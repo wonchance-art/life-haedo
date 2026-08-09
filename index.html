@@ -1,0 +1,2563 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="인생 해도(海圖) — 시간·기간·깊이를 한 장의 측량도로 기록하는 개인 연표 에디터">
+<meta name="theme-color" content="#E9EDE6">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚓</text></svg>">
+<title>인생 해도 — Life Sounding Chart</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root{
+    --paper:#E9EDE6; --paper-2:#DFE5DB; --panel:#F2F4EE;
+    --ink:#23312B; --ink-soft:#5D6B62; --line:#C4CDC1;
+    --water:#2E5E63; --water-deep:#1E4348;
+    --cinnabar:#B5432A; --gold:#A87F3D; --future:#7A8A80;
+    --maxw:1180px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:'IBM Plex Sans KR',sans-serif; line-height:1.65;
+    background-image:linear-gradient(var(--line) 1px,transparent 1px),
+                     linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:56px 56px; background-position:center top;
+  }
+  ::selection{background:var(--water);color:var(--paper)}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+
+  header{padding:64px 0 36px;border-bottom:2px solid var(--ink)}
+  .hgroup{display:flex;flex-wrap:wrap;align-items:flex-end;gap:28px;justify-content:space-between}
+  h1{font-family:'Gowun Batang',serif;font-weight:700;font-size:clamp(48px,7.5vw,88px);line-height:.95;letter-spacing:.04em}
+  .subtitle{font-family:'Gowun Batang',serif;font-size:clamp(15px,2.2vw,19px);color:var(--ink-soft);margin-top:14px}
+  .legend-box{border:1px solid var(--ink);background:var(--panel);padding:14px 18px;min-width:225px;
+    font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft)}
+  .legend-box .t{color:var(--ink);font-weight:500;letter-spacing:.14em;margin-bottom:8px;font-size:11px}
+  .legend-box .row{display:flex;justify-content:space-between;gap:16px;padding:2px 0}
+  .legend-box .v{color:var(--ink);font-weight:500}
+
+  section{padding:52px 0}
+  .sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:8px}
+  .sec-no{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--cinnabar);letter-spacing:.2em}
+  h2{font-family:'Gowun Batang',serif;font-weight:700;font-size:clamp(23px,3.4vw,32px)}
+  .sec-desc{color:var(--ink-soft);font-size:14px;max-width:640px;margin-bottom:22px}
+
+  /* ===== 컨트롤 ===== */
+  .tl-controls{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .ctrl-btn,.file-btn{font-family:inherit;font-size:13px;cursor:pointer;border:1px solid var(--ink);
+    background:transparent;color:var(--ink);padding:6px 13px;border-radius:2px;transition:all .15s;display:inline-block}
+  .ctrl-btn:hover,.file-btn:hover{background:var(--paper-2)}
+  .ctrl-btn.primary{background:var(--ink);color:var(--paper)}
+  .ctrl-btn:disabled{opacity:.35;cursor:default;pointer-events:none}
+  #docSel{max-width:150px}
+
+  /* ===== 공유 뷰어 (읽기 전용) ===== */
+  .view-only #btnEdit,.view-only #btnNew,.view-only #btnUndo,.view-only #btnRedo,
+  .view-only #btnShare,.view-only .file-btn,.view-only #docSel,.view-only .editor{display:none!important}
+  .ctrl-btn.primary:hover{background:var(--water-deep)}
+  .ctrl-btn:focus-visible,.trip-btn:focus-visible{outline:2px solid var(--cinnabar);outline-offset:2px}
+  .ctrl-hint{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);margin-left:auto}
+  .save-state{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);letter-spacing:.04em}
+  .save-state.warn{color:var(--cinnabar)}
+
+  /* ===== 스크러버 (미니맵) ===== */
+  .scrubber{display:flex;align-items:center;gap:10px;padding:8px 2px 2px}
+  .scrub-play{width:32px;height:26px;border:1px solid var(--ink);background:transparent;color:var(--ink);
+    cursor:pointer;border-radius:2px;font-size:11px;line-height:1;font-family:inherit}
+  .scrub-play:hover{background:var(--paper-2)}
+  .scrub-track{flex:1;position:relative;height:24px;border:1px solid var(--line);background:var(--paper-2);
+    cursor:pointer;overflow:hidden;touch-action:none}
+  .scrub-era,.scrub-ev,.scrub-now,.scrub-sp{position:absolute;pointer-events:none}
+  .scrub-era{top:0;bottom:0;opacity:.18}
+  .scrub-sp{height:4px;border-radius:1px;opacity:.6}
+  .scrub-ev{bottom:2px;width:1.5px;height:9px;background:var(--ink);opacity:.55}
+  .scrub-ev.future{background:var(--future)}
+  .scrub-now{top:0;bottom:0;width:0;border-left:1.5px dashed var(--cinnabar)}
+  .scrub-win{position:absolute;top:0;bottom:0;background:rgba(46,94,99,.16);border:1.5px solid var(--water-deep);
+    cursor:grab;min-width:8px;touch-action:none}
+  .scrub-win:active{cursor:grabbing}
+  .scrub-year{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);min-width:104px;text-align:right}
+
+  /* ===== 검색 오버레이 ===== */
+  .search-bd{position:fixed;inset:0;background:rgba(35,49,43,.4);z-index:1000;
+    display:flex;align-items:flex-start;justify-content:center;padding:12vh 16px 0}
+  .search-bd[hidden]{display:none}
+  .search-panel{width:100%;max-width:560px;background:var(--panel);border:1px solid var(--ink);
+    border-radius:3px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+  .search-row{display:flex;align-items:center;gap:9px;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .search-row input{flex:1;border:none;background:transparent;font-family:inherit;font-size:14.5px;color:var(--ink);outline:none}
+  .search-row kbd{font-family:'IBM Plex Mono',monospace;font-size:10px;border:1px solid var(--line);
+    border-radius:3px;padding:2px 5px;color:var(--ink-soft)}
+  .search-results{max-height:330px;overflow-y:auto}
+  .search-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:9px 14px;
+    background:transparent;border:none;cursor:pointer;font-family:inherit;font-size:13.5px;color:var(--ink)}
+  .search-item.on{background:var(--paper-2);box-shadow:inset 2px 0 0 var(--cinnabar)}
+  .search-badge{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-soft);border:1px solid var(--line);
+    border-radius:2px;padding:1px 6px;min-width:46px;text-align:center;flex-shrink:0}
+  .search-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .search-date{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);flex-shrink:0;
+    max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .search-empty{padding:18px;font-size:13px;color:var(--ink-soft);text-align:center}
+
+  .canvas-frame{border:1px solid var(--ink);background:var(--panel);padding:8px;position:relative}
+  .canvas-inner{border:1px solid var(--line);position:relative;overflow:hidden}
+  #tl{display:block;width:100%;touch-action:pan-y;cursor:grab;user-select:none}
+  #tl.dragging{cursor:grabbing}
+  #tl:focus-visible{outline:2px solid var(--cinnabar);outline-offset:-2px}
+  #tl text{paint-order:stroke;stroke:#F2F4EE;stroke-width:2.5px;stroke-linejoin:round}
+  .tl-tip{position:absolute;pointer-events:none;opacity:0;transform:translate(-50%,-118%);
+    background:var(--ink);color:var(--paper);padding:7px 11px;border-radius:3px;font-size:12px;
+    white-space:normal;line-height:1.5;width:max-content;transition:opacity .1s;z-index:6;max-width:340px}
+  .tl-tip .yy{font-family:'IBM Plex Mono',monospace;color:#9FB8AE;font-size:11px}
+  .tl-tip .hh{font-family:'IBM Plex Mono',monospace;color:#E8B26A}
+
+  .detail{border:1px solid var(--ink);border-top:none;background:var(--panel);
+    padding:18px 22px;min-height:92px;display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
+  .detail .dt-date{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink-soft);min-width:150px;padding-top:3px}
+  .detail .dt-date .age{display:block;font-size:11px;color:var(--gold)}
+  .detail .dt-title{font-family:'Gowun Batang',serif;font-weight:700;font-size:18px;margin-bottom:4px}
+  .detail .dt-desc{font-size:14px;color:var(--ink-soft);max-width:640px}
+  .detail .dt-empty{color:var(--ink-soft);font-size:13.5px;align-self:center}
+
+  /* ===== 인라인 편집 (노션식) ===== */
+  .dt-main{flex:1;min-width:260px;display:flex;flex-direction:column;gap:4px}
+  .dt-edit{background:transparent;border:1px solid transparent;border-radius:2px;font-family:inherit;
+    color:var(--ink);padding:3px 6px;transition:background .12s,border-color .12s}
+  .dt-edit:hover{background:#FBFCF9;border-color:var(--line)}
+  .dt-edit:focus{outline:2px solid var(--water);outline-offset:-1px;background:#FBFCF9;border-color:var(--water)}
+  .dt-title-in{font-family:'Gowun Batang',serif;font-weight:700;font-size:18px;width:100%}
+  .dt-desc-in{font-size:14px;color:var(--ink-soft);width:100%;resize:vertical;min-height:40px;line-height:1.55}
+  .dt-month{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink-soft);
+    display:block;width:100%;max-width:155px;margin-bottom:3px}
+  .dt-num{width:66px;font-family:'IBM Plex Mono',monospace;font-size:13px}
+  .dt-lab{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ink-soft);white-space:nowrap}
+  .dt-lab input[type=checkbox]{accent-color:var(--cinnabar)}
+
+  /* ===== 팝오버 에디터 (클릭 즉시 편집) ===== */
+  .pop-ed{position:fixed;z-index:900;background:var(--panel);border:1px solid var(--ink);border-radius:3px;
+    box-shadow:0 10px 30px rgba(0,0,0,.22);width:302px;padding:12px 14px;display:flex;flex-direction:column;gap:7px}
+  .pop-ed[hidden]{display:none}
+  .pe-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .pe-title{font-family:'Gowun Batang',serif;font-weight:700;font-size:15.5px;width:100%}
+  .pe-desc{font-size:12.5px;color:var(--ink-soft);min-height:36px;width:100%;resize:vertical;line-height:1.5}
+  .pe-month{font-family:'IBM Plex Mono',monospace;font-size:12px;width:126px}
+  .pe-num{font-family:'IBM Plex Mono',monospace;font-size:12.5px;width:60px}
+  .pe-actions{display:flex;gap:6px;justify-content:flex-end;border-top:1px dashed var(--line);padding-top:8px}
+  .pe-btn{font-family:inherit;font-size:12px;padding:4px 10px;border-radius:2px;cursor:pointer;
+    background:transparent;border:1px solid var(--line);color:var(--ink)}
+  .pe-btn:hover{background:var(--paper-2);border-color:var(--ink)}
+  .pe-btn.danger{color:var(--cinnabar);border-color:var(--cinnabar)}
+  .pe-btn.danger:hover{background:var(--cinnabar);color:var(--paper)}
+
+  /* ===== 호버 설명 카드 ===== */
+  .hover-card{position:fixed;z-index:800;pointer-events:none;width:max-content;max-width:300px;
+    background:var(--panel);border:1px solid var(--ink);border-radius:3px;
+    box-shadow:0 8px 24px rgba(0,0,0,.18);padding:10px 13px;display:flex;flex-direction:column;gap:5px}
+  .hover-card[hidden]{display:none}
+  .hc-top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+  .hc-date{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft)}
+  .hc-hap{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--water-deep);
+    border:1px solid var(--water);border-radius:2px;padding:0 5px;white-space:nowrap}
+  .hc-hap.neg{color:var(--cinnabar);border-color:var(--cinnabar)}
+  .hc-title{font-family:'Gowun Batang',serif;font-weight:700;font-size:14.5px;line-height:1.35}
+  .hc-desc{font-size:12.5px;color:var(--ink-soft);line-height:1.55;
+    display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+  .hc-loc{font-size:11.5px;color:var(--water-deep)}
+
+  /* ===== 컨텍스트 메뉴 ===== */
+  .ctx{position:fixed;z-index:1200;background:var(--panel);border:1px solid var(--ink);border-radius:3px;
+    box-shadow:0 8px 24px rgba(0,0,0,.2);min-width:150px;padding:4px 0}
+  .ctx[hidden]{display:none}
+  .ctx button{display:block;width:100%;text-align:left;padding:8px 14px;font-family:inherit;font-size:13px;
+    background:none;border:none;cursor:pointer;color:var(--ink)}
+  .ctx button:hover{background:var(--paper-2)}
+  .ctx button.danger{color:var(--cinnabar)}
+  .detail .dt-meta{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
+  .depth-badge{font-family:'IBM Plex Mono',monospace;font-size:11px;border:1px solid var(--water);
+    color:var(--water-deep);padding:2px 8px;border-radius:2px}
+  .future-tag{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--paper);
+    background:var(--future);padding:2px 7px;border-radius:2px;letter-spacing:.1em}
+  .loc-chip,.mini-btn{font-size:12px;border:none;background:var(--ink);color:var(--paper);padding:5px 13px;
+    border-radius:2px;cursor:pointer;font-family:inherit;transition:background .15s}
+  .loc-chip:hover,.mini-btn:hover{background:var(--water-deep)}
+  .mini-btn.ghost{background:transparent;border:1px solid var(--ink);color:var(--ink)}
+  .mini-btn.ghost:hover{background:var(--paper-2)}
+  .mini-btn.danger{background:var(--cinnabar)}
+
+  /* ===== 에디터 ===== */
+  .editor{border:1px solid var(--ink);border-top:none;background:var(--paper-2);padding:0;display:none}
+  .editor.open{display:block}
+  .ed-tabs{display:flex;border-bottom:1px solid var(--ink);flex-wrap:wrap}
+  .ed-tab{font-family:inherit;font-size:13px;padding:10px 18px;background:transparent;border:none;
+    cursor:pointer;color:var(--ink-soft);border-right:1px solid var(--line)}
+  .ed-tab.on{background:var(--panel);color:var(--ink);font-weight:600;box-shadow:inset 0 -2px 0 var(--cinnabar)}
+  .ed-body{padding:20px 22px;background:var(--panel)}
+  .ed-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:4px;min-width:120px;flex:1}
+  .field.grow{flex:2 1 260px}
+  .field.small{flex:0 1 110px;min-width:96px}
+  .field label{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);letter-spacing:.08em}
+  .field input,.field select,.field textarea{
+    font-family:inherit;font-size:13.5px;padding:7px 9px;border:1px solid var(--line);
+    border-radius:2px;background:#FBFCF9;color:var(--ink);width:100%}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--water);outline-offset:-1px;border-color:var(--water)}
+  .field textarea{resize:vertical;min-height:60px;line-height:1.5}
+  .checkline{display:flex;align-items:center;gap:7px;font-size:13px;padding-bottom:8px;white-space:nowrap}
+  .checkline input{width:15px;height:15px;accent-color:var(--cinnabar)}
+  .ed-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px dashed var(--line);padding-top:16px}
+  .ed-note{font-size:12px;color:var(--ink-soft);margin-left:auto;font-family:'IBM Plex Mono',monospace}
+  .geo-result{font-size:12px;color:var(--water-deep);min-height:18px}
+
+  /* ===== 지도 ===== */
+  .map-frame{border:1px solid var(--ink);background:var(--panel);padding:8px}
+  #map{height:520px;border:1px solid var(--line);z-index:1;position:relative}
+  .trip-bar{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 18px}
+  .trip-btn{font-family:inherit;font-size:13px;cursor:pointer;border:1px solid var(--ink);
+    background:transparent;color:var(--ink);padding:7px 16px;border-radius:2px;transition:all .15s}
+  .trip-btn:hover{background:var(--paper-2)}
+  .trip-btn.on{background:var(--ink);color:var(--paper)}
+  .trip-btn .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:1px}
+  .trip-info{margin-top:13px;font-size:13.5px;color:var(--ink-soft);display:flex;flex-wrap:wrap;gap:6px 18px;min-height:22px}
+  .trip-info .route{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink)}
+  .leaflet-container{font-family:'IBM Plex Sans KR',sans-serif;background:#DCE4DE}
+  .leaflet-popup-content-wrapper{border-radius:3px;background:var(--panel);color:var(--ink)}
+  .leaflet-popup-content{margin:12px 16px;font-size:13px}
+  .leaflet-popup-content .p-title{font-family:'Gowun Batang',serif;font-weight:700;font-size:14px}
+  .leaflet-popup-content .p-date{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft)}
+  .port-marker{width:12px;height:12px;border-radius:50%;border:2px solid var(--paper);box-shadow:0 0 0 1.5px var(--ink)}
+  .ship-marker{font-size:18px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
+
+  footer{border-top:2px solid var(--ink);padding:32px 0 60px;margin-top:20px;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft)}
+  footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
+
+  @media (max-width:640px){
+    header{padding:44px 0 28px}
+    section{padding:36px 0}
+    #map{height:400px}
+    .ctrl-hint{display:none}
+    .detail .dt-date{min-width:0}
+  }
+</style>
+</head>
+<body>
+<!--SHARE_INJECT-->
+
+<noscript><div style="max-width:1180px;margin:24px auto;padding:16px 24px;border:1px solid #B5432A;color:#B5432A;font-size:14px">
+이 해도는 JavaScript로 그려진다. 브라우저에서 JavaScript를 허용해야 연표·지도가 표시된다.
+</div></noscript>
+
+<header>
+  <div class="wrap">
+    <div class="hgroup">
+      <div>
+        <h1>나의 해도</h1>
+        <p class="subtitle">인생 해도(海圖) — 시간·기간·깊이의 측량 기록</p>
+      </div>
+      <div class="legend-box" aria-label="기록 요약">
+        <div class="t">SURVEY LOG</div>
+        <div class="row"><span>기점(起點)</span><span class="v" id="statBirth">—</span></div>
+        <div class="row"><span>항해 연수</span><span class="v" id="statYears">—</span></div>
+        <div class="row"><span>사건 · 기간</span><span class="v" id="statEvents">—</span></div>
+        <div class="row"><span>기록 노트</span><span class="v" id="statNotes">—</span></div>
+        <div class="row"><span>평균 행복</span><span class="v" id="statAvg">—</span></div>
+        <div class="row"><span>기항지</span><span class="v" id="statPorts">—</span></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="sec-canvas">
+    <div class="wrap">
+      <div class="sec-head"><span class="sec-no">年表 01</span><h2>연표 캔버스</h2></div>
+      <p class="sec-desc">시대(章)가 배경을 물들이고, 기간은 막대로, 사건은 핀으로 놓인다. 행복 수심 곡선은 같은 시간축에 결속되어 함께 움직인다.</p>
+
+      <div class="tl-controls">
+        <button class="ctrl-btn" id="btnFit">전체 보기</button>
+        <button class="ctrl-btn" id="btnZoomOut" aria-label="축소">−</button>
+        <button class="ctrl-btn" id="btnZoomIn" aria-label="확대">＋</button>
+        <button class="ctrl-btn" id="btnUndo" title="되돌리기 (⌘/Ctrl+Z)" aria-label="되돌리기" disabled>↺</button>
+        <button class="ctrl-btn" id="btnRedo" title="다시 실행 (⌘/Ctrl+Shift+Z)" aria-label="다시 실행" disabled>↻</button>
+        <button class="ctrl-btn" id="btnNow">現在로</button>
+        <button class="ctrl-btn" id="btnSearch" title="검색 (⌘/Ctrl+F)">🔍 검색</button>
+        <button class="ctrl-btn primary" id="btnEdit">✎ 기록 편집</button>
+        <select class="ctrl-btn" id="docSel" title="문서 전환" aria-label="문서 선택"></select>
+        <button class="ctrl-btn" id="btnNew">✚ 새 해도</button>
+        <button class="ctrl-btn" id="btnCloud" title="온라인 DB 동기화 설정">☁ DB</button>
+        <span class="save-state" id="saveState"></span>
+        <span class="ctrl-hint">⌘/Ctrl+휠 = 확대 · 드래그/←→ = 이동 · 더블클릭 = 그 자리에 추가 · 우클릭 = 메뉴</span>
+      </div>
+
+      <div class="canvas-frame">
+        <div class="canvas-inner">
+          <svg id="tl" tabindex="0" role="application" aria-label="가로형 인생 연표. ⌘ 또는 Ctrl과 휠로 확대, 드래그 또는 좌우 화살표로 이동, 0으로 전체 보기, 더블클릭으로 그 자리에 추가"></svg>
+          <div class="tl-tip" id="tlTip"></div>
+        </div>
+
+        <!-- 스크러버 (미니맵) -->
+        <div class="scrubber">
+          <button class="scrub-play" id="scrubPlay" aria-label="시간 훑기 재생" aria-pressed="false">▶</button>
+          <div class="scrub-track" id="scrubTrack" aria-label="타임라인 미니맵 — 클릭·드래그로 이동"></div>
+          <span class="scrub-year" id="scrubYear">—</span>
+        </div>
+
+        <!-- 에디터 -->
+        <div class="editor" id="editor">
+          <div class="ed-tabs" role="tablist">
+            <button class="ed-tab on" data-tab="event">사건</button>
+            <button class="ed-tab" data-tab="span">기간</button>
+            <button class="ed-tab" data-tab="era">시대</button>
+            <button class="ed-tab" data-tab="hap">수심</button>
+            <button class="ed-tab" data-tab="trip">항로</button>
+          </div>
+          <div class="ed-body">
+
+            <!-- 사건 -->
+            <div class="ed-pane" data-pane="event">
+              <div class="ed-row">
+                <div class="field grow"><label>편집 대상</label><select id="evSelect"></select></div>
+                <div class="field small"><label>날짜</label><input type="month" id="evDate"></div>
+                <div class="field small"><label>행복 −1~+1</label><input type="number" id="evHap" min="-1" max="1" step="0.1"></div>
+                <span class="checkline"><input type="checkbox" id="evFuture"><label for="evFuture">예정(계획)</label></span>
+              </div>
+              <div class="ed-row">
+                <div class="field grow"><label>제목</label><input type="text" id="evTitle" placeholder="예: JLPT N1 취득"></div>
+              </div>
+              <div class="ed-row">
+                <div class="field grow"><label>설명</label><textarea id="evDesc"></textarea></div>
+              </div>
+              <div class="ed-row">
+                <div class="field grow"><label>장소 검색 (선택)</label><input type="text" id="evGeoQ" placeholder="예: 부산, Perth, 台北"></div>
+                <button class="mini-btn ghost" id="evGeoBtn" type="button">🔍 좌표 찾기</button>
+                <div class="field small"><label>위도</label><input type="number" id="evLat" step="any"></div>
+                <div class="field small"><label>경도</label><input type="number" id="evLng" step="any"></div>
+                <div class="field small"><label>장소 라벨</label><input type="text" id="evLocLabel"></div>
+                <div class="field small"><label>연결 항로</label><select id="evTrip"></select></div>
+              </div>
+              <div class="geo-result" id="evGeoRes"></div>
+              <div class="ed-actions">
+                <button class="mini-btn" id="evSave">저장</button>
+                <button class="mini-btn danger" id="evDelete">삭제</button>
+                <span class="ed-note">캔버스의 핀을 클릭해도 여기로 불러온다</span>
+              </div>
+            </div>
+
+            <!-- 기간 -->
+            <div class="ed-pane" data-pane="span" hidden>
+              <div class="ed-row">
+                <div class="field grow"><label>편집 대상</label><select id="spSelect"></select></div>
+                <div class="field small"><label>시작</label><input type="month" id="spStart"></div>
+                <div class="field small"><label>종료 (비움=진행 중)</label><input type="month" id="spEnd"></div>
+                <div class="field small"><label>행복 −1~+1</label><input type="number" id="spHap" min="-1" max="1" step="0.1"></div>
+                <span class="checkline"><input type="checkbox" id="spFuture"><label for="spFuture">예정(계획)</label></span>
+              </div>
+              <div class="ed-row">
+                <div class="field grow"><label>제목</label><input type="text" id="spTitle" placeholder="예: 프랑스어 집중 — 28주"></div>
+                <div class="field small"><label>색</label>
+                  <select id="spColor">
+                    <option value="#2E5E63">청록</option><option value="#1E4348">심청</option>
+                    <option value="#3E5C7F">쪽</option><option value="#5F7A54">솔</option>
+                    <option value="#B5432A">주홍</option><option value="#8C4A52">팥</option>
+                    <option value="#7E5A78">자주</option><option value="#BF7B4B">감</option>
+                    <option value="#A87F3D">황토</option><option value="#8A5A3B">갈</option>
+                    <option value="#7A8A80">회록</option><option value="#23312B">먹</option>
+                  </select></div>
+              </div>
+              <div class="ed-row"><div class="field grow"><label>설명</label><textarea id="spDesc"></textarea></div></div>
+              <div class="ed-row">
+                <div class="field grow"><label>장소 검색 (선택)</label><input type="text" id="spGeoQ"></div>
+                <button class="mini-btn ghost" id="spGeoBtn" type="button">🔍 좌표 찾기</button>
+                <div class="field small"><label>위도</label><input type="number" id="spLat" step="any"></div>
+                <div class="field small"><label>경도</label><input type="number" id="spLng" step="any"></div>
+                <div class="field small"><label>장소 라벨</label><input type="text" id="spLocLabel"></div>
+                <div class="field small"><label>연결 항로</label><select id="spTrip"></select></div>
+              </div>
+              <div class="geo-result" id="spGeoRes"></div>
+              <div class="ed-actions">
+                <button class="mini-btn" id="spSave">저장</button>
+                <button class="mini-btn danger" id="spDelete">삭제</button>
+              </div>
+            </div>
+
+            <!-- 시대 -->
+            <div class="ed-pane" data-pane="era" hidden>
+              <div class="ed-row">
+                <div class="field grow"><label>편집 대상</label><select id="erSelect"></select></div>
+                <div class="field small"><label>시작</label><input type="month" id="erStart"></div>
+                <div class="field small"><label>종료</label><input type="month" id="erEnd"></div>
+                <div class="field small"><label>색</label>
+                  <select id="erColor">
+                    <option value="#2E5E63">청록</option><option value="#1E4348">심청</option>
+                    <option value="#3E5C7F">쪽</option><option value="#5F7A54">솔</option>
+                    <option value="#B5432A">주홍</option><option value="#8C4A52">팥</option>
+                    <option value="#7E5A78">자주</option><option value="#BF7B4B">감</option>
+                    <option value="#A87F3D">황토</option><option value="#8A5A3B">갈</option>
+                    <option value="#7A8A80">회록</option>
+                  </select></div>
+              </div>
+              <div class="ed-row"><div class="field grow"><label>제목</label><input type="text" id="erTitle" placeholder="예: 제5장 · 귀환"></div></div>
+              <div class="ed-actions">
+                <button class="mini-btn" id="erSave">저장</button>
+                <button class="mini-btn danger" id="erDelete">삭제</button>
+              </div>
+            </div>
+
+            <!-- 수심 -->
+            <div class="ed-pane" data-pane="hap" hidden>
+              <div class="ed-row">
+                <div class="field grow"><label>편집 대상</label><select id="hpSelect"></select></div>
+                <div class="field small"><label>날짜</label><input type="month" id="hpDate"></div>
+                <div class="field small"><label>행복 −1~+1</label><input type="number" id="hpVal" min="-1" max="1" step="0.1"></div>
+                <span class="checkline"><input type="checkbox" id="hpFuture"><label for="hpFuture">예정(계획)</label></span>
+              </div>
+              <div class="ed-actions">
+                <button class="mini-btn" id="hpSave">저장</button>
+                <button class="mini-btn danger" id="hpDelete">삭제</button>
+                <span class="ed-note">측점이 촘촘할수록 곡선이 정직해진다</span>
+              </div>
+            </div>
+
+            <!-- 항로 -->
+            <div class="ed-pane" data-pane="trip" hidden>
+              <div class="ed-row">
+                <div class="field grow"><label>편집 대상</label><select id="trSelect"></select></div>
+                <div class="field grow"><label>이름</label><input type="text" id="trTitle" placeholder="예: 일본 — 산인 여행"></div>
+                <div class="field small"><label>색</label>
+                  <select id="trColor">
+                    <option value="#B5432A">주홍</option><option value="#2E5E63">청록</option>
+                    <option value="#1E4348">심청</option><option value="#3E5C7F">쪽</option>
+                    <option value="#5F7A54">솔</option><option value="#8C4A52">팥</option>
+                    <option value="#7E5A78">자주</option><option value="#BF7B4B">감</option>
+                    <option value="#A87F3D">황토</option><option value="#8A5A3B">갈</option>
+                    <option value="#7A8A80">회록</option>
+                  </select></div>
+                <span class="checkline"><input type="checkbox" id="trDashed"><label for="trDashed">계획 항로(점선)</label></span>
+              </div>
+              <div class="ed-row"><div class="field grow"><label>메모</label><input type="text" id="trNote"></div></div>
+              <div class="ed-row">
+                <div class="field grow">
+                  <label>기항지 — 한 줄에 하나: 장소명 | 메모(선택). 좌표는 저장 시 자동 검색</label>
+                  <textarea id="trPoints" rows="5" placeholder="부산 | 출발&#10;후쿠오카 | 1일차&#10;오사카 | 3일차"></textarea>
+                </div>
+              </div>
+              <div class="geo-result" id="trGeoRes"></div>
+              <div class="ed-actions">
+                <button class="mini-btn" id="trSave">저장 (좌표 자동 검색)</button>
+                <button class="mini-btn danger" id="trDelete">삭제</button>
+                <span class="ed-note">이미 좌표가 있는 줄은 다시 검색하지 않는다</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="detail" id="detail"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-map">
+    <div class="wrap">
+      <div class="sec-head"><span class="sec-no">航路 02</span><h2>항로도</h2></div>
+      <p class="sec-desc">머물렀던 곳과 이동의 경로. 항로를 선택하면 배가 궤적을 따라 움직인다. 선택된 항로를 한 번 더 클릭하면 수정.</p>
+      <div class="trip-bar" id="tripBar" role="group" aria-label="항로 선택"></div>
+      <div class="map-frame"><div id="map"></div></div>
+      <div class="trip-info" id="tripInfo"></div>
+    </div>
+  </section>
+</main>
+
+<!-- 온라인 DB 설정 -->
+<div class="search-bd" id="cloudBd" hidden>
+  <div class="search-panel" role="dialog" aria-modal="true" aria-label="온라인 DB 동기화" style="max-width:460px">
+    <div style="display:flex;flex-direction:column;gap:12px;padding:20px 22px">
+      <div style="font-family:'Gowun Batang',serif;font-weight:700;font-size:17px">☁ 온라인 DB 동기화</div>
+      <div style="font-size:12px;color:var(--ink-soft);line-height:1.6">Supabase(무료) 프로젝트의 URL과 anon 키를 넣으면 모든 문서가 자동 동기화된다. 로컬 저장은 그대로 유지(오프라인 안전).</div>
+      <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-soft)">Project URL
+        <input id="cloudUrl" placeholder="https://xxxx.supabase.co" spellcheck="false"
+          style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:#FBFCF9;color:var(--ink)">
+      </label>
+      <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-soft)">anon key
+        <input id="cloudKey" placeholder="eyJhbGci..." spellcheck="false"
+          style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:#FBFCF9;color:var(--ink)">
+      </label>
+      <details style="font-size:11.5px;color:var(--ink-soft)">
+        <summary style="cursor:pointer">최초 1회 — Supabase SQL Editor에 실행할 테이블 생성문</summary>
+        <pre style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;background:#FBFCF9;border:1px solid var(--line);padding:10px;margin-top:6px;overflow-x:auto;line-height:1.5">create table charts (
+  id text primary key,
+  name text,
+  data jsonb,
+  updated_at timestamptz
+);
+alter table charts enable row level security;
+create policy "personal" on charts
+  for all using (true) with check (true);</pre>
+        <div style="margin-top:4px">⚠ anon 공개 정책 — 개인용. 키를 아는 사람은 읽고 쓸 수 있다.</div>
+      </details>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="pe-btn danger" id="cloudOff">연결 해제</button>
+        <button class="pe-btn" id="cloudCancel">닫기</button>
+        <button class="mini-btn" id="cloudSave">연결</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 새 해도 온보딩 -->
+<div class="search-bd" id="newBd" hidden>
+  <div class="search-panel" role="dialog" aria-modal="true" aria-label="새 해도 시작" style="max-width:400px">
+    <div style="display:flex;flex-direction:column;gap:13px;padding:20px 22px">
+      <div style="font-family:'Gowun Batang',serif;font-weight:700;font-size:17px">새 해도 시작</div>
+      <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-soft)">이름 또는 호
+        <input id="nbName" placeholder="이름 또는 호" style="font-family:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:#FBFCF9;color:var(--ink)">
+      </label>
+      <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-soft)">출생 연월 — 해도의 기점(起點)
+        <input id="nbBirth" type="month" style="font-family:'IBM Plex Mono',monospace;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:#FBFCF9;color:var(--ink)">
+      </label>
+      <div style="font-size:12px;color:var(--ink-soft);line-height:1.6">새 <b>문서</b>로 만들어진다 — 지금 해도는 문서 목록에 그대로 남고, 상단 셀렉트로 오갈 수 있다.</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="pe-btn" id="nbCancel">취소</button>
+        <button class="mini-btn" id="nbStart">⚓ 출항</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 컨텍스트 메뉴 -->
+<div class="ctx" id="ctxMenu" hidden></div>
+
+<!-- 팝오버 에디터 -->
+<div class="pop-ed" id="popEd" hidden role="dialog" aria-label="바로 편집"></div>
+
+<!-- 호버 설명 카드 -->
+<div class="hover-card" id="hoverCard" hidden aria-hidden="true"></div>
+
+<!-- 검색 오버레이 -->
+<div class="search-bd" id="searchBd" hidden>
+  <div class="search-panel" role="dialog" aria-modal="true" aria-label="기록 검색">
+    <div class="search-row">
+      <span aria-hidden="true">🔍</span>
+      <input id="searchInput" placeholder="사건 · 기간 · 시대 · 항로 검색…" spellcheck="false" autocomplete="off">
+      <kbd>esc</kbd>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>인생 해도 · LIFE SOUNDING CHART</span>
+    <span id="footNote">편집 → 브라우저 자동 저장 · ☁ DB 연결 시 온라인 동기화</span>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* 공유 뷰어 모드 + 페이지 원본 캡처 (렌더로 DOM이 변형되기 전) */
+const RO=!!window.VIEW_ONLY;
+const PAGE_SRC='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
+if(RO)document.documentElement.classList.add('view-only');
+
+/* ==========================================================================
+   기본 데이터 (최초 실행 시에만 사용 — 이후엔 브라우저 저장본/JSON이 우선)
+   ⚠ (예시) 표기 항목은 편집 화면에서 실제 기록으로 교체하세요.
+   ========================================================================== */
+const DEFAULT_DATA = {
+  profile:{ name:"나의 해도", birth:"1995-01" },
+  scale:"signed1",
+  eras:[
+    { title:"제1장 · 학창",  start:"1995-01", end:"2014-03", color:"#2E5E63" },
+    { title:"제2장 · 모색",  start:"2014-03", end:"2020-01", color:"#A87F3D" },
+    { title:"제3장 · 항해",  start:"2020-01", end:"2030-01", color:"#3E5C7F" },
+  ],
+  events:[
+    { date:"1995-01", title:"태어나다", happiness:0, desc:"해도의 기점(起點)." },
+    { date:"2014-03", title:"첫 독립", happiness:0.3, desc:"집을 떠나 새 도시로." },
+    { date:"2017-08", title:"긴 여행", happiness:0.6, desc:"한 달의 배낭여행 — 낯선 거리에서 기록을 시작했다.",
+      loc:{lat:41.3874,lng:2.1686,label:"바르셀로나"}, tripId:"trip1" },
+    { date:"2019-11", title:"슬럼프", happiness:-0.4, desc:"방향을 잃었던 겨울." },
+    { date:"2020-06", title:"새 일 시작", happiness:0.4 },
+    { date:"2027-01", title:"다음 목표 (계획)", happiness:0.5, future:true, desc:"준비 중인 도전의 관문." },
+  ],
+  spans:[
+    { start:"2001-03", end:"2014-02", title:"학창 시절", happiness:0.1, color:"#7A8A80" },
+    { start:"2014-03", end:"2018-02", title:"대학", happiness:0.3, color:"#2E5E63" },
+    { start:"2018-06", end:"2020-01", title:"첫 직장", happiness:-0.1, color:"#8C4A52" },
+    { start:"2020-06", end:null, title:"지금의 일", happiness:0.4, color:"#5F7A54" },
+    { start:"2026-01", end:"2027-06", title:"준비 중인 도전 (계획)", happiness:0.5, color:"#BF7B4B", future:true },
+  ],
+  happiness:[
+    { date:"1995-01", v:0 },{ date:"2005-06", v:0.2 },{ date:"2012-01", v:-0.1 },
+    { date:"2016-03", v:0.2 },{ date:"2019-11", v:-0.4 },{ date:"2021-06", v:0.3 },
+    { date:"2024-01", v:0.35 },{ date:"2028-01", v:0.5, future:true },
+  ],
+  trips:[
+    { id:"trip1", title:"유럽 배낭", color:"#B5432A", note:"여름 한 달의 경로",
+      points:[
+        {lat:48.8566,lng:2.3522,label:"파리",date:"1주차"},
+        {lat:41.3874,lng:2.1686,label:"바르셀로나",date:"2주차"},
+        {lat:41.9028,lng:12.4964,label:"로마",date:"4주차"} ]},
+  ],
+  records:[],
+};
+
+/* ==========================================================================
+   저장 계층 — 다중 문서 (레지스트리 + 문서별 키)
+   ========================================================================== */
+const LS_KEY='caeyeon_life_v2';            /* 구버전 단일 문서 (마이그레이션 소스) */
+const REG_KEY='caeyeon_life_registry';
+const DOC_PREFIX='caeyeon_life_doc_';
+let storageOK=true, REG=null, curDocId=null;
+const newDocId=()=>'d'+Math.random().toString(36).slice(2,9);
+function saveRegistry(){try{localStorage.setItem(REG_KEY,JSON.stringify(REG));}catch(e){}}
+function loadDoc(id){
+  try{const raw=localStorage.getItem(DOC_PREFIX+id);if(raw)return JSON.parse(raw);}catch(e){}
+  return structuredClone(DEFAULT_DATA);
+}
+(function initRegistry(){
+  if(RO)return; /* 공유 뷰어는 레지스트리 안 씀 */
+  try{const r=JSON.parse(localStorage.getItem(REG_KEY));if(r&&Array.isArray(r.docs)&&r.docs.length){REG=r;curDocId=r.current;return;}}catch(e){}
+  /* 구버전 단일 문서 → 첫 문서로 승격 */
+  let legacy=null;
+  try{const raw=localStorage.getItem(LS_KEY);if(raw)legacy=JSON.parse(raw);}catch(e){}
+  const id=newDocId();
+  const data=legacy||structuredClone(DEFAULT_DATA);
+  REG={docs:[{id,name:(data.profile&&data.profile.name)||'나의 해도'}],current:id};
+  curDocId=id;
+  try{localStorage.setItem(DOC_PREFIX+id,JSON.stringify(data));}catch(e){}
+  saveRegistry();
+})();
+function persist(){
+  histPush();
+  if(RO)return; /* 공유 뷰어는 저장하지 않음 */
+  try{
+    localStorage.setItem(DOC_PREFIX+curDocId,JSON.stringify(DATA));
+    const d=REG.docs.find(x=>x.id===curDocId);
+    if(d){
+      d.updated=new Date().toISOString();
+      if(DATA.profile&&DATA.profile.name&&d.name!==DATA.profile.name){d.name=DATA.profile.name;refreshDocSel();}
+    }
+    saveRegistry();
+    storageOK=true;
+  }catch(e){storageOK=false;}
+  queueCloudPush(); /* 온라인 DB 미러 (설정된 경우) */
+  updateSaveState();
+}
+function updateSaveState(){
+  const s=document.getElementById('saveState');
+  if(RO){s.textContent='👁 공유 화면 — 읽기 전용';s.classList.remove('warn');return;}
+  if(!storageOK){s.textContent='▲ 메모리 전용 — 저장 실패';s.classList.add('warn');return;}
+  if(typeof CLOUD!=='undefined'&&CLOUD){
+    if(cloudState==='sync'){s.textContent='☁ 동기화 중…';s.classList.remove('warn');}
+    else if(cloudState==='err'){s.textContent='⚠ 동기화 실패 — 로컬엔 저장됨';s.classList.add('warn');}
+    else{s.textContent='☁ 온라인 DB 동기화됨';s.classList.remove('warn');}
+    return;
+  }
+  s.textContent='● 브라우저에 저장됨'; s.classList.remove('warn');
+}
+/* 행복 척도 마이그레이션: 구 0~10 / signed10(−10~+10) → 최종 −1~+1 (중앙 0) */
+function migrateScale(d){
+  const conv=f=>{
+    (d.events||[]).forEach(e=>{if(e.happiness!=null)e.happiness=f(e.happiness);});
+    (d.spans||[]).forEach(s=>{if(s.happiness!=null)s.happiness=f(s.happiness);});
+    (d.happiness||[]).forEach(h=>{h.v=f(h.v);});
+  };
+  const r2=v=>Math.round(v*100)/100;
+  delete d.now; /* 現在는 항상 오늘 기준 자동 (고정값 폐기) */
+  if(d.scale==='signed1')return d;
+  if(d.scale==='signed10')conv(v=>r2(v/10));
+  else conv(v=>r2((v-5)/5)); /* 구 0~10 */
+  d.scale='signed1';
+  return d;
+}
+let DATA = migrateScale(RO?structuredClone(window.SHARED_DATA):loadDoc(curDocId));
+
+/* ==========================================================================
+   실행 취소 / 다시 실행 — 모든 데이터 변경의 스냅샷 히스토리
+   ========================================================================== */
+let UNDO=[],REDO=[],histCur=JSON.stringify(DATA),restoring=false;
+function histPush(){
+  if(restoring)return;
+  const now=JSON.stringify(DATA);
+  if(now===histCur)return; /* 무변경 저장은 스택에 안 쌓음 */
+  UNDO.push(histCur);
+  if(UNDO.length>60)UNDO.shift();
+  REDO.length=0;
+  histCur=now;
+  updateHistBtns();
+}
+function undo(){
+  if(!UNDO.length)return;
+  REDO.push(histCur);
+  histCur=UNDO.pop();
+  restoreHist();
+}
+function redo(){
+  if(!REDO.length)return;
+  UNDO.push(histCur);
+  histCur=REDO.pop();
+  restoreHist();
+}
+function restoreHist(){
+  restoring=true;
+  DATA=JSON.parse(histCur);
+  selected=null;
+  if(typeof closePop==='function')closePop();
+  if(typeof closeCtx==='function')closeCtx();
+  afterMutate();
+  restoring=false;
+  updateHistBtns();
+}
+function updateHistBtns(){
+  const u=document.getElementById('btnUndo'),r=document.getElementById('btnRedo');
+  if(u)u.disabled=!UNDO.length;
+  if(r)r.disabled=!REDO.length;
+}
+document.getElementById('btnUndo').onclick=()=>undo();
+document.getElementById('btnRedo').onclick=()=>redo();
+
+/* ==========================================================================
+   유틸
+   ========================================================================== */
+const $=s=>document.querySelector(s);
+const NS='http://www.w3.org/2000/svg';
+const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const T=d=>{const[y,m]=d.split('-').map(Number);return y+((m||1)-1)/12;};
+const tToMonth=t=>{let y=Math.floor(t),m=Math.round((t-y)*12)+1;if(m>12){y++;m=1;}return y+'-'+String(m).padStart(2,'0');};
+/* 월 인덱스 연산 — 드래그 스냅용 */
+const miOf=d=>{const[y,m]=d.split('-').map(Number);return y*12+((m||1)-1);};
+const miToMonth=mi=>Math.floor(mi/12)+'-'+String(mi%12+1).padStart(2,'0');
+const miAtT=t=>Math.round(t*12);
+const el=(t,a)=>{const n=document.createElementNS(NS,t);for(const k in a)n.setAttribute(k,a[k]);return n;};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const textW=s=>[...String(s)].reduce((w,c)=>w+(c.charCodeAt(0)>255?13:7.2),0);
+let NOW, selected=null, dom=null, FULL, BOUND;
+
+/* ==========================================================================
+   전처리 + 레이아웃
+   ========================================================================== */
+let LAYOUT={}, NLANES=1, HAPPTS=[];
+function prepare(){
+  NOW=T(DATA.now||new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0'));
+  DATA.events.forEach(e=>{e.t=T(e.date);e.kind='event';});
+  DATA.events.sort((a,b)=>a.t-b.t);
+  DATA.spans.forEach(s=>{s.t0=T(s.start);s.t1=s.end?T(s.end):null;s.kind='span';s.ongoing=!s.end;});
+  DATA.spans.sort((a,b)=>a.t0-b.t0);
+  DATA.happiness.forEach(h=>h.t=T(h.date));
+  DATA.happiness.sort((a,b)=>a.t-b.t);
+  DATA.records=DATA.records||[];
+  DATA.records.forEach(r=>r.t=T(r.m));
+
+  /* 수심 곡선 = 월 단위 통합 — 같은 달의 사건·측점 여러 개는 평균 한 점으로 (수직 꺾임 방지).
+     개별 점은 각자 값 높이에 그대로 그려지고, 곡선은 그 평균을 지나간다 */
+  const contrib=new Map();
+  const addC=(date,t,v,future)=>{
+    let c=contrib.get(date);
+    if(!c){c={t,vals:[],fut:true};contrib.set(date,c);}
+    c.vals.push(v);
+    if(!future)c.fut=false;
+  };
+  DATA.happiness.forEach(h=>addC(h.date,h.t,h.v,h.future));
+  DATA.events.filter(e=>e.happiness!=null).forEach(e=>addC(e.date,e.t,e.happiness,e.future));
+  HAPPTS=[...contrib.entries()].map(([date,c])=>({date,t:c.t,
+    v:Math.round(c.vals.reduce((a,b)=>a+b,0)/c.vals.length*100)/100,
+    future:c.fut,kind:'agg',n:c.vals.length}))
+    .sort((a,b)=>a.t-b.t);
+
+  const laneEnds=[];
+  DATA.spans.forEach(s=>{
+    const end=s.t1??NOW+0.5;
+    /* 시작 월 ≥ 종료 월이면 같은 레인 — 끝·시작이 같은 달인 기간은 나란히 이어진다 */
+    let lane=laneEnds.findIndex(le=>s.t0>=le-1e-6);
+    if(lane===-1){lane=laneEnds.length;laneEnds.push(end);}else laneEnds[lane]=end;
+    s.lane=lane;
+  });
+  NLANES=Math.max(laneEnds.length,1);
+
+  /* 통합 캔버스 — 맨 위: 시간축 / 기간 막대 / 행복 곡선(사건 주석) / 기록 밀도 */
+  const EV_LVLS=3;
+  const L={ERA_LABEL_Y:22, EV_LVLS};
+  L.AXIS_Y=64;                             /* 시간축 — 맨 위 (시대 라벨 아래) */
+  L.SPAN_TOP=L.AXIS_Y+14; L.SPAN_H=26; L.SPAN_GAP=9;
+  const spanBot=L.SPAN_TOP+NLANES*(L.SPAN_H+L.SPAN_GAP)-L.SPAN_GAP;
+  L.HAP_TOP=spanBot+18;                    /* +1 상한 */
+  L.HAP_BOT=L.HAP_TOP+230;                 /* −1 하한. 사건 라벨은 점 옆에 직접 붙는다 */
+  L.H=L.HAP_BOT+30;
+  LAYOUT=L;
+
+  const allT=[...DATA.events.map(e=>e.t),...DATA.spans.flatMap(s=>[s.t0,s.t1??NOW+0.5]),
+              ...DATA.happiness.map(h=>h.t),...DATA.eras.flatMap(e=>[T(e.start),T(e.end)])];
+  const mn=allT.length?Math.min(...allT):NOW-10, mx=allT.length?Math.max(...allT):NOW+2;
+  FULL=[mn-1.2,mx+1.5]; BOUND=[mn-4,mx+5];
+  if(!dom) dom=[NOW-3,NOW+2]; /* 기본 뷰 = 現在 중심 5년 (전체는 '전체 보기'·0 키) */
+  dom=[Math.max(dom[0],BOUND[0]),Math.min(dom[1],BOUND[1])];
+
+  /* 요약 */
+  const ports=new Set();
+  DATA.events.concat(DATA.spans).forEach(x=>x.loc&&ports.add(x.loc.label));
+  DATA.trips.forEach(t=>t.points.forEach(p=>ports.add(p.label)));
+  const h1Sync=document.querySelector('h1');
+  if(h1Sync&&DATA.profile.name&&h1Sync.textContent!==DATA.profile.name)h1Sync.textContent=DATA.profile.name;
+  $('#statBirth').textContent=DATA.profile.birth.replace('-','.');
+  $('#statYears').textContent=(NOW-T(DATA.profile.birth)).toFixed(1)+" yr";
+  $('#statEvents').textContent=DATA.events.length+" · "+DATA.spans.length;
+  $('#statNotes').textContent=DATA.records.reduce((s,r)=>s+r.n,0).toLocaleString()+" 편";
+  const avgPts=HAPPTS.filter(pt=>!pt.future);
+  $('#statAvg').textContent=avgPts.length
+    ?(a=>(a>0?'+':'')+a.toFixed(2))(avgPts.reduce((s,pt)=>s+pt.v,0)/avgPts.length)
+    :'—';
+  $('#statPorts').textContent=ports.size+" 곳";
+}
+const fmtAge=t=>Math.floor(t-T(DATA.profile.birth))+"세";
+
+/* ==========================================================================
+   캔버스 렌더
+   ========================================================================== */
+const svg=$('#tl'), tip=$('#tlTip');
+const svgXY=e=>{const r=svg.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};}; /* target 무관 svg 좌표 */
+let W=1000;
+const X=t=>(t-dom[0])/(dom[1]-dom[0])*W;
+const Xinv=px=>dom[0]+px/W*(dom[1]-dom[0]);
+function hapAt(t){ /* 곡선 보간 — 수심 없는 사건의 위치 */
+  const a=HAPPTS;
+  if(!a.length)return 0;
+  if(t<=a[0].t)return a[0].v;
+  for(let i=1;i<a.length;i++)if(a[i].t>=t){
+    const p=a[i-1],q=a[i];
+    return p.v+(q.v-p.v)*((t-p.t)/((q.t-p.t)||1));
+  }
+  return a[a.length-1].v;
+}
+function smoothPath(p){
+  /* 단조 3차 보간 (Fritsch–Carlson) — x 역행·오버슈트 없이 완만하게.
+     기존 Catmull-Rom은 점 간격이 불균등하면 뒤로 꺾이거나 급락 과장이 생겼다 */
+  if(p.length<2)return'';
+  if(p.length===2)return`M ${p[0].x} ${p[0].y} L ${p[1].x} ${p[1].y}`;
+  const n=p.length,dx=[],m=[];
+  for(let i=0;i<n-1;i++){
+    const h=Math.max(p[i+1].x-p[i].x,1e-6);
+    dx.push(h);m.push((p[i+1].y-p[i].y)/h);
+  }
+  const t=[m[0]];
+  for(let i=1;i<n-1;i++){
+    if(m[i-1]*m[i]<=0)t.push(0); /* 극값에선 수평 접선 — 출렁임 방지 */
+    else{
+      const w1=2*dx[i]+dx[i-1],w2=dx[i]+2*dx[i-1];
+      t.push((w1+w2)/(w1/m[i-1]+w2/m[i]));
+    }
+  }
+  t.push(m[n-2]);
+  let d=`M ${p[0].x} ${p[0].y}`;
+  for(let i=0;i<n-1;i++){
+    const h=dx[i];
+    d+=` C ${p[i].x+h/3} ${p[i].y+t[i]*h/3}, ${p[i+1].x-h/3} ${p[i+1].y-t[i+1]*h/3}, ${p[i+1].x} ${p[i+1].y}`;
+  }
+  return d;
+}
+
+function render(){
+  hideTip();
+  if(typeof hideCard==='function')hideCard();
+  const L=LAYOUT;
+  W=svg.clientWidth||1000;
+  svg.setAttribute('viewBox',`0 0 ${W} ${L.H}`);
+  svg.setAttribute('height',L.H);
+  svg.innerHTML='';
+  const span=dom[1]-dom[0];
+  const HY=v=>L.HAP_BOT-((v+1)/2)*(L.HAP_BOT-L.HAP_TOP); /* −1~+1, 중앙 0 */
+
+  let eraLabelEnd=-1e9; /* 라벨은 온전히 그리거나 아예 생략 — 잘림 금지, 이전 라벨과 겹침 시 우측으로 밀기 */
+  DATA.eras.forEach(er=>{
+    const x1=Math.max(X(T(er.start)),-50), x2=Math.min(X(T(er.end)),W+50);
+    if(x2<0||x1>W)return;
+    svg.appendChild(el('rect',{x:x1,y:0,width:x2-x1,height:L.H,fill:er.color,opacity:.055}));
+    svg.appendChild(el('line',{x1:x1,x2:x1,y1:0,y2:L.H,stroke:er.color,opacity:.3,'stroke-width':1}));
+    let lx=Math.max(x1+10,10);
+    if(lx<eraLabelEnd+18)lx=eraLabelEnd+18;
+    const etw=textW(er.title);
+    if(lx<Math.min(x2,W)-24&&lx+etw<W-4){
+      const t=el('text',{x:lx,y:L.ERA_LABEL_Y,'font-size':12,fill:er.color,'font-family':'Gowun Batang','font-weight':700,opacity:.9});
+      t.textContent=er.title;svg.appendChild(t);
+      eraLabelEnd=lx+etw;
+    }
+    /* 상단 띠 = 시대 클릭 존 (클릭하면 바로 수정) */
+    const zx1=Math.max(x1,0),zx2=Math.min(x2,W);
+    if(zx2-zx1>6){
+      const gz=el('g',{cursor:'pointer',tabindex:0,role:'button','aria-label':`시대 ${er.title} — 클릭해서 수정`});
+      gz.appendChild(el('rect',{x:zx1,y:0,width:zx2-zx1,height:30,fill:'transparent'}));
+      gz.addEventListener('mouseenter',()=>showTip((zx1+zx2)/2,26,
+        `<span class="yy">${esc(er.start.replace('-','.'))} – ${esc(er.end.replace('-','.'))}</span> · ${esc(er.title)} · 클릭 = 수정`));
+      gz.addEventListener('mouseleave',hideTip);
+      gz.addEventListener('click',e=>{
+        if(moved)return;e.stopPropagation();hideTip();
+        openPopEra(er,e.clientX,e.clientY);
+      });
+      gz.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();
+        const b=gz.getBoundingClientRect();openPopEra(er,b.left+40,b.top+20);}});
+      gz.addEventListener('contextmenu',e=>{
+        e.preventDefault();e.stopPropagation();
+        openCtx(e.clientX,e.clientY,[
+          ['✎ 폼에서 편집','',()=>{if(!editMode)$('#btnEdit').onclick();openTab('era');fillEraForm(er);}],
+          ['✕ 시대 삭제','danger',()=>{
+                    DATA.eras.splice(DATA.eras.indexOf(er),1);afterMutate(selected!=null);
+          }],
+        ]);
+      });
+      svg.appendChild(gz);
+    }
+  });
+
+  let step=[1,2,5,10].find(s=>s/span*W>=76)||10;
+  for(let y=Math.ceil(dom[0]/step)*step;y<=dom[1];y+=step){
+    const x=X(y);
+    svg.appendChild(el('line',{x1:x,x2:x,y1:L.AXIS_Y-5,y2:L.AXIS_Y+5,stroke:'#23312B','stroke-width':1.2}));
+    svg.appendChild(el('line',{x1:x,x2:x,y1:L.AXIS_Y+5,y2:L.H,stroke:'#C4CDC1','stroke-width':.5,'stroke-dasharray':'2 6'}));
+    if(x>18&&x<W-18){ /* 가장자리 반토막 숫자 방지 */
+      const t=el('text',{x:x,y:L.AXIS_Y-12,'text-anchor':'middle','font-size':11,fill:'#23312B','font-family':'IBM Plex Mono'});
+      t.textContent=y;svg.appendChild(t);
+      const age=Math.floor(y-T(DATA.profile.birth)); /* 만 나이 — 연도 위 빈 줄 (아래는 핀 줄기와 겹침) */
+      if(age>=0&&Math.abs(x-X(NOW))>38){ /* 現在 태그 근처만 생략 */
+        const at=el('text',{x:x,y:L.AXIS_Y-24,'text-anchor':'middle','font-size':9.5,fill:'#A87F3D','font-family':'IBM Plex Mono',opacity:.85});
+        at.textContent='만 '+age;svg.appendChild(at);
+      }
+    }
+  }
+  if(1/span*W>=34&&step>1)
+    for(let y=Math.ceil(dom[0]);y<=dom[1];y++){
+      if(y%step===0)continue;
+      svg.appendChild(el('line',{x1:X(y),x2:X(y),y1:L.AXIS_Y-3,y2:L.AXIS_Y+3,stroke:'#5D6B62','stroke-width':.8}));
+    }
+  if(span<7)
+    for(let y=Math.floor(dom[0]);y<=dom[1];y++)
+      for(let m=1;m<12;m++){
+        const t=y+m/12;if(t<dom[0]||t>dom[1])continue;
+        svg.appendChild(el('line',{x1:X(t),x2:X(t),y1:L.AXIS_Y-2,y2:L.AXIS_Y+2,stroke:'#8A968D','stroke-width':.6}));
+      }
+  svg.appendChild(el('line',{x1:0,x2:W,y1:L.AXIS_Y,y2:L.AXIS_Y,stroke:'#23312B','stroke-width':1.6}));
+
+  const nx=X(NOW);
+  if(nx>-10&&nx<W+10){
+    svg.appendChild(el('line',{x1:nx,x2:nx,y1:30,y2:L.H,stroke:'#B5432A','stroke-width':1.2,'stroke-dasharray':'5 4',opacity:.75}));
+    const nflip=nx+40>W; /* 우측 끝에서 잘리면 선 왼쪽에 표기 */
+    const t=el('text',{x:nflip?nx-6:nx+6,'text-anchor':nflip?'end':'start',y:L.AXIS_Y-30,'font-size':10,fill:'#B5432A','font-family':'IBM Plex Mono','letter-spacing':'.1em'});
+    t.textContent='現在';svg.appendChild(t);
+  }
+
+  /* ===== 행복 곡선 — 중앙 0, 상·하한 ±1은 선명한 경계선 ===== */
+  /* 수로 배경 — ±1 채널을 닫힌 용기로 */
+  svg.appendChild(el('rect',{x:0,y:HY(1),width:W,height:HY(-1)-HY(1),fill:'#2E5E63',opacity:.05}));
+  [-1,-.5,0,.5,1].forEach(v=>{
+    const isBound=Math.abs(v)===1, isZero=v===0;
+    svg.appendChild(el('line',{x1:0,x2:W,y1:HY(v),y2:HY(v),
+      stroke:isBound?'#23312B':(isZero?'#5D6B62':'#C4CDC1'),
+      'stroke-width':isBound?1.4:(isZero?1.2:.6),
+      'stroke-dasharray':(isBound||isZero)?'':'2 5',
+      opacity:isBound?.65:(isZero?.8:1)}));
+    const t=el('text',{x:W-8,y:HY(v)-4,'text-anchor':'end','font-size':isBound?10.5:10,
+      fill:(isBound||isZero)?'#23312B':'#5D6B62','font-weight':isBound?600:400,'font-family':'IBM Plex Mono'});
+    t.textContent=v>0?'+'+v:String(v);svg.appendChild(t);
+  });
+  const capT=el('text',{x:10,y:HY(-1)+18,'font-size':9,fill:'#5D6B62','font-family':'IBM Plex Mono','letter-spacing':'.14em',opacity:.9});
+  capT.textContent='幸福 水深';svg.appendChild(capT);
+
+  /* 전체 행복 평균선 — 실측(미래 제외) 평균, 황토 점선. 값은 SURVEY LOG에 표기 */
+  const pastPts=HAPPTS.filter(pt=>!pt.future);
+  if(pastPts.length){
+    const avg=pastPts.reduce((sum,pt)=>sum+pt.v,0)/pastPts.length;
+    const ay=HY(avg);
+    svg.appendChild(el('line',{x1:0,x2:W,y1:ay,y2:ay,stroke:'#A87F3D','stroke-width':1.1,'stroke-dasharray':'7 5',opacity:.75}));
+  }
+
+  /* 기록 밀도 — vault 노트 월별 편수 (최하단, 이벤트 위임) */
+  if(DATA.records.length){
+    const maxN=Math.max(...DATA.records.map(r=>r.n));
+    const bandH=Math.min(90,(L.HAP_BOT-L.HAP_TOP)*.3);
+    const mw=Math.max((1/12)/span*W-1,1.2);
+    const rg=el('g',{});
+    DATA.records.forEach(r=>{
+      const x=X(r.t);if(x<-20||x>W+20)return;
+      const h=Math.max(r.n/maxN*bandH,1.5);
+      const rect=el('rect',{x:x,y:L.HAP_BOT-h,width:mw,height:h,fill:'#A87F3D',opacity:.22});
+      rect.dataset.m=r.m;rect.dataset.n=r.n;rect.dataset.tx=x+mw/2;rect.dataset.ty=L.HAP_BOT-h;
+      rg.appendChild(rect);
+    });
+    rg.addEventListener('pointerover',e=>{
+      const d=e.target.dataset;
+      if(d&&d.m)showTip(+d.tx,+d.ty,`<span class="yy">${d.m}</span> · 기록 <span class="hh">${d.n}</span>편`);
+    });
+    rg.addEventListener('pointerout',hideTip);
+    svg.appendChild(rg);
+    const rl=el('text',{x:10,y:L.HAP_BOT-6,'font-size':10,fill:'#A87F3D','font-family':'IBM Plex Mono','letter-spacing':'.12em',opacity:.85});
+    rl.textContent='記錄 밀도 — NOTES/MONTH (max '+maxN+')';svg.appendChild(rl);
+  }
+
+  const hp=HAPPTS.map(pt=>({x:X(pt.t),y:HY(pt.v),pt}));
+  const fi=hp.findIndex(p=>p.pt.future);
+  const past=fi===-1?hp:hp.slice(0,fi), fut=fi===-1?[]:hp.slice(Math.max(fi-1,0));
+  if(past.length>1){
+    /* 0선 기준 면적 분할: 위(＋) 청록 / 아래(−) 주홍 */
+    const z=HY(0);
+    const defs=el('defs',{});
+    const gp=el('linearGradient',{id:'wgp',gradientUnits:'userSpaceOnUse',x1:0,y1:L.HAP_TOP,x2:0,y2:z});
+    gp.appendChild(el('stop',{offset:'0%','stop-color':'#2E5E63','stop-opacity':.26}));
+    gp.appendChild(el('stop',{offset:'100%','stop-color':'#2E5E63','stop-opacity':.04}));
+    const gn=el('linearGradient',{id:'wgn',gradientUnits:'userSpaceOnUse',x1:0,y1:z,x2:0,y2:L.HAP_BOT});
+    gn.appendChild(el('stop',{offset:'0%','stop-color':'#B5432A','stop-opacity':.06}));
+    gn.appendChild(el('stop',{offset:'100%','stop-color':'#B5432A','stop-opacity':.24}));
+    const cp=el('clipPath',{id:'cpPos'});cp.appendChild(el('rect',{x:-50,y:0,width:W+100,height:z}));
+    const cn=el('clipPath',{id:'cpNeg'});cn.appendChild(el('rect',{x:-50,y:z,width:W+100,height:L.H-z}));
+    defs.appendChild(gp);defs.appendChild(gn);defs.appendChild(cp);defs.appendChild(cn);
+    svg.appendChild(defs);
+    const dArea=smoothPath(past)+` L ${past[past.length-1].x} ${z} L ${past[0].x} ${z} Z`;
+    svg.appendChild(el('path',{d:dArea,fill:'url(#wgp)','clip-path':'url(#cpPos)'}));
+    svg.appendChild(el('path',{d:dArea,fill:'url(#wgn)','clip-path':'url(#cpNeg)'}));
+    svg.appendChild(el('path',{d:smoothPath(past),fill:'none',stroke:'#1E4348','stroke-width':2.2,'stroke-linecap':'round',opacity:.85}));
+  }
+  if(fut.length>1)
+    svg.appendChild(el('path',{d:smoothPath(fut),fill:'none',stroke:'#7A8A80','stroke-width':1.8,'stroke-dasharray':'6 6',opacity:.85}));
+
+  /* 사건 — 곡선 위 점 + 점 옆 라벨 (머리 위 여백을 비워 높이가 읽히게) */
+  let evLabelEnd=-1e9;
+  DATA.events.forEach(e=>{
+    const x=X(e.t);if(x<-160||x>W+160)return;
+    const hasV=e.happiness!=null;
+    const v=hasV?e.happiness:0; /* 행복 미반영 핀 = 중앙 0선 위 (곡선 기준에서 제외) */
+    const y=HY(v);
+    const col=e.future?'#7A8A80':'#B5432A';
+    const sel=selected===e;
+    const ly=v>=0.45?y+17:y-9; /* 천장 근처 점은 라벨을 아래로 */
+    const g=el('g',{cursor:'pointer',tabindex:0,role:'button','aria-label':`${e.date} ${e.title}`});
+    g.appendChild(el('circle',{cx:x,cy:y,r:12,fill:'transparent'}));
+    const dot=el('circle',{cx:x,cy:y,r:sel?6:4.5,fill:'#F2F4EE',stroke:col,'stroke-width':2.2,opacity:hasV?1:.55});
+    g.appendChild(dot);
+    const label=e.title.replace(/^\(예시\)\s*/,'');
+    const tw=textW(label)+14;
+    const next=DATA.events.find(o=>o.t>e.t);
+    const prevEnd=evLabelEnd;
+    const showLabel=(x>-2&&x<W+2)&&(sel||!next||X(next.t)-x>tw); /* 잘린 글자 금지 — 안 되면 생략 */
+    let labelEnd=x+6;
+    if(showLabel){
+      if(x+8+tw<=W-4){
+        const t=el('text',{x:x+8,y:ly,'font-size':11.5,fill:sel?'#B5432A':'#23312B','font-weight':sel?600:400});
+        t.textContent=label;g.appendChild(t);
+        labelEnd=x+tw;
+      }else if(x-8-tw>prevEnd+6){
+        const t=el('text',{x:x-8,y:ly,'text-anchor':'end','font-size':11.5,fill:sel?'#B5432A':'#23312B','font-weight':sel?600:400});
+        t.textContent=label;g.appendChild(t);
+      }
+    }
+    evLabelEnd=labelEnd;
+    /* 자유 드래그: 상하 = 행복, 좌우 = 시기 (월 스냅, 놓을 때 1회 커밋) */
+    let drag=null;
+    g.addEventListener('pointerdown',ev=>{
+      if(RO)return; /* 뷰어: 드래그 편집 차단 (팬으로 통과) */
+      ev.stopPropagation();hideCard();
+      try{g.setPointerCapture(ev.pointerId);}catch(_){}
+      const p=svgXY(ev);
+      drag={x0:p.x,y0:p.y,v0:v,mi0:miOf(e.date),mi:miOf(e.date),did:false};
+    });
+    g.addEventListener('pointermove',ev=>{
+      if(!drag)return;
+      const p=svgXY(ev);
+      if(Math.abs(p.y-drag.y0)>3||Math.abs(p.x-drag.x0)>3)drag.did=true;
+      if(!drag.did)return;
+      drag.mi=drag.mi0+Math.round((Xinv(p.x)-Xinv(drag.x0))*12);
+      const nx=X(drag.mi/12);
+      dot.setAttribute('cx',nx);
+      let nv=e.happiness;
+      if(hasV||Math.abs(p.y-drag.y0)>5){ /* 수심 없던 사건은 세로로 확실히 움직일 때만 부여 */
+        nv=Math.round(Math.max(-1,Math.min(1,drag.v0-(p.y-drag.y0)/(L.HAP_BOT-L.HAP_TOP)*2))*10)/10;
+        e.happiness=nv;
+        dot.setAttribute('cy',HY(nv));
+      }
+      showTip(nx,+dot.getAttribute('cy'),
+        `<span class="yy">${miToMonth(drag.mi)}</span> · <span class="hh">${nv!=null?(nv>0?'+':'')+nv.toFixed(1):'—'}</span> · ${esc(e.title)}`);
+    });
+    const endDrag=()=>{
+      if(!drag)return;
+      const d=drag;drag=null;
+      if(d.did){
+        moved=true;setTimeout(()=>moved=false,0);
+        hideTip();
+        e.date=miToMonth(d.mi);
+        afterMutate(true);
+      }
+    };
+    g.addEventListener('pointerup',endDrag);
+    g.addEventListener('pointercancel',endDrag);
+    g.addEventListener('mouseenter',()=>{ /* 스냅샷 설명 카드 */
+      if(drag)return;
+      const rc=svg.getBoundingClientRect();
+      showCard(e,rc.left+x,rc.top+y);
+    });
+    g.addEventListener('mouseleave',()=>{if(!drag)hideCard();});
+    const pickEv=()=>{
+      selected=(selected===e)?null:e;
+      render();renderDetail();
+      if(selected){
+        const rc=svg.getBoundingClientRect();
+        openPop(e,rc.left+x,rc.top+y);
+        if(editMode){openTab('event');fillEventForm(e);}
+      }else closePop();
+    };
+    g.addEventListener('click',ev=>{if(moved)return;ev.stopPropagation();pickEv();});
+    g.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();pickEv();}});
+    g.addEventListener('contextmenu',ev=>{
+      ev.preventDefault();ev.stopPropagation();
+      selected=e;render();renderDetail();
+      openCtx(ev.clientX,ev.clientY,[
+        ['✎ 폼에서 편집','',()=>{if(!editMode)$('#btnEdit').onclick();openTab('event');fillEventForm(e);
+          $('#editor').scrollIntoView({behavior:reduceMotion?'auto':'smooth',block:'center'});}],
+        ['⧉ 복제','',()=>duplicateItem(e)],
+        ...(hasV?[['행복 반영 해제 (0선으로)','',()=>{e.happiness=undefined;afterMutate(selected!=null);}]]
+                :[['행복 반영 (곡선에 올리기)','',()=>{e.happiness=0;afterMutate(selected!=null);}]]),
+        ['✕ 삭제','danger',()=>deleteItem(e)],
+      ]);
+    });
+    svg.appendChild(g);
+  });
+
+  /* 스팬 */
+  DATA.spans.forEach(s=>{
+    const x1=X(s.t0),x2=X(s.t1??NOW+0.45);
+    if(x2<-60||x1>W+60)return;
+    const y=L.SPAN_TOP+s.lane*(L.SPAN_H+L.SPAN_GAP);
+    const sel=selected===s;
+    const g=el('g',{cursor:'grab',tabindex:0,role:'button','aria-label':`${s.start}부터 ${s.end||'진행 중'} ${s.title}`});
+    const rf=el('rect',{x:x1,y:y,width:Math.max(x2-x1,3),height:L.SPAN_H,rx:2,fill:s.color||'#2E5E63',opacity:sel?.32:.16});
+    const ro=el('rect',{x:x1,y:y,width:Math.max(x2-x1,3),height:L.SPAN_H,rx:2,fill:'none',stroke:s.color||'#2E5E63','stroke-width':sel?2:1.3,'stroke-dasharray':s.future?'5 4':''});
+    g.appendChild(rf);g.appendChild(ro);
+    const label=s.title.replace(/^\(예시\)\s*/,'')+(s.ongoing?' ⋯':'');
+    const slx=Math.max(x1,0)+9; /* 화면 밖으로 밀린 막대는 보이는 구간 안에 라벨 */
+    if(Math.min(x2,W)-slx>textW(label)+9){
+      const t=el('text',{x:slx,y:y+L.SPAN_H/2+4,'font-size':12,fill:'#23312B','font-weight':sel?600:500});
+      t.textContent=label;g.appendChild(t);
+    }
+    /* 드래그: 가장자리 8px = 기간 조절, 중앙 = 통째 이동 (월 스냅, 놓을 때 1회 커밋) */
+    let sd=null;
+    const edgeAt=px=>Math.abs(px-x1)<=8?'l':(Math.abs(px-x2)<=8?'r':'mid');
+    g.addEventListener('pointermove',ev=>{
+      if(sd){
+        const px=svgXY(ev).x;
+        if(Math.abs(px-sd.x0)>4)sd.did=true;
+        if(!sd.did)return;
+        const dMi=Math.round((Xinv(px)-Xinv(sd.x0))*12);
+        if(sd.mode==='mid'){
+          sd.nS=sd.sMi+dMi;
+          sd.nE=sd.eMi==null?null:sd.eMi+dMi;
+        }else if(sd.mode==='l'){
+          sd.nS=Math.min(sd.sMi+dMi,(sd.eMi==null?miAtT(NOW):sd.eMi)-1);
+        }else{
+          sd.nE=Math.max((sd.eMi==null?miAtT(NOW):sd.eMi)+dMi,sd.nS+1); /* 진행 중 막대 끝 드래그 = 종료 부여 */
+        }
+        const nx1=X(sd.nS/12),nx2=X(sd.nE==null?NOW+0.45:sd.nE/12);
+        [rf,ro].forEach(r=>{r.setAttribute('x',nx1);r.setAttribute('width',Math.max(nx2-nx1,3));});
+        showTip(Math.max(nx1,0)/2+Math.min(nx2,W)/2,y,
+          `<span class="yy">${miToMonth(sd.nS)} – ${sd.nE==null?'진행 중':miToMonth(sd.nE)}</span> · ${esc(s.title)}`);
+      }else{
+        g.setAttribute('cursor',edgeAt(svgXY(ev).x)==='mid'?'grab':'ew-resize');
+      }
+    });
+    g.addEventListener('pointerdown',ev=>{
+      if(RO)return;
+      ev.stopPropagation();hideCard();
+      try{g.setPointerCapture(ev.pointerId);}catch(_){}
+      const px=svgXY(ev).x;
+      sd={mode:edgeAt(px),x0:px,sMi:miOf(s.start),eMi:s.end?miOf(s.end):null,
+          nS:miOf(s.start),nE:s.end?miOf(s.end):null,did:false};
+    });
+    const sup=()=>{
+      if(!sd)return;
+      const d=sd;sd=null;
+      if(d.did){
+        moved=true;setTimeout(()=>moved=false,0);
+        hideTip();
+        s.start=miToMonth(d.nS);
+        s.end=d.nE==null?null:miToMonth(d.nE);
+        afterMutate(true);
+      }
+    };
+    g.addEventListener('pointerup',sup);
+    g.addEventListener('pointercancel',sup);
+    attachInteract(g,s,()=>({x:Math.max(x1,0)/2+Math.min(x2,W)/2,y:y}));
+    svg.appendChild(g);
+  });
+
+  /* 독립 수심 측점 — 각자 자기 값 높이에 (곡선은 월 평균을 지나감) */
+  const hpDots=DATA.happiness.map(h=>({x:X(h.t),y:HY(h.v),pt:{kind:'hap',src:h,date:h.date,v:h.v,future:h.future}}));
+  hpDots.forEach(p=>{
+    if(p.x<-20||p.x>W+20)return;
+    const pt=p.pt, isEv=pt.kind==='event';
+    const g=el('g',{cursor:'ns-resize','data-hap':'1'});
+    g.appendChild(el('circle',{cx:p.x,cy:p.y,r:10,fill:'transparent'}));
+    /* 사건 유래 측점 = 링, 독립 측점 = 채움 */
+    const dot=isEv
+      ?el('circle',{cx:p.x,cy:p.y,r:4.5,fill:'#F2F4EE',stroke:pt.future?'#7A8A80':'#B5432A','stroke-width':2.2})
+      :el('circle',{cx:p.x,cy:p.y,r:4,fill:pt.future?'#7A8A80':'#B5432A',stroke:'#F2F4EE','stroke-width':2});
+    g.appendChild(dot);
+    const getV=()=>isEv?pt.src.happiness:pt.src.v;
+    const setV=v=>{if(isEv)pt.src.happiness=v;else pt.src.v=v;};
+    const tipHtml=v=>`<span class="yy">${pt.date}</span> · 수심 <span class="hh">${v.toFixed(1)}</span>`+(isEv?` · ${esc(pt.src.title)}`:'');
+    let drag=null;
+    g.addEventListener('pointerdown',ev=>{ /* 자유 드래그: 상하 = 값, 좌우 = 시기 */
+      if(RO)return;
+      ev.stopPropagation();
+      try{g.setPointerCapture(ev.pointerId);}catch(_){}
+      const q=svgXY(ev);
+      drag={x0:q.x,y0:q.y,v0:getV(),mi0:miOf(pt.src.date),mi:miOf(pt.src.date),did:false};
+    });
+    g.addEventListener('pointermove',ev=>{
+      if(!drag)return;
+      const q=svgXY(ev);
+      if(Math.abs(q.y-drag.y0)>3||Math.abs(q.x-drag.x0)>3)drag.did=true;
+      if(!drag.did)return;
+      const v=Math.round(Math.max(-1,Math.min(1,drag.v0-(q.y-drag.y0)/(L.HAP_BOT-L.HAP_TOP)*2))*10)/10;
+      setV(v);
+      drag.mi=drag.mi0+Math.round((Xinv(q.x)-Xinv(drag.x0))*12);
+      const nx=X(drag.mi/12);
+      dot.setAttribute('cy',HY(v));dot.setAttribute('cx',nx);
+      showTip(nx,HY(v),`<span class="yy">${miToMonth(drag.mi)}</span> · 수심 <span class="hh">${(v>0?'+':'')+v.toFixed(1)}</span>`);
+    });
+    const endDrag=()=>{
+      if(!drag)return;
+      const d=drag;drag=null;
+      if(d.did){
+        moved=true;setTimeout(()=>moved=false,0);
+        hideTip();
+        pt.src.date=miToMonth(d.mi);
+        afterMutate(true);
+      }
+    };
+    g.addEventListener('pointerup',endDrag);
+    g.addEventListener('pointercancel',endDrag);
+    g.addEventListener('mouseenter',()=>{if(!drag)showTip(p.x,p.y,tipHtml(getV()));});
+    g.addEventListener('mouseleave',()=>{if(!drag)hideTip();});
+    g.addEventListener('click',ev=>{
+      if(moved)return; ev.stopPropagation();
+      const rc=svg.getBoundingClientRect();
+      if(isEv){ /* 사건 측점 → 사건 팝오버로 통합 편집 */
+        selected=pt.src;render();renderDetail();
+        openPop(pt.src,rc.left+p.x,rc.top+p.y);
+      }else{
+        openPopHap(pt.src,rc.left+p.x,rc.top+p.y);
+        if(editMode){ openTab('hap'); fillHapForm(pt.src); }
+      }
+    });
+    g.addEventListener('contextmenu',ev=>{
+      ev.preventDefault();ev.stopPropagation();
+      openCtx(ev.clientX,ev.clientY,isEv?[
+        ['✎ 사건 편집','',()=>{
+          const rc=svg.getBoundingClientRect();
+          selected=pt.src;render();renderDetail();
+          openPop(pt.src,rc.left+p.x,rc.top+p.y);
+        }],
+        ['곡선에서 제외 (수심 해제)','',()=>{pt.src.happiness=undefined;afterMutate(selected!=null);}],
+      ]:[
+        [`✕ 측점 삭제 (${pt.date} · ${getV().toFixed(1)})`,'danger',()=>{
+          const i=DATA.happiness.indexOf(pt.src);
+          if(i>=0){DATA.happiness.splice(i,1);afterMutate(selected!=null);}
+        }],
+      ]);
+    });
+    svg.appendChild(g);
+  });
+  updateScrubber();
+}
+
+function showTip(x,y,html){
+  const r=svg.getBoundingClientRect();
+  tip.innerHTML=html;
+  tip.style.left=Math.max(60,Math.min(x*(r.width/W),r.width-60))+'px';
+  tip.style.top=Math.max(34,y*(r.height/LAYOUT.H))+'px';
+  tip.style.opacity=1;
+}
+function hideTip(){tip.style.opacity=0;}
+
+function attachInteract(g,item,posFn){
+  g.addEventListener('mouseenter',()=>{ /* 스냅샷 설명 카드 */
+    const p=posFn(),rc=svg.getBoundingClientRect();
+    showCard(item,rc.left+p.x,rc.top+p.y);
+  });
+  g.addEventListener('mouseleave',hideCard);
+  const pick=e=>{
+    if(moved)return; e.stopPropagation();
+    selected=(selected===item)?null:item;
+    render();renderDetail();
+    if(selected){ /* 클릭 즉시 그 자리에서 편집 */
+      const p=posFn(),rc=svg.getBoundingClientRect();
+      openPop(item,rc.left+p.x,rc.top+p.y);
+      if(editMode){
+        if(item.kind==='event'){openTab('event');fillEventForm(item);}
+        else{openTab('span');fillSpanForm(item);}
+      }
+    }else closePop();
+  };
+  g.addEventListener('click',pick);
+  g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(e);}});
+  g.addEventListener('contextmenu',e=>{ /* 우클릭 = 노션식 ⋯ 메뉴 */
+    e.preventDefault();e.stopPropagation();
+    selected=item;render();renderDetail();
+    openCtx(e.clientX,e.clientY,[
+      ['✎ 폼에서 편집','',()=>{
+        if(!editMode)$('#btnEdit').onclick();
+        if(item.kind==='event'){openTab('event');fillEventForm(item);}
+        else{openTab('span');fillSpanForm(item);}
+        $('#editor').scrollIntoView({behavior:reduceMotion?'auto':'smooth',block:'center'});
+      }],
+      ['⧉ 복제','',()=>duplicateItem(item)],
+      ['✕ 삭제','danger',()=>deleteItem(item)],
+    ]);
+  });
+}
+
+const SPAN_COLORS=[
+  ['#2E5E63','청록'],['#1E4348','심청'],['#3E5C7F','쪽'],['#5F7A54','솔'],
+  ['#B5432A','주홍'],['#8C4A52','팥'],['#7E5A78','자주'],['#BF7B4B','감'],
+  ['#A87F3D','황토'],['#8A5A3B','갈'],['#7A8A80','회록'],['#23312B','먹'],
+];
+function renderDetail(){
+  const d=$('#detail');
+  if(RO){ /* 공유 뷰어: 읽기 전용 상세 */
+    if(!selected){d.innerHTML='<span class="dt-empty">핀·막대 클릭 = 상세 · 호버 = 설명 카드 · 이 화면은 공유용 읽기 전용이다</span>';return;}
+    const it=selected,isSpan=it.kind==='span';
+    const range=isSpan?`${it.start.replace('-','.')} – ${it.end?it.end.replace('-','.'):'진행 중'}`:it.date.replace('-','.');
+    const age=it.future?'예정':fmtAge(isSpan?it.t0:it.t);
+    d.innerHTML=`
+      <div class="dt-date">${esc(range)}<span class="age">${esc(age)}</span></div>
+      <div>
+        <div class="dt-title">${esc(it.title)} ${it.future?'<span class="future-tag">PLANNED</span>':''}</div>
+        <p class="dt-desc">${esc(it.desc||'')}</p>
+        <div class="dt-meta">
+          ${it.happiness!=null?`<span class="depth-badge">水深 ${(it.happiness>0?'+':'')+it.happiness.toFixed(1)}</span>`:''}
+          ${it.loc?`<button class="loc-chip" data-lat="${it.loc.lat}" data-lng="${it.loc.lng}" data-trip="${esc(it.tripId||'')}">⚓ ${esc(it.loc.label)} — 지도에서 보기</button>`:''}
+        </div>
+      </div>`;
+    return;
+  }
+  if(!selected){
+    d.innerHTML=`<span class="dt-empty">클릭 = 바로 편집 · 더블클릭 = 추가(위=기간·아래=사건) · 점 드래그: 상하=행복·좌우=시기 · 막대: 끝=조절·중앙=이동 · 우클릭 = 메뉴</span>`;
+    return;
+  }
+  const it=selected, isSpan=it.kind==='span';
+  const age=isSpan?fmtAge(it.t0):fmtAge(it.t);
+  d.innerHTML=`
+    <div class="dt-date">
+      ${isSpan
+        ?`<input type="month" class="dt-edit dt-month" id="dtStart" value="${it.start}" aria-label="시작">
+           <input type="month" class="dt-edit dt-month" id="dtEnd" value="${it.end||''}" aria-label="종료 — 비우면 진행 중">`
+        :`<input type="month" class="dt-edit dt-month" id="dtDate" value="${it.date}" aria-label="날짜">`}
+      <span class="age">${it.future?'예정':age}${isSpan&&!it.end?' · 진행 중':''}</span>
+    </div>
+    <div class="dt-main">
+      <input class="dt-edit dt-title-in" id="dtTitle" value="${esc(it.title)}" aria-label="제목">
+      <textarea class="dt-edit dt-desc-in" id="dtDesc" placeholder="설명…" aria-label="설명">${esc(it.desc||'')}</textarea>
+      <div class="dt-meta">
+        ${!isSpan?`<label class="dt-lab"><input type="checkbox" id="dtHasHap" ${it.happiness!=null?'checked':''}> 행복 반영</label>`:''}
+        <label class="dt-lab">水深 <input type="number" class="dt-edit dt-num" id="dtHap" min="-1" max="1" step="0.1" value="${it.happiness??''}"${!isSpan&&it.happiness==null?' disabled':''}></label>
+        <label class="dt-lab"><input type="checkbox" id="dtFuture" ${it.future?'checked':''}> 예정</label>
+        ${isSpan?`<select class="dt-edit" id="dtColor" aria-label="색">${SPAN_COLORS.map(c=>`<option value="${c[0]}"${it.color===c[0]?' selected':''}>${c[1]}</option>`).join('')}</select>`:''}
+        ${it.loc?`<button class="loc-chip" data-lat="${it.loc.lat}" data-lng="${it.loc.lng}" data-trip="${esc(it.tripId||'')}">⚓ ${esc(it.loc.label)}</button>`:''}
+        <span style="flex:1"></span>
+        <button class="mini-btn ghost" id="dtMore">✎ 전체 편집</button>
+        <button class="mini-btn ghost" id="dtDup">⧉ 복제</button>
+        <button class="mini-btn danger" id="dtDel">✕ 삭제</button>
+      </div>
+    </div>`;
+  const commit=()=>afterMutate(true);
+  $('#dtTitle').onchange=e=>{const v=e.target.value.trim();if(v){it.title=v;commit();}else e.target.value=it.title;};
+  $('#dtTitle').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();e.target.blur();}};
+  $('#dtDesc').onchange=e=>{it.desc=e.target.value.trim();commit();};
+  $('#dtHap').onchange=e=>{const v=parseFloat(e.target.value);it.happiness=isNaN(v)?undefined:Math.min(1,Math.max(-1,v));commit();};
+  $('#dtFuture').onchange=e=>{it.future=e.target.checked||undefined;commit();};
+  if(!isSpan)$('#dtHasHap').onchange=e=>{ /* commit → renderDetail 재구성으로 상태 동기화 */
+    it.happiness=e.target.checked?(it.happiness??0):undefined;
+    commit();
+  };
+  if(isSpan){
+    $('#dtStart').onchange=e=>{
+      const v=e.target.value;
+      if(!v){e.target.value=it.start;return;}
+      if(it.end&&T(it.end)<=T(v)){ /* 종료를 넘어서면 = 통째 이동 */
+        const dur=miOf(it.end)-miOf(it.start);
+        it.start=v;it.end=miToMonth(miOf(v)+dur);
+      }else it.start=v;
+      commit();
+    };
+    $('#dtEnd').onchange=e=>{
+      const v=e.target.value||null;
+      if(v&&T(v)<=T(it.start)){ /* 시작보다 앞서면 = 통째 이동 */
+        const dur=it.end?miOf(it.end)-miOf(it.start):12;
+        it.end=v;it.start=miToMonth(miOf(v)-dur);
+      }else it.end=v;
+      commit();
+    };
+    $('#dtColor').onchange=e=>{it.color=e.target.value;commit();};
+  }else{
+    $('#dtDate').onchange=e=>{const v=e.target.value;if(v){it.date=v;commit();}else e.target.value=it.date;};
+  }
+  $('#dtMore').onclick=()=>{
+    if(!editMode)$('#btnEdit').onclick();
+    if(isSpan){openTab('span');fillSpanForm(it);}else{openTab('event');fillEventForm(it);}
+  };
+  $('#dtDup').onclick=()=>duplicateItem(it);
+  $('#dtDel').onclick=()=>deleteItem(it);
+}
+function focusTitle(){requestAnimationFrame(()=>{const i=$('#dtTitle');if(i){i.focus();i.select();}});}
+function deleteItem(it){ /* 즉시 삭제 — 복구는 ⌘/Ctrl+Z */
+  if(RO)return;
+  const arr=it.kind==='span'?DATA.spans:DATA.events;
+  const i=arr.indexOf(it);if(i<0)return;
+  arr.splice(i,1);selected=null;closePop();afterMutate();
+}
+function duplicateItem(it){
+  if(RO)return;
+  const c=JSON.parse(JSON.stringify(it));
+  delete c.t;delete c.t0;delete c.t1;delete c.lane;delete c.ongoing;
+  c.title=it.title+' (복사)';
+  (it.kind==='span'?DATA.spans:DATA.events).push(c);
+  selected=c;afterMutate(true);focusTitle();
+}
+
+/* --- 컨텍스트 메뉴 --- */
+const ctxMenu=$('#ctxMenu');
+function openCtx(x,y,items){
+  if(RO)return;
+  ctxMenu.innerHTML='';
+  items.forEach(([label,cls,fn])=>{
+    const b=document.createElement('button');
+    if(cls)b.className=cls;
+    b.textContent=label;
+    b.onclick=()=>{closeCtx();fn();};
+    ctxMenu.appendChild(b);
+  });
+  ctxMenu.hidden=false;
+  const r=ctxMenu.getBoundingClientRect();
+  ctxMenu.style.left=Math.min(x,innerWidth-r.width-8)+'px';
+  ctxMenu.style.top=Math.min(y,innerHeight-r.height-8)+'px';
+}
+function closeCtx(){ctxMenu.hidden=true;}
+
+/* --- 호버 설명 카드 (스냅샷 미리보기) — 사건·기간 공용 --- */
+const hoverCard=$('#hoverCard');
+function showCard(it,cx,cy){
+  const isSpan=it.kind==='span';
+  const range=isSpan
+    ?`${it.start.replace('-','.')} – ${it.end?it.end.replace('-','.'):'진행 중'}`
+    :it.date.replace('-','.');
+  const dur=isSpan?((it.t1??NOW)-it.t0):null;
+  const age=it.future?'예정':fmtAge(isSpan?it.t0:T(it.date));
+  hoverCard.innerHTML=`
+    <div class="hc-top">
+      <span class="hc-date">${esc(range)}${dur!=null?` (${dur.toFixed(1)}년)`:''} · ${esc(age)}</span>
+      ${it.happiness!=null?`<span class="hc-hap${it.happiness<0?' neg':''}">${it.happiness>0?'+':''}${it.happiness.toFixed(1)}</span>`:''}
+    </div>
+    <div class="hc-title">${esc(it.title)}${it.future?' <span class="future-tag">PLANNED</span>':''}</div>
+    ${it.desc?`<div class="hc-desc">${esc(it.desc)}</div>`:''}
+    ${it.loc?`<div class="hc-loc">⚓ ${esc(it.loc.label)}</div>`:''}`;
+  hoverCard.hidden=false;
+  const r=hoverCard.getBoundingClientRect();
+  let x=cx-r.width/2, y=cy-r.height-16;
+  x=Math.max(8,Math.min(x,innerWidth-r.width-8));
+  if(y<8)y=cy+18; /* 위 공간 없으면 아래로 */
+  hoverCard.style.left=x+'px';hoverCard.style.top=y+'px';
+}
+function hideCard(){hoverCard.hidden=true;}
+document.addEventListener('click',e=>{if(!ctxMenu.hidden&&!ctxMenu.contains(e.target))closeCtx();});
+addEventListener('scroll',closeCtx,{passive:true});
+
+/* --- 팝오버 에디터: 클릭한 자리에서 즉시 수정 --- */
+const popEd=$('#popEd');
+let popAnchor=null;
+function popCommit(){afterMutate(true);}
+function openPop(it,ax,ay){
+  if(RO)return;
+  popAnchor={x:ax,y:ay};
+  const isSpan=it.kind==='span';
+  popEd.innerHTML=`
+    <input class="dt-edit pe-title" value="${esc(it.title)}" aria-label="제목">
+    <div class="pe-row">
+      ${isSpan
+        ?`<input type="month" class="dt-edit pe-month" data-f="start" value="${it.start}" aria-label="시작">
+           <span style="color:var(--ink-soft)">–</span>
+           <input type="month" class="dt-edit pe-month" data-f="end" value="${it.end||''}" aria-label="종료 — 비우면 진행 중">`
+        :`<input type="month" class="dt-edit pe-month" data-f="date" value="${it.date}" aria-label="날짜">`}
+    </div>
+    <div class="pe-row">
+      ${!isSpan?`<label class="dt-lab"><input type="checkbox" data-f="hasHap" ${it.happiness!=null?'checked':''}> 행복 반영</label>`:''}
+      <label class="dt-lab">水深 <input type="number" class="dt-edit pe-num" data-f="hap" min="-1" max="1" step="0.1" value="${it.happiness??''}"${!isSpan&&it.happiness==null?' disabled':''}></label>
+      <label class="dt-lab"><input type="checkbox" data-f="future" ${it.future?'checked':''}> 예정</label>
+      ${isSpan?`<select class="dt-edit" data-f="color" aria-label="색">${SPAN_COLORS.map(c=>`<option value="${c[0]}"${it.color===c[0]?' selected':''}>${c[1]}</option>`).join('')}</select>`:''}
+    </div>
+    <textarea class="dt-edit pe-desc" data-f="desc" placeholder="설명…" aria-label="설명">${esc(it.desc||'')}</textarea>
+    <div class="pe-actions">
+      <button class="pe-btn" data-a="form">✎ 전체</button>
+      <button class="pe-btn" data-a="dup">⧉ 복제</button>
+      <button class="pe-btn danger" data-a="del">✕ 삭제</button>
+    </div>`;
+  const q=s=>popEd.querySelector(s);
+  q('.pe-title').onchange=e=>{const v=e.target.value.trim();if(v){it.title=v;popCommit();}else e.target.value=it.title;};
+  q('.pe-title').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();e.target.blur();}};
+  q('[data-f="desc"]').onchange=e=>{it.desc=e.target.value.trim();popCommit();};
+  q('[data-f="hap"]').onchange=e=>{
+    const v=parseFloat(e.target.value);
+    it.happiness=isNaN(v)?undefined:Math.min(1,Math.max(-1,v));
+    const cb=q('[data-f="hasHap"]');if(cb)cb.checked=it.happiness!=null;
+    popCommit();
+  };
+  if(!isSpan){ /* 행복 반영 토글: 해제 = 0선 고정·곡선 제외, 반영 = 값 부여 */
+    q('[data-f="hasHap"]').onchange=ev2=>{
+      const hapInp=q('[data-f="hap"]');
+      if(ev2.target.checked){
+        let nv=parseFloat(hapInp.value);
+        it.happiness=isNaN(nv)?0:Math.min(1,Math.max(-1,nv));
+        hapInp.disabled=false;hapInp.value=it.happiness;
+      }else{
+        it.happiness=undefined;
+        hapInp.disabled=true;hapInp.value='';
+      }
+      popCommit();
+    };
+  }
+  q('[data-f="future"]').onchange=e=>{it.future=e.target.checked||undefined;popCommit();};
+  if(isSpan){
+    q('[data-f="start"]').onchange=e=>{
+      const v=e.target.value;
+      if(!v){e.target.value=it.start;return;}
+      if(it.end&&T(it.end)<=T(v)){ /* 종료를 넘어서면 = 통째 이동 */
+        const dur=miOf(it.end)-miOf(it.start);
+        it.start=v;it.end=miToMonth(miOf(v)+dur);
+        q('[data-f="end"]').value=it.end;
+      }else it.start=v;
+      popCommit();
+    };
+    q('[data-f="end"]').onchange=e=>{
+      const v=e.target.value||null;
+      if(v&&T(v)<=T(it.start)){ /* 시작보다 앞서면 = 통째 이동 */
+        const dur=it.end?miOf(it.end)-miOf(it.start):12;
+        it.end=v;it.start=miToMonth(miOf(v)-dur);
+        q('[data-f="start"]').value=it.start;
+      }else it.end=v;
+      popCommit();
+    };
+    q('[data-f="color"]').onchange=e=>{it.color=e.target.value;popCommit();};
+  }else{
+    q('[data-f="date"]').onchange=e=>{const v=e.target.value;if(v){it.date=v;popCommit();}else e.target.value=it.date;};
+  }
+  q('[data-a="form"]').onclick=()=>{
+    closePop();
+    if(!editMode)$('#btnEdit').onclick();
+    if(isSpan){openTab('span');fillSpanForm(it);}else{openTab('event');fillEventForm(it);}
+    $('#editor').scrollIntoView({behavior:reduceMotion?'auto':'smooth',block:'center'});
+  };
+  q('[data-a="dup"]').onclick=()=>{
+    closePop();duplicateItem(it);
+    openPop(selected,ax+18,ay+18);
+  };
+  q('[data-a="del"]').onclick=()=>{closePop();deleteItem(it);};
+  placePop(ax,ay);
+  requestAnimationFrame(()=>q('.pe-title').focus());
+}
+function openPopHap(h,ax,ay){
+  if(RO)return;
+  popAnchor={x:ax,y:ay};
+  popEd.innerHTML=`
+    <div class="pe-row" style="justify-content:space-between">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft)">幸福 水深 측점</span>
+      <label class="dt-lab"><input type="checkbox" data-f="future" ${h.future?'checked':''}> 예정</label>
+    </div>
+    <div class="pe-row">
+      <input type="month" class="dt-edit pe-month" data-f="date" value="${h.date}" aria-label="날짜">
+      <input type="number" class="dt-edit pe-num" data-f="v" min="-1" max="1" step="0.1" value="${h.v}" aria-label="수심">
+    </div>
+    <div class="pe-actions"><button class="pe-btn danger" data-a="del">✕ 측점 삭제</button></div>`;
+  const q=s=>popEd.querySelector(s);
+  q('[data-f="date"]').onchange=e=>{if(e.target.value){h.date=e.target.value;popCommit();}else e.target.value=h.date;};
+  q('[data-f="v"]').onchange=e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){h.v=Math.min(1,Math.max(-1,v));popCommit();}else e.target.value=h.v;};
+  q('[data-f="future"]').onchange=e=>{h.future=e.target.checked||undefined;popCommit();};
+  q('[data-a="del"]').onclick=()=>{
+    closePop();
+    const i=DATA.happiness.indexOf(h);
+    if(i>=0){DATA.happiness.splice(i,1);afterMutate();}
+  };
+  placePop(ax,ay);
+  requestAnimationFrame(()=>q('[data-f="v"]').focus());
+}
+function openPopEra(er,ax,ay){
+  if(RO)return;
+  popAnchor={x:ax,y:ay};
+  const commit=()=>{DATA.eras.sort((a,b)=>T(a.start)-T(b.start));afterMutate(selected!=null);};
+  popEd.innerHTML=`
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);letter-spacing:.12em">時代 · ERA</div>
+    <input class="dt-edit pe-title" value="${esc(er.title)}" aria-label="시대 제목">
+    <div class="pe-row">
+      <input type="month" class="dt-edit pe-month" data-f="start" value="${er.start}" aria-label="시작">
+      <span style="color:var(--ink-soft)">–</span>
+      <input type="month" class="dt-edit pe-month" data-f="end" value="${er.end}" aria-label="종료">
+    </div>
+    <div class="pe-row"><select class="dt-edit" data-f="color" aria-label="색">${SPAN_COLORS.map(c=>`<option value="${c[0]}"${er.color===c[0]?' selected':''}>${c[1]}</option>`).join('')}</select></div>
+    <div class="pe-actions"><button class="pe-btn danger" data-a="del">✕ 시대 삭제</button></div>`;
+  const q=s=>popEd.querySelector(s);
+  q('.pe-title').onchange=e=>{const v=e.target.value.trim();if(v){er.title=v;commit();}else e.target.value=er.title;};
+  q('.pe-title').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();e.target.blur();}};
+  q('[data-f="start"]').onchange=e=>{
+    const v=e.target.value;
+    if(!v){e.target.value=er.start;return;}
+    if(T(er.end)<=T(v)){ /* 종료를 넘어서면 = 기간 유지한 채 통째 이동 */
+      const dur=miOf(er.end)-miOf(er.start);
+      er.start=v;er.end=miToMonth(miOf(v)+dur);
+      q('[data-f="end"]').value=er.end;
+    }else er.start=v;
+    commit();
+  };
+  q('[data-f="end"]').onchange=e=>{
+    const v=e.target.value;
+    if(!v){e.target.value=er.end;return;}
+    if(T(v)<=T(er.start)){ /* 시작보다 앞서면 = 통째 이동 */
+      const dur=miOf(er.end)-miOf(er.start);
+      er.end=v;er.start=miToMonth(miOf(v)-dur);
+      q('[data-f="start"]').value=er.start;
+    }else er.end=v;
+    commit();
+  };
+  q('[data-f="color"]').onchange=e=>{er.color=e.target.value;commit();};
+  q('[data-a="del"]').onclick=()=>{
+    closePop();
+    DATA.eras.splice(DATA.eras.indexOf(er),1);afterMutate(selected!=null);
+  };
+  placePop(ax,ay);
+  requestAnimationFrame(()=>q('.pe-title').focus());
+}
+function openPopTrip(t,ax,ay){
+  if(RO)return;
+  popAnchor={x:ax,y:ay};
+  const commit=()=>{
+    afterMutate(selected!=null);
+    if(curTripId===t.id){ /* 지도에 떠 있는 항로면 다시 그림 */
+      const bar=$('#tripBar'),b=bar.querySelector(`[data-trip="${t.id}"]`);
+      if(b&&bar._setActive)bar._setActive(b);
+      selectTrip(t.id);
+    }
+  };
+  popEd.innerHTML=`
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);letter-spacing:.12em">航路 · TRIP</div>
+    <input class="dt-edit pe-title" value="${esc(t.title)}" aria-label="항로 이름">
+    <div class="pe-row">
+      <select class="dt-edit" data-f="color" aria-label="색">${SPAN_COLORS.map(c=>`<option value="${c[0]}"${t.color===c[0]?' selected':''}>${c[1]}</option>`).join('')}</select>
+      <label class="dt-lab"><input type="checkbox" data-f="dashed" ${t.dashed?'checked':''}> 계획(점선)</label>
+    </div>
+    <input class="dt-edit" data-f="note" value="${esc(t.note||'')}" placeholder="메모…" style="font-size:12.5px;width:100%">
+    <div class="pe-actions">
+      <button class="pe-btn" data-a="pts">⚓ 기항지 편집</button>
+      <button class="pe-btn danger" data-a="del">✕ 삭제</button>
+    </div>`;
+  const q=s=>popEd.querySelector(s);
+  q('.pe-title').onchange=e=>{const v=e.target.value.trim();if(v){t.title=v;commit();}else e.target.value=t.title;};
+  q('.pe-title').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();e.target.blur();}};
+  q('[data-f="color"]').onchange=e=>{t.color=e.target.value;commit();};
+  q('[data-f="dashed"]').onchange=e=>{t.dashed=e.target.checked||undefined;commit();};
+  q('[data-f="note"]').onchange=e=>{t.note=e.target.value.trim();commit();};
+  q('[data-a="pts"]').onclick=()=>{
+    closePop();
+    if(!editMode)$('#btnEdit').onclick();
+    openTab('trip');fillTripForm(t);
+    $('#editor').scrollIntoView({behavior:reduceMotion?'auto':'smooth',block:'center'});
+  };
+  q('[data-a="del"]').onclick=()=>{
+    closePop();
+    const id=t.id;
+    DATA.trips.splice(DATA.trips.indexOf(t),1);
+    DATA.events.concat(DATA.spans).forEach(x=>{if(x.tripId===id)delete x.tripId;});
+    if(curTripId===id)selectTrip(null);
+    afterMutate(selected!=null);
+  };
+  placePop(ax,ay);
+}
+function placePop(ax,ay){
+  popEd.hidden=false;
+  const r=popEd.getBoundingClientRect();
+  let x=ax+14,y=ay-8;
+  if(x+r.width>innerWidth-8)x=ax-r.width-14;
+  x=Math.max(8,x);
+  y=Math.max(8,Math.min(y,innerHeight-r.height-8)); /* 하한이 마지막에 이겨야 화면 밖으로 안 나감 */
+  popEd.style.left=x+'px';popEd.style.top=y+'px';
+}
+function closePop(){popEd.hidden=true;popAnchor=null;}
+document.addEventListener('click',e=>{if(!popEd.hidden&&!popEd.contains(e.target))closePop();});
+
+/* ==========================================================================
+   팬 / 줌
+   ========================================================================== */
+let moved=false;
+(function nav(){
+  const pointers=new Map();
+  let dragStart=null,domStart=null,pinchStart=null;
+  svg.addEventListener('pointerdown',e=>{
+    stopPlay(); /* 수동 조작 시 재생 중단 */
+    closePop(); /* 팬 시작 시 팝오버 닫기 (핀 클릭이면 click에서 다시 연다) */
+    hideCard();
+    /* ⚠ 여기서 캡처하면 click이 svg로 재타게팅돼 핀 클릭이 죽는다 — 드래그 확정 시점에 캡처 */
+    pointers.set(e.pointerId,{x:svgXY(e).x});
+    if(pointers.size===1){dragStart=svgXY(e).x;domStart=[...dom];moved=false;svg.classList.add('dragging');}
+    else if(pointers.size===2){
+      svg.setPointerCapture(e.pointerId); /* 핀치는 클릭이 아니므로 즉시 캡처 OK */
+      const[a,b]=[...pointers.values()];
+      pinchStart={dist:Math.abs(a.x-b.x)||1,mid:Xinv((a.x+b.x)/2),dom:[...dom]};
+    }
+  });
+  svg.addEventListener('pointermove',e=>{
+    if(!pointers.has(e.pointerId))return;
+    pointers.set(e.pointerId,{x:svgXY(e).x});
+    if(pointers.size===1&&dragStart!=null){
+      const dx=svgXY(e).x-dragStart;
+      if(Math.abs(dx)>4&&!moved){moved=true;try{svg.setPointerCapture(e.pointerId);}catch(_){}}
+      if(!moved)return;
+      const dt=-dx/W*(domStart[1]-domStart[0]);
+      setDom(domStart[0]+dt,domStart[1]+dt);
+    }else if(pointers.size===2&&pinchStart){
+      moved=true;
+      const[a,b]=[...pointers.values()];
+      const ratio=pinchStart.dist/(Math.abs(a.x-b.x)||1);
+      const s0=(pinchStart.dom[1]-pinchStart.dom[0])*ratio;
+      const f=(pinchStart.mid-pinchStart.dom[0])/(pinchStart.dom[1]-pinchStart.dom[0]);
+      setDom(pinchStart.mid-f*s0,pinchStart.mid+(1-f)*s0);
+    }
+  });
+  const up=e=>{pointers.delete(e.pointerId);
+    if(pointers.size===0){dragStart=null;pinchStart=null;svg.classList.remove('dragging');setTimeout(()=>moved=false,0);}
+    if(pointers.size<2)pinchStart=null;};
+  svg.addEventListener('pointerup',up);
+  svg.addEventListener('pointercancel',up);
+  let zoomVel=0,zoomRaf=null,zoomOriginT=0; /* 연속 줌 + 감쇠 관성 (Timelines Studio 패턴) */
+  svg.addEventListener('wheel',e=>{
+    if(e.ctrlKey||e.metaKey){ /* ⌘/Ctrl+휠 · 트랙패드 핀치 = 확대 */
+      e.preventDefault();
+      const c=Xinv(svgXY(e).x);
+      zoomAt(c,Math.pow(1.0015,e.deltaY));
+      if(!reduceMotion){
+        zoomVel=Math.max(-400,Math.min(400,zoomVel+e.deltaY*0.3));zoomOriginT=c;
+        if(zoomRaf)cancelAnimationFrame(zoomRaf);
+        const tick=()=>{
+          zoomVel*=0.75;
+          if(Math.abs(zoomVel)<1){zoomRaf=null;return;}
+          zoomAt(zoomOriginT,Math.pow(1.0015,zoomVel));
+          zoomRaf=requestAnimationFrame(tick);
+        };
+        zoomRaf=requestAnimationFrame(tick);
+      }
+    }else if(e.shiftKey||Math.abs(e.deltaX)>Math.abs(e.deltaY)){ /* 가로휠·Shift+휠 = 팬 */
+      e.preventDefault();
+      const d=(e.deltaX||e.deltaY)/W*(dom[1]-dom[0]);
+      setDom(dom[0]+d,dom[1]+d);
+    } /* 일반 세로휠 = 페이지 스크롤 통과 */
+  },{passive:false});
+  svg.addEventListener('keydown',e=>{
+    if(e.target!==svg)return;
+    const s=dom[1]-dom[0];
+    if(e.key==='ArrowLeft'){e.preventDefault();setDom(dom[0]-s*.1,dom[1]-s*.1);}
+    else if(e.key==='ArrowRight'){e.preventDefault();setDom(dom[0]+s*.1,dom[1]+s*.1);}
+    else if(e.key==='+'||e.key==='='){e.preventDefault();zoomAt((dom[0]+dom[1])/2,1/1.35);}
+    else if(e.key==='-'){e.preventDefault();zoomAt((dom[0]+dom[1])/2,1.35);}
+    else if(e.key==='0'){e.preventDefault();dom=[...FULL];render();}
+    else if(e.key===' '){e.preventDefault();$('#scrubPlay').onclick();} /* Space = 시간 훑기 */
+  });
+  /* 빈 곳: 클릭 = 선택 해제 · 빠른 두 번 클릭 = 그 자리에 추가.
+     ⚠ 네이티브 dblclick은 못 쓴다 — 첫 클릭의 render()가 노드를 갈아치워 브라우저가 더블클릭으로 안 센다 */
+  let lastEmptyClick=null;
+  svg.addEventListener('click',e=>{
+    if(moved)return;
+    if(e.target.closest('g[role="button"],g[data-hap]'))return;
+    const now=performance.now(),p=svgXY(e);
+    if(lastEmptyClick&&now-lastEmptyClick.t<450&&Math.abs(p.x-lastEmptyClick.x)<6&&Math.abs(p.y-lastEmptyClick.y)<6){
+      lastEmptyClick=null;
+      e.stopPropagation(); /* document 클릭 리스너가 새 팝오버를 닫는 것 방지 */
+      addAt(p.x,p.y,e.clientX,e.clientY);
+      return;
+    }
+    lastEmptyClick={t:now,x:p.x,y:p.y};
+    if(selected){selected=null;render();renderDetail();}
+  });
+  function addAt(x,y,cx,cy){ /* 더블클릭 추가: 위 = 기간, 아래 = 사건(곡선 높이 = 행복) */
+    if(RO)return;
+    const t=Xinv(x);
+    if(t<BOUND[0]||t>BOUND[1])return;
+    const date=tToMonth(t);
+    if(y<LAYOUT.AXIS_Y)return; /* 상단 시대·축 라벨 구역은 추가 없음 */
+    if(y<LAYOUT.HAP_TOP){ /* 막대 구역 → 새 기간 */
+      const sp={start:date,end:tToMonth(t+1),title:'새 기간',color:'#2E5E63'};
+      DATA.spans.push(sp);selected=sp;afterMutate(true);
+      openPop(sp,cx,cy);
+    }else{
+      const ev={date,title:'새 사건'};
+      if(y>=LAYOUT.HAP_TOP)
+        ev.happiness=Math.round(Math.max(-1,Math.min(1,(LAYOUT.HAP_BOT-y)/(LAYOUT.HAP_BOT-LAYOUT.HAP_TOP)*2-1))*10)/10;
+      DATA.events.push(ev);selected=ev;afterMutate(true);
+      openPop(ev,cx,cy);
+    }
+    requestAnimationFrame(()=>{const ti=document.querySelector('#popEd .pe-title');if(ti)ti.select();});
+  }
+  $('#btnFit').onclick=()=>{dom=[...FULL];render();};
+  $('#btnZoomIn').onclick=()=>zoomAt((dom[0]+dom[1])/2,1/1.35);
+  $('#btnZoomOut').onclick=()=>zoomAt((dom[0]+dom[1])/2,1.35);
+  $('#btnNow').onclick=()=>{const s=Math.min(dom[1]-dom[0],6);setDom(NOW-s*.6,NOW+s*.4);};
+  addEventListener('resize',render);
+})();
+function setDom(a,b){
+  const s=b-a;
+  if(a<BOUND[0]){a=BOUND[0];b=a+s;}
+  if(b>BOUND[1]){b=BOUND[1];a=b-s;}
+  dom=[a,b];
+  if(typeof closePop==='function'&&popAnchor)closePop(); /* 캔버스가 움직이면 앵커가 어긋남 */
+  render();
+}
+function zoomAt(c,f){
+  let s=(dom[1]-dom[0])*f;
+  s=Math.max(.5,Math.min(s,BOUND[1]-BOUND[0]));
+  const r=(c-dom[0])/(dom[1]-dom[0]);
+  setDom(c-r*s,c+(1-r)*s);
+}
+
+/* ==========================================================================
+   점프 · 스크러버 · 검색 — Timelines Studio(GPL-3.0)의 UX 패턴을 바닐라 JS로 재구현
+   ========================================================================== */
+function jumpToItem(it){
+  let t0,t1;
+  if(it.kind==='era'){t0=T(it.start);t1=T(it.end);}
+  else if(it.kind==='span'){t0=it.t0;t1=it.t1??NOW;}
+  else{t0=it.t;t1=it.t;}
+  const c=(t0+t1)/2, s=Math.max((t1-t0)*1.6,3);
+  setDom(c-s/2,c+s/2);
+  if(it.kind==='event'||it.kind==='span'){selected=it;render();renderDetail();}
+}
+
+/* --- 스크러버 (미니맵) --- */
+const scrubTrack=$('#scrubTrack'),scrubYearEl=$('#scrubYear'),scrubPlayBtn=$('#scrubPlay');
+let scrubWin=null,playRaf=null,playLast=null;
+const SP01=t=>(t-FULL[0])/(FULL[1]-FULL[0]);
+function rebuildScrubber(){
+  scrubTrack.innerHTML='';
+  DATA.eras.forEach(er=>{
+    const a=SP01(T(er.start)),b=SP01(T(er.end));
+    const d=document.createElement('div');d.className='scrub-era';
+    d.style.left=(a*100)+'%';d.style.width=((b-a)*100)+'%';d.style.background=er.color;
+    scrubTrack.appendChild(d);
+  });
+  DATA.spans.forEach(s=>{ /* 기간 = 상단 얇은 스트립 (2줄 교차) */
+    const a=SP01(s.t0),b=SP01(s.t1??NOW);
+    const d=document.createElement('div');d.className='scrub-sp';
+    d.style.left=(a*100)+'%';d.style.width=(Math.max(b-a,.004)*100)+'%';
+    d.style.top=(3+(s.lane%2)*5)+'px';
+    d.style.background=s.color||'#2E5E63';
+    if(s.future)d.style.opacity=.3;
+    scrubTrack.appendChild(d);
+  });
+  DATA.events.forEach(e=>{
+    const d=document.createElement('div');d.className='scrub-ev'+(e.future?' future':'');
+    d.style.left=(SP01(e.t)*100)+'%';scrubTrack.appendChild(d);
+  });
+  const n=document.createElement('div');n.className='scrub-now';n.style.left=(SP01(NOW)*100)+'%';scrubTrack.appendChild(n);
+  scrubWin=document.createElement('div');scrubWin.className='scrub-win';
+  scrubTrack.appendChild(scrubWin);
+  updateScrubber();
+}
+function updateScrubber(){
+  if(!scrubWin)return;
+  const a=Math.max(SP01(dom[0]),0),b=Math.min(SP01(dom[1]),1);
+  scrubWin.style.left=(a*100)+'%';
+  scrubWin.style.width=(Math.max(b-a,.008)*100)+'%';
+  const c=(dom[0]+dom[1])/2,yr=Math.floor(c);
+  const age=Math.floor(c-T(DATA.profile.birth));
+  scrubYearEl.textContent=yr+'.'+String(Math.min(Math.round((c-yr)*12)+1,12)).padStart(2,'0')+(age>=0?' · 만'+age:'');
+}
+(function scrubNav(){
+  let dragOff=null;
+  const trackT=px=>{const r=scrubTrack.getBoundingClientRect();return FULL[0]+(px-r.left)/r.width*(FULL[1]-FULL[0]);};
+  scrubTrack.addEventListener('pointerdown',e=>{
+    stopPlay();
+    scrubTrack.setPointerCapture(e.pointerId);
+    const s=dom[1]-dom[0],t=trackT(e.clientX);
+    if(e.target===scrubWin)dragOff=t-dom[0];  /* 창 드래그 */
+    else{dragOff=s/2;setDom(t-s/2,t+s/2);}    /* 트랙 클릭 = 그 지점으로 센터 */
+  });
+  scrubTrack.addEventListener('pointermove',e=>{
+    if(dragOff==null)return;
+    const s=dom[1]-dom[0],t=trackT(e.clientX);
+    setDom(t-dragOff,t-dragOff+s);
+  });
+  const up=()=>{dragOff=null;};
+  scrubTrack.addEventListener('pointerup',up);
+  scrubTrack.addEventListener('pointercancel',up);
+})();
+function stopPlay(){
+  if(playRaf){cancelAnimationFrame(playRaf);playRaf=null;}
+  playLast=null;
+  scrubPlayBtn.textContent='▶';scrubPlayBtn.setAttribute('aria-pressed','false');
+}
+scrubPlayBtn.onclick=()=>{
+  if(playRaf){stopPlay();return;}
+  let s=dom[1]-dom[0];
+  const fullSpan=FULL[1]-FULL[0];
+  if(s>fullSpan*.5){s=Math.min(8,fullSpan/3);setDom(FULL[0],FULL[0]+s);} /* 전체 보기면 창을 좁혀 처음부터 */
+  else if(dom[1]>=FULL[1]-.02)setDom(FULL[0],FULL[0]+s); /* 끝에 있으면 처음부터 */
+  scrubPlayBtn.textContent='❚❚';scrubPlayBtn.setAttribute('aria-pressed','true');
+  const SPEED=(FULL[1]-FULL[0])/25; /* 전 구간 ≈ 25초 */
+  const step=now=>{
+    if(playLast==null)playLast=now;
+    const dt=(now-playLast)/1000;playLast=now;
+    const w=dom[1]-dom[0], a=dom[0]+SPEED*dt;
+    if(a+w>=FULL[1]){setDom(FULL[1]-w,FULL[1]);stopPlay();return;}
+    setDom(a,a+w);
+    playRaf=requestAnimationFrame(step);
+  };
+  playRaf=requestAnimationFrame(step);
+};
+
+/* --- 검색 (⌘/Ctrl+F) --- */
+const searchBd=$('#searchBd'),searchInput=$('#searchInput'),searchResults=$('#searchResults');
+let searchIdx=0,searchItems=[];
+const KIND_BADGE={event:'● 사건',span:'▬ 기간',era:'▢ 시대',trip:'⛵ 항로'};
+function searchPool(){
+  return [
+    ...DATA.events.map(e=>({kind:'event',ref:e,title:e.title,date:e.date,
+      text:(e.title+' '+(e.desc||'')+' '+(e.loc?.label||'')).toLowerCase()})),
+    ...DATA.spans.map(s=>({kind:'span',ref:s,title:s.title,date:s.start+' – '+(s.end||'진행 중'),
+      text:(s.title+' '+(s.desc||'')+' '+(s.loc?.label||'')).toLowerCase()})),
+    ...DATA.eras.map(er=>({kind:'era',ref:er,title:er.title,date:er.start+' – '+er.end,
+      text:er.title.toLowerCase()})),
+    ...DATA.trips.map(t=>({kind:'trip',ref:t,title:t.title,date:t.points.map(p=>p.label).join('→'),
+      text:(t.title+' '+(t.note||'')+' '+t.points.map(p=>p.label).join(' ')).toLowerCase()})),
+  ];
+}
+function refreshSearchActive(){
+  [...searchResults.querySelectorAll('.search-item')].forEach((c,i)=>c.classList.toggle('on',i===searchIdx));
+  const on=searchResults.querySelector('.on');if(on)on.scrollIntoView({block:'nearest'});
+}
+function renderSearch(){
+  const q=searchInput.value.trim().toLowerCase();
+  searchItems=searchPool().filter(it=>!q||it.text.includes(q)).slice(0,40);
+  if(searchIdx>=searchItems.length)searchIdx=0;
+  searchResults.innerHTML=searchItems.length?'':'<div class="search-empty">결과 없음</div>';
+  searchItems.forEach((it,i)=>{
+    const b=document.createElement('button');
+    b.className='search-item'+(i===searchIdx?' on':'');
+    b.innerHTML=`<span class="search-badge">${KIND_BADGE[it.kind]}</span><span class="search-title">${esc(it.title)}</span><span class="search-date">${esc(it.date)}</span>`;
+    b.onmousedown=ev=>{ev.preventDefault();pickSearch(it);};
+    b.onmouseenter=()=>{searchIdx=i;refreshSearchActive();};
+    searchResults.appendChild(b);
+  });
+}
+function pickSearch(it){
+  closeSearch();
+  if(it.kind==='trip'){
+    document.getElementById('sec-map').scrollIntoView({behavior:reduceMotion?'auto':'smooth'});
+    setTimeout(()=>{
+      selectTrip(it.ref.id);
+      const bar=$('#tripBar'),b=bar.querySelector(`[data-trip="${it.ref.id}"]`);
+      if(b&&bar._setActive)bar._setActive(b);
+    },reduceMotion?0:400);
+  }else{
+    document.getElementById('sec-canvas').scrollIntoView({behavior:reduceMotion?'auto':'smooth'});
+    jumpToItem(it.kind==='era'?{kind:'era',...it.ref}:it.ref);
+  }
+}
+function openSearch(){searchBd.hidden=false;searchInput.value='';searchIdx=0;renderSearch();requestAnimationFrame(()=>searchInput.focus());}
+function closeSearch(){searchBd.hidden=true;}
+searchInput.addEventListener('input',()=>{searchIdx=0;renderSearch();});
+searchInput.addEventListener('keydown',e=>{
+  if(e.key==='ArrowDown'){e.preventDefault();searchIdx=Math.min(searchIdx+1,searchItems.length-1);refreshSearchActive();}
+  else if(e.key==='ArrowUp'){e.preventDefault();searchIdx=Math.max(searchIdx-1,0);refreshSearchActive();}
+  else if(e.key==='Enter'){e.preventDefault();if(searchItems[searchIdx])pickSearch(searchItems[searchIdx]);}
+});
+searchBd.addEventListener('mousedown',e=>{if(e.target===searchBd)closeSearch();});
+document.addEventListener('keydown',e=>{
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='f'){e.preventDefault();openSearch();}
+  else if(e.key==='Escape'){if(!searchBd.hidden)closeSearch();closeCtx();closePop();document.getElementById('newBd').hidden=true;document.getElementById('cloudBd').hidden=true;}
+  else if((e.key==='Delete'||e.key==='Backspace')&&selected&&!RO
+    &&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)&&!e.target.isContentEditable){
+    e.preventDefault();deleteItem(selected); /* 노션식: Delete = 선택 항목 삭제 */
+  }
+  else if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'&&!RO
+    &&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)&&!e.target.isContentEditable){
+    e.preventDefault();
+    if(e.shiftKey)redo();else undo(); /* ⌘/Ctrl+Z · +Shift = 다시 실행 */
+  }
+  else if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='y'&&!RO
+    &&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)&&!e.target.isContentEditable){
+    e.preventDefault();redo();
+  }
+});
+$('#btnSearch').onclick=openSearch;
+
+/* --- 프로필 인라인 편집 (이름·기점) --- */
+(function profileEdit(){
+  if(RO)return; /* 뷰어: 프로필 편집 차단 */
+  const h1El=document.querySelector('h1');
+  h1El.setAttribute('contenteditable','plaintext-only');
+  h1El.setAttribute('spellcheck','false');
+  h1El.title='클릭해서 이름 편집';
+  if(DATA.profile.name)h1El.textContent=DATA.profile.name;
+  h1El.addEventListener('blur',()=>{
+    const v=h1El.textContent.trim();
+    if(v){DATA.profile.name=v;persist();}
+    else h1El.textContent=DATA.profile.name||'나의 해도';
+  });
+  h1El.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();h1El.blur();}});
+
+  const span=$('#statBirth');
+  span.style.cursor='pointer';span.title='클릭해서 기점(출생 연월) 수정';
+  span.addEventListener('click',()=>{
+    if(span.querySelector('input'))return;
+    const inp=document.createElement('input');
+    inp.type='month';inp.value=DATA.profile.birth;
+    inp.style.cssText='font:inherit;background:#FBFCF9;border:1px solid #C4CDC1;border-radius:2px;width:130px';
+    span.textContent='';span.appendChild(inp);inp.focus();
+    let done=false;
+    const fin=()=>{
+      if(done)return;done=true;
+      if(inp.value)DATA.profile.birth=inp.value;
+      afterMutate(selected!=null); /* prepare()가 표시값 복원 */
+    };
+    inp.addEventListener('change',fin);
+    inp.addEventListener('blur',fin);
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter')fin();});
+  });
+})();
+
+/* --- 온라인 DB (Supabase REST) — 로컬 우선 + 클라우드 미러 --- */
+const CLOUD_KEY='caeyeon_life_cloud';
+let CLOUD=null,cloudTimer=null,cloudState='';
+try{CLOUD=JSON.parse(localStorage.getItem(CLOUD_KEY))||null;}catch(e){}
+const cloudBase=()=>CLOUD.url.replace(/\/+$/,'')+'/rest/v1/charts';
+const cloudHeaders=()=>({'apikey':CLOUD.key,'Authorization':'Bearer '+CLOUD.key,
+  'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'});
+function setCloudState(s){cloudState=s;updateSaveState();}
+async function cloudPush(docId){
+  if(!CLOUD||RO)return;
+  setCloudState('sync');
+  try{
+    const reg=REG.docs.find(d=>d.id===docId);
+    let data=null;
+    try{data=JSON.parse(localStorage.getItem(DOC_PREFIX+docId));}catch(e){}
+    if(!data)data=docId===curDocId?DATA:null;
+    if(!data){setCloudState('ok');return;}
+    const r=await fetch(cloudBase(),{method:'POST',headers:cloudHeaders(),
+      body:JSON.stringify([{id:docId,name:(reg&&reg.name)||'해도',data,updated_at:(reg&&reg.updated)||new Date().toISOString()}])});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    setCloudState('ok');
+  }catch(e){setCloudState('err');}
+}
+function queueCloudPush(){
+  if(!CLOUD||RO)return;
+  clearTimeout(cloudTimer);
+  cloudTimer=setTimeout(()=>cloudPush(curDocId),1500); /* 저장 후 1.5초 디바운스 */
+}
+async function cloudDelete(docId){
+  if(!CLOUD||RO)return;
+  try{await fetch(cloudBase()+'?id=eq.'+encodeURIComponent(docId),{method:'DELETE',headers:cloudHeaders()});}catch(e){}
+}
+async function cloudPullAll(){
+  if(!CLOUD||RO)return;
+  setCloudState('sync');
+  try{
+    const r=await fetch(cloudBase()+'?select=id,name,data,updated_at',{headers:cloudHeaders()});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const rows=await r.json();
+    let changed=false;
+    rows.forEach(row=>{
+      if(!row||!row.id||!row.data)return;
+      const local=REG.docs.find(d=>d.id===row.id);
+      if(!local){ /* 클라우드에만 있는 문서 → 로컬로 */
+        REG.docs.push({id:row.id,name:row.name||'해도',updated:row.updated_at});
+        try{localStorage.setItem(DOC_PREFIX+row.id,JSON.stringify(row.data));}catch(e){}
+        changed=true;
+      }else if(row.updated_at&&row.updated_at>(local.updated||'')){ /* 더 최신이면 당겨오기 */
+        local.name=row.name||local.name;local.updated=row.updated_at;
+        try{localStorage.setItem(DOC_PREFIX+row.id,JSON.stringify(row.data));}catch(e){}
+        if(row.id===curDocId){
+          DATA=migrateScale(row.data);
+          selected=null;dom=null;
+          prepare();render();renderDetail();refreshAllSelects();rebuildMapBase();rebuildTripBar();rebuildScrubber();
+          histCur=JSON.stringify(DATA);UNDO=[];REDO=[];updateHistBtns();
+        }
+        changed=true;
+      }
+    });
+    REG.docs.forEach(d=>{if(!rows.find(x=>x&&x.id===d.id))cloudPush(d.id);}); /* 로컬에만 있는 문서 → 올리기 */
+    if(changed){saveRegistry();refreshDocSel();}
+    setCloudState('ok');
+  }catch(e){setCloudState('err');}
+}
+(function cloudUI(){
+  if(RO)return;
+  const bd=document.getElementById('cloudBd');
+  document.getElementById('btnCloud').onclick=()=>{
+    document.getElementById('cloudUrl').value=CLOUD?CLOUD.url:'';
+    document.getElementById('cloudKey').value=CLOUD?CLOUD.key:'';
+    bd.hidden=false;
+  };
+  document.getElementById('cloudCancel').onclick=()=>{bd.hidden=true;};
+  bd.addEventListener('mousedown',e=>{if(e.target===bd)bd.hidden=true;});
+  document.getElementById('cloudSave').onclick=()=>{
+    const url=document.getElementById('cloudUrl').value.trim();
+    const key=document.getElementById('cloudKey').value.trim();
+    if(!/^https?:\/\//.test(url)||!key){alert('URL과 anon key를 확인해줘.');return;}
+    CLOUD={url,key};
+    try{localStorage.setItem(CLOUD_KEY,JSON.stringify(CLOUD));}catch(e){}
+    bd.hidden=true;
+    cloudPullAll();
+  };
+  document.getElementById('cloudOff').onclick=()=>{
+    CLOUD=null;cloudState='';
+    try{localStorage.removeItem(CLOUD_KEY);}catch(e){}
+    bd.hidden=true;updateSaveState();
+  };
+})();
+
+/* --- 다중 문서: 전환·삭제·셀렉트 --- */
+function refreshDocSel(){
+  const sel=document.getElementById('docSel');
+  if(!sel||RO||!REG)return;
+  sel.innerHTML=REG.docs.map(d=>`<option value="${d.id}"${d.id===curDocId?' selected':''}>${esc(d.name)}</option>`).join('')
+    +'<option disabled>────</option><option value="__del">🗑 이 문서 삭제…</option>';
+}
+function switchDoc(id){
+  if(id===curDocId)return;
+  curDocId=id;REG.current=id;saveRegistry();
+  DATA=migrateScale(loadDoc(id));
+  UNDO=[];REDO=[];histCur=JSON.stringify(DATA);updateHistBtns();
+  selected=null;dom=null;closePop();closeCtx();
+  prepare();render();renderDetail();refreshAllSelects();rebuildMapBase();rebuildTripBar();rebuildScrubber();updateSaveState();
+  refreshDocSel();
+}
+function deleteCurrentDoc(){
+  if(REG.docs.length<=1){alert('마지막 문서는 삭제할 수 없다. 새 해도를 먼저 만들어줘.');return;}
+  const d=REG.docs.find(x=>x.id===curDocId);
+  if(!confirm(`문서 「${d.name}」 전체를 삭제할까? 문서 삭제는 되돌릴 수 없다.`))return; /* 문서 단위라 확인 유지 */
+  cloudDelete(curDocId); /* 온라인 DB에서도 제거 (best-effort) */
+  localStorage.removeItem(DOC_PREFIX+curDocId);
+  REG.docs=REG.docs.filter(x=>x.id!==curDocId);
+  const next=REG.docs[0].id;
+  curDocId=null; /* switchDoc가 새로 로드하도록 */
+  switchDoc(next);
+}
+if(!RO){
+  document.getElementById('docSel').onchange=e=>{
+    const v=e.target.value;
+    if(v==='__del'){refreshDocSel();deleteCurrentDoc();}
+    else switchDoc(v);
+  };
+}
+
+/* 공유 HTML 내보내기 제거 — 온라인 DB로 대체 (RO 뷰어 코드는 기존 공유 파일 호환용으로 유지) */
+
+/* --- 새 해도 온보딩 --- */
+(function newDoc(){
+  const bd=document.getElementById('newBd');
+  $('#btnNew').onclick=()=>{
+    bd.hidden=false;
+    $('#nbName').value='';$('#nbBirth').value='';
+    $('#nbBirth').style.borderColor='';
+    requestAnimationFrame(()=>$('#nbName').focus());
+  };
+  $('#nbCancel').onclick=()=>{bd.hidden=true;};
+  bd.addEventListener('mousedown',e=>{if(e.target===bd)bd.hidden=true;});
+  $('#nbName').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#nbBirth').focus();}});
+  $('#nbBirth').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#nbStart').click();}});
+  $('#nbStart').onclick=()=>{
+    const name=$('#nbName').value.trim()||'나의 해도';
+    const birth=$('#nbBirth').value;
+    if(!birth){$('#nbBirth').style.borderColor='var(--cinnabar)';$('#nbBirth').focus();return;}
+    const today=new Date();
+    const nowMi=today.getFullYear()*12+today.getMonth();
+    /* 새 문서로 생성 — 기존 해도는 문서 목록에 그대로 남는다 */
+    const id=newDocId();
+    REG.docs.push({id,name});REG.current=id;curDocId=id;
+    DATA={
+      profile:{name,birth},
+      eras:[{title:'제1장 · 시작',start:birth,end:miToMonth(nowMi+60),color:'#2E5E63'}],
+      events:[{date:birth,title:'태어나다',happiness:0}],
+      spans:[],happiness:[],trips:[],records:[],
+      scale:'signed1'
+    };
+    UNDO=[];REDO=[];histCur=JSON.stringify(DATA);updateHistBtns();
+    selected=null;dom=null;
+    prepare();render();renderDetail();refreshAllSelects();rebuildMapBase();rebuildTripBar();rebuildScrubber();
+    persist();refreshDocSel();
+    bd.hidden=true;
+  };
+})();
+
+/* ==========================================================================
+   에디터
+   ========================================================================== */
+let editMode=false;
+$('#btnEdit').onclick=()=>{
+  editMode=!editMode;
+  $('#editor').classList.toggle('open',editMode);
+  $('#btnEdit').textContent=editMode?'✕ 편집 닫기':'✎ 기록 편집';
+  renderDetail(); refreshAllSelects();
+};
+document.querySelectorAll('.ed-tab').forEach(b=>b.onclick=()=>openTab(b.dataset.tab));
+function openTab(name){
+  document.querySelectorAll('.ed-tab').forEach(b=>b.classList.toggle('on',b.dataset.tab===name));
+  document.querySelectorAll('.ed-pane').forEach(p=>p.hidden=p.dataset.pane!==name);
+}
+
+function fillSelect(sel,items,labelFn){
+  sel.innerHTML='<option value="-1">＋ 새 항목</option>'+
+    items.map((it,i)=>`<option value="${i}">${esc(labelFn(it))}</option>`).join('');
+}
+function refreshTripSelects(){
+  const opts='<option value="">없음</option>'+DATA.trips.map(t=>`<option value="${esc(t.id)}">${esc(t.title)}</option>`).join('');
+  $('#evTrip').innerHTML=opts; $('#spTrip').innerHTML=opts;
+}
+function refreshAllSelects(){
+  fillSelect($('#evSelect'),DATA.events,e=>`${e.date} · ${e.title}`);
+  fillSelect($('#spSelect'),DATA.spans,s=>`${s.start}– · ${s.title}`);
+  fillSelect($('#erSelect'),DATA.eras,e=>e.title);
+  fillSelect($('#hpSelect'),DATA.happiness,h=>`${h.date} · ${h.v.toFixed(1)}`);
+  fillSelect($('#trSelect'),DATA.trips,t=>t.title);
+  refreshTripSelects();
+}
+function afterMutate(keepSelected){
+  if(!keepSelected)selected=null;
+  prepare(); render(); renderDetail(); refreshAllSelects(); rebuildMapBase(); rebuildTripBar(); rebuildScrubber(); persist();
+}
+
+/* --- 사건 폼 --- */
+function fillEventForm(e){
+  $('#evSelect').value=e?String(DATA.events.indexOf(e)):'-1';
+  $('#evDate').value=e?.date||'';
+  $('#evHap').value=e?.happiness??'';
+  $('#evFuture').checked=!!e?.future;
+  $('#evTitle').value=e?.title||'';
+  $('#evDesc').value=e?.desc||'';
+  $('#evLat').value=e?.loc?.lat??''; $('#evLng').value=e?.loc?.lng??'';
+  $('#evLocLabel').value=e?.loc?.label||''; $('#evTrip').value=e?.tripId||'';
+  $('#evGeoQ').value=''; $('#evGeoRes').textContent='';
+}
+$('#evSelect').onchange=()=>{const i=+$('#evSelect').value; fillEventForm(i>=0?DATA.events[i]:null);};
+$('#evSave').onclick=()=>{
+  const date=$('#evDate').value, title=$('#evTitle').value.trim();
+  if(!date||!title){alert('날짜와 제목은 필수다.');return;}
+  const i=+$('#evSelect').value;
+  const e=i>=0?DATA.events[i]:{};
+  e.date=date; e.title=title; e.desc=$('#evDesc').value.trim();
+  const hv=parseFloat($('#evHap').value); e.happiness=isNaN(hv)?undefined:Math.min(1,Math.max(-1,hv));
+  e.future=$('#evFuture').checked||undefined;
+  const lat=parseFloat($('#evLat').value), lng=parseFloat($('#evLng').value);
+  if(!isNaN(lat)&&!isNaN(lng)) e.loc={lat,lng,label:$('#evLocLabel').value.trim()||'장소'};
+  else delete e.loc;
+  e.tripId=$('#evTrip').value||undefined;
+  if(i<0)DATA.events.push(e);
+  selected=e; afterMutate(true); fillEventForm(e);
+};
+$('#evDelete').onclick=()=>{
+  const i=+$('#evSelect').value; if(i<0)return;
+  DATA.events.splice(i,1); afterMutate(); fillEventForm(null);
+};
+
+/* --- 기간 폼 --- */
+function fillSpanForm(s){
+  $('#spSelect').value=s?String(DATA.spans.indexOf(s)):'-1';
+  $('#spStart').value=s?.start||''; $('#spEnd').value=s?.end||'';
+  $('#spHap').value=s?.happiness??''; $('#spFuture').checked=!!s?.future;
+  $('#spTitle').value=s?.title||''; $('#spColor').value=s?.color||'#2E5E63';
+  $('#spDesc').value=s?.desc||'';
+  $('#spLat').value=s?.loc?.lat??''; $('#spLng').value=s?.loc?.lng??'';
+  $('#spLocLabel').value=s?.loc?.label||''; $('#spTrip').value=s?.tripId||'';
+  $('#spGeoQ').value=''; $('#spGeoRes').textContent='';
+}
+$('#spSelect').onchange=()=>{const i=+$('#spSelect').value; fillSpanForm(i>=0?DATA.spans[i]:null);};
+$('#spSave').onclick=()=>{
+  const start=$('#spStart').value, title=$('#spTitle').value.trim();
+  if(!start||!title){alert('시작과 제목은 필수다.');return;}
+  const end=$('#spEnd').value||null;
+  if(end&&T(end)<=T(start)){alert('종료는 시작 이후여야 한다.');return;}
+  const i=+$('#spSelect').value;
+  const s=i>=0?DATA.spans[i]:{};
+  s.start=start; s.end=end; s.title=title; s.desc=$('#spDesc').value.trim();
+  s.color=$('#spColor').value;
+  const hv=parseFloat($('#spHap').value); s.happiness=isNaN(hv)?undefined:Math.min(1,Math.max(-1,hv));
+  s.future=$('#spFuture').checked||undefined;
+  const lat=parseFloat($('#spLat').value), lng=parseFloat($('#spLng').value);
+  if(!isNaN(lat)&&!isNaN(lng)) s.loc={lat,lng,label:$('#spLocLabel').value.trim()||'장소'};
+  else delete s.loc;
+  s.tripId=$('#spTrip').value||undefined;
+  if(i<0)DATA.spans.push(s);
+  selected=s; afterMutate(true); fillSpanForm(s);
+};
+$('#spDelete').onclick=()=>{
+  const i=+$('#spSelect').value; if(i<0)return;
+  DATA.spans.splice(i,1); afterMutate(); fillSpanForm(null);
+};
+
+/* --- 시대 폼 --- */
+function fillEraForm(e){
+  $('#erSelect').value=e?String(DATA.eras.indexOf(e)):'-1';
+  $('#erStart').value=e?.start||''; $('#erEnd').value=e?.end||'';
+  $('#erColor').value=e?.color||'#2E5E63'; $('#erTitle').value=e?.title||'';
+}
+$('#erSelect').onchange=()=>{const i=+$('#erSelect').value; fillEraForm(i>=0?DATA.eras[i]:null);};
+$('#erSave').onclick=()=>{
+  const start=$('#erStart').value,end=$('#erEnd').value,title=$('#erTitle').value.trim();
+  if(!start||!end||!title){alert('시작·종료·제목 모두 필수다.');return;}
+  if(T(end)<=T(start)){alert('종료는 시작 이후여야 한다.');return;}
+  const i=+$('#erSelect').value;
+  const e=i>=0?DATA.eras[i]:{};
+  e.start=start;e.end=end;e.title=title;e.color=$('#erColor').value;
+  if(i<0)DATA.eras.push(e);
+  DATA.eras.sort((a,b)=>T(a.start)-T(b.start));
+  afterMutate(); fillEraForm(null);
+};
+$('#erDelete').onclick=()=>{
+  const i=+$('#erSelect').value; if(i<0)return;
+  DATA.eras.splice(i,1); afterMutate(); fillEraForm(null);
+};
+
+/* --- 수심 폼 --- */
+function fillHapForm(h){
+  $('#hpSelect').value=h?String(DATA.happiness.indexOf(h)):'-1';
+  $('#hpDate').value=h?.date||''; $('#hpVal').value=h?.v??'';
+  $('#hpFuture').checked=!!h?.future;
+}
+$('#hpSelect').onchange=()=>{const i=+$('#hpSelect').value; fillHapForm(i>=0?DATA.happiness[i]:null);};
+$('#hpSave').onclick=()=>{
+  const date=$('#hpDate').value, v=parseFloat($('#hpVal').value);
+  if(!date||isNaN(v)){alert('날짜와 수심값은 필수다.');return;}
+  const i=+$('#hpSelect').value;
+  const h=i>=0?DATA.happiness[i]:{};
+  h.date=date; h.v=Math.min(1,Math.max(-1,v)); h.future=$('#hpFuture').checked||undefined;
+  if(i<0)DATA.happiness.push(h);
+  afterMutate(); fillHapForm(null);
+};
+$('#hpDelete').onclick=()=>{
+  const i=+$('#hpSelect').value; if(i<0)return;
+  DATA.happiness.splice(i,1); afterMutate(); fillHapForm(null);
+};
+
+/* --- 항로 폼 --- */
+function fillTripForm(t){
+  $('#trSelect').value=t?String(DATA.trips.indexOf(t)):'-1';
+  $('#trTitle').value=t?.title||''; $('#trColor').value=t?.color||'#B5432A';
+  $('#trDashed').checked=!!t?.dashed; $('#trNote').value=t?.note||'';
+  $('#trPoints').value=t?t.points.map(p=>`${p.label} | ${p.date||''}`.replace(/ \| $/,'')).join('\n'):'';
+  $('#trGeoRes').textContent='';
+}
+$('#trSelect').onchange=()=>{const i=+$('#trSelect').value; fillTripForm(i>=0?DATA.trips[i]:null);};
+$('#trSave').onclick=async()=>{
+  const title=$('#trTitle').value.trim();
+  const lines=$('#trPoints').value.split('\n').map(l=>l.trim()).filter(Boolean);
+  if(!title||lines.length<2){alert('이름과 기항지 2곳 이상이 필요하다.');return;}
+  const i=+$('#trSelect').value;
+  const t=i>=0?DATA.trips[i]:{id:'trip'+Date.now()};
+  const oldPts=t.points||[];
+  const res=$('#trGeoRes');
+  const pts=[];
+  for(const [idx,line] of lines.entries()){
+    const [label,note]=line.split('|').map(s=>s.trim());
+    const prev=oldPts.find(p=>p.label===label);
+    if(prev){pts.push({...prev,date:note||prev.date});continue;}
+    res.textContent=`좌표 검색 중… (${idx+1}/${lines.length}) ${label}`;
+    const g=await geocode(label);
+    if(!g){res.textContent=`「${label}」 좌표를 찾지 못했다. 지명을 바꿔 다시 시도.`;return;}
+    pts.push({lat:g.lat,lng:g.lng,label,date:note||''});
+    await new Promise(r=>setTimeout(r,1100)); /* Nominatim 예의: 1req/s */
+  }
+  t.title=title;t.color=$('#trColor').value;t.dashed=$('#trDashed').checked||undefined;
+  t.note=$('#trNote').value.trim();t.points=pts;
+  if(i<0)DATA.trips.push(t);
+  res.textContent='저장 완료.';
+  afterMutate(); fillTripForm(t);
+};
+$('#trDelete').onclick=()=>{
+  const i=+$('#trSelect').value; if(i<0)return;
+  const id=DATA.trips[i].id;
+  DATA.trips.splice(i,1);
+  DATA.events.concat(DATA.spans).forEach(x=>{if(x.tripId===id)delete x.tripId;});
+  afterMutate(); fillTripForm(null);
+};
+
+/* --- 지명 검색 (Nominatim, 키 불필요) --- */
+async function geocode(q){
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`,
+      {headers:{'Accept':'application/json'}});
+    const j=await r.json();
+    if(j&&j[0])return{lat:+j[0].lat,lng:+j[0].lon,name:j[0].display_name};
+  }catch(e){}
+  return null;
+}
+function bindGeo(qId,btnId,latId,lngId,labelId,resId){
+  $(btnId).onclick=async()=>{
+    const q=$(qId).value.trim(); if(!q)return;
+    $(resId).textContent='검색 중…';
+    const g=await geocode(q);
+    if(!g){$(resId).textContent='결과 없음 — 지명을 바꿔 시도 (예: "Perth, Australia")';return;}
+    $(latId).value=g.lat.toFixed(4); $(lngId).value=g.lng.toFixed(4);
+    if(!$(labelId).value)$(labelId).value=q;
+    $(resId).textContent='✓ '+g.name;
+  };
+}
+bindGeo('#evGeoQ','#evGeoBtn','#evLat','#evLng','#evLocLabel','#evGeoRes');
+bindGeo('#spGeoQ','#spGeoBtn','#spLat','#spLng','#spLocLabel','#spGeoRes');
+
+/* JSON 입출력 제거 — 데이터 이동은 온라인 DB 동기화로 */
+
+/* ==========================================================================
+   지도
+   ========================================================================== */
+let map=null,baseLayer=null,tripLayers=[],shipMarker=null,animId=null,curTripId=null;
+function mapNotice(msg){
+  const host=document.getElementById('map');
+  let n=host.querySelector('.map-notice');
+  if(!n){
+    n=document.createElement('div'); n.className='map-notice';
+    n.style.cssText='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;background:rgba(233,237,230,.92);z-index:500;font-size:13.5px;color:#23312B;line-height:1.7';
+    host.appendChild(n);
+  }
+  n.innerHTML=msg;
+}
+try{
+  if(typeof L==='undefined') throw new Error('leaflet-missing');
+  map=L.map('map',{scrollWheelZoom:false}).setView([27,127],4);
+  let tileFails=0, fellBack=false;
+  function addTiles(url,opt){
+    const layer=L.tileLayer(url,opt).addTo(map);
+    layer.on('tileerror',()=>{
+      tileFails++;
+      if(!fellBack && tileFails>=4){
+        fellBack=true; map.removeLayer(layer);
+        addTiles('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          {attribution:'&copy; OpenStreetMap',maxZoom:19});
+      } else if(fellBack && tileFails>=10){
+        mapNotice('지도 타일을 불러오지 못했다.<br>· Claude 미리보기 안이라면: 외부 이미지가 차단되는 환경 — <b>파일을 다운로드해 브라우저에서 직접 열면 표시된다.</b><br>· 브라우저에서 열었다면: 인터넷 연결 또는 광고차단기(cartocdn/openstreetmap 차단 여부)를 확인.');
+      }
+    });
+    layer.on('load',()=>{const n=document.querySelector('.map-notice');if(n)n.remove();});
+    return layer;
+  }
+  addTiles('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    {attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:19});
+}catch(e){
+  mapNotice('지도 라이브러리(Leaflet)를 불러오지 못해 지도를 표시할 수 없다.<br>인터넷 연결 후 새로고침하면 나타난다. 연표·곡선·편집 기능은 정상 작동한다.');
+}
+
+function rebuildMapBase(){
+  if(!map)return;
+  if(baseLayer)map.removeLayer(baseLayer);
+  baseLayer=L.layerGroup();
+  DATA.events.concat(DATA.spans).filter(x=>x.loc).forEach(x=>{
+    L.marker([x.loc.lat,x.loc.lng],{icon:L.divIcon({className:'',html:'<div class="port-marker" style="background:#23312B"></div>',iconSize:[12,12],iconAnchor:[6,6]})})
+     .bindPopup(`<div class="p-title">${esc(x.title)}</div><div class="p-date">${esc(x.date||x.start)} · ${esc(x.loc.label)}</div>`)
+     .addTo(baseLayer);
+  });
+  baseLayer.addTo(map);
+}
+function rebuildTripBar(){
+  const bar=$('#tripBar'); bar.innerHTML='';
+  const allBtn=document.createElement('button');
+  allBtn.className='trip-btn on'; allBtn.textContent='전체 보기';
+  allBtn.setAttribute('aria-pressed','true');
+  allBtn.onclick=()=>{selectTrip(null);setActive(allBtn);};
+  bar.appendChild(allBtn);
+  DATA.trips.forEach(t=>{
+    const b=document.createElement('button');
+    b.className='trip-btn';
+    b.setAttribute('aria-pressed','false');
+    b.title='한 번 더 클릭 또는 우클릭 = 수정';
+    b.innerHTML=`<span class="dot" style="background:${t.color}"></span>${esc(t.title)}`;
+    b.dataset.trip=t.id;
+    b.onclick=e=>{
+      e.stopPropagation(); /* document 클릭 리스너가 팝오버를 바로 닫는 것 방지 */
+      if(b.classList.contains('on'))openPopTrip(t,e.clientX,e.clientY); /* 재클릭 = 수정 */
+      else{selectTrip(t.id);setActive(b);}
+    };
+    b.oncontextmenu=e=>{e.preventDefault();e.stopPropagation();openPopTrip(t,e.clientX,e.clientY);};
+    bar.appendChild(b);
+  });
+  function setActive(btn){
+    bar.querySelectorAll('.trip-btn').forEach(x=>{x.classList.remove('on');x.setAttribute('aria-pressed','false');});
+    btn.classList.add('on');btn.setAttribute('aria-pressed','true');
+  }
+  bar._setActive=setActive;
+}
+document.addEventListener('click',ev=>{
+  const c=ev.target.closest('.loc-chip'); if(!c)return;
+  document.getElementById('sec-map').scrollIntoView({behavior:reduceMotion?'auto':'smooth'});
+  setTimeout(()=>{
+    const bar=$('#tripBar');
+    if(c.dataset.trip){
+      selectTrip(c.dataset.trip);
+      const b=bar.querySelector(`[data-trip="${c.dataset.trip}"]`); if(b)bar._setActive(b);
+    }else{
+      clearTrips(); map.flyTo([+c.dataset.lat,+c.dataset.lng],9,{duration:reduceMotion?0:1.5});
+    }
+  },reduceMotion?0:500);
+});
+
+function clearTrips(){
+  if(!map)return;
+  tripLayers.forEach(l=>map.removeLayer(l));tripLayers=[];
+  if(shipMarker){map.removeLayer(shipMarker);shipMarker=null;}
+  if(animId){cancelAnimationFrame(animId);animId=null;}
+  $('#tripInfo').innerHTML='';
+}
+function selectTrip(id){
+  if(!map)return;
+  clearTrips();
+  curTripId=id||null;
+  if(!id){map.flyTo([27,127],4,{duration:reduceMotion?0:1.2});return;}
+  const t=DATA.trips.find(x=>x.id===id); if(!t||t.points.length<2)return;
+  const latlngs=t.points.map(p=>[p.lat,p.lng]);
+  map.flyToBounds(L.latLngBounds(latlngs).pad(0.25),{duration:reduceMotion?0:1.2});
+  t.points.forEach((p,i)=>{
+    tripLayers.push(L.marker([p.lat,p.lng],{icon:L.divIcon({className:'',html:`<div class="port-marker" style="background:${t.color}"></div>`,iconSize:[12,12],iconAnchor:[6,6]})})
+      .addTo(map).bindPopup(`<div class="p-title">${i+1}. ${esc(p.label)}</div><div class="p-date">${esc(p.date||'')}</div>`));
+  });
+  tripLayers.push(L.polyline(latlngs,{color:t.color,weight:1.5,opacity:.35,dashArray:'4 8'}).addTo(map));
+  $('#tripInfo').innerHTML=`<span class="route">${t.points.map(p=>esc(p.label)).join(' → ')}</span><span>${esc(t.note||'')}</span>`;
+  if(reduceMotion){
+    tripLayers.push(L.polyline(latlngs,{color:t.color,weight:3,opacity:.9,dashArray:t.dashed?'8 8':null}).addTo(map));
+    return;
+  }
+  const prog=L.polyline([latlngs[0]],{color:t.color,weight:3,opacity:.9,dashArray:t.dashed?'8 8':null}).addTo(map);
+  tripLayers.push(prog);
+  shipMarker=L.marker(latlngs[0],{icon:L.divIcon({className:'',html:'<div class="ship-marker">⛵</div>',iconSize:[20,20],iconAnchor:[10,10]}),zIndexOffset:1000}).addTo(map);
+  const dists=[0];
+  for(let i=1;i<latlngs.length;i++)dists.push(dists[i-1]+map.distance(latlngs[i-1],latlngs[i]));
+  const total=dists[dists.length-1];
+  const DUR=Math.min(9000,3500+total/1000*1.2);
+  const start=performance.now();
+  function step(now){
+    const t01=Math.min((now-start)/DUR,1);
+    const eased=t01<.5?2*t01*t01:1-Math.pow(-2*t01+2,2)/2;
+    const d=eased*total;
+    let seg=1;while(seg<dists.length&&dists[seg]<d)seg++;
+    seg=Math.min(seg,latlngs.length-1);
+    const f=(d-dists[seg-1])/((dists[seg]-dists[seg-1])||1);
+    const lat=latlngs[seg-1][0]+(latlngs[seg][0]-latlngs[seg-1][0])*f;
+    const lng=latlngs[seg-1][1]+(latlngs[seg][1]-latlngs[seg-1][1])*f;
+    prog.setLatLngs([...latlngs.slice(0,seg),[lat,lng]]);
+    shipMarker.setLatLng([lat,lng]);
+    if(t01<1)animId=requestAnimationFrame(step);
+    else{shipMarker.bindPopup(`<div class="p-title">${esc(t.points[t.points.length-1].label)} 도착</div>`).openPopup();animId=null;}
+  }
+  animId=requestAnimationFrame(step);
+}
+
+/* ==========================================================================
+   초기화
+   ========================================================================== */
+prepare(); render(); renderDetail(); refreshAllSelects(); rebuildMapBase(); rebuildTripBar(); rebuildScrubber(); updateSaveState(); refreshDocSel();
+if(!RO&&CLOUD)cloudPullAll(); /* 온라인 DB에서 최신 문서 당겨오기 */
+fillEventForm(null); fillSpanForm(null); fillEraForm(null); fillHapForm(null); fillTripForm(null);
+</script>
+</body>
+</html>
