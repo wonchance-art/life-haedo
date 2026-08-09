@@ -489,18 +489,38 @@
           style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:#FBFCF9;color:var(--ink)">
       </label>
       <details style="font-size:11.5px;color:var(--ink-soft)">
-        <summary style="cursor:pointer">최초 1회 — Supabase SQL Editor에 실행할 테이블 생성문</summary>
-        <pre style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;background:#FBFCF9;border:1px solid var(--line);padding:10px;margin-top:6px;overflow-x:auto;line-height:1.5">create table charts (
+        <summary style="cursor:pointer">최초 1회 — Supabase SQL Editor에 실행할 생성문 (로그인 보안 포함)</summary>
+        <pre style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;background:#FBFCF9;border:1px solid var(--line);padding:10px;margin-top:6px;overflow-x:auto;line-height:1.5">create table if not exists charts (
   id text primary key,
   name text,
   data jsonb,
-  updated_at timestamptz
+  updated_at timestamptz,
+  user_id uuid default auth.uid()
 );
+alter table charts
+  add column if not exists user_id uuid default auth.uid();
 alter table charts enable row level security;
-create policy "personal" on charts
-  for all using (true) with check (true);</pre>
-        <div style="margin-top:4px">⚠ anon 공개 정책 — 개인용. 키를 아는 사람은 읽고 쓸 수 있다.</div>
+drop policy if exists "personal" on charts;
+drop policy if exists "own" on charts;
+create policy "own" on charts for all
+  using (user_id is null or auth.uid() = user_id)
+  with check (auth.uid() = user_id);</pre>
+        <div style="margin-top:4px">로그인한 계정만 자기 데이터를 읽고 쓴다. 예전 무소유 행은 로그인 후 저장하는 순간 내 소유가 된다.</div>
       </details>
+      <div style="border-top:1px dashed var(--line);padding-top:12px;display:flex;flex-direction:column;gap:9px">
+        <div id="authStat" style="font-size:12px;color:var(--water-deep)"></div>
+        <div id="authForm" style="display:flex;flex-direction:column;gap:8px">
+          <input id="authEmail" type="email" placeholder="이메일" autocomplete="username"
+            style="font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:#FBFCF9;color:var(--ink)">
+          <input id="authPw" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="current-password"
+            style="font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:#FBFCF9;color:var(--ink)">
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="pe-btn" id="authSignup">가입</button>
+            <button class="mini-btn" id="authLogin">로그인</button>
+          </div>
+        </div>
+        <button class="pe-btn" id="authLogout" hidden>로그아웃</button>
+      </div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button class="pe-btn danger" id="cloudOff">연결 해제</button>
         <button class="pe-btn" id="cloudCancel">닫기</button>
@@ -656,8 +676,9 @@ function updateSaveState(){
   if(!storageOK){s.textContent='▲ 메모리 전용 — 저장 실패';s.classList.add('warn');return;}
   if(typeof CLOUD!=='undefined'&&CLOUD){
     if(cloudState==='sync'){s.textContent='☁ 동기화 중…';s.classList.remove('warn');}
+    else if(cloudState==='auth'){s.textContent='🔐 로그인 필요 — ☁ DB에서 로그인';s.classList.add('warn');}
     else if(cloudState==='err'){s.textContent='⚠ 동기화 실패 — 로컬엔 저장됨';s.classList.add('warn');}
-    else{s.textContent='☁ 온라인 DB 동기화됨';s.classList.remove('warn');}
+    else{s.textContent='☁ 온라인 DB 동기화됨'+(CLOUD.session?' · '+CLOUD.session.email:'');s.classList.remove('warn');}
     return;
   }
   s.textContent='● 브라우저에 저장됨'; s.classList.remove('warn');
@@ -2034,9 +2055,44 @@ const CLOUD_KEY='caeyeon_life_cloud';
 let CLOUD=null,cloudTimer=null,cloudState='';
 try{CLOUD=JSON.parse(localStorage.getItem(CLOUD_KEY))||null;}catch(e){}
 const cloudBase=()=>CLOUD.url.replace(/\/+$/,'')+'/rest/v1/charts';
-const cloudHeaders=()=>({'apikey':CLOUD.key,'Authorization':'Bearer '+CLOUD.key,
+const cloudHeaders=()=>({'apikey':CLOUD.key,
+  'Authorization':'Bearer '+(CLOUD.session?CLOUD.session.access_token:CLOUD.key),
   'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'});
 function setCloudState(s){cloudState=s;updateSaveState();}
+
+/* --- 계정 (Supabase Auth REST) — 로그인하면 내 데이터만 분리·동기화 --- */
+async function authCall(path,body){
+  const r=await fetch(CLOUD.url.replace(/\/+$/,'')+'/auth/v1/'+path,{method:'POST',
+    headers:{'apikey':CLOUD.key,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(j.msg||j.error_description||j.message||('HTTP '+r.status));
+  return j;
+}
+function saveCloud(){try{localStorage.setItem(CLOUD_KEY,JSON.stringify(CLOUD));}catch(e){}}
+function setSession(j){
+  if(!j||!j.access_token)return false;
+  CLOUD.session={access_token:j.access_token,refresh_token:j.refresh_token,
+    expires_at:Date.now()+(((j.expires_in||3600)-60)*1000),
+    email:(j.user&&j.user.email)||'',uid:(j.user&&j.user.id)||''};
+  saveCloud();return true;
+}
+function dropSession(){if(CLOUD){CLOUD.session=null;saveCloud();}setCloudState('auth');}
+async function ensureToken(){
+  if(!CLOUD||!CLOUD.session)return;
+  if(Date.now()<CLOUD.session.expires_at)return;
+  try{setSession(await authCall('token?grant_type=refresh_token',{refresh_token:CLOUD.session.refresh_token}));}
+  catch(e){dropSession();throw e;}
+}
+async function cloudFetch(url,optsFn){ /* 만료 갱신 + 401 시 1회 재시도 */
+  await ensureToken();
+  let r=await fetch(url,optsFn());
+  if(r.status===401&&CLOUD.session){
+    try{setSession(await authCall('token?grant_type=refresh_token',{refresh_token:CLOUD.session.refresh_token}));}
+    catch(e){dropSession();return r;}
+    r=await fetch(url,optsFn());
+  }
+  return r;
+}
 async function cloudPush(docId){
   if(!CLOUD||RO)return;
   setCloudState('sync');
@@ -2046,11 +2102,12 @@ async function cloudPush(docId){
     try{data=JSON.parse(localStorage.getItem(DOC_PREFIX+docId));}catch(e){}
     if(!data)data=docId===curDocId?DATA:null;
     if(!data){setCloudState('ok');return;}
-    const r=await fetch(cloudBase(),{method:'POST',headers:cloudHeaders(),
-      body:JSON.stringify([{id:docId,name:(reg&&reg.name)||'해도',data,updated_at:(reg&&reg.updated)||new Date().toISOString()}])});
+    const row={id:docId,name:(reg&&reg.name)||'해도',data,updated_at:(reg&&reg.updated)||new Date().toISOString()};
+    if(CLOUD.session&&CLOUD.session.uid)row.user_id=CLOUD.session.uid; /* 저장 시 내 소유로 (기존 무소유 행도 자동 귀속) */
+    const r=await cloudFetch(cloudBase(),()=>({method:'POST',headers:cloudHeaders(),body:JSON.stringify([row])}));
     if(!r.ok)throw new Error('HTTP '+r.status);
     setCloudState('ok');
-  }catch(e){setCloudState('err');}
+  }catch(e){setCloudState(CLOUD&&!CLOUD.session&&cloudState==='auth'?'auth':'err');}
 }
 function queueCloudPush(){
   if(!CLOUD||RO)return;
@@ -2059,13 +2116,14 @@ function queueCloudPush(){
 }
 async function cloudDelete(docId){
   if(!CLOUD||RO)return;
-  try{await fetch(cloudBase()+'?id=eq.'+encodeURIComponent(docId),{method:'DELETE',headers:cloudHeaders()});}catch(e){}
+  try{await cloudFetch(cloudBase()+'?id=eq.'+encodeURIComponent(docId),()=>({method:'DELETE',headers:cloudHeaders()}));}catch(e){}
 }
 async function cloudPullAll(){
   if(!CLOUD||RO)return;
+  if(!document.getElementById('popEd').hidden)return; /* 편집 중엔 풀 보류 (다음 주기에) */
   setCloudState('sync');
   try{
-    const r=await fetch(cloudBase()+'?select=id,name,data,updated_at',{headers:cloudHeaders()});
+    const r=await cloudFetch(cloudBase()+'?select=id,name,data,updated_at',()=>({headers:cloudHeaders()}));
     if(!r.ok)throw new Error('HTTP '+r.status);
     const rows=await r.json();
     let changed=false;
@@ -2093,12 +2151,30 @@ async function cloudPullAll(){
     setCloudState('ok');
   }catch(e){setCloudState('err');}
 }
+/* 온라인 전용 사용: 자동 풀 — 탭 복귀 시 + 60초 주기 (다른 기기의 수정이 저절로 반영) */
+if(!RO){
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&CLOUD)cloudPullAll();});
+  setInterval(()=>{if(CLOUD&&!document.hidden)cloudPullAll();},60000);
+}
 (function cloudUI(){
   if(RO)return;
   const bd=document.getElementById('cloudBd');
+  function refreshAuthUI(){
+    const stat=document.getElementById('authStat');
+    const form=document.getElementById('authForm');
+    const outBtn=document.getElementById('authLogout');
+    if(CLOUD&&CLOUD.session){
+      stat.textContent='🔐 로그인됨 — '+CLOUD.session.email;
+      form.style.display='none';outBtn.hidden=false;
+    }else{
+      stat.textContent=CLOUD?'로그인하면 이 계정의 데이터만 안전하게 동기화된다':'먼저 위에서 URL·키를 연결해줘';
+      form.style.display='flex';outBtn.hidden=true;
+    }
+  }
   document.getElementById('btnCloud').onclick=()=>{
     document.getElementById('cloudUrl').value=CLOUD?CLOUD.url:'';
     document.getElementById('cloudKey').value=CLOUD?CLOUD.key:'';
+    refreshAuthUI();
     bd.hidden=false;
   };
   document.getElementById('cloudCancel').onclick=()=>{bd.hidden=true;};
@@ -2107,11 +2183,35 @@ async function cloudPullAll(){
     const url=document.getElementById('cloudUrl').value.trim();
     const key=document.getElementById('cloudKey').value.trim();
     if(!/^https?:\/\//.test(url)||!key){alert('URL과 anon key를 확인해줘.');return;}
-    CLOUD={url,key};
-    try{localStorage.setItem(CLOUD_KEY,JSON.stringify(CLOUD));}catch(e){}
-    bd.hidden=true;
+    const keepSession=CLOUD&&CLOUD.url===url?CLOUD.session:null;
+    CLOUD={url,key,session:keepSession};
+    saveCloud();
+    refreshAuthUI();
     cloudPullAll();
   };
+  document.getElementById('authLogin').onclick=async()=>{
+    if(!CLOUD){alert('먼저 URL·키를 연결해줘.');return;}
+    const email=document.getElementById('authEmail').value.trim();
+    const pw=document.getElementById('authPw').value;
+    if(!email||!pw)return;
+    try{
+      setSession(await authCall('token?grant_type=password',{email,password:pw}));
+      refreshAuthUI();setCloudState('sync');
+      cloudPullAll();
+    }catch(e){alert('로그인 실패: '+e.message);}
+  };
+  document.getElementById('authSignup').onclick=async()=>{
+    if(!CLOUD){alert('먼저 URL·키를 연결해줘.');return;}
+    const email=document.getElementById('authEmail').value.trim();
+    const pw=document.getElementById('authPw').value;
+    if(!email||pw.length<6){alert('이메일과 6자 이상 비밀번호가 필요하다.');return;}
+    try{
+      const j=await authCall('signup',{email,password:pw});
+      if(setSession(j)){refreshAuthUI();cloudPullAll();}
+      else alert('가입 확인 메일을 확인한 뒤 로그인해줘.');
+    }catch(e){alert('가입 실패: '+e.message);}
+  };
+  document.getElementById('authLogout').onclick=()=>{dropSession();refreshAuthUI();};
   document.getElementById('cloudOff').onclick=()=>{
     CLOUD=null;cloudState='';
     try{localStorage.removeItem(CLOUD_KEY);}catch(e){}
