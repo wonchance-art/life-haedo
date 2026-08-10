@@ -474,6 +474,18 @@
   </section>
 </main>
 
+<!-- 입장 게이트 -->
+<div id="gateBd" hidden style="position:fixed;inset:0;z-index:2000;background:var(--paper);display:flex;align-items:center;justify-content:center">
+  <div style="display:flex;flex-direction:column;gap:14px;width:min(320px,86vw);text-align:center">
+    <div style="font-family:'Gowun Batang',serif;font-weight:700;font-size:26px">인생 해도</div>
+    <div style="font-size:12.5px;color:var(--ink-soft)">이 해도는 잠겨 있다 — 입장 비밀번호</div>
+    <input id="gatePw" type="password" autocomplete="off"
+      style="font-family:'IBM Plex Mono',monospace;font-size:15px;padding:10px 12px;border:1px solid var(--line);border-radius:2px;background:#FBFCF9;color:var(--ink);text-align:center">
+    <button id="gateGo" class="mini-btn" style="padding:9px">⚓ 입장</button>
+  </div>
+</div>
+<style>#gateBd[hidden]{display:none!important}</style>
+
 <!-- 온라인 DB 설정 -->
 <div class="search-bd" id="cloudBd" hidden>
   <div class="search-panel" role="dialog" aria-modal="true" aria-label="온라인 DB 동기화" style="max-width:460px">
@@ -489,7 +501,7 @@
           style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:#FBFCF9;color:var(--ink)">
       </label>
       <details style="font-size:11.5px;color:var(--ink-soft)">
-        <summary style="cursor:pointer">최초 1회 — Supabase SQL Editor에 실행할 생성문 (로그인 보안 포함)</summary>
+        <summary style="cursor:pointer">최초 1회 — Supabase SQL Editor에 실행할 생성문</summary>
         <pre style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;background:#FBFCF9;border:1px solid var(--line);padding:10px;margin-top:6px;overflow-x:auto;line-height:1.5">create table if not exists charts (
   id text primary key,
   name text,
@@ -497,17 +509,15 @@
   updated_at timestamptz,
   user_id uuid default auth.uid()
 );
-alter table charts
-  add column if not exists user_id uuid default auth.uid();
 alter table charts enable row level security;
-drop policy if exists "personal" on charts;
 drop policy if exists "own" on charts;
-create policy "own" on charts for all
-  using (user_id is null or auth.uid() = user_id)
-  with check (auth.uid() = user_id);</pre>
-        <div style="margin-top:4px">로그인한 계정만 자기 데이터를 읽고 쓴다. 예전 무소유 행은 로그인 후 저장하는 순간 내 소유가 된다.</div>
+drop policy if exists "personal" on charts;
+create policy "personal" on charts
+  for all using (true) with check (true);</pre>
+        <div style="margin-top:4px">개인용 개방 정책 — 키를 아는 사람은 접근 가능. 아래 계정 로그인(선택)을 쓰기 시작하면 정책을 계정 분리형으로 올릴 수 있다.</div>
       </details>
       <div style="border-top:1px dashed var(--line);padding-top:12px;display:flex;flex-direction:column;gap:9px">
+        <div style="font-size:11px;color:var(--ink-soft)">(선택) 계정 로그인 — 다인용·계정 분리로 갈 때</div>
         <div id="authStat" style="font-size:12px;color:var(--water-deep)"></div>
         <div id="authForm" style="display:flex;flex-direction:column;gap:8px">
           <input id="authEmail" type="email" placeholder="이메일" autocomplete="username"
@@ -582,6 +592,31 @@ create policy "own" on charts for all
 <script>
 /* 공유 뷰어 모드 + 페이지 원본 캡처 (렌더로 DOM이 변형되기 전) */
 const RO=!!window.VIEW_ONLY;
+
+/* 입장 게이트 — 클라이언트 측 열람 차단 (해시만 보관, 기기당 1회 입력) */
+const GATE_HASH='483c394ef473d719bc20c4308d93b276729d2c86b76eacd529409d23fe49d3d1';
+const GATE_KEY='caeyeon_life_gate';
+(function gate(){
+  if(RO)return;
+  try{if(localStorage.getItem(GATE_KEY)===GATE_HASH)return;}catch(e){}
+  const sha=async s=>{
+    const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));
+    return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+  };
+  /* 스크립트가 body 끝이라 DOM은 이미 준비됨 */
+  const bd=document.getElementById('gateBd');
+  const inp=document.getElementById('gatePw');
+  bd.hidden=false;
+  const tryGo=async()=>{
+    if(await sha(inp.value)===GATE_HASH){
+      try{localStorage.setItem(GATE_KEY,GATE_HASH);}catch(e){}
+      bd.hidden=true;
+    }else{inp.style.borderColor='var(--cinnabar)';inp.select();}
+  };
+  document.getElementById('gateGo').onclick=tryGo;
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter')tryGo();});
+  requestAnimationFrame(()=>inp.focus());
+})();
 const PAGE_SRC='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
 if(RO)document.documentElement.classList.add('view-only');
 
