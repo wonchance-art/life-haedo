@@ -2153,7 +2153,7 @@ async function cloudDelete(docId){
   if(!CLOUD||RO)return;
   try{await cloudFetch(cloudBase()+'?id=eq.'+encodeURIComponent(docId),()=>({method:'DELETE',headers:cloudHeaders()}));}catch(e){}
 }
-async function cloudPullAll(){
+async function cloudPullAll(autoSwitch){
   if(!CLOUD||RO)return;
   if(!document.getElementById('popEd').hidden)return; /* 편집 중엔 풀 보류 (다음 주기에) */
   setCloudState('sync');
@@ -2183,6 +2183,10 @@ async function cloudPullAll(){
     });
     REG.docs.forEach(d=>{if(!rows.find(x=>x&&x.id===d.id))cloudPush(d.id);}); /* 로컬에만 있는 문서 → 올리기 */
     if(changed){saveRegistry();refreshDocSel();}
+    if(autoSwitch){ /* 연결 직후엔 가장 최근에 쓰던 문서로 자동 전환 */
+      const newest=[...REG.docs].sort((a,b)=>(b.updated||'').localeCompare(a.updated||''))[0];
+      if(newest&&newest.id!==curDocId)switchDoc(newest.id);
+    }
     setCloudState('ok');
   }catch(e){setCloudState('err');}
 }
@@ -2229,7 +2233,7 @@ if(!RO){
       const n=(await r.json()).length;
       alert('✓ 연결 성공 — 클라우드에 문서 '+n+'개.\n이 기기의 문서들이 지금 자동 업로드된다.');
       bd.hidden=true;
-      await cloudPullAll();
+      await cloudPullAll(true);
       alert(cloudState==='ok'?'✓ 동기화 완료 — 상태 표시가 「☁ 온라인 DB 동기화됨」이면 정상이다.':'⚠ 동기화 중 문제 발생 — 상태 표시를 확인해줘.');
     }catch(e){
       alert('✗ 연결 실패: '+e.message);
