@@ -531,6 +531,11 @@ create policy "personal" on charts
         </div>
         <button class="pe-btn" id="authLogout" hidden>로그아웃</button>
       </div>
+      <div style="border-top:1px dashed var(--line);padding-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="pe-btn" id="btnBackup">⬇ 데이터 백업</button>
+        <label class="pe-btn" style="cursor:pointer">⬆ 백업 복원<input type="file" id="fileRestore" accept=".json" hidden></label>
+        <span style="font-size:11px;color:var(--ink-soft)">DB와 별개로 파일 한 벌 — 만약을 위한 안전망</span>
+      </div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button class="pe-btn danger" id="cloudOff">연결 해제</button>
         <button class="pe-btn" id="cloudCancel">닫기</button>
@@ -718,6 +723,12 @@ function updateSaveState(){
   }
   s.textContent='● 브라우저에 저장됨'; s.classList.remove('warn');
 }
+/* 시간 유틸 — 로드 관문(migrateScale/sanitize)보다 먼저 선언되어야 한다 */
+const T=d=>{const[y,m]=String(d).split('-').map(Number);return y+((m||1)-1)/12;};
+const MONTH_RE=/^\d{4}-(0[1-9]|1[0-2])$/;
+const validMonth=d=>MONTH_RE.test(String(d));
+const tToMonth=t=>{let y=Math.floor(t),m=Math.round((t-y)*12)+1;if(m>12){y++;m=1;}return y+'-'+String(m).padStart(2,'0');};
+
 /* 행복 척도 마이그레이션: 구 0~10 / signed10(−10~+10) → 최종 −1~+1 (중앙 0) */
 function migrateScale(d){
   const conv=f=>{
@@ -727,11 +738,70 @@ function migrateScale(d){
   };
   const r2=v=>Math.round(v*100)/100;
   delete d.now; /* 現在는 항상 오늘 기준 자동 (고정값 폐기) */
-  if(d.scale==='signed1')return d;
-  if(d.scale==='signed10')conv(v=>r2(v/10));
-  else conv(v=>r2((v-5)/5)); /* 구 0~10 */
-  d.scale='signed1';
+  if(d.scale!=='signed1'){
+    if(d.scale==='signed10')conv(v=>r2(v/10));
+    else conv(v=>r2((v-5)/5)); /* 구 0~10 */
+    d.scale='signed1';
+  }
+  return sanitize(d);
+}
+
+/* 날짜 위생 — 깨진 값 하나가 NaN으로 전체 좌표계를 오염시키는 것을 차단.
+   복구 불가한 항목은 버리지 않고 격리(quarantine)해서 사용자에게 알린다 */
+let DATA_ISSUES=[];
+function sanitize(d){
+  const issues=[];
+  const fix=(obj,key,label)=>{ /* '1998-5'·'1998-05-05' 같은 근사값은 복구 시도 */
+    const raw=obj[key];
+    if(validMonth(raw))return true;
+    const m=String(raw??'').match(/^(\d{4})-(\d{1,2})/);
+    if(m&&+m[2]>=1&&+m[2]<=12){
+      obj[key]=m[1]+'-'+String(+m[2]).padStart(2,'0');
+      issues.push({label,key,from:raw,to:obj[key],fixed:true});
+      return true;
+    }
+    issues.push({label,key,from:raw,fixed:false});
+    return false;
+  };
+  const keep=(arr,test)=>{const ok=[],bad=[];(arr||[]).forEach(x=>(test(x)?ok:bad).push(x));return[ok,bad];};
+
+  const [eras,badEras]=keep(d.eras,e=>{
+    const a=fix(e,'start','시대 「'+(e.title||'')+'」'), b=fix(e,'end','시대 「'+(e.title||'')+'」');
+    return a&&b&&T(e.end)>T(e.start);
+  });
+  const [events,badEvents]=keep(d.events,e=>fix(e,'date','사건 「'+(e.title||'')+'」'));
+  const [spans,badSpans]=keep(d.spans,s=>{
+    if(!fix(s,'start','기간 「'+(s.title||'')+'」'))return false;
+    if(s.end!=null&&s.end!==''){ if(!fix(s,'end','기간 「'+(s.title||'')+'」'))return false; }
+    else s.end=null;
+    return true;
+  });
+  const [happiness,badHap]=keep(d.happiness,h=>fix(h,'date','수심 측점')&&typeof h.v==='number'&&isFinite(h.v));
+  const [records,badRec]=keep(d.records,r=>validMonth(r.m)&&typeof r.n==='number');
+
+  d.eras=eras;d.events=events;d.spans=spans;d.happiness=happiness;d.records=records;
+  const dropped=[...badEras,...badEvents,...badSpans,...badHap,...badRec];
+  if(dropped.length){ /* 격리 — 데이터는 보존하되 렌더에서 제외 */
+    d._quarantine=[...(d._quarantine||[]),...dropped];
+  }
+  if(!validMonth(d.profile&&d.profile.birth)){
+    d.profile=d.profile||{};
+    if(!fix(d.profile,'birth','기점(출생)'))d.profile.birth=tToMonth(new Date().getFullYear()-30);
+  }
+  DATA_ISSUES=issues;
   return d;
+}
+function reportIssues(){
+  if(!DATA_ISSUES.length)return;
+  const fixed=DATA_ISSUES.filter(i=>i.fixed), drop=DATA_ISSUES.filter(i=>!i.fixed);
+  const lines=[];
+  if(fixed.length)lines.push('· 자동 교정 '+fixed.length+'건: '+fixed.slice(0,3).map(i=>i.label+' '+i.from+'→'+i.to).join(', ')+(fixed.length>3?' 외':''));
+  if(drop.length)lines.push('· 격리 '+drop.length+'건(형식 불명, 화면에서 제외): '+drop.slice(0,3).map(i=>i.label+' '+i.key+'='+i.from).join(', ')+(drop.length>3?' 외':''));
+  const s=document.getElementById('saveState');
+  if(s){s.textContent='⚠ 날짜 '+DATA_ISSUES.length+'건 정리됨 — 클릭해 확인';s.classList.add('warn');s.style.cursor='pointer';
+    s.onclick=()=>{alert('날짜 형식 문제를 정리했다:\n\n'+lines.join('\n')+'\n\n교정된 항목은 그대로 쓰면 되고, 격리된 항목은 편집에서 다시 입력하면 살아난다.');
+      s.onclick=null;s.style.cursor='';updateSaveState();};
+  }
 }
 let DATA = migrateScale(RO?structuredClone(window.SHARED_DATA):loadDoc(curDocId));
 
@@ -785,8 +855,7 @@ document.getElementById('btnRedo').onclick=()=>redo();
 const $=s=>document.querySelector(s);
 const NS='http://www.w3.org/2000/svg';
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
-const T=d=>{const[y,m]=d.split('-').map(Number);return y+((m||1)-1)/12;};
-const tToMonth=t=>{let y=Math.floor(t),m=Math.round((t-y)*12)+1;if(m>12){y++;m=1;}return y+'-'+String(m).padStart(2,'0');};
+/* T·validMonth·tToMonth는 migrateScale/sanitize보다 먼저 선언됨 (파일 상단) */
 /* 월 인덱스 연산 — 드래그 스냅용 */
 const miOf=d=>{const[y,m]=d.split('-').map(Number);return y*12+((m||1)-1);};
 const miToMonth=mi=>Math.floor(mi/12)+'-'+String(mi%12+1).padStart(2,'0');
@@ -2137,12 +2206,20 @@ async function cloudPush(docId){
     try{data=JSON.parse(localStorage.getItem(DOC_PREFIX+docId));}catch(e){}
     if(!data)data=docId===curDocId?DATA:null;
     if(!data){setCloudState('ok');return;}
+    if(isPristineSample(data)){setCloudState('ok');return;} /* 미편집 샘플은 업로드 생략 */
     const row={id:docId,name:(reg&&reg.name)||'해도',data,updated_at:(reg&&reg.updated)||new Date().toISOString()};
     if(CLOUD.session&&CLOUD.session.uid)row.user_id=CLOUD.session.uid; /* 저장 시 내 소유로 (기존 무소유 행도 자동 귀속) */
     const r=await cloudFetch(cloudBase(),()=>({method:'POST',headers:cloudHeaders(),body:JSON.stringify([row])}));
     if(!r.ok)throw new Error('HTTP '+r.status);
     setCloudState('ok');
   }catch(e){setCloudState(CLOUD&&!CLOUD.session&&cloudState==='auth'?'auth':'err');}
+}
+/* 한 번도 편집 안 된 기본 샘플은 DB로 올리지 않는다 (기기마다 샘플이 쌓이는 것 방지) */
+let PRISTINE_SEED=JSON.stringify(DEFAULT_DATA.events)+'|'+JSON.stringify(DEFAULT_DATA.spans);
+function isPristineSample(data){
+  if(!data||!data.profile)return false;
+  if(data.profile.name!==DEFAULT_DATA.profile.name||data.profile.birth!==DEFAULT_DATA.profile.birth)return false;
+  return JSON.stringify(data.events)+'|'+JSON.stringify(data.spans)===PRISTINE_SEED;
 }
 function queueCloudPush(){
   if(!CLOUD||RO)return;
@@ -2263,6 +2340,42 @@ if(!RO){
     }catch(e){alert('가입 실패: '+e.message);}
   };
   document.getElementById('authLogout').onclick=()=>{dropSession();refreshAuthUI();};
+  /* 백업 — 전 문서를 한 파일로. DB가 정본이어도 마지막 안전망은 파일 */
+  document.getElementById('btnBackup').onclick=()=>{
+    const docs=REG.docs.map(d=>{
+      let data=null;
+      try{data=d.id===curDocId?DATA:JSON.parse(localStorage.getItem(DOC_PREFIX+d.id));}catch(e){}
+      return{id:d.id,name:d.name,updated:d.updated,data};
+    }).filter(x=>x.data);
+    const blob=new Blob([JSON.stringify({format:'haedo-backup-v1',at:new Date().toISOString(),docs},null,1)],{type:'application/json'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='해도-백업-'+new Date().toISOString().slice(0,10)+'.json';
+    a.click();URL.revokeObjectURL(a.href);
+  };
+  document.getElementById('fileRestore').onchange=async e=>{
+    const f=e.target.files[0];e.target.value='';
+    if(!f)return;
+    try{
+      const j=JSON.parse(await f.text());
+      const docs=Array.isArray(j.docs)?j.docs:(j.events?[{id:newDocId(),name:(j.profile&&j.profile.name)||'복원',data:j}]:null);
+      if(!docs||!docs.length)throw new Error('백업 형식이 아니다');
+      if(!confirm('백업에서 문서 '+docs.length+'개를 복원한다.\n같은 id의 문서는 덮어쓴다. 계속?'))return;
+      docs.forEach(x=>{
+        if(!x.data)return;
+        const id=x.id||newDocId();
+        localStorage.setItem(DOC_PREFIX+id,JSON.stringify(migrateScale(x.data)));
+        const ex=REG.docs.find(r=>r.id===id);
+        if(ex){ex.name=x.name||ex.name;ex.updated=x.updated||new Date().toISOString();}
+        else REG.docs.push({id,name:x.name||'복원',updated:x.updated||new Date().toISOString()});
+      });
+      saveRegistry();refreshDocSel();
+      const first=docs[0].id||REG.docs[0].id;
+      curDocId=null;switchDoc(first);
+      if(CLOUD)REG.docs.forEach(d=>cloudPush(d.id)); /* 복원본을 DB로도 올림 */
+      alert('✓ 복원 완료 — 문서 '+docs.length+'개');
+    }catch(err){alert('복원 실패: '+err.message);}
+  };
   document.getElementById('cloudOff').onclick=()=>{
     CLOUD=null;cloudState='';
     try{localStorage.removeItem(CLOUD_KEY);}catch(e){}
@@ -2706,7 +2819,7 @@ function selectTrip(id){
 /* ==========================================================================
    초기화
    ========================================================================== */
-prepare(); render(); renderDetail(); refreshAllSelects(); rebuildMapBase(); rebuildTripBar(); rebuildScrubber(); updateSaveState(); refreshDocSel();
+prepare(); render(); renderDetail(); refreshAllSelects(); rebuildMapBase(); rebuildTripBar(); rebuildScrubber(); updateSaveState(); refreshDocSel(); reportIssues();
 if(!RO&&CLOUD)cloudPullAll(); /* 온라인 DB에서 최신 문서 당겨오기 */
 fillEventForm(null); fillSpanForm(null); fillEraForm(null); fillHapForm(null); fillTripForm(null);
 </script>
