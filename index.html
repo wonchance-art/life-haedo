@@ -2214,7 +2214,7 @@ if(!RO){
   };
   document.getElementById('cloudCancel').onclick=()=>{bd.hidden=true;};
   bd.addEventListener('mousedown',e=>{if(e.target===bd)bd.hidden=true;});
-  document.getElementById('cloudSave').onclick=()=>{
+  document.getElementById('cloudSave').onclick=async()=>{
     const url=document.getElementById('cloudUrl').value.trim();
     const key=document.getElementById('cloudKey').value.trim();
     if(!/^https?:\/\//.test(url)||!key){alert('URL과 anon key를 확인해줘.');return;}
@@ -2222,7 +2222,19 @@ if(!RO){
     CLOUD={url,key,session:keepSession};
     saveCloud();
     refreshAuthUI();
-    cloudPullAll();
+    /* 연결 즉시 검사 — 성공/실패를 명시적으로 보고 (조용한 실패 금지) */
+    try{
+      const r=await cloudFetch(cloudBase()+'?select=id',()=>({headers:cloudHeaders()}));
+      if(!r.ok)throw new Error('HTTP '+r.status+(r.status===404?' — charts 테이블 없음: 아래 SQL을 먼저 실행':r.status===401?' — anon key 확인':''));
+      const n=(await r.json()).length;
+      alert('✓ 연결 성공 — 클라우드에 문서 '+n+'개.\n이 기기의 문서들이 지금 자동 업로드된다.');
+      bd.hidden=true;
+      await cloudPullAll();
+      alert(cloudState==='ok'?'✓ 동기화 완료 — 상태 표시가 「☁ 온라인 DB 동기화됨」이면 정상이다.':'⚠ 동기화 중 문제 발생 — 상태 표시를 확인해줘.');
+    }catch(e){
+      alert('✗ 연결 실패: '+e.message);
+      setCloudState('err');
+    }
   };
   document.getElementById('authLogin').onclick=async()=>{
     if(!CLOUD){alert('먼저 URL·키를 연결해줘.');return;}
