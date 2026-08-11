@@ -120,6 +120,12 @@
   .lay-hint{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);margin-left:4px}
   #tl .c-main,#tl [data-hap],#tl .c-lay{transition:opacity .25s ease}
   #tl:not([data-focus="main"]) .c-main,#tl:not([data-focus="main"]) [data-hap]{opacity:.13;pointer-events:none}
+  .pe-tags{flex-wrap:wrap;gap:9px}
+  .lay-tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--ink);cursor:pointer;font-family:'Gowun Batang',serif}
+  .lay-tag input{accent-color:var(--ink);width:12px;height:12px;margin:0}
+  .lay-tag .swz,.hc-tag .swz{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none}
+  .hc-tags{display:flex;gap:9px;margin-top:4px;flex-wrap:wrap}
+  .hc-tag{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--ink-soft)}
   .canvas-frame{border:1px solid var(--ink);background:var(--panel);padding:8px;position:relative}
   .canvas-inner{border:1px solid var(--line);position:relative;overflow:hidden}
   #tl{display:block;width:100%;touch-action:pan-y;cursor:grab;user-select:none}
@@ -685,9 +691,9 @@ const DEFAULT_DATA = {
   ],
   events:[
     { date:"1995-01", title:"태어나다", happiness:0, desc:"해도의 기점(起點)." },
-    { date:"2014-03", title:"첫 독립", happiness:0.3, desc:"집을 떠나 새 도시로." },
+    { date:"2014-03", title:"첫 독립", happiness:0.3, desc:"집을 떠나 새 도시로.", layers:["people"] },
     { date:"2017-08", title:"긴 여행", happiness:0.6, desc:"한 달의 배낭여행 — 낯선 거리에서 기록을 시작했다.",
-      loc:{lat:41.3874,lng:2.1686,label:"바르셀로나"}, tripId:"trip1" },
+      loc:{lat:41.3874,lng:2.1686,label:"바르셀로나"}, tripId:"trip1", layers:["travel","people"] },
     { date:"2019-11", title:"슬럼프", happiness:-0.4, desc:"방향을 잃었던 겨울." },
     { date:"2020-06", title:"새 일 시작", happiness:0.4 },
     { date:"2027-01", title:"다음 목표 (계획)", happiness:0.5, future:true, desc:"준비 중인 도전의 관문." },
@@ -836,6 +842,13 @@ function sanitize(d){
   });
   const [thoughts,badTh]=keep(d.thoughts,th=>fix(th,'date','생각')&&typeof th.text==='string'&&th.text.trim());
   d.thoughts=thoughts;
+  /* 사건의 분야 태그 — 존재하는 레이어 id만 남긴다 */
+  (d.events||[]).forEach(e=>{
+    if(e.layers){
+      e.layers=(Array.isArray(e.layers)?e.layers:[]).filter(id=>d.layers.some(l=>l.id===id));
+      if(!e.layers.length)delete e.layers;
+    }
+  });
 
   d.eras=eras;d.events=events;d.spans=spans;d.happiness=happiness;d.records=records;
   const dropped=[...badEras,...badEvents,...badSpans,...badHap,...badRec,...badLay,...badTh];
@@ -1276,9 +1289,16 @@ function render(){
     const sel=selected===e;
     const ly=v>=0.45?y+17:y-9; /* 천장 근처 점은 라벨을 아래로 */
     const g=el('g',{cursor:'pointer',tabindex:0,role:'button',class:'c-main','aria-label':`${e.date} ${e.title}`});
+    if(focusLayer!=='main'&&(e.layers||[]).includes(focusLayer)){
+      g.style.opacity='1';g.style.pointerEvents='auto'; /* 포커스 레이어 소속 사건은 흐려지지 않는다 */
+    }
     g.appendChild(el('circle',{cx:x,cy:y,r:12,fill:'transparent'}));
     const dot=el('circle',{cx:x,cy:y,r:sel?6:4.5,fill:'#F2F4EE',stroke:col,'stroke-width':2.2,opacity:hasV?1:.55});
     g.appendChild(dot);
+    if(e.layers&&e.layers.length){ /* 분야 태그 = 핀 아래 작은 색점 */
+      const tags=(DATA.layers||[]).filter(l=>e.layers.includes(l.id));
+      tags.forEach((l,i)=>g.appendChild(el('circle',{cx:x+(i-(tags.length-1)/2)*7,cy:y+11,r:2.2,fill:l.color,opacity:.9})));
+    }
     const label=e.title.replace(/^\(예시\)\s*/,'');
     const tw=textW(label)+14;
     const next=DATA.events.find(o=>o.t>e.t);
@@ -1436,6 +1456,9 @@ function render(){
     if(p.x<-20||p.x>W+20)return;
     const pt=p.pt, isEv=pt.kind==='event';
     const g=el('g',{cursor:'ns-resize','data-hap':'1'});
+    if(focusLayer!=='main'&&pt.kind==='event'&&(pt.src.layers||[]).includes(focusLayer)){
+      g.style.opacity='1';g.style.pointerEvents='auto'; /* 태그된 사건의 측점도 함께 선명 */
+    }
     g.appendChild(el('circle',{cx:p.x,cy:p.y,r:10,fill:'transparent'}));
     /* 사건 유래 측점 = 링, 독립 측점 = 채움 */
     const dot=isEv
@@ -1769,6 +1792,8 @@ function showCard(it,cx,cy){
     </div>
     <div class="hc-title">${esc(it.title)}${it.future?' <span class="future-tag">PLANNED</span>':''}</div>
     ${it.desc?`<div class="hc-desc">${esc(it.desc)}</div>`:''}
+    ${it.layers&&it.layers.length?`<div class="hc-tags">${(DATA.layers||[]).filter(l=>it.layers.includes(l.id))
+      .map(l=>`<span class="hc-tag"><span class="swz" style="background:${l.color}"></span>${esc(l.name)}</span>`).join('')}</div>`:''}
     ${it.loc?`<div class="hc-loc">⚓ ${esc(it.loc.label)}</div>`:''}`;
   hoverCard.hidden=false;
   const r=hoverCard.getBoundingClientRect();
@@ -1804,6 +1829,9 @@ function openPop(it,ax,ay){
       <label class="dt-lab"><input type="checkbox" data-f="future" ${it.future?'checked':''}> 예정</label>
       ${isSpan?`<select class="dt-edit" data-f="color" aria-label="색">${SPAN_COLORS.map(c=>`<option value="${c[0]}"${it.color===c[0]?' selected':''}>${c[1]}</option>`).join('')}</select>`:''}
     </div>
+    ${!isSpan?`<div class="pe-row pe-tags" role="group" aria-label="해당 분야">
+      ${(DATA.layers||[]).map(l=>`<label class="lay-tag"><input type="checkbox" data-lay="${l.id}"${(it.layers||[]).includes(l.id)?' checked':''}><span class="swz" style="background:${l.color}"></span>${esc(l.name)}</label>`).join('')}
+    </div>`:''}
     <textarea class="dt-edit pe-desc" data-f="desc" placeholder="설명…" aria-label="설명">${esc(it.desc||'')}</textarea>
     <div class="pe-actions">
       <button class="pe-btn" data-a="form">✎ 전체</button>
@@ -1835,6 +1863,13 @@ function openPop(it,ax,ay){
     };
   }
   q('[data-f="future"]').onchange=e=>{it.future=e.target.checked||undefined;popCommit();};
+  if(!isSpan)popEd.querySelectorAll('.lay-tag input').forEach(cb=>{ /* 분야 체크 → e.layers */
+    cb.onchange=()=>{
+      const ids=[...popEd.querySelectorAll('.lay-tag input:checked')].map(x=>x.dataset.lay);
+      if(ids.length)it.layers=ids;else delete it.layers;
+      popCommit();
+    };
+  });
   if(isSpan){
     q('[data-f="start"]').onchange=e=>{
       const v=e.target.value;
