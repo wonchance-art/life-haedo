@@ -13,7 +13,7 @@
 <title>인생 연표</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -38,19 +38,18 @@
 
   header{padding:64px 0 36px;border-bottom:2px solid var(--ink)}
   .hgroup{display:flex;flex-wrap:wrap;align-items:flex-end;gap:28px;justify-content:space-between}
-  h1{font-family:'Gowun Batang',serif;font-weight:700;font-size:clamp(48px,7.5vw,88px);line-height:.95;letter-spacing:.04em}
-  .subtitle{font-family:'Gowun Batang',serif;font-size:clamp(15px,2.2vw,19px);color:var(--ink-soft);margin-top:14px}
+  h1{font-weight:700;font-size:clamp(48px,7.5vw,88px);line-height:.95;letter-spacing:.04em}
+  .subtitle{font-size:clamp(15px,2.2vw,19px);color:var(--ink-soft);margin-top:14px}
   .legend-box{border:1px solid var(--ink);background:var(--panel);padding:14px 18px;min-width:225px;
     font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft)}
-  .legend-box .t{color:var(--ink);font-weight:500;letter-spacing:.14em;margin-bottom:8px;font-size:11px}
+  .legend-box .t{color:var(--ink);font-weight:600;letter-spacing:.14em;margin-bottom:8px;font-size:11px}
   .legend-box .row{display:flex;justify-content:space-between;gap:16px;padding:2px 0}
-  .legend-box .v{color:var(--ink);font-weight:500}
+  .legend-box .v{color:var(--ink);font-weight:600}
 
   section{padding:52px 0}
   .sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:8px}
   .sec-no{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--cinnabar);letter-spacing:.2em}
-  h2{font-family:'Gowun Batang',serif;font-weight:700;font-size:clamp(23px,3.4vw,32px)}
-  .sec-desc{color:var(--ink-soft);font-size:14px;max-width:640px;margin-bottom:22px}
+  h2{font-weight:700;font-size:clamp(23px,3.4vw,32px)}
 
   /* ===== 컨트롤 ===== */
   .tl-controls{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
@@ -66,7 +65,6 @@
   .view-only #btnShare,.view-only .file-btn,.view-only #docSel,.view-only .editor{display:none!important}
   .ctrl-btn.primary:hover{background:var(--water-deep)}
   .ctrl-btn:focus-visible,.trip-btn:focus-visible{outline:2px solid var(--cinnabar);outline-offset:2px}
-  .ctrl-hint{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);margin-left:auto}
   .save-state{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);letter-spacing:.04em}
   .save-state.warn{color:var(--cinnabar)}
 
@@ -112,16 +110,15 @@
   /* 레이어 칩 + 포커스 디밍 — 지정한 그래프만 선명, 나머지는 흐릿 */
   .layer-bar{display:flex;gap:6px;align-items:center;margin:8px 0 6px;flex-wrap:wrap}
   .lay-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border:1px solid var(--line);
-    background:transparent;font-family:'Gowun Batang',serif;font-size:12px;color:var(--ink);
+    background:transparent;font-family:inherit;font-size:12px;color:var(--ink);
     cursor:pointer;border-radius:999px;opacity:.62;transition:opacity .15s,border-color .15s}
   .lay-chip:hover{opacity:.9}
   .lay-chip.on{opacity:1;border-color:var(--ink);font-weight:700}
   .lay-chip .swz{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
-  .lay-hint{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);margin-left:4px}
   #tl .c-main,#tl [data-hap],#tl .c-lay{transition:opacity .25s ease}
   #tl:not([data-focus="main"]) .c-main,#tl:not([data-focus="main"]) [data-hap]{opacity:.13;pointer-events:none}
   .pe-tags{flex-wrap:wrap;gap:9px}
-  .lay-tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--ink);cursor:pointer;font-family:'Gowun Batang',serif}
+  .lay-tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--ink);cursor:pointer;font-family:inherit}
   .lay-tag input{accent-color:var(--ink);width:12px;height:12px;margin:0}
   .lay-tag .swz,.hc-tag .swz{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none}
   .hc-list{display:flex;flex-direction:column;gap:3px;margin:5px 0 2px}
@@ -141,13 +138,13 @@
   .tl-tip .yy{font-family:'IBM Plex Mono',monospace;color:#9FB8AE;font-size:11px}
   .tl-tip .hh{font-family:'IBM Plex Mono',monospace;color:#E8B26A}
 
+  .detail[hidden]{display:none}
   .detail{border:1px solid var(--ink);border-top:none;background:var(--panel);
     padding:18px 22px;min-height:92px;display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
   .detail .dt-date{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink-soft);min-width:150px;padding-top:3px}
   .detail .dt-date .age{display:block;font-size:11px;color:var(--gold)}
-  .detail .dt-title{font-family:'Gowun Batang',serif;font-weight:700;font-size:18px;margin-bottom:4px}
+  .detail .dt-title{font-weight:700;font-size:18px;margin-bottom:4px}
   .detail .dt-desc{font-size:14px;color:var(--ink-soft);max-width:640px}
-  .detail .dt-empty{color:var(--ink-soft);font-size:13.5px;align-self:center}
 
   /* ===== 인라인 편집 (노션식) ===== */
   .dt-main{flex:1;min-width:260px;display:flex;flex-direction:column;gap:4px}
@@ -155,7 +152,7 @@
     color:var(--ink);padding:3px 6px;transition:background .12s,border-color .12s}
   .dt-edit:hover{background:#FBFCF9;border-color:var(--line)}
   .dt-edit:focus{outline:2px solid var(--water);outline-offset:-1px;background:#FBFCF9;border-color:var(--water)}
-  .dt-title-in{font-family:'Gowun Batang',serif;font-weight:700;font-size:18px;width:100%}
+  .dt-title-in{font-weight:700;font-size:18px;width:100%}
   .dt-desc-in{font-size:14px;color:var(--ink-soft);width:100%;resize:vertical;min-height:40px;line-height:1.55}
   .dt-month{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink-soft);
     display:block;width:100%;max-width:155px;margin-bottom:3px}
@@ -168,7 +165,7 @@
     box-shadow:0 10px 30px rgba(0,0,0,.22);width:302px;padding:12px 14px;display:flex;flex-direction:column;gap:7px}
   .pop-ed[hidden]{display:none}
   .pe-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-  .pe-title{font-family:'Gowun Batang',serif;font-weight:700;font-size:15.5px;width:100%}
+  .pe-title{font-weight:700;font-size:15.5px;width:100%}
   .pe-desc{font-size:12.5px;color:var(--ink-soft);min-height:36px;width:100%;resize:vertical;line-height:1.5}
   .pe-month{font-family:'IBM Plex Mono',monospace;font-size:12px;width:126px}
   .pe-num{font-family:'IBM Plex Mono',monospace;font-size:12.5px;width:60px}
@@ -189,7 +186,7 @@
   .hc-hap{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--water-deep);
     border:1px solid var(--water);border-radius:2px;padding:0 5px;white-space:nowrap}
   .hc-hap.neg{color:var(--cinnabar);border-color:var(--cinnabar)}
-  .hc-title{font-family:'Gowun Batang',serif;font-weight:700;font-size:14.5px;line-height:1.35}
+  .hc-title{font-weight:700;font-size:14.5px;line-height:1.35}
   .hc-desc{font-size:12.5px;color:var(--ink-soft);line-height:1.55;
     display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
   .hc-loc{font-size:11.5px;color:var(--water-deep)}
@@ -235,7 +232,6 @@
   .checkline{display:flex;align-items:center;gap:7px;font-size:13px;padding-bottom:8px;white-space:nowrap}
   .checkline input{width:15px;height:15px;accent-color:var(--cinnabar)}
   .ed-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px dashed var(--line);padding-top:16px}
-  .ed-note{font-size:12px;color:var(--ink-soft);margin-left:auto;font-family:'IBM Plex Mono',monospace}
   .geo-result{font-size:12px;color:var(--water-deep);min-height:18px}
 
   /* ===== 지도 ===== */
@@ -252,7 +248,7 @@
   .leaflet-container{font-family:'IBM Plex Sans KR',sans-serif;background:#DCE4DE}
   .leaflet-popup-content-wrapper{border-radius:3px;background:var(--panel);color:var(--ink)}
   .leaflet-popup-content{margin:12px 16px;font-size:13px}
-  .leaflet-popup-content .p-title{font-family:'Gowun Batang',serif;font-weight:700;font-size:14px}
+  .leaflet-popup-content .p-title{font-weight:700;font-size:14px}
   .leaflet-popup-content .p-date{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft)}
   .port-marker{width:12px;height:12px;border-radius:50%;border:2px solid var(--paper);box-shadow:0 0 0 1.5px var(--ink)}
   .ship-marker{width:11px;height:11px;border-radius:50%;background:var(--cinnabar);
@@ -266,7 +262,6 @@
     header{padding:44px 0 28px}
     section{padding:36px 0}
     #map{height:400px}
-    .ctrl-hint{display:none}
     .detail .dt-date{min-width:0}
     /* 터치 타깃 최소 크기 + 모바일 여백 */
     .ctrl-btn,.file-btn,.mini-btn,.pe-btn,.trip-btn{min-height:38px;padding-top:8px;padding-bottom:8px}
@@ -311,7 +306,6 @@
   <section id="sec-canvas">
     <div class="wrap">
       <div class="sec-head"><span class="sec-no">01</span><h2>연표</h2></div>
-      <p class="sec-desc">시대는 배경색, 기간은 막대, 사건은 곡선 위의 점으로 표시된다. 모두 같은 시간축을 쓴다.</p>
 
       <div class="tl-controls">
         <button class="ctrl-btn" id="btnFit">전체 보기</button>
@@ -326,7 +320,6 @@
         <button class="ctrl-btn" id="btnNew">✚ 새 문서</button>
         <button class="ctrl-btn" id="btnCloud" title="온라인 DB 동기화 설정">☁ DB</button>
         <span class="save-state" id="saveState"></span>
-        <span class="ctrl-hint">⌘/Ctrl+휠 = 확대 · 드래그/←→ = 이동 · 더블클릭 = 그 자리에 추가 · 우클릭 = 메뉴</span>
       </div>
 
       <div class="layer-bar" id="layerBar" aria-label="그래프 레이어 선택"></div>
@@ -381,7 +374,6 @@
               <div class="ed-actions">
                 <button class="mini-btn" id="evSave">저장</button>
                 <button class="mini-btn danger" id="evDelete">삭제</button>
-                <span class="ed-note">그래프의 점을 클릭해도 여기로 불러온다</span>
               </div>
             </div>
 
@@ -456,7 +448,6 @@
               <div class="ed-actions">
                 <button class="mini-btn" id="hpSave">저장</button>
                 <button class="mini-btn danger" id="hpDelete">삭제</button>
-                <span class="ed-note">값을 촘촘히 넣을수록 곡선이 정확해진다</span>
               </div>
             </div>
 
@@ -487,7 +478,6 @@
               <div class="ed-actions">
                 <button class="mini-btn" id="trSave">저장 (좌표 자동 검색)</button>
                 <button class="mini-btn danger" id="trDelete">삭제</button>
-                <span class="ed-note">이미 좌표가 있는 줄은 다시 검색하지 않는다</span>
               </div>
             </div>
 
@@ -502,7 +492,6 @@
   <section id="sec-map">
     <div class="wrap">
       <div class="sec-head"><span class="sec-no">02</span><h2>지도</h2></div>
-      <p class="sec-desc">머물렀던 곳과 이동 경로. 경로를 선택하면 지도에 표시된다. 선택된 경로를 한 번 더 클릭하면 수정.</p>
       <div class="trip-bar" id="tripBar" role="group" aria-label="경로 선택"></div>
       <div class="map-frame"><div id="map"></div></div>
       <div class="trip-info" id="tripInfo"></div>
@@ -513,8 +502,7 @@
 <!-- 입장 게이트 -->
 <div id="gateBd" hidden style="position:fixed;inset:0;z-index:2000;background:var(--paper);display:flex;align-items:center;justify-content:center">
   <div style="display:flex;flex-direction:column;gap:14px;width:min(320px,86vw);text-align:center">
-    <div style="font-family:'Gowun Batang',serif;font-weight:700;font-size:26px">인생 연표</div>
-    <div style="font-size:12.5px;color:var(--ink-soft)">비밀번호를 입력해 주세요</div>
+    <div style="font-weight:700;font-size:26px">인생 연표</div>
     <input id="gatePw" type="password" autocomplete="off"
       style="font-family:'IBM Plex Mono',monospace;font-size:15px;padding:10px 12px;border:1px solid var(--line);border-radius:2px;background:#FBFCF9;color:var(--ink);text-align:center">
     <button id="gateGo" class="mini-btn" style="padding:9px">입장</button>
@@ -526,8 +514,7 @@
 <div class="search-bd" id="cloudBd" hidden>
   <div class="search-panel" role="dialog" aria-modal="true" aria-label="온라인 DB 동기화" style="max-width:460px">
     <div style="display:flex;flex-direction:column;gap:12px;padding:20px 22px">
-      <div style="font-family:'Gowun Batang',serif;font-weight:700;font-size:17px">☁ 온라인 DB 동기화</div>
-      <div style="font-size:12px;color:var(--ink-soft);line-height:1.6">Supabase(무료) 프로젝트의 URL과 anon 키를 넣으면 모든 문서가 자동 동기화된다. 로컬 저장은 그대로 유지(오프라인 안전).</div>
+      <div style="font-weight:700;font-size:17px">☁ 온라인 DB 동기화</div>
       <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-soft)">Project URL
         <input id="cloudUrl" placeholder="https://xxxx.supabase.co" spellcheck="false"
           style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:#FBFCF9;color:var(--ink)">
@@ -550,10 +537,9 @@ drop policy if exists "own" on charts;
 drop policy if exists "personal" on charts;
 create policy "personal" on charts
   for all using (true) with check (true);</pre>
-        <div style="margin-top:4px">개인용 개방 정책 — 키를 아는 사람은 접근 가능. 아래 계정 로그인(선택)을 쓰기 시작하면 정책을 계정 분리형으로 올릴 수 있다.</div>
       </details>
       <div style="border-top:1px dashed var(--line);padding-top:12px;display:flex;flex-direction:column;gap:9px">
-        <div style="font-size:11px;color:var(--ink-soft)">(선택) 계정 로그인 — 다인용·계정 분리로 갈 때</div>
+        <div style="font-size:11px;color:var(--ink-soft)">계정 로그인 (선택)</div>
         <div id="authStat" style="font-size:12px;color:var(--water-deep)"></div>
         <div id="authForm" style="display:flex;flex-direction:column;gap:8px">
           <input id="authEmail" type="email" placeholder="이메일" autocomplete="username"
@@ -570,7 +556,6 @@ create policy "personal" on charts
       <div style="border-top:1px dashed var(--line);padding-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="pe-btn" id="btnBackup">⬇ 데이터 백업</button>
         <label class="pe-btn" style="cursor:pointer">⬆ 백업 복원<input type="file" id="fileRestore" accept=".json" hidden></label>
-        <span style="font-size:11px;color:var(--ink-soft)">DB와 별개로 파일 한 벌 — 만약을 위한 안전망</span>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button class="pe-btn danger" id="cloudOff">연결 해제</button>
@@ -585,14 +570,13 @@ create policy "personal" on charts
 <div class="search-bd" id="newBd" hidden>
   <div class="search-panel" role="dialog" aria-modal="true" aria-label="새 문서 만들기" style="max-width:400px">
     <div style="display:flex;flex-direction:column;gap:13px;padding:20px 22px">
-      <div style="font-family:'Gowun Batang',serif;font-weight:700;font-size:17px">새 문서 만들기</div>
+      <div style="font-weight:700;font-size:17px">새 문서 만들기</div>
       <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-soft)">이름
         <input id="nbName" placeholder="이름" style="font-family:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:#FBFCF9;color:var(--ink)">
       </label>
       <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-soft)">출생 연월
         <input id="nbBirth" type="month" style="font-family:'IBM Plex Mono',monospace;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:#FBFCF9;color:var(--ink)">
       </label>
-      <div style="font-size:12px;color:var(--ink-soft);line-height:1.6">새 <b>문서</b>로 만들어진다 — 지금 문서는 목록에 그대로 남고, 상단 선택창으로 오갈 수 있다.</div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button class="pe-btn" id="nbCancel">취소</button>
         <button class="mini-btn" id="nbStart">만들기</button>
@@ -625,7 +609,6 @@ create policy "personal" on charts
 <footer>
   <div class="wrap">
     <span>인생 연표</span>
-    <span id="footNote">편집 → 브라우저 자동 저장 · ☁ DB 연결 시 온라인 동기화</span>
   </div>
 </footer>
 
@@ -1131,7 +1114,7 @@ function render(){
     if(lx<eraLabelEnd+18)lx=eraLabelEnd+18;
     const etw=textW(er.title);
     if(lx<Math.min(x2,W)-24&&lx+etw<W-4){
-      const t=el('text',{x:lx,y:L.ERA_LABEL_Y,'font-size':12,fill:er.color,'font-family':'Gowun Batang','font-weight':700,opacity:.9});
+      const t=el('text',{x:lx,y:L.ERA_LABEL_Y,'font-size':12,fill:er.color,'font-weight':700,opacity:.9});
       t.textContent=er.title;svg.appendChild(t);
       reserveText(lx,L.ERA_LABEL_Y,er.title,'start',12);
       eraLabelEnd=lx+etw;
@@ -1142,7 +1125,7 @@ function render(){
       const gz=el('g',{cursor:'pointer',tabindex:0,role:'button','aria-label':`시대 ${er.title} — 클릭 = 이 시기 보기, 다시 클릭 = 수정`});
       gz.appendChild(el('rect',{x:zx1,y:0,width:zx2-zx1,height:30,fill:'transparent'}));
       gz.addEventListener('mouseenter',()=>showTip((zx1+zx2)/2,26,
-        `<span class="yy">${esc(er.start.replace('-','.'))} – ${esc(er.end.replace('-','.'))}</span> · ${esc(er.title)} · ${focusEra===er?'재클릭 = 수정':'클릭 = 이 시기만'}`));
+        `<span class="yy">${esc(er.start.replace('-','.'))} – ${esc(er.end.replace('-','.'))}</span> · ${esc(er.title)}`));
       gz.addEventListener('mouseleave',hideTip);
       gz.addEventListener('click',e=>{
         if(moved)return;e.stopPropagation();hideTip();
@@ -1722,7 +1705,7 @@ function render(){
     const y=HY(hapVAt(th.t))-16;
     const gt=el('g',{cursor:'pointer',class:'c-main','data-th':'1'});
     gt.appendChild(el('circle',{cx:x,cy:y,r:10,fill:'transparent'}));
-    const q=el('text',{x:x,y:y+5,'text-anchor':'middle','font-size':15,fill:'#A87F3D','font-family':'Gowun Batang','font-weight':700,opacity:.9});
+    const q=el('text',{x:x,y:y+5,'text-anchor':'middle','font-size':15,fill:'#A87F3D','font-weight':700,opacity:.9});
     q.textContent='❝';gt.appendChild(q);
     const short=th.text.length>90?th.text.slice(0,90)+'…':th.text;
     gt.addEventListener('mouseenter',()=>showTip(x,y,`<span class="yy">${esc(th.date)}</span> · ${esc(short)}`));
@@ -1782,11 +1765,6 @@ function renderLayerBar(){
   };
   mk('main','행복도 종합','#1E4348');
   (DATA.layers||[]).forEach(l=>mk(l.id,l.name,l.color));
-  const h=document.createElement('span');h.className='lay-hint';
-  h.textContent=focusLayer==='main'
-    ?'칩 = 그 그래프만 선명 · 시대 클릭 = 그 시기만'
-    :'빈 곳 빠른 두 번 클릭 = 값 추가 · 점 드래그 = 조정 · Esc = 종합';
-  bar.appendChild(h);
 }
 
 function showTip(x,y,html){
@@ -1842,7 +1820,7 @@ const SPAN_COLORS=[
 function renderDetail(){
   const d=$('#detail');
   if(RO){ /* 공유 뷰어: 읽기 전용 상세 */
-    if(!selected){d.innerHTML='<span class="dt-empty">핀·막대 클릭 = 상세 · 호버 = 설명 카드 · 이 화면은 공유용 읽기 전용이다</span>';return;}
+    if(!selected){d.innerHTML='';d.hidden=true;return;}
     const it=selected,isSpan=it.kind==='span';
     const range=isSpan?`${it.start.replace('-','.')} – ${it.end?it.end.replace('-','.'):'진행 중'}`:it.date.replace('-','.');
     const age=it.future?'예정':fmtAge(isSpan?it.t0:it.t);
@@ -1856,14 +1834,12 @@ function renderDetail(){
           ${it.loc?`<button class="loc-chip" data-lat="${it.loc.lat}" data-lng="${it.loc.lng}" data-trip="${esc(it.tripId||'')}">${esc(it.loc.label)} — 지도에서 보기</button>`:''}
         </div>
       </div>`;
-    return;
+    d.hidden=false;return;
   }
-  if(!selected){
-    d.innerHTML=`<span class="dt-empty">클릭 = 바로 편집 · 더블클릭 = 추가(위=기간·아래=사건) · 점 드래그: 상하=행복·좌우=시기 · 막대: 끝=조절·중앙=이동 · 우클릭 = 메뉴</span>`;
-    return;
-  }
+  if(!selected){d.innerHTML='';d.hidden=true;return;}
   const it=selected, isSpan=it.kind==='span';
   const age=isSpan?fmtAge(it.t0):fmtAge(it.t);
+  d.hidden=false;
   d.innerHTML=`
     <div class="dt-date">
       ${isSpan
@@ -1998,7 +1974,7 @@ function showClusterCard(list,cx,cy){ /* 겹친 묶음 — 무엇들이 겹쳤�
         ?esc(x.start.replace('-','.')+'–'+(x.end?x.end.replace('-','.'):'진행 중'))
         :(x.happiness!=null?(x.happiness>0?'+':'')+x.happiness.toFixed(1):'—')}</span>
       <span class="hc-lt">${esc(x.title)}</span></div>`).join('')}</div>
-    <div class="hc-desc" style="opacity:.72">클릭 = 하나 골라 편집 · 확대하면 흩어진다</div>`;
+`;
   placeCard(cx,cy);
 }
 function placeCard(cx,cy){
@@ -3298,7 +3274,6 @@ function rebuildTripBar(){
     const b=document.createElement('button');
     b.className='trip-btn';
     b.setAttribute('aria-pressed','false');
-    b.title='한 번 더 클릭 또는 우클릭 = 수정';
     b.innerHTML=`<span class="dot" style="background:${t.color}"></span>${esc(t.title)}`;
     b.dataset.trip=t.id;
     b.onclick=e=>{
