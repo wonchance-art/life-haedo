@@ -124,6 +124,9 @@
   .lay-tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--ink);cursor:pointer;font-family:'Gowun Batang',serif}
   .lay-tag input{accent-color:var(--ink);width:12px;height:12px;margin:0}
   .lay-tag .swz,.hc-tag .swz{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none}
+  .hc-list{display:flex;flex-direction:column;gap:3px;margin:5px 0 2px}
+  .hc-li{display:flex;align-items:baseline;gap:8px;font-size:12px}
+  .hc-li .hc-lt{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .hc-tags{display:flex;gap:9px;margin-top:4px;flex-wrap:wrap}
   .hc-tag{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--ink-soft)}
   .canvas-frame{border:1px solid var(--ink);background:var(--panel);padding:8px;position:relative}
@@ -1278,9 +1281,68 @@ function render(){
   if(fut.length>1)
     svg.appendChild(el('path',{d:smoothPath(fut),fill:'none',stroke:'#7A8A80','stroke-width':1.8,'stroke-dasharray':'6 6',opacity:.85,class:'c-main'}));
 
-  /* 사건 — 곡선 위 점 + 점 옆 라벨 (머리 위 여백을 비워 높이가 읽히게) */
-  let evLabelEnd=-1e9;
+  /* 사건 — 곡선 위 점 + 점 옆 라벨 (머리 위 여백을 비워 높이가 읽히게).
+     화면에서 서로 포개지는 사건은 한 점 + 개수 배지로 묶는다 (겹쳐서 사라지는 것 방지).
+     선택된 사건은 언제나 단독으로 떼어내 드래그로 분리할 수 있다 */
+  /* 라벨은 위·아래 두 줄에 번갈아 놓는다 — 촘촘한 구간에서도 이름이 살아남게 */
+  const taken=[]; /* 이미 글자가 놓인 자리 — 위·아래 두 자리를 시도해 빈 곳에만 쓴다 */
+  const fits=(x1,x2,y)=>!taken.some(t=>x1<t.x2+6&&t.x1-6<x2&&Math.abs(t.y-y)<12);
+  const putLabel=(g,label,x,y,off,preferBelow,fill,weight)=>{
+    const tw=textW(label)+14, lx=x+off;
+    if(lx<-2||lx+tw>W-34)return; /* 오른쪽 끝 수심 눈금(+1·0·−1)을 침범하지 않게 */
+    for(const dy of (preferBelow?[18,-9]:[-9,18])){
+      if(fits(lx,lx+tw,y+dy)){
+        const t=el('text',{x:lx,y:y+dy,'font-size':11.5,fill:fill,'font-weight':weight});
+        t.textContent=label;g.appendChild(t);
+        taken.push({x1:lx,x2:lx+tw,y:y+dy});return;
+      }
+    }
+  };
+  const CL_DX=15, CL_DY=15;
+  const evGroups=[];
   DATA.events.forEach(e=>{
+    const ex=X(e.t);if(ex<-160||ex>W+160)return;
+    const ey=HY(e.happiness!=null?e.happiness:0);
+    const solo=(e===selected);
+    const gr=solo?null:evGroups.find(q=>!q.solo&&Math.abs(q.x-ex)<=CL_DX&&Math.abs(q.y-ey)<=CL_DY);
+    if(gr){gr.list.push(e);gr.x=(gr.x*(gr.list.length-1)+ex)/gr.list.length;gr.y=(gr.y*(gr.list.length-1)+ey)/gr.list.length;}
+    else evGroups.push({x:ex,y:ey,list:[e],solo});
+  });
+  const renderCluster=q=>{
+    const list=q.list, n=list.length, x=q.x, y=q.y;
+    const anyFut=list.every(e=>e.future);
+    const col=anyFut?'#7A8A80':'#B5432A';
+    const g=el('g',{cursor:'pointer',tabindex:0,role:'button',class:'c-main',
+      'aria-label':`${list[0].date} 부근 겹친 사건 ${n}건 — 열어서 고르기`});
+    if(focusLayer!=='main'&&list.some(e=>(e.layers||[]).includes(focusLayer))){
+      g.style.opacity='1';g.style.pointerEvents='auto';
+    }
+    g.appendChild(el('circle',{cx:x,cy:y,r:14,fill:'transparent'}));
+    g.appendChild(el('circle',{cx:x,cy:y,r:7.5,fill:'none',stroke:col,'stroke-width':1,opacity:.45}));
+    g.appendChild(el('circle',{cx:x,cy:y,r:4.5,fill:'#F2F4EE',stroke:col,'stroke-width':2.2}));
+    g.appendChild(el('circle',{cx:x+9,cy:y-9,r:6.6,fill:col,stroke:'#F2F4EE','stroke-width':1.4}));
+    const bt=el('text',{x:x+9,y:y-6.3,'text-anchor':'middle','font-size':8.6,fill:'#F2F4EE',
+      'font-family':'IBM Plex Mono','font-weight':700});
+    bt.textContent=n;g.appendChild(bt);
+    const tags=(DATA.layers||[]).filter(l=>list.some(e=>(e.layers||[]).includes(l.id)));
+    tags.forEach((l,i)=>g.appendChild(el('circle',{cx:x+(i-(tags.length-1)/2)*7,cy:y+13,r:2.2,fill:l.color,opacity:.9})));
+    putLabel(g,list[0].title.replace(/^\(예시\)\s*/,'')+` 외 ${n-1}`,x,y,18,y<HY(.45),'#23312B',400);
+    const pick=(cx,cy)=>openPick(cx,cy,list.map(e=>[
+      `${e.happiness!=null?(e.happiness>0?'+':'')+e.happiness.toFixed(1):'—'}  ${e.title}`,'',
+      ()=>{selected=e;render();renderDetail();
+        const r=svg.getBoundingClientRect();
+        openPop(e,r.left+X(e.t)*(r.width/W||1),r.top+HY(e.happiness??0)*(r.height/LAYOUT.H||1));
+        if(editMode){openTab('event');fillEventForm(e);}}]));
+    g.addEventListener('mouseenter',()=>{const rc=svg.getBoundingClientRect();showClusterCard(list,rc.left+x,rc.top+y);});
+    g.addEventListener('mouseleave',hideCard);
+    g.addEventListener('pointerdown',ev=>{if(ev.pointerType!=='mouse'){const rc=svg.getBoundingClientRect();showClusterCard(list,rc.left+x,rc.top+y);}});
+    g.addEventListener('click',ev=>{if(moved)return;ev.stopPropagation();hideCard();pick(ev.clientX,ev.clientY);});
+    g.addEventListener('contextmenu',ev=>{ev.preventDefault();ev.stopPropagation();pick(ev.clientX,ev.clientY);});
+    g.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();
+      const b=g.getBoundingClientRect();pick(b.left+10,b.top+10);}});
+    svg.appendChild(g);
+  };
+  const renderSingleEvent=e=>{
     const x=X(e.t);if(x<-160||x>W+160)return;
     const hasV=e.happiness!=null;
     const v=hasV?e.happiness:0; /* 행복 미반영 핀 = 중앙 0선 위 (곡선 기준에서 제외) */
@@ -1300,22 +1362,11 @@ function render(){
       tags.forEach((l,i)=>g.appendChild(el('circle',{cx:x+(i-(tags.length-1)/2)*7,cy:y+11,r:2.2,fill:l.color,opacity:.9})));
     }
     const label=e.title.replace(/^\(예시\)\s*/,'');
-    const tw=textW(label)+14;
-    const next=DATA.events.find(o=>o.t>e.t);
-    const prevEnd=evLabelEnd;
-    const showLabel=(x>-2&&x<W+2)&&(sel||!next||X(next.t)-x>tw); /* 잘린 글자 금지 — 안 되면 생략 */
-    let labelEnd=x+6;
-    if(showLabel){
-      if(x+8+tw<=W-4){
-        const t=el('text',{x:x+8,y:ly,'font-size':11.5,fill:sel?'#B5432A':'#23312B','font-weight':sel?600:400});
-        t.textContent=label;g.appendChild(t);
-        labelEnd=x+tw;
-      }else if(x-8-tw>prevEnd+6){
-        const t=el('text',{x:x-8,y:ly,'text-anchor':'end','font-size':11.5,fill:sel?'#B5432A':'#23312B','font-weight':sel?600:400});
-        t.textContent=label;g.appendChild(t);
-      }
-    }
-    evLabelEnd=labelEnd;
+    if(sel){ /* 선택된 사건은 무조건 이름을 보여준다 */
+      const t=el('text',{x:x+8,y:ly,'font-size':11.5,fill:'#B5432A','font-weight':600});
+      t.textContent=label;g.appendChild(t);
+      taken.push({x1:x+8,x2:x+8+textW(label)+14,y:ly});
+    }else putLabel(g,label,x,y,8,v>=0.45,'#23312B',400);
     /* 자유 드래그: 상하 = 행복, 좌우 = 시기 (월 스냅, 놓을 때 1회 커밋) */
     let drag=null;
     g.addEventListener('pointerdown',ev=>{
@@ -1382,6 +1433,10 @@ function render(){
       ]);
     });
     svg.appendChild(g);
+  };
+  evGroups.forEach(q=>{ /* x 순 한 줄기로 — 라벨 충돌 규칙이 군집·단독에 똑같이 적용된다 */
+    if(q.list.length>1)renderCluster(q);
+    else renderSingleEvent(q.list[0]);
   });
 
   /* 스팬 */
@@ -1761,12 +1816,15 @@ function duplicateItem(it){
 const ctxMenu=$('#ctxMenu');
 function openCtx(x,y,items){
   if(RO)return;
+  openPick(x,y,items);
+}
+function openPick(x,y,items){ /* 목록 팝업 — 겹친 사건 고르기 (읽기 전용 화면에서도 열린다) */
   ctxMenu.innerHTML='';
   items.forEach(([label,cls,fn])=>{
     const b=document.createElement('button');
     if(cls)b.className=cls;
     b.textContent=label;
-    b.onclick=()=>{closeCtx();fn();};
+    b.onclick=ev=>{ev.stopPropagation();closeCtx();fn();}; /* document 리스너가 새 팝오버를 닫는 것 방지 */
     ctxMenu.appendChild(b);
   });
   ctxMenu.hidden=false;
@@ -1795,6 +1853,21 @@ function showCard(it,cx,cy){
     ${it.layers&&it.layers.length?`<div class="hc-tags">${(DATA.layers||[]).filter(l=>it.layers.includes(l.id))
       .map(l=>`<span class="hc-tag"><span class="swz" style="background:${l.color}"></span>${esc(l.name)}</span>`).join('')}</div>`:''}
     ${it.loc?`<div class="hc-loc">⚓ ${esc(it.loc.label)}</div>`:''}`;
+  placeCard(cx,cy);
+}
+function showClusterCard(list,cx,cy){ /* 겹친 사건 묶음 — 무엇들이 겹쳤는지 한눈에 */
+  const d0=list[0].date.replace('-','.'), d1=list[list.length-1].date.replace('-','.');
+  hoverCard.innerHTML=`
+    <div class="hc-top">
+      <span class="hc-date">${esc(d0===d1?d0:d0+'–'+d1)} · ${list.length}건 겹침</span>
+    </div>
+    <div class="hc-list">${list.map(e=>`<div class="hc-li">
+      <span class="hc-hap${e.happiness!=null&&e.happiness<0?' neg':''}">${e.happiness!=null?(e.happiness>0?'+':'')+e.happiness.toFixed(1):'—'}</span>
+      <span class="hc-lt">${esc(e.title)}</span></div>`).join('')}</div>
+    <div class="hc-desc" style="opacity:.72">클릭 = 하나 골라 편집 · 확대하면 흩어진다</div>`;
+  placeCard(cx,cy);
+}
+function placeCard(cx,cy){
   hoverCard.hidden=false;
   const r=hoverCard.getBoundingClientRect();
   let x=cx-r.width/2, y=cy-r.height-16;
