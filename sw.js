@@ -1,5 +1,5 @@
-/* 인생 해도 — 오프라인 셸 캐시 (앱은 단일 HTML, 데이터는 localStorage/Supabase) */
-const CACHE='haedo-v2';
+/* 인생 연표 — 오프라인 캐시 (앱은 단일 HTML, 데이터는 localStorage/Supabase) */
+const CACHE='haedo-v3';
 const SHELL=['./','./index.html','./manifest.webmanifest','./icon.svg'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()));

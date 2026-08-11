@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="인생 해도(海圖) — 시간·기간·깊이를 한 장의 측량도로 기록하는 개인 연표 에디터">
+<meta name="description" content="행복도 곡선 위에 사건·기간·시대를 기록하는 개인 연표 편집기">
 <meta name="theme-color" content="#E9EDE6">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚓</text></svg>">
+<link rel="icon" href="icon.svg">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon.svg">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<title>인생 해도 — Life Sounding Chart</title>
+<title>인생 연표</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -255,7 +255,8 @@
   .leaflet-popup-content .p-title{font-family:'Gowun Batang',serif;font-weight:700;font-size:14px}
   .leaflet-popup-content .p-date{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft)}
   .port-marker{width:12px;height:12px;border-radius:50%;border:2px solid var(--paper);box-shadow:0 0 0 1.5px var(--ink)}
-  .ship-marker{font-size:18px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
+  .ship-marker{width:11px;height:11px;border-radius:50%;background:var(--cinnabar);
+    border:2px solid #FBFCF9;box-shadow:0 1px 3px rgba(0,0,0,.35)}
 
   footer{border-top:2px solid var(--ink);padding:32px 0 60px;margin-top:20px;
     font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft)}
@@ -283,24 +284,24 @@
 <body>
 
 <noscript><div style="max-width:1180px;margin:24px auto;padding:16px 24px;border:1px solid #B5432A;color:#B5432A;font-size:14px">
-이 해도는 JavaScript로 그려진다. 브라우저에서 JavaScript를 허용해야 연표·지도가 표시된다.
+이 페이지는 JavaScript로 그려진다. 브라우저에서 JavaScript를 허용해야 연표·지도가 표시된다.
 </div></noscript>
 
 <header>
   <div class="wrap">
     <div class="hgroup">
       <div>
-        <h1>나의 해도</h1>
-        <p class="subtitle">인생 해도(海圖) — 시간·기간·깊이의 측량 기록</p>
+        <h1>내 연표</h1>
+        <p class="subtitle">시간에 따른 행복도와 사건 기록</p>
       </div>
       <div class="legend-box" aria-label="기록 요약">
-        <div class="t">SURVEY LOG</div>
-        <div class="row"><span>기점(起點)</span><span class="v" id="statBirth">—</span></div>
-        <div class="row"><span>항해 연수</span><span class="v" id="statYears">—</span></div>
+        <div class="t">요약</div>
+        <div class="row"><span>출생</span><span class="v" id="statBirth">—</span></div>
+        <div class="row"><span>나이</span><span class="v" id="statYears">—</span></div>
         <div class="row"><span>사건 · 기간</span><span class="v" id="statEvents">—</span></div>
         <div class="row"><span>기록 노트</span><span class="v" id="statNotes">—</span></div>
         <div class="row"><span>평균 행복</span><span class="v" id="statAvg">—</span></div>
-        <div class="row"><span>기항지</span><span class="v" id="statPorts">—</span></div>
+        <div class="row"><span>장소</span><span class="v" id="statPorts">—</span></div>
       </div>
     </div>
   </div>
@@ -309,8 +310,8 @@
 <main>
   <section id="sec-canvas">
     <div class="wrap">
-      <div class="sec-head"><span class="sec-no">年表 01</span><h2>연표 캔버스</h2></div>
-      <p class="sec-desc">시대(章)가 배경을 물들이고, 기간은 막대로, 사건은 핀으로 놓인다. 행복 수심 곡선은 같은 시간축에 결속되어 함께 움직인다.</p>
+      <div class="sec-head"><span class="sec-no">01</span><h2>연표</h2></div>
+      <p class="sec-desc">시대는 배경색, 기간은 막대, 사건은 곡선 위의 점으로 표시된다. 모두 같은 시간축을 쓴다.</p>
 
       <div class="tl-controls">
         <button class="ctrl-btn" id="btnFit">전체 보기</button>
@@ -318,11 +319,11 @@
         <button class="ctrl-btn" id="btnZoomIn" aria-label="확대">＋</button>
         <button class="ctrl-btn" id="btnUndo" title="되돌리기 (⌘/Ctrl+Z)" aria-label="되돌리기" disabled>↺</button>
         <button class="ctrl-btn" id="btnRedo" title="다시 실행 (⌘/Ctrl+Shift+Z)" aria-label="다시 실행" disabled>↻</button>
-        <button class="ctrl-btn" id="btnNow">現在로</button>
+        <button class="ctrl-btn" id="btnNow">오늘로</button>
         <button class="ctrl-btn" id="btnSearch" title="검색 (⌘/Ctrl+F)">🔍 검색</button>
         <button class="ctrl-btn primary" id="btnEdit">✎ 기록 편집</button>
         <select class="ctrl-btn" id="docSel" title="문서 전환" aria-label="문서 선택"></select>
-        <button class="ctrl-btn" id="btnNew">✚ 새 해도</button>
+        <button class="ctrl-btn" id="btnNew">✚ 새 문서</button>
         <button class="ctrl-btn" id="btnCloud" title="온라인 DB 동기화 설정">☁ DB</button>
         <span class="save-state" id="saveState"></span>
         <span class="ctrl-hint">⌘/Ctrl+휠 = 확대 · 드래그/←→ = 이동 · 더블클릭 = 그 자리에 추가 · 우클릭 = 메뉴</span>
@@ -332,13 +333,13 @@
 
       <div class="canvas-frame">
         <div class="canvas-inner">
-          <svg id="tl" tabindex="0" role="application" aria-label="가로형 인생 연표. ⌘ 또는 Ctrl과 휠로 확대, 드래그 또는 좌우 화살표로 이동, 0으로 전체 보기, 더블클릭으로 그 자리에 추가"></svg>
+          <svg id="tl" tabindex="0" role="application" aria-label="가로형 연표. ⌘ 또는 Ctrl과 휠로 확대, 드래그 또는 좌우 화살표로 이동, 0으로 전체 보기, 더블클릭으로 그 자리에 추가"></svg>
           <div class="tl-tip" id="tlTip"></div>
         </div>
 
         <!-- 스크러버 (미니맵) -->
         <div class="scrubber">
-          <button class="scrub-play" id="scrubPlay" aria-label="시간 훑기 재생" aria-pressed="false">▶</button>
+          <button class="scrub-play" id="scrubPlay" aria-label="시간 순서로 재생" aria-pressed="false">▶</button>
           <div class="scrub-track" id="scrubTrack" aria-label="타임라인 미니맵 — 클릭·드래그로 이동"></div>
           <span class="scrub-year" id="scrubYear">—</span>
         </div>
@@ -349,8 +350,8 @@
             <button class="ed-tab on" data-tab="event">사건</button>
             <button class="ed-tab" data-tab="span">기간</button>
             <button class="ed-tab" data-tab="era">시대</button>
-            <button class="ed-tab" data-tab="hap">수심</button>
-            <button class="ed-tab" data-tab="trip">항로</button>
+            <button class="ed-tab" data-tab="hap">행복도</button>
+            <button class="ed-tab" data-tab="trip">경로</button>
           </div>
           <div class="ed-body">
 
@@ -374,13 +375,13 @@
                 <div class="field small"><label>위도</label><input type="number" id="evLat" step="any"></div>
                 <div class="field small"><label>경도</label><input type="number" id="evLng" step="any"></div>
                 <div class="field small"><label>장소 라벨</label><input type="text" id="evLocLabel"></div>
-                <div class="field small"><label>연결 항로</label><select id="evTrip"></select></div>
+                <div class="field small"><label>연결 경로</label><select id="evTrip"></select></div>
               </div>
               <div class="geo-result" id="evGeoRes"></div>
               <div class="ed-actions">
                 <button class="mini-btn" id="evSave">저장</button>
                 <button class="mini-btn danger" id="evDelete">삭제</button>
-                <span class="ed-note">캔버스의 핀을 클릭해도 여기로 불러온다</span>
+                <span class="ed-note">그래프의 점을 클릭해도 여기로 불러온다</span>
               </div>
             </div>
 
@@ -412,7 +413,7 @@
                 <div class="field small"><label>위도</label><input type="number" id="spLat" step="any"></div>
                 <div class="field small"><label>경도</label><input type="number" id="spLng" step="any"></div>
                 <div class="field small"><label>장소 라벨</label><input type="text" id="spLocLabel"></div>
-                <div class="field small"><label>연결 항로</label><select id="spTrip"></select></div>
+                <div class="field small"><label>연결 경로</label><select id="spTrip"></select></div>
               </div>
               <div class="geo-result" id="spGeoRes"></div>
               <div class="ed-actions">
@@ -437,14 +438,14 @@
                     <option value="#7A8A80">회록</option>
                   </select></div>
               </div>
-              <div class="ed-row"><div class="field grow"><label>제목</label><input type="text" id="erTitle" placeholder="예: 제5장 · 귀환"></div></div>
+              <div class="ed-row"><div class="field grow"><label>제목</label><input type="text" id="erTitle" placeholder="예: 대학 시절"></div></div>
               <div class="ed-actions">
                 <button class="mini-btn" id="erSave">저장</button>
                 <button class="mini-btn danger" id="erDelete">삭제</button>
               </div>
             </div>
 
-            <!-- 수심 -->
+            <!-- 행복도 -->
             <div class="ed-pane" data-pane="hap" hidden>
               <div class="ed-row">
                 <div class="field grow"><label>편집 대상</label><select id="hpSelect"></select></div>
@@ -455,11 +456,11 @@
               <div class="ed-actions">
                 <button class="mini-btn" id="hpSave">저장</button>
                 <button class="mini-btn danger" id="hpDelete">삭제</button>
-                <span class="ed-note">측점이 촘촘할수록 곡선이 정직해진다</span>
+                <span class="ed-note">값을 촘촘히 넣을수록 곡선이 정확해진다</span>
               </div>
             </div>
 
-            <!-- 항로 -->
+            <!-- 경로 -->
             <div class="ed-pane" data-pane="trip" hidden>
               <div class="ed-row">
                 <div class="field grow"><label>편집 대상</label><select id="trSelect"></select></div>
@@ -473,12 +474,12 @@
                     <option value="#A87F3D">황토</option><option value="#8A5A3B">갈</option>
                     <option value="#7A8A80">회록</option>
                   </select></div>
-                <span class="checkline"><input type="checkbox" id="trDashed"><label for="trDashed">계획 항로(점선)</label></span>
+                <span class="checkline"><input type="checkbox" id="trDashed"><label for="trDashed">계획 경로(점선)</label></span>
               </div>
               <div class="ed-row"><div class="field grow"><label>메모</label><input type="text" id="trNote"></div></div>
               <div class="ed-row">
                 <div class="field grow">
-                  <label>기항지 — 한 줄에 하나: 장소명 | 메모(선택). 좌표는 저장 시 자동 검색</label>
+                  <label>장소 — 한 줄에 하나: 장소명 | 메모(선택). 좌표는 저장 시 자동 검색</label>
                   <textarea id="trPoints" rows="5" placeholder="부산 | 출발&#10;후쿠오카 | 1일차&#10;오사카 | 3일차"></textarea>
                 </div>
               </div>
@@ -500,9 +501,9 @@
 
   <section id="sec-map">
     <div class="wrap">
-      <div class="sec-head"><span class="sec-no">航路 02</span><h2>항로도</h2></div>
-      <p class="sec-desc">머물렀던 곳과 이동의 경로. 항로를 선택하면 배가 궤적을 따라 움직인다. 선택된 항로를 한 번 더 클릭하면 수정.</p>
-      <div class="trip-bar" id="tripBar" role="group" aria-label="항로 선택"></div>
+      <div class="sec-head"><span class="sec-no">02</span><h2>지도</h2></div>
+      <p class="sec-desc">머물렀던 곳과 이동 경로. 경로를 선택하면 지도에 표시된다. 선택된 경로를 한 번 더 클릭하면 수정.</p>
+      <div class="trip-bar" id="tripBar" role="group" aria-label="경로 선택"></div>
       <div class="map-frame"><div id="map"></div></div>
       <div class="trip-info" id="tripInfo"></div>
     </div>
@@ -512,11 +513,11 @@
 <!-- 입장 게이트 -->
 <div id="gateBd" hidden style="position:fixed;inset:0;z-index:2000;background:var(--paper);display:flex;align-items:center;justify-content:center">
   <div style="display:flex;flex-direction:column;gap:14px;width:min(320px,86vw);text-align:center">
-    <div style="font-family:'Gowun Batang',serif;font-weight:700;font-size:26px">인생 해도</div>
-    <div style="font-size:12.5px;color:var(--ink-soft)">이 해도는 잠겨 있다 — 입장 비밀번호</div>
+    <div style="font-family:'Gowun Batang',serif;font-weight:700;font-size:26px">인생 연표</div>
+    <div style="font-size:12.5px;color:var(--ink-soft)">비밀번호를 입력해 주세요</div>
     <input id="gatePw" type="password" autocomplete="off"
       style="font-family:'IBM Plex Mono',monospace;font-size:15px;padding:10px 12px;border:1px solid var(--line);border-radius:2px;background:#FBFCF9;color:var(--ink);text-align:center">
-    <button id="gateGo" class="mini-btn" style="padding:9px">⚓ 입장</button>
+    <button id="gateGo" class="mini-btn" style="padding:9px">입장</button>
   </div>
 </div>
 <style>#gateBd[hidden]{display:none!important}</style>
@@ -580,21 +581,21 @@ create policy "personal" on charts
   </div>
 </div>
 
-<!-- 새 해도 온보딩 -->
+<!-- 새 문서 만들기 -->
 <div class="search-bd" id="newBd" hidden>
-  <div class="search-panel" role="dialog" aria-modal="true" aria-label="새 해도 시작" style="max-width:400px">
+  <div class="search-panel" role="dialog" aria-modal="true" aria-label="새 문서 만들기" style="max-width:400px">
     <div style="display:flex;flex-direction:column;gap:13px;padding:20px 22px">
-      <div style="font-family:'Gowun Batang',serif;font-weight:700;font-size:17px">새 해도 시작</div>
-      <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-soft)">이름 또는 호
-        <input id="nbName" placeholder="이름 또는 호" style="font-family:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:#FBFCF9;color:var(--ink)">
+      <div style="font-family:'Gowun Batang',serif;font-weight:700;font-size:17px">새 문서 만들기</div>
+      <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-soft)">이름
+        <input id="nbName" placeholder="이름" style="font-family:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:#FBFCF9;color:var(--ink)">
       </label>
-      <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-soft)">출생 연월 — 해도의 기점(起點)
+      <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-soft)">출생 연월
         <input id="nbBirth" type="month" style="font-family:'IBM Plex Mono',monospace;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:#FBFCF9;color:var(--ink)">
       </label>
-      <div style="font-size:12px;color:var(--ink-soft);line-height:1.6">새 <b>문서</b>로 만들어진다 — 지금 해도는 문서 목록에 그대로 남고, 상단 셀렉트로 오갈 수 있다.</div>
+      <div style="font-size:12px;color:var(--ink-soft);line-height:1.6">새 <b>문서</b>로 만들어진다 — 지금 문서는 목록에 그대로 남고, 상단 선택창으로 오갈 수 있다.</div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button class="pe-btn" id="nbCancel">취소</button>
-        <button class="mini-btn" id="nbStart">⚓ 출항</button>
+        <button class="mini-btn" id="nbStart">만들기</button>
       </div>
     </div>
   </div>
@@ -614,7 +615,7 @@ create policy "personal" on charts
   <div class="search-panel" role="dialog" aria-modal="true" aria-label="기록 검색">
     <div class="search-row">
       <span aria-hidden="true">🔍</span>
-      <input id="searchInput" placeholder="사건 · 기간 · 시대 · 항로 검색…" spellcheck="false" autocomplete="off">
+      <input id="searchInput" placeholder="사건 · 기간 · 시대 · 경로 검색…" spellcheck="false" autocomplete="off">
       <kbd>esc</kbd>
     </div>
     <div class="search-results" id="searchResults"></div>
@@ -623,14 +624,14 @@ create policy "personal" on charts
 
 <footer>
   <div class="wrap">
-    <span>인생 해도 · LIFE SOUNDING CHART</span>
+    <span>인생 연표</span>
     <span id="footNote">편집 → 브라우저 자동 저장 · ☁ DB 연결 시 온라인 동기화</span>
   </div>
 </footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
-/* 공유 뷰어 모드 + 페이지 원본 캡처 (렌더로 DOM이 변형되기 전) */
+/* 공유 뷰어 모드 */
 const RO=!!window.VIEW_ONLY;
 
 /* 입장 게이트 — 클라이언트 측 열람 차단 (해시만 보관, 기기당 1회 입력) */
@@ -663,7 +664,7 @@ if(RO)document.documentElement.classList.add('view-only');
    기본 데이터 (최초 실행 시에만 사용 — 이후엔 브라우저 저장본/JSON이 우선)
    ⚠ (예시) 표기 항목은 편집 화면에서 실제 기록으로 교체하세요.
    ========================================================================== */
-/* 분야 레이어 기본형 — 종합(幸福) 아래에 겹쳐 그리는 보조 그래프 */
+/* 분야 레이어 기본형 — 행복도 곡선 아래에 겹쳐 그리는 보조 그래프 */
 const DEFAULT_LAYERS=[
   {id:'study',  name:'학습', color:'#3E6FA3', pts:[]},
   {id:'travel', name:'여행', color:'#3F8A5F', pts:[]},
@@ -671,7 +672,7 @@ const DEFAULT_LAYERS=[
   {id:'people', name:'사람', color:'#B5536B', pts:[]},
 ];
 const DEFAULT_DATA = {
-  profile:{ name:"나의 해도", birth:"1995-01" },
+  profile:{ name:"내 연표", birth:"1995-01" },
   scale:"signed1",
   layers:[
     {id:'study',  name:'학습', color:'#3E6FA3', pts:[
@@ -688,14 +689,14 @@ const DEFAULT_DATA = {
     {date:'2019-11',text:'(예시) 길을 잃은 게 아니라, 지도가 끝난 것이었다.'},
   ],
   eras:[
-    { title:"제1장 · 학창",  start:"1995-01", end:"2014-03", color:"#2E5E63" },
-    { title:"제2장 · 모색",  start:"2014-03", end:"2020-01", color:"#A87F3D" },
-    { title:"제3장 · 항해",  start:"2020-01", end:"2030-01", color:"#3E5C7F" },
+    { title:"학창 시절",  start:"1995-01", end:"2014-03", color:"#2E5E63" },
+    { title:"20대 초반",  start:"2014-03", end:"2020-01", color:"#A87F3D" },
+    { title:"지금",  start:"2020-01", end:"2030-01", color:"#3E5C7F" },
   ],
   events:[
-    { date:"1995-01", title:"태어나다", happiness:0, desc:"해도의 기점(起點)." },
+    { date:"1995-01", title:"태어남", happiness:0, desc:"기록의 시작." },
     { date:"2014-03", title:"첫 독립", happiness:0.3, desc:"집을 떠나 새 도시로.", layers:["people"] },
-    { date:"2017-08", title:"긴 여행", happiness:0.6, desc:"한 달의 배낭여행 — 낯선 거리에서 기록을 시작했다.",
+    { date:"2017-08", title:"긴 여행", happiness:0.6, desc:"한 달간의 배낭여행.",
       loc:{lat:41.3874,lng:2.1686,label:"바르셀로나"}, tripId:"trip1", layers:["travel","people"] },
     { date:"2019-11", title:"슬럼프", happiness:-0.4, desc:"방향을 잃었던 겨울." },
     { date:"2020-06", title:"새 일 시작", happiness:0.4 },
@@ -744,7 +745,7 @@ function loadDoc(id){
   try{const raw=localStorage.getItem(LS_KEY);if(raw)legacy=JSON.parse(raw);}catch(e){}
   const id=newDocId();
   const data=legacy||structuredClone(DEFAULT_DATA);
-  REG={docs:[{id,name:(data.profile&&data.profile.name)||'나의 해도'}],current:id};
+  REG={docs:[{id,name:(data.profile&&data.profile.name)||'내 연표'}],current:id};
   curDocId=id;
   try{localStorage.setItem(DOC_PREFIX+id,JSON.stringify(data));}catch(e){}
   saveRegistry();
@@ -793,7 +794,7 @@ function migrateScale(d){
     (d.happiness||[]).forEach(h=>{h.v=f(h.v);});
   };
   const r2=v=>Math.round(v*100)/100;
-  delete d.now; /* 現在는 항상 오늘 기준 자동 (고정값 폐기) */
+  delete d.now; /* 오늘 날짜는 항상 자동 (고정값 폐기) */
   if(d.scale!=='signed1'){
     if(d.scale==='signed10')conv(v=>r2(v/10));
     else conv(v=>r2((v-5)/5)); /* 구 0~10 */
@@ -832,7 +833,7 @@ function sanitize(d){
     else s.end=null;
     return true;
   });
-  const [happiness,badHap]=keep(d.happiness,h=>fix(h,'date','수심 측점')&&typeof h.v==='number'&&isFinite(h.v));
+  const [happiness,badHap]=keep(d.happiness,h=>fix(h,'date','행복도 값')&&typeof h.v==='number'&&isFinite(h.v));
   const [records,badRec]=keep(d.records,r=>validMonth(r.m)&&typeof r.n==='number');
 
   /* 분야 레이어 + 생각(당시 문장) — 구버전 문서엔 없으므로 기본형 주입 */
@@ -840,7 +841,7 @@ function sanitize(d){
   let badLay=[];
   d.layers.forEach(l=>{
     l.pts=Array.isArray(l.pts)?l.pts:[];
-    const [ok,bad]=keep(l.pts,p=>fix(p,'date','레이어 「'+(l.name||l.id)+'」 측점')&&typeof p.v==='number'&&isFinite(p.v));
+    const [ok,bad]=keep(l.pts,p=>fix(p,'date','레이어 「'+(l.name||l.id)+'」 값')&&typeof p.v==='number'&&isFinite(p.v));
     l.pts=ok;badLay=badLay.concat(bad);
   });
   const [thoughts,badTh]=keep(d.thoughts,th=>fix(th,'date','생각')&&typeof th.text==='string'&&th.text.trim());
@@ -860,7 +861,7 @@ function sanitize(d){
   }
   if(!validMonth(d.profile&&d.profile.birth)){
     d.profile=d.profile||{};
-    if(!fix(d.profile,'birth','기점(출생)'))d.profile.birth=tToMonth(new Date().getFullYear()-30);
+    if(!fix(d.profile,'birth','출생'))d.profile.birth=tToMonth(new Date().getFullYear()-30);
   }
   DATA_ISSUES=issues;
   return d;
@@ -959,7 +960,7 @@ function prepare(){
   DATA.thoughts.forEach(th=>th.t=T(th.date));
   DATA.thoughts.sort((a,b)=>a.t-b.t);
 
-  /* 수심 곡선 = 월 단위 통합 — 같은 달의 사건·측점 여러 개는 평균 한 점으로 (수직 꺾임 방지).
+  /* 행복도 곡선 = 월 단위 통합 — 같은 달의 사건·값 여러 개는 평균 한 점으로 (수직 꺾임 방지).
      개별 점은 각자 값 높이에 그대로 그려지고, 곡선은 그 평균을 지나간다 */
   const contrib=new Map();
   const addC=(date,t,v,future)=>{
@@ -1000,7 +1001,7 @@ function prepare(){
               ...(DATA.layers||[]).flatMap(l=>l.pts.map(p=>p.t)),...DATA.thoughts.map(th=>th.t)];
   const mn=allT.length?Math.min(...allT):NOW-10, mx=allT.length?Math.max(...allT):NOW+2;
   FULL=[mn-1.2,mx+1.5]; BOUND=[mn-4,mx+5];
-  if(!dom) dom=[NOW-3,NOW+2]; /* 기본 뷰 = 現在 중심 5년 (전체는 '전체 보기'·0 키) */
+  if(!dom) dom=[NOW-3,NOW+2]; /* 기본 뷰 = 오늘 중심 5년 (전체는 '전체 보기'·0 키) */
   dom=[Math.max(dom[0],BOUND[0]),Math.min(dom[1],BOUND[1])];
 
   /* 요약 */
@@ -1079,7 +1080,7 @@ function render(){
     return {x1:x1-3,y1:y-fs*.86,x2:x1+w+3,y2:y+fs*.3};
   };
   const reserveText=(x,y,txt,anchor,fs)=>{const b=textBox(x,y,textW(txt),anchor||'start',fs||11);reserve(b.x1,b.y1,b.x2,b.y2);};
-  const nearCurve=(x1,x2,y)=>{ /* 수심 곡선을 글자가 가로지르는지 (근사) */
+  const nearCurve=(x1,x2,y)=>{ /* 행복도 곡선을 글자가 가로지르는지 (근사) */
     const step=Math.max(9,(x2-x1)/6);
     for(let px=x1;px<=x2;px+=step)if(Math.abs(HY(hapVAt(Xinv(px)))-y)<8)return true;
     return Math.abs(HY(hapVAt(Xinv(x2)))-y)<8;
@@ -1173,7 +1174,7 @@ function render(){
       t.textContent=y;svg.appendChild(t);
       reserveText(x,L.AXIS_Y-12,String(y),'middle',11);
       const age=Math.floor(y-T(DATA.profile.birth)); /* 만 나이 — 연도 위 빈 줄 (아래는 핀 줄기와 겹침) */
-      if(age>=0&&Math.abs(x-X(NOW))>38){ /* 現在 태그 근처만 생략 */
+      if(age>=0&&Math.abs(x-X(NOW))>38){ /* 오늘 표시 근처만 생략 */
         const at=el('text',{x:x,y:L.AXIS_Y-24,'text-anchor':'middle','font-size':9.5,fill:'#A87F3D','font-family':'IBM Plex Mono',opacity:.85});
         at.textContent='만 '+age;svg.appendChild(at);
         reserveText(x,L.AXIS_Y-24,'만 '+age,'middle',9.5);
@@ -1198,11 +1199,11 @@ function render(){
     svg.appendChild(el('line',{x1:nx,x2:nx,y1:30,y2:L.H,stroke:'#B5432A','stroke-width':1.2,'stroke-dasharray':'5 4',opacity:.75}));
     const nflip=nx+40>W; /* 우측 끝에서 잘리면 선 왼쪽에 표기 */
     const t=el('text',{x:nflip?nx-6:nx+6,'text-anchor':nflip?'end':'start',y:L.AXIS_Y-30,'font-size':10,fill:'#B5432A','font-family':'IBM Plex Mono','letter-spacing':'.1em'});
-    t.textContent='現在';svg.appendChild(t);
+    t.textContent='오늘';svg.appendChild(t);
   }
 
   /* ===== 행복 곡선 — 중앙 0, 상·하한 ±1은 선명한 경계선 ===== */
-  /* 수로 배경 — ±1 채널을 닫힌 용기로 */
+  /* 그래프 배경 — ±1 범위 */
   svg.appendChild(el('rect',{x:0,y:HY(1),width:W,height:HY(-1)-HY(1),fill:'#2E5E63',opacity:.05}));
   [-1,-.5,0,.5,1].forEach(v=>{
     const isBound=Math.abs(v)===1, isZero=v===0;
@@ -1217,10 +1218,10 @@ function render(){
     reserveText(W-8,HY(v)-4,v>0?'+'+v:String(v),'end',isBound?10.5:10);
   });
   const capT=el('text',{x:10,y:HY(-1)+18,'font-size':9,fill:'#5D6B62','font-family':'IBM Plex Mono','letter-spacing':'.14em',opacity:.9});
-  capT.textContent='幸福 水深';svg.appendChild(capT);
-  reserveText(10,HY(-1)+18,'幸福 水深','start',9);
+  capT.textContent='행복도';svg.appendChild(capT);
+  reserveText(10,HY(-1)+18,'행복도','start',9);
 
-  /* 전체 행복 평균선 — 실측(미래 제외) 평균, 황토 점선. 값은 SURVEY LOG에 표기 */
+  /* 전체 행복도 평균선 — 실측(미래 제외) 평균, 점선. 값은 요약 상자에 표기 */
   const pastPts=HAPPTS.filter(pt=>!pt.future);
   if(pastPts.length){
     const avg=pastPts.reduce((sum,pt)=>sum+pt.v,0)/pastPts.length;
@@ -1248,11 +1249,11 @@ function render(){
     rg.addEventListener('pointerout',hideTip);
     svg.appendChild(rg);
     const rl=el('text',{x:10,y:L.HAP_BOT-6,'font-size':10,fill:'#A87F3D','font-family':'IBM Plex Mono','letter-spacing':'.12em',opacity:.85});
-    rl.textContent='記錄 밀도 — NOTES/MONTH (max '+maxN+')';svg.appendChild(rl);
+    rl.textContent='월별 기록 수 (최대 '+maxN+')';svg.appendChild(rl);
   }
 
   /* 분야 레이어 — 학습·여행·독서·사람. 종합(main) 상태에선 은은한 배경,
-     칩으로 포커스하면 그 레이어만 선명 + 편집 가능 (측점 드래그·클릭 수정) */
+     칩으로 포커스하면 그 레이어만 선명 + 편집 가능 (값 드래그·클릭 수정) */
   (DATA.layers||[]).forEach(lay=>{
     const pts=lay.pts.filter(p=>isFinite(p.t)).map(p=>({x:X(p.t),y:HY(p.v),p}));
     const foc=focusLayer===lay.id;
@@ -1303,7 +1304,7 @@ function render(){
         gd.addEventListener('contextmenu',ev=>{
           ev.preventDefault();ev.stopPropagation();
           openCtx(ev.clientX,ev.clientY,[
-            ['✕ 측점 삭제','danger',()=>{const i=lay.pts.indexOf(p);if(i>=0){lay.pts.splice(i,1);afterMutate(true);}}],
+            ['✕ 값 삭제','danger',()=>{const i=lay.pts.indexOf(p);if(i>=0){lay.pts.splice(i,1);afterMutate(true);}}],
           ]);
         });
       }
@@ -1371,7 +1372,7 @@ function render(){
     g.appendChild(el('circle',{cx:x,cy:y,r:14,fill:'transparent'}));
     g.appendChild(el('circle',{cx:x,cy:y,r:7.5,fill:'none',stroke:col,'stroke-width':1,opacity:.45}));
     g.appendChild(el('circle',{cx:x,cy:y,r:4.5,fill:'#F2F4EE',stroke:col,'stroke-width':2.2}));
-    const bdx=(x+16>W-34)?-9:9; /* 오른쪽 끝에서는 배지를 안쪽으로 접는다 (수심 눈금 침범 방지) */
+    const bdx=(x+16>W-34)?-9:9; /* 오른쪽 끝에서는 배지를 안쪽으로 접는다 (눈금 침범 방지) */
     if(x>4&&x<W-4){ /* 화면 밖 묶음은 배지 없이 점만 */
       g.appendChild(el('circle',{cx:x+bdx,cy:y-9,r:6.6,fill:col,stroke:'#F2F4EE','stroke-width':1.4}));
       const bt=el('text',{x:x+bdx,y:y-6.3,'text-anchor':'middle','font-size':8.6,fill:'#F2F4EE',
@@ -1440,7 +1441,7 @@ function render(){
       const nx=X(drag.mi/12);
       dot.setAttribute('cx',nx);
       let nv=e.happiness;
-      if(hasV||Math.abs(p.y-drag.y0)>5){ /* 수심 없던 사건은 세로로 확실히 움직일 때만 부여 */
+      if(hasV||Math.abs(p.y-drag.y0)>5){ /* 행복도 없던 사건은 세로로 확실히 움직일 때만 부여 */
         nv=Math.round(Math.max(-1,Math.min(1,drag.v0-(p.y-drag.y0)/(L.HAP_BOT-L.HAP_TOP)*2))*10)/10;
         e.happiness=nv;
         dot.setAttribute('cy',HY(nv));
@@ -1634,24 +1635,24 @@ function render(){
   });
   spGroups.forEach(q=>{if(q.list.length>1)renderSpanCluster(q);else renderSpan(q.list[0]);});
 
-  /* 독립 수심 측점 — 각자 자기 값 높이에 (곡선은 월 평균을 지나감) */
+  /* 독립 행복도 값 — 각자 자기 높이에 (곡선은 월 평균을 지나감) */
   const hpDots=DATA.happiness.map(h=>({x:X(h.t),y:HY(h.v),pt:{kind:'hap',src:h,date:h.date,v:h.v,future:h.future}}));
   hpDots.forEach(p=>{
     if(p.x<-20||p.x>W+20)return;
     const pt=p.pt, isEv=pt.kind==='event';
     const g=el('g',{cursor:'ns-resize','data-hap':'1'});
     if(focusLayer!=='main'&&pt.kind==='event'&&(pt.src.layers||[]).includes(focusLayer)){
-      g.style.opacity='1';g.style.pointerEvents='auto'; /* 태그된 사건의 측점도 함께 선명 */
+      g.style.opacity='1';g.style.pointerEvents='auto'; /* 태그된 사건의 값도 함께 선명 */
     }
     g.appendChild(el('circle',{cx:p.x,cy:p.y,r:10,fill:'transparent'}));
-    /* 사건 유래 측점 = 링, 독립 측점 = 채움 */
+    /* 사건에서 온 값 = 링, 독립 값 = 채움 */
     const dot=isEv
       ?el('circle',{cx:p.x,cy:p.y,r:4.5,fill:'#F2F4EE',stroke:pt.future?'#7A8A80':'#B5432A','stroke-width':2.2})
       :el('circle',{cx:p.x,cy:p.y,r:4,fill:pt.future?'#7A8A80':'#B5432A',stroke:'#F2F4EE','stroke-width':2});
     g.appendChild(dot);
     const getV=()=>isEv?pt.src.happiness:pt.src.v;
     const setV=v=>{if(isEv)pt.src.happiness=v;else pt.src.v=v;};
-    const tipHtml=v=>`<span class="yy">${esc(pt.date)}</span> · 수심 <span class="hh">${v.toFixed(1)}</span>`+(isEv?` · ${esc(pt.src.title)}`:'');
+    const tipHtml=v=>`<span class="yy">${esc(pt.date)}</span> · 행복도 <span class="hh">${v.toFixed(1)}</span>`+(isEv?` · ${esc(pt.src.title)}`:'');
     let drag=null;
     g.addEventListener('pointerdown',ev=>{ /* 자유 드래그: 상하 = 값, 좌우 = 시기 */
       if(RO)return;
@@ -1670,7 +1671,7 @@ function render(){
       drag.mi=drag.mi0+Math.round((Xinv(q.x)-Xinv(drag.x0))*12);
       const nx=X(drag.mi/12);
       dot.setAttribute('cy',HY(v));dot.setAttribute('cx',nx);
-      showTip(nx,HY(v),`<span class="yy">${miToMonth(drag.mi)}</span> · 수심 <span class="hh">${(v>0?'+':'')+v.toFixed(1)}</span>`);
+      showTip(nx,HY(v),`<span class="yy">${miToMonth(drag.mi)}</span> · 행복도 <span class="hh">${(v>0?'+':'')+v.toFixed(1)}</span>`);
     });
     const endDrag=()=>{
       if(!drag)return;
@@ -1689,7 +1690,7 @@ function render(){
     g.addEventListener('click',ev=>{
       if(moved)return; ev.stopPropagation();
       const rc=svg.getBoundingClientRect();
-      if(isEv){ /* 사건 측점 → 사건 팝오버로 통합 편집 */
+      if(isEv){ /* 사건 값 → 사건 팝오버로 통합 편집 */
         selected=pt.src;render();renderDetail();
         openPop(pt.src,rc.left+p.x,rc.top+p.y);
       }else{
@@ -1705,9 +1706,9 @@ function render(){
           selected=pt.src;render();renderDetail();
           openPop(pt.src,rc.left+p.x,rc.top+p.y);
         }],
-        ['곡선에서 제외 (수심 해제)','',()=>{pt.src.happiness=undefined;afterMutate(selected!=null);}],
+        ['곡선에서 제외 (행복도 해제)','',()=>{pt.src.happiness=undefined;afterMutate(selected!=null);}],
       ]:[
-        [`✕ 측점 삭제 (${pt.date} · ${getV().toFixed(1)})`,'danger',()=>{
+        [`✕ 값 삭제 (${pt.date} · ${getV().toFixed(1)})`,'danger',()=>{
           const i=DATA.happiness.indexOf(pt.src);
           if(i>=0){DATA.happiness.splice(i,1);afterMutate(selected!=null);}
         }],
@@ -1756,7 +1757,7 @@ function render(){
   updateScrubber();
 }
 
-/* 곡선 보간 — 임의 시점의 수심 (생각 마커 위치용) */
+/* 곡선 보간 — 임의 시점의 행복도 (생각 표식 위치용) */
 function hapVAt(t){
   const a=HAPPTS;
   if(!a.length)return 0;
@@ -1779,12 +1780,12 @@ function renderLayerBar(){
     b.onclick=()=>{focusLayer=(focusLayer===id?'main':id);render();};
     bar.appendChild(b);
   };
-  mk('main','幸福 종합','#1E4348');
+  mk('main','행복도 종합','#1E4348');
   (DATA.layers||[]).forEach(l=>mk(l.id,l.name,l.color));
   const h=document.createElement('span');h.className='lay-hint';
   h.textContent=focusLayer==='main'
     ?'칩 = 그 그래프만 선명 · 시대 클릭 = 그 시기만'
-    :'빈 곳 빠른 두 번 클릭 = 측점 추가 · 점 드래그 = 조정 · Esc = 종합';
+    :'빈 곳 빠른 두 번 클릭 = 값 추가 · 점 드래그 = 조정 · Esc = 종합';
   bar.appendChild(h);
 }
 
@@ -1851,8 +1852,8 @@ function renderDetail(){
         <div class="dt-title">${esc(it.title)} ${it.future?'<span class="future-tag">PLANNED</span>':''}</div>
         <p class="dt-desc">${esc(it.desc||'')}</p>
         <div class="dt-meta">
-          ${it.happiness!=null?`<span class="depth-badge">水深 ${(it.happiness>0?'+':'')+it.happiness.toFixed(1)}</span>`:''}
-          ${it.loc?`<button class="loc-chip" data-lat="${it.loc.lat}" data-lng="${it.loc.lng}" data-trip="${esc(it.tripId||'')}">⚓ ${esc(it.loc.label)} — 지도에서 보기</button>`:''}
+          ${it.happiness!=null?`<span class="depth-badge">행복도 ${(it.happiness>0?'+':'')+it.happiness.toFixed(1)}</span>`:''}
+          ${it.loc?`<button class="loc-chip" data-lat="${it.loc.lat}" data-lng="${it.loc.lng}" data-trip="${esc(it.tripId||'')}">${esc(it.loc.label)} — 지도에서 보기</button>`:''}
         </div>
       </div>`;
     return;
@@ -1876,10 +1877,10 @@ function renderDetail(){
       <textarea class="dt-edit dt-desc-in" id="dtDesc" placeholder="설명…" aria-label="설명">${esc(it.desc||'')}</textarea>
       <div class="dt-meta">
         ${!isSpan?`<label class="dt-lab"><input type="checkbox" id="dtHasHap" ${it.happiness!=null?'checked':''}> 행복 반영</label>`:''}
-        <label class="dt-lab">水深 <input type="number" class="dt-edit dt-num" id="dtHap" min="-1" max="1" step="0.1" value="${it.happiness??''}"${!isSpan&&it.happiness==null?' disabled':''}></label>
+        <label class="dt-lab">행복도 <input type="number" class="dt-edit dt-num" id="dtHap" min="-1" max="1" step="0.1" value="${it.happiness??''}"${!isSpan&&it.happiness==null?' disabled':''}></label>
         <label class="dt-lab"><input type="checkbox" id="dtFuture" ${it.future?'checked':''}> 예정</label>
         ${isSpan?`<select class="dt-edit" id="dtColor" aria-label="색">${SPAN_COLORS.map(c=>`<option value="${c[0]}"${it.color===c[0]?' selected':''}>${c[1]}</option>`).join('')}</select>`:''}
-        ${it.loc?`<button class="loc-chip" data-lat="${it.loc.lat}" data-lng="${it.loc.lng}" data-trip="${esc(it.tripId||'')}">⚓ ${esc(it.loc.label)}</button>`:''}
+        ${it.loc?`<button class="loc-chip" data-lat="${it.loc.lat}" data-lng="${it.loc.lng}" data-trip="${esc(it.tripId||'')}">${esc(it.loc.label)}</button>`:''}
         <span style="flex:1"></span>
         <button class="mini-btn ghost" id="dtMore">✎ 전체 편집</button>
         <button class="mini-btn ghost" id="dtDup">⧉ 복제</button>
@@ -1981,7 +1982,7 @@ function showCard(it,cx,cy){
     ${it.desc?`<div class="hc-desc">${esc(it.desc)}</div>`:''}
     ${it.layers&&it.layers.length?`<div class="hc-tags">${(DATA.layers||[]).filter(l=>it.layers.includes(l.id))
       .map(l=>`<span class="hc-tag"><span class="swz" style="background:${l.color}"></span>${esc(l.name)}</span>`).join('')}</div>`:''}
-    ${it.loc?`<div class="hc-loc">⚓ ${esc(it.loc.label)}</div>`:''}`;
+    ${it.loc?`<div class="hc-loc">${esc(it.loc.label)}</div>`:''}`;
   placeCard(cx,cy);
 }
 function showClusterCard(list,cx,cy){ /* 겹친 묶음 — 무엇들이 겹쳤는지 한눈에 (사건·기간 공용) */
@@ -2031,7 +2032,7 @@ function openPop(it,ax,ay){
     </div>
     <div class="pe-row">
       ${!isSpan?`<label class="dt-lab"><input type="checkbox" data-f="hasHap" ${it.happiness!=null?'checked':''}> 행복 반영</label>`:''}
-      <label class="dt-lab">水深 <input type="number" class="dt-edit pe-num" data-f="hap" min="-1" max="1" step="0.1" value="${it.happiness??''}"${!isSpan&&it.happiness==null?' disabled':''}></label>
+      <label class="dt-lab">행복도 <input type="number" class="dt-edit pe-num" data-f="hap" min="-1" max="1" step="0.1" value="${it.happiness??''}"${!isSpan&&it.happiness==null?' disabled':''}></label>
       <label class="dt-lab"><input type="checkbox" data-f="future" ${it.future?'checked':''}> 예정</label>
       ${isSpan?`<select class="dt-edit" data-f="color" aria-label="색">${SPAN_COLORS.map(c=>`<option value="${c[0]}"${it.color===c[0]?' selected':''}>${c[1]}</option>`).join('')}</select>`:''}
     </div>
@@ -2119,14 +2120,14 @@ function openPopHap(h,ax,ay){
   popAnchor={x:ax,y:ay};
   popEd.innerHTML=`
     <div class="pe-row" style="justify-content:space-between">
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft)">幸福 水深 측점</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft)">행복도 값</span>
       <label class="dt-lab"><input type="checkbox" data-f="future" ${h.future?'checked':''}> 예정</label>
     </div>
     <div class="pe-row">
       <input type="month" class="dt-edit pe-month" data-f="date" value="${h.date}" aria-label="날짜">
-      <input type="number" class="dt-edit pe-num" data-f="v" min="-1" max="1" step="0.1" value="${h.v}" aria-label="수심">
+      <input type="number" class="dt-edit pe-num" data-f="v" min="-1" max="1" step="0.1" value="${h.v}" aria-label="행복도">
     </div>
-    <div class="pe-actions"><button class="pe-btn danger" data-a="del">✕ 측점 삭제</button></div>`;
+    <div class="pe-actions"><button class="pe-btn danger" data-a="del">✕ 값 삭제</button></div>`;
   const q=s=>popEd.querySelector(s);
   q('[data-f="date"]').onchange=e=>{if(e.target.value){h.date=e.target.value;popCommit();}else e.target.value=h.date;};
   q('[data-f="v"]').onchange=e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){h.v=Math.min(1,Math.max(-1,v));popCommit();}else e.target.value=h.v;};
@@ -2145,13 +2146,13 @@ function openPopLayerPt(lay,p,ax,ay){
   popEd.innerHTML=`
     <div class="pe-row" style="justify-content:space-between">
       <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft)">
-        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${lay.color};margin-right:5px"></span>${esc(lay.name)} 측점</span>
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${lay.color};margin-right:5px"></span>${esc(lay.name)} 값</span>
     </div>
     <div class="pe-row">
       <input type="month" class="dt-edit pe-month" data-f="date" value="${p.date}" aria-label="날짜">
       <input type="number" class="dt-edit pe-num" data-f="v" min="-1" max="1" step="0.1" value="${p.v}" aria-label="깊이">
     </div>
-    <div class="pe-actions"><button class="pe-btn danger" data-a="del">✕ 측점 삭제</button></div>`;
+    <div class="pe-actions"><button class="pe-btn danger" data-a="del">✕ 값 삭제</button></div>`;
   const q=s=>popEd.querySelector(s);
   q('[data-f="date"]').onchange=e=>{if(e.target.value){p.date=e.target.value;popCommit();}else e.target.value=p.date;};
   q('[data-f="v"]').onchange=e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){p.v=Math.min(1,Math.max(-1,v));popCommit();}else e.target.value=p.v;};
@@ -2235,22 +2236,22 @@ function openPopTrip(t,ax,ay){
   popAnchor={x:ax,y:ay};
   const commit=()=>{
     afterMutate(selected!=null);
-    if(curTripId===t.id){ /* 지도에 떠 있는 항로면 다시 그림 */
+    if(curTripId===t.id){ /* 지도에 표시 중인 경로면 다시 그림 */
       const bar=$('#tripBar'),b=bar.querySelector(`[data-trip="${t.id}"]`);
       if(b&&bar._setActive)bar._setActive(b);
       selectTrip(t.id);
     }
   };
   popEd.innerHTML=`
-    <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);letter-spacing:.12em">航路 · TRIP</div>
-    <input class="dt-edit pe-title" value="${esc(t.title)}" aria-label="항로 이름">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);letter-spacing:.12em">경로</div>
+    <input class="dt-edit pe-title" value="${esc(t.title)}" aria-label="경로 이름">
     <div class="pe-row">
       <select class="dt-edit" data-f="color" aria-label="색">${SPAN_COLORS.map(c=>`<option value="${c[0]}"${t.color===c[0]?' selected':''}>${c[1]}</option>`).join('')}</select>
       <label class="dt-lab"><input type="checkbox" data-f="dashed" ${t.dashed?'checked':''}> 계획(점선)</label>
     </div>
     <input class="dt-edit" data-f="note" value="${esc(t.note||'')}" placeholder="메모…" style="font-size:12.5px;width:100%">
     <div class="pe-actions">
-      <button class="pe-btn" data-a="pts">⚓ 기항지 편집</button>
+      <button class="pe-btn" data-a="pts">장소 편집</button>
       <button class="pe-btn danger" data-a="del">✕ 삭제</button>
     </div>`;
   const q=s=>popEd.querySelector(s);
@@ -2361,7 +2362,7 @@ let moved=false;
     else if(e.key==='+'||e.key==='='){e.preventDefault();zoomAt((dom[0]+dom[1])/2,1/1.35);}
     else if(e.key==='-'){e.preventDefault();zoomAt((dom[0]+dom[1])/2,1.35);}
     else if(e.key==='0'){e.preventDefault();dom=[...FULL];render();}
-    else if(e.key===' '){e.preventDefault();$('#scrubPlay').onclick();} /* Space = 시간 훑기 */
+    else if(e.key===' '){e.preventDefault();$('#scrubPlay').onclick();} /* Space = 시간 순서 재생 */
   });
   /* 빈 곳: 클릭 = 선택 해제 · 빠른 두 번 클릭 = 그 자리에 추가.
      ⚠ 네이티브 dblclick은 못 쓴다 — 첫 클릭의 render()가 노드를 갈아치워 브라우저가 더블클릭으로 안 센다 */
@@ -2401,7 +2402,7 @@ let moved=false;
     if(t<BOUND[0]||t>BOUND[1])return;
     const date=tToMonth(t);
     if(y<LAYOUT.AXIS_Y)return; /* 상단 시대·축 라벨 구역은 추가 없음 */
-    if(focusLayer!=='main'){ /* 레이어 포커스 중엔 그 레이어의 측점 추가 */
+    if(focusLayer!=='main'){ /* 레이어 포커스 중엔 그 레이어의 값 추가 */
       const lay=(DATA.layers||[]).find(l=>l.id===focusLayer);
       if(lay){
         const v=Math.round(Math.max(-1,Math.min(1,(LAYOUT.HAP_BOT-y)/(LAYOUT.HAP_BOT-LAYOUT.HAP_TOP)*2-1))*10)/10;
@@ -2543,7 +2544,7 @@ scrubPlayBtn.onclick=()=>{
 /* --- 검색 (⌘/Ctrl+F) --- */
 const searchBd=$('#searchBd'),searchInput=$('#searchInput'),searchResults=$('#searchResults');
 let searchIdx=0,searchItems=[];
-const KIND_BADGE={event:'● 사건',span:'▬ 기간',era:'▢ 시대',trip:'⛵ 항로'};
+const KIND_BADGE={event:'● 사건',span:'▬ 기간',era:'▢ 시대',trip:'▷ 경로'};
 function searchPool(){
   return [
     ...DATA.events.map(e=>({kind:'event',ref:e,title:e.title,date:e.date,
@@ -2634,12 +2635,12 @@ $('#btnSearch').onclick=openSearch;
   h1El.addEventListener('blur',()=>{
     const v=h1El.textContent.trim();
     if(v){DATA.profile.name=v;persist();}
-    else h1El.textContent=DATA.profile.name||'나의 해도';
+    else h1El.textContent=DATA.profile.name||'내 연표';
   });
   h1El.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();h1El.blur();}});
 
   const span=$('#statBirth');
-  span.style.cursor='pointer';span.title='클릭해서 기점(출생 연월) 수정';
+  span.style.cursor='pointer';span.title='클릭해서 출생 연월 수정';
   span.addEventListener('click',()=>{
     if(span.querySelector('input'))return;
     const inp=document.createElement('input');
@@ -2727,7 +2728,7 @@ async function cloudPush(docId){
       }
     }
     const stamp=(reg&&reg.updated)||new Date().toISOString();
-    const row={id:docId,name:(reg&&reg.name)||'해도',data,updated_at:stamp};
+    const row={id:docId,name:(reg&&reg.name)||'연표',data,updated_at:stamp};
     if(CLOUD.session&&CLOUD.session.uid)row.user_id=CLOUD.session.uid; /* 저장 시 내 소유로 (기존 무소유 행도 자동 귀속) */
     const r=await cloudFetch(cloudBase(),()=>({method:'POST',headers:cloudHeaders(),body:JSON.stringify([row])}));
     if(!r.ok)throw new Error('HTTP '+r.status);
@@ -2764,7 +2765,7 @@ async function cloudPullAll(autoSwitch){
       if(!row||!row.id||!row.data)return;
       const local=REG.docs.find(d=>d.id===row.id);
       if(!local){ /* 클라우드에만 있는 문서 → 로컬로 */
-        REG.docs.push({id:row.id,name:row.name||'해도',updated:row.updated_at,syncedAt:row.updated_at});
+        REG.docs.push({id:row.id,name:row.name||'연표',updated:row.updated_at,syncedAt:row.updated_at});
         try{localStorage.setItem(DOC_PREFIX+row.id,JSON.stringify(row.data));}catch(e){}
         changed=true;
       }else if(row.updated_at&&row.updated_at>(local.updated||'')){ /* 더 최신이면 당겨오기 */
@@ -2871,7 +2872,7 @@ if(!RO){
     const blob=new Blob([JSON.stringify({format:'haedo-backup-v1',at:new Date().toISOString(),docs},null,1)],{type:'application/json'});
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob);
-    a.download='해도-백업-'+new Date().toISOString().slice(0,10)+'.json';
+    a.download='연표-백업-'+new Date().toISOString().slice(0,10)+'.json';
     a.click();URL.revokeObjectURL(a.href);
   };
   document.getElementById('fileRestore').onchange=async e=>{
@@ -2961,7 +2962,7 @@ function switchDoc(id){
   refreshDocSel();
 }
 function deleteCurrentDoc(){
-  if(REG.docs.length<=1){alert('마지막 문서는 삭제할 수 없다. 새 해도를 먼저 만들어줘.');return;}
+  if(REG.docs.length<=1){alert('마지막 문서는 삭제할 수 없다. 새 문서를 먼저 만들어줘.');return;}
   const d=REG.docs.find(x=>x.id===curDocId);
   if(!confirm(`문서 「${d.name}」 전체를 삭제할까? 문서 삭제는 되돌릴 수 없다.`))return; /* 문서 단위라 확인 유지 */
   cloudDelete(curDocId); /* 온라인 DB에서도 제거 (best-effort) */
@@ -2982,7 +2983,7 @@ if(!RO){
 
 /* 공유 HTML 내보내기 제거 — 온라인 DB로 대체 (RO 뷰어 코드는 기존 공유 파일 호환용으로 유지) */
 
-/* --- 새 해도 온보딩 --- */
+/* --- 새 문서 만들기 --- */
 (function newDoc(){
   const bd=document.getElementById('newBd');
   $('#btnNew').onclick=()=>{
@@ -2996,12 +2997,12 @@ if(!RO){
   $('#nbName').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#nbBirth').focus();}});
   $('#nbBirth').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#nbStart').click();}});
   $('#nbStart').onclick=()=>{
-    const name=$('#nbName').value.trim()||'나의 해도';
+    const name=$('#nbName').value.trim()||'내 연표';
     const birth=$('#nbBirth').value;
     if(!birth){$('#nbBirth').style.borderColor='var(--cinnabar)';$('#nbBirth').focus();return;}
     const today=new Date();
     const nowMi=today.getFullYear()*12+today.getMonth();
-    /* 새 문서로 생성 — 기존 해도는 문서 목록에 그대로 남는다 */
+    /* 새 문서로 생성 — 기존 문서는 목록에 그대로 남는다 */
     const id=newDocId();
     REG.docs.push({id,name});REG.current=id;curDocId=id;
     DATA={
@@ -3147,7 +3148,7 @@ $('#erDelete').onclick=()=>{
   DATA.eras.splice(i,1); afterMutate(); fillEraForm(null);
 };
 
-/* --- 수심 폼 --- */
+/* --- 행복도 폼 --- */
 function fillHapForm(h){
   $('#hpSelect').value=h?String(DATA.happiness.indexOf(h)):'-1';
   $('#hpDate').value=h?.date||''; $('#hpVal').value=h?.v??'';
@@ -3156,7 +3157,7 @@ function fillHapForm(h){
 $('#hpSelect').onchange=()=>{const i=+$('#hpSelect').value; fillHapForm(i>=0?DATA.happiness[i]:null);};
 $('#hpSave').onclick=()=>{
   const date=$('#hpDate').value, v=parseFloat($('#hpVal').value);
-  if(!date||isNaN(v)){alert('날짜와 수심값은 필수다.');return;}
+  if(!date||isNaN(v)){alert('날짜와 행복도 값은 필수다.');return;}
   const i=+$('#hpSelect').value;
   const h=i>=0?DATA.happiness[i]:{};
   h.date=date; h.v=Math.min(1,Math.max(-1,v)); h.future=$('#hpFuture').checked||undefined;
@@ -3168,7 +3169,7 @@ $('#hpDelete').onclick=()=>{
   DATA.happiness.splice(i,1); afterMutate(); fillHapForm(null);
 };
 
-/* --- 항로 폼 --- */
+/* --- 경로 폼 --- */
 function fillTripForm(t){
   $('#trSelect').value=t?String(DATA.trips.indexOf(t)):'-1';
   $('#trTitle').value=t?.title||''; $('#trColor').value=t?.color||'#B5432A';
@@ -3180,7 +3181,7 @@ $('#trSelect').onchange=()=>{const i=+$('#trSelect').value; fillTripForm(i>=0?DA
 $('#trSave').onclick=async()=>{
   const title=$('#trTitle').value.trim();
   const lines=$('#trPoints').value.split('\n').map(l=>l.trim()).filter(Boolean);
-  if(!title||lines.length<2){alert('이름과 기항지 2곳 이상이 필요하다.');return;}
+  if(!title||lines.length<2){alert('이름과 장소 2곳 이상이 필요하다.');return;}
   const i=+$('#trSelect').value;
   const t=i>=0?DATA.trips[i]:{id:'trip'+Date.now()};
   const oldPts=t.points||[];
@@ -3355,7 +3356,7 @@ function selectTrip(id){
   }
   const prog=L.polyline([latlngs[0]],{color:t.color,weight:3,opacity:.9,dashArray:t.dashed?'8 8':null}).addTo(map);
   tripLayers.push(prog);
-  shipMarker=L.marker(latlngs[0],{icon:L.divIcon({className:'',html:'<div class="ship-marker">⛵</div>',iconSize:[20,20],iconAnchor:[10,10]}),zIndexOffset:1000}).addTo(map);
+  shipMarker=L.marker(latlngs[0],{icon:L.divIcon({className:'',html:'<div class="ship-marker"></div>',iconSize:[15,15],iconAnchor:[7,7]}),zIndexOffset:1000}).addTo(map);
   const dists=[0];
   for(let i=1;i<latlngs.length;i++)dists.push(dists[i-1]+map.distance(latlngs[i-1],latlngs[i]));
   const total=dists[dists.length-1];

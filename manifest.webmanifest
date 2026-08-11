@@ -1,7 +1,7 @@
 {
-  "name": "인생 해도 — Life Sounding Chart",
-  "short_name": "인생 해도",
-  "description": "시간·기간·깊이를 한 장의 측량도로 기록하는 인생 연표 에디터",
+  "name": "인생 연표",
+  "short_name": "인생 연표",
+  "description": "행복도 곡선 위에 사건·기간·시대를 기록하는 개인 연표 편집기",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
