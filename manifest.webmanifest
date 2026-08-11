@@ -1,0 +1,15 @@
+{
+  "name": "인생 해도 — Life Sounding Chart",
+  "short_name": "인생 해도",
+  "description": "시간·기간·깊이를 한 장의 측량도로 기록하는 인생 연표 에디터",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#E9EDE6",
+  "theme_color": "#E9EDE6",
+  "lang": "ko",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

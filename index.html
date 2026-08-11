@@ -6,6 +6,10 @@
 <meta name="description" content="인생 해도(海圖) — 시간·기간·깊이를 한 장의 측량도로 기록하는 개인 연표 에디터">
 <meta name="theme-color" content="#E9EDE6">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚓</text></svg>">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>인생 해도 — Life Sounding Chart</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -243,11 +247,20 @@
     #map{height:400px}
     .ctrl-hint{display:none}
     .detail .dt-date{min-width:0}
+    /* 터치 타깃 최소 크기 + 모바일 여백 */
+    .ctrl-btn,.file-btn,.mini-btn,.pe-btn,.trip-btn{min-height:38px;padding-top:8px;padding-bottom:8px}
+    #docSel{max-width:120px}
+    .pop-ed{width:min(320px,92vw)}
+    .hover-card{max-width:min(300px,88vw)}
+    .scrub-track{height:30px}
+    .scrub-play{width:38px;height:32px}
+  }
+  @media (hover:none){ /* 터치 기기: 호버 툴팁 대신 카드 사용 */
+    .tl-tip{display:none}
   }
 </style>
 </head>
 <body>
-<!--SHARE_INJECT-->
 
 <noscript><div style="max-width:1180px;margin:24px auto;padding:16px 24px;border:1px solid #B5432A;color:#B5432A;font-size:14px">
 이 해도는 JavaScript로 그려진다. 브라우저에서 JavaScript를 허용해야 연표·지도가 표시된다.
@@ -622,7 +635,6 @@ const GATE_KEY='caeyeon_life_gate';
   inp.addEventListener('keydown',e=>{if(e.key==='Enter')tryGo();});
   requestAnimationFrame(()=>inp.focus());
 })();
-const PAGE_SRC='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
 if(RO)document.documentElement.classList.add('view-only');
 
 /* ==========================================================================
@@ -717,6 +729,7 @@ function updateSaveState(){
   if(typeof CLOUD!=='undefined'&&CLOUD){
     if(cloudState==='sync'){s.textContent='☁ 동기화 중…';s.classList.remove('warn');}
     else if(cloudState==='auth'){s.textContent='🔐 로그인 필요 — ☁ DB에서 로그인';s.classList.add('warn');}
+    else if(cloudState==='conflict'){s.textContent='⚠ 업로드 보류 — 다른 기기 수정본 있음 (새로고침 권장)';s.classList.add('warn');}
     else if(cloudState==='err'){s.textContent='⚠ 동기화 실패 — 로컬엔 저장됨';s.classList.add('warn');}
     else{s.textContent='☁ 온라인 DB 동기화됨'+(CLOUD.session?' · '+CLOUD.session.email:'');s.classList.remove('warn');}
     return;
@@ -907,8 +920,7 @@ function prepare(){
   NLANES=Math.max(laneEnds.length,1);
 
   /* 통합 캔버스 — 맨 위: 시간축 / 기간 막대 / 행복 곡선(사건 주석) / 기록 밀도 */
-  const EV_LVLS=3;
-  const L={ERA_LABEL_Y:22, EV_LVLS};
+  const L={ERA_LABEL_Y:22};
   L.AXIS_Y=64;                             /* 시간축 — 맨 위 (시대 라벨 아래) */
   L.SPAN_TOP=L.AXIS_Y+14; L.SPAN_H=26; L.SPAN_GAP=9;
   const spanBot=L.SPAN_TOP+NLANES*(L.SPAN_H+L.SPAN_GAP)-L.SPAN_GAP;
@@ -950,16 +962,6 @@ const svgXY=e=>{const r=svg.getBoundingClientRect();return{x:e.clientX-r.left,y:
 let W=1000;
 const X=t=>(t-dom[0])/(dom[1]-dom[0])*W;
 const Xinv=px=>dom[0]+px/W*(dom[1]-dom[0]);
-function hapAt(t){ /* 곡선 보간 — 수심 없는 사건의 위치 */
-  const a=HAPPTS;
-  if(!a.length)return 0;
-  if(t<=a[0].t)return a[0].v;
-  for(let i=1;i<a.length;i++)if(a[i].t>=t){
-    const p=a[i-1],q=a[i];
-    return p.v+(q.v-p.v)*((t-p.t)/((q.t-p.t)||1));
-  }
-  return a[a.length-1].v;
-}
 function smoothPath(p){
   /* 단조 3차 보간 (Fritsch–Carlson) — x 역행·오버슈트 없이 완만하게.
      기존 Catmull-Rom은 점 간격이 불균등하면 뒤로 꺾이거나 급락 과장이 생겼다 */
@@ -1115,7 +1117,7 @@ function render(){
     });
     rg.addEventListener('pointerover',e=>{
       const d=e.target.dataset;
-      if(d&&d.m)showTip(+d.tx,+d.ty,`<span class="yy">${d.m}</span> · 기록 <span class="hh">${d.n}</span>편`);
+      if(d&&d.m)showTip(+d.tx,+d.ty,`<span class="yy">${esc(d.m)}</span> · 기록 <span class="hh">${esc(d.n)}</span>편`);
     });
     rg.addEventListener('pointerout',hideTip);
     svg.appendChild(rg);
@@ -1217,12 +1219,10 @@ function render(){
     };
     g.addEventListener('pointerup',endDrag);
     g.addEventListener('pointercancel',endDrag);
-    g.addEventListener('mouseenter',()=>{ /* 스냅샷 설명 카드 */
-      if(drag)return;
-      const rc=svg.getBoundingClientRect();
-      showCard(e,rc.left+x,rc.top+y);
-    });
+    const showEvCard=()=>{const rc=svg.getBoundingClientRect();showCard(e,rc.left+x,rc.top+y);};
+    g.addEventListener('mouseenter',()=>{if(!drag)showEvCard();}); /* 스냅샷 설명 카드 */
     g.addEventListener('mouseleave',()=>{if(!drag)hideCard();});
+    g.addEventListener('pointerdown',ev=>{if(ev.pointerType!=='mouse')showEvCard();}); /* 터치: 누르는 순간 카드 */
     const pickEv=()=>{
       selected=(selected===e)?null:e;
       render();renderDetail();
@@ -1329,7 +1329,7 @@ function render(){
     g.appendChild(dot);
     const getV=()=>isEv?pt.src.happiness:pt.src.v;
     const setV=v=>{if(isEv)pt.src.happiness=v;else pt.src.v=v;};
-    const tipHtml=v=>`<span class="yy">${pt.date}</span> · 수심 <span class="hh">${v.toFixed(1)}</span>`+(isEv?` · ${esc(pt.src.title)}`:'');
+    const tipHtml=v=>`<span class="yy">${esc(pt.date)}</span> · 수심 <span class="hh">${v.toFixed(1)}</span>`+(isEv?` · ${esc(pt.src.title)}`:'');
     let drag=null;
     g.addEventListener('pointerdown',ev=>{ /* 자유 드래그: 상하 = 값, 좌우 = 시기 */
       if(RO)return;
@@ -1406,11 +1406,10 @@ function showTip(x,y,html){
 function hideTip(){tip.style.opacity=0;}
 
 function attachInteract(g,item,posFn){
-  g.addEventListener('mouseenter',()=>{ /* 스냅샷 설명 카드 */
-    const p=posFn(),rc=svg.getBoundingClientRect();
-    showCard(item,rc.left+p.x,rc.top+p.y);
-  });
+  const showItemCard=()=>{const p=posFn(),rc=svg.getBoundingClientRect();showCard(item,rc.left+p.x,rc.top+p.y);};
+  g.addEventListener('mouseenter',showItemCard); /* 스냅샷 설명 카드 */
   g.addEventListener('mouseleave',hideCard);
+  g.addEventListener('pointerdown',ev=>{if(ev.pointerType!=='mouse')showItemCard();}); /* 터치 */
   const pick=e=>{
     if(moved)return; e.stopPropagation();
     selected=(selected===item)?null:item;
@@ -2207,10 +2206,27 @@ async function cloudPush(docId){
     if(!data)data=docId===curDocId?DATA:null;
     if(!data){setCloudState('ok');return;}
     if(isPristineSample(data)){setCloudState('ok');return;} /* 미편집 샘플은 업로드 생략 */
-    const row={id:docId,name:(reg&&reg.name)||'해도',data,updated_at:(reg&&reg.updated)||new Date().toISOString()};
+    /* 충돌 감지 — 원격이 내가 마지막으로 본 것보다 새로우면 덮어쓰기 전 확인 */
+    const seen=reg&&reg.syncedAt;
+    if(seen){
+      const chk=await cloudFetch(cloudBase()+'?id=eq.'+encodeURIComponent(docId)+'&select=updated_at',()=>({headers:cloudHeaders()}));
+      if(chk.ok){
+        const rows=await chk.json();
+        const remote=rows[0]&&rows[0].updated_at;
+        if(remote&&remote>seen){
+          const t=new Date(remote).toLocaleString('ko-KR');
+          if(!confirm('⚠ 다른 기기에서 수정된 기록이 있다 ('+t+').\n\n[확인] 이 기기 내용으로 덮어쓰기\n[취소] 중단 — 새로고침하면 다른 기기 내용을 받아온다')){
+            setCloudState('conflict');return;
+          }
+        }
+      }
+    }
+    const stamp=(reg&&reg.updated)||new Date().toISOString();
+    const row={id:docId,name:(reg&&reg.name)||'해도',data,updated_at:stamp};
     if(CLOUD.session&&CLOUD.session.uid)row.user_id=CLOUD.session.uid; /* 저장 시 내 소유로 (기존 무소유 행도 자동 귀속) */
     const r=await cloudFetch(cloudBase(),()=>({method:'POST',headers:cloudHeaders(),body:JSON.stringify([row])}));
     if(!r.ok)throw new Error('HTTP '+r.status);
+    if(reg){reg.syncedAt=stamp;saveRegistry();} /* 내가 올린 시점 = 내가 아는 최신 */
     setCloudState('ok');
   }catch(e){setCloudState(CLOUD&&!CLOUD.session&&cloudState==='auth'?'auth':'err');}
 }
@@ -2243,11 +2259,11 @@ async function cloudPullAll(autoSwitch){
       if(!row||!row.id||!row.data)return;
       const local=REG.docs.find(d=>d.id===row.id);
       if(!local){ /* 클라우드에만 있는 문서 → 로컬로 */
-        REG.docs.push({id:row.id,name:row.name||'해도',updated:row.updated_at});
+        REG.docs.push({id:row.id,name:row.name||'해도',updated:row.updated_at,syncedAt:row.updated_at});
         try{localStorage.setItem(DOC_PREFIX+row.id,JSON.stringify(row.data));}catch(e){}
         changed=true;
       }else if(row.updated_at&&row.updated_at>(local.updated||'')){ /* 더 최신이면 당겨오기 */
-        local.name=row.name||local.name;local.updated=row.updated_at;
+        local.name=row.name||local.name;local.updated=row.updated_at;local.syncedAt=row.updated_at;
         try{localStorage.setItem(DOC_PREFIX+row.id,JSON.stringify(row.data));}catch(e){}
         if(row.id===curDocId){
           DATA=migrateScale(row.data);
@@ -2384,11 +2400,51 @@ if(!RO){
 })();
 
 /* --- 다중 문서: 전환·삭제·셀렉트 --- */
+function docStat(id){ /* 문서 규모·최종 수정 — 중복 문서 구분용 */
+  let d=null;
+  try{d=id===curDocId?DATA:JSON.parse(localStorage.getItem(DOC_PREFIX+id));}catch(e){}
+  if(!d)return{n:0,when:''};
+  const reg=REG.docs.find(x=>x.id===id);
+  return{n:(d.events||[]).length+(d.spans||[]).length,
+    when:reg&&reg.updated?reg.updated.slice(2,10).replace(/-/g,'.'):''};
+}
 function refreshDocSel(){
   const sel=document.getElementById('docSel');
   if(!sel||RO||!REG)return;
-  sel.innerHTML=REG.docs.map(d=>`<option value="${d.id}"${d.id===curDocId?' selected':''}>${esc(d.name)}</option>`).join('')
-    +'<option disabled>────</option><option value="__del">🗑 이 문서 삭제…</option>';
+  const dupes=new Set(); const seen=new Set();
+  REG.docs.forEach(d=>{if(seen.has(d.name))dupes.add(d.name);seen.add(d.name);});
+  sel.innerHTML=REG.docs.map(d=>{
+    const s=docStat(d.id);
+    /* 같은 이름이 여럿이면 규모·날짜를 붙여 구분 가능하게 */
+    const label=d.name+(dupes.has(d.name)?` · ${s.n}건 · ${s.when}`:'');
+    return `<option value="${d.id}"${d.id===curDocId?' selected':''}>${esc(label)}</option>`;
+  }).join('')
+    +'<option disabled>────</option>'
+    +(dupes.size?'<option value="__dedupe">🧹 중복 문서 정리…</option>':'')
+    +'<option value="__del">🗑 이 문서 삭제…</option>';
+}
+function dedupeDocs(){ /* 같은 이름 문서 중 가장 큰(=풍부한) 것만 남기고 나머지 삭제 */
+  const byName={};
+  REG.docs.forEach(d=>{(byName[d.name]=byName[d.name]||[]).push(d);});
+  const groups=Object.entries(byName).filter(([,v])=>v.length>1);
+  if(!groups.length){alert('중복 문서가 없다.');return;}
+  const plan=groups.map(([name,list])=>{
+    const scored=list.map(d=>({d,s:docStat(d.id)}))
+      .sort((a,b)=>b.s.n-a.s.n||(b.d.updated||'').localeCompare(a.d.updated||''));
+    return{name,keep:scored[0],drop:scored.slice(1)};
+  });
+  const msg=plan.map(p=>`「${p.name}」 유지: ${p.keep.s.n}건(${p.keep.s.when})  ·  삭제: `
+    +p.drop.map(x=>`${x.s.n}건(${x.s.when})`).join(', ')).join('\n');
+  if(!confirm('중복 문서를 정리한다 — 각 이름에서 가장 기록이 많은 것만 남긴다.\n\n'+msg+'\n\n계속?'))return;
+  plan.forEach(p=>p.drop.forEach(x=>{
+    cloudDelete(x.d.id);
+    try{localStorage.removeItem(DOC_PREFIX+x.d.id);}catch(e){}
+    REG.docs=REG.docs.filter(r=>r.id!==x.d.id);
+    if(x.d.id===curDocId)curDocId=null;
+  }));
+  saveRegistry();
+  if(!curDocId)switchDoc(REG.docs[0].id);else refreshDocSel();
+  alert('✓ 정리 완료 — 문서 '+REG.docs.length+'개');
 }
 function switchDoc(id){
   if(id===curDocId)return;
@@ -2414,6 +2470,7 @@ if(!RO){
   document.getElementById('docSel').onchange=e=>{
     const v=e.target.value;
     if(v==='__del'){refreshDocSel();deleteCurrentDoc();}
+    else if(v==='__dedupe'){refreshDocSel();dedupeDocs();}
     else switchDoc(v);
   };
 }
@@ -2820,6 +2877,11 @@ function selectTrip(id){
    초기화
    ========================================================================== */
 prepare(); render(); renderDetail(); refreshAllSelects(); rebuildMapBase(); rebuildTripBar(); rebuildScrubber(); updateSaveState(); refreshDocSel(); reportIssues();
+
+/* PWA — 홈 화면 설치 + 오프라인 (file://에서는 건너뜀) */
+if('serviceWorker' in navigator&&location.protocol.startsWith('http')){
+  addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
 if(!RO&&CLOUD)cloudPullAll(); /* 온라인 DB에서 최신 문서 당겨오기 */
 fillEventForm(null); fillSpanForm(null); fillEraForm(null); fillHapForm(null); fillTripForm(null);
 </script>
