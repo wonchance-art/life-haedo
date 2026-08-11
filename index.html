@@ -109,6 +109,17 @@
     max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .search-empty{padding:18px;font-size:13px;color:var(--ink-soft);text-align:center}
 
+  /* 레이어 칩 + 포커스 디밍 — 지정한 그래프만 선명, 나머지는 흐릿 */
+  .layer-bar{display:flex;gap:6px;align-items:center;margin:8px 0 6px;flex-wrap:wrap}
+  .lay-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border:1px solid var(--line);
+    background:transparent;font-family:'Gowun Batang',serif;font-size:12px;color:var(--ink);
+    cursor:pointer;border-radius:999px;opacity:.62;transition:opacity .15s,border-color .15s}
+  .lay-chip:hover{opacity:.9}
+  .lay-chip.on{opacity:1;border-color:var(--ink);font-weight:700}
+  .lay-chip .swz{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+  .lay-hint{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);margin-left:4px}
+  #tl .c-main,#tl [data-hap],#tl .c-lay{transition:opacity .25s ease}
+  #tl:not([data-focus="main"]) .c-main,#tl:not([data-focus="main"]) [data-hap]{opacity:.13;pointer-events:none}
   .canvas-frame{border:1px solid var(--ink);background:var(--panel);padding:8px;position:relative}
   .canvas-inner{border:1px solid var(--line);position:relative;overflow:hidden}
   #tl{display:block;width:100%;touch-action:pan-y;cursor:grab;user-select:none}
@@ -307,6 +318,8 @@
         <span class="save-state" id="saveState"></span>
         <span class="ctrl-hint">⌘/Ctrl+휠 = 확대 · 드래그/←→ = 이동 · 더블클릭 = 그 자리에 추가 · 우클릭 = 메뉴</span>
       </div>
+
+      <div class="layer-bar" id="layerBar" aria-label="그래프 레이어 선택"></div>
 
       <div class="canvas-frame">
         <div class="canvas-inner">
@@ -641,9 +654,30 @@ if(RO)document.documentElement.classList.add('view-only');
    기본 데이터 (최초 실행 시에만 사용 — 이후엔 브라우저 저장본/JSON이 우선)
    ⚠ (예시) 표기 항목은 편집 화면에서 실제 기록으로 교체하세요.
    ========================================================================== */
+/* 분야 레이어 기본형 — 종합(幸福) 아래에 겹쳐 그리는 보조 그래프 */
+const DEFAULT_LAYERS=[
+  {id:'study',  name:'학습', color:'#3E6FA3', pts:[]},
+  {id:'travel', name:'여행', color:'#3F8A5F', pts:[]},
+  {id:'reading',name:'독서', color:'#7C5FA8', pts:[]},
+  {id:'people', name:'사람', color:'#B5536B', pts:[]},
+];
 const DEFAULT_DATA = {
   profile:{ name:"나의 해도", birth:"1995-01" },
   scale:"signed1",
+  layers:[
+    {id:'study',  name:'학습', color:'#3E6FA3', pts:[
+      {date:'2005-06',v:0.5},{date:'2013-01',v:0.7},{date:'2016-03',v:0.3},{date:'2020-06',v:0.5},{date:'2024-01',v:0.2}]},
+    {id:'travel', name:'여행', color:'#3F8A5F', pts:[
+      {date:'2014-07',v:0.2},{date:'2017-08',v:0.9},{date:'2019-01',v:0.1},{date:'2023-07',v:0.5}]},
+    {id:'reading',name:'독서', color:'#7C5FA8', pts:[
+      {date:'2010-01',v:0.3},{date:'2015-06',v:0.6},{date:'2019-11',v:0.8},{date:'2024-01',v:0.4}]},
+    {id:'people', name:'사람', color:'#B5536B', pts:[
+      {date:'2001-03',v:0.4},{date:'2014-03',v:0.7},{date:'2019-11',v:-0.5},{date:'2022-01',v:0.3}]},
+  ],
+  thoughts:[
+    {date:'2017-08',text:'(예시) 낯선 거리에서야 비로소 내 속도를 알았다.'},
+    {date:'2019-11',text:'(예시) 길을 잃은 게 아니라, 지도가 끝난 것이었다.'},
+  ],
   eras:[
     { title:"제1장 · 학창",  start:"1995-01", end:"2014-03", color:"#2E5E63" },
     { title:"제2장 · 모색",  start:"2014-03", end:"2020-01", color:"#A87F3D" },
@@ -792,8 +826,19 @@ function sanitize(d){
   const [happiness,badHap]=keep(d.happiness,h=>fix(h,'date','수심 측점')&&typeof h.v==='number'&&isFinite(h.v));
   const [records,badRec]=keep(d.records,r=>validMonth(r.m)&&typeof r.n==='number');
 
+  /* 분야 레이어 + 생각(당시 문장) — 구버전 문서엔 없으므로 기본형 주입 */
+  if(!Array.isArray(d.layers)||!d.layers.length)d.layers=structuredClone(DEFAULT_LAYERS);
+  let badLay=[];
+  d.layers.forEach(l=>{
+    l.pts=Array.isArray(l.pts)?l.pts:[];
+    const [ok,bad]=keep(l.pts,p=>fix(p,'date','레이어 「'+(l.name||l.id)+'」 측점')&&typeof p.v==='number'&&isFinite(p.v));
+    l.pts=ok;badLay=badLay.concat(bad);
+  });
+  const [thoughts,badTh]=keep(d.thoughts,th=>fix(th,'date','생각')&&typeof th.text==='string'&&th.text.trim());
+  d.thoughts=thoughts;
+
   d.eras=eras;d.events=events;d.spans=spans;d.happiness=happiness;d.records=records;
-  const dropped=[...badEras,...badEvents,...badSpans,...badHap,...badRec];
+  const dropped=[...badEras,...badEvents,...badSpans,...badHap,...badRec,...badLay,...badTh];
   if(dropped.length){ /* 격리 — 데이터는 보존하되 렌더에서 제외 */
     d._quarantine=[...(d._quarantine||[]),...dropped];
   }
@@ -877,6 +922,7 @@ const el=(t,a)=>{const n=document.createElementNS(NS,t);for(const k in a)n.setAt
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const textW=s=>[...String(s)].reduce((w,c)=>w+(c.charCodeAt(0)>255?13:7.2),0);
 let NOW, selected=null, dom=null, FULL, BOUND;
+let focusLayer='main', focusEra=null; /* 레이어 포커스 + 시기 스포트라이트 */
 
 /* ==========================================================================
    전처리 + 레이아웃
@@ -892,6 +938,10 @@ function prepare(){
   DATA.happiness.sort((a,b)=>a.t-b.t);
   DATA.records=DATA.records||[];
   DATA.records.forEach(r=>r.t=T(r.m));
+  (DATA.layers||[]).forEach(l=>{l.pts.forEach(p=>p.t=T(p.date));l.pts.sort((a,b)=>a.t-b.t);});
+  DATA.thoughts=DATA.thoughts||[];
+  DATA.thoughts.forEach(th=>th.t=T(th.date));
+  DATA.thoughts.sort((a,b)=>a.t-b.t);
 
   /* 수심 곡선 = 월 단위 통합 — 같은 달의 사건·측점 여러 개는 평균 한 점으로 (수직 꺾임 방지).
      개별 점은 각자 값 높이에 그대로 그려지고, 곡선은 그 평균을 지나간다 */
@@ -930,7 +980,8 @@ function prepare(){
   LAYOUT=L;
 
   const allT=[...DATA.events.map(e=>e.t),...DATA.spans.flatMap(s=>[s.t0,s.t1??NOW+0.5]),
-              ...DATA.happiness.map(h=>h.t),...DATA.eras.flatMap(e=>[T(e.start),T(e.end)])];
+              ...DATA.happiness.map(h=>h.t),...DATA.eras.flatMap(e=>[T(e.start),T(e.end)]),
+              ...(DATA.layers||[]).flatMap(l=>l.pts.map(p=>p.t)),...DATA.thoughts.map(th=>th.t)];
   const mn=allT.length?Math.min(...allT):NOW-10, mx=allT.length?Math.max(...allT):NOW+2;
   FULL=[mn-1.2,mx+1.5]; BOUND=[mn-4,mx+5];
   if(!dom) dom=[NOW-3,NOW+2]; /* 기본 뷰 = 現在 중심 5년 (전체는 '전체 보기'·0 키) */
@@ -993,6 +1044,8 @@ function render(){
   hideTip();
   if(typeof hideCard==='function')hideCard();
   const L=LAYOUT;
+  if(focusEra&&!DATA.eras.includes(focusEra))focusEra=null; /* undo 등으로 사라진 시대 */
+  svg.dataset.focus=focusLayer;
   W=svg.clientWidth||1000;
   svg.setAttribute('viewBox',`0 0 ${W} ${L.H}`);
   svg.setAttribute('height',L.H);
@@ -1017,14 +1070,15 @@ function render(){
     /* 상단 띠 = 시대 클릭 존 (클릭하면 바로 수정) */
     const zx1=Math.max(x1,0),zx2=Math.min(x2,W);
     if(zx2-zx1>6){
-      const gz=el('g',{cursor:'pointer',tabindex:0,role:'button','aria-label':`시대 ${er.title} — 클릭해서 수정`});
+      const gz=el('g',{cursor:'pointer',tabindex:0,role:'button','aria-label':`시대 ${er.title} — 클릭 = 이 시기 보기, 다시 클릭 = 수정`});
       gz.appendChild(el('rect',{x:zx1,y:0,width:zx2-zx1,height:30,fill:'transparent'}));
       gz.addEventListener('mouseenter',()=>showTip((zx1+zx2)/2,26,
-        `<span class="yy">${esc(er.start.replace('-','.'))} – ${esc(er.end.replace('-','.'))}</span> · ${esc(er.title)} · 클릭 = 수정`));
+        `<span class="yy">${esc(er.start.replace('-','.'))} – ${esc(er.end.replace('-','.'))}</span> · ${esc(er.title)} · ${focusEra===er?'재클릭 = 수정':'클릭 = 이 시기만'}`));
       gz.addEventListener('mouseleave',hideTip);
       gz.addEventListener('click',e=>{
         if(moved)return;e.stopPropagation();hideTip();
-        openPopEra(er,e.clientX,e.clientY);
+        if(focusEra!==er){focusEra=er;render();} /* 1차 클릭 = 스포트라이트, 재클릭 = 수정 */
+        else openPopEra(er,e.clientX,e.clientY);
       });
       gz.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();
         const b=gz.getBoundingClientRect();openPopEra(er,b.left+40,b.top+20);}});
@@ -1125,6 +1179,67 @@ function render(){
     rl.textContent='記錄 밀도 — NOTES/MONTH (max '+maxN+')';svg.appendChild(rl);
   }
 
+  /* 분야 레이어 — 학습·여행·독서·사람. 종합(main) 상태에선 은은한 배경,
+     칩으로 포커스하면 그 레이어만 선명 + 편집 가능 (측점 드래그·클릭 수정) */
+  (DATA.layers||[]).forEach(lay=>{
+    const pts=lay.pts.filter(p=>isFinite(p.t)).map(p=>({x:X(p.t),y:HY(p.v),p}));
+    const foc=focusLayer===lay.id;
+    const gl=el('g',{class:'c-lay','data-lay':lay.id,
+      opacity:focusLayer==='main'?.34:(foc?1:.07)});
+    if(!foc)gl.setAttribute('pointer-events','none');
+    if(pts.length>1)gl.appendChild(el('path',{d:smoothPath(pts),fill:'none',stroke:lay.color,
+      'stroke-width':foc?2.4:1.5,'stroke-linecap':'round',opacity:foc?.95:.8}));
+    pts.forEach(q=>{
+      if(q.x<-20||q.x>W+20)return;
+      const gd=el('g',{cursor:foc?'ns-resize':'default'});
+      gd.appendChild(el('circle',{cx:q.x,cy:q.y,r:9,fill:'transparent'}));
+      const dot=el('circle',{cx:q.x,cy:q.y,r:foc?4.2:2.6,fill:lay.color,stroke:'#F2F4EE','stroke-width':foc?1.6:0});
+      gd.appendChild(dot);
+      if(foc&&!RO){
+        const p=q.p;
+        let drag=null;
+        gd.addEventListener('pointerdown',ev=>{
+          ev.stopPropagation();
+          try{gd.setPointerCapture(ev.pointerId);}catch(_){}
+          const c=svgXY(ev);
+          drag={x0:c.x,y0:c.y,v0:p.v,mi0:miOf(p.date),mi:miOf(p.date),did:false};
+        });
+        gd.addEventListener('pointermove',ev=>{
+          if(!drag)return;
+          const c=svgXY(ev);
+          if(Math.abs(c.y-drag.y0)>3||Math.abs(c.x-drag.x0)>3)drag.did=true;
+          if(!drag.did)return;
+          drag.mi=drag.mi0+Math.round((Xinv(c.x)-Xinv(drag.x0))*12);
+          const nv=Math.round(Math.max(-1,Math.min(1,drag.v0-(c.y-drag.y0)/(L.HAP_BOT-L.HAP_TOP)*2))*10)/10;
+          p.v=nv;
+          dot.setAttribute('cx',X(drag.mi/12));dot.setAttribute('cy',HY(nv));
+          showTip(X(drag.mi/12),HY(nv),`<span class="yy">${miToMonth(drag.mi)}</span> · ${esc(lay.name)} <span class="hh">${(nv>0?'+':'')+nv.toFixed(1)}</span>`);
+        });
+        const endDrag=()=>{
+          if(!drag)return;
+          const d=drag;drag=null;
+          if(d.did){moved=true;setTimeout(()=>moved=false,0);hideTip();p.date=miToMonth(d.mi);afterMutate(true);}
+        };
+        gd.addEventListener('pointerup',endDrag);
+        gd.addEventListener('pointercancel',endDrag);
+        gd.addEventListener('mouseenter',()=>{if(!drag)showTip(q.x,q.y,`<span class="yy">${esc(p.date)}</span> · ${esc(lay.name)} <span class="hh">${(p.v>0?'+':'')+p.v.toFixed(1)}</span>`);});
+        gd.addEventListener('mouseleave',()=>{if(!drag)hideTip();});
+        gd.addEventListener('click',ev=>{
+          if(moved)return;ev.stopPropagation();
+          openPopLayerPt(lay,p,ev.clientX,ev.clientY);
+        });
+        gd.addEventListener('contextmenu',ev=>{
+          ev.preventDefault();ev.stopPropagation();
+          openCtx(ev.clientX,ev.clientY,[
+            ['✕ 측점 삭제','danger',()=>{const i=lay.pts.indexOf(p);if(i>=0){lay.pts.splice(i,1);afterMutate(true);}}],
+          ]);
+        });
+      }
+      gl.appendChild(gd);
+    });
+    svg.appendChild(gl);
+  });
+
   const hp=HAPPTS.map(pt=>({x:X(pt.t),y:HY(pt.v),pt}));
   const fi=hp.findIndex(p=>p.pt.future);
   const past=fi===-1?hp:hp.slice(0,fi), fut=fi===-1?[]:hp.slice(Math.max(fi-1,0));
@@ -1143,12 +1258,12 @@ function render(){
     defs.appendChild(gp);defs.appendChild(gn);defs.appendChild(cp);defs.appendChild(cn);
     svg.appendChild(defs);
     const dArea=smoothPath(past)+` L ${past[past.length-1].x} ${z} L ${past[0].x} ${z} Z`;
-    svg.appendChild(el('path',{d:dArea,fill:'url(#wgp)','clip-path':'url(#cpPos)'}));
-    svg.appendChild(el('path',{d:dArea,fill:'url(#wgn)','clip-path':'url(#cpNeg)'}));
-    svg.appendChild(el('path',{d:smoothPath(past),fill:'none',stroke:'#1E4348','stroke-width':2.2,'stroke-linecap':'round',opacity:.85}));
+    svg.appendChild(el('path',{d:dArea,fill:'url(#wgp)','clip-path':'url(#cpPos)',class:'c-main'}));
+    svg.appendChild(el('path',{d:dArea,fill:'url(#wgn)','clip-path':'url(#cpNeg)',class:'c-main'}));
+    svg.appendChild(el('path',{d:smoothPath(past),fill:'none',stroke:'#1E4348','stroke-width':2.2,'stroke-linecap':'round',opacity:.85,class:'c-main'}));
   }
   if(fut.length>1)
-    svg.appendChild(el('path',{d:smoothPath(fut),fill:'none',stroke:'#7A8A80','stroke-width':1.8,'stroke-dasharray':'6 6',opacity:.85}));
+    svg.appendChild(el('path',{d:smoothPath(fut),fill:'none',stroke:'#7A8A80','stroke-width':1.8,'stroke-dasharray':'6 6',opacity:.85,class:'c-main'}));
 
   /* 사건 — 곡선 위 점 + 점 옆 라벨 (머리 위 여백을 비워 높이가 읽히게) */
   let evLabelEnd=-1e9;
@@ -1160,7 +1275,7 @@ function render(){
     const col=e.future?'#7A8A80':'#B5432A';
     const sel=selected===e;
     const ly=v>=0.45?y+17:y-9; /* 천장 근처 점은 라벨을 아래로 */
-    const g=el('g',{cursor:'pointer',tabindex:0,role:'button','aria-label':`${e.date} ${e.title}`});
+    const g=el('g',{cursor:'pointer',tabindex:0,role:'button',class:'c-main','aria-label':`${e.date} ${e.title}`});
     g.appendChild(el('circle',{cx:x,cy:y,r:12,fill:'transparent'}));
     const dot=el('circle',{cx:x,cy:y,r:sel?6:4.5,fill:'#F2F4EE',stroke:col,'stroke-width':2.2,opacity:hasV?1:.55});
     g.appendChild(dot);
@@ -1255,7 +1370,7 @@ function render(){
     if(x2<-60||x1>W+60)return;
     const y=L.SPAN_TOP+s.lane*(L.SPAN_H+L.SPAN_GAP);
     const sel=selected===s;
-    const g=el('g',{cursor:'grab',tabindex:0,role:'button','aria-label':`${s.start}부터 ${s.end||'진행 중'} ${s.title}`});
+    const g=el('g',{cursor:'grab',tabindex:0,role:'button',class:'c-main','aria-label':`${s.start}부터 ${s.end||'진행 중'} ${s.title}`});
     const rf=el('rect',{x:x1,y:y,width:Math.max(x2-x1,3),height:L.SPAN_H,rx:2,fill:s.color||'#2E5E63',opacity:sel?.32:.16});
     const ro=el('rect',{x:x1,y:y,width:Math.max(x2-x1,3),height:L.SPAN_H,rx:2,fill:'none',stroke:s.color||'#2E5E63','stroke-width':sel?2:1.3,'stroke-dasharray':s.future?'5 4':''});
     g.appendChild(rf);g.appendChild(ro);
@@ -1393,7 +1508,77 @@ function render(){
     });
     svg.appendChild(g);
   });
+  /* 생각(당시 쓴 글 속 문장) — 곡선 위 ❝ 표식. 호버 = 문장, 클릭 = 수정 */
+  DATA.thoughts.forEach(th=>{
+    const x=X(th.t);if(x<-20||x>W+20)return;
+    const y=HY(hapVAt(th.t))-16;
+    const gt=el('g',{cursor:'pointer',class:'c-main','data-th':'1'});
+    gt.appendChild(el('circle',{cx:x,cy:y,r:10,fill:'transparent'}));
+    const q=el('text',{x:x,y:y+5,'text-anchor':'middle','font-size':15,fill:'#A87F3D','font-family':'Gowun Batang','font-weight':700,opacity:.9});
+    q.textContent='❝';gt.appendChild(q);
+    const short=th.text.length>90?th.text.slice(0,90)+'…':th.text;
+    gt.addEventListener('mouseenter',()=>showTip(x,y,`<span class="yy">${esc(th.date)}</span> · ${esc(short)}`));
+    gt.addEventListener('mouseleave',hideTip);
+    gt.addEventListener('pointerdown',ev=>{if(ev.pointerType!=='mouse')showTip(x,y,`<span class="yy">${esc(th.date)}</span> · ${esc(short)}`);});
+    gt.addEventListener('click',ev=>{
+      if(moved||RO)return;ev.stopPropagation();hideTip();
+      openPopThought(th,ev.clientX,ev.clientY);
+    });
+    gt.addEventListener('contextmenu',ev=>{
+      ev.preventDefault();ev.stopPropagation();
+      openCtx(ev.clientX,ev.clientY,[
+        ['✕ 생각 삭제','danger',()=>{const i=DATA.thoughts.indexOf(th);if(i>=0){DATA.thoughts.splice(i,1);afterMutate(true);}}],
+      ]);
+    });
+    svg.appendChild(gt);
+  });
+
+  /* 시기 스포트라이트 — 시대 1차 클릭: 그 기간 밖을 덮어 흐리게 */
+  if(focusEra){
+    const fx1=X(T(focusEra.start)),fx2=X(T(focusEra.end));
+    const dimRect=(a,b)=>{
+      if(b-a<0.5)return;
+      const r=el('rect',{x:a,y:0,width:b-a,height:L.H,opacity:.78,'pointer-events':'none'});
+      r.style.fill='var(--panel)';svg.appendChild(r);
+    };
+    dimRect(-1,Math.min(Math.max(fx1,-1),W+1));
+    dimRect(Math.max(Math.min(fx2,W+1),-1),W+1);
+  }
+
+  renderLayerBar();
   updateScrubber();
+}
+
+/* 곡선 보간 — 임의 시점의 수심 (생각 마커 위치용) */
+function hapVAt(t){
+  const a=HAPPTS;
+  if(!a.length)return 0;
+  if(t<=a[0].t)return a[0].v;
+  for(let i=1;i<a.length;i++)if(a[i].t>=t){
+    const p=a[i-1],q=a[i];
+    return p.v+(q.v-p.v)*((t-p.t)/((q.t-p.t)||1));
+  }
+  return a[a.length-1].v;
+}
+
+/* 레이어 칩 — 종합(main) + 분야. 클릭 = 그 그래프만 선명하게 */
+function renderLayerBar(){
+  const bar=document.getElementById('layerBar');if(!bar)return;
+  bar.innerHTML='';
+  const mk=(id,name,color)=>{
+    const b=document.createElement('button');
+    b.className='lay-chip'+(focusLayer===id?' on':'');
+    b.innerHTML=`<span class="swz" style="background:${color}"></span>${esc(name)}`;
+    b.onclick=()=>{focusLayer=(focusLayer===id?'main':id);render();};
+    bar.appendChild(b);
+  };
+  mk('main','幸福 종합','#1E4348');
+  (DATA.layers||[]).forEach(l=>mk(l.id,l.name,l.color));
+  const h=document.createElement('span');h.className='lay-hint';
+  h.textContent=focusLayer==='main'
+    ?'칩 = 그 그래프만 선명 · 시대 클릭 = 그 시기만'
+    :'빈 곳 빠른 두 번 클릭 = 측점 추가 · 점 드래그 = 조정 · Esc = 종합';
+  bar.appendChild(h);
 }
 
 function showTip(x,y,html){
@@ -1713,6 +1898,52 @@ function openPopHap(h,ax,ay){
   placePop(ax,ay);
   requestAnimationFrame(()=>q('[data-f="v"]').focus());
 }
+function openPopLayerPt(lay,p,ax,ay){
+  if(RO)return;
+  popAnchor={x:ax,y:ay};
+  popEd.innerHTML=`
+    <div class="pe-row" style="justify-content:space-between">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft)">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${lay.color};margin-right:5px"></span>${esc(lay.name)} 측점</span>
+    </div>
+    <div class="pe-row">
+      <input type="month" class="dt-edit pe-month" data-f="date" value="${p.date}" aria-label="날짜">
+      <input type="number" class="dt-edit pe-num" data-f="v" min="-1" max="1" step="0.1" value="${p.v}" aria-label="깊이">
+    </div>
+    <div class="pe-actions"><button class="pe-btn danger" data-a="del">✕ 측점 삭제</button></div>`;
+  const q=s=>popEd.querySelector(s);
+  q('[data-f="date"]').onchange=e=>{if(e.target.value){p.date=e.target.value;popCommit();}else e.target.value=p.date;};
+  q('[data-f="v"]').onchange=e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){p.v=Math.min(1,Math.max(-1,v));popCommit();}else e.target.value=p.v;};
+  q('[data-a="del"]').onclick=()=>{
+    closePop();
+    const i=lay.pts.indexOf(p);
+    if(i>=0){lay.pts.splice(i,1);afterMutate(true);}
+  };
+  placePop(ax,ay);
+  requestAnimationFrame(()=>q('[data-f="v"]').focus());
+}
+function openPopThought(th,ax,ay){
+  if(RO)return;
+  popAnchor={x:ax,y:ay};
+  popEd.innerHTML=`
+    <div class="pe-row" style="justify-content:space-between">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft)">❝ 당시의 문장</span>
+      <input type="month" class="dt-edit pe-month" data-f="date" value="${th.date}" aria-label="날짜">
+    </div>
+    <textarea class="dt-edit" data-f="text" rows="3" style="width:100%;resize:vertical"
+      placeholder="그때 쓴 글에서 한 문장">${esc(th.text)}</textarea>
+    <div class="pe-actions"><button class="pe-btn danger" data-a="del">✕ 생각 삭제</button></div>`;
+  const q=s=>popEd.querySelector(s);
+  q('[data-f="date"]').onchange=e=>{if(e.target.value){th.date=e.target.value;popCommit();}else e.target.value=th.date;};
+  q('[data-f="text"]').onchange=e=>{th.text=e.target.value.trim();if(th.text)popCommit();};
+  q('[data-a="del"]').onclick=()=>{
+    closePop();
+    const i=DATA.thoughts.indexOf(th);
+    if(i>=0){DATA.thoughts.splice(i,1);afterMutate(true);}
+  };
+  placePop(ax,ay);
+  requestAnimationFrame(()=>q('[data-f="text"]').focus());
+}
 function openPopEra(er,ax,ay){
   if(RO)return;
   popAnchor={x:ax,y:ay};
@@ -1905,7 +2136,23 @@ let moved=false;
       return;
     }
     lastEmptyClick={t:now,x:p.x,y:p.y};
+    if(focusEra){focusEra=null;render();}
     if(selected){selected=null;render();renderDetail();}
+  });
+  svg.addEventListener('contextmenu',e=>{ /* 빈 곳 우클릭 = 생각 남기기 */
+    if(RO)return;
+    if(e.target.closest('g[role="button"],g[data-hap],g[data-th],.c-lay'))return;
+    e.preventDefault();
+    const p=svgXY(e), t=Xinv(p.x);
+    if(t<BOUND[0]||t>BOUND[1])return;
+    const date=tToMonth(t), cx=e.clientX, cy=e.clientY;
+    openCtx(cx,cy,[
+      ['❝ 이 자리에 생각 남기기','',()=>{
+        const th={date,text:''};
+        DATA.thoughts.push(th);afterMutate(true);
+        openPopThought(th,cx,cy);
+      }],
+    ]);
   });
   function addAt(x,y,cx,cy){ /* 더블클릭 추가: 위 = 기간, 아래 = 사건(곡선 높이 = 행복) */
     if(RO)return;
@@ -1913,6 +2160,16 @@ let moved=false;
     if(t<BOUND[0]||t>BOUND[1])return;
     const date=tToMonth(t);
     if(y<LAYOUT.AXIS_Y)return; /* 상단 시대·축 라벨 구역은 추가 없음 */
+    if(focusLayer!=='main'){ /* 레이어 포커스 중엔 그 레이어의 측점 추가 */
+      const lay=(DATA.layers||[]).find(l=>l.id===focusLayer);
+      if(lay){
+        const v=Math.round(Math.max(-1,Math.min(1,(LAYOUT.HAP_BOT-y)/(LAYOUT.HAP_BOT-LAYOUT.HAP_TOP)*2-1))*10)/10;
+        const p={date,v};
+        lay.pts.push(p);afterMutate(true);
+        openPopLayerPt(lay,p,cx,cy);
+      }
+      return;
+    }
     if(y<LAYOUT.HAP_TOP){ /* 막대 구역 → 새 기간 */
       const sp={start:date,end:tToMonth(t+1),title:'새 기간',color:'#2E5E63'};
       DATA.spans.push(sp);selected=sp;afterMutate(true);
@@ -2101,7 +2358,14 @@ searchInput.addEventListener('keydown',e=>{
 searchBd.addEventListener('mousedown',e=>{if(e.target===searchBd)closeSearch();});
 document.addEventListener('keydown',e=>{
   if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='f'){e.preventDefault();openSearch();}
-  else if(e.key==='Escape'){if(!searchBd.hidden)closeSearch();closeCtx();closePop();document.getElementById('newBd').hidden=true;document.getElementById('cloudBd').hidden=true;}
+  else if(e.key==='Escape'){
+    const wasOpen=!searchBd.hidden||!ctxMenu.hidden||!popEd.hidden
+      ||!document.getElementById('newBd').hidden||!document.getElementById('cloudBd').hidden;
+    if(!searchBd.hidden)closeSearch();closeCtx();closePop();
+    document.getElementById('newBd').hidden=true;document.getElementById('cloudBd').hidden=true;
+    /* 열린 창이 없었으면 Esc = 포커스 해제 (레이어 → 종합, 시기 스포트라이트 끔) */
+    if(!wasOpen&&(focusEra||focusLayer!=='main')){focusEra=null;focusLayer='main';render();}
+  }
   else if((e.key==='Delete'||e.key==='Backspace')&&selected&&!RO
     &&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)&&!e.target.isContentEditable){
     e.preventDefault();deleteItem(selected); /* 노션식: Delete = 선택 항목 삭제 */
