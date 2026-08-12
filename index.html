@@ -1056,7 +1056,8 @@ function render(){
   /* 글자 자리 잡기 — 이미 놓인 글자·표식·곡선을 피해 가장 자연스러운 자리를 고른다.
      후보를 가까운 순서로 훑어 첫 빈자리에 놓고, 멀리 놓일 땐 가는 실선으로 이어 준다 */
   const occ=[];
-  const reserve=(x1,y1,x2,y2)=>occ.push({x1,y1,x2,y2});
+  const lbTasks=[]; /* 어닐링 다듬기 대상 (사건·묶음 라벨) */
+  const reserve=(x1,y1,x2,y2,lb)=>occ.push({x1,y1,x2,y2,lb});
   const free=(x1,y1,x2,y2)=>!occ.some(o=>x1<o.x2&&o.x1<x2&&y1<o.y2&&o.y1<y2);
   const textBox=(x,y,w,anchor,fs)=>{
     const x1=anchor==='end'?x-w:(anchor==='middle'?x-w/2:x);
@@ -1090,16 +1091,20 @@ function render(){
       }
       if(hit)break;
     }
-    if(!hit)return false;
+    const task={g,label,ax,ay,w,fs,fill:o.fill||'#23312B',weight:o.weight||400,t:null,ln:null,b:null};
+    lbTasks.push(task);
+    if(!hit)return false; /* 그리디 실패 — 어닐링이 자리를 찾아볼 수 있게 작업은 남긴다 */
     if(Math.abs(hit.dy)>=24){ /* 멀리 놓인 글자는 표식과 실선으로 잇는다 */
       const ly=hit.dy<0?hit.b.y2+1:hit.b.y1-1;
-      g.appendChild(el('line',{x1:ax,y1:ay+(hit.dy<0?-6:6),x2:hit.tx+(hit.anchor==='end'?-4:(hit.anchor==='middle'?0:4)),y2:ly,
-        stroke:'#8D9A91','stroke-width':.7,opacity:.55}));
+      task.ln=el('line',{x1:ax,y1:ay+(hit.dy<0?-6:6),x2:hit.tx+(hit.anchor==='end'?-4:(hit.anchor==='middle'?0:4)),y2:ly,
+        stroke:'#8D9A91','stroke-width':.7,opacity:.55});
+      g.appendChild(task.ln);
     }
     const t=el('text',{x:hit.tx,y:hit.ty,'font-size':fs,fill:o.fill||'#23312B','font-weight':o.weight||400});
     if(hit.anchor!=='start')t.setAttribute('text-anchor',hit.anchor);
     t.textContent=label;g.appendChild(t);
-    reserve(hit.b.x1,hit.b.y1,hit.b.x2,hit.b.y2);
+    reserve(hit.b.x1,hit.b.y1,hit.b.x2,hit.b.y2,true);
+    task.t=t;task.b={...hit.b};
     return true;
   };
 
@@ -1737,7 +1742,113 @@ function render(){
   }
 
   renderLayerBar();
+  LB_SNAP={tasks:lbTasks,obst:occ.filter(o=>!o.lb),W,L,
+    hapY:t=>HY(hapVAt(t)),
+    key:[Math.round(dom[0]*24),Math.round(dom[1]*24),W,lbTasks.length].join('|')};
+  scheduleLabelPolish();
   updateScrubber();
+}
+
+/* ==========================================================================
+   라벨 다듬기 — 시뮬레이티드 어닐링.
+   렌더 중에는 그리디로 즉시 놓고, 조작이 멈추면 이 패스가 전체 라벨을 동시에
+   재배치한다. 에너지 함수·냉각 구조는 D3-Labeler(Evan Wang, MIT)를 이 캔버스에
+   맞게 재구성한 것 — 겹침 면적·리더선 길이·방향 선호·곡선 횡단을 함께 최소화.
+   난수는 화면 상태로 시드를 고정해 같은 화면이면 항상 같은 결과가 나온다.
+   ========================================================================== */
+let LB_SNAP=null, LB_TIMER=0, LB_LASTKEY='';
+function scheduleLabelPolish(){
+  clearTimeout(LB_TIMER);
+  LB_TIMER=setTimeout(()=>{if(LB_SNAP&&LB_SNAP.key!==LB_LASTKEY)polishLabels();},120);
+}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function polishLabels(){
+  const S=LB_SNAP;if(!S)return;
+  LB_LASTKEY=S.key;
+  const L=S.L, W=S.W;
+  const tasks=S.tasks.filter(k=>k.ax>-20&&k.ax<W+20);
+  const n=tasks.length;
+  if(!n)return;
+  /* 곡선 y를 4px 격자로 미리 계산 — 에너지 평가를 싸게 */
+  const grid=[];
+  for(let px=0;px<=W;px+=4)grid.push(S.hapY(Xinv(px)));
+  const curveAt=px=>grid[Math.max(0,Math.min(grid.length-1,Math.round(px/4)))];
+  const XMIN=2,XMAX=W-34,YMIN=L.AXIS_Y+6,YMAX=L.H-4;
+  const boxH=fs=>fs*1.16;
+  /* 상태 = 각 라벨 박스의 좌상단. 그리디 결과(있으면)에서 출발 */
+  const st=tasks.map(k=>{
+    if(k.b)return{x:k.b.x1,y:k.b.y1};
+    return{x:Math.min(XMAX-(k.w+6),Math.max(XMIN,k.ax+9)),y:Math.max(YMIN,k.ay-10-k.fs*.86)};
+  });
+  const bw=tasks.map(k=>k.w+6), bh=tasks.map(k=>boxH(k.fs));
+  const ov=(ax1,ay1,ax2,ay2,bx1,by1,bx2,by2)=>{
+    const w=Math.min(ax2,bx2)-Math.max(ax1,bx1), h=Math.min(ay2,by2)-Math.max(ay1,by1);
+    return w>0&&h>0?w*h:0;
+  };
+  const energy=i=>{
+    const k=tasks[i],x=st[i].x,y=st[i].y,x2=x+bw[i],y2=y+bh[i];
+    const cx=(x+x2)/2, cy=(y+y2)/2;
+    let e=0;
+    const dist=Math.hypot(cx-k.ax,cy-k.ay);
+    e+=.09*Math.max(0,dist-15);                       /* 리더선 길이 */
+    if(x>k.ax+4)e+=0;else if(x2<k.ax-4)e+=1.4;else e+=2.2; /* 오른쪽 선호, 표식 위 걸침 벌점 */
+    for(let j=0;j<n;j++)if(j!==i)e+=1.3*ov(x,y,x2,y2,st[j].x,st[j].y,st[j].x+bw[j],st[j].y+bh[j]);
+    for(const o of S.obst)e+=1.3*ov(x,y,x2,y2,o.x1,o.y1,o.x2,o.y2);
+    const base=y+bh[i]*.74; /* 대략 글자 기준선 */
+    if(Math.abs(curveAt(x)-base)<8||Math.abs(curveAt(cx)-base)<8||Math.abs(curveAt(x2)-base)<8)e+=7; /* 곡선 횡단 */
+    return e;
+  };
+  const seed=[...S.key].reduce((a,c)=>(a*33+c.charCodeAt(0))>>>0,5381);
+  const rng=mulberry32(seed);
+  const MOVES=Math.min(6000,Math.max(1600,230*n));
+  let T=1;
+  const cool=1/MOVES;
+  for(let m=0;m<MOVES;m++){
+    const i=(rng()*n)|0, k=tasks[i];
+    const ox=st[i].x, oy=st[i].y;
+    const e0=energy(i);
+    if(rng()<.16){ /* 가끔 표식 주변 후보 자리로 점프 — 국소 최적 탈출 */
+      const CJ=[[9,-22],[9,6],[-9-bw[i],-22],[-9-bw[i],6],[-bw[i]/2,-34],[-bw[i]/2,18],[12,-36],[12,20]];
+      const c=CJ[(rng()*CJ.length)|0];
+      st[i].x=k.ax+c[0];st[i].y=k.ay+c[1];
+    }else{
+      const step=5+26*T;
+      st[i].x+=(rng()-.5)*2*step;
+      st[i].y+=(rng()-.5)*2*step;
+    }
+    if(st[i].x<XMIN)st[i].x=XMIN; if(st[i].x+bw[i]>XMAX)st[i].x=XMAX-bw[i];
+    if(st[i].y<YMIN)st[i].y=YMIN; if(st[i].y+bh[i]>YMAX)st[i].y=YMAX-bh[i];
+    const dE=energy(i)-e0;
+    if(!(dE<0||rng()<Math.exp(-dE/(T*6)))){st[i].x=ox;st[i].y=oy;}
+    T-=cool;
+  }
+  /* 결과 반영 — 아직도 세게 겹치는 라벨은 없는 편이 낫다 */
+  tasks.forEach((k,i)=>{
+    const x=st[i].x,y=st[i].y,x2=x+bw[i],y2=y+bh[i];
+    let worst=0;
+    for(let j=0;j<n;j++)if(j!==i)worst=Math.max(worst,ov(x,y,x2,y2,st[j].x,st[j].y,st[j].x+bw[j],st[j].y+bh[j]));
+    for(const o of S.obst)worst=Math.max(worst,ov(x,y,x2,y2,o.x1,o.y1,o.x2,o.y2));
+    if(k.ln){k.ln.remove();k.ln=null;}
+    if(worst>26){ /* 유의미한 겹침 잔존 → 숨김 */
+      if(k.t){k.t.remove();k.t=null;}
+      return;
+    }
+    if(!k.t){
+      k.t=el('text',{'font-size':k.fs,fill:k.fill,'font-weight':k.weight});
+      k.t.textContent=k.label;k.g.appendChild(k.t);
+    }
+    k.t.removeAttribute('text-anchor');
+    k.t.setAttribute('x',x+3);
+    k.t.setAttribute('y',y+k.fs*.86);
+    const cx=(x+x2)/2, cy=(y+y2)/2;
+    if(Math.hypot(cx-k.ax,cy-k.ay)>30){ /* 멀어진 라벨은 실선으로 연결 */
+      const ex=k.ax<x?x-2:(k.ax>x2?x2+2:k.ax);
+      const ey=k.ay<y?y-1:(k.ay>y2?y2+1:(y+y2)/2);
+      k.ln=el('line',{x1:k.ax,y1:k.ay+(k.ay<y?6:(k.ay>y2?-6:0)),x2:ex,y2:ey,
+        stroke:'#8D9A91','stroke-width':.7,opacity:.55});
+      k.g.insertBefore(k.ln,k.t);
+    }
+  });
 }
 
 /* 곡선 보간 — 임의 시점의 행복도 (생각 표식 위치용) */
