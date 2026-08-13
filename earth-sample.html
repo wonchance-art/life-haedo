@@ -26,6 +26,7 @@
     --star:oklch(88% 0.08 85);          /* 별 — 사람 */
     --cloud:oklch(74% 0.045 340);       /* 놀에 물든 구름 — 학업 */
     --bloom:oklch(80% 0.09 15);         /* 산 위의 꽃 */
+    --seed:oklch(80% 0.07 85);          /* 씨앗 — 학업 */
     --cream:oklch(94% 0.015 90);        /* 밝은 라벨 */
     --cream-soft:oklch(94% 0.015 90 / .62);
   }
@@ -55,9 +56,9 @@
   </div>
   <div class="legend">
     <span><b>분류가 층을 정한다</b></span>
-    <span>✦ <b>별</b> = 사람 (맨 위)</span><span>☁ <b>구름</b> = 학업</span>
-    <span>❀ <b>꽃</b> = 좋은 일 (산 위)</span><span>● <b>돌</b> = 힘든 일 (호수 속)</span>
-    <span>〜 <b>밤바다</b> = 월별 글</span><span>☀ 해 = 오늘 · ☾ 달·별 공존</span>
+    <span>✦ <b>별</b> = 사람 (맨 위)</span><span>⦿ <b>씨앗</b> = 학업 (꽃 아래 땅속)</span>
+    <span>❀ <b>꽃</b> = 좋은 일 (산 위)</span><span>◌ <b>물결</b> = 힘든 일 (호수에 가라앉은 자리)</span>
+    <span>☁ = 생각</span><span>〜 <b>밤바다</b> = 월별 글</span><span>☀ 해 = 오늘 · ☾ 달·별 공존</span>
   </div>
   <svg id="c" aria-label="지구 연표 황혼 샘플"></svg>
   <div class="cap" id="cap"></div>
@@ -97,8 +98,16 @@ const T0=1994.2,T1=2028.8;
 let W=1200;
 const H=470, SKY_T=46, ZERO=258, LAKE_B=356, SEA_T=392, SEA_B=452;
 const X=t=>(t-T0)/(T1-T0)*W;
-const VAL_TOP=SKY_T+126; /* +1 상한 — 분류 띠 아래 */
+const VAL_TOP=SKY_T+62; /* +1 상한 — 별 띠 아래 */
 const yOf=v=>v>=0? ZERO - v*(ZERO-VAL_TOP) : ZERO + (-v)*(LAKE_B-ZERO);
+const hapAt=t=>{ /* 곡선 값 보간 — 씨앗을 지표 바로 아래 심기 위해 */
+  if(t<=HAP[0][0])return HAP[0][1];
+  for(let i=1;i<HAP.length;i++)if(HAP[i][0]>=t){
+    const a=HAP[i-1],b=HAP[i];
+    return a[1]+(b[1]-a[1])*((t-a[0])/(b[0]-a[0]||1));
+  }
+  return HAP[HAP.length-1][1];
+};
 
 function smooth(p){
   if(p.length<3)return 'M '+p.map(q=>q[0]+' '+q[1]).join(' L ');
@@ -149,8 +158,8 @@ function render(){
   mtn.appendChild(el('stop',{offset:'0%','stop-color':'var(--mtn)','stop-opacity':.92}));
   mtn.appendChild(el('stop',{offset:'100%','stop-color':'var(--mtn)','stop-opacity':scene?1:.96}));
   const lake=el('linearGradient',{id:'lake',x1:0,x2:0,gradientUnits:'userSpaceOnUse',y1:ZERO,y2:LAKE_B});
-  lake.appendChild(el('stop',{offset:'0%','stop-color':'var(--lake)','stop-opacity':.85}));
-  lake.appendChild(el('stop',{offset:'100%','stop-color':'var(--lake-deep)','stop-opacity':.95}));
+  lake.appendChild(el('stop',{offset:'0%','stop-color':'var(--lake)','stop-opacity':.95}));
+  lake.appendChild(el('stop',{offset:'100%','stop-color':'var(--lake-deep)','stop-opacity':1}));
   const seaG=el('linearGradient',{id:'seaG',x1:0,x2:0,gradientUnits:'userSpaceOnUse',y1:SEA_T,y2:SEA_B});
   seaG.appendChild(el('stop',{offset:'0%','stop-color':'var(--sea)','stop-opacity':.55}));
   seaG.appendChild(el('stop',{offset:'100%','stop-color':'var(--sea)','stop-opacity':.95}));
@@ -194,8 +203,7 @@ function render(){
 
   /* 분류 띠 */
   const BAND_STAR={top:SKY_T+4,bot:SKY_T+40};
-  const BAND_CLOUD={top:SKY_T+52,bot:SKY_T+94};
-  [['사람',BAND_STAR],['학업',BAND_CLOUD]].forEach(([nm,b])=>{
+  [['사람',BAND_STAR]].forEach(([nm,b])=>{
     const t=el('text',{x:8,y:(b.top+b.bot)/2+3,'font-size':10,fill:'var(--cream-soft)',
       'font-family':'ui-monospace,monospace','letter-spacing':'.18em'});
     t.textContent=nm;svg.appendChild(t);
@@ -220,8 +228,10 @@ function render(){
     'stroke-linecap':'round','clip-path':'url(#up)',opacity:.95}));
   svg.appendChild(el('path',{d:area,fill:'url(#lake)','clip-path':'url(#dn)'}));
   svg.appendChild(el('line',{x1:0,x2:W,y1:ZERO,y2:ZERO,stroke:'var(--sky-glow)',opacity:.75,'stroke-width':1.1}));
+  svg.appendChild(el('path',{d:smooth(past.map(p=>[p[0],Math.min(p[1]+12,LAKE_B)])),
+    fill:'none',stroke:'var(--cream)','stroke-width':.55,opacity:.18,'clip-path':'url(#dn)'}));
   if(scene){
-    [14,30].forEach(dy=>svg.appendChild(el('path',{d:smooth(past.map(p=>[p[0],Math.min(p[1]+dy,LAKE_B)])),
+    [24,38].forEach(dy=>svg.appendChild(el('path',{d:smooth(past.map(p=>[p[0],Math.min(p[1]+dy,LAKE_B)])),
       fill:'none',stroke:'var(--cream)','stroke-width':.5,opacity:.12,'clip-path':'url(#dn)'})));
     const mx=W*.16;
     svg.appendChild(el('ellipse',{cx:mx,cy:ZERO+22,rx:9,ry:2.2,fill:'var(--moon)',opacity:.22,'clip-path':'url(#dn)'}));
@@ -238,10 +248,11 @@ function render(){
   const seaLb=el('text',{x:10,y:SEA_B-8,'font-size':10,fill:'var(--cream-soft)','font-family':'ui-monospace,monospace'});
   seaLb.textContent='월별 글';svg.appendChild(seaLb);
 
-  /* 생각 — ❝ 크림 문장 */
+  /* 생각 — 작은 구름에 매달린 문장 */
   THOUGHTS.forEach(([t,txt],i)=>{
-    const x=X(t), y=BAND_CLOUD.bot+26+(i%2)*15;
-    const q=el('text',{x:x,y:y,'text-anchor':'middle','font-size':10.5,fill:'var(--cream-soft)'});
+    const x=X(t), y=SKY_T+58+(i%2)*16;
+    svg.appendChild(cloudShape(x,y,7.5,'var(--cloud)',.8));
+    const q=el('text',{x:x,y:y+18,'text-anchor':'middle','font-size':10.5,fill:'var(--cream-soft)'});
     q.textContent='❝ '+txt.slice(0,10)+'…';svg.appendChild(q);
   });
 
@@ -249,17 +260,25 @@ function render(){
   const inBand=(b,v)=>b.bot-((v+1)/2)*(b.bot-b.top);
   EVENTS.forEach(([t,v,cat,name])=>{
     const x=X(t), cy=yOf(v);
-    if(cat==='people'||cat==='study'){
-      const b=cat==='people'?BAND_STAR:BAND_CLOUD;
-      const y=inBand(b,v);
-      svg.appendChild(el('line',{x1:x,y1:y+(cat==='people'?9:11),x2:x,y2:cy-4,
+    if(cat==='people'){ /* 별 — 맨 위 띠 */
+      const y=inBand(BAND_STAR,v);
+      svg.appendChild(el('line',{x1:x,y1:y+9,x2:x,y2:cy-4,
         stroke:'var(--cream)','stroke-width':.5,'stroke-dasharray':'2 6',opacity:.25}));
       svg.appendChild(el('circle',{cx:x,cy:cy,r:1.7,fill:'var(--cream)',opacity:.5}));
-      if(cat==='people'){
-        svg.appendChild(star(x,y,scene?9:8,'var(--star)'));
-        if(scene)svg.appendChild(el('circle',{cx:x,cy:y,r:12,fill:'var(--star)',opacity:.12}));
-      }else svg.appendChild(cloudShape(x,y,scene?9:8,'var(--cloud)',.95));
-      const lt=el('text',{x:x,y:y+(cat==='people'?21:25),'text-anchor':'middle','font-size':10.5,fill:'var(--cream)'});
+      svg.appendChild(star(x,y,scene?9:8,'var(--star)'));
+      if(scene)svg.appendChild(el('circle',{cx:x,cy:y,r:12,fill:'var(--star)',opacity:.12}));
+      const lt=el('text',{x:x,y:y+21,'text-anchor':'middle','font-size':10.5,fill:'var(--cream)'});
+      lt.textContent=name;svg.appendChild(lt);
+      return;
+    }
+    if(cat==='study'){ /* 씨앗 — 꽃 아래 땅속 (지표를 따라 심김) */
+      const sy=yOf(hapAt(t))+16;
+      const g=el('g',{});
+      g.appendChild(el('ellipse',{cx:x,cy:sy,rx:3.4,ry:4.6,fill:'var(--seed)',stroke:'var(--sky-glow)','stroke-width':.8,opacity:.98}));
+      g.appendChild(el('path',{d:`M ${x} ${sy-4.6} Q ${x+1.6} ${sy} ${x} ${sy+4.6}`,
+        stroke:'var(--sky-glow)','stroke-width':.7,fill:'none',opacity:.6}));
+      svg.appendChild(g);
+      const lt=el('text',{x:x,y:sy+17,'text-anchor':'middle','font-size':10.5,fill:'var(--cream-soft)'});
       lt.textContent=name;svg.appendChild(lt);
       return;
     }
@@ -267,10 +286,12 @@ function render(){
       svg.appendChild(flower(x,cy,scene?5.4:4.8,'var(--bloom)'));
       const lt=el('text',{x:x,y:cy-13,'text-anchor':'middle','font-size':11,fill:'var(--cream)'});
       lt.textContent=name;svg.appendChild(lt);
-    }else{ /* 호수에 잠긴 돌 */
-      svg.appendChild(el('ellipse',{cx:x,cy:cy,rx:5.4,ry:4,fill:'var(--sky-top)',opacity:.85}));
-      svg.appendChild(el('ellipse',{cx:x-1.3,cy:cy-1.1,rx:1.5,ry:1,fill:'var(--cream)',opacity:.4}));
-      const lt=el('text',{x:x,y:cy+18,'text-anchor':'middle','font-size':11,fill:'var(--cream-soft)'});
+    }else{ /* 힘든 일 — 수면의 파문 + 가라앉은 깊이 */
+      svg.appendChild(el('ellipse',{cx:x,cy:ZERO+2,rx:7,ry:2.1,fill:'none',stroke:'var(--cream)','stroke-width':.9,opacity:.55}));
+      svg.appendChild(el('ellipse',{cx:x,cy:ZERO+2,rx:13,ry:3.6,fill:'none',stroke:'var(--cream)','stroke-width':.55,opacity:.28}));
+      svg.appendChild(el('line',{x1:x,y1:ZERO+6,x2:x,y2:cy-3,stroke:'var(--cream)','stroke-width':.5,'stroke-dasharray':'2 5',opacity:.3}));
+      svg.appendChild(el('circle',{cx:x,cy:cy,r:1.8,fill:'var(--cream)',opacity:.65}));
+      const lt=el('text',{x:x,y:cy+15,'text-anchor':'middle','font-size':11,fill:'var(--cream-soft)'});
       lt.textContent=name;svg.appendChild(lt);
     }
   });
@@ -278,7 +299,7 @@ function render(){
   document.getElementById('cap').textContent=
     scene
     ? 'b. 깊은 황혼 — 별이 짙어지고, 달빛이 호수에 비치고, 해기둥·잔물결·먼 능선이 진해진다.'
-    : 'a. 옅은 황혼 — 산맥(행복)·호수(마이너스)·놀 하늘. 해(오늘)와 달과 별이 같은 하늘에 있다.';
+    : 'a. 옅은 황혼 — 산맥(행복)·호수(마이너스). 학업은 꽃 아래 땅속 씨앗, 힘든 일은 호수에 가라앉은 자리의 파문.';
 }
 document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{
   document.documentElement.dataset.mode=b.dataset.mode;
