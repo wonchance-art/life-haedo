@@ -314,6 +314,17 @@ html[data-theme=spring]{
 </style>
 </head>
 <body>
+<div class="corner corner-tl" aria-label="실행 취소">
+  <button class="btn btn-xs btn-square btn-ghost" id="btnUndo" title="되돌리기 (⌘/Ctrl+Z)" aria-label="되돌리기" disabled>↺</button>
+  <button class="btn btn-xs btn-square btn-ghost" id="btnRedo" title="다시 실행 (⌘/Ctrl+Shift+Z)" aria-label="다시 실행" disabled>↻</button>
+</div>
+<div class="corner corner-tr" aria-label="문서·동기화">
+  <span class="save-state" id="saveState"></span>
+  <select class="select select-xs select-ghost" id="docSel" title="문서 전환" aria-label="문서 선택"></select>
+  <button class="btn btn-xs btn-ghost" id="btnNew">＋ 새 문서</button>
+  <button class="btn btn-xs btn-ghost" id="btnCloud" title="온라인 DB 동기화 설정">☁ DB</button>
+  <button class="btn btn-xs btn-square btn-ghost" id="btnTheme" aria-label="밝은/어두운 테마 전환">◐</button>
+</div>
 
 <noscript><div style="max-width:1180px;margin:24px auto;padding:16px 24px;border:1px solid #B5432A;color:#B5432A;font-size:14px">
 이 페이지는 JavaScript로 그려진다. 브라우저에서 JavaScript를 허용해야 연표·지도가 표시된다.
@@ -344,19 +355,12 @@ html[data-theme=spring]{
       <div class="sec-head"><span class="sec-no">01</span><h2>연표</h2></div>
 
       <div class="tl-controls">
-        <button class="btn btn-sm btn-ghost" id="btnFit">전체 보기</button>
-        <button class="btn btn-sm btn-square" id="btnZoomOut" aria-label="축소">−</button>
-        <button class="btn btn-sm btn-square" id="btnZoomIn" aria-label="확대">＋</button>
-        <button class="btn btn-sm btn-square btn-ghost" id="btnUndo" title="되돌리기 (⌘/Ctrl+Z)" aria-label="되돌리기" disabled>↺</button>
-        <button class="btn btn-sm btn-square btn-ghost" id="btnRedo" title="다시 실행 (⌘/Ctrl+Shift+Z)" aria-label="다시 실행" disabled>↻</button>
-        <button class="btn btn-sm btn-ghost" id="btnNow">오늘로</button>
+        <button class="btn btn-sm btn-ghost" id="btnFit">All</button>
+        <button class="btn btn-sm btn-square btn-ghost" id="btnZoomOut" aria-label="축소">−</button>
+        <button class="btn btn-sm btn-square btn-ghost" id="btnZoomIn" aria-label="확대">＋</button>
+        <button class="btn btn-sm btn-ghost" id="btnNow">Today</button>
         <button class="btn btn-sm btn-ghost" id="btnSearch" title="검색 (⌘/Ctrl+F)">검색</button>
         <button class="btn btn-sm btn-soft btn-primary" id="btnEdit">기록 편집</button>
-        <select class="select select-sm select-ghost" id="docSel" title="문서 전환" aria-label="문서 선택"></select>
-        <button class="btn btn-sm btn-ghost" id="btnNew">＋ 새 문서</button>
-        <button class="btn btn-sm btn-ghost" id="btnCloud" title="온라인 DB 동기화 설정">☁ DB</button>
-        <button class="btn btn-sm btn-square btn-ghost" id="btnTheme" aria-label="밝은/어두운 테마 전환">◐</button>
-        <span class="save-state" id="saveState"></span>
       </div>
 
       <div class="layer-bar" id="layerBar" aria-label="그래프 레이어 선택"></div>
@@ -567,6 +571,16 @@ html[data-theme=spring]{
   .lay-chip.on{border-color:var(--line);background:var(--color-base-200);font-weight:600}
   footer{opacity:.6}
   .layer-bar{margin:14px 0 10px}
+  .corner{position:fixed;top:10px;z-index:700;display:flex;gap:3px;align-items:center;
+    opacity:.5;transition:opacity .2s}
+  .corner:hover,.corner:focus-within{opacity:1}
+  .corner-tl{left:12px}
+  .corner-tr{right:12px}
+  .corner .save-state{font-size:10px;margin-right:5px;max-width:220px;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .corner #docSel{max-width:120px}
+  @media (max-width:640px){.corner{top:6px}.corner-tl{left:6px}.corner-tr{right:6px}
+    .corner .save-state{display:none}}
 </style>
 
 <!-- 온라인 DB 설정 -->
