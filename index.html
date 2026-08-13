@@ -855,7 +855,7 @@ const el=(t,a)=>{const n=document.createElementNS(NS,t);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const textW=s=>[...String(s)].reduce((w,c)=>w+(c.charCodeAt(0)>255?13:7.2),0);
 let NOW, selected=null, dom=null, FULL, BOUND;
-let focusLayer='main', focusEra=null; /* 레이어 포커스 + 시기 스포트라이트 */
+let focusLayer='main'; /* 레이어 포커스 */
 const CH={g:null,line:null,dot:null,txt:null}; /* 크로스헤어 노드 (렌더마다 재생성) */
 
 /* ==========================================================================
@@ -973,7 +973,6 @@ function render(){
   hideTip();
   if(typeof hideCard==='function')hideCard();
   const L=LAYOUT;
-  if(focusEra&&!DATA.eras.includes(focusEra))focusEra=null; /* undo 등으로 사라진 시대 */
   svg.dataset.focus=focusLayer;
   W=svg.clientWidth||1000;
   svg.setAttribute('viewBox',`0 0 ${W} ${L.H}`);
@@ -1056,22 +1055,21 @@ function render(){
     /* 상단 띠 = 시대 클릭 존 (클릭하면 바로 수정) */
     const zx1=Math.max(x1,0),zx2=Math.min(x2,W);
     if(zx2-zx1>6){
-      const gz=el('g',{cursor:'pointer',tabindex:0,role:'button','aria-label':`시대 ${er.title} — 클릭 = 이 시기 보기, 다시 클릭 = 수정`});
+      const gz=el('g',{cursor:'pointer',tabindex:0,role:'button','aria-label':`시대 ${er.title} — 클릭해서 수정`});
       gz.appendChild(el('rect',{x:zx1,y:0,width:zx2-zx1,height:30,fill:'transparent'}));
       gz.addEventListener('mouseenter',()=>showTip((zx1+zx2)/2,26,
         `<span class="yy">${esc(er.start.replace('-','.'))} – ${esc(er.end.replace('-','.'))}</span> · ${esc(er.title)}`));
       gz.addEventListener('mouseleave',hideTip);
       gz.addEventListener('click',e=>{
         if(moved)return;e.stopPropagation();hideTip();
-        if(focusEra!==er){focusEra=er;render();} /* 1차 클릭 = 스포트라이트, 재클릭 = 수정 */
-        else openPopEra(er,e.clientX,e.clientY);
+        openPopEra(er,e.clientX,e.clientY);
       });
       gz.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();
         const b=gz.getBoundingClientRect();openPopEra(er,b.left+40,b.top+20);}});
       gz.addEventListener('contextmenu',e=>{
         e.preventDefault();e.stopPropagation();
         openCtx(e.clientX,e.clientY,[
-          ['✕ 시대 삭제','danger',()=>{
+          ['✕ 삭제','danger',()=>{
                     DATA.eras.splice(DATA.eras.indexOf(er),1);afterMutate(selected!=null);
           }],
         ]);
@@ -1654,23 +1652,11 @@ function render(){
     gt.addEventListener('contextmenu',ev=>{
       ev.preventDefault();ev.stopPropagation();
       openCtx(ev.clientX,ev.clientY,[
-        ['✕ 생각 삭제','danger',()=>{const i=DATA.thoughts.indexOf(th);if(i>=0){DATA.thoughts.splice(i,1);afterMutate(true);}}],
+        ['✕ 삭제','danger',()=>{const i=DATA.thoughts.indexOf(th);if(i>=0){DATA.thoughts.splice(i,1);afterMutate(true);}}],
       ]);
     });
     svg.appendChild(gt);
   });
-
-  /* 시기 스포트라이트 — 시대 1차 클릭: 그 기간 밖을 덮어 흐리게 */
-  if(focusEra){
-    const fx1=X(T(focusEra.start)),fx2=X(T(focusEra.end));
-    const dimRect=(a,b)=>{
-      if(b-a<0.5)return;
-      const r=el('rect',{x:a,y:0,width:b-a,height:L.H,opacity:.78,'pointer-events':'none'});
-      r.style.fill='var(--panel)';svg.appendChild(r);
-    };
-    dimRect(-1,Math.min(Math.max(fx1,-1),W+1));
-    dimRect(Math.max(Math.min(fx2,W+1),-1),W+1);
-  }
 
   /* 크로스헤어 — 마우스 위치의 시점·행복도 읽기 (주식 차트식) */
   CH.g=el('g',{'pointer-events':'none',opacity:0});
@@ -2122,7 +2108,7 @@ function openPopThought(th,ax,ay){
     </div>
     <textarea class="dt-edit" data-f="text" rows="3" style="width:100%;resize:vertical"
       placeholder="그때 쓴 글에서 한 문장">${esc(th.text)}</textarea>
-    <div class="pe-actions"><button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 생각 삭제</button></div>`;
+    <div class="pe-actions"><button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 삭제</button></div>`;
   const q=s=>popEd.querySelector(s);
   q('[data-f="date"]').onchange=e=>{if(e.target.value){th.date=e.target.value;popCommit();}else e.target.value=th.date;};
   q('[data-f="text"]').onchange=e=>{th.text=e.target.value.trim();if(th.text)popCommit();};
@@ -2147,7 +2133,7 @@ function openPopEra(er,ax,ay){
       <input type="month" class="dt-edit pe-month" data-f="end" value="${er.end}" aria-label="종료">
     </div>
     <div class="pe-row"><select class="dt-edit" data-f="color" aria-label="색">${SPAN_COLORS.map(c=>`<option value="${c[0]}"${er.color===c[0]?' selected':''}>${c[1]}</option>`).join('')}</select></div>
-    <div class="pe-actions"><button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 시대 삭제</button></div>`;
+    <div class="pe-actions"><button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 삭제</button></div>`;
   const q=s=>popEd.querySelector(s);
   q('.pe-title').onchange=e=>{const v=e.target.value.trim();if(v){er.title=v;commit();}else e.target.value=er.title;};
   q('.pe-title').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();e.target.blur();}};
@@ -2343,7 +2329,6 @@ let moved=false;
       return;
     }
     lastEmptyClick={t:now,x:p.x,y:p.y};
-    if(focusEra){focusEra=null;render();}
     if(selected){selected=null;render();renderDetail();}
   });
   const CHshow=e=>{
@@ -2372,6 +2357,16 @@ let moved=false;
     const p=svgXY(e), t=Xinv(p.x);
     if(t<BOUND[0]||t>BOUND[1])return;
     const date=tToMonth(t), cx=e.clientX, cy=e.clientY;
+    if(p.y<=30){ /* 시대 띠의 빈 구간 = 시대 추가 */
+      openCtx(cx,cy,[
+        ['＋ 시대 추가','',()=>{
+          const er={title:'새 시대',start:tToMonth(t-2),end:tToMonth(t+2),color:'#8A8577'};
+          DATA.eras.push(er);afterMutate(true);
+          openPopEra(er,cx,cy);
+        }],
+      ]);
+      return;
+    }
     openCtx(cx,cy,[
       ['❝ 이 자리에 생각 남기기','',()=>{
         const th={date,text:''};
@@ -2607,8 +2602,8 @@ document.addEventListener('keydown',e=>{
       ||!document.getElementById('newBd').hidden||!document.getElementById('cloudBd').hidden;
     if(!searchBd.hidden)closeSearch();closeCtx();closePop();
     document.getElementById('newBd').hidden=true;document.getElementById('cloudBd').hidden=true;
-    /* 열린 창이 없었으면 Esc = 포커스 해제 (레이어 → 종합, 시기 스포트라이트 끔) */
-    if(!wasOpen&&(focusEra||focusLayer!=='main')){focusEra=null;focusLayer='main';render();}
+    /* 열린 창이 없었으면 Esc = 레이어 포커스 해제 */
+    if(!wasOpen&&focusLayer!=='main'){focusLayer='main';render();}
   }
   else if((e.key==='Delete'||e.key==='Backspace')&&selected&&!RO
     &&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)&&!e.target.isContentEditable){
