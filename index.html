@@ -312,10 +312,14 @@ html[data-theme=spring]{
     <div class="wrap">
       <div class="sec-head"><h2>연표</h2></div>
 
-      <div class="tl-controls">
-        <button class="btn btn-sm btn-ghost" id="btnFit">All</button>
-        <button class="btn btn-sm btn-ghost" id="btnNow">Today</button>
-        <button class="btn btn-sm btn-ghost" id="btnSearch" title="검색 (⌘/Ctrl+F)">검색</button>
+      <div class="tl-controls" role="group" aria-label="기간 스케일">
+        <button class="lay-chip scale" data-y="all">All</button>
+        <button class="lay-chip scale" data-y="20">20Y</button>
+        <button class="lay-chip scale" data-y="10">10Y</button>
+        <button class="lay-chip scale" data-y="5">5Y</button>
+        <button class="lay-chip scale" data-y="1">1Y</button>
+        <span style="flex:1"></span>
+        <button class="lay-chip" id="btnSearch" title="검색 (⌘/Ctrl+F)">검색</button>
       </div>
 
       <div class="layer-bar" id="layerBar" aria-label="그래프 레이어 선택"></div>
@@ -384,17 +388,15 @@ html[data-theme=spring]{
   #mapWrap[open]>summary.sec-head::after{transform:rotate(180deg)}
   #mapWrap>.trip-bar{margin-top:18px}
   .tl-controls{gap:4px;margin-bottom:2px}
-  .corner{position:fixed;top:10px;z-index:700;display:flex;gap:3px;align-items:center;
-    opacity:.6;transition:opacity .2s;border-radius:999px;padding:3px 7px;
-    background:color-mix(in srgb,var(--paper) 84%,transparent);
-    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  .corner{position:absolute;top:14px;z-index:700;display:flex;gap:3px;align-items:center;
+    opacity:.65;transition:opacity .2s;border-radius:999px;padding:3px 7px}
   .corner:hover,.corner:focus-within{opacity:1}
-  .corner-tl{left:12px}
-  .corner-tr{right:12px}
+  .corner-tl{left:14px}
+  .corner-tr{right:22px} /* 브라우저 스크롤바 회피 */
   .corner .save-state{font-size:10px;margin-right:5px;max-width:220px;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap}
   .corner #docSel{max-width:120px}
-  @media (max-width:640px){.corner{top:6px}.corner-tl{left:6px}.corner-tr{right:6px}
+  @media (max-width:640px){.corner{top:8px}.corner-tl{left:8px}.corner-tr{right:12px}
     .corner .save-state{display:none}}
 </style>
 
@@ -852,6 +854,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const textW=s=>[...String(s)].reduce((w,c)=>w+(c.charCodeAt(0)>255?13:7.2),0);
 let NOW, selected=null, dom=null, FULL, BOUND;
 let focusLayer='main', focusEra=null; /* 레이어 포커스 + 시기 스포트라이트 */
+const CH={g:null,line:null,dot:null,txt:null}; /* 크로스헤어 노드 (렌더마다 재생성) */
 
 /* ==========================================================================
    전처리 + 레이아웃
@@ -1667,6 +1670,14 @@ function render(){
     dimRect(Math.max(Math.min(fx2,W+1),-1),W+1);
   }
 
+  /* 크로스헤어 — 마우스 위치의 시점·행복도 읽기 (주식 차트식) */
+  CH.g=el('g',{'pointer-events':'none',opacity:0});
+  CH.line=el('line',{y1:L.AXIS_Y+2,y2:L.HAP_BOT,stroke:'#C4CDC1','stroke-width':.8,'stroke-dasharray':'3 4'});
+  CH.dot=el('circle',{r:3,fill:'#1E4348',stroke:'#F2F4EE','stroke-width':1.2});
+  CH.txt=el('text',{y:L.AXIS_Y+16,'font-size':10.5,fill:'#5D6B62','font-family':'IBM Plex Mono'});
+  CH.g.appendChild(CH.line);CH.g.appendChild(CH.dot);CH.g.appendChild(CH.txt);
+  svg.appendChild(CH.g);
+
   renderLayerBar();
   LB_SNAP={tasks:lbTasks,obst:occ.filter(o=>!o.lb),W,L,
     hapY:t=>HY(hapVAt(t)),
@@ -2333,6 +2344,25 @@ let moved=false;
     if(focusEra){focusEra=null;render();}
     if(selected){selected=null;render();renderDetail();}
   });
+  const CHshow=e=>{
+    if(e.pointerType&&e.pointerType!=='mouse')return; /* 터치는 카드·팝오버가 담당 */
+    if(e.buttons||!CH.g)return;                        /* 드래그 중엔 팬이 우선 */
+    const p=svgXY(e), t=Xinv(p.x);
+    if(p.x<0||p.x>W||t<FULL[0]||t>BOUND[1]){CH.g.setAttribute('opacity',0);return;}
+    const main=focusLayer==='main';
+    const v=hapVAt(t);
+    const L2=LAYOUT, y=L2.HAP_BOT-((v+1)/2)*(L2.HAP_BOT-L2.HAP_TOP);
+    CH.line.setAttribute('x1',p.x);CH.line.setAttribute('x2',p.x);
+    if(main){CH.dot.setAttribute('cx',p.x);CH.dot.setAttribute('cy',y);CH.dot.setAttribute('opacity',1);}
+    else CH.dot.setAttribute('opacity',0);
+    CH.txt.textContent=tToMonth(t).replace('-','.')+(main?' · '+(v>0?'+':'')+v.toFixed(2):'');
+    const tw=textW(CH.txt.textContent);
+    CH.txt.setAttribute('x',Math.max(4,Math.min(p.x+8,W-tw-8)));
+    CH.g.setAttribute('opacity',1);
+  };
+  svg.addEventListener('pointermove',CHshow);
+  svg.addEventListener('pointerleave',()=>{if(CH.g)CH.g.setAttribute('opacity',0);});
+  svg.addEventListener('pointerdown',()=>{if(CH.g)CH.g.setAttribute('opacity',0);});
   svg.addEventListener('contextmenu',e=>{ /* 빈 곳 우클릭 = 생각 남기기 */
     if(RO)return;
     if(e.target.closest('g[role="button"],g[data-hap],g[data-th],.c-lay'))return;
@@ -2377,8 +2407,7 @@ let moved=false;
     }
     requestAnimationFrame(()=>{const ti=document.querySelector('#popEd .pe-title');if(ti)ti.select();});
   }
-  $('#btnFit').onclick=()=>{dom=[...FULL];render();};
-  $('#btnNow').onclick=()=>{const s=Math.min(dom[1]-dom[0],6);setDom(NOW-s*.6,NOW+s*.4);};
+  document.querySelectorAll('.scale').forEach(b=>b.onclick=()=>setScale(b.dataset.y,b));
   $('#btnTheme').onclick=()=>{
     DARK=!DARK;
     const t=DARK?'dim':'spring';
@@ -2390,7 +2419,21 @@ let moved=false;
   resolvePal(); /* 앱 초기 렌더 전에 테마 팔레트 해석 */
   addEventListener('resize',()=>{prepare();render();});
 })();
+let scaleLock=false;
+function setScale(y,btn){ /* 주식 차트식: 오늘을 오른쪽 가장자리 근처에 두고 N년 창 */
+  scaleLock=true;
+  if(y==='all')dom=[...FULL];
+  else{
+    const n=+y;
+    const right=Math.min(BOUND[1],NOW+n*.08);
+    dom=[Math.max(BOUND[0],right-n),right];
+  }
+  render();
+  scaleLock=false;
+  document.querySelectorAll('.scale').forEach(b=>b.classList.toggle('on',b===btn));
+}
 function setDom(a,b){
+  if(!scaleLock)document.querySelectorAll('.scale.on').forEach(b2=>b2.classList.remove('on')); /* 수동 팬·줌 = 스케일 해제 */
   const s=b-a;
   if(a<BOUND[0]){a=BOUND[0];b=a+s;}
   if(b>BOUND[1]){b=BOUND[1];a=b-s;}
