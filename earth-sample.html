@@ -27,8 +27,10 @@
     --cloud:oklch(74% 0.045 340);       /* 놀에 물든 구름 — 학업 */
     --bloom:oklch(80% 0.09 15);         /* 산 위의 꽃 */
     --seed:oklch(80% 0.07 85);          /* 씨앗 — 학업 */
-    --earth:oklch(36% 0.045 55);        /* 표토 — 놀빛이 스민 흙 */
-    --earth-deep:oklch(24% 0.035 45);   /* 심토 */
+    --ridge2:oklch(62% 0.03 300);       /* 아주 먼 능선 — 대기에 녹음 */
+    --mist:oklch(80% 0.05 55);          /* 산기슭 안개 */
+    --ground:oklch(24% 0.03 150);       /* 발밑의 땅 — 월별 글 */
+    --ground-edge:oklch(45% 0.05 130);  /* 땅 가장자리 풀빛 */
     --cream:oklch(94% 0.015 90);        /* 밝은 라벨 */
     --cream-soft:oklch(94% 0.015 90 / .62);
   }
@@ -51,16 +53,16 @@
 </head>
 <body>
   <h1>지구 연표 — 황혼</h1>
-  <div class="sub">행복은 산맥, 마이너스는 호수. 해와 달과 별이 함께 뜬 저녁. 익명 예시 데이터.</div>
+  <div class="sub">저 멀리 산과 하늘을 바라보는 풍경. 발밑의 땅은 내가 쓴 글 — 존재의 기반. 익명 예시 데이터.</div>
   <div class="modes">
     <button class="chip on" data-mode="subtle">a. 옅은 황혼</button>
     <button class="chip" data-mode="scene">b. 깊은 황혼</button>
   </div>
   <div class="legend">
     <span><b>분류가 층을 정한다</b></span>
-    <span>✦ <b>별</b> = 사람 (맨 위)</span><span>⦿ <b>씨앗</b> = 학업 (꽃 아래 땅속)</span>
+    <span>✦ <b>별</b> = 사람 (맨 위)</span><span>⦿ <b>씨앗</b> = 학업 (기록의 땅에 심김)</span>
     <span>❀ <b>꽃</b> = 좋은 일 (산 위)</span><span>◌ <b>물결</b> = 힘든 일 (호수에 가라앉은 자리)</span>
-    <span>☁ = 생각</span><span>〜 <b>밤바다</b> = 월별 글</span><span>☀ 해 = 오늘 · ☾ 달·별 공존</span>
+    <span>☁ = 생각</span><span>▄ <b>땅</b> = 월별 글 (존재의 기반)</span><span>☀ 해 = 오늘 · ☾ 달·별 공존</span>
   </div>
   <svg id="c" aria-label="지구 연표 황혼 샘플"></svg>
   <div class="cap" id="cap"></div>
@@ -98,7 +100,7 @@ const NS='http://www.w3.org/2000/svg';
 const el=(t,a)=>{const n=document.createElementNS(NS,t);for(const k in a)n.setAttribute(k,a[k]);return n;};
 const T0=1994.2,T1=2028.8;
 let W=1200;
-const H=470, SKY_T=46, ZERO=258, LAKE_B=356, SEA_T=392, SEA_B=452;
+const H=470, SKY_T=46, ZERO=258, LAKE_B=334, GRND_T=368, GRND_B=452;
 const X=t=>(t-T0)/(T1-T0)*W;
 const VAL_TOP=SKY_T+62; /* +1 상한 — 별 띠 아래 */
 const yOf=v=>v>=0? ZERO - v*(ZERO-VAL_TOP) : ZERO + (-v)*(LAKE_B-ZERO);
@@ -162,28 +164,20 @@ function render(){
   const lake=el('linearGradient',{id:'lake',x1:0,x2:0,gradientUnits:'userSpaceOnUse',y1:ZERO,y2:LAKE_B});
   lake.appendChild(el('stop',{offset:'0%','stop-color':'var(--lake)','stop-opacity':.95}));
   lake.appendChild(el('stop',{offset:'100%','stop-color':'var(--lake-deep)','stop-opacity':1}));
-  const seaG=el('linearGradient',{id:'seaG',x1:0,x2:0,gradientUnits:'userSpaceOnUse',y1:SEA_T,y2:SEA_B});
-  seaG.appendChild(el('stop',{offset:'0%','stop-color':'var(--sea)','stop-opacity':.55}));
-  seaG.appendChild(el('stop',{offset:'100%','stop-color':'var(--sea)','stop-opacity':.95}));
-  defs.appendChild(sky);defs.appendChild(mtn);defs.appendChild(lake);defs.appendChild(seaG);
+  defs.appendChild(sky);defs.appendChild(mtn);defs.appendChild(lake);
   svg.appendChild(defs);
 
   /* 배경판 */
-  const earth=el('linearGradient',{id:'earth',x1:0,x2:0,gradientUnits:'userSpaceOnUse',y1:ZERO,y2:SEA_T+18});
-  earth.appendChild(el('stop',{offset:'0%','stop-color':'var(--earth)','stop-opacity':.96}));
-  earth.appendChild(el('stop',{offset:'55%','stop-color':'var(--earth-deep)','stop-opacity':.98}));
-  earth.appendChild(el('stop',{offset:'100%','stop-color':'var(--sea)','stop-opacity':1}));
-  defs.appendChild(earth);
+  /* 하늘이 호수 언저리까지 내려온다 — 놀이 물과 안개에 비침 */
   svg.appendChild(el('rect',{x:0,y:0,width:W,height:ZERO,fill:'url(#sky)'}));
-  svg.appendChild(el('rect',{x:0,y:ZERO,width:W,height:H-ZERO,fill:'url(#earth)'}));
-  /* 지층 결 — 흙의 단면임을 속삭이는 물결 줄 */
-  {const strata=scene?[26,54,86,120]:[34,72,112];
-   strata.forEach((dy,i)=>{
-     const pts2=[];for(let px=0;px<=W;px+=90)
-       pts2.push([px,ZERO+dy+Math.sin(px/140+i*2.1)*3.5]);
-     svg.appendChild(el('path',{d:smooth(pts2),fill:'none',stroke:'var(--cream)',
-       'stroke-width':.55,opacity:scene?.11:.08}));});}
-  svg.appendChild(el('rect',{x:0,y:SEA_T-6,width:W,height:H-SEA_T+6,fill:'url(#seaG)'}));
+  svg.appendChild(el('rect',{x:0,y:ZERO,width:W,height:H-ZERO,fill:'var(--sky-glow)',opacity:.5}));
+  /* 산기슭 안개 — 호수와 발밑 땅 사이의 대기 */
+  const mist=el('linearGradient',{id:'mist',x1:0,x2:0,gradientUnits:'userSpaceOnUse',y1:LAKE_B-6,y2:GRND_T+22});
+  mist.appendChild(el('stop',{offset:'0%','stop-color':'var(--mist)','stop-opacity':0}));
+  mist.appendChild(el('stop',{offset:'55%','stop-color':'var(--mist)','stop-opacity':scene?.5:.38}));
+  mist.appendChild(el('stop',{offset:'100%','stop-color':'var(--mist)','stop-opacity':.15}));
+  defs.appendChild(mist);
+  svg.appendChild(el('rect',{x:0,y:LAKE_B-6,width:W,height:GRND_T+22-(LAKE_B-6),fill:'url(#mist)'}));
 
   /* 별하늘 — 위쪽 전역에 옅게 (위로 갈수록 또렷) */
   {let sd=13;const n=scene?90:48;
@@ -203,14 +197,14 @@ function render(){
   /* 연도 눈금 */
   for(let y=1995;y<=2028;y+=5){
     const x=X(y);
-    svg.appendChild(el('line',{x1:x,x2:x,y1:SKY_T,y2:SEA_B,stroke:'var(--cream)','stroke-width':.7,'stroke-dasharray':'2 8',opacity:.22}));
+    svg.appendChild(el('line',{x1:x,x2:x,y1:SKY_T,y2:GRND_T+30,stroke:'var(--cream)','stroke-width':.7,'stroke-dasharray':'2 8',opacity:.22}));
     const t=el('text',{x:x,y:SKY_T-16,'text-anchor':'middle','font-size':11,fill:'var(--cream-soft)','font-family':'ui-monospace,monospace'});
     t.textContent=y;svg.appendChild(t);
   }
 
   /* 해 — 오늘, 지평선에 낮게 */
   const nx=X(NOW);
-  svg.appendChild(el('line',{x1:nx,x2:nx,y1:SKY_T-4,y2:SEA_B,stroke:'var(--sun)','stroke-width':1,'stroke-dasharray':'4 6',opacity:.6}));
+  svg.appendChild(el('line',{x1:nx,x2:nx,y1:SKY_T-4,y2:GRND_T+26,stroke:'var(--sun)','stroke-width':1,'stroke-dasharray':'4 6',opacity:.6}));
   svg.appendChild(el('circle',{cx:nx,cy:ZERO-13,r:scene?11:9,fill:'var(--sun)',opacity:.98}));
   svg.appendChild(el('circle',{cx:nx,cy:ZERO-13,r:scene?22:16,fill:'var(--sun)',opacity:.16}));
   if(scene)svg.appendChild(el('rect',{x:nx-1.2,y:ZERO,width:2.4,height:LAKE_B-ZERO,fill:'var(--sun)',opacity:.18}));
@@ -234,6 +228,9 @@ function render(){
   const cpUp=el('clipPath',{id:'up'});cpUp.appendChild(el('rect',{x:0,y:0,width:W,height:ZERO}));
   const cpDn=el('clipPath',{id:'dn'});cpDn.appendChild(el('rect',{x:0,y:ZERO,width:W,height:H-ZERO}));
   defs.appendChild(cpUp);defs.appendChild(cpDn);
+  const far2=past.map(p=>[p[0]-26,Math.min(ZERO-((ZERO-p[1])*.45),ZERO)]);
+  svg.appendChild(el('path',{d:smooth(far2)+` L ${far2[far2.length-1][0]} ${ZERO} L ${far2[0][0]} ${ZERO} Z`,
+    fill:'var(--ridge2)',opacity:scene?.4:.3,'clip-path':'url(#up)'}));
   const farPts=past.map(p=>[p[0]+14,Math.min(p[1]+26,ZERO)]);
   svg.appendChild(el('path',{d:smooth(farPts)+` L ${farPts[farPts.length-1][0]} ${ZERO} L ${farPts[0][0]} ${ZERO} Z`,
     fill:'var(--mtn-far)',opacity:scene?.5:.38,'clip-path':'url(#up)'}));
@@ -247,28 +244,42 @@ function render(){
   if(scene){
     [24,38].forEach(dy=>svg.appendChild(el('path',{d:smooth(past.map(p=>[p[0],Math.min(p[1]+dy,LAKE_B)])),
       fill:'none',stroke:'var(--cream)','stroke-width':.5,opacity:.12,'clip-path':'url(#dn)'})));
-    const mx=W*.16;
-    svg.appendChild(el('ellipse',{cx:mx,cy:ZERO+22,rx:9,ry:2.2,fill:'var(--moon)',opacity:.22,'clip-path':'url(#dn)'}));
-    svg.appendChild(el('ellipse',{cx:mx,cy:ZERO+34,rx:6,ry:1.6,fill:'var(--moon)',opacity:.14,'clip-path':'url(#dn)'}));
-  }
-  if(scene){ /* 큰 봉우리의 뿌리 — 산과 흙이 한 몸임을 */
-    [[2017.6,.6],[2024,.3]].forEach(([pt,pv])=>{
-      const px=X(pt);
-      [[-14,34,-22],[0,46,4],[13,30,20]].forEach(([dx0,len,dx1])=>{
-        svg.appendChild(el('path',{d:`M ${px+dx0} ${ZERO+2} Q ${px+dx0+dx1*.4} ${ZERO+len*.55} ${px+dx0+dx1} ${ZERO+len}`,
-          stroke:'var(--cream)','stroke-width':.6,fill:'none',opacity:.13}));});
-    });
   }
   svg.appendChild(el('path',{d:smooth(fut),fill:'none',stroke:'var(--cream)','stroke-width':1.4,'stroke-dasharray':'6 6',opacity:.55}));
 
-  /* 밤바다 — 월별 글 */
-  const wave=[[0,SEA_B]];
-  RECS.forEach(([t,n])=>wave.push([X(t),SEA_T+(1-n)*(SEA_B-SEA_T)*.8+6]));
-  wave.push([W,SEA_B]);
-  svg.appendChild(el('path',{d:smooth(wave)+` L ${W} ${SEA_B} L 0 ${SEA_B} Z`,fill:'var(--sea)',opacity:scene?.9:.75}));
-  svg.appendChild(el('path',{d:smooth(wave),fill:'none',stroke:'var(--cream)','stroke-width':.7,opacity:.25}));
-  const seaLb=el('text',{x:10,y:SEA_B-8,'font-size':10,fill:'var(--cream-soft)','font-family':'ui-monospace,monospace'});
-  seaLb.textContent='월별 글';svg.appendChild(seaLb);
+  /* 발밑의 땅 — 월별 글이 쌓아 올린 언덕 (가장 가깝고 가장 어둡다) */
+  const gnd=[[0,GRND_B]];
+  {const step=4; /* 분기 단위로 뭉쳐 완만한 언덕으로 */
+   for(let i=0;i<RECS.length;i+=step){
+     const chunk=RECS.slice(i,i+step);
+     const t=chunk.reduce((a,c)=>a+c[0],0)/chunk.length;
+     const n=chunk.reduce((a,c)=>a+c[1],0)/chunk.length;
+     gnd.push([X(t),GRND_T+(1-n)*(GRND_B-GRND_T)*.75+4]);
+   }}
+  gnd.push([W,GRND_B]);
+  const dG=smooth(gnd);
+  svg.appendChild(el('path',{d:dG+` L ${W} ${H} L 0 ${H} Z`,fill:'var(--ground)',opacity:scene?1:.96}));
+  svg.appendChild(el('path',{d:dG,fill:'none',stroke:'var(--ground-edge)','stroke-width':1.1,opacity:.55}));
+  /* 풀잎 — 가까운 땅의 질감 */
+  {let gd=29;const nG=scene?60:34;
+   for(let i=0;i<nG;i++){gd=(gd*16807)%2147483647;const rx=gd/2147483647;
+     gd=(gd*16807)%2147483647;const rl=gd/2147483647;
+     const gx=rx*W;
+     let gy=GRND_B;for(let j=1;j<gnd.length;j++)if(gnd[j][0]>=gx){
+       const a=gnd[j-1],b=gnd[j];gy=a[1]+(b[1]-a[1])*((gx-a[0])/((b[0]-a[0])||1));break;}
+     svg.appendChild(el('path',{d:`M ${gx} ${gy+1} q ${rl>.5?2:-2} ${-(4+rl*5)} ${rl>.5?3.5:-3.5} ${-(6+rl*6)}`,
+       stroke:'var(--ground-edge)','stroke-width':.8,fill:'none',opacity:.5}));}}
+  const gLb=el('text',{x:10,y:GRND_B-10,'font-size':10,fill:'var(--cream-soft)','font-family':'ui-monospace,monospace'});
+  gLb.textContent='월별 글 — 존재의 기반';svg.appendChild(gLb);
+  /* 바라보는 사람 — 오늘의 자리에서 */
+  {const px2=Math.min(X(NOW),W-24);
+   let py=GRND_B;for(let j=1;j<gnd.length;j++)if(gnd[j][0]>=px2){
+     const a=gnd[j-1],b=gnd[j];py=a[1]+(b[1]-a[1])*((px2-a[0])/((b[0]-a[0])||1));break;}
+   const fig=el('g',{opacity:.9});
+   fig.appendChild(el('circle',{cx:px2,cy:py-13.5,r:2.6,fill:'var(--ground)'}));
+   fig.appendChild(el('path',{d:`M ${px2} ${py-11} L ${px2} ${py-3} M ${px2} ${py-3} L ${px2-2.4} ${py+2} M ${px2} ${py-3} L ${px2+2.4} ${py+2} M ${px2} ${py-8.5} L ${px2-3.2} ${py-5.5}`,
+     stroke:'var(--ground)','stroke-width':1.6,'stroke-linecap':'round',fill:'none'}));
+   svg.appendChild(fig);}
 
   /* 생각 — 작은 구름에 매달린 문장 */
   THOUGHTS.forEach(([t,txt],i)=>{
@@ -294,14 +305,17 @@ function render(){
       lt.textContent=name;svg.appendChild(lt);
       return;
     }
-    if(cat==='study'){ /* 씨앗 — 꽃 아래 땅속 (지표를 따라 심김) */
-      const sy=yOf(hapAt(t))+16;
+    if(cat==='study'){ /* 씨앗 — 존재의 기반(글의 땅)에 심김 */
+      let sy=GRND_B;const gx=x;
+      for(let j=0;j<RECS.length;j++){if(X(RECS[j][0])>=gx){
+        sy=GRND_T+(1-RECS[j][1])*(GRND_B-GRND_T)*.75+4;break;}}
+      sy=Math.min(sy+9,GRND_B-6);
       const g=el('g',{});
       g.appendChild(el('ellipse',{cx:x,cy:sy,rx:3.4,ry:4.6,fill:'var(--seed)',stroke:'var(--sky-glow)','stroke-width':.8,opacity:.98}));
       g.appendChild(el('path',{d:`M ${x} ${sy-4.6} Q ${x+1.6} ${sy} ${x} ${sy+4.6}`,
         stroke:'var(--sky-glow)','stroke-width':.7,fill:'none',opacity:.6}));
       svg.appendChild(g);
-      const lt=el('text',{x:x,y:sy+17,'text-anchor':'middle','font-size':10.5,fill:'var(--cream-soft)'});
+      const lt=el('text',{x:x,y:sy+16,'text-anchor':'middle','font-size':10.5,fill:'var(--cream-soft)'});
       lt.textContent=name;svg.appendChild(lt);
       return;
     }
@@ -322,8 +336,8 @@ function render(){
 
   document.getElementById('cap').textContent=
     scene
-    ? 'b. 깊은 황혼 — 지층 결이 늘고 큰 봉우리 아래 뿌리가 내린다. 달빛 반영·해기둥·잔물결도 진해진다.'
-    : 'a. 옅은 황혼 — 호수 아래는 흙의 단면(지층). 씨앗은 그 흙에 묻히고, 깊어질수록 어두워지다 밤바다로 이어진다.';
+    ? 'b. 깊은 황혼 — 안개가 짙어지고 풀이 우거지고 별이 늘어난다. 해기둥·잔물결도 진해진다.'
+    : 'a. 옅은 황혼 — 서서 바라보는 풍경: 먼 능선일수록 대기에 옅어지고, 산기슭엔 안개, 발밑의 어두운 땅은 내가 쓴 글이다.';
 }
 document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{
   document.documentElement.dataset.mode=b.dataset.mode;
