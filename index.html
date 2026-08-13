@@ -309,7 +309,6 @@ html[data-theme=spring]{
 <main>
   <section id="sec-canvas">
     <div class="wrap">
-      <div class="sec-head"><h2>연표</h2></div>
 
       <div class="tl-controls" role="group" aria-label="기간 스케일">
         <button class="lay-chip scale" data-y="all">All</button>
@@ -364,6 +363,7 @@ html[data-theme=spring]{
 </div>
 <style>#gateBd[hidden]{display:none!important}  /* ===== 봄 · 여백(間) — 상자 대신 공간, 도구는 물러나고 곡선만 남는다 ===== */
   section{padding:96px 0}
+  #sec-canvas{padding-top:26px} /* 헤더 구분선에 바로 붙는다 */
   header .wrap{padding-top:120px;padding-bottom:64px}
   .subtitle{margin-top:18px;opacity:.75}
   .canvas-frame{border:none;background:transparent;padding:0;border-radius:0}
@@ -1841,14 +1841,18 @@ function attachInteract(g,item,posFn){
   g.addEventListener('mouseenter',showItemCard); /* 스냅샷 설명 카드 */
   g.addEventListener('mouseleave',hideCard);
   g.addEventListener('pointerdown',ev=>{if(ev.pointerType!=='mouse')showItemCard();}); /* 터치 */
+  const edit=()=>{
+    selected=item;render();renderDetail();
+    const p=posFn(),rc=svg.getBoundingClientRect();
+    openPop(item,rc.left+p.x,rc.top+p.y);
+  };
   const pick=e=>{
     if(moved)return; e.stopPropagation();
+    if(item.tripId){flyToLoc(item);return;} /* 여행 기간 = 클릭하면 바로 지도 */
     selected=(selected===item)?null:item;
     render();renderDetail();
-    if(selected){ /* 클릭 즉시 그 자리에서 편집 */
-      const p=posFn(),rc=svg.getBoundingClientRect();
-      openPop(item,rc.left+p.x,rc.top+p.y);
-    }else closePop();
+    if(selected)edit();
+    else closePop();
   };
   g.addEventListener('click',pick);
   g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(e);}});
@@ -1856,6 +1860,7 @@ function attachInteract(g,item,posFn){
     e.preventDefault();e.stopPropagation();
     selected=item;render();renderDetail();
     openCtx(e.clientX,e.clientY,[
+      ...(item.tripId?[['✎ 수정','',edit]]:[]), /* 클릭이 지도로 가므로 수정 통로 유지 */
       ['⧉ 복제','',()=>duplicateItem(item)],
       ...((item.loc||item.tripId)?[['⌖ 지도에서 보기','',()=>flyToLoc(item)]]:[]),
       ['✕ 삭제','danger',()=>deleteItem(item)],
