@@ -11,10 +11,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>인생 연표</title>
-<script>(function(){try{var t=localStorage.getItem('caeyeon_life_theme');
-if(t==='light'||t==='nord')t='spring'; if(t==='dark')t='dim'; /* 구 저장값 이행 */
-if(!t)t=matchMedia('(prefers-color-scheme: dark)').matches?'dim':'spring';
-document.documentElement.dataset.theme=t;}catch(e){}})();</script>
+<script>document.documentElement.dataset.theme='spring';</script>
 <link rel="stylesheet" href="vendor/daisyui.css">
 <link rel="stylesheet" href="vendor/daisyui-themes.css">
 <style>
@@ -85,8 +82,6 @@ html[data-theme=spring]{
   .view-only #btnShare,.view-only .file-btn,.view-only #docSel,.view-only .editor{display:none!important}
   .ctrl-btn.primary:hover{background:var(--water-deep)}
   .ctrl-btn:focus-visible,.trip-btn:focus-visible{outline:2px solid var(--cinnabar);outline-offset:2px}
-  .save-state{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);letter-spacing:.04em}
-  .save-state.warn{color:var(--cinnabar)}
 
   /* ===== 스크러버 (미니맵) ===== */
   .scrubber{display:flex;align-items:center;gap:10px;padding:8px 2px 2px}
@@ -279,11 +274,8 @@ html[data-theme=spring]{
   <button class="btn btn-xs btn-square btn-ghost" id="btnRedo" title="다시 실행 (⌘/Ctrl+Shift+Z)" aria-label="다시 실행" disabled>↻</button>
 </div>
 <div class="corner corner-tr" aria-label="문서·동기화">
-  <span class="save-state" id="saveState"></span>
   <select class="select select-xs select-ghost" id="docSel" title="문서 전환" aria-label="문서 선택"></select>
-  <button class="btn btn-xs btn-ghost" id="btnNew">＋ 새 문서</button>
-  <button class="btn btn-xs btn-ghost" id="btnCloud" title="온라인 DB 동기화 설정">☁ DB</button>
-  <button class="btn btn-xs btn-square btn-ghost" id="btnTheme" aria-label="밝은/어두운 테마 전환">◐</button>
+  <button class="db-dot" id="btnCloud" title="온라인 DB" aria-label="온라인 DB 연결 상태·설정"></button>
 </div>
 
 <noscript><div style="max-width:1180px;margin:24px auto;padding:16px 24px;border:1px solid #B5432A;color:#B5432A;font-size:14px">
@@ -391,16 +383,16 @@ html[data-theme=spring]{
   .map-ov-bar{display:flex;align-items:center;gap:8px;padding:7px 9px;flex-wrap:wrap}
   .map-overlay #map{flex:1;z-index:1;position:relative}
   .map-overlay .trip-info{padding:5px 12px 8px}
-  .corner{position:absolute;top:14px;z-index:700;display:flex;gap:3px;align-items:center;
-    opacity:.65;transition:opacity .2s;border-radius:999px;padding:3px 7px}
+  .corner{position:absolute;top:14px;height:30px;z-index:700;display:flex;gap:5px;align-items:center;
+    opacity:.18;transition:opacity .25s;border-radius:999px;padding:0 7px}
   .corner:hover,.corner:focus-within{opacity:1}
+  .db-dot{width:10px;height:10px;border-radius:50%;border:none;padding:0;cursor:pointer;
+    background:var(--cinnabar);flex:none}
+  .db-dot.ok{background:#5C9E55}
   .corner-tl{left:14px}
   .corner-tr{right:22px} /* 브라우저 스크롤바 회피 */
-  .corner .save-state{font-size:10px;margin-right:5px;max-width:220px;overflow:hidden;
-    text-overflow:ellipsis;white-space:nowrap}
   .corner #docSel{max-width:120px}
-  @media (max-width:640px){.corner{top:8px}.corner-tl{left:8px}.corner-tr{right:12px}
-    .corner .save-state{display:none}}
+  @media (max-width:640px){.corner{top:8px}.corner-tl{left:8px}.corner-tr{right:12px}}
 </style>
 
 <!-- 온라인 DB 설정 -->
@@ -638,18 +630,19 @@ function persist(){
   updateSaveState();
 }
 function updateSaveState(){
-  const s=document.getElementById('saveState');
-  const set=(dot,msg,warn)=>{s.textContent=dot;s.title=msg;s.classList.toggle('warn',!!warn);};
-  if(RO)return set('👁','공유 화면 — 읽기 전용');
-  if(!storageOK)return set('⚠','메모리 전용 — 저장 실패',1);
+  const d=document.getElementById('btnCloud');
+  if(!d)return;
+  const set=(ok,msg)=>{d.classList.toggle('ok',!!ok);d.title=msg;};
+  if(RO)return set(false,'공유 화면 — 읽기 전용');
+  if(!storageOK)return set(false,'메모리 전용 — 저장 실패');
   if(typeof CLOUD!=='undefined'&&CLOUD){
-    if(cloudState==='sync')return set('…','동기화 중');
-    if(cloudState==='auth')return set('⚠','로그인 필요 — ☁ DB에서 로그인',1);
-    if(cloudState==='conflict')return set('⚠','업로드 보류 — 다른 기기 수정본 있음 (새로고침 권장)',1);
-    if(cloudState==='err')return set('⚠','동기화 실패 — 로컬엔 저장됨',1);
-    return set('●','온라인 DB 동기화됨'+(CLOUD.session?' · '+CLOUD.session.email:''));
+    if(cloudState==='sync')return set(true,'동기화 중…');
+    if(cloudState==='auth')return set(false,'로그인 필요 — 클릭해 로그인');
+    if(cloudState==='conflict')return set(false,'업로드 보류 — 다른 기기 수정본 있음 (새로고침 권장)');
+    if(cloudState==='err')return set(false,'동기화 실패 — 로컬엔 저장됨');
+    return set(true,'온라인 DB 동기화됨'+(CLOUD.session?' · '+CLOUD.session.email:''));
   }
-  set('●','브라우저에 저장됨');
+  set(false,'DB 미연결 — 클릭해 연결');
 }
 /* 시간 유틸 — 로드 관문(migrateScale/sanitize)보다 먼저 선언되어야 한다.
    날짜는 'YYYY-MM' 또는 'YYYY-MM-DD' — 일자는 선택 사항 */
@@ -770,11 +763,8 @@ function reportIssues(){
   const lines=[];
   if(fixed.length)lines.push('· 자동 교정 '+fixed.length+'건: '+fixed.slice(0,3).map(i=>i.label+' '+i.from+'→'+i.to).join(', ')+(fixed.length>3?' 외':''));
   if(drop.length)lines.push('· 격리 '+drop.length+'건(형식 불명, 화면에서 제외): '+drop.slice(0,3).map(i=>i.label+' '+i.key+'='+i.from).join(', ')+(drop.length>3?' 외':''));
-  const s=document.getElementById('saveState');
-  if(s){s.textContent='⚠';s.title='날짜 '+DATA_ISSUES.length+'건 정리됨 — 클릭해 확인';s.classList.add('warn');s.style.cursor='pointer';
-    s.onclick=()=>{alert('날짜 형식 문제를 정리했다:\n\n'+lines.join('\n')+'\n\n교정된 항목은 그대로 쓰면 되고, 격리된 항목은 편집에서 다시 입력하면 살아난다.');
-      s.onclick=null;s.style.cursor='';updateSaveState();};
-  }
+  const d=document.getElementById('btnCloud');
+  if(d)d.title=(d.title?d.title+' · ':'')+'날짜 '+DATA_ISSUES.length+'건 정리됨: '+lines.join(' / ');
 }
 let DATA = migrateScale(RO?structuredClone(window.SHARED_DATA):loadDoc(curDocId));
 
@@ -2430,14 +2420,6 @@ let moved=false;
     requestAnimationFrame(()=>{const ti=document.querySelector('#popEd .pe-title');if(ti)ti.select();});
   }
   document.querySelectorAll('.scale').forEach(b=>b.onclick=()=>setScale(b.dataset.y,b));
-  $('#btnTheme').onclick=()=>{
-    DARK=!DARK;
-    const t=DARK?'dim':'spring';
-    document.documentElement.dataset.theme=t;
-    try{localStorage.setItem('caeyeon_life_theme',t);}catch(e){}
-    resolvePal();
-    render();renderDetail();rebuildScrubber();updateScrubber();rebuildTripBar();
-  };
   resolvePal(); /* 앱 초기 렌더 전에 테마 팔레트 해석 */
   addEventListener('resize',()=>{prepare();render();});
 })();
@@ -2945,6 +2927,7 @@ function refreshDocSel(){
     return `<option value="${d.id}"${d.id===curDocId?' selected':''}>${esc(label)}</option>`;
   }).join('')
     +'<option disabled>────</option>'
+    +'<option value="__new">＋ 새 문서…</option>'
     +(dupes.size?'<option value="__dedupe">🧹 중복 문서 정리…</option>':'')
     +'<option value="__del">🗑 이 문서 삭제…</option>';
 }
@@ -2996,6 +2979,7 @@ if(!RO){
     const v=e.target.value;
     if(v==='__del'){refreshDocSel();deleteCurrentDoc();}
     else if(v==='__dedupe'){refreshDocSel();dedupeDocs();}
+    else if(v==='__new'){refreshDocSel();openNewDoc();}
     else switchDoc(v);
   };
 }
@@ -3005,7 +2989,7 @@ if(!RO){
 /* --- 새 문서 만들기 --- */
 (function newDoc(){
   const bd=document.getElementById('newBd');
-  $('#btnNew').onclick=()=>{
+  window.openNewDoc=()=>{
     bd.hidden=false;
     $('#nbName').value='';$('#nbBirth').value='';
     $('#nbBirth').style.borderColor='';
