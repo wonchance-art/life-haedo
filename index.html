@@ -12,35 +12,33 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>인생 연표</title>
 <script>(function(){try{var t=localStorage.getItem('caeyeon_life_theme');
-if(!t)t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+if(t==='light')t='nord'; if(t==='dark')t='dim'; /* 구 저장값 이행 */
+if(!t)t=matchMedia('(prefers-color-scheme: dark)').matches?'dim':'nord';
 document.documentElement.dataset.theme=t;}catch(e){}})();</script>
+<link rel="stylesheet" href="vendor/daisyui.css">
+<link rel="stylesheet" href="vendor/daisyui-themes.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
-  :root{
-    --paper:#E9EDE6; --paper-2:#DFE5DB; --panel:#F2F4EE; --field:#FBFCF9;
-    --ink:#23312B; --ink-soft:#5D6B62; --line:#C4CDC1;
-    --water:#2E5E63; --water-deep:#1E4348;
-    --cinnabar:#B5432A; --gold:#A87F3D; --future:#7A8A80;
+  :root{ /* 디자인 토큰은 전부 daisyUI 테마 변수에서 빌려온다 */
+    --paper:var(--color-base-200); --paper-2:var(--color-base-300);
+    --panel:var(--color-base-100); --field:var(--color-base-100);
+    --ink:var(--color-base-content);
+    --ink-soft:color-mix(in oklab,var(--color-base-content) 60%,var(--color-base-100));
+    --line:var(--color-base-300);
+    --water:var(--color-primary); --water-deep:var(--color-primary);
+    --cinnabar:var(--color-error); --gold:var(--color-warning); --future:var(--color-neutral);
     --maxw:1180px;
-  }
-  html[data-theme="dark"]{
-    --paper:#0D1310; --paper-2:#101713; --panel:#131B16; --field:#0F1613;
-    --ink:#E4EBE5; --ink-soft:#93A198; --line:#222C26;
-    --water:#4FA79B; --water-deep:#9FD8CC;
-    --cinnabar:#E06A50; --gold:#D9AE6A; --future:#8B9A90;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth}
   @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
   body{
     background:var(--paper); color:var(--ink);
-    font-family:'IBM Plex Sans KR',sans-serif; line-height:1.65;
-    background-image:linear-gradient(var(--line) 1px,transparent 1px),
-                     linear-gradient(90deg,var(--line) 1px,transparent 1px);
-    background-size:56px 56px; background-position:center top;
+    font-family:'Pretendard Variable',Pretendard,'IBM Plex Sans KR',sans-serif; line-height:1.6;
   }
   ::selection{background:var(--water);color:var(--paper)}
   .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
@@ -49,11 +47,6 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   .hgroup{display:flex;flex-wrap:wrap;align-items:flex-end;gap:28px;justify-content:space-between}
   h1{font-weight:700;font-size:clamp(48px,7.5vw,88px);line-height:.95;letter-spacing:.04em}
   .subtitle{font-size:clamp(15px,2.2vw,19px);color:var(--ink-soft);margin-top:14px}
-  .legend-box{border:1px solid var(--ink);background:var(--panel);padding:14px 18px;min-width:225px;
-    font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft)}
-  .legend-box .t{color:var(--ink);font-weight:600;letter-spacing:.14em;margin-bottom:8px;font-size:11px}
-  .legend-box .row{display:flex;justify-content:space-between;gap:16px;padding:2px 0}
-  .legend-box .v{color:var(--ink);font-weight:600}
 
   section{padding:52px 0}
   .sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:8px}
@@ -62,10 +55,9 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
 
   /* ===== 컨트롤 ===== */
   .tl-controls{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
-  .ctrl-btn,.file-btn{font-family:inherit;font-size:13px;cursor:pointer;border:1px solid var(--ink);
+  .ctrl-btn,.file-btn{font-family:inherit;font-size:13px;cursor:pointer;border:1px solid var(--line);
     background:transparent;color:var(--ink);padding:6px 13px;border-radius:2px;transition:all .15s;display:inline-block}
   .ctrl-btn:hover,.file-btn:hover{background:var(--paper-2)}
-  .ctrl-btn.primary{background:var(--ink);color:var(--paper)}
   .ctrl-btn:disabled{opacity:.35;cursor:default;pointer-events:none}
   #docSel{max-width:150px}
 
@@ -79,7 +71,7 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
 
   /* ===== 스크러버 (미니맵) ===== */
   .scrubber{display:flex;align-items:center;gap:10px;padding:8px 2px 2px}
-  .scrub-play{width:32px;height:26px;border:1px solid var(--ink);background:transparent;color:var(--ink);
+  .scrub-play{width:32px;height:26px;border:1px solid var(--line);background:transparent;color:var(--ink);
     cursor:pointer;border-radius:2px;font-size:11px;line-height:1;font-family:inherit}
   .scrub-play:hover{background:var(--paper-2)}
   .scrub-track{flex:1;position:relative;height:24px;border:1px solid var(--line);background:var(--paper-2);
@@ -99,7 +91,7 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   .search-bd{position:fixed;inset:0;background:rgba(35,49,43,.4);z-index:1000;
     display:flex;align-items:flex-start;justify-content:center;padding:12vh 16px 0}
   .search-bd[hidden]{display:none}
-  .search-panel{width:100%;max-width:560px;background:var(--panel);border:1px solid var(--ink);
+  .search-panel{width:100%;max-width:560px;background:var(--panel);border:1px solid var(--line);
     border-radius:3px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
   .search-row{display:flex;align-items:center;gap:9px;padding:11px 14px;border-bottom:1px solid var(--line)}
   .search-row input{flex:1;border:none;background:transparent;font-family:inherit;font-size:14.5px;color:var(--ink);outline:none}
@@ -136,7 +128,7 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   .hc-tags{display:flex;gap:9px;margin-top:4px;flex-wrap:wrap}
   .hc-tag{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--ink-soft)}
   #sec-canvas .wrap{max-width:none;padding:0 clamp(14px,2.2vw,36px)} /* 연표는 화면 전체 폭 */
-  .canvas-frame{border:1px solid var(--ink);background:var(--panel);padding:8px;position:relative}
+  .canvas-frame{border:1px solid var(--line);background:var(--panel);padding:8px;position:relative}
   .canvas-inner{border:1px solid var(--line);position:relative;overflow:hidden}
   #tl{display:block;width:100%;touch-action:pan-y;cursor:grab;user-select:none}
   #tl.dragging{cursor:grabbing}
@@ -149,7 +141,7 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   .tl-tip .hh{font-family:'IBM Plex Mono',monospace;color:#E8B26A}
 
   .detail[hidden]{display:none}
-  .detail{border:1px solid var(--ink);border-top:none;background:var(--panel);
+  .detail{border:1px solid var(--line);border-top:none;background:var(--panel);
     padding:18px 22px;min-height:92px;display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
   .detail .dt-date{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink-soft);min-width:150px;padding-top:3px}
   .detail .dt-date .age{display:block;font-size:11px;color:var(--gold)}
@@ -171,7 +163,7 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   .dt-lab input[type=checkbox]{accent-color:var(--cinnabar)}
 
   /* ===== 팝오버 에디터 (클릭 즉시 편집) ===== */
-  .pop-ed{position:fixed;z-index:900;background:var(--panel);border:1px solid var(--ink);border-radius:3px;
+  .pop-ed{position:fixed;z-index:900;background:var(--panel);border:1px solid var(--line);border-radius:3px;
     box-shadow:0 10px 30px rgba(0,0,0,.22);width:302px;padding:12px 14px;display:flex;flex-direction:column;gap:7px}
   .pop-ed[hidden]{display:none}
   .pe-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
@@ -180,15 +172,11 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   .pe-month{font-family:'IBM Plex Mono',monospace;font-size:12px;width:126px}
   .pe-num{font-family:'IBM Plex Mono',monospace;font-size:12.5px;width:60px}
   .pe-actions{display:flex;gap:6px;justify-content:flex-end;border-top:1px dashed var(--line);padding-top:8px}
-  .pe-btn{font-family:inherit;font-size:12px;padding:4px 10px;border-radius:2px;cursor:pointer;
-    background:transparent;border:1px solid var(--line);color:var(--ink)}
-  .pe-btn:hover{background:var(--paper-2);border-color:var(--ink)}
-  .pe-btn.danger{color:var(--cinnabar);border-color:var(--cinnabar)}
   .pe-btn.danger:hover{background:var(--cinnabar);color:var(--paper)}
 
   /* ===== 호버 설명 카드 ===== */
   .hover-card{position:fixed;z-index:800;pointer-events:none;width:max-content;max-width:300px;
-    background:var(--panel);border:1px solid var(--ink);border-radius:3px;
+    background:var(--panel);border:1px solid var(--line);border-radius:3px;
     box-shadow:0 8px 24px rgba(0,0,0,.18);padding:10px 13px;display:flex;flex-direction:column;gap:5px}
   .hover-card[hidden]{display:none}
   .hc-top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
@@ -202,7 +190,7 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   .hc-loc{font-size:11.5px;color:var(--water-deep)}
 
   /* ===== 컨텍스트 메뉴 ===== */
-  .ctx{position:fixed;z-index:1200;background:var(--panel);border:1px solid var(--ink);border-radius:3px;
+  .ctx{position:fixed;z-index:1200;background:var(--panel);border:1px solid var(--line);border-radius:3px;
     box-shadow:0 8px 24px rgba(0,0,0,.2);min-width:150px;padding:4px 0}
   .ctx[hidden]{display:none}
   .ctx button{display:block;width:100%;text-align:left;padding:8px 14px;font-family:inherit;font-size:13px;
@@ -217,14 +205,14 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   .loc-chip,.mini-btn{font-size:12px;border:none;background:var(--ink);color:var(--paper);padding:5px 13px;
     border-radius:2px;cursor:pointer;font-family:inherit;transition:background .15s}
   .loc-chip:hover,.mini-btn:hover{background:var(--water-deep)}
-  .mini-btn.ghost{background:transparent;border:1px solid var(--ink);color:var(--ink)}
+  .mini-btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
   .mini-btn.ghost:hover{background:var(--paper-2)}
   .mini-btn.danger{background:var(--cinnabar)}
 
   /* ===== 에디터 ===== */
-  .editor{border:1px solid var(--ink);border-top:none;background:var(--paper-2);padding:0;display:none}
+  .editor{border:1px solid var(--line);border-top:none;background:var(--paper-2);padding:0;display:none}
   .editor.open{display:block}
-  .ed-tabs{display:flex;border-bottom:1px solid var(--ink);flex-wrap:wrap}
+  .ed-tabs{display:flex;border-bottom:1px solid var(--line);flex-wrap:wrap}
   .ed-tab{font-family:inherit;font-size:13px;padding:10px 18px;background:transparent;border:none;
     cursor:pointer;color:var(--ink-soft);border-right:1px solid var(--line)}
   .ed-tab.on{background:var(--panel);color:var(--ink);font-weight:600;box-shadow:inset 0 -2px 0 var(--cinnabar)}
@@ -245,10 +233,10 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   .geo-result{font-size:12px;color:var(--water-deep);min-height:18px}
 
   /* ===== 지도 ===== */
-  .map-frame{border:1px solid var(--ink);background:var(--panel);padding:8px}
+  .map-frame{border:1px solid var(--line);background:var(--panel);padding:8px}
   #map{height:520px;border:1px solid var(--line);z-index:1;position:relative}
   .trip-bar{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 18px}
-  .trip-btn{font-family:inherit;font-size:13px;cursor:pointer;border:1px solid var(--ink);
+  .trip-btn{font-family:inherit;font-size:13px;cursor:pointer;border:1px solid var(--line);
     background:transparent;color:var(--ink);padding:7px 16px;border-radius:2px;transition:all .15s}
   .trip-btn:hover{background:var(--paper-2)}
   .trip-btn.on{background:var(--ink);color:var(--paper)}
@@ -274,7 +262,7 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
     #map{height:400px}
     .detail .dt-date{min-width:0}
     /* 터치 타깃 최소 크기 + 모바일 여백 */
-    .ctrl-btn,.file-btn,.mini-btn,.pe-btn,.trip-btn{min-height:38px;padding-top:8px;padding-bottom:8px}
+    .btn,.trip-btn{min-height:38px}
     #docSel{max-width:120px}
     .pop-ed{width:min(320px,92vw)}
     .hover-card{max-width:min(300px,88vw)}
@@ -285,19 +273,13 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
     .tl-tip{display:none}
   }
   /* ===== 2026 다듬기 — 글래스(떠 있는 요소만)·그레인·벤토 요약·라운드·미세 모션 ===== */
-  .pop-ed,.hover-card,.ctx,.search-panel{
-    background:color-mix(in srgb,var(--panel) 78%,transparent);
-    -webkit-backdrop-filter:blur(16px) saturate(1.15);backdrop-filter:blur(16px) saturate(1.15)}
-  body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:3000;opacity:.05;
-    mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
-  html[data-theme="dark"] body::after{opacity:.09}
-  .legend-box{display:grid;grid-template-columns:repeat(3,minmax(92px,1fr));gap:7px;
-    border:none;background:transparent;padding:0;min-width:300px}
-  .legend-box .t{grid-column:1/-1;margin-bottom:0}
-  .legend-box .row{flex-direction:column;align-items:flex-start;gap:1px;justify-content:flex-start;
-    border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:8px 11px}
-  .legend-box .v{font-size:14.5px}
-  .ctrl-btn,.file-btn,.mini-btn,.pe-btn,.ed-tab{border-radius:9px}
+  .pop-ed,.hover-card,.ctx{box-shadow:0 12px 34px color-mix(in oklab,var(--color-base-content) 14%,transparent)}
+  .search-panel{box-shadow:0 22px 60px color-mix(in oklab,var(--color-base-content) 20%,transparent)}
+  .stat-cards{display:grid;grid-template-columns:repeat(3,minmax(96px,1fr));gap:8px}
+  .stat-cards .stat{background:var(--color-base-100);border:1px solid var(--line);border-radius:14px;padding:10px 14px}
+  .stat-cards .stat-title{font-size:11px;color:var(--ink-soft)}
+  .stat-cards .stat-value{font-size:16px;font-weight:650;font-family:'IBM Plex Mono',monospace;color:var(--ink)}
+  .ed-tab{border-radius:9px}
   .dt-edit,#docSel,.search-row input{border-radius:8px}
   .canvas-frame{border-radius:14px}
   .canvas-inner{border-radius:8px}
@@ -306,12 +288,11 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   .hover-card{border-radius:12px}
   .ctx{border-radius:12px;overflow:hidden}
   .search-panel{border-radius:16px}
-  .legend-box .row,.canvas-frame{transition:border-color .15s}
-  .ctrl-btn,.mini-btn,.pe-btn,.lay-chip{transition:transform .12s ease,background .15s,border-color .15s,opacity .15s}
-  .ctrl-btn:hover,.mini-btn:hover,.pe-btn:hover{transform:translateY(-1px)}
-  @media (prefers-reduced-motion:reduce){.ctrl-btn,.mini-btn,.pe-btn,.lay-chip{transition:none}}
-  html[data-theme="dark"] .leaflet-tile{filter:brightness(.7) invert(1) contrast(2.2) hue-rotate(190deg) saturate(.28) brightness(.78)}
-  html[data-theme="dark"] .leaflet-container{background:#0F1613}
+  .lay-chip{transition:transform .12s ease,background .15s,border-color .15s,opacity .15s}
+  
+  @media (prefers-reduced-motion:reduce){.lay-chip{transition:none}}
+  html[data-theme="dim"] .leaflet-tile{filter:brightness(.7) invert(1) contrast(2.2) hue-rotate(190deg) saturate(.28) brightness(.78)}
+  html[data-theme="dim"] .leaflet-container{background:#0F1613}
 </style>
 </head>
 <body>
@@ -327,14 +308,13 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
         <h1>내 연표</h1>
         <p class="subtitle">시간에 따른 행복도와 사건 기록</p>
       </div>
-      <div class="legend-box" aria-label="기록 요약">
-        <div class="t">요약</div>
-        <div class="row"><span>출생</span><span class="v" id="statBirth">—</span></div>
-        <div class="row"><span>나이</span><span class="v" id="statYears">—</span></div>
-        <div class="row"><span>사건 · 기간</span><span class="v" id="statEvents">—</span></div>
-        <div class="row"><span>기록 노트</span><span class="v" id="statNotes">—</span></div>
-        <div class="row"><span>평균 행복</span><span class="v" id="statAvg">—</span></div>
-        <div class="row"><span>장소</span><span class="v" id="statPorts">—</span></div>
+      <div class="stat-cards" aria-label="기록 요약">
+        <div class="stat"><div class="stat-title">출생</div><div class="stat-value" id="statBirth">—</div></div>
+        <div class="stat"><div class="stat-title">나이</div><div class="stat-value" id="statYears">—</div></div>
+        <div class="stat"><div class="stat-title">사건 · 기간</div><div class="stat-value" id="statEvents">—</div></div>
+        <div class="stat"><div class="stat-title">기록 노트</div><div class="stat-value" id="statNotes">—</div></div>
+        <div class="stat"><div class="stat-title">평균 행복</div><div class="stat-value" id="statAvg">—</div></div>
+        <div class="stat"><div class="stat-title">장소</div><div class="stat-value" id="statPorts">—</div></div>
       </div>
     </div>
   </div>
@@ -346,18 +326,18 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
       <div class="sec-head"><span class="sec-no">01</span><h2>연표</h2></div>
 
       <div class="tl-controls">
-        <button class="ctrl-btn" id="btnFit">전체 보기</button>
-        <button class="ctrl-btn" id="btnZoomOut" aria-label="축소">−</button>
-        <button class="ctrl-btn" id="btnZoomIn" aria-label="확대">＋</button>
-        <button class="ctrl-btn" id="btnUndo" title="되돌리기 (⌘/Ctrl+Z)" aria-label="되돌리기" disabled>↺</button>
-        <button class="ctrl-btn" id="btnRedo" title="다시 실행 (⌘/Ctrl+Shift+Z)" aria-label="다시 실행" disabled>↻</button>
-        <button class="ctrl-btn" id="btnNow">오늘로</button>
-        <button class="ctrl-btn" id="btnSearch" title="검색 (⌘/Ctrl+F)">🔍 검색</button>
-        <button class="ctrl-btn primary" id="btnEdit">✎ 기록 편집</button>
-        <select class="ctrl-btn" id="docSel" title="문서 전환" aria-label="문서 선택"></select>
-        <button class="ctrl-btn" id="btnNew">✚ 새 문서</button>
-        <button class="ctrl-btn" id="btnCloud" title="온라인 DB 동기화 설정">☁ DB</button>
-        <button class="ctrl-btn" id="btnTheme" aria-label="밝은/어두운 테마 전환">◐</button>
+        <button class="btn btn-sm" id="btnFit">전체 보기</button>
+        <button class="btn btn-sm btn-square" id="btnZoomOut" aria-label="축소">−</button>
+        <button class="btn btn-sm btn-square" id="btnZoomIn" aria-label="확대">＋</button>
+        <button class="btn btn-sm btn-square btn-ghost" id="btnUndo" title="되돌리기 (⌘/Ctrl+Z)" aria-label="되돌리기" disabled>↺</button>
+        <button class="btn btn-sm btn-square btn-ghost" id="btnRedo" title="다시 실행 (⌘/Ctrl+Shift+Z)" aria-label="다시 실행" disabled>↻</button>
+        <button class="btn btn-sm" id="btnNow">오늘로</button>
+        <button class="btn btn-sm" id="btnSearch" title="검색 (⌘/Ctrl+F)">검색</button>
+        <button class="btn btn-sm btn-primary" id="btnEdit">기록 편집</button>
+        <select class="select select-sm" id="docSel" title="문서 전환" aria-label="문서 선택"></select>
+        <button class="btn btn-sm" id="btnNew">＋ 새 문서</button>
+        <button class="btn btn-sm" id="btnCloud" title="온라인 DB 동기화 설정">☁ DB</button>
+        <button class="btn btn-sm btn-square btn-ghost" id="btnTheme" aria-label="밝은/어두운 테마 전환">◐</button>
         <span class="save-state" id="saveState"></span>
       </div>
 
@@ -411,7 +391,7 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
               </div>
               <div class="geo-result" id="evGeoRes"></div>
               <div class="ed-actions">
-                <button class="mini-btn" id="evSave">저장</button>
+                <button class="btn btn-sm btn-primary" id="evSave">저장</button>
                 <button class="mini-btn danger" id="evDelete">삭제</button>
               </div>
             </div>
@@ -448,7 +428,7 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
               </div>
               <div class="geo-result" id="spGeoRes"></div>
               <div class="ed-actions">
-                <button class="mini-btn" id="spSave">저장</button>
+                <button class="btn btn-sm btn-primary" id="spSave">저장</button>
                 <button class="mini-btn danger" id="spDelete">삭제</button>
               </div>
             </div>
@@ -471,7 +451,7 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
               </div>
               <div class="ed-row"><div class="field grow"><label>제목</label><input type="text" id="erTitle" placeholder="예: 대학 시절"></div></div>
               <div class="ed-actions">
-                <button class="mini-btn" id="erSave">저장</button>
+                <button class="btn btn-sm btn-primary" id="erSave">저장</button>
                 <button class="mini-btn danger" id="erDelete">삭제</button>
               </div>
             </div>
@@ -485,7 +465,7 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
                 <span class="checkline"><input type="checkbox" id="hpFuture"><label for="hpFuture">예정(계획)</label></span>
               </div>
               <div class="ed-actions">
-                <button class="mini-btn" id="hpSave">저장</button>
+                <button class="btn btn-sm btn-primary" id="hpSave">저장</button>
                 <button class="mini-btn danger" id="hpDelete">삭제</button>
               </div>
             </div>
@@ -515,7 +495,7 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
               </div>
               <div class="geo-result" id="trGeoRes"></div>
               <div class="ed-actions">
-                <button class="mini-btn" id="trSave">저장 (좌표 자동 검색)</button>
+                <button class="btn btn-sm btn-primary" id="trSave">저장 (좌표 자동 검색)</button>
                 <button class="mini-btn danger" id="trDelete">삭제</button>
               </div>
             </div>
@@ -544,14 +524,14 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
     <div style="font-weight:700;font-size:26px">인생 연표</div>
     <input id="gatePw" type="password" autocomplete="off"
       style="font-family:'IBM Plex Mono',monospace;font-size:15px;padding:10px 12px;border:1px solid var(--line);border-radius:2px;background:var(--field);color:var(--ink);text-align:center">
-    <button id="gateGo" class="mini-btn" style="padding:9px">입장</button>
+    <button id="gateGo" class="btn btn-sm btn-primary" style="padding:9px">입장</button>
   </div>
 </div>
 <style>#gateBd[hidden]{display:none!important}</style>
 
 <!-- 온라인 DB 설정 -->
 <div class="search-bd" id="cloudBd" hidden>
-  <div class="search-panel" role="dialog" aria-modal="true" aria-label="온라인 DB 동기화" style="max-width:460px">
+  <div class="search-panel card bg-base-100" role="dialog" aria-modal="true" aria-label="온라인 DB 동기화" style="max-width:460px">
     <div style="display:flex;flex-direction:column;gap:12px;padding:20px 22px">
       <div style="font-weight:700;font-size:17px">☁ 온라인 DB 동기화</div>
       <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-soft)">Project URL
@@ -586,20 +566,20 @@ create policy "personal" on charts
           <input id="authPw" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="current-password"
             style="font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:var(--field);color:var(--ink)">
           <div style="display:flex;gap:8px;justify-content:flex-end">
-            <button class="pe-btn" id="authSignup">가입</button>
-            <button class="mini-btn" id="authLogin">로그인</button>
+            <button class="btn btn-xs" id="authSignup">가입</button>
+            <button class="btn btn-sm btn-primary" id="authLogin">로그인</button>
           </div>
         </div>
-        <button class="pe-btn" id="authLogout" hidden>로그아웃</button>
+        <button class="btn btn-xs" id="authLogout" hidden>로그아웃</button>
       </div>
       <div style="border-top:1px dashed var(--line);padding-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button class="pe-btn" id="btnBackup">⬇ 데이터 백업</button>
-        <label class="pe-btn" style="cursor:pointer">⬆ 백업 복원<input type="file" id="fileRestore" accept=".json" hidden></label>
+        <button class="btn btn-xs" id="btnBackup">⬇ 데이터 백업</button>
+        <label class="btn btn-xs" style="cursor:pointer">⬆ 백업 복원<input type="file" id="fileRestore" accept=".json" hidden></label>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button class="pe-btn danger" id="cloudOff">연결 해제</button>
-        <button class="pe-btn" id="cloudCancel">닫기</button>
-        <button class="mini-btn" id="cloudSave">연결</button>
+        <button class="btn btn-xs btn-error btn-soft" id="cloudOff">연결 해제</button>
+        <button class="btn btn-xs" id="cloudCancel">닫기</button>
+        <button class="btn btn-sm btn-primary" id="cloudSave">연결</button>
       </div>
     </div>
   </div>
@@ -607,7 +587,7 @@ create policy "personal" on charts
 
 <!-- 새 문서 만들기 -->
 <div class="search-bd" id="newBd" hidden>
-  <div class="search-panel" role="dialog" aria-modal="true" aria-label="새 문서 만들기" style="max-width:400px">
+  <div class="search-panel card bg-base-100" role="dialog" aria-modal="true" aria-label="새 문서 만들기" style="max-width:400px">
     <div style="display:flex;flex-direction:column;gap:13px;padding:20px 22px">
       <div style="font-weight:700;font-size:17px">새 문서 만들기</div>
       <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-soft)">이름
@@ -617,8 +597,8 @@ create policy "personal" on charts
         <input id="nbBirth" type="month" style="font-family:'IBM Plex Mono',monospace;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:var(--field);color:var(--ink)">
       </label>
       <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button class="pe-btn" id="nbCancel">취소</button>
-        <button class="mini-btn" id="nbStart">만들기</button>
+        <button class="btn btn-xs" id="nbCancel">취소</button>
+        <button class="btn btn-sm btn-primary" id="nbStart">만들기</button>
       </div>
     </div>
   </div>
@@ -635,7 +615,7 @@ create policy "personal" on charts
 
 <!-- 검색 오버레이 -->
 <div class="search-bd" id="searchBd" hidden>
-  <div class="search-panel" role="dialog" aria-modal="true" aria-label="기록 검색">
+  <div class="search-panel card bg-base-100" role="dialog" aria-modal="true" aria-label="기록 검색">
     <div class="search-row">
       <span aria-hidden="true">🔍</span>
       <input id="searchInput" placeholder="사건 · 기간 · 시대 · 경로 검색…" spellcheck="false" autocomplete="off">
@@ -960,18 +940,29 @@ const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const miOf=d=>{const[y,m]=d.split('-').map(Number);return y*12+((m||1)-1);};
 const miToMonth=mi=>Math.floor(mi/12)+'-'+String(mi%12+1).padStart(2,'0');
 const miAtT=t=>Math.round(t*12);
-let DARK=document.documentElement.dataset.theme==='dark';
-/* 다크 표시 변환 — 캔버스의 잉크·표면·강조색은 지정 짝으로, 데이터 색(시대·기간·레이어)은 밝기만 끌어올린다 */
-const DARKMAP={'#23312B':'#E4EBE5','#F2F4EE':'#131B16','#B5432A':'#E06A50','#2E5E63':'#4FA79B',
-  '#1E4348':'#9FD8CC','#A87F3D':'#D9AE6A','#7A8A80':'#8B9A90','#5D6B62':'#9AA79E',
-  '#C4CDC1':'#2A342E','#8D9A91':'#75847A','#9FB8AE':'#7FA396','#E8B26A':'#E8B26A',
-  '#3A6FBA':'#4E8ED6','#3F8A5F':'#3FA379','#7A55B8':'#8E6BD1','#C24A62':'#D65A78'};
+let DARK=document.documentElement.dataset.theme==='dim';
+/* 캔버스 색 = daisyUI 테마에서 빌린다. 코드의 기준 헥스는 역할 키로 매핑되고,
+   실제 값은 현재 테마의 CSS 변수를 해석해 얻는다 (라이트·다크 모두).
+   데이터에 저장된 색(시대·기간·레이어)은 다크에서만 밝기 리프트 */
+const CHART_ROLE={'#23312B':'bc','#F2F4EE':'b1','#C4CDC1':'b3','#5D6B62':'mut','#8D9A91':'mut',
+  '#9FB8AE':'mut','#7A8A80':'nt','#1E4348':'pr','#2E5E63':'pr','#B5432A':'er','#A87F3D':'wa','#E8B26A':'wa'};
+let PAL={};
+function resolvePal(){
+  const probe=document.createElement('div');document.body.appendChild(probe);
+  const paint=v=>{probe.style.color='#000';probe.style.color=v;return getComputedStyle(probe).color;};
+  PAL={b1:paint('var(--color-base-100)'),b3:paint('var(--color-base-300)'),
+    bc:paint('var(--color-base-content)'),pr:paint('var(--color-primary)'),
+    er:paint('var(--color-error)'),wa:paint('var(--color-warning)'),nt:paint('var(--color-neutral)'),
+    mut:paint('color-mix(in oklab,var(--color-base-content) 55%,var(--color-base-100))')};
+  probe.remove();DISP_CACHE.clear();
+}
 const DISP_CACHE=new Map();
 function dispCol(c){
-  if(!DARK||typeof c!=='string')return c;
+  if(typeof c!=='string')return c;
   const m=/^#([0-9a-fA-F]{6})$/.exec(c);if(!m)return c;
   const key=c.toUpperCase();
-  if(DARKMAP[key])return DARKMAP[key];
+  if(CHART_ROLE[key]&&PAL[CHART_ROLE[key]])return PAL[CHART_ROLE[key]];
+  if(!DARK)return c; /* 데이터 색: 라이트는 원본 그대로 */
   if(DISP_CACHE.has(key))return DISP_CACHE.get(key);
   /* HSL 밝기 리프트 */
   const r=parseInt(key.slice(1,3),16)/255,g=parseInt(key.slice(3,5),16)/255,b=parseInt(key.slice(5,7),16)/255;
@@ -986,7 +977,7 @@ function dispCol(c){
 }
 const el=(t,a)=>{const n=document.createElementNS(NS,t);
   for(const k in a){let v=a[k];
-    if(DARK&&(k==='fill'||k==='stroke'||k==='stop-color')&&typeof v==='string'&&v.charCodeAt(0)===35)v=dispCol(v);
+    if((k==='fill'||k==='stroke'||k==='stop-color')&&typeof v==='string'&&v.charCodeAt(0)===35)v=dispCol(v);
     n.setAttribute(k,v);}
   return n;};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1394,7 +1385,9 @@ function render(){
     svg.appendChild(el('path',{d:dArea,fill:'url(#wgn)','clip-path':'url(#cpNeg)',class:'c-main'}));
     if(DARK){
       const gf=el('filter',{id:'curveGlow',x:'-10%',y:'-300%',width:'120%',height:'700%'});
-      gf.appendChild(el('feDropShadow',{dx:0,dy:0,stdDeviation:4.5,'flood-color':'#9FD8CC','flood-opacity':.5}));
+      const gfd=el('feDropShadow',{dx:0,dy:0,stdDeviation:4.5,'flood-opacity':.5});
+      gfd.setAttribute('flood-color',PAL.pr||'#9FD8CC');
+      gf.appendChild(gfd);
       defs.appendChild(gf);
     }
     const mainCurve=el('path',{d:smoothPath(past),fill:'none',stroke:'#1E4348','stroke-width':2.2,'stroke-linecap':'round',opacity:.85,class:'c-main'});
@@ -2206,9 +2199,9 @@ function openPop(it,ax,ay){
     </div>`:''}
     <textarea class="dt-edit pe-desc" data-f="desc" placeholder="설명…" aria-label="설명">${esc(it.desc||'')}</textarea>
     <div class="pe-actions">
-      <button class="pe-btn" data-a="form">✎ 전체</button>
-      <button class="pe-btn" data-a="dup">⧉ 복제</button>
-      <button class="pe-btn danger" data-a="del">✕ 삭제</button>
+      <button class="btn btn-xs" data-a="form">✎ 전체</button>
+      <button class="btn btn-xs" data-a="dup">⧉ 복제</button>
+      <button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 삭제</button>
     </div>`;
   const q=s=>popEd.querySelector(s);
   q('.pe-title').onchange=e=>{const v=e.target.value.trim();if(v){it.title=v;popCommit();}else e.target.value=it.title;};
@@ -2292,7 +2285,7 @@ function openPopHap(h,ax,ay){
       <input type="month" class="dt-edit pe-month" data-f="date" value="${h.date}" aria-label="날짜">
       <input type="number" class="dt-edit pe-num" data-f="v" min="-1" max="1" step="0.1" value="${h.v}" aria-label="행복도">
     </div>
-    <div class="pe-actions"><button class="pe-btn danger" data-a="del">✕ 값 삭제</button></div>`;
+    <div class="pe-actions"><button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 값 삭제</button></div>`;
   const q=s=>popEd.querySelector(s);
   q('[data-f="date"]').onchange=e=>{if(e.target.value){h.date=e.target.value;popCommit();}else e.target.value=h.date;};
   q('[data-f="v"]').onchange=e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){h.v=Math.min(1,Math.max(-1,v));popCommit();}else e.target.value=h.v;};
@@ -2317,7 +2310,7 @@ function openPopLayerPt(lay,p,ax,ay){
       <input type="month" class="dt-edit pe-month" data-f="date" value="${p.date}" aria-label="날짜">
       <input type="number" class="dt-edit pe-num" data-f="v" min="-1" max="1" step="0.1" value="${p.v}" aria-label="깊이">
     </div>
-    <div class="pe-actions"><button class="pe-btn danger" data-a="del">✕ 값 삭제</button></div>`;
+    <div class="pe-actions"><button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 값 삭제</button></div>`;
   const q=s=>popEd.querySelector(s);
   q('[data-f="date"]').onchange=e=>{if(e.target.value){p.date=e.target.value;popCommit();}else e.target.value=p.date;};
   q('[data-f="v"]').onchange=e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){p.v=Math.min(1,Math.max(-1,v));popCommit();}else e.target.value=p.v;};
@@ -2339,7 +2332,7 @@ function openPopThought(th,ax,ay){
     </div>
     <textarea class="dt-edit" data-f="text" rows="3" style="width:100%;resize:vertical"
       placeholder="그때 쓴 글에서 한 문장">${esc(th.text)}</textarea>
-    <div class="pe-actions"><button class="pe-btn danger" data-a="del">✕ 생각 삭제</button></div>`;
+    <div class="pe-actions"><button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 생각 삭제</button></div>`;
   const q=s=>popEd.querySelector(s);
   q('[data-f="date"]').onchange=e=>{if(e.target.value){th.date=e.target.value;popCommit();}else e.target.value=th.date;};
   q('[data-f="text"]').onchange=e=>{th.text=e.target.value.trim();if(th.text)popCommit();};
@@ -2364,7 +2357,7 @@ function openPopEra(er,ax,ay){
       <input type="month" class="dt-edit pe-month" data-f="end" value="${er.end}" aria-label="종료">
     </div>
     <div class="pe-row"><select class="dt-edit" data-f="color" aria-label="색">${SPAN_COLORS.map(c=>`<option value="${c[0]}"${er.color===c[0]?' selected':''}>${c[1]}</option>`).join('')}</select></div>
-    <div class="pe-actions"><button class="pe-btn danger" data-a="del">✕ 시대 삭제</button></div>`;
+    <div class="pe-actions"><button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 시대 삭제</button></div>`;
   const q=s=>popEd.querySelector(s);
   q('.pe-title').onchange=e=>{const v=e.target.value.trim();if(v){er.title=v;commit();}else e.target.value=er.title;};
   q('.pe-title').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();e.target.blur();}};
@@ -2416,8 +2409,8 @@ function openPopTrip(t,ax,ay){
     </div>
     <input class="dt-edit" data-f="note" value="${esc(t.note||'')}" placeholder="메모…" style="font-size:12.5px;width:100%">
     <div class="pe-actions">
-      <button class="pe-btn" data-a="pts">장소 편집</button>
-      <button class="pe-btn danger" data-a="del">✕ 삭제</button>
+      <button class="btn btn-xs" data-a="pts">장소 편집</button>
+      <button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 삭제</button>
     </div>`;
   const q=s=>popEd.querySelector(s);
   q('.pe-title').onchange=e=>{const v=e.target.value.trim();if(v){t.title=v;commit();}else e.target.value=t.title;};
@@ -2596,12 +2589,13 @@ let moved=false;
   $('#btnNow').onclick=()=>{const s=Math.min(dom[1]-dom[0],6);setDom(NOW-s*.6,NOW+s*.4);};
   $('#btnTheme').onclick=()=>{
     DARK=!DARK;
-    const t=DARK?'dark':'light';
+    const t=DARK?'dim':'nord';
     document.documentElement.dataset.theme=t;
     try{localStorage.setItem('caeyeon_life_theme',t);}catch(e){}
-    DISP_CACHE.clear();
+    resolvePal();
     render();renderDetail();rebuildScrubber();updateScrubber();rebuildTripBar();
   };
+  resolvePal(); /* 앱 초기 렌더 전에 테마 팔레트 해석 */
   addEventListener('resize',()=>{prepare();render();});
 })();
 function setDom(a,b){
