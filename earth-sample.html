@@ -45,29 +45,32 @@
     <button class="chip" data-mode="scene">b. 풍경 모드</button>
   </div>
   <div class="legend">
-    <span><b>높이가 표식을 정한다</b></span>
-    <span>✦ <b>별</b> +0.7↑</span><span>❀ <b>꽃</b> +0.3~0.7</span><span>🌱 <b>싹</b> 0~+0.3</span>
-    <span>● <b>돌</b> 0~−0.4</span><span>◆ <b>바위</b> −0.4↓</span>
-    <span>☁ <b>구름</b> = 생각</span><span>〜 <b>바다</b> = 월별 글</span><span>☀ <b>오늘</b></span>
+    <span><b>분류가 층을 정한다</b></span>
+    <span>✦ <b>별</b> = 사람 (맨 위 띠 고정)</span><span>☁ <b>구름</b> = 학업 (구름 띠 고정)</span>
+    <span>❀ <b>꽃</b> = 좋은 일 (0 위)</span><span>●◆ <b>돌·바위</b> = 힘든 일 (흙 속)</span>
+    <span>〜 <b>바다</b> = 월별 글</span><span>☀ <b>오늘</b></span>
   </div>
   <svg id="c" aria-label="지구 연표 샘플"></svg>
   <div class="cap" id="cap"></div>
 <script>
 /* ── 익명 샘플 데이터 (1995–2028) ───────────────────────────── */
-const EVENTS=[ /* [연도, 행복 −1~+1, 이름] — 표식은 높이(값)가 정한다 */
-  [1995.0,  0.05,'태어나다'],
-  [2001.2,  0.12,'첫 친구'],
-  [2005.5,  0.3,'작은 성취'],
-  [2009.1, -0.3,'긴 방황'],
-  [2012.0, -0.12,'재수'],
-  [2014.2,  0.42,'독립'],
-  [2017.6,  0.8,'긴 여행'],
-  [2019.8, -0.62,'슬럼프'],
-  [2021.4,  0.15,'새 일'],
-  [2023.0,  0.55,'귀한 인연'],
-  [2024.6,  0.9,'가장 빛난 날'],
-  [2025.8, -0.2,'작은 부침'],
-  [2027.2,  0.6,'다음 목표']
+const EVENTS=[ /* [연도, 행복, 분류, 이름] — 분류가 층을 정한다: people=별(맨 위)·study=구름·무표=땅/꽃 */
+  [1995.0,  0.1,'','태어나다'],
+  [2001.2,  0.35,'people','첫 친구'],
+  [2004.0,  0.2,'study','첫 시험'],
+  [2005.5,  0.3,'','작은 성취'],
+  [2009.1, -0.3,'','긴 방황'],
+  [2011.3, -0.15,'study','재수 생활'],
+  [2013.1,  0.5,'study','대학 입학'],
+  [2014.2,  0.42,'people','독립과 사람들'],
+  [2017.6,  0.8,'','긴 여행'],
+  [2019.8, -0.62,'','슬럼프'],
+  [2020.9,  0.3,'study','새 언어 공부'],
+  [2021.4,  0.15,'','새 일'],
+  [2023.0,  0.55,'people','귀한 인연'],
+  [2024.6,  0.9,'people','평생의 벗'],
+  [2025.8, -0.2,'','작은 부침'],
+  [2027.2,  0.6,'','다음 목표']
 ];
 const THOUGHTS=[[2010.8,'낯선 거리에서야 내 속도를 알았다'],[2020.9,'길이 끝난 게 아니라 지도가 끝났다']];
 const HAP=[[1995,0],[2000,.2],[2004,.28],[2007,-.05],[2009,-.35],[2011,-.2],[2013,.15],[2015,.3],[2017.6,.6],
@@ -89,7 +92,8 @@ const X=t=>(t-T0)/(T1-T0)*W;
 const Y=v=>ZERO-(v)*(v>=0?(ZERO-SKY_T-38)/1:(LAND_B-ZERO)/1)* (v>=0?1:1)*(v>=0?( (ZERO-(SKY_T+38))/1 )/((ZERO-(SKY_T+38))/1):1);
 /* 단순화: +1 → SKY_T+38, −1 → LAND_B */
 const HY=v=>v>=0? ZERO-v*(ZERO-(SKY_T+38)) : ZERO-v*(LAND_B-ZERO)*-1===0?ZERO:ZERO+(-v)*(LAND_B-ZERO);
-function yOf(v){return v>=0? ZERO - v*(ZERO-(SKY_T+38)) : ZERO + (-v)*(LAND_B-ZERO);}
+const VAL_TOP=SKY_T+124; /* +1 상한 — 분류 띠(별·구름) 아래에서 멈춘다 */
+function yOf(v){return v>=0? ZERO - v*(ZERO-VAL_TOP) : ZERO + (-v)*(LAND_B-ZERO);}
 
 function smooth(p){ /* 단조 3차 (Fritsch–Carlson) */
   if(p.length<3)return 'M '+p.map(q=>q[0]+' '+q[1]).join(' L ');
@@ -133,9 +137,11 @@ const cloud=(x,y,s,label)=>{ /* ☁ + 문장 일부 */
   const g=el('g',{});
   [[0,0,10],[ -9,3,7.5],[9,3,7.5],[0,4,9]].forEach(([dx,dy,r])=>
     g.appendChild(el('ellipse',{cx:x+dx*s/10,cy:y+dy*s/10,rx:r*s/10,ry:r*s/10*.78,fill:'var(--cloud)',opacity:.9})));
-  const t=el('text',{x:x,y:y+s*2.1,'text-anchor':'middle','font-size':10.5,fill:'var(--ink-soft)'});
-  t.textContent='❝ '+label;
-  g.appendChild(t);
+  if(label){
+    const t=el('text',{x:x,y:y+s*2.1,'text-anchor':'middle','font-size':10.5,fill:'var(--ink-soft)'});
+    t.textContent='❝ '+label;
+    g.appendChild(t);
+  }
   return g;
 };
 
@@ -168,18 +174,21 @@ function render(){
   svg.appendChild(defs);
 
   svg.appendChild(el('rect',{x:0,y:0,width:W,height:ZERO,fill:'url(#sky)'}));
-  /* 하늘 꼭대기(+0.7↑) = 별무리 층 — 은은한 점들 */
-  {let sd=13;const starTop=yOf(1)-8, starBot=yOf(0.7);
-   const nStars=scene?40:16;
+  /* 분류 띠 — 별(사람)·구름(학업)은 자기 층에만 산다 */
+  const BAND_STAR={top:SKY_T+6,bot:SKY_T+40};
+  const BAND_CLOUD={top:SKY_T+52,bot:SKY_T+92};
+  {let sd=13;const nStars=scene?36:14; /* 별무리는 별 띠 안에만 */
    for(let i=0;i<nStars;i++){sd=(sd*16807)%2147483647;const rx=(sd/2147483647);
      sd=(sd*16807)%2147483647;const ry=(sd/2147483647);
      sd=(sd*16807)%2147483647;const rr=(sd/2147483647);
-     svg.appendChild(el('circle',{cx:rx*W,cy:starTop+ry*(starBot-starTop),r:.8+rr*1.1,
-       fill:'var(--star)',opacity:scene?.5:.3}));}}
-  /* 층 경계선 — ±0.5 옅은 안내선 */
-  [[0.5,'var(--sky)'],[-0.5,'var(--soil)']].forEach(([v,c])=>{
-    svg.appendChild(el('line',{x1:0,x2:W,y1:yOf(v),y2:yOf(v),stroke:c,'stroke-width':.7,
-      'stroke-dasharray':'3 9',opacity:.5}));
+     svg.appendChild(el('circle',{cx:rx*W,cy:BAND_STAR.top+ry*(BAND_STAR.bot-BAND_STAR.top),
+       r:.7+rr*1.0,fill:'var(--star)',opacity:scene?.42:.25}));}}
+  [['사람',BAND_STAR],['학업',BAND_CLOUD]].forEach(([nm,b])=>{
+    const t=el('text',{x:8,y:(b.top+b.bot)/2+3,'font-size':10,fill:'var(--ink-soft)',
+      'font-family':'ui-monospace,monospace','letter-spacing':'.18em',opacity:.75});
+    t.textContent=nm;svg.appendChild(t);
+    svg.appendChild(el('line',{x1:0,x2:W,y1:b.bot+8,y2:b.bot+8,stroke:'var(--line)','stroke-width':.7,
+      'stroke-dasharray':'3 10',opacity:.55}));
   });
 
   /* 연도 눈금 */
@@ -230,24 +239,37 @@ function render(){
   seaLb.textContent='월별 글';svg.appendChild(seaLb);
 
   /* 구름 = 생각 */
-  THOUGHTS.forEach(([t,txt],i)=>{ /* 구름은 하늘 띠에 산다 — 사건 라벨과 층 분리 */
-    const x=X(t), y=SKY_T+30+(i%2)*14;
-    svg.appendChild(cloud(x,y,scene?12:10,txt.slice(0,14)+'…'));
+  THOUGHTS.forEach(([t,txt],i)=>{ /* 생각 = ❝ 문장 (구름 모양은 학업 전용이 됨) */
+    const x=X(t), y=BAND_CLOUD.bot+26+(i%2)*15;
+    const q=el('text',{x:x,y:y,'text-anchor':'middle','font-size':10.5,fill:'var(--ink-soft)',opacity:.9});
+    q.textContent='❝ '+txt.slice(0,10)+'…';svg.appendChild(q);
   });
 
-  /* 사건 — 높이가 표식을 정한다: 별(+0.7↑) 꽃(+0.3↑) 싹(0↑) 돌(−0.4↑) 바위(그 아래) */
-  EVENTS.forEach(([t,v,name])=>{
-    const x=X(t), y=yOf(v);
-    if(v>=0.7)svg.appendChild(star(x,y,scene?9.5:8,'var(--star)'));
-    else if(v>=0.3)svg.appendChild(flower(x,y,scene?5.5:4.8,'var(--bloom)'));
-    else if(v>=0)svg.appendChild(sprout(x,y,scene?7:6,'var(--leaf)'));
-    else if(v>-0.4){
-      svg.appendChild(el('ellipse',{cx:x,cy:y,rx:5.5,ry:4.2,fill:'var(--soil)',opacity:.75}));
-      svg.appendChild(el('ellipse',{cx:x-1.4,cy:y-1.2,rx:1.6,ry:1.1,fill:'var(--paper)',opacity:.5}));
+  /* 사건 — 분류가 층을 정한다. 띠 안에서의 높이 = 그 사건의 행복(미세 축) */
+  const inBand=(b,v)=>b.bot-((v+1)/2)*(b.bot-b.top);
+  EVENTS.forEach(([t,v,cat,name])=>{
+    const x=X(t), cy=yOf(v);
+    if(cat==='people'||cat==='study'){
+      const b=cat==='people'?BAND_STAR:BAND_CLOUD;
+      const y=inBand(b,v);
+      /* 제 시점의 지형과 가는 실로 연결 — 시간·값의 끈은 남긴다 */
+      svg.appendChild(el('line',{x1:x,y1:y+(cat==='people'?8:10),x2:x,y2:cy-4,
+        stroke:'var(--ink-soft)','stroke-width':.6,'stroke-dasharray':'2 5',opacity:.3}));
+      svg.appendChild(el('circle',{cx:x,cy:cy,r:1.8,fill:'var(--ink-soft)',opacity:.5}));
+      if(cat==='people')svg.appendChild(star(x,y,scene?8.5:7.5,'var(--star)'));
+      else svg.appendChild(cloud(x,y,scene?9:8,''));
+      const lt=el('text',{x:x,y:y+(cat==='people'?20:24),'text-anchor':'middle','font-size':10.5,fill:'var(--ink)'});
+      lt.textContent=name;svg.appendChild(lt);
+      return;
     }
-    else svg.appendChild(rock(x,y,scene?8:7,'oklch(38% 0.035 60)'));
+    if(v>=0)svg.appendChild(flower(x,cy,scene?5.5:4.8,'var(--bloom)'));
+    else if(v>-0.4){
+      svg.appendChild(el('ellipse',{cx:x,cy:cy,rx:5.5,ry:4.2,fill:'var(--soil)',opacity:.75}));
+      svg.appendChild(el('ellipse',{cx:x-1.4,cy:cy-1.2,rx:1.6,ry:1.1,fill:'var(--paper)',opacity:.5}));
+    }
+    else svg.appendChild(rock(x,cy,scene?8:7,'oklch(38% 0.035 60)'));
     const above=v>=0;
-    const ty=above? y-(v>=0.7?16:13) : y+18;
+    const ty=above? cy-13 : cy+18;
     const lt=el('text',{x:x,y:ty,'text-anchor':'middle','font-size':11,fill:above?'var(--ink)':'var(--ink-soft)'});
     lt.textContent=name;svg.appendChild(lt);
   });
@@ -255,7 +277,7 @@ function render(){
   document.getElementById('cap').textContent=
     document.documentElement.dataset.mode==='scene'
     ? 'b. 풍경 모드 — 별무리·해무리·흙의 결·이중 파도까지 진하게. 시선 분산도 함께 커진다.'
-    : 'a. 은은한 무대 — 같은 값이라도 높이(층)에 따라 다른 존재가 된다: 별무리 하늘 · 들판 · 표토 · 심토 · 암반 · 바다.';
+    : 'a. 은은한 무대 — 사람은 별 띠, 학업은 구름 띠에만 산다. 띠 안의 높이 = 그 사건의 행복, 점선 실 = 제 시점의 지형과의 연결.';
 }
 document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{
   document.documentElement.dataset.mode=b.dataset.mode;
