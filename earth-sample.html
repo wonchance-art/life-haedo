@@ -282,11 +282,12 @@ function render(){
   const inBand=(b,v)=>b.bot-((v+1)/2)*(b.bot-b.top);
   EVENTS.forEach(([t,v,cat,name])=>{
     const x=X(t), cy=yOf(v);
-    if(cat==='people'){ /* 별 — 맨 위 띠 */
+    if(cat==='people'){ /* 별 — 맨 위 띠, 실은 능선까지 */
       const y=inBand(BAND_STAR,v);
-      svg.appendChild(el('line',{x1:x,y1:y+9,x2:x,y2:cy-4,
+      const gy=yOf(hapAt(t));
+      svg.appendChild(el('line',{x1:x,y1:y+9,x2:x,y2:gy-4,
         stroke:'var(--cream)','stroke-width':.5,'stroke-dasharray':'2 6',opacity:.25}));
-      svg.appendChild(el('circle',{cx:x,cy:cy,r:1.7,fill:'var(--cream)',opacity:.5}));
+      svg.appendChild(el('circle',{cx:x,cy:gy,r:1.7,fill:'var(--cream)',opacity:.5}));
       svg.appendChild(star(x,y,scene?9:8,'var(--star)'));
       if(scene)svg.appendChild(el('circle',{cx:x,cy:y,r:12,fill:'var(--star)',opacity:.12}));
       const lt=el('text',{x:x,y:y+21,'text-anchor':'middle','font-size':10.5,fill:'var(--cream)'});
@@ -304,9 +305,10 @@ function render(){
       lt.textContent=name;svg.appendChild(lt);
       return;
     }
-    if(v>=0){ /* 산 위의 꽃 */
-      svg.appendChild(flower(x,cy,scene?5.4:4.8,'var(--bloom)'));
-      const lt=el('text',{x:x,y:cy-13,'text-anchor':'middle','font-size':11,fill:'var(--cream)'});
+    if(v>=0){ /* 꽃 — 능선 위에 그대로 얹는다 */
+      const gy=yOf(Math.max(hapAt(t),0))-3;
+      svg.appendChild(flower(x,gy,scene?5.4:4.8,'var(--bloom)'));
+      const lt=el('text',{x:x,y:gy-13,'text-anchor':'middle','font-size':11,fill:'var(--cream)'});
       lt.textContent=name;svg.appendChild(lt);
     }else{ /* 힘든 일 — 수면의 파문 + 가라앉은 깊이 */
       svg.appendChild(el('ellipse',{cx:x,cy:ZERO+2,rx:7,ry:2.1,fill:'none',stroke:'var(--cream)','stroke-width':.9,opacity:.55}));
