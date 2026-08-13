@@ -12,11 +12,29 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>인생 연표</title>
 <script>(function(){try{var t=localStorage.getItem('caeyeon_life_theme');
-if(t==='light')t='nord'; if(t==='dark')t='dim'; /* 구 저장값 이행 */
-if(!t)t=matchMedia('(prefers-color-scheme: dark)').matches?'dim':'nord';
+if(t==='light'||t==='nord')t='spring'; if(t==='dark')t='dim'; /* 구 저장값 이행 */
+if(!t)t=matchMedia('(prefers-color-scheme: dark)').matches?'dim':'spring';
 document.documentElement.dataset.theme=t;}catch(e){}})();</script>
 <link rel="stylesheet" href="vendor/daisyui.css">
 <link rel="stylesheet" href="vendor/daisyui-themes.css">
+<style>
+html[data-theme=spring]{
+  color-scheme:light;
+  --color-base-100:oklch(98.2% 0.008 95); --color-base-200:oklch(96.2% 0.011 95);
+  --color-base-300:oklch(90.5% 0.015 92); --color-base-content:oklch(33% 0.014 75);
+  --color-primary:oklch(60% 0.095 135); --color-primary-content:oklch(98% 0.01 135);
+  --color-secondary:oklch(78% 0.05 40); --color-secondary-content:oklch(30% 0.03 40);
+  --color-accent:oklch(74% 0.075 20); --color-accent-content:oklch(28% 0.04 20);
+  --color-neutral:oklch(52% 0.018 80); --color-neutral-content:oklch(97% 0.008 95);
+  --color-info:oklch(64% 0.08 245); --color-info-content:oklch(97% 0.01 245);
+  --color-success:oklch(62% 0.1 145); --color-success-content:oklch(97% 0.01 145);
+  --color-warning:oklch(75% 0.09 85); --color-warning-content:oklch(30% 0.05 85);
+  --color-error:oklch(62% 0.11 25); --color-error-content:oklch(97% 0.01 25);
+  --radius-selector:1rem; --radius-field:0.65rem; --radius-box:1rem;
+  --size-selector:0.25rem; --size-field:0.25rem;
+  --border:1px; --depth:0; --noise:0;
+}
+</style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -24,7 +42,7 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{ /* 디자인 토큰은 전부 daisyUI 테마 변수에서 빌려온다 */
-    --paper:var(--color-base-200); --paper-2:var(--color-base-300);
+    --paper:var(--color-base-100); --paper-2:var(--color-base-200);
     --panel:var(--color-base-100); --field:var(--color-base-100);
     --ink:var(--color-base-content);
     --ink-soft:color-mix(in oklab,var(--color-base-content) 60%,var(--color-base-100));
@@ -326,17 +344,17 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
       <div class="sec-head"><span class="sec-no">01</span><h2>연표</h2></div>
 
       <div class="tl-controls">
-        <button class="btn btn-sm" id="btnFit">전체 보기</button>
+        <button class="btn btn-sm btn-ghost" id="btnFit">전체 보기</button>
         <button class="btn btn-sm btn-square" id="btnZoomOut" aria-label="축소">−</button>
         <button class="btn btn-sm btn-square" id="btnZoomIn" aria-label="확대">＋</button>
         <button class="btn btn-sm btn-square btn-ghost" id="btnUndo" title="되돌리기 (⌘/Ctrl+Z)" aria-label="되돌리기" disabled>↺</button>
         <button class="btn btn-sm btn-square btn-ghost" id="btnRedo" title="다시 실행 (⌘/Ctrl+Shift+Z)" aria-label="다시 실행" disabled>↻</button>
-        <button class="btn btn-sm" id="btnNow">오늘로</button>
-        <button class="btn btn-sm" id="btnSearch" title="검색 (⌘/Ctrl+F)">검색</button>
-        <button class="btn btn-sm btn-primary" id="btnEdit">기록 편집</button>
-        <select class="select select-sm" id="docSel" title="문서 전환" aria-label="문서 선택"></select>
-        <button class="btn btn-sm" id="btnNew">＋ 새 문서</button>
-        <button class="btn btn-sm" id="btnCloud" title="온라인 DB 동기화 설정">☁ DB</button>
+        <button class="btn btn-sm btn-ghost" id="btnNow">오늘로</button>
+        <button class="btn btn-sm btn-ghost" id="btnSearch" title="검색 (⌘/Ctrl+F)">검색</button>
+        <button class="btn btn-sm btn-soft btn-primary" id="btnEdit">기록 편집</button>
+        <select class="select select-sm select-ghost" id="docSel" title="문서 전환" aria-label="문서 선택"></select>
+        <button class="btn btn-sm btn-ghost" id="btnNew">＋ 새 문서</button>
+        <button class="btn btn-sm btn-ghost" id="btnCloud" title="온라인 DB 동기화 설정">☁ DB</button>
         <button class="btn btn-sm btn-square btn-ghost" id="btnTheme" aria-label="밝은/어두운 테마 전환">◐</button>
         <span class="save-state" id="saveState"></span>
       </div>
@@ -527,7 +545,29 @@ document.documentElement.dataset.theme=t;}catch(e){}})();</script>
     <button id="gateGo" class="btn btn-sm btn-primary" style="padding:9px">입장</button>
   </div>
 </div>
-<style>#gateBd[hidden]{display:none!important}</style>
+<style>#gateBd[hidden]{display:none!important}  /* ===== 봄 · 여백(間) — 상자 대신 공간, 도구는 물러나고 곡선만 남는다 ===== */
+  section{padding:96px 0}
+  header .wrap{padding-top:120px;padding-bottom:64px}
+  .subtitle{margin-top:18px;opacity:.75}
+  .canvas-frame{border:none;background:transparent;padding:0;border-radius:0}
+  .canvas-inner{border:none}
+  .detail{border:none;background:transparent;padding:20px 4px}
+  .stat-cards{display:flex;flex-wrap:wrap;gap:8px 30px}
+  .stat-cards .stat{border:none;background:transparent;border-radius:0;padding:0}
+  .stat-cards .stat-title{font-size:11px;color:var(--ink-soft)}
+  .stat-cards .stat-value{font-size:15px;font-weight:600;font-family:'IBM Plex Mono',monospace;color:var(--ink)}
+  .tl-controls{gap:6px;opacity:.92}
+  .sec-no{color:var(--ink-soft);letter-spacing:.3em}
+  .sec-head{margin-bottom:20px}
+  .scrubber{opacity:.55;transition:opacity .2s}
+  .scrubber:hover,.scrubber:focus-within{opacity:1}
+  .scrub-play{border:none}
+  .scrub-track{border:none;background:var(--color-base-200)}
+  .lay-chip{border-color:transparent;background:transparent}
+  .lay-chip.on{border-color:var(--line);background:var(--color-base-200);font-weight:600}
+  footer{opacity:.6}
+  .layer-bar{margin:14px 0 10px}
+</style>
 
 <!-- 온라인 DB 설정 -->
 <div class="search-bd" id="cloudBd" hidden>
@@ -668,22 +708,22 @@ if(RO)document.documentElement.classList.add('view-only');
    ========================================================================== */
 /* 분야 레이어 기본형 — 행복도 곡선 아래에 겹쳐 그리는 보조 그래프 */
 const DEFAULT_LAYERS=[
-  {id:'study',  name:'학습', color:'#3A6FBA', pts:[]},
-  {id:'travel', name:'여행', color:'#3F8A5F', pts:[]},
-  {id:'reading',name:'독서', color:'#7A55B8', pts:[]},
-  {id:'people', name:'사람', color:'#C24A62', pts:[]},
+  {id:'study',  name:'학습', color:'#5C8AC7', pts:[]},
+  {id:'travel', name:'여행', color:'#5C9E55', pts:[]},
+  {id:'reading',name:'독서', color:'#8E6FC8', pts:[]},
+  {id:'people', name:'사람', color:'#D06E77', pts:[]},
 ];
 const DEFAULT_DATA = {
   profile:{ name:"내 연표", birth:"1995-01" },
   scale:"signed1",
   layers:[
-    {id:'study',  name:'학습', color:'#3A6FBA', pts:[
+    {id:'study',  name:'학습', color:'#5C8AC7', pts:[
       {date:'2005-06',v:0.5},{date:'2013-01',v:0.7},{date:'2016-03',v:0.3},{date:'2020-06',v:0.5},{date:'2024-01',v:0.2}]},
-    {id:'travel', name:'여행', color:'#3F8A5F', pts:[
+    {id:'travel', name:'여행', color:'#5C9E55', pts:[
       {date:'2014-07',v:0.2},{date:'2017-08',v:0.9},{date:'2019-01',v:0.1},{date:'2023-07',v:0.5}]},
-    {id:'reading',name:'독서', color:'#7A55B8', pts:[
+    {id:'reading',name:'독서', color:'#8E6FC8', pts:[
       {date:'2010-01',v:0.3},{date:'2015-06',v:0.6},{date:'2019-11',v:0.8},{date:'2024-01',v:0.4}]},
-    {id:'people', name:'사람', color:'#C24A62', pts:[
+    {id:'people', name:'사람', color:'#D06E77', pts:[
       {date:'2001-03',v:0.4},{date:'2014-03',v:0.7},{date:'2019-11',v:-0.5},{date:'2022-01',v:0.3}]},
   ],
   thoughts:[
@@ -841,7 +881,11 @@ function sanitize(d){
   /* 분야 레이어 + 생각(당시 문장) — 구버전 문서엔 없으므로 기본형 주입 */
   if(!Array.isArray(d.layers)||!d.layers.length)d.layers=structuredClone(DEFAULT_LAYERS);
   /* 구 기본색 → 검증 통과 팔레트 (직접 바꾼 색은 건드리지 않음) */
-  const LAY_MIG={study:{'#3E6FA3':'#3A6FBA'},reading:{'#7C5FA8':'#7A55B8'},people:{'#B5536B':'#C24A62'}};
+  const LAY_MIG={
+    study:{'#3E6FA3':'#5C8AC7','#3A6FBA':'#5C8AC7'},
+    travel:{'#3F8A5F':'#5C9E55'},
+    reading:{'#7C5FA8':'#8E6FC8','#7A55B8':'#8E6FC8'},
+    people:{'#B5536B':'#D06E77','#C24A62':'#D06E77'}};
   d.layers.forEach(l=>{const m=LAY_MIG[l.id];if(m&&m[l.color])l.color=m[l.color];});
   let badLay=[];
   d.layers.forEach(l=>{
@@ -1175,8 +1219,8 @@ function render(){
   DATA.eras.forEach(er=>{
     const x1=Math.max(X(T(er.start)),-50), x2=Math.min(X(T(er.end)),W+50);
     if(x2<0||x1>W)return;
-    svg.appendChild(el('rect',{x:x1,y:0,width:x2-x1,height:L.H,fill:er.color,opacity:.055}));
-    svg.appendChild(el('line',{x1:x1,x2:x1,y1:0,y2:L.H,stroke:er.color,opacity:.3,'stroke-width':1}));
+    svg.appendChild(el('rect',{x:x1,y:0,width:x2-x1,height:L.H,fill:er.color,opacity:.035}));
+    svg.appendChild(el('line',{x1:x1,x2:x1,y1:0,y2:L.H,stroke:er.color,opacity:.15,'stroke-width':1}));
     let lx=Math.max(x1+10,10);
     if(lx<eraLabelEnd+18)lx=eraLabelEnd+18;
     const etw=textW(er.title);
@@ -1218,7 +1262,7 @@ function render(){
   for(let y=Math.ceil(dom[0]/step)*step;y<=dom[1];y+=step){
     const x=X(y);
     svg.appendChild(el('line',{x1:x,x2:x,y1:L.AXIS_Y-5,y2:L.AXIS_Y+5,stroke:'#23312B','stroke-width':1.2}));
-    svg.appendChild(el('line',{x1:x,x2:x,y1:L.AXIS_Y+5,y2:L.H,stroke:'#C4CDC1','stroke-width':.5,'stroke-dasharray':'2 6'}));
+    svg.appendChild(el('line',{x1:x,x2:x,y1:L.AXIS_Y+5,y2:L.H,stroke:'#C4CDC1','stroke-width':.5,'stroke-dasharray':'2 7',opacity:.55}));
     if(x>18&&x<W-18){ /* 가장자리 반토막 숫자 방지 */
       const t=el('text',{x:x,y:L.AXIS_Y-12,'text-anchor':'middle','font-size':11,fill:'#23312B','font-family':'IBM Plex Mono'});
       t.textContent=y;svg.appendChild(t);
@@ -1254,7 +1298,7 @@ function render(){
 
   /* ===== 행복 곡선 — 중앙 0, 상·하한 ±1은 선명한 경계선 ===== */
   /* 그래프 배경 — ±1 범위 */
-  svg.appendChild(el('rect',{x:0,y:HY(1),width:W,height:HY(-1)-HY(1),fill:'#2E5E63',opacity:.05}));
+  svg.appendChild(el('rect',{x:0,y:HY(1),width:W,height:HY(-1)-HY(1),fill:'#2E5E63',opacity:.025}));
   [-1,-.5,0,.5,1].forEach(v=>{
     const isBound=Math.abs(v)===1, isZero=v===0;
     svg.appendChild(el('line',{x1:0,x2:W,y1:HY(v),y2:HY(v),
@@ -1288,7 +1332,7 @@ function render(){
     DATA.records.forEach(r=>{
       const x=X(r.t);if(x<-20||x>W+20)return;
       const h=Math.max(r.n/maxN*bandH,1.5);
-      const rect=el('rect',{x:x,y:L.HAP_BOT-h,width:mw,height:h,fill:'#A87F3D',opacity:.22});
+      const rect=el('rect',{x:x,y:L.HAP_BOT-h,width:mw,height:h,fill:'#A87F3D',opacity:.13});
       rect.dataset.m=r.m;rect.dataset.n=r.n;rect.dataset.tx=x+mw/2;rect.dataset.ty=L.HAP_BOT-h;
       rg.appendChild(rect);
     });
@@ -1308,7 +1352,7 @@ function render(){
     const pts=lay.pts.filter(p=>isFinite(p.t)).map(p=>({x:X(p.t),y:HY(p.v),p}));
     const foc=focusLayer===lay.id;
     const gl=el('g',{class:'c-lay','data-lay':lay.id,
-      opacity:focusLayer==='main'?.34:(foc?1:.07)});
+      opacity:focusLayer==='main'?.26:(foc?1:.06)});
     if(!foc)gl.setAttribute('pointer-events','none');
     if(pts.length>1)gl.appendChild(el('path',{d:smoothPath(pts),fill:'none',stroke:lay.color,
       'stroke-width':foc?2.4:1.5,'stroke-linecap':'round',opacity:foc?.95:.8}));
@@ -1390,12 +1434,12 @@ function render(){
       gf.appendChild(gfd);
       defs.appendChild(gf);
     }
-    const mainCurve=el('path',{d:smoothPath(past),fill:'none',stroke:'#1E4348','stroke-width':2.2,'stroke-linecap':'round',opacity:.85,class:'c-main'});
+    const mainCurve=el('path',{d:smoothPath(past),fill:'none',stroke:'#1E4348','stroke-width':2.4,'stroke-linecap':'round',opacity:.92,class:'c-main'});
     if(DARK)mainCurve.setAttribute('filter','url(#curveGlow)');
     svg.appendChild(mainCurve);
   }
   if(fut.length>1)
-    svg.appendChild(el('path',{d:smoothPath(fut),fill:'none',stroke:'#7A8A80','stroke-width':1.8,'stroke-dasharray':'6 6',opacity:.85,class:'c-main'}));
+    svg.appendChild(el('path',{d:smoothPath(fut),fill:'none',stroke:'#7A8A80','stroke-width':1.7,'stroke-dasharray':'6 6',opacity:.6,class:'c-main'}));
 
   /* 표식 자리를 먼저 잡아 둔다 — 글자가 점·막대·생각표식 위에 얹히지 않게 */
   reserve(-1e4,L.SPAN_TOP-6,1e4,L.HAP_TOP-8);                        /* 막대 구역 전체 */
@@ -1579,8 +1623,8 @@ function render(){
     const y=L.SPAN_TOP+s.lane*(L.SPAN_H+L.SPAN_GAP);
     const sel=selected===s;
     const g=el('g',{cursor:'grab',tabindex:0,role:'button',class:'c-main','aria-label':`${s.start}부터 ${s.end||'진행 중'} ${s.title}`});
-    const rf=el('rect',{x:x1,y:y,width:Math.max(x2-x1,3),height:L.SPAN_H,rx:2,fill:s.color||'#2E5E63',opacity:sel?.32:.16});
-    const ro=el('rect',{x:x1,y:y,width:Math.max(x2-x1,3),height:L.SPAN_H,rx:2,fill:'none',stroke:s.color||'#2E5E63','stroke-width':sel?2:1.3,'stroke-dasharray':s.future?'5 4':''});
+    const rf=el('rect',{x:x1,y:y,width:Math.max(x2-x1,3),height:L.SPAN_H,rx:3,fill:s.color||'#2E5E63',opacity:sel?.3:.12});
+    const ro=el('rect',{x:x1,y:y,width:Math.max(x2-x1,3),height:L.SPAN_H,rx:2,fill:'none',stroke:s.color||'#2E5E63','stroke-width':sel?1.8:1,'stroke-dasharray':s.future?'5 4':''});
     g.appendChild(rf);g.appendChild(ro);
     const label=s.title.replace(/^\(예시\)\s*/,'')+(s.ongoing?' ⋯':'');
     const slx=Math.max(x1,0)+9; /* 화면 밖으로 밀린 막대는 보이는 구간 안에 라벨 */
@@ -1995,8 +2039,8 @@ function attachInteract(g,item,posFn){
 }
 
 const SPAN_COLORS=[
-  ['#2E5E63','청록'],['#1E4348','심청'],['#3E5C7F','쪽'],['#5F7A54','솔'],
-  ['#B5432A','주홍'],['#8C4A52','팥'],['#7E5A78','자주'],['#BF7B4B','감'],
+  ['#5C9E55','새잎'],['#7FA98F','옥빛'],['#5C8AC7','봄하늘'],['#8E6FC8','등꽃'],
+  ['#D06E77','산호'],['#C9A96A','봄볕'],['#B98A6E','흙'],['#8A8577','돌'],
   ['#A87F3D','황토'],['#8A5A3B','갈'],['#7A8A80','회록'],['#23312B','먹'],
 ];
 function renderDetail(){
@@ -2589,7 +2633,7 @@ let moved=false;
   $('#btnNow').onclick=()=>{const s=Math.min(dom[1]-dom[0],6);setDom(NOW-s*.6,NOW+s*.4);};
   $('#btnTheme').onclick=()=>{
     DARK=!DARK;
-    const t=DARK?'dim':'nord';
+    const t=DARK?'dim':'spring';
     document.documentElement.dataset.theme=t;
     try{localStorage.setItem('caeyeon_life_theme',t);}catch(e){}
     resolvePal();
