@@ -14,7 +14,7 @@
     --leaf:oklch(65% 0.105 133);      /* 새잎 — 곡선·들판 */
     --soil:oklch(52% 0.055 62);       /* 흙 — 0 아래 */
     --bloom:oklch(66% 0.115 23);      /* 다홍 — 꽃 핀 */
-    --star:oklch(75% 0.105 85);       /* 별 — 사람 */
+    --star:oklch(60% 0.115 82);       /* 별 — 사람 */
     --cloud:oklch(88% 0.012 250);     /* 구름 — 생각 */
     --sea:oklch(72% 0.055 225);       /* 바다 — 글 */
     --sky:oklch(90% 0.03 235);        /* 하늘 워시 */
@@ -45,28 +45,31 @@
     <button class="chip" data-mode="scene">b. 풍경 모드</button>
   </div>
   <div class="legend">
-    <span>☀ <b>오늘</b></span><span>✦ <b>별</b> = 사람 사건</span><span>❀ <b>꽃</b> = 좋은 일</span>
-    <span>● <b>돌</b> = 힘든 일(흙 속)</span><span>☁ <b>구름</b> = 생각(당시 문장)</span><span>〜 <b>바다</b> = 월별 글</span>
+    <span><b>높이가 표식을 정한다</b></span>
+    <span>✦ <b>별</b> +0.7↑</span><span>❀ <b>꽃</b> +0.3~0.7</span><span>🌱 <b>싹</b> 0~+0.3</span>
+    <span>● <b>돌</b> 0~−0.4</span><span>◆ <b>바위</b> −0.4↓</span>
+    <span>☁ <b>구름</b> = 생각</span><span>〜 <b>바다</b> = 월별 글</span><span>☀ <b>오늘</b></span>
   </div>
   <svg id="c" aria-label="지구 연표 샘플"></svg>
   <div class="cap" id="cap"></div>
 <script>
 /* ── 익명 샘플 데이터 (1995–2028) ───────────────────────────── */
-const EVENTS=[ /* [연도, 행복 −1~+1, 종류: bloom|stone|star, 이름] */
-  [1995.0,  0.0,'bloom','태어나다'],
-  [2001.2,  0.35,'star','첫 친구'],
-  [2005.5,  0.3,'bloom','작은 성취'],
-  [2009.1, -0.35,'stone','긴 방황'],
-  [2012.0, -0.15,'stone','재수'],
-  [2014.2,  0.4,'star','독립과 사람들'],
-  [2017.6,  0.65,'bloom','긴 여행'],
-  [2019.8, -0.5,'stone','슬럼프'],
-  [2021.4,  0.35,'bloom','새 일'],
-  [2023.0,  0.5,'star','귀한 인연'],
-  [2025.5,  0.3,'bloom','회복'],
-  [2027.2,  0.55,'bloom','다음 목표']
+const EVENTS=[ /* [연도, 행복 −1~+1, 이름] — 표식은 높이(값)가 정한다 */
+  [1995.0,  0.05,'태어나다'],
+  [2001.2,  0.12,'첫 친구'],
+  [2005.5,  0.3,'작은 성취'],
+  [2009.1, -0.3,'긴 방황'],
+  [2012.0, -0.12,'재수'],
+  [2014.2,  0.42,'독립'],
+  [2017.6,  0.8,'긴 여행'],
+  [2019.8, -0.62,'슬럼프'],
+  [2021.4,  0.15,'새 일'],
+  [2023.0,  0.55,'귀한 인연'],
+  [2024.6,  0.9,'가장 빛난 날'],
+  [2025.8, -0.2,'작은 부침'],
+  [2027.2,  0.6,'다음 목표']
 ];
-const THOUGHTS=[[2017.9,'낯선 거리에서야 내 속도를 알았다'],[2020.1,'길이 끝난 게 아니라 지도가 끝났다']];
+const THOUGHTS=[[2010.8,'낯선 거리에서야 내 속도를 알았다'],[2020.9,'길이 끝난 게 아니라 지도가 끝났다']];
 const HAP=[[1995,0],[2000,.2],[2004,.28],[2007,-.05],[2009,-.35],[2011,-.2],[2013,.15],[2015,.3],[2017.6,.6],
   [2019,-.1],[2019.8,-.5],[2021,.2],[2022.5,.42],[2024,.3],[2025.5,.28],[2027,.5],[2028,.55]];
 const NOW=2026.6;
@@ -113,6 +116,19 @@ const star=(x,y,r,col)=>{ /* ✦ 네 갈래 */
            Q ${x-r*.18} ${y+r*.18} ${x-r} ${y} Q ${x-r*.18} ${y-r*.18} ${x} ${y-r} Z`;
   return el('path',{d:p,fill:col,opacity:.95});
 };
+const sprout=(x,y,r,col)=>{ /* 🌱 줄기 + 두 잎 */
+  const g=el('g',{});
+  g.appendChild(el('path',{d:`M ${x} ${y+r} L ${x} ${y-r*.6}`,stroke:col,'stroke-width':1.6,'stroke-linecap':'round',fill:'none'}));
+  g.appendChild(el('path',{d:`M ${x} ${y-r*.2} Q ${x-r*1.1} ${y-r*.9} ${x-r*1.5} ${y-r*.2} Q ${x-r*.7} ${y+r*.15} ${x} ${y-r*.2} Z`,fill:col,opacity:.85}));
+  g.appendChild(el('path',{d:`M ${x} ${y-r*.55} Q ${x+r*1.1} ${y-r*1.25} ${x+r*1.5} ${y-r*.55} Q ${x+r*.7} ${y-r*.2} ${x} ${y-r*.55} Z`,fill:col,opacity:.85}));
+  return g;
+};
+const rock=(x,y,r,col)=>{ /* ◆ 심토의 모난 바위 */
+  const g=el('g',{});
+  g.appendChild(el('path',{d:`M ${x-r} ${y+r*.5} L ${x-r*.5} ${y-r*.6} L ${x+r*.3} ${y-r*.8} L ${x+r} ${y+r*.1} L ${x+r*.5} ${y+r*.7} Z`,fill:col,opacity:.9}));
+  g.appendChild(el('path',{d:`M ${x-r*.5} ${y-r*.6} L ${x-r*.1} ${y+r*.1} L ${x+r*.3} ${y-r*.8}`,stroke:'var(--paper)','stroke-width':.7,fill:'none',opacity:.4}));
+  return g;
+};
 const cloud=(x,y,s,label)=>{ /* ☁ + 문장 일부 */
   const g=el('g',{});
   [[0,0,10],[ -9,3,7.5],[9,3,7.5],[0,4,9]].forEach(([dx,dy,r])=>
@@ -138,10 +154,12 @@ function render(){
   const field=el('linearGradient',{id:'field',x1:0,y1:0,x2:0,y2:1});
   field.appendChild(el('stop',{offset:'0%','stop-color':'var(--leaf)','stop-opacity':scene?.34:.2}));
   field.appendChild(el('stop',{offset:'100%','stop-color':'var(--leaf)','stop-opacity':.04}));
-  /* 흙 */
+  /* 흙 — 깊이에 따라 표토→심토→암반 */
   const soil=el('linearGradient',{id:'soil',x1:0,y1:0,x2:0,y2:1});
-  soil.appendChild(el('stop',{offset:'0%','stop-color':'var(--soil)','stop-opacity':.06}));
-  soil.appendChild(el('stop',{offset:'100%','stop-color':'var(--soil)','stop-opacity':scene?.4:.26}));
+  soil.appendChild(el('stop',{offset:'0%','stop-color':'var(--soil)','stop-opacity':.05}));
+  soil.appendChild(el('stop',{offset:'40%','stop-color':'var(--soil)','stop-opacity':scene?.28:.18}));
+  soil.appendChild(el('stop',{offset:'78%','stop-color':'var(--soil)','stop-opacity':scene?.46:.32}));
+  soil.appendChild(el('stop',{offset:'100%','stop-color':'oklch(30% 0.03 60)','stop-opacity':scene?.55:.4}));
   /* 바다 */
   const seaG=el('linearGradient',{id:'seaG',x1:0,y1:0,x2:0,y2:1});
   seaG.appendChild(el('stop',{offset:'0%','stop-color':'var(--sea)','stop-opacity':scene?.5:.32}));
@@ -150,6 +168,19 @@ function render(){
   svg.appendChild(defs);
 
   svg.appendChild(el('rect',{x:0,y:0,width:W,height:ZERO,fill:'url(#sky)'}));
+  /* 하늘 꼭대기(+0.7↑) = 별무리 층 — 은은한 점들 */
+  {let sd=13;const starTop=yOf(1)-8, starBot=yOf(0.7);
+   const nStars=scene?40:16;
+   for(let i=0;i<nStars;i++){sd=(sd*16807)%2147483647;const rx=(sd/2147483647);
+     sd=(sd*16807)%2147483647;const ry=(sd/2147483647);
+     sd=(sd*16807)%2147483647;const rr=(sd/2147483647);
+     svg.appendChild(el('circle',{cx:rx*W,cy:starTop+ry*(starBot-starTop),r:.8+rr*1.1,
+       fill:'var(--star)',opacity:scene?.5:.3}));}}
+  /* 층 경계선 — ±0.5 옅은 안내선 */
+  [[0.5,'var(--sky)'],[-0.5,'var(--soil)']].forEach(([v,c])=>{
+    svg.appendChild(el('line',{x1:0,x2:W,y1:yOf(v),y2:yOf(v),stroke:c,'stroke-width':.7,
+      'stroke-dasharray':'3 9',opacity:.5}));
+  });
 
   /* 연도 눈금 */
   for(let y=1995;y<=2028;y+=5){
@@ -204,25 +235,27 @@ function render(){
     svg.appendChild(cloud(x,y,scene?12:10,txt.slice(0,14)+'…'));
   });
 
-  /* 사건 — 꽃·별·돌 */
-  EVENTS.forEach(([t,v,kind,name])=>{
+  /* 사건 — 높이가 표식을 정한다: 별(+0.7↑) 꽃(+0.3↑) 싹(0↑) 돌(−0.4↑) 바위(그 아래) */
+  EVENTS.forEach(([t,v,name])=>{
     const x=X(t), y=yOf(v);
-    if(kind==='star')svg.appendChild(star(x,y,scene?9:7.5,'var(--star)'));
-    else if(kind==='bloom')svg.appendChild(flower(x,y,scene?5.5:4.8,'var(--bloom)'));
-    else{ /* 돌 — 흙 속 둥근 돌 */
+    if(v>=0.7)svg.appendChild(star(x,y,scene?9.5:8,'var(--star)'));
+    else if(v>=0.3)svg.appendChild(flower(x,y,scene?5.5:4.8,'var(--bloom)'));
+    else if(v>=0)svg.appendChild(sprout(x,y,scene?7:6,'var(--leaf)'));
+    else if(v>-0.4){
       svg.appendChild(el('ellipse',{cx:x,cy:y,rx:5.5,ry:4.2,fill:'var(--soil)',opacity:.75}));
       svg.appendChild(el('ellipse',{cx:x-1.4,cy:y-1.2,rx:1.6,ry:1.1,fill:'var(--paper)',opacity:.5}));
     }
+    else svg.appendChild(rock(x,y,scene?8:7,'oklch(38% 0.035 60)'));
     const above=v>=0;
-    const ty=above? y-(kind==='star'?15:12) : y+16;
+    const ty=above? y-(v>=0.7?16:13) : y+18;
     const lt=el('text',{x:x,y:ty,'text-anchor':'middle','font-size':11,fill:above?'var(--ink)':'var(--ink-soft)'});
     lt.textContent=name;svg.appendChild(lt);
   });
 
   document.getElementById('cap').textContent=
     document.documentElement.dataset.mode==='scene'
-    ? 'b. 풍경 모드 — 하늘·해무리·흙의 결·이중 파도까지. 장식이 늘어난 만큼 시선 분산도 커진다.'
-    : 'a. 은은한 무대 — 새 요소 없이 기존 요소의 모양·색만 은유로 교체. 여백과 집중 유지.';
+    ? 'b. 풍경 모드 — 별무리·해무리·흙의 결·이중 파도까지 진하게. 시선 분산도 함께 커진다.'
+    : 'a. 은은한 무대 — 같은 값이라도 높이(층)에 따라 다른 존재가 된다: 별무리 하늘 · 들판 · 표토 · 심토 · 암반 · 바다.';
 }
 document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{
   document.documentElement.dataset.mode=b.dataset.mode;
