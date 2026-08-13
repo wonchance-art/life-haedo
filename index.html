@@ -529,6 +529,7 @@ if(RO)document.documentElement.classList.add('view-only');
    ========================================================================== */
 /* 분야 레이어 기본형 — 행복도 곡선 아래에 겹쳐 그리는 보조 그래프 */
 const DEFAULT_LAYERS=[
+  {id:'work',   name:'노동', color:'#B5843B', pts:[]},
   {id:'study',  name:'학습', color:'#5C8AC7', pts:[]},
   {id:'travel', name:'여행', color:'#5C9E55', pts:[]},
   {id:'reading',name:'독서', color:'#8E6FC8', pts:[]},
@@ -538,6 +539,8 @@ const DEFAULT_DATA = {
   profile:{ name:"내 연표", birth:"1995-01" },
   scale:"signed1",
   layers:[
+    {id:'work',   name:'노동', color:'#B5843B', pts:[
+      {date:'2014-03',v:0.2},{date:'2018-06',v:-0.3},{date:'2020-06',v:0.4},{date:'2024-01',v:0.5}]},
     {id:'study',  name:'학습', color:'#5C8AC7', pts:[
       {date:'2005-06',v:0.5},{date:'2013-01',v:0.7},{date:'2016-03',v:0.3},{date:'2020-06',v:0.5},{date:'2024-01',v:0.2}]},
     {id:'travel', name:'여행', color:'#5C9E55', pts:[
@@ -729,6 +732,7 @@ function sanitize(d){
     reading:{'#7C5FA8':'#8E6FC8','#7A55B8':'#8E6FC8'},
     people:{'#B5536B':'#D06E77','#C24A62':'#D06E77'}};
   d.layers.forEach(l=>{const m=LAY_MIG[l.id];if(m&&m[l.color])l.color=m[l.color];});
+  if(!d.layers.some(l=>l.id==='work'))d.layers.unshift({id:'work',name:'노동',color:'#B5843B',pts:[]}); /* 기존 문서에 노동 레이어 주입 (맨 앞) */
   let badLay=[];
   d.layers.forEach(l=>{
     l.pts=Array.isArray(l.pts)?l.pts:[];
