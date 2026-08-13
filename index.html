@@ -218,8 +218,6 @@ html[data-theme=spring]{
   .checkline input{width:15px;height:15px;accent-color:var(--cinnabar)}
 
   /* ===== 지도 ===== */
-  .map-frame{border:1px solid var(--line);background:var(--panel);padding:8px}
-  #map{height:520px;border:1px solid var(--line);z-index:1;position:relative}
   .trip-bar{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 18px}
   .trip-btn{font-family:inherit;font-size:13px;cursor:pointer;border:1px solid var(--line);
     background:transparent;color:var(--ink);padding:7px 16px;border-radius:2px;transition:all .15s}
@@ -244,8 +242,7 @@ html[data-theme=spring]{
   @media (max-width:640px){
     header{padding:44px 0 28px}
     section{padding:36px 0}
-    #map{height:400px}
-      /* 터치 타깃 최소 크기 + 모바일 여백 */
+        /* 터치 타깃 최소 크기 + 모바일 여백 */
     .btn,.trip-btn{min-height:38px}
     #docSel{max-width:120px}
     .pop-ed{width:min(320px,92vw)}
@@ -321,6 +318,7 @@ html[data-theme=spring]{
         <button class="lay-chip scale" data-y="5">5Y</button>
         <button class="lay-chip scale" data-y="1">1Y</button>
         <span style="flex:1"></span>
+        <button class="lay-chip" id="btnMap">지도</button>
         <button class="lay-chip" id="btnSearch" title="검색 (⌘/Ctrl+F)">검색</button>
       </div>
 
@@ -330,6 +328,16 @@ html[data-theme=spring]{
         <div class="canvas-inner">
           <svg id="tl" tabindex="0" role="application" aria-label="가로형 연표. ⌘ 또는 Ctrl과 휠로 확대, 드래그 또는 좌우 화살표로 이동, 0으로 전체 보기, 더블클릭으로 그 자리에 추가"></svg>
           <div class="tl-tip" id="tlTip"></div>
+          <!-- 지도 오버레이 — 연표 프레임 그 자리에서 펼쳐진다 -->
+          <div class="map-overlay" id="mapOverlay" hidden>
+            <div class="map-ov-bar">
+              <div class="trip-bar" id="tripBar" role="group" aria-label="경로 선택"></div>
+              <span style="flex:1"></span>
+              <button class="lay-chip" id="mapClose" aria-label="지도 닫기">✕</button>
+            </div>
+            <div id="map"></div>
+            <div class="trip-info" id="tripInfo"></div>
+          </div>
         </div>
 
         <!-- 스크러버 (미니맵) -->
@@ -343,16 +351,6 @@ html[data-theme=spring]{
     </div>
   </section>
 
-  <section id="sec-map">
-    <div class="wrap">
-      <details id="mapWrap">
-        <summary class="sec-head"><h2>지도</h2></summary>
-        <div class="trip-bar" id="tripBar" role="group" aria-label="경로 선택"></div>
-        <div class="map-frame"><div id="map"></div></div>
-        <div class="trip-info" id="tripInfo"></div>
-      </details>
-    </div>
-  </section>
 </main>
 
 <!-- 입장 게이트 -->
@@ -383,14 +381,16 @@ html[data-theme=spring]{
   .lay-chip.on{border-color:var(--line);background:var(--color-base-200);font-weight:600}
   footer{opacity:.6}
   .layer-bar{margin:14px 0 10px}
-  #mapWrap>summary{cursor:pointer;list-style:none}
-  #mapWrap>summary::-webkit-details-marker{display:none}
-  #mapWrap>summary.sec-head{display:flex;align-items:center;gap:10px}
-  #mapWrap>summary.sec-head::after{content:'▾';color:var(--ink-soft);font-size:13px;transition:transform .2s}
-  #mapWrap[open]>summary.sec-head::after{transform:rotate(180deg)}
-  #mapWrap>.trip-bar{margin-top:18px}
   .tl-controls{gap:4px;margin-bottom:2px}
   .dt-edit.bad{border-color:var(--cinnabar);outline:none}
+  .map-overlay{position:absolute;inset:0;z-index:5;background:var(--paper);
+    display:flex;flex-direction:column;animation:mapIn .25s ease}
+  .map-overlay[hidden]{display:none}
+  @keyframes mapIn{from{opacity:0}to{opacity:1}}
+  @media (prefers-reduced-motion:reduce){.map-overlay{animation:none}}
+  .map-ov-bar{display:flex;align-items:center;gap:8px;padding:7px 9px;flex-wrap:wrap}
+  .map-overlay #map{flex:1;z-index:1;position:relative}
+  .map-overlay .trip-info{padding:5px 12px 8px}
   .corner{position:absolute;top:14px;z-index:700;display:flex;gap:3px;align-items:center;
     opacity:.65;transition:opacity .2s;border-radius:999px;padding:3px 7px}
   .corner:hover,.corner:focus-within{opacity:1}
@@ -500,7 +500,7 @@ create policy "personal" on charts
 </div>
 
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous"></script>
 <script>
 /* 공유 뷰어 모드 */
 const RO=!!window.VIEW_ONLY;
@@ -1424,6 +1424,7 @@ function render(){
       selected=e;render();renderDetail();
       openCtx(ev.clientX,ev.clientY,[
         ['⧉ 복제','',()=>duplicateItem(e)],
+        ...((e.loc||e.tripId)?[['⌖ 지도에서 보기','',()=>flyToLoc(e)]]:[]),
         ...(hasV?[['행복 반영 해제 (0선으로)','',()=>{e.happiness=undefined;afterMutate(selected!=null);}]]
                 :[['행복 반영 (곡선에 올리기)','',()=>{e.happiness=0;afterMutate(selected!=null);}]]),
         ['✕ 삭제','danger',()=>deleteItem(e)],
@@ -1689,6 +1690,7 @@ function render(){
   svg.appendChild(CH.g);
 
   renderLayerBar();
+  if(MAP_OPEN){clearTimeout(mapWinTimer);mapWinTimer=setTimeout(rebuildMapBase,150);}
   LB_SNAP={tasks:lbTasks,obst:occ.filter(o=>!o.lb),W,L,
     hapY:t=>HY(hapVAt(t)),
     key:[Math.round(dom[0]*24),Math.round(dom[1]*24),W,lbTasks.length].join('|')};
@@ -1855,6 +1857,7 @@ function attachInteract(g,item,posFn){
     selected=item;render();renderDetail();
     openCtx(e.clientX,e.clientY,[
       ['⧉ 복제','',()=>duplicateItem(item)],
+      ...((item.loc||item.tripId)?[['⌖ 지도에서 보기','',()=>flyToLoc(item)]]:[]),
       ['✕ 삭제','danger',()=>deleteItem(item)],
     ]);
   });
@@ -2592,12 +2595,8 @@ function renderSearch(){
 function pickSearch(it){
   closeSearch();
   if(it.kind==='trip'){
-    document.getElementById('sec-map').scrollIntoView({behavior:reduceMotion?'auto':'smooth'});
-    setTimeout(()=>{
-      selectTrip(it.ref.id);
-      const bar=$('#tripBar'),b=bar.querySelector(`[data-trip="${it.ref.id}"]`);
-      if(b&&bar._setActive)bar._setActive(b);
-    },reduceMotion?0:400);
+    document.getElementById('sec-canvas').scrollIntoView({behavior:reduceMotion?'auto':'smooth'});
+    flyToLoc({tripId:it.ref.id});
   }else{
     document.getElementById('sec-canvas').scrollIntoView({behavior:reduceMotion?'auto':'smooth'});
     jumpToItem(it.kind==='era'?{kind:'era',...it.ref}:it.ref);
@@ -2616,7 +2615,8 @@ document.addEventListener('keydown',e=>{
   if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='f'){e.preventDefault();openSearch();}
   else if(e.key==='Escape'){
     const wasOpen=!searchBd.hidden||!ctxMenu.hidden||!popEd.hidden
-      ||!document.getElementById('newBd').hidden||!document.getElementById('cloudBd').hidden;
+      ||!document.getElementById('newBd').hidden||!document.getElementById('cloudBd').hidden||MAP_OPEN;
+    if(MAP_OPEN)closeMapOverlay();
     if(!searchBd.hidden)closeSearch();closeCtx();closePop();
     document.getElementById('newBd').hidden=true;document.getElementById('cloudBd').hidden=true;
     /* 열린 창이 없었으면 Esc = 레이어 포커스 해제 */
@@ -3073,8 +3073,6 @@ function mapNotice(msg){
 try{
   if(typeof L==='undefined') throw new Error('leaflet-missing');
   map=L.map('map',{scrollWheelZoom:false}).setView([27,127],4);
-  const mw=document.getElementById('mapWrap');
-  if(mw)mw.addEventListener('toggle',()=>{if(mw.open)setTimeout(()=>map.invalidateSize(),80);});
   let tileFails=0, fellBack=false;
   function addTiles(url,opt){
     const layer=L.tileLayer(url,opt).addTo(map);
@@ -3101,7 +3099,12 @@ function rebuildMapBase(){
   if(!map)return;
   if(baseLayer)map.removeLayer(baseLayer);
   baseLayer=L.layerGroup();
-  DATA.events.concat(DATA.spans).filter(x=>x.loc).forEach(x=>{
+  const inWin=x=>{ /* 지금 보이는 시간창에 걸친 것만 — 재생하면 타임랩스가 된다 */
+    if(!dom)return true;
+    if(x.kind==='span')return x.t0<=dom[1]&&(x.t1??NOW)>=dom[0];
+    return x.t>=dom[0]&&x.t<=dom[1];
+  };
+  DATA.events.concat(DATA.spans).filter(x=>x.loc&&inWin(x)).forEach(x=>{
     L.marker([x.loc.lat,x.loc.lng],{icon:L.divIcon({className:'',html:'<div class="port-marker" style="background:var(--ink)"></div>',iconSize:[12,12],iconAnchor:[6,6]})})
      .bindPopup(`<div class="p-title">${esc(x.title)}</div><div class="p-date">${esc(x.date||x.start)} · ${esc(x.loc.label)}</div>`)
      .addTo(baseLayer);
@@ -3146,19 +3149,43 @@ function rebuildTripBar(){
   }
   bar._setActive=setActive;
 }
-document.addEventListener('click',ev=>{
-  const c=ev.target.closest('.loc-chip'); if(!c)return;
-  document.getElementById('sec-map').scrollIntoView({behavior:reduceMotion?'auto':'smooth'});
+/* ── 지도 오버레이 — 연표 프레임 그 자리에서 열리고, 시간창과 동기화된다 ── */
+let MAP_OPEN=false, mapWinTimer=0;
+function openMapOverlay(){
+  if(MAP_OPEN)return;
+  MAP_OPEN=true;
+  document.getElementById('mapOverlay').hidden=false;
+  const bm=document.getElementById('btnMap'); if(bm)bm.classList.add('on');
+  if(map){map.invalidateSize();setTimeout(()=>map.invalidateSize(),150);} /* 크기 확정 (rAF 의존 금지) */
+  rebuildMapBase();
+}
+function whenMapSized(fn){ /* 크기 0인 지도에 flyTo하면 NaN — 크기 잡힌 뒤 실행 */
+  if(!map)return;
+  if(map.getSize().x>10&&map.getSize().y>10){fn();return;}
+  map.once('resize',()=>fn());
+  map.invalidateSize();
+}
+function closeMapOverlay(){
+  if(!MAP_OPEN)return;
+  MAP_OPEN=false;
+  document.getElementById('mapOverlay').hidden=true;
+  const bm=document.getElementById('btnMap'); if(bm)bm.classList.remove('on');
+}
+document.getElementById('btnMap').onclick=()=>{MAP_OPEN?closeMapOverlay():openMapOverlay();};
+document.getElementById('mapClose').onclick=closeMapOverlay;
+function flyToLoc(item){ /* 사건·기간의 장소/경로로 열어서 이동 */
+  openMapOverlay();
   setTimeout(()=>{
-    const bar=$('#tripBar');
-    if(c.dataset.trip){
-      selectTrip(c.dataset.trip);
-      const b=bar.querySelector(`[data-trip="${c.dataset.trip}"]`); if(b)bar._setActive(b);
-    }else{
-      clearTrips(); map.flyTo([+c.dataset.lat,+c.dataset.lng],9,{duration:reduceMotion?0:1.5});
+    if(item.tripId){
+      selectTrip(item.tripId);
+      const b=$('#tripBar').querySelector(`[data-trip="${item.tripId}"]`);
+      if(b&&$('#tripBar')._setActive)$('#tripBar')._setActive(b);
+    }else if(item.loc){
+      clearTrips();
+      whenMapSized(()=>map.flyTo([item.loc.lat,item.loc.lng],9,{duration:reduceMotion?0:1.2}));
     }
-  },reduceMotion?0:500);
-});
+  },160);
+}
 
 function clearTrips(){
   if(!map)return;
@@ -3171,10 +3198,10 @@ function selectTrip(id){
   if(!map)return;
   clearTrips();
   curTripId=id||null;
-  if(!id){map.flyTo([27,127],4,{duration:reduceMotion?0:1.2});return;}
+  if(!id){whenMapSized(()=>map.flyTo([27,127],4,{duration:reduceMotion?0:1.2}));return;}
   const t=DATA.trips.find(x=>x.id===id); if(!t||t.points.length<2)return;
   const latlngs=t.points.map(p=>[p.lat,p.lng]);
-  map.flyToBounds(L.latLngBounds(latlngs).pad(0.25),{duration:reduceMotion?0:1.2});
+  whenMapSized(()=>map.flyToBounds(L.latLngBounds(latlngs).pad(0.25),{duration:reduceMotion?0:1.2}));
   t.points.forEach((p,i)=>{
     tripLayers.push(L.marker([p.lat,p.lng],{icon:L.divIcon({className:'',html:`<div class="port-marker" style="background:${dispCol(t.color)}"></div>`,iconSize:[12,12],iconAnchor:[6,6]})})
       .addTo(map).bindPopup(`<div class="p-title">${i+1}. ${esc(p.label)}</div><div class="p-date">${esc(p.date||'')}</div>`));
