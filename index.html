@@ -68,7 +68,6 @@ html[data-theme=spring]{
 
   section{padding:52px 0}
   .sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:8px}
-  .sec-no{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--cinnabar);letter-spacing:.2em}
   h2{font-weight:700;font-size:clamp(23px,3.4vw,32px)}
 
   /* ===== 컨트롤 ===== */
@@ -89,9 +88,6 @@ html[data-theme=spring]{
 
   /* ===== 스크러버 (미니맵) ===== */
   .scrubber{display:flex;align-items:center;gap:10px;padding:8px 2px 2px}
-  .scrub-play{width:32px;height:26px;border:1px solid var(--line);background:transparent;color:var(--ink);
-    cursor:pointer;border-radius:2px;font-size:11px;line-height:1;font-family:inherit}
-  .scrub-play:hover{background:var(--paper-2)}
   .scrub-track{flex:1;position:relative;height:24px;border:1px solid var(--line);background:var(--paper-2);
     cursor:pointer;overflow:hidden;touch-action:none}
   .scrub-era,.scrub-ev,.scrub-now,.scrub-sp{position:absolute;pointer-events:none}
@@ -158,13 +154,6 @@ html[data-theme=spring]{
   .tl-tip .yy{font-family:'IBM Plex Mono',monospace;color:#9FB8AE;font-size:11px}
   .tl-tip .hh{font-family:'IBM Plex Mono',monospace;color:#E8B26A}
 
-  .detail[hidden]{display:none}
-  .detail{border:1px solid var(--line);border-top:none;background:var(--panel);
-    padding:18px 22px;min-height:92px;display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
-  .detail .dt-date{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink-soft);min-width:150px;padding-top:3px}
-  .detail .dt-date .age{display:block;font-size:11px;color:var(--gold)}
-  .detail .dt-title{font-weight:700;font-size:18px;margin-bottom:4px}
-  .detail .dt-desc{font-size:14px;color:var(--ink-soft);max-width:640px}
 
   /* ===== 인라인 편집 (노션식) ===== */
   .dt-main{flex:1;min-width:260px;display:flex;flex-direction:column;gap:4px}
@@ -172,7 +161,6 @@ html[data-theme=spring]{
     color:var(--ink);padding:3px 6px;transition:background .12s,border-color .12s}
   .dt-edit:hover{background:var(--field);border-color:var(--line)}
   .dt-edit:focus{outline:2px solid var(--water);outline-offset:-1px;background:var(--field);border-color:var(--water)}
-  .dt-title-in{font-weight:700;font-size:18px;width:100%}
   .dt-desc-in{font-size:14px;color:var(--ink-soft);width:100%;resize:vertical;min-height:40px;line-height:1.55}
   .dt-month{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink-soft);
     display:block;width:100%;max-width:155px;margin-bottom:3px}
@@ -215,9 +203,6 @@ html[data-theme=spring]{
     background:none;border:none;cursor:pointer;color:var(--ink)}
   .ctx button:hover{background:var(--paper-2)}
   .ctx button.danger{color:var(--cinnabar)}
-  .detail .dt-meta{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
-  .depth-badge{font-family:'IBM Plex Mono',monospace;font-size:11px;border:1px solid var(--water);
-    color:var(--water-deep);padding:2px 8px;border-radius:2px}
   .future-tag{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--paper);
     background:var(--future);padding:2px 7px;border-radius:2px;letter-spacing:.1em}
   .loc-chip,.mini-btn{font-size:12px;border:none;background:var(--ink);color:var(--paper);padding:5px 13px;
@@ -228,27 +213,7 @@ html[data-theme=spring]{
   .mini-btn.danger{background:var(--cinnabar)}
 
   /* ===== 에디터 ===== */
-  .editor{border:1px solid var(--line);border-top:none;background:var(--paper-2);padding:0;display:none}
-  .editor.open{display:block}
-  .ed-tabs{display:flex;border-bottom:1px solid var(--line);flex-wrap:wrap}
-  .ed-tab{font-family:inherit;font-size:13px;padding:10px 18px;background:transparent;border:none;
-    cursor:pointer;color:var(--ink-soft);border-right:1px solid var(--line)}
-  .ed-tab.on{background:var(--panel);color:var(--ink);font-weight:600;box-shadow:inset 0 -2px 0 var(--cinnabar)}
-  .ed-body{padding:20px 22px;background:var(--panel)}
-  .ed-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;align-items:flex-end}
-  .field{display:flex;flex-direction:column;gap:4px;min-width:120px;flex:1}
-  .field.grow{flex:2 1 260px}
-  .field.small{flex:0 1 110px;min-width:96px}
-  .field label{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);letter-spacing:.08em}
-  .field input,.field select,.field textarea{
-    font-family:inherit;font-size:13.5px;padding:7px 9px;border:1px solid var(--line);
-    border-radius:2px;background:var(--field);color:var(--ink);width:100%}
-  .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--water);outline-offset:-1px;border-color:var(--water)}
-  .field textarea{resize:vertical;min-height:60px;line-height:1.5}
-  .checkline{display:flex;align-items:center;gap:7px;font-size:13px;padding-bottom:8px;white-space:nowrap}
   .checkline input{width:15px;height:15px;accent-color:var(--cinnabar)}
-  .ed-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px dashed var(--line);padding-top:16px}
-  .geo-result{font-size:12px;color:var(--water-deep);min-height:18px}
 
   /* ===== 지도 ===== */
   .map-frame{border:1px solid var(--line);background:var(--panel);padding:8px}
@@ -278,15 +243,13 @@ html[data-theme=spring]{
     header{padding:44px 0 28px}
     section{padding:36px 0}
     #map{height:400px}
-    .detail .dt-date{min-width:0}
-    /* 터치 타깃 최소 크기 + 모바일 여백 */
+      /* 터치 타깃 최소 크기 + 모바일 여백 */
     .btn,.trip-btn{min-height:38px}
     #docSel{max-width:120px}
     .pop-ed{width:min(320px,92vw)}
     .hover-card{max-width:min(300px,88vw)}
     .scrub-track{height:30px}
-    .scrub-play{width:38px;height:32px}
-  }
+    }
   @media (hover:none){ /* 터치 기기: 호버 툴팁 대신 카드 사용 */
     .tl-tip{display:none}
   }
@@ -297,12 +260,10 @@ html[data-theme=spring]{
   .stat-cards .stat{background:var(--color-base-100);border:1px solid var(--line);border-radius:14px;padding:10px 14px}
   .stat-cards .stat-title{font-size:11px;color:var(--ink-soft)}
   .stat-cards .stat-value{font-size:16px;font-weight:650;font-family:'IBM Plex Mono',monospace;color:var(--ink)}
-  .ed-tab{border-radius:9px}
   .dt-edit,#docSel,.search-row input{border-radius:8px}
   .canvas-frame{border-radius:14px}
   .canvas-inner{border-radius:8px}
-  .detail{border-radius:0 0 14px 14px}
-  .pop-ed{border-radius:14px}
+    .pop-ed{border-radius:14px}
   .hover-card{border-radius:12px}
   .ctx{border-radius:12px;overflow:hidden}
   .search-panel{border-radius:16px}
@@ -339,11 +300,8 @@ html[data-theme=spring]{
       </div>
       <div class="stat-cards" aria-label="기록 요약">
         <div class="stat"><div class="stat-title">출생</div><div class="stat-value" id="statBirth">—</div></div>
-        <div class="stat"><div class="stat-title">나이</div><div class="stat-value" id="statYears">—</div></div>
         <div class="stat"><div class="stat-title">사건 · 기간</div><div class="stat-value" id="statEvents">—</div></div>
-        <div class="stat"><div class="stat-title">기록 노트</div><div class="stat-value" id="statNotes">—</div></div>
         <div class="stat"><div class="stat-title">평균 행복</div><div class="stat-value" id="statAvg">—</div></div>
-        <div class="stat"><div class="stat-title">장소</div><div class="stat-value" id="statPorts">—</div></div>
       </div>
     </div>
   </div>
@@ -352,15 +310,12 @@ html[data-theme=spring]{
 <main>
   <section id="sec-canvas">
     <div class="wrap">
-      <div class="sec-head"><span class="sec-no">01</span><h2>연표</h2></div>
+      <div class="sec-head"><h2>연표</h2></div>
 
       <div class="tl-controls">
         <button class="btn btn-sm btn-ghost" id="btnFit">All</button>
-        <button class="btn btn-sm btn-square btn-ghost" id="btnZoomOut" aria-label="축소">−</button>
-        <button class="btn btn-sm btn-square btn-ghost" id="btnZoomIn" aria-label="확대">＋</button>
         <button class="btn btn-sm btn-ghost" id="btnNow">Today</button>
         <button class="btn btn-sm btn-ghost" id="btnSearch" title="검색 (⌘/Ctrl+F)">검색</button>
-        <button class="btn btn-sm btn-soft btn-primary" id="btnEdit">기록 편집</button>
       </div>
 
       <div class="layer-bar" id="layerBar" aria-label="그래프 레이어 선택"></div>
@@ -373,169 +328,23 @@ html[data-theme=spring]{
 
         <!-- 스크러버 (미니맵) -->
         <div class="scrubber">
-          <button class="scrub-play" id="scrubPlay" aria-label="시간 순서로 재생" aria-pressed="false">▶</button>
           <div class="scrub-track" id="scrubTrack" aria-label="타임라인 미니맵 — 클릭·드래그로 이동"></div>
           <span class="scrub-year" id="scrubYear">—</span>
         </div>
 
         <!-- 에디터 -->
-        <div class="editor" id="editor">
-          <div class="ed-tabs" role="tablist">
-            <button class="ed-tab on" data-tab="event">사건</button>
-            <button class="ed-tab" data-tab="span">기간</button>
-            <button class="ed-tab" data-tab="era">시대</button>
-            <button class="ed-tab" data-tab="hap">행복도</button>
-            <button class="ed-tab" data-tab="trip">경로</button>
-          </div>
-          <div class="ed-body">
-
-            <!-- 사건 -->
-            <div class="ed-pane" data-pane="event">
-              <div class="ed-row">
-                <div class="field grow"><label>편집 대상</label><select id="evSelect"></select></div>
-                <div class="field small"><label>날짜</label><input type="month" id="evDate"></div>
-                <div class="field small"><label>행복 −1~+1</label><input type="number" id="evHap" min="-1" max="1" step="0.1"></div>
-                <span class="checkline"><input type="checkbox" id="evFuture"><label for="evFuture">예정(계획)</label></span>
-              </div>
-              <div class="ed-row">
-                <div class="field grow"><label>제목</label><input type="text" id="evTitle" placeholder="예: JLPT N1 취득"></div>
-              </div>
-              <div class="ed-row">
-                <div class="field grow"><label>설명</label><textarea id="evDesc"></textarea></div>
-              </div>
-              <div class="ed-row">
-                <div class="field grow"><label>장소 검색 (선택)</label><input type="text" id="evGeoQ" placeholder="예: 부산, Perth, 台北"></div>
-                <button class="mini-btn ghost" id="evGeoBtn" type="button">🔍 좌표 찾기</button>
-                <div class="field small"><label>위도</label><input type="number" id="evLat" step="any"></div>
-                <div class="field small"><label>경도</label><input type="number" id="evLng" step="any"></div>
-                <div class="field small"><label>장소 라벨</label><input type="text" id="evLocLabel"></div>
-                <div class="field small"><label>연결 경로</label><select id="evTrip"></select></div>
-              </div>
-              <div class="geo-result" id="evGeoRes"></div>
-              <div class="ed-actions">
-                <button class="btn btn-sm btn-primary" id="evSave">저장</button>
-                <button class="mini-btn danger" id="evDelete">삭제</button>
-              </div>
-            </div>
-
-            <!-- 기간 -->
-            <div class="ed-pane" data-pane="span" hidden>
-              <div class="ed-row">
-                <div class="field grow"><label>편집 대상</label><select id="spSelect"></select></div>
-                <div class="field small"><label>시작</label><input type="month" id="spStart"></div>
-                <div class="field small"><label>종료 (비움=진행 중)</label><input type="month" id="spEnd"></div>
-                <div class="field small"><label>행복 −1~+1</label><input type="number" id="spHap" min="-1" max="1" step="0.1"></div>
-                <span class="checkline"><input type="checkbox" id="spFuture"><label for="spFuture">예정(계획)</label></span>
-              </div>
-              <div class="ed-row">
-                <div class="field grow"><label>제목</label><input type="text" id="spTitle" placeholder="예: 프랑스어 집중 — 28주"></div>
-                <div class="field small"><label>색</label>
-                  <select id="spColor">
-                    <option value="#2E5E63">청록</option><option value="#1E4348">심청</option>
-                    <option value="#3E5C7F">쪽</option><option value="#5F7A54">솔</option>
-                    <option value="#B5432A">주홍</option><option value="#8C4A52">팥</option>
-                    <option value="#7E5A78">자주</option><option value="#BF7B4B">감</option>
-                    <option value="#A87F3D">황토</option><option value="#8A5A3B">갈</option>
-                    <option value="#7A8A80">회록</option><option value="#23312B">먹</option>
-                  </select></div>
-              </div>
-              <div class="ed-row"><div class="field grow"><label>설명</label><textarea id="spDesc"></textarea></div></div>
-              <div class="ed-row">
-                <div class="field grow"><label>장소 검색 (선택)</label><input type="text" id="spGeoQ"></div>
-                <button class="mini-btn ghost" id="spGeoBtn" type="button">🔍 좌표 찾기</button>
-                <div class="field small"><label>위도</label><input type="number" id="spLat" step="any"></div>
-                <div class="field small"><label>경도</label><input type="number" id="spLng" step="any"></div>
-                <div class="field small"><label>장소 라벨</label><input type="text" id="spLocLabel"></div>
-                <div class="field small"><label>연결 경로</label><select id="spTrip"></select></div>
-              </div>
-              <div class="geo-result" id="spGeoRes"></div>
-              <div class="ed-actions">
-                <button class="btn btn-sm btn-primary" id="spSave">저장</button>
-                <button class="mini-btn danger" id="spDelete">삭제</button>
-              </div>
-            </div>
-
-            <!-- 시대 -->
-            <div class="ed-pane" data-pane="era" hidden>
-              <div class="ed-row">
-                <div class="field grow"><label>편집 대상</label><select id="erSelect"></select></div>
-                <div class="field small"><label>시작</label><input type="month" id="erStart"></div>
-                <div class="field small"><label>종료</label><input type="month" id="erEnd"></div>
-                <div class="field small"><label>색</label>
-                  <select id="erColor">
-                    <option value="#2E5E63">청록</option><option value="#1E4348">심청</option>
-                    <option value="#3E5C7F">쪽</option><option value="#5F7A54">솔</option>
-                    <option value="#B5432A">주홍</option><option value="#8C4A52">팥</option>
-                    <option value="#7E5A78">자주</option><option value="#BF7B4B">감</option>
-                    <option value="#A87F3D">황토</option><option value="#8A5A3B">갈</option>
-                    <option value="#7A8A80">회록</option>
-                  </select></div>
-              </div>
-              <div class="ed-row"><div class="field grow"><label>제목</label><input type="text" id="erTitle" placeholder="예: 대학 시절"></div></div>
-              <div class="ed-actions">
-                <button class="btn btn-sm btn-primary" id="erSave">저장</button>
-                <button class="mini-btn danger" id="erDelete">삭제</button>
-              </div>
-            </div>
-
-            <!-- 행복도 -->
-            <div class="ed-pane" data-pane="hap" hidden>
-              <div class="ed-row">
-                <div class="field grow"><label>편집 대상</label><select id="hpSelect"></select></div>
-                <div class="field small"><label>날짜</label><input type="month" id="hpDate"></div>
-                <div class="field small"><label>행복 −1~+1</label><input type="number" id="hpVal" min="-1" max="1" step="0.1"></div>
-                <span class="checkline"><input type="checkbox" id="hpFuture"><label for="hpFuture">예정(계획)</label></span>
-              </div>
-              <div class="ed-actions">
-                <button class="btn btn-sm btn-primary" id="hpSave">저장</button>
-                <button class="mini-btn danger" id="hpDelete">삭제</button>
-              </div>
-            </div>
-
-            <!-- 경로 -->
-            <div class="ed-pane" data-pane="trip" hidden>
-              <div class="ed-row">
-                <div class="field grow"><label>편집 대상</label><select id="trSelect"></select></div>
-                <div class="field grow"><label>이름</label><input type="text" id="trTitle" placeholder="예: 일본 — 산인 여행"></div>
-                <div class="field small"><label>색</label>
-                  <select id="trColor">
-                    <option value="#B5432A">주홍</option><option value="#2E5E63">청록</option>
-                    <option value="#1E4348">심청</option><option value="#3E5C7F">쪽</option>
-                    <option value="#5F7A54">솔</option><option value="#8C4A52">팥</option>
-                    <option value="#7E5A78">자주</option><option value="#BF7B4B">감</option>
-                    <option value="#A87F3D">황토</option><option value="#8A5A3B">갈</option>
-                    <option value="#7A8A80">회록</option>
-                  </select></div>
-                <span class="checkline"><input type="checkbox" id="trDashed"><label for="trDashed">계획 경로(점선)</label></span>
-              </div>
-              <div class="ed-row"><div class="field grow"><label>메모</label><input type="text" id="trNote"></div></div>
-              <div class="ed-row">
-                <div class="field grow">
-                  <label>장소 — 한 줄에 하나: 장소명 | 메모(선택). 좌표는 저장 시 자동 검색</label>
-                  <textarea id="trPoints" rows="5" placeholder="부산 | 출발&#10;후쿠오카 | 1일차&#10;오사카 | 3일차"></textarea>
-                </div>
-              </div>
-              <div class="geo-result" id="trGeoRes"></div>
-              <div class="ed-actions">
-                <button class="btn btn-sm btn-primary" id="trSave">저장 (좌표 자동 검색)</button>
-                <button class="mini-btn danger" id="trDelete">삭제</button>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        <div class="detail" id="detail"></div>
       </div>
     </div>
   </section>
 
   <section id="sec-map">
     <div class="wrap">
-      <div class="sec-head"><span class="sec-no">02</span><h2>지도</h2></div>
-      <div class="trip-bar" id="tripBar" role="group" aria-label="경로 선택"></div>
-      <div class="map-frame"><div id="map"></div></div>
-      <div class="trip-info" id="tripInfo"></div>
+      <details id="mapWrap">
+        <summary class="sec-head"><h2>지도</h2></summary>
+        <div class="trip-bar" id="tripBar" role="group" aria-label="경로 선택"></div>
+        <div class="map-frame"><div id="map"></div></div>
+        <div class="trip-info" id="tripInfo"></div>
+      </details>
     </div>
   </section>
 </main>
@@ -555,22 +364,26 @@ html[data-theme=spring]{
   .subtitle{margin-top:18px;opacity:.75}
   .canvas-frame{border:none;background:transparent;padding:0;border-radius:0}
   .canvas-inner{border:none}
-  .detail{border:none;background:transparent;padding:20px 4px}
   .stat-cards{display:flex;flex-wrap:wrap;gap:8px 30px}
   .stat-cards .stat{border:none;background:transparent;border-radius:0;padding:0}
   .stat-cards .stat-title{font-size:11px;color:var(--ink-soft)}
   .stat-cards .stat-value{font-size:15px;font-weight:600;font-family:'IBM Plex Mono',monospace;color:var(--ink)}
   .tl-controls{gap:6px;opacity:.92}
-  .sec-no{color:var(--ink-soft);letter-spacing:.3em}
   .sec-head{margin-bottom:20px}
   .scrubber{opacity:.55;transition:opacity .2s}
   .scrubber:hover,.scrubber:focus-within{opacity:1}
-  .scrub-play{border:none}
   .scrub-track{border:none;background:var(--color-base-200)}
   .lay-chip{border-color:transparent;background:transparent}
   .lay-chip.on{border-color:var(--line);background:var(--color-base-200);font-weight:600}
   footer{opacity:.6}
   .layer-bar{margin:14px 0 10px}
+  #mapWrap>summary{cursor:pointer;list-style:none}
+  #mapWrap>summary::-webkit-details-marker{display:none}
+  #mapWrap>summary.sec-head{display:flex;align-items:center;gap:10px}
+  #mapWrap>summary.sec-head::after{content:'▾';color:var(--ink-soft);font-size:13px;transition:transform .2s}
+  #mapWrap[open]>summary.sec-head::after{transform:rotate(180deg)}
+  #mapWrap>.trip-bar{margin-top:18px}
+  .tl-controls{gap:4px;margin-bottom:2px}
   .corner{position:fixed;top:10px;z-index:700;display:flex;gap:3px;align-items:center;
     opacity:.5;transition:opacity .2s}
   .corner:hover,.corner:focus-within{opacity:1}
@@ -679,11 +492,6 @@ create policy "personal" on charts
   </div>
 </div>
 
-<footer>
-  <div class="wrap">
-    <span>인생 연표</span>
-  </div>
-</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
@@ -824,17 +632,17 @@ function persist(){
 }
 function updateSaveState(){
   const s=document.getElementById('saveState');
-  if(RO){s.textContent='👁 공유 화면 — 읽기 전용';s.classList.remove('warn');return;}
-  if(!storageOK){s.textContent='▲ 메모리 전용 — 저장 실패';s.classList.add('warn');return;}
+  const set=(dot,msg,warn)=>{s.textContent=dot;s.title=msg;s.classList.toggle('warn',!!warn);};
+  if(RO)return set('👁','공유 화면 — 읽기 전용');
+  if(!storageOK)return set('⚠','메모리 전용 — 저장 실패',1);
   if(typeof CLOUD!=='undefined'&&CLOUD){
-    if(cloudState==='sync'){s.textContent='☁ 동기화 중…';s.classList.remove('warn');}
-    else if(cloudState==='auth'){s.textContent='🔐 로그인 필요 — ☁ DB에서 로그인';s.classList.add('warn');}
-    else if(cloudState==='conflict'){s.textContent='⚠ 업로드 보류 — 다른 기기 수정본 있음 (새로고침 권장)';s.classList.add('warn');}
-    else if(cloudState==='err'){s.textContent='⚠ 동기화 실패 — 로컬엔 저장됨';s.classList.add('warn');}
-    else{s.textContent='☁ 온라인 DB 동기화됨'+(CLOUD.session?' · '+CLOUD.session.email:'');s.classList.remove('warn');}
-    return;
+    if(cloudState==='sync')return set('…','동기화 중');
+    if(cloudState==='auth')return set('⚠','로그인 필요 — ☁ DB에서 로그인',1);
+    if(cloudState==='conflict')return set('⚠','업로드 보류 — 다른 기기 수정본 있음 (새로고침 권장)',1);
+    if(cloudState==='err')return set('⚠','동기화 실패 — 로컬엔 저장됨',1);
+    return set('●','온라인 DB 동기화됨'+(CLOUD.session?' · '+CLOUD.session.email:''));
   }
-  s.textContent='● 브라우저에 저장됨'; s.classList.remove('warn');
+  set('●','브라우저에 저장됨');
 }
 /* 시간 유틸 — 로드 관문(migrateScale/sanitize)보다 먼저 선언되어야 한다 */
 const T=d=>{const[y,m]=String(d).split('-').map(Number);return y+((m||1)-1)/12;};
@@ -936,7 +744,7 @@ function reportIssues(){
   if(fixed.length)lines.push('· 자동 교정 '+fixed.length+'건: '+fixed.slice(0,3).map(i=>i.label+' '+i.from+'→'+i.to).join(', ')+(fixed.length>3?' 외':''));
   if(drop.length)lines.push('· 격리 '+drop.length+'건(형식 불명, 화면에서 제외): '+drop.slice(0,3).map(i=>i.label+' '+i.key+'='+i.from).join(', ')+(drop.length>3?' 외':''));
   const s=document.getElementById('saveState');
-  if(s){s.textContent='⚠ 날짜 '+DATA_ISSUES.length+'건 정리됨 — 클릭해 확인';s.classList.add('warn');s.style.cursor='pointer';
+  if(s){s.textContent='⚠';s.title='날짜 '+DATA_ISSUES.length+'건 정리됨 — 클릭해 확인';s.classList.add('warn');s.style.cursor='pointer';
     s.onclick=()=>{alert('날짜 형식 문제를 정리했다:\n\n'+lines.join('\n')+'\n\n교정된 항목은 그대로 쓰면 되고, 격리된 항목은 편집에서 다시 입력하면 살아난다.');
       s.onclick=null;s.style.cursor='';updateSaveState();};
   }
@@ -1108,20 +916,14 @@ function prepare(){
   dom=[Math.max(dom[0],BOUND[0]),Math.min(dom[1],BOUND[1])];
 
   /* 요약 */
-  const ports=new Set();
-  DATA.events.concat(DATA.spans).forEach(x=>x.loc&&ports.add(x.loc.label));
-  DATA.trips.forEach(t=>t.points.forEach(p=>ports.add(p.label)));
   const h1Sync=document.querySelector('h1');
   if(h1Sync&&DATA.profile.name&&h1Sync.textContent!==DATA.profile.name)h1Sync.textContent=DATA.profile.name;
   $('#statBirth').textContent=DATA.profile.birth.replace('-','.');
-  $('#statYears').textContent=(NOW-T(DATA.profile.birth)).toFixed(1)+" yr";
   $('#statEvents').textContent=DATA.events.length+" · "+DATA.spans.length;
-  $('#statNotes').textContent=DATA.records.reduce((s,r)=>s+r.n,0).toLocaleString()+" 편";
   const avgPts=HAPPTS.filter(pt=>!pt.future);
   $('#statAvg').textContent=avgPts.length
     ?(a=>(a>0?'+':'')+a.toFixed(2))(avgPts.reduce((s,pt)=>s+pt.v,0)/avgPts.length)
     :'—';
-  $('#statPorts').textContent=ports.size+" 곳";
 }
 const fmtAge=t=>Math.floor(t-T(DATA.profile.birth))+"세";
 
@@ -1262,7 +1064,6 @@ function render(){
       gz.addEventListener('contextmenu',e=>{
         e.preventDefault();e.stopPropagation();
         openCtx(e.clientX,e.clientY,[
-          ['✎ 폼에서 편집','',()=>{if(!editMode)$('#btnEdit').onclick();openTab('era');fillEraForm(er);}],
           ['✕ 시대 삭제','danger',()=>{
                     DATA.eras.splice(DATA.eras.indexOf(er),1);afterMutate(selected!=null);
           }],
@@ -1504,8 +1305,7 @@ function render(){
       `${e.happiness!=null?(e.happiness>0?'+':'')+e.happiness.toFixed(1):'—'}  ${e.title}`,'',
       ()=>{selected=e;render();renderDetail();
         const r=svg.getBoundingClientRect();
-        openPop(e,r.left+X(e.t)*(r.width/W||1),r.top+HY(e.happiness??0)*(r.height/LAYOUT.H||1));
-        if(editMode){openTab('event');fillEventForm(e);}}]));
+        openPop(e,r.left+X(e.t)*(r.width/W||1),r.top+HY(e.happiness??0)*(r.height/LAYOUT.H||1));}]));
     g.addEventListener('mouseenter',()=>{const rc=svg.getBoundingClientRect();showClusterCard(list,rc.left+x,rc.top+y);});
     g.addEventListener('mouseleave',hideCard);
     g.addEventListener('pointerdown',ev=>{if(ev.pointerType!=='mouse'){const rc=svg.getBoundingClientRect();showClusterCard(list,rc.left+x,rc.top+y);}});
@@ -1588,7 +1388,6 @@ function render(){
       if(selected){
         const rc=svg.getBoundingClientRect();
         openPop(e,rc.left+x,rc.top+y);
-        if(editMode){openTab('event');fillEventForm(e);}
       }else closePop();
     };
     g.addEventListener('click',ev=>{if(moved)return;ev.stopPropagation();pickEv();});
@@ -1597,8 +1396,6 @@ function render(){
       ev.preventDefault();ev.stopPropagation();
       selected=e;render();renderDetail();
       openCtx(ev.clientX,ev.clientY,[
-        ['✎ 폼에서 편집','',()=>{if(!editMode)$('#btnEdit').onclick();openTab('event');fillEventForm(e);
-          $('#editor').scrollIntoView({behavior:reduceMotion?'auto':'smooth',block:'center'});}],
         ['⧉ 복제','',()=>duplicateItem(e)],
         ...(hasV?[['행복 반영 해제 (0선으로)','',()=>{e.happiness=undefined;afterMutate(selected!=null);}]]
                 :[['행복 반영 (곡선에 올리기)','',()=>{e.happiness=0;afterMutate(selected!=null);}]]),
@@ -1730,8 +1527,7 @@ function render(){
       `${sp.start.replace('-','.')}–${sp.end?sp.end.replace('-','.'):'진행 중'}  ${sp.title}`,'',
       ()=>{selected=sp;render();renderDetail();
         const r=svg.getBoundingClientRect();
-        openPop(sp,r.left+Math.max(X(sp.t0),0)+20,r.top+y+L.SPAN_H);
-        if(editMode){openTab('span');fillSpanForm(sp);}}]));
+        openPop(sp,r.left+Math.max(X(sp.t0),0)+20,r.top+y+L.SPAN_H);}]));
     g.addEventListener('mouseenter',()=>{const rc=svg.getBoundingClientRect();showClusterCard(list,rc.left+bx,rc.top+by);});
     g.addEventListener('mouseleave',hideCard);
     g.addEventListener('pointerdown',ev=>{if(ev.pointerType!=='mouse'){const rc=svg.getBoundingClientRect();showClusterCard(list,rc.left+bx,rc.top+by);}});
@@ -1812,7 +1608,6 @@ function render(){
         openPop(pt.src,rc.left+p.x,rc.top+p.y);
       }else{
         openPopHap(pt.src,rc.left+p.x,rc.top+p.y);
-        if(editMode){ openTab('hap'); fillHapForm(pt.src); }
       }
     });
     g.addEventListener('contextmenu',ev=>{
@@ -2003,7 +1798,7 @@ function renderLayerBar(){
     b.onclick=()=>{focusLayer=(focusLayer===id?'main':id);render();};
     bar.appendChild(b);
   };
-  mk('main','행복도 종합','#1E4348');
+  mk('main','종합','#1E4348');
   (DATA.layers||[]).forEach(l=>mk(l.id,l.name,l.color));
 }
 
@@ -2028,10 +1823,6 @@ function attachInteract(g,item,posFn){
     if(selected){ /* 클릭 즉시 그 자리에서 편집 */
       const p=posFn(),rc=svg.getBoundingClientRect();
       openPop(item,rc.left+p.x,rc.top+p.y);
-      if(editMode){
-        if(item.kind==='event'){openTab('event');fillEventForm(item);}
-        else{openTab('span');fillSpanForm(item);}
-      }
     }else closePop();
   };
   g.addEventListener('click',pick);
@@ -2040,12 +1831,6 @@ function attachInteract(g,item,posFn){
     e.preventDefault();e.stopPropagation();
     selected=item;render();renderDetail();
     openCtx(e.clientX,e.clientY,[
-      ['✎ 폼에서 편집','',()=>{
-        if(!editMode)$('#btnEdit').onclick();
-        if(item.kind==='event'){openTab('event');fillEventForm(item);}
-        else{openTab('span');fillSpanForm(item);}
-        $('#editor').scrollIntoView({behavior:reduceMotion?'auto':'smooth',block:'center'});
-      }],
       ['⧉ 복제','',()=>duplicateItem(item)],
       ['✕ 삭제','danger',()=>deleteItem(item)],
     ]);
@@ -2057,91 +1842,7 @@ const SPAN_COLORS=[
   ['#D06E77','산호'],['#C9A96A','봄볕'],['#B98A6E','흙'],['#8A8577','돌'],
   ['#A87F3D','황토'],['#8A5A3B','갈'],['#7A8A80','회록'],['#23312B','먹'],
 ];
-function renderDetail(){
-  const d=$('#detail');
-  if(RO){ /* 공유 뷰어: 읽기 전용 상세 */
-    if(!selected){d.innerHTML='';d.hidden=true;return;}
-    const it=selected,isSpan=it.kind==='span';
-    const range=isSpan?`${it.start.replace('-','.')} – ${it.end?it.end.replace('-','.'):'진행 중'}`:it.date.replace('-','.');
-    const age=it.future?'예정':fmtAge(isSpan?it.t0:it.t);
-    d.innerHTML=`
-      <div class="dt-date">${esc(range)}<span class="age">${esc(age)}</span></div>
-      <div>
-        <div class="dt-title">${esc(it.title)} ${it.future?'<span class="future-tag">PLANNED</span>':''}</div>
-        <p class="dt-desc">${esc(it.desc||'')}</p>
-        <div class="dt-meta">
-          ${it.happiness!=null?`<span class="depth-badge">행복도 ${(it.happiness>0?'+':'')+it.happiness.toFixed(1)}</span>`:''}
-          ${it.loc?`<button class="loc-chip" data-lat="${it.loc.lat}" data-lng="${it.loc.lng}" data-trip="${esc(it.tripId||'')}">${esc(it.loc.label)} — 지도에서 보기</button>`:''}
-        </div>
-      </div>`;
-    d.hidden=false;return;
-  }
-  if(!selected){d.innerHTML='';d.hidden=true;return;}
-  const it=selected, isSpan=it.kind==='span';
-  const age=isSpan?fmtAge(it.t0):fmtAge(it.t);
-  d.hidden=false;
-  d.innerHTML=`
-    <div class="dt-date">
-      ${isSpan
-        ?`<input type="month" class="dt-edit dt-month" id="dtStart" value="${it.start}" aria-label="시작">
-           <input type="month" class="dt-edit dt-month" id="dtEnd" value="${it.end||''}" aria-label="종료 — 비우면 진행 중">`
-        :`<input type="month" class="dt-edit dt-month" id="dtDate" value="${it.date}" aria-label="날짜">`}
-      <span class="age">${it.future?'예정':age}${isSpan&&!it.end?' · 진행 중':''}</span>
-    </div>
-    <div class="dt-main">
-      <input class="dt-edit dt-title-in" id="dtTitle" value="${esc(it.title)}" aria-label="제목">
-      <textarea class="dt-edit dt-desc-in" id="dtDesc" placeholder="설명…" aria-label="설명">${esc(it.desc||'')}</textarea>
-      <div class="dt-meta">
-        ${!isSpan?`<label class="dt-lab"><input type="checkbox" id="dtHasHap" ${it.happiness!=null?'checked':''}> 행복 반영</label>`:''}
-        <label class="dt-lab">행복도 <input type="number" class="dt-edit dt-num" id="dtHap" min="-1" max="1" step="0.1" value="${it.happiness??''}"${!isSpan&&it.happiness==null?' disabled':''}></label>
-        <label class="dt-lab"><input type="checkbox" id="dtFuture" ${it.future?'checked':''}> 예정</label>
-        ${isSpan?`<select class="dt-edit" id="dtColor" aria-label="색">${SPAN_COLORS.map(c=>`<option value="${c[0]}"${it.color===c[0]?' selected':''}>${c[1]}</option>`).join('')}</select>`:''}
-        ${it.loc?`<button class="loc-chip" data-lat="${it.loc.lat}" data-lng="${it.loc.lng}" data-trip="${esc(it.tripId||'')}">${esc(it.loc.label)}</button>`:''}
-        <span style="flex:1"></span>
-        <button class="mini-btn ghost" id="dtMore">✎ 전체 편집</button>
-        <button class="mini-btn ghost" id="dtDup">⧉ 복제</button>
-        <button class="mini-btn danger" id="dtDel">✕ 삭제</button>
-      </div>
-    </div>`;
-  const commit=()=>afterMutate(true);
-  $('#dtTitle').onchange=e=>{const v=e.target.value.trim();if(v){it.title=v;commit();}else e.target.value=it.title;};
-  $('#dtTitle').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();e.target.blur();}};
-  $('#dtDesc').onchange=e=>{it.desc=e.target.value.trim();commit();};
-  $('#dtHap').onchange=e=>{const v=parseFloat(e.target.value);it.happiness=isNaN(v)?undefined:Math.min(1,Math.max(-1,v));commit();};
-  $('#dtFuture').onchange=e=>{it.future=e.target.checked||undefined;commit();};
-  if(!isSpan)$('#dtHasHap').onchange=e=>{ /* commit → renderDetail 재구성으로 상태 동기화 */
-    it.happiness=e.target.checked?(it.happiness??0):undefined;
-    commit();
-  };
-  if(isSpan){
-    $('#dtStart').onchange=e=>{
-      const v=e.target.value;
-      if(!v){e.target.value=it.start;return;}
-      if(it.end&&T(it.end)<=T(v)){ /* 종료를 넘어서면 = 통째 이동 */
-        const dur=miOf(it.end)-miOf(it.start);
-        it.start=v;it.end=miToMonth(miOf(v)+dur);
-      }else it.start=v;
-      commit();
-    };
-    $('#dtEnd').onchange=e=>{
-      const v=e.target.value||null;
-      if(v&&T(v)<=T(it.start)){ /* 시작보다 앞서면 = 통째 이동 */
-        const dur=it.end?miOf(it.end)-miOf(it.start):12;
-        it.end=v;it.start=miToMonth(miOf(v)-dur);
-      }else it.end=v;
-      commit();
-    };
-    $('#dtColor').onchange=e=>{it.color=e.target.value;commit();};
-  }else{
-    $('#dtDate').onchange=e=>{const v=e.target.value;if(v){it.date=v;commit();}else e.target.value=it.date;};
-  }
-  $('#dtMore').onclick=()=>{
-    if(!editMode)$('#btnEdit').onclick();
-    if(isSpan){openTab('span');fillSpanForm(it);}else{openTab('event');fillEventForm(it);}
-  };
-  $('#dtDup').onclick=()=>duplicateItem(it);
-  $('#dtDel').onclick=()=>deleteItem(it);
-}
+function renderDetail(){} /* 상세 패널 제거 — 팝오버·호버 카드가 담당 */
 function focusTitle(){requestAnimationFrame(()=>{const i=$('#dtTitle');if(i){i.focus();i.select();}});}
 function deleteItem(it){ /* 즉시 삭제 — 복구는 ⌘/Ctrl+Z */
   if(RO)return;
@@ -2255,9 +1956,16 @@ function openPop(it,ax,ay){
     ${!isSpan?`<div class="pe-row pe-tags" role="group" aria-label="해당 분야">
       ${(DATA.layers||[]).map(l=>`<label class="lay-tag"><input type="checkbox" data-lay="${l.id}"${(it.layers||[]).includes(l.id)?' checked':''}><span class="swz" style="background:${dispCol(l.color)}"></span>${esc(l.name)}</label>`).join('')}
     </div>`:''}
+    <div class="pe-row">
+      <input class="dt-edit" data-f="locq" placeholder="장소 — Enter로 좌표 검색" aria-label="장소"
+        value="${esc(it.loc?it.loc.label:'')}" style="flex:1;min-width:0">
+      ${DATA.trips.length?`<select class="dt-edit" data-f="trip" aria-label="연결 경로" style="max-width:110px">
+        <option value="">경로 없음</option>
+        ${DATA.trips.map(tr=>`<option value="${esc(tr.id)}"${it.tripId===tr.id?' selected':''}>${esc(tr.title)}</option>`).join('')}
+      </select>`:''}
+    </div>
     <textarea class="dt-edit pe-desc" data-f="desc" placeholder="설명…" aria-label="설명">${esc(it.desc||'')}</textarea>
     <div class="pe-actions">
-      <button class="btn btn-xs" data-a="form">✎ 전체</button>
       <button class="btn btn-xs" data-a="dup">⧉ 복제</button>
       <button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 삭제</button>
     </div>`;
@@ -2286,6 +1994,21 @@ function openPop(it,ax,ay){
     };
   }
   q('[data-f="future"]').onchange=e=>{it.future=e.target.checked||undefined;popCommit();};
+  const lq=q('[data-f="locq"]');
+  lq.onkeydown=async ev2=>{ /* Enter = 지오코딩해서 위치 부여, 비우면 해제 */
+    if(ev2.key!=='Enter')return;
+    ev2.preventDefault();
+    const v=lq.value.trim();
+    if(!v){if(it.loc){delete it.loc;popCommit();}return;}
+    lq.disabled=true;
+    const g=await geocode(v);
+    lq.disabled=false;
+    if(g){it.loc={lat:g.lat,lng:g.lng,label:v};lq.style.borderColor='';lq.title='';popCommit();}
+    else{lq.style.borderColor='var(--cinnabar)';lq.title='좌표를 찾지 못함 — 지명을 바꿔보세요';}
+  };
+  lq.onchange=()=>{const v=lq.value.trim();if(!v&&it.loc){delete it.loc;popCommit();}};
+  const ts=q('[data-f="trip"]');
+  if(ts)ts.onchange=()=>{it.tripId=ts.value||undefined;popCommit();};
   if(!isSpan)popEd.querySelectorAll('.lay-tag input').forEach(cb=>{ /* 분야 체크 → e.layers */
     cb.onchange=()=>{
       const ids=[...popEd.querySelectorAll('.lay-tag input:checked')].map(x=>x.dataset.lay);
@@ -2317,12 +2040,6 @@ function openPop(it,ax,ay){
   }else{
     q('[data-f="date"]').onchange=e=>{const v=e.target.value;if(v){it.date=v;popCommit();}else e.target.value=it.date;};
   }
-  q('[data-a="form"]').onclick=()=>{
-    closePop();
-    if(!editMode)$('#btnEdit').onclick();
-    if(isSpan){openTab('span');fillSpanForm(it);}else{openTab('event');fillEventForm(it);}
-    $('#editor').scrollIntoView({behavior:reduceMotion?'auto':'smooth',block:'center'});
-  };
   q('[data-a="dup"]').onclick=()=>{
     closePop();duplicateItem(it);
     openPop(selected,ax+18,ay+18);
@@ -2466,9 +2183,14 @@ function openPopTrip(t,ax,ay){
       <label class="dt-lab"><input type="checkbox" data-f="dashed" ${t.dashed?'checked':''}> 계획(점선)</label>
     </div>
     <input class="dt-edit" data-f="note" value="${esc(t.note||'')}" placeholder="메모…" style="font-size:12.5px;width:100%">
-    <div class="pe-actions">
-      <button class="btn btn-xs" data-a="pts">장소 편집</button>
-      <button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 삭제</button>
+    <textarea class="dt-edit" data-f="pts" rows="4" style="width:100%;font-size:12px"
+      placeholder="장소명 | 메모 — 한 줄에 하나">${esc((t.points||[]).map(p=>p.label+(p.date?' | '+p.date:'')).join('\n'))}</textarea>
+    <div class="pe-row" style="justify-content:space-between;align-items:center">
+      <span data-s="geo" style="font-size:11px;color:var(--ink-soft)"></span>
+      <span style="display:flex;gap:6px">
+        <button class="btn btn-xs btn-soft btn-primary" data-a="savepts">장소 저장</button>
+        <button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 삭제</button>
+      </span>
     </div>`;
   const q=s=>popEd.querySelector(s);
   q('.pe-title').onchange=e=>{const v=e.target.value.trim();if(v){t.title=v;commit();}else e.target.value=t.title;};
@@ -2476,11 +2198,23 @@ function openPopTrip(t,ax,ay){
   q('[data-f="color"]').onchange=e=>{t.color=e.target.value;commit();};
   q('[data-f="dashed"]').onchange=e=>{t.dashed=e.target.checked||undefined;commit();};
   q('[data-f="note"]').onchange=e=>{t.note=e.target.value.trim();commit();};
-  q('[data-a="pts"]').onclick=()=>{
-    closePop();
-    if(!editMode)$('#btnEdit').onclick();
-    openTab('trip');fillTripForm(t);
-    $('#editor').scrollIntoView({behavior:reduceMotion?'auto':'smooth',block:'center'});
+  q('[data-a="savepts"]').onclick=async()=>{ /* 좌표는 새 장소만 검색 (Nominatim 1req/s) */
+    const st=q('[data-s="geo"]');
+    const lines=q('[data-f="pts"]').value.split('\n').map(l=>l.trim()).filter(Boolean);
+    if(lines.length<2){st.textContent='장소가 2곳 이상 필요';return;}
+    const old=t.points||[]; const pts=[];
+    for(const [idx,line] of lines.entries()){
+      const [label,note]=line.split('|').map(x=>x.trim());
+      const prev=old.find(p2=>p2.label===label);
+      if(prev){pts.push({...prev,date:note||prev.date});continue;}
+      st.textContent=`좌표 검색 ${idx+1}/${lines.length} — ${label}`;
+      const g=await geocode(label);
+      if(!g){st.textContent=`「${label}」 좌표 없음 — 지명 수정`;return;}
+      pts.push({lat:g.lat,lng:g.lng,label,date:note||''});
+      await new Promise(r=>setTimeout(r,1100));
+    }
+    t.points=pts; st.textContent='저장됨';
+    commit();
   };
   q('[data-a="del"]').onclick=()=>{
     closePop();
@@ -2578,7 +2312,7 @@ let moved=false;
     else if(e.key==='+'||e.key==='='){e.preventDefault();zoomAt((dom[0]+dom[1])/2,1/1.35);}
     else if(e.key==='-'){e.preventDefault();zoomAt((dom[0]+dom[1])/2,1.35);}
     else if(e.key==='0'){e.preventDefault();dom=[...FULL];render();}
-    else if(e.key===' '){e.preventDefault();$('#scrubPlay').onclick();} /* Space = 시간 순서 재생 */
+    else if(e.key===' '){e.preventDefault();togglePlay();}
   });
   /* 빈 곳: 클릭 = 선택 해제 · 빠른 두 번 클릭 = 그 자리에 추가.
      ⚠ 네이티브 dblclick은 못 쓴다 — 첫 클릭의 render()가 노드를 갈아치워 브라우저가 더블클릭으로 안 센다 */
@@ -2642,8 +2376,6 @@ let moved=false;
     requestAnimationFrame(()=>{const ti=document.querySelector('#popEd .pe-title');if(ti)ti.select();});
   }
   $('#btnFit').onclick=()=>{dom=[...FULL];render();};
-  $('#btnZoomIn').onclick=()=>zoomAt((dom[0]+dom[1])/2,1/1.35);
-  $('#btnZoomOut').onclick=()=>zoomAt((dom[0]+dom[1])/2,1.35);
   $('#btnNow').onclick=()=>{const s=Math.min(dom[1]-dom[0],6);setDom(NOW-s*.6,NOW+s*.4);};
   $('#btnTheme').onclick=()=>{
     DARK=!DARK;
@@ -2685,7 +2417,7 @@ function jumpToItem(it){
 }
 
 /* --- 스크러버 (미니맵) --- */
-const scrubTrack=$('#scrubTrack'),scrubYearEl=$('#scrubYear'),scrubPlayBtn=$('#scrubPlay');
+const scrubTrack=$('#scrubTrack'),scrubYearEl=$('#scrubYear');
 let scrubWin=null,playRaf=null,playLast=null;
 const SP01=t=>(t-FULL[0])/(FULL[1]-FULL[0]);
 function rebuildScrubber(){
@@ -2745,15 +2477,13 @@ function updateScrubber(){
 function stopPlay(){
   if(playRaf){cancelAnimationFrame(playRaf);playRaf=null;}
   playLast=null;
-  scrubPlayBtn.textContent='▶';scrubPlayBtn.setAttribute('aria-pressed','false');
 }
-scrubPlayBtn.onclick=()=>{
+function togglePlay(){ /* Space = 시간 순서 재생 */
   if(playRaf){stopPlay();return;}
   let s=dom[1]-dom[0];
   const fullSpan=FULL[1]-FULL[0];
   if(s>fullSpan*.5){s=Math.min(8,fullSpan/3);setDom(FULL[0],FULL[0]+s);} /* 전체 보기면 창을 좁혀 처음부터 */
   else if(dom[1]>=FULL[1]-.02)setDom(FULL[0],FULL[0]+s); /* 끝에 있으면 처음부터 */
-  scrubPlayBtn.textContent='❚❚';scrubPlayBtn.setAttribute('aria-pressed','true');
   const SPEED=(FULL[1]-FULL[0])/25; /* 전 구간 ≈ 25초 */
   const step=now=>{
     if(playLast==null)playLast=now;
@@ -2764,7 +2494,7 @@ scrubPlayBtn.onclick=()=>{
     playRaf=requestAnimationFrame(step);
   };
   playRaf=requestAnimationFrame(step);
-};
+}
 
 /* --- 검색 (⌘/Ctrl+F) --- */
 const searchBd=$('#searchBd'),searchInput=$('#searchInput'),searchResults=$('#searchResults');
@@ -3248,193 +2978,11 @@ if(!RO){
 /* ==========================================================================
    에디터
    ========================================================================== */
-let editMode=false;
-$('#btnEdit').onclick=()=>{
-  editMode=!editMode;
-  $('#editor').classList.toggle('open',editMode);
-  $('#btnEdit').textContent=editMode?'✕ 편집 닫기':'✎ 기록 편집';
-  renderDetail(); refreshAllSelects();
-};
-document.querySelectorAll('.ed-tab').forEach(b=>b.onclick=()=>openTab(b.dataset.tab));
-function openTab(name){
-  document.querySelectorAll('.ed-tab').forEach(b=>b.classList.toggle('on',b.dataset.tab===name));
-  document.querySelectorAll('.ed-pane').forEach(p=>p.hidden=p.dataset.pane!==name);
-}
-
-function fillSelect(sel,items,labelFn){
-  sel.innerHTML='<option value="-1">＋ 새 항목</option>'+
-    items.map((it,i)=>`<option value="${i}">${esc(labelFn(it))}</option>`).join('');
-}
-function refreshTripSelects(){
-  const opts='<option value="">없음</option>'+DATA.trips.map(t=>`<option value="${esc(t.id)}">${esc(t.title)}</option>`).join('');
-  $('#evTrip').innerHTML=opts; $('#spTrip').innerHTML=opts;
-}
-function refreshAllSelects(){
-  fillSelect($('#evSelect'),DATA.events,e=>`${e.date} · ${e.title}`);
-  fillSelect($('#spSelect'),DATA.spans,s=>`${s.start}– · ${s.title}`);
-  fillSelect($('#erSelect'),DATA.eras,e=>e.title);
-  fillSelect($('#hpSelect'),DATA.happiness,h=>`${h.date} · ${h.v.toFixed(1)}`);
-  fillSelect($('#trSelect'),DATA.trips,t=>t.title);
-  refreshTripSelects();
-}
+function refreshAllSelects(){} /* 폼 편집기 제거 — 팝오버가 전부 담당 */
 function afterMutate(keepSelected){
   if(!keepSelected)selected=null;
   prepare(); render(); renderDetail(); refreshAllSelects(); rebuildMapBase(); rebuildTripBar(); rebuildScrubber(); persist();
 }
-
-/* --- 사건 폼 --- */
-function fillEventForm(e){
-  $('#evSelect').value=e?String(DATA.events.indexOf(e)):'-1';
-  $('#evDate').value=e?.date||'';
-  $('#evHap').value=e?.happiness??'';
-  $('#evFuture').checked=!!e?.future;
-  $('#evTitle').value=e?.title||'';
-  $('#evDesc').value=e?.desc||'';
-  $('#evLat').value=e?.loc?.lat??''; $('#evLng').value=e?.loc?.lng??'';
-  $('#evLocLabel').value=e?.loc?.label||''; $('#evTrip').value=e?.tripId||'';
-  $('#evGeoQ').value=''; $('#evGeoRes').textContent='';
-}
-$('#evSelect').onchange=()=>{const i=+$('#evSelect').value; fillEventForm(i>=0?DATA.events[i]:null);};
-$('#evSave').onclick=()=>{
-  const date=$('#evDate').value, title=$('#evTitle').value.trim();
-  if(!date||!title){alert('날짜와 제목은 필수다.');return;}
-  const i=+$('#evSelect').value;
-  const e=i>=0?DATA.events[i]:{};
-  e.date=date; e.title=title; e.desc=$('#evDesc').value.trim();
-  const hv=parseFloat($('#evHap').value); e.happiness=isNaN(hv)?undefined:Math.min(1,Math.max(-1,hv));
-  e.future=$('#evFuture').checked||undefined;
-  const lat=parseFloat($('#evLat').value), lng=parseFloat($('#evLng').value);
-  if(!isNaN(lat)&&!isNaN(lng)) e.loc={lat,lng,label:$('#evLocLabel').value.trim()||'장소'};
-  else delete e.loc;
-  e.tripId=$('#evTrip').value||undefined;
-  if(i<0)DATA.events.push(e);
-  selected=e; afterMutate(true); fillEventForm(e);
-};
-$('#evDelete').onclick=()=>{
-  const i=+$('#evSelect').value; if(i<0)return;
-  DATA.events.splice(i,1); afterMutate(); fillEventForm(null);
-};
-
-/* --- 기간 폼 --- */
-function fillSpanForm(s){
-  $('#spSelect').value=s?String(DATA.spans.indexOf(s)):'-1';
-  $('#spStart').value=s?.start||''; $('#spEnd').value=s?.end||'';
-  $('#spHap').value=s?.happiness??''; $('#spFuture').checked=!!s?.future;
-  $('#spTitle').value=s?.title||''; $('#spColor').value=s?.color||'#2E5E63';
-  $('#spDesc').value=s?.desc||'';
-  $('#spLat').value=s?.loc?.lat??''; $('#spLng').value=s?.loc?.lng??'';
-  $('#spLocLabel').value=s?.loc?.label||''; $('#spTrip').value=s?.tripId||'';
-  $('#spGeoQ').value=''; $('#spGeoRes').textContent='';
-}
-$('#spSelect').onchange=()=>{const i=+$('#spSelect').value; fillSpanForm(i>=0?DATA.spans[i]:null);};
-$('#spSave').onclick=()=>{
-  const start=$('#spStart').value, title=$('#spTitle').value.trim();
-  if(!start||!title){alert('시작과 제목은 필수다.');return;}
-  const end=$('#spEnd').value||null;
-  if(end&&T(end)<=T(start)){alert('종료는 시작 이후여야 한다.');return;}
-  const i=+$('#spSelect').value;
-  const s=i>=0?DATA.spans[i]:{};
-  s.start=start; s.end=end; s.title=title; s.desc=$('#spDesc').value.trim();
-  s.color=$('#spColor').value;
-  const hv=parseFloat($('#spHap').value); s.happiness=isNaN(hv)?undefined:Math.min(1,Math.max(-1,hv));
-  s.future=$('#spFuture').checked||undefined;
-  const lat=parseFloat($('#spLat').value), lng=parseFloat($('#spLng').value);
-  if(!isNaN(lat)&&!isNaN(lng)) s.loc={lat,lng,label:$('#spLocLabel').value.trim()||'장소'};
-  else delete s.loc;
-  s.tripId=$('#spTrip').value||undefined;
-  if(i<0)DATA.spans.push(s);
-  selected=s; afterMutate(true); fillSpanForm(s);
-};
-$('#spDelete').onclick=()=>{
-  const i=+$('#spSelect').value; if(i<0)return;
-  DATA.spans.splice(i,1); afterMutate(); fillSpanForm(null);
-};
-
-/* --- 시대 폼 --- */
-function fillEraForm(e){
-  $('#erSelect').value=e?String(DATA.eras.indexOf(e)):'-1';
-  $('#erStart').value=e?.start||''; $('#erEnd').value=e?.end||'';
-  $('#erColor').value=e?.color||'#2E5E63'; $('#erTitle').value=e?.title||'';
-}
-$('#erSelect').onchange=()=>{const i=+$('#erSelect').value; fillEraForm(i>=0?DATA.eras[i]:null);};
-$('#erSave').onclick=()=>{
-  const start=$('#erStart').value,end=$('#erEnd').value,title=$('#erTitle').value.trim();
-  if(!start||!end||!title){alert('시작·종료·제목 모두 필수다.');return;}
-  if(T(end)<=T(start)){alert('종료는 시작 이후여야 한다.');return;}
-  const i=+$('#erSelect').value;
-  const e=i>=0?DATA.eras[i]:{};
-  e.start=start;e.end=end;e.title=title;e.color=$('#erColor').value;
-  if(i<0)DATA.eras.push(e);
-  DATA.eras.sort((a,b)=>T(a.start)-T(b.start));
-  afterMutate(); fillEraForm(null);
-};
-$('#erDelete').onclick=()=>{
-  const i=+$('#erSelect').value; if(i<0)return;
-  DATA.eras.splice(i,1); afterMutate(); fillEraForm(null);
-};
-
-/* --- 행복도 폼 --- */
-function fillHapForm(h){
-  $('#hpSelect').value=h?String(DATA.happiness.indexOf(h)):'-1';
-  $('#hpDate').value=h?.date||''; $('#hpVal').value=h?.v??'';
-  $('#hpFuture').checked=!!h?.future;
-}
-$('#hpSelect').onchange=()=>{const i=+$('#hpSelect').value; fillHapForm(i>=0?DATA.happiness[i]:null);};
-$('#hpSave').onclick=()=>{
-  const date=$('#hpDate').value, v=parseFloat($('#hpVal').value);
-  if(!date||isNaN(v)){alert('날짜와 행복도 값은 필수다.');return;}
-  const i=+$('#hpSelect').value;
-  const h=i>=0?DATA.happiness[i]:{};
-  h.date=date; h.v=Math.min(1,Math.max(-1,v)); h.future=$('#hpFuture').checked||undefined;
-  if(i<0)DATA.happiness.push(h);
-  afterMutate(); fillHapForm(null);
-};
-$('#hpDelete').onclick=()=>{
-  const i=+$('#hpSelect').value; if(i<0)return;
-  DATA.happiness.splice(i,1); afterMutate(); fillHapForm(null);
-};
-
-/* --- 경로 폼 --- */
-function fillTripForm(t){
-  $('#trSelect').value=t?String(DATA.trips.indexOf(t)):'-1';
-  $('#trTitle').value=t?.title||''; $('#trColor').value=t?.color||'#B5432A';
-  $('#trDashed').checked=!!t?.dashed; $('#trNote').value=t?.note||'';
-  $('#trPoints').value=t?t.points.map(p=>`${p.label} | ${p.date||''}`.replace(/ \| $/,'')).join('\n'):'';
-  $('#trGeoRes').textContent='';
-}
-$('#trSelect').onchange=()=>{const i=+$('#trSelect').value; fillTripForm(i>=0?DATA.trips[i]:null);};
-$('#trSave').onclick=async()=>{
-  const title=$('#trTitle').value.trim();
-  const lines=$('#trPoints').value.split('\n').map(l=>l.trim()).filter(Boolean);
-  if(!title||lines.length<2){alert('이름과 장소 2곳 이상이 필요하다.');return;}
-  const i=+$('#trSelect').value;
-  const t=i>=0?DATA.trips[i]:{id:'trip'+Date.now()};
-  const oldPts=t.points||[];
-  const res=$('#trGeoRes');
-  const pts=[];
-  for(const [idx,line] of lines.entries()){
-    const [label,note]=line.split('|').map(s=>s.trim());
-    const prev=oldPts.find(p=>p.label===label);
-    if(prev){pts.push({...prev,date:note||prev.date});continue;}
-    res.textContent=`좌표 검색 중… (${idx+1}/${lines.length}) ${label}`;
-    const g=await geocode(label);
-    if(!g){res.textContent=`「${label}」 좌표를 찾지 못했다. 지명을 바꿔 다시 시도.`;return;}
-    pts.push({lat:g.lat,lng:g.lng,label,date:note||''});
-    await new Promise(r=>setTimeout(r,1100)); /* Nominatim 예의: 1req/s */
-  }
-  t.title=title;t.color=$('#trColor').value;t.dashed=$('#trDashed').checked||undefined;
-  t.note=$('#trNote').value.trim();t.points=pts;
-  if(i<0)DATA.trips.push(t);
-  res.textContent='저장 완료.';
-  afterMutate(); fillTripForm(t);
-};
-$('#trDelete').onclick=()=>{
-  const i=+$('#trSelect').value; if(i<0)return;
-  const id=DATA.trips[i].id;
-  DATA.trips.splice(i,1);
-  DATA.events.concat(DATA.spans).forEach(x=>{if(x.tripId===id)delete x.tripId;});
-  afterMutate(); fillTripForm(null);
-};
 
 /* --- 지명 검색 (Nominatim, 키 불필요) --- */
 async function geocode(q){
@@ -3446,19 +2994,6 @@ async function geocode(q){
   }catch(e){}
   return null;
 }
-function bindGeo(qId,btnId,latId,lngId,labelId,resId){
-  $(btnId).onclick=async()=>{
-    const q=$(qId).value.trim(); if(!q)return;
-    $(resId).textContent='검색 중…';
-    const g=await geocode(q);
-    if(!g){$(resId).textContent='결과 없음 — 지명을 바꿔 시도 (예: "Perth, Australia")';return;}
-    $(latId).value=g.lat.toFixed(4); $(lngId).value=g.lng.toFixed(4);
-    if(!$(labelId).value)$(labelId).value=q;
-    $(resId).textContent='✓ '+g.name;
-  };
-}
-bindGeo('#evGeoQ','#evGeoBtn','#evLat','#evLng','#evLocLabel','#evGeoRes');
-bindGeo('#spGeoQ','#spGeoBtn','#spLat','#spLng','#spLocLabel','#spGeoRes');
 
 /* JSON 입출력 제거 — 데이터 이동은 온라인 DB 동기화로 */
 
@@ -3479,6 +3014,8 @@ function mapNotice(msg){
 try{
   if(typeof L==='undefined') throw new Error('leaflet-missing');
   map=L.map('map',{scrollWheelZoom:false}).setView([27,127],4);
+  const mw=document.getElementById('mapWrap');
+  if(mw)mw.addEventListener('toggle',()=>{if(mw.open)setTimeout(()=>map.invalidateSize(),80);});
   let tileFails=0, fellBack=false;
   function addTiles(url,opt){
     const layer=L.tileLayer(url,opt).addTo(map);
@@ -3533,6 +3070,17 @@ function rebuildTripBar(){
     b.oncontextmenu=e=>{e.preventDefault();e.stopPropagation();openPopTrip(t,e.clientX,e.clientY);};
     bar.appendChild(b);
   });
+  if(!RO){
+    const nb=document.createElement('button');
+    nb.className='trip-btn';nb.textContent='＋';nb.title='새 경로';
+    nb.onclick=e=>{
+      e.stopPropagation();
+      const t={id:'trip'+Date.now(),title:'새 경로',color:'#D06E77',points:[]};
+      DATA.trips.push(t);afterMutate(selected!=null);
+      openPopTrip(t,e.clientX,e.clientY);
+    };
+    bar.appendChild(nb);
+  }
   function setActive(btn){
     bar.querySelectorAll('.trip-btn').forEach(x=>{x.classList.remove('on');x.setAttribute('aria-pressed','false');});
     btn.classList.add('on');btn.setAttribute('aria-pressed','true');
@@ -3613,7 +3161,6 @@ if('serviceWorker' in navigator&&location.protocol.startsWith('http')){
   addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 }
 if(!RO&&CLOUD)cloudPullAll(); /* 온라인 DB에서 최신 문서 당겨오기 */
-fillEventForm(null); fillSpanForm(null); fillEraForm(null); fillHapForm(null); fillTripForm(null);
 </script>
 </body>
 </html>
