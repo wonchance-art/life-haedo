@@ -17,16 +17,16 @@
 <style>
 html[data-theme=spring]{
   color-scheme:light;
-  --color-base-100:oklch(98.2% 0.008 95); --color-base-200:oklch(96.2% 0.011 95);
-  --color-base-300:oklch(90.5% 0.015 92); --color-base-content:oklch(33% 0.014 75);
-  --color-primary:oklch(60% 0.095 135); --color-primary-content:oklch(98% 0.01 135);
-  --color-secondary:oklch(78% 0.05 40); --color-secondary-content:oklch(30% 0.03 40);
-  --color-accent:oklch(74% 0.075 20); --color-accent-content:oklch(28% 0.04 20);
-  --color-neutral:oklch(52% 0.018 80); --color-neutral-content:oklch(97% 0.008 95);
-  --color-info:oklch(64% 0.08 245); --color-info-content:oklch(97% 0.01 245);
-  --color-success:oklch(62% 0.1 145); --color-success-content:oklch(97% 0.01 145);
-  --color-warning:oklch(75% 0.09 85); --color-warning-content:oklch(30% 0.05 85);
-  --color-error:oklch(62% 0.11 25); --color-error-content:oklch(97% 0.01 25);
+  --color-base-100:oklch(99.2% 0.005 95); --color-base-200:oklch(97.6% 0.008 95);
+  --color-base-300:oklch(93.5% 0.012 92); --color-base-content:oklch(36% 0.013 75);
+  --color-primary:oklch(65% 0.105 133); --color-primary-content:oklch(99% 0.008 135);
+  --color-secondary:oklch(82% 0.05 40); --color-secondary-content:oklch(32% 0.03 40);
+  --color-accent:oklch(79% 0.075 20); --color-accent-content:oklch(30% 0.04 20);
+  --color-neutral:oklch(58% 0.016 80); --color-neutral-content:oklch(98% 0.006 95);
+  --color-info:oklch(68% 0.08 245); --color-info-content:oklch(98% 0.008 245);
+  --color-success:oklch(66% 0.1 145); --color-success-content:oklch(98% 0.008 145);
+  --color-warning:oklch(80% 0.09 85); --color-warning-content:oklch(32% 0.05 85);
+  --color-error:oklch(66% 0.115 23); --color-error-content:oklch(98% 0.008 25);
   --radius-selector:1rem; --radius-field:0.65rem; --radius-box:1rem;
   --size-selector:0.25rem; --size-field:0.25rem;
   --border:1px; --depth:0; --noise:0;
@@ -60,7 +60,7 @@ html[data-theme=spring]{
   ::selection{background:var(--water);color:var(--paper)}
   .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
 
-  header{padding:64px 0 36px;border-bottom:2px solid var(--ink)}
+  header{padding:64px 0 36px;border-bottom:1px solid color-mix(in oklab,var(--color-base-content) 26%,var(--color-base-100))}
   .hgroup{display:flex;flex-wrap:wrap;align-items:flex-end;gap:28px;justify-content:space-between}
   h1{font-weight:700;font-size:clamp(48px,7.5vw,88px);line-height:.95;letter-spacing:.04em}
   .subtitle{font-size:clamp(15px,2.2vw,19px);color:var(--ink-soft);margin-top:14px}
