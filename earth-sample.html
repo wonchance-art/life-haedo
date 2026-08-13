@@ -27,6 +27,8 @@
     --cloud:oklch(74% 0.045 340);       /* 놀에 물든 구름 — 학업 */
     --bloom:oklch(80% 0.09 15);         /* 산 위의 꽃 */
     --seed:oklch(80% 0.07 85);          /* 씨앗 — 학업 */
+    --earth:oklch(36% 0.045 55);        /* 표토 — 놀빛이 스민 흙 */
+    --earth-deep:oklch(24% 0.035 45);   /* 심토 */
     --cream:oklch(94% 0.015 90);        /* 밝은 라벨 */
     --cream-soft:oklch(94% 0.015 90 / .62);
   }
@@ -167,8 +169,20 @@ function render(){
   svg.appendChild(defs);
 
   /* 배경판 */
+  const earth=el('linearGradient',{id:'earth',x1:0,x2:0,gradientUnits:'userSpaceOnUse',y1:ZERO,y2:SEA_T+18});
+  earth.appendChild(el('stop',{offset:'0%','stop-color':'var(--earth)','stop-opacity':.96}));
+  earth.appendChild(el('stop',{offset:'55%','stop-color':'var(--earth-deep)','stop-opacity':.98}));
+  earth.appendChild(el('stop',{offset:'100%','stop-color':'var(--sea)','stop-opacity':1}));
+  defs.appendChild(earth);
   svg.appendChild(el('rect',{x:0,y:0,width:W,height:ZERO,fill:'url(#sky)'}));
-  svg.appendChild(el('rect',{x:0,y:ZERO,width:W,height:H-ZERO,fill:'var(--sky-glow)',opacity:.25}));
+  svg.appendChild(el('rect',{x:0,y:ZERO,width:W,height:H-ZERO,fill:'url(#earth)'}));
+  /* 지층 결 — 흙의 단면임을 속삭이는 물결 줄 */
+  {const strata=scene?[26,54,86,120]:[34,72,112];
+   strata.forEach((dy,i)=>{
+     const pts2=[];for(let px=0;px<=W;px+=90)
+       pts2.push([px,ZERO+dy+Math.sin(px/140+i*2.1)*3.5]);
+     svg.appendChild(el('path',{d:smooth(pts2),fill:'none',stroke:'var(--cream)',
+       'stroke-width':.55,opacity:scene?.11:.08}));});}
   svg.appendChild(el('rect',{x:0,y:SEA_T-6,width:W,height:H-SEA_T+6,fill:'url(#seaG)'}));
 
   /* 별하늘 — 위쪽 전역에 옅게 (위로 갈수록 또렷) */
@@ -237,6 +251,14 @@ function render(){
     svg.appendChild(el('ellipse',{cx:mx,cy:ZERO+22,rx:9,ry:2.2,fill:'var(--moon)',opacity:.22,'clip-path':'url(#dn)'}));
     svg.appendChild(el('ellipse',{cx:mx,cy:ZERO+34,rx:6,ry:1.6,fill:'var(--moon)',opacity:.14,'clip-path':'url(#dn)'}));
   }
+  if(scene){ /* 큰 봉우리의 뿌리 — 산과 흙이 한 몸임을 */
+    [[2017.6,.6],[2024,.3]].forEach(([pt,pv])=>{
+      const px=X(pt);
+      [[-14,34,-22],[0,46,4],[13,30,20]].forEach(([dx0,len,dx1])=>{
+        svg.appendChild(el('path',{d:`M ${px+dx0} ${ZERO+2} Q ${px+dx0+dx1*.4} ${ZERO+len*.55} ${px+dx0+dx1} ${ZERO+len}`,
+          stroke:'var(--cream)','stroke-width':.6,fill:'none',opacity:.13}));});
+    });
+  }
   svg.appendChild(el('path',{d:smooth(fut),fill:'none',stroke:'var(--cream)','stroke-width':1.4,'stroke-dasharray':'6 6',opacity:.55}));
 
   /* 밤바다 — 월별 글 */
@@ -298,8 +320,8 @@ function render(){
 
   document.getElementById('cap').textContent=
     scene
-    ? 'b. 깊은 황혼 — 별이 짙어지고, 달빛이 호수에 비치고, 해기둥·잔물결·먼 능선이 진해진다.'
-    : 'a. 옅은 황혼 — 산맥(행복)·호수(마이너스). 학업은 꽃 아래 땅속 씨앗, 힘든 일은 호수에 가라앉은 자리의 파문.';
+    ? 'b. 깊은 황혼 — 지층 결이 늘고 큰 봉우리 아래 뿌리가 내린다. 달빛 반영·해기둥·잔물결도 진해진다.'
+    : 'a. 옅은 황혼 — 호수 아래는 흙의 단면(지층). 씨앗은 그 흙에 묻히고, 깊어질수록 어두워지다 밤바다로 이어진다.';
 }
 document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{
   document.documentElement.dataset.mode=b.dataset.mode;
