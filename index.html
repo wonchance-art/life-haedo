@@ -390,6 +390,7 @@ html[data-theme=spring]{
   #mapWrap[open]>summary.sec-head::after{transform:rotate(180deg)}
   #mapWrap>.trip-bar{margin-top:18px}
   .tl-controls{gap:4px;margin-bottom:2px}
+  .dt-edit.bad{border-color:var(--cinnabar);outline:none}
   .corner{position:absolute;top:14px;z-index:700;display:flex;gap:3px;align-items:center;
     opacity:.65;transition:opacity .2s;border-radius:999px;padding:3px 7px}
   .corner:hover,.corner:focus-within{opacity:1}
@@ -650,11 +651,30 @@ function updateSaveState(){
   }
   set('●','브라우저에 저장됨');
 }
-/* 시간 유틸 — 로드 관문(migrateScale/sanitize)보다 먼저 선언되어야 한다 */
-const T=d=>{const[y,m]=String(d).split('-').map(Number);return y+((m||1)-1)/12;};
+/* 시간 유틸 — 로드 관문(migrateScale/sanitize)보다 먼저 선언되어야 한다.
+   날짜는 'YYYY-MM' 또는 'YYYY-MM-DD' — 일자는 선택 사항 */
+const T=d=>{const[y,m,dd]=String(d).split('-').map(Number);return y+((m||1)-1)/12+((dd||1)-1)/372;};
 const MONTH_RE=/^\d{4}-(0[1-9]|1[0-2])$/;
 const validMonth=d=>MONTH_RE.test(String(d));
+const DATE_RE=/^\d{4}-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?$/;
+const validDate=d=>DATE_RE.test(String(d));
 const tToMonth=t=>{let y=Math.floor(t),m=Math.round((t-y)*12)+1;if(m>12){y++;m=1;}return y+'-'+String(m).padStart(2,'0');};
+const fmtD=d=>String(d??'').split('-').join('.');
+const withDay=(orig,mon)=>{const dd=String(orig||'').split('-')[2];return dd?mon+'-'+dd:mon;}; /* 월 이동 시 일자 보존 */
+function parseDateSmart(str){ /* 2024, 2024-3, 2024.03.15, 2024년 3월 15일, 20240315 전부 수용 */
+  let t=String(str||'').trim();
+  if(!t)return null;
+  const compact=/^(\d{4})(\d{2})(\d{2})?$/.exec(t);
+  if(compact)t=compact[1]+'-'+compact[2]+(compact[3]?'-'+compact[3]:'');
+  t=t.replace(/[년월\/\.\s]+/g,'-').replace(/일/g,'').replace(/-+/g,'-').replace(/^-|-$/g,'');
+  const m=/^(\d{4})(?:-(\d{1,2})(?:-(\d{1,2}))?)?$/.exec(t);
+  if(!m)return null;
+  const y=+m[1],mo=m[2]?+m[2]:1,d=m[3]!=null?+m[3]:null;
+  if(y<1800||y>2200||mo<1||mo>12)return null;
+  if(d!=null&&(d<1||d>31))return null;
+  const p=n=>String(n).padStart(2,'0');
+  return y+'-'+p(mo)+(d!=null?'-'+p(d):'');
+}
 
 /* 행복 척도 마이그레이션: 구 0~10 / signed10(−10~+10) → 최종 −1~+1 (중앙 0) */
 function migrateScale(d){
@@ -680,10 +700,11 @@ function sanitize(d){
   const issues=[];
   const fix=(obj,key,label)=>{ /* '1998-5'·'1998-05-05' 같은 근사값은 복구 시도 */
     const raw=obj[key];
-    if(validMonth(raw))return true;
-    const m=String(raw??'').match(/^(\d{4})-(\d{1,2})/);
+    if(validDate(raw))return true;
+    const m=String(raw??'').match(/^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?/);
     if(m&&+m[2]>=1&&+m[2]<=12){
-      obj[key]=m[1]+'-'+String(+m[2]).padStart(2,'0');
+      obj[key]=m[1]+'-'+String(+m[2]).padStart(2,'0')
+        +(m[3]&&+m[3]>=1&&+m[3]<=31?'-'+String(+m[3]).padStart(2,'0'):'');
       issues.push({label,key,from:raw,to:obj[key],fixed:true});
       return true;
     }
@@ -881,8 +902,9 @@ function prepare(){
      개별 점은 각자 값 높이에 그대로 그려지고, 곡선은 그 평균을 지나간다 */
   const contrib=new Map();
   const addC=(date,t,v,future)=>{
-    let c=contrib.get(date);
-    if(!c){c={t,vals:[],fut:true};contrib.set(date,c);}
+    const mk=String(date).slice(0,7); /* 일자는 달로 묶음 — 곡선은 월 단위 */
+    let c=contrib.get(mk);
+    if(!c){c={t:T(mk),vals:[],fut:true};contrib.set(mk,c);}
     c.vals.push(v);
     if(!future)c.fut=false;
   };
@@ -925,7 +947,7 @@ function prepare(){
   /* 요약 */
   const h1Sync=document.querySelector('h1');
   if(h1Sync&&DATA.profile.name&&h1Sync.textContent!==DATA.profile.name)h1Sync.textContent=DATA.profile.name;
-  $('#statBirth').textContent=DATA.profile.birth.replace('-','.');
+  $('#statBirth').textContent=fmtD(DATA.profile.birth);
   $('#statEvents').textContent=DATA.events.length+" · "+DATA.spans.length;
   const avgPts=HAPPTS.filter(pt=>!pt.future);
   $('#statAvg').textContent=avgPts.length
@@ -1058,7 +1080,7 @@ function render(){
       const gz=el('g',{cursor:'pointer',tabindex:0,role:'button','aria-label':`시대 ${er.title} — 클릭해서 수정`});
       gz.appendChild(el('rect',{x:zx1,y:0,width:zx2-zx1,height:30,fill:'transparent'}));
       gz.addEventListener('mouseenter',()=>showTip((zx1+zx2)/2,26,
-        `<span class="yy">${esc(er.start.replace('-','.'))} – ${esc(er.end.replace('-','.'))}</span> · ${esc(er.title)}`));
+        `<span class="yy">${esc(fmtD(er.start))} – ${esc(fmtD(er.end))}</span> · ${esc(er.title)}`));
       gz.addEventListener('mouseleave',hideTip);
       gz.addEventListener('click',e=>{
         if(moved)return;e.stopPropagation();hideTip();
@@ -1377,7 +1399,7 @@ function render(){
       if(d.did){
         moved=true;setTimeout(()=>moved=false,0);
         hideTip();
-        e.date=miToMonth(d.mi);
+        e.date=withDay(e.date,miToMonth(d.mi));
         afterMutate(true);
       }
     };
@@ -1491,8 +1513,8 @@ function render(){
       if(d.did){
         moved=true;setTimeout(()=>moved=false,0);
         hideTip();
-        s.start=miToMonth(d.nS);
-        s.end=d.nE==null?null:miToMonth(d.nE);
+        s.start=withDay(s.start,miToMonth(d.nS));
+        s.end=d.nE==null?null:withDay(s.end,miToMonth(d.nE));
         afterMutate(true);
       }
     };
@@ -1529,7 +1551,7 @@ function render(){
       reserveText(bx+13,by+4,inner,'start',11.5);
     }else sideLabel(g,label,x2,x1,by+4,false);
     const pick=(cx,cy)=>openPick(cx,cy,list.map(sp=>[
-      `${sp.start.replace('-','.')}–${sp.end?sp.end.replace('-','.'):'진행 중'}  ${sp.title}`,'',
+      `${fmtD(sp.start)}–${sp.end?fmtD(sp.end):'진행 중'}  ${sp.title}`,'',
       ()=>{selected=sp;render();renderDetail();
         const r=svg.getBoundingClientRect();
         openPop(sp,r.left+Math.max(X(sp.t0),0)+20,r.top+y+L.SPAN_H);}]));
@@ -1597,7 +1619,7 @@ function render(){
       if(d.did){
         moved=true;setTimeout(()=>moved=false,0);
         hideTip();
-        pt.src.date=miToMonth(d.mi);
+        pt.src.date=withDay(pt.src.date,miToMonth(d.mi));
         afterMutate(true);
       }
     };
@@ -1887,8 +1909,8 @@ const hoverCard=$('#hoverCard');
 function showCard(it,cx,cy){
   const isSpan=it.kind==='span';
   const range=isSpan
-    ?`${it.start.replace('-','.')} – ${it.end?it.end.replace('-','.'):'진행 중'}`
-    :it.date.replace('-','.');
+    ?`${fmtD(it.start)} – ${it.end?fmtD(it.end):'진행 중'}`
+    :fmtD(it.date);
   const dur=isSpan?((it.t1??NOW)-it.t0):null;
   const age=it.future?'예정':fmtAge(isSpan?it.t0:T(it.date));
   hoverCard.innerHTML=`
@@ -1905,7 +1927,7 @@ function showCard(it,cx,cy){
 }
 function showClusterCard(list,cx,cy){ /* 겹친 묶음 — 무엇들이 겹쳤는지 한눈에 (사건·기간 공용) */
   const isSpan=list[0].kind==='span';
-  const at=x=>isSpan?x.start.replace('-','.'):x.date.replace('-','.');
+  const at=x=>isSpan?fmtD(x.start):fmtD(x.date);
   const d0=at(list[0]), d1=at(list[list.length-1]);
   hoverCard.innerHTML=`
     <div class="hc-top">
@@ -1913,7 +1935,7 @@ function showClusterCard(list,cx,cy){ /* 겹친 묶음 — 무엇들이 겹쳤�
     </div>
     <div class="hc-list">${list.map(x=>`<div class="hc-li">
       <span class="hc-hap${!isSpan&&x.happiness!=null&&x.happiness<0?' neg':''}">${isSpan
-        ?esc(x.start.replace('-','.')+'–'+(x.end?x.end.replace('-','.'):'진행 중'))
+        ?esc(fmtD(x.start)+'–'+(x.end?fmtD(x.end):'진행 중'))
         :(x.happiness!=null?(x.happiness>0?'+':'')+x.happiness.toFixed(1):'—')}</span>
       <span class="hc-lt">${esc(x.title)}</span></div>`).join('')}</div>
 `;
@@ -1935,6 +1957,20 @@ addEventListener('scroll',closeCtx,{passive:true});
 const popEd=$('#popEd');
 let popAnchor=null;
 function popCommit(){afterMutate(true);}
+/* 날짜 입력 공통: 관대한 파서로 정규화, 틀리면 빨간 테두리(값 안 잃음), Enter=확정 */
+function bindDate(inp,apply,allowEmpty){
+  if(!inp)return;
+  inp.onchange=()=>{
+    const raw=inp.value.trim();
+    if(!raw&&allowEmpty){inp.classList.remove('bad');apply(null);return;}
+    const v=parseDateSmart(raw);
+    if(!v){inp.classList.add('bad');return;}
+    inp.classList.remove('bad');
+    inp.value=v;
+    apply(v);
+  };
+  inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();inp.blur();}};
+}
 function openPop(it,ax,ay){
   if(RO)return;
   popAnchor={x:ax,y:ay};
@@ -1943,10 +1979,10 @@ function openPop(it,ax,ay){
     <input class="dt-edit pe-title" value="${esc(it.title)}" aria-label="제목">
     <div class="pe-row">
       ${isSpan
-        ?`<input type="month" class="dt-edit pe-month" data-f="start" value="${it.start}" aria-label="시작">
+        ?`<input type="text" inputmode="numeric" class="dt-edit pe-month" data-f="start" value="${it.start}" placeholder="2024-03(-15)" aria-label="시작">
            <span style="color:var(--ink-soft)">–</span>
-           <input type="month" class="dt-edit pe-month" data-f="end" value="${it.end||''}" aria-label="종료 — 비우면 진행 중">`
-        :`<input type="month" class="dt-edit pe-month" data-f="date" value="${it.date}" aria-label="날짜">`}
+           <input type="text" inputmode="numeric" class="dt-edit pe-month" data-f="end" value="${it.end||''}" placeholder="비우면 진행 중" aria-label="종료 — 비우면 진행 중">`
+        :`<input type="text" inputmode="numeric" class="dt-edit pe-month" data-f="date" value="${it.date}" placeholder="2024-03(-15)" aria-label="날짜">`}
     </div>
     <div class="pe-row">
       ${!isSpan?`<label class="dt-lab"><input type="checkbox" data-f="hasHap" ${it.happiness!=null?'checked':''}> 행복 반영</label>`:''}
@@ -2018,28 +2054,19 @@ function openPop(it,ax,ay){
     };
   });
   if(isSpan){
-    q('[data-f="start"]').onchange=e=>{
-      const v=e.target.value;
-      if(!v){e.target.value=it.start;return;}
-      if(it.end&&T(it.end)<=T(v)){ /* 종료를 넘어서면 = 통째 이동 */
-        const dur=miOf(it.end)-miOf(it.start);
-        it.start=v;it.end=miToMonth(miOf(v)+dur);
-        q('[data-f="end"]').value=it.end;
-      }else it.start=v;
+    bindDate(q('[data-f="start"]'),v=>{ /* 입력한 값이 그대로 남는다 — 끝은 순서가 깨질 때만 같은 날짜로 */
+      it.start=v;
+      if(it.end&&T(it.end)<T(v)){it.end=v;q('[data-f="end"]').value=v;}
       popCommit();
-    };
-    q('[data-f="end"]').onchange=e=>{
-      const v=e.target.value||null;
-      if(v&&T(v)<=T(it.start)){ /* 시작보다 앞서면 = 통째 이동 */
-        const dur=it.end?miOf(it.end)-miOf(it.start):12;
-        it.end=v;it.start=miToMonth(miOf(v)-dur);
-        q('[data-f="start"]').value=it.start;
-      }else it.end=v;
+    });
+    bindDate(q('[data-f="end"]'),v=>{
+      it.end=v;
+      if(v&&T(v)<T(it.start)){it.start=v;q('[data-f="start"]').value=v;}
       popCommit();
-    };
+    },true);
     q('[data-f="color"]').onchange=e=>{it.color=e.target.value;popCommit();};
   }else{
-    q('[data-f="date"]').onchange=e=>{const v=e.target.value;if(v){it.date=v;popCommit();}else e.target.value=it.date;};
+    bindDate(q('[data-f="date"]'),v=>{it.date=v;popCommit();});
   }
   q('[data-a="dup"]').onclick=()=>{
     closePop();duplicateItem(it);
@@ -2058,12 +2085,12 @@ function openPopHap(h,ax,ay){
       <label class="dt-lab"><input type="checkbox" data-f="future" ${h.future?'checked':''}> 예정</label>
     </div>
     <div class="pe-row">
-      <input type="month" class="dt-edit pe-month" data-f="date" value="${h.date}" aria-label="날짜">
+      <input type="text" inputmode="numeric" class="dt-edit pe-month" data-f="date" value="${h.date}" placeholder="2024-03(-15)" aria-label="날짜">
       <input type="number" class="dt-edit pe-num" data-f="v" min="-1" max="1" step="0.1" value="${h.v}" aria-label="행복도">
     </div>
     <div class="pe-actions"><button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 값 삭제</button></div>`;
   const q=s=>popEd.querySelector(s);
-  q('[data-f="date"]').onchange=e=>{if(e.target.value){h.date=e.target.value;popCommit();}else e.target.value=h.date;};
+  bindDate(q('[data-f="date"]'),v=>{h.date=v;popCommit();});
   q('[data-f="v"]').onchange=e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){h.v=Math.min(1,Math.max(-1,v));popCommit();}else e.target.value=h.v;};
   q('[data-f="future"]').onchange=e=>{h.future=e.target.checked||undefined;popCommit();};
   q('[data-a="del"]').onclick=()=>{
@@ -2083,12 +2110,12 @@ function openPopLayerPt(lay,p,ax,ay){
         <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${lay.color};margin-right:5px"></span>${esc(lay.name)} 값</span>
     </div>
     <div class="pe-row">
-      <input type="month" class="dt-edit pe-month" data-f="date" value="${p.date}" aria-label="날짜">
+      <input type="text" inputmode="numeric" class="dt-edit pe-month" data-f="date" value="${p.date}" placeholder="2024-03(-15)" aria-label="날짜">
       <input type="number" class="dt-edit pe-num" data-f="v" min="-1" max="1" step="0.1" value="${p.v}" aria-label="깊이">
     </div>
     <div class="pe-actions"><button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 값 삭제</button></div>`;
   const q=s=>popEd.querySelector(s);
-  q('[data-f="date"]').onchange=e=>{if(e.target.value){p.date=e.target.value;popCommit();}else e.target.value=p.date;};
+  bindDate(q('[data-f="date"]'),v=>{p.date=v;popCommit();});
   q('[data-f="v"]').onchange=e=>{const v=parseFloat(e.target.value);if(!isNaN(v)){p.v=Math.min(1,Math.max(-1,v));popCommit();}else e.target.value=p.v;};
   q('[data-a="del"]').onclick=()=>{
     closePop();
@@ -2104,13 +2131,13 @@ function openPopThought(th,ax,ay){
   popEd.innerHTML=`
     <div class="pe-row" style="justify-content:space-between">
       <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft)">❝ 당시의 문장</span>
-      <input type="month" class="dt-edit pe-month" data-f="date" value="${th.date}" aria-label="날짜">
+      <input type="text" inputmode="numeric" class="dt-edit pe-month" data-f="date" value="${th.date}" placeholder="2024-03(-15)" aria-label="날짜">
     </div>
     <textarea class="dt-edit" data-f="text" rows="3" style="width:100%;resize:vertical"
       placeholder="그때 쓴 글에서 한 문장">${esc(th.text)}</textarea>
     <div class="pe-actions"><button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 삭제</button></div>`;
   const q=s=>popEd.querySelector(s);
-  q('[data-f="date"]').onchange=e=>{if(e.target.value){th.date=e.target.value;popCommit();}else e.target.value=th.date;};
+  bindDate(q('[data-f="date"]'),v=>{th.date=v;popCommit();});
   q('[data-f="text"]').onchange=e=>{th.text=e.target.value.trim();if(th.text)popCommit();};
   q('[data-a="del"]').onclick=()=>{
     closePop();
@@ -2128,35 +2155,25 @@ function openPopEra(er,ax,ay){
     <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);letter-spacing:.12em">時代 · ERA</div>
     <input class="dt-edit pe-title" value="${esc(er.title)}" aria-label="시대 제목">
     <div class="pe-row">
-      <input type="month" class="dt-edit pe-month" data-f="start" value="${er.start}" aria-label="시작">
+      <input type="text" inputmode="numeric" class="dt-edit pe-month" data-f="start" value="${er.start}" placeholder="2014-03" aria-label="시작">
       <span style="color:var(--ink-soft)">–</span>
-      <input type="month" class="dt-edit pe-month" data-f="end" value="${er.end}" aria-label="종료">
+      <input type="text" inputmode="numeric" class="dt-edit pe-month" data-f="end" value="${er.end}" placeholder="2020-01" aria-label="종료">
     </div>
     <div class="pe-row"><select class="dt-edit" data-f="color" aria-label="색">${SPAN_COLORS.map(c=>`<option value="${c[0]}"${er.color===c[0]?' selected':''}>${c[1]}</option>`).join('')}</select></div>
     <div class="pe-actions"><button class="btn btn-xs btn-error btn-soft" data-a="del">✕ 삭제</button></div>`;
   const q=s=>popEd.querySelector(s);
   q('.pe-title').onchange=e=>{const v=e.target.value.trim();if(v){er.title=v;commit();}else e.target.value=er.title;};
   q('.pe-title').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();e.target.blur();}};
-  q('[data-f="start"]').onchange=e=>{
-    const v=e.target.value;
-    if(!v){e.target.value=er.start;return;}
-    if(T(er.end)<=T(v)){ /* 종료를 넘어서면 = 기간 유지한 채 통째 이동 */
-      const dur=miOf(er.end)-miOf(er.start);
-      er.start=v;er.end=miToMonth(miOf(v)+dur);
-      q('[data-f="end"]').value=er.end;
-    }else er.start=v;
+  bindDate(q('[data-f="start"]'),v=>{ /* 입력 값 유지 — 끝은 순서가 깨질 때만 한 달 뒤로 */
+    er.start=v;
+    if(T(er.end)<=T(v)){er.end=miToMonth(miOf(v)+1);q('[data-f="end"]').value=er.end;}
     commit();
-  };
-  q('[data-f="end"]').onchange=e=>{
-    const v=e.target.value;
-    if(!v){e.target.value=er.end;return;}
-    if(T(v)<=T(er.start)){ /* 시작보다 앞서면 = 통째 이동 */
-      const dur=miOf(er.end)-miOf(er.start);
-      er.end=v;er.start=miToMonth(miOf(v)-dur);
-      q('[data-f="start"]').value=er.start;
-    }else er.end=v;
+  });
+  bindDate(q('[data-f="end"]'),v=>{
+    er.end=v;
+    if(T(v)<=T(er.start)){er.start=miToMonth(miOf(v)-1);q('[data-f="start"]').value=er.start;}
     commit();
-  };
+  });
   q('[data-f="color"]').onchange=e=>{er.color=e.target.value;commit();};
   q('[data-a="del"]').onclick=()=>{
     closePop();
@@ -2342,7 +2359,7 @@ let moved=false;
     CH.line.setAttribute('x1',p.x);CH.line.setAttribute('x2',p.x);
     if(main){CH.dot.setAttribute('cx',p.x);CH.dot.setAttribute('cy',y);CH.dot.setAttribute('opacity',1);}
     else CH.dot.setAttribute('opacity',0);
-    CH.txt.textContent=tToMonth(t).replace('-','.')+(main?' · '+(v>0?'+':'')+v.toFixed(2):'');
+    CH.txt.textContent=fmtD(tToMonth(t))+(main?' · '+(v>0?'+':'')+v.toFixed(2):'');
     const tw=textW(CH.txt.textContent);
     CH.txt.setAttribute('x',Math.max(4,Math.min(p.x+8,W-tw-8)));
     CH.g.setAttribute('opacity',1);
