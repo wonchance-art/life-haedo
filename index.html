@@ -126,6 +126,7 @@
   .hc-li .hc-lt{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .hc-tags{display:flex;gap:9px;margin-top:4px;flex-wrap:wrap}
   .hc-tag{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--ink-soft)}
+  #sec-canvas .wrap{max-width:none;padding:0 clamp(14px,2.2vw,36px)} /* 연표는 화면 전체 폭 */
   .canvas-frame{border:1px solid var(--ink);background:var(--panel);padding:8px;position:relative}
   .canvas-inner{border:1px solid var(--line);position:relative;overflow:hidden}
   #tl{display:block;width:100%;touch-action:pan-y;cursor:grab;user-select:none}
@@ -975,7 +976,8 @@ function prepare(){
   L.SPAN_TOP=L.AXIS_Y+14; L.SPAN_H=26; L.SPAN_GAP=9;
   const spanBot=L.SPAN_TOP+NLANES*(L.SPAN_H+L.SPAN_GAP)-L.SPAN_GAP;
   L.HAP_TOP=spanBot+18;                    /* +1 상한 */
-  L.HAP_BOT=L.HAP_TOP+230;                 /* −1 하한. 사건 라벨은 점 옆에 직접 붙는다 */
+  const hapH=Math.max(240,Math.min(600,Math.round((typeof innerHeight!=='undefined'?innerHeight:800)*.44)));
+  L.HAP_BOT=L.HAP_TOP+hapH;                /* −1 하한 — 창 높이에 비례해 자연스럽게 */
   L.H=L.HAP_BOT+30;
   LAYOUT=L;
 
@@ -2516,7 +2518,7 @@ let moved=false;
   $('#btnZoomIn').onclick=()=>zoomAt((dom[0]+dom[1])/2,1/1.35);
   $('#btnZoomOut').onclick=()=>zoomAt((dom[0]+dom[1])/2,1.35);
   $('#btnNow').onclick=()=>{const s=Math.min(dom[1]-dom[0],6);setDom(NOW-s*.6,NOW+s*.4);};
-  addEventListener('resize',render);
+  addEventListener('resize',()=>{prepare();render();});
 })();
 function setDom(a,b){
   const s=b-a;
