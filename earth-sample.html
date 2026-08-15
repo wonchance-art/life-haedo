@@ -70,9 +70,9 @@
   </div>
   <div class="legend">
     <span><b>분류가 층을 정한다</b></span>
-    <span>✦ <b>별</b> = 사람 (맨 위)</span><span>⦿ <b>씨앗</b> = 학업 (기록의 땅에 심김)</span>
+    <span>✦ <b>별</b> = 사람 (맨 위)</span><span>🌱 <b>새싹</b> = 학업 (들에 돋음)</span>
     <span>❀ <b>꽃</b> = 좋은 일 (산 위)</span><span>◌ <b>물결</b> = 힘든 일 (호수에 가라앉은 자리)</span>
-    <span>⋀ <b>철새</b> = 여행</span><span>☁ = 생각</span><span>ᛉ <b>풀</b> = 월별 글 (무성할수록 많이 쓴 시절)</span><span>☀ 해 = 오늘 · ☾ 달·별 공존</span>
+    <span>⋀ <b>철새</b> = 여행 (매개)</span><span>✧ <b>등불</b> = 독서 (매개)</span><span>☁ = 생각·글쓰기 (매개)</span><span>≡ <b>밭이랑</b> = 노동</span><span>ᛉ <b>풀</b> = 월별 글 (무성할수록 많이 쓴 시절)</span><span>☀ 해 = 오늘 · ☾ 달·별 공존</span>
   </div>
   <svg id="c" aria-label="지구 연표 황혼 샘플"></svg>
   <div class="cap" id="cap"></div>
@@ -83,20 +83,23 @@ const EVENTS=[ /* [연도, 행복, 분류, 이름] — people=별 띠 · study=�
   [2001.2,  0.35,'people','첫 친구'],
   [2004.0,  0.2,'study','첫 시험'],
   [2005.5,  0.3,'','작은 성취'],
-  [2007.6,  0.15,'travel','제주 한 달'],
+  [2006.3,  0.25,'reading','밤의 책들'],
+  [2007.6,  0.15,'travel','제주 한 달',2007.75],
   [2009.1, -0.3,'','긴 방황'],
   [2011.3, -0.15,'study','재수 생활'],
   [2013.1,  0.5,'study','대학 입학'],
   [2014.2,  0.42,'people','독립과 사람들'],
-  [2017.6,  0.8,'travel','긴 여행'],
+  [2017.4,  0.8,'travel','긴 여행',2018.9],
   [2019.8, -0.62,'','슬럼프'],
   [2020.9,  0.3,'study','새 언어 공부'],
   [2021.4,  0.15,'','새 일'],
+  [2022.2,  0.4,'reading','다시 읽는 철학'],
   [2023.0,  0.55,'people','귀한 인연'],
   [2024.6,  0.9,'people','평생의 벗'],
   [2025.8, -0.2,'','작은 부침'],
   [2027.2,  0.6,'','다음 목표']
 ];
+const WORKS=[[2015.2,2017.2,'첫 직장'],[2021.3,2024.2,'지금의 일']]; /* 노동 = 밭이랑 (기간) */
 const THOUGHTS=[[2010.8,'낯선 거리에서야 내 속도를'],[2020.9,'길이 끝난 게 아니라 지도가']];
 const HAP=[[1995,0],[2000,.2],[2004,.28],[2007,-.05],[2009,-.35],[2011,-.2],[2013,.15],[2015,.3],[2017.6,.6],
   [2019,-.1],[2019.8,-.5],[2021,.2],[2022.5,.42],[2024,.3],[2025.5,.28],[2027,.5],[2028,.55]];
@@ -157,6 +160,21 @@ const birds=(x,y,sc,col)=>{ /* ⋀ 철새 무리 — 셋이 비껴 난다 */
     g.appendChild(el('path',{d:`M ${bx-w} ${by} Q ${bx-w/2} ${by-3.2*k} ${bx} ${by} Q ${bx+w/2} ${by-3.2*k} ${bx+w} ${by}`,
       stroke:col,'stroke-width':1.2*k,fill:'none','stroke-linecap':'round'}));
   });
+  return g;
+};
+const sprout=(x,y,r,col)=>{ /* 🌱 줄기 + 두 잎 */
+  const g=el('g',{});
+  g.appendChild(el('path',{d:`M ${x} ${y+r} L ${x} ${y-r*.5}`,stroke:col,'stroke-width':1.5,'stroke-linecap':'round',fill:'none'}));
+  g.appendChild(el('path',{d:`M ${x} ${y-r*.15} Q ${x-r} ${y-r*.85} ${x-r*1.4} ${y-r*.15} Q ${x-r*.6} ${y+r*.15} ${x} ${y-r*.15} Z`,fill:col,opacity:.9}));
+  g.appendChild(el('path',{d:`M ${x} ${y-r*.5} Q ${x+r} ${y-r*1.2} ${x+r*1.4} ${y-r*.5} Q ${x+r*.6} ${y-r*.18} ${x} ${y-r*.5} Z`,fill:col,opacity:.9}));
+  return g;
+};
+const lamp=(x,y,scene)=>{ /* ✧ 호롱 — 로고스의 빛을 지상에서 밝히는 눈 */
+  const g=el('g',{});
+  g.appendChild(el('circle',{cx:x,cy:y-3,r:scene?8:6.5,fill:'var(--sun)',opacity:.16}));
+  g.appendChild(el('ellipse',{cx:x,cy:y-3,rx:1.7,ry:2.6,fill:'var(--sun)',opacity:.97}));
+  g.appendChild(el('line',{x1:x-3.2,y1:y+3.5,x2:x+3.2,y2:y+3.5,stroke:'oklch(35% 0.05 60)','stroke-width':1.1,'stroke-linecap':'round'}));
+  g.appendChild(el('line',{x1:x,y1:y+3.5,x2:x,y2:y+.5,stroke:'oklch(35% 0.05 60)','stroke-width':.9}));
   return g;
 };
 const cloudShape=(x,y,s,fill,op)=>{
@@ -276,6 +294,20 @@ function render(){
   }
   svg.appendChild(el('path',{d:smooth(fut),fill:'none',stroke:'var(--cream)','stroke-width':1.4,'stroke-dasharray':'6 6',opacity:.55}));
 
+  /* 밭이랑 — 노동의 기간 동안 일군 땅 (완만한 세 고랑) */
+  WORKS.forEach(([t0,t1,name])=>{
+    const x1=X(t0),x2=X(t1);
+    [40,50,60].forEach((dy,i)=>{
+      const pts2=[];for(let px=x1;px<=x2;px+=36)
+        pts2.push([px,ZERO+dy+Math.sin(px/90+i)*1.8]);
+      pts2.push([x2,ZERO+dy+Math.sin(x2/90+i)*1.8]);
+      svg.appendChild(el('path',{d:smooth(pts2),fill:'none',stroke:'oklch(48% 0.055 58)',
+        'stroke-width':1.1,opacity:.5,'stroke-linecap':'round'}));
+    });
+    const lt=el('text',{x:x1+4,y:ZERO+74,'font-size':10.5,fill:'oklch(35% 0.05 60)',opacity:.85});
+    lt.textContent=name;svg.appendChild(lt);
+  });
+
   /* 강가의 풀 — 월별 글. 물가 기슭을 따라, 글이 많던 시절일수록 무성하다 */
   const inkWarm='oklch(35% 0.05 60)';
   {let gd=29;
@@ -315,7 +347,8 @@ function render(){
 
   /* 사건 — 분류가 층을 정한다 */
   const inBand=(b,v)=>b.bot-((v+1)/2)*(b.bot-b.top);
-  EVENTS.forEach(([t,v,cat,name])=>{
+  EVENTS.forEach(ev=>{
+    const [t,v,cat,name]=ev;
     const x=X(t), cy=yOf(v);
     if(cat==='people'){ /* 별 — 맨 위 띠, 실은 능선까지 */
       const y=inBand(BAND_STAR,v);
@@ -329,27 +362,45 @@ function render(){
       lt.textContent=name;svg.appendChild(lt);
       return;
     }
-    if(cat==='travel'){ /* 철새 — 하늘의 빈 층을 난다 */
-      const y=VAL_TOP-16-((v+1)/2)*18;
+    if(cat==='travel'){ /* 철새 — 매개: 하늘을 실제로 가로지른다 */
+      const tEnd=ev[4];
+      const y=VAL_TOP-18-((v+1)/2)*14;
       const gy=yOf(hapAt(t));
       svg.appendChild(el('line',{x1:x,y1:y+8,x2:x,y2:gy-4,
-        stroke:'var(--cream)','stroke-width':.5,'stroke-dasharray':'2 6',opacity:.22}));
-      svg.appendChild(el('circle',{cx:x,cy:gy,r:1.6,fill:'var(--cream)',opacity:.45}));
-      const bg=birds(x,y,scene?11:9.5,'var(--cream)');
-      bg.setAttribute('class','drift');
-      svg.appendChild(bg);
-      const lt=el('text',{x:x,y:y+20,'text-anchor':'middle','font-size':10.5,fill:'var(--cream-soft)'});
+        stroke:'var(--cream)','stroke-width':.5,'stroke-dasharray':'2 6',opacity:.2}));
+      svg.appendChild(el('circle',{cx:x,cy:gy,r:1.6,fill:'var(--cream)',opacity:.4}));
+      if(tEnd&&X(tEnd)-x>40){ /* 기간 여행 = 비행 궤적을 따라 줄지어 */
+        const xe=X(tEnd), midX=(x+xe)/2;
+        const qy=y-16;
+        svg.appendChild(el('path',{d:`M ${x} ${y} Q ${midX} ${qy} ${xe} ${y-6}`,
+          fill:'none',stroke:'var(--cream)','stroke-width':.5,'stroke-dasharray':'1.5 7',opacity:.3}));
+        [0.08,0.38,0.66,0.92].forEach((f,i)=>{
+          const bx2=x+(xe-x)*f;
+          const by2=(1-f)*(1-f)*y+2*(1-f)*f*qy+f*f*(y-6);
+          const bg=birds(bx2,by2,(scene?10:8.6)*(0.8+f*0.35),'var(--cream)');
+          bg.setAttribute('class',i%2?'drift':'drift2');
+          svg.appendChild(bg);
+        });
+      }else{
+        const bg=birds(x,y,scene?11:9.5,'var(--cream)');
+        bg.setAttribute('class','drift');
+        svg.appendChild(bg);
+      }
+      const lt=el('text',{x:x,y:y+22,'text-anchor':'middle','font-size':10.5,fill:'var(--cream-soft)'});
       lt.textContent=name;svg.appendChild(lt);
       return;
     }
-    if(cat==='study'){ /* 씨앗 — 물가 들에 심김 */
-      const sy=ZERO+52;
-      const g=el('g',{});
-      g.appendChild(el('ellipse',{cx:x,cy:sy,rx:3.4,ry:4.6,fill:'var(--seed)',stroke:'var(--sky-glow)','stroke-width':.8,opacity:.98}));
-      g.appendChild(el('path',{d:`M ${x} ${sy-4.6} Q ${x+1.6} ${sy} ${x} ${sy+4.6}`,
-        stroke:'var(--sky-glow)','stroke-width':.7,fill:'none',opacity:.6}));
-      svg.appendChild(g);
-      const lt=el('text',{x:x,y:sy+17,'text-anchor':'middle','font-size':10.5,fill:inkWarm,opacity:.85});
+    if(cat==='study'){ /* 새싹 — 들에 돋은 배움 */
+      const sy=ZERO+94;
+      svg.appendChild(sprout(x,sy,scene?7:6,'oklch(46% 0.09 135)'));
+      const lt=el('text',{x:x,y:sy+18,'text-anchor':'middle','font-size':10.5,fill:inkWarm,opacity:.85});
+      lt.textContent=name;svg.appendChild(lt);
+      return;
+    }
+    if(cat==='reading'){ /* 등불 — 독서, 지상의 작은 빛 */
+      const ly2=ZERO+72;
+      svg.appendChild(lamp(x,ly2,scene));
+      const lt=el('text',{x:x,y:ly2+16,'text-anchor':'middle','font-size':10.5,fill:inkWarm,opacity:.85});
       lt.textContent=name;svg.appendChild(lt);
       return;
     }
@@ -371,7 +422,7 @@ function render(){
   document.getElementById('cap').textContent=
     scene
     ? 'b. 깊은 황혼 — 별이 반짝이고 구름이 흐르고 물결이 일렁인다. 마우스를 움직이면 먼 능선이 천천히 따라온다(원근).'
-    : 'a. 옅은 황혼 — 땅은 끝까지 볕 든 들. 강가 기슭의 풀이 그 시절 쓴 글의 양이다.';
+    : 'a. 옅은 황혼 — 하늘(세계)·매개(구름·철새·등불)·땅(삶). 들에는 밭이랑(노동)과 새싹(학업), 강가엔 풀(글).';
 }
 /* 원근 패럴랙스 — 먼 층일수록 시선을 따라 덜 움직인다 */
 const reduceM=matchMedia('(prefers-reduced-motion: reduce)').matches;
