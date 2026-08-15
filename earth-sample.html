@@ -112,7 +112,7 @@ const NS='http://www.w3.org/2000/svg';
 const el=(t,a)=>{const n=document.createElementNS(NS,t);for(const k in a)n.setAttribute(k,a[k]);return n;};
 const T0=1994.2,T1=2028.8;
 let W=1200;
-const H=470, SKY_T=46, ZERO=258, LAKE_B=334, GRND_T=368, GRND_B=452;
+const H=380, SKY_T=46, ZERO=258, LAKE_B=334;
 const X=t=>(t-T0)/(T1-T0)*W;
 const VAL_TOP=SKY_T+62; /* +1 상한 — 별 띠 아래 */
 const yOf=v=>v>=0? ZERO - v*(ZERO-VAL_TOP) : ZERO + (-v)*(LAKE_B-ZERO);
@@ -223,14 +223,14 @@ function render(){
   /* 연도 눈금 */
   for(let y=1995;y<=2028;y+=5){
     const x=X(y);
-    svg.appendChild(el('line',{x1:x,x2:x,y1:SKY_T,y2:GRND_T+30,stroke:'var(--cream)','stroke-width':.7,'stroke-dasharray':'2 8',opacity:.22}));
+    svg.appendChild(el('line',{x1:x,x2:x,y1:SKY_T,y2:H-8,stroke:'var(--cream)','stroke-width':.7,'stroke-dasharray':'2 8',opacity:.22}));
     const t=el('text',{x:x,y:SKY_T-16,'text-anchor':'middle','font-size':11,fill:'var(--cream-soft)','font-family':'ui-monospace,monospace'});
     t.textContent=y;svg.appendChild(t);
   }
 
   /* 해 — 오늘, 지평선에 낮게 */
   const nx=X(NOW);
-  svg.appendChild(el('line',{x1:nx,x2:nx,y1:SKY_T-4,y2:GRND_T+26,stroke:'var(--sun)','stroke-width':1,'stroke-dasharray':'4 6',opacity:.6}));
+  svg.appendChild(el('line',{x1:nx,x2:nx,y1:SKY_T-4,y2:H-8,stroke:'var(--sun)','stroke-width':1,'stroke-dasharray':'4 6',opacity:.6}));
   svg.appendChild(el('circle',{cx:nx,cy:ZERO-13,r:scene?11:9,fill:'var(--sun)',opacity:.98}));
   svg.appendChild(el('circle',{cx:nx,cy:ZERO-13,r:scene?22:16,fill:'var(--sun)',opacity:.16}));
   if(scene)svg.appendChild(el('rect',{x:nx-1.2,y:ZERO,width:2.4,height:LAKE_B-ZERO,fill:'var(--sun)',opacity:.18}));
