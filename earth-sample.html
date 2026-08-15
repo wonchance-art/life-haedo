@@ -49,6 +49,16 @@
   .legend b{color:var(--ink);font-weight:600}
   svg{display:block;width:100%;border-radius:16px}
   .cap{margin-top:14px;font-size:12.5px;color:var(--ink-soft)}
+  /* 살아있는 풍경 — 아주 느린 미세 모션 */
+  @keyframes twk{0%,100%{opacity:.18}50%{opacity:.75}}
+  .twk{animation:twk 4.5s ease-in-out infinite}
+  @keyframes swell{0%{transform:translateX(0)}100%{transform:translateX(9px)}}
+  .swell{animation:swell 11s ease-in-out infinite alternate}
+  @keyframes drift{0%{transform:translateX(0)}100%{transform:translateX(14px)}}
+  .drift{animation:drift 26s ease-in-out infinite alternate}
+  @keyframes drift2{0%{transform:translateX(0)}100%{transform:translateX(-10px)}}
+  .drift2{animation:drift2 34s ease-in-out infinite alternate}
+  @media (prefers-reduced-motion:reduce){.twk,.swell,.drift,.drift2{animation:none}}
 </style>
 </head>
 <body>
@@ -62,7 +72,7 @@
     <span><b>분류가 층을 정한다</b></span>
     <span>✦ <b>별</b> = 사람 (맨 위)</span><span>⦿ <b>씨앗</b> = 학업 (기록의 땅에 심김)</span>
     <span>❀ <b>꽃</b> = 좋은 일 (산 위)</span><span>◌ <b>물결</b> = 힘든 일 (호수에 가라앉은 자리)</span>
-    <span>☁ = 생각</span><span>▄ <b>땅</b> = 월별 글 (존재의 기반)</span><span>☀ 해 = 오늘 · ☾ 달·별 공존</span>
+    <span>⋀ <b>철새</b> = 여행</span><span>☁ = 생각</span><span>▄ <b>땅</b> = 월별 글 (존재의 기반)</span><span>☀ 해 = 오늘 · ☾ 달·별 공존</span>
   </div>
   <svg id="c" aria-label="지구 연표 황혼 샘플"></svg>
   <div class="cap" id="cap"></div>
@@ -73,11 +83,12 @@ const EVENTS=[ /* [연도, 행복, 분류, 이름] — people=별 띠 · study=�
   [2001.2,  0.35,'people','첫 친구'],
   [2004.0,  0.2,'study','첫 시험'],
   [2005.5,  0.3,'','작은 성취'],
+  [2007.6,  0.15,'travel','제주 한 달'],
   [2009.1, -0.3,'','긴 방황'],
   [2011.3, -0.15,'study','재수 생활'],
   [2013.1,  0.5,'study','대학 입학'],
   [2014.2,  0.42,'people','독립과 사람들'],
-  [2017.6,  0.8,'','긴 여행'],
+  [2017.6,  0.8,'travel','긴 여행'],
   [2019.8, -0.62,'','슬럼프'],
   [2020.9,  0.3,'study','새 언어 공부'],
   [2021.4,  0.15,'','새 일'],
@@ -94,6 +105,7 @@ const RECS=[];{let s=7;for(let t=1995;t<=2028.4;t+=1/12){s=(s*16807)%2147483647;
   const base=t>2015? .55:.25, k=(s/2147483647);
   RECS.push([t, Math.max(0, base + .45*Math.sin((t-1995)*1.7) * k)]);}}
 
+const PX={stars:null,ridge2:null,far:null}; /* 패럴랙스 층 */
 /* ── 렌더 ──────────────────────────────────────────────────── */
 const svg=document.getElementById('c');
 const NS='http://www.w3.org/2000/svg';
@@ -138,6 +150,15 @@ const star=(x,y,r,col)=>{
            Q ${x-r*.18} ${y+r*.18} ${x-r} ${y} Q ${x-r*.18} ${y-r*.18} ${x} ${y-r} Z`;
   return el('path',{d:p,fill:col});
 };
+const birds=(x,y,sc,col)=>{ /* ⋀ 철새 무리 — 셋이 비껴 난다 */
+  const g=el('g',{});
+  [[0,0,1],[ -11,5,.8],[10,6,.75]].forEach(([dx,dy,k])=>{
+    const bx=x+dx*sc/10, by=y+dy*sc/10, w=6*sc/10*k;
+    g.appendChild(el('path',{d:`M ${bx-w} ${by} Q ${bx-w/2} ${by-3.2*k} ${bx} ${by} Q ${bx+w/2} ${by-3.2*k} ${bx+w} ${by}`,
+      stroke:col,'stroke-width':1.2*k,fill:'none','stroke-linecap':'round'}));
+  });
+  return g;
+};
 const cloudShape=(x,y,s,fill,op)=>{
   const g=el('g',{});
   [[0,0,10],[-9,3,7.5],[9,3,7.5],[0,4,9]].forEach(([dx,dy,r])=>
@@ -180,13 +201,17 @@ function render(){
   svg.appendChild(el('rect',{x:0,y:LAKE_B-6,width:W,height:GRND_T+22-(LAKE_B-6),fill:'url(#mist)'}));
 
   /* 별하늘 — 위쪽 전역에 옅게 (위로 갈수록 또렷) */
+  PX.stars=el('g',{});
   {let sd=13;const n=scene?90:48;
    for(let i=0;i<n;i++){sd=(sd*16807)%2147483647;const rx=sd/2147483647;
      sd=(sd*16807)%2147483647;const ry=sd/2147483647;
      sd=(sd*16807)%2147483647;const rr=sd/2147483647;
      const y=Math.max(8,SKY_T-30+ry*(VAL_TOP-SKY_T+10));
-     svg.appendChild(el('circle',{cx:rx*W,cy:y,r:.6+rr*1.1,
-       fill:'var(--star)',opacity:(scene?.7:.5)*(1-ry*.6)}));}}
+     const st2=el('circle',{cx:rx*W,cy:y,r:.6+rr*1.1,
+       fill:'var(--star)',opacity:(scene?.7:.5)*(1-ry*.6)});
+     if(rr>.66){st2.setAttribute('class','twk');st2.style.animationDelay=(rx*6).toFixed(2)+'s';}
+     PX.stars.appendChild(st2);}}
+  svg.appendChild(PX.stars);
 
   /* 달 — 초승달, 왼쪽 위 */
   {const mx=W*.16,my=SKY_T+16,r=scene?13:11;
@@ -229,18 +254,21 @@ function render(){
   const cpDn=el('clipPath',{id:'dn'});cpDn.appendChild(el('rect',{x:0,y:ZERO,width:W,height:H-ZERO}));
   defs.appendChild(cpUp);defs.appendChild(cpDn);
   const far2=past.map(p=>[p[0]-26,Math.min(ZERO-((ZERO-p[1])*.45),ZERO)]);
-  svg.appendChild(el('path',{d:smooth(far2)+` L ${far2[far2.length-1][0]} ${ZERO} L ${far2[0][0]} ${ZERO} Z`,
-    fill:'var(--ridge2)',opacity:scene?.4:.3,'clip-path':'url(#up)'}));
+  PX.ridge2=el('path',{d:smooth(far2)+` L ${far2[far2.length-1][0]} ${ZERO} L ${far2[0][0]} ${ZERO} Z`,
+    fill:'var(--ridge2)',opacity:scene?.4:.3,'clip-path':'url(#up)'});
+  svg.appendChild(PX.ridge2);
   const farPts=past.map(p=>[p[0]+14,Math.min(p[1]+26,ZERO)]);
-  svg.appendChild(el('path',{d:smooth(farPts)+` L ${farPts[farPts.length-1][0]} ${ZERO} L ${farPts[0][0]} ${ZERO} Z`,
-    fill:'var(--mtn-far)',opacity:scene?.5:.38,'clip-path':'url(#up)'}));
+  PX.far=el('path',{d:smooth(farPts)+` L ${farPts[farPts.length-1][0]} ${ZERO} L ${farPts[0][0]} ${ZERO} Z`,
+    fill:'var(--mtn-far)',opacity:scene?.5:.38,'clip-path':'url(#up)'});
+  svg.appendChild(PX.far);
   svg.appendChild(el('path',{d:area,fill:'url(#mtn)','clip-path':'url(#up)'}));
   svg.appendChild(el('path',{d:dPast,fill:'none',stroke:'var(--crest)','stroke-width':scene?2:1.6,
     'stroke-linecap':'round','clip-path':'url(#up)',opacity:.95}));
   svg.appendChild(el('path',{d:area,fill:'url(#lake)','clip-path':'url(#dn)'}));
   svg.appendChild(el('line',{x1:0,x2:W,y1:ZERO,y2:ZERO,stroke:'var(--sky-glow)',opacity:.75,'stroke-width':1.1}));
-  svg.appendChild(el('path',{d:smooth(past.map(p=>[p[0],Math.min(p[1]+12,LAKE_B)])),
-    fill:'none',stroke:'var(--cream)','stroke-width':.55,opacity:.18,'clip-path':'url(#dn)'}));
+  {const rip=el('path',{d:smooth(past.map(p=>[p[0],Math.min(p[1]+12,LAKE_B)])),
+    fill:'none',stroke:'var(--cream)','stroke-width':.55,opacity:.18,'clip-path':'url(#dn)','class':'swell'});
+   svg.appendChild(rip);}
   if(scene){
     [24,38].forEach(dy=>svg.appendChild(el('path',{d:smooth(past.map(p=>[p[0],Math.min(p[1]+dy,LAKE_B)])),
       fill:'none',stroke:'var(--cream)','stroke-width':.5,opacity:.12,'clip-path':'url(#dn)'})));
@@ -284,7 +312,7 @@ function render(){
   /* 생각 — 작은 구름에 매달린 문장 */
   THOUGHTS.forEach(([t,txt],i)=>{
     const x=X(t), y=SKY_T+58+(i%2)*16;
-    svg.appendChild(cloudShape(x,y,7.5,'var(--cloud)',.8));
+    const cs=cloudShape(x,y,7.5,'var(--cloud)',.8);cs.setAttribute('class',i%2?'drift2':'drift');svg.appendChild(cs);
     const q=el('text',{x:x,y:y+18,'text-anchor':'middle','font-size':10.5,fill:'var(--cream-soft)'});
     q.textContent='❝ '+txt.slice(0,10)+'…';svg.appendChild(q);
   });
@@ -302,6 +330,19 @@ function render(){
       svg.appendChild(star(x,y,scene?9:8,'var(--star)'));
       if(scene)svg.appendChild(el('circle',{cx:x,cy:y,r:12,fill:'var(--star)',opacity:.12}));
       const lt=el('text',{x:x,y:y+21,'text-anchor':'middle','font-size':10.5,fill:'var(--cream)'});
+      lt.textContent=name;svg.appendChild(lt);
+      return;
+    }
+    if(cat==='travel'){ /* 철새 — 하늘의 빈 층을 난다 */
+      const y=VAL_TOP-16-((v+1)/2)*18;
+      const gy=yOf(hapAt(t));
+      svg.appendChild(el('line',{x1:x,y1:y+8,x2:x,y2:gy-4,
+        stroke:'var(--cream)','stroke-width':.5,'stroke-dasharray':'2 6',opacity:.22}));
+      svg.appendChild(el('circle',{cx:x,cy:gy,r:1.6,fill:'var(--cream)',opacity:.45}));
+      const bg=birds(x,y,scene?11:9.5,'var(--cream)');
+      bg.setAttribute('class','drift');
+      svg.appendChild(bg);
+      const lt=el('text',{x:x,y:y+20,'text-anchor':'middle','font-size':10.5,fill:'var(--cream-soft)'});
       lt.textContent=name;svg.appendChild(lt);
       return;
     }
@@ -336,8 +377,23 @@ function render(){
 
   document.getElementById('cap').textContent=
     scene
-    ? 'b. 깊은 황혼 — 안개가 짙어지고 풀이 우거지고 별이 늘어난다. 해기둥·잔물결도 진해진다.'
+    ? 'b. 깊은 황혼 — 별이 반짝이고 구름이 흐르고 물결이 일렁인다. 마우스를 움직이면 먼 능선이 천천히 따라온다(원근).'
     : 'a. 옅은 황혼 — 서서 바라보는 풍경: 먼 능선일수록 대기에 옅어지고, 산기슭엔 안개, 발밑의 어두운 땅은 내가 쓴 글이다.';
+}
+/* 원근 패럴랙스 — 먼 층일수록 시선을 따라 덜 움직인다 */
+const reduceM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+if(!reduceM){
+  svg.addEventListener('pointermove',e=>{
+    if(e.pointerType&&e.pointerType!=='mouse')return;
+    const r=svg.getBoundingClientRect();
+    const dx=((e.clientX-r.left)/Math.max(r.width,1)-.5)*2; /* −1..1 */
+    if(PX.stars)PX.stars.style.transform=`translateX(${(-dx*4).toFixed(1)}px)`;
+    if(PX.ridge2)PX.ridge2.style.transform=`translateX(${(-dx*9).toFixed(1)}px)`;
+    if(PX.far)PX.far.style.transform=`translateX(${(-dx*16).toFixed(1)}px)`;
+  });
+  svg.addEventListener('pointerleave',()=>{
+    [PX.stars,PX.ridge2,PX.far].forEach(n=>{if(n)n.style.transform='';});
+  });
 }
 document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{
   document.documentElement.dataset.mode=b.dataset.mode;
