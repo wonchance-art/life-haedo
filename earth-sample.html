@@ -192,10 +192,9 @@ function render(){
   svg.appendChild(el('rect',{x:0,y:0,width:W,height:ZERO,fill:'url(#sky)'}));
   /* 호수 밖 전부가 땅 — 물가의 볕 든 들판이 내 발밑까지 한 번에 이어진다 */
   const plain=el('linearGradient',{id:'plain',x1:0,x2:0,gradientUnits:'userSpaceOnUse',y1:ZERO,y2:H});
-  plain.appendChild(el('stop',{offset:'0%','stop-color':'oklch(80% 0.075 68)'}));   /* 놀빛 든 물가 들 */
-  plain.appendChild(el('stop',{offset:'34%','stop-color':'oklch(62% 0.06 62)'}));
-  plain.appendChild(el('stop',{offset:'70%','stop-color':'oklch(40% 0.045 95)'}));
-  plain.appendChild(el('stop',{offset:'100%','stop-color':'oklch(26% 0.03 135)'})); /* 가장 가까운 그늘 */
+  plain.appendChild(el('stop',{offset:'0%','stop-color':'oklch(81% 0.075 68)'}));   /* 놀빛 든 물가 들 */
+  plain.appendChild(el('stop',{offset:'55%','stop-color':'oklch(71% 0.065 62)'}));
+  plain.appendChild(el('stop',{offset:'100%','stop-color':'oklch(63% 0.055 58)'})); /* 가까워도 여전히 볕 든 들 */
   defs.appendChild(plain);
   svg.appendChild(el('rect',{x:0,y:ZERO,width:W,height:H-ZERO,fill:'url(#plain)'}));
   if(scene){ /* 물가에 옅은 저녁 안개 한 겹 (분리 띠가 아니라 땅 위의 공기) */
@@ -277,29 +276,33 @@ function render(){
   }
   svg.appendChild(el('path',{d:smooth(fut),fill:'none',stroke:'var(--cream)','stroke-width':1.4,'stroke-dasharray':'6 6',opacity:.55}));
 
-  /* 발밑의 풀밭 — 월별 글. 언덕을 따로 세우지 않고, 글이 많던 시절일수록 풀이 무성하다 */
+  /* 강가의 풀 — 월별 글. 물가 기슭을 따라, 글이 많던 시절일수록 무성하다 */
+  const inkWarm='oklch(35% 0.05 60)';
   {let gd=29;
    for(let i=0;i<RECS.length;i+=2){
      const [t,n]=RECS[i];
      const bx=X(t);
-     const tufts=Math.round(n*3.2); /* 글 양 → 포기 수 */
+     const v=hapAt(t), depth=v<0?(-v)*(LAKE_B-ZERO):0;
+     if(depth>20)continue; /* 깊은 물 속엔 풀이 없다 */
+     const baseY=ZERO+24+depth*.5;
+     const tufts=Math.round(n*3.2);
      for(let k=0;k<tufts;k++){
        gd=(gd*16807)%2147483647;const jx=(gd/2147483647-.5)*26;
        gd=(gd*16807)%2147483647;const jl=gd/2147483647;
-       const gx=bx+jx, gh=7+n*16+jl*6, lean=jl>.5?1:-1;
-       svg.appendChild(el('path',{d:`M ${gx} ${H-3} q ${lean*2.2} ${-gh*.55} ${lean*3.6} ${-gh}`,
-         stroke:'var(--ground-edge)','stroke-width':.9,fill:'none','stroke-linecap':'round',
-         opacity:.34+n*.3}));
+       const gx=bx+jx, gh=6+n*14+jl*5, lean=jl>.5?1:-1;
+       svg.appendChild(el('path',{d:`M ${gx} ${baseY} q ${lean*2.2} ${-gh*.55} ${lean*3.6} ${-gh}`,
+         stroke:'oklch(40% 0.055 130)','stroke-width':.9,fill:'none','stroke-linecap':'round',
+         opacity:.32+n*.32}));
      }
    }}
-  const gLb=el('text',{x:10,y:H-10,'font-size':10,fill:'var(--cream-soft)','font-family':'ui-monospace,monospace'});
+  const gLb=el('text',{x:10,y:ZERO+66,'font-size':10,fill:inkWarm,opacity:.7,'font-family':'ui-monospace,monospace'});
   gLb.textContent='풀 = 월별 글';svg.appendChild(gLb);
-  /* 바라보는 사람 — 오늘의 자리, 맨 앞 땅 위 */
-  {const px2=Math.min(X(NOW),W-24), py=H-8;
-   const fig=el('g',{opacity:.92});
-   fig.appendChild(el('circle',{cx:px2,cy:py-13.5,r:2.6,fill:'oklch(16% 0.02 130)'}));
+  /* 바라보는 사람 — 오늘의 물가에 서서 */
+  {const px2=Math.min(X(NOW),W-24), py=ZERO+42;
+   const fig=el('g',{opacity:.9});
+   fig.appendChild(el('circle',{cx:px2,cy:py-13.5,r:2.6,fill:inkWarm}));
    fig.appendChild(el('path',{d:`M ${px2} ${py-11} L ${px2} ${py-3} M ${px2} ${py-3} L ${px2-2.4} ${py+2} M ${px2} ${py-3} L ${px2+2.4} ${py+2} M ${px2} ${py-8.5} L ${px2-3.2} ${py-5.5}`,
-     stroke:'oklch(16% 0.02 130)','stroke-width':1.6,'stroke-linecap':'round',fill:'none'}));
+     stroke:inkWarm,'stroke-width':1.6,'stroke-linecap':'round',fill:'none'}));
    svg.appendChild(fig);}
 
   /* 생각 — 작은 구름에 매달린 문장 */
@@ -339,14 +342,14 @@ function render(){
       lt.textContent=name;svg.appendChild(lt);
       return;
     }
-    if(cat==='study'){ /* 씨앗 — 발밑 땅에 심김 */
-      const sy=H-30;
+    if(cat==='study'){ /* 씨앗 — 물가 들에 심김 */
+      const sy=ZERO+52;
       const g=el('g',{});
       g.appendChild(el('ellipse',{cx:x,cy:sy,rx:3.4,ry:4.6,fill:'var(--seed)',stroke:'var(--sky-glow)','stroke-width':.8,opacity:.98}));
       g.appendChild(el('path',{d:`M ${x} ${sy-4.6} Q ${x+1.6} ${sy} ${x} ${sy+4.6}`,
         stroke:'var(--sky-glow)','stroke-width':.7,fill:'none',opacity:.6}));
       svg.appendChild(g);
-      const lt=el('text',{x:x,y:sy-11,'text-anchor':'middle','font-size':10.5,fill:'var(--cream-soft)'});
+      const lt=el('text',{x:x,y:sy+17,'text-anchor':'middle','font-size':10.5,fill:inkWarm,opacity:.85});
       lt.textContent=name;svg.appendChild(lt);
       return;
     }
@@ -360,7 +363,7 @@ function render(){
       svg.appendChild(el('ellipse',{cx:x,cy:ZERO+2,rx:13,ry:3.6,fill:'none',stroke:'var(--cream)','stroke-width':.55,opacity:.28}));
       svg.appendChild(el('line',{x1:x,y1:ZERO+6,x2:x,y2:cy-3,stroke:'var(--cream)','stroke-width':.5,'stroke-dasharray':'2 5',opacity:.3}));
       svg.appendChild(el('circle',{cx:x,cy:cy,r:1.8,fill:'var(--cream)',opacity:.65}));
-      const lt=el('text',{x:x,y:cy+15,'text-anchor':'middle','font-size':11,fill:'var(--cream-soft)'});
+      const lt=el('text',{x:x,y:cy+15,'text-anchor':'middle','font-size':11,fill:inkWarm,opacity:.85});
       lt.textContent=name;svg.appendChild(lt);
     }
   });
@@ -368,7 +371,7 @@ function render(){
   document.getElementById('cap').textContent=
     scene
     ? 'b. 깊은 황혼 — 별이 반짝이고 구름이 흐르고 물결이 일렁인다. 마우스를 움직이면 먼 능선이 천천히 따라온다(원근).'
-    : 'a. 옅은 황혼 — 하나의 땅이 물가에서 발밑까지 이어지고, 발밑 풀의 무성함이 그 시절 쓴 글의 양이다.';
+    : 'a. 옅은 황혼 — 땅은 끝까지 볕 든 들. 강가 기슭의 풀이 그 시절 쓴 글의 양이다.';
 }
 /* 원근 패럴랙스 — 먼 층일수록 시선을 따라 덜 움직인다 */
 const reduceM=matchMedia('(prefers-reduced-motion: reduce)').matches;
