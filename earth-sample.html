@@ -189,16 +189,18 @@ function render(){
   svg.appendChild(defs);
 
   /* 배경판 */
-  /* 하늘이 호수 언저리까지 내려온다 — 놀이 물과 안개에 비침 */
   svg.appendChild(el('rect',{x:0,y:0,width:W,height:ZERO,fill:'url(#sky)'}));
-  svg.appendChild(el('rect',{x:0,y:ZERO,width:W,height:H-ZERO,fill:'var(--sky-glow)',opacity:.5}));
-  /* 산기슭 안개 — 호수와 발밑 땅 사이의 대기 */
-  const mist=el('linearGradient',{id:'mist',x1:0,x2:0,gradientUnits:'userSpaceOnUse',y1:LAKE_B-6,y2:GRND_T+22});
-  mist.appendChild(el('stop',{offset:'0%','stop-color':'var(--mist)','stop-opacity':0}));
-  mist.appendChild(el('stop',{offset:'55%','stop-color':'var(--mist)','stop-opacity':scene?.5:.38}));
-  mist.appendChild(el('stop',{offset:'100%','stop-color':'var(--mist)','stop-opacity':.15}));
-  defs.appendChild(mist);
-  svg.appendChild(el('rect',{x:0,y:LAKE_B-6,width:W,height:GRND_T+22-(LAKE_B-6),fill:'url(#mist)'}));
+  /* 호수 밖 전부가 땅 — 물가의 볕 든 들판이 내 발밑까지 한 번에 이어진다 */
+  const plain=el('linearGradient',{id:'plain',x1:0,x2:0,gradientUnits:'userSpaceOnUse',y1:ZERO,y2:H});
+  plain.appendChild(el('stop',{offset:'0%','stop-color':'oklch(80% 0.075 68)'}));   /* 놀빛 든 물가 들 */
+  plain.appendChild(el('stop',{offset:'34%','stop-color':'oklch(62% 0.06 62)'}));
+  plain.appendChild(el('stop',{offset:'70%','stop-color':'oklch(40% 0.045 95)'}));
+  plain.appendChild(el('stop',{offset:'100%','stop-color':'oklch(26% 0.03 135)'})); /* 가장 가까운 그늘 */
+  defs.appendChild(plain);
+  svg.appendChild(el('rect',{x:0,y:ZERO,width:W,height:H-ZERO,fill:'url(#plain)'}));
+  if(scene){ /* 물가에 옅은 저녁 안개 한 겹 (분리 띠가 아니라 땅 위의 공기) */
+    svg.appendChild(el('rect',{x:0,y:ZERO+4,width:W,height:26,fill:'var(--mist)',opacity:.22}));
+  }
 
   /* 별하늘 — 위쪽 전역에 옅게 (위로 갈수록 또렷) */
   PX.stars=el('g',{});
