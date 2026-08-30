@@ -42,7 +42,8 @@
     <button class="chip" data-alt="relax">A 접선 완화</button>
     <button class="chip" data-alt="c2">B C² 스플라인</button>
     <button class="chip" data-alt="tol">C 허용 오차(전역)</button>
-    <button class="chip on" data-alt="corner">D 뾰족한 곳만</button>
+    <button class="chip" data-alt="corner">D 뾰족한 곳만</button>
+    <button class="chip on" data-alt="ma">E 이동평균 (주식 MA)</button>
     <span class="sep"></span>
     <button class="chip on" data-mode="both">겹쳐</button>
     <button class="chip" data-mode="now">현행만</button>
@@ -56,6 +57,7 @@
     <label class="sl">클램프 <input id="clamp" type="range" min="0" max="12" step="1" value="6"><span class="val" id="cV">6px</span></label>
     <label class="sl">완화 예산 <input id="tol" type="range" min="0" max="24" step="1" value="10"><span class="val" id="tV">10px</span></label>
     <label class="sl">뾰족 기준 <input id="thr" type="range" min="10" max="160" step="5" value="90"><span class="val" id="hV">90°</span></label>
+    <label class="sl">MA 폭 <input id="ma" type="range" min="8" max="110" step="2" value="36"><span class="val" id="mV">36px</span></label>
   </div>
 
   <svg id="c" aria-label="곡선 비교 시안"></svg>
@@ -80,7 +82,7 @@ const NOW=2026.6;
 const svg=document.getElementById('c'), NS='http://www.w3.org/2000/svg';
 const el=(t,a)=>{const n=document.createElementNS(NS,t);for(const k in a)n.setAttribute(k,a[k]);return n;};
 let W=1200; const H=380, TOP=42, BOT=330;
-let mode='both', view='all', alt='corner', alpha=0.3, clampPx=6, tolPx=10, thrDeg=90;
+let mode='both', view='all', alt='ma', alpha=0.3, clampPx=6, tolPx=10, thrDeg=90, maSigma=36;
 const dom=()=>view==='all'?[1994.2,2028.8]:view==='10'?[NOW-9.2,NOW+0.8]:[NOW-4.6,NOW+0.4];
 
 function tanFC(p){
@@ -181,6 +183,41 @@ function smoothCorners(p,R,thr){
   }
   return{pts:cur,allow:allow};
 }
+/* E: 이동평균 — 화면 px 기준 가우시안 창. 줌인하면 세부가, 줌아웃하면 추세가 보인다 (주식 MA와 같은 성질) */
+function maPath(p,sigma,x0,x1){
+  const out=[];
+  for(let x=x0;x<=x1;x+=3){
+    let sw=0,sy=0;
+    for(let i=0;i<p.length;i++){
+      const d=(x-p[i].x)/sigma, w=Math.exp(-d*d);
+      if(w<1e-4)continue;
+      sw+=w; sy+=w*p[i].y;
+    }
+    if(sw>0)out.push({x:x,y:sy/sw});
+  }
+  return out;
+}
+const polyPath=pts=>'M '+pts.map(q=>q.x+' '+q.y).join(' L ');
+/* 그려진 곡선의 기울기 — 뾰족함의 실제 지표 (주식 일봉은 0.2~0.6) */
+function slopeMedian(sampler,x0,x1){
+  const r=[]; let prev=null;
+  for(let x=x0;x<=x1;x+=4){
+    const y=sampler(x); if(y==null){prev=null;continue;}
+    if(prev!=null)r.push(Math.abs(y-prev)/4);
+    prev=y;
+  }
+  r.sort((a,b)=>a-b);
+  return r.length?r[Math.floor(r.length/2)]:0;
+}
+function bezSampler(p,tg){
+  return x=>{
+    for(let i=0;i<p.length-1;i++)if(x>=p[i].x&&x<=p[i+1].x){
+      const h=tg.dx[i],u=(x-p[i].x)/h,y0=p[i].y,y1=p[i+1].y;
+      return Math.pow(1-u,3)*y0+3*Math.pow(1-u,2)*u*(y0+tg.t[i]*h/3)+3*(1-u)*u*u*(y1-tg.t[i+1]*h/3)+u*u*u*y1;
+    }
+    return null;
+  };
+}
 const pathOf=(p,tg)=>{
   let d='M '+p[0].x+' '+p[0].y;
   for(let i=0;i<p.length-1;i++){const h=tg.dx[i];
@@ -221,18 +258,22 @@ function render(){
   const pts=P.filter(p=>p.t>=d[0]-.6&&p.t<=d[1]+.6).map(p=>({x:X(p.t),y:Y(p.v)}));
   if(pts.length<4){document.getElementById('met').textContent='구간에 점이 부족';return;}
   const fc=tanFC(pts);
-  let altPts=pts, rx, touched=null;
+  let altPts=pts, rx, touched=null, maPts=null;
   if(alt==='relax')      rx=tanRelax(pts,alpha,clampPx);
   else if(alt==='c2')    rx=tanC2(pts,clampPx);
   else if(alt==='tol'){ altPts=smoothWithin(pts,tolPx); rx=tanRelax(altPts,alpha,clampPx); }
-  else { const r=smoothCorners(pts,tolPx,(1-Math.cos(thrDeg*Math.PI/180))/2); altPts=r.pts; touched=r.allow; rx=tanC2(altPts,clampPx); }
+  else if(alt==='corner'){ const r=smoothCorners(pts,tolPx,(1-Math.cos(thrDeg*Math.PI/180))/2); altPts=r.pts; touched=r.allow; rx=tanC2(altPts,clampPx); }
+  else { maPts=maPath(pts,maSigma,pts[0].x,pts[pts.length-1].x); rx=tanFC(pts); }
   if(mode!=='new')
     svg.appendChild(el('path',{d:pathOf(pts,fc),fill:'none',stroke:mode==='both'?'var(--bloom)':'var(--ink)',
       'stroke-width':mode==='both'?1.6:2.4,opacity:mode==='both'?.6:.9,'stroke-linecap':'round',
       'stroke-dasharray':mode==='both'?'5 4':''}));
-  if(mode!=='now')
-    svg.appendChild(el('path',{d:pathOf(altPts,rx),fill:'none',stroke:'var(--leaf)','stroke-width':2.4,
+  if(mode!=='now'){
+    if(maPts)svg.appendChild(el('path',{d:polyPath(maPts),fill:'none',stroke:'var(--leaf)','stroke-width':2.6,
+      opacity:.95,'stroke-linecap':'round','stroke-linejoin':'round'}));
+    else svg.appendChild(el('path',{d:pathOf(altPts,rx),fill:'none',stroke:'var(--leaf)','stroke-width':2.4,
       opacity:.95,'stroke-linecap':'round'}));
+  }
   if(touched)pts.forEach((p,i)=>{ if(touched[i]>0.4)
     svg.appendChild(el('circle',{cx:p.x,cy:p.y,r:7,fill:'none',stroke:'var(--leaf)','stroke-width':1,opacity:.35})); });
   pts.forEach((p,i)=>{
@@ -241,18 +282,31 @@ function render(){
       stroke:(isFlat&&mode!=='new')?'var(--bloom)':'var(--ink-soft)','stroke-width':1.6}));
   });
   const a=stats(pts,fc), b=stats(altPts,rx);
-  let drift=0; for(let i=0;i<pts.length;i++)drift=Math.max(drift,Math.abs(altPts[i].y-pts[i].y));
+  let drift=0;
+  const x0=pts[0].x,x1=pts[pts.length-1].x;
+  const sNow=slopeMedian(bezSampler(pts,fc),x0,x1);
+  let sAlt;
+  if(maPts){
+    const f=x=>{for(let i=0;i<maPts.length-1;i++)if(x>=maPts[i].x&&x<=maPts[i+1].x){
+      const u=(x-maPts[i].x)/Math.max(maPts[i+1].x-maPts[i].x,1e-6);return maPts[i].y+(maPts[i+1].y-maPts[i].y)*u;} return null;};
+    sAlt=slopeMedian(f,x0,x1);
+    pts.forEach(q=>{const y=f(q.x); if(y!=null)drift=Math.max(drift,Math.abs(y-q.y));});
+  }else{
+    sAlt=slopeMedian(bezSampler(altPts,rx),x0,x1);
+    for(let i=0;i<pts.length;i++)drift=Math.max(drift,Math.abs(altPts[i].y-pts[i].y));
+  }
   document.getElementById('met').innerHTML=
     '<span>지점 <b>'+(a.inner+2)+'</b></span>'+
     '<span>사건에서 수평으로 눕는 자리 — 현행 <b>'+a.flat+'/'+a.inner+'</b> → A안 <span class="m-good">'+b.flat+'/'+b.inner+'</span></span>'+
-    '<span>꺾임 강도 현행 <b>'+a.jump.toFixed(2)+'</b> → A안 <span class="m-good">'+b.jump.toFixed(2)+'</span></span>'+
-    '<span>A안 오버슈트 <b>'+b.ov.toFixed(1)+'px</b></span>'+
+    '<span>선 기울기 현행 <b>'+sNow.toFixed(2)+'</b> → 대안 <span class="m-good">'+sAlt.toFixed(2)+'</span> <span style="opacity:.7">(주식 일봉 0.2~0.6)</span></span>'+
+
     '<span>점 이탈 '+(drift<0.5?'<span class="m-good">0px</span> — 점을 정확히 지남':'<b>'+drift.toFixed(1)+'px</b> — 최대치')+'</span>'+
     (touched?'<span>완화된 지점 <b>'+touched.filter(v=>v>0.4).length+'/'+(pts.length-2)+'</b> — 나머지는 손대지 않음</span>':'');
   document.getElementById('cap').textContent =
     alt==='relax' ? 'A 접선 완화 — 점을 정확히 지나되 사건에서 눕지 않는다. 수치는 좋아지지만 눈에 띄는 변화는 작다(구조상 한계).'
     : alt==='c2'  ? 'B C² 스플라인 — 곡률까지 연속이라 흐름이 눈에 띄게 매끈해진다. 점은 여전히 정확히 지나고, 대신 구간 사이가 살짝 부풀 수 있다(클램프로 제한).'
     : alt==='tol' ? 'C 허용 오차(전역) — 모든 점을 최대 '+tolPx+'px까지 옮긴다. 매끈하지만 멀쩡한 구간까지 흔들린다.'
+    : alt==='ma' ? 'E 이동평균 — 주식 차트에서 매끄러운 건 원 데이터가 아니라 MA선이다. 점(기록)은 제자리에 그대로 두고, 선은 흐름만 그린다. MA 폭은 화면 px 기준이라 줌인하면 세부가, 줌아웃하면 추세가 보인다.'
     : 'D 뾰족한 곳만 — 꺾임이 '+thrDeg+'° 넘는 지점(초록 링)에만 최대 '+tolPx+'px를 쓰고 나머지는 손대지 않는다. 기준을 올릴수록 진짜 바늘 끝만 다듬는다.';
 }
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=function(){
@@ -262,6 +316,7 @@ document.querySelectorAll('[data-view]').forEach(b=>b.onclick=function(){
 document.querySelectorAll('[data-alt]').forEach(b=>b.onclick=function(){
   alt=b.dataset.alt; document.querySelectorAll('[data-alt]').forEach(x=>x.classList.toggle('on',x===b)); render();});
 document.getElementById('tol').oninput=function(e){tolPx=+e.target.value;document.getElementById('tV').textContent=tolPx+'px';render();};
+document.getElementById('ma').oninput=function(e){maSigma=+e.target.value;document.getElementById('mV').textContent=maSigma+'px';render();};
 document.getElementById('thr').oninput=function(e){thrDeg=+e.target.value;document.getElementById('hV').textContent=thrDeg+'\u00B0';render();};
 document.getElementById('alpha').oninput=function(e){alpha=+e.target.value;document.getElementById('aV').textContent=alpha.toFixed(2);render();};
 document.getElementById('clamp').oninput=function(e){clampPx=+e.target.value;document.getElementById('cV').textContent=clampPx+'px';render();};
