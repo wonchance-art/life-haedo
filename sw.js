@@ -11,7 +11,7 @@ self.addEventListener('fetch',e=>{
   const u=new URL(e.request.url);
   if(e.request.method!=='GET')return;
   if(u.origin!==location.origin)return; /* Supabase·타일·폰트는 항상 네트워크 */
-  if(u.pathname.endsWith('/earth-sample.html')){e.respondWith(fetch(e.request));return;} /* 시안은 캐시 우회 — 항상 최신 */
+  if(/-sample.html$/.test(u.pathname)){e.respondWith(fetch(e.request));return;} /* 시안은 캐시 우회 — 항상 최신 */
   /* 네트워크 우선 — 최신 배포를 놓치지 않되, 오프라인이면 캐시로 */
   e.respondWith(
     fetch(e.request).then(r=>{

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="spring">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>곡선 부드러움 — 시안</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+  :root{
+    --paper:oklch(99.2% 0.005 95); --panel:oklch(97.6% 0.008 95);
+    --ink:oklch(36% 0.013 75); --ink-soft:oklch(36% 0.013 75 / .58);
+    --line:oklch(93.5% 0.012 92);
+    --leaf:oklch(65% 0.105 133); --bloom:oklch(66% 0.115 23);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:'Pretendard Variable',Pretendard,sans-serif;
+    line-height:1.6;padding:32px clamp(16px,3vw,40px) 60px}
+  h1{font-size:clamp(21px,2.6vw,27px);font-weight:700}
+  .sub{color:var(--ink-soft);font-size:13.5px;margin-top:6px;max-width:820px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:18px 0 6px}
+  .chip{font-family:inherit;font-size:12.5px;padding:4px 13px;border-radius:999px;cursor:pointer;
+    border:1px solid transparent;background:transparent;color:var(--ink);opacity:.55;transition:.15s}
+  .chip:hover{opacity:.9}
+  .chip.on{opacity:1;border-color:var(--line);background:var(--panel);font-weight:600}
+  .sep{width:1px;height:18px;background:var(--line);margin:0 6px}
+  label.sl{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-soft)}
+  input[type=range]{width:118px;accent-color:oklch(65% 0.105 133)}
+  .val{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;color:var(--ink);min-width:36px}
+  svg{display:block;width:100%;margin-top:8px}
+  .metrics{display:flex;gap:24px;flex-wrap:wrap;font-size:12px;color:var(--ink-soft);
+    font-family:'IBM Plex Mono',ui-monospace,monospace;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+  .metrics b{color:var(--ink);font-weight:600}
+  .m-good{color:oklch(55% 0.11 133);font-weight:600}
+  .cap{margin-top:16px;font-size:12.5px;color:var(--ink-soft);max-width:820px}
+</style>
+</head>
+<body>
+  <h1>곡선 부드러움 — 시안</h1>
+  <div class="sub">현행은 사건마다 접선이 0이 되어 곡선이 수평으로 눕는다(실데이터 기준 지점의 76%). A안은 그 자리에서 접선을 조금 살려 둥글게 넘어간다 — 지나는 점은 그대로다. 데이터는 실데이터의 밀도·진폭만 흉내 낸 익명 합성값.</div>
+
+  <div class="row">
+    <button class="chip on" data-mode="both">겹쳐 보기</button>
+    <button class="chip" data-mode="now">현행만</button>
+    <button class="chip" data-mode="new">A안만</button>
+    <span class="sep"></span>
+    <button class="chip on" data-view="all">All</button>
+    <button class="chip" data-view="10">10Y</button>
+    <button class="chip" data-view="5">5Y</button>
+    <span class="sep"></span>
+    <label class="sl">α <input id="alpha" type="range" min="0" max="0.6" step="0.05" value="0.3"><span class="val" id="aV">0.30</span></label>
+    <label class="sl">클램프 <input id="clamp" type="range" min="0" max="12" step="1" value="6"><span class="val" id="cV">6px</span></label>
+  </div>
+
+  <svg id="c" aria-label="곡선 비교 시안"></svg>
+  <div class="metrics" id="met"></div>
+  <div class="cap" id="cap"></div>
+
+<script>
+/* 익명 합성 데이터 — 실데이터의 밀도(월 지점 72·34년)·진폭만 재현 */
+const P=(()=>{
+  let s=20260815; const rnd=()=>((s=(s*16807)%2147483647)/2147483647);
+  const out=[]; let t=1995;
+  while(t<2028.5){
+    const drift=Math.sin((t-1995)/6.5)*0.32+Math.sin((t-1995)/2.1)*0.14;
+    const spike=(rnd()-0.45)*0.85;
+    out.push({t:+t.toFixed(3), v:Math.max(-0.95,Math.min(0.95,drift+spike))});
+    const dens = t<2008 ? 1.7 : (t<2016 ? 1.0 : 0.42);   /* 최근일수록 기록이 촘촘 — 실데이터 특성 */
+    t += (rnd()<0.42 ? 1/12+rnd()/12 : 0.25+rnd()*0.9) * dens;
+  }
+  return out;
+})();
+const NOW=2026.6;
+const svg=document.getElementById('c'), NS='http://www.w3.org/2000/svg';
+const el=(t,a)=>{const n=document.createElementNS(NS,t);for(const k in a)n.setAttribute(k,a[k]);return n;};
+let W=1200; const H=380, TOP=42, BOT=330;
+let mode='both', view='all', alpha=0.3, clampPx=6;
+const dom=()=>view==='all'?[1994.2,2028.8]:view==='10'?[NOW-9.2,NOW+0.8]:[NOW-4.6,NOW+0.4];
+
+function tanFC(p){
+  const n=p.length,dx=[],m=[];
+  for(let i=0;i<n-1;i++){const h=Math.max(p[i+1].x-p[i].x,1e-6);dx.push(h);m.push((p[i+1].y-p[i].y)/h);}
+  const t=[m[0]];
+  for(let i=1;i<n-1;i++){
+    if(m[i-1]*m[i]<=0)t.push(0);
+    else{const w1=2*dx[i]+dx[i-1],w2=dx[i]+2*dx[i-1];t.push((w1+w2)/(w1/m[i-1]+w2/m[i]));}
+  }
+  t.push(m[n-2]); return{t,dx,m};
+}
+function tanRelax(p,a,cl){
+  const n=p.length,dx=[],m=[];
+  for(let i=0;i<n-1;i++){const h=Math.max(p[i+1].x-p[i].x,1e-6);dx.push(h);m.push((p[i+1].y-p[i].y)/h);}
+  const t=[m[0]];
+  for(let i=1;i<n-1;i++){
+    if(m[i-1]*m[i]<=0)t.push(a*(m[i-1]+m[i])/2);
+    else{const w1=2*dx[i]+dx[i-1],w2=dx[i]+2*dx[i-1];t.push((w1+w2)/(w1/m[i-1]+w2/m[i]));}
+  }
+  t.push(m[n-2]);
+  if(cl>0)for(let pass=0;pass<3;pass++)for(let i=0;i<n-1;i++){
+    const h=dx[i],y0=p[i].y,y1=p[i+1].y; let w=0;
+    for(let u=.05;u<1;u+=.05){
+      const b=Math.pow(1-u,3)*y0+3*Math.pow(1-u,2)*u*(y0+t[i]*h/3)+3*(1-u)*u*u*(y1-t[i+1]*h/3)+u*u*u*y1;
+      w=Math.max(w,Math.max(0,Math.min(y0,y1)-b,b-Math.max(y0,y1)));
+    }
+    if(w>cl){const k=Math.max(.3,cl/w);t[i]*=k;t[i+1]*=k;}
+  }
+  return{t,dx,m};
+}
+const pathOf=(p,tg)=>{
+  let d='M '+p[0].x+' '+p[0].y;
+  for(let i=0;i<p.length-1;i++){const h=tg.dx[i];
+    d+=' C '+(p[i].x+h/3)+' '+(p[i].y+tg.t[i]*h/3)+', '+(p[i+1].x-h/3)+' '+(p[i+1].y-tg.t[i+1]*h/3)+', '+p[i+1].x+' '+p[i+1].y;}
+  return d;
+};
+function stats(p,tg){
+  const t=tg.t,dx=tg.dx,m=tg.m,n=p.length; let flat=0,sum=0,ov=0;
+  for(let i=1;i<n-1;i++){
+    if(Math.abs(t[i])<1e-9)flat++;
+    const L=(2*t[i-1]+4*t[i]-6*m[i-1])/dx[i-1], R=(-4*t[i]-2*t[i+1]+6*m[i])/dx[i];
+    sum+=Math.abs(L-R);
+  }
+  for(let i=0;i<n-1;i++){const h=dx[i],y0=p[i].y,y1=p[i+1].y;
+    for(let u=.05;u<1;u+=.05){
+      const b=Math.pow(1-u,3)*y0+3*Math.pow(1-u,2)*u*(y0+t[i]*h/3)+3*(1-u)*u*u*(y1-t[i+1]*h/3)+u*u*u*y1;
+      ov=Math.max(ov,Math.max(0,Math.min(y0,y1)-b,b-Math.max(y0,y1)));}}
+  return{flat:flat,inner:n-2,jump:sum/(n-2),ov:ov};
+}
+function render(){
+  W=svg.clientWidth||1200;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H); svg.setAttribute('height',H); svg.innerHTML='';
+  const d=dom(), X=t=>(t-d[0])/(d[1]-d[0])*W, Y=v=>BOT-((v+1)/2)*(BOT-TOP);
+  [1,.5,0,-.5,-1].forEach(v=>{
+    const y=Y(v), z=(v===0);
+    svg.appendChild(el('line',{x1:0,x2:W,y1:y,y2:y,stroke:z?'oklch(62% .02 90)':'var(--line)',
+      'stroke-width':z?1:.6,'stroke-dasharray':z?'':'2 6'}));
+    const tx=el('text',{x:W-6,y:y-4,'text-anchor':'end','font-size':10,fill:'var(--ink-soft)',
+      'font-family':'IBM Plex Mono,ui-monospace,monospace'}); tx.textContent=(v>0?'+':'')+v; svg.appendChild(tx);
+  });
+  const step=view==='all'?5:(view==='10'?2:1);
+  for(let y=1995;y<=2028;y+=step){
+    const x=X(y); if(x<12||x>W-12)continue;
+    svg.appendChild(el('line',{x1:x,x2:x,y1:TOP,y2:BOT,stroke:'var(--line)','stroke-width':.6,'stroke-dasharray':'2 7'}));
+    const t=el('text',{x:x,y:TOP-12,'text-anchor':'middle','font-size':10.5,fill:'var(--ink-soft)',
+      'font-family':'IBM Plex Mono,ui-monospace,monospace'}); t.textContent=y; svg.appendChild(t);
+  }
+  const pts=P.filter(p=>p.t>=d[0]-.6&&p.t<=d[1]+.6).map(p=>({x:X(p.t),y:Y(p.v)}));
+  if(pts.length<4){document.getElementById('met').textContent='구간에 점이 부족';return;}
+  const fc=tanFC(pts), rx=tanRelax(pts,alpha,clampPx);
+  if(mode!=='new')
+    svg.appendChild(el('path',{d:pathOf(pts,fc),fill:'none',stroke:mode==='both'?'var(--bloom)':'var(--ink)',
+      'stroke-width':mode==='both'?1.6:2.4,opacity:mode==='both'?.6:.9,'stroke-linecap':'round',
+      'stroke-dasharray':mode==='both'?'5 4':''}));
+  if(mode!=='now')
+    svg.appendChild(el('path',{d:pathOf(pts,rx),fill:'none',stroke:'var(--leaf)','stroke-width':2.4,
+      opacity:.95,'stroke-linecap':'round'}));
+  pts.forEach((p,i)=>{
+    const isFlat=(i>0&&i<pts.length-1&&Math.abs(fc.t[i])<1e-9);
+    svg.appendChild(el('circle',{cx:p.x,cy:p.y,r:3.2,fill:'var(--paper)',
+      stroke:(isFlat&&mode!=='new')?'var(--bloom)':'var(--ink-soft)','stroke-width':1.6}));
+  });
+  const a=stats(pts,fc), b=stats(pts,rx);
+  document.getElementById('met').innerHTML=
+    '<span>지점 <b>'+(a.inner+2)+'</b></span>'+
+    '<span>사건에서 수평으로 눕는 자리 — 현행 <b>'+a.flat+'/'+a.inner+'</b> → A안 <span class="m-good">'+b.flat+'/'+b.inner+'</span></span>'+
+    '<span>꺾임 강도 현행 <b>'+a.jump.toFixed(2)+'</b> → A안 <span class="m-good">'+b.jump.toFixed(2)+'</span></span>'+
+    '<span>A안 오버슈트 <b>'+b.ov.toFixed(1)+'px</b></span>'+
+    '<span>점 이탈 <span class="m-good">0px</span> — 둘 다 점을 정확히 지남</span>';
+  document.getElementById('cap').textContent = mode==='both'
+    ? '주황 점선 = 현행, 초록 실선 = A안. 주황 테두리 점이 현행에서 접선이 0이 되는 자리 — 그 지점마다 곡선이 수평으로 눕고 다시 꺾인다.'
+    : (mode==='now' ? '현행: 사건마다 수평으로 눕고 다시 꺾인다.' : 'A안: 같은 점들을 그대로 지나되 둥글게 넘어간다.');
+}
+document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=function(){
+  mode=b.dataset.mode; document.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('on',x===b)); render();});
+document.querySelectorAll('[data-view]').forEach(b=>b.onclick=function(){
+  view=b.dataset.view; document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('on',x===b)); render();});
+document.getElementById('alpha').oninput=function(e){alpha=+e.target.value;document.getElementById('aV').textContent=alpha.toFixed(2);render();};
+document.getElementById('clamp').oninput=function(e){clampPx=+e.target.value;document.getElementById('cV').textContent=clampPx+'px';render();};
+addEventListener('resize',render);
+render();
+</script>
+</body>
+</html>
