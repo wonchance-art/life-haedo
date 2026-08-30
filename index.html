@@ -309,6 +309,11 @@ html[data-theme=spring]{
         <button class="lay-chip scale" data-y="5">5Y</button>
         <button class="lay-chip scale" data-y="1">1Y</button>
         <span style="flex:1"></span>
+        <label class="ma-ctl" title="곡선 폭 — 넓을수록 흐름만, 0이면 기록을 그대로 잇는다">
+          <span>곡선</span>
+          <input type="range" id="maW" min="0" max="90" step="2" aria-label="곡선 폭">
+          <span class="val" id="maV">36</span>
+        </label>
         <button class="lay-chip" id="btnMap">지도</button>
         <button class="lay-chip" id="btnSearch" title="검색 (⌘/Ctrl+F)">검색</button>
       </div>
@@ -374,6 +379,12 @@ html[data-theme=spring]{
   footer{opacity:.6}
   .layer-bar{margin:14px 0 10px}
   .tl-controls{gap:4px;margin-bottom:2px}
+  .ma-ctl{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--ink-soft);
+    opacity:.5;transition:opacity .15s;margin-right:4px}
+  .ma-ctl:hover,.ma-ctl:focus-within{opacity:1}
+  .ma-ctl input[type=range]{width:76px;accent-color:var(--water)}
+  .ma-ctl .val{font-family:'IBM Plex Mono',monospace;font-size:11px;min-width:22px;color:var(--ink)}
+  @media (max-width:640px){.ma-ctl input[type=range]{width:58px}}
   .dt-edit.bad{border-color:var(--cinnabar);outline:none}
   .map-overlay{position:absolute;inset:0;z-index:5;background:var(--paper);
     display:flex;flex-direction:column;animation:mapIn .25s ease}
@@ -872,6 +883,43 @@ const textW=s=>[...String(s)].reduce((w,c)=>w+(c.charCodeAt(0)>255?13:7.2),0);
 let NOW, selected=null, dom=null, FULL, BOUND;
 let focusLayer='main'; /* 레이어 포커스 */
 const CH={g:null,line:null,dot:null,txt:null}; /* 크로스헤어 노드 (렌더마다 재생성) */
+/* 곡선 = 이동평균. 점(기록)은 제 값 자리에 그대로 두고, 선은 흐름만 그린다.
+   폭은 화면 px 기준이라 확대하면 세부가, 축소하면 추세가 보인다. 0 = 이동평균 끄기 */
+let MA_SIGMA=(()=>{try{const raw=localStorage.getItem('caeyeon_life_ma');
+  if(raw==null||raw==='')return 36;                      /* 저장값 없음 = 기본 36 (+null이 0으로 통과하던 함정) */
+  const v=+raw;return isFinite(v)&&v>=0&&v<=90?v:36;}catch(e){return 36;}})();
+let MA_CURVE=null;
+function maSeries(pts,sigma){ /* 화면 px 가우시안 가중 평균 — 3px 간격 표본 */
+  if(!pts||pts.length<2)return null;
+  const x0=pts[0].x, x1=pts[pts.length-1].x, out=[];
+  const lim=sigma*2.6;
+  for(let x=x0;x<=x1+0.01;x+=3){
+    let sw=0,sy=0;
+    for(let i=0;i<pts.length;i++){
+      const dxp=x-pts[i].x;
+      if(dxp<-lim)break;
+      if(dxp>lim)continue;
+      const u=dxp/sigma, w=Math.exp(-u*u);
+      sw+=w; sy+=w*pts[i].y;
+    }
+    if(sw>0)out.push({x:x,y:sy/sw});
+  }
+  return out.length>1?out:null;
+}
+const polyD=pts=>'M '+pts.map(q=>q.x+' '+q.y).join(' L ');
+const HYg=v=>LAYOUT.HAP_BOT-((v+1)/2)*(LAYOUT.HAP_BOT-LAYOUT.HAP_TOP);
+function curveYAt(x){ /* 화면에 그려진 곡선의 y — 표식·라벨·크로스헤어가 이 선을 기준으로 삼는다 */
+  const M=MA_CURVE;
+  if(M&&M.length>1){
+    if(x<=M[0].x)return M[0].y;
+    if(x>=M[M.length-1].x)return M[M.length-1].y;
+    const i=Math.min(M.length-2,Math.max(0,Math.floor((x-M[0].x)/3)));
+    const a=M[i],b=M[i+1];
+    return a.y+(b.y-a.y)*((x-a.x)/Math.max(b.x-a.x,1e-6));
+  }
+  return HYg(hapVAt(Xinv(x)));
+}
+const valAtY=y=>2*(LAYOUT.HAP_BOT-y)/(LAYOUT.HAP_BOT-LAYOUT.HAP_TOP)-1;
 
 /* ==========================================================================
    전처리 + 레이아웃
@@ -1010,8 +1058,8 @@ function render(){
   const reserveText=(x,y,txt,anchor,fs)=>{const b=textBox(x,y,textW(txt),anchor||'start',fs||11);reserve(b.x1,b.y1,b.x2,b.y2);};
   const nearCurve=(x1,x2,y)=>{ /* 행복도 곡선을 글자가 가로지르는지 (근사) */
     const step=Math.max(9,(x2-x1)/6);
-    for(let px=x1;px<=x2;px+=step)if(Math.abs(HY(hapVAt(Xinv(px)))-y)<8)return true;
-    return Math.abs(HY(hapVAt(Xinv(x2)))-y)<8;
+    for(let px=x1;px<=x2;px+=step)if(Math.abs(curveYAt(px)-y)<8)return true;
+    return Math.abs(curveYAt(x2)-y)<8;
   };
   const CANDS=[[1,-10,'start'],[1,18,'start'],[-1,-10,'end'],[-1,18,'end'],
                [0,-24,'middle'],[0,31,'middle'],[1,-27,'start'],[1,35,'start'],[-1,-27,'end'],[-1,35,'end']];
@@ -1190,8 +1238,9 @@ function render(){
     const gl=el('g',{class:'c-lay','data-lay':lay.id,
       opacity:focusLayer==='main'?.26:(foc?1:.06)});
     if(!foc)gl.setAttribute('pointer-events','none');
-    if(pts.length>1)gl.appendChild(el('path',{d:smoothPath(pts),fill:'none',stroke:lay.color,
-      'stroke-width':foc?2.4:1.5,'stroke-linecap':'round',opacity:foc?.95:.8}));
+    const lma=MA_SIGMA>0?maSeries(pts,MA_SIGMA):null;
+    if(pts.length>1)gl.appendChild(el('path',{d:lma?polyD(lma):smoothPath(pts),fill:'none',stroke:lay.color,
+      'stroke-width':foc?2.4:1.5,'stroke-linecap':'round','stroke-linejoin':'round',opacity:foc?.95:.8}));
     pts.forEach(q=>{
       if(q.x<-20||q.x>W+20)return;
       const gd=el('g',{cursor:foc?'ns-resize':'default'});
@@ -1246,6 +1295,11 @@ function render(){
   const hp=HAPPTS.map(pt=>({x:X(pt.t),y:HY(pt.v),pt}));
   const fi=hp.findIndex(p=>p.pt.future);
   const past=fi===-1?hp:hp.slice(0,fi), fut=fi===-1?[]:hp.slice(Math.max(fi-1,0));
+  MA_CURVE=MA_SIGMA>0?maSeries(hp,MA_SIGMA):null;
+  const splitX=(fi===-1)?Infinity:hp[fi].x;
+  const maPast=MA_CURVE?MA_CURVE.filter(q=>q.x<=splitX):null;
+  const maFut=MA_CURVE?MA_CURVE.filter(q=>q.x>=splitX):null;
+  const usePast=(maPast&&maPast.length>1)?maPast:null;
   if(past.length>1){
     /* 0선 기준 면적 분할: 위(＋) 청록 / 아래(−) 주홍 */
     const z=HY(0);
@@ -1260,7 +1314,8 @@ function render(){
     const cn=el('clipPath',{id:'cpNeg'});cn.appendChild(el('rect',{x:-50,y:z,width:W+100,height:L.H-z}));
     defs.appendChild(gp);defs.appendChild(gn);defs.appendChild(cp);defs.appendChild(cn);
     svg.appendChild(defs);
-    const dArea=smoothPath(past)+` L ${past[past.length-1].x} ${z} L ${past[0].x} ${z} Z`;
+    const base=usePast||past;
+    const dArea=(usePast?polyD(usePast):smoothPath(past))+` L ${base[base.length-1].x} ${z} L ${base[0].x} ${z} Z`;
     svg.appendChild(el('path',{d:dArea,fill:'url(#wgp)','clip-path':'url(#cpPos)',class:'c-main'}));
     svg.appendChild(el('path',{d:dArea,fill:'url(#wgn)','clip-path':'url(#cpNeg)',class:'c-main'}));
     if(DARK){
@@ -1270,18 +1325,23 @@ function render(){
       gf.appendChild(gfd);
       defs.appendChild(gf);
     }
-    const mainCurve=el('path',{d:smoothPath(past),fill:'none',stroke:'#1E4348','stroke-width':2.4,'stroke-linecap':'round',opacity:.92,class:'c-main'});
+    if(usePast) /* 원 기록을 잇는 선 — 아주 옅게 남겨 둔다 */
+      svg.appendChild(el('path',{d:smoothPath(past),fill:'none',stroke:'#1E4348','stroke-width':1,
+        opacity:.16,'stroke-linecap':'round',class:'c-main'}));
+    const mainCurve=el('path',{d:usePast?polyD(usePast):smoothPath(past),fill:'none',stroke:'#1E4348',
+      'stroke-width':2.4,'stroke-linecap':'round','stroke-linejoin':'round',opacity:.92,class:'c-main'});
     if(DARK)mainCurve.setAttribute('filter','url(#curveGlow)');
     svg.appendChild(mainCurve);
   }
-  if(fut.length>1)
-    svg.appendChild(el('path',{d:smoothPath(fut),fill:'none',stroke:'#7A8A80','stroke-width':1.7,'stroke-dasharray':'6 6',opacity:.6,class:'c-main'}));
+  if(fut.length>1||(maFut&&maFut.length>1))
+    svg.appendChild(el('path',{d:(maFut&&maFut.length>1)?polyD(maFut):smoothPath(fut),fill:'none',
+      stroke:'#7A8A80','stroke-width':1.7,'stroke-dasharray':'6 6',opacity:.6,class:'c-main'}));
 
   /* 표식 자리를 먼저 잡아 둔다 — 글자가 점·막대·생각표식 위에 얹히지 않게 */
   reserve(-1e4,L.SPAN_TOP-6,1e4,L.HAP_TOP-8);                        /* 막대 구역 전체 */
   DATA.events.forEach(e=>{const x=X(e.t),y=HY(e.happiness!=null?e.happiness:0);reserve(x-7,y-7,x+7,y+7);});
   DATA.happiness.forEach(h=>{const x=X(h.t),y=HY(h.v);reserve(x-6,y-6,x+6,y+6);});
-  DATA.thoughts.forEach(th=>{const x=X(th.t),y=HY(hapVAt(th.t))-16;reserve(x-9,y-12,x+9,y+7);});
+  DATA.thoughts.forEach(th=>{const x=X(th.t),y=curveYAt(x)-16;reserve(x-9,y-12,x+9,y+7);});
   if(focusLayer!=='main')(DATA.layers||[]).filter(l=>l.id===focusLayer)
     .forEach(l=>l.pts.forEach(p=>{const x=X(p.t),y=HY(p.v);reserve(x-6,y-6,x+6,y+6);}));
 
@@ -1653,7 +1713,7 @@ function render(){
   /* 생각(당시 쓴 글 속 문장) — 곡선 위 ❝ 표식. 호버 = 문장, 클릭 = 수정 */
   DATA.thoughts.forEach(th=>{
     const x=X(th.t);if(x<-20||x>W+20)return;
-    const y=HY(hapVAt(th.t))-16;
+    const y=curveYAt(x)-16;
     const gt=el('g',{cursor:'pointer',class:'c-main','data-th':'1'});
     gt.appendChild(el('circle',{cx:x,cy:y,r:10,fill:'transparent'}));
     const q=el('text',{x:x,y:y+5,'text-anchor':'middle','font-size':15,fill:'#A87F3D','font-weight':700,opacity:.9});
@@ -1686,7 +1746,7 @@ function render(){
   renderLayerBar();
   if(MAP_OPEN){clearTimeout(mapWinTimer);mapWinTimer=setTimeout(rebuildMapBase,150);}
   LB_SNAP={tasks:lbTasks,obst:occ.filter(o=>!o.lb),W,L,
-    hapY:t=>HY(hapVAt(t)),
+    hapY:t=>curveYAt(X(t)),
     key:[Math.round(dom[0]*24),Math.round(dom[1]*24),W,lbTasks.length].join('|')};
   scheduleLabelPolish();
   updateScrubber();
@@ -2356,8 +2416,7 @@ let moved=false;
     const p=svgXY(e), t=Xinv(p.x);
     if(p.x<0||p.x>W||t<FULL[0]||t>BOUND[1]){CH.g.setAttribute('opacity',0);return;}
     const main=focusLayer==='main';
-    const v=hapVAt(t);
-    const L2=LAYOUT, y=L2.HAP_BOT-((v+1)/2)*(L2.HAP_BOT-L2.HAP_TOP);
+    const y=curveYAt(p.x), v=valAtY(y);
     CH.line.setAttribute('x1',p.x);CH.line.setAttribute('x2',p.x);
     if(main){CH.dot.setAttribute('cx',p.x);CH.dot.setAttribute('cy',y);CH.dot.setAttribute('opacity',1);}
     else CH.dot.setAttribute('opacity',0);
@@ -2424,6 +2483,15 @@ let moved=false;
     requestAnimationFrame(()=>{const ti=document.querySelector('#popEd .pe-title');if(ti)ti.select();});
   }
   document.querySelectorAll('.scale').forEach(b=>b.onclick=()=>setScale(b.dataset.y,b));
+  const maW=$('#maW'), maV=$('#maV');
+  if(maW){
+    maW.value=MA_SIGMA; maV.textContent=MA_SIGMA===0?'원본':MA_SIGMA;
+    maW.oninput=()=>{
+      MA_SIGMA=+maW.value; maV.textContent=MA_SIGMA===0?'원본':MA_SIGMA;
+      try{localStorage.setItem('caeyeon_life_ma',MA_SIGMA);}catch(e){}
+      render();
+    };
+  }
   resolvePal(); /* 앱 초기 렌더 전에 테마 팔레트 해석 */
   addEventListener('resize',()=>{prepare();render();});
 })();

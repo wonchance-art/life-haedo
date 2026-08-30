@@ -1,5 +1,5 @@
 /* 인생 연표 — 오프라인 캐시 (앱은 단일 HTML, 데이터는 localStorage/Supabase) */
-const CACHE='haedo-v4';
+const CACHE='haedo-v5';
 const SHELL=['./','./index.html','./manifest.webmanifest','./icon.svg','./vendor/daisyui.css','./vendor/daisyui-themes.css'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()));
