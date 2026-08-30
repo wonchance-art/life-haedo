@@ -39,9 +39,13 @@
   <div class="sub">현행은 사건마다 접선이 0이 되어 곡선이 수평으로 눕는다(실데이터 기준 지점의 76%). A안은 그 자리에서 접선을 조금 살려 둥글게 넘어간다 — 지나는 점은 그대로다. 데이터는 실데이터의 밀도·진폭만 흉내 낸 익명 합성값.</div>
 
   <div class="row">
-    <button class="chip on" data-mode="both">겹쳐 보기</button>
+    <button class="chip on" data-alt="relax">A 접선 완화</button>
+    <button class="chip" data-alt="c2">B C² 스플라인</button>
+    <button class="chip" data-alt="tol">C 허용 오차</button>
+    <span class="sep"></span>
+    <button class="chip on" data-mode="both">겹쳐</button>
     <button class="chip" data-mode="now">현행만</button>
-    <button class="chip" data-mode="new">A안만</button>
+    <button class="chip" data-mode="new">대안만</button>
     <span class="sep"></span>
     <button class="chip on" data-view="all">All</button>
     <button class="chip" data-view="10">10Y</button>
@@ -49,6 +53,7 @@
     <span class="sep"></span>
     <label class="sl">α <input id="alpha" type="range" min="0" max="0.6" step="0.05" value="0.3"><span class="val" id="aV">0.30</span></label>
     <label class="sl">클램프 <input id="clamp" type="range" min="0" max="12" step="1" value="6"><span class="val" id="cV">6px</span></label>
+    <label class="sl">허용 오차 <input id="tol" type="range" min="0" max="24" step="1" value="10"><span class="val" id="tV">10px</span></label>
   </div>
 
   <svg id="c" aria-label="곡선 비교 시안"></svg>
@@ -73,7 +78,7 @@ const NOW=2026.6;
 const svg=document.getElementById('c'), NS='http://www.w3.org/2000/svg';
 const el=(t,a)=>{const n=document.createElementNS(NS,t);for(const k in a)n.setAttribute(k,a[k]);return n;};
 let W=1200; const H=380, TOP=42, BOT=330;
-let mode='both', view='all', alpha=0.3, clampPx=6;
+let mode='both', view='all', alt='relax', alpha=0.3, clampPx=6, tolPx=10;
 const dom=()=>view==='all'?[1994.2,2028.8]:view==='10'?[NOW-9.2,NOW+0.8]:[NOW-4.6,NOW+0.4];
 
 function tanFC(p){
@@ -104,6 +109,51 @@ function tanRelax(p,a,cl){
     if(w>cl){const k=Math.max(.3,cl/w);t[i]*=k;t[i+1]*=k;}
   }
   return{t,dx,m};
+}
+/* B: C² 자연 3차 스플라인 — 곡률이 연속이라 흐름이 매끈, 점은 정확히 지남 */
+function tanC2(p,cl){
+  const n=p.length,h=[],d=[];
+  for(let i=0;i<n-1;i++){h.push(Math.max(p[i+1].x-p[i].x,1e-6));d.push((p[i+1].y-p[i].y)/h[i]);}
+  const a=new Array(n).fill(0),b=new Array(n).fill(1),c=new Array(n).fill(0),r=new Array(n).fill(0);
+  for(let i=1;i<n-1;i++){a[i]=h[i-1];b[i]=2*(h[i-1]+h[i]);c[i]=h[i];r[i]=6*(d[i]-d[i-1]);}
+  for(let i=1;i<n;i++){const w=a[i]/b[i-1];b[i]-=w*c[i-1];r[i]-=w*r[i-1];}
+  const M=new Array(n).fill(0);
+  M[n-1]=r[n-1]/b[n-1];
+  for(let i=n-2;i>=0;i--)M[i]=(r[i]-c[i]*M[i+1])/b[i];
+  const t=[];
+  for(let i=0;i<n-1;i++)t.push(d[i]-h[i]*(2*M[i]+M[i+1])/6);
+  t.push(d[n-2]+h[n-2]*(M[n-2]+2*M[n-1])/6);
+  const tg={t:t,dx:h,m:d};
+  if(cl>0)clampOver(p,tg,cl);
+  return tg;
+}
+function clampOver(p,tg,cl){
+  const n=p.length,t=tg.t,dx=tg.dx;
+  for(let pass=0;pass<3;pass++)for(let i=0;i<n-1;i++){
+    const hh=dx[i],y0=p[i].y,y1=p[i+1].y; let w=0;
+    for(let u=.05;u<1;u+=.05){
+      const bz=Math.pow(1-u,3)*y0+3*Math.pow(1-u,2)*u*(y0+t[i]*hh/3)+3*(1-u)*u*u*(y1-t[i+1]*hh/3)+u*u*u*y1;
+      w=Math.max(w,Math.max(0,Math.min(y0,y1)-bz,bz-Math.max(y0,y1)));
+    }
+    if(w>cl){const k=Math.max(.3,cl/w);t[i]*=k;t[i+1]*=k;}
+  }
+}
+/* C: 허용 오차 평활 — 각 점을 최대 tol px까지만 옮겨 흐름을 만든다 (점은 원위치에 남음) */
+function smoothWithin(p,tol){
+  if(tol<=0)return p.map(q=>({x:q.x,y:q.y}));
+  const n=p.length, cur=p.map(q=>({x:q.x,y:q.y}));
+  for(let it=0;it<14;it++){
+    const nx=cur.map(q=>({x:q.x,y:q.y}));
+    for(let i=1;i<n-1;i++){
+      const wl=1/Math.max(cur[i].x-cur[i-1].x,1), wr=1/Math.max(cur[i+1].x-cur[i].x,1);
+      const avg=(cur[i-1].y*wl+cur[i+1].y*wr)/(wl+wr);
+      let y=cur[i].y*0.35+avg*0.65;
+      y=Math.max(p[i].y-tol,Math.min(p[i].y+tol,y));   /* 원래 값에서 tol 이상 벗어나지 않음 */
+      nx[i].y=y;
+    }
+    for(let i=1;i<n-1;i++)cur[i].y=nx[i].y;
+  }
+  return cur;
 }
 const pathOf=(p,tg)=>{
   let d='M '+p[0].x+' '+p[0].y;
@@ -144,34 +194,43 @@ function render(){
   }
   const pts=P.filter(p=>p.t>=d[0]-.6&&p.t<=d[1]+.6).map(p=>({x:X(p.t),y:Y(p.v)}));
   if(pts.length<4){document.getElementById('met').textContent='구간에 점이 부족';return;}
-  const fc=tanFC(pts), rx=tanRelax(pts,alpha,clampPx);
+  const fc=tanFC(pts);
+  let altPts=pts, rx;
+  if(alt==='relax')      rx=tanRelax(pts,alpha,clampPx);
+  else if(alt==='c2')    rx=tanC2(pts,clampPx);
+  else { altPts=smoothWithin(pts,tolPx); rx=tanRelax(altPts,alpha,clampPx); }
   if(mode!=='new')
     svg.appendChild(el('path',{d:pathOf(pts,fc),fill:'none',stroke:mode==='both'?'var(--bloom)':'var(--ink)',
       'stroke-width':mode==='both'?1.6:2.4,opacity:mode==='both'?.6:.9,'stroke-linecap':'round',
       'stroke-dasharray':mode==='both'?'5 4':''}));
   if(mode!=='now')
-    svg.appendChild(el('path',{d:pathOf(pts,rx),fill:'none',stroke:'var(--leaf)','stroke-width':2.4,
+    svg.appendChild(el('path',{d:pathOf(altPts,rx),fill:'none',stroke:'var(--leaf)','stroke-width':2.4,
       opacity:.95,'stroke-linecap':'round'}));
   pts.forEach((p,i)=>{
     const isFlat=(i>0&&i<pts.length-1&&Math.abs(fc.t[i])<1e-9);
     svg.appendChild(el('circle',{cx:p.x,cy:p.y,r:3.2,fill:'var(--paper)',
       stroke:(isFlat&&mode!=='new')?'var(--bloom)':'var(--ink-soft)','stroke-width':1.6}));
   });
-  const a=stats(pts,fc), b=stats(pts,rx);
+  const a=stats(pts,fc), b=stats(altPts,rx);
+  let drift=0; for(let i=0;i<pts.length;i++)drift=Math.max(drift,Math.abs(altPts[i].y-pts[i].y));
   document.getElementById('met').innerHTML=
     '<span>지점 <b>'+(a.inner+2)+'</b></span>'+
     '<span>사건에서 수평으로 눕는 자리 — 현행 <b>'+a.flat+'/'+a.inner+'</b> → A안 <span class="m-good">'+b.flat+'/'+b.inner+'</span></span>'+
     '<span>꺾임 강도 현행 <b>'+a.jump.toFixed(2)+'</b> → A안 <span class="m-good">'+b.jump.toFixed(2)+'</span></span>'+
     '<span>A안 오버슈트 <b>'+b.ov.toFixed(1)+'px</b></span>'+
-    '<span>점 이탈 <span class="m-good">0px</span> — 둘 다 점을 정확히 지남</span>';
-  document.getElementById('cap').textContent = mode==='both'
-    ? '주황 점선 = 현행, 초록 실선 = A안. 주황 테두리 점이 현행에서 접선이 0이 되는 자리 — 그 지점마다 곡선이 수평으로 눕고 다시 꺾인다.'
-    : (mode==='now' ? '현행: 사건마다 수평으로 눕고 다시 꺾인다.' : 'A안: 같은 점들을 그대로 지나되 둥글게 넘어간다.');
+    '<span>점 이탈 '+(drift<0.5?'<span class="m-good">0px</span> — 점을 정확히 지남':'<b>'+drift.toFixed(1)+'px</b> — 그만큼 점에서 떨어짐')+'</span>';
+  document.getElementById('cap').textContent =
+    alt==='relax' ? 'A 접선 완화 — 점을 정확히 지나되 사건에서 눕지 않는다. 수치는 좋아지지만 눈에 띄는 변화는 작다(구조상 한계).'
+    : alt==='c2'  ? 'B C² 스플라인 — 곡률까지 연속이라 흐름이 눈에 띄게 매끈해진다. 점은 여전히 정확히 지나고, 대신 구간 사이가 살짝 부풀 수 있다(클램프로 제한).'
+    : 'C 허용 오차 — 각 점을 최대 '+tolPx+'px까지만 옮겨 흐름을 만든다. 가장 매끈하지만 점이 곡선에서 그만큼 떨어진다(0px면 현행과 동일).';
 }
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=function(){
   mode=b.dataset.mode; document.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('on',x===b)); render();});
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=function(){
   view=b.dataset.view; document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('on',x===b)); render();});
+document.querySelectorAll('[data-alt]').forEach(b=>b.onclick=function(){
+  alt=b.dataset.alt; document.querySelectorAll('[data-alt]').forEach(x=>x.classList.toggle('on',x===b)); render();});
+document.getElementById('tol').oninput=function(e){tolPx=+e.target.value;document.getElementById('tV').textContent=tolPx+'px';render();};
 document.getElementById('alpha').oninput=function(e){alpha=+e.target.value;document.getElementById('aV').textContent=alpha.toFixed(2);render();};
 document.getElementById('clamp').oninput=function(e){clampPx=+e.target.value;document.getElementById('cV').textContent=clampPx+'px';render();};
 addEventListener('resize',render);
