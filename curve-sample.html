@@ -39,9 +39,10 @@
   <div class="sub">현행은 사건마다 접선이 0이 되어 곡선이 수평으로 눕는다(실데이터 기준 지점의 76%). A안은 그 자리에서 접선을 조금 살려 둥글게 넘어간다 — 지나는 점은 그대로다. 데이터는 실데이터의 밀도·진폭만 흉내 낸 익명 합성값.</div>
 
   <div class="row">
-    <button class="chip on" data-alt="relax">A 접선 완화</button>
+    <button class="chip" data-alt="relax">A 접선 완화</button>
     <button class="chip" data-alt="c2">B C² 스플라인</button>
-    <button class="chip" data-alt="tol">C 허용 오차</button>
+    <button class="chip" data-alt="tol">C 허용 오차(전역)</button>
+    <button class="chip on" data-alt="corner">D 뾰족한 곳만</button>
     <span class="sep"></span>
     <button class="chip on" data-mode="both">겹쳐</button>
     <button class="chip" data-mode="now">현행만</button>
@@ -53,7 +54,8 @@
     <span class="sep"></span>
     <label class="sl">α <input id="alpha" type="range" min="0" max="0.6" step="0.05" value="0.3"><span class="val" id="aV">0.30</span></label>
     <label class="sl">클램프 <input id="clamp" type="range" min="0" max="12" step="1" value="6"><span class="val" id="cV">6px</span></label>
-    <label class="sl">허용 오차 <input id="tol" type="range" min="0" max="24" step="1" value="10"><span class="val" id="tV">10px</span></label>
+    <label class="sl">완화 예산 <input id="tol" type="range" min="0" max="24" step="1" value="10"><span class="val" id="tV">10px</span></label>
+    <label class="sl">뾰족 기준 <input id="thr" type="range" min="10" max="160" step="5" value="90"><span class="val" id="hV">90°</span></label>
   </div>
 
   <svg id="c" aria-label="곡선 비교 시안"></svg>
@@ -78,7 +80,7 @@ const NOW=2026.6;
 const svg=document.getElementById('c'), NS='http://www.w3.org/2000/svg';
 const el=(t,a)=>{const n=document.createElementNS(NS,t);for(const k in a)n.setAttribute(k,a[k]);return n;};
 let W=1200; const H=380, TOP=42, BOT=330;
-let mode='both', view='all', alt='relax', alpha=0.3, clampPx=6, tolPx=10;
+let mode='both', view='all', alt='corner', alpha=0.3, clampPx=6, tolPx=10, thrDeg=90;
 const dom=()=>view==='all'?[1994.2,2028.8]:view==='10'?[NOW-9.2,NOW+0.8]:[NOW-4.6,NOW+0.4];
 
 function tanFC(p){
@@ -155,6 +157,30 @@ function smoothWithin(p,tol){
   }
   return cur;
 }
+/* D: 뾰족한 모서리에만 예산 — 꺾임이 클수록 최대 R px까지 완화, 완만한 곳은 손대지 않음 */
+function smoothCorners(p,R,thr){
+  const n=p.length, allow=new Array(n).fill(0);
+  for(let i=1;i<n-1;i++){
+    const ax=p[i].x-p[i-1].x, ay=p[i].y-p[i-1].y, L1=Math.hypot(ax,ay)||1;
+    const bx=p[i+1].x-p[i].x, by=p[i+1].y-p[i].y, L2=Math.hypot(bx,by)||1;
+    const dot=(ax*bx+ay*by)/(L1*L2);
+    const sharp=(1-dot)/2;                        /* 0 = 일직선, 1 = 완전히 되꺾임 */
+    if(sharp>thr)allow[i]=R*Math.min(1,(sharp-thr)/(1-thr));
+  }
+  const cur=p.map(q=>({x:q.x,y:q.y}));
+  for(let it=0;it<12;it++){
+    const ny=cur.map(q=>q.y);
+    for(let i=1;i<n-1;i++){
+      if(allow[i]<=0)continue;
+      const wl=1/Math.max(cur[i].x-cur[i-1].x,1), wr=1/Math.max(cur[i+1].x-cur[i].x,1);
+      const avg=(cur[i-1].y*wl+cur[i+1].y*wr)/(wl+wr);
+      let y=cur[i].y*0.4+avg*0.6;
+      ny[i]=Math.max(p[i].y-allow[i],Math.min(p[i].y+allow[i],y));
+    }
+    for(let i=1;i<n-1;i++)cur[i].y=ny[i];
+  }
+  return{pts:cur,allow:allow};
+}
 const pathOf=(p,tg)=>{
   let d='M '+p[0].x+' '+p[0].y;
   for(let i=0;i<p.length-1;i++){const h=tg.dx[i];
@@ -195,10 +221,11 @@ function render(){
   const pts=P.filter(p=>p.t>=d[0]-.6&&p.t<=d[1]+.6).map(p=>({x:X(p.t),y:Y(p.v)}));
   if(pts.length<4){document.getElementById('met').textContent='구간에 점이 부족';return;}
   const fc=tanFC(pts);
-  let altPts=pts, rx;
+  let altPts=pts, rx, touched=null;
   if(alt==='relax')      rx=tanRelax(pts,alpha,clampPx);
   else if(alt==='c2')    rx=tanC2(pts,clampPx);
-  else { altPts=smoothWithin(pts,tolPx); rx=tanRelax(altPts,alpha,clampPx); }
+  else if(alt==='tol'){ altPts=smoothWithin(pts,tolPx); rx=tanRelax(altPts,alpha,clampPx); }
+  else { const r=smoothCorners(pts,tolPx,(1-Math.cos(thrDeg*Math.PI/180))/2); altPts=r.pts; touched=r.allow; rx=tanC2(altPts,clampPx); }
   if(mode!=='new')
     svg.appendChild(el('path',{d:pathOf(pts,fc),fill:'none',stroke:mode==='both'?'var(--bloom)':'var(--ink)',
       'stroke-width':mode==='both'?1.6:2.4,opacity:mode==='both'?.6:.9,'stroke-linecap':'round',
@@ -206,6 +233,8 @@ function render(){
   if(mode!=='now')
     svg.appendChild(el('path',{d:pathOf(altPts,rx),fill:'none',stroke:'var(--leaf)','stroke-width':2.4,
       opacity:.95,'stroke-linecap':'round'}));
+  if(touched)pts.forEach((p,i)=>{ if(touched[i]>0.4)
+    svg.appendChild(el('circle',{cx:p.x,cy:p.y,r:7,fill:'none',stroke:'var(--leaf)','stroke-width':1,opacity:.35})); });
   pts.forEach((p,i)=>{
     const isFlat=(i>0&&i<pts.length-1&&Math.abs(fc.t[i])<1e-9);
     svg.appendChild(el('circle',{cx:p.x,cy:p.y,r:3.2,fill:'var(--paper)',
@@ -218,11 +247,13 @@ function render(){
     '<span>사건에서 수평으로 눕는 자리 — 현행 <b>'+a.flat+'/'+a.inner+'</b> → A안 <span class="m-good">'+b.flat+'/'+b.inner+'</span></span>'+
     '<span>꺾임 강도 현행 <b>'+a.jump.toFixed(2)+'</b> → A안 <span class="m-good">'+b.jump.toFixed(2)+'</span></span>'+
     '<span>A안 오버슈트 <b>'+b.ov.toFixed(1)+'px</b></span>'+
-    '<span>점 이탈 '+(drift<0.5?'<span class="m-good">0px</span> — 점을 정확히 지남':'<b>'+drift.toFixed(1)+'px</b> — 그만큼 점에서 떨어짐')+'</span>';
+    '<span>점 이탈 '+(drift<0.5?'<span class="m-good">0px</span> — 점을 정확히 지남':'<b>'+drift.toFixed(1)+'px</b> — 최대치')+'</span>'+
+    (touched?'<span>완화된 지점 <b>'+touched.filter(v=>v>0.4).length+'/'+(pts.length-2)+'</b> — 나머지는 손대지 않음</span>':'');
   document.getElementById('cap').textContent =
     alt==='relax' ? 'A 접선 완화 — 점을 정확히 지나되 사건에서 눕지 않는다. 수치는 좋아지지만 눈에 띄는 변화는 작다(구조상 한계).'
     : alt==='c2'  ? 'B C² 스플라인 — 곡률까지 연속이라 흐름이 눈에 띄게 매끈해진다. 점은 여전히 정확히 지나고, 대신 구간 사이가 살짝 부풀 수 있다(클램프로 제한).'
-    : 'C 허용 오차 — 각 점을 최대 '+tolPx+'px까지만 옮겨 흐름을 만든다. 가장 매끈하지만 점이 곡선에서 그만큼 떨어진다(0px면 현행과 동일).';
+    : alt==='tol' ? 'C 허용 오차(전역) — 모든 점을 최대 '+tolPx+'px까지 옮긴다. 매끈하지만 멀쩡한 구간까지 흔들린다.'
+    : 'D 뾰족한 곳만 — 꺾임이 '+thrDeg+'° 넘는 지점(초록 링)에만 최대 '+tolPx+'px를 쓰고 나머지는 손대지 않는다. 기준을 올릴수록 진짜 바늘 끝만 다듬는다.';
 }
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=function(){
   mode=b.dataset.mode; document.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('on',x===b)); render();});
@@ -231,6 +262,7 @@ document.querySelectorAll('[data-view]').forEach(b=>b.onclick=function(){
 document.querySelectorAll('[data-alt]').forEach(b=>b.onclick=function(){
   alt=b.dataset.alt; document.querySelectorAll('[data-alt]').forEach(x=>x.classList.toggle('on',x===b)); render();});
 document.getElementById('tol').oninput=function(e){tolPx=+e.target.value;document.getElementById('tV').textContent=tolPx+'px';render();};
+document.getElementById('thr').oninput=function(e){thrDeg=+e.target.value;document.getElementById('hV').textContent=thrDeg+'\u00B0';render();};
 document.getElementById('alpha').oninput=function(e){alpha=+e.target.value;document.getElementById('aV').textContent=alpha.toFixed(2);render();};
 document.getElementById('clamp').oninput=function(e){clampPx=+e.target.value;document.getElementById('cV').textContent=clampPx+'px';render();};
 addEventListener('resize',render);
