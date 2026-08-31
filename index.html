@@ -79,7 +79,8 @@ html[data-theme=spring]{
 
   /* ===== 공유 뷰어 (읽기 전용) ===== */
   .view-only #btnEdit,.view-only #btnNew,.view-only #btnUndo,.view-only #btnRedo,
-  .view-only #btnShare,.view-only .file-btn,.view-only #docSel,.view-only .editor{display:none!important}
+  .view-only #btnShare,.view-only .file-btn,.view-only #docSel,.view-only .editor,
+  .view-only #btnFill{display:none!important}
   .ctrl-btn.primary:hover{background:var(--water-deep)}
   .ctrl-btn:focus-visible,.trip-btn:focus-visible{outline:2px solid var(--cinnabar);outline-offset:2px}
 
@@ -118,6 +119,15 @@ html[data-theme=spring]{
   .search-date{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);flex-shrink:0;
     max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .search-empty{padding:18px;font-size:13px;color:var(--ink-soft);text-align:center}
+  #fillBd [hidden]{display:none!important}
+  .fill-tabs{display:flex;gap:6px;flex-wrap:wrap}
+  .fill-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px}
+  .fill-tr{display:flex;gap:9px;align-items:center;padding:5px 2px;border-bottom:1px solid var(--line);
+    font-size:12.5px;flex-wrap:wrap} /* 좁으면 칩이 아랫줄로 */
+  .fill-tr .fd{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);width:58px;flex-shrink:0}
+  .fill-tr .ft{flex:1;min-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fill-tr .fc{display:flex;gap:4px;justify-content:flex-end;flex-shrink:0;margin-left:auto}
+  .tag-chip{padding:2px 7px;font-size:11px;line-height:1.3}
 
   /* 레이어 칩 + 포커스 디밍 — 지정한 그래프만 선명, 나머지는 흐릿 */
   .layer-bar{display:flex;gap:6px;align-items:center;margin:8px 0 6px;flex-wrap:wrap}
@@ -316,6 +326,7 @@ html[data-theme=spring]{
           <button class="lay-chip ma-chip" data-ma="60" title="흐름 — 인생의 궤적" aria-label="흐름">●</button>
         </span>
         <button class="lay-chip" id="btnMap">지도</button>
+        <button class="lay-chip" id="btnFill">채우기</button>
         <button class="lay-chip" id="btnSearch" title="검색 (⌘/Ctrl+F)">검색</button>
       </div>
 
@@ -461,6 +472,34 @@ create policy "personal" on charts
 </div>
 
 <!-- 새 문서 만들기 -->
+<div class="search-bd" id="fillBd" hidden>
+  <div class="search-panel card bg-base-100" role="dialog" aria-modal="true" aria-label="채우기" style="max-width:640px">
+    <div style="display:flex;flex-direction:column;gap:12px;padding:18px 20px">
+      <div class="fill-tabs" role="tablist">
+        <button class="lay-chip fill-tab on" data-tab="thought">생각</button>
+        <button class="lay-chip fill-tab" data-tab="layer">분야 값</button>
+        <button class="lay-chip fill-tab" data-tab="record">기록 밀도</button>
+        <button class="lay-chip fill-tab" data-tab="tag">사건 태그</button>
+      </div>
+      <div id="fillPaste" style="display:flex;flex-direction:column;gap:9px">
+        <div class="fill-row">
+          <select class="dt-edit" id="fillLayer" aria-label="분야" hidden></select>
+          <label class="dt-lab"><input type="checkbox" id="fillOver"> 이미 있는 달은 덮어쓴다</label>
+          <span style="flex:1"></span>
+          <label class="btn btn-xs" style="cursor:pointer">파일<input type="file" id="fillFile" accept=".txt,.tsv,.csv" hidden></label>
+        </div>
+        <textarea id="fillText" class="dt-edit" spellcheck="false" aria-label="붙여넣기"
+          style="min-height:168px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.5"></textarea>
+        <div id="fillPrev" style="font-size:11.5px;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;white-space:pre-line;min-height:34px"></div>
+      </div>
+      <div id="fillTag" hidden style="max-height:330px;overflow-y:auto"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-xs" id="fillCancel">닫기</button>
+        <button class="btn btn-sm btn-primary" id="fillGo">넣기</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div class="search-bd" id="newBd" hidden>
   <div class="search-panel card bg-base-100" role="dialog" aria-modal="true" aria-label="새 문서 만들기" style="max-width:400px">
     <div style="display:flex;flex-direction:column;gap:13px;padding:20px 22px">
@@ -2791,6 +2830,161 @@ function pickSearch(it){
   if(it.kind==='date'||it.kind==='thought'){jumpToItem({kind:it.kind,t:it.t});return;}
   jumpToItem(it.kind==='era'?{kind:'era',...it.ref}:it.ref);
 }
+/* ==========================================================================
+   채우기 — 비어 있는 것들을 한 곳에서
+   ========================================================================== */
+const fillBd=$('#fillBd'), fillText=$('#fillText'), fillPrev=$('#fillPrev'), fillLayerSel=$('#fillLayer');
+let fillTab='thought';
+const FILL_PH={
+  thought:'2019-03  그때 적어둔 문장 한 줄\n2021-02  같은 형식으로 한 달에 하나',
+  layer:'2019-03  0.5\n2019-06  -0.2',
+  record:'2026-06  18\n2026-07  22'};
+const TAG_KW={
+  work:['근무','알바','취업','일자리','직장','현장','회사','퇴사','실업급여','노동'],
+  study:['jlpt','공부','학기','대학','학교','자퇴','검정고시','시험','취득','유학','영어','학습','강의','교직','graddip'],
+  travel:['여행','트레킹','대장정','워홀','워킹홀리데이','방문','귀국','귀향','이사','출국','입국','정착','피크','투어'],
+  reading:['독서','책','고전','책방','서점','읽'],
+  people:['만남','친구','여사친','첫사랑','연애','결혼','가족','사람','쉐어','포럼'],
+};
+const tagSuggest=e=>{
+  const t=(e.title+' '+(e.desc||'')).toLowerCase();
+  return Object.keys(TAG_KW).filter(id=>TAG_KW[id].some(w=>t.includes(w)));
+};
+function parseFill(raw,kind){
+  const all=String(raw||'').split(/\r?\n/);
+  const cut=all.length>5000;
+  const rows=new Map(); const bad={date:0,val:0}; let merged=0;
+  const valid=(rest)=>{ /* 종류별로 나머지가 쓸 수 있는 값인지 */
+    if(kind==='thought')return rest?rest:null;
+    const num=Number(rest);
+    if(rest===''||!isFinite(num))return null;
+    if(kind==='layer')return (num<-1||num>1)?null:Math.round(num*100)/100;
+    return (num<0||!Number.isInteger(num))?null:num;
+  };
+  all.slice(0,5000).forEach(ln=>{
+    const t=ln.trim(); if(!t||t.startsWith('#'))return;
+    const tok=t.split(/\s+/);
+    let hit=null;
+    for(let k=Math.min(3,tok.length-1);k>=1;k--){ /* '2019년 3월 …'처럼 날짜가 띄어져도 읽는다 */
+      const d=parseDateSmart(tok.slice(0,k).join(' '));
+      if(!d)continue;
+      const v=valid(tok.slice(k).join(' ').trim());
+      if(v===null)continue;
+      hit={d,v};break;
+    }
+    if(!hit){ /* 날짜는 읽히는데 값이 못 쓸 것인지, 날짜부터 안 읽히는지 구분 */
+      (parseDateSmart(tok[0])||parseDateSmart(tok.slice(0,2).join(' ')))?bad.val++:bad.date++;
+      return;
+    }
+    const mk=hit.d.slice(0,7);
+    if(rows.has(mk))merged++;
+    rows.set(mk,hit);
+  });
+  return {rows,bad,merged,cut};
+}
+function fillExisting(kind){
+  if(kind==='thought')return new Set(DATA.thoughts.map(t=>String(t.date).slice(0,7)));
+  if(kind==='record')return new Set(DATA.records.map(r=>String(r.m).slice(0,7)));
+  const lay=(DATA.layers||[]).find(l=>l.id===fillLayerSel.value);
+  return new Set(lay?lay.pts.map(p=>String(p.date).slice(0,7)):[]);
+}
+function fillPreview(msg){
+  if(fillTab==='tag'){fillPrev.textContent='';return;}
+  const p=parseFill(fillText.value,fillTab);
+  if(!p.rows.size&&!p.bad.date&&!p.bad.val){fillPrev.textContent=msg||'';return;}
+  const ex=fillExisting(fillTab), over=$('#fillOver').checked;
+  let skip=0;[...p.rows.keys()].forEach(mk=>{if(ex.has(mk)&&!over)skip++;});
+  const bits=[`넣음 예정 ${p.rows.size-skip}`];
+  if(skip)bits.push(`건너뜀 ${skip}(이미 있음)`);
+  if(p.bad.date)bits.push(`버림 ${p.bad.date}(날짜)`);
+  if(p.bad.val)bits.push(`버림 ${p.bad.val}(값)`);
+  if(p.merged)bits.push(`합쳐짐 ${p.merged}(같은 달)`);
+  if(p.cut)bits.push('5,000줄에서 자름');
+  const head=[...p.rows.entries()].slice(0,3)
+    .map(([mk,h])=>mk+'  '+String(h.v).slice(0,30)).join('\n');
+  fillPrev.textContent=(msg?msg+'\n':'')+bits.join(' · ')+(head?'\n'+head:'');
+}
+function renderFillTag(){
+  const box=$('#fillTag');box.innerHTML='';
+  const frag=document.createDocumentFragment();
+  DATA.events.forEach((e,i)=>{
+    const sug=(e.layers&&e.layers.length)?e.layers:tagSuggest(e);
+    const row=document.createElement('div');row.className='fill-tr';row.dataset.ev=i;
+    row.innerHTML=`<span class="fd">${esc(e.date)}</span><span class="ft">${esc(e.title)}</span>
+      <span class="fc">${(DATA.layers||[]).map(l=>
+        `<button class="lay-chip tag-chip${sug.includes(l.id)?' on':''}" data-lay="${l.id}">${esc(l.name)}</button>`).join('')}</span>`;
+    row.querySelectorAll('.tag-chip').forEach(b=>b.onclick=()=>b.classList.toggle('on'));
+    frag.appendChild(row);
+  });
+  box.appendChild(frag);
+}
+function setFillTab(k){
+  fillTab=k;
+  document.querySelectorAll('.fill-tab').forEach(b=>b.classList.toggle('on',b.dataset.tab===k));
+  const tag=(k==='tag');
+  $('#fillPaste').hidden=tag; $('#fillTag').hidden=!tag;
+  fillLayerSel.hidden=(k!=='layer');
+  if(tag){renderFillTag();fillPrev.textContent='';return;}
+  fillText.placeholder=FILL_PH[k];
+  fillPreview();
+}
+function openFill(){
+  if(RO)return;
+  fillLayerSel.innerHTML=(DATA.layers||[]).map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('');
+  fillBd.hidden=false; setFillTab(fillTab);
+}
+function closeFill(){fillBd.hidden=true;}
+function fillApply(){
+  if(RO)return;
+  if(fillTab==='tag'){
+    let n=0;
+    document.querySelectorAll('#fillTag .fill-tr').forEach(row=>{
+      const e=DATA.events[+row.dataset.ev];if(!e)return;
+      const ids=[...row.querySelectorAll('.tag-chip.on')].map(x=>x.dataset.lay);
+      const before=(e.layers||[]).join(',');
+      if(ids.length)e.layers=ids;else delete e.layers;
+      if((e.layers||[]).join(',')!==before)n++;
+    });
+    afterMutate(false);renderFillTag();
+    fillPrev.textContent='';
+    $('#fillTag').insertAdjacentHTML('afterbegin',`<div class="search-empty">태그 ${n}건 반영</div>`);
+    return;
+  }
+  const p=parseFill(fillText.value,fillTab), ex=fillExisting(fillTab), over=$('#fillOver').checked;
+  const lay=(DATA.layers||[]).find(l=>l.id===fillLayerSel.value);
+  let n=0;
+  p.rows.forEach((h,mk)=>{
+    if(ex.has(mk)&&!over)return;
+    if(fillTab==='thought'){
+      const i=DATA.thoughts.findIndex(t=>String(t.date).slice(0,7)===mk);
+      if(i>=0)Object.assign(DATA.thoughts[i],{date:h.d,text:h.v});
+      else DATA.thoughts.push({date:h.d,text:h.v});
+    }else if(fillTab==='record'){
+      const i=DATA.records.findIndex(r=>String(r.m).slice(0,7)===mk);
+      if(i>=0)DATA.records[i].n=h.v; else DATA.records.push({m:mk,n:h.v});
+    }else{
+      if(!lay)return;
+      const i=lay.pts.findIndex(q=>String(q.date).slice(0,7)===mk);
+      if(i>=0)Object.assign(lay.pts[i],{date:h.d,v:h.v}); else lay.pts.push({date:h.d,v:h.v});
+    }
+    n++;
+  });
+  afterMutate(false);
+  fillPreview(`넣음 ${n}건 — ⌘Z로 되돌린다`);
+}
+$('#btnFill').onclick=openFill;
+$('#fillCancel').onclick=closeFill;
+$('#fillGo').onclick=fillApply;
+document.querySelectorAll('.fill-tab').forEach(b=>b.onclick=()=>setFillTab(b.dataset.tab));
+fillText.addEventListener('input',()=>fillPreview());
+$('#fillOver').addEventListener('change',()=>fillPreview());
+fillLayerSel.addEventListener('change',()=>fillPreview());
+$('#fillFile').addEventListener('change',async ev=>{
+  const f=ev.target.files&&ev.target.files[0];if(!f)return;
+  fillText.value=await f.text();ev.target.value='';fillPreview();
+});
+fillBd.addEventListener('mousedown',e=>{if(e.target===fillBd)closeFill();});
+
 function openSearch(){searchBd.hidden=false;searchInput.value='';searchIdx=0;renderSearch();requestAnimationFrame(()=>searchInput.focus());}
 function closeSearch(){searchBd.hidden=true;}
 searchInput.addEventListener('input',()=>{searchIdx=0;renderSearch();});
@@ -2803,10 +2997,10 @@ searchBd.addEventListener('mousedown',e=>{if(e.target===searchBd)closeSearch();}
 document.addEventListener('keydown',e=>{
   if((e.metaKey||e.ctrlKey)&&/^[fk]$/.test(e.key.toLowerCase())){e.preventDefault();openSearch();}
   else if(e.key==='Escape'){
-    const wasOpen=!searchBd.hidden||!ctxMenu.hidden||!popEd.hidden
+    const wasOpen=!searchBd.hidden||!ctxMenu.hidden||!popEd.hidden||!fillBd.hidden
       ||!document.getElementById('newBd').hidden||!document.getElementById('cloudBd').hidden||MAP_OPEN;
     if(MAP_OPEN)closeMapOverlay();
-    if(!searchBd.hidden)closeSearch();closeCtx();closePop();
+    if(!searchBd.hidden)closeSearch();closeCtx();closePop();closeFill();
     document.getElementById('newBd').hidden=true;document.getElementById('cloudBd').hidden=true;
     /* 열린 창이 없었으면 Esc = 레이어 포커스 해제 */
     if(!wasOpen&&focusLayer!=='main'){focusLayer='main';render();}
