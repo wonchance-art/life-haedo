@@ -309,11 +309,12 @@ html[data-theme=spring]{
         <button class="lay-chip scale" data-y="5">5Y</button>
         <button class="lay-chip scale" data-y="1">1Y</button>
         <span style="flex:1"></span>
-        <label class="ma-ctl" title="곡선 폭 — 넓을수록 흐름만, 0이면 기록을 그대로 잇는다">
-          <span>곡선</span>
-          <input type="range" id="maW" min="0" max="90" step="2" aria-label="곡선 폭">
-          <span class="val" id="maV">36</span>
-        </label>
+        <span class="ma-ctl" role="group" aria-label="곡선이 요약하는 정도">
+          <button class="lay-chip ma-chip" data-ma="0" title="기록 — 적은 그대로" aria-label="기록">○</button>
+          <button class="lay-chip ma-chip" data-ma="18" title="사건 — 그 일 전후" aria-label="사건">◔</button>
+          <button class="lay-chip ma-chip" data-ma="36" title="시기 — 그 해의 기조" aria-label="시기">◑</button>
+          <button class="lay-chip ma-chip" data-ma="60" title="흐름 — 인생의 궤적" aria-label="흐름">●</button>
+        </span>
         <button class="lay-chip" id="btnMap">지도</button>
         <button class="lay-chip" id="btnSearch" title="검색 (⌘/Ctrl+F)">검색</button>
       </div>
@@ -379,12 +380,9 @@ html[data-theme=spring]{
   footer{opacity:.6}
   .layer-bar{margin:14px 0 10px}
   .tl-controls{gap:4px;margin-bottom:2px}
-  .ma-ctl{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--ink-soft);
-    opacity:.5;transition:opacity .15s;margin-right:4px}
-  .ma-ctl:hover,.ma-ctl:focus-within{opacity:1}
-  .ma-ctl input[type=range]{width:76px;accent-color:var(--water)}
-  .ma-ctl .val{font-family:'IBM Plex Mono',monospace;font-size:11px;min-width:22px;color:var(--ink)}
-  @media (max-width:640px){.ma-ctl input[type=range]{width:58px}}
+  .ma-ctl{display:inline-flex;align-items:center;gap:1px;margin-right:6px}
+  .ma-chip{padding:3px 7px;font-size:13px;line-height:1.15;min-width:28px;text-align:center;
+    font-family:'Apple SD Gothic Neo','Segoe UI Symbol','Noto Sans Symbols 2',system-ui,sans-serif}
   .dt-edit.bad{border-color:var(--cinnabar);outline:none}
   .map-overlay{position:absolute;inset:0;z-index:5;background:var(--paper);
     display:flex;flex-direction:column;animation:mapIn .25s ease}
@@ -885,9 +883,12 @@ let focusLayer='main'; /* 레이어 포커스 */
 const CH={g:null,line:null,dot:null,txt:null}; /* 크로스헤어 노드 (렌더마다 재생성) */
 /* 곡선 = 이동평균. 점(기록)은 제 값 자리에 그대로 두고, 선은 흐름만 그린다.
    폭은 화면 px 기준이라 확대하면 세부가, 축소하면 추세가 보인다. 0 = 이동평균 끄기 */
+const MA_STEPS=[0,18,36,60];  /* ○ 기록 · ◔ 사건 · ◑ 시기 · ● 흐름 */
 let MA_SIGMA=(()=>{try{const raw=localStorage.getItem('caeyeon_life_ma');
   if(raw==null||raw==='')return 36;                      /* 저장값 없음 = 기본 36 (+null이 0으로 통과하던 함정) */
-  const v=+raw;return isFinite(v)&&v>=0&&v<=90?v:36;}catch(e){return 36;}})();
+  const v=+raw; if(!isFinite(v))return 36;
+  return MA_STEPS.reduce((a,b)=>Math.abs(b-v)<Math.abs(a-v)?b:a,MA_STEPS[0]); /* 구 연속값은 가까운 칸으로 */
+}catch(e){return 36;}})();
 let MA_CURVE=null;
 function hermiteTangents(p){ /* 단조 3차(Fritsch–Carlson) 접선 — smoothPath와 동일 규칙 */
   const n=p.length,dx=[],m=[];
@@ -2522,15 +2523,14 @@ let moved=false;
     requestAnimationFrame(()=>{const ti=document.querySelector('#popEd .pe-title');if(ti)ti.select();});
   }
   document.querySelectorAll('.scale').forEach(b=>b.onclick=()=>setScale(b.dataset.y,b));
-  const maW=$('#maW'), maV=$('#maV');
-  if(maW){
-    maW.value=MA_SIGMA; maV.textContent=MA_SIGMA===0?'원본':MA_SIGMA;
-    maW.oninput=()=>{
-      MA_SIGMA=+maW.value; maV.textContent=MA_SIGMA===0?'원본':MA_SIGMA;
-      try{localStorage.setItem('caeyeon_life_ma',MA_SIGMA);}catch(e){}
-      render();
-    };
-  }
+  const maChips=[...document.querySelectorAll('.ma-chip')];
+  const syncMA=()=>maChips.forEach(b=>b.classList.toggle('on',+b.dataset.ma===MA_SIGMA));
+  syncMA();
+  maChips.forEach(b=>b.onclick=()=>{
+    MA_SIGMA=+b.dataset.ma;
+    try{localStorage.setItem('caeyeon_life_ma',MA_SIGMA);}catch(e){}
+    syncMA(); render();
+  });
   resolvePal(); /* 앱 초기 렌더 전에 테마 팔레트 해석 */
   addEventListener('resize',()=>{prepare();render();});
 })();
