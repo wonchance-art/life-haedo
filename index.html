@@ -207,6 +207,7 @@ html[data-theme=spring]{
     box-shadow:0 8px 24px rgba(0,0,0,.2);min-width:150px;padding:4px 0}
   .ctx[hidden]{display:none}
   .show-panel{display:flex;flex-wrap:wrap;gap:5px;padding:9px 10px;max-width:250px}
+  .show-sep{flex-basis:100%;height:0;border-top:1px solid var(--line);margin:4px 0 1px}
   .show-panel .lay-chip{display:inline-flex;align-items:center;width:auto;
     padding:3px 9px;font-size:12px;text-align:center} /* .ctx button의 block·100% 를 덮는다 */
   .ctx button{display:block;width:100%;text-align:left;padding:8px 14px;font-family:inherit;font-size:13px;
@@ -938,6 +939,8 @@ let MA_CURVE=null;
 /* 표시 토글 — 그리기만 끈다. 곡선·평균·데이터는 그대로 */
 const SHOW_KEYS=['ev','name','tag','span','th','hap','lay','rec','era'];
 const SHOW_NAME={ev:'사건',name:'이름',tag:'핀색',span:'기간',th:'생각',hap:'값',lay:'분야',rec:'기록',era:'시대'};
+/* 나이 셈법 — 만(태어난 해 0세) / 한국식(태어난 해 1세) */
+let AGE_MODE=(()=>{try{return localStorage.getItem('caeyeon_life_age')==='kr'?'kr':'intl';}catch(e){return 'intl';}})();
 let SHOW=(()=>{
   const d={};SHOW_KEYS.forEach(k=>d[k]=true);
   try{const r=JSON.parse(localStorage.getItem('caeyeon_life_show'));
@@ -1112,7 +1115,10 @@ function prepare(){
     ?(a=>(a>0?'+':'')+a.toFixed(2))(avgPts.reduce((s,pt)=>s+pt.v,0)/avgPts.length)
     :'—';
 }
-const fmtAge=t=>Math.floor(t-T(DATA.profile.birth))+"세";
+const birthYear=()=>+String(DATA.profile.birth).slice(0,4);
+const ageAt=t=>AGE_MODE==='kr'?Math.floor(t)-birthYear()+1:Math.floor(t-T(DATA.profile.birth));
+const AGE_MIN=()=>AGE_MODE==='kr'?1:0;
+const fmtAge=t=>(AGE_MODE==='kr'?'':'만 ')+ageAt(t)+"세";
 
 /* ==========================================================================
    캔버스 렌더
@@ -1276,11 +1282,12 @@ function render(){
       const t=el('text',{x:x,y:L.AXIS_Y-12,'text-anchor':'middle','font-size':11,fill:'#23312B','font-family':'IBM Plex Mono'});
       t.textContent=y;svg.appendChild(t);
       reserveText(x,L.AXIS_Y-12,String(y),'middle',11);
-      const age=Math.floor(y-T(DATA.profile.birth)); /* 만 나이 — 연도 위 빈 줄 (아래는 핀 줄기와 겹침) */
-      if(age>=0&&Math.abs(x-X(NOW))>38){ /* 오늘 표시 근처만 생략 */
+      const age=ageAt(y); /* 나이 — 연도 위 빈 줄 (아래는 핀 줄기와 겹침) */
+      if(age>=AGE_MIN()&&Math.abs(x-X(NOW))>38){ /* 오늘 표시 근처만 생략 */
+        const txt=AGE_MODE==='kr'?age+'세':'만 '+age;
         const at=el('text',{x:x,y:L.AXIS_Y-24,'text-anchor':'middle','font-size':9.5,fill:'#A87F3D','font-family':'IBM Plex Mono',opacity:.85});
-        at.textContent='만 '+age;svg.appendChild(at);
-        reserveText(x,L.AXIS_Y-24,'만 '+age,'middle',9.5);
+        at.textContent=txt;svg.appendChild(at);
+        reserveText(x,L.AXIS_Y-24,txt,'middle',9.5);
       }
     }
   }
@@ -3126,7 +3133,8 @@ function fillApply(){
 }
 const showPanel=$('#showPanel');
 function syncShowPanel(){ /* 켜짐 표시와 비활성만 제자리에서 갱신 */
-  showPanel.querySelectorAll('button').forEach(b=>{
+  showPanel.querySelectorAll('button[data-age]').forEach(b=>b.classList.toggle('on',b.dataset.age===AGE_MODE));
+  showPanel.querySelectorAll('button[data-k]').forEach(b=>{
     const k=b.dataset.k;
     b.classList.toggle('on',!!SHOW[k]);
     const dim=(k==='name'||k==='tag')&&!SHOW.ev; /* 사건이 없으면 이름·색점도 없다 */
@@ -3147,6 +3155,19 @@ function renderShowPanel(){
       try{localStorage.setItem('caeyeon_life_show',JSON.stringify(SHOW));}catch(e){}
       syncShowPanel();  /* 통째로 다시 그리면 누른 버튼이 사라져 포커스가 날아간다 */
       prepare();render();renderLayerBar();
+    };
+    showPanel.appendChild(b);
+  });
+  const sep=document.createElement('span');sep.className='show-sep';showPanel.appendChild(sep);
+  [['intl','만 나이'],['kr','한국 나이']].forEach(([m,label])=>{
+    const b=document.createElement('button');
+    b.className='lay-chip';b.textContent=label;b.dataset.age=m;
+    b.onclick=ev=>{
+      ev.stopPropagation();
+      if(AGE_MODE===m)return;
+      AGE_MODE=m;
+      try{localStorage.setItem('caeyeon_life_age',m);}catch(e){}
+      syncShowPanel();render();
     };
     showPanel.appendChild(b);
   });
