@@ -325,7 +325,6 @@ html[data-theme=spring]{
         <span style="flex:1"></span>
         <span class="ma-ctl" role="group" aria-label="곡선이 요약하는 정도">
           <button class="lay-chip ma-chip" data-ma="0" title="기록 — 적은 그대로" aria-label="기록">○</button>
-          <button class="lay-chip ma-chip" data-ma="18" title="사건 — 그 일 전후" aria-label="사건">◔</button>
           <button class="lay-chip ma-chip" data-ma="36" title="시기 — 그 해의 기조" aria-label="시기">◑</button>
           <button class="lay-chip ma-chip" data-ma="60" title="흐름 — 인생의 궤적" aria-label="흐름">●</button>
         </span>
@@ -929,11 +928,14 @@ let focusLayer='main'; /* 레이어 포커스 */
 const CH={g:null,line:null,dot:null,txt:null}; /* 크로스헤어 노드 (렌더마다 재생성) */
 /* 곡선 = 이동평균. 점(기록)은 제 값 자리에 그대로 두고, 선은 흐름만 그린다.
    폭은 화면 px 기준이라 확대하면 세부가, 축소하면 추세가 보인다. 0 = 이동평균 끄기 */
-const MA_STEPS=[0,18,36,60];  /* ○ 기록 · ◔ 사건 · ◑ 시기 · ● 흐름 */
+const MA_STEPS=[0,36,60];  /* ○ 기록 · ◑ 시기 · ● 흐름 */
 let MA_SIGMA=(()=>{try{const raw=localStorage.getItem('caeyeon_life_ma');
   if(raw==null||raw==='')return 36;                      /* 저장값 없음 = 기본 36 (+null이 0으로 통과하던 함정) */
   const v=+raw; if(!isFinite(v))return 36;
-  return MA_STEPS.reduce((a,b)=>Math.abs(b-v)<Math.abs(a-v)?b:a,MA_STEPS[0]); /* 구 연속값은 가까운 칸으로 */
+  /* 구 저장값은 가까운 칸으로. 동점이면 큰 쪽 — 사라진 18이 0으로 내려가 곡선이 꺼지면 안 된다 */
+  const snapped=MA_STEPS.reduce((a,b)=>Math.abs(b-v)<=Math.abs(a-v)?b:a,MA_STEPS[0]);
+  if(snapped!==v)try{localStorage.setItem('caeyeon_life_ma',snapped);}catch(e){} /* 없는 칸이 저장소에 남지 않게 */
+  return snapped;
 }catch(e){return 36;}})();
 let MA_CURVE=null;
 /* 표시 토글 — 그리기만 끈다. 곡선·평균·데이터는 그대로 */
