@@ -206,6 +206,9 @@ html[data-theme=spring]{
   .ctx{position:fixed;z-index:1200;background:var(--panel);border:1px solid var(--line);border-radius:3px;
     box-shadow:0 8px 24px rgba(0,0,0,.2);min-width:150px;padding:4px 0}
   .ctx[hidden]{display:none}
+  .show-panel{display:flex;flex-wrap:wrap;gap:5px;padding:9px 10px;max-width:250px}
+  .show-panel .lay-chip{display:inline-flex;align-items:center;width:auto;
+    padding:3px 9px;font-size:12px;text-align:center} /* .ctx button의 block·100% 를 덮는다 */
   .ctx button{display:block;width:100%;text-align:left;padding:8px 14px;font-family:inherit;font-size:13px;
     background:none;border:none;cursor:pointer;color:var(--ink)}
   .ctx button:hover{background:var(--paper-2)}
@@ -326,6 +329,7 @@ html[data-theme=spring]{
           <button class="lay-chip ma-chip" data-ma="60" title="흐름 — 인생의 궤적" aria-label="흐름">●</button>
         </span>
         <button class="lay-chip" id="btnMap">지도</button>
+        <button class="lay-chip" id="btnShow">표시</button>
         <button class="lay-chip" id="btnFill">채우기</button>
         <button class="lay-chip" id="btnExport">내보내기</button>
         <button class="lay-chip" id="btnSearch" title="검색 (⌘/Ctrl+F)">검색</button>
@@ -521,6 +525,7 @@ create policy "personal" on charts
 
 <!-- 컨텍스트 메뉴 -->
 <div class="ctx" id="ctxMenu" hidden></div>
+<div class="ctx show-panel" id="showPanel" role="group" aria-label="표시" hidden></div>
 
 <!-- 팝오버 에디터 -->
 <div class="pop-ed" id="popEd" hidden role="dialog" aria-label="바로 편집"></div>
@@ -930,6 +935,15 @@ let MA_SIGMA=(()=>{try{const raw=localStorage.getItem('caeyeon_life_ma');
   return MA_STEPS.reduce((a,b)=>Math.abs(b-v)<Math.abs(a-v)?b:a,MA_STEPS[0]); /* 구 연속값은 가까운 칸으로 */
 }catch(e){return 36;}})();
 let MA_CURVE=null;
+/* 표시 토글 — 그리기만 끈다. 곡선·평균·데이터는 그대로 */
+const SHOW_KEYS=['ev','name','tag','span','th','hap','lay','rec','era'];
+const SHOW_NAME={ev:'사건',name:'이름',tag:'색점',span:'기간',th:'생각',hap:'값',lay:'분야',rec:'기록',era:'시대'};
+let SHOW=(()=>{
+  const d={};SHOW_KEYS.forEach(k=>d[k]=true);
+  try{const r=JSON.parse(localStorage.getItem('caeyeon_life_show'));
+    if(r&&typeof r==='object')SHOW_KEYS.forEach(k=>{if(r[k]===false)d[k]=false;});
+  }catch(e){}
+  return d;})();
 function hermiteTangents(p){ /* 단조 3차(Fritsch–Carlson) 접선 — smoothPath와 동일 규칙 */
   const n=p.length,dx=[],m=[];
   for(let i=0;i<n-1;i++){const h=Math.max(p[i+1].x-p[i].x,1e-6);dx.push(h);m.push((p[i+1].y-p[i].y)/h);}
@@ -1067,13 +1081,13 @@ function prepare(){
     if(lane===-1){lane=laneEnds.length;laneEnds.push(end);}else laneEnds[lane]=end;
     s.lane=lane;
   });
-  NLANES=Math.max(laneEnds.length,1);
+  NLANES=SHOW.span?Math.max(laneEnds.length,1):0;
 
   /* 통합 캔버스 — 맨 위: 시간축 / 기간 막대 / 행복 곡선(사건 주석) / 기록 밀도 */
   const L={ERA_LABEL_Y:22};
   L.AXIS_Y=64;                             /* 시간축 — 맨 위 (시대 라벨 아래) */
   L.SPAN_TOP=L.AXIS_Y+14; L.SPAN_H=26; L.SPAN_GAP=9;
-  const spanBot=L.SPAN_TOP+NLANES*(L.SPAN_H+L.SPAN_GAP)-L.SPAN_GAP;
+  const spanBot=NLANES?L.SPAN_TOP+NLANES*(L.SPAN_H+L.SPAN_GAP)-L.SPAN_GAP:L.AXIS_Y+6;
   L.HAP_TOP=spanBot+18;                    /* +1 상한 */
   const hapH=Math.max(240,Math.min(600,Math.round((typeof innerHeight!=='undefined'?innerHeight:800)*.44)));
   L.HAP_BOT=L.HAP_TOP+hapH;                /* −1 하한 — 창 높이에 비례해 자연스럽게 */
@@ -1136,6 +1150,7 @@ function smoothPath(p){
 }
 
 function render(){
+  if(!SHOW.lay)focusLayer='main'; /* 분야를 끈 채 포커스가 남으면 화면 전체가 흐려진다 */
   hideTip();
   if(typeof hideCard==='function')hideCard();
   const L=LAYOUT;
@@ -1207,7 +1222,7 @@ function render(){
 
 
   let eraLabelEnd=-1e9; /* 라벨은 온전히 그리거나 아예 생략 — 잘림 금지, 이전 라벨과 겹침 시 우측으로 밀기 */
-  DATA.eras.forEach(er=>{
+  if(SHOW.era)DATA.eras.forEach(er=>{
     const x1=Math.max(X(T(er.start)),-50), x2=Math.min(X(T(er.end)),W+50);
     if(x2<0||x1>W)return;
     svg.appendChild(el('rect',{x:x1,y:0,width:x2-x1,height:L.H,fill:er.color,opacity:.035}));
@@ -1308,7 +1323,7 @@ function render(){
   }
 
   /* 기록 밀도 — vault 노트 월별 편수 (최하단, 이벤트 위임) */
-  if(DATA.records.length){
+  if(SHOW.rec&&DATA.records.length){
     const maxN=Math.max(...DATA.records.map(r=>r.n));
     const bandH=Math.min(90,(L.HAP_BOT-L.HAP_TOP)*.3);
     const mw=Math.max((1/12)/span*W-1,1.2);
@@ -1332,7 +1347,7 @@ function render(){
 
   /* 분야 레이어 — 학습·여행·독서·사람. 종합(main) 상태에선 은은한 배경,
      칩으로 포커스하면 그 레이어만 선명 + 편집 가능 (값 드래그·클릭 수정) */
-  (DATA.layers||[]).forEach(lay=>{
+  if(SHOW.lay)(DATA.layers||[]).forEach(lay=>{
     const pts=lay.pts.filter(p=>isFinite(p.t)).map(p=>({x:X(p.t),y:HY(p.v),p}));
     const foc=focusLayer===lay.id;
     const gl=el('g',{class:'c-lay','data-lay':lay.id,
@@ -1436,8 +1451,8 @@ function render(){
 
   /* 표식 자리를 먼저 잡아 둔다 — 글자가 점·막대·생각표식 위에 얹히지 않게 */
   reserve(-1e4,L.SPAN_TOP-6,1e4,L.HAP_TOP-8);                        /* 막대 구역 전체 */
-  DATA.events.forEach(e=>{const x=X(e.t),y=HY(e.happiness!=null?e.happiness:0);reserve(x-7,y-7,x+7,y+7);});
-  DATA.happiness.forEach(h=>{const x=X(h.t),y=HY(h.v);reserve(x-6,y-6,x+6,y+6);});
+  if(SHOW.ev)DATA.events.forEach(e=>{const x=X(e.t),y=HY(e.happiness!=null?e.happiness:0);reserve(x-7,y-7,x+7,y+7);});
+  if(SHOW.hap)DATA.happiness.forEach(h=>{const x=X(h.t),y=HY(h.v);reserve(x-6,y-6,x+6,y+6);});
   /* 생각 ❝ — 화면 26px 격자로 묶는다. 매달 이어지면 표식이 띠가 되어 곡선을 덮는다.
      사건처럼 '붙은 것끼리 연쇄로' 묶으면 전체 보기에서 통째로 한 덩어리가 된다 */
   const TH_GAP=26;
@@ -1445,6 +1460,7 @@ function render(){
     /* 고정 격자로 나누면 칸 경계에서 대표끼리 1px까지 붙는다.
        마지막으로 그린 표식에서 TH_GAP만큼 떨어졌을 때만 새로 그린다 — 간격이 항상 보장된다 */
     const out=[]; let anchor=-Infinity, cur=null;
+    if(!SHOW.th)return out;
     DATA.thoughts.forEach(th=>{                 /* 이미 날짜순 — 묶음의 첫 항목이 가장 이른 것 */
       const x=X(th.t); if(x<-20||x>W+20)return;
       if(x-anchor>=TH_GAP){cur={x,list:[th]};out.push(cur);anchor=x;}
@@ -1534,9 +1550,9 @@ function render(){
       bt.textContent=n;g.appendChild(bt);
       reserve(x+bdx-8,y-17,x+bdx+8,y-1);
     }
-    const tags=(DATA.layers||[]).filter(l=>list.some(e=>(e.layers||[]).includes(l.id)));
+    const tags=SHOW.tag?(DATA.layers||[]).filter(l=>list.some(e=>(e.layers||[]).includes(l.id))):[];
     tags.forEach((l,i)=>g.appendChild(el('circle',{cx:x+(i-(tags.length-1)/2)*7,cy:y+13,r:2.2,fill:l.color,opacity:.9})));
-    placeText(g,list[0].title.replace(/^\(예시\)\s*/,'')+` 외 ${n-1}`,x,y,{near:bdx>0?19:12});
+    if(SHOW.name)placeText(g,list[0].title.replace(/^\(예시\)\s*/,'')+` 외 ${n-1}`,x,y,{near:bdx>0?19:12});
     const pick=(cx,cy)=>openPick(cx,cy,list.map(e=>[
       `${e.happiness!=null?(e.happiness>0?'+':'')+e.happiness.toFixed(1):'—'}  ${e.title}`,'',
       ()=>{selected=e;render();renderDetail();
@@ -1567,7 +1583,7 @@ function render(){
     const dot=el('circle',{cx:x,cy:y,r:sel?6:4.5,fill:'#F2F4EE',stroke:col,'stroke-width':2.2,opacity:hasV?1:.55});
     g.appendChild(dot);
     if(e.layers&&e.layers.length){ /* 분야 태그 = 핀 아래 작은 색점 */
-      const tags=(DATA.layers||[]).filter(l=>e.layers.includes(l.id));
+      const tags=SHOW.tag?(DATA.layers||[]).filter(l=>e.layers.includes(l.id)):[];
       tags.forEach((l,i)=>g.appendChild(el('circle',{cx:x+(i-(tags.length-1)/2)*7,cy:y+11,r:2.2,fill:l.color,opacity:.9})));
     }
     const label=e.title.replace(/^\(예시\)\s*/,'');
@@ -1575,7 +1591,7 @@ function render(){
       const t=el('text',{x:x+8,y:ly,'font-size':11.5,fill:'#B5432A','font-weight':600});
       t.textContent=label;g.appendChild(t);
       reserveText(x+8,ly,label,'start',11.5);
-    }else placeText(g,label,x,y,{});
+    }else if(SHOW.name)placeText(g,label,x,y,{});
     /* 자유 드래그: 상하 = 행복, 좌우 = 시기 (월 스냅, 놓을 때 1회 커밋) */
     let drag=null;
     g.addEventListener('pointerdown',ev=>{
@@ -1640,7 +1656,7 @@ function render(){
     });
     svg.appendChild(g);
   };
-  evGroups.forEach(q=>{ /* x 순 한 줄기로 — 라벨 충돌 규칙이 군집·단독에 똑같이 적용된다 */
+  if(SHOW.ev)evGroups.forEach(q=>{ /* x 순 한 줄기로 — 라벨 충돌 규칙이 군집·단독에 똑같이 적용된다 */
     if(q.list.length>1)renderCluster(q);
     else renderSingleEvent(q.list[0]);
   });
@@ -1782,10 +1798,10 @@ function render(){
     if(q){q.list.push(s);q.x2=Math.max(q.x2,x2);}
     else spGroups.push({lane:s.lane,x1,x2,narrow,solo,list:[s]});
   });
-  spGroups.forEach(q=>{if(q.list.length>1)renderSpanCluster(q);else renderSpan(q.list[0]);});
+  if(SHOW.span)spGroups.forEach(q=>{if(q.list.length>1)renderSpanCluster(q);else renderSpan(q.list[0]);});
 
   /* 독립 행복도 값 — 각자 자기 높이에 (곡선은 월 평균을 지나감) */
-  const hpDots=DATA.happiness.map(h=>({x:X(h.t),y:HY(h.v),pt:{kind:'hap',src:h,date:h.date,v:h.v,future:h.fut}}));
+  const hpDots=SHOW.hap?DATA.happiness.map(h=>({x:X(h.t),y:HY(h.v),pt:{kind:'hap',src:h,date:h.date,v:h.v,future:h.fut}})):[];
   hpDots.forEach(p=>{
     if(p.x<-20||p.x>W+20)return;
     const pt=p.pt, isEv=pt.kind==='event';
@@ -1998,6 +2014,8 @@ function hapVAt(t){
 function renderLayerBar(){
   const bar=document.getElementById('layerBar');if(!bar)return;
   bar.innerHTML='';
+  bar.hidden=!SHOW.lay;               /* 분야를 끄면 포커스 칩도 뜻이 없다 */
+  if(!SHOW.lay)return;
   const mk=(id,name,color)=>{
     const b=document.createElement('button');
     b.className='lay-chip'+(focusLayer===id?' on':'');
@@ -3096,6 +3114,34 @@ function fillApply(){
   afterMutate(false);
   fillPreview(`넣음 ${n}건 — ⌘Z로 되돌린다`);
 }
+const showPanel=$('#showPanel');
+function renderShowPanel(){
+  showPanel.innerHTML='';
+  SHOW_KEYS.forEach(k=>{
+    const b=document.createElement('button');
+    b.className='lay-chip'+(SHOW[k]?' on':'');
+    b.textContent=SHOW_NAME[k];b.dataset.k=k;
+    const dim=(k==='name'||k==='tag')&&!SHOW.ev; /* 사건이 없으면 이름·색점도 없다 */
+    if(dim){b.disabled=true;b.style.opacity=.35;b.style.cursor='default';}
+    b.onclick=ev=>{
+      ev.stopPropagation();
+      SHOW[k]=!SHOW[k];
+      try{localStorage.setItem('caeyeon_life_show',JSON.stringify(SHOW));}catch(e){}
+      renderShowPanel();prepare();render();renderLayerBar();
+    };
+    showPanel.appendChild(b);
+  });
+}
+$('#btnShow').onclick=e=>{
+  e.stopPropagation(); /* document 리스너가 방금 연 패널을 닫는 것 방지 */
+  if(!showPanel.hidden){showPanel.hidden=true;return;}
+  renderShowPanel();showPanel.hidden=false;
+  const b=e.currentTarget.getBoundingClientRect(), r=showPanel.getBoundingClientRect();
+  showPanel.style.left=Math.max(8,Math.min(b.left,innerWidth-r.width-8))+'px';
+  showPanel.style.top=Math.max(8,Math.min(b.bottom+6,innerHeight-r.height-8))+'px';
+};
+document.addEventListener('click',e=>{
+  if(!showPanel.hidden&&!showPanel.contains(e.target))showPanel.hidden=true;});
 $('#btnFill').onclick=openFill;
 $('#fillCancel').onclick=closeFill;
 $('#fillGo').onclick=fillApply;
@@ -3124,7 +3170,7 @@ document.addEventListener('keydown',e=>{
     const wasOpen=!searchBd.hidden||!ctxMenu.hidden||!popEd.hidden||!fillBd.hidden
       ||!document.getElementById('newBd').hidden||!document.getElementById('cloudBd').hidden||MAP_OPEN;
     if(MAP_OPEN)closeMapOverlay();
-    if(!searchBd.hidden)closeSearch();closeCtx();closePop();closeFill();
+    if(!searchBd.hidden)closeSearch();closeCtx();closePop();closeFill();showPanel.hidden=true;
     document.getElementById('newBd').hidden=true;document.getElementById('cloudBd').hidden=true;
     /* 열린 창이 없었으면 Esc = 레이어 포커스 해제 */
     if(!wasOpen&&focusLayer!=='main'){focusLayer='main';render();}
