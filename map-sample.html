@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="spring">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>지도 시안 — 인생 연표</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root{
+    --paper:oklch(0.992 0.005 95); --panel:#FBFBF7; --ink:#23312B; --ink-soft:#5D6B62;
+    --line:#DDE3DC; --accent:#5C9E55;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:Pretendard,'Apple SD Gothic Neo',system-ui,sans-serif;font-size:14px;line-height:1.6}
+  .wrap{max-width:1500px;margin:0 auto;padding:26px clamp(14px,2.4vw,34px) 60px}
+  h1{font-size:22px;font-weight:800;margin:0 0 4px;letter-spacing:-.01em}
+  .sub{color:var(--ink-soft);font-size:13px;margin:0 0 20px}
+  .bar{display:flex;gap:22px;flex-wrap:wrap;align-items:center;
+    padding:12px 0 16px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:22px}
+  .grp{display:flex;gap:6px;align-items:center}
+  .grp b{font-size:11px;color:var(--ink-soft);font-weight:600;letter-spacing:.06em;margin-right:4px}
+  button.chip{font:inherit;font-size:12.5px;padding:4px 12px;border:1px solid var(--line);
+    background:transparent;color:var(--ink);border-radius:2px;cursor:pointer;opacity:.62}
+  button.chip.on{opacity:1;border-color:var(--ink);font-weight:700}
+  .grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
+  .card{border:1px solid var(--line);background:var(--panel)}
+  .card h2{font-size:13.5px;font-weight:700;margin:0;padding:9px 12px 3px}
+  .card .note{font-size:11.5px;color:var(--ink-soft);padding:0 12px 8px;min-height:32px}
+  .card .m{height:250px;background:#DCE4DE}
+  .leaflet-container{font-family:inherit;background:#DCE4DE}
+  .tag{display:inline-block;font-size:10.5px;padding:1px 6px;border:1px solid var(--line);
+    border-radius:2px;color:var(--ink-soft);margin-left:5px;vertical-align:2px}
+  .tag.warn{color:#B5432A;border-color:#E4C4BC}
+  .tag.now{color:var(--accent);border-color:#C6DFC0}
+  footer{margin-top:30px;font-size:12px;color:var(--ink-soft)}
+  footer code{font-family:'IBM Plex Mono',monospace;font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>지도 시안</h1>
+  <p class="sub">같은 자리·같은 항로를 아홉 가지 지도로. 키가 필요 없는 것만 모았다.
+    보기를 바꿔가며 비교하고, 색 보정은 어떤 지도에도 그대로 얹을 수 있다.</p>
+
+  <div class="bar">
+    <div class="grp"><b>보기</b>
+      <button class="chip view on" data-view="wide">넓게</button>
+      <button class="chip view" data-view="mid">나라</button>
+      <button class="chip view" data-view="near">가까이</button>
+    </div>
+    <div class="grp"><b>색 보정</b>
+      <button class="chip filt" data-f="none">없음</button>
+      <button class="chip filt on" data-f="hanji">한지</button>
+      <button class="chip filt" data-f="ink">담묵</button>
+      <button class="chip filt" data-f="sepia">세피아</button>
+    </div>
+    <div class="grp"><b>항로</b>
+      <button class="chip route on" data-r="1">보임</button>
+      <button class="chip route" data-r="0">숨김</button>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <footer>
+    <p>색 보정은 <code>filter</code> 한 줄이라 어떤 지도에도 얹을 수 있다 —
+      한지 <code>saturate(.55) contrast(.92) brightness(1.04)</code> ·
+      담묵 <code>saturate(.18) contrast(.88) brightness(1.07)</code> ·
+      세피아 <code>sepia(.4) saturate(.55) brightness(1.04)</code></p>
+    <p>지명 표기: OSM 계열은 현지어(한국·일본은 한글·일본어), Esri 계열은 영어다.</p>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const WORLD=L.latLngBounds([-85.0511,-180],[85.0511,180]);
+
+const SOURCES=[
+  {id:'osm', name:'OSM 표준', tag:'now', tagText:'지금 쓰는 것',
+   note:'선명하고 정보가 많다. 색이 진해 보정이 필요하다.',
+   url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png', max:19},
+  {id:'osmde', name:'OSM 독일',
+   note:'표준과 거의 같되 조금 차분하다. 폴백으로 쓰는 곳.',
+   url:'https://tile.openstreetmap.de/{z}/{x}/{y}.png', max:18},
+  {id:'osmfr', name:'OSM 프랑스',
+   note:'선이 가늘고 글자가 작다. 여백이 가장 많이 남는 편.',
+   url:'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', max:19, sub:'ab'},
+  {id:'hot', name:'OSM 인문',
+   note:'도로가 도드라지고 채도가 높다. 도시 안에서 강하다.',
+   url:'https://tile-{s}.openstreetmap.fr/hot/{z}/{x}/{y}.png', max:19, sub:'ab'},
+  {id:'gray', name:'Esri 밝은 회색',
+   note:'거의 무채색. 항로와 핀이 가장 잘 산다. 도시 줌에서는 아주 옅다.',
+   url:'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', max:16},
+  {id:'terrain', name:'Esri 지형',
+   note:'산 음영이 은은하다. 다만 한국 도시 줌에는 데이터가 없다(넓게 볼 때만).',
+   url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}', max:13},
+  {id:'physical', name:'Esri 물리',
+   note:'글자가 거의 없는 자연 지도. 줌 8까지만 있어 넓게 볼 때 전용.',
+   url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Physical_Map/MapServer/tile/{z}/{y}/{x}', max:8},
+  {id:'topo', name:'OpenTopoMap',
+   note:'등고선까지 나온다. 가까이서는 촘촘해 복잡해진다.',
+   url:'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', max:17, sub:'ab'},
+  {id:'carto', name:'CARTO positron', tag:'warn', tagText:'키 필요',
+   note:'가장 담백하지만 이제 타일에 워터마크가 찍힌다. 직접 보라.',
+   url:'https://basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png', max:19},
+];
+
+const VIEWS={
+  wide:{fit:'route', label:'항로 전체'},
+  mid: {center:[35.9,129.5], zoom:6, label:'나라 단위'},
+  near:{center:[35.15,129.07], zoom:12, label:'도시 안'},
+};
+const FILTERS={
+  none:'none',
+  hanji:'saturate(.55) contrast(.92) brightness(1.04)',
+  ink:'saturate(.18) contrast(.88) brightness(1.07)',
+  sepia:'sepia(.4) saturate(.55) brightness(1.04)',
+};
+
+/* 데모용 좌표 — 실제 기록이 아니라 대표 도시 몇 곳 */
+const ROUTE=[[35.1796,129.0756],[-36.8485,174.7633],[-43.5321,172.6362],[-33.8688,151.2093]];
+const NEAR_ROUTE=[[35.1796,129.0756],[35.1587,129.1604],[35.0989,129.0350]];
+
+let view='wide', filt='hanji', showRoute=true;
+const maps=[];
+
+function build(){
+  const grid=document.getElementById('grid');
+  SOURCES.forEach(src=>{
+    const card=document.createElement('div');card.className='card';
+    const tag=src.tag?`<span class="tag ${src.tag}">${src.tagText}</span>`:'';
+    card.innerHTML=`<h2>${src.name}${tag}</h2><div class="note">${src.note}</div>
+      <div class="m" id="m-${src.id}"></div>`;
+    grid.appendChild(card);
+    const map=L.map('m-'+src.id,{
+      zoomControl:false, attributionControl:false, scrollWheelZoom:false,
+      minZoom:1, maxBounds:WORLD, maxBoundsViscosity:1,
+    }).setView([20,130],2);
+    L.tileLayer(src.url,{maxZoom:src.max, noWrap:true, bounds:WORLD,
+      subdomains:src.sub||'abc'}).addTo(map);
+    maps.push({src,map,line:null,marks:[]});
+  });
+  goView();
+}
+function place(m){
+  const v=VIEWS[view];
+  if(v.fit){
+    const b=L.latLngBounds(ROUTE).pad(.12);
+    m.map.fitBounds(b,{animate:false,maxZoom:m.src.max});
+  }else{
+    m.map.setView(v.center, Math.min(v.zoom, m.src.max), {animate:false});
+  }
+}
+
+function drawRoute(){
+  maps.forEach(m=>{
+    if(m.line){m.map.removeLayer(m.line);m.line=null;}
+    m.marks.forEach(k=>m.map.removeLayer(k));m.marks=[];
+    if(!showRoute)return;
+    const pts=(view==='near')?NEAR_ROUTE:ROUTE;
+    m.line=L.polyline(pts,{color:'#B5432A',weight:2.4,opacity:.85}).addTo(m.map);
+    pts.forEach(p=>m.marks.push(
+      L.circleMarker(p,{radius:4,color:'#B5432A',weight:2,fillColor:'#F2F4EE',fillOpacity:1}).addTo(m.map)));
+  });
+}
+function applyFilter(){
+  document.querySelectorAll('.leaflet-tile-pane').forEach(p=>p.style.filter=FILTERS[filt]);
+}
+function goView(){
+  maps.forEach(m=>{m.map.invalidateSize();place(m);});
+  drawRoute();
+  setTimeout(applyFilter,150);
+}
+document.querySelectorAll('.chip.view').forEach(b=>b.onclick=()=>{
+  view=b.dataset.view;
+  document.querySelectorAll('.chip.view').forEach(x=>x.classList.toggle('on',x===b));
+  goView();
+});
+document.querySelectorAll('.chip.filt').forEach(b=>b.onclick=()=>{
+  filt=b.dataset.f;
+  document.querySelectorAll('.chip.filt').forEach(x=>x.classList.toggle('on',x===b));
+  applyFilter();
+});
+document.querySelectorAll('.chip.route').forEach(b=>b.onclick=()=>{
+  showRoute=b.dataset.r==='1';
+  document.querySelectorAll('.chip.route').forEach(x=>x.classList.toggle('on',x===b));
+  drawRoute();
+});
+build();
+setTimeout(applyFilter,400);
+</script>
+</body>
+</html>
