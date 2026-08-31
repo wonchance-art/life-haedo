@@ -278,6 +278,7 @@ html[data-theme=spring]{
   .lay-chip{transition:transform .12s ease,background .15s,border-color .15s,opacity .15s}
   
   @media (prefers-reduced-motion:reduce){.lay-chip{transition:none}}
+  .leaflet-tile{filter:saturate(.55) contrast(.92) brightness(1.04)} /* 한지 톤에 맞춰 눌러준다 */
   html[data-theme="dim"] .leaflet-tile{filter:brightness(.7) invert(1) contrast(2.2) hue-rotate(190deg) saturate(.28) brightness(.78)}
   html[data-theme="dim"] .leaflet-container{background:#0F1613}
 </style>
@@ -3678,6 +3679,8 @@ function mapNotice(msg){
 }
 try{
   if(typeof L==='undefined') throw new Error('leaflet-missing');
+  /* noWrap만으로는 범위 밖 타일을 계속 요청한다(400) — bounds까지 줘야 안 부른다 */
+  const WORLD_BOUNDS=L.latLngBounds([-85.0511,-180],[85.0511,180]);
   map=L.map('map',{scrollWheelZoom:false,minZoom:1,
     maxBounds:[[-85,-180],[85,180]],maxBoundsViscosity:1}).setView([27,127],4);
   let tileFails=0, fellBack=false;
@@ -3687,17 +3690,18 @@ try{
       tileFails++;
       if(!fellBack && tileFails>=4){
         fellBack=true; map.removeLayer(layer);
-        addTiles('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          {attribution:'&copy; OpenStreetMap',maxZoom:19,noWrap:true});
+        addTiles('https://tile.openstreetmap.de/{z}/{x}/{y}.png',
+          {attribution:'&copy; OpenStreetMap',maxZoom:18,noWrap:true,bounds:WORLD_BOUNDS});
       } else if(fellBack && tileFails>=10){
-        mapNotice('지도 타일을 불러오지 못했다.<br>· Claude 미리보기 안이라면: 외부 이미지가 차단되는 환경 — <b>파일을 다운로드해 브라우저에서 직접 열면 표시된다.</b><br>· 브라우저에서 열었다면: 인터넷 연결 또는 광고차단기(cartocdn/openstreetmap 차단 여부)를 확인.');
+        mapNotice('지도 타일을 불러오지 못했다.<br>· Claude 미리보기 안이라면: 외부 이미지가 차단되는 환경 — <b>파일을 다운로드해 브라우저에서 직접 열면 표시된다.</b><br>· 브라우저에서 열었다면: 인터넷 연결 또는 광고차단기(openstreetmap 차단 여부)를 확인.');
       }
     });
     layer.on('load',()=>{const n=document.querySelector('.map-notice');if(n)n.remove();});
     return layer;
   }
-  addTiles('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    {attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:19,noWrap:true});
+  /* carto light_all은 이제 키가 없으면 워터마크가 찍힌 타일을 준다(200이라 폴백도 안 걸린다) */
+  addTiles('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {attribution:'&copy; OpenStreetMap',maxZoom:19,noWrap:true,bounds:WORLD_BOUNDS});
 }catch(e){
   mapNotice('지도 라이브러리(Leaflet)를 불러오지 못해 지도를 표시할 수 없다.<br>인터넷 연결 후 새로고침하면 나타난다. 연표·곡선·편집 기능은 정상 작동한다.');
 }
