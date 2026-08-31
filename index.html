@@ -937,7 +937,7 @@ let MA_SIGMA=(()=>{try{const raw=localStorage.getItem('caeyeon_life_ma');
 let MA_CURVE=null;
 /* 표시 토글 — 그리기만 끈다. 곡선·평균·데이터는 그대로 */
 const SHOW_KEYS=['ev','name','tag','span','th','hap','lay','rec','era'];
-const SHOW_NAME={ev:'사건',name:'이름',tag:'색점',span:'기간',th:'생각',hap:'값',lay:'분야',rec:'기록',era:'시대'};
+const SHOW_NAME={ev:'사건',name:'이름',tag:'핀색',span:'기간',th:'생각',hap:'값',lay:'분야',rec:'기록',era:'시대'};
 let SHOW=(()=>{
   const d={};SHOW_KEYS.forEach(k=>d[k]=true);
   try{const r=JSON.parse(localStorage.getItem('caeyeon_life_show'));
@@ -1149,6 +1149,16 @@ function smoothPath(p){
   return d;
 }
 
+const PIN_GRAY='#5D6B62';   /* 태그 없는 핀 — 채도 0이라 분야 5색과 안 헷갈린다 */
+const PIN_PAPER='#F2F4EE';
+function pinColor(e){       /* 여러 태그면 레이어 순서상 첫 번째 (나머지는 호버 카드에) */
+  if(!SHOW.tag)return PIN_GRAY;
+  const ids=e.layers||[];
+  if(!ids.length)return PIN_GRAY;
+  const l=(DATA.layers||[]).find(x=>ids.includes(x.id));
+  return l?l.color:PIN_GRAY;
+}
+const pinDash=fut=>fut?{'stroke-dasharray':'3 2.4'}:{}; /* 예정 = 점선 — 기간 막대와 같은 문법 */
 function render(){
   if(!SHOW.lay)focusLayer='main'; /* 분야를 끈 채 포커스가 남으면 화면 전체가 흐려진다 */
   hideTip();
@@ -1533,15 +1543,17 @@ function render(){
   const renderCluster=q=>{
     const list=q.list, n=list.length, x=q.x, y=q.y;
     const anyFut=list.every(e=>e.fut);
-    const col=anyFut?'#7A8A80':'#B5432A';
+    const cols=[...new Set(list.map(pinColor))];
+    const col=cols.length===1?cols[0]:PIN_GRAY; /* 섞이면 중립 회색 */
     const g=el('g',{cursor:'pointer',tabindex:0,role:'button',class:'c-main',
       'aria-label':`${list[0].date} 부근 겹친 사건 ${n}건 — 열어서 고르기`});
     if(focusLayer!=='main'&&list.some(e=>(e.layers||[]).includes(focusLayer))){
       g.style.opacity='1';g.style.pointerEvents='auto';
     }
     g.appendChild(el('circle',{cx:x,cy:y,r:14,fill:'transparent'}));
-    g.appendChild(el('circle',{cx:x,cy:y,r:7.5,fill:'none',stroke:col,'stroke-width':1,opacity:.45}));
-    g.appendChild(el('circle',{cx:x,cy:y,r:4.5,fill:'#F2F4EE',stroke:col,'stroke-width':2.2}));
+    g.appendChild(el('circle',{cx:x,cy:y,r:7.5,fill:'none',stroke:col,'stroke-width':1,opacity:.45,...pinDash(anyFut)}));
+    g.appendChild(el('circle',{cx:x,cy:y,r:4.5,fill:PIN_PAPER,stroke:PIN_PAPER,'stroke-width':4.6}));
+    g.appendChild(el('circle',{cx:x,cy:y,r:4.5,fill:'none',stroke:col,'stroke-width':2.2,...pinDash(anyFut)}));
     const bdx=(x+16>W-34)?-9:9; /* 오른쪽 끝에서는 배지를 안쪽으로 접는다 (눈금 침범 방지) */
     if(x>4&&x<W-4){ /* 화면 밖 묶음은 배지 없이 점만 */
       g.appendChild(el('circle',{cx:x+bdx,cy:y-9,r:6.6,fill:col,stroke:'#F2F4EE','stroke-width':1.4}));
@@ -1550,8 +1562,6 @@ function render(){
       bt.textContent=n;g.appendChild(bt);
       reserve(x+bdx-8,y-17,x+bdx+8,y-1);
     }
-    const tags=SHOW.tag?(DATA.layers||[]).filter(l=>list.some(e=>(e.layers||[]).includes(l.id))):[];
-    tags.forEach((l,i)=>g.appendChild(el('circle',{cx:x+(i-(tags.length-1)/2)*7,cy:y+13,r:2.2,fill:l.color,opacity:.9})));
     if(SHOW.name)placeText(g,list[0].title.replace(/^\(예시\)\s*/,'')+` 외 ${n-1}`,x,y,{near:bdx>0?19:12});
     const pick=(cx,cy)=>openPick(cx,cy,list.map(e=>[
       `${e.happiness!=null?(e.happiness>0?'+':'')+e.happiness.toFixed(1):'—'}  ${e.title}`,'',
@@ -1572,7 +1582,7 @@ function render(){
     const hasV=e.happiness!=null;
     const v=hasV?e.happiness:0; /* 행복 미반영 핀 = 중앙 0선 위 (곡선 기준에서 제외) */
     const y=HY(v);
-    const col=e.fut?'#7A8A80':'#B5432A';
+    const col=pinColor(e);
     const sel=selected===e;
     const ly=v>=0.45?y+17:y-9; /* 천장 근처 점은 라벨을 아래로 */
     const g=el('g',{cursor:'pointer',tabindex:0,role:'button',class:'c-main','aria-label':`${e.date} ${e.title}`});
@@ -1580,12 +1590,11 @@ function render(){
       g.style.opacity='1';g.style.pointerEvents='auto'; /* 포커스 레이어 소속 사건은 흐려지지 않는다 */
     }
     g.appendChild(el('circle',{cx:x,cy:y,r:12,fill:'transparent'}));
-    const dot=el('circle',{cx:x,cy:y,r:sel?6:4.5,fill:'#F2F4EE',stroke:col,'stroke-width':2.2,opacity:hasV?1:.55});
+    const R=sel?6:4.5;
+    /* 종이색 테두리를 먼저 — 곡선·막대 위에 얹혀도 핀이 떨어져 보인다 (여행 초록은 곡선과 같은 색) */
+    g.appendChild(el('circle',{cx:x,cy:y,r:R,fill:PIN_PAPER,stroke:PIN_PAPER,'stroke-width':4.6,opacity:hasV?1:.55}));
+    const dot=el('circle',{cx:x,cy:y,r:R,fill:'none',stroke:col,'stroke-width':2.2,opacity:hasV?1:.55,...pinDash(e.fut)});
     g.appendChild(dot);
-    if(e.layers&&e.layers.length){ /* 분야 태그 = 핀 아래 작은 색점 */
-      const tags=SHOW.tag?(DATA.layers||[]).filter(l=>e.layers.includes(l.id)):[];
-      tags.forEach((l,i)=>g.appendChild(el('circle',{cx:x+(i-(tags.length-1)/2)*7,cy:y+11,r:2.2,fill:l.color,opacity:.9})));
-    }
     const label=e.title.replace(/^\(예시\)\s*/,'');
     if(sel){ /* 선택된 사건은 자리를 다투지 않고 무조건 이름을 보여준다 */
       const t=el('text',{x:x+8,y:ly,'font-size':11.5,fill:'#B5432A','font-weight':600});
@@ -1811,9 +1820,10 @@ function render(){
     }
     g.appendChild(el('circle',{cx:p.x,cy:p.y,r:10,fill:'transparent'}));
     /* 사건에서 온 값 = 링, 독립 값 = 채움 */
-    const dot=isEv
-      ?el('circle',{cx:p.x,cy:p.y,r:4.5,fill:'#F2F4EE',stroke:pt.future?'#7A8A80':'#B5432A','stroke-width':2.2})
-      :el('circle',{cx:p.x,cy:p.y,r:4,fill:pt.future?'#7A8A80':'#B5432A',stroke:'#F2F4EE','stroke-width':2});
+    g.appendChild(el('circle',{cx:p.x,cy:p.y,r:4,fill:PIN_PAPER,stroke:PIN_PAPER,'stroke-width':4}));
+    const dot=pt.future
+      ?el('circle',{cx:p.x,cy:p.y,r:4,fill:'none',stroke:PIN_GRAY,'stroke-width':2.2,'stroke-dasharray':'3 2.4'})
+      :el('circle',{cx:p.x,cy:p.y,r:4,fill:PIN_GRAY,stroke:PIN_PAPER,'stroke-width':1.6});
     g.appendChild(dot);
     const getV=()=>isEv?pt.src.happiness:pt.src.v;
     const setV=v=>{if(isEv)pt.src.happiness=v;else pt.src.v=v;};
