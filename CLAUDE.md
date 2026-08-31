@@ -24,6 +24,8 @@
 - **스타일**: vendor/daisyui(.css/themes.css) + 커스텀 `[data-theme=spring]`(html 특이성, themes.css 뒤에 선언해야 이김). 토큰(--paper·--ink·--line…)은 daisy 변수로 재연결. 폰트 Pretendard(CDN)+IBM Plex Mono.
 - **차트 색**: `CHART_ROLE` 역할 매핑 + `resolvePal()`(CSS 변수 → rgb 해석). 데이터 색(시대·기간·레이어)은 저장값 그대로.
 - **렌더**: `prepare()`(t 계산·월 집계 HAPPTS·레이아웃) → `render()`(전체 SVG 재구성).
+  곡선 집계 우선순위 = **① 그 달의 사건·독립 행복도 평균 → ② 없으면 그 달을 덮는 기간 중 가장 짧은 것의 값 → ③ 없으면 점 없음.** 기간은 빈 달만 메우고(진행 중 = 오늘까지, 100년 상한), 만든 달의 점은 그리지 않는다(핀은 events/happiness에서만).
+  `fut` = 화면상 '예정'(예정 체크 or `t>NOW`)을 prepare에서 파생 — 저장값 `future`는 불변. 과거/미래 분할·평균선·평균 통계·핀 색이 전부 이걸 본다.
   곡선 = **화면 px 기준 가우시안 이동평균**(`maSeries`, σ=`MA_SIGMA`, localStorage `caeyeon_life_ma`, 0이면 구 Fritsch–Carlson 보간). 조작 = 도구줄 4칸 원 칩 `○ ◔ ◑ ●` = σ 0·18·36·60(기본 36) — 이름(기록·사건·시기·흐름)은 툴팁에만, 구 연속 저장값은 가장 가까운 칸으로 스냅. 점은 제 값 자리 유지 + 원 기록선은 opacity .16으로 잔존.
   표식·라벨·크로스헤어는 반드시 `curveYAt(x)`(그려진 곡선)를 기준으로 — `hapVAt` 직접 사용 금지.
   근거: 인접 knot 기울기 중앙값 81°(전체 보기) vs 주식 일봉 11~31° → 보간법으로는 해결 불가, MA만 0.33 달성.
