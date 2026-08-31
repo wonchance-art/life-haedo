@@ -967,11 +967,12 @@ const valAtY=y=>2*(LAYOUT.HAP_BOT-y)/(LAYOUT.HAP_BOT-LAYOUT.HAP_TOP)-1;
 let LAYOUT={}, NLANES=1, HAPPTS=[];
 function prepare(){
   NOW=T(DATA.now||new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0'));
-  DATA.events.forEach(e=>{e.t=T(e.date);e.kind='event';});
+  /* fut = 화면상 '예정' — 예정 체크했거나 아직 오지 않은 날. 저장값 future는 건드리지 않는다 */
+  DATA.events.forEach(e=>{e.t=T(e.date);e.kind='event';e.fut=!!e.future||e.t>NOW;});
   DATA.events.sort((a,b)=>a.t-b.t);
-  DATA.spans.forEach(s=>{s.t0=T(s.start);s.t1=s.end?T(s.end):null;s.kind='span';s.ongoing=!s.end;});
+  DATA.spans.forEach(s=>{s.t0=T(s.start);s.t1=s.end?T(s.end):null;s.kind='span';s.ongoing=!s.end;s.fut=!!s.future||s.t0>NOW;});
   DATA.spans.sort((a,b)=>a.t0-b.t0);
-  DATA.happiness.forEach(h=>h.t=T(h.date));
+  DATA.happiness.forEach(h=>{h.t=T(h.date);h.fut=!!h.future||h.t>NOW;});
   DATA.happiness.sort((a,b)=>a.t-b.t);
   DATA.records=DATA.records||[];
   DATA.records.forEach(r=>r.t=T(r.m));
@@ -990,8 +991,29 @@ function prepare(){
     c.vals.push(v);
     if(!future)c.fut=false;
   };
-  DATA.happiness.forEach(h=>addC(h.date,h.t,h.v,h.future));
-  DATA.events.filter(e=>e.happiness!=null).forEach(e=>addC(e.date,e.t,e.happiness,e.future));
+  DATA.happiness.forEach(h=>addC(h.date,h.t,h.v,h.fut));
+  DATA.events.filter(e=>e.happiness!=null).forEach(e=>addC(e.date,e.t,e.happiness,e.fut));
+  /* 기간 행복도 = 그 시기의 기조 — 기록이 없는 달만 메운다. 겹치면 짧은 기간이 이긴다 */
+  {
+    const mIdx=d=>{const[y,m]=String(d).split('-').map(Number);return y*12+((m||1)-1);};
+    const have=new Set([...contrib.keys()].map(mIdx));
+    const nowI=mIdx(tToMonth(NOW));
+    const fill=new Map();
+    DATA.spans.filter(sp=>sp.happiness!=null).forEach(sp=>{
+      const a=mIdx(sp.start), b=Math.min(sp.end?mIdx(sp.end):nowI, a+1199); /* 진행 중 = 오늘까지 · 100년 상한 */
+      if(b<a)return;
+      const dur=b-a+1;
+      for(let i=a;i<=b;i++){
+        if(have.has(i))continue;                 /* 기록이 있는 달은 기록이 이긴다 */
+        const prev=fill.get(i);
+        if(!prev||dur<prev.dur)fill.set(i,{v:sp.happiness,dur,fut:i>nowI||!!sp.future});
+      }
+    });
+    fill.forEach((f,i)=>{
+      const mk=Math.floor(i/12)+'-'+String(i%12+1).padStart(2,'0');
+      contrib.set(mk,{t:T(mk),vals:[f.v],fut:f.fut});
+    });
+  }
   HAPPTS=[...contrib.entries()].map(([date,c])=>({date,t:c.t,
     v:Math.round(c.vals.reduce((a,b)=>a+b,0)/c.vals.length*100)/100,
     future:c.fut,kind:'agg',n:c.vals.length}))
@@ -1401,7 +1423,7 @@ function render(){
   });
   const renderCluster=q=>{
     const list=q.list, n=list.length, x=q.x, y=q.y;
-    const anyFut=list.every(e=>e.future);
+    const anyFut=list.every(e=>e.fut);
     const col=anyFut?'#7A8A80':'#B5432A';
     const g=el('g',{cursor:'pointer',tabindex:0,role:'button',class:'c-main',
       'aria-label':`${list[0].date} 부근 겹친 사건 ${n}건 — 열어서 고르기`});
@@ -1441,7 +1463,7 @@ function render(){
     const hasV=e.happiness!=null;
     const v=hasV?e.happiness:0; /* 행복 미반영 핀 = 중앙 0선 위 (곡선 기준에서 제외) */
     const y=HY(v);
-    const col=e.future?'#7A8A80':'#B5432A';
+    const col=e.fut?'#7A8A80':'#B5432A';
     const sel=selected===e;
     const ly=v>=0.45?y+17:y-9; /* 천장 근처 점은 라벨을 아래로 */
     const g=el('g',{cursor:'pointer',tabindex:0,role:'button',class:'c-main','aria-label':`${e.date} ${e.title}`});
@@ -1557,7 +1579,7 @@ function render(){
     const sel=selected===s;
     const g=el('g',{cursor:'grab',tabindex:0,role:'button',class:'c-main','aria-label':`${s.start}부터 ${s.end||'진행 중'} ${s.title}`});
     const rf=el('rect',{x:x1,y:y,width:Math.max(x2-x1,3),height:L.SPAN_H,rx:3,fill:s.color||'#2E5E63',opacity:sel?.3:.12});
-    const ro=el('rect',{x:x1,y:y,width:Math.max(x2-x1,3),height:L.SPAN_H,rx:2,fill:'none',stroke:s.color||'#2E5E63','stroke-width':sel?1.8:1,'stroke-dasharray':s.future?'5 4':''});
+    const ro=el('rect',{x:x1,y:y,width:Math.max(x2-x1,3),height:L.SPAN_H,rx:2,fill:'none',stroke:s.color||'#2E5E63','stroke-width':sel?1.8:1,'stroke-dasharray':s.fut?'5 4':''});
     g.appendChild(rf);g.appendChild(ro);
     const label=s.title.replace(/^\(예시\)\s*/,'')+(s.ongoing?' ⋯':'');
     const slx=Math.max(x1,0)+9; /* 화면 밖으로 밀린 막대는 보이는 구간 안에 라벨 */
@@ -1671,7 +1693,7 @@ function render(){
   spGroups.forEach(q=>{if(q.list.length>1)renderSpanCluster(q);else renderSpan(q.list[0]);});
 
   /* 독립 행복도 값 — 각자 자기 높이에 (곡선은 월 평균을 지나감) */
-  const hpDots=DATA.happiness.map(h=>({x:X(h.t),y:HY(h.v),pt:{kind:'hap',src:h,date:h.date,v:h.v,future:h.future}}));
+  const hpDots=DATA.happiness.map(h=>({x:X(h.t),y:HY(h.v),pt:{kind:'hap',src:h,date:h.date,v:h.v,future:h.fut}}));
   hpDots.forEach(p=>{
     if(p.x<-20||p.x>W+20)return;
     const pt=p.pt, isEv=pt.kind==='event';
@@ -2014,13 +2036,13 @@ function showCard(it,cx,cy){
     ?`${fmtD(it.start)} – ${it.end?fmtD(it.end):'진행 중'}`
     :fmtD(it.date);
   const dur=isSpan?((it.t1??NOW)-it.t0):null;
-  const age=it.future?'예정':fmtAge(isSpan?it.t0:T(it.date));
+  const age=it.fut?'예정':fmtAge(isSpan?it.t0:T(it.date));
   hoverCard.innerHTML=`
     <div class="hc-top">
       <span class="hc-date">${esc(range)}${dur!=null?` (${dur.toFixed(1)}년)`:''} · ${esc(age)}</span>
       ${it.happiness!=null?`<span class="hc-hap${it.happiness<0?' neg':''}">${it.happiness>0?'+':''}${it.happiness.toFixed(1)}</span>`:''}
     </div>
-    <div class="hc-title">${esc(it.title)}${it.future?' <span class="future-tag">PLANNED</span>':''}</div>
+    <div class="hc-title">${esc(it.title)}${it.fut?' <span class="future-tag">PLANNED</span>':''}</div>
     ${it.desc?`<div class="hc-desc">${esc(it.desc)}</div>`:''}
     ${it.layers&&it.layers.length?`<div class="hc-tags">${(DATA.layers||[]).filter(l=>it.layers.includes(l.id))
       .map(l=>`<span class="hc-tag"><span class="swz" style="background:${dispCol(l.color)}"></span>${esc(l.name)}</span>`).join('')}</div>`:''}
@@ -2087,8 +2109,8 @@ function openPop(it,ax,ay){
         :`<input type="text" inputmode="numeric" class="dt-edit pe-month" data-f="date" value="${it.date}" placeholder="2024-03(-15)" aria-label="날짜">`}
     </div>
     <div class="pe-row">
-      ${!isSpan?`<label class="dt-lab"><input type="checkbox" data-f="hasHap" ${it.happiness!=null?'checked':''}> 행복 반영</label>`:''}
-      <label class="dt-lab">행복도 <input type="number" class="dt-edit pe-num" data-f="hap" min="-1" max="1" step="0.1" value="${it.happiness??''}"${!isSpan&&it.happiness==null?' disabled':''}></label>
+      <label class="dt-lab"><input type="checkbox" data-f="hasHap" ${it.happiness!=null?'checked':''}> 행복 반영</label>
+      <label class="dt-lab">행복도 <input type="number" class="dt-edit pe-num" data-f="hap" min="-1" max="1" step="0.1" value="${it.happiness??''}"${it.happiness==null?' disabled':''}></label>
       <label class="dt-lab"><input type="checkbox" data-f="future" ${it.future?'checked':''}> 예정</label>
       ${isSpan?`<select class="dt-edit" data-f="color" aria-label="색">${SPAN_COLORS.map(c=>`<option value="${c[0]}"${it.color===c[0]?' selected':''}>${c[1]}</option>`).join('')}</select>`:''}
     </div>
@@ -2118,20 +2140,19 @@ function openPop(it,ax,ay){
     const cb=q('[data-f="hasHap"]');if(cb)cb.checked=it.happiness!=null;
     popCommit();
   };
-  if(!isSpan){ /* 행복 반영 토글: 해제 = 0선 고정·곡선 제외, 반영 = 값 부여 */
-    q('[data-f="hasHap"]').onchange=ev2=>{
-      const hapInp=q('[data-f="hap"]');
-      if(ev2.target.checked){
-        let nv=parseFloat(hapInp.value);
-        it.happiness=isNaN(nv)?0:Math.min(1,Math.max(-1,nv));
-        hapInp.disabled=false;hapInp.value=it.happiness;
-      }else{
-        it.happiness=undefined;
-        hapInp.disabled=true;hapInp.value='';
-      }
-      popCommit();
-    };
-  }
+  /* 행복 반영 — 사건: 해제하면 0선 고정 / 기간: 해제하면 곡선의 빈 달을 안 메움 */
+  q('[data-f="hasHap"]').onchange=ev2=>{
+    const hapInp=q('[data-f="hap"]');
+    if(ev2.target.checked){
+      let nv=parseFloat(hapInp.value);
+      it.happiness=isNaN(nv)?0:Math.min(1,Math.max(-1,nv));
+      hapInp.disabled=false;hapInp.value=it.happiness;
+    }else{
+      it.happiness=undefined;
+      hapInp.disabled=true;hapInp.value='';
+    }
+    popCommit();
+  };
   q('[data-f="future"]').onchange=e=>{it.future=e.target.checked||undefined;popCommit();};
   const lq=q('[data-f="locq"]');
   lq.onkeydown=async ev2=>{ /* Enter = 지오코딩해서 위치 부여, 비우면 해제 */
@@ -2594,11 +2615,11 @@ function rebuildScrubber(){
     d.style.left=(a*100)+'%';d.style.width=(Math.max(b-a,.004)*100)+'%';
     d.style.top=(3+(s.lane%2)*5)+'px';
     d.style.background=dispCol(s.color||'#2E5E63');
-    if(s.future)d.style.opacity=.3;
+    if(s.fut)d.style.opacity=.3;
     scrubTrack.appendChild(d);
   });
   DATA.events.forEach(e=>{
-    const d=document.createElement('div');d.className='scrub-ev'+(e.future?' future':'');
+    const d=document.createElement('div');d.className='scrub-ev'+(e.fut?' future':'');
     d.style.left=(SP01(e.t)*100)+'%';scrubTrack.appendChild(d);
   });
   const n=document.createElement('div');n.className='scrub-now';n.style.left=(SP01(NOW)*100)+'%';scrubTrack.appendChild(n);
