@@ -327,6 +327,7 @@ html[data-theme=spring]{
         </span>
         <button class="lay-chip" id="btnMap">지도</button>
         <button class="lay-chip" id="btnFill">채우기</button>
+        <button class="lay-chip" id="btnExport">내보내기</button>
         <button class="lay-chip" id="btnSearch" title="검색 (⌘/Ctrl+F)">검색</button>
       </div>
 
@@ -2830,6 +2831,90 @@ function pickSearch(it){
   if(it.kind==='date'||it.kind==='thought'){jumpToItem({kind:it.kind,t:it.t});return;}
   jumpToItem(it.kind==='era'?{kind:'era',...it.ref}:it.ref);
 }
+/* ==========================================================================
+   내보내기 — 지금 보이는 연표를 그림 파일로
+   ========================================================================== */
+function saveBlob(blob,name){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=name;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+const exportName=ext=>'연표-'+new Date().toISOString().slice(0,10)+'.'+ext;
+function exportSvgText(){
+  const box=svg.viewBox.baseVal, W2=box.width||svg.clientWidth, H2=box.height||svg.clientHeight;
+  const c=svg.cloneNode(true);
+  c.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  c.setAttribute('width',W2);c.setAttribute('height',H2);
+  c.removeAttribute('style');c.removeAttribute('tabindex');c.removeAttribute('class');
+  /* 마우스를 따라다니던 것은 그림에 박히면 안 된다 */
+  c.querySelectorAll('g[pointer-events="none"][opacity]').forEach(g=>{
+    if(g.querySelector('line[stroke-dasharray="3 4"]'))g.remove();
+  });
+  /* 색을 rgb로 굳힌다 — 화면 색은 oklch라 오래된 뷰어에서 통째로 빠질 수 있다 */
+  const cvp=document.createElement('canvas');cvp.width=cvp.height=1;
+  const cx=cvp.getContext('2d',{willReadFrequently:true}), memo=new Map();
+  const toRgb=v=>{
+    if(!v||!/^(oklch|oklab|lab|lch|color|color-mix)\(/.test(v))return v;
+    if(memo.has(v))return memo.get(v);
+    let out=v;
+    try{cx.clearRect(0,0,1,1);cx.fillStyle='#000';cx.fillStyle=v;cx.fillRect(0,0,1,1);
+      const d=cx.getImageData(0,0,1,1).data;
+      out=d[3]===255?`rgb(${d[0]},${d[1]},${d[2]})`:`rgba(${d[0]},${d[1]},${d[2]},${(d[3]/255).toFixed(3)})`;
+    }catch(e){}
+    memo.set(v,out);return out;
+  };
+  c.querySelectorAll('*').forEach(node=>{
+    ['fill','stroke','stop-color'].forEach(a=>{
+      const v=node.getAttribute&&node.getAttribute(a);
+      if(v)  {const r=toRgb(v); if(r!==v)node.setAttribute(a,r);}
+    });
+  });
+  const paper=toRgb(getComputedStyle(document.body).backgroundColor||'#fff');
+  const bg=document.createElementNS(NS,'rect');
+  bg.setAttribute('x',0);bg.setAttribute('y',0);
+  bg.setAttribute('width',W2);bg.setAttribute('height',H2);bg.setAttribute('fill',paper);
+  c.insertBefore(bg,c.firstChild);
+  /* 문서 CSS에 있던 규칙을 안으로 옮긴다 — 글자 테두리가 없으면 곡선에 묻혀 안 읽힌다 */
+  const st=document.createElementNS(NS,'style');
+  st.textContent=`svg{font-family:'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',system-ui,sans-serif}
+text{paint-order:stroke;stroke:#F2F4EE;stroke-width:2.5px;stroke-linejoin:round}
+svg:not([data-focus="main"]) .c-main,svg:not([data-focus="main"]) [data-hap]{opacity:.13}`;
+  c.insertBefore(st,c.firstChild);
+  return {text:'<?xml version="1.0" encoding="UTF-8"?>\n'+new XMLSerializer().serializeToString(c),w:W2,h:H2};
+}
+function exportSVG(){
+  const {text}=exportSvgText();
+  saveBlob(new Blob([text],{type:'image/svg+xml;charset=utf-8'}),exportName('svg'));
+}
+function exportFailed(){ /* 지도 알림은 지도 안에만 뜬다 — 캔버스 말풍선으로 */
+  showTip(W/2,60,'PNG를 만들지 못했다 — SVG로 내보내면 된다.');
+  setTimeout(hideTip,4000);
+}
+function exportPNG(scale){
+  const {text,w,h}=exportSvgText(), k=scale||2;
+  const img=new Image();
+  img.onload=()=>{
+    try{
+      const cv=document.createElement('canvas');
+      cv.width=Math.round(w*k);cv.height=Math.round(h*k);
+      const ctx=cv.getContext('2d');
+      ctx.drawImage(img,0,0,cv.width,cv.height);
+      cv.toBlob(b=>{
+        if(!b){exportFailed();return;}
+        saveBlob(b,exportName('png'));
+      },'image/png');
+    }catch(e){exportFailed();}
+  };
+  img.onerror=exportFailed;
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(text);
+}
+$('#btnExport').onclick=e=>{
+  e.stopPropagation(); /* document 클릭 리스너가 방금 연 메뉴를 닫는 것 방지 */
+  const b=e.currentTarget.getBoundingClientRect();
+  openPick(b.left,b.bottom+6,[['PNG','',()=>exportPNG(2)],['SVG','',exportSVG]]);
+};
+
 /* ==========================================================================
    채우기 — 비어 있는 것들을 한 곳에서
    ========================================================================== */
