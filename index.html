@@ -80,7 +80,7 @@ html[data-theme=spring]{
   /* ===== 공유 뷰어 (읽기 전용) ===== */
   .view-only #btnEdit,.view-only #btnNew,.view-only #btnUndo,.view-only #btnRedo,
   .view-only #btnShare,.view-only .file-btn,.view-only #docSel,.view-only .editor,
-  .view-only #btnFill{display:none!important}
+  .view-only #btnShow{display:none!important}
   .ctrl-btn.primary:hover{background:var(--water-deep)}
   .ctrl-btn:focus-visible,.trip-btn:focus-visible{outline:2px solid var(--cinnabar);outline-offset:2px}
 
@@ -323,15 +323,8 @@ html[data-theme=spring]{
         <button class="lay-chip scale" data-y="5">5Y</button>
         <button class="lay-chip scale" data-y="1">1Y</button>
         <span style="flex:1"></span>
-        <span class="ma-ctl" role="group" aria-label="곡선이 요약하는 정도">
-          <button class="lay-chip ma-chip" data-ma="0" title="기록 — 적은 그대로" aria-label="기록">○</button>
-          <button class="lay-chip ma-chip" data-ma="36" title="시기 — 그 해의 기조" aria-label="시기">◑</button>
-          <button class="lay-chip ma-chip" data-ma="60" title="흐름 — 인생의 궤적" aria-label="흐름">●</button>
-        </span>
+        <button class="lay-chip" id="btnShow" aria-label="표시 · 곡선 · 나이 · 채우기 · 내보내기">⋯</button>
         <button class="lay-chip" id="btnMap">지도</button>
-        <button class="lay-chip" id="btnShow">표시</button>
-        <button class="lay-chip" id="btnFill">채우기</button>
-        <button class="lay-chip" id="btnExport">내보내기</button>
         <button class="lay-chip" id="btnSearch" title="검색 (⌘/Ctrl+F)">검색</button>
       </div>
 
@@ -396,7 +389,6 @@ html[data-theme=spring]{
   footer{opacity:.6}
   .layer-bar{margin:14px 0 10px}
   .tl-controls{gap:4px;margin-bottom:2px}
-  .ma-ctl{display:inline-flex;align-items:center;gap:1px;margin-right:6px}
   .ma-chip{padding:3px 7px;font-size:13px;line-height:1.15;min-width:28px;text-align:center;
     font-family:'Apple SD Gothic Neo','Segoe UI Symbol','Noto Sans Symbols 2',system-ui,sans-serif}
   .dt-edit.bad{border-color:var(--cinnabar);outline:none}
@@ -513,7 +505,7 @@ create policy "personal" on charts
         <input id="nbName" placeholder="이름" style="font-family:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:var(--field);color:var(--ink)">
       </label>
       <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-soft)">출생 연월
-        <input id="nbBirth" type="month" style="font-family:'IBM Plex Mono',monospace;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:var(--field);color:var(--ink)">
+        <input id="nbBirth" type="text" inputmode="numeric" placeholder="1998-05(-05)" style="font-family:'IBM Plex Mono',monospace;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:2px;background:var(--field);color:var(--ink)">
       </label>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button class="btn btn-xs" id="nbCancel">취소</button>
@@ -808,7 +800,7 @@ function sanitize(d){
   if(dropped.length){ /* 격리 — 데이터는 보존하되 렌더에서 제외 */
     d._quarantine=[...(d._quarantine||[]),...dropped];
   }
-  if(!validMonth(d.profile&&d.profile.birth)){
+  if(!validDate(d.profile&&d.profile.birth)){   /* 연-월 또는 연-월-일 */
     d.profile=d.profile||{};
     if(!fix(d.profile,'birth','출생'))d.profile.birth=tToMonth(new Date().getFullYear()-30);
   }
@@ -938,6 +930,7 @@ let MA_SIGMA=(()=>{try{const raw=localStorage.getItem('caeyeon_life_ma');
   return snapped;
 }catch(e){return 36;}})();
 let MA_CURVE=null;
+let MAP_OPEN=false, mapWinTimer=0; /* render()가 참조 — 이른 resize에서 TDZ가 나지 않게 위에서 선언 */
 /* 표시 토글 — 그리기만 끈다. 곡선·평균·데이터는 그대로 */
 const SHOW_KEYS=['ev','name','tag','span','th','hap','lay','rec','era'];
 const SHOW_NAME={ev:'사건',name:'이름',tag:'핀색',span:'기간',th:'생각',hap:'값',lay:'분야',rec:'기록',era:'시대'};
@@ -1329,9 +1322,6 @@ function render(){
     t.textContent=v>0?'+'+v:String(v);svg.appendChild(t);
     reserveText(W-8,HY(v)-4,v>0?'+'+v:String(v),'end',isBound?10.5:10);
   });
-  const capT=el('text',{x:10,y:HY(-1)+18,'font-size':9,fill:'#5D6B62','font-family':'IBM Plex Mono','letter-spacing':'.14em',opacity:.9});
-  capT.textContent='행복도';svg.appendChild(capT);
-  reserveText(10,HY(-1)+18,'행복도','start',9);
 
   /* 전체 행복도 평균선 — 실측(미래 제외) 평균, 점선. 값은 요약 상자에 표기 */
   const pastPts=HAPPTS.filter(pt=>!pt.future);
@@ -1360,8 +1350,6 @@ function render(){
     });
     rg.addEventListener('pointerout',hideTip);
     svg.appendChild(rg);
-    const rl=el('text',{x:10,y:L.HAP_BOT-6,'font-size':10,fill:'#A87F3D','font-family':'IBM Plex Mono','letter-spacing':'.12em',opacity:.85});
-    rl.textContent='월별 기록 수 (최대 '+maxN+')';svg.appendChild(rl);
   }
 
   /* 분야 레이어 — 학습·여행·독서·사람. 종합(main) 상태에선 은은한 배경,
@@ -2042,8 +2030,11 @@ function renderLayerBar(){
     b.onclick=()=>{focusLayer=(focusLayer===id?'main':id);render();};
     bar.appendChild(b);
   };
+  const live=(DATA.layers||[]).filter(l=>l.pts.length); /* 값 없는 분야의 포커스 칩은 뜻이 없다 */
+  bar.hidden=!live.length;
+  if(!live.length){if(focusLayer!=='main'){focusLayer='main';}return;}
   mk('main','종합','#1E4348');
-  (DATA.layers||[]).forEach(l=>mk(l.id,l.name,l.color));
+  live.forEach(l=>mk(l.id,l.name,l.color));
 }
 
 function showTip(x,y,html){
@@ -2707,14 +2698,6 @@ let moved=false;
     requestAnimationFrame(()=>{const ti=document.querySelector('#popEd .pe-title');if(ti)ti.select();});
   }
   document.querySelectorAll('.scale').forEach(b=>b.onclick=()=>setScale(b.dataset.y,b));
-  const maChips=[...document.querySelectorAll('.ma-chip')];
-  const syncMA=()=>maChips.forEach(b=>b.classList.toggle('on',+b.dataset.ma===MA_SIGMA));
-  syncMA();
-  maChips.forEach(b=>b.onclick=()=>{
-    MA_SIGMA=+b.dataset.ma;
-    try{localStorage.setItem('caeyeon_life_ma',MA_SIGMA);}catch(e){}
-    syncMA(); render();
-  });
   resolvePal(); /* 앱 초기 렌더 전에 테마 팔레트 해석 */
   addEventListener('resize',()=>{prepare();render();});
 })();
@@ -2985,11 +2968,6 @@ function exportPNG(scale){
   img.onerror=exportFailed;
   img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(text);
 }
-$('#btnExport').onclick=e=>{
-  e.stopPropagation(); /* document 클릭 리스너가 방금 연 메뉴를 닫는 것 방지 */
-  const b=e.currentTarget.getBoundingClientRect();
-  openPick(b.left,b.bottom+6,[['PNG','',()=>exportPNG(2)],['SVG','',exportSVG]]);
-};
 
 /* ==========================================================================
    채우기 — 비어 있는 것들을 한 곳에서
@@ -3136,6 +3114,7 @@ function fillApply(){
 const showPanel=$('#showPanel');
 function syncShowPanel(){ /* 켜짐 표시와 비활성만 제자리에서 갱신 */
   showPanel.querySelectorAll('button[data-age]').forEach(b=>b.classList.toggle('on',b.dataset.age===AGE_MODE));
+  showPanel.querySelectorAll('button[data-ma]').forEach(b=>b.classList.toggle('on',+b.dataset.ma===MA_SIGMA));
   showPanel.querySelectorAll('button[data-k]').forEach(b=>{
     const k=b.dataset.k;
     b.classList.toggle('on',!!SHOW[k]);
@@ -3160,7 +3139,8 @@ function renderShowPanel(){
     };
     showPanel.appendChild(b);
   });
-  const sep=document.createElement('span');sep.className='show-sep';showPanel.appendChild(sep);
+  const line=()=>{const d=document.createElement('span');d.className='show-sep';showPanel.appendChild(d);};
+  line();
   [['intl','만 나이'],['kr','한국 나이']].forEach(([m,label])=>{
     const b=document.createElement('button');
     b.className='lay-chip';b.textContent=label;b.dataset.age=m;
@@ -3171,6 +3151,29 @@ function renderShowPanel(){
       try{localStorage.setItem('caeyeon_life_age',m);}catch(e){}
       syncShowPanel();render();
     };
+    showPanel.appendChild(b);
+  });
+  line();
+  [['0','○','기록 — 적은 그대로'],['36','◑','시기 — 그 해의 기조'],['60','●','흐름 — 인생의 궤적']].forEach(([v,g,t])=>{
+    const b=document.createElement('button');
+    b.className='lay-chip ma-chip';b.textContent=g;b.dataset.ma=v;b.title=t;
+    b.onclick=ev=>{
+      ev.stopPropagation();
+      MA_SIGMA=+v;
+      try{localStorage.setItem('caeyeon_life_ma',MA_SIGMA);}catch(e){}
+      syncShowPanel();render();
+    };
+    showPanel.appendChild(b);
+  });
+  line();
+  [['채우기',()=>{showPanel.hidden=true;openFill();}],
+   ['내보내기',e=>{showPanel.hidden=true;
+     const b=e.currentTarget.getBoundingClientRect();
+     openPick(b.left,b.bottom+6,[['PNG','',()=>exportPNG(2)],['SVG','',exportSVG]]);}]
+  ].forEach(([label,fn])=>{
+    const b=document.createElement('button');
+    b.className='lay-chip';b.textContent=label;
+    b.onclick=ev=>{ev.stopPropagation();fn(ev);};
     showPanel.appendChild(b);
   });
   syncShowPanel();
@@ -3185,7 +3188,6 @@ $('#btnShow').onclick=e=>{
 };
 document.addEventListener('click',e=>{
   if(!showPanel.hidden&&!showPanel.contains(e.target))showPanel.hidden=true;});
-$('#btnFill').onclick=openFill;
 $('#fillCancel').onclick=closeFill;
 $('#fillGo').onclick=fillApply;
 document.querySelectorAll('.fill-tab').forEach(b=>b.onclick=()=>setFillTab(b.dataset.tab));
@@ -3250,17 +3252,19 @@ $('#btnSearch').onclick=openSearch;
   h1El.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();h1El.blur();}});
 
   const span=$('#statBirth');
-  span.style.cursor='pointer';span.title='클릭해서 출생 연월 수정';
+  span.style.cursor='pointer';span.title='클릭해서 수정 — 1998-05 또는 1998-05-05';
   span.addEventListener('click',()=>{
     if(span.querySelector('input'))return;
     const inp=document.createElement('input');
-    inp.type='month';inp.value=DATA.profile.birth;
+    inp.type='text';inp.value=DATA.profile.birth;inp.placeholder='1998-05(-05)';
+    inp.setAttribute('inputmode','numeric');
     inp.style.cssText='font:inherit;background:var(--field);border:1px solid #C4CDC1;border-radius:2px;width:130px';
     span.textContent='';span.appendChild(inp);inp.focus();
     let done=false;
     const fin=()=>{
       if(done)return;done=true;
-      if(inp.value)DATA.profile.birth=inp.value;
+      const v=parseDateSmart(inp.value);   /* 1998.5.5 · 1998년 5월 5일도 받는다 */
+      if(v)DATA.profile.birth=v;
       afterMutate(selected!=null); /* prepare()가 표시값 복원 */
     };
     inp.addEventListener('change',fin);
@@ -3610,7 +3614,7 @@ if(!RO){
   $('#nbBirth').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#nbStart').click();}});
   $('#nbStart').onclick=()=>{
     const name=$('#nbName').value.trim()||'내 연표';
-    const birth=$('#nbBirth').value;
+    const birth=parseDateSmart($('#nbBirth').value);
     if(!birth){$('#nbBirth').style.borderColor='var(--cinnabar)';$('#nbBirth').focus();return;}
     const today=new Date();
     const nowMi=today.getFullYear()*12+today.getMonth();
@@ -3748,7 +3752,6 @@ function rebuildTripBar(){
   bar._setActive=setActive;
 }
 /* ── 지도 오버레이 — 연표 프레임 그 자리에서 열리고, 시간창과 동기화된다 ── */
-let MAP_OPEN=false, mapWinTimer=0;
 function openMapOverlay(){
   if(MAP_OPEN)return;
   MAP_OPEN=true;
