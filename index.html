@@ -1151,8 +1151,9 @@ function render(){
      후보를 가까운 순서로 훑어 첫 빈자리에 놓고, 멀리 놓일 땐 가는 실선으로 이어 준다 */
   const occ=[];
   const lbTasks=[]; /* 어닐링 다듬기 대상 (사건·묶음 라벨) */
-  const reserve=(x1,y1,x2,y2,lb)=>occ.push({x1,y1,x2,y2,lb});
-  const free=(x1,y1,x2,y2)=>!occ.some(o=>x1<o.x2&&o.x1<x2&&y1<o.y2&&o.y1<y2);
+  const reserve=(x1,y1,x2,y2,lb,th)=>occ.push({x1,y1,x2,y2,lb,th});
+  /* skipTh = 생각 표식은 없는 셈 치고 자리를 찾는다 (마지막 수단) */
+  const free=(x1,y1,x2,y2,skipTh)=>!occ.some(o=>(skipTh&&o.th)?false:(x1<o.x2&&o.x1<x2&&y1<o.y2&&o.y1<y2));
   const textBox=(x,y,w,anchor,fs)=>{
     const x1=anchor==='end'?x-w:(anchor==='middle'?x-w/2:x);
     return {x1:x1-3,y1:y-fs*.86,x2:x1+w+3,y2:y+fs*.3};
@@ -1168,17 +1169,19 @@ function render(){
   const placeText=(g,label,ax,ay,o)=>{
     o=o||{};
     const fs=o.fs||11.5, near=o.near||9, w=textW(label);
-    const draw=(dx,dy,anchor)=>{
+    const draw=(dx,dy,anchor,skipTh)=>{
       const tx=ax+dx*near, ty=ay+dy;
       const b=textBox(tx,ty,w,anchor,fs);
       if(b.x1<2||b.x2>W-34||b.y1<L.AXIS_Y+6||b.y2>L.H-4)return null; /* 화면·눈금 밖 금지 */
-      if(!free(b.x1,b.y1,b.x2,b.y2))return null;
+      if(!free(b.x1,b.y1,b.x2,b.y2,skipTh))return null;
       return {tx,ty,b,anchor,dy};
     };
     let hit=null;
-    for(const pass of [0,1]){ /* 1차: 곡선까지 피해서, 2차: 글자 충돌만 피해서 */
+    /* 1차: 곡선까지 피해서 · 2차: 글자 충돌만 피해서 · 3차: 생각 표식 위에라도
+       이름이 사라지는 것보다 ❝ 위에 겹치는 편이 낫다 — 이름이 연표를 읽는 축이다 */
+    for(const pass of [0,1,2]){
       for(const [dx,dy,anchor] of CANDS){
-        const c=draw(dx,dy,anchor);
+        const c=draw(dx,dy,anchor,pass===2);
         if(!c)continue;
         if(pass===0&&nearCurve(c.b.x1,c.b.x2,c.ty))continue;
         hit=c;break;
@@ -1449,7 +1452,51 @@ function render(){
     });
     return out;
   })();
-  thGroups.forEach(g=>{const y=curveYAt(g.x)-16;reserve(g.x-9,y-12,g.x+9,y+7);});
+  thGroups.forEach(g=>{const y=curveYAt(g.x)-16;reserve(g.x-6,y-10,g.x+6,y+9,false,true);});
+
+  /* 라벨보다 먼저 그린다 — 이름이 ❝ 위에 얹히도록 (자리 다툼에서 이름이 이기기로 했다) */
+  /* 생각 ❝ — 곡선 위 표식. 호버 = 문장, 클릭 = 수정. 한 칸에 여럿이면 개수 배지 + 목록 */
+  const thCut=(t,n2)=>t.length>n2?t.slice(0,n2)+'…':t;
+  thGroups.forEach(grp=>{
+    const list=grp.list, cnt=list.length, x=grp.x, th=list[0];
+    const y=curveYAt(x)-16;
+    const gt=el('g',{cursor:'pointer',class:'c-main','data-th':'1',tabindex:0,
+      'aria-label':cnt>1?`${th.date} 부근 생각 ${cnt}개 — 열어서 고르기`:`생각 ${th.date}`});
+    gt.appendChild(el('circle',{cx:x,cy:y,r:10,fill:'transparent'}));
+    const q=el('text',{x:x,y:y+5,'text-anchor':'middle','font-size':15,fill:'#A87F3D','font-weight':700,opacity:.9});
+    q.textContent='❝';gt.appendChild(q);
+    let tipHtml=`<span class="yy">${esc(th.date)}</span> · ${esc(thCut(th.text,90))}`;
+    if(cnt>1){
+      /* 사건 묶음의 원반 배지는 여기선 못 쓴다 — 거의 전부가 묶음이라 금색 원이 줄지어 선다.
+         숫자만 옆에 작게 */
+      const bdx=(x+13>W-24)?-9:9;
+      const bt=el('text',{x:x+bdx,y:y+2,'text-anchor':'middle','font-size':8.4,fill:'#A87F3D',
+        'font-family':'IBM Plex Mono','font-weight':700,opacity:.75});
+      bt.textContent=cnt;gt.appendChild(bt);
+      reserve(x+bdx-4,y-6,x+bdx+4,y+4,false,true);
+      tipHtml=`<span class="yy">${esc(th.date)} – ${esc(list[cnt-1].date)}</span> · ${cnt}개<br>${esc(thCut(th.text,80))}`;
+    }
+    const show=()=>showTip(x,y,tipHtml);
+    gt.addEventListener('mouseenter',show);
+    gt.addEventListener('mouseleave',hideTip);
+    gt.addEventListener('pointerdown',ev=>{if(ev.pointerType!=='mouse')show();});
+    const pick=(cx,cy)=>openPick(cx,cy,list.map(t=>[
+      esc(t.date)+'  '+thCut(t.text,40),'',()=>openPopThought(t,cx,cy)]));
+    gt.addEventListener('click',ev=>{
+      if(moved||RO)return;ev.stopPropagation();hideTip();
+      if(cnt>1)pick(ev.clientX,ev.clientY);else openPopThought(th,ev.clientX,ev.clientY);
+    });
+    gt.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();
+      const b=gt.getBoundingClientRect();
+      if(cnt>1)pick(b.left+10,b.top+10);else openPopThought(th,b.left+10,b.top+10);}});
+    bindMenu(gt,(cx,cy)=>{
+      if(cnt>1){pick(cx,cy);return;}
+      openCtx(cx,cy,[['✕ 삭제','danger',()=>{
+        const i=DATA.thoughts.indexOf(th);if(i>=0){DATA.thoughts.splice(i,1);afterMutate(true);}}]]);
+    });
+    svg.appendChild(gt);
+  });
+
   if(focusLayer!=='main')(DATA.layers||[]).filter(l=>l.id===focusLayer)
     .forEach(l=>l.pts.forEach(p=>{const x=X(p.t),y=HY(p.v);reserve(x-6,y-6,x+6,y+6);}));
 
@@ -1816,48 +1863,6 @@ function render(){
     });
     svg.appendChild(g);
   });
-  /* 생각 ❝ — 곡선 위 표식. 호버 = 문장, 클릭 = 수정. 한 칸에 여럿이면 개수 배지 + 목록 */
-  const thCut=(t,n2)=>t.length>n2?t.slice(0,n2)+'…':t;
-  thGroups.forEach(grp=>{
-    const list=grp.list, cnt=list.length, x=grp.x, th=list[0];
-    const y=curveYAt(x)-16;
-    const gt=el('g',{cursor:'pointer',class:'c-main','data-th':'1',tabindex:0,
-      'aria-label':cnt>1?`${th.date} 부근 생각 ${cnt}개 — 열어서 고르기`:`생각 ${th.date}`});
-    gt.appendChild(el('circle',{cx:x,cy:y,r:10,fill:'transparent'}));
-    const q=el('text',{x:x,y:y+5,'text-anchor':'middle','font-size':15,fill:'#A87F3D','font-weight':700,opacity:.9});
-    q.textContent='❝';gt.appendChild(q);
-    let tipHtml=`<span class="yy">${esc(th.date)}</span> · ${esc(thCut(th.text,90))}`;
-    if(cnt>1){
-      /* 사건 묶음의 원반 배지는 여기선 못 쓴다 — 거의 전부가 묶음이라 금색 원이 줄지어 선다.
-         숫자만 옆에 작게 */
-      const bdx=(x+13>W-24)?-8:8;
-      const bt=el('text',{x:x+bdx,y:y-6,'text-anchor':'middle','font-size':8.4,fill:'#A87F3D',
-        'font-family':'IBM Plex Mono','font-weight':700,opacity:.75});
-      bt.textContent=cnt;gt.appendChild(bt);
-      reserve(x+bdx-6,y-13,x+bdx+6,y-2);
-      tipHtml=`<span class="yy">${esc(th.date)} – ${esc(list[cnt-1].date)}</span> · ${cnt}개<br>${esc(thCut(th.text,80))}`;
-    }
-    const show=()=>showTip(x,y,tipHtml);
-    gt.addEventListener('mouseenter',show);
-    gt.addEventListener('mouseleave',hideTip);
-    gt.addEventListener('pointerdown',ev=>{if(ev.pointerType!=='mouse')show();});
-    const pick=(cx,cy)=>openPick(cx,cy,list.map(t=>[
-      esc(t.date)+'  '+thCut(t.text,40),'',()=>openPopThought(t,cx,cy)]));
-    gt.addEventListener('click',ev=>{
-      if(moved||RO)return;ev.stopPropagation();hideTip();
-      if(cnt>1)pick(ev.clientX,ev.clientY);else openPopThought(th,ev.clientX,ev.clientY);
-    });
-    gt.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();
-      const b=gt.getBoundingClientRect();
-      if(cnt>1)pick(b.left+10,b.top+10);else openPopThought(th,b.left+10,b.top+10);}});
-    bindMenu(gt,(cx,cy)=>{
-      if(cnt>1){pick(cx,cy);return;}
-      openCtx(cx,cy,[['✕ 삭제','danger',()=>{
-        const i=DATA.thoughts.indexOf(th);if(i>=0){DATA.thoughts.splice(i,1);afterMutate(true);}}]]);
-    });
-    svg.appendChild(gt);
-  });
-
   /* 크로스헤어 — 마우스 위치의 시점·행복도 읽기 (주식 차트식) */
   CH.g=el('g',{'pointer-events':'none',opacity:0});
   CH.line=el('line',{y1:L.AXIS_Y+2,y2:L.HAP_BOT,stroke:'#C4CDC1','stroke-width':.8,'stroke-dasharray':'3 4'});
@@ -1919,7 +1924,7 @@ function polishLabels(){
     e+=.09*Math.max(0,dist-15);                       /* 리더선 길이 */
     if(x>k.ax+4)e+=0;else if(x2<k.ax-4)e+=1.4;else e+=2.2; /* 오른쪽 선호, 표식 위 걸침 벌점 */
     for(let j=0;j<n;j++)if(j!==i)e+=1.3*ov(x,y,x2,y2,st[j].x,st[j].y,st[j].x+bw[j],st[j].y+bh[j]);
-    for(const o of S.obst)e+=1.3*ov(x,y,x2,y2,o.x1,o.y1,o.x2,o.y2);
+    for(const o of S.obst)e+=(o.th?.35:1.3)*ov(x,y,x2,y2,o.x1,o.y1,o.x2,o.y2); /* ❝는 약한 장애물 */
     const base=y+bh[i]*.74; /* 대략 글자 기준선 */
     if(Math.abs(curveAt(x)-base)<8||Math.abs(curveAt(cx)-base)<8||Math.abs(curveAt(x2)-base)<8)e+=7; /* 곡선 횡단 */
     return e;
@@ -1953,7 +1958,7 @@ function polishLabels(){
     const x=st[i].x,y=st[i].y,x2=x+bw[i],y2=y+bh[i];
     let worst=0;
     for(let j=0;j<n;j++)if(j!==i)worst=Math.max(worst,ov(x,y,x2,y2,st[j].x,st[j].y,st[j].x+bw[j],st[j].y+bh[j]));
-    for(const o of S.obst)worst=Math.max(worst,ov(x,y,x2,y2,o.x1,o.y1,o.x2,o.y2));
+    for(const o of S.obst)if(!o.th)worst=Math.max(worst,ov(x,y,x2,y2,o.x1,o.y1,o.x2,o.y2)); /* ❝ 때문에 이름을 숨기지 않는다 */
     if(k.ln){k.ln.remove();k.ln=null;}
     if(worst>26){ /* 유의미한 겹침 잔존 → 숨김 */
       if(k.t){k.t.remove();k.t=null;}
