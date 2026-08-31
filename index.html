@@ -141,7 +141,7 @@ html[data-theme=spring]{
   #sec-canvas .wrap{max-width:none;padding:0 clamp(14px,2.2vw,36px)} /* 연표는 화면 전체 폭 */
   .canvas-frame{border:1px solid var(--line);background:var(--panel);padding:8px;position:relative}
   .canvas-inner{border:1px solid var(--line);position:relative;overflow:hidden}
-  #tl{display:block;width:100%;touch-action:pan-y;cursor:grab;user-select:none}
+  #tl{display:block;width:100%;touch-action:pan-y;cursor:grab;user-select:none;-webkit-touch-callout:none}
   #tl.dragging{cursor:grabbing}
   #tl:focus-visible{outline:2px solid var(--cinnabar);outline-offset:-2px}
   #tl text{paint-order:stroke;stroke:#F2F4EE;stroke-width:2.5px;stroke-linejoin:round}
@@ -1192,14 +1192,9 @@ function render(){
       });
       gz.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();
         const b=gz.getBoundingClientRect();openPopEra(er,b.left+40,b.top+20);}});
-      gz.addEventListener('contextmenu',e=>{
-        e.preventDefault();e.stopPropagation();
-        openCtx(e.clientX,e.clientY,[
-          ['✕ 삭제','danger',()=>{
-                    DATA.eras.splice(DATA.eras.indexOf(er),1);afterMutate(selected!=null);
-          }],
-        ]);
-      });
+      bindMenu(gz,(cx,cy)=>openCtx(cx,cy,[
+        ['✕ 삭제','danger',()=>{DATA.eras.splice(DATA.eras.indexOf(er),1);afterMutate(selected!=null);}],
+      ]));
       svg.appendChild(gz);
     }
   });
@@ -1342,12 +1337,9 @@ function render(){
           if(moved)return;ev.stopPropagation();
           openPopLayerPt(lay,p,ev.clientX,ev.clientY);
         });
-        gd.addEventListener('contextmenu',ev=>{
-          ev.preventDefault();ev.stopPropagation();
-          openCtx(ev.clientX,ev.clientY,[
-            ['✕ 값 삭제','danger',()=>{const i=lay.pts.indexOf(p);if(i>=0){lay.pts.splice(i,1);afterMutate(true);}}],
-          ]);
-        });
+        bindMenu(gd,(cx,cy)=>openCtx(cx,cy,[
+          ['✕ 값 삭제','danger',()=>{const i=lay.pts.indexOf(p);if(i>=0){lay.pts.splice(i,1);afterMutate(true);}}],
+        ]));
       }
       gl.appendChild(gd);
     });
@@ -1453,7 +1445,7 @@ function render(){
     g.addEventListener('mouseleave',hideCard);
     g.addEventListener('pointerdown',ev=>{if(ev.pointerType!=='mouse'){const rc=svg.getBoundingClientRect();showClusterCard(list,rc.left+x,rc.top+y);}});
     g.addEventListener('click',ev=>{if(moved)return;ev.stopPropagation();hideCard();pick(ev.clientX,ev.clientY);});
-    g.addEventListener('contextmenu',ev=>{ev.preventDefault();ev.stopPropagation();pick(ev.clientX,ev.clientY);});
+    bindMenu(g,pick);
     g.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();
       const b=g.getBoundingClientRect();pick(b.left+10,b.top+10);}});
     svg.appendChild(g);
@@ -1535,10 +1527,9 @@ function render(){
     };
     g.addEventListener('click',ev=>{if(moved)return;ev.stopPropagation();pickEv();});
     g.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();pickEv();}});
-    g.addEventListener('contextmenu',ev=>{
-      ev.preventDefault();ev.stopPropagation();
+    bindMenu(g,(cx,cy)=>{
       selected=e;render();renderDetail();
-      openCtx(ev.clientX,ev.clientY,[
+      openCtx(cx,cy,[
         ['⧉ 복제','',()=>duplicateItem(e)],
         ...((e.loc||e.tripId)?[['⌖ 지도에서 보기','',()=>flyToLoc(e)]]:[]),
         ...(hasV?[['행복 반영 해제 (0선으로)','',()=>{e.happiness=undefined;afterMutate(selected!=null);}]]
@@ -1676,7 +1667,7 @@ function render(){
     g.addEventListener('mouseleave',hideCard);
     g.addEventListener('pointerdown',ev=>{if(ev.pointerType!=='mouse'){const rc=svg.getBoundingClientRect();showClusterCard(list,rc.left+bx,rc.top+by);}});
     g.addEventListener('click',ev=>{if(moved)return;ev.stopPropagation();hideCard();pick(ev.clientX,ev.clientY);});
-    g.addEventListener('contextmenu',ev=>{ev.preventDefault();ev.stopPropagation();pick(ev.clientX,ev.clientY);});
+    bindMenu(g,pick);
     g.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();
       const b=g.getBoundingClientRect();pick(b.left+10,b.top+10);}});
     svg.appendChild(g);
@@ -1754,9 +1745,8 @@ function render(){
         openPopHap(pt.src,rc.left+p.x,rc.top+p.y);
       }
     });
-    g.addEventListener('contextmenu',ev=>{
-      ev.preventDefault();ev.stopPropagation();
-      openCtx(ev.clientX,ev.clientY,isEv?[
+    bindMenu(g,(cx,cy)=>{
+      openCtx(cx,cy,isEv?[
         ['✎ 사건 편집','',()=>{
           const rc=svg.getBoundingClientRect();
           selected=pt.src;render();renderDetail();
@@ -1788,12 +1778,9 @@ function render(){
       if(moved||RO)return;ev.stopPropagation();hideTip();
       openPopThought(th,ev.clientX,ev.clientY);
     });
-    gt.addEventListener('contextmenu',ev=>{
-      ev.preventDefault();ev.stopPropagation();
-      openCtx(ev.clientX,ev.clientY,[
-        ['✕ 삭제','danger',()=>{const i=DATA.thoughts.indexOf(th);if(i>=0){DATA.thoughts.splice(i,1);afterMutate(true);}}],
-      ]);
-    });
+    bindMenu(gt,(cx,cy)=>openCtx(cx,cy,[
+      ['✕ 삭제','danger',()=>{const i=DATA.thoughts.indexOf(th);if(i>=0){DATA.thoughts.splice(i,1);afterMutate(true);}}],
+    ]));
     svg.appendChild(gt);
   });
 
@@ -1972,10 +1959,9 @@ function attachInteract(g,item,posFn){
   };
   g.addEventListener('click',pick);
   g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(e);}});
-  g.addEventListener('contextmenu',e=>{ /* 우클릭 = 노션식 ⋯ 메뉴 */
-    e.preventDefault();e.stopPropagation();
+  bindMenu(g,(cx,cy)=>{ /* 우클릭 · 길게 누르기 = 노션식 ⋯ 메뉴 */
     selected=item;render();renderDetail();
-    openCtx(e.clientX,e.clientY,[
+    openCtx(cx,cy,[
       ...(item.tripId?[['✎ 수정','',edit]]:[]), /* 클릭이 지도로 가므로 수정 통로 유지 */
       ['⧉ 복제','',()=>duplicateItem(item)],
       ...((item.loc||item.tripId)?[['⌖ 지도에서 보기','',()=>flyToLoc(item)]]:[]),
@@ -2008,6 +1994,53 @@ function duplicateItem(it){
 
 /* --- 컨텍스트 메뉴 --- */
 const ctxMenu=$('#ctxMenu');
+let lpAt=0, lpTapGuard=false;
+function onLongPress(el,menu,guard,noDim){ /* 터치·펜에서 길게 누르기 = 우클릭 */
+  let tm=null,dim=null,dimWas='',pid=null,sx=0,sy=0;
+  const clear=()=>{
+    if(tm){clearTimeout(tm);tm=null;}
+    if(dim){dim.style.opacity=dimWas;dim=null;} /* 레이어 포커스가 넣어둔 값을 지우지 않는다 */
+    pid=null;
+  };
+  el.addEventListener('pointerdown',ev=>{
+    if(ev.pointerType==='mouse')return;         /* 마우스엔 우클릭이 있다 */
+    if(pid!==null){clear();return;}             /* 두 번째 손가락(핀치) = 취소 */
+    if(guard&&!guard(ev))return;
+    pid=ev.pointerId;sx=ev.clientX;sy=ev.clientY;
+    const t=el;
+    tm=setTimeout(()=>{                         /* 350ms — 먹히고 있다는 신호 */
+      if(!noDim){dim=t;dimWas=t.style.opacity;t.style.opacity='.55';}
+      tm=setTimeout(()=>{
+        const px=sx,py=sy,pointerId=pid;
+        clear();
+        lpAt=performance.now(); lpTapGuard=true;
+        /* 손을 뗄 때까지는 유지 — 오래 누르고 있어도 놓는 순간의 탭을 놓치지 않는다 */
+        addEventListener('pointerup',function pu(){
+          removeEventListener('pointerup',pu,true);
+          setTimeout(()=>{lpTapGuard=false;},400);
+        },true);
+        moved=true; setTimeout(()=>{moved=false;},600); /* 뒤따르는 탭을 앱이 무시하게 */
+        try{t.dispatchEvent(new PointerEvent('pointercancel',{pointerId}));}catch(_){}
+        try{navigator.vibrate&&navigator.vibrate(20);}catch(_){}
+        menu(px,py);
+      },150);
+    },350);
+  });
+  el.addEventListener('pointermove',ev=>{
+    if(tm===null&&!dim)return;
+    if(Math.abs(ev.clientX-sx)>8||Math.abs(ev.clientY-sy)>8)clear();
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(t=>el.addEventListener(t,clear));
+}
+function bindMenu(el,menu,guard,noDim){ /* 우클릭(마우스) · 길게 누르기(터치) — 같은 메뉴 */
+  el.addEventListener('contextmenu',e=>{
+    if(guard&&!guard(e))return;
+    e.preventDefault();e.stopPropagation();
+    if(performance.now()-lpAt<800)return;      /* 안드로이드: 롱프레스가 이미 열었다 */
+    menu(e.clientX,e.clientY);
+  });
+  onLongPress(el,menu,guard,noDim);
+}
 function openCtx(x,y,items){
   if(RO)return;
   openPick(x,y,items);
@@ -2023,8 +2056,12 @@ function openPick(x,y,items){ /* 목록 팝업 — 겹친 사건 고르기 (읽�
   });
   ctxMenu.hidden=false;
   const r=ctxMenu.getBoundingClientRect();
-  ctxMenu.style.left=Math.min(x,innerWidth-r.width-8)+'px';
-  ctxMenu.style.top=Math.min(y,innerHeight-r.height-8)+'px';
+  let ty=y;
+  if(performance.now()-lpAt<800){              /* 길게 눌러서 열었다 = 손가락이 그 자리에 있다 */
+    ty=(y-r.height-14>=8)?y-r.height-14:y+18;
+  }
+  ctxMenu.style.left=Math.max(8,Math.min(x,innerWidth-r.width-8))+'px';
+  ctxMenu.style.top=Math.max(8,Math.min(ty,innerHeight-r.height-8))+'px';
 }
 function closeCtx(){ctxMenu.hidden=true;}
 
@@ -2074,6 +2111,12 @@ function placeCard(cx,cy){
   hoverCard.style.left=x+'px';hoverCard.style.top=y+'px';
 }
 function hideCard(){hoverCard.hidden=true;}
+document.addEventListener('click',e=>{ /* 길게 누른 손을 뗄 때 오는 탭 한 번을 삼킨다 */
+  if(!lpTapGuard)return;
+  if(ctxMenu.contains(e.target)||popEd.contains(e.target))return; /* 메뉴·팝오버 조작은 통과 */
+  lpTapGuard=false;
+  e.stopPropagation();e.preventDefault();
+},true);
 document.addEventListener('click',e=>{if(!ctxMenu.hidden&&!ctxMenu.contains(e.target))closeCtx();});
 addEventListener('scroll',closeCtx,{passive:true});
 
@@ -2489,14 +2532,19 @@ let moved=false;
   svg.addEventListener('pointermove',CHshow);
   svg.addEventListener('pointerleave',()=>{if(CH.g)CH.g.setAttribute('opacity',0);});
   svg.addEventListener('pointerdown',()=>{if(CH.g)CH.g.setAttribute('opacity',0);});
-  svg.addEventListener('contextmenu',e=>{ /* 빈 곳 우클릭 = 생각 남기기 */
-    if(RO)return;
-    if(e.target.closest('g[role="button"],g[data-hap],g[data-th],.c-lay'))return;
-    e.preventDefault();
-    const p=svgXY(e), t=Xinv(p.x);
+  /* 빈 곳 = 추가 메뉴. 대상 위에서는 그 대상의 메뉴가 뜨므로 여기선 비켜준다 */
+  const emptyGuard=e=>!RO&&!e.target.closest('g[role="button"],g[data-hap],g[data-th],.c-lay');
+  bindMenu(svg,(cx,cy)=>{
+    const r=svg.getBoundingClientRect();
+    const px=cx-r.left, py=cy-r.top, t=Xinv(px);
     if(t<BOUND[0]||t>BOUND[1])return;
-    const date=tToMonth(t), cx=e.clientX, cy=e.clientY;
-    if(p.y<=30){ /* 시대 띠의 빈 구간 = 시대 추가 */
+    const date=tToMonth(t);
+    const 생각=['❝ 생각 남기기','',()=>{
+      const th={date,text:''};
+      DATA.thoughts.push(th);afterMutate(true);
+      openPopThought(th,cx,cy);
+    }];
+    if(py<=30){ /* 시대 띠의 빈 구간 */
       openCtx(cx,cy,[
         ['＋ 시대 추가','',()=>{
           const er={title:'새 시대',start:tToMonth(t-2),end:tToMonth(t+2),color:'#8A8577'};
@@ -2506,15 +2554,14 @@ let moved=false;
       ]);
       return;
     }
+    if(py<LAYOUT.AXIS_Y){openCtx(cx,cy,[생각]);return;} /* 축 구역 = 생각만 */
     openCtx(cx,cy,[
-      ['❝ 이 자리에 생각 남기기','',()=>{
-        const th={date,text:''};
-        DATA.thoughts.push(th);afterMutate(true);
-        openPopThought(th,cx,cy);
-      }],
+      ['＋ 사건 추가','',()=>addAt(px,py,cx,cy,'event')],
+      ['＋ 기간 추가','',()=>addAt(px,py,cx,cy,'span')],
+      생각,
     ]);
-  });
-  function addAt(x,y,cx,cy){ /* 더블클릭 추가: 위 = 기간, 아래 = 사건(곡선 높이 = 행복) */
+  },emptyGuard,true);
+  function addAt(x,y,cx,cy,kind){ /* 더블클릭 추가: 위 = 기간, 아래 = 사건(곡선 높이 = 행복). kind = 메뉴에서 고른 경우 */
     if(RO)return;
     const t=Xinv(x);
     if(t<BOUND[0]||t>BOUND[1])return;
@@ -2530,13 +2577,13 @@ let moved=false;
       }
       return;
     }
-    if(y<LAYOUT.HAP_TOP){ /* 막대 구역 → 새 기간 */
+    if(kind?kind==='span':y<LAYOUT.HAP_TOP){ /* 막대 구역 → 새 기간 */
       const sp={start:date,end:tToMonth(t+1),title:'새 기간',color:'#2E5E63'};
       DATA.spans.push(sp);selected=sp;afterMutate(true);
       openPop(sp,cx,cy);
     }else{
       const ev={date,title:'새 사건'};
-      if(y>=LAYOUT.HAP_TOP)
+      if(y>=LAYOUT.HAP_TOP) /* 막대 구역에서 고른 사건은 값 없이 0선에 */
         ev.happiness=Math.round(Math.max(-1,Math.min(1,(LAYOUT.HAP_BOT-y)/(LAYOUT.HAP_BOT-LAYOUT.HAP_TOP)*2-1))*10)/10;
       DATA.events.push(ev);selected=ev;afterMutate(true);
       openPop(ev,cx,cy);
@@ -3250,7 +3297,7 @@ function rebuildTripBar(){
       if(b.classList.contains('on'))openPopTrip(t,e.clientX,e.clientY); /* 재클릭 = 수정 */
       else{selectTrip(t.id);setActive(b);}
     };
-    b.oncontextmenu=e=>{e.preventDefault();e.stopPropagation();openPopTrip(t,e.clientX,e.clientY);};
+    bindMenu(b,(cx,cy)=>openPopTrip(t,cx,cy));
     bar.appendChild(b);
   });
   if(!RO){
