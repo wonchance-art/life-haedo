@@ -31,7 +31,8 @@
   근거: 인접 knot 기울기 중앙값 81°(전체 보기) vs 주식 일봉 11~31° → 보간법으로는 해결 불가, MA만 0.33 달성.
 - **라벨 배치 2단**: 렌더 중 그리디(`placeText`, occ 예약) → 조작 멎으면 120ms 뒤 `polishLabels()` 어닐링(시드 = 화면 상태 고정).
 - **겹침**: 화면상 15px 이내 사건 = 개수 배지 군집(`renderCluster`), 같은 줄 좁은 기간 = 막대 군집. 클릭 = 목록에서 선택.
-- **편집**: 전부 팝오버(openPop/openPopEra/openPopHap/openPopLayerPt/openPopThought/openPopTrip). 더블클릭 추가(수동 감지 450ms — 네이티브 dblclick 불가), 드래그 = 값·시기, ⌘Z 60단계. 날짜는 `parseDateSmart`(2024.3.15·한글·압축형 수용, 일자 선택), 기간·시대 순서는 "편집한 쪽이 이김".
+- **편집**: 전부 팝오버(openPop/openPopEra/openPopHap/openPopLayerPt/openPopThought/openPopTrip). 더블클릭 추가(수동 감지 450ms — 네이티브 dblclick 불가), 드래그 = 값·시기, ⌘Z 60단계.
+- **메뉴**: `bindMenu(el,menu,guard,noDim)` = 우클릭(마우스) + `onLongPress`(터치·펜 500ms). 아홉 자리 전부 이걸 쓴다. 롱프레스 성립 시 그 요소에 `pointercancel`을 쏴서 진행 중 드래그를 기존 정리 코드로 끝내고, 손 뗄 때 오는 탭 한 번은 `lpTapGuard`가 캡처 단계에서 삼킨다(다음 pointerup 기준으로 해제 — 오래 눌러도 유효). 안드로이드 네이티브 contextmenu는 `lpAt` 800ms로 중복 차단. iOS 사파리는 롱프레스로 contextmenu를 안 쏘는 게 이 구조의 이유. 날짜는 `parseDateSmart`(2024.3.15·한글·압축형 수용, 일자 선택), 기간·시대 순서는 "편집한 쪽이 이김".
 - **레이어**: DATA.layers = 노동·학습·여행·독서·사람(pts: date·v). 칩 = 포커스(svg[data-focus] 디밍). 사건 분야 태그 = e.layers[].
 - **지도**: 연표 프레임 안 오버레이(#mapOverlay). 열기 = 경로 연결 기간 클릭·'지도' 칩·우클릭 메뉴·검색. 시간창 동기화(창 안의 장소만). `whenMapSized` 가드 필수(크기 0에서 flyTo = NaN).
 - **동기화**: 저장 1.5s 디바운스 푸시, 탭 복귀·60s 풀, 충돌 감지(syncedAt vs updated_at → confirm). 상태는 우상단 점(●=정상·⚠=문제, 설명 title).
