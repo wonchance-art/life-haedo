@@ -397,7 +397,11 @@ html[data-theme=spring]{
   .map-overlay[hidden]{display:none}
   @keyframes mapIn{from{opacity:0}to{opacity:1}}
   @media (prefers-reduced-motion:reduce){.map-overlay{animation:none}}
-  .map-ov-bar{display:flex;align-items:center;gap:8px;padding:7px 9px;flex-wrap:wrap}
+  .map-ov-bar{display:flex;align-items:center;gap:8px;padding:7px 9px;flex-wrap:nowrap}
+  .map-ov-bar .trip-bar{flex-wrap:nowrap;overflow-x:auto;margin:0;gap:7px;
+    scrollbar-width:none;-ms-overflow-style:none}
+  .map-ov-bar .trip-bar::-webkit-scrollbar{display:none}
+  .map-ov-bar .trip-btn{white-space:nowrap;flex:none;padding:5px 12px;font-size:12.5px}
   .map-overlay #map{flex:1;z-index:1;position:relative}
   .map-overlay .trip-info{padding:5px 12px 8px}
   .corner{position:absolute;top:14px;height:30px;z-index:700;display:flex;gap:5px;align-items:center;
@@ -3674,7 +3678,8 @@ function mapNotice(msg){
 }
 try{
   if(typeof L==='undefined') throw new Error('leaflet-missing');
-  map=L.map('map',{scrollWheelZoom:false}).setView([27,127],4);
+  map=L.map('map',{scrollWheelZoom:false,minZoom:1,
+    maxBounds:[[-85,-180],[85,180]],maxBoundsViscosity:1}).setView([27,127],4);
   let tileFails=0, fellBack=false;
   function addTiles(url,opt){
     const layer=L.tileLayer(url,opt).addTo(map);
@@ -3683,7 +3688,7 @@ try{
       if(!fellBack && tileFails>=4){
         fellBack=true; map.removeLayer(layer);
         addTiles('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          {attribution:'&copy; OpenStreetMap',maxZoom:19});
+          {attribution:'&copy; OpenStreetMap',maxZoom:19,noWrap:true});
       } else if(fellBack && tileFails>=10){
         mapNotice('지도 타일을 불러오지 못했다.<br>· Claude 미리보기 안이라면: 외부 이미지가 차단되는 환경 — <b>파일을 다운로드해 브라우저에서 직접 열면 표시된다.</b><br>· 브라우저에서 열었다면: 인터넷 연결 또는 광고차단기(cartocdn/openstreetmap 차단 여부)를 확인.');
       }
@@ -3692,7 +3697,7 @@ try{
     return layer;
   }
   addTiles('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    {attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:19});
+    {attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:19,noWrap:true});
 }catch(e){
   mapNotice('지도 라이브러리(Leaflet)를 불러오지 못해 지도를 표시할 수 없다.<br>인터넷 연결 후 새로고침하면 나타난다. 연표·곡선·편집 기능은 정상 작동한다.');
 }
@@ -3821,6 +3826,12 @@ function selectTrip(id){
   const total=dists[dists.length-1];
   const DUR=Math.min(9000,3500+total/1000*1.2);
   const start=performance.now();
+  let legShown=-1;
+  const frameLeg=seg=>{ /* 구간이 바뀔 때 한 번만 — 그 구간이 화면에 꽉 차게 */
+    if(seg===legShown)return; legShown=seg;
+    map.flyToBounds(L.latLngBounds([latlngs[seg-1],latlngs[seg]]).pad(0.5),
+      {duration:.8,maxZoom:13,easeLinearity:.4});
+  };
   function step(now){
     const t01=Math.min((now-start)/DUR,1);
     const eased=t01<.5?2*t01*t01:1-Math.pow(-2*t01+2,2)/2;
@@ -3832,8 +3843,15 @@ function selectTrip(id){
     const lng=latlngs[seg-1][1]+(latlngs[seg][1]-latlngs[seg-1][1])*f;
     prog.setLatLngs([...latlngs.slice(0,seg),[lat,lng]]);
     shipMarker.setLatLng([lat,lng]);
+    if(now-start>900)frameLeg(seg); /* 처음 1초는 전체 항로를 보여준 뒤 */
     if(t01<1)animId=requestAnimationFrame(step);
-    else{shipMarker.bindPopup(`<div class="p-title">${esc(t.points[t.points.length-1].label)} 도착</div>`).openPopup();animId=null;}
+    else{
+      shipMarker.bindPopup(`<div class="p-title">${esc(t.points[t.points.length-1].label)} 도착</div>`).openPopup();
+      animId=null;
+      if(latlngs.length>2)setTimeout(()=>{ /* 끝나면 다시 전체 항로로 */
+        if(curTripId===id)map.flyToBounds(L.latLngBounds(latlngs).pad(0.25),{duration:1.1});
+      },700);
+    }
   }
   animId=requestAnimationFrame(step);
 }
