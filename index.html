@@ -493,7 +493,7 @@ create policy "personal" on charts
   <div class="search-panel card bg-base-100" role="dialog" aria-modal="true" aria-label="기록 검색">
     <div class="search-row">
       <span aria-hidden="true">🔍</span>
-      <input id="searchInput" placeholder="사건 · 기간 · 시대 · 경로 검색…" spellcheck="false" autocomplete="off">
+      <input id="searchInput" placeholder="이름 · 문장 · 날짜" spellcheck="false" autocomplete="off">
       <kbd>esc</kbd>
     </div>
     <div class="search-results" id="searchResults"></div>
@@ -2727,26 +2727,52 @@ function togglePlay(){ /* Space = 시간 순서 재생 */
 /* --- 검색 (⌘/Ctrl+F) --- */
 const searchBd=$('#searchBd'),searchInput=$('#searchInput'),searchResults=$('#searchResults');
 let searchIdx=0,searchItems=[];
-const KIND_BADGE={event:'● 사건',span:'▬ 기간',era:'▢ 시대',trip:'▷ 경로'};
+const KIND_BADGE={event:'● 사건',span:'▬ 기간',era:'▢ 시대',trip:'▷ 경로',thought:'❝ 생각',date:'⌖ 이동'};
 function searchPool(){
+  const tripT=id=>{ /* 경로는 제 날짜가 없다 — 연결된 사건·기간 중 가장 이른 때 */
+    const ts=[...DATA.events.filter(e=>e.tripId===id).map(e=>e.t),
+              ...DATA.spans.filter(sp=>sp.tripId===id).map(sp=>sp.t0)];
+    return ts.length?Math.min(...ts):Infinity;
+  };
   return [
-    ...DATA.events.map(e=>({kind:'event',ref:e,title:e.title,date:e.date,
+    ...DATA.events.map(e=>({kind:'event',ref:e,title:e.title,date:e.date,t:e.t,
       text:(e.title+' '+(e.desc||'')+' '+(e.loc?.label||'')).toLowerCase()})),
-    ...DATA.spans.map(s=>({kind:'span',ref:s,title:s.title,date:s.start+' – '+(s.end||'진행 중'),
+    ...DATA.spans.map(s=>({kind:'span',ref:s,title:s.title,date:s.start+' – '+(s.end||'진행 중'),t:s.t0,
       text:(s.title+' '+(s.desc||'')+' '+(s.loc?.label||'')).toLowerCase()})),
-    ...DATA.eras.map(er=>({kind:'era',ref:er,title:er.title,date:er.start+' – '+er.end,
+    ...DATA.eras.map(er=>({kind:'era',ref:er,title:er.title,date:er.start+' – '+er.end,t:T(er.start),
       text:er.title.toLowerCase()})),
-    ...DATA.trips.map(t=>({kind:'trip',ref:t,title:t.title,date:t.points.map(p=>p.label).join('→'),
+    ...DATA.trips.map(t=>({kind:'trip',ref:t,title:t.title,date:t.points.map(p=>p.label).join('→'),t:tripT(t.id),
       text:(t.title+' '+(t.note||'')+' '+t.points.map(p=>p.label).join(' ')).toLowerCase()})),
+    ...DATA.thoughts.map(th=>({kind:'thought',ref:th,title:th.text,date:th.date,t:th.t,
+      text:th.text.toLowerCase()})),
   ];
+}
+function searchScore(it,q){ /* 제목·문장 시작 3 · 포함 2 · 설명·장소·메모에만 1 */
+  if(!q)return 0;
+  const t=(it.title||'').toLowerCase();
+  if(t.startsWith(q))return 3;
+  if(t.includes(q))return 2;
+  return it.text.includes(q)?1:0;
+}
+function dateJump(raw){ /* 날짜로 읽히면 그 시점으로 가는 행을 맨 위에 */
+  const d=raw&&parseDateSmart(raw);
+  if(!d)return null;
+  const t=T(d);
+  if(t<BOUND[0]||t>BOUND[1])return null;
+  return {kind:'date',ref:null,title:fmtD(d),date:'',text:'',t};
 }
 function refreshSearchActive(){
   [...searchResults.querySelectorAll('.search-item')].forEach((c,i)=>c.classList.toggle('on',i===searchIdx));
   const on=searchResults.querySelector('.on');if(on)on.scrollIntoView({block:'nearest'});
 }
 function renderSearch(){
-  const q=searchInput.value.trim().toLowerCase();
-  searchItems=searchPool().filter(it=>!q||it.text.includes(q)).slice(0,40);
+  const raw=searchInput.value.trim(), q=raw.toLowerCase();
+  const hits=searchPool().map(it=>({it,s:searchScore(it,q)}))
+    .filter(x=>!q||x.s>0)
+    .sort((a,b)=>b.s-a.s||(a.it.t-b.it.t)||0)   /* 점수 → 연표 순 */
+    .map(x=>x.it);
+  const jump=dateJump(raw);
+  searchItems=(jump?[jump]:[]).concat(hits).slice(0,40);
   if(searchIdx>=searchItems.length)searchIdx=0;
   searchResults.innerHTML=searchItems.length?'':'<div class="search-empty">결과 없음</div>';
   searchItems.forEach((it,i)=>{
@@ -2760,13 +2786,10 @@ function renderSearch(){
 }
 function pickSearch(it){
   closeSearch();
-  if(it.kind==='trip'){
-    document.getElementById('sec-canvas').scrollIntoView({behavior:reduceMotion?'auto':'smooth'});
-    flyToLoc({tripId:it.ref.id});
-  }else{
-    document.getElementById('sec-canvas').scrollIntoView({behavior:reduceMotion?'auto':'smooth'});
-    jumpToItem(it.kind==='era'?{kind:'era',...it.ref}:it.ref);
-  }
+  document.getElementById('sec-canvas').scrollIntoView({behavior:reduceMotion?'auto':'smooth'});
+  if(it.kind==='trip'){flyToLoc({tripId:it.ref.id});return;}
+  if(it.kind==='date'||it.kind==='thought'){jumpToItem({kind:it.kind,t:it.t});return;}
+  jumpToItem(it.kind==='era'?{kind:'era',...it.ref}:it.ref);
 }
 function openSearch(){searchBd.hidden=false;searchInput.value='';searchIdx=0;renderSearch();requestAnimationFrame(()=>searchInput.focus());}
 function closeSearch(){searchBd.hidden=true;}
@@ -2778,7 +2801,7 @@ searchInput.addEventListener('keydown',e=>{
 });
 searchBd.addEventListener('mousedown',e=>{if(e.target===searchBd)closeSearch();});
 document.addEventListener('keydown',e=>{
-  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='f'){e.preventDefault();openSearch();}
+  if((e.metaKey||e.ctrlKey)&&/^[fk]$/.test(e.key.toLowerCase())){e.preventDefault();openSearch();}
   else if(e.key==='Escape'){
     const wasOpen=!searchBd.hidden||!ctxMenu.hidden||!popEd.hidden
       ||!document.getElementById('newBd').hidden||!document.getElementById('cloudBd').hidden||MAP_OPEN;
