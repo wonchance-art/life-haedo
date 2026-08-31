@@ -3115,22 +3115,32 @@ function fillApply(){
   fillPreview(`넣음 ${n}건 — ⌘Z로 되돌린다`);
 }
 const showPanel=$('#showPanel');
+function syncShowPanel(){ /* 켜짐 표시와 비활성만 제자리에서 갱신 */
+  showPanel.querySelectorAll('button').forEach(b=>{
+    const k=b.dataset.k;
+    b.classList.toggle('on',!!SHOW[k]);
+    const dim=(k==='name'||k==='tag')&&!SHOW.ev; /* 사건이 없으면 이름·색점도 없다 */
+    b.disabled=dim;
+    b.style.opacity=dim?.35:'';
+    b.style.cursor=dim?'default':'';
+  });
+}
 function renderShowPanel(){
   showPanel.innerHTML='';
   SHOW_KEYS.forEach(k=>{
     const b=document.createElement('button');
-    b.className='lay-chip'+(SHOW[k]?' on':'');
+    b.className='lay-chip';
     b.textContent=SHOW_NAME[k];b.dataset.k=k;
-    const dim=(k==='name'||k==='tag')&&!SHOW.ev; /* 사건이 없으면 이름·색점도 없다 */
-    if(dim){b.disabled=true;b.style.opacity=.35;b.style.cursor='default';}
     b.onclick=ev=>{
       ev.stopPropagation();
       SHOW[k]=!SHOW[k];
       try{localStorage.setItem('caeyeon_life_show',JSON.stringify(SHOW));}catch(e){}
-      renderShowPanel();prepare();render();renderLayerBar();
+      syncShowPanel();  /* 통째로 다시 그리면 누른 버튼이 사라져 포커스가 날아간다 */
+      prepare();render();renderLayerBar();
     };
     showPanel.appendChild(b);
   });
+  syncShowPanel();
 }
 $('#btnShow').onclick=e=>{
   e.stopPropagation(); /* document 리스너가 방금 연 패널을 닫는 것 방지 */
