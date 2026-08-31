@@ -1435,7 +1435,21 @@ function render(){
   reserve(-1e4,L.SPAN_TOP-6,1e4,L.HAP_TOP-8);                        /* 막대 구역 전체 */
   DATA.events.forEach(e=>{const x=X(e.t),y=HY(e.happiness!=null?e.happiness:0);reserve(x-7,y-7,x+7,y+7);});
   DATA.happiness.forEach(h=>{const x=X(h.t),y=HY(h.v);reserve(x-6,y-6,x+6,y+6);});
-  DATA.thoughts.forEach(th=>{const x=X(th.t),y=curveYAt(x)-16;reserve(x-9,y-12,x+9,y+7);});
+  /* 생각 ❝ — 화면 26px 격자로 묶는다. 매달 이어지면 표식이 띠가 되어 곡선을 덮는다.
+     사건처럼 '붙은 것끼리 연쇄로' 묶으면 전체 보기에서 통째로 한 덩어리가 된다 */
+  const TH_GAP=26;
+  const thGroups=(()=>{
+    /* 고정 격자로 나누면 칸 경계에서 대표끼리 1px까지 붙는다.
+       마지막으로 그린 표식에서 TH_GAP만큼 떨어졌을 때만 새로 그린다 — 간격이 항상 보장된다 */
+    const out=[]; let anchor=-Infinity, cur=null;
+    DATA.thoughts.forEach(th=>{                 /* 이미 날짜순 — 묶음의 첫 항목이 가장 이른 것 */
+      const x=X(th.t); if(x<-20||x>W+20)return;
+      if(x-anchor>=TH_GAP){cur={x,list:[th]};out.push(cur);anchor=x;}
+      else cur.list.push(th);
+    });
+    return out;
+  })();
+  thGroups.forEach(g=>{const y=curveYAt(g.x)-16;reserve(g.x-9,y-12,g.x+9,y+7);});
   if(focusLayer!=='main')(DATA.layers||[]).filter(l=>l.id===focusLayer)
     .forEach(l=>l.pts.forEach(p=>{const x=X(p.t),y=HY(p.v);reserve(x-6,y-6,x+6,y+6);}));
 
@@ -1802,25 +1816,45 @@ function render(){
     });
     svg.appendChild(g);
   });
-  /* 생각(당시 쓴 글 속 문장) — 곡선 위 ❝ 표식. 호버 = 문장, 클릭 = 수정 */
-  DATA.thoughts.forEach(th=>{
-    const x=X(th.t);if(x<-20||x>W+20)return;
+  /* 생각 ❝ — 곡선 위 표식. 호버 = 문장, 클릭 = 수정. 한 칸에 여럿이면 개수 배지 + 목록 */
+  const thCut=(t,n2)=>t.length>n2?t.slice(0,n2)+'…':t;
+  thGroups.forEach(grp=>{
+    const list=grp.list, cnt=list.length, x=grp.x, th=list[0];
     const y=curveYAt(x)-16;
-    const gt=el('g',{cursor:'pointer',class:'c-main','data-th':'1'});
+    const gt=el('g',{cursor:'pointer',class:'c-main','data-th':'1',tabindex:0,
+      'aria-label':cnt>1?`${th.date} 부근 생각 ${cnt}개 — 열어서 고르기`:`생각 ${th.date}`});
     gt.appendChild(el('circle',{cx:x,cy:y,r:10,fill:'transparent'}));
     const q=el('text',{x:x,y:y+5,'text-anchor':'middle','font-size':15,fill:'#A87F3D','font-weight':700,opacity:.9});
     q.textContent='❝';gt.appendChild(q);
-    const short=th.text.length>90?th.text.slice(0,90)+'…':th.text;
-    gt.addEventListener('mouseenter',()=>showTip(x,y,`<span class="yy">${esc(th.date)}</span> · ${esc(short)}`));
+    let tipHtml=`<span class="yy">${esc(th.date)}</span> · ${esc(thCut(th.text,90))}`;
+    if(cnt>1){
+      /* 사건 묶음의 원반 배지는 여기선 못 쓴다 — 거의 전부가 묶음이라 금색 원이 줄지어 선다.
+         숫자만 옆에 작게 */
+      const bdx=(x+13>W-24)?-8:8;
+      const bt=el('text',{x:x+bdx,y:y-6,'text-anchor':'middle','font-size':8.4,fill:'#A87F3D',
+        'font-family':'IBM Plex Mono','font-weight':700,opacity:.75});
+      bt.textContent=cnt;gt.appendChild(bt);
+      reserve(x+bdx-6,y-13,x+bdx+6,y-2);
+      tipHtml=`<span class="yy">${esc(th.date)} – ${esc(list[cnt-1].date)}</span> · ${cnt}개<br>${esc(thCut(th.text,80))}`;
+    }
+    const show=()=>showTip(x,y,tipHtml);
+    gt.addEventListener('mouseenter',show);
     gt.addEventListener('mouseleave',hideTip);
-    gt.addEventListener('pointerdown',ev=>{if(ev.pointerType!=='mouse')showTip(x,y,`<span class="yy">${esc(th.date)}</span> · ${esc(short)}`);});
+    gt.addEventListener('pointerdown',ev=>{if(ev.pointerType!=='mouse')show();});
+    const pick=(cx,cy)=>openPick(cx,cy,list.map(t=>[
+      esc(t.date)+'  '+thCut(t.text,40),'',()=>openPopThought(t,cx,cy)]));
     gt.addEventListener('click',ev=>{
       if(moved||RO)return;ev.stopPropagation();hideTip();
-      openPopThought(th,ev.clientX,ev.clientY);
+      if(cnt>1)pick(ev.clientX,ev.clientY);else openPopThought(th,ev.clientX,ev.clientY);
     });
-    bindMenu(gt,(cx,cy)=>openCtx(cx,cy,[
-      ['✕ 삭제','danger',()=>{const i=DATA.thoughts.indexOf(th);if(i>=0){DATA.thoughts.splice(i,1);afterMutate(true);}}],
-    ]));
+    gt.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();
+      const b=gt.getBoundingClientRect();
+      if(cnt>1)pick(b.left+10,b.top+10);else openPopThought(th,b.left+10,b.top+10);}});
+    bindMenu(gt,(cx,cy)=>{
+      if(cnt>1){pick(cx,cy);return;}
+      openCtx(cx,cy,[['✕ 삭제','danger',()=>{
+        const i=DATA.thoughts.indexOf(th);if(i>=0){DATA.thoughts.splice(i,1);afterMutate(true);}}]]);
+    });
     svg.appendChild(gt);
   });
 
