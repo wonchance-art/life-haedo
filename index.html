@@ -340,6 +340,7 @@ html[data-theme=spring]{
             <div class="map-ov-bar">
               <div class="trip-bar" id="tripBar" role="group" aria-label="경로 선택"></div>
               <span style="flex:1"></span>
+              <button class="lay-chip" id="mapShow" aria-label="지도에 무엇을 보일지">⋯</button>
               <button class="lay-chip" id="mapClose" aria-label="지도 닫기">✕</button>
             </div>
             <div id="map"></div>
@@ -523,6 +524,7 @@ create policy "personal" on charts
 <!-- 컨텍스트 메뉴 -->
 <div class="ctx" id="ctxMenu" hidden></div>
 <div class="ctx show-panel" id="showPanel" role="group" aria-label="표시" hidden></div>
+<div class="ctx show-panel" id="mapPanel" role="group" aria-label="지도 표시" hidden></div>
 
 <!-- 팝오버 에디터 -->
 <div class="pop-ed" id="popEd" hidden role="dialog" aria-label="바로 편집"></div>
@@ -1156,6 +1158,15 @@ function smoothPath(p){
   return d;
 }
 
+/* 지도에 무엇을 그릴지 — 벡터라 레이어 단위로 켜고 끈다 */
+const MAP_KEYS=['water','green','road','border','building'];
+const MAP_NAME={water:'물',green:'녹지',road:'길',border:'국경',building:'건물'};
+let MSHOW=(()=>{
+  const d={water:true,green:true,road:true,border:false,building:false};
+  try{const r=JSON.parse(localStorage.getItem('caeyeon_life_mapshow'));
+    if(r&&typeof r==='object')MAP_KEYS.forEach(k=>{if(typeof r[k]==='boolean')d[k]=r[k];});
+  }catch(e){}
+  return d;})();
 const PIN_GRAY='#5D6B62';   /* 태그 없는 핀 — 채도 0이라 분야 5색과 안 헷갈린다 */
 const PIN_PAPER='#F2F4EE';
 function pinColor(e){       /* 여러 태그면 레이어 순서상 첫 번째 (나머지는 호버 카드에) */
@@ -3194,6 +3205,36 @@ $('#btnShow').onclick=e=>{
 };
 document.addEventListener('click',e=>{
   if(!showPanel.hidden&&!showPanel.contains(e.target))showPanel.hidden=true;});
+const mapPanel=$('#mapPanel');
+function syncMapPanel(){
+  mapPanel.querySelectorAll('button').forEach(b=>b.classList.toggle('on',!!MSHOW[b.dataset.m]));
+}
+function renderMapPanel(){
+  mapPanel.innerHTML='';
+  MAP_KEYS.forEach(k=>{
+    const b=document.createElement('button');
+    b.className='lay-chip';b.textContent=MAP_NAME[k];b.dataset.m=k;
+    b.onclick=ev=>{
+      ev.stopPropagation();
+      MSHOW[k]=!MSHOW[k];
+      try{localStorage.setItem('caeyeon_life_mapshow',JSON.stringify(MSHOW));}catch(e){}
+      syncMapPanel();
+      if(window.rebuildMapVector)window.rebuildMapVector();
+    };
+    mapPanel.appendChild(b);
+  });
+  syncMapPanel();
+}
+$('#mapShow').onclick=e=>{
+  e.stopPropagation();
+  if(!mapPanel.hidden){mapPanel.hidden=true;return;}
+  renderMapPanel();mapPanel.hidden=false;
+  const b=e.currentTarget.getBoundingClientRect(), r=mapPanel.getBoundingClientRect();
+  mapPanel.style.left=Math.max(8,Math.min(b.left+b.width-r.width,innerWidth-r.width-8))+'px';
+  mapPanel.style.top=Math.max(8,Math.min(b.bottom+6,innerHeight-r.height-8))+'px';
+};
+document.addEventListener('click',e=>{
+  if(!mapPanel.hidden&&!mapPanel.contains(e.target))mapPanel.hidden=true;});
 $('#fillCancel').onclick=closeFill;
 $('#fillGo').onclick=fillApply;
 document.querySelectorAll('.fill-tab').forEach(b=>b.onclick=()=>setFillTab(b.dataset.tab));
@@ -3221,7 +3262,7 @@ document.addEventListener('keydown',e=>{
     const wasOpen=!searchBd.hidden||!ctxMenu.hidden||!popEd.hidden||!fillBd.hidden
       ||!document.getElementById('newBd').hidden||!document.getElementById('cloudBd').hidden||MAP_OPEN;
     if(MAP_OPEN)closeMapOverlay();
-    if(!searchBd.hidden)closeSearch();closeCtx();closePop();closeFill();showPanel.hidden=true;
+    if(!searchBd.hidden)closeSearch();closeCtx();closePop();closeFill();showPanel.hidden=true;mapPanel.hidden=true;
     document.getElementById('newBd').hidden=true;document.getElementById('cloudBd').hidden=true;
     /* 열린 창이 없었으면 Esc = 레이어 포커스 해제 */
     if(!wasOpen&&focusLayer!=='main'){focusLayer='main';render();}
@@ -3719,23 +3760,33 @@ try{
       const OMT=['water','waterway','landcover','landuse','park','boundary','aeroway',
         'transportation','building','water_name','transportation_name','place',
         'housenumber','poi','aerodrome_label','mountain_peak'];
-      const styles={}; OMT.forEach(k=>styles[k]=off);
-      Object.assign(styles,{
-        water:{fill:true,fillColor:MAP_SEA,fillOpacity:1,stroke:false,weight:0},
-        landcover:{fill:true,fillColor:'#DAE2CF',fillOpacity:.5,stroke:false},
-        park:{fill:true,fillColor:'#D7E0CB',fillOpacity:.55,stroke:false},
-        /* 깊이 들어갔을 때만 길을 아주 옅게 — 도시 줌에서 아무 단서도 없으면 못 읽는다 */
-        transportation:(p,z)=>z>=11?{color:'#D3DACB',weight:.8,opacity:.9,fill:false}:off,
-        waterway:(p,z)=>z>=11?{color:'#E6EDE4',weight:.9,opacity:.9,fill:false}:off,
-      });
-      let vfail=0, gone=false;
-      const vg=L.vectorGrid.protobuf(url,{
-        interactive:false, maxNativeZoom:14, maxZoom:19, rendererFactory:L.canvas.tile,
-        attribution:'&copy; OpenStreetMap · OpenFreeMap',
-        vectorTileLayerStyles:styles});
-      vg.on('tileerror',()=>{ if(gone||++vfail<6)return; gone=true;
-        map.removeLayer(vg); rasterFallback(); });
-      vg.addTo(map);
+      const mkStyles=()=>{
+        const st={}; OMT.forEach(k=>st[k]=off);
+        if(MSHOW.water)st.water={fill:true,fillColor:MAP_SEA,fillOpacity:1,stroke:false,weight:0};
+        if(MSHOW.green){
+          st.landcover={fill:true,fillColor:'#DAE2CF',fillOpacity:.5,stroke:false};
+          st.park={fill:true,fillColor:'#D7E0CB',fillOpacity:.55,stroke:false};
+        }
+        if(MSHOW.road){ /* 깊이 들어갔을 때만 — 도시 줌에서 아무 단서도 없으면 못 읽는다 */
+          st.transportation=(p,z)=>z>=11?{color:'#D3DACB',weight:.8,opacity:.9,fill:false}:off;
+          st.waterway=(p,z)=>z>=11?{color:'#E6EDE4',weight:.9,opacity:.9,fill:false}:off;
+        }
+        if(MSHOW.border)st.boundary={color:'#C4CFBB',weight:.8,opacity:.9,fill:false};
+        if(MSHOW.building)st.building=(p,z)=>z>=14?{fill:true,fillColor:'#D9DFD0',fillOpacity:.85,stroke:false}:off;
+        return st;
+      };
+      let vfail=0, gone=false, vg=null;
+      window.rebuildMapVector=()=>{   /* vectorgrid는 스타일을 못 바꾼다 — 레이어를 다시 얹는다 */
+        if(vg)map.removeLayer(vg);
+        vg=L.vectorGrid.protobuf(url,{
+          interactive:false, maxNativeZoom:14, maxZoom:19, rendererFactory:L.canvas.tile,
+          attribution:'&copy; OpenStreetMap · OpenFreeMap',
+          vectorTileLayerStyles:mkStyles()});
+        vg.on('tileerror',()=>{ if(gone||++vfail<6)return; gone=true;
+          map.removeLayer(vg); vg=null; window.rebuildMapVector=null; rasterFallback(); });
+        vg.addTo(map);
+      };
+      window.rebuildMapVector();
     })
     .catch(rasterFallback);
 }catch(e){
