@@ -1161,6 +1161,16 @@ function smoothPath(p){
 /* 지도에 무엇을 그릴지 — 벡터라 레이어 단위로 켜고 끈다 */
 const MAP_KEYS=['water','green','road','border','building'];
 const MAP_NAME={water:'물',green:'녹지',road:'길',border:'국경',building:'건물'};
+/* 색조 — 타일 판에만 건다. 항로·핀은 위 판에 있어 안 물든다 */
+const MAP_FILTERS={base:'none',ink:'saturate(.25) brightness(1.03)',
+  sepia:'sepia(.35) saturate(.7) brightness(1.02)',deep:'saturate(1.4) contrast(1.06)'};
+const MAP_FNAME={base:'기본',ink:'담묵',sepia:'세피아',deep:'진하게'};
+let MAP_FILTER=(()=>{try{const v=localStorage.getItem('caeyeon_life_mapfilter');
+  return MAP_FILTERS[v]?v:'base';}catch(e){return 'base';}})();
+function applyMapFilter(){
+  const pane=document.querySelector('#map .leaflet-tile-pane');
+  if(pane)pane.style.filter=MAP_FILTERS[MAP_FILTER]||'none';
+}
 let MSHOW=(()=>{
   const d={water:true,green:true,road:true,border:false,building:false};
   try{const r=JSON.parse(localStorage.getItem('caeyeon_life_mapshow'));
@@ -3207,7 +3217,8 @@ document.addEventListener('click',e=>{
   if(!showPanel.hidden&&!showPanel.contains(e.target))showPanel.hidden=true;});
 const mapPanel=$('#mapPanel');
 function syncMapPanel(){
-  mapPanel.querySelectorAll('button').forEach(b=>b.classList.toggle('on',!!MSHOW[b.dataset.m]));
+  mapPanel.querySelectorAll('button[data-m]').forEach(b=>b.classList.toggle('on',!!MSHOW[b.dataset.m]));
+  mapPanel.querySelectorAll('button[data-mf]').forEach(b=>b.classList.toggle('on',b.dataset.mf===MAP_FILTER));
 }
 function renderMapPanel(){
   mapPanel.innerHTML='';
@@ -3220,6 +3231,19 @@ function renderMapPanel(){
       try{localStorage.setItem('caeyeon_life_mapshow',JSON.stringify(MSHOW));}catch(e){}
       syncMapPanel();
       if(window.rebuildMapVector)window.rebuildMapVector();
+      setTimeout(applyMapFilter,60); /* 레이어를 다시 얹으면 판이 새로 생긴다 */
+    };
+    mapPanel.appendChild(b);
+  });
+  const sep=document.createElement('span');sep.className='show-sep';mapPanel.appendChild(sep);
+  Object.keys(MAP_FILTERS).forEach(k=>{
+    const b=document.createElement('button');
+    b.className='lay-chip';b.textContent=MAP_FNAME[k];b.dataset.mf=k;
+    b.onclick=ev=>{
+      ev.stopPropagation();
+      MAP_FILTER=k;
+      try{localStorage.setItem('caeyeon_life_mapfilter',k);}catch(e){}
+      syncMapPanel();applyMapFilter();
     };
     mapPanel.appendChild(b);
   });
@@ -3787,6 +3811,7 @@ try{
         vg.addTo(map);
       };
       window.rebuildMapVector();
+      setTimeout(applyMapFilter,80);
     })
     .catch(rasterFallback);
 }catch(e){
@@ -3854,7 +3879,7 @@ function openMapOverlay(){
   document.getElementById('mapOverlay').hidden=false;
   const bm=document.getElementById('btnMap'); if(bm)bm.classList.add('on');
   if(map){map.invalidateSize();setTimeout(()=>map.invalidateSize(),150);} /* 크기 확정 (rAF 의존 금지) */
-  rebuildMapBase();
+  rebuildMapBase(); applyMapFilter();
 }
 function whenMapSized(fn){ /* 크기 0인 지도에 flyTo하면 NaN — 크기 잡힌 뒤 실행 */
   if(!map)return;
