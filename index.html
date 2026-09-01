@@ -278,8 +278,8 @@ html[data-theme=spring]{
   .lay-chip{transition:transform .12s ease,background .15s,border-color .15s,opacity .15s}
   
   @media (prefers-reduced-motion:reduce){.lay-chip{transition:none}}
-  .leaflet-tile{filter:saturate(.55) contrast(.92) brightness(1.04)} /* 한지 톤에 맞춰 눌러준다 */
-  html[data-theme="dim"] .leaflet-tile{filter:brightness(.7) invert(1) contrast(2.2) hue-rotate(190deg) saturate(.28) brightness(.78)}
+  img.leaflet-tile{filter:saturate(.55) contrast(.92) brightness(1.04)} /* 래스터 폴백만 — 벡터 캔버스도 같은 클래스를 단다 */
+  html[data-theme="dim"] img.leaflet-tile{filter:brightness(.7) invert(1) contrast(2.2) hue-rotate(190deg) saturate(.28) brightness(.78)}
   html[data-theme="dim"] .leaflet-container{background:#0F1613}
 </style>
 </head>
@@ -544,6 +544,7 @@ create policy "personal" on charts
 
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/leaflet.vectorgrid@1.3.0/dist/Leaflet.VectorGrid.bundled.js"></script>
 <script>
 /* 공유 뷰어 모드 */
 const RO=!!window.VIEW_ONLY;
@@ -3700,8 +3701,43 @@ try{
     return layer;
   }
   /* carto light_all은 이제 키가 없으면 워터마크가 찍힌 타일을 준다(200이라 폴백도 안 걸린다) */
-  addTiles('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  /* 벡터 타일 — 그리는 규칙이 우리 손에 있어 바다를 면만 칠하고 테두리를 안 그린다.
+     그게 '해안선 없음'의 실체다. 글자·건물·도로·관심지점도 다 뺐다.
+     이 스키마(OpenMapTiles)엔 '땅' 레이어가 없다 — 배경이 땅이고 물만 도형이다 */
+  const MAP_LAND='#E1E7D9', MAP_SEA='#F3F6F0';
+  map.getContainer().style.background=MAP_LAND;
+  const rasterFallback=()=>addTiles('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     {attribution:'&copy; OpenStreetMap',maxZoom:19,noWrap:true,bounds:WORLD_BOUNDS});
+  if(typeof L.vectorGrid==='undefined'){rasterFallback();}
+  else fetch('https://tiles.openfreemap.org/planet')   /* 경로에 빌드 날짜가 박혀 있어 매번 받는다 */
+    .then(r=>r.json())
+    .then(j=>{
+      const url=j.tiles&&j.tiles[0]; if(!url)throw new Error('타일 주소 없음');
+      const off={weight:0,fill:false,opacity:0,fillOpacity:0,stroke:false};
+      /* 스타일을 안 준 레이어는 기본값으로 그려진다 — 점 레이어(mountain_peak 등)가
+         동그라미로 흩뿌려졌다. 스키마 전체를 먼저 끄고 필요한 것만 켠다 */
+      const OMT=['water','waterway','landcover','landuse','park','boundary','aeroway',
+        'transportation','building','water_name','transportation_name','place',
+        'housenumber','poi','aerodrome_label','mountain_peak'];
+      const styles={}; OMT.forEach(k=>styles[k]=off);
+      Object.assign(styles,{
+        water:{fill:true,fillColor:MAP_SEA,fillOpacity:1,stroke:false,weight:0},
+        landcover:{fill:true,fillColor:'#DAE2CF',fillOpacity:.5,stroke:false},
+        park:{fill:true,fillColor:'#D7E0CB',fillOpacity:.55,stroke:false},
+        /* 깊이 들어갔을 때만 길을 아주 옅게 — 도시 줌에서 아무 단서도 없으면 못 읽는다 */
+        transportation:(p,z)=>z>=11?{color:'#D3DACB',weight:.8,opacity:.9,fill:false}:off,
+        waterway:(p,z)=>z>=11?{color:'#E6EDE4',weight:.9,opacity:.9,fill:false}:off,
+      });
+      let vfail=0, gone=false;
+      const vg=L.vectorGrid.protobuf(url,{
+        interactive:false, maxNativeZoom:14, maxZoom:19, rendererFactory:L.canvas.tile,
+        attribution:'&copy; OpenStreetMap · OpenFreeMap',
+        vectorTileLayerStyles:styles});
+      vg.on('tileerror',()=>{ if(gone||++vfail<6)return; gone=true;
+        map.removeLayer(vg); rasterFallback(); });
+      vg.addTo(map);
+    })
+    .catch(rasterFallback);
 }catch(e){
   mapNotice('지도 라이브러리(Leaflet)를 불러오지 못해 지도를 표시할 수 없다.<br>인터넷 연결 후 새로고침하면 나타난다. 연표·곡선·편집 기능은 정상 작동한다.');
 }
