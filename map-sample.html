@@ -71,7 +71,10 @@
       담묵 <code>saturate(.18) contrast(.88) brightness(1.07)</code> ·
       세피아 <code>sepia(.4) saturate(.55) brightness(1.04)</code></p>
     <p>지명 표기: OSM 계열은 현지어(한국·일본은 한글·일본어), Esri 계열은 영어다.</p>
-    <p><b>벡터 세 장</b>은 타일(그림)이 아니라 도형이라 해안선·글자를 마음대로 뺄 수 있다.
+    <p><b>벡터타일 두 장</b>은 OpenFreeMap(키 불필요·z0~14)을 Leaflet에서 직접 칠한 것이다.
+      지도를 그리는 규칙이 우리 손에 있으니 바다 테두리를 안 그리면 해안선이 사라진다.
+      글자·건물·관심지점도 다 뺐다. 줌 제한이 없고 Leaflet을 그대로 쓴다.</p>
+    <p><b>벡터 네 장</b>은 타일이 아니라 도형이라 해안선·글자를 마음대로 뺄 수 있다.
       대신 자료 정밀도만큼만 보인다 — 110m(135KB)는 줌 5까지, 50m(533KB)는 줌 8까지.
       어느 쪽도 도시 안은 못 본다.
       색 보정은 벡터에는 안 걸린다(그림이 아니라 도형이라 색을 직접 정한다).</p>
@@ -79,9 +82,12 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://unpkg.com/leaflet.vectorgrid@1.3.0/dist/Leaflet.VectorGrid.bundled.js"></script>
 <script>
 const WORLD=L.latLngBounds([-85.0511,-180],[85.0511,180]);
 /* 벡터 땅 — Natural Earth 110m. 타일이 아니라 도형이라 해안선을 지울 수 있다 */
+/* OpenFreeMap 벡터 타일 — 경로에 빌드 날짜가 박혀 있어 TileJSON에서 그때그때 받아온다 */
+const MVT_URL=fetch('https://tiles.openfreemap.org/planet').then(r=>r.json()).then(j=>j.tiles[0]);
 const NE='https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/';
 const LAND=fetch(NE+'ne_110m_land.geojson').then(r=>r.json());          /* 135KB — 줌 5까지 */
 const LAND50=fetch(NE+'ne_50m_land.geojson').then(r=>r.json());          /* 533KB — 줌 8까지 */
@@ -93,6 +99,10 @@ function drawGraticule(map){
 }
 
 const SOURCES=[
+  {id:'mvt', name:'벡터타일 · 조용', mvt:'quiet', tag:'new', tagText:'해안선 없음 · 줌 19',
+   note:'OpenFreeMap 벡터 타일(키 불필요)을 Leaflet에서 직접 칠한다. 바다는 면만 칠하고 테두리를 안 그린다.'},
+  {id:'mvtroad', name:'벡터타일 · 길까지', mvt:'road', tag:'new', tagText:'해안선 없음 · 줌 19',
+   note:'같은 타일에 도로·경계만 가늘게 더한 것. 어디까지 넣을지는 마음대로.'},
   {id:'vec', name:'벡터 · 땅만', vector:'plain', tag:'new', tagText:'해안선 없음',
    note:'타일 없이 땅 모양만 옅은 면으로. 해안선도 글자도 없다.'},
   {id:'vecline', name:'벡터 · 윤곽선', vector:'line', tag:'new', tagText:'해안선 있음',
@@ -161,13 +171,32 @@ function build(){
       zoomControl:false, attributionControl:false, scrollWheelZoom:false,
       minZoom:1, maxBounds:WORLD, maxBoundsViscosity:1,
     }).setView([20,130],2);
-    if(src.vector){
-      map.getContainer().style.background='#EDF1EA'; /* 바다 = 아주 옅은 한 톤 */
+    if(src.mvt){
+      /* 이 스키마엔 '땅' 레이어가 없다 — 배경이 땅이고 물만 도형이다 */
+      map.getContainer().style.background='#E1E7D9';
+      MVT_URL.then(u=>{
+        const none={weight:0,fill:false,opacity:0,fillOpacity:0};
+        const road=src.mvt==='road';
+        L.vectorGrid.protobuf(u,{
+          interactive:false, maxNativeZoom:14, maxZoom:19, rendererFactory:L.canvas.tile,
+          vectorTileLayerStyles:{
+            /* 바다·물 — 면만 칠하고 테두리를 안 그린다. 이게 '해안선 없음'의 실체 */
+            water:{fill:true,fillColor:'#F3F6F0',fillOpacity:1,stroke:false,weight:0},
+            landcover:{fill:true,fillColor:'#DAE2CF',fillOpacity:.5,stroke:false},
+            park:{fill:true,fillColor:'#D7E0CB',fillOpacity:.6,stroke:false},
+            landuse:none, building:none, poi:none, aeroway:none, waterway:none,
+            water_name:none, transportation_name:none, aerodrome_label:none, place:none,
+            boundary: road?{color:'#C7D0C0',weight:.7,opacity:.9,fill:false}:none,
+            transportation: road?{color:'#D6DCCF',weight:.6,opacity:.9,fill:false}:none,
+          }}).addTo(map);
+      });
+    }else if(src.vector){
+      map.getContainer().style.background='#F3F6F0'; /* 바다 = 아주 옅은 한 톤 */
       if(src.vector==='grid')drawGraticule(map);
       (src.fine?LAND50:LAND).then(gj=>{
         const style=src.vector==='line'
-          ?{fillColor:'#E3E8DC',fillOpacity:1,color:'#C2CDBB',weight:.9}
-          :{fillColor:'#E3E8DC',fillOpacity:1,color:'#E3E8DC',weight:0};
+          ?{fillColor:'#E1E7D9',fillOpacity:1,color:'#B9C6AE',weight:.9}
+          :{fillColor:'#E1E7D9',fillOpacity:1,color:'#E1E7D9',weight:0};
         L.geoJSON(gj,{style,interactive:false}).addTo(map);
       });
     }else{
