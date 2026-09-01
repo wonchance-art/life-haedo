@@ -3748,7 +3748,8 @@ try{
   /* noWrap만으로는 범위 밖 타일을 계속 요청한다(400) — bounds까지 줘야 안 부른다 */
   const WORLD_BOUNDS=L.latLngBounds([-85.0511,-180],[85.0511,180]);
   map=L.map('map',{scrollWheelZoom:true,doubleClickZoom:false,minZoom:1,
-    zoomSnap:.25,zoomDelta:.5,wheelPxPerZoomLevel:100,   /* 거의 연속으로 확대 */
+    zoomSnap:.25,zoomDelta:.5,
+    wheelPxPerZoomLevel:20,wheelDebounceTime:20,   /* 트랙패드 한 번에 반 칸쯤 — 100은 스냅에서 버려졌다 */
     maxBounds:[[-85,-180],[85,180]],maxBoundsViscosity:1}).setView([27,127],4);
   /* 확대 조작을 연표와 같게 — 맨 휠은 페이지 스크롤, ⌘/Ctrl+휠(=트랙패드 핀치)이 확대 */
   map.getContainer().addEventListener('keydown',e=>{
