@@ -34,6 +34,7 @@
     border-radius:2px;color:var(--ink-soft);margin-left:5px;vertical-align:2px}
   .tag.warn{color:#B5432A;border-color:#E4C4BC}
   .tag.now{color:var(--accent);border-color:#C6DFC0}
+  .tag.new{color:#8A6D3B;border-color:#E0D3B8}
   footer{margin-top:30px;font-size:12px;color:var(--ink-soft)}
   footer code{font-family:'IBM Plex Mono',monospace;font-size:11.5px}
 </style>
@@ -70,14 +71,36 @@
       담묵 <code>saturate(.18) contrast(.88) brightness(1.07)</code> ·
       세피아 <code>sepia(.4) saturate(.55) brightness(1.04)</code></p>
     <p>지명 표기: OSM 계열은 현지어(한국·일본은 한글·일본어), Esri 계열은 영어다.</p>
+    <p><b>벡터 세 장</b>은 타일(그림)이 아니라 도형이라 해안선·글자를 마음대로 뺄 수 있다.
+      대신 자료 정밀도만큼만 보인다 — 110m(135KB)는 줌 5까지, 50m(533KB)는 줌 8까지.
+      어느 쪽도 도시 안은 못 본다.
+      색 보정은 벡터에는 안 걸린다(그림이 아니라 도형이라 색을 직접 정한다).</p>
   </footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 const WORLD=L.latLngBounds([-85.0511,-180],[85.0511,180]);
+/* 벡터 땅 — Natural Earth 110m. 타일이 아니라 도형이라 해안선을 지울 수 있다 */
+const NE='https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/';
+const LAND=fetch(NE+'ne_110m_land.geojson').then(r=>r.json());          /* 135KB — 줌 5까지 */
+const LAND50=fetch(NE+'ne_50m_land.geojson').then(r=>r.json());          /* 533KB — 줌 8까지 */
+function drawGraticule(map){
+  const g=[];
+  for(let lng=-180;lng<=180;lng+=30)g.push([[-85,lng],[85,lng]]);
+  for(let lat=-60;lat<=60;lat+=30)g.push([[lat,-180],[lat,180]]);
+  g.forEach(p=>L.polyline(p,{color:'#CBD5C6',weight:.6,opacity:.8,interactive:false}).addTo(map));
+}
 
 const SOURCES=[
+  {id:'vec', name:'벡터 · 땅만', vector:'plain', tag:'new', tagText:'해안선 없음',
+   note:'타일 없이 땅 모양만 옅은 면으로. 해안선도 글자도 없다.'},
+  {id:'vecline', name:'벡터 · 윤곽선', vector:'line', tag:'new', tagText:'해안선 있음',
+   note:'같은 벡터에 가는 윤곽선만 얹은 것. 있고 없고를 비교해보라.'},
+  {id:'vecgrid', name:'벡터 · 땅 + 위경선', vector:'grid', tag:'new', tagText:'해안선 없음',
+   note:'땅 면에 위경선만. 넓게 볼 때 거리감이 생긴다.'},
+  {id:'vec50', name:'벡터 · 땅만 (정밀)', vector:'plain', fine:true, max:8, tag:'new', tagText:'해안선 없음',
+   note:'같은 방식에 다섯 배 정밀한 자료(533KB). 나라 모양이 제대로 나온다.'},
   {id:'osm', name:'OSM 표준', tag:'now', tagText:'지금 쓰는 것',
    note:'선명하고 정보가 많다. 색이 진해 보정이 필요하다.',
    url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png', max:19},
@@ -138,19 +161,29 @@ function build(){
       zoomControl:false, attributionControl:false, scrollWheelZoom:false,
       minZoom:1, maxBounds:WORLD, maxBoundsViscosity:1,
     }).setView([20,130],2);
-    L.tileLayer(src.url,{maxZoom:src.max, noWrap:true, bounds:WORLD,
-      subdomains:src.sub||'abc'}).addTo(map);
+    if(src.vector){
+      map.getContainer().style.background='#EDF1EA'; /* 바다 = 아주 옅은 한 톤 */
+      if(src.vector==='grid')drawGraticule(map);
+      (src.fine?LAND50:LAND).then(gj=>{
+        const style=src.vector==='line'
+          ?{fillColor:'#E3E8DC',fillOpacity:1,color:'#C2CDBB',weight:.9}
+          :{fillColor:'#E3E8DC',fillOpacity:1,color:'#E3E8DC',weight:0};
+        L.geoJSON(gj,{style,interactive:false}).addTo(map);
+      });
+    }else{
+      L.tileLayer(src.url,{maxZoom:src.max, noWrap:true, bounds:WORLD,
+        subdomains:src.sub||'abc'}).addTo(map);
+    }
     maps.push({src,map,line:null,marks:[]});
   });
   goView();
 }
 function place(m){
-  const v=VIEWS[view];
+  const v=VIEWS[view], max=m.src.max||(m.src.vector?7:19); /* 110m 벡터는 도시 줌이 없다 */
   if(v.fit){
-    const b=L.latLngBounds(ROUTE).pad(.12);
-    m.map.fitBounds(b,{animate:false,maxZoom:m.src.max});
+    m.map.fitBounds(L.latLngBounds(ROUTE).pad(.12),{animate:false,maxZoom:max});
   }else{
-    m.map.setView(v.center, Math.min(v.zoom, m.src.max), {animate:false});
+    m.map.setView(v.center, Math.min(v.zoom, max), {animate:false});
   }
 }
 
