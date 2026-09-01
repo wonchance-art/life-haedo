@@ -3747,8 +3747,20 @@ try{
   if(typeof L==='undefined') throw new Error('leaflet-missing');
   /* noWrap만으로는 범위 밖 타일을 계속 요청한다(400) — bounds까지 줘야 안 부른다 */
   const WORLD_BOUNDS=L.latLngBounds([-85.0511,-180],[85.0511,180]);
-  map=L.map('map',{scrollWheelZoom:false,minZoom:1,
+  map=L.map('map',{scrollWheelZoom:false,doubleClickZoom:false,minZoom:1,
+    zoomSnap:0,zoomDelta:.6,   /* 연표처럼 연속 확대 */
     maxBounds:[[-85,-180],[85,180]],maxBoundsViscosity:1}).setView([27,127],4);
+  /* 확대 조작을 연표와 같게 — 맨 휠은 페이지 스크롤, ⌘/Ctrl+휠이 확대. 커서 자리를 기준으로 */
+  map.getContainer().addEventListener('keydown',e=>{
+    if(e.key!=='0')return;            /* +/- 는 Leaflet 기본 키(zoomDelta .6)가 처리 */
+    e.preventDefault();selectTrip(curTripId);   /* 연표의 0 = 전체 보기와 같은 뜻 */
+  });
+  map.getContainer().addEventListener('wheel',e=>{
+    if(!(e.ctrlKey||e.metaKey))return;
+    e.preventDefault();
+    const ll=map.containerPointToLatLng(map.mouseEventToContainerPoint(e));
+    map.setZoomAround(ll,map.getZoom()-e.deltaY*0.0022,{animate:false});
+  },{passive:false});
   let tileFails=0, fellBack=false;
   function addTiles(url,opt){
     const layer=L.tileLayer(url,opt).addTo(map);
