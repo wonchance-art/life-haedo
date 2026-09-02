@@ -151,7 +151,7 @@ html[data-theme=spring]{
   #sec-canvas .wrap{max-width:none;padding:0 clamp(14px,2.2vw,36px)} /* 연표는 화면 전체 폭 */
   .canvas-frame{border:1px solid var(--line);background:var(--panel);padding:8px;position:relative}
   .canvas-inner{border:1px solid var(--line);position:relative;overflow:hidden}
-  .grid-band{border:1px solid var(--line);border-top:none;position:relative;background:var(--panel)}
+  .grid-band{border:1px solid var(--line);position:relative;background:var(--panel);margin-top:6px}
   .grid-bar{display:flex;align-items:center;gap:5px;padding:4px 6px;border-bottom:1px solid var(--line)}
   .grid-note{font-size:11.5px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .grid-note b{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--ink)}
@@ -355,6 +355,12 @@ html[data-theme=spring]{
           </div>
         </div>
 
+        <!-- 스크러버 (미니맵) -->
+        <div class="scrubber">
+          <div class="scrub-track" id="scrubTrack" aria-label="타임라인 미니맵 — 클릭·드래그로 이동"></div>
+          <span class="scrub-year" id="scrubYear">—</span>
+        </div>
+
         <!-- 생애 격자 — 연표 아래 띠. 가로가 시간, 위가 시대 -->
         <div class="grid-band" id="gridBand" hidden>
           <div class="grid-bar">
@@ -365,12 +371,6 @@ html[data-theme=spring]{
           </div>
           <canvas id="gridCv"></canvas>
           <div class="tl-tip" id="gridTip"></div>
-        </div>
-
-        <!-- 스크러버 (미니맵) -->
-        <div class="scrubber">
-          <div class="scrub-track" id="scrubTrack" aria-label="타임라인 미니맵 — 클릭·드래그로 이동"></div>
-          <span class="scrub-year" id="scrubYear">—</span>
         </div>
 
         <!-- 에디터 -->
@@ -4137,13 +4137,13 @@ function drawGrid(){
   END.setFullYear(B.getFullYear()+GRID_SPAN);
   const tot=gDay(END)-gDay(B), lived=todayN-gDay(B), left=Math.max(0,tot-lived);
   const nf=x=>x.toLocaleString('ko-KR');
-  const uname={week:'한 칸 한 주',month:'한 칸 한 달'}[L.u];
-  $('#gridNote').innerHTML=`남은 날 <b>${nf(left)}</b> · 남은 주 <b>${nf(Math.round(left/7))}</b>`
+  /* 격자가 세는 단위 그대로 — 주 칸이면 남은 주, 달 칸이면 남은 달 */
+  const leftN=L.u==='month'
+    ?(END.getFullYear()-NOWD.getFullYear())*12+(END.getMonth()-NOWD.getMonth())
+    :Math.round(left/7);
+  $('#gridNote').innerHTML=`남은 ${L.u==='month'?'달':'주'} <b>${nf(leftN)}</b>`
     +` · 지난 몫 <b>${(lived/tot*100).toFixed(1)}%</b>`
-    +` <span class="dim">${GRID_SPAN}년 가정 · ${uname}`
-    +`${Math.abs(cw-ch)>.5?` ${cw.toFixed(1)}×${ch.toFixed(1)}px`:''} · 세로 `
-    +`그 해의 ${L.u==='week'?'주':'달'}`
-    +(gw<(W-SIDE)*.95?` · 가로 ${Math.round(gw/(W-SIDE)*100)}%`:'')+`</span>`
+    +` <span class="dim">${GRID_SPAN}년</span>`
     +(L.fell?' <span style="color:var(--cinnabar)">고른 칸이 안 들어가 자동으로</span>':'');
 }
 
