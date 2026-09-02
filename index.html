@@ -3944,8 +3944,9 @@ document.getElementById('btnMap').onclick=()=>{MAP_OPEN?closeMapOverlay():openMa
 /* ==========================================================================
    생애 격자 — 연표 아래 띠
    가로가 시간(연표와 같은 방향), 위가 시대, 아래가 나이. 지난 칸이 왼쪽.
-   한 칸은 한 주·한 달·하루 중 하나. 한 열은 한 해·반년·분기·한 달 중 하나.
-   열이 칸의 정수배인 짝만 후보로 두고, 폭에 칸이 가장 많이 들어가는 짝을 고른다.
+   세로는 '그 열 안의 자리'다 — 그래서 한 열은 늘 한 해다(칸이 하루일 때만 한 달).
+   반년·분기로 쪼개면 같은 줄이 열마다 다른 달을 가리킨다(7째 줄이 2월이었다 8월이었다).
+   한 칸은 한 주·한 달·하루. 폭에 칸이 가장 많이 들어가는 짝을 고르고,
    높이는 채우려 들지 않는다 — 격자가 필요한 만큼만 쓴다.
    ========================================================================== */
 const gridBand=$('#gridBand'), gridCv=$('#gridCv'), gridTip=$('#gridTip');
@@ -3975,17 +3976,16 @@ const gMix=(a,b,t)=>{const A=gRGB(a),B=gRGB(b);
 function gridLayout(W,H){
   const y=GRID_SPAN;
   const cand=[
-    {kind:'year', p:1, cols:y,    rows:52,u:'week'},   /* 열 한 해 · 칸 한 주 */
-    {kind:'year', p:2, cols:y*2,  rows:26,u:'week'},   /* 열 반년 · 칸 한 주 */
-    {kind:'year', p:4, cols:y*4,  rows:13,u:'week'},   /* 열 분기 · 칸 한 주 */
-    {kind:'ym',   p:1, cols:y,    rows:12,u:'month'},  /* 열 한 해 · 칸 한 달 */
-    {kind:'ym',   p:2, cols:y*2,  rows:6, u:'month'},  /* 열 반년 · 칸 한 달 */
-    {kind:'month',p:12,cols:y*12, rows:31,u:'day'},    /* 열 한 달 · 칸 하루 */
+    {kind:'year', p:1, cols:y,    rows:52,u:'week'},   /* 열 한 해 · 세로 그 해의 주 */
+    {kind:'ym',   p:1, cols:y,    rows:12,u:'month'},  /* 열 한 해 · 세로 그 해의 달 */
+    {kind:'month',p:12,cols:y*12, rows:31,u:'day'},    /* 열 한 달 · 세로 그 달의 날 */
   ];
   const most=(a,b)=>a.cols*a.rows>b.cols*b.rows;
+  const auto=GRID_CELL==='auto';
   const pick=(list,floor)=>{let b=null;
-    for(const o of list){const cell=W/o.cols;
-      if(cell<floor||cell>64||o.rows*cell>H)continue;
+    for(const o of list){const cell=Math.min(W/o.cols,H/o.rows);
+      if(cell<floor||cell>64)continue;
+      if(auto&&o.cols*cell<W*.5)continue;      /* 자동은 폭을 채우는 것만 */
       if(!b||most(o,b))b=o;}
     return b;};
   const pool=GRID_CELL==='auto'?cand:cand.filter(o=>o.u===GRID_CELL);
@@ -3997,10 +3997,9 @@ function gridLayout(W,H){
     if(best)break;
   }
   if(!best){                                  /* 그래도 없으면 칸이 가장 큰 것 */
-    for(const o of cand){const cell=W/o.cols;
-      if(o.rows*cell>H)continue;
-      if(!best||cell>W/best.cols)best=o;}
-    best=best||cand[4];
+    for(const o of cand){const cell=Math.min(W/o.cols,H/o.rows);
+      if(!best||cell>Math.min(W/best.cols,H/best.rows))best=o;}
+    best=best||cand[1];
   }
   return{...best,fell};
 }
@@ -4028,9 +4027,12 @@ function drawGrid(){
   if(W<80)return;
   const ctx=gridCv.getContext('2d');
   const SIDE=44, TOP=SHOW.era?18:4, BOT=16;
-  const HMAX=Math.max(110,Math.min(300,Math.round((self.innerHeight||800)*.26)));
+  const ih=self.innerHeight||800;
+  const HMAX=GRID_CELL==='auto'
+    ? Math.max(110,Math.min(300,Math.round(ih*.26)))   /* 띠 — 연표를 가리지 않는 높이 */
+    : Math.max(150,Math.min(480,Math.round(ih*.46)));  /* 칸을 직접 골랐으면 더 내준다 */
   const L=gridLayout(W-SIDE,HMAX); GLAY=L;
-  const cell=(W-SIDE)/L.cols, gw=L.cols*cell, gh=L.rows*cell;
+  const cell=Math.min((W-SIDE)/L.cols,HMAX/L.rows), gw=L.cols*cell, gh=L.rows*cell;
   const CH=Math.round(gh+TOP+BOT), dpr=devicePixelRatio||1;
   gridCv.width=Math.round(W*dpr); gridCv.height=Math.round(CH*dpr); gridCv.style.height=CH+'px';
   ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,CH);
@@ -4079,11 +4081,10 @@ function drawGrid(){
     if(L.kind==='ym'){
       const d=gCellDate(L,r,0);
       if(cell>=13||d.getMonth()%3===0)ctx.fillText(d.getMonth()+1,GPADL-6,yy);
-    }else if(L.kind==='year'&&L.p===1){
-      const mo=new Date(2001,0,1+r*7).getMonth(), pv=r?new Date(2001,0,1+(r-1)*7).getMonth():-1;
+    }else if(L.kind==='year'){          /* 그 해의 주 → 달로 읽는다 */
+      const B=gBirth();
+      const mo=gCellDate(L,r,0).getMonth(), pv=r?gCellDate(L,r-1,0).getMonth():-1;
       if(mo!==pv&&(cell>=11||mo%3===0))ctx.fillText(mo+1,GPADL-6,yy);
-    }else if(L.kind==='year'){
-      if((r+1)%4===0)ctx.fillText(r+1,GPADL-6,yy);
     }else if(r===0||(r+1)%10===0)ctx.fillText(r+1,GPADL-6,yy);
   }
   /* 아래 축 — 나이 */
@@ -4127,7 +4128,9 @@ function drawGrid(){
   const uname={week:'한 칸 한 주',month:'한 칸 한 달',day:'한 칸 하루'}[L.u];
   $('#gridNote').innerHTML=`남은 날 <b>${nf(left)}</b> · 남은 주 <b>${nf(Math.round(left/7))}</b>`
     +` · 지난 몫 <b>${(lived/tot*100).toFixed(1)}%</b>`
-    +` <span class="dim">${GRID_SPAN}년 가정 · ${uname}</span>`
+    +` <span class="dim">${GRID_SPAN}년 가정 · ${uname} · 세로 `
+    +`${L.u==='day'?'그 달의 날':'그 해의 '+(L.u==='week'?'주':'달')}`
+    +(gw<(W-SIDE)*.95?` · 가로 ${Math.round(gw/(W-SIDE)*100)}%`:'')+`</span>`
     +(L.fell?' <span style="color:var(--cinnabar)">고른 칸이 안 들어가 자동으로</span>':'');
 }
 
