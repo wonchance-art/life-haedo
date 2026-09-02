@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>디자인 시안 — 인생 연표</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════════════════════
+   토큰 — 두 벌. data-t="now" 는 지금 앱, data-t="new" 는 새 설계
+   ══════════════════════════════════════════════════════════════ */
+:root{
+  --w:1180px;
+  --serif:'Noto Serif KR',serif;
+  --sans:Pretendard,'Apple SD Gothic Neo',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+[data-t="now"]{
+  --page:oklch(99.2% .005 95);      /* 바탕과 판이 같은 값 — 그래서 선이 필요하다 */
+  --panel:oklch(99.2% .005 95);
+  --sunk:oklch(97.6% .008 95);
+  --rule:oklch(93.5% .012 92);
+  --ink:oklch(36% .013 75);
+  --ink-1:oklch(36% .013 75);
+  --ink-2:color-mix(in oklab,oklch(36% .013 75) 60%,oklch(99.2% .005 95));
+  --accent:oklch(66% .115 23);
+  --gold:oklch(66% .08 85);
+  --r-panel:0px; --r-chip:999px;
+  --elev:none;
+  --border:1px solid var(--rule);
+  --head-pad:52px;
+  --name-size:clamp(48px,7.5vw,88px);
+  --name-face:var(--sans);
+  --name-weight:700;
+  --name-track:.04em;
+  --fig-size:19px;
+  --fig-face:var(--mono);
+  --fig-num:tabular-nums;
+}
+[data-t="new"]{
+  --page:oklch(97.4% .008 92);      /* 바탕을 한 단 내리고 */
+  --panel:oklch(99.6% .004 95);     /* 판을 한 단 올린다 → 선 없이 뜬다 */
+  --sunk:oklch(95.2% .01 92);
+  --rule:oklch(91% .012 92);
+  --ink:oklch(21% .014 70);
+  --ink-1:oklch(21% .014 70);
+  --ink-2:oklch(56% .012 78);
+  --accent:oklch(58% .16 28);       /* 진사를 올리고 쓰는 자리를 줄인다 */
+  --gold:oklch(68% .06 85);
+  --r-panel:12px; --r-chip:7px;
+  --elev:0 1px 2px oklch(21% .01 70/.05), 0 14px 34px -18px oklch(21% .01 70/.22);
+  --border:none;
+  --head-pad:26px;
+  --name-size:clamp(44px,6.4vw,84px);
+  --name-face:var(--serif);
+  --name-weight:900;
+  --name-track:-.03em;
+  --fig-size:56px;
+  --fig-face:var(--sans);
+  --fig-num:proportional-nums;
+}
+[data-t="new"][data-face="sans"]{ --name-face:var(--sans); --name-weight:800; }
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--page);color:var(--ink-1);font-family:var(--sans);
+  font-size:14.5px;line-height:1.65;-webkit-font-smoothing:antialiased}
+
+/* 종이 결 — 페이지 바닥에만. 플롯 안에는 절대 넣지 않는다 (값 눈금 위의 질감은 노이즈) */
+[data-t="new"] body::before,[data-t="new"] .app::before{content:''}
+[data-t="new"] .app::before{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 .12 0 0 0 0 .10 0 0 0 0 .07 0 0 0 .045 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* ── 조작 막대 ─────────────────────────────────────────────── */
+.ctrl{position:sticky;top:0;z-index:40;display:flex;gap:22px;flex-wrap:wrap;align-items:center;
+  padding:10px clamp(14px,3vw,34px);background:color-mix(in oklab,var(--page) 88%,transparent);
+  backdrop-filter:blur(14px);border-bottom:1px solid var(--rule)}
+.ctrl b{font-size:10.5px;letter-spacing:.09em;color:var(--ink-2);font-weight:600}
+.ctrl .g{display:flex;gap:5px;align-items:center}
+.sw{font:inherit;font-size:12px;padding:4px 11px;border:1px solid var(--rule);background:transparent;
+  color:var(--ink-1);border-radius:6px;cursor:pointer;opacity:.55;transition:opacity .15s,border-color .15s}
+.sw.on{opacity:1;border-color:var(--ink-1);font-weight:700}
+.sw:disabled{opacity:.2;cursor:default}
+.spec{font-family:var(--name-face);font-weight:var(--name-weight);font-size:22px;
+  letter-spacing:var(--name-track);color:var(--ink-1)}
+
+/* ── 앱 ────────────────────────────────────────────────────── */
+.app{position:relative;z-index:1;padding-bottom:80px}
+.wrap{max-width:var(--w);margin:0 auto;padding:0 clamp(14px,3vw,34px);position:relative;z-index:1}
+
+.head{padding:var(--head-pad) 0;border-bottom:1px solid var(--rule)}
+[data-t="new"] .head{padding:34px 0 26px}
+.head-in{display:flex;align-items:flex-end;justify-content:space-between;gap:40px;flex-wrap:wrap}
+h1{font-family:var(--name-face);font-weight:var(--name-weight);font-size:var(--name-size);
+  line-height:.92;letter-spacing:var(--name-track)}
+.sub{color:var(--ink-2);font-size:15px;margin-top:12px}
+[data-t="new"] .sub{margin-top:8px;font-size:13.5px;letter-spacing:.01em}
+
+.figs{display:flex;gap:34px;align-items:flex-end}
+.fig{display:flex;flex-direction:column;gap:2px}
+.fig .k{font-size:10.5px;letter-spacing:.09em;color:var(--ink-2);font-weight:600;order:-1}
+.fig .v{font-family:var(--mono);font-size:17px;font-weight:500;font-variant-numeric:tabular-nums}
+.fig.hero .v{font-family:var(--fig-face);font-size:var(--fig-size);font-weight:700;
+  font-variant-numeric:var(--fig-num);line-height:1;letter-spacing:-.02em}
+[data-t="now"] .fig.hero .v{font-weight:500;letter-spacing:0}
+
+/* ── 막대 · 칩 ─────────────────────────────────────────────── */
+.bar{display:flex;align-items:center;gap:6px;padding:16px 0 8px}
+.chip{font:inherit;font-size:12px;padding:3px 11px;border:1px solid var(--rule);background:transparent;
+  color:var(--ink-1);border-radius:var(--r-chip);cursor:pointer;opacity:.6;
+  transition:opacity .15s,border-color .15s,transform .12s,background .15s}
+.chip:hover{opacity:.9}
+.chip.on{opacity:1;border-color:var(--ink-1);font-weight:700}
+[data-t="new"] .chip.on{background:var(--sunk);border-color:transparent}
+.chip:active{transform:scale(.97)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 12px}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.chip.lay{display:inline-flex;align-items:center;gap:6px}
+
+/* ── 판 ────────────────────────────────────────────────────── */
+.panel{background:var(--panel);border:var(--border);border-radius:var(--r-panel);box-shadow:var(--elev)}
+.plot{padding:8px}
+[data-t="new"] .plot{padding:14px 10px 10px}
+/* 곡선만 화면 끝까지 — 글은 단 안에 남는다 */
+[data-t="new"] .bleed{margin-inline:calc(50% - 50vw);width:100vw;border-radius:0;
+  padding-inline:clamp(14px,3vw,34px);box-shadow:none;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+svg{display:block;width:100%;height:auto;overflow:visible}
+.mini{margin-top:8px;padding:6px 8px}
+.gridwrap{margin-top:8px;padding:8px}
+canvas{display:block;width:100%}
+
+/* ── 차트 요소 ─────────────────────────────────────────────── */
+.ax{stroke:var(--ink-1);stroke-width:1.6;opacity:1}
+[data-t="new"] .ax{stroke:var(--rule);stroke-width:1}
+.grid-l{stroke:var(--gold);stroke-width:1.1;stroke-dasharray:7 5;opacity:.75}
+[data-t="new"] .grid-l{stroke:var(--rule);stroke-width:1;stroke-dasharray:none;opacity:1}
+.zero{stroke:var(--ink-1);stroke-width:1;opacity:.35}
+[data-t="new"] .zero{stroke:var(--rule);stroke-width:1;opacity:1}
+.curve{fill:none;stroke:var(--curve);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;opacity:.92}
+[data-t="new"] .curve{stroke-width:2;opacity:1}
+.curve-f{fill:none;stroke:var(--curve);stroke-width:2.4;stroke-linecap:round;
+  stroke-dasharray:6 5;opacity:.45}
+[data-t="new"] .curve-f{stroke-width:2;opacity:.42}
+.now-l{stroke:var(--accent);stroke-width:1.2;stroke-dasharray:5 4;opacity:.75}
+[data-t="new"] .now-l{stroke-width:1;stroke-dasharray:none;opacity:1}
+.pin{stroke:var(--panel);stroke-width:1.4}
+[data-t="new"] .pin{stroke-width:2}
+.tk{font-family:var(--mono);font-size:10px;fill:var(--ink-2)}
+.tk-y{font-family:var(--mono);font-size:10px;fill:var(--ink-2)}
+.era-t{font-size:11px;fill:var(--ink-2)}
+[data-t="new"] .era-t{font-size:10.5px;letter-spacing:.06em}
+.nowtag{font-size:10px;fill:var(--accent);font-weight:700}
+[data-t="new"] .nowtag{fill:var(--panel)}
+
+/* ── 모션 — 새 설계에만 ────────────────────────────────────── */
+[data-t="new"] .rise{opacity:0;transform:translateY(9px);animation:rise .5s cubic-bezier(.16,1,.3,1) forwards}
+[data-t="new"] .rise:nth-of-type(1){animation-delay:.02s}
+@keyframes rise{to{opacity:1;transform:none}}
+[data-t="new"] .draw{stroke-dasharray:var(--len);stroke-dashoffset:var(--len);
+  animation:draw .75s cubic-bezier(.16,1,.3,1) .12s forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+@media (prefers-reduced-motion:reduce){
+  [data-t="new"] .rise,[data-t="new"] .draw{animation:none;opacity:1;transform:none;stroke-dashoffset:0}
+}
+
+.note{max-width:var(--w);margin:34px auto 0;padding:0 clamp(14px,3vw,34px);
+  font-size:12.5px;color:var(--ink-2);line-height:1.75}
+.note h3{font-size:13px;color:var(--ink-1);margin:16px 0 4px;font-weight:700}
+.note code{font-family:var(--mono);font-size:11.5px}
+</style>
+</head>
+<body>
+
+<div class="ctrl">
+  <div class="g"><b>테마</b>
+    <button class="sw t" data-t="now">지금</button>
+    <button class="sw t on" data-t="new">새 설계</button>
+  </div>
+  <div class="g"><b>이름 서체</b>
+    <button class="sw f on" data-f="serif">명조</button>
+    <button class="sw f" data-f="sans">산세리프</button>
+  </div>
+  <div class="g"><b>히어로 수치</b>
+    <button class="sw h on" data-h="avg">평균 행복</button>
+    <button class="sw h" data-h="past">지난 몫</button>
+    <button class="sw h" data-h="left">남은 주</button>
+  </div>
+  <div class="g"><b>한자</b><span class="spec">年表</span></div>
+</div>
+
+<div class="app" id="app">
+  <div class="wrap">
+    <header class="head">
+      <div class="head-in">
+        <div class="rise">
+          <h1>내 연표</h1>
+          <p class="sub">시간에 따른 행복도와 사건 기록</p>
+        </div>
+        <div class="figs rise" id="figs"></div>
+      </div>
+    </header>
+
+    <div class="bar" id="bar"></div>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <div class="wrap" id="plotwrap">
+    <div class="panel plot bleed" id="plot"><svg id="chart" viewBox="0 0 1160 440" preserveAspectRatio="none"></svg></div>
+  </div>
+
+  <div class="wrap">
+    <div class="panel mini"><svg id="mini" viewBox="0 0 1160 26" preserveAspectRatio="none"></svg></div>
+    <div class="panel gridwrap"><canvas id="gridcv"></canvas></div>
+  </div>
+
+  <div class="note">
+    <h3>이 시안이 견주는 것</h3>
+    바탕과 판의 값 차이(선 없이 뜨는가) · 이름 서체 · 히어로 수치 하나 ·
+    곡선 2px와 축 1px의 대비 · 눈금선 실선 · 점선을 미래에만 · 종이 결 · 화면 끝까지 나가는 곡선 ·
+    불러올 때의 차례.
+    <h3>규범에서 온 것</h3>
+    선 <code>2px</code> · 면 <code>10%</code> 워시 · 눈금은 실선 한 겹 · 표식 <code>r≥4</code>에 종이색 2px 링 ·
+    히어로 수치는 한 화면에 하나, 본문과 같은 산세리프, 비례숫자 ·
+    분야 5색은 검사를 통과했으므로 그대로 두고 포커스 밖만 회색으로.
+    <h3>데이터</h3>
+    예시 인물(1998-05 출생)의 것이다. 실제 기록이 아니다.
+  </div>
+</div>
+
+<script>
+/* ── 예시 데이터 (익명) ─────────────────────────────────────── */
+const BIRTH=new Date(1998,4,12), TODAY=new Date(2026,8,2);
+const LAYERS=[
+  {id:'work',  name:'노동', c:'#B5843B'},
+  {id:'study', name:'학습', c:'#5C8AC7'},
+  {id:'travel',name:'여행', c:'#5C9E55'},
+  {id:'read',  name:'독서', c:'#8E6FC8'},
+  {id:'people',name:'사람', c:'#D06E77'},
+];
+const ERAS=[
+  {t:'학교',   s:2016.0, e:2020.2, c:'#8AA6C8'},
+  {t:'첫 일',  s:2020.2, e:2024.0, c:'#C89A6E'},
+  {t:'지금',   s:2024.0, e:2027.5, c:'#7FA98F'},
+  {t:'다음',   s:2027.5, e:2032.0, c:'#B58AC0'},
+];
+/* 씨앗 고정 난수 — 새로고침해도 같은 곡선 */
+let _s=20260902; const rnd=()=>(_s=(_s*1664525+1013904223)%4294967296)/4294967296;
+const SER=(()=>{const a=[];let v=.15;
+  for(let y=2018;y<=2032;y++)for(let m=0;m<12;m++){
+    v=Math.max(-.85,Math.min(.95,v+(rnd()-.48)*.34));
+    a.push({t:y+m/12,v:+v.toFixed(3)});}
+  /* 완만하게 — 화면 기준 이동평균 */
+  return a.map((p,i,arr)=>{let s=0,w=0;
+    for(let k=-5;k<=5;k++){const q=arr[i+k];if(!q)continue;const g=Math.exp(-k*k/12);s+=q.v*g;w+=g;}
+    return{t:p.t,v:s/w};});})();
+const NOW=TODAY.getFullYear()+TODAY.getMonth()/12;
+const EVENTS=[
+  [2024.05,'이사'],[2024.22,'자격증'],[2024.48,'긴 여행'],[2024.71,'이직'],
+  [2025.04,'새 프로젝트'],[2025.30,'가족 일'],[2025.58,'짧은 쉼'],[2025.83,'승진'],
+  [2026.10,'만남'],[2026.38,'큰 결정'],[2026.62,'다시 시작'],
+  [2027.15,'이주'],[2027.9,'정착'],[2028.4,'다음 목표'],
+].map(([t,title])=>({t,title,v:SER.reduce((b,p)=>Math.abs(p.t-t)<Math.abs(b.t-t)?p:b).v}));
+
+/* ── 상태 ───────────────────────────────────────────────────── */
+const root=document.documentElement;
+let THEME='new', FACE='serif', HERO='avg', FOCUS=null;
+const DOM=[2023.6,2029.4];
+
+/* ── 수치 ───────────────────────────────────────────────────── */
+const past=SER.filter(p=>p.t<=NOW);
+const AVG=past.reduce((s,p)=>s+p.v,0)/past.length;
+const dayN=d=>Math.floor((d.getTime()-d.getTimezoneOffset()*6e4)/864e5);
+const END=new Date(BIRTH.getFullYear()+80,BIRTH.getMonth(),BIRTH.getDate());
+const TOT=dayN(END)-dayN(BIRTH), LIVED=dayN(TODAY)-dayN(BIRTH), LEFT=TOT-LIVED;
+const HEROV={
+  avg :{k:'평균 행복', v:(AVG>0?'+':'')+AVG.toFixed(2)},
+  past:{k:'지난 몫',   v:(LIVED/TOT*100).toFixed(1)+'%'},
+  left:{k:'남은 주',   v:Math.round(LEFT/7).toLocaleString('ko-KR')},
+};
+function figs(){
+  const rest=[['출생','1998.05'],['사건 · 기간','115 · 26']];
+  const h=HEROV[HERO];
+  document.getElementById('figs').innerHTML=
+    `<div class="fig hero"><span class="k">${h.k}</span><span class="v">${h.v}</span></div>`
+    +rest.map(([k,v])=>`<div class="fig"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
+}
+
+/* ── 막대 · 칩 ─────────────────────────────────────────────── */
+document.getElementById('bar').innerHTML=
+  ['All','20Y','10Y','5Y','1Y'].map((s,i)=>`<button class="chip${i===3?' on':''}">${s}</button>`).join('')
+  +`<span style="flex:1"></span>`
+  +['⋯','지도','격자','검색'].map(s=>`<button class="chip">${s}</button>`).join('');
+function chips(){
+  document.getElementById('chips').innerHTML=
+    `<button class="chip lay${FOCUS===null?' on':''}" data-l="">종합</button>`
+    +LAYERS.map(l=>`<button class="chip lay${FOCUS===l.id?' on':''}" data-l="${l.id}">
+      <i class="dot" style="background:${FOCUS===null||FOCUS===l.id?l.c:'var(--ink-2)'}"></i>${l.name}</button>`).join('');
+  document.querySelectorAll('.chip.lay').forEach(b=>b.onclick=()=>{
+    FOCUS=b.dataset.l||null; chips(); draw();});
+}
+
+/* ── 차트 ───────────────────────────────────────────────────── */
+const SVGNS='http://www.w3.org/2000/svg';
+const el=(n,a)=>{const e=document.createElementNS(SVGNS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const W=1160,H=440,PT=78,PB=34;   /* 위 78 — 시대 이름·나이·해가 겹치지 않게 */
+const X=t=>(t-DOM[0])/(DOM[1]-DOM[0])*W;
+const Y=v=>PT+(1-(v+1)/2)*(H-PT-PB);
+
+function path(pts){                    /* 단조 3차 — 되꺾임 없이 */
+  if(pts.length<2)return'';
+  const n=pts.length,dx=[],dy=[],m=[];
+  for(let i=0;i<n-1;i++){dx[i]=pts[i+1].x-pts[i].x;dy[i]=(pts[i+1].y-pts[i].y)/dx[i];}
+  m[0]=dy[0];m[n-1]=dy[n-2];
+  for(let i=1;i<n-1;i++)m[i]=dy[i-1]*dy[i]<=0?0:(dy[i-1]+dy[i])/2;
+  let d=`M ${pts[0].x} ${pts[0].y}`;
+  for(let i=0;i<n-1;i++){const t=dx[i]/3;
+    d+=` C ${pts[i].x+t} ${pts[i].y+m[i]*t} ${pts[i+1].x-t} ${pts[i+1].y-m[i+1]*t} ${pts[i+1].x} ${pts[i+1].y}`;}
+  return d;
+}
+function draw(){
+  const svg=document.getElementById('chart');
+  svg.innerHTML='';
+  const NEW=THEME==='new';
+  const curveC=FOCUS?LAYERS.find(l=>l.id===FOCUS).c:(NEW?'#3E7A52':'#5C9E55');
+  svg.style.setProperty('--curve',curveC);
+
+  /* 면 그라디언트 — 규격 10% 워시 */
+  const defs=el('defs');
+  const lg=el('linearGradient',{id:'fill',x1:0,y1:Y(1),x2:0,y2:Y(0),gradientUnits:'userSpaceOnUse'});
+  lg.appendChild(el('stop',{offset:0,'stop-color':curveC,'stop-opacity':NEW?.11:.14}));
+  lg.appendChild(el('stop',{offset:1,'stop-color':curveC,'stop-opacity':NEW?.01:.14}));
+  defs.appendChild(lg);
+  const cp=el('clipPath',{id:'cp'});
+  cp.appendChild(el('rect',{x:0,y:0,width:X(NOW),height:H}));
+  defs.appendChild(cp); svg.appendChild(defs);
+
+  /* 시대 띠 */
+  ERAS.forEach(er=>{
+    const x0=Math.max(0,X(er.s)),x1=Math.min(W,X(er.e));
+    if(x1<=x0)return;
+    svg.appendChild(el('rect',{x:x0,y:16,width:x1-x0,height:NEW?2.5:3,
+      fill:er.c,opacity:NEW?.6:.4,rx:NEW?1.2:0}));
+    const tx=el('text',{x:x0+2,y:0,class:'era-t','dominant-baseline':'hanging'});
+    tx.textContent=er.t; if(x1-x0>34)svg.appendChild(tx);
+  });
+
+  /* 눈금선 — 새 설계는 실선 한 겹, 0선만 강조 */
+  [1,.5,0,-.5,-1].forEach(v=>{
+    if(NEW&&v!==0&&Math.abs(v)!==1)return;          /* 새 설계: 0과 양끝만 */
+    const y=Y(v);
+    svg.appendChild(el('line',{x1:0,x2:W,y1:y,y2:y,class:v===0?'zero':'grid-l'}));
+    const t=el('text',{x:W-2,y:y-4,class:'tk-y','text-anchor':'end'});
+    t.textContent=(v>0?'+':'')+v; svg.appendChild(t);
+  });
+
+  /* x축 — 해 눈금 + 나이 */
+  const y0=Y(1)-14;
+  svg.appendChild(el('line',{x1:0,x2:W,y1:y0,y2:y0,class:'ax'}));
+  for(let y=Math.ceil(DOM[0]);y<=DOM[1];y++){
+    const x=X(y);
+    svg.appendChild(el('line',{x1:x,x2:x,y1:y0-4,y2:y0+4,class:'ax'}));
+    const t=el('text',{x:x,y:y0-9,class:'tk','text-anchor':'middle'});
+    t.textContent=y; svg.appendChild(t);
+    const a=el('text',{x:x,y:y0-21,class:'tk','text-anchor':'middle','fill-opacity':.75});
+    a.textContent='만 '+(y-1999); svg.appendChild(a);
+  }
+
+  /* 면 + 곡선 */
+  const pts=SER.filter(p=>p.t>=DOM[0]-.2&&p.t<=DOM[1]+.2).map(p=>({x:X(p.t),y:Y(p.v)}));
+  const pastPts=pts.filter(p=>p.x<=X(NOW)+.5);
+  const futPts=pts.filter(p=>p.x>=X(NOW)-.5);
+  const area=path(pastPts)+` L ${X(NOW)} ${Y(0)} L ${pastPts[0].x} ${Y(0)} Z`;
+  svg.appendChild(el('path',{d:area,fill:'url(#fill)',stroke:'none'}));
+  const cf=el('path',{d:path(futPts),class:'curve-f'});
+  svg.appendChild(cf);
+  const cmain=el('path',{d:path(pastPts),class:'curve'+(NEW?' draw':'')});
+  svg.appendChild(cmain);
+  if(NEW){const L=cmain.getTotalLength();cmain.style.setProperty('--len',L);}
+
+  /* 오늘 실 */
+  const nx=X(NOW);
+  svg.appendChild(el('line',{x1:nx,x2:nx,y1:y0,y2:H-PB+8,class:'now-l'}));
+  if(NEW){
+    svg.appendChild(el('rect',{x:nx-17,y:y0-30,width:34,height:15,rx:7.5,fill:'var(--accent)'}));
+    const t=el('text',{x:nx,y:y0-19,class:'nowtag','text-anchor':'middle'});
+    t.textContent='오늘'; svg.appendChild(t);
+  }else{
+    const t=el('text',{x:nx+4,y:y0-9,class:'nowtag'}); t.textContent='오늘'; svg.appendChild(t);
+  }
+
+  /* 사건 표식 — r≥4 + 종이색 링 */
+  EVENTS.forEach(e=>{
+    if(e.t<DOM[0]||e.t>DOM[1])return;
+    const x=X(e.t),y=Y(e.v);
+    svg.appendChild(el('circle',{cx:x,cy:y,r:NEW?4.5:3.4,
+      fill:e.t>NOW?'var(--panel)':(NEW?'var(--ink-1)':'var(--ink-2)'),
+      stroke:e.t>NOW?'var(--ink-2)':'var(--panel)','stroke-width':NEW?2:1.4,class:'pin'}));
+  });
+
+  mini(); grid();
+}
+
+/* ── 미니맵 ─────────────────────────────────────────────────── */
+function mini(){
+  const s=document.getElementById('mini'); s.innerHTML='';
+  const NEW=THEME==='new';
+  const t0=2018,t1=2032, mx=t=>(t-t0)/(t1-t0)*W;
+  const pts=SER.map(p=>({x:mx(p.t),y:13-p.v*10}));
+  s.appendChild(el('path',{d:path(pts),fill:'none',stroke:'var(--ink-1)',
+    'stroke-width':1.2,opacity:NEW?.5:.6}));
+  s.appendChild(el('rect',{x:mx(DOM[0]),y:0,width:mx(DOM[1])-mx(DOM[0]),height:26,
+    fill:'var(--ink-1)',opacity:NEW?.08:.09,rx:NEW?4:0}));
+  s.appendChild(el('line',{x1:mx(NOW),x2:mx(NOW),y1:0,y2:26,class:'now-l'}));
+}
+
+/* ── 생애 격자 ─────────────────────────────────────────────── */
+function grid(){
+  const cv=document.getElementById('gridcv'), ctx=cv.getContext('2d');
+  const NEW=THEME==='new';
+  const box=cv.parentElement.clientWidth-16; if(box<60)return;
+  const SIDE=34, cols=80, rows=52;
+  const ch=Math.min((box-SIDE)/cols,380/rows);
+  const cw=Math.min((box-SIDE)/cols,ch*2);
+  const gw=cols*cw, gh=rows*ch, HH=Math.round(gh+22);
+  const dpr=devicePixelRatio||1;
+  cv.width=box*dpr; cv.height=HH*dpr; cv.style.height=HH+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,box,HH);
+  const cs=getComputedStyle(document.documentElement);
+  const pix=(()=>{const c=document.createElement('canvas').getContext('2d');c.width=c.height=1;
+    return v=>{c.fillStyle='#000';c.fillStyle=v;c.fillRect(0,0,1,1);
+      const d=c.getImageData(0,0,1,1).data;return[d[0],d[1],d[2]];};})();
+  const P=pix(cs.getPropertyValue('--panel')), I=pix(cs.getPropertyValue('--ink-1'));
+  const mix=(a,b,t)=>`rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*t)).join(',')})`;
+  const PAST=mix(I,P,.74), FUT=mix(I,P,.90);
+  const gap=NEW?1:.6, sw=cw-gap, sh=ch-gap, PADL=SIDE, PADT=4;
+  const nowAge=(TODAY-BIRTH)/(365.25*864e5);
+  for(let c=0;c<cols;c++)for(let r=0;r<rows;r++){
+    const age=c+r/52, x=PADL+c*cw, y=PADT+r*ch;
+    const er=ERAS.find(e=>{const yy=1998.36+age;return yy>=e.s&&yy<e.e;});
+    const p=age<nowAge;
+    ctx.fillStyle=er?mix(pix(er.c),P,p?.52:.86):(p?PAST:FUT);
+    ctx.fillRect(x,y,sw,sh);
+  }
+  /* 오늘 실이 격자까지 이어진다 */
+  const ax=PADL+nowAge*cw;
+  ctx.strokeStyle=cs.getPropertyValue('--accent').trim()||'#B5432A';
+  ctx.lineWidth=NEW?1:1.2;
+  if(!NEW)ctx.setLineDash([5,4]);
+  ctx.beginPath();ctx.moveTo(ax,PADT);ctx.lineTo(ax,PADT+gh);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle=mix(I,P,.45); ctx.font='9.5px "IBM Plex Mono", monospace';
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  for(let a=0;a<=80;a+=10)ctx.fillText(a,PADL+a*cw,PADT+gh+5);
+}
+
+/* ── 전환 ───────────────────────────────────────────────────── */
+function apply(){
+  root.dataset.t=THEME; root.dataset.face=FACE;
+  document.querySelectorAll('.sw.f').forEach(b=>b.disabled=THEME!=='new');
+  figs(); chips(); draw();
+  if(THEME==='new'){ /* 다시 그릴 때 등장 애니를 되살린다 */
+    document.querySelectorAll('.rise').forEach(n=>{n.style.animation='none';n.offsetHeight;n.style.animation='';});
+  }
+}
+document.querySelectorAll('.sw.t').forEach(b=>b.onclick=()=>{
+  THEME=b.dataset.t;
+  document.querySelectorAll('.sw.t').forEach(x=>x.classList.toggle('on',x===b));apply();});
+document.querySelectorAll('.sw.f').forEach(b=>b.onclick=()=>{
+  FACE=b.dataset.f;
+  document.querySelectorAll('.sw.f').forEach(x=>x.classList.toggle('on',x===b));apply();});
+document.querySelectorAll('.sw.h').forEach(b=>b.onclick=()=>{
+  HERO=b.dataset.h;
+  document.querySelectorAll('.sw.h').forEach(x=>x.classList.toggle('on',x===b));figs();});
+addEventListener('resize',()=>{clearTimeout(window._rt);window._rt=setTimeout(draw,120)});
+apply();
+</script>
+</body>
+</html>
