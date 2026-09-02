@@ -121,9 +121,12 @@ h1{font-family:var(--name-face);font-weight:var(--name-weight);font-size:var(--n
 .panel{background:var(--panel);border:var(--border);border-radius:var(--r-panel);box-shadow:var(--elev)}
 .plot{padding:8px}
 [data-t="new"] .plot{padding:14px 10px 10px}
-/* 곡선만 화면 끝까지 — 글은 단 안에 남는다 */
-[data-t="new"] .bleed{margin-inline:calc(50% - 50vw);width:100vw;border-radius:0;
-  padding-inline:clamp(14px,3vw,34px);box-shadow:none;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+/* 기구는 화면 끝까지, 글은 단 안에 — 세 판의 왼쪽 끝이 같아진다 */
+[data-t="new"] .bleed{margin-inline:calc(50% - 50vw);width:100vw;border-radius:0;margin-top:0;
+  padding-inline:clamp(14px,3vw,34px);box-shadow:none;border-top:1px solid var(--rule)}
+[data-t="new"] .bleed:last-child{border-bottom:1px solid var(--rule)}
+[data-t="new"] .mini.bleed{padding-block:10px}
+[data-t="new"] .gridwrap.bleed{padding-block:12px 14px}
 svg{display:block;width:100%;height:auto;overflow:visible}
 .mini{margin-top:8px;padding:6px 8px}
 .gridwrap{margin-top:8px;padding:8px}
@@ -204,13 +207,11 @@ canvas{display:block;width:100%}
     <div class="chips" id="chips"></div>
   </div>
 
+  <!-- 세 판은 하나의 기구다 — 왼쪽 끝이 같아야 한다 -->
   <div class="wrap" id="plotwrap">
-    <div class="panel plot bleed" id="plot"><svg id="chart" viewBox="0 0 1160 440" preserveAspectRatio="none"></svg></div>
-  </div>
-
-  <div class="wrap">
-    <div class="panel mini"><svg id="mini" viewBox="0 0 1160 26" preserveAspectRatio="none"></svg></div>
-    <div class="panel gridwrap"><canvas id="gridcv"></canvas></div>
+    <div class="panel plot bleed"><svg id="chart" viewBox="0 0 1160 440" preserveAspectRatio="none"></svg></div>
+    <div class="panel mini bleed"><svg id="mini" viewBox="0 0 1160 26" preserveAspectRatio="none"></svg></div>
+    <div class="panel gridwrap bleed"><canvas id="gridcv"></canvas></div>
   </div>
 
   <div class="note">
@@ -417,7 +418,7 @@ function mini(){
 function grid(){
   const cv=document.getElementById('gridcv'), ctx=cv.getContext('2d');
   const NEW=THEME==='new';
-  const box=cv.parentElement.clientWidth-16; if(box<60)return;
+  const box=Math.round(cv.getBoundingClientRect().width); if(box<60)return;
   const SIDE=34, cols=80, rows=52;
   const ch=Math.min((box-SIDE)/cols,380/rows);
   const cw=Math.min((box-SIDE)/cols,ch*2);
