@@ -151,6 +151,12 @@ html[data-theme=spring]{
   #sec-canvas .wrap{max-width:none;padding:0 clamp(14px,2.2vw,36px)} /* 연표는 화면 전체 폭 */
   .canvas-frame{border:1px solid var(--line);background:var(--panel);padding:8px;position:relative}
   .canvas-inner{border:1px solid var(--line);position:relative;overflow:hidden}
+  .grid-band{border:1px solid var(--line);border-top:none;position:relative;background:var(--panel)}
+  .grid-bar{display:flex;align-items:center;gap:5px;padding:4px 6px;border-bottom:1px solid var(--line)}
+  .grid-note{font-size:11.5px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .grid-note b{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--ink)}
+  .grid-note .dim{opacity:.7}
+  #gridCv{display:block;width:100%;cursor:crosshair}
   #tl{display:block;width:100%;touch-action:pan-y;cursor:grab;user-select:none;-webkit-touch-callout:none}
   #tl.dragging{cursor:grabbing}
   #tl:focus-visible{outline:2px solid var(--cinnabar);outline-offset:-2px}
@@ -326,6 +332,7 @@ html[data-theme=spring]{
         <span style="flex:1"></span>
         <button class="lay-chip" id="btnShow" aria-label="표시 · 곡선 · 나이 · 채우기 · 내보내기">⋯</button>
         <button class="lay-chip" id="btnMap">지도</button>
+        <button class="lay-chip" id="btnGrid" title="생애 격자 — 남은 날">격자</button>
         <button class="lay-chip" id="btnSearch" title="검색 (⌘/Ctrl+F)">검색</button>
       </div>
 
@@ -346,6 +353,18 @@ html[data-theme=spring]{
             <div id="map"></div>
             <div class="trip-info" id="tripInfo"></div>
           </div>
+        </div>
+
+        <!-- 생애 격자 — 연표 아래 띠. 가로가 시간, 위가 시대 -->
+        <div class="grid-band" id="gridBand" hidden>
+          <div class="grid-bar">
+            <span class="grid-note" id="gridNote"></span>
+            <span style="flex:1"></span>
+            <button class="lay-chip" id="gridShow" aria-label="격자 설정">⋯</button>
+            <button class="lay-chip" id="gridClose" aria-label="격자 닫기">✕</button>
+          </div>
+          <canvas id="gridCv"></canvas>
+          <div class="tl-tip" id="gridTip"></div>
         </div>
 
         <!-- 스크러버 (미니맵) -->
@@ -525,6 +544,7 @@ create policy "personal" on charts
 <div class="ctx" id="ctxMenu" hidden></div>
 <div class="ctx show-panel" id="showPanel" role="group" aria-label="표시" hidden></div>
 <div class="ctx show-panel" id="mapPanel" role="group" aria-label="지도 표시" hidden></div>
+<div class="ctx show-panel" id="gridPanel" role="group" aria-label="격자 설정" hidden></div>
 
 <!-- 팝오버 에디터 -->
 <div class="pop-ed" id="popEd" hidden role="dialog" aria-label="바로 편집"></div>
@@ -939,6 +959,12 @@ let MA_SIGMA=(()=>{try{const raw=localStorage.getItem('caeyeon_life_ma');
 }catch(e){return 36;}})();
 let MA_CURVE=null;
 let MAP_OPEN=false, mapWinTimer=0; /* render()가 참조 — 이른 resize에서 TDZ가 나지 않게 위에서 선언 */
+/* 생애 격자 — 같은 이유로 여기서 선언 */
+let GRID_OPEN=(()=>{try{return localStorage.getItem('caeyeon_life_grid')==='1';}catch(e){return false;}})();
+let GRID_SPAN=(()=>{try{return +localStorage.getItem('caeyeon_life_gridspan')===100?100:80;}catch(e){return 80;}})();
+let GRID_CELL=(()=>{try{const v=localStorage.getItem('caeyeon_life_gridcell');
+  return ['week','month','day'].includes(v)?v:'auto';}catch(e){return 'auto';}})();
+let GLAY=null, GCELL=0, GPADL=0, GPADT=0;
 /* 표시 토글 — 그리기만 끈다. 곡선·평균·데이터는 그대로 */
 const SHOW_KEYS=['ev','name','tag','span','th','hap','lay','rec','era'];
 const SHOW_NAME={ev:'사건',name:'이름',tag:'핀색',span:'기간',th:'생각',hap:'값',lay:'분야',rec:'기록',era:'시대'};
@@ -1928,6 +1954,7 @@ function render(){
     key:[Math.round(dom[0]*24),Math.round(dom[1]*24),W,lbTasks.length].join('|')};
   scheduleLabelPolish();
   updateScrubber();
+  if(GRID_OPEN)drawGrid();
 }
 
 /* ==========================================================================
@@ -3214,7 +3241,9 @@ $('#btnShow').onclick=e=>{
   showPanel.style.top=Math.max(8,Math.min(b.bottom+6,innerHeight-r.height-8))+'px';
 };
 document.addEventListener('click',e=>{
-  if(!showPanel.hidden&&!showPanel.contains(e.target))showPanel.hidden=true;});
+  if(!showPanel.hidden&&!showPanel.contains(e.target))showPanel.hidden=true;
+  const gp=document.getElementById('gridPanel');
+  if(gp&&!gp.hidden&&!gp.contains(e.target)&&e.target.id!=='gridShow')gp.hidden=true;});
 const mapPanel=$('#mapPanel');
 function syncMapPanel(){
   mapPanel.querySelectorAll('button[data-m]').forEach(b=>b.classList.toggle('on',!!MSHOW[b.dataset.m]));
@@ -3287,6 +3316,7 @@ document.addEventListener('keydown',e=>{
       ||!document.getElementById('newBd').hidden||!document.getElementById('cloudBd').hidden||MAP_OPEN;
     if(MAP_OPEN)closeMapOverlay();
     if(!searchBd.hidden)closeSearch();closeCtx();closePop();closeFill();showPanel.hidden=true;mapPanel.hidden=true;
+    document.getElementById('gridPanel').hidden=true;
     document.getElementById('newBd').hidden=true;document.getElementById('cloudBd').hidden=true;
     /* 열린 창이 없었으면 Esc = 레이어 포커스 해제 */
     if(!wasOpen&&focusLayer!=='main'){focusLayer='main';render();}
@@ -3910,6 +3940,294 @@ function closeMapOverlay(){
   const bm=document.getElementById('btnMap'); if(bm)bm.classList.remove('on');
 }
 document.getElementById('btnMap').onclick=()=>{MAP_OPEN?closeMapOverlay():openMapOverlay();};
+
+/* ==========================================================================
+   생애 격자 — 연표 아래 띠
+   가로가 시간(연표와 같은 방향), 위가 시대, 아래가 나이. 지난 칸이 왼쪽.
+   한 칸은 한 주·한 달·하루 중 하나. 한 열은 한 해·반년·분기·한 달 중 하나.
+   열이 칸의 정수배인 짝만 후보로 두고, 폭에 칸이 가장 많이 들어가는 짝을 고른다.
+   높이는 채우려 들지 않는다 — 격자가 필요한 만큼만 쓴다.
+   ========================================================================== */
+const gridBand=$('#gridBand'), gridCv=$('#gridCv'), gridTip=$('#gridTip');
+const GMS=86400000;
+const gDay=d=>Math.floor(d.getTime()/GMS);
+const gBirth=()=>{const[y,m,d]=String(DATA.profile.birth).split('-').map(Number);
+  return new Date(y,(m||1)-1,d||1);};
+const gMonKey=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+const gFmt=d=>d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0');
+
+/* 색은 CSS에서 읽는다 — 테마가 바뀌어도 따라오게.
+   getComputedStyle은 oklch를 그대로 돌려줘서 숫자를 못 믿는다.
+   1px 캔버스에 칠해 픽셀을 되읽으면 어떤 표기든 rgb로 떨어진다 */
+const gProbe=document.createElement('span');
+gProbe.style.cssText='position:absolute;visibility:hidden;pointer-events:none';
+const gPix=(()=>{const c=document.createElement('canvas');c.width=c.height=1;
+  return c.getContext('2d',{willReadFrequently:true});})();
+const gRGB=c=>{gPix.clearRect(0,0,1,1);gPix.fillStyle='#000';gPix.fillStyle=c;
+  gPix.fillRect(0,0,1,1);const d=gPix.getImageData(0,0,1,1).data;return[d[0],d[1],d[2]];};
+const gCss=v=>{if(!gProbe.parentNode)document.body.appendChild(gProbe);
+  gProbe.style.color='';gProbe.style.color=v;
+  const got=getComputedStyle(gProbe).color||'#000';
+  const [r,g,b]=gRGB(got);return`rgb(${r},${g},${b})`;};
+const gMix=(a,b,t)=>{const A=gRGB(a),B=gRGB(b);
+  return`rgb(${A.map((v,i)=>Math.round(v+(B[i]-v)*t)).join(',')})`;};
+
+function gridLayout(W,H){
+  const y=GRID_SPAN;
+  const cand=[
+    {kind:'year', p:1, cols:y,    rows:52,u:'week'},   /* 열 한 해 · 칸 한 주 */
+    {kind:'year', p:2, cols:y*2,  rows:26,u:'week'},   /* 열 반년 · 칸 한 주 */
+    {kind:'year', p:4, cols:y*4,  rows:13,u:'week'},   /* 열 분기 · 칸 한 주 */
+    {kind:'ym',   p:1, cols:y,    rows:12,u:'month'},  /* 열 한 해 · 칸 한 달 */
+    {kind:'ym',   p:2, cols:y*2,  rows:6, u:'month'},  /* 열 반년 · 칸 한 달 */
+    {kind:'month',p:12,cols:y*12, rows:31,u:'day'},    /* 열 한 달 · 칸 하루 */
+  ];
+  const most=(a,b)=>a.cols*a.rows>b.cols*b.rows;
+  const pick=(list,floor)=>{let b=null;
+    for(const o of list){const cell=W/o.cols;
+      if(cell<floor||cell>64||o.rows*cell>H)continue;
+      if(!b||most(o,b))b=o;}
+    return b;};
+  const pool=GRID_CELL==='auto'?cand:cand.filter(o=>o.u===GRID_CELL);
+  /* 칸이 읽히는 크기를 먼저 지키고, 좁아지면 한 단계씩 양보한다 */
+  let best=null, fell=false;
+  for(const floor of [5.5,4,3]){
+    best=pick(pool,floor);
+    if(!best&&pool!==cand){best=pick(cand,floor);fell=!!best;}
+    if(best)break;
+  }
+  if(!best){                                  /* 그래도 없으면 칸이 가장 큰 것 */
+    for(const o of cand){const cell=W/o.cols;
+      if(o.rows*cell>H)continue;
+      if(!best||cell>W/best.cols)best=o;}
+    best=best||cand[4];
+  }
+  return{...best,fell};
+}
+function gCellDate(L,row,col){
+  const B=gBirth();
+  if(L.kind==='ym'){                          /* 한 칸 = 한 달 */
+    const m=B.getMonth()+Math.floor(col/L.p)*12+(col%L.p)*(12/L.p)+row;
+    const d=new Date(2000,((m%12)+12)%12,15);
+    d.setFullYear(B.getFullYear()+Math.floor(m/12));
+    return d;
+  }
+  if(L.kind==='year'){                        /* 한 칸 = 한 주 */
+    const s=new Date(2000,B.getMonth(),B.getDate());
+    s.setFullYear(B.getFullYear()+Math.floor(col/L.p));
+    return new Date(s.getTime()+((col%L.p)*(364/L.p)+row*7)*GMS);
+  }
+  const m=B.getFullYear()*12+B.getMonth()+col, mo=((m%12)+12)%12;
+  const d=new Date(2000,mo,row+1); d.setFullYear(Math.floor(m/12));
+  return d.getMonth()===mo?d:null;            /* 그 달에 없는 날 */
+}
+
+function drawGrid(){
+  if(!GRID_OPEN||gridBand.hidden)return;
+  const W=Math.round(gridBand.clientWidth);
+  if(W<80)return;
+  const ctx=gridCv.getContext('2d');
+  const SIDE=44, TOP=SHOW.era?18:4, BOT=16;
+  const HMAX=Math.max(110,Math.min(300,Math.round((self.innerHeight||800)*.26)));
+  const L=gridLayout(W-SIDE,HMAX); GLAY=L;
+  const cell=(W-SIDE)/L.cols, gw=L.cols*cell, gh=L.rows*cell;
+  const CH=Math.round(gh+TOP+BOT), dpr=devicePixelRatio||1;
+  gridCv.width=Math.round(W*dpr); gridCv.height=Math.round(CH*dpr); gridCv.style.height=CH+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,CH);
+  GCELL=cell; GPADL=Math.max(30,Math.round((W-gw)/2)); GPADT=TOP;
+
+  const paper=gCss('var(--panel)'), ink=gCss('var(--ink)'),
+        soft=gCss('var(--ink-soft)'), cin=gCss('var(--cinnabar)');
+  const PAST=gMix(ink,paper,.74), FUT=gMix(ink,paper,.93);
+  const gap=cell>=9?1:(cell>=6?.6:.35), sq=Math.max(.6,cell-gap);
+  const NOWD=new Date(), todayN=gDay(NOWD), nowKey=gMonKey(NOWD);
+  const eras=SHOW.era?DATA.eras:[];
+  const eraAt=d=>{const k=gMonKey(d);
+    return eras.find(x=>k>=String(x.start).slice(0,7)&&k<=String(x.end).slice(0,7));};
+  const evMon={};
+  if(SHOW.ev)DATA.events.forEach(e=>{const k=String(e.date).slice(0,7);
+    (evMon[k]=evMon[k]||[]).push(e.title);});
+  const eraCol={}; eras.forEach((er,i)=>{eraCol[i]=er.color||soft;});
+
+  ctx.font='10px "IBM Plex Mono", monospace';
+  for(let c=0;c<L.cols;c++)for(let r=0;r<L.rows;r++){
+    const d=gCellDate(L,r,c); if(!d)continue;
+    const x=GPADL+c*cell, y=GPADT+r*cell;
+    const past=L.u==='month'?gMonKey(d)<=nowKey:gDay(d)<=todayN;
+    const er=eraAt(d);
+    ctx.fillStyle=er?gMix(eraCol[eras.indexOf(er)],paper,past?.52:.88):(past?PAST:FUT);
+    ctx.fillRect(x,y,sq,sq);
+    if(SHOW.ev&&evMon[gMonKey(d)]){           /* 그 달의 첫 칸에만 */
+      const pv=r>0?gCellDate(L,r-1,c):(c>0?gCellDate(L,L.rows-1,c-1):null);
+      if(!pv||gMonKey(pv)!==gMonKey(d)){
+        ctx.fillStyle=cin;
+        const rr=Math.max(1,Math.min(sq*.3,3.2));
+        ctx.beginPath();ctx.arc(x+sq/2,y+sq/2,rr,0,7);ctx.fill();
+      }
+    }
+    if(L.u==='month'?gMonKey(d)===nowKey:Math.abs(gDay(d)-todayN)<(L.u==='week'?4:1)){
+      ctx.strokeStyle=cin;ctx.lineWidth=Math.max(1,cell*.14);
+      ctx.strokeRect(x-.5,y-.5,sq+1,sq+1);
+    }
+  }
+
+  /* 왼쪽 축 — 그 열 안의 자리 */
+  ctx.fillStyle=soft;ctx.textAlign='right';ctx.textBaseline='middle';
+  ctx.font='9.5px "IBM Plex Mono", monospace';
+  if(cell>=6)for(let r=0;r<L.rows;r++){
+    const yy=GPADT+r*cell+cell/2;
+    if(L.kind==='ym'){
+      const d=gCellDate(L,r,0);
+      if(cell>=13||d.getMonth()%3===0)ctx.fillText(d.getMonth()+1,GPADL-6,yy);
+    }else if(L.kind==='year'&&L.p===1){
+      const mo=new Date(2001,0,1+r*7).getMonth(), pv=r?new Date(2001,0,1+(r-1)*7).getMonth():-1;
+      if(mo!==pv&&(cell>=11||mo%3===0))ctx.fillText(mo+1,GPADL-6,yy);
+    }else if(L.kind==='year'){
+      if((r+1)%4===0)ctx.fillText(r+1,GPADL-6,yy);
+    }else if(r===0||(r+1)%10===0)ctx.fillText(r+1,GPADL-6,yy);
+  }
+  /* 아래 축 — 나이 */
+  ctx.textAlign='center';ctx.textBaseline='top';
+  const cpy=L.kind==='month'?12:L.p, yb=GPADT+gh+4;
+  for(let c=0;c<L.cols;c+=cpy){
+    const a=c/cpy+AGE_MIN(), w=cell*cpy;
+    if(a%10===0||a===AGE_MIN()||(w>=26&&a%5===0)||w>=60)
+      ctx.fillText(a,GPADL+c*cell+w/2,yb);
+  }
+  /* 위 띠 — 시대 */
+  if(SHOW.era&&eras.length){
+    ctx.textAlign='left';ctx.textBaseline='bottom';ctx.font='11px Pretendard, sans-serif';
+    eras.forEach(er=>{
+      let c0=null,c1=null;
+      for(let c=0;c<L.cols;c++){
+        const d=gCellDate(L,0,c); if(!d)continue;
+        const k=gMonKey(d);
+        if(k>=String(er.start).slice(0,7)&&k<=String(er.end).slice(0,7)){if(c0===null)c0=c;c1=c;}
+      }
+      if(c0===null)return;
+      const x=GPADL+c0*cell, w=(c1-c0+1)*cell;
+      ctx.fillStyle=gMix(eraCol[eras.indexOf(er)],paper,.25);ctx.fillRect(x,GPADT-5,w,2.5);
+      ctx.fillStyle=soft;
+      if(w>=ctx.measureText(er.title).width+6)ctx.fillText(er.title,x+1,GPADT-7);
+    });
+  }
+  /* 연표가 지금 보고 있는 구간 */
+  const bt=T(DATA.profile.birth);
+  const c0=(dom[0]-bt)*cpy, c1=(dom[1]-bt)*cpy;
+  const x0=GPADL+Math.max(0,c0)*cell, x1=GPADL+Math.min(L.cols,c1)*cell;
+  if(x1>x0+1){
+    ctx.strokeStyle=gMix(ink,paper,.55);ctx.lineWidth=1;
+    ctx.strokeRect(Math.round(x0)+.5,GPADT-.5,Math.round(x1-x0),gh+1);
+  }
+
+  const B=gBirth(), END=new Date(2000,B.getMonth(),B.getDate());
+  END.setFullYear(B.getFullYear()+GRID_SPAN);
+  const tot=gDay(END)-gDay(B), lived=todayN-gDay(B), left=Math.max(0,tot-lived);
+  const nf=x=>x.toLocaleString('ko-KR');
+  const uname={week:'한 칸 한 주',month:'한 칸 한 달',day:'한 칸 하루'}[L.u];
+  $('#gridNote').innerHTML=`남은 날 <b>${nf(left)}</b> · 남은 주 <b>${nf(Math.round(left/7))}</b>`
+    +` · 지난 몫 <b>${(lived/tot*100).toFixed(1)}%</b>`
+    +` <span class="dim">${GRID_SPAN}년 가정 · ${uname}</span>`
+    +(L.fell?' <span style="color:var(--cinnabar)">고른 칸이 안 들어가 자동으로</span>':'');
+}
+
+/* 칸 짚기 */
+function gridCellAt(e){
+  if(!GLAY)return null;
+  const r=gridCv.getBoundingClientRect(), sc=(gridCv.width/(devicePixelRatio||1))/r.width;
+  const c=Math.floor(((e.clientX-r.left)*sc-GPADL)/GCELL);
+  const row=Math.floor(((e.clientY-r.top)*sc-GPADT)/GCELL);
+  if(c<0||row<0||c>=GLAY.cols||row>=GLAY.rows)return null;
+  const d=gCellDate(GLAY,row,c);
+  return d?{d,c,row}:null;
+}
+gridCv.addEventListener('mousemove',e=>{
+  const hit=gridCellAt(e);
+  if(!hit){gridTip.style.opacity=0;return;}
+  const {d}=hit, past=gDay(d)<=gDay(new Date());
+  const k=gMonKey(d);
+  const er=DATA.eras.find(x=>k>=String(x.start).slice(0,7)&&k<=String(x.end).slice(0,7));
+  const evs=DATA.events.filter(x=>String(x.date).slice(0,7)===k).map(x=>x.title);
+  const t=T(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));
+  gridTip.innerHTML=`<span class="yy">${gFmt(d)}</span> · ${fmtAge(t)} · ${past?'지남':'남음'}`
+    +(er?`<br>${er.title}`:'')+(evs.length?`<br>${evs.slice(0,3).join(' · ')}`:'');
+  const br=gridBand.getBoundingClientRect();
+  gridTip.style.left=(e.clientX-br.left)+'px';
+  gridTip.style.top=(e.clientY-br.top)+'px';
+  gridTip.style.opacity=1;
+});
+gridCv.addEventListener('mouseleave',()=>{gridTip.style.opacity=0;});
+gridCv.addEventListener('click',e=>{        /* 그 자리로 연표를 옮긴다 */
+  const hit=gridCellAt(e); if(!hit)return;
+  const t=hit.d.getFullYear()+(hit.d.getMonth())/12+(hit.d.getDate()-1)/372;
+  const half=(dom[1]-dom[0])/2;
+  let a=t-half,b=t+half;
+  if(a<BOUND[0]){a=BOUND[0];b=a+half*2;}
+  if(b>BOUND[1]){b=BOUND[1];a=b-half*2;}
+  dom=[Math.max(BOUND[0],a),Math.min(BOUND[1],b)];
+  render();
+});
+
+/* 열고 닫기 */
+function syncGridBtn(){
+  const b=document.getElementById('btnGrid');
+  if(b)b.classList.toggle('on',GRID_OPEN);
+}
+function openGrid(){
+  GRID_OPEN=true; gridBand.hidden=false;
+  try{localStorage.setItem('caeyeon_life_grid','1');}catch(e){}
+  syncGridBtn(); drawGrid();
+}
+function closeGrid(){
+  GRID_OPEN=false; gridBand.hidden=true;
+  try{localStorage.setItem('caeyeon_life_grid','0');}catch(e){}
+  syncGridBtn();
+}
+document.getElementById('btnGrid').onclick=()=>{GRID_OPEN?closeGrid():openGrid();};
+document.getElementById('gridClose').onclick=closeGrid;
+
+/* 설정 — 가정 년수와 칸 단위 */
+const gridPanel=$('#gridPanel');
+function syncGridPanel(){
+  gridPanel.querySelectorAll('button[data-gs]').forEach(b=>b.classList.toggle('on',+b.dataset.gs===GRID_SPAN));
+  gridPanel.querySelectorAll('button[data-gc]').forEach(b=>b.classList.toggle('on',b.dataset.gc===GRID_CELL));
+}
+function renderGridPanel(){
+  gridPanel.innerHTML='';
+  [[80,'80년'],[100,'100년']].forEach(([v,label])=>{
+    const b=document.createElement('button');
+    b.className='lay-chip';b.textContent=label;b.dataset.gs=v;
+    b.onclick=ev=>{ev.stopPropagation();GRID_SPAN=v;
+      try{localStorage.setItem('caeyeon_life_gridspan',v);}catch(e){}
+      syncGridPanel();drawGrid();};
+    gridPanel.appendChild(b);
+  });
+  const sep=document.createElement('span');sep.className='show-sep';gridPanel.appendChild(sep);
+  [['auto','자동'],['week','주'],['month','달'],['day','하루']].forEach(([v,label])=>{
+    const b=document.createElement('button');
+    b.className='lay-chip';b.textContent=label;b.dataset.gc=v;
+    b.onclick=ev=>{ev.stopPropagation();GRID_CELL=v;
+      try{localStorage.setItem('caeyeon_life_gridcell',v);}catch(e){}
+      syncGridPanel();drawGrid();};
+    gridPanel.appendChild(b);
+  });
+  syncGridPanel();
+}
+document.getElementById('gridShow').onclick=e=>{
+  e.stopPropagation();
+  if(!gridPanel.hidden){gridPanel.hidden=true;return;}
+  renderGridPanel();gridPanel.hidden=false;
+  const b=e.currentTarget.getBoundingClientRect(), r=gridPanel.getBoundingClientRect();
+  gridPanel.style.left=Math.max(8,Math.min(b.left,innerWidth-r.width-8))+'px';
+  gridPanel.style.top=Math.max(8,Math.min(b.bottom+6,innerHeight-r.height-8))+'px';
+};
+/* 폭이 바뀌면 다시 그린다 — 창 크기 변화만으로는 놓치는 경우가 있다 */
+if(self.ResizeObserver){
+  let gt=0;
+  new ResizeObserver(()=>{clearTimeout(gt);gt=setTimeout(drawGrid,60);}).observe(gridBand);
+}
+if(GRID_OPEN){gridBand.hidden=false;syncGridBtn();}
+
 document.getElementById('mapClose').onclick=closeMapOverlay;
 function flyToLoc(item){ /* 사건·기간의 장소/경로로 열어서 이동 */
   openMapOverlay();
