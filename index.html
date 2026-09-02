@@ -964,7 +964,7 @@ let GRID_OPEN=(()=>{try{return localStorage.getItem('caeyeon_life_grid')==='1';}
 let GRID_SPAN=(()=>{try{return +localStorage.getItem('caeyeon_life_gridspan')===100?100:80;}catch(e){return 80;}})();
 let GRID_CELL=(()=>{try{const v=localStorage.getItem('caeyeon_life_gridcell');
   return ['week','month'].includes(v)?v:'auto';}catch(e){return 'auto';}})();
-let GLAY=null, GCELL=0, GPADL=0, GPADT=0;
+let GLAY=null, GCW=0, GCH=0, GPADL=0, GPADT=0;
 /* 표시 토글 — 그리기만 끈다. 곡선·평균·데이터는 그대로 */
 const SHOW_KEYS=['ev','name','tag','span','th','hap','lay','rec','era'];
 const SHOW_NAME={ev:'사건',name:'이름',tag:'핀색',span:'기간',th:'생각',hap:'값',lay:'분야',rec:'기록',era:'시대'};
@@ -4036,16 +4036,22 @@ function drawGrid(){
     ? Math.max(110,Math.min(300,Math.round(ih*.26)))   /* 띠 — 연표를 가리지 않는 높이 */
     : Math.max(150,Math.min(480,Math.round(ih*.46)));  /* 칸을 직접 골랐으면 더 내준다 */
   const L=gridLayout(W-SIDE,HMAX); GLAY=L;
-  const cell=Math.min((W-SIDE)/L.cols,HMAX/L.rows), gw=L.cols*cell, gh=L.rows*cell;
+  const AW=W-SIDE;
+  /* 정사각이 먼저다. 세로가 모자라 폭이 남을 때만 가로로 늘린다 (최대 2:1).
+     한 주 x 52줄은 상자보다 세로로 길어 정사각으로는 폭의 절반밖에 못 쓴다 */
+  let ch=Math.min(AW/L.cols,HMAX/L.rows), cw=ch;
+  if(L.cols*cw<AW*.95)cw=Math.min(AW/L.cols,ch*2);
+  const gw=L.cols*cw, gh=L.rows*ch;
   const CH=Math.round(gh+TOP+BOT), dpr=devicePixelRatio||1;
   gridCv.width=Math.round(W*dpr); gridCv.height=Math.round(CH*dpr); gridCv.style.height=CH+'px';
   ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,CH);
-  GCELL=cell; GPADL=Math.max(30,Math.round((W-gw)/2)); GPADT=TOP;
+  GCW=cw; GCH=ch; GPADL=Math.max(30,Math.round((W-gw)/2)); GPADT=TOP;
 
   const paper=gCss('var(--panel)'), ink=gCss('var(--ink)'),
         soft=gCss('var(--ink-soft)'), cin=gCss('var(--cinnabar)');
   const PAST=gMix(ink,paper,.74), FUT=gMix(ink,paper,.93);
-  const gap=cell>=9?1:(cell>=6?.6:.35), sq=Math.max(.6,cell-gap);
+  const mn=Math.min(cw,ch), gap=mn>=9?1:(mn>=6?.6:.35);
+  const sw=Math.max(.6,cw-gap), sh=Math.max(.6,ch-gap);
   const NOWD=new Date(), todayN=gDay(NOWD);
   const cellRange=gCellRange(L);
   const eras=SHOW.era?DATA.eras:[];
@@ -4059,46 +4065,46 @@ function drawGrid(){
   ctx.font='10px "IBM Plex Mono", monospace';
   for(let c=0;c<L.cols;c++)for(let r=0;r<L.rows;r++){
     const d=gCellDate(L,r,c); if(!d)continue;
-    const x=GPADL+c*cell, y=GPADT+r*cell;
+    const x=GPADL+c*cw, y=GPADT+r*ch;
     const[c0,c1]=cellRange(d);
     const past=c1<todayN;                     /* 다 지나간 칸만 지난 칸 */
     const er=eraAt(d);
     ctx.fillStyle=er?gMix(eraCol[eras.indexOf(er)],paper,past?.52:.88):(past?PAST:FUT);
-    ctx.fillRect(x,y,sq,sq);
+    ctx.fillRect(x,y,sw,sh);
     if(SHOW.ev&&evMon[gMonKey(d)]){           /* 그 달의 첫 칸에만 */
       const pv=r>0?gCellDate(L,r-1,c):(c>0?gCellDate(L,L.rows-1,c-1):null);
       if(!pv||gMonKey(pv)!==gMonKey(d)){
         ctx.fillStyle=cin;
-        const rr=Math.max(1,Math.min(sq*.3,3.2));
-        ctx.beginPath();ctx.arc(x+sq/2,y+sq/2,rr,0,7);ctx.fill();
+        const rr=Math.max(1,Math.min(mn*.34,3.2));
+        ctx.beginPath();ctx.arc(x+sw/2,y+sh/2,rr,0,7);ctx.fill();
       }
     }
     if(c0<=todayN&&todayN<=c1){               /* 오늘이 든 칸 — 지나는 중 */
-      ctx.strokeStyle=cin;ctx.lineWidth=Math.max(1,cell*.14);
-      ctx.strokeRect(x-.5,y-.5,sq+1,sq+1);
+      ctx.strokeStyle=cin;ctx.lineWidth=Math.max(1,mn*.16);
+      ctx.strokeRect(x-.5,y-.5,sw+1,sh+1);
     }
   }
 
   /* 왼쪽 축 — 그 열 안의 자리 */
   ctx.fillStyle=soft;ctx.textAlign='right';ctx.textBaseline='middle';
   ctx.font='9.5px "IBM Plex Mono", monospace';
-  if(cell>=6)for(let r=0;r<L.rows;r++){
-    const yy=GPADT+r*cell+cell/2;
+  if(ch>=5)for(let r=0;r<L.rows;r++){
+    const yy=GPADT+r*ch+ch/2;
     if(L.kind==='ym'){
       const d=gCellDate(L,r,0);
-      if(cell>=13||d.getMonth()%3===0)ctx.fillText(d.getMonth()+1,GPADL-6,yy);
+      if(ch>=13||d.getMonth()%3===0)ctx.fillText(d.getMonth()+1,GPADL-6,yy);
     }else{                              /* 그 해의 주 → 달로 읽는다 */
       const mo=gCellDate(L,r,0).getMonth(), pv=r?gCellDate(L,r-1,0).getMonth():-1;
-      if(mo!==pv&&(cell>=11||mo%3===0))ctx.fillText(mo+1,GPADL-6,yy);
+      if(mo!==pv&&(ch>=11||mo%3===0))ctx.fillText(mo+1,GPADL-6,yy);
     }
   }
   /* 아래 축 — 나이 */
   ctx.textAlign='center';ctx.textBaseline='top';
   const cpy=L.p, yb=GPADT+gh+4;
   for(let c=0;c<L.cols;c+=cpy){
-    const a=c/cpy+AGE_MIN(), w=cell*cpy;
+    const a=c/cpy+AGE_MIN(), w=cw*cpy;
     if(a%10===0||a===AGE_MIN()||(w>=26&&a%5===0)||w>=60)
-      ctx.fillText(a,GPADL+c*cell+w/2,yb);
+      ctx.fillText(a,GPADL+c*cw+w/2,yb);
   }
   /* 위 띠 — 시대 */
   if(SHOW.era&&eras.length){
@@ -4111,7 +4117,7 @@ function drawGrid(){
         if(k>=String(er.start).slice(0,7)&&k<=String(er.end).slice(0,7)){if(c0===null)c0=c;c1=c;}
       }
       if(c0===null)return;
-      const x=GPADL+c0*cell, w=(c1-c0+1)*cell;
+      const x=GPADL+c0*cw, w=(c1-c0+1)*cw;
       ctx.fillStyle=gMix(eraCol[eras.indexOf(er)],paper,.25);ctx.fillRect(x,GPADT-5,w,2.5);
       ctx.fillStyle=soft;
       if(w>=ctx.measureText(er.title).width+6)ctx.fillText(er.title,x+1,GPADT-7);
@@ -4120,7 +4126,7 @@ function drawGrid(){
   /* 연표가 지금 보고 있는 구간 */
   const bt=T(DATA.profile.birth);
   const c0=(dom[0]-bt)*cpy, c1=(dom[1]-bt)*cpy;
-  const x0=GPADL+Math.max(0,c0)*cell, x1=GPADL+Math.min(L.cols,c1)*cell;
+  const x0=GPADL+Math.max(0,c0)*cw, x1=GPADL+Math.min(L.cols,c1)*cw;
   if(x1>x0+1){
     ctx.strokeStyle=gMix(ink,paper,.55);ctx.lineWidth=1;
     ctx.strokeRect(Math.round(x0)+.5,GPADT-.5,Math.round(x1-x0),gh+1);
@@ -4133,7 +4139,8 @@ function drawGrid(){
   const uname={week:'한 칸 한 주',month:'한 칸 한 달'}[L.u];
   $('#gridNote').innerHTML=`남은 날 <b>${nf(left)}</b> · 남은 주 <b>${nf(Math.round(left/7))}</b>`
     +` · 지난 몫 <b>${(lived/tot*100).toFixed(1)}%</b>`
-    +` <span class="dim">${GRID_SPAN}년 가정 · ${uname} · 세로 `
+    +` <span class="dim">${GRID_SPAN}년 가정 · ${uname}`
+    +`${Math.abs(cw-ch)>.5?` ${cw.toFixed(1)}×${ch.toFixed(1)}px`:''} · 세로 `
     +`그 해의 ${L.u==='week'?'주':'달'}`
     +(gw<(W-SIDE)*.95?` · 가로 ${Math.round(gw/(W-SIDE)*100)}%`:'')+`</span>`
     +(L.fell?' <span style="color:var(--cinnabar)">고른 칸이 안 들어가 자동으로</span>':'');
@@ -4143,8 +4150,8 @@ function drawGrid(){
 function gridCellAt(e){
   if(!GLAY)return null;
   const r=gridCv.getBoundingClientRect(), sc=(gridCv.width/(devicePixelRatio||1))/r.width;
-  const c=Math.floor(((e.clientX-r.left)*sc-GPADL)/GCELL);
-  const row=Math.floor(((e.clientY-r.top)*sc-GPADT)/GCELL);
+  const c=Math.floor(((e.clientX-r.left)*sc-GPADL)/GCW);
+  const row=Math.floor(((e.clientY-r.top)*sc-GPADT)/GCH);
   if(c<0||row<0||c>=GLAY.cols||row>=GLAY.rows)return null;
   const d=gCellDate(GLAY,row,c);
   return d?{d,c,row}:null;
