@@ -1,5 +1,5 @@
 /* 인생 연표 — 오프라인 캐시 (앱은 단일 HTML, 데이터는 localStorage/Supabase) */
-const CACHE='haedo-v32';
+const CACHE='haedo-v33';
 const SHELL=['./','./index.html','./manifest.webmanifest','./icon.svg','./vendor/daisyui.css','./vendor/daisyui-themes.css'];
 self.addEventListener('install',e=>{
   /* 설치 때도 HTTP 캐시를 건너뛴다 — 안 그러면 오프라인 폴백이 직전 배포로 굳는다 */
