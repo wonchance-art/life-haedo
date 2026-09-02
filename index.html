@@ -280,11 +280,8 @@ html[data-theme=spring]{
   .hero-fig:hover{opacity:.72}
   .hero-fig:focus-visible{outline:2px solid var(--cinnabar);outline-offset:6px}
   .hero-k{display:block;font-size:11px;letter-spacing:.09em;font-weight:600;color:var(--ink-soft)}
-  .hero-k i{font-style:normal;opacity:.62;letter-spacing:.02em}
   .hero-v{display:block;font-size:clamp(38px,4.6vw,56px);font-weight:700;line-height:1;
     letter-spacing:-.025em;font-variant-numeric:proportional-nums;margin-top:3px}
-  .hero-v u{text-decoration:none;font-size:.34em;font-weight:600;letter-spacing:0;
-    color:var(--ink-soft);margin-left:.18em;vertical-align:.28em}
   .hero-dots{display:flex;gap:5px}
   .hero-dots button{appearance:none;border:none;padding:0;cursor:pointer;
     width:6px;height:6px;border-radius:3px;background:var(--line);
@@ -3998,9 +3995,9 @@ function heroItem(k){
   const end=new Date(2000,B.getMonth(),B.getDate());
   end.setFullYear(B.getFullYear()+GRID_SPAN);
   const nf=x=>Math.max(0,x).toLocaleString('ko-KR');
-  if(k==='hap')   return{k:'행복도',   v:HERO_AVG};
-  if(k==='lived') return{k:'흐른 시간', v:nf(dn-d0)+'<u>일</u>'};
-  return {k:`남은 시간 <i>· ${GRID_SPAN}년 가정</i>`, v:nf(heroDay(end)-dn)+'<u>일</u>'};
+  if(k==='hap')   return{k:'행복도',  v:HERO_AVG};
+  if(k==='lived') return{k:'흐른 날', v:nf(dn-d0)};
+  return             {k:'남은 날', v:nf(heroDay(end)-dn)};
 }
 function paintHero(anim){
   const fig=document.getElementById('heroFig');
