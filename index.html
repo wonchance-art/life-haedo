@@ -963,7 +963,7 @@ let MAP_OPEN=false, mapWinTimer=0; /* render()가 참조 — 이른 resize에서
 let GRID_OPEN=(()=>{try{return localStorage.getItem('caeyeon_life_grid')==='1';}catch(e){return false;}})();
 let GRID_SPAN=(()=>{try{return +localStorage.getItem('caeyeon_life_gridspan')===100?100:80;}catch(e){return 80;}})();
 let GRID_CELL=(()=>{try{const v=localStorage.getItem('caeyeon_life_gridcell');
-  return ['week','month','day'].includes(v)?v:'auto';}catch(e){return 'auto';}})();
+  return ['week','month'].includes(v)?v:'auto';}catch(e){return 'auto';}})();
 let GLAY=null, GCELL=0, GPADL=0, GPADT=0;
 /* 표시 토글 — 그리기만 끈다. 곡선·평균·데이터는 그대로 */
 const SHOW_KEYS=['ev','name','tag','span','th','hap','lay','rec','era'];
@@ -3951,7 +3951,7 @@ document.getElementById('btnMap').onclick=()=>{MAP_OPEN?closeMapOverlay():openMa
    ========================================================================== */
 const gridBand=$('#gridBand'), gridCv=$('#gridCv'), gridTip=$('#gridTip');
 const GMS=86400000;
-const gDay=d=>Math.floor(d.getTime()/GMS);
+const gDay=d=>Math.floor((d.getTime()-d.getTimezoneOffset()*6e4)/GMS);
 const gBirth=()=>{const[y,m,d]=String(DATA.profile.birth).split('-').map(Number);
   return new Date(y,(m||1)-1,d||1);};
 const gMonKey=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
@@ -3978,7 +3978,6 @@ function gridLayout(W,H){
   const cand=[
     {kind:'year', p:1, cols:y,    rows:52,u:'week'},   /* 열 한 해 · 세로 그 해의 주 */
     {kind:'ym',   p:1, cols:y,    rows:12,u:'month'},  /* 열 한 해 · 세로 그 해의 달 */
-    {kind:'month',p:12,cols:y*12, rows:31,u:'day'},    /* 열 한 달 · 세로 그 달의 날 */
   ];
   const most=(a,b)=>a.cols*a.rows>b.cols*b.rows;
   const auto=GRID_CELL==='auto';
@@ -3989,6 +3988,7 @@ function gridLayout(W,H){
       if(!b||most(o,b))b=o;}
     return b;};
   const pool=GRID_CELL==='auto'?cand:cand.filter(o=>o.u===GRID_CELL);
+  if(!pool.length)return{...cand[1],fell:true};
   /* 칸이 읽히는 크기를 먼저 지키고, 좁아지면 한 단계씩 양보한다 */
   let best=null, fell=false;
   for(const floor of [5.5,4,3]){
@@ -4011,16 +4011,20 @@ function gCellDate(L,row,col){
     d.setFullYear(B.getFullYear()+Math.floor(m/12));
     return d;
   }
-  if(L.kind==='year'){                        /* 한 칸 = 한 주 */
-    const s=new Date(2000,B.getMonth(),B.getDate());
-    s.setFullYear(B.getFullYear()+Math.floor(col/L.p));
-    return new Date(s.getTime()+((col%L.p)*(364/L.p)+row*7)*GMS);
-  }
-  const m=B.getFullYear()*12+B.getMonth()+col, mo=((m%12)+12)%12;
-  const d=new Date(2000,mo,row+1); d.setFullYear(Math.floor(m/12));
-  return d.getMonth()===mo?d:null;            /* 그 달에 없는 날 */
+  /* 한 칸 = 한 주 */
+  const s=new Date(2000,B.getMonth(),B.getDate());
+  s.setFullYear(B.getFullYear()+Math.floor(col/L.p));
+  return new Date(s.getTime()+((col%L.p)*(364/L.p)+row*7)*GMS);
 }
 
+/* 한 칸이 걸치는 날 범위. 달 칸은 그 달 1일~말일, 주 칸은 이레.
+   이번 달·이번 주는 아직 다 지나지 않았으니 지난 칸으로 세지 않는다 */
+function gCellRange(L){
+  return L.u==='month'
+    ?d=>[gDay(new Date(d.getFullYear(),d.getMonth(),1)),
+         gDay(new Date(d.getFullYear(),d.getMonth()+1,0))]
+    :d=>[gDay(d),gDay(d)+6];
+}
 function drawGrid(){
   if(!GRID_OPEN||gridBand.hidden)return;
   const W=Math.round(gridBand.clientWidth);
@@ -4042,7 +4046,8 @@ function drawGrid(){
         soft=gCss('var(--ink-soft)'), cin=gCss('var(--cinnabar)');
   const PAST=gMix(ink,paper,.74), FUT=gMix(ink,paper,.93);
   const gap=cell>=9?1:(cell>=6?.6:.35), sq=Math.max(.6,cell-gap);
-  const NOWD=new Date(), todayN=gDay(NOWD), nowKey=gMonKey(NOWD);
+  const NOWD=new Date(), todayN=gDay(NOWD);
+  const cellRange=gCellRange(L);
   const eras=SHOW.era?DATA.eras:[];
   const eraAt=d=>{const k=gMonKey(d);
     return eras.find(x=>k>=String(x.start).slice(0,7)&&k<=String(x.end).slice(0,7));};
@@ -4055,7 +4060,8 @@ function drawGrid(){
   for(let c=0;c<L.cols;c++)for(let r=0;r<L.rows;r++){
     const d=gCellDate(L,r,c); if(!d)continue;
     const x=GPADL+c*cell, y=GPADT+r*cell;
-    const past=L.u==='month'?gMonKey(d)<=nowKey:gDay(d)<=todayN;
+    const[c0,c1]=cellRange(d);
+    const past=c1<todayN;                     /* 다 지나간 칸만 지난 칸 */
     const er=eraAt(d);
     ctx.fillStyle=er?gMix(eraCol[eras.indexOf(er)],paper,past?.52:.88):(past?PAST:FUT);
     ctx.fillRect(x,y,sq,sq);
@@ -4067,7 +4073,7 @@ function drawGrid(){
         ctx.beginPath();ctx.arc(x+sq/2,y+sq/2,rr,0,7);ctx.fill();
       }
     }
-    if(L.u==='month'?gMonKey(d)===nowKey:Math.abs(gDay(d)-todayN)<(L.u==='week'?4:1)){
+    if(c0<=todayN&&todayN<=c1){               /* 오늘이 든 칸 — 지나는 중 */
       ctx.strokeStyle=cin;ctx.lineWidth=Math.max(1,cell*.14);
       ctx.strokeRect(x-.5,y-.5,sq+1,sq+1);
     }
@@ -4081,15 +4087,14 @@ function drawGrid(){
     if(L.kind==='ym'){
       const d=gCellDate(L,r,0);
       if(cell>=13||d.getMonth()%3===0)ctx.fillText(d.getMonth()+1,GPADL-6,yy);
-    }else if(L.kind==='year'){          /* 그 해의 주 → 달로 읽는다 */
-      const B=gBirth();
+    }else{                              /* 그 해의 주 → 달로 읽는다 */
       const mo=gCellDate(L,r,0).getMonth(), pv=r?gCellDate(L,r-1,0).getMonth():-1;
       if(mo!==pv&&(cell>=11||mo%3===0))ctx.fillText(mo+1,GPADL-6,yy);
-    }else if(r===0||(r+1)%10===0)ctx.fillText(r+1,GPADL-6,yy);
+    }
   }
   /* 아래 축 — 나이 */
   ctx.textAlign='center';ctx.textBaseline='top';
-  const cpy=L.kind==='month'?12:L.p, yb=GPADT+gh+4;
+  const cpy=L.p, yb=GPADT+gh+4;
   for(let c=0;c<L.cols;c+=cpy){
     const a=c/cpy+AGE_MIN(), w=cell*cpy;
     if(a%10===0||a===AGE_MIN()||(w>=26&&a%5===0)||w>=60)
@@ -4125,11 +4130,11 @@ function drawGrid(){
   END.setFullYear(B.getFullYear()+GRID_SPAN);
   const tot=gDay(END)-gDay(B), lived=todayN-gDay(B), left=Math.max(0,tot-lived);
   const nf=x=>x.toLocaleString('ko-KR');
-  const uname={week:'한 칸 한 주',month:'한 칸 한 달',day:'한 칸 하루'}[L.u];
+  const uname={week:'한 칸 한 주',month:'한 칸 한 달'}[L.u];
   $('#gridNote').innerHTML=`남은 날 <b>${nf(left)}</b> · 남은 주 <b>${nf(Math.round(left/7))}</b>`
     +` · 지난 몫 <b>${(lived/tot*100).toFixed(1)}%</b>`
     +` <span class="dim">${GRID_SPAN}년 가정 · ${uname} · 세로 `
-    +`${L.u==='day'?'그 달의 날':'그 해의 '+(L.u==='week'?'주':'달')}`
+    +`그 해의 ${L.u==='week'?'주':'달'}`
     +(gw<(W-SIDE)*.95?` · 가로 ${Math.round(gw/(W-SIDE)*100)}%`:'')+`</span>`
     +(L.fell?' <span style="color:var(--cinnabar)">고른 칸이 안 들어가 자동으로</span>':'');
 }
@@ -4147,12 +4152,14 @@ function gridCellAt(e){
 gridCv.addEventListener('mousemove',e=>{
   const hit=gridCellAt(e);
   if(!hit){gridTip.style.opacity=0;return;}
-  const {d}=hit, past=gDay(d)<=gDay(new Date());
+  const {d}=hit, now=gDay(new Date());
+  const[c0,c1]=gCellRange(GLAY)(d);
+  const when=c1<now?'지남':(c0<=now?'지나는 중':'남음');
   const k=gMonKey(d);
   const er=DATA.eras.find(x=>k>=String(x.start).slice(0,7)&&k<=String(x.end).slice(0,7));
   const evs=DATA.events.filter(x=>String(x.date).slice(0,7)===k).map(x=>x.title);
   const t=T(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));
-  gridTip.innerHTML=`<span class="yy">${gFmt(d)}</span> · ${fmtAge(t)} · ${past?'지남':'남음'}`
+  gridTip.innerHTML=`<span class="yy">${gFmt(d)}</span> · ${fmtAge(t)} · ${when}`
     +(er?`<br>${er.title}`:'')+(evs.length?`<br>${evs.slice(0,3).join(' · ')}`:'');
   const br=gridBand.getBoundingClientRect();
   gridTip.style.left=(e.clientX-br.left)+'px';
@@ -4206,7 +4213,7 @@ function renderGridPanel(){
     gridPanel.appendChild(b);
   });
   const sep=document.createElement('span');sep.className='show-sep';gridPanel.appendChild(sep);
-  [['auto','자동'],['week','주'],['month','달'],['day','하루']].forEach(([v,label])=>{
+  [['auto','자동'],['week','주'],['month','달']].forEach(([v,label])=>{
     const b=document.createElement('button');
     b.className='lay-chip';b.textContent=label;b.dataset.gc=v;
     b.onclick=ev=>{ev.stopPropagation();GRID_CELL=v;
