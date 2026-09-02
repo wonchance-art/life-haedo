@@ -420,8 +420,12 @@ function grid(){
   const NEW=THEME==='new';
   const box=Math.round(cv.getBoundingClientRect().width); if(box<60)return;
   const SIDE=34, cols=80, rows=52;
-  const ch=Math.min((box-SIDE)/cols,380/rows);
-  const cw=Math.min((box-SIDE)/cols,ch*2);
+  /* 앱과 같은 규칙 — 높이 예산은 창에서 나온다. 정사각이 먼저고,
+     세로가 모자라 폭이 남을 때만 가로로 늘린다(최대 2:1) */
+  const avail=box-SIDE, ih=self.innerHeight||800;
+  const HMAX=Math.max(150,Math.min(480,Math.round(ih*.46)));
+  let ch=Math.min(avail/cols,HMAX/rows), cw=ch;
+  if(cols*cw<avail*.95)cw=Math.min(avail/cols,ch*2);
   const gw=cols*cw, gh=rows*ch, HH=Math.round(gh+22);
   const dpr=devicePixelRatio||1;
   cv.width=box*dpr; cv.height=HH*dpr; cv.style.height=HH+'px';
