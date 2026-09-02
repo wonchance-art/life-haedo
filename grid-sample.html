@@ -48,6 +48,14 @@
       <button class="chip span on" data-span="80">80년</button>
       <button class="chip span" data-span="100">100년</button>
     </div>
+    <div class="grp"><b>방향</b>
+      <button class="chip dir on" data-d="wrap">줄바꿈</button>
+      <button class="chip dir" data-d="lie">눕힘</button>
+    </div>
+    <div class="grp"><b>화면</b>
+      <button class="chip screen on" data-sc="page">이 페이지</button>
+      <button class="chip screen" data-sc="app">앱 크기</button>
+    </div>
     <div class="grp"><b>범위</b>
       <button class="chip range on" data-r="all">All</button>
       <button class="chip range" data-r="20">20Y</button>
@@ -95,7 +103,7 @@ const EVENTS=[
 ].map(s=>({date:s.slice(0,7),title:s.slice(8)}));
 
 /* ── 상태 ─────────────────────────────────────────────────────── */
-let SPAN=80, RANGE='all';
+let SPAN=80, RANGE='all', SCREEN='page', DIR='wrap';
 const SHOW={era:true,event:true,today:true,age:true};
 
 const MS=86400000;
@@ -109,37 +117,85 @@ const ageAt=d=>{let a=d.getFullYear()-BIRTH.getFullYear();
   return a;};
 const monKey=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
 
+/* 요일 격자의 첫 칸 — 시작 달의 1일이 든 주의 일요일 */
+function weekStart(L){
+  const y=Math.floor(L.firstMon/12), mo=((L.firstMon%12)+12)%12;
+  const d=ymd(y,mo,1);
+  return new Date(d.getTime()-d.getDay()*MS);
+}
 const EV_BY_MON={}; EVENTS.forEach(e=>{(EV_BY_MON[e.date]=EV_BY_MON[e.date]||[]).push(e.title);});
 const eraAt=d=>{const k=monKey(d);return ERAS.find(x=>k>=x.s&&k<=x.e)||null;};
 
 /* ── 배치: 범위 → 단위·열·줄 ──────────────────────────────────── */
+/* 한 줄에 몇 주기를 담을지 — 격자가 화면을 꽉 채우도록 비율에서 구한다.
+   열/줄 = 화면 가로/세로 가 되게 k를 잡으면 k = √(비율 × 총주기 ÷ 한주기열) */
+function perRow(base,total,W,H){
+  const k=Math.round(Math.sqrt((W/H)*total/base));
+  return Math.max(1,Math.min(k,total));
+}
 function layout(W,H){
-  const END=addY(BIRTH,SPAN);
-  if(RANGE==='all'){                       /* 주 · 한 줄 = 1년 */
-    return {unit:'week',cols:52,rows:SPAN,startAge:0,W,H};
-  }
-  const n=+RANGE;
   const nowAge=ageAt(TODAY);
-  if(n>=10){                               /* 주 · 오늘을 가운데 두고 n년 */
-    const startAge=Math.max(0,Math.min(SPAN-n,nowAge-Math.floor(n/2)));
-    return {unit:'week',cols:52,rows:n,startAge,W,H};
+  const years=(RANGE==='all')?SPAN:+RANGE;
+  if(DIR==='lie'){                           /* 가로 = 시간. 연표와 같은 방향 */
+    const startAge=(RANGE==='all')?0
+      :Math.max(0,Math.min(SPAN-years,nowAge-Math.floor(years/2)));
+    const months=years*12, cur=TODAY.getFullYear()*12+TODAY.getMonth();
+    const firstMon=(RANGE==='all')
+      ? BIRTH.getFullYear()*12+BIRTH.getMonth()
+      : cur-Math.floor(months/2);
+    /* 한 칸이 며칠이고 세로를 몇으로 나눌지 — 화면을 가장 넓게 덮는 쪽 */
+    const cand=[
+      {kind:'year', cols:years,    rows:52},   /* 한 칸 = 한 주 */
+      {kind:'year', cols:years,    rows:26},   /* 두 주 */
+      {kind:'year', cols:years,    rows:13},   /* 네 주 */
+      {kind:'month',cols:months,   rows:31},   /* 하루 · 세로 = 그 달 */
+      {kind:'week', cols:years*52, rows:7},    /* 하루 · 세로 = 요일 */
+    ];
+    let best=null;
+    for(const o of cand){
+      const cell=Math.min(W/o.cols,H/o.rows), area=o.cols*o.rows*cell*cell;
+      if(!best||area>best.area+1||(Math.abs(area-best.area)<=1&&o.rows>best.rows))
+        best={...o,area};
+    }
+    return {lie:1,kind:best.kind,cols:best.cols,rows:best.rows,k:1,
+      unit:best.rows===7||best.kind==='month'?'day':'week',
+      startAge,firstMon,W,H};
   }
-  /* 일 · 한 줄 = 1달, 오늘을 가운데 두고 n년치 달 */
-  const months=n*12;
+  if(years>=10){                             /* 주 단위 */
+    const k=perRow(52,years,W,H);            /* 한 줄 = k년 */
+    const rows=Math.ceil(years/k);
+    const startAge=(RANGE==='all')?0
+      :Math.max(0,Math.min(SPAN-years,nowAge-Math.floor(years/2)));
+    return {unit:'week',k,cols:52*k,rows,startAge,W,H};
+  }
+  const months=years*12;                     /* 일 단위 */
+  const m=perRow(31,months,W,H);             /* 한 줄 = m달 */
+  const rows=Math.ceil(months/m);
   const cur=TODAY.getFullYear()*12+TODAY.getMonth();
-  const first=cur-Math.floor(months/2);
-  return {unit:'day',cols:31,rows:months,firstMon:first,W,H};
+  return {unit:'day',k:m,cols:31*m,rows,firstMon:cur-Math.floor(months/2),W,H};
 }
 
 /* ── 칸 하나가 가리키는 날짜 ──────────────────────────────────── */
 function cellDate(L,row,col){
-  if(L.unit==='week'){
-    const yStart=addY(BIRTH,L.startAge+row);
-    return new Date(yStart.getTime()+col*7*MS);
+  if(L.lie){
+    if(L.kind==='year')
+      return new Date(addY(BIRTH,L.startAge+col).getTime()+row*(364/L.rows)*MS);
+    if(L.kind==='week'){
+      const st=weekStart(L);
+      return new Date(st.getTime()+(col*7+row)*MS);
+    }
+    const m=L.firstMon+col, y=Math.floor(m/12), mo=((m%12)+12)%12;
+    const d=ymd(y,mo,row+1);
+    return d.getMonth()===mo?d:null;
   }
-  const m=L.firstMon+row;
-  const y=Math.floor(m/12), mo=m%12;
-  const d=ymd(y,mo,col+1);
+  if(L.unit==='week'){
+    const age=L.startAge+row*L.k+Math.floor(col/52), wk=col%52;
+    if(age>=(RANGE==='all'?SPAN:L.startAge+ (L.rows*L.k)))return null;
+    return new Date(addY(BIRTH,age).getTime()+wk*7*MS);
+  }
+  const m=L.firstMon+row*L.k+Math.floor(col/31), day=col%31;
+  const y=Math.floor(m/12), mo=((m%12)+12)%12;
+  const d=ymd(y,mo,day+1);
   return d.getMonth()===mo?d:null;         /* 그 달에 없는 날 */
 }
 
@@ -149,18 +205,25 @@ let LAY=null, CELL=0, PADL=0, PADT=0;
 
 function draw(){
   const board=cv.parentElement;
-  const W=board.clientWidth-20;
-  const H=Math.max(360,Math.min(780,Math.round(innerHeight*0.72)));
-  const L=layout(W,H); LAY=L;
-  const cell=Math.max(3,Math.min((W-180)/L.cols,H/L.rows));
+  const APP=SCREEN==='app';
+  const W=APP?1224:(board.clientWidth-20);
+  const H=APP?470:Math.max(360,Math.min(780,Math.round(innerHeight*0.72)));
+  cv.style.width=APP?'1224px':'100%';
+  cv.style.maxWidth='100%';
+  const LIE=DIR==='lie';
+  const SIDE=LIE?46:132;
+  const TOP=LIE&&SHOW.era?19:3, BOT=LIE&&SHOW.age?17:3;
+  const L=layout(W-SIDE,H-TOP-BOT); LAY=L;
+  const cell=Math.max(3,Math.min((W-SIDE)/L.cols,(H-TOP-BOT)/L.rows));
   const gridW=L.cols*cell, gridH=L.rows*cell;
   /* 격자가 다 그려질 만큼만 높이를 잡는다 — 남는 아래 여백이 안 생기게 */
-  const CH=Math.round(Math.min(H,gridH)+6);
+  const CH=Math.round(Math.min(H,gridH+TOP+BOT));
   const dpr=devicePixelRatio||1;
   cv.width=W*dpr; cv.height=CH*dpr; cv.style.height=CH+'px';
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.clearRect(0,0,W,CH);
-  CELL=cell; PADL=Math.max(38,Math.round((W-gridW)/2)); PADT=3;
+  CELL=cell; PADT=TOP;
+  PADL=Math.max(LIE?34:38,Math.round((W-gridW)/2));
   const gap=cell>=9?1:(cell>=6?.6:.35);
   const s=cell-gap;
 
@@ -179,7 +242,8 @@ function draw(){
       ctx.fillRect(x,y,s,s);
       /* 사건이 있는 칸 */
       if(SHOW.event&&EV_BY_MON[monKey(d)]){
-        const prev=c>0?cellDate(L,r,c-1):null;   /* 그 달의 첫 칸에만 */
+        const prev=(L.lie&&L.kind!=='week')?(r>0?cellDate(L,r-1,c):null)
+                  :(c>0?cellDate(L,r,c-1):(L.lie&&r>0?cellDate(L,r-1,L.cols-1):null));
         if(!prev||monKey(prev)!==monKey(d)){
           ctx.fillStyle='#B5432A';
           const rr=Math.max(1,Math.min(s*.3,3.2));
@@ -192,27 +256,78 @@ function draw(){
         ctx.strokeRect(x-.5,y-.5,s+1,s+1);
       }
     }
-    /* 왼쪽 축 — 주 격자는 나이, 일 격자는 달 */
-    if(SHOW.age&&cell>=6){
+    /* 왼쪽 축 */
+    if(SHOW.age&&cell>=6&&L.lie){
+      ctx.fillStyle='#8D9A91';ctx.textAlign='right';ctx.textBaseline='middle';
+      ctx.font='10px "IBM Plex Mono", monospace';
+      if(L.kind==='year'){                    /* 그 해 안 위치 — 달 */
+        const step=364/L.rows;
+        const mo=new Date(2001,0,1+r*step).getMonth();
+        const prev=r?new Date(2001,0,1+(r-1)*step).getMonth():-1;
+        if(mo!==prev&&(cell>=11||mo%3===0))ctx.fillText(mo+1,PADL-7,PADT+r*cell+cell/2);
+      }else if(L.kind==='week'){              /* 요일 */
+        if(r%2===0)ctx.fillText('일월화수목금토'[r],PADL-7,PADT+r*cell+cell/2);
+      }else if(r===0||(r+1)%10===0)ctx.fillText(r+1,PADL-7,PADT+r*cell+cell/2);
+    }
+    if(SHOW.age&&cell>=6&&!L.lie){
       ctx.fillStyle='#8D9A91';ctx.textAlign='right';ctx.textBaseline='middle';
       ctx.font='10px "IBM Plex Mono", monospace';
       if(L.unit==='week'){
-        const a=L.startAge+r;
-        if(a%10===0||(cell>=12&&a%5===0))ctx.fillText(a,PADL-8,PADT+r*cell+cell/2);
+        const a=L.startAge+r*L.k;
+        if(a%10===0||(cell>=14&&a%5===0))ctx.fillText(a,PADL-8,PADT+r*cell+cell/2);
       }else{
-        const m=L.firstMon+r, y=Math.floor(m/12), mo=m%12;
-        const every=cell>=20?1:(cell>=10?3:6);
+        const m=L.firstMon+r*L.k, y=Math.floor(m/12), mo=((m%12)+12)%12;
+        const every=cell>=20?1:(cell>=10?2:4);
         if(r%every===0)ctx.fillText(String(y).slice(2)+'.'+String(mo+1).padStart(2,'0'),
           PADL-8,PADT+r*cell+cell/2);
       }
     }
   }
+  if(L.lie){
+    if(SHOW.age){                             /* 아래 = 시간 축 */
+      ctx.fillStyle='#8D9A91';ctx.textAlign='center';ctx.textBaseline='top';
+      ctx.font='10px "IBM Plex Mono", monospace';
+      const yb=PADT+gridH+4;
+      for(let c=0;c<L.cols;c++){
+        if(L.kind==='year'){
+          const a=L.startAge+c;
+          if(a%10===0||(cell>=13&&a%5===0))ctx.fillText(a,PADL+c*cell+cell/2,yb);
+        }else if(L.kind==='week'){
+          const d=cellDate(L,0,c), prev=c?cellDate(L,0,c-1):null;
+          if(prev&&d.getMonth()!==prev.getMonth()&&(cell>=20||d.getMonth()%3===0))
+            ctx.fillText(String(d.getFullYear()).slice(2)+'.'+String(d.getMonth()+1).padStart(2,'0'),
+              PADL+c*cell+cell/2,yb);
+        }else{
+          const m=L.firstMon+c, y=Math.floor(m/12), mo=((m%12)+12)%12;
+          const every=cell>=26?1:(cell>=13?3:6);
+          if(c%every===0)ctx.fillText(String(y).slice(2)+'.'+String(mo+1).padStart(2,'0'),
+            PADL+c*cell+cell/2,yb);
+        }
+      }
+    }
+    if(SHOW.era){                             /* 위 = 시대 띠 */
+      ctx.textAlign='left';ctx.textBaseline='bottom';ctx.font='11.5px Pretendard, sans-serif';
+      ERAS.forEach(er=>{
+        let c0=null,c1=null;
+        for(let c=0;c<L.cols;c++){
+          const d=cellDate(L,0,c); if(!d)continue;
+          const k=monKey(d); if(k>=er.s&&k<=er.e){if(c0===null)c0=c;c1=c;}
+        }
+        if(c0===null)return;
+        const x=PADL+c0*cell, w=(c1-c0+1)*cell;
+        ctx.fillStyle=mix(er.c,'#FBFBF7',.25);ctx.fillRect(x,PADT-5,w,3);
+        ctx.fillStyle='#5D6B62';
+        if(w>=ctx.measureText(er.t).width+6)ctx.fillText(er.t,x+1,PADT-8);
+      });
+    }
+  }
   /* 시대 이름 — 오른쪽 여백 */
-  if(SHOW.era&&L.unit==='week'){
+  if(SHOW.era&&!L.lie&&L.unit==='week'){
     ctx.textAlign='left';ctx.textBaseline='middle';ctx.font='11.5px Pretendard, sans-serif';
     ERAS.forEach(er=>{
       const a0=ageAt(new Date(er.s+'-01')), a1=ageAt(new Date(er.e+'-01'));
-      const r0=Math.max(0,a0-L.startAge), r1=Math.min(L.rows-1,a1-L.startAge);
+      const r0=Math.max(0,Math.floor((a0-L.startAge)/L.k)),
+            r1=Math.min(L.rows-1,Math.floor((a1-L.startAge)/L.k));
       if(r1<0||r0>L.rows-1)return;
       const y=PADT+((r0+r1)/2+.5)*cell;
       const bx=PADL+L.cols*cell+16;
@@ -242,13 +357,16 @@ function stats(){
     <div class="stat"><b>지난 몫</b><span>${(lived/tot*100).toFixed(1)}%</span> <span class="sm">${SPAN}년 가정</span></div>`;
 }
 function legend(){
-  const u=LAY.unit==='week'?'한 칸 = 한 주':'한 칸 = 하루';
+  const wk=LAY.lie&&LAY.kind==='year'?Math.round(364/LAY.rows/7):1;
+  const u=LAY.unit==='week'?(wk>1?`한 칸 = ${wk}주`:'한 칸 = 한 주'):'한 칸 = 하루';
   document.getElementById('legend').innerHTML=
     `<span>${u} · ${LAY.cols}열 × ${LAY.rows}줄 · 칸 ${CELL.toFixed(1)}px</span>
      <span><i style="background:#C3CFBE"></i>지난 칸</span>
      <span><i style="background:#EEF1E9;border:1px solid var(--line)"></i>남은 칸</span>
      <span><i style="background:#B5432A"></i>사건 · 오늘</span>
-     <span>${LAY.unit==='week'?'세로 = 나이':'세로 = 달'}</span>`;
+     <span>${LAY.lie?({year:`가로 = 나이 · 세로 = ${Math.round(364/LAY.rows/7)||1}주씩`,
+         month:'가로 = 달 · 세로 = 그 달',week:'가로 = 주 · 세로 = 요일'})[LAY.kind]
+       :(LAY.unit==='week'?`한 줄 = ${LAY.k}년`:`한 줄 = ${LAY.k}달`)}</span>`;
 }
 
 /* ── 호버 ─────────────────────────────────────────────────────── */
@@ -275,6 +393,12 @@ document.querySelectorAll('.chip.span').forEach(b=>b.onclick=()=>{
 document.querySelectorAll('.chip.range').forEach(b=>b.onclick=()=>{
   RANGE=b.dataset.r;
   document.querySelectorAll('.chip.range').forEach(x=>x.classList.toggle('on',x===b));draw();});
+document.querySelectorAll('.chip.dir').forEach(b=>b.onclick=()=>{
+  DIR=b.dataset.d;
+  document.querySelectorAll('.chip.dir').forEach(x=>x.classList.toggle('on',x===b));draw();});
+document.querySelectorAll('.chip.screen').forEach(b=>b.onclick=()=>{
+  SCREEN=b.dataset.sc;
+  document.querySelectorAll('.chip.screen').forEach(x=>x.classList.toggle('on',x===b));draw();});
 document.querySelectorAll('.chip.show').forEach(b=>b.onclick=()=>{
   SHOW[b.dataset.s]=!SHOW[b.dataset.s];b.classList.toggle('on',SHOW[b.dataset.s]);draw();});
 addEventListener('resize',draw);
