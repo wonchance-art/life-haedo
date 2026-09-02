@@ -3984,7 +3984,7 @@ document.getElementById('btnMap').onclick=()=>{MAP_OPEN?closeMapOverlay():openMa
    히어로 수치 — 행복도 · 흐른 시간 · 남은 시간이 차례로 넘어간다
    눌러서 다음, 점을 눌러 바로 이동. 손을 올리면 멈춘다.
    ========================================================================== */
-const HERO_KEYS=['hap','lived','left'];
+const HERO_KEYS=['hap','lived','left','clock'];
 const heroReduce=()=>matchMedia('(prefers-reduced-motion:reduce)').matches;
 /* 격자 쪽 도우미를 끌어쓰지 않는다 — 그쪽은 아래에서 선언돼 아직 없다 */
 const heroBirth=()=>{const[y,m,d]=String(DATA.profile.birth).split('-').map(Number);
@@ -3997,7 +3997,12 @@ function heroItem(k){
   const nf=x=>Math.max(0,x).toLocaleString('ko-KR');
   if(k==='hap')   return{k:'행복도',  v:HERO_AVG};
   if(k==='lived') return{k:'흐른 날', v:nf(dn-d0)};
-  return             {k:'남은 날', v:nf(heroDay(end)-dn)};
+  if(k==='left')  return{k:'남은 날', v:nf(heroDay(end)-dn)};
+  /* 삶 전체를 하루 스물네 시간으로 놓으면 지금이 몇 시인가 */
+  const tot=heroDay(end)-d0;
+  const mm=tot>0?Math.max(0,Math.min(1439,Math.round((dn-d0)/tot*1440))):0;
+  const p2=x=>String(x).padStart(2,'0');
+  return{k:'삶의 시간', v:p2(Math.floor(mm/60))+':'+p2(mm%60)};
 }
 function paintHero(anim){
   const fig=document.getElementById('heroFig');
