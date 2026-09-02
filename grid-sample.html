@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="spring">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>생애 격자 시안 — 인생 연표</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root{--paper:#FBFBF7;--panel:#fff;--ink:#23312B;--ink-soft:#5D6B62;--line:#DDE3DC;--cinnabar:#B5432A}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:Pretendard,'Apple SD Gothic Neo',system-ui,sans-serif;font-size:14px;line-height:1.6}
+  .wrap{max-width:1400px;margin:0 auto;padding:26px clamp(14px,2.4vw,34px) 60px}
+  h1{font-size:22px;font-weight:800;margin:0 0 4px}
+  .sub{color:var(--ink-soft);font-size:13px;margin:0 0 18px}
+  .stats{display:flex;gap:34px;flex-wrap:wrap;padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .stat b{display:block;font-size:11px;color:var(--ink-soft);font-weight:600;letter-spacing:.06em}
+  .stat span{font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:600}
+  .stat .sm{font-size:13px;color:var(--ink-soft);font-weight:400}
+  .bar{display:flex;gap:26px;flex-wrap:wrap;align-items:center;padding:14px 0 16px}
+  .grp{display:flex;gap:5px;align-items:center}
+  .grp b{font-size:11px;color:var(--ink-soft);font-weight:600;letter-spacing:.06em;margin-right:3px}
+  button.chip{font:inherit;font-size:12.5px;padding:4px 12px;border:1px solid var(--line);
+    background:transparent;color:var(--ink);border-radius:2px;cursor:pointer;opacity:.6}
+  button.chip.on{opacity:1;border-color:var(--ink);font-weight:700}
+  .board{position:relative;border:1px solid var(--line);background:var(--panel);padding:10px}
+  canvas{display:block;width:100%;cursor:crosshair}
+  .tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .1s;z-index:9;
+    background:var(--ink);color:var(--paper);padding:7px 11px;border-radius:3px;font-size:12px;
+    line-height:1.55;white-space:nowrap;transform:translate(-50%,-118%)}
+  .tip .yy{font-family:'IBM Plex Mono',monospace;opacity:.75}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;font-size:11.5px;color:var(--ink-soft)}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:1px;margin-right:5px;vertical-align:-1px}
+  footer{margin-top:28px;font-size:12px;color:var(--ink-soft)}
+  footer code{font-family:'IBM Plex Mono',monospace;font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>생애 격자</h1>
+  <p class="sub">한 칸이 한 주, 또는 하루. 채워진 칸은 지나갔고 빈 칸은 남았다.
+    아래 수치와 격자는 예시 인물(1995-03 출생)의 것이다.</p>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="bar">
+    <div class="grp"><b>가정</b>
+      <button class="chip span on" data-span="80">80년</button>
+      <button class="chip span" data-span="100">100년</button>
+    </div>
+    <div class="grp"><b>범위</b>
+      <button class="chip range on" data-r="all">All</button>
+      <button class="chip range" data-r="20">20Y</button>
+      <button class="chip range" data-r="10">10Y</button>
+      <button class="chip range" data-r="5">5Y</button>
+      <button class="chip range" data-r="1">1Y</button>
+    </div>
+    <div class="grp"><b>표시</b>
+      <button class="chip show on" data-s="era">시대</button>
+      <button class="chip show on" data-s="event">사건</button>
+      <button class="chip show on" data-s="today">오늘</button>
+      <button class="chip show on" data-s="age">축</button>
+    </div>
+  </div>
+
+  <div class="board"><canvas id="cv"></canvas></div>
+  <div class="legend" id="legend"></div>
+
+  <footer>
+    <p>단위는 고르지 않는다 — 범위를 고르면 칸이 읽히는 크기(5px 이상)에 맞춰 <b>주</b>나 <b>일</b>이 정해진다.
+      계산해보면 월·년 단위는 어떤 범위에서도 뽑히지 않는다(월은 12열이라 칸이 가로로만 길고, 년은 80칸뿐이다).</p>
+    <p>주 격자는 <b>한 줄이 한 살</b>이라 세로가 그대로 나이 축이 된다. 일 격자는 한 줄이 한 달이다.</p>
+    <p>칸에 올리면 그날이 언제였는지, 그때 몇 살이었는지, 그 시기에 무엇이 있었는지 나온다.</p>
+  </footer>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+/* ── 예시 데이터 (익명) ───────────────────────────────────────── */
+const BIRTH=new Date(1995,2,15);
+const TODAY=new Date();
+const ERAS=[
+  {t:'학교',      s:'1995-03', e:'2014-02', c:'#8AA6C8'},
+  {t:'흔들림',    s:'2014-03', e:'2018-08', c:'#C89A6E'},
+  {t:'일',        s:'2018-09', e:'2024-12', c:'#7FA98F'},
+  {t:'다음 장',   s:'2025-01', e:'2035-12', c:'#B58AC0'},
+];
+const EVENTS=[
+  '1995-03 태어남','2002-03 입학','2008-03 중학교','2011-03 고등학교','2014-02 졸업',
+  '2014-03 첫 자취','2015-07 첫 여행','2016-01 입대','2017-10 전역','2018-03 복학',
+  '2018-09 첫 일','2019-05 이사','2020-02 이직','2020-11 긴 산책','2021-06 자격증',
+  '2021-12 첫 차','2022-04 먼 여행','2022-09 승진','2023-02 이사','2023-08 큰 병',
+  '2023-12 회복','2024-05 퇴사','2024-07 쉼','2024-12 결정','2025-03 새 도시',
+  '2025-09 다시 일','2026-02 만남','2026-08 계획','2027-05 이주','2029-01 정착',
+].map(s=>({date:s.slice(0,7),title:s.slice(8)}));
+
+/* ── 상태 ─────────────────────────────────────────────────────── */
+let SPAN=80, RANGE='all';
+const SHOW={era:true,event:true,today:true,age:true};
+
+const MS=86400000;
+const dnum=d=>Math.floor(d.getTime()/MS);
+const ymd=(y,m,d)=>new Date(y,m,d);
+const addY=(d,n)=>new Date(d.getFullYear()+n,d.getMonth(),d.getDate());
+const fmt=d=>d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0');
+const ageAt=d=>{let a=d.getFullYear()-BIRTH.getFullYear();
+  const m=d.getMonth()-BIRTH.getMonth();
+  if(m<0||(m===0&&d.getDate()<BIRTH.getDate()))a--;
+  return a;};
+const monKey=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+
+const EV_BY_MON={}; EVENTS.forEach(e=>{(EV_BY_MON[e.date]=EV_BY_MON[e.date]||[]).push(e.title);});
+const eraAt=d=>{const k=monKey(d);return ERAS.find(x=>k>=x.s&&k<=x.e)||null;};
+
+/* ── 배치: 범위 → 단위·열·줄 ──────────────────────────────────── */
+function layout(W,H){
+  const END=addY(BIRTH,SPAN);
+  if(RANGE==='all'){                       /* 주 · 한 줄 = 1년 */
+    return {unit:'week',cols:52,rows:SPAN,startAge:0,W,H};
+  }
+  const n=+RANGE;
+  const nowAge=ageAt(TODAY);
+  if(n>=10){                               /* 주 · 오늘을 가운데 두고 n년 */
+    const startAge=Math.max(0,Math.min(SPAN-n,nowAge-Math.floor(n/2)));
+    return {unit:'week',cols:52,rows:n,startAge,W,H};
+  }
+  /* 일 · 한 줄 = 1달, 오늘을 가운데 두고 n년치 달 */
+  const months=n*12;
+  const cur=TODAY.getFullYear()*12+TODAY.getMonth();
+  const first=cur-Math.floor(months/2);
+  return {unit:'day',cols:31,rows:months,firstMon:first,W,H};
+}
+
+/* ── 칸 하나가 가리키는 날짜 ──────────────────────────────────── */
+function cellDate(L,row,col){
+  if(L.unit==='week'){
+    const yStart=addY(BIRTH,L.startAge+row);
+    return new Date(yStart.getTime()+col*7*MS);
+  }
+  const m=L.firstMon+row;
+  const y=Math.floor(m/12), mo=m%12;
+  const d=ymd(y,mo,col+1);
+  return d.getMonth()===mo?d:null;         /* 그 달에 없는 날 */
+}
+
+/* ── 그리기 ───────────────────────────────────────────────────── */
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let LAY=null, CELL=0, PADL=0, PADT=0;
+
+function draw(){
+  const board=cv.parentElement;
+  const W=board.clientWidth-20;
+  const H=Math.max(360,Math.min(780,Math.round(innerHeight*0.72)));
+  const L=layout(W,H); LAY=L;
+  const cell=Math.max(3,Math.min((W-180)/L.cols,H/L.rows));
+  const gridW=L.cols*cell, gridH=L.rows*cell;
+  /* 격자가 다 그려질 만큼만 높이를 잡는다 — 남는 아래 여백이 안 생기게 */
+  const CH=Math.round(Math.min(H,gridH)+6);
+  const dpr=devicePixelRatio||1;
+  cv.width=W*dpr; cv.height=CH*dpr; cv.style.height=CH+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,CH);
+  CELL=cell; PADL=Math.max(38,Math.round((W-gridW)/2)); PADT=3;
+  const gap=cell>=9?1:(cell>=6?.6:.35);
+  const s=cell-gap;
+
+  const todayN=dnum(TODAY);
+  ctx.font='10px "IBM Plex Mono", monospace';
+
+  for(let r=0;r<L.rows;r++){
+    for(let c=0;c<L.cols;c++){
+      const d=cellDate(L,r,c); if(!d)continue;
+      const x=PADL+c*cell, y=PADT+r*cell;
+      const past=dnum(d)<=todayN;
+      /* 바탕 — 지난 칸은 진하게, 남은 칸은 옅게 */
+      ctx.fillStyle=past?'#C3CFBE':'#EEF1E9';
+      const era=SHOW.era?eraAt(d):null;
+      if(era)ctx.fillStyle=mix(era.c,'#FBFBF7',past?.52:.88);
+      ctx.fillRect(x,y,s,s);
+      /* 사건이 있는 칸 */
+      if(SHOW.event&&EV_BY_MON[monKey(d)]){
+        const prev=c>0?cellDate(L,r,c-1):null;   /* 그 달의 첫 칸에만 */
+        if(!prev||monKey(prev)!==monKey(d)){
+          ctx.fillStyle='#B5432A';
+          const rr=Math.max(1,Math.min(s*.3,3.2));
+          ctx.beginPath();ctx.arc(x+s/2,y+s/2,rr,0,7);ctx.fill();
+        }
+      }
+      /* 오늘 */
+      if(SHOW.today&&Math.abs(dnum(d)-todayN)<(L.unit==='week'?4:1)){
+        ctx.strokeStyle='#B5432A';ctx.lineWidth=Math.max(1,cell*.14);
+        ctx.strokeRect(x-.5,y-.5,s+1,s+1);
+      }
+    }
+    /* 왼쪽 축 — 주 격자는 나이, 일 격자는 달 */
+    if(SHOW.age&&cell>=6){
+      ctx.fillStyle='#8D9A91';ctx.textAlign='right';ctx.textBaseline='middle';
+      ctx.font='10px "IBM Plex Mono", monospace';
+      if(L.unit==='week'){
+        const a=L.startAge+r;
+        if(a%10===0||(cell>=12&&a%5===0))ctx.fillText(a,PADL-8,PADT+r*cell+cell/2);
+      }else{
+        const m=L.firstMon+r, y=Math.floor(m/12), mo=m%12;
+        const every=cell>=20?1:(cell>=10?3:6);
+        if(r%every===0)ctx.fillText(String(y).slice(2)+'.'+String(mo+1).padStart(2,'0'),
+          PADL-8,PADT+r*cell+cell/2);
+      }
+    }
+  }
+  /* 시대 이름 — 오른쪽 여백 */
+  if(SHOW.era&&L.unit==='week'){
+    ctx.textAlign='left';ctx.textBaseline='middle';ctx.font='11.5px Pretendard, sans-serif';
+    ERAS.forEach(er=>{
+      const a0=ageAt(new Date(er.s+'-01')), a1=ageAt(new Date(er.e+'-01'));
+      const r0=Math.max(0,a0-L.startAge), r1=Math.min(L.rows-1,a1-L.startAge);
+      if(r1<0||r0>L.rows-1)return;
+      const y=PADT+((r0+r1)/2+.5)*cell;
+      const bx=PADL+L.cols*cell+16;
+      ctx.fillStyle=mix(er.c,'#FBFBF7',.25);ctx.fillRect(bx,PADT+r0*cell,3,(r1-r0+1)*cell);
+      ctx.fillStyle='#5D6B62';ctx.fillText(er.t,bx+9,y);
+    });
+  }
+  stats();
+  legend();
+}
+function mix(a,b,t){/* a를 b쪽으로 t만큼 */
+  const p=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+  const [r1,g1,b1]=p(a),[r2,g2,b2]=p(b);
+  const q=(x,y)=>Math.round(x+(y-x)*t);
+  return `rgb(${q(r1,r2)},${q(g1,g2)},${q(b1,b2)})`;
+}
+
+/* ── 수치 ─────────────────────────────────────────────────────── */
+function stats(){
+  const END=addY(BIRTH,SPAN);
+  const tot=dnum(END)-dnum(BIRTH), lived=dnum(TODAY)-dnum(BIRTH), left=tot-lived;
+  const n=x=>x.toLocaleString('ko-KR');
+  document.getElementById('stats').innerHTML=`
+    <div class="stat"><b>산 날</b><span>${n(lived)}</span> <span class="sm">일 · ${ageAt(TODAY)}세</span></div>
+    <div class="stat"><b>남은 날</b><span>${n(left)}</span> <span class="sm">일</span></div>
+    <div class="stat"><b>남은 주</b><span>${n(Math.round(left/7))}</span> <span class="sm">주</span></div>
+    <div class="stat"><b>지난 몫</b><span>${(lived/tot*100).toFixed(1)}%</span> <span class="sm">${SPAN}년 가정</span></div>`;
+}
+function legend(){
+  const u=LAY.unit==='week'?'한 칸 = 한 주':'한 칸 = 하루';
+  document.getElementById('legend').innerHTML=
+    `<span>${u} · ${LAY.cols}열 × ${LAY.rows}줄 · 칸 ${CELL.toFixed(1)}px</span>
+     <span><i style="background:#C3CFBE"></i>지난 칸</span>
+     <span><i style="background:#EEF1E9;border:1px solid var(--line)"></i>남은 칸</span>
+     <span><i style="background:#B5432A"></i>사건 · 오늘</span>
+     <span>${LAY.unit==='week'?'세로 = 나이':'세로 = 달'}</span>`;
+}
+
+/* ── 호버 ─────────────────────────────────────────────────────── */
+const tip=document.getElementById('tip');
+cv.addEventListener('mousemove',e=>{
+  const r=cv.getBoundingClientRect(), sc=(cv.width/(devicePixelRatio||1))/r.width;
+  const x=(e.clientX-r.left)*sc-PADL, y=(e.clientY-r.top)*sc-PADT;
+  const c=Math.floor(x/CELL), row=Math.floor(y/CELL);
+  if(c<0||row<0||c>=LAY.cols||row>=LAY.rows){tip.style.opacity=0;return;}
+  const d=cellDate(LAY,row,c);
+  if(!d){tip.style.opacity=0;return;}
+  const past=dnum(d)<=dnum(TODAY);
+  const era=eraAt(d), evs=EV_BY_MON[monKey(d)];
+  tip.innerHTML=`<span class="yy">${fmt(d)}</span> · 만 ${ageAt(d)}세 · ${past?'지남':'남음'}`
+    +(era?`<br>${era.t}`:'')+(evs?`<br>${evs.join(' · ')}`:'');
+  tip.style.left=e.clientX+'px'; tip.style.top=e.clientY+'px'; tip.style.opacity=1;
+});
+cv.addEventListener('mouseleave',()=>tip.style.opacity=0);
+
+/* ── 칩 ───────────────────────────────────────────────────────── */
+document.querySelectorAll('.chip.span').forEach(b=>b.onclick=()=>{
+  SPAN=+b.dataset.span;
+  document.querySelectorAll('.chip.span').forEach(x=>x.classList.toggle('on',x===b));draw();});
+document.querySelectorAll('.chip.range').forEach(b=>b.onclick=()=>{
+  RANGE=b.dataset.r;
+  document.querySelectorAll('.chip.range').forEach(x=>x.classList.toggle('on',x===b));draw();});
+document.querySelectorAll('.chip.show').forEach(b=>b.onclick=()=>{
+  SHOW[b.dataset.s]=!SHOW[b.dataset.s];b.classList.toggle('on',SHOW[b.dataset.s]);draw();});
+addEventListener('resize',draw);
+draw();
+</script>
+</body>
+</html>
