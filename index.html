@@ -963,7 +963,7 @@ let MAP_OPEN=false, mapWinTimer=0; /* render()가 참조 — 이른 resize에서
 let GRID_OPEN=(()=>{try{return localStorage.getItem('caeyeon_life_grid')==='1';}catch(e){return false;}})();
 let GRID_SPAN=(()=>{try{return +localStorage.getItem('caeyeon_life_gridspan')===100?100:80;}catch(e){return 80;}})();
 let GRID_CELL=(()=>{try{const v=localStorage.getItem('caeyeon_life_gridcell');
-  return ['week','month'].includes(v)?v:'auto';}catch(e){return 'auto';}})();
+  return ['week','month','auto'].includes(v)?v:'week';}catch(e){return 'week';}})();
 let GLAY=null, GCW=0, GCH=0, GPADL=0, GPADT=0;
 /* 표시 토글 — 그리기만 끈다. 곡선·평균·데이터는 그대로 */
 const SHOW_KEYS=['ev','name','tag','span','th','hap','lay','rec','era'];
@@ -4032,9 +4032,10 @@ function drawGrid(){
   const ctx=gridCv.getContext('2d');
   const SIDE=44, TOP=SHOW.era?18:4, BOT=16;
   const ih=self.innerHeight||800;
-  const HMAX=GRID_CELL==='auto'
-    ? Math.max(110,Math.min(300,Math.round(ih*.26)))   /* 띠 — 연표를 가리지 않는 높이 */
-    : Math.max(150,Math.min(480,Math.round(ih*.46)));  /* 칸을 직접 골랐으면 더 내준다 */
+  /* 주 칸은 한 해가 52줄이라 높이가 더 든다. 달·자동은 연표를 가리지 않는 띠로 */
+  const HMAX=GRID_CELL==='week'
+    ? Math.max(150,Math.min(480,Math.round(ih*.46)))
+    : Math.max(110,Math.min(300,Math.round(ih*.26)));
   const L=gridLayout(W-SIDE,HMAX); GLAY=L;
   const AW=W-SIDE;
   /* 정사각이 먼저다. 세로가 모자라 폭이 남을 때만 가로로 늘린다 (최대 2:1).
