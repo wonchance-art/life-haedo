@@ -35,7 +35,7 @@ html[data-theme=spring]{
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@400&family=Noto+Serif+KR:wght@900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{ /* 디자인 토큰은 전부 daisyUI 테마 변수에서 빌려온다 */
@@ -62,7 +62,8 @@ html[data-theme=spring]{
 
   header{padding:64px 0 36px;border-bottom:1px solid color-mix(in oklab,var(--color-base-content) 26%,var(--color-base-100))}
   .hgroup{display:flex;flex-wrap:wrap;align-items:flex-end;gap:28px;justify-content:space-between}
-  h1{font-weight:700;font-size:clamp(48px,7.5vw,88px);line-height:.95;letter-spacing:.04em}
+  h1{font-family:'Noto Serif KR',serif;font-weight:900;
+    font-size:clamp(46px,7.2vw,86px);line-height:.94;letter-spacing:-.03em}
   .subtitle{font-size:clamp(15px,2.2vw,19px);color:var(--ink-soft);margin-top:14px}
 
   section{padding:52px 0}
@@ -270,7 +271,37 @@ html[data-theme=spring]{
   /* ===== 2026 다듬기 — 글래스(떠 있는 요소만)·그레인·벤토 요약·라운드·미세 모션 ===== */
   .pop-ed,.hover-card,.ctx{box-shadow:0 12px 34px color-mix(in oklab,var(--color-base-content) 14%,transparent)}
   .search-panel{box-shadow:0 22px 60px color-mix(in oklab,var(--color-base-content) 20%,transparent)}
-  .stat-cards{display:grid;grid-template-columns:repeat(3,minmax(96px,1fr));gap:8px}
+  /* ── 히어로 수치 — 행복도 · 흐른 시간 · 남은 시간이 차례로 넘어간다 ── */
+  .head-right{display:flex;flex-direction:column;align-items:flex-end;gap:16px}
+  .hero{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+  .hero-fig{appearance:none;border:none;background:transparent;padding:0;cursor:pointer;
+    font-family:inherit;color:inherit;text-align:right;display:block;
+    border-radius:8px;transition:opacity .15s}
+  .hero-fig:hover{opacity:.72}
+  .hero-fig:focus-visible{outline:2px solid var(--cinnabar);outline-offset:6px}
+  .hero-k{display:block;font-size:11px;letter-spacing:.09em;font-weight:600;color:var(--ink-soft)}
+  .hero-k i{font-style:normal;opacity:.62;letter-spacing:.02em}
+  .hero-v{display:block;font-size:clamp(38px,4.6vw,56px);font-weight:700;line-height:1;
+    letter-spacing:-.025em;font-variant-numeric:proportional-nums;margin-top:3px}
+  .hero-v u{text-decoration:none;font-size:.34em;font-weight:600;letter-spacing:0;
+    color:var(--ink-soft);margin-left:.18em;vertical-align:.28em}
+  .hero-dots{display:flex;gap:5px}
+  .hero-dots button{appearance:none;border:none;padding:0;cursor:pointer;
+    width:6px;height:6px;border-radius:3px;background:var(--line);
+    transition:width .22s cubic-bezier(.16,1,.3,1),background .22s}
+  .hero-dots button.on{width:17px;background:var(--cinnabar)}
+  .hero-fig.out .hero-k,.hero-fig.out .hero-v{opacity:0;transform:translateY(-9px);
+    transition:opacity .15s ease,transform .15s ease}
+  .hero-fig.in .hero-k{animation:heroIn .34s cubic-bezier(.16,1,.3,1)}
+  .hero-fig.in .hero-v{animation:heroIn .34s cubic-bezier(.16,1,.3,1) .05s backwards}
+  @keyframes heroIn{from{opacity:0;transform:translateY(13px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){
+    .hero-fig.out .hero-k,.hero-fig.out .hero-v{opacity:1;transform:none;transition:none}
+    .hero-fig.in .hero-k,.hero-fig.in .hero-v{animation:none}
+    .hero-dots button{transition:none}
+  }
+  .head-right .stat-cards{display:flex;flex-wrap:nowrap;gap:8px 26px;justify-content:flex-end}
+  .stat-cards{display:grid;grid-template-columns:repeat(2,minmax(96px,1fr));gap:8px}
   .stat-cards .stat{background:var(--color-base-100);border:1px solid var(--line);border-radius:14px;padding:10px 14px}
   .stat-cards .stat-title{font-size:11px;color:var(--ink-soft)}
   .stat-cards .stat-value{font-size:16px;font-weight:650;font-family:'IBM Plex Mono',monospace;color:var(--ink)}
@@ -310,10 +341,18 @@ html[data-theme=spring]{
         <h1>내 연표</h1>
         <p class="subtitle">시간에 따른 행복도와 사건 기록</p>
       </div>
-      <div class="stat-cards" aria-label="기록 요약">
-        <div class="stat"><div class="stat-title">출생</div><div class="stat-value" id="statBirth">—</div></div>
-        <div class="stat"><div class="stat-title">사건 · 기간</div><div class="stat-value" id="statEvents">—</div></div>
-        <div class="stat"><div class="stat-title">평균 행복</div><div class="stat-value" id="statAvg">—</div></div>
+      <div class="head-right">
+        <div class="hero" id="hero">
+          <button class="hero-fig" id="heroFig" aria-live="polite" aria-label="요약 수치 — 눌러서 다음">
+            <span class="hero-k" id="heroK">행복도</span>
+            <span class="hero-v" id="heroV">—</span>
+          </button>
+          <div class="hero-dots" id="heroDots" role="group" aria-label="수치 고르기"></div>
+        </div>
+        <div class="stat-cards" aria-label="기록 요약">
+          <div class="stat"><div class="stat-title">출생</div><div class="stat-value" id="statBirth">—</div></div>
+          <div class="stat"><div class="stat-title">사건 · 기간</div><div class="stat-value" id="statEvents">—</div></div>
+        </div>
       </div>
     </div>
   </div>
@@ -965,6 +1004,8 @@ let GRID_SPAN=(()=>{try{return +localStorage.getItem('caeyeon_life_gridspan')===
 let GRID_CELL=(()=>{try{const v=localStorage.getItem('caeyeon_life_gridcell');
   return ['week','month','auto'].includes(v)?v:'week';}catch(e){return 'week';}})();
 let GLAY=null, GCW=0, GCH=0, GPADL=0, GPADT=0;
+/* 히어로 수치 — prepare()가 값을 채우고 아래 블록이 그린다 */
+let HERO_AVG='—', HERO_I=0, heroTimer=0, heroHold=false;
 /* 표시 토글 — 그리기만 끈다. 곡선·평균·데이터는 그대로 */
 const SHOW_KEYS=['ev','name','tag','span','th','hap','lay','rec','era'];
 const SHOW_NAME={ev:'사건',name:'이름',tag:'핀색',span:'기간',th:'생각',hap:'값',lay:'분야',rec:'기록',era:'시대'};
@@ -1140,9 +1181,10 @@ function prepare(){
   $('#statBirth').textContent=fmtD(DATA.profile.birth);
   $('#statEvents').textContent=DATA.events.length+" · "+DATA.spans.length;
   const avgPts=HAPPTS.filter(pt=>!pt.future);
-  $('#statAvg').textContent=avgPts.length
+  HERO_AVG=avgPts.length
     ?(a=>(a>0?'+':'')+a.toFixed(2))(avgPts.reduce((s,pt)=>s+pt.v,0)/avgPts.length)
     :'—';
+  paintHero();
 }
 const birthYear=()=>+String(DATA.profile.birth).slice(0,4);
 const ageAt=t=>AGE_MODE==='kr'?Math.floor(t)-birthYear()+1:Math.floor(t-T(DATA.profile.birth));
@@ -3942,6 +3984,63 @@ function closeMapOverlay(){
 document.getElementById('btnMap').onclick=()=>{MAP_OPEN?closeMapOverlay():openMapOverlay();};
 
 /* ==========================================================================
+   히어로 수치 — 행복도 · 흐른 시간 · 남은 시간이 차례로 넘어간다
+   눌러서 다음, 점을 눌러 바로 이동. 손을 올리면 멈춘다.
+   ========================================================================== */
+const HERO_KEYS=['hap','lived','left'];
+const heroReduce=()=>matchMedia('(prefers-reduced-motion:reduce)').matches;
+/* 격자 쪽 도우미를 끌어쓰지 않는다 — 그쪽은 아래에서 선언돼 아직 없다 */
+const heroBirth=()=>{const[y,m,d]=String(DATA.profile.birth).split('-').map(Number);
+  return new Date(y,(m||1)-1,d||1);};
+const heroDay=d=>Math.floor((d.getTime()-d.getTimezoneOffset()*6e4)/864e5);
+function heroItem(k){
+  const B=heroBirth(), d0=heroDay(B), dn=heroDay(new Date());
+  const end=new Date(2000,B.getMonth(),B.getDate());
+  end.setFullYear(B.getFullYear()+GRID_SPAN);
+  const nf=x=>Math.max(0,x).toLocaleString('ko-KR');
+  if(k==='hap')   return{k:'행복도',   v:HERO_AVG};
+  if(k==='lived') return{k:'흐른 시간', v:nf(dn-d0)+'<u>일</u>'};
+  return {k:`남은 시간 <i>· ${GRID_SPAN}년 가정</i>`, v:nf(heroDay(end)-dn)+'<u>일</u>'};
+}
+function paintHero(anim){
+  const fig=document.getElementById('heroFig');
+  if(!fig||!(DATA&&DATA.profile&&DATA.profile.birth))return;   /* 아직 데이터 전 */
+  const kEl=document.getElementById('heroK'), vEl=document.getElementById('heroV');
+  const put=()=>{const it=heroItem(HERO_KEYS[HERO_I]);
+    kEl.innerHTML=it.k; vEl.innerHTML=it.v;};
+  document.querySelectorAll('#heroDots button').forEach((b,i)=>{
+    b.classList.toggle('on',i===HERO_I);
+    b.setAttribute('aria-current',i===HERO_I?'true':'false');});
+  if(!anim||heroReduce()){put();return;}
+  fig.classList.remove('in'); fig.classList.add('out');
+  setTimeout(()=>{
+    put(); fig.classList.remove('out'); fig.classList.add('in');
+    setTimeout(()=>fig.classList.remove('in'),400);
+  },155);
+}
+function heroGo(i){
+  HERO_I=((i%HERO_KEYS.length)+HERO_KEYS.length)%HERO_KEYS.length;
+  paintHero(true); heroArm();
+}
+function heroArm(){
+  clearInterval(heroTimer);
+  if(heroReduce())return;                       /* 저절로 넘기지 않는다 */
+  heroTimer=setInterval(()=>{ if(!heroHold&&!document.hidden)heroGo(HERO_I+1); },4600);
+}
+(()=>{
+  const dots=document.getElementById('heroDots');
+  if(!dots)return;
+  dots.innerHTML=HERO_KEYS.map((_,i)=>
+    `<button type="button" aria-label="${i+1}번째 수치"></button>`).join('');
+  dots.querySelectorAll('button').forEach((b,i)=>b.onclick=e=>{e.stopPropagation();heroGo(i);});
+  const fig=document.getElementById('heroFig');
+  fig.onclick=()=>heroGo(HERO_I+1);
+  ['pointerenter','focusin'].forEach(ev=>fig.addEventListener(ev,()=>heroHold=true));
+  ['pointerleave','focusout'].forEach(ev=>fig.addEventListener(ev,()=>heroHold=false));
+  paintHero(); heroArm();
+})();
+
+/* ==========================================================================
    생애 격자 — 연표 아래 띠
    가로가 시간(연표와 같은 방향), 위가 시대, 아래가 나이. 지난 칸이 왼쪽.
    세로는 '그 열 안의 자리'다 — 그래서 한 열은 늘 한 해다(칸이 하루일 때만 한 달).
@@ -4217,7 +4316,7 @@ function renderGridPanel(){
     b.className='lay-chip';b.textContent=label;b.dataset.gs=v;
     b.onclick=ev=>{ev.stopPropagation();GRID_SPAN=v;
       try{localStorage.setItem('caeyeon_life_gridspan',v);}catch(e){}
-      syncGridPanel();drawGrid();};
+      syncGridPanel();drawGrid();paintHero();};
     gridPanel.appendChild(b);
   });
   const sep=document.createElement('span');sep.className='show-sep';gridPanel.appendChild(sep);
