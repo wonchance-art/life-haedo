@@ -437,7 +437,9 @@ function grid(){
   const P=pix(cs.getPropertyValue('--panel')), I=pix(cs.getPropertyValue('--ink-1'));
   const mix=(a,b,t)=>`rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*t)).join(',')})`;
   const PAST=mix(I,P,.74), FUT=mix(I,P,.90);
-  const gap=NEW?1:.6, sw=cw-gap, sh=ch-gap, PADL=SIDE, PADT=4;
+  const gap=NEW?1:.6, sw=cw-gap, sh=ch-gap, PADT=4;
+  /* 폭이 남으면 가운데로 — 왼쪽 축 자리(SIDE)는 지킨다 */
+  const PADL=Math.max(SIDE,Math.round((box-gw)/2));
   const nowAge=(TODAY-BIRTH)/(365.25*864e5);
   for(let c=0;c<cols;c++)for(let r=0;r<rows;r++){
     const age=c+r/52, x=PADL+c*cw, y=PADT+r*ch;
