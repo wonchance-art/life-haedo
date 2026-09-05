@@ -17,8 +17,10 @@
 <style>
 html[data-theme=spring]{
   color-scheme:light;
-  --color-base-100:oklch(99.2% 0.005 95); --color-base-200:oklch(97.6% 0.008 95);
-  --color-base-300:oklch(93.5% 0.012 92); --color-base-content:oklch(36% 0.013 75);
+  /* 바탕 넷 = 2026 개편 종이색. 페이지 토큰(--paper·--ink·--line)·차트 팔레트(resolvePal)·daisy 위젯이 전부 여기서 읽는다.
+     base-100 = #FAF8F0 (theme-color·manifest와 같은 값) */
+  --color-base-100:oklch(97.8% 0.011 92); --color-base-200:oklch(94.8% 0.018 96);
+  --color-base-300:oklch(87% 0.025 91); --color-base-content:oklch(27% 0.025 72);
   --color-primary:oklch(65% 0.105 133); --color-primary-content:oklch(99% 0.008 135);
   --color-secondary:oklch(82% 0.05 40); --color-secondary-content:oklch(32% 0.03 40);
   --color-accent:oklch(79% 0.075 20); --color-accent-content:oklch(30% 0.04 20);
@@ -42,9 +44,9 @@ html[data-theme=spring]{
     --paper:var(--color-base-100); --paper-2:var(--color-base-200);
     --panel:var(--color-base-100); --field:var(--color-base-100);
     --ink:var(--color-base-content);
-    --ink-soft:color-mix(in oklab,var(--color-base-content) 60%,var(--color-base-100));
+    --ink-soft:color-mix(in oklab,var(--color-base-content) 65%,var(--color-base-100)); /* ≈ L 52% */
     --line:var(--color-base-300);
-    --water:var(--color-primary); --water-deep:var(--color-primary);
+    --water:var(--color-primary); --water-deep:color-mix(in oklab,var(--color-primary) 72%,black); /* 스크러버 창·＋ 칩 hover — 곡선색의 짙은 판 */
     --cinnabar:var(--color-error); --gold:var(--color-warning); --future:var(--color-neutral);
     --maxw:1180px;
   }
@@ -485,19 +487,11 @@ html[data-theme=spring]{
 
 <style>
   /* ===== 2026 전면 개편 — 조용한 편집 화면, 선명한 정보 위계 ===== */
+  /* 색 토큰은 여기서 덮지 않는다 — 값은 html[data-theme=spring]의 daisy 변수에, 별칭은 위 :root에.
+     여기서 리터럴로 덮으면 차트(resolvePal)·daisy 위젯과 종이색이 갈라진다(2026-09-05 리뷰) */
   :root{
-    --paper:oklch(97.8% .011 92);
-    --paper-2:oklch(94.8% .018 96);
     --panel:color-mix(in oklab,var(--paper) 88%,white);
     --field:color-mix(in oklab,var(--paper) 72%,white);
-    --ink:oklch(27% .025 72);
-    --ink-soft:oklch(52% .025 76);
-    --line:oklch(87% .025 91);
-    --water:oklch(67% .105 144);
-    --water-deep:oklch(48% .09 151);
-    --cinnabar:oklch(60% .16 38);
-    --gold:oklch(77% .12 83);
-    --future:oklch(62% .025 82);
     --shadow-sm:0 1px 2px color-mix(in oklab,var(--ink) 7%,transparent),0 8px 26px color-mix(in oklab,var(--ink) 5%,transparent);
     --shadow-lg:0 28px 80px color-mix(in oklab,var(--ink) 16%,transparent);
     --ease-out:cubic-bezier(.22,1,.36,1);
