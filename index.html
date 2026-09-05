@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="행복도 곡선 위에 사건·기간·시대를 기록하는 개인 연표 편집기">
-<meta name="theme-color" content="#F5F2E9">
+<meta name="theme-color" content="#FAF8F0">
 <link rel="icon" href="icon.svg">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon.svg">
@@ -540,6 +540,7 @@ html[data-theme=spring]{
   .lay-chip.on{color:var(--paper);background:var(--ink);border-color:transparent;font-weight:650}
   #btnShow{font-size:17px;letter-spacing:.12em;padding-left:14px}
   #btnMap,#btnGrid,#btnSearch{color:var(--ink)}
+  #btnMap.on,#btnGrid.on,#btnSearch.on{color:var(--paper)} /* id 규칙이 .lay-chip.on을 이겨 켠 칩의 글자가 배경색에 묻힌다 */
   .layer-bar{min-height:34px;margin:0 2px 12px;gap:4px}
   .layer-bar:empty{display:none}
   .layer-bar .lay-chip{min-height:28px;padding:3px 10px;font-size:11px}
