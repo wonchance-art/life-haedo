@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="행복도 곡선 위에 사건·기간·시대를 기록하는 개인 연표 편집기">
-<meta name="theme-color" content="#E9EDE6">
+<meta name="theme-color" content="#F5F2E9">
 <link rel="icon" href="icon.svg">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon.svg">
@@ -471,6 +471,129 @@ html[data-theme=spring]{
   .corner-tr{right:22px} /* 브라우저 스크롤바 회피 */
   .corner #docSel{max-width:120px}
   @media (max-width:640px){.corner{top:8px}.corner-tl{left:8px}.corner-tr{right:12px}}
+</style>
+
+<style>
+  /* ===== 2026 전면 개편 — 조용한 편집 화면, 선명한 정보 위계 ===== */
+  :root{
+    --paper:oklch(97.8% .011 92);
+    --paper-2:oklch(94.8% .018 96);
+    --panel:color-mix(in oklab,var(--paper) 88%,white);
+    --field:color-mix(in oklab,var(--paper) 72%,white);
+    --ink:oklch(27% .025 72);
+    --ink-soft:oklch(52% .025 76);
+    --line:oklch(87% .025 91);
+    --water:oklch(67% .105 144);
+    --water-deep:oklch(48% .09 151);
+    --cinnabar:oklch(60% .16 38);
+    --gold:oklch(77% .12 83);
+    --future:oklch(62% .025 82);
+    --shadow-sm:0 1px 2px color-mix(in oklab,var(--ink) 7%,transparent),0 8px 26px color-mix(in oklab,var(--ink) 5%,transparent);
+    --shadow-lg:0 28px 80px color-mix(in oklab,var(--ink) 16%,transparent);
+    --ease-out:cubic-bezier(.22,1,.36,1);
+    --maxw:1240px;
+  }
+  html{background:var(--paper)}
+  body{
+    min-height:100vh;
+    background:
+      radial-gradient(circle at 84% 4%,color-mix(in oklab,var(--gold) 13%,transparent),transparent 28rem),
+      radial-gradient(circle at 8% 32%,color-mix(in oklab,var(--water) 9%,transparent),transparent 32rem),
+      var(--paper);
+    letter-spacing:-.012em;
+  }
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:1500;opacity:.055;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.4'/%3E%3C/svg%3E")}
+  .wrap{padding-inline:clamp(20px,4vw,64px)}
+
+  header{position:relative;padding:0;border-bottom:0;overflow:hidden}
+  header::after{content:"";position:absolute;left:clamp(20px,4vw,64px);right:clamp(20px,4vw,64px);bottom:0;height:1px;
+    background:linear-gradient(90deg,var(--ink),color-mix(in oklab,var(--ink) 12%,transparent),transparent)}
+  header .wrap{padding-top:clamp(120px,17vh,190px);padding-bottom:clamp(48px,7vw,84px)}
+  .hgroup{align-items:flex-end;gap:48px}
+  h1{position:relative;font-size:clamp(58px,8.7vw,118px);line-height:.84;letter-spacing:-.065em;color:var(--ink)}
+  h1::after{content:"";display:inline-block;width:.18em;height:.18em;margin-left:.11em;border-radius:50%;background:var(--cinnabar);vertical-align:.08em}
+  .subtitle{font-size:clamp(14px,1.5vw,18px);margin-top:26px;letter-spacing:.015em;color:var(--ink-soft)}
+  .head-right{min-width:min(100%,310px);gap:24px}
+  .hero{gap:13px}
+  .hero-k{text-transform:uppercase;font-size:10px;letter-spacing:.18em}
+  .hero-v{font-size:clamp(46px,6vw,74px);font-weight:620;letter-spacing:-.055em}
+  .hero-dots{gap:7px}
+  .hero-dots button{height:5px;background:color-mix(in oklab,var(--ink) 16%,transparent)}
+  .hero-dots button.on{width:24px;background:var(--cinnabar)}
+  .head-right .stat-cards{width:100%;gap:0;border-top:1px solid var(--line);padding-top:14px}
+  .head-right .stat{flex:1}
+  .head-right .stat+.stat{border-left:1px solid var(--line);padding-left:20px}
+  .stat-cards .stat-title{font-size:10px;letter-spacing:.09em}
+  .stat-cards .stat-value{font-size:14px;margin-top:2px}
+
+  #sec-canvas{padding:clamp(24px,4vw,48px) 0 90px}
+  .tl-controls{position:sticky;top:12px;z-index:30;width:max-content;max-width:100%;margin:0 0 18px;padding:6px;
+    flex-wrap:nowrap;overflow-x:auto;border:1px solid color-mix(in oklab,var(--line) 80%,transparent);
+    border-radius:999px;background:color-mix(in oklab,var(--paper) 82%,transparent);box-shadow:var(--shadow-sm);
+    backdrop-filter:blur(18px) saturate(1.25);-webkit-backdrop-filter:blur(18px) saturate(1.25);scrollbar-width:none}
+  .tl-controls::-webkit-scrollbar{display:none}
+  .tl-controls>span{min-width:12px}
+  .lay-chip{min-height:32px;padding:5px 12px;border:0;border-radius:999px;color:var(--ink-soft);font-weight:560;
+    white-space:nowrap;flex:none;transition:color .18s,background .18s,transform .18s var(--ease-out)}
+  .lay-chip:hover{color:var(--ink);background:color-mix(in oklab,var(--ink) 6%,transparent);transform:translateY(-1px)}
+  .lay-chip.on{color:var(--paper);background:var(--ink);border-color:transparent;font-weight:650}
+  #btnShow{font-size:17px;letter-spacing:.12em;padding-left:14px}
+  #btnMap,#btnGrid,#btnSearch{color:var(--ink)}
+  .layer-bar{min-height:34px;margin:0 2px 12px;gap:4px}
+  .layer-bar:empty{display:none}
+  .layer-bar .lay-chip{min-height:28px;padding:3px 10px;font-size:11px}
+
+  .canvas-frame{position:relative;padding:clamp(8px,1.2vw,14px);border:1px solid color-mix(in oklab,var(--line) 90%,transparent);
+    border-radius:24px;background:color-mix(in oklab,var(--panel) 83%,transparent);box-shadow:var(--shadow-lg);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  .canvas-inner{border:0;border-radius:16px;overflow:hidden;background:color-mix(in oklab,var(--field) 66%,transparent)}
+  #tl{border-radius:16px}
+  #tl:focus-visible{outline:2px solid var(--cinnabar);outline-offset:-4px}
+  #tl text{stroke:var(--panel);stroke-width:3px}
+  .scrubber{padding:12px 4px 2px;opacity:.72;gap:14px}
+  .scrub-track{height:18px;border-radius:999px;background:color-mix(in oklab,var(--ink) 6%,transparent)}
+  .scrub-win{top:2px;bottom:2px;border:0;border-radius:999px;background:color-mix(in oklab,var(--water-deep) 22%,transparent);box-shadow:inset 0 0 0 1px var(--water-deep)}
+  .scrub-year{font-size:10px;letter-spacing:.03em}
+  .grid-band{border:0;border-radius:15px;overflow:hidden;background:var(--field);margin-top:10px}
+  .grid-bar{border-color:var(--line);padding:8px 10px}
+
+  .corner{position:fixed;top:16px;opacity:.72;border:1px solid color-mix(in oklab,var(--line) 70%,transparent);
+    background:color-mix(in oklab,var(--paper) 76%,transparent);box-shadow:var(--shadow-sm);backdrop-filter:blur(14px)}
+  .corner:hover,.corner:focus-within{opacity:1}
+  .corner-tl{left:18px}.corner-tr{right:18px}
+  .db-dot{box-shadow:0 0 0 4px color-mix(in oklab,var(--cinnabar) 13%,transparent)}
+  .db-dot.ok{box-shadow:0 0 0 4px color-mix(in oklab,var(--water) 16%,transparent)}
+  .pop-ed,.hover-card,.ctx,.search-panel{border-color:color-mix(in oklab,var(--line) 75%,transparent);background:color-mix(in oklab,var(--panel) 94%,transparent);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+  .pop-ed{border-radius:18px;box-shadow:var(--shadow-lg)}
+  .hover-card{border-radius:16px;box-shadow:var(--shadow-sm)}
+  .ctx{border-radius:14px;box-shadow:var(--shadow-lg);padding:6px}
+  .ctx button{border-radius:9px}
+  .search-bd{background:color-mix(in oklab,var(--ink) 30%,transparent);backdrop-filter:blur(9px)}
+  .search-panel{border-radius:22px;box-shadow:var(--shadow-lg);overflow:hidden}
+  .map-overlay{border-radius:16px;background:var(--panel)}
+
+  #gateBd{background:radial-gradient(circle at 50% 35%,color-mix(in oklab,var(--gold) 17%,transparent),transparent 25rem),var(--paper)!important}
+  #gateBd>div{padding:38px;border:1px solid var(--line);border-radius:24px;background:color-mix(in oklab,var(--panel) 84%,transparent);box-shadow:var(--shadow-lg);backdrop-filter:blur(16px)}
+  #gateBd>div>div:first-child{font-family:'Noto Serif KR',serif;font-size:32px!important;letter-spacing:-.045em}
+  #gatePw{border-radius:12px!important;padding:12px 14px!important;background:var(--field)!important}
+  #gateGo{border:0;border-radius:12px!important;min-height:44px;background:var(--ink);color:var(--paper)}
+
+  @media (max-width:720px){
+    header .wrap{padding-top:112px;padding-bottom:48px}
+    .hgroup{display:grid;gap:44px}
+    .head-right{align-items:flex-start;width:100%}.hero{align-items:flex-start}.hero-fig{text-align:left}
+    .head-right .stat-cards{justify-content:flex-start}
+    .tl-controls{width:100%;top:8px}
+    .canvas-frame{margin-inline:-10px;border-radius:18px;padding:6px}
+    .canvas-inner,#tl{border-radius:12px}
+    .corner{top:10px}.corner-tl{left:10px}.corner-tr{right:10px}
+  }
+  @media (prefers-reduced-motion:no-preference){
+    header .hgroup{animation:reveal .8s var(--ease-out) both}
+    .canvas-frame{animation:reveal .8s var(--ease-out) .12s both}
+    @keyframes reveal{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+  }
 </style>
 
 <!-- 온라인 DB 설정 -->

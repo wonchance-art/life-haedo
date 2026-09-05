@@ -1,12 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#E9EDE6"/>
-  <g stroke="#23312B" stroke-width="10" fill="none" stroke-linecap="round">
-    <line x1="60" y1="150" x2="452" y2="150"/>
-    <path d="M60 330 C 130 330, 150 250, 210 250 S 300 380, 360 300 S 430 230, 452 240" stroke="#1E4348" stroke-width="16"/>
-  </g>
-  <g fill="#B5432A">
-    <circle cx="210" cy="250" r="16"/><circle cx="360" cy="300" r="16"/>
-  </g>
-  <rect x="90" y="180" width="150" height="34" rx="4" fill="#2E5E63" opacity=".3" stroke="#2E5E63" stroke-width="4"/>
-  <rect x="270" y="180" width="180" height="34" rx="4" fill="#A87F3D" opacity=".3" stroke="#A87F3D" stroke-width="4"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="인생 연표">
+  <rect width="512" height="512" rx="112" fill="#F5F2E9"/>
+  <path d="M74 356C126 356 145 270 203 270s78 89 134 42c38-32 53-104 101-128" fill="none" stroke="#315F4B" stroke-width="28" stroke-linecap="round"/>
+  <path d="M74 148h364" fill="none" stroke="#2E2A24" stroke-width="12" stroke-linecap="round" opacity=".18"/>
+  <circle cx="203" cy="270" r="23" fill="#D35331" stroke="#F5F2E9" stroke-width="10"/>
+  <circle cx="438" cy="184" r="19" fill="#E0A63B" stroke="#F5F2E9" stroke-width="9"/>
 </svg>
