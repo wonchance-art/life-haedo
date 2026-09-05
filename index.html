@@ -1513,7 +1513,7 @@ function render(){
   for(let y=Math.ceil(dom[0]/step)*step;y<=dom[1];y+=step){
     const x=X(y);
     svg.appendChild(el('line',{x1:x,x2:x,y1:L.AXIS_Y-5,y2:L.AXIS_Y+5,stroke:'#23312B','stroke-width':1.2}));
-    svg.appendChild(el('line',{x1:x,x2:x,y1:L.AXIS_Y+5,y2:L.H,stroke:'#C4CDC1','stroke-width':.5,'stroke-dasharray':'2 7',opacity:.55}));
+    svg.appendChild(el('line',{x1:x,x2:x,y1:L.AXIS_Y+5,y2:L.H,stroke:'#C4CDC1','stroke-width':.5,opacity:.55})); /* 실선 — 점선은 미래에만 */
     if(x>18&&x<W-18){ /* 가장자리 반토막 숫자 방지 */
       const t=el('text',{x:x,y:L.AXIS_Y-12,'text-anchor':'middle','font-size':11,fill:'#23312B','font-family':'IBM Plex Mono'});
       t.textContent=y;svg.appendChild(t);
@@ -1538,11 +1538,11 @@ function render(){
         const t=y+m/12;if(t<dom[0]||t>dom[1])continue;
         svg.appendChild(el('line',{x1:X(t),x2:X(t),y1:L.AXIS_Y-2,y2:L.AXIS_Y+2,stroke:'#8A968D','stroke-width':.6}));
       }
-  svg.appendChild(el('line',{x1:0,x2:W,y1:L.AXIS_Y,y2:L.AXIS_Y,stroke:'#23312B','stroke-width':1.6}));
+  svg.appendChild(el('line',{x1:0,x2:W,y1:L.AXIS_Y,y2:L.AXIS_Y,stroke:'#23312B','stroke-width':1})); /* 축 1px — 곡선(2px)을 띄운다 */
 
   const nx=X(NOW);
   if(nx>-10&&nx<W+10){
-    svg.appendChild(el('line',{x1:nx,x2:nx,y1:30,y2:L.H,stroke:'#B5432A','stroke-width':1.2,'stroke-dasharray':'5 4',opacity:.75}));
+    svg.appendChild(el('line',{x1:nx,x2:nx,y1:30,y2:L.H,stroke:'#B5432A','stroke-width':1,opacity:1})); /* 오늘 = 실선. 점선은 예정에만 */
     const nflip=nx+40>W; /* 우측 끝에서 잘리면 선 왼쪽에 표기 */
     const t=el('text',{x:nflip?nx-6:nx+6,'text-anchor':nflip?'end':'start',y:L.AXIS_Y-30,'font-size':10,fill:'#B5432A','font-family':'IBM Plex Mono','letter-spacing':'.1em'});
     t.textContent='오늘';svg.appendChild(t);
@@ -1556,20 +1556,19 @@ function render(){
     svg.appendChild(el('line',{x1:0,x2:W,y1:HY(v),y2:HY(v),
       stroke:isBound?'#23312B':(isZero?'#5D6B62':'#C4CDC1'),
       'stroke-width':isBound?1.4:(isZero?1.2:.6),
-      'stroke-dasharray':(isBound||isZero)?'':'2 5',
-      opacity:isBound?.65:(isZero?.8:1)}));
+      opacity:isBound?.65:(isZero?.8:1)})); /* 눈금선은 전부 실선 — 점선은 미래에만 */
     const t=el('text',{x:W-8,y:HY(v)-4,'text-anchor':'end','font-size':isBound?10.5:10,
       fill:(isBound||isZero)?'#23312B':'#5D6B62','font-weight':isBound?600:400,'font-family':'IBM Plex Mono'});
     t.textContent=v>0?'+'+v:String(v);svg.appendChild(t);
     reserveText(W-8,HY(v)-4,v>0?'+'+v:String(v),'end',isBound?10.5:10);
   });
 
-  /* 전체 행복도 평균선 — 실측(미래 제외) 평균, 점선. 값은 요약 상자에 표기 */
+  /* 전체 행복도 평균선 — 실측(미래 제외) 평균, 금색 실선. 값은 요약 상자에 표기 */
   const pastPts=HAPPTS.filter(pt=>!pt.future);
   if(pastPts.length){
     const avg=pastPts.reduce((sum,pt)=>sum+pt.v,0)/pastPts.length;
     const ay=HY(avg);
-    svg.appendChild(el('line',{x1:0,x2:W,y1:ay,y2:ay,stroke:'#A87F3D','stroke-width':1.1,'stroke-dasharray':'7 5',opacity:.75}));
+    svg.appendChild(el('line',{x1:0,x2:W,y1:ay,y2:ay,stroke:'#A87F3D','stroke-width':1,opacity:.75}));
   }
 
   /* 기록 밀도 — vault 노트 월별 편수 (최하단, 이벤트 위임) */
@@ -1665,11 +1664,12 @@ function render(){
     const z=HY(0);
     const defs=el('defs',{});
     const gp=el('linearGradient',{id:'wgp',gradientUnits:'userSpaceOnUse',x1:0,y1:L.HAP_TOP,x2:0,y2:z});
-    gp.appendChild(el('stop',{offset:'0%','stop-color':'#2E5E63','stop-opacity':.26}));
-    gp.appendChild(el('stop',{offset:'100%','stop-color':'#2E5E63','stop-opacity':.04}));
+    /* 면은 10% 워시 — 그 이상은 '굵은 채도 블록'(dataviz 규범) */
+    gp.appendChild(el('stop',{offset:'0%','stop-color':'#2E5E63','stop-opacity':.10}));
+    gp.appendChild(el('stop',{offset:'100%','stop-color':'#2E5E63','stop-opacity':.02}));
     const gn=el('linearGradient',{id:'wgn',gradientUnits:'userSpaceOnUse',x1:0,y1:z,x2:0,y2:L.HAP_BOT});
-    gn.appendChild(el('stop',{offset:'0%','stop-color':'#B5432A','stop-opacity':.06}));
-    gn.appendChild(el('stop',{offset:'100%','stop-color':'#B5432A','stop-opacity':.24}));
+    gn.appendChild(el('stop',{offset:'0%','stop-color':'#B5432A','stop-opacity':.02}));
+    gn.appendChild(el('stop',{offset:'100%','stop-color':'#B5432A','stop-opacity':.10}));
     const cp=el('clipPath',{id:'cpPos'});cp.appendChild(el('rect',{x:-50,y:0,width:W+100,height:z}));
     const cn=el('clipPath',{id:'cpNeg'});cn.appendChild(el('rect',{x:-50,y:z,width:W+100,height:L.H-z}));
     defs.appendChild(gp);defs.appendChild(gn);defs.appendChild(cp);defs.appendChild(cn);
@@ -1689,13 +1689,13 @@ function render(){
       svg.appendChild(el('path',{d:smoothPath(past),fill:'none',stroke:'#1E4348','stroke-width':1,
         opacity:.16,'stroke-linecap':'round',class:'c-main'}));
     const mainCurve=el('path',{d:usePast?polyD(usePast):smoothPath(past),fill:'none',stroke:'#1E4348',
-      'stroke-width':2.4,'stroke-linecap':'round','stroke-linejoin':'round',opacity:.92,class:'c-main'});
+      'stroke-width':2,'stroke-linecap':'round','stroke-linejoin':'round',opacity:1,class:'c-main'}); /* 선은 2px */
     if(DARK)mainCurve.setAttribute('filter','url(#curveGlow)');
     svg.appendChild(mainCurve);
   }
   if(fut.length>1||(maFut&&maFut.length>1))
     svg.appendChild(el('path',{d:(maFut&&maFut.length>1)?polyD(maFut):smoothPath(fut),fill:'none',
-      stroke:'#7A8A80','stroke-width':1.7,'stroke-dasharray':'6 6',opacity:.6,class:'c-main'}));
+      stroke:'#7A8A80','stroke-width':2,'stroke-dasharray':'6 6',opacity:.6,class:'c-main'})); /* 예정 = 점선 */
 
   /* 표식 자리를 먼저 잡아 둔다 — 글자가 점·막대·생각표식 위에 얹히지 않게 */
   reserve(-1e4,L.SPAN_TOP-6,1e4,L.HAP_TOP-8);                        /* 막대 구역 전체 */
@@ -2004,7 +2004,7 @@ function render(){
       'aria-label':`${list[0].start} 부근 붙어 있는 기간 ${n}건 — 열어서 고르기`});
     g.appendChild(el('rect',{x:x1,y:y,width:w,height:L.SPAN_H,rx:2,fill:col,opacity:.13}));
     g.appendChild(el('rect',{x:x1,y:y,width:w,height:L.SPAN_H,rx:2,fill:'none',stroke:col,
-      'stroke-width':1.2,'stroke-dasharray':'4 3',opacity:.75}));
+      'stroke-width':1.2,opacity:.75})); /* 군집 테두리도 실선 — 점선은 예정에만 */
     list.forEach(s=>{ /* 안쪽에 각 기간의 자리를 옅은 눈금으로 남긴다 */
       const sx=Math.max(X(s.t0),x1), sw=Math.max(Math.min(X(s.t1??NOW+0.45),x2)-sx,1.5);
       g.appendChild(el('rect',{x:sx,y:y+4,width:sw,height:L.SPAN_H-8,rx:1,fill:s.color||col,opacity:.42}));
