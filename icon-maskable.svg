@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="인생 연표">
+  <rect width="512" height="512" fill="#F5F2E9"/>
+  <path d="M74 356C126 356 145 270 203 270s78 89 134 42c38-32 53-104 101-128" fill="none" stroke="#315F4B" stroke-width="28" stroke-linecap="round"/>
+  <path d="M74 148h364" fill="none" stroke="#2E2A24" stroke-width="12" stroke-linecap="round" opacity=".18"/>
+  <circle cx="203" cy="270" r="23" fill="#D35331" stroke="#F5F2E9" stroke-width="10"/>
+  <circle cx="438" cy="184" r="19" fill="#E0A63B" stroke="#F5F2E9" stroke-width="9"/>
+</svg>
