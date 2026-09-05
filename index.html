@@ -538,7 +538,8 @@ html[data-theme=spring]{
   .stat-cards .stat-value{font-size:14px;margin-top:2px}
 
   #sec-canvas{padding:clamp(24px,4vw,48px) 0 90px}
-  .tl-controls{position:sticky;top:12px;z-index:30;width:max-content;max-width:100%;margin:0 0 18px;padding:6px;
+  /* top은 고정 모서리 칩(top 16px + 30px) 아래 — 12px이면 붙었을 때 되돌리기·문서 칩이 All·＋ 기록 추가를 덮는다 */
+  .tl-controls{position:sticky;top:56px;z-index:30;width:max-content;max-width:100%;margin:0 0 18px;padding:6px;
     flex-wrap:nowrap;overflow-x:auto;border:1px solid color-mix(in oklab,var(--line) 80%,transparent);
     border-radius:999px;background:color-mix(in oklab,var(--paper) 82%,transparent);box-shadow:var(--shadow-sm);
     backdrop-filter:blur(18px) saturate(1.25);-webkit-backdrop-filter:blur(18px) saturate(1.25);scrollbar-width:none}
@@ -551,7 +552,7 @@ html[data-theme=spring]{
   #btnShow{font-size:17px;letter-spacing:.12em;padding-left:14px}
   #btnMap,#btnGrid,#btnSearch{color:var(--ink)}
   #btnMap.on,#btnGrid.on,#btnSearch.on{color:var(--paper)} /* id 규칙이 .lay-chip.on을 이겨 켠 칩의 글자가 배경색에 묻힌다 */
-  .add-chip{color:var(--paper)!important;background:var(--ink)!important;box-shadow:0 5px 14px color-mix(in oklab,var(--ink) 16%,transparent)}
+  .add-chip{opacity:1;color:var(--paper)!important;background:var(--ink)!important;box-shadow:0 5px 14px color-mix(in oklab,var(--ink) 16%,transparent)}
   .add-chip:hover{background:var(--water-deep)!important;color:white!important}
   .layer-bar{min-height:34px;margin:0 2px 12px;gap:4px}
   .layer-bar:empty{display:none}
@@ -609,7 +610,7 @@ html[data-theme=spring]{
     .hgroup{display:grid;gap:44px}
     .head-right{align-items:flex-start;width:100%}.hero{align-items:flex-start}.hero-fig{text-align:left}
     .head-right .stat-cards{justify-content:flex-start}
-    .tl-controls{width:100%;top:8px}
+    .tl-controls{width:100%;top:48px} /* 모서리 칩 top 10px + 30px 아래 */
     .tl-controls .scale:not([data-y="all"]):not([data-y="1"]){display:none}
     .tl-controls>span{flex:1!important;min-width:2px}
     #btnMap,#btnGrid{display:none}
@@ -1407,6 +1408,7 @@ function pinColor(e){       /* 여러 태그면 레이어 순서상 첫 번째 (
 const pinDash=fut=>fut?{'stroke-dasharray':'3 2.4'}:{}; /* 예정 = 점선 — 기간 막대와 같은 문법 */
 function render(){
   if(!SHOW.lay)focusLayer='main'; /* 분야를 끈 채 포커스가 남으면 화면 전체가 흐려진다 */
+  if(window.syncStartGuide)syncStartGuide(); /* 안내 카드는 데이터가 생기면 거둔다 */
   hideTip();
   if(typeof hideCard==='function')hideCard();
   const L=LAYOUT;
@@ -2644,6 +2646,12 @@ function openPopLayerPt(lay,p,ax,ay){
   placePop(ax,ay);
   requestAnimationFrame(()=>q('[data-f="v"]').focus());
 }
+/* 생각 만들기 — 우클릭 메뉴와 도구줄 ＋ 메뉴가 같이 쓴다 */
+function addThoughtAt(date,cx,cy){
+  const th={date,text:''};
+  DATA.thoughts.push(th);afterMutate(true);
+  openPopThought(th,cx,cy);
+}
 function openPopThought(th,ax,ay){
   if(RO)return;
   popAnchor={x:ax,y:ay};
@@ -2892,11 +2900,7 @@ let moved=false;
     const px=cx-r.left, py=cy-r.top, t=Xinv(px);
     if(t<BOUND[0]||t>BOUND[1])return;
     const date=tToMonth(t);
-    const 생각=['❝ 생각 남기기','',()=>{
-      const th={date,text:''};
-      DATA.thoughts.push(th);afterMutate(true);
-      openPopThought(th,cx,cy);
-    }];
+    const 생각=['❝ 생각 남기기','',()=>addThoughtAt(date,cx,cy)];
     if(py<=30){ /* 시대 띠의 빈 구간 */
       openCtx(cx,cy,[
         ['＋ 시대 추가','',()=>{
@@ -2920,7 +2924,7 @@ let moved=false;
     if(t<BOUND[0]||t>BOUND[1])return;
     const date=tToMonth(t);
     if(y<LAYOUT.AXIS_Y)return; /* 상단 시대·축 라벨 구역은 추가 없음 */
-    if(focusLayer!=='main'){ /* 레이어 포커스 중엔 그 레이어의 값 추가 */
+    if(focusLayer!=='main'&&!kind){ /* 레이어 포커스 중 더블클릭 = 그 레이어의 값 추가. 메뉴에서 고른 종류(kind)는 그대로 만든다 */
       const lay=(DATA.layers||[]).find(l=>l.id===focusLayer);
       if(lay){
         const v=Math.round(Math.max(-1,Math.min(1,(LAYOUT.HAP_BOT-y)/(LAYOUT.HAP_BOT-LAYOUT.HAP_TOP)*2-1))*10)/10;
@@ -2953,7 +2957,7 @@ let moved=false;
     openPick(cx,cy,[
       ['＋ 사건 추가','',()=>addAt(x,curveYAt(x),sr.left+x,sr.top+curveYAt(x),'event')],
       ['＋ 기간 추가','',()=>addAt(x,LAYOUT.HAP_TOP-8,sr.left+x,sr.top+LAYOUT.HAP_TOP,'span')],
-      ['❝ 생각 남기기','',()=>{const th={date,text:''};DATA.thoughts.push(th);afterMutate(true);openPopThought(th,sr.left+x,sr.top+LAYOUT.AXIS_Y);}],
+      ['❝ 생각 남기기','',()=>addThoughtAt(date,sr.left+x,sr.top+LAYOUT.AXIS_Y)],
     ]);
   };
   $('#btnAdd').onclick=e=>{e.stopPropagation();openAddMenu(e.currentTarget);};
@@ -2965,13 +2969,29 @@ const GUIDE_KEY='caeyeon_life_start_guide_v1';
 (function initStartGuide(){
   if(RO)return;
   const guide=$('#startGuide');
-  const dismiss=()=>{guide.hidden=true;try{localStorage.setItem(GUIDE_KEY,'1');}catch(e){}};
+  let seen=false;try{seen=localStorage.getItem(GUIDE_KEY)==='1';}catch(e){}
+  const dismiss=()=>{guide.hidden=true;seen=true;try{localStorage.setItem(GUIDE_KEY,'1');}catch(e){}};
   $('#startClose').onclick=dismiss;
   $('#startDismiss').onclick=dismiss;
   /* 전파를 막아야 문서 클릭 리스너가 방금 연 메뉴를 닫지 않고, 카드를 숨기기 전에 자리를 재야 메뉴가 버튼 아래 붙는다 */
   $('#startAdd').onclick=e=>{e.stopPropagation();openAddMenu(e.currentTarget);dismiss();};
-  let seen=false;try{seen=localStorage.getItem(GUIDE_KEY)==='1';}catch(e){}
-  if(!seen)setTimeout(()=>{guide.hidden=false;},700);
+  /* 손대지 않은 샘플이거나 빈 문서일 때만 — 기록이 있는 문서 위에 '첫 기록'을 권하면 안 된다 */
+  /* 살아 있는 DATA에는 prepare()가 붙인 파생값(t·kind·fut·t0·t1·ongoing·lane)이 있어 isPristineSample을 그대로 못 쓴다 */
+  const DERIVED=/^(t|t0|t1|kind|fut|ongoing|lane)$/;
+  const clean=arr=>(arr||[]).map(o=>{const c={};Object.keys(o).sort().forEach(k=>{if(!DERIVED.test(k))c[k]=o[k];});return c;});
+  const sameAsSample=()=>!!DATA.profile&&DATA.profile.name===DEFAULT_DATA.profile.name&&DATA.profile.birth===DEFAULT_DATA.profile.birth
+    &&JSON.stringify(clean(DATA.events))===JSON.stringify(clean(DEFAULT_DATA.events))
+    &&JSON.stringify(clean(DATA.spans))===JSON.stringify(clean(DEFAULT_DATA.spans));
+  const wanted=()=>{
+    if(seen)return false;
+    try{
+      const empty=!(DATA.events||[]).length&&!(DATA.spans||[]).length&&!(DATA.happiness||[]).length&&!(DATA.thoughts||[]).length;
+      return empty||sameAsSample();
+    }catch(e){return false;}
+  };
+  /* render()가 부른다 — 기록을 하나 넣거나 DB에서 실데이터가 내려오면 카드를 거둔다 */
+  window.syncStartGuide=()=>{if(!guide.hidden&&!wanted())dismiss();};
+  if(!seen)setTimeout(()=>{if(wanted())guide.hidden=false;},700);
 })();
 let scaleLock=false;
 function setScale(y,btn){ /* 주식 차트식: 오늘을 오른쪽 가장자리 근처에 두고 N년 창 */
@@ -3208,8 +3228,11 @@ function exportSvgText(){
   c.insertBefore(bg,c.firstChild);
   /* 문서 CSS에 있던 규칙을 안으로 옮긴다 — 글자 테두리가 없으면 곡선에 묻혀 안 읽힌다 */
   const st=document.createElementNS(NS,'style');
+  /* 테두리색은 화면 규칙(#tl text{stroke})에서 읽는다 — 리터럴을 두 벌 두면 종이색이 바뀔 때 어긋난다 */
+  const liveText=svg.querySelector('text');
+  const halo=toRgb((liveText&&getComputedStyle(liveText).stroke)||paper)||paper;
   st.textContent=`svg{font-family:'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',system-ui,sans-serif}
-text{paint-order:stroke;stroke:#F2F4EE;stroke-width:2.5px;stroke-linejoin:round}
+text{paint-order:stroke;stroke:${halo};stroke-width:2.5px;stroke-linejoin:round}
 svg:not([data-focus="main"]) .c-main,svg:not([data-focus="main"]) [data-hap]{opacity:.13}`;
   c.insertBefore(st,c.firstChild);
   return {text:'<?xml version="1.0" encoding="UTF-8"?>\n'+new XMLSerializer().serializeToString(c),w:W2,h:H2};
@@ -4457,8 +4480,11 @@ gridCv.addEventListener('mousemove',e=>{
   gridTip.innerHTML=`<span class="yy">${gFmt(d)}</span> · ${fmtAge(t)} · ${when}`
     +(er?`<br>${er.title}`:'')+(evs.length?`<br>${evs.slice(0,3).join(' · ')}`:'');
   const br=gridBand.getBoundingClientRect();
-  gridTip.style.left=(e.clientX-br.left)+'px';
-  gridTip.style.top=(e.clientY-br.top)+'px';
+  /* 띠가 overflow:hidden이라 가장자리에서 잘린다 — 연표 툴팁처럼 안쪽으로 민다 (translate(-50%,-118%) 기준) */
+  const tw=gridTip.offsetWidth, th=gridTip.offsetHeight, cy=e.clientY-br.top;
+  gridTip.style.left=Math.max(tw/2+6,Math.min(br.width-tw/2-6,e.clientX-br.left))+'px';
+  /* 위로 못 올라가는 윗줄에서는 커서 아래에 편다 (커서를 덮지 않게) */
+  gridTip.style.top=(cy-th*1.18<6?cy+14+th*1.18:cy)+'px';
   gridTip.style.opacity=1;
 });
 gridCv.addEventListener('mouseleave',()=>{gridTip.style.opacity=0;});

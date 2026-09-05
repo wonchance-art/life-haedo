@@ -21,7 +21,7 @@
 
 ## 아키텍처 (index.html 단일 파일, ~3,300줄)
 
-- **스타일**: vendor/daisyui(.css/themes.css) + 커스텀 `[data-theme=spring]`(html 특이성, themes.css 뒤에 선언해야 이김). 토큰(--paper·--ink·--line…)은 daisy 변수로 재연결. 폰트 Pretendard(CDN)+IBM Plex Mono.
+- **스타일**: vendor/daisyui(.css/themes.css) + 커스텀 `[data-theme=spring]`(html 특이성, themes.css 뒤에 선언해야 이김). 토큰(--paper·--ink·--line…)은 원래 daisy 변수로 재연결했지만, **2026-09-05 개편 블록**(`<style>` 마지막, `/* 2026 전면 개편 */`)이 `:root`에서 oklch 리터럴로 덮는다 — 종이 `#FAF8F0`(theme-color·manifest와 같은 값). 차트 팔레트(`resolvePal`)는 여전히 daisy 변수(`--color-base-*`·primary·error·warning·neutral)를 읽으므로 **페이지 토큰과 차트 색은 따로 논다**(차트의 종이색 역할 b1 = base-100). 종이 결(`body::before`)·그림자·등장 애니메이션(reduced-motion 존중)·sticky 도구줄·fixed 모서리 칩도 그 블록. 폰트 Pretendard(CDN)+IBM Plex Mono.
 - **차트 색**: `CHART_ROLE` 역할 매핑 + `resolvePal()`(CSS 변수 → rgb 해석). 데이터 색(시대·기간·레이어)은 저장값 그대로.
   **사건 핀 = 분야 색**(`pinColor`, 여러 태그면 레이어 순서상 첫 색 / 무태그·`SHOW.tag` 끔이면 `PIN_GRAY #5D6B62`). 기록·예정 구분은 색이 아니라 **점선**(`pinDash`, 기간 막대와 같은 문법). 핀 바깥에 종이색 테두리를 한 겹 더 두른다 — **여행 초록 `#5C9E55`가 행복 곡선과 거의 같은 색이라 없으면 링이 곡선에 먹힌다.** 핀 아래 색점은 제거됨.
 - **렌더**: `prepare()`(t 계산·월 집계 HAPPTS·레이아웃) → `render()`(전체 SVG 재구성).
@@ -36,7 +36,9 @@
   **생각 ❝는 다른 규칙**(`TH_GAP=26`): 매달 연속이라 연쇄 묶기를 쓰면 전체 보기에서 통째로 한 덩어리가 되고, 고정 격자는 칸 경계에서 대표끼리 붙는다. → **마지막으로 그린 표식에서 26px 떨어졌을 때만 새로 그린다**(간격 보장·표식 수 안정). 묶음 표시는 원반 배지가 아니라 옆의 작은 숫자 — 거의 전부가 묶음이라 배지가 표식보다 무거워진다. 라벨 자리 예약도 그려지는 표식만.
 - **편집**: 전부 팝오버(openPop/openPopEra/openPopHap/openPopLayerPt/openPopThought/openPopTrip). 더블클릭 추가(수동 감지 450ms — 네이티브 dblclick 불가), 드래그 = 값·시기, ⌘Z 60단계.
 - **메뉴**: `bindMenu(el,menu,guard,noDim)` = 우클릭(마우스) + `onLongPress`(터치·펜 500ms). 아홉 자리 전부 이걸 쓴다. 롱프레스 성립 시 그 요소에 `pointercancel`을 쏴서 진행 중 드래그를 기존 정리 코드로 끝내고, 손 뗄 때 오는 탭 한 번은 `lpTapGuard`가 캡처 단계에서 삼킨다(다음 pointerup 기준으로 해제 — 오래 눌러도 유효). 안드로이드 네이티브 contextmenu는 `lpAt` 800ms로 중복 차단. iOS 사파리는 롱프레스로 contextmenu를 안 쏘는 게 이 구조의 이유. 날짜는 `parseDateSmart`(2024.3.15·한글·압축형 수용, 일자 선택), 기간·시대 순서는 "편집한 쪽이 이김".
-- **⋯ 패널**(도구줄 `⋯`): 표시 9칸 + 나이 셈법 + 곡선 3칸 + 채우기·내보내기를 한 곳에. 도구줄 밖에는 자주 쓰는 `지도`·`검색`만 남긴다. **버튼을 도구줄에서 뺄 땐 그 핸들러(`$('#btnX').onclick`)도 같이 지울 것 — 남으면 그 줄에서 스크립트가 통째로 멈춘다.**
+- **도구줄**: All·20Y·10Y·5Y·1Y · `＋ 기록 추가` · `⋯` · `지도` · `격자` · `검색`. 720px 이하에서는 스케일 All·1Y만 남기고 지도·격자는 `⋯` 패널 아래칸으로 들어간다(`renderShowPanel`이 matchMedia로 판단). 도구줄은 sticky인데 **top은 56px(모바일 48px)** — 고정 모서리 칩(되돌리기·문서, `.corner` fixed, top 16/10px + 30px) 아래여야 한다. 12px이면 붙었을 때 칩이 All·＋ 기록 추가를 덮는다(2026-09-05 실측).
+  `＋ 기록 추가`(`#btnAdd`, `openAddMenu`) = 오늘 자리 기준으로 사건·기간·생각 메뉴. `addAt`은 **메뉴에서 고른 kind가 분야 포커스보다 우선**(분야 값은 더블클릭으로만). 생각 만들기는 `addThoughtAt` 한 벌. 안내 카드(`#startGuide`, localStorage `caeyeon_life_start_guide_v1`)는 **손대지 않은 샘플이거나 빈 문서일 때만** 700ms 뒤에 뜨고, 기록이 생기거나 DB에서 실데이터가 내려오면 `render()`의 `syncStartGuide`가 거둔다.
+- **⋯ 패널**(도구줄 `⋯`): 표시 9칸 + 나이 셈법 + 곡선 3칸 + 채우기·내보내기를 한 곳에. 도구줄 밖에는 자주 쓰는 것만 남긴다. **버튼을 도구줄에서 뺄 땐 그 핸들러(`$('#btnX').onclick`)도 같이 지울 것 — 남으면 그 줄에서 스크립트가 통째로 멈춘다.**
 - **표시 토글**(`SHOW`, `⋯` 패널): 사건·이름·색점·기간·생각·값·분야·기록·시대 9가지. localStorage `caeyeon_life_show`, 기본 전부 켜짐. **그리기만 끈다 — 곡선·평균·데이터 불변.** 주의: 기간 off면 `prepare()`에서 `NLANES=0`으로 자리를 회수하고, 분야 off면 **`render()` 첫 줄에서** `focusLayer='main'`으로 되돌려야 한다(`renderLayerBar`에서 하면 그 판이 `data-focus`를 물고 그려져 화면 전체가 opacity .13이 된다). 사건 off면 이름·색점 칩은 비활성.
 - **레이어**: 칩은 **값이 있는 분야만** 만든다(`renderLayerBar`) — 값 0이면 줄 전체가 사라진다. DATA.layers = 노동·학습·여행·독서·사람(pts: date·v). 칩 = 포커스(svg[data-focus] 디밍). 사건 분야 태그 = e.layers[].
 - **지도**: **OpenFreeMap 벡터 타일 + leaflet-vectorgrid**(키 불필요·z0~14, Leaflet 유지). 바다를 면만 칠하고 **테두리를 안 그려 해안선이 없다**. 이 스키마(OpenMapTiles)엔 '땅' 레이어가 없다 — 배경이 땅(`MAP_LAND`)이고 물만 도형이다. **스타일을 안 준 레이어는 기본값으로 그려진다**(점 레이어 `mountain_peak`이 동그라미로 흩뿌려졌다) → 스키마 16개를 먼저 전부 끄고 필요한 것만 켠다. **지도 요소 토글**(`MSHOW`, 지도 바 `⋯` → 물·녹지·길·국경·건물, localStorage `caeyeon_life_mapshow`) — 길은 z≥11, 건물은 z≥14에서만. vectorgrid는 얹은 뒤 스타일을 못 바꾸므로 토글하면 `window.rebuildMapVector()`로 레이어를 다시 얹는다. 같은 패널 아래칸에 **색조**(`MAP_FILTER`: 기본·담묵·세피아·진하게, localStorage `caeyeon_life_mapfilter`) — **`.leaflet-tile-pane`에만** 걸어 항로·핀(overlayPane)은 안 물든다. 레이어를 다시 얹거나 지도를 열 때마다 `applyMapFilter()`를 다시 불러야 한다(판이 새로 생긴다). 타일 주소는 TileJSON에서 매번 받는다(경로에 빌드 날짜). 실패 시 OSM 래스터로 폴백.
@@ -44,7 +46,7 @@
   **확대 조작은 연표와 같다** — 맨 휠은 페이지 스크롤, `⌘/Ctrl+휠`이 커서 기준 확대(`setZoomAround`, `{animate:false}`), `zoomSnap:0`·`zoomDelta:.6`으로 연속 줌, 지도에서 `0` = 전체 보기. **더블클릭 확대는 끈다**(연표에선 더블클릭이 '추가'). `+/-/0`은 연표에서도 **SVG에 포커스가 있을 때만** 듣는 키다 — 전역 키로 착각하지 말 것.
   경로 재생은 **구간이 바뀔 때마다 `flyToBounds(구간, pad .5, maxZoom 13)`** — 대륙 이동은 멀리서, 도시 안 이동은 가까이. 처음 1초는 전체 항로, 끝나면 전체로 복귀. 경로 바는 한 줄+가로 스크롤(접히면 지도 높이를 100px 넘게 잡아먹는다).
 - **지도**: 연표 프레임 안 오버레이(#mapOverlay). 열기 = 경로 연결 기간 클릭·'지도' 칩·우클릭 메뉴·검색. 시간창 동기화(창 안의 장소만). `whenMapSized` 가드 필수(크기 0에서 flyTo = NaN).
-- **내보내기**(도구줄 칩 → `openPick` 메뉴): `exportSvgText()`가 `#tl`을 복제해 ① 배경 rect ② 문서 CSS 규칙을 `<style>`로 이식(**글자 테두리 `paint-order:stroke`가 빠지면 라벨이 곡선에 묻힌다**) ③ 색을 canvas로 rgb 변환(화면은 oklch) ④ 크로스헤어 제거 ⑤ 시스템 한글 폰트 스택. PNG는 그 SVG를 `<img>`→canvas 2배. 지금 보이는 시간창·포커스 그대로.
+- **내보내기**(도구줄 칩 → `openPick` 메뉴): `exportSvgText()`가 `#tl`을 복제해 ① 배경 rect ② 문서 CSS 규칙을 `<style>`로 이식(**글자 테두리 `paint-order:stroke`가 빠지면 라벨이 곡선에 묻힌다**, 테두리색은 화면의 `#tl text{stroke}`를 읽어 넣는다 — 리터럴을 두 벌 두면 종이색이 바뀔 때 어긋난다) ③ 색을 canvas로 rgb 변환(화면은 oklch) ④ 크로스헤어 제거 ⑤ 시스템 한글 폰트 스택. PNG는 그 SVG를 `<img>`→canvas 2배. 지금 보이는 시간창·포커스 그대로.
 - **채우기**(`#fillBd`, 도구줄 칩): 생각·분야 값·기록 밀도는 `날짜␣␣나머지` 붙여넣기/파일 → `parseFill`(앞 3토큰까지 긴 쪽부터 날짜 시도, 종류별로 나머지 검증) → 미리보기(넣음 예정·건너뜀·버림 사유별·합쳐짐) → `fillApply`. 생각은 **달당 하나**(❝ 표식이 완전히 겹치므로). `이미 있는 달은 덮어쓴다`는 기본 꺼짐 — 앱은 어느 수치가 옳은지 판단하지 않는다. 사건 태그는 표에서 낱말 제안(`TAG_KW`)을 미리 켜두고 `넣기`를 눌러야 저장. **UI 예시 문구에 실데이터 문장을 쓰지 말 것**(public repo).
 - **검색**: 사건·기간·시대·경로·**생각**. 날짜로 읽히는 입력(`parseDateSmart`)은 맨 위 `⌖ 이동` 행. 정렬 = 제목·문장 시작 3 / 포함 2 / 설명·장소·메모 1 → 동점은 연표 순. 값 점·기록 밀도는 제외. ⌘F·⌘K.
 - **동기화**: 저장 1.5s 디바운스 푸시, 탭 복귀·60s 풀, 충돌 감지(syncedAt vs updated_at → confirm). 상태는 우상단 점(●=정상·⚠=문제, 설명 title).
@@ -180,8 +182,7 @@ Song Myung · Hahmlet 은 **한자를 못 갖고 있어 시스템 서체로 떨�
 
 **점선은 미래에만.** 지금 앱은 눈금·평균·오늘·미래가 다 점선이라 점선에 뜻이 없다(미적용).
 
-**시안에만 있고 앱에 아직 안 넣은 것**: 바탕/판 값 분리, 테두리→그림자, 화면 끝까지 나가는
-세 판, 눈금선 실선화, 종이 결, 불러올 때 차례. 미결: 값 범위(-1~+1 고정이라 아래 절반이 늘 빈다
+**앱에 들어간 것(2026-09-05 개편, PR #1·#3)**: 바탕/판 값 분리, 테두리→그림자, 종이 결, 불러올 때 차례. **아직 시안에만**: 화면 끝까지 나가는 세 판, 눈금선 실선화. 미결: 값 범위(-1~+1 고정이라 아래 절반이 늘 빈다
 — 그대로/잘라내기/비대칭).
 
 **히어로는 격자 도우미를 쓰지 않는다.** `gBirth`·`gDay` 는 아래에서 `const` 로 선언돼
