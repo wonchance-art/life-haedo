@@ -366,6 +366,7 @@ html[data-theme=spring]{
         <button class="lay-chip scale" data-y="5">5Y</button>
         <button class="lay-chip scale" data-y="1">1Y</button>
         <span style="flex:1"></span>
+        <button class="lay-chip add-chip" id="btnAdd" aria-label="기록 추가">＋ 기록 추가</button>
         <button class="lay-chip" id="btnShow" aria-label="표시 · 곡선 · 나이 · 채우기 · 내보내기">⋯</button>
         <button class="lay-chip" id="btnMap">지도</button>
         <button class="lay-chip" id="btnGrid" title="생애 격자 — 지나온 칸과 남은 칸">격자</button>
@@ -378,6 +379,15 @@ html[data-theme=spring]{
         <div class="canvas-inner">
           <svg id="tl" tabindex="0" role="application" aria-label="가로형 연표. ⌘ 또는 Ctrl과 휠로 확대, 드래그 또는 좌우 화살표로 이동, 0으로 전체 보기, 더블클릭으로 그 자리에 추가"></svg>
           <div class="tl-tip" id="tlTip"></div>
+          <aside class="start-guide" id="startGuide" hidden aria-label="연표 사용 안내">
+            <button class="start-close" id="startClose" aria-label="안내 닫기">×</button>
+            <strong>첫 기록을 추가해보세요.</strong>
+            <p>날짜와 내용을 남기면 연표에 바로 표시됩니다.</p>
+            <div class="start-actions">
+              <button class="lay-chip add-chip" id="startAdd">＋ 기록 추가</button>
+              <button class="guide-link" id="startDismiss">안내 닫기</button>
+            </div>
+          </aside>
           <!-- 지도 오버레이 — 연표 프레임 그 자리에서 펼쳐진다 -->
           <div class="map-overlay" id="mapOverlay" hidden>
             <div class="map-ov-bar">
@@ -541,6 +551,8 @@ html[data-theme=spring]{
   #btnShow{font-size:17px;letter-spacing:.12em;padding-left:14px}
   #btnMap,#btnGrid,#btnSearch{color:var(--ink)}
   #btnMap.on,#btnGrid.on,#btnSearch.on{color:var(--paper)} /* id 규칙이 .lay-chip.on을 이겨 켠 칩의 글자가 배경색에 묻힌다 */
+  .add-chip{color:var(--paper)!important;background:var(--ink)!important;box-shadow:0 5px 14px color-mix(in oklab,var(--ink) 16%,transparent)}
+  .add-chip:hover{background:var(--water-deep)!important;color:white!important}
   .layer-bar{min-height:34px;margin:0 2px 12px;gap:4px}
   .layer-bar:empty{display:none}
   .layer-bar .lay-chip{min-height:28px;padding:3px 10px;font-size:11px}
@@ -552,6 +564,18 @@ html[data-theme=spring]{
   #tl{border-radius:16px}
   #tl:focus-visible{outline:2px solid var(--cinnabar);outline-offset:-4px}
   #tl text{stroke:var(--panel);stroke-width:3px}
+  .start-guide{position:absolute;z-index:4;left:clamp(18px,3vw,38px);bottom:clamp(20px,4vw,42px);width:min(330px,calc(100% - 36px));
+    padding:20px 20px 17px;border:1px solid color-mix(in oklab,var(--line) 70%,transparent);border-radius:18px;
+    background:color-mix(in oklab,var(--panel) 92%,transparent);box-shadow:var(--shadow-lg);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px)}
+  .start-guide[hidden]{display:none}
+  .start-guide strong{display:block;padding-right:24px;font-size:16px;letter-spacing:-.025em}
+  .start-guide p{margin-top:5px;color:var(--ink-soft);font-size:12.5px;line-height:1.55}
+  .start-actions{display:flex;align-items:center;gap:12px;margin-top:15px}
+  .start-actions .lay-chip{font-size:12px}
+  .guide-link,.start-close{border:0;background:transparent;color:var(--ink-soft);font-family:inherit;cursor:pointer}
+  .guide-link{font-size:11.5px;text-decoration:underline;text-underline-offset:3px}
+  .start-close{position:absolute;right:12px;top:9px;width:28px;height:28px;font-size:20px;border-radius:50%}
+  .guide-link:hover,.start-close:hover{color:var(--ink);background:color-mix(in oklab,var(--ink) 5%,transparent)}
   .scrubber{padding:12px 4px 2px;opacity:.72;gap:14px}
   .scrub-track{height:18px;border-radius:999px;background:color-mix(in oklab,var(--ink) 6%,transparent)}
   .scrub-win{top:2px;bottom:2px;border:0;border-radius:999px;background:color-mix(in oklab,var(--water-deep) 22%,transparent);box-shadow:inset 0 0 0 1px var(--water-deep)}
@@ -586,9 +610,14 @@ html[data-theme=spring]{
     .head-right{align-items:flex-start;width:100%}.hero{align-items:flex-start}.hero-fig{text-align:left}
     .head-right .stat-cards{justify-content:flex-start}
     .tl-controls{width:100%;top:8px}
+    .tl-controls .scale:not([data-y="all"]):not([data-y="1"]){display:none}
+    .tl-controls>span{flex:1!important;min-width:2px}
+    #btnMap,#btnGrid{display:none}
+    #btnAdd{order:5}
     .canvas-frame{margin-inline:-10px;border-radius:18px;padding:6px}
     .canvas-inner,#tl{border-radius:12px}
     .corner{top:10px}.corner-tl{left:10px}.corner-tr{right:10px}
+    .start-guide{left:16px;bottom:16px;width:calc(100% - 32px)}
   }
   @media (prefers-reduced-motion:no-preference){
     header .hgroup{animation:reveal .8s var(--ease-out) both}
@@ -2914,9 +2943,35 @@ let moved=false;
     }
     requestAnimationFrame(()=>{const ti=document.querySelector('#popEd .pe-title');if(ti)ti.select();});
   }
+  /* 명시적인 추가 버튼도 더블클릭과 같은 생성 경로를 쓴다. */
+  window.openAddMenu=anchor=>{
+    if(RO)return;
+    const ar=anchor.getBoundingClientRect(),sr=svg.getBoundingClientRect();
+    const t=Math.max(dom[0],Math.min(NOW,dom[1]));
+    const x=X(t),cx=Math.max(16,Math.min(innerWidth-16,ar.left+ar.width/2));
+    const cy=Math.min(innerHeight-16,ar.bottom+8),date=tToMonth(t);
+    openPick(cx,cy,[
+      ['＋ 사건 추가','',()=>addAt(x,curveYAt(x),sr.left+x,sr.top+curveYAt(x),'event')],
+      ['＋ 기간 추가','',()=>addAt(x,LAYOUT.HAP_TOP-8,sr.left+x,sr.top+LAYOUT.HAP_TOP,'span')],
+      ['❝ 생각 남기기','',()=>{const th={date,text:''};DATA.thoughts.push(th);afterMutate(true);openPopThought(th,sr.left+x,sr.top+LAYOUT.AXIS_Y);}],
+    ]);
+  };
+  $('#btnAdd').onclick=e=>{e.stopPropagation();openAddMenu(e.currentTarget);};
   document.querySelectorAll('.scale').forEach(b=>b.onclick=()=>setScale(b.dataset.y,b));
   resolvePal(); /* 앱 초기 렌더 전에 테마 팔레트 해석 */
   addEventListener('resize',()=>{prepare();render();});
+})();
+const GUIDE_KEY='caeyeon_life_start_guide_v1';
+(function initStartGuide(){
+  if(RO)return;
+  const guide=$('#startGuide');
+  const dismiss=()=>{guide.hidden=true;try{localStorage.setItem(GUIDE_KEY,'1');}catch(e){}};
+  $('#startClose').onclick=dismiss;
+  $('#startDismiss').onclick=dismiss;
+  /* 전파를 막아야 문서 클릭 리스너가 방금 연 메뉴를 닫지 않고, 카드를 숨기기 전에 자리를 재야 메뉴가 버튼 아래 붙는다 */
+  $('#startAdd').onclick=e=>{e.stopPropagation();openAddMenu(e.currentTarget);dismiss();};
+  let seen=false;try{seen=localStorage.getItem(GUIDE_KEY)==='1';}catch(e){}
+  if(!seen)setTimeout(()=>{guide.hidden=false;},700);
 })();
 let scaleLock=false;
 function setScale(y,btn){ /* 주식 차트식: 오늘을 오른쪽 가장자리 근처에 두고 N년 창 */
@@ -3383,6 +3438,13 @@ function renderShowPanel(){
     showPanel.appendChild(b);
   });
   line();
+  if(matchMedia('(max-width:720px)').matches){
+    [['지도',()=>$('#btnMap').click()],['격자',()=>$('#btnGrid').click()]].forEach(([label,fn])=>{
+      const b=document.createElement('button');b.className='lay-chip';b.textContent=label;
+      b.onclick=ev=>{ev.stopPropagation();showPanel.hidden=true;fn();};showPanel.appendChild(b);
+    });
+    line();
+  }
   [['채우기',()=>{showPanel.hidden=true;openFill();}],
    ['내보내기',e=>{showPanel.hidden=true;
      const b=e.currentTarget.getBoundingClientRect();
