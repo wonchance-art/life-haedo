@@ -1531,6 +1531,7 @@ function renderLayerBar(){
   const mk=(id,name,color)=>{
     const b=document.createElement('button');
     b.className='lay-chip'+(focusLayer===id?' on':'');
+    b.setAttribute('aria-pressed',String(focusLayer===id));
     b.innerHTML=`<span class="swz" style="background:${dispCol(color)}"></span>${esc(name)}`;
     b.onclick=()=>{focusLayer=(focusLayer===id?'main':id);render();};
     bar.appendChild(b);
@@ -2731,13 +2732,6 @@ function renderShowPanel(){
     showPanel.appendChild(b);
   });
   line();
-  if(matchMedia('(max-width:720px)').matches){
-    [['지도',()=>$('#btnMap').click()],['격자',()=>$('#btnGrid').click()]].forEach(([label,fn])=>{
-      const b=document.createElement('button');b.className='lay-chip';b.textContent=label;
-      b.onclick=ev=>{ev.stopPropagation();showPanel.hidden=true;fn();};showPanel.appendChild(b);
-    });
-    line();
-  }
   [['채우기',()=>{showPanel.hidden=true;openFill();}],
    ['내보내기',e=>{showPanel.hidden=true;
      const b=$('#btnShow').getBoundingClientRect();
@@ -3145,7 +3139,7 @@ function refreshDocSel(){
   }).join('')
     +'<option disabled>────</option>'
     +'<option value="__new">＋ 새 문서…</option>'
-    +'<option value="__del">🗑 이 문서 삭제…</option>';
+    +'<option value="__del">이 문서 삭제…</option>';
 }
 function switchDoc(id){
   if(id===curDocId)return;

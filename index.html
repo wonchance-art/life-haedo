@@ -23,19 +23,27 @@
 <link rel="stylesheet" href="assets/app.css">
 </head>
 <body>
+<svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+  <symbol id="ui-calendar" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4m8-4v4M4 11h16"/></symbol>
+  <symbol id="ui-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></symbol>
+  <symbol id="ui-chevron" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></symbol>
+  <symbol id="ui-map" viewBox="0 0 24 24"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Zm6-2v16m6-14v16"/></symbol>
+  <symbol id="ui-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M12 4v16M4 12h16"/></symbol>
+  <symbol id="ui-settings" viewBox="0 0 24 24"><path d="M4 6h3m6 0h7M4 18h7m6 0h3"/><circle cx="10" cy="6" r="3"/><circle cx="14" cy="18" r="3"/></symbol>
+  <symbol id="ui-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+  <symbol id="ui-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="ui-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+  <symbol id="ui-undo" viewBox="0 0 24 24"><path d="m8 4-5 5 5 5M3 9h11a6 6 0 0 1 0 12"/></symbol>
+  <symbol id="ui-redo" viewBox="0 0 24 24"><path d="m16 4 5 5-5 5m5-5H10a6 6 0 0 0 0 12"/></symbol>
+</defs></svg>
 <a class="skip-link" href="#sec-canvas">기록으로 이동</a>
 <nav class="app-bar" aria-label="문서 도구">
-  <a class="app-brand" href="./" aria-label="인생 연표 홈"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 24h26M4 20c5 0 5-11 10-11s5 7 9 7 4-5 6-7"/></svg><span>인생 연표</span></a>
-  <div class="edit-tools" aria-label="실행 취소">
-    <button class="icon-button" id="btnUndo" title="되돌리기 (⌘/Ctrl+Z)" aria-label="되돌리기" disabled>↶</button>
-    <button class="icon-button" id="btnRedo" title="다시 실행 (⌘/Ctrl+Shift+Z)" aria-label="다시 실행" disabled>↷</button>
-  </div>
+  <a class="app-brand" href="./index.html" aria-label="인생 연표 홈"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 24h26M4 20c5 0 5-11 10-11s5 7 9 7 4-5 6-7"/></svg></a>
   <div class="document-tools">
     <select class="select select-sm select-ghost" id="docSel" title="문서 전환" aria-label="문서 선택"></select>
-    <button class="bar-button" id="btnNewDoc">＋ 새 문서</button>
-    <button class="bar-button" id="btnFile" aria-haspopup="menu">파일 <span aria-hidden="true">⌄</span></button>
+    <button class="db-dot" id="btnCloud" title="동기화 설정" aria-label="동기화 설정"></button>
   </div>
-  <div class="save-state"><span id="saveStatus" role="status">기기에 저장됨</span><button class="db-dot" id="btnCloud" title="동기화 설정" aria-label="동기화 설정"></button></div>
+  <span class="sr-only" id="saveStatus" role="status">기기에 저장됨</span>
 </nav>
 
 <noscript><div style="max-width:1180px;margin:24px auto;padding:16px 24px;border:1px solid #B5432A;color:#B5432A;font-size:14px">
@@ -71,35 +79,42 @@
     <div class="wrap">
 
       <div class="workspace-toolbar">
-        <div class="workspace-main">
-          <div class="view-switch" role="group" aria-label="보기 방식">
-            <button id="btnTimeline" class="on" aria-pressed="true">연표</button>
-            <button id="btnRecords" aria-pressed="false">기록</button>
-          </div>
-          <div class="workspace-actions">
-            <button class="lay-chip" id="btnSearch" title="검색 (⌘/Ctrl+K)">검색 <kbd>⌘ K</kbd></button>
-            <button class="lay-chip add-chip" id="btnAdd" aria-label="추가">＋ 추가</button>
-          </div>
+        <div class="view-switch" role="group" aria-label="보기 방식">
+          <button id="btnTimeline" class="on" aria-pressed="true">연표</button>
+          <button id="btnRecords" aria-pressed="false">기록</button>
         </div>
         <div class="tl-controls" role="group" aria-label="연표 보기 설정">
-          <div class="scale-group" role="group" aria-label="표시 기간">
-            <button class="lay-chip scale" data-y="all" aria-pressed="false">전체</button>
-            <button class="lay-chip scale" data-y="20" aria-pressed="false">20년</button>
-            <button class="lay-chip scale" data-y="10" aria-pressed="false">10년</button>
-            <button class="lay-chip scale on" data-y="5" aria-pressed="true">5년</button>
-            <button class="lay-chip scale" data-y="1" aria-pressed="false">1년</button>
+          <details class="tool-select" id="periodSelect">
+            <summary title="표시 기간" aria-label="표시 기간: 5년"><svg class="ui-icon" aria-hidden="true"><use href="#ui-calendar"/></svg><span id="periodLabel">5년</span><svg class="ui-icon" aria-hidden="true"><use href="#ui-chevron"/></svg></summary>
+            <div class="tool-popover">
+              <div class="scale-group" role="group" aria-label="표시 기간"><button class="lay-chip scale" data-y="all" aria-pressed="false">전체</button>
+<button class="lay-chip scale" data-y="20" aria-pressed="false">20년</button>
+<button class="lay-chip scale" data-y="10" aria-pressed="false">10년</button>
+<button class="lay-chip scale on" data-y="5" aria-pressed="true">5년</button>
+<button class="lay-chip scale" data-y="1" aria-pressed="false">1년</button></div>
+              <button class="bar-button" id="btnToday">오늘로 이동</button>
+            </div>
+          </details>
+          <details class="tool-select" id="layerSelect" hidden>
+            <summary title="분야 선택" aria-label="분야 선택: 종합"><svg class="ui-icon" aria-hidden="true"><use href="#ui-layers"/></svg><span id="layerLabel">종합</span><svg class="ui-icon" aria-hidden="true"><use href="#ui-chevron"/></svg></summary>
+            <div class="tool-popover"><div class="layer-bar" id="layerBar" role="group" aria-label="분야 선택"></div></div>
+          </details>
+        </div>
+        <div class="tool-actions">
+          <div class="edit-tools" role="group" aria-label="실행 취소">
+            <button class="tool-button" id="btnUndo" title="되돌리기 (⌘/Ctrl+Z)" aria-label="되돌리기" disabled><svg class="ui-icon" aria-hidden="true"><use href="#ui-undo"/></svg></button>
+            <button class="tool-button" id="btnRedo" title="다시 실행 (⌘/Ctrl+Shift+Z)" aria-label="다시 실행" disabled><svg class="ui-icon" aria-hidden="true"><use href="#ui-redo"/></svg></button>
           </div>
-          <button class="bar-button" id="btnToday">오늘</button>
-          <span class="toolbar-spacer"></span>
-          <div class="view-tools">
-            <button class="lay-chip" id="btnMap" aria-pressed="false">지도</button>
-            <button class="lay-chip" id="btnGrid" aria-pressed="false">격자</button>
-            <button class="lay-chip" id="btnShow" aria-label="설정" aria-haspopup="true">설정</button>
-          </div>
+          <button class="tool-button" id="btnMap" title="지도" aria-label="지도" data-timeline-tool aria-pressed="false"><svg class="ui-icon" aria-hidden="true"><use href="#ui-map"/></svg></button>
+          <button class="tool-button" id="btnGrid" title="격자" aria-label="격자" data-timeline-tool aria-pressed="false"><svg class="ui-icon" aria-hidden="true"><use href="#ui-grid"/></svg></button>
+          <button class="tool-button" id="btnShow" title="설정" aria-label="설정" data-timeline-tool aria-haspopup="true"><svg class="ui-icon" aria-hidden="true"><use href="#ui-settings"/></svg></button>
+          <button class="tool-button" id="btnFile" title="더 보기 · 문서와 내보내기" aria-label="더 보기" aria-haspopup="menu"><svg class="ui-icon" aria-hidden="true"><use href="#ui-more"/></svg></button>
+        </div>
+        <div class="workspace-actions">
+          <button class="tool-button" id="btnSearch" title="검색 (⌘/Ctrl+K)" aria-label="검색" ><svg class="ui-icon" aria-hidden="true"><use href="#ui-search"/></svg></button>
+          <button class="tool-button add-button" id="btnAdd" aria-label="추가"><svg class="ui-icon" aria-hidden="true"><use href="#ui-plus"/></svg><span>추가</span></button>
         </div>
       </div>
-
-      <div class="layer-bar" id="layerBar" aria-label="그래프 레이어 선택"></div>
 
       <div class="canvas-frame" id="chartView">
         <div class="canvas-inner">
@@ -272,7 +287,7 @@
 <div class="search-bd" id="searchBd" hidden>
   <div class="search-panel card bg-base-100" role="dialog" aria-modal="true" aria-label="기록 검색">
     <div class="search-row">
-      <span aria-hidden="true">🔍</span>
+      <svg class="ui-icon" aria-hidden="true"><use href="#ui-search"/></svg>
       <input id="searchInput" aria-label="기록 검색" placeholder="이름 · 문장 · 날짜" spellcheck="false" autocomplete="off">
       <kbd>esc</kbd>
     </div>

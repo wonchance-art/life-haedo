@@ -1,5 +1,5 @@
 /* Versioned app shell. Personal documents remain in localStorage. */
-const CACHE='haedo-v47';
+const CACHE='haedo-v48';
 const SHELL=['./','./index.html','./manifest.webmanifest','./icon.svg','./icon-maskable.svg',
   './vendor/daisyui.css','./vendor/daisyui-themes.css','./assets/app.css',
   './assets/data.js','./assets/sync.js','./assets/app.js','./assets/workspace.js'];
