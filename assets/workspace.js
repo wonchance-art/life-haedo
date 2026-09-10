@@ -54,7 +54,9 @@
     closePop(); closeCtx(); view = next;
     const records = view === 'records';
     byId('recordsView').hidden = !records; byId('chartView').hidden = records;
-    byId('layerBar').hidden = records; document.querySelector('.tl-controls').hidden = records;
+    document.querySelector('.tl-controls').hidden = records;
+    document.querySelectorAll('[data-timeline-tool]').forEach(button => { button.hidden = records; });
+    document.querySelector('.workspace-toolbar').classList.toggle('records-active', records);
     for (const [id, active] of [['btnTimeline', !records], ['btnRecords', records]]) {
       byId(id).classList.toggle('on', active); byId(id).setAttribute('aria-pressed', String(active));
     }
@@ -67,9 +69,42 @@
   byId('btnRecords').onclick = () => setView('records');
   byId('recordQuery').oninput = renderRecords; byId('recordKind').onchange = renderRecords;
   byId('btnToday').onclick = () => setScale('5', document.querySelector('.scale[data-y="5"]'));
-  byId('btnNewDoc').onclick = () => openNewDoc();
   byId('btnAdd').addEventListener('click', () => { if (view === 'records') setView('timeline'); }, true);
   byId('btnSearch').addEventListener('click', () => { if (view === 'records') setView('timeline'); }, true);
+
+  // Keep compact controls in sync with zoom, document changes and graph rendering.
+  const selectors = [...document.querySelectorAll('.tool-select')];
+  function syncChartControls() {
+    const period = document.querySelector('.scale.on')?.textContent || '기간';
+    byId('periodLabel').textContent = period;
+    byId('periodSelect').querySelector('summary').setAttribute('aria-label', `표시 기간: ${period}`);
+    const bar = byId('layerBar'), select = byId('layerSelect');
+    select.hidden = bar.hidden || !bar.children.length;
+    if (select.hidden) select.open = false;
+    const layer = bar.querySelector('.on')?.textContent.trim() || '종합';
+    byId('layerLabel').textContent = layer;
+    const summary = select.querySelector('summary');
+    summary.setAttribute('aria-label', `분야 선택: ${layer}`);
+    summary.title = `분야 선택: ${layer}`;
+  }
+  const controlsObserver = new MutationObserver(syncChartControls);
+  controlsObserver.observe(document.querySelector('.scale-group'), { subtree: true, attributes: true, attributeFilter: ['class'] });
+  controlsObserver.observe(byId('layerBar'), { childList: true, attributes: true, attributeFilter: ['hidden'] });
+  syncChartControls();
+  function closeSelectors(except) {
+    selectors.forEach(select => { if (select !== except) select.open = false; });
+  }
+  document.addEventListener('click', event => {
+    const select = event.target.closest('.tool-select');
+    closeSelectors(select);
+    // Use capture because chart button handlers may stop propagation or rerender.
+    if (select && event.target.closest('button')) select.open = false;
+  }, true);
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    const open = selectors.find(select => select.open);
+    if (open) { closeSelectors(); open.querySelector('summary').focus(); }
+  });
 
   function backup() {
     const docs = [], unreadable = [], ids = new Set(REG.docs.map(entry => entry.id));
@@ -94,10 +129,15 @@
   byId('btnFile').onclick = event => {
     event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect();
     const options = RO ? [] : [
+      ['새 문서', '', () => openNewDoc()],
       ['전체 문서 백업 · JSON', '', backup],
       ['JSON 가져오기 · 새 사본', '', () => byId('fileRestore').click()],
       ['텍스트 한꺼번에 추가', '', () => openFill()]
     ];
+    if (!RO && matchMedia('(max-width:720px)').matches) {
+      if (!byId('btnUndo').disabled) options.unshift(['되돌리기', '', () => byId('btnUndo').click()]);
+      if (!byId('btnRedo').disabled) options.unshift(['다시 실행', '', () => byId('btnRedo').click()]);
+    }
     openPick(rect.left, rect.bottom + 8, [...options,
       ['이미지 저장 · PNG', '', () => { setView('timeline'); exportPNG(); }],
       ['벡터 이미지 저장 · SVG', '', () => { setView('timeline'); exportSVG(); }]
