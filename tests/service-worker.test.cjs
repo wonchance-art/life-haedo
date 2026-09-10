@@ -11,10 +11,10 @@ function harness({ failInstall = false, fetchResult } = {}) {
     self: { registration: { scope: 'https://test.invalid/life-haedo/' }, location: { origin: 'https://test.invalid' },
       addEventListener: (type, fn) => handlers[type] = fn,
       skipWaiting: async () => skipped = true, clients: { claim: async () => claimed = true } },
-    caches: { open: async () => cache, keys: async () => ['haedo-v45', 'haedo-v46', 'unrelated-app'], delete: async name => removed.push(name) },
+    caches: { open: async () => cache, keys: async () => ['haedo-v1', context.currentCache, 'unrelated-app'], delete: async name => removed.push(name) },
     fetch: async () => { if (fetchResult instanceof Error) throw fetchResult; return fetchResult || new Response('OK'); }
   };
-  vm.runInNewContext(readFileSync(require.resolve('../sw.js'), 'utf8'), context);
+  vm.runInNewContext(readFileSync(require.resolve('../sw.js'), 'utf8') + '\nthis.currentCache = CACHE;', context);
   async function run(type, request) {
     const waits = []; let response;
     handlers[type]({ request, waitUntil: p => waits.push(p), respondWith: p => { response = p; } });
@@ -35,7 +35,7 @@ test('failed installation does not activate a partial shell', async () => {
 });
 test('activation removes old app caches but preserves unrelated caches', async () => {
   const h = harness(); await h.run('activate');
-  assert.deepEqual(h.removed, ['haedo-v45']); assert.equal(h.state().claimed, true);
+  assert.deepEqual(h.removed, ['haedo-v1']); assert.equal(h.state().claimed, true);
 });
 test('HTTP errors never replace a usable offline asset', async () => {
   const h = harness({ fetchResult: new Response('Not found', { status: 404 }) });

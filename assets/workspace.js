@@ -47,7 +47,7 @@
       };
       fragment.append(button);
     }
-    if (!rows.length) fragment.append(element('p', 'record-empty', all.length ? '검색 결과가 없어요. 다른 단어나 기록 종류를 선택해보세요.' : '아직 기록이 없어요. 기록 추가로 시작해보세요.'));
+    if (!rows.length) fragment.append(element('p', 'record-empty', all.length ? '검색 결과가 없어요. 다른 단어나 기록 종류를 선택해보세요.' : '아직 기록이 없어요. 추가 버튼으로 시작해보세요.'));
     byId('recordRows').replaceChildren(fragment);
   }
   function setView(next) {
@@ -66,7 +66,6 @@
   byId('btnTimeline').onclick = () => setView('timeline');
   byId('btnRecords').onclick = () => setView('records');
   byId('recordQuery').oninput = renderRecords; byId('recordKind').onchange = renderRecords;
-  byId('workspaceDate').textContent = `${fmtD(HaedoData.localDate())} 오늘`;
   byId('btnToday').onclick = () => setScale('5', document.querySelector('.scale[data-y="5"]'));
   byId('btnNewDoc').onclick = () => openNewDoc();
   byId('btnAdd').addEventListener('click', () => { if (view === 'records') setView('timeline'); }, true);

@@ -568,8 +568,7 @@ function prepare(){
   const spanBot=NLANES?L.SPAN_TOP+NLANES*(L.SPAN_H+L.SPAN_GAP)-L.SPAN_GAP:L.AXIS_Y+6;
   L.HAP_TOP=spanBot+18;                    /* +1 상한 */
   const viewport=typeof innerHeight!=='undefined'?innerHeight:800;
-  const chartTop=document.getElementById('chartView').getBoundingClientRect().top+scrollY;
-  const hapH=Math.max(220,Math.min(440,Math.round(viewport-chartTop-L.HAP_TOP-120)));
+  const hapH=Math.max(240,Math.min(600,Math.round(viewport*.44)));
   L.HAP_BOT=L.HAP_TOP+hapH;                /* −1 하한 — 창 높이에 비례해 자연스럽게 */
   L.H=L.HAP_BOT+30;
   LAYOUT=L;
@@ -1033,7 +1032,7 @@ function render(){
     .forEach(l=>l.pts.forEach(p=>{const x=X(p.t),y=HY(p.v);reserve(x-6,y-6,x+6,y+6);}));
 
   /* 사건 — 곡선 위 점 + 점 옆 라벨 (머리 위 여백을 비워 높이가 읽히게).
-     화면에서 서로 포개지는 사건은 한 점 + 개수 배지로 묶는다 (겹쳐서 사라지는 것 방지).
+     화면에서 서로 포개지는 사건은 동심원 두 겹으로 묶는다.
      선택된 사건은 언제나 단독으로 떼어내 드래그로 분리할 수 있다 */
   /* 라벨은 위·아래 두 줄에 번갈아 놓는다 — 촘촘한 구간에서도 이름이 살아남게 */
   const CL_DX=15, CL_DY=15;
@@ -1048,27 +1047,23 @@ function render(){
   });
   const renderCluster=q=>{
     const list=q.list, n=list.length, x=q.x, y=q.y;
-    const anyFut=list.every(e=>e.fut);
+    const allFut=list.every(e=>e.fut);
     const cols=[...new Set(list.map(pinColor))];
     const col=cols.length===1?cols[0]:PIN_GRAY; /* 섞이면 중립 회색 */
-    const g=el('g',{cursor:'pointer',tabindex:0,role:'button',class:'c-main',
+    const g=el('g',{cursor:'pointer',tabindex:0,role:'button',class:'c-main','data-event-cluster':n,
       'aria-label':`${list[0].date} 부근 겹친 사건 ${n}건 — 열어서 고르기`});
     if(focusLayer!=='main'&&list.some(e=>(e.layers||[]).includes(focusLayer))){
       g.style.opacity='1';g.style.pointerEvents='auto';
     }
-    g.appendChild(el('circle',{cx:x,cy:y,r:14,fill:'transparent'}));
-    g.appendChild(el('circle',{cx:x,cy:y,r:7.5,fill:'none',stroke:col,'stroke-width':1,opacity:.45,...pinDash(anyFut)}));
-    g.appendChild(el('circle',{cx:x,cy:y,r:4.5,fill:PIN_PAPER,stroke:PIN_PAPER,'stroke-width':4.6}));
-    g.appendChild(el('circle',{cx:x,cy:y,r:4.5,fill:'none',stroke:col,'stroke-width':2.2,...pinDash(anyFut)}));
-    const bdx=(x+16>W-34)?-9:9; /* 오른쪽 끝에서는 배지를 안쪽으로 접는다 (눈금 침범 방지) */
-    if(x>4&&x<W-4){ /* 화면 밖 묶음은 배지 없이 점만 */
-      g.appendChild(el('circle',{cx:x+bdx,cy:y-9,r:6.6,fill:col,stroke:'#F2F4EE','stroke-width':1.4}));
-      const bt=el('text',{x:x+bdx,y:y-6.3,'text-anchor':'middle','font-size':8.6,fill:'#F2F4EE',
-        'font-family':'IBM Plex Mono','font-weight':700});
-      bt.textContent=n;g.appendChild(bt);
-      reserve(x+bdx-8,y-17,x+bdx+8,y-1);
+    g.appendChild(el('circle',{cx:x,cy:y,r:matchMedia('(pointer:coarse)').matches?22:16,fill:'transparent'}));
+    /* 두 링 아래를 종이색으로 비워 곡선 위에서도 각각 또렷하게 보인다. */
+    g.appendChild(el('circle',{cx:x,cy:y,r:8,fill:PIN_PAPER,stroke:PIN_PAPER,'stroke-width':4.6}));
+    for(const radius of [8,4.5]){
+      g.appendChild(el('circle',{cx:x,cy:y,r:radius,fill:'none',stroke:col,'stroke-width':1.8,
+        'data-cluster-ring':radius===8?'outer':'inner',...pinDash(allFut)}));
     }
-    if(SHOW.name)placeText(g,list[0].title.replace(/^\(예시\)\s*/,'')+` 외 ${n-1}`,x,y,{near:bdx>0?19:12});
+    reserve(x-11,y-11,x+11,y+11);
+    if(SHOW.name)placeText(g,list[0].title.replace(/^\(예시\)\s*/,'')+` 외 ${n-1}`,x,y,{near:14});
     const pick=(cx,cy)=>openPick(cx,cy,list.map(e=>[
       `${e.happiness!=null?(e.happiness>0?'+':'')+e.happiness.toFixed(1):'—'}  ${e.title}`,'',
       ()=>{selected=e;render();renderDetail();

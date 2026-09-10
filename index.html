@@ -26,6 +26,10 @@
 <a class="skip-link" href="#sec-canvas">기록으로 이동</a>
 <nav class="app-bar" aria-label="문서 도구">
   <a class="app-brand" href="./" aria-label="인생 연표 홈"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 24h26M4 20c5 0 5-11 10-11s5 7 9 7 4-5 6-7"/></svg><span>인생 연표</span></a>
+  <div class="edit-tools" aria-label="실행 취소">
+    <button class="icon-button" id="btnUndo" title="되돌리기 (⌘/Ctrl+Z)" aria-label="되돌리기" disabled>↶</button>
+    <button class="icon-button" id="btnRedo" title="다시 실행 (⌘/Ctrl+Shift+Z)" aria-label="다시 실행" disabled>↷</button>
+  </div>
   <div class="document-tools">
     <select class="select select-sm select-ghost" id="docSel" title="문서 전환" aria-label="문서 선택"></select>
     <button class="bar-button" id="btnNewDoc">＋ 새 문서</button>
@@ -42,9 +46,8 @@
   <div class="wrap">
     <div class="hgroup">
       <div>
-        <p class="eyebrow">PERSONAL TIMELINE</p>
         <h1>내 연표</h1>
-        <p class="subtitle">사건과 생각을 기록하고, 시간의 흐름을 살펴보세요.</p>
+        <p class="subtitle">시간에 따른 행복도와 사건 기록</p>
       </div>
       <div class="head-right">
         <div class="hero" id="hero">
@@ -71,15 +74,12 @@
         <div class="workspace-main">
           <div class="view-switch" role="group" aria-label="보기 방식">
             <button id="btnTimeline" class="on" aria-pressed="true">연표</button>
-            <button id="btnRecords" aria-pressed="false">기록 목록</button>
+            <button id="btnRecords" aria-pressed="false">기록</button>
           </div>
-          <span class="workspace-date" id="workspaceDate"></span>
-          <div class="edit-tools" aria-label="실행 취소">
-            <button class="icon-button" id="btnUndo" title="되돌리기 (⌘/Ctrl+Z)" aria-label="되돌리기" disabled>↶</button>
-            <button class="icon-button" id="btnRedo" title="다시 실행 (⌘/Ctrl+Shift+Z)" aria-label="다시 실행" disabled>↷</button>
+          <div class="workspace-actions">
+            <button class="lay-chip" id="btnSearch" title="검색 (⌘/Ctrl+K)">검색 <kbd>⌘ K</kbd></button>
+            <button class="lay-chip add-chip" id="btnAdd" aria-label="추가">＋ 추가</button>
           </div>
-          <button class="bar-button" id="btnSearch" title="검색 (⌘/Ctrl+K)">검색 <kbd>⌘ K</kbd></button>
-          <button class="lay-chip add-chip" id="btnAdd" aria-label="기록 추가">＋ 기록 추가</button>
         </div>
         <div class="tl-controls" role="group" aria-label="연표 보기 설정">
           <div class="scale-group" role="group" aria-label="표시 기간">
@@ -91,9 +91,11 @@
           </div>
           <button class="bar-button" id="btnToday">오늘</button>
           <span class="toolbar-spacer"></span>
-          <button class="bar-button" id="btnMap" aria-pressed="false">지도</button>
-          <button class="bar-button" id="btnGrid" aria-pressed="false">격자</button>
-          <button class="bar-button" id="btnShow" aria-label="표시와 곡선 설정" aria-haspopup="true">보기 설정</button>
+          <div class="view-tools">
+            <button class="lay-chip" id="btnMap" aria-pressed="false">지도</button>
+            <button class="lay-chip" id="btnGrid" aria-pressed="false">격자</button>
+            <button class="lay-chip" id="btnShow" aria-label="설정" aria-haspopup="true">설정</button>
+          </div>
         </div>
       </div>
 
@@ -108,7 +110,7 @@
             <strong>첫 기록을 추가해보세요.</strong>
             <p>날짜와 내용을 남기면 연표에 바로 표시됩니다.</p>
             <div class="start-actions">
-              <button class="lay-chip add-chip" id="startAdd">＋ 기록 추가</button>
+              <button class="lay-chip add-chip" id="startAdd">＋ 추가</button>
               <button class="guide-link" id="startDismiss">안내 닫기</button>
             </div>
           </aside>
@@ -146,7 +148,7 @@
         <div class="chart-help"><span>기록을 누르면 편집할 수 있어요.</span><span>드래그로 이동 · ⌘/Ctrl + 휠로 확대</span></div>
       </div>
       <div class="records-view" id="recordsView" hidden>
-        <div class="records-head"><div><h2>기록 목록</h2><p id="recordCount"></p></div>
+        <div class="records-head"><div><h2>기록</h2><p id="recordCount"></p></div>
           <div class="record-filters"><input id="recordQuery" type="search" placeholder="제목이나 내용 검색" aria-label="목록 검색">
           <select id="recordKind" aria-label="기록 종류"><option value="all">모든 기록</option><option value="event">사건</option><option value="span">기간</option><option value="thought">생각</option></select></div>
         </div>
