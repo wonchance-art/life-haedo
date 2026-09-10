@@ -1,0 +1,4 @@
+# Project defaults; explicit task selection and managed policy can take precedence.
+# Preserve the user's existing GPT-6 Astra / xhigh baseline.
+model = "gpt-6-astra"
+model_reasoning_effort = "xhigh"

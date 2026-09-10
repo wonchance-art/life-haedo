@@ -1,29 +1,41 @@
-/* 인생 연표 — 오프라인 캐시 (앱은 단일 HTML, 데이터는 localStorage/Supabase) */
-const CACHE='haedo-v45';
-const SHELL=['./','./index.html','./manifest.webmanifest','./icon.svg','./vendor/daisyui.css','./vendor/daisyui-themes.css'];
-self.addEventListener('install',e=>{
-  /* 설치 때도 HTTP 캐시를 건너뛴다 — 안 그러면 오프라인 폴백이 직전 배포로 굳는다 */
-  e.waitUntil(caches.open(CACHE)
-    .then(c=>Promise.all(SHELL.map(u=>fetch(new Request(u,{cache:'reload'})).then(r=>c.put(u,r)).catch(()=>{}))))
+/* Versioned app shell. Personal documents remain in localStorage. */
+const CACHE='haedo-v46';
+const SHELL=['./','./index.html','./manifest.webmanifest','./icon.svg','./icon-maskable.svg',
+  './vendor/daisyui.css','./vendor/daisyui-themes.css','./assets/app.css',
+  './assets/data.js','./assets/sync.js','./assets/app.js','./assets/workspace.js'];
+const shellURLs=new Set(SHELL.map(path=>new URL(path,self.registration.scope).href));
+self.addEventListener('install',event=>{
+  // Reject a partial shell so the installed version stays usable.
+  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL.map(url=>new Request(url,{cache:'reload'}))))
     .then(()=>self.skipWaiting()));
 });
-self.addEventListener('activate',e=>{
-  e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));
+self.addEventListener('activate',event=>{
+  event.waitUntil(caches.keys().then(keys=>Promise.all(keys
+    .filter(key=>/^haedo-v\d+$/.test(key)&&key!==CACHE).map(key=>caches.delete(key))))
+    .then(()=>self.clients.claim()));
 });
-self.addEventListener('fetch',e=>{
-  const u=new URL(e.request.url);
-  if(e.request.method!=='GET')return;
-  if(u.origin!==location.origin)return; /* Supabase·타일·폰트는 항상 네트워크 */
-  if(/-sample.html$/.test(u.pathname)){e.respondWith(fetch(e.request));return;} /* 시안은 캐시 우회 — 항상 최신 */
-  /* 네트워크 우선 — 최신 배포를 놓치지 않되, 오프라인이면 캐시로.
-     문서는 브라우저 HTTP 캐시까지 건너뛴다 (Pages가 max-age를 붙여 새 배포가 몇 분 늦게 보였다) */
-  const doc=e.request.mode==='navigate'||u.pathname.endsWith('/')||/\.html?$/.test(u.pathname);
-  const req=doc?new Request(e.request,{cache:'reload'}):e.request;
-  e.respondWith(
-    fetch(req).then(r=>{
-      const copy=r.clone();
-      caches.open(CACHE).then(c=>c.put(e.request,copy)).catch(()=>{});
-      return r;
-    }).catch(()=>caches.match(e.request).then(r=>r||caches.match('./index.html')))
-  );
+self.addEventListener('fetch',event=>{
+  const request=event.request,url=new URL(request.url);
+  if(request.method!=='GET'||url.origin!==self.location.origin)return;
+  const canonical=url.origin+url.pathname;
+  if(!shellURLs.has(canonical))return;
+  event.respondWith((async()=>{
+    const cache=await caches.open(CACHE);
+    try{
+      const response=await fetch(new Request(request,{cache:'reload'}));
+      if(response.ok){
+        event.waitUntil(cache.put(canonical,response.clone()).catch(()=>{}));
+        return response;
+      }
+      return await cache.match(canonical)||response;
+    }catch(error){
+      const cached=await cache.match(canonical);
+      if(cached)return cached;
+      if(request.mode==='navigate'){
+        const index=await cache.match(new URL('./index.html',self.registration.scope).href);
+        if(index)return index;
+      }
+      return Response.error();
+    }
+  })());
 });
