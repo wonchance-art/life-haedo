@@ -161,17 +161,23 @@
       return response;
     },
   };
+  function hidePrivate() {
+    document.querySelectorAll("[data-private]").forEach((el) => {
+      el.hidden = true;
+    });
+    document
+      .querySelectorAll("dialog[open]")
+      .forEach((dialog) => dialog.close());
+    if (location.pathname.endsWith("/timeline.html"))
+      document.documentElement.classList.add("auth-pending");
+  }
   client?.auth.onAuthStateChange((event, next) => {
     if (
       user &&
       (event === "SIGNED_OUT" || (next && next.user.id !== user.id))
     ) {
       user = session = null;
-      document.querySelectorAll("[data-private]").forEach((el) => {
-        el.hidden = true;
-      });
-      if (location.pathname.endsWith("/timeline.html"))
-        document.documentElement.classList.add("auth-pending");
+      hidePrivate();
       document.dispatchEvent(new Event("haedo:signed-out"));
       if (privatePages.has(location.pathname.split("/").pop()))
         location.replace("login.html");
@@ -179,11 +185,7 @@
   });
   addEventListener("pagehide", () => {
     if (!privatePages.has(location.pathname.split("/").pop())) return;
-    document.querySelectorAll("[data-private]").forEach((el) => {
-      el.hidden = true;
-    });
-    if (location.pathname.endsWith("/timeline.html"))
-      document.documentElement.classList.add("auth-pending");
+    hidePrivate();
   });
   addEventListener("pageshow", async (event) => {
     if (

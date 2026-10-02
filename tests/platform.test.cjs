@@ -332,3 +332,59 @@ test("uploading a document preserves edits and new registry entries made while t
   );
   h.logout();
 });
+test("signing out closes an open private form before navigating away", async () => {
+  let changed;
+  const user = { id: "A" },
+    session = { user, access_token: "anonymous-fixture" };
+  const privateArea = { hidden: false },
+    dialog = {
+      open: true,
+      close() {
+        this.open = false;
+      },
+    };
+  const location = {
+    hostname: "127.0.0.1",
+    pathname: "/workspace.html",
+    search: "",
+    replace() {
+      assert.equal(privateArea.hidden, true);
+      assert.equal(dialog.open, false);
+    },
+  };
+  const client = {
+    auth: {
+      getSession: async () => ({ data: { session } }),
+      getUser: async () => ({ data: { user } }),
+      onAuthStateChange: (fn) => {
+        changed = fn;
+      },
+    },
+  };
+  const context = {
+    HAEDO_CONFIG: {
+      url: "https://test.supabase.co",
+      key: "sb_publishable_fixture",
+    },
+    supabase: { createClient: () => client },
+    location,
+    URL,
+    URLSearchParams,
+    Event,
+    document: {
+      querySelectorAll: (selector) =>
+        selector === "[data-private]" ? [privateArea] : [dialog],
+      dispatchEvent: () => {},
+      documentElement: { classList: { add: () => {} } },
+    },
+    addEventListener: () => {},
+  };
+  vm.runInNewContext(
+    readFileSync(require.resolve("../assets/platform-auth.js"), "utf8"),
+    context,
+  );
+  await context.HaedoAuth.verify();
+  changed("SIGNED_OUT", null);
+  assert.equal(context.HaedoAuth.user, null);
+  assert.equal(dialog.open, false);
+});
