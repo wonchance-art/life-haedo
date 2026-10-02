@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="ko" data-theme="spring">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#FAF8F0" />
+    <meta name="referrer" content="same-origin" />
+    <link rel="icon" href="icon.svg" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="vendor/daisyui.css" />
+    <link rel="stylesheet" href="vendor/daisyui-themes.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/app.css" />
+    <link rel="stylesheet" href="assets/platform.css" />
+    <meta name="robots" content="noindex" />
+    <title>습관 · 해도</title>
+  </head>
+  <body class="platform" data-page="habits">
+    <svg
+      class="icon-defs"
+      aria-hidden="true"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <symbol id="p-time" viewBox="0 0 32 32">
+          <path d="M3 26h26M3 19c5 0 5-10 10-10s5 6 9 6 5-5 7-7" />
+          <circle cx="13" cy="9" r="3" />
+        </symbol>
+        <symbol id="p-goal" viewBox="0 0 32 32">
+          <circle cx="16" cy="16" r="11" />
+          <circle cx="16" cy="16" r="5" />
+          <path d="m16 16 12-12M24 4h4v4" />
+        </symbol>
+        <symbol id="p-habit" viewBox="0 0 32 32">
+          <rect x="5" y="6" width="22" height="22" rx="3" />
+          <path d="M11 3v6m10-6v6M5 13h22m-17 7 4 4 8-8" />
+        </symbol>
+        <symbol id="p-plus" viewBox="0 0 24 24">
+          <path d="M12 4v16M4 12h16" />
+        </symbol>
+        <symbol id="p-check" viewBox="0 0 24 24">
+          <path d="m5 12 4 4L19 6" />
+        </symbol>
+        <symbol id="p-out" viewBox="0 0 24 24">
+          <path d="M14 4H5v16h9M10 12h11m-4-4 4 4-4 4" />
+        </symbol>
+      </defs></svg
+    ><a class="skip-link" href="#content">본문으로 이동</a>
+    <nav class="p-nav" aria-label="주 메뉴">
+      <a class="p-brand" href="index.html" aria-label="해도 홈"
+        ><svg viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M3 24h26M4 20c5 0 5-11 10-11s5 7 9 7 4-5 6-7" /></svg
+      ></a>
+      <div class="p-nav-links">
+        <a href="index.html">홈</a
+        ><a href="workspace.html" data-space-link>내 공간</a
+        ><a class="p-login-link" href="login.html" data-login-link>로그인</a
+        ><button
+          class="p-icon-button"
+          data-logout
+          hidden
+          aria-label="로그아웃"
+          title="로그아웃"
+        >
+          <svg aria-hidden="true"><use href="#p-out" /></svg>
+        </button>
+      </div>
+    </nav>
+    <div id="accessState" class="p-access" role="status">
+      <p>로그인을 확인하고 있습니다.</p>
+      <a href="login.html">로그인 화면</a
+      ><button id="accessRetry" class="p-button" hidden>다시 확인</button>
+    </div>
+    <noscript
+      ><p class="p-access">
+        JavaScript를 허용해야 개인 공간을 열 수 있습니다.
+      </p></noscript
+    >
+    <main id="content" class="p-main private-main" data-private hidden>
+      <header class="p-page-head">
+        <div>
+          <p id="accountLabel" class="p-account"></p>
+          <h1>습관</h1>
+          <p>작은 반복을 오늘부터 체크하세요.</p>
+        </div>
+        <button class="p-button primary" id="addItem">
+          <svg aria-hidden="true"><use href="#p-plus" /></svg>추가
+        </button>
+      </header>
+      <nav class="space-tabs" aria-label="내 공간 기능">
+        <a href="workspace.html">전체</a><a href="timeline.html">연표</a
+        ><a href="goals.html">목표</a
+        ><a href="habits.html" aria-current="page">습관</a>
+      </nav>
+      <div class="p-status-line">
+        <span id="syncMessage" role="status">기기 사본을 확인합니다.</span
+        ><button id="syncRetry" class="p-text-link">동기화</button>
+      </div>
+      <div class="p-list-tools">
+        <p id="habitWeekLabel"></p>
+        <span id="itemCount"></span>
+      </div>
+      <div id="habitList" class="habit-list"></div>
+      <p class="p-muted habit-note">
+        정한 요일에만 체크할 수 있습니다. 지난 7일의 완료 기록도 수정할 수
+        있습니다.
+      </p>
+    </main>
+    <dialog id="itemDialog" class="p-dialog" aria-labelledby="itemDialogTitle">
+      <form id="itemForm">
+        <div class="p-dialog-head">
+          <h2 id="itemDialogTitle">목표 추가</h2>
+          <button
+            type="button"
+            data-close="itemDialog"
+            class="p-icon-button"
+            aria-label="닫기"
+          >
+            ×
+          </button>
+        </div>
+        <label
+          >이름<input
+            id="itemTitle"
+            required
+            maxlength="120"
+            autocomplete="off"
+        /></label>
+        <div id="goalFields">
+          <label
+            >마감일 <span class="p-muted">선택</span
+            ><input id="goalTarget" type="date" /></label
+          ><label
+            >진행률<input
+              id="goalProgress"
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              value="0"
+              required
+          /></label>
+        </div>
+        <div id="habitFields" hidden>
+          <fieldset>
+            <legend>반복 요일</legend>
+            <div class="day-options" id="habitDays"></div>
+          </fieldset>
+          <p class="p-muted">완료한 날을 체크하면 연속 실천 횟수가 쌓입니다.</p>
+        </div>
+        <p id="itemFormMessage" class="p-message" role="alert"></p>
+        <div class="p-dialog-actions">
+          <button type="button" id="deleteItem" class="p-text-link" hidden>
+            삭제</button
+          ><button type="button" data-close="itemDialog" class="p-button">
+            취소</button
+          ><button type="submit" class="p-button primary">저장</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="importDialog" class="p-dialog" aria-label="기존 연표 연결">
+      <div class="p-dialog-head">
+        <h2>기존 연표 연결</h2>
+        <button
+          data-close="importDialog"
+          class="p-icon-button"
+          aria-label="닫기"
+        >
+          ×
+        </button>
+      </div>
+      <p id="legacySummary"></p>
+      <p>
+        백업을 내려받은 뒤 내 계정에 사본을 만듭니다. 기기의 원본은 그대로
+        남습니다.
+      </p>
+      <button id="legacyBackup" class="p-button">백업 다운로드</button
+      ><label class="ownership-check"
+        ><input type="checkbox" id="legacyOwnership" />이 기기에 저장된 연표는
+        내 기록입니다.</label
+      >
+      <p id="legacyMessage" class="p-message" role="status"></p>
+      <div class="p-dialog-actions">
+        <button id="legacyImport" class="p-button primary" disabled>
+          내 계정에 사본 만들기
+        </button>
+      </div>
+    </dialog>
+    <dialog
+      id="conflictDialog"
+      class="p-dialog"
+      aria-label="두 기기의 변경 사항"
+    >
+      <div class="p-dialog-head">
+        <h2>두 기기의 변경 사항</h2>
+        <button
+          data-close="conflictDialog"
+          class="p-icon-button"
+          aria-label="닫기"
+        >
+          ×
+        </button>
+      </div>
+      <p>
+        같은 항목이 다른 기기에서도 바뀌었습니다. 백업을 내려받고 사용할 사본을
+        선택하세요.
+      </p>
+      <button id="conflictBackup" class="p-button">백업 다운로드</button>
+      <p id="conflictMessage" class="p-message" role="status"></p>
+      <div class="p-dialog-actions">
+        <button id="useRemote" class="p-button" disabled>서버 사본 사용</button
+        ><button id="useLocal" class="p-button primary" disabled>
+          기기 사본 사용
+        </button>
+      </div>
+    </dialog>
+    <div id="platformToast" class="p-toast" role="status" hidden></div>
+    <footer class="p-footer">
+      <a href="index.html" aria-label="해도 홈">해도</a
+      ><span>연표 · 목표 · 습관</span><a href="privacy.html">개인정보 안내</a>
+    </footer>
+    <script src="vendor/supabase.js"></script>
+    <script src="assets/platform-config.js"></script>
+    <script src="assets/platform-auth.js"></script>
+    <script src="assets/data.js"></script>
+    <script src="assets/sync.js"></script>
+    <script src="assets/platform-data.js"></script>
+    <script src="assets/platform-store.js"></script>
+    <script src="assets/platform-ui.js"></script>
+  </body>
+</html>

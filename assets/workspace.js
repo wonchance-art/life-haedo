@@ -167,11 +167,10 @@
     } finally { event.target.value = ''; updateSaveState(); }
   };
 
-  const dialogs = [...document.querySelectorAll('.search-bd'), byId('gateBd')];
+  const dialogs = [...document.querySelectorAll('.search-bd')];
   let activeDialog = null, previousFocus;
   const focusable = node => [...node.querySelectorAll('button,input,select,textarea,a[href],[tabindex="0"]')]
     .filter(el => !el.disabled && el.getClientRects().length);
-  byId('gateBd').setAttribute('role', 'dialog'); byId('gateBd').setAttribute('aria-modal', 'true'); byId('gateBd').setAttribute('aria-label', '입장');
   function syncDialog() {
     const current = dialogs.find(node => !node.hidden) || null;
     if (current === activeDialog) return;

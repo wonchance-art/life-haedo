@@ -1,7 +1,7 @@
 {
-  "name": "인생 연표",
-  "short_name": "인생 연표",
-  "description": "행복도 곡선 위에 사건·기간·시대를 기록하는 개인 연표 편집기",
+  "name": "해도",
+  "short_name": "해도",
+  "description": "나의 연표, 목표, 습관을 한곳에서 관리하는 개인 기록 공간",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -10,7 +10,17 @@
   "theme_color": "#FAF8F0",
   "lang": "ko",
   "icons": [
-    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
   ]
 }

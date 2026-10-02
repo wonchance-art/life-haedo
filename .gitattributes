@@ -1,0 +1,2 @@
+# Keep the official UMD bundle byte-for-byte, including its literal whitespace.
+vendor/supabase.js -whitespace linguist-vendored

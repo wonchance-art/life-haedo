@@ -19,13 +19,9 @@
     />
     <link rel="stylesheet" href="assets/app.css" />
     <link rel="stylesheet" href="assets/platform.css" />
-    <meta
-      name="description"
-      content="나의 연표, 목표, 습관을 한곳에서 관리하는 개인 기록 공간"
-    />
-    <title>해도</title>
+    <title>개인정보 안내 · 해도</title>
   </head>
-  <body class="platform" data-page="home">
+  <body class="platform" data-page="privacy">
     <svg
       class="icon-defs"
       aria-hidden="true"
@@ -76,82 +72,36 @@
         </button>
       </div>
     </nav>
-    <main id="content" class="p-main">
-      <section class="home-hero">
-        <div class="home-copy">
-          <h1>기록을 모으고,<br />나의 시간을<br />살펴보세요.</h1>
-          <p>지나온 일은 연표에,<br />하고 싶은 일은 목표와 습관에.</p>
-          <a class="p-button primary" href="workspace.html">내 공간 열기</a>
-        </div>
-        <div class="home-preview">
-          <div class="preview-caption">
-            <span>연표 미리보기</span><span>예시</span>
-          </div>
-          <svg
-            class="home-curve"
-            viewBox="0 0 580 300"
-            role="img"
-            aria-label="사건이 쌓인 시간의 흐름을 보여주는 예시 연표"
-          >
-            <path
-              class="curve-wash"
-              d="M20 205C75 205 83 170 118 178S174 230 218 174 281 98 315 125 367 173 405 108 489 90 560 47V270H20Z"
-            />
-            <path class="curve-axis" d="M20 270h540" />
-            <path
-              class="curve-line"
-              d="M20 205C75 205 83 170 118 178S174 230 218 174 281 98 315 125 367 173 405 108 489 90 560 47"
-            />
-            <g class="curve-pins">
-              <circle cx="118" cy="178" r="5" />
-              <circle cx="315" cy="125" r="8" />
-              <circle cx="315" cy="125" r="4" />
-              <circle cx="405" cy="108" r="5" />
-            </g>
-            <g class="curve-text">
-              <text x="86" y="147">새로운 시작</text>
-              <text x="280" y="92">배움과 만남</text>
-              <text x="400" y="76">나의 변화</text>
-              <text x="20" y="292">2020</text>
-              <text x="272" y="292">2023</text>
-              <text x="528" y="292">2026</text>
-            </g>
-          </svg>
-          <div class="preview-foot">
-            <span>사건과 감정을 함께 기록</span
-            ><span class="preview-signal" aria-hidden="true"></span>
-          </div>
-        </div>
-      </section>
-      <section class="home-features" aria-label="기능">
-        <a class="feature-row" href="timeline.html"
-          ><svg aria-hidden="true"><use href="#p-time" /></svg>
-          <div>
-            <h2>연표</h2>
-            <p>사건, 기간, 행복도를 시간 위에 남깁니다.</p>
-          </div>
-          <span>기록 · 지도</span></a
-        >
-        <a class="feature-row" href="goals.html"
-          ><svg aria-hidden="true"><use href="#p-goal" /></svg>
-          <div>
-            <h2>목표</h2>
-            <p>하고 싶은 일의 마감일과 진행 상황을 살펴봅니다.</p>
-          </div>
-          <span>진행률 · 완료</span></a
-        >
-        <a class="feature-row" href="habits.html"
-          ><svg aria-hidden="true"><use href="#p-habit" /></svg>
-          <div>
-            <h2>습관</h2>
-            <p>요일을 정하고, 오늘 해낸 일을 체크합니다.</p>
-          </div>
-          <span>반복 · 체크</span></a
-        >
-      </section>
-      <p class="home-note">
-        Google 계정으로 로그인하면 나의 기록에 접근할 수 있습니다.
+    <main id="content" class="p-main privacy-main">
+      <h1>개인정보 안내</h1>
+      <h2>로그인과 기록</h2>
+      <p>
+        Google 로그인에서 계정 식별자, 이름, 이메일을 받아 개인 공간을
+        구분합니다. 연표, 목표, 습관은 로그인한 계정의 저장 공간과 사용하는
+        브라우저에 보관됩니다. 다른 계정은 서버의 접근 정책에 따라 이 기록에
+        접근할 수 없습니다.
       </p>
+      <h2>기기에 남는 사본</h2>
+      <p>
+        로그아웃하면 개인 화면은 닫히지만 복구를 위해 기기의 기록 사본을 지우지
+        않습니다. 공용 기기에서는 사용 후 로그아웃하고 브라우저의 사이트
+        데이터를 삭제하세요. 사이트 데이터를 삭제하기 전에 동기화와 전체 백업을
+        확인하세요.
+      </p>
+      <h2>기존 연표와 백업</h2>
+      <p>
+        기존 브라우저 기록은 자동으로 계정에 연결하지 않습니다. 백업을 내려받고
+        직접 사본을 연결할 수 있습니다. 내려받은 백업에는 개인 기록이 들어
+        있으므로 안전한 곳에 보관하세요. 연결 설정과 로그인 토큰은 백업에
+        포함하지 않습니다.
+      </p>
+      <h2>외부 서비스</h2>
+      <p>
+        계정 인증과 기록 저장에는 Supabase, 로그인에는 Google을 사용합니다.
+        글꼴과 지도 기능을 사용할 때 해당 제공 서비스에 네트워크 요청이
+        전송됩니다.
+      </p>
+      <a href="index.html" class="p-text-link">홈으로 돌아가기</a>
     </main>
     <footer class="p-footer">
       <a href="index.html" aria-label="해도 홈">해도</a

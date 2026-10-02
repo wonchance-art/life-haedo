@@ -26,7 +26,9 @@ const request = (path, mode = 'cors') => ({ url: 'https://test.invalid/life-haed
 test('complete offline shell includes every runtime module', async () => {
   const h = harness(); await h.run('install');
   assert.equal(h.state().skipped, true);
-  for (const name of ['assets/app.js', 'assets/data.js', 'assets/sync.js', 'assets/workspace.js', 'assets/app.css'])
+  for (const name of ['assets/app.js', 'assets/data.js', 'assets/sync.js', 'assets/workspace.js', 'assets/app.css',
+    'login.html', 'workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'vendor/supabase.js',
+    'assets/platform-auth.js', 'assets/platform-store.js', 'assets/timeline-entry.js'])
     assert.ok(h.state().resources.some(r => r.url.endsWith(name)), name);
 });
 test('failed installation does not activate a partial shell', async () => {
@@ -49,6 +51,12 @@ test('a missing script never falls back to HTML', async () => {
   const response = await h.run('fetch', request('assets/app.js'));
   assert.equal(response.type, 'error');
   assert.equal(await h.run('fetch', request('missing.js')), undefined);
+});
+test('personal APIs and OAuth responses are never handled or cached by the worker', async () => {
+  const h = harness();
+  for (const path of ['rest/v1/haedo_documents', 'auth/v1/token', 'fixture/continue'])
+    assert.equal(await h.run('fetch', request(path)), undefined);
+  assert.equal(h.writes.length, 0);
 });
 test('offline navigation can use the cached index document', async () => {
   const h = harness({ fetchResult: new Error('offline') });

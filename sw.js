@@ -1,8 +1,9 @@
 /* Versioned app shell. Personal documents remain in localStorage. */
-const CACHE='haedo-v48';
-const SHELL=['./','./index.html','./manifest.webmanifest','./icon.svg','./icon-maskable.svg',
+const CACHE='haedo-v49';
+const SHELL=['./','./index.html','./login.html','./workspace.html','./timeline.html','./goals.html','./habits.html','./privacy.html','./manifest.webmanifest','./icon.svg','./icon-maskable.svg',
   './vendor/daisyui.css','./vendor/daisyui-themes.css','./assets/app.css',
-  './assets/data.js','./assets/sync.js','./assets/app.js','./assets/workspace.js'];
+  './assets/data.js','./assets/sync.js','./assets/app.js','./assets/workspace.js','./vendor/supabase.js','./assets/platform-config.js',
+  './assets/platform.css','./assets/platform-auth.js','./assets/platform-data.js','./assets/platform-store.js','./assets/platform-ui.js','./assets/timeline-entry.js'];
 const shellURLs=new Set(SHELL.map(path=>new URL(path,self.registration.scope).href));
 self.addEventListener('install',event=>{
   // Reject a partial shell so the installed version stays usable.
