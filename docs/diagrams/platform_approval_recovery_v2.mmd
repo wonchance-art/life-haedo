@@ -1,0 +1,84 @@
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#ffffff","primaryTextColor":"#111111","primaryBorderColor":"#666666","lineColor":"#666666","secondaryColor":"#ffffff","tertiaryColor":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#999999","edgeLabelBackground":"#ffffff","fontFamily":"sans-serif","fontSize":"14px"},"flowchart":{"curve":"linear","nodeSpacing":24,"rankSpacing":42,"htmlLabels":true}}}%%
+flowchart TB
+  subgraph USER["사용자"]
+    REQUEST["전송·공개·중요 변경 선택"]
+    REVIEW{"내용·대상·범위·버전 미리보기<br/>승인 / 수정 / 거절"}
+    UI["완료·보류·취소·오류 확인<br/>초안은 비공개로 유지"]
+  end
+  subgraph CONTROL["개인 운영센터 · 승인과 실행 상태를 먼저 저장"]
+    PREP["현재 권한·입력 검증<br/>초안 버전·대상·공개 범위 고정<br/>승인 대기 저장·이전 승인 무효화"]
+    INTENT["승인과 실행 의도 저장<br/>내용·대상·범위·만료·버전 결합<br/>같은 효과에 동일한 중복 방지 키"]
+    GUARD{"실행 점유·최종 검증<br/>권한·승인·취소·기한·버전·한도<br/>이미 실행 중이거나 완료됐는가?"}
+    DISPATCH["실행 시작 상태 먼저 기록<br/>실패 시 외부 호출하지 않음"]
+    ROUTE{"실행 대상"}
+    LOCAL["내부 공개·중요 변경<br/>승인된 변경과 완료 상태를<br/>같은 저장 단위로 확정"]
+    SEND["외부 전송<br/>지원되는 경우 동일 효과 키 전달<br/>AI가 아닌 연결 모듈이 실행"]
+    RESPONSE{"외부 응답 분류"}
+    RECEIPT["외부 실행 ID·완료 상태 저장<br/>전송이 아니라 결과 저장 단계"]
+    RECON["외부 결과 대조·안전한 상태 조회<br/>응답 유실을 실패로 단정하지 않음"]
+    DECIDE{"실제 실행 결과 확인"}
+    RETRY{"미실행 확정·일시 오류인가?<br/>재시도 안전성·횟수·비용 한도 확인"}
+    RETRYWAIT["재시도 대기 상태 저장<br/>점유 해제·횟수 갱신·지연 적용<br/>내용과 효과 키 유지"]
+    SAVEFAIL{"완료 기록 재저장 가능?<br/>검증된 외부 응답은 유지<br/>재저장 횟수·한도 확인"}
+    HOLD["보류·실패 또는 취소 상태 기록<br/>결과 불명은 자동 재전송 금지<br/>사용자 확인 또는 추가 대조"]
+    DONE["완료 응답<br/>이미 완료된 요청도 기존 결과 반환"]
+  end
+  subgraph DATA["사용자별 논리 저장소 · 내부 변경은 동일 트랜잭션 범위"]
+    WORK[("작업 원장·Outbox<br/>승인 대기·승인 내용·실행 의도<br/>단계 상태·효과 키·외부 실행 ID")]
+    SHARED[("승인된 공유본·중요 변경 대상<br/>공개 버전·대상·범위")]
+  end
+  subgraph EXTERNAL["외부 서비스"]
+    EXT["블로그·SNS·메시지 서비스<br/>전송 응답 / 지원되는 상태 조회"]
+  end
+
+  REQUEST --> PREP
+  PREP <-->|초안·승인 대기 저장 확정| WORK
+  PREP -->|저장 성공| REVIEW
+  PREP -.->|권한·입력·저장 실패: 미승인| UI
+  REVIEW -->|수정: 새 버전 생성| PREP
+  REVIEW -->|거절| HOLD
+  REVIEW -->|승인| INTENT
+  INTENT <-->|승인·실행 의도 함께 저장| WORK
+  INTENT -->|저장 성공| GUARD
+  INTENT -.->|저장 실패: 미실행| UI
+  GUARD <-->|원자적 점유·현재 상태 확인| WORK
+  GUARD -->|유효·미실행| DISPATCH
+  GUARD -->|완료 기록 있음| DONE
+  GUARD -->|활성 실행이 이미 점유 중: 기존 진행 상태 반환| UI
+  GUARD -->|점유 만료·이전 실행 결과 미확정| RECON
+  GUARD -->|내용 변경·승인 만료: 재검토 필요| PREP
+  GUARD -->|권한 상실·취소·한도 초과| HOLD
+  DISPATCH -->|실행 시작 저장 확정| ROUTE
+  DISPATCH <-->|단계 상태 저장| WORK
+  DISPATCH -.->|상태 저장 실패: 호출하지 않음| HOLD
+  ROUTE -->|플랫폼 내부| LOCAL
+  ROUTE -->|외부 전달| SEND
+  LOCAL <-->|변경·완료 상태 함께 확정| WORK
+  LOCAL <-->|승인된 변경만 반영| SHARED
+  LOCAL -->|저장 성공| DONE
+  LOCAL -.->|저장 실패·응답 불명: 내부 상태부터 대조| HOLD
+  SEND -->|승인 내용·고정 효과 키| EXT
+  EXT -->|응답 수신| RESPONSE
+  SEND -.->|시간 초과·연결 단절·실행 결과 불명| RECON
+  RESPONSE -->|성공 확인| RECEIPT
+  RESPONSE -->|명확한 미실행 오류| RETRY
+  RESPONSE -->|성공 여부 불명| RECON
+  RECEIPT <-->|외부 실행 ID·완료 확정| WORK
+  RECEIPT -->|저장 성공| DONE
+  RECEIPT -.->|완료 저장 실패: 전송은 반복하지 않음| SAVEFAIL
+  SAVEFAIL -->|한도 내: 결과 저장 단계만 재시도| RECEIPT
+  SAVEFAIL -->|저장 한도 초과: 성공 확인·기록 미확정| HOLD
+  RECON <-->|기존 실행 ID·효과 키·응답 이력 조회| WORK
+  RECON <-->|지원되는 조회만·반복 한도 적용| EXT
+  RECON --> DECIDE
+  DECIDE -->|실행 확인| RECEIPT
+  DECIDE -->|미실행 확정| RETRY
+  DECIDE -->|아직 진행 중·확인 불가·조회 한도 초과| HOLD
+  RETRY -->|안전한 재시도만 허용| RETRYWAIT
+  RETRYWAIT <-->|재시도 상태·횟수 저장 확정| WORK
+  RETRYWAIT -->|저장 성공·지연 경과| GUARD
+  RETRYWAIT -.->|저장 실패: 재실행하지 않음| HOLD
+  RETRY -->|영구 오류·한도 초과·안전성 불명| HOLD
+  HOLD <-->|상태·사유 저장| WORK
+  HOLD -->|저장 실패 시 미확정 표시·안전하게 중단| UI
+  DONE --> UI

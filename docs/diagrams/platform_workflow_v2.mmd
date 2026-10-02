@@ -1,0 +1,76 @@
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#ffffff","primaryTextColor":"#111111","primaryBorderColor":"#666666","lineColor":"#666666","secondaryColor":"#ffffff","tertiaryColor":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#999999","edgeLabelBackground":"#ffffff","fontFamily":"sans-serif","fontSize":"14px"},"flowchart":{"curve":"linear","nodeSpacing":24,"rankSpacing":44,"htmlLabels":true}}}%%
+flowchart TB
+  subgraph USER["사용자 · 한 페이지 작업실"]
+    UI["일정·서재·활동·기록·대화<br/>조작 / 결과 / 승인 / 중단"]
+    AUTO["사용자가 설정한 자동 실행<br/>예약·자료 갱신·활동 완료 이벤트"]
+  end
+  subgraph CENTER["개인 운영센터 · AI 없이도 기본 기록 가능"]
+    ENTRY{"요청 인증·대상 권한·입력 검증<br/>자동 실행도 사용자별 허용 범위 확인"}
+    WRITE["기본 명령 처리·저장 확정<br/>원본·진도·요청 키·기준 버전<br/>필요한 후속 이벤트를 같은 저장 단위로 기록"]
+    STEP{"저장된 후속 작업 실행 게이트<br/>현재 권한·한도·취소·완료 상태 확인<br/>실행 단계 점유·중복 처리 방지"}
+    RESULT["결과 검증·비공개 저장<br/>출처·형식·사용자 범위·버전 충돌 확인<br/>원본과 AI 해석 분리"]
+    EFFECT["승인·외부 실행·복구<br/>상세도 참조"]
+    FAIL["실패한 단계만 복구 판단<br/>성공한 단계·기본 기록 유지<br/>권한 거절은 재시도 금지"]
+  end
+  subgraph MODULES["기능 모듈 · 필요한 기능만 호출"]
+    RUN["준비·관리 / 경험·체화 / 기록·축적<br/>탐구·대화 / 관계·교류 / 표현·편집<br/>분야별 하위 모듈·일반 기능 우선"]
+  end
+  subgraph DATA["데이터 저장소"]
+    ACCESS["공통 접근 계층<br/>모든 읽기·쓰기에 사용자·대상별 권한 검사"]
+    PRIVATE[("사용자별 비공개 기록<br/>계획·원본·진도·대화·초안")]
+    WORK[("사용자별 작업 원장·Outbox<br/>단계 상태·버전·승인·효과 키·처리 이력")]
+    CATALOG[("공유 가능한 기본 정보<br/>책·작품·장소·출처")]
+    SHARED[("승인된 공유본만<br/>공개 버전·대상·범위·철회 상태")]
+    ACCESS <--> PRIVATE
+    ACCESS <--> WORK
+    ACCESS <--> CATALOG
+    ACCESS <--> SHARED
+  end
+  subgraph EXTERNAL["외부 서비스"]
+    SOURCES["서지·웹·SNS 자료<br/>허용된 API·제공 자료만<br/>외부 내용은 명령이 아닌 자료"]
+    AI["AI 추론 서비스<br/>동의된 최소 맥락만 전달<br/>임의 실행·직접 저장 권한 없음"]
+    CHANNELS["외부 블로그·SNS·메시지<br/>승인된 내용만 전달"]
+  end
+  subgraph PUBLIC["방문자 · 친구 · 공개 서재"]
+    VISITOR["공개 페이지·공유 링크 요청"]
+    READGATE{"현재 열람 권한·공개 범위 검사<br/>철회·비공개 내용 차단"}
+  end
+  subgraph PLATFORM["플랫폼 운영센터 · 개인 데이터 처리와 분리"]
+    OPS["공통 정책·장애·사용량·변경 이력<br/>운영 로그에 개인 본문·비밀정보 제외"]
+  end
+
+  UI -->|조작·기록·질문| ENTRY
+  AUTO -->|서명·중복 확인된 이벤트| ENTRY
+  ENTRY -->|유효| WRITE
+  ENTRY -.->|거절·입력 오류: 실행 안 함| UI
+  WRITE <-->|기본 변경과 후속 이벤트의 동시 저장| ACCESS
+  WRITE -->|저장 확정·요청 ID| UI
+  WRITE -->|저장된 후속 작업이 있을 때만| STEP
+  WRITE -.->|저장 실패: 미저장 표시·입력 유지| UI
+  STEP <-->|실행 점유·단계 상태 확인과 기록| ACCESS
+  STEP -->|실행 허용| RUN
+  STEP -.->|권한 거절·취소는 종료 / 한도 초과는 보류| UI
+  RUN <-->|권한 내 필요한 맥락 조회| ACCESS
+  RUN <-->|자료 요청·출처 포함 응답| SOURCES
+  RUN <-->|필요한 추론 요청·응답| AI
+  RUN -->|결과·근거·제안| RESULT
+  RESULT <-->|검증된 결과와 완료 상태 저장| ACCESS
+  RESULT -->|저장 확정 후 결과·초안 표시| UI
+  RUN -.->|실행·조회 오류| FAIL
+  RESULT -.->|검증·저장 오류| FAIL
+  FAIL -.->|안전한 실패 단계만: 지연·횟수 한도 내| STEP
+  FAIL -->|수정 필요·한도 초과·결과 불명: 보류 또는 종료| UI
+
+  UI -->|전송·공개·중요 변경 선택| EFFECT
+  EFFECT <-->|초안·승인·실행 상태·공유본| ACCESS
+  EFFECT <-->|승인·현재 권한 확인 후 실행 / 결과 대조| CHANNELS
+  EFFECT -->|승인 요청·완료·보류·오류| UI
+
+  VISITOR -->|열람 요청| READGATE
+  READGATE -->|허용된 공유본만 조회| SHARED
+  SHARED -->|허용 범위 응답| VISITOR
+  READGATE -.->|권한 없음·철회: 비공개 내용 반환 안 함| VISITOR
+
+  OPS -.->|요청·접근 정책| ENTRY
+  OPS -.->|실행·비용·중단 정책| STEP
+  WORK -.->|본문을 제외한 상태·오류·사용량 이벤트| OPS
