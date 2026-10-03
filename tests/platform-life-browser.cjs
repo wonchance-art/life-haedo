@@ -1,6 +1,7 @@
 /* Protected platform integration with real SDK/IndexedDB/SW and anonymous HTTP.
  * SITE_DIR must be an output of scripts/prepare-site.mjs with test public config.
- * OLD_SITE_DIR optionally supplies a preserved earlier Cloud static fixture.
+ * OLD_SITE_DIR optionally supplies preserved earlier static fixtures, separated
+ * by the platform path delimiter (":" on Linux). Common checks run once.
  * This does not authenticate with Google or prove production RLS/Apple behavior.
  */
 'use strict';
@@ -10,7 +11,7 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 const site=process.env.SITE_DIR;
 if(!site)throw new Error('Set SITE_DIR to the prepared anonymous static site.');
-const oldSite=process.env.OLD_SITE_DIR;
+const oldSites=(process.env.OLD_SITE_DIR||'').split(path.delimiter).filter(Boolean);
 const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript','.css':'text/css','.svg':'image/svg+xml','.webmanifest':'application/manifest+json','.sql':'text/plain'};
 let currentSite=site;
 const web=http.createServer(async(req,res)=>{
@@ -41,10 +42,9 @@ async function main(){
     return match[1];
   };
   const newCache=await cacheName(site);
-  const oldCache=oldSite?await cacheName(oldSite):null;
   await new Promise(resolve=>web.listen(0,'127.0.0.1',resolve));
   process.env.BASE_URL=`http://127.0.0.1:${web.address().port}`;
-  const {FakeCloud,platformContext,accounts,cloud,base}=require('./life-sync-browser.cjs');
+  const {FakeCloud,platformContext,accounts,cloud,base,openManagement,openAccount}=require('./life-sync-browser.cjs');
   const pw=require(process.env.PW_MODULE_PATH||'/opt/codex/cua_node/lib/node_modules/playwright');
   const browser=await pw.chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
   const server=new FakeCloud(),contexts=[];
@@ -66,7 +66,11 @@ async function main(){
     return value;
   }
   const settle=page=>page.waitForFunction(()=>!document.querySelector('.life-app[aria-busy="true"]'));
-  async function click(page,name){await page.getByRole('button',{name,exact:true}).click();await settle(page);}
+  async function click(page,name){
+    if(['기기 간 동기화','내보내기·사본 복원'].includes(name))await openManagement(page);
+    if(name==='로그아웃')await openAccount(page);
+    await page.getByRole('button',{name,exact:true}).click();await settle(page);
+  }
   async function ready(page){await page.waitForFunction(()=>globalThis.HaedoLife?.Shell?.storage && !document.querySelector('#lifeApp').hidden);await page.evaluate(()=>HaedoLife.Shell.ready);}
   async function login(page,device,account){
     server.oauthAccounts.set(device,account);
@@ -117,8 +121,8 @@ async function main(){
     });
     await check('protected import/excerpt/source jump, reload and backup-copy restore work',async()=>{
       await importText(page,'익명 A 자료','첫 문장\n🌱 계정 A 원문 구절\n끝','🌱 계정 A 원문 구절');
-      await click(page,'원문에서 보기');
-      await page.waitForFunction(()=>{const el=document.querySelector('#lifeSourceText');return el?.value.slice(el.selectionStart,el.selectionEnd)==='🌱 계정 A 원문 구절';});
+      await click(page,/^원문에서 보기(?: · |$)/);
+      await page.waitForFunction(()=>{const el=document.querySelector('#lifeSourceText'),selection=getSelection();return el?.contains(selection?.anchorNode)&&el.contains(selection?.focusNode)&&selection.toString()==='🌱 계정 A 원문 구절';});
       await page.reload();await ready(page);assert.equal((await stored(page)).records[0].text,'🌱 계정 A 원문 구절');
       await click(page,'내보내기·사본 복원');const pending=page.waitForEvent('download');await click(page,'JSON 백업');
       backup=JSON.parse(await fs.readFile(await(await pending).path(),'utf8'));
@@ -155,6 +159,7 @@ async function main(){
         IDBObjectStore.prototype.put=function(...args){const request=__originalStagePut.apply(this,args);if(this.name==='staging'&&args[0]?.input?.title==='로그아웃 실패 보존'){__flushAborted++;this.transaction.abort();}return request;};
       });
       try{
+        await openAccount(page);
         await page.getByRole('button',{name:'로그아웃',exact:true}).click();
         await page.waitForFunction(()=>window.__flushAborted>0&&!document.querySelector('#lifeApp').hidden);
         assert.equal(await page.evaluate(()=>HaedoAuth.user.id),accounts.a.id);
@@ -192,7 +197,9 @@ async function main(){
       assert.equal(await p.evaluate(()=>HaedoAuth.user),null);assert.deepEqual(await p.evaluate(()=>__productDbOpens),[]);
       await bad.close();
     });
-    if(oldSite)await check(`preserved Cloud ${oldCache} fixture upgrades atomically to ${newCache} without altering old local data`,async()=>{
+    for(const oldSite of oldSites){
+      const oldCache=await cacheName(oldSite);
+      await check(`preserved Cloud ${oldCache} fixture upgrades atomically to ${newCache} without altering old local data`,async()=>{
       assert.notEqual(oldCache,newCache,'The upgrade requires two distinct actual service workers.');
       const oldHasAuth=(await fs.readFile(path.join(oldSite,'life.html'),'utf8')).includes('assets/platform-auth.js');
       currentSite=oldSite;
@@ -223,7 +230,7 @@ async function main(){
       assert.equal(visible.some(w=>w.workspaceId===fixture.bundle.workspaceId),oldHasAuth);
       const original=await p.evaluate(async ids=>{const db=await idb.openDB('life-tools-v1',1);try{return {bundle:await db.get('bundles',ids.workspaceId),stage:await db.get('staging',ids.stageId)};}finally{db.close();}},{workspaceId:fixture.bundle.workspaceId,stageId:fixture.stage.stageId});
       assert.deepEqual(original,fixture);assert.equal(await p.evaluate(()=>localStorage.getItem('caeyeon_life_registry')),'{"docs":[],"anonymous":"preserve-upgrade"}');
-      const modules=['assets/platform-auth.js','assets/platform-life-remote.js','assets/life/core.js','assets/life/storage.js','assets/life/ui.js','vendor/supabase/supabase.js'];
+      const modules=['life.html','assets/platform-auth.js','assets/platform-life-remote.js','assets/life/core.js','assets/life/storage.js','assets/life/icons.js','assets/life/ui.js','assets/life/ui.css','vendor/supabase/supabase.js'];
       const runtime=await p.evaluate(async({name,modules})=>{
         if(!await caches.has(name))return [];
         const cache=await caches.open(name);
@@ -236,7 +243,9 @@ async function main(){
       const {createHash}=require('node:crypto');
       const expected=await Promise.all(modules.map(async path=>({path,hash:createHash('sha256').update(await fs.readFile(require('node:path').join(site,path))).digest('hex')})));
       assert.deepEqual(runtime,expected,'The installed modules must match the complete new release.');await old.close();
-    });else console.log('SKIP preserved update fixture (OLD_SITE_DIR not supplied)');
+      });
+    }
+    if(!oldSites.length)console.log('SKIP preserved update fixture (OLD_SITE_DIR not supplied)');
     await check('unexpected console/page errors',async()=>assert.deepEqual(errors,[]));
   }finally{await Promise.all(contexts.map(ctx=>ctx.close().catch(()=>{})));await browser.close();await new Promise(resolve=>web.close(resolve));}
   console.log(`Platform integration: ${passed} passed, ${failures.length} failed; ${expectedErrors} intentional transport/callback errors. Anonymous HTTP only; no real Google OAuth/Apple proof.`);

@@ -157,7 +157,19 @@ async function ready(page) {
   await page.locator('.life-app').waitFor();
 }
 async function settle(page) { await page.waitForFunction(() => !document.querySelector('.life-app[aria-busy="true"]')); }
-async function click(page,name) { await page.getByRole('button',{name,exact:true}).click(); await settle(page); }
+async function openManagement(page) {
+  const button = page.getByRole('button',{name:'자료 관리',exact:true});
+  if (await button.getAttribute('aria-expanded') !== 'true') { await button.click(); await settle(page); }
+}
+async function openAccount(page) {
+  const toggle = page.locator('#lifeAccountToggle');
+  if (!(await toggle.evaluate(el => el.closest('details').open))) await toggle.click();
+}
+async function click(page,name) {
+  if (['기기 간 동기화','내보내기·사본 복원','시간 보기'].includes(name)) await openManagement(page);
+  if (name === '로그아웃') await openAccount(page);
+  await page.getByRole('button',{name,exact:true}).click(); await settle(page);
+}
 async function state(page,id) { return page.evaluate(id => HaedoLife.Shell.storage.getSyncState(id),id); }
 async function bundle(page,id) { return page.evaluate(id => HaedoLife.Shell.storage.read(id),id); }
 async function syncNow(page,id) {
@@ -417,5 +429,5 @@ async function main() {
   console.log(`Sync browser checks: ${passed} passed, ${failures.length} failed; ${expectedConsoleErrors} expected transport/schema console errors. HTTP simulator only; live RLS and Apple hardware not proven.`);
   if (failures.length) process.exitCode=1;
 }
-module.exports={FakeCloud,platformContext,session,accounts,cloud,publicKey,password,base};
+module.exports={FakeCloud,platformContext,session,accounts,cloud,publicKey,password,base,openManagement,openAccount};
 if(require.main===module)main().catch(error=>{console.error(error.stack);process.exitCode=1;});

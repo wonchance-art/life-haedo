@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>해도 · 본문 중심 시안</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/design-social/ui.css">
+</head>
+<body>
+  <a class="s-skip" href="#socialMain">본문으로 이동</a>
+  <details class="s-review" id="reviewOptions">
+    <summary>시안 비교</summary>
+    <div class="s-review-content">
+    <p>본문 중심 · 익명 샘플 · 담기와 발췌는 새로고침하면 초기화됩니다.</p>
+    <div class="s-concepts" role="group" aria-label="비교할 콘셉트">
+      <button data-concept="color">A 넓은 목록</button><button data-concept="thread">B 문장 피드</button><button data-concept="pulse">C 빠른 탐색</button>
+    </div>
+    <label class="s-state-label">상태<select id="socialState"><option value="normal">기본</option><option value="empty">빈 상태</option><option value="loading">로딩</option><option value="error">오류</option></select></label>
+  </div>
+  </details>
+  <div id="socialApp"></div>
+  <div id="socialFeedback" class="s-toast" role="status" aria-live="polite" hidden></div>
+  <noscript>이 비교 시안은 JavaScript로 동작하며 개인 기록에 접근하지 않습니다.</noscript>
+  <script src="assets/design-review/sample-data.js"></script>
+  <script src="assets/design-social/ui.js"></script>
+</body>
+</html>

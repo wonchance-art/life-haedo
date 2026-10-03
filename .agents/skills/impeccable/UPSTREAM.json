@@ -1,0 +1,394 @@
+{
+  "schema_version": 1,
+  "checked_at": "2026-10-03T15:28:46+00:00",
+  "scope": "project",
+  "install_mode": "official_instruction_payload_only",
+  "upstream": "https://github.com/pbakaus/impeccable",
+  "skill_version": "4.5.0",
+  "release_tag": "skill-v4.5.0",
+  "release_commit": "508d7e8955de3b3caf2d8676e85206723d41a887",
+  "release_url": "https://github.com/pbakaus/impeccable/releases/tag/skill-v4.5.0",
+  "archive": {
+    "url": "https://github.com/pbakaus/impeccable/releases/download/skill-v4.5.0/universal.zip",
+    "asset_id": 604641942,
+    "sha256": "a6877c158ec90c63560728553d2e737081afa8a79b86c507fa8d15a81fffd475",
+    "digest_matched_github_release_api": true,
+    "signature_verified": false
+  },
+  "license": "Apache-2.0",
+  "third_party_sources": {
+    "platform_design_skills_commit": {
+      "repository": "https://github.com/ehmo/platform-design-skills",
+      "commit": "dc2be825d8b439caea78e9eaa8fb3ac23b0ff3e9",
+      "path": "LICENSE",
+      "license": "MIT"
+    }
+  },
+  "upstream_payload_unmodified": true,
+  "not_installed": [
+    "scripts/* (launchers, engine data and browser injection scripts)",
+    "agents/*.toml (engine-specific roles)",
+    "other-provider skill copies",
+    ".codex/hooks.json"
+  ],
+  "engine_version_referenced_by_release": "0.1.11",
+  "engine_installed": false,
+  "engine_executed": false,
+  "hooks_installed": false,
+  "files": [
+    {
+      "path": "LICENSE",
+      "source": "release_commit",
+      "bytes": 10766,
+      "sha256": "02bb8c3b4e70190e3986c0404ad2fd8d639b4f534252d82379cc1b502b6d1812"
+    },
+    {
+      "path": "NOTICE.md",
+      "source": "release_commit",
+      "bytes": 503,
+      "sha256": "c60a093c2845fd9fb82f9c6f742ece31f379f8190b535309d32d66c45ccffdcb"
+    },
+    {
+      "path": "SKILL.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/SKILL.md",
+      "bytes": 11868,
+      "sha256": "37680abf9a8e446619fcd33862718f483d197bf2652f966adca8dc54d2909b9d"
+    },
+    {
+      "path": "agents/openai.yaml",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/agents/openai.yaml",
+      "bytes": 235,
+      "sha256": "cbd8bd68fa00935dd0f179adb169252629cf7ee443ea9dc7db77e7ef2cf77446"
+    },
+    {
+      "path": "licenses/platform-design-skills.LICENSE",
+      "source": "platform_design_skills_commit",
+      "bytes": 1056,
+      "sha256": "1126322e2cc8d165adc4c792eeb195717de2bcc7b39be1ce77959d78e87ef685"
+    },
+    {
+      "path": "reference/adapt.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/adapt.md",
+      "bytes": 11301,
+      "sha256": "871a8e4d749b807c693ebabd83defbd6c76e1bd2a0f53a28a460cb1308ba8634"
+    },
+    {
+      "path": "reference/adapt.native.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/adapt.native.md",
+      "bytes": 3910,
+      "sha256": "6acc0bf221a4ddc6e5c6438348920b2ca2393b29c4314dbde2cdc23f2b1a9639"
+    },
+    {
+      "path": "reference/android.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/android.md",
+      "bytes": 4093,
+      "sha256": "058f81f256134841875fd3183e06b37a023de0c877fd2b9eecd97011640791fe"
+    },
+    {
+      "path": "reference/animate.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/animate.md",
+      "bytes": 5236,
+      "sha256": "d658c48ffbe0031e8e3b318996cad6ceafe29e40aa50d5bb25e4bf1d6839dc7c"
+    },
+    {
+      "path": "reference/audit.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/audit.md",
+      "bytes": 8528,
+      "sha256": "d5f83912eda93d42f93522bb74aeff0ea04d9c559577ec52fcccc130dd03166d"
+    },
+    {
+      "path": "reference/audit.native.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/audit.native.md",
+      "bytes": 8364,
+      "sha256": "960cb922bc934adbf9192e9428ff6bec1f382038166f02a785939c93b7391067"
+    },
+    {
+      "path": "reference/bolder.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/bolder.md",
+      "bytes": 3564,
+      "sha256": "f964506c0fae87b3c2c1db7016ddc9be9ef970bbcf5548d684b997b5d5991586"
+    },
+    {
+      "path": "reference/clarify.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/clarify.md",
+      "bytes": 4590,
+      "sha256": "173dd66abe65633910dcb04a51f40d6ff2a793f87088f022a02fc4cad24dd133"
+    },
+    {
+      "path": "reference/colorize.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/colorize.md",
+      "bytes": 4537,
+      "sha256": "bc5f71f1129d0f2c310d913d07c8dc609a1d25644121bd78c308f42d52a0b9e9"
+    },
+    {
+      "path": "reference/component-review.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/component-review.md",
+      "bytes": 7660,
+      "sha256": "514a27fc9830455828d337cfc2fa95fa86be8e5464501bbabb9aca09a66b40ad"
+    },
+    {
+      "path": "reference/craft-floor.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/craft-floor.md",
+      "bytes": 5500,
+      "sha256": "e802e4f7bdc89050a9c0f2ca506e1d493a2316e6e810c0336c57aa073717ef3e"
+    },
+    {
+      "path": "reference/craft.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/craft.md",
+      "bytes": 555,
+      "sha256": "9205e222bc6565b37fb504ceec93233c2d2a456802b69d16e6b1c44723907c4c"
+    },
+    {
+      "path": "reference/critique.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/critique.md",
+      "bytes": 45944,
+      "sha256": "cb8caddbb3919e5bf7f252143b519fb16db28a244642d937b186cb89962d9201"
+    },
+    {
+      "path": "reference/degraded/asset-producer.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/degraded/asset-producer.md",
+      "bytes": 8476,
+      "sha256": "754e9f0aa2101245a83cb17d8cc5bc49cf87997b29a83dedbfff283dbd0a8c4f"
+    },
+    {
+      "path": "reference/degraded/documenter.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/degraded/documenter.md",
+      "bytes": 3325,
+      "sha256": "bcc05ea92faebb5c74037a9d4263a5ce9a56f5ab07c8ab3c59ee704d8cade745"
+    },
+    {
+      "path": "reference/degraded/finish-reviewer.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/degraded/finish-reviewer.md",
+      "bytes": 15415,
+      "sha256": "275dd1b6e63bbd30d2713227c4f79b880a8bc4e01cc48d392068bb86939d3afa"
+    },
+    {
+      "path": "reference/degraded/manual-edit-applier.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/degraded/manual-edit-applier.md",
+      "bytes": 7196,
+      "sha256": "5fae7f8a2fc3ddd49ad0a413446dc44daedef5b6b7de5eb935bd2fbfad646d58"
+    },
+    {
+      "path": "reference/delight.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/delight.md",
+      "bytes": 3716,
+      "sha256": "098a891028ce59c212b747d3c70468dd750aff7053a703d1336045ed31e0da7c"
+    },
+    {
+      "path": "reference/distill.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/distill.md",
+      "bytes": 5717,
+      "sha256": "ea8432c90c30ecb0426662a681ead5c0941113079704e1a766cda09e85b15b4f"
+    },
+    {
+      "path": "reference/doctor.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/doctor.md",
+      "bytes": 5481,
+      "sha256": "a98b397cedeeaa1da57f3395b3d9b6c1fc477f4247fb9dc13e4da3da588283ff"
+    },
+    {
+      "path": "reference/document.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/document.md",
+      "bytes": 27521,
+      "sha256": "3673248740bcdd1122ccc610093ba2fe52f3943a61ce0b7170b74dc49e5b6098"
+    },
+    {
+      "path": "reference/extract.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/extract.md",
+      "bytes": 3433,
+      "sha256": "31b90048c0b540daec46762a10c2b6b6434737a89af005054d8b848d829d003b"
+    },
+    {
+      "path": "reference/generate.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/generate.md",
+      "bytes": 13219,
+      "sha256": "53628d05b7eff0d4f48b95e48fad40266452fe1b42f398bd88dd9328353e0dd8"
+    },
+    {
+      "path": "reference/harden.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/harden.md",
+      "bytes": 9450,
+      "sha256": "16ba7fca1973c5faf53dd2ca523559129c0fe9e5f8d50b645f527afa78186cd2"
+    },
+    {
+      "path": "reference/hooks.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/hooks.md",
+      "bytes": 13922,
+      "sha256": "56cc1bba51e6805de370160ce4a9399fef3740571204f13c3c751725870305e5"
+    },
+    {
+      "path": "reference/init.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/init.md",
+      "bytes": 11536,
+      "sha256": "bb069b43c09109d7031b0374e31955749fec657b252d39782f11e8985aca2b51"
+    },
+    {
+      "path": "reference/ios.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/ios.md",
+      "bytes": 3812,
+      "sha256": "40c87038b5f75147a5952a96237acf312a327bf70c1bcd8e0a5f064625ae9668"
+    },
+    {
+      "path": "reference/layout.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/layout.md",
+      "bytes": 5161,
+      "sha256": "0bc7d7971b3edf2acd0580e847458dc6d84129d90715b452799ace3bed815c7c"
+    },
+    {
+      "path": "reference/live-setup.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/live-setup.md",
+      "bytes": 8186,
+      "sha256": "2b5b2fbf5f658f34ea1997fb1aeebe01604d05187f75c6a4f1f55a5bc78520a4"
+    },
+    {
+      "path": "reference/live.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/live.md",
+      "bytes": 36490,
+      "sha256": "68c5636a7858dd0b5137a9229c15e25fdc2ee40a0f8a4e9d809f78e809256262"
+    },
+    {
+      "path": "reference/mode-operate.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/mode-operate.md",
+      "bytes": 4483,
+      "sha256": "385a0efe833bd4afe4a257e7159590de0cf1b7fd8f7b213b732f1e537c62dab7"
+    },
+    {
+      "path": "reference/mode-persuade.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/mode-persuade.md",
+      "bytes": 3638,
+      "sha256": "21e78c8a77badb3f83290cd4577ed3b24bd4dd3b57136d7da75733d4f3ee9ac0"
+    },
+    {
+      "path": "reference/mode-read.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/mode-read.md",
+      "bytes": 4396,
+      "sha256": "a569989e6a3d6453b4c45e9474e162a15cc54e11732ac6baa7990a6e7cccc0b5"
+    },
+    {
+      "path": "reference/new-work.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/new-work.md",
+      "bytes": 57020,
+      "sha256": "634257e766b1fecacd25e27dbfc7e21ef3b440b01e94e92b8b17711018d8a661"
+    },
+    {
+      "path": "reference/onboard.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/onboard.md",
+      "bytes": 7740,
+      "sha256": "ef2dde00030580ed2765cbf7be9b2ea4a6f64cb915b804fd6f6abcf38051c7b9"
+    },
+    {
+      "path": "reference/operate.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/operate.md",
+      "bytes": 4145,
+      "sha256": "a9d2203acd45ca33a13d5c68b02b23ed512425ac15f0e8438318ed124b43729d"
+    },
+    {
+      "path": "reference/optimize.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/optimize.md",
+      "bytes": 7614,
+      "sha256": "f672ef8251a3ed4051a053d30819664951b17540b2899acd27d20e500c234abc"
+    },
+    {
+      "path": "reference/overdrive.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/overdrive.md",
+      "bytes": 9178,
+      "sha256": "fce6688138d2ceb1e3d2cde5231f54b1d8dc8748b4c95a7919aa83b6f924cf96"
+    },
+    {
+      "path": "reference/polish.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/polish.md",
+      "bytes": 6646,
+      "sha256": "81666fc7f783b4e3514db6554e713dc0479bd9cdedb06e93d15f8b579aae869a"
+    },
+    {
+      "path": "reference/quieter.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/quieter.md",
+      "bytes": 4952,
+      "sha256": "190a4e642ca362d7499f3c3ab123e21f18f75457d11f072b545a183f296e6495"
+    },
+    {
+      "path": "reference/region-map.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/region-map.md",
+      "bytes": 3361,
+      "sha256": "778cedc9199b407d3e23fa1041e38d548b00b1101a33517aa2a2eb299f9d0edc"
+    },
+    {
+      "path": "reference/routing.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/routing.md",
+      "bytes": 3336,
+      "sha256": "77ae09542fbc10aa4e8b119d6fd19359908a47c13c30068d6a150bfdb50e3e10"
+    },
+    {
+      "path": "reference/shape.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/shape.md",
+      "bytes": 3547,
+      "sha256": "a55f016c046cb6a27c55bd7f346375aeb506a755c4fbca19a5f92dbd42309c23"
+    },
+    {
+      "path": "reference/typeset.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/typeset.md",
+      "bytes": 5256,
+      "sha256": "442749aed338f51c1a3ccfb182c6ade9b74b90590b67984062ac94a5b100e914"
+    },
+    {
+      "path": "reference/visualize.md",
+      "source": "release_archive",
+      "archive_path": ".agents/skills/impeccable/reference/visualize.md",
+      "bytes": 12985,
+      "sha256": "88549c11ea55d5dfc9f551db9a9c270d7362a9d42aa83db7747c9a7f020e1255"
+    }
+  ],
+  "release_published_at": "2026-10-02T02:35:11Z",
+  "observed_main_commit": "e103efe779e2dd01274dabae83531fef00bf2563",
+  "public_advisories": {
+    "count": 0,
+    "source": "https://api.github.com/repos/pbakaus/impeccable/security-advisories?per_page=100",
+    "meaning": "No published repository advisories returned at checked_at; not a comprehensive vulnerability assessment."
+  }
+}

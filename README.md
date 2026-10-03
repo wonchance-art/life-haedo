@@ -5,6 +5,8 @@
 
 [배포 사이트](https://wonchance-art.github.io/life-haedo/) · 로컬 변경은 배포 전까지 사이트에 반영되지 않는다.
 
+자료 화면은 승인된 본문 중심 한 열과 A 인용 아이콘을 [실제 검색·원문·발췌 저장](docs/design-review/integration.md)에 연결했다. 후속으로 [가져오기·내 발췌·주제 모음](docs/design-review/collections-integration.md)도 정리하고 로컬 검증을 마쳤다. 이번 디자인 변경은 공개 배포 전이다. `social-sample.html`과 `design-sample.html`은 저장 기능에 연결하지 않은 [이전 비교 시안](docs/design-review/README.md)이며 후속 화면 개발은 [DESIGN.md](DESIGN.md)를 따른다.
+
 ## 사용
 
 1. 공개 홈에서 Google 로그인 후 `내 공간`을 연다. `새 연표`에서 이름과 기준 날짜를 입력한다. 기존 문서는 목록에 남는다.
@@ -15,7 +17,7 @@
 - 행복도는 −1~+1. 같은 달의 사건·명시적 값은 평균을 내고, 기록이 없는 달은 기간 값으로 채운다.
 - 연표에서 드래그·확대·기간 조절, 실행 취소/다시 실행, 지도·생애 격자, PNG/SVG 내보내기를 지원한다.
 - 데이터는 브라우저 localStorage에 저장된다. 저장 상태는 상단에 표시된다. 브라우저 데이터 삭제에 대비해 파일 백업을 보관한다.
-- 로그인은 공용 Supabase SDK의 Google OAuth·PKCE를 사용한다. 사용자가 별도 DB 키나 비밀번호를 입력하지 않는다. 운영 Google 제공자·콜백 등록과 Mac Comet에서의 실제 로그인·개인 화면 복귀를 확인했다. 공개 배포 후의 로그인 재확인은 남아 있다.
+- 로그인은 공용 Supabase SDK의 Google OAuth·PKCE를 사용한다. 사용자가 별도 DB 키나 비밀번호를 입력하지 않는다. 운영 Google 제공자·콜백 등록과 Mac Comet에서의 실제 로그인·개인 화면 복귀를 확인했다. 공용 인증 PR #17은 병합되었으며 사용자의 정상 작동 확인을 받은 기반이다. 이번 디자인 검증과 이전 인증 검증은 구분한다.
 - 계정 간 서버 접근은 RLS, 기기 자료 노출은 계정별 저장과 화면 보호로 제한한다. 기존 무소유 연표는 원본 백업·본인 확인 후 새 계정 사본으로 연결한다.
 
 ## 자료 모아보기
@@ -62,7 +64,7 @@ Node 없이 화면만 실행하려면 `python3 scripts/dev-server.py`. 이 서�
 - `npm run check`: JavaScript 구문, 로컬 리소스와 PWA 셸.
 - `npm test`: 날짜·데이터 보존·동기화 충돌·서비스워커 회귀 검사.
 - 실제 편집과 모바일 화면은 프로젝트 스킬의 격리 브라우저 절차로 검증한다.
-- 여러 파일 검토와 정확한 원문 검색을 포함한 통합 검사: Node 181개·브라우저 60개 통과. 별도 관리자 검증에서 실제 Mac Comet의 Google 로그인·개인 공간 새로고침·자료 화면 진입을 확인했다. iPad/iPhone·한글 IME·Files 제공자는 미검증이며 공개 배포는 대기다. [통합 검증의 환경과 한계](docs/supabase-integration.md#실제-로그인-확인과-남은-외부-항목), [검색 단위의 검사별 결과와 한계](docs/life-tools-design/r2-search.md#검증-상태)를 참고한다.
+- 이전 기능 통합 검사에서 여러 파일 검토와 정확한 원문 검색을 포함해 Node 181개·브라우저 60개가 통과했다. 별도 관리자 검증에서 실제 Mac Comet의 Google 로그인·개인 공간 새로고침·자료 화면 진입을 확인했다. iPad/iPhone·한글 IME·Files 제공자는 미검증이다. 해당 기능 PR #17/#19는 병합되었으며 이번 디자인 변경의 검증·미배포 상태는 [별도 기록](docs/design-review/integration.md)을 따른다. [통합 검증의 환경과 한계](docs/supabase-integration.md#실제-로그인-확인과-남은-외부-항목), [검색 단위의 검사별 결과와 한계](docs/life-tools-design/r2-search.md#검증-상태)를 참고한다.
 - `main` 푸시는 GitHub Pages 배포로 이어진다.
 
 ## 코드와 작업 지침
