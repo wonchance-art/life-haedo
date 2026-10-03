@@ -12,19 +12,19 @@
 };
   const options = [
     { id:'a', name:'짧은 두 획', description:'고리 없이, 짧고 가벼운 선만.',
-      shape:'<path d="M8.5 7.5v5l-2 4M17.5 7.5v5l-2 4"/>' },
+      shape:'<path d="M7.5 4v9.5L4.5 20M19.5 4v9.5L16.5 20"/>' },
     { id:'b', name:'작은 쉼표', description:'작은 동그라미와 짧은 꼬리.',
-      shape:'<circle cx="7.5" cy="9.5" r="2.4" fill="currentColor" stroke="none"/><path d="M9.6 10c0 3-1.4 5-3.6 6.4"/><circle cx="16.5" cy="9.5" r="2.4" fill="currentColor" stroke="none"/><path d="M18.6 10c0 3-1.4 5-3.6 6.4"/>' },
+      shape:'<circle cx="6.5" cy="6.5" r="3.5" fill="currentColor" stroke="none"/><path d="M9.5 8c0 5-1.5 9-5 12"/><circle cx="17.5" cy="6.5" r="3.5" fill="currentColor" stroke="none"/><path d="M20.5 8c0 5-1.5 9-5 12"/>' },
     { id:'c', name:'채운 따옴표', description:'빈 구멍 없이 또렷한 인용부호.',
-      shape:'<path fill="currentColor" stroke="none" d="M6 7a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h1l-1.5 4h2L10 12V8a1 1 0 0 0-1-1Z M15 7a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h1l-1.5 4h2L19 12V8a1 1 0 0 0-1-1Z"/>' },
+      shape:'<path fill="currentColor" stroke="none" d="M4.5 3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2l-3 8h3L10 12V4a1 1 0 0 0-1-1Z M15.5 3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2l-3 8h3L21 12V4a1 1 0 0 0-1-1Z"/>' },
     { id:'d', name:'인용 괄호', description:'따옴표 대신, 고른 구절을 감싸는 표시.',
-      shape:'<path d="M10 6H6a1 1 0 0 0-1 1v7M14 18h4a1 1 0 0 0 1-1v-7"/>' }
+      shape:'<path d="M10 3H4a1 1 0 0 0-1 1v10M14 21h6a1 1 0 0 0 1-1V10"/>' }
   ];
   const svg = (shape,size=20) => `<svg class="s-glyph" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${shape}</svg>`;
   const cell = (name,shape) => `<span class="q-icon-cell ${name==='quote'?'is-quote':''}" data-glyph="${name}">${svg(shape)}</span>`;
   const nav = option => ['book','search','bookmark','quote','plus'].map(name=>cell(name,name==='quote'?option.shape:neighbors[name])).join('');
   const group = document.querySelector('#quoteOptions');
-  group.innerHTML=options.map(option=>`<button class="q-option" data-option="${option.id}" aria-label="${option.id.toUpperCase()} ${option.name} 선택" aria-pressed="false"><span class="q-title"><span class="q-letter">${option.id.toUpperCase()}</span>${option.name}</span><span class="q-large">${svg(option.shape,56)}</span><span class="q-description">${option.description}</span><span class="q-context" aria-hidden="true">${nav(option)}</span></button>`).join('');
+  group.innerHTML=options.map(option=>`<button class="q-option" data-option="${option.id}" aria-label="${option.id.toUpperCase()} ${option.name} 선택" aria-pressed="false"><span class="q-title"><span class="q-letter">${option.id.toUpperCase()}</span>${option.name}</span><span class="q-description">${option.description}</span><span class="q-context" aria-hidden="true">${nav(option)}</span></button>`).join('');
   function choose(id) {
     const option=options.find(item=>item.id===id);
     group.querySelectorAll('[data-option]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.option===id)));
