@@ -56,7 +56,7 @@ Cloud HTTP 검사의 합성 자료 8행은 2026-10-03 Local 관리자가 정리�
 - `HAEDO_SUPABASE_URL`·`HAEDO_SUPABASE_KEY`를 검증한 해도 전용 프로젝트의 URL·publishable key로 다시 등록했다. 값은 로그·소스·이 문서에 남기지 않았다.
 - Supabase Site URL을 공개 홈 주소로 설정했다. 배포된 `login.html`과 `login.html?next=**`, 로컬 `http://127.0.0.1:4173/login.html`과 그 `?next=**` 경로, 총 4개를 저장했다. 관리자 화면 새로고침 후 유지 여부를 확인했다.
 - 실제 연결 값으로 공개 산출물을 준비했다. 보호 페이지·공용 SDK·설정 주입·빈 소스 설정·내부 파일 제외·허용한 SQL 다운로드만 포함하는 6개 조건을 확인했다. 정적 검사는 HTML 13·JS 28·참조 158 및 PWA 셸을 통과했다. 앱 코드를 변경하지 않아 이미 통과한 Node 181개·브라우저 60개는 반복하지 않았다.
-- Google 제공자 인증정보는 사용자 직접 입력을 기다린다. 실제 Google 로그인 검증과 공개 배포는 아직 완료하지 않았다.
+- 사용자가 Google 웹 OAuth 인증정보를 입력·저장했고 실제 `/auth/v1/settings` HTTP 200에서 Google 활성화를 확인했다. nonce 검사 생략·이메일 없는 사용자 허용은 모두 꺼져 있다. 실제 SDK의 로그인 요청에서 Google의 `redirect_uri_mismatch`를 확인했다. 같은 웹 클라이언트의 기존 반환 주소 1개에 해도 콜백이 없어, 기존 주소를 보존한 추가 입력을 준비했다. Google Cloud 최종 저장과 실제 로그인 검증은 남아 있다.
 
 ## 오프라인·배포 경계
 
@@ -68,7 +68,7 @@ Pages 준비에 `life.html`과 단일 SDK·공용 모듈을 포함한다. 공개
 
 ## 아직 외부 확인이 필요한 항목
 
-실제 `/auth/v1/settings`에서 Google 제공자는 아직 비활성화다. Supabase의 Site URL과 로그인 반환 경로는 위 관리자 후속에서 설정했지만, 기존 Google Cloud 프로젝트의 웹 OAuth Client ID·Secret 및 callback 등록은 남아 있다. 사용자에게 Comet의 Google 제공자 화면에서 인증정보를 직접 입력·활성화·저장하도록 요청했다. Secret은 채팅이나 저장소에 넣지 않으며 모의 OAuth 검사를 실제 제공자 로그인으로 보고하지 않는다.
+Google 제공자 활성화·웹 클라이언트 ID 형식·전용 Supabase 콜백의 OAuth 요청 사용을 확인했다. 실제 HTTP 요청은 Google로 302를 반환했지만, 실제 SDK를 사용한 브라우저 로그인은 Google에서 `redirect_uri_mismatch`로 중단됐다. Google Cloud의 같은 클라이언트에 해도 콜백을 등록한 뒤 다시 확인해야 한다. 기존 반환 주소를 보존한 추가 입력은 준비했으며 최종 저장 승인을 요청했다. Secret은 채팅이나 저장소에 넣지 않았으며 Google 계정 인증·앱 복귀 성공은 아직 확인하지 않았다.
 
 실제 Google 로그인·Mac/iPad/iPhone 체험·`main` 병합과 공개 배포는 아직 완료하지 않았다. 합성 자료 정리와 PR #19의 PR #17 브랜치 병합은 완료했다. GitHub API 접근은 환경 설정 반영 후 실제 조회·PR 생성에 성공했다. 아래는 최초 통합 커밋 `f18b5ca`의 검사 기록이다. 브라우저의 Auth/HTTP는 익명 모사이며 실제 SDK·IndexedDB·서비스워커를 실행했다. 이후 R2의 최신 검사 결과는 다음 절과 [R2 구현 기록](life-tools-design/r2-implementation.md)을 따른다.
 
@@ -101,4 +101,4 @@ Node **173/173**, 정적 점검, 브라우저 **54/54**(R1 23·동기화 14·공
 
 검색 변경 후 Node **181/181**, 정적 검사 **HTML 13·JS 28·참조 158**, 브라우저 **60/60**(검색 6·R1 23·동기화 14·공용 인증/업데이트 9·다중 파일 8)을 통과했다. 예상 밖 console/pageerror는 0개다. 의도한 전송 실패는 R1 1개·동기화 7개·플랫폼 1개로 구분했다. 1440/820/390px 검색·원문 화면 6장과 긴 원문의 중간/끝 구절 가시성·목록 복귀를 확인했다.
 
-실제 보존한 `7f57ac5` v52 산출물에서 v53으로 업데이트하여 원문·미적용 초안·기존 로컬 자료 보존 및 새 캐시 6개 모듈의 SHA-256 일치를 확인했다. v52는 공개 배포 가정이 아닌 Cloud 작업 산출물이다. 로그는 `/tmp/life-search-node.log`, `/tmp/life-search-browser-final.log`, `/tmp/life-search-{r1,batch,sync,platform}.log`에 있다. 새 SQL·운영 DB 행·인증·백업 형식 변경은 없다. 실제 Google 설정 조회는 여전히 비활성화이며 Apple 실기·`main` 병합·배포는 위 외부 확인 항목으로 남는다. 관리자 합성 행 정리는 위 후속 기록과 같이 완료했다.
+실제 보존한 `7f57ac5` v52 산출물에서 v53으로 업데이트하여 원문·미적용 초안·기존 로컬 자료 보존 및 새 캐시 6개 모듈의 SHA-256 일치를 확인했다. v52는 공개 배포 가정이 아닌 Cloud 작업 산출물이다. 로그는 `/tmp/life-search-node.log`, `/tmp/life-search-browser-final.log`, `/tmp/life-search-{r1,batch,sync,platform}.log`에 있다. 새 SQL·운영 DB 행·인증·백업 형식 변경은 없다. Google 제공자는 이후 관리자 작업에서 활성화됐으며 콜백 등록·실제 로그인·Apple 실기·`main` 병합·배포는 위 외부 확인 항목으로 남는다. 관리자 합성 행 정리는 위 후속 기록과 같이 완료했다.
