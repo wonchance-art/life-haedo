@@ -1,4 +1,4 @@
-/* Four original quote candidates. Neighbor SVGs: Lucide 1.51.0;
+/* Three original outline candidates. Neighbor SVGs: Lucide 1.51.0;
    source and ISC/Feather MIT notices: vendor/lucide/. Comparison only. */
 (() => {
   'use strict';
@@ -11,14 +11,12 @@
   "info": "<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"M12 16v-4\" /><path d=\"M12 8h.01\" />"
 };
   const options = [
-    { id:'a', name:'짧은 두 획', description:'고리 없이, 짧고 가벼운 선만.',
-      shape:'<path d="M7.5 4v9.5L4.5 20M19.5 4v9.5L16.5 20"/>' },
-    { id:'b', name:'작은 쉼표', description:'작은 동그라미와 짧은 꼬리.',
-      shape:'<circle cx="6.5" cy="6.5" r="3.5" fill="currentColor" stroke="none"/><path d="M9.5 8c0 5-1.5 9-5 12"/><circle cx="17.5" cy="6.5" r="3.5" fill="currentColor" stroke="none"/><path d="M20.5 8c0 5-1.5 9-5 12"/>' },
-    { id:'c', name:'채운 따옴표', description:'빈 구멍 없이 또렷한 인용부호.',
-      shape:'<path fill="currentColor" stroke="none" d="M4.5 3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2l-3 8h3L10 12V4a1 1 0 0 0-1-1Z M15.5 3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2l-3 8h3L21 12V4a1 1 0 0 0-1-1Z"/>' },
-    { id:'d', name:'인용 괄호', description:'따옴표 대신, 고른 구절을 감싸는 표시.',
-      shape:'<path d="M10 3H4a1 1 0 0 0-1 1v10M14 21h6a1 1 0 0 0 1-1V10"/>' }
+    { id:'a', name:'둥근 따옴표', description:'둥근 사각형과 부드러운 끝선.',
+      shape:'<path d="M10 12H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v8a6 6 0 0 1-6 6M21 12h-5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v8a6 6 0 0 1-6 6"/>' },
+    { id:'b', name:'짧은 따옴표', description:'같은 둥근 모서리, 짧게 꺾인 끝선.',
+      shape:'<path d="M10 13H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v10l-3 4M21 13h-5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v10l-3 4"/>' },
+    { id:'c', name:'문장 인용', description:'인용선과 글줄로 발췌를 표현.',
+      shape:'<path d="M4 4v16M10 6h11M10 12h11M10 18h7"/>' }
   ];
   const svg = (shape,size=20) => `<svg class="s-glyph" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${shape}</svg>`;
   const cell = (name,shape) => `<span class="q-icon-cell ${name==='quote'?'is-quote':''}" data-glyph="${name}">${svg(shape)}</span>`;
