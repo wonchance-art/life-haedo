@@ -5,7 +5,7 @@
 
 [배포 사이트](https://wonchance-art.github.io/life-haedo/) · 로컬 변경은 배포 전까지 사이트에 반영되지 않는다.
 
-자료 화면의 [디자인 비교·스크린샷·검증](docs/design-review/README.md)을 별도로 제공한다. `design-sample.html`은 같은 한글 자료로 검색/원문 3방향과 UI 기준을 비교하는 독립 시안이며, 운영 UI와 데이터에는 연결하지 않았다. 후속 화면 개발은 [DESIGN.md](DESIGN.md)를 따른다.
+자료 화면의 [최신 소셜 스타일 비교·스크린샷·검증](docs/design-review/README.md)을 별도로 제공한다. `social-sample.html`에서 컬러 모음·문장 피드·빠른 탐색 3안의 담기/발췌/선택 반응을 비교한다. 기존 `design-sample.html`은 첫 시안 이력이며 두 시안 모두 운영 데이터에는 연결하지 않았다. 후속 화면 개발은 [DESIGN.md](DESIGN.md)를 따른다.
 
 ## 사용
 
