@@ -5,7 +5,7 @@ description: 해도의 화면 추가·수정·디자인 검토에 사용한다. 
 
 # 해도 화면 작업
 
-경로는 저장소 루트 기준이다. [AGENTS.md](../../../AGENTS.md), [PRODUCT.md](../../../PRODUCT.md), [DESIGN.md](../../../DESIGN.md)를 읽고 현재 요청에 해당하는 화면만 다룬다. 현재 소셜 스타일 비교 시안과 이전 종이색 시안을 구분한다. 추천안을 사용자 확정이나 운영 적용 완료로 해석하지 않는다.
+경로는 저장소 루트 기준이다. [AGENTS.md](../../../AGENTS.md), [PRODUCT.md](../../../PRODUCT.md), [DESIGN.md](../../../DESIGN.md)를 읽고 현재 요청에 해당하는 화면만 다룬다. 현재 본문 중심 시안 03, 이전 소셜 스타일 02와 종이색 01을 구분한다. 추천안을 사용자 확정이나 운영 적용 완료로 해석하지 않는다.
 
 공식 Impeccable 지침은 `../impeccable/SKILL.md`와 `../impeccable/INSTALLATION.md`를 따른다. 현재는 프로젝트 내부 지침 배포본이며 바이너리·launcher·자동 hook을 설치하지 않았다. 컨텍스트를 직접 읽는 지원된 fallback을 사용하고 엔진 검사 결과를 만들어내지 않는다. 외부 스킬의 일반적인 확인 질문보다 현재 사용자의 명시 요청·기존 합의가 우선한다.
 
@@ -14,7 +14,7 @@ description: 해도의 화면 추가·수정·디자인 검토에 사용한다. 
 - 검색·가져오기는 Operate, 긴 원문은 Read 모드다. 실제 코드와 최신 스크린샷을 보고 수정 범위를 정한다.
 - 동일한 컴포넌트를 찾고 재사용한다. 최신 비교는 `social-sample.html`과 `assets/design-social/`다. 이전 `design-sample.html`은 비교 이력이다. 운영 연결에는 해당 화면의 기존 CSS/저장 경계를 함께 확인한다.
 - 새로운 라이브러리는 최신 공식 버전·라이선스·유지관리·적합성을 조사하고 [참고 기록](../../../docs/design-review/references.md)에 채택/참고/제외를 구분한다. 작은 기능마다 전체 후보를 재조사하지 않는다.
-- UI 편집 직전에 Impeccable `reference/craft-floor.md`를 읽고 최신 사용자 시각 방향과 실제 작업 목적을 우선한다. 이번의 생동감 있는 선택·저장 반응은 허용된 표현이다. 모션은 사용자 행동의 상태를 보여주며 reduced-motion을 제공한다.
+- UI 편집 직전에 Impeccable `reference/craft-floor.md`를 읽고 최신 사용자 시각 방향과 실제 작업 목적을 우선한다. 본문을 앞세우고 메뉴·프레임은 최소화한다. 아이콘 탐색에는 접근 가능한 이름·초점/hover 도움말을 붙인다. 선택·저장 반응은 짧게 유지한다. 모션은 사용자 행동의 상태를 보여주며 reduced-motion을 제공한다.
 
 ## 구현과 확인
 
@@ -26,6 +26,6 @@ description: 해도의 화면 추가·수정·디자인 검토에 사용한다. 
 
 ## 실행
 
-`npm run dev` 후 `node scripts/check-social-preview.cjs`로 최신 시안을 검사한다. `node scripts/check-design-preview.cjs`는 이전 시안용이다. `node scripts/design-audit.cjs`는 기존 앱을 모의 Auth와 익명 자료로 다시 캡처한다. 실제 Supabase에는 접근하지 않는다. 최신 검증은 `docs/design-review/social-verification.md`를 따른다. 시안 검사 전체를 작은 운영 UI 수정의 필수 검사로 과도하게 확장하지 않는다.
+`npm run dev` 후 `node scripts/check-social-preview.cjs`로 최신 시안을 검사한다. `node scripts/check-design-preview.cjs`는 이전 시안용이다. `node scripts/design-audit.cjs`는 기존 앱을 모의 Auth와 익명 자료로 다시 캡처한다. 실제 Supabase에는 접근하지 않는다. 최신 검증은 `docs/design-review/minimal-verification.md`를 따른다. 숨긴 필터·출처·발췌를 실제로 열고 닫기/초점 복귀도 확인한다. 시안 검사 전체를 작은 운영 UI 수정의 필수 검사로 과도하게 확장하지 않는다.
 
 보고는 이번에 수행한 기능 검사 / 시각 검토 / 실제 기기 체험 / 배포를 구분한다. 장치 폭만 바꾼 Chromium 결과를 Apple 실기 검증으로 쓰지 않는다.

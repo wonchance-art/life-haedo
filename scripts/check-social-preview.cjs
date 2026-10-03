@@ -1,15 +1,15 @@
-/* Social-style UI comparison checks with anonymous, in-memory samples.
+/* Minimal reading UI comparison checks with anonymous, in-memory samples.
  * Start npm run dev first. This does not test native Apple devices or live accounts.
  * Uses an existing Playwright/Chromium installation; no package or remote writes.
- * Evidence and the machine-readable report are overwritten in .local/design-review/social.
+ * Evidence and the machine-readable report are overwritten in .local/design-review/minimal.
  */
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
-const out = path.join(root, '.local/design-review/social');
-const evidence = path.join(root, 'docs/design-review/evidence/social');
+const out = path.join(root, '.local/design-review/minimal');
+const evidence = path.join(root, 'docs/design-review/evidence/minimal');
 const base = new URL(process.env.BASE_URL || 'http://127.0.0.1:4173');
 assert(['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname), 'Only a local preview server is permitted');
 const sizes = [{ name: 'desktop', width: 1440, height: 1000 }, { name: 'tablet', width: 820, height: 1000 }, { name: 'phone', width: 390, height: 844 }];
@@ -20,12 +20,26 @@ function playwright() {
   throw new Error('Use an existing Playwright installation via PW_MODULE_PATH.');
 }
 
+function navigation(page, tab) {
+  return page.locator('.s-nav [data-tab="' + tab + '"]:visible, .s-bottom [data-tab="' + tab + '"]:visible').first();
+}
+
+async function openFilters(page) {
+  if (await page.locator('#socialFilters').isHidden()) await page.locator('#filterToggle').click();
+  await page.locator('#socialFilters').waitFor({ state: 'visible' });
+}
+
+async function openExcerpt(page) {
+  if (await page.locator('#excerptPanel').isHidden()) await page.locator('#excerptToggle').click();
+  await page.locator('#excerptPanel').waitFor({ state: 'visible' });
+}
+
 // Runs inside Chromium. Measures rendered text over its actual ancestor surfaces.
 // Native option popups, images, browser chrome and disabled controls are out of scope.
 function inspect() {
   const visible = el => {
     const r = el.getBoundingClientRect(), css = getComputedStyle(el);
-    return r.width > 0 && r.height > 0 && css.visibility === 'visible' && css.display !== 'none' && !el.closest('[hidden], [inert]');
+    return r.width > 0 && r.height > 0 && css.visibility === 'visible' && css.display !== 'none' && !el.closest('[hidden], [inert], .s-sr');
   };
   const rgb = value => {
     const match = value.match(/^rgba?\(([^)]+)\)$/);
@@ -63,8 +77,10 @@ function inspect() {
   const interactive = Array.from(document.querySelectorAll('button, a[href], input, select, textarea, summary')).filter(visible).filter(el => !el.disabled && !el.matches('.s-skip'));
   const targets = interactive.map(el => { const r = el.getBoundingClientRect(); return { ...describe(el), width: +r.width.toFixed(1), height: +r.height.toFixed(1) }; });
   const boundaries = interactive.filter(el => el.matches('input, select, textarea')).map(el => {
-    const css = getComputedStyle(el), border = rgb(css.borderTopColor), surface = bg(el);
-    return { ...describe(el), ratio: border ? +ratio(over(border, surface), surface).toFixed(3) : null };
+    const css = getComputedStyle(el), surface = bg(el);
+    const edges = ['Top', 'Right', 'Bottom', 'Left'].filter(side => parseFloat(css['border' + side + 'Width']) > 0 && css['border' + side + 'Style'] !== 'none');
+    const contrasts = edges.map(side => rgb(css['border' + side + 'Color'])).filter(Boolean).map(border => ratio(over(border, surface), surface));
+    return { ...describe(el), ratio: +(contrasts.length ? Math.min(...contrasts) : ratio(surface, bg(el.parentElement))).toFixed(3) };
   });
   const unnamed = interactive.filter(el => {
     const name = el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent.trim() || el.labels?.[0]?.textContent.trim();
@@ -84,11 +100,14 @@ function inspect() {
     width: innerWidth, height: innerHeight, documentHeight: document.documentElement.scrollHeight,
     horizontalOverflow: document.documentElement.scrollWidth > innerWidth + 1, overflowingElements: overflow,
     firstResultY: title ? Math.round(title.getBoundingClientRect().top + scrollY) : null,
+    firstBodyY: document.querySelector('#sourceBody') ? Math.round(document.querySelector('#sourceBody').getBoundingClientRect().top + scrollY) : null,
     resultCount: document.querySelectorAll('#socialResults .s-post').length,
     readingFont: document.querySelector('#sourceBody') ? getComputedStyle(document.querySelector('#sourceBody')).fontFamily : null,
     minTextContrast: Math.min(...text.map(t => t.ratio)), contrastFailures: text.filter(t => t.ratio + .001 < t.required),
     measuredText: text.length, smallTargets: targets.filter(t => t.width < 44 || t.height < 44), unnamed,
     controlBoundaryFailures: boundaries.filter(t => t.ratio !== null && t.ratio < 3),
+    collapsed: Object.fromEntries(['socialFilters', 'excerptPanel', 'sourceDetails', 'socialPeek'].map(id => [id, document.getElementById(id) ? !visible(document.getElementById(id)) : null])),
+    reviewOpen: !!document.querySelector('#reviewOptions[open]'),
     focusContrast,
     backgroundImages: Array.from(document.querySelectorAll('body *')).filter(visible).filter(el => getComputedStyle(el).backgroundImage !== 'none').map(el => ({ ...describe(el), image: getComputedStyle(el).backgroundImage })),
     longHeading: Array.from(document.querySelectorAll('h1,h2,h3')).filter(el => visible(el) && el.textContent.length > 60).map(el => ({ ...describe(el), clipped: el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1, lineHeight: getComputedStyle(el).lineHeight, height: el.getBoundingClientRect().height })),
@@ -98,10 +117,14 @@ function inspect() {
 
 async function main() {
   const connectedOnly = process.argv.includes('--connected-only');
+  const interactionsOnly = process.argv.includes('--interactions-only');
+  const sourceOnly = process.argv.includes('--source-disclosure-only');
+  const reportName = sourceOnly ? 'source-disclosure-report.json' : connectedOnly ? 'connected-report.json' : interactionsOnly ? 'interactions-report.json' : 'report.json';
   await fs.mkdir(out, { recursive: true }); await fs.mkdir(evidence, { recursive: true });
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
   const report = { capturedAt: new Date().toISOString(), browser: browser.version(), platform: 'Linux Chromium; viewport/touch simulation, not Apple hardware',
-    matrix: [], interactions: [], screenshots: [], failures: [], consoleErrors: [], pageErrors: [], blockedRequests: [], activity: [] };
+    mode: sourceOnly ? 'source-disclosure' : connectedOnly ? 'connected' : interactionsOnly ? 'interactions' : 'full', completed: false,
+    matrix: [], disclosures: [], interactions: [], screenshots: [], failures: [], consoleErrors: [], pageErrors: [], blockedRequests: [], activity: [] };
   function check(ok, description, detail) { if (!ok) report.failures.push({ description, detail }); }
   async function context(viewport, touch = false) {
     const context = await browser.newContext({ viewport, serviceWorkers: 'block', hasTouch: touch });
@@ -150,7 +173,12 @@ async function main() {
     check(Object.values(metrics.activity).every(n => n === 0), scene + ': no persistent storage or service worker access', metrics.activity);
   }
   try {
-    if (connectedOnly) {
+    if (sourceOnly) {
+      await sourceDisclosureEvidence({ context, go, capture, inspect, check, report });
+    } else if (connectedOnly) {
+      await connectedEvidence({ context, go, capture, inspect, check, report });
+    } else if (interactionsOnly) {
+      await interactionChecks({ context, go, capture, inspect, check, report });
       await connectedEvidence({ context, go, capture, inspect, check, report });
     } else {
     for (const size of sizes) {
@@ -159,6 +187,11 @@ async function main() {
         await go(page, concept, view, state);
         const scene = [concept, view, state, size.name].join('-');
         await measure(page, scene, { concept, view, state, viewport: size });
+        const hiddenTools = await page.evaluate(() => ({ review: !!document.querySelector('#reviewOptions[open]'), filters: document.querySelector('#socialFilters')?.hidden, excerpt: document.querySelector('#excerptPanel')?.hidden, source: document.querySelector('#sourceDetails')?.hidden }));
+        check(!hiddenTools.review, scene + ': comparison tools start collapsed', hiddenTools);
+        if (view === 'feed') check(hiddenTools.filters === true, scene + ': source/topic filters start collapsed', hiddenTools);
+        if (view === 'feed' && concept === 'pulse') check(await page.locator('#socialPeek').isHidden(), scene + ': preview starts collapsed');
+        if (view === 'reader' && state === 'normal') check(hiddenTools.excerpt === true && hiddenTools.source === true, scene + ': reading starts without excerpt/source panels', hiddenTools);
         if (state === 'normal') await capture(page, [concept, view, size.name].join('-'), true);
         else if (concept === 'color') await capture(page, scene);
       }
@@ -173,18 +206,54 @@ async function main() {
     }
     await ctx.close();
     await interactionChecks({ context, go, capture, inspect, check, report });
+    await connectedEvidence({ context, go, capture, inspect, check, report });
+    await sourceDisclosureEvidence({ context, go, capture, inspect, check, report });
     }
     check(!report.pageErrors.length, 'No browser page errors', report.pageErrors);
     check(!report.consoleErrors.length, 'No browser console errors', report.consoleErrors);
     check(!report.blockedRequests.length, 'No auth, remote or non-preview asset requests attempted', report.blockedRequests);
+    report.completed = true;
+  } catch (error) {
+    report.runnerError = error.message;
+    throw error;
   } finally {
     await browser.close();
-    await fs.writeFile(path.join(out, connectedOnly ? 'connected-report.json' : 'report.json'), JSON.stringify(report, null, 2) + '\n');
+    await fs.writeFile(path.join(out, reportName), JSON.stringify(report, null, 2) + '\n');
   }
-  console.log(JSON.stringify({ matrixScenes: report.matrix.length, interactions: report.interactions.length, screenshots: report.screenshots.length,
+  console.log(JSON.stringify({ matrixScenes: report.matrix.length, disclosedScenes: report.disclosures.length, interactions: report.interactions.length, screenshots: report.screenshots.length,
     failures: report.failures, consoleErrors: report.consoleErrors.length, pageErrors: report.pageErrors.length,
-    report: '.local/design-review/social/' + (connectedOnly ? 'connected-report.json' : 'report.json') }, null, 2));
+    report: '.local/design-review/minimal/' + reportName }, null, 2));
   if (report.failures.length) process.exitCode = 1;
+}
+
+async function sourceDisclosureEvidence({ context, go, capture, inspect, check, report }) {
+  for (const viewport of [{ name: 'phone', width: 390, height: 844 }, { name: 'desktop', width: 1440, height: 1000 }]) {
+    const ctx = await context({ width: viewport.width, height: viewport.height }, viewport.name === 'phone'), page = await ctx.newPage();
+    try {
+      await go(page, 'thread', 'reader');
+      await page.evaluate(() => scrollTo(0, Math.min(1200, document.documentElement.scrollHeight - innerHeight)));
+      const readingY = await page.evaluate(() => scrollY);
+      check(readingY > 700, viewport.name + ': source disclosure starts after meaningful reading scroll', readingY);
+      await page.locator('#sourceToggle').click();
+      const opened = await page.locator('#sourceDetails').evaluate(el => {
+        const first = el.querySelector('dt').getBoundingClientRect(), toolbar = document.querySelector('.s-reader-tools').getBoundingClientRect();
+        return { visible: !el.hidden, focused: el === document.activeElement, firstRowY: first.top, firstRowBottom: first.bottom, toolbarBottom: toolbar.bottom, viewportHeight: innerHeight, y: scrollY };
+      });
+      check(opened.visible && opened.focused && opened.firstRowY >= opened.toolbarBottom && opened.firstRowBottom < opened.viewportHeight,
+        viewport.name + ': requested source details move into view below the sticky toolbar', opened);
+      const metrics = await page.evaluate(inspect); report.disclosures.push({ concept: 'thread', panel: 'source-after-reading-scroll', viewport, ...metrics });
+      check(!metrics.horizontalOverflow && !metrics.contrastFailures.length && !metrics.smallTargets.length && !metrics.unnamed.length,
+        viewport.name + ': source details remain readable and operable after scrolling', { contrast: metrics.contrastFailures, targets: metrics.smallTargets, unnamed: metrics.unnamed });
+      await capture(page, 'thread-source-open-' + viewport.name, viewport.name === 'phone');
+      await page.keyboard.press('Escape');
+      const closed = await page.evaluate(() => ({ hidden: document.querySelector('#sourceDetails').hidden, focused: document.activeElement.id, y: scrollY }));
+      check(closed.hidden && closed.focused === 'sourceToggle' && Math.abs(closed.y - readingY) <= 1, viewport.name + ': Escape restores the reading position and source opener', { readingY, closed });
+      await page.locator('#sourceToggle').click(); await page.locator('#sourceToggle').click();
+      const toggled = await page.evaluate(() => ({ hidden: document.querySelector('#sourceDetails').hidden, focused: document.activeElement.id, y: scrollY }));
+      check(toggled.hidden && toggled.focused === 'sourceToggle' && Math.abs(toggled.y - readingY) <= 1, viewport.name + ': toggling source details closed restores the same reading position', { readingY, toggled });
+      report.interactions.push({ concept: 'thread', flow: 'Scrolled reading → visible source metadata → Escape/toggle → original scroll and focus', viewport });
+    } finally { await ctx.close(); }
+  }
 }
 
 async function connectedEvidence({ context, go, capture, inspect, check, report }) {
@@ -197,10 +266,12 @@ async function connectedEvidence({ context, go, capture, inspect, check, report 
       const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range); return selection.toString();
     });
     await page.waitForFunction(text => document.querySelector('#selectedQuote').textContent === text, selected);
+    await openExcerpt(page);
     const note = '다음에 다시 읽을 때는 이 문장이 마음에 남은 이유부터 살펴보기.';
     await page.locator('#excerptTopic').fill('읽기와 기록'); await page.locator('#excerptNote').fill(note);
     await page.locator('#addExcerpt').tap(); await page.keyboard.press('Escape');
-    await page.locator('[data-action="back"]').tap(); await page.locator('.s-tabs [data-tab="excerpts"]').tap();
+    if (await page.locator('#excerptPanel').isVisible()) await page.locator('#closeExcerpt').click();
+    await page.locator('[data-action="back"]').tap(); await navigation(page, 'excerpts').tap();
     const card = page.locator('.s-post[data-source-id="source-01"]');
     check(await card.locator('.s-inline-quote p').nth(0).textContent() === selected && await card.locator('.s-inline-quote p').nth(1).textContent() === note,
       'thread connected example keeps the original excerpt and the personal note separate');
@@ -215,9 +286,25 @@ async function connectedEvidence({ context, go, capture, inspect, check, report 
 }
 
 async function interactionChecks({ context, go, capture, inspect, check, report }) {
+  async function checkDisclosed(page, concept, panel) {
+    const metrics = await page.evaluate(inspect);
+    report.disclosures.push({ concept, panel, ...metrics });
+    check(!metrics.horizontalOverflow && !metrics.overflowingElements.length, concept + ': disclosed ' + panel + ' stays within the viewport', metrics.overflowingElements);
+    check(!metrics.contrastFailures.length && !metrics.controlBoundaryFailures.length, concept + ': disclosed ' + panel + ' keeps text and boundary contrast', { text: metrics.contrastFailures, boundary: metrics.controlBoundaryFailures });
+    check(!metrics.unnamed.length && !metrics.smallTargets.length, concept + ': disclosed ' + panel + ' keeps named 44px controls', { unnamed: metrics.unnamed, small: metrics.smallTargets });
+  }
   for (const concept of ['color', 'thread', 'pulse']) {
     const ctx = await context({ width: 390, height: 844 }, true), page = await ctx.newPage();
     await go(page, concept, 'feed');
+    check(await page.locator('#socialFilters').isHidden(), concept + ': filters are hidden before use');
+    await openFilters(page);
+    check(await page.locator('#filterToggle').getAttribute('aria-expanded') === 'true', concept + ': filter opener announces the expanded controls');
+    await checkDisclosed(page, concept, 'filters'); await capture(page, concept + '-filters-open-phone', concept === 'color');
+    await page.locator('#filterToggle').click();
+    check(await page.locator('#socialFilters').isHidden() && await page.locator('#filterToggle').getAttribute('aria-expanded') === 'false', concept + ': filter toggle closes its controls');
+    await openFilters(page); await page.locator('#socialOrigin').focus(); await page.keyboard.press('Escape');
+    check(await page.locator('#socialFilters').isHidden() && await page.locator('#filterToggle').evaluate(el => el === document.activeElement), concept + ': Escape closes filters and returns focus to their opener');
+    report.interactions.push({ concept, flow: 'Collapsed filters, toggle, expanded state and Escape focus restoration' });
     const firstBookmark = page.locator('[data-save]').first();
     const bookmarkId = await firstBookmark.getAttribute('data-save');
     const wasSaved = await firstBookmark.getAttribute('aria-pressed') === 'true';
@@ -225,9 +312,9 @@ async function interactionChecks({ context, go, capture, inspect, check, report 
     check(await page.locator('[data-save="' + bookmarkId + '"]').getAttribute('aria-pressed') === String(!wasSaved), concept + ': bookmark toggles its accessible state');
     check(await page.locator('#socialFeedback').isVisible() && /담았어요/.test(await page.locator('#socialFeedback').textContent()), concept + ': bookmark announces its result');
     await page.keyboard.press('Escape');
-    await page.locator('.s-tabs [data-tab="saved"]').tap();
+    await navigation(page, 'saved').tap();
     check(await page.locator('#socialResults .s-post').count() === 1 && await page.locator('#socialResults [data-source-id="' + bookmarkId + '"]').count() === 1, concept + ': saved tab shows only the chosen source');
-    await page.locator('.s-tabs [data-tab="all"]').tap();
+    await navigation(page, 'all').tap();
     await page.locator('[data-save="' + bookmarkId + '"]').tap();
     check(await page.locator('[data-save="' + bookmarkId + '"]').getAttribute('aria-pressed') === String(wasSaved), concept + ': bookmark toggle is reversible');
     await page.keyboard.press('Escape');
@@ -240,7 +327,15 @@ async function interactionChecks({ context, go, capture, inspect, check, report 
     check(await expand.getAttribute('aria-expanded') === 'false' && await page.locator('#expanded-source-01').isHidden(), concept + ': inline expansion closes reversibly');
     report.interactions.push({ concept, flow: 'Inline source passage expansion and collapse' });
 
-    await page.locator('.s-topic[data-topic="원문과 출처"]').tap();
+    if (concept === 'pulse') {
+      await page.locator('[data-preview="source-03"]').tap();
+      check(await page.locator('#socialPeek').isVisible() && await page.locator('#peekTitle').evaluate(el => el === document.activeElement), 'pulse: mobile preview opens only on request and focuses its heading');
+      await page.keyboard.press('Escape');
+      check(await page.locator('#socialPeek').isHidden() && await page.locator('[data-preview="source-03"]').evaluate(el => el === document.activeElement), 'pulse: mobile preview Escape restores its source opener');
+      report.interactions.push({ concept, flow: 'Mobile preview disclosure and Escape focus restoration' });
+    }
+
+    await openFilters(page); await page.locator('.s-topic[data-topic="원문과 출처"]').tap();
     check(await page.locator('#socialResults .s-post').count() === 1 && await page.locator('#social-open-source-06').count() === 1, concept + ': mobile topic filter reaches the last horizontally scrolled topic');
     const selectedTopic = await page.locator('.s-topic[data-topic="원문과 출처"]').evaluate(el => {
       const r = el.getBoundingClientRect(), parent = el.parentElement.getBoundingClientRect();
@@ -252,7 +347,7 @@ async function interactionChecks({ context, go, capture, inspect, check, report 
 
     await page.locator('#socialSearch').fill('따옴표');
     check(await page.locator('#socialResults .s-post').count() === 1 && await page.locator('#social-open-source-06').count() === 1, concept + ': literal Korean body search finds the source');
-    await page.locator('#socialOrigin').selectOption('apple-notes');
+    await openFilters(page); await page.locator('#socialOrigin').selectOption('apple-notes');
     check(await page.locator('#socialResults .s-post').count() === 0, concept + ': source filter intersects search results');
     await page.locator('#socialSearch').fill(''); await page.locator('#socialOrigin').selectOption('');
     const count = await page.locator('#socialResults .s-post').count();
@@ -280,6 +375,13 @@ async function interactionChecks({ context, go, capture, inspect, check, report 
     report.interactions.push({ concept, flow: 'Korean search, origin filter, synthetic IME lifecycle and reading/back context' });
 
     await go(page, concept, 'reader');
+    check(await page.locator('#excerptPanel').isHidden() && await page.locator('#sourceDetails').isHidden(), concept + ': reader starts with original content and closed auxiliary panels');
+    await page.locator('#sourceToggle').click();
+    check(await page.locator('#sourceDetails').isVisible() && await page.locator('#sourceToggle').getAttribute('aria-expanded') === 'true', concept + ': source metadata is explicitly available');
+    await checkDisclosed(page, concept, 'source');
+    await page.keyboard.press('Escape');
+    check(await page.locator('#sourceDetails').isHidden() && await page.locator('#sourceToggle').evaluate(el => el === document.activeElement), concept + ': Escape closes source details and returns focus');
+    await page.locator('#sourceBody').focus();
     const selected = await page.evaluate(() => {
       const text = document.querySelector('#sourceBody p').firstChild;
       const range = document.createRange(); range.setStart(text, 0); range.setEnd(text, Math.min(text.length, 38));
@@ -287,17 +389,38 @@ async function interactionChecks({ context, go, capture, inspect, check, report 
     });
     await page.waitForFunction(text => document.querySelector('#selectedQuote')?.textContent === text, selected);
     check(await page.locator('#selectedQuote').textContent() === selected, concept + ': selected original appears verbatim in excerpt');
+    check(await page.locator('#excerptPanel').isHidden() && await page.locator('#sourceBody').evaluate(el => el === document.activeElement), concept + ': text selection does not open tools or steal reading focus');
+    await openExcerpt(page);
+    check(await page.locator('#excerptToggle').getAttribute('aria-expanded') === 'true' && await page.locator('#selectedQuote').isVisible(), concept + ': explicit excerpt action reveals the selected quote');
+    await page.locator('#closeExcerpt').click();
+    check(await page.locator('#excerptPanel').isHidden() && await page.locator('#excerptToggle').evaluate(el => el === document.activeElement), concept + ': excerpt close button restores its opener focus');
+    await openExcerpt(page); await page.locator('#excerptNote').focus(); await page.keyboard.press('Escape');
+    check(await page.locator('#excerptPanel').isHidden() && await page.locator('#excerptToggle').evaluate(el => el === document.activeElement), concept + ': Escape closes excerpt tools and returns focus');
+    await openExcerpt(page);
+    const openMetrics = await page.evaluate(inspect);
+    check(!openMetrics.horizontalOverflow && !openMetrics.contrastFailures.length && !openMetrics.controlBoundaryFailures.length && !openMetrics.smallTargets.length, concept + ': disclosed excerpt tools retain layout, contrast and target sizes', openMetrics);
+    await capture(page, concept + '-excerpt-open-phone', concept === 'thread');
+    await checkDisclosed(page, concept, 'excerpt');
+    report.interactions.push({ concept, flow: 'Original-first reading, source disclosure, selection without focus theft, explicit excerpt open/close/Escape' });
     await page.locator('#addExcerpt').tap();
     check(/연결했어요/.test(await page.locator('#excerptStatus').textContent()) && /새로고침하면 초기화/.test(await page.locator('#socialFeedback').textContent()), concept + ': excerpt status clearly describes its temporary scope');
     report.interactions.push({ concept, flow: 'DOM text selection and adding a sample excerpt without a note' });
     const excerptMetrics = await page.evaluate(inspect);
     check(!excerptMetrics.contrastFailures.length, concept + ': excerpt feedback text contrast', excerptMetrics.contrastFailures);
     check(Object.values(excerptMetrics.activity).every(n => n === 0), concept + ': sample excerpt does not use persistent storage', excerptMetrics.activity);
-    await page.keyboard.press('Escape'); await page.locator('[data-action="back"]').tap();
-    await page.locator('.s-tabs [data-tab="excerpts"]').tap();
+    await page.keyboard.press('Escape');
+    if (await page.locator('#excerptPanel').isVisible()) await page.locator('#closeExcerpt').click();
+    await page.locator('[data-action="back"]').tap();
+    await navigation(page, 'excerpts').tap();
     check(await page.locator('#socialResults .s-post').count() === 1 && await page.locator('.s-inline-quote p').textContent() === selected, concept + ': excerpt tab shows the selected quote next to its source');
     await page.reload(); await page.locator('main').waitFor();
     check(await page.locator('.s-inline-quote').count() === 0, concept + ': reload discards temporary excerpts');
+
+    await go(page, concept, 'feed'); await page.locator('[data-excerpt="true"][data-open="source-01"]').tap();
+    check(await page.locator('#sourceBody').isVisible() && await page.locator('#excerptPanel').isVisible() && await page.locator('#excerptTopic').evaluate(el => el === document.activeElement), concept + ': source excerpt shortcut opens the original and explicit excerpt tools');
+    await page.locator('#closeExcerpt').click();
+    check(await page.locator('#excerptPanel').isHidden() && await page.locator('#excerptToggle').evaluate(el => el === document.activeElement), concept + ': shortcut excerpt close returns to the reader control');
+    report.interactions.push({ concept, flow: 'Source excerpt shortcut and reader focus recovery' });
 
     await go(page, concept, 'feed'); await page.locator('#socialSearch').fill('');
     await page.locator('#social-open-source-09').tap();
@@ -328,6 +451,27 @@ async function interactionChecks({ context, go, capture, inspect, check, report 
     await capture(page, concept + '-keyboard-phone');
     report.interactions.push({ concept, flow: 'Keyboard skip navigation, Tab order and focus' });
 
+    const iconNav = page.locator('.s-nav button:visible, .s-bottom button:visible');
+    const iconNames = await iconNav.evaluateAll(elements => elements.map(el => ({ name: el.getAttribute('aria-label'), text: el.textContent.trim() })));
+    check(iconNames.length >= 3 && iconNames.every(item => item.name && item.name.trim()), concept + ': icon-only navigation retains explicit accessible names', iconNames);
+    await iconNav.first().focus();
+    const help = await iconNav.first().evaluate(el => {
+      const pseudo = getComputedStyle(el, '::after');
+      const generated = pseudo.content !== 'none' && pseudo.content !== 'normal' && pseudo.display !== 'none' && pseudo.visibility !== 'hidden' && Number(pseudo.opacity) > 0;
+      const tooltips = Array.from(document.querySelectorAll('[role="tooltip"]')).filter(t => { const r=t.getBoundingClientRect(), css=getComputedStyle(t); return r.width>0 && r.height>0 && css.visibility!=='hidden' && Number(css.opacity)>0; }).map(t => t.textContent.trim());
+      return { name: el.getAttribute('aria-label'), generated, content: pseudo.content, tooltips, focused: el.matches(':focus-visible') };
+    });
+    check(help.focused && (help.generated || help.tooltips.length > 0), concept + ': keyboard focus exposes icon help', help);
+    await capture(page, concept + '-icon-help-phone');
+    report.interactions.push({ concept, flow: 'Icon navigation accessible names and keyboard-visible help' });
+
+    await page.locator('#reviewOptions > summary').focus(); await page.keyboard.press('Enter');
+    check(await page.locator('#reviewOptions').getAttribute('open') !== null && await page.locator('button[data-concept="' + concept + '"]').isVisible(), concept + ': comparison options remain keyboard-accessible when requested');
+    await checkDisclosed(page, concept, 'comparison');
+    await page.locator('#reviewOptions > summary').focus(); await page.keyboard.press('Enter');
+    check(await page.locator('#reviewOptions').getAttribute('open') === null, concept + ': comparison options can return to their collapsed state');
+    report.interactions.push({ concept, flow: 'Collapsed comparison options open and close with the keyboard' });
+
     await page.emulateMedia({ reducedMotion: 'reduce' }); await go(page, concept, 'feed');
     const moving = await page.evaluate(() => Array.from(document.querySelectorAll('*')).filter(el => {
       const css = getComputedStyle(el), moving = value => value.split(',').some(v => parseFloat(v) > .01);
@@ -338,16 +482,20 @@ async function interactionChecks({ context, go, capture, inspect, check, report 
     await page.setViewportSize({ width: 1440, height: 1000 });
     if (concept === 'pulse') {
       await page.locator('[data-preview="source-03"]').click();
-      check(await page.locator('#socialPeek .s-peek-title').textContent() === '천천히 걷다가 발견한 동네의 작은 도서관' && await page.locator('#socialPeek [data-open="source-03"]').count() === 1,
-        'pulse: adjacent preview changes title and reading action to the chosen original');
+      check(await page.locator('#socialPeek').isVisible() && await page.locator('#socialPeek h3').textContent() === '천천히 걷다가 발견한 동네의 작은 도서관' && await page.locator('#socialPeek [data-open="source-03"]').count() === 1,
+        'pulse: explicitly opened preview shows the chosen original title and reading action');
       check(await page.locator('[data-preview="source-03"]').getAttribute('aria-pressed') === 'true' && await page.locator('[data-source-id="source-03"]').getAttribute('data-selected') === 'true',
-        'pulse: adjacent preview selection is reflected on its source row');
+        'pulse: preview selection is reflected on its source row');
+      await page.locator('[data-action="close-preview"]').click();
+      check(await page.locator('#socialPeek').isHidden() && await page.locator('[data-preview="source-03"]').evaluate(el => el === document.activeElement), 'pulse: preview close returns focus to its opener');
       await page.locator('[data-preview="source-09"]').click();
-      check(/본문 미확보/.test(await page.locator('#socialPeek').textContent()) && /링크만 보관/.test(await page.locator('#socialPeek').textContent()), 'pulse: adjacent link-only preview preserves its missing-body status');
-      await capture(page, 'pulse-adjacent-preview-desktop');
-      report.interactions.push({ concept, flow: 'Desktop adjacent original preview, selected row and missing-body status' });
+      check(/본문 미확보/.test(await page.locator('#socialPeek').textContent()) && /링크만 보관/.test(await page.locator('#socialPeek').textContent()), 'pulse: link-only preview preserves its missing-body status');
+      await capture(page, 'pulse-preview-open-desktop', true);
+      await page.keyboard.press('Escape');
+      check(await page.locator('#socialPeek').isHidden() && await page.locator('[data-preview="source-09"]').evaluate(el => el === document.activeElement), 'pulse: Escape closes the preview and restores focus');
+      report.interactions.push({ concept, flow: 'Explicit preview, selected source, missing-body status and close/Escape focus restoration' });
     }
-    await page.locator('[data-topic="걷기와 관찰"]:visible').first().click();
+    await openFilters(page); await page.locator('[data-topic="걷기와 관찰"]:visible').first().click();
     check(await page.locator('#socialResults .s-post').count() === 2 && await page.locator('#socialResults [data-source-id="source-03"]').count() === 1 && await page.locator('#socialResults [data-source-id="source-11"]').count() === 1,
       concept + ': topic filter shows the two walking/observation sources');
     check(await page.locator('[data-topic="걷기와 관찰"]:visible').first().getAttribute('aria-pressed') === 'true', concept + ': topic announces its selected state');
