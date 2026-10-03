@@ -388,3 +388,41 @@ test("signing out closes an open private form before navigating away", async () 
   assert.equal(context.HaedoAuth.user, null);
   assert.equal(dialog.open, false);
 });
+
+test("auth configuration only accepts a clean HTTP or HTTPS project origin", () => {
+  for (const url of ["https://name:password@test.supabase.co", "https://test.supabase.co/path",
+    "https://test.supabase.co?query=1", "https://test.supabase.co#fragment", "ftp://localhost"]) {
+    assert.equal(validConfig({ url, key: "sb_publishable_fixture" }, "localhost"), false);
+  }
+});
+
+for (const response of ["old_success", "old_rejection"]) {
+  test(`account verification rejects ${response} after the shared session changes`, async () => {
+    let finish, started, signouts = 0;
+    let session = { user: { id: "A" } };
+    const pending = new Promise(resolve => { finish = resolve; });
+    const start = new Promise(resolve => { started = resolve; });
+    const client = { auth: {
+      getSession: async () => ({ data: { session } }),
+      getUser: async () => { started(); return pending; },
+      signOut: async () => { signouts++; },
+      onAuthStateChange: () => {},
+    } };
+    const context = {
+      HAEDO_CONFIG: { url: "https://test.supabase.co", key: "sb_publishable_fixture" },
+      supabase: { createClient: () => client },
+      location: { hostname: "localhost" }, URL, URLSearchParams,
+      addEventListener: () => {},
+    };
+    vm.runInNewContext(readFileSync(require.resolve("../assets/platform-auth.js"), "utf8"), context);
+    const verification = context.HaedoAuth.verify();
+    await start;
+    session = { user: { id: "B" } };
+    finish(response === "old_success" ? { data: { user: { id: "A" } } } :
+      { data: {}, error: { status: 401 } });
+    await assert.rejects(verification, /계정이 변경/);
+    assert.equal(context.HaedoAuth.user, null);
+    assert.equal(signouts, 0);
+    assert.equal(session.user.id, "B");
+  });
+}

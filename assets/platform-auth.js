@@ -30,9 +30,12 @@
     if (!config || typeof config.key !== "string" || !config.key) return false;
     try {
       const url = new URL(config.url);
+      if (url.username || url.password || url.search || url.hash ||
+        (url.pathname !== "/" && url.pathname !== "")) return false;
       const local =
         ["localhost", "127.0.0.1"].includes(hostname) &&
-        ["localhost", "127.0.0.1"].includes(url.hostname);
+        ["localhost", "127.0.0.1"].includes(url.hostname) &&
+        ["http:", "https:"].includes(url.protocol);
       if (
         !(url.protocol === "https:" && url.hostname.endsWith(".supabase.co")) &&
         !local
@@ -84,9 +87,17 @@
       const { data: current, error: sessionError } =
         await client.auth.getSession();
       if (sessionError) throw sessionError;
-      if (!current.session) return null;
+      if (!current.session) {
+        user = session = null;
+        return null;
+      }
+      const uid = current.session.user.id;
       // An unverified local token is never sufficient to open personal records.
       const { data, error } = await client.auth.getUser();
+      const { data: latest, error: latestError } = await client.auth.getSession();
+      if (latestError) throw latestError;
+      if (!latest.session || latest.session.user.id !== uid)
+        throw new Error("계정이 변경됐습니다. 다시 로그인해 주세요.");
       if (error) {
         if (
           error.status === 401 ||
@@ -98,8 +109,10 @@
         }
         throw error;
       }
+      if (!data.user || data.user.id !== uid)
+        throw new Error("계정 확인 결과가 달라졌습니다. 다시 로그인해 주세요.");
       user = data.user;
-      session = (await client.auth.getSession()).data.session;
+      session = latest.session;
       return user;
     },
     async requireUser() {

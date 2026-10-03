@@ -2,6 +2,8 @@
 
 공개 홈에서 서비스를 안내하고, Google 로그인 후 개인 공간에서 연표·목표·습관을 사용한다. 빌드 없이 실행하는 일반 HTML·CSS·JavaScript 구조를 유지한다.
 
+자료 가져오기·개인 동기화와의 서버·인증 통합 현황은 [Supabase 통합 기록](supabase-integration.md)에 있다. 새 자료용 서버 SQL은 설치했으며 전체 Cloud 화면 병합과 Google 로그인 실검증은 별도 단계다.
+
 ## 화면과 코드
 
 - `index.html`: 공개 홈. 합성 예시만 표시한다.
@@ -14,7 +16,7 @@
 
 ## 연결 설정
 
-다른 프로젝트를 재사용하지 않고 해도 전용 Supabase 프로젝트를 사용한다. `supabase/migrations/202610020001_platform.sql`을 적용한다. 테이블은 `haedo_documents`, `haedo_items`이며, `user_id`가 로그인 계정과 같은 행에만 접근하는 RLS를 SELECT/INSERT/UPDATE/DELETE 모두에 적용한다. 익명 역할에는 테이블 권한이 없다. 수정 시점은 서버가 만든다.
+다른 프로젝트를 재사용하지 않고 해도 전용 Supabase 프로젝트를 사용한다. `supabase/migrations/20261002061709_haedo_platform_accounts.sql`을 적용한다. 테이블은 `haedo_documents`, `haedo_items`이며, `user_id`가 로그인 계정과 같은 행에만 접근하는 RLS를 SELECT/INSERT/UPDATE/DELETE 모두에 적용한다. 익명 역할에는 테이블 권한이 없다. 수정 시점은 서버가 만든다.
 
 Google Auth Platform에서 웹 애플리케이션 OAuth 클라이언트를 만들고, 해당 전용 Supabase 프로젝트의 `/auth/v1/callback` 주소를 리디렉션 URI로 등록한다. 클라이언트 ID·Secret은 Supabase의 Google 제공자 설정에 입력한다. 저장소와 채팅에 Secret을 넣지 않는다.
 
