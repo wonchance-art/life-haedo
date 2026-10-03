@@ -20,6 +20,7 @@ test('browser IIFE and CommonJS expose the same contract without external depend
   vm.runInContext(fs.readFileSync(require.resolve('../assets/life/core.js'), 'utf8'), context);
   assert.equal(typeof context.HaedoLife.Core.restoreBackup, 'function');
   assert.equal(typeof context.HaedoLife.Core.buildImportChanges, 'function');
+  assert.equal(typeof context.HaedoLife.Core.searchSources, 'function');
   assert.equal(context.HaedoLife.Core.createWorkspace().revision, 0);
   assert.match(core.id(), /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/);
   assert.equal(core.validateWorkspace(core.createWorkspace()), true);
@@ -301,4 +302,138 @@ test('reading Markdown preserves text and provenance inside fences that contain 
 test('reading export handles many short backtick runs without an argument-stack overflow', async () => {
   const { bundle } = await stored(input({ text: '`x'.repeat(150000) }));
   assert.doesNotThrow(() => core.toMarkdown(bundle));
+});
+
+async function addSearchVersion(bundle, value, sourceId) {
+  const prepared = await core.prepareImport(input({ ...value, ...(sourceId ? { existingSourceId: sourceId } : {}) }), bundle);
+  return { bundle: core.applyChanges(bundle, core.buildImportChanges(bundle, prepared)), sourceId: prepared.source.id, versionId: prepared.version.id };
+}
+
+test('source search opens the matching old version and defines latest by array order, not timestamp or revision', async () => {
+  const first = await addSearchVersion(core.createWorkspace(), { title: '이전 제목', text: 'alpha 기억할 구절' });
+  const latest = await addSearchVersion(first.bundle, { title: '현재 제목', text: 'beta 다른 내용' }, first.sourceId);
+  latest.bundle.sourceVersions[0].importedAt = '2026-10-03T10:00:00.000Z';
+  latest.bundle.sourceVersions[1].importedAt = '2026-10-01T10:00:00.000Z';
+  const [hit] = core.searchSources(latest.bundle, '기억할');
+  assert.deepEqual(hit, { sourceId: first.sourceId, sourceVersionId: first.versionId,
+    versionIndex: 1, versionCount: 2, matchedBy: 'body', locator: { start: 6, end: 9 }, quote: '기억할',
+    snippet: { before: 'alpha ', after: ' 구절' } });
+  const [all] = core.searchSources(latest.bundle);
+  assert.equal(all.sourceVersionId, latest.versionId);
+  assert.equal(all.versionIndex, 2);
+  assert.equal(all.matchedBy, 'all');
+  assert.equal(all.locator, null);
+  assert.equal(all.quote, null);
+  assert.equal(all.snippet, null);
+  assert.deepEqual(core.searchSources(latest.bundle, ' \n\t '), [all]);
+  assert.equal(core.searchSources(latest.bundle, '이전 제목').length, 0, 'only the current source title is searchable');
+  assert.equal(core.searchSources(latest.bundle, '구절 beta').length, 0, 'a match cannot cross version boundaries');
+  assert.equal(core.searchSources(latest.bundle, '제목 alpha').length, 0, 'a title/body join is not source text');
+});
+
+test('source search unions current-title latest with body versions and deduplicates in source/newest order', async () => {
+  const first = await addSearchVersion(core.createWorkspace(), { title: '제목', text: 'needle 첫 버전' });
+  const second = await addSearchVersion(first.bundle, { title: 'NEEDLE 현재 제목', text: '새 본문' }, first.sourceId);
+  const other = await addSearchVersion(second.bundle, { title: '두 번째 원천', text: 'needle 다른 원천' });
+  const results = core.searchSources(other.bundle, 'needle');
+  assert.deepEqual(results.map(hit => [hit.sourceVersionId, hit.matchedBy, hit.versionIndex]),
+    [[second.versionId, 'title', 2], [first.versionId, 'body', 1], [other.versionId, 'body', 1]]);
+  assert.equal(results[0].locator, null); assert.equal(results[0].quote, null); assert.equal(results[0].snippet, null);
+  const third = await addSearchVersion(other.bundle, { title: 'NEEDLE 현재 제목', text: 'needle 또 다른 needle' }, first.sourceId);
+  const combined = core.searchSources(third.bundle, 'needle');
+  assert.deepEqual(combined.map(hit => hit.sourceVersionId), [third.versionId, first.versionId, other.versionId]);
+  assert.equal(combined[0].matchedBy, 'body');
+  assert.equal(combined[0].versionCount, 3);
+  assert.deepEqual(combined[0].locator, { start: 0, end: 6 }, 'only the first body hit becomes this version card');
+  assert.deepEqual(core.searchSources(third.bundle).map(hit => hit.sourceVersionId), [third.versionId, other.versionId]);
+});
+
+test('source search treats regex syntax literally and trims only query ends', async () => {
+  const literal = '.*+?^${}()|[]\\-/';
+  const { bundle } = await stored(input({ title: '문자 찾기', text: 'axb a.b ' + literal + '\nA  B\na b' }));
+  const [punctuation] = core.searchSources(bundle, literal);
+  assert.equal(punctuation.quote, literal);
+  assert.equal(punctuation.locator.start, 8);
+  const [dot] = core.searchSources(bundle, '  a.b  ');
+  assert.deepEqual(dot.locator, { start: 4, end: 7 });
+  assert.equal(dot.quote, 'a.b');
+  assert.equal(core.searchSources(bundle, '[missing]').length, 0);
+  assert.equal(core.searchSources(bundle, 'a  b')[0].quote, 'A  B');
+  assert.equal(core.searchSources(bundle, 'a b')[0].quote, 'a b');
+});
+
+test('source search returns raw UTF-16 quotes across dotted I, emoji, CRLF and repeated text', async () => {
+  const raw = 'İ\r\n🌱AbC abc\r\n끝';
+  const { bundle } = await stored(input({ title: '원문', text: raw }));
+  const [hit] = core.searchSources(bundle, ' aBc ');
+  assert.deepEqual(hit.locator, { start: 5, end: 8 });
+  assert.equal(hit.quote, 'AbC');
+  assert.equal(raw.slice(hit.locator.start, hit.locator.end), hit.quote);
+  assert.equal(hit.snippet.before, 'İ\r\n🌱');
+  assert.equal(hit.snippet.after, ' abc\r\n끝');
+  const [emoji] = core.searchSources(bundle, '🌱abc');
+  assert.deepEqual(emoji.locator, { start: 3, end: 8 });
+  assert.equal(emoji.quote, '🌱AbC');
+  const [lines] = core.searchSources(bundle, 'abc\r\n끝');
+  assert.deepEqual(lines.locator, { start: 9, end: 15 });
+  assert.equal(lines.quote, 'abc\r\n끝');
+  assert.deepEqual(core.searchSources(bundle, '\ud83c'), [], 'a half surrogate cannot select half of an emoji');
+  assert.equal(bundle.sourceVersions[0].contentText, raw);
+});
+
+test('search uses native simple case folding without locale, NFC/NFD or multi-character equivalence', async () => {
+  const { bundle } = await stored(input({ title: '문자', text: 'İ ß é e\u0301 K ς' }));
+  assert.equal(core.searchSources(bundle, 'i').length, 0);
+  assert.equal(core.searchSources(bundle, 'SS').length, 0);
+  assert.equal(core.searchSources(bundle, 'İ')[0].quote, 'İ');
+  assert.equal(core.searchSources(bundle, 'é')[0].quote, 'é');
+  assert.equal(core.searchSources(bundle, 'e\u0301')[0].quote, 'e\u0301');
+  assert.equal(core.searchSources(bundle, 'k')[0].quote, 'K');
+  assert.equal(core.searchSources(bundle, 'σ')[0].quote, 'ς');
+  const composedOnly = await stored(input({ title: '문자', text: 'é' }));
+  assert.deepEqual(core.searchSources(composedOnly.bundle, 'e\u0301'), []);
+});
+
+test('search snippets stay near 60 UTF-16 units and never split a surrogate pair at either edge', async () => {
+  const before = '🌱' + 'a'.repeat(59), after = 'b'.repeat(59) + '🌱';
+  const { bundle } = await stored(input({ title: '경계', text: 'x'.repeat(5) + before + 'HIT' + after + 'y'.repeat(5) }));
+  const [hit] = core.searchSources(bundle, 'hit');
+  assert.deepEqual(hit.locator, { start: 66, end: 69 });
+  assert.deepEqual(hit.snippet, { before, after });
+  assert.ok(hit.snippet.before.length <= 61 && hit.snippet.after.length <= 61);
+  assert.equal(hit.snippet.before.isWellFormed(), true);
+  assert.equal(hit.snippet.after.isWellFormed(), true);
+});
+
+test('link-only search never invents body text from its URL or current title', async () => {
+  const { bundle } = await stored(input({ title: '링크 제목', text: '', url: 'https://example.org/hidden-query' }));
+  assert.deepEqual(core.searchSources(bundle, 'hidden-query'), []);
+  const [hit] = core.searchSources(bundle, '링크');
+  assert.equal(hit.matchedBy, 'title');
+  assert.equal(hit.locator, null); assert.equal(hit.quote, null); assert.equal(hit.snippet, null);
+  assert.equal(core.searchSources(bundle)[0].sourceVersionId, bundle.sourceVersions[0].id);
+  const noVersion = copy(bundle); noVersion.sourceVersions = [];
+  assert.deepEqual(core.searchSources(noVersion, '링크'), [], 'no source version means no invented reader target');
+});
+
+test('source search validates query/bundle and neither mutates nor retains references into the workspace', async () => {
+  const { bundle } = await stored(input({ text: '원문 needle 끝' }));
+  const before = copy(bundle);
+  function freeze(value) { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } return value; }
+  freeze(bundle);
+  const first = core.searchSources(bundle, 'needle');
+  assert.equal(first instanceof Promise, false);
+  first[0].locator.start = 0; first[0].snippet.before = '바꾼 결과'; first[0].sourceVersionId = 'changed';
+  const next = core.searchSources(bundle, 'needle');
+  assert.deepEqual(next[0].locator, { start: 3, end: 9 });
+  assert.equal(next[0].snippet.before, '원문 ');
+  assert.equal(next[0].sourceVersionId, bundle.sourceVersions[0].id);
+  assert.deepEqual(bundle, before);
+  for (const query of [null, 1, [], {}, 'x'.repeat(501), ' '.repeat(501), '🌱'.repeat(251)]) {
+    assert.throws(() => core.searchSources(bundle, query), errorCode('invalid_query'));
+  }
+  assert.doesNotThrow(() => core.searchSources(bundle, 'x'.repeat(500)));
+  assert.doesNotThrow(() => core.searchSources(bundle, '🌱'.repeat(250)));
+  const invalid = copy(bundle); invalid.sourceVersions[0].sourceId = 'missing';
+  assert.throws(() => core.searchSources(invalid, 'needle'), errorCode('missing_reference'));
 });

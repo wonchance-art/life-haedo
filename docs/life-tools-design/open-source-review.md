@@ -177,3 +177,20 @@ idb와 [Importer](https://github.com/obsidianmd/obsidian-importer/security/advis
 [Obsidian 공식 도움말](https://github.com/obsidianmd/obsidian-help/blob/master/en/Files%20and%20folders/How%20Obsidian%20stores%20data.md)은 vault note가 평문 Markdown임을 확인해 준다. 이번 범위는 선택 파일의 본문을 그대로 받는 것이며 폴더·vault 탐색, ZIP, frontmatter·wiki 링크 해석, 첨부 미디어 수집은 포함하지 않는다. 파일마다 검토·중복 선택·명시 저장을 하고, 다음 항목의 실패나 취소가 앞서 저장한 자료를 되돌리지 않는다.
 
 iPad Chrome의 실제 다중 선택·Files 제공자 다운로드는 문서 확인으로 증명하지 않았다. 실제 기기에서 읽기 실패·중복·부분 성공·재개를 확인한다. TXT/MD 샘플에서 반복되는 변환·첨부·폴더 요구가 확인되거나 idb의 보안 권고·지원 환경이 바뀔 때만 라이브러리 선택을 재검토한다.
+
+## R2 검색 결과의 원문 버전·구절 복귀
+
+**2026-10-03 UTC**에 공식 npm/GitHub의 안정 버전·실제 배포 LICENSE·공개 권고를 재확인했다. 이번 문제는 여러 버전 중 일치한 본문과 위치 대신 최신 버전을 여는 것이다. 결정은 **새 검색 라이브러리 없이 기존 문자열 검색을 재사용**하고, 결과에 실제 `sourceVersionId`와 원문 UTF-16 locator를 연결하는 것이다. fuzzy·순위·tokenizer·영속 검색 인덱스는 도입하지 않는다.
+
+| 후보 | 최신 안정판·유지관리·라이선스 확인 | 이번 요구와 비교 |
+| --- | --- | --- |
+| Fuse.js **7.5.0 · Apache-2.0** | [npm](https://registry.npmjs.org/fuse.js) 게시 **2026-07-13 17:23:36 UTC**, [GitHub 릴리스](https://github.com/krisk/Fuse/releases/tag/v7.5.0) **17:19:30 UTC**. [공식 tarball](https://registry.npmjs.org/fuse.js/-/fuse.js-7.5.0.tgz)의 `package/LICENSE` 확인. [공식 commit 조회](https://api.github.com/repos/krisk/Fuse/commits?per_page=1)는 최근 **2026-08-09** | [README](https://github.com/krisk/Fuse/blob/v7.5.0/README.md)의 작은·중간 규모 브라우저 fuzzy 검색과 `includeMatches`는 적합한 후속 후보. 정확한 부분 문자열·원문 추적에는 fuzzy 결과 해석과 위치 변환이 추가되어 이번 도입은 불필요 |
+| MiniSearch **7.2.0 · MIT** | [npm](https://registry.npmjs.org/minisearch) 게시 **2025-09-16 12:42:12 UTC**, [고정 태그](https://github.com/lucaong/minisearch/tree/v7.2.0) 일치. [공식 tarball](https://registry.npmjs.org/minisearch/-/minisearch-7.2.0.tgz)의 `package/LICENSE.txt` 확인. [공식 commit 조회](https://api.github.com/repos/lucaong/minisearch/commits?per_page=1)는 최근 **2025-09-16**. `releases/latest` API는 404여서 GitHub 릴리스 게시일은 확정하지 못함 | [README](https://github.com/lucaong/minisearch/blob/v7.2.0/README.md)의 기본 Unicode 공백·구두점 토큰 분리, prefix·fuzzy·필드 순위는 전체 텍스트 검색용. 현재 substring 동작·정확한 원문 구절 locator를 대체하지 않음 |
+
+두 패키지의 해당 npm 버전은 runtime dependencies가 없고, 확인일의 [Fuse](https://github.com/krisk/Fuse/security/advisories)/[MiniSearch](https://github.com/lucaong/minisearch/security/advisories) 공개 advisories는 게시된 권고 없음으로 표시했다. 이것은 전체 보안 감사가 아니다. beta는 선택하지 않았고, 마지막 배포·commit 시각만으로 장기 지원 여부를 단정하지 않는다.
+
+작은 실제 API 비교는 `/tmp/life-search-oss/probe.cjs`에서만 실행했다. 공식 tarball을 registry SHA-512 integrity와 대조한 뒤 원본 배포 파일을 사용했으며 앱 설치·vendor 추가·제품 코드 변경은 하지 않았다. 익명 본문 `🌱 JavaScript 기록`의 `Script` 검색은 native `indexOf`가 옛 버전과 **[7,13)**을 반환했고, Fuse는 **[7,12]** 일치 구간을 반환했다. MiniSearch 기본 토큰 검색에는 결과가 없었다. 오타 `JavaScrpt`는 native 결과가 없지만 Fuse는 fuzzy 결과를 반환했다. 최신 버전으로 잘못 여는 문제는 어느 엔진에서도 버전 연결을 별도로 고쳐야 한다.
+
+locator는 받은 원문에서 계산한다. `İ abc 🌱`는 원문에서 `abc` 시작이 2지만 `toLowerCase()` 후에는 3이므로, 변환 문자열의 index를 원문 위치로 그대로 사용하지 않는다. 대소문자 정책을 정하고 원문 `indexOf` 또는 escape한 literal의 원문 정규식 결과에서 UTF-16 시작·실제 일치 길이를 얻는다. 제목만 일치하거나 본문 미확보이면 본문 구절을 찾았다고 표시하지 않는다.
+
+실제 사용에서 오타 허용·여러 단어 관련도·큰 자료의 검색 지연이 확인될 때만 두 후보를 다시 비교한다. 현재 작은 로컬 bundle에서는 원문 버전·일치 위치·줄바꿈/emoji·옛 버전 일치·본문 없는 링크·대소문자 경계를 먼저 검증한다. 이번 임시 Node API 비교는 실제 Apple 기기나 사용자의 검색 평가가 아니다.

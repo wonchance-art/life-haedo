@@ -431,6 +431,45 @@
     const fence = '`'.repeat(longest + 1);
     return fence + 'text\n' + text + (text.endsWith('\n') ? '' : '\n') + fence + '\n';
   }
+  function searchSources(bundle, query = '') {
+    validateWorkspace(bundle);
+    assert(typeof query === 'string' && query.length <= 500, 'invalid_query', '검색어는 500자 이내의 텍스트로 입력해 주세요.');
+    const term = query.trim();
+    // Native Unicode case folding keeps match.index on the unchanged UTF-16 text.
+    // No global flag: reusing the literal expression cannot carry a lastIndex.
+    const pattern = term ? new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'iu') : null;
+    const bySource = new Map();
+    for (const version of bundle.sourceVersions) {
+      if (!bySource.has(version.sourceId)) bySource.set(version.sourceId, []);
+      bySource.get(version.sourceId).push(version);
+    }
+    const results = [];
+    for (const source of bundle.sources) {
+      const versions = bySource.get(source.id) || [];
+      const titleMatches = pattern && pattern.test(source.title);
+      for (let index = versions.length - 1; index >= 0; index--) {
+        const version = versions[index], latest = index === versions.length - 1;
+        if (!pattern && !latest) break;
+        const match = pattern && version.contentText !== null ? pattern.exec(version.contentText) : null;
+        if (pattern && !match && !(latest && titleMatches)) continue;
+        const result = { sourceId: source.id, sourceVersionId: version.id, versionIndex: index + 1,
+          versionCount: versions.length, matchedBy: match ? 'body' : pattern ? 'title' : 'all',
+          locator: null, quote: null, snippet: null };
+        if (match) {
+          const text = version.contentText, start = match.index, end = start + match[0].length;
+          result.locator = { start, end };
+          result.quote = text.slice(start, end);
+          locator(result.locator, text, result.quote);
+          let before = Math.max(0, start - 60), after = Math.min(text.length, end + 60);
+          if (!boundary(text, before)) before -= 1;
+          if (!boundary(text, after)) after += 1;
+          result.snippet = { before: text.slice(before, start), after: text.slice(end, after) };
+        }
+        results.push(result);
+      }
+    }
+    return results;
+  }
   function toMarkdown(bundle) {
     validateWorkspace(bundle);
     const output = ['# 생활 도구 읽기 내보내기\n', '이 파일은 읽기용입니다. 복원은 JSON 백업을 사용하세요. 미적용 검토 초안은 포함하지 않습니다.\n', fenced(bundle.title)];
@@ -456,5 +495,5 @@
     return output.join('\n');
   }
 
-  return Object.freeze({ MAX_IMPORT_BYTES, createWorkspace, id, validateWorkspace, prepareImport, buildImportChanges, applyChanges, makeBackup, restoreBackup, toMarkdown });
+  return Object.freeze({ MAX_IMPORT_BYTES, createWorkspace, id, validateWorkspace, prepareImport, buildImportChanges, applyChanges, makeBackup, restoreBackup, searchSources, toMarkdown });
 });

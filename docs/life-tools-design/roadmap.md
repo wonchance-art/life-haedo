@@ -6,7 +6,7 @@
 직접 기록은 보완 역할로 바꾸며, 이전의 오늘/빠른 활동 기록 중심 R1을 대체한다.
 전체 영역은 [통합 설계](README.md), 검증 ID는 [검증 기준](validation.md)을 따른다.
 
-후속으로 공용 인증·개인 동기화를 [통합 브랜치](../supabase-integration.md)에 연결했고, R2의 첫 입력 확대인 [여러 TXT·Markdown 파일 검토](r2-implementation.md)를 구현·검증했다. 주제별 활용·서비스별 adapter 등 R2 전체와 실제 Google 로그인·Apple 기기·공개 배포는 별도 남은 범위다.
+후속으로 공용 인증·개인 동기화를 [통합 브랜치](../supabase-integration.md)에 연결했고, R2의 [여러 TXT·Markdown 파일 검토](r2-implementation.md)와 [검색에서 일치한 원문 버전·구절을 열고 목록으로 복귀](r2-search.md)를 구현·검증했다. 변경은 [초안 PR #19](https://github.com/wonchance-art/life-haedo/pull/19)에서 검토할 수 있다. 주제별 활용·서비스별 adapter 등 R2 전체와 실제 Google 로그인·Apple 기기·공개 배포는 별도 남은 범위다.
 
 ## 단계와 의존성
 
