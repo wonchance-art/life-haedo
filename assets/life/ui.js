@@ -59,12 +59,16 @@
     let syncRefreshSequence = 0;
     let stageTimer = null;
     let saveChain = Promise.resolve();
+    let batchGeneration = 0;
+    let workspaceGeneration = 0;
+    let dataRefreshSequence = 0;
+    let dataRefreshPromise = Promise.resolve(false);
     const downloadUrls = new Set();
     const state = {
       bundle: null, workspaces: [], mode: 'topics', topic: '', search: '', sourceId: null,
       sourceVersionId: null, locator: null, stage: null, prepared: null,
       busy: false, editTick: 0, savedTick: 0, stageFailed: false, status: '', error: '',
-      pendingOperation: null, stageSelection: null, sourceSelection: null, stages: [],
+      pendingOperation: null, stageSelection: null, sourceSelection: null, stages: [], allStages: [], batches: new Map(), batchId: null,
       remoteChanged: false, readerPositions: new Map(), sourceDrafts: new Map(),
       syncAccount: null, syncState: null, syncReadError: null, syncAccountKey: null,
       syncLoading: false,
@@ -206,11 +210,13 @@
 
     async function rescueStage() {
       state.stage.stageId = core.id();
+      for (const key of ['batchId', 'batchIndex', 'batchTotal', 'fileLabel']) delete state.stage[key];
       state.stage.revision = 0;
       state.stage.createdAt = new Date().toISOString();
       state.stageFailed = false;
       state.editTick += 1;
       await persistStage(true);
+      await refreshData();
       render();
     }
 
@@ -231,6 +237,7 @@
             state.stage.updatedAt = saved.updatedAt;
             state.savedTick = tick;
             state.stageFailed = false;
+            markBatchStageSaved(saved);
             if (!dirty()) announce('검토 중 보관됨 · 이 브라우저에 임시 보관했습니다.');
           }
         } catch (cause) {
@@ -242,11 +249,250 @@
       return saveChain;
     }
 
-    async function refreshData() {
-      if (disposed) return;
-      state.bundle = await storage.read(state.bundle.workspaceId);
-      state.workspaces = await storage.listWorkspaces();
-      state.stages = (await storage.listStages(state.bundle.workspaceId)).filter(s => s.state === 'draft');
+    function refreshData() {
+      if (disposed || !state.bundle) return Promise.resolve(false);
+      const workspaceId = state.bundle.workspaceId, token = workspaceGeneration, sequence = ++dataRefreshSequence;
+      const pending = (async () => {
+        const bundle = await storage.read(workspaceId);
+        const workspaces = await storage.listWorkspaces();
+        const stages = await storage.listStages(workspaceId);
+        if (!batchContext(workspaceId) || token !== workspaceGeneration) return false;
+        if (sequence !== dataRefreshSequence) return dataRefreshPromise;
+        if (bundle.revision < state.bundle.revision) return false;
+        state.bundle = bundle;
+        state.workspaces = workspaces;
+        state.allStages = stages;
+        state.stages = stages.filter(stage => stage.state === 'draft');
+        mergeBatches(stages);
+        return true;
+      })();
+      dataRefreshPromise = pending;
+      return pending;
+    }
+
+    function batchKey(workspaceId, batchId) { return workspaceId + '|' + batchId; }
+
+    function invalidateBatchContext() { workspaceGeneration += 1; stopBatchReading(); }
+
+    function validBatchStage(stage) {
+      return typeof stage.batchId === 'string' && /^[a-f0-9-]{36}$/i.test(stage.batchId) &&
+        Number.isInteger(stage.batchIndex) && stage.batchIndex >= 0 && stage.batchIndex < 10 && stage.batchIndex < stage.batchTotal &&
+        Number.isInteger(stage.batchTotal) && stage.batchTotal >= 1 && stage.batchTotal <= 10;
+    }
+
+    function markBatchStageSaved(saved) {
+      for (const batch of state.batches.values()) {
+        if (batch.workspaceId !== saved.workspaceId) continue;
+        const item = batch.items.find(row => row.stageId === saved.stageId || row.unsaved?.stageId === saved.stageId);
+        if (!item) continue;
+        item.stageId = saved.stageId;
+        item.status = 'draft';
+        item.message = '';
+        delete item.unsaved;
+      }
+    }
+
+    function mergeBatches(stages) {
+      const existing = new Set(stages.map(stage => stage.stageId));
+      for (const batch of state.batches.values()) if (batch.workspaceId === state.bundle.workspaceId) {
+        batch.items.forEach(item => {
+          if (item.stageId && !existing.has(item.stageId) && !item.unsaved) { item.status = 'removed'; item.result = null; }
+        });
+      }
+      for (const stage of stages) {
+        if (!validBatchStage(stage)) continue;
+        let batch = state.batches.get(batchKey(stage.workspaceId, stage.batchId));
+        if (!batch) {
+          batch = { id: stage.batchId, workspaceId: stage.workspaceId, total: stage.batchTotal, items: [], reading: false, recovered: true };
+          state.batches.set(batchKey(batch.workspaceId, batch.id), batch);
+        }
+        let item = batch.items.find(row => row.index === stage.batchIndex);
+        if (!item) { item = { index: stage.batchIndex }; batch.items.push(item); }
+        Object.assign(item, { label: (typeof stage.fileLabel === 'string' ? stage.fileLabel : '') || stage.input.fileName || stage.input.title || '제목 없는 파일', stageId: stage.stageId,
+          result: stage.appliedResult || null, status: stage.state === 'applied' ? 'applied' : item.status === 'skipped' ? 'skipped' : 'draft' });
+        delete item.unsaved;
+        batch.items.sort((x, y) => x.index - y.index);
+      }
+    }
+
+    function currentBatch() {
+      if (!state.bundle) return null;
+      const batch = state.batches.get(batchKey(state.bundle.workspaceId, state.batchId));
+      return batch && batch.workspaceId === state.bundle.workspaceId ? batch : null;
+    }
+
+    function stopBatchReading() {
+      batchGeneration += 1;
+      for (const batch of state.batches.values()) if (batch.reading) {
+        batch.stopped = true;
+        batch.reading = false;
+        batch.items.forEach(item => {
+          if (item.status === 'reading') { item.status = 'unread'; item.message = '읽기 중단 · 파일 재선택 필요'; }
+        });
+      }
+    }
+
+    function batchContext(workspaceId) { return !disposed && state.bundle && state.bundle.workspaceId === workspaceId; }
+
+    function batchStage(file, batch, index, text, origin) {
+      const now = new Date().toISOString();
+      return { stageId: core.id(), workspaceId: batch.workspaceId, revision: 0, state: 'draft',
+        batchId: batch.id, batchIndex: index, batchTotal: batch.total, fileLabel: file.name,
+        input: { origin, title: file.name.replace(/\.(txt|md)$/i, ''), fileName: file.name, text,
+          url: '', format: /\.md$/i.test(file.name) ? 'text/markdown' : 'text/plain', authorRelation: 'unknown', coverage: { status: 'unknown', omissions: [] } },
+        excerpts: [], createdAt: now, updatedAt: now };
+    }
+
+    async function startBatch(files, origin) {
+      if (disposed || !files.length) return;
+      if (state.busy) throw new Error('현재 검토 처리가 끝난 뒤 파일을 선택해 주세요.');
+      if (files.length > 10) throw new Error('한 번에 파일 10개까지 선택할 수 있습니다. 현재 검토는 그대로 유지됩니다.');
+      if (files.reduce((total, file) => total + file.size, 0) > 5 * MAX_TEXT_BYTES) throw new Error('선택한 파일의 총용량이 5 MiB를 넘습니다. 파일을 나누어 선택해 주세요.');
+      const workspaceId = state.bundle.workspaceId, workspaceToken = workspaceGeneration;
+      const contextAlive = () => batchContext(workspaceId) && workspaceToken === workspaceGeneration;
+      stopBatchReading();
+      const token = ++batchGeneration;
+      if (dirty()) await persistStage();
+      if (!contextAlive() || token !== batchGeneration) return;
+      const batch = { id: core.id(), workspaceId, total: files.length, reading: true, recovered: false,
+        items: files.map((file, index) => ({ index, label: file.name, status: 'unread' })) };
+      state.batches.set(batchKey(batch.workspaceId, batch.id), batch);
+      state.batchId = batch.id;
+      state.mode = 'batch';
+      render();
+      announce('파일을 읽어 검토초안으로 보관합니다. 아직 자료에 반영하지 않습니다.');
+      for (let index = 0; index < files.length; index++) {
+        if (!contextAlive() || token !== batchGeneration || batch.stopped) break;
+        const file = files[index], item = batch.items[index];
+        item.status = 'reading'; updateBatchPanel();
+        try {
+          if (!/\.(txt|md)$/i.test(file.name)) throw new Error('UTF-8 .txt 또는 .md 파일만 지원합니다. 폴더·ZIP·사진은 가져오지 않습니다.');
+          if (file.size > MAX_TEXT_BYTES) throw new Error('이 파일이 1 MiB를 넘습니다. 필요한 내용을 나누어 다시 선택해 주세요.');
+          let text;
+          try { text = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer()); }
+          catch (_) { throw new Error('UTF-8로 읽을 수 없습니다. 원래 파일은 변경하지 않았습니다.'); }
+          if (!contextAlive() || token !== batchGeneration || batch.stopped) break;
+          const stage = batchStage(file, batch, index, text, origin);
+          item.unsaved = stage;
+          item.status = 'saving'; updateBatchPanel();
+          const saved = await storage.saveStage(stage);
+          if (!contextAlive()) return;
+          item.stageId = saved.stageId;
+          item.status = 'draft';
+          item.message = text ? '' : '빈 파일 · 내용을 보완해야 자료로 보관할 수 있습니다.';
+          delete item.unsaved;
+        } catch (cause) {
+          if (!contextAlive()) return;
+          item.status = 'failed';
+          item.message = item.unsaved ? '초안 보관 실패 · 입력은 이 화면에만 있습니다. 다시 보관하거나 복사해 주세요.' : (cause?.message || '파일을 읽지 못했습니다. 다시 선택해 주세요.');
+        }
+        if (!contextAlive()) return;
+        if (state.mode === 'batch' && state.batchId === batch.id) updateBatchPanel();
+        if (token !== batchGeneration || batch.stopped) break;
+      }
+      if (!contextAlive()) return;
+      batch.reading = false;
+      // A stopped save may still have completed atomically; retain its confirmed result.
+      if (state.mode === 'batch' && state.batchId === batch.id) updateBatchPanel();
+      if (token === batchGeneration) {
+        await refreshData();
+        if (!contextAlive() || token !== batchGeneration) return;
+        renderHeader(); updateBatchPanel();
+        announce('선택한 파일의 처리를 마쳤습니다. 각 초안을 확인해 자료로 보관해 주세요.');
+      }
+    }
+
+    function renderBatchPicker(parent) {
+      const details = node('details', null, 'life-details');
+      details.id = 'lifeBatchPicker';
+      details.append(node('summary', '여러 텍스트 파일 가져오기'));
+      details.append(node('p', '한 번에 10개 · 총 5 MiB · 파일당 1 MiB까지. 선택하면 파일별 검토초안을 보관하며, 현재 본문을 바꾸거나 자료를 자동 확정하지 않습니다.', 'life-help'));
+      details.append(node('p', 'UTF-8 TXT·Markdown 본문만 가져옵니다. 폴더·ZIP·사진, Obsidian 내부 링크와 첨부를 자동으로 가져오거나 연결하지 않습니다.', 'life-help'));
+      const file = field('여러 UTF-8 .txt 또는 .md 파일 선택', 'file', 'lifeBatchFiles', '');
+      file.input.multiple = true;
+      file.input.accept = '.txt,.md,text/plain,text/markdown';
+      file.input.addEventListener('change', async () => {
+        const files = Array.from(file.input.files);
+        file.input.value = '';
+        const origin = main.querySelector('#lifeImportOrigin')?.value || state.stage?.input.origin || 'other';
+        clearError();
+        try { await startBatch(files, origin); } catch (cause) { failure(cause); }
+      });
+      details.append(file.label);
+      parent.append(details);
+    }
+
+    async function openBatchItem(item) {
+      if (dirty()) await persistStage();
+      if (item.unsaved) {
+        state.stage = structuredClone(item.unsaved);
+        state.editTick = 1; state.savedTick = 0;
+        state.prepared = null; state.stageFailed = true;
+        state.mode = 'import'; render();
+        announce('보관하지 못한 초안을 열었습니다. 입력을 복사하거나 검토 내용을 다시 보관해 주세요.');
+      } else await openStage(item.stageId);
+    }
+
+    async function skipBatchItem(item) {
+      if (state.stage?.stageId === item.stageId && dirty()) await persistStage();
+      item.status = 'skipped';
+      state.mode = 'batch';
+      render();
+      announce('이번 검토에서 건너뛰었습니다. 보관된 초안은 유지하며 나중에 다시 검토할 수 있습니다.');
+    }
+
+    function renderBatch() {
+      main.append(title('선택한 파일'), node('p', '파일별 원문을 확인하고 보관하거나 건너뛰세요. 저장된 검토초안과 보관 결과만 다시 열기에서 복구됩니다. 실패·미읽음 파일은 다시 선택해야 합니다.', 'life-help'));
+      const batches = [...state.batches.values()].filter(batch => batch.workspaceId === state.bundle.workspaceId);
+      if (!currentBatch() && batches.length) state.batchId = batches[batches.length - 1].id;
+      if (batches.length > 1) {
+        const choice = selectField('선택 파일 묶음', 'lifeBatchChoice', batches.map((batch, index) => [batch.id, '파일 ' + batch.total + '개 · 묶음 ' + (index + 1)]), state.batchId);
+        choice.input.addEventListener('change', guarded(() => { state.batchId = choice.input.value; render(); }));
+        main.append(choice.label);
+      }
+      const panel = node('section', null, 'life-batch-list'); panel.id = 'lifeBatchList';
+      main.append(panel);
+      updateBatchPanel();
+      renderBatchPicker(main);
+    }
+
+    function updateBatchPanel() {
+      if (disposed || state.mode !== 'batch') return;
+      const panel = main.querySelector('#lifeBatchList'), batch = currentBatch();
+      if (!panel || !batch) return;
+      panel.replaceChildren();
+      const labels = { unread: '아직 읽지 않음 · 재선택 필요', reading: '파일 읽는 중', saving: '초안 보관 중', draft: '검토 중 보관됨', applied: '자료 보관됨', skipped: '건너뜀 · 초안 유지', failed: '실패 · 자료 미보관', removed: '검토 취소 · 자료 미보관' };
+      const count = name => batch.items.filter(item => item.status === name).length;
+      const summary = node('p', '자료 보관 ' + count('applied') + '개 · 검토초안 ' + count('draft') + '개 · 건너뜀 ' + count('skipped') + '개 · 실패 ' + count('failed') + '개 · 미읽음 ' + count('unread') + '개 · 선택 ' + batch.total + '개', 'life-batch-status');
+      summary.id = 'lifeBatchStatus'; summary.setAttribute('role', 'status'); panel.append(summary);
+      if (batch.recovered && batch.items.length < batch.total) panel.append(node('p', '저장되지 않은 파일은 이 목록에서 복구할 수 없습니다. 원래 파일을 다시 선택해 주세요.', 'life-help'));
+      if (batch.reading) {
+        const stop = button('파일 읽기 중단', () => { stopBatchReading(); updateBatchPanel(); announce('새 파일 읽기를 중단했습니다. 보관된 초안과 자료는 유지합니다. 진행 중인 저장은 결과가 확인되면 표시합니다.'); });
+        stop.id = 'lifeBatchStop'; panel.append(stop);
+      }
+      const next = batch.items.find(item => item.status === 'draft');
+      if (next) { const proceed = button('다음 파일 검토', guarded(() => openBatchItem(next)), 'life-primary'); proceed.id = 'lifeBatchNext'; panel.append(proceed); }
+      const rows = node('div', null, 'life-batch-rows');
+      batch.items.forEach(item => {
+        const row = node('article', null, 'life-batch-row');
+        row.dataset.batchIndex = String(item.index); row.dataset.batchState = item.status;
+        if (item.stageId) row.dataset.stageId = item.stageId;
+        row.append(node('h3', item.label), node('p', labels[item.status], 'life-meta'));
+        if (item.message) row.append(node('p', item.message, 'life-help'));
+        const actions = node('div', null, 'life-actions');
+        if (['draft', 'skipped'].includes(item.status)) actions.append(button('이 파일 검토', guarded(() => openBatchItem(item))), button('건너뛰기 · 초안 유지', guarded(() => skipBatchItem(item))));
+        if (item.unsaved) {
+          actions.append(button('입력 확인', guarded(() => openBatchItem(item))), button('다시 초안 보관', guarded(async () => {
+            const saved = await storage.saveStage(item.unsaved);
+            item.stageId = saved.stageId; item.status = 'draft'; delete item.unsaved; item.message = '';
+            await refreshData(); updateBatchPanel(); announce('검토 중 보관됨 · 이 브라우저에 임시 보관했습니다.');
+          })));
+        }
+        if (item.status === 'applied' && item.result) actions.append(button('보관한 원문 열기', guarded(() => navigate('source', { sourceId: item.result.sourceId, sourceVersionId: item.result.sourceVersionId, locator: null }))));
+        else if (item.status === 'applied') actions.append(node('p', '이전 보관 결과입니다. 원천 기록 목록에서 자료를 찾아주세요.', 'life-help'));
+        row.append(actions); rows.append(row);
+      });
+      panel.append(rows);
     }
 
     function syncAccountKey(account) {
@@ -337,11 +583,12 @@
       }
     }
 
-    async function commit(changes, stage) {
+    async function commit(changes, stage, stageResult) {
       const request = {
         workspaceId: state.bundle.workspaceId, baseRevision: state.bundle.revision, changes
       };
       if (stage) { request.stageId = stage.stageId; request.stageRevision = stage.revision; }
+      if (stageResult) request.stageResult = stageResult;
       const signature = JSON.stringify(request);
       if (!state.pendingOperation || state.pendingOperation.signature !== signature) {
         state.pendingOperation = { signature, operationId: core.id() };
@@ -402,6 +649,7 @@
       const workspace = selectField('작업공간', 'lifeWorkspace', state.workspaces.map(w => [w.workspaceId, w.title]), state.bundle.workspaceId);
       workspace.input.addEventListener('change', guarded(async () => {
         const selected = workspace.input.value;
+        invalidateBatchContext();
         if (dirty()) await persistStage();
         await storage.setActive(selected);
         state.bundle = await storage.read(selected);
@@ -441,6 +689,7 @@
         render();
         announce('최신 내용을 불러왔습니다. 보관 중인 입력은 유지됩니다. 다시 검토해 주세요.');
       })));
+      if ([...state.batches.values()].some(batch => batch.workspaceId === state.bundle.workspaceId)) actions.append(button('선택 파일 목록', guarded(() => navigate('batch'))));
       toolbar.append(nav, actions);
     }
 
@@ -448,7 +697,15 @@
       if (!state.stages.length) return;
       const details = node('details', null, 'life-details');
       details.append(node('summary', '검토 중 ' + state.stages.length + '개 · 이어서 확인'));
+      const listedBatches = new Set();
       state.stages.forEach(stage => {
+        if (validBatchStage(stage)) {
+          if (!listedBatches.has(stage.batchId)) {
+            listedBatches.add(stage.batchId);
+            details.append(button('파일 ' + stage.batchTotal + '개 · 검토 목록', guarded(() => { state.batchId = stage.batchId; return navigate('batch'); })));
+          }
+          return;
+        }
         const row = node('div', null, 'life-row');
         row.append(button(stage.input.title || stage.input.fileName || '제목 없는 검토 항목', guarded(() => openStage(stage.stageId))), node('span', originName(stage.input.origin), 'life-meta'));
         details.append(row);
@@ -566,6 +823,10 @@
       const version = versions.find(v => v.id === state.sourceVersionId) || versions.slice(-1)[0];
       if (!source || !version) { main.append(title('자료를 찾을 수 없습니다.'), button('원천 기록으로 돌아가기', guarded(() => navigate('sources')))); return; }
       state.sourceVersionId = version.id;
+      const batch = currentBatch();
+      if (batch && batch.items.some(item => item.result?.sourceVersionId === version.id)) {
+        const back = button('파일 목록으로 돌아가기', guarded(() => navigate('batch'))); back.id = 'lifeBatchReturn'; main.append(back);
+      }
       main.append(title(sourceLabel(source)), node('p', originName(source.origin) + ' · ' + (COVERAGE[version.coverage.status] || COVERAGE.unknown), 'life-help'));
       main.append(button('모음으로 돌아가기', guarded(() => navigate('topics'))));
       if (versions.length > 1) {
@@ -663,6 +924,13 @@
     function renderImport() {
       if (!state.stage || state.stage.state !== 'draft') newDraft();
       const input = state.stage.input;
+      if (validBatchStage(state.stage)) {
+        state.batchId = state.stage.batchId;
+        const back = button('파일 목록으로 돌아가기', guarded(() => navigate('batch'))); back.id = 'lifeBatchReturn'; main.append(back, node('p', '현재 검토: ' + (state.stage.fileLabel || input.fileName), 'life-help'));
+        const item = currentBatch()?.items.find(row => row.stageId === state.stage.stageId);
+        if (item && !item.unsaved) main.append(button('건너뛰기 · 초안 유지', guarded(() => skipBatchItem(item))));
+      }
+      renderBatchPicker(main);
       main.append(title('선택한 기록 가져오기'), node('p', '본문·UTF-8 텍스트 파일·링크 중 필요한 내용만 제공합니다. 원래 앱은 그대로 유지됩니다.', 'life-help'));
       const form = node('form', null, 'life-import-form');
       form.addEventListener('submit', event => event.preventDefault());
@@ -673,11 +941,12 @@
       const body = field('가져온 본문', 'textarea', 'lifeImportText', input.text);
       body.input.rows = 10;
       body.input.spellcheck = false;
-      const file = field('UTF-8 .txt 또는 .md 파일 (1 MiB까지)', 'file', 'lifeImportFile', '');
+      const file = field(validBatchStage(state.stage) ? '현재 검토의 본문을 파일로 교체 (1 MiB까지)' : 'UTF-8 .txt 또는 .md 파일 (1 MiB까지)', 'file', 'lifeImportFile', '');
       file.input.accept = '.txt,.md,text/plain,text/markdown';
       file.input.addEventListener('change', guarded(async () => {
         const selected = file.input.files[0];
         if (!selected) return;
+        if (validBatchStage(state.stage) && !global.confirm('현재 검토 파일의 본문을 바꿀까요? 다른 파일 초안은 그대로 유지됩니다.')) return;
         if (!/\.(txt|md)$/i.test(selected.name)) throw new Error('UTF-8 .txt 또는 .md 파일을 선택해 주세요.');
         if (selected.size > MAX_TEXT_BYTES) throw new Error('파일이 1 MiB를 넘습니다. 필요한 부분을 선택해 나누어 제공해 주세요.');
         let text;
@@ -821,12 +1090,13 @@
         if (!state.stage || state.stage.stageId !== snapshot.stageId || state.editTick !== tick) throw new Error('입력이 바뀌어 적용하지 않았습니다. 원문·발췌를 다시 확인해 주세요.');
         if (fresh.match.kind === 'overlap' && !snapshot.input.forceSeparate && !snapshot.input.existingSourceId) throw new Error('겹치는 자료를 비교해 같은 자료인지 별개 자료인지 먼저 선택해 주세요.');
         const changes = core.buildImportChanges(state.bundle, fresh, selected);
-        await commit(changes, snapshot);
+        await commit(changes, snapshot, validBatchStage(snapshot) ? { sourceId: fresh.source.id, sourceVersionId: fresh.version.id } : undefined);
         const retained = fresh.source.id;
         state.stage = null;
         state.prepared = null;
         state.savedTick = state.editTick = 0;
-        if (excerpts.length) await navigate('topics');
+        if (validBatchStage(snapshot)) { state.batchId = snapshot.batchId; await navigate('batch'); }
+        else if (excerpts.length) await navigate('topics');
         else await navigate('source', { sourceId: retained, sourceVersionId: fresh.version.id, locator: null });
         announce((excerpts.length ? '모음에 반영됨' : '자료 보관됨') + ' · 이 브라우저에 저장됨');
       };
@@ -884,6 +1154,7 @@
         preview.append(node('p', '검증된 사본: 자료 ' + candidate.sources.length + '개 · 원문 버전 ' + candidate.sourceVersions.length + '개 · 발췌 ' + candidate.records.length + '개'));
         preview.append(button('새 사본으로 복원', guarded(async () => {
           if (dirty()) await persistStage();
+          invalidateBatchContext();
           await storage.installWorkspace(candidate);
           state.bundle = await storage.read(candidate.workspaceId);
           state.stage = null;
@@ -900,7 +1171,9 @@
       const workspaceName = field('새 작업공간 이름', 'text', 'lifeNewWorkspaceName', '');
       main.append(workspaceName.label, button('빈 작업공간 만들기', guarded(async () => {
         if (dirty()) await persistStage();
+        invalidateBatchContext();
         const created = await storage.createWorkspace(workspaceName.input.value || '새 작업공간');
+        invalidateBatchContext();
         await storage.setActive(created.workspaceId);
         state.bundle = created;
         state.stage = null;
@@ -928,9 +1201,11 @@
           const adopt = button('현재 계정에 자료 사본 만들기', guarded(async () => {
             if (!ownership.input.checked) return;
             if (dirty()) await persistStage();
+            invalidateBatchContext();
             const copy = await storage.importUnownedWorkspace(choice.input.value);
             if (disposed) return;
-            await storage.setActive(copy.workspaceId);
+            invalidateBatchContext();
+        await storage.setActive(copy.workspaceId);
             state.bundle = copy;
             state.stage = state.prepared = null;
             state.topic = state.search = '';
@@ -1050,7 +1325,8 @@
         panel.append(node('p', '선택하지 않은 쪽의 사본: ' + (copy ? copy.title : '작업공간 목록에서 확인'), 'life-help'));
         panel.append(button('보존한 사본 열기', guarded(async () => {
           if (dirty()) await persistStage();
-          await storage.setActive(state.conflictCopyId);
+          invalidateBatchContext();
+        await storage.setActive(state.conflictCopyId);
           state.bundle = await storage.read(state.conflictCopyId);
           state.stage = state.prepared = null;
           state.topic = state.search = '';
@@ -1090,12 +1366,14 @@
         card.append(button('이 작업공간 받기', guarded(async () => {
           if (dirty()) await persistStage();
           const before = state.syncAccountKey;
+          invalidateBatchContext();
           const received = await sync.download(row.id);
           await refreshSync();
           if (before !== state.syncAccountKey) throw new Error('계정이 바뀌어 이전 화면으로 전환하지 않았습니다. 로컬 자료는 유지됩니다.');
           if (!received || !received.workspaceId) throw new Error('받은 작업공간을 확인하지 못했습니다. 기존 자료를 유지합니다.');
           const downloaded = await storage.read(received.workspaceId);
-          await storage.setActive(received.workspaceId);
+          invalidateBatchContext();
+        await storage.setActive(received.workspaceId);
           state.bundle = downloaded;
           state.stage = state.prepared = null;
           state.topic = state.search = '';
@@ -1193,7 +1471,8 @@
       if (disposed) return;
       renderHeader();
       main.replaceChildren();
-      if (state.mode === 'import') renderImport();
+      if (state.mode === 'batch') renderBatch();
+      else if (state.mode === 'import') renderImport();
       else if (state.mode === 'source') renderSource();
       else if (state.mode === 'sources') renderSources();
       else if (state.mode === 'transfer') renderTransfer();
@@ -1222,6 +1501,7 @@
     if (disposed) return { dispose };
     let active = await storage.getActive();
     if (!active && !state.workspaces.length) {
+      invalidateBatchContext();
       const first = await storage.createWorkspace('내 자료');
       active = first.workspaceId;
       await storage.setActive(active);
@@ -1239,6 +1519,7 @@
       main.append(title('보관한 작업공간 선택'));
       const choice = selectField('작업공간', 'lifeWorkspaceChoice', state.workspaces.map(w => [w.workspaceId, w.title]), state.workspaces[0].workspaceId);
       main.append(choice.label, button('선택한 작업공간 열기', guarded(async () => {
+        invalidateBatchContext();
         await storage.setActive(choice.input.value);
         state.bundle = await storage.read(choice.input.value);
         await refreshData();
@@ -1280,6 +1561,9 @@
     function dispose() {
       if (disposed) return;
       disposed = true;
+      invalidateBatchContext();
+      state.batches.clear();
+      state.allStages = [];
       root.replaceChildren();
       root.remove();
       state.sourceDrafts.clear();

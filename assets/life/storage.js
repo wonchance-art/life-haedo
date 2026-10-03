@@ -430,7 +430,7 @@
       try {
         const input = clone(request);
         if (!plain(input)) throw fault('invalid_request', '저장할 작업을 확인하세요.');
-        const { workspaceId, baseRevision, changes, stageId, stageRevision } = input;
+        const { workspaceId, baseRevision, changes, stageId, stageRevision, stageResult } = input;
         operationId = input.operationId;
         requireId(operationId, '작업');
         requireId(workspaceId, '작업공간');
@@ -438,7 +438,13 @@
         if (!plain(changes)) throw fault('invalid_request', '변경 내용을 확인하세요.');
         if (stageId !== undefined) { requireId(stageId, '가져오기'); requireRevision(stageRevision, 'stageRevision'); }
         else if (stageRevision !== undefined) throw fault('invalid_request', '가져오기 식별자가 필요합니다.');
-        const payload = stablePayload({ workspaceId, baseRevision, changes, stageId, stageRevision });
+        if (stageResult !== undefined) {
+          if (stageId === undefined) throw fault('invalid_stage_result', '보관 결과를 연결할 가져오기 항목이 필요합니다.');
+          validateStageResult(stageResult);
+        }
+        // Omitting this extension preserves the byte-for-byte payload of earlier receipts.
+        const payload = stablePayload({ workspaceId, baseRevision, changes, stageId, stageRevision,
+          ...(stageResult !== undefined ? { stageResult } : {}) });
         let wrote = false, updatedSync = null;
         const result = await transaction(['bundles', 'operations', 'staging', 'meta'], 'readwrite', async tx => {
           await assertOwner(tx.objectStore('meta'), workspaceId);
@@ -463,10 +469,12 @@
           if (updated.workspaceId !== workspaceId || updated.revision !== bundle.revision + 1) {
             throw fault('invalid_revision', '저장할 작업공간 버전을 확인할 수 없습니다.');
           }
+          if (stageResult !== undefined) validateStageResult(stageResult, updated);
           const stored = { status: 'stored', revision: updated.revision, operationId };
           const sync = await readSyncState(tx.objectStore('meta'), workspaceId, bundle);
           await tx.objectStore('bundles').put(updated);
-          if (stage) await tx.objectStore('staging').put({ ...stage, state: 'applied', revision: stage.revision + 1, updatedAt: new Date().toISOString() });
+          if (stage) await tx.objectStore('staging').put({ ...stage, state: 'applied', revision: stage.revision + 1,
+            updatedAt: new Date().toISOString(), ...(stageResult !== undefined ? { appliedResult: clone(stageResult) } : {}) });
           if (sync) {
             sync.status = syncStatus(sync, updated); sync.error = null;
             updatedSync = await writeSyncState(tx.objectStore('meta'), sync);
@@ -706,12 +714,29 @@
       syncChanged(result.metadata);
       return result;
     }
+    function validateStageResult(value, bundle) {
+      try {
+        if (!plain(value) || Object.keys(value).length !== 2 ||
+            Object.keys(value).some(key => key !== 'sourceId' && key !== 'sourceVersionId')) throw new Error('shape');
+        requireId(value.sourceId, '자료'); requireId(value.sourceVersionId, '원문 버전');
+      } catch (_) {
+        throw fault('invalid_stage_result', '보관한 원문을 연결할 자료와 버전 식별자를 확인하세요.');
+      }
+      if (bundle && (!bundle.sources.some(source => source.id === value.sourceId) ||
+          !bundle.sourceVersions.some(version => version.id === value.sourceVersionId && version.sourceId === value.sourceId))) {
+        throw fault('invalid_stage_result', '보관 결과가 이 작업공간의 원문과 일치하지 않습니다. 입력은 유지됩니다.');
+      }
+    }
     function validateStage(stage) {
       if (!plain(stage)) throw fault('invalid_stage', '가져오기 초안을 확인하세요.');
       requireId(stage.stageId, '가져오기');
       requireId(stage.workspaceId, '작업공간');
       requireRevision(stage.revision);
       if (stage.state !== 'draft' && stage.state !== 'applied') throw fault('invalid_stage', '가져오기 상태를 확인하세요.');
+      if (Object.hasOwn(stage, 'appliedResult')) {
+        if (stage.state !== 'applied') throw fault('invalid_stage', '검토 중인 항목에 확정된 보관 결과를 넣을 수 없습니다.');
+        validateStageResult(stage.appliedResult);
+      }
       stablePayload(stage);
     }
     async function saveStage(input) {
@@ -787,11 +812,17 @@
       const copy = await core().restoreBackup(core().makeBackup(source.bundle));
       scopeGuard();
       const sourceIds = new Map(source.bundle.sources.map((item, index) => [item.id, copy.sources[index].id]));
+      const versionIds = new Map(source.bundle.sourceVersions.map((item, index) => [item.id, copy.sourceVersions[index].id]));
       const copiedStages = source.stages.map(stage => {
         const result = { ...clone(stage), stageId: core().id(), workspaceId: copy.workspaceId, revision: 1 };
         if (result.input?.existingSourceId) {
           if (!sourceIds.has(result.input.existingSourceId)) throw fault('invalid_stage', '이전 초안의 원천 연결을 확인할 수 없습니다. 원본과 초안을 보존했습니다.');
           result.input.existingSourceId = sourceIds.get(result.input.existingSourceId);
+        }
+        if (stage.appliedResult !== undefined) {
+          validateStageResult(stage.appliedResult, source.bundle);
+          result.appliedResult = { sourceId: sourceIds.get(stage.appliedResult.sourceId), sourceVersionId: versionIds.get(stage.appliedResult.sourceVersionId) };
+          validateStageResult(result.appliedResult, copy);
         }
         validateStage(result);
         return result;

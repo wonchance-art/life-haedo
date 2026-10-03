@@ -656,3 +656,176 @@ test('a copy finishing validation after logout is discarded and leaves unowned s
   assert.deepEqual(await base.read(original.workspaceId), original);
   assert.equal((await base.listWorkspaces()).length, 1);
 });
+
+async function batchItem(storage, bundle, index = 0, batchId = Core.id()) {
+  const input = { origin: 'obsidian', fileName: `anonymous-${index}.md`, text: `보존할 익명 원문 ${index}` };
+  const stage = await storage.saveStage({ ...draft(bundle, Core.id()), input,
+    batchId, batchIndex: index, batchTotal: 3, fileLabel: input.fileName });
+  const prepared = await Core.prepareImport(input, bundle);
+  const stageResult = { sourceId: prepared.source.id, sourceVersionId: prepared.version.id };
+  const request = { operationId: Core.id(), workspaceId: bundle.workspaceId, baseRevision: bundle.revision,
+    changes: Core.buildImportChanges(bundle, prepared), stageId: stage.stageId, stageRevision: stage.revision, stageResult };
+  return { stage, request };
+}
+
+test('batch item stores its exact source result with the receipt, survives reopen, and stays out of backup', async t => {
+  const { storage, rows } = syncFixture(); t.after(() => storage.close());
+  const bundle = await storage.createWorkspace('여러 파일 검증');
+  const { stage, request } = await batchItem(storage, bundle);
+  const stored = await storage.commitLocal(request);
+  assert.equal(stored.status, 'stored');
+  assert.deepEqual(await storage.commitLocal(request), stored);
+  assert.equal((await storage.read(bundle.workspaceId)).revision, 1);
+  const receipt = rows.get('operations').get(JSON.stringify([bundle.workspaceId, request.operationId]));
+  assert.deepEqual(JSON.parse(receipt.payload).stageResult, request.stageResult);
+  storage.close();
+  const applied = await storage.getStage(stage.stageId);
+  assert.equal(applied.state, 'applied');
+  assert.deepEqual(applied.appliedResult, request.stageResult);
+  assert.equal(applied.batchId, stage.batchId);
+  assert.equal(applied.fileLabel, stage.fileLabel);
+  applied.appliedResult.sourceId = Core.id();
+  assert.deepEqual((await storage.getStage(stage.stageId)).appliedResult, request.stageResult);
+  const backup = Core.makeBackup(await storage.read(bundle.workspaceId));
+  assert.equal(backup.manifest.stagingIncluded, false);
+  assert.equal(JSON.stringify(backup).includes(stage.batchId), false);
+  assert.equal(JSON.stringify(backup).includes('appliedResult'), false);
+});
+
+test('legacy receipt payloads and applied stages without results remain compatible', async t => {
+  const { storage, rows } = syncFixture(); t.after(() => storage.close());
+  const bundle = await storage.createWorkspace();
+  const { stage, request } = await batchItem(storage, bundle);
+  const legacyRequest = { ...request }; delete legacyRequest.stageResult;
+  const stored = await storage.commitLocal(legacyRequest);
+  const row = rows.get('operations').get(JSON.stringify([bundle.workspaceId, request.operationId]));
+  assert.deepEqual(Object.keys(JSON.parse(row.payload)).sort(), ['baseRevision', 'changes', 'stageId', 'stageRevision', 'workspaceId']);
+  assert.deepEqual(await storage.commitLocal({ ...legacyRequest, stageResult: undefined }), stored);
+  assert.equal(Object.hasOwn(await storage.getStage(stage.stageId), 'appliedResult'), false);
+  assert.equal((await storage.commitLocal(request)).error.code, 'operation_mismatch');
+
+  const next = await batchItem(storage, await storage.read(bundle.workspaceId), 1);
+  assert.equal((await storage.commitLocal(next.request)).status, 'stored');
+  const changed = { ...next.request, stageResult: { ...next.request.stageResult, sourceId: Core.id() } };
+  assert.equal((await storage.commitLocal(changed)).error.code, 'operation_mismatch');
+  assert.deepEqual((await storage.getStage(next.stage.stageId)).appliedResult, next.request.stageResult);
+});
+
+test('stage result rejects forged drafts, malformed IDs and sources outside the resulting workspace', async t => {
+  const { storage, rows } = syncFixture(); t.after(() => storage.close());
+  const original = await initialImport(storage);
+  const { stage, request } = await batchItem(storage, original);
+  await assert.rejects(storage.saveStage({ ...stage, appliedResult: request.stageResult }), { code: 'invalid_stage' });
+  await assert.rejects(storage.saveStage({ ...stage, appliedResult: undefined }), { code: 'invalid_stage' });
+  const originalReceiptCount = rows.get('operations').size;
+  const invalid = [
+    { ...request, stageId: undefined, stageRevision: undefined },
+    { ...request, stageResult: null },
+    { ...request, stageResult: { ...request.stageResult, sourceId: '' } },
+    { ...request, stageResult: { ...request.stageResult, sourceId: [request.stageResult.sourceId] } },
+    { ...request, stageResult: { sourceId: request.stageResult.sourceId } },
+    { ...request, stageResult: { ...request.stageResult, workspaceId: original.workspaceId } },
+    { ...request, stageResult: { sourceId: Core.id(), sourceVersionId: Core.id() } },
+    { ...request, stageResult: { sourceId: original.sources[0].id, sourceVersionId: request.stageResult.sourceVersionId } }
+  ];
+  for (const item of invalid) {
+    const rejected = await storage.commitLocal({ ...item, operationId: Core.id() });
+    assert.equal(rejected.status, 'rejected');
+    assert.equal(rejected.error.code, 'invalid_stage_result');
+  }
+  assert.deepEqual(await storage.read(original.workspaceId), original);
+  assert.deepEqual(await storage.getStage(stage.stageId), stage);
+  assert.equal(rows.get('operations').size, originalReceiptCount);
+});
+
+test('duplicate import reuses Core-valid opaque IDs without adding a second original', async t => {
+  const { storage } = syncFixture(); t.after(() => storage.close());
+  const empty = Core.createWorkspace();
+  const legacy = await Core.prepareImport({ origin: 'obsidian', title: '익명 자료', text: '검증할 원문입니다.' }, empty);
+  legacy.source.id = legacy.version.sourceId = 'src_note';
+  legacy.version.id = 'version_note';
+  const original = Core.applyChanges(empty, Core.buildImportChanges(empty, legacy));
+  await storage.installWorkspace(original);
+  const input = { origin: 'obsidian', title: '익명 자료', text: '검증할 원문입니다.', existingSourceId: original.sources[0].id };
+  const stage = await storage.saveStage({ ...draft(original, Core.id()), input });
+  const prepared = await Core.prepareImport(input, original);
+  assert.equal(prepared.match.kind, 'exact_duplicate');
+  const request = { operationId: Core.id(), workspaceId: original.workspaceId, baseRevision: original.revision,
+    changes: Core.buildImportChanges(original, prepared), stageId: stage.stageId, stageRevision: stage.revision,
+    stageResult: { sourceId: prepared.source.id, sourceVersionId: prepared.version.id } };
+  assert.equal((await storage.commitLocal(request)).status, 'stored');
+  assert.equal((await storage.read(original.workspaceId)).sourceVersions.length, 1);
+  assert.deepEqual((await storage.getStage(stage.stageId)).appliedResult, request.stageResult);
+});
+
+test('quota and transaction abort retain earlier batch results and pending drafts for identical retry', async t => {
+  for (const failure of ['stage_write', 'receipt_write', 'transaction_completion']) await t.test(failure, async () => {
+    const { storage, rows, control } = syncFixture();
+    try {
+      const original = await storage.createWorkspace();
+      const first = await batchItem(storage, original);
+      assert.equal((await storage.commitLocal(first.request)).status, 'stored');
+      const afterFirst = await storage.read(original.workspaceId);
+      const second = await batchItem(storage, afterFirst, 1, first.stage.batchId);
+      const third = await batchItem(storage, afterFirst, 2, first.stage.batchId);
+      if (failure === 'transaction_completion') control.failCompletion = true;
+      else control.failWrite = { name: failure === 'stage_write' ? 'staging' : 'operations', method: failure === 'stage_write' ? 'put' : 'add' };
+      const rejected = await storage.commitLocal(second.request);
+      assert.equal(rejected.status, 'rejected');
+      assert.equal(rejected.error.code, failure === 'transaction_completion' ? 'storage_aborted' : 'storage_quota');
+      assert.deepEqual(await storage.read(original.workspaceId), afterFirst);
+      assert.deepEqual(await storage.getStage(second.stage.stageId), second.stage);
+      assert.deepEqual(await storage.getStage(third.stage.stageId), third.stage);
+      assert.deepEqual((await storage.getStage(first.stage.stageId)).appliedResult, first.request.stageResult);
+      assert.equal(rows.get('operations').size, 1);
+      assert.equal((await storage.commitLocal(second.request)).status, 'stored');
+      assert.deepEqual((await storage.getStage(second.stage.stageId)).appliedResult, second.request.stageResult);
+      assert.equal(rows.get('operations').size, 2);
+    } finally { storage.close(); }
+  });
+});
+
+test('stale batch review cannot persist a result and a changed account aborts the whole item', async t => {
+  const { storage: base, control, rows } = syncFixture(); t.after(() => base.close());
+  const a = base.forAccount(accountA);
+  const bundle = await a.createWorkspace();
+  const { stage, request } = await batchItem(a, bundle);
+  const edited = await a.saveStage({ ...stage, fileLabel: '검토 후 이름.md' });
+  assert.equal((await a.commitLocal(request)).status, 'conflict');
+  assert.deepEqual(await a.getStage(stage.stageId), edited);
+  const currentRequest = { ...request, operationId: Core.id(), stageRevision: edited.revision };
+  let b;
+  control.afterWrite = ({ name }) => {
+    if (name === 'staging') { control.afterWrite = null; b = base.forAccount(accountB); }
+  };
+  assert.equal((await a.commitLocal(currentRequest)).error.code, 'storage_scope_closed');
+  assert.equal(rows.get('operations').size, 0);
+  await assert.rejects(b.getStage(stage.stageId), { code: 'workspace_access_denied' });
+  assert.equal((await b.commitLocal(currentRequest)).error.code, 'workspace_access_denied');
+  const againA = base.forAccount(accountA);
+  assert.deepEqual(await againA.read(bundle.workspaceId), bundle);
+  assert.deepEqual(await againA.getStage(stage.stageId), edited);
+  assert.equal((await againA.commitLocal(currentRequest)).status, 'stored');
+  const againB = base.forAccount(accountB);
+  assert.equal((await againB.commitLocal(currentRequest)).error.code, 'workspace_access_denied');
+});
+
+test('unowned copy remaps applied result references and preserves the original stage and backup boundary', async t => {
+  const { storage: base } = syncFixture(); t.after(() => base.close());
+  const original = await base.createWorkspace();
+  const { stage, request } = await batchItem(base, original);
+  assert.equal((await base.commitLocal(request)).status, 'stored');
+  const before = await base.getStage(stage.stageId);
+  const account = base.forAccount(accountA);
+  const copy = await account.importUnownedWorkspace(original.workspaceId);
+  const [copied] = await account.listStages(copy.workspaceId);
+  assert.notEqual(copied.stageId, stage.stageId);
+  assert.equal(copied.state, 'applied');
+  assert.equal(copied.batchId, stage.batchId);
+  assert.deepEqual(copied.appliedResult, { sourceId: copy.sources[0].id, sourceVersionId: copy.sourceVersions[0].id });
+  assert.notEqual(copied.appliedResult.sourceId, request.stageResult.sourceId);
+  assert.notEqual(copied.appliedResult.sourceVersionId, request.stageResult.sourceVersionId);
+  assert.deepEqual(await base.getStage(stage.stageId), before);
+  assert.equal(await account.getSyncState(copy.workspaceId), null);
+  assert.equal(JSON.stringify(Core.makeBackup(copy)).includes('appliedResult'), false);
+});

@@ -1,6 +1,6 @@
 /* Protected platform integration with real SDK/IndexedDB/SW and anonymous HTTP.
  * SITE_DIR must be an output of scripts/prepare-site.mjs with test public config.
- * OLD_SITE_DIR optionally supplies the preserved Cloud v50 static fixture.
+ * OLD_SITE_DIR optionally supplies a preserved earlier Cloud static fixture.
  * This does not authenticate with Google or prove production RLS/Apple behavior.
  */
 'use strict';
@@ -24,7 +24,24 @@ const web=http.createServer(async(req,res)=>{
 });
 let passed=0;const failures=[],errors=[];let expectedErrors=0;
 async function check(name,fn){try{await fn();passed++;console.log(`PASS ${name}`);}catch(error){failures.push(name);console.error(`FAIL ${name}\n${error.stack}`);}}
+async function waitForPage(page,predicate,arg){
+  // Some installed Playwright versions treat an async predicate's Promise as
+  // truthy in waitForFunction, even when it later resolves to false.
+  const deadline=Date.now()+15000;
+  while(Date.now()<deadline){
+    if(await page.evaluate(predicate,arg)===true)return;
+    await new Promise(resolve=>setTimeout(resolve,50));
+  }
+  throw new Error('The asynchronous browser condition did not become true.');
+}
 async function main(){
+  const cacheName=async directory=>{
+    const match=(await fs.readFile(path.join(directory,'sw.js'),'utf8')).match(/const CACHE\s*=\s*['"](haedo-v\d+)['"]/);
+    if(!match)throw new Error('The fixture service worker has no versioned cache.');
+    return match[1];
+  };
+  const newCache=await cacheName(site);
+  const oldCache=oldSite?await cacheName(oldSite):null;
   await new Promise(resolve=>web.listen(0,'127.0.0.1',resolve));
   process.env.BASE_URL=`http://127.0.0.1:${web.address().port}`;
   const {FakeCloud,platformContext,accounts,cloud,base}=require('./life-sync-browser.cjs');
@@ -160,9 +177,9 @@ async function main(){
       }finally{server.offline.delete('platform');await ctx.setOffline(false);page.expectedTransport=false;}
       await click(page,'다시 확인');await ready(page);
       assert.ok((await stored(page)).sources.some(s=>s.title==='오프라인 보존'));
-      const cached=await page.evaluate(async()=>{
-        const cache=await caches.open('haedo-v51');return(await cache.keys()).map(request=>request.url);
-      });
+      const cached=await page.evaluate(async name=>{
+        const cache=await caches.open(name);return(await cache.keys()).map(request=>request.url);
+      },newCache);
       assert.ok(cached.length>20);assert.ok(cached.every(url=>new URL(url).origin===new URL(base).origin&&!new URL(url).search));
       assert.ok(!cached.some(url=>/auth\/|rest\/|token|code=/.test(url)));
     });
@@ -175,25 +192,51 @@ async function main(){
       assert.equal(await p.evaluate(()=>HaedoAuth.user),null);assert.deepEqual(await p.evaluate(()=>__productDbOpens),[]);
       await bad.close();
     });
-    if(oldSite)await check('preserved Cloud v50 fixture upgrades atomically to v51 without altering old local data',async()=>{
+    if(oldSite)await check(`preserved Cloud ${oldCache} fixture upgrades atomically to ${newCache} without altering old local data`,async()=>{
+      assert.notEqual(oldCache,newCache,'The upgrade requires two distinct actual service workers.');
+      const oldHasAuth=(await fs.readFile(path.join(oldSite,'life.html'),'utf8')).includes('assets/platform-auth.js');
       currentSite=oldSite;
       const old=await context('upgrade'),p=await old.newPage();observe(p);
-      await p.goto(`${base}/life.html`);await p.waitForFunction(()=>globalThis.HaedoLife?.Shell?.ready);await p.evaluate(()=>HaedoLife.Shell.ready);
-      await p.waitForFunction(async()=>!!navigator.serviceWorker.controller&&(await caches.keys()).includes('haedo-v50'));
+      if(oldHasAuth)await login(p,'upgrade',accounts.a);
+      else {await p.goto(`${base}/life.html`);await p.waitForFunction(()=>globalThis.HaedoLife?.Shell?.ready);await p.evaluate(()=>HaedoLife.Shell.ready);}
+      await waitForPage(p,async name=>{
+        const registration=await navigator.serviceWorker.getRegistration();
+        return registration?.active?.state==='activated' && navigator.serviceWorker.controller===registration.active && (await caches.keys()).includes(name);
+      },oldCache);
       const fixture=await p.evaluate(async()=>{
-        const s=HaedoLife.Storage,c=HaedoLife.Core,b=await s.createWorkspace('v50 익명 원본');const prepared=await c.prepareImport({origin:'other',title:'v50 원문',text:'이전 버전 원문 유지'},b);
+        const s=HaedoLife.Shell.storage||HaedoLife.Storage,c=HaedoLife.Core,b=await s.createWorkspace('이전 버전 익명 원본');const prepared=await c.prepareImport({origin:'other',title:'이전 원문',text:'이전 버전 원문 유지'},b);
         await s.commitLocal({operationId:c.id(),workspaceId:b.workspaceId,baseRevision:b.revision,changes:c.buildImportChanges(b,prepared,[])});
-        localStorage.setItem('caeyeon_life_registry','{"docs":[],"anonymous":"preserve-v50"}');return await s.read(b.workspaceId);
+        const stage=await s.saveStage({stageId:c.id(),workspaceId:b.workspaceId,revision:0,state:'draft',input:{origin:'other',title:'이전 검토초안',text:'미적용 원문 유지'},excerpts:[]});
+        await s.setActive(b.workspaceId);
+        localStorage.setItem('caeyeon_life_registry','{"docs":[],"anonymous":"preserve-upgrade"}');return {bundle:await s.read(b.workspaceId),stage};
       });
       currentSite=site;await p.evaluate(async()=>{const registration=await navigator.serviceWorker.getRegistration();await registration.update();});
-      await p.waitForFunction(async()=>{const keys=await caches.keys();return keys.includes('haedo-v51')&&!keys.includes('haedo-v50');});
-      await p.reload();await p.waitForURL('**/login.html?next=*');await login(p,'upgrade',accounts.a);
-      assert.ok(!(await p.evaluate(()=>HaedoLife.Shell.storage.listWorkspaces())).some(w=>w.workspaceId===fixture.workspaceId));
-      const original=await p.evaluate(async id=>{const db=await idb.openDB('life-tools-v1',1);try{return await db.get('bundles',id);}finally{db.close();}},fixture.workspaceId);
-      assert.deepEqual(original,fixture);assert.equal(await p.evaluate(()=>localStorage.getItem('caeyeon_life_registry')),'{"docs":[],"anonymous":"preserve-v50"}');
-      const runtime=await p.evaluate(async()=>{const cache=await caches.open('haedo-v51');return Promise.all(['assets/platform-auth.js','assets/platform-life-remote.js','assets/life/core.js','assets/life/storage.js','vendor/supabase/supabase.js'].map(path=>cache.match(new URL(path,location.href).href).then(Boolean)));});
-      assert.ok(runtime.every(Boolean));await old.close();
-    });else console.log('SKIP v50 update fixture (OLD_SITE_DIR not supplied)');
+      await waitForPage(p,async names=>{
+        const keys=await caches.keys();
+        const registration=await navigator.serviceWorker.getRegistration();
+        return keys.includes(names.current) && !keys.includes(names.old) && registration?.active?.state==='activated' && navigator.serviceWorker.controller===registration.active;
+      },{current:newCache,old:oldCache});
+      await p.reload();
+      if(oldHasAuth)await ready(p);
+      else {await p.waitForURL('**/login.html?next=*');await login(p,'upgrade',accounts.a);}
+      const visible=await p.evaluate(()=>HaedoLife.Shell.storage.listWorkspaces());
+      assert.equal(visible.some(w=>w.workspaceId===fixture.bundle.workspaceId),oldHasAuth);
+      const original=await p.evaluate(async ids=>{const db=await idb.openDB('life-tools-v1',1);try{return {bundle:await db.get('bundles',ids.workspaceId),stage:await db.get('staging',ids.stageId)};}finally{db.close();}},{workspaceId:fixture.bundle.workspaceId,stageId:fixture.stage.stageId});
+      assert.deepEqual(original,fixture);assert.equal(await p.evaluate(()=>localStorage.getItem('caeyeon_life_registry')),'{"docs":[],"anonymous":"preserve-upgrade"}');
+      const modules=['assets/platform-auth.js','assets/platform-life-remote.js','assets/life/core.js','assets/life/storage.js','assets/life/ui.js','vendor/supabase/supabase.js'];
+      const runtime=await p.evaluate(async({name,modules})=>{
+        if(!await caches.has(name))return [];
+        const cache=await caches.open(name);
+        return Promise.all(modules.map(async path=>{
+          const response=await cache.match(new URL(path,location.href).href);
+          const hash=response?Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await response.arrayBuffer())),b=>b.toString(16).padStart(2,'0')).join(''):null;
+          return {path,hash};
+        }));
+      },{name:newCache,modules});
+      const {createHash}=require('node:crypto');
+      const expected=await Promise.all(modules.map(async path=>({path,hash:createHash('sha256').update(await fs.readFile(require('node:path').join(site,path))).digest('hex')})));
+      assert.deepEqual(runtime,expected,'The installed modules must match the complete new release.');await old.close();
+    });else console.log('SKIP preserved update fixture (OLD_SITE_DIR not supplied)');
     await check('unexpected console/page errors',async()=>assert.deepEqual(errors,[]));
   }finally{await Promise.all(contexts.map(ctx=>ctx.close().catch(()=>{})));await browser.close();await new Promise(resolve=>web.close(resolve));}
   console.log(`Platform integration: ${passed} passed, ${failures.length} failed; ${expectedErrors} intentional transport/callback errors. Anonymous HTTP only; no real Google OAuth/Apple proof.`);

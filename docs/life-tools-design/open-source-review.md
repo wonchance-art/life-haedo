@@ -161,3 +161,19 @@ SQL 담당의 시험 전용 도구는 **@electric-sql/pglite 0.5.8**, npm latest
 ## 공용 인증 통합: 기존 모듈 재사용
 
 2026-10-03 같은 날 확인한 SDK 2.117.2와 idb 8.0.3을 유지했다. PR #17의 Google PKCE·플랫폼 화면·저장 코드와 Cloud 원문·발췌·CAS를 통합하며 새 프레임워크나 인증 라이브러리를 도입하지 않았다. 단일 SDK 경로와 공용 세션을 사용하고, 앞 절의 별도 `life_tools_sync_auth_v1:` 세션은 독립 어댑터 검증용에만 남는다. 제품 `life.html`에서는 공용 `HaedoAuth` SDK를 빌려 쓰며 신규 독립 세션을 만들지 않는다. 같은 버전의 배포 원본·라이선스·해시 고정을 재사용했다.
+
+## R2 다중 TXT·Markdown 가져오기 재확인
+
+**2026-10-03 09:58 UTC**에 공식 자료를 다시 조회했다. 결정은 **새 라이브러리 없이**, 사용자가 선택한 `.txt/.md` 파일을 내장 API로 받고 기존 idb·파일별 staging·원자 저장을 재사용하는 것이다.
+
+| 후보·기능 | 실제 확인 근거·한계 | 선택 |
+| --- | --- | --- |
+| idb **8.0.3 · ISC** | [npm latest](https://registry.npmjs.org/idb), 게시 **2025-05-07 08:12:54 UTC**; [태그 LICENSE](https://github.com/jakearchibald/idb/blob/v8.0.3/LICENSE) 실제 확인. [README](https://github.com/jakearchibald/idb/blob/v8.0.3/README.md)의 여러 store 트랜잭션·`tx.done`과 트랜잭션 중 외부 `await` 금지를 확인 | 동봉 버전 유지. 파일 읽기·해시는 트랜잭션 밖에서 하고, 기존 `saveStage`/`commitLocal` 경계 사용 |
+| Obsidian Importer **3.1.11 · MIT** | [최신 릴리스](https://github.com/obsidianmd/obsidian-importer/releases/tag/3.1.11) **2026-10-02 23:06:10 UTC**, [실제 LICENSE](https://github.com/obsidianmd/obsidian-importer/blob/3.1.11/LICENSE), manifest 최소 Obsidian 1.13.0 확인. [README](https://github.com/obsidianmd/obsidian-importer/blob/3.1.11/README.md)는 MD/TXT 가져오기 안내와 community-led 유지관리·Obsidian 팀의 새 기능 추가 비활성을 명시 | 선택·검토·fixture 비교의 설계 참고. Obsidian 플러그인 전체를 웹앱에 넣지 않음. 이번 재확인에서는 MD/TXT 변환 소스를 직접 읽거나 설치·실행하지 않았으므로 변환 동작 검증으로 표현하지 않음 |
+| 내장 File·TextDecoder | [multiple](https://github.com/mdn/content/blob/main/files/en-us/web/html/reference/attributes/multiple/index.md), [File](https://github.com/mdn/content/blob/main/files/en-us/web/api/file/index.md), [Blob.arrayBuffer](https://github.com/mdn/content/blob/main/files/en-us/web/api/blob/arraybuffer/index.md), [TextDecoder 생성자](https://github.com/mdn/content/blob/main/files/en-us/web/api/textdecoder/textdecoder/index.md) 공식 MDN 원본 확인. FileList의 여러 File, Promise 읽기 실패, `fatal:true`의 잘못된 UTF-8 거절 지원 | 기존 브라우저 기능 재사용. 새 실행 패키지·라이선스 동봉 없음. 기본 `ignoreBOM:false`는 BOM을 출력에서 제외하므로 원래 파일 바이트의 완전 보존을 주장하지 않음 |
+
+idb와 [Importer](https://github.com/obsidianmd/obsidian-importer/security/advisories)의 공개 security advisories는 확인일에 게시된 권고 없음으로 표시했다([idb 페이지](https://github.com/jakearchibald/idb/security/advisories)). 전체 의존성 감사는 아니다. idb의 GitHub `releases/latest`는 릴리스 목록으로 이동했고 별도 릴리스 날짜·최근 commit 날짜는 확정하지 못했으므로 npm 게시일을 사용하며 유지관리 활성을 단정하지 않는다. 조회는 허용된 공식 npm/GitHub 경로로 했고 새 패키지를 설치하지 않았다.
+
+[Obsidian 공식 도움말](https://github.com/obsidianmd/obsidian-help/blob/master/en/Files%20and%20folders/How%20Obsidian%20stores%20data.md)은 vault note가 평문 Markdown임을 확인해 준다. 이번 범위는 선택 파일의 본문을 그대로 받는 것이며 폴더·vault 탐색, ZIP, frontmatter·wiki 링크 해석, 첨부 미디어 수집은 포함하지 않는다. 파일마다 검토·중복 선택·명시 저장을 하고, 다음 항목의 실패나 취소가 앞서 저장한 자료를 되돌리지 않는다.
+
+iPad Chrome의 실제 다중 선택·Files 제공자 다운로드는 문서 확인으로 증명하지 않았다. 실제 기기에서 읽기 실패·중복·부분 성공·재개를 확인한다. TXT/MD 샘플에서 반복되는 변환·첨부·폴더 요구가 확인되거나 idb의 보안 권고·지원 환경이 바뀔 때만 라이브러리 선택을 재검토한다.
