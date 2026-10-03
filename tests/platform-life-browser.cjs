@@ -44,7 +44,7 @@ async function main(){
   const oldCache=oldSite?await cacheName(oldSite):null;
   await new Promise(resolve=>web.listen(0,'127.0.0.1',resolve));
   process.env.BASE_URL=`http://127.0.0.1:${web.address().port}`;
-  const {FakeCloud,platformContext,accounts,cloud,base}=require('./life-sync-browser.cjs');
+  const {FakeCloud,platformContext,accounts,cloud,base,openManagement,openAccount}=require('./life-sync-browser.cjs');
   const pw=require(process.env.PW_MODULE_PATH||'/opt/codex/cua_node/lib/node_modules/playwright');
   const browser=await pw.chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
   const server=new FakeCloud(),contexts=[];
@@ -66,7 +66,11 @@ async function main(){
     return value;
   }
   const settle=page=>page.waitForFunction(()=>!document.querySelector('.life-app[aria-busy="true"]'));
-  async function click(page,name){await page.getByRole('button',{name,exact:true}).click();await settle(page);}
+  async function click(page,name){
+    if(['기기 간 동기화','내보내기·사본 복원'].includes(name))await openManagement(page);
+    if(name==='로그아웃')await openAccount(page);
+    await page.getByRole('button',{name,exact:true}).click();await settle(page);
+  }
   async function ready(page){await page.waitForFunction(()=>globalThis.HaedoLife?.Shell?.storage && !document.querySelector('#lifeApp').hidden);await page.evaluate(()=>HaedoLife.Shell.ready);}
   async function login(page,device,account){
     server.oauthAccounts.set(device,account);
@@ -118,7 +122,7 @@ async function main(){
     await check('protected import/excerpt/source jump, reload and backup-copy restore work',async()=>{
       await importText(page,'익명 A 자료','첫 문장\n🌱 계정 A 원문 구절\n끝','🌱 계정 A 원문 구절');
       await click(page,'원문에서 보기');
-      await page.waitForFunction(()=>{const el=document.querySelector('#lifeSourceText');return el?.value.slice(el.selectionStart,el.selectionEnd)==='🌱 계정 A 원문 구절';});
+      await page.waitForFunction(()=>{const el=document.querySelector('#lifeSourceText'),selection=getSelection();return el?.contains(selection?.anchorNode)&&el.contains(selection?.focusNode)&&selection.toString()==='🌱 계정 A 원문 구절';});
       await page.reload();await ready(page);assert.equal((await stored(page)).records[0].text,'🌱 계정 A 원문 구절');
       await click(page,'내보내기·사본 복원');const pending=page.waitForEvent('download');await click(page,'JSON 백업');
       backup=JSON.parse(await fs.readFile(await(await pending).path(),'utf8'));
@@ -155,6 +159,7 @@ async function main(){
         IDBObjectStore.prototype.put=function(...args){const request=__originalStagePut.apply(this,args);if(this.name==='staging'&&args[0]?.input?.title==='로그아웃 실패 보존'){__flushAborted++;this.transaction.abort();}return request;};
       });
       try{
+        await openAccount(page);
         await page.getByRole('button',{name:'로그아웃',exact:true}).click();
         await page.waitForFunction(()=>window.__flushAborted>0&&!document.querySelector('#lifeApp').hidden);
         assert.equal(await page.evaluate(()=>HaedoAuth.user.id),accounts.a.id);
@@ -223,7 +228,7 @@ async function main(){
       assert.equal(visible.some(w=>w.workspaceId===fixture.bundle.workspaceId),oldHasAuth);
       const original=await p.evaluate(async ids=>{const db=await idb.openDB('life-tools-v1',1);try{return {bundle:await db.get('bundles',ids.workspaceId),stage:await db.get('staging',ids.stageId)};}finally{db.close();}},{workspaceId:fixture.bundle.workspaceId,stageId:fixture.stage.stageId});
       assert.deepEqual(original,fixture);assert.equal(await p.evaluate(()=>localStorage.getItem('caeyeon_life_registry')),'{"docs":[],"anonymous":"preserve-upgrade"}');
-      const modules=['assets/platform-auth.js','assets/platform-life-remote.js','assets/life/core.js','assets/life/storage.js','assets/life/ui.js','vendor/supabase/supabase.js'];
+      const modules=['life.html','assets/platform-auth.js','assets/platform-life-remote.js','assets/life/core.js','assets/life/storage.js','assets/life/icons.js','assets/life/ui.js','assets/life/ui.css','vendor/supabase/supabase.js'];
       const runtime=await p.evaluate(async({name,modules})=>{
         if(!await caches.has(name))return [];
         const cache=await caches.open(name);

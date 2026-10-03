@@ -19,6 +19,22 @@
     return el;
   }
 
+  function iconButton(label, name, action, className) {
+    const el = button(null, action, 'life-icon-button' + (className ? ' ' + className : ''));
+    el.setAttribute('aria-label', label);
+    el.append(global.HaedoLife.Icons.create(name));
+    const tooltip = node('span', label, 'life-tooltip');
+    tooltip.setAttribute('aria-hidden', 'true');
+    el.append(tooltip);
+    el.addEventListener('keydown', event => {
+      if (event.key === 'Escape') el.dataset.tooltipDismissed = 'true';
+    });
+    const resetTooltip = () => { delete el.dataset.tooltipDismissed; };
+    el.addEventListener('blur', resetTooltip);
+    el.addEventListener('pointerleave', resetTooltip);
+    return el;
+  }
+
   function safeUrl(value) {
     try {
       const url = new URL(value);
@@ -28,6 +44,12 @@
 
   function sourceLabel(source) {
     return source.title || source.url || '제목 없는 자료';
+  }
+
+  function dateLabel(value) {
+    if (!value) return '미상';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString('ko-KR');
   }
 
   // Textareas normalize CRLF (and lone CR) to LF; source locators use unchanged input.
@@ -63,6 +85,7 @@
     let workspaceGeneration = 0;
     let dataRefreshSequence = 0;
     let dataRefreshPromise = Promise.resolve(false);
+    let readerCleanup = null;
     const downloadUrls = new Set();
     const state = {
       bundle: null, workspaces: [], mode: 'topics', topic: '', topicsSearch: '', sourcesSearch: '', originFilter: '', returnContext: null, suppressReaderResume: false, sourceId: null,
@@ -71,7 +94,7 @@
       pendingOperation: null, stageSelection: null, sourceSelection: null, stages: [], allStages: [], batches: new Map(), batchId: null,
       remoteChanged: false, readerPositions: new Map(), sourceDrafts: new Map(),
       syncAccount: null, syncState: null, syncReadError: null, syncAccountKey: null,
-      syncLoading: false,
+      syncLoading: false, managementOpen: false, sourcesFiltersOpen: false, topicsFiltersOpen: false,
       remoteRows: null, remoteRowsAccountKey: null, conflictView: null, conflictCopyId: null
     };
     const root = node('div', null, 'life-app');
@@ -176,6 +199,28 @@
     }
 
     function empty(text) { return node('p', text, 'life-empty'); }
+
+    function disclosure(trigger, panel, options = {}) {
+      trigger.setAttribute('aria-controls', panel.id);
+      trigger.setAttribute('aria-expanded', String(!panel.hidden));
+      const setOpen = open => {
+        panel.hidden = !open;
+        trigger.setAttribute('aria-expanded', String(open));
+        if (!open && panel.contains(document.activeElement)) trigger.focus({ preventScroll: true });
+        options.onChange?.(open);
+      };
+      trigger.addEventListener('click', () => setOpen(panel.hidden));
+      const escape = event => {
+        if (event.key !== 'Escape' || panel.hidden) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        trigger.focus({ preventScroll: true });
+      };
+      trigger.addEventListener('keydown', escape);
+      panel.addEventListener('keydown', escape);
+      return setOpen;
+    }
 
     function originName(value) { return (ORIGINS.find(pair => pair[0] === value) || [value, value])[1]; }
 
@@ -611,6 +656,7 @@
     async function navigate(mode, options) {
       if (dirty()) await persistStage();
       if (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext'))) state.returnContext = null;
+      state.managementOpen = false;
       Object.assign(state, options || {}, { mode });
       render();
       const heading = main.querySelector('h2');
@@ -644,9 +690,30 @@
 
     function renderHeader() {
       if (disposed) return;
-      header.replaceChildren();
-      const introduction = node('div');
-      introduction.append(node('h1', '자료 모아보기'), node('p', '선택한 기록을 가져와 관심 주제로 다시 읽습니다.', 'life-subtitle'));
+      header.replaceChildren(node('h1', '자료 모아보기', 'life-sr-only'));
+      toolbar.replaceChildren();
+      const nav = node('nav', null, 'life-nav');
+      nav.setAttribute('aria-label', '자료 보기');
+      [['topics', '모아보기', 'quote'], ['sources', '원천 기록', 'search']].forEach(([mode, label, icon]) => {
+        const tab = iconButton(label, icon, guarded(() => navigate(mode)));
+        if (state.mode === mode || (mode === 'sources' && state.mode === 'source')) tab.setAttribute('aria-current', 'page');
+        nav.append(tab);
+      });
+      const add = iconButton('가져오기', 'plus', guarded(async () => {
+        if (state.stage && state.stage.state === 'draft') await navigate('import');
+        else { newDraft(); await navigate('import'); }
+      }));
+      if (state.mode === 'import' || state.mode === 'batch') add.setAttribute('aria-current', 'page');
+      const manage = iconButton('자료 관리', 'settings', () => {});
+      const management = node('section', null, 'life-management');
+      management.id = 'lifeManagement';
+      management.hidden = !state.managementOpen;
+      management.setAttribute('aria-label', '자료 관리');
+      const close = iconButton('자료 관리 닫기', 'close', () => setManagement(false));
+      const setManagement = disclosure(manage, management, { onChange: open => { state.managementOpen = open; } });
+      const managementHeading = node('div', null, 'life-panel-heading');
+      managementHeading.append(node('h2', '자료 관리'), close);
+      management.append(managementHeading);
       const workspace = selectField('작업공간', 'lifeWorkspace', state.workspaces.map(w => [w.workspaceId, w.title]), state.bundle.workspaceId);
       workspace.input.addEventListener('change', guarded(async () => {
         const selected = workspace.input.value;
@@ -664,34 +731,28 @@
         render();
         announce('선택한 작업공간을 열었습니다. 다른 작업공간은 그대로 보관됩니다.');
       }));
-      header.append(introduction, workspace.label);
-      toolbar.replaceChildren();
-      const nav = node('nav', null, 'life-nav');
-      nav.setAttribute('aria-label', '자료 보기');
-      [['topics', '모아보기'], ['sources', '원천 기록'], ['time', '시간 보기']].forEach(([mode, label]) => {
-        const tab = button(label, guarded(() => navigate(mode)));
-        if (state.mode === mode) tab.setAttribute('aria-current', 'page');
-        nav.append(tab);
-      });
+      management.append(workspace.label);
       const actions = node('div', null, 'life-actions');
-      actions.append(button('가져오기', guarded(async () => {
-        if (state.stage && state.stage.state === 'draft') await navigate('import');
-        else { newDraft(); await navigate('import'); }
-      }), 'life-primary'), button('내보내기·사본 복원', guarded(() => navigate('transfer'))));
+      actions.append(button('시간 보기', guarded(() => navigate('time'))), button('내보내기·사본 복원', guarded(() => navigate('transfer'))));
       if (sync) actions.append(button('기기 간 동기화', guarded(async () => {
         await navigate('sync');
         await refreshSync();
       })));
-      if (state.remoteChanged) actions.append(button('최신 내용 확인', guarded(async () => {
-        if (dirty()) await persistStage();
-        await refreshData();
-        state.remoteChanged = false;
-        state.prepared = null;
-        render();
-        announce('최신 내용을 불러왔습니다. 보관 중인 입력은 유지됩니다. 다시 검토해 주세요.');
-      })));
       if ([...state.batches.values()].some(batch => batch.workspaceId === state.bundle.workspaceId)) actions.append(button('선택 파일 목록', guarded(() => navigate('batch'))));
-      toolbar.append(nav, actions);
+      management.append(actions);
+      nav.append(add, manage);
+      toolbar.append(nav, management);
+      if (state.remoteChanged) {
+        const refresh = button('최신 내용 확인', guarded(async () => {
+          if (dirty()) await persistStage();
+          await refreshData();
+          state.remoteChanged = false;
+          state.prepared = null;
+          render();
+          announce('최신 내용을 불러왔습니다. 보관 중인 입력은 유지됩니다. 다시 검토해 주세요.');
+        }), 'life-refresh');
+        toolbar.append(refresh);
+      }
     }
 
     function renderStages(parent) {
@@ -721,7 +782,10 @@
     }
 
     function searchField(parent, placeholder, update, key) {
+      const bar = node('div', null, 'life-search-bar');
       const search = field('자료 검색', 'search', 'lifeSearch', state[key]);
+      search.label.classList.add('life-search-field');
+      search.label.firstChild.className = 'life-sr-only';
       search.input.placeholder = placeholder;
       search.input.maxLength = 500;
       let composing = false;
@@ -734,14 +798,16 @@
       search.input.addEventListener('compositionstart', () => { composing = true; });
       search.input.addEventListener('input', event => { if (!composing && !event.isComposing) finish(); });
       search.input.addEventListener('compositionend', () => { composing = false; finish(); });
-      const clear = button('검색어 지우기', () => {
+      const clear = iconButton('검색어 지우기', 'close', () => {
         composing = false;
         search.input.value = state[key] = lastValue = '';
         update();
         search.input.focus({ preventScroll: true });
       });
       clear.id = 'lifeSearchClear';
-      parent.append(search.label, clear);
+      bar.append(global.HaedoLife.Icons.create('search'), search.label, clear);
+      parent.append(bar);
+      return bar;
     }
 
     function matchingText(text, query) {
@@ -769,7 +835,7 @@
     }
 
     function searchReturnButton() {
-      const back = button('검색 결과로 돌아가기', guarded(returnToResults));
+      const back = iconButton('검색 결과로 돌아가기', 'back', guarded(returnToResults));
       back.id = 'lifeSearchReturn';
       return back;
     }
@@ -807,7 +873,7 @@
     }
 
     function renderTopics() {
-      main.append(title('주제별 모아보기'), node('p', '발췌와 출처를 함께 읽고 원문으로 돌아갈 수 있습니다.', 'life-help'));
+      main.append(title('주제별 모아보기'));
       renderStages(main);
       const results = node('div', null, 'life-card-grid'); results.id = 'lifeSearchResults';
       const count = searchCount();
@@ -825,17 +891,26 @@
         });
         results.replaceChildren();
         const records = state.bundle.records.filter(r => (!state.topic || r.topic === state.topic) && matchingText([r.text, r.topic, r.note, ...r.sourceRefs.map(ref => sourceLabel(sourceFor(ref.sourceId) || {}))].join(' '), state.topicsSearch));
-        count.textContent = '발췌 ' + records.length + '개';
+        count.textContent = '발췌 ' + records.length + '개' + (state.topic ? ' · ' + state.topic : '');
         records.forEach(record => results.append(excerptCard(record)));
         if (!records.length) results.append(empty(state.bundle.records.length ? '조건에 맞는 발췌가 없습니다. 검색어나 주제를 바꿔 주세요.' : '아직 모아 둔 발췌가 없습니다. 가져오기에서 본문·파일·링크를 선택하거나 원천 기록에서 보관한 자료를 읽어 주세요.'));
       };
-      searchField(main, '문장·주제·출처 찾기', update, 'topicsSearch');
-      main.append(topics, count, results);
+      const bar = searchField(main, '문장·주제·출처 찾기', update, 'topicsSearch');
+      const filters = node('section', null, 'life-filter-panel');
+      filters.id = 'lifeSearchFilters';
+      filters.hidden = !state.topicsFiltersOpen;
+      filters.setAttribute('aria-label', '주제 필터');
+      filters.append(topics);
+      const filter = iconButton('검색 필터', 'filter', () => {});
+      filter.id = 'lifeFilterToggle';
+      disclosure(filter, filters, { onChange: open => { state.topicsFiltersOpen = open; } });
+      bar.append(filter);
+      main.append(filters, count, results);
       update();
     }
 
     function renderSources() {
-      main.append(title('원천 기록'), node('p', '선택해 가져온 자료만 보관합니다. 원래 앱의 기록은 변경하지 않습니다.', 'life-help'));
+      main.append(title('원천 기록'));
       renderStages(main);
       const list = node('div', null, 'life-card-grid'); list.id = 'lifeSearchResults';
       const count = searchCount();
@@ -843,38 +918,52 @@
       const update = () => {
         list.replaceChildren();
         const matches = core.searchSources(state.bundle, state.sourcesSearch).filter(hit => !state.originFilter || sourceFor(hit.sourceId).origin === state.originFilter);
-        count.textContent = '자료 ' + matches.length + '개' + (state.sourcesSearch.trim() ? ' · 일치한 버전별 결과' : ' · 최신 버전');
+        count.textContent = '자료 ' + matches.length + '개' + (state.sourcesSearch.trim() ? ' · 일치한 버전별 결과' : ' · 최신 버전') + (state.originFilter ? ' · ' + originName(state.originFilter) : '');
         matches.forEach(hit => {
           const source = sourceFor(hit.sourceId);
           const version = state.bundle.sourceVersions.find(v => v.id === hit.sourceVersionId);
-          const card = node('article', null, 'life-card');
+          const card = node('article', null, 'life-card life-source-card');
           Object.assign(card.dataset, { sourceId: source.id, versionId: version.id, matchedBy: hit.matchedBy });
-          card.append(node('p', originName(source.origin), 'life-tag'), node('h3', sourceLabel(source)), node('p', '버전 ' + hit.versionIndex + '/' + hit.versionCount + ' · ' + (hit.versionIndex === hit.versionCount ? '최신 버전' : '이전 버전'), 'life-meta'), node('p', COVERAGE[version.coverage.status] || COVERAGE.unknown, 'life-meta'));
-          card.append(node('p', '원문 작성: ' + (version.originalCreatedAt || '모름') + ' · 가져온 시각: ' + version.importedAt, 'life-meta'));
-          if (state.sourcesSearch.trim()) card.append(node('p', { body: '본문 일치', title: '제목 일치 · 본문 일치 없음', all: '제목·본문 일치' }[hit.matchedBy], 'life-meta'));
+          const key = resultFocusKey('sources', version.id);
+          const open = button(sourceLabel(source), guarded(() => openResult('sources', key, hit)), 'life-source-open');
+          open.setAttribute('aria-label', '자료 읽기: ' + sourceLabel(source));
+          Object.assign(open.dataset, { focusKey: key, sourceId: source.id, versionId: version.id });
+          const heading = node('h3');
+          heading.append(open);
+          card.append(node('p', originName(source.origin) + ' · 원문 작성 ' + (version.originalCreatedAt || '미상'), 'life-meta life-source-meta'), heading);
+          card.append(node('p', (COVERAGE[version.coverage.status] || COVERAGE.unknown) + ' · 버전 ' + hit.versionIndex + '/' + hit.versionCount + (hit.versionIndex === hit.versionCount ? '' : ' · 이전 버전'), 'life-meta'));
+          if (state.sourcesSearch.trim() && hit.matchedBy === 'title') card.append(node('p', '제목에서 일치 · 본문에는 일치하는 구절 없음', 'life-meta'));
           if (hit.locator) {
             card.dataset.locatorStart = String(hit.locator.start); card.dataset.locatorEnd = String(hit.locator.end);
             const context = node('p', null, 'life-search-context');
             const before = hit.snippet?.before || '', after = hit.snippet?.after || '';
             context.append(document.createTextNode((hit.locator.start > before.length ? '…' : '') + before), node('mark', hit.quote), document.createTextNode(after + (hit.locator.end + after.length < version.contentText.length ? '…' : '')));
             card.append(context);
+          } else if (!state.sourcesSearch.trim() && version.contentText) {
+            card.append(node('p', version.contentText.slice(0, 180) + (version.contentText.length > 180 ? '…' : ''), 'life-search-context'));
           }
-          const key = resultFocusKey('sources', version.id);
-          const open = button('자료 읽기', guarded(() => openResult('sources', key, hit)));
-          Object.assign(open.dataset, { focusKey: key, sourceId: source.id, versionId: version.id });
-          card.append(open); list.append(card);
+          list.append(card);
         });
         if (!matches.length) list.append(empty(state.bundle.sources.length ? '조건에 맞는 자료가 없습니다.' : '보관한 자료가 없습니다. 가져오기에서 선택한 본문·텍스트 파일·링크로 시작하세요.'));
       };
-      searchField(main, '제목·본문 찾기', update, 'sourcesSearch');
+      const bar = searchField(main, '제목·본문 찾기', update, 'sourcesSearch');
+      const filters = node('section', null, 'life-filter-panel');
+      filters.id = 'lifeSearchFilters';
+      filters.hidden = !state.sourcesFiltersOpen;
+      filters.setAttribute('aria-label', '원천 필터');
+      filters.append(origin.label);
+      const filter = iconButton('검색 필터', 'filter', () => {});
+      filter.id = 'lifeFilterToggle';
+      disclosure(filter, filters, { onChange: open => { state.sourcesFiltersOpen = open; } });
+      bar.append(filter);
       origin.input.addEventListener('change', () => { state.originFilter = origin.input.value; update(); });
-      main.append(origin.label, count, list);
+      main.append(filters, count, list);
       update();
     }
 
-    function metadata(source, version) {
-      const details = node('details', null, 'life-details');
-      details.append(node('summary', '출처와 포함 범위'));
+    function metadata(source, version, expanded = false) {
+      const details = node(expanded ? 'section' : 'details', null, expanded ? 'life-source-details' : 'life-details');
+      if (!expanded) details.append(node('summary', '출처와 포함 범위'));
       const authorRelation = { self: '내 기록', other: '다른 사람의 기록', unknown: '작성자 관계 미확인' };
       const lines = [originName(source.origin), '원문 작성: ' + (version.originalCreatedAt || '모름'), '가져온 시각: ' + version.importedAt,
         '작성자: ' + (version.originalAuthor.label || '모름') + ' · ' + (authorRelation[version.originalAuthor.relation] || authorRelation.unknown),
@@ -894,21 +983,6 @@
       return details;
     }
 
-    function revealReaderSelection(reader) {
-      // A textarea selection does not scroll to the selected range in every browser.
-      // Measure the unchanged displayed prefix with the textarea's wrapping metrics.
-      const style = global.getComputedStyle(reader);
-      const mirror = node('div');
-      ['font', 'lineHeight', 'letterSpacing', 'padding', 'boxSizing', 'wordBreak', 'overflowWrap', 'tabSize'].forEach(key => { mirror.style[key] = style[key]; });
-      Object.assign(mirror.style, { position: 'fixed', top: '0', left: '0', visibility: 'hidden', pointerEvents: 'none', width: reader.clientWidth + 'px', whiteSpace: 'pre-wrap', border: '0', margin: '0' });
-      mirror.append(document.createTextNode(reader.value.slice(0, reader.selectionStart)));
-      const marker = node('span', reader.value.slice(reader.selectionStart) || '\u200b');
-      mirror.append(marker); root.append(mirror);
-      const offset = marker.getBoundingClientRect().top - mirror.getBoundingClientRect().top;
-      reader.scrollTop = Math.max(0, offset - reader.clientHeight / 3);
-      mirror.remove();
-    }
-
     function renderSource() {
       const suppressResume = state.suppressReaderResume;
       state.suppressReaderResume = false;
@@ -922,68 +996,188 @@
       if (batch && batch.items.some(item => item.result?.sourceVersionId === version.id)) {
         const back = button('파일 목록으로 돌아가기', guarded(() => navigate('batch'))); back.id = 'lifeBatchReturn'; main.append(back);
       }
-      main.append(title(sourceLabel(source)), node('p', originName(source.origin) + ' · ' + (COVERAGE[version.coverage.status] || COVERAGE.unknown), 'life-help'));
-      main.append(state.returnContext ? searchReturnButton() : button('모음으로 돌아가기', guarded(() => navigate('topics'))));
+      const article = node('article', null, 'life-reader');
+      const tools = node('div', null, 'life-reader-tools');
+      const back = state.returnContext ? searchReturnButton() : iconButton('모음으로 돌아가기', 'back', guarded(() => navigate('topics')));
+      const info = iconButton('출처 정보', 'info', () => {});
+      info.id = 'lifeSourceInfoToggle';
+      tools.append(back, info);
+      const heading = title(sourceLabel(source));
+      heading.classList.add('life-reader-heading');
+      const versionIndex = versions.findIndex(item => item.id === version.id) + 1;
+      article.append(tools, heading,
+        node('p', originName(source.origin) + ' · 원문 작성 ' + (version.originalCreatedAt || '미상'), 'life-reader-meta'),
+        node('p', (COVERAGE[version.coverage.status] || COVERAGE.unknown) + ' · 버전 ' + versionIndex + '/' + versions.length + (versionIndex === versions.length ? '' : ' · 이전 버전'), 'life-reader-meta'));
       if (versions.length > 1) {
-        const choices = selectField('원문 버전', 'lifeVersion', versions.map((v, index) => [v.id, '버전 ' + (index + 1) + ' · ' + v.importedAt]), version.id);
+        const choices = selectField('원문 버전', 'lifeVersion', versions.map((v, index) => [v.id, '버전 ' + (index + 1) + ' · ' + dateLabel(v.importedAt) + ' 보관']), version.id);
+        choices.label.classList.add('life-version-field');
         choices.input.addEventListener('change', guarded(() => navigate('source', { sourceVersionId: choices.input.value, locator: null })));
-        main.append(choices.label);
+        article.append(choices.label);
       }
-      const layout = node('div', null, 'life-reader-layout');
-      const reading = node('section', null, 'life-reading');
-      reading.append(metadata(source, version));
+      const details = metadata(source, version, true);
+      details.id = 'lifeSourceDetails';
+      details.hidden = true;
+      details.setAttribute('aria-label', '출처와 포함 범위');
+      const setDetails = disclosure(info, details);
+      const detailsHeading = node('div', null, 'life-panel-heading');
+      detailsHeading.append(node('h3', '출처와 포함 범위'), iconButton('출처 정보 닫기', 'close', () => setDetails(false)));
+      details.prepend(detailsHeading);
+      article.append(details);
+      main.append(article);
       if (version.contentText === null || version.contentText === undefined) {
-        reading.append(empty('본문 미확보 · 링크만 보관했습니다. 원래 출처를 열거나 본문을 제공해 새 버전으로 보관할 수 있습니다.'));
-        layout.append(reading);
-        main.append(layout);
+        article.append(empty('본문 미확보 · 링크만 보관했습니다. 원래 출처를 열거나 본문을 제공해 새 버전으로 보관할 수 있습니다.'));
+        state.locator = null;
         return;
       }
-      const reader = field('보관한 원문 · 발췌할 구절을 선택하세요', 'textarea', 'lifeSourceText', version.contentText);
-      reader.input.readOnly = true;
-      reader.input.className = 'life-source-text';
-      reader.input.spellcheck = false;
-      reading.append(reader.label);
+
+      // Keep a single unchanged Text node: DOM offsets are the original UTF-16
+      // positions, including CRLF, surrogate pairs and repeated sentences.
+      const reader = node('div', null, 'life-source-text');
+      reader.id = 'lifeSourceText';
+      reader.tabIndex = 0;
+      reader.setAttribute('role', 'document');
+      reader.setAttribute('aria-label', '보관한 원문');
+      const originalText = document.createTextNode(version.contentText);
+      reader.append(originalText);
+      article.append(reader);
       const panel = node('section', null, 'life-excerpt-panel');
-      panel.append(node('h3', '발췌와 주제 연결'));
-      const picked = node('p', '원문에서 문장을 선택하세요. 키보드의 Shift + 화살표로도 선택할 수 있습니다.', 'life-selection');
-      const capture = () => {
-        state.sourceSelection = { start: displayToRaw(version.contentText, reader.input.selectionStart), end: displayToRaw(version.contentText, reader.input.selectionEnd) };
-        if (state.sourceDrafts.has(version.id)) state.sourceDrafts.get(version.id).range = { ...state.sourceSelection };
-        if (state.sourceSelection.start < state.sourceSelection.end) picked.textContent = version.contentText.slice(state.sourceSelection.start, state.sourceSelection.end);
-      };
-      reader.input.addEventListener('select', capture);
-      reader.input.addEventListener('keyup', capture);
-      reader.input.addEventListener('pointerup', capture);
+      panel.id = 'lifeExcerptPanel';
+      panel.hidden = true;
+      panel.setAttribute('aria-label', '발췌와 주제 연결');
+      const quote = iconButton('발췌와 주제 연결', 'quote', () => {});
+      quote.id = 'lifeExcerptToggle';
+      tools.append(quote);
       const sourceDraft = state.sourceDrafts.get(version.id) || { topic: '', note: '' };
+      const instruction = '원문에서 발췌할 구절을 선택하세요.';
+      const picked = node('blockquote', instruction, 'life-selection');
+      picked.id = 'lifeSelectedQuote';
       const topic = field('주제 (선택)', 'text', 'lifeSourceTopic', sourceDraft.topic);
       const note = field('연결 이유 또는 메모 (선택)', 'textarea', 'lifeSourceNote', sourceDraft.note);
-      topic.input.addEventListener('input', () => { sourceDraft.topic = topic.input.value; sourceDraft.range = state.sourceSelection && { ...state.sourceSelection }; state.sourceDrafts.set(version.id, sourceDraft); announce('메모 입력 중 · 아직 모음에 반영하지 않았습니다.'); });
-      note.input.addEventListener('input', () => { sourceDraft.note = note.input.value; sourceDraft.range = state.sourceSelection && { ...state.sourceSelection }; state.sourceDrafts.set(version.id, sourceDraft); announce('메모 입력 중 · 아직 모음에 반영하지 않았습니다.'); });
-      panel.append(picked, topic.label, note.label, button('선택 구절 모음에 추가', guarded(async () => {
-        capture();
-        const range = state.sourceSelection;
-        if (!range || range.start === range.end) throw new Error('먼저 원문에서 발췌할 구절을 선택해 주세요.');
-        const prepared = { source, version, match: { kind: 'exact_duplicate', sourceId: source.id, sourceVersionId: version.id } };
-        const changes = core.buildImportChanges(state.bundle, prepared, [{ start: range.start, end: range.end, topic: topic.input.value, note: note.input.value }]);
-        state.readerPositions.set(version.id, { start: range.start, end: range.end, scrollTop: reader.input.scrollTop });
-        await commit(changes);
-        state.sourceDrafts.delete(version.id);
-        render();
-        announce('모음에 반영됨 · 이 브라우저에 저장됨');
-      }), 'life-primary'));
-      layout.append(reading, panel);
-      main.append(layout);
+      let readingScrollY = global.scrollY;
+      let selectionOrigin = 'dom';
+      const savePosition = () => {
+        state.readerPositions.set(version.id, { ...(state.sourceSelection || { start: 0, end: 0 }), scrollY: panel.hidden ? global.scrollY : readingScrollY });
+      };
+      const remember = (start, end) => {
+        state.sourceSelection = { start, end };
+        if (state.sourceDrafts.has(version.id)) state.sourceDrafts.get(version.id).range = { start, end };
+        picked.textContent = start < end ? version.contentText.slice(start, end) : instruction;
+        quote.dataset.hasSelection = String(start < end);
+        savePosition();
+      };
+      const capture = event => {
+        if (!reader.isConnected || document.activeElement?.matches('input,textarea')) return;
+        // A textarea selection leaves the document's earlier Range intact.
+        // Keep the keyboard choice when opening/closing tools; only a fresh
+        // interaction with the readable body makes that Range authoritative.
+        if (selectionOrigin === 'keyboard' && !['pointerup', 'keyup'].includes(event?.type)) return;
+        const selection = global.getSelection();
+        if (!selection || selection.rangeCount !== 1) return;
+        const range = selection.getRangeAt(0);
+        if (!reader.contains(range.startContainer) || !reader.contains(range.endContainer)) return;
+        const offset = (container, value) => container === originalText ? value : container === reader ? (value === 0 ? 0 : version.contentText.length) : null;
+        const start = offset(range.startContainer, range.startOffset), end = offset(range.endContainer, range.endOffset);
+        if (start === null || end === null) return;
+        selectionOrigin = 'dom';
+        remember(start, end);
+      };
+      const restoreSelection = locator => {
+        const start = Math.max(0, Math.min(version.contentText.length, locator.start));
+        const end = Math.max(start, Math.min(version.contentText.length, locator.end));
+        const range = document.createRange();
+        range.setStart(originalText, start);
+        range.setEnd(originalText, end);
+        reader.focus({ preventScroll: true });
+        const selection = global.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        remember(start, end);
+        return range;
+      };
+      reader.addEventListener('pointerdown', () => { selectionOrigin = 'dom'; });
+      reader.addEventListener('pointerup', capture);
+      reader.addEventListener('keyup', capture);
+      document.addEventListener('selectionchange', capture);
+      global.addEventListener('scroll', savePosition, { passive: true });
+      readerCleanup = () => {
+        savePosition();
+        document.removeEventListener('selectionchange', capture);
+        global.removeEventListener('scroll', savePosition);
+      };
+      const setPanel = disclosure(quote, panel, { onChange: open => {
+        if (open) {
+          capture();
+          readingScrollY = global.scrollY;
+          topic.input.focus({ preventScroll: true });
+          panel.scrollIntoView({ block: 'start', behavior: 'instant' });
+        } else {
+          quote.focus({ preventScroll: true });
+          global.scrollTo({ top: readingScrollY, behavior: 'instant' });
+        }
+      } });
+      const panelHeading = node('div', null, 'life-panel-heading');
+      panelHeading.append(node('h3', '발췌와 주제 연결'), iconButton('발췌 닫기', 'close', () => setPanel(false)));
+      const editDraft = () => {
+        sourceDraft.topic = topic.input.value;
+        sourceDraft.note = note.input.value;
+        sourceDraft.range = state.sourceSelection && { ...state.sourceSelection };
+        state.sourceDrafts.set(version.id, sourceDraft);
+        announce('메모 입력 중 · 아직 모음에 반영하지 않았습니다.');
+      };
+      topic.input.addEventListener('input', editDraft);
+      note.input.addEventListener('input', editDraft);
+      const keyboard = node('div', null, 'life-keyboard-selection');
+      keyboard.id = 'lifeKeyboardSelection';
+      keyboard.hidden = true;
+      const keyboardReader = field('키보드로 원문 구절 선택', 'textarea', 'lifeSourceSelectionText', version.contentText);
+      keyboardReader.input.readOnly = true;
+      keyboardReader.input.spellcheck = false;
+      keyboardReader.input.className = 'life-keyboard-text';
+      const captureKeyboard = () => {
+        if (!keyboardReader.input.isConnected) return;
+        selectionOrigin = 'keyboard';
+        remember(displayToRaw(version.contentText, keyboardReader.input.selectionStart), displayToRaw(version.contentText, keyboardReader.input.selectionEnd));
+      };
+      ['select', 'keyup', 'pointerup'].forEach(name => keyboardReader.input.addEventListener(name, captureKeyboard));
+      keyboard.append(node('p', 'Shift + 화살표로 구절을 선택하세요. 원문 내용은 바뀌지 않습니다.', 'life-help'),
+        button('첫 줄 선택', () => {
+          keyboardReader.input.focus({ preventScroll: true });
+          const lineEnd = keyboardReader.input.value.indexOf('\n');
+          keyboardReader.input.setSelectionRange(0, lineEnd < 0 ? keyboardReader.input.value.length : lineEnd + 1);
+          captureKeyboard();
+        }), keyboardReader.label);
+      const keyboardToggle = button('키보드로 구절 선택', () => {});
+      disclosure(keyboardToggle, keyboard, { onChange: open => {
+        if (!open) return;
+        const range = state.sourceSelection || { start: 0, end: 0 };
+        keyboardReader.input.focus({ preventScroll: true });
+        keyboardReader.input.setSelectionRange(rawToDisplay(version.contentText, range.start), rawToDisplay(version.contentText, range.end));
+      } });
+      panel.append(panelHeading, picked, keyboardToggle, keyboard, topic.label, note.label,
+        button('선택 구절 모음에 추가', guarded(async () => {
+          const range = state.sourceSelection;
+          if (!range || range.start === range.end) throw new Error('먼저 원문에서 발췌할 구절을 선택해 주세요.');
+          const prepared = { source, version, match: { kind: 'exact_duplicate', sourceId: source.id, sourceVersionId: version.id } };
+          const changes = core.buildImportChanges(state.bundle, prepared, [{ start: range.start, end: range.end, topic: topic.input.value, note: note.input.value }]);
+          state.readerPositions.set(version.id, { start: range.start, end: range.end, scrollY: readingScrollY });
+          await commit(changes);
+          state.sourceDrafts.delete(version.id);
+          render();
+          announce('모음에 반영됨 · 이 브라우저에 저장됨');
+        }), 'life-primary'));
+      article.append(panel);
       const locator = state.locator || (!suppressResume && state.readerPositions.get(version.id));
       if (locator) requestAnimationFrame(() => {
-        if (!reader.input.isConnected) return;
-        reader.input.focus({ preventScroll: true });
-        reader.input.setSelectionRange(rawToDisplay(version.contentText, locator.start), rawToDisplay(version.contentText, locator.end));
-        if (locator.scrollTop !== undefined) reader.input.scrollTop = locator.scrollTop;
-        else { revealReaderSelection(reader.input); reader.input.scrollIntoView({ block: 'center', behavior: 'instant' }); }
-        capture();
+        if (!reader.isConnected) return;
+        const range = restoreSelection(locator);
+        if (locator.scrollY !== undefined) global.scrollTo({ top: locator.scrollY, behavior: 'instant' });
+        else {
+          const rect = range.getBoundingClientRect();
+          global.scrollTo({ top: Math.max(0, global.scrollY + rect.top - global.innerHeight / 3), behavior: 'instant' });
+        }
+        readingScrollY = global.scrollY;
       });
       state.locator = null;
-      reader.input.addEventListener('scroll', () => state.readerPositions.set(version.id, { start: displayToRaw(version.contentText, reader.input.selectionStart), end: displayToRaw(version.contentText, reader.input.selectionEnd), scrollTop: reader.input.scrollTop }));
     }
 
     function draftExcerptList(parent) {
@@ -1565,7 +1759,9 @@
 
     function render() {
       if (disposed) return;
+      if (readerCleanup) { readerCleanup(); readerCleanup = null; }
       renderHeader();
+      main.dataset.mode = state.mode;
       main.replaceChildren();
       if (state.mode === 'batch') renderBatch();
       else if (state.mode === 'import') renderImport();
@@ -1657,6 +1853,7 @@
     function dispose() {
       if (disposed) return;
       disposed = true;
+      if (readerCleanup) { readerCleanup(); readerCleanup = null; }
       invalidateBatchContext();
       state.batches.clear();
       state.allStages = [];

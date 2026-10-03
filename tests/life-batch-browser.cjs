@@ -5,7 +5,7 @@
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
-const { FakeCloud, platformContext, accounts, base } = require('./life-sync-browser.cjs');
+const { FakeCloud, platformContext, accounts, base, openManagement, openAccount } = require('./life-sync-browser.cjs');
 function playwright() {
   for (const module of [process.env.PW_MODULE_PATH, 'playwright', 'playwright-core', '/opt/codex/cua_node/lib/node_modules/playwright'].filter(Boolean)) {
     try { return require(module); } catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
@@ -16,7 +16,11 @@ const file = (name, text) => ({ name, mimeType: /\.md$/i.test(name) ? 'text/mark
 const errors = [], failures = [];
 let passed = 0;
 const settle = page => page.waitForFunction(() => !document.querySelector('.life-app[aria-busy="true"]'));
-async function click(page, name) { await page.getByRole('button', { name, exact: true }).click(); await settle(page); }
+async function click(page, name) {
+  if (['내보내기·사본 복원', '선택 파일 목록'].includes(name)) await openManagement(page);
+  if (name === '로그아웃') await openAccount(page);
+  await page.getByRole('button', { name, exact: true }).click(); await settle(page);
+}
 async function ready(page) {
   await page.waitForFunction(() => globalThis.HaedoLife?.Shell?.storage && !document.querySelector('#lifeApp').hidden);
   await page.evaluate(() => HaedoLife.Shell.ready);
@@ -76,7 +80,7 @@ async function main() {
       assert.equal(await row(page, 0).getAttribute('data-batch-state'), 'applied');
       assert.equal(await row(page, 2).getAttribute('data-batch-state'), 'draft');
       await row(page, 0).getByRole('button', { name: '보관한 원문 열기', exact: true }).click(); await settle(page);
-      assert.equal((await page.locator('#lifeSourceText').inputValue()).replace(/\r\n/g, '\n'), raw.replace(/\r\n/g, '\n'));
+      assert.equal(await page.locator('#lifeSourceText').textContent(), raw);
       await page.locator('#lifeBatchReturn').click(); await settle(page);
       await review(page, 1); await click(page, '원문·출처 확인');
       assert.equal(await page.getByRole('button', { name: '자료만 보관', exact: true }).isDisabled(), true);

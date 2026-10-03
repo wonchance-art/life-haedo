@@ -32,7 +32,7 @@ test('complete offline shell includes every runtime module', async () => {
     'assets/platform-ui.js', 'assets/platform.css', 'assets/platform-life-remote.js', 'assets/timeline-entry.js',
     'life.html', 'vendor/idb/idb.js', 'vendor/supabase/supabase.js', 'assets/life/core.js', 'assets/life/storage.js', 'assets/life/legacy.js',
     'assets/life/remote.js', 'assets/life/sync.js',
-    'assets/life/ui.js', 'assets/life/ui.css', 'assets/life/shell.js'])
+    'assets/life/icons.js', 'assets/life/ui.js', 'assets/life/ui.css', 'assets/life/shell.js'])
     assert.ok(h.state().resources.some(r => r.url.endsWith(name)), name);
 });
 test('failed installation does not activate a partial shell', async () => {
@@ -63,12 +63,14 @@ test('offline public home uses its exact installed document, without another-pag
   h.entries.set(request('').url,new Response('installed public home'));
   assert.equal(await (await h.run('fetch', request('', 'navigate'))).text(), 'installed public home');
 });
-test('a failed life runtime asset installation keeps the old worker active', async () => {
-  const h = harness({ failInstallAsset: 'assets/life/storage.js' });
-  await assert.rejects(h.run('install'));
-  assert.equal(h.state().skipped, false);
-  assert.equal(h.state().claimed, false);
-});
+for (const asset of ['assets/life/storage.js', 'assets/life/icons.js']) {
+  test(`a failed ${asset} installation keeps the old worker active`, async () => {
+    const h = harness({ failInstallAsset: asset });
+    await assert.rejects(h.run('install'));
+    assert.equal(h.state().skipped, false);
+    assert.equal(h.state().claimed, false);
+  });
+}
 test('life navigation returns its own installed HTML while offline', async () => {
   const h = harness({ fetchResult: new Error('offline') });
   h.entries.set(request('index.html').url, new Response('old timeline'));
@@ -78,7 +80,7 @@ test('life navigation returns its own installed HTML while offline', async () =>
 });
 test('platform Auth and life modules use one installed bundle without online replacement', async () => {
   const h = harness({ fetchResult: new Response('different online version') });
-  for (const path of ['assets/platform-auth.js', 'assets/platform-config.js', 'assets/platform-ui.js', 'assets/app.js', 'timeline.html', 'index.html', 'assets/life/core.js', 'assets/life/ui.css', 'assets/life/remote.js', 'assets/life/sync.js', 'vendor/supabase/supabase.js', 'vendor/idb/idb.js', 'vendor/daisyui.css']) {
+  for (const path of ['assets/platform-auth.js', 'assets/platform-config.js', 'assets/platform-ui.js', 'assets/app.js', 'timeline.html', 'index.html', 'assets/life/core.js', 'assets/life/icons.js', 'assets/life/ui.css', 'assets/life/remote.js', 'assets/life/sync.js', 'vendor/supabase/supabase.js', 'vendor/idb/idb.js', 'vendor/daisyui.css']) {
     h.entries.set(request(path).url, new Response('installed ' + path));
     assert.equal(await (await h.run('fetch', request(path + '?v=new'))).text(), 'installed ' + path);
   }

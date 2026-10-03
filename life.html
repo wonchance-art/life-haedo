@@ -4,16 +4,33 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="선택한 기록을 가져와 원문과 출처를 보존하고 발췌를 모으는 개인 생활 도구">
-  <meta name="theme-color" content="#FAF8F0">
+  <meta name="theme-color" content="#FFFFFF">
   <title>자료 모아보기 · 해도</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="vendor/daisyui.css">
-  <link rel="stylesheet" href="vendor/daisyui-themes.css">
   <link rel="stylesheet" href="assets/life/ui.css">
 </head>
 <body data-page="life">
-  <nav class="life-global-nav" aria-label="주 메뉴"><a href="index.html">해도 홈</a><a href="workspace.html">내 공간</a><a href="life.html" aria-current="page">자료 모아보기</a><span id="lifeAccount" data-private hidden><span id="lifeAccountLabel"></span><button id="lifeLogout" class="life-button" type="button">로그아웃</button></span></nav>
+  <nav class="life-global-nav" aria-label="주 메뉴">
+    <a href="index.html" class="life-icon-button" aria-label="해도 홈">
+      <svg class="life-glyph" data-glyph="home" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m3 10 9-7 9 7M5 9v10a2 2 0 0 0 2 2h3v-7h4v7h3a2 2 0 0 0 2-2V9"/></svg>
+      <span class="life-tooltip" aria-hidden="true">해도 홈</span>
+    </a>
+    <a href="workspace.html" class="life-icon-button" aria-label="내 공간">
+      <svg class="life-glyph" data-glyph="workspace" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      <span class="life-tooltip" aria-hidden="true">내 공간</span>
+    </a>
+    <details id="lifeAccount" class="life-account" data-private hidden>
+      <summary id="lifeAccountToggle" class="life-icon-button" aria-label="계정 메뉴">
+        <svg class="life-glyph" data-glyph="user" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="7.5" r="4"/><path d="M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2"/></svg>
+        <span class="life-tooltip" aria-hidden="true">계정 메뉴</span>
+      </summary>
+      <div class="life-account-panel">
+        <span id="lifeAccountLabel"></span>
+        <button id="lifeLogout" class="life-button" type="button">로그아웃</button>
+      </div>
+    </details>
+  </nav>
   <noscript>생활 자료를 열려면 브라우저에서 JavaScript를 허용해주세요. 기존 기록은 변경되지 않습니다.</noscript>
   <div id="lifeStartup" role="status" aria-live="polite">자료 모아보기를 여는 중입니다.</div>
   <div id="lifeApp" data-private hidden aria-label="자료 모아보기"></div>
@@ -29,6 +46,7 @@
   <script src="assets/platform-life-remote.js"></script>
   <script src="assets/life/sync.js"></script>
   <script src="assets/life/legacy.js"></script>
+  <script src="assets/life/icons.js"></script>
   <script src="assets/life/ui.js"></script>
   <script src="assets/life/shell.js"></script>
 </body>
