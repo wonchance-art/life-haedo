@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko" data-theme="spring">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>해도 · 자료 화면 디자인 비교</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/design-review/system.css">
+  <link rel="stylesheet" href="assets/design-review/prototype.css">
+</head>
+<body>
+  <a class="hd-skip" href="#main">본문으로 이동</a>
+  <header class="review-bar" aria-label="디자인 시안 설정">
+    <div class="review-title"><strong>해도 디자인 비교</strong><span>익명 샘플 · 변경은 저장되지 않아요</span></div>
+    <div class="review-controls">
+      <label>방향<select id="direction"><option value="a">A · 목록과 읽기</option><option value="b">B · 조사 작업</option><option value="c">C · 넓은 보관함</option></select></label>
+      <label>화면<select id="view"><option value="search">자료 검색</option><option value="reader">원문·발췌</option><option value="components">UI 기준</option></select></label>
+      <label>상태<select id="state"><option value="normal">기본</option><option value="many">많은 자료</option><option value="empty">빈 상태</option><option value="loading">불러오는 중</option><option value="error">오류</option></select></label>
+    </div>
+  </header>
+  <div id="prototype"></div>
+  <div class="hd-toast" id="feedback" role="status" aria-live="polite" hidden></div>
+  <noscript>시안 비교에는 JavaScript가 필요합니다. 이 페이지는 개인 기록에 접근하지 않습니다.</noscript>
+  <script src="assets/design-review/sample-data.js"></script>
+  <script src="assets/design-review/prototype.js"></script>
+</body>
+</html>
