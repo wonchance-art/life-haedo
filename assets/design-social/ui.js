@@ -7,7 +7,7 @@
   const m = { concept: concepts.includes(q.get('concept')) ? q.get('concept') : 'color', view: q.get('view') === 'reader' ? 'reader' : 'feed', state: states.includes(q.get('state')) ? q.get('state') : 'normal', query: '', origin: '', topic: '', tab: 'all', saved: new Set(), excerpts: [], expanded: new Set(), sourceId: data.sources[0].id, peekId: data.sources[0].id, selected: data.excerpt, note: '', excerptTopic: '', scroll: 0, returnId: '', composing: false, filtersOpen: false, excerptOpen: false, sourceOpen: false, sourceScroll: 0, peekOpen: false, panelScroll: 0, panelOpener: '', peekOpener: '' };
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  // Lucide 1.51.0, fixed source and ISC/Feather MIT notices: vendor/lucide/.
+  // Lucide 1.51.0 except Haedo's approved quote A; provenance: vendor/lucide/.
   const iconPaths = {
     book: '<path d="M12 5v16" /><path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z" />',
     search: '<path d="m21 21-4.34-4.34" /><circle cx="11" cy="11" r="8" />',
@@ -15,7 +15,7 @@
     link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />',
     plus: '<path d="M5 12h14" /><path d="M12 5v14" />',
     back: '<path d="m12 19-7-7 7-7" /><path d="M19 12H5" />',
-    quote: '<path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z" /><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z" />',
+    quote: '<path d="M10 12H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v8a6 6 0 0 1-6 6M21 12h-5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v8a6 6 0 0 1-6 6"/>',
     arrow: '<path d="M5 12h14" /><path d="m12 5 7 7-7 7" />',
     close: '<path d="M18 6 6 18" /><path d="m6 6 12 12" />',
     filter: '<path d="M10 5H3" /><path d="M12 19H3" /><path d="M14 3v4" /><path d="M16 17v4" /><path d="M21 12h-9" /><path d="M21 19h-5" /><path d="M21 5h-7" /><path d="M8 10v4" /><path d="M8 12H3" />',
