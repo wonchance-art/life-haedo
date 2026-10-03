@@ -7,22 +7,23 @@
   const m = { concept: concepts.includes(q.get('concept')) ? q.get('concept') : 'color', view: q.get('view') === 'reader' ? 'reader' : 'feed', state: states.includes(q.get('state')) ? q.get('state') : 'normal', query: '', origin: '', topic: '', tab: 'all', saved: new Set(), excerpts: [], expanded: new Set(), sourceId: data.sources[0].id, peekId: data.sources[0].id, selected: data.excerpt, note: '', excerptTopic: '', scroll: 0, returnId: '', composing: false, filtersOpen: false, excerptOpen: false, sourceOpen: false, sourceScroll: 0, peekOpen: false, panelScroll: 0, panelOpener: '', peekOpener: '' };
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Lucide 1.51.0, fixed source and ISC/Feather MIT notices: vendor/lucide/.
   const iconPaths = {
-    book: '<path d="M12 5c-3-2-6-2-9-1v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1Z"/><path d="M12 5v15"/>',
-    search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>',
-    bookmark: '<path d="M6 3h12v18l-6-4-6 4Z"/>',
-    link: '<path d="m10 14 4-4M8 16l-2 2a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0M16 8l2-2a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0" transform="translate(1 0) scale(.9)"/>',
-    plus: '<path d="M12 5v14M5 12h14"/>',
-    back: '<path d="m11 5-7 7 7 7M4 12h16"/>',
-    quote: '<path d="M4 6h6v7H5c0 3-1 4-2 5M14 6h6v7h-5c0 3-1 4-2 5"/>',
-    arrow: '<path d="M4 12h15m-6-6 6 6-6 6"/>',
-    close: '<path d="m6 6 12 12M6 18 18 6"/>',
-    filter: '<path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="white"/><circle cx="15" cy="17" r="2" fill="white"/>',
-    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v.1"/>',
-    more: '<path d="m6 9 6 6 6-6"/>',
-    spark: '<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>'
+    book: '<path d="M12 5v16" /><path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z" />',
+    search: '<path d="m21 21-4.34-4.34" /><circle cx="11" cy="11" r="8" />',
+    bookmark: '<path d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z" />',
+    link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />',
+    plus: '<path d="M5 12h14" /><path d="M12 5v14" />',
+    back: '<path d="m12 19-7-7 7-7" /><path d="M19 12H5" />',
+    quote: '<path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z" /><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z" />',
+    arrow: '<path d="M5 12h14" /><path d="m12 5 7 7-7 7" />',
+    close: '<path d="M18 6 6 18" /><path d="m6 6 12 12" />',
+    filter: '<path d="M10 5H3" /><path d="M12 19H3" /><path d="M14 3v4" /><path d="M16 17v4" /><path d="M21 12h-9" /><path d="M21 19h-5" /><path d="M21 5h-7" /><path d="M8 10v4" /><path d="M8 12H3" />',
+    info: '<circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />',
+    more: '<path d="m6 9 6 6 6-6" />',
+    spark: '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z" />',
   };
-  const icon = (name, size = 22) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[name] || iconPaths.book}</svg>`;
+  const icon = (name, size = 20) => `<svg class="s-glyph" data-glyph="${name}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${iconPaths[name] || iconPaths.book}</svg>`;
   const current = () => data.sources.find(s => s.id === m.sourceId) || data.sources[0];
   const cover = s => ({ full: '본문 보관', partial: '일부 본문', link: '본문 미확보' }[s.coverage]);
   const origins = [...new Map(data.sources.map(s => [s.origin, s.originLabel])).entries()];
@@ -57,7 +58,7 @@
     return navItem('모아보기','book','all') + iconButton('검색','search','data-action="search"') + navItem('다시 볼 자료','bookmark','saved') + navItem('내 발췌','quote','excerpts') + iconButton('자료 가져오기','plus','data-action="import"');
   }
   function nav() {
-    return `<aside class="s-nav"><div class="s-brand" aria-label="해도">${icon('spark',24)}</div><nav class="s-nav-links" aria-label="내 자료 탐색">${navItems()}</nav></aside>`;
+    return `<aside class="s-nav"><div class="s-brand" aria-label="해도">${icon('spark')}</div><nav class="s-nav-links" aria-label="내 자료 탐색">${navItems()}</nav></aside>`;
   }
   function bottom() { return `<nav class="s-bottom" aria-label="하단 탐색">${navItems()}</nav>`; }
   function topicButtons() {

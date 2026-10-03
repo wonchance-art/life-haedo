@@ -4,6 +4,8 @@
 
 ## 최신 시안 03
 
+따옴표와 아이콘 정렬을 추가로 다듬었습니다. **[최신 아이콘과 화면](icon-refinement.md)**에서 확인할 수 있습니다. 아래 03 기본 캡처는 아이콘 보정 전의 배치 기록입니다.
+
 | 콘셉트 | 1440px 목록 | 390px 목록 | 820px 원문 |
 | --- | --- | --- | --- |
 | A · 넓은 목록 | [큰 화면](evidence/minimal/color-feed-desktop.png) | [휴대전화 폭](evidence/minimal/color-feed-phone.png) | [읽기](evidence/minimal/color-reader-tablet.png) |

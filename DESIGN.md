@@ -19,7 +19,7 @@
 
 ## 아이콘과 접근성
 
-익숙한 책·돋보기·북마크·인용부호·더하기·뒤로·정보·필터 기호를 같은 1.8px SVG 선으로 그린다. 화면에서 메뉴 이름을 계속 노출하지 않더라도 `aria-label`은 유지한다. hover와 키보드 초점에는 짧은 도움말을 표시하고 Escape로 닫는다. 모바일 조작은 hover를 요구하지 않는다. 아이콘만 보고 뜻을 이해하는지의 실제 사용자 체험은 별도 확인 사항이다.
+책·돋보기·북마크·따옴표·더하기·뒤로·정보·필터는 [Lucide 1.51.0의 로컬 SVG](vendor/lucide/README.md)를 재사용한다. 같은 24×24 좌표계와 2단위 둥근 선을 유지하고, 메뉴는 20×20px 그림을 44×44px 조작 영역의 중앙에 놓는다. 그림을 가로·세로로 늘리거나 글꼴의 문양으로 대체하지 않는다. 글자 옆 보조 아이콘은 16/18px로 구분한다. 화면에서 메뉴 이름을 계속 노출하지 않더라도 `aria-label`은 유지한다. hover와 키보드 초점에는 짧은 도움말을 표시하고 Escape로 닫는다. 모바일 조작은 hover를 요구하지 않는다. 아이콘만 보고 뜻을 이해하는지의 실제 사용자 체험은 별도 확인 사항이다.
 
 출처 플랫폼·날짜·본문 일부/미확보·버전처럼 자료를 판단하는 정보는 의미 있는 글자로 유지한다. 필터의 주제 이름, 발췌 입력의 필드 이름, 오류 원인과 복구 행동은 아이콘으로 대체하지 않는다.
 
@@ -50,7 +50,7 @@
 | 반응 | 눌림·색 변화 180ms, 담기 아이콘 260ms의 한 번 팝 |
 | 모션 감소 | transition/animation 해제, 상태와 조작 결과 유지 |
 
-`.s-icon`, `.s-button`, `.s-post`, `.s-body`, `.s-filter-panel`, `.s-source-details`, `.s-excerpt`, `.s-state`를 재사용한다. 새 라이브러리·외부 폰트·SNS SDK는 추가하지 않는다. 이전에 검토한 daisyUI/Lucide/Open Props는 [기록](docs/design-review/references.md)을 유지하며 이 범위에는 기본 CSS·DOM·기존 SVG로 충분하다.
+`.s-icon`, `.s-button`, `.s-post`, `.s-body`, `.s-filter-panel`, `.s-source-details`, `.s-excerpt`, `.s-state`를 재사용한다. 새 라이브러리·외부 폰트·SNS SDK는 추가하지 않는다. 이전에 검토한 daisyUI/Lucide/Open Props는 [기록](docs/design-review/references.md)을 유지하며 이 범위에는 기본 CSS·DOM과 출처·고지를 보존한 13개 SVG로 충분하다.
 
 ## 후속 기능과 보존
 
