@@ -6,7 +6,7 @@ function setup() {
   const listeners = new Set();
   let calls = 0, verified = 0, disposed = 0, signal, pending;
   const auth = {
-    ready: true, config, user: { id: "A" },
+    ready: true, config, user: { id: "A" }, epoch: 0,
     async verify() { verified++; return auth.user; },
     async signOut() { auth.user = null; change(null); },
     client: {
@@ -23,6 +23,7 @@ function setup() {
     },
   };
   function change(user) {
+    auth.epoch++;
     auth.user = user;
     for (const callback of listeners) callback(user ? "SIGNED_IN" : "SIGNED_OUT", user ? { user } : null);
   }
@@ -91,6 +92,36 @@ test("disposing life transport aborts its queries without disposing the shared s
   finish({ data: { status: "stored" }, error: null });
   await rejected;
 });
+
+test("a builder created by A cannot execute later as B or after A returns", async () => {
+  for (const returns of [false, true]) {
+    const s = setup();
+    const builder = s.client.rpc("life_sync_put", { fixtureBody: "A only" });
+    s.change({ id: "B" }); if (returns) s.change({ id: "A" });
+    await assert.rejects(Promise.resolve(builder), { code: "request_cancelled" });
+    assert.equal(s.signal, undefined); s.client.auth.dispose();
+  }
+});
+
+test("verification completing after bridge disposal cannot restore its account", async () => {
+  const s = setup(); let finish;
+  s.auth.verify = () => new Promise(resolve => { finish = resolve; });
+  const pending = s.client.auth.getUser(); s.client.auth.dispose(); finish({ id: "A" });
+  await assert.rejects(pending, { code: "request_cancelled" });
+  assert.equal(s.auth.user.id, "A"); assert.equal(s.disposed, 0);
+});
+
+test("platform account notifications are verified and all borrowed subscriptions are removed", () => {
+  const s = setup(), accountListeners = new Set(), events = [];
+  s.auth.onAccountChange = listener => { accountListeners.add(listener); return () => accountListeners.delete(listener); };
+  const borrowed = bridge.clientFactory(s.auth)(config.url, config.key);
+  borrowed.auth.onAuthStateChange((event, session) => events.push({ event, user: session?.user }));
+  s.change({ id: "B" }); assert.equal(events.length, 0);
+  for (const listener of accountListeners) listener({ userId: "B" });
+  assert.equal(events[0].user.id, "B");
+  borrowed.auth.dispose(); assert.equal(accountListeners.size, 0); s.client.auth.dispose();
+  assert.equal(s.listeners, 0); assert.equal(s.disposed, 0);
+});
 test("logout uses the platform logout and the bridge only exposes the life API", async () => {
   const s = setup();
   assert.throws(() => s.client.from("charts"), { code: "invalid_request" });
@@ -113,7 +144,7 @@ test("borrowed official SDK sends the same verified token to life SELECT and RPC
   const context = { fetch, Headers, Request, Response, URL, crypto, TextEncoder,
     WebSocket, AbortController, setTimeout, clearTimeout, setInterval, clearInterval,
     atob, btoa, console };
-  vm.runInNewContext(fs.readFileSync(require.resolve("../vendor/supabase.js"), "utf8"), context);
+  vm.runInNewContext(fs.readFileSync(require.resolve("../vendor/supabase/supabase.js"), "utf8"), context);
   const { createClient } = context.supabase;
   const user = { id: "6f8e1779-3972-4343-84ee-d1f45e123008", email: "anonymous@example.invalid" };
   const exp = Math.floor(Date.now() / 1000) + 3600;

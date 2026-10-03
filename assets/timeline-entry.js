@@ -6,14 +6,17 @@
     if (!user) return;
     const model = HaedoPlatformData,
       store = HaedoPlatformStore.init(user.id);
+    const checkAccount = store.captureAccount();
     try {
       await store.syncDocuments();
     } catch (_) {
+      checkAccount();
       if (!model.registry(localStorage, user.id).docs.length)
         throw new Error(
           "연표를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.",
         );
     }
+    checkAccount();
     const keys = model.keys(user.id),
       reg = model.registry(localStorage, user.id);
     if (!reg.docs.length) {
@@ -28,7 +31,7 @@
     }
     window.HAEDO_CONTEXT = Object.freeze({ uid: user.id, keys });
     for (const source of ["assets/app.js", "assets/workspace.js"]) {
-      if (auth.user?.id !== user.id) throw new Error("계정이 변경됐습니다.");
+      checkAccount();
       await new Promise((resolve, reject) => {
         const script = document.createElement("script");
         script.src = source;
@@ -50,7 +53,7 @@
         document.body.append(script);
       });
     }
-    if (auth.user?.id !== user.id) throw new Error("계정이 변경됐습니다.");
+    checkAccount();
     document.documentElement.classList.remove("auth-pending");
     document.getElementById("timelineAccess").hidden = true;
     if (params.get("view") === "records")

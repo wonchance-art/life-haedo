@@ -2,7 +2,7 @@
   "name": "life-haedo",
   "private": true,
   "scripts": {
-    "dev": "python3 -m http.server 4173 --bind 127.0.0.1",
+    "dev": "python3 scripts/dev-server.py",
     "check": "node scripts/check.mjs",
     "test": "node --test tests/*.test.cjs"
   },

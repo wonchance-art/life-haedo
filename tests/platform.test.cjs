@@ -358,6 +358,7 @@ test("signing out closes an open private form before navigating away", async () 
       getUser: async () => ({ data: { user } }),
       onAuthStateChange: (fn) => {
         changed = fn;
+        return { data: { subscription: { unsubscribe() {} } } };
       },
     },
   };
@@ -406,7 +407,7 @@ for (const response of ["old_success", "old_rejection"]) {
       getSession: async () => ({ data: { session } }),
       getUser: async () => { started(); return pending; },
       signOut: async () => { signouts++; },
-      onAuthStateChange: () => {},
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     } };
     const context = {
       HAEDO_CONFIG: { url: "https://test.supabase.co", key: "sb_publishable_fixture" },

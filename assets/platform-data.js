@@ -99,6 +99,7 @@
     makeId = newId,
     fromLegacy = false,
   ) {
+    assertBackupFormat(backup);
     const reg = registry(storage, uid),
       accountKeys = keys(uid);
     const imported = root.HaedoData.prepareImport(
@@ -121,6 +122,16 @@
     reg.current = imported[0].id;
     storage.setItem(accountKeys.registry, JSON.stringify(reg));
     return imported;
+  }
+  function assertBackupFormat(backup) {
+    if (!backup || typeof backup !== "object" || Array.isArray(backup))
+      throw new Error("JSON 백업의 형식을 확인해 주세요. 기존 기록은 변경하지 않았습니다.");
+    if (
+      Object.prototype.hasOwnProperty.call(backup, "format") &&
+      !["haedo-backup-v1", "haedo-platform-backup-v1"].includes(backup.format)
+    )
+      throw new Error("연표·목표·습관 백업을 선택해 주세요. 생활 자료 백업은 자료 모아보기에서 새 사본으로 복원할 수 있습니다.");
+    return true;
   }
   function addDays(value, n) {
     const date = new Date(value + "T12:00:00");
@@ -201,6 +212,7 @@
     emptyDocument,
     legacyBackup,
     importDocs,
+    assertBackupFormat,
     addDays,
     dayOfWeek,
     scheduled,

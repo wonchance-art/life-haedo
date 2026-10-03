@@ -8,6 +8,7 @@ stdout, files, command arguments or exception reports. Only generated anonymous
 workspaces are read/written. Existing charts are never accessed.
 
 python3 scripts/check-life-cloud.py --schema-only
+python3 scripts/check-life-cloud.py --auth-settings-only
 python3 scripts/check-life-cloud.py --cleanup-sql /tmp/life-cloud-cleanup.sql
 
 The full check creates isolated test rows and writes administrator cleanup SQL.
@@ -49,27 +50,41 @@ class Client:
         # Do not override the proxy or disable certificate checks. Python honors
         # SSL_CERT_FILE/SSL_CERT_DIR in create_default_context().
         self.context = ssl.create_default_context()
+        self.last_response_metadata = None
 
-    def request(self, path, token=None, method="GET", data=None):
+    def request(self, path, token=None, method="GET", data=None, *, serialized=None):
+        self.last_response_metadata = None
         headers = {"apikey": self.key, "Accept": "application/json"}
         if token:
             headers["Authorization"] = "Bearer " + token
-        body = None
+        require(data is None or serialized is None, "Specify only one request encoding.")
+        body = serialized
         if data is not None:
             body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        if body is not None:
             headers["Content-Type"] = "application/json"
         request = urllib.request.Request(self.base + path, data=body, headers=headers, method=method)
         try:
             with urllib.request.urlopen(request, context=self.context, timeout=45) as response:
-                status, raw = response.status, response.read()
+                status, raw, response_headers = response.status, response.read(), response.headers
         except urllib.error.HTTPError as error:
-            status, raw = error.code, error.read()
+            status, raw, response_headers = error.code, error.read(), error.headers
         except (urllib.error.URLError, TimeoutError, OSError):
             raise CheckFailure("Network request failed; inspect proxy/CA access without exposing credentials.") from None
         try:
             result = json.loads(raw) if raw else None
         except (ValueError, UnicodeDecodeError):
             result = None
+        media_type = response_headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        # Never retain/print raw headers, URLs, body text, identifiers or tokens.
+        # Presence of a proxy/server header cannot attribute a response by itself.
+        self.last_response_metadata = {
+            "status": status, "request_bytes": len(body) if body else 0,
+            "response_bytes": len(raw), "json_response": result is not None,
+            "media_type": media_type if media_type in ("application/json", "text/html", "text/plain") else "other",
+            "via_header_present": "Via" in response_headers,
+            "www_authenticate_present": "WWW-Authenticate" in response_headers,
+        }
         return status, result
 
     def login(self, label):
@@ -95,6 +110,19 @@ class Client:
 
     def read(self, token, wid):
         return self.request("/rest/v1/life_workspaces?select=id,title,revision,data&id=eq." + wid, token)
+
+    def put_oversized_jsonb(self, token, wid, bundle):
+        # PostgreSQL expands finite JSON numeric exponents when storing JSONB.
+        # 18,000 * 1e1000 is >18 MB as JSONB, but ~126 KB on the wire. This
+        # reaches the SQL size guard even when a gateway limits HTTP bodies.
+        marker = "LIFE_OVERSIZE_NUMERIC_FIXTURE"
+        encoded = json.dumps({
+            "p_workspace_id": wid, "p_expected_revision": 0,
+            "p_operation_id": str(uuid.uuid4()), "p_data": {**bundle, "extra": marker},
+        }, ensure_ascii=False, separators=(",", ":"))
+        require(encoded.count(json.dumps(marker)) == 1, "Unexpected size-fixture marker.")
+        encoded = encoded.replace(json.dumps(marker), "[" + ",".join(["1e1000"] * 18000) + "]")
+        return self.request("/rest/v1/rpc/life_sync_put", token, "POST", serialized=encoded.encode("utf-8"))
 
 
 class Run:
@@ -146,8 +174,11 @@ def rpc_result(response, result, label):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--schema-only", action="store_true", help="Authenticate and check schema; create no rows.")
+    read_only = parser.add_mutually_exclusive_group()
+    read_only.add_argument("--schema-only", action="store_true", help="Authenticate and check schema; create no rows.")
+    read_only.add_argument("--auth-settings-only", action="store_true", help="Read only the Google provider enabled flag; no login or rows.")
     parser.add_argument("--cleanup-sql", help="New administrator cleanup file for generated rows only (default: unique /tmp path).")
+    parser.add_argument("--wire-size-check", action="store_true", help="Also probe a >16 MiB HTTP body; gateways may reject it before SQL.")
     args = parser.parse_args()
     base = env("SUPABASE_URL").rstrip("/")
     parsed = urllib.parse.urlsplit(base)
@@ -155,6 +186,13 @@ def main():
             and not parsed.path and not parsed.query and not parsed.fragment,
             "SUPABASE_URL must be an HTTPS project origin.")
     client = Client(base, env("SUPABASE_PUBLISHABLE_KEY"))
+    if args.auth_settings_only:
+        status, settings = client.request("/auth/v1/settings")
+        google = settings.get("external", {}).get("google") if isinstance(settings, dict) else None
+        require(status == 200 and isinstance(google, bool),
+                "Google provider readiness could not be read (HTTP " + str(status) + ").")
+        print(json.dumps({"status": status, "google_enabled": google}))
+        return 0
     token_a, owner_a = client.login("A")
     token_b, owner_b = client.login("B")
     require(owner_a != owner_b, "Test A and B must be distinct accounts.")
@@ -249,12 +287,21 @@ def main():
         run.passed("concurrent identical request rechecks durable receipt")
 
         large_id = run.new_id()
-        large_data = {**run.bundle(large_id, " large"), "extra": "x" * (16 * 1024 * 1024)}
-        status, error = client.put(token_a, large_id, 0, str(uuid.uuid4()), large_data)
-        require(status == 413 or status == 400 and isinstance(error, dict) and error.get("code") == "22001",
-                "Server did not reject an oversized snapshot.")
+        large_data = run.bundle(large_id, " large")
+        status, error = client.put_oversized_jsonb(token_a, large_id, large_data)
+        require(status == 400 and isinstance(error, dict) and error.get("code") == "22001"
+                and error.get("message") == "life_snapshot_too_large",
+                "SQL size guard not confirmed (HTTP " + str(status) + ").")
         require(client.read(token_a, large_id) == (200, []), "Oversized snapshot left a row.")
-        run.passed("server-side 16 MiB snapshot defense")
+        run.passed("server-side 16 MiB JSONB defense through bounded HTTP input")
+        if args.wire_size_check:
+            status, error = client.put(token_a, large_id, 0, str(uuid.uuid4()),
+                                       {**large_data, "extra": "x" * (16 * 1024 * 1024)})
+            print("HTTP size response metadata: " + json.dumps(client.last_response_metadata, sort_keys=True))
+            require(client.read(token_a, large_id) == (200, []), "Oversized HTTP request left a row.")
+            require(status == 413 or status == 400 and isinstance(error, dict) and error.get("code") == "22001",
+                    "Oversized HTTP transport rejection is inconclusive (HTTP " + str(status) + ").")
+            run.passed("oversized HTTP transport rejection")
         print(str(run.count) + " live checks passed. No existing user rows or charts were read or changed.")
         print("Deletion-after-admin-removal is checked locally; this script does not grant or perform privileged DELETE.")
         return 0

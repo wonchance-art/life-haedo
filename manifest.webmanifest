@@ -1,7 +1,7 @@
 {
   "name": "해도",
   "short_name": "해도",
-  "description": "나의 연표, 목표, 습관을 한곳에서 관리하는 개인 기록 공간",
+  "description": "연표, 목표, 습관과 가져온 자료를 관리하는 개인 기록 공간",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

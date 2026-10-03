@@ -676,10 +676,14 @@
     byId("backupFile").onchange = async (event) => {
       const file = event.target.files[0];
       if (!file) return;
+      let checkAccount;
       try {
+        checkAccount = store.captureAccount();
         if (file.size > 20 * 1024 * 1024)
           throw new Error("20MB 이하의 백업 파일을 선택해 주세요.");
         const backup = JSON.parse(await file.text());
+        checkAccount();
+        model.assertBackupFormat(backup);
         if (
           backup.items &&
           (!Array.isArray(backup.items) ||

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko" data-theme="spring">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="선택한 기록을 가져와 원문과 출처를 보존하고 발췌를 모으는 개인 생활 도구">
+  <meta name="theme-color" content="#FAF8F0">
+  <title>자료 모아보기 · 해도</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="vendor/daisyui.css">
+  <link rel="stylesheet" href="vendor/daisyui-themes.css">
+  <link rel="stylesheet" href="assets/life/ui.css">
+</head>
+<body data-page="life">
+  <nav class="life-global-nav" aria-label="주 메뉴"><a href="index.html">해도 홈</a><a href="workspace.html">내 공간</a><a href="life.html" aria-current="page">자료 모아보기</a><span id="lifeAccount" data-private hidden><span id="lifeAccountLabel"></span><button id="lifeLogout" class="life-button" type="button">로그아웃</button></span></nav>
+  <noscript>생활 자료를 열려면 브라우저에서 JavaScript를 허용해주세요. 기존 기록은 변경되지 않습니다.</noscript>
+  <div id="lifeStartup" role="status" aria-live="polite">자료 모아보기를 여는 중입니다.</div>
+  <div id="lifeApp" data-private hidden aria-label="자료 모아보기"></div>
+  <script src="vendor/idb/idb.js"></script>
+  <script src="vendor/supabase/supabase.js"></script>
+  <script src="assets/platform-config.js"></script>
+  <script src="assets/platform-auth.js"></script>
+  <script src="assets/data.js"></script>
+  <script src="assets/platform-data.js"></script>
+  <script src="assets/life/core.js"></script>
+  <script src="assets/life/storage.js"></script>
+  <script src="assets/life/remote.js"></script>
+  <script src="assets/platform-life-remote.js"></script>
+  <script src="assets/life/sync.js"></script>
+  <script src="assets/life/legacy.js"></script>
+  <script src="assets/life/ui.js"></script>
+  <script src="assets/life/shell.js"></script>
+</body>
+</html>

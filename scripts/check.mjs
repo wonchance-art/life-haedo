@@ -41,7 +41,16 @@ for (const name of htmlFiles) {
   }
 }
 
-for (const name of ['sw.js', ...((await Promise.all(['scripts', 'assets'].map(async dir => (await readdir(resolve(root, dir))).filter(name => /\.(?:mjs|js)$/.test(name)).map(name => `${dir}/${name}`)))).flat())]) {
+async function javascriptFiles(dir) {
+  const entries = await readdir(resolve(root, dir), { withFileTypes: true });
+  const groups = await Promise.all(entries.map(entry => {
+    const name = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) return javascriptFiles(name);
+    return /\.(?:mjs|js)$/.test(entry.name) ? [name] : [];
+  }));
+  return groups.flat();
+}
+for (const name of ['sw.js', ...(await javascriptFiles('scripts')), ...(await javascriptFiles('assets')), ...(await javascriptFiles('vendor/idb')), ...(await javascriptFiles('vendor/supabase'))]) {
   const result = spawnSync(process.execPath, ['--check', resolve(root, name)], { encoding: 'utf8' });
   assert.equal(result.status, 0, `${name}: ${result.stderr || result.error || 'syntax check failed'}`);
   scriptCount++;
@@ -52,7 +61,7 @@ assert(manifest.name && manifest.start_url && manifest.scope, 'Incomplete PWA ma
 for (const icon of manifest.icons ?? []) await localResource(icon.src, 'manifest.webmanifest');
 await localResource(manifest.start_url, 'manifest.webmanifest');
 const sw = await readFile(resolve(root, 'sw.js'), 'utf8');
-const shell = sw.match(/const SHELL=\[([^\]]*)\]/)?.[1];
+const shell = sw.match(/const\s+SHELL\s*=\s*\[([^\]]*)\]/)?.[1];
 assert(shell, 'Service worker SHELL list not found; update the checker if its format changes');
 for (const entry of shell.matchAll(/['"]([^'"]+)['"]/g)) await localResource(entry[1], 'sw.js');
 
