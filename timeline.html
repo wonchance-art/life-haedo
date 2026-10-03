@@ -1,0 +1,704 @@
+<!doctype html>
+<html lang="ko" data-theme="spring" class="auth-pending">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="행복도 곡선 위에 사건·기간·시대를 기록하는 개인 연표 편집기"
+    />
+    <meta name="theme-color" content="#FAF8F0" />
+    <link rel="icon" href="icon.svg" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icon.svg" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="robots" content="noindex" />
+    <meta name="referrer" content="same-origin" />
+    <title>연표 · 해도</title>
+
+    <link rel="stylesheet" href="vendor/daisyui.css" />
+    <link rel="stylesheet" href="vendor/daisyui-themes.css" />
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@400&family=Noto+Serif+KR:wght@900&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="assets/app.css" />
+    <link rel="stylesheet" href="assets/platform.css" />
+  </head>
+  <body data-page="timeline">
+    <div class="timeline-access" id="timelineAccess" role="status">
+      <p id="timelineAccessMessage">로그인을 확인하고 있습니다.</p>
+      <a href="login.html">로그인 화면</a
+      ><button id="timelineRetry" class="ctrl-btn" hidden>다시 확인</button>
+    </div>
+    <svg
+      class="icon-defs"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <defs>
+        <symbol id="ui-calendar" viewBox="0 0 24 24">
+          <rect x="4" y="5" width="16" height="16" rx="2" />
+          <path d="M8 3v4m8-4v4M4 11h16" />
+        </symbol>
+        <symbol id="ui-layers" viewBox="0 0 24 24">
+          <path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5" />
+        </symbol>
+        <symbol id="ui-chevron" viewBox="0 0 24 24">
+          <path d="m8 10 4 4 4-4" />
+        </symbol>
+        <symbol id="ui-map" viewBox="0 0 24 24">
+          <path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Zm6-2v16m6-14v16" />
+        </symbol>
+        <symbol id="ui-grid" viewBox="0 0 24 24">
+          <rect x="4" y="4" width="16" height="16" rx="2" />
+          <path d="M12 4v16M4 12h16" />
+        </symbol>
+        <symbol id="ui-settings" viewBox="0 0 24 24">
+          <path d="M4 6h3m6 0h7M4 18h7m6 0h3" />
+          <circle cx="10" cy="6" r="3" />
+          <circle cx="14" cy="18" r="3" />
+        </symbol>
+        <symbol id="ui-search" viewBox="0 0 24 24">
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <path d="m16 16 5 5" />
+        </symbol>
+        <symbol id="ui-plus" viewBox="0 0 24 24">
+          <path d="M12 5v14M5 12h14" />
+        </symbol>
+        <symbol id="ui-more" viewBox="0 0 24 24">
+          <circle cx="5" cy="12" r="1" />
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+        </symbol>
+        <symbol id="ui-undo" viewBox="0 0 24 24">
+          <path d="m8 4-5 5 5 5M3 9h11a6 6 0 0 1 0 12" />
+        </symbol>
+        <symbol id="ui-redo" viewBox="0 0 24 24">
+          <path d="m16 4 5 5-5 5m5-5H10a6 6 0 0 0 0 12" />
+        </symbol>
+      </defs>
+    </svg>
+    <a class="skip-link" href="#sec-canvas">기록으로 이동</a>
+    <nav class="app-bar" aria-label="문서 도구">
+      <a class="app-brand" href="./index.html" aria-label="인생 연표 홈"
+        ><svg viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M3 24h26M4 20c5 0 5-11 10-11s5 7 9 7 4-5 6-7" /></svg
+      ></a>
+      <div class="document-tools">
+        <a class="timeline-space-link" href="workspace.html">내 공간</a>
+        <a class="timeline-space-link" href="life.html">자료 모아보기</a>
+        <select
+          class="select select-sm select-ghost"
+          id="docSel"
+          title="문서 전환"
+          aria-label="문서 선택"
+        ></select>
+        <button
+          class="db-dot"
+          id="btnCloud"
+          title="동기화 상태"
+          aria-label="동기화 상태"
+        ></button>
+      </div>
+      <span class="sr-only" id="saveStatus" role="status">기기에 저장됨</span>
+    </nav>
+
+    <noscript
+      ><div
+        style="
+          max-width: 1180px;
+          margin: 24px auto;
+          padding: 16px 24px;
+          border: 1px solid #b5432a;
+          color: #b5432a;
+          font-size: 14px;
+        "
+      >
+        이 페이지는 JavaScript로 그려진다. 브라우저에서 JavaScript를 허용해야
+        연표·지도가 표시된다.
+      </div></noscript
+    >
+
+    <header>
+      <div class="wrap">
+        <div class="hgroup">
+          <div>
+            <h1>내 연표</h1>
+            <p class="subtitle">시간에 따른 행복도와 사건 기록</p>
+          </div>
+          <div class="head-right">
+            <div class="hero" id="hero">
+              <button
+                class="hero-fig"
+                id="heroFig"
+                aria-label="요약 수치 — 눌러서 다음"
+              >
+                <span class="hero-k" id="heroK">행복도</span>
+                <span class="hero-v" id="heroV">—</span>
+              </button>
+              <div
+                class="hero-dots"
+                id="heroDots"
+                role="group"
+                aria-label="수치 고르기"
+              ></div>
+            </div>
+            <div class="stat-cards" aria-label="기록 요약">
+              <div class="stat">
+                <div class="stat-title">출생</div>
+                <div class="stat-value" id="statBirth">—</div>
+              </div>
+              <div class="stat">
+                <div class="stat-title">사건 · 기간</div>
+                <div class="stat-value" id="statEvents">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section id="sec-canvas">
+        <div class="wrap">
+          <div class="workspace-toolbar">
+            <div class="view-switch" role="group" aria-label="보기 방식">
+              <button id="btnTimeline" class="on" aria-pressed="true">
+                연표
+              </button>
+              <button id="btnRecords" aria-pressed="false">기록</button>
+            </div>
+            <div class="tl-controls" role="group" aria-label="연표 보기 설정">
+              <details class="tool-select" id="periodSelect">
+                <summary title="표시 기간" aria-label="표시 기간: 5년">
+                  <svg class="ui-icon" aria-hidden="true">
+                    <use href="#ui-calendar" /></svg
+                  ><span id="periodLabel">5년</span
+                  ><svg class="ui-icon" aria-hidden="true">
+                    <use href="#ui-chevron" />
+                  </svg>
+                </summary>
+                <div class="tool-popover">
+                  <div class="scale-group" role="group" aria-label="표시 기간">
+                    <button
+                      class="lay-chip scale"
+                      data-y="all"
+                      aria-pressed="false"
+                    >
+                      전체
+                    </button>
+                    <button
+                      class="lay-chip scale"
+                      data-y="20"
+                      aria-pressed="false"
+                    >
+                      20년
+                    </button>
+                    <button
+                      class="lay-chip scale"
+                      data-y="10"
+                      aria-pressed="false"
+                    >
+                      10년
+                    </button>
+                    <button
+                      class="lay-chip scale on"
+                      data-y="5"
+                      aria-pressed="true"
+                    >
+                      5년
+                    </button>
+                    <button
+                      class="lay-chip scale"
+                      data-y="1"
+                      aria-pressed="false"
+                    >
+                      1년
+                    </button>
+                  </div>
+                  <button class="bar-button" id="btnToday">오늘로 이동</button>
+                </div>
+              </details>
+              <details class="tool-select" id="layerSelect" hidden>
+                <summary title="분야 선택" aria-label="분야 선택: 종합">
+                  <svg class="ui-icon" aria-hidden="true">
+                    <use href="#ui-layers" /></svg
+                  ><span id="layerLabel">종합</span
+                  ><svg class="ui-icon" aria-hidden="true">
+                    <use href="#ui-chevron" />
+                  </svg>
+                </summary>
+                <div class="tool-popover">
+                  <div
+                    class="layer-bar"
+                    id="layerBar"
+                    role="group"
+                    aria-label="분야 선택"
+                  ></div>
+                </div>
+              </details>
+            </div>
+            <div class="tool-actions">
+              <div class="edit-tools" role="group" aria-label="실행 취소">
+                <button
+                  class="tool-button"
+                  id="btnUndo"
+                  title="되돌리기 (⌘/Ctrl+Z)"
+                  aria-label="되돌리기"
+                  disabled
+                >
+                  <svg class="ui-icon" aria-hidden="true">
+                    <use href="#ui-undo" />
+                  </svg>
+                </button>
+                <button
+                  class="tool-button"
+                  id="btnRedo"
+                  title="다시 실행 (⌘/Ctrl+Shift+Z)"
+                  aria-label="다시 실행"
+                  disabled
+                >
+                  <svg class="ui-icon" aria-hidden="true">
+                    <use href="#ui-redo" />
+                  </svg>
+                </button>
+              </div>
+              <button
+                class="tool-button"
+                id="btnMap"
+                title="지도"
+                aria-label="지도"
+                data-timeline-tool
+                aria-pressed="false"
+              >
+                <svg class="ui-icon" aria-hidden="true">
+                  <use href="#ui-map" />
+                </svg>
+              </button>
+              <button
+                class="tool-button"
+                id="btnGrid"
+                title="격자"
+                aria-label="격자"
+                data-timeline-tool
+                aria-pressed="false"
+              >
+                <svg class="ui-icon" aria-hidden="true">
+                  <use href="#ui-grid" />
+                </svg>
+              </button>
+              <button
+                class="tool-button"
+                id="btnShow"
+                title="설정"
+                aria-label="설정"
+                data-timeline-tool
+                aria-haspopup="true"
+              >
+                <svg class="ui-icon" aria-hidden="true">
+                  <use href="#ui-settings" />
+                </svg>
+              </button>
+              <button
+                class="tool-button"
+                id="btnFile"
+                title="더 보기 · 문서와 내보내기"
+                aria-label="더 보기"
+                aria-haspopup="menu"
+              >
+                <svg class="ui-icon" aria-hidden="true">
+                  <use href="#ui-more" />
+                </svg>
+              </button>
+            </div>
+            <div class="workspace-actions">
+              <button
+                class="tool-button"
+                id="btnSearch"
+                title="검색 (⌘/Ctrl+K)"
+                aria-label="검색"
+              >
+                <svg class="ui-icon" aria-hidden="true">
+                  <use href="#ui-search" />
+                </svg>
+              </button>
+              <button
+                class="tool-button add-button"
+                id="btnAdd"
+                aria-label="추가"
+              >
+                <svg class="ui-icon" aria-hidden="true">
+                  <use href="#ui-plus" /></svg
+                ><span>추가</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="canvas-frame" id="chartView">
+            <div class="canvas-inner">
+              <svg
+                id="tl"
+                tabindex="0"
+                role="application"
+                aria-label="가로형 연표. ⌘ 또는 Ctrl과 휠로 확대, 드래그 또는 좌우 화살표로 이동, 0으로 전체 보기, 더블클릭으로 그 자리에 추가"
+              ></svg>
+              <div class="tl-tip" id="tlTip"></div>
+              <aside
+                class="start-guide"
+                id="startGuide"
+                hidden
+                aria-label="연표 사용 안내"
+              >
+                <button
+                  class="start-close"
+                  id="startClose"
+                  aria-label="안내 닫기"
+                >
+                  ×
+                </button>
+                <strong>첫 기록을 추가해보세요.</strong>
+                <p>날짜와 내용을 남기면 연표에 바로 표시됩니다.</p>
+                <div class="start-actions">
+                  <button class="lay-chip add-chip" id="startAdd">
+                    ＋ 추가
+                  </button>
+                  <button class="guide-link" id="startDismiss">
+                    안내 닫기
+                  </button>
+                </div>
+              </aside>
+              <!-- 지도 오버레이 — 연표 프레임 그 자리에서 펼쳐진다 -->
+              <div class="map-overlay" id="mapOverlay" hidden>
+                <div class="map-ov-bar">
+                  <div
+                    class="trip-bar"
+                    id="tripBar"
+                    role="group"
+                    aria-label="경로 선택"
+                  ></div>
+                  <span style="flex: 1"></span>
+                  <button
+                    class="lay-chip"
+                    id="mapShow"
+                    aria-label="지도에 무엇을 보일지"
+                  >
+                    ⋯
+                  </button>
+                  <button class="lay-chip" id="mapClose" aria-label="지도 닫기">
+                    ✕
+                  </button>
+                </div>
+                <div id="map"></div>
+                <div class="trip-info" id="tripInfo"></div>
+              </div>
+            </div>
+
+            <!-- 스크러버 (미니맵) -->
+            <div class="scrubber">
+              <div
+                class="scrub-track"
+                id="scrubTrack"
+                aria-label="타임라인 미니맵 — 클릭·드래그로 이동"
+              ></div>
+              <span class="scrub-year" id="scrubYear">—</span>
+            </div>
+
+            <!-- 생애 격자 — 연표 아래 띠. 가로가 시간, 위가 시대 -->
+            <div class="grid-band" id="gridBand" hidden>
+              <div class="grid-bar">
+                <span class="grid-note" id="gridNote"></span>
+                <span style="flex: 1"></span>
+                <button class="lay-chip" id="gridShow" aria-label="격자 설정">
+                  ⋯
+                </button>
+                <button class="lay-chip" id="gridClose" aria-label="격자 닫기">
+                  ✕
+                </button>
+              </div>
+              <canvas id="gridCv"></canvas>
+              <div class="tl-tip" id="gridTip"></div>
+            </div>
+
+            <div class="chart-help">
+              <span>기록을 누르면 편집할 수 있어요.</span
+              ><span>드래그로 이동 · ⌘/Ctrl + 휠로 확대</span>
+            </div>
+          </div>
+          <div class="records-view" id="recordsView" hidden>
+            <div class="records-head">
+              <div>
+                <h2>기록</h2>
+                <p id="recordCount"></p>
+              </div>
+              <div class="record-filters">
+                <input
+                  id="recordQuery"
+                  type="search"
+                  placeholder="제목이나 내용 검색"
+                  aria-label="목록 검색"
+                />
+                <select id="recordKind" aria-label="기록 종류">
+                  <option value="all">모든 기록</option>
+                  <option value="event">사건</option>
+                  <option value="span">기간</option>
+                  <option value="thought">생각</option>
+                </select>
+              </div>
+            </div>
+            <div id="recordRows"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <input
+      type="file"
+      id="fileRestore"
+      accept=".json,application/json"
+      hidden
+    />
+    <div class="toast-message" id="toastMessage" role="status" hidden></div>
+
+    <!-- 입장 게이트 -->
+
+    <!-- 온라인 DB 설정 -->
+
+    <!-- 새 문서 만들기 -->
+    <div class="search-bd" id="fillBd" hidden>
+      <div
+        class="search-panel card bg-base-100"
+        role="dialog"
+        aria-modal="true"
+        aria-label="채우기"
+        style="max-width: 640px"
+      >
+        <div
+          style="
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 18px 20px;
+          "
+        >
+          <div class="fill-tabs" role="tablist">
+            <button class="lay-chip fill-tab on" data-tab="thought">
+              생각
+            </button>
+            <button class="lay-chip fill-tab" data-tab="layer">분야 값</button>
+            <button class="lay-chip fill-tab" data-tab="record">
+              기록 밀도
+            </button>
+            <button class="lay-chip fill-tab" data-tab="tag">사건 태그</button>
+          </div>
+          <div
+            id="fillPaste"
+            style="display: flex; flex-direction: column; gap: 9px"
+          >
+            <div class="fill-row">
+              <select
+                class="dt-edit"
+                id="fillLayer"
+                aria-label="분야"
+                hidden
+              ></select>
+              <label class="dt-lab"
+                ><input type="checkbox" id="fillOver" /> 이미 있는 달은
+                덮어쓴다</label
+              >
+              <span style="flex: 1"></span>
+              <label class="btn btn-xs" style="cursor: pointer"
+                >파일<input
+                  type="file"
+                  id="fillFile"
+                  accept=".txt,.tsv,.csv"
+                  hidden
+              /></label>
+            </div>
+            <textarea
+              id="fillText"
+              class="dt-edit"
+              spellcheck="false"
+              aria-label="붙여넣기"
+              style="
+                min-height: 168px;
+                font-family: &quot;IBM Plex Mono&quot;, monospace;
+                font-size: 12.5px;
+                line-height: 1.5;
+              "
+            ></textarea>
+            <div
+              id="fillPrev"
+              style="
+                font-size: 11.5px;
+                color: var(--ink-soft);
+                font-family: &quot;IBM Plex Mono&quot;, monospace;
+                white-space: pre-line;
+                min-height: 34px;
+              "
+            ></div>
+          </div>
+          <div
+            id="fillTag"
+            hidden
+            style="max-height: 330px; overflow-y: auto"
+          ></div>
+          <div style="display: flex; gap: 8px; justify-content: flex-end">
+            <button class="btn btn-xs" id="fillCancel">닫기</button>
+            <button class="btn btn-sm btn-primary" id="fillGo">넣기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="search-bd" id="newBd" hidden>
+      <div
+        class="search-panel card bg-base-100"
+        role="dialog"
+        aria-modal="true"
+        aria-label="새 문서 만들기"
+        style="max-width: 400px"
+      >
+        <div
+          style="
+            display: flex;
+            flex-direction: column;
+            gap: 13px;
+            padding: 20px 22px;
+          "
+        >
+          <div style="font-weight: 700; font-size: 17px">새 문서 만들기</div>
+          <label
+            style="
+              display: flex;
+              flex-direction: column;
+              gap: 5px;
+              font-size: 12px;
+              color: var(--ink-soft);
+            "
+            >이름
+            <input
+              id="nbName"
+              placeholder="이름"
+              style="
+                font-family: inherit;
+                font-size: 14px;
+                padding: 8px 10px;
+                border: 1px solid var(--line);
+                border-radius: 2px;
+                background: var(--field);
+                color: var(--ink);
+              "
+            />
+          </label>
+          <label
+            style="
+              display: flex;
+              flex-direction: column;
+              gap: 5px;
+              font-size: 12px;
+              color: var(--ink-soft);
+            "
+            >출생 연월
+            <input
+              id="nbBirth"
+              type="text"
+              inputmode="numeric"
+              placeholder="1998-05(-05)"
+              style="
+                font-family: &quot;IBM Plex Mono&quot;, monospace;
+                font-size: 14px;
+                padding: 8px 10px;
+                border: 1px solid var(--line);
+                border-radius: 2px;
+                background: var(--field);
+                color: var(--ink);
+              "
+            />
+          </label>
+          <div style="display: flex; gap: 8px; justify-content: flex-end">
+            <button class="btn btn-xs" id="nbCancel">취소</button>
+            <button class="btn btn-sm btn-primary" id="nbStart">만들기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 컨텍스트 메뉴 -->
+    <div class="ctx" id="ctxMenu" hidden></div>
+    <div
+      class="ctx show-panel"
+      id="showPanel"
+      role="group"
+      aria-label="표시"
+      hidden
+    ></div>
+    <div
+      class="ctx show-panel"
+      id="mapPanel"
+      role="group"
+      aria-label="지도 표시"
+      hidden
+    ></div>
+    <div
+      class="ctx show-panel"
+      id="gridPanel"
+      role="group"
+      aria-label="격자 설정"
+      hidden
+    ></div>
+
+    <!-- 팝오버 에디터 -->
+    <div
+      class="pop-ed"
+      id="popEd"
+      hidden
+      role="dialog"
+      aria-label="바로 편집"
+    ></div>
+
+    <!-- 호버 설명 카드 -->
+    <div class="hover-card" id="hoverCard" hidden aria-hidden="true"></div>
+
+    <!-- 검색 오버레이 -->
+    <div class="search-bd" id="searchBd" hidden>
+      <div
+        class="search-panel card bg-base-100"
+        role="dialog"
+        aria-modal="true"
+        aria-label="기록 검색"
+      >
+        <div class="search-row">
+          <svg class="ui-icon" aria-hidden="true">
+            <use href="#ui-search" />
+          </svg>
+          <input
+            id="searchInput"
+            aria-label="기록 검색"
+            placeholder="이름 · 문장 · 날짜"
+            spellcheck="false"
+            autocomplete="off"
+          />
+          <kbd>esc</kbd>
+        </div>
+        <div class="search-results" id="searchResults"></div>
+      </div>
+    </div>
+
+    <script src="vendor/supabase/supabase.js"></script>
+    <script src="assets/platform-config.js"></script>
+    <script src="assets/platform-auth.js"></script>
+    <script src="assets/data.js"></script>
+    <script src="assets/sync.js"></script>
+    <script src="assets/platform-data.js"></script>
+    <script src="assets/platform-store.js"></script>
+    <script src="assets/timeline-entry.js"></script>
+  </body>
+</html>

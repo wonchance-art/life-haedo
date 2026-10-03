@@ -1,30 +1,6 @@
 /* 공유 뷰어 모드 */
 const RO=!!window.VIEW_ONLY;
 
-/* 입장 게이트 — 클라이언트 측 열람 차단 (해시만 보관, 기기당 1회 입력) */
-const GATE_HASH='686f746a95b6f836d7d70567c302c3f9ebb5ee0def3d1220ee9d4e9f34f5e131';
-const GATE_KEY='caeyeon_life_gate';
-(function gate(){
-  if(RO)return;
-  try{if(localStorage.getItem(GATE_KEY)===GATE_HASH)return;}catch(e){}
-  const sha=async s=>{
-    const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));
-    return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
-  };
-  /* 스크립트가 body 끝이라 DOM은 이미 준비됨 */
-  const bd=document.getElementById('gateBd');
-  const inp=document.getElementById('gatePw');
-  bd.hidden=false;
-  const tryGo=async()=>{
-    if(await sha(inp.value)===GATE_HASH){
-      try{localStorage.setItem(GATE_KEY,GATE_HASH);}catch(e){}
-      bd.hidden=true;
-    }else{inp.style.borderColor='var(--cinnabar)';inp.select();}
-  };
-  document.getElementById('gateGo').onclick=tryGo;
-  inp.addEventListener('keydown',e=>{if(e.key==='Enter')tryGo();});
-  requestAnimationFrame(()=>inp.focus());
-})();
 if(RO)document.documentElement.classList.add('view-only');
 
 /* ==========================================================================
@@ -97,12 +73,12 @@ const DEFAULT_DATA = {
 /* ==========================================================================
    저장 계층 — 다중 문서 (레지스트리 + 문서별 키)
    ========================================================================== */
-const LS_KEY='caeyeon_life_v2';            /* 구버전 단일 문서 (마이그레이션 소스) */
-const REG_KEY='caeyeon_life_registry';
-const DOC_PREFIX='caeyeon_life_doc_';
+const LS_KEY=window.HAEDO_CONTEXT?'caeyeon_life_account_'+window.HAEDO_CONTEXT.uid+'_legacy':'caeyeon_life_v2';            /* 구버전 단일 문서 (마이그레이션 소스) */
+const REG_KEY=window.HAEDO_CONTEXT?.keys.registry||'caeyeon_life_registry';
+const DOC_PREFIX=window.HAEDO_CONTEXT?.keys.docs||'caeyeon_life_doc_';
 let storageOK=true, REG=null, curDocId=null;
 const newDocId=()=>typeof crypto.randomUUID==='function'?'d'+crypto.randomUUID():'d'+Date.now().toString(36)+Math.random().toString(36).slice(2);
-function saveRegistry(){try{localStorage.setItem(REG_KEY,JSON.stringify(REG));return true;}catch(e){storageOK=false;return false;}}
+function saveRegistry(){if(window.HAEDO_CONTEXT&&HaedoAuth.user?.id!==window.HAEDO_CONTEXT.uid)return false;try{localStorage.setItem(REG_KEY,JSON.stringify(REG));return true;}catch(e){storageOK=false;return false;}}
 function loadDoc(id){
   try{const raw=localStorage.getItem(DOC_PREFIX+id);if(raw){const data=JSON.parse(raw);if(HaedoData.isDocument(data))return data;}}catch(e){}
   return null;
@@ -123,6 +99,7 @@ function loadDoc(id){
   saveRegistry();
 })();
 function persist(){
+  if(window.HAEDO_CONTEXT&&HaedoAuth.user?.id!==window.HAEDO_CONTEXT.uid)return;
   histPush();
   if(RO)return; /* 공유 뷰어는 저장하지 않음 */
   try{
@@ -140,7 +117,7 @@ function persist(){
 function updateSaveState(){
   const d=document.getElementById('btnCloud');
   if(!d)return;
-  const set=(ok,msg)=>{d.classList.toggle('ok',!!ok);d.title=msg;d.setAttribute('aria-label',msg+' — 동기화 설정');const status=document.getElementById('saveStatus');if(status){status.textContent=msg;status.dataset.state=storageOK?'saved':'error';}};
+  const set=(ok,msg)=>{d.classList.toggle('ok',!!ok);d.title=msg;d.setAttribute('aria-label',msg+' — 동기화 상태');const status=document.getElementById('saveStatus');if(status){status.textContent=msg;status.dataset.state=storageOK?'saved':'error';}};
   if(RO)return set(false,'공유 화면 — 읽기 전용');
   if(!storageOK)return set(false,'저장 공간 부족 · 파일로 백업하세요');
   if(typeof CLOUD!=='undefined'&&CLOUD){
@@ -2045,7 +2022,13 @@ function placePop(ax,ay){
     const foot=document.createElement('div');foot.className='pe-footer';
     const hint=document.createElement('span');hint.textContent='변경 사항은 자동 저장';
     const done=document.createElement('button');done.className='pe-done';done.textContent='완료';
-    done.onclick=()=>{const active=document.activeElement;if(popEd.contains(active))active.blur();if(!popEd.querySelector('.bad'))closePop();};
+    const pending=new Map([...popEd.querySelectorAll('input:not([type=checkbox]),textarea,select')].map(field=>[field,field.value]));
+    for(const field of pending.keys())field.addEventListener('change',()=>pending.set(field,field.value));
+    done.onclick=()=>{
+      const active=document.activeElement;if(popEd.contains(active))active.blur();
+      for(const [field,committed] of pending)if(!field.disabled&&field.value!==committed)field.dispatchEvent(new Event('change',{bubbles:true}));
+      if(!popEd.querySelector('.bad'))closePop();
+    };
     foot.append(hint,done);popEd.appendChild(foot);
   }
   popEd.hidden=false;
@@ -2823,15 +2806,15 @@ searchInput.addEventListener('keydown',e=>{
 });
 searchBd.addEventListener('mousedown',e=>{if(e.target===searchBd)closeSearch();});
 document.addEventListener('keydown',e=>{
-  if(!document.getElementById('gateBd').hidden)return;
+  if(window.HAEDO_CONTEXT&&!HaedoAuth.user)return;
   if((e.metaKey||e.ctrlKey)&&/^[fk]$/.test(e.key.toLowerCase())){e.preventDefault();openSearch();}
   else if(e.key==='Escape'){
     const wasOpen=!searchBd.hidden||!ctxMenu.hidden||!popEd.hidden||!fillBd.hidden
-      ||!document.getElementById('newBd').hidden||!document.getElementById('cloudBd').hidden||MAP_OPEN;
+      ||!document.getElementById('newBd').hidden||MAP_OPEN;
     if(MAP_OPEN)closeMapOverlay();
     if(!searchBd.hidden)closeSearch();closeCtx();closePop();closeFill();showPanel.hidden=true;mapPanel.hidden=true;
     document.getElementById('gridPanel').hidden=true;
-    document.getElementById('newBd').hidden=true;document.getElementById('cloudBd').hidden=true;
+    document.getElementById('newBd').hidden=true;
     /* 열린 창이 없었으면 Esc = 레이어 포커스 해제 */
     if(!wasOpen&&focusLayer!=='main'){focusLayer='main';render();}
   }
@@ -2892,8 +2875,9 @@ $('#btnSearch').onclick=openSearch;
 const CLOUD_KEY='caeyeon_life_cloud';
 let CLOUD=null,cloudState='',cloudEpoch=0,cloudPulling=false,tokenRefresh=null;
 const cloudDocStates=new Map();
-try{const cfg=JSON.parse(localStorage.getItem(CLOUD_KEY));if(cfg&&typeof cfg.url==='string'&&/^https:\/\//.test(cfg.url)&&typeof cfg.key==='string')CLOUD=cfg;}catch(e){}
-const cloudBase=()=>CLOUD.url.replace(/\/+$/,'')+'/rest/v1/charts';
+if(window.HAEDO_CONTEXT){CLOUD={...HaedoAuth.config,session:{uid:HaedoAuth.user.id,email:HaedoAuth.user.email,access_token:HaedoAuth.session.access_token}};}
+else try{const cfg=JSON.parse(localStorage.getItem(CLOUD_KEY));if(cfg&&typeof cfg.url==='string'&&/^https:\/\//.test(cfg.url)&&typeof cfg.key==='string')CLOUD=cfg;}catch(e){}
+const cloudBase=()=>CLOUD.url.replace(/\/+$/,'')+'/rest/v1/'+(window.HAEDO_CONTEXT?'haedo_documents':'charts');
 const cloudHeaders=()=>({'apikey':CLOUD.key,
   'Authorization':'Bearer '+(CLOUD.session?CLOUD.session.access_token:CLOUD.key),
   'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'});
@@ -2920,6 +2904,7 @@ function setSession(j){
 }
 function dropSession(){cloudEpoch++;cloudQueue.clear();if(CLOUD){CLOUD.session=null;saveCloud();}setCloudState('auth');}
 async function ensureToken(){
+  if(window.HAEDO_CONTEXT)return;
   if(!CLOUD?.session||Date.now()<CLOUD.session.expires_at)return;
   if(tokenRefresh)return tokenRefresh;
   const cfg=CLOUD,epoch=cloudEpoch;
@@ -2935,9 +2920,9 @@ async function cloudFetch(url,optsFn){
   const cfg=CLOUD,epoch=cloudEpoch;
   await ensureToken();
   if(!cfg||CLOUD!==cfg||cloudEpoch!==epoch)throw new Error('연결이 변경됐습니다.');
-  let r=await fetch(url,optsFn());
+  let r=await (window.HAEDO_CONTEXT?HaedoAuth.request(url,optsFn()):fetch(url,optsFn()));
   if(CLOUD!==cfg||cloudEpoch!==epoch)throw new Error('연결이 변경됐습니다.');
-  if(r.status===401&&cfg.session){
+  if(!window.HAEDO_CONTEXT&&r.status===401&&cfg.session){
     cfg.session.expires_at=0;await ensureToken();
     if(CLOUD!==cfg||cloudEpoch!==epoch)throw new Error('연결이 변경됐습니다.');
     r=await fetch(url,optsFn());
@@ -3035,86 +3020,11 @@ if(!RO){
 }
 (function cloudUI(){
   if(RO)return;
-  const bd=document.getElementById('cloudBd');
-  function refreshAuthUI(){
-    const stat=document.getElementById('authStat');
-    const form=document.getElementById('authForm');
-    const outBtn=document.getElementById('authLogout');
-    if(CLOUD&&CLOUD.session){
-      stat.textContent='🔐 로그인됨 — '+CLOUD.session.email;
-      form.style.display='none';outBtn.hidden=false;
-    }else{
-      stat.textContent=CLOUD?'계정별 접근 권한은 서버 설정에 따라 적용됩니다.':'먼저 위에서 URL·키를 연결해줘';
-      form.style.display='flex';outBtn.hidden=true;
-    }
-  }
-  document.getElementById('btnCloud').onclick=()=>{
-    document.getElementById('cloudUrl').value=CLOUD?CLOUD.url:'';
-    document.getElementById('cloudKey').value=CLOUD?CLOUD.key:'';
-    refreshAuthUI();
-    bd.hidden=false;
+  document.getElementById('btnCloud').onclick=async()=>{
+    await cloudPullAll(true);
+    window.showToast?.(document.getElementById('saveStatus').textContent);
   };
-  document.getElementById('cloudCancel').onclick=()=>{bd.hidden=true;};
-  bd.addEventListener('mousedown',e=>{if(e.target===bd)bd.hidden=true;});
-  document.getElementById('cloudSave').onclick=async()=>{
-    const url=document.getElementById('cloudUrl').value.trim();
-    const key=document.getElementById('cloudKey').value.trim();
-    if(!/^https:\/\//.test(url)||!key){alert('HTTPS 프로젝트 URL과 공개 키를 확인하세요.');return;}
-    let secretKey=key.startsWith('sb_secret_');
-    try{secretKey=secretKey||JSON.parse(atob(key.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).role==='service_role';}catch(e){}
-    if(secretKey){alert('서버 전용 키는 사용할 수 없습니다. publishable 또는 anon 키를 입력하세요.');return;}
-    const keepSession=CLOUD&&CLOUD.url===url?CLOUD.session:null;
-    cloudEpoch++;cloudQueue.clear();CLOUD={url,key,session:keepSession};
-    saveCloud();
-    refreshAuthUI();
-    /* 연결 즉시 검사 — 성공/실패를 명시적으로 보고 (조용한 실패 금지) */
-    try{
-      const r=await cloudFetch(cloudBase()+'?select=id',()=>({headers:cloudHeaders()}));
-      if(!r.ok)throw new Error('HTTP '+r.status+(r.status===404?' — charts 테이블을 확인하세요':r.status===401?' — anon key 확인':''));
-      const n=(await r.json()).length;
-      window.showToast?.('연결됐습니다. 문서 '+n+'개의 변경 사항을 확인합니다.');
-      bd.hidden=true;
-      await cloudPullAll(true);
-      window.showToast?.(cloudState==='ok'?'동기화했습니다.':'동기화 상태를 확인하세요. 로컬 기록은 보존됩니다.');
-    }catch(e){
-      alert('✗ 연결 실패: '+e.message);
-      setCloudState('err');
-    }
-  };
-  document.getElementById('authLogin').onclick=async()=>{
-    if(!CLOUD){alert('먼저 URL·키를 연결해줘.');return;}
-    const email=document.getElementById('authEmail').value.trim();
-    const pw=document.getElementById('authPw').value;
-    if(!email||!pw)return;
-    try{
-      const cfg=CLOUD,epoch=++cloudEpoch;cloudQueue.clear();
-      const session=await authCall('token?grant_type=password',{email,password:pw});
-      if(CLOUD!==cfg||cloudEpoch!==epoch)return;
-      setSession(session);document.getElementById('authPw').value='';
-      refreshAuthUI();setCloudState('sync');
-      cloudPullAll();
-    }catch(e){alert('로그인 실패: '+e.message);}
-  };
-  document.getElementById('authSignup').onclick=async()=>{
-    if(!CLOUD){alert('먼저 URL·키를 연결해줘.');return;}
-    const email=document.getElementById('authEmail').value.trim();
-    const pw=document.getElementById('authPw').value;
-    if(!email||pw.length<6){alert('이메일과 6자 이상 비밀번호가 필요하다.');return;}
-    try{
-      const cfg=CLOUD,epoch=++cloudEpoch;cloudQueue.clear();
-      const j=await authCall('signup',{email,password:pw});
-      if(CLOUD!==cfg||cloudEpoch!==epoch)return;
-      document.getElementById('authPw').value='';
-      if(setSession(j)){refreshAuthUI();cloudPullAll();}
-      else alert('가입 확인 메일을 확인한 뒤 로그인해줘.');
-    }catch(e){alert('가입 실패: '+e.message);}
-  };
-  document.getElementById('authLogout').onclick=()=>{dropSession();refreshAuthUI();};
-  document.getElementById('cloudOff').onclick=()=>{
-    cloudEpoch++;cloudQueue.clear();CLOUD=null;cloudState='';
-    try{localStorage.removeItem(CLOUD_KEY);}catch(e){}
-    bd.hidden=true;updateSaveState();
-  };
+  document.addEventListener('haedo:signed-out',()=>{cloudEpoch++;cloudQueue.clear();CLOUD=null;});
 })();
 
 /* --- 다중 문서: 전환·삭제·셀렉트 --- */

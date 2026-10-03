@@ -1,10 +1,13 @@
-# 현재 구조 (2026-09-10)
+# 현재 구조 (2026-10-03)
 
 HTML·CSS·데이터 유틸·동기화 큐·작업 화면을 나누었다. 빌드 도구 없이 일반 script를 순서대로 로드한다.
-`index.html` → `assets/data.js` → `assets/sync.js` → `assets/app.js` → `assets/workspace.js`.
+`index.html`은 공개 홈이다. Google 로그인 후 `workspace.html`, `goals.html`, `habits.html`에서 계정별 자료를 사용한다.
+`timeline.html` → 계정 확인 → `assets/app.js` → `assets/workspace.js` 순서로 기존 연표를 실행한다.
+`life.html`은 같은 인증 뒤 계정별 IndexedDB에서 기존 자료의 가져오기·발췌·출처·개인 동기화를 제공한다.
+로그인·RLS·사본 연결·배포 설정은 [플랫폼 문서](platform.md)를 따른다.
 스타일은 `assets/app.css`에 있으며 다섯 개의 `*-sample.html`은 별도 시안으로 남아 있다.
 
-`app.js`가 기존 `prepare()` → `render()`와 localStorage 키를 유지한다.
+`app.js`가 기존 `prepare()` → `render()`를 유지한다. 기존 localStorage 키는 보존하고, 새 플랫폼 기록은 계정별 키에 저장한다.
 `data.js`는 실제 달력·가져오기 사본·손상 값 보존, `sync.js`는 문서별 큐와 조건부 쓰기를 담당한다.
 `workspace.js`는 목록·파일 작업·모달 포커스를 담당한다. `sw.js`의 셸에는 모든 런타임 파일이 포함된다.
 
