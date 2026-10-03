@@ -28,9 +28,15 @@ async function ready(page) {
 const stages = page => page.evaluate(async () => HaedoLife.Shell.storage.listStages(await HaedoLife.Shell.storage.getActive()));
 const bundle = page => page.evaluate(async () => HaedoLife.Shell.storage.read(await HaedoLife.Shell.storage.getActive()));
 const row = (page, index) => page.locator('#lifeBatchList [data-batch-index="' + index + '"]');
+async function setBatchFiles(page, files) {
+  const picker = page.locator('#lifeBatchFiles');
+  if (!(await picker.evaluate(el => el.closest('details').open))) await page.getByText('여러 텍스트 파일 가져오기', { exact: true }).click();
+  await picker.setInputFiles(files);
+}
 async function selectFiles(page, files) {
   await click(page, '가져오기');
-  await page.locator('#lifeBatchFiles').setInputFiles(files);
+  await click(page, '텍스트 파일');
+  await setBatchFiles(page, files);
   await page.waitForFunction(() => document.querySelector('#lifeBatchList') && !document.querySelector('#lifeBatchList [data-batch-state="reading"], #lifeBatchList [data-batch-state="saving"], #lifeBatchList [data-batch-state="unread"]'));
 }
 async function review(page, index) { await row(page, index).getByRole('button', { name: '이 파일 검토', exact: true }).click(); await settle(page); }
@@ -104,9 +110,9 @@ async function main() {
       assert.equal((await stages(page)).length, 2); assert.equal(await page.locator('#lifeBatchList [data-batch-state="failed"]').count(), 3);
       assert.equal((await bundle(page)).sources.length, 0);
       const before = (await stages(page)).map(s => s.stageId).sort();
-      await page.locator('#lifeBatchFiles').setInputFiles(Array.from({ length: 11 }, (_, i) => file('count-' + i + '.txt', '합성'))); await settle(page);
+      await setBatchFiles(page, Array.from({ length: 11 }, (_, i) => file('count-' + i + '.txt', '합성'))); await settle(page);
       assert.deepEqual((await stages(page)).map(s => s.stageId).sort(), before);
-      await page.locator('#lifeBatchFiles').setInputFiles(Array.from({ length: 6 }, (_, i) => file('total-' + i + '.txt', Buffer.alloc(1024 * 1024, 65)))); await settle(page);
+      await setBatchFiles(page, Array.from({ length: 6 }, (_, i) => file('total-' + i + '.txt', Buffer.alloc(1024 * 1024, 65)))); await settle(page);
       assert.deepEqual((await stages(page)).map(s => s.stageId).sort(), before);
       await page.reload(); await ready(page);
       assert.deepEqual((await stages(page)).map(s => s.stageId).sort(), before);
@@ -141,6 +147,7 @@ async function main() {
       await selectFiles(page, [file('recover.txt', '최초 파일 내용')]);
       assert.equal((await stages(page)).length, 0); assert.equal(await row(page, 0).getAttribute('data-batch-state'), 'failed');
       await click(page, '입력 확인'); assert.equal(await page.locator('#lifeImportText').inputValue(), '최초 파일 내용');
+      await click(page, '본문 붙여넣기');
       await page.locator('#lifeImportText').fill('실패 후 수정하여 보관한 내용'); await click(page, '검토 내용 보관');
       await page.locator('#lifeBatchReturn').click(); await settle(page);
       assert.equal(await row(page, 0).getAttribute('data-batch-state'), 'draft'); await review(page, 0);
@@ -149,22 +156,24 @@ async function main() {
     });
     await check('stop discards delayed file result, retains earlier draft, and same selection creates fresh IDs', async page => {
       await click(page, '가져오기');
+      await click(page, '텍스트 파일');
       await page.evaluate(() => { window.__arrayBuffer = File.prototype.arrayBuffer; window.__held = false; File.prototype.arrayBuffer = async function() { const value = await __arrayBuffer.call(this); if (this.name === 'held.txt') { __held = true; await new Promise(resolve => { window.__release = resolve; }); } return value; }; });
       const files = [file('first.txt', '먼저 읽은 원문'), file('held.txt', '늦게 읽은 원문'), file('last.txt', '아직 읽지 않은 원문')];
-      await page.locator('#lifeBatchFiles').setInputFiles(files); await page.waitForFunction(() => window.__held);
+      await setBatchFiles(page, files); await page.waitForFunction(() => window.__held);
       await page.locator('#lifeBatchStop').click(); await page.evaluate(() => __release());
       await page.waitForFunction(() => !document.querySelector('#lifeBatchList [data-batch-state="reading"], #lifeBatchList [data-batch-state="saving"]'));
       let saved = await stages(page); assert.equal(saved.length, 1); const original = saved[0];
       await page.evaluate(() => { File.prototype.arrayBuffer = __arrayBuffer; });
-      await page.locator('#lifeBatchFiles').setInputFiles(files);
+      await setBatchFiles(page, files);
       await page.waitForFunction(() => document.querySelectorAll('#lifeBatchList [data-batch-state="draft"]').length === 3 && !document.querySelector('#lifeBatchStop'));
       saved = await stages(page); assert.equal(saved.length, 4); assert.ok(saved.some(s => s.stageId === original.stageId)); assert.equal(new Set(saved.map(s => s.batchId)).size, 2);
       assert.equal((await bundle(page)).sources.length, 0);
     });
     await check('account switch while reading prevents old text entering new scope or UI', async (page, context, device) => {
       await click(page, '가져오기');
+      await click(page, '텍스트 파일');
       await page.evaluate(() => { window.__held = false; const original = File.prototype.arrayBuffer; File.prototype.arrayBuffer = async function() { const value = await original.call(this); __held = true; await new Promise(resolve => { window.__release = resolve; }); return value; }; });
-      await page.locator('#lifeBatchFiles').setInputFiles(file('old-account.txt', '계정 A 지연 원문')); await page.waitForFunction(() => window.__held);
+      await setBatchFiles(page, file('old-account.txt', '계정 A 지연 원문')); await page.waitForFunction(() => window.__held);
       assert.equal(await page.evaluate(() => { HaedoAuth.signOut().catch(() => {}); __release(); return document.querySelector('#lifeApp').hidden; }), true);
       await page.waitForFunction(() => location.pathname.endsWith('/index.html') && document.readyState === 'complete');
       server.oauthAccounts.set(device, accounts.b); await page.goto(base + '/login.html?next=life.html'); await page.locator('#googleLogin').click(); await page.waitForURL('**/life.html'); await ready(page);

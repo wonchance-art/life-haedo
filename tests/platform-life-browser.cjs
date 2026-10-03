@@ -1,6 +1,7 @@
 /* Protected platform integration with real SDK/IndexedDB/SW and anonymous HTTP.
  * SITE_DIR must be an output of scripts/prepare-site.mjs with test public config.
- * OLD_SITE_DIR optionally supplies a preserved earlier Cloud static fixture.
+ * OLD_SITE_DIR optionally supplies preserved earlier static fixtures, separated
+ * by the platform path delimiter (":" on Linux). Common checks run once.
  * This does not authenticate with Google or prove production RLS/Apple behavior.
  */
 'use strict';
@@ -10,7 +11,7 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 const site=process.env.SITE_DIR;
 if(!site)throw new Error('Set SITE_DIR to the prepared anonymous static site.');
-const oldSite=process.env.OLD_SITE_DIR;
+const oldSites=(process.env.OLD_SITE_DIR||'').split(path.delimiter).filter(Boolean);
 const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript','.css':'text/css','.svg':'image/svg+xml','.webmanifest':'application/manifest+json','.sql':'text/plain'};
 let currentSite=site;
 const web=http.createServer(async(req,res)=>{
@@ -41,7 +42,6 @@ async function main(){
     return match[1];
   };
   const newCache=await cacheName(site);
-  const oldCache=oldSite?await cacheName(oldSite):null;
   await new Promise(resolve=>web.listen(0,'127.0.0.1',resolve));
   process.env.BASE_URL=`http://127.0.0.1:${web.address().port}`;
   const {FakeCloud,platformContext,accounts,cloud,base,openManagement,openAccount}=require('./life-sync-browser.cjs');
@@ -121,7 +121,7 @@ async function main(){
     });
     await check('protected import/excerpt/source jump, reload and backup-copy restore work',async()=>{
       await importText(page,'익명 A 자료','첫 문장\n🌱 계정 A 원문 구절\n끝','🌱 계정 A 원문 구절');
-      await click(page,'원문에서 보기');
+      await click(page,/^원문에서 보기(?: · |$)/);
       await page.waitForFunction(()=>{const el=document.querySelector('#lifeSourceText'),selection=getSelection();return el?.contains(selection?.anchorNode)&&el.contains(selection?.focusNode)&&selection.toString()==='🌱 계정 A 원문 구절';});
       await page.reload();await ready(page);assert.equal((await stored(page)).records[0].text,'🌱 계정 A 원문 구절');
       await click(page,'내보내기·사본 복원');const pending=page.waitForEvent('download');await click(page,'JSON 백업');
@@ -197,7 +197,9 @@ async function main(){
       assert.equal(await p.evaluate(()=>HaedoAuth.user),null);assert.deepEqual(await p.evaluate(()=>__productDbOpens),[]);
       await bad.close();
     });
-    if(oldSite)await check(`preserved Cloud ${oldCache} fixture upgrades atomically to ${newCache} without altering old local data`,async()=>{
+    for(const oldSite of oldSites){
+      const oldCache=await cacheName(oldSite);
+      await check(`preserved Cloud ${oldCache} fixture upgrades atomically to ${newCache} without altering old local data`,async()=>{
       assert.notEqual(oldCache,newCache,'The upgrade requires two distinct actual service workers.');
       const oldHasAuth=(await fs.readFile(path.join(oldSite,'life.html'),'utf8')).includes('assets/platform-auth.js');
       currentSite=oldSite;
@@ -241,7 +243,9 @@ async function main(){
       const {createHash}=require('node:crypto');
       const expected=await Promise.all(modules.map(async path=>({path,hash:createHash('sha256').update(await fs.readFile(require('node:path').join(site,path))).digest('hex')})));
       assert.deepEqual(runtime,expected,'The installed modules must match the complete new release.');await old.close();
-    });else console.log('SKIP preserved update fixture (OLD_SITE_DIR not supplied)');
+      });
+    }
+    if(!oldSites.length)console.log('SKIP preserved update fixture (OLD_SITE_DIR not supplied)');
     await check('unexpected console/page errors',async()=>assert.deepEqual(errors,[]));
   }finally{await Promise.all(contexts.map(ctx=>ctx.close().catch(()=>{})));await browser.close();await new Promise(resolve=>web.close(resolve));}
   console.log(`Platform integration: ${passed} passed, ${failures.length} failed; ${expectedErrors} intentional transport/callback errors. Anonymous HTTP only; no real Google OAuth/Apple proof.`);

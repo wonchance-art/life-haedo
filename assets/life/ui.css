@@ -89,6 +89,8 @@ html.auth-pending [data-private] { display: none !important; }
 .life-topic-list { margin: 12px 0 20px; }
 .life-topic-list .life-button { border-color: transparent; color: var(--ink-soft); }
 .life-topic-list .life-button[aria-pressed=true] { color: var(--color-primary); background: var(--soft); }
+.life-count { font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 400; }
+.life-topic-list .life-button { gap: 7px; text-align: left; }
 #lifeSearchCount { font-size: 12px; margin: 14px 0 4px; }
 .life-card-grid { display: grid; grid-template-columns: minmax(0,1fr); gap: 0; }
 .life-card { min-width: 0; padding: 28px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; align-items: stretch; gap: 12px; overflow-wrap: anywhere; }
@@ -99,8 +101,20 @@ html.auth-pending [data-private] { display: none !important; }
 .life-search-context { width: 100%; color: #49454e; font-size: 16px; line-height: 1.9; white-space: normal; word-break: keep-all; overflow-wrap: anywhere; }
 .life-search-context mark { color: var(--ink); background: var(--soft); font-weight: 600; }
 .life-quote { width: 100%; max-height: 24rem; overflow: auto; white-space: pre-wrap; font-size: 17px; line-height: 1.95; word-break: keep-all; overflow-wrap: anywhere; }
-.life-note { font-size: 14px; color: var(--ink-soft); white-space: pre-wrap; line-height: 1.85; overflow-wrap: anywhere; }
+.life-note { font-size: 14px; color: var(--ink-soft); white-space: pre-wrap; line-height: 1.85; word-break: keep-all; overflow-wrap: anywhere; }
+.life-excerpt-card { gap: 14px; }
+.life-excerpt-note { padding: 12px 16px; background: var(--paper-2); border-radius: 6px; }
+.life-excerpt-note > .life-meta { margin-bottom: 4px; font-size: 12px; }
+.life-source-refs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.life-source-refs > li { min-width: 0; }
+.life-source-refs .life-button { border-color: transparent; color: var(--color-primary); padding-inline: 0; font-size: 13px; text-align: left; justify-content: flex-start; word-break: keep-all; }
+.life-source-refs .life-button:hover { background: transparent; text-decoration: underline; text-underline-offset: 4px; }
+.life-excerpt-card > .life-excerpt-manage { margin: 0; padding: 0; border: 0; }
+.life-excerpt-manage > summary { width: fit-content; min-width: 44px; min-height: 44px; padding: 10px 0; color: var(--ink-soft); font-size: 12px; }
+.life-excerpt-manage[open] > summary { margin-bottom: 8px; }
 .life-empty { padding: 40px 0; line-height: 1.9; color: var(--ink-soft); grid-column: 1/-1; overflow-wrap: anywhere; }
+.life-empty-state { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 10px; }
+.life-empty-state > .life-empty { flex-basis: 100%; padding-bottom: 14px; }
 .life-reader { max-width: 700px; margin: 0 auto; }
 .life-reader-tools { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 6px; padding: 8px 0; margin: -8px -10px 32px; background: var(--paper); }
 .life-reader-tools > :first-child { margin-right: auto; }
@@ -115,7 +129,7 @@ html.auth-pending [data-private] { display: none !important; }
 .life-reader-layout { display: block; margin-top: 24px; }
 .life-reading,.life-excerpt-panel { min-width: 0; }
 div.life-source-text { font-size: 18px; line-height: 1.95; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; padding: 0; margin-bottom: 48px; scroll-margin-top: 80px; }
-textarea.life-source-text { min-height: 340px; max-height: 70vh; padding: 16px; font-size: 17px; line-height: 1.95; }
+textarea.life-source-text { min-height: 340px; max-height: 70vh; padding: 16px; font-size: 17px; line-height: 1.95; word-break: keep-all; overflow-wrap: anywhere; }
 .life-excerpt-panel { border-top: 1px solid var(--line); padding: 24px 0; margin-top: 28px; scroll-margin-top: 76px; }
 .life-selection { padding: 0 0 0 18px; border-left: 1px solid var(--color-primary); margin: 20px 0; max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.9; }
 .life-external { display: inline-block; min-height: 44px; padding: 10px 0; }
@@ -125,8 +139,17 @@ textarea.life-source-text { min-height: 340px; max-height: 70vh; padding: 16px; 
 .life-details > .life-row { padding: 12px 0; border-top: 1px solid var(--line); }
 .life-details[open] { padding-bottom: 18px; }
 .life-import-form { max-width: 700px; }
+.life-import-phase { margin: 0 0 20px; color: var(--ink-soft); font-size: 13px; line-height: 1.8; }
+.life-import-methods { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 4px; margin: 24px 0; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.life-import-methods .life-button { min-width: 0; padding: 10px 8px; border-color: transparent; border-radius: 6px; color: var(--ink-soft); font-size: 14px; word-break: keep-all; }
+.life-import-methods .life-button[aria-pressed=true] { color: var(--color-primary); background: var(--soft); font-weight: 600; }
+.life-import-form > .life-actions { margin-block: 24px; }
 .life-review { margin-top: 32px; padding-top: 28px; border-top: 1px solid var(--line); }
 .life-review > .life-actions { margin-top: 22px; }
+.life-review-confirm { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--line); }
+.life-review-confirm > .life-actions { margin-top: 12px; }
+.life-retained-input { margin: 20px 0; padding: 12px 16px; background: var(--paper-2); border-radius: 6px; }
+.life-retained-input > .life-help { margin: 0 0 8px; }
 .life-match { padding: 20px; border: 1px solid var(--field-line); background: var(--paper-2); border-radius: 12px; margin: 18px 0; display: flex; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
 .life-match > h4,.life-match > p { flex-basis: 100%; overflow-wrap: anywhere; }
 .life-draft-excerpts { display: grid; grid-template-columns: minmax(0,1fr); gap: 14px; margin: 20px 0; }
@@ -144,6 +167,13 @@ textarea.life-source-text { min-height: 340px; max-height: 70vh; padding: 16px; 
 .life-conflict-content { font: inherit; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 300px; overflow: auto; border: 1px solid var(--line); padding: 14px; border-radius: 8px; background: var(--paper); }
 .life-batch-list { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; margin: 20px 0 28px; min-width: 0; }
 .life-batch-status { padding: 14px 16px; border-radius: 8px; background: var(--paper-2); width: 100%; overflow-wrap: anywhere; font-size: 14px; }
+.life-batch-status > p:first-child { margin-bottom: 6px; font-weight: 550; font-variant-numeric: tabular-nums; }
+.life-batch-status progress { display: block; width: 100%; height: 4px; margin: 12px 0; accent-color: var(--color-primary); border: 0; border-radius: 2px; overflow: hidden; background: var(--line); }
+.life-batch-status progress::-webkit-progress-bar { background: var(--line); }
+.life-batch-status progress::-webkit-progress-value { background: var(--color-primary); }
+.life-batch-status progress::-moz-progress-bar { background: var(--color-primary); }
+.life-batch-next-label { color: var(--ink-soft); font-size: 13px; overflow-wrap: anywhere; }
+.life-batch-next { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .life-batch-rows { display: grid; grid-template-columns: minmax(0,1fr); gap: 16px; width: 100%; min-width: 0; }
 .life-batch-row { padding: 20px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; min-width: 0; overflow-wrap: anywhere; }
 .life-batch-row[data-batch-state=applied] { border-color: var(--color-primary); }
@@ -151,6 +181,8 @@ textarea.life-source-text { min-height: 340px; max-height: 70vh; padding: 16px; 
 .life-batch-row .life-help { margin: 0; }
 .life-batch-row .life-actions { margin-top: auto; padding-top: 8px; }
 @media (max-width: 700px) {
+  html { scroll-padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+  button,input,textarea,select,summary,[tabindex] { scroll-margin-bottom: calc(92px + env(safe-area-inset-bottom)); }
   .life-app { margin-left: 0; padding: 16px 24px calc(100px + env(safe-area-inset-bottom)); }
   .life-global-nav { padding: 8px 16px 0; min-height: 60px; }
   .life-nav { top: auto; bottom: 0; right: 0; width: auto; flex-direction: row; justify-content: space-around; gap: 0; padding: 6px 12px max(8px,env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }

@@ -197,7 +197,7 @@ async function applicationChecks(browser, observe) {
       assert.notEqual(bundle.sourceVersions[0].importedAt,bundle.sourceVersions[0].originalCreatedAt);
       assert.equal(bundle.sourceVersions[0].originalAuthor.relation,'self');
       assert.deepEqual(bundle.sourceVersions[0].coverage,{status:'partial',omissions:['사진 미포함']});
-      await click('원문에서 보기');
+      await page.getByRole('button',{name:/^원문에서 보기/}).click(); await settle();
       assert.equal(await page.locator('#lifeSourceText').textContent(),raw);
       await page.waitForFunction(() => {
         const el = document.querySelector('#lifeSourceText');
@@ -227,6 +227,7 @@ async function applicationChecks(browser, observe) {
       await click('가져오기');
       await page.locator('#lifeImportTitle').fill('익명 Markdown');
       await page.locator('#lifeImportText').fill('실패해도 유지할 입력');
+      await click('텍스트 파일');
       await page.locator('#lifeImportFile').setInputFiles({name:'invalid.txt',mimeType:'text/plain',buffer:Buffer.from([0xc3,0x28])});
       await settle();
       assert.match(await page.locator('#lifeError').textContent(),/UTF-8/);
@@ -249,6 +250,7 @@ async function applicationChecks(browser, observe) {
       await click('가져오기');
       await page.locator('#lifeImportOrigin').selectOption('instagram');
       await page.locator('#lifeImportTitle').fill('익명 링크');
+      await click('링크 보관');
       await page.locator('#lifeImportUrl').fill('javascript:globalThis.__lifeXss=true');
       await click('원문·출처 확인');
       assert.equal(await page.locator('.life-review').count(),0);
@@ -295,10 +297,12 @@ async function applicationChecks(browser, observe) {
       await page.locator('#lifeExcerptTopic').fill('임시 주제');
       await page.locator('#lifeExcerptNote').fill('잃으면 안 되는 익명 메모');
       await click('발췌 후보 추가');
+      await click('입력 수정');
       await page.locator('#lifeImportText').fill('bravo words');
       assert.equal('alpha quote'.length,'bravo words'.length);
       await click('원문·출처 확인');
       assert.equal(await page.getByRole('button',{name:'선택한 발췌 모음에 반영',exact:true}).count(),0);
+      await click('입력 수정');
       await page.getByText('원문 변경으로 해제한 발췌 · 다시 선택 필요',{exact:true}).click();
       assert.ok(await page.locator('.life-quote').filter({hasText:'alpha quote'}).isVisible());
       assert.ok(await page.locator('.life-note').filter({hasText:'잃으면 안 되는 익명 메모'}).isVisible());
