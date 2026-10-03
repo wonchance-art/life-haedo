@@ -20,7 +20,6 @@ description: life-haedo 정적 웹 앱의 기능 수정, 로컬 실행, SVG·저
 | 날짜·나이·격자 | `parseDateSmart`, `ageAt`, `gDay`, `gCellRange`; 한국 시간대의 날짜 경계 |
 | 목록·백업·모달 | `assets/workspace.js`, `assets/data.js`; 가져오기는 새 문서 ID |
 | 저장·다중 문서 | `REG_KEY`, `DOC_PREFIX`, `persist`, `histPush`; 기존 데이터 호환성 |
-| 플랫폼·로그인 | `assets/platform-auth.js`, `assets/platform-store.js`, `assets/platform-ui.js`, `assets/timeline-entry.js`; Google 설정과 RLS는 `docs/platform.md` |
 | DB 동기화 | `CLOUD_KEY`, `queueCloudPush`, `cloudPullAll`, `assets/sync.js`; 관련 Supabase 스킬이 있으면 적용 |
 | 지도 | `whenMapSized`, `rebuildMapVector`, `MSHOW`, `MAP_FILTER` |
 | 색·레이아웃 | `assets/app.css`, `html[data-theme=spring]`, `CHART_ROLE`, `resolvePal`, 모바일 720px 경계 |
@@ -28,17 +27,16 @@ description: life-haedo 정적 웹 앱의 기능 수정, 로컬 실행, SVG·저
 
 ## 실행과 검증
 
-`npm run check`로 구문과 로컬 리소스를, `npm test`로 데이터·동기화·서비스워커 회귀 사례를 확인하고 `npm run dev`로 127.0.0.1:4173에서 실행한다.
+`npm run check`로 구문과 로컬 리소스를, `npm test`로 데이터·동기화·서비스워커 회귀 사례를 확인하고 `npm run dev`로 127.0.0.1:4173에서 실행한다. `scripts/dev-server.py`는 OAuth 코드·문서 URL을 요청 로그에 남기지 않는다.
 앱 실행용 패키지 설치는 없다. 브라우저 CLI가 설치돼 있지 않으면 현재 사용 가능한 Codex 브라우저 도구를 써도 된다.
 이 기기에서 검증한 CLI는 `npx --yes agent-browser@0.37.1`이다. 앱 의존성으로 추가하지 않는다.
 
 별도 브라우저 세션을 사용한다. 예: `--session life-haedo-check`. 개인 Chrome 프로필이나 운영 DB 설정을 가져오지 않는다.
-개인 화면은 Supabase 서버의 계정 확인 후 열린다. localStorage에 임의 토큰을 넣거나 인증을 우회하지 않는다.
-OAuth 모의 서버를 사용하는 검증은 합성 계정·PKCE 교환·계정별 데이터만 사용하고, 실제 Google 로그인과는 구분해 보고한다.
-실제 서버 RLS는 `supabase/tests/rls.sql`의 익명 자료를 사용하고 트랜잭션 종료 시 되돌린다. 개인 기록을 가져오지 않는다.
+처음에는 `index.html` 공개 홈이 보인다. 개인 화면은 Google 공용 인증 뒤 계정별 자료를 연다.
+자동 검증은 합성 계정의 모의 Auth HTTP와 실제 동봉 SDK를 사용하고 운영 세션을 복사하지 않는다.
+모의 OAuth·계정 전환 검증을 실제 Google 제공자 로그인으로 보고하지 않는다. 과거 게이트 우회값을 현재 보호 페이지의 인증 대신 쓰지 않는다.
 
-초기 구동 확인은 공개 홈 → 로그인 → 내 공간 → 새 연표 → 익명 사건 한 건 저장 → 재로드 후 유지까지 본다.
-기존 기록 연결은 합성 자료의 원본 바이트 보존·새 사본 생성·다른 계정에 미노출을 확인한다.
+초기 구동 확인은 공개 홈 → 계정 검증 → `내 공간` 또는 `자료 모아보기` 진입으로 한다. 연표 변경은 새 익명 연표 → 사건 편집·저장 → 새로고침 후 유지, 자료 변경은 텍스트 가져오기 → 발췌·출처 → 재열기 → JSON 사본 복원을 확인한다.
 수정 작업에서는 영향받은 흐름만 추가한다. 실제 `console`과 `errors`를 읽고 스크린샷을 눈으로 확인한다.
 설치되지 않은 `window.__consoleErrors` 배열의 빈 결과를 “콘솔 0”의 근거로 쓰지 않는다.
 

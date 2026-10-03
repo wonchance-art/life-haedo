@@ -1,8 +1,9 @@
-# 현재 구조 (2026-10-02)
+# 현재 구조 (2026-10-03)
 
 HTML·CSS·데이터 유틸·동기화 큐·작업 화면을 나누었다. 빌드 도구 없이 일반 script를 순서대로 로드한다.
 `index.html`은 공개 홈이다. Google 로그인 후 `workspace.html`, `goals.html`, `habits.html`에서 계정별 자료를 사용한다.
 `timeline.html` → 계정 확인 → `assets/app.js` → `assets/workspace.js` 순서로 기존 연표를 실행한다.
+`life.html`은 같은 인증 뒤 계정별 IndexedDB에서 기존 자료의 가져오기·발췌·출처·개인 동기화를 제공한다.
 로그인·RLS·사본 연결·배포 설정은 [플랫폼 문서](platform.md)를 따른다.
 스타일은 `assets/app.css`에 있으며 다섯 개의 `*-sample.html`은 별도 시안으로 남아 있다.
 
