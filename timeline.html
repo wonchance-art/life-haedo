@@ -33,8 +33,10 @@
 
     <link rel="stylesheet" href="assets/app.css" />
     <link rel="stylesheet" href="assets/platform.css" />
+    <link rel="stylesheet" href="assets/haedo-shell.css" />
   </head>
-  <body data-page="timeline">
+  <body class="haedo-shell haedo-timeline" data-page="timeline" data-haedo-section="records">
+    <nav class="haedo-nav" data-haedo-navigation aria-label="주 메뉴"></nav>
     <div class="timeline-access" id="timelineAccess" role="status">
       <p id="timelineAccessMessage">로그인을 확인하고 있습니다.</p>
       <a href="login.html">로그인 화면</a
@@ -90,13 +92,8 @@
     </svg>
     <a class="skip-link" href="#sec-canvas">기록으로 이동</a>
     <nav class="app-bar" aria-label="문서 도구">
-      <a class="app-brand" href="./index.html" aria-label="인생 연표 홈"
-        ><svg viewBox="0 0 32 32" aria-hidden="true">
-          <path d="M3 24h26M4 20c5 0 5-11 10-11s5 7 9 7 4-5 6-7" /></svg
-      ></a>
       <div class="document-tools">
-        <a class="timeline-space-link" href="workspace.html">내 공간</a>
-        <a class="timeline-space-link" href="life.html">자료 모아보기</a>
+        <a class="haedo-icon-button" href="workspace.html" aria-label="연표 목록"><span data-haedo-icon="back" aria-hidden="true"></span></a>
         <select
           class="select select-sm select-ghost"
           id="docSel"
@@ -699,6 +696,8 @@
     <script src="assets/sync.js"></script>
     <script src="assets/platform-data.js"></script>
     <script src="assets/platform-store.js"></script>
+    <script src="assets/life/icons.js"></script>
+    <script src="assets/haedo-navigation.js"></script>
     <script src="assets/timeline-entry.js"></script>
   </body>
 </html>

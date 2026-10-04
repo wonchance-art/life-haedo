@@ -44,6 +44,7 @@ try {
     'assets/app.css', 'assets/app.js', 'assets/data.js', 'assets/sync.js', 'assets/workspace.js',
     'assets/platform.css', 'assets/platform-auth.js', 'assets/platform-data.js', 'assets/platform-store.js',
     'assets/platform-ui.js', 'assets/platform-life-remote.js', 'assets/timeline-entry.js',
+    'assets/haedo-navigation.js', 'assets/haedo-shell.css',
     'assets/life/core.js', 'assets/life/storage.js', 'assets/life/remote.js', 'assets/life/sync.js',
     'assets/life/legacy.js', 'assets/life/icons.js', 'assets/life/ui.js', 'assets/life/ui.css', 'assets/life/shell.js',
     'vendor/daisyui.css', 'vendor/daisyui-themes.css', 'vendor/idb/idb.js', 'vendor/idb/LICENSE',

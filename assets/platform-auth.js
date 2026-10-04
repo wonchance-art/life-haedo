@@ -4,18 +4,25 @@
   const SESSION_KEY = 'caeyeon_life_platform_session';
   const LOGOUT_KEY = 'caeyeon_life_platform_logged_out';
   const privatePages = new Set(['workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'life.html']);
+  const homeSections = new Set(['records', 'tools', 'manage']);
+  const materialViews = new Set(['topics', 'sources', 'time', 'import', 'transfer', 'sync']);
   function safeNext(value) {
     try {
-      const url = new URL(value || 'workspace.html', 'https://haedo.invalid/');
-      if (url.origin !== 'https://haedo.invalid' || !privatePages.has(url.pathname.slice(1))) return 'workspace.html';
+      const url = new URL(value || 'index.html', 'https://haedo.invalid/');
+      if (url.origin !== 'https://haedo.invalid' || !(url.pathname === '/index.html' || privatePages.has(url.pathname.slice(1)))) return 'index.html';
       const params = new URLSearchParams();
+      if (url.pathname === '/index.html' || url.pathname === '/life.html') {
+        if (homeSections.has(url.searchParams.get('section'))) params.set('section', url.searchParams.get('section'));
+        if (materialViews.has(url.searchParams.get('view'))) params.set('view', url.searchParams.get('view'));
+      }
+      if (url.pathname === '/workspace.html' && url.searchParams.get('section') === 'manage') params.set('section', 'manage');
       if (url.pathname === '/timeline.html') {
         if (['records', 'map'].includes(url.searchParams.get('view'))) params.set('view', url.searchParams.get('view'));
         const doc = url.searchParams.get('doc');
         if (doc && /^[a-zA-Z0-9_-]{1,120}$/.test(doc)) params.set('doc', doc);
       }
       return url.pathname.slice(1) + (params.size ? '?' + params : '');
-    } catch (_) { return 'workspace.html'; }
+    } catch (_) { return 'index.html'; }
   }
   function validConfig(config, hostname) {
     if (!config || typeof config.key !== 'string' || !config.key) return false;
@@ -49,6 +56,8 @@
   }
   function createAuth(env, options = {}) {
     const location = env.location || {}, document = env.document;
+    const publicLifeHome = () => document?.body?.dataset?.lifeHome === 'true';
+    const hasPrivateSurface = () => privatePages.has(location.pathname?.split('/').pop()) || publicLifeHome();
     const input = options.config || env.HAEDO_CONFIG;
     const sdkFactory = options.clientFactory || env.supabase?.createClient;
     const ready = validConfig(input, location.hostname) && typeof sdkFactory === 'function';
@@ -202,16 +211,19 @@
         if (url.href !== location.href) env.history?.replaceState(null, '', url.pathname + url.search + url.hash);
       } catch (_) {}
     }
-    const pagehide = () => { if (privatePages.has(location.pathname?.split('/').pop())) hidePrivate(); };
+    const pagehide = () => { if (hasPrivateSurface()) { cancel(); hidePrivate(); } };
     const storageChange = value => {
       if (value.key === LOGOUT_KEY && value.newValue === '1') invalidate();
     };
     const pageshow = async value => {
-      if (!value.persisted || !privatePages.has(location.pathname?.split('/').pop())) return;
+      if (!value.persisted || !hasPrivateSurface()) return;
       const previous = user?.id, expected = epoch;
       try {
         const current = await verify();
         if (closed || expected !== epoch) return;
+        // The public home owns its guest and private states. Its shell remounts
+        // only the verified account, never a cached personal DOM snapshot.
+        if (publicLifeHome()) return;
         if (!current || current.id !== previous) { location.replace?.('login.html'); return; }
         document?.querySelectorAll?.('[data-private]').forEach(element => { element.hidden = false; });
         document?.documentElement?.classList.remove('auth-pending');

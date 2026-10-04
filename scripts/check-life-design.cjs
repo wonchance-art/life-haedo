@@ -6,7 +6,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { FakeCloud, platformContext, cloud, base } = require('../tests/life-sync-browser.cjs');
+const { FakeCloud, platformContext, cloud, base, openSection, openManagement } = require('../tests/life-sync-browser.cjs');
 const { fixtures: originals, query } = require('./design-audit.cjs');
 assert(['127.0.0.1', 'localhost', '[::1]'].includes(new URL(base).hostname), 'Only a local server is permitted');
 const project = path.resolve(__dirname, '..');
@@ -29,7 +29,10 @@ async function ready(page) {
   await page.evaluate(() => HaedoLife.Shell.ready);
 }
 const settle = page => page.waitForFunction(() => !document.querySelector('.life-app[aria-busy="true"]'));
-async function click(page, name) { await page.getByRole('button', { name, exact: true }).click(); await settle(page); }
+async function click(page, name) {
+  if (['모아보기', '원천 기록', '가져오기', '시간 보기'].includes(name)) await openSection(page, 'records');
+  await page.getByRole('button', { name, exact: true }).click(); await settle(page);
+}
 async function seed(page) {
   const ids = await page.evaluate(async specs => {
     const storage = HaedoLife.Shell.storage, core = HaedoLife.Core;
@@ -139,6 +142,7 @@ async function main() {
     return context;
   }
   async function toggle(page, name, panel, open) {
+    if (name === '자료 관리' && open) await openManagement(page);
     const button = page.getByRole('button', { name, exact: true });
     if (await button.getAttribute('aria-expanded') !== String(open)) {
       if (page.viewportSize().width <= 820) await button.tap(); else await button.click();
@@ -158,6 +162,7 @@ async function main() {
         await page.locator('#lifeStartup').waitFor({ state: 'visible' });
         await capture(page, 'loading', size, size.name === 'tablet'); release();
         await ready(page); await context.unroute(`${cloud}/auth/v1/user`);
+        await openSection(page, 'manage');
         await page.locator('#lifeAccountToggle').focus(); await page.keyboard.press('Enter');
         check(`${size.name} account menu opens by keyboard`, await page.locator('#lifeLogout').isVisible());
         await page.keyboard.press('Escape');

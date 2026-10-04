@@ -1,5 +1,5 @@
 /* Shared UI SVGs. Lucide 1.51.0 geometry: vendor/lucide/ (ISC + Feather MIT).
- * quote: Haedo's approved A. settings/download/cloud/home/user/workspace:
+ * quote: Haedo's approved A. settings/download/cloud/home/user/workspace/timeline/target/check:
  * locally authored conventional UI geometry; no added library or remote asset.
  */
 (function (root) {
@@ -23,6 +23,9 @@
     cloud: '<path d="M7 19a5 5 0 0 1-.8-9.9 6.5 6.5 0 0 1 12.6 1.6A4.2 4.2 0 0 1 18 19Z"/>',
     home: '<path d="m3 10 9-7 9 7M5 9v10a2 2 0 0 0 2 2h3v-7h4v7h3a2 2 0 0 0 2-2V9"/>',
     user: '<circle cx="12" cy="7.5" r="4"/><path d="M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2"/>',
+    timeline: '<path d="M4 20h16M5 15l5-6 5 3 4-7"/><circle cx="10" cy="9" r="2"/><circle cx="15" cy="12" r="2"/>',
+    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>',
+    check: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 3 3 5-6"/>',
     workspace: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'
   };
   function create(name, { size = 20 } = {}) {

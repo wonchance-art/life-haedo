@@ -38,7 +38,7 @@ test("private return destinations are restricted to known local feature routes",
   ])
     assert.equal(
       safeNext(next),
-      next.startsWith("goals") ? "goals.html" : "workspace.html",
+      next.startsWith("goals") ? "goals.html" : next.startsWith("workspace") ? "workspace.html" : "index.html",
     );
   assert.equal(
     safeNext("timeline.html?view=records&doc=d_test&access_token=hidden"),

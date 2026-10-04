@@ -87,6 +87,8 @@
     let dataRefreshPromise = Promise.resolve(false);
     let readerCleanup = null;
     let focusFrame = null;
+    let unbindNavigation = null;
+    let lastRecordMode = 'topics';
     const downloadUrls = new Set();
     const state = {
       bundle: null, workspaces: [], mode: 'topics', topic: '', topicsSearch: '', sourcesSearch: '', originFilter: '', returnContext: null, suppressReaderResume: false, sourceId: null,
@@ -125,7 +127,7 @@
         focusFrame = null;
         if (disposed || !target.isConnected || document.activeElement !== target || !root.contains(target) ||
           !target.matches(':focus-visible') || !global.matchMedia('(max-width: 700px)').matches) return;
-        const nav = toolbar.querySelector('.life-nav');
+        const nav = document.querySelector('.haedo-nav') || toolbar.querySelector('.life-nav');
         if (!nav || nav.contains(target)) return;
         const boundary = nav.getBoundingClientRect().top;
         const rect = target.getBoundingClientRect();
@@ -706,9 +708,12 @@
 
     async function navigate(mode, options) {
       if (dirty()) await persistStage();
-      if (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext'))) state.returnContext = null;
+      if (!['tools', 'manage', 'sync', 'transfer'].includes(mode) && !options?.preserveContext &&
+          (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       Object.assign(state, options || {}, { mode });
+      if (sectionFor(mode) === 'records') lastRecordMode = mode;
+      writeRoute(mode, false);
       render();
       const heading = main.querySelector('h2');
       if (heading) heading.focus({ preventScroll: true });
@@ -741,23 +746,128 @@
       await navigate('import');
     }
 
+    function sectionFor(mode) {
+      return mode === 'tools' ? 'tools' : ['manage', 'sync', 'transfer'].includes(mode) ? 'manage' : 'records';
+    }
+
+    function routeMode() {
+      const params = new URLSearchParams(global.location.search);
+      const section = params.get('section');
+      const view = params.get('view');
+      if (section === 'tools') return 'tools';
+      if (section === 'manage') return ['transfer', 'sync'].includes(view) ? view : 'manage';
+      if (!section && ['transfer', 'sync'].includes(view)) return view;
+      return ['topics', 'sources', 'time', 'import'].includes(view) ? view : 'topics';
+    }
+
+    function writeRoute(mode, push) {
+      if (!global.HaedoNavigation) return;
+      const url = new URL(global.location.href);
+      const section = sectionFor(mode);
+      if (section === 'records') url.searchParams.delete('section');
+      else url.searchParams.set('section', section);
+      const view = mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
+      if (['sources', 'time', 'import', 'sync', 'transfer'].includes(view)) url.searchParams.set('view', view);
+      else url.searchParams.delete('view');
+      const destination = url.pathname + url.search + url.hash;
+      if (destination !== global.location.pathname + global.location.search + global.location.hash)
+        global.history[push ? 'pushState' : 'replaceState'](null, '', destination);
+    }
+
+    async function navigateSection(section, push = true) {
+      if (!state.bundle) {
+        global.requestAnimationFrame(() => { if (!disposed) main.querySelector('#lifeWorkspaceChoice')?.focus(); });
+        announce('먼저 보관한 작업공간을 선택해 주세요.');
+        return;
+      }
+      const previousSection = sectionFor(state.mode);
+      if (section === previousSection) return;
+      if (previousSection === 'records') lastRecordMode = state.mode;
+      const next = section === 'records' ? lastRecordMode : section === 'tools' ? 'tools' : 'manage';
+      // Save before changing URL so a failed draft write keeps the current view.
+      if (dirty()) await persistStage();
+      writeRoute(next, push);
+      await navigate(next, { preserveContext: true });
+    }
+
+    const popstate = guarded(async () => {
+      if (!state.bundle) return;
+      let mode = routeMode();
+      if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
+      if (mode === 'sources' && lastRecordMode === 'source') mode = 'source';
+      if (mode === 'import' && lastRecordMode === 'batch') mode = 'batch';
+      try { await navigate(mode, { preserveContext: true }); }
+      catch (cause) { writeRoute(state.mode, false); throw cause; }
+    });
+
     function renderHeader() {
       if (disposed) return;
-      header.replaceChildren(node('h1', '자료 모아보기', 'life-sr-only'));
+      const section = sectionFor(state.mode);
+      global.HaedoNavigation?.activate(section);
+      header.replaceChildren(node('h1', { records: '기록', tools: '도구', manage: '관리' }[section], 'life-sr-only'));
       toolbar.replaceChildren();
-      const nav = node('nav', null, 'life-nav');
-      nav.setAttribute('aria-label', '자료 보기');
-      [['topics', '모아보기', 'quote'], ['sources', '원천 기록', 'search']].forEach(([mode, label, icon]) => {
-        const tab = iconButton(label, icon, guarded(() => navigate(mode)));
-        if (state.mode === mode || (mode === 'sources' && state.mode === 'source')) tab.setAttribute('aria-current', 'page');
-        nav.append(tab);
+      if (section === 'records') {
+        const nav = node('nav', null, 'life-nav life-context-nav');
+        nav.setAttribute('aria-label', '기록 보기');
+        [['topics', '모아보기', 'quote'], ['sources', '원천 기록', 'search'], ['time', '시간 보기', 'timeline']].forEach(([mode, label, icon]) => {
+          const tab = iconButton(label, icon, guarded(() => navigate(mode)));
+          if (state.mode === mode || mode === 'sources' && state.mode === 'source') tab.setAttribute('aria-current', 'page');
+          nav.append(tab);
+        });
+        const add = iconButton('가져오기', 'plus', guarded(async () => {
+          if (!state.stage || state.stage.state !== 'draft') newDraft();
+          await navigate('import');
+        }));
+        if (state.mode === 'import' || state.mode === 'batch') add.setAttribute('aria-current', 'page');
+        nav.append(add);
+        toolbar.append(nav);
+      } else if (section === 'manage' && state.mode !== 'manage') {
+        toolbar.append(iconButton('관리로 돌아가기', 'back', guarded(() => navigate('manage'))));
+      }
+      if (state.remoteChanged) {
+        const refresh = button('최신 내용 확인', guarded(async () => {
+          if (dirty()) await persistStage();
+          await refreshData();
+          state.remoteChanged = false;
+          state.prepared = null;
+          render();
+          announce('최신 내용을 불러왔습니다. 보관 중인 입력은 유지됩니다. 다시 검토해 주세요.');
+        }), 'life-refresh');
+        toolbar.append(refresh);
+      }
+    }
+
+    function destinationRow(label, description, href, glyph) {
+      const link = node('a', null, 'life-destination');
+      link.href = href;
+      link.append(global.HaedoLife.Icons.create(glyph));
+      const copy = node('span', null, 'life-destination-copy');
+      copy.append(node('strong', label), node('span', description, 'life-meta'));
+      link.append(copy, global.HaedoLife.Icons.create('chevron'));
+      link.addEventListener('click', event => {
+        if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        guarded(async () => {
+          await persistDrafts();
+          if (disposed) return;
+          state.sourceDrafts.clear();
+          global.location.assign(href);
+        })(event);
       });
-      const add = iconButton('가져오기', 'plus', guarded(async () => {
-        if (state.stage && state.stage.state === 'draft') await navigate('import');
-        else { newDraft(); await navigate('import'); }
-      }));
-      if (state.mode === 'import' || state.mode === 'batch') add.setAttribute('aria-current', 'page');
-      const manage = iconButton('자료 관리', 'settings', () => {});
+      return link;
+    }
+
+    function renderTools() {
+      main.append(title('도구'));
+      const list = node('div', null, 'life-destinations');
+      list.append(destinationRow('목표', '진행 중인 일과 다음 계획', 'goals.html', 'target'),
+        destinationRow('습관', '반복할 일과 오늘의 체크', 'habits.html', 'check'));
+      main.append(list);
+    }
+
+    function renderManagement() {
+      main.append(title('관리'));
+      const manage = iconButton('자료 관리', 'book', () => {});
       const management = node('section', null, 'life-management');
       management.id = 'lifeManagement';
       management.hidden = !state.managementOpen;
@@ -786,26 +896,18 @@
       }));
       management.append(workspace.label);
       const actions = node('div', null, 'life-actions');
-      actions.append(button('시간 보기', guarded(() => navigate('time'))), button('내보내기·사본 복원', guarded(() => navigate('transfer'))));
+      actions.append(button('내보내기·사본 복원', guarded(() => navigate('transfer'))));
       if (sync) actions.append(button('기기 간 동기화', guarded(async () => {
         await navigate('sync');
         await refreshSync();
       })));
       if ([...state.batches.values()].some(batch => batch.workspaceId === state.bundle.workspaceId)) actions.append(button('선택 파일 목록', guarded(() => navigate('batch'))));
       management.append(actions);
-      nav.append(add, manage);
-      toolbar.append(nav, management);
-      if (state.remoteChanged) {
-        const refresh = button('최신 내용 확인', guarded(async () => {
-          if (dirty()) await persistStage();
-          await refreshData();
-          state.remoteChanged = false;
-          state.prepared = null;
-          render();
-          announce('최신 내용을 불러왔습니다. 보관 중인 입력은 유지됩니다. 다시 검토해 주세요.');
-        }), 'life-refresh');
-        toolbar.append(refresh);
-      }
+
+      const controls = node('div', null, 'life-management-entry');
+      controls.append(manage, node('span', '자료 · 작업공간과 보관', 'life-meta'));
+      main.append(controls, management);
+      main.append(destinationRow('연표·목표·습관 백업·복원', '자료 백업과 별도로 보관됩니다.', 'workspace.html?section=manage#backupAll', 'download'));
     }
 
     function renderStages(parent) {
@@ -974,6 +1076,17 @@
       return count;
     }
 
+    function sourceFeedCard(source, version) {
+      const card = node('article', null, 'life-card life-source-card');
+      const key = resultFocusKey('topics', source.id, 'original');
+      const open = button(sourceLabel(source), guarded(() => openResult('topics', key, { sourceId: source.id, sourceVersionId: version.id })), 'life-source-open');
+      open.dataset.focusKey = key;
+      card.append(open);
+      if (version.contentText) card.append(node('p', version.contentText.slice(0, 240), 'life-search-context'));
+      card.append(node('p', originName(source.origin) + (version.coverage.status === 'full_text' ? '' : ' · ' + COVERAGE[version.coverage.status]), 'life-meta'));
+      return card;
+    }
+
     function renderTopics() {
       main.append(title('모아보기'));
       renderStages(main);
@@ -1033,7 +1146,13 @@
         count.textContent = '발췌 ' + records.length + '개' + (state.topicUnassigned ? ' · 주제 없음' : state.topic ? ' · ' + state.topic : '');
         results.replaceChildren();
         records.forEach(record => results.append(excerptCard(record)));
-        if (!records.length) {
+        if (!records.length && !state.bundle.records.length && state.bundle.sources.length && !state.topic && !state.topicUnassigned) {
+          const sources = state.bundle.sources.slice().reverse().map(source => ({ source, version: state.bundle.sourceVersions.filter(version => version.sourceId === source.id).at(-1) }))
+            .filter(({ source, version }) => version && matchingText(sourceLabel(source) + ' ' + (version.contentText || ''), state.topicsSearch));
+          count.textContent = '자료 ' + sources.length + '개';
+          for (const { source, version } of sources) results.append(sourceFeedCard(source, version));
+          if (!sources.length) results.append(empty('조건에 맞는 자료가 없습니다.'), button('검색·필터 초기화', reset));
+        } else if (!records.length) {
           const box = node('div', null, 'life-empty-state');
           if (state.topicsSearch || state.topic || state.topicUnassigned) {
             box.append(empty('조건에 맞는 발췌가 없습니다. 검색과 주제 조건을 지워 다시 찾아보세요.'), button('검색·필터 초기화', reset));
@@ -1746,8 +1865,8 @@
     }
 
     function renderTime() {
-      main.append(title('시간 보기'), node('p', '기존 연표를 별도로 열어 시간의 흐름을 봅니다. 가져온 작성일을 경험일로 자동 변환하지 않습니다.', 'life-help'));
-      main.append(node('p', '현재 계정의 연표만 확인합니다. 선택한 연표를 별도 화면에서 엽니다.', 'life-help'));
+      main.append(title('연표'));
+      main.append(destinationRow('연표 목록', '보관한 연표를 열거나 새로 만듭니다.', 'workspace.html', 'timeline'));
       const list = node('div', null, 'life-card-grid');
       main.append(button('기존 연표 목록 확인', guarded(async () => {
         const documents = await legacy.listDocuments();
@@ -1760,8 +1879,6 @@
           if (parsed.origin === global.location.origin && /\/timeline\.html$/.test(parsed.pathname)) {
             const link = node('a', '기존 연표 열기', 'life-button');
             link.href = parsed.href;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
             card.append(link);
           }
           list.append(card);
@@ -1991,10 +2108,14 @@
     function render() {
       if (disposed) return;
       if (readerCleanup) { readerCleanup(); readerCleanup = null; }
+      if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
+      writeRoute(state.mode, false);
       renderHeader();
       main.dataset.mode = state.mode;
       main.replaceChildren();
-      if (state.mode === 'batch') renderBatch();
+      if (state.mode === 'tools') renderTools();
+      else if (state.mode === 'manage') renderManagement();
+      else if (state.mode === 'batch') renderBatch();
       else if (state.mode === 'import') renderImport();
       else if (state.mode === 'source') renderSource();
       else if (state.mode === 'sources') renderSources();
@@ -2031,8 +2152,10 @@
       await storage.setActive(active);
     }
     if (disposed) return { dispose };
+    state.mode = routeMode();
     if (active) {
       state.bundle = await storage.read(active);
+      if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
       await refreshData();
       connectSubscription();
       render();
@@ -2053,11 +2176,19 @@
       })));
       announce('현재 작업공간을 선택하지 않았습니다. 보관한 목록에서 선택해 주세요.');
     }
+    unbindNavigation = global.HaedoNavigation?.bind(section => guarded(() => navigateSection(section))());
+    global.addEventListener('popstate', popstate);
     return { dispose, flushDraft };
 
     async function flushDraft() {
       if (disposed) throw new Error('계정이 바뀌어 이전 초안을 보관할 수 없습니다.');
       if (state.busy) throw new Error('자료를 처리 중입니다. 작업이 끝난 뒤 로그아웃을 다시 선택해 주세요.');
+      await persistDrafts();
+    }
+
+    // Call inside guarded actions; the public logout hook checks its own boundary.
+    async function persistDrafts() {
+      if (disposed) throw new Error('계정이 바뀌어 이전 초안을 보관할 수 없습니다.');
       if (state.stage && dirty()) await persistStage();
       for (const [versionId, draft] of state.sourceDrafts) {
         if (!draft.topic && !draft.note) continue;
@@ -2085,6 +2216,8 @@
     function dispose() {
       if (disposed) return;
       disposed = true;
+      unbindNavigation?.();
+      global.removeEventListener('popstate', popstate);
       root.removeEventListener('focusin', keepFocusVisible);
       if (focusFrame !== null) { global.cancelAnimationFrame(focusFrame); focusFrame = null; }
       if (readerCleanup) { readerCleanup(); readerCleanup = null; }

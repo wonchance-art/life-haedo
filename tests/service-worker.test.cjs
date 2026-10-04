@@ -5,7 +5,7 @@ const vm = require('node:vm');
 function harness({ failInstall = false, failInstallAsset, fetchResult } = {}) {
   const handlers = {}, removed = [], writes = [], entries = new Map(), requests = []; let skipped = false, claimed = false, resources, fetches = 0;
   const cache = { addAll: async urls => { resources = urls; if (failInstall || (failInstallAsset && urls.some(r => r.url.endsWith(failInstallAsset)))) throw new Error('offline'); },
-    match: async key => entries.get(key), put: async (key, response) => writes.push([key, response]) };
+    match: async key => entries.get(key)?.clone(), put: async (key, response) => writes.push([key, response]) };
   class WorkerRequest { constructor(input, options) { this.url = typeof input === 'string' ? new URL(input, 'https://test.invalid/life-haedo/').href : input.url; Object.assign(this, options); } }
   const context = { URL, Request: WorkerRequest, Response,
     self: { registration: { scope: 'https://test.invalid/life-haedo/' }, location: { origin: 'https://test.invalid' },
@@ -30,6 +30,7 @@ test('complete offline shell includes every runtime module', async () => {
     'index.html', 'login.html', 'workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'privacy.html',
     'assets/platform-config.js', 'assets/platform-auth.js', 'assets/platform-store.js', 'assets/platform-data.js',
     'assets/platform-ui.js', 'assets/platform.css', 'assets/platform-life-remote.js', 'assets/timeline-entry.js',
+    'assets/haedo-navigation.js', 'assets/haedo-shell.css',
     'life.html', 'vendor/idb/idb.js', 'vendor/supabase/supabase.js', 'assets/life/core.js', 'assets/life/storage.js', 'assets/life/legacy.js',
     'assets/life/remote.js', 'assets/life/sync.js',
     'assets/life/icons.js', 'assets/life/ui.js', 'assets/life/ui.css', 'assets/life/shell.js'])
@@ -76,6 +77,16 @@ test('life navigation returns its own installed HTML while offline', async () =>
   h.entries.set(request('index.html').url, new Response('old timeline'));
   h.entries.set(request('life.html').url, new Response('life shell'));
   assert.equal(await (await h.run('fetch', request('life.html?view-only=1', 'navigate'))).text(), 'life shell');
+  assert.equal(h.state().fetches, 0);
+});
+test('section and nested view links resolve to the same installed shell offline', async () => {
+  const h = harness({ fetchResult: new Error('offline') });
+  h.entries.set(request('index.html').url, new Response('unified home'));
+  h.entries.set(request('workspace.html').url, new Response('timeline management'));
+  for (const query of ['section=tools', 'section=manage&view=sync', 'view=sources']) {
+    assert.equal(await (await h.run('fetch', request('index.html?' + query, 'navigate'))).text(), 'unified home');
+  }
+  assert.equal(await (await h.run('fetch', request('workspace.html?section=manage', 'navigate'))).text(), 'timeline management');
   assert.equal(h.state().fetches, 0);
 });
 test('platform Auth and life modules use one installed bundle without online replacement', async () => {

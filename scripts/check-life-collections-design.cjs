@@ -136,7 +136,7 @@ async function main() {
         check(size.name + ' focused excerpt control stays above fixed mobile navigation', await manage.evaluate(el => {
           if (innerWidth > 700) return true;
           const css = getComputedStyle(el), ring = parseFloat(css.outlineWidth) + parseFloat(css.outlineOffset);
-          return el.getBoundingClientRect().bottom + ring + 8 <= document.querySelector('.life-nav').getBoundingClientRect().top;
+          return el.getBoundingClientRect().bottom + ring + 8 <= document.querySelector('.haedo-nav, .life-nav').getBoundingClientRect().top;
         }));
         await page.keyboard.press('Space');
         assert.equal(await card.getByRole('button', { name: '발췌 제거', exact: true }).isHidden(), true);
