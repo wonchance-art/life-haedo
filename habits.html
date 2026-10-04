@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko" data-theme="spring">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,57 +7,15 @@
     <meta name="referrer" content="same-origin" />
     <link rel="icon" href="icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="vendor/daisyui.css" />
-    <link rel="stylesheet" href="vendor/daisyui-themes.css" />
-    <link rel="stylesheet" href="assets/app.css" />
     <link rel="stylesheet" href="assets/platform.css" />
     <link rel="stylesheet" href="assets/haedo-shell.css" />
     <meta name="robots" content="noindex" />
     <title>습관 · 해도</title>
   </head>
   <body class="platform haedo-shell" data-haedo-section="tools" data-page="habits">
-    <svg
-      class="icon-defs"
-      aria-hidden="true"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <defs>
-        <symbol id="p-time" viewBox="0 0 32 32">
-          <path d="M3 26h26M3 19c5 0 5-10 10-10s5 6 9 6 5-5 7-7" />
-          <circle cx="13" cy="9" r="3" />
-        </symbol>
-        <symbol id="p-goal" viewBox="0 0 32 32">
-          <circle cx="16" cy="16" r="11" />
-          <circle cx="16" cy="16" r="5" />
-          <path d="m16 16 12-12M24 4h4v4" />
-        </symbol>
-        <symbol id="p-habit" viewBox="0 0 32 32">
-          <rect x="5" y="6" width="22" height="22" rx="3" />
-          <path d="M11 3v6m10-6v6M5 13h22m-17 7 4 4 8-8" />
-        </symbol>
-        <symbol id="p-plus" viewBox="0 0 24 24">
-          <path d="M12 4v16M4 12h16" />
-        </symbol>
-        <symbol id="p-check" viewBox="0 0 24 24">
-          <path d="m5 12 4 4L19 6" />
-        </symbol>
-        <symbol id="p-out" viewBox="0 0 24 24">
-          <path d="M14 4H5v16h9M10 12h11m-4-4 4 4-4 4" />
-        </symbol>
-      </defs></svg
-    ><a class="skip-link" href="#content">본문으로 이동</a>
+    <a class="skip-link" href="#content">본문으로 이동</a>
     <nav class="haedo-nav" data-haedo-navigation aria-label="주 메뉴"></nav>
-    <div class="haedo-page-account">
-      <a class="haedo-icon-button" href="login.html" data-login-link aria-label="로그인"><span data-haedo-icon="user" aria-hidden="true"></span></a>
-      <details class="haedo-account" data-account-menu hidden>
-        <summary class="haedo-icon-button" aria-label="계정 메뉴"><span data-haedo-icon="user" aria-hidden="true"></span></summary>
-        <div class="haedo-account-panel">
-          <p id="accountLabel" class="p-account"></p>
-          <a class="p-text-link" href="index.html?section=manage">관리</a>
-          <button class="p-button" data-logout hidden type="button">로그아웃</button>
-        </div>
-      </details>
-    </div>
+
     <div id="accessState" class="p-access" role="status">
       <p>로그인을 확인하고 있습니다.</p>
       <a href="login.html">로그인 화면</a
@@ -69,19 +27,26 @@
       </p></noscript
     >
     <main id="content" class="p-main private-main" data-private hidden>
-      <header class="p-page-head haedo-page-head">
-        <div>
+      <header class="haedo-page-heading">
+        <div class="haedo-heading-title">
+          <a class="haedo-icon-button" href="index.html?section=tools" data-section-back aria-label="도구로 돌아가기"><span data-haedo-icon="back" aria-hidden="true"></span></a>
           <h1>습관</h1>
         </div>
-        <button class="haedo-icon-button" id="addItem" aria-label="습관 추가">
-          <span data-haedo-icon="plus" aria-hidden="true"></span>
-        </button>
+        <div class="haedo-heading-actions">
+          <button id="syncRetry" class="haedo-icon-button" aria-label="동기화 다시 확인"><span data-haedo-icon="cloud" aria-hidden="true"></span></button>
+          <button id="addItem" class="haedo-icon-button" aria-label="습관 추가"><span data-haedo-icon="plus" aria-hidden="true"></span></button>
+          <a class="haedo-icon-button" href="login.html" data-login-link aria-label="로그인"><span data-haedo-icon="user" aria-hidden="true"></span></a>
+      <details class="haedo-account" data-account-menu hidden>
+        <summary class="haedo-icon-button" aria-label="계정 메뉴"><span data-haedo-icon="user" aria-hidden="true"></span></summary>
+        <div class="haedo-account-panel">
+          <p id="accountLabel" class="p-account"></p>
+          <a class="p-text-link" href="index.html?section=manage">관리</a>
+          <button class="p-button" data-logout hidden type="button">로그아웃</button>
+        </div>
+      </details>
+        </div>
       </header>
-      <a class="haedo-back-link" href="index.html?section=tools"><span data-haedo-icon="back" aria-hidden="true"></span><span>도구</span></a>
-      <div class="p-status-line">
-        <span id="syncMessage" role="status">기기 사본을 확인합니다.</span
-        ><button id="syncRetry" class="haedo-icon-button" aria-label="동기화 다시 확인"><span data-haedo-icon="cloud" aria-hidden="true"></span></button>
-      </div>
+      <div class="p-status-line"><span id="syncMessage" role="status">기기 사본을 확인합니다.</span></div>
       <div class="p-list-tools">
         <p id="habitWeekLabel"></p>
         <span id="itemCount"></span>

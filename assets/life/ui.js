@@ -650,7 +650,7 @@
       const matching = state.syncAccount && item?.binding && item.binding.userId === state.syncAccount.userId && item.binding.projectUrl === state.syncAccount.projectUrl;
       const mismatched = item?.binding && state.syncAccount && !matching;
       const passive = !state.syncReadError && !state.syncLoading && !item?.error && !item?.conflict && !mismatched && (!item?.binding || !item.enabled || (matching && item.status === 'synced'));
-      scope.classList.toggle('life-sr-only', ['topics', 'sources'].includes(state.mode) && passive);
+      scope.classList.toggle('life-sr-only', sectionFor(state.mode) !== 'manage' && passive);
     }
 
     async function syncAction(action, message, refreshLocal) {
@@ -715,7 +715,7 @@
       if (sectionFor(mode) === 'records') lastRecordMode = mode;
       writeRoute(mode, false);
       render();
-      const heading = main.querySelector('h2');
+      const heading = main.querySelector('h2') || toolbar.querySelector('h1');
       if (heading) heading.focus({ preventScroll: true });
     }
 
@@ -804,12 +804,26 @@
       if (disposed) return;
       const section = sectionFor(state.mode);
       global.HaedoNavigation?.activate(section);
-      header.replaceChildren(node('h1', { records: '기록', tools: '도구', manage: '관리' }[section], 'life-sr-only'));
+      header.replaceChildren();
+      toolbar.classList.add('haedo-page-heading');
       toolbar.replaceChildren();
+      const heading = node('h1', null, 'life-page-title');
+      heading.tabIndex = -1;
+      const headingGroup = node('div', null, 'haedo-heading-title');
+      if (section === 'records') {
+        const home = button('기록', guarded(() => navigate('topics')), 'life-title-button');
+        home.setAttribute('aria-label', '모아보기');
+        heading.append(home);
+      } else heading.textContent = section === 'tools' ? '도구' : '관리';
+      if (section === 'manage' && state.mode !== 'manage') {
+        headingGroup.append(iconButton('관리로 돌아가기', 'back', guarded(() => navigate('manage'))));
+      }
+      headingGroup.append(heading);
+      toolbar.append(headingGroup);
       if (section === 'records') {
         const nav = node('nav', null, 'life-nav life-context-nav');
         nav.setAttribute('aria-label', '기록 보기');
-        [['topics', '모아보기', 'quote'], ['sources', '원천 기록', 'search'], ['time', '시간 보기', 'timeline']].forEach(([mode, label, icon]) => {
+        [['sources', '원천 기록', 'search'], ['time', '시간 보기', 'timeline']].forEach(([mode, label, icon]) => {
           const tab = iconButton(label, icon, guarded(() => navigate(mode)));
           if (state.mode === mode || mode === 'sources' && state.mode === 'source') tab.setAttribute('aria-current', 'page');
           nav.append(tab);
@@ -821,8 +835,6 @@
         if (state.mode === 'import' || state.mode === 'batch') add.setAttribute('aria-current', 'page');
         nav.append(add);
         toolbar.append(nav);
-      } else if (section === 'manage' && state.mode !== 'manage') {
-        toolbar.append(iconButton('관리로 돌아가기', 'back', guarded(() => navigate('manage'))));
       }
       if (state.remoteChanged) {
         const refresh = button('최신 내용 확인', guarded(async () => {
@@ -857,8 +869,16 @@
       return link;
     }
 
+    function actionRow(label, description, glyph, action, displayLabel) {
+      const control = button(null, guarded(action), 'life-destination life-action-row');
+      control.setAttribute('aria-label', label);
+      const copy = node('span', null, 'life-destination-copy');
+      copy.append(node('strong', displayLabel || label), node('span', description, 'life-meta'));
+      control.append(global.HaedoLife.Icons.create(glyph), copy, global.HaedoLife.Icons.create('chevron'));
+      return control;
+    }
+
     function renderTools() {
-      main.append(title('도구'));
       const list = node('div', null, 'life-destinations');
       list.append(destinationRow('목표', '진행 중인 일과 다음 계획', 'goals.html', 'target'),
         destinationRow('습관', '반복할 일과 오늘의 체크', 'habits.html', 'check'));
@@ -866,8 +886,7 @@
     }
 
     function renderManagement() {
-      main.append(title('관리'));
-      const manage = iconButton('자료 관리', 'book', () => {});
+      const manage = actionRow('자료 관리', '자료 ' + state.bundle.sources.length + '개 · 발췌 ' + state.bundle.records.length + '개', 'book', () => {}, state.bundle.title || '내 자료');
       const management = node('section', null, 'life-management');
       management.id = 'lifeManagement';
       management.hidden = !state.managementOpen;
@@ -895,19 +914,15 @@
         announce('선택한 작업공간을 열었습니다. 다른 작업공간은 그대로 보관됩니다.');
       }));
       management.append(workspace.label);
-      const actions = node('div', null, 'life-actions');
-      actions.append(button('내보내기·사본 복원', guarded(() => navigate('transfer'))));
-      if (sync) actions.append(button('기기 간 동기화', guarded(async () => {
-        await navigate('sync');
-        await refreshSync();
-      })));
-      if ([...state.batches.values()].some(batch => batch.workspaceId === state.bundle.workspaceId)) actions.append(button('선택 파일 목록', guarded(() => navigate('batch'))));
-      management.append(actions);
-
-      const controls = node('div', null, 'life-management-entry');
-      controls.append(manage, node('span', '자료 · 작업공간과 보관', 'life-meta'));
-      main.append(controls, management);
-      main.append(destinationRow('연표·목표·습관 백업·복원', '자료 백업과 별도로 보관됩니다.', 'workspace.html?section=manage#backupAll', 'download'));
+      if ([...state.batches.values()].some(batch => batch.workspaceId === state.bundle.workspaceId)) management.append(button('선택 파일 목록', guarded(() => navigate('batch'))));
+      main.append(manage, management);
+      const destinations = node('div', null, 'life-destinations');
+      destinations.append(actionRow('내보내기·사본 복원', '원문·발췌·출처를 파일로 보관', 'download', () => navigate('transfer'), '자료 백업·복원'));
+      if (sync) destinations.append(actionRow('기기 간 동기화', '연결할 작업공간을 직접 선택', 'cloud', async () => {
+        await navigate('sync'); await refreshSync();
+      }));
+      destinations.append(destinationRow('연표·목표·습관 백업·복원', '자료 백업과 별도로 보관됩니다.', 'workspace.html?section=manage#backupAll', 'timeline'));
+      main.append(destinations);
     }
 
     function renderStages(parent) {
@@ -1088,7 +1103,6 @@
     }
 
     function renderTopics() {
-      main.append(title('모아보기'));
       renderStages(main);
       const results = node('div', null, 'life-card-grid'); results.id = 'lifeSearchResults';
       const count = searchCount();
@@ -1767,16 +1781,16 @@
     }
 
     function renderTransfer() {
-      main.append(title('내보내기·사본 복원'), node('p', '현재 작업공간의 확정 자료·본문·발췌·메모·출처를 파일로 옮깁니다. 개인 내용이 포함되며 자동 공개하지 않습니다.', 'life-help'));
-      main.append(node('p', '현재 계정의 이 작업공간만 포함합니다. 미적용 검토 항목과 보관하지 않은 사진·원격 본문, 연표·목표·습관은 포함되지 않습니다. 내 공간 백업과 별개입니다.', 'life-help'));
-      const actions = node('div', null, 'life-actions');
+      main.append(title('내보내기·사본 복원'), node('p', '이 작업공간의 원문·발췌·메모·출처를 파일로 보관합니다. 파일에는 개인 자료가 포함됩니다.', 'life-help'));
+      main.append(node('p', '검토 초안과 기기에 보관하지 않은 사진·본문은 제외됩니다. 연표·목표·습관은 별도 백업입니다.', 'life-help'));
+      const actions = node('section', null, 'life-destinations life-settings-section');
       const stamp = new Date().toISOString().slice(0, 10);
-      actions.append(button('JSON 백업', guarded(async () => {
+      actions.append(actionRow('JSON 백업', '새 작업공간 사본으로 복원할 수 있는 파일', 'download', async () => {
         const backup = await core.makeBackup(state.bundle);
         download(JSON.stringify(backup, null, 2), 'life-tools-' + stamp + '.json', 'application/json');
-      })), button('Markdown 내보내기', guarded(async () => {
+      }), actionRow('Markdown 내보내기', '다른 앱에서 읽고 활용할 문서', 'book', async () => {
         download(await core.toMarkdown(state.bundle), 'life-tools-' + stamp + '.md', 'text/markdown;charset=utf-8');
-      })));
+      }));
       main.append(actions);
       const restore = field('JSON 백업을 새 작업공간 사본으로 복원', 'file', 'lifeRestoreFile', '');
       restore.input.accept = '.json,application/json';
@@ -1807,9 +1821,12 @@
           announce('새 작업공간 사본을 열었습니다. 이전 작업공간은 그대로 유지됩니다. 자동 동기화는 연결하지 않았습니다.');
         }), 'life-primary'));
       }));
-      main.append(restore.label, preview, node('p', '다른 기기로 옮긴 백업은 별도 사본입니다. 여러 기기의 변경이 서로 자동 반영되지 않습니다.', 'life-help'));
+      const restoreSection = node('section', null, 'life-settings-section');
+      restoreSection.append(node('h3', '백업에서 복원'), restore.label, preview, node('p', '다른 기기로 옮긴 백업은 별도 사본입니다. 여러 기기의 변경이 서로 자동 반영되지 않습니다.', 'life-help'));
+      main.append(restoreSection);
       const workspaceName = field('새 작업공간 이름', 'text', 'lifeNewWorkspaceName', '');
-      main.append(workspaceName.label, button('빈 작업공간 만들기', guarded(async () => {
+      const workspaceSection = node('section', null, 'life-settings-section');
+      workspaceSection.append(node('h3', '새 작업공간'), workspaceName.label, button('빈 작업공간 만들기', guarded(async () => {
         if (dirty()) await persistStage();
         invalidateBatchContext();
         const created = await storage.createWorkspace(workspaceName.input.value || '새 작업공간');
@@ -1825,6 +1842,7 @@
         render();
         announce('빈 작업공간을 만들었습니다. 이전 기록은 유지됩니다.');
       })));
+      main.append(workspaceSection);
       if (storage.listUnownedWorkspaces && storage.importUnownedWorkspace) {
         const old = node('details', null, 'life-details');
         old.id = 'lifeUnownedImport';

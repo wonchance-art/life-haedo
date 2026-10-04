@@ -30,7 +30,7 @@ test('complete offline shell includes every runtime module', async () => {
     'index.html', 'login.html', 'workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'privacy.html',
     'assets/platform-config.js', 'assets/platform-auth.js', 'assets/platform-store.js', 'assets/platform-data.js',
     'assets/platform-ui.js', 'assets/platform.css', 'assets/platform-life-remote.js', 'assets/timeline-entry.js',
-    'assets/haedo-navigation.js', 'assets/haedo-shell.css',
+    'assets/haedo-navigation.js', 'assets/haedo-shell.css', 'assets/timeline-shell.css',
     'life.html', 'vendor/idb/idb.js', 'vendor/supabase/supabase.js', 'assets/life/core.js', 'assets/life/storage.js', 'assets/life/legacy.js',
     'assets/life/remote.js', 'assets/life/sync.js',
     'assets/life/icons.js', 'assets/life/ui.js', 'assets/life/ui.css', 'assets/life/shell.js'])

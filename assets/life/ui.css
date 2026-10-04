@@ -35,7 +35,7 @@ h4 { font-size: 16px; line-height: 1.7; }
 .life-main { padding-top: 8px; }
 .life-heading { font-size: 21px; margin-bottom: 10px; }
 .life-subtitle,.life-help,.life-meta,.life-scope { color: var(--ink-soft); font-size: 13px; line-height: 1.75; overflow-wrap: anywhere; }
-.life-help { margin: 8px 0 20px; }
+.life-help { margin: 8px 0 20px; word-break: keep-all; }
 .life-scope { border-top: 1px solid var(--line); padding-top: 20px; margin-top: 36px; }
 .life-status { font-size: 12px; color: var(--ink-soft); margin-top: 8px; margin-bottom: 8px; overflow-wrap: anywhere; }
 .life-status:empty { display: none; }
@@ -210,20 +210,37 @@ textarea.life-source-text { min-height: 340px; max-height: 70vh; padding: 16px; 
   *,*::before,*::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
 
-/* The three global destinations own the rail. Record actions stay beside content. */
-.life-nav.life-context-nav { position: static; z-index: auto; width: auto; display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 6px; padding: 0; border: 0; background: transparent; }
-.life-context-nav .life-tooltip { top: calc(100% + 6px); bottom: auto; left: 50%; transform: translateX(-50%); }
-.life-context-nav > :first-child .life-tooltip { left: 0; transform: none; }
-.life-context-nav > :last-child .life-tooltip { left: auto; right: 0; transform: none; }
-.life-context-nav { margin-bottom: 18px; }
-.life-destinations { margin-top: 22px; }
-.life-destination { display: flex; align-items: center; gap: 18px; min-height: 96px; padding: 22px 0; border-bottom: 1px solid var(--line); text-decoration: none; color: var(--ink); }
+/* Page headings and settings use the same quiet feed rhythm. */
+.life-toolbar.haedo-page-heading { flex-wrap: wrap; margin-inline: auto; }
+.life-toolbar .life-title-button { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 0; font: inherit; color: var(--ink); background: none; }
+.life-toolbar .life-title-button:hover { color: var(--color-primary); }
+.life-toolbar .life-refresh { flex-basis: 100%; }
+body[data-haedo-section=manage] .life-toolbar { padding-right: 50px; }
+.life-nav.life-context-nav { position: static; z-index: auto; width: auto; display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 6px; margin: 0; padding: 0; border: 0; background: transparent; }
+.life-context-nav .life-tooltip { top: calc(100% + 6px); bottom: auto; left: auto; right: 0; transform: none; }
+.life-context-nav > :first-child .life-tooltip, .life-context-nav > :last-child .life-tooltip { left: auto; right: 0; transform: none; }
+.life-main[data-mode=topics] .life-search-bar { margin-top: 0; }
+.life-main[data-mode=topics] > .life-details { margin-top: 0; }
+.life-destinations { margin: 0; }
+.life-destination { display: flex; align-items: center; gap: 18px; min-height: 96px; padding: 24px 0; border-bottom: 1px solid var(--line); text-decoration: none; color: var(--ink); }
 .life-destination:hover { color: var(--color-primary); }
 .life-destination-copy { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; }
 .life-destination-copy strong { font-size: 18px; font-weight: 600; word-break: keep-all; overflow-wrap: anywhere; }
-.life-destination > .life-glyph:last-child { transform: rotate(-90deg); color: var(--ink-soft); }
-.life-management-entry { display: flex; align-items: center; gap: 12px; margin-top: 20px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.life-destination > .life-glyph { color: var(--ink-soft); }
+.life-destination > .life-glyph:last-child { transform: rotate(-90deg); }
+.life-action-row { width: 100%; text-align: left; justify-content: flex-start; border-width: 0 0 1px; border-radius: 0; background: transparent; }
+.life-action-row:hover { background: transparent; }
+.life-action-row[aria-expanded=true] > .life-glyph:last-child { transform: none; }
+.life-main[data-mode=manage] > .life-destination { padding-top: 12px; }
+.life-settings-section { padding: 26px 0; border-bottom: 1px solid var(--line); }
+.life-settings-section h3 { margin: 0 0 18px; font-size: 18px; }
+.life-settings-section.life-destinations { padding-top: 0; }
+.life-settings-section.life-destinations > :last-child { border-bottom: 0; }
+.life-management { margin-bottom: 0; padding: 20px 0 24px; }
+.life-management .life-panel-heading h2 { font-size: 16px; }
+.haedo-account-host .life-account { margin: 0; }
+.haedo-account-panel #lifeAccountLabel { margin: 0; }
 @media (max-width:700px) {
-  .life-nav.life-context-nav { margin-bottom: 12px; }
+  .life-nav.life-context-nav { gap: 2px; }
   .life-destination { min-height: 90px; gap: 14px; }
 }

@@ -1,11 +1,11 @@
 /* Versioned app shell. Personal documents remain in localStorage/IndexedDB. */
-const CACHE='haedo-v57';
+const CACHE='haedo-v58';
 const SHELL=['./','./index.html','./login.html','./workspace.html','./timeline.html',
   './goals.html','./habits.html','./privacy.html','./manifest.webmanifest','./icon.svg','./icon-maskable.svg',
   './vendor/daisyui.css','./vendor/daisyui-themes.css','./assets/app.css',
   './assets/data.js','./assets/sync.js','./assets/app.js','./assets/workspace.js',
   './assets/platform-config.js','./assets/platform.css','./assets/platform-auth.js',
-  './assets/haedo-navigation.js','./assets/haedo-shell.css',
+  './assets/haedo-navigation.js','./assets/haedo-shell.css','./assets/timeline-shell.css',
   './assets/platform-data.js','./assets/platform-store.js','./assets/platform-ui.js','./assets/platform-life-remote.js','./assets/timeline-entry.js',
   './life.html','./vendor/idb/idb.js','./vendor/supabase/supabase.js','./assets/life/core.js','./assets/life/storage.js',
   './assets/life/remote.js','./assets/life/sync.js',
