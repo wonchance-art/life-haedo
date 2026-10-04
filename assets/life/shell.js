@@ -21,7 +21,7 @@
     const container = root.document.getElementById('lifeApp');
     container.hidden = true;
     const accountPanel = root.document.getElementById('lifeAccount');
-    if (accountPanel) accountPanel.hidden = true;
+    if (accountPanel) { accountPanel.hidden = true; accountPanel.open = false; }
     const accountLabel = root.document.getElementById('lifeAccountLabel');
     if (accountLabel) accountLabel.textContent = '';
     controller?.abort(); controller = null;
@@ -115,6 +115,21 @@
   root.document.addEventListener('haedo:auth-unavailable', () => { hide(); retryNotice('로그인을 확인하지 못했습니다. 인터넷 연결 후 다시 확인해 주세요.'); });
   root.addEventListener('pagehide', () => { hide(); });
   root.addEventListener('pageshow', event => { if (event.persisted) start(); });
+  root.document.querySelectorAll('.life-global-nav .life-icon-button').forEach(control => {
+    control.addEventListener('keydown', event => {
+      if (event.key === 'Escape') control.dataset.tooltipDismissed = 'true';
+    });
+    const resetTooltip = () => { delete control.dataset.tooltipDismissed; };
+    control.addEventListener('blur', resetTooltip);
+    control.addEventListener('pointerleave', resetTooltip);
+  });
+  root.document.addEventListener('keydown', event => {
+    const panel = root.document.getElementById('lifeAccount');
+    if (event.key !== 'Escape' || !panel?.open || !panel.contains(root.document.activeElement)) return;
+    panel.open = false;
+    const toggle = root.document.getElementById('lifeAccountToggle');
+    if (toggle) { toggle.dataset.tooltipDismissed = 'true'; toggle.focus({ preventScroll: true }); }
+  });
   root.document.getElementById('lifeLogout')?.addEventListener('click', async () => {
     if (leaving) return;
     leaving = true;
@@ -139,6 +154,7 @@
       container.hidden = false;
       if (accountPanel) accountPanel.hidden = false;
       notice((error?.message || '검토 내용을 보관하지 못했습니다.') + ' 로그아웃을 완료하지 않았습니다. 입력은 편집 화면에 남아 있습니다. 작업과 저장 상태를 확인한 뒤 다시 시도해 주세요.', true);
+      root.document.getElementById('lifeLogout')?.focus({ preventScroll: true });
     } finally { leaving = false; }
   });
   life.Shell = { isReadOnly, start, get sync() { return sync; }, get storage() { return scopedStorage; } };

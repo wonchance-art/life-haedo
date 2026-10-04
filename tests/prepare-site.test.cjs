@@ -17,9 +17,25 @@ test('repeat public build removes stale private canary and old SDK while preserv
     await assert.rejects(fs.access(path.join(target,'old-private-canary.txt')));
     await assert.rejects(fs.access(path.join(target,'vendor/supabase.js')));
     await fs.access(path.join(target,'vendor/supabase/supabase.js'));await fs.access(path.join(target,'life.html'));
+    await fs.access(path.join(target,'assets/life/icons.js'));await fs.access(path.join(target,'vendor/lucide/LICENSE'));
+    const shell=(await fs.readFile(path.join(target,'sw.js'),'utf8')).match(/const\s+SHELL\s*=\s*\[([^\]]*)\]/)?.[1];
+    assert.ok(shell,'Published worker must declare its complete offline shell.');
+    for(const entry of shell.matchAll(/['"]([^'"]+)['"]/g))await fs.access(path.join(target,entry[1]));
+    for(const name of (await fs.readdir(target)).filter(name=>name.endsWith('.html'))){
+      const html=await fs.readFile(path.join(target,name),'utf8');
+      for(const tag of html.matchAll(/<(?:script|link|img)\b[^>]*>/gi)){
+        for(const attr of tag[0].matchAll(/\b(?:src|href)\s*=\s*["']([^"']+)["']/gi)){
+          if(/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(attr[1]))continue;
+          await fs.access(path.join(target,decodeURIComponent(attr[1].split(/[?#]/)[0])));
+        }
+      }
+    }
     assert.equal(await fs.readFile(path.join(root,'assets/platform-config.js'),'utf8'),source);
     assert.match(await fs.readFile(path.join(target,'assets/platform-config.js'),'utf8'),/sb_publishable_anonymous_build_test/);
-    await assert.rejects(fs.access(path.join(target,'.git')));await assert.rejects(fs.access(path.join(target,'tests')));
+    for(const internal of ['.git','.agents','tests','scripts','docs','assets/design-review','assets/design-social',
+      'design-sample.html','social-sample.html','quote-sample.html','vendor/lucide/UPSTREAM.json']){
+      await assert.rejects(fs.access(path.join(target,internal)),`${internal} must not be published`);
+    }
   }finally{await fs.rm(dir,{recursive:true,force:true});}
 });
 test('unowned nonempty output and source/symlink destinations are rejected without deleting files',async()=>{
