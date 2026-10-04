@@ -15,6 +15,7 @@ description: 해도의 화면 추가·수정·디자인 검토에 사용한다. 
 - 동일한 컴포넌트를 찾고 재사용한다. 실제 자료 화면은 `life.html`, `assets/life/ui.css`, `assets/life/icons.js`, `assets/life/ui.js`가 기준이다. 승인한 A 인용 아이콘과 본문 중심 한 열을 사용한다. `social-sample.html`과 `assets/design-social/`는 설계 비교, 이전 `design-sample.html`은 초기 이력이다. 검색·원문은 `docs/design-review/integration.md`, 후속 가져오기·발췌·주제는 `docs/design-review/collections-integration.md`에서 실제 UI와 저장 경계를 확인한다.
 - 새로운 라이브러리는 최신 공식 버전·라이선스·유지관리·적합성을 조사하고 [참고 기록](../../../docs/design-review/references.md)에 채택/참고/제외를 구분한다. 작은 기능마다 전체 후보를 재조사하지 않는다.
 - UI 편집 직전에 Impeccable `reference/craft-floor.md`를 읽고 최신 사용자 시각 방향과 실제 작업 목적을 우선한다. 본문을 앞세우고 메뉴·프레임은 최소화한다. 아이콘 탐색에는 접근 가능한 이름·초점/hover 도움말을 붙인다. 선택·저장 반응은 짧게 유지한다. 모션은 사용자 행동의 상태를 보여주며 reduced-motion을 제공한다.
+- 목록은 각 자료·발췌를 독립 피드로 구분한다. 본문 이외의 반복 텍스트는 줄이고 원문/정보/관리는 기존 공통 도형을 재사용한다. 20px 도형·44px 조작 영역의 정렬을 유지하고, 접힌 출처에서도 정확한 버전·목록 복귀 초점을 보존한다. 필요 정보는 눌러 펼칠 수 있어야 하며 모바일에서 hover를 요구하지 않는다.
 
 ## 구현과 확인
 
@@ -29,3 +30,5 @@ description: 해도의 화면 추가·수정·디자인 검토에 사용한다. 
 `npm run dev` 후 검색·원문은 `node scripts/check-life-design.cjs`, 가져오기·발췌·주제는 `node scripts/check-life-collections-design.cjs`로 모의 Auth·익명 자료를 사용해 검토한다. 후속 UX 회귀는 `node tests/life-collections-browser.cjs`이며 기존 기능 검사는 변경 흐름에 맞는 `tests/life-*-browser.cjs`를 실행한다. 같은 화면을 다른 검사 이름으로 반복 캡처하지 않는다. `node scripts/check-social-preview.cjs`는 비교 시안용, `node scripts/check-design-preview.cjs`는 초기 시안용이다. 실제 Supabase에는 접근하지 않는다. 실제 UI의 최신 검증 범위는 `docs/design-review/collections-integration.md`, 첫 통합은 `docs/design-review/integration.md`, 과거 시안 검사는 `docs/design-review/minimal-verification.md`에서 구분한다. 숨긴 필터·출처·발췌를 실제로 열고 닫기/초점 복귀도 확인한다. 시안 검사 전체를 작은 운영 UI 수정의 필수 검사로 과도하게 확장하지 않는다.
 
 보고는 이번에 수행한 기능 검사 / 시각 검토 / 실제 기기 체험 / 배포를 구분한다. 장치 폭만 바꾼 Chromium 결과를 Apple 실기 검증으로 쓰지 않는다.
+
+피드의 간결한 표시와 접힌 출처·관리는 `docs/design-review/feed-refinement.md`와 `node scripts/check-life-feed-design.cjs`를 따른다. 이 집중 검사는 기존 전체 화면 감사와 실행 범위를 구분한다.

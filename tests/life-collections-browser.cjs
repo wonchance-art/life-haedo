@@ -162,8 +162,8 @@ async function main() {
       const ids = await seedCollections(page); await page.locator('#lifeSearch').fill('서로 다른 두 원문');
       for (let index = 0; index < 2; index++) {
         const card = page.locator('article[data-record-id="' + ids.multi + '"]');
-        const open = card.locator('button[data-ref-index="' + index + '"]');
-        if (!(await open.isVisible())) await open.locator('xpath=ancestor::details[1]').locator('summary').click();
+        const open = card.locator('.life-source-refs button[data-ref-index="' + index + '"]');
+        if (!(await open.isVisible())) await card.getByRole('button', { name: /^발췌 출처 정보/ }).click();
         assert.match(await card.innerText(), /이전 버전/);
         const focusKey = await open.getAttribute('data-focus-key'); await open.click(); await settle(page);
         assert.equal(await page.locator('#lifeVersion').inputValue(), ids.sources[index].versions[0]);
@@ -172,13 +172,14 @@ async function main() {
         await page.locator('#lifeSearchReturn').click(); await settle(page);
         assert.equal(await page.locator('#lifeSearch').inputValue(), '서로 다른 두 원문');
         await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, focusKey);
+        assert.equal(await open.isVisible(), true, 'return focus must not be inside a hidden source panel');
       }
     });
     await check('collapsed excerpt management cancels removal unchanged and confirmed removal keeps all original versions', async page => {
       const ids = await seedCollections(page), before = await stored(page);
       const card = page.locator('article[data-record-id="' + ids.multi + '"]');
       const remove = card.getByRole('button', { name: '발췌 제거', exact: true });
-      assert.ok(await remove.isHidden()); await card.locator('details.life-excerpt-manage summary').click();
+      assert.ok(await remove.isHidden()); await card.getByRole('button', { name: '발췌 관리', exact: true }).click();
       page.once('dialog', dialog => dialog.dismiss()); await remove.click(); await settle(page);
       assert.deepEqual(await stored(page), before, 'cancelled removal modified the stored workspace');
       page.once('dialog', dialog => dialog.accept()); await remove.click(); await settle(page);

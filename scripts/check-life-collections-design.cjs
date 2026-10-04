@@ -124,8 +124,9 @@ async function main() {
         await click(page, '검색·필터 초기화'); assert.equal(await page.locator('.life-excerpt-card').count(), 12);
         const card = page.locator('.life-excerpt-card').first();
         assert.equal(await card.locator('.life-source-refs button').count(), 2);
-        const manage = card.locator('summary').filter({ hasText: '발췌 관리' });
-        await card.locator('.life-source-refs button').last().focus(); await page.keyboard.press('Tab');
+        const sourceInfo = card.getByRole('button', { name: /^발췌 출처 정보/ });
+        const manage = card.getByRole('button', { name: '발췌 관리', exact: true });
+        await sourceInfo.focus(); await page.keyboard.press('Tab');
         assert.equal(await manage.evaluate(el => el === document.activeElement), true);
         await page.keyboard.press('Enter');
         assert.equal(await card.getByRole('button', { name: '발췌 제거', exact: true }).isVisible(), true);
@@ -139,6 +140,7 @@ async function main() {
         }));
         await page.keyboard.press('Space');
         assert.equal(await card.getByRole('button', { name: '발췌 제거', exact: true }).isHidden(), true);
+        await sourceInfo.click();
         await card.locator('.life-source-refs button').first().click(); await settle(page);
         await page.waitForFunction(expected => getSelection().toString() === expected, quote);
         assert.equal(await page.locator('#lifeSourceText').textContent(), seeded.sources[0].raw);

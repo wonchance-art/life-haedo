@@ -233,11 +233,15 @@ async function main() {
       assert.equal(await result(page, ids[1].versions[0]).getByRole('button', { name: /^자료 읽기/ }).evaluate(el => el === document.activeElement), true);
       await click(page, '모아보기'); await page.locator('#lifeSearch').fill('둘째근거'); await filterPanel(page); await click(page, '확인 주제');
       assert.equal(await page.locator('.life-quote').count(), 1);
-      const second = page.locator('[data-source-id="' + ids[1].sourceId + '"][data-version-id="' + ids[1].versions[0] + '"]');
+      await page.getByRole('button', { name: /^발췌 출처 정보/ }).click();
+      const second = page.locator('.life-source-refs button[data-source-id="' + ids[1].sourceId + '"][data-version-id="' + ids[1].versions[0] + '"]');
+      const secondFocusKey = await second.getAttribute('data-focus-key');
       await second.click(); await settle(page); await selectedText(page, '함께 읽을 구절');
       assert.equal(await page.locator('#lifeSourceText').textContent(), '🌱\r\n함께 읽을 구절 둘째');
       await page.locator('#lifeSearchReturn').click(); await settle(page);
       assert.equal(await page.locator('#lifeSearch').inputValue(), '둘째근거'); assert.equal(await page.getByRole('button', { name: '확인 주제', exact: true }).getAttribute('aria-pressed'), 'true');
+      await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, secondFocusKey);
+      assert.equal(await second.isVisible(), true);
       await click(page, '원천 기록'); assert.equal(await page.locator('#lifeSearch').inputValue(), '함께'); assert.equal(await page.locator('#lifeOriginFilter').inputValue(), 'obsidian');
     });
     await check('search stays within workspace/account and never persists or transmits query state', async (page, context, device) => {
