@@ -19,6 +19,8 @@ description: 해도의 화면 추가·수정·디자인 검토에 사용한다. 
 
 전역 메뉴는 기록·도구·관리 세 개이며 `assets/haedo-navigation.js`/`assets/haedo-shell.css`를 재사용한다. 자료·연표는 기록에 묶고 본문 앞에 중복 대시보드·소개를 넣지 않는다. [통합 홈 기록](../../../docs/design-review/unified-home.md)의 라우팅·계정 경계를 따른다.
 
+전체 사이트는 `life.html`의 시각 기준을 따르고 최신 계약은 `DESIGN.md`를 따른다. 플랫폼 CSS는 연표 테마에 기대지 않는다. 전체 표면 변경은 `node scripts/check-site-design.cjs`의 익명 샘플로 기존 피드와 도구·연표·폼을 함께 검토한다.
+
 ## 구현과 확인
 
 대표 내용은 `assets/design-review/sample-data.js`의 익명 한글 자료를 사용할 수 있다. 실제 개인 기록이나 Auth 세션을 복사하지 않는다. 동일한 자료로 전후/변형을 비교하되 현재 감사 자료와 시안 샘플은 다른 세트라는 한계를 명시한다.

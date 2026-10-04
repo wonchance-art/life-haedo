@@ -10,19 +10,24 @@
     if (text != null) node.textContent = text;
     return node;
   };
-  const icon = (name) => {
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("aria-hidden", "true");
-    const use = document.createElementNS(svg.namespaceURI, "use");
-    use.setAttribute("href", "#p-" + name);
-    svg.append(use);
-    return svg;
-  };
+  const icon = (name) => HaedoLife.Icons.create(name);
   const link = (text, href, className = "") => {
     const node = el("a", className, text);
     node.href = href;
     return node;
   };
+  function iconControl(control, label, glyph) {
+    control.classList.add("haedo-icon-button");
+    control.setAttribute("aria-label", label);
+    control.append(icon(glyph));
+    const tip = el("span", "haedo-tooltip", label);
+    tip.setAttribute("aria-hidden", "true");
+    control.append(tip);
+    const reset = () => { delete control.dataset.tooltipDismissed; };
+    control.addEventListener("blur", reset);
+    control.addEventListener("pointerleave", reset);
+    return control;
+  }
   let toastTimer,
     uid,
     editing,
@@ -254,6 +259,7 @@
           "p-icon-button goal-complete" + (done ? " done" : ""),
         );
       complete.append(icon("check"));
+      complete.setAttribute("aria-pressed", String(done));
       complete.setAttribute(
         "aria-label",
         item.data.title + (done ? " 완료 취소" : " 완료"),
@@ -286,30 +292,6 @@
       toast(e.message);
     }
   }
-  function todayRow(item) {
-    const today = HaedoData.localDate(),
-      row = el("div", "today-row"),
-      copy = el("div");
-    copy.append(
-      el("span", "", item.data.title),
-      el("p", "", "연속 " + model.streak(item.data, today) + "회"),
-    );
-    const done = item.data.checks.includes(today),
-      button = el(
-        "button",
-        "habit-check" + (done ? " done" : ""),
-        done ? "✓" : "",
-      );
-    button.setAttribute(
-      "aria-label",
-      item.data.title + (done ? " 오늘 완료 취소" : " 오늘 완료"),
-    );
-    button.setAttribute("aria-pressed", String(done));
-    button.onclick = () => checkHabit(item, today);
-    row.append(copy, button);
-    resolveButton(item, row);
-    return row;
-  }
   function renderWorkspace() {
     const list = byId("documentList"),
       k = model.keys(uid),
@@ -340,15 +322,9 @@
         );
       const links = el("div", "document-links");
       links.append(
-        link("연표", "timeline.html?doc=" + encodeURIComponent(doc.id)),
-        link(
-          "기록",
-          "timeline.html?view=records&doc=" + encodeURIComponent(doc.id),
-        ),
-        link(
-          "지도",
-          "timeline.html?view=map&doc=" + encodeURIComponent(doc.id),
-        ),
+        iconControl(link("", "timeline.html?doc=" + encodeURIComponent(doc.id)), "연표로 보기", "timeline"),
+        iconControl(link("", "timeline.html?view=records&doc=" + encodeURIComponent(doc.id)), "목록으로 보기", "book"),
+        iconControl(link("", "timeline.html?view=map&doc=" + encodeURIComponent(doc.id)), "지도로 보기", "map"),
       );
       row.append(copy, links);
       list.append(row);
@@ -416,8 +392,9 @@
           button = el(
             "button",
             "habit-check" + (done ? " done" : ""),
-            done ? "✓" : date.slice(8),
+            done ? "" : date.slice(8),
           );
+        if (done) button.append(icon("check"));
         button.disabled = !model.scheduled(item.data, date);
         button.setAttribute("aria-pressed", String(done));
         button.setAttribute(
@@ -558,11 +535,13 @@
     };
   function showTimelineManagement() {
     globalThis.HaedoNavigation?.activate("manage");
-    document.querySelector(".haedo-page-head h1").textContent = "연표·목표·습관 관리";
+    document.querySelector(".haedo-page-heading h1").textContent = "백업·복원";
     document.title = "연표·목표·습관 관리 · 해도";
-    const back = document.querySelector(".haedo-back-link");
+    const back = document.querySelector("[data-section-back]");
     back.href = "index.html?section=manage";
-    back.querySelector("span:last-child").textContent = "관리";
+    back.setAttribute("aria-label", "관리로 돌아가기");
+    const tip = back.querySelector(".haedo-tooltip");
+    if (tip) tip.textContent = "관리로 돌아가기";
     const backups = byId("timelineBackups");
     backups.open = true;
     document.querySelector(".space-documents").before(backups);

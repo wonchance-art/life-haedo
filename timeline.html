@@ -7,7 +7,7 @@
       name="description"
       content="행복도 곡선 위에 사건·기간·시대를 기록하는 개인 연표 편집기"
     />
-    <meta name="theme-color" content="#FAF8F0" />
+    <meta name="theme-color" content="#ffffff" />
     <link rel="icon" href="icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="icon.svg" />
@@ -20,20 +20,10 @@
     <link rel="stylesheet" href="vendor/daisyui.css" />
     <link rel="stylesheet" href="vendor/daisyui-themes.css" />
 
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
-    />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@400&family=Noto+Serif+KR:wght@900&display=swap"
-      rel="stylesheet"
-    />
-
     <link rel="stylesheet" href="assets/app.css" />
     <link rel="stylesheet" href="assets/platform.css" />
     <link rel="stylesheet" href="assets/haedo-shell.css" />
+    <link rel="stylesheet" href="assets/timeline-shell.css" />
   </head>
   <body class="haedo-shell haedo-timeline" data-page="timeline" data-haedo-section="records">
     <nav class="haedo-nav" data-haedo-navigation aria-label="주 메뉴"></nav>
@@ -91,25 +81,6 @@
       </defs>
     </svg>
     <a class="skip-link" href="#sec-canvas">기록으로 이동</a>
-    <nav class="app-bar" aria-label="문서 도구">
-      <div class="document-tools">
-        <a class="haedo-icon-button" href="workspace.html" aria-label="연표 목록"><span data-haedo-icon="back" aria-hidden="true"></span></a>
-        <select
-          class="select select-sm select-ghost"
-          id="docSel"
-          title="문서 전환"
-          aria-label="문서 선택"
-        ></select>
-        <button
-          class="db-dot"
-          id="btnCloud"
-          title="동기화 상태"
-          aria-label="동기화 상태"
-        ></button>
-      </div>
-      <span class="sr-only" id="saveStatus" role="status">기기에 저장됨</span>
-    </nav>
-
     <noscript
       ><div
         style="
@@ -128,12 +99,23 @@
 
     <header>
       <div class="wrap">
-        <div class="hgroup">
-          <div>
+        <div class="haedo-page-heading">
+          <div class="haedo-heading-title">
+            <a class="haedo-icon-button" href="workspace.html" aria-label="연표 목록"><span data-haedo-icon="back" aria-hidden="true"></span></a>
             <h1>내 연표</h1>
-            <p class="subtitle">시간에 따른 행복도와 사건 기록</p>
           </div>
-          <div class="head-right">
+          <div class="haedo-heading-actions">
+            <div class="document-tools">
+              <button class="db-dot haedo-icon-button" id="btnCloud" title="동기화 상태" aria-label="동기화 상태"><span data-haedo-icon="cloud" aria-hidden="true"></span></button>
+            </div>
+            <details class="timeline-summary haedo-account">
+              <summary class="haedo-icon-button" aria-label="연표 정보" title="연표 정보"><span data-haedo-icon="info" aria-hidden="true"></span></summary>
+              <div class="timeline-summary-panel">
+                <nav class="app-bar document-tools" aria-label="문서 도구">
+                  <label for="docSel">문서 선택</label>
+                  <select class="select select-sm select-ghost" id="docSel" title="문서 전환" aria-label="문서 선택"></select>
+                </nav>
+                <div class="head-right">
             <div class="hero" id="hero">
               <button
                 class="hero-fig"
@@ -160,8 +142,12 @@
                 <div class="stat-value" id="statEvents">—</div>
               </div>
             </div>
+                </div>
+              </div>
+            </details>
           </div>
         </div>
+        <span class="sr-only" id="saveStatus" role="status">기기에 저장됨</span>
       </div>
     </header>
 
@@ -170,10 +156,10 @@
         <div class="wrap">
           <div class="workspace-toolbar">
             <div class="view-switch" role="group" aria-label="보기 방식">
-              <button id="btnTimeline" class="on" aria-pressed="true">
-                연표
+              <button id="btnTimeline" class="on haedo-icon-button" aria-label="연표" title="연표" aria-pressed="true">
+                <span data-haedo-icon="timeline" aria-hidden="true"></span>
               </button>
-              <button id="btnRecords" aria-pressed="false">기록</button>
+              <button id="btnRecords" class="haedo-icon-button" aria-label="기록" title="기록" aria-pressed="false"><span data-haedo-icon="book" aria-hidden="true"></span></button>
             </div>
             <div class="tl-controls" role="group" aria-label="연표 보기 설정">
               <details class="tool-select" id="periodSelect">
@@ -336,7 +322,7 @@
               >
                 <svg class="ui-icon" aria-hidden="true">
                   <use href="#ui-plus" /></svg
-                ><span>추가</span>
+                >
               </button>
             </div>
           </div>
@@ -361,13 +347,13 @@
                   id="startClose"
                   aria-label="안내 닫기"
                 >
-                  ×
+                  <span data-haedo-icon="close" aria-hidden="true"></span>
                 </button>
                 <strong>첫 기록을 추가해보세요.</strong>
                 <p>날짜와 내용을 남기면 연표에 바로 표시됩니다.</p>
                 <div class="start-actions">
                   <button class="lay-chip add-chip" id="startAdd">
-                    ＋ 추가
+                    <span data-haedo-icon="plus" aria-hidden="true"></span> 추가
                   </button>
                   <button class="guide-link" id="startDismiss">
                     안내 닫기
@@ -389,10 +375,10 @@
                     id="mapShow"
                     aria-label="지도에 무엇을 보일지"
                   >
-                    ⋯
+                    <svg class="ui-icon" aria-hidden="true"><use href="#ui-more" /></svg>
                   </button>
                   <button class="lay-chip" id="mapClose" aria-label="지도 닫기">
-                    ✕
+                    <span data-haedo-icon="close" aria-hidden="true"></span>
                   </button>
                 </div>
                 <div id="map"></div>
@@ -416,10 +402,10 @@
                 <span class="grid-note" id="gridNote"></span>
                 <span style="flex: 1"></span>
                 <button class="lay-chip" id="gridShow" aria-label="격자 설정">
-                  ⋯
+                  <svg class="ui-icon" aria-hidden="true"><use href="#ui-more" /></svg>
                 </button>
                 <button class="lay-chip" id="gridClose" aria-label="격자 닫기">
-                  ✕
+                  <span data-haedo-icon="close" aria-hidden="true"></span>
                 </button>
               </div>
               <canvas id="gridCv"></canvas>
@@ -527,17 +513,12 @@
               aria-label="붙여넣기"
               style="
                 min-height: 168px;
-                font-family: &quot;IBM Plex Mono&quot;, monospace;
-                font-size: 12.5px;
-                line-height: 1.5;
               "
             ></textarea>
             <div
               id="fillPrev"
               style="
-                font-size: 11.5px;
-                color: var(--ink-soft);
-                font-family: &quot;IBM Plex Mono&quot;, monospace;
+                color: var(--haedo-muted);
                 white-space: pre-line;
                 min-height: 34px;
               "
@@ -577,22 +558,14 @@
               display: flex;
               flex-direction: column;
               gap: 5px;
-              font-size: 12px;
-              color: var(--ink-soft);
+              font-size: 14px;
+              color: var(--haedo-muted);
             "
             >이름
             <input
               id="nbName"
+              class="dt-edit"
               placeholder="이름"
-              style="
-                font-family: inherit;
-                font-size: 14px;
-                padding: 8px 10px;
-                border: 1px solid var(--line);
-                border-radius: 2px;
-                background: var(--field);
-                color: var(--ink);
-              "
             />
           </label>
           <label
@@ -600,24 +573,16 @@
               display: flex;
               flex-direction: column;
               gap: 5px;
-              font-size: 12px;
-              color: var(--ink-soft);
+              font-size: 14px;
+              color: var(--haedo-muted);
             "
             >출생 연월
             <input
               id="nbBirth"
+              class="dt-edit"
               type="text"
               inputmode="numeric"
               placeholder="1998-05(-05)"
-              style="
-                font-family: &quot;IBM Plex Mono&quot;, monospace;
-                font-size: 14px;
-                padding: 8px 10px;
-                border: 1px solid var(--line);
-                border-radius: 2px;
-                background: var(--field);
-                color: var(--ink);
-              "
             />
           </label>
           <div style="display: flex; gap: 8px; justify-content: flex-end">
