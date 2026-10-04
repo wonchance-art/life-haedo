@@ -98,7 +98,7 @@
       remoteChanged: false, readerPositions: new Map(), sourceDrafts: new Map(),
       syncAccount: null, syncState: null, syncReadError: null, syncAccountKey: null,
       syncLoading: false, managementOpen: false, sourcesFiltersOpen: false, topicsFiltersOpen: false,
-      remoteRows: null, remoteRowsAccountKey: null, conflictView: null, conflictCopyId: null
+      remoteRows: null, remoteRowsAccountKey: null, conflictView: null, conflictCopyId: null, restoreReturn: null
     };
     const root = node('div', null, 'life-app');
     const status = node('p', '', 'life-status');
@@ -588,18 +588,28 @@
       return account ? account.projectUrl + '|' + account.userId : null;
     }
 
-    function syncSummary() {
-      if (!sync) return '기기 간 자동 동기화 미연결';
-      if (state.syncReadError) return '동기화 상태 확인 실패 · 자료는 이 브라우저에 보관';
-      if (state.syncLoading) return '동기화 상태 확인 중';
+    function syncPresentation() {
+      if (!sync) return { key: 'unavailable', label: '기기 간 자동 동기화 미연결', hint: '자료는 이 브라우저에 보관합니다. JSON 백업으로 사본을 옮길 수 있습니다.' };
+      if (state.syncReadError) return { key: 'read_error', label: '동기화 상태 확인 실패 · 자료는 이 브라우저에 보관', hint: '기존 연결은 유지합니다. 상태를 다시 확인해 주세요.' };
+      if (state.syncLoading) return { key: 'loading', label: '동기화 상태 확인 중', hint: '연결 상태를 확인한 뒤 가능한 작업을 표시합니다.' };
       const item = state.syncState;
-      if (!item || !item.binding) return '기기 간 자동 동기화 미연결';
-      if (!item.enabled) return '기기 간 동기화 중지됨';
-      if (!state.syncAccount) return '동기화 로그인 필요 · 자료는 이 브라우저에 보관';
-      if (item.binding.userId !== state.syncAccount.userId || item.binding.projectUrl !== state.syncAccount.projectUrl) return '다른 계정에 연결된 작업공간 · 자동 전송 안 함';
-      const labels = { pending: '동기화 대기', syncing: '동기화 중', synced: '서버와 동기화됨', conflict: '양쪽 변경 확인 필요', error: '동기화 실패', not_configured: '기기 간 자동 동기화 미연결' };
-      return labels[item.status] || '동기화 상태 확인 필요';
+      if (!state.syncAccount) return { key: 'auth_required', label: '동기화 로그인 필요 · 자료는 이 브라우저에 보관', hint: '관리에서 계정을 확인한 뒤 다시 시도해 주세요.' };
+      if (item?.status === 'account_mismatch' || (item?.binding && (item.binding.userId !== state.syncAccount.userId || item.binding.projectUrl !== state.syncAccount.projectUrl))) return { key: 'mismatch', label: '다른 계정에 연결된 작업공간 · 자동 전송 안 함', hint: '기존 연결은 바꾸지 않습니다. 다른 계정으로 옮기려면 JSON 백업을 새 사본으로 복원하세요.' };
+      if (!item?.binding) return { key: 'unbound', label: '기기 간 자동 동기화 미연결', hint: '시작하면 이 작업공간의 확정 자료를 서버에 보냅니다. 검토 초안은 이 브라우저에 남습니다.' };
+      if (!item.enabled) return { key: 'paused', label: '기기 간 동기화 중지됨', hint: item.conflict ? '양쪽에 변경이 남아 있습니다. 동기화를 다시 시작한 뒤 비교해 주세요.' : '이 브라우저의 자료와 기존 연결을 유지합니다. 다시 시작하면 양쪽 변경을 확인합니다.' };
+      const descriptions = {
+        pending: ['동기화 대기', '이 브라우저의 변경을 보관했습니다. 연결되면 전송을 다시 시도합니다.'],
+        syncing: ['동기화 중', '서버와 변경을 확인하고 있습니다. 이 브라우저의 자료는 그대로 유지합니다.'],
+        synced: ['서버와 동기화됨', '다른 기기에서 같은 계정으로 로그인한 뒤 이 작업공간을 받으세요. 그 기기에서 열었는지는 확인하지 않습니다.'],
+        conflict: ['양쪽 변경 확인 필요', '내 변경과 서버 변경을 비교해 선택하세요. 선택하지 않은 쪽도 별도 사본으로 남습니다.'],
+        error: ['동기화 실패', '이 브라우저의 자료는 유지합니다. 연결을 확인하고 지금 동기화를 다시 시도해 주세요.']
+      };
+      const key = item.conflict ? 'conflict' : item.status;
+      const [label, hint] = descriptions[key] || ['동기화 상태 확인 필요', '상태를 다시 확인해 주세요. 이 브라우저의 자료는 유지합니다.'];
+      return { key, label, hint };
     }
+
+    function syncSummary() { return syncPresentation().label; }
 
     async function refreshSync() {
       if (!sync || !state.bundle || disposed) return;
@@ -637,6 +647,11 @@
       const scope = main.querySelector('.life-scope');
       if (scope) updateScope(scope);
       if (state.mode === 'sync') {
+        if (state.conflictView && state.syncState && (!state.syncState.enabled || !state.syncState.conflict)) {
+          state.conflictView = null;
+          renderConflict();
+        }
+        if (!state.conflictView && main.querySelector('#lifeSyncConflict')?.childElementCount) renderConflict();
         const panel = main.querySelector('#lifeSyncState');
         if (panel) fillSyncState(panel);
         const server = main.querySelector('#lifeRemoteList');
@@ -650,7 +665,7 @@
       const matching = state.syncAccount && item?.binding && item.binding.userId === state.syncAccount.userId && item.binding.projectUrl === state.syncAccount.projectUrl;
       const mismatched = item?.binding && state.syncAccount && !matching;
       const passive = !state.syncReadError && !state.syncLoading && !item?.error && !item?.conflict && !mismatched && (!item?.binding || !item.enabled || (matching && item.status === 'synced'));
-      scope.classList.toggle('life-sr-only', sectionFor(state.mode) !== 'manage' && passive);
+      scope.classList.toggle('life-sr-only', state.mode === 'sync' || (sectionFor(state.mode) !== 'manage' && passive));
     }
 
     async function syncAction(action, message, refreshLocal) {
@@ -715,6 +730,7 @@
       if (sectionFor(mode) === 'records') lastRecordMode = mode;
       writeRoute(mode, false);
       render();
+      if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
       const heading = main.querySelector('h2') || toolbar.querySelector('h1');
       if (heading) heading.focus({ preventScroll: true });
     }
@@ -1780,6 +1796,62 @@
       announce('파일을 만들었습니다. 파일 앱 또는 다운로드에서 저장 위치와 내용을 확인해 주세요.');
     }
 
+    function backupContents(bundle) {
+      const details = node('details', null, 'life-details life-backup-contents');
+      details.append(node('summary', '백업에 담긴 원문 확인'));
+      if (!bundle.sources.length) details.append(empty('보관된 원문이 없는 작업공간입니다.'));
+      bundle.sources.forEach(source => {
+        const row = node('div', null, 'life-backup-source');
+        const versions = bundle.sourceVersions.filter(version => version.sourceId === source.id);
+        row.append(node('strong', sourceLabel(source)), node('p', originName(source.origin) + ' · 원문 버전 ' + versions.length + '개', 'life-meta'));
+        const coverage = [...new Set(versions.map(version => COVERAGE[version.coverage.status] || COVERAGE.unknown))];
+        row.append(node('p', coverage.join(' · '), 'life-meta'));
+        details.append(row);
+      });
+      return details;
+    }
+
+    function renderRestoreResult() {
+      const receipt = state.restoreReturn;
+      if (!receipt || receipt.copyId !== state.bundle.workspaceId) return;
+      const panel = node('section', null, 'life-restore-result');
+      panel.id = 'lifeRestoreResult';
+      panel.setAttribute('aria-label', '복원 결과');
+      const heading = node('h3', '새 사본을 열었습니다.');
+      heading.tabIndex = -1;
+      const top = node('div', null, 'life-panel-heading');
+      top.append(heading, iconButton('복원 안내 닫기', 'close', guarded(() => {
+        state.restoreReturn = null;
+        panel.remove();
+        toolbar.querySelector('h1')?.focus({ preventScroll: true });
+      })));
+      panel.append(top, node('p', '이전 작업공간은 그대로 남아 있습니다. 이 사본의 자동 동기화는 연결하지 않았습니다.', 'life-help'));
+      panel.append(button('이전 작업공간으로 돌아가기', guarded(async () => {
+        await persistDrafts();
+        const previous = await storage.read(receipt.previousId);
+        if (disposed) return;
+        await storage.setActive(previous.workspaceId);
+        if (disposed) return;
+        invalidateBatchContext();
+        state.bundle = previous;
+        state.stage = state.prepared = null;
+        state.sourceDrafts.clear();
+        state.stages = [];
+        state.allStages = [];
+        state.restoreReturn = null;
+        state.mode = 'topics';
+        connectSubscription();
+        render();
+        global.scrollTo({ top: 0, behavior: 'instant' });
+        toolbar.querySelector('h1')?.focus({ preventScroll: true });
+        announce('이전 작업공간을 열었습니다. 복원한 사본도 그대로 보관됩니다.');
+        try { await refreshData(); render(); }
+        catch (_) { throw new Error('이전 작업공간을 열었고 복원 사본도 보관돼 있습니다. 목록 갱신에 실패했으니 관리에서 다시 확인해 주세요.'); }
+        finally { toolbar.querySelector('h1')?.focus({ preventScroll: true }); }
+      })));
+      main.prepend(panel);
+    }
+
     function renderTransfer() {
       main.append(title('내보내기·사본 복원'), node('p', '이 작업공간의 원문·발췌·메모·출처를 파일로 보관합니다. 파일에는 개인 자료가 포함됩니다.', 'life-help'));
       main.append(node('p', '검토 초안과 기기에 보관하지 않은 사진·본문은 제외됩니다. 연표·목표·습관은 별도 백업입니다.', 'life-help'));
@@ -1795,31 +1867,69 @@
       const restore = field('JSON 백업을 새 작업공간 사본으로 복원', 'file', 'lifeRestoreFile', '');
       restore.input.accept = '.json,application/json';
       const preview = node('div', null, 'life-restore-preview');
+      preview.id = 'lifeRestorePreview';
+      preview.setAttribute('aria-live', 'polite');
       let candidate = null;
       restore.input.addEventListener('change', guarded(async () => {
         candidate = null;
         preview.replaceChildren();
         const file = restore.input.files[0];
         if (!file) return;
+        preview.append(node('p', '백업의 원문과 참조를 확인하고 있습니다.', 'life-help'));
         let parsed;
-        try { parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer())); }
-        catch (_) { throw new Error('JSON 백업을 읽을 수 없습니다. 원래 파일과 현재 작업공간은 그대로 유지됩니다.'); }
-        candidate = await core.restoreBackup(parsed);
+        try {
+          try { parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer())); }
+          catch (_) { throw new Error('JSON 백업을 읽을 수 없습니다. 원래 파일과 현재 작업공간은 그대로 유지됩니다.'); }
+          candidate = await core.restoreBackup(parsed);
+        } catch (cause) { preview.replaceChildren(); throw cause; }
+        if (disposed) return;
+        preview.replaceChildren();
+        preview.append(node('h4', candidate.title || '제목 없는 작업공간'));
+        preview.append(node('p', file.name + ' · 백업 생성 ' + dateLabel(parsed.exportedAt), 'life-meta'));
         preview.append(node('p', '검증된 사본: 자료 ' + candidate.sources.length + '개 · 원문 버전 ' + candidate.sourceVersions.length + '개 · 발췌 ' + candidate.records.length + '개'));
-        preview.append(button('새 사본으로 복원', guarded(async () => {
-          if (dirty()) await persistStage();
+        const counts = { full_text: 0, partial: 0, link_only: 0, unknown: 0 };
+        candidate.sourceVersions.forEach(version => { counts[version.coverage.status] += 1; });
+        const coverage = Object.entries(counts).filter(([, count]) => count).map(([kind, count]) => COVERAGE[kind] + ' ' + count + '개');
+        if (coverage.length) preview.append(node('p', '원문 버전 기준 · ' + coverage.join(' / '), 'life-help'));
+        preview.append(backupContents(candidate), node('p', '현재 작업공간을 덮어쓰지 않습니다. 새 사본을 만들고 자동 동기화는 연결하지 않습니다.', 'life-help'));
+        const actions = node('div', null, 'life-actions');
+        actions.append(button('새 사본으로 복원', guarded(async () => {
+          const selected = candidate;
+          if (!selected) return;
+          await persistDrafts();
+          const previousId = state.bundle.workspaceId;
+          const installed = await storage.installWorkspace(selected);
+          if (disposed) return;
+          candidate = null;
+          preview.replaceChildren();
           invalidateBatchContext();
-          await storage.installWorkspace(candidate);
-          state.bundle = await storage.read(candidate.workspaceId);
+          state.bundle = installed;
+          state.restoreReturn = { previousId, copyId: installed.workspaceId };
           state.stage = null;
           state.prepared = null;
+          state.sourceDrafts.clear();
+          state.stages = [];
+          state.allStages = [];
+          state.workspaces = [...state.workspaces, { workspaceId: installed.workspaceId, title: installed.title }];
           resetSearchContext();
           state.mode = 'topics';
-          await refreshData();
           connectSubscription();
           render();
-          announce('새 작업공간 사본을 열었습니다. 이전 작업공간은 그대로 유지됩니다. 자동 동기화는 연결하지 않았습니다.');
-        }), 'life-primary'));
+          global.scrollTo({ top: 0, behavior: 'instant' });
+          announce('새 작업공간 사본을 열었습니다. 이전 작업공간은 그대로 유지됩니다. 자동 동기화는 연결하지 않았습니다.', { quiet: true });
+          main.querySelector('#lifeRestoreResult h3')?.focus({ preventScroll: true });
+          // Installation already committed. A later list/read failure must not offer to install it again.
+          try { await refreshData(); render(); }
+          catch (_) { throw new Error('사본은 이 브라우저에 보관됐습니다. 작업공간 목록을 갱신하지 못했으니 관리에서 다시 확인해 주세요.'); }
+          finally { main.querySelector('#lifeRestoreResult h3')?.focus({ preventScroll: true }); }
+        }), 'life-primary'), button('복원 취소', guarded(() => {
+          candidate = null;
+          preview.replaceChildren();
+          restore.input.value = '';
+          global.requestAnimationFrame(() => { if (!disposed && restore.input.isConnected) restore.input.focus({ preventScroll: true }); });
+          announce('복원을 취소했습니다. 파일과 현재 작업공간은 그대로 유지됩니다.');
+        })));
+        preview.append(actions);
       }));
       const restoreSection = node('section', null, 'life-settings-section');
       restoreSection.append(node('h3', '백업에서 복원'), restore.label, preview, node('p', '다른 기기로 옮긴 백업은 별도 사본입니다. 여러 기기의 변경이 서로 자동 반영되지 않습니다.', 'life-help'));
@@ -1921,68 +2031,74 @@
 
     function fillSyncState(panel) {
       if (disposed) return;
-      const focusedName = panel.contains(document.activeElement) ? document.activeElement.textContent : null;
+      const active = panel.contains(document.activeElement) ? document.activeElement : null;
+      const focus = active && { tag: active.tagName, name: active.getAttribute('aria-label') || active.textContent };
+      const detailsOpen = panel.querySelector('#lifeSyncDetails')?.open || false;
       panel.replaceChildren();
-      const heading = node('h3', '현재 작업공간');
+      const heading = node('h3', state.bundle.title || '현재 작업공간');
       heading.tabIndex = -1;
-      panel.append(heading, node('p', state.bundle.title, 'life-note'));
-      panel.append(node('p', '로컬 자료: 이 브라우저에 저장됨 · 검토 중 입력은 별도 임시 보관', 'life-meta'));
-      const remoteStatus = node('p', syncSummary(), 'life-sync-status');
+      panel.append(heading, node('p', '자료 ' + state.bundle.sources.length + '개 · 발췌 ' + state.bundle.records.length + '개 · 이 브라우저에 보관', 'life-meta'));
+      const presentation = syncPresentation();
+      panel.dataset.syncState = presentation.key;
+      const remoteStatus = node('p', null, 'life-sync-status');
       remoteStatus.id = 'lifeSyncStatus';
       remoteStatus.setAttribute('role', 'status');
-      panel.append(remoteStatus);
-      if (state.syncReadError) {
-        panel.append(node('p', state.syncReadError.message || '동기화 상태를 읽지 못했습니다. 미연결 상태로 바꾸지 않았습니다.', 'life-error'));
-        if (focusedName) heading.focus({ preventScroll: true });
-        return;
-      }
+      remoteStatus.append(global.HaedoLife.Icons.create('cloud'), node('span', presentation.label));
+      panel.append(remoteStatus, node('p', presentation.hint, 'life-help'));
       const info = state.syncState;
       const account = state.syncAccount;
-      const accountInfo = node('div', null, 'life-sync-account');
-      if (account) accountInfo.append(node('p', '현재 계정: ' + (account.email || '로그인한 계정')), node('p', '프로젝트: ' + account.projectUrl, 'life-meta'));
-      else accountInfo.append(node('p', '현재 계정: 로그인하지 않음', 'life-meta'));
-      panel.append(accountInfo);
-      if (info && info.binding) panel.append(node('p', '이 작업공간의 연결 프로젝트: ' + info.binding.projectUrl, 'life-meta'));
-      if (account && info && info.binding && (info.binding.userId !== account.userId || info.binding.projectUrl !== account.projectUrl)) panel.append(node('p', '다른 계정에 연결된 자료입니다. 기존 연결을 바꾸지 않습니다. 다른 계정으로 옮기려면 백업을 새 작업공간 사본으로 복원하세요.', 'life-help'));
-      if (info && info.error) panel.append(node('p', info.error.message || '동기화에 실패했습니다. 로컬 자료를 유지합니다.', 'life-error'));
       const actions = node('div', null, 'life-actions');
-      const matching = account && (!info || !info.binding || (info.binding.projectUrl === account.projectUrl && info.binding.userId === account.userId));
-      if (matching && (!info || !info.binding || !info.enabled)) actions.append(button('이 작업공간 동기화 시작', guarded(async () => {
+      const restoreFocus = () => {
+        if (!focus) return;
+        const replacement = [...panel.querySelectorAll('button,summary,a')].find(item => item.tagName === focus.tag && (item.getAttribute('aria-label') || item.textContent) === focus.name && !item.disabled);
+        (replacement || heading).focus({ preventScroll: true });
+      };
+      if (state.syncReadError) {
+        panel.append(node('p', state.syncReadError.message || '연결 상태를 읽지 못했습니다.', 'life-error'));
+        actions.append(button('동기화 상태 다시 확인', guarded(refreshSync), 'life-primary'));
+        panel.append(actions);
+        restoreFocus();
+        return;
+      }
+      if (state.syncLoading) { restoreFocus(); return; }
+      if (info?.error && presentation.key === 'error') panel.append(node('p', info.error.message || '서버에 연결하지 못했습니다.', 'life-error'));
+      const matching = account && presentation.key !== 'mismatch' && (!info?.binding || (info.binding.projectUrl === account.projectUrl && info.binding.userId === account.userId));
+      if (matching && (!info?.binding || !info.enabled)) actions.append(button('이 작업공간 동기화 시작', guarded(async () => {
         await syncAction(() => sync.enable(state.bundle.workspaceId), '이 작업공간의 동기화를 시작했습니다. 로컬 저장과 서버 상태는 별도로 확인할 수 있습니다.');
       }), 'life-primary'));
-      if (matching && info && info.binding && info.enabled) {
-        actions.append(button('지금 동기화', guarded(async () => {
-          await syncAction(() => sync.syncNow(state.bundle.workspaceId), '', true);
-          announce(syncSummary() + ' · 이 브라우저의 자료는 유지됩니다.');
-        })), button('연결 중지', guarded(async () => {
-          await syncAction(() => sync.pause(state.bundle.workspaceId), '이 작업공간의 동기화를 중지했습니다. 로컬 자료와 이전 연결 정보는 유지됩니다.');
-        })));
-      }
-      if (account && !auth) actions.append(button('로그아웃', guarded(async () => {
-        state.remoteRows = null;
-        state.remoteRowsAccountKey = null;
-        state.conflictView = null;
-        updateSyncPanels();
-        await (auth ? auth.signOut() : sync.signOut());
-      })));
-      panel.append(actions);
-      if (info && info.conflict) panel.append(button('양쪽 변경 비교', guarded(async () => {
+      if (info?.conflict && info.enabled && matching) actions.append(button('양쪽 변경 비교', guarded(async () => {
         if (dirty()) await persistStage();
         await refreshData();
         await refreshSync();
-        if (!state.syncState || !state.syncState.conflict) return;
+        if (!state.syncState?.conflict) return;
         state.conflictView = { workspaceId: state.bundle.workspaceId, local: structuredClone(state.bundle), remote: structuredClone(state.syncState.conflict), accountKey: state.syncAccountKey };
         renderConflict();
         const comparisonHeading = main.querySelector('#lifeSyncConflict h3');
         if (comparisonHeading) { comparisonHeading.tabIndex = -1; comparisonHeading.focus(); }
-      })));
+      }), 'life-primary'));
+      if (matching && info?.binding && info.enabled) {
+        if (!info.conflict) {
+          const retry = button('지금 동기화', guarded(async () => {
+            await syncAction(() => sync.syncNow(state.bundle.workspaceId), '', true);
+            announce(syncSummary() + ' · 이 브라우저의 자료는 유지됩니다.');
+          }), 'life-primary');
+          retry.disabled = presentation.key === 'syncing';
+          actions.append(retry);
+        }
+        actions.append(button('연결 중지', guarded(async () => {
+          await syncAction(() => sync.pause(state.bundle.workspaceId), '이 작업공간의 동기화를 중지했습니다. 로컬 자료와 이전 연결 정보는 유지됩니다.');
+        })));
+      }
+      if (presentation.key === 'auth_required') actions.append(button('계정 확인', guarded(() => navigate('manage'))));
+      if (presentation.key === 'mismatch' || info?.conflict?.missing) actions.append(button('자료 백업·복원', guarded(() => navigate('transfer'))));
+      panel.append(actions);
       if (state.conflictCopyId) {
         const copy = state.workspaces.find(item => item.workspaceId === state.conflictCopyId);
         panel.append(node('p', '선택하지 않은 쪽의 사본: ' + (copy ? copy.title : '작업공간 목록에서 확인'), 'life-help'));
         panel.append(button('보존한 사본 열기', guarded(async () => {
           if (dirty()) await persistStage();
           invalidateBatchContext();
-        await storage.setActive(state.conflictCopyId);
+          await storage.setActive(state.conflictCopyId);
           state.bundle = await storage.read(state.conflictCopyId);
           state.stage = state.prepared = null;
           resetSearchContext();
@@ -1994,14 +2110,36 @@
           announce('보존한 사본을 열었습니다. 이 사본을 다른 계정이나 서버에 자동 연결하지 않았습니다.');
         })));
       }
-      if (focusedName) {
-        const replacement = Array.from(panel.querySelectorAll('button')).find(item => item.textContent === focusedName);
-        (replacement || heading).focus({ preventScroll: true });
-      }
+      const details = node('details', null, 'life-details life-sync-account');
+      details.id = 'lifeSyncDetails';
+      details.open = detailsOpen;
+      details.append(node('summary', '계정·연결 정보'));
+      if (account) details.append(node('p', account.email || '로그인한 계정'), node('p', '프로젝트: ' + account.projectUrl, 'life-meta'));
+      else details.append(node('p', '현재 계정: 로그인하지 않음', 'life-meta'));
+      if (info?.binding) details.append(node('p', '연결 프로젝트: ' + info.binding.projectUrl, 'life-meta'), node('p', '서버 버전 ' + info.remoteRevision + ' · 이 브라우저 버전 ' + state.bundle.revision, 'life-meta'));
+      details.append(node('p', '계정을 바꾸려면 관리에서 로그아웃한 뒤 다시 로그인하세요.', 'life-help'));
+      if (account && !auth) details.append(button('로그아웃', guarded(async () => {
+        state.remoteRows = null;
+        state.remoteRowsAccountKey = null;
+        state.conflictView = null;
+        updateSyncPanels();
+        await sync.signOut();
+      })));
+      panel.append(details);
+      restoreFocus();
     }
 
     function fillRemoteList(parent) {
       if (disposed) return;
+      const active = parent.contains(document.activeElement) ? document.activeElement : null;
+      const focus = active && { rowId: active.closest('[data-remote-id]')?.dataset.remoteId, tag: active.tagName, name: active.textContent };
+      const openRows = new Set([...parent.querySelectorAll('[data-remote-id]:has(details[open])')].map(row => row.dataset.remoteId));
+      const restoreFocus = () => {
+        if (!focus) return;
+        const row = focus.rowId ? [...parent.querySelectorAll('[data-remote-id]')].find(item => item.dataset.remoteId === focus.rowId) : parent;
+        const control = row && [...row.querySelectorAll('button,summary')].find(item => item.tagName === focus.tag && item.textContent === focus.name);
+        (control || parent.querySelector('button'))?.focus({ preventScroll: true });
+      };
       parent.replaceChildren();
       const accountKey = state.syncAccountKey;
       if (!state.syncAccount) { parent.append(empty('로그인한 뒤 필요한 서버 작업공간을 선택해 받습니다.')); return; }
@@ -2014,11 +2152,16 @@
         state.remoteRowsAccountKey = before;
         fillRemoteList(parent);
       })));
-      if (state.remoteRows === null || state.remoteRowsAccountKey !== accountKey) return;
-      if (!state.remoteRows.length) { parent.append(empty('이 계정에 보관된 서버 작업공간이 없습니다.')); return; }
+      if (state.remoteRows === null || state.remoteRowsAccountKey !== accountKey) { restoreFocus(); return; }
+      if (!state.remoteRows.length) { parent.append(empty('이 계정에 보관된 서버 작업공간이 없습니다.')); restoreFocus(); return; }
       state.remoteRows.forEach(row => {
         const card = node('article', null, 'life-card');
-        card.append(node('h4', row.title || '제목 없는 작업공간'), node('p', '서버 버전 ' + row.revision + ' · ' + (row.updated_at || '시각 미확인'), 'life-meta'));
+        card.dataset.remoteId = row.id;
+        card.append(node('h4', row.title || '제목 없는 작업공간'), node('p', '서버 저장 ' + dateLabel(row.updated_at), 'life-meta'));
+        const details = node('details', null, 'life-details');
+        details.open = openRows.has(row.id);
+        details.append(node('summary', '서버 정보'), node('p', '서버 버전 ' + row.revision, 'life-meta'));
+        card.append(details);
         card.append(button('이 작업공간 받기', guarded(async () => {
           if (dirty()) await persistStage();
           const before = state.syncAccountKey;
@@ -2042,6 +2185,7 @@
         })));
         parent.append(card);
       });
+      restoreFocus();
     }
 
     function renderSync() {
@@ -2050,18 +2194,19 @@
       panel.id = 'lifeSyncState';
       main.append(panel);
       fillSyncState(panel);
-      main.append(node('p', '내 공간과 같은 Google 계정을 사용합니다. 계정을 바꾸려면 로그아웃 후 다시 로그인하세요.', 'life-help'), syncHelp());
+      const conflict = node('section', null, 'life-conflict-section');
+      conflict.id = 'lifeSyncConflict';
+      conflict.hidden = true;
+      main.append(conflict);
+      if (state.conflictView) renderConflict();
       const remoteSection = node('section', null, 'life-remote-section');
-      remoteSection.append(node('h3', '서버 작업공간'));
+      remoteSection.append(node('h3', '서버 작업공간 받기'), node('p', '같은 계정으로 다른 기기에서 올린 작업공간을 선택해 받습니다.', 'life-help'));
       const list = node('div', null, 'life-remote-list');
       list.id = 'lifeRemoteList';
       remoteSection.append(list);
       main.append(remoteSection);
       fillRemoteList(list);
-      const conflict = node('section', null, 'life-conflict-section');
-      conflict.id = 'lifeSyncConflict';
-      main.append(conflict);
-      if (state.conflictView) renderConflict();
+      main.append(syncHelp());
     }
 
     function conflictSide(label, bundle) {
@@ -2090,11 +2235,15 @@
       if (!parent) return;
       parent.replaceChildren();
       const view = state.conflictView;
-      if (!view || view.workspaceId !== state.bundle.workspaceId || view.accountKey !== state.syncAccountKey) return;
+      parent.hidden = !view || view.workspaceId !== state.bundle.workspaceId || view.accountKey !== state.syncAccountKey;
+      if (parent.hidden) return;
       parent.append(node('h3', '양쪽 변경 비교'));
       if (view.remote.missing || !view.remote.row) { parent.append(empty('서버의 작업공간을 찾을 수 없습니다. 자동으로 다시 생성하지 않습니다. 로컬 백업 또는 연결 중지를 선택해 주세요.')); return; }
       const row = view.remote.row;
-      parent.append(node('p', '이 브라우저 버전 ' + view.local.revision + ' · 서버 버전 ' + row.revision + '. 선택하지 않은 쪽도 별도 작업공간 사본으로 보관합니다.', 'life-help'));
+      parent.append(node('p', '선택하지 않은 쪽도 이 브라우저의 별도 작업공간 사본으로 보관합니다.', 'life-help'));
+      const comparison = node('details', null, 'life-details');
+      comparison.append(node('summary', '비교 기준'), node('p', '이 브라우저 버전 ' + view.local.revision + ' · 서버 버전 ' + row.revision, 'life-meta'));
+      parent.append(comparison);
       const sides = node('div', null, 'life-conflict-grid');
       sides.append(conflictSide('내 변경', view.local), conflictSide('서버 변경', row.data));
       parent.append(sides);
@@ -2108,7 +2257,17 @@
           renderConflict();
           throw new Error('비교 후 내용이나 계정이 바뀌었습니다. 양쪽 변경을 다시 비교해 주세요.');
         }
-        const result = await sync.resolve(view.workspaceId, choice, { expectedLocalRevision: view.local.revision, expectedRemoteRevision: row.revision });
+        let result;
+        try { result = await sync.resolve(view.workspaceId, choice, { expectedLocalRevision: view.local.revision, expectedRemoteRevision: row.revision }); }
+        catch (cause) {
+          if (['stale_conflict', 'sync_conflict_changed', 'stale_session', 'account_mismatch', 'remote_missing', 'sync_paused', 'auth_required'].includes(cause.code)) {
+            state.conflictView = null;
+            renderConflict();
+            await refreshSync();
+            main.querySelector('#lifeSyncState h3')?.focus({ preventScroll: true });
+          }
+          throw cause;
+        }
         state.conflictCopyId = result && result.copyWorkspaceId || null;
         state.conflictView = null;
         await refreshData();
@@ -2119,7 +2278,7 @@
           announce('선택한 변경과 사본을 이 브라우저에 보관했습니다. 서버 전송은 완료되지 않았습니다. 동기화 상태를 확인해 주세요.');
         } else announce('선택한 변경을 반영했습니다. 선택하지 않은 쪽은 별도 사본으로 보관됩니다. 서버 상태는 위에서 확인해 주세요.');
       };
-      actions.append(button('서버 변경 받기 · 내 변경은 사본 보관', guarded(() => resolve('remote')), 'life-primary'), button('내 변경 보내기 · 서버 변경은 사본 보관', guarded(() => resolve('local'))));
+      actions.append(button('서버 변경 받기 · 내 변경은 사본 보관', guarded(() => resolve('remote'))), button('내 변경 보내기 · 서버 변경은 사본 보관', guarded(() => resolve('local'))));
       parent.append(actions);
     }
 
@@ -2141,6 +2300,7 @@
       else if (state.mode === 'time') renderTime();
       else if (state.mode === 'sync' && sync) renderSync();
       else renderTopics();
+      if (state.mode === 'topics') renderRestoreResult();
       const scope = node('p', null, 'life-scope');
       updateScope(scope);
       main.append(scope);
@@ -2248,6 +2408,7 @@
       state.readerPositions.clear();
       resetSearchContext();
       state.bundle = state.stage = state.prepared = state.conflictView = state.remoteRows = null;
+      state.restoreReturn = null;
       if (stageTimer) clearTimeout(stageTimer);
       if (unsubscribe) unsubscribe();
       if (unsubscribeSync) unsubscribeSync();

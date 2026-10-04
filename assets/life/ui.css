@@ -159,15 +159,34 @@ textarea.life-source-text { min-height: 340px; max-height: 70vh; padding: 16px; 
 .life-match { padding: 20px; border: 1px solid var(--field-line); background: var(--paper-2); border-radius: 12px; margin: 18px 0; display: flex; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
 .life-match > h4,.life-match > p { flex-basis: 100%; overflow-wrap: anywhere; }
 .life-draft-excerpts { display: grid; grid-template-columns: minmax(0,1fr); gap: 14px; margin: 20px 0; }
-.life-restore-preview { margin: 16px 0; display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
-.life-sync-state-panel { padding: 24px 0; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
-.life-sync-status { background: var(--paper-2); padding: 9px 13px; border-radius: 8px; font-weight: 550; overflow-wrap: anywhere; }
-.life-sync-account { display: flex; flex-direction: column; gap: 6px; max-width: 100%; overflow-wrap: anywhere; }
+.life-restore-preview { width: 100%; margin: 16px 0 0; padding: 20px 0 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+.life-restore-preview:empty { display: none; }
+.life-restore-preview > :is(h4,p) { margin: 0; word-break: keep-all; overflow-wrap: anywhere; }
+.life-restore-preview h4 { font-size: 18px; }
+.life-restore-preview > .life-actions { margin-top: 12px; }
+.life-backup-contents { width: 100%; }
+.life-backup-source { padding: 16px 0; border-bottom: 1px solid var(--line); word-break: keep-all; overflow-wrap: anywhere; }
+.life-backup-source strong { display: block; font-size: 15px; }
+.life-backup-source p { margin: 6px 0 0; }
+.life-restore-result { margin-bottom: 28px; padding: 18px 0 24px; border-bottom: 1px solid var(--line); }
+.life-restore-result h3 { margin: 0; font-size: 17px; }
+.life-restore-result .life-panel-heading { margin-bottom: 4px; }
+.life-sync-state-panel { padding: 20px 0 28px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+.life-sync-state-panel > :is(h3,p) { margin: 0; word-break: keep-all; overflow-wrap: anywhere; }
+.life-sync-state-panel h3 { font-size: 18px; }
+.life-sync-state-panel > .life-actions { margin-top: 8px; }
+.life-sync-status { display: flex; align-items: center; gap: 10px; padding: 12px 0 0; font-size: 16px; font-weight: 550; word-break: keep-all; overflow-wrap: anywhere; }
+.life-sync-status svg { flex: 0 0 20px; width: 20px; height: 20px; color: var(--color-primary); }
+.life-sync-state-panel[data-sync-state=error] .life-sync-status svg,.life-sync-state-panel[data-sync-state=read_error] .life-sync-status svg { color: var(--color-error); }
+details.life-sync-account { display: block; width: 100%; margin: 12px 0 0; overflow-wrap: anywhere; }
+.life-sync-account > p { margin: 12px 0 0; }
 .life-remote-section,.life-conflict-section { margin-top: 30px; min-width: 0; }
 .life-remote-list { display: flex; flex-direction: column; align-items: stretch; gap: 14px; margin-top: 16px; }
 .life-remote-list > .life-button { align-self: flex-start; }
 .life-conflict-grid { display: grid; grid-template-columns: minmax(0,1fr); gap: 18px; margin: 18px 0; }
 .life-conflict-grid > .life-card { display: block; }
+.life-conflict-section > .life-actions { flex-direction: column; align-items: stretch; }
+.life-conflict-section > .life-actions .life-button { justify-content: flex-start; text-align: left; word-break: keep-all; }
 .life-conflict-grid .life-details { width: 100%; margin: 14px 0; }
 .life-conflict-text summary { overflow-wrap: anywhere; }
 .life-conflict-content { font: inherit; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 300px; overflow: auto; border: 1px solid var(--line); padding: 14px; border-radius: 8px; background: var(--paper); }

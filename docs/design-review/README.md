@@ -2,6 +2,8 @@
 
 최신 디자인은 [Life 기준 사이트 전체 재구성](life-design-site.md)입니다.
 
+후속 구현은 [자료 보관·복원·동기화의 다음 행동](life-management.md)입니다. 복원 미리보기·이전 공간 복귀·상태별 동기화와 오류 복구를 개선했습니다.
+
 앞선 작업은 [기록·도구·관리 통합 홈](unified-home.md)입니다. 아래는 앞선 디자인 통합 이력입니다.
 
 **앞선 완료 단위는 [본문 중심 피드 마감](feed-refinement.md)입니다.** 각 자료·발췌의 본문을 구분하고 반복 문구·출처·관리 도구를 공통 아이콘과 접힌 상세로 정리했습니다. [가져오기·내 발췌·주제 모음](collections-integration.md)과 [검색 → 원문 → 발췌 → 목록 복귀](integration.md)는 앞선 구현 기록입니다. 병합·배포 결과는 [PR #20](https://github.com/wonchance-art/life-haedo/pull/20)에서 확인합니다.
