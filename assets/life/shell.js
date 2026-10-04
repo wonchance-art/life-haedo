@@ -1,9 +1,14 @@
-/* Private material workspace; mount only after shared account verification. */
+/* Shared material workspace; public home mounts only after account verification. */
 (function (root) {
   'use strict';
   const life = root.HaedoLife = root.HaedoLife || {};
   const auth = root.HaedoAuth;
-  let mounted, sync, scopedStorage, controller, showing, generation = 0, activeKey = null, starting, leaving = false;
+  const publicHome = root.document.body?.dataset.lifeHome === 'true';
+  let mounted, sync, scopedStorage, controller, showing, generation = 0, activeKey = null, starting, leaving = false, suspended = false;
+  function loginPath() {
+    const next = auth?.safeNext((publicHome ? 'index.html' : 'life.html') + root.location.search) || (publicHome ? 'index.html' : 'life.html');
+    return 'login.html?next=' + encodeURIComponent(next);
+  }
   function isReadOnly() {
     if (root.VIEW_ONLY) return true;
     const query = new URLSearchParams(root.location.search);
@@ -13,13 +18,17 @@
     const status = root.document.getElementById('lifeStartup');
     status.hidden = false;
     status.setAttribute('role', error ? 'alert' : 'status');
-    status.replaceChildren(root.document.createTextNode(message));
+    const text = root.document.createElement('p');
+    text.textContent = message;
+    status.replaceChildren(text);
     return status;
   }
   function hide() {
     generation += 1;
     const container = root.document.getElementById('lifeApp');
     container.hidden = true;
+    const welcome = root.document.getElementById('lifeWelcome');
+    if (welcome) welcome.hidden = true;
     const accountPanel = root.document.getElementById('lifeAccount');
     if (accountPanel) { accountPanel.hidden = true; accountPanel.open = false; }
     const accountLabel = root.document.getElementById('lifeAccountLabel');
@@ -32,16 +41,28 @@
     container.replaceChildren();
     activeKey = null;
   }
+  function showWelcome() {
+    hide();
+    if (!publicHome || suspended) return;
+    const welcome = root.document.getElementById('lifeWelcome');
+    if (welcome) {
+      welcome.querySelectorAll('[data-life-login]').forEach(link => { link.href = loginPath(); });
+      welcome.hidden = false;
+    }
+    root.document.getElementById('lifeStartup').hidden = true;
+    root.document.documentElement.classList.remove('auth-pending');
+  }
   function retryNotice(message) {
     const status = notice(message, true);
     const retry = root.document.createElement('button');
     retry.type = 'button'; retry.className = 'life-button'; retry.textContent = '다시 확인';
     retry.addEventListener('click', () => { starting = null; start(); });
     const login = root.document.createElement('a');
-    login.href = 'login.html?next=life.html'; login.className = 'life-button'; login.textContent = '로그인 화면';
+    login.href = loginPath(); login.className = 'life-button'; login.textContent = '로그인 화면';
     status.append(retry, login);
   }
   function show(account) {
+    if (suspended || isReadOnly()) return Promise.resolve(null);
     const key = account.projectUrl + '|' + account.userId;
     if (activeKey === key && (mounted || showing)) return Promise.resolve(mounted || showing);
     const pending = build(account);
@@ -87,34 +108,38 @@
     }
   }
   function start() {
+    if (suspended) return Promise.resolve(null);
     if (starting) return starting;
-    starting = (async () => {
+    const pending = (async () => {
       if (isReadOnly()) { hide(); notice('읽기 전용 주소에서는 개인 자료를 열지 않습니다.'); return null; }
       if (!auth) { hide(); retryNotice('로그인 연결을 준비하지 못했습니다.'); return null; }
       notice('로그인을 확인하고 있습니다.');
       const authEpoch = auth.epoch;
       try {
-        const user = await auth.requireUser();
+        const user = await (publicHome ? auth.verify() : auth.requireUser());
+        if (suspended || auth.epoch !== authEpoch) return null;
         const account = auth.getAccount();
-        if (!user || !account) return null;
+        if (!user || !account) { if (publicHome) showWelcome(); return null; }
         return await show(account);
       } catch (_) {
-        if (auth.epoch !== authEpoch) return null;
+        if (suspended || auth.epoch !== authEpoch) return null;
         hide();
         retryNotice('개인 자료를 열기 위해 로그인을 확인해야 합니다. 인터넷 연결 후 다시 확인해 주세요. 저장된 자료는 보존돼 있습니다.');
         return null;
       }
-    })().finally(() => { starting = null; });
-    return starting;
+    })();
+    starting = pending;
+    pending.finally(() => { if (starting === pending) starting = null; });
+    return pending;
   }
   auth?.onAccountChange(account => {
-    if (!account) { hide(); notice('로그인을 확인한 뒤 자료를 다시 열 수 있습니다. 저장된 자료는 보존돼 있습니다.'); }
+    if (!account) { if (publicHome) showWelcome(); else { hide(); notice('로그인을 확인한 뒤 자료를 다시 열 수 있습니다. 저장된 자료는 보존돼 있습니다.'); } }
     else if (!isReadOnly()) show(account);
   });
-  root.document.addEventListener('haedo:signed-out', () => { hide(); notice('로그아웃했습니다. 저장된 자료는 보존돼 있습니다.'); });
+  root.document.addEventListener('haedo:signed-out', () => { if (publicHome) showWelcome(); else { hide(); notice('로그아웃했습니다. 저장된 자료는 보존돼 있습니다.'); } });
   root.document.addEventListener('haedo:auth-unavailable', () => { hide(); retryNotice('로그인을 확인하지 못했습니다. 인터넷 연결 후 다시 확인해 주세요.'); });
-  root.addEventListener('pagehide', () => { hide(); });
-  root.addEventListener('pageshow', event => { if (event.persisted) start(); });
+  root.addEventListener('pagehide', () => { suspended = true; hide(); });
+  root.addEventListener('pageshow', event => { if (event.persisted) { suspended = false; starting = null; start(); } });
   root.document.querySelectorAll('.life-global-nav .life-icon-button').forEach(control => {
     control.addEventListener('keydown', event => {
       if (event.key === 'Escape') control.dataset.tooltipDismissed = 'true';
@@ -158,5 +183,6 @@
     } finally { leaving = false; }
   });
   life.Shell = { isReadOnly, start, get sync() { return sync; }, get storage() { return scopedStorage; } };
+  if (publicHome && 'serviceWorker' in root.navigator) root.navigator.serviceWorker.register('./sw.js').catch(() => {});
   life.Shell.ready = start();
 })(globalThis);

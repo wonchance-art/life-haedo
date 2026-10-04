@@ -209,3 +209,21 @@ textarea.life-source-text { min-height: 340px; max-height: 70vh; padding: 16px; 
 @media (prefers-reduced-motion: reduce) {
   *,*::before,*::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
+
+/* The three global destinations own the rail. Record actions stay beside content. */
+.life-nav.life-context-nav { position: static; z-index: auto; width: auto; display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 6px; padding: 0; border: 0; background: transparent; }
+.life-context-nav .life-tooltip { top: calc(100% + 6px); bottom: auto; left: 50%; transform: translateX(-50%); }
+.life-context-nav > :first-child .life-tooltip { left: 0; transform: none; }
+.life-context-nav > :last-child .life-tooltip { left: auto; right: 0; transform: none; }
+.life-context-nav { margin-bottom: 18px; }
+.life-destinations { margin-top: 22px; }
+.life-destination { display: flex; align-items: center; gap: 18px; min-height: 96px; padding: 22px 0; border-bottom: 1px solid var(--line); text-decoration: none; color: var(--ink); }
+.life-destination:hover { color: var(--color-primary); }
+.life-destination-copy { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; }
+.life-destination-copy strong { font-size: 18px; font-weight: 600; word-break: keep-all; overflow-wrap: anywhere; }
+.life-destination > .life-glyph:last-child { transform: rotate(-90deg); color: var(--ink-soft); }
+.life-management-entry { display: flex; align-items: center; gap: 12px; margin-top: 20px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+@media (max-width:700px) {
+  .life-nav.life-context-nav { margin-bottom: 12px; }
+  .life-destination { min-height: 90px; gap: 14px; }
+}

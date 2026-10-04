@@ -54,10 +54,13 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   function setAccount(user) {
-    document.querySelector("[data-login-link]").hidden = true;
+    const login = document.querySelector("[data-login-link]");
+    if (login) login.hidden = true;
+    const accountMenu = document.querySelector("[data-account-menu]");
+    if (accountMenu) accountMenu.hidden = false;
     const logout = document.querySelector("[data-logout]");
-    logout.hidden = false;
-    logout.onclick = async () => {
+    if (logout) logout.hidden = false;
+    if (logout) logout.onclick = async () => {
       logout.disabled = true;
       try {
         await auth.signOut();
@@ -205,6 +208,7 @@
     )
       text = "기기에 저장했습니다. 서버와 동기화하고 있습니다.";
     byId("syncMessage").textContent = text;
+    byId("syncMessage").closest(".p-status-line").dataset.idle = String(text === "서버와 기기 사본을 확인했습니다.");
   }
   function resolveButton(item, parent) {
     if (item.state !== "conflict") return;
@@ -355,31 +359,6 @@
         "아직 연결된 연표가 없습니다. 새 연표를 만들거나 기존 백업을 가져오세요.",
         "새 연표",
         openNewTimeline,
-      );
-    const today = HaedoData.localDate(),
-      habits = store.items.filter(
-        (item) => item.kind === "habit" && model.scheduled(item.data, today),
-      );
-    const todayList = byId("todayHabits");
-    todayList.replaceChildren(...habits.map(todayRow));
-    if (!habits.length)
-      empty(
-        todayList,
-        "오늘 체크할 습관이 없습니다.",
-        "습관 정하기",
-        "habits.html",
-      );
-    const goals = store.items
-      .filter((item) => item.kind === "goal" && item.data.progress < 100)
-      .slice(0, 3);
-    const goalList = byId("activeGoals");
-    goalList.replaceChildren(...goals.map((item) => goalRow(item, true)));
-    if (!goals.length)
-      empty(
-        goalList,
-        "진행 중인 목표가 없습니다.",
-        "목표 정하기",
-        "goals.html",
       );
   }
   function renderGoals() {
@@ -577,6 +556,17 @@
         byId(id).disabled = false;
       }
     };
+  function showTimelineManagement() {
+    globalThis.HaedoNavigation?.activate("manage");
+    document.querySelector(".haedo-page-head h1").textContent = "연표·목표·습관 관리";
+    document.title = "연표·목표·습관 관리 · 해도";
+    const back = document.querySelector(".haedo-back-link");
+    back.href = "index.html?section=manage";
+    back.querySelector("span:last-child").textContent = "관리";
+    const backups = byId("timelineBackups");
+    backups.open = true;
+    document.querySelector(".space-documents").before(backups);
+  }
   function openNewTimeline() {
     byId("timelineForm").reset();
     byId("timelineName").value = "내 연표";
@@ -585,6 +575,9 @@
     byId("timelineName").focus();
   }
   if (page === "workspace") {
+    if (new URLSearchParams(location.search).get("section") === "manage") {
+      showTimelineManagement();
+    }
     byId("newTimeline").onclick = openNewTimeline;
     byId("timelineForm").onsubmit = async (event) => {
       event.preventDefault();

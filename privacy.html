@@ -3,25 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#FAF8F0" />
+    <meta name="theme-color" content="#FFFFFF" />
     <meta name="referrer" content="same-origin" />
     <link rel="icon" href="icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="vendor/daisyui.css" />
     <link rel="stylesheet" href="vendor/daisyui-themes.css" />
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@900&display=swap"
-      rel="stylesheet"
-    />
     <link rel="stylesheet" href="assets/app.css" />
     <link rel="stylesheet" href="assets/platform.css" />
+    <link rel="stylesheet" href="assets/haedo-shell.css" />
     <title>개인정보 안내 · 해도</title>
   </head>
-  <body class="platform" data-page="privacy">
+  <body class="platform haedo-shell" data-haedo-section="manage" data-page="privacy">
     <svg
       class="icon-defs"
       aria-hidden="true"
@@ -52,35 +45,29 @@
         </symbol>
       </defs></svg
     ><a class="skip-link" href="#content">본문으로 이동</a>
-    <nav class="p-nav" aria-label="주 메뉴">
-      <a class="p-brand" href="index.html" aria-label="해도 홈"
-        ><svg viewBox="0 0 32 32" aria-hidden="true">
-          <path d="M3 24h26M4 20c5 0 5-11 10-11s5 7 9 7 4-5 6-7" /></svg
-      ></a>
-      <div class="p-nav-links">
-        <a href="index.html">홈</a
-        ><a href="workspace.html" data-space-link>내 공간</a
-        ><a class="p-login-link" href="login.html" data-login-link>로그인</a
-        ><button
-          class="p-icon-button"
-          data-logout
-          hidden
-          aria-label="로그아웃"
-          title="로그아웃"
-        >
-          <svg aria-hidden="true"><use href="#p-out" /></svg>
-        </button>
-      </div>
-    </nav>
+    <nav class="haedo-nav" data-haedo-navigation aria-label="주 메뉴"></nav>
+    <div class="haedo-page-account">
+      <a class="haedo-icon-button" href="login.html" data-login-link aria-label="로그인"><span data-haedo-icon="user" aria-hidden="true"></span></a>
+      <details class="haedo-account" data-account-menu hidden>
+        <summary class="haedo-icon-button" aria-label="계정 메뉴"><span data-haedo-icon="user" aria-hidden="true"></span></summary>
+        <div class="haedo-account-panel">
+          <p id="accountLabel" class="p-account"></p>
+          <a class="p-text-link" href="index.html?section=manage">관리</a>
+          <button class="p-button" data-logout hidden type="button">로그아웃</button>
+        </div>
+      </details>
+    </div>
     <main id="content" class="p-main privacy-main">
       <h1>개인정보 안내</h1>
       <h2>로그인과 기록</h2>
       <p>
-        Google 로그인에서 계정 식별자, 이름, 이메일을 받아 개인 공간을
+        Google 로그인에서 계정 식별자, 이름, 이메일을 받아 개인 기록을
         구분합니다. 연표, 목표, 습관은 로그인한 계정의 저장 공간과 사용하는
         브라우저에 보관됩니다. 다른 계정은 서버의 접근 정책에 따라 이 기록에
         접근할 수 없습니다.
       </p>
+      <h2>가져온 자료와 발췌</h2>
+      <p>가져온 원문과 발췌는 계정별로 브라우저에 보관합니다. 작업공간을 동기화에 연결해야 다른 기기로 전송합니다. 로그인만으로 연결하지 않은 자료를 업로드하지 않습니다. 자료 백업과 연표·목표·습관 백업은 별도로 만드세요.</p>
       <h2>기기에 남는 사본</h2>
       <p>
         로그아웃하면 개인 화면은 닫히지만 복구를 위해 기기의 기록 사본을 지우지
@@ -104,8 +91,7 @@
       <a href="index.html" class="p-text-link">홈으로 돌아가기</a>
     </main>
     <footer class="p-footer">
-      <a href="index.html" aria-label="해도 홈">해도</a
-      ><span>연표 · 목표 · 습관</span><a href="privacy.html">개인정보 안내</a>
+      <a href="privacy.html">개인정보 안내</a>
     </footer>
     <script src="vendor/supabase/supabase.js"></script>
     <script src="assets/platform-config.js"></script>
@@ -114,6 +100,8 @@
     <script src="assets/sync.js"></script>
     <script src="assets/platform-data.js"></script>
     <script src="assets/platform-store.js"></script>
+    <script src="assets/life/icons.js"></script>
+    <script src="assets/haedo-navigation.js"></script>
     <script src="assets/platform-ui.js"></script>
   </body>
 </html>

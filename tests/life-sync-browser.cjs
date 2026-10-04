@@ -157,16 +157,25 @@ async function ready(page) {
   await page.locator('.life-app').waitFor();
 }
 async function settle(page) { await page.waitForFunction(() => !document.querySelector('.life-app[aria-busy="true"]')); }
+async function openSection(page, section) {
+  const link = page.locator('[data-haedo-navigation] [data-haedo-section="' + section + '"]');
+  if (await link.count() && await link.getAttribute('aria-current') !== 'page') { await link.click(); await settle(page); }
+}
 async function openManagement(page) {
+  await openSection(page, 'manage');
+  const back = page.getByRole('button',{name:'관리로 돌아가기',exact:true});
+  if (await back.isVisible()) { await back.click(); await settle(page); }
   const button = page.getByRole('button',{name:'자료 관리',exact:true});
   if (await button.getAttribute('aria-expanded') !== 'true') { await button.click(); await settle(page); }
 }
 async function openAccount(page) {
+  if (!(await page.locator('#lifeAccountToggle').isVisible())) await openSection(page, 'manage');
   const toggle = page.locator('#lifeAccountToggle');
   if (!(await toggle.evaluate(el => el.closest('details').open))) await toggle.click();
 }
 async function click(page,name) {
-  if (['기기 간 동기화','내보내기·사본 복원','시간 보기'].includes(name)) await openManagement(page);
+  if (['기기 간 동기화','내보내기·사본 복원'].includes(name)) await openManagement(page);
+  if (['모아보기','원천 기록','가져오기','시간 보기'].includes(name)) await openSection(page, 'records');
   if (name === '로그아웃') await openAccount(page);
   await page.getByRole('button',{name,exact:true}).click(); await settle(page);
 }
@@ -429,5 +438,5 @@ async function main() {
   console.log(`Sync browser checks: ${passed} passed, ${failures.length} failed; ${expectedConsoleErrors} expected transport/schema console errors. HTTP simulator only; live RLS and Apple hardware not proven.`);
   if (failures.length) process.exitCode=1;
 }
-module.exports={FakeCloud,platformContext,session,accounts,cloud,publicKey,password,base,openManagement,openAccount};
+module.exports={FakeCloud,platformContext,session,accounts,cloud,publicKey,password,base,openManagement,openAccount,openSection};
 if(require.main===module)main().catch(error=>{console.error(error.stack);process.exitCode=1;});

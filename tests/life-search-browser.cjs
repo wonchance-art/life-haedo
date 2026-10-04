@@ -4,7 +4,7 @@
  */
 'use strict';
 const assert = require('node:assert/strict');
-const { FakeCloud, platformContext, accounts, base, openManagement, openAccount } = require('./life-sync-browser.cjs');
+const { FakeCloud, platformContext, accounts, base, openManagement, openAccount, openSection } = require('./life-sync-browser.cjs');
 function playwright() {
   for (const name of [process.env.PW_MODULE_PATH, 'playwright', 'playwright-core', '/opt/codex/cua_node/lib/node_modules/playwright'].filter(Boolean)) {
     try { return require(name); } catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
@@ -13,6 +13,7 @@ function playwright() {
 }
 const settle = page => page.waitForFunction(() => !document.querySelector('.life-app[aria-busy="true"]'));
 async function click(page, name) {
+  if (['모아보기','원천 기록','가져오기','시간 보기'].includes(name)) await openSection(page, 'records');
   if (name === '로그아웃') await openAccount(page);
   await page.getByRole('button', { name, exact: true }).click(); await settle(page);
 }

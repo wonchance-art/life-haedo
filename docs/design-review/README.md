@@ -1,6 +1,8 @@
 # 자료 화면 디자인 비교
 
-**최신 완료 단위는 [본문 중심 피드 마감](feed-refinement.md)입니다.** 각 자료·발췌의 본문을 구분하고 반복 문구·출처·관리 도구를 공통 아이콘과 접힌 상세로 정리했습니다. [가져오기·내 발췌·주제 모음](collections-integration.md)과 [검색 → 원문 → 발췌 → 목록 복귀](integration.md)는 앞선 구현 기록입니다. 병합·배포 결과는 [PR #20](https://github.com/wonchance-art/life-haedo/pull/20)에서 확인합니다.
+최신 작업은 [기록·도구·관리 통합 홈](unified-home.md)입니다. 아래는 앞선 디자인 통합 이력입니다.
+
+**앞선 완료 단위는 [본문 중심 피드 마감](feed-refinement.md)입니다.** 각 자료·발췌의 본문을 구분하고 반복 문구·출처·관리 도구를 공통 아이콘과 접힌 상세로 정리했습니다. [가져오기·내 발췌·주제 모음](collections-integration.md)과 [검색 → 원문 → 발췌 → 목록 복귀](integration.md)는 앞선 구현 기록입니다. 병합·배포 결과는 [PR #20](https://github.com/wonchance-art/life-haedo/pull/20)에서 확인합니다.
 
 아래 03은 통합의 기준이 된 비교 시안입니다. 이전 02 소셜 스타일과 01 종이색·명조 비교도 증거와 함께 보존합니다. 시안의 동작과 실제 저장 기능을 구분합니다.
 

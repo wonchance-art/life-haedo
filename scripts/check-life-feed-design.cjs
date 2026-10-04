@@ -91,7 +91,7 @@ async function main() {
         check(size.name + ' focused control clear of bottom navigation', await manage.evaluate(el => {
           if (innerWidth > 700) return true;
           const css = getComputedStyle(el), ring = parseFloat(css.outlineWidth) + parseFloat(css.outlineOffset);
-          return el.getBoundingClientRect().bottom + ring + 8 <= document.querySelector('.life-nav').getBoundingClientRect().top;
+          return el.getBoundingClientRect().bottom + ring + 8 <= document.querySelector('.haedo-nav, .life-nav').getBoundingClientRect().top;
         }));
         await capture(page, 'management', size, size.name === 'phone');
         await page.keyboard.press('Escape'); assert.equal(await card.locator('.life-excerpt-manage').isHidden(), true);

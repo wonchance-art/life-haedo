@@ -14,9 +14,11 @@ function setup(overrides = {}) {
   const state = { records, user: A, calls: [], events: [], navigations: [], privateElement: { hidden: false }, ...overrides };
   const pageHandlers = new Map(), sdkListeners = new Set();
   const backingStorage = { getItem: key => records.get(key) || null, setItem: (key, value) => records.set(key, value), removeItem: key => records.delete(key) };
+  const pathname = overrides.pathname || '/life.html';
   const env = {
-    location: { hostname: 'localhost', pathname: '/life.html', search: '', href: 'http://localhost/life.html', replace: value => state.navigations.push(value) },
+    location: { hostname: 'localhost', pathname, search: overrides.search || '', href: 'http://localhost' + pathname + (overrides.search || ''), replace: value => state.navigations.push(value) },
     document: { querySelectorAll: selector => selector === '[data-private]' ? [state.privateElement] : [],
+      body: { dataset: { lifeHome: overrides.publicHome ? 'true' : 'false' } },
       documentElement: { classList: { add() {}, remove() {} } }, dispatchEvent: event => state.events.push(event) },
     history: { replaceState: (_state, _title, url) => { state.scrubbed = url; } }, Event,
     addEventListener: (name, callback) => pageHandlers.set(name, callback), removeEventListener: name => pageHandlers.delete(name),
@@ -57,9 +59,68 @@ function setup(overrides = {}) {
 
 test('private routes include life and remove unknown query values and external redirects', () => {
   assert.equal(safeNext('life.html?code=private&doc=unrelated#token'), 'life.html');
-  assert.equal(safeNext('//evil.invalid/life.html'), 'workspace.html');
+  assert.equal(safeNext('//evil.invalid/life.html'), 'index.html');
   assert.equal(safeNext('timeline.html?doc=d_1&view=map&access_token=hidden'), 'timeline.html?view=map&doc=d_1');
   assert.equal(validConfig({ ...config, key: 'sb_secret_hidden' }, 'localhost'), false);
+});
+
+test('unified home return accepts only known sections and material views', () => {
+  assert.equal(safeNext(), 'index.html');
+  assert.equal(safeNext('https://evil.invalid/index.html?section=records'), 'index.html');
+  assert.equal(safeNext('index.html?section=manage&view=sync&code=discarded#token'), 'index.html?section=manage&view=sync');
+  assert.equal(safeNext('index.html?section=tools&view=transfer'), 'index.html?section=tools&view=transfer');
+  assert.equal(safeNext('index.html?section=unknown&view=public&next=https://evil.invalid'), 'index.html');
+  assert.equal(safeNext('life.html?view=sources&section=manage'), 'life.html?section=manage&view=sources');
+  assert.equal(safeNext('workspace.html?doc=unrelated'), 'workspace.html');
+  assert.equal(safeNext('workspace.html?section=manage#backupAll'), 'workspace.html?section=manage');
+  assert.equal(safeNext('workspace.html?section=tools'), 'workspace.html');
+  assert.equal(safeNext('life.html?section=manage&view=transfer&token=hidden'), 'life.html?section=manage&view=transfer');
+});
+
+test('public home guest verification does not redirect and Google returns to the requested section', async () => {
+  const { auth, state } = setup({ pathname: '/index.html', publicHome: true, search: '?section=tools' });
+  state.records.delete(SESSION_KEY);
+  assert.equal(await auth.verify(), null); assert.equal(auth.getAccount(), null);
+  assert.equal(state.navigations.length, 0); assert.equal(state.calls.includes('getUser'), false);
+  await auth.login('index.html?section=tools');
+  assert.equal(new URL(state.oauth.options.redirectTo).searchParams.get('next'), 'index.html?section=tools');
+  auth.dispose();
+});
+
+test('public home bfcache keeps cached personal DOM hidden until its shell remounts', async () => {
+  const { auth, state, pageHandlers } = setup({ pathname: '/index.html', publicHome: true });
+  await auth.verify(); pageHandlers.get('pagehide')();
+  assert.equal(state.privateElement.hidden, true);
+  await pageHandlers.get('pageshow')({ persisted: true });
+  assert.equal(auth.getAccount().userId, A.id); assert.equal(state.privateElement.hidden, true);
+  assert.equal(state.navigations.length, 0);
+  state.verifyError = { name: 'AuthRetryableFetchError' };
+  await pageHandlers.get('pageshow')({ persisted: true });
+  assert.equal(state.privateElement.hidden, true); assert.equal(state.events.at(-1).type, 'haedo:auth-unavailable');
+  assert.equal(state.navigations.length, 0); auth.dispose();
+});
+
+test('leaving the public home cancels a pending verification before it can expose an account', async () => {
+  const { auth, state, pageHandlers } = setup({ pathname: '/', publicHome: true });
+  const waiting = deferred(); state.userPromise = waiting.promise;
+  const accounts = []; auth.onAccountChange(account => accounts.push(account));
+  const pending = auth.verify(); await tick(); pageHandlers.get('pagehide')();
+  waiting.resolve({ data: { user: A }, error: null });
+  await assert.rejects(pending, errorCode('request_cancelled'));
+  assert.equal(auth.getAccount(), null); assert.equal(state.privateElement.hidden, true);
+  assert.equal(accounts.some(Boolean), false); assert.equal(state.navigations.length, 0); auth.dispose();
+});
+
+test('public home account change hides old data without forcing navigation or accepting its late result', async () => {
+  const { auth, state } = setup({ pathname: '/index.html', publicHome: true });
+  await auth.verify(); const waiting = deferred(); state.userPromise = waiting.promise;
+  const pending = auth.verify(); await tick(); state.change(B);
+  assert.equal(state.privateElement.hidden, true); assert.equal(auth.getAccount(), null);
+  assert.equal(state.navigations.length, 0);
+  state.userPromise = null; await auth.verify();
+  waiting.resolve({ data: { user: A }, error: null });
+  await assert.rejects(pending, errorCode('request_cancelled'));
+  assert.equal(auth.getAccount().userId, B.id); assert.equal(state.navigations.length, 0); auth.dispose();
 });
 
 test('verified shared account uses Google PKCE and never enables a password flow', async () => {

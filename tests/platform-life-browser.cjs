@@ -44,7 +44,7 @@ async function main(){
   const newCache=await cacheName(site);
   await new Promise(resolve=>web.listen(0,'127.0.0.1',resolve));
   process.env.BASE_URL=`http://127.0.0.1:${web.address().port}`;
-  const {FakeCloud,platformContext,accounts,cloud,base,openManagement,openAccount}=require('./life-sync-browser.cjs');
+  const {FakeCloud,platformContext,accounts,cloud,base,openManagement,openAccount,openSection}=require('./life-sync-browser.cjs');
   const pw=require(process.env.PW_MODULE_PATH||'/opt/codex/cua_node/lib/node_modules/playwright');
   const browser=await pw.chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
   const server=new FakeCloud(),contexts=[];
@@ -67,6 +67,7 @@ async function main(){
   }
   const settle=page=>page.waitForFunction(()=>!document.querySelector('.life-app[aria-busy="true"]'));
   async function click(page,name){
+    if(['모아보기','원천 기록','가져오기','시간 보기'].includes(name))await openSection(page,'records');
     if(['기기 간 동기화','내보내기·사본 복원'].includes(name))await openManagement(page);
     if(name==='로그아웃')await openAccount(page);
     await page.getByRole('button',{name,exact:true}).click();await settle(page);
@@ -151,7 +152,7 @@ async function main(){
       assert.ok(drafts.some(stage=>stage.input.title==='즉시 로그아웃 초안'&&stage.input.text==='자동 보관 타이머 전 입력'));
       assert.match(await page.evaluate(()=>localStorage.getItem('caeyeon_life_registry')),/이전 미연결 연표/);
     });
-    await check('failed logout draft transaction restores editing and does not call shared signOut',async()=>{
+    await check('failed management navigation and logout draft transactions preserve input without signing out',async()=>{
       await click(page,'가져오기');await page.locator('#lifeImportTitle').fill('로그아웃 실패 보존');await page.locator('#lifeImportText').fill('저장 실패해도 유지할 익명 입력');
       const previousLogouts=server.requests.filter(r=>r.kind==='logout').length;
       await page.evaluate(()=>{
@@ -159,15 +160,44 @@ async function main(){
         IDBObjectStore.prototype.put=function(...args){const request=__originalStagePut.apply(this,args);if(this.name==='staging'&&args[0]?.input?.title==='로그아웃 실패 보존'){__flushAborted++;this.transaction.abort();}return request;};
       });
       try{
-        await openAccount(page);
-        await page.getByRole('button',{name:'로그아웃',exact:true}).click();
+        await page.locator('[data-haedo-navigation] [data-haedo-section="manage"]').click();
         await page.waitForFunction(()=>window.__flushAborted>0&&!document.querySelector('#lifeApp').hidden);
         assert.equal(await page.evaluate(()=>HaedoAuth.user.id),accounts.a.id);
         assert.equal(server.requests.filter(r=>r.kind==='logout').length,previousLogouts);
         assert.equal(await page.locator('#lifeImportText').inputValue(),'저장 실패해도 유지할 익명 입력');
-        assert.ok(await page.locator('#lifeStartup').isVisible());
+        assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').getAttribute('aria-current'),'page');
+        assert.ok(await page.locator('#lifeError').isVisible());
       }finally{await page.evaluate(()=>{IDBObjectStore.prototype.put=__originalStagePut;});}
       await click(page,'검토 내용 보관');page.once('dialog',dialog=>dialog.accept());await click(page,'이 검토 취소');
+
+      await click(page,'원천 기록');await page.locator('#lifeSearch').fill('익명 A 자료');
+      await page.getByRole('button',{name:'자료 읽기: 익명 A 자료',exact:true}).click();await settle(page);
+      await page.locator('#lifeSourceText').evaluate(el=>{
+        const text='🌱 계정 A 원문 구절',start=el.textContent.indexOf(text);
+        if(start<0)throw new Error('The saved anonymous original is missing');
+        getSelection().setBaseAndExtent(el.firstChild,start,el.firstChild,start+text.length);
+      });
+      await page.getByRole('button',{name:'발췌와 주제 연결',exact:true}).click();
+      await page.locator('#lifeSourceNote').fill('로그아웃 실패 보존 메모');
+      await openAccount(page);
+      await page.evaluate(()=>{
+        window.__flushAborted=0;
+        IDBObjectStore.prototype.put=function(...args){const request=__originalStagePut.apply(this,args);if(this.name==='staging'&&args[0]?.input?.title==='익명 A 자료'){__flushAborted++;this.transaction.abort();}return request;};
+      });
+      try{
+        await page.getByRole('button',{name:'로그아웃',exact:true}).click();
+        await page.waitForFunction(()=>window.__flushAborted>0&&!document.querySelector('#lifeApp').hidden);
+        assert.equal(await page.evaluate(()=>HaedoAuth.user.id),accounts.a.id);
+        assert.equal(server.requests.filter(r=>r.kind==='logout').length,previousLogouts);
+        assert.ok(await page.locator('#lifeStartup').isVisible());
+        await openSection(page,'records');
+        assert.equal(await page.locator('#lifeSourceNote').inputValue(),'로그아웃 실패 보존 메모');
+        assert.match(await page.locator('#lifeSourceText').textContent(),/계정 A 원문 구절/);
+      }finally{await page.evaluate(()=>{IDBObjectStore.prototype.put=__originalStagePut;});}
+      await click(page,'로그아웃');await page.waitForFunction(()=>location.pathname.endsWith('/index.html')&&document.readyState==='complete');
+      await login(page,'platform',accounts.a);
+      const recovered=await page.evaluate(async()=>HaedoLife.Shell.storage.listStages(await HaedoLife.Shell.storage.getActive()));
+      assert.ok(recovered.some(stage=>stage.draftNote==='로그아웃 실패 보존 메모'||stage.excerpts.some(excerpt=>excerpt.note==='로그아웃 실패 보존 메모')));
     });
     await check('offline warm local editing survives cold-load lock and online re-verification',async()=>{
       await page.waitForFunction(()=>!!navigator.serviceWorker.controller);
