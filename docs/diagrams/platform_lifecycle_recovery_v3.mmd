@@ -1,0 +1,60 @@
+%% 2026-10-05 v3. Entire diagram is FUTURE lifecycle and invalidation behavior.
+%% Continuation of platform_approval_recovery_v3.mmd; never republishes on resume alone.
+%%{init: {"theme":"base","look":"classic","htmlLabels":false,"themeVariables":{"primaryColor":"#ffffff","primaryTextColor":"#222126","primaryBorderColor":"#827B86","lineColor":"#827B86","clusterBkg":"#ffffff","clusterBorder":"#E9E7EB","edgeLabelBackground":"#ffffff","fontFamily":"Noto Sans CJK KR, sans-serif","fontSize":"15px"},"flowchart":{"curve":"linear","wrappingWidth":340,"nodeSpacing":26,"rankSpacing":46,"htmlLabels":false}}}%%
+flowchart TB
+  accTitle: 해도 v3 — 후속 보류·취소·철회와 파생 자료 복구
+  accDescr: 보류 상태 저장과 재개, 실행 전후 취소, 공개 철회와 원문 삭제의 영향을 각각 구분한다. 진행 중이나 결과 불명인 작업은 실행 대상의 결과만 대조한다.
+
+  subgraph HOLDING["보류·재개 · 게시 실행도의 HOLD에서 이어짐"]
+    HOLD["보류할 작업<br/>작업 종류·내부/외부 대상·단계<br/>승인·확인된 결과를 함께 유지"]
+    STORE{"보류 상태 저장"}
+    UNSAVED["보류 상태 미저장 표시<br/>입력·확인된 응답 보존<br/>상태 저장만 제한적으로 재시도"]
+    WAIT["보류 상태 보관됨<br/>조건 회복 후 사용자 재개 또는 종료"]
+    RESUME{"보관한 작업의 현재 단계"}
+    LOOKUP["진행 중·결과 불명<br/>실행도의 CHECKTARGET으로<br/>내부/외부를 나눠 조회만 수행"]
+    ACK["외부 성공·기록 저장 실패<br/>실행도의 RECEIPT으로<br/>완료 기록만 저장"]
+    PREP["미실행·조건 회복 확인<br/>실행도의 PREP부터 다시 검토<br/>승인·실행 의도 저장 없이 실행 금지"]
+    END["보관한 상태를 유지하며 종료<br/>이미 실행된 효과의 취소를 뜻하지 않음"]
+    HOLD --> STORE
+    STORE -->|실패| UNSAVED
+    UNSAVED -->|상태 저장 재시도 선택| STORE
+    STORE -->|성공| WAIT
+    WAIT -->|재개 선택| RESUME
+    WAIT -->|종료 선택| END
+    RESUME -->|진행·불명| LOOKUP
+    RESUME -->|외부 성공 확인됨| ACK
+    RESUME -->|미실행 확정| PREP
+  end
+  subgraph CANCEL["취소 · 실행 점유와 같은 작업 ID로 대조"]
+    CANCELREQ["게시·전송 취소 요청"]
+    BEFORE{"실행 전 상태에서 취소를 확정했는가?"}
+    CANCELDONE["취소 확정<br/>후속 실행 차단"]
+    RUNNING["진행 중 또는 결과 불명<br/>중단 요청과 취소 완료를 구분<br/>실행도의 CHECKTARGET으로 대조"]
+    CANCELFAIL["취소 상태 저장 실패 표시<br/>취소 완료로 표시하지 않음<br/>같은 작업의 취소 상태부터 재확인"]
+    CANCELREQ --> BEFORE
+    BEFORE -->|취소 상태 원자 저장 성공| CANCELDONE
+    BEFORE -->|이미 실행 중·불명| RUNNING
+    BEFORE -->|저장 실패| CANCELFAIL
+    CANCELFAIL -->|취소 재개 선택| CANCELREQ
+  end
+  subgraph REMOVE["공개 철회와 근거 삭제 · 영향 범위를 구별"]
+    CHANGE{"사용자가 바꾼 범위"}
+    PUBLIC["공개·친구 공유 철회<br/>대상 사본의 열람을 서버에서 차단<br/>개인 원문·개인 보고서는 유지"]
+    PRIVATE["원문 삭제·분석 권한 철회<br/>선택한 범위의 근거·인용·해석 무효화<br/>독립적으로 쓴 내 생각은 유지"]
+    APPLIED{"권한 확인·상태 확정 결과<br/>변경 종류와 영향 범위 유지"}
+    CLEAN["해당 범위의 검색·캐시·보고서 정리<br/>늦은 응답·삭제 인용의 재노출 차단<br/>외부에서 내려받은 사본은 별도"]
+    RETRY["차단은 유지·정리만 대기<br/>정리된 것으로 표시하지 않음"]
+    FAILED["철회·삭제 미확정 표시<br/>오프라인·실패 해소 후<br/>원래 종류의 요청을 다시 검증"]
+    DONE["해당 범위의 확정 결과 표시"]
+    CHANGE -->|공개 범위| PUBLIC --> APPLIED
+    CHANGE -->|원문·분석 근거| PRIVATE --> APPLIED
+    APPLIED -->|확정 성공| CLEAN
+    APPLIED -->|미확정·실패| FAILED
+    FAILED -->|같은 요청 종류로 재개| CHANGE
+    CLEAN -->|정리 완료| DONE
+    CLEAN -->|정리 실패| RETRY
+    RETRY -->|지연·횟수 한도 내 정리만 재개| CLEAN
+  end
+
+  classDef future fill:#ffffff,stroke:#827B86,stroke-width:1.5px,stroke-dasharray:6 4,color:#222126;
+  class HOLD,STORE,UNSAVED,WAIT,RESUME,LOOKUP,ACK,PREP,END,CANCELREQ,BEFORE,CANCELDONE,RUNNING,CANCELFAIL,CHANGE,PUBLIC,PRIVATE,APPLIED,CLEAN,RETRY,FAILED,DONE future;

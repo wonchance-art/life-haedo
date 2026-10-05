@@ -1,0 +1,54 @@
+%% 2026-10-05 v3. Product context, not a mandatory pipeline or a completion claim.
+%% Source: backup messages 001-086 + final/post-snapshot handoff + current user direction.
+%%{init: {"theme":"base","look":"classic","htmlLabels":false,"themeVariables":{"primaryColor":"#ffffff","primaryTextColor":"#222126","primaryBorderColor":"#827B86","lineColor":"#827B86","clusterBkg":"#ffffff","clusterBorder":"#E9E7EB","edgeLabelBackground":"#ffffff","fontFamily":"Noto Sans CJK KR, sans-serif","fontSize":"16px"},"flowchart":{"curve":"linear","wrappingWidth":340,"nodeSpacing":28,"rankSpacing":48,"htmlLabels":false}}}%%
+flowchart TB
+  accTitle: 해도 v3 — 생활에서 표현으로, 다시 생활로
+  accDescr: 생활과 여유를 중심에 두고 현재 자료 보관 기능과 후속 글쓰기, 발견, 깊은 대화, 자기 이해, 선택적 공유를 구분한다. 어느 단계에서도 끝낼 수 있다.
+
+  LIFE["생활 · 경험 · 여유<br/>읽기 · 배우기 · 걷기 · 창작 · 사람 만나기"]
+  TOOLS["현재 · 생활 도구<br/>목표 · 습관 · 연표<br/>연표 값과 계산 유지"]
+  INPUT["현재 · 기존 기록 가져오기<br/>Apple 메모 · Obsidian · 블로그 · Instagram<br/>제공한 본문 · TXT/MD · 링크"]
+  STORE["현재 · 출처 확인 · 보관<br/>내 말 / 타인의 말 · 원문 버전 · 포함 범위"]
+  READ["현재 · 내 자료 읽기<br/>검색 · 발췌 · 내 메모 · 주제 모음<br/>원문 복귀 · 백업 · 선택 동기화"]
+  WRITE["후속 · 내 글 쓰기<br/>경험 · 질문 · 선택한 이유<br/>인용과 내 생각을 구분"]
+
+  subgraph EXPLORE["후속 설계 · 필요한 탐구만 선택"]
+    DISCOVER["발견 · 재발견<br/>같은 관심을 깊게 / 인접 분야 / 다른 관점<br/>추천 이유 · 제외 · 유입 경로"]
+    TALK["깊은 대화<br/>현재 질문 ↔ 근거·다른 해석 ↔ 내 반응<br/>생각을 고치거나 여기서 종료"]
+    REPORT["자기 이해 보고서<br/>선택 기간·자료 · 반복된 질문 · 생각의 변화<br/>근거 확인 · 해석 수정 · 비공개 기본"]
+  end
+  subgraph EXPRESS["후속 설계 · 공개 범위는 내가 선택"]
+    SELECT["내 글 · 모음 · 선택한 자료와 내 코멘트<br/>보여줄 내용과 버전을 미리보기"]
+    FRIEND["특정 친구 · 모임<br/>함께 읽을 소재와 연결 이유<br/>선택한 수신자에게만"]
+    BLOG["라이프스타일 블로그<br/>소개 · 고정한 글 · 주제별 모음<br/>선택한 사본으로 나를 표현"]
+  end
+
+  LIFE -->|필요할 때| TOOLS
+  TOOLS -->|필요한 일만 마치기| NEXT
+  LIFE -->|원래 앱의 기록을 선택| INPUT
+  INPUT --> STORE --> READ
+  LIFE -->|직접 쓰고 싶을 때| WRITE
+  WRITE -->|후속 저장 계약| READ
+  READ -->|읽고 닫기만 해도 충분| NEXT
+  READ -->|선택한 자료와 질문| DISCOVER
+  READ -->|대화부터 시작 가능| TALK
+  READ -->|선택 범위로 회고| REPORT
+  DISCOVER <-->|관련 자료와 다음 질문| TALK
+  TALK -->|사용자가 원할 때만| REPORT
+  REPORT -->|다음 읽기·경험을 내가 선택| NEXT
+  TALK -->|후속 글쓰기·읽기 또는 종료 선택| NEXT
+  READ -->|공유할 것만 고르기| SELECT
+  SELECT -->|개인 보관으로 마침| NEXT
+  SELECT -->|대상·내용 확인| FRIEND
+  SELECT -->|공개 미리보기·게시| BLOG
+  FRIEND -->|새 대화와 경험| NEXT
+  BLOG -->|표현 이후에도 생활로| NEXT
+
+  NEXT["다시 생활 · 경험 · 여유로<br/>모든 탐구·공유를 거칠 필요 없음"]
+
+  classDef current fill:#ffffff,stroke:#5442BC,stroke-width:2px,color:#222126;
+  classDef future fill:#ffffff,stroke:#827B86,stroke-width:1.5px,stroke-dasharray:6 4,color:#222126;
+  classDef context fill:#F5F4F7,stroke:#827B86,stroke-width:1px,color:#222126;
+  class TOOLS,INPUT,STORE,READ current;
+  class WRITE,DISCOVER,TALK,REPORT,SELECT,FRIEND,BLOG future;
+  class LIFE,NEXT context;

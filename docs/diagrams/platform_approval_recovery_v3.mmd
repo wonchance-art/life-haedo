@@ -1,0 +1,65 @@
+%% 2026-10-05 v3. Entire diagram is a FUTURE publishing/side-effect contract.
+%% Ordinary reading/local notes/private sync do not require this approval.
+%% Cancellation, revocation, durable hold and resume: platform_lifecycle_recovery_v3.mmd.
+%%{init: {"theme":"base","look":"classic","htmlLabels":false,"themeVariables":{"primaryColor":"#ffffff","primaryTextColor":"#222126","primaryBorderColor":"#827B86","lineColor":"#827B86","clusterBkg":"#ffffff","clusterBorder":"#E9E7EB","edgeLabelBackground":"#ffffff","fontFamily":"Noto Sans CJK KR, sans-serif","fontSize":"15px"},"flowchart":{"curve":"linear","wrappingWidth":340,"nodeSpacing":26,"rankSpacing":46,"htmlLabels":false}}}%%
+flowchart TB
+  accTitle: 해도 v3 — 후속 게시·전송 실행과 결과 확인
+  accDescr: 전체가 미구현 설계다. 승인된 사본을 내부에 게시하거나 외부로 전송할 때 저장과 실행을 구분하고 결과 불명은 실행 대상별로 대조한다. 취소와 재개는 별도 상세도에서 다룬다.
+
+  REQUEST["게시·갱신·외부 전송 선택<br/>원본 수정만으로 공개본을 갱신하지 않음"]
+  PREP["내용·대상·공개 범위·버전 고정<br/>방문자·수신자 관점의 미리보기"]
+  REVIEW{"사용자 선택"}
+  INTENT["승인·실행 의도 저장<br/>작업 ID · 기준 버전 · 중복 방지 키"]
+  GATE{"실행 직전 재검증·점유<br/>저장된 승인·계정·권한·버전·취소·한도<br/>완료·진행 중·이전 점유 상태"}
+  ROUTE{"실행 대상"}
+  LOCAL["내부 게시·갱신<br/>공유 사본 + 완료 영수증<br/>같은 서버 트랜잭션으로 확정"]
+  DISPATCH["외부 전송 시작 상태 먼저 저장<br/>성공한 경우에만 연결 모듈이 호출<br/>지원되면 같은 중복 방지 키 사용"]
+  RESPONSE{"외부 결과"}
+  RECEIPT["확인된 외부 실행 ID·결과 저장<br/>실패해도 전송을 다시 하지 않음"]
+  RECORDWAIT["외부 성공 확인 · 완료 기록 대기<br/>응답 보존 · 기록 저장만 재시도"]
+  CHECKTARGET{"대조할 실행 대상<br/>진행 중이면 기존 작업 상태만 확인"}
+  LOCALCHECK["내부 작업 영수증·공유 사본 조회<br/>외부 서비스에 조회·전송하지 않음"]
+  EXTCHECK["외부 실행 ID·효과 키로 안전한 조회<br/>조회 미지원·실패면 결과 불명 유지"]
+  RETRY{"미실행 확정·일시 오류이며<br/>같은 요청 재시도가 안전한가?"}
+  HOLD["실행 보류 · 상태 보관/재개 상세도<br/>대상·단계·확인된 결과 유지<br/>결과 불명은 자동 재전송 금지"]
+  DONE["확정된 결과 표시<br/>같은 작업에는 기존 결과 반환"]
+  STOP["실행하지 않고 종료<br/>개인 초안 유지"]
+
+  REQUEST --> PREP --> REVIEW
+  REVIEW -->|수정| PREP
+  REVIEW -->|거절·닫기| STOP
+  REVIEW -->|확인| INTENT
+  INTENT -->|저장 성공| GATE
+  INTENT -->|저장 실패·실행 없음| HOLD
+  GATE -->|승인·버전 변경| PREP
+  GATE -->|권한 없음·취소·한도 초과| HOLD
+  GATE -->|이미 완료| DONE
+  GATE -->|진행 중·이전 실행 불명| CHECKTARGET
+  GATE -->|실행 가능| ROUTE
+  ROUTE -->|해도 내부 공개| LOCAL
+  LOCAL -->|확정 성공| DONE
+  LOCAL -->|응답 불명| CHECKTARGET
+  LOCAL -->|미실행 실패 확인| HOLD
+  ROUTE -->|선택한 외부 채널| DISPATCH
+  DISPATCH -->|시작 상태 저장 실패·호출 없음| HOLD
+  DISPATCH -->|시작 상태 확정 후 호출·응답| RESPONSE
+  RESPONSE -->|성공 확인| RECEIPT
+  RESPONSE -->|미실행 실패 확정| RETRY
+  RESPONSE -->|시간 초과·연결 끊김| CHECKTARGET
+  RECEIPT -->|저장 성공| DONE
+  RECEIPT -->|기록 저장 실패| RECORDWAIT
+  RECORDWAIT -->|지연·횟수 한도 내 기록만 재저장| RECEIPT
+  RECORDWAIT -->|한도 초과·중단| HOLD
+  CHECKTARGET -->|내부 작업| LOCALCHECK
+  CHECKTARGET -->|외부 작업| EXTCHECK
+  LOCALCHECK -->|완료 영수증 확인| DONE
+  LOCALCHECK -->|미실행 확정| RETRY
+  LOCALCHECK -->|진행 중·조회 불가| HOLD
+  EXTCHECK -->|실행됨| RECEIPT
+  EXTCHECK -->|미실행 확정| RETRY
+  EXTCHECK -->|진행 중·불명·조회 불가| HOLD
+  RETRY -->|안전·횟수와 비용 한도 내| GATE
+  RETRY -->|재시도 불가| HOLD
+
+  classDef future fill:#ffffff,stroke:#827B86,stroke-width:1.5px,stroke-dasharray:6 4,color:#222126;
+  class REQUEST,PREP,REVIEW,INTENT,GATE,ROUTE,LOCAL,DISPATCH,RESPONSE,RECEIPT,RECORDWAIT,CHECKTARGET,LOCALCHECK,EXTCHECK,RETRY,HOLD,DONE,STOP future;
