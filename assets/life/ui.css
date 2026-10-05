@@ -150,6 +150,9 @@ textarea.life-source-text { min-height: 340px; max-height: 70vh; padding: 16px; 
 .life-import-methods .life-button { min-width: 0; padding: 10px 8px; border-color: transparent; border-radius: 6px; color: var(--ink-soft); font-size: 14px; word-break: keep-all; }
 .life-import-methods .life-button[aria-pressed=true] { color: var(--color-primary); background: var(--soft); font-weight: 600; }
 .life-import-form > .life-actions { margin-block: 24px; }
+.life-origin-suggestion { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin: -8px 0 16px; }
+.life-origin-suggestion .life-help { margin: 0; }
+.life-source-url { overflow-wrap: anywhere; word-break: break-all; user-select: text; }
 .life-review { margin-top: 32px; padding-top: 28px; border-top: 1px solid var(--line); }
 .life-review > .life-actions { margin-top: 22px; }
 .life-review-confirm { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--line); }

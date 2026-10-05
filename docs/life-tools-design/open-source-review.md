@@ -194,3 +194,31 @@ iPad Chrome의 실제 다중 선택·Files 제공자 다운로드는 문서 확�
 locator는 받은 원문에서 계산한다. `İ abc 🌱`는 원문에서 `abc` 시작이 2지만 `toLowerCase()` 후에는 3이므로, 변환 문자열의 index를 원문 위치로 그대로 사용하지 않는다. 대소문자 정책을 정하고 원문 `indexOf` 또는 escape한 literal의 원문 정규식 결과에서 UTF-16 시작·실제 일치 길이를 얻는다. 제목만 일치하거나 본문 미확보이면 본문 구절을 찾았다고 표시하지 않는다.
 
 실제 사용에서 오타 허용·여러 단어 관련도·큰 자료의 검색 지연이 확인될 때만 두 후보를 다시 비교한다. 현재 작은 로컬 bundle에서는 원문 버전·일치 위치·줄바꿈/emoji·옛 버전 일치·본문 없는 링크·대소문자 경계를 먼저 검증한다. 이번 임시 Node API 비교는 실제 Apple 기기나 사용자의 검색 평가가 아니다.
+
+## 네이버 블로그·Instagram 글과 출처 입력 개선
+
+확인일 **2026-10-05 UTC**. 사용자는 다음 입력 개선의 우선 원천으로 네이버 블로그와 Instagram을 선택했다. 이번 조사 범위는 사용자가 가져온 글과 URL을 검토·저장하는 부담을 줄이는 것이다. 서비스 계정 연결, 자동 수집, HTML/계정 ZIP 해석은 별도 요구다.
+
+| 대안 | 이번에 확인한 공식 근거 | 이번 범위의 선택 |
+| --- | --- | --- |
+| 브라우저 `URL`과 기존 평문 입력·검토·저장 | [MDN URL 원본](https://github.com/mdn/content/blob/main/files/en-us/web/api/url/index.md)은 URL 구성요소 파싱과 `protocol`·`username`·`password`·`searchParams`를 설명한다. [paste 원본](https://github.com/mdn/content/blob/main/files/en-us/web/api/element/paste_event/index.md)은 사용자가 시작한 붙여넣기와 textarea의 기본 삽입을 구분한다. | **기존 구현 재사용**. URL에서 제한적으로 원천을 제안하고, 사용자가 제공한 평문·포함 범위·원문 URL을 기존 staging에서 검토한다. 새 실행 패키지·범용 parser·빌드 단계가 필요하지 않다. |
+| Mozilla Readability **0.6.0 · Apache-2.0** | [공식 npm](https://registry.npmjs.org/@mozilla%2Freadability)의 latest는 0.6.0, 게시일 **2025-03-03 21:50:47 UTC**. [태그 LICENSE](https://github.com/mozilla/readability/blob/0.6.0/LICENSE.md)와 [README](https://github.com/mozilla/readability/blob/0.6.0/README.md)를 재확인했다. [main commit 조회](https://api.github.com/repos/mozilla/readability/commits?per_page=1)의 최신 commit은 **2026-07-09**였다. | **후속 HTML 입력 후보로 유지**, 이번에는 도입하지 않는다. 이미 확보한 DOM에서 본문 후보를 추출하므로 URL만으로 원격 본문을 얻는 문제를 해결하지 않는다. 평문을 그대로 보존하는 현재 요구에는 추출·정제·위치 매핑 비용만 추가한다. |
+| 네이버 공식 검색 API·Meta Instagram API/oEmbed | 아래 공식 사이트의 현재 문서는 모두 프록시 HTTP 403으로 읽지 못했다. 현행 권한·응답 범위·지원 계정·요금·반출 메뉴를 이번 조사에서 확정하지 않았다. | **도입 보류**. 확인하지 못한 API를 일반 게시물 본문 수집 API로 간주하지 않는다. 계정 연결·서버·비밀값 관리가 필요한지까지 공식 조건과 실제 샘플로 확인한 뒤 별도 비교한다. |
+
+Readability의 GitHub `releases/latest` API는 **404**였으므로 GitHub 릴리스 게시일을 새로 확인했다고 쓰지 않는다. npm 게시 정보와 고정 태그를 기준으로 했다. [공식 공개 보안 권고 API](https://api.github.com/repos/mozilla/readability/security-advisories)에는 [GHSA-3p6v-hrg8-8qj7](https://github.com/mozilla/readability/security/advisories/GHSA-3p6v-hrg8-8qj7)가 있으며 영향 `<0.6.0`, 수정 `0.6.0`을 재확인했다. 해당 README는 Readability가 sanitizer가 아니며 비신뢰 HTML 출력에 sanitizer와 CSP를 권고한다. 이번에는 설치·실행·의존성 전체 감사를 하지 않았다. 최근 commit이나 권고 한 건의 확인을 무취약성 보증으로 표현하지 않는다.
+
+직접 읽지 못한 공식 경로는 [네이버 블로그 검색 API](https://developers.naver.com/docs/serviceapi/search/blog/blog.md), [네이버 블로그 도움말](https://help.naver.com/service/5593), [Instagram API with Instagram Login](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login), [Instagram oEmbed](https://developers.facebook.com/docs/instagram-platform/oembed), [Instagram 정보 다운로드 도움말](https://www.facebook.com/help/instagram/181231772500920)이다. 모두 TLS 검증을 유지한 요청에서 프록시 연결 403으로 실패했다. 이를 서비스 장애나 해당 기능의 부재로 해석하지 않는다. 허용 경로를 우회하거나 사용자 계정·게시물을 조회하지 않았다.
+
+### 원문 URL 보존과 제한적인 제안
+
+URL은 원문 재추적 자료다. **저장된 원문 URL을 조용히 고쳐 쓰지 않는다.** 입력 중 원천 제안과 저장할 출처 값은 구분한다. `URL` 파싱은 문자열 정규식으로 호스트를 추측하는 일을 줄일 뿐, 주소의 실제 존재·게시물 공개 여부·본문 일치를 증명하지 않는다.
+
+- HTTP(S)와 정확한 호스트를 구분한다. `blog.naver.com`·`m.blog.naver.com`, `instagram.com`·`www.instagram.com`을 확인하며 유사 도메인, 다른 suffix, 사용자명/비밀번호가 들어간 주소에 출처 제안을 표시하지 않는다.
+- 네이버 `/{blogId}/{숫자}`와 `/PostView.naver?blogId=…&logNo=…`, Instagram `/p/{shortcode}`와 `/reel/{shortcode}` 같은 형태의 분류는 **이번에 채택하지 않은 후속 후보**다. 현재 구현은 호스트로 원천만 제안하며 게시물 경로를 판정하지 않는다. 이번 공식 문서 접근으로 영속 식별자 계약을 확인한 것은 아니다. 이 형태만으로 새 원문 ID·중복 병합 기준을 만들지 않는다.
+- 네이버 `blogId`·`logNo`와 모르는 query/hash를 보존한다. Instagram의 공유 query도 자동 삭제하지 않는다. 추적값으로 보이는 값이 있어도 원형 보존이 기본이며, 향후 정리 기능은 원래 URL을 보존하고 사용자가 확인하는 별도 제안이어야 한다.
+- `naver.me`, Instagram 공유·프로필·미확인 경로는 URL 그대로 받을 수 있어도 게시물 주소로 자동 확장하지 않는다. 리다이렉트 확인이나 본문 조회를 위해 외부 요청을 추가하지 않는다. 가져온 본문을 그대로 두고 제목·출처·포함 범위만 사용자가 검토한다.
+- URL만 받으면 본문 미확보 상태를 유지한다. 텍스트가 있다고 자동으로 전체 본문이라고 판단하지 않는다. 사용자가 이미 고친 제목·원천·포함 범위를 뒤늦은 URL 제안이 덮어쓰지 않게 한다.
+
+[MDN CORS 공식 원본](https://github.com/mdn/content/blob/main/files/en-us/web/http/guides/cors/index.md)은 다른 origin의 응답을 script가 읽으려면 서버가 허용하는 CORS 헤더가 필요하다고 설명한다. service worker·Readability·붙여넣기 개선이 이 권한을 대신하지 않는다. 이번 조사에서는 네이버·Instagram 실제 게시물 응답의 CORS, URL 리다이렉트, 실제 Apple 기기의 복사 메뉴를 검사하지 않았다.
+
+반대 검토: 원천 추론이 잘못되면 수동 수정 가능하고 기존 평문 입력으로 끝낼 수 있어야 한다. 더 단순한 기본 경로인 글+URL 직접 입력을 남긴다. 실제 iPad/iPhone에서 복사한 한 건의 본문·출처 대조와 링크 다시 열기를 다음 기기 체험에서 확인하며, 반복되는 누락·HTML 입력·공식 export 요구가 확인될 때만 parser/API 연결을 다시 비교한다. 이번 문서 조사는 기능·브라우저·기기 검증 결과를 대신하지 않는다.

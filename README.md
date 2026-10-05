@@ -9,6 +9,8 @@
 
 후속 [자료 보관·복원·동기화](docs/design-review/life-management.md)는 JSON 내용 미리보기·새 사본 복원·이전 공간 복귀, 상태별 동기화 행동과 실패 복구를 정리한다. 연표 값과 계산은 유지한다.
 
+[웹 글·출처 가져오기](docs/design-review/social-import.md)는 네이버 블로그·Instagram 링크의 원천 설정 제안, 복사한 본문·포함 범위 검토, 출처 주소 대조를 제공한다. 링크만으로 본문·사진·영상을 수집하지 않는다.
+
 앞선 [통합 홈과 검증](docs/design-review/unified-home.md)은 자료·연표를 기록에 묶고 목표·습관은 도구, 계정·동기화·백업은 관리에 배치한다.
 
 자료 화면은 승인된 본문 중심 한 열과 A 인용 아이콘을 [실제 검색·원문·발췌 저장](docs/design-review/integration.md)에 연결했다. 후속으로 [가져오기·내 발췌·주제 모음](docs/design-review/collections-integration.md)도 정리하고 로컬 검증을 마쳤다. 최신 [피드 마감과 검증](docs/design-review/feed-refinement.md), [PR #20의 공개 적용 결과](https://github.com/wonchance-art/life-haedo/pull/20)를 함께 확인한다. `social-sample.html`과 `design-sample.html`은 저장 기능에 연결하지 않은 [이전 비교 시안](docs/design-review/README.md)이며 후속 화면 개발은 [DESIGN.md](DESIGN.md)를 따른다.

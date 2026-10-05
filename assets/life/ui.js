@@ -42,6 +42,22 @@
     } catch (_) { return null; }
   }
 
+  // A host suggests a source label, never the existence or contents of a post.
+  // Keep the user's URL untouched: it is also part of the source identity.
+  function suggestedWebOrigin(value) {
+    const text = String(value || '').trim();
+    if (text.length > 8192 || !/^https?:\/\//i.test(text) || /[\s\u0000-\u001f\u007f\\]/.test(text)) return null;
+    try {
+      const url = new URL(text);
+      if (url.username || url.password) return null;
+      if (['blog.naver.com', 'm.blog.naver.com'].includes(url.hostname)) return 'naver_blog';
+      if (['instagram.com', 'www.instagram.com'].includes(url.hostname)) return 'instagram';
+    } catch (_) { /* Invalid URLs remain editable and are checked before review. */ }
+    return null;
+  }
+
+  function isWebOrigin(origin) { return origin === 'naver_blog' || origin === 'instagram'; }
+
   function sourceLabel(source) {
     return source.title || source.url || '제목 없는 자료';
   }
@@ -1294,7 +1310,7 @@
           link.href = href;
           link.target = '_blank';
           link.rel = 'noopener noreferrer';
-          details.append(link, node('p', '외부 출처는 연결이 필요하며 삭제·비공개 상태일 수 있습니다.', 'life-help'));
+          details.append(node('p', source.url, 'life-meta life-source-url'), link, node('p', '외부 출처는 연결이 필요하며 삭제·비공개 상태일 수 있습니다.', 'life-help'));
         }
       }
       return details;
@@ -1556,6 +1572,24 @@
       const name = field('제목 (선택)', 'text', 'lifeImportTitle', input.title);
       const url = field('원문 링크 (선택)', 'url', 'lifeImportUrl', input.url);
       url.input.placeholder = 'https://';
+      url.input.autocapitalize = 'none';
+      url.input.spellcheck = false;
+      const suggestion = node('div', null, 'life-origin-suggestion');
+      suggestion.id = 'lifeImportOriginSuggestion';
+      const suggestionText = node('span', '', 'life-help');
+      suggestionText.setAttribute('role', 'status');
+      const acceptOrigin = button('', () => {
+        if (state.busy) return;
+        const value = suggestedWebOrigin(input.url);
+        if (!value) return;
+        input.origin = origin.input.value = value;
+        delete input.existingSourceId;
+        delete input.forceSeparate;
+        changedStage();
+        updateWebFields();
+        origin.input.focus({ preventScroll: true });
+      });
+      suggestion.append(suggestionText, acceptOrigin);
       const body = field('가져온 본문', 'textarea', 'lifeImportText', input.text);
       body.input.rows = 10;
       body.input.spellcheck = false;
@@ -1594,6 +1628,7 @@
       const retainedText = node('p', '', 'life-help');
       retained.append(retainedText, button('본문 확인', () => { setMethod('text'); body.input.focus(); }));
       const methodButtons = new Map();
+      let updateWebFields = () => {};
       const setMethod = method => {
         state.importMethod = method;
         textPanel.hidden = method !== 'text';
@@ -1602,6 +1637,7 @@
         retained.hidden = method === 'text' || !input.text;
         retainedText.textContent = '기존 본문 ' + (input.text || '').length.toLocaleString('ko-KR') + '자도 함께 보관됩니다. 방식만 바꾸어도 입력한 내용은 유지됩니다.';
         for (const [key, control] of methodButtons) control.setAttribute('aria-pressed', String(key === method));
+        updateWebFields();
       };
       [['text', '본문 붙여넣기', 'Text'], ['file', '텍스트 파일', 'File'], ['link', '링크 보관', 'Link']].forEach(([key, label, suffix]) => {
         const method = button(label, () => { if (!state.busy) setMethod(key); });
@@ -1609,9 +1645,9 @@
         methodButtons.set(key, method);
         methods.append(method);
       });
-      setMethod(state.importMethod);
       const details = node('details', null, 'life-details');
-      details.append(node('summary', '출처 상세·포함 범위 (선택)'));
+      const detailsSummary = node('summary', '출처 상세·포함 범위 (선택)');
+      details.append(detailsSummary);
       const author = field('원문 작성자 (모르면 비워 두기)', 'text', 'lifeImportAuthor', input.author);
       const relation = selectField('작성자 관계', 'lifeImportRelation', [['unknown', '미확인'], ['self', '내 기록 / 내 게시물'], ['other', '다른 사람의 기록 / 내가 저장한 게시물']], input.authorRelation || 'unknown');
       const originalDate = field('원문 작성일 (모르면 비워 두기)', 'date', 'lifeImportDate', input.originalCreatedAt);
@@ -1619,6 +1655,46 @@
       const omissions = field('누락·미확인 항목 (선택)', 'text', 'lifeImportOmissions', (input.omissions || input.coverage && input.coverage.omissions || []).join(', '));
       omissions.input.placeholder = '예: 사진 미보관, 댓글 미포함';
       details.append(author.label, relation.label, originalDate.label, coverage.label, omissions.label);
+      const webHelp = node('details', null, 'life-details');
+      webHelp.id = 'lifeImportWebHelp';
+      webHelp.append(node('summary', '글·출처 가져오는 방법'));
+      const webSteps = node('ol', null, 'life-help');
+      const copyBodyStep = node('li');
+      webSteps.append(node('li', '원래 게시물에서 링크를 복사해 위에 붙여 넣습니다.'), copyBodyStep,
+        node('li', '복사할 수 없다면 링크만 보관하고, 나중에 본문을 추가할 수 있습니다.'));
+      webHelp.append(webSteps);
+      const webNotice = node('p', '', 'life-help');
+      webNotice.id = 'lifeImportWebNotice';
+      const webScope = node('div');
+      webScope.id = 'lifeImportWebScope';
+      updateWebFields = () => {
+        const suggested = suggestedWebOrigin(input.url);
+        const offer = suggested && suggested !== input.origin;
+        suggestion.hidden = !offer;
+        if (offer) {
+          const label = originName(suggested);
+          if (suggestionText.textContent !== label + ' 링크') suggestionText.textContent = label + ' 링크';
+          acceptOrigin.textContent = label + (suggested === 'naver_blog' ? '로 설정' : '으로 설정');
+        } else suggestionText.textContent = '';
+        const social = isWebOrigin(input.origin);
+        webHelp.hidden = webNotice.hidden = !social;
+        webScope.hidden = !social || !input.text;
+        linkHelp.hidden = state.importMethod !== 'link' || social;
+        if (social) {
+          if (coverage.label.parentNode !== webScope) webScope.append(coverage.label);
+          copyBodyStep.textContent = input.origin === 'instagram'
+            ? '복사할 수 있는 캡션을 선택해 본문에 붙여 넣습니다. 앱에서 선택되지 않으면 브라우저에서 열어 확인합니다.'
+            : '필요한 글 본문을 선택해 복사한 뒤 본문에 붙여 넣습니다.';
+          webNotice.textContent = input.text
+            ? '제공한 글·캡션만 보관합니다. 사진·영상은 포함되지 않습니다.'
+            : '링크만으로 본문·사진·영상을 가져오지 않습니다.';
+          detailsSummary.textContent = '작성자·날짜·누락 항목 (선택)';
+        } else {
+          if (coverage.label.parentNode !== details) details.insertBefore(coverage.label, omissions.label);
+          detailsSummary.textContent = '출처 상세·포함 범위 (선택)';
+        }
+      };
+      setMethod(state.importMethod);
       const bindings = [[origin.input, 'origin'], [name.input, 'title'], [url.input, 'url'], [body.input, 'text'], [author.input, 'author'], [relation.input, 'authorRelation'], [originalDate.input, 'originalCreatedAt']];
       bindings.forEach(([element, key]) => element.addEventListener('input', () => {
         if (key === 'text') replaceDraftText(element.value);
@@ -1626,6 +1702,7 @@
         delete input.existingSourceId;
         delete input.forceSeparate;
         changedStage();
+        if (['origin', 'url', 'text'].includes(key)) updateWebFields();
       }));
       coverage.input.addEventListener('change', () => { input.coverage = { status: coverage.input.value, omissions: input.omissions || [] }; changedStage(); });
       omissions.input.addEventListener('input', () => { input.omissions = omissions.input.value.split(',').map(x => x.trim()).filter(Boolean); input.coverage = { status: coverage.input.value, omissions: input.omissions }; changedStage(); });
@@ -1635,7 +1712,7 @@
         newDraft();
         render();
       })));
-      form.append(methods, origin.label, name.label, textPanel, filePanel, linkHelp, retained, url.label, details, actions);
+      form.append(methods, url.label, suggestion, origin.label, name.label, textPanel, filePanel, linkHelp, retained, webNotice, webScope, details, actions, webHelp);
       if (state.stageFailed) form.append(button('새 검토 사본으로 보관', guarded(rescueStage)));
       if (state.stage.invalidatedExcerpts && state.stage.invalidatedExcerpts.length) {
         const invalid = node('details', null, 'life-details');
@@ -1681,6 +1758,13 @@
       section.append(node('h3', sourceLabel(prepared.source), 'life-review-title'),
         node('p', originName(prepared.source.origin) + ' · ' + (COVERAGE[prepared.version.coverage.status] || COVERAGE.unknown), 'life-meta'),
         metadata(prepared.source, prepared.version));
+      if (isWebOrigin(prepared.source.origin)) {
+        const notice = node('p', prepared.version.contentText === null
+          ? '링크만 보관합니다. 본문·사진·영상은 가져오지 않았습니다.'
+          : '제공한 글·캡션만 보관합니다. 사진·영상은 포함되지 않습니다.', 'life-help');
+        notice.id = 'lifeReviewWebNotice';
+        section.append(notice);
+      }
       let unresolved = prepared.match.kind === 'overlap' && !state.stage.input.forceSeparate && !state.stage.input.existingSourceId;
       if (unresolved) {
         const prior = sourceFor(prepared.match.sourceId);
