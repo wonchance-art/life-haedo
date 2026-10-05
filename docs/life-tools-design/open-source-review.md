@@ -250,3 +250,38 @@ idb의 [GitHub `releases/latest`](https://api.github.com/repos/jakearchibald/idb
 - **변경 범위:** 기존 IndexedDB의 store/DB schema version, Core bundle 형식, Supabase SQL·원격 동기화 형식을 바꾸는 근거로 이 조사를 사용하지 않는다. 새 로컬 구성 계약의 허용 필드·실패 복구·원자성 검증은 앱 구현에서 별도로 수행한다.
 
 반대 검토: 페이지를 구성하려고 원문을 다시 복사·편집하거나 동기화 형식 전체를 확장하면 현재 필요보다 변경 범위가 커진다. 기존 자료를 읽고 선택한 버전을 참조하는 작은 로컬 구성으로 먼저 완결한다. 실제 사용에서 복잡한 인덱스 조회·반응형 구독·반복되는 스키마 이전 문제가 확인되거나 보안 권고·지원 환경이 달라지면 Dexie를 다시 비교한다. 이번 공식 문서·배포 파일 확인은 앱의 계정 전환·동시 탭 충돌·용량 부족·사본 복원 테스트 및 실제 Apple 기기 검증을 대신하지 않는다.
+
+## 선택한 사본의 공개 게시 — 기존 Supabase와 별도 CMS 비교
+
+**2026-10-05 UTC**에 공식 GitHub API·고정 릴리스 태그·npm registry를 다시 확인했다. 이번 사용 장면은 내 페이지의 표시 설정과 선택한 본문을 확인한 뒤 **공개 사본 한 개를 게시하고, 같은 주소에서 명시적으로 갱신하거나 철회**하는 것이다. 철회 후 재게시는 새 주소를 받아 이전 주소를 계속 차단한다. 개인 작업공간·백업 전체를 익명으로 읽게 하거나 SNS 원본에 쓰는 기능은 포함하지 않는다. 아래는 도입 판단과 검증할 설계이며 실제 SQL 설치·운영 게시 완료 보고가 아니다.
+
+### 공식 배포·유지보수와 적합성
+
+| 후보 | 확인한 안정판·라이선스·유지보수 | 해도의 이번 요구와 결정 |
+| --- | --- | --- |
+| **Supabase JS 2.117.2 · MIT** + 기존 관리형 Supabase | [공식 릴리스](https://github.com/supabase/supabase-js/releases/tag/v2.117.2) **2026-09-25 10:05:55 UTC**, [npm latest](https://registry.npmjs.org/@supabase%2Fsupabase-js) 같은 버전·게시 **10:08:51 UTC**. [고정 태그 LICENSE](https://github.com/supabase/supabase-js/blob/v2.117.2/LICENSE) 본문 확인. [기본 브랜치 최근 commit](https://github.com/supabase/supabase-js/commit/cb7682857665fd9e83cfae4212f8d1550370b41c)은 **2026-10-02**. | **기존 동봉판과 검증된 공용 인증을 재사용**한다. 소유자는 기존 계정으로 전용 RPC에 선택 사본만 보낸다. 방문자는 공개 사본 조회만 수행하며 개인 계정 저장소를 열지 않는다. 새 CMS·별도 SDK·두 번째 로그인 세션을 추가할 이유가 없다. |
+| **PostgREST 16.4 · MIT** | [공식 안정 릴리스](https://github.com/PostgREST/postgrest/releases/tag/v16.4) **2026-09-24 05:31:39 UTC**, [고정 태그 LICENSE](https://github.com/PostgREST/postgrest/blob/v16.4/LICENSE) 확인. [최근 commit](https://github.com/PostgREST/postgrest/commit/d42ae9d55d12989cdc2f0fda8d551b07af4e6ab5)은 **2026-10-04**. | **Supabase의 기존 PostgreSQL/RPC 경로를 이용하는 설계 근거**다. 별도 서버를 설치하거나 업그레이드하지 않는다. 이 버전은 upstream 최신 조회이며, 현재 해도 프로젝트가 실행하는 관리형 PostgREST 버전을 확인한 결과가 아니다. |
+| **Ghost 6.67.0 · MIT** | [공식 안정 릴리스](https://github.com/TryGhost/Ghost/releases/tag/v6.67.0) **2026-09-29 17:23:19 UTC**, [npm](https://registry.npmjs.org/ghost) 게시 **17:40:56 UTC**. [고정 태그 LICENSE](https://github.com/TryGhost/Ghost/blob/v6.67.0/LICENSE)·[README](https://github.com/TryGhost/Ghost/blob/v6.67.0/README.md) 확인. [최근 commit](https://github.com/TryGhost/Ghost/commit/43e2122dcb50efb34c870f93c08b399ddeda29d7)은 **2026-10-05**. | **도입하지 않음.** 완성된 발행·편집 제품은 장점이지만, 이번 작은 공유 사본에 별도 Node 서버·배포·업데이트·CMS 계정과 콘텐츠 저장 경계를 더한다. Ghost 편집 데이터와 해도의 불변 원문/선택 구성 사이의 변환·동기화도 필요하다. 독립 출판 서비스·회원/뉴스레터 운영이 실제 요구가 되면 재검토한다. |
+| **Decap CMS 3.16.3 · MIT** | [공식 안정 릴리스](https://github.com/decaporg/decap-cms/releases/tag/decap-cms%403.16.3) **2026-09-22 12:51:56 UTC**, [npm](https://registry.npmjs.org/decap-cms) 게시 **12:49:24 UTC**. [고정 태그 LICENSE](https://github.com/decaporg/decap-cms/blob/decap-cms%403.16.3/LICENSE)·[README](https://github.com/decaporg/decap-cms/blob/decap-cms%403.16.3/README.md) 확인. [최근 commit](https://github.com/decaporg/decap-cms/commit/1d5868347d3d8648d7d5f7f59fc1b46595881b29)은 **2026-09-22**. | **도입하지 않음.** Git 저장소의 콘텐츠를 편집하는 정적 사이트 CMS다. 해도의 계정별 자료에서 고른 공유 사본을 위해 Git 인증·커밋·사이트 재배포와 별도 편집 화면을 추가하게 된다. 공개 Git 이력에 사본을 넣으면 현재 DB 조회를 차단하는 철회와 보존/삭제 모델도 달라진다. Git을 원본 콘텐츠 저장소로 운영할 별도 요구가 생길 때 재검토한다. |
+
+조회한 네 저장소는 모두 `archived=false`, `disabled=false`였다. 최근 commit과 안정판 존재는 확인 사실이며 장기 지원이나 모든 배포의 안전을 보증하지 않는다. 설치하지 않은 Ghost/Decap의 전체 의존성 감사를 수행한 것으로 보고하지 않는다. Supabase 동봉 파일의 기존 무결성 기록은 [vendor 안내](../../vendor/supabase/README.md)에 있다. 이번에는 앱 런타임 의존성을 추가하지 않는다.
+
+### 공개 보안 권고와 재사용 경계
+
+[Supabase JS](https://api.github.com/repos/supabase/supabase-js/security-advisories)와 [PostgREST](https://api.github.com/repos/PostgREST/postgrest/security-advisories)의 해당 저장소 공개 보안 권고 API는 조회 시 빈 배열을 반환했다. 미공개 문제·다른 데이터베이스·전체 전이 의존성까지 검사했거나 취약점이 없다는 뜻은 아니다.
+
+[Ghost 공개 권고](https://github.com/TryGhost/Ghost/security/advisories)에서 2026-10-01 공개된 가져오기 SVG의 저장형 XSS([GHSA-hqq2-xqr2-fmx2](https://github.com/TryGhost/Ghost/security/advisories/GHSA-hqq2-xqr2-fmx2), 영향 `>=4.0.0,<6.67.0`)와 embed 미리보기 XSS([GHSA-69qc-f5m6-889c](https://github.com/TryGhost/Ghost/security/advisories/GHSA-69qc-f5m6-889c), 영향 `>=6.34.0,<6.67.0`)를 확인했으며 두 권고의 수정 버전은 **6.67.0**이다. 이는 Ghost를 위험한 제품으로 분류하는 근거가 아니라, 미디어·embed·HTML 가져오기를 추가할 때 함께 생기는 유지관리 범위를 보여준다. 해도의 첫 공개 사본은 평문을 DOM `textContent`로 표시하고 원격 미디어·embed·비신뢰 HTML을 실행하지 않는 범위로 한정한다.
+
+[Decap 공개 권고](https://github.com/decaporg/decap-cms/security/advisories)에는 Bitbucket OAuth refresh token의 URL 노출([GHSA-jm5q-pq3r-26g9](https://github.com/decaporg/decap-cms/security/advisories/GHSA-jm5q-pq3r-26g9), `decap-cms <=3.15.1` 영향, **3.16.0** 수정)과 별도 `decap-server`의 저장소 경계 path traversal([GHSA-5rrq-v82w-qpfr](https://github.com/decaporg/decap-cms/security/advisories/GHSA-5rrq-v82w-qpfr), `<=3.10.0` 영향, **3.11.0** 수정)이 있었다. 이번에 Decap 인증·로컬 서버를 추가하지 않으며 두 패키지를 동일한 버전으로 취급하지 않는다.
+
+### 채택한 설계와 검증해야 할 비용
+
+공개 기능 자체를 새 CMS로 만들지 않고 **기존 인증·저장·RPC 기반을 재사용하며 해도에 필요한 선택 사본과 게시 경계만 구현**한다. 별도 서버 운영과 편집 데이터 이중화를 줄이는 대신, 아래 앱 고유 계약의 구현·회귀 검증을 직접 유지해야 한다.
+
+- **개인 자료와 공개 사본을 분리한다.** 전송 스키마는 페이지 제목·허용한 소개·표시할 항목·선택 본문/구절·페이지용 코멘트·출처 정보만 허용한다. 계정·작업공간·내부 원문/버전 ID, 원문 hash, 개인 기록의 메모와 회고, 미선택 항목을 제외한다. 정확한 버전을 찾을 수 없는 선택 항목은 다른 버전으로 대체하거나 일부만 조용히 게시하지 않는다.
+- **익명 사용자는 공개 식별자 한 개로 사본만 읽는다.** 개인 원문 테이블, 소유자 상태, 공개 사본 목록을 조회할 권한을 주지 않는다. 소유자 RPC는 서버의 `auth.uid()`에서 계정을 정하며 클라이언트의 소유자 주장을 받지 않는다. 소유자에게만 공개본의 관리용 목록을 제공하여 원래 로컬 구성을 잃어도 철회할 수 있게 한다. 이 복구 경로는 공개 본문/개인 초안 동기화와 별개다. 함수의 기본 실행 권한과 직접 테이블 권한을 함께 막아야 한다. [Supabase 공식 함수 지침](https://github.com/supabase/supabase/blob/master/apps/docs/content/guides/database/functions.mdx)은 기본 `security invoker`를 권하며, 필요한 `security definer`에는 제한한 `search_path`와 스키마 명시, `PUBLIC`/역할별 `EXECUTE` 철회를 설명한다. 이번 목적을 위해 기존 앱 함수 전체 권한을 일괄 변경하지 않는다.
+- **재시도·동시 수정과 철회를 함께 다룬다.** 서버 revision 비교와 operation ID/요청 내용 일치 검사로 중복 쓰기를 막는다. 응답을 받지 못한 요청은 같은 ID·같은 선택 사본으로 다시 확인한다. 과거 게시 요청의 영수증을 재생해도 철회 후 사본이 되살아나면 안 된다. 이미 처리된 과거 응답과 현재 서버 상태가 다를 수 있으므로 사용자에게 완료를 표시할 때 현재 게시 상태를 다시 확인한다.
+- **캐시가 철회를 뒤집지 않도록 한다.** 공개 데이터 응답과 클라이언트 요청의 캐시를 금지하고 서비스워커의 공개 사본 저장을 제외한다. [PostgREST 공식 응답 헤더 지침](https://github.com/PostgREST/postgrest/blob/v16.4/docs/references/transactions.rst#response-headers)의 `response.headers`와 `Cache-Control: no-cache, no-store, must-revalidate`를 검토 근거로 쓴다. 실제 관리형 HTTP 응답 헤더·철회 뒤 재접속은 별도로 검증해야 한다. 방문자가 이미 읽거나 외부에 저장한 사본까지 회수할 수 있다고 표현하지 않는다.
+- **게시 전 실제 전송 내용을 보여준다.** 본문을 선택하지 않아도 제목·URL·작성자 표시는 공개 사본에 포함될 수 있다. 원문 URL의 쿼리를 조용히 바꾸는 대신 공개할 출처 주소를 확인할 수 있게 하고, 방문자 외부 링크는 `noopener noreferrer` 등으로 공개 페이지 주소의 불필요한 전달을 줄인다. 자동 가져오기·로컬 표시 변경을 실제 게시/갱신 승인으로 취급하지 않는다.
+
+확인·자료 수집은 상속된 프록시와 TLS 검증을 유지한 공식 GitHub/npm HTTPS 요청으로 수행했다. 운영 DB·실제 계정·개인 자료는 이 조사에 사용하지 않았다. 로컬 모델/SQL/브라우저 검사와 관리형 Supabase의 실제 설치·HTTP 권한 검사, 공개 배포는 각각 별도 완료 조건이다.

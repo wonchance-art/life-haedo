@@ -1,5 +1,5 @@
 /* Versioned app shell. Personal documents remain in localStorage/IndexedDB. */
-const CACHE='haedo-v63';
+const CACHE='haedo-v64';
 const SHELL=['./','./index.html','./login.html','./workspace.html','./timeline.html',
   './goals.html','./habits.html','./privacy.html','./manifest.webmanifest','./icon.svg','./icon-maskable.svg',
   './vendor/daisyui.css','./vendor/daisyui-themes.css','./assets/app.css',
@@ -7,7 +7,7 @@ const SHELL=['./','./index.html','./login.html','./workspace.html','./timeline.h
   './assets/platform-config.js','./assets/platform.css','./assets/platform-auth.js',
   './assets/haedo-navigation.js','./assets/haedo-shell.css','./assets/timeline-shell.css',
   './assets/platform-data.js','./assets/platform-store.js','./assets/platform-ui.js','./assets/platform-life-remote.js','./assets/timeline-entry.js',
-  './life.html','./vendor/idb/idb.js','./vendor/supabase/supabase.js','./assets/life/core.js','./assets/life/workbench.js','./assets/life/storage.js',
+  './life.html','./vendor/idb/idb.js','./vendor/supabase/supabase.js','./assets/life/core.js','./assets/life/workbench.js','./assets/life/share.js','./assets/life/share-remote.js','./assets/life/share-view.js','./assets/life/share-view.css','./assets/life/storage.js',
   './assets/life/remote.js','./assets/life/sync.js',
   './assets/life/legacy.js','./assets/life/icons.js','./assets/life/workbench-ui.js','./assets/life/home.js','./assets/life/ui.js','./assets/life/ui.css','./assets/life/workbench.css','./assets/life/home.css','./assets/life/shell.js'];
 const shellURLs=new Set(SHELL.map(path=>new URL(path,self.registration.scope).href));

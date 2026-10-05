@@ -1,0 +1,14 @@
+{
+  "generatedAt": "2026-10-05T08:08:39.384608+00:00",
+  "scope": "Local network-isolated Docker PostgreSQL 17.11; synthetic Auth shim/claims; no live Supabase/Google/PostgREST assertions",
+  "migration": "supabase/migrations/20261005120000_life_public_pages.sql",
+  "migrationSha256": "d44c711a293906b6962ff8e983578da742648d9938aaeb71b32062eb6ec4e78c",
+  "repeatableMigration": true,
+  "installationChecks": 12,
+  "sqlRoleRlsRpcChecks": 104,
+  "multiSessionRaces": 3,
+  "existingChartsAndLifeWorkspacesUntouched": true,
+  "testTransactionRolledBack": true,
+  "temporaryHarnessContainerRemoved": true,
+  "image": "postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24"
+}

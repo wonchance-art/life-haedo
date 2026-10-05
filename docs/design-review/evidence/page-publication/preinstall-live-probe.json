@@ -1,0 +1,35 @@
+{
+  "scope": "read-only deployed HTTP; no real owner publish/revoke or Google login",
+  "checks": [
+    {
+      "check": "anonymous exact-ID lookup and no-store",
+      "http": 404,
+      "code": "PGRST202",
+      "passed": false
+    },
+    {
+      "check": "anonymous owner listing denied",
+      "http": 404,
+      "code": "PGRST202",
+      "passed": false
+    },
+    {
+      "check": "anonymous owner status denied",
+      "http": 404,
+      "code": "PGRST202",
+      "passed": false
+    },
+    {
+      "check": "anonymous base table denied",
+      "http": 404,
+      "code": "PGRST205",
+      "passed": false
+    },
+    {
+      "check": "anonymous receipts denied",
+      "http": 404,
+      "code": "PGRST205",
+      "passed": false
+    }
+  ]
+}

@@ -140,7 +140,7 @@
     skip.href = '#lifeMain';
     root.append(skip, header, toolbar, recordSections, status, error, main);
     container.replaceChildren(root);
-    const workbenchModes = ['activities', 'page', 'discover', 'reflection', 'workbench-backup'];
+    const workbenchModes = ['activities', 'page', 'discover', 'reflection', 'workbench-backup', 'public-pages'];
     const workbench = global.HaedoLife.WorkbenchUI?.create({
       storage, core, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce,
@@ -844,7 +844,7 @@
 
     function sectionFor(mode) {
       if (mode === 'home') return 'home';
-      return ['tools', 'discover', 'reflection'].includes(mode) ? 'tools' : ['manage', 'sync', 'transfer', 'workbench-backup'].includes(mode) ? 'manage' : 'records';
+      return ['tools', 'discover', 'reflection'].includes(mode) ? 'tools' : ['manage', 'sync', 'transfer', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
     }
 
     function routeMode() {
@@ -853,8 +853,8 @@
       const view = params.get('view');
       if (section === 'home') return 'home';
       if (section === 'tools') return ['discover', 'reflection'].includes(view) ? view : 'tools';
-      if (section === 'manage') return ['transfer', 'sync', 'workbench-backup'].includes(view) ? view : 'manage';
-      if (!section && ['transfer', 'sync', 'workbench-backup', 'discover', 'reflection'].includes(view)) return view;
+      if (section === 'manage') return ['transfer', 'sync', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
+      if (!section && ['transfer', 'sync', 'workbench-backup', 'public-pages', 'discover', 'reflection'].includes(view)) return view;
       if (['topics', 'sources', 'time', 'import', 'activities', 'page'].includes(view)) return view;
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
     }
@@ -1051,6 +1051,7 @@
       if ([...state.batches.values()].some(batch => batch.workspaceId === state.bundle.workspaceId)) management.append(button('선택 파일 목록', guarded(() => navigate('batch'))));
       main.append(manage, management);
       const destinations = node('div', null, 'life-destinations');
+      destinations.append(actionRow('공개 페이지 관리', '이 계정으로 게시한 페이지 확인·철회', 'link', () => navigate('public-pages')));
       destinations.append(actionRow('자료·구성 백업', '원문과 묶음·내 페이지·회고를 함께 보관', 'download', () => navigate('workbench-backup')));
       destinations.append(actionRow('내보내기·사본 복원', '원문·발췌·출처를 파일로 보관', 'download', () => navigate('transfer'), '자료 백업·복원'));
       if (sync) destinations.append(actionRow('기기 간 동기화', '연결할 작업공간을 직접 선택', 'cloud', async () => {

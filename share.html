@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#FFFFFF">
+  <meta name="description" content="선택한 기록과 생각을 모은 해도 페이지">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <title>공유 페이지 · 해도</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/life/ui.css">
+  <link rel="stylesheet" href="assets/life/share-view.css">
+</head>
+<body>
+  <a class="life-skip" href="#shareContent">본문으로 이동</a>
+  <main class="share-page">
+    <header class="share-header">
+      <a class="share-brand" href="index.html" aria-label="해도 홈">해도</a>
+      <button id="shareRefresh" class="life-button life-icon-button" type="button" aria-label="공개 상태 다시 확인" title="공개 상태 다시 확인"></button>
+    </header>
+    <p id="shareStatus" class="share-page-state" role="status" aria-live="polite">공유 페이지를 확인하는 중입니다.</p>
+    <div id="shareContent" tabindex="-1"></div>
+    <p id="shareUpdated" class="share-updated" hidden></p>
+    <noscript><p class="share-page-state">공개된 페이지를 확인하려면 JavaScript를 허용해 주세요.</p></noscript>
+  </main>
+  <script src="assets/platform-config.js"></script>
+  <script src="assets/life/icons.js"></script>
+  <script src="assets/life/share.js"></script>
+  <script src="assets/life/share-remote.js"></script>
+  <script src="assets/life/share-view.js"></script>
+  <script src="assets/life/share-page.js"></script>
+</body>
+</html>

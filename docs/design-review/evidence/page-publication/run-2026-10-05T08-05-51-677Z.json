@@ -1,0 +1,16 @@
+{
+  "createdAt": "2026-10-05T08:05:51.677Z",
+  "scope": "Actual local app/SDK/IndexedDB with anonymous HTTP share-RPC simulator; not live SQL/RLS, Apple hardware or real Google login",
+  "checks": [
+    {
+      "name": "a new authenticated device can find and revoke its existing public page without private local records",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "browser": "151.0.7922.173"
+}

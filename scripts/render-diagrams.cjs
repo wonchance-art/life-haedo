@@ -1,7 +1,7 @@
 /* Render documentation diagrams using an isolated Mermaid installation.
  * npm --prefix .local/diagram-render install --ignore-scripts --save-exact mermaid@12.1.0
  * MERMAID_MODULE_DIR=.local/diagram-render/node_modules/mermaid node scripts/render-diagrams.cjs
- * Explicit v3/v4 source: node scripts/render-diagrams.cjs activity_hub_v4.mmd
+ * Explicit v3/v4/v5 source: node scripts/render-diagrams.cjs activity_hub_v4.mmd
  * Default renders v3 only; explicit calls write a separate source/set-specific report.
  * Optional: PLAYWRIGHT_MODULE, CHROMIUM_PATH. No application dependency or external fetch.
  */
@@ -25,7 +25,7 @@ async function main() {
   const names = process.argv.length > 2 ? process.argv.slice(2).map(name => path.basename(name))
     : (await fs.readdir(sourceDir)).filter(name => /_v3\.mmd$/.test(name)).sort();
   assert(names.length, 'No diagram sources found');
-  assert(names.every(name => /^[a-z0-9_-]+_v[34]\.mmd$/.test(name)), 'Only v3/v4 documentation diagrams are rendered');
+  assert(names.every(name => /^[a-z0-9_-]+_v[345]\.mmd$/.test(name)), 'Only v3/v4/v5 documentation diagrams are rendered');
   const reportName = process.argv.length <= 2 ? 'report.json' : names.length === 1
     ? names[0].replace(/\.mmd$/, '.report.json')
     : 'report-' + createHash('sha256').update([...names].sort().join('\n')).digest('hex').slice(0, 16) + '.json';

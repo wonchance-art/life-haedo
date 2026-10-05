@@ -70,7 +70,7 @@
   if (page === 'home' || page === 'life') {
     if (sections.some(section => section.id === fromQuery)) initialSection = fromQuery;
     else if (['discover', 'reflection'].includes(query.get('view'))) initialSection = 'tools';
-    else if (['transfer', 'sync', 'workbench-backup'].includes(query.get('view'))) initialSection = 'manage';
+    else if (['transfer', 'sync', 'workbench-backup', 'public-pages'].includes(query.get('view'))) initialSection = 'manage';
     else if (['topics', 'sources', 'time', 'import', 'activities', 'page'].includes(query.get('view'))) initialSection = 'records';
   }
   activate(initialSection);

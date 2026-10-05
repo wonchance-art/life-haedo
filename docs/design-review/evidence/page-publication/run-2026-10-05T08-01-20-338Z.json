@@ -1,0 +1,24 @@
+{
+  "createdAt": "2026-10-05T08:01:20.338Z",
+  "scope": "Actual local app/SDK/IndexedDB with anonymous HTTP share-RPC simulator; not live SQL/RLS, Apple hardware or real Google login",
+  "checks": [
+    {
+      "name": "local edits stay private until explicit update; revoke hides content and republish rotates the address",
+      "pass": true
+    },
+    {
+      "name": "historical publish retry after server revocation never revives the old publication",
+      "pass": true
+    },
+    {
+      "name": "private composition changed after review must be reviewed again before any public write",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 1,
+  "external": [],
+  "browser": "151.0.7922.173"
+}

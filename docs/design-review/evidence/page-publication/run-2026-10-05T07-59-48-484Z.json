@@ -1,0 +1,274 @@
+{
+  "createdAt": "2026-10-05T07:59:48.484Z",
+  "scope": "Actual local app/SDK/IndexedDB with anonymous HTTP share-RPC simulator; not live SQL/RLS, Apple hardware or real Google login",
+  "checks": [
+    {
+      "name": "only explicitly selected own body and exact original excerpt reach the anonymous snapshot",
+      "pass": true
+    },
+    {
+      "name": "local edits stay private until explicit update; revoke hides content and republish rotates the address",
+      "pass": true
+    },
+    {
+      "name": "keyboard consent is required and one explicit Enter publishes the reviewed snapshot",
+      "pass": true
+    },
+    {
+      "name": "visual public and owner review long Korean empty loading error 1440",
+      "pass": true
+    },
+    {
+      "name": "visual public and owner review long Korean empty loading error 820",
+      "pass": true
+    },
+    {
+      "name": "visual public and owner review long Korean empty loading error 390",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "scene": "owner-review",
+      "file": "owner-review-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 114,
+      "contrastFailures": []
+    },
+    {
+      "scene": "public-many",
+      "file": "public-many-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 87,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "public-loading",
+      "file": "public-loading-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 2,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "public-error",
+      "file": "public-error-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 7.299,
+      "measuredTexts": 2,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "public-empty",
+      "file": "public-empty-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 4,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "public-missing",
+      "file": "public-missing-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 2,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "owner-review",
+      "file": "owner-review-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 114,
+      "contrastFailures": []
+    },
+    {
+      "scene": "public-many",
+      "file": "public-many-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 87,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "public-loading",
+      "file": "public-loading-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 2,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "public-error",
+      "file": "public-error-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 7.299,
+      "measuredTexts": 2,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "public-empty",
+      "file": "public-empty-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 4,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "public-missing",
+      "file": "public-missing-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 2,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "owner-review",
+      "file": "owner-review-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 114,
+      "contrastFailures": []
+    },
+    {
+      "scene": "public-many",
+      "file": "public-many-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 87,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "public-loading",
+      "file": "public-loading-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 2,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "public-error",
+      "file": "public-error-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 7.299,
+      "measuredTexts": 2,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "public-empty",
+      "file": "public-empty-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 4,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "public-missing",
+      "file": "public-missing-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 2,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 3,
+  "external": [],
+  "browser": "151.0.7922.173"
+}
