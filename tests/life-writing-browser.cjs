@@ -19,7 +19,18 @@ async function write(page){await page.goto(base+'/index.html?section=records&vie
 async function savedDraft(page){await page.waitForFunction(()=>document.querySelector('#lifeWritingStatus')?.dataset.state==='draft');return writingDrafts(page);}
 async function fill(page,text=body,name=title){await page.locator('#lifeWritingTitle').fill(name);await page.locator('#lifeWritingBody').fill(text);await savedDraft(page);}
 async function commit(page,count=1){await page.locator('#lifeWritingSave').click();await page.waitForFunction(count=>{const s=HaedoLife.Shell.storage;return s.getActive().then(id=>s.read(id)).then(b=>b.sourceVersions.length===count);},count);await settle(page);return stored(page);}
-async function records(page){await nav(page,'records');if(await page.locator('#lifeWritingClose').isVisible())await page.locator('#lifeWritingClose').click();const heading=page.getByRole('button',{name:'기록 목록',exact:true});if(await heading.count())await heading.click();await settle(page);await page.locator('#lifeSearch').waitFor();}
+async function records(page){
+ await nav(page,'records');
+ if(await page.locator('#lifeWritingClose').isVisible())await page.locator('#lifeWritingClose').click();
+ if(await page.locator('.life-reader').isVisible()){
+  await page.locator('.life-reader-tools > button').first().click();await settle(page);
+ }
+ const back=page.getByRole('button',{name:'기록으로 돌아가기',exact:true});
+ if(await back.isVisible())await back.click();
+ const heading=page.getByRole('button',{name:'기록 목록',exact:true});
+ if(await heading.isVisible())await heading.click();
+ await settle(page);await page.locator('#lifeSearch').waitFor();
+}
 async function readVersion(page,id){await records(page);await page.locator(`.life-source-card[data-version-id="${id}"] .life-source-open`).click();await settle(page);await page.locator('#lifeSourceText').waitFor();}
 async function abortWrites(page,store){await page.evaluate(store=>{window.__writingOriginalPut||=IDBObjectStore.prototype.put;window.__writingAborted=0;IDBObjectStore.prototype.put=store?function(...args){const r=__writingOriginalPut.apply(this,args);if(this.name===store){__writingAborted++;this.transaction.abort();}return r;}:__writingOriginalPut;},store);}
 async function addExcerpt(page){
@@ -63,7 +74,7 @@ async function main(){
    await write(page);await page.locator('#lifeWritingClose').click();await page.getByRole('button',{name:'가져오기',exact:true}).click();await page.locator('#lifeImportTitle').fill('가져오기 전용 초안');await page.locator('#lifeImportText').fill('다른 곳에서 받은 본문을 검토 중입니다.');await page.getByRole('button',{name:'검토 내용 보관',exact:true}).click();await settle(page);const imported=(await stages(page)).find(s=>s.kind!=='writing');
    await page.getByRole('button',{name:'글쓰기',exact:true}).click();await page.locator('#lifeWritingBody').waitFor();await fill(page);assert.deepEqual((await stages(page)).find(s=>s.stageId===imported.stageId),imported);await commit(page);
    assert.deepEqual((await stages(page)).find(s=>s.stageId===imported.stageId),imported);assert.equal((await stored(page)).sources.length,1);
-   await page.getByRole('button',{name:'가져오기',exact:true}).click();await page.locator('#lifeImportText').waitFor();assert.equal(await page.locator('#lifeImportText').inputValue(),imported.input.text);assert.equal((await writingDrafts(page)).length,0);
+   await records(page);await page.getByRole('button',{name:'가져오기',exact:true}).click();await page.locator('#lifeImportText').waitFor();assert.equal(await page.locator('#lifeImportText').inputValue(),imported.input.text);assert.equal((await writingDrafts(page)).length,0);
   });
   await check('real staging and commit aborts preserve text, block failed navigation and retry once',async({page})=>{
    await write(page);await abortWrites(page,'staging');await page.locator('#lifeWritingTitle').fill(title);await page.locator('#lifeWritingBody').fill(body);await page.locator('#lifeWritingError').waitFor({state:'visible'});assert.equal(await page.locator('#lifeWritingBody').inputValue(),body);assert.equal((await stored(page)).sources.length,0);assert((await page.evaluate(()=>__writingAborted))>0);

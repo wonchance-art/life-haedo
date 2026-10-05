@@ -1,0 +1,11 @@
+{
+  "name": "life-haedo-browser-ci",
+  "private": true,
+  "description": "Pinned browser tooling for anonymous local integration checks only",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

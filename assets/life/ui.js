@@ -111,6 +111,7 @@
     let homeRenderPromise = Promise.resolve();
     const selectedVersions = new Set();
     let selectionReturn = null;
+    let relatedOrigin = null;
     const downloadUrls = new Set();
     const state = {
       bundle: null, workspaces: [], mode: 'sources', topic: '', topicsSearch: '', sourcesSearch: '', originFilter: '', returnContext: null, suppressReaderResume: false, sourceId: null,
@@ -142,7 +143,7 @@
     skip.href = '#lifeMain';
     root.append(skip, header, toolbar, recordSections, status, error, main);
     container.replaceChildren(root);
-    const workbenchModes = ['activities', 'page', 'discover', 'reflection', 'workbench-backup', 'public-pages'];
+    const workbenchModes = ['activities', 'page', 'discover', 'related', 'reflection', 'workbench-backup', 'public-pages'];
     const workbench = global.HaedoLife.WorkbenchUI?.create({
       storage, core, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce,
@@ -155,7 +156,7 @@
       },
       onSelectionCancel: returnFromArrange,
       onArrange: ({ workspaceId, versionIds, focusId }) => {
-        if (disposed || state.bundle?.workspaceId !== workspaceId || state.mode !== 'discover') return;
+        if (disposed || state.bundle?.workspaceId !== workspaceId || !['discover', 'related'].includes(state.mode)) return;
         return arrangeRecords('activities', [...new Set(versionIds)], focusId);
       },
       openSource: (sourceId, versionId, options = {}) => navigate('source', {
@@ -828,7 +829,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { selection, groupId, pagePreview, writing, ...viewOptions } = options || {};
+      const { selection, groupId, pagePreview, discovery, writing, ...viewOptions } = options || {};
       writingOpenOptions = mode === 'write' ? writing || {} : null;
       Object.assign(state, viewOptions, { mode });
       workbenchOpenOptions = workbenchModes.includes(mode) ? options : null;
@@ -839,7 +840,7 @@
       const rendering = render();
       if (!options?.selection) await rendering;
       if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
-      const heading = main.querySelector('h2') || toolbar.querySelector('h1');
+      const heading = main.querySelector('h1,h2') || toolbar.querySelector('h1');
       if (heading && !options?.groupId) heading.focus({ preventScroll: true });
     }
 
@@ -883,7 +884,7 @@
       if (section === 'tools') return ['discover', 'reflection'].includes(view) ? view : 'tools';
       if (section === 'manage') return ['transfer', 'sync', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
       if (!section && ['transfer', 'sync', 'workbench-backup', 'public-pages', 'discover', 'reflection'].includes(view)) return view;
-      if (['topics', 'sources', 'time', 'import', 'write', 'activities', 'page'].includes(view)) return view;
+      if (['topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related'].includes(view)) return view;
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
     }
 
@@ -938,12 +939,16 @@
       header.replaceChildren();
       toolbar.classList.add('haedo-page-heading');
       toolbar.replaceChildren();
+      toolbar.hidden = state.mode === 'source' && !state.remoteChanged;
       recordSections.replaceChildren();
-      recordSections.hidden = section !== 'records' || state.mode === 'write';
+      const focused = ['write', 'source', 'page', 'related'].includes(state.mode);
+      recordSections.hidden = section !== 'records' || focused;
       const heading = node('h1', null, 'life-page-title');
       heading.tabIndex = -1;
       const headingGroup = node('div', null, 'haedo-heading-title');
       if (state.mode === 'write') heading.textContent = '글쓰기';
+      else if (state.mode === 'page') heading.textContent = '내 페이지';
+      else if (state.mode === 'related') heading.textContent = '관련 기록';
       else if (section === 'records') {
         const records = button('기록', guarded(() => navigate('sources')), 'life-title-button');
         records.setAttribute('aria-label', '기록 목록');
@@ -955,8 +960,14 @@
       if (section === 'tools' && state.mode !== 'tools') {
         headingGroup.append(iconButton('도구로 돌아가기', 'back', guarded(() => navigate('tools'))));
       }
+      if (state.mode === 'page') headingGroup.append(iconButton('기록으로 돌아가기', 'back', guarded(() => navigate('sources'))));
+      if (state.mode === 'related') {
+        const back = iconButton(relatedOrigin?.workspaceId === state.bundle?.workspaceId ? '읽던 글로 돌아가기' : '기록으로 돌아가기', 'back', guarded(returnFromRelated));
+        back.id = 'lifeRelatedReturn';
+        headingGroup.append(back);
+      }
       headingGroup.append(heading);
-      toolbar.append(headingGroup);
+      if (state.mode !== 'source') toolbar.append(headingGroup);
       if (section === 'records') {
         if (state.mode === 'sources') {
           const select = iconButton('기록 선택', 'check', guarded(() => {
@@ -975,7 +986,7 @@
           recordSections.append(tab);
         });
       }
-      if (state.mode !== 'write' && (section === 'records' || section === 'home')) {
+      if (!focused && (section === 'records' || section === 'home')) {
         const nav = node('nav', null, 'life-nav life-context-nav');
         nav.setAttribute('aria-label', '기록 보기');
         [['sources', '기록 검색', 'search'], ...(section === 'records' ? [['time', '시간 보기', 'timeline']] : [])].forEach(([mode, label, icon]) => {
@@ -1116,6 +1127,7 @@
     function resetSearchContext() {
       selectedVersions.clear();
       selectionReturn = null;
+      relatedOrigin = null;
       state.selecting = state.readerArrangeOpen = false;
       state.topic = state.topicsSearch = state.sourcesSearch = state.originFilter = '';
       state.topicUnassigned = false;
@@ -1226,10 +1238,22 @@
     }
 
     function searchReturnButton() {
-      const labels = { home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '내 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', reflection: '회고로 돌아가기' };
+      const labels = { home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '내 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기' };
       const back = iconButton(labels[state.returnContext?.mode] || '검색 결과로 돌아가기', 'back', guarded(returnToResults));
       back.id = 'lifeSearchReturn';
       return back;
+    }
+
+    async function returnFromRelated() {
+      const origin = relatedOrigin;
+      if (!origin || origin.workspaceId !== state.bundle?.workspaceId) return navigate('sources', { returnContext: null });
+      await navigate('source', { sourceId: origin.sourceId, sourceVersionId: origin.sourceVersionId,
+        locator: origin.locator, returnContext: origin.returnContext, suppressReaderResume: false });
+      requestAnimationFrame(() => {
+        if (disposed || state.bundle?.workspaceId !== origin.workspaceId || state.mode !== 'source' || state.sourceVersionId !== origin.sourceVersionId) return;
+        main.querySelector('#' + (origin.focusId || 'lifeReaderRelated'))?.focus({ preventScroll: true });
+        global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
+      });
     }
 
     function excerptCard(record, { mode = 'topics', instanceId = '', sourceId = null } = {}) {
@@ -1626,8 +1650,8 @@
       if (isOwnWriting(source) && version.id === versions[versions.length - 1].id) {
         tools.append(iconButton('내 글 수정', 'edit', guarded(() => navigate('write', { writing: { sourceId: source.id, sourceVersionId: version.id } }))));
       }
-      const heading = title(sourceLabel(source));
-      heading.classList.add('life-reader-heading');
+      const heading = node('h1', sourceLabel(source), 'life-heading life-reader-heading');
+      heading.tabIndex = -1;
       const versionIndex = versions.findIndex(item => item.id === version.id) + 1;
       article.append(tools, arrangePanel, heading,
         node('p', sourceOrigin(source) + ' · 원문 작성 ' + (version.originalCreatedAt || '미상'), 'life-reader-meta'),
@@ -1647,6 +1671,20 @@
       detailsHeading.append(node('h3', '출처와 포함 범위'), iconButton('출처 정보 닫기', 'close', () => setDetails(false)));
       details.prepend(detailsHeading);
       article.append(details);
+      const openRelated = focusId => guarded(async () => {
+        const origin = { workspaceId: state.bundle.workspaceId, sourceId: source.id, sourceVersionId: version.id,
+          locator: state.sourceSelection ? { ...state.sourceSelection } : null,
+          scrollY: global.scrollY, returnContext: state.returnContext, focusId };
+        // Do not overwrite the reader context if a failed draft flush blocks navigation.
+        await navigate('related', { discovery: { workspaceId: origin.workspaceId, seedVersionId: version.id } });
+        if (state.mode !== 'related' || state.bundle?.workspaceId !== origin.workspaceId) return;
+        relatedOrigin = origin;
+        renderHeader();
+        global.scrollTo({ top: 0, behavior: 'instant' });
+      });
+      const related = button('함께 읽을 기록', openRelated('lifeReaderRelated'), 'life-reader-related');
+      related.id = 'lifeReaderRelated';
+      article.append(related);
       main.append(article);
       if (version.contentText === null || version.contentText === undefined) {
         article.append(empty('본문 미확보 · 링크만 보관했습니다. 원래 출처를 열거나 본문을 제공해 새 버전으로 보관할 수 있습니다.'));
@@ -1664,6 +1702,9 @@
       const originalText = document.createTextNode(version.contentText);
       reader.append(originalText);
       article.append(reader);
+      const relatedEnd = button('함께 읽을 기록', openRelated('lifeReaderRelatedEnd'), 'life-reader-related life-reader-related-end');
+      relatedEnd.id = 'lifeReaderRelatedEnd';
+      article.append(relatedEnd);
       const panel = node('section', null, 'life-excerpt-panel');
       panel.id = 'lifeExcerptPanel';
       panel.hidden = true;

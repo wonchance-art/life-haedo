@@ -11,6 +11,7 @@ description: 해도의 화면 추가·수정·디자인 검토에 사용한다. 
 
 ## 시작
 
+- 사용자의 짧은 지시는 AGENTS.md의 실행 지시 변환 원칙으로 구체화한다. 먼저 실제 자료에서 얻을 결과와 실패 후 복구를 정하고, 동일한 익명 한글 자료로 전후를 비교한다. 제목 반복·본문 등장 위치·중간 재선택·읽던 위치 복귀를 확인하되 수치나 테스트 통과를 미적 품질·유용성의 증명으로 쓰지 않는다. 현재 기준 흐름은 `docs/design-review/core-experience.md`다.
 - 검색·가져오기는 Operate, 긴 원문은 Read 모드다. 실제 코드와 최신 스크린샷을 보고 수정 범위를 정한다.
 - 동일한 컴포넌트를 찾고 재사용한다. 실제 자료 화면은 `index.html`/`life.html`, `assets/life/ui.css`, `assets/life/icons.js`, `assets/life/ui.js`가 기준이다. 승인한 A 인용 아이콘과 본문 중심 한 열을 사용한다. `social-sample.html`과 `assets/design-social/`는 설계 비교, 이전 `design-sample.html`은 초기 이력이다. 검색·원문은 `docs/design-review/integration.md`, 후속 가져오기·발췌·주제는 `docs/design-review/collections-integration.md`에서 실제 UI와 저장 경계를 확인한다.
 - 새로운 라이브러리는 최신 공식 버전·라이선스·유지관리·적합성을 조사하고 [참고 기록](../../../docs/design-review/references.md)에 채택/참고/제외를 구분한다. 작은 기능마다 전체 후보를 재조사하지 않는다.

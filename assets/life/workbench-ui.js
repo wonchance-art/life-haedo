@@ -4,7 +4,7 @@
 
   const life = global.HaedoLife = global.HaedoLife || {};
   const ORIGINS = { apple_notes: 'Apple 메모', obsidian: 'Obsidian', naver_blog: '네이버 블로그', instagram: 'Instagram', other: '기타' };
-  const MODES = { activities: '묶음', page: '내 페이지', discover: '다시 찾기', reflection: '회고', 'workbench-backup': '자료·구성 백업', 'public-pages': '공개한 페이지' };
+  const MODES = { activities: '묶음', page: '내 페이지', discover: '다시 찾기', related: '관련 기록', reflection: '회고', 'workbench-backup': '자료·구성 백업', 'public-pages': '공개한 페이지' };
   const copy = value => JSON.parse(JSON.stringify(value));
   function el(tag, text, className) {
     const element = document.createElement(tag);
@@ -49,6 +49,7 @@
       statusNode.textContent = !session.state ? '구성을 불러오지 못함' : session.saving ? '이 브라우저에 저장 중…' : session.error ? '저장하지 못함 · 초안 유지' : incoming ? '선택 검토 중 · 아직 추가하지 않음' :
         session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '다른 탭의 새 구성이 있습니다.' : '이 브라우저에 저장됨';
       statusNode.dataset.state = session.error ? 'error' : session.edit !== session.stored ? 'dirty' : 'saved';
+      if (mode === 'related') surface.querySelector('.wb-storage-line').hidden = !!session.state && !session.saving && !session.error && session.edit === session.stored && session.remoteRevision <= session.baseRevision;
     }
     function clearError() { if (errorNode) { errorNode.hidden = true; errorNode.replaceChildren(); } }
     function report(error, session = current) {
@@ -239,7 +240,7 @@
       await flush();
       if (showing(token, session)) await openSource(info.source.id, info.version.id, { focusKey });
     }
-    function sourceRow(id, { body = false, remove, previewOnly = false, hideTitle = false, focusKey } = {}) {
+    function sourceRow(id, { body = false, remove, previewOnly = false, hideTitle = false, showLink = false, focusKey } = {}) {
       const row = el('div', null, 'wb-source'); row.dataset.versionId = id;
       const info = sourceInfo(id);
       const head = el('div', null, 'wb-row');
@@ -258,7 +259,7 @@
         const content = el('p', info.version.contentText, 'wb-source-body');
         row.append(content);
       }
-      if (previewOnly && info?.source.url) {
+      if ((previewOnly || showLink) && info?.source.url) {
         try {
           const url = new URL(info.source.url);
           if (['http:', 'https:'].includes(url.protocol)) {
@@ -826,6 +827,26 @@
       bodyNode.append(box);
       if (!listing.started) { listing.started = true; loadPublicPages(); }
     }
+    function pagePart(part, entry, index) {
+      const info = sourceInfo(part.versionId);
+      const section = el('div', null, 'wb-page-part'); section.dataset.versionId = part.versionId;
+      if (!info) {
+        section.append(el('p', '연결된 원문 없음', 'wb-source-title'), notice('이 버전은 현재 공간에 없습니다. 다른 버전으로 바꾸지 않았습니다.'));
+        return section;
+      }
+      const title = el('h4', info.source.title, 'wb-source-title wb-page-part-title');
+      title.hidden = index === 0 && info.source.title === entry.title; section.append(title);
+      const origin = life.Writing?.isOwnSource(info.source, getBundle()) ? '내 글' : ORIGINS[info.source.origin] || '기타';
+      const metadata = [origin];
+      if (info.version.originalAuthor.relation !== 'self') metadata.push(info.version.originalAuthor.relation === 'other' ? '다른 사람의 기록' : '작성자 관계 미확인');
+      if (info.version.contentText == null) metadata.push('본문 미확보');
+      else if (info.version.coverage.status === 'partial') metadata.push('일부 본문');
+      else if (info.version.coverage.status === 'unknown') metadata.push('확보 범위 미확인');
+      if (info.total > 1) metadata.push(info.number + '/' + info.total + ' 버전');
+      section.append(el('p', metadata.join(' · '), 'life-meta wb-page-source-meta'));
+      if (entry.showBody && info.version.contentText != null) section.append(el('p', info.version.contentText, 'wb-source-body'));
+      return section;
+    }
     function renderPage() {
       const session = current, page = session.state.page;
       if (session.share?.open) { renderSharePanel(session); return; }
@@ -834,63 +855,145 @@
         await flush();
         if (!showing(token, session)) return;
         preview = !preview; redraw(); surface.querySelector('#wbPagePreview')?.focus();
-      }, 'life-primary');
+      });
       switchButton.id = 'wbPagePreview'; switchButton.setAttribute('aria-pressed', String(preview));
-      const actions = el('div', null, 'life-actions');
-      const publish = icon('공개 사본 관리', 'link', () => openShare(session)); publish.id = 'wbPageShare';
+      const actions = el('div', null, 'life-actions wb-page-actions');
+      const publish = discoveryIcon('공개 사본 관리', 'link', () => openShare(session)); publish.id = 'wbPageShare';
       actions.append(switchButton, publish);
-      bodyNode.append(actions, notice('비공개 미리보기'));
-      if (preview) { renderVisitor(page); return; }
-      const pageSettings = details('제목·소개·표시 설정', { open: !page.entries.length });
-      pageSettings.append(field('페이지 제목', page.title, { id: 'wbPageTitle', change: value => { page.title = value; } }).wrapper);
-      pageSettings.append(field('소개', page.intro, { id: 'wbPageIntro', multiline: true, max: limits.text, change: value => { page.intro = value; } }).wrapper);
-      pageSettings.append(toggle('소개 표시', page.showIntro, value => { page.showIntro = value; mark(session); }, { id: 'wbShowIntro' }));
-      pageSettings.append(toggle('고정하지 않은 항목 표시', page.showRecent, value => { page.showRecent = value; mark(session); }, { id: 'wbShowRecent' }));
-      bodyNode.append(pageSettings);
-      const add = details('자료·묶음 추가');
+      if (saveControl) actions.append(saveControl);
+      if (preview) {
+        bodyNode.append(actions, notice('비공개 미리보기')); renderVisitor(page); return;
+      }
+      const lead = el('div', null, 'wb-page-lead');
+      const title = el('h2', '', 'wb-visitor-title'), intro = el('p', '', 'wb-visitor-intro');
+      lead.append(title, intro);
+      const refreshLead = () => {
+        title.textContent = page.title; title.hidden = !page.title.trim() || page.title === MODES.page;
+        intro.textContent = page.intro; intro.hidden = !page.showIntro || !page.intro;
+        lead.hidden = title.hidden && intro.hidden;
+      };
+      refreshLead(); bodyNode.append(lead, actions);
+      const pageSettings = details('제목·소개·표시 설정', { open: !page.entries.length }); pageSettings.classList.add('wb-page-settings');
+      const editPage = discoveryIcon('페이지 설정', 'settings', () => { pageSettings.open = true; pageSettings.querySelector('summary').focus(); pageSettings.scrollIntoView({ block: 'nearest' }); });
+      editPage.id = 'wbPageSettings'; actions.append(editPage);
+      pageSettings.append(field('페이지 제목', page.title, { id: 'wbPageTitle', change: value => { page.title = value; refreshLead(); } }).wrapper);
+      pageSettings.append(field('소개', page.intro, { id: 'wbPageIntro', multiline: true, max: limits.text, change: value => { page.intro = value; refreshLead(); } }).wrapper);
+      pageSettings.append(toggle('소개 표시', page.showIntro, value => { page.showIntro = value; mark(session); refreshLead(); }, { id: 'wbShowIntro' }));
+      pageSettings.append(toggle('고정하지 않은 항목 표시', page.showRecent, value => {
+        page.showRecent = value; mark(session); entryViews.forEach(view => view.refresh());
+      }, { id: 'wbShowRecent' }));
+      const add = details('자료·묶음 추가'); add.classList.add('wb-page-add');
       let selection = [];
       add.append(picker('원문에서 고르기', () => selection, (id, checked) => { selection = checked ? selection.concat(id) : selection.filter(value => value !== id); }, { max: limits.parts }));
       add.append(action('선택한 원문 추가', () => addEntry(sourceName(selection[0]), selection)));
       session.state.groups.forEach(group => add.append(action(group.title + ' 추가', () => addEntry(group.title, group.versionIds), 'wb-group-add')));
       add.append(notice('묶음을 추가한 뒤 구성은 별도로 편집됩니다. 묶음 연결을 바꿔도 이 항목이 자동 변경되지 않습니다.'));
-      bodyNode.append(add);
-      if (!page.entries.length) bodyNode.append(empty('보여줄 원문이나 묶음을 골라 내 페이지를 구성해 보세요.'));
-      page.entries.forEach((entry, index) => {
-        const article = el('article', null, 'wb-feed'); article.dataset.entryId = entry.id;
-        const row = el('div', null, 'wb-row');
-        row.append(el('h3', entry.title, 'wb-grow'));
-        row.append(icon(entry.enabled ? '이 항목 숨기기' : '이 항목 표시', 'check', () => { entry.enabled = !entry.enabled; mark(session); redraw(); }, entry.enabled));
-        row.append(icon(entry.pinned ? '항목 고정 해제' : '항목 고정', 'bookmark', () => { entry.pinned = !entry.pinned; mark(session); redraw(); }, entry.pinned));
-        article.append(row);
-        if (!entry.enabled) article.append(notice('미리보기에서 숨김'));
-        entry.parts.forEach(part => {
-          const partRow = el('div', null, 'wb-part'); partRow.dataset.partVersionId = part.versionId;
-          partRow.append(toggle(sourceName(part.versionId) + ' 표시', part.enabled, value => { part.enabled = value; mark(session); }));
-          partRow.append(sourceRow(part.versionId, { body: entry.showBody && part.enabled }));
-          article.append(partRow);
+      const setup = el('div', null, 'wb-page-setup'); setup.append(pageSettings, add);
+      const entriesHost = el('div', null, 'wb-page-entries');
+      const none = empty('보여줄 원문이나 묶음을 골라 내 페이지를 구성해 보세요.'); none.id = 'wbPageEmpty';
+      const entryViews = new Map();
+      function reorder() {
+        const focus = document.activeElement;
+        const ordered = page.entries.slice().sort((a, b) => Number(b.pinned) - Number(a.pinned));
+        ordered.forEach((entry, index) => {
+          const article = entryViews.get(entry.id).article;
+          if (entriesHost.children[index] !== article) entriesHost.insertBefore(article, entriesHost.children[index] || null);
         });
-        const settings = details('항목 편집');
-        settings.append(field('항목 제목', entry.title, { change: value => { entry.title = value; row.querySelector('h3').textContent = value || '제목 입력 중'; } }).wrapper);
-        settings.append(field('내 코멘트', entry.note, { multiline: true, max: limits.text, change: value => { entry.note = value; } }).wrapper);
-        settings.append(toggle('원문 본문 표시', entry.showBody, value => { entry.showBody = value; mark(session); redraw(); }));
-        settings.append(toggle('내 코멘트 표시', entry.showNote, value => { entry.showNote = value; mark(session); }));
+        page.entries.forEach((entry, index) => {
+          const view = entryViews.get(entry.id); view.up.disabled = index === 0; view.down.disabled = index === page.entries.length - 1;
+        });
+        none.hidden = page.entries.length > 0;
+        if (focus?.isConnected && document.activeElement !== focus) focus.focus({ preventScroll: true });
+      }
+      function move(entry, direction) {
+        const index = page.entries.findIndex(item => item.id === entry.id), target = index + direction;
+        if (index < 0 || target < 0 || target >= page.entries.length) return;
+        [page.entries[index], page.entries[target]] = [page.entries[target], entry]; mark(session); reorder();
+      }
+      page.entries.forEach(entry => {
+        const article = el('article', null, 'wb-feed wb-page-entry'); article.dataset.entryId = entry.id;
+        const row = el('div', null, 'wb-row wb-page-entry-heading');
+        const heading = el('h3', entry.title, 'wb-grow'); row.append(heading);
+        const pin = el('span', null, 'wb-page-pin'); pin.append(life.Icons.create('bookmark'), el('span', '고정한 항목', 'life-sr-only')); row.append(pin);
+        const hidden = el('p', '', 'life-meta wb-page-hidden');
+        const content = el('div', null, 'wb-page-content');
+        const sourceContent = el('div', null, 'wb-page-parts');
+        const note = el('div', null, 'wb-comment'), noteBody = el('p', '', 'wb-comment-body');
+        note.append(el('p', '내 코멘트', 'life-meta'), noteBody);
+        const noContent = notice('표시할 내용이 없습니다. 항목 편집에서 원문이나 코멘트를 선택해 주세요.');
+        content.append(sourceContent, note, noContent);
+        const settings = details('항목 편집'); settings.classList.add('wb-page-entry-edit'); settings.id = 'wbPageEntryEdit-' + entry.id;
+        const editEntry = discoveryIcon('항목 편집', 'edit', () => {
+          settings.open = true; settings.querySelector('summary').focus(); settings.scrollIntoView({ block: 'nearest' });
+        });
+        editEntry.classList.add('wb-page-entry-open'); editEntry.setAttribute('aria-controls', settings.id); editEntry.setAttribute('aria-expanded', 'false');
+        settings.addEventListener('toggle', () => { editEntry.setAttribute('aria-expanded', String(settings.open)); });
+        row.append(editEntry);
+        let enabled, pinned, renderedParts = null;
+        const refresh = () => {
+          const entryTitle = entry.title || '제목 입력 중';
+          if (heading.textContent !== entryTitle) heading.textContent = entryTitle;
+          pin.hidden = !entry.pinned;
+          const shown = entry.enabled && (entry.pinned || page.showRecent);
+          article.dataset.shown = String(shown); hidden.hidden = shown;
+          hidden.textContent = entry.enabled ? '고정하지 않은 항목 · 미리보기에서 숨김' : '미리보기에서 숨김';
+          content.hidden = !shown;
+          if (shown) {
+            const parts = entry.parts.filter(part => part.enabled);
+            const partsKey = JSON.stringify([getBundle().revision, entry.showBody, parts.map(part => part.versionId)]);
+            if (renderedParts !== partsKey) {
+              sourceContent.replaceChildren(...parts.map((part, index) => pagePart(part, entry, index))); renderedParts = partsKey;
+            }
+            const firstTitle = sourceContent.firstElementChild?.querySelector('.wb-page-part-title');
+            if (firstTitle) firstTitle.hidden = firstTitle.textContent === entry.title;
+            note.hidden = !entry.showNote || !entry.note;
+            if (noteBody.textContent !== entry.note) noteBody.textContent = entry.note;
+            noContent.hidden = parts.length > 0 || !note.hidden;
+          }
+          if (enabled) { enabled.setAttribute('aria-label', entry.enabled ? '이 항목 숨기기' : '이 항목 표시'); enabled.setAttribute('aria-pressed', String(entry.enabled)); enabled.querySelector('.life-tooltip').textContent = enabled.getAttribute('aria-label'); }
+          if (pinned) { pinned.setAttribute('aria-label', entry.pinned ? '항목 고정 해제' : '항목 고정'); pinned.setAttribute('aria-pressed', String(entry.pinned)); pinned.querySelector('.life-tooltip').textContent = pinned.getAttribute('aria-label'); }
+        };
+        const flags = el('div', null, 'life-actions wb-page-flags');
+        enabled = discoveryIcon(entry.enabled ? '이 항목 숨기기' : '이 항목 표시', 'check', () => { entry.enabled = !entry.enabled; mark(session); refresh(); }, entry.enabled);
+        pinned = discoveryIcon(entry.pinned ? '항목 고정 해제' : '항목 고정', 'bookmark', () => { entry.pinned = !entry.pinned; mark(session); refresh(); reorder(); }, entry.pinned);
+        flags.append(enabled, pinned); settings.append(flags);
+        settings.append(field('항목 제목', entry.title, { change: value => { entry.title = value; refresh(); } }).wrapper);
+        settings.append(field('내 코멘트', entry.note, { multiline: true, max: limits.text, change: value => { entry.note = value; refresh(); } }).wrapper);
+        settings.append(toggle('원문 본문 표시', entry.showBody, value => { entry.showBody = value; mark(session); refresh(); }));
+        settings.append(toggle('내 코멘트 표시', entry.showNote, value => { entry.showNote = value; mark(session); refresh(); }));
+        const partsHost = el('div', null, 'wb-page-part-settings');
+        const refreshParts = () => {
+          partsHost.replaceChildren();
+          entry.parts.forEach(part => {
+            const partRow = el('div', null, 'wb-part'); partRow.dataset.partVersionId = part.versionId;
+            partRow.append(toggle(sourceName(part.versionId) + ' 표시', part.enabled, value => { part.enabled = value; mark(session); refresh(); }));
+            partRow.append(sourceRow(part.versionId, { hideTitle: true, showLink: true, focusKey: 'page:part:' + entry.id + ':' + part.versionId }));
+            const info = sourceInfo(part.versionId);
+            if (info?.version.originalAuthor.label) partRow.append(el('p', '원 작성자 · ' + info.version.originalAuthor.label, 'life-meta'));
+            if (info?.version.coverage.omissions.length) partRow.append(el('p', '포함되지 않은 내용 · ' + info.version.coverage.omissions.join(' · '), 'life-meta'));
+            if (!info) partRow.append(action('없는 원문 연결 해제', () => { entry.parts = entry.parts.filter(item => item.versionId !== part.versionId); mark(session); refreshParts(); refresh(); }));
+            partsHost.append(partRow);
+          });
+        };
+        refreshParts(); settings.append(partsHost);
         settings.append(picker('이 항목의 원문 선택', () => entry.parts.map(part => part.versionId), (id, checked) => {
           entry.parts = checked ? entry.parts.concat({ versionId: id, enabled: true }) : entry.parts.filter(part => part.versionId !== id);
-          mark(session);
+          mark(session); refreshParts(); refresh();
         }, { max: limits.parts }));
-        const actions = el('div', null, 'life-actions');
-        const up = action('위로', () => { [page.entries[index - 1], page.entries[index]] = [entry, page.entries[index - 1]]; mark(session); redraw(); });
-        up.disabled = index === 0;
-        const down = action('아래로', () => { [page.entries[index], page.entries[index + 1]] = [page.entries[index + 1], entry]; mark(session); redraw(); });
-        down.disabled = index === page.entries.length - 1;
-        actions.append(up, down, action('페이지에서 제거', () => { page.entries = page.entries.filter(item => item.id !== entry.id); mark(session); redraw(); }));
-        settings.append(actions, notice('미리보기 구성만 바뀝니다. 보관한 원문과 묶음은 유지합니다.'));
-        article.append(settings); bodyNode.append(article);
+        const itemActions = el('div', null, 'life-actions');
+        const up = action('위로', () => move(entry, -1)), down = action('아래로', () => move(entry, 1));
+        itemActions.append(up, down, action('페이지에서 제거', () => {
+          page.entries = page.entries.filter(item => item.id !== entry.id); mark(session); article.remove(); entryViews.delete(entry.id); reorder();
+          if (!page.entries.length) { pageSettings.open = true; add.open = true; add.querySelector('summary').focus({ preventScroll: true }); }
+        }));
+        settings.append(itemActions, notice('미리보기 구성만 바뀝니다. 보관한 원문과 묶음은 유지합니다.'));
+        article.append(row, hidden, content, settings); entryViews.set(entry.id, { article, refresh, up, down }); refresh();
       });
+      reorder(); bodyNode.append(entriesHost, none, setup);
     }
     function renderVisitor(page) {
       const visitor = el('section', null, 'wb-visitor'); visitor.id = 'wbVisitor'; visitor.setAttribute('aria-label', '비공개 방문자 미리보기');
-      visitor.append(el('h3', page.title, 'wb-visitor-title'));
+      if (page.title !== MODES.page) visitor.append(el('h3', page.title, 'wb-visitor-title'));
       if (page.showIntro && page.intro) visitor.append(el('p', page.intro, 'wb-visitor-intro'));
       const entries = page.entries.filter(entry => entry.enabled && (entry.pinned || page.showRecent));
       entries.sort((a, b) => Number(b.pinned) - Number(a.pinned));
@@ -909,7 +1012,8 @@
       bodyNode.append(visitor);
     }
     function discoveryView(session) {
-      return session.discoveryView ||= { query: '', seedVersionId: null, chooserOpen: true, excludedOpen: false, criteriaOpen: false, shown: 30 };
+      const key = mode === 'related' ? 'relatedView' : 'discoveryView';
+      return session[key] ||= { query: '', seedVersionId: null, chooserOpen: true, excludedOpen: false, criteriaOpen: false, shown: 30, contextError: '' };
     }
     function discoveryIcon(label, glyph, task, pressed) {
       const button = icon(label, glyph, task, pressed); button.removeAttribute('title');
@@ -922,6 +1026,9 @@
     function renderDiscover() {
       const session = current, token = generation, view = discoveryView(session);
       const relatedHost = el('section', null, 'wb-discovery'); relatedHost.id = 'wbDiscoveryRelated';
+      if (view.contextError) {
+        const error = el('p', view.contextError, 'wb-discovery-error'); error.id = 'wbDiscoveryContextError'; error.setAttribute('role', 'alert'); bodyNode.append(error);
+      }
       const chooser = details(view.seedVersionId ? '기준 기록 바꾸기' : '기준 기록 고르기', { open: !view.seedVersionId || view.chooserOpen });
       chooser.id = 'wbDiscoveryChooser'; chooser.classList.add('wb-discovery-chooser');
       chooser.addEventListener('toggle', () => { if (chooser.isConnected && showing(token, session)) view.chooserOpen = chooser.open; });
@@ -935,6 +1042,7 @@
         await flush();
         if (!showing(token, session)) return;
         view.seedVersionId = versionId; view.chooserOpen = !versionId; view.excludedOpen = false;
+        view.contextError = ''; bodyNode.querySelector('#wbDiscoveryContextError')?.remove();
         chooser.open = view.chooserOpen; chooser.querySelector('summary').textContent = versionId ? '기준 기록 바꾸기' : '기준 기록 고르기';
         fillRelated(); fill();
         (versionId ? relatedHost.querySelector('#wbDiscoverySeed') : search.input)?.focus({ preventScroll: true });
@@ -1038,9 +1146,10 @@
             article.append(el('p', (start ? '…' : '') + body.slice(start, end) + (end < body.length ? '…' : ''), 'wb-result-text'));
           }
           const actions = el('div', null, 'life-actions wb-discovery-actions');
-          const select = discoveryIcon('이 기록으로 관련 기록 찾기', 'search', () => choose(hit.sourceVersionId), view.seedVersionId === hit.sourceVersionId);
+          const select = action('관련 기록 보기', () => choose(hit.sourceVersionId), 'life-primary');
+          select.setAttribute('aria-pressed', String(view.seedVersionId === hit.sourceVersionId));
           select.classList.add('wb-discovery-select'); select.dataset.versionId = hit.sourceVersionId;
-          actions.append(select, action('내 페이지에 추가', () => addEntry(info?.source.title, [hit.sourceVersionId]))); article.append(actions);
+          actions.append(select, discoveryIcon('내 페이지에 추가', 'plus', () => addEntry(info?.source.title, [hit.sourceVersionId]))); article.append(actions);
           list.append(article);
         });
         if (!hits.length) list.append(empty(query ? '일치하는 자료가 없습니다. 다른 표현으로 찾아보세요.' : '보관한 기록이 없습니다. 기록에서 글을 쓰거나 자료를 가져와 주세요.'));
@@ -1193,12 +1302,12 @@
       if (!visible || !current || !workspaceIs(current) || mode !== 'public-pages' && !current.state) return;
       cleanupView();
       bodyNode.replaceChildren();
-      if (saveControl) saveControl.hidden = mode === 'public-pages' || !!incoming || mode === 'page' && !!current.share?.open;
+      if (saveControl) saveControl.hidden = ['public-pages', 'related'].includes(mode) || !!incoming || mode === 'page' && !!current.share?.open;
       if (mode === 'public-pages') { renderPublicPages(); return; }
       if (incoming && ['activities', 'page'].includes(mode)) { renderIncoming(); updateStatus(current); return; }
       if (mode === 'activities') renderActivities();
       if (mode === 'page') renderPage();
-      if (mode === 'discover') renderDiscover();
+      if (mode === 'discover' || mode === 'related') renderDiscover();
       if (mode === 'reflection') renderReflection();
       if (mode === 'workbench-backup') renderBackup();
       updateStatus(current);
@@ -1212,6 +1321,12 @@
       if (typeof options.pagePreview === 'boolean') preview = options.pagePreview;
       if (mode === 'discover' && typeof options.seedVersionId === 'string') {
         const view = discoveryView(current); view.seedVersionId = options.seedVersionId; view.chooserOpen = false;
+      }
+      if (mode === 'related' && options.discovery !== undefined) {
+        const context = options.discovery, view = discoveryView(current);
+        const valid = context && context.workspaceId === bundle.workspaceId && typeof context.seedVersionId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(context.seedVersionId);
+        view.seedVersionId = valid ? context.seedVersionId : null; view.chooserOpen = !valid;
+        view.contextError = valid ? '' : '기준 기록의 작업공간이나 버전을 확인하지 못했습니다. 현재 공간에서 기록을 다시 골라 주세요.';
       }
       incoming = null;
       if (options.selection && ['activities', 'page'].includes(mode)) {
@@ -1229,17 +1344,18 @@
       surface.dataset.workspaceId = bundle.workspaceId;
       const heading = el('div', null, 'wb-row wb-heading');
       const title = el('h2', MODES[mode], 'life-heading wb-grow'); title.tabIndex = -1;
-      saveControl = icon('지금 저장', 'check', () => flush()); saveControl.hidden = mode === 'public-pages' || !!incoming;
+      if (mode === 'page' || mode === 'related') { heading.classList.add('wb-heading-quiet'); title.classList.add('life-sr-only'); }
+      saveControl = (mode === 'page' ? discoveryIcon : icon)('지금 저장', 'check', () => flush()); saveControl.hidden = ['public-pages', 'related'].includes(mode) || !!incoming;
       heading.append(title, saveControl);
       statusNode = el('p', '이 브라우저의 구성을 불러오는 중…', 'life-meta wb-save-status'); statusNode.id = 'wbStatus';
       statusNode.setAttribute('role', 'status'); statusNode.setAttribute('aria-live', 'polite');
       const scope = details('저장 범위');
       scope.classList.add('wb-scope');
-      scope.append(notice('묶음·페이지·회고 초안은 비공개로 이 브라우저에만 저장되며 기기 간 동기화 대상이 아닙니다. 다른 기기로 옮기려면 자료·구성 통합 JSON 백업을 사용해 주세요. 내 페이지의 공개 사본은 공개 전 확인 후 따로 게시·갱신·철회합니다. 표시를 끄거나 원문을 수정해도 이미 게시한 사본은 바뀌지 않습니다.'));
+      scope.append(notice('묶음·페이지·회고 초안과 관련 기록 제외는 비공개로 이 브라우저에만 저장되며 기기 간 동기화 대상이 아닙니다. 다른 기기로 옮기려면 자료·구성 통합 JSON 백업을 사용해 주세요. 내 페이지의 공개 사본은 공개 전 확인 후 따로 게시·갱신·철회합니다. 표시를 끄거나 원문을 수정해도 이미 게시한 사본은 바뀌지 않습니다.'));
       errorNode = el('div', null, 'life-error wb-error'); errorNode.id = 'wbError'; errorNode.setAttribute('role', 'alert'); errorNode.hidden = true;
       bodyNode = el('div', null, 'wb-content'); bodyNode.append(notice('불러오는 중…'));
       const storageLine = el('div', null, 'wb-storage-line'); storageLine.append(statusNode, scope);
-      storageLine.hidden = mode === 'public-pages';
+      storageLine.hidden = mode === 'public-pages' || mode === 'related';
       surface.append(heading, storageLine, errorNode, bodyNode); host.replaceChildren(surface);
       if (mode === 'public-pages') { surface.setAttribute('aria-busy', 'false'); redraw(); return; }
       try {

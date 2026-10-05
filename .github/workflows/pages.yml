@@ -17,21 +17,108 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
+          package-manager-cache: false
       - run: npm run check
       - run: npm test
-  build:
-    if: github.event_name != 'pull_request'
-    needs: check
-    runs-on: ubuntu-latest
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      CI: "true"
+      BASE_URL: http://127.0.0.1:4184
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: tests/browser-ci/package-lock.json
+      - name: Install pinned browser tooling
+        run: npm ci --prefix tests/browser-ci --ignore-scripts
+      - name: Install Chromium and Korean fonts
+        run: |
+          node tests/browser-ci/node_modules/playwright/cli.js install --with-deps chromium
+          sudo apt-get install -y fonts-noto-cjk
+      - name: Select the pinned browser
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const modulePath = path.resolve('tests/browser-ci/node_modules/playwright');
+          const browserPath = require(modulePath).chromium.executablePath();
+          if (!fs.existsSync(browserPath)) throw new Error('Pinned Chromium was not installed.');
+          fs.appendFileSync(process.env.GITHUB_ENV, `PW_MODULE_PATH=${modulePath}\nCHROMIUM_PATH=${browserPath}\n`);
+          NODE
+      - name: Start the OAuth-safe local server
+        id: server
+        run: |
+          mkdir -p .local/browser-ci
+          python3 scripts/dev-server.py --port 4184 > .local/browser-ci/server.log 2>&1 &
+          echo "HAEDO_CI_SERVER_PID=$!" >> "$GITHUB_ENV"
+          python3 <<'PY'
+          import time
+          import urllib.error
+          import urllib.request
+
+          deadline = time.monotonic() + 20
+          while True:
+              try:
+                  with urllib.request.urlopen('http://127.0.0.1:4184/index.html', timeout=1) as response:
+                      if response.status == 200 and b'id="lifeApp"' in response.read():
+                          break
+              except (OSError, urllib.error.URLError):
+                  pass
+              if time.monotonic() >= deadline:
+                  raise SystemExit('The local app shell did not become ready.')
+              time.sleep(0.2)
+          PY
+      - name: Verify unified entry and account boundaries
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/unified-home-browser.cjs
+      - name: Verify the core experience across screen sizes
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/core-experience-browser.cjs
+      - name: Stop the local server
+        if: always()
+        run: |
+          if [[ -n "${HAEDO_CI_SERVER_PID:-}" ]]; then
+            kill "$HAEDO_CI_SERVER_PID" || true
+          fi
+      - name: Retain anonymous browser reports and failure screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-checks-${{ github.run_attempt }}
+          path: |
+            .local/core-experience/
+            .local/unified-home/
+            .local/quality-audit/after/
+            .local/browser-ci/server.log
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
+  build:
+    if: github.event_name != 'pull_request'
+    needs: [check, browser]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
       - name: Prepare public shell
         env:
           HAEDO_SUPABASE_URL: ${{ secrets.HAEDO_SUPABASE_URL }}

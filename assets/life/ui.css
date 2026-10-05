@@ -156,6 +156,7 @@ html.auth-pending [data-private] { display: none !important; }
 .life-reader-heading { font-size: 28px; font-weight: 700; line-height: 1.6; letter-spacing: -.03em; margin-bottom: 16px; }
 .life-reader-meta { color: var(--ink-soft); font-size: 12px; line-height: 1.8; margin-bottom: 8px; overflow-wrap: anywhere; }
 .life-reader-meta + .life-reader-meta { margin-bottom: 32px; }
+.life-reader-related { display: inline-flex; min-height: 44px; margin: -12px 0 24px; padding: 10px 14px; color: var(--color-primary); background: var(--soft); border-color: transparent; font-size: 14px; }
 .life-version-field { max-width: 400px; margin: 0 0 28px; }
 .life-source-details { margin: 0 0 28px; padding: 18px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 76px; }
 .life-source-details p { margin-bottom: 8px; }
@@ -264,6 +265,7 @@ details.life-sync-account { display: block; width: 100%; margin: 12px 0 0; overf
 .life-toolbar .life-title-button { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 0; font: inherit; color: var(--ink); background: none; }
 .life-toolbar .life-title-button:hover { color: var(--color-primary); }
 .life-toolbar .life-refresh { flex-basis: 100%; }
+.life-toolbar[hidden] { display: none; }
 body[data-haedo-section=manage] .life-toolbar { padding-right: 50px; }
 .life-nav.life-context-nav { position: static; z-index: auto; width: auto; display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 6px; margin: 0; padding: 0; border: 0; background: transparent; }
 .life-context-nav .life-tooltip { top: calc(100% + 6px); bottom: auto; left: auto; right: 0; transform: none; }

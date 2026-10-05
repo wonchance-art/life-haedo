@@ -30,6 +30,30 @@
 .wb-source .life-meta { font-size: 12px; margin-top: 3px; }
 .wb-source-body { margin-top: 14px; font-size: 17px; line-height: 1.95; white-space: pre-wrap; max-height: 24rem; overflow: auto; scrollbar-color: var(--field-line) var(--paper-2); }
 .wb-visitor .wb-source-body { max-height: none; overflow: visible; }
+.wb-heading.wb-heading-quiet { min-height: 0; height: 0; }
+.wb-page-lead { margin-block: 12px 20px; }
+.wb-page-actions { gap: 6px; margin-block: 12px 8px; }
+.wb-page-actions > #wbPageSettings { margin-left: auto; }
+.wb-page-actions > #wbPageSettings .life-tooltip { left: auto; right: 0; transform: none; }
+.wb-page-flags .life-tooltip { left: 0; transform: none; }
+.wb-page-entry > .wb-page-entry-heading { align-items: flex-start; margin-bottom: 6px; }
+.wb-page-entry-heading h3 { font-size: 21px; line-height: 1.6; letter-spacing: -.02em; }
+.wb-page-entry-heading .wb-page-entry-open { flex: none; }
+.wb-page-entry-open .life-tooltip { left: auto; right: 0; transform: none; }
+.wb-page-pin { flex: none; padding-top: 6px; color: var(--color-primary); }
+.wb-page-pin .life-glyph { width: 18px; height: 18px; }
+.wb-page-content .wb-source-body { max-height: none; overflow: visible; margin-top: 16px; }
+.wb-page-content .wb-page-part + .wb-page-part { margin-top: 28px; }
+.wb-page-source-meta { font-size: 12px; line-height: 1.8; }
+.wb-page-content .wb-comment { padding: 14px 16px; border-radius: var(--control-radius); background: var(--mint); }
+.wb-page-content .wb-comment .life-meta { color: var(--mint-ink); }
+.wb-page-content .wb-comment-body { margin-top: 4px; }
+.wb-page-entry-edit { margin-block: 14px 0; }
+.wb-page-entry-edit[open] { padding-top: 8px; }
+.wb-page-entry-edit .life-field { margin-top: 16px; }
+.wb-page-entry[data-shown=false] { border-bottom-style: dashed; }
+.wb-page-setup { margin-top: 24px; }
+.wb-page-hidden { margin-top: 6px; }
 .wb-source-link { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 0; font-size: 13px; }
 .wb-check { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 0; cursor: pointer; }
 .wb-check > input { flex: 0 0 22px; width: 22px; height: 22px; margin: 0; accent-color: var(--color-primary); }
@@ -117,7 +141,7 @@
 .wb-discovery-arrange,.wb-discovery-select { color: var(--color-primary); background: var(--soft); }
 .wb-discovery-actions .life-tooltip { left: 0; transform: none; width: max-content; max-width: min(260px,calc(100vw - 60px)); white-space: normal; text-align: left; }
 .wb-discovery-seed .life-tooltip { left: auto; right: 0; transform: none; }
-.life-workbench[data-mode=discover] .wb-source .life-tooltip { left: auto; right: 0; transform: none; }
+.life-workbench:is([data-mode=discover],[data-mode=related],[data-mode=page]) .wb-source .life-tooltip { left: auto; right: 0; transform: none; }
 .wb-discovery-chooser { margin-block: 20px; }
 .wb-discovery-chooser > summary { color: var(--color-primary); }
 .wb-discovery-chooser .life-field { margin-top: 16px; }
@@ -128,7 +152,7 @@
 @media (max-width: 700px) {
   .wb-discovery-result .wb-source-title { font-size: 17px; }
   .wb-discovery-seed { margin-bottom: 24px; }
-  .life-workbench[data-mode=discover] .life-tooltip { top: auto; bottom: calc(100% + 6px); }
+  .life-workbench:is([data-mode=discover],[data-mode=related]) .life-tooltip { top: auto; bottom: calc(100% + 6px); }
 }
 @media (forced-colors: active) {
   .wb-discovery-arrange,.wb-discovery-select { border: 1px solid ButtonText; }

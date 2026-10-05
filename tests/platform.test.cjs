@@ -28,6 +28,7 @@ const doc = (n) => ({
   spans: [],
 });
 test("private return destinations are restricted to known local feature routes", () => {
+  assert.equal(safeNext('index.html?section=records&view=related&seed=private-version'), 'index.html?section=records&view=related');
   for (const next of [
     "https://evil.invalid/workspace.html",
     "//evil.invalid/",

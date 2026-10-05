@@ -27,6 +27,8 @@ description: life-haedo 정적 웹 앱의 기능 수정, 로컬 실행, SVG·저
 
 ## 실행과 검증
 
+짧은 요청도 AGENTS.md에 따라 목표·범위·보존 조건·완료 기준으로 정리해 실행한다. 핵심 흐름은 실제 UI 진입부터 결과 재열기까지 검증한다. `node tests/core-experience-browser.cjs`는 가져오기 → 읽기 → 관련 기록 → 묶음/내 페이지 → 저장·복귀를 확인하며 CI 배포 조건에도 포함된다. 브라우저 검사 통과와 시각·추천 내용의 유용성, 실제 Apple 기기 체험을 서로 대신하지 않는다.
+
 `npm run check`로 구문과 로컬 리소스를, `npm test`로 데이터·동기화·서비스워커 회귀 사례를 확인하고 `npm run dev`로 127.0.0.1:4173에서 실행한다. `scripts/dev-server.py`는 OAuth 코드·문서 URL을 요청 로그에 남기지 않는다.
 앱 실행용 패키지 설치는 없다. 브라우저 CLI가 설치돼 있지 않으면 현재 사용 가능한 Codex 브라우저 도구를 써도 된다.
 이 기기에서 검증한 CLI는 `npx --yes agent-browser@0.37.1`이다. 앱 의존성으로 추가하지 않는다.

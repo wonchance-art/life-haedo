@@ -176,7 +176,7 @@ async function main() {
       await page.locator(`#wbIncomingSelection input[data-version-id="${f.refs[1].versionId}"]`).uncheck();
       await apply(page,'검토에서 원문 하나만 고른 항목'); const after=await waitSaved(page,w=>w.page.entries.length===1);
       assert.deepEqual(after.workbench.page.entries[0].parts.map(p=>p.versionId),[f.refs[0].versionId]);
-      await page.getByRole('button',{name:'기록 목록',exact:true}).click(); await settle(page);
+      await page.getByRole('button',{name:'기록으로 돌아가기',exact:true}).click(); await settle(page);
       assert.equal(await page.locator('.life-source-select[aria-pressed="true"]').count(),0);
       await selectMode(page); await page.locator('#lifeSearch').fill(''); await selectVersion(page,f.refs[2].versionId);
       await page.locator(`.life-source-card[data-version-id="${f.refs[1].versionId}"] .life-source-open`).click(); await settle(page);
