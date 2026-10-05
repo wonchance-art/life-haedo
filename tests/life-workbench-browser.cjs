@@ -99,7 +99,7 @@ async function main() {
       const group=page.locator('article[data-group-id]').first(),groupId=await group.getAttribute('data-group-id');await openDetails(group);
       for(const ref of f.refs.slice(0,3))await group.locator(`input[data-version-id="${ref.versionId}"]`).check();await save(page);
       assert.deepEqual((await current(page)).workbench.groups[0].versionIds,f.refs.slice(0,3).map(r=>r.versionId));
-      await group.getByRole('button',{name:'이 활동을 내 페이지에 추가',exact:true}).click();await save(page);await go(page,'page');
+      await group.getByRole('button',{name:'이 묶음을 내 페이지에 추가',exact:true}).click();await save(page);await go(page,'page');
       const entry=page.locator('article[data-entry-id]').first(),entryId=await entry.getAttribute('data-entry-id');await openDetails(entry);
       await entry.getByLabel('내 코멘트',{exact:true}).fill('첫 코멘트를 먼저 저장');await save(page);
       const note='다시 고친 내 코멘트 <img src=x onerror="window.__wbInjection=1"> & 🌱';await entry.getByLabel('내 코멘트',{exact:true}).fill(note);
@@ -110,8 +110,8 @@ async function main() {
     });
     await check('editing or deleting an activity does not mutate an existing page copy',async({page})=>{
       const f=await fixture(page),ids=await seedComposition(page,f.refs),before=await current(page);await go(page);
-      const group=page.locator(`[data-group-id="${ids.groupId}"]`);await openDetails(group);await group.getByLabel('활동 이름',{exact:true}).fill('이후에 고친 활동 제목');await group.locator(`input[data-version-id="${f.refs[1].versionId}"]`).uncheck();await save(page);assert.deepEqual((await current(page)).workbench.page,before.workbench.page);
-      await group.getByRole('button',{name:'활동 묶음만 삭제',exact:true}).click();await save(page);const after=await current(page);assert.equal(after.workbench.groups.length,0);assert.deepEqual(after.workbench.page,before.workbench.page);assert.deepEqual(after.bundle,before.bundle);await go(page,'page');await togglePreview(page);assert((await page.locator('#wbVisitor').textContent()).includes('오후 네 시의 빛.'));
+      const group=page.locator(`[data-group-id="${ids.groupId}"]`);await openDetails(group);await group.getByLabel('묶음 이름',{exact:true}).fill('이후에 고친 활동 제목');await group.locator(`input[data-version-id="${f.refs[1].versionId}"]`).uncheck();await save(page);assert.deepEqual((await current(page)).workbench.page,before.workbench.page);
+      await group.getByRole('button',{name:'묶음만 삭제',exact:true}).click();await save(page);const after=await current(page);assert.equal(after.workbench.groups.length,0);assert.deepEqual(after.workbench.page,before.workbench.page);assert.deepEqual(after.bundle,before.bundle);await go(page,'page');await togglePreview(page);assert((await page.locator('#wbVisitor').textContent()).includes('오후 네 시의 빛.'));
     });
     await check('missing fixed version stays missing and existing older version never substitutes latest',async({page})=>{
       const f=await fixture(page);await seedComposition(page,f.refs);await page.evaluate(async()=>{const s=HaedoLife.Shell.storage,id=await s.getActive(),w=await s.readWorkbench(id);w.page.entries[0].parts.push({versionId:'missing-fixed-version',enabled:true});await s.saveWorkbench(id,w,w.revision);});await go(page,'page');await togglePreview(page);const visitor=page.locator('#wbVisitor');assert((await visitor.textContent()).includes(oldBody));assert(!(await visitor.textContent()).includes(newBody));assert.match(await visitor.locator('[data-version-id="missing-fixed-version"]').textContent(),/연결된 원문 없음/);assert.equal(await visitor.locator('[data-version-id="missing-fixed-version"] .wb-source-body').count(),0);

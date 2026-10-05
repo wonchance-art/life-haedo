@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="선택한 기록을 가져와 원문과 출처를 보존하고 발췌를 모으는 개인 생활 도구">
+  <meta name="description" content="여러 곳에 남긴 기록을 모아 읽고 정리하는 개인 생활 도구">
   <meta name="theme-color" content="#FFFFFF">
-  <title>자료 모아보기 · 해도</title>
+  <title>기록 · 해도</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="assets/life/ui.css">
   <link rel="stylesheet" href="assets/life/workbench.css">
+  <link rel="stylesheet" href="assets/life/home.css">
   <link rel="stylesheet" href="assets/haedo-shell.css">
 </head>
 <body class="haedo-shell" data-page="life" data-haedo-section="records">
@@ -26,8 +27,8 @@
     </details>
   </div>
   <noscript>생활 자료를 열려면 브라우저에서 JavaScript를 허용해주세요. 기존 기록은 변경되지 않습니다.</noscript>
-  <div id="lifeStartup" role="status" aria-live="polite">자료 모아보기를 여는 중입니다.</div>
-  <div id="lifeApp" data-private hidden aria-label="자료 모아보기"></div>
+  <div id="lifeStartup" role="status" aria-live="polite">기록을 여는 중입니다.</div>
+  <div id="lifeApp" data-private hidden aria-label="내 기록 공간"></div>
   <script src="vendor/idb/idb.js"></script>
   <script src="vendor/supabase/supabase.js"></script>
   <script src="assets/platform-config.js"></script>
@@ -44,6 +45,7 @@
   <script src="assets/life/icons.js"></script>
   <script src="assets/haedo-navigation.js"></script>
   <script src="assets/life/workbench-ui.js"></script>
+  <script src="assets/life/home.js"></script>
   <script src="assets/life/ui.js"></script>
   <script src="assets/life/shell.js"></script>
 </body>

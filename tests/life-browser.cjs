@@ -147,7 +147,7 @@ async function applicationChecks(browser, observe) {
   const settle = () => page.waitForFunction(() => !document.querySelector('.life-app[aria-busy="true"]'));
   async function click(name) {
     if (name === '내보내기·사본 복원') await openManagement(page);
-    if (['모아보기','원천 기록','가져오기','시간 보기'].includes(name)) await openSection(page, 'records');
+    if (['기록 목록','기록 검색','가져오기','시간 보기'].includes(name)) await openSection(page, 'records');
     await page.getByRole('button',{name,exact:true}).click(); await settle();
   }
   async function mounted() {
@@ -218,7 +218,7 @@ async function applicationChecks(browser, observe) {
       await click('검토 내용 보관');
       assert.match(await page.locator('#lifeSaveStatus').textContent(),/검토 중 보관됨/);
       await page.reload(); await mounted();
-      await click('모아보기');
+      await click('기록 목록');
       await page.getByText(/검토 중 \d+개 · 이어서 확인/).click();
       await click('익명 이어쓰기 초안');
       assert.equal(await page.locator('#lifeImportText').inputValue(),'아직 확정하지 않은 검토 내용');
@@ -396,7 +396,7 @@ async function applicationChecks(browser, observe) {
         },before.workspaceId);
         assert.deepEqual(after,before);
         assert.ok(after.sourceVersions.some(v => v.contentText === raw));
-        assert.match(await page.title(),/자료/);
+        assert.match(await page.title(),/기록/);
       } finally { cloudFixture.offline.delete('r1'); await context.setOffline(false); page.__lifeExpectedOffline=false; }
     });
   } finally { await context.close(); }
