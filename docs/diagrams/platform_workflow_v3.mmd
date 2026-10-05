@@ -1,0 +1,79 @@
+%% 2026-10-05 v3. Current runtime + separately marked future contracts.
+%% Source: backup workflow v1/v2, O-01..09, PRODUCT.md, lifestyle-blog.md, runtime at fa9a8e6.
+%%{init: {"theme":"base","look":"classic","htmlLabels":false,"themeVariables":{"primaryColor":"#ffffff","primaryTextColor":"#222126","primaryBorderColor":"#827B86","lineColor":"#827B86","clusterBkg":"#ffffff","clusterBorder":"#E9E7EB","edgeLabelBackground":"#ffffff","fontFamily":"Noto Sans CJK KR, sans-serif","fontSize":"15px"},"flowchart":{"curve":"linear","wrappingWidth":340,"nodeSpacing":24,"rankSpacing":42,"htmlLabels":false}}}%%
+flowchart TB
+  accTitle: 해도 v3 — 현재 기반과 후속 블로그·발견·분석 구조
+  accDescr: 현재 인증, 원문 보관과 조회, 초안, 선택 동기화를 표시한다. 후속 글쓰기·추천·대화·보고서·공개 사본은 점선 테두리다. 읽기에는 저장이나 AI 실행이 필요하지 않다.
+
+  subgraph CURRENT["현재 구현 · 개인 공간"]
+    VIEW["개인 화면에 결과 표시 · 계속 또는 종료"]
+    USER["사용 대상 · Mac · iPad · iPhone<br/>기록 / 도구 / 관리 · 본문 중심"]
+    AUTH["Google 공용 인증<br/>서버 계정 확인 후 개인 저장소 연결<br/>view-only는 개인 저장소 연결 차단"]
+    READ["조회 · 검색 · 읽기 · 원문 복귀<br/>조회만으로 확정 자료를 바꾸지 않음"]
+    IMPORT["사용자가 제공한 본문 · 파일 · 링크<br/>URL만이면 본문 미확보"]
+    STAGE[("계정별 로컬 검토 초안<br/>재개 · 수정 · 취소<br/>동기화 대상에서 제외")]
+    REVIEW["원문·출처·포함 범위 검토<br/>자료만 보관 / 발췌·내 메모 연결"]
+    COMMIT["일반 코드로 검증·저장<br/>버전·구절·충돌·원자성 확인<br/>실패하면 입력 유지"]
+    PRIVATE[("계정별 확정 자료<br/>불변 원문 버전 · 정확한 발췌 · 내 메모")]
+    BACKUP["JSON 백업 · 새 사본 복원<br/>Markdown 읽기용 내보내기"]
+    SYNC["선택한 작업공간의 개인 동기화<br/>조건부 쓰기 · 충돌 사본 · 중지·재개"]
+    CLOUD[("해도 전용 Supabase<br/>소유자별 자료 · 동기화 영수증")]
+    LEGACY["기존 연표·목표·습관<br/>자료와 별도 저장·백업 계약"]
+  end
+  subgraph FUTURE["후속 설계 · 읽기·보관과 독립적으로 사용"]
+    AUTHOR["내 글·편집 초안·선택 이유<br/>저장·동기화·백업 계약을 먼저 확장"]
+    SCOPE["분석할 자료·기간·질문 선택<br/>작성자·시점·본문 확보·제외 확인"]
+    DISCOVER["발견 · 재발견<br/>실제 후보 검색 → 중복·다양성 정렬<br/>근거·추천 유입·사용자 피드백"]
+    TALK["질문 ↔ 근거·다른 해석 ↔ 내 반응<br/>깊은 대화 · 자기 이해 보고서 후보"]
+    CHECK["결과 수신 시 다시 확인<br/>계정 · 허용 범위 · 근거 버전 · 인용<br/>삭제·철회·취소된 결과는 차단"]
+    RESULT["개인 추천·대화·보고서 보기<br/>원문과 해석 구분 · 수정·제외<br/>확정 글이나 공개본으로 자동 적용하지 않음"]
+    SAVE["해석·내 글 보관을 선택<br/>원문과 분리한 후속 저장 계약"]
+    SHARE["공개 / 특정 친구·모임 선택<br/>내용·대상·버전 미리보기<br/>게시·갱신·철회 상세도 참조"]
+    SNAPSHOT[("선택된 공유 사본<br/>필드·버전·대상·철회 상태<br/>개인 원본과 분리")]
+    GATE["방문자 요청마다 접근 확인<br/>허용된 공유 사본만 읽기"]
+    VISITOR_RESULT["방문자에게 선택된 사본만 표시<br/>개인 작업공간 조회 없음"]
+    VISITOR["방문자 · 선택한 친구·모임<br/>라이프스타일 블로그 / 공유 페이지"]
+  end
+  subgraph EXTERNAL["후속 연결 · 제공처·범위·비용 미확정"]
+    SOURCES["선택한 콘텐츠 제공처<br/>허용 API·RSS·제공 자료<br/>제목만 확보했으면 본문 미확인"]
+    AI["필요할 때 선택적 AI<br/>허용 맥락만 전송 · 서버에서 키 관리<br/>원본 저장·게시 권한 없음"]
+  end
+
+  USER --> AUTH
+  AUTH --> READ
+  PRIVATE -->|계정 범위 안에서 조회| READ
+  READ -->|대상·읽기 맥락 유지| VIEW
+  AUTH --> IMPORT --> STAGE --> REVIEW
+  REVIEW -->|명시적으로 확정| COMMIT --> PRIVATE
+  REVIEW -->|수정·나중에 재개| STAGE
+  COMMIT -->|저장 결과·실패 복구| VIEW
+  PRIVATE --> BACKUP
+  BACKUP -->|검증 후 새 사본 설치| PRIVATE
+  AUTH -->|계정·공간 binding 확인 후 시작 선택| SYNC
+  PRIVATE <-->|확정 자료만| SYNC
+  SYNC <-->|서버 영수증으로 같은 요청 대조| CLOUD
+  AUTH --> LEGACY
+  USER -->|후속 글쓰기| AUTHOR --> SAVE
+  USER -->|후속 분석·탐구| SCOPE
+  PRIVATE -->|선택한 근거만 읽기| SCOPE
+  SCOPE --> DISCOVER
+  SCOPE --> TALK
+  SOURCES -->|조회가 허용된 실제 후보| DISCOVER
+  DISCOVER <-->|필요한 질문과 자료| TALK
+  TALK <-->|외부 분석을 선택한 범위만| AI
+  DISCOVER --> CHECK
+  TALK --> CHECK --> RESULT
+  RESULT -->|읽고 종료·제외 가능| VIEW
+  RESULT -->|보관을 선택한 경우만| SAVE
+  SAVE -->|새 계약 구현 후 일반 저장 검증 경유| COMMIT
+  USER -->|후속 게시·공유| SHARE
+  PRIVATE -->|선택한 내용만 사본 후보로| SHARE
+  SHARE -->|실행·권한 검증 후 확정| SNAPSHOT
+  VISITOR --> GATE
+  SNAPSHOT -->|현재 열람 범위를 만족하는 사본만| GATE
+  GATE -->|허용된 결과 또는 접근 거절| VISITOR_RESULT
+
+  classDef current fill:#ffffff,stroke:#5442BC,stroke-width:2px,color:#222126;
+  classDef future fill:#ffffff,stroke:#827B86,stroke-width:1.5px,stroke-dasharray:6 4,color:#222126;
+  class VIEW,USER,AUTH,READ,IMPORT,STAGE,REVIEW,COMMIT,PRIVATE,BACKUP,SYNC,CLOUD,LEGACY current;
+  class AUTHOR,SCOPE,DISCOVER,TALK,CHECK,RESULT,SAVE,SHARE,SNAPSHOT,GATE,VISITOR,VISITOR_RESULT,SOURCES,AI future;
