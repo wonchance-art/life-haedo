@@ -36,7 +36,7 @@
     const showing = (token, session) => visible && token === generation && workspaceIs(session) && current === session;
     function cleanupView() { viewCleanups.splice(0).forEach(cleanup => cleanup()); }
     function errorText(error) {
-      if (error?.code === 'workbench_conflict') return '다른 탭에서 구성이 바뀌었습니다. 현재 초안을 유지했습니다. 저장본과 비교해 주세요.';
+      if (error?.code === 'workbench_conflict') return '다른 곳에서 구성이 바뀌었습니다. 현재 초안을 유지했습니다. 저장본과 비교해 주세요.';
       if (error?.code === 'storage_quota') return '저장 공간이 부족합니다. 현재 초안을 유지했습니다. JSON 사본을 받아 보관한 뒤 다시 저장해 주세요.';
       if (error?.code === 'storage_scope_closed' || error?.code === 'workspace_access_denied') return '계정 또는 작업공간이 바뀌어 저장을 멈췄습니다. 원래 공간에서 다시 확인해 주세요.';
       return error?.message || '저장하지 못했습니다. 현재 초안을 유지했습니다. 다시 시도해 주세요.';
@@ -47,7 +47,7 @@
     function updateStatus(session) {
       if (!visible || current !== session || !workspaceIs(session) || !statusNode) return;
       statusNode.textContent = !session.state ? '구성을 불러오지 못함' : session.saving ? '이 브라우저에 저장 중…' : session.error ? '저장하지 못함 · 초안 유지' : incoming ? '선택 검토 중 · 아직 추가하지 않음' :
-        session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '다른 탭의 새 구성이 있습니다.' : '이 브라우저에 저장됨';
+        session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : '이 브라우저에 저장됨';
       statusNode.dataset.state = session.error ? 'error' : session.edit !== session.stored ? 'dirty' : 'saved';
       if (mode === 'related') surface.querySelector('.wb-storage-line').hidden = !!session.state && !session.saving && !session.error && session.edit === session.stored && session.remoteRevision <= session.baseRevision;
     }
@@ -1351,7 +1351,7 @@
       statusNode.setAttribute('role', 'status'); statusNode.setAttribute('aria-live', 'polite');
       const scope = details('저장 범위');
       scope.classList.add('wb-scope');
-      scope.append(notice('묶음·페이지·회고 초안과 관련 기록 제외는 비공개로 이 브라우저에만 저장되며 기기 간 동기화 대상이 아닙니다. 다른 기기로 옮기려면 자료·구성 통합 JSON 백업을 사용해 주세요. 내 페이지의 공개 사본은 공개 전 확인 후 따로 게시·갱신·철회합니다. 표시를 끄거나 원문을 수정해도 이미 게시한 사본은 바뀌지 않습니다.'));
+      scope.append(notice('구성은 먼저 이 브라우저에 저장됩니다. 관리의 기기 간 동기화에서 묶음·내 페이지 이어쓰기를 별도로 시작하면 같은 계정의 서버에 보관합니다. 글쓰기·가져오기 초안은 포함하지 않습니다. 자료·구성 JSON 백업으로 새 사본을 복원할 수도 있습니다. 공개 사본은 따로 게시·갱신·철회하며, 표시를 끄거나 원문을 수정해도 이미 게시한 사본은 바뀌지 않습니다.'));
       errorNode = el('div', null, 'life-error wb-error'); errorNode.id = 'wbError'; errorNode.setAttribute('role', 'alert'); errorNode.hidden = true;
       bodyNode = el('div', null, 'wb-content'); bodyNode.append(notice('불러오는 중…'));
       const storageLine = el('div', null, 'wb-storage-line'); storageLine.append(statusNode, scope);

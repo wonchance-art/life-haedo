@@ -89,7 +89,7 @@
     return display;
   }
 
-  async function mount(container, { storage, core, legacy, sync, auth, signal }) {
+  async function mount(container, { storage, core, legacy, sync, compositionSync, auth, signal }) {
     if (signal?.aborted) throw new Error('화면 연결이 취소되었습니다.');
     let disposed = false;
     let unsubscribe = null;
@@ -112,6 +112,7 @@
     const selectedVersions = new Set();
     let selectionReturn = null;
     let relatedOrigin = null;
+    let compositionPanel = null;
     const downloadUrls = new Set();
     const state = {
       bundle: null, workspaces: [], mode: 'sources', topic: '', topicsSearch: '', sourcesSearch: '', originFilter: '', returnContext: null, suppressReaderResume: false, sourceId: null,
@@ -2618,6 +2619,13 @@
       conflict.hidden = true;
       main.append(conflict);
       if (state.conflictView) renderConflict();
+      if (compositionSync && global.HaedoLife.CompositionUI) {
+        const compositionHost = node('section'); main.append(compositionHost);
+        const workspaceId = state.bundle.workspaceId;
+        compositionPanel = global.HaedoLife.CompositionUI.create({ host: compositionHost, manager: compositionSync,
+          storage, workspaceId, beforeAction: persistDrafts,
+          isCurrent: () => !disposed && state.mode === 'sync' && state.bundle?.workspaceId === workspaceId });
+      }
       const remoteSection = node('section', null, 'life-remote-section');
       remoteSection.append(node('h3', '서버 작업공간 받기'), node('p', '같은 계정으로 다른 기기에서 올린 작업공간을 선택해 받습니다.', 'life-help'));
       const list = node('div', null, 'life-remote-list');
@@ -2703,6 +2711,7 @@
 
     function render() {
       if (disposed) return;
+      compositionPanel?.dispose(); compositionPanel = null;
       homeRenderPromise = Promise.resolve();
       home?.leave();
       workbench?.leave();
@@ -2842,6 +2851,8 @@
     function dispose() {
       if (disposed) return;
       disposed = true;
+      compositionPanel?.dispose(); compositionPanel = null;
+      compositionSync?.dispose();
       home?.dispose();
       workbench?.dispose();
       writer?.dispose();

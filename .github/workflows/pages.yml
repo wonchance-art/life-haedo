@@ -88,6 +88,12 @@ jobs:
       - name: Verify the core experience across screen sizes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/core-experience-browser.cjs
+      - name: Verify composition transactions and recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/composition-storage-browser.cjs
+      - name: Verify composition continuity across browser contexts
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/composition-sync-browser.cjs
       - name: Stop the local server
         if: always()
         run: |
@@ -103,6 +109,7 @@ jobs:
             .local/core-experience/
             .local/unified-home/
             .local/quality-audit/after/
+            .local/composition-sync/
             .local/browser-ci/server.log
           include-hidden-files: true
           if-no-files-found: warn

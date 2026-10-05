@@ -4,7 +4,7 @@
   const life = root.HaedoLife = root.HaedoLife || {};
   const auth = root.HaedoAuth;
   const publicHome = root.document.body?.dataset.lifeHome === 'true';
-  let mounted, sync, scopedStorage, controller, showing, generation = 0, activeKey = null, starting, leaving = false, suspended = false;
+  let mounted, sync, compositionSync, scopedStorage, controller, showing, generation = 0, activeKey = null, starting, leaving = false, suspended = false;
   function loginPath() {
     const next = auth?.safeNext((publicHome ? 'index.html' : 'life.html') + root.location.search) || (publicHome ? 'index.html' : 'life.html');
     return 'login.html?next=' + encodeURIComponent(next);
@@ -36,6 +36,7 @@
     controller?.abort(); controller = null;
     showing = null;
     mounted?.dispose?.(); mounted = null;
+    compositionSync?.dispose?.(); compositionSync = null;
     sync?.dispose?.(); sync = null;
     life.Storage?.clearAccount?.(); scopedStorage = null;
     container.replaceChildren();
@@ -85,7 +86,8 @@
       scopedStorage = storage;
       const legacy = life.Legacy.forAccount(account);
       sync = life.Sync.create({ storage, core: life.Core, remoteFactory: life.PlatformRemote.create });
-      const instance = await life.UI.mount(container, { storage, core: life.Core, legacy, sync, auth, signal });
+      compositionSync = life.CompositionSync.create({ storage, sourceSync: sync, auth });
+      const instance = await life.UI.mount(container, { storage, core: life.Core, legacy, sync, compositionSync, auth, signal });
       if (signal.aborted || token !== generation || key !== auth.getAccount()?.projectUrl + '|' + auth.getAccount()?.userId) { instance?.dispose(); return null; }
       mounted = instance;
       container.hidden = false;
@@ -98,6 +100,7 @@
       sync.start().catch(() => {
         if (token === generation && !signal.aborted) notice('자료는 이 브라우저에 보관돼 있습니다. 기기 간 동기화에서 서버 연결 상태를 확인해 주세요.');
       });
+      compositionSync.start();
       if ('serviceWorker' in root.navigator) root.navigator.serviceWorker.register('./sw.js').catch(() => {});
       return mounted;
     } catch (error) {
@@ -182,7 +185,7 @@
       root.document.getElementById('lifeLogout')?.focus({ preventScroll: true });
     } finally { leaving = false; }
   });
-  life.Shell = { isReadOnly, start, get sync() { return sync; }, get storage() { return scopedStorage; } };
+  life.Shell = { isReadOnly, start, get sync() { return sync; }, get compositionSync() { return compositionSync; }, get storage() { return scopedStorage; } };
   if (publicHome && 'serviceWorker' in root.navigator) root.navigator.serviceWorker.register('./sw.js').catch(() => {});
   life.Shell.ready = start();
 })(globalThis);
