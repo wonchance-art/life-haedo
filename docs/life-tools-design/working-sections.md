@@ -53,3 +53,7 @@
 재현: `npm run dev` 후 `BASE_URL=http://127.0.0.1:4173 node tests/life-workbench-browser.cjs`, `BASE_URL=http://127.0.0.1:4173 node tests/workbench-storage-browser.cjs`를 실행한다. 테스트용 Chromium/Playwright는 개발 환경 도구이며 앱 의존성이 아니다.
 
 **미검증:** 실제 Mac/iPad/iPhone의 한글 IME·터치·Files 체험. Chromium의 화면 크기와 터치 설정 모사를 Apple 실기 확인으로 표현하지 않는다. 실제 개인 자료의 사용성 평가는 사용자가 각 영역을 직접 확인한 뒤 다음 범위를 정한다.
+
+## 다시 찾기 후속
+
+[기록 재발견](../design-review/rediscovery.md)에서 기존 정확 검색을 유지하면서 기준 원문·관련 기록 최대 3개·근거·제외/복원·묶음 검토를 연결했다. 제외는 자료·구성 백업의 선택 필드이며 원문 동기화에는 포함되지 않는다. 위 초기 영역 검사 수치를 이번 기능 검사 결과로 재사용하지 않는다.

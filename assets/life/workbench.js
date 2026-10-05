@@ -9,14 +9,14 @@
   'use strict';
 
   const LIMITS = Object.freeze({ groups: 100, groupVersions: 1000, entries: 200, parts: 100,
-    reflectionVersions: 1000, title: 500, text: 20000, bytes: 2 * 1024 * 1024 });
+    reflectionVersions: 1000, excludedPairs: 1000, title: 500, text: 20000, bytes: 2 * 1024 * 1024 });
   const clone = value => JSON.parse(JSON.stringify(value));
   const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value) &&
     (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
   function fail(code, message) { throw Object.assign(new Error(message), { code }); }
   function assert(value, code, message) { if (!value) fail(code, message); }
-  function fields(value, names) {
-    assert(plain(value) && Reflect.ownKeys(value).every(key => names.includes(key)) && names.every(key => Object.hasOwn(value, key)),
+  function fields(value, names, optional = []) {
+    assert(plain(value) && Reflect.ownKeys(value).every(key => names.includes(key) || optional.includes(key)) && names.every(key => Object.hasOwn(value, key)),
       'invalid_workbench', '구성 정보의 항목과 형식을 확인해 주세요. 원본은 변경하지 않았습니다.');
   }
   function identifier(value) {
@@ -63,7 +63,7 @@
       reflection: { versionIds: [], note: '' } };
   }
   function validate(state) {
-    fields(state, ['format', 'workspaceId', 'revision', 'groups', 'page', 'reflection']);
+    fields(state, ['format', 'workspaceId', 'revision', 'groups', 'page', 'reflection'], ['discovery']);
     assert(state.format === 'life-workbench-v1', 'unsupported_workbench', '지원하는 구성 파일 형식이 아닙니다.');
     identifier(state.workspaceId);
     assert(Number.isSafeInteger(state.revision) && state.revision >= 0, 'invalid_revision', '구성 저장 버전을 확인해 주세요.');
@@ -86,6 +86,18 @@
     }
     fields(state.reflection, ['versionIds', 'note']);
     versionList(state.reflection.versionIds, LIMITS.reflectionVersions); text(state.reflection.note, LIMITS.text);
+    if (Object.hasOwn(state, 'discovery')) {
+      fields(state.discovery, ['excludedPairs']); list(state.discovery.excludedPairs, LIMITS.excludedPairs);
+      const excluded = new Set();
+      for (const pair of state.discovery.excludedPairs) {
+        fields(pair, ['seedSourceId', 'candidateSourceId']);
+        identifier(pair.seedSourceId); identifier(pair.candidateSourceId);
+        assert(pair.seedSourceId !== pair.candidateSourceId, 'invalid_workbench', '같은 자료를 재발견 제외 대상으로 연결할 수 없습니다.');
+        const key = JSON.stringify([pair.seedSourceId, pair.candidateSourceId]);
+        assert(!excluded.has(key), 'duplicate_id', '같은 재발견 제외 조합이 두 번 있습니다.');
+        excluded.add(key);
+      }
+    }
     assert(new TextEncoder().encode(JSON.stringify(state)).length <= LIMITS.bytes,
       'workbench_too_large', '활동·페이지 구성은 합계 2 MiB까지 보관할 수 있습니다.');
     // Missing versions remain explicit references. Reading never substitutes a newer version.
@@ -116,12 +128,15 @@
     const original = snapshot.sourceBackup.workspace;
     const bundle = await core().restoreBackup(snapshot.sourceBackup), workbench = snapshot.workbench;
     const versions = new Map(original.sourceVersions.map((version, index) => [version.id, bundle.sourceVersions[index].id]));
+    const sources = new Map(original.sources.map((source, index) => [source.id, bundle.sources[index].id]));
     const used = new Set([original.workspaceId, bundle.workspaceId]);
     for (const value of [original, bundle]) for (const key of ['sources', 'sourceVersions', 'records', 'links', 'resumeHints', 'tombstones'])
       for (const item of value[key]) { used.add(item.id); if (item.entityId) used.add(item.entityId); }
     const referenced = workbench.groups.flatMap(group => group.versionIds).concat(
       workbench.page.entries.flatMap(entry => entry.parts.map(part => part.versionId)), workbench.reflection.versionIds);
-    for (const value of referenced) used.add(value);
+    const excludedPairs = workbench.discovery?.excludedPairs || [];
+    const sourceReferences = excludedPairs.flatMap(pair => [pair.seedSourceId, pair.candidateSourceId]);
+    for (const value of referenced.concat(sourceReferences)) used.add(value);
     for (const item of workbench.groups.concat(workbench.page.entries)) used.add(item.id);
     const freshId = () => {
       for (let attempt = 0; attempt < 1024; attempt++) { const value = core().id(); if (!used.has(value)) { used.add(value); return value; } }
@@ -130,6 +145,7 @@
     // A missing reference gets one fresh, deliberately absent ID everywhere it is used.
     // This preserves the gap without accidentally connecting it to an unrelated new original.
     for (const value of referenced) if (!versions.has(value)) versions.set(value, freshId());
+    for (const value of sourceReferences) if (!sources.has(value)) sources.set(value, freshId());
     workbench.workspaceId = bundle.workspaceId; workbench.revision = 0;
     for (const group of workbench.groups) { group.id = freshId(); group.versionIds = group.versionIds.map(value => versions.get(value)); }
     for (const entry of workbench.page.entries) {
@@ -137,6 +153,10 @@
       for (const part of entry.parts) part.versionId = versions.get(part.versionId);
     }
     workbench.reflection.versionIds = workbench.reflection.versionIds.map(value => versions.get(value));
+    for (const pair of excludedPairs) {
+      pair.seedSourceId = sources.get(pair.seedSourceId);
+      pair.candidateSourceId = sources.get(pair.candidateSourceId);
+    }
     pair(bundle, workbench);
     return { bundle, workbench };
   }
