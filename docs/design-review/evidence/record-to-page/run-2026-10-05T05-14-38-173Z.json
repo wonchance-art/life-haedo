@@ -1,0 +1,29 @@
+{
+  "createdAt": "2026-10-05T05:14:38.173Z",
+  "scope": "Actual app/SDK/IndexedDB; anonymous intercepted Auth, viewport/touch/IME-event simulation only",
+  "checks": [
+    {
+      "name": "selection spans searches, reviews fixed versions and cancellation writes nothing",
+      "pass": true
+    },
+    {
+      "name": "hidden selections can be removed and a batch stops at one hundred fixed versions",
+      "pass": true
+    },
+    {
+      "name": "review omission changes only the new page and reader arrange preserves unrelated list selection",
+      "pass": true
+    },
+    {
+      "name": "workspace switch clears selection and late review cannot overwrite another section",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "realRemoteWrites": 0,
+  "browser": "151.0.7922.173"
+}

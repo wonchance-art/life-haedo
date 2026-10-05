@@ -1,0 +1,400 @@
+{
+  "createdAt": "2026-10-05T05:16:52.540750+00:00",
+  "scope": "Latest outcome per focused journey; this is an evidence index, not a claim that all checks were repeated in one execution. Anonymous local SDK/IndexedDB, viewport/touch/IME-event simulation only.",
+  "runs": [
+    {
+      "file": "run-2026-10-05T05-12-26-141Z.json",
+      "createdAt": "2026-10-05T05:12:26.141Z",
+      "checks": 6,
+      "failures": 1,
+      "visual": 0
+    },
+    {
+      "file": "run-2026-10-05T05-12-53-105Z.json",
+      "createdAt": "2026-10-05T05:12:53.105Z",
+      "checks": 5,
+      "failures": 1,
+      "visual": 18
+    },
+    {
+      "file": "run-2026-10-05T05-13-49-709Z.json",
+      "createdAt": "2026-10-05T05:13:49.709Z",
+      "checks": 3,
+      "failures": 2,
+      "visual": 0
+    },
+    {
+      "file": "run-2026-10-05T05-14-38-173Z.json",
+      "createdAt": "2026-10-05T05:14:38.173Z",
+      "checks": 4,
+      "failures": 0,
+      "visual": 0
+    },
+    {
+      "file": "run-2026-10-05T05-16-00-925Z.json",
+      "createdAt": "2026-10-05T05:16:00.925Z",
+      "checks": 1,
+      "failures": 0,
+      "visual": 0
+    },
+    {
+      "file": "run-2026-10-05T05-16-10-499Z.json",
+      "createdAt": "2026-10-05T05:16:10.499Z",
+      "checks": 3,
+      "failures": 0,
+      "visual": 3
+    }
+  ],
+  "checks": [
+    {
+      "name": "selection spans searches, reviews fixed versions and cancellation writes nothing",
+      "pass": true,
+      "evidenceRun": "run-2026-10-05T05-14-38-173Z.json"
+    },
+    {
+      "name": "existing group receives a unique union and source coordinates remain intact",
+      "pass": true,
+      "evidenceRun": "run-2026-10-05T05-12-26-141Z.json"
+    },
+    {
+      "name": "reader keeps exact old version and quote return through review cancel and new group",
+      "pass": true,
+      "evidenceRun": "run-2026-10-05T05-12-26-141Z.json"
+    },
+    {
+      "name": "selected page entry is independent, respects toggles and survives backup restore",
+      "pass": true,
+      "evidenceRun": "run-2026-10-05T05-12-26-141Z.json"
+    },
+    {
+      "name": "write failure preserves one accepted draft, blocks navigation and retries without duplicate",
+      "pass": true,
+      "evidenceRun": "run-2026-10-05T05-12-26-141Z.json"
+    },
+    {
+      "name": "keyboard selection and Korean composition keep review local until explicit apply",
+      "pass": true,
+      "evidenceRun": "run-2026-10-05T05-12-26-141Z.json"
+    },
+    {
+      "name": "workspace switch clears selection and late review cannot overwrite another section",
+      "pass": true,
+      "evidenceRun": "run-2026-10-05T05-14-38-173Z.json"
+    },
+    {
+      "name": "pending review disappears across signout and another account",
+      "pass": true,
+      "evidenceRun": "run-2026-10-05T05-12-53-105Z.json"
+    },
+    {
+      "name": "visual selection empty many review loading and save error 1440",
+      "pass": true,
+      "evidenceRun": "run-2026-10-05T05-16-10-499Z.json"
+    },
+    {
+      "name": "visual selection empty many review loading and save error 820",
+      "pass": true,
+      "evidenceRun": "run-2026-10-05T05-16-10-499Z.json"
+    },
+    {
+      "name": "visual selection empty many review loading and save error 390",
+      "pass": true,
+      "evidenceRun": "run-2026-10-05T05-16-10-499Z.json"
+    },
+    {
+      "name": "hidden selections can be removed and a batch stops at one hundred fixed versions",
+      "pass": true,
+      "evidenceRun": "run-2026-10-05T05-14-38-173Z.json"
+    },
+    {
+      "name": "review omission changes only the new page and reader arrange preserves unrelated list selection",
+      "pass": true,
+      "evidenceRun": "run-2026-10-05T05-14-38-173Z.json"
+    },
+    {
+      "name": "new saved composition preserves pending review and a deleted destination never becomes a new group silently",
+      "pass": true,
+      "evidenceRun": "run-2026-10-05T05-16-00-925Z.json"
+    }
+  ],
+  "visual": [
+    {
+      "scene": "empty",
+      "file": "empty-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 2,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "smallInputs": [],
+      "evidenceRun": "run-2026-10-05T05-12-53-105Z.json"
+    },
+    {
+      "scene": "many-selected",
+      "file": "many-selected-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 77,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "smallInputs": [],
+      "evidenceRun": "run-2026-10-05T05-16-10-499Z.json"
+    },
+    {
+      "scene": "hidden-selection",
+      "file": "hidden-selection-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 11,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "smallInputs": [],
+      "evidenceRun": "run-2026-10-05T05-12-53-105Z.json"
+    },
+    {
+      "scene": "loading",
+      "file": "loading-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 4,
+      "contrastFailures": [],
+      "evidenceRun": "run-2026-10-05T05-12-53-105Z.json"
+    },
+    {
+      "scene": "review",
+      "file": "review-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 18,
+      "contrastFailures": [],
+      "evidenceRun": "run-2026-10-05T05-12-53-105Z.json"
+    },
+    {
+      "scene": "save-error",
+      "file": "save-error-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 35,
+      "contrastFailures": [],
+      "evidenceRun": "run-2026-10-05T05-12-53-105Z.json"
+    },
+    {
+      "scene": "empty",
+      "file": "empty-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 2,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "smallInputs": [],
+      "evidenceRun": "run-2026-10-05T05-12-53-105Z.json"
+    },
+    {
+      "scene": "many-selected",
+      "file": "many-selected-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 77,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "smallInputs": [],
+      "evidenceRun": "run-2026-10-05T05-12-53-105Z.json"
+    },
+    {
+      "scene": "hidden-selection",
+      "file": "hidden-selection-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 11,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "smallInputs": [],
+      "evidenceRun": "run-2026-10-05T05-12-53-105Z.json"
+    },
+    {
+      "scene": "loading",
+      "file": "loading-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 4,
+      "contrastFailures": [],
+      "evidenceRun": "run-2026-10-05T05-12-53-105Z.json"
+    },
+    {
+      "scene": "review",
+      "file": "review-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 18,
+      "contrastFailures": [],
+      "evidenceRun": "run-2026-10-05T05-16-10-499Z.json"
+    },
+    {
+      "scene": "save-error",
+      "file": "save-error-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 35,
+      "contrastFailures": [],
+      "evidenceRun": "run-2026-10-05T05-12-53-105Z.json"
+    },
+    {
+      "scene": "empty",
+      "file": "empty-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 2,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "smallInputs": [],
+      "evidenceRun": "run-2026-10-05T05-12-53-105Z.json"
+    },
+    {
+      "scene": "many-selected",
+      "file": "many-selected-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 77,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "smallInputs": [],
+      "evidenceRun": "run-2026-10-05T05-12-53-105Z.json"
+    },
+    {
+      "scene": "hidden-selection",
+      "file": "hidden-selection-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 11,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "smallInputs": [],
+      "evidenceRun": "run-2026-10-05T05-12-53-105Z.json"
+    },
+    {
+      "scene": "loading",
+      "file": "loading-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 4,
+      "contrastFailures": [],
+      "evidenceRun": "run-2026-10-05T05-12-53-105Z.json"
+    },
+    {
+      "scene": "review",
+      "file": "review-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 18,
+      "contrastFailures": [],
+      "evidenceRun": "run-2026-10-05T05-16-10-499Z.json"
+    },
+    {
+      "scene": "save-error",
+      "file": "save-error-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 35,
+      "contrastFailures": [],
+      "evidenceRun": "run-2026-10-05T05-12-53-105Z.json"
+    }
+  ],
+  "totals": {
+    "latestChecks": 14,
+    "latestPassed": 14,
+    "visualStates": 18,
+    "consoleErrorsAcrossRuns": 0,
+    "pageErrorsAcrossRuns": 0,
+    "externalRequestsAcrossRuns": 0
+  }
+}

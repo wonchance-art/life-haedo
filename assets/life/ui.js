@@ -107,6 +107,8 @@
     let lastRecordMode = 'sources';
     let workbenchOpenOptions = null;
     let homeRenderPromise = Promise.resolve();
+    const selectedVersions = new Set();
+    let selectionReturn = null;
     const downloadUrls = new Set();
     const state = {
       bundle: null, workspaces: [], mode: 'sources', topic: '', topicsSearch: '', sourcesSearch: '', originFilter: '', returnContext: null, suppressReaderResume: false, sourceId: null,
@@ -116,6 +118,7 @@
       remoteChanged: false, readerPositions: new Map(), sourceDrafts: new Map(),
       syncAccount: null, syncState: null, syncReadError: null, syncAccountKey: null,
       syncLoading: false, managementOpen: false, sourcesFiltersOpen: false, topicsFiltersOpen: false,
+      selecting: false, readerArrangeOpen: false,
       remoteRows: null, remoteRowsAccountKey: null, conflictView: null, conflictCopyId: null, restoreReturn: null
     };
     const root = node('div', null, 'life-app');
@@ -141,6 +144,14 @@
     const workbench = global.HaedoLife.WorkbenchUI?.create({
       storage, core, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce,
+      onSelectionUsed: ({ workspaceId, versionIds }) => {
+        if (disposed || state.bundle?.workspaceId !== workspaceId) return;
+        const consumed = selectionReturn?.workspaceId === workspaceId ? selectionReturn.versionIds : versionIds;
+        consumed.forEach(id => selectedVersions.delete(id));
+        if (!selectedVersions.size) state.selecting = false;
+        selectionReturn = null;
+      },
+      onSelectionCancel: returnFromArrange,
       openSource: (sourceId, versionId) => navigate('source', {
         sourceId, sourceVersionId: versionId, locator: null,
         returnContext: { mode: state.mode, workspaceId: state.bundle.workspaceId, scrollY: global.scrollY }
@@ -789,11 +800,16 @@
       if (!['tools', 'manage', 'sync', 'transfer', ...workbenchModes].includes(mode) && !options?.preserveContext &&
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
-      Object.assign(state, options || {}, { mode });
+      if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
+      const { selection, groupId, pagePreview, ...viewOptions } = options || {};
+      Object.assign(state, viewOptions, { mode });
       workbenchOpenOptions = workbenchModes.includes(mode) ? options : null;
       if (sectionFor(mode) === 'records') lastRecordMode = mode;
       writeRoute(mode, false);
-      await render();
+      // Incoming records are only a review. A slow configuration read must not
+      // lock the global navigation; Workbench owns stale-response guards.
+      const rendering = render();
+      if (!options?.selection) await rendering;
       if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
       const heading = main.querySelector('h2') || toolbar.querySelector('h1');
       if (heading && !options?.groupId) heading.focus({ preventScroll: true });
@@ -911,6 +927,17 @@
       headingGroup.append(heading);
       toolbar.append(headingGroup);
       if (section === 'records') {
+        if (state.mode === 'sources') {
+          const select = iconButton('기록 선택', 'check', guarded(() => {
+            state.selecting = !state.selecting;
+            if (!state.selecting) selectedVersions.clear();
+            render();
+            main.parentNode.querySelector('#lifeSelectionToggle')?.focus({ preventScroll: true });
+          }));
+          select.id = 'lifeSelectionToggle';
+          select.setAttribute('aria-pressed', String(state.selecting));
+          recordSections.append(select);
+        }
         [['activities', '묶음'], ['page', '내 페이지']].forEach(([mode, label]) => {
           const tab = button(label, guarded(() => navigate(mode)));
           if (state.mode === mode || (mode === 'sources' && state.mode === 'source')) tab.setAttribute('aria-current', 'page');
@@ -1054,11 +1081,53 @@
     }
 
     function resetSearchContext() {
+      selectedVersions.clear();
+      selectionReturn = null;
+      state.selecting = state.readerArrangeOpen = false;
       state.topic = state.topicsSearch = state.sourcesSearch = state.originFilter = '';
       state.topicUnassigned = false;
       state.topicFilterSearch = '';
       state.returnContext = null;
       state.suppressReaderResume = false;
+    }
+
+    async function arrangeRecords(mode, versionIds) {
+      if (!versionIds.length) return;
+      const workspaceId = state.bundle.workspaceId;
+      if (versionIds.some(id => !state.bundle.sourceVersions.some(version => version.id === id))) {
+        throw new Error('선택한 원문 버전을 찾을 수 없습니다. 선택 목록을 확인해 주세요.');
+      }
+      selectionReturn = { workspaceId, versionIds: [...versionIds], mode: state.mode, sourceId: state.sourceId,
+        sourceVersionId: state.sourceVersionId, locator: state.sourceSelection,
+        returnContext: state.returnContext, scrollY: global.scrollY,
+        focusId: mode === 'activities' ? 'lifeArrangeGroups' : 'lifeArrangePage' };
+      await navigate(mode, { selection: { workspaceId, versionIds: [...versionIds] }, pagePreview: false });
+    }
+
+    async function returnFromArrange() {
+      const context = selectionReturn;
+      if (!context || context.workspaceId !== state.bundle?.workspaceId) return navigate('sources');
+      await navigate(context.mode, { sourceId: context.sourceId, sourceVersionId: context.sourceVersionId,
+        locator: context.locator, returnContext: context.returnContext, preserveContext: true,
+        readerArrangeOpen: context.mode === 'source' });
+      requestAnimationFrame(() => {
+        if (disposed || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode) return;
+        main.querySelector('#' + context.focusId)?.focus({ preventScroll: true });
+        global.scrollTo({ top: context.scrollY, behavior: 'instant' });
+      });
+    }
+
+    function arrangeActions(getVersions) {
+      const actions = node('div', null, 'life-actions life-arrange-actions');
+      [['activities', '묶음에 담기', 'link', 'lifeArrangeGroups', 'life-arrange-groups'],
+        ['page', '내 페이지에 담기', 'user', 'lifeArrangePage', 'life-arrange-page']].forEach(([mode, label, glyph, id, css]) => {
+        const control = button(null, guarded(() => arrangeRecords(mode, getVersions())), css);
+        control.id = id;
+        control.append(global.HaedoLife.Icons.create(glyph), node('span', label));
+        control.disabled = !getVersions().length;
+        actions.append(control);
+      });
+      return actions;
     }
 
     function searchField(parent, placeholder, update, key) {
@@ -1321,6 +1390,46 @@
       const list = node('div', null, 'life-card-grid'); list.id = 'lifeSearchResults';
       const count = searchCount();
       const origin = selectField('원천 필터', 'lifeOriginFilter', [['', '모든 원천']].concat(ORIGINS), state.originFilter);
+      const selectionBar = node('section', null, 'life-selection-bar');
+      selectionBar.id = 'lifeSelectionBar';
+      selectionBar.setAttribute('aria-label', '선택한 기록 정리');
+      selectionBar.hidden = !state.selecting;
+      const selectionDetails = node('details', null, 'life-selection-details');
+      const selectionSummary = node('summary');
+      const selectionSummaryText = node('span', '선택한 기록 0개');
+      selectionSummary.append(selectionSummaryText, global.HaedoLife.Icons.create('chevron'));
+      const selectionList = node('ul', null, 'life-selection-list');
+      selectionDetails.append(selectionSummary, selectionList);
+      const selectionStatus = node('p', null, 'life-meta');
+      selectionStatus.id = 'lifeSelectionStatus';
+      selectionStatus.setAttribute('role', 'status');
+      const controls = arrangeActions(() => [...selectedVersions]);
+      controls.append(iconButton('선택 모두 해제', 'close', () => { selectedVersions.clear(); update(); selectionSummary.focus(); }));
+      const cancelSelection = button('선택 취소', () => {
+        selectedVersions.clear(); state.selecting = false; render();
+        recordSections.querySelector('#lifeSelectionToggle')?.focus({ preventScroll: true });
+      });
+      selectionBar.append(selectionDetails, selectionStatus, controls, cancelSelection);
+      function updateSelection(matches) {
+        if (!state.selecting) return;
+        const visible = new Set(matches.map(hit => hit.sourceVersionId));
+        const hiddenCount = [...selectedVersions].filter(id => !visible.has(id)).length;
+        selectionSummaryText.textContent = '선택한 기록 ' + selectedVersions.size + '개';
+        selectionStatus.textContent = selectedVersions.size ? (hiddenCount ? '현재 검색 결과 밖에서 선택한 기록 ' + hiddenCount + '개 포함' : '담을 곳에서 선택한 원문을 확인합니다.') : '정리할 기록을 선택해 주세요.';
+        controls.querySelectorAll('.life-arrange-groups,.life-arrange-page').forEach(control => { control.disabled = !selectedVersions.size; });
+        selectionList.replaceChildren();
+        selectedVersions.forEach(id => {
+          const version = state.bundle.sourceVersions.find(item => item.id === id);
+          const source = version && sourceFor(version.sourceId);
+          const versions = source ? state.bundle.sourceVersions.filter(item => item.sourceId === source.id) : [];
+          const row = node('li');
+          row.append(node('span', source ? sourceLabel(source) + ' · 버전 ' + (versions.findIndex(item => item.id === id) + 1) + '/' + versions.length : '선택한 원문 없음'));
+          row.append(iconButton('선택 해제 · ' + (source ? sourceLabel(source) : '없는 원문'), 'close', () => {
+            selectedVersions.delete(id); update(); selectionSummary.focus({ preventScroll: true });
+          }));
+          selectionList.append(row);
+        });
+      }
       const update = () => {
         list.replaceChildren();
         const query = state.sourcesSearch.trim();
@@ -1339,6 +1448,7 @@
           hits.push(hit);
         }));
         const matches = hits.filter(hit => !state.originFilter || sourceFor(hit.sourceId).origin === state.originFilter);
+        updateSelection(matches);
         count.textContent = '자료 ' + matches.length + '개' + (state.sourcesSearch.trim() ? ' · 일치한 버전별 결과' : ' · 최신 버전') + (state.originFilter ? ' · ' + originName(state.originFilter) : '');
         matches.forEach(hit => {
           const source = sourceFor(hit.sourceId);
@@ -1351,7 +1461,25 @@
           const open = button(sourceLabel(source), guarded(() => openResult('sources', key, hit)), 'life-source-open');
           open.setAttribute('aria-label', '자료 읽기: ' + sourceLabel(source));
           Object.assign(open.dataset, { focusKey: key, sourceId: source.id, versionId: version.id });
-          const heading = node('h3');
+          const heading = node('h3', null, 'life-record-heading');
+          if (state.selecting) {
+            const choose = iconButton('기록 선택 · ' + sourceLabel(source) + ' · 버전 ' + hit.versionIndex + '/' + hit.versionCount, 'check', () => {
+              if (selectedVersions.has(version.id)) selectedVersions.delete(version.id);
+              else {
+                if (selectedVersions.size >= global.HaedoLife.Workbench.LIMITS.parts) {
+                  announce('한 번에 원문 ' + global.HaedoLife.Workbench.LIMITS.parts + '개까지 선택할 수 있습니다.');
+                  return;
+                }
+                selectedVersions.add(version.id);
+              }
+              update();
+              [...list.querySelectorAll('.life-source-select')].find(control => control.dataset.versionId === version.id)?.focus({ preventScroll: true });
+            }, 'life-source-select');
+            choose.dataset.versionId = version.id;
+            choose.setAttribute('aria-pressed', String(selectedVersions.has(version.id)));
+            card.dataset.selected = String(selectedVersions.has(version.id));
+            heading.append(choose);
+          }
           heading.append(open);
           card.append(heading);
           if (hit.locator) {
@@ -1409,7 +1537,7 @@
       disclosure(filter, filters, { onChange: open => { state.sourcesFiltersOpen = open; } });
       bar.append(filter);
       origin.input.addEventListener('change', () => { state.originFilter = origin.input.value; update(); });
-      main.append(filters, count, list);
+      main.append(filters, selectionBar, count, list);
       update();
     }
 
@@ -1453,11 +1581,19 @@
       const back = state.returnContext ? searchReturnButton() : iconButton('기록으로 돌아가기', 'back', guarded(() => navigate('sources')));
       const info = iconButton('출처 정보', 'info', () => {});
       info.id = 'lifeSourceInfoToggle';
-      tools.append(back, info);
+      const arrange = iconButton('이 원문 담기', 'link', () => {});
+      arrange.id = 'lifeReaderArrange';
+      const arrangePanel = node('section', null, 'life-reader-arrange');
+      arrangePanel.id = 'lifeReaderArrangePanel';
+      arrangePanel.setAttribute('aria-label', '읽던 원문 정리');
+      arrangePanel.hidden = !state.readerArrangeOpen;
+      arrangePanel.append(node('p', '현재 원문 버전을 담습니다.', 'life-meta'), arrangeActions(() => [version.id]));
+      disclosure(arrange, arrangePanel, { onChange: open => { state.readerArrangeOpen = open; } });
+      tools.append(back, arrange, info);
       const heading = title(sourceLabel(source));
       heading.classList.add('life-reader-heading');
       const versionIndex = versions.findIndex(item => item.id === version.id) + 1;
-      article.append(tools, heading,
+      article.append(tools, arrangePanel, heading,
         node('p', originName(source.origin) + ' · 원문 작성 ' + (version.originalCreatedAt || '미상'), 'life-reader-meta'),
         node('p', (COVERAGE[version.coverage.status] || COVERAGE.unknown) + ' · 버전 ' + versionIndex + '/' + versions.length + (versionIndex === versions.length ? '' : ' · 이전 버전'), 'life-reader-meta'));
       if (versions.length > 1) {
