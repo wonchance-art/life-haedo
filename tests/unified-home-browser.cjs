@@ -71,7 +71,10 @@ async function main() {
     const server = new FakeCloud(), device = 'home-' + report.checks.length;
     const context = await makeContext(browser, server, device, seed), page = await context.newPage(); page.setDefaultTimeout(15000); observe(page, report, name);
     try { await run({ page, context, server, device }); assert.equal(server.writes().length, 0); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
-    catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); }
+    catch (error) {
+      report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack);
+      await page.screenshot({ path: '.local/unified-home/failure-' + report.checks.length + '.png', fullPage: true }).catch(() => {});
+    }
     finally { await context.close(); }
   }
   try {
@@ -175,7 +178,7 @@ async function main() {
       await page.goto(base + '/index.html'); await ready(page);
       const raw = '아직 발췌하지 않은 원문도 첫 화면에서 다시 읽는다. '.repeat(14);
       await button(page, '가져오기'); await page.locator('#lifeImportTitle').fill('발췌 전 보관한 익명 자료'); await page.locator('#lifeImportText').fill(raw);
-      await button(page, '원문·출처 확인'); await button(page, '자료만 보관'); await button(page, '기록 목록');
+      await button(page, '원문·출처 확인'); await button(page, '자료만 보관'); await button(page, '기록으로 돌아가기');
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'sources');
       const card = page.locator('#lifeSearchResults .life-source-card'); assert.equal(await card.count(), 1);
       assert((await card.locator('.life-search-context').textContent()).startsWith(raw.slice(0, 100))); // Unified list still shows the stored original, even without saved quotes.

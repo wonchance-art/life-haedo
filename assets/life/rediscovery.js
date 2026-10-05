@@ -11,7 +11,7 @@
   const STOP = new Set(('그리고 그러나 하지만 그래서 또한 또는 다만 대한 대해 위한 위해 통해 함께 다시 ' +
     '지금 오늘 어제 내일 이번 지난 다음 최근 그냥 정말 매우 가장 이런 저런 그런 이것 저것 그것 여기 저기 ' +
     '우리 나는 내가 나의 너의 자신 자신의 있는 있다 있었다 없는 없다 없었다 하는 한다 했다 되는 된다 ' +
-    '싶은 싶다 같은 같다 생각 기록 자료 본문 제목 메모 내용 경우 정도 만큼 모두 여러 다른 새로운 좋은 ' +
+    '싶은 싶다 같은 같다 보고 읽고 적고 남긴 생각 기록 자료 본문 제목 메모 내용 경우 정도 만큼 모두 여러 다른 새로운 좋은 ' +
     'the and for with from this that these those about into over under after before have has had ' +
     'are was were been being can could would should will shall not but also then than here there ' +
     'you your our their they them its his her who what when where why how all any some more most ' +

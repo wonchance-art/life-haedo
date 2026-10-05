@@ -53,6 +53,24 @@ test('particle endings and semantic or morphological similarity are never guesse
   assert.deepEqual(related(data), []);
 });
 
+test('realistic Korean reading examples separate useful literal evidence from generic activity words', async () => {
+  const data = await fixture([
+    { title: '비 온 뒤 동네를 걸으며 남긴 메모', text: '오늘 정원 산책 중에 낮은 담장 너머 식물을 보았다. 보고 싶은 풍경을 문장 하나로 적고 돌아왔다.' },
+    { title: '주말 사진에 붙인 짧은 글', text: '정원 산책. 젖은 잎사귀의 빛과 좁은 골목을 오래 기억하고 싶다.' },
+    { title: '서점에서 읽은 소설의 한 구절', text: '보고 싶은 사람이 등장할 때마다 문장 끝이 짧아졌다. 화자의 침묵과 시점을 읽고 적고 남긴 독서 메모.' },
+    { title: '도시의 공원을 거니는 법', text: '녹지를 천천히 걸으면 마음의 속도가 달라진다.' },
+    { title: '정원 산책 행사 안내', text: null, url: 'https://example.org/garden' }
+  ]);
+  const result = related(data);
+  assert.deepEqual(new Set(result.map(item => item.sourceId)), new Set([data.refs[1].sourceId, data.refs[4].sourceId]));
+  assert.ok(result.every(item => item.reasons.every(reason => reason.kind !== 'term' || !['보고', '읽고', '적고', '남긴'].includes(reason.label))));
+  // The semantically related park example is an acknowledged miss, not fabricated evidence.
+  assert.ok(!result.some(item => item.sourceId === data.refs[3].sourceId));
+  // The reader can explicitly connect a text even when its wording supplies no signal.
+  group(data, [data.refs[0], data.refs[3]], '걷기의 감각');
+  assert.equal(related(data)[0].sourceId, data.refs[3].sourceId);
+});
+
 test('explicit exact-version groups rank before matching topics and two common terms', async () => {
   const data = await fixture([{ title: '기준', text: '정원 산책' }, { title: '그룹후보', text: '지질학 해양' },
     { title: '주제후보', text: '천문학 별빛' }, { title: '단어후보', text: '정원 산책 풍경' }]);

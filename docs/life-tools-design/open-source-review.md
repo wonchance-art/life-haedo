@@ -352,3 +352,28 @@ CodeMirror/ProseMirror의 기존 GitHub 저장소는 `archived=true`였고 `rele
 - **결과 계산은 개인 자료를 바꾸지 않는다.** 현재 계정·작업공간의 자료만 읽고 원문·토픽·묶음·공개 사본을 자동 수정하지 않는다. 제외 기능은 추천 표시의 선택으로 다루며 원문 삭제·공개 철회와 구분한다. 계정/작업공간 전환 뒤 늦은 계산·저장 응답이 다른 공간의 목록에 적용되지 않게 한다. 외부 서버·임베딩 API·원격 로그에 개인 본문을 보내지 않는다.
 
 검증은 연결된 정확한 버전과 같은 토픽, 옛 버전에만 있는 근거, 같은 source의 중복 버전, 본문 없는 링크, 공통어 한 개/두 개 경계, 긴 본문의 비교 범위, 동점 순서·제외/다시 표시·원문 복귀를 중심으로 한다. 자료량·길이 증가로 실제 지연이 확인되거나 오타 허용·검색어 기반 순위가 필요해질 때 MiniSearch/Fuse/FlexSearch를 해당 한글 샘플과 비교한다. 먼저 계정/작업공간별 인덱스 수명·원문 버전 참조·캐시 폐기·백업 복원 후 재생성을 정하고, worker나 영속 인덱스는 측정된 문제를 해결하는 범위에서만 도입한다.
+
+## 핵심 사용 흐름 CI — 브라우저 도구와 배포 전 검사
+
+확인일 **2026-10-05 UTC**. 기존 CI는 정적 검사와 Node 회귀만 실행했다. 실제 공용 진입·계정 경계·기록 읽기·내 페이지와 관련 기록의 화면 동작을 배포 전에 검사하기 위해 기존 Node 기반 브라우저 스크립트를 재사용한다. **앱의 production dependency는 추가하지 않고**, `tests/browser-ci/package.json`과 lockfile에 Playwright만 테스트용으로 고정한다. 새 테스트 프레임워크나 제품 내 SDK를 도입하는 변경은 아니다.
+
+### 공식 배포·라이선스·보안 확인
+
+| 도구 | 확인한 최신 공식 배포와 라이선스 | 채택 범위 |
+| --- | --- | --- |
+| **Playwright 1.63.0 · Apache-2.0** | [공식 npm](https://registry.npmjs.org/playwright) 게시 **2026-09-04 22:45:21 UTC**, [GitHub 릴리스](https://github.com/microsoft/playwright/releases/tag/v1.63.0) **22:40:31 UTC**. [배포 tarball](https://registry.npmjs.org/playwright/-/playwright-1.63.0.tgz)의 LICENSE·NOTICE와 registry SHA-512 integrity를 확인했다. [최근 commit](https://github.com/microsoft/playwright/commit/2a8ba77a33a5a39a52372c42f12d254506296c76)은 **2026-10-05**. 패키지의 Node 요구는 `>=20`이다. | `playwright`·`playwright-core`를 **1.63.0**으로 lock한다. 기존 `chromium.launch`·context·locator 기반 검사와 fake Auth/IndexedDB helper를 재사용한다. `@playwright/test`를 추가해 기존 runner를 다시 만들 필요는 없다. 테스트 작업의 Node는 기존 CI와 같은 **22**로 유지한다. |
+| **actions/checkout v7.0.1 · MIT** | [릴리스](https://github.com/actions/checkout/releases/tag/v7.0.1) **2026-07-20**, [LICENSE](https://github.com/actions/checkout/blob/v7.0.1/LICENSE), [action.yml](https://github.com/actions/checkout/blob/v7.0.1/action.yml). | 검증한 태그의 commit `3d3c42e5aac5ba805825da76410c181273ba90b1`로 고정하고 checkout 자격 증명을 작업 디렉터리에 지속하지 않는다. |
+| **actions/setup-node v7.0.0 · MIT** | [릴리스](https://github.com/actions/setup-node/releases/tag/v7.0.0) **2026-07-14**, [LICENSE](https://github.com/actions/setup-node/blob/v7.0.0/LICENSE), [README](https://github.com/actions/setup-node/blob/v7.0.0/README.md). | commit `820762786026740c76f36085b0efc47a31fe5020`로 고정한다. 브라우저 작업만 전용 lockfile 기준 npm cache를 사용하고 check/build의 불필요한 자동 cache는 끈다. |
+| **actions/upload-artifact v7.0.1 · MIT** | [릴리스](https://github.com/actions/upload-artifact/releases/tag/v7.0.1) **2026-04-10**, [LICENSE](https://github.com/actions/upload-artifact/blob/v7.0.1/LICENSE), [action.yml](https://github.com/actions/upload-artifact/blob/v7.0.1/action.yml). | commit `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a`로 고정한다. 성공·실패 보고서와 익명 샘플 스크린샷만 지정 경로에서 **7일** 보관한다. 저장소 전체·환경 파일을 artifact로 올리지 않는다. |
+
+세 Action의 실행 runtime은 Node **24**이며, 이것은 앱 검사에 선택한 Node **22**와 별개다. 공식 README의 runner 최소 버전 **2.327.1** 요구에 맞춰 GitHub 호스팅 Ubuntu runner에서 사용한다. 새 browser 작업은 `ubuntu-24.04`로 두고, 기존 Pages 전용 configure/upload/deploy Action은 이 변경에서 교체하지 않는다.
+
+Playwright의 저장소 공개 권고가 비어 있다는 사실만으로 끝내지 않고 [GitHub 전역 npm 권고](https://api.github.com/advisories?ecosystem=npm&affects=playwright&per_page=100)를 확인했다. [GHSA-7mvr-c777-76hp](https://github.com/advisories/GHSA-7mvr-c777-76hp)는 브라우저 다운로드의 TLS 인증서 검증 문제이며, 영향 범위 **`<1.55.1`**, 첫 수정 **`1.55.1`**이다. 선택한 1.63.0은 해당 영향 범위 밖이다. `playwright-core`·`@playwright/test` 전역 npm 조회와 세 Action 저장소의 공개 권고 API는 확인 당시 빈 목록이었다. `npm audit --prefix tests/browser-ci --audit-level=high`도 **0건**을 반환했다. 이는 해당 시점에 공개된 권고 확인이며 미공개 문제 없음이나 전체 보안 감사 결과를 뜻하지 않는다. TLS·다운로드 무결성 검증을 끄거나 임의 미러로 바꾸지 않는다.
+
+### 실행과 실패 자료의 계약
+
+- **브라우저도 패키지와 함께 선택한다.** [1.63.0 공식 browsers.json](https://github.com/microsoft/playwright/blob/v1.63.0/packages/playwright-core/browsers.json)의 Chromium은 **153.0.8010.12, revision 1243**이다. `npm ci --prefix tests/browser-ci --ignore-scripts` 뒤 해당 패키지 CLI의 `install --with-deps chromium`을 사용한다. `chromium.executablePath()`가 반환한 실제 파일을 확인해 `CHROMIUM_PATH`로 전달하며 runner의 임의 시스템 Chromium에 의존하지 않는다. 한글 렌더링용 `fonts-noto-cjk`도 설치한다.
+- **캐시는 설치를 대신하지 않는다.** [공식 CI 지침](https://github.com/microsoft/playwright/blob/v1.63.0/docs/src/ci.md#caching-browsers)에 따라 브라우저 바이너리 cache를 만들지 않는다. npm cache는 lockfile의 integrity 검증과 `npm ci`를 거쳐 사용한다. 브라우저·OS 의존성 설치 실패를 통과로 바꾸지 않는다.
+- **실제 앱과 익명 자료로 검사한다.** OAuth 쿼리를 로그에 쓰지 않는 `scripts/dev-server.py --port 4184`를 시작하고, 제한 시간 내 HTTP 200과 앱 셸 내용을 확인한 뒤 실행한다. 고정 시간 sleep만으로 준비 완료를 판단하지 않는다. `tests/unified-home-browser.cjs`와 `tests/core-experience-browser.cjs`는 합성 계정·자료와 가짜 Auth HTTP를 사용하며 운영 Supabase 자격 증명을 받지 않는다. 공개 빌드는 `check`와 `browser` **둘 다 성공해야** 시작한다.
+- **한 검사의 실패가 다음 진단을 막지 않는다.** 서버가 준비됐다면 두 스크립트를 각각 실행하고 실패 exit code를 유지한다. 서버는 종료 단계에서 정리하며, 항상 보고서 수집을 시도한다. `.local/core-experience/`, `.local/unified-home/`, `.local/quality-audit/after/`와 요청 내용을 기록하지 않는 서버 로그만 업로드한다. `.local`을 포함하기 위해 `include-hidden-files`를 켜되 전체 `.local`을 수집하지 않는다.
+- **검증 환경을 구분한다.** 이번 클라우드의 기존 브라우저 도구는 Playwright **1.57.0**이었으며 새 전용 lock과 섞어 보고하지 않는다. 새 1.63.0의 `npm ci`와 audit, 워크플로 YAML·Bash 구문·build 의존 관계 검사는 통과했다. 고정 Chromium의 로컬 다운로드는 `cdn.playwright.dev`에 대한 환경 네트워크 **403 Domain forbidden**으로 중단됐다. 따라서 기존 시스템 Chromium을 사용한 로컬 실행과 새 고정 Chromium을 내려받는 GitHub Actions 실행 결과를 구분해 후속 검증한다. 실제 GitHub CI·Apple 기기·한글 실물 IME 검증은 이 문서의 설치/구문 확인으로 대체하지 않는다.

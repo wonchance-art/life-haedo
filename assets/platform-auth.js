@@ -5,7 +5,7 @@
   const LOGOUT_KEY = 'caeyeon_life_platform_logged_out';
   const privatePages = new Set(['workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'life.html']);
   const homeSections = new Set(['home', 'records', 'tools', 'manage']);
-  const materialViews = new Set(['topics', 'sources', 'time', 'import', 'write', 'transfer', 'sync', 'activities', 'page', 'discover', 'reflection', 'workbench-backup']);
+  const materialViews = new Set(['topics', 'sources', 'time', 'import', 'write', 'transfer', 'sync', 'activities', 'page', 'discover', 'related', 'reflection', 'workbench-backup']);
   function safeNext(value) {
     try {
       const url = new URL(value || 'index.html', 'https://haedo.invalid/');
