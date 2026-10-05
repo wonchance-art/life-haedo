@@ -3,12 +3,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createStorage } = require('../assets/life/storage.js');
 const Core = require('../assets/life/core.js');
+const Workbench = require('../assets/life/workbench.js');
 
 // This adapter exercises application decisions and failure propagation. Browser tests
 // separately prove IndexedDB serialization, durability, and the real idb wrapper.
 function memoryAdapter() {
   const schemas = new Map(), rows = new Map();
-  const control = { opens: 0, closes: 0, callbacks: null, failWrite: null, failCompletion: false };
+  const control = { opens: 0, closes: 0, callbacks: null, failWrite: null, failCompletion: false, transactions: [] };
   const encode = key => JSON.stringify(key);
   function connection() {
     let closed = false;
@@ -21,6 +22,7 @@ function memoryAdapter() {
       close() { if (!closed) { closed = true; control.closes += 1; } },
       transaction(names, mode) {
         if (closed) throw new DOMException('closed', 'InvalidStateError');
+        control.transactions.push({ names: [...names], mode });
         const working = new Map(names.map(name => [name, structuredClone(rows.get(name))]));
         let finished = false, resolve, reject;
         const done = new Promise((yes, no) => { resolve = yes; reject = no; });
@@ -828,4 +830,132 @@ test('unowned copy remaps applied result references and preserves the original s
   assert.deepEqual(await base.getStage(stage.stageId), before);
   assert.equal(await account.getSyncState(copy.workspaceId), null);
   assert.equal(JSON.stringify(Core.makeBackup(copy)).includes('appliedResult'), false);
+});
+
+function workbenchFor(bundle) {
+  const state = Workbench.empty(bundle.workspaceId);
+  state.groups.push({ id: Core.id(), title: '다시 읽는 활동', versionIds: [bundle.sourceVersions[0].id, 'missing_version'] });
+  state.page.entries.push({ id: Core.id(), title: '선택한 문장', parts: [{ versionId: bundle.sourceVersions[0].id, enabled: true }],
+    note: '이 원문 버전을 다시 읽습니다.', pinned: true, enabled: true, showBody: true, showNote: true });
+  return state;
+}
+
+test('workbench starts without a write and persists independently of bundle revisions, backups and sync', async t => {
+  const { storage, rows } = syncFixture(); t.after(() => storage.close());
+  const bundle = await initialImport(storage), binding = await uploaded(storage, bundle);
+  const beforeMeta = structuredClone(rows.get('meta')), beforeSync = await storage.getSyncState(bundle.workspaceId);
+  assert.deepEqual(await storage.readWorkbench(bundle.workspaceId), Workbench.empty(bundle.workspaceId));
+  assert.deepEqual(rows.get('meta'), beforeMeta);
+  const input = workbenchFor(bundle), expected = structuredClone(input), events = [];
+  storage.subscribe(bundle.workspaceId, event => events.push(event));
+  const promise = storage.saveWorkbench(bundle.workspaceId, input, 0);
+  input.page.entries[0].note = '저장 요청 뒤 바꾼 값';
+  const saved = await promise;
+  assert.deepEqual(saved, { ...expected, revision: 1 });
+  assert.deepEqual(events, [{ type: 'workbench_changed', workspaceId: bundle.workspaceId, revision: 1 }]);
+  assert.deepEqual(await storage.read(bundle.workspaceId), bundle);
+  assert.deepEqual(await storage.getSyncState(bundle.workspaceId), beforeSync);
+  assert.equal(await storage.prepareSyncUpload(bundle.workspaceId, binding), null);
+  assert.equal(JSON.stringify(Core.makeBackup(bundle)).includes(expected.groups[0].id), false);
+  storage.close(); assert.deepEqual(await storage.readWorkbench(bundle.workspaceId), saved);
+  saved.groups = []; assert.equal((await storage.readWorkbench(bundle.workspaceId)).groups.length, 1);
+});
+
+test('workbench snapshot reads both validated halves in one transaction and refuses corrupt metadata', async t => {
+  const { storage, rows, control } = syncFixture(); t.after(() => storage.close());
+  const bundle = await initialImport(storage), saved = await storage.saveWorkbench(bundle.workspaceId, workbenchFor(bundle), 0);
+  const before = control.transactions.length, snapshot = await storage.readWorkbenchSnapshot(bundle.workspaceId);
+  assert.deepEqual(snapshot, { bundle, workbench: saved });
+  assert.deepEqual(control.transactions.slice(before), [{ names: ['bundles', 'meta'], mode: 'readonly' }]);
+  snapshot.workbench.page.title = '반환 사본'; snapshot.bundle.title = '반환 사본';
+  assert.deepEqual(await storage.readWorkbenchSnapshot(bundle.workspaceId), { bundle, workbench: saved });
+  const key = JSON.stringify(`workbench:${bundle.workspaceId}`), row = structuredClone(rows.get('meta').get(key));
+  row.value.workspaceId = 'wrong_workspace'; rows.get('meta').set(key, row);
+  await assert.rejects(storage.readWorkbenchSnapshot(bundle.workspaceId), { code: 'workspace_mismatch' });
+  await assert.rejects(storage.saveWorkbench(bundle.workspaceId, saved, saved.revision), { code: 'workspace_mismatch' });
+  assert.deepEqual(rows.get('meta').get(key), row);
+  assert.deepEqual(await storage.read(bundle.workspaceId), bundle);
+});
+
+test('two workbench readers cannot overwrite a newer revision or submit another workspace configuration', async t => {
+  const { storage, idb } = syncFixture();
+  const second = createStorage({ idb, core: Core, workbench: Workbench, channelFactory: null });
+  t.after(() => { storage.close(); second.close(); });
+  const bundle = await initialImport(storage), first = await storage.readWorkbench(bundle.workspaceId), stale = await second.readWorkbench(bundle.workspaceId);
+  first.page.intro = '첫 탭에서 변경'; stale.page.intro = '이전 버전에서 변경';
+  const saved = await storage.saveWorkbench(bundle.workspaceId, first, first.revision);
+  await assert.rejects(second.saveWorkbench(bundle.workspaceId, stale, stale.revision), { code: 'workbench_conflict' });
+  await assert.rejects(second.saveWorkbench(bundle.workspaceId, saved, 0), { code: 'workbench_conflict' });
+  await assert.rejects(storage.saveWorkbench(bundle.workspaceId, { ...saved, workspaceId: 'wrong_workspace' }, saved.revision), { code: 'workspace_mismatch' });
+  assert.deepEqual(await second.readWorkbench(bundle.workspaceId), saved);
+  assert.deepEqual(stale.page.intro, '이전 버전에서 변경');
+});
+
+test('failed workbench writes and transaction completion preserve prior data and emit no success event', async t => {
+  for (const fail of ['quota', 'completion']) await t.test(fail, async () => {
+    const { storage, control } = syncFixture();
+    try {
+      const bundle = await initialImport(storage), saved = await storage.saveWorkbench(bundle.workspaceId, workbenchFor(bundle), 0), events = [];
+      storage.subscribe(bundle.workspaceId, event => events.push(event));
+      const input = { ...structuredClone(saved), page: { ...saved.page, intro: '아직 저장되지 않은 메모' } };
+      if (fail === 'quota') control.failWrite = { name: 'meta', method: 'put' }; else control.failCompletion = true;
+      await assert.rejects(storage.saveWorkbench(bundle.workspaceId, input, saved.revision), { code: fail === 'quota' ? 'storage_quota' : 'storage_aborted' });
+      assert.deepEqual(await storage.readWorkbench(bundle.workspaceId), saved); assert.deepEqual(await storage.read(bundle.workspaceId), bundle);
+      assert.deepEqual(events, []);
+      assert.equal((await storage.saveWorkbench(bundle.workspaceId, input, saved.revision)).revision, saved.revision + 1);
+    } finally { storage.close(); }
+  });
+});
+
+test('combined copy installation atomically owns bundle, workbench and active pointer without replacing originals', async t => {
+  const { storage: base, control } = syncFixture(); t.after(() => base.close());
+  const storage = base.forAccount(accountA), original = await initialImport(storage);
+  const state = await storage.saveWorkbench(original.workspaceId, workbenchFor(original), 0);
+  const candidate = await Workbench.restoreBackup(Workbench.makeBackup(original, state));
+  for (const point of ['configuration', 'active', 'completion']) {
+    if (point === 'completion') control.failCompletion = true;
+    else control.afterWrite = ({ name, value }) => {
+      if (name === 'meta' && (point === 'configuration' ? value.key.startsWith('workbench:') : value.key.startsWith('activeWorkspace:'))) {
+        control.afterWrite = null; throw new DOMException('anonymous interrupted copy', 'AbortError');
+      }
+    };
+    await assert.rejects(storage.installWorkbenchCopy(candidate), { code: 'storage_aborted' });
+    assert.equal(await storage.getActive(), original.workspaceId);
+    assert.equal((await storage.listWorkspaces()).length, 1);
+    assert.deepEqual(await storage.readWorkbenchSnapshot(original.workspaceId), { bundle: original, workbench: state });
+  }
+  const installed = await storage.installWorkbenchCopy(candidate);
+  assert.deepEqual(installed, candidate); assert.equal(await storage.getActive(), candidate.bundle.workspaceId);
+  assert.deepEqual(await storage.readWorkbenchSnapshot(candidate.bundle.workspaceId), candidate);
+  assert.equal(await storage.getSyncState(candidate.bundle.workspaceId), null);
+  await assert.rejects(storage.installWorkbenchCopy(candidate), { code: 'workspace_exists' });
+  assert.deepEqual(await storage.readWorkbenchSnapshot(original.workspaceId), { bundle: original, workbench: state });
+});
+
+test('workbench account isolation rejects foreign reads and account replacement aborts late writes and copies', async t => {
+  const { storage: base, control, rows } = syncFixture(); t.after(() => base.close());
+  let a = base.forAccount(accountA), original = await initialImport(a);
+  const state = await a.saveWorkbench(original.workspaceId, workbenchFor(original), 0);
+  let b = base.forAccount(accountB);
+  await assert.rejects(a.readWorkbench(original.workspaceId), { code: 'storage_scope_closed' });
+  await assert.rejects(b.readWorkbench(original.workspaceId), { code: 'workspace_access_denied' });
+  await assert.rejects(b.readWorkbenchSnapshot(original.workspaceId), { code: 'workspace_access_denied' });
+  await assert.rejects(b.saveWorkbench(original.workspaceId, state, state.revision), { code: 'workspace_access_denied' });
+  for (const mode of ['save', 'install']) {
+    a = base.forAccount(accountA);
+    const events = []; a.subscribe(original.workspaceId, event => events.push(event));
+    const before = structuredClone(rows.get('meta'));
+    const candidate = await Workbench.restoreBackup(Workbench.makeBackup(original, state));
+    control.afterWrite = ({ name, value }) => {
+      if (name === 'meta' && value.key.startsWith('workbench:')) { control.afterWrite = null; b = base.forAccount(accountB); }
+    };
+    const pending = mode === 'save' ? a.saveWorkbench(original.workspaceId, { ...state, page: { ...state.page, intro: '늦은 변경' } }, state.revision) : a.installWorkbenchCopy(candidate);
+    await assert.rejects(pending, { code: 'storage_scope_closed' });
+    assert.deepEqual(rows.get('meta'), before); assert.deepEqual(events, []); assert.deepEqual(await b.listWorkspaces(), []);
+    assert.equal(rows.get('bundles').size, 1);
+  }
+  a = base.forAccount(accountA);
+  assert.deepEqual(await a.readWorkbenchSnapshot(original.workspaceId), { bundle: original, workbench: state });
+  const anotherProject = base.forAccount({ ...accountA, projectUrl: 'https://different-project.supabase.co' });
+  await assert.rejects(anotherProject.readWorkbench(original.workspaceId), { code: 'workspace_access_denied' });
 });

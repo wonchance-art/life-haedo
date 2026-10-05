@@ -222,3 +222,31 @@ URL은 원문 재추적 자료다. **저장된 원문 URL을 조용히 고쳐 �
 [MDN CORS 공식 원본](https://github.com/mdn/content/blob/main/files/en-us/web/http/guides/cors/index.md)은 다른 origin의 응답을 script가 읽으려면 서버가 허용하는 CORS 헤더가 필요하다고 설명한다. service worker·Readability·붙여넣기 개선이 이 권한을 대신하지 않는다. 이번 조사에서는 네이버·Instagram 실제 게시물 응답의 CORS, URL 리다이렉트, 실제 Apple 기기의 복사 메뉴를 검사하지 않았다.
 
 반대 검토: 원천 추론이 잘못되면 수동 수정 가능하고 기존 평문 입력으로 끝낼 수 있어야 한다. 더 단순한 기본 경로인 글+URL 직접 입력을 남긴다. 실제 iPad/iPhone에서 복사한 한 건의 본문·출처 대조와 링크 다시 열기를 다음 기기 체험에서 확인하며, 반복되는 누락·HTML 입력·공식 export 요구가 확인될 때만 parser/API 연결을 다시 비교한다. 이번 문서 조사는 기능·브라우저·기기 검증 결과를 대신하지 않는다.
+
+## 활동·내 페이지·돌아보기의 최소 로컬 구성
+
+**2026-10-05 UTC**에 공식 npm registry와 GitHub를 실제로 조회했다. 이번 요구는 보관한 원문의 특정 버전을 활동으로 묶고, 별도로 구성한 내 페이지와 돌아보기를 같은 계정·작업공간에서 다시 여는 것이다. **기존 idb 8.0.3, native DOM과 `Core.searchSources()`를 재사용**한다. 구성 전용 revision과 원자적인 통합 사본 복원을 추가하는 범위이며, 새 에디터·라우터·저장 라이브러리는 도입하지 않는다.
+
+### 배포·유지관리·라이선스 비교
+
+| 후보 | 이번 실제 조회 결과 | 요구와 비교·선택 |
+| --- | --- | --- |
+| **idb 8.0.3 · ISC** | [npm latest](https://registry.npmjs.org/idb)는 **8.0.3**, 게시 **2025-05-07 08:12:54 UTC**. [공식 태그](https://github.com/jakearchibald/idb/tree/v8.0.3) 존재와 [배포 tarball](https://registry.npmjs.org/idb/-/idb-8.0.3.tgz)의 `package/LICENSE`를 확인했다. [최근 기본 브랜치 commit](https://github.com/jakearchibald/idb/commit/77dd8bebf3669bbce9628e470a021ff63eb4acaf)은 **2025-05-07 08:10:45 UTC**이며 저장소는 archived/disabled가 모두 false였다. | **동봉판 그대로 사용**. 기존 여러 store 트랜잭션과 `tx.done` 경계를 확장할 수 있다. 작은 래퍼를 새로 만들거나 이미 검증한 저장 경계를 교체할 필요가 없다. 마지막 commit 시각만으로 장기 지원이나 활발한 유지관리를 보장하지 않는다. |
+| **Dexie 4.4.6 · Apache-2.0** | [npm latest](https://registry.npmjs.org/dexie)는 **4.4.6**, 게시 **2026-09-10 13:26:36 UTC**. [공식 안정 릴리스](https://github.com/dexie/Dexie.js/releases/tag/v4.4.6)는 같은 날 **13:45:16 UTC**이며 prerelease가 아니다. [태그](https://github.com/dexie/Dexie.js/tree/v4.4.6)와 [배포 tarball](https://registry.npmjs.org/dexie/-/dexie-4.4.6.tgz)의 `package/LICENSE`를 확인했다. [최근 commit](https://github.com/dexie/Dexie.js/commit/9282725a40bb659dca8e5971970243ef48238811)은 **2026-09-28 07:30:55 UTC**이며 archived/disabled가 모두 false였다. | **대안으로 검토하고 이번에는 도입하지 않음**. 선언적 스키마·인덱스 조회·버전 이전·여러 테이블 트랜잭션은 유용하지만, 이번 구성은 기존 `meta` store와 bundle을 함께 다루면 된다. 저장 API 교체와 회귀 검증 부담에 비해 현재 필요한 추가 기능이 없다. Dexie Cloud도 도입하지 않는다. |
+| 브라우저 native DOM·기존 검색/저장 모듈 | 현재 `assets/life/ui.js`의 `createElement`·`textContent`·입력 컨트롤과 `Core.searchSources()`의 원문 버전별 검색 계약을 확인했다. | **기존 코드 재사용**. 선택·제목·메모·표시/정렬 구성에는 서식 에디터나 새 라우터가 필요하지 않다. 검색 결과의 버전·구절을 그대로 전달하고, HTML 변환·새 검색 인덱스·원시 IndexedDB 래퍼 자체 구현을 추가하지 않는다. |
+
+두 tarball은 npm metadata의 SHA-512 integrity와 실제 내려받은 바이트가 일치했다. idb의 `package/build/umd.js`와 LICENSE는 현재 동봉 파일과 바이트가 같고, UMD SHA-256은 `ff4b3763d5b8e7981f606cb3d46df37ac5b7fc1d4b4eca34da129b47219edd59`다. 기존 [배포 고지](../../vendor/idb/README.md)와 [ISC LICENSE](../../vendor/idb/LICENSE)를 유지한다. npm package 설치·vendor 교체·배포 코드 실행은 하지 않았다. 해당 두 버전의 npm metadata에는 runtime dependencies가 없었다.
+
+idb의 [GitHub `releases/latest`](https://api.github.com/repos/jakearchibald/idb/releases/latest)는 HTTP 404였으므로 GitHub 릴리스 게시일을 확인했다고 쓰지 않는다. npm 게시 정보·태그·실제 배포 파일을 근거로 했다. [idb 공개 보안 권고 API](https://api.github.com/repos/jakearchibald/idb/security-advisories)와 [Dexie 공개 보안 권고 API](https://api.github.com/repos/dexie/Dexie.js/security-advisories)는 조회 시 모두 빈 배열을 반환했다. 이는 해당 저장소에 공개된 권고를 조회한 결과이며, 미공개 문제·전체 취약점 데이터베이스·모든 의존성을 감사했거나 취약점이 없다는 보증이 아니다.
+
+### 저장 계약에 적용할 경계
+
+[idb 8.0.3 README](https://github.com/jakearchibald/idb/blob/v8.0.3/README.md)는 `tx.done`을 전체 트랜잭션의 성공 커밋 신호로 설명한다. 개별 `put()` 성공을 구성 저장 완료로 표시하지 않는다. 파일 읽기·해시 등 다른 비동기 작업은 트랜잭션 전에 끝내고, 내부에서는 IndexedDB 요청만 이어 간다. [Dexie 트랜잭션 문서](https://github.com/dexie/dexie-website/blob/master/docs/Dexie/Dexie.transaction%28%29.md)도 최상위 transaction Promise의 완료와 외부 비동기 대기 시 자동 커밋 문제를 명시한다. 따라서 라이브러리를 바꿔도 계정 검사·revision 충돌·복원 범위의 제품 계약은 별도로 필요하다.
+
+- **계정·작업공간:** 기존 저장소의 계정 범위 검사와 bundle 소유권 확인을 재사용한다. IndexedDB 라이브러리가 인증이나 계정 격리를 제공한다고 가정하지 않는다. 계정이 바뀌어 닫힌 화면의 늦은 저장·읽기 결과도 기존 scope 경계에서 다룬다.
+- **활동과 페이지:** 활동은 선택한 `sourceVersionId`를 고정 참조한다. 내 페이지의 선택·순서·표시 설정은 활동 배열과 별도 사본으로 편집하되 원문 버전은 계속 추적한다. 참조가 사라지면 누락으로 표시하고 최신 버전으로 조용히 바꾸지 않는다. 검색은 `Core.searchSources()`의 일치 버전·위치를 재사용한다.
+- **독립 revision:** 구성은 기존 `meta` store에서 별도 revision으로 저장한다. 같은 readwrite 트랜잭션에서 소유권과 기준 revision을 확인하고 다음 revision을 확정한다. 구성 변경만으로 원문 bundle revision이나 기존 동기화 큐를 갱신하지 않는다. 이번에는 구성의 기기 간 자동 동기화를 지원한다고 표시하지 않는다.
+- **통합 사본 복원:** 기존 원문 백업 검증과 새 구성 검증·ID 참조 재연결을 먼저 끝낸 뒤, 새 bundle·구성·소유권·활성 작업공간을 한 트랜잭션으로 설치한다. 부분 성공으로 한쪽만 남기지 않고 기존 작업공간은 보존한다. 기존 자료 전용 백업과 구성 포함 백업은 구분한다.
+- **변경 범위:** 기존 IndexedDB의 store/DB schema version, Core bundle 형식, Supabase SQL·원격 동기화 형식을 바꾸는 근거로 이 조사를 사용하지 않는다. 새 로컬 구성 계약의 허용 필드·실패 복구·원자성 검증은 앱 구현에서 별도로 수행한다.
+
+반대 검토: 페이지를 구성하려고 원문을 다시 복사·편집하거나 동기화 형식 전체를 확장하면 현재 필요보다 변경 범위가 커진다. 기존 자료를 읽고 선택한 버전을 참조하는 작은 로컬 구성으로 먼저 완결한다. 실제 사용에서 복잡한 인덱스 조회·반응형 구독·반복되는 스키마 이전 문제가 확인되거나 보안 권고·지원 환경이 달라지면 Dexie를 다시 비교한다. 이번 공식 문서·배포 파일 확인은 앱의 계정 전환·동시 탭 충돌·용량 부족·사본 복원 테스트 및 실제 Apple 기기 검증을 대신하지 않는다.

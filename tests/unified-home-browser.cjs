@@ -142,7 +142,8 @@ async function main() {
       assert.equal(await page.locator('#lifeSearch').inputValue(), '출처를 기억할');
       await page.waitForFunction(value => document.activeElement?.dataset.focusKey === value, key);
       await openManagement(page); await button(page, '내보내기·사본 복원');
-      assert.match(await page.locator('#lifeMain').innerText(), /연표·목표·습관은 포함되지/);
+      assert.match(await page.locator('#lifeMain').innerText(), /연표·목표·습관은 별도 백업/);
+      assert.match(await page.locator('#lifeMain').innerText(), /자료 전용 파일에는 페이지 구성과 회고가 포함되지/);
       const download = page.waitForEvent('download'); await button(page, 'JSON 백업');
       const backup = JSON.parse(await fs.readFile(await (await download).path(), 'utf8'));
       assert.equal(backup.format, 'life-tools-backup-v1'); assert.equal(backup.manifest.stagingIncluded, false);

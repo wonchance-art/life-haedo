@@ -89,6 +89,11 @@
       }
       return value;
     };
+    const workbench = () => {
+      const value = options.workbench || root.HaedoLife?.Workbench;
+      if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '활동·페이지 구성 모듈을 불러오지 못했습니다.');
+      return value;
+    };
     function notify(event) {
       if (disposed) return;
       const callbacks = event.type === 'error'
@@ -108,6 +113,11 @@
       notify(event);
       try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Persistent state is authoritative. */ }
     }
+    function workbenchChanged(state) {
+      const event = { type: 'workbench_changed', workspaceId: state.workspaceId, revision: state.revision };
+      notify(event);
+      try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Persistent state is authoritative. */ }
+    }
     function ensureChannel() {
       if (channel || options.channelFactory === null) return;
       try {
@@ -120,6 +130,10 @@
           if (data?.sender !== sender && data?.type === 'changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
             notify({ type: 'changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'workbench_changed' && typeof data.workspaceId === 'string' &&
+              Number.isSafeInteger(data.revision) && data.revision >= 0) {
+            notify({ type: 'workbench_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
         };
       } catch (_) { channel = null; }
@@ -389,6 +403,62 @@
     async function read(workspaceId) {
       requireId(workspaceId, '작업공간');
       return transaction(['bundles'], 'readonly', async tx => clone(await checkedBundle(tx.objectStore('bundles'), workspaceId, tx.objectStore('meta'))));
+    }
+    async function workbenchValue(meta, workspaceId) {
+      const row = await meta.get(`workbench:${workspaceId}`);
+      const state = row === undefined ? workbench().empty(workspaceId) : row.value;
+      workbench().validate(state);
+      if (state.workspaceId !== workspaceId) throw fault('workspace_mismatch', '구성의 작업공간이 다릅니다. 기존 구성을 보존했습니다.');
+      return state;
+    }
+    async function readWorkbenchSnapshot(workspaceId) {
+      requireId(workspaceId, '작업공간');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, tx.objectStore('meta'));
+        const state = await workbenchValue(tx.objectStore('meta'), workspaceId);
+        return { bundle: clone(bundle), workbench: clone(state) };
+      });
+    }
+    async function readWorkbench(workspaceId) { return (await readWorkbenchSnapshot(workspaceId)).workbench; }
+    async function saveWorkbench(workspaceId, input, baseRevision) {
+      requireId(workspaceId, '작업공간'); requireRevision(baseRevision, 'baseRevision');
+      workbench().validate(input);
+      const state = clone(input);
+      if (state.workspaceId !== workspaceId) throw fault('workspace_mismatch', '저장할 구성의 작업공간이 다릅니다.');
+      if (state.revision !== baseRevision) throw fault('workbench_conflict', '구성의 저장 기준이 달라졌습니다. 입력을 보존하고 최신 구성을 확인해 주세요.');
+      const saved = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await workbenchValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) throw fault('workbench_conflict', '다른 탭에서 구성을 바꿨습니다. 입력을 보존하고 최신 구성을 확인해 주세요.');
+        state.revision = baseRevision + 1;
+        workbench().validate(state);
+        await meta.put({ key: `workbench:${workspaceId}`, value: state });
+        return clone(state);
+      });
+      workbenchChanged(saved);
+      return saved;
+    }
+    async function installWorkbenchCopy(input) {
+      if (!plain(input) || Object.keys(input).some(key => !['bundle', 'workbench'].includes(key))) {
+        throw fault('invalid_workbench', '설치할 자료와 구성을 확인해 주세요.');
+      }
+      core().validateWorkspace(input.bundle); workbench().validate(input.workbench);
+      const { bundle, workbench: state } = clone(input);
+      if (bundle.workspaceId !== state.workspaceId) throw fault('workspace_mismatch', '자료와 구성의 작업공간이 다릅니다.');
+      const installed = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const bundles = tx.objectStore('bundles'), meta = tx.objectStore('meta');
+        if (await bundles.get(bundle.workspaceId) || await workspaceOwner(meta, bundle.workspaceId) || await meta.get(`workbench:${bundle.workspaceId}`)) {
+          throw fault('workspace_exists', '같은 작업공간이 이미 있습니다. 새 사본으로 복원하세요.');
+        }
+        await bundles.add(bundle);
+        await saveOwner(meta, bundle.workspaceId);
+        await meta.put({ key: `workbench:${bundle.workspaceId}`, value: state });
+        await meta.put({ key: activeKey, value: bundle.workspaceId });
+        return { bundle: clone(bundle), workbench: clone(state) };
+      });
+      changed(bundle.workspaceId, bundle.revision); workbenchChanged(state);
+      return installed;
     }
     async function installWorkspace(input) {
       const bundle = clone(input);
@@ -861,6 +931,7 @@
     }
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, read, createWorkspace, installWorkspace, getActive, setActive,
+      readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       commitLocal, saveStage, getStage, listStages, deleteStage, subscribe,
       getSyncState, bindSync, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,
       setSyncConflict, setSyncError, resolveSync, listUnownedWorkspaces, importUnownedWorkspace };

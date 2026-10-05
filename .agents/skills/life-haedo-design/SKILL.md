@@ -19,6 +19,8 @@ description: 해도의 화면 추가·수정·디자인 검토에 사용한다. 
 
 전역 메뉴는 기록·도구·관리 세 개이며 `assets/haedo-navigation.js`/`assets/haedo-shell.css`를 재사용한다. 자료·연표는 기록에 묶고 본문 앞에 중복 대시보드·소개를 넣지 않는다. [통합 홈 기록](../../../docs/design-review/unified-home.md)의 라우팅·계정 경계를 따른다.
 
+활동·내 페이지·다시 찾기·회고의 최소 화면은 `assets/life/workbench-ui.js`/`workbench.css`와 [영역별 동작](../../../docs/life-tools-design/working-sections.md)을 따른다. 기능 밖 반복 설명은 접고, 선택·원문·내 코멘트를 먼저 보여준다. 영역 이동·미리보기 전 저장 실패로 입력이 사라지지 않는지 확인하며, 계정별 로컬 구성과 실제 공개·기기 간 동기화를 구분한다.
+
 전체 사이트는 `life.html`의 시각 기준을 따르고 최신 계약은 `DESIGN.md`를 따른다. 플랫폼 CSS는 연표 테마에 기대지 않는다. 전체 표면 변경은 `node scripts/check-site-design.cjs`의 익명 샘플로 기존 피드와 도구·연표·폼을 함께 검토한다.
 
 ## 구현과 확인

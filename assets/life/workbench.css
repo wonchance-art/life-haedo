@@ -1,0 +1,70 @@
+/* Local composition shares the production Life palette, controls and 700px column. */
+.life-workbench { min-width: 0; overflow-wrap: anywhere; }
+.life-workbench :is(h2,h3,p,pre,span,label) { overflow-wrap: anywhere; word-break: keep-all; }
+.wb-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.wb-grow { flex: 1; min-width: 0; }
+.wb-heading { min-height: 56px; }
+.wb-heading .life-heading { margin: 0; }
+.wb-save-status { margin: 6px 0; font-variant-numeric: tabular-nums; }
+.wb-save-status[data-state=error] { color: var(--color-error); }
+.wb-storage-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 16px; margin-bottom: 12px; }
+.wb-storage-line > .wb-scope { margin: 0; }
+.wb-storage-line > .wb-scope[open] { flex-basis: 100%; }
+.wb-scope { margin: 0 0 16px; }
+.wb-details { min-width: 0; margin: 16px 0; }
+.wb-details > summary { display: flex; align-items: center; gap: 8px; min-height: 44px; width: fit-content; max-width: 100%; color: var(--ink-soft); font-size: 14px; list-style: none; }
+.wb-details > summary::-webkit-details-marker { display: none; }
+.wb-details > summary::after { content: ''; width: 7px; height: 7px; border-bottom: 1.5px solid currentColor; border-right: 1.5px solid currentColor; transform: rotate(45deg); margin: -4px 4px 0 2px; flex: 0 0 7px; }
+.wb-details[open] > summary::after { transform: rotate(225deg); margin-top: 4px; }
+.wb-scope > summary { font-size: 12px; }
+.wb-notice { margin: 12px 0; font-size: 13px; }
+.wb-empty { margin: 30px 0; color: var(--ink-soft); font-size: 15px; }
+.wb-add-row { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin: 18px 0; }
+.wb-add-row .life-field { flex: 1 1 180px; margin: 0; }
+.wb-add-row > .life-button { margin-bottom: 1px; }
+.wb-feed { min-width: 0; padding: 26px 0; border-bottom: 1px solid var(--line); }
+.wb-feed > .wb-row { margin-bottom: 12px; }
+.wb-feed h3 { font-size: 19px; line-height: 1.65; }
+.wb-source { margin: 14px 0; min-width: 0; }
+.wb-source-title { font-size: 15px; font-weight: 550; line-height: 1.75; }
+.wb-source .life-meta { font-size: 12px; margin-top: 3px; }
+.wb-source-body { margin-top: 14px; font-size: 17px; line-height: 1.95; white-space: pre-wrap; max-height: 24rem; overflow: auto; scrollbar-color: var(--field-line) var(--paper-2); }
+.wb-visitor .wb-source-body { max-height: none; overflow: visible; }
+.wb-source-link { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 0; font-size: 13px; }
+.wb-check { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 0; cursor: pointer; }
+.wb-check > input { flex: 0 0 22px; width: 22px; height: 22px; margin: 0; accent-color: var(--color-primary); }
+.wb-check > span { min-width: 0; font-size: 14px; line-height: 1.75; }
+.wb-picker-list { max-height: 27rem; overflow: auto; padding: 5px; margin-inline: -5px; scrollbar-color: var(--field-line) var(--paper-2); }
+.wb-picker-list .wb-check { border-bottom: 1px solid var(--line); }
+.wb-part { margin-block: 20px; }
+.wb-part > .wb-check { font-weight: 550; }
+.wb-group-add { display: flex; margin: 10px 0; text-align: left; }
+.wb-visitor { margin-top: 30px; }
+.wb-visitor-title { font-size: 23px; letter-spacing: -.02em; }
+.wb-visitor-intro { margin-top: 12px; white-space: pre-wrap; font-size: 16px; line-height: 1.85; }
+.wb-comment { margin-top: 20px; }
+.wb-comment-body { margin-top: 5px; white-space: pre-wrap; font-size: 16px; line-height: 1.95; }
+.wb-result-text { font-size: 17px; line-height: 1.9; white-space: pre-wrap; margin-block: 14px 18px; }
+.wb-reflection-overview { margin-top: 24px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.wb-facts { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px 20px; margin: 16px 0; font-size: 14px; }
+.wb-facts dt { color: var(--ink-soft); }
+.wb-facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.wb-conflict { margin-top: 20px; color: var(--ink); }
+.wb-comparison-text { max-height: 20rem; overflow: auto; padding: 12px; white-space: pre-wrap; font: inherit; font-size: 14px; border: 1px solid var(--field-line); border-radius: 6px; }
+.wb-error .life-actions { margin-top: 12px; }
+.wb-error .life-button { margin: 0; }
+.wb-restore-preview { margin-top: 24px; }
+.wb-restore-preview > .life-button { margin: 12px 10px 0 0; }
+.life-record-sections { display: flex; align-items: stretch; gap: 4px; width: 100%; max-width: 700px; min-width: 0; margin: 8px auto 10px; border-bottom: 1px solid var(--line); }
+.life-record-sections button { flex: 1 1 0; min-width: 44px; min-height: 44px; padding: 10px 5px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: var(--paper); color: var(--ink-soft); font-size: 14px; line-height: 1.6; white-space: nowrap; }
+.life-record-sections button:hover { color: var(--ink); background: var(--paper-2); }
+.life-record-sections button[aria-current=page] { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+@media (max-width: 700px) {
+  .wb-heading { min-height: 50px; }
+  .wb-feed { padding-block: 24px; }
+  .wb-row { gap: 6px; }
+  .wb-source-body,.wb-result-text { font-size: 16px; }
+  .wb-feed > .wb-row { flex-wrap: wrap; }
+  .wb-feed > .wb-row > h3 { flex-basis: calc(100% - 108px); }
+}
+@media (prefers-reduced-motion: reduce) { .life-workbench * { scroll-behavior: auto; transition: none; } }
