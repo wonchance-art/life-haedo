@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>해도 · 활동 통합과 내 페이지 시안</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../../../assets/life/ui.css">
+  <link rel="stylesheet" href="preview.css">
+  <script src="../../../assets/life/icons.js" defer></script>
+  <script src="preview.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#editor">내용으로 이동</a>
+  <div class="demo-bar"><span>설계 시안 · 익명 예시 · 실제 저장·공개 없음</span><a href="../../diagrams/rendered/activity_hub_v4.svg">전체 흐름<span data-icon="arrow"></span></a></div>
+  <header class="hub-header">
+    <div class="brand"><span data-icon="book"></span><h1>내 페이지</h1></div>
+    <div class="header-actions">
+      <button class="life-icon-button" id="reset" aria-label="예시 선택 초기화" title="예시 선택 초기화"><span data-icon="back"></span></button>
+      <button class="life-button life-primary" id="previewOnly"><span data-icon="user"></span><span>미리보기</span></button>
+    </div>
+  </header>
+  <main class="workbench" id="workbench">
+    <section class="editor" id="editor" aria-labelledby="editorHeading" tabindex="-1">
+      <div class="pane-heading"><h2 id="editorHeading">선택·편집</h2><span class="meta" id="selectionCount"></span></div>
+      <p class="editor-intro">여러 곳의 기록을 모아, 보여줄 부분만 고르세요.</p>
+      <div class="setting-row"><label for="showIntro">소개</label><input type="checkbox" id="showIntro" class="switch" checked></div>
+      <label class="life-field intro-field" id="introField"><span>소개 문장</span><input id="intro" maxlength="120" value="보고, 걷고, 오래 생각한 것들."></label>
+      <div class="setting-row"><label for="showRecent">최근 활동 영역 배치</label><input type="checkbox" id="showRecent" class="switch" checked></div>
+      <p class="quiet-note">배치를 끄더라도 선택한 글의 공개 범위는 바뀌지 않습니다.</p>
+      <div class="section-caption"><h3>공개 초안에 넣을 내용</h3><button class="text-button" id="clearSelection">모두 제외</button></div>
+      <div id="sourceNotice" role="status"></div>
+      <div id="activities"></div>
+      <details class="demo-settings"><summary>예시 상태 바꾸기</summary><label class="life-field"><span>가져오기 상태 예시</span><select id="scenario"><option value="ready">보관한 자료 있음</option><option value="empty">첫 사용 · 자료 없음</option><option value="loading">새 자료 확인 중</option><option value="error">연결 지연 · 보관본 유지</option></select></label><p class="meta">SNS 계정에 연결하지 않는 화면 예시입니다.</p></details>
+      <p class="scope-note"><span data-icon="download"></span>SNS는 가져오기 전용. 여기서 고치거나 제외해도 원본 글은 그대로입니다.</p>
+    </section>
+    <section class="visitor" id="visitor" aria-labelledby="visitorHeading" tabindex="-1">
+      <div class="pane-heading"><h2 id="visitorHeading">방문자 미리보기</h2><span class="meta">선택한 사본</span></div>
+      <div id="publicPage"></div>
+    </section>
+  </main>
+  <div class="sr-only" id="announcement" role="status" aria-live="polite"></div>
+</body>
+</html>

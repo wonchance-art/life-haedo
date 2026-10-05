@@ -1,0 +1,35 @@
+%% 2026-10-05. Approved product flow. Future design except explicitly marked current inputs/store.
+%% SNS is inbound only: no create/update/delete operation is sent to an originating platform.
+%%{init: {"theme":"base","look":"classic","htmlLabels":false,"themeVariables":{"primaryColor":"#ffffff","primaryTextColor":"#222126","primaryBorderColor":"#827B86","lineColor":"#827B86","clusterBkg":"#ffffff","clusterBorder":"#E9E7EB","edgeLabelBackground":"#ffffff","fontFamily":"Noto Sans CJK KR, sans-serif","fontSize":"16px"},"flowchart":{"curve":"linear","wrappingWidth":310,"nodeSpacing":36,"rankSpacing":50,"htmlLabels":false}}}%%
+flowchart TB
+  accTitle: 해도 v4 — 흩어진 활동을 모아 나의 흐름으로 보여주기
+  accDescr: SNS는 가져오기 전용이다. 현재 원문 보관 기반 위에 활동 연결, 개인 활용, 선택 편집, 방문자 미리보기와 공유 사본을 설계한다. 공개하지 않고 개인적으로만 써도 된다.
+  SOURCES["SNS · 메모 · 파일<br/>밖에서 남긴 글과 활동"]
+  IMPORT["현재: 제공한 본문·파일·링크 가져오기<br/>후속: 허용된 계정·피드의 자동 수집<br/>출처·확보 범위·마지막 확인을 구분"]
+  STORE[("현재: 계정별 개인 보관함<br/>원문 버전·출처·정확한 발췌<br/>읽기·검색·백업·선택 동기화")]
+  OWN["후속: 내 글 · 도구의 결과<br/>직접 쓴 생각과 타인 원문 구분"]
+  GROUP["후속: 같은 활동의 기록 연결<br/>전시 사진 글 + 감상 글 + 메모<br/>원본 유지 · 묶기/풀기 가능"]
+  USE["개인 활용<br/>현재 읽기·검색·기존 도구<br/>후속 발견·깊은 대화·자기 이해"]
+  SELECT["후속: 공개할 결과 선택<br/>원천 기본값 → 모음 → 항목 예외<br/>가져오기·분석·공개 선택을 구별"]
+  EDIT["후속: 내 페이지 구성·편집<br/>대표 글/모음 · 선택한 최근 활동<br/>출처·본문·내 생각을 개별 선택"]
+  PREVIEW["후속: 방문자 미리보기<br/>선택한 사본만 확인<br/>확인 후 해도에 게시·갱신"]
+  PAGE["후속: 나의 블로그 · 공유 모음<br/>허용된 사본만 열람<br/>한 주소에서 활동과 관심의 흐름"]
+  MANAGE["후속: 해도 공유본 관리<br/>페이지 배치 숨김 ≠ 공개 철회<br/>공개 철회는 공유본의 열람 차단"]
+  LIFE["생활 · 탐구 · 사람과의 교류<br/>더 쓰거나 공개하지 않고 마쳐도 됨"]
+  SOURCES -->|수신 전용| IMPORT --> STORE
+  OWN -->|새 저장 계약 구현 후| STORE
+  STORE --> GROUP
+  STORE -->|바로 읽기| USE
+  GROUP --> USE
+  GROUP --> SELECT
+  STORE -->|묶지 않고도 선택| SELECT
+  USE -->|원하는 결과만| SELECT
+  SELECT --> EDIT --> PREVIEW --> PAGE --> MANAGE
+  USE --> LIFE
+  PAGE --> LIFE
+  classDef current fill:#ffffff,stroke:#5442BC,stroke-width:1.7px,color:#222126;
+  classDef future fill:#ffffff,stroke:#827B86,stroke-width:1.5px,stroke-dasharray:6 4,color:#222126;
+  classDef context fill:#F4F3F6,stroke:#E9E7EB,color:#222126;
+  class STORE current;
+  class IMPORT,OWN,GROUP,USE,SELECT,EDIT,PREVIEW,PAGE,MANAGE future;
+  class SOURCES,LIFE context;
