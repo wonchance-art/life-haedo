@@ -1,0 +1,118 @@
+{
+  "before": {
+    "captures": 15,
+    "report": "before/report.json"
+  },
+  "after": {
+    "captures": 36,
+    "checks": 189,
+    "passed": 189,
+    "minimumTextContrast": 5.661,
+    "report": "after/report.json",
+    "sourceRuns": [
+      {
+        "file": "run-2026-10-05T09-39-53-427Z.json",
+        "createdAt": "2026-10-05T09:39:53.427Z",
+        "captures": 36,
+        "checks": 189
+      },
+      {
+        "file": "run-2026-10-05T09-42-58-867Z.json",
+        "createdAt": "2026-10-05T09:42:58.867Z",
+        "captures": 3,
+        "checks": 18
+      }
+    ]
+  },
+  "focusedFunctionJourneys": [
+    {
+      "name": "dock end focus, exact quote/search return, backup preservation 390",
+      "pass": true,
+      "overlap": {
+        "covered": false,
+        "button": {
+          "top": 668.5625,
+          "bottom": 712.5625
+        },
+        "dock": {
+          "top": 772,
+          "bottom": 832
+        },
+        "focused": true
+      }
+    },
+    {
+      "name": "dock end focus, exact quote/search return, backup preservation 600",
+      "pass": true,
+      "overlap": {
+        "covered": false,
+        "button": {
+          "top": 724.75,
+          "bottom": 768.75
+        },
+        "dock": {
+          "top": 828,
+          "bottom": 888
+        },
+        "focused": true
+      }
+    },
+    {
+      "name": "dock end focus, exact quote/search return, backup preservation 844",
+      "pass": true,
+      "overlap": {
+        "covered": false,
+        "button": {
+          "top": 229.46875,
+          "bottom": 273.46875
+        },
+        "dock": {
+          "top": 24,
+          "bottom": 238
+        },
+        "focused": true
+      }
+    }
+  ],
+  "landscapeRefinement": {
+    "viewport": "844x390",
+    "readerTopBefore": 374.984375,
+    "readerTopAfter": 270.578125,
+    "note": "Comparison before/after the short-height refinement, not the original main baseline"
+  },
+  "limits": "Linux Chromium viewport/touch/IME-event simulation; actual Apple devices, native IME, Files and production services were not tested",
+  "platformVisual": {
+    "captures": 33,
+    "passed": 240,
+    "failed": 0,
+    "minimumTextContrast": 5.661,
+    "report": "platform-report.json",
+    "knownSpatialMarkerException": "Timeline c-main markers retain existing 26–33px heights. Equivalent 44px record list and keyboard Enter paths passed."
+  },
+  "regression": {
+    "node": {
+      "passed": 229,
+      "failed": 0
+    },
+    "unifiedHome": {
+      "passed": 13,
+      "failed": 0,
+      "report": "home-regression.json"
+    },
+    "publication": {
+      "passed": 17,
+      "failed": 0,
+      "visualStates": 21,
+      "report": "share-regression.json"
+    },
+    "platformAndUpdate": {
+      "passed": 9,
+      "failed": 0,
+      "from": "haedo-v64",
+      "to": "haedo-v65",
+      "baselineCommit": "1325f2aff6e14685be5bcb249d52d9bc1b8e630f",
+      "log": "pwa-regression.log"
+    }
+  },
+  "retestNotes": "Fixed old audit assumptions (3 menu items vs existing 4, original-source control name) and reported chart marker geometry separately; kept initial reports. No production SQL/Auth writes."
+}

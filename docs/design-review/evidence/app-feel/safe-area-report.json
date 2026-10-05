@@ -1,0 +1,126 @@
+{
+  "scope": "Chromium CSS env() substitution (left/right44,bottom21); CDP native safe-area unavailable; not Apple hardware",
+  "checks": [
+    {
+      "file": "index.html",
+      "viewport": 844,
+      "nav": {
+        "left": 44,
+        "right": 100,
+        "width": 56
+      },
+      "content": {
+        "left": 136,
+        "right": 780,
+        "paddingLeft": 60,
+        "paddingRight": 60
+      },
+      "bodyPadding": {
+        "left": 116,
+        "right": 44
+      },
+      "scroll": 844
+    },
+    {
+      "file": "privacy.html",
+      "viewport": 844,
+      "nav": {
+        "left": 44,
+        "right": 100,
+        "width": 56
+      },
+      "content": {
+        "left": 136,
+        "right": 780,
+        "paddingLeft": 60,
+        "paddingRight": 60
+      },
+      "bodyPadding": {
+        "left": 116,
+        "right": 44
+      },
+      "scroll": 844
+    },
+    {
+      "file": "index.html",
+      "viewport": 390,
+      "nav": {
+        "left": 44,
+        "right": 346,
+        "width": 302
+      },
+      "content": {
+        "left": 0,
+        "right": 390,
+        "paddingLeft": 44,
+        "paddingRight": 44
+      },
+      "bodyPadding": {
+        "left": 0,
+        "right": 0
+      },
+      "scroll": 390
+    },
+    {
+      "file": "privacy.html",
+      "viewport": 390,
+      "nav": {
+        "left": 44,
+        "right": 346,
+        "width": 302
+      },
+      "content": {
+        "left": 0,
+        "right": 390,
+        "paddingLeft": 44,
+        "paddingRight": 44
+      },
+      "bodyPadding": {
+        "left": 0,
+        "right": 0
+      },
+      "scroll": 390
+    },
+    {
+      "file": "index.html",
+      "viewport": 320,
+      "nav": {
+        "left": 44,
+        "right": 276,
+        "width": 232
+      },
+      "content": {
+        "left": 0,
+        "right": 320,
+        "paddingLeft": 44,
+        "paddingRight": 44
+      },
+      "bodyPadding": {
+        "left": 0,
+        "right": 0
+      },
+      "scroll": 320
+    },
+    {
+      "file": "privacy.html",
+      "viewport": 320,
+      "nav": {
+        "left": 44,
+        "right": 276,
+        "width": 232
+      },
+      "content": {
+        "left": 0,
+        "right": 320,
+        "paddingLeft": 44,
+        "paddingRight": 44
+      },
+      "bodyPadding": {
+        "left": 0,
+        "right": 0
+      },
+      "scroll": 320
+    }
+  ],
+  "errors": []
+}

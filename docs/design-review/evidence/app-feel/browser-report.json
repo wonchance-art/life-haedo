@@ -1,0 +1,58 @@
+{
+  "createdAt": "2026-10-05T09:42:12.498Z",
+  "scope": "Anonymous SDK/Auth/IDB; Linux Chromium viewport/touch simulation, not Apple hardware",
+  "checks": [
+    {
+      "name": "dock end focus, exact quote/search return, backup preservation 390",
+      "pass": true,
+      "overlap": {
+        "covered": false,
+        "button": {
+          "top": 668.5625,
+          "bottom": 712.5625
+        },
+        "dock": {
+          "top": 772,
+          "bottom": 832
+        },
+        "focused": true
+      }
+    },
+    {
+      "name": "dock end focus, exact quote/search return, backup preservation 600",
+      "pass": true,
+      "overlap": {
+        "covered": false,
+        "button": {
+          "top": 724.75,
+          "bottom": 768.75
+        },
+        "dock": {
+          "top": 828,
+          "bottom": 888
+        },
+        "focused": true
+      }
+    },
+    {
+      "name": "dock end focus, exact quote/search return, backup preservation 844",
+      "pass": true,
+      "overlap": {
+        "covered": false,
+        "button": {
+          "top": 229.46875,
+          "bottom": 273.46875
+        },
+        "dock": {
+          "top": 24,
+          "bottom": 238
+        },
+        "focused": true
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": []
+}

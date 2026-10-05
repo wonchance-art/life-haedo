@@ -1,0 +1,5425 @@
+{
+  "phase": "after",
+  "capturedAt": "2026-10-05T09:45:07.872Z",
+  "base": "http://127.0.0.1:4184",
+  "browser": "151.0.7922.173",
+  "environment": "Linux Chromium viewport and touch simulation; not actual Apple, Google, IME, Files, VoiceOver or production Supabase",
+  "fixture": "Same six-source/twelve-excerpt collections fixture; eight synthetic goals, habits and timelines with long Korean titles",
+  "method": "Computed HTML color and SVG fill over actual surfaces, including inherited opacity; finite entrance animations finish before measurement. Spatial chart targets retain their measured sizes and are reported separately from menus/forms.",
+  "checks": [
+    {
+      "name": "desktop home-welcome: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "desktop home-welcome: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop home-welcome: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop home-welcome: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop home-welcome: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop home-welcome: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "desktop home-welcome: content maximum 700px",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "desktop login: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "desktop login: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop login: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop login: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop login: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop login: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "desktop login: content maximum 700px",
+      "pass": true,
+      "detail": 700
+    },
+    {
+      "name": "desktop login-error: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "desktop login-error: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop login-error: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop login-error: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop login-error: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop login-error: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "desktop login-error: content maximum 700px",
+      "pass": true,
+      "detail": 700
+    },
+    {
+      "name": "desktop goals-list: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "desktop goals-list: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop goals-list: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop goals-list: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop goals-list: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop goals-list: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "desktop goals-list: content maximum 700px",
+      "pass": true,
+      "detail": 700
+    },
+    {
+      "name": "desktop goals-form: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "desktop goals-form: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop goals-form: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop goals-form: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop goals-form: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop goals-form: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "desktop goals-form: content maximum 700px",
+      "pass": true,
+      "detail": 700
+    },
+    {
+      "name": "desktop goals form escape returns to add button",
+      "pass": true
+    },
+    {
+      "name": "desktop habits-list: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "desktop habits-list: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop habits-list: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop habits-list: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop habits-list: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop habits-list: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "desktop habits-list: content maximum 700px",
+      "pass": true,
+      "detail": 700
+    },
+    {
+      "name": "desktop habits-form: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "desktop habits-form: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop habits-form: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop habits-form: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop habits-form: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop habits-form: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "desktop habits-form: content maximum 700px",
+      "pass": true,
+      "detail": 700
+    },
+    {
+      "name": "desktop habits form escape returns to add button",
+      "pass": true
+    },
+    {
+      "name": "desktop workspace-list: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "desktop workspace-list: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop workspace-list: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop workspace-list: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop workspace-list: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop workspace-list: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "desktop workspace-list: content maximum 700px",
+      "pass": true,
+      "detail": 700
+    },
+    {
+      "name": "desktop workspace-form: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "desktop workspace-form: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop workspace-form: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop workspace-form: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop workspace-form: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop workspace-form: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "desktop workspace-form: content maximum 700px",
+      "pass": true,
+      "detail": 700
+    },
+    {
+      "name": "desktop timeline-chart: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "desktop timeline-chart: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop timeline-chart: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop timeline-chart: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop timeline-chart: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop timeline-chart: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "desktop timeline equivalent record has 44px target and keyboard edit",
+      "pass": true
+    },
+    {
+      "name": "desktop timeline marker keyboard Enter opens exact event",
+      "pass": true,
+      "detail": {
+        "markerFocus": {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-01-15 좋은 문장을 모으는 일에서 그 문장을 다시 읽고 내 생각과 연결하는 일까지 천천히 이어 가기",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        }
+      }
+    },
+    {
+      "name": "tablet home-welcome: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "tablet home-welcome: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet home-welcome: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet home-welcome: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet home-welcome: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet home-welcome: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "tablet home-welcome: content maximum 700px",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "tablet login: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "tablet login: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet login: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet login: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet login: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet login: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "tablet login: content maximum 700px",
+      "pass": true,
+      "detail": 588
+    },
+    {
+      "name": "tablet login-error: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "tablet login-error: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet login-error: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet login-error: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet login-error: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet login-error: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "tablet login-error: content maximum 700px",
+      "pass": true,
+      "detail": 588
+    },
+    {
+      "name": "tablet goals-list: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "tablet goals-list: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet goals-list: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet goals-list: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet goals-list: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet goals-list: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "tablet goals-list: content maximum 700px",
+      "pass": true,
+      "detail": 588
+    },
+    {
+      "name": "tablet goals-form: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "tablet goals-form: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet goals-form: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet goals-form: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet goals-form: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet goals-form: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "tablet goals-form: content maximum 700px",
+      "pass": true,
+      "detail": 588
+    },
+    {
+      "name": "tablet goals form escape returns to add button",
+      "pass": true
+    },
+    {
+      "name": "tablet habits-list: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "tablet habits-list: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet habits-list: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet habits-list: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet habits-list: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet habits-list: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "tablet habits-list: content maximum 700px",
+      "pass": true,
+      "detail": 588
+    },
+    {
+      "name": "tablet habits-form: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "tablet habits-form: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet habits-form: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet habits-form: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet habits-form: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet habits-form: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "tablet habits-form: content maximum 700px",
+      "pass": true,
+      "detail": 588
+    },
+    {
+      "name": "tablet habits form escape returns to add button",
+      "pass": true
+    },
+    {
+      "name": "tablet workspace-list: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "tablet workspace-list: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet workspace-list: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet workspace-list: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet workspace-list: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet workspace-list: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "tablet workspace-list: content maximum 700px",
+      "pass": true,
+      "detail": 588
+    },
+    {
+      "name": "tablet workspace-form: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "tablet workspace-form: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet workspace-form: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet workspace-form: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet workspace-form: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet workspace-form: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "tablet workspace-form: content maximum 700px",
+      "pass": true,
+      "detail": 588
+    },
+    {
+      "name": "tablet timeline-chart: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "tablet timeline-chart: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet timeline-chart: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet timeline-chart: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet timeline-chart: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet timeline-chart: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "tablet timeline equivalent record has 44px target and keyboard edit",
+      "pass": true
+    },
+    {
+      "name": "tablet timeline marker keyboard Enter opens exact event",
+      "pass": true,
+      "detail": {
+        "markerFocus": {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-01-15 좋은 문장을 모으는 일에서 그 문장을 다시 읽고 내 생각과 연결하는 일까지 천천히 이어 가기",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        }
+      }
+    },
+    {
+      "name": "phone home-welcome: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "phone home-welcome: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone home-welcome: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone home-welcome: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone home-welcome: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone home-welcome: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "phone home-welcome: content maximum 700px",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "phone login: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "phone login: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone login: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone login: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone login: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone login: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "phone login: content maximum 700px",
+      "pass": true,
+      "detail": 350
+    },
+    {
+      "name": "phone login-error: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "phone login-error: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone login-error: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone login-error: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone login-error: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone login-error: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "phone login-error: content maximum 700px",
+      "pass": true,
+      "detail": 350
+    },
+    {
+      "name": "phone goals-list: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "phone goals-list: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone goals-list: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone goals-list: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone goals-list: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone goals-list: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "phone goals-list: content maximum 700px",
+      "pass": true,
+      "detail": 350
+    },
+    {
+      "name": "phone goals-form: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "phone goals-form: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone goals-form: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone goals-form: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone goals-form: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone goals-form: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "phone goals-form: content maximum 700px",
+      "pass": true,
+      "detail": 350
+    },
+    {
+      "name": "phone goals form escape returns to add button",
+      "pass": true
+    },
+    {
+      "name": "phone habits-list: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "phone habits-list: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone habits-list: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone habits-list: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone habits-list: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone habits-list: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "phone habits-list: content maximum 700px",
+      "pass": true,
+      "detail": 350
+    },
+    {
+      "name": "phone habits-form: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "phone habits-form: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone habits-form: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone habits-form: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone habits-form: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone habits-form: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "phone habits-form: content maximum 700px",
+      "pass": true,
+      "detail": 350
+    },
+    {
+      "name": "phone habits form escape returns to add button",
+      "pass": true
+    },
+    {
+      "name": "phone workspace-list: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "phone workspace-list: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone workspace-list: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone workspace-list: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone workspace-list: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone workspace-list: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "phone workspace-list: content maximum 700px",
+      "pass": true,
+      "detail": 350
+    },
+    {
+      "name": "phone workspace-form: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "phone workspace-form: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone workspace-form: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone workspace-form: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone workspace-form: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone workspace-form: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "phone workspace-form: content maximum 700px",
+      "pass": true,
+      "detail": 350
+    },
+    {
+      "name": "phone timeline-chart: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "phone timeline-chart: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone timeline-chart: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone timeline-chart: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone timeline-chart: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone timeline-chart: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "phone timeline equivalent record has 44px target and keyboard edit",
+      "pass": true
+    },
+    {
+      "name": "phone timeline marker keyboard Enter opens exact event",
+      "pass": true,
+      "detail": {
+        "markerFocus": {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-01-15 좋은 문장을 모으는 일에서 그 문장을 다시 읽고 내 생각과 연결하는 일까지 천천히 이어 가기",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        }
+      }
+    },
+    {
+      "name": "no unexpected console errors",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "no page errors",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "no remote write attempts",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop timeline-records: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "desktop timeline-records: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop timeline-records: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop timeline-records: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop timeline-records: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "desktop timeline-records: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "tablet timeline-records: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "tablet timeline-records: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet timeline-records: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet timeline-records: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet timeline-records: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "tablet timeline-records: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "phone timeline-records: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "phone timeline-records: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone timeline-records: 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone timeline-records: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone timeline-records: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "phone timeline-records: aligned common navigation",
+      "pass": true,
+      "detail": [
+        {
+          "label": "홈",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "기록",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "도구",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        },
+        {
+          "label": "관리",
+          "width": 44,
+          "height": 44,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "offsetX": 0,
+          "offsetY": 0
+        }
+      ]
+    }
+  ],
+  "captures": [
+    {
+      "scene": "home-welcome",
+      "size": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "file": "home-welcome-desktop.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        \n        로그아웃\n      \n",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": null,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "login",
+      "size": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "file": "login-desktop.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n    \n      \n        \n          기록으로 돌아가기\n          로그인\n     ",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 700,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "login-error",
+      "size": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "file": "login-error-desktop.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n    \n      \n        \n          기록으로 돌아가기\n          로그인\n     ",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 700,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "goals-list",
+      "size": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "file": "goals-list-desktop.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.661,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 700,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "goals-form",
+      "size": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "file": "goals-form-desktop.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.661,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 700,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "habits-list",
+      "size": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "file": "habits-list-desktop.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 700,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "habits-form",
+      "size": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "file": "habits-form-desktop.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 700,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "workspace-list",
+      "size": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "file": "workspace-list-desktop.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 700,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "workspace-form",
+      "size": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "file": "workspace-form-desktop.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 700,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "timeline-chart",
+      "size": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "file": "timeline-chart-desktop.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-01-15 좋은 문장을 모으는 일에서 그 문장을 다시 읽고 내 생각과 연결하는 일까지 천천히 이어 가기",
+          "spatial": true,
+          "width": 457.5,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-02-15 산책 중에 남긴 질문을 책의 한 문단과 함께 읽기",
+          "spatial": true,
+          "width": 247.8,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-03-15 메모에 남긴 출처를 확인하고 다음 주에 다시 읽기",
+          "spatial": true,
+          "width": 255.1,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-04-15 짧은 기록을 모아 한 달의 변화를 돌아보기",
+          "spatial": true,
+          "width": 220.2,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-05-15 좋은 문장을 모으는 일에서 그 문장을 다시 읽고 내 생각과 연결하는 일까지 천천히 이어 가기",
+          "spatial": true,
+          "width": 457.5,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-02부터 2026-05 천천히 다시 읽은 기간",
+          "spatial": true,
+          "width": 56,
+          "height": 26
+        }
+      ],
+      "spatialTargets": [
+        {
+          "tag": "svg",
+          "id": "tl",
+          "class": "",
+          "text": "가로형 연표. ⌘ 또는 Ctrl과 휠로 확대, 드래그 또는 좌우 화살표로 이동, 0으로 전체 보기, 더블클릭으로 그 자리에 추가",
+          "spatial": true,
+          "width": 1120,
+          "height": 592
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-01-15 좋은 문장을 모으는 일에서 그 문장을 다시 읽고 내 생각과 연결하는 일까지 천천히 이어 가기",
+          "spatial": true,
+          "width": 457.5,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-02-15 산책 중에 남긴 질문을 책의 한 문단과 함께 읽기",
+          "spatial": true,
+          "width": 247.8,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-03-15 메모에 남긴 출처를 확인하고 다음 주에 다시 읽기",
+          "spatial": true,
+          "width": 255.1,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-04-15 짧은 기록을 모아 한 달의 변화를 돌아보기",
+          "spatial": true,
+          "width": 220.2,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-05-15 좋은 문장을 모으는 일에서 그 문장을 다시 읽고 내 생각과 연결하는 일까지 천천히 이어 가기",
+          "spatial": true,
+          "width": 457.5,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-06-15 산책 중에 남긴 질문을 책의 한 문단과 함께 읽기",
+          "spatial": true,
+          "width": 247.8,
+          "height": 52
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-07-15 메모에 남긴 출처를 확인하고 다음 주에 다시 읽기",
+          "spatial": true,
+          "width": 255.1,
+          "height": 52
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-08-15 짧은 기록을 모아 한 달의 변화를 돌아보기",
+          "spatial": true,
+          "width": 220.2,
+          "height": 52
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-02부터 2026-05 천천히 다시 읽은 기간",
+          "spatial": true,
+          "width": 56,
+          "height": 26
+        }
+      ],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell haedo-timeline",
+        "text": "홈기록도구관리\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    \n      \n        \n ",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.036
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": null,
+        "headingTop": 30.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "home-welcome",
+      "size": {
+        "name": "tablet",
+        "width": 820,
+        "height": 1000
+      },
+      "file": "home-welcome-tablet.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        \n        로그아웃\n      \n",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": null,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "login",
+      "size": {
+        "name": "tablet",
+        "width": 820,
+        "height": 1000
+      },
+      "file": "login-tablet.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n    \n      \n        \n          기록으로 돌아가기\n          로그인\n     ",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 588,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "login-error",
+      "size": {
+        "name": "tablet",
+        "width": 820,
+        "height": 1000
+      },
+      "file": "login-error-tablet.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n    \n      \n        \n          기록으로 돌아가기\n          로그인\n     ",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 588,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "goals-list",
+      "size": {
+        "name": "tablet",
+        "width": 820,
+        "height": 1000
+      },
+      "file": "goals-list-tablet.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.661,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 588,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "goals-form",
+      "size": {
+        "name": "tablet",
+        "width": 820,
+        "height": 1000
+      },
+      "file": "goals-form-tablet.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.661,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 588,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "habits-list",
+      "size": {
+        "name": "tablet",
+        "width": 820,
+        "height": 1000
+      },
+      "file": "habits-list-tablet.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 588,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "habits-form",
+      "size": {
+        "name": "tablet",
+        "width": 820,
+        "height": 1000
+      },
+      "file": "habits-form-tablet.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 588,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "workspace-list",
+      "size": {
+        "name": "tablet",
+        "width": 820,
+        "height": 1000
+      },
+      "file": "workspace-list-tablet.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 588,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "workspace-form",
+      "size": {
+        "name": "tablet",
+        "width": 820,
+        "height": 1000
+      },
+      "file": "workspace-form-tablet.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 588,
+        "headingTop": 48.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "timeline-chart",
+      "size": {
+        "name": "tablet",
+        "width": 820,
+        "height": 1000
+      },
+      "file": "timeline-chart-tablet.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-01-15 좋은 문장을 모으는 일에서 그 문장을 다시 읽고 내 생각과 연결하는 일까지 천천히 이어 가기",
+          "spatial": true,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-03-15 메모에 남긴 출처를 확인하고 다음 주에 다시 읽기",
+          "spatial": true,
+          "width": 255.1,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-04-15 짧은 기록을 모아 한 달의 변화를 돌아보기",
+          "spatial": true,
+          "width": 220.2,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-05-15 좋은 문장을 모으는 일에서 그 문장을 다시 읽고 내 생각과 연결하는 일까지 천천히 이어 가기",
+          "spatial": true,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-06-15 산책 중에 남긴 질문을 책의 한 문단과 함께 읽기",
+          "spatial": true,
+          "width": 247.8,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-02부터 2026-05 천천히 다시 읽은 기간",
+          "spatial": true,
+          "width": 35,
+          "height": 26
+        }
+      ],
+      "spatialTargets": [
+        {
+          "tag": "svg",
+          "id": "tl",
+          "class": "",
+          "text": "가로형 연표. ⌘ 또는 Ctrl과 휠로 확대, 드래그 또는 좌우 화살표로 이동, 0으로 전체 보기, 더블클릭으로 그 자리에 추가",
+          "spatial": true,
+          "width": 700,
+          "height": 592
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-01-15 좋은 문장을 모으는 일에서 그 문장을 다시 읽고 내 생각과 연결하는 일까지 천천히 이어 가기",
+          "spatial": true,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-02-15 산책 중에 남긴 질문을 책의 한 문단과 함께 읽기",
+          "spatial": true,
+          "width": 247.8,
+          "height": 52
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-03-15 메모에 남긴 출처를 확인하고 다음 주에 다시 읽기",
+          "spatial": true,
+          "width": 255.1,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-04-15 짧은 기록을 모아 한 달의 변화를 돌아보기",
+          "spatial": true,
+          "width": 220.2,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-05-15 좋은 문장을 모으는 일에서 그 문장을 다시 읽고 내 생각과 연결하는 일까지 천천히 이어 가기",
+          "spatial": true,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-06-15 산책 중에 남긴 질문을 책의 한 문단과 함께 읽기",
+          "spatial": true,
+          "width": 247.8,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-07-15 메모에 남긴 출처를 확인하고 다음 주에 다시 읽기",
+          "spatial": true,
+          "width": 255.1,
+          "height": 50
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-08-15 짧은 기록을 모아 한 달의 변화를 돌아보기",
+          "spatial": true,
+          "width": 220.2,
+          "height": 52
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-02부터 2026-05 천천히 다시 읽은 기간",
+          "spatial": true,
+          "width": 35,
+          "height": 26
+        }
+      ],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell haedo-timeline",
+        "text": "홈기록도구관리\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    \n      \n        \n ",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.036
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": null,
+        "headingTop": 30.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "home-welcome",
+      "size": {
+        "name": "phone",
+        "width": 390,
+        "height": 844
+      },
+      "file": "home-welcome-phone.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        \n        로그아웃\n      \n",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": null,
+        "headingTop": 24.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "login",
+      "size": {
+        "name": "phone",
+        "width": 390,
+        "height": 844
+      },
+      "file": "login-phone.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n    \n      \n        \n          기록으로 돌아가기\n          로그인\n     ",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 350,
+        "headingTop": 24.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "login-error",
+      "size": {
+        "name": "phone",
+        "width": 390,
+        "height": 844
+      },
+      "file": "login-error-phone.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n    \n      \n        \n          기록으로 돌아가기\n          로그인\n     ",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 350,
+        "headingTop": 24.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "goals-list",
+      "size": {
+        "name": "phone",
+        "width": 390,
+        "height": 844
+      },
+      "file": "goals-list-phone.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.661,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 350,
+        "headingTop": 24.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "goals-form",
+      "size": {
+        "name": "phone",
+        "width": 390,
+        "height": 844
+      },
+      "file": "goals-form-phone.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.661,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 350,
+        "headingTop": 24.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "habits-list",
+      "size": {
+        "name": "phone",
+        "width": 390,
+        "height": 844
+      },
+      "file": "habits-list-phone.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 350,
+        "headingTop": 24.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "habits-form",
+      "size": {
+        "name": "phone",
+        "width": 390,
+        "height": 844
+      },
+      "file": "habits-form-phone.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 350,
+        "headingTop": 24.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "workspace-list",
+      "size": {
+        "name": "phone",
+        "width": 390,
+        "height": 844
+      },
+      "file": "workspace-list-phone.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 350,
+        "headingTop": 24.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "workspace-form",
+      "size": {
+        "name": "phone",
+        "width": 390,
+        "height": 844
+      },
+      "file": "workspace-form-phone.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "platform haedo-shell",
+        "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": 350,
+        "headingTop": 24.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "timeline-chart",
+      "size": {
+        "name": "phone",
+        "width": 390,
+        "height": 844
+      },
+      "file": "timeline-chart-phone.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-01-15 좋은 문장을 모으는 일에서 그 문장을 다시 읽고 내 생각과 연결하는 일까지 천천히 이어 가기",
+          "spatial": true,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-02-15 산책 중에 남긴 질문을 책의 한 문단과 함께 읽기",
+          "spatial": true,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-03-15 메모에 남긴 출처를 확인하고 다음 주에 다시 읽기",
+          "spatial": true,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-04-15 짧은 기록을 모아 한 달의 변화를 돌아보기",
+          "spatial": true,
+          "width": 220.2,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-05-15 좋은 문장을 모으는 일에서 그 문장을 다시 읽고 내 생각과 연결하는 일까지 천천히 이어 가기",
+          "spatial": true,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-06-15 산책 중에 남긴 질문을 책의 한 문단과 함께 읽기",
+          "spatial": true,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-07-15 메모에 남긴 출처를 확인하고 다음 주에 다시 읽기",
+          "spatial": true,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-02부터 2026-05 천천히 다시 읽은 기간",
+          "spatial": true,
+          "width": 17.1,
+          "height": 26
+        }
+      ],
+      "spatialTargets": [
+        {
+          "tag": "svg",
+          "id": "tl",
+          "class": "",
+          "text": "가로형 연표. ⌘ 또는 Ctrl과 휠로 확대, 드래그 또는 좌우 화살표로 이동, 0으로 전체 보기, 더블클릭으로 그 자리에 추가",
+          "spatial": true,
+          "width": 342,
+          "height": 523
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-01-15 좋은 문장을 모으는 일에서 그 문장을 다시 읽고 내 생각과 연결하는 일까지 천천히 이어 가기",
+          "spatial": true,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-02-15 산책 중에 남긴 질문을 책의 한 문단과 함께 읽기",
+          "spatial": true,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-03-15 메모에 남긴 출처를 확인하고 다음 주에 다시 읽기",
+          "spatial": true,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-04-15 짧은 기록을 모아 한 달의 변화를 돌아보기",
+          "spatial": true,
+          "width": 220.2,
+          "height": 33
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-05-15 좋은 문장을 모으는 일에서 그 문장을 다시 읽고 내 생각과 연결하는 일까지 천천히 이어 가기",
+          "spatial": true,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-06-15 산책 중에 남긴 질문을 책의 한 문단과 함께 읽기",
+          "spatial": true,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-07-15 메모에 남긴 출처를 확인하고 다음 주에 다시 읽기",
+          "spatial": true,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-08-15 짧은 기록을 모아 한 달의 변화를 돌아보기",
+          "spatial": true,
+          "width": 220.2,
+          "height": 52
+        },
+        {
+          "tag": "g",
+          "id": "",
+          "class": "c-main",
+          "text": "2026-02부터 2026-05 천천히 다시 읽은 기간",
+          "spatial": true,
+          "width": 17.1,
+          "height": 26
+        }
+      ],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell haedo-timeline",
+        "text": "홈기록도구관리\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    \n      \n        \n ",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.036
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": null,
+        "headingTop": 22.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "timeline-records",
+      "size": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "file": "timeline-records-desktop.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.661,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell haedo-timeline",
+        "text": "홈기록도구관리\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    \n      \n        \n ",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.036
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": null,
+        "headingTop": 30.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "timeline-records",
+      "size": {
+        "name": "tablet",
+        "width": 820,
+        "height": 1000
+      },
+      "file": "timeline-records-tablet.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.661,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell haedo-timeline",
+        "text": "홈기록도구관리\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    \n      \n        \n ",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.036
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": null,
+        "headingTop": 30.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    },
+    {
+      "scene": "timeline-records",
+      "size": {
+        "name": "phone",
+        "width": 390,
+        "height": 844
+      },
+      "file": "timeline-records-phone.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.661,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell haedo-timeline",
+        "text": "홈기록도구관리\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    \n      \n        \n ",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.036
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "background": "rgb(247, 247, 251)",
+        "contentWidth": null,
+        "headingTop": 22.3,
+        "commonIcons": [
+          {
+            "label": "홈",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "기록",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "도구",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          },
+          {
+            "label": "관리",
+            "width": 44,
+            "height": 44,
+            "iconWidth": 20,
+            "iconHeight": 20,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 6,
+  "blockedWrites": [],
+  "realRemoteWrites": 0,
+  "partialRuns": [
+    {
+      "capturedAt": "2026-10-05T09:42:16.996Z",
+      "scenes": [
+        "home-welcome",
+        "login",
+        "login-error",
+        "goals-list",
+        "goals-form",
+        "habits-list",
+        "habits-form",
+        "workspace-list",
+        "workspace-form",
+        "timeline-chart"
+      ]
+    },
+    {
+      "capturedAt": "2026-10-05T09:45:07.872Z",
+      "scenes": [
+        "home-welcome",
+        "login",
+        "login-error",
+        "goals-list",
+        "goals-form",
+        "habits-list",
+        "habits-form",
+        "workspace-list",
+        "workspace-form",
+        "timeline-chart",
+        "timeline-records"
+      ]
+    }
+  ]
+}
