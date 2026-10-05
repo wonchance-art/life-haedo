@@ -4,7 +4,7 @@
 
 ## 현재 적용 상태
 
-개발 브랜치에서 구현과 아래 로컬 검증을 완료했다. 운영 Supabase의 읽기 전용 조회는 새 RPC/테이블에 `PGRST202`/`PGRST205`를 반환했다. **새 게시 SQL 설치와 운영 HTTP 확인, main 병합·공개 배포는 아직 완료하지 않았다.** 기존 자료 동기화 SQL의 재설치가 필요한 상태가 아니다. 운영에 합성 자료를 만들거나 이전 Cloud 검사를 다시 실행하지 않았다.
+구현과 아래 로컬 검증을 완료했다. 2026-10-05 Local이 지정 커밋의 신규 게시 SQL을 운영에 설치하고 읽기 전용 설치 점검 **12/12**를 확인했다. Cloud도 설치 후 실제 운영 HTTP 검사 **5/5**를 통과했다. SQL 재설치는 필요 없다. 최종 병합·Pages 배포 결과는 [PR #30](https://github.com/wonchance-art/life-haedo/pull/30)에 기록한다. 운영에서 실제 소유자의 게시·갱신·철회와 Apple 실기 체험은 이 읽기 전용 검사로 확인한 범위가 아니다.
 
 ## 체험 흐름
 
@@ -46,7 +46,7 @@
 - 실제 SQL이 만든 JSON을 앱의 엄격한 응답 해석기로 읽는 별도 계약 검사 **56/56**. 게시/갱신/철회, 과거 영수증, 익명·타계정, 50+2 목록 페이지, Unicode·제어문자·URL·1 MiB 경계를 대조했다. SQL은 실제 엔진이지만 SDK/fetch 전송은 모사이며 PostgREST 실 HTTP 증거는 아니다.
 - 초기 통합에서 철회 응답의 publicId와 원격 오류 이름 불일치가 발견됐다. SQL/JS를 맞추고 실제 SQL 응답 대조를 추가했다. 긴 제목의 중복을 제거하고 공개 1440/390·검토 820·관리 390·오류 화면을 검토했다. 같은 revision 재조회 때 본문 DOM을 바꾸지 않는다.
 
-[브라우저 집계](evidence/page-publication/verification-summary.json) · [시각 검토](evidence/page-publication/visual-review.md) · [기존 구성 회귀](evidence/page-publication/workbench-regression.json) · [SQL 검사](evidence/page-publication/sql-report.json) · [SQL/JS 계약 검사](evidence/page-publication/contract-report.json) · [운영 설치 전 조회](evidence/page-publication/preinstall-live-probe.json)
+[브라우저 집계](evidence/page-publication/verification-summary.json) · [시각 검토](evidence/page-publication/visual-review.md) · [기존 구성 회귀](evidence/page-publication/workbench-regression.json) · [SQL 검사](evidence/page-publication/sql-report.json) · [SQL/JS 계약 검사](evidence/page-publication/contract-report.json) · [운영 설치 전 조회](evidence/page-publication/preinstall-live-probe.json) · [Local 설치 인계](evidence/page-publication/production-installation.json) · [설치 후 실제 HTTP 검사](evidence/page-publication/postinstall-live-probe.json)
 
 [방문 화면 1440](evidence/page-publication/public-many-1440.png) · [방문 화면 390](evidence/page-publication/public-many-390.png) · [게시 검토 820](evidence/page-publication/owner-review-820.png) · [공개본 관리 390](evidence/page-publication/published-management-390.png) · [조회 오류 390](evidence/page-publication/public-error-390.png)
 
@@ -54,11 +54,12 @@
 
 실제 Mac/iPad/iPhone의 한글 IME·Files·VoiceOver, 운영 Google 로그인과 실제 소유자의 게시·철회는 이번 로컬 브라우저 검사로 완료 처리하지 않는다. 브라우저 Auth/공개 HTTP 모사와 관리형 Supabase의 실 HTTP 권한 검증을 구분한다.
 
-## 운영 설치 인계
+## 운영 설치·읽기 권한 확인 — 2026-10-05
 
-1. 해도 전용 Supabase SQL Editor의 관리자 연결에서 [신규 게시 SQL](../../supabase/migrations/20261005120000_life_public_pages.sql)을 실행한다. 기존 자료 동기화 SQL은 다시 설치하지 않는다.
-2. [읽기 전용 설치 확인](../../supabase/tests/life-public-pages-installation.sql)을 실행해 모든 `passed`가 true인지 확인한다. 개인 자료 조회·합성 계정/페이지 생성·권한 변경을 하지 않는 점검이다.
-3. Cloud에서 `python3 scripts/check-life-share-read.py`로 익명 직접 조회와 소유자/테이블 접근 거절을 확인한다. 이 명령은 공개 사본을 생성하지 않는다.
-4. 검증한 변경을 병합·배포한 뒤 실제 계정에서 원하는 내용만 선택해 공개 흐름을 확인한다.
+Local 관리자 인계에 따르면 `e562e61dc140db69e7c099c474732d8302342f29`의 [신규 게시 SQL](../../supabase/migrations/20261005120000_life_public_pages.sql)을 1회 설치했다. SQL SHA-256은 `d44c711a293906b6962ff8e983578da742648d9938aaeb71b32062eb6ec4e78c`다. 운영 migration 이력은 실행 시각으로 생성된 `20261005090134 / life_public_pages`이며, 저장소 파일명과 시각이 다르다는 이유로 재설치하지 않는다.
 
-`supabase/tests/life-public-pages.sql`과 SQL/JS 계약 검사는 격리된 로컬 DB 전용이다. 운영 SQL Editor에서 테스트 자료를 생성하지 않는다. 이전 `scripts/check-life-cloud.py` 합성 검사도 다시 실행하지 않는다. 현재 Cloud에는 프로젝트 공개 키만 제공되고 관리자 SQL 실행 수단이 없어 운영 설치는 Local 관리자 또는 SQL Editor에서 이어야 한다. 비밀번호·서비스 키를 채팅으로 전달하지 않는다.
+Local이 [설치 점검 SQL](../../supabase/tests/life-public-pages-installation.sql)을 `BEGIN READ ONLY / ROLLBACK` 안에서 실행해 12조건 모두 통과했다. 기존 5개 테이블과 기존 public 함수의 정의·권한 메타데이터 지문은 설치 전후 `79430602812563783493ba58f008ca7d`로 동일했다. Auth 설정·개인 자료·기존 동기화 SQL은 바꾸지 않았다. 이는 Local의 관리자 인계이며 Cloud의 직접 SQL 실행 기록과 구분한다.
+
+Cloud는 `python3 scripts/check-life-share-read.py`를 실제 운영 API에 실행했다. 존재하지 않는 고정 UUID의 익명 조회는 HTTP 200 `missing`과 `no-store`, 소유자 목록·소유자 상태·두 테이블 직접 접근은 모두 HTTP 401 / `42501`로 기대대로 거절됐다. **5/5 통과**이며 개인 자료를 읽거나 게시본을 만들지 않았다. 설치 전 `PGRST202`/`PGRST205` 기록은 과거 상태로 보존한다. 이전 로컬 기능·브라우저 검사 수치는 이 관리자/HTTP 확인 때 재실행한 결과가 아니다.
+
+`supabase/tests/life-public-pages.sql`과 SQL/JS 계약 검사는 격리된 로컬 DB 전용이다. 운영 SQL Editor에서 테스트 자료를 생성하지 않는다. 이전 `scripts/check-life-cloud.py` 합성 검사도 다시 실행하지 않는다. 실제 계정의 선택 게시·갱신·철회는 배포 후 별도 사용자 체험으로 확인한다.

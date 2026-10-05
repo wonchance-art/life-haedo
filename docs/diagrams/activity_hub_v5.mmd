@@ -1,17 +1,17 @@
 %% 2026-10-05. Existing private features and selected-copy publishing contract.
-%% Public SQL installation, managed HTTP permission checks, and deployment are pending.
+%% Public SQL installed; read-only managed HTTP checks passed. Release status is in PR #30.
 %% Incoming SNS content never triggers outgoing SNS writes or automatic publication.
 %%{init: {"theme":"base","look":"classic","htmlLabels":false,"themeVariables":{"primaryColor":"#ffffff","primaryTextColor":"#222126","primaryBorderColor":"#827B86","lineColor":"#827B86","clusterBkg":"#ffffff","clusterBorder":"#E9E7EB","edgeLabelBackground":"#ffffff","fontFamily":"Noto Sans CJK KR, sans-serif","fontSize":"16px"},"flowchart":{"curve":"linear","wrappingWidth":330,"nodeSpacing":36,"rankSpacing":48,"htmlLabels":false}}}%%
 flowchart TB
   accTitle: 해도 v5 — 개인 기록에서 선택한 사본만 공개하기
-  accDescr: 현재 개인 홈과 기록, 묶음, 내 페이지 편집을 유지한다. 이번 공개 게시 구현은 운영 SQL 설치와 실제 HTTP 권한 검증 대기 상태다. 사용자가 공개할 사본을 확인한 뒤 소유자 인증으로 게시하며 방문자는 별도 공개 사본만 읽는다. 갱신은 같은 주소, 철회는 서버 사본 제거, 재게시는 새 주소를 사용한다. SNS 원본에는 쓰지 않는다.
+  accDescr: 현재 개인 홈과 기록, 묶음, 내 페이지 편집을 유지한다. 이번 공개 게시 구현과 운영 SQL 설치, 읽기 전용 HTTP 권한 확인을 완료했다. 실제 소유자의 운영 게시 체험은 별도다. 사용자가 공개할 사본을 확인한 뒤 소유자 인증으로 게시하며 방문자는 별도 공개 사본만 읽는다. 갱신은 같은 주소, 철회는 서버 사본 제거, 재게시는 새 주소를 사용한다. SNS 원본에는 쓰지 않는다.
   SOURCES["메모 · Obsidian · SNS · 파일<br/>가져오기 전용 · SNS 원본 쓰기 없음"]
   RECORDS[("현재: 계정별 개인 기록<br/>원문 버전 · 출처 · 저장한 문장과 메모<br/>기존 백업 · 선택한 원문 동기화")]
   HOME["현재: 개인 홈 · 기록 · 도구 · 관리<br/>원문 읽기 · 찾기 · 관련 기록 묶기<br/>공개하지 않고 개인 사용으로 끝내도 됨"]
   PAGE["현재: 내 페이지 편집<br/>항목·소개·본문·코멘트 표시 선택<br/>이 브라우저 저장 · 비공개 미리보기"]
   FUTURE["별도 후속<br/>직접 글쓰기 · 추천 · 자기 이해<br/>허용된 원천의 수신 전용 자동 연결"]
 
-  subgraph PUBLISH["이번 공개 게시 구현 — 운영 SQL 설치·실제 HTTP 검증 대기"]
+  subgraph PUBLISH["공개 게시 — 구현·운영 설치·읽기 권한 확인"]
     REVIEW["공개할 사본 확인<br/>표시 항목 + 명시 선택한 본문/구절<br/>제목 · 출처 · 페이지용 코멘트까지 확인"]
     OWNER["소유자 인증 · 명시적 게시/갱신<br/>고정한 사본 + revision + operation ID<br/>개인 작업공간 전체 전송 없음"]
     PUBLIC[("전용 공개 사본 저장소<br/>작업공간별 페이지 · 갱신은 같은 주소<br/>공개 응답에 개인 ID·메모·회고 없음<br/>직접 테이블 접근 차단")]

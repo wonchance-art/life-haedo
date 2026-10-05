@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-05",
+  "source": "Local administrator handoff supplied by the user; Cloud did not execute production SQL",
+  "installedSourceCommit": "e562e61dc140db69e7c099c474732d8302342f29",
+  "migration": {
+    "file": "supabase/migrations/20261005120000_life_public_pages.sql",
+    "sha256": "d44c711a293906b6962ff8e983578da742648d9938aaeb71b32062eb6ec4e78c",
+    "productionVersion": "20261005090134",
+    "name": "life_public_pages",
+    "success": true,
+    "reinstall": false
+  },
+  "installationCheck": {
+    "file": "supabase/tests/life-public-pages-installation.sql",
+    "sha256": "9ee7d7309367b011fb637afd5788d79c2f8f7ca9144f4c3026582539308d0f0c",
+    "execution": "BEGIN READ ONLY / ROLLBACK",
+    "passed": 12,
+    "failed": 0
+  },
+  "existingMetadata": {
+    "tables": [
+      "charts",
+      "haedo_documents",
+      "haedo_items",
+      "life_workspaces",
+      "life_sync_receipts"
+    ],
+    "includesExistingPublicFunctionDefinitionsAndGrants": true,
+    "before": "79430602812563783493ba58f008ca7d",
+    "after": "79430602812563783493ba58f008ca7d"
+  },
+  "authChanged": false,
+  "personalRowsReadOrChanged": false,
+  "syntheticAccountsOrPagesCreated": false,
+  "scope": "Installation metadata only; actual HTTP checks are recorded separately. No actual owner publish/update/revoke or Apple device claim."
+}
