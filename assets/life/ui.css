@@ -111,6 +111,22 @@ html.auth-pending [data-private] { display: none !important; }
 .life-record-notes .life-excerpt-card { padding: 18px 0 0; border: 0; }
 .life-record-notes .life-excerpt-card + .life-excerpt-card { margin-top: 18px; border-top: 1px solid var(--line); }
 .life-record-more > summary { display: flex; align-items: center; min-height: 44px; padding: 8px 0; color: var(--ink-soft); font-size: 14px; }
+.life-record-actions #lifeSelectionToggle { margin-right: auto; }
+.life-record-heading { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.life-record-heading > .life-source-open { flex: 1; min-width: 0; }
+.life-source-select[aria-pressed=true] { background: var(--soft); }
+.life-source-select[aria-pressed=false] .life-glyph path { visibility: hidden; }
+.life-selection-bar { padding: 12px 0 20px; border-bottom: 1px solid var(--line); }
+.life-selection-details > summary { display: flex; align-items: center; justify-content: space-between; min-height: 44px; font-size: 15px; }
+.life-selection-details > summary > .life-glyph { color: var(--ink-soft); }
+.life-selection-details[open] > summary > .life-glyph { transform: rotate(180deg); }
+.life-selection-list { list-style: none; margin: 0 0 12px; padding: 0; max-height: 19rem; overflow-y: auto; }
+.life-selection-list > li { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.life-selection-list > li > span { flex: 1; min-width: 0; font-size: 14px; word-break: keep-all; overflow-wrap: anywhere; }
+.life-arrange-actions { margin-top: 10px; gap: 6px; }
+.life-arrange-actions .life-glyph { width: 20px; height: 20px; }
+.life-selection-bar > .life-button { margin-top: 8px; border-color: transparent; color: var(--ink-soft); }
+.life-reader-arrange { padding: 0 0 22px; margin-bottom: 24px; border-bottom: 1px solid var(--line); }
 .life-excerpt-note { display: grid; grid-template-columns: 16px minmax(0,1fr); column-gap: 10px; align-items: start; }
 .life-excerpt-note > .life-glyph { margin-top: 6px; color: var(--ink-soft); }
 .life-excerpt-note > .life-note { font-size: 15px; }

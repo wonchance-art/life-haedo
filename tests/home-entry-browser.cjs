@@ -106,7 +106,8 @@ async function main() {
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'sources');
       assert.equal(await page.locator('a[data-haedo-section="records"]').getAttribute('aria-current'), 'page');
       assert.equal(await page.locator('.life-record-sections').count(), 0);
-      assert.deepEqual(await page.locator('.life-record-actions button').allTextContents(), ['묶음', '내 페이지']);
+      assert.deepEqual(await page.locator('.life-record-actions button').allTextContents(), ['기록 선택', '묶음', '내 페이지']);
+      assert.equal(await page.locator('#lifeSelectionToggle').getAttribute('aria-label'), '기록 선택');
       for (const view of ['topics', 'sources', 'activities', 'page', 'time', 'import']) {
         await page.goto(`${base}/life.html?view=${view}`); await ready(page);
         assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), view);
@@ -162,7 +163,8 @@ async function main() {
       await page.locator('[data-home-destination="sources"]').click(); await settle(page);
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'sources');
       assert.equal(await page.locator('.life-record-sections').count(), 0);
-      assert.deepEqual(await page.locator('.life-record-actions button').allTextContents(), ['묶음', '내 페이지']);
+      assert.deepEqual(await page.locator('.life-record-actions button').allTextContents(), ['기록 선택', '묶음', '내 페이지']);
+      assert.equal(await page.locator('#lifeSelectionToggle').getAttribute('aria-label'), '기록 선택');
       await page.locator('#lifeSearch').fill('원문 버전과 위치를 보존할 익명 발췌');
       const notes = page.locator('.life-record-notes .life-excerpt-card'); assert.equal(await notes.count(), 1);
       assert.equal(await notes.getAttribute('data-record-id'), before.bundle.records[0].id);

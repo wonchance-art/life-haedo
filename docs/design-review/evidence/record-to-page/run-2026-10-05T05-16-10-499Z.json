@@ -1,0 +1,68 @@
+{
+  "createdAt": "2026-10-05T05:16:10.499Z",
+  "scope": "Actual app/SDK/IndexedDB; anonymous intercepted Auth, viewport/touch/IME-event simulation only",
+  "checks": [
+    {
+      "name": "visual selection empty many review loading and save error 1440",
+      "pass": true
+    },
+    {
+      "name": "visual selection empty many review loading and save error 820",
+      "pass": true
+    },
+    {
+      "name": "visual selection empty many review loading and save error 390",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "scene": "many-selected",
+      "file": "many-selected-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 77,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "smallInputs": []
+    },
+    {
+      "scene": "review",
+      "file": "review-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 18,
+      "contrastFailures": []
+    },
+    {
+      "scene": "review",
+      "file": "review-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 18,
+      "contrastFailures": []
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "realRemoteWrites": 0,
+  "browser": "151.0.7922.173"
+}

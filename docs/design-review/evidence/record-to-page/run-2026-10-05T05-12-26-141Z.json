@@ -1,0 +1,38 @@
+{
+  "createdAt": "2026-10-05T05:12:26.141Z",
+  "scope": "Actual app/SDK/IndexedDB; anonymous intercepted Auth, viewport/touch/IME-event simulation only",
+  "checks": [
+    {
+      "name": "selection spans searches, reviews fixed versions and cancellation writes nothing",
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n1 !== 0\n\n    at /workspace/life-haedo/tests/record-arrange-browser.cjs:92:66\n    at async check (/workspace/life-haedo/tests/record-arrange-browser.cjs:70:11)\n    at async main (/workspace/life-haedo/tests/record-arrange-browser.cjs:75:5)"
+    },
+    {
+      "name": "existing group receives a unique union and source coordinates remain intact",
+      "pass": true
+    },
+    {
+      "name": "reader keeps exact old version and quote return through review cancel and new group",
+      "pass": true
+    },
+    {
+      "name": "selected page entry is independent, respects toggles and survives backup restore",
+      "pass": true
+    },
+    {
+      "name": "write failure preserves one accepted draft, blocks navigation and retries without duplicate",
+      "pass": true
+    },
+    {
+      "name": "keyboard selection and Korean composition keep review local until explicit apply",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "realRemoteWrites": 0,
+  "browser": "151.0.7922.173"
+}

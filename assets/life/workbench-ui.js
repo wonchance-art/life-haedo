@@ -15,14 +15,16 @@
   function fault(code, message) { return Object.assign(new Error(message), { code }); }
 
   function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored,
+    onSelectionUsed = () => {}, onSelectionCancel = () => {},
     beforeRestore = async () => {}, isDisposed = () => false }) {
     const model = life.Workbench;
     const limits = model.LIMITS;
     const sessions = new Map();
     const urls = new Set();
     let disposed = false, generation = 0, visible = false, current = null, mode = null;
-    let surface = null, statusNode = null, errorNode = null, bodyNode = null;
+    let surface = null, statusNode = null, errorNode = null, bodyNode = null, saveControl = null;
     let preview = false, discoverQuery = '', restoreCandidate = null, restoreName = '', restoreSequence = 0, installing = false;
+    let incoming = null;
     let viewCleanups = [];
 
     const alive = () => !disposed && !isDisposed();
@@ -40,7 +42,7 @@
     }
     function updateStatus(session) {
       if (!visible || current !== session || !workspaceIs(session) || !statusNode) return;
-      statusNode.textContent = !session.state ? '구성을 불러오지 못함' : session.saving ? '이 브라우저에 저장 중…' : session.error ? '저장하지 못함 · 초안 유지' :
+      statusNode.textContent = !session.state ? '구성을 불러오지 못함' : session.saving ? '이 브라우저에 저장 중…' : session.error ? '저장하지 못함 · 초안 유지' : incoming ? '선택 검토 중 · 아직 추가하지 않음' :
         session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '다른 탭의 새 구성이 있습니다.' : '이 브라우저에 저장됨';
       statusNode.dataset.state = session.error ? 'error' : session.edit !== session.stored ? 'dirty' : 'saved';
     }
@@ -199,7 +201,17 @@
         } else if (visible && current === session && workspaceIs(session)) {
           updateStatus(session);
           if (!surface.querySelector('#wbReloadSaved')) {
-            const reload = action('새 저장본 읽기', async () => { session.state = null; await render(mode); });
+            const reload = action('새 저장본 읽기', async () => {
+              if (!incoming) { session.state = null; await render(mode); return; }
+              const token = generation;
+              cleanupView(); session.state = null;
+              surface.setAttribute('aria-busy', 'true'); bodyNode.replaceChildren(notice('불러오는 중…'));
+              try {
+                await load(session);
+                if (!showing(token, session)) return;
+                clearError(); redraw(); reload.remove();
+              } finally { if (showing(token, session)) surface.setAttribute('aria-busy', 'false'); }
+            });
             reload.id = 'wbReloadSaved'; statusNode.after(reload);
           }
         }
@@ -320,6 +332,136 @@
         edit.append(notice('기록과 내 페이지에 이미 추가한 항목은 그대로 남습니다.'));
         article.append(edit); bodyNode.append(article);
       });
+    }
+    function renderIncoming() {
+      const session = current, pending = incoming, token = generation;
+      const box = el('section', null, 'wb-incoming'); box.id = 'wbIncomingSelection';
+      box.setAttribute('aria-labelledby', 'wbIncomingHeading');
+      const heading = el('h3', '담을 기록'); heading.id = 'wbIncomingHeading';
+      box.append(heading);
+      const count = el('p', '', 'life-meta'); count.id = 'wbIncomingCount'; count.setAttribute('role', 'status');
+      const error = el('p', '', 'wb-incoming-error'); error.id = 'wbIncomingError'; error.setAttribute('role', 'alert'); error.hidden = true;
+      const list = el('div', null, 'wb-incoming-list');
+      const sameWorkspace = pending.workspaceId === session.workspaceId;
+      const selected = () => pending.versionIds.filter(id => pending.selected.has(id));
+      const fail = message => { error.textContent = message; error.hidden = false; return false; };
+      const validate = () => {
+        if (!sameWorkspace || pending.workspaceId !== getBundle()?.workspaceId) return fail('다른 작업공간에서 고른 기록입니다. 원래 공간으로 돌아가 다시 선택해 주세요.');
+        if (pending.invalid) return fail('선택 정보를 읽지 못했습니다. 기록으로 돌아가 다시 선택해 주세요.');
+        if (mode === 'activities' && pending.groupId && !session.state.groups.some(item => item.id === pending.groupId)) return fail('선택한 묶음이 다른 탭에서 삭제되었습니다. 담을 묶음을 다시 선택해 주세요.');
+        const ids = selected();
+        if (!ids.length) return fail('담을 기록을 하나 이상 선택해 주세요.');
+        if (ids.some(id => !sourceInfo(id))) return fail('현재 공간에 없는 원문 버전이 있습니다. 다시 선택하거나 해당 기록을 직접 해제해 주세요.');
+        const max = mode === 'page' ? limits.parts : limits.groupVersions;
+        if (ids.length > max) return fail('한 번에 담을 수 있는 원문은 ' + max + '개까지입니다. 선택을 줄여 주세요.');
+        error.hidden = true; error.textContent = ''; return true;
+      };
+      const refresh = () => {
+        count.textContent = selected().length + '개 선택';
+        validate();
+      };
+      pending.versionIds.forEach(id => {
+        const info = sameWorkspace ? sourceInfo(id) : null;
+        const row = el('div', null, 'wb-incoming-record'); row.dataset.versionId = id;
+        const check = toggle(info?.source.title || (sameWorkspace ? '연결된 원문 없음' : '다른 작업공간의 기록'), pending.selected.has(id), checked => {
+          if (checked) pending.selected.add(id); else pending.selected.delete(id);
+          refresh();
+        }, { 'data-version-id': id });
+        check.classList.add('wb-incoming-check');
+        if (!sameWorkspace) check.querySelector('input').disabled = true;
+        const detail = el('div', null, 'wb-incoming-meta');
+        if (info) {
+          detail.append(el('p', sourceMeta(info) + (info.total === 1 ? ' · 1/1 버전' : ''), 'life-meta'));
+          if (info.version.originalAuthor.label) detail.append(el('p', '원 작성자 · ' + info.version.originalAuthor.label, 'life-meta'));
+          if (info.source.url) {
+            try {
+              const url = new URL(info.source.url);
+              if (['http:', 'https:'].includes(url.protocol)) {
+                const link = el('a', '원문 출처', 'wb-source-link'); link.href = url.href;
+                link.target = '_blank'; link.rel = 'noopener noreferrer'; detail.append(link);
+              }
+            } catch (_) { /* Invalid URLs never become links. */ }
+          }
+        } else detail.append(el('p', '다른 버전으로 대신 담지 않습니다.', 'life-meta'));
+        row.append(check, detail); list.append(row);
+      });
+      box.append(count, list, error);
+      const target = el('label', null, 'life-field');
+      const group = el('select'); group.id = 'wbIncomingGroup';
+      if (mode === 'activities') {
+        target.append(el('span', '담을 묶음'));
+        group.append(new Option('새 묶음', ''));
+        session.state.groups.forEach(item => group.append(new Option(item.title, item.id)));
+        if (pending.groupId && !session.state.groups.some(item => item.id === pending.groupId)) {
+          const missing = new Option('선택한 묶음 없음', pending.groupId); missing.disabled = true; group.append(missing);
+        }
+        group.value = pending.groupId;
+        target.append(group); box.append(target);
+      }
+      const title = field(mode === 'page' ? '항목 제목' : '새 묶음 이름', pending.title, { id: 'wbIncomingTitle' });
+      let composing = false;
+      const apply = action(mode === 'page' ? '내 페이지에 추가' : '묶음에 담기', async () => {
+        if (incoming !== pending || pending.accepted || composing || !showing(token, session)) return;
+        if (!validate()) { error.scrollIntoView({ block: 'nearest' }); return; }
+        const ids = selected(), name = title.input.value.trim();
+        if ((mode === 'page' || !group.value) && !name) {
+          title.input.setCustomValidity(mode === 'page' ? '항목 제목을 입력해 주세요.' : '묶음 이름을 입력해 주세요.');
+          title.input.reportValidity(); return;
+        }
+        const candidate = copy(session.state);
+        let addedId;
+        if (mode === 'activities') {
+          if (group.value) {
+            const existing = candidate.groups.find(item => item.id === group.value);
+            if (!existing) { fail('선택한 묶음을 찾지 못했습니다. 묶음을 다시 선택해 주세요.'); return; }
+            const union = [...new Set(existing.versionIds.concat(ids))];
+            if (union.length > limits.groupVersions) { fail('한 묶음에는 원문 ' + limits.groupVersions + '개까지 담을 수 있습니다.'); return; }
+            existing.versionIds = union; addedId = existing.id;
+          } else {
+            if (candidate.groups.length >= limits.groups) { fail('묶음은 ' + limits.groups + '개까지 보관할 수 있습니다.'); return; }
+            addedId = core.id(); candidate.groups.push({ id: addedId, title: name, versionIds: ids });
+          }
+        } else {
+          if (candidate.page.entries.length >= limits.entries) { fail('내 페이지 항목은 ' + limits.entries + '개까지 만들 수 있습니다.'); return; }
+          addedId = core.id();
+          candidate.page.entries.push({ id: addedId, title: name, parts: ids.map(versionId => ({ versionId, enabled: true })),
+            note: '', pinned: false, enabled: true, showBody: true, showNote: true });
+        }
+        model.validate(candidate);
+        // Accept once before writing. A failed save retains this draft and retries the same entry.
+        pending.accepted = true; incoming = null;
+        session.state.groups = candidate.groups; session.state.page.entries = candidate.page.entries;
+        mark(session, false); redraw();
+        if (mode === 'activities') revealGroup(addedId);
+        else {
+          const article = [...bodyNode.querySelectorAll('[data-entry-id]')].find(node => node.dataset.entryId === addedId);
+          const editor = article?.querySelector('details');
+          if (editor) { editor.open = true; editor.querySelector('summary')?.focus({ preventScroll: true }); }
+          article?.scrollIntoView({ block: 'start' });
+        }
+        announceSafe('선택한 기록을 편집 초안에 담았습니다.', session);
+        try { onSelectionUsed({ workspaceId: session.workspaceId, versionIds: ids }); }
+        finally { await flushSession(session); }
+      }, 'life-primary');
+      apply.id = 'wbIncomingApply';
+      title.input.addEventListener('compositionstart', () => { composing = true; apply.disabled = true; });
+      const finishComposition = () => { composing = false; apply.disabled = false; pending.title = title.input.value; };
+      title.input.addEventListener('compositionend', finishComposition);
+      title.input.addEventListener('blur', finishComposition);
+      title.input.addEventListener('input', () => { pending.title = title.input.value; title.input.setCustomValidity(''); });
+      group.addEventListener('change', () => {
+        if (!showing(token, session) || incoming !== pending) return;
+        pending.groupId = group.value; title.wrapper.hidden = !!group.value; refresh();
+      });
+      title.wrapper.hidden = mode === 'activities' && !!group.value;
+      box.append(title.wrapper);
+      if (mode === 'page') box.append(notice('하나의 비공개 항목으로 담습니다. 추가한 뒤 본문·코멘트·표시 여부를 편집하고 미리볼 수 있습니다.'));
+      const actions = el('div', null, 'life-actions');
+      const cancel = action('취소', async () => {
+        if (await onSelectionCancel() === false) return;
+        if (showing(token, session) && incoming === pending) { incoming = null; redraw(); }
+      }); cancel.id = 'wbIncomingCancel';
+      actions.append(apply, cancel); box.append(actions); bodyNode.append(box); refresh();
     }
     function revealGroup(groupId) {
       const article = [...surface.querySelectorAll('[data-group-id]')].find(node => node.dataset.groupId === groupId);
@@ -594,6 +736,8 @@
       if (!visible || !current?.state || !workspaceIs(current)) return;
       cleanupView();
       bodyNode.replaceChildren();
+      if (saveControl) saveControl.hidden = !!incoming;
+      if (incoming && ['activities', 'page'].includes(mode)) { renderIncoming(); updateStatus(current); return; }
       if (mode === 'activities') renderActivities();
       if (mode === 'page') renderPage();
       if (mode === 'discover') renderDiscover();
@@ -608,13 +752,24 @@
       const token = ++generation;
       visible = true; mode = MODES[nextMode] ? nextMode : 'activities'; current = sessionFor(bundle.workspaceId);
       if (typeof options.pagePreview === 'boolean') preview = options.pagePreview;
+      incoming = null;
+      if (options.selection && ['activities', 'page'].includes(mode)) {
+        const selection = options.selection;
+        const validIds = Array.isArray(selection.versionIds) && selection.versionIds.length <= limits.groupVersions &&
+          selection.versionIds.every(id => typeof id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(id));
+        const ids = validIds ? [...new Set(selection.versionIds)] : [];
+        incoming = { workspaceId: selection.workspaceId, versionIds: ids, selected: new Set(ids), invalid: !validIds,
+          title: selection.workspaceId === bundle.workspaceId ? (sourceInfo(ids[0], bundle)?.source.title || '') : '', groupId: '', accepted: false };
+        if (mode === 'page') preview = false;
+      }
       const session = current;
       surface = el('section', null, 'life-workbench'); surface.dataset.mode = mode;
       surface.setAttribute('aria-busy', 'true');
       surface.dataset.workspaceId = bundle.workspaceId;
       const heading = el('div', null, 'wb-row wb-heading');
       const title = el('h2', MODES[mode], 'life-heading wb-grow'); title.tabIndex = -1;
-      heading.append(title, icon('지금 저장', 'check', () => flush()));
+      saveControl = icon('지금 저장', 'check', () => flush()); saveControl.hidden = !!incoming;
+      heading.append(title, saveControl);
       statusNode = el('p', '이 브라우저의 구성을 불러오는 중…', 'life-meta wb-save-status'); statusNode.id = 'wbStatus';
       statusNode.setAttribute('role', 'status'); statusNode.setAttribute('aria-live', 'polite');
       const scope = details('저장 범위');
@@ -629,7 +784,7 @@
         if (!showing(token, session)) return;
         surface.setAttribute('aria-busy', 'false');
         redraw(); if (session.error) report(session.error, session);
-        if (mode === 'activities' && typeof options.groupId === 'string') revealGroup(options.groupId);
+        if (!incoming && mode === 'activities' && typeof options.groupId === 'string') revealGroup(options.groupId);
       } catch (error) {
         if (!showing(token, session)) return;
         surface.setAttribute('aria-busy', 'false');
@@ -637,7 +792,7 @@
         report(error, session);
       }
     }
-    function leave() { generation += 1; visible = false; cleanupView(); restoreSequence += 1; restoreCandidate = null; restoreName = ''; }
+    function leave() { generation += 1; visible = false; cleanupView(); incoming = null; restoreSequence += 1; restoreCandidate = null; restoreName = ''; }
     function dispose() {
       disposed = true; leave();
       sessions.forEach(session => { clearTimeout(session.timer); session.unsubscribe?.(); });

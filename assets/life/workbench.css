@@ -55,6 +55,19 @@
 .wb-error .life-button { margin: 0; }
 .wb-restore-preview { margin-top: 24px; }
 .wb-restore-preview > .life-button { margin: 12px 10px 0 0; }
+.wb-incoming { margin-block: 24px; }
+.wb-incoming > h3 { font-size: 19px; line-height: 1.65; }
+.wb-incoming > .life-meta { margin-block: 8px 16px; }
+.wb-incoming-list { max-height: 28rem; overflow: auto; padding: 4px; margin-inline: -4px; scrollbar-color: var(--field-line) var(--paper-2); }
+.wb-incoming-record { padding-block: 12px; border-bottom: 1px solid var(--line); }
+.wb-incoming-check { align-items: flex-start; }
+.wb-incoming-check > input { margin-top: 2px; }
+.wb-incoming-check > span { font-size: 16px; font-weight: 550; }
+.wb-incoming-meta { padding-inline-start: 34px; }
+.wb-incoming-meta .life-meta { margin-block: 0 4px; }
+.wb-incoming-meta .wb-source-link { margin-top: 0; }
+.wb-incoming-error { color: var(--color-error); font-size: 14px; line-height: 1.75; margin-block: 16px; }
+.wb-incoming > .life-actions { margin-top: 20px; }
 @media (max-width: 700px) {
   .wb-heading { min-height: 50px; }
   .wb-feed { padding-block: 24px; }

@@ -1,0 +1,69 @@
+{
+  "createdAt": "2026-10-05T05:12:32.918Z",
+  "scope": "Real local app/SDK/IDB with anonymous HTTP interception; no live SQL/SNS or Apple-device verification",
+  "checks": [
+    {
+      "name": "all five real sections open with empty local compositions",
+      "pass": true
+    },
+    {
+      "name": "create activity, select fixed sources, copy and edit page, preview and reload preserve data",
+      "pass": true
+    },
+    {
+      "name": "editing or deleting an activity does not mutate an existing page copy",
+      "pass": true
+    },
+    {
+      "name": "missing fixed version stays missing and existing older version never substitutes latest",
+      "pass": true
+    },
+    {
+      "name": "page placement and visibility remain separate and toggles remove preview DOM",
+      "pass": true
+    },
+    {
+      "name": "integrated download restores a remapped unbound copy with exact raw text and excerpt",
+      "pass": true
+    },
+    {
+      "name": "invalid backup replaces valid candidate without installing anything",
+      "pass": true
+    },
+    {
+      "name": "discover uses actual stored versions and reflection counts selected scope only",
+      "pass": true
+    },
+    {
+      "name": "real IDB write abort preserves visible edits and retry saves once",
+      "pass": true
+    },
+    {
+      "name": "keyboard Space and preview return keep a visible focus target",
+      "pass": true
+    },
+    {
+      "name": "boundary: failed workbench save blocks global navigation and preserves same draft",
+      "pass": true
+    },
+    {
+      "name": "boundary: malformed UTF-8 composition note is rejected without replacement characters or install",
+      "pass": true
+    },
+    {
+      "name": "boundary: pending restore blocks scope navigation and opens only its new copy after completion",
+      "pass": true
+    },
+    {
+      "name": "boundary: delayed composition read cannot overwrite a different section",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "realRemoteWrites": 0,
+  "browser": "151.0.7922.173"
+}

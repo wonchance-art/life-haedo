@@ -1,0 +1,17 @@
+{
+  "createdAt": "2026-10-05T05:16:00.925Z",
+  "scope": "Actual app/SDK/IndexedDB; anonymous intercepted Auth, viewport/touch/IME-event simulation only",
+  "checks": [
+    {
+      "name": "new saved composition preserves pending review and a deleted destination never becomes a new group silently",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "realRemoteWrites": 0,
+  "browser": "151.0.7922.173"
+}
