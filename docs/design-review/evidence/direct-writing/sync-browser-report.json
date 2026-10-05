@@ -1,0 +1,17 @@
+{
+  "createdAt": "2026-10-05T12:11:22.523Z",
+  "browser": "151.0.7922.173",
+  "scope": "Two isolated Chromium contexts, same anonymous account; actual SDK and IndexedDB, intercepted HTTP only",
+  "checks": [
+    {
+      "name": "Explicit two-device writing sync preserves source identity and immutable versions while local drafts stay on device A",
+      "pass": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "externalRequests": [],
+  "simulatedWrites": 2,
+  "productionWrites": 0
+}

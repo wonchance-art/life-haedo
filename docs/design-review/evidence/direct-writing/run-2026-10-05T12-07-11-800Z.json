@@ -1,0 +1,24 @@
+{
+  "createdAt": "2026-10-05T12:07:11.800Z",
+  "browser": "151.0.7922.173",
+  "scope": "Actual local app/SDK/IndexedDB with anonymous Auth HTTP; browser-size/touch/IME-event simulation only",
+  "checks": [
+    {
+      "name": "concurrent source revision keeps the newer saved head and preserves current writing as a new source",
+      "pass": true
+    },
+    {
+      "name": "drafts remain separate across workspaces and account changes",
+      "pass": true
+    },
+    {
+      "name": "Korean composition waits for completion and keyboard controls preserve focus",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": []
+}

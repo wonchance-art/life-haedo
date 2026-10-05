@@ -1,0 +1,47 @@
+%% 2026-10-05. Add native writing, local-only drafts and immutable saved versions.
+%% Public SQL installed; read-only managed HTTP checks passed. Release status is in PR #30.
+%% Incoming SNS content never triggers outgoing SNS writes or automatic publication.
+%%{init: {"theme":"base","look":"classic","htmlLabels":false,"themeVariables":{"primaryColor":"#ffffff","primaryTextColor":"#222126","primaryBorderColor":"#827B86","lineColor":"#827B86","clusterBkg":"#ffffff","clusterBorder":"#E9E7EB","edgeLabelBackground":"#ffffff","fontFamily":"Noto Sans CJK KR, sans-serif","fontSize":"16px"},"flowchart":{"curve":"linear","wrappingWidth":330,"nodeSpacing":36,"rankSpacing":48,"htmlLabels":false}}}%%
+flowchart TB
+  accTitle: 해도 v6 — 직접 쓰거나 가져온 기록에서 선택한 사본만 공개하기
+  accDescr: 현재 개인 홈과 기록, 묶음, 내 페이지 편집을 유지한다. 이번 공개 게시 구현과 운영 SQL 설치, 읽기 전용 HTTP 권한 확인을 완료했다. 실제 소유자의 운영 게시 체험은 별도다. 사용자가 공개할 사본을 확인한 뒤 소유자 인증으로 게시하며 방문자는 별도 공개 사본만 읽는다. 갱신은 같은 주소, 철회는 서버 사본 제거, 재게시는 새 주소를 사용한다. SNS 원본에는 쓰지 않는다.
+  SOURCES["메모 · Obsidian · SNS · 파일<br/>가져오기 전용 · SNS 원본 쓰기 없음"]
+  RECORDS[("현재: 계정별 개인 기록<br/>원문 버전 · 출처 · 저장한 문장과 메모<br/>기존 백업 · 선택한 원문 동기화")]
+  HOME["현재: 개인 홈 · 기록 · 도구 · 관리<br/>원문 읽기 · 찾기 · 관련 기록 묶기<br/>공개하지 않고 개인 사용으로 끝내도 됨"]
+  PAGE["현재: 내 페이지 편집<br/>항목·소개·본문·코멘트 표시 선택<br/>이 브라우저 저장 · 비공개 미리보기"]
+  WRITING["직접 글쓰기 · 최신 내 글 수정<br/>제목 + 평문 · 자동 초안은 이 브라우저만<br/>초안 TXT 내보내기 · 가져오기 초안과 분리"]
+  FUTURE["별도 후속<br/>추천 · 자기 이해<br/>허용된 원천의 수신 전용 자동 연결"]
+
+  subgraph PUBLISH["공개 게시 — 구현·운영 설치·읽기 권한 확인"]
+    REVIEW["공개할 사본 확인<br/>표시 항목 + 명시 선택한 본문/구절<br/>제목 · 출처 · 페이지용 코멘트까지 확인"]
+    OWNER["소유자 인증 · 명시적 게시/갱신<br/>고정한 사본 + revision + operation ID<br/>개인 작업공간 전체 전송 없음"]
+    PUBLIC[("전용 공개 사본 저장소<br/>작업공간별 페이지 · 갱신은 같은 주소<br/>공개 응답에 개인 ID·메모·회고 없음<br/>직접 테이블 접근 차단")]
+    READ["별도 공개 조회 RPC<br/>공개 식별자 한 개의 사본만 반환<br/>익명 목록 · 소유자 상태 조회 없음"]
+    VISITOR["로그인 없는 방문자 화면<br/>링크를 아는 누구나 접근하는 공개 페이지<br/>개인 SDK/Auth/저장소 · 오프라인 캐시 없음"]
+    CHECK["열린 화면도 공개 상태 다시 확인<br/>보이는 동안 30초마다 · 재진입 시 조회<br/>숨김·페이지 이탈·오프라인이면 내용 비움"]
+    REVOKE["소유자가 공개 철회<br/>서버 snapshot 제거 · 이전 주소 조회 차단<br/>이미 외부에 저장한 사본의 회수는 불가"]
+    REPUBLISH["다시 공개하려면 새로 확인<br/>명시적 재게시 → 새 공개 주소<br/>이전 주소는 계속 철회 상태"]
+  end
+
+  SOURCES -->|선택 본문·파일·링크 제공| RECORDS
+  WRITING -->|명시적 저장 · 새 불변 본문 버전| RECORDS
+  HOME -->|연필 아이콘| WRITING
+  RECORDS --> HOME
+  RECORDS -->|불변 원문 참조| PAGE
+  HOME -->|필요할 때 구성| PAGE
+  HOME -.-> FUTURE
+  PAGE -->|표시 변경만으로 게시하지 않음| REVIEW
+  REVIEW --> OWNER --> PUBLIC --> READ --> VISITOR --> CHECK
+  CHECK -->|계정 없이 재조회| READ
+  OWNER -->|철회 요청| REVOKE
+  REVOKE -->|사본 비우기 · 낡은 재시도로 되살리지 않음| PUBLIC
+  REVOKE --> REPUBLISH --> REVIEW
+
+  classDef current fill:#ffffff,stroke:#5442BC,stroke-width:1.7px,color:#222126;
+  classDef pending fill:#ffffff,stroke:#5442BC,stroke-width:1.5px,stroke-dasharray:6 4,color:#222126;
+  classDef future fill:#ffffff,stroke:#827B86,stroke-width:1.5px,stroke-dasharray:6 4,color:#222126;
+  classDef context fill:#F4F3F6,stroke:#E9E7EB,color:#222126;
+  class RECORDS,HOME,PAGE,WRITING current;
+  class REVIEW,OWNER,PUBLIC,READ,VISITOR,CHECK,REVOKE,REPUBLISH current;
+  class FUTURE future;
+  class SOURCES context;

@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const { createStorage } = require('../assets/life/storage.js');
 const Core = require('../assets/life/core.js');
 const Workbench = require('../assets/life/workbench.js');
+const Writing = require('../assets/life/writing.js');
 
 // This adapter exercises application decisions and failure propagation. Browser tests
 // separately prove IndexedDB serialization, durability, and the real idb wrapper.
@@ -830,6 +831,91 @@ test('unowned copy remaps applied result references and preserves the original s
   assert.deepEqual(await base.getStage(stage.stageId), before);
   assert.equal(await account.getSyncState(copy.workspaceId), null);
   assert.equal(JSON.stringify(Core.makeBackup(copy)).includes('appliedResult'), false);
+});
+
+async function writingItem(storage, bundle, sourceId, content = '직접 남긴 한글 글 🌱') {
+  const stage = await storage.saveStage({ ...Writing.createDraft(bundle, sourceId ? { sourceId } : {}),
+    title: '직접 쓴 제목', text: content });
+  const prepared = await Writing.prepareSave(bundle, stage);
+  return { stage, prepared, request: { operationId: Core.id(), workspaceId: bundle.workspaceId,
+    baseRevision: bundle.revision, changes: prepared.changes, stageId: stage.stageId,
+    stageRevision: stage.revision, stageResult: prepared.stageResult } };
+}
+
+test('writing commit atomically consumes its typed draft with an idempotent receipt, and rolls back quota failure', async t => {
+  const { storage, control } = syncFixture(); t.after(() => storage.close());
+  const initial = await storage.createWorkspace(), item = await writingItem(storage, initial);
+  control.failWrite = { name: 'operations', method: 'add' };
+  assert.equal((await storage.commitLocal(item.request)).error.code, 'storage_quota');
+  assert.deepEqual(await storage.read(initial.workspaceId), initial);
+  assert.deepEqual(await storage.getStage(item.stage.stageId), item.stage);
+  const result = await storage.commitLocal(item.request);
+  assert.equal(result.status, 'stored');
+  assert.deepEqual(await storage.commitLocal(item.request), result);
+  const bundle = await storage.read(initial.workspaceId), applied = await storage.getStage(item.stage.stageId);
+  assert.equal(bundle.sourceVersions.length, 1); assert.equal(applied.state, 'applied');
+  assert.equal(Writing.validateDraft(applied), true); assert.deepEqual(applied.appliedResult, item.prepared.stageResult);
+  assert.equal(await storage.getSyncState(bundle.workspaceId), null);
+  assert.equal(Core.makeBackup(bundle).manifest.stagingIncluded, false);
+});
+
+test('writing drafts remain local while explicit saves join an existing sync binding without changing fixed upload snapshots', async t => {
+  const { storage } = syncFixture(); t.after(() => storage.close());
+  const initial = await storage.createWorkspace(), binding = await uploaded(storage, initial);
+  const item = await writingItem(storage, initial);
+  assert.equal((await storage.getSyncState(initial.workspaceId)).status, 'synced');
+  assert.equal((await storage.commitLocal(item.request)).status, 'stored');
+  const first = await storage.read(initial.workspaceId), pending = await storage.prepareSyncUpload(first.workspaceId, binding);
+  assert.equal(pending.data.sources.length, 1); assert.equal(pending.data.sources[0].sourceKey, item.prepared.source.sourceKey);
+  assert.equal(JSON.stringify(pending.data).includes('life-writing-draft-v1'), false);
+  const next = await writingItem(storage, first, first.sources[0].id, '수정해서 다시 보관한 본문');
+  assert.equal((await storage.commitLocal(next.request)).status, 'stored');
+  assert.deepEqual(await storage.prepareSyncUpload(first.workspaceId, binding), pending);
+  await storage.ackSync(first.workspaceId, binding, pending.operationId, 2);
+  const second = await storage.prepareSyncUpload(first.workspaceId, binding);
+  assert.equal(second.data.sourceVersions.length, 2);
+  assert.equal(second.data.sourceVersions[0].contentText, item.stage.text);
+  assert.equal(second.data.sourceVersions[1].contentText, next.stage.text);
+});
+
+test('unowned writing copy remaps edit bases and applied results, retaining stale revisions after copied revisions reset', async t => {
+  const { storage: base } = syncFixture(); t.after(() => base.close());
+  const initial = await base.createWorkspace(), first = await writingItem(base, initial);
+  assert.equal((await base.commitLocal(first.request)).status, 'stored');
+  let original = await base.read(initial.workspaceId);
+  const stale = await base.saveStage({ ...Writing.createDraft(original, { sourceId: first.prepared.source.id }), text: '보존할 이전 입력' });
+  // A source-only title change keeps the same version ID. After a copy resets
+  // revision 2 to 1, revision 1 must not make this stale draft current again.
+  const renamed = { ...original.sources[0], title: '다른 곳에서 바꾼 제목', revision: 2 };
+  assert.equal((await base.commitLocal({ workspaceId: original.workspaceId, operationId: Core.id(),
+    baseRevision: original.revision, changes: { put: { sources: [renamed] } } })).status, 'stored');
+  original = await base.read(initial.workspaceId);
+  const fresh = await base.saveStage(Writing.createDraft(original, { sourceId: first.prepared.source.id }));
+  const blank = await base.saveStage(Writing.createDraft(original));
+  const before = await base.listStages(original.workspaceId), account = base.forAccount(accountA);
+  const copied = await account.importUnownedWorkspace(original.workspaceId);
+  const stages = await account.listStages(copied.workspaceId);
+  assert.equal(stages.length, 4);
+  const applied = stages.find(stage => stage.state === 'applied');
+  assert.deepEqual(applied.appliedResult, { sourceId: copied.sources[0].id, sourceVersionId: copied.sourceVersions[0].id });
+  const copiedStale = stages.find(stage => stage.text === stale.text);
+  assert.equal(copiedStale.sourceId, copied.sources[0].id);
+  assert.equal(copiedStale.baseSourceVersionId, copied.sourceVersions[0].id);
+  assert.equal(copiedStale.baseSourceRevision, 1); assert.equal(copiedStale.baseChanged, true);
+  await assert.rejects(Writing.prepareSave(copied, copiedStale), { code: 'writing_conflict' });
+  const preservedAgain = Writing.recoverDraft(copiedStale);
+  assert.equal(preservedAgain.baseChanged, true);
+  await assert.rejects(Writing.prepareSave(copied, preservedAgain), { code: 'writing_conflict' });
+  const separate = Writing.recoverDraft(copiedStale, { asNew: true });
+  assert.equal(separate.baseChanged, undefined); assert.equal(separate.sourceId, null);
+  assert.notEqual((await Writing.prepareSave(copied, separate)).source.id, copied.sources[0].id);
+  const copiedFresh = stages.find(stage => stage.state === 'draft' && stage.title === fresh.title && stage.sourceId !== null);
+  assert.equal(copiedFresh.baseChanged, undefined); assert.equal(copiedFresh.baseSourceRevision, 1);
+  assert.equal((await Writing.prepareSave(copied, copiedFresh)).source.id, copied.sources[0].id);
+  assert.equal(stages.filter(stage => stage.state === 'draft' && stage.sourceId === null).length, 1);
+  assert.equal(blank.text, '');
+  assert.deepEqual(await base.listStages(original.workspaceId), before);
+  assert.equal(await account.getSyncState(copied.workspaceId), null);
 });
 
 function workbenchFor(bundle) {

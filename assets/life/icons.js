@@ -1,6 +1,6 @@
 /* Shared UI SVGs. Lucide 1.51.0 geometry: vendor/lucide/ (ISC + Feather MIT).
  * quote: Haedo's approved A. settings/download/cloud/home/user/workspace/timeline/target/check/map:
- * locally authored conventional UI geometry; no added library or remote asset.
+ * edit and the above are locally authored conventional UI geometry; no added library or remote asset.
  */
 (function (root) {
   'use strict';
@@ -10,6 +10,7 @@
     search: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
     bookmark: '<path d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"/>',
     quote: '<path d="M10 12H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v8a6 6 0 0 1-6 6M21 12h-5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v8a6 6 0 0 1-6 6"/>',
+    edit: '<path d="m14 5 5 5M4 20l5-1 11-11a3.5 3.5 0 0 0-5-5L4 14v6Z"/>',
     plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
     back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
     arrow: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',

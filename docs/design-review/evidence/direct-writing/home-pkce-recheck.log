@@ -1,0 +1,3 @@
+PASS Google PKCE fixture returns to selected home section with only allowed query state
+PASS Google PKCE default return opens personal home without inventing a records selection
+{"passed":2,"failed":0,"consoleErrors":0,"pageErrors":0,"expectedErrors":0,"realRemoteWrites":0}

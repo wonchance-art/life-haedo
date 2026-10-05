@@ -533,6 +533,7 @@
             if (!stage || stage.workspaceId !== workspaceId || stage.revision !== stageRevision || stage.state !== 'draft') {
               return { status: 'conflict', currentRevision: bundle.revision, operationId, error: { code: 'stage_conflict', message: '가져오기 검토 내용이 바뀌었습니다. 다시 확인하세요.' } };
             }
+            validateStage(stage);
           }
           const updated = core().applyChanges(bundle, changes);
           core().validateWorkspace(updated);
@@ -799,6 +800,12 @@
     }
     function validateStage(stage) {
       if (!plain(stage)) throw fault('invalid_stage', '가져오기 초안을 확인하세요.');
+      if (stage.kind === 'writing') {
+        const writing = options.writing || root.HaedoLife?.Writing ||
+          (typeof require === 'function' ? require('./writing.js') : null);
+        if (!writing?.validateDraft) throw fault('dependency_unavailable', '글쓰기 모듈을 불러오지 못했습니다.');
+        writing.validateDraft(stage);
+      }
       requireId(stage.stageId, '가져오기');
       requireId(stage.workspaceId, '작업공간');
       requireRevision(stage.revision);
@@ -888,6 +895,20 @@
         if (result.input?.existingSourceId) {
           if (!sourceIds.has(result.input.existingSourceId)) throw fault('invalid_stage', '이전 초안의 원천 연결을 확인할 수 없습니다. 원본과 초안을 보존했습니다.');
           result.input.existingSourceId = sourceIds.get(result.input.existingSourceId);
+        }
+        if (stage.kind === 'writing' && stage.sourceId !== null) {
+          const originalSource = source.bundle.sources.find(item => item.id === stage.sourceId);
+          const originalVersion = source.bundle.sourceVersions.find(item => item.id === stage.baseSourceVersionId && item.sourceId === stage.sourceId);
+          if (!originalSource || !originalVersion) throw fault('invalid_stage', '이전 글쓰기 초안의 원문을 확인할 수 없습니다. 원본과 입력을 보존했습니다.');
+          const originalHead = source.bundle.sourceVersions.findLast(item => item.sourceId === stage.sourceId);
+          result.sourceId = sourceIds.get(stage.sourceId);
+          result.baseSourceVersionId = versionIds.get(stage.baseSourceVersionId);
+          result.baseSourceRevision = copy.sources.find(item => item.id === result.sourceId).revision;
+          // Copying resets entity revisions. Preserve an already stale editing
+          // base explicitly instead of accidentally making revision 1 current.
+          if (stage.baseChanged || stage.baseSourceRevision !== originalSource.revision || originalHead.id !== stage.baseSourceVersionId) {
+            result.baseChanged = true;
+          }
         }
         if (stage.appliedResult !== undefined) {
           validateStageResult(stage.appliedResult, source.bundle);

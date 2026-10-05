@@ -1,0 +1,26 @@
+{
+  "createdAt": "2026-10-05T12:04:02.764Z",
+  "browser": "151.0.7922.173",
+  "scope": "Actual local app/SDK/IndexedDB with anonymous Auth HTTP; browser-size/touch/IME-event simulation only",
+  "checks": [
+    {
+      "name": "blank composition stays private; draft resumes after section change and reload before explicit save",
+      "pass": false,
+      "error": "locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '글쓰기', exact: true })\u001b[22m\n\n    at /workspace/life-haedo/tests/life-writing-browser.cjs:47:268\n    at async /workspace/life-haedo/tests/life-writing-browser.cjs:47:28\n    at async check (/workspace/life-haedo/tests/life-writing-browser.cjs:36:7)\n    at async main (/workspace/life-haedo/tests/life-writing-browser.cjs:44:3)"
+    },
+    {
+      "name": "editing makes an immutable version; old quote and JSON copy keep exact original locations",
+      "pass": true
+    },
+    {
+      "name": "writing and import drafts coexist without converting or consuming each other",
+      "pass": false,
+      "error": "locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '가져오기', exact: true })\u001b[22m\n\n    at /workspace/life-haedo/tests/life-writing-browser.cjs:63:78\n    at async check (/workspace/life-haedo/tests/life-writing-browser.cjs:36:7)\n    at async main (/workspace/life-haedo/tests/life-writing-browser.cjs:62:3)"
+    }
+  ],
+  "visual": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": []
+}

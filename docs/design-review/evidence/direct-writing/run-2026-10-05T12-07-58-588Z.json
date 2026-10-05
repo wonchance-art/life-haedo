@@ -1,0 +1,16 @@
+{
+  "createdAt": "2026-10-05T12:07:58.588Z",
+  "browser": "151.0.7922.173",
+  "scope": "Actual local app/SDK/IndexedDB with anonymous Auth HTTP; browser-size/touch/IME-event simulation only",
+  "checks": [
+    {
+      "name": "own-writing filter excludes imported self text and only app writing offers edit",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": []
+}

@@ -40,3 +40,5 @@ description: 해도의 화면 추가·수정·디자인 검토에 사용한다. 
 피드의 간결한 표시와 접힌 출처·관리는 `docs/design-review/feed-refinement.md`와 `node scripts/check-life-feed-design.cjs`를 따른다. 이 집중 검사는 기존 전체 화면 감사와 실행 범위를 구분한다.
 
 앱 표면의 전후 비교는 `docs/design-review/app-feel.md`, 현대 CSS와 오픈소스 선택 근거는 `app-feel-references.md`를 따른다(두 문서는 `docs/design-review/` 아래). 집중 검사는 `node scripts/check-app-feel-design.cjs`와 `node tests/app-feel-browser.cjs`를 사용한다. 플랫폼 검사는 `SITE_DESIGN_OUTPUT`을 새 `.local/` 경로로 지정해 이전 감사 증거를 보존한다. 연표의 공간 표식은 일반 메뉴·폼의 44px 기준과 구분해 실측 및 대체 목록 경로를 남긴다.
+
+직접 글쓰기의 화면 기준은 `docs/design-review/direct-writing.md`다. 제목·본문·작은 저장 조작에 집중하고 글쓰기 중 기록 보조 메뉴를 접는다. 기본 textarea를 재사용하며 입력 중 DOM/value를 다시 설정하지 않는다. 초안 보관과 기록 저장·동기화·공개를 상태 문구에서 구분하고, 초기 로딩·실패·충돌에도 입력과 복구 조작을 보존한다.

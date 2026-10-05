@@ -327,3 +327,29 @@ body.haedo-shell .haedo-account-host { top: 42px; right: max(calc(60px + env(saf
   .life-reader-layout { margin-top: 14px; }
   body.haedo-shell .haedo-account-host { top: 12px; }
 }
+
+/* Direct writing stays on the existing white reading surface. */
+.life-writing { min-width: 0; }
+.life-writing-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.life-writing-actions .life-primary { margin-left: auto; }
+.life-writing .life-field { margin: 0; }
+.life-writing-title,.life-writing-body { display: block; width: 100%; min-width: 0; border: 0; border-radius: 0; background: var(--paper); color: var(--ink); padding: 14px 4px; box-shadow: none; }
+.life-writing-title { min-height: 52px; font-size: 23px; font-weight: 650; line-height: 1.6; letter-spacing: -.025em; border-bottom: 1px solid var(--line); }
+.life-writing-body { min-height: 360px; min-height: clamp(280px, 46dvh, 640px); margin-top: 8px; font-size: 18px; line-height: 1.95; overflow-wrap: anywhere; resize: vertical; }
+.life-writing-title:focus-visible,.life-writing-body:focus-visible { outline-offset: 0; border-radius: 4px; }
+.life-writing-status { margin: 10px 0; font-size: 12px; color: var(--ink-soft); overflow-wrap: anywhere; }
+.life-writing-error { margin: 12px 0; padding: 14px; border: 1px solid var(--color-error); border-radius: var(--control-radius); background: var(--error-soft); color: var(--color-error); overflow-wrap: anywhere; }
+.life-writing-error .life-button { margin: 8px 8px 0 0; }
+.life-writing-drafts,.life-writing-scope { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 4px; }
+.life-writing-drafts summary,.life-writing-scope summary { display: flex; align-items: center; min-height: 44px; gap: 8px; font-size: 13px; color: var(--ink-soft); }
+.life-writing-drafts summary::after,.life-writing-scope summary::after { content: ''; width: 6px; height: 6px; margin-left: 4px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); }
+.life-writing-drafts[open] summary::after,.life-writing-scope[open] summary::after { transform: rotate(225deg); }
+.life-writing-draft { width: 100%; text-align: left; justify-content: flex-start; white-space: normal; overflow-wrap: anywhere; margin: 4px 0; }
+.life-writing-scope p { font-size: 13px; line-height: 1.8; color: var(--ink-soft); }
+@media (max-width: 700px) {
+  .life-writing-title { font-size: 21px; }
+  .life-writing-body { font-size: 17px; }
+}
+@media (forced-colors: active) {
+  .life-writing-title,.life-writing-body { border: 1px solid CanvasText; }
+}

@@ -145,7 +145,7 @@
       const coverage = info.version.contentText == null ? '본문 미확보' : info.version.coverage.status === 'partial' ? '일부 본문' :
         info.version.coverage.status === 'unknown' ? '확보 범위 미확인' : '제공한 본문';
       const relation = { self: '내 기록', other: '다른 사람의 기록', unknown: '작성자 관계 미확인' }[info.version.originalAuthor.relation];
-      return (ORIGINS[info.source.origin] || '기타') + ' · ' + relation + ' · ' + coverage + (info.total > 1 ? ' · ' + info.number + '/' + info.total + ' 버전' : '');
+      return (life.Writing?.isOwnSource(info.source, getBundle()) ? '내 글' : ORIGINS[info.source.origin] || '기타') + ' · ' + relation + ' · ' + coverage + (info.total > 1 ? ' · ' + info.number + '/' + info.total + ' 버전' : '');
     }
     function mark(session, autosave = true) {
       session.edit += 1;
