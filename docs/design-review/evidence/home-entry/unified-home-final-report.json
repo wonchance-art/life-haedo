@@ -1,0 +1,82 @@
+{
+  "createdAt": "2026-10-05T04:24:27.467216+00:00",
+  "scope": "Actual local SDK/Auth interception/IndexedDB; no live credentials or Apple hardware",
+  "runs": [
+    ".local/unified-home/browser-report.json",
+    ".local/home-entry/unified-home-recheck-report.json"
+  ],
+  "initialFailures": [
+    {
+      "name": "Google PKCE default return opens personal home without inventing a records selection",
+      "pass": false,
+      "error": "locator.getAttribute: Error: strict mode violation: locator('[data-haedo-section=\"home\"]') resolved to 2 elements:\n    1) <body data-page=\"home\" class=\"haedo-shell\" data-life-home=\"true\" data-haedo-section=\"home\">…</body> aka getByText('홈기록도구관리 계정 메뉴 device-a@')\n    2) <a aria-label=\"홈\" href=\"index.html\" aria-current=\"page\" data-haedo-section=\"home\" class=\"haedo-icon-button haedo-nav-link\">…</a> aka getByRole('link', { name: '홈' })\n\nCall log:\n\u001b[2m  - waiting for locator('[data-haedo-section=\"home\"]')\u001b[22m\n\n    at /workspace/life-haedo/tests/unified-home-browser.cjs:121:70\n    at async check (/workspace/life-haedo/tests/unified-home-browser.cjs:73:11)\n    at async main (/workspace/life-haedo/tests/unified-home-browser.cjs:114:5)"
+    },
+    {
+      "name": "a home with originals and no excerpts shows real text and opens the complete original",
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'source'\n- 'sources'\n         ^\n\n    at /workspace/life-haedo/tests/unified-home-browser.cjs:169:14\n    at async check (/workspace/life-haedo/tests/unified-home-browser.cjs:73:11)\n    at async main (/workspace/life-haedo/tests/unified-home-browser.cjs:164:5)"
+    }
+  ],
+  "corrections": [
+    "Select navigation link, excluding body section marker.",
+    "Reader navigation retains context; use explicit records-list title button to open its list."
+  ],
+  "checks": [
+    {
+      "name": "anonymous common home is usable in all sections without redirect or private IDB",
+      "pass": true
+    },
+    {
+      "name": "public readonly home does not mount even an authenticated account",
+      "pass": true
+    },
+    {
+      "name": "server verification completes before any account storage opens",
+      "pass": true
+    },
+    {
+      "name": "Google PKCE fixture returns to selected home section with only allowed query state",
+      "pass": true
+    },
+    {
+      "name": "Google PKCE default return opens personal home without inventing a records selection",
+      "pass": true
+    },
+    {
+      "name": "import draft and reviewed exact excerpt survive tools/manage switching without page reload",
+      "pass": true
+    },
+    {
+      "name": "reader quote/search context and backup scope remain exact through common navigation",
+      "pass": true
+    },
+    {
+      "name": "a home with originals and no excerpts shows real text and opens the complete original",
+      "pass": true
+    },
+    {
+      "name": "tools lead to existing goal/habit editors and account timeline list with the same four-way navigation",
+      "pass": true
+    },
+    {
+      "name": "history keeps a management subview and a legacy life sync link keeps its destination",
+      "pass": true
+    },
+    {
+      "name": "account change cannot reveal previous home content and returning account recovers its own data",
+      "pass": true
+    },
+    {
+      "name": "a late verification response after signout cannot remount the previous private home",
+      "pass": true
+    },
+    {
+      "name": "failed server verification shows recoverable error without opening private storage",
+      "pass": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 1,
+  "realRemoteWrites": 0
+}

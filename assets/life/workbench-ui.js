@@ -4,7 +4,7 @@
 
   const life = global.HaedoLife = global.HaedoLife || {};
   const ORIGINS = { apple_notes: 'Apple 메모', obsidian: 'Obsidian', naver_blog: '네이버 블로그', instagram: 'Instagram', other: '기타' };
-  const MODES = { activities: '활동', page: '내 페이지', discover: '다시 찾기', reflection: '회고', 'workbench-backup': '자료·구성 백업' };
+  const MODES = { activities: '묶음', page: '내 페이지', discover: '다시 찾기', reflection: '회고', 'workbench-backup': '자료·구성 백업' };
   const copy = value => JSON.parse(JSON.stringify(value));
   function el(tag, text, className) {
     const element = document.createElement(tag);
@@ -284,28 +284,28 @@
     function renderActivities() {
       const session = current, state = session.state;
       const add = el('form', null, 'wb-add-row');
-      const title = field('새 활동 이름', '', { id: 'wbGroupTitle' });
-      const createButton = action('활동 만들기', () => {
-        if (!title.input.value.trim()) { title.input.setCustomValidity('활동 이름을 입력해 주세요.'); title.input.reportValidity(); return; }
-        if (state.groups.length >= limits.groups) throw fault('limit_reached', '활동은 ' + limits.groups + '개까지 보관할 수 있습니다.');
+      const title = field('새 묶음 이름', '', { id: 'wbGroupTitle' });
+      const createButton = action('묶음 만들기', () => {
+        if (!title.input.value.trim()) { title.input.setCustomValidity('묶음 이름을 입력해 주세요.'); title.input.reportValidity(); return; }
+        if (state.groups.length >= limits.groups) throw fault('limit_reached', '묶음은 ' + limits.groups + '개까지 보관할 수 있습니다.');
         const group = { id: core.id(), title: title.input.value.trim(), versionIds: [] };
         state.groups.push(group); mark(session); redraw();
-        surface.querySelector('[data-group-id="' + group.id + '"] summary')?.focus();
+        revealGroup(group.id);
       }, 'life-primary');
       createButton.id = 'wbCreateGroup';
       title.input.addEventListener('input', () => title.input.setCustomValidity(''));
       add.addEventListener('submit', event => { event.preventDefault(); createButton.click(); });
       add.append(title.wrapper, createButton); bodyNode.append(add);
-      if (!state.groups.length) bodyNode.append(empty('같은 활동에 남긴 글을 연결해 보세요. 원문은 각각 그대로 보관됩니다.'));
+      if (!state.groups.length) bodyNode.append(empty('관련된 기록을 묶어 정리해 보세요. 원문은 각각 그대로 보관됩니다.'));
       state.groups.forEach(group => {
         const article = el('article', null, 'wb-feed'); article.dataset.groupId = group.id;
         const heading = el('div', null, 'wb-row');
-        heading.append(el('h3', group.title, 'wb-grow'), icon('이 활동을 내 페이지에 추가', 'plus', () => addEntry(group.title, group.versionIds)));
+        heading.append(el('h3', group.title, 'wb-grow'), icon('이 묶음을 내 페이지에 추가', 'plus', () => addEntry(group.title, group.versionIds)));
         article.append(heading);
         const none = notice('아직 연결한 원문이 없습니다.'); none.hidden = group.versionIds.length > 0; article.append(none);
         group.versionIds.forEach(id => article.append(sourceRow(id)));
-        const edit = details('활동 편집');
-        edit.append(field('활동 이름', group.title, { change: value => { group.title = value; heading.querySelector('h3').textContent = value || '이름 입력 중'; } }).wrapper);
+        const edit = details('묶음 편집');
+        edit.append(field('묶음 이름', group.title, { change: value => { group.title = value; heading.querySelector('h3').textContent = value || '이름 입력 중'; } }).wrapper);
         edit.append(picker('원문 선택', () => group.versionIds, (id, checked) => {
           group.versionIds = checked ? group.versionIds.concat(id) : group.versionIds.filter(value => value !== id);
           mark(session);
@@ -316,10 +316,18 @@
         }));
         const missing = group.versionIds.filter(id => !sourceInfo(id));
         missing.forEach(id => edit.append(action('없는 원문 연결 해제', () => { group.versionIds = group.versionIds.filter(value => value !== id); mark(session); redraw(); })));
-        edit.append(action('활동 묶음만 삭제', () => { state.groups = state.groups.filter(item => item.id !== group.id); mark(session); redraw(); }));
-        edit.append(notice('원문과 내 페이지에 이미 추가한 항목은 그대로 남습니다.'));
+        edit.append(action('묶음만 삭제', () => { state.groups = state.groups.filter(item => item.id !== group.id); mark(session); redraw(); }));
+        edit.append(notice('기록과 내 페이지에 이미 추가한 항목은 그대로 남습니다.'));
         article.append(edit); bodyNode.append(article);
       });
+    }
+    function revealGroup(groupId) {
+      const article = [...surface.querySelectorAll('[data-group-id]')].find(node => node.dataset.groupId === groupId);
+      if (!article) return;
+      const editor = article.querySelector('details');
+      if (editor) editor.open = true;
+      editor?.querySelector('summary')?.focus({ preventScroll: true });
+      article.scrollIntoView({ block: 'start' });
     }
     function addEntry(title, versionIds) {
       const session = current;
@@ -349,14 +357,14 @@
       pageSettings.append(toggle('소개 표시', page.showIntro, value => { page.showIntro = value; mark(session); }, { id: 'wbShowIntro' }));
       pageSettings.append(toggle('고정하지 않은 항목 표시', page.showRecent, value => { page.showRecent = value; mark(session); }, { id: 'wbShowRecent' }));
       bodyNode.append(pageSettings);
-      const add = details('자료·활동 추가');
+      const add = details('자료·묶음 추가');
       let selection = [];
       add.append(picker('원문에서 고르기', () => selection, (id, checked) => { selection = checked ? selection.concat(id) : selection.filter(value => value !== id); }, { max: limits.parts }));
       add.append(action('선택한 원문 추가', () => addEntry(sourceName(selection[0]), selection)));
       session.state.groups.forEach(group => add.append(action(group.title + ' 추가', () => addEntry(group.title, group.versionIds), 'wb-group-add')));
-      add.append(notice('활동을 추가한 뒤 구성은 별도로 편집됩니다. 활동 연결을 바꿔도 이 항목이 자동 변경되지 않습니다.'));
+      add.append(notice('묶음을 추가한 뒤 구성은 별도로 편집됩니다. 묶음 연결을 바꿔도 이 항목이 자동 변경되지 않습니다.'));
       bodyNode.append(add);
-      if (!page.entries.length) bodyNode.append(empty('보여줄 원문이나 활동을 골라 내 페이지를 구성해 보세요.'));
+      if (!page.entries.length) bodyNode.append(empty('보여줄 원문이나 묶음을 골라 내 페이지를 구성해 보세요.'));
       page.entries.forEach((entry, index) => {
         const article = el('article', null, 'wb-feed'); article.dataset.entryId = entry.id;
         const row = el('div', null, 'wb-row');
@@ -386,7 +394,7 @@
         const down = action('아래로', () => { [page.entries[index], page.entries[index + 1]] = [page.entries[index + 1], entry]; mark(session); redraw(); });
         down.disabled = index === page.entries.length - 1;
         actions.append(up, down, action('페이지에서 제거', () => { page.entries = page.entries.filter(item => item.id !== entry.id); mark(session); redraw(); }));
-        settings.append(actions, notice('미리보기 구성만 바뀝니다. 보관한 원문과 활동 묶음은 유지합니다.'));
+        settings.append(actions, notice('미리보기 구성만 바뀝니다. 보관한 원문과 묶음은 유지합니다.'));
         article.append(settings); bodyNode.append(article);
       });
     }
@@ -492,9 +500,9 @@
       const saved = await storage.readWorkbench(session.workspaceId);
       if (!showing(token, session)) return;
       const compare = el('section', null, 'wb-conflict');
-      compare.append(el('h3', '구성 비교'), notice('내 초안을 적용하면 아래 저장본의 활동·페이지·회고 구성이 바뀝니다. 보관한 원문은 바뀌지 않습니다.'));
+      compare.append(el('h3', '구성 비교'), notice('내 초안을 적용하면 아래 저장본의 묶음·페이지·회고 구성이 바뀝니다. 보관한 원문은 바뀌지 않습니다.'));
       function summary(state) {
-        const text = ['활동', ...state.groups.map(group => group.title + '\n' + group.versionIds.map(id => sourceName(id)).join('\n')),
+        const text = ['묶음', ...state.groups.map(group => group.title + '\n' + group.versionIds.map(id => sourceName(id)).join('\n')),
           '\n페이지: ' + state.page.title, '소개 표시: ' + (state.page.showIntro ? '켬' : '끔'), state.page.intro,
           '고정하지 않은 항목 표시: ' + (state.page.showRecent ? '켬' : '끔')];
         state.page.entries.forEach(entry => text.push('\n' + entry.title,
@@ -514,7 +522,7 @@
     }
     function renderBackup() {
       const session = current;
-      bodyNode.append(notice('보관한 원문·발췌와 활동·페이지·회고 구성을 함께 담습니다. 미적용 가져오기 초안·사진·연표는 포함하지 않습니다.'));
+      bodyNode.append(notice('보관한 원문·발췌와 묶음·페이지·회고 구성을 함께 담습니다. 미적용 가져오기 초안·사진·연표는 포함하지 않습니다.'));
       const downloadButton = action('통합 JSON 받기', async () => {
         const token = generation;
         await flush();
@@ -534,7 +542,7 @@
         if (!restoreCandidate) return;
         const candidate = restoreCandidate;
         previewHost.append(el('h3', '복원 전 확인'), el('p', restoreName, 'life-meta'), el('p', candidate.bundle.title, 'wb-source-title'));
-        previewHost.append(notice('자료 ' + candidate.bundle.sources.length + '개 · 원문 버전 ' + candidate.bundle.sourceVersions.length + '개 · 활동 ' + candidate.workbench.groups.length + '개 · 페이지 항목 ' + candidate.workbench.page.entries.length + '개'));
+        previewHost.append(notice('자료 ' + candidate.bundle.sources.length + '개 · 원문 버전 ' + candidate.bundle.sourceVersions.length + '개 · 묶음 ' + candidate.workbench.groups.length + '개 · 페이지 항목 ' + candidate.workbench.page.entries.length + '개'));
         previewHost.append(notice('새 작업공간으로 복원합니다. 기존 공간은 유지되고 새 사본은 자동 동기화되지 않습니다.'));
         const install = action('새 사본으로 복원', async () => {
           if (installing) return;
@@ -593,12 +601,13 @@
       if (mode === 'workbench-backup') renderBackup();
       updateStatus(current);
     }
-    async function render(nextMode) {
+    async function render(nextMode, options = {}) {
       if (!alive()) return;
       const bundle = getBundle(); if (!bundle) return;
       cleanupView();
       const token = ++generation;
       visible = true; mode = MODES[nextMode] ? nextMode : 'activities'; current = sessionFor(bundle.workspaceId);
+      if (typeof options.pagePreview === 'boolean') preview = options.pagePreview;
       const session = current;
       surface = el('section', null, 'life-workbench'); surface.dataset.mode = mode;
       surface.setAttribute('aria-busy', 'true');
@@ -610,7 +619,7 @@
       statusNode.setAttribute('role', 'status'); statusNode.setAttribute('aria-live', 'polite');
       const scope = details('저장 범위');
       scope.classList.add('wb-scope');
-      scope.append(notice('활동·페이지·회고 구성은 비공개로 이 브라우저에만 저장되며 기기 간 동기화 대상이 아닙니다. 다른 기기로 옮기려면 자료·구성 통합 JSON 백업을 사용해 주세요. 내 페이지는 방문자용 주소나 공개 게시 기능이 없는 비공개 미리보기입니다.'));
+      scope.append(notice('묶음·페이지·회고 구성은 비공개로 이 브라우저에만 저장되며 기기 간 동기화 대상이 아닙니다. 다른 기기로 옮기려면 자료·구성 통합 JSON 백업을 사용해 주세요. 내 페이지는 방문자용 주소나 공개 게시 기능이 없는 비공개 미리보기입니다.'));
       errorNode = el('div', null, 'life-error wb-error'); errorNode.id = 'wbError'; errorNode.setAttribute('role', 'alert'); errorNode.hidden = true;
       bodyNode = el('div', null, 'wb-content'); bodyNode.append(notice('불러오는 중…'));
       const storageLine = el('div', null, 'wb-storage-line'); storageLine.append(statusNode, scope);
@@ -620,10 +629,11 @@
         if (!showing(token, session)) return;
         surface.setAttribute('aria-busy', 'false');
         redraw(); if (session.error) report(session.error, session);
+        if (mode === 'activities' && typeof options.groupId === 'string') revealGroup(options.groupId);
       } catch (error) {
         if (!showing(token, session)) return;
         surface.setAttribute('aria-busy', 'false');
-        bodyNode.replaceChildren(empty('구성을 불러오지 못했습니다. 보관한 원문은 바뀌지 않았습니다.'), action('다시 불러오기', () => render(mode)));
+        bodyNode.replaceChildren(empty('구성을 불러오지 못했습니다. 보관한 원문은 바뀌지 않았습니다.'), action('다시 불러오기', () => render(mode, options)));
         report(error, session);
       }
     }

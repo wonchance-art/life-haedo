@@ -25,12 +25,14 @@ test('repeat public build removes stale private canary and old SDK while preserv
       const html=await fs.readFile(path.join(target,name),'utf8');
       if(['index.html','life.html'].includes(name)){
         const scripts=[...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(match=>match[1]);
-        const ordered=['assets/life/core.js','assets/life/workbench.js','assets/life/storage.js','assets/life/workbench-ui.js','assets/life/ui.js','assets/life/shell.js'];
+        const ordered=['assets/life/core.js','assets/life/workbench.js','assets/life/storage.js','assets/life/workbench-ui.js','assets/life/home.js','assets/life/ui.js','assets/life/shell.js'];
         for(let index=0;index<ordered.length;index++){
           assert.equal(scripts.filter(src=>src===ordered[index]).length,1,`${name}: ${ordered[index]} must load once`);
           if(index)assert.ok(scripts.indexOf(ordered[index-1])<scripts.indexOf(ordered[index]),`${name}: dependency order`);
         }
         assert.ok(html.indexOf('href="assets/life/ui.css"')<html.indexOf('href="assets/life/workbench.css"'),`${name}: workbench follows shared styles`);
+        assert.ok(html.indexOf('href="assets/life/workbench.css"')<html.indexOf('href="assets/life/home.css"'),`${name}: home follows shared styles`);
+        assert.match(html,new RegExp(`data-haedo-section="${name==='index.html'?'home':'records'}"`),`${name}: correct initial section`);
       }
       for(const tag of html.matchAll(/<(?:script|link|img)\b[^>]*>/gi)){
         for(const attr of tag[0].matchAll(/\b(?:src|href)\s*=\s*["']([^"']+)["']/gi)){

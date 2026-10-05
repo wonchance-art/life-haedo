@@ -2,13 +2,14 @@
 (function (root) {
   'use strict';
   const sections = [
-    { id: 'records', label: '기록', glyph: 'quote', href: 'index.html' },
+    { id: 'home', label: '홈', glyph: 'home', href: 'index.html' },
+    { id: 'records', label: '기록', glyph: 'quote', href: 'index.html?section=records' },
     { id: 'tools', label: '도구', glyph: 'workspace', href: 'index.html?section=tools' },
     { id: 'manage', label: '관리', glyph: 'settings', href: 'index.html?section=manage' }
   ];
   const handlers = new Set();
   function activate(section) {
-    const current = sections.some(item => item.id === section) ? section : 'records';
+    const current = sections.some(item => item.id === section) ? section : 'home';
     root.document.body.dataset.haedoSection = current;
     root.document.querySelectorAll('[data-haedo-section]').forEach(node => {
       if (!node.matches('a')) return;
@@ -62,8 +63,16 @@
   if (loginNext) root.document.querySelectorAll('[data-login-link], #accessState a, #timelineAccess a').forEach(link => {
     link.href = 'login.html?next=' + encodeURIComponent(loginNext);
   });
-  const fromQuery = new URLSearchParams(root.location.search).get('section');
+  const query = new URLSearchParams(root.location.search);
+  const fromQuery = query.get('section');
   const page = root.document.body.dataset.page;
-  activate((page === 'home' || page === 'life') && fromQuery ? fromQuery : root.document.body.dataset.haedoSection);
+  let initialSection = root.document.body.dataset.haedoSection;
+  if (page === 'home' || page === 'life') {
+    if (sections.some(section => section.id === fromQuery)) initialSection = fromQuery;
+    else if (['discover', 'reflection'].includes(query.get('view'))) initialSection = 'tools';
+    else if (['transfer', 'sync', 'workbench-backup'].includes(query.get('view'))) initialSection = 'manage';
+    else if (['topics', 'sources', 'time', 'import', 'activities', 'page'].includes(query.get('view'))) initialSection = 'records';
+  }
+  activate(initialSection);
   root.HaedoNavigation = Object.freeze({ activate, bind });
 })(globalThis);

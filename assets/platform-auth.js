@@ -4,7 +4,7 @@
   const SESSION_KEY = 'caeyeon_life_platform_session';
   const LOGOUT_KEY = 'caeyeon_life_platform_logged_out';
   const privatePages = new Set(['workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'life.html']);
-  const homeSections = new Set(['records', 'tools', 'manage']);
+  const homeSections = new Set(['home', 'records', 'tools', 'manage']);
   const materialViews = new Set(['topics', 'sources', 'time', 'import', 'transfer', 'sync', 'activities', 'page', 'discover', 'reflection', 'workbench-backup']);
   function safeNext(value) {
     try {

@@ -104,10 +104,12 @@
     let readerCleanup = null;
     let focusFrame = null;
     let unbindNavigation = null;
-    let lastRecordMode = 'topics';
+    let lastRecordMode = 'sources';
+    let workbenchOpenOptions = null;
+    let homeRenderPromise = Promise.resolve();
     const downloadUrls = new Set();
     const state = {
-      bundle: null, workspaces: [], mode: 'topics', topic: '', topicsSearch: '', sourcesSearch: '', originFilter: '', returnContext: null, suppressReaderResume: false, sourceId: null,
+      bundle: null, workspaces: [], mode: 'sources', topic: '', topicsSearch: '', sourcesSearch: '', originFilter: '', returnContext: null, suppressReaderResume: false, sourceId: null,
       sourceVersionId: null, locator: null, stage: null, prepared: null, importMethod: 'text', topicUnassigned: false, topicFilterSearch: '',
       busy: false, editTick: 0, savedTick: 0, stageFailed: false, status: '', error: '',
       pendingOperation: null, stageSelection: null, sourceSelection: null, stages: [], allStages: [], batches: new Map(), batchId: null,
@@ -127,8 +129,8 @@
     error.hidden = true;
     const header = node('div', null, 'life-header');
     const toolbar = node('div', null, 'life-toolbar');
-    const recordSections = node('nav', null, 'life-record-sections');
-    recordSections.setAttribute('aria-label', '기록 영역');
+    const recordSections = node('nav', null, 'life-record-actions');
+    recordSections.setAttribute('aria-label', '기록 정리');
     const main = node('main', null, 'life-main');
     main.id = 'lifeMain';
     const skip = node('a', '본문으로 이동', 'life-skip');
@@ -165,6 +167,16 @@
         await render();
         announce('자료와 구성을 새 사본으로 열었습니다. 이전 작업공간은 그대로 보관됩니다.');
       }
+    });
+
+    const home = global.HaedoLife.HomeUI?.create({
+      storage, core, host: main, getBundle: () => state.bundle,
+      isDisposed: () => disposed, announce, navigate,
+      openSource: (sourceId, versionId) => navigate('source', {
+        sourceId, sourceVersionId: versionId, locator: null,
+        returnContext: { mode: 'home', workspaceId: state.bundle.workspaceId, scrollY: global.scrollY,
+          focusKey: document.activeElement?.dataset.focusKey }
+      })
     });
 
     // Native focus scrolling does not account for the fixed phone navigation
@@ -778,12 +790,13 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       Object.assign(state, options || {}, { mode });
+      workbenchOpenOptions = workbenchModes.includes(mode) ? options : null;
       if (sectionFor(mode) === 'records') lastRecordMode = mode;
       writeRoute(mode, false);
       await render();
       if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
       const heading = main.querySelector('h2') || toolbar.querySelector('h1');
-      if (heading) heading.focus({ preventScroll: true });
+      if (heading && !options?.groupId) heading.focus({ preventScroll: true });
     }
 
     function newDraft() {
@@ -814,6 +827,7 @@
     }
 
     function sectionFor(mode) {
+      if (mode === 'home') return 'home';
       return ['tools', 'discover', 'reflection'].includes(mode) ? 'tools' : ['manage', 'sync', 'transfer', 'workbench-backup'].includes(mode) ? 'manage' : 'records';
     }
 
@@ -821,20 +835,22 @@
       const params = new URLSearchParams(global.location.search);
       const section = params.get('section');
       const view = params.get('view');
+      if (section === 'home') return 'home';
       if (section === 'tools') return ['discover', 'reflection'].includes(view) ? view : 'tools';
       if (section === 'manage') return ['transfer', 'sync', 'workbench-backup'].includes(view) ? view : 'manage';
-      if (!section && ['transfer', 'sync', 'workbench-backup'].includes(view)) return view;
-      return ['topics', 'sources', 'time', 'import', 'activities', 'page'].includes(view) ? view : 'topics';
+      if (!section && ['transfer', 'sync', 'workbench-backup', 'discover', 'reflection'].includes(view)) return view;
+      if (['topics', 'sources', 'time', 'import', 'activities', 'page'].includes(view)) return view;
+      return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
     }
 
     function writeRoute(mode, push) {
       if (!global.HaedoNavigation) return;
       const url = new URL(global.location.href);
       const section = sectionFor(mode);
-      if (section === 'records') url.searchParams.delete('section');
+      if (section === 'home' && !/\/life\.html$/.test(url.pathname)) url.searchParams.delete('section');
       else url.searchParams.set('section', section);
       const view = mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
-      if (['sources', 'time', 'import', 'sync', 'transfer', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
+      if (['topics', 'time', 'import', 'sync', 'transfer', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
       else url.searchParams.delete('view');
       const destination = url.pathname + url.search + url.hash;
       if (destination !== global.location.pathname + global.location.search + global.location.hash)
@@ -850,7 +866,7 @@
       const previousSection = sectionFor(state.mode);
       if (section === previousSection) return;
       if (previousSection === 'records') lastRecordMode = state.mode;
-      const next = section === 'records' ? lastRecordMode : section === 'tools' ? 'tools' : 'manage';
+      const next = section === 'home' ? 'home' : section === 'records' ? lastRecordMode : section === 'tools' ? 'tools' : 'manage';
       // Save before changing URL so a failed draft write keeps the current view.
       if (dirty()) await persistStage();
       await workbench?.flush();
@@ -882,10 +898,10 @@
       heading.tabIndex = -1;
       const headingGroup = node('div', null, 'haedo-heading-title');
       if (section === 'records') {
-        const home = button('기록', guarded(() => navigate('topics')), 'life-title-button');
-        home.setAttribute('aria-label', '모아보기');
-        heading.append(home);
-      } else heading.textContent = section === 'tools' ? '도구' : '관리';
+        const records = button('기록', guarded(() => navigate('sources')), 'life-title-button');
+        records.setAttribute('aria-label', '기록 목록');
+        heading.append(records);
+      } else heading.textContent = section === 'home' ? '홈' : section === 'tools' ? '도구' : '관리';
       if (section === 'manage' && state.mode !== 'manage') {
         headingGroup.append(iconButton('관리로 돌아가기', 'back', guarded(() => navigate('manage'))));
       }
@@ -895,14 +911,16 @@
       headingGroup.append(heading);
       toolbar.append(headingGroup);
       if (section === 'records') {
-        [['sources', '자료'], ['topics', '발췌'], ['activities', '활동'], ['page', '내 페이지']].forEach(([mode, label]) => {
+        [['activities', '묶음'], ['page', '내 페이지']].forEach(([mode, label]) => {
           const tab = button(label, guarded(() => navigate(mode)));
           if (state.mode === mode || (mode === 'sources' && state.mode === 'source')) tab.setAttribute('aria-current', 'page');
           recordSections.append(tab);
         });
+      }
+      if (section === 'records' || section === 'home') {
         const nav = node('nav', null, 'life-nav life-context-nav');
         nav.setAttribute('aria-label', '기록 보기');
-        [['sources', '원천 기록', 'search'], ['time', '시간 보기', 'timeline']].forEach(([mode, label, icon]) => {
+        [['sources', '기록 검색', 'search'], ...(section === 'records' ? [['time', '시간 보기', 'timeline']] : [])].forEach(([mode, label, icon]) => {
           const tab = iconButton(label, icon, guarded(() => navigate(mode)));
           if (state.mode === mode || mode === 'sources' && state.mode === 'source') tab.setAttribute('aria-current', 'page');
           nav.append(tab);
@@ -995,7 +1013,7 @@
         state.sourceDrafts.clear();
         state.readerPositions.clear();
         state.remoteChanged = false;
-        state.mode = 'topics';
+        state.mode = 'sources';
         resetSearchContext();
         await refreshData();
         connectSubscription();
@@ -1006,7 +1024,7 @@
       if ([...state.batches.values()].some(batch => batch.workspaceId === state.bundle.workspaceId)) management.append(button('선택 파일 목록', guarded(() => navigate('batch'))));
       main.append(manage, management);
       const destinations = node('div', null, 'life-destinations');
-      destinations.append(actionRow('자료·구성 백업', '원문과 활동·내 페이지·회고를 함께 보관', 'download', () => navigate('workbench-backup')));
+      destinations.append(actionRow('자료·구성 백업', '원문과 묶음·내 페이지·회고를 함께 보관', 'download', () => navigate('workbench-backup')));
       destinations.append(actionRow('내보내기·사본 복원', '원문·발췌·출처를 파일로 보관', 'download', () => navigate('transfer'), '자료 백업·복원'));
       if (sync) destinations.append(actionRow('기기 간 동기화', '연결할 작업공간을 직접 선택', 'cloud', async () => {
         await navigate('sync'); await refreshSync();
@@ -1088,24 +1106,32 @@
       const context = state.returnContext;
       if (!context || context.workspaceId !== state.bundle.workspaceId) return navigate('sources', { returnContext: null });
       await navigate(context.mode, { returnContext: null });
-      requestAnimationFrame(() => {
+      const restore = () => requestAnimationFrame(() => {
         if (disposed || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode) return;
         const target = Array.from(main.querySelectorAll('[data-focus-key]')).find(el => el.dataset.focusKey === context.focusKey) || main.querySelector('#lifeSearch');
         const panel = target?.closest('[data-result-panel]');
+        let ancestor = target?.parentElement;
+        while (ancestor && ancestor !== main) { if (ancestor.tagName === 'DETAILS') ancestor.open = true; ancestor = ancestor.parentElement; }
         if (panel?.hidden) Array.from(main.querySelectorAll('[aria-controls]')).find(el => el.getAttribute('aria-controls') === panel.id)?.click();
         target?.focus({ preventScroll: true });
         global.scrollTo({ top: context.scrollY, behavior: 'instant' });
       });
+      if (context.mode === 'home') {
+        const pending = homeRenderPromise;
+        pending.then(() => { if (pending === homeRenderPromise) restore(); });
+      }
+      else restore();
     }
 
     function searchReturnButton() {
-      const labels = { activities: '활동으로 돌아가기', page: '내 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', reflection: '회고로 돌아가기' };
+      const labels = { home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '내 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', reflection: '회고로 돌아가기' };
       const back = iconButton(labels[state.returnContext?.mode] || '검색 결과로 돌아가기', 'back', guarded(returnToResults));
       back.id = 'lifeSearchReturn';
       return back;
     }
 
-    function excerptCard(record) {
+    function excerptCard(record, { mode = 'topics', instanceId = '', sourceId = null } = {}) {
+      const instanceKey = record.id + (instanceId ? '-' + instanceId : '');
       const card = node('article', null, 'life-card life-excerpt-card');
       card.dataset.recordId = record.id;
       card.append(node('blockquote', record.text, 'life-quote'));
@@ -1117,17 +1143,18 @@
       const footer = node('div', null, 'life-feed-footer');
       if (record.topic) footer.append(node('p', record.topic, 'life-tag life-excerpt-topic'));
       const actions = node('div', null, 'life-feed-actions');
-      const firstRef = record.sourceRefs[0];
+      const firstRef = record.sourceRefs.find(ref => ref.sourceVersionId === instanceId) || record.sourceRefs.find(ref => ref.sourceId === sourceId) || record.sourceRefs[0];
       if (firstRef) {
+        if (instanceId && firstRef.sourceVersionId !== instanceId) footer.append(node('p', '이전 버전에 저장한 문장', 'life-meta'));
         const firstSource = sourceFor(firstRef.sourceId);
         const firstLabel = firstSource ? sourceLabel(firstSource) : '출처 없음';
-        const key = resultFocusKey('topics', record.id, 'primary');
-        const open = iconButton((record.sourceRefs.length > 1 ? '첫 번째 원문에서 보기 · ' : '원문에서 보기 · ') + firstLabel, 'book', guarded(() => openResult('topics', key, firstRef)), 'life-excerpt-open');
+        const key = resultFocusKey(mode, instanceKey, 'primary');
+        const open = iconButton((record.sourceRefs.length > 1 && !sourceId ? '첫 번째 원문에서 보기 · ' : '원문에서 보기 · ') + firstLabel, 'book', guarded(() => openResult(mode, key, firstRef)), 'life-excerpt-open');
         Object.assign(open.dataset, { sourceId: firstRef.sourceId, versionId: firstRef.sourceVersionId, focusKey: key });
         actions.append(open);
       }
       const sources = node('section', null, 'life-excerpt-sources');
-      sources.id = 'lifeExcerptSources-' + record.id;
+      sources.id = 'lifeExcerptSources-' + instanceKey;
       sources.hidden = true;
       sources.dataset.resultPanel = 'sources';
       sources.setAttribute('aria-label', '발췌의 원문 출처');
@@ -1146,8 +1173,8 @@
         const versionIndex = versions.findIndex(version => version.id === ref.sourceVersionId) + 1;
         const versionLabel = versionIndex ? '버전 ' + versionIndex + '/' + versions.length + (versionIndex < versions.length ? ' · 이전 버전' : '') : '요청한 버전 미확인';
         const row = node('li', null, 'life-source-ref');
-        const key = resultFocusKey('topics', record.id, index);
-        const open = button(label, guarded(() => openResult('topics', key, ref)), 'life-source-ref-open');
+        const key = resultFocusKey(mode, instanceKey, index);
+        const open = button(label, guarded(() => openResult(mode, key, ref)), 'life-source-ref-open');
         open.setAttribute('aria-label', '이 출처의 원문에서 보기 · ' + label);
         Object.assign(open.dataset, { sourceId: ref.sourceId, versionId: ref.sourceVersionId, refIndex: String(index), focusKey: key });
         row.append(open, node('p', versionLabel, 'life-meta'));
@@ -1156,7 +1183,7 @@
       });
       sources.append(refs);
       const manage = node('section', null, 'life-excerpt-manage');
-      manage.id = 'lifeExcerptManage-' + record.id;
+      manage.id = 'lifeExcerptManage-' + instanceKey;
       manage.hidden = true;
       manage.setAttribute('aria-label', '발췌 관리');
       const management = iconButton('발췌 관리', 'settings', () => {}, 'life-excerpt-manage-toggle');
@@ -1287,18 +1314,37 @@
     }
 
     function renderSources() {
-      main.append(title('원천 기록'));
+      const heading = title('기록');
+      heading.classList.add('life-sr-only');
+      main.append(heading);
       renderStages(main);
       const list = node('div', null, 'life-card-grid'); list.id = 'lifeSearchResults';
       const count = searchCount();
       const origin = selectField('원천 필터', 'lifeOriginFilter', [['', '모든 원천']].concat(ORIGINS), state.originFilter);
       const update = () => {
         list.replaceChildren();
-        const matches = core.searchSources(state.bundle, state.sourcesSearch).filter(hit => !state.originFilter || sourceFor(hit.sourceId).origin === state.originFilter);
+        const query = state.sourcesSearch.trim();
+        const hits = core.searchSources(state.bundle, query);
+        const byVersion = new Map(hits.map(hit => [hit.sourceVersionId, hit]));
+        const matchingRecords = state.bundle.records.filter(record => matchingText([record.text, record.topic, record.note].join('\n'), query));
+        // A note can match without the source text matching. Keep its exact version
+        // and do not invent a source-text location for a user's own words.
+        if (query) matchingRecords.forEach(record => record.sourceRefs.forEach(ref => {
+          if (byVersion.has(ref.sourceVersionId)) return;
+          const versions = state.bundle.sourceVersions.filter(version => version.sourceId === ref.sourceId);
+          const index = versions.findIndex(version => version.id === ref.sourceVersionId);
+          if (index < 0 || !sourceFor(ref.sourceId)) return;
+          const hit = { sourceId: ref.sourceId, sourceVersionId: ref.sourceVersionId, matchedBy: 'note', versionIndex: index + 1, versionCount: versions.length };
+          byVersion.set(ref.sourceVersionId, hit);
+          hits.push(hit);
+        }));
+        const matches = hits.filter(hit => !state.originFilter || sourceFor(hit.sourceId).origin === state.originFilter);
         count.textContent = '자료 ' + matches.length + '개' + (state.sourcesSearch.trim() ? ' · 일치한 버전별 결과' : ' · 최신 버전') + (state.originFilter ? ' · ' + originName(state.originFilter) : '');
         matches.forEach(hit => {
           const source = sourceFor(hit.sourceId);
           const version = state.bundle.sourceVersions.find(v => v.id === hit.sourceVersionId);
+          const records = (query ? matchingRecords : state.bundle.records).filter(record => record.sourceRefs.some(ref =>
+            query ? ref.sourceVersionId === version.id : ref.sourceId === source.id));
           const card = node('article', null, 'life-card life-source-card');
           Object.assign(card.dataset, { sourceId: source.id, versionId: version.id, matchedBy: hit.matchedBy });
           const key = resultFocusKey('sources', version.id);
@@ -1314,7 +1360,7 @@
             const before = hit.snippet?.before || '', after = hit.snippet?.after || '';
             context.append(document.createTextNode((hit.locator.start > before.length ? '…' : '') + before), node('mark', hit.quote), document.createTextNode(after + (hit.locator.end + after.length < version.contentText.length ? '…' : '')));
             card.append(context);
-          } else if (!state.sourcesSearch.trim() && version.contentText) {
+          } else if (!query && !records.length && version.contentText) {
             card.append(node('p', version.contentText.slice(0, 180) + (version.contentText.length > 180 ? '…' : ''), 'life-search-context'));
           }
           const footer = node('div', null, 'life-feed-footer');
@@ -1322,6 +1368,7 @@
           if (version.coverage.status !== 'full_text') facts.push(({ partial: '본문 일부', link_only: '본문 미확보', unknown: '범위 미확인' })[version.coverage.status] || '범위 미확인');
           if (hit.versionIndex < hit.versionCount) facts.push('이전 버전');
           if (state.sourcesSearch.trim() && hit.matchedBy === 'title') facts.push('제목 일치');
+          if (hit.matchedBy === 'note') facts.push('저장한 문장·메모 일치');
           footer.append(node('p', facts.join(' · '), 'life-meta life-source-meta'));
           const details = node('section', null, 'life-result-details');
           details.id = 'lifeResultDetails-' + version.id;
@@ -1334,16 +1381,29 @@
           disclosure(info, details);
           footer.append(info);
           card.append(footer, details);
+          if (records.length) {
+            const notes = node('section', null, 'life-record-notes');
+            notes.setAttribute('aria-label', '저장한 문장·메모');
+            const more = node('details', null, 'life-record-more');
+            more.append(node('summary', '문장·메모 ' + Math.max(0, records.length - 3) + '개 더 보기'));
+            records.forEach((record, index) => {
+              const item = excerptCard(record, { mode: 'sources', instanceId: version.id, sourceId: source.id });
+              (index < 3 ? notes : more).append(item);
+            });
+            if (records.length > 3) notes.append(more);
+            card.append(notes);
+          }
           list.append(card);
         });
         if (!matches.length) list.append(empty(state.bundle.sources.length ? '조건에 맞는 자료가 없습니다.' : '보관한 자료가 없습니다. 가져오기에서 선택한 본문·텍스트 파일·링크로 시작하세요.'));
       };
-      const bar = searchField(main, '제목·본문 찾기', update, 'sourcesSearch');
+      const bar = searchField(main, '제목·본문·메모 찾기', update, 'sourcesSearch');
       const filters = node('section', null, 'life-filter-panel');
       filters.id = 'lifeSearchFilters';
       filters.hidden = !state.sourcesFiltersOpen;
       filters.setAttribute('aria-label', '원천 필터');
       filters.append(origin.label);
+      filters.append(button('저장한 문장 주제로 찾기', guarded(() => navigate('topics'))));
       const filter = iconButton('검색 필터', 'filter', () => {});
       filter.id = 'lifeFilterToggle';
       disclosure(filter, filters, { onChange: open => { state.sourcesFiltersOpen = open; } });
@@ -1390,7 +1450,7 @@
       }
       const article = node('article', null, 'life-reader');
       const tools = node('div', null, 'life-reader-tools');
-      const back = state.returnContext ? searchReturnButton() : iconButton('모음으로 돌아가기', 'back', guarded(() => navigate('topics')));
+      const back = state.returnContext ? searchReturnButton() : iconButton('기록으로 돌아가기', 'back', guarded(() => navigate('sources')));
       const info = iconButton('출처 정보', 'info', () => {});
       info.id = 'lifeSourceInfoToggle';
       tools.append(back, info);
@@ -1805,7 +1865,7 @@
         state.prepared = null;
         state.editTick = state.savedTick = 0;
         await refreshData();
-        await navigate('topics');
+        await navigate('sources');
         announce('미적용 검토만 취소했습니다. 보관한 자료는 그대로 유지됩니다.');
       }));
       main.append(cancel);
@@ -1905,7 +1965,7 @@
         state.prepared = null;
         state.savedTick = state.editTick = 0;
         if (validBatchStage(snapshot)) { state.batchId = snapshot.batchId; await navigate('batch'); }
-        else if (excerpts.length) await navigate('topics');
+        else if (excerpts.length) await navigate('sources');
         else await navigate('source', { sourceId: retained, sourceVersionId: fresh.version.id, locator: null });
         announce((excerpts.length ? '모음에 반영됨' : '자료 보관됨') + ' · 이 브라우저에 저장됨');
       };
@@ -1982,7 +2042,7 @@
         state.stages = [];
         state.allStages = [];
         state.restoreReturn = null;
-        state.mode = 'topics';
+        state.mode = 'sources';
         connectSubscription();
         render();
         global.scrollTo({ top: 0, behavior: 'instant' });
@@ -1998,7 +2058,7 @@
     function renderTransfer() {
       main.append(title('내보내기·사본 복원'), node('p', '이 작업공간의 원문·발췌·메모·출처를 파일로 보관합니다. 파일에는 개인 자료가 포함됩니다.', 'life-help'));
       main.append(node('p', '검토 초안과 기기에 보관하지 않은 사진·본문은 제외됩니다. 연표·목표·습관은 별도 백업입니다.', 'life-help'));
-      main.append(actionRow('활동·내 페이지도 함께 백업', '아래 자료 전용 파일에는 페이지 구성과 회고가 포함되지 않습니다.', 'download', () => navigate('workbench-backup')));
+      main.append(actionRow('묶음·내 페이지도 함께 백업', '아래 자료 전용 파일에는 페이지 구성과 회고가 포함되지 않습니다.', 'download', () => navigate('workbench-backup')));
       const actions = node('section', null, 'life-destinations life-settings-section');
       const stamp = new Date().toISOString().slice(0, 10);
       actions.append(actionRow('JSON 백업', '새 작업공간 사본으로 복원할 수 있는 파일', 'download', async () => {
@@ -2056,7 +2116,7 @@
           state.allStages = [];
           state.workspaces = [...state.workspaces, { workspaceId: installed.workspaceId, title: installed.title }];
           resetSearchContext();
-          state.mode = 'topics';
+          state.mode = 'sources';
           connectSubscription();
           render();
           global.scrollTo({ top: 0, behavior: 'instant' });
@@ -2092,7 +2152,7 @@
         state.sourceDrafts.clear();
         state.readerPositions.clear();
         resetSearchContext();
-        state.mode = 'topics';
+        state.mode = 'sources';
         await refreshData();
         connectSubscription();
         render();
@@ -2123,7 +2183,7 @@
             state.bundle = copy;
             state.stage = state.prepared = null;
             resetSearchContext();
-            state.mode = 'topics';
+            state.mode = 'sources';
             await refreshData();
             connectSubscription();
             render();
@@ -2248,7 +2308,7 @@
           state.bundle = await storage.read(state.conflictCopyId);
           state.stage = state.prepared = null;
           resetSearchContext();
-          state.mode = 'topics';
+          state.mode = 'sources';
           await refreshData();
           connectSubscription();
           await refreshSync();
@@ -2322,7 +2382,7 @@
           state.bundle = downloaded;
           state.stage = state.prepared = null;
           resetSearchContext();
-          state.mode = 'topics';
+          state.mode = 'sources';
           await refreshData();
           connectSubscription();
           await refreshSync();
@@ -2430,6 +2490,8 @@
 
     function render() {
       if (disposed) return;
+      homeRenderPromise = Promise.resolve();
+      home?.leave();
       workbench?.leave();
       if (readerCleanup) { readerCleanup(); readerCleanup = null; }
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
@@ -2437,8 +2499,15 @@
       renderHeader();
       main.dataset.mode = state.mode;
       main.replaceChildren();
+      if (state.mode === 'home' && home) {
+        // Home's configuration read must not lock independent navigation.
+        homeRenderPromise = home.render().catch(failure);
+        return;
+      }
       if (workbenchModes.includes(state.mode) && workbench) {
-        return Promise.resolve(workbench.render(state.mode)).then(() => {
+        const options = workbenchOpenOptions || {};
+        workbenchOpenOptions = null;
+        return Promise.resolve(workbench.render(state.mode, options)).then(() => {
           if (!disposed && state.mode === 'page') renderRestoreResult();
         }).catch(failure);
       }
@@ -2452,7 +2521,7 @@
       else if (state.mode === 'time') renderTime();
       else if (state.mode === 'sync' && sync) renderSync();
       else renderTopics();
-      if (state.mode === 'topics') renderRestoreResult();
+      if (state.mode === 'topics' || state.mode === 'sources') renderRestoreResult();
       const scope = node('p', null, 'life-scope');
       updateScope(scope);
       main.append(scope);
@@ -2552,6 +2621,7 @@
     function dispose() {
       if (disposed) return;
       disposed = true;
+      home?.dispose();
       workbench?.dispose();
       unbindNavigation?.();
       global.removeEventListener('popstate', popstate);

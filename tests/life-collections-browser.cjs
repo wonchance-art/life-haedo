@@ -84,7 +84,8 @@ async function main() {
       const page = await context.newPage(); page.setDefaultTimeout(12000);
       page.on('console', event => { if (event.type() === 'error') report.consoleErrors.push({ check: name, message: event.text() }); });
       page.on('pageerror', error => report.pageErrors.push({ check: name, message: error.message }));
-      await page.goto(base + '/life.html'); await ready(page); await run(page);
+      // The retained legacy view isolates topic/reference behavior from the unified records feed.
+      await page.goto(base + '/life.html?view=topics'); await ready(page); await run(page);
       assert.equal(server.writes().length, 0, 'UI journey must not opt into remote upload');
       report.checks.push({ name, pass: true }); console.log('PASS ' + name);
     } catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); }

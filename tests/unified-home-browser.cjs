@@ -67,6 +67,7 @@ async function main() {
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
   const report = { checks: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, realRemoteWrites: 0 };
   async function check(name, run, seed = accounts.a) {
+    if (process.env.HOME_TEST_MATCH && !new RegExp(process.env.HOME_TEST_MATCH).test(name)) return;
     const server = new FakeCloud(), device = 'home-' + report.checks.length;
     const context = await makeContext(browser, server, device, seed), page = await context.newPage(); page.setDefaultTimeout(15000); observe(page, report, name);
     try { await run({ page, context, server, device }); assert.equal(server.writes().length, 0); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
@@ -79,7 +80,7 @@ async function main() {
         await page.goto(base + '/index.html' + suffix); await shellReady(page);
         assert.equal(new URL(page.url()).pathname, '/index.html'); assert.equal(await page.locator('#lifeWelcome').isVisible(), true);
         assert.equal(await page.locator('#lifeApp').isHidden(), true); assert.deepEqual(await page.evaluate(() => __homeDbOpens), []);
-        assert.equal(await page.locator('[data-haedo-navigation] a').count(), 3);
+        assert.equal(await page.locator('[data-haedo-navigation] a').count(), 4);
         assert.equal(await page.locator('[data-life-login]').isVisible(), true);
       }
     }, null);
@@ -109,6 +110,16 @@ async function main() {
       assert.equal(await page.locator('#lifeRestoreFile').isVisible(), true);
       assert.equal(await page.evaluate(() => HaedoAuth.safeNext('https://outside.invalid/steal')), 'index.html');
       assert.equal(await page.evaluate(() => HaedoAuth.safeNext('index.html?section=bad&view=bad&doc=secret')), 'index.html');
+    }, null);
+    await check('Google PKCE default return opens personal home without inventing a records selection', async ({ page, server, device }) => {
+      server.oauthAccounts.set(device, accounts.a);
+      await page.goto(base + '/index.html'); await shellReady(page);
+      await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click();
+      await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
+      await page.locator('#lifeHome').waitFor();
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'home');
+      assert.equal(await page.locator('a[data-haedo-section="home"]').getAttribute('aria-current'), 'page');
+      assert.equal(new URL(page.url()).searchParams.has('code'), false);
     }, null);
     await check('import draft and reviewed exact excerpt survive tools/manage switching without page reload', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); const instance = await page.evaluate(() => __homeInstance);
@@ -154,20 +165,21 @@ async function main() {
       await page.goto(base + '/index.html'); await ready(page);
       const raw = '아직 발췌하지 않은 원문도 첫 화면에서 다시 읽는다. '.repeat(14);
       await button(page, '가져오기'); await page.locator('#lifeImportTitle').fill('발췌 전 보관한 익명 자료'); await page.locator('#lifeImportText').fill(raw);
-      await button(page, '원문·출처 확인'); await button(page, '자료만 보관'); await button(page, '모아보기');
+      await button(page, '원문·출처 확인'); await button(page, '자료만 보관'); await button(page, '기록 목록');
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'sources');
       const card = page.locator('#lifeSearchResults .life-source-card'); assert.equal(await card.count(), 1);
-      assert.equal(await card.locator('.life-search-context').textContent(), raw.slice(0, 240));
+      assert((await card.locator('.life-search-context').textContent()).startsWith(raw.slice(0, 100))); // Unified list still shows the stored original, even without saved quotes.
       assert.equal((await stored(page)).records.length, 0);
-      await card.getByRole('button', { name: '발췌 전 보관한 익명 자료', exact: true }).click(); await settle(page);
+      await card.locator('h3 .life-source-open').click(); await settle(page);
       assert.equal(await page.locator('#lifeSourceText').textContent(), raw);
       await page.locator('#lifeSearchReturn').click(); await settle(page); assert.equal(await card.count(), 1);
     });
-    await check('tools lead to existing goal/habit editors and account timeline list with the same three-way navigation', async ({ page }) => {
+    await check('tools lead to existing goal/habit editors and account timeline list with the same four-way navigation', async ({ page }) => {
       await page.goto(base + '/index.html?section=tools'); await ready(page);
       for (const target of ['goals', 'habits']) {
         await page.locator('#lifeMain a[href="' + target + '.html"]').click();
         await page.waitForFunction(target => document.body.dataset.page === target && !document.querySelector('[data-private]').hidden, target);
-        assert.equal(await page.locator('[data-haedo-navigation] a').count(), 3);
+        assert.equal(await page.locator('[data-haedo-navigation] a').count(), 4);
         assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="tools"]').getAttribute('aria-current'), 'page');
         await page.locator('#addItem').click(); assert.equal(await page.locator('#itemDialog').isVisible(), true);
         await page.keyboard.press('Escape'); await nav(page, 'tools'); await ready(page);
@@ -175,7 +187,7 @@ async function main() {
       await nav(page, 'records'); await button(page, '시간 보기');
       await page.locator('#lifeMain a[href="workspace.html"]').click();
       await page.waitForFunction(() => document.body.dataset.page === 'workspace' && !document.querySelector('[data-private]').hidden);
-      assert.equal(await page.locator('[data-haedo-navigation] a').count(), 3);
+      assert.equal(await page.locator('[data-haedo-navigation] a').count(), 4);
       await page.locator('#newTimeline').click(); assert.equal(await page.locator('#timelineDialog').isVisible(), true); await page.keyboard.press('Escape');
     });
     await check('history keeps a management subview and a legacy life sync link keeps its destination', async ({ page }) => {
@@ -227,7 +239,7 @@ async function main() {
     });
   } finally {
     report.capturedAt = new Date().toISOString(); report.browser = browser.version(); await browser.close();
-    await fs.writeFile('.local/unified-home/browser-report.json', JSON.stringify(report, null, 2) + '\n');
+    await fs.writeFile(process.env.HOME_TEST_MATCH ? '.local/unified-home/recheck-report.json' : '.local/unified-home/browser-report.json', JSON.stringify(report, null, 2) + '\n');
   }
   const failed = report.checks.filter(item => !item.pass).length;
   console.log(JSON.stringify({ passed: report.checks.length - failed, failed, consoleErrors: report.consoleErrors.length, pageErrors: report.pageErrors.length, expectedErrors: report.expectedErrors, realRemoteWrites: 0 }));

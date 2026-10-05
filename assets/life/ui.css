@@ -104,6 +104,13 @@ html.auth-pending [data-private] { display: none !important; }
 .life-note { font-size: 14px; color: var(--ink-soft); white-space: pre-wrap; line-height: 1.85; word-break: keep-all; overflow-wrap: anywhere; }
 .life-excerpt-card,.life-source-card { gap: 14px; border-bottom-color: #dedce2; }
 .life-excerpt-card .life-quote { line-height: 1.85; }
+.life-record-actions { display: flex; justify-content: flex-end; gap: 8px; max-width: 700px; margin: 4px auto 0; }
+.life-record-actions .life-button { border: 0; color: var(--ink-soft); }
+.life-record-actions [aria-current=page] { color: var(--color-primary); background: var(--soft); }
+.life-record-notes { min-width: 0; }
+.life-record-notes .life-excerpt-card { padding: 18px 0 0; border: 0; }
+.life-record-notes .life-excerpt-card + .life-excerpt-card { margin-top: 18px; border-top: 1px solid var(--line); }
+.life-record-more > summary { display: flex; align-items: center; min-height: 44px; padding: 8px 0; color: var(--ink-soft); font-size: 14px; }
 .life-excerpt-note { display: grid; grid-template-columns: 16px minmax(0,1fr); column-gap: 10px; align-items: start; }
 .life-excerpt-note > .life-glyph { margin-top: 6px; color: var(--ink-soft); }
 .life-excerpt-note > .life-note { font-size: 15px; }

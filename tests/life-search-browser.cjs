@@ -13,7 +13,7 @@ function playwright() {
 }
 const settle = page => page.waitForFunction(() => !document.querySelector('.life-app[aria-busy="true"]'));
 async function click(page, name) {
-  if (['모아보기','원천 기록','가져오기','시간 보기'].includes(name)) await openSection(page, 'records');
+  if (['기록 목록','기록 검색','가져오기','시간 보기'].includes(name)) await openSection(page, 'records');
   if (name === '로그아웃') await openAccount(page);
   await page.getByRole('button', { name, exact: true }).click(); await settle(page);
 }
@@ -25,7 +25,12 @@ const results = page => page.locator('#lifeSearchResults article[data-source-id]
 const result = (page, versionId) => page.locator('#lifeSearchResults article[data-version-id="' + versionId + '"]');
 async function openResult(page, versionId) { await result(page, versionId).getByRole('button', { name: /^자료 읽기/ }).click(); await settle(page); }
 const stored = page => page.evaluate(async () => HaedoLife.Shell.storage.read(await HaedoLife.Shell.storage.getActive()));
-async function sources(page, query) { await click(page, '원천 기록'); await page.locator('#lifeSearch').fill(query); }
+async function sources(page, query) { await click(page, '기록 검색'); await page.locator('#lifeSearch').fill(query); }
+async function legacyTopics(page) {
+  // Topic grouping is now a secondary search action inside the records view.
+  await filterPanel(page); await click(page, '저장한 문장 주제로 찾기');
+  await page.waitForFunction(() => document.querySelector('#lifeMain')?.dataset.mode === 'topics'); await settle(page);
+}
 async function selectedText(page, expected) {
   await page.waitForFunction(expected => {
     const el = document.querySelector('#lifeSourceText'), selection = getSelection();
@@ -232,7 +237,7 @@ async function main() {
       assert.equal(await page.locator('#lifeSearch').inputValue(), '함께'); assert.equal(await page.locator('#lifeOriginFilter').inputValue(), 'obsidian');
       await page.waitForFunction(id => document.activeElement?.matches('button[data-version-id="' + id + '"]'), ids[1].versions[0]);
       assert.equal(await result(page, ids[1].versions[0]).getByRole('button', { name: /^자료 읽기/ }).evaluate(el => el === document.activeElement), true);
-      await click(page, '모아보기'); await page.locator('#lifeSearch').fill('둘째근거'); await filterPanel(page); await click(page, '확인 주제');
+      await legacyTopics(page); await page.locator('#lifeSearch').fill('둘째근거'); await filterPanel(page); await click(page, '확인 주제');
       assert.equal(await page.locator('.life-quote').count(), 1);
       await page.getByRole('button', { name: /^발췌 출처 정보/ }).click();
       const second = page.locator('.life-source-refs button[data-source-id="' + ids[1].sourceId + '"][data-version-id="' + ids[1].versions[0] + '"]');
@@ -243,7 +248,7 @@ async function main() {
       assert.equal(await page.locator('#lifeSearch').inputValue(), '둘째근거'); assert.equal(await page.getByRole('button', { name: '확인 주제', exact: true }).getAttribute('aria-pressed'), 'true');
       await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, secondFocusKey);
       assert.equal(await second.isVisible(), true);
-      await click(page, '원천 기록'); assert.equal(await page.locator('#lifeSearch').inputValue(), '함께'); assert.equal(await page.locator('#lifeOriginFilter').inputValue(), 'obsidian');
+      await click(page, '기록 검색'); assert.equal(await page.locator('#lifeSearch').inputValue(), '함께'); assert.equal(await page.locator('#lifeOriginFilter').inputValue(), 'obsidian');
     });
     await check('search stays within workspace/account and never persists or transmits query state', async (page, context, device) => {
       await seed(page, [{ title: 'A 공간 자료', texts: ['A공간에서만 찾을 내용'] }]);
@@ -256,11 +261,11 @@ async function main() {
       assert.ok(!page.url().includes(encodeURIComponent(sentinel)) && !page.url().includes(sentinel));
       const local = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage }, history: history.state })); assert.ok(!local.includes(sentinel));
       assert.ok(!JSON.stringify(await stored(page)).includes(sentinel)); assert.ok(requests.every(text => !text.includes(sentinel) && !text.includes(encodeURIComponent(sentinel))));
-      await openManagement(page); await page.locator('#lifeWorkspace').selectOption(other); await settle(page); await click(page, '원천 기록');
+      await openManagement(page); await page.locator('#lifeWorkspace').selectOption(other); await settle(page); await click(page, '기록 검색');
       assert.equal(await page.locator('#lifeSearch').inputValue(), ''); await page.locator('#lifeSearch').fill('A공간'); assert.equal(await results(page).count(), 0);
-      await openManagement(page); await page.locator('#lifeWorkspace').selectOption(original); await settle(page); await click(page, '원천 기록'); assert.equal(await page.locator('#lifeSearch').inputValue(), '');
+      await openManagement(page); await page.locator('#lifeWorkspace').selectOption(original); await settle(page); await click(page, '기록 검색'); assert.equal(await page.locator('#lifeSearch').inputValue(), '');
       await page.locator('#lifeSearch').fill(sentinel); await click(page, '로그아웃'); await page.waitForFunction(() => location.pathname.endsWith('/index.html') && document.readyState === 'complete');
-      server.oauthAccounts.set(device, accounts.b); await page.goto(base + '/login.html?next=life.html'); await page.locator('#googleLogin').click(); await page.waitForURL('**/life.html'); await ready(page); await click(page, '원천 기록');
+      server.oauthAccounts.set(device, accounts.b); await page.goto(base + '/login.html?next=life.html'); await page.locator('#googleLogin').click(); await page.waitForURL('**/life.html'); await ready(page); await click(page, '기록 검색');
       assert.equal(await page.locator('#lifeSearch').inputValue(), ''); await page.locator('#lifeSearch').fill('A공간'); assert.equal(await results(page).count(), 0);
       assert.equal((await stored(page)).sources.length, 0); assert.doesNotMatch(await page.locator('#lifeApp').innerText(), /A 공간 자료/);
     });

@@ -1,7 +1,7 @@
 # 해도 — life-haedo
 
 기존 메모·글의 자료 모아보기와 개인 연표·목표·습관을 함께 사용하는 생활 도구.
-한 홈에서 기록·도구·관리를 오가며, 빌드 없이 정적 호스팅에서 실행한다.
+홈·기록·도구·관리를 오가며, 빌드 없이 정적 호스팅에서 실행한다.
 
 [배포 사이트](https://wonchance-art.github.io/life-haedo/) · 로컬 변경은 배포 전까지 사이트에 반영되지 않는다.
 
@@ -11,13 +11,15 @@
 
 [웹 글·출처 가져오기](docs/design-review/social-import.md)는 네이버 블로그·Instagram 링크의 원천 설정 제안, 복사한 본문·포함 범위 검토, 출처 주소 대조를 제공한다. 링크만으로 본문·사진·영상을 수집하지 않는다.
 
+[첫 접속 홈과 기록 통합](docs/design-review/home-entry-proposal.md)은 최근 기록·묶음·내 페이지 요약을 현재 작업공간에서 보여준다. 묶음과 페이지 구성은 여전히 이 브라우저에만 저장되며 공개 게시가 아니다.
+
 앞선 [통합 홈과 검증](docs/design-review/unified-home.md)은 자료·연표를 기록에 묶고 목표·습관은 도구, 계정·동기화·백업은 관리에 배치한다.
 
 자료 화면은 승인된 본문 중심 한 열과 A 인용 아이콘을 [실제 검색·원문·발췌 저장](docs/design-review/integration.md)에 연결했다. 후속으로 [가져오기·내 발췌·주제 모음](docs/design-review/collections-integration.md)도 정리하고 로컬 검증을 마쳤다. 최신 [피드 마감과 검증](docs/design-review/feed-refinement.md), [PR #20의 공개 적용 결과](https://github.com/wonchance-art/life-haedo/pull/20)를 함께 확인한다. `social-sample.html`과 `design-sample.html`은 저장 기능에 연결하지 않은 [이전 비교 시안](docs/design-review/README.md)이며 후속 화면 개발은 [DESIGN.md](DESIGN.md)를 따른다.
 
 ## 사용
 
-1. 홈에서 Google 로그인하면 기록 피드가 열린다. 기록 상단의 연표 아이콘 → 연표 목록 → `새 연표`에서 이름과 기준 날짜를 입력한다. 목표·습관은 도구, 계정·백업·동기화는 관리에서 연다.
+1. 홈에서 Google 로그인하면 최근 기록과 각 기능 진입이 보인다. 기록을 누르면 원문과 저장한 문장·메모를 함께 볼 수 있다. 기록 상단의 연표 아이콘 → 연표 목록 → `새 연표`에서 이름과 기준 날짜를 입력한다. 목표·습관은 도구, 계정·백업·동기화는 관리에서 연다.
 2. `＋ 추가`로 사건·기간·생각을 추가한다. 입력을 마치거나 `완료`를 누르면 기기에 저장된다.
 3. `기록`에서 제목·내용·날짜와 종류로 찾고 편집한다. `⌘/Ctrl+K`로 전체 검색도 가능하다.
 4. `파일 → 전체 문서 백업`으로 JSON을 보관한다. 가져오기는 항상 **새 사본**을 만든다.
@@ -82,7 +84,7 @@ Node 없이 화면만 실행하려면 `python3 scripts/dev-server.py`. 이 서�
 | 경로 | 역할 |
 | --- | --- |
 | `index.html`, `login.html`, `workspace.html` | 통합 홈·Google 로그인·연표 목록/관리 |
-| `assets/haedo-navigation.js`, `assets/haedo-shell.css` | 기록·도구·관리 공통 탐색과 화면 스타일 |
+| `assets/haedo-navigation.js`, `assets/haedo-shell.css` | 홈·기록·도구·관리 공통 탐색과 화면 스타일 |
 | `timeline.html`, `goals.html`, `habits.html` | 계정별 연표·목표·습관 |
 | `assets/platform-*.js` | 공용 인증·계정 저장·플랫폼 화면·자료 원격 어댑터 |
 | `assets/app.css` | 테마·그래프·반응형 레이아웃 |

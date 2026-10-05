@@ -66,6 +66,9 @@ test('private routes include life and remove unknown query values and external r
 
 test('unified home return accepts only known sections and material views', () => {
   assert.equal(safeNext(), 'index.html');
+  assert.equal(safeNext('index.html?section=home&code=discarded#token'), 'index.html?section=home');
+  assert.equal(safeNext('life.html?section=home&access_token=discarded'), 'life.html?section=home');
+  assert.equal(safeNext('index.html?section=records&code=discarded'), 'index.html?section=records');
   assert.equal(safeNext('https://evil.invalid/index.html?section=records'), 'index.html');
   assert.equal(safeNext('index.html?section=manage&view=sync&code=discarded#token'), 'index.html?section=manage&view=sync');
   assert.equal(safeNext('index.html?section=tools&view=transfer'), 'index.html?section=tools&view=transfer');
