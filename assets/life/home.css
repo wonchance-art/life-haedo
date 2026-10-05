@@ -1,17 +1,25 @@
-/* Personal home keeps the Life reading column, controls and shared palette. */
-.life-home { min-width: 0; }
+/* Home shares the white reading surface. Tint marks controls and private state only. */
+.life-home { min-width: 0; container-type: inline-size; container-name: personal-home; }
 .life-home :is(p,span,strong,button) { overflow-wrap: anywhere; word-break: keep-all; }
-.home-shortcuts { display: flex; align-items: center; gap: 8px; padding: 8px 0 22px; border-bottom: 1px solid var(--line); }
-.home-shortcut { flex: 1 1 0; gap: 9px; min-width: 0; padding: 12px 8px; border: 0; border-radius: 8px; color: var(--ink); font-size: 14px; }
-.home-shortcut > .life-glyph { color: var(--ink-soft); }
-.home-section { min-width: 0; margin-top: 26px; }
+.home-shortcuts { display: flex; align-items: stretch; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 16px; background: var(--canvas, #f7f7fb); }
+.home-shortcut { flex: 1 1 0; gap: 9px; min-width: 0; min-height: 54px; padding: 8px; border: 0; border-radius: 11px; background: transparent; color: var(--ink); font-size: 14px; font-weight: 550; transition: background-color 160ms ease-out, color 160ms ease-out; }
+.home-shortcut > .life-glyph { box-sizing: content-box; width: 20px; height: 20px; padding: 7px; border-radius: 10px; color: var(--color-primary); background: var(--soft); }
+.home-shortcut[data-home-destination=page] > .life-glyph { color: var(--mint-ink, #356452); background: var(--mint, #edf7f3); }
+.home-shortcut[data-home-destination=tools] > .life-glyph { color: var(--sky-ink, #416187); background: var(--sky, #eff4fb); }
+.home-shortcut:hover:not(:disabled) { background: var(--paper); }
+.home-shortcut:active:not(:disabled) { background: var(--soft); color: var(--color-primary); }
+.home-shortcut:focus-visible { outline-offset: 1px; }
+.home-section { min-width: 0; margin-top: 28px; }
 .home-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
-.home-section-heading > h2 { font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
+.home-section-heading > h2 { font-size: 16px; font-weight: 650; letter-spacing: -.02em; }
+.home-section-heading > .life-icon-button { color: var(--ink-soft); }
 .home-section-heading > .life-actions { gap: 4px; }
-.home-section-heading .life-actions > .life-button { border-color: transparent; padding-inline: 10px; color: var(--ink-soft); }
-.home-record { min-width: 0; padding: 20px 0; border-bottom: 1px solid var(--line); }
+.home-section-heading .life-actions > .life-button { border-color: transparent; border-radius: 10px; padding-inline: 11px; color: var(--ink-soft); }
+.home-section-heading .life-actions > .life-button:hover { color: var(--color-primary); background: var(--soft); }
+.home-record { min-width: 0; padding: 18px 0 20px; border-bottom: 1px solid var(--line); }
 .home-record-open { width: 100%; max-width: 100%; border: 0; border-radius: 0; padding: 0; color: var(--ink); font-size: 18px; font-weight: 600; line-height: 1.7; text-align: left; }
 .home-record-open:hover { background: transparent; color: var(--color-primary); }
+.home-record-open:active { color: var(--color-primary); background: transparent; }
 .home-text { margin-top: 7px; color: var(--ink); font-size: 16px; line-height: 1.85; }
 .home-clamp,.home-record-open { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .home-record-meta { margin-top: 9px; font-size: 12px; }
@@ -19,18 +27,21 @@
 .home-empty { padding: 18px 0 26px; border-bottom: 1px solid var(--line); }
 .home-empty > .life-button { margin-top: 16px; }
 .home-empty-note { padding: 16px 0 24px; border-bottom: 1px solid var(--line); }
-.home-group { display: flex; align-items: center; justify-content: flex-start; gap: 15px; width: 100%; padding: 18px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; text-align: left; }
+.home-group { display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; padding: 17px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; text-align: left; transition: background-color 160ms ease-out, color 160ms ease-out; }
+.home-group:hover:not(:disabled) { background: var(--canvas, #f7f7fb); }
+.home-group:active:not(:disabled) { background: var(--soft); }
 .home-group-copy { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; }
 .home-group-copy > strong { color: var(--ink); font-size: 16px; font-weight: 550; line-height: 1.75; }
 .home-group > .life-glyph { color: var(--ink-soft); }
+.home-group > .life-glyph:first-child { box-sizing: content-box; width: 20px; height: 20px; padding: 7px; border-radius: 10px; background: var(--soft); color: var(--color-primary); }
 .home-group > .life-glyph:last-child { transform: rotate(-90deg); }
-.home-page-scope { margin: 4px 0 12px; font-size: 12px; }
+.home-page-scope { display: inline-block; margin: 4px 0 12px; padding: 3px 8px; border-radius: 6px; color: var(--mint-ink, #356452); background: var(--mint, #edf7f3); font-size: 12px; font-weight: 500; }
 .home-page-title { font-size: 19px; margin-top: 16px; }
 .home-intro { margin-bottom: 18px; }
 .home-page-entry { min-width: 0; padding: 16px 0 20px; border-bottom: 1px solid var(--line); }
 .home-entry-heading { display: flex; align-items: flex-start; gap: 10px; }
 .home-entry-heading > h3 { flex: 1; min-width: 0; font-size: 18px; }
-.home-entry-heading > .life-glyph { margin-top: 5px; color: var(--ink-soft); }
+.home-entry-heading > .life-glyph { margin-top: 5px; color: var(--color-primary); }
 .home-record-compact { padding-block: 12px; border: 0; }
 .home-record-compact .home-record-open { min-height: 44px; font-size: 15px; font-weight: 550; }
 .home-record-compact .home-text { font-size: 15px; margin-top: 0; }
@@ -41,11 +52,19 @@
 .home-loading,.home-load-error { padding-block: 28px; }
 .home-load-error > .life-button { margin-top: 12px; }
 .home-error { margin-top: 0; }
+@container personal-home (min-width: 560px) {
+  /* The date shares the metadata row only when this reading column has room. */
+  #homeRecent > .home-record { display: grid; grid-template-columns: minmax(0,1fr) auto; column-gap: 20px; }
+  #homeRecent > .home-record > :is(h3,.home-text) { grid-column: 1 / -1; }
+  #homeRecent > .home-record > .home-date { margin-top: 9px; white-space: nowrap; }
+}
 @media (max-width: 700px) {
-  .home-shortcuts { gap: 4px; padding-bottom: 16px; }
-  .home-shortcut { gap: 7px; padding-inline: 4px; }
-  .home-section { margin-top: 22px; }
+  .home-shortcuts { gap: 4px; padding: 5px; }
+  .home-shortcut { gap: 7px; padding-inline: 4px; font-size: 13px; }
+  .home-section { margin-top: 24px; }
   .home-record-open { font-size: 17px; }
   .home-section-heading { gap: 8px; }
-  .home-section-heading > h2 { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .life-home :is(.home-shortcut,.home-group,.home-record-open) { transition: none; }
 }

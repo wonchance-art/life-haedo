@@ -1,0 +1,141 @@
+{
+  "checks": [
+    {
+      "width": 56,
+      "x": 8,
+      "y": 24,
+      "height": 214,
+      "links": [
+        {
+          "width": 44,
+          "height": 44
+        },
+        {
+          "width": 44,
+          "height": 44
+        },
+        {
+          "width": 44,
+          "height": 44
+        },
+        {
+          "width": 44,
+          "height": 44
+        }
+      ],
+      "direction": "column",
+      "doc": 1440,
+      "view": 1440,
+      "bg": "rgb(247, 247, 251)",
+      "clearance": "0px",
+      "keyboardTooltip": true,
+      "touchTooltipHidden": false,
+      "reducedMotion": true,
+      "forcedColors": true,
+      "viewportWidth": 1440
+    },
+    {
+      "width": 56,
+      "x": 8,
+      "y": 24,
+      "height": 214,
+      "links": [
+        {
+          "width": 44,
+          "height": 44
+        },
+        {
+          "width": 44,
+          "height": 44
+        },
+        {
+          "width": 44,
+          "height": 44
+        },
+        {
+          "width": 44,
+          "height": 44
+        }
+      ],
+      "direction": "column",
+      "doc": 820,
+      "view": 820,
+      "bg": "rgb(247, 247, 251)",
+      "clearance": "0px",
+      "keyboardTooltip": true,
+      "touchTooltipHidden": false,
+      "reducedMotion": true,
+      "forcedColors": true,
+      "viewportWidth": 820
+    },
+    {
+      "width": 312,
+      "x": 39,
+      "y": 828,
+      "height": 60,
+      "links": [
+        {
+          "width": 44,
+          "height": 44
+        },
+        {
+          "width": 44,
+          "height": 44
+        },
+        {
+          "width": 44,
+          "height": 44
+        },
+        {
+          "width": 44,
+          "height": 44
+        }
+      ],
+      "direction": "row",
+      "doc": 390,
+      "view": 390,
+      "bg": "rgb(247, 247, 251)",
+      "clearance": "calc(96px + 0px)",
+      "keyboardTooltip": true,
+      "touchTooltipHidden": true,
+      "reducedMotion": true,
+      "forcedColors": true,
+      "viewportWidth": 390
+    },
+    {
+      "width": 296,
+      "x": 12,
+      "y": 828,
+      "height": 60,
+      "links": [
+        {
+          "width": 44,
+          "height": 44
+        },
+        {
+          "width": 44,
+          "height": 44
+        },
+        {
+          "width": 44,
+          "height": 44
+        },
+        {
+          "width": 44,
+          "height": 44
+        }
+      ],
+      "direction": "row",
+      "doc": 320,
+      "view": 320,
+      "bg": "rgb(247, 247, 251)",
+      "clearance": "calc(96px + 0px)",
+      "keyboardTooltip": true,
+      "touchTooltipHidden": true,
+      "reducedMotion": true,
+      "forcedColors": true,
+      "viewportWidth": 320
+    }
+  ],
+  "errors": []
+}

@@ -21,7 +21,7 @@ description: 해도의 화면 추가·수정·디자인 검토에 사용한다. 
 
 묶음·내 페이지·다시 찾기·회고의 최소 화면은 `assets/life/workbench-ui.js`/`workbench.css`와 [영역별 동작](../../../docs/life-tools-design/working-sections.md)을 따른다. 기능 밖 반복 설명은 접고, 선택·원문·내 코멘트를 먼저 보여준다. 영역 이동·미리보기 전 저장 실패로 입력이 사라지지 않는지 확인하며, 계정별 로컬 구성과 실제 공개·기기 간 동기화를 구분한다.
 
-전체 사이트는 `life.html`의 시각 기준을 따르고 최신 계약은 `DESIGN.md`를 따른다. 플랫폼 CSS는 연표 테마에 기대지 않는다. 전체 표면 변경은 `node scripts/check-site-design.cjs`의 익명 샘플로 기존 피드와 도구·연표·폼을 함께 검토한다.
+전체 사이트는 `life.html`의 시각 기준을 따르고 최신 계약은 `DESIGN.md`를 따른다. 2026-10-05의 앱 표면은 흰 본문·옅은 라벤더 바탕·작은 민트/스카이 조작, 작은 rail/dock와 모바일 native dialog 하단 시트를 쓴다. 새 기능도 기존 토큰·44px 조작·안전 영역을 재사용하며 본문 등장 모션이나 동작 없는 스와이프 손잡이를 추가하지 않는다. 플랫폼 CSS는 연표 테마에 기대지 않는다. 전체 표면 변경은 `node scripts/check-site-design.cjs`의 익명 샘플로 기존 피드와 도구·연표·폼을 함께 검토한다.
 
 ## 구현과 확인
 
@@ -38,3 +38,5 @@ description: 해도의 화면 추가·수정·디자인 검토에 사용한다. 
 보고는 이번에 수행한 기능 검사 / 시각 검토 / 실제 기기 체험 / 배포를 구분한다. 장치 폭만 바꾼 Chromium 결과를 Apple 실기 검증으로 쓰지 않는다.
 
 피드의 간결한 표시와 접힌 출처·관리는 `docs/design-review/feed-refinement.md`와 `node scripts/check-life-feed-design.cjs`를 따른다. 이 집중 검사는 기존 전체 화면 감사와 실행 범위를 구분한다.
+
+앱 표면의 전후 비교는 `docs/design-review/app-feel.md`, 현대 CSS와 오픈소스 선택 근거는 `app-feel-references.md`를 따른다(두 문서는 `docs/design-review/` 아래). 집중 검사는 `node scripts/check-app-feel-design.cjs`와 `node tests/app-feel-browser.cjs`를 사용한다. 플랫폼 검사는 `SITE_DESIGN_OUTPUT`을 새 `.local/` 경로로 지정해 이전 감사 증거를 보존한다. 연표의 공간 표식은 일반 메뉴·폼의 44px 기준과 구분해 실측 및 대체 목록 경로를 남긴다.

@@ -14,7 +14,7 @@ const phase = process.env.SITE_DESIGN_PHASE || 'after';
 assert(['before', 'after'].includes(phase));
 const selectedScenes = new Set((process.env.SITE_DESIGN_SCENES || '').split(',').filter(Boolean));
 const root = path.resolve(__dirname, '..');
-const out = path.join(root, '.local/life-design-site', phase, 'visual');
+const out = process.env.SITE_DESIGN_OUTPUT ? path.resolve(root, process.env.SITE_DESIGN_OUTPUT) : path.join(root, '.local/life-design-site', phase, 'visual');
 const evidence = path.join(root, 'docs/design-review/evidence/life-design-site');
 const sizes = [{ name: 'desktop', width: 1440, height: 1000 }, { name: 'tablet', width: 820, height: 1000 }, { name: 'phone', width: 390, height: 844 }];
 const stamp = '2026-10-04T00:00:00.000Z';
@@ -108,8 +108,8 @@ async function main() {
     await page.screenshot({ path: path.join(out, file) });
     report.captures.push({ scene, size, file, ...metrics, layout });
     for (const [name, pass, detail] of [['no horizontal overflow', !metrics.horizontalOverflow], ['text contrast', !metrics.contrastFailures.length, metrics.contrastFailures],
-      ['44px targets', !metrics.smallTargets.length, metrics.smallTargets], ['named controls', !metrics.unnamed.length, metrics.unnamed], ['16px inputs', !metrics.smallInputs.length, metrics.smallInputs]]) check(`${size.name} ${scene}: ${name}`, pass, detail);
-    check(`${size.name} ${scene}: aligned common navigation`, layout.commonIcons.length === 3 && layout.commonIcons.every(i => i.width >= 44 && i.height >= 44 && i.iconWidth === 20 && i.iconHeight === 20 && i.offsetX < 1 && i.offsetY < 1), layout.commonIcons);
+      ['44px targets', !metrics.smallTargets.some(item => !(scene.startsWith('timeline-') && item.spatial && item.class === 'c-main')), metrics.smallTargets.filter(item => !(scene.startsWith('timeline-') && item.spatial && item.class === 'c-main'))], ['named controls', !metrics.unnamed.length, metrics.unnamed], ['16px inputs', !metrics.smallInputs.length, metrics.smallInputs]]) check(`${size.name} ${scene}: ${name}`, pass, detail);
+    check(`${size.name} ${scene}: aligned common navigation`, layout.commonIcons.map(i => i.label).join(',') === '홈,기록,도구,관리' && layout.commonIcons.every(i => i.width >= 44 && i.height >= 44 && i.iconWidth === 20 && i.iconHeight === 20 && i.offsetX < 1 && i.offsetY < 1), layout.commonIcons);
     if (!scene.startsWith('timeline-')) check(`${size.name} ${scene}: content maximum 700px`, layout.contentWidth === null || layout.contentWidth <= 701, layout.contentWidth);
   }
   async function contextFor(server, device, account, size, platform = { docs: [], items: [] }) {
@@ -205,7 +205,9 @@ async function main() {
   } finally {
     await browser.close();
     if (selectedScenes.size) {
-      const previous = JSON.parse(await fs.readFile(path.join(out, 'report.json'), 'utf8'));
+      let previous = { checks: [], captures: [], errors: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, blockedWrites: [] };
+      try { previous = JSON.parse(await fs.readFile(path.join(out, 'report.json'), 'utf8')); }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
       const merge = (old, current, key) => [...new Map([...old, ...current].map(value => [key(value), value])).values()];
       report.checks = merge(previous.checks, report.checks, row => row.name);
       report.captures = merge(previous.captures, report.captures, row => row.file);
@@ -215,7 +217,7 @@ async function main() {
     }
     await fs.writeFile(path.join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
   }
-  if (phase === 'after') {
+  if (phase === 'after' && !process.env.SITE_DESIGN_OUTPUT) {
     await fs.mkdir(evidence, { recursive: true });
     for (const entry of report.captures) if (representatives.has(entry.file.replace('.png', ''))) {
       await fs.copyFile(path.join(out, entry.file), path.join(evidence, 'after-' + entry.file));

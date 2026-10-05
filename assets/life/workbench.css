@@ -93,3 +93,11 @@
   .wb-feed > .wb-row > h3 { flex-basis: calc(100% - 108px); }
 }
 @media (prefers-reduced-motion: reduce) { .life-workbench * { scroll-behavior: auto; transition: none; } }
+
+/* Selected material and saved state share the app's quiet action palette. */
+.wb-picker-list .wb-check:has(input:checked) { background: var(--soft); border-radius: var(--control-radius); padding-inline: 10px; }
+.wb-check input { transition: accent-color var(--motion-quick) ease; }
+.wb-share-confirm { padding: 16px; border: 0; border-radius: var(--surface-radius); background: var(--canvas); }
+.wb-share-excerpt,.wb-comparison-text { border-radius: var(--control-radius); }
+.wb-incoming-list,.wb-picker-list { overscroll-behavior-block: contain; }
+@media (forced-colors: active) { .wb-share-confirm { border: 1px solid CanvasText; } }

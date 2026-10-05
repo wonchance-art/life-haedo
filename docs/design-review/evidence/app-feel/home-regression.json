@@ -1,0 +1,62 @@
+{
+  "checks": [
+    {
+      "name": "anonymous common home is usable in all sections without redirect or private IDB",
+      "pass": true
+    },
+    {
+      "name": "public readonly home does not mount even an authenticated account",
+      "pass": true
+    },
+    {
+      "name": "server verification completes before any account storage opens",
+      "pass": true
+    },
+    {
+      "name": "Google PKCE fixture returns to selected home section with only allowed query state",
+      "pass": true
+    },
+    {
+      "name": "Google PKCE default return opens personal home without inventing a records selection",
+      "pass": true
+    },
+    {
+      "name": "import draft and reviewed exact excerpt survive tools/manage switching without page reload",
+      "pass": true
+    },
+    {
+      "name": "reader quote/search context and backup scope remain exact through common navigation",
+      "pass": true
+    },
+    {
+      "name": "a home with originals and no excerpts shows real text and opens the complete original",
+      "pass": true
+    },
+    {
+      "name": "tools lead to existing goal/habit editors and account timeline list with the same four-way navigation",
+      "pass": true
+    },
+    {
+      "name": "history keeps a management subview and a legacy life sync link keeps its destination",
+      "pass": true
+    },
+    {
+      "name": "account change cannot reveal previous home content and returning account recovers its own data",
+      "pass": true
+    },
+    {
+      "name": "a late verification response after signout cannot remount the previous private home",
+      "pass": true
+    },
+    {
+      "name": "failed server verification shows recoverable error without opening private storage",
+      "pass": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 1,
+  "realRemoteWrites": 0,
+  "capturedAt": "2026-10-05T09:41:58.531Z",
+  "browser": "151.0.7922.173"
+}

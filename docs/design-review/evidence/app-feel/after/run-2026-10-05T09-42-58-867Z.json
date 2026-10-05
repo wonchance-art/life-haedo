@@ -1,0 +1,287 @@
+{
+  "phase": "after",
+  "createdAt": "2026-10-05T09:42:58.867Z",
+  "browser": "151.0.7922.173",
+  "environment": "Linux Chromium viewport/touch simulation; no actual Apple, native IME, Files, VoiceOver, production database or Google login",
+  "captures": [
+    {
+      "scene": "split-records",
+      "file": "split-records-844.png",
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.661,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 652,
+        "height": 44,
+        "lineHeight": "31.35px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 19,
+      "layout": {
+        "toolbar": {
+          "top": 12,
+          "left": 132,
+          "right": 784,
+          "bottom": 56,
+          "width": 652,
+          "height": 44
+        },
+        "reader": null,
+        "firstRecord": {
+          "top": 203,
+          "left": 132,
+          "right": 784,
+          "bottom": 769.125,
+          "width": 652,
+          "height": 566.125
+        },
+        "navigation": {
+          "top": 24,
+          "left": 8,
+          "right": 64,
+          "bottom": 238,
+          "width": 56,
+          "height": 214
+        },
+        "clippedControls": []
+      }
+    },
+    {
+      "scene": "split-reader",
+      "file": "split-reader-844.png",
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 652,
+        "height": 38,
+        "lineHeight": "38.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": {
+        "width": 652,
+        "size": "18px",
+        "lineHeight": "35.1px",
+        "selectedText": ""
+      },
+      "resultCount": 0,
+      "layout": {
+        "toolbar": {
+          "top": 12,
+          "left": 132,
+          "right": 784,
+          "bottom": 56,
+          "width": 652,
+          "height": 44
+        },
+        "reader": {
+          "top": 270.578125,
+          "left": 132,
+          "right": 784,
+          "bottom": 1990.171875,
+          "width": 652,
+          "height": 1719.59375
+        },
+        "firstRecord": null,
+        "navigation": {
+          "top": 24,
+          "left": 8,
+          "right": 64,
+          "bottom": 238,
+          "width": 56,
+          "height": 214
+        },
+        "clippedControls": []
+      }
+    },
+    {
+      "scene": "split-tools",
+      "file": "split-tools-844.png",
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "layout": {
+        "toolbar": {
+          "top": 12,
+          "left": 132,
+          "right": 784,
+          "bottom": 56,
+          "width": 652,
+          "height": 44
+        },
+        "reader": null,
+        "firstRecord": null,
+        "navigation": {
+          "top": 24,
+          "left": 8,
+          "right": 64,
+          "bottom": 238,
+          "width": 56,
+          "height": 214
+        },
+        "clippedControls": []
+      }
+    }
+  ],
+  "checks": [
+    {
+      "name": "keyboard focus/820",
+      "pass": true,
+      "detail": {
+        "tag": "a",
+        "id": "",
+        "class": "haedo-icon-button haedo-nav-link",
+        "text": "기록",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      }
+    },
+    {
+      "name": "reduced motion/820",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "selection/search/reader/navigation preserve source data/820",
+      "pass": true
+    },
+    {
+      "name": "split-records/844 overflow",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "split-records/844 contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "split-records/844 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "split-records/844 named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "split-records/844 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "split-reader/844 overflow",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "split-reader/844 contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "split-reader/844 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "split-reader/844 named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "split-reader/844 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "split-tools/844 overflow",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "split-tools/844 contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "split-tools/844 44px targets",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "split-tools/844 named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "split-tools/844 16px inputs",
+      "pass": true,
+      "detail": []
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": []
+}

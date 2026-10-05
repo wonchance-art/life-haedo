@@ -1,0 +1,18 @@
+PASS public home and anonymous private routes never mount account storage
+PASS Google-button PKCE HTTP fixture opens verified A scope without automatic upload
+PASS protected import/excerpt/source jump, reload and backup-copy restore work
+PASS logout/B login cannot list, read or render A and unowned data; A return restores its scope
+FAIL failed management navigation and logout draft transactions preserve input without signing out
+locator.click: Timeout 15000ms exceeded.
+Call log:
+[2m  - waiting for getByRole('button', { name: '원천 기록', exact: true })[22m
+
+    at click (/workspace/life-haedo/tests/platform-life-browser.cjs:73:54)
+    at async /workspace/life-haedo/tests/platform-life-browser.cjs:173:7
+    at async check (/workspace/life-haedo/tests/platform-life-browser.cjs:27:35)
+    at async main (/workspace/life-haedo/tests/platform-life-browser.cjs:155:5)
+PASS offline warm local editing survives cold-load lock and online re-verification
+PASS failed callback clears credentials from address and never exposes private UI
+PASS preserved Cloud haedo-v64 fixture upgrades atomically to haedo-v65 without altering old local data
+PASS unexpected console/page errors
+Platform integration: 8 passed, 1 failed; 1 intentional transport/callback errors. Anonymous HTTP only; no real Google OAuth/Apple proof.

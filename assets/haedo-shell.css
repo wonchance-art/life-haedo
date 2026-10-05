@@ -1,13 +1,16 @@
 /* One frame for the material feed and every Haedo surface. */
 :root {
   --haedo-paper: #fff; --haedo-ink: #222126; --haedo-muted: #65616a;
+  --haedo-canvas: #f7f7fb; --haedo-selected: #eeebff;
   --haedo-line: #e9e7eb; --haedo-soft: #f6f5f8; --haedo-accent: #5442bc;
+  --haedo-radius: 16px; --haedo-control-radius: 12px; --haedo-dock-clearance: 0px;
   --haedo-font: "Apple SD Gothic Neo", "Noto Sans CJK KR", "Malgun Gothic", sans-serif;
   --life-font: var(--haedo-font); --field-line: #827b86; --color-primary: #5442bc;
-  --color-error: #a3243d; --soft: #eeebff;
+  --color-error: #a3243d; --soft: var(--haedo-selected);
+  scroll-padding-top: 24px; scroll-padding-bottom: var(--haedo-dock-clearance);
 }
 body.haedo-shell {
-  margin: 0; min-height: 100vh; background: var(--haedo-paper); color: var(--haedo-ink);
+  margin: 0; min-height: 100vh; min-height: 100svh; background: var(--haedo-canvas); color: var(--haedo-ink);
   font: 16px/1.7 var(--haedo-font); letter-spacing: 0;
 }
 body.haedo-shell:not(.haedo-timeline) {
@@ -20,7 +23,8 @@ body.haedo-shell::before { display: none; }
 .haedo-shell [hidden] { display: none !important; }
 .haedo-shell :is(button, input, select, textarea) { font-family: inherit; }
 .haedo-shell :is(a, button, summary, input, select, textarea):focus-visible { outline: 3px solid var(--haedo-accent); outline-offset: 3px; }
-.haedo-shell ::selection { background: #eeebff; color: var(--haedo-ink); }
+.haedo-shell :is(a, button, summary, input, select, textarea, [tabindex]) { scroll-margin-top: 20px; scroll-margin-bottom: var(--haedo-dock-clearance); }
+.haedo-shell ::selection { background: var(--haedo-selected); color: var(--haedo-ink); }
 .haedo-shell :is(input, textarea) { caret-color: var(--haedo-accent); }
 .haedo-shell :is(input, textarea)::placeholder { color: var(--haedo-muted); opacity: 1; }
 .haedo-shell a { text-underline-offset: 4px; }
@@ -28,21 +32,27 @@ body.haedo-shell::before { display: none; }
 .haedo-shell :is(button, summary) { cursor: pointer; }
 .haedo-shell :is(button, input, select, textarea):disabled { cursor: not-allowed; }
 .haedo-nav {
-  position: fixed; z-index: 60; inset: 0 auto 0 0; width: 72px;
-  display: flex; flex-direction: column; align-items: center; gap: 14px;
-  padding: 30px 0; background: var(--haedo-paper); color: var(--haedo-muted);
+  position: fixed; z-index: 60; inset: 24px auto auto 8px; width: 56px;
+  left: max(8px, env(safe-area-inset-left, 0px));
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 6px 5px; border: 1px solid var(--haedo-line); border-radius: var(--haedo-radius);
+  background: var(--haedo-paper); color: var(--haedo-muted);
   font: 14px/1.6 var(--haedo-font);
 }
 .haedo-icon-button {
   position: relative; display: inline-flex; align-items: center; justify-content: center;
   flex: 0 0 44px; width: 44px; height: 44px; min-width: 44px; min-height: 44px;
-  padding: 12px; border: 0; border-radius: 50%; background: transparent;
+  padding: 12px; border: 0; border-radius: var(--haedo-control-radius); background: transparent;
   color: var(--haedo-muted); text-decoration: none !important;
-  transition: color 180ms ease, background 180ms ease;
+  transition: color 150ms ease-out, background-color 150ms ease-out;
 }
 .haedo-shell .haedo-icon-button { color: var(--haedo-muted); }
-.haedo-shell .haedo-icon-button:hover { background: var(--haedo-soft); color: var(--haedo-ink); }
+@media (hover: hover) and (pointer: fine) {
+  .haedo-shell .haedo-icon-button:hover { background: var(--haedo-soft); color: var(--haedo-ink); }
+}
+.haedo-shell .haedo-icon-button:active:not(:disabled) { background: var(--haedo-selected); color: var(--haedo-accent); }
 .haedo-shell .haedo-icon-button[aria-current=page], .haedo-shell .haedo-icon-button[aria-expanded=true] { color: var(--haedo-accent); }
+.haedo-shell .haedo-nav-link[aria-current=page] { background: var(--haedo-selected); }
 .haedo-nav-link[aria-current=page]::before {
   content: ''; position: absolute; bottom: 1px; width: 4px; height: 4px; border-radius: 50%; background: currentColor;
 }
@@ -54,7 +64,7 @@ body.haedo-shell::before { display: none; }
   font: 400 12px/1.6 var(--haedo-font); word-break: keep-all; overflow-wrap: anywhere; pointer-events: none;
 }
 .haedo-icon-button:focus-visible > .haedo-tooltip { display: block; }
-@media (hover: hover) { .haedo-icon-button:hover > .haedo-tooltip { display: block; } }
+@media (hover: hover) and (pointer: fine) { .haedo-icon-button:hover > .haedo-tooltip { display: block; } }
 .haedo-icon-button[data-tooltip-dismissed=true] > .haedo-tooltip { display: none; }
 .haedo-nav .haedo-tooltip { top: 50%; left: calc(100% + 8px); right: auto; transform: translateY(-50%); }
 .haedo-page-heading {
@@ -74,32 +84,60 @@ body.haedo-shell::before { display: none; }
 .haedo-account-panel {
   position: absolute; z-index: 70; right: 0; top: 54px; width: 260px;
   max-width: calc(100vw - 48px); padding: 20px; border: 1px solid var(--haedo-line);
-  border-radius: 12px; background: var(--haedo-paper); overflow-wrap: anywhere;
+  border-radius: var(--haedo-radius); background: var(--haedo-paper); overflow-wrap: anywhere;
   display: flex; flex-direction: column; align-items: stretch; gap: 14px;
 }
 .haedo-account-panel .p-account { margin: 0; color: var(--haedo-muted); font-size: 13px; }
 .haedo-account-host { position: absolute; z-index: 45; top: 30px; right: max(48px, calc((100% - 772px) / 2)); width: 44px; }
 body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost { display: none; }
-.haedo-welcome { max-width: 796px; margin: 0 auto; padding: 24px 48px 100px; }
-.haedo-welcome .haedo-page-heading { margin-bottom: 80px; }
+.haedo-welcome {
+  width: calc(100% - 40px); max-width: 820px; margin: 20px auto; padding: 16px 60px 80px;
+  min-height: calc(100vh - 40px); min-height: calc(100svh - 40px);
+  border-radius: 24px; background: var(--haedo-paper);
+}
+.haedo-welcome .haedo-page-heading { margin-bottom: 48px; }
 .haedo-welcome-copy { max-width: 460px; padding: 24px 0 32px; border-bottom: 1px solid var(--haedo-line); }
 .haedo-welcome-copy h2 { margin: 0; font-size: 26px; line-height: 1.55; letter-spacing: -.025em; word-break: keep-all; }
 .haedo-welcome-copy p { margin: 12px 0 28px; font-size: 15px; line-height: 1.85; color: var(--haedo-muted); word-break: keep-all; }
 .haedo-welcome .life-primary { gap: 14px; }
 .haedo-privacy-link { display: flex; align-items: center; min-height: 44px; width: fit-content; margin-top: 18px; color: var(--haedo-muted); font-size: 12px; }
-body.platform.haedo-shell { padding-left: 72px; }
-body:has(> #lifeWelcome:not([hidden])) { padding-left: 72px; }
+body.platform.haedo-shell, body:has(> #lifeWelcome:not([hidden])) {
+  padding-left: calc(72px + env(safe-area-inset-left, 0px)); padding-right: env(safe-area-inset-right, 0px);
+}
 html.auth-pending body.haedo-shell > .haedo-nav { visibility: visible; }
 @media (max-width: 700px) {
-  .haedo-nav { inset: auto 0 0; width: auto; height: calc(64px + env(safe-area-inset-bottom)); flex-direction: row; justify-content: space-evenly; gap: 0; padding: 10px 20px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--haedo-line); }
+  :root { --haedo-dock-clearance: calc(96px + env(safe-area-inset-bottom, 0px)); }
+  .haedo-nav {
+    inset: auto 12px 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
+    width: calc(100% - 24px);
+    width: calc(100% - max(12px, env(safe-area-inset-left, 0px)) - max(12px, env(safe-area-inset-right, 0px)));
+    max-width: 312px; height: 60px; margin-inline: auto;
+    flex-direction: row; justify-content: space-around; gap: 8px; padding: 7px 12px;
+    border-radius: var(--haedo-radius);
+  }
   .haedo-nav .haedo-tooltip { top: auto; bottom: calc(100% + 6px); left: 50%; right: auto; transform: translateX(-50%); }
-  body.platform.haedo-shell { padding-left: 0; padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
-  body:has(> #lifeWelcome:not([hidden])) { padding-left: 0; }
+  body.platform.haedo-shell { padding-left: 0; padding-right: 0; padding-bottom: var(--haedo-dock-clearance); }
+  body:has(> #lifeWelcome:not([hidden])) { padding-left: 0; padding-right: 0; }
   .haedo-page-heading { gap: 8px; margin-bottom: 20px; }
   .haedo-heading-title, .haedo-heading-actions { gap: 2px; }
   .haedo-account-host { top: 22px; right: 24px; }
-  .haedo-welcome { padding: 16px 24px 100px; }
-  .haedo-welcome .haedo-page-heading { margin-bottom: 48px; }
+  .haedo-welcome {
+    width: 100%; max-width: none; margin: 0; padding: 12px max(20px, env(safe-area-inset-right, 0px)) calc(104px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px));
+    min-height: 100vh; min-height: 100svh; border-radius: 0;
+  }
+  .haedo-welcome .haedo-page-heading { margin-bottom: 32px; }
   .haedo-welcome-copy h2 { font-size: 24px; }
 }
-@media (prefers-reduced-motion: reduce) { .haedo-icon-button { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  :root { scroll-behavior: auto; }
+  .haedo-icon-button { transition: none; }
+}
+@media (forced-colors: active) {
+  body.haedo-shell, .haedo-nav, .haedo-account-panel { background: Canvas; color: CanvasText; }
+  .haedo-nav, .haedo-account-panel { border-color: CanvasText; }
+  .haedo-shell .haedo-icon-button { color: ButtonText; }
+  .haedo-shell .haedo-nav-link[aria-current=page] { color: Highlight; outline: 2px solid Highlight; outline-offset: -2px; }
+  .haedo-shell :is(a, button, summary, input, select, textarea):focus-visible { outline-color: Highlight; }
+  .haedo-tooltip { background: Canvas; color: CanvasText; border: 1px solid CanvasText; }
+}

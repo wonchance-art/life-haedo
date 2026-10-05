@@ -35,3 +35,9 @@
   .share-body,.share-comment-body { font-size: 17px; }
 }
 @media(prefers-reduced-motion:reduce) { .share-page * { scroll-behavior: auto; transition: none; } }
+
+/* Public reading stays white; only the author's separate comment is tinted. */
+.share-comment { padding: 16px 18px; border-radius: var(--surface-radius); background: #f3f8f5; }
+.share-comment > .share-caption { color: var(--mint-ink); }
+.share-page .share-header { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+@media (max-width:700px) { .share-page { padding-inline: max(20px, env(safe-area-inset-left)) max(20px, env(safe-area-inset-right)); } }

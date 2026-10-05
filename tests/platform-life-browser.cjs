@@ -67,7 +67,7 @@ async function main(){
   }
   const settle=page=>page.waitForFunction(()=>!document.querySelector('.life-app[aria-busy="true"]'));
   async function click(page,name){
-    if(['모아보기','원천 기록','가져오기','시간 보기'].includes(name))await openSection(page,'records');
+    if(['모아보기','기록 검색','가져오기','시간 보기'].includes(name))await openSection(page,'records');
     if(['기기 간 동기화','내보내기·사본 복원'].includes(name))await openManagement(page);
     if(name==='로그아웃')await openAccount(page);
     await page.getByRole('button',{name,exact:true}).click();await settle(page);
@@ -170,7 +170,7 @@ async function main(){
       }finally{await page.evaluate(()=>{IDBObjectStore.prototype.put=__originalStagePut;});}
       await click(page,'검토 내용 보관');page.once('dialog',dialog=>dialog.accept());await click(page,'이 검토 취소');
 
-      await click(page,'원천 기록');await page.locator('#lifeSearch').fill('익명 A 자료');
+      await click(page,'기록 검색');await page.locator('#lifeSearch').fill('익명 A 자료');
       await page.getByRole('button',{name:'자료 읽기: 익명 A 자료',exact:true}).click();await settle(page);
       await page.locator('#lifeSourceText').evaluate(el=>{
         const text='🌱 계정 A 원문 구절',start=el.textContent.indexOf(text);
