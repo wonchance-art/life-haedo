@@ -62,7 +62,7 @@
     }
     function metadata(info) {
       const { source, version } = info;
-      const parts = [ORIGINS[source.origin] || '기타', RELATIONS[version.originalAuthor.relation] || RELATIONS.unknown];
+      const parts = [life.Writing?.isOwnSource(source, getBundle()) ? '내 글' : ORIGINS[source.origin] || '기타', RELATIONS[version.originalAuthor.relation] || RELATIONS.unknown];
       if (version.contentText == null) parts.push('링크만 보관 · 본문 미확보');
       else if (version.coverage.status === 'partial') parts.push('일부 본문');
       else if (version.coverage.status === 'unknown') parts.push('확보 범위 미확인');

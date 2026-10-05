@@ -1,0 +1,18 @@
+PASS review defaults exclude all source bodies and private fields; explicit publish has no private workspace write
+PASS only explicitly selected own body and exact original excerpt reach the anonymous snapshot
+PASS local edits stay private until explicit update; revoke hides content and republish rotates the address
+PASS lost publish response retries one operation without duplicate revisions or auto retries
+PASS historical publish retry after server revocation never revives the old publication
+PASS private composition changed after review must be reviewed again before any public write
+PASS revision conflict preserves remote publication and requires a fresh explicit review
+PASS keyboard consent is required and one explicit Enter publishes the reviewed snapshot
+PASS unavailable publication schema stays an error and never reports an empty successful public page
+PASS late owner response cannot display the previous account public link after signout
+PASS anonymous late reads, navigation return and offline events never revive a revoked cached body
+PASS anonymous malformed IDs and malformed snapshots fail closed without executing markup
+PASS a new authenticated device can find and revoke its existing public page without private local records
+PASS owner public list paginates exact metadata and excludes another account
+PASS visual public and owner review long Korean empty loading error 1440
+PASS visual public and owner review long Korean empty loading error 820
+PASS visual public and owner review long Korean empty loading error 390
+Publication: 17/17 journeys; 21 visual states; console 0; page 0.

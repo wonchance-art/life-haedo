@@ -285,3 +285,40 @@ idb의 [GitHub `releases/latest`](https://api.github.com/repos/jakearchibald/idb
 - **게시 전 실제 전송 내용을 보여준다.** 본문을 선택하지 않아도 제목·URL·작성자 표시는 공개 사본에 포함될 수 있다. 원문 URL의 쿼리를 조용히 바꾸는 대신 공개할 출처 주소를 확인할 수 있게 하고, 방문자 외부 링크는 `noopener noreferrer` 등으로 공개 페이지 주소의 불필요한 전달을 줄인다. 자동 가져오기·로컬 표시 변경을 실제 게시/갱신 승인으로 취급하지 않는다.
 
 확인·자료 수집은 상속된 프록시와 TLS 검증을 유지한 공식 GitHub/npm HTTPS 요청으로 수행했다. 운영 DB·실제 계정·개인 자료는 이 조사에 사용하지 않았다. 로컬 모델/SQL/브라우저 검사와 관리형 Supabase의 실제 설치·HTTP 권한 검사, 공개 배포는 각각 별도 완료 조건이다.
+
+## 직접 글쓰기 — 기본 textarea와 편집기 비교
+
+확인일 **2026-10-05 UTC**. 이번 시작 조건은 로그인한 사용자가 현재 작업공간에서 제목·평문 본문을 쓰고, 초안을 다시 열거나 기록으로 저장하는 것이다. 저장한 글은 기존 읽기·검색·원문 버전·발췌·백업 흐름에 연결하며, 글쓰기만으로 공개 사본을 게시하거나 SNS에 전송하지 않는다. 서식 편집·공동 편집·Markdown 미리보기는 이번 요구가 아니다. 아래는 구현 선택과 검증할 계약이며 직접 글쓰기 구현 완료 보고가 아니다.
+
+**결정: 기존 공통 필드와 native `<textarea>`를 재사용하고 편집기 패키지는 추가하지 않는다.** `assets/life/ui.js`의 `field()`와 본문 입력·원문 선택에 이미 textarea가 있다. 편집 화면을 새로 구성하더라도 브라우저 기본 편집·선택 기능 위에 해도의 초안·불변 저장본 연결만 구현한다. 이 선택이 한글 IME·초안 복구·계정 분리까지 자동으로 해결한다는 뜻은 아니다.
+
+### 공식 배포·라이선스·유지관리
+
+공식 npm의 `latest`와 배포 시각, 실제 tarball의 LICENSE·README·가능한 CHANGELOG를 읽었다. 세 tarball 모두 registry의 SHA-512 integrity와 대조했으며 설치·실행·전역 설정·런타임 의존성 추가는 하지 않았다. CodeMirror 6과 ProseMirror는 모듈마다 버전이 다르므로 아래 숫자는 비교한 **DOM 편집 모듈**의 버전이다.
+
+| 대안 | 확인한 공식 배포와 유지관리 | 해도와의 적합성·선택 |
+| --- | --- | --- |
+| **브라우저 `<textarea>` + 기존 필드** | [MDN 공식 원본](https://github.com/mdn/content/blob/main/files/en-us/web/html/reference/elements/textarea/index.md), [WHATWG HTML 원본](https://github.com/whatwg/html/blob/main/source)의 textarea API 값·선택 규칙 확인. 별도 패키지 라이선스나 배포 버전을 추가하지 않으며 사용자의 브라우저 업데이트와 실제 기기 검증을 따른다. | **재사용.** 평문 작성·기본 선택·붙여넣기·키보드 입력에 맞고 기존 UI 토큰·레이블·계정별 저장을 유지한다. 입력 중 전체 DOM 교체와 `.value` 재설정을 피한다. 초안 저장·충돌·이탈·재개는 앱에서 별도로 구현·검증한다. |
+| **CodeMirror 6 — `@codemirror/view` 6.43.13 · MIT** | [npm](https://registry.npmjs.org/@codemirror%2Fview) 게시 **2026-09-22 07:16:47 UTC**, [배포 tarball](https://registry.npmjs.org/@codemirror/view/-/view-6.43.13.tgz)의 `LICENSE`·`CHANGELOG.md` 확인. 6.43.12는 조합 중 DOM·Firefox composition·VoiceOver 보완, 6.43.11은 iOS Enter/Backspace 처리를 기록한다. [기존 GitHub README](https://github.com/codemirror/view/blob/fbff59ba004d80d8c914f64c42586387b08706ac/README.md)는 `code.haverbeke.berlin/codemirror/view`로 이전했음을 명시한다. | **현재 제외, 고급 평문/Markdown 편집의 후속 후보.** 일반 JS에서 사용할 수 있고 텍스트 편집에 더 가까운 선택이다. 다만 DOM view 외에도 state·스타일·키 처리 모듈을 추가하고 번들 또는 동봉 배포를 관리해야 한다. 지금 필요하지 않은 코드 편집·확장 구조의 비용을 먼저 부담할 이유가 없다. |
+| **Tiptap Core 3.31.4 · MIT** | [npm](https://registry.npmjs.org/@tiptap%2Fcore) 게시 **2026-09-30 13:16:54 UTC**, [GitHub 릴리스](https://github.com/ueberdosis/tiptap/releases/tag/v3.31.4) **12:56:57 UTC**. [tarball](https://registry.npmjs.org/@tiptap/core/-/core-3.31.4.tgz)의 `LICENSE.md` 확인. [최근 commit](https://github.com/ueberdosis/tiptap/commit/13675ea215a33dfc39819fd42a5f87e3118b13f2)은 **2026-10-02**이며 저장소는 archived/disabled 모두 false다. | **현재 제외.** [공식 README](https://github.com/ueberdosis/tiptap/blob/v3.31.4/README.md)대로 일반 JS도 지원하므로 React가 필수여서 제외하는 것은 아니다. ProseMirror 기반 문서 스키마·확장·HTML/Markdown 변환과 `@tiptap/pm` peer를 관리할 필요가 생긴다. 서식 없는 글을 기존 불변 평문에 연결하는 첫 단위에는 추가 이득이 작다. |
+| **ProseMirror View 1.42.6 · MIT** | [npm](https://registry.npmjs.org/prosemirror-view) 게시 **2026-09-25 17:10:10 UTC**, [tarball](https://registry.npmjs.org/prosemirror-view/-/prosemirror-view-1.42.6.tgz)의 `LICENSE`·`CHANGELOG.md` 확인. 1.42.6은 Safari/Firefox 커서 위치, 1.42.4는 선택 구간에서 시작한 composition 수정을 기록한다. [기존 GitHub README](https://github.com/ProseMirror/prosemirror-view/blob/ca4c78e9b56f1b164c0b3758b59d8748f11b7534/README.md)는 `code.haverbeke.berlin/prosemirror/prosemirror-view/`로 이전했음을 명시한다. | **현재 제외.** 일반 JS로 직접 통합할 수 있는 문서 스키마·트랜잭션·contentEditable 기반 편집 도구다. `prosemirror-model/state/transform`과 스키마·키맵·직렬화 설계를 앱에서 관리해야 한다. 구조화된 서식 문서의 위치를 기존 평문 UTF-16 구간으로 바꾸는 계약도 별도로 필요하다. |
+
+CodeMirror/ProseMirror의 기존 GitHub 저장소는 `archived=true`였고 `releases/latest`는 각각 404였다. 이를 유지관리 중단이나 최신 배포 없음으로 해석하지 않았다. **이전 안내와 2026년 9월 npm 배포·배포 CHANGELOG**를 근거로 했으며, 옮긴 서버의 최신 commit·전체 이슈 상태까지 조회한 것은 아니다. Tiptap과 ProseMirror는 독립적인 세 가지 문서 엔진 중 둘이 아니라 상위 편집 도구와 그 기반 도구의 비교다. 최근 배포가 있다고 해도의 한글 입력·저장 계약까지 검증된 것은 아니다.
+
+### 보안 권고를 읽은 범위
+
+- **CodeMirror:** [기존 view 저장소 공개 권고](https://api.github.com/repos/codemirror/view/security-advisories)와 GitHub 공식 전체 권고의 [`@codemirror/view`](https://api.github.com/advisories?ecosystem=npm&affects=%40codemirror%2Fview&per_page=100)·[`@codemirror/state`](https://api.github.com/advisories?ecosystem=npm&affects=%40codemirror%2Fstate&per_page=100) 조회는 빈 목록이었다. 패키지명으로 확인한 공개 권고 범위이며, 이전한 서버의 모든 보안 정보·전이 의존성·미공개 문제의 감사는 아니다.
+- **ProseMirror View:** [GHSA-c8x8-7fp4-3x9w](https://github.com/ProseMirror/prosemirror-view/security/advisories/GHSA-c8x8-7fp4-3x9w)는 **2026-08-25** 공개된 붙여넣기 HTML의 XSS다. 영향 `<1.42.3`, 수정 **1.42.3**으로 명시되며 실제 1.42.3 CHANGELOG에도 clipboard slice context의 속성 검증 추가가 기록돼 있다. 조사한 최신 버전은 1.42.6이다. 이는 편집기 전체를 위험하다고 분류하는 근거가 아니라 HTML 붙여넣기·스키마·속성 검증을 채택하면 함께 관리할 경계를 보여준다.
+- **Tiptap Core:** 공식 [GHSA-cp6q-959q-f8rh](https://github.com/ueberdosis/tiptap/security/advisories/GHSA-cp6q-959q-f8rh)는 비신뢰 속성 병합과 DOM 속성 처리, [GHSA-j95f-988m-3j2f](https://github.com/ueberdosis/tiptap/security/advisories/GHSA-j95f-988m-3j2f)는 Markdown 속성 parser의 ReDoS를 다룬다. API의 `patched_versions`는 각각 **3.30.4**, **3.30.5**다. 다만 같은 권고의 영향 범위에는 상한이 없고 설명 일부는 발견 당시의 미수정 상태를 담고 있어, 이 조회만으로 현행 모든 경로의 안전을 보증하지 않는다. 별도 [CollaborationCaret 권고](https://github.com/ueberdosis/tiptap/security/advisories/GHSA-pmh9-4rj3-c67g)는 `@tiptap/extension-collaboration-caret <=3.31.2`, 수정 `>=3.31.3`이며 Core 단독과 구분했다. 이번에는 해당 편집기·Markdown 해석·공동 편집 확장을 도입하지 않는다.
+
+해도의 새 평문 입력은 `.value`로 읽고 원문 표시는 기존 `Text`/`textContent` 경로를 따른다. 입력을 `innerHTML`·Markdown HTML로 해석하거나 외부 embed를 실행하지 않는다. 그렇더라도 계정 경계·저장 유효성·본문 크기·복원 검사는 별도로 필요하다. 이번 조사는 패키지를 설치한 전체 의존성 감사나 실제 취약점 재현 검사가 아니다.
+
+### textarea를 선택해도 직접 지켜야 하는 계약
+
+1. **초안과 불변 원문 버전을 구분한다.** 미완성 입력을 초안에 보관하고, 명시적 기록 저장은 그때 확정한 문자열의 새 버전을 만든다. 수정으로 예전 버전·이미 저장한 발췌 위치·페이지 사본을 덮어쓰지 않는다. 기본 편집기의 undo가 앱 저장 이력·백업·충돌 복구를 대신하지 않는다.
+2. **줄바꿈과 UTF-16 기준을 섞지 않는다.** WHATWG 원문의 textarea API 값은 줄바꿈을 LF로 정규화하며 선택 위치는 해당 값의 code unit을 기준으로 한다. 새 직접 작성본은 저장 때 확정한 `textarea.value`를 기준으로 하고, 저장 뒤 공백 trim·Unicode 정규화·HTML/Markdown 왕복 변환을 추가하지 않는다. `trim()`은 빈 입력 여부 판단에만 사용할 수 있다. 기존 가져온 CRLF 원문을 textarea에 넣었다는 이유로 다시 직렬화하거나, 정규화한 초안의 선택 위치를 옛 원문의 위치로 재사용하지 않는다.
+3. **한글 조합 중 화면과 값을 재설정하지 않는다.** [InputEvent.isComposing](https://github.com/mdn/content/blob/main/files/en-us/web/api/inputevent/iscomposing/index.md)·[KeyboardEvent.isComposing](https://github.com/mdn/content/blob/main/files/en-us/web/api/keyboardevent/iscomposing/index.md)와 composition 시작/종료를 고려한다. Enter는 본문 줄바꿈이며 조합 확정과 저장 단축키를 혼동하지 않는다. 조합 중 저장 버튼·이동·자동 초안 저장이 겹칠 때 마지막 글자가 사라지지 않는지 검증한다. 값 변화마다 textarea를 새로 만들거나 앱이 선택 구간을 되돌리는 방식을 피한다.
+4. **초안은 계정·작업공간에 묶는다.** 저장 실패면 현재 입력을 유지하고 성공한 것처럼 닫지 않는다. 늦은 저장/읽기 응답이 새 계정·새 작업공간·다른 초안을 덮지 않게 한다. 새 글과 기존 글 수정의 충돌·중복 클릭·용량 부족·재열기·사본 복원 결과를 구별한다. 로컬 저장 완료와 원격 동기화 완료도 구분한다.
+5. **브라우저 기본 편집을 실제 입력으로 확인한다.** 한글 조합·선택 후 교체·붙여넣기·되돌리기·emoji/결합 문자·빈 줄·긴 본문, 조합 중 저장/이탈을 대표 사례로 삼는다. Mac/iPad/iPhone의 IME·소프트 키보드·선택 손잡이·앱 복귀는 자동 Chromium 폭 검사나 synthetic composition 이벤트만으로 통과라고 보고하지 않는다. 조사 담당은 편집기 실행·브라우저·실기 검사를 수행하지 않았으며 구현 담당이 이 계약을 검증한다.
+
+실제 사용에서 긴 문서의 편집 지연, Markdown 구문 이동·접기, 필요한 서식·블록 편집처럼 **native 입력으로 해결하지 못한 요구가 관찰될 때** 후보를 다시 비교한다. CodeMirror는 고급 평문 편집, Tiptap/ProseMirror는 구조화된 서식 문서 요구에서 검토한다. 그때도 기존 저장본과 발췌 위치를 보존하는 변환·백업·업데이트 비용을 작은 한글 샘플 실험으로 먼저 확인한다. 이번 선택은 새 기반을 먼저 만들기보다 이미 쓰는 브라우저 입력과 앱 저장 경계를 재사용하는 것이다.

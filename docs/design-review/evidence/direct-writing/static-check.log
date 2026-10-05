@@ -1,0 +1,11 @@
+
+> check
+> node scripts/check.mjs
+
+PASS: 17 HTML pages, 43 JavaScript blocks/files, 228 local resource references, PWA manifest and shell.
+Browser interactions, remote resources and cloud sync need separate verification.
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

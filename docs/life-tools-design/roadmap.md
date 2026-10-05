@@ -8,7 +8,11 @@ R1은 직접 기록을 보완 역할로 두고 이전의 오늘/빠른 활동 �
 
 후속으로 공용 인증·개인 동기화를 [통합 브랜치](../supabase-integration.md)에 연결했고, R2의 [여러 TXT·Markdown 파일 검토](r2-implementation.md)와 [검색에서 일치한 원문 버전·구절을 열고 목록으로 복귀](r2-search.md)를 구현·검증했다. [PR #19](https://github.com/wonchance-art/life-haedo/pull/19)와 공용 인증 PR #17은 병합되었다. Google 제공자·콜백 설정과 Mac 실제 로그인은 인계로 확인했고 사용자가 정상 작동을 확인했다. 주제별 활용·서비스별 adapter 등 R2 전체와 Apple 기기의 자료 입력·선택·Files 검증은 별도 남은 범위다.
 
-## 현재 구현 단위 — 선택 사본의 공개 페이지
+## 현재 구현 단위 — 직접 글쓰기
+
+공개 사본(PR #30)과 앱 표면 개선(PR #31) 이후 [직접 글쓰기](../design-review/direct-writing.md)를 연결한다. 제목·본문 입력 → 로컬 초안 재개 → 명시적 저장 → 기록 검색·발췌 → 새 본문 버전으로 수정 → 기존 백업·선택 동기화의 작은 단위다. 저장 전 초안은 이 브라우저 전용이며 TXT로 내보낸다. 저장한 글과 이전 버전·발췌는 기존 자료 백업에 포함된다. 공개·외부 추천·AI·SNS 자동 연결은 글쓰기의 선행 조건이 아니다. 최신 구조는 [v6](../diagrams/activity_hub_v6.mmd), 현재 검증·미검증은 구현 기록을 따른다.
+
+## 이전 구현 단위 — 선택 사본의 공개 페이지
 
 2026-10-05. 개인 홈·통합 기록·묶음·내 페이지 편집/비공개 미리보기에서 **공개할 사본 확인 → 명시적 게시 → 로그인 없는 방문 → 갱신/철회**로 다음 단위를 확장했다. [v5 도식](../diagrams/activity_hub_v5.mmd)과 [공개 경계 설명](../diagrams/README.md), [공식 오픈소스 비교](open-source-review.md#선택한-사본의-공개-게시--기존-supabase와-별도-cms-비교)를 따른다. **구현·로컬 기능 검사, Local 운영 SQL 설치 12조건, Cloud 읽기 전용 운영 HTTP 5조건을 완료했다.** [검증 기록](../design-review/page-publication.md)에 증거와 범위를 구분한다. 실제 계정 게시·갱신·철회와 Apple 실기 체험은 별도이며, 최종 병합·배포 결과는 [PR #30](https://github.com/wonchance-art/life-haedo/pull/30)을 따른다.
 

@@ -1,0 +1,414 @@
+{
+  "createdAt": "2026-10-05T12:08:57.905507+00:00",
+  "scope": "Local Chromium, actual bundled Auth SDK and IndexedDB, anonymous intercepted HTTP. Combined latest case evidence across focused runs, not a repeated complete suite.",
+  "checks": [
+    {
+      "name": "blank composition stays private; draft resumes after section change and reload before explicit save",
+      "pass": true,
+      "evidence": "run-2026-10-05T12-04-56-940Z.json"
+    },
+    {
+      "name": "editing makes an immutable version; old quote and JSON copy keep exact original locations",
+      "pass": true,
+      "evidence": "run-2026-10-05T12-04-02-764Z.json"
+    },
+    {
+      "name": "writing and import drafts coexist without converting or consuming each other",
+      "pass": true,
+      "evidence": "run-2026-10-05T12-04-56-940Z.json"
+    },
+    {
+      "name": "real staging and commit aborts preserve text, block failed navigation and retry once",
+      "pass": true,
+      "evidence": "run-2026-10-05T12-05-08-067Z.json"
+    },
+    {
+      "name": "another tab draft conflict preserves both texts and recovery creates a separate draft",
+      "pass": true,
+      "evidence": "run-2026-10-05T12-05-08-067Z.json"
+    },
+    {
+      "name": "drafts remain separate across workspaces and account changes",
+      "pass": true,
+      "evidence": "run-2026-10-05T12-07-11-800Z.json"
+    },
+    {
+      "name": "Korean composition waits for completion and keyboard controls preserve focus",
+      "pass": true,
+      "evidence": "run-2026-10-05T12-07-11-800Z.json"
+    },
+    {
+      "name": "visual blank long Korean and saving error 1440",
+      "pass": true,
+      "evidence": "run-2026-10-05T12-05-08-067Z.json"
+    },
+    {
+      "name": "visual blank long Korean and saving error 820",
+      "pass": true,
+      "evidence": "run-2026-10-05T12-05-08-067Z.json"
+    },
+    {
+      "name": "visual blank long Korean and saving error 390",
+      "pass": true,
+      "evidence": "run-2026-10-05T12-05-08-067Z.json"
+    },
+    {
+      "name": "concurrent source revision keeps the newer saved head and preserves current writing as a new source",
+      "pass": true,
+      "evidence": "run-2026-10-05T12-07-11-800Z.json"
+    },
+    {
+      "name": "own-writing filter excludes imported self text and only app writing offers edit",
+      "pass": true,
+      "evidence": "run-2026-10-05T12-07-58-588Z.json"
+    }
+  ],
+  "passed": 12,
+  "total": 12,
+  "functional": {
+    "passed": 9,
+    "total": 9
+  },
+  "visual": {
+    "screenshots": 9,
+    "minimumTextContrast": 6.05,
+    "overflow": 0,
+    "smallTargets": 0,
+    "smallInputs": 0,
+    "unnamed": 0,
+    "contrastFailures": 0,
+    "evidence": [
+      {
+        "scene": "empty",
+        "file": "empty-1440.png",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0,
+        "evidence": "run-2026-10-05T12-05-08-067Z.json"
+      },
+      {
+        "scene": "long-draft",
+        "file": "long-draft-1440.png",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0,
+        "evidence": "run-2026-10-05T12-05-08-067Z.json"
+      },
+      {
+        "scene": "save-error",
+        "file": "save-error-1440.png",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0,
+        "evidence": "run-2026-10-05T12-05-08-067Z.json"
+      },
+      {
+        "scene": "empty",
+        "file": "empty-820.png",
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0,
+        "evidence": "run-2026-10-05T12-05-08-067Z.json"
+      },
+      {
+        "scene": "long-draft",
+        "file": "long-draft-820.png",
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0,
+        "evidence": "run-2026-10-05T12-05-08-067Z.json"
+      },
+      {
+        "scene": "save-error",
+        "file": "save-error-820.png",
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0,
+        "evidence": "run-2026-10-05T12-05-08-067Z.json"
+      },
+      {
+        "scene": "empty",
+        "file": "empty-390.png",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0,
+        "evidence": "run-2026-10-05T12-05-08-067Z.json"
+      },
+      {
+        "scene": "long-draft",
+        "file": "long-draft-390.png",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0,
+        "evidence": "run-2026-10-05T12-05-08-067Z.json"
+      },
+      {
+        "scene": "save-error",
+        "file": "save-error-390.png",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0,
+        "evidence": "run-2026-10-05T12-05-08-067Z.json"
+      }
+    ]
+  },
+  "runs": [
+    {
+      "file": "run-2026-10-05T12-04-02-764Z.json",
+      "passed": 1,
+      "total": 3,
+      "visual": 0,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "externalRequests": 0
+    },
+    {
+      "file": "run-2026-10-05T12-04-56-940Z.json",
+      "passed": 2,
+      "total": 2,
+      "visual": 0,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "externalRequests": 0
+    },
+    {
+      "file": "run-2026-10-05T12-05-08-067Z.json",
+      "passed": 5,
+      "total": 7,
+      "visual": 9,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "externalRequests": 0
+    },
+    {
+      "file": "run-2026-10-05T12-07-11-800Z.json",
+      "passed": 3,
+      "total": 3,
+      "visual": 0,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "externalRequests": 0
+    },
+    {
+      "file": "run-2026-10-05T12-07-58-588Z.json",
+      "passed": 1,
+      "total": 1,
+      "visual": 0,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "externalRequests": 0
+    }
+  ],
+  "initialFailures": [
+    {
+      "name": "blank composition stays private; draft resumes after section change and reload before explicit save",
+      "evidence": "run-2026-10-05T12-04-02-764Z.json",
+      "classification": "test expectation corrected; latest focused recheck passed"
+    },
+    {
+      "name": "writing and import drafts coexist without converting or consuming each other",
+      "evidence": "run-2026-10-05T12-04-02-764Z.json",
+      "classification": "test expectation corrected; latest focused recheck passed"
+    },
+    {
+      "name": "drafts remain separate across workspaces and account changes",
+      "evidence": "run-2026-10-05T12-05-08-067Z.json",
+      "classification": "test expectation corrected; latest focused recheck passed"
+    },
+    {
+      "name": "Korean composition waits for completion and keyboard controls preserve focus",
+      "evidence": "run-2026-10-05T12-05-08-067Z.json",
+      "classification": "test expectation corrected; latest focused recheck passed"
+    }
+  ],
+  "consoleErrors": 0,
+  "pageErrors": 0,
+  "externalRequests": 0,
+  "productionWrites": 0,
+  "limitations": [
+    "No Apple hardware, native Korean IME, Files, VoiceOver, or real Google/Supabase verification.",
+    "Touch is Chromium hasTouch/tap simulation; Korean composition is dispatched browser events.",
+    "Storage conflicts and aborts use actual local IndexedDB with synthetic data.",
+    "Drafts remain local and outside record JSON backup by product contract; confirmed records were round-tripped."
+  ]
+}

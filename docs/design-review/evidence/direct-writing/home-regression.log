@@ -1,0 +1,21 @@
+PASS anonymous common home is usable in all sections without redirect or private IDB
+PASS public readonly home does not mount even an authenticated account
+PASS server verification completes before any account storage opens
+PASS Google PKCE fixture returns to selected home section with only allowed query state
+FAIL Google PKCE default return opens personal home without inventing a records selection
+page.waitForURL: Timeout 15000ms exceeded.
+=========================== logs ===========================
+waiting for navigation until "load"
+============================================================
+    at /workspace/life-haedo/tests/unified-home-browser.cjs:118:18
+    at async check (/workspace/life-haedo/tests/unified-home-browser.cjs:73:11)
+    at async main (/workspace/life-haedo/tests/unified-home-browser.cjs:114:5)
+PASS import draft and reviewed exact excerpt survive tools/manage switching without page reload
+PASS reader quote/search context and backup scope remain exact through common navigation
+PASS a home with originals and no excerpts shows real text and opens the complete original
+PASS tools lead to existing goal/habit editors and account timeline list with the same four-way navigation
+PASS history keeps a management subview and a legacy life sync link keeps its destination
+PASS account change cannot reveal previous home content and returning account recovers its own data
+PASS a late verification response after signout cannot remount the previous private home
+PASS failed server verification shows recoverable error without opening private storage
+{"passed":12,"failed":1,"consoleErrors":0,"pageErrors":0,"expectedErrors":1,"realRemoteWrites":0}

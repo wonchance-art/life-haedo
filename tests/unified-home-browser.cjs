@@ -111,10 +111,20 @@ async function main() {
       assert.equal(await page.evaluate(() => HaedoAuth.safeNext('https://outside.invalid/steal')), 'index.html');
       assert.equal(await page.evaluate(() => HaedoAuth.safeNext('index.html?section=bad&view=bad&doc=secret')), 'index.html');
     }, null);
-    await check('Google PKCE default return opens personal home without inventing a records selection', async ({ page, server, device }) => {
+    await check('Google PKCE default return opens personal home without inventing a records selection', async ({ page, context, server, device }) => {
       server.oauthAccounts.set(device, accounts.a);
       await page.goto(base + '/index.html'); await shellReady(page);
-      await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click();
+      // The HTML can render before the login handler arrives on a slow link.
+      // Do not offer an enabled button which silently ignores that first click.
+      let release;
+      const handlerReady = new Promise(resolve => { release = resolve; });
+      await context.route('**/assets/platform-ui.js', async route => { await handlerReady; await route.fallback(); });
+      const navigation = page.locator('[data-life-login]').click();
+      try {
+        await page.locator('#googleLogin').waitFor({ state: 'visible' });
+        assert.equal(await page.locator('#googleLogin').isDisabled(), true);
+      } finally { release(); await navigation; }
+      await page.locator('#googleLogin').click();
       await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
       await page.locator('#lifeHome').waitFor();
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'home');
