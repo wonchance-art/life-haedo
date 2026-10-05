@@ -1,0 +1,61 @@
+{
+  "browser": "151.0.7922.173",
+  "capturedAt": "2026-10-05T02:48:37.855Z",
+  "environment": "Linux Chromium; real IndexedDB and BroadcastChannel in two tabs; bundled SDK and intercepted anonymous Supabase HTTP; no UI or Apple-device verification",
+  "checks": [
+    {
+      "name": "two tabs racing from revision zero commit exactly one configuration and reject the other stale draft",
+      "pass": true,
+      "evidence": {
+        "successfulWrites": 1,
+        "rejectedStaleWrites": 1,
+        "persistedRevision": 1,
+        "losingDraftRetained": true
+      }
+    },
+    {
+      "name": "the winning workbench revision reaches the other tab through its separate subscription",
+      "pass": true,
+      "evidence": {
+        "subscribers": 2,
+        "workbenchEventsPerTab": [
+          1,
+          1
+        ],
+        "losingTabReceivedBroadcast": true
+      }
+    },
+    {
+      "name": "configuration writes leave material, its sync state and the intercepted remote snapshot unchanged",
+      "pass": true,
+      "evidence": {
+        "explicitBaselineSyntheticWrites": 1,
+        "additionalMaterialWritesAfterWorkbenchChange": 0,
+        "pendingMaterialUpload": false
+      }
+    },
+    {
+      "name": "a different account scope in the same browser cannot read or save the existing account configuration",
+      "pass": true,
+      "evidence": {
+        "rejectedForeignOperations": 3,
+        "visibleForeignWorkspaces": 0,
+        "accountASavedRevision": 1
+      }
+    },
+    {
+      "name": "browser execution stays inside the local and anonymous intercepted endpoints without unexpected errors",
+      "pass": true,
+      "evidence": {
+        "consoleErrors": 0,
+        "pageErrors": 0,
+        "unexpectedRequests": 0,
+        "realRemoteWrites": 0
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "unexpectedRequests": [],
+  "realRemoteWrites": 0
+}
