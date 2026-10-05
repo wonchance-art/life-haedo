@@ -322,3 +322,33 @@ CodeMirror/ProseMirror의 기존 GitHub 저장소는 `archived=true`였고 `rele
 5. **브라우저 기본 편집을 실제 입력으로 확인한다.** 한글 조합·선택 후 교체·붙여넣기·되돌리기·emoji/결합 문자·빈 줄·긴 본문, 조합 중 저장/이탈을 대표 사례로 삼는다. Mac/iPad/iPhone의 IME·소프트 키보드·선택 손잡이·앱 복귀는 자동 Chromium 폭 검사나 synthetic composition 이벤트만으로 통과라고 보고하지 않는다. 조사 담당은 편집기 실행·브라우저·실기 검사를 수행하지 않았으며 구현 담당이 이 계약을 검증한다.
 
 실제 사용에서 긴 문서의 편집 지연, Markdown 구문 이동·접기, 필요한 서식·블록 편집처럼 **native 입력으로 해결하지 못한 요구가 관찰될 때** 후보를 다시 비교한다. CodeMirror는 고급 평문 편집, Tiptap/ProseMirror는 구조화된 서식 문서 요구에서 검토한다. 그때도 기존 저장본과 발췌 위치를 보존하는 변환·백업·업데이트 비용을 작은 한글 샘플 실험으로 먼저 확인한다. 이번 선택은 새 기반을 먼저 만들기보다 이미 쓰는 브라우저 입력과 앱 저장 경계를 재사용하는 것이다.
+
+## 기록 재발견 — 근거가 보이는 로컬 연결과 검색 도구 비교
+
+확인일 **2026-10-05 UTC**. 사용 장면은 현재 작업공간에서 기준 원문 버전 하나를 골라 **다시 읽을 다른 기록을 최대 3개** 보고, 표시된 이유를 확인한 뒤 해당 원문을 여는 것이다. 외부 콘텐츠 검색·의미 임베딩·AI 분석·개인 본문 전송은 포함하지 않는다. 기존 정확 검색을 대체하는 것도 아니다. 앞의 R2 비교는 검색어와 원문 구절의 복귀 문제였고, 이번에는 검색어 없이 기준 기록과의 연결 이유를 정하는 문제다.
+
+**결정: 새 검색 패키지 없이 기존 자료·토픽·묶음 참조를 재사용하고, 근거에 따라 후보를 정렬하는 작은 순수 JS 모듈을 둔다.** 명시적 연결·같은 토픽을 먼저 보고 공통어는 제한된 보조 근거로 사용한다. 일반 검색엔진의 relevance 점수를 사용자의 관심·신념·지식 성장으로 표현하지 않는다. 아래는 도입 판단과 구현 계약이며 재발견 기능의 검증 완료 보고가 아니다.
+
+### 최신 공식 배포와 선택 근거
+
+세 후보의 공식 npm `latest`, GitHub 릴리스/최근 commit/공개 권고를 재조회했다. 실제 npm tarball의 LICENSE·README를 읽고 registry의 SHA-512 integrity와 대조했다. 설치·패키지 실행·CDN 연결·전역 설정 변경은 하지 않았다.
+
+| 후보 | 확인한 배포·라이선스·유지관리 | 이번 요구와 비교 |
+| --- | --- | --- |
+| **Fuse.js 7.5.0 · Apache-2.0** | [npm](https://registry.npmjs.org/fuse.js) 게시 **2026-07-13 17:23:36 UTC**, [GitHub 릴리스](https://github.com/krisk/Fuse/releases/tag/v7.5.0) **17:19:30 UTC**. [tarball](https://registry.npmjs.org/fuse.js/-/fuse.js-7.5.0.tgz)의 `package/LICENSE` 확인. [최근 commit](https://github.com/krisk/Fuse/commit/edf2fb608eca0461508d1d71317e6e58309ffada)은 **2026-08-09**. | [공식 README](https://github.com/krisk/Fuse/blob/v7.5.0/README.md)의 작은·중간 자료군 fuzzy/token 검색은 오타·여러 검색어 입력의 후속 후보다. **현재 도입하지 않음.** 기준 기록을 검색어로 바꾸는 규칙과 토픽/명시적 연결 우선순위는 별도로 필요하다. 특히 7.5.0 릴리스는 필드 길이 정규화·가중치 등 수정으로 **점수와 결과 순위가 바뀜**을 명시한다. 엔진 점수를 연결 사실의 근거로 쓰지 않는다. |
+| **MiniSearch 7.2.0 · MIT** | [npm](https://registry.npmjs.org/minisearch) 게시 **2025-09-16 12:42:12 UTC**, [고정 태그](https://github.com/lucaong/minisearch/tree/v7.2.0)와 [tarball](https://registry.npmjs.org/minisearch/-/minisearch-7.2.0.tgz)의 `package/LICENSE.txt` 확인. [최근 commit](https://github.com/lucaong/minisearch/commit/3d239d1c3ae7aef1bf5d8945dd7b5f0709f646f5)은 **2025-09-16**. `releases/latest`는 이번에도 404였다. | [공식 README](https://github.com/lucaong/minisearch/blob/v7.2.0/README.md)는 메모리 full-text index, 필드 가중치, prefix/fuzzy, 사용자 tokenizer를 제공한다. 기본 토큰은 Unicode 공백·구두점에서 나눈다. **현재 도입하지 않음.** 반복 검색량이 많아 인덱스가 필요할 때 적합하지만, 지금은 최신 후보·정확한 버전의 연결 근거·제외 상태를 직접 확인해야 한다. 인덱스 갱신·폐기 경계를 추가해도 이 계약은 남는다. |
+| **FlexSearch 0.8.212 · Apache-2.0** | [npm](https://registry.npmjs.org/flexsearch) 게시 **2025-09-06 23:41:14 UTC**, [tarball](https://registry.npmjs.org/flexsearch/-/flexsearch-0.8.212.tgz)의 `package/LICENSE`·README 확인. [최근 commit](https://github.com/nextapps-de/flexsearch/commit/f7ed963096a0792da7b2fd63bb7114b3fbac55ed)은 **2026-05-29**. GitHub의 [최신 release 0.8.2](https://github.com/nextapps-de/flexsearch/releases/tag/0.8.2)는 **2025-05-21**로, npm 최신 번호·게시일과 구분했다. | [배포 원본 README](https://github.com/nextapps-de/flexsearch/blob/20b36c243c4f65a6dc6f97f64d4dcfc12934aa92/README.md)의 CJK charset·문서/태그 검색·worker·영속 인덱스는 자료량이 커졌을 때 비교할 후보다. **현재 도입하지 않음.** 대규모 인덱스·비동기 작업·캐시 수명 관리를 먼저 추가할 필요가 없고, 정확한 버전 참조와 연결 이유는 별도 구현해야 한다. CJK 지원이나 README의 성능 수치를 해도의 한글 의미 이해·실측 성능으로 간주하지 않는다. |
+
+세 패키지의 해당 npm 버전에는 runtime dependencies 선언이 없거나 빈 객체였고, 세 GitHub 저장소는 `archived=false`, `disabled=false`였다. 확인일의 [Fuse](https://api.github.com/repos/krisk/Fuse/security-advisories?per_page=100)·[MiniSearch](https://api.github.com/repos/lucaong/minisearch/security-advisories?per_page=100)·[FlexSearch](https://api.github.com/repos/nextapps-de/flexsearch/security-advisories?per_page=100) 공개 권고 API는 모두 빈 목록이었다. 이것은 해당 저장소의 공개 권고 확인이며 전체 보안 감사·장기 지원·미공개 취약점 없음의 보증이 아니다. 이 절에서 새 라이브러리 벤치마크나 이전 R2 API 비교를 다시 실행하지 않았다.
+
+### 자체 정렬의 범위와 정확한 근거
+
+자체 구현은 검색엔진·한국어 형태소 분석기를 새로 만드는 범위가 아니다. 기존 자료의 고정 참조를 확인하고 제한된 후보에 **실제로 확인한 연결 이유**를 붙이는 앱 고유 규칙이다. 새 엔진 도입 비용을 줄이는 대신 아래 정책과 회귀 사례를 직접 유지해야 한다.
+
+- **기준 버전과 후보 버전을 구별한다.** 기준은 사용자가 고른 정확한 버전이며 이전 버전도 가능하다. 후보는 각 source의 배열상 마지막, 즉 기존 앱이 사용하는 최신 버전만 허용한다. 기준과 같은 source의 다른 버전은 모두 제외하고 결과도 source별 한 개, 최대 3개다. 옛 후보 버전에만 있는 연결·토픽·문장을 최신 후보에 승계하지 않는다. 근거가 부족하면 결과 수를 억지로 채우지 않는다.
+- **연결은 실제 참조에서 확인한다.** 저장한 문장·토픽의 `sourceRefs`, 묶음의 `versionIds` 등을 사용할 때 기준/후보의 정확한 버전 ID를 확인한다. 같은 제목이나 같은 source라는 이유만으로 연결을 만들지 않는다. 설명은 해당 연결·토픽·공통어를 표시하며 실제 본문을 확보하지 못한 링크를 읽은 글처럼 표현하지 않는다. 저장 사실을 동의나 사용자의 신념으로 해석하지 않는다.
+- **공통어 비교의 한계를 표시한다.** 제목·본문 등 승인된 범위에서 제한된 어휘 일치를 비교하며, 공통어만으로 추천하려면 서로 다른 일치어 최소 2개를 요구한다. 본문 비교는 버전마다 앞 **16,000 UTF-16 code unit**으로 제한하는 계약이다. 한글 조사·활용형·띄어쓰기·동의어·의미까지 이해했다고 주장하지 않는다. 잘린 범위 밖에 근거가 없다고 단정하지 않으며 이 범위를 사용자 설명과 코드의 LIMITS에 함께 둔다.
+- **비교용 정규화와 원문을 분리한다.** 정규화한 토큰은 공통어 비교 키로만 쓴다. 원문 표시용 근거는 실제 문자열에서 얻고, 정규화 문자열의 위치를 원문 UTF-16 위치로 재사용하지 않는다. 이번 API는 근거 snippet을 제공하며 새로운 발췌 offset 계약을 만들지 않는다. 원문 열기는 선택한 후보 버전 ID를 유지한다. 기존 source 제목은 현재 메타데이터이므로 과거 기준 버전의 제목 이력이 보존된 것처럼 표현하지 않는다.
+- **결과 계산은 개인 자료를 바꾸지 않는다.** 현재 계정·작업공간의 자료만 읽고 원문·토픽·묶음·공개 사본을 자동 수정하지 않는다. 제외 기능은 추천 표시의 선택으로 다루며 원문 삭제·공개 철회와 구분한다. 계정/작업공간 전환 뒤 늦은 계산·저장 응답이 다른 공간의 목록에 적용되지 않게 한다. 외부 서버·임베딩 API·원격 로그에 개인 본문을 보내지 않는다.
+
+검증은 연결된 정확한 버전과 같은 토픽, 옛 버전에만 있는 근거, 같은 source의 중복 버전, 본문 없는 링크, 공통어 한 개/두 개 경계, 긴 본문의 비교 범위, 동점 순서·제외/다시 표시·원문 복귀를 중심으로 한다. 자료량·길이 증가로 실제 지연이 확인되거나 오타 허용·검색어 기반 순위가 필요해질 때 MiniSearch/Fuse/FlexSearch를 해당 한글 샘플과 비교한다. 먼저 계정/작업공간별 인덱스 수명·원문 버전 참조·캐시 폐기·백업 복원 후 재생성을 정하고, worker나 영속 인덱스는 측정된 문제를 해결하는 범위에서만 도입한다.

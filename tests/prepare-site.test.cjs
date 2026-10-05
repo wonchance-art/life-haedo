@@ -30,7 +30,7 @@ test('repeat public build removes stale private canary and old SDK while preserv
       }
       if(['index.html','life.html'].includes(name)){
         const scripts=[...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(match=>match[1]);
-        const ordered=['assets/life/core.js','assets/life/workbench.js','assets/life/storage.js','assets/life/workbench-ui.js','assets/life/home.js','assets/life/ui.js','assets/life/shell.js'];
+        const ordered=['assets/life/core.js','assets/life/workbench.js', 'assets/life/rediscovery.js','assets/life/storage.js','assets/life/workbench-ui.js','assets/life/home.js','assets/life/ui.js','assets/life/shell.js'];
         for(let index=0;index<ordered.length;index++){
           assert.equal(scripts.filter(src=>src===ordered[index]).length,1,`${name}: ${ordered[index]} must load once`);
           if(index)assert.ok(scripts.indexOf(ordered[index-1])<scripts.indexOf(ordered[index]),`${name}: dependency order`);

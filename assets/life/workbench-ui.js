@@ -15,7 +15,7 @@
   function fault(code, message) { return Object.assign(new Error(message), { code }); }
 
   function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored,
-    onSelectionUsed = () => {}, onSelectionCancel = () => {},
+    onSelectionUsed = () => {}, onSelectionCancel = () => {}, onArrange = () => {},
     shareRemoteFactory = () => life.ShareRemote?.createOwner({ auth: global.HaedoAuth }),
     sharePublicUrl = publicId => { const url = new URL('share.html', global.location.href); url.searchParams.set('id', publicId); return url.href; },
     beforeRestore = async () => {}, isDisposed = () => false }) {
@@ -25,7 +25,7 @@
     const urls = new Set();
     let disposed = false, generation = 0, visible = false, current = null, mode = null;
     let surface = null, statusNode = null, errorNode = null, bodyNode = null, saveControl = null;
-    let preview = false, discoverQuery = '', restoreCandidate = null, restoreName = '', restoreSequence = 0, installing = false;
+    let preview = false, restoreCandidate = null, restoreName = '', restoreSequence = 0, installing = false;
     let incoming = null;
     let shareRemote = null;
     let publicList = null;
@@ -233,13 +233,13 @@
       })();
       try { await session.loading; } finally { session.loading = null; }
     }
-    async function openVersion(id) {
+    async function openVersion(id, focusKey) {
       const session = current, token = generation, info = sourceInfo(id);
       if (!info) throw fault('source_missing', '연결된 원문이 없습니다. 새 버전으로 대신 열지 않았습니다.');
       await flush();
-      if (showing(token, session)) await openSource(info.source.id, info.version.id);
+      if (showing(token, session)) await openSource(info.source.id, info.version.id, { focusKey });
     }
-    function sourceRow(id, { body = false, remove, previewOnly = false, hideTitle = false } = {}) {
+    function sourceRow(id, { body = false, remove, previewOnly = false, hideTitle = false, focusKey } = {}) {
       const row = el('div', null, 'wb-source'); row.dataset.versionId = id;
       const info = sourceInfo(id);
       const head = el('div', null, 'wb-row');
@@ -247,7 +247,11 @@
       if (!hideTitle || !info) text.append(el('p', info ? info.source.title : '연결된 원문 없음', 'wb-source-title'));
       text.append(el('p', info ? sourceMeta(info) : '이 버전은 현재 공간에 없습니다. 다른 버전으로 바꾸지 않았습니다.', 'life-meta'));
       head.append(text);
-      if (info && !previewOnly) head.append(icon('이 원문 버전 열기', 'book', () => openVersion(id)));
+      if (info && !previewOnly) {
+        const open = (focusKey ? discoveryIcon : icon)('이 원문 버전 열기', 'book', () => openVersion(id, focusKey));
+        if (focusKey) open.dataset.focusKey = focusKey;
+        head.append(open);
+      }
       if (remove) head.append(icon('연결 해제', 'close', remove));
       row.append(head);
       if (body && info?.version.contentText != null) {
@@ -904,22 +908,128 @@
       });
       bodyNode.append(visitor);
     }
+    function discoveryView(session) {
+      return session.discoveryView ||= { query: '', seedVersionId: null, chooserOpen: true, excludedOpen: false, criteriaOpen: false, shown: 30 };
+    }
+    function discoveryIcon(label, glyph, task, pressed) {
+      const button = icon(label, glyph, task, pressed); button.removeAttribute('title');
+      const tooltip = el('span', label, 'life-tooltip'); tooltip.setAttribute('aria-hidden', 'true'); button.append(tooltip);
+      button.addEventListener('keydown', event => { if (event.key === 'Escape') button.dataset.tooltipDismissed = 'true'; });
+      const reset = () => { delete button.dataset.tooltipDismissed; };
+      button.addEventListener('blur', reset); button.addEventListener('pointerleave', reset);
+      return button;
+    }
     function renderDiscover() {
-      const search = field('저장한 자료에서 찾을 말', discoverQuery, { id: 'wbDiscoverQuery' });
+      const session = current, token = generation, view = discoveryView(session);
+      const relatedHost = el('section', null, 'wb-discovery'); relatedHost.id = 'wbDiscoveryRelated';
+      const chooser = details(view.seedVersionId ? '기준 기록 바꾸기' : '기준 기록 고르기', { open: !view.seedVersionId || view.chooserOpen });
+      chooser.id = 'wbDiscoveryChooser'; chooser.classList.add('wb-discovery-chooser');
+      chooser.addEventListener('toggle', () => { if (chooser.isConnected && showing(token, session)) view.chooserOpen = chooser.open; });
+      const search = field('저장한 자료에서 찾을 말', view.query, { id: 'wbDiscoverQuery' });
       search.input.type = 'search';
       const list = el('div'); list.id = 'wbDiscoverResults';
       const count = el('p', '', 'life-meta'); count.setAttribute('role', 'status');
-      let composing = false, shown = 30;
-      const more = action('검색 결과 더 보기', () => { shown += 30; fill(); });
+      let composing = false;
+      const more = action('검색 결과 더 보기', () => { view.shown += 30; fill(); });
+      async function choose(versionId) {
+        await flush();
+        if (!showing(token, session)) return;
+        view.seedVersionId = versionId; view.chooserOpen = !versionId; view.excludedOpen = false;
+        chooser.open = view.chooserOpen; chooser.querySelector('summary').textContent = versionId ? '기준 기록 바꾸기' : '기준 기록 고르기';
+        fillRelated(); fill();
+        (versionId ? relatedHost.querySelector('#wbDiscoverySeed') : search.input)?.focus({ preventScroll: true });
+      }
+      async function changeExclusions(seedId, candidateId, exclude) {
+        const pairs = session.state.discovery?.excludedPairs || [];
+        const matches = pair => pair.seedSourceId === seedId && (!candidateId || pair.candidateSourceId === candidateId);
+        if (exclude && pairs.some(matches)) return;
+        if (exclude && pairs.length >= limits.excludedPairs) throw fault('limit_reached', '제외한 연결이 ' + limits.excludedPairs + '개입니다. 이전에 제외한 연결을 복원한 뒤 다시 선택해 주세요.');
+        session.state.discovery = { excludedPairs: exclude ? pairs.concat({ seedSourceId: seedId, candidateSourceId: candidateId }) : pairs.filter(pair => !matches(pair)) };
+        mark(session, false); fillRelated();
+        (relatedHost.querySelector('#wbDiscoveryExcluded > summary') || relatedHost.querySelector('#wbDiscoverySeed'))?.focus({ preventScroll: true });
+        await flushSession(session);
+        if (showing(token, session)) announceSafe(exclude ? '이 기준 기록의 관련 목록에서 제외했습니다.' : '이 기준 기록의 제외를 복원했습니다.', session);
+      }
+      function fillRelated() {
+        if (!showing(token, session)) return;
+        relatedHost.replaceChildren(); relatedHost.hidden = !view.seedVersionId;
+        if (!view.seedVersionId) return;
+        const seed = sourceInfo(view.seedVersionId);
+        const seedBox = el('section', null, 'wb-discovery-seed'); seedBox.id = 'wbDiscoverySeed'; seedBox.dataset.versionId = view.seedVersionId; seedBox.tabIndex = -1;
+        const seedHeading = el('div', null, 'wb-row'); seedHeading.append(el('h3', '기준 기록', 'wb-grow'));
+        const clear = discoveryIcon('기준 기록 해제', 'close', () => choose(null)); clear.id = 'wbDiscoveryClear'; seedHeading.append(clear);
+        seedBox.append(seedHeading, sourceRow(view.seedVersionId, { focusKey: 'discover:seed:' + view.seedVersionId }));
+        if (seed?.total === 1) seedBox.append(el('p', '버전 1/1', 'life-meta'));
+        relatedHost.append(seedBox);
+        const error = el('p', '', 'wb-discovery-error'); error.id = 'wbDiscoveryError'; error.setAttribute('role', 'alert'); error.hidden = true; relatedHost.append(error);
+        let results;
+        try {
+          if (!seed) throw fault('seed_missing', '기준 원문 버전을 찾지 못했습니다. 다른 버전으로 바꾸지 않았습니다.');
+          if (!life.Rediscovery?.related) throw fault('rediscovery_unavailable', '관련 기록 기능을 불러오지 못했습니다. 새로고침한 뒤 다시 확인해 주세요.');
+          results = life.Rediscovery.related(getBundle(), session.state, view.seedVersionId, { limit: 3 });
+        } catch (cause) {
+          error.textContent = cause.message || '관련 기록을 확인하지 못했습니다. 기준 기록을 다시 선택해 주세요.'; error.hidden = false;
+          relatedHost.append(action('기준 기록 다시 고르기', () => choose(null)));
+          return;
+        }
+        const heading = el('h3', '함께 읽을 기록', 'wb-discovery-heading'); heading.id = 'wbDiscoveryRelatedHeading';
+        relatedHost.append(heading);
+        if (!results.length) relatedHost.append(empty('연결 근거가 있는 기록을 찾지 못했습니다. 다른 기준 기록을 고르거나 제외한 연결을 복원해 보세요.'));
+        results.forEach(result => {
+          const article = el('article', null, 'wb-feed wb-discovery-result'); article.dataset.versionId = result.versionId; article.dataset.sourceId = result.sourceId;
+          article.append(sourceRow(result.versionId, { focusKey: 'discover:related:' + result.versionId }));
+          if (result.snippet) article.append(el('p', result.snippet, 'wb-result-text'));
+          const reasons = el('ul', null, 'wb-discovery-reasons');
+          result.reasons.forEach(reason => {
+            const label = reason.kind === 'topic' ? '같은 주제' : reason.kind === 'group' ? '같은 묶음' : reason.field === 'title' ? '제목에 함께 나온 말' : reason.field === 'body' ? '본문에 함께 나온 말' : '함께 나온 말';
+            reasons.append(el('li', label + ' · ' + reason.label));
+          }); article.append(reasons);
+          const actions = el('div', null, 'life-actions wb-discovery-actions');
+          const focusId = 'wbDiscoveryArrange-' + result.versionId;
+          const seedVersionId = view.seedVersionId;
+          const arrange = discoveryIcon('기준 기록과 함께 묶음에 담기', 'link', async () => {
+            await flush();
+            if (!showing(token, session) || view.seedVersionId !== seedVersionId) return;
+            if (!sourceInfo(seedVersionId) || !sourceInfo(result.versionId)) throw fault('source_missing', '담을 원문 버전을 찾지 못했습니다. 다른 버전으로 바꾸지 않았습니다.');
+            await onArrange({ workspaceId: session.workspaceId, versionIds: [...new Set([seedVersionId, result.versionId])], focusId });
+          }); arrange.id = focusId; arrange.classList.add('wb-discovery-arrange');
+          const exclude = discoveryIcon('이 기준 기록의 관련 목록에서 제외', 'close', () => changeExclusions(seed.source.id, result.sourceId, true));
+          exclude.classList.add('wb-discovery-exclude'); exclude.dataset.sourceId = result.sourceId;
+          actions.append(arrange, exclude); article.append(actions); relatedHost.append(article);
+        });
+        const pairs = (session.state.discovery?.excludedPairs || []).filter(pair => pair.seedSourceId === seed.source.id);
+        if (pairs.length) {
+          const excluded = details('이 기준 기록에서 제외한 연결 ' + pairs.length + '개', { open: view.excludedOpen }); excluded.id = 'wbDiscoveryExcluded';
+          excluded.addEventListener('toggle', () => { if (excluded.isConnected) view.excludedOpen = excluded.open; });
+          excluded.append(notice('관련 목록에서만 제외한 연결입니다. 원문은 그대로 남아 있습니다.'));
+          pairs.forEach(pair => {
+            const title = getBundle().sources.find(source => source.id === pair.candidateSourceId)?.title || '현재 공간에 없는 기록';
+            const row = el('div', null, 'wb-row wb-discovery-excluded'); row.append(el('span', title, 'wb-grow'));
+            const restore = action('복원', () => changeExclusions(seed.source.id, pair.candidateSourceId, false)); restore.setAttribute('aria-label', title + ' 연결 복원');
+            restore.classList.add('wb-discovery-restore'); restore.dataset.sourceId = pair.candidateSourceId; row.append(restore); excluded.append(row);
+          });
+          const restoreAll = action('이 기준 기록의 제외 모두 복원', () => changeExclusions(seed.source.id, null, false)); restoreAll.id = 'wbDiscoveryRestoreAll'; excluded.append(restoreAll);
+          relatedHost.append(excluded);
+        }
+        const criteria = details('연결 기준', { open: view.criteriaOpen }); criteria.classList.add('wb-discovery-criteria');
+        criteria.addEventListener('toggle', () => { if (criteria.isConnected) view.criteriaOpen = criteria.open; });
+        criteria.append(notice('같은 주제·묶음 또는 두 개 이상 함께 나온 단어를 비교합니다. 후보는 각 기록의 최신 버전이며, 단어 비교에는 본문 앞 16,000자만 사용합니다. 의미나 취향을 분석한 결과는 아닙니다.'));
+        relatedHost.append(criteria);
+      }
       const fill = () => {
-        discoverQuery = search.input.value;
-        const query = discoverQuery.trim(); list.replaceChildren();
-        if (!query) { count.textContent = ''; more.hidden = true; list.append(empty('찾고 싶은 단어를 입력하면 보관한 제목과 원문에서 찾습니다.')); return; }
+        if (!showing(token, session)) return;
+        view.query = search.input.value;
+        const query = view.query.trim(); list.replaceChildren();
         const hits = core.searchSources(getBundle(), query);
-        count.textContent = '보관한 자료 ' + hits.length + '건';
-        hits.slice(0, shown).forEach(hit => {
+        count.textContent = query ? '보관한 자료 ' + hits.length + '건 · 일치한 버전' : '최근 담은 기록에서 시작하기';
+        const versions = new Map(getBundle().sourceVersions.map((version, index) => [version.id, { ...version, index }]));
+        const visibleHits = query ? hits.slice(0, view.shown) : hits.slice().sort((a, b) => {
+          const left = versions.get(a.sourceVersionId), right = versions.get(b.sourceVersionId);
+          return right.importedAt.localeCompare(left.importedAt) || right.index - left.index;
+        }).slice(0, 3);
+        visibleHits.forEach(hit => {
           const article = el('article', null, 'wb-feed'); article.dataset.versionId = hit.sourceVersionId;
-          article.append(sourceRow(hit.sourceVersionId));
+          article.append(sourceRow(hit.sourceVersionId, { focusKey: 'discover:search:' + hit.sourceVersionId }));
           const info = sourceInfo(hit.sourceVersionId);
           if (info?.version.contentText != null) {
             const body = info.version.contentText;
@@ -927,16 +1037,19 @@
             const end = hit.locator ? Math.min(body.length, hit.locator.end + 150) : Math.min(body.length, 220);
             article.append(el('p', (start ? '…' : '') + body.slice(start, end) + (end < body.length ? '…' : ''), 'wb-result-text'));
           }
-          article.append(action('내 페이지에 추가', () => addEntry(info?.source.title, [hit.sourceVersionId])));
+          const actions = el('div', null, 'life-actions wb-discovery-actions');
+          const select = discoveryIcon('이 기록으로 관련 기록 찾기', 'search', () => choose(hit.sourceVersionId), view.seedVersionId === hit.sourceVersionId);
+          select.classList.add('wb-discovery-select'); select.dataset.versionId = hit.sourceVersionId;
+          actions.append(select, action('내 페이지에 추가', () => addEntry(info?.source.title, [hit.sourceVersionId]))); article.append(actions);
           list.append(article);
         });
-        if (!hits.length) list.append(empty('일치하는 자료가 없습니다. 다른 표현으로 찾아보세요.'));
-        more.hidden = hits.length <= shown;
+        if (!hits.length) list.append(empty(query ? '일치하는 자료가 없습니다. 다른 표현으로 찾아보세요.' : '보관한 기록이 없습니다. 기록에서 글을 쓰거나 자료를 가져와 주세요.'));
+        more.hidden = !query || hits.length <= view.shown;
       };
       search.input.addEventListener('compositionstart', () => { composing = true; });
-      search.input.addEventListener('compositionend', () => { composing = false; shown = 30; fill(); });
-      search.input.addEventListener('input', () => { if (!composing) { shown = 30; fill(); } });
-      bodyNode.append(search.wrapper, count, list, more); fill();
+      search.input.addEventListener('compositionend', () => { composing = false; view.shown = 30; fill(); });
+      search.input.addEventListener('input', () => { if (!composing) { view.shown = 30; fill(); } });
+      chooser.append(search.wrapper, count, list, more); bodyNode.append(relatedHost, chooser); fillRelated(); fill();
     }
     function renderReflection() {
       const session = current, reflection = session.state.reflection;
@@ -1097,6 +1210,9 @@
       const token = ++generation;
       visible = true; mode = MODES[nextMode] ? nextMode : 'activities'; current = sessionFor(bundle.workspaceId);
       if (typeof options.pagePreview === 'boolean') preview = options.pagePreview;
+      if (mode === 'discover' && typeof options.seedVersionId === 'string') {
+        const view = discoveryView(current); view.seedVersionId = options.seedVersionId; view.chooserOpen = false;
+      }
       incoming = null;
       if (options.selection && ['activities', 'page'].includes(mode)) {
         const selection = options.selection;

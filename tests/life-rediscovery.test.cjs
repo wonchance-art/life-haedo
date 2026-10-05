@@ -1,0 +1,201 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const core = require('../assets/life/core.js');
+const workbench = require('../assets/life/workbench.js');
+const rediscovery = require('../assets/life/rediscovery.js');
+const clone = value => JSON.parse(JSON.stringify(value));
+
+async function fixture(specs = []) {
+  let bundle = core.createWorkspace(); const refs = [];
+  for (const spec of specs) {
+    const prepared = await core.prepareImport({ origin: 'other', forceSeparate: true, ...spec }, bundle);
+    bundle = core.applyChanges(bundle, core.buildImportChanges(bundle, prepared, []));
+    refs.push({ sourceId: prepared.source.id, versionId: prepared.version.id });
+  }
+  return { bundle, state: workbench.empty(bundle.workspaceId), refs };
+}
+async function newer(data, index, text) {
+  const source = data.bundle.sources.find(value => value.id === data.refs[index].sourceId);
+  const prepared = await core.prepareImport({ origin: source.origin, title: source.title, text,
+    existingSourceId: source.id }, data.bundle);
+  data.bundle = core.applyChanges(data.bundle, core.buildImportChanges(data.bundle, prepared, []));
+  return { sourceId: prepared.source.id, versionId: prepared.version.id };
+}
+function topic(data, ref, name) {
+  const version = data.bundle.sourceVersions.find(item => item.id === ref.versionId), now = data.bundle.updatedAt;
+  const record = { id: core.id(), kind: 'excerpt', text: version.contentText.slice(0, 1), topic: name,
+    note: '이 메모는 추천의 단어 근거로 사용하지 않습니다.', sourceRefs: [{ sourceId: ref.sourceId,
+      sourceVersionId: ref.versionId, locator: { start: 0, end: 1 } }], provenance: { kind: 'user' },
+    revision: 1, createdAt: now, updatedAt: now };
+  data.bundle = core.applyChanges(data.bundle, { put: { records: [record] } }); return record.id;
+}
+function group(data, refs, title = '선택해서 연결한 기록') {
+  data.state.groups.push({ id: core.id(), title, versionIds: refs.map(ref => ref.versionId) });
+}
+function related(data, seed = 0, options) { return rediscovery.related(data.bundle, data.state,
+  typeof seed === 'number' ? data.refs[seed].versionId : seed, options); }
+
+test('two exact Korean tokens are evidence while one token or generic words do not fill empty results', async () => {
+  const data = await fixture([{ title: '기준', text: '정원 산책' }, { title: '연결갑', text: '정원 산책 풍경' },
+    { title: '연결을', text: '정원 도예' }, { title: '무관', text: '양자역학 중력파' }]);
+  const result = related(data);
+  assert.equal(result.length, 1); assert.equal(result[0].versionId, data.refs[1].versionId);
+  assert.deepEqual(result[0].reasons, [{ kind: 'term', label: '산책', field: 'body' }, { kind: 'term', label: '정원', field: 'body' }]);
+  assert.equal(result[0].snippet, '정원 산책 풍경');
+  const generic = await fixture([{ title: '기준', text: '오늘 기록 그리고 새로운 생각 함께' },
+    { title: '후보', text: '오늘 기록 그리고 새로운 생각 함께' }]);
+  assert.deepEqual(related(generic), []);
+});
+
+test('particle endings and semantic or morphological similarity are never guessed', async () => {
+  const data = await fixture([{ title: '기준', text: '정원 산책 읽기' },
+    { title: '후보', text: '정원의 산책은 읽었다' }]);
+  assert.deepEqual(related(data), []);
+});
+
+test('explicit exact-version groups rank before matching topics and two common terms', async () => {
+  const data = await fixture([{ title: '기준', text: '정원 산책' }, { title: '그룹후보', text: '지질학 해양' },
+    { title: '주제후보', text: '천문학 별빛' }, { title: '단어후보', text: '정원 산책 풍경' }]);
+  group(data, data.refs.slice(0, 2), '직접 정리한 묶음'); topic(data, data.refs[0], '마음에 남은 질문'); topic(data, data.refs[2], '마음에 남은 질문');
+  const result = related(data);
+  assert.deepEqual(result.map(value => value.versionId), data.refs.slice(1).map(value => value.versionId));
+  assert.deepEqual(result[0].reasons, [{ kind: 'group', label: '직접 정리한 묶음' }]);
+  assert.deepEqual(result[1].reasons, [{ kind: 'topic', label: '마음에 남은 질문' }]);
+});
+
+test('the selected older seed stays exact and its own newer version is never a recommendation', async () => {
+  const data = await fixture([{ title: '기준', text: '정원 산책' }, { title: '후보', text: '정원 산책 풍경' }]);
+  const latestSeed = await newer(data, 0, '천문학 망원경');
+  assert.deepEqual(related(data).map(value => value.versionId), [data.refs[1].versionId]);
+  assert.deepEqual(related(data, latestSeed.versionId), []);
+});
+
+test('latest candidates never inherit old-version groups or topics', async () => {
+  const data = await fixture([{ title: '기준', text: '정원 산책' }, { title: '후보', text: '도예 가마' }]);
+  group(data, data.refs); topic(data, data.refs[0], '연결할 주제'); topic(data, data.refs[1], '연결할 주제');
+  const newest = await newer(data, 1, '천문학 망원경');
+  assert.deepEqual(related(data), []);
+  group(data, [data.refs[0], newest], '현재 버전 연결');
+  assert.deepEqual(related(data).map(value => value.versionId), [newest.versionId]);
+  assert.deepEqual(related(data)[0].reasons, [{ kind: 'group', label: '현재 버전 연결' }]);
+});
+
+test('latest means the last Core version, independent of imported or original dates', async () => {
+  const data = await fixture([{ title: '기준', text: '정원 산책' }, { title: '후보', text: '천문학 망원경' }]);
+  const latest = await newer(data, 1, '정원 산책 풍경');
+  data.bundle.sourceVersions.at(-1).importedAt = '2000-01-01T00:00:00.000Z';
+  assert.equal(related(data)[0].versionId, latest.versionId);
+});
+
+test('directed source exclusions apply across versions without excluding the reverse direction', async () => {
+  const data = await fixture([{ title: '기준', text: '정원 산책' }, { title: '후보', text: '정원 산책' }]);
+  data.state.discovery = { excludedPairs: [{ seedSourceId: data.refs[0].sourceId, candidateSourceId: data.refs[1].sourceId }] };
+  assert.deepEqual(related(data), []);
+  assert.equal(related(data, 1)[0].sourceId, data.refs[0].sourceId);
+  await newer(data, 1, '정원 산책 풍경'); assert.deepEqual(related(data), []);
+});
+
+test('link-only title evidence is labeled as title evidence and never invents a body', async () => {
+  const data = await fixture([{ title: '정원 산책', text: '풍경' },
+    { title: '정원 산책 안내', text: null, url: 'https://example.org/original' }]);
+  const result = related(data)[0];
+  assert.equal(result.snippet, ''); assert(result.reasons.every(reason => reason.kind === 'term' && reason.field === 'title'));
+  assert.equal(result.versionId, data.refs[1].versionId);
+});
+
+test('source URLs and query parameters in a body do not become word evidence', async () => {
+  const data = await fixture([{ title: '기준', text: 'https://example.org/정원/산책?query=풍경' },
+    { title: '후보', text: 'https://example.org/정원/산책?query=풍경' }]);
+  assert.deepEqual(related(data), []);
+});
+
+test('deleted record topics are no longer used and unrelated note text is ignored', async () => {
+  const data = await fixture([{ title: '기준', text: '정원 산책' }, { title: '후보', text: '도예 가마' }]);
+  topic(data, data.refs[0], '명시한 주제'); const deleted = topic(data, data.refs[1], '명시한 주제');
+  assert.equal(related(data).length, 1);
+  data.bundle = core.applyChanges(data.bundle, { remove: { records: [deleted] } });
+  assert.deepEqual(related(data), []);
+});
+
+test('only selected seed and latest candidate bodies are read; all source candidates remain eligible', async () => {
+  const data = await fixture([{ title: '기준', text: '정원 산책' }, { title: '후보', text: '과거 내용' }]);
+  const old = data.bundle.sourceVersions.find(value => value.id === data.refs[1].versionId);
+  const latest = await newer(data, 1, '정원 산책 풍경');
+  Object.defineProperty(data.bundle.sourceVersions.find(value => value.id === old.id), 'contentText', {
+    get() { throw new Error('Historical candidate body must not be read'); }
+  });
+  assert.equal(related(data)[0].versionId, latest.versionId);
+});
+
+test('body comparison stops at the documented 16,000 UTF-16 limit with safe snippet boundaries', async () => {
+  const data = await fixture([{ title: '기준', text: '정원 산책' },
+    { title: '후보', text: ' '.repeat(rediscovery.LIMITS.bodyCharacters) + '정원 산책' }]);
+  assert.deepEqual(related(data), []);
+  const version = data.bundle.sourceVersions.at(-1); version.contentText = '🌱'.repeat(40) + ' 정원 산책 ' + '풍경 '.repeat(100);
+  const result = related(data)[0];
+  assert(result.snippet.includes('정원 산책')); assert(!/^[\udc00-\udfff]|[\ud800-\udbff]$/.test(result.snippet.replace(/^…|…$/g, '')));
+});
+
+test('a word cut at the body budget boundary cannot turn into a shorter matching word', async () => {
+  const data = await fixture([{ title: '기준', text: '산책 영화' },
+    { title: '후보', text: '산책 ' + ' '.repeat(15995) + '영화평론가' }]);
+  assert.deepEqual(related(data), []);
+});
+
+test('title versus body matches keep a generic reason instead of claiming the same field', async () => {
+  const data = await fixture([{ title: '기준', text: '정원 산책' },
+    { title: '정원 산책 안내', text: null, url: 'https://example.org/original' }]);
+  const result = related(data)[0];
+  assert.equal(result.snippet, ''); assert(result.reasons.every(reason => reason.kind === 'term' && !Object.hasOwn(reason, 'field')));
+});
+
+test('results are deterministic, capped at three and leave all source and composition data unchanged', async () => {
+  const data = await fixture([{ title: '기준', text: '정원 산책' }, ...Array.from({ length: 6 }, (_, index) =>
+    ({ title: '후보' + index, text: '정원 산책' }))]);
+  const before = JSON.stringify(data);
+  const first = related(data), second = related(data); assert.deepEqual(first, second); assert.equal(first.length, 3);
+  assert.deepEqual(first.map(result => result.sourceId), data.refs.slice(1).map(ref => ref.sourceId).sort().slice(0, 3));
+  assert.equal(related(data, 0, { limit: 1 }).length, 1); assert.equal(JSON.stringify(data), before);
+  first[0].reasons[0].label = '호출자가 바꾼 사본'; assert.deepEqual(related(data), second);
+  const reordered = clone(data); reordered.bundle.sources.reverse(); assert.deepEqual(related(reordered), second);
+});
+
+test('large seed vocabularies keep the same exact-token contract without dropping later terms', async () => {
+  const data = await fixture([{ title: '기준', text: Array.from({ length: 600 }, (_, index) => '어휘' + index).join(' ') },
+    { title: '후보', text: '어휘550 어휘599' }]);
+  const result = related(data);
+  assert.equal(result.length, 1);
+  assert.deepEqual(result[0].reasons, [{ kind: 'term', label: '어휘550', field: 'body' }, { kind: 'term', label: '어휘599', field: 'body' }]);
+});
+
+test('small and large seed vocabularies use the same conservative digit boundary', async () => {
+  const extra = Array.from({ length: 550 }, (_, index) => '무관어휘' + index).join(' ');
+  for (const suffix of ['', ' ' + extra]) {
+    const data = await fixture([{ title: '기준', text: '독서 산책' + suffix },
+      { title: '후보', text: '2026독서 산책' }]);
+    assert.deepEqual(related(data), []);
+  }
+});
+
+test('expanding Unicode lowercase mappings preserve results across the native matcher threshold', async () => {
+  const extra = Array.from({ length: 550 }, (_, index) => '무관어휘' + index).join(' ');
+  const results = [];
+  for (const suffix of ['', ' ' + extra]) {
+    const data = await fixture([{ title: '기준', text: 'İstanbul 독서' + suffix },
+      { title: '후보', text: 'İstanbul 독서' }]);
+    const result = related(data);
+    assert.equal(result.length, 1); results.push({ reasons: result[0].reasons, snippet: result[0].snippet });
+  }
+  assert.deepEqual(results[0], results[1]);
+  assert(results[0].reasons.some(reason => reason.label === 'İstanbul'));
+});
+
+test('invalid requests and unavailable seeds fail with actionable codes', async () => {
+  const data = await fixture([{ title: '기준', text: '정원 산책' }]);
+  for (const limit of [0, -1, 4, 1000, '3', 1.5]) assert.throws(() => related(data, 0, { limit }), { code: 'invalid_request' });
+  assert.throws(() => related(data, 'missing-version'), { code: 'seed_missing' });
+  const mismatch = clone(data); mismatch.state.workspaceId = 'other';
+  assert.throws(() => related(mismatch), { code: 'invalid_data' });
+  data.state.discovery = { excludedPairs: [{ seedSourceId: data.refs[0].sourceId }] };
+  assert.throws(() => related(data), { code: 'invalid_data' });
+});

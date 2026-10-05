@@ -154,9 +154,13 @@
         selectionReturn = null;
       },
       onSelectionCancel: returnFromArrange,
-      openSource: (sourceId, versionId) => navigate('source', {
+      onArrange: ({ workspaceId, versionIds, focusId }) => {
+        if (disposed || state.bundle?.workspaceId !== workspaceId || state.mode !== 'discover') return;
+        return arrangeRecords('activities', [...new Set(versionIds)], focusId);
+      },
+      openSource: (sourceId, versionId, options = {}) => navigate('source', {
         sourceId, sourceVersionId: versionId, locator: null,
-        returnContext: { mode: state.mode, workspaceId: state.bundle.workspaceId, scrollY: global.scrollY }
+        returnContext: { mode: state.mode, workspaceId: state.bundle.workspaceId, scrollY: global.scrollY, focusKey: options.focusKey }
       }),
       beforeRestore: () => persistDrafts(),
       onRestored: async ({ bundle }) => {
@@ -1033,7 +1037,7 @@
 
     function renderTools() {
       const list = node('div', null, 'life-destinations');
-      list.append(actionRow('다시 찾기', '보관한 자료에서 검색', 'search', () => navigate('discover')),
+      list.append(actionRow('다시 찾기', '검색하고 관련 기록 이어 보기', 'search', () => navigate('discover')),
         actionRow('회고', '고른 자료를 돌아보고 메모', 'book', () => navigate('reflection')),
         destinationRow('목표', '진행 중인 일과 다음 계획', 'goals.html', 'target'),
         destinationRow('습관', '반복할 일과 오늘의 체크', 'habits.html', 'check'));
@@ -1120,7 +1124,7 @@
       state.suppressReaderResume = false;
     }
 
-    async function arrangeRecords(mode, versionIds) {
+    async function arrangeRecords(mode, versionIds, returnFocusId) {
       if (!versionIds.length) return;
       const workspaceId = state.bundle.workspaceId;
       if (versionIds.some(id => !state.bundle.sourceVersions.some(version => version.id === id))) {
@@ -1129,7 +1133,7 @@
       selectionReturn = { workspaceId, versionIds: [...versionIds], mode: state.mode, sourceId: state.sourceId,
         sourceVersionId: state.sourceVersionId, locator: state.sourceSelection,
         returnContext: state.returnContext, scrollY: global.scrollY,
-        focusId: mode === 'activities' ? 'lifeArrangeGroups' : 'lifeArrangePage' };
+        focusId: returnFocusId || (mode === 'activities' ? 'lifeArrangeGroups' : 'lifeArrangePage') };
       await navigate(mode, { selection: { workspaceId, versionIds: [...versionIds] }, pagePreview: false });
     }
 

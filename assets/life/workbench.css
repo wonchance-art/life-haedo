@@ -101,3 +101,36 @@
 .wb-share-excerpt,.wb-comparison-text { border-radius: var(--control-radius); }
 .wb-incoming-list,.wb-picker-list { overscroll-behavior-block: contain; }
 @media (forced-colors: active) { .wb-share-confirm { border: 1px solid CanvasText; } }
+
+/* Rediscovery keeps the selected original and related reading in one quiet column. */
+.wb-discovery-seed { margin-block: 12px 30px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.wb-discovery-seed > .wb-row > h3 { color: var(--ink-soft); font-size: 13px; font-weight: 500; }
+.wb-discovery-seed .wb-source-title { font-size: 17px; }
+.wb-discovery-seed .wb-source { margin-block: 6px; }
+.wb-discovery-seed > .life-meta { margin-top: 3px; font-size: 12px; }
+.wb-discovery-heading { margin-top: 28px; font-size: 18px; line-height: 1.7; }
+.wb-discovery-result .wb-source { margin-top: 0; }
+.wb-discovery-result .wb-source-title { font-size: 18px; }
+.wb-discovery-reasons { list-style: none; margin: 14px 0 10px; padding: 0; color: var(--mint-ink); font-size: 13px; line-height: 1.85; }
+.wb-discovery-reasons li + li { margin-top: 3px; }
+.wb-discovery-actions { flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.wb-discovery-arrange,.wb-discovery-select { color: var(--color-primary); background: var(--soft); }
+.wb-discovery-actions .life-tooltip { left: 0; transform: none; width: max-content; max-width: min(260px,calc(100vw - 60px)); white-space: normal; text-align: left; }
+.wb-discovery-seed .life-tooltip { left: auto; right: 0; transform: none; }
+.life-workbench[data-mode=discover] .wb-source .life-tooltip { left: auto; right: 0; transform: none; }
+.wb-discovery-chooser { margin-block: 20px; }
+.wb-discovery-chooser > summary { color: var(--color-primary); }
+.wb-discovery-chooser .life-field { margin-top: 16px; }
+.wb-discovery-excluded { padding-block: 12px; border-bottom: 1px solid var(--line); font-size: 14px; line-height: 1.75; }
+.wb-discovery-excluded + .life-button { margin-top: 16px; }
+.wb-discovery-error { margin-block: 20px; color: var(--color-error); font-size: 14px; line-height: 1.8; }
+.wb-discovery-criteria .wb-notice { max-width: 58ch; }
+@media (max-width: 700px) {
+  .wb-discovery-result .wb-source-title { font-size: 17px; }
+  .wb-discovery-seed { margin-bottom: 24px; }
+  .life-workbench[data-mode=discover] .life-tooltip { top: auto; bottom: calc(100% + 6px); }
+}
+@media (forced-colors: active) {
+  .wb-discovery-arrange,.wb-discovery-select { border: 1px solid ButtonText; }
+  .wb-discovery-reasons { color: CanvasText; }
+}
