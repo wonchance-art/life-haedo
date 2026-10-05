@@ -1,6 +1,8 @@
 # 공용 인증·자료 가져오기 통합
 
-2026-10-03 · [PR #19](https://github.com/wonchance-art/life-haedo/pull/19)를 [PR #17](https://github.com/wonchance-art/life-haedo/pull/17)의 `codex/platform-home-auth`에 병합했다. 앱 검증 기준은 `9328eb144b8b86d9efe838cfd690be66ae36d631`이며, 아래 Local 관리자 후속은 운영 설정과 합성 자료 정리 결과다. `main` 병합·공개 배포는 아직 수행하지 않았다.
+아래는 2026-10-03 통합 당시의 기록이다. PR #17·#19는 이후 병합·배포됐으며 사용자가 정상 작동을 확인했다. **2026-10-05 신규 게시 SQL은 Local이 설치했고 설치 점검 12조건과 Cloud 읽기 전용 운영 HTTP 5조건을 통과했다.** 이력 번호·해시·기존 데이터 보존 및 재설치 금지는 [공개 페이지 운영 확인](design-review/page-publication.md#운영-설치읽기-권한-확인--2026-10-05)을 따른다.
+
+2026-10-03 · [PR #19](https://github.com/wonchance-art/life-haedo/pull/19)를 [PR #17](https://github.com/wonchance-art/life-haedo/pull/17)의 `codex/platform-home-auth`에 병합했다. 앱 검증 기준은 `9328eb144b8b86d9efe838cfd690be66ae36d631`이며, 아래 Local 관리자 후속은 운영 설정과 합성 자료 정리 결과다. 당시에는 `main` 병합·공개 배포 전이었다.
 
 ## 하나의 로그인과 계정별 자료
 

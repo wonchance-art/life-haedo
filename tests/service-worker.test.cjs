@@ -83,7 +83,7 @@ test('section and nested view links resolve to the same installed shell offline'
   const h = harness({ fetchResult: new Error('offline') });
   h.entries.set(request('index.html').url, new Response('unified home'));
   h.entries.set(request('workspace.html').url, new Response('timeline management'));
-  for (const query of ['section=home', 'section=records', 'section=tools', 'section=manage&view=sync', 'view=sources', 'section=records&view=activities', 'section=records&view=page', 'section=tools&view=discover', 'section=tools&view=reflection', 'section=manage&view=workbench-backup']) {
+  for (const query of ['section=home', 'section=records', 'section=tools', 'section=manage&view=sync', 'view=sources', 'section=records&view=activities', 'section=records&view=page', 'section=tools&view=discover', 'section=tools&view=reflection', 'section=manage&view=workbench-backup', 'section=manage&view=public-pages']) {
     assert.equal(await (await h.run('fetch', request('index.html?' + query, 'navigate'))).text(), 'unified home');
   }
   assert.equal(await (await h.run('fetch', request('workspace.html?section=manage', 'navigate'))).text(), 'timeline management');
@@ -138,4 +138,15 @@ test('failed platform Auth installation cannot activate a mixed life/platform re
   const h=harness({failInstallAsset:'assets/platform-auth.js'});
   await assert.rejects(h.run('install'));
   assert.equal(h.state().skipped,false);
+});
+
+test('public visitor document and anonymous RPC results never enter the app offline cache', async () => {
+  const h = harness();
+  await h.run('install');
+  assert.equal(h.state().resources.some(r => r.url.includes('share.html')), false);
+  for (const path of ['share.html', 'share.html?id=00000000-0000-4000-8000-000000000001', 'rest/v1/rpc/life_public_page_read']) {
+    assert.equal(await h.run('fetch', request(path, 'navigate')), undefined);
+  }
+  assert.equal(h.writes.length, 0);
+  assert.equal(h.state().fetches, 0);
 });

@@ -1,0 +1,37 @@
+/* Public reading uses the same Life type, rhythm and quiet source controls. */
+.share-document { min-width: 0; overflow-wrap: anywhere; }
+.share-document :is(h1,h2,h3,h4,h5,h6,p,blockquote) { word-break: keep-all; overflow-wrap: anywhere; }
+.share-title { font-size: 25px; font-weight: 700; line-height: 1.6; letter-spacing: -.025em; }
+.share-intro { margin-top: 16px; font-size: 17px; line-height: 1.9; white-space: pre-wrap; }
+.share-entry { padding-block: 32px; border-bottom: 1px solid var(--line); }
+.share-entry-title { font-size: 20px; line-height: 1.7; margin-bottom: 18px; }
+.share-source + .share-source { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); }
+.share-source-title { font-size: 16px; line-height: 1.75; margin-bottom: 12px; }
+.share-body { font-size: 18px; line-height: 1.95; white-space: pre-wrap; }
+.share-caption { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; color: var(--ink-soft); }
+.share-source-meta { margin-top: 14px; color: var(--ink-soft); font-size: 13px; line-height: 1.85; }
+.share-source-link { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; min-width: 44px; }
+.share-details { font-size: 12px; }
+.share-details > summary { display: flex; align-items: center; gap: 10px; min-height: 44px; width: fit-content; max-width: 100%; list-style: none; }
+.share-details > summary::-webkit-details-marker { display: none; }
+.share-details > summary::after { content: ''; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); margin-top: -4px; }
+.share-details[open] > summary::after { transform: rotate(225deg); margin-top: 4px; }
+.share-details p { margin-block: 6px; white-space: pre-wrap; }
+.share-comment { margin-top: 24px; }
+.share-comment-body { font-size: 17px; line-height: 1.95; white-space: pre-wrap; }
+.share-empty { margin-block: 32px; color: var(--ink-soft); }
+.share-page { padding: 16px 48px 72px; max-width: 796px; margin-inline: auto; }
+.share-header { display: flex; align-items: center; justify-content: space-between; min-height: 56px; margin-bottom: 28px; }
+.share-brand { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; text-decoration: none; color: var(--ink); font-size: 21px; font-weight: 700; }
+.share-page-state { margin-block: 20px; color: var(--ink-soft); font-size: 15px; }
+.share-page-state[data-state=error] { color: var(--color-error); }
+.share-page-state:empty { display: none; }
+.share-updated { margin-top: 28px; color: var(--ink-soft); font-size: 12px; font-variant-numeric: tabular-nums; }
+@media(max-width:700px) {
+  .share-page { padding: 12px 24px calc(48px + env(safe-area-inset-bottom)); }
+  .share-header { margin-bottom: 22px; }
+  .share-title { font-size: 23px; }
+  .share-entry { padding-block: 28px; }
+  .share-body,.share-comment-body { font-size: 17px; }
+}
+@media(prefers-reduced-motion:reduce) { .share-page * { scroll-behavior: auto; transition: none; } }

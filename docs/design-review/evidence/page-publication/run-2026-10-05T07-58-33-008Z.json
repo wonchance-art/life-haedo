@@ -1,0 +1,45 @@
+{
+  "createdAt": "2026-10-05T07:58:33.008Z",
+  "scope": "Actual local app/SDK/IndexedDB with anonymous HTTP share-RPC simulator; not live SQL/RLS, Apple hardware or real Google login",
+  "checks": [
+    {
+      "name": "only explicitly selected own body and exact original excerpt reach the anonymous snapshot",
+      "pass": true
+    },
+    {
+      "name": "local edits stay private until explicit update; revoke hides content and republish rotates the address",
+      "pass": false,
+      "error": "locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#wbShareReview')\u001b[22m\n\n    at /workspace/life-haedo/tests/life-share-browser.cjs:174:102\n    at async check (/workspace/life-haedo/tests/life-share-browser.cjs:134:9)\n    at async main (/workspace/life-haedo/tests/life-share-browser.cjs:168:5)"
+    },
+    {
+      "name": "lost publish response retries one operation without duplicate revisions or auto retries",
+      "pass": true
+    },
+    {
+      "name": "revision conflict preserves remote publication and requires a fresh explicit review",
+      "pass": true
+    },
+    {
+      "name": "unavailable publication schema stays an error and never reports an empty successful public page",
+      "pass": true
+    },
+    {
+      "name": "late owner response cannot display the previous account public link after signout",
+      "pass": true
+    },
+    {
+      "name": "anonymous late reads, navigation return and offline events never revive a revoked cached body",
+      "pass": true
+    },
+    {
+      "name": "anonymous malformed IDs and malformed snapshots fail closed without executing markup",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 2,
+  "external": [],
+  "browser": "151.0.7922.173"
+}

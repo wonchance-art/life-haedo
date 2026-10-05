@@ -4,7 +4,7 @@
 
   const life = global.HaedoLife = global.HaedoLife || {};
   const ORIGINS = { apple_notes: 'Apple 메모', obsidian: 'Obsidian', naver_blog: '네이버 블로그', instagram: 'Instagram', other: '기타' };
-  const MODES = { activities: '묶음', page: '내 페이지', discover: '다시 찾기', reflection: '회고', 'workbench-backup': '자료·구성 백업' };
+  const MODES = { activities: '묶음', page: '내 페이지', discover: '다시 찾기', reflection: '회고', 'workbench-backup': '자료·구성 백업', 'public-pages': '공개한 페이지' };
   const copy = value => JSON.parse(JSON.stringify(value));
   function el(tag, text, className) {
     const element = document.createElement(tag);
@@ -16,6 +16,8 @@
 
   function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored,
     onSelectionUsed = () => {}, onSelectionCancel = () => {},
+    shareRemoteFactory = () => life.ShareRemote?.createOwner({ auth: global.HaedoAuth }),
+    sharePublicUrl = publicId => { const url = new URL('share.html', global.location.href); url.searchParams.set('id', publicId); return url.href; },
     beforeRestore = async () => {}, isDisposed = () => false }) {
     const model = life.Workbench;
     const limits = model.LIMITS;
@@ -25,6 +27,8 @@
     let surface = null, statusNode = null, errorNode = null, bodyNode = null, saveControl = null;
     let preview = false, discoverQuery = '', restoreCandidate = null, restoreName = '', restoreSequence = 0, installing = false;
     let incoming = null;
+    let shareRemote = null;
+    let publicList = null;
     let viewCleanups = [];
 
     const alive = () => !disposed && !isDisposed();
@@ -145,6 +149,7 @@
     }
     function mark(session, autosave = true) {
       session.edit += 1;
+      if (session.share) { session.share.draft = null; session.share.consented = false; }
       if (session.error?.code !== 'workbench_conflict') { session.error = null; clearError(); }
       updateStatus(session);
       if (autosave) schedule(session);
@@ -482,8 +487,344 @@
       announceSafe('내 페이지에 추가했습니다. 비공개 구성으로 보관합니다.', session);
       if (mode === 'page') redraw();
     }
+    function owner() {
+      shareRemote ||= shareRemoteFactory();
+      if (!shareRemote || !life.Share || !life.ShareView) throw fault('share_unavailable', '공개 기능을 불러오지 못했습니다. 새로고침한 뒤 다시 확인해 주세요.');
+      return shareRemote;
+    }
+    function shareState(session) {
+      return session.share ||= { open: false, sequence: 0, phase: 'idle', head: null, loaded: false, error: '', message: '',
+        choices: { bodyVersionIds: [], excerpts: [] }, draft: null, reviewRows: [], choicesOpen: false, quoteOpen: new Set(), consented: false, revokeConfirm: false };
+    }
+    function sharing(session, sequence) {
+      return workspaceIs(session) && visible && current === session && mode === 'page' && session.share?.open && session.share.sequence === sequence;
+    }
+    function shareError(error) {
+      if (error?.code === 'publish_unknown' || error?.code === 'pending_operation') return '게시 결과를 아직 확인하지 못했습니다. 같은 요청의 결과를 확인하거나 다시 시도해 주세요.';
+      if (error?.code === 'request_cancelled') return '계정 또는 화면이 바뀌어 결과를 표시하지 않았습니다. 원래 계정에서 공개 상태를 확인해 주세요.';
+      if (error?.code === 'pending_storage_failed') return '요청 복구 정보를 보관하지 못해 전송하지 않았습니다. 브라우저 저장 설정을 확인해 주세요.';
+      return error?.message || '공개 상태를 확인하지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요.';
+    }
+    function makeShareDraft(session) {
+      const share = shareState(session);
+      share.consented = false; share.draft = null;
+      if (session.remoteRevision > session.baseRevision) throw fault('workbench_conflict', '다른 탭의 새 구성이 있습니다. 새 저장본을 읽은 뒤 공개할 내용을 다시 확인해 주세요.');
+      const draft = life.Share.makeDraft(getBundle(), session.state, share.choices);
+      share.reviewRows = draft.reviewRows;
+      share.draft = { ...draft, edit: session.edit, revision: getBundle().revision, signature: JSON.stringify(draft.snapshot) };
+    }
+    async function openShare(session) {
+      const token = generation;
+      await flush();
+      if (!showing(token, session)) return;
+      const share = shareState(session);
+      share.open = true; share.choices = { bodyVersionIds: [], excerpts: [] }; share.reviewRows = []; share.choicesOpen = false; share.quoteOpen.clear();
+      share.revokeConfirm = false; share.message = '';
+      await refreshShare(session);
+    }
+    async function refreshShare(session) {
+      const share = shareState(session), sequence = ++share.sequence;
+      share.phase = 'loading'; share.error = ''; share.message = ''; share.loaded = false; share.draft = null; share.consented = false; share.revokeConfirm = false; redraw();
+      try {
+        const head = await owner().get(session.workspaceId);
+        if (!sharing(session, sequence)) return;
+        share.head = head; share.loaded = true; share.phase = 'ready';
+        if (!owner().pending(session.workspaceId)) makeShareDraft(session);
+      } catch (error) {
+        if (!sharing(session, sequence)) return;
+        share.error = shareError(error); share.phase = 'error';
+      }
+      if (sharing(session, sequence)) redraw();
+    }
+    function changeShareChoices(session, change, focusClass, versionId) {
+      const share = shareState(session);
+      if (!share.open || ['loading', 'sending'].includes(share.phase)) return;
+      change(share.choices); share.error = ''; share.message = '';
+      try { makeShareDraft(session); } catch (error) { share.error = shareError(error); }
+      redraw();
+      [...bodyNode.querySelectorAll('.' + focusClass)].find(control => control.dataset.versionId === versionId)?.focus({ preventScroll: true });
+    }
+    async function sendShare(session, actionName, retry = false) {
+      const share = shareState(session), sequence = share.sequence;
+      if (!sharing(session, sequence) || ['loading', 'sending'].includes(share.phase)) return;
+      try {
+        const remote = owner();
+        if (!retry) {
+          if (remote.pending(session.workspaceId)) throw fault('pending_operation');
+          if (!share.loaded || !share.head) throw fault('share_not_checked', '공개 상태를 먼저 확인해 주세요.');
+          if (actionName === 'publish') {
+            if (!share.consented || !share.draft) throw fault('share_not_reviewed', '공개할 사본과 공개 범위를 먼저 확인해 주세요.');
+            share.phase = 'sending'; share.error = ''; share.message = ''; redraw();
+            await flush();
+            if (!sharing(session, sequence)) return;
+            const latest = life.Share.makeDraft(getBundle(), session.state, share.choices);
+            if (share.draft.edit !== session.edit || share.draft.revision !== getBundle().revision || session.remoteRevision > session.baseRevision ||
+                JSON.stringify(latest.snapshot) !== share.draft.signature) {
+              share.draft = null; share.consented = false;
+              throw fault('share_draft_changed', '검토한 뒤 구성이 바뀌었습니다. 공개할 내용을 다시 확인해 주세요.');
+            }
+          }
+        }
+        share.phase = 'sending'; share.error = ''; share.message = ''; redraw();
+        const result = retry ? await remote.retryPending(session.workspaceId) : await remote.put({ workspaceId: session.workspaceId,
+          expectedRevision: share.head.revision, operationId: global.crypto.randomUUID(), action: actionName,
+          snapshot: actionName === 'publish' ? share.draft.snapshot : null });
+        if (!sharing(session, sequence)) return;
+        // An idempotent receipt may describe an older operation; read the current server head.
+        share.loaded = false; share.draft = null; share.consented = false; share.revokeConfirm = false;
+        const head = await remote.get(session.workspaceId);
+        if (!sharing(session, sequence)) return;
+        share.head = head; share.loaded = true; share.phase = 'ready';
+        if (result?.status === 'conflict' || result?.status === 'missing') {
+          share.error = '다른 기기에서 공개본이 바뀌었습니다. 최신 공개 상태를 읽었습니다. 내용을 다시 검토한 뒤 적용해 주세요.';
+        } else share.message = head.status === 'published' ? '서버에서 공개 상태를 확인했습니다.' : head.status === 'revoked' ? '서버에서 공개 철회를 확인했습니다.' : '아직 게시한 사본이 없습니다.';
+        announceSafe(share.error || share.message, session);
+      } catch (error) {
+        if (!sharing(session, sequence)) return;
+        share.error = shareError(error); share.phase = 'error';
+        // A transport error cannot prove whether a public change committed.
+        if (error?.code === 'publish_unknown' || error?.code === 'request_cancelled') share.loaded = false;
+      }
+      if (sharing(session, sequence)) {
+        redraw();
+        const target = bodyNode.querySelector(share.error ? '#wbShareError' : '#wbShareUrl') || bodyNode.querySelector('#wbShareStatus');
+        if (target) { if (!target.matches('a[href],button,input,select,textarea,[tabindex]')) target.tabIndex = -1; target.focus({ preventScroll: true }); }
+      }
+    }
+    function renderSharePanel(session) {
+      const share = shareState(session), busy = ['loading', 'sending'].includes(share.phase);
+      const box = el('section', null, 'wb-share'); box.id = 'wbSharePanel'; box.setAttribute('aria-label', '공개 사본 관리');
+      box.setAttribute('aria-busy', String(busy));
+      const header = el('div', null, 'wb-row');
+      const back = icon('페이지 편집으로 돌아가기', 'back', () => {
+        share.open = false; share.sequence += 1; share.draft = null; share.consented = false; preview = false; redraw();
+        surface.querySelector('#wbPageShare')?.focus();
+      }); back.id = 'wbShareBack';
+      header.append(back, el('h3', '공개 사본', 'wb-grow'));
+      box.append(header);
+      const status = el('p', share.phase === 'loading' ? '공개 상태를 확인하는 중…' : share.phase === 'sending' ? '서버에 요청 중…' :
+        !share.loaded ? '공개 상태 확인 필요' : share.head?.status === 'published' ? '공개 중' : share.head?.status === 'revoked' ? '공개 철회됨' : '아직 게시하지 않음', 'life-meta');
+      status.id = 'wbShareStatus'; status.setAttribute('role', 'status'); box.append(status);
+      const error = el('p', share.error, 'wb-incoming-error'); error.id = 'wbShareError'; error.setAttribute('role', 'alert'); error.hidden = !share.error; box.append(error);
+      if (share.message) box.append(notice(share.message));
+      let pending = null, pendingError = null;
+      try { pending = shareRemote?.pending(session.workspaceId); } catch (cause) { pendingError = cause; error.textContent = shareError(cause); error.hidden = false; }
+      if (pending) box.append(notice('아직 확인하지 못한 요청이 있습니다. 새 게시 대신 같은 요청의 결과를 확인해 주세요.'));
+      if (share.loaded && share.head?.status === 'published' && !pending && !pendingError) {
+        const link = el('a', '공개 페이지 열기', 'wb-source-link'); link.id = 'wbShareUrl';
+        link.href = sharePublicUrl(share.head.publicId); link.target = '_blank'; link.rel = 'noopener noreferrer';
+        const copyLink = action('링크 복사', async () => {
+          const sequence = share.sequence;
+          if (!global.navigator.clipboard?.writeText) { share.error = '링크 복사를 지원하지 않습니다. 공개 페이지를 연 뒤 주소를 복사해 주세요.'; redraw(); return; }
+          try { await global.navigator.clipboard.writeText(link.href); if (sharing(session, sequence)) announceSafe('공개 링크를 복사했습니다.', session); }
+          catch (_) { if (sharing(session, sequence)) { share.error = '링크를 복사하지 못했습니다. 공개 페이지를 연 뒤 주소를 복사해 주세요.'; redraw(); } }
+        }); copyLink.id = 'wbShareCopy';
+        const links = el('div', null, 'life-actions'); links.append(link, copyLink); box.append(links);
+      }
+      const actions = el('div', null, 'life-actions');
+      const refresh = action('공개 상태 다시 확인', () => refreshShare(session)); refresh.id = 'wbShareRefresh'; refresh.disabled = busy; actions.append(refresh);
+      if (pending) {
+        const retry = action('같은 요청 다시 확인', () => sendShare(session, pending.action, true)); retry.id = 'wbShareRetry'; retry.disabled = busy; actions.append(retry);
+      } else if (share.loaded && !pendingError) {
+        const review = action(share.draft ? '공개 내용 다시 확인' : '공개할 내용 검토', async () => {
+          const sequence = share.sequence;
+          await flush();
+          if (!sharing(session, sequence)) return;
+          share.error = ''; share.message = ''; share.revokeConfirm = false;
+          try { makeShareDraft(session); } catch (cause) { share.error = shareError(cause); }
+          redraw();
+        }); review.id = 'wbShareReview'; review.disabled = busy; actions.append(review);
+        if (share.head?.status === 'published') {
+          const revoke = action('공개 철회', () => { share.revokeConfirm = true; share.consented = false; redraw(); bodyNode.querySelector('#wbShareRevokeConfirm')?.focus(); });
+          revoke.id = 'wbShareRevoke'; revoke.disabled = busy; actions.append(revoke);
+        }
+      }
+      box.append(actions);
+      if (share.revokeConfirm && !pending && !pendingError) {
+        const confirmation = el('section', null, 'wb-share-confirm');
+        confirmation.append(el('h3', '공개를 철회할까요?'), notice('이 주소에서 사본을 읽을 수 없게 됩니다. 이미 외부에 복사된 내용까지 지워지지는 않습니다.'));
+        const revoke = action('공개 철회 확인', () => sendShare(session, 'revoke')); revoke.id = 'wbShareRevokeConfirm'; revoke.disabled = busy;
+        confirmation.append(revoke, action('철회 취소', () => { share.revokeConfirm = false; redraw(); bodyNode.querySelector('#wbShareRevoke')?.focus(); })); box.append(confirmation);
+      } else if (!pending && !pendingError) {
+        if (share.reviewRows.length) renderShareChoices(session, box, busy);
+        if (share.draft) {
+          const previewBox = el('section', null, 'wb-share-preview'); previewBox.id = 'wbSharePreview';
+          previewBox.append(el('h3', '공개 전 확인'), life.ShareView.render(share.draft.snapshot, { headingLevel: 3 })); box.append(previewBox);
+          const consent = toggle('이 사본을 누구나 볼 수 있는 주소로 공개합니다.', share.consented, value => {
+            share.consented = value; box.querySelector('#wbSharePublish').disabled = !value;
+          }, { id: 'wbShareConsent' }); consent.querySelector('input').disabled = busy;
+          const publish = action(share.head?.status === 'published' ? '이 사본으로 공개본 갱신' : '이 사본 게시', () => sendShare(session, 'publish'), 'life-primary');
+          publish.id = 'wbSharePublish'; publish.disabled = busy || !share.consented;
+          box.append(consent, publish, notice('표시한 사본만 공개합니다. 이후 편집 내용은 다시 갱신하기 전까지 반영되지 않습니다.'));
+        }
+      }
+      bodyNode.append(box);
+    }
+    function renderShareChoices(session, box, busy) {
+      const share = session.share;
+      const choices = details('공개할 본문·인용 선택', { open: share.choicesOpen }); choices.id = 'wbShareChoices';
+      choices.addEventListener('toggle', () => { if (choices.isConnected) share.choicesOpen = choices.open; });
+      choices.append(notice('기본은 제목·출처 카드입니다. 다른 사람의 글은 공개해도 되는 본문이나 인용만 직접 골라 주세요.'));
+      share.reviewRows.forEach(row => {
+        const article = el('section', null, 'wb-share-part'); article.dataset.versionId = row.versionId;
+        article.append(el('h4', row.title));
+        const info = sourceInfo(row.versionId);
+        if (info) article.append(el('p', sourceMeta(info), 'life-meta'));
+        const body = toggle('본문 공개', share.choices.bodyVersionIds.includes(row.versionId), checked => changeShareChoices(session, value => {
+          value.bodyVersionIds = checked ? value.bodyVersionIds.concat(row.versionId) : value.bodyVersionIds.filter(id => id !== row.versionId);
+          if (checked) value.excerpts = value.excerpts.filter(item => item.versionId !== row.versionId);
+        }, 'wb-share-body', row.versionId), { 'data-version-id': row.versionId, class: 'wb-share-body' });
+        body.querySelector('input').disabled = busy || !row.canIncludeBody; article.append(body);
+        if (!row.canIncludeBody && typeof row.text === 'string') article.append(notice('페이지 편집에서 원문 본문 표시를 켜면 선택할 수 있습니다.'));
+        if (row.canIncludeBody && typeof row.text === 'string' && row.text.length) {
+          const quote = details('인용 구간 선택', { open: share.quoteOpen.has(row.versionId) });
+          quote.addEventListener('toggle', () => { if (quote.isConnected) {
+            if (quote.open) share.quoteOpen.add(row.versionId); else share.quoteOpen.delete(row.versionId);
+          } });
+          quote.append(notice('아래 원문에서 공개할 구절을 선택해 주세요.'));
+          const input = el('textarea', null, 'wb-share-excerpt'); input.readOnly = true; input.rows = 6; input.value = row.text;
+          input.dataset.versionId = row.versionId; input.setAttribute('aria-label', row.title + ' 인용할 구절 선택');
+          // Textarea normalizes CRLF/CR. Convert its UTF-16 offsets back to unchanged source text.
+          const rawOffset = value => { let raw = 0, displayed = 0; while (raw < row.text.length && displayed < value) {
+            if (row.text[raw] === '\r' && row.text[raw + 1] === '\n') raw += 2; else raw += 1; displayed += 1;
+          } return raw; };
+          const use = action('선택 구절 사용', () => {
+            const start = rawOffset(input.selectionStart), end = rawOffset(input.selectionEnd);
+            if (start === end) {
+              share.error = '원문에서 공개할 구절을 먼저 선택해 주세요.';
+              const error = bodyNode.querySelector('#wbShareError'); error.textContent = share.error; error.hidden = false; input.focus(); return;
+            }
+            changeShareChoices(session, value => {
+              value.bodyVersionIds = value.bodyVersionIds.filter(id => id !== row.versionId);
+              value.excerpts = value.excerpts.filter(item => item.versionId !== row.versionId).concat({ versionId: row.versionId, start, end });
+            }, 'wb-share-use-excerpt', row.versionId);
+          }); use.classList.add('wb-share-use-excerpt'); use.dataset.versionId = row.versionId; use.disabled = busy;
+          quote.append(input, use); article.append(quote);
+        }
+        const excerpt = share.choices.excerpts.find(item => item.versionId === row.versionId);
+        if (excerpt) {
+          article.append(el('blockquote', row.text.slice(excerpt.start, excerpt.end), 'wb-share-quote'));
+          const clear = action('인용 선택 해제', () => changeShareChoices(session, value => { value.excerpts = value.excerpts.filter(item => item.versionId !== row.versionId); }, 'wb-share-body', row.versionId));
+          clear.classList.add('wb-share-clear-excerpt'); clear.dataset.versionId = row.versionId; clear.disabled = busy; article.append(clear);
+        }
+        choices.append(article);
+      });
+      box.append(choices);
+    }
+    function publicShowing(token, session, listing) {
+      return showing(token, session) && mode === 'public-pages' && publicList === listing;
+    }
+    async function loadPublicPages(more = false) {
+      const listing = publicList, session = current, token = generation;
+      if (!listing || listing.busy) return;
+      const focusId = ['wbPublicPagesRefresh', 'wbPublicPagesMore'].includes(document.activeElement?.id) ? document.activeElement.id : null;
+      listing.busy = true; listing.error = ''; listing.message = ''; listing.confirm = null; redraw();
+      try {
+        const result = await owner().list(more ? listing.nextCursor : null);
+        if (!publicShowing(token, session, listing)) return;
+        const rows = more ? listing.rows.slice() : [];
+        result.pages.forEach(row => { const index = rows.findIndex(item => item.workspaceId === row.workspaceId); if (index < 0) rows.push(row); else rows[index] = row; });
+        listing.rows = rows; listing.nextCursor = result.nextCursor; listing.loaded = true;
+      } catch (error) { if (publicShowing(token, session, listing)) listing.error = shareError(error); }
+      finally { if (publicShowing(token, session, listing)) {
+        listing.busy = false; redraw();
+        if (focusId) (bodyNode.querySelector('#' + focusId) || bodyNode.querySelector('#wbPublicPagesRefresh'))?.focus({ preventScroll: true });
+      } }
+    }
+    async function managePublicPage(row, intent) {
+      const listing = publicList, session = current, token = generation;
+      if (!listing || listing.busy) return;
+      listing.busy = true; listing.error = ''; listing.message = ''; redraw();
+      const updateHead = head => {
+        listing.confirm = null;
+        if (head.status !== 'published') {
+          listing.rows = listing.rows.filter(item => item.workspaceId !== row.workspaceId);
+          listing.message = '이 사본이 공개되지 않은 상태를 서버에서 확인했습니다.';
+          return false;
+        }
+        const index = listing.rows.findIndex(item => item.workspaceId === row.workspaceId);
+        const changed = head.revision !== row.revision || head.publicId !== row.publicId;
+        if (index >= 0) listing.rows[index] = { ...row, ...head, title: changed ? '공개 내용이 바뀐 페이지' : row.title };
+        listing.message = changed ? '공개본이 바뀌었습니다. 현재 공개 페이지를 확인한 뒤 다시 철회를 선택해 주세요.' : '현재 이 페이지가 공개 중인 상태를 서버에서 확인했습니다.';
+        return true;
+      };
+      try {
+        const remote = owner();
+        if (intent === 'retry') {
+          await remote.retryPending(row.workspaceId);
+          if (!publicShowing(token, session, listing)) return;
+          const head = await remote.get(row.workspaceId);
+          if (!publicShowing(token, session, listing)) return;
+          updateHead(head);
+        } else {
+          if (remote.pending(row.workspaceId)) throw fault('pending_operation');
+          const head = await remote.get(row.workspaceId);
+          if (!publicShowing(token, session, listing)) return;
+          if (head.status !== 'published' || head.revision !== row.revision || head.publicId !== row.publicId) { updateHead(head); return; }
+          if (intent === 'prepare') listing.confirm = { workspaceId: row.workspaceId, revision: head.revision, publicId: head.publicId };
+          else {
+            const confirmed = listing.confirm;
+            if (!confirmed || confirmed.workspaceId !== row.workspaceId || confirmed.revision !== head.revision || confirmed.publicId !== head.publicId)
+              throw fault('share_not_reviewed', '철회할 공개 페이지를 다시 확인해 주세요.');
+            await remote.put({ workspaceId: row.workspaceId, expectedRevision: head.revision,
+              operationId: global.crypto.randomUUID(), action: 'revoke', snapshot: null });
+            if (!publicShowing(token, session, listing)) return;
+            const latest = await remote.get(row.workspaceId);
+            if (!publicShowing(token, session, listing)) return;
+            updateHead(latest);
+          }
+        }
+      } catch (error) { if (publicShowing(token, session, listing)) { listing.error = shareError(error); listing.confirm = null; } }
+      finally { if (publicShowing(token, session, listing)) {
+        listing.busy = false; redraw();
+        const article = [...bodyNode.querySelectorAll('.wb-public-page')].find(item => item.dataset.workspaceId === row.workspaceId);
+        (article?.querySelector(listing.confirm ? '.wb-public-revoke-confirm' : '.wb-public-retry,.wb-public-revoke') || bodyNode.querySelector('#wbPublicPagesRefresh'))?.focus({ preventScroll: true });
+      } }
+    }
+    function renderPublicPages() {
+      const listing = publicList ||= { rows: [], nextCursor: null, loaded: false, started: false, busy: false, error: '', message: '', confirm: null };
+      const box = el('section', null, 'wb-public-pages'); box.id = 'wbPublicPages'; box.setAttribute('aria-busy', String(listing.busy));
+      const status = el('p', listing.busy ? '공개 상태를 확인하는 중…' : listing.error ? '공개 상태 다시 확인 필요' : listing.loaded ? '이 계정에서 공개한 페이지' : '공개 목록 확인 필요', 'life-meta');
+      status.id = 'wbPublicPagesStatus'; status.setAttribute('role', 'status'); box.append(status);
+      const error = el('p', listing.error, 'wb-incoming-error'); error.id = 'wbPublicPagesError'; error.setAttribute('role', 'alert'); error.hidden = !listing.error; box.append(error);
+      if (listing.message) box.append(notice(listing.message));
+      const refresh = action('공개 목록 다시 확인', () => loadPublicPages()); refresh.id = 'wbPublicPagesRefresh'; refresh.disabled = listing.busy; box.append(refresh);
+      if (listing.loaded && !listing.rows.length) box.append(empty('현재 공개한 페이지가 없습니다.'));
+      listing.rows.forEach(row => {
+        const article = el('article', null, 'wb-feed wb-public-page'); article.dataset.workspaceId = row.workspaceId;
+        article.append(el('h3', row.title), el('p', '서버 갱신 · ' + new Date(row.updatedAt).toLocaleString('ko-KR'), 'life-meta'));
+        const actions = el('div', null, 'life-actions');
+        const link = el('a', '공개 페이지 열기', 'wb-source-link wb-public-link'); link.href = sharePublicUrl(row.publicId); link.target = '_blank'; link.rel = 'noopener noreferrer';
+        actions.append(link);
+        let pending = null, pendingError = null;
+        try { pending = shareRemote?.pending(row.workspaceId); } catch (cause) { pendingError = cause; }
+        if (pendingError) article.append(el('p', shareError(pendingError), 'wb-incoming-error'));
+        else if (pending) {
+          article.append(notice('이 페이지에 확인하지 못한 요청이 있습니다.'));
+          const retry = action('같은 요청 다시 확인', () => managePublicPage(row, 'retry')); retry.classList.add('wb-public-retry'); retry.disabled = listing.busy; actions.append(retry);
+        } else {
+          const revoke = action('공개 철회', () => managePublicPage(row, 'prepare')); revoke.classList.add('wb-public-revoke'); revoke.disabled = listing.busy; actions.append(revoke);
+        }
+        article.append(actions);
+        if (listing.confirm?.workspaceId === row.workspaceId && !pending && !pendingError) {
+          const confirm = el('section', null, 'wb-share-confirm');
+          confirm.append(notice('이 페이지의 공개 주소를 닫습니다. 이미 외부에 복사된 내용까지 지워지지는 않습니다.'));
+          const revoke = action('공개 철회 확인', () => managePublicPage(row, 'revoke')); revoke.classList.add('wb-public-revoke-confirm'); revoke.disabled = listing.busy;
+          const cancel = action('철회 취소', () => {
+            listing.confirm = null; redraw();
+            [...bodyNode.querySelectorAll('.wb-public-page')].find(item => item.dataset.workspaceId === row.workspaceId)?.querySelector('.wb-public-revoke')?.focus({ preventScroll: true });
+          }); cancel.classList.add('wb-public-revoke-cancel'); cancel.disabled = listing.busy;
+          confirm.append(revoke, cancel); article.append(confirm);
+        }
+        box.append(article);
+      });
+      if (listing.nextCursor) { const more = action('공개 페이지 더 보기', () => loadPublicPages(true)); more.id = 'wbPublicPagesMore'; more.disabled = listing.busy; box.append(more); }
+      bodyNode.append(box);
+      if (!listing.started) { listing.started = true; loadPublicPages(); }
+    }
     function renderPage() {
       const session = current, page = session.state.page;
+      if (session.share?.open) { renderSharePanel(session); return; }
       const switchButton = action(preview ? '편집으로 돌아가기' : '방문자 미리보기', async () => {
         const token = generation;
         await flush();
@@ -491,7 +832,10 @@
         preview = !preview; redraw(); surface.querySelector('#wbPagePreview')?.focus();
       }, 'life-primary');
       switchButton.id = 'wbPagePreview'; switchButton.setAttribute('aria-pressed', String(preview));
-      bodyNode.append(switchButton, notice('비공개 미리보기'));
+      const actions = el('div', null, 'life-actions');
+      const publish = icon('공개 사본 관리', 'link', () => openShare(session)); publish.id = 'wbPageShare';
+      actions.append(switchButton, publish);
+      bodyNode.append(actions, notice('비공개 미리보기'));
       if (preview) { renderVisitor(page); return; }
       const pageSettings = details('제목·소개·표시 설정', { open: !page.entries.length });
       pageSettings.append(field('페이지 제목', page.title, { id: 'wbPageTitle', change: value => { page.title = value; } }).wrapper);
@@ -733,10 +1077,11 @@
     }
 
     function redraw() {
-      if (!visible || !current?.state || !workspaceIs(current)) return;
+      if (!visible || !current || !workspaceIs(current) || mode !== 'public-pages' && !current.state) return;
       cleanupView();
       bodyNode.replaceChildren();
-      if (saveControl) saveControl.hidden = !!incoming;
+      if (saveControl) saveControl.hidden = mode === 'public-pages' || !!incoming || mode === 'page' && !!current.share?.open;
+      if (mode === 'public-pages') { renderPublicPages(); return; }
       if (incoming && ['activities', 'page'].includes(mode)) { renderIncoming(); updateStatus(current); return; }
       if (mode === 'activities') renderActivities();
       if (mode === 'page') renderPage();
@@ -768,17 +1113,19 @@
       surface.dataset.workspaceId = bundle.workspaceId;
       const heading = el('div', null, 'wb-row wb-heading');
       const title = el('h2', MODES[mode], 'life-heading wb-grow'); title.tabIndex = -1;
-      saveControl = icon('지금 저장', 'check', () => flush()); saveControl.hidden = !!incoming;
+      saveControl = icon('지금 저장', 'check', () => flush()); saveControl.hidden = mode === 'public-pages' || !!incoming;
       heading.append(title, saveControl);
       statusNode = el('p', '이 브라우저의 구성을 불러오는 중…', 'life-meta wb-save-status'); statusNode.id = 'wbStatus';
       statusNode.setAttribute('role', 'status'); statusNode.setAttribute('aria-live', 'polite');
       const scope = details('저장 범위');
       scope.classList.add('wb-scope');
-      scope.append(notice('묶음·페이지·회고 구성은 비공개로 이 브라우저에만 저장되며 기기 간 동기화 대상이 아닙니다. 다른 기기로 옮기려면 자료·구성 통합 JSON 백업을 사용해 주세요. 내 페이지는 방문자용 주소나 공개 게시 기능이 없는 비공개 미리보기입니다.'));
+      scope.append(notice('묶음·페이지·회고 초안은 비공개로 이 브라우저에만 저장되며 기기 간 동기화 대상이 아닙니다. 다른 기기로 옮기려면 자료·구성 통합 JSON 백업을 사용해 주세요. 내 페이지의 공개 사본은 공개 전 확인 후 따로 게시·갱신·철회합니다. 표시를 끄거나 원문을 수정해도 이미 게시한 사본은 바뀌지 않습니다.'));
       errorNode = el('div', null, 'life-error wb-error'); errorNode.id = 'wbError'; errorNode.setAttribute('role', 'alert'); errorNode.hidden = true;
       bodyNode = el('div', null, 'wb-content'); bodyNode.append(notice('불러오는 중…'));
       const storageLine = el('div', null, 'wb-storage-line'); storageLine.append(statusNode, scope);
+      storageLine.hidden = mode === 'public-pages';
       surface.append(heading, storageLine, errorNode, bodyNode); host.replaceChildren(surface);
+      if (mode === 'public-pages') { surface.setAttribute('aria-busy', 'false'); redraw(); return; }
       try {
         if (!session.state || session.edit === session.stored && session.remoteRevision > session.baseRevision) await load(session);
         if (!showing(token, session)) return;
@@ -792,9 +1139,14 @@
         report(error, session);
       }
     }
-    function leave() { generation += 1; visible = false; cleanupView(); incoming = null; restoreSequence += 1; restoreCandidate = null; restoreName = ''; }
+    function leave() {
+      generation += 1; visible = false; cleanupView(); incoming = null; restoreSequence += 1; restoreCandidate = null; restoreName = '';
+      publicList = null;
+      if (current?.share) { current.share.open = false; current.share.sequence += 1; current.share.draft = null; current.share.consented = false; }
+    }
     function dispose() {
       disposed = true; leave();
+      shareRemote?.dispose();
       sessions.forEach(session => { clearTimeout(session.timer); session.unsubscribe?.(); });
       urls.forEach(url => URL.revokeObjectURL(url)); urls.clear();
     }

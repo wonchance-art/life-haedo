@@ -68,6 +68,22 @@
 .wb-incoming-meta .wb-source-link { margin-top: 0; }
 .wb-incoming-error { color: var(--color-error); font-size: 14px; line-height: 1.75; margin-block: 16px; }
 .wb-incoming > .life-actions { margin-top: 20px; }
+.wb-share { margin-top: 18px; }
+.wb-share > .wb-row h3 { font-size: 19px; }
+.wb-share > .life-meta { margin-block: 10px 16px; }
+.wb-share > .life-actions { margin-block: 12px 20px; }
+.wb-share-preview { margin-block: 28px; padding-block: 22px; border-block: 1px solid var(--line); }
+.wb-share-preview > h3 { margin-bottom: 20px; font-size: 16px; }
+.wb-share-part { padding-block: 20px; border-bottom: 1px solid var(--line); }
+.wb-share-part h4 { font-size: 16px; line-height: 1.8; }
+.wb-share-part > .life-meta { margin-top: 8px; }
+.wb-share-excerpt { display: block; width: 100%; max-width: 100%; min-height: 160px; max-height: 26rem; padding: 12px; margin-block: 12px; border: 1px solid var(--field-line); border-radius: 6px; background: var(--field); font: inherit; font-size: 16px; line-height: 1.85; white-space: pre-wrap; resize: vertical; }
+.wb-share-quote { margin-block: 12px; font-size: 16px; line-height: 1.85; white-space: pre-wrap; }
+.wb-share-confirm { margin-block: 24px; padding-block: 20px; border-block: 1px solid var(--line); }
+.wb-share-confirm > .life-button { margin: 10px 10px 0 0; }
+.wb-public-pages > .life-meta { margin-block: 12px 18px; }
+.wb-public-page > .life-meta { margin-block: 8px 16px; }
+.wb-public-page > .life-actions { margin-top: 14px; }
 @media (max-width: 700px) {
   .wb-heading { min-height: 50px; }
   .wb-feed { padding-block: 24px; }

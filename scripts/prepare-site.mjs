@@ -40,12 +40,12 @@ let previous;
 try {
   // Publish runtime files explicitly. Design previews, samples and future
   // internal assets must not become public just by living under assets/vendor.
-  for (const path of ['index.html', 'login.html', 'workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'privacy.html', 'life.html',
+  for (const path of ['index.html', 'login.html', 'workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'privacy.html', 'life.html', 'share.html',
     'assets/app.css', 'assets/app.js', 'assets/data.js', 'assets/sync.js', 'assets/workspace.js',
     'assets/platform.css', 'assets/platform-auth.js', 'assets/platform-data.js', 'assets/platform-store.js',
     'assets/platform-ui.js', 'assets/platform-life-remote.js', 'assets/timeline-entry.js',
     'assets/haedo-navigation.js', 'assets/haedo-shell.css', 'assets/timeline-shell.css',
-    'assets/life/core.js', 'assets/life/workbench.js', 'assets/life/storage.js', 'assets/life/remote.js', 'assets/life/sync.js',
+    'assets/life/core.js', 'assets/life/workbench.js', 'assets/life/share.js', 'assets/life/share-remote.js', 'assets/life/share-view.js', 'assets/life/share-view.css', 'assets/life/share-page.js', 'assets/life/storage.js', 'assets/life/remote.js', 'assets/life/sync.js',
     'assets/life/legacy.js', 'assets/life/icons.js', 'assets/life/workbench-ui.js', 'assets/life/home.js', 'assets/life/ui.js', 'assets/life/ui.css', 'assets/life/workbench.css', 'assets/life/home.css', 'assets/life/shell.js',
     'vendor/daisyui.css', 'vendor/daisyui-themes.css', 'vendor/idb/idb.js', 'vendor/idb/LICENSE',
     'vendor/supabase/supabase.js', 'vendor/supabase/LICENSE', 'vendor/lucide/LICENSE',

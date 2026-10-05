@@ -1,0 +1,243 @@
+{
+  "timestamp": "2026-10-05T08:07:05.310Z",
+  "passed": 56,
+  "failed": 0,
+  "scope": "Real local PostgreSQL 17 RPC JSON through production ShareRemote owner and anonymous strict decoders; SDK/fetch envelopes simulated.",
+  "limitations": [
+    "No real PostgREST/HTTP or hosted Supabase connection",
+    "No production users or content",
+    "No browser/Apple hardware coverage"
+  ],
+  "cleanup": "Single PostgreSQL transaction rolled back",
+  "inputs": {
+    "assets/life/share.js": "ee2ce770346da14c0262a0d55bace36d579bf589b5e64372fa56559f15ec85a4",
+    "assets/life/share-remote.js": "1541c9d39ca0d9d04fd9cdfa1153d5741cb0f69fd764008d9db2fa401cd72076",
+    "supabase/migrations/20261005120000_life_public_pages.sql": "d44c711a293906b6962ff8e983578da742648d9938aaeb71b32062eb6ec4e78c"
+  },
+  "checks": [
+    {
+      "name": "ownerMissing",
+      "passed": true
+    },
+    {
+      "name": "publish",
+      "passed": true
+    },
+    {
+      "name": "ownerPublished",
+      "passed": true
+    },
+    {
+      "name": "publishReplay",
+      "passed": true
+    },
+    {
+      "name": "anonymousPublished",
+      "passed": true
+    },
+    {
+      "name": "anonymousMissing",
+      "passed": true
+    },
+    {
+      "name": "update",
+      "passed": true
+    },
+    {
+      "name": "ownerUpdated",
+      "passed": true
+    },
+    {
+      "name": "conflict",
+      "passed": true
+    },
+    {
+      "name": "actual SQL operation mismatch maps to a recoverable named error",
+      "passed": true
+    },
+    {
+      "name": "revoke",
+      "passed": true
+    },
+    {
+      "name": "ownerRevoked",
+      "passed": true
+    },
+    {
+      "name": "revokeReplay",
+      "passed": true
+    },
+    {
+      "name": "anonymousRevoked",
+      "passed": true
+    },
+    {
+      "name": "historicalPublishReplay",
+      "passed": true
+    },
+    {
+      "name": "ownerAfterHistoricalPublish",
+      "passed": true
+    },
+    {
+      "name": "republish",
+      "passed": true
+    },
+    {
+      "name": "historicalRevokeReplay",
+      "passed": true
+    },
+    {
+      "name": "ownerAfterHistoricalRevoke",
+      "passed": true
+    },
+    {
+      "name": "initialRevoke",
+      "passed": true
+    },
+    {
+      "name": "otherOwnerMissing",
+      "passed": true
+    },
+    {
+      "name": "otherWriteMissing",
+      "passed": true
+    },
+    {
+      "name": "otherNamespacePublish",
+      "passed": true
+    },
+    {
+      "name": "anonymousOldLink",
+      "passed": true
+    },
+    {
+      "name": "anonymousRepublished",
+      "passed": true
+    },
+    {
+      "name": "actual SQL permission error does not become transport success",
+      "passed": true
+    },
+    {
+      "name": "listEmpty",
+      "passed": true
+    },
+    {
+      "name": "listPublished",
+      "passed": true
+    },
+    {
+      "name": "listRevoked",
+      "passed": true
+    },
+    {
+      "name": "listRepublished",
+      "passed": true
+    },
+    {
+      "name": "listOther",
+      "passed": true
+    },
+    {
+      "name": "listFirst",
+      "passed": true
+    },
+    {
+      "name": "listNext",
+      "passed": true
+    },
+    {
+      "name": "owner list excludes revoked pages and other accounts across cursor pages",
+      "passed": true
+    },
+    {
+      "name": "actual SQL anonymous list permission error reaches owner decoder",
+      "passed": true
+    },
+    {
+      "name": "update preserves URL, revoke clears it, and republish rotates it",
+      "passed": true
+    },
+    {
+      "name": "SQL public envelope excludes private owner, workspace and operation identities",
+      "passed": true
+    },
+    {
+      "name": "strict owner decoder rejects a stale public URL on revoked metadata",
+      "passed": true
+    },
+    {
+      "name": "strict write decoder preserves the pending request for a malformed revoked result",
+      "passed": true
+    },
+    {
+      "name": "strict owner decoder rejects extra snapshot data",
+      "passed": true
+    },
+    {
+      "name": "strict visitor decoder rejects extra private identifiers",
+      "passed": true
+    },
+    {
+      "name": "SQL/client validation parity: ordinary Korean and paired emoji",
+      "passed": true
+    },
+    {
+      "name": "SQL/client validation parity: title exactly 500 UTF-16 units",
+      "passed": true
+    },
+    {
+      "name": "SQL/client validation parity: title exceeds 500 UTF-16 units",
+      "passed": true
+    },
+    {
+      "name": "SQL/client validation parity: ECMAScript whitespace-only title",
+      "passed": true
+    },
+    {
+      "name": "SQL/client validation parity: control character in title",
+      "passed": true
+    },
+    {
+      "name": "SQL/client validation parity: whitespace-only published text",
+      "passed": true
+    },
+    {
+      "name": "SQL/client validation parity: valid Korean hostname",
+      "passed": true
+    },
+    {
+      "name": "SQL/client validation parity: invalid URL port",
+      "passed": true
+    },
+    {
+      "name": "SQL/client validation parity: out-of-range URL port",
+      "passed": true
+    },
+    {
+      "name": "SQL/client validation parity: invalid bracketed URL host",
+      "passed": true
+    },
+    {
+      "name": "SQL/client validation parity: out-of-range numeric IPv4 host",
+      "passed": true
+    },
+    {
+      "name": "SQL/client validation parity: invalid bracketed IPv6 host",
+      "passed": true
+    },
+    {
+      "name": "SQL/client validation parity: compact JSON exactly one MiB",
+      "passed": true
+    },
+    {
+      "name": "SQL/client validation parity: compact JSON one byte beyond one MiB",
+      "passed": true
+    },
+    {
+      "name": "rollback leaves account, page and receipt row counts unchanged",
+      "passed": true
+    }
+  ]
+}

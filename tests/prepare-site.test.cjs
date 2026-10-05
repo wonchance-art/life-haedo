@@ -23,6 +23,11 @@ test('repeat public build removes stale private canary and old SDK while preserv
     for(const entry of shell.matchAll(/['"]([^'"]+)['"]/g))await fs.access(path.join(target,entry[1]));
     for(const name of (await fs.readdir(target)).filter(name=>name.endsWith('.html'))){
       const html=await fs.readFile(path.join(target,name),'utf8');
+      if(name === 'share.html') {
+        for (const privateModule of ['platform-auth.js','supabase.js','storage.js','core.js','shell.js','workbench-ui.js']) assert.equal(html.includes(privateModule),false,`public reader must not load ${privateModule}`);
+        assert.match(html, /name="referrer" content="no-referrer"/);
+        assert.match(html, /name="robots" content="noindex, nofollow"/);
+      }
       if(['index.html','life.html'].includes(name)){
         const scripts=[...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(match=>match[1]);
         const ordered=['assets/life/core.js','assets/life/workbench.js','assets/life/storage.js','assets/life/workbench-ui.js','assets/life/home.js','assets/life/ui.js','assets/life/shell.js'];
