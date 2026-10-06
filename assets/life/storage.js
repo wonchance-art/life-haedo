@@ -135,6 +135,10 @@
           if (data?.sender !== sender && data?.type === 'composition_sync_changed' && typeof data.workspaceId === 'string') {
             notify({ type: 'composition_sync_changed', workspaceId: data.workspaceId });
           }
+          if (data?.sender !== sender && ['writing_draft_changed', 'writing_sync_changed'].includes(data?.type) &&
+              typeof data.workspaceId === 'string' && typeof data.stageId === 'string') {
+            notify({ type: data.type, workspaceId: data.workspaceId, stageId: data.stageId });
+          }
           if (data?.sender !== sender && data?.type === 'changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
             notify({ type: 'changed', workspaceId: data.workspaceId, revision: data.revision });
@@ -528,7 +532,7 @@
         // Omitting this extension preserves the byte-for-byte payload of earlier receipts.
         const payload = stablePayload({ workspaceId, baseRevision, changes, stageId, stageRevision,
           ...(stageResult !== undefined ? { stageResult } : {}) });
-        let wrote = false, updatedSync = null;
+        let wrote = false, updatedSync = null, updatedWriting = null, appliedWriting = null;
         const result = await transaction(['bundles', 'operations', 'staging', 'meta'], 'readwrite', async tx => {
           await assertOwner(tx.objectStore('meta'), workspaceId);
           const operations = tx.objectStore('operations');
@@ -557,8 +561,22 @@
           const stored = { status: 'stored', revision: updated.revision, operationId };
           const sync = await readSyncState(tx.objectStore('meta'), workspaceId, bundle);
           await tx.objectStore('bundles').put(updated);
-          if (stage) await tx.objectStore('staging').put({ ...stage, state: 'applied', revision: stage.revision + 1,
-            updatedAt: new Date().toISOString(), ...(stageResult !== undefined ? { appliedResult: clone(stageResult) } : {}) });
+          if (stage) {
+            const applied = { ...stage, state: 'applied', revision: stage.revision + 1,
+              updatedAt: new Date().toISOString(), ...(stageResult !== undefined ? { appliedResult: clone(stageResult) } : {}) };
+            if (stage.kind === 'writing') {
+              const writingSync = await readWritingState(tx.objectStore('meta'), workspaceId, stage.stageId, stage);
+              if (writingSync) {
+                checkWritingApplied(applied, updated);
+                // The original write and its terminal marker are one transaction. The
+                // source stream becomes pending below, blocking premature transmission.
+                writingSync.error = null; writingSync.status = writingStatus(writingSync, applied);
+                updatedWriting = await writeWritingState(tx.objectStore('meta'), writingSync);
+              }
+              appliedWriting = applied;
+            }
+            await tx.objectStore('staging').put(applied);
+          }
           if (sync) {
             sync.status = syncStatus(sync, updated); sync.error = null;
             updatedSync = await writeSyncState(tx.objectStore('meta'), sync);
@@ -569,6 +587,8 @@
         });
         if (wrote) changed(workspaceId, result.revision);
         if (updatedSync) syncChanged(updatedSync);
+        if (appliedWriting) writingChanged(appliedWriting);
+        if (updatedWriting) writingSyncChanged(updatedWriting);
         return result;
       } catch (error) {
         return { status: 'rejected', error: errorInfo(error), operationId };
@@ -1118,6 +1138,289 @@
         return clone(compositionRecovery(entry.value, workspaceId, id));
       });
     }
+    // A selected writing draft has its own CAS/receipt stream. Imports and unselected
+    // drafts remain local, and the original-material stream is always a prerequisite.
+    function writing() {
+      const value = options.writing || root.HaedoLife?.Writing || (typeof require === 'function' ? require('./writing.js') : null);
+      if (!value?.validateDraft || !value?.recoverDraft) throw fault('dependency_unavailable', '글쓰기 모듈을 불러오지 못했습니다.');
+      return value;
+    }
+    function writingChanged(stage) {
+      const event = { type: 'writing_draft_changed', workspaceId: stage.workspaceId, stageId: stage.stageId };
+      notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
+    }
+    function writingSyncChanged(state) {
+      const event = { type: 'writing_sync_changed', workspaceId: state.workspaceId, stageId: state.draftId, status: state.status, enabled: state.enabled };
+      notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
+    }
+    const writingKey = (workspaceId, draftId) => `writingSync:${workspaceId}:${draftId}`;
+    const writingHeadKey = (workspaceId, draftId) => `writingHead:${workspaceId}:${draftId}`;
+    function writingIdentity(workspaceId, draftId) {
+      requireId(workspaceId, '작업공간'); requireId(draftId, '초안');
+    }
+    function writingRow(input, workspaceId, draftId) {
+      if (!plain(input) || !Number.isSafeInteger(input.revision) || input.revision < 1 ||
+          !Number.isSafeInteger(input.source_revision) || input.source_revision < 1) throw fault('invalid_remote_snapshot', '서버 초안의 저장 버전을 확인할 수 없습니다.');
+      const row = clone(input); writing().validateDraft(row.data);
+      if (row.workspace_id !== workspaceId || row.draft_id !== draftId || row.data.workspaceId !== workspaceId || row.data.stageId !== draftId ||
+          row.data.revision < 1 || (row.data.state === 'applied' && !row.data.appliedResult)) throw fault('invalid_remote_snapshot', '서버 초안의 식별자 또는 보관 결과가 일치하지 않습니다.');
+      return { workspace_id: workspaceId, draft_id: draftId, revision: row.revision, source_revision: row.source_revision, data: row.data,
+        ...(typeof row.updated_at === 'string' ? { updated_at: row.updated_at } : {}) };
+    }
+    function writingStatus(sync, stage) {
+      return sync.conflict ? 'conflict' : sync.outbox || stage.revision !== sync.syncedLocalRevision ? 'pending' : 'synced';
+    }
+    function validateWritingState(sync, workspaceId, draftId) {
+      try {
+        onlyFields(sync, ['format', 'workspaceId', 'draftId', 'binding', 'enabled', 'remoteRevision', 'sourceRevision', 'syncedLocalRevision', 'outbox', 'conflict', 'status', 'error']);
+        if (sync.format !== 'life-writing-sync-v1' || sync.workspaceId !== workspaceId || sync.draftId !== draftId || typeof sync.enabled !== 'boolean' ||
+            !['pending', 'synced', 'conflict', 'error'].includes(sync.status) || !Number.isSafeInteger(sync.syncedLocalRevision) || sync.syncedLocalRevision < -1) throw new Error('metadata');
+        if (stablePayload(bindingValue(sync.binding, workspaceId)) !== stablePayload(sync.binding)) throw new Error('binding');
+        requireRevision(sync.remoteRevision); requireRevision(sync.sourceRevision);
+        if ((sync.remoteRevision === 0) !== (sync.sourceRevision === 0)) throw new Error('floor');
+        if (sync.outbox !== null) {
+          const box = sync.outbox; onlyFields(box, ['operationId', 'expectedRevision', 'sourceRevision', 'localRevision', 'data']);
+          requireId(box.operationId, '전송 작업'); requireRevision(box.expectedRevision); requireRevision(box.localRevision); requireRevision(box.sourceRevision);
+          writing().validateDraft(box.data);
+          if (box.data.workspaceId !== workspaceId || box.data.stageId !== draftId || box.data.revision !== box.localRevision ||
+              box.expectedRevision !== sync.remoteRevision || box.sourceRevision < Math.max(1, sync.sourceRevision) ||
+              box.localRevision <= sync.syncedLocalRevision || (box.data.state === 'applied' && !box.data.appliedResult)) throw new Error('outbox');
+        }
+        if (sync.conflict !== null) {
+          const conflict = sync.conflict; onlyFields(conflict, ['missing', 'row', 'remoteRevision', 'localRevision']);
+          requireRevision(conflict.remoteRevision); requireRevision(conflict.localRevision);
+          if (typeof conflict.missing !== 'boolean' || conflict.remoteRevision < sync.remoteRevision) throw new Error('conflict');
+          if (conflict.missing) { if (conflict.row !== null) throw new Error('missing'); }
+          else {
+            const row = writingRow(conflict.row, workspaceId, draftId);
+            if (row.revision !== conflict.remoteRevision || row.source_revision < sync.sourceRevision) throw new Error('conflict');
+          }
+        }
+        if (sync.error !== null) {
+          onlyFields(sync.error, ['code', 'message']);
+          if (typeof sync.error.code !== 'string' || !/^[a-z0-9_]{1,80}$/.test(sync.error.code) || typeof sync.error.message !== 'string' || sync.error.message.length > 1000) throw new Error('error');
+        }
+        if ((sync.status === 'conflict') !== (sync.conflict !== null) || (sync.status === 'synced' && (sync.outbox || sync.error || sync.syncedLocalRevision < 0)) ||
+            (sync.status === 'error' && !sync.error) || (sync.status === 'pending' && sync.error) || (sync.remoteRevision === 0 && sync.syncedLocalRevision !== -1)) throw new Error('consistency');
+      } catch (_) { throw fault('invalid_writing_metadata', '초안 이어쓰기 정보를 확인할 수 없습니다. 입력은 보존했습니다.'); }
+      return sync;
+    }
+    async function writingStage(stages, workspaceId, draftId) {
+      const stage = await stages.get(draftId);
+      if (!stage || stage.workspaceId !== workspaceId || stage.kind !== 'writing') throw fault('writing_draft_not_found', '이 작업공간의 글쓰기 초안을 찾을 수 없습니다.');
+      writing().validateDraft(stage); return stage;
+    }
+    async function readWritingState(meta, workspaceId, draftId, stage) {
+      await assertOwner(meta, workspaceId);
+      const entry = await meta.get(writingKey(workspaceId, draftId)); if (entry === undefined) return null;
+      const sync = validateWritingState(entry.value, workspaceId, draftId);
+      if (account && !sameAccount(account, sync.binding)) throw fault('account_mismatch', '현재 계정과 초안 연결 정보가 다릅니다.');
+      if (stage && (sync.syncedLocalRevision > stage.revision || sync.outbox?.localRevision > stage.revision || sync.conflict?.localRevision > stage.revision ||
+          (sync.status === 'synced' && stage.revision !== sync.syncedLocalRevision))) throw fault('invalid_writing_metadata', '초안의 저장 기준이 일치하지 않습니다. 입력은 보존했습니다.');
+      const head = await meta.get(writingHeadKey(workspaceId, draftId));
+      if (sync.remoteRevision > 0) {
+        if (!head) throw fault('invalid_writing_metadata', '초안의 서버 비교 기준을 찾을 수 없습니다.');
+        const row = writingRow(head.value, workspaceId, draftId);
+        if (row.revision !== sync.remoteRevision || row.source_revision !== sync.sourceRevision ||
+            (stage && stage.revision === sync.syncedLocalRevision && stablePayload({ ...row.data, revision: stage.revision }) !== stablePayload(stage))) throw fault('invalid_writing_metadata', '초안의 서버 비교 기준이 일치하지 않습니다.');
+      } else if (head) throw fault('invalid_writing_metadata', '연결되지 않은 초안에 서버 비교 기준이 있습니다.');
+      return sync;
+    }
+    async function writeWritingState(meta, sync) {
+      if (account && !sameAccount(account, sync.binding)) throw fault('account_mismatch', '현재 계정과 초안 연결 정보가 다릅니다.');
+      validateWritingState(sync, sync.workspaceId, sync.draftId);
+      await meta.put({ key: writingKey(sync.workspaceId, sync.draftId), value: sync }); return clone(sync);
+    }
+    function authorizedWriting(sync, binding, enabled = true) {
+      if (account && !sameAccount(account, binding)) throw fault('account_mismatch', '현재 계정과 초안 연결 정보가 다릅니다.');
+      if (!sync) throw fault('writing_not_configured', '이 초안의 이어쓰기를 먼저 시작하세요.');
+      if (stablePayload(sync.binding) !== stablePayload(binding)) throw fault('account_mismatch', '다른 계정에 연결된 초안입니다.');
+      if (enabled && !sync.enabled) throw fault('writing_paused', '초안 이어쓰기가 중지되어 있습니다.'); return sync;
+    }
+    async function writingSource(meta, workspaceId, binding, bundle, ready = true) {
+      try { return await compositionSource(meta, workspaceId, binding, bundle, ready); }
+      catch (error) { if (error.code === 'composition_source_pending') throw fault('writing_source_pending', '원문 동기화를 먼저 완료해 주세요. 초안은 이 기기에 보존했습니다.'); throw error; }
+    }
+    function checkWritingApplied(stage, bundle) {
+      if (stage.state !== 'applied') return;
+      if (!stage.appliedResult) throw fault('invalid_remote_snapshot', '보관을 마친 초안의 원문 연결을 확인할 수 없습니다.');
+      const ref = stage.appliedResult, source = bundle.sources.find(value => value.id === ref.sourceId),
+        version = bundle.sourceVersions.find(value => value.id === ref.sourceVersionId && value.sourceId === ref.sourceId);
+      if (!source || !version || !writing().isOwnSource(source, bundle) || version.contentText !== stage.text) {
+        throw fault('writing_source_pending', '보관된 초안과 정확히 일치하는 원문 버전을 먼저 받아 주세요. 입력은 보존했습니다.');
+      }
+    }
+    async function checkWritingRow(meta, sync, source, row, bundle) {
+      if (row.revision < revisionFloor(sync) || row.source_revision < Math.max(sync.sourceRevision, sync.conflict?.row?.source_revision || 0)) throw fault('stale_sync_result', '더 최신 초안 또는 원문 기준을 이미 확인했습니다.');
+      if (row.source_revision > source.remoteRevision) throw fault('writing_source_pending', '이 초안에서 참조하는 원문을 먼저 받아 주세요.');
+      checkWritingApplied(row.data, bundle);
+      const known = row.revision === sync.remoteRevision ? (await meta.get(writingHeadKey(sync.workspaceId, sync.draftId)))?.value : row.revision === sync.conflict?.remoteRevision ? sync.conflict.row : null;
+      if (known && (row.source_revision !== known.source_revision || stablePayload(row.data) !== stablePayload(known.data))) throw fault('remote_revision_mismatch', '같은 서버 버전의 초안 내용이 달라졌습니다. 입력은 보존했습니다.');
+    }
+    async function saveWritingHead(meta, row) {
+      await meta.put({ key: writingHeadKey(row.workspace_id, row.draft_id), value: clone(row) });
+    }
+    function freshWritingState(workspaceId, draftId, binding) {
+      return { format: 'life-writing-sync-v1', workspaceId, draftId, binding, enabled: true, remoteRevision: 0, sourceRevision: 0,
+        syncedLocalRevision: -1, outbox: null, conflict: null, status: 'pending', error: null };
+    }
+    async function getWritingSyncState(workspaceId, draftId) {
+      writingIdentity(workspaceId, draftId);
+      return transaction(['bundles', 'staging'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const stage = await writingStage(tx.objectStore('staging'), workspaceId, draftId);
+        return clone(await readWritingState(meta, workspaceId, draftId, stage));
+      });
+    }
+    async function readWritingSnapshot(workspaceId, draftId) {
+      writingIdentity(workspaceId, draftId);
+      return transaction(['bundles', 'staging'], 'readonly', async tx => ({
+        bundle: clone(await checkedBundle(tx.objectStore('bundles'), workspaceId, tx.objectStore('meta'))),
+        stage: clone(await writingStage(tx.objectStore('staging'), workspaceId, draftId))
+      }));
+    }
+    async function listWritingSyncStates(workspaceId) {
+      requireId(workspaceId, '작업공간');
+      return transaction(['bundles', 'staging'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const prefix = `writingSync:${workspaceId}:`, entries = await meta.getAll(root.IDBKeyRange.bound(prefix, prefix + '\uffff')), result = [];
+        for (const entry of entries) {
+          const draftId = entry.key.slice(prefix.length), stage = await writingStage(tx.objectStore('staging'), workspaceId, draftId);
+          result.push(await readWritingState(meta, workspaceId, draftId, stage));
+        }
+        return clone(result);
+      });
+    }
+    async function bindWritingSync(workspaceId, draftId, input) {
+      writingIdentity(workspaceId, draftId); const binding = bindingValue(input, workspaceId);
+      const result = await transaction(['bundles', 'staging'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        await writingSource(meta, workspaceId, binding, bundle);
+        const stage = await writingStage(tx.objectStore('staging'), workspaceId, draftId); checkWritingApplied(stage, bundle);
+        const previous = await readWritingState(meta, workspaceId, draftId, stage), sync = previous ? authorizedWriting(previous, binding, false) : freshWritingState(workspaceId, draftId, binding);
+        sync.enabled = true; sync.error = null; sync.status = writingStatus(sync, stage); return writeWritingState(meta, sync);
+      }); writingSyncChanged(result); return result;
+    }
+    async function pauseWritingSync(workspaceId, draftId, input) {
+      writingIdentity(workspaceId, draftId); const binding = bindingValue(input, workspaceId);
+      const result = await transaction(['bundles', 'staging'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const stage = await writingStage(tx.objectStore('staging'), workspaceId, draftId), previous = await readWritingState(meta, workspaceId, draftId, stage);
+        if (!previous) return null;
+        const sync = authorizedWriting(previous, binding, false); sync.enabled = false; return writeWritingState(meta, sync);
+      }); if (result) writingSyncChanged(result); return result;
+    }
+    async function prepareWritingUpload(workspaceId, draftId, input) {
+      const binding = bindingValue(input, workspaceId); let event;
+      const result = await transaction(['bundles', 'staging'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta), source = await writingSource(meta, workspaceId, binding, bundle);
+        const stage = await writingStage(tx.objectStore('staging'), workspaceId, draftId), sync = authorizedWriting(await readWritingState(meta, workspaceId, draftId, stage), binding);
+        if (sync.conflict) throw fault('writing_conflict', '다른 기기의 초안을 먼저 비교해 주세요.');
+        checkWritingApplied(stage, bundle);
+        if (sync.outbox) {
+          if (sync.outbox.sourceRevision > source.remoteRevision) throw fault('writing_source_pending', '전송 대기 초안의 원문을 먼저 받아 주세요.');
+          checkWritingApplied(sync.outbox.data, bundle); return clone(sync.outbox);
+        }
+        if (stage.revision === sync.syncedLocalRevision) return null;
+        if (source.remoteRevision < sync.sourceRevision) throw fault('stale_sync_result', '초안이 참조한 원문보다 이전 자료입니다.');
+        sync.outbox = { operationId: core().id(), expectedRevision: sync.remoteRevision, sourceRevision: source.remoteRevision, localRevision: stage.revision, data: clone(stage) };
+        sync.error = null; sync.status = 'pending'; event = await writeWritingState(meta, sync); return clone(sync.outbox);
+      }); if (event) writingSyncChanged(event); return result;
+    }
+    async function ackWritingSync(workspaceId, draftId, input, operationId, remoteRevision) {
+      const binding = bindingValue(input, workspaceId); requireId(operationId, '전송 작업'); requireRevision(remoteRevision);
+      const result = await transaction(['bundles', 'staging'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta), source = await writingSource(meta, workspaceId, binding, bundle);
+        const stage = await writingStage(tx.objectStore('staging'), workspaceId, draftId), sync = authorizedWriting(await readWritingState(meta, workspaceId, draftId, stage), binding), box = sync.outbox;
+        if (!box || box.operationId !== operationId || sync.conflict || remoteRevision !== box.expectedRevision + 1 || remoteRevision < revisionFloor(sync) || box.sourceRevision > source.remoteRevision) throw fault('stale_sync_result', '현재 초안 전송 작업과 다른 응답입니다.');
+        checkWritingApplied(stage, bundle); checkWritingApplied(box.data, bundle);
+        await saveWritingHead(meta, { workspace_id: workspaceId, draft_id: draftId, revision: remoteRevision, source_revision: box.sourceRevision, data: box.data });
+        sync.remoteRevision = remoteRevision; sync.sourceRevision = box.sourceRevision; sync.syncedLocalRevision = box.localRevision;
+        sync.outbox = null; sync.error = null; sync.status = writingStatus(sync, stage); return writeWritingState(meta, sync);
+      }); writingSyncChanged(result); return result;
+    }
+    async function applyWritingRemote(workspaceId, draftId, input, inputRow) {
+      const binding = bindingValue(input, workspaceId), row = writingRow(inputRow, workspaceId, draftId); let event, updated;
+      const result = await transaction(['bundles', 'staging'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta), source = await writingSource(meta, workspaceId, binding, bundle);
+        const stages = tx.objectStore('staging'), stage = await writingStage(stages, workspaceId, draftId), sync = authorizedWriting(await readWritingState(meta, workspaceId, draftId, stage), binding);
+        checkWritingApplied(stage, bundle); await checkWritingRow(meta, sync, source, row, bundle);
+        if (row.revision === sync.remoteRevision && !sync.conflict) return { status: 'stored', revision: stage.revision };
+        if (stage.state === 'applied' || sync.outbox || sync.conflict || stage.revision !== sync.syncedLocalRevision) {
+          sync.conflict = { missing: false, row, remoteRevision: row.revision, localRevision: stage.revision }; sync.status = 'conflict'; sync.error = null;
+          event = await writeWritingState(meta, sync); return { status: 'conflict', revision: stage.revision };
+        }
+        updated = { ...clone(row.data), revision: stage.revision + 1 }; writing().validateDraft(updated);
+        await stages.put(updated); await saveWritingHead(meta, row);
+        sync.remoteRevision = row.revision; sync.sourceRevision = row.source_revision; sync.syncedLocalRevision = updated.revision;
+        sync.error = null; sync.status = 'synced'; event = await writeWritingState(meta, sync); return { status: 'stored', revision: updated.revision };
+      }); if (updated) writingChanged(updated); if (event) writingSyncChanged(event); return result;
+    }
+    async function installWritingRemote(workspaceId, input, inputRow) {
+      const binding = bindingValue(input, workspaceId), row = writingRow(inputRow, workspaceId, inputRow?.draft_id), draftId = row.draft_id;
+      const result = await transaction(['bundles', 'staging'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta), source = await writingSource(meta, workspaceId, binding, bundle);
+        const stages = tx.objectStore('staging');
+        if (await stages.get(draftId) || await meta.get(writingKey(workspaceId, draftId)) || await meta.get(writingHeadKey(workspaceId, draftId))) throw fault('writing_draft_exists', '이 초안이 이미 있습니다. 양쪽 내용을 비교해 주세요.');
+        const sync = freshWritingState(workspaceId, draftId, binding); await checkWritingRow(meta, sync, source, row, bundle);
+        const stage = { ...clone(row.data), revision: 1 }; await stages.add(stage); await saveWritingHead(meta, row);
+        Object.assign(sync, { remoteRevision: row.revision, sourceRevision: row.source_revision, syncedLocalRevision: 1, status: 'synced' });
+        return { stage: clone(stage), metadata: await writeWritingState(meta, sync) };
+      }); writingChanged(result.stage); writingSyncChanged(result.metadata); return result;
+    }
+    async function setWritingConflict(workspaceId, draftId, input, inputRow) {
+      const binding = bindingValue(input, workspaceId), row = inputRow === null ? null : writingRow(inputRow, workspaceId, draftId);
+      const result = await transaction(['bundles', 'staging'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta), source = await writingSource(meta, workspaceId, binding, bundle);
+        const stage = await writingStage(tx.objectStore('staging'), workspaceId, draftId), sync = authorizedWriting(await readWritingState(meta, workspaceId, draftId, stage), binding);
+        checkWritingApplied(stage, bundle); if (row) await checkWritingRow(meta, sync, source, row, bundle);
+        sync.conflict = { missing: row === null, row, remoteRevision: row?.revision ?? revisionFloor(sync), localRevision: stage.revision };
+        sync.error = null; sync.status = 'conflict'; return writeWritingState(meta, sync);
+      }); writingSyncChanged(result); return result;
+    }
+    async function setWritingError(workspaceId, draftId, input, inputError) {
+      const binding = bindingValue(input, workspaceId), error = clone(inputError);
+      if (error !== null) {
+        onlyFields(error, ['code', 'message'], 'invalid_request');
+        if (typeof error.code !== 'string' || !/^[a-z0-9_]{1,80}$/.test(error.code) || typeof error.message !== 'string' || error.message.length > 1000) throw fault('invalid_request', '정제된 초안 오류 정보가 필요합니다.');
+      }
+      const result = await transaction(['bundles', 'staging'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        await writingSource(meta, workspaceId, binding, bundle, false);
+        const stage = await writingStage(tx.objectStore('staging'), workspaceId, draftId), sync = authorizedWriting(await readWritingState(meta, workspaceId, draftId, stage), binding);
+        sync.error = error; sync.status = error === null ? writingStatus(sync, stage) : sync.conflict ? 'conflict' : 'error'; return writeWritingState(meta, sync);
+      }); writingSyncChanged(result); return result;
+    }
+    async function resolveWritingSync(workspaceId, draftId, input, resolution) {
+      const binding = bindingValue(input, workspaceId), request = clone(resolution);
+      onlyFields(request, ['choice', 'expectedLocalRevision', 'remoteRow'], 'invalid_request'); requireRevision(request.expectedLocalRevision);
+      if (!['local', 'remote', 'fork'].includes(request.choice)) throw fault('invalid_request', '남길 초안을 선택하세요.');
+      const row = request.remoteRow === null ? null : writingRow(request.remoteRow, workspaceId, draftId); let recovered;
+      const result = await transaction(['bundles', 'staging'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta), source = await writingSource(meta, workspaceId, binding, bundle);
+        const stages = tx.objectStore('staging'), stage = await writingStage(stages, workspaceId, draftId), sync = authorizedWriting(await readWritingState(meta, workspaceId, draftId, stage), binding);
+        if (sync.conflict?.missing) throw fault('remote_missing', '삭제된 서버 초안을 자동 재생성하지 않습니다. 입력을 내보내거나 연결을 중지하세요.');
+        if (!sync.conflict || !row || request.expectedLocalRevision !== stage.revision || sync.conflict.localRevision !== stage.revision ||
+            row.revision !== sync.conflict.remoteRevision || row.source_revision !== sync.conflict.row.source_revision || stablePayload(row.data) !== stablePayload(sync.conflict.row.data)) throw fault('writing_conflict_changed', '비교한 초안이 바뀌었습니다. 최신 양쪽 내용을 다시 확인하세요.');
+        checkWritingApplied(stage, bundle); await checkWritingRow(meta, sync, source, row, bundle);
+        const terminal = stage.state === 'applied' || row.data.state === 'applied';
+        if (terminal !== (request.choice === 'fork')) throw fault('writing_conflict', terminal ? '보관한 글은 유지하고 다른 입력을 새 초안으로 남겨 주세요.' : '남길 초안을 선택해 주세요.');
+        const useRemote = terminal ? row.data.state === 'applied' : request.choice === 'remote';
+        const loser = clone(useRemote ? stage : row.data);
+        if (terminal) {
+          loser.state = 'draft'; delete loser.appliedResult; delete loser.baseChanged;
+          Object.assign(loser, { sourceId: null, baseSourceRevision: null, baseSourceVersionId: null });
+        }
+        recovered = { ...writing().recoverDraft(loser), revision: 1 };
+        await stages.add(recovered);
+        const updated = useRemote ? { ...clone(row.data), revision: stage.revision + 1 } : stage;
+        writing().validateDraft(updated); if (useRemote) await stages.put(updated);
+        await saveWritingHead(meta, row);
+        Object.assign(sync, { remoteRevision: row.revision, sourceRevision: row.source_revision, syncedLocalRevision: useRemote ? updated.revision : -1,
+          outbox: null, conflict: null, error: null, status: useRemote ? 'synced' : 'pending' });
+        return { stage: clone(updated), metadata: await writeWritingState(meta, sync), recoveryStageId: recovered.stageId };
+      }); writingChanged(recovered); writingChanged(result.stage); writingSyncChanged(result.metadata); return result;
+    }
     function validateStageResult(value, bundle) {
       try {
         if (!plain(value) || Object.keys(value).length !== 2 ||
@@ -1153,18 +1456,30 @@
       const stage = clone(input);
       validateStage(stage);
       if (stage.state !== 'draft') throw fault('invalid_stage', '확정된 가져오기는 다시 초안으로 저장할 수 없습니다.');
-      return transaction(['staging', 'bundles'], 'readwrite', async tx => {
+      let event;
+      const result = await transaction(['staging', 'bundles'], 'readwrite', async tx => {
         await checkedBundle(tx.objectStore('bundles'), stage.workspaceId, tx.objectStore('meta'));
         const stages = tx.objectStore('staging');
         const previous = await stages.get(stage.stageId);
         if (previous ? previous.workspaceId !== stage.workspaceId || previous.revision !== stage.revision || previous.state !== 'draft' : stage.revision !== 0) {
           throw fault('stage_conflict', '다른 탭에서 가져오기 초안을 바꿨습니다. 이전 입력을 보존하고 다시 확인하세요.');
         }
+        if (previous && (previous.kind === 'writing') !== (stage.kind === 'writing')) {
+          throw fault('stage_conflict', '기존 초안의 종류를 바꿀 수 없습니다. 입력은 보존했습니다.');
+        }
         const now = new Date().toISOString();
         const saved = { ...stage, revision: stage.revision + 1, createdAt: previous?.createdAt || now, updatedAt: now };
+        if (stage.kind === 'writing') {
+          const sync = await readWritingState(tx.objectStore('meta'), stage.workspaceId, stage.stageId, previous);
+          if (sync) {
+            if (!previous) throw fault('invalid_writing_metadata', '연결된 초안을 찾을 수 없습니다. 같은 식별자로 다시 만들지 않습니다.');
+            sync.error = null; sync.status = writingStatus(sync, saved); event = await writeWritingState(tx.objectStore('meta'), sync);
+          }
+        }
         await stages.put(saved);
         return clone(saved);
       });
+      if (stage.kind === 'writing') writingChanged(result); if (event) writingSyncChanged(event); return result;
     }
     async function getStage(stageId) {
       requireId(stageId, '가져오기');
@@ -1191,6 +1506,9 @@
         const stage = await tx.objectStore('staging').get(stageId);
         if (stage === undefined) return;
         await assertOwner(tx.objectStore('meta'), stage.workspaceId);
+        if (stage.kind === 'writing' && await readWritingState(tx.objectStore('meta'), stage.workspaceId, stageId, stage)) {
+          throw fault('writing_selected', '이어쓰기로 연결한 초안은 삭제할 수 없습니다. 입력을 보존했습니다.');
+        }
         await tx.objectStore('staging').delete(stageId);
       });
     }
@@ -1291,7 +1609,10 @@
       setSyncConflict, setSyncError, resolveSync,
       getCompositionState, bindCompositionSync, pauseCompositionSync, prepareCompositionUpload, ackCompositionSync,
       applyCompositionRemote, setCompositionConflict, setCompositionError, resolveCompositionSync,
-      listCompositionRecoveries, readCompositionRecovery, listUnownedWorkspaces, importUnownedWorkspace };
+      listCompositionRecoveries, readCompositionRecovery,
+      getWritingSyncState, readWritingSnapshot, listWritingSyncStates, bindWritingSync, pauseWritingSync, prepareWritingUpload, ackWritingSync,
+      applyWritingRemote, installWritingRemote, setWritingConflict, setWritingError, resolveWritingSync,
+      listUnownedWorkspaces, importUnownedWorkspace };
     if (!account) Object.assign(api, { forAccount, clearAccount });
     return Object.freeze(api);
   }

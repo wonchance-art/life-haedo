@@ -22,7 +22,8 @@
   const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
   const fault = code => Object.assign(new Error(messages[code] || messages.network_error), { code });
   function create({ storage, sourceSync, auth = root.HaedoAuth,
-    remote = root.HaedoLife?.CompositionRemote?.create({ auth }) } = {}) {
+    remote = root.HaedoLife?.CompositionRemote?.create({ auth }), errorCleaner = null,
+    resolutionChoices = ['local', 'remote'], sendResolution = choice => choice === 'local', polling = true } = {}) {
     if (!storage?.account || !sourceSync || !auth || !remote) throw fault('account_mismatch');
     const owner = storage.account, watches = new Map(), timers = new Map(), locks = new Map(), generations = new Map(), listeners = new Set();
     let disposed = false, started = false, interval = null, refreshing = false, unlistenSources = null;
@@ -35,6 +36,7 @@
     const binding = workspaceId => ({ projectUrl: owner.projectUrl, userId: owner.userId, remoteId: workspaceId });
     function emit(workspaceId) { if (!disposed) for (const listener of [...listeners]) { try { listener({ workspaceId }); } catch (_) {} } }
     function clean(error) {
+      if (errorCleaner) return errorCleaner(error);
       if (messages[error?.code]) return fault(error.code);
       return root.HaedoLife?.CompositionRemote?.clean(error) || fault('network_error');
     }
@@ -163,7 +165,7 @@
       const ctx = context(workspaceId);
       return serial(ctx, async () => {
         const state = await checkedState(ctx);
-        if (!['local', 'remote'].includes(choice) || !state.conflict || state.conflict.missing ||
+        if (!resolutionChoices.includes(choice) || !state.conflict || state.conflict.missing ||
             state.conflict.remoteRevision !== expected?.expectedRemoteRevision) throw fault('composition_conflict_changed');
         await sources(ctx);
         const row = await remote.read(workspaceId); guard(ctx);
@@ -173,7 +175,7 @@
         const result = await storage.resolveCompositionSync(workspaceId, binding(workspaceId), {
           choice, expectedLocalRevision: expected.expectedLocalRevision, remoteRow: row }); guard(ctx);
         emit(workspaceId);
-        if (choice === 'local') {
+        if (sendResolution(choice, result)) {
           try { await run(ctx); } catch (error) { result.syncError = { code: error.code, message: error.message }; }
           guard(ctx);
         }
@@ -196,7 +198,7 @@
       guard(); if (started) return; started = true;
       root.addEventListener?.('online', automatic); root.addEventListener?.('focus', automatic);
       root.document?.addEventListener('visibilitychange', automatic);
-      interval = root.setInterval(automatic, 30000); interval?.unref?.();
+      if (polling) { interval = root.setInterval(automatic, 30000); interval?.unref?.(); }
       unlistenSources = sourceSync.subscribe(event => { if (event.workspaceId && watches.has(event.workspaceId) && ![...locks.keys()].some(key => key.startsWith(event.workspaceId + '|'))) schedule(event.workspaceId); });
       automatic();
     }

@@ -89,7 +89,7 @@
     return display;
   }
 
-  async function mount(container, { storage, core, legacy, sync, compositionSync, auth, signal }) {
+  async function mount(container, { storage, core, legacy, sync, compositionSync, writingSync, auth, signal }) {
     if (signal?.aborted) throw new Error('화면 연결이 취소되었습니다.');
     let disposed = false;
     let unsubscribe = null;
@@ -199,7 +199,7 @@
     });
 
     const writer = global.HaedoLife.WritingUI?.create({
-      storage, core, host: main, getBundle: () => state.bundle,
+      storage, core, writingSync, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce,
       onClose: () => navigate('sources'),
       onSaved: async ({ sourceId, sourceVersionId }) => {
@@ -2853,6 +2853,7 @@
       disposed = true;
       compositionPanel?.dispose(); compositionPanel = null;
       compositionSync?.dispose();
+      writingSync?.dispose();
       home?.dispose();
       workbench?.dispose();
       writer?.dispose();

@@ -110,3 +110,9 @@ Node **173/173**, 정적 점검, 브라우저 **54/54**(R1 23·동기화 14·공
 PR #35에서 원문과 별개로 명시 연결하는 묶음·내 페이지·회고·관련 기록 제외를 구현했다. 공용 Auth의 동일 SDK를 composition RPC에 제한해 빌리며 Google 설정이나 기존 원문/게시 SQL은 변경하지 않는다. 독립 revision/CAS·원문 도착 기준·영속 영수증·충돌 통합 복구 사본을 사용한다. 글쓰기 초안·공개 사본은 포함하지 않는다.
 
 **신규 SQL 운영 설치·병합·배포 대기**. 운영 읽기 전용 HTTP는 신규 get `404/PGRST202`, 테이블 2개 `404/PGRST205`로 아직 설치되지 않은 상태다. 검증한 SQL 커밋 `07058a749a68df1a3801059a968080365f1df8fd`의 [관리자 인계](life-tools-design/composition-installation.md)에 따라 설치하고 11조건 확인 후 Cloud가 HTTP·CI·배포를 이어간다. 기존 설치와 Google 로그인을 다시 미완료로 되돌리지 않는다. [이번 브라우저·SQL 검증](design-review/composition-continuity.md)은 운영 완료 주장과 구분한다.
+
+## 선택한 글쓰기 초안 후속 — 2026-10-06
+
+사용자가 Local에서 필요한 SQL을 한 번에 처리하도록 요청했다. 구성 SQL과 후속 초안 SQL의 [일괄 설치 인계](life-tools-design/continuity-batch-installation.md)에 설치 순서·해시·읽기 전용 11+9조건을 모았다. 관리자 완료 보고 전이며 이번 작업에서는 운영 HTTP도 다시 실행하지 않았다. 기존 Auth·원문·게시 설정은 그대로다.
+
+새 초안은 공용 SDK의 writing 전용 RPC 범위를 빌리고 기존 구성 CAS 엔진의 큐/수명 처리를 재사용한다. 선택한 stage 한 편만 전송하며 초안과 기록 저장·공개를 구분한다. [이번 구현·검증](design-review/writing-continuity.md)과 운영 설치/배포 여부는 별개다.

@@ -374,3 +374,18 @@ body.haedo-shell .haedo-account-host { top: 42px; right: max(calc(60px + env(saf
 .composition-recovery .life-button { margin-top: 8px; }
 .composition-recovery:last-child { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
 .life-composition-sync > .composition-content > .life-details { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+
+/* Draft transport is a folded footer; the editor's text and selection stay native. */
+.life-writing-sync { margin-block: 20px; padding-block: 12px; border-top: 1px solid var(--line); }
+.life-writing-sync > summary { min-height: 44px; padding-block: 10px; font-size: 14px; }
+.life-writing-sync .life-actions { flex-wrap: wrap; gap: 8px; margin-block: 16px; }
+.life-writing-sync .life-help { margin-block: 12px; }
+.writing-sync-side { margin-block: 20px; min-width: 0; }
+.writing-sync-side h4 { font-size: 16px; line-height: 1.75; }
+.writing-sync-side .life-details { max-height: 28rem; overflow: auto; }
+.writing-sync-side summary { position: sticky; top: 0; background: var(--paper); }
+.writing-sync-side pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.writing-remote-section { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 20px; }
+.writing-remote-row { padding-block: 12px; border-bottom: 1px solid var(--line); }
+.writing-remote-row button { text-align: left; word-break: keep-all; overflow-wrap: anywhere; }
+.life-writing-incoming { padding-block: 12px; border-bottom: 1px solid var(--line); }
