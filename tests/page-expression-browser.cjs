@@ -23,6 +23,13 @@ function ciFailure(error) {
 // private sync retain the existing FakeCloud's real bundled SDK interception.
 class PublicationCloud extends FakeCloud {
   constructor() { super(); this.publicPage = null; this.publicationWrites = []; }
+  holdPublish() {
+    let enter, release;
+    const entered = new Promise(resolve => { enter = resolve; });
+    const released = new Promise(resolve => { release = resolve; });
+    this.publishGate = { enter, released };
+    return { entered, release };
+  }
   async handle(route, device) {
     const request = route.request(), rpc = new URL(request.url()).pathname.split('/').at(-1);
     if (!rpc.startsWith('life_public_page_')) return super.handle(route, device);
@@ -35,6 +42,7 @@ class PublicationCloud extends FakeCloud {
     if (rpc === 'life_public_page_get') result = this.publicPage ? clone(this.publicPage.metadata) : { status: 'missing', revision: 0, publicId: null, updatedAt: null, lastOperationId: null };
     else {
       assert.equal(rpc, 'life_public_page_put'); assert.equal(payload.p_action, 'publish');
+      if (this.publishGate) { const gate = this.publishGate; this.publishGate = null; gate.enter(); await gate.released; }
       assert.equal(payload.p_expected_revision, this.publicPage?.metadata.revision || 0);
       this.publicationWrites.push(clone(payload));
       const metadata = { status: 'published', revision: payload.p_expected_revision + 1, publicId: '33333333-3333-4333-8333-000000000001', updatedAt: new Date().toISOString(), lastOperationId: payload.p_operation_id };
@@ -211,7 +219,33 @@ async function main() {
       async function publish(optIn) {
         await page.locator('#wbPageShare').click(); await page.locator('#wbSharePreview').waitFor();
         if (optIn) { await page.locator('#wbShareChoices > summary').click(); await page.locator(`.wb-share-body[data-version-id="${f.versionIds['garden-old']}"]`).check(); }
-        await page.locator('#wbShareConsent').check(); await page.locator('#wbSharePublish').click(); await page.locator('#wbShareUrl').waitFor({ state: 'visible' });
+        const previousWrites = server.publicationWrites.length, expectedRevision = (server.publicPage?.metadata.revision || 0) + 1;
+        const gate = server.holdPublish();
+        const storedResponse = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/life_public_page_put') && response.request().method() === 'POST' && response.request().postDataJSON().p_expected_revision === expectedRevision - 1);
+        const confirmedResponse = page.waitForResponse(async response => new URL(response.url()).pathname.endsWith('/life_public_page_get') && response.request().method() === 'POST' && response.ok() && (await response.json()).revision === expectedRevision);
+        const responses = Promise.all([storedResponse, confirmedResponse]);
+        // If an earlier UI/gate check fails, context closure may reject these
+        // waiters. Observe that rejection while retaining it for the await below.
+        responses.catch(() => {});
+        let gateTimer;
+        // Updating retains the last confirmed URL while sending. A visible old
+        // link must not be treated as completion of this distinct operation.
+        try {
+          await page.locator('#wbShareConsent').check(); await page.locator('#wbSharePublish').click();
+          await new Promise((resolve, reject) => {
+            gateTimer = setTimeout(() => reject(Error('The reviewed publication did not issue its mock put within 12 seconds')), 12000);
+            gate.entered.then(resolve, reject);
+          });
+          assert.equal(server.publicationWrites.length, previousWrites);
+          assert.equal(await page.locator('#wbSharePanel').getAttribute('aria-busy'), 'true');
+          if (previousWrites) assert.equal(await page.locator('#wbShareUrl').isVisible(), true);
+        } finally { clearTimeout(gateTimer); gate.release(); }
+        const [storedReply, confirmedReply] = await responses;
+        const stored = await storedReply.json(), confirmed = await confirmedReply.json();
+        assert.equal(stored.status, 'stored'); assert.equal(stored.revision, expectedRevision);
+        assert.equal(confirmed.revision, expectedRevision); assert.equal(confirmed.lastOperationId, server.publicationWrites.at(-1).p_operation_id);
+        await page.waitForFunction(() => document.querySelector('#wbSharePanel')?.getAttribute('aria-busy') === 'false' && document.querySelector('#wbShareStatus')?.textContent === '공개 중' && document.querySelector('#wbShareError')?.hidden === true);
+        await page.locator('#wbShareUrl').waitFor({ state: 'visible' }); assert.equal(server.publicationWrites.length, previousWrites + 1);
         const snapshot = clone(server.publicPage.snapshot); await page.locator('#wbShareBack').click(); await entry(page, f).waitFor(); return snapshot;
       }
       const defaults = await publish(false);
@@ -222,7 +256,7 @@ async function main() {
       const other = folded.entries.flatMap(entry => entry.parts).find(part => part.title === '느린 선택을 다루는 책 소개'); assert.equal(other.text, null); assert.equal(other.textKind, 'none');
       assert.equal(server.publicationWrites.length, 3); assert.deepEqual(await current(page), before);
       const backup = await snapshotBackup(page); assert.equal(backup.sourceBackup.workspace.sourceVersions.find(v => v.id === f.versionIds['garden-old']).contentText, raw);
-      report.observations.push({ scene: 'publication', simulatedWrites: 3, privateSourcesUnchanged: true, defaultBodyIncluded: false, explicitBodyIsRaw: true, foldIndependent: true });
+      report.observations.push({ scene: 'publication', simulatedWrites: 3, privateSourcesUnchanged: true, defaultBodyIncluded: false, explicitBodyIsRaw: true, foldIndependent: true, heldUpdatesAwaitedAuthoritativeRevision: true });
     });
     await check('free-form dates, duplicate-source entry independence and responsive fold boundaries', 820, async ({ page }) => {
       const variation = clone(sample); variation.sources[0].versions[0].originalCreatedAt = '2024년 가을 산책';

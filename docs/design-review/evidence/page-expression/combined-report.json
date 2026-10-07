@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-10-07T21:48:08.288Z",
+  "createdAt": "2026-10-07T22:03:47.285Z",
   "scope": "Actual private page/preview, bundled SDK and IndexedDB; synthetic intercepted publication; Chromium viewport/touch/keyboard, not Apple hardware or native IME.",
   "browser": "151.0.7922.173",
   "checks": [
@@ -30,8 +30,8 @@
     {
       "name": "publication body consent and full backup remain independent of page fold",
       "pass": true,
-      "runFile": "run-2026-10-07T21-44-25-458Z.json",
-      "runCreatedAt": "2026-10-07T21:44:25.458Z"
+      "runFile": "run-2026-10-07T22-03-17-848Z.json",
+      "runCreatedAt": "2026-10-07T22:03:17.848Z"
     },
     {
       "name": "free-form dates, duplicate-source entry independence and responsive fold boundaries",
@@ -419,6 +419,16 @@
       "expandedTextNodeRetained": true,
       "selectedPhraseRetained": true,
       "runFile": "run-2026-10-07T21-47-57-360Z.json"
+    },
+    {
+      "scene": "publication",
+      "simulatedWrites": 3,
+      "privateSourcesUnchanged": true,
+      "defaultBodyIncluded": false,
+      "explicitBodyIsRaw": true,
+      "foldIndependent": true,
+      "heldUpdatesAwaitedAuthoritativeRevision": true,
+      "runFile": "run-2026-10-07T22-03-17-848Z.json"
     }
   ],
   "sourceRuns": [
@@ -457,9 +467,18 @@
       "consoleErrors": 0,
       "pageErrors": 0,
       "external": 0
+    },
+    {
+      "file": "run-2026-10-07T22-03-17-848Z.json",
+      "createdAt": "2026-10-07T22:03:17.848Z",
+      "checks": 1,
+      "passed": 1,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "external": 0
     }
   ],
-  "history": "Initial five focused checks passed. Requested free-form/duplicate-entry/resizing case then passed. First expanded failure test released its IndexedDB abort while a second async save was still in flight; corrected test waits for the additional abort and source-open button completion. This test-only timing correction passed on its focused rerun. Application code was not changed by QA. Final independent review found redundant expanded-body text reassignment during responsive resizing. Root guarded unchanged text writes; QA added exact Text-node identity and a Korean/emoji Range selection across 701/700/390/820px. Only that affected case was rerun and passed.",
+  "history": "Initial five focused checks passed. Requested free-form/duplicate-entry/resizing case then passed. First expanded failure test released its IndexedDB abort while a second async save was still in flight; corrected test waits for the additional abort and source-open button completion. This test-only timing correction passed on its focused rerun. Application code was not changed by QA. Final independent review found redundant expanded-body text reassignment during responsive resizing. Root guarded unchanged text writes; QA added exact Text-node identity and a Korean/emoji Range selection across 701/700/390/820px. Only that affected case was rerun and passed. CI run 37691974665/check 113034151041 exposed an update-wait race in this test: the previously confirmed public URL stays visible while a new publication is sending, so waiting only for URL visibility read the old null-body snapshot. The helper now holds each mock publication to reproduce that interval, then waits for the new put revision, authoritative get operation identity and terminal panel state. Only the publication case was rerun locally and passed; this does not claim the subsequent CI run passed.",
   "consoleErrors": [],
   "pageErrors": [],
   "external": [],

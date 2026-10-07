@@ -1,0 +1,30 @@
+{
+  "createdAt": "2026-10-07T22:03:17.848Z",
+  "browser": "151.0.7922.173",
+  "scope": "Actual private page/preview, bundled SDK and IndexedDB; synthetic intercepted publication; Chromium viewport/touch/keyboard, not Apple hardware or native IME.",
+  "checks": [
+    {
+      "name": "publication body consent and full backup remain independent of page fold",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "observations": [
+    {
+      "scene": "publication",
+      "simulatedWrites": 3,
+      "privateSourcesUnchanged": true,
+      "defaultBodyIncluded": false,
+      "explicitBodyIsRaw": true,
+      "foldIndependent": true,
+      "heldUpdatesAwaitedAuthoritativeRevision": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "operatingRemoteWrites": 0,
+  "pass": true,
+  "finishedAt": "2026-10-07T22:03:20.186Z"
+}
