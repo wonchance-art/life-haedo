@@ -1,0 +1,7 @@
+{
+  "createdAt": "2026-10-07T22:17:36.463Z",
+  "scope": "First development execution, before the runner completed any scenario.",
+  "failure": "The anonymous read fake expected an Authorization Bearer publishable key, but createReader correctly sends apikey only and no Authorization header. The route assertion rejected and escaped the original handler; no completed test report was produced.",
+  "correction": "Assert the publishable apikey and absence of Authorization; collect route assertion errors instead of allowing unhandled route rejection.",
+  "applicationChanged": false
+}

@@ -1,0 +1,418 @@
+{
+  "createdAt": "2026-10-07T22:17:36.909Z",
+  "browser": "151.0.7922.173",
+  "scope": "Actual owner review and anonymous public reader with synthetic HTTP; Chromium viewport/touch/keyboard only, not live SQL/RLS/Google or Apple hardware.",
+  "checks": [
+    {
+      "name": "owner review and anonymous body/excerpt distinction at 1440",
+      "pass": true
+    },
+    {
+      "name": "owner review and anonymous body/excerpt distinction at 820",
+      "pass": true
+    },
+    {
+      "name": "owner review and anonymous body/excerpt distinction at 390",
+      "pass": true
+    },
+    {
+      "name": "same-revision background reads preserve selection; changes, revocation and failures clear stale public content",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "label": "review",
+      "width": 1440,
+      "screenshot": "review-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "label": "public",
+      "width": 1440,
+      "screenshot": "public-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "",
+        "text": "본문으로 이동\n  \n    \n      해도\n      \n    \n    \n    보고 읽으며 남긴 기록전시와 산책에서 관찰한 장면, 다시 읽은",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "label": "review",
+      "width": 820,
+      "screenshot": "review-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "label": "public",
+      "width": 820,
+      "screenshot": "public-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "",
+        "text": "본문으로 이동\n  \n    \n      해도\n      \n    \n    \n    보고 읽으며 남긴 기록전시와 산책에서 관찰한 장면, 다시 읽은",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "label": "review",
+      "width": 390,
+      "screenshot": "review-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "label": "public",
+      "width": 390,
+      "screenshot": "public-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "",
+        "text": "본문으로 이동\n  \n    \n      해도\n      \n    \n    \n    보고 읽으며 남긴 기록전시와 산책에서 관찰한 장면, 다시 읽은",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "label": "loading",
+      "width": 390,
+      "screenshot": "loading-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "",
+        "text": "본문으로 이동\n  \n    \n      해도\n      \n    \n    공유 페이지를 확인하는 중입니다.\n    \n    \n    <p cla",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "label": "offline",
+      "width": 390,
+      "screenshot": "offline-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 7.299,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "",
+        "text": "본문으로 이동\n  \n    \n      해도\n      \n    \n    인터넷 연결 후 공개 상태를 다시 확인해 주세요.\n    \n    \n ",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "label": "error",
+      "width": 390,
+      "screenshot": "error-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 7.299,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "",
+        "text": "본문으로 이동\n  \n    \n      해도\n      \n    \n    공개 상태를 확인하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "label": "revoked",
+      "width": 390,
+      "screenshot": "revoked-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "",
+        "text": "본문으로 이동\n  \n    \n      해도\n      \n    \n    공개된 페이지가 없습니다. 주소가 바뀌었거나 공개가 종료됐을 수 있습니",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "label": "empty",
+      "width": 390,
+      "screenshot": "empty-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "",
+        "text": "본문으로 이동\n  \n    \n      해도\n      \n    \n    \n    보고 읽으며 남긴 기록전시와 산책에서 관찰한 장면, 다시 읽은",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    }
+  ],
+  "observations": [
+    {
+      "width": 1440,
+      "rawUtf16Length": 1543,
+      "payloadContainsWholeBody": true,
+      "excerptAlwaysWhole": true,
+      "resizePreservesTextAndSelection": true,
+      "readRequests": 1,
+      "storageAccesses": 0,
+      "idbAccesses": 0,
+      "cacheAccesses": 0,
+      "authLoaded": false,
+      "requestsNoStore": true
+    },
+    {
+      "width": 820,
+      "rawUtf16Length": 1543,
+      "payloadContainsWholeBody": true,
+      "excerptAlwaysWhole": true,
+      "resizePreservesTextAndSelection": true,
+      "readRequests": 1,
+      "storageAccesses": 0,
+      "idbAccesses": 0,
+      "cacheAccesses": 0,
+      "authLoaded": false,
+      "requestsNoStore": true
+    },
+    {
+      "width": 390,
+      "rawUtf16Length": 1543,
+      "payloadContainsWholeBody": true,
+      "excerptAlwaysWhole": true,
+      "resizePreservesTextAndSelection": true,
+      "readRequests": 1,
+      "storageAccesses": 0,
+      "idbAccesses": 0,
+      "cacheAccesses": 0,
+      "authLoaded": false,
+      "requestsNoStore": true
+    },
+    {
+      "scene": "lifecycle",
+      "sameRevisionRetainsDOMAndSelection": true,
+      "changedRevisionReplacesDOM": true,
+      "lateReadCannotReviveRemovedContent": true,
+      "readRequests": 9,
+      "storageAccesses": 0,
+      "idbAccesses": 0,
+      "cacheAccesses": 0,
+      "authLoaded": false,
+      "requestsNoStore": true,
+      "manualRefreshRecoversError": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "operatingRemoteWrites": 0,
+  "pass": true,
+  "finishedAt": "2026-10-07T22:17:45.791Z",
+  "sourceRun": {
+    "file": "run-2026-10-07T22-17-36-909Z.json",
+    "createdAt": "2026-10-07T22:17:36.909Z"
+  },
+  "reportPreparedAt": "2026-10-07T22:18:40.636Z",
+  "history": "The initial development attempt incorrectly required an Authorization header on anonymous read requests; the actual reader correctly uses apikey without an account token. That fake HTTP assertion was corrected and route errors are now collected. See initial-harness-failure.json. The subsequent complete suite passed 4/4 with 11 visual scenes. A report-only wording correction renames manualRefreshResetsReadingState to manualRefreshRecoversError because the exercised manual refresh follows an error that already cleared the DOM; preservation of reading state was tested only for same-revision background reads."
+}

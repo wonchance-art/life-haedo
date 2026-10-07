@@ -1,0 +1,16 @@
+{
+  "createdAt": "2026-10-07T22:18:01.339Z",
+  "scope": "Actual local app/SDK/IndexedDB with anonymous HTTP share-RPC simulator; not live SQL/RLS, Apple hardware or real Google login",
+  "checks": [
+    {
+      "name": "keyboard consent is required and one explicit Enter publishes the reviewed snapshot",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "browser": "151.0.7922.173"
+}
