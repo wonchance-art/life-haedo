@@ -1,6 +1,6 @@
 # 제품 기준
 
-현재 우선순위는 기능 수 확대보다 [핵심 경험 완성도](docs/design-review/core-experience.md)다. `기록 → 읽기 → 관련 기록 → 묶음/내 페이지 → 저장 후 재열기`를 연결하고 그다음 [기기 간 구성·초안 이어쓰기](docs/life-tools-design/device-continuity.md)를 진행한다. 관련 기록 진입은 읽던 정확 버전을 전달하며, 구성 동기화는 현재 미구현이다.
+현재 우선순위는 기능 수 확대보다 [핵심 경험 완성도](docs/design-review/core-experience.md)다. `기록 → 읽기 → 관련 기록 → 묶음/내 페이지 → 저장 후 재열기`를 연결하고, [기기 간 구성·초안 이어쓰기](docs/life-tools-design/device-continuity.md)의 운영 적용을 준비한다. 관련 기록 진입은 읽던 정확 버전을 전달한다. 구성·선택 초안 이어쓰기는 구현과 CI 검증을 마쳤으며 운영 SQL 설치 보고·병합·배포를 기다린다. 그동안 [읽기·글쓰기 품질 개선](docs/design-review/reading-writing-quality.md)을 진행한다.
 
 현재 사용자가 밝힌 목적과 사용 환경을 정리한 문서다. 디자인 시안이나 미결 기능을 운영 기능 완료로 해석하지 않는다.
 

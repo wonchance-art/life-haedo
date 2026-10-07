@@ -1,0 +1,76 @@
+{
+  "createdAt": "2026-10-07T13:00:08.783Z",
+  "baseline": false,
+  "browser": "151.0.7922.173",
+  "checks": [
+    {
+      "name": "note search → older reader → exact excerpt → return 1440",
+      "pass": true,
+      "listY": 8607,
+      "readerY": 0,
+      "headingY": 121,
+      "emptySaveDisabled": true,
+      "exactUTF16Excerpt": true,
+      "unchangedSourcesAndVersions": true,
+      "searchFilterScrollFocusRestored": true
+    },
+    {
+      "name": "note search → older reader → exact excerpt → return 820",
+      "pass": true,
+      "listY": 8607,
+      "readerY": 0,
+      "headingY": 121,
+      "emptySaveDisabled": true,
+      "exactUTF16Excerpt": true,
+      "unchangedSourcesAndVersions": true,
+      "searchFilterScrollFocusRestored": true
+    },
+    {
+      "name": "note search → older reader → exact excerpt → return 390",
+      "pass": true,
+      "listY": 8587,
+      "readerY": 0,
+      "headingY": 95,
+      "emptySaveDisabled": true,
+      "exactUTF16Excerpt": true,
+      "unchangedSourcesAndVersions": true,
+      "searchFilterScrollFocusRestored": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "realRemoteWrites": 0,
+  "observations": [
+    {
+      "width": 1440,
+      "listY": 8607,
+      "readerY": 0,
+      "headingY": 121,
+      "savedPosition": {
+        "expected": 79,
+        "actual": 79
+      }
+    },
+    {
+      "width": 820,
+      "listY": 8607,
+      "readerY": 0,
+      "headingY": 121,
+      "savedPosition": {
+        "expected": 198,
+        "actual": 198
+      }
+    },
+    {
+      "width": 390,
+      "listY": 8587,
+      "readerY": 0,
+      "headingY": 95,
+      "savedPosition": {
+        "expected": 44,
+        "actual": 44
+      }
+    }
+  ]
+}

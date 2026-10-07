@@ -1,0 +1,275 @@
+[
+  {
+    "width": 390,
+    "scene": "reader",
+    "inspect": {
+      "viewport": {
+        "width": 390,
+        "height": 900
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "h1",
+        "id": "",
+        "class": "life-heading life-reader-heading",
+        "text": "정원 산책에서 배운 관찰의 속도",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": {
+        "width": 350,
+        "size": "17px",
+        "lineHeight": "33.15px",
+        "selectedText": ""
+      },
+      "resultCount": 0
+    },
+    "reader": "정원 산책에서 배운 관찰의 속도\n\nApple 메모 · 원문 작성 미상\n\n제공한 본문 전체 · 버전 1/1\n\n함께 읽을 기록\n정원 산책을 마치고 벤치에 앉았다. 잎사귀의 모양을 자세히 보려고 멈추니 방금 지나온 길도 다르게 보였다.\n\n빨리 걸을 때는 목적지만 생각했지만 천천히 걸을 때는 빛과 나무의 간격이 눈에 들어왔다. 사진을 더 찍는 것보다 한 장을 오래 보는 편이 오늘의 기억에는 도움이 됐다.\n\n다음 산책에서는 같은 나무를 다시 찾아가고 싶다. 어떤 것을 알아차렸는지 적어 두면 계절이 바뀌는 모습도 천천히 비교할 수 있을 것 같다.\n함께 읽을 기록\n\n이 브라우저의 개인 작업공간 · 기기 간 자동 동기화 미연결",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "scene": "long-write",
+    "inspect": {
+      "viewport": {
+        "width": 390,
+        "height": 900
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "textarea",
+        "id": "lifeWritingBody",
+        "class": "life-writing-body",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    "writing": "이 브라우저에 초안 보관됨\n\n기록에 저장\n제목\n본문\n초안 1개\n초안 이어쓰기\n초안 보관",
+    "metrics": {
+      "clientHeight": 492,
+      "scrollHeight": 2978,
+      "pageScroll": 0,
+      "title": {
+        "x": 20,
+        "y": 132,
+        "width": 350,
+        "height": 130,
+        "top": 132,
+        "right": 370,
+        "bottom": 262,
+        "left": 20
+      },
+      "save": {
+        "x": 271.671875,
+        "y": 76,
+        "width": 98.328125,
+        "height": 44,
+        "top": 76,
+        "right": 370,
+        "bottom": 120,
+        "left": 271.671875
+      }
+    }
+  },
+  {
+    "width": 820,
+    "scene": "reader",
+    "inspect": {
+      "viewport": {
+        "width": 820,
+        "height": 900
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "h1",
+        "id": "",
+        "class": "life-heading life-reader-heading",
+        "text": "정원 산책에서 배운 관찰의 속도",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": {
+        "width": 628,
+        "size": "18px",
+        "lineHeight": "35.1px",
+        "selectedText": ""
+      },
+      "resultCount": 0
+    },
+    "reader": "정원 산책에서 배운 관찰의 속도\n\nApple 메모 · 원문 작성 미상\n\n제공한 본문 전체 · 버전 1/1\n\n함께 읽을 기록\n정원 산책을 마치고 벤치에 앉았다. 잎사귀의 모양을 자세히 보려고 멈추니 방금 지나온 길도 다르게 보였다.\n\n빨리 걸을 때는 목적지만 생각했지만 천천히 걸을 때는 빛과 나무의 간격이 눈에 들어왔다. 사진을 더 찍는 것보다 한 장을 오래 보는 편이 오늘의 기억에는 도움이 됐다.\n\n다음 산책에서는 같은 나무를 다시 찾아가고 싶다. 어떤 것을 알아차렸는지 적어 두면 계절이 바뀌는 모습도 천천히 비교할 수 있을 것 같다.\n함께 읽을 기록\n\n이 브라우저의 개인 작업공간 · 기기 간 자동 동기화 미연결",
+    "errors": []
+  },
+  {
+    "width": 820,
+    "scene": "long-write",
+    "inspect": {
+      "viewport": {
+        "width": 820,
+        "height": 900
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "textarea",
+        "id": "lifeWritingBody",
+        "class": "life-writing-body",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    "writing": "이 브라우저에 초안 보관됨\n\n기록에 저장\n제목\n본문\n초안 1개\n초안 이어쓰기\n초안 보관",
+    "metrics": {
+      "clientHeight": 519,
+      "scrollHeight": 3151,
+      "pageScroll": 0,
+      "title": {
+        "x": 132,
+        "y": 166,
+        "width": 628,
+        "height": 103,
+        "top": 166,
+        "right": 760,
+        "bottom": 269,
+        "left": 132
+      },
+      "save": {
+        "x": 661.671875,
+        "y": 110,
+        "width": 98.328125,
+        "height": 44,
+        "top": 110,
+        "right": 760,
+        "bottom": 154,
+        "left": 661.671875
+      }
+    }
+  },
+  {
+    "width": 1440,
+    "scene": "reader",
+    "inspect": {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "h1",
+        "id": "",
+        "class": "life-heading life-reader-heading",
+        "text": "정원 산책에서 배운 관찰의 속도",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": {
+        "width": 700,
+        "size": "18px",
+        "lineHeight": "35.1px",
+        "selectedText": ""
+      },
+      "resultCount": 0
+    },
+    "reader": "정원 산책에서 배운 관찰의 속도\n\nApple 메모 · 원문 작성 미상\n\n제공한 본문 전체 · 버전 1/1\n\n함께 읽을 기록\n정원 산책을 마치고 벤치에 앉았다. 잎사귀의 모양을 자세히 보려고 멈추니 방금 지나온 길도 다르게 보였다.\n\n빨리 걸을 때는 목적지만 생각했지만 천천히 걸을 때는 빛과 나무의 간격이 눈에 들어왔다. 사진을 더 찍는 것보다 한 장을 오래 보는 편이 오늘의 기억에는 도움이 됐다.\n\n다음 산책에서는 같은 나무를 다시 찾아가고 싶다. 어떤 것을 알아차렸는지 적어 두면 계절이 바뀌는 모습도 천천히 비교할 수 있을 것 같다.\n함께 읽을 기록\n\n이 브라우저의 개인 작업공간 · 기기 간 자동 동기화 미연결",
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "scene": "long-write",
+    "inspect": {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "textarea",
+        "id": "lifeWritingBody",
+        "class": "life-writing-body",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    "writing": "이 브라우저에 초안 보관됨\n\n기록에 저장\n제목\n본문\n초안 1개\n초안 이어쓰기\n초안 보관",
+    "metrics": {
+      "clientHeight": 519,
+      "scrollHeight": 2099,
+      "pageScroll": 0,
+      "title": {
+        "x": 406,
+        "y": 166,
+        "width": 700,
+        "height": 103,
+        "top": 166,
+        "right": 1106,
+        "bottom": 269,
+        "left": 406
+      },
+      "save": {
+        "x": 1007.671875,
+        "y": 110,
+        "width": 98.328125,
+        "height": 44,
+        "top": 110,
+        "right": 1106,
+        "bottom": 154,
+        "left": 1007.671875
+      }
+    }
+  }
+]

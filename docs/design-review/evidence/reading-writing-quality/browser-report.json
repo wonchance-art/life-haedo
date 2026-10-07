@@ -1,0 +1,1967 @@
+{
+  "phase": "after",
+  "createdAt": "2026-10-07T13:03:27.940Z",
+  "base": "http://127.0.0.1:4184",
+  "browser": "151.0.7922.173",
+  "scope": "Real local UI, SDK and isolated IndexedDB; anonymous Auth HTTP; Linux Chromium viewport/touch/keyboard simulation only",
+  "checks": [
+    {
+      "name": "1440 records-empty: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "1440 records-empty: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 records-empty: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 records-empty: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 records-empty: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 search opens exact previous version",
+      "pass": true
+    },
+    {
+      "name": "1440 reader-match: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "1440 reader-match: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 reader-match: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 reader-match: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 reader-match: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 selected middle is scrolled",
+      "pass": true,
+      "detail": 2016
+    },
+    {
+      "name": "1440 excerpt shows exact middle quote",
+      "pass": true
+    },
+    {
+      "name": "1440 reader-excerpt: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "1440 reader-excerpt: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 reader-excerpt: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 reader-excerpt: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 reader-excerpt: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 closing excerpt restores reading position and toolbar focus",
+      "pass": true,
+      "detail": {
+        "y": 2016,
+        "focus": "lifeExcerptToggle",
+        "expanded": "false",
+        "expectedY": 2016
+      }
+    },
+    {
+      "name": "1440 saving excerpt keeps reading position",
+      "pass": true
+    },
+    {
+      "name": "1440 back preserves query and exact result focus",
+      "pass": true
+    },
+    {
+      "name": "1440 search-empty: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "1440 search-empty: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 search-empty: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 search-empty: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 search-empty: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer entry clears previous excerpt success",
+      "pass": true
+    },
+    {
+      "name": "1440 writer-empty: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "1440 writer-empty: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-empty: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-empty: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-empty: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 full long title is visible",
+      "pass": true,
+      "detail": {
+        "tag": "TEXTAREA",
+        "clientHeight": 138,
+        "scrollHeight": 138,
+        "clientWidth": 700,
+        "scrollWidth": 700,
+        "value": "비가 멎은 오후에 책을 덮고 걸으며 오래 남겨 둔 질문을 다시 읽고 나의 언어로 천천히 이어 쓰는 기록 — 익숙한 관심과 새로 발견한 생각을 함께 놓고 다음 문장의 방향을 고르는 시간"
+      }
+    },
+    {
+      "name": "1440 title save retains focus and cursor",
+      "pass": true
+    },
+    {
+      "name": "1440 title Enter keeps single-line title without saving",
+      "pass": true
+    },
+    {
+      "name": "1440 writer-long-title: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "1440 writer-long-title: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-long-title: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-long-title: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-long-title: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 maximum 500-character title fits",
+      "pass": true,
+      "detail": {
+        "length": 500,
+        "clientHeight": 470,
+        "scrollHeight": 470,
+        "clientWidth": 700,
+        "scrollWidth": 700,
+        "maxLength": 500
+      }
+    },
+    {
+      "name": "1440 writer-maximum-title: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "1440 writer-maximum-title: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-maximum-title: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-maximum-title: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-maximum-title: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 section return keeps body selection direction and inner scroll",
+      "pass": true,
+      "detail": {
+        "before": {
+          "start": 610,
+          "end": 640,
+          "direction": "backward",
+          "scrollTop": 970
+        },
+        "after": {
+          "start": 610,
+          "end": 640,
+          "direction": "backward",
+          "scrollTop": 970
+        }
+      }
+    },
+    {
+      "name": "1440 new draft has independent position and text",
+      "pass": true
+    },
+    {
+      "name": "1440 writer-error: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "1440 writer-error: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-error: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-error: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-error: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 failed navigation preserves writing error and input",
+      "pass": true
+    },
+    {
+      "name": "1440 writer-saved-reader: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "1440 writer-saved-reader: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-saved-reader: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-saved-reader: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-saved-reader: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-loading: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "1440 writer-loading: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-loading: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-loading: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer-loading: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "1440 writer loading clears previous record-save success",
+      "pass": true
+    },
+    {
+      "name": "1440 combined local journey",
+      "pass": true
+    },
+    {
+      "name": "820 records-empty: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "820 records-empty: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 records-empty: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 records-empty: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 records-empty: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 search opens exact previous version",
+      "pass": true
+    },
+    {
+      "name": "820 reader-match: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "820 reader-match: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 reader-match: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 reader-match: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 reader-match: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 selected middle is scrolled",
+      "pass": true,
+      "detail": 2060
+    },
+    {
+      "name": "820 excerpt shows exact middle quote",
+      "pass": true
+    },
+    {
+      "name": "820 reader-excerpt: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "820 reader-excerpt: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 reader-excerpt: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 reader-excerpt: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 reader-excerpt: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 closing excerpt restores reading position and toolbar focus",
+      "pass": true,
+      "detail": {
+        "y": 2060,
+        "focus": "lifeExcerptToggle",
+        "expanded": "false",
+        "expectedY": 2060
+      }
+    },
+    {
+      "name": "820 saving excerpt keeps reading position",
+      "pass": true
+    },
+    {
+      "name": "820 back preserves query and exact result focus",
+      "pass": true
+    },
+    {
+      "name": "820 search-empty: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "820 search-empty: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 search-empty: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 search-empty: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 search-empty: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer entry clears previous excerpt success",
+      "pass": true
+    },
+    {
+      "name": "820 writer-empty: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "820 writer-empty: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-empty: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-empty: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-empty: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 full long title is visible",
+      "pass": true,
+      "detail": {
+        "tag": "TEXTAREA",
+        "clientHeight": 138,
+        "scrollHeight": 138,
+        "clientWidth": 628,
+        "scrollWidth": 628,
+        "value": "비가 멎은 오후에 책을 덮고 걸으며 오래 남겨 둔 질문을 다시 읽고 나의 언어로 천천히 이어 쓰는 기록 — 익숙한 관심과 새로 발견한 생각을 함께 놓고 다음 문장의 방향을 고르는 시간"
+      }
+    },
+    {
+      "name": "820 title save retains focus and cursor",
+      "pass": true
+    },
+    {
+      "name": "820 title Enter keeps single-line title without saving",
+      "pass": true
+    },
+    {
+      "name": "820 writer-long-title: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "820 writer-long-title: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-long-title: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-long-title: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-long-title: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 maximum 500-character title fits",
+      "pass": true,
+      "detail": {
+        "length": 500,
+        "clientHeight": 543,
+        "scrollHeight": 543,
+        "clientWidth": 628,
+        "scrollWidth": 628,
+        "maxLength": 500
+      }
+    },
+    {
+      "name": "820 writer-maximum-title: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "820 writer-maximum-title: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-maximum-title: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-maximum-title: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-maximum-title: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 section return keeps body selection direction and inner scroll",
+      "pass": true,
+      "detail": {
+        "before": {
+          "start": 610,
+          "end": 640,
+          "direction": "backward",
+          "scrollTop": 970
+        },
+        "after": {
+          "start": 610,
+          "end": 640,
+          "direction": "backward",
+          "scrollTop": 970
+        }
+      }
+    },
+    {
+      "name": "820 new draft has independent position and text",
+      "pass": true
+    },
+    {
+      "name": "820 writer-error: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "820 writer-error: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-error: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-error: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-error: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 failed navigation preserves writing error and input",
+      "pass": true
+    },
+    {
+      "name": "820 writer-saved-reader: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "820 writer-saved-reader: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-saved-reader: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-saved-reader: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-saved-reader: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-loading: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "820 writer-loading: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-loading: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-loading: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer-loading: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "820 writer loading clears previous record-save success",
+      "pass": true
+    },
+    {
+      "name": "820 combined local journey",
+      "pass": true
+    },
+    {
+      "name": "390 records-empty: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "390 records-empty: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 records-empty: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 records-empty: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 records-empty: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 search opens exact previous version",
+      "pass": true
+    },
+    {
+      "name": "390 reader-match: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "390 reader-match: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 reader-match: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 reader-match: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 reader-match: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 selected middle is scrolled",
+      "pass": true,
+      "detail": 3202
+    },
+    {
+      "name": "390 excerpt shows exact middle quote",
+      "pass": true
+    },
+    {
+      "name": "390 reader-excerpt: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "390 reader-excerpt: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 reader-excerpt: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 reader-excerpt: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 reader-excerpt: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 closing excerpt restores reading position and toolbar focus",
+      "pass": true,
+      "detail": {
+        "y": 3202,
+        "focus": "lifeExcerptToggle",
+        "expanded": "false",
+        "expectedY": 3202
+      }
+    },
+    {
+      "name": "390 saving excerpt keeps reading position",
+      "pass": true
+    },
+    {
+      "name": "390 back preserves query and exact result focus",
+      "pass": true
+    },
+    {
+      "name": "390 search-empty: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "390 search-empty: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 search-empty: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 search-empty: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 search-empty: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer entry clears previous excerpt success",
+      "pass": true
+    },
+    {
+      "name": "390 writer-empty: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "390 writer-empty: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-empty: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-empty: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-empty: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 full long title is visible",
+      "pass": true,
+      "detail": {
+        "tag": "TEXTAREA",
+        "clientHeight": 196,
+        "scrollHeight": 196,
+        "clientWidth": 350,
+        "scrollWidth": 350,
+        "value": "비가 멎은 오후에 책을 덮고 걸으며 오래 남겨 둔 질문을 다시 읽고 나의 언어로 천천히 이어 쓰는 기록 — 익숙한 관심과 새로 발견한 생각을 함께 놓고 다음 문장의 방향을 고르는 시간"
+      }
+    },
+    {
+      "name": "390 title save retains focus and cursor",
+      "pass": true
+    },
+    {
+      "name": "390 title Enter keeps single-line title without saving",
+      "pass": true
+    },
+    {
+      "name": "390 writer-long-title: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "390 writer-long-title: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-long-title: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-long-title: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-long-title: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 maximum 500-character title fits",
+      "pass": true,
+      "detail": {
+        "length": 500,
+        "clientHeight": 834,
+        "scrollHeight": 834,
+        "clientWidth": 350,
+        "scrollWidth": 350,
+        "maxLength": 500
+      }
+    },
+    {
+      "name": "390 writer-maximum-title: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "390 writer-maximum-title: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-maximum-title: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-maximum-title: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-maximum-title: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 section return keeps body selection direction and inner scroll",
+      "pass": true,
+      "detail": {
+        "before": {
+          "start": 610,
+          "end": 640,
+          "direction": "backward",
+          "scrollTop": 970
+        },
+        "after": {
+          "start": 610,
+          "end": 640,
+          "direction": "backward",
+          "scrollTop": 970
+        }
+      }
+    },
+    {
+      "name": "390 new draft has independent position and text",
+      "pass": true
+    },
+    {
+      "name": "390 writer-error: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "390 writer-error: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-error: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-error: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-error: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 failed navigation preserves writing error and input",
+      "pass": true
+    },
+    {
+      "name": "390 writer-saved-reader: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "390 writer-saved-reader: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-saved-reader: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-saved-reader: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-saved-reader: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-loading: no horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "390 writer-loading: 44px controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-loading: 16px inputs",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-loading: named controls",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer-loading: text contrast",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "390 writer loading clears previous record-save success",
+      "pass": true
+    },
+    {
+      "name": "390 combined local journey",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "scene": "records-empty",
+      "file": "records-empty-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.661,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "reader-match",
+      "file": "reader-match-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "div",
+        "id": "lifeSourceText",
+        "class": "life-source-text",
+        "text": "보관한 원문",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": {
+        "width": 700,
+        "size": "18px",
+        "lineHeight": "35.1px",
+        "selectedText": "같은 길에서 다시 발견한 질문🌱"
+      },
+      "resultCount": 0
+    },
+    {
+      "scene": "reader-excerpt",
+      "file": "reader-excerpt-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "textarea",
+        "id": "lifeSourceNote",
+        "class": "",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": {
+        "width": 700,
+        "size": "18px",
+        "lineHeight": "35.1px",
+        "selectedText": ""
+      },
+      "resultCount": 0
+    },
+    {
+      "scene": "search-empty",
+      "file": "search-empty-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "input",
+        "id": "lifeSearch",
+        "class": "",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 6.818
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-empty",
+      "file": "writer-empty-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "h1",
+        "id": "",
+        "class": "life-page-title",
+        "text": "글쓰기",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-long-title",
+      "file": "writer-long-title-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "textarea",
+        "id": "lifeWritingTitle",
+        "class": "life-writing-title",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-maximum-title",
+      "file": "writer-maximum-title-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "textarea",
+        "id": "lifeWritingTitle",
+        "class": "life-writing-title",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-error",
+      "file": "writer-error-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "textarea",
+        "id": "lifeWritingBody",
+        "class": "life-writing-body",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-saved-reader",
+      "file": "writer-saved-reader-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "h1",
+        "id": "",
+        "class": "life-heading life-reader-heading",
+        "text": "실패에서 복구하는 다른 익명 초안",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": {
+        "width": 700,
+        "size": "18px",
+        "lineHeight": "35.1px",
+        "selectedText": ""
+      },
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-loading",
+      "file": "writer-loading-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "records-empty",
+      "file": "records-empty-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.661,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "reader-match",
+      "file": "reader-match-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "div",
+        "id": "lifeSourceText",
+        "class": "life-source-text",
+        "text": "보관한 원문",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": {
+        "width": 628,
+        "size": "18px",
+        "lineHeight": "35.1px",
+        "selectedText": "같은 길에서 다시 발견한 질문🌱"
+      },
+      "resultCount": 0
+    },
+    {
+      "scene": "reader-excerpt",
+      "file": "reader-excerpt-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "textarea",
+        "id": "lifeSourceNote",
+        "class": "",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": {
+        "width": 628,
+        "size": "18px",
+        "lineHeight": "35.1px",
+        "selectedText": ""
+      },
+      "resultCount": 0
+    },
+    {
+      "scene": "search-empty",
+      "file": "search-empty-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "input",
+        "id": "lifeSearch",
+        "class": "",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 6.818
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-empty",
+      "file": "writer-empty-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "h1",
+        "id": "",
+        "class": "life-page-title",
+        "text": "글쓰기",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-long-title",
+      "file": "writer-long-title-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "textarea",
+        "id": "lifeWritingTitle",
+        "class": "life-writing-title",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-maximum-title",
+      "file": "writer-maximum-title-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "textarea",
+        "id": "lifeWritingTitle",
+        "class": "life-writing-title",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-error",
+      "file": "writer-error-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "textarea",
+        "id": "lifeWritingBody",
+        "class": "life-writing-body",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-saved-reader",
+      "file": "writer-saved-reader-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "h1",
+        "id": "",
+        "class": "life-heading life-reader-heading",
+        "text": "실패에서 복구하는 다른 익명 초안",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": {
+        "width": 628,
+        "size": "18px",
+        "lineHeight": "35.1px",
+        "selectedText": ""
+      },
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-loading",
+      "file": "writer-loading-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "records-empty",
+      "file": "records-empty-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.661,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "reader-match",
+      "file": "reader-match-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "div",
+        "id": "lifeSourceText",
+        "class": "life-source-text",
+        "text": "보관한 원문",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": {
+        "width": 350,
+        "size": "17px",
+        "lineHeight": "33.15px",
+        "selectedText": "같은 길에서 다시 발견한 질문🌱"
+      },
+      "resultCount": 0
+    },
+    {
+      "scene": "reader-excerpt",
+      "file": "reader-excerpt-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "textarea",
+        "id": "lifeSourceNote",
+        "class": "",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": {
+        "width": 350,
+        "size": "17px",
+        "lineHeight": "33.15px",
+        "selectedText": ""
+      },
+      "resultCount": 0
+    },
+    {
+      "scene": "search-empty",
+      "file": "search-empty-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "input",
+        "id": "lifeSearch",
+        "class": "",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 6.818
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-empty",
+      "file": "writer-empty-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "h1",
+        "id": "",
+        "class": "life-page-title",
+        "text": "글쓰기",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-long-title",
+      "file": "writer-long-title-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "textarea",
+        "id": "lifeWritingTitle",
+        "class": "life-writing-title",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-maximum-title",
+      "file": "writer-maximum-title-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "textarea",
+        "id": "lifeWritingTitle",
+        "class": "life-writing-title",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-error",
+      "file": "writer-error-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "textarea",
+        "id": "lifeWritingBody",
+        "class": "life-writing-body",
+        "text": "",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-saved-reader",
+      "file": "writer-saved-reader-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "h1",
+        "id": "",
+        "class": "life-heading life-reader-heading",
+        "text": "실패에서 복구하는 다른 익명 초안",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": {
+        "width": 350,
+        "size": "17px",
+        "lineHeight": "33.15px",
+        "selectedText": ""
+      },
+      "resultCount": 0
+    },
+    {
+      "scene": "writer-loading",
+      "file": "writer-loading-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0
+    }
+  ],
+  "observations": [
+    {
+      "width": 1440,
+      "control": "lifeExcerptToggle",
+      "beforeActivation": 2016,
+      "afterActivation": 3807
+    },
+    {
+      "width": 1440,
+      "control": "lifeExcerptToggle",
+      "beforeActivation": 2016,
+      "afterActivation": 3843
+    },
+    {
+      "width": 820,
+      "control": "lifeExcerptToggle",
+      "beforeActivation": 2060,
+      "afterActivation": 3852
+    },
+    {
+      "width": 820,
+      "control": "lifeExcerptToggle",
+      "beforeActivation": 2060,
+      "afterActivation": 3888
+    },
+    {
+      "width": 390,
+      "control": "lifeExcerptToggle",
+      "beforeActivation": 3202,
+      "afterActivation": 6099
+    },
+    {
+      "width": 390,
+      "control": "lifeExcerptToggle",
+      "beforeActivation": 3202,
+      "afterActivation": 6135
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": []
+}
