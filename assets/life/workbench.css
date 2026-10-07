@@ -47,6 +47,13 @@
 .wb-page-content .wb-page-part + .wb-page-part { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
 .wb-page-source-meta { font-size: 12px; line-height: 1.8; }
 .wb-page-source-date,.wb-page-omissions { font-size: 12px; line-height: 1.8; }
+.wb-page-content .wb-source-body { scroll-margin-block: 90px; }
+.wb-page-content .wb-source-body[data-collapsed=true]::after { content: '…'; color: var(--ink-soft); }
+.wb-page-metadata { display: flex; flex-wrap: wrap; gap: 0 10px; }
+.wb-page-expand { padding-inline: 0; border: 0; background: transparent; color: var(--color-primary); font-size: 13px; }
+.wb-page-source-actions { gap: 12px; margin-top: 4px; }
+.wb-page-source-open { margin-left: auto; }
+.wb-page-source-open .life-tooltip { left: auto; right: 0; transform: none; }
 .wb-page-content .wb-comment { padding: 14px 16px; border-radius: var(--control-radius); background: var(--mint); }
 .wb-page-content .wb-comment .life-meta { color: var(--mint-ink); }
 .wb-page-content .wb-comment-body { margin-top: 4px; }
