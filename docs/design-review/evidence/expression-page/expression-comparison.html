@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>해도 · 표현 페이지 비교</title>
+  
+  <style>
+/* Shared production material UI. Content-first tokens from the approved preview. */
+:root {
+  color-scheme: light;
+  --paper: #fff; --paper-2: #f6f5f8; --ink: #222126; --ink-soft: #65616a;
+  --line: #e9e7eb; --field: #fff; --field-line: #827b86;
+  --color-primary: #5442bc; --color-error: #a3243d; --soft: #eeebff;
+  --canvas: var(--haedo-canvas, #f7f7fb); --mint: #edf7f3; --mint-ink: #356452;
+  --sky: #eff4fb; --sky-ink: #416187; --error-soft: #fff2f4;
+  --control-radius: 12px; --surface-radius: 16px; --motion-quick: 150ms;
+  --life-font: "Apple SD Gothic Neo", "Noto Sans CJK KR", "Malgun Gothic", sans-serif;
+}
+* { box-sizing: border-box; }
+html { background: var(--canvas); color: var(--ink); scroll-behavior: smooth; scrollbar-color: #a29baa var(--canvas); }
+body { margin: 0; background: var(--paper); font: 16px/1.7 var(--life-font); }
+button,input,textarea,select { font: inherit; color: inherit; }
+button,a,input,textarea,select,summary { -webkit-tap-highlight-color: transparent; }
+button,summary { cursor: pointer; touch-action: manipulation; }
+button:disabled { cursor: not-allowed; opacity: .55; }
+:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 3px; }
+::selection { background: var(--soft); color: var(--ink); }
+input,textarea { caret-color: var(--color-primary); }
+input::placeholder,textarea::placeholder { color: var(--ink-soft); opacity: 1; }
+a { color: var(--color-primary); text-underline-offset: 4px; overflow-wrap: anywhere; }
+textarea { resize: vertical; }
+h1,h2,h3,h4,p,blockquote { margin: 0; }
+h1,h2,h3,h4 { word-break: keep-all; overflow-wrap: anywhere; }
+h1 { font-size: 28px; line-height: 1.55; letter-spacing: -.03em; }
+h2 { font-size: 22px; line-height: 1.6; letter-spacing: -.025em; }
+h3 { font-size: 19px; line-height: 1.65; letter-spacing: -.02em; }
+h4 { font-size: 16px; line-height: 1.7; }
+[hidden] { display: none !important; }
+.life-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.life-skip { position: fixed; top: -100px; left: 16px; z-index: 100; padding: 12px 20px; background: var(--paper); }
+.life-skip:focus { top: 10px; }
+.life-app { width: calc(100% - 112px - env(safe-area-inset-left) - env(safe-area-inset-right)); max-width: 820px; min-width: 0; min-height: calc(100svh - 40px); margin: 20px calc(20px + env(safe-area-inset-right)) 20px max(calc(92px + env(safe-area-inset-left)), calc((100% + 72px - 820px) / 2)); padding: 16px 40px 80px; border-radius: 24px; background: var(--paper); }
+.life-header:empty { display: none; }
+.life-toolbar,.life-main,.life-status,.life-error { max-width: 700px; margin-left: auto; margin-right: auto; min-width: 0; }
+.life-main { padding-top: 8px; }
+.life-heading { font-size: 21px; margin-bottom: 10px; }
+.life-subtitle,.life-help,.life-meta,.life-scope { color: var(--ink-soft); font-size: 13px; line-height: 1.75; overflow-wrap: anywhere; }
+.life-help { margin: 8px 0 20px; word-break: keep-all; }
+.life-scope { border-top: 1px solid var(--line); padding-top: 20px; margin-top: 36px; }
+.life-status { font-size: 12px; color: var(--ink-soft); margin-top: 8px; margin-bottom: 8px; overflow-wrap: anywhere; }
+.life-status:empty { display: none; }
+.life-error { margin-top: 14px; margin-bottom: 20px; padding: 16px; border: 1px solid var(--color-error); border-radius: var(--control-radius); color: var(--color-error); background: var(--error-soft); overflow-wrap: anywhere; }
+.life-error .life-button { display: block; margin-top: 12px; }
+.life-nav { position: fixed; z-index: 20; left: 0; top: 96px; width: 72px; display: flex; flex-direction: column; align-items: center; gap: 14px; background: var(--paper); }
+.life-actions,.life-topic-list,.life-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; }
+.life-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; min-width: 44px; max-width: 100%; padding: 8px 14px; border: 1px solid var(--field-line); border-radius: var(--control-radius); background: var(--paper); font-size: 14px; line-height: 1.6; text-align: center; white-space: normal; overflow-wrap: anywhere; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, border-color var(--motion-quick) ease; }
+@media (hover: hover) and (pointer: fine) { .life-button:hover { background: var(--paper-2); } }
+.life-primary { border-color: transparent; color: var(--color-primary); background: var(--soft); font-weight: 600; }
+@media (hover: hover) and (pointer: fine) { .life-primary:hover { background: #e4defd; } }
+.life-icon-button { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 12px; border: 0; border-radius: 50%; background: transparent; color: var(--ink-soft); text-decoration: none; transition: color 180ms ease, background 180ms ease; }
+@media (hover: hover) and (pointer: fine) { .life-icon-button:hover { background: var(--paper-2); color: var(--ink); } }
+.life-icon-button[aria-current=page],.life-icon-button[aria-pressed=true],.life-icon-button[aria-expanded=true] { color: var(--color-primary); background: var(--soft); }
+.life-icon-button[aria-current=page]::before { content: ''; position: absolute; bottom: 1px; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+.life-glyph { display: block; flex: none; }
+.life-tooltip { display: none; position: absolute; z-index: 50; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); padding: 4px 9px; border-radius: 5px; background: var(--ink); color: var(--paper); font-size: 12px; font-weight: 400; line-height: 1.6; white-space: nowrap; pointer-events: none; }
+.life-icon-button:focus-visible > .life-tooltip { display: block; }
+@media (hover:hover) { .life-icon-button:hover > .life-tooltip { display: block; } }
+.life-icon-button[data-tooltip-dismissed=true] > .life-tooltip { display: none; }
+.life-nav .life-tooltip { top: 50%; left: calc(100% + 8px); transform: translateY(-50%); }
+.life-global-nav { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-height: 64px; padding: 10px 24px 0 84px; }
+.life-account { position: relative; margin-left: 6px; }
+.life-account > summary { list-style: none; }
+.life-account > summary::-webkit-details-marker { display: none; }
+.life-account[open] > summary { color: var(--color-primary); }
+.life-account .life-tooltip { left: auto; right: 0; transform: none; }
+.life-account-panel { position: absolute; z-index: 40; right: 0; top: 54px; width: max-content; max-width: min(320px,calc(100vw - 40px)); min-width: 220px; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); overflow-wrap: anywhere; }
+#lifeAccountLabel { display: block; margin-bottom: 14px; color: var(--ink-soft); font-size: 13px; }
+#lifeStartup { max-width: 700px; margin: 60px auto; padding: 24px; color: var(--ink-soft); }
+#lifeStartup .life-button { margin: 16px 10px 0 0; }
+html.auth-pending [data-private] { display: none !important; }
+.life-management { padding: 20px 0 28px; border-bottom: 1px solid var(--line); margin-bottom: 24px; }
+.life-panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+.life-panel-heading h2,.life-panel-heading h3 { font-size: 18px; }
+.life-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; margin: 16px 0; }
+.life-field > span { font-size: 13px; font-weight: 550; }
+.life-field input,.life-field select,.life-field textarea { width: 100%; max-width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--field-line); border-radius: var(--control-radius); background: var(--field); font-size: 16px; line-height: 1.65; }
+.life-field textarea { min-height: 100px; white-space: pre-wrap; overflow-wrap: break-word; }
+.life-field input[type=file] { padding: 9px 10px; overflow: hidden; font-size: 16px; }
+.life-field input[type=file]::file-selector-button { min-height: 36px; margin-right: 10px; padding: 4px 10px; border: 1px solid var(--field-line); border-radius: 6px; background: var(--paper-2); color: var(--ink); font: inherit; cursor: pointer; }
+.life-field:has(input[type=checkbox]) { flex-direction: row-reverse; justify-content: flex-end; align-items: center; gap: 12px; min-height: 44px; }
+.life-field input[type=checkbox] { flex: none; width: 24px; height: 24px; min-height: 24px; }
+.life-search-bar { display: flex; align-items: center; gap: 8px; margin: 10px 0 16px; padding: 4px 6px 4px 14px; background: var(--canvas); border-radius: var(--surface-radius); }
+.life-search-bar .life-field { flex: 1; margin: 0; }
+.life-search-bar .life-field > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.life-search-bar input { padding: 8px 0; min-height: 44px; border: 0; border-radius: 4px; background: transparent; }
+.life-search-bar:focus-within { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.life-search-bar > .life-glyph { color: var(--ink-soft); }
+.life-filter-panel { margin-bottom: 24px; }
+.life-filter-panel .life-field { margin-block: 0 12px; }
+.life-topic-list { margin: 12px 0 20px; }
+.life-topic-list .life-button { border-color: transparent; color: var(--ink-soft); }
+.life-topic-list .life-button[aria-pressed=true] { color: var(--color-primary); background: var(--soft); }
+.life-count { font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 400; }
+.life-topic-list .life-button { gap: 7px; text-align: left; }
+#lifeSearchCount { font-size: 12px; margin: 14px 0 4px; }
+.life-card-grid { display: grid; grid-template-columns: minmax(0,1fr); gap: 0; }
+.life-card { min-width: 0; padding: 28px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; align-items: stretch; gap: 12px; overflow-wrap: anywhere; }
+.life-card > .life-meta,.life-tag { color: var(--ink-soft); font-size: 12px; line-height: 1.75; }
+.life-card .life-actions { margin-top: 2px; }
+.life-source-open { display: block; padding: 0; border: 0; border-radius: 0; min-height: 44px; background: none; color: var(--ink); font-size: 19px; font-weight: 700; line-height: 1.65; text-align: left; }
+.life-source-open:hover { background: none; color: var(--color-primary); }
+.life-search-context { width: 100%; color: #49454e; font-size: 16px; line-height: 1.9; white-space: normal; word-break: keep-all; overflow-wrap: anywhere; }
+.life-search-context mark { color: var(--ink); background: var(--soft); font-weight: 600; }
+.life-quote { width: 100%; max-height: 24rem; overflow: auto; white-space: pre-wrap; font-size: 17px; line-height: 1.95; word-break: keep-all; overflow-wrap: anywhere; }
+.life-note { font-size: 14px; color: var(--ink-soft); white-space: pre-wrap; line-height: 1.85; word-break: keep-all; overflow-wrap: anywhere; }
+.life-excerpt-card,.life-source-card { gap: 14px; border-bottom-color: #dedce2; }
+.life-excerpt-card .life-quote { line-height: 1.85; }
+.life-record-actions { display: flex; justify-content: flex-end; gap: 6px; max-width: 700px; margin: 0 auto; }
+.life-record-actions .life-button { border: 0; color: var(--ink-soft); }
+.life-record-actions [aria-current=page] { color: var(--color-primary); background: var(--soft); }
+.life-record-notes { min-width: 0; }
+.life-record-notes .life-excerpt-card { padding: 18px 0 0; border: 0; }
+.life-record-notes .life-excerpt-card + .life-excerpt-card { margin-top: 18px; border-top: 1px solid var(--line); }
+.life-record-more > summary { display: flex; align-items: center; min-height: 44px; padding: 8px 0; color: var(--ink-soft); font-size: 14px; }
+.life-record-actions #lifeSelectionToggle { margin-right: auto; }
+.life-record-heading { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.life-record-heading > .life-source-open { flex: 1; min-width: 0; }
+.life-source-select[aria-pressed=true] { background: var(--soft); }
+.life-source-select[aria-pressed=false] .life-glyph path { visibility: hidden; }
+.life-selection-bar { padding: 12px 16px; margin-block: 8px 18px; border-radius: var(--surface-radius); background: var(--canvas); }
+.life-selection-details > summary { display: flex; align-items: center; justify-content: space-between; min-height: 44px; font-size: 15px; }
+.life-selection-details > summary > .life-glyph { color: var(--ink-soft); }
+.life-selection-details[open] > summary > .life-glyph { transform: rotate(180deg); }
+.life-selection-list { list-style: none; margin: 0 0 12px; padding: 0; max-height: 19rem; overflow-y: auto; }
+.life-selection-list > li { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.life-selection-list > li > span { flex: 1; min-width: 0; font-size: 14px; word-break: keep-all; overflow-wrap: anywhere; }
+.life-arrange-actions { margin-top: 10px; gap: 6px; }
+.life-arrange-actions .life-glyph { width: 20px; height: 20px; }
+.life-selection-bar > .life-button { margin-top: 8px; border-color: transparent; color: var(--ink-soft); }
+.life-reader-arrange { padding: 0 0 22px; margin-bottom: 24px; border-bottom: 1px solid var(--line); }
+.life-excerpt-note { display: grid; grid-template-columns: 16px minmax(0,1fr); column-gap: 10px; align-items: start; padding: 12px 14px; border-radius: var(--control-radius); background: #f3f8f5; }
+.life-excerpt-note > .life-glyph { margin-top: 6px; color: var(--mint-ink); }
+.life-excerpt-note > .life-note { font-size: 15px; color: #4e6359; }
+.life-feed-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.life-feed-footer > .life-excerpt-topic,.life-feed-footer > .life-meta { min-width: 0; font-size: 12px; word-break: keep-all; }
+.life-feed-actions { display: flex; align-items: center; flex: none; gap: 4px; margin-left: auto; }
+.life-feed-footer .life-tooltip { left: auto; right: 0; transform: none; width: max-content; max-width: min(220px,calc(100vw - 48px)); white-space: normal; word-break: keep-all; overflow-wrap: anywhere; }
+.life-excerpt-sources,.life-excerpt-manage,.life-result-details { margin: 0; padding: 16px 0 0; border-top: 1px solid var(--line); min-width: 0; }
+.life-result-details > p { margin-bottom: 8px; }
+.life-excerpt-sources .life-source-details,.life-result-details .life-source-details { margin: 0; padding: 12px 0; border: 0; }
+.life-source-refs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.life-source-refs > li { min-width: 0; }
+.life-source-refs .life-button { border-color: transparent; color: var(--color-primary); padding-inline: 0; font-size: 13px; text-align: left; justify-content: flex-start; word-break: keep-all; }
+.life-source-refs .life-button:hover { background: transparent; text-decoration: underline; text-underline-offset: 4px; }
+.life-empty { padding: 40px 0; line-height: 1.9; color: var(--ink-soft); grid-column: 1/-1; overflow-wrap: anywhere; }
+.life-empty-state { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 10px; }
+.life-empty-state > .life-empty { flex-basis: 100%; padding-bottom: 14px; }
+/* One local reading position shares the home and records column. */
+.life-reading-resume { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; margin-block: 16px; padding-block: 14px; border-bottom: 1px solid var(--line); }
+.life-reading-resume-copy { flex: 1 1 200px; min-width: 0; }
+.life-reading-resume-title { color: var(--ink); font-size: 16px; font-weight: 550; line-height: 1.75; word-break: keep-all; overflow-wrap: anywhere; }
+.life-reading-resume-copy > .life-meta { margin-top: 4px; font-size: 12px; }
+.life-reading-resume :is(.life-reading-resume-open,.life-reading-resume-clear) { flex: none; }
+.life-reading-resume-status { flex-basis: 100%; margin: 0; }
+.life-reading-resume-copy ~ .life-reading-resume-status { order: 1; }
+.life-reading-position-status { margin-bottom: 16px; }
+.life-reader { max-width: 700px; margin: 0 auto; }
+.life-reader-tools { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 6px; padding: 8px 0; margin: -8px -10px 24px; border-bottom: 1px solid var(--line); background: var(--paper); }
+.life-reader-tools > :first-child { margin-right: auto; }
+.life-reader-tools > :first-child .life-tooltip { left: 0; transform: none; }
+.life-reader-tools > :last-child .life-tooltip { left: auto; right: 0; transform: none; }
+.life-reader-heading { font-size: 28px; font-weight: 700; line-height: 1.6; letter-spacing: -.03em; margin-bottom: 16px; }
+.life-reader-meta { color: var(--ink-soft); font-size: 12px; line-height: 1.8; margin-bottom: 8px; overflow-wrap: anywhere; }
+.life-reader-meta + .life-reader-meta { margin-bottom: 32px; }
+.life-reader-related { display: inline-flex; min-height: 44px; margin: -12px 0 24px; padding: 10px 14px; color: var(--color-primary); background: var(--soft); border-color: transparent; font-size: 14px; }
+.life-version-field { max-width: 400px; margin: 0 0 28px; }
+.life-source-details { margin: 0 0 28px; padding: 18px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 76px; }
+.life-source-details p { margin-bottom: 8px; }
+.life-reader-layout { display: block; margin-top: 24px; }
+.life-reading,.life-excerpt-panel { min-width: 0; }
+div.life-source-text { font-size: 18px; line-height: 1.95; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; padding: 0; margin-bottom: 48px; scroll-margin-top: 80px; }
+textarea.life-source-text { min-height: 340px; max-height: 70vh; padding: 16px; font-size: 17px; line-height: 1.95; word-break: keep-all; overflow-wrap: anywhere; }
+.life-excerpt-panel { border-top: 1px solid var(--line); padding: 24px 0; margin-top: 28px; scroll-margin-top: 76px; }
+.life-selection { padding: 0 0 0 18px; border-left: 1px solid var(--color-primary); margin: 20px 0; max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.9; }
+.life-external { display: inline-block; min-height: 44px; padding: 10px 0; }
+.life-details { margin: 18px 0; padding: 10px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); min-width: 0; }
+.life-details summary { min-height: 44px; padding: 8px 0; font-size: 14px; line-height: 1.7; }
+.life-details p { margin: 8px 0; }
+.life-details > .life-row { padding: 12px 0; border-top: 1px solid var(--line); }
+.life-details[open] { padding-bottom: 18px; }
+.life-import-form { max-width: 700px; }
+.life-import-phase { margin: 0 0 20px; color: var(--ink-soft); font-size: 13px; line-height: 1.8; }
+.life-import-methods { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 4px; margin: 20px 0; padding: 4px; background: var(--canvas); border-radius: var(--surface-radius); }
+.life-import-methods .life-button { min-width: 0; padding: 10px 8px; border-color: transparent; border-radius: var(--control-radius); color: var(--ink-soft); font-size: 14px; word-break: keep-all; }
+.life-import-methods .life-button[aria-pressed=true] { color: var(--color-primary); background: var(--soft); font-weight: 600; }
+.life-import-form > .life-actions { margin-block: 24px; }
+.life-origin-suggestion { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin: -8px 0 16px; }
+.life-origin-suggestion .life-help { margin: 0; }
+.life-source-url { overflow-wrap: anywhere; word-break: break-all; user-select: text; }
+.life-review { margin-top: 32px; padding-top: 28px; border-top: 1px solid var(--line); }
+.life-review > .life-actions { margin-top: 22px; }
+.life-review-confirm { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--line); }
+.life-review-confirm > .life-actions { margin-top: 12px; }
+.life-review-cancel { margin-top: 16px; }
+.life-retained-input { margin: 20px 0; padding: 12px 16px; background: var(--paper-2); border-radius: 6px; }
+.life-retained-input > .life-help { margin: 0 0 8px; }
+.life-match { padding: 20px; border: 1px solid var(--field-line); background: var(--paper-2); border-radius: 12px; margin: 18px 0; display: flex; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+.life-match > h4,.life-match > p { flex-basis: 100%; overflow-wrap: anywhere; }
+.life-draft-excerpts { display: grid; grid-template-columns: minmax(0,1fr); gap: 14px; margin: 20px 0; }
+.life-restore-preview { width: 100%; margin: 16px 0 0; padding: 20px 0 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+.life-restore-preview:empty { display: none; }
+.life-restore-preview > :is(h4,p) { margin: 0; word-break: keep-all; overflow-wrap: anywhere; }
+.life-restore-preview h4 { font-size: 18px; }
+.life-restore-preview > .life-actions { margin-top: 12px; }
+.life-backup-contents { width: 100%; }
+.life-backup-source { padding: 16px 0; border-bottom: 1px solid var(--line); word-break: keep-all; overflow-wrap: anywhere; }
+.life-backup-source strong { display: block; font-size: 15px; }
+.life-backup-source p { margin: 6px 0 0; }
+.life-restore-result { margin-bottom: 28px; padding: 18px 0 24px; border-bottom: 1px solid var(--line); }
+.life-restore-result h3 { margin: 0; font-size: 17px; }
+.life-restore-result .life-panel-heading { margin-bottom: 4px; }
+.life-sync-state-panel { padding: 20px 0 28px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+.life-sync-state-panel > :is(h3,p) { margin: 0; word-break: keep-all; overflow-wrap: anywhere; }
+.life-sync-state-panel h3 { font-size: 18px; }
+.life-sync-state-panel > .life-actions { margin-top: 8px; }
+.life-sync-status { display: flex; align-items: center; gap: 10px; padding: 12px 0 0; font-size: 16px; font-weight: 550; word-break: keep-all; overflow-wrap: anywhere; }
+.life-sync-status svg { flex: 0 0 20px; width: 20px; height: 20px; color: var(--color-primary); }
+.life-sync-state-panel[data-sync-state=error] .life-sync-status svg,.life-sync-state-panel[data-sync-state=read_error] .life-sync-status svg { color: var(--color-error); }
+details.life-sync-account { display: block; width: 100%; margin: 12px 0 0; overflow-wrap: anywhere; }
+.life-sync-account > p { margin: 12px 0 0; }
+.life-remote-section,.life-conflict-section { margin-top: 30px; min-width: 0; }
+.life-remote-list { display: flex; flex-direction: column; align-items: stretch; gap: 14px; margin-top: 16px; }
+.life-remote-list > .life-button { align-self: flex-start; }
+.life-conflict-grid { display: grid; grid-template-columns: minmax(0,1fr); gap: 18px; margin: 18px 0; }
+.life-conflict-grid > .life-card { display: block; }
+.life-conflict-section > .life-actions { flex-direction: column; align-items: stretch; }
+.life-conflict-section > .life-actions .life-button { justify-content: flex-start; text-align: left; word-break: keep-all; }
+.life-conflict-grid .life-details { width: 100%; margin: 14px 0; }
+.life-conflict-text summary { overflow-wrap: anywhere; }
+.life-conflict-content { font: inherit; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 300px; overflow: auto; border: 1px solid var(--line); padding: 14px; border-radius: 8px; background: var(--paper); }
+.life-batch-list { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; margin: 20px 0 28px; min-width: 0; }
+.life-batch-status { padding: 14px 16px; border-radius: 8px; background: var(--paper-2); width: 100%; overflow-wrap: anywhere; font-size: 14px; }
+.life-batch-status > p:first-child { margin-bottom: 6px; font-weight: 550; font-variant-numeric: tabular-nums; }
+.life-batch-status progress { display: block; width: 100%; height: 4px; margin: 12px 0; accent-color: var(--color-primary); border: 0; border-radius: 2px; overflow: hidden; background: var(--line); }
+.life-batch-status progress::-webkit-progress-bar { background: var(--line); }
+.life-batch-status progress::-webkit-progress-value { background: var(--color-primary); }
+.life-batch-status progress::-moz-progress-bar { background: var(--color-primary); }
+.life-batch-next-label { color: var(--ink-soft); font-size: 13px; overflow-wrap: anywhere; }
+.life-batch-next { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.life-batch-rows { display: grid; grid-template-columns: minmax(0,1fr); gap: 16px; width: 100%; min-width: 0; }
+.life-batch-row { padding: 20px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; min-width: 0; overflow-wrap: anywhere; }
+.life-batch-row[data-batch-state=applied] { border-color: var(--color-primary); }
+.life-batch-row[data-batch-state=failed] { border-color: var(--color-error); }
+.life-batch-row .life-help { margin: 0; }
+.life-batch-row .life-actions { margin-top: auto; padding-top: 8px; }
+@media (max-width: 700px) {
+  html { scroll-padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+  button,input,textarea,select,summary,[tabindex] { scroll-margin-bottom: calc(92px + env(safe-area-inset-bottom)); }
+  .life-app { width: 100%; max-width: none; min-height: 100svh; margin: 0; padding: 12px max(20px, env(safe-area-inset-right)) calc(104px + env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); border-radius: 0; }
+  .life-global-nav { padding: 8px 16px 0; min-height: 60px; }
+  .life-nav { top: auto; bottom: 0; right: 0; width: auto; flex-direction: row; justify-content: space-around; gap: 0; padding: 6px 12px max(8px,env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
+  .life-nav .life-tooltip { top: auto; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); }
+  .life-nav > :first-child .life-tooltip { left: 0; transform: none; }
+  .life-nav > :last-child .life-tooltip { left: auto; right: 0; transform: none; }
+  .life-main { padding-top: 4px; }
+  .life-heading { font-size: 19px; }
+  .life-search-bar { gap: 4px; }
+  .life-source-open { font-size: 18px; }
+  .life-reading-resume-copy { flex-basis: 100%; }
+  .life-card { padding-block: 26px; }
+  .life-reader-heading { font-size: 25px; }
+  .life-reader-tools { margin-bottom: 26px; }
+  div.life-source-text { font-size: 17px; }
+  .life-reader-meta + .life-reader-meta { margin-bottom: 28px; }
+  .life-management { padding-top: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}
+
+/* Page headings and settings use the same quiet feed rhythm. */
+.life-toolbar.haedo-page-heading { flex-wrap: wrap; margin-inline: auto; margin-bottom: 10px; }
+.life-toolbar .life-title-button { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 0; font: inherit; color: var(--ink); background: none; }
+.life-toolbar .life-title-button:hover { color: var(--color-primary); }
+.life-toolbar .life-refresh { flex-basis: 100%; }
+.life-toolbar[hidden] { display: none; }
+body[data-haedo-section=manage] .life-toolbar { padding-right: 50px; }
+.life-nav.life-context-nav { position: static; z-index: auto; width: auto; display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 6px; margin: 0; padding: 0; border: 0; background: transparent; }
+.life-context-nav .life-tooltip { top: calc(100% + 6px); bottom: auto; left: auto; right: 0; transform: none; }
+.life-context-nav > :first-child .life-tooltip, .life-context-nav > :last-child .life-tooltip { left: auto; right: 0; transform: none; }
+.life-main[data-mode=topics] .life-search-bar { margin-top: 0; }
+.life-main[data-mode=topics] > .life-details { margin-top: 0; }
+.life-destinations { margin: 0; }
+.life-destination { display: flex; align-items: center; gap: 16px; min-height: 88px; padding: 20px 0; border-bottom: 1px solid var(--line); text-decoration: none; color: var(--ink); transition: color var(--motion-quick) ease; }
+.life-destination:hover { color: var(--color-primary); }
+.life-destination-copy { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; }
+.life-destination-copy strong { font-size: 18px; font-weight: 600; word-break: keep-all; overflow-wrap: anywhere; }
+.life-destination > .life-glyph { color: var(--ink-soft); }
+.life-destination > .life-glyph:first-child { box-sizing: content-box; padding: 12px; border-radius: 14px; background: var(--soft); color: var(--color-primary); }
+.life-destinations > .life-destination:nth-child(2) > .life-glyph:first-child { background: var(--mint); color: var(--mint-ink); }
+.life-destinations > .life-destination:nth-child(3) > .life-glyph:first-child { background: var(--sky); color: var(--sky-ink); }
+.life-destination > .life-glyph:last-child { transform: rotate(-90deg); }
+.life-action-row { width: 100%; text-align: left; justify-content: flex-start; border-width: 0 0 1px; border-radius: 0; background: transparent; }
+.life-action-row:hover { background: transparent; }
+.life-action-row[aria-expanded=true] > .life-glyph:last-child { transform: none; }
+.life-main[data-mode=manage] > .life-destination { padding-top: 12px; }
+.life-settings-section { padding: 26px 0; border-bottom: 1px solid var(--line); }
+.life-settings-section h3 { margin: 0 0 18px; font-size: 18px; }
+.life-settings-section.life-destinations { padding-top: 0; }
+.life-settings-section.life-destinations > :last-child { border-bottom: 0; }
+.life-management { margin-bottom: 0; padding: 20px 0 24px; }
+.life-management .life-panel-heading h2 { font-size: 16px; }
+.haedo-account-host .life-account { margin: 0; }
+.haedo-account-panel #lifeAccountLabel { margin: 0; }
+@media (max-width:700px) {
+  .life-nav.life-context-nav { gap: 2px; }
+  .life-destination { min-height: 90px; gap: 14px; }
+}
+
+/* App controls retain native selection, scrolling and keyboard behavior. */
+.life-app :is(input[type=checkbox],input[type=radio]) { accent-color: var(--color-primary); }
+.life-app :is(.life-primary,.life-icon-button):active:not(:disabled) { background: #e4defd; }
+.life-app :is(.life-card,.life-destination,.life-field) { scroll-margin-top: 76px; }
+.life-app :is(.life-picker-list,.life-selection-list,.life-source-text,.life-conflict-content) { overscroll-behavior-block: contain; }
+body.haedo-shell .haedo-account-host { top: 42px; right: max(calc(60px + env(safe-area-inset-right)), calc((100% - 772px) / 2)); }
+@supports (text-wrap: pretty) { .life-help,.life-destination-copy .life-meta { text-wrap: pretty; } }
+@media (max-width: 700px) {
+  body.haedo-shell .haedo-account-host { top: 18px; right: max(20px, env(safe-area-inset-right)); }
+  .life-toolbar.haedo-page-heading { margin-bottom: 4px; }
+  .life-search-bar { gap: 4px; margin-top: 8px; }
+  .life-record-actions .life-button { padding-inline: 12px; }
+  .life-destination { min-height: 84px; padding-block: 18px; }
+}
+@media (forced-colors: active) {
+  .life-primary,.life-search-bar,.life-icon-button[aria-pressed=true],.life-import-methods .life-button[aria-pressed=true] { outline: 1px solid ButtonText; outline-offset: -1px; }
+  .life-icon-button[aria-current=page]::before { background: Highlight; }
+}
+
+/* Low landscape/split windows keep the first reading lines on screen. */
+@media (min-width: 701px) and (max-height: 500px) {
+  .life-app { margin-block: 8px; padding-top: 4px; min-height: calc(100svh - 16px); }
+  .life-toolbar.haedo-page-heading { min-height: 44px; margin-bottom: 0; }
+  .life-main { padding-top: 0; }
+  .life-reader-tools { padding-block: 4px; margin-bottom: 14px; }
+  .life-reader-heading { font-size: 24px; margin-bottom: 8px; }
+  .life-reader-meta + .life-reader-meta { margin-bottom: 14px; }
+  .life-reader-layout { margin-top: 14px; }
+  body.haedo-shell .haedo-account-host { top: 12px; }
+}
+
+/* Direct writing stays on the existing white reading surface. */
+.life-writing { min-width: 0; }
+.life-writing-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.life-writing-actions .life-primary { flex: none; margin-left: auto; }
+.life-writing-actions .life-writing-status { flex: 1; min-width: 0; }
+.life-writing .life-field { margin: 0; }
+.life-writing-title,.life-writing-body { display: block; width: 100%; min-width: 0; border: 0; border-radius: 0; background: var(--paper); color: var(--ink); padding: 14px 4px; box-shadow: none; }
+.life-writing-title { min-height: 52px; height: auto; resize: none; overflow: hidden; font-size: 23px; font-weight: 650; line-height: 1.6; letter-spacing: -.025em; word-break: keep-all; overflow-wrap: anywhere; border-bottom: 1px solid var(--line); }
+.life-writing-body { min-height: 360px; min-height: clamp(280px, 46dvh, 640px); margin-top: 8px; font-size: 18px; line-height: 1.95; overflow-wrap: anywhere; resize: vertical; }
+.life-writing-title:focus-visible,.life-writing-body:focus-visible { outline-offset: 0; border-radius: 4px; }
+.life-writing-status { margin: 10px 0; font-size: 12px; color: var(--ink-soft); overflow-wrap: anywhere; }
+.life-writing-error { margin: 12px 0; padding: 14px; border: 1px solid var(--color-error); border-radius: var(--control-radius); background: var(--error-soft); color: var(--color-error); overflow-wrap: anywhere; }
+.life-writing-error .life-button { margin: 8px 8px 0 0; }
+.life-writing-drafts,.life-writing-scope { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 4px; }
+.life-writing-drafts summary,.life-writing-scope summary { display: flex; align-items: center; min-height: 44px; gap: 8px; font-size: 13px; color: var(--ink-soft); }
+.life-writing-drafts summary::after,.life-writing-scope summary::after { content: ''; width: 6px; height: 6px; margin-left: 4px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); }
+.life-writing-drafts[open] summary::after,.life-writing-scope[open] summary::after { transform: rotate(225deg); }
+.life-writing-draft { width: 100%; text-align: left; justify-content: flex-start; white-space: normal; overflow-wrap: anywhere; margin: 4px 0; }
+.life-writing-scope p { font-size: 13px; line-height: 1.8; color: var(--ink-soft); }
+@media (max-width: 700px) {
+  .life-writing-title { font-size: 21px; }
+  .life-writing-body { font-size: 17px; }
+}
+@media (forced-colors: active) {
+  .life-writing-title,.life-writing-body { border: 1px solid CanvasText; }
+}
+
+/* Configuration management keeps state and recovery in the existing quiet column. */
+.life-composition-sync { padding-block: 28px; border-bottom: 1px solid var(--line); }
+.life-sync-state-panel .life-sync-account { border: 0; padding-block: 0; }
+.life-composition-sync > h3 { font-size: 19px; line-height: 1.6; margin-bottom: 12px; }
+.life-composition-sync .life-help { margin-block: 10px; }
+.life-composition-sync .life-actions { flex-wrap: wrap; gap: 8px; margin-block: 16px; }
+.composition-comparison { margin-top: 24px; }
+.composition-side { margin-block: 20px; min-width: 0; }
+.composition-side h4 { font-size: 16px; line-height: 1.75; }
+.composition-side h5 { font-size: 15px; line-height: 1.75; margin-block: 12px 6px; }
+.composition-side .life-meta { margin-top: 6px; }
+.composition-side + .composition-side { padding-top: 20px; border-top: 1px solid var(--line); }
+.composition-side .life-details { margin-block: 8px; border: 0; max-height: 28rem; overflow: auto; scrollbar-color: var(--field-line) var(--paper-2); }
+.composition-side .life-details summary { position: sticky; top: 0; background: var(--paper); }
+.composition-entry,.composition-recovery { margin-block: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.composition-recovery .life-button { margin-top: 8px; }
+.composition-recovery:last-child { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
+.life-composition-sync > .composition-content > .life-details { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+
+/* Draft transport is a folded footer; the editor's text and selection stay native. */
+.life-writing-sync { margin-block: 20px; padding-block: 12px; border-top: 1px solid var(--line); }
+.life-writing-sync > summary { min-height: 44px; padding-block: 10px; font-size: 14px; }
+.life-writing-sync .life-actions { flex-wrap: wrap; gap: 8px; margin-block: 16px; }
+.life-writing-sync .life-help { margin-block: 12px; }
+.writing-sync-side { margin-block: 20px; min-width: 0; }
+.writing-sync-side h4 { font-size: 16px; line-height: 1.75; }
+.writing-sync-side .life-details { max-height: 28rem; overflow: auto; }
+.writing-sync-side summary { position: sticky; top: 0; background: var(--paper); }
+.writing-sync-side pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.writing-remote-section { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 20px; }
+.writing-remote-row { padding-block: 12px; border-bottom: 1px solid var(--line); }
+.writing-remote-row button { text-align: left; word-break: keep-all; overflow-wrap: anywhere; }
+.life-writing-incoming { padding-block: 12px; border-bottom: 1px solid var(--line); }
+
+</style>
+  <style>
+/* Local composition shares the production Life palette, controls and 700px column. */
+.life-workbench { min-width: 0; overflow-wrap: anywhere; }
+.life-workbench :is(h2,h3,p,pre,span,label) { overflow-wrap: anywhere; word-break: keep-all; }
+.wb-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.wb-grow { flex: 1; min-width: 0; }
+.wb-heading { min-height: 56px; }
+.wb-heading .life-heading { margin: 0; }
+.wb-save-status { margin: 6px 0; font-variant-numeric: tabular-nums; }
+.wb-save-status[data-state=error] { color: var(--color-error); }
+.wb-storage-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 16px; margin-bottom: 12px; }
+.wb-storage-line > .wb-scope { margin: 0; }
+.wb-storage-line > .wb-scope[open] { flex-basis: 100%; }
+.wb-scope { margin: 0 0 16px; }
+.wb-details { min-width: 0; margin: 16px 0; }
+.wb-details > summary { display: flex; align-items: center; gap: 8px; min-height: 44px; width: fit-content; max-width: 100%; color: var(--ink-soft); font-size: 14px; list-style: none; }
+.wb-details > summary::-webkit-details-marker { display: none; }
+.wb-details > summary::after { content: ''; width: 7px; height: 7px; border-bottom: 1.5px solid currentColor; border-right: 1.5px solid currentColor; transform: rotate(45deg); margin: -4px 4px 0 2px; flex: 0 0 7px; }
+.wb-details[open] > summary::after { transform: rotate(225deg); margin-top: 4px; }
+.wb-scope > summary { font-size: 12px; }
+.wb-notice { margin: 12px 0; font-size: 13px; }
+.wb-empty { margin: 30px 0; color: var(--ink-soft); font-size: 15px; }
+.wb-add-row { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin: 18px 0; }
+.wb-add-row .life-field { flex: 1 1 180px; margin: 0; }
+.wb-add-row > .life-button { margin-bottom: 1px; }
+.wb-feed { min-width: 0; padding: 26px 0; border-bottom: 1px solid var(--line); }
+.wb-feed > .wb-row { margin-bottom: 12px; }
+.wb-feed h3 { font-size: 19px; line-height: 1.65; }
+.wb-source { margin: 14px 0; min-width: 0; }
+.wb-source-title { font-size: 15px; font-weight: 550; line-height: 1.75; }
+.wb-source .life-meta { font-size: 12px; margin-top: 3px; }
+.wb-source-body { margin-top: 14px; font-size: 17px; line-height: 1.95; white-space: pre-wrap; max-height: 24rem; overflow: auto; scrollbar-color: var(--field-line) var(--paper-2); }
+.wb-visitor .wb-source-body { max-height: none; overflow: visible; }
+.wb-heading.wb-heading-quiet { min-height: 0; height: 0; }
+.wb-page-lead { margin-block: 12px 20px; }
+.wb-page-actions { gap: 6px; margin-block: 12px 8px; }
+.wb-page-actions > #wbPageSettings { margin-left: auto; }
+.wb-page-actions > #wbPageSettings .life-tooltip { left: auto; right: 0; transform: none; }
+.wb-page-flags .life-tooltip { left: 0; transform: none; }
+.wb-page-entry > .wb-page-entry-heading { align-items: flex-start; margin-bottom: 6px; }
+.wb-page-entry-heading h3 { font-size: 21px; line-height: 1.6; letter-spacing: -.02em; }
+.wb-page-entry-heading .wb-page-entry-open { flex: none; }
+.wb-page-entry-open .life-tooltip { left: auto; right: 0; transform: none; }
+.wb-page-pin { flex: none; padding-top: 6px; color: var(--color-primary); }
+.wb-page-pin .life-glyph { width: 18px; height: 18px; }
+.wb-page-content .wb-source-body { max-height: none; overflow: visible; margin-top: 16px; }
+.wb-page-content .wb-page-part + .wb-page-part { margin-top: 28px; }
+.wb-page-source-meta { font-size: 12px; line-height: 1.8; }
+.wb-page-content .wb-comment { padding: 14px 16px; border-radius: var(--control-radius); background: var(--mint); }
+.wb-page-content .wb-comment .life-meta { color: var(--mint-ink); }
+.wb-page-content .wb-comment-body { margin-top: 4px; }
+.wb-page-entry-edit { margin-block: 14px 0; }
+.wb-page-entry-edit[open] { padding-top: 8px; }
+.wb-page-entry-edit .life-field { margin-top: 16px; }
+.wb-page-entry[data-shown=false] { border-bottom-style: dashed; }
+.wb-page-setup { margin-top: 24px; }
+.wb-page-hidden { margin-top: 6px; }
+.wb-source-link { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 0; font-size: 13px; }
+.wb-check { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 0; cursor: pointer; }
+.wb-check > input { flex: 0 0 22px; width: 22px; height: 22px; margin: 0; accent-color: var(--color-primary); }
+.wb-check > span { min-width: 0; font-size: 14px; line-height: 1.75; }
+.wb-picker-list { max-height: 27rem; overflow: auto; padding: 5px; margin-inline: -5px; scrollbar-color: var(--field-line) var(--paper-2); }
+.wb-picker-list .wb-check { border-bottom: 1px solid var(--line); }
+.wb-part { margin-block: 20px; }
+.wb-part > .wb-check { font-weight: 550; }
+.wb-group-add { display: flex; margin: 10px 0; text-align: left; }
+.wb-visitor { margin-top: 30px; }
+.wb-visitor-title { font-size: 23px; letter-spacing: -.02em; }
+.wb-visitor-intro { margin-top: 12px; white-space: pre-wrap; font-size: 16px; line-height: 1.85; }
+.wb-comment { margin-top: 20px; }
+.wb-comment-body { margin-top: 5px; white-space: pre-wrap; font-size: 16px; line-height: 1.95; }
+.wb-result-text { font-size: 17px; line-height: 1.9; white-space: pre-wrap; margin-block: 14px 18px; }
+.wb-reflection-overview { margin-top: 24px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.wb-facts { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px 20px; margin: 16px 0; font-size: 14px; }
+.wb-facts dt { color: var(--ink-soft); }
+.wb-facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.wb-conflict { margin-top: 20px; color: var(--ink); }
+.wb-comparison-text { max-height: 20rem; overflow: auto; padding: 12px; white-space: pre-wrap; font: inherit; font-size: 14px; border: 1px solid var(--field-line); border-radius: 6px; }
+.wb-error .life-actions { margin-top: 12px; }
+.wb-error .life-button { margin: 0; }
+.wb-restore-preview { margin-top: 24px; }
+.wb-restore-preview > .life-button { margin: 12px 10px 0 0; }
+.wb-incoming { margin-block: 24px; }
+.wb-incoming > h3 { font-size: 19px; line-height: 1.65; }
+.wb-incoming > .life-meta { margin-block: 8px 16px; }
+.wb-incoming-list { max-height: 28rem; overflow: auto; padding: 4px; margin-inline: -4px; scrollbar-color: var(--field-line) var(--paper-2); }
+.wb-incoming-record { padding-block: 12px; border-bottom: 1px solid var(--line); }
+.wb-incoming-check { align-items: flex-start; }
+.wb-incoming-check > input { margin-top: 2px; }
+.wb-incoming-check > span { font-size: 16px; font-weight: 550; }
+.wb-incoming-meta { padding-inline-start: 34px; }
+.wb-incoming-meta .life-meta { margin-block: 0 4px; }
+.wb-incoming-meta .wb-source-link { margin-top: 0; }
+.wb-incoming-error { color: var(--color-error); font-size: 14px; line-height: 1.75; margin-block: 16px; }
+.wb-incoming > .life-actions { margin-top: 20px; }
+.wb-share { margin-top: 18px; }
+.wb-share > .wb-row h3 { font-size: 19px; }
+.wb-share > .life-meta { margin-block: 10px 16px; }
+.wb-share > .life-actions { margin-block: 12px 20px; }
+.wb-share-preview { margin-block: 28px; padding-block: 22px; border-block: 1px solid var(--line); }
+.wb-share-preview > h3 { margin-bottom: 20px; font-size: 16px; }
+.wb-share-part { padding-block: 20px; border-bottom: 1px solid var(--line); }
+.wb-share-part h4 { font-size: 16px; line-height: 1.8; }
+.wb-share-part > .life-meta { margin-top: 8px; }
+.wb-share-excerpt { display: block; width: 100%; max-width: 100%; min-height: 160px; max-height: 26rem; padding: 12px; margin-block: 12px; border: 1px solid var(--field-line); border-radius: 6px; background: var(--field); font: inherit; font-size: 16px; line-height: 1.85; white-space: pre-wrap; resize: vertical; }
+.wb-share-quote { margin-block: 12px; font-size: 16px; line-height: 1.85; white-space: pre-wrap; }
+.wb-share-confirm { margin-block: 24px; padding-block: 20px; border-block: 1px solid var(--line); }
+.wb-share-confirm > .life-button { margin: 10px 10px 0 0; }
+.wb-public-pages > .life-meta { margin-block: 12px 18px; }
+.wb-public-page > .life-meta { margin-block: 8px 16px; }
+.wb-public-page > .life-actions { margin-top: 14px; }
+@media (max-width: 700px) {
+  .wb-heading { min-height: 50px; }
+  .wb-feed { padding-block: 24px; }
+  .wb-row { gap: 6px; }
+  .wb-source-body,.wb-result-text { font-size: 16px; }
+  .wb-feed > .wb-row { flex-wrap: wrap; }
+  .wb-feed > .wb-row > h3 { flex-basis: calc(100% - 108px); }
+}
+@media (prefers-reduced-motion: reduce) { .life-workbench * { scroll-behavior: auto; transition: none; } }
+
+/* Selected material and saved state share the app's quiet action palette. */
+.wb-picker-list .wb-check:has(input:checked) { background: var(--soft); border-radius: var(--control-radius); padding-inline: 10px; }
+.wb-check input { transition: accent-color var(--motion-quick) ease; }
+.wb-share-confirm { padding: 16px; border: 0; border-radius: var(--surface-radius); background: var(--canvas); }
+.wb-share-excerpt,.wb-comparison-text { border-radius: var(--control-radius); }
+.wb-incoming-list,.wb-picker-list { overscroll-behavior-block: contain; }
+@media (forced-colors: active) { .wb-share-confirm { border: 1px solid CanvasText; } }
+
+/* Rediscovery keeps the selected original and related reading in one quiet column. */
+.wb-discovery-seed { margin-block: 12px 30px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.wb-discovery-seed > .wb-row > h3 { color: var(--ink-soft); font-size: 13px; font-weight: 500; }
+.wb-discovery-seed .wb-source-title { font-size: 17px; }
+.wb-discovery-seed .wb-source { margin-block: 6px; }
+.wb-discovery-seed > .life-meta { margin-top: 3px; font-size: 12px; }
+.wb-discovery-heading { margin-top: 28px; font-size: 18px; line-height: 1.7; }
+.wb-discovery-result .wb-source { margin-top: 0; }
+.wb-discovery-result .wb-source-title { font-size: 18px; }
+.wb-discovery-reasons { list-style: none; margin: 14px 0 10px; padding: 0; color: var(--mint-ink); font-size: 13px; line-height: 1.85; }
+.wb-discovery-reasons li + li { margin-top: 3px; }
+.wb-discovery-actions { flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.wb-discovery-arrange,.wb-discovery-select { color: var(--color-primary); background: var(--soft); }
+.wb-discovery-actions .life-tooltip { left: 0; transform: none; width: max-content; max-width: min(260px,calc(100vw - 60px)); white-space: normal; text-align: left; }
+.wb-discovery-seed .life-tooltip { left: auto; right: 0; transform: none; }
+.life-workbench:is([data-mode=discover],[data-mode=related],[data-mode=page]) .wb-source .life-tooltip { left: auto; right: 0; transform: none; }
+.wb-discovery-chooser { margin-block: 20px; }
+.wb-discovery-chooser > summary { color: var(--color-primary); }
+.wb-discovery-chooser .life-field { margin-top: 16px; }
+.wb-discovery-excluded { padding-block: 12px; border-bottom: 1px solid var(--line); font-size: 14px; line-height: 1.75; }
+.wb-discovery-excluded + .life-button { margin-top: 16px; }
+.wb-discovery-error { margin-block: 20px; color: var(--color-error); font-size: 14px; line-height: 1.8; }
+.wb-discovery-criteria .wb-notice { max-width: 58ch; }
+@media (max-width: 700px) {
+  .wb-discovery-result .wb-source-title { font-size: 17px; }
+  .wb-discovery-seed { margin-bottom: 24px; }
+  .life-workbench:is([data-mode=discover],[data-mode=related]) .life-tooltip { top: auto; bottom: calc(100% + 6px); }
+}
+@media (forced-colors: active) {
+  .wb-discovery-arrange,.wb-discovery-select { border: 1px solid ButtonText; }
+  .wb-discovery-reasons { color: CanvasText; }
+}
+
+</style>
+  <style>
+/* Isolated comparison. Production tokens, icons and native controls are reused. */
+body { background: var(--canvas); }
+.expression-review { width: min(820px,calc(100% - 40px)); margin: 16px auto 0; }
+.expression-review summary { min-height: 44px; width: fit-content; max-width: 100%; padding-block: 10px; font-size: 13px; color: var(--ink-soft); }
+.expression-review .life-field { max-width: 260px; }
+#expressionVariant { margin-top: 8px; }
+#expressionVariant [aria-pressed=true] { background: var(--soft); color: var(--color-primary); border-color: transparent; font-weight: 600; }
+.expression-shell.life-app { width: min(820px,calc(100% - 40px)); margin: 16px auto 32px; padding: 24px 60px 64px; min-height: 65svh; }
+.expression-page-title { font-size: 25px; line-height: 1.6; }
+.expression-intro { margin-top: 8px; color: var(--ink-soft); font-size: 15px; line-height: 1.85; }
+.expression-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.expression-toolbar > .life-meta { font-size: 12px; }
+.expression-entry { padding-block: 30px; border-bottom: 1px solid var(--line); }
+.expression-entry-heading { display: flex; align-items: flex-start; gap: 12px; }
+.expression-entry-heading h2 { flex: 1; min-width: 0; font-size: 21px; line-height: 1.65; }
+.expression-entry-heading .life-icon-button { flex: none; }
+.expression-pin { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; color: var(--color-primary); font-size: 12px; }
+.expression-pin .life-glyph { width: 14px; height: 14px; }
+.expression-source { margin-top: 20px; }
+.expression-source + .expression-source { margin-top: 28px; }
+.expression-source h3 { font-size: 15px; font-weight: 600; line-height: 1.8; }
+.expression-source-meta { margin-top: 4px; font-size: 12px; color: var(--ink-soft); line-height: 1.9; }
+.expression-date { display: block; }
+.expression-body { margin: 12px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: keep-all; font: 17px/1.95 var(--life-font); }
+.expression-body[data-collapsed=true]::after { content: '…'; color: var(--ink-soft); }
+.expression-source-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; }
+.expression-text-button { display: inline-flex; align-items: center; gap: 6px; min-width: 44px; min-height: 44px; padding: 8px 0; border: 0; background: transparent; color: var(--color-primary); font: inherit; font-size: 13px; text-align: left; }
+.expression-source-actions .expression-open { margin-left: auto; color: var(--ink-soft); }
+.expression-source .life-help { margin-block: 12px 0; }
+.expression-comment { margin-top: 20px; padding: 14px 16px; border-radius: var(--control-radius); background: var(--mint); }
+.expression-comment > .life-meta { color: var(--mint-ink); }
+.expression-comment-body { margin-top: 5px; white-space: pre-wrap; overflow-wrap: anywhere; word-break: keep-all; font-size: 16px; line-height: 1.9; }
+.expression-editor { margin-top: 18px; }
+.expression-editor .life-field { margin-top: 0; }
+.expression-reader-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.expression-reader-heading h1 { font-size: 21px; flex: 1; }
+#expressionReader .expression-body { font-size: 18px; }
+.expression-state { padding-block: 36px; }
+.expression-state .life-button { margin-top: 16px; }
+/* B puts each source title/date and a shorter opening in a compact group. */
+[data-variant=b] .expression-entry { padding-block: 26px; }
+[data-variant=b] .expression-source { margin-top: 16px; }
+[data-variant=b] .expression-source + .expression-source { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 16px; }
+[data-variant=b] .expression-body { font-size: 16px; line-height: 1.8; margin-top: 8px; }
+[data-variant=b] .expression-source h3 { font-size: 16px; }
+[data-variant=b] .expression-source-meta { display: flex; flex-wrap: wrap; gap: 0 10px; }
+[data-variant=b] .expression-date { display: inline; }
+[data-variant=b] .expression-comment { margin-top: 16px; }
+@media (max-width: 700px) {
+  .expression-review { width: calc(100% - 40px); }
+  .expression-shell.life-app { width: 100%; margin-top: 16px; padding: 24px max(20px,env(safe-area-inset-right)) calc(48px + env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left)); border-radius: 0; }
+  .expression-page-title { font-size: 23px; }
+  .expression-entry-heading h2 { font-size: 20px; }
+  .expression-body { font-size: 17px; }
+  #expressionReader .expression-body { font-size: 17px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+</style>
+</head>
+<body>
+  <a class="life-skip" href="#expressionApp">본문으로 이동</a>
+  <header class="expression-review">
+    <details id="expressionReview">
+      <summary>표현 페이지 비교 · 익명 예시</summary>
+      <p class="life-meta">같은 8개 글을 비교합니다. 편집은 이 화면에서만 유지되며 새로고침하면 초기화됩니다. 실제 자료·게시에는 연결되지 않습니다.</p>
+      <label class="life-field"><span>상태 체험</span><select id="expressionState"><option value="normal">기본</option><option value="empty">빈 상태</option><option value="loading">로딩</option><option value="error">오류</option></select></label>
+    </details>
+    <div id="expressionVariant" class="life-actions" role="group" aria-label="표현 페이지 배치">
+      <button class="life-button" type="button" data-variant="a" aria-pressed="true">A · 글 중심</button>
+      <button class="life-button" type="button" data-variant="b" aria-pressed="false">B · 활동 구분</button>
+    </div>
+  </header>
+  <main id="expressionApp" class="life-app expression-shell" tabindex="-1"></main>
+  <p id="expressionStatus" class="life-sr-only" role="status"></p>
+  <noscript>이 비교 화면은 JavaScript를 사용합니다. 개인 자료나 계정에 접근하지 않습니다.</noscript>
+  <script>
+/* Shared UI SVGs. Lucide 1.51.0 geometry: vendor/lucide/ (ISC + Feather MIT).
+ * quote: Haedo's approved A. settings/download/cloud/home/user/workspace/timeline/target/check/map:
+ * edit and the above are locally authored conventional UI geometry; no added library or remote asset.
+ */
+(function (root) {
+  'use strict';
+  const life = root.HaedoLife = root.HaedoLife || {};
+  const paths = {
+    book: '<path d="M12 5v16"/><path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z"/>',
+    search: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+    bookmark: '<path d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"/>',
+    quote: '<path d="M10 12H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v8a6 6 0 0 1-6 6M21 12h-5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v8a6 6 0 0 1-6 6"/>',
+    edit: '<path d="m14 5 5 5M4 20l5-1 11-11a3.5 3.5 0 0 0-5-5L4 14v6Z"/>',
+    plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+    back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+    arrow: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+    info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+    filter: '<path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/>',
+    close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    chevron: '<path d="m6 9 6 6 6-6"/>',
+    link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    settings: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6 7 7m10 10 1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>',
+    download: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
+    cloud: '<path d="M7 19a5 5 0 0 1-.8-9.9 6.5 6.5 0 0 1 12.6 1.6A4.2 4.2 0 0 1 18 19Z"/>',
+    home: '<path d="m3 10 9-7 9 7M5 9v10a2 2 0 0 0 2 2h3v-7h4v7h3a2 2 0 0 0 2-2V9"/>',
+    user: '<circle cx="12" cy="7.5" r="4"/><path d="M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2"/>',
+    timeline: '<path d="M4 20h16M5 15l5-6 5 3 4-7"/><circle cx="10" cy="9" r="2"/><circle cx="15" cy="12" r="2"/>',
+    map: '<path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Zm6-2v16m6-14v16"/>',
+    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>',
+    check: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 3 3 5-6"/>',
+    workspace: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'
+  };
+  function create(name, { size = 20 } = {}) {
+    const svg = root.document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const glyph = Object.prototype.hasOwnProperty.call(paths, name) ? name : 'book';
+    const dimension = Number.isFinite(size) && size > 0 ? size : 20;
+    const attributes = {
+      class: 'life-glyph', 'data-glyph': glyph, width: dimension, height: dimension,
+      viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2,
+      'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', focusable: 'false'
+    };
+    for (const [key, value] of Object.entries(attributes)) svg.setAttribute(key, String(value));
+    // Only fixed local SVG paths are used; document content never enters this markup.
+    svg.innerHTML = paths[glyph];
+    return svg;
+  }
+  life.Icons = Object.freeze({ create });
+})(globalThis);
+
+</script>
+  <script>
+(function (root) {
+  'use strict';
+
+  // Fictional, anonymous texts written for the standalone A/B comparison.
+  // These are not imported records, a public copy, or quotations from real books.
+  const paragraphs = values => values.join('\r\n\r\n');
+  const gardenOld = [
+    '전시실을 나왔을 때는 작품의 제목보다 오래 서 있던 자리부터 떠올랐다. 큰 그림 앞에서는 뒤로 물러났고, 작은 드로잉 앞에서는 한 걸음 다가갔다. 무엇을 보았는지 적기 전에 내가 어떻게 움직였는지부터 기록해 보기로 했다.',
+    '첫 방에는 나무의 그림자가 여러 방향으로 겹쳐 있었다. 설명을 읽고 다시 보니 처음에는 빈 공간처럼 느껴졌던 부분이 가지 사이의 틈이었다. 작품을 이해했다기보다 두 번째로 보는 속도가 조금 느려졌다고 적는 편이 정확하겠다.',
+    '다음 방의 작은 종이 작업에는 지운 흔적이 남아 있었다. 완성된 선만 찾다가 연한 자국을 놓쳤다는 사실이 마음에 걸렸다. 작업 과정이 보이는 곳에서는 정답을 찾는 대신 이전 선택이 어떻게 남아 있는지 살펴보게 된다.',
+    '전시장 한쪽의 의자에 앉아 메모를 다시 읽었다. 좋았다는 말이 세 번이나 나왔지만 각각 무엇이 좋았는지는 없었다. 하나는 종이의 질감으로, 하나는 눈을 쉬게 하는 간격으로, 나머지는 아직 설명하지 못하는 느낌으로 바꾸었다.',
+    '밖으로 나와 건물 뒤의 정원으로 걸었다. 🌱 낮은 화단의 새잎에는 먼지가 조금 묻어 있었고, 그 옆의 오래된 잎은 빛을 더 매끄럽게 반사했다. 전시실에서 보던 겹친 그림자가 실제 잎 사이에서도 보였지만 두 장면을 같은 의미라고 묶지는 않았다.',
+    '정원 길은 예상보다 짧았다. 빠르게 한 바퀴 돌면 다시 입구에 닿겠지만, 길 가장자리의 돌을 따라 걸으니 방향을 바꾸는 지점이 여럿 보였다. 멀리 가는 일보다 같은 장소를 다르게 보는 일이 오늘의 산책에 가까웠다.',
+    '벤치 근처에는 물이 고인 작은 홈이 있었다. 비가 온 시간을 알 수 없어 그것을 방금 내린 비의 흔적이라고 쓰지 않았다. 보이는 것은 얕은 물과 그 위에 비친 잎뿐이라는 식으로 관찰과 추측을 따로 적었다.',
+    '사진을 찍기 전에 어떤 장면을 남기고 싶은지 잠깐 생각했다. 화단 전체를 찍으면 위치는 알 수 있지만 잎의 차이는 잘 보이지 않았다. 가까이 찍으면 질감은 남지만 길을 걸어온 순서는 빠진다. 한 장이 산책 전체를 대신할 수는 없었다.',
+    '다시 전시 메모를 펼쳐 보니 작품 설명과 내 생각이 한 문장에 섞인 곳이 있었다. 안내문에서 확인한 말에는 출처를 붙이고, 내가 떠올린 질문은 다음 줄로 옮겼다. 읽은 것을 남기는 일과 내 해석을 남기는 일을 구분할 필요가 있었다.',
+    '집으로 돌아가는 길에는 오늘 본 것 중 다른 날에도 확인할 수 있는 것을 골랐다. 나무가 계속 같은 자리에 있을 가능성은 높지만, 빛과 잎의 상태는 달라질 것이다. 다음 기록에는 변화한 부분만 쓰기보다 비교할 수 있는 자리를 먼저 남겨 두기로 했다.',
+    '메모 끝에 다시 볼 질문을 세 개 적었다. 설명을 먼저 읽었을 때와 나중에 읽었을 때 무엇이 달라지는가. 사진에 없는 길의 움직임은 어떤 문장으로 남길 수 있는가. 좋았다는 말 대신 실제로 멈춘 이유를 설명할 수 있는가.',
+    '오늘의 기록을 전시 감상과 산책 후기 중 하나로 정리하지는 않았다. 두 장소를 이어 걸었지만 각각의 출처와 관찰은 따로 남겨 두었다. 나중에 함께 읽을 때는 그 사이를 연결한 내 코멘트가 무엇인지 확인하고 싶다.',
+  ];
+  const gardenCurrent = gardenOld.map((text, index) => index === 8
+    ? '다시 전시 메모를 펼쳐 보니 작품 설명과 내 생각이 한 문장에 섞인 곳이 있었다. 안내문에서 확인한 말에는 출처를 붙이고, 내가 떠올린 질문은 다음 줄로 옮겼다. 보완한 기록에서는 확인하지 못한 작품명도 빼고 관찰한 장면만 남겼다.'
+    : text);
+
+  const samples = {
+    title: '보고 읽으며 남긴 기록',
+    intro: '전시와 산책에서 관찰한 장면, 다시 읽은 책, 작은 작업 뒤의 질문을 골랐다. 원문과 내 코멘트를 함께 읽을 수 있도록 묶었다.',
+    sources: [
+      {
+        id: 'exhibition-garden', title: '전시를 나와 정원에서 정리한 메모', origin: 'apple_notes', relation: 'self', coverage: 'full_text', omissions: [],
+        versions: [
+          { id: 'garden-old', text: paragraphs(gardenOld), originalCreatedAt: '2026-04-18' },
+          { id: 'garden-current', text: paragraphs(gardenCurrent), originalCreatedAt: '2026-04-18' },
+        ],
+      },
+      {
+        id: 'garden-caption', title: '다음 날 사진에 붙인 정원 캡션', origin: 'instagram', relation: 'self', coverage: 'partial', omissions: ['사진', '위치 태그'],
+        versions: [{ id: 'caption-first', originalCreatedAt: '2026-04-19', text: paragraphs([
+          '어제 걸었던 정원에서 새잎과 오래된 잎이 나란히 있던 자리를 남겼다. 사진을 다시 보니 잎의 질감은 보이지만 내가 벤치에서 화단까지 돌아간 길은 보이지 않는다. 이 글에는 사진 대신 그때 붙였던 문장만 보관한다.',
+          '전시실에서 오래 바라보았던 그림자를 정원의 잎과 함께 떠올렸다. 두 장면이 같은 뜻이라서가 아니라, 설명을 서둘러 붙이지 않고 다시 보게 했다는 점이 비슷했다. 다음에는 같은 자리에서 빛이 어떻게 달라지는지 확인해 보고 싶다.',
+        ]) }],
+      },
+      {
+        id: 'reading-notes', title: '결정을 미룬 장면을 다시 읽은 독서 메모', origin: 'obsidian', relation: 'self', coverage: 'full_text', omissions: [],
+        versions: [{ id: 'reading-first', originalCreatedAt: '2026-03-07', text: paragraphs([
+          '책을 처음 읽을 때는 인물이 결정을 내리는 장면에 밑줄을 많이 그었다. 다시 읽으니 결정을 미룬 장면에도 이유가 있었다. 바로 답하지 않은 시간을 우유부단함이라는 한 단어로 정리했는지 돌아보게 되었다.',
+          '이번 메모에는 책의 문장을 옮겨 적기보다 내가 이해한 장면을 내 말로 적었다. 인물이 무엇을 알고 있었는지와 내가 나중에 알게 된 내용을 구분하려고 했다. 독자는 결말을 아는 상태에서 앞의 선택을 쉽게 평가할 수 있다.',
+          '가장 오래 생각한 부분은 주변 사람에게 설명할 수 없는 이유를 어떻게 다룰 것인가였다. 설명이 부족하면 선택이 잘못된 것인지, 아직 말로 만들지 못한 감각이 있는 것인지 구분하기 어려웠다. 이 질문에는 아직 답을 붙이지 않았다.',
+          '책 소개에서 강조한 느린 선택이라는 표현은 기억하기 쉬웠지만 모든 장면을 설명하지는 못했다. 어떤 기다림은 상대를 살피는 행동이었고, 다른 기다림은 책임을 피하는 행동처럼 보였다. 같은 표현 아래 두 상황을 놓치지 않으려 한다.',
+          '다음에 읽을 때는 인물이 선택한 결과보다 선택 직전에 확인한 정보에 표시를 해 보고 싶다. 내 일에서도 결론만 기록하면 왜 그때 그렇게 판단했는지 사라진다. 읽은 책과 생활의 경험을 같은 사례로 단정하지 않고 질문만 가져오기로 했다.',
+        ]) }],
+      },
+      {
+        id: 'book-introduction', title: '느린 선택을 다루는 책 소개', origin: 'naver_blog', relation: 'other', coverage: 'full_text', omissions: [], url: 'https://example.org/fictional-book-introduction',
+        versions: [{ id: 'introduction-first', originalCreatedAt: '2026-03-02', text: paragraphs([
+          '이 책의 인물들은 중요한 순간마다 잠시 멈춘다. 작가는 그 멈춤을 성공을 위한 요령으로 설명하지 않고, 주변의 말을 듣고 자신의 이유를 다시 확인하는 시간으로 그린다. 빨리 결정하는 사람과 천천히 결정하는 사람을 단순히 나누지 않는 점이 눈에 들어온다.',
+          '중반부에는 같은 질문에 서로 다른 답을 내놓는 두 인물이 등장한다. 필요한 정보를 충분히 모았다고 생각하는 사람도 있고, 더 알아본 뒤에 말하겠다는 사람도 있다. 소개하는 입장에서는 어느 쪽이 옳다고 고르기보다 두 판단이 놓인 조건을 함께 읽기를 권한다.',
+          '짧은 장면 사이의 빈칸은 독자가 인물의 속도를 따라가게 한다. 사건이 적다는 이유로 내용이 가볍다고 볼 수도 있지만, 한 번 말한 답을 고치는 과정은 작게 다뤄지지 않는다. 읽는 동안 내 결정을 설명했던 방식도 떠올릴 수 있다.',
+          '독서 모임에서 이 책을 읽는다면 가장 인상적인 결론보다 그 결론에 이르기 전의 망설임을 먼저 이야기해 볼 만하다. 다만 책의 장면을 실제 관계에 바로 대입할 필요는 없다. 각자의 경험과 소설의 조건이 어떻게 다른지도 함께 남기면 좋겠다.',
+        ]) }],
+      },
+      {
+        id: 'work-retrospective', title: '작은 기록 화면을 고치며 버튼 이름과 오류 안내를 다시 살피고, 저장 뒤에도 읽던 문맥을 잃지 않도록 정리한 작업의 결과와 다음에 확인할 질문을 남기는 회고와 남겨 둔 다음 질문들', origin: 'other', relation: 'self', coverage: 'full_text', omissions: [],
+        versions: [{ id: 'work-first', originalCreatedAt: '2026-05-06', text: paragraphs([
+          '이번 작업은 새로운 화면을 만드는 일보다 이미 있는 조작을 이해하기 쉽게 고치는 데서 시작했다. 가져온 글을 보관한 다음 어디에서 다시 읽어야 하는지 바로 알기 어려웠다. 저장 자체가 성공해도 사용자의 일이 끝난 것은 아니라는 점을 먼저 적었다.',
+          '처음에는 성공 메시지를 크게 보여 주면 문제가 해결될 것이라고 생각했다. 하지만 검색 조건 때문에 새 글이 목록에서 보이지 않는 경우가 있었다. 필요한 것은 더 큰 메시지가 아니라 보관한 정확한 글을 여는 작은 조작이었다.',
+          '읽기 화면에서는 다른 부분을 고르려다가 선택을 풀었을 때 이전 구절이 남아 있는 상황을 확인했다. 아무것도 고르지 않은 상태와 메모를 쓰기 위해 잠깐 초점을 옮긴 상태를 구분해야 했다. 둘을 같은 방식으로 처리하면 잘못된 구절을 저장하거나 의도한 선택을 잃을 수 있었다.',
+          '버튼 이름을 바꾸는 일에도 완료의 뜻을 확인했다. 원문만 보관하는 것과 골라 둔 구절까지 함께 남기는 것은 다르다. 사용자가 어느 범위를 보관했는지 말로 설명할 수 있어야 다음에 읽을 때도 결과를 믿을 수 있다.',
+          '오류가 났을 때는 입력이 남아 있는지부터 살폈다. 다시 시도하라는 안내가 있어도 본문과 메모가 사라졌다면 같은 일을 처음부터 반복해야 한다. 실패 뒤의 화면이 처음 화면보다 더 막막해지지 않도록 확인할 항목을 정리했다.',
+          '좁은 화면에서는 버튼 사이의 간격보다 문장과 조작의 관계가 먼저 보였다. 설명을 읽은 뒤 어느 버튼을 눌러야 하는지 알 수 없으면 공간을 줄여도 부담은 줄지 않았다. 필요한 말은 가까이 두고, 취소는 완료 조작과 구분되는 위치에 놓았다.',
+          '수정 뒤에는 새로 보관한 글을 열었다가 이전 검색 결과로 돌아오는 흐름을 확인했다. 검색어와 출처 조건이 남아 있어야 방금 하던 일을 이어갈 수 있었다. 원문이 여러 버전일 때는 가장 최근 글이 아니라 실제로 고른 버전이 열리는지도 살폈다.',
+          '작업을 마친 뒤 남은 질문은 실제 기기에서 선택 손잡이와 한글 입력이 어떻게 느껴지는가였다. 화면 크기를 바꾸어 확인한 결과를 기기 체험과 같은 것으로 쓰지는 않기로 했다. 다음 확인에서는 처음부터 끝까지 한 글을 가져오고 읽는 데 드는 부담을 보려고 한다.',
+        ]) }],
+      },
+      {
+        id: 'short-day', title: '퇴근 뒤 창가에 잠깐 앉은 날', origin: 'other', relation: 'self', coverage: 'full_text', omissions: [],
+        versions: [{ id: 'day-first', originalCreatedAt: '2026-05-02', text: '집에 돌아와 창가에 앉아 물을 한 잔 마셨다. 해야 할 일을 새로 정하지 않고 오늘 끝낸 일 하나만 적었다.' }],
+      },
+      {
+        id: 'museum-link', title: '주말 관람 전에 확인할 박물관 안내', origin: 'other', relation: 'other', coverage: 'link_only', omissions: [], url: 'https://example.org/museum/visit',
+        versions: [{ id: 'museum-link-first', originalCreatedAt: null, text: null }],
+      },
+      {
+        id: 'walk-questions', title: '산책을 마치고 적어 둔 세 가지 질문', origin: 'apple_notes', relation: 'self', coverage: 'full_text', omissions: [],
+        versions: [{ id: 'questions-first', originalCreatedAt: null, text: paragraphs([
+          '같은 길을 다시 걸으면 지난번에 보았던 것을 먼저 찾게 된다. 그것이 비교를 돕는지, 새로 생긴 장면을 놓치게 하는지 아직 잘 모르겠다. 다음에는 기억한 장면을 적은 종이를 펼치기 전에 한 번 걸어 보고 싶다.',
+          '기록을 남기기 위해 멈춘 시간과 그냥 바라보기 위해 멈춘 시간은 어떻게 다를까. 사진이나 메모가 없다고 해서 덜 본 것은 아닐 수 있다. 남은 자료의 양으로 산책의 밀도를 판단하지 않으려 한다.',
+          '나중에 읽을 수 있는 기록에는 장소 설명을 얼마나 남겨야 할까. 길 전체를 설명하면 작은 관찰이 묻히고, 한 장면만 쓰면 돌아갈 자리를 찾기 어렵다. 다음 메모에서는 방향을 바꾼 지점 하나와 그때 보았던 것을 함께 적어 보려고 한다.',
+        ]) }],
+      },
+    ],
+    entries: [
+      { id: 'exhibition-walk', title: '전시에서 산책으로 이어진 관찰', pinned: true, sourceRefs: [{ sourceId: 'exhibition-garden', versionId: 'garden-old' }, { sourceId: 'garden-caption', versionId: 'caption-first' }], note: '전시를 본 날의 메모와 다음 날 붙인 캡션을 함께 읽으면 장면을 남기는 방식이 달라졌음을 알 수 있다. 두 글의 내용을 하나로 합치기보다 서로 빠뜨린 부분을 확인하고 싶다. 이전 메모의 망설임을 남기기 위해 보완한 최신 버전 대신 처음 기록한 버전을 골랐다.' },
+      { id: 'book-questions', title: '다시 읽은 책과 남겨 둔 질문', pinned: true, sourceRefs: [{ sourceId: 'reading-notes', versionId: 'reading-first' }, { sourceId: 'book-introduction', versionId: 'introduction-first' }], note: '타인의 소개문은 다시 읽을 질문을 찾는 참고로 보관했으며 그 설명에 모두 동의한다는 뜻은 아니다. 내 독서 메모와 나란히 두고 같은 장면을 다르게 읽은 지점을 확인하려 한다.' },
+      { id: 'finished-work', title: '작업을 마치고 남긴 기록', pinned: false, sourceRefs: [{ sourceId: 'work-retrospective', versionId: 'work-first' }], note: '처음 생각한 해결책이 실제 문제와 달랐던 순간을 남겼다. 성공 메시지를 다듬기 전에 다음에 할 일을 확인해야 했다. 선택이 풀린 상태를 정확히 보여 주는 일은 작은 표시 이상의 의미가 있었다. 실패 뒤에도 입력을 이어 쓸 수 있어야 다시 시도할 이유가 생긴다. 이전 검색 조건으로 돌아가는 과정까지 하나의 작업으로 보았다. 확인한 화면과 아직 쓰지 않은 실제 기기를 구분해 기록했다. 다음에는 처음 쓰는 사람이 안내 없이 한 글을 보관하고 다시 읽는 과정을 살펴보고 싶다. 그 결과가 다르면 이번에 정한 버튼 이름과 배치도 다시 바꿀 것이다.' },
+      { id: 'brief-day', title: '짧게 남긴 하루', pinned: false, sourceRefs: [{ sourceId: 'short-day', versionId: 'day-first' }], note: '' },
+      { id: 'visit-information', title: '주말 관람 전에 확인할 정보', pinned: false, sourceRefs: [{ sourceId: 'museum-link', versionId: 'museum-link-first' }], note: '방문 전에 원문 안내에서 운영 시간과 관람 조건을 직접 확인하려고 링크만 남겼다.' },
+      { id: 'after-walk', title: '산책 뒤 적은 질문', pinned: false, sourceRefs: [{ sourceId: 'walk-questions', versionId: 'questions-first' }], note: '작성한 날을 확인할 수 없어 다른 산책 기록의 앞뒤에 놓인 글이라고 설명하지 않는다. 여기서는 기록의 양과 실제로 바라본 시간을 구분한 질문만 이어 읽고 싶다.' },
+    ],
+  };
+
+  function deepFreeze(value) {
+    if (value && typeof value === 'object') {
+      Object.values(value).forEach(deepFreeze);
+      Object.freeze(value);
+    }
+    return value;
+  }
+  root.HaedoExpressionSamples = deepFreeze(samples);
+})(typeof globalThis === 'object' ? globalThis : this);
+
+</script>
+  <script>
+/* Anonymous, memory-only comparison. No Auth, storage, service worker or publishing. */
+(function () {
+  'use strict';
+  const data = globalThis.HaedoExpressionSamples;
+  const app = document.querySelector('#expressionApp');
+  const status = document.querySelector('#expressionStatus');
+  const variants = document.querySelector('#expressionVariant');
+  const stateControl = document.querySelector('#expressionState');
+  const notes = new Map(data.entries.map(entry => [entry.id, entry.note]));
+  const expanded = new Set(), editors = new Map();
+  let variant = 'a', preview = true, reader = null, returnPoint = null, previewReturn = null;
+  const origins = { apple_notes: 'Apple 메모', obsidian: 'Obsidian', instagram: 'Instagram', naver_blog: '네이버 블로그', other: '기타' };
+  const element = (tag, text, className) => {
+    const el = document.createElement(tag);
+    if (text !== undefined && text !== null) el.textContent = text;
+    if (className) el.className = className;
+    return el;
+  };
+  function control(text, fn, className = 'life-button') {
+    const el = element('button', text, className); el.type = 'button'; el.addEventListener('click', fn); return el;
+  }
+  function iconControl(label, icon, fn) {
+    const el = control(null, fn, 'life-icon-button'); el.setAttribute('aria-label', label); el.title = label;
+    el.append(HaedoLife.Icons.create(icon)); return el;
+  }
+  function resolve(ref) {
+    const source = data.sources.find(item => item.id === ref.sourceId);
+    return { source, version: source.versions.find(item => item.id === ref.versionId) };
+  }
+  function metadata(source, version) {
+    const meta = element('p', null, 'expression-source-meta');
+    const facts = [origins[source.origin] || source.origin, source.relation === 'self' ? '내 글' : source.relation === 'other' ? '보관한 타인 글' : '작성자 미확인'];
+    if (source.coverage === 'partial') facts.push('본문 일부', ...(source.omissions || []));
+    if (source.coverage === 'link_only') facts.push('본문 미확보');
+    const index = source.versions.findIndex(item => item.id === version.id);
+    if (index < source.versions.length - 1) facts.push('이전 버전 ' + (index + 1) + '/' + source.versions.length);
+    meta.append(element('span', facts.join(' · ')));
+    if (version.originalCreatedAt) {
+      const date = element('time', '원문 작성일 ' + version.originalCreatedAt.slice(0, 10).replaceAll('-', '.'), 'expression-date');
+      date.dateTime = version.originalCreatedAt; meta.append(date);
+    }
+    return meta;
+  }
+  // A prefix remains an exact slice of the selected source version. Nothing is
+  // summarized, re-written or used to decide what a public snapshot contains.
+  function opening(text) {
+    const narrow = app.clientWidth < 600;
+    const limit = variant === 'a' ? (narrow ? 170 : 290) : (narrow ? 90 : 150);
+    if (text.length <= limit + 40) return text;
+    let end = limit;
+    const paragraph = Math.max(text.lastIndexOf('\n\n', end), text.lastIndexOf('\r\n\r\n', end));
+    const space = Math.max(text.lastIndexOf(' ', end), text.lastIndexOf('\n', end));
+    if (paragraph > limit / 2) end = paragraph;
+    else if (space > limit / 2) end = space;
+    if (/^[\uDC00-\uDFFF]$/.test(text[end])) end -= 1;
+    if (text[end - 1] === '\r' && text[end] === '\n') end -= 1;
+    return text.slice(0, end);
+  }
+  function restore(point) {
+    if (!point) return;
+    const target = document.getElementById(point.id);
+    target?.focus({ preventScroll: true });
+    if (target instanceof HTMLTextAreaElement && point.start !== undefined) {
+      target.setSelectionRange(point.start, point.end, point.direction); target.scrollTop = point.innerScroll;
+    }
+    scrollTo({ top: point.scrollY, behavior: 'instant' });
+  }
+  function capturePoint(target) {
+    return { id: target.id, scrollY, start: target.selectionStart, end: target.selectionEnd, direction: target.selectionDirection, innerScroll: target.scrollTop };
+  }
+  function openSource(source, version, button) {
+    returnPoint = capturePoint(button); reader = { source, version }; render();
+    document.querySelector('#expressionReader h1').focus({ preventScroll: true }); scrollTo({ top: 0, behavior: 'instant' });
+  }
+  function sourcePart(ref, entry, index) {
+    const { source, version } = resolve(ref), key = entry.id + ':' + version.id;
+    const part = element('section', null, 'expression-source');
+    Object.assign(part.dataset, { sourceId: source.id, versionId: version.id });
+    part.setAttribute('aria-label', source.title);
+    if (entry.sourceRefs.length > 1 || entry.title !== source.title) part.append(element('h3', source.title));
+    part.append(metadata(source, version));
+    const actions = element('div', null, 'expression-source-actions');
+    if (version.text !== null) {
+      const prefix = opening(version.text), canFold = prefix !== version.text;
+      const body = element('pre', expanded.has(key) ? version.text : prefix, 'expression-body');
+      body.tabIndex = -1;
+      body.id = 'expressionBody-' + entry.id + '-' + index;
+      body.dataset.collapsed = String(canFold && !expanded.has(key));
+      body.setAttribute('aria-label', canFold && !expanded.has(key) ? '원문 앞부분' : '보관한 원문');
+      part.append(body);
+      if (canFold) {
+        const expand = control(expanded.has(key) ? '본문 접기' : '본문 펼치기', () => {
+          const wasOpen = expanded.has(key), offset = expand.getBoundingClientRect().top;
+          if (wasOpen) expanded.delete(key); else expanded.add(key);
+          body.textContent = wasOpen ? prefix : version.text;
+          body.dataset.collapsed = String(wasOpen);
+          body.setAttribute('aria-label', wasOpen ? '원문 앞부분' : '보관한 원문');
+          expand.textContent = wasOpen ? '본문 펼치기' : '본문 접기';
+          expand.setAttribute('aria-expanded', String(!wasOpen));
+          (wasOpen ? expand : body).focus({ preventScroll: true });
+          // Keep the collapse control where the reader was using it.
+          if (wasOpen) scrollBy({ top: expand.getBoundingClientRect().top - offset, behavior: 'instant' });
+        }, 'expression-text-button expression-expand');
+        expand.setAttribute('aria-expanded', String(expanded.has(key))); expand.setAttribute('aria-controls', body.id);
+        expand.id = 'expressionExpand-' + entry.id + '-' + index; actions.append(expand);
+      }
+    } else part.append(element('p', '링크만 보관했습니다. 원문 본문은 없습니다.', 'life-help'));
+    const open = control('원문 보기', () => openSource(source, version, open), 'expression-text-button expression-open');
+    open.id = 'expressionOpen-' + entry.id + '-' + index;
+    open.prepend(HaedoLife.Icons.create('book')); actions.append(open); part.append(actions); return part;
+  }
+  function entryCard(entry) {
+    const card = element('article', null, 'expression-entry'); card.dataset.entryId = entry.id;
+    if (entry.pinned) { const pin = element('p', null, 'expression-pin'); pin.append(HaedoLife.Icons.create('bookmark'), document.createTextNode('고정')); card.append(pin); }
+    const heading = element('div', null, 'expression-entry-heading'); heading.append(element('h2', entry.title));
+    const editorId = 'expressionNote-' + entry.id;
+    if (!preview) {
+      const edit = iconControl('코멘트 편집 · ' + entry.title, 'edit', () => {
+        const opened = editors.has(entry.id);
+        if (opened) editors.delete(entry.id); else editors.set(entry.id, null);
+        render(); document.getElementById(opened ? edit.id : editorId)?.focus({ preventScroll: true });
+      });
+      edit.dataset.noteEdit = entry.id; edit.id = 'expressionEdit-' + entry.id;
+      edit.setAttribute('aria-expanded', String(editors.has(entry.id))); heading.append(edit);
+    }
+    card.append(heading);
+    entry.sourceRefs.forEach((ref, index) => card.append(sourcePart(ref, entry, index)));
+    const note = element('div', null, 'expression-comment'); note.dataset.noteFor = entry.id;
+    note.append(element('p', '내 코멘트', 'life-meta'), element('p', notes.get(entry.id), 'expression-comment-body'));
+    note.hidden = !notes.get(entry.id); card.append(note);
+    if (!preview && editors.has(entry.id)) {
+      const editor = element('div', null, 'expression-editor'), label = element('label', null, 'life-field');
+      label.append(element('span', '내 코멘트')); const input = element('textarea');
+      input.id = editorId; input.dataset.noteId = entry.id; input.value = notes.get(entry.id); input.maxLength = 10000;
+      input.addEventListener('input', () => {
+        notes.set(entry.id, input.value); note.lastChild.textContent = input.value; note.hidden = !input.value;
+        status.textContent = '시안에만 반영했습니다. 실제 자료는 바뀌지 않습니다.';
+      });
+      input.addEventListener('focusout', () => editors.set(entry.id, capturePoint(input)));
+      label.append(input); editor.append(label, element('p', '시안에서만 편집 · 새로고침하면 초기화', 'life-meta')); card.append(editor);
+    }
+    return card;
+  }
+  function renderReader() {
+    const { source, version } = reader;
+    const surface = element('section'); surface.id = 'expressionReader';
+    Object.assign(surface.dataset, { sourceId: source.id, versionId: version.id });
+    const heading = element('div', null, 'expression-reader-heading');
+    const back = iconControl('페이지로 돌아가기', 'back', () => { reader = null; render(); restore(returnPoint); }); back.id = 'expressionBack';
+    const title = element('h1', source.title); title.tabIndex = -1;
+    heading.append(back, title); surface.append(heading, metadata(source, version));
+    if (version.text !== null) surface.append(element('pre', version.text, 'expression-body'));
+    else surface.append(element('p', '본문을 확보하지 않은 링크입니다. 예시 주소이며 실제 글을 가져오지 않습니다.', 'life-help'));
+    if (source.url) surface.append(element('p', source.url, 'life-meta'));
+    app.append(surface);
+  }
+  function render() {
+    app.dataset.variant = variant; app.replaceChildren();
+    if (reader) { renderReader(); return; }
+    const top = element('header'); top.append(element('h1', data.title, 'expression-page-title'), element('p', data.intro, 'expression-intro'));
+    const toolbar = element('div', null, 'expression-toolbar');
+    toolbar.append(element('p', preview ? '비공개 미리보기 · 익명 예시' : '편집 체험 · 익명 예시', 'life-meta'));
+    const mode = control(preview ? '편집 체험' : '미리보기', () => {
+      if (!preview) {
+        const last = [...editors.values()].filter(Boolean).at(-1);
+        previewReturn = last ? { ...last, scrollY } : capturePoint(mode);
+      }
+      preview = !preview; render();
+      if (!preview && previewReturn) restore(previewReturn);
+      else document.querySelector('#expressionMode').focus({ preventScroll: true });
+    });
+    mode.id = 'expressionMode'; toolbar.append(mode); top.append(toolbar); app.append(top);
+    const scene = stateControl.value;
+    if (scene !== 'normal') {
+      const box = element('section', null, 'expression-state');
+      if (scene === 'empty') box.append(element('p', '표시할 글이 없습니다.'), control('예시 글 보기', () => { stateControl.value = 'normal'; render(); document.querySelector('#expressionMode').focus(); }));
+      if (scene === 'loading') { box.setAttribute('role', 'status'); box.setAttribute('aria-busy', 'true'); box.append(element('p', '글을 불러오는 중입니다.')); }
+      if (scene === 'error') { box.setAttribute('role', 'alert'); box.append(element('p', '글을 불러오지 못했습니다. 시안의 편집 내용은 유지됩니다.'), control('다시 보기', () => { stateControl.value = 'normal'; render(); document.querySelector('#expressionMode').focus(); })); }
+      app.append(box); return;
+    }
+    data.entries.forEach(entry => app.append(entryCard(entry)));
+  }
+  variants.addEventListener('click', event => {
+    const button = event.target.closest('[data-variant]'); if (!button) return;
+    variant = button.dataset.variant; reader = null;
+    variants.querySelectorAll('button').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+    render(); status.textContent = variant === 'a' ? 'A 글 중심 배치' : 'B 활동 구분 배치';
+  });
+  stateControl.addEventListener('change', () => { reader = null; render(); });
+  let width = innerWidth;
+  addEventListener('resize', () => { if (innerWidth !== width) { width = innerWidth; if (!document.activeElement?.matches('textarea')) render(); } });
+  render();
+})();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,2677 @@
+{
+  "createdAt": "2026-10-07T16:18:19.851098+00:00",
+  "base": "http://127.0.0.1:4188",
+  "browser": "151.0.7922.173",
+  "scope": "Standalone anonymous design samples in Linux Chromium at three viewports; touch/keyboard simulation, no Apple hardware, authentication, production UI, publishing or personal data",
+  "checks": [
+    {
+      "name": "a/1440",
+      "pass": true,
+      "detail": {
+        "exactFixtureOrderAndPairs": true,
+        "rawPrefixAndExpandedWholeText": true,
+        "shortBodyHasNoCollapse": true,
+        "selectedOldOriginalAndBackFocusScroll": true,
+        "commentEditPreviewAndEntryFocus": true,
+        "sourceFixtureImmutable": true,
+        "linkPartialDatesTruthful": true,
+        "emptyLoadingErrorRetry": true
+      }
+    },
+    {
+      "name": "b/1440",
+      "pass": true,
+      "detail": {
+        "exactFixtureOrderAndPairs": true,
+        "rawPrefixAndExpandedWholeText": true,
+        "shortBodyHasNoCollapse": true,
+        "selectedOldOriginalAndBackFocusScroll": true,
+        "commentEditPreviewAndEntryFocus": true,
+        "sourceFixtureImmutable": true,
+        "linkPartialDatesTruthful": true,
+        "emptyLoadingErrorRetry": true
+      }
+    },
+    {
+      "name": "a/820",
+      "pass": true,
+      "detail": {
+        "exactFixtureOrderAndPairs": true,
+        "rawPrefixAndExpandedWholeText": true,
+        "shortBodyHasNoCollapse": true,
+        "selectedOldOriginalAndBackFocusScroll": true,
+        "commentEditPreviewAndEntryFocus": true,
+        "sourceFixtureImmutable": true,
+        "linkPartialDatesTruthful": true,
+        "emptyLoadingErrorRetry": true
+      }
+    },
+    {
+      "name": "b/820",
+      "pass": true,
+      "detail": {
+        "exactFixtureOrderAndPairs": true,
+        "rawPrefixAndExpandedWholeText": true,
+        "shortBodyHasNoCollapse": true,
+        "selectedOldOriginalAndBackFocusScroll": true,
+        "commentEditPreviewAndEntryFocus": true,
+        "sourceFixtureImmutable": true,
+        "linkPartialDatesTruthful": true,
+        "emptyLoadingErrorRetry": true
+      }
+    },
+    {
+      "name": "a/390",
+      "pass": true,
+      "detail": {
+        "exactFixtureOrderAndPairs": true,
+        "rawPrefixAndExpandedWholeText": true,
+        "shortBodyHasNoCollapse": true,
+        "selectedOldOriginalAndBackFocusScroll": true,
+        "commentEditPreviewAndEntryFocus": true,
+        "sourceFixtureImmutable": true,
+        "linkPartialDatesTruthful": true,
+        "emptyLoadingErrorRetry": true
+      }
+    },
+    {
+      "name": "b/390",
+      "pass": true,
+      "detail": {
+        "exactFixtureOrderAndPairs": true,
+        "rawPrefixAndExpandedWholeText": true,
+        "shortBodyHasNoCollapse": true,
+        "selectedOldOriginalAndBackFocusScroll": true,
+        "commentEditPreviewAndEntryFocus": true,
+        "sourceFixtureImmutable": true,
+        "linkPartialDatesTruthful": true,
+        "emptyLoadingErrorRetry": true
+      }
+    }
+  ],
+  "captures": [
+    {
+      "variant": "a",
+      "scene": "normal",
+      "width": 1440,
+      "file": "a-normal-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "",
+          "text": "본문으로 이동\n  \n    \n      표현 페이지 비교 · 익명 예시\n      같은 8개 글을 비교합니다. 편집은 이 화면에서만 유지되며 새",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 534.1,
+        "firstCommentY": 1238.7,
+        "secondEntryY": 1416.6,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "expanded",
+      "width": 1440,
+      "file": "a-expanded-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "expressionExpand-exhibition-walk-0",
+          "class": "expression-text-button expression-expand",
+          "text": "본문 접기",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 534.1,
+        "firstCommentY": 2564.3,
+        "secondEntryY": 2742.2,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "original-old-version",
+      "width": 1440,
+      "file": "a-original-old-version-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "h1",
+          "id": "",
+          "class": "",
+          "text": "전시를 나와 정원에서 정리한 메모",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "comment-edit",
+      "width": 1440,
+      "file": "a-comment-edit-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "textarea",
+          "id": "expressionNote-exhibition-walk",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 543.5,
+        "firstCommentY": 1248,
+        "secondEntryY": 1672.6,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "empty",
+      "width": 1440,
+      "file": "a-empty-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "loading",
+      "width": 1440,
+      "file": "a-loading-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "error",
+      "width": 1440,
+      "file": "a-error-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "normal",
+      "width": 1440,
+      "file": "b-normal-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "",
+          "text": "본문으로 이동\n  \n    \n      표현 페이지 비교 · 익명 예시\n      같은 8개 글을 비교합니다. 편집은 이 화면에서만 유지되며 새",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 501.1,
+        "firstCommentY": 890.5,
+        "secondEntryY": 1064.4,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": true,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "expanded",
+      "width": 1440,
+      "file": "b-expanded-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "expressionExpand-exhibition-walk-0",
+          "class": "expression-text-button expression-expand",
+          "text": "본문 접기",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 501.1,
+        "firstCommentY": 2128.8,
+        "secondEntryY": 2302.7,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "original-old-version",
+      "width": 1440,
+      "file": "b-original-old-version-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "h1",
+          "id": "",
+          "class": "",
+          "text": "전시를 나와 정원에서 정리한 메모",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "comment-edit",
+      "width": 1440,
+      "file": "b-comment-edit-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "textarea",
+          "id": "expressionNote-exhibition-walk",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 510.5,
+        "firstCommentY": 899.9,
+        "secondEntryY": 1320.4,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": true,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "empty",
+      "width": 1440,
+      "file": "b-empty-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "loading",
+      "width": 1440,
+      "file": "b-loading-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "error",
+      "width": 1440,
+      "file": "b-error-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "normal",
+      "width": 820,
+      "file": "a-normal-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "",
+          "text": "본문으로 이동\n  \n    \n      표현 페이지 비교 · 익명 예시\n      같은 8개 글을 비교합니다. 편집은 이 화면에서만 유지되며 새",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 534.1,
+        "firstCommentY": 1238.7,
+        "secondEntryY": 1416.6,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "expanded",
+      "width": 820,
+      "file": "a-expanded-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "expressionExpand-exhibition-walk-0",
+          "class": "expression-text-button expression-expand",
+          "text": "본문 접기",
+          "visible": false,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 534.1,
+        "firstCommentY": 2564.3,
+        "secondEntryY": 2742.2,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "original-old-version",
+      "width": 820,
+      "file": "a-original-old-version-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "h1",
+          "id": "",
+          "class": "",
+          "text": "전시를 나와 정원에서 정리한 메모",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "comment-edit",
+      "width": 820,
+      "file": "a-comment-edit-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "textarea",
+          "id": "expressionNote-exhibition-walk",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 543.5,
+        "firstCommentY": 1248,
+        "secondEntryY": 1672.6,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "empty",
+      "width": 820,
+      "file": "a-empty-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "loading",
+      "width": 820,
+      "file": "a-loading-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "error",
+      "width": 820,
+      "file": "a-error-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "normal",
+      "width": 820,
+      "file": "b-normal-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "",
+          "text": "본문으로 이동\n  \n    \n      표현 페이지 비교 · 익명 예시\n      같은 8개 글을 비교합니다. 편집은 이 화면에서만 유지되며 새",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 501.1,
+        "firstCommentY": 890.5,
+        "secondEntryY": 1064.4,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": true,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "expanded",
+      "width": 820,
+      "file": "b-expanded-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "expressionExpand-exhibition-walk-0",
+          "class": "expression-text-button expression-expand",
+          "text": "본문 접기",
+          "visible": false,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 501.1,
+        "firstCommentY": 2157.6,
+        "secondEntryY": 2331.5,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "original-old-version",
+      "width": 820,
+      "file": "b-original-old-version-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "h1",
+          "id": "",
+          "class": "",
+          "text": "전시를 나와 정원에서 정리한 메모",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "comment-edit",
+      "width": 820,
+      "file": "b-comment-edit-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "textarea",
+          "id": "expressionNote-exhibition-walk",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 510.5,
+        "firstCommentY": 899.9,
+        "secondEntryY": 1320.4,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": true,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "empty",
+      "width": 820,
+      "file": "b-empty-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "loading",
+      "width": 820,
+      "file": "b-loading-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "error",
+      "width": 820,
+      "file": "b-error-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "normal",
+      "width": 390,
+      "file": "a-normal-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "",
+          "text": "본문으로 이동\n  \n    \n      표현 페이지 비교 · 익명 예시\n      같은 8개 글을 비교합니다. 편집은 이 화면에서만 유지되며 새",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 557,
+        "firstCommentY": 1129,
+        "secondEntryY": 1398.1,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "expanded",
+      "width": 390,
+      "file": "a-expanded-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "expressionExpand-exhibition-walk-0",
+          "class": "expression-text-button expression-expand",
+          "text": "본문 접기",
+          "visible": false,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 557,
+        "firstCommentY": 3382.6,
+        "secondEntryY": 3651.7,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "original-old-version",
+      "width": 390,
+      "file": "a-original-old-version-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "h1",
+          "id": "",
+          "class": "",
+          "text": "전시를 나와 정원에서 정리한 메모",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "comment-edit",
+      "width": 390,
+      "file": "a-comment-edit-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "textarea",
+          "id": "expressionNote-exhibition-walk",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 568,
+        "firstCommentY": 1140,
+        "secondEntryY": 1655.8,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "empty",
+      "width": 390,
+      "file": "a-empty-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "loading",
+      "width": 390,
+      "file": "a-loading-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "a",
+      "scene": "error",
+      "width": 390,
+      "file": "a-error-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "normal",
+      "width": 390,
+      "file": "b-normal-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "",
+          "text": "본문으로 이동\n  \n    \n      표현 페이지 비교 · 익명 예시\n      같은 8개 글을 비교합니다. 편집은 이 화면에서만 유지되며 새",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 524,
+        "firstCommentY": 993.8,
+        "secondEntryY": 1258.9,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "expanded",
+      "width": 390,
+      "file": "b-expanded-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "expressionExpand-exhibition-walk-0",
+          "class": "expression-text-button expression-expand",
+          "text": "본문 접기",
+          "visible": false,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 524,
+        "firstCommentY": 2894.4,
+        "secondEntryY": 3159.5,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "original-old-version",
+      "width": 390,
+      "file": "b-original-old-version-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "h1",
+          "id": "",
+          "class": "",
+          "text": "전시를 나와 정원에서 정리한 메모",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "comment-edit",
+      "width": 390,
+      "file": "b-comment-edit-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "textarea",
+          "id": "expressionNote-exhibition-walk",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": 535,
+        "firstCommentY": 1004.8,
+        "secondEntryY": 1516.5,
+        "firstBodyAboveFold": true,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 6
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "empty",
+      "width": 390,
+      "file": "b-empty-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "loading",
+      "width": 390,
+      "file": "b-loading-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    },
+    {
+      "variant": "b",
+      "scene": "error",
+      "width": 390,
+      "file": "b-error-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "표현 페이지 비교 · 익명 예시",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.661
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      },
+      "layout": {
+        "firstBodyY": null,
+        "firstCommentY": null,
+        "secondEntryY": null,
+        "firstBodyAboveFold": false,
+        "firstCommentAboveFold": false,
+        "secondEntryAboveFold": false,
+        "entryCount": 0
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "storageCalls": [],
+  "realRemoteWrites": 0,
+  "sourceRuns": [
+    {
+      "report": "browser-a-1440-focused-report.json",
+      "createdAt": "2026-10-07T16:16:54.899Z",
+      "checks": [
+        {
+          "name": "a/1440",
+          "pass": true,
+          "detail": {
+            "exactFixtureOrderAndPairs": true,
+            "rawPrefixAndExpandedWholeText": true,
+            "shortBodyHasNoCollapse": true,
+            "selectedOldOriginalAndBackFocusScroll": true,
+            "commentEditPreviewAndEntryFocus": true,
+            "sourceFixtureImmutable": true,
+            "linkPartialDatesTruthful": true,
+            "emptyLoadingErrorRetry": true
+          }
+        }
+      ]
+    },
+    {
+      "report": "browser-five-case-report.json",
+      "createdAt": "2026-10-07T16:17:32.398Z",
+      "checks": [
+        {
+          "name": "b/1440",
+          "pass": true,
+          "detail": {
+            "exactFixtureOrderAndPairs": true,
+            "rawPrefixAndExpandedWholeText": true,
+            "shortBodyHasNoCollapse": true,
+            "selectedOldOriginalAndBackFocusScroll": true,
+            "commentEditPreviewAndEntryFocus": true,
+            "sourceFixtureImmutable": true,
+            "linkPartialDatesTruthful": true,
+            "emptyLoadingErrorRetry": true
+          }
+        },
+        {
+          "name": "a/820",
+          "pass": true,
+          "detail": {
+            "exactFixtureOrderAndPairs": true,
+            "rawPrefixAndExpandedWholeText": true,
+            "shortBodyHasNoCollapse": true,
+            "selectedOldOriginalAndBackFocusScroll": true,
+            "commentEditPreviewAndEntryFocus": true,
+            "sourceFixtureImmutable": true,
+            "linkPartialDatesTruthful": true,
+            "emptyLoadingErrorRetry": true
+          }
+        },
+        {
+          "name": "b/820",
+          "pass": true,
+          "detail": {
+            "exactFixtureOrderAndPairs": true,
+            "rawPrefixAndExpandedWholeText": true,
+            "shortBodyHasNoCollapse": true,
+            "selectedOldOriginalAndBackFocusScroll": true,
+            "commentEditPreviewAndEntryFocus": true,
+            "sourceFixtureImmutable": true,
+            "linkPartialDatesTruthful": true,
+            "emptyLoadingErrorRetry": true
+          }
+        },
+        {
+          "name": "a/390",
+          "pass": true,
+          "detail": {
+            "exactFixtureOrderAndPairs": true,
+            "rawPrefixAndExpandedWholeText": true,
+            "shortBodyHasNoCollapse": true,
+            "selectedOldOriginalAndBackFocusScroll": true,
+            "commentEditPreviewAndEntryFocus": true,
+            "sourceFixtureImmutable": true,
+            "linkPartialDatesTruthful": true,
+            "emptyLoadingErrorRetry": true
+          }
+        },
+        {
+          "name": "b/390",
+          "pass": true,
+          "detail": {
+            "exactFixtureOrderAndPairs": true,
+            "rawPrefixAndExpandedWholeText": true,
+            "shortBodyHasNoCollapse": true,
+            "selectedOldOriginalAndBackFocusScroll": true,
+            "commentEditPreviewAndEntryFocus": true,
+            "sourceFixtureImmutable": true,
+            "linkPartialDatesTruthful": true,
+            "emptyLoadingErrorRetry": true
+          }
+        }
+      ]
+    }
+  ],
+  "method": "A/1440 focused verification followed by the other five variant/viewport scenarios; no full six-case rerun claimed. Same recursively frozen eight-source/nine-version/six-entry fixture at every initial capture. After visible-reading-focus and decorative truncation marker changes, only expansion/original-back/collapse and six normal captures were rechecked; initial edit/state captures and complete-flow checks retained separately.",
+  "finalVerification": {
+    "report": "browser-expansion-recheck-report.json",
+    "createdAt": "2026-10-07T16:19:54.292Z",
+    "checks": [
+      {
+        "name": "a/1440",
+        "pass": true,
+        "detail": {
+          "rawPrefixAndExpandedWholeText": true,
+          "expansionFocusIsVisibleReadingSurface": true,
+          "exactOldOriginalAndBackFocusScroll": true,
+          "collapseButtonFocused": true,
+          "sourceFixtureImmutable": true
+        }
+      },
+      {
+        "name": "b/1440",
+        "pass": true,
+        "detail": {
+          "rawPrefixAndExpandedWholeText": true,
+          "expansionFocusIsVisibleReadingSurface": true,
+          "exactOldOriginalAndBackFocusScroll": true,
+          "collapseButtonFocused": true,
+          "sourceFixtureImmutable": true
+        }
+      },
+      {
+        "name": "a/820",
+        "pass": true,
+        "detail": {
+          "rawPrefixAndExpandedWholeText": true,
+          "expansionFocusIsVisibleReadingSurface": true,
+          "exactOldOriginalAndBackFocusScroll": true,
+          "collapseButtonFocused": true,
+          "sourceFixtureImmutable": true
+        }
+      },
+      {
+        "name": "b/820",
+        "pass": true,
+        "detail": {
+          "rawPrefixAndExpandedWholeText": true,
+          "expansionFocusIsVisibleReadingSurface": true,
+          "exactOldOriginalAndBackFocusScroll": true,
+          "collapseButtonFocused": true,
+          "sourceFixtureImmutable": true
+        }
+      },
+      {
+        "name": "a/390",
+        "pass": true,
+        "detail": {
+          "rawPrefixAndExpandedWholeText": true,
+          "expansionFocusIsVisibleReadingSurface": true,
+          "exactOldOriginalAndBackFocusScroll": true,
+          "collapseButtonFocused": true,
+          "sourceFixtureImmutable": true
+        }
+      },
+      {
+        "name": "b/390",
+        "pass": true,
+        "detail": {
+          "rawPrefixAndExpandedWholeText": true,
+          "expansionFocusIsVisibleReadingSurface": true,
+          "exactOldOriginalAndBackFocusScroll": true,
+          "collapseButtonFocused": true,
+          "sourceFixtureImmutable": true
+        }
+      }
+    ],
+    "captures": [
+      {
+        "variant": "a",
+        "scene": "normal",
+        "width": 1440,
+        "file": "recheck-a-normal-1440.png",
+        "metrics": {
+          "viewport": {
+            "width": 1440,
+            "height": 1000
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "body",
+            "id": "",
+            "class": "",
+            "text": "본문으로 이동\n  \n    \n      표현 페이지 비교 · 익명 예시\n      같은 8개 글을 비교합니다. 편집은 이 화면에서만 유지되며 새",
+            "visible": false,
+            "width": 3,
+            "contrast": 14.961
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 534.1,
+          "firstCommentY": 1238.7,
+          "secondEntryY": 1416.6,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": false,
+          "secondEntryAboveFold": false,
+          "entryCount": 6
+        }
+      },
+      {
+        "variant": "a",
+        "scene": "expanded",
+        "width": 1440,
+        "file": "recheck-a-expanded-1440.png",
+        "metrics": {
+          "viewport": {
+            "width": 1440,
+            "height": 1000
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "pre",
+            "id": "expressionBody-exhibition-walk-0",
+            "class": "expression-body",
+            "text": "보관한 원문",
+            "visible": true,
+            "width": 3,
+            "contrast": 7.286
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 534.1,
+          "firstCommentY": 2564.3,
+          "secondEntryY": 2742.2,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": false,
+          "secondEntryAboveFold": false,
+          "entryCount": 6
+        }
+      },
+      {
+        "variant": "a",
+        "scene": "collapsed",
+        "width": 1440,
+        "file": "recheck-a-collapsed-1440.png",
+        "metrics": {
+          "viewport": {
+            "width": 1440,
+            "height": 1000
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "button",
+            "id": "expressionExpand-exhibition-walk-0",
+            "class": "expression-text-button expression-expand",
+            "text": "본문 펼치기",
+            "visible": true,
+            "width": 3,
+            "contrast": 7.286
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 534.1,
+          "firstCommentY": 1238.7,
+          "secondEntryY": 1416.6,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": true,
+          "secondEntryAboveFold": false,
+          "entryCount": 6
+        }
+      },
+      {
+        "variant": "b",
+        "scene": "normal",
+        "width": 1440,
+        "file": "recheck-b-normal-1440.png",
+        "metrics": {
+          "viewport": {
+            "width": 1440,
+            "height": 1000
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "body",
+            "id": "",
+            "class": "",
+            "text": "본문으로 이동\n  \n    \n      표현 페이지 비교 · 익명 예시\n      같은 8개 글을 비교합니다. 편집은 이 화면에서만 유지되며 새",
+            "visible": false,
+            "width": 3,
+            "contrast": 14.961
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 501.1,
+          "firstCommentY": 890.5,
+          "secondEntryY": 1064.4,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": true,
+          "secondEntryAboveFold": false,
+          "entryCount": 6
+        }
+      },
+      {
+        "variant": "b",
+        "scene": "expanded",
+        "width": 1440,
+        "file": "recheck-b-expanded-1440.png",
+        "metrics": {
+          "viewport": {
+            "width": 1440,
+            "height": 1000
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "pre",
+            "id": "expressionBody-exhibition-walk-0",
+            "class": "expression-body",
+            "text": "보관한 원문",
+            "visible": true,
+            "width": 3,
+            "contrast": 7.286
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 501.1,
+          "firstCommentY": 2128.8,
+          "secondEntryY": 2302.7,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": false,
+          "secondEntryAboveFold": false,
+          "entryCount": 6
+        }
+      },
+      {
+        "variant": "b",
+        "scene": "collapsed",
+        "width": 1440,
+        "file": "recheck-b-collapsed-1440.png",
+        "metrics": {
+          "viewport": {
+            "width": 1440,
+            "height": 1000
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "button",
+            "id": "expressionExpand-exhibition-walk-0",
+            "class": "expression-text-button expression-expand",
+            "text": "본문 펼치기",
+            "visible": true,
+            "width": 3,
+            "contrast": 7.286
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 501.1,
+          "firstCommentY": 890.5,
+          "secondEntryY": 1064.4,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": true,
+          "secondEntryAboveFold": true,
+          "entryCount": 6
+        }
+      },
+      {
+        "variant": "a",
+        "scene": "normal",
+        "width": 820,
+        "file": "recheck-a-normal-820.png",
+        "metrics": {
+          "viewport": {
+            "width": 820,
+            "height": 1000
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "body",
+            "id": "",
+            "class": "",
+            "text": "본문으로 이동\n  \n    \n      표현 페이지 비교 · 익명 예시\n      같은 8개 글을 비교합니다. 편집은 이 화면에서만 유지되며 새",
+            "visible": false,
+            "width": 3,
+            "contrast": 14.961
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 534.1,
+          "firstCommentY": 1238.7,
+          "secondEntryY": 1416.6,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": false,
+          "secondEntryAboveFold": false,
+          "entryCount": 6
+        }
+      },
+      {
+        "variant": "a",
+        "scene": "expanded",
+        "width": 820,
+        "file": "recheck-a-expanded-820.png",
+        "metrics": {
+          "viewport": {
+            "width": 820,
+            "height": 1000
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "pre",
+            "id": "expressionBody-exhibition-walk-0",
+            "class": "expression-body",
+            "text": "보관한 원문",
+            "visible": false,
+            "width": 3,
+            "contrast": 15.987
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 534.1,
+          "firstCommentY": 2564.3,
+          "secondEntryY": 2742.2,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": false,
+          "secondEntryAboveFold": false,
+          "entryCount": 6
+        }
+      },
+      {
+        "variant": "a",
+        "scene": "collapsed",
+        "width": 820,
+        "file": "recheck-a-collapsed-820.png",
+        "metrics": {
+          "viewport": {
+            "width": 820,
+            "height": 1000
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "button",
+            "id": "expressionExpand-exhibition-walk-0",
+            "class": "expression-text-button expression-expand",
+            "text": "본문 펼치기",
+            "visible": false,
+            "width": 3,
+            "contrast": 7.286
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 534.1,
+          "firstCommentY": 1238.7,
+          "secondEntryY": 1416.6,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": true,
+          "secondEntryAboveFold": false,
+          "entryCount": 6
+        }
+      },
+      {
+        "variant": "b",
+        "scene": "normal",
+        "width": 820,
+        "file": "recheck-b-normal-820.png",
+        "metrics": {
+          "viewport": {
+            "width": 820,
+            "height": 1000
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "body",
+            "id": "",
+            "class": "",
+            "text": "본문으로 이동\n  \n    \n      표현 페이지 비교 · 익명 예시\n      같은 8개 글을 비교합니다. 편집은 이 화면에서만 유지되며 새",
+            "visible": false,
+            "width": 3,
+            "contrast": 14.961
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 501.1,
+          "firstCommentY": 890.5,
+          "secondEntryY": 1064.4,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": true,
+          "secondEntryAboveFold": false,
+          "entryCount": 6
+        }
+      },
+      {
+        "variant": "b",
+        "scene": "expanded",
+        "width": 820,
+        "file": "recheck-b-expanded-820.png",
+        "metrics": {
+          "viewport": {
+            "width": 820,
+            "height": 1000
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "pre",
+            "id": "expressionBody-exhibition-walk-0",
+            "class": "expression-body",
+            "text": "보관한 원문",
+            "visible": false,
+            "width": 3,
+            "contrast": 15.987
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 501.1,
+          "firstCommentY": 2157.6,
+          "secondEntryY": 2331.5,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": false,
+          "secondEntryAboveFold": false,
+          "entryCount": 6
+        }
+      },
+      {
+        "variant": "b",
+        "scene": "collapsed",
+        "width": 820,
+        "file": "recheck-b-collapsed-820.png",
+        "metrics": {
+          "viewport": {
+            "width": 820,
+            "height": 1000
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "button",
+            "id": "expressionExpand-exhibition-walk-0",
+            "class": "expression-text-button expression-expand",
+            "text": "본문 펼치기",
+            "visible": false,
+            "width": 3,
+            "contrast": 7.286
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 501.1,
+          "firstCommentY": 890.5,
+          "secondEntryY": 1064.4,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": true,
+          "secondEntryAboveFold": true,
+          "entryCount": 6
+        }
+      },
+      {
+        "variant": "a",
+        "scene": "normal",
+        "width": 390,
+        "file": "recheck-a-normal-390.png",
+        "metrics": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "body",
+            "id": "",
+            "class": "",
+            "text": "본문으로 이동\n  \n    \n      표현 페이지 비교 · 익명 예시\n      같은 8개 글을 비교합니다. 편집은 이 화면에서만 유지되며 새",
+            "visible": false,
+            "width": 3,
+            "contrast": 14.961
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 557,
+          "firstCommentY": 1129,
+          "secondEntryY": 1398.1,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": false,
+          "secondEntryAboveFold": false,
+          "entryCount": 6
+        }
+      },
+      {
+        "variant": "a",
+        "scene": "expanded",
+        "width": 390,
+        "file": "recheck-a-expanded-390.png",
+        "metrics": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "pre",
+            "id": "expressionBody-exhibition-walk-0",
+            "class": "expression-body",
+            "text": "보관한 원문",
+            "visible": false,
+            "width": 3,
+            "contrast": 15.987
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 557,
+          "firstCommentY": 3382.6,
+          "secondEntryY": 3651.7,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": false,
+          "secondEntryAboveFold": false,
+          "entryCount": 6
+        }
+      },
+      {
+        "variant": "a",
+        "scene": "collapsed",
+        "width": 390,
+        "file": "recheck-a-collapsed-390.png",
+        "metrics": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "button",
+            "id": "expressionExpand-exhibition-walk-0",
+            "class": "expression-text-button expression-expand",
+            "text": "본문 펼치기",
+            "visible": false,
+            "width": 3,
+            "contrast": 7.286
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 557,
+          "firstCommentY": 1129,
+          "secondEntryY": 1398.1,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": true,
+          "secondEntryAboveFold": false,
+          "entryCount": 6
+        }
+      },
+      {
+        "variant": "b",
+        "scene": "normal",
+        "width": 390,
+        "file": "recheck-b-normal-390.png",
+        "metrics": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "body",
+            "id": "",
+            "class": "",
+            "text": "본문으로 이동\n  \n    \n      표현 페이지 비교 · 익명 예시\n      같은 8개 글을 비교합니다. 편집은 이 화면에서만 유지되며 새",
+            "visible": false,
+            "width": 3,
+            "contrast": 14.961
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 524,
+          "firstCommentY": 993.8,
+          "secondEntryY": 1258.9,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": false,
+          "secondEntryAboveFold": false,
+          "entryCount": 6
+        }
+      },
+      {
+        "variant": "b",
+        "scene": "expanded",
+        "width": 390,
+        "file": "recheck-b-expanded-390.png",
+        "metrics": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "pre",
+            "id": "expressionBody-exhibition-walk-0",
+            "class": "expression-body",
+            "text": "보관한 원문",
+            "visible": false,
+            "width": 3,
+            "contrast": 15.987
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 524,
+          "firstCommentY": 2894.4,
+          "secondEntryY": 3159.5,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": false,
+          "secondEntryAboveFold": false,
+          "entryCount": 6
+        }
+      },
+      {
+        "variant": "b",
+        "scene": "collapsed",
+        "width": 390,
+        "file": "recheck-b-collapsed-390.png",
+        "metrics": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "horizontalOverflow": false,
+          "contrastFailures": [],
+          "minimumTextContrast": 5.661,
+          "smallTargets": [],
+          "spatialTargets": [],
+          "unnamed": [],
+          "smallInputs": [],
+          "focus": {
+            "tag": "button",
+            "id": "expressionExpand-exhibition-walk-0",
+            "class": "expression-text-button expression-expand",
+            "text": "본문 펼치기",
+            "visible": false,
+            "width": 3,
+            "contrast": 7.286
+          },
+          "title": null,
+          "reader": null,
+          "resultCount": 0
+        },
+        "layout": {
+          "firstBodyY": 524,
+          "firstCommentY": 993.8,
+          "secondEntryY": 1258.9,
+          "firstBodyAboveFold": true,
+          "firstCommentAboveFold": true,
+          "secondEntryAboveFold": false,
+          "entryCount": 6
+        }
+      }
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "external": [],
+    "storageCalls": []
+  },
+  "completedAt": "2026-10-07T16:20:35.273940+00:00"
+}
