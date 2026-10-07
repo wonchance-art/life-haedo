@@ -1,0 +1,19 @@
+{
+  "createdAt": "2026-10-07T13:25:29.645Z",
+  "browser": "151.0.7922.173",
+  "base": "http://127.0.0.1:4184",
+  "scope": "Real local UI, SDK, isolated IndexedDB and anonymous Auth HTTP; Chromium viewport/touch simulation only",
+  "checks": [
+    {
+      "name": "native Chromium touch gesture stores a visible reading character",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "observations": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "realRemoteWrites": 0
+}

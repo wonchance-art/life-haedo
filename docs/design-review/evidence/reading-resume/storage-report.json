@@ -1,0 +1,123 @@
+{
+  "capturedAt": "2026-10-07T13:17:23.509Z",
+  "browser": "151.0.7922.173",
+  "environment": "Linux Chromium, actual IndexedDB/BroadcastChannel and anonymous local samples; no real Auth, remote writes or Apple hardware.",
+  "checks": [
+    {
+      "name": "one local position survives reload; caller mutation cannot alter the saved row",
+      "pass": true,
+      "evidence": {
+        "reloadPreserved": true,
+        "metadataRows": 1,
+        "savedContentOrHistory": false
+      }
+    },
+    {
+      "name": "a new source head leaves the exact old version and UTF-16 end position intact",
+      "pass": true,
+      "evidence": {
+        "exactOldVersionPreserved": true,
+        "utf16EndAllowed": true,
+        "latestFallback": false
+      }
+    },
+    {
+      "name": "invalid offsets, split surrogate pairs, missing pairs and link-only sources cannot be stored",
+      "pass": true,
+      "evidence": {
+        "rejectedInvalidCandidates": 10,
+        "metadataWritten": false
+      }
+    },
+    {
+      "name": "clearing an empty position stores a revision tombstone that rejects delayed revision-zero captures",
+      "pass": true,
+      "evidence": {
+        "emptyClearRevision": 1,
+        "repeatedClearRevision": 2,
+        "staleResurrection": false
+      }
+    },
+    {
+      "name": "two tabs saving from the same revision have exactly one winner",
+      "pass": true,
+      "evidence": {
+        "winningWrites": 1,
+        "conflictingWrites": 1,
+        "samePersistedState": true
+      }
+    },
+    {
+      "name": "another tab clear and newer save both reject a delayed older candidate without rebasing",
+      "pass": true,
+      "evidence": {
+        "staleAfterClearRejected": true,
+        "newerOtherTabPreserved": true,
+        "automaticRetry": false
+      }
+    },
+    {
+      "name": "a removed exact version remains unavailable until explicit clear; newer text is never substituted",
+      "pass": true,
+      "evidence": {
+        "danglingPositionRetained": true,
+        "unavailableWithoutMutation": true,
+        "explicitClearWorks": true
+      }
+    },
+    {
+      "name": "positions are isolated by account, project and workspace; unscoped access is rejected",
+      "pass": true,
+      "evidence": {
+        "foreignOperationsRejected": 6,
+        "unscopedOperationsRejected": 3,
+        "workspacePositionsIndependent": true
+      }
+    },
+    {
+      "name": "scope disposal aborts a pending write and its old handle cannot read, save or clear",
+      "pass": true,
+      "evidence": {
+        "pendingWriteAborted": true,
+        "disposedOperationsRejected": 3,
+        "partialPositionWritten": false
+      }
+    },
+    {
+      "name": "quota aborts roll back both save and clear without advancing revision or publishing success",
+      "pass": true,
+      "evidence": {
+        "failedSaveAndClearRolledBack": true,
+        "falseSuccessEvents": 0
+      }
+    },
+    {
+      "name": "save and clear preserve source revisions, pending sync payload, exports and restored-copy isolation",
+      "pass": true,
+      "evidence": {
+        "bundleAndOutboxByteUnchanged": true,
+        "backupPayloadUnchangedExceptExportTime": true,
+        "restoredCopyHasNoPosition": true
+      }
+    },
+    {
+      "name": "account-scoped notifications contain revision only and other tabs re-read the authoritative state",
+      "pass": true,
+      "evidence": {
+        "broadcastReceived": true,
+        "leakedContentOrPosition": false
+      }
+    },
+    {
+      "name": "unknown metadata formats and content-bearing fields are rejected without overwriting their row",
+      "pass": true,
+      "evidence": {
+        "invalidMetadataOperationsRejected": 6,
+        "corruptRowsSilentlyOverwritten": false
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": []
+}
