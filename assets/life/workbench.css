@@ -42,9 +42,11 @@
 .wb-page-entry-open .life-tooltip { left: auto; right: 0; transform: none; }
 .wb-page-pin { flex: none; padding-top: 6px; color: var(--color-primary); }
 .wb-page-pin .life-glyph { width: 18px; height: 18px; }
-.wb-page-content .wb-source-body { max-height: none; overflow: visible; margin-top: 16px; }
-.wb-page-content .wb-page-part + .wb-page-part { margin-top: 28px; }
+.wb-page-content .wb-source-body { max-height: none; overflow: visible; margin-top: 12px; font-family: inherit; font-size: 16px; line-height: 1.8; }
+.wb-page-content .wb-page-part { margin: 12px 0 0; }
+.wb-page-content .wb-page-part + .wb-page-part { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
 .wb-page-source-meta { font-size: 12px; line-height: 1.8; }
+.wb-page-source-date,.wb-page-omissions { font-size: 12px; line-height: 1.8; }
 .wb-page-content .wb-comment { padding: 14px 16px; border-radius: var(--control-radius); background: var(--mint); }
 .wb-page-content .wb-comment .life-meta { color: var(--mint-ink); }
 .wb-page-content .wb-comment-body { margin-top: 4px; }

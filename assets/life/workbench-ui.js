@@ -865,7 +865,7 @@
     }
     function pagePart(part, entry, index) {
       const info = sourceInfo(part.versionId);
-      const section = el('div', null, 'wb-page-part'); section.dataset.versionId = part.versionId;
+      const section = el('div', null, 'wb-page-part wb-source'); section.dataset.versionId = part.versionId;
       if (!info) {
         section.append(el('p', '연결된 원문 없음', 'wb-source-title'), notice('이 버전은 현재 공간에 없습니다. 다른 버전으로 바꾸지 않았습니다.'));
         return section;
@@ -880,7 +880,20 @@
       else if (info.version.coverage.status === 'unknown') metadata.push('확보 범위 미확인');
       if (info.total > 1) metadata.push(info.number + '/' + info.total + ' 버전');
       section.append(el('p', metadata.join(' · '), 'life-meta wb-page-source-meta'));
-      if (entry.showBody && info.version.contentText != null) section.append(el('p', info.version.contentText, 'wb-source-body'));
+      // Imported dates may be free-form (or unknown). Preserve the selected
+      // version's value without inventing a timezone, precision or activity date.
+      if (info.version.originalCreatedAt) section.append(el('p', '원문 작성일 ' + info.version.originalCreatedAt, 'life-meta wb-page-source-date'));
+      if (info.version.coverage.omissions.length) section.append(el('p', '포함되지 않은 내용 · ' + info.version.coverage.omissions.join(' · '), 'life-meta wb-page-omissions'));
+      if (entry.showBody && info.version.contentText != null) section.append(el('pre', info.version.contentText, 'wb-source-body'));
+      if (info.source.url) {
+        try {
+          const url = new URL(info.source.url);
+          if (['http:', 'https:'].includes(url.protocol)) {
+            const link = el('a', '원문 출처', 'wb-source-link'); link.href = url.href;
+            link.target = '_blank'; link.rel = 'noopener noreferrer'; section.append(link);
+          }
+        } catch (_) { /* Invalid URLs never become links. */ }
+      }
       return section;
     }
     function renderPage() {
@@ -1046,14 +1059,14 @@
       entries.sort((a, b) => Number(b.pinned) - Number(a.pinned));
       if (!entries.length) visitor.append(empty('표시할 항목이 없습니다. 편집에서 항목 표시를 켜 주세요.'));
       entries.forEach(entry => {
-        const article = el('article', null, 'wb-feed'); article.dataset.entryId = entry.id;
-        const head = el('div', null, 'wb-row'); head.append(el('h3', entry.title, 'wb-grow'));
+        const article = el('article', null, 'wb-feed wb-page-entry'); article.dataset.entryId = entry.id;
+        const head = el('div', null, 'wb-row wb-page-entry-heading'); head.append(el('h3', entry.title, 'wb-grow'));
         if (entry.pinned) { const pin = life.Icons.create('bookmark'); const note = el('span', '고정한 항목', 'life-sr-only'); head.append(pin, note); }
         article.append(head);
-        entry.parts.filter(part => part.enabled).forEach((part, index) => article.append(sourceRow(part.versionId, {
-          body: entry.showBody, previewOnly: true, hideTitle: index === 0 && sourceInfo(part.versionId)?.source.title === entry.title
-        })));
-        if (entry.showNote && entry.note) { const note = el('div', null, 'wb-comment'); note.append(el('p', '내 코멘트', 'life-meta'), el('p', entry.note, 'wb-comment-body')); article.append(note); }
+        const content = el('div', null, 'wb-page-content');
+        entry.parts.filter(part => part.enabled).forEach((part, index) => content.append(pagePart(part, entry, index)));
+        if (entry.showNote && entry.note) { const note = el('div', null, 'wb-comment'); note.append(el('p', '내 코멘트', 'life-meta'), el('p', entry.note, 'wb-comment-body')); content.append(note); }
+        article.append(content);
         visitor.append(article);
       });
       bodyNode.append(visitor);
