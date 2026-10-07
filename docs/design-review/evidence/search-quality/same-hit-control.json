@@ -1,0 +1,25 @@
+{
+  "sourceCount": 10000,
+  "scope": "Sequential same-hit-count native engine comparison; full validation, no render time",
+  "beforeExact": {
+    "firstMs": 171.934,
+    "medianMs": 134.695,
+    "p95Ms": 152.21,
+    "samples": 15,
+    "resultCount": 10000
+  },
+  "afterExact": {
+    "firstMs": 148.545,
+    "medianMs": 145.162,
+    "p95Ms": 179.705,
+    "samples": 15,
+    "resultCount": 10000
+  },
+  "afterSpacing": {
+    "firstMs": 133.253,
+    "medianMs": 136.475,
+    "p95Ms": 156.709,
+    "samples": 15,
+    "resultCount": 10000
+  }
+}

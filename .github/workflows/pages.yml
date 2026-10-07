@@ -124,6 +124,9 @@ jobs:
       - name: Verify import-to-page product flow
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/product-flow-quality-browser.cjs
+      - name: Verify Korean search and bounded result rendering
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/search-quality-browser.cjs
       - name: Stop the local server
         if: always()
         run: |
@@ -145,6 +148,7 @@ jobs:
             .local/reading-writing-quality/
             .local/reading-resume/
             .local/product-flow-quality/
+            .local/search-quality/
             .local/browser-ci/server.log
           include-hidden-files: true
           if-no-files-found: warn

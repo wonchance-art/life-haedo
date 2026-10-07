@@ -437,3 +437,64 @@ test('source search validates query/bundle and neither mutates nor retains refer
   const invalid = copy(bundle); invalid.sourceVersions[0].sourceId = 'missing';
   assert.throws(() => core.searchSources(invalid, 'needle'), errorCode('missing_reference'));
 });
+
+test('opt-in Korean spacing returns the exact raw quote and older version without altering literal search', async () => {
+  const raw = 'İ\r\n🌱 정원\t  산책\r\n정원산책 끝';
+  const first = await addSearchVersion(core.createWorkspace(), { title: '한글 자료', text: raw });
+  const latest = await addSearchVersion(first.bundle, { title: '현재 제목', text: '최신 자료에는 그 구절이 없다.' }, first.sourceId);
+  const before = copy(latest.bundle);
+  const literal = core.searchSources(latest.bundle, '정원산책');
+  assert.equal(literal[0].quote, '정원산책');
+  assert.deepEqual(core.searchSources(latest.bundle, '정원 산책'), []);
+  assert.deepEqual(core.searchSources(latest.bundle, '정원산책', { ignoreKoreanSpacing: false }), literal);
+  for (const query of ['정원산책', '정원 산책', '정원\t산책', '정원\u3000산책']) {
+    const [hit] = core.searchSources(latest.bundle, query, { ignoreKoreanSpacing: true });
+    assert.equal(hit.sourceId, first.sourceId);
+    assert.equal(hit.sourceVersionId, first.versionId);
+    assert.equal(hit.versionIndex, 1); assert.equal(hit.versionCount, 2);
+    assert.deepEqual(hit.locator, { start: 6, end: 13 });
+    assert.equal(hit.quote, '정원\t  산책');
+    assert.equal(raw.slice(hit.locator.start, hit.locator.end), hit.quote);
+    assert.equal(hit.snippet.before, 'İ\r\n🌱 ');
+    assert.equal(core.matchesSearchText(raw, query, { ignoreKoreanSpacing: true }), true);
+  }
+  assert.deepEqual(latest.bundle, before);
+  const titled = await stored(input({ title: '정원 산책', text: '다른 본문' }));
+  const [titleHit] = core.searchSources(titled.bundle, '정원산책', { ignoreKoreanSpacing: true });
+  assert.equal(titleHit.matchedBy, 'title'); assert.equal(titleHit.locator, null); assert.equal(titleHit.quote, null);
+});
+
+test('Korean spacing permits only horizontal spaces between complete Hangul syllables', () => {
+  const options = { ignoreKoreanSpacing: true };
+  for (const gap of ['', ' ', '  ', '\t', '\u00a0', '\u1680', '\u2000', '\u200a', '\u202f', '\u205f', '\u3000']) {
+    assert.equal(core.matchesSearchText('🌱 정원' + gap + '산책', '정원 산책', options), true);
+  }
+  for (const gap of ['\r\n', '\n', '\r', '\u2028', '\u2029', '\v', '\f', '. ', '에서 천천히 ']) {
+    assert.equal(core.matchesSearchText('🌱 정원' + gap + '산책', '정원산책', options), false);
+  }
+  for (const [text, query] of [['A B', 'AB'], ['AB', 'A B'], ['정원 A B 산책', '정원 AB 산책'], ['정원 산책'.normalize('NFD'), '정원 산책'], ['정원 산책', '산책 정원'], ['정원.*산책', '정원산책']]) {
+    assert.equal(core.matchesSearchText(text, query, options), false);
+  }
+  assert.equal(core.matchesSearchText('정원.*산책', '정원.*산책', options), true);
+  assert.equal(core.matchesSearchText('정원\r\n산책', '정원\r\n산책', options), true);
+  assert.equal(core.matchesSearchText('A  B', 'a  b', options), true);
+  assert.equal(core.matchesSearchText('🌱', '\ud83c', options), false);
+  assert.equal(core.matchesSearchText('가 '.repeat(12000), '가'.repeat(499) + '나', options), false);
+});
+
+test('source and note search share strict query/options validation and native literal defaults', async () => {
+  const { bundle } = await stored(input({ text: '정원 산책' }));
+  assert.equal(core.matchesSearchText('정원 산책', '정원산책'), false);
+  assert.equal(core.matchesSearchText('', ' \n\t '), true);
+  assert.equal(core.matchesSearchText('K ς', 'k'), true);
+  assert.equal(core.matchesSearchText('ß', 'SS'), false);
+  assert.throws(() => core.matchesSearchText(null, '정원'), errorCode('invalid_text'));
+  for (const query of [null, 1, [], {}, 'x'.repeat(501), '🌱'.repeat(251)]) {
+    assert.throws(() => core.matchesSearchText('정원', query), errorCode('invalid_query'));
+  }
+  for (const search of [(options) => core.searchSources(bundle, '정원', options), (options) => core.matchesSearchText('정원', '정원', options)]) {
+    for (const options of [null, [], true]) assert.throws(() => search(options), errorCode('invalid_structure'));
+    for (const value of ['true', 1, null, {}]) assert.throws(() => search({ ignoreKoreanSpacing: value }), errorCode('invalid_search_options'));
+    assert.throws(() => search({ normalized: true }), errorCode('unsupported_field'));
+  }
+});

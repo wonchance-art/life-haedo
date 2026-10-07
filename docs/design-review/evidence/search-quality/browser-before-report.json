@@ -1,0 +1,507 @@
+{
+  "phase": "before",
+  "createdAt": "2026-10-07T15:44:40.532Z",
+  "base": "http://127.0.0.1:4187",
+  "browser": "151.0.7922.173",
+  "scope": "Anonymous Auth HTTP; actual SDK/isolated IDB; Linux Chromium viewport and composition-event simulation only; no production or Apple claims",
+  "methodology": "Batch fixture through existing prepareImport/commitLocal; seed cost excluded. Input event capture until second requestAnimationFrame measures app compute+render opportunity, not hardware latency. No timing threshold assertions on shared host.",
+  "checks": [
+    {
+      "name": "100 sources / 1440px",
+      "pass": true
+    },
+    {
+      "name": "100 sources / 390px",
+      "pass": true
+    },
+    {
+      "name": "1000 sources / 1440px",
+      "pass": true
+    },
+    {
+      "name": "1000 sources / 390px",
+      "pass": true
+    }
+  ],
+  "measurements": [
+    {
+      "count": 100,
+      "width": 1440,
+      "fixture": {
+        "sourceCount": 100,
+        "versionCount": 101,
+        "bodyUtf16Units": 137341
+      },
+      "load": {
+        "cards": 100,
+        "domElements": 2303,
+        "listElements": 2100,
+        "scrollHeight": 26713,
+        "navigation": {
+          "domContentLoadedMs": 122.60000000149012,
+          "loadEventMs": 123
+        },
+        "longTasks": [],
+        "reloadToReadyTwoFramesWallMs": 311
+      },
+      "common": [
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 39.900000002235174,
+          "cards": 101,
+          "domElements": 2425,
+          "listElements": 2222,
+          "scrollHeight": 23939,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 27.5,
+          "cards": 101,
+          "domElements": 2425,
+          "listElements": 2222,
+          "scrollHeight": 23939,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 48,
+          "cards": 101,
+          "domElements": 2425,
+          "listElements": 2222,
+          "scrollHeight": 23939,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 27.799999997019768,
+          "cards": 101,
+          "domElements": 2425,
+          "listElements": 2222,
+          "scrollHeight": 23939,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 30.899999998509884,
+          "cards": 101,
+          "domElements": 2425,
+          "listElements": 2222,
+          "scrollHeight": 23939,
+          "inputFocused": true
+        }
+      ],
+      "commonMedianMs": 30.899999998509884,
+      "commonMaxMs": 48,
+      "rare": {
+        "query": "옛기억🌱구절",
+        "inputToTwoFramesMs": 18.599999997764826,
+        "cards": 1,
+        "domElements": 225,
+        "listElements": 22,
+        "scrollHeight": 1020,
+        "inputFocused": true
+      },
+      "exactOldVersion": true,
+      "rawUtf16Locator": true,
+      "backQueryFocusScroll": true,
+      "compositionIntermediateSuppressed": true,
+      "compositionEndCards": 101,
+      "longTasks": []
+    },
+    {
+      "count": 100,
+      "width": 390,
+      "fixture": {
+        "sourceCount": 100,
+        "versionCount": 101,
+        "bodyUtf16Units": 137341
+      },
+      "load": {
+        "cards": 100,
+        "domElements": 2303,
+        "listElements": 2100,
+        "scrollHeight": 38346,
+        "navigation": {
+          "domContentLoadedMs": 99.89999999850988,
+          "loadEventMs": 100.10000000149012
+        },
+        "longTasks": [],
+        "reloadToReadyTwoFramesWallMs": 270
+      },
+      "common": [
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 30.699999999254942,
+          "cards": 101,
+          "domElements": 2425,
+          "listElements": 2222,
+          "scrollHeight": 29611,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 28.5,
+          "cards": 101,
+          "domElements": 2425,
+          "listElements": 2222,
+          "scrollHeight": 29611,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 27.600000001490116,
+          "cards": 101,
+          "domElements": 2425,
+          "listElements": 2222,
+          "scrollHeight": 29611,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 25.900000002235174,
+          "cards": 101,
+          "domElements": 2425,
+          "listElements": 2222,
+          "scrollHeight": 29611,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 28.199999999254942,
+          "cards": 101,
+          "domElements": 2425,
+          "listElements": 2222,
+          "scrollHeight": 29611,
+          "inputFocused": true
+        }
+      ],
+      "commonMedianMs": 28.199999999254942,
+      "commonMaxMs": 30.699999999254942,
+      "rare": {
+        "query": "옛기억🌱구절",
+        "inputToTwoFramesMs": 22.100000001490116,
+        "cards": 1,
+        "domElements": 225,
+        "listElements": 22,
+        "scrollHeight": 844,
+        "inputFocused": true
+      },
+      "exactOldVersion": true,
+      "rawUtf16Locator": true,
+      "backQueryFocusScroll": true,
+      "compositionIntermediateSuppressed": true,
+      "compositionEndCards": 101,
+      "longTasks": []
+    },
+    {
+      "count": 1000,
+      "width": 1440,
+      "fixture": {
+        "sourceCount": 1000,
+        "versionCount": 1001,
+        "bodyUtf16Units": 1373041
+      },
+      "load": {
+        "cards": 1000,
+        "domElements": 21203,
+        "listElements": 21000,
+        "scrollHeight": 264468,
+        "navigation": {
+          "domContentLoadedMs": 108,
+          "loadEventMs": 110.19999999925494
+        },
+        "longTasks": [
+          {
+            "startTime": 304.69999999925494,
+            "duration": 100
+          },
+          {
+            "startTime": 404.80000000074506,
+            "duration": 194
+          }
+        ],
+        "reloadToReadyTwoFramesWallMs": 832
+      },
+      "common": [
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 289.5,
+          "cards": 1001,
+          "domElements": 22225,
+          "listElements": 22022,
+          "scrollHeight": 234342,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 274.5999999977648,
+          "cards": 1001,
+          "domElements": 22225,
+          "listElements": 22022,
+          "scrollHeight": 234342,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 291,
+          "cards": 1001,
+          "domElements": 22225,
+          "listElements": 22022,
+          "scrollHeight": 234342,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 273.69999999925494,
+          "cards": 1001,
+          "domElements": 22225,
+          "listElements": 22022,
+          "scrollHeight": 234342,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 266.8999999985099,
+          "cards": 1001,
+          "domElements": 22225,
+          "listElements": 22022,
+          "scrollHeight": 234342,
+          "inputFocused": true
+        }
+      ],
+      "commonMedianMs": 274.5999999977648,
+      "commonMaxMs": 291,
+      "rare": {
+        "query": "옛기억🌱구절",
+        "inputToTwoFramesMs": 32.69999999925494,
+        "cards": 1,
+        "domElements": 225,
+        "listElements": 22,
+        "scrollHeight": 1020,
+        "inputFocused": true
+      },
+      "exactOldVersion": true,
+      "rawUtf16Locator": true,
+      "backQueryFocusScroll": true,
+      "compositionIntermediateSuppressed": true,
+      "compositionEndCards": 1001,
+      "longTasks": [
+        {
+          "startTime": 304.69999999925494,
+          "duration": 100
+        },
+        {
+          "startTime": 404.80000000074506,
+          "duration": 194
+        },
+        {
+          "startTime": 1002.5,
+          "duration": 261
+        },
+        {
+          "startTime": 1360.800000000745,
+          "duration": 246
+        },
+        {
+          "startTime": 1697.800000000745,
+          "duration": 263
+        },
+        {
+          "startTime": 2126.5,
+          "duration": 244
+        },
+        {
+          "startTime": 2461.5,
+          "duration": 236
+        },
+        {
+          "startTime": 3153.800000000745,
+          "duration": 80
+        }
+      ]
+    },
+    {
+      "count": 1000,
+      "width": 390,
+      "fixture": {
+        "sourceCount": 1000,
+        "versionCount": 1001,
+        "bodyUtf16Units": 1373041
+      },
+      "load": {
+        "cards": 1000,
+        "domElements": 21203,
+        "listElements": 21000,
+        "scrollHeight": 381907,
+        "navigation": {
+          "domContentLoadedMs": 106.5,
+          "loadEventMs": 106.70000000298023
+        },
+        "longTasks": [
+          {
+            "startTime": 341.20000000298023,
+            "duration": 139
+          },
+          {
+            "startTime": 480.80000000074506,
+            "duration": 208
+          }
+        ],
+        "reloadToReadyTwoFramesWallMs": 956
+      },
+      "common": [
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 305.1000000014901,
+          "cards": 1001,
+          "domElements": 22225,
+          "listElements": 22022,
+          "scrollHeight": 291117,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 290,
+          "cards": 1001,
+          "domElements": 22225,
+          "listElements": 22022,
+          "scrollHeight": 291117,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 280.9000000022352,
+          "cards": 1001,
+          "domElements": 22225,
+          "listElements": 22022,
+          "scrollHeight": 291117,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 259.70000000298023,
+          "cards": 1001,
+          "domElements": 22225,
+          "listElements": 22022,
+          "scrollHeight": 291117,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 286.4000000022352,
+          "cards": 1001,
+          "domElements": 22225,
+          "listElements": 22022,
+          "scrollHeight": 291117,
+          "inputFocused": true
+        }
+      ],
+      "commonMedianMs": 286.4000000022352,
+      "commonMaxMs": 305.1000000014901,
+      "rare": {
+        "query": "옛기억🌱구절",
+        "inputToTwoFramesMs": 33.19999999925494,
+        "cards": 1,
+        "domElements": 225,
+        "listElements": 22,
+        "scrollHeight": 844,
+        "inputFocused": true
+      },
+      "exactOldVersion": true,
+      "rawUtf16Locator": true,
+      "backQueryFocusScroll": true,
+      "compositionIntermediateSuppressed": true,
+      "compositionEndCards": 1001,
+      "longTasks": [
+        {
+          "startTime": 341.20000000298023,
+          "duration": 139
+        },
+        {
+          "startTime": 480.80000000074506,
+          "duration": 208
+        },
+        {
+          "startTime": 1140.4000000022352,
+          "duration": 275
+        },
+        {
+          "startTime": 1507.300000000745,
+          "duration": 259
+        },
+        {
+          "startTime": 1942.300000000745,
+          "duration": 250
+        },
+        {
+          "startTime": 2288.300000000745,
+          "duration": 233
+        },
+        {
+          "startTime": 2605.7000000029802,
+          "duration": 258
+        },
+        {
+          "startTime": 3336.800000000745,
+          "duration": 78
+        }
+      ]
+    }
+  ],
+  "captures": [
+    {
+      "scene": "list",
+      "count": 100,
+      "width": 1440,
+      "file": "browser-before-list-100-1440.png"
+    },
+    {
+      "scene": "common",
+      "count": 100,
+      "width": 1440,
+      "file": "browser-before-common-100-1440.png"
+    },
+    {
+      "scene": "list",
+      "count": 100,
+      "width": 390,
+      "file": "browser-before-list-100-390.png"
+    },
+    {
+      "scene": "common",
+      "count": 100,
+      "width": 390,
+      "file": "browser-before-common-100-390.png"
+    },
+    {
+      "scene": "list",
+      "count": 1000,
+      "width": 1440,
+      "file": "browser-before-list-1000-1440.png"
+    },
+    {
+      "scene": "common",
+      "count": 1000,
+      "width": 1440,
+      "file": "browser-before-common-1000-1440.png"
+    },
+    {
+      "scene": "list",
+      "count": 1000,
+      "width": 390,
+      "file": "browser-before-list-1000-390.png"
+    },
+    {
+      "scene": "common",
+      "count": 1000,
+      "width": 390,
+      "file": "browser-before-common-1000-390.png"
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "realRemoteWrites": 0
+}
