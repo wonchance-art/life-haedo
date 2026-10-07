@@ -57,7 +57,7 @@ async function main() {
       assert.equal(server.writes().length, 0, 'Input/review must never opt into cloud writes');
       assert.equal(report.externalRequests.filter(item => item.check === name).length, 0, 'Source URL was fetched');
       report.checks.push({ name, pass: true }); console.log('PASS ' + name);
-    } catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); }
+    } catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); if (process.env.CI) console.error('::error::' + String(name + ': ' + error.stack).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')); }
     finally { await context.close(); }
   }
   try {
@@ -180,7 +180,7 @@ async function main() {
       const raw = '앱을 닫기 전에 확인하던 본문🌱\n남겨 둔 두 번째 문장', url = 'https://www.instagram.com/p/Anonymous_draft/?igsh=keep#caption';
       await page.locator('#lifeImportTitle').fill('이어서 확인할 익명 게시물'); await page.locator('#lifeImportUrl').fill(url); await button(page, 'Instagram으로 설정');
       await page.locator('#lifeImportText').fill(raw); await sourceDetails(page, { Coverage: 'partial', Author: '익명 작성자', Relation: 'self', Omissions: '사진 미보관' });
-      const draft = await savedDraft(page); await page.reload(); await ready(page); await button(page, '모아보기');
+      const draft = await savedDraft(page); await page.reload(); await ready(page); await button(page, '기록 목록');
       await page.getByText(/검토 중 \d+개 · 이어서 확인/).click(); await button(page, '이어서 확인할 익명 게시물');
       assert.equal(await page.locator('#lifeImportText').inputValue(), raw); assert.equal(await page.locator('#lifeImportUrl').inputValue(), url);
       assert.equal(await page.locator('#lifeImportOrigin').inputValue(), 'instagram'); assert.equal(await page.locator('#lifeImportCoverage').inputValue(), 'partial');

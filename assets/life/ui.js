@@ -2162,7 +2162,7 @@
         const item = currentBatch()?.items.find(row => row.stageId === state.stage.stageId);
         if (item && !item.unsaved) main.append(button('건너뛰기 · 초안 유지', guarded(() => skipBatchItem(item))));
       }
-      main.append(title(state.prepared ? '원문·출처 검토' : '선택한 기록 가져오기'));
+      main.append(title(state.prepared ? '원문·출처 검토' : linkedSource ? '보관한 글에 본문 추가' : '선택한 기록 가져오기'));
       const phase = node('p', state.prepared ? '확인 후 보관 · 아직 자료에 반영하지 않았습니다.' : '본문·텍스트 파일·링크를 선택해 검토합니다.', 'life-import-phase');
       phase.id = 'lifeImportPhase';
       main.append(phase);
@@ -2327,7 +2327,9 @@
         newDraft();
         render();
       })));
-      form.append(linkedNotice, methods, url.label, suggestion, origin.label, name.label, textPanel, filePanel, linkHelp, retained, webNotice, webScope, details, actions, webHelp);
+      // Reimport starts with the only new input; already known metadata remains editable below.
+      if (linkedSource) form.append(linkedNotice, methods, textPanel, filePanel, linkHelp, retained, webNotice, webScope, url.label, suggestion, origin.label, name.label, details, actions, webHelp);
+      else form.append(methods, url.label, suggestion, origin.label, name.label, textPanel, filePanel, linkHelp, retained, webNotice, webScope, details, actions, webHelp);
       if (state.stageFailed) form.append(button('새 검토 사본으로 보관', guarded(rescueStage)));
       if (state.stage.invalidatedExcerpts && state.stage.invalidatedExcerpts.length) {
         const invalid = node('details', null, 'life-details');

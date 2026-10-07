@@ -118,6 +118,12 @@ jobs:
       - name: Verify import outcomes and review selection
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/import-flow-quality-browser.cjs
+      - name: Verify social source input and draft recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-social-import-browser.cjs
+      - name: Verify source reimport identity and immutable versions
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/source-reimport-browser.cjs
       - name: Verify page ordering and preview return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/page-flow-quality-browser.cjs
@@ -164,6 +170,8 @@ jobs:
             .local/expression-design/
             .local/page-expression/
             .local/public-expression/
+            .local/source-reimport/
+            .local/life-social-import/
             .local/share/
             .local/browser-ci/server.log
           include-hidden-files: true
