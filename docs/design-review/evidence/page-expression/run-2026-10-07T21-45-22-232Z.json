@@ -1,0 +1,38 @@
+{
+  "createdAt": "2026-10-07T21:45:22.232Z",
+  "browser": "151.0.7922.173",
+  "scope": "Actual private page/preview, bundled SDK and IndexedDB; synthetic intercepted publication; Chromium viewport/touch/keyboard, not Apple hardware or native IME.",
+  "checks": [
+    {
+      "name": "comment failure keeps draft and editor context while fold remains independent",
+      "pass": false,
+      "error": "locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#wbError').getByRole('button', { name: '다시 저장', exact: true })\u001b[22m\n\n    at /workspace/life-haedo/tests/page-expression-browser.cjs:198:131\n    at async check (/workspace/life-haedo/tests/page-expression-browser.cjs:146:11)\n    at async main (/workspace/life-haedo/tests/page-expression-browser.cjs:183:5)"
+    },
+    {
+      "name": "free-form dates, duplicate-source entry independence and responsive fold boundaries",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "observations": [
+    {
+      "scene": "responsive-duplicate-source",
+      "widths": [
+        700,
+        701,
+        390,
+        820
+      ],
+      "freeFormDatePreserved": true,
+      "unknownDateOmitted": true,
+      "eachEntryIndependent": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "operatingRemoteWrites": 0,
+  "pass": false,
+  "finishedAt": "2026-10-07T21:45:37.379Z"
+}

@@ -50,4 +50,4 @@ description: 해도의 화면 추가·수정·디자인 검토에 사용한다. 
 
 로컬 이어 읽기는 [읽기 위치](../../../docs/design-review/reading-resume.md)를 따른다. 홈·기록의 한 행에서만 명시적으로 열고 본문에 추가 상시 UI를 만들지 않는다. `이 브라우저`·이전 버전·없는 버전의 복구 상태를 보존하고, 프로그램 스크롤을 실제 읽기 입력으로 간주하지 않는다.
 
-표현 페이지의 A/B는 `expression-sample.html`과 [비교 결과](../../../docs/design-review/expression-page-comparison.md)에 둔다. 동일 익명 글의 독립 시안이며 운영 기본 배치가 아니다. B의 출처 구분·확인된 작성일·본문 펼침을 다음 통합 후보로 권고한다. 화면 접힘과 공개 사본 포함 범위를 혼동하지 않고, 펼친 뒤 읽기 영역이 실제 viewport와 교차하는지와 접기 초점 복귀를 확인한다.
+표현 페이지의 A/B는 `expression-sample.html`과 [비교 결과](../../../docs/design-review/expression-page-comparison.md)에 둔다. 동일 익명 글의 독립 시안이며 운영 기본 배치가 아니다. B의 출처 구분·원문 작성일·본문 펼침은 [실제 비공개 페이지·미리보기](../../../docs/design-review/page-expression-integration.md)에 연결했다. 작성일은 기존 자유 문자열까지 원값을 보존하고 펼침은 항목/버전별 session 메모리에만 둔다. 화면 접힘과 공개 사본 포함 범위를 혼동하지 않고, 펼친 뒤 읽기 영역이 실제 viewport와 교차하는지와 접기 초점 복귀를 확인한다.

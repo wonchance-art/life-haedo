@@ -889,7 +889,8 @@
       function fill() {
         const prefix = pageOpening(text, narrow.matches), canFold = prefix !== text;
         const open = expanded.has(key);
-        content.textContent = open ? text : prefix;
+        const shownText = open ? text : prefix;
+        if (content.textContent !== shownText) content.textContent = shownText;
         content.dataset.collapsed = String(canFold && !open);
         button.hidden = !canFold; button.textContent = open ? '본문 접기' : '본문 펼치기';
         button.setAttribute('aria-expanded', String(open));
