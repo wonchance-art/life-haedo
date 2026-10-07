@@ -85,7 +85,18 @@
         const actions = el('div', null, 'life-actions');
         actions.append(action('초안 JSON 받기', () => downloadDraft(session)));
         if (error?.code === 'workbench_conflict') actions.append(action('저장본과 비교', () => compareSaved(session)));
-        else actions.append(action('다시 저장', () => flush()));
+        else {
+          const token = generation, recoveryBox = errorNode, recoveryError = errorNode.firstElementChild;
+          const retry = action('다시 저장', async () => {
+            await flush();
+            if (showing(token, session) && errorNode === recoveryBox && recoveryBox.firstElementChild === recoveryError && !session.error) {
+              const restoreFocus = document.activeElement === retry;
+              clearError();
+              if (restoreFocus) surface.querySelector('#wbPagePreview')?.focus();
+            }
+          });
+          actions.append(retry);
+        }
         errorNode.append(actions);
       }
       updateStatus(session);

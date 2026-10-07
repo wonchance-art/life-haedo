@@ -11,6 +11,14 @@ const { current } = require('./life-workbench-browser.cjs');
 const baseline = process.env.PAGE_FLOW_BASELINE === '1';
 const out = path.resolve('.local/product-flow-quality');
 const comment = '페이지에 남긴 생각. 원문과 개인 자료 메모를 바꾸지 않고 이 구성에서만 다듬는다.\n다음 독서에서 확인할 질문을 남긴다.';
+async function waitForPage(page, predicate, arg) {
+  const deadline = Date.now() + 12000;
+  while (Date.now() < deadline) {
+    if (await page.evaluate(predicate, arg) === true) return;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  throw Error('The saved-workbench browser condition did not become true.');
+}
 async function go(page) {
   await page.goto(base + '/index.html?section=records&view=page'); await ready(page); await settle(page);
   await page.locator('.life-workbench[data-mode="page"][aria-busy="false"]').waitFor();
@@ -97,15 +105,29 @@ async function main() {
           assert.deepEqual(await displayed(page), [f.ids[3], f.ids[1], f.ids[2], f.ids[0]]); assert.deepEqual((await current(page)).bundle, original);
           // A real IndexedDB abort blocks preview, retains the editable draft and
           // offers recovery before the retry publishes any saved-state claim.
+          const beforeFailureRevision = (await current(page)).workbench.revision;
           await edit.locator('.wb-page-entry-open').click(); await input.evaluate(el => { window.__pageInput = el; });
           await page.evaluate(() => {
             window.__pagePut = IDBObjectStore.prototype.put;
-            IDBObjectStore.prototype.put = function (value, ...args) { const result = __pagePut.call(this, value, ...args); if (this.name === 'meta' && value?.key.startsWith('workbench:')) this.transaction.abort(); return result; };
+            window.__pageWriteAborts = 0;
+            IDBObjectStore.prototype.put = function (value, ...args) { const result = __pagePut.call(this, value, ...args); if (this.name === 'meta' && value?.key.startsWith('workbench:')) { __pageWriteAborts++; this.transaction.abort(); } return result; };
           });
           await input.fill('저장에 실패해도 보존할 페이지 코멘트'); await page.locator('#wbPagePreview').click(); await page.locator('#wbError').waitFor({ state: 'visible' });
+          // An earlier debounce may already have shown an error. Keep the fault
+          // active until the explicit preview action has also finished failing.
+          await page.waitForFunction(() => __pageWriteAborts > 0 && document.querySelector('#wbStatus')?.dataset.state === 'error' &&
+            document.querySelector('#wbPagePreview')?.disabled === false);
           assert.equal(await page.locator('#wbVisitor').count(), 0); assert.equal(await input.inputValue(), '저장에 실패해도 보존할 페이지 코멘트');
           assert.equal(await input.evaluate(el => el === __pageInput), true);
           await page.evaluate(() => { IDBObjectStore.prototype.put = __pagePut; }); await page.locator('#wbError').getByRole('button', { name: '다시 저장', exact: true }).click();
+          await waitForPage(page, async ({ entryId, note, revision }) => {
+            const storage = HaedoLife.Shell.storage, saved = await storage.readWorkbench(await storage.getActive());
+            return saved.revision === revision + 1 && saved.page.entries.find(entry => entry.id === entryId)?.note === note &&
+              document.querySelector('#wbStatus')?.dataset.state === 'saved';
+          }, { entryId: f.ids[3], note: '저장에 실패해도 보존할 페이지 코멘트', revision: beforeFailureRevision });
+          assert.equal(await input.inputValue(), '저장에 실패해도 보존할 페이지 코멘트');
+          assert.equal(await input.evaluate(el => el === __pageInput), true);
+          await page.locator('#wbError').waitFor({ state: 'hidden' });
           await page.locator('#wbPagePreview').click(); await page.locator('#wbVisitor').waitFor(); assert((await previewEntry.textContent()).includes('저장에 실패해도 보존할 페이지 코멘트'));
           assert.equal(server.writes().length, 0); assert.deepEqual((await current(page)).bundle, original);
         }
