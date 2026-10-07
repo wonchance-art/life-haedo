@@ -105,7 +105,12 @@ async function main() {
       const note='다시 고친 내 코멘트 <img src=x onerror="window.__wbInjection=1"> & 🌱';await entry.getByLabel('내 코멘트',{exact:true}).fill(note);
       await entry.locator(`[data-part-version-id="${f.refs[2].versionId}"] input[type=checkbox]`).uncheck();await save(page);
       await togglePreview(page);assert(await page.locator('#wbVisitor').isVisible());const text=await page.locator('#wbVisitor').textContent();assert(text.includes(oldBody));assert(!text.includes(newBody));assert(!text.includes('혼자 남긴 질문:'));assert(text.includes(note));assert.equal(await page.locator('#wbVisitor img').count(),0);assert.equal(await page.evaluate(()=>window.__wbInjection),undefined);assert.equal(await page.evaluate(()=>document.activeElement.id),'wbPagePreview');
-      await togglePreview(page);assert.equal(await page.evaluate(()=>document.activeElement.id),'wbPagePreview');await page.reload();await ready(page);await page.locator(`article[data-entry-id="${entryId}"]`).waitFor();await togglePreview(page);assert((await page.locator('#wbVisitor').textContent()).includes(note));
+      await togglePreview(page);
+      const resumedNote=entry.getByLabel('내 코멘트',{exact:true});
+      assert.equal(await resumedNote.evaluate(el=>el===document.activeElement),true);
+      assert.equal(await entry.locator('.wb-page-entry-edit').evaluate(el=>el.open),true);
+      assert.equal(await resumedNote.inputValue(),note);
+      await page.reload();await ready(page);await page.locator(`article[data-entry-id="${entryId}"]`).waitFor();await togglePreview(page);assert((await page.locator('#wbVisitor').textContent()).includes(note));
       const stored=await current(page);assert.equal(stored.workbench.groups[0].id,groupId);assert.equal(stored.workbench.page.entries[0].parts[2].enabled,false);assert.deepEqual(stored.bundle,original);
     });
     await check('editing or deleting an activity does not mutate an existing page copy',async({page})=>{

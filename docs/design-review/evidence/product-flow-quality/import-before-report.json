@@ -1,0 +1,56 @@
+{
+  "createdAt": "2026-10-07T14:25:41.795Z",
+  "baseline": true,
+  "browser": "151.0.7922.173",
+  "checks": [
+    {
+      "name": "filtered import → exact excerpt → saved original access 1440",
+      "pass": true,
+      "exactRawVersionAndUTF16": true,
+      "retainedSearchFilters": true
+    },
+    {
+      "name": "filtered import → exact excerpt → saved original access 820",
+      "pass": true,
+      "exactRawVersionAndUTF16": true,
+      "retainedSearchFilters": true
+    },
+    {
+      "name": "filtered import → exact excerpt → saved original access 390",
+      "pass": true,
+      "exactRawVersionAndUTF16": true,
+      "retainedSearchFilters": true
+    }
+  ],
+  "observations": [
+    {
+      "width": 1440,
+      "emptyAddDisabled": false,
+      "collapsedAddDisabled": false,
+      "collapsedPreview": "천천히 다시 읽을 구절🌱",
+      "visibleSavedCards": 0,
+      "savedReadingAction": false
+    },
+    {
+      "width": 820,
+      "emptyAddDisabled": false,
+      "collapsedAddDisabled": false,
+      "collapsedPreview": "천천히 다시 읽을 구절🌱",
+      "visibleSavedCards": 0,
+      "savedReadingAction": false
+    },
+    {
+      "width": 390,
+      "emptyAddDisabled": false,
+      "collapsedAddDisabled": false,
+      "collapsedPreview": "천천히 다시 읽을 구절🌱",
+      "visibleSavedCards": 0,
+      "savedReadingAction": false
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "realRemoteWrites": 0
+}

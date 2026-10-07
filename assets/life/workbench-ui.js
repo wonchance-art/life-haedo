@@ -35,6 +35,31 @@
     const workspaceIs = session => alive() && getBundle()?.workspaceId === session.workspaceId;
     const showing = (token, session) => visible && token === generation && workspaceIs(session) && current === session;
     function cleanupView() { viewCleanups.splice(0).forEach(cleanup => cleanup()); }
+    function rememberPageEditor() {
+      if (!visible || mode !== 'page' || preview || incoming || current?.share?.open || !bodyNode?.isConnected || !bodyNode.querySelector('.wb-page-entries')) return;
+      current.pageEditorView = { revision: current.baseRevision,
+        openEntries: [...bodyNode.querySelectorAll('.wb-page-entry-edit[open]')].map(node => node.closest('[data-entry-id]').dataset.entryId),
+        settingsOpen: !!bodyNode.querySelector('.wb-page-settings')?.open, addOpen: !!bodyNode.querySelector('.wb-page-add')?.open,
+        fields: [...bodyNode.querySelectorAll('[data-page-field]')].map(input => ({ key: input.dataset.pageField,
+          start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection, top: input.scrollTop, left: input.scrollLeft })) };
+    }
+    function restorePageEditor(session, focus = false) {
+      const view = session.pageEditorView;
+      if (!view || view.revision !== session.baseRevision || preview) return false;
+      bodyNode.querySelectorAll('.wb-page-entry-edit').forEach(node => { node.open = view.openEntries.includes(node.closest('[data-entry-id]').dataset.entryId); });
+      for (const [selector, open] of [['.wb-page-settings', view.settingsOpen], ['.wb-page-add', view.addOpen]]) {
+        const node = bodyNode.querySelector(selector); if (node) node.open = open;
+      }
+      const inputs = [...bodyNode.querySelectorAll('[data-page-field]')];
+      for (const position of view.fields) {
+        const input = inputs.find(node => node.dataset.pageField === position.key); if (!input) continue;
+        input.setSelectionRange(position.start, position.end, position.direction);
+        input.scrollTop = position.top; input.scrollLeft = position.left;
+      }
+      const target = focus && inputs.find(node => node.dataset.pageField === session.pageFieldFocus && node.getClientRects().length);
+      if (target) { target.focus({ preventScroll: true }); target.scrollIntoView({ block: 'nearest' }); }
+      return !!target;
+    }
     function errorText(error) {
       if (error?.code === 'workbench_conflict') return '다른 곳에서 구성이 바뀌었습니다. 현재 초안을 유지했습니다. 저장본과 비교해 주세요.';
       if (error?.code === 'storage_quota') return '저장 공간이 부족합니다. 현재 초안을 유지했습니다. JSON 사본을 받아 보관한 뒤 다시 저장해 주세요.';
@@ -65,7 +90,7 @@
       }
       updateStatus(session);
     }
-    function action(label, task, className = '') {
+    function action(label, task, className = '', isEnabled = () => true) {
       const button = el('button', label, 'life-button' + (className ? ' ' + className : ''));
       button.type = 'button';
       const token = generation, session = current;
@@ -74,7 +99,7 @@
         if (installing) { report(fault('restore_in_progress', '새 사본을 저장하는 중입니다. 완료 후 다시 시도해 주세요.'), session); return; }
         button.disabled = true;
         try { await task(); } catch (error) { report(error, session); }
-        finally { if (button.isConnected) button.disabled = false; }
+        finally { if (button.isConnected) button.disabled = !isEnabled(); }
       });
       return button;
     }
@@ -854,7 +879,8 @@
         const token = generation;
         await flush();
         if (!showing(token, session)) return;
-        preview = !preview; redraw(); surface.querySelector('#wbPagePreview')?.focus();
+        rememberPageEditor(); preview = !preview; redraw();
+        if (preview || !restorePageEditor(session, true)) surface.querySelector('#wbPagePreview')?.focus();
       });
       switchButton.id = 'wbPagePreview'; switchButton.setAttribute('aria-pressed', String(preview));
       const actions = el('div', null, 'life-actions wb-page-actions');
@@ -874,10 +900,15 @@
       };
       refreshLead(); bodyNode.append(lead, actions);
       const pageSettings = details('제목·소개·표시 설정', { open: !page.entries.length }); pageSettings.classList.add('wb-page-settings');
+      const pageField = (control, key) => {
+        control.input.dataset.pageField = key;
+        control.input.addEventListener('focus', () => { if (workspaceIs(session)) session.pageFieldFocus = key; });
+        return control.wrapper;
+      };
       const editPage = discoveryIcon('페이지 설정', 'settings', () => { pageSettings.open = true; pageSettings.querySelector('summary').focus(); pageSettings.scrollIntoView({ block: 'nearest' }); });
       editPage.id = 'wbPageSettings'; actions.append(editPage);
-      pageSettings.append(field('페이지 제목', page.title, { id: 'wbPageTitle', change: value => { page.title = value; refreshLead(); } }).wrapper);
-      pageSettings.append(field('소개', page.intro, { id: 'wbPageIntro', multiline: true, max: limits.text, change: value => { page.intro = value; refreshLead(); } }).wrapper);
+      pageSettings.append(pageField(field('페이지 제목', page.title, { id: 'wbPageTitle', change: value => { page.title = value; refreshLead(); } }), 'page:title'));
+      pageSettings.append(pageField(field('소개', page.intro, { id: 'wbPageIntro', multiline: true, max: limits.text, change: value => { page.intro = value; refreshLead(); } }), 'page:intro'));
       pageSettings.append(toggle('소개 표시', page.showIntro, value => { page.showIntro = value; mark(session); refreshLead(); }, { id: 'wbShowIntro' }));
       pageSettings.append(toggle('고정하지 않은 항목 표시', page.showRecent, value => {
         page.showRecent = value; mark(session); entryViews.forEach(view => view.refresh());
@@ -899,16 +930,18 @@
           const article = entryViews.get(entry.id).article;
           if (entriesHost.children[index] !== article) entriesHost.insertBefore(article, entriesHost.children[index] || null);
         });
-        page.entries.forEach((entry, index) => {
-          const view = entryViews.get(entry.id); view.up.disabled = index === 0; view.down.disabled = index === page.entries.length - 1;
+        page.entries.forEach(entry => {
+          const peers = ordered.filter(item => item.pinned === entry.pinned), index = peers.indexOf(entry);
+          const view = entryViews.get(entry.id); view.up.disabled = index === 0; view.down.disabled = index === peers.length - 1;
         });
         none.hidden = page.entries.length > 0;
         if (focus?.isConnected && document.activeElement !== focus) focus.focus({ preventScroll: true });
       }
       function move(entry, direction) {
-        const index = page.entries.findIndex(item => item.id === entry.id), target = index + direction;
-        if (index < 0 || target < 0 || target >= page.entries.length) return;
-        [page.entries[index], page.entries[target]] = [page.entries[target], entry]; mark(session); reorder();
+        const peers = page.entries.filter(item => item.pinned === entry.pinned), index = peers.indexOf(entry), other = peers[index + direction];
+        if (index < 0 || !other) return;
+        const from = page.entries.indexOf(entry), to = page.entries.indexOf(other);
+        [page.entries[from], page.entries[to]] = [other, entry]; mark(session); reorder();
       }
       page.entries.forEach(entry => {
         const article = el('article', null, 'wb-feed wb-page-entry'); article.dataset.entryId = entry.id;
@@ -957,8 +990,8 @@
         enabled = discoveryIcon(entry.enabled ? '이 항목 숨기기' : '이 항목 표시', 'check', () => { entry.enabled = !entry.enabled; mark(session); refresh(); }, entry.enabled);
         pinned = discoveryIcon(entry.pinned ? '항목 고정 해제' : '항목 고정', 'bookmark', () => { entry.pinned = !entry.pinned; mark(session); refresh(); reorder(); }, entry.pinned);
         flags.append(enabled, pinned); settings.append(flags);
-        settings.append(field('항목 제목', entry.title, { change: value => { entry.title = value; refresh(); } }).wrapper);
-        settings.append(field('내 코멘트', entry.note, { multiline: true, max: limits.text, change: value => { entry.note = value; refresh(); } }).wrapper);
+        settings.append(pageField(field('항목 제목', entry.title, { change: value => { entry.title = value; refresh(); } }), entry.id + ':title'));
+        settings.append(pageField(field('내 코멘트', entry.note, { multiline: true, max: limits.text, change: value => { entry.note = value; refresh(); } }), entry.id + ':note'));
         settings.append(toggle('원문 본문 표시', entry.showBody, value => { entry.showBody = value; mark(session); refresh(); }));
         settings.append(toggle('내 코멘트 표시', entry.showNote, value => { entry.showNote = value; mark(session); refresh(); }));
         const partsHost = el('div', null, 'wb-page-part-settings');
@@ -981,7 +1014,9 @@
           mark(session); refreshParts(); refresh();
         }, { max: limits.parts }));
         const itemActions = el('div', null, 'life-actions');
-        const up = action('위로', () => move(entry, -1)), down = action('아래로', () => move(entry, 1));
+        const peers = () => page.entries.filter(item => item.pinned === entry.pinned);
+        const up = action('위로', () => move(entry, -1), '', () => peers().indexOf(entry) > 0);
+        const down = action('아래로', () => move(entry, 1), '', () => peers().indexOf(entry) < peers().length - 1);
         itemActions.append(up, down, action('페이지에서 제거', () => {
           page.entries = page.entries.filter(item => item.id !== entry.id); mark(session); article.remove(); entryViews.delete(entry.id); reorder();
           if (!page.entries.length) { pageSettings.open = true; add.open = true; add.querySelector('summary').focus({ preventScroll: true }); }
@@ -990,6 +1025,7 @@
         article.append(row, hidden, content, settings); entryViews.set(entry.id, { article, refresh, up, down }); refresh();
       });
       reorder(); bodyNode.append(entriesHost, none, setup);
+      restorePageEditor(session);
     }
     function renderVisitor(page) {
       const visitor = el('section', null, 'wb-visitor'); visitor.id = 'wbVisitor'; visitor.setAttribute('aria-label', '비공개 방문자 미리보기');
@@ -1300,6 +1336,7 @@
 
     function redraw() {
       if (!visible || !current || !workspaceIs(current) || mode !== 'public-pages' && !current.state) return;
+      rememberPageEditor();
       cleanupView();
       bodyNode.replaceChildren();
       if (saveControl) saveControl.hidden = ['public-pages', 'related'].includes(mode) || !!incoming || mode === 'page' && !!current.share?.open;
@@ -1372,6 +1409,7 @@
       }
     }
     function leave() {
+      rememberPageEditor();
       generation += 1; visible = false; cleanupView(); incoming = null; restoreSequence += 1; restoreCandidate = null; restoreName = '';
       publicList = null;
       if (current?.share) { current.share.open = false; current.share.sequence += 1; current.share.draft = null; current.share.consented = false; }

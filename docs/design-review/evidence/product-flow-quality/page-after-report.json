@@ -1,0 +1,128 @@
+{
+  "createdAt": "2026-10-07T14:23:27.981Z",
+  "baseline": false,
+  "browser": "151.0.7922.173",
+  "scope": "Actual app, SDK and IndexedDB with anonymous HTTP; Chromium viewport/touch simulation, no operating writes or Apple hardware.",
+  "checks": [
+    {
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "width": 820,
+      "pass": true
+    },
+    {
+      "width": 390,
+      "pass": true
+    }
+  ],
+  "observations": [
+    {
+      "width": 1440,
+      "scene": "pinned-order",
+      "upInitiallyDisabled": true,
+      "beforeOrder": [
+        "d8098a68-3435-41fd-bc80-4fbc15d30946",
+        "23100b1d-15e9-48f2-99f7-14932522ebb4",
+        "7257f9c2-93e4-4fbc-aefc-5faa83c71b62",
+        "a05d1fe7-af63-4d1c-b39a-8d53de4ade62"
+      ],
+      "afterOrder": [
+        "23100b1d-15e9-48f2-99f7-14932522ebb4",
+        "d8098a68-3435-41fd-bc80-4fbc15d30946",
+        "7257f9c2-93e4-4fbc-aefc-5faa83c71b62",
+        "a05d1fe7-af63-4d1c-b39a-8d53de4ade62"
+      ]
+    },
+    {
+      "width": 1440,
+      "scene": "preview-return",
+      "editorOpen": true,
+      "before": {
+        "start": 13,
+        "end": 31,
+        "direction": "backward",
+        "top": 65
+      },
+      "after": {
+        "start": 13,
+        "end": 31,
+        "direction": "backward",
+        "top": 65
+      }
+    },
+    {
+      "width": 820,
+      "scene": "pinned-order",
+      "upInitiallyDisabled": true,
+      "beforeOrder": [
+        "38a733fc-1895-49af-b085-a509885c99b4",
+        "20fc4e55-45b2-40a8-a2e5-f263392041fa",
+        "e4f4e631-0864-4dea-aa08-a283e129c8df",
+        "8c37587c-772a-4e22-ac67-1ef6cd272817"
+      ],
+      "afterOrder": [
+        "20fc4e55-45b2-40a8-a2e5-f263392041fa",
+        "38a733fc-1895-49af-b085-a509885c99b4",
+        "e4f4e631-0864-4dea-aa08-a283e129c8df",
+        "8c37587c-772a-4e22-ac67-1ef6cd272817"
+      ]
+    },
+    {
+      "width": 820,
+      "scene": "preview-return",
+      "editorOpen": true,
+      "before": {
+        "start": 13,
+        "end": 31,
+        "direction": "backward",
+        "top": 65
+      },
+      "after": {
+        "start": 13,
+        "end": 31,
+        "direction": "backward",
+        "top": 65
+      }
+    },
+    {
+      "width": 390,
+      "scene": "pinned-order",
+      "upInitiallyDisabled": true,
+      "beforeOrder": [
+        "59c6629b-e9d7-46b5-82eb-15e215892032",
+        "0d38a4eb-fe78-4601-9261-6cde49462bb2",
+        "282b95c0-5e12-40f4-8c33-1a724483fd0b",
+        "17b2a181-5889-444b-9b2b-1edf7fa6ce6a"
+      ],
+      "afterOrder": [
+        "0d38a4eb-fe78-4601-9261-6cde49462bb2",
+        "59c6629b-e9d7-46b5-82eb-15e215892032",
+        "282b95c0-5e12-40f4-8c33-1a724483fd0b",
+        "17b2a181-5889-444b-9b2b-1edf7fa6ce6a"
+      ]
+    },
+    {
+      "width": 390,
+      "scene": "preview-return",
+      "editorOpen": true,
+      "before": {
+        "start": 13,
+        "end": 31,
+        "direction": "backward",
+        "top": 65
+      },
+      "after": {
+        "start": 13,
+        "end": 31,
+        "direction": "backward",
+        "top": 65
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0
+}

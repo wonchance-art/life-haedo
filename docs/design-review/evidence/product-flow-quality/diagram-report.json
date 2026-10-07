@@ -1,0 +1,35 @@
+{
+  "renderer": {
+    "name": "mermaid",
+    "version": "12.1.0",
+    "license": "MIT"
+  },
+  "capturedAt": "2026-10-07T14:21:39.024Z",
+  "font": "Noto Sans CJK KR",
+  "environment": "Linux Chromium; documentation render, not an Apple device test",
+  "completed": true,
+  "diagrams": [
+    {
+      "source": "activity_hub_v8.mmd",
+      "sourceSha256": "ba414d447429b78ca5df448c315019db554df30ea70a7c4a859dda5f2f24c1db",
+      "svgSha256": "94e3f028d534d0893d1b547a4f3f5b62e4b5551018f5c96582dc5b6c9a2cff57",
+      "title": "해도 v8 — 자료 통합부터 표현과 자기 이해까지",
+      "description": "본문과 파일과 링크를 계정별 원문으로 보관하고 읽기와 검색과 관련 기록을 거쳐 묶음과 내 페이지를 구성한다. 이번 병렬 작업은 가져오기 저장 결과, 내 페이지 순서와 편집 복귀, 재발견 품질 평가다. 선택한 사본만 별도 검토 후 공개한다. 구성과 선택 초안의 기기 이어쓰기, 로컬 읽기 위치는 구현됐으며 운영 마무리는 Local 담당이다. 다음 후보는 많은 자료의 검색, 표현 화면, 비공개 자기 이해, 공식 경로의 수신 전용 연결과 외부 콘텐츠 발견이다. 후속 후보를 구현 완료로 표시하지 않는다.",
+      "width": 1254.2552490234375,
+      "height": 1256.9951171875,
+      "nodes": 16,
+      "edges": 19,
+      "textElements": 16,
+      "koreanText": true,
+      "koreanFontReady": true,
+      "outOfBounds": [],
+      "clippedLabels": [],
+      "externalReferences": [],
+      "foreignObjects": 0
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "externalRequests": [],
+  "browser": "151.0.7922.173"
+}
