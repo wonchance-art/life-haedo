@@ -112,6 +112,13 @@ async function main() {
         report.checks.push({ width, pass: true });
       } catch (error) {
         report.checks.push({ width, pass: false, error: error.stack }); console.error('FAIL ' + width + '\n' + error.stack);
+        if (process.env.CI) {
+          // Anonymous fixtures only. Keep a concise failure on the check itself
+          // when this environment cannot download the CI screenshot artifact.
+          const diagnostic = JSON.stringify({ width, browser: report.browser, name: error.name, code: error.code,
+            message: error.message.slice(0, 1800), frame: error.stack?.split('\n').find(line => line.includes('page-flow-quality-browser.cjs:')) });
+          console.error('::error title=Page flow quality::' + diagnostic.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A'));
+        }
         await page.screenshot({ path: path.join(out, 'page-failure-' + width + '.png'), fullPage: true }).catch(() => {});
       } finally { await context.close(); }
     }
