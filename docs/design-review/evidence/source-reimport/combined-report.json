@@ -1,0 +1,490 @@
+{
+  "createdAt": "2026-10-07T22:41:59.919Z",
+  "scope": "Actual import/reimport UI, SDK and IndexedDB with anonymous intercepted HTTP; Chromium viewport/touch/keyboard, not live Naver/Google/SQL, clipboard or Apple hardware.",
+  "browser": "151.0.7922.173",
+  "checks": [
+    {
+      "name": "link to partial body, exact duplicate and new immutable version at 1440",
+      "pass": true,
+      "runFile": "run-2026-10-07T22-40-21-819Z.json",
+      "runCreatedAt": "2026-10-07T22:40:21.819Z"
+    },
+    {
+      "name": "link to partial body, exact duplicate and new immutable version at 820",
+      "pass": true,
+      "runFile": "run-2026-10-07T22-40-21-819Z.json",
+      "runCreatedAt": "2026-10-07T22:40:21.819Z"
+    },
+    {
+      "name": "link to partial body, exact duplicate and new immutable version at 390",
+      "pass": true,
+      "runFile": "run-2026-10-07T22-40-21-819Z.json",
+      "runCreatedAt": "2026-10-07T22:40:21.819Z"
+    },
+    {
+      "name": "cancel and reload resume preserve earlier drafts and explicit source identity",
+      "pass": true,
+      "runFile": "run-2026-10-07T22-38-53-895Z.json",
+      "runCreatedAt": "2026-10-07T22:38:53.895Z"
+    },
+    {
+      "name": "identity changes detach linking while unchanged URL and same filename remain explicit",
+      "pass": true,
+      "runFile": "run-2026-10-07T22-38-53-895Z.json",
+      "runCreatedAt": "2026-10-07T22:38:53.895Z"
+    },
+    {
+      "name": "staging and atomic commit failures retain text and source identity for retry",
+      "pass": true,
+      "runFile": "run-2026-10-07T22-41-43-287Z.json",
+      "runCreatedAt": "2026-10-07T22:41:43.287Z"
+    },
+    {
+      "name": "a source date rejected by native date input remains exact during reimport",
+      "pass": true,
+      "runFile": "run-2026-10-07T22-40-21-819Z.json",
+      "runCreatedAt": "2026-10-07T22:40:21.819Z"
+    }
+  ],
+  "visual": [
+    {
+      "scene": "source-action",
+      "width": 1440,
+      "screenshot": "source-action-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "runFile": "run-2026-10-07T22-40-21-819Z.json"
+    },
+    {
+      "scene": "reimport-filled",
+      "width": 1440,
+      "screenshot": "reimport-filled-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 700,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "runFile": "layout-report.json"
+    },
+    {
+      "scene": "reimport-review",
+      "width": 1440,
+      "screenshot": "reimport-review-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 700,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "runFile": "run-2026-10-07T22-40-21-819Z.json"
+    },
+    {
+      "scene": "source-action",
+      "width": 820,
+      "screenshot": "source-action-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "runFile": "run-2026-10-07T22-40-21-819Z.json"
+    },
+    {
+      "scene": "reimport-filled",
+      "width": 820,
+      "screenshot": "reimport-filled-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 628,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "runFile": "layout-report.json"
+    },
+    {
+      "scene": "reimport-review",
+      "width": 820,
+      "screenshot": "reimport-review-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 628,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "runFile": "run-2026-10-07T22-40-21-819Z.json"
+    },
+    {
+      "scene": "source-action",
+      "width": 390,
+      "screenshot": "source-action-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "runFile": "run-2026-10-07T22-40-21-819Z.json"
+    },
+    {
+      "scene": "reimport-filled",
+      "width": 390,
+      "screenshot": "reimport-filled-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 350,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "runFile": "layout-report.json"
+    },
+    {
+      "scene": "reimport-review",
+      "width": 390,
+      "screenshot": "reimport-review-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 350,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "runFile": "run-2026-10-07T22-40-21-819Z.json"
+    },
+    {
+      "scene": "save-error",
+      "width": 390,
+      "screenshot": "save-error-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 350,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "runFile": "run-2026-10-07T22-41-43-287Z.json"
+    }
+  ],
+  "observations": [
+    {
+      "width": 1440,
+      "sameSourceId": true,
+      "sourceVersions": 3,
+      "exactDuplicateAddedVersions": 0,
+      "preservedOldVersions": 2,
+      "preservedExcerptUtf16": true,
+      "runFile": "run-2026-10-07T22-40-21-819Z.json"
+    },
+    {
+      "width": 820,
+      "sameSourceId": true,
+      "sourceVersions": 3,
+      "exactDuplicateAddedVersions": 0,
+      "preservedOldVersions": 2,
+      "preservedExcerptUtf16": true,
+      "runFile": "run-2026-10-07T22-40-21-819Z.json"
+    },
+    {
+      "width": 390,
+      "sameSourceId": true,
+      "sourceVersions": 3,
+      "exactDuplicateAddedVersions": 0,
+      "preservedOldVersions": 2,
+      "preservedExcerptUtf16": true,
+      "runFile": "run-2026-10-07T22-40-21-819Z.json"
+    },
+    {
+      "scene": "unverified-original-date",
+      "originalDate": "2024-02-30",
+      "nativeDateFallback": "text",
+      "storedVerbatim": true,
+      "runFile": "run-2026-10-07T22-40-21-819Z.json"
+    }
+  ],
+  "sourceRuns": [
+    {
+      "file": "run-2026-10-07T22-38-53-895Z.json",
+      "createdAt": "2026-10-07T22:38:53.895Z",
+      "checks": 6,
+      "passed": 3
+    },
+    {
+      "file": "run-2026-10-07T22-40-21-819Z.json",
+      "createdAt": "2026-10-07T22:40:21.819Z",
+      "checks": 4,
+      "passed": 4
+    },
+    {
+      "file": "run-2026-10-07T22-41-43-287Z.json",
+      "createdAt": "2026-10-07T22:41:43.287Z",
+      "checks": 1,
+      "passed": 1
+    }
+  ],
+  "history": "Initial run: cancellation/resume, identity boundaries and real IndexedDB failure/retry cases passed. The three width cases stopped after successful link-to-body/excerpt storage because the test expected the filtered-import result button in an unfiltered feed. The helper was corrected to open the visible source card and exact version. Those three cases plus one new invalid-native-date preservation case then passed. No application change was made by QA; original run files and failure captures are retained. Root then moved only linked-import body/coverage above inherited URL/origin/title and renamed the input heading. After that layout change, a separate three-width capture/focus/field-order/source-identity check passed and reimport-filled images were replaced. The staging/commit failure case alone was rerun (1/1) and its 390px save-error image replaced. Source-action and prepared-review images remain from the earlier identical scenes; the full functional suite was not repeated.",
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "operatingRemoteWrites": 0,
+  "pass": true,
+  "layoutVerification": {
+    "file": "layout-report.json",
+    "createdAt": "2026-10-07T22:41:35.454Z",
+    "checks": [
+      {
+        "name": "body-first linked import 1440",
+        "pass": true
+      },
+      {
+        "name": "body-first linked import 820",
+        "pass": true
+      },
+      {
+        "name": "body-first linked import 390",
+        "pass": true
+      }
+    ],
+    "observations": [
+      {
+        "width": 1440,
+        "bodyTop": 421.609375,
+        "bodyBottom": 707.515625,
+        "urlTop": 888.453125,
+        "bodyBeforeURL": true,
+        "heading": "보관한 글에 본문 추가"
+      },
+      {
+        "width": 820,
+        "bodyTop": 421.609375,
+        "bodyBottom": 707.515625,
+        "urlTop": 888.453125,
+        "bodyBeforeURL": true,
+        "heading": "보관한 글에 본문 추가"
+      },
+      {
+        "width": 390,
+        "bodyTop": 407.15625,
+        "bodyBottom": 693.0625,
+        "urlTop": 874,
+        "bodyBeforeURL": true,
+        "heading": "보관한 글에 본문 추가"
+      }
+    ],
+    "pass": true
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "checks": [
+    {
+      "name": "uncommitted social draft resumes after reload with body, URL, source and inclusion decisions intact",
+      "pass": false,
+      "error": "locator.click: Error: strict mode violation: locator('[data-haedo-section=records]:visible') resolved to 2 elements:\n    1) <body data-page=\"home\" class=\"haedo-shell\" data-life-home=\"true\" data-haedo-section=\"records\">…</body> aka getByText('홈기록도구관리 계정 메뉴 device-a@')\n    2) <a aria-label=\"기록\" aria-current=\"page\" data-haedo-section=\"records\" href=\"index.html?section=records\" class=\"haedo-icon-button haedo-nav-link\">…</a> aka getByRole('link', { name: '기록' })\n\nCall log:\n\u001b[2m  - waiting for locator('[data-haedo-section=records]:visible')\u001b[22m\n\n    at /workspace/life-haedo/tests/life-social-import-browser.cjs:183:144\n    at async check (/workspace/life-haedo/tests/life-social-import-browser.cjs:56:31)\n    at async main (/workspace/life-haedo/tests/life-social-import-browser.cjs:179:5)"
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "externalRequests": [],
+  "realRemoteWrites": 0,
+  "browser": "151.0.7922.173"
+}

@@ -1,0 +1,14 @@
+{
+  "checks": [
+    {
+      "name": "uncommitted social draft resumes after reload with body, URL, source and inclusion decisions intact",
+      "pass": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "externalRequests": [],
+  "realRemoteWrites": 0,
+  "browser": "151.0.7922.173"
+}

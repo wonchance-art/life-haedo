@@ -1,0 +1,15 @@
+{
+  "checks": [
+    {
+      "name": "uncommitted social draft resumes after reload with body, URL, source and inclusion decisions intact",
+      "pass": false,
+      "error": "locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByText(/검토 중 \\d+개 · 이어서 확인/)\u001b[22m\n\n    at /workspace/life-haedo/tests/life-social-import-browser.cjs:184:50\n    at async check (/workspace/life-haedo/tests/life-social-import-browser.cjs:56:31)\n    at async main (/workspace/life-haedo/tests/life-social-import-browser.cjs:179:5)"
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "externalRequests": [],
+  "realRemoteWrites": 0,
+  "browser": "151.0.7922.173"
+}

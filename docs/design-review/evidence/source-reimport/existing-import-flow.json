@@ -1,0 +1,56 @@
+{
+  "createdAt": "2026-10-07T22:37:19.904Z",
+  "baseline": false,
+  "browser": "151.0.7922.173",
+  "checks": [
+    {
+      "name": "filtered import → exact excerpt → saved original access 1440",
+      "pass": true,
+      "exactRawVersionAndUTF16": true,
+      "retainedSearchFilters": true
+    },
+    {
+      "name": "filtered import → exact excerpt → saved original access 820",
+      "pass": true,
+      "exactRawVersionAndUTF16": true,
+      "retainedSearchFilters": true
+    },
+    {
+      "name": "filtered import → exact excerpt → saved original access 390",
+      "pass": true,
+      "exactRawVersionAndUTF16": true,
+      "retainedSearchFilters": true
+    }
+  ],
+  "observations": [
+    {
+      "width": 1440,
+      "emptyAddDisabled": true,
+      "collapsedAddDisabled": true,
+      "collapsedPreview": "필요한 구절을 선택해 발췌 후보로 추가할 수 있습니다.",
+      "visibleSavedCards": 0,
+      "savedReadingAction": true
+    },
+    {
+      "width": 820,
+      "emptyAddDisabled": true,
+      "collapsedAddDisabled": true,
+      "collapsedPreview": "필요한 구절을 선택해 발췌 후보로 추가할 수 있습니다.",
+      "visibleSavedCards": 0,
+      "savedReadingAction": true
+    },
+    {
+      "width": 390,
+      "emptyAddDisabled": true,
+      "collapsedAddDisabled": true,
+      "collapsedPreview": "필요한 구절을 선택해 발췌 후보로 추가할 수 있습니다.",
+      "visibleSavedCards": 0,
+      "savedReadingAction": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "realRemoteWrites": 0
+}
