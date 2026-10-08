@@ -1568,7 +1568,7 @@
         const target = focusId && bodyNode.querySelector('#' + focusId);
         target?.focus({ preventScroll: true });
         const scrollTarget = focusId === 'wbChapterNote' ? target?.closest('.wb-book-editor') : target;
-        scrollTarget?.scrollIntoView({ block: focusId === 'wbChapterNote' ? 'start' : 'nearest' });
+        scrollTarget?.scrollIntoView({ block: focusId === 'wbChapterNote' ? 'start' : 'nearest', behavior: 'instant' });
       }
       async function historyChange(make, after = () => {}, focusId) {
         if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 원고를 보관해 주세요.');
@@ -1924,7 +1924,7 @@
           input.focus({ preventScroll: true });
           if (position?.chapterId === view.chapterId && Number.isFinite(position.inputTop)) global.scrollBy({ top: input.getBoundingClientRect().top - position.inputTop, behavior: 'instant' });
           else if (position?.chapterId === view.chapterId && Number.isFinite(position.pageY)) global.scrollTo({ top: position.pageY, behavior: 'instant' });
-          else input.scrollIntoView({ block: 'nearest' });
+          else input.scrollIntoView({ block: 'nearest', behavior: 'instant' });
         }
       }
     }
@@ -2116,7 +2116,9 @@
         const jump = action(chapter.title, () => {
           outline.open = false;
           const target = [...reader.querySelectorAll('[data-preview-chapter-id]')].find(node => node.dataset.previewChapterId === chapter.id);
-          target?.focus({ preventScroll: true }); target?.scrollIntoView({ block: 'start' });
+          // The destination must be visible before a following edit action
+          // chooses the current chapter; CSS smooth scrolling is asynchronous.
+          target?.focus({ preventScroll: true }); target?.scrollIntoView({ block: 'start', behavior: 'instant' });
         }, 'wb-reading-jump'); outline.append(jump);
       }
       outline.classList.add('wb-toolbar-outline');
@@ -2223,8 +2225,8 @@
         const focus = view.focusReadOptions ? include.querySelector('input') : [...reader.querySelectorAll('[data-preview-edit]')].find(node => node.dataset.previewEdit === view.readFocusChapter) || anchor?.closest('[data-preview-chapter-id]') || reader;
         view.focusReadOptions = false;
         if (!focus.matches('button,input')) focus.tabIndex = -1; focus.focus({ preventScroll: true });
-        if (anchor) global.scrollBy(0, anchor.getBoundingClientRect().top - saved.top);
-        else { bodyNode.querySelector('#wbBookHeading')?.scrollIntoView({ block: 'start' }); }
+        if (anchor) global.scrollBy({ top: anchor.getBoundingClientRect().top - saved.top, behavior: 'instant' });
+        else { bodyNode.querySelector('#wbBookHeading')?.scrollIntoView({ block: 'start', behavior: 'instant' }); }
       });
     }
 

@@ -28,7 +28,7 @@ async function main(){
  const report={createdAt:new Date().toISOString(),browser:browser.version(),scope:'Actual restored app: long title and mid-manuscript input/reading return. Plain Korean insertion and synthetic composition events only; not native Apple IME.',checks:[],observations:[],consoleErrors:[],pageErrors:[],external:[],expectedErrors:0,remoteWrites:0};
  report.runtime={};for(const file of['assets/life/workbench-ui.js','assets/life/workbench.css'])report.runtime[file]=require('node:crypto').createHash('sha256').update(await fs.readFile(file)).digest('hex');
  try{for(const width of(process.env.BOOK_MANUSCRIPT_LAYOUT_WIDTHS||'390,820,1440').split(',').map(Number)){
-  const server=new FakeCloud(),context=await makeContext(browser,server,'app-caret-'+width,accounts.a,{viewport:{width,height:width===390?844:1000},hasTouch:width<=820,reducedMotion:'reduce'});
+  const server=new FakeCloud(),context=await makeContext(browser,server,'app-caret-'+width,accounts.a,{viewport:{width,height:width===390?844:1000},hasTouch:width<=820,reducedMotion:process.env.BOOK_MANUSCRIPT_LAYOUT_MOTION||'reduce'});
   await context.route('**/*',route=>{const url=new URL(route.request().url());if([new URL(base).origin,cloud].includes(url.origin))return route.fallback();report.external.push(url.origin);return route.abort()});
   const page=await context.newPage();page.setDefaultTimeout(12000);observe(page,report,''+width);
   try{
