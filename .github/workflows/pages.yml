@@ -103,6 +103,12 @@ jobs:
       - name: Verify writing input survives delayed draft notifications
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/writing-sync-incoming-browser.cjs
+      - name: Verify reading selection and return context
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reading-quality-browser.cjs
+      - name: Verify reading and writing quality across screen sizes
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reading-writing-quality-browser.cjs
       - name: Stop the local server
         if: always()
         run: |
@@ -120,6 +126,8 @@ jobs:
             .local/quality-audit/after/
             .local/composition-sync/
             .local/writing-sync/
+            .local/reading-quality/
+            .local/reading-writing-quality/
             .local/browser-ci/server.log
           include-hidden-files: true
           if-no-files-found: warn

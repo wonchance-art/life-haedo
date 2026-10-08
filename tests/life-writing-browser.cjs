@@ -78,7 +78,12 @@ async function main(){
   });
   await check('real staging and commit aborts preserve text, block failed navigation and retry once',async({page})=>{
    await write(page);await abortWrites(page,'staging');await page.locator('#lifeWritingTitle').fill(title);await page.locator('#lifeWritingBody').fill(body);await page.locator('#lifeWritingError').waitFor({state:'visible'});assert.equal(await page.locator('#lifeWritingBody').inputValue(),body);assert.equal((await stored(page)).sources.length,0);assert((await page.evaluate(()=>__writingAborted))>0);
-   await page.locator('[data-haedo-section="tools"]').click();await page.locator('#lifeWritingBody').waitFor();assert.equal(await page.locator('#lifeWritingBody').inputValue(),body);
+   const failedWrites=await page.evaluate(()=>__writingAborted);
+   await page.locator('[data-haedo-section="tools"]').click();
+   // The editor is already visible while navigation awaits its draft flush.
+   // Keep the storage fault active until that new write has actually failed.
+   await page.waitForFunction(count=>__writingAborted>count&&document.querySelector('#lifeWritingStatus')?.dataset.state==='error',failedWrites);
+   await page.locator('#lifeWritingBody').waitFor();assert.equal(await page.locator('#lifeWritingBody').inputValue(),body);
    await abortWrites(page,null);await page.locator('#lifeWritingRetry').click();await savedDraft(page);await abortWrites(page,'bundles');await page.locator('#lifeWritingSave').click();await page.locator('#lifeWritingError').waitFor({state:'visible'});assert.equal((await stored(page)).sources.length,0);assert.equal((await writingDrafts(page)).length,1);assert.equal(await page.locator('#lifeWritingBody').inputValue(),body);
    await abortWrites(page,null);const result=await commit(page);assert.equal(result.sources.length,1);assert.equal(result.sourceVersions.length,1);assert.equal(result.sourceVersions[0].contentText,body);
   });

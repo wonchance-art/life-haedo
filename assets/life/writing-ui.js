@@ -15,13 +15,34 @@
     const workspaces = new Map(), urls = new Set();
     let disposed = false, visible = false, generation = 0, current = null;
     let surface = null, status = null, errorBox = null, saveButton = null, titleInput = null, bodyInput = null;
-    let syncPanel = null, incomingBox = null;
+    let syncPanel = null, incomingBox = null, titleResize = null;
     const subscriptions = new Map();
     const alive = () => !disposed && !isDisposed();
     const inWorkspace = session => alive() && getBundle()?.workspaceId === session.workspaceId;
     const showing = (session, token = generation) => visible && token === generation && current === session && inWorkspace(session);
     const hasText = session => !!(session.stage.title || session.stage.text);
     const edited = session => session.stage.state === 'draft' && session.edit !== session.stored;
+    function rememberEditor(session = current) {
+      if (!session || current !== session || !titleInput || !bodyInput) return;
+      const position = control => ({ start: control.selectionStart, end: control.selectionEnd,
+        direction: control.selectionDirection, top: control.scrollTop, left: control.scrollLeft });
+      session.editorPosition = { stageId: session.stage.stageId, title: position(titleInput), body: position(bodyInput) };
+    }
+    function restoreEditor(session) {
+      const position = session.editorPosition;
+      if (!position || position.stageId !== session.stage.stageId) return;
+      for (const [control, value] of [[titleInput, position.title], [bodyInput, position.body]]) {
+        control.setSelectionRange(value.start, value.end, value.direction);
+        control.scrollTop = value.top; control.scrollLeft = value.left;
+      }
+    }
+    function fitTitle() {
+      if (!titleInput?.isConnected) return;
+      const control = titleInput, style = global.getComputedStyle(control);
+      control.style.height = 'auto';
+      const borders = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+      control.style.height = Math.ceil(control.scrollHeight + borders) + 'px';
+    }
     function errorMessage(error) {
       if (error?.code === 'stage_conflict') return '다른 탭에서 이 초안이 바뀌었습니다. 입력을 유지했습니다. 새 초안 사본으로 보관해 주세요.';
       if (error?.code === 'writing_conflict') return '보관한 글의 최신 버전이 바뀌었습니다. 입력은 초안에 남아 있습니다. 새 글로 따로 저장할 수 있습니다.';
@@ -210,6 +231,7 @@
       if (!inWorkspace(session) || session.recordSaving || session.saving) return;
       if (session.composing.size) throw fault('writing_composing', '입력 중인 글자를 완료한 뒤 다시 시도해 주세요.');
       session.stage = model.recoverDraft(copy(session.stage), asNew ? { asNew: true } : {});
+      session.editorPosition = null;
       session.externalStage = null;
       session.edit += 1; session.stored = 0; session.pendingCommit = null; clearError(session);
       renderEditor(session); await flushSession(session);
@@ -243,29 +265,48 @@
     function renderEditor(session) {
       if (!showing(session)) return;
       syncPanel?.dispose(); syncPanel = null;
+      titleResize?.disconnect(); titleResize = null;
       surface.setAttribute('aria-busy', 'false'); surface.replaceChildren();
       const actions = el('div', null, 'life-writing-actions');
       actions.append(action('기록으로 돌아가기', async () => { await flush(); if (showing(session)) await onClose(); }, { id: 'lifeWritingClose', glyph: 'back' }));
       status = el('p', '', 'life-meta life-writing-status'); status.id = 'lifeWritingStatus'; status.setAttribute('role', 'status'); actions.append(status);
-      saveButton = action('저장', () => saveRecord(session), { id: 'lifeWritingSave', primary: true }); actions.append(saveButton); surface.append(actions);
+      saveButton = action('기록에 저장', () => saveRecord(session), { id: 'lifeWritingSave', primary: true }); actions.append(saveButton); surface.append(actions);
       incomingBox = el('div', null, 'life-writing-incoming'); incomingBox.id = 'lifeWritingIncoming'; incomingBox.setAttribute('role', 'status'); incomingBox.hidden = true; surface.append(incomingBox);
       errorBox = el('div', null, 'life-writing-error'); errorBox.id = 'lifeWritingError'; errorBox.setAttribute('role', 'alert'); errorBox.hidden = true; surface.append(errorBox);
       const form = el('form'); form.addEventListener('submit', event => event.preventDefault());
       function input(label, field, multiline) {
         const wrapper = el('label', null, 'life-writing-field'); wrapper.append(el('span', label, 'life-sr-only'));
-        const control = el(multiline ? 'textarea' : 'input', null, 'life-writing-' + (multiline ? 'body' : 'title'));
-        if (!multiline) control.type = 'text'; else control.rows = 14;
+        const control = el('textarea', null, 'life-writing-' + (multiline ? 'body' : 'title'));
+        control.rows = multiline ? 14 : 1;
         control.id = multiline ? 'lifeWritingBody' : 'lifeWritingTitle'; control.value = session.stage[field]; control.placeholder = label;
         if (!multiline) control.maxLength = 500;
         const token = generation;
+        // Wrap a long title visually, while retaining the former text input's
+        // single-line value. Only an inserted line break requires value repair.
+        const normalizeTitle = () => {
+          if (multiline || session.composing.has(control) || !/[\r\n]/.test(control.value)) return;
+          const { selectionStart: start, selectionEnd: end, selectionDirection: direction } = control;
+          const clean = value => value.replace(/[\r\n]/g, '');
+          const nextStart = clean(control.value.slice(0, start)).length, nextEnd = clean(control.value.slice(0, end)).length;
+          control.value = clean(control.value); control.setSelectionRange(nextStart, nextEnd, direction);
+        };
+        if (!multiline) {
+          control.addEventListener('keydown', event => {
+            if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229 && !session.composing.has(control)) event.preventDefault();
+          });
+          control.addEventListener('beforeinput', event => {
+            if (['insertLineBreak', 'insertParagraph'].includes(event.inputType) && !event.isComposing && !session.composing.has(control)) event.preventDefault();
+          });
+        }
         control.addEventListener('compositionstart', () => { if (!showing(session, token)) return; session.composing.add(control); clearTimeout(session.timer); updateStatus(session); });
         control.addEventListener('input', () => {
           if (!showing(session, token) || session.recordSaving || session.stage.state !== 'draft') return;
-          session.stage[field] = control.value; changed(session);
+          normalizeTitle(); session.stage[field] = control.value; if (!multiline) fitTitle(); changed(session);
         });
         const finish = () => {
           if (!showing(session, token) || !session.composing.has(control)) return;
           session.composing.delete(control);
+          normalizeTitle(); if (!multiline) fitTitle();
           if (session.stage[field] !== control.value) { session.stage[field] = control.value; changed(session); }
           else { updateStatus(session); schedule(session); }
         };
@@ -279,6 +320,15 @@
         event.preventDefault(); if (!event.isComposing && !session.composing.size && !saveButton.disabled) saveButton.click();
       });
       surface.append(form);
+      fitTitle();
+      if (global.ResizeObserver) {
+        let width = titleInput.getBoundingClientRect().width;
+        titleResize = new global.ResizeObserver(entries => {
+          const nextWidth = entries[0].contentRect.width;
+          if (nextWidth !== width) { width = nextWidth; fitTitle(); }
+        });
+        titleResize.observe(titleInput);
+      }
       const drafts = el('details', null, 'life-writing-drafts'); drafts.id = 'lifeWritingDrafts';
       fillDrafts(session, drafts);
       const footer = el('div', null, 'life-writing-actions');
@@ -296,10 +346,12 @@
       const scope = el('details', null, 'life-writing-scope'); scope.append(el('summary', '초안 보관'),
         el('p', '초안은 먼저 이 브라우저에 보관합니다. 초안 이어쓰기에서 고른 글만 별도로 연결할 수 있고 기록 백업에는 포함되지 않습니다. TXT로 따로 받을 수 있습니다. 저장한 글은 기록 백업과 기존 원문 동기화 설정을 따르며 공개 게시와는 별개입니다.', 'life-meta'));
       surface.append(scope); updateStatus(session); renderIncoming(session); if (session.error) report(session, session.error, session.errorPhase);
+      restoreEditor(session);
     }
     async function open(options = {}) {
       if (!alive()) return;
       if (current && (isDirty() || current.composing.size)) await flush();
+      rememberEditor();
       const bundle = getBundle(); if (!bundle) return;
       const token = ++generation, workspaceId = bundle.workspaceId;
       visible = true; current = workspaces.get(workspaceId) || null;
@@ -338,6 +390,7 @@
       }
     }
     function close() {
+      rememberEditor(); titleResize?.disconnect(); titleResize = null;
       syncPanel?.dispose(); syncPanel = null; incomingBox = null;
       visible = false; generation += 1;
       if (current) { clearTimeout(current.timer); current.timer = null; current.composing.clear(); }

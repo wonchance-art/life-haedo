@@ -333,10 +333,11 @@ body.haedo-shell .haedo-account-host { top: 42px; right: max(calc(60px + env(saf
 /* Direct writing stays on the existing white reading surface. */
 .life-writing { min-width: 0; }
 .life-writing-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.life-writing-actions .life-primary { margin-left: auto; }
+.life-writing-actions .life-primary { flex: none; margin-left: auto; }
+.life-writing-actions .life-writing-status { flex: 1; min-width: 0; }
 .life-writing .life-field { margin: 0; }
 .life-writing-title,.life-writing-body { display: block; width: 100%; min-width: 0; border: 0; border-radius: 0; background: var(--paper); color: var(--ink); padding: 14px 4px; box-shadow: none; }
-.life-writing-title { min-height: 52px; font-size: 23px; font-weight: 650; line-height: 1.6; letter-spacing: -.025em; border-bottom: 1px solid var(--line); }
+.life-writing-title { min-height: 52px; height: auto; resize: none; overflow: hidden; font-size: 23px; font-weight: 650; line-height: 1.6; letter-spacing: -.025em; word-break: keep-all; overflow-wrap: anywhere; border-bottom: 1px solid var(--line); }
 .life-writing-body { min-height: 360px; min-height: clamp(280px, 46dvh, 640px); margin-top: 8px; font-size: 18px; line-height: 1.95; overflow-wrap: anywhere; resize: vertical; }
 .life-writing-title:focus-visible,.life-writing-body:focus-visible { outline-offset: 0; border-radius: 4px; }
 .life-writing-status { margin: 10px 0; font-size: 12px; color: var(--ink-soft); overflow-wrap: anywhere; }

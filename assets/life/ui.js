@@ -826,6 +826,9 @@
       await workbench?.flush();
       await writer?.flush();
       if (disposed || token !== navigationGeneration) return;
+      // A previous excerpt/record save does not describe the draft being opened.
+      // Clear only after navigation can succeed; failed flushes keep their feedback.
+      if (mode === 'write' && state.mode !== 'write') announce('', { quiet: true });
       if (!['tools', 'manage', 'sync', 'transfer', ...workbenchModes].includes(mode) && !options?.preserveContext &&
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
@@ -1687,6 +1690,11 @@
       related.id = 'lifeReaderRelated';
       article.append(related);
       main.append(article);
+      // A list's scroll belongs to its return context, not to a newly opened
+      // original. Exact matches and this session's reader positions still win.
+      if (!state.locator && (suppressResume || !state.readerPositions.has(version.id))) {
+        global.scrollTo({ top: 0, behavior: 'instant' });
+      }
       if (version.contentText === null || version.contentText === undefined) {
         article.append(empty('본문 미확보 · 링크만 보관했습니다. 원래 출처를 열거나 본문을 제공해 새 버전으로 보관할 수 있습니다.'));
         state.locator = null;
@@ -1719,6 +1727,19 @@
       picked.id = 'lifeSelectedQuote';
       const topic = field('주제 (선택)', 'text', 'lifeSourceTopic', sourceDraft.topic);
       const note = field('연결 이유 또는 메모 (선택)', 'textarea', 'lifeSourceNote', sourceDraft.note);
+      const saveExcerpt = button('선택 구절 모음에 추가', guarded(async () => {
+        const range = state.sourceSelection;
+        if (!range || range.start === range.end) throw new Error('먼저 원문에서 발췌할 구절을 선택해 주세요.');
+        const prepared = { source, version, match: { kind: 'exact_duplicate', sourceId: source.id, sourceVersionId: version.id } };
+        const changes = core.buildImportChanges(state.bundle, prepared, [{ start: range.start, end: range.end, topic: topic.input.value, note: note.input.value }]);
+        state.readerPositions.set(version.id, { start: range.start, end: range.end, scrollY: readingScrollY });
+        await commit(changes);
+        state.sourceDrafts.delete(version.id);
+        render();
+        announce('모음에 반영됨 · 이 브라우저에 저장됨');
+      }), 'life-primary');
+      saveExcerpt.id = 'lifeSourceExcerptSave';
+      saveExcerpt.disabled = true;
       let readingScrollY = global.scrollY;
       let selectionOrigin = 'dom';
       const savePosition = () => {
@@ -1729,6 +1750,7 @@
         if (state.sourceDrafts.has(version.id)) state.sourceDrafts.get(version.id).range = { start, end };
         picked.textContent = start < end ? version.contentText.slice(start, end) : instruction;
         quote.dataset.hasSelection = String(start < end);
+        saveExcerpt.disabled = start >= end;
         savePosition();
       };
       const capture = event => {
@@ -1819,18 +1841,7 @@
         keyboardReader.input.focus({ preventScroll: true });
         keyboardReader.input.setSelectionRange(rawToDisplay(version.contentText, range.start), rawToDisplay(version.contentText, range.end));
       } });
-      panel.append(panelHeading, picked, keyboardToggle, keyboard, topic.label, note.label,
-        button('선택 구절 모음에 추가', guarded(async () => {
-          const range = state.sourceSelection;
-          if (!range || range.start === range.end) throw new Error('먼저 원문에서 발췌할 구절을 선택해 주세요.');
-          const prepared = { source, version, match: { kind: 'exact_duplicate', sourceId: source.id, sourceVersionId: version.id } };
-          const changes = core.buildImportChanges(state.bundle, prepared, [{ start: range.start, end: range.end, topic: topic.input.value, note: note.input.value }]);
-          state.readerPositions.set(version.id, { start: range.start, end: range.end, scrollY: readingScrollY });
-          await commit(changes);
-          state.sourceDrafts.delete(version.id);
-          render();
-          announce('모음에 반영됨 · 이 브라우저에 저장됨');
-        }), 'life-primary'));
+      panel.append(panelHeading, picked, keyboardToggle, keyboard, topic.label, note.label, saveExcerpt);
       article.append(panel);
       const locator = state.locator || (!suppressResume && state.readerPositions.get(version.id));
       if (locator) requestAnimationFrame(() => {

@@ -49,7 +49,11 @@
       const positions = new Map([...content.querySelectorAll('details[data-section]')].map(value => [value.dataset.section, { open: value.open, top: value.scrollTop }]));
       status.dataset.state = state?.status || 'error'; status.textContent = labels[state?.status] || '초안 연결 확인 필요';
       errorBox.textContent = error || state?.error?.message || ''; errorBox.hidden = !errorBox.textContent;
-      summary.textContent = '초안 이어쓰기' + (state?.status === 'conflict' || errorBox.textContent ? ' · 확인 필요' : '');
+      const completionPending = state?.stage?.state === 'applied' && state.binding && !['closed', 'synced'].includes(state.status);
+      const summaryState = state?.status === 'conflict' || errorBox.textContent ? '확인 필요' :
+        completionPending ? '저장 완료 확인 필요' : pendingSaved.length ? '저장 완료 확인 ' + pendingSaved.length + '개' :
+        ({ pending: '전송 대기', synced: '연결됨', paused: '중지됨', closed: '완료' })[state?.status];
+      summary.textContent = '초안 이어쓰기' + (summaryState ? ' · ' + summaryState : '');
       host.setAttribute('aria-busy', 'false'); content.replaceChildren();
       if (!state) content.append(button('다시 확인', 'writingSyncRetry', refresh));
       else {
