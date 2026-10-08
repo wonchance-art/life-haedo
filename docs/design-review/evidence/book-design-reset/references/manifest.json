@@ -1,0 +1,345 @@
+{
+  "confirmedAt": "2026-10-08",
+  "scope": "Official GitHub API metadata and repository images/docs only. Products not installed or interacted with. Images are upstream documentation, not new captures. No production data. Three OSS applications plus proprietary Obsidian; documentation license handled separately.",
+  "products": [
+    {
+      "name": "novelWriter",
+      "repo": "saga-soft/novelWriter",
+      "officialRepo": "https://github.com/saga-soft/novelWriter",
+      "release": {
+        "tag_name": "v26.2.1",
+        "published_at": "2026-09-26T17:37:59Z",
+        "html_url": "https://github.com/saga-soft/novelWriter/releases/tag/v26.2.1",
+        "prerelease": false
+      },
+      "head": {
+        "sha": "3ea0240bcca17e214ed772293f1ff932dbfe98a8",
+        "committedAt": "2026-10-07T22:47:14Z",
+        "message": "Add Fluent UI icons and remvove FontAwesome icons (#3071)",
+        "url": "https://github.com/saga-soft/novelWriter/commit/3ea0240bcca17e214ed772293f1ff932dbfe98a8"
+      },
+      "archived": false,
+      "license": {
+        "spdx": "GPL-3.0",
+        "url": "https://github.com/saga-soft/novelWriter/blob/main/LICENSE.md",
+        "file": "novelWriter/LICENSE.upstream.txt",
+        "sha256": "d868ab9242eb3df42ac7b7c008a4498ed28951e80a73cd3aedeac6bdc0d54073"
+      },
+      "advisories": {
+        "url": "https://api.github.com/repos/saga-soft/novelWriter/security-advisories",
+        "querySucceeded": true,
+        "items": []
+      },
+      "files": [
+        {
+          "upstreamPath": "docs/source/user_interface/images/fig_welcome.jpg",
+          "evidence": "novelWriter/fig_welcome.jpg",
+          "url": "https://github.com/saga-soft/novelWriter/blob/3ea0240bcca17e214ed772293f1ff932dbfe98a8/docs/source/user_interface/images/fig_welcome.jpg",
+          "apiUrl": "https://api.github.com/repos/saga-soft/novelWriter/contents/docs/source/user_interface/images/fig_welcome.jpg?ref=3ea0240bcca17e214ed772293f1ff932dbfe98a8",
+          "sha256": "3c3fe4882771def6442157098daa9ae52cbee83983916725618f4edf44bb5328",
+          "bytes": 153925,
+          "lastPathCommit": "b7a8664cf91b725a8f257bfce0b1bf61a5ceb4cf",
+          "lastPathCommittedAt": "2025-05-24T19:00:14Z"
+        },
+        {
+          "upstreamPath": "docs/source/user_interface/images/fig_editor.png",
+          "evidence": "novelWriter/fig_editor.png",
+          "url": "https://github.com/saga-soft/novelWriter/blob/3ea0240bcca17e214ed772293f1ff932dbfe98a8/docs/source/user_interface/images/fig_editor.png",
+          "apiUrl": "https://api.github.com/repos/saga-soft/novelWriter/contents/docs/source/user_interface/images/fig_editor.png?ref=3ea0240bcca17e214ed772293f1ff932dbfe98a8",
+          "sha256": "d04df66f593e5b7850c57399b96df4f8d67d8096fa311e6cf0ac0b1cd03f542a",
+          "bytes": 155537,
+          "lastPathCommit": "b7a8664cf91b725a8f257bfce0b1bf61a5ceb4cf",
+          "lastPathCommittedAt": "2025-05-24T19:00:14Z"
+        },
+        {
+          "upstreamPath": "docs/source/user_interface/main_window.rst",
+          "evidence": "novelWriter/main_window.rst",
+          "url": "https://github.com/saga-soft/novelWriter/blob/3ea0240bcca17e214ed772293f1ff932dbfe98a8/docs/source/user_interface/main_window.rst",
+          "apiUrl": "https://api.github.com/repos/saga-soft/novelWriter/contents/docs/source/user_interface/main_window.rst?ref=3ea0240bcca17e214ed772293f1ff932dbfe98a8",
+          "sha256": "8728035f8f74e132497b6755dacc4a3d62836430c606e77b934b4c6f232127a7",
+          "bytes": 8860,
+          "lastPathCommit": "24f950e3b3d74b4bfeb1636c2b7cd5c6337b5e5c",
+          "lastPathCommittedAt": "2026-06-21T18:41:35Z"
+        },
+        {
+          "upstreamPath": "docs/source/user_interface/editor_viewer.rst",
+          "evidence": "novelWriter/editor_viewer.rst",
+          "url": "https://github.com/saga-soft/novelWriter/blob/3ea0240bcca17e214ed772293f1ff932dbfe98a8/docs/source/user_interface/editor_viewer.rst",
+          "apiUrl": "https://api.github.com/repos/saga-soft/novelWriter/contents/docs/source/user_interface/editor_viewer.rst?ref=3ea0240bcca17e214ed772293f1ff932dbfe98a8",
+          "sha256": "1710fd16f97fa9e552e2f8ac4e6dee42f00d928446b951a9a04e93d43375b397",
+          "bytes": 8434,
+          "lastPathCommit": "32a441cda9093c1ca7e339daa7f190682491a8ec",
+          "lastPathCommittedAt": "2026-07-19T23:17:24Z"
+        },
+        {
+          "upstreamPath": "docs/source/user_interface/projects.rst",
+          "evidence": "novelWriter/projects.rst",
+          "url": "https://github.com/saga-soft/novelWriter/blob/3ea0240bcca17e214ed772293f1ff932dbfe98a8/docs/source/user_interface/projects.rst",
+          "apiUrl": "https://api.github.com/repos/saga-soft/novelWriter/contents/docs/source/user_interface/projects.rst?ref=3ea0240bcca17e214ed772293f1ff932dbfe98a8",
+          "sha256": "6e2ee7b1da9e52b63e3c2001b0f144588fb2f36d3c747d6b6330479f41393dc5",
+          "bytes": 6222,
+          "lastPathCommit": "0e101ecc8a5de0e45b3ae1100a18872204cd1ee4",
+          "lastPathCommittedAt": "2026-09-30T22:33:17Z"
+        },
+        {
+          "upstreamPath": "docs/source/user_interface/manuscript.rst",
+          "evidence": "novelWriter/manuscript.rst",
+          "url": "https://github.com/saga-soft/novelWriter/blob/3ea0240bcca17e214ed772293f1ff932dbfe98a8/docs/source/user_interface/manuscript.rst",
+          "apiUrl": "https://api.github.com/repos/saga-soft/novelWriter/contents/docs/source/user_interface/manuscript.rst?ref=3ea0240bcca17e214ed772293f1ff932dbfe98a8",
+          "sha256": "c805fdac6ce27eb17c6617166b6022ecea1793ee5b57dc963550663184ce2e39",
+          "bytes": 10555,
+          "lastPathCommit": "3bdb5ed59485d555225253c441dbdbf0d703698e",
+          "lastPathCommittedAt": "2026-07-02T18:13:00Z"
+        },
+        {
+          "upstreamPath": "docs/source/user_interface/images/fig_project_tree_view.png",
+          "evidence": "novelWriter/fig_project_tree_view.png",
+          "url": "https://github.com/saga-soft/novelWriter/blob/3ea0240bcca17e214ed772293f1ff932dbfe98a8/docs/source/user_interface/images/fig_project_tree_view.png",
+          "apiUrl": "https://api.github.com/repos/saga-soft/novelWriter/contents/docs/source/user_interface/images/fig_project_tree_view.png?ref=3ea0240bcca17e214ed772293f1ff932dbfe98a8",
+          "sha256": "06b0da6dd16fcf4aea299957bd9efc7eca288d49fbcffc130a31493e3b56c815",
+          "bytes": 286945,
+          "lastPathCommit": "77662f9505af9d57804e1044f0a87bb097151c6b",
+          "lastPathCommittedAt": "2025-05-25T14:01:25Z"
+        },
+        {
+          "upstreamPath": "docs/source/user_interface/images/fig_manuscript_build.png",
+          "evidence": "novelWriter/fig_manuscript_build.png",
+          "url": "https://github.com/saga-soft/novelWriter/blob/3ea0240bcca17e214ed772293f1ff932dbfe98a8/docs/source/user_interface/images/fig_manuscript_build.png",
+          "apiUrl": "https://api.github.com/repos/saga-soft/novelWriter/contents/docs/source/user_interface/images/fig_manuscript_build.png?ref=3ea0240bcca17e214ed772293f1ff932dbfe98a8",
+          "sha256": "ca948ea543bdf7ea90b8d8899976ae1f7e21edc84de6a930a7e3f7bec00a5c34",
+          "bytes": 109761,
+          "lastPathCommit": "f459025f39a4f387379a117ad20c514d2012a3cc",
+          "lastPathCommittedAt": "2026-06-19T17:36:33Z"
+        }
+      ]
+    },
+    {
+      "name": "Zettlr",
+      "repo": "Zettlr/Zettlr",
+      "officialRepo": "https://github.com/Zettlr/Zettlr",
+      "release": {
+        "tag_name": "v4.8.0",
+        "published_at": "2026-09-18T17:20:22Z",
+        "html_url": "https://github.com/Zettlr/Zettlr/releases/tag/v4.8.0",
+        "prerelease": false
+      },
+      "head": {
+        "sha": "e6c7fd8ffebfddb6fa091521b5a9dea673719887",
+        "committedAt": "2026-09-28T17:42:38Z",
+        "message": "chore: Update CHANGELOG.md",
+        "url": "https://github.com/Zettlr/Zettlr/commit/e6c7fd8ffebfddb6fa091521b5a9dea673719887"
+      },
+      "archived": false,
+      "license": {
+        "spdx": "GPL-3.0",
+        "url": "https://github.com/Zettlr/Zettlr/blob/develop/LICENSE",
+        "file": "Zettlr/LICENSE.upstream.txt",
+        "sha256": "ad64ffba025cc70eb2f5fa51fa17ced27e0755f1015dc2a26d64d2140cea13f1"
+      },
+      "advisories": {
+        "url": "https://api.github.com/repos/Zettlr/Zettlr/security-advisories",
+        "querySucceeded": true,
+        "items": [
+          {
+            "ghsa_id": "GHSA-qp9r-5xcv-35gx",
+            "html_url": "https://github.com/Zettlr/Zettlr/security/advisories/GHSA-qp9r-5xcv-35gx",
+            "summary": "Command injection via unsanitized file paths in custom export shell execution",
+            "severity": "medium",
+            "published_at": "2026-03-30T07:50:31Z",
+            "vulnerabilities": [
+              {
+                "package": {
+                  "ecosystem": "",
+                  "name": "Zettlr"
+                },
+                "vulnerable_version_range": "v4.2.0",
+                "patched_versions": "",
+                "vulnerable_functions": []
+              }
+            ]
+          }
+        ]
+      },
+      "files": [
+        {
+          "upstreamPath": "resources/screenshots/zettlr_view.png",
+          "evidence": "Zettlr/zettlr_view.png",
+          "url": "https://github.com/Zettlr/Zettlr/blob/e6c7fd8ffebfddb6fa091521b5a9dea673719887/resources/screenshots/zettlr_view.png",
+          "apiUrl": "https://api.github.com/repos/Zettlr/Zettlr/contents/resources/screenshots/zettlr_view.png?ref=e6c7fd8ffebfddb6fa091521b5a9dea673719887",
+          "sha256": "7a262231967731d491b3a7eba4e1e9895474d1c042be2d4cefb0e6982b3bbf1d",
+          "bytes": 447620,
+          "lastPathCommit": "2771598695d25f458f791839c6f73ceaebe4f1f9",
+          "lastPathCommittedAt": "2026-06-11T16:46:25Z"
+        },
+        {
+          "upstreamPath": "README.md",
+          "evidence": "Zettlr/README.md",
+          "url": "https://github.com/Zettlr/Zettlr/blob/e6c7fd8ffebfddb6fa091521b5a9dea673719887/README.md",
+          "apiUrl": "https://api.github.com/repos/Zettlr/Zettlr/contents/README.md?ref=e6c7fd8ffebfddb6fa091521b5a9dea673719887",
+          "sha256": "814dbabdab583a3ef104d2875553515b8461e068542a312f8b6a4bc0f02802e7",
+          "bytes": 33215,
+          "lastPathCommit": "d41c8af7b030122fc085b9f1eab2ab2887c0d94e",
+          "lastPathCommittedAt": "2026-09-11T13:22:14Z"
+        }
+      ]
+    },
+    {
+      "name": "manuskript",
+      "repo": "olivierkes/manuskript",
+      "officialRepo": "https://github.com/olivierkes/manuskript",
+      "release": {
+        "tag_name": "0.17.0",
+        "published_at": "2025-06-30T19:13:12Z",
+        "html_url": "https://github.com/olivierkes/manuskript/releases/tag/0.17.0",
+        "prerelease": false
+      },
+      "head": {
+        "sha": "01e05747f3c13f637d802ca915c31f9a27a601f8",
+        "committedAt": "2026-09-01T23:55:44Z",
+        "message": "Merge pull request #1439 from marosoft/feature/debian-deb-package-fixes",
+        "url": "https://github.com/olivierkes/manuskript/commit/01e05747f3c13f637d802ca915c31f9a27a601f8"
+      },
+      "archived": false,
+      "license": {
+        "spdx": "GPL-3.0",
+        "url": "https://github.com/olivierkes/manuskript/blob/develop/COPYING",
+        "file": "manuskript/LICENSE.upstream.txt",
+        "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+      },
+      "advisories": {
+        "url": "https://api.github.com/repos/olivierkes/manuskript/security-advisories",
+        "querySucceeded": true,
+        "items": []
+      },
+      "files": [
+        {
+          "upstreamPath": "README.md",
+          "evidence": "manuskript/README.md",
+          "url": "https://github.com/olivierkes/manuskript/blob/01e05747f3c13f637d802ca915c31f9a27a601f8/README.md",
+          "apiUrl": "https://api.github.com/repos/olivierkes/manuskript/contents/README.md?ref=01e05747f3c13f637d802ca915c31f9a27a601f8",
+          "sha256": "7e1f2bc056d5c779d0abcb1c6c67fc0aecd6e1bf481a348966db96cf411ee23a",
+          "bytes": 3169,
+          "lastPathCommit": "fe213894cbef4000648a33f3449d1e1bb6756570",
+          "lastPathCommittedAt": "2023-03-20T03:44:49Z"
+        },
+        {
+          "upstreamPath": "manuskript/ui/mainWindow.ui",
+          "evidence": "manuskript/mainWindow.ui",
+          "url": "https://github.com/olivierkes/manuskript/blob/01e05747f3c13f637d802ca915c31f9a27a601f8/manuskript/ui/mainWindow.ui",
+          "apiUrl": "https://api.github.com/repos/olivierkes/manuskript/contents/manuskript/ui/mainWindow.ui?ref=01e05747f3c13f637d802ca915c31f9a27a601f8",
+          "sha256": "f9559a79089c9fbf20a9dcf39ed3be62accb40f585f309fc90fddc76e16136f7",
+          "bytes": 109141,
+          "lastPathCommit": "b05377b417517aa00662db6cb0b651898abfb7f4",
+          "lastPathCommittedAt": "2023-05-14T09:59:07Z"
+        },
+        {
+          "upstreamPath": "manuskript/mainWindow.py",
+          "evidence": "manuskript/mainWindow.py",
+          "url": "https://github.com/olivierkes/manuskript/blob/01e05747f3c13f637d802ca915c31f9a27a601f8/manuskript/mainWindow.py",
+          "apiUrl": "https://api.github.com/repos/olivierkes/manuskript/contents/manuskript/mainWindow.py?ref=01e05747f3c13f637d802ca915c31f9a27a601f8",
+          "sha256": "224cd627605f4558a7d63399c87b7caf0a10c7c88fd224bb394536f59b578aa9",
+          "bytes": 85214,
+          "lastPathCommit": "8a41937f6e47bdf104b70f9d2e4f6f31e977f200",
+          "lastPathCommittedAt": "2025-03-26T20:52:33Z"
+        }
+      ]
+    },
+    {
+      "name": "Obsidian",
+      "repo": "obsidianmd/obsidian-help",
+      "officialRepo": "https://github.com/obsidianmd/obsidian-help",
+      "release": {
+        "tag_name": "v1.14.4",
+        "published_at": "2026-10-05T17:03:28Z",
+        "html_url": "https://github.com/obsidianmd/obsidian-releases/releases/tag/v1.14.4",
+        "prerelease": false
+      },
+      "releaseRepo": "obsidianmd/obsidian-releases",
+      "releaseRepoHead": {
+        "sha": "8bb992a6c085cbdbb64b420f89b5abd8135e9ac3",
+        "committedAt": "2026-10-08T20:31:47Z"
+      },
+      "head": {
+        "sha": "4043fa7019ea6db47e76e5dcc582740a11683140",
+        "committedAt": "2026-10-08T19:58:20Z",
+        "message": "chore: apply EN diff to locales",
+        "url": "https://github.com/obsidianmd/obsidian-help/commit/4043fa7019ea6db47e76e5dcc582740a11683140"
+      },
+      "archived": false,
+      "license": {
+        "spdx": null,
+        "file": null,
+        "product": "proprietary; not adopted as an open-source dependency",
+        "documentation": "No explicit reusable license verified in this investigation. GitHub repository license endpoint returned 404; README has no license grant. Public source availability is not an OSS license.",
+        "apiStatus": 404,
+        "apiUrl": "https://api.github.com/repos/obsidianmd/obsidian-help/license"
+      },
+      "advisories": {
+        "url": "https://api.github.com/repos/obsidianmd/obsidian-releases/security-advisories",
+        "querySucceeded": true,
+        "publishedItemsCount": 0,
+        "scope": "Public release repository only; not a full security review of the proprietary desktop/mobile app."
+      },
+      "files": [
+        {
+          "upstreamPath": "en/Attachments/ios-quick-capture-view.png",
+          "evidence": "Obsidian/ios-quick-capture-view.png",
+          "url": "https://github.com/obsidianmd/obsidian-help/blob/4043fa7019ea6db47e76e5dcc582740a11683140/en/Attachments/ios-quick-capture-view.png",
+          "apiUrl": "https://api.github.com/repos/obsidianmd/obsidian-help/contents/en/Attachments/ios-quick-capture-view.png?ref=4043fa7019ea6db47e76e5dcc582740a11683140",
+          "sha256": "5504cdeec7f09b6ae877a6e9f7cea7fbd141459f5ddd2b0bdc909bd51249ba69",
+          "bytes": 254503,
+          "lastPathCommit": "2166787798330bad527ed426d5eac6852309a1cd",
+          "lastPathCommittedAt": "2026-10-05T16:34:09Z"
+        },
+        {
+          "upstreamPath": "en/Attachments/ios-quick-capture-locations.png",
+          "evidence": "Obsidian/ios-quick-capture-locations.png",
+          "url": "https://github.com/obsidianmd/obsidian-help/blob/4043fa7019ea6db47e76e5dcc582740a11683140/en/Attachments/ios-quick-capture-locations.png",
+          "apiUrl": "https://api.github.com/repos/obsidianmd/obsidian-help/contents/en/Attachments/ios-quick-capture-locations.png?ref=4043fa7019ea6db47e76e5dcc582740a11683140",
+          "sha256": "4c24f02a276ceaf838277d9bdbe697229c827486a036bc748a33ab0d477d4fea",
+          "bytes": 358975,
+          "lastPathCommit": "2166787798330bad527ed426d5eac6852309a1cd",
+          "lastPathCommittedAt": "2026-10-05T16:34:09Z"
+        }
+      ],
+      "officialTextReviewed": [
+        {
+          "upstreamPath": "en/User interface/Sidebar.md",
+          "url": "https://github.com/obsidianmd/obsidian-help/blob/4043fa7019ea6db47e76e5dcc582740a11683140/en/User%20interface/Sidebar.md",
+          "lastPathCommit": "2f9705d495668a25150592e182f9b7a3a859d579",
+          "lastPathCommittedAt": "2026-03-24T23:28:26Z",
+          "scope": "Read official text through GitHub contents API; not copied as a licensed source distribution."
+        },
+        {
+          "upstreamPath": "en/Getting started/Mobile app.md",
+          "url": "https://github.com/obsidianmd/obsidian-help/blob/4043fa7019ea6db47e76e5dcc582740a11683140/en/Getting%20started/Mobile%20app.md",
+          "lastPathCommit": "eef54640940f5624fee6aafdcc3fcefba0b718b5",
+          "lastPathCommittedAt": "2026-10-06T02:39:22Z",
+          "scope": "Read official text through GitHub contents API; not copied as a licensed source distribution."
+        },
+        {
+          "upstreamPath": "en/Editing and formatting/Views and editing mode.md",
+          "url": "https://github.com/obsidianmd/obsidian-help/blob/4043fa7019ea6db47e76e5dcc582740a11683140/en/Editing%20and%20formatting/Views%20and%20editing%20mode.md",
+          "lastPathCommit": "29772df3bfcde251f0dd4c68e943722261c4845b",
+          "lastPathCommittedAt": "2026-03-27T02:46:39Z",
+          "scope": "Read official text through GitHub contents API; not copied as a licensed source distribution."
+        },
+        {
+          "upstreamPath": "en/Obsidian/Obsidian for iOS and iPadOS.md",
+          "url": "https://github.com/obsidianmd/obsidian-help/blob/4043fa7019ea6db47e76e5dcc582740a11683140/en/Obsidian/Obsidian%20for%20iOS%20and%20iPadOS.md",
+          "lastPathCommit": "eef54640940f5624fee6aafdcc3fcefba0b718b5",
+          "lastPathCommittedAt": "2026-10-06T02:39:22Z",
+          "scope": "Read official text through GitHub contents API; not copied as a licensed source distribution."
+        },
+        {
+          "upstreamPath": "README.md",
+          "url": "https://github.com/obsidianmd/obsidian-help/blob/4043fa7019ea6db47e76e5dcc582740a11683140/README.md",
+          "lastPathCommit": "8f7d783625fbed4505f1ccc332f20c50f69dced0",
+          "lastPathCommittedAt": "2026-10-08T16:08:49Z",
+          "scope": "Read official text through GitHub contents API; not copied as a licensed source distribution."
+        }
+      ],
+      "imageUse": "Official research evidence only; asset redistribution/reuse license unconfirmed, no production reuse."
+    }
+  ]
+}
