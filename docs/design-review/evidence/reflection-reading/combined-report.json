@@ -1,0 +1,467 @@
+{
+  "createdAt": "2026-10-08T01:02:39.518Z",
+  "pass": true,
+  "scope": "Actual reflection UI, SDK and IndexedDB with synthetic intercepted HTTP; Chromium viewport/touch/keyboard, not live accounts, AI self-analysis, Apple hardware or native IME.",
+  "summary": {
+    "fullFunctionalFlows": {
+      "passed": 5,
+      "total": 5
+    },
+    "focusedLayoutRechecks": {
+      "passed": 3,
+      "total": 3
+    },
+    "exactOldVersionReturnFocusAt390": true,
+    "visualStates": 8,
+    "consoleErrors": 0,
+    "pageErrors": 0,
+    "blockedExternalRequests": 0,
+    "operatingRemoteWrites": 0,
+    "minimumTextContrast": 6.05
+  },
+  "history": [
+    {
+      "file": "run-2026-10-08T00-58-57-810Z.json",
+      "createdAt": "2026-10-08T00:58:57.810Z",
+      "finishedAt": "2026-10-08T00:59:07.554Z",
+      "pass": true,
+      "checks": 5,
+      "visual": 8,
+      "description": "Complete functional flows before final visual compaction. No failed checks. Original images preserved in before-layout/."
+    },
+    {
+      "file": "run-2026-10-08T01-02-01-248Z.json",
+      "createdAt": "2026-10-08T01:02:01.248Z",
+      "finishedAt": "2026-10-08T01:02:05.360Z",
+      "pass": true,
+      "checks": 3,
+      "visual": 3,
+      "description": "Only chronological captures at 1440/820/390 refreshed after visual compaction; exact source-return focus and unchanged note/selection verified at 390. Full suite not repeated."
+    },
+    {
+      "file": "run-2026-10-08T01-03-25-684Z.json",
+      "createdAt": "2026-10-08T01:03:25.684Z",
+      "finishedAt": "2026-10-08T01:03:29.985Z",
+      "pass": true,
+      "checks": 3,
+      "visual": 3,
+      "description": "Final visible label clarifies year grouping rather than exact day ordering. Three layout/focus checks passed; source data and full flow code unchanged."
+    }
+  ],
+  "checks": [
+    {
+      "name": "selected exact versions, view-only periods/themes, note and Markdown at 1440",
+      "pass": true,
+      "sourceRun": "run-2026-10-08T00-58-57-810Z.json",
+      "checkedAt": "2026-10-08T00:58:57.810Z",
+      "scope": "complete-functional-flow"
+    },
+    {
+      "name": "selected exact versions, view-only periods/themes, note and Markdown at 820",
+      "pass": true,
+      "sourceRun": "run-2026-10-08T00-58-57-810Z.json",
+      "checkedAt": "2026-10-08T00:58:57.810Z",
+      "scope": "complete-functional-flow"
+    },
+    {
+      "name": "selected exact versions, view-only periods/themes, note and Markdown at 390",
+      "pass": true,
+      "sourceRun": "run-2026-10-08T00-58-57-810Z.json",
+      "checkedAt": "2026-10-08T00:58:57.810Z",
+      "scope": "complete-functional-flow"
+    },
+    {
+      "name": "invalid period recovery and failed note save preserve manuscript and prevent export or navigation",
+      "pass": true,
+      "sourceRun": "run-2026-10-08T00-58-57-810Z.json",
+      "checkedAt": "2026-10-08T00:58:57.810Z",
+      "scope": "complete-functional-flow"
+    },
+    {
+      "name": "integrated backup restores exact reflection versions and manuscript into an independent local copy",
+      "pass": true,
+      "sourceRun": "run-2026-10-08T00-58-57-810Z.json",
+      "checkedAt": "2026-10-08T00:58:57.810Z",
+      "scope": "complete-functional-flow"
+    },
+    {
+      "name": "reading layout and exact source return focus at 1440",
+      "pass": true,
+      "sourceRun": "run-2026-10-08T01-02-01-248Z.json",
+      "checkedAt": "2026-10-08T01:02:01.248Z",
+      "scope": "layout-and-390-focus-recheck"
+    },
+    {
+      "name": "reading layout and exact source return focus at 820",
+      "pass": true,
+      "sourceRun": "run-2026-10-08T01-02-01-248Z.json",
+      "checkedAt": "2026-10-08T01:02:01.248Z",
+      "scope": "layout-and-390-focus-recheck"
+    },
+    {
+      "name": "reading layout and exact source return focus at 390",
+      "pass": true,
+      "sourceRun": "run-2026-10-08T01-02-01-248Z.json",
+      "checkedAt": "2026-10-08T01:02:01.248Z",
+      "scope": "layout-and-390-focus-recheck"
+    }
+  ],
+  "visual": [
+    {
+      "scene": "themes-period",
+      "width": 1440,
+      "screenshot": "before-layout/themes-period-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 648,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "sourceRun": "run-2026-10-08T00-58-57-810Z.json",
+      "checkedAt": "2026-10-08T00:58:57.810Z",
+      "layoutStage": "before-final-compaction"
+    },
+    {
+      "scene": "themes-period",
+      "width": 820,
+      "screenshot": "before-layout/themes-period-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 576,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "sourceRun": "run-2026-10-08T00-58-57-810Z.json",
+      "checkedAt": "2026-10-08T00:58:57.810Z",
+      "layoutStage": "before-final-compaction"
+    },
+    {
+      "scene": "empty",
+      "width": 390,
+      "screenshot": "before-layout/empty-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 300,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "sourceRun": "run-2026-10-08T00-58-57-810Z.json",
+      "checkedAt": "2026-10-08T00:58:57.810Z",
+      "layoutStage": "before-final-compaction"
+    },
+    {
+      "scene": "themes-period",
+      "width": 390,
+      "screenshot": "before-layout/themes-period-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 300,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "sourceRun": "run-2026-10-08T00-58-57-810Z.json",
+      "checkedAt": "2026-10-08T00:58:57.810Z",
+      "layoutStage": "before-final-compaction"
+    },
+    {
+      "scene": "save-error",
+      "width": 390,
+      "screenshot": "before-layout/save-error-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 300,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "sourceRun": "run-2026-10-08T00-58-57-810Z.json",
+      "checkedAt": "2026-10-08T00:58:57.810Z",
+      "layoutStage": "before-final-compaction"
+    },
+    {
+      "scene": "chronology",
+      "width": 1440,
+      "screenshot": "chronology-1440.png",
+      "firstRecordTop": 529.046875,
+      "firstBodyTop": 693.296875,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 648,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "runFile": "run-2026-10-08T01-03-25-684Z.json"
+    },
+    {
+      "scene": "chronology",
+      "width": 820,
+      "screenshot": "chronology-820.png",
+      "firstRecordTop": 529.046875,
+      "firstBodyTop": 693.296875,
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 576,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "runFile": "run-2026-10-08T01-03-25-684Z.json"
+    },
+    {
+      "scene": "chronology",
+      "width": 390,
+      "screenshot": "chronology-390.png",
+      "firstRecordTop": 489.046875,
+      "firstBodyTop": 679.546875,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 300,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "runFile": "run-2026-10-08T01-03-25-684Z.json"
+    }
+  ],
+  "observations": [
+    {
+      "width": 1440,
+      "selectedVersions": 8,
+      "filteredVisible": 5,
+      "unknownDatesVisible": 3,
+      "exactOldReaderAndReturn": true,
+      "noFilterPersistence": true,
+      "explicitQuestionAppend": true,
+      "defaultExportExcludesBodies": true,
+      "optInExportIncludesAllChosenExactBodies": true,
+      "sourceRun": "run-2026-10-08T00-58-57-810Z.json"
+    },
+    {
+      "width": 820,
+      "selectedVersions": 8,
+      "filteredVisible": 5,
+      "unknownDatesVisible": 3,
+      "exactOldReaderAndReturn": true,
+      "noFilterPersistence": true,
+      "explicitQuestionAppend": true,
+      "defaultExportExcludesBodies": true,
+      "optInExportIncludesAllChosenExactBodies": true,
+      "sourceRun": "run-2026-10-08T00-58-57-810Z.json"
+    },
+    {
+      "width": 390,
+      "selectedVersions": 8,
+      "filteredVisible": 5,
+      "unknownDatesVisible": 3,
+      "exactOldReaderAndReturn": true,
+      "noFilterPersistence": true,
+      "explicitQuestionAppend": true,
+      "defaultExportExcludesBodies": true,
+      "optInExportIncludesAllChosenExactBodies": true,
+      "sourceRun": "run-2026-10-08T00-58-57-810Z.json"
+    },
+    {
+      "scene": "backup",
+      "schemaUnchanged": true,
+      "remappedExactVersions": 8,
+      "oldExcerptPreserved": true,
+      "originalWorkspaceUnchanged": true,
+      "newCopyUnbound": true,
+      "sourceRun": "run-2026-10-08T00-58-57-810Z.json"
+    },
+    {
+      "width": 390,
+      "exactOldReaderAndReturn": true,
+      "sourceButtonFocusRestored": true,
+      "noteAndSelectionUnchanged": true,
+      "sourceRun": "run-2026-10-08T01-02-01-248Z.json"
+    }
+  ],
+  "limitations": [
+    "Synthetic SDK/Auth HTTP and isolated IndexedDB only; no production connections or writes.",
+    "Chromium viewport, keyboard and touch emulation are not real Mac/iPad/iPhone/Files/VoiceOver/native IME verification.",
+    "Final chronology captures reflect compacted UI; theme-period/empty/save-error captures retain the preceding layout and are labeled accordingly.",
+    "Readability/usefulness as a life narrative or book manuscript has not been validated with personal records."
+  ]
+}
