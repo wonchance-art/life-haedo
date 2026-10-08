@@ -841,7 +841,22 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { selection, groupId, pagePreview, discovery, writing, ...viewOptions } = options || {};
+      const { selection, groupId, pagePreview, discovery, writing, reimport, ...viewOptions } = options || {};
+      if (reimport) {
+        if (mode !== 'import' || state.bundle.workspaceId !== reimport.workspaceId) return;
+        const source = sourceFor(reimport.sourceId);
+        const version = state.bundle.sourceVersions.find(item => item.id === reimport.sourceVersionId && item.sourceId === source?.id);
+        if (!source || source.origin !== 'naver_blog' || !version) throw new Error('선택한 원문을 찾을 수 없습니다. 기존 자료를 다시 열어 주세요.');
+        newDraft();
+        Object.assign(state.stage.input, {
+          origin: source.origin, title: source.title, url: source.url || '', existingSourceId: source.id,
+          author: version.originalAuthor.label, authorRelation: version.originalAuthor.relation,
+          originalCreatedAt: version.originalCreatedAt, format: version.format
+        });
+        if (source.sourceKey) state.stage.input.fileName = source.sourceKey;
+        // A new capture has its own scope; do not inherit full_text or omissions.
+        state.editTick = 1;
+      }
       writingOpenOptions = mode === 'write' ? writing || {} : null;
       Object.assign(state, viewOptions, { mode });
       workbenchOpenOptions = workbenchModes.includes(mode) ? options : null;
@@ -851,9 +866,13 @@
       // lock the global navigation; Workbench owns stale-response guards.
       const rendering = render();
       if (!options?.selection) await rendering;
+      if (reimport) {
+        main.querySelector('#lifeImportText')?.focus();
+        await persistStage(true);
+      }
       if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
       const heading = main.querySelector('h1,h2') || toolbar.querySelector('h1');
-      if (heading && !options?.groupId) heading.focus({ preventScroll: true });
+      if (heading && !options?.groupId && !reimport) heading.focus({ preventScroll: true });
     }
 
     function newDraft() {
@@ -879,7 +898,7 @@
       state.savedTick = state.editTick = 0;
       state.prepared = null;
       state.stageFailed = false;
-      state.importMethod = stage.input.text ? 'text' : stage.input.url ? 'link' : stage.input.fileName ? 'file' : 'text';
+      state.importMethod = stage.input.text || stage.input.existingSourceId ? 'text' : stage.input.url ? 'link' : stage.input.fileName ? 'file' : 'text';
       await navigate('import');
     }
 
@@ -1871,6 +1890,17 @@
       const detailsHeading = node('div', null, 'life-panel-heading');
       detailsHeading.append(node('h3', '출처와 포함 범위'), iconButton('출처 정보 닫기', 'close', () => setDetails(false)));
       details.prepend(detailsHeading);
+      if (source.origin === 'naver_blog') {
+        const reimport = button('본문 추가·다시 가져오기', guarded(async () => {
+          const workspaceId = state.bundle.workspaceId;
+          // Keep any unfinished import and reading notes before creating a new draft.
+          await persistDrafts();
+          if (disposed || state.bundle.workspaceId !== workspaceId) return;
+          await navigate('import', { reimport: { workspaceId, sourceId: source.id, sourceVersionId: version.id } });
+        }));
+        reimport.id = 'lifeSourceReimport';
+        details.append(reimport);
+      }
       article.append(details);
       const openRelated = focusId => guarded(async () => {
         const origin = { workspaceId: state.bundle.workspaceId, sourceId: source.id, sourceVersionId: version.id,
@@ -2094,6 +2124,9 @@
     }
 
     async function prepareStage() {
+      if (state.stage.input.existingSourceId && !state.stage.input.text && state.importMethod !== 'link') {
+        throw new Error('새 본문을 붙여 넣거나 파일을 선택해 주세요. 본문 없이 보관하려면 링크 보관을 선택해 주세요.');
+      }
       const tick = state.editTick;
       const stageId = state.stage.stageId;
       await persistStage(true);
@@ -2113,13 +2146,23 @@
     function renderImport() {
       if (!state.stage || state.stage.state !== 'draft') newDraft();
       const input = state.stage.input;
+      const linkedSource = input.existingSourceId && sourceFor(input.existingSourceId);
+      const linkedNotice = node('p', '', 'life-help');
+      linkedNotice.id = 'lifeImportExistingSource';
+      const updateLinkNotice = () => {
+        linkedNotice.hidden = !linkedSource;
+        linkedNotice.textContent = input.existingSourceId
+          ? '보관한 자료의 새 본문을 검토합니다. 기존 버전은 그대로 남습니다.'
+          : '출처가 바뀌어 기존 자료 연결을 해제했습니다. 검토에서 같은 자료인지 다시 확인해 주세요.';
+      };
+      updateLinkNotice();
       if (validBatchStage(state.stage)) {
         state.batchId = state.stage.batchId;
         const back = button('파일 목록으로 돌아가기', guarded(() => navigate('batch'))); back.id = 'lifeBatchReturn'; main.append(back, node('p', '현재 검토: ' + (state.stage.fileLabel || input.fileName), 'life-help'));
         const item = currentBatch()?.items.find(row => row.stageId === state.stage.stageId);
         if (item && !item.unsaved) main.append(button('건너뛰기 · 초안 유지', guarded(() => skipBatchItem(item))));
       }
-      main.append(title(state.prepared ? '원문·출처 검토' : '선택한 기록 가져오기'));
+      main.append(title(state.prepared ? '원문·출처 검토' : linkedSource ? '보관한 글에 본문 추가' : '선택한 기록 가져오기'));
       const phase = node('p', state.prepared ? '확인 후 보관 · 아직 자료에 반영하지 않았습니다.' : '본문·텍스트 파일·링크를 선택해 검토합니다.', 'life-import-phase');
       phase.id = 'lifeImportPhase';
       main.append(phase);
@@ -2144,6 +2187,7 @@
         input.origin = origin.input.value = value;
         delete input.existingSourceId;
         delete input.forceSeparate;
+        updateLinkNotice();
         changedStage();
         updateWebFields();
         origin.input.focus({ preventScroll: true });
@@ -2163,6 +2207,11 @@
         let text;
         try { text = new TextDecoder('utf-8', { fatal: true }).decode(await selected.arrayBuffer()); }
         catch (_) { throw new Error('UTF-8로 읽을 수 없는 파일입니다. 원래 파일은 변경하지 않았습니다.'); }
+        if (input.fileName !== selected.name) {
+          delete input.existingSourceId;
+          delete input.forceSeparate;
+          updateLinkNotice();
+        }
         replaceDraftText(text);
         input.fileName = selected.name;
         input.format = /\.md$/i.test(selected.name) ? 'text/markdown' : 'text/plain';
@@ -2210,6 +2259,11 @@
       const author = field('원문 작성자 (모르면 비워 두기)', 'text', 'lifeImportAuthor', input.author);
       const relation = selectField('작성자 관계', 'lifeImportRelation', [['unknown', '미확인'], ['self', '내 기록 / 내 게시물'], ['other', '다른 사람의 기록 / 내가 저장한 게시물']], input.authorRelation || 'unknown');
       const originalDate = field('원문 작성일 (모르면 비워 두기)', 'date', 'lifeImportDate', input.originalCreatedAt);
+      // Existing dates may be free text; never hide a value the native date input rejects.
+      if (input.originalCreatedAt && originalDate.input.value !== input.originalCreatedAt) {
+        originalDate.input.type = 'text';
+        originalDate.input.value = input.originalCreatedAt;
+      }
       const coverage = selectField('포함한 본문 범위', 'lifeImportCoverage', [['unknown', '미확인'], ['partial', '선택한 본문 일부'], ['full_text', '제공한 본문 전체']], input.coverage && input.coverage.status === 'link_only' ? 'unknown' : input.coverage && input.coverage.status || 'unknown');
       const omissions = field('누락·미확인 항목 (선택)', 'text', 'lifeImportOmissions', (input.omissions || input.coverage && input.coverage.omissions || []).join(', '));
       omissions.input.placeholder = '예: 사진 미보관, 댓글 미포함';
@@ -2256,10 +2310,12 @@
       setMethod(state.importMethod);
       const bindings = [[origin.input, 'origin'], [name.input, 'title'], [url.input, 'url'], [body.input, 'text'], [author.input, 'author'], [relation.input, 'authorRelation'], [originalDate.input, 'originalCreatedAt']];
       bindings.forEach(([element, key]) => element.addEventListener('input', () => {
+        const identityChanged = ['origin', 'url'].includes(key) && input[key] !== element.value;
         if (key === 'text') replaceDraftText(element.value);
         else input[key] = element.value;
-        delete input.existingSourceId;
+        if (identityChanged) delete input.existingSourceId;
         delete input.forceSeparate;
+        updateLinkNotice();
         changedStage();
         if (['origin', 'url', 'text'].includes(key)) updateWebFields();
       }));
@@ -2271,7 +2327,9 @@
         newDraft();
         render();
       })));
-      form.append(methods, url.label, suggestion, origin.label, name.label, textPanel, filePanel, linkHelp, retained, webNotice, webScope, details, actions, webHelp);
+      // Reimport starts with the only new input; already known metadata remains editable below.
+      if (linkedSource) form.append(linkedNotice, methods, textPanel, filePanel, linkHelp, retained, webNotice, webScope, url.label, suggestion, origin.label, name.label, details, actions, webHelp);
+      else form.append(methods, url.label, suggestion, origin.label, name.label, textPanel, filePanel, linkHelp, retained, webNotice, webScope, details, actions, webHelp);
       if (state.stageFailed) form.append(button('새 검토 사본으로 보관', guarded(rescueStage)));
       if (state.stage.invalidatedExcerpts && state.stage.invalidatedExcerpts.length) {
         const invalid = node('details', null, 'life-details');

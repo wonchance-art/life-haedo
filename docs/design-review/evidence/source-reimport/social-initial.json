@@ -1,0 +1,47 @@
+{
+  "checks": [
+    {
+      "name": "recognized exact hosts only suggest an origin; explicit acceptance preserves URL spelling and never commits",
+      "pass": true
+    },
+    {
+      "name": "lookalike, credential, malformed and non-HTTP addresses have no platform suggestion; manual choice remains authoritative",
+      "pass": true
+    },
+    {
+      "name": "accepting a source suggestion preserves reviewed metadata and exact excerpt candidates",
+      "pass": true
+    },
+    {
+      "name": "invalid URL review preserves pasted body and details and recovers after correcting only the URL",
+      "pass": true
+    },
+    {
+      "name": "naver_blog pasted partial body → exact excerpt/source → JSON backup and remapped copy preserves provenance",
+      "pass": true
+    },
+    {
+      "name": "instagram pasted partial body → exact excerpt/source → JSON backup and remapped copy preserves provenance",
+      "pass": true
+    },
+    {
+      "name": "link-only preview neither fetches nor marks body obtained; adding a body starts with unknown coverage",
+      "pass": true
+    },
+    {
+      "name": "file CRLF content and raw UTF-16 locators survive source acceptance and input-method switches",
+      "pass": true
+    },
+    {
+      "name": "uncommitted social draft resumes after reload with body, URL, source and inclusion decisions intact",
+      "pass": false,
+      "error": "locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '모아보기', exact: true })\u001b[22m\n\n    at button (/workspace/life-haedo/tests/life-social-import-browser.cjs:10:94)\n    at /workspace/life-haedo/tests/life-social-import-browser.cjs:183:91\n    at async check (/workspace/life-haedo/tests/life-social-import-browser.cjs:56:31)\n    at async main (/workspace/life-haedo/tests/life-social-import-browser.cjs:179:5)"
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "externalRequests": [],
+  "realRemoteWrites": 0,
+  "browser": "151.0.7922.173"
+}

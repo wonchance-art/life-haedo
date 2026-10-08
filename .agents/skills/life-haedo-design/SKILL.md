@@ -53,3 +53,5 @@ description: 해도의 화면 추가·수정·디자인 검토에 사용한다. 
 표현 페이지의 A/B는 `expression-sample.html`과 [비교 결과](../../../docs/design-review/expression-page-comparison.md)에 둔다. 동일 익명 글의 독립 시안이며 운영 기본 배치가 아니다. B의 출처 구분·원문 작성일·본문 펼침은 [실제 비공개 페이지·미리보기](../../../docs/design-review/page-expression-integration.md)에 연결했다. 작성일은 기존 자유 문자열까지 원값을 보존하고 펼침은 항목/버전별 session 메모리에만 둔다. 화면 접힘과 공개 사본 포함 범위를 혼동하지 않고, 펼친 뒤 읽기 영역이 실제 viewport와 교차하는지와 접기 초점 복귀를 확인한다.
 
 공개 화면은 [B 공개 읽기](../../../docs/design-review/public-expression.md)를 따른다. 공유된 문자열만 사용하고 본문 펼침과 공개 동의를 구분한다. 발췌를 다시 자르지 않는다. 출처·작성 관계·누락을 접힘 밖에 두며 같은 revision 재조회·폭 변경의 구절 선택 보존과 철회/실패 시 이전 내용 제거를 함께 검증한다.
+
+기존 출처에 본문을 보완할 때는 [재가져오기](../../../docs/design-review/source-reimport.md)의 입력/검토를 재사용한다. 기존 메모 보관 실패 시 초안을 교체하지 않고, 새 본문의 범위를 이전 full_text에서 승계하지 않는다. 주소·원천·파일 식별 변경과 본문 편집을 구분하고, 자유 형식 날짜가 표시되지 않은 채 저장되지 않도록 확인한다.
