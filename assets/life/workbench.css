@@ -215,3 +215,30 @@
 .wb-insight-editor > .life-field:first-child textarea { background: var(--mint); color: var(--mint-ink); }
 .wb-insight-sources > .wb-source { padding-block: 12px; border-bottom: 1px solid var(--line); }
 .wb-insight-editor > #wbInsightExclude { margin-top: 12px; }
+
+/* Private continuous manuscript; editor and source controls recede around the text. */
+.wb-reading-tools { display: flex; align-items: start; flex-wrap: wrap; gap: 8px 20px; margin-block: 12px 28px; }
+.wb-reading-tools > .wb-details { margin: 0; }
+.wb-reading-tools > .wb-details[open] { flex-basis: 100%; }
+.wb-reading-jump { display: block; text-align: left; width: 100%; border: 0; }
+.wb-book-reading { max-width: 68ch; margin-inline: auto; overflow-wrap: anywhere; }
+.wb-reading-question { white-space: pre-wrap; margin-block: 18px 30px; font-size: 19px; line-height: 1.8; }
+.wb-reading-chapter { padding-block: 30px 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 90px; }
+.wb-reading-chapter-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-bottom: 24px; }
+.wb-reading-chapter-heading h4 { flex: 1; min-width: 12ch; font-size: 24px; line-height: 1.6; word-break: keep-all; overflow-wrap: anywhere; }
+.wb-reading-chapter-heading button { color: var(--color-primary); background: var(--soft); }
+.wb-reading-text { font-size: 18px; line-height: 1.95; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
+.wb-reading-text > span { white-space: inherit; }
+.wb-reading-thought { margin-top: 32px; }
+.wb-reading-thought h5 { font-size: 16px; color: var(--mint-ink); margin-bottom: 12px; }
+.wb-reading-thought h6 { margin-block: 22px 8px; font-size: 14px; color: var(--ink-soft); }
+.wb-reading-source { padding-block: 18px; border-top: 1px solid var(--line); }
+.wb-reading-source h5 { font-size: 16px; line-height: 1.7; }
+.wb-reading-provenance { white-space: pre-wrap; line-height: 1.9; margin-block: 10px; }
+.wb-reading-source .wb-reading-text { font-size: 16px; }
+.wb-reading-intro { margin-block: 8px 20px; }
+@media (max-width: 700px) {
+  .wb-reading-text { font-size: 17px; }
+  .wb-reading-chapter-heading h4 { font-size: 21px; }
+  .wb-book-actions { flex-wrap: wrap; }
+}

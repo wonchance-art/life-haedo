@@ -1419,7 +1419,7 @@
       surfaceHeading.querySelector('h2').classList.toggle('life-sr-only', !!book);
       if (!book) {
         surfaceHeading.append(saveControl); saveControl.hidden = true;
-        view.bookId = null; view.chapterId = null;
+        view.bookId = null; view.chapterId = null; view.reading = false; view.readPosition = null; view.editorPosition = null; view.includeSources = false;
         if (!books.length) bodyNode.append(empty('돌아보고 싶은 시기나 주제로 첫 책을 시작하세요.'));
         const list = el('div', null, 'wb-book-list'); list.id = 'wbBookList'; list.tabIndex = -1;
         books.forEach(item => {
@@ -1455,6 +1455,18 @@
       const heading = el('h3', book.title, 'wb-book-title'); heading.id = 'wbBookHeading'; heading.tabIndex = -1;
       const lead = el('div', null, 'wb-book-lead'), leadActions = el('div', null, 'wb-row wb-book-actions');
       saveControl.hidden = false; leadActions.append(back, saveControl); lead.append(leadActions, heading); bodyNode.append(lead);
+      if (view.reading) {
+        saveControl.hidden = true;
+        renderBookReading(session, book, view, active, transition, leadActions);
+        return;
+      }
+      const openReading = action(view.readPosition ? '읽던 곳으로 돌아가기' : '전체 원고 읽기', async () => {
+        const input = bodyNode.querySelector('#wbChapterNote');
+        const position = input && { chapterId: view.chapterId, start: input.selectionStart, end: input.selectionEnd, top: input.scrollTop };
+        await transition(() => { view.editorPosition = position; view.reading = true; }, null);
+      });
+      openReading.id = view.readPosition ? 'wbBookPreviewReturn' : 'wbBookPreviewOpen';
+      leadActions.insertBefore(openReading, saveControl);
       const settings = details('책 설정'); settings.id = 'wbBookSettings';
       const title = field('책 제목', book.title, { id: 'wbBookTitle', change: value => { book.title = value; heading.textContent = value || '제목을 입력해 주세요'; } });
       const from = field('시작 연도', book.fromYear, { id: 'wbBookFromYear', max: 4, change: value => { book.fromYear = value; } });
@@ -1495,7 +1507,7 @@
       }); addChapter.id = 'wbChapterCreate'; addRow.append(chapterTitle.wrapper, addChapter);
       outline.append(chapterList, addRow);
       const tools = el('div', null, 'wb-book-controls'); tools.append(outline, settings); bodyNode.append(tools);
-      const chapter = book.chapters.find(item => item.id === view.chapterId) || book.chapters[0];
+      const chapter = view.chapterId ? book.chapters.find(item => item.id === view.chapterId) : book.chapters[0];
       if (chapter) {
         view.chapterId = chapter.id;
         const editor = el('section', null, 'wb-book-editor'); editor.dataset.activeChapterId = chapter.id;
@@ -1544,9 +1556,9 @@
         sourceBox.open = view.evidenceOpen === chapter.id;
         sourceBox.addEventListener('toggle', () => { if (active()) view.evidenceOpen = sourceBox.open ? chapter.id : null; });
         editor.append(insightPanel(session, book, chapter, view, active), sourceBox); bodyNode.append(editor);
-      } else bodyNode.append(empty('첫 장을 추가해 글과 생각을 모아 보세요.'));
+      } else bodyNode.append(empty(book.chapters.length ? '선택한 장을 찾을 수 없습니다. 목차에서 편집할 장을 골라 주세요.' : '첫 장을 추가해 글과 생각을 모아 보세요.'));
       const exportBox = details('책 원고 파일로 보관');
-      const include = toggle('연결한 원문 본문도 포함', false, () => {}); include.querySelector('input').id = 'wbBookIncludeSources';
+      const include = toggle('연결한 원문 본문도 포함', !!view.includeSources, value => { view.includeSources = value; }); include.querySelector('input').id = 'wbBookIncludeSources';
       const exportButton = action('책 원고 Markdown 받기', async () => {
         if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 원고를 받아 주세요.');
         await flush(); if (!active()) return;
@@ -1558,6 +1570,136 @@
       }); exportButton.id = 'wbBookExport';
       exportBox.append(include, notice('이 책의 모든 장과 제외하지 않은 생각을 목차 순서대로 받습니다. 기본은 직접 쓴 원고·해석·출처이며 공개 게시하지 않습니다. 제외한 생각을 이미 원고에 적었다면 그 문장은 직접 검토하세요. 복원에는 자료·구성 JSON 백업을 사용하세요.'), exportButton);
       bodyNode.append(exportBox);
+      if (view.restoreEditor) {
+        view.restoreEditor = false;
+        const input = bodyNode.querySelector('#wbChapterNote'), position = view.editorPosition;
+        if (input) {
+          if (position?.chapterId === view.chapterId) {
+            input.setSelectionRange(position.start, position.end); input.scrollTop = position.top;
+          }
+          input.focus({ preventScroll: true }); input.scrollIntoView({ block: 'nearest' });
+        }
+      }
+    }
+
+    function renderBookReading(session, book, view, active, transition, leadActions) {
+      const projection = life.Books.project(getBundle(), session.state, book.id, { includeSources: !!view.includeSources });
+      const reader = el('article', null, 'wb-book-reading'); reader.id = 'wbBookPreview';
+      reader.setAttribute('aria-label', '전체 원고 미리보기');
+      view.readOpen ||= [];
+      const remember = () => {
+        const candidates = [...reader.querySelectorAll('[data-read-anchor]')].filter(node => node.getClientRects().length);
+        const anchor = candidates.find(node => node.getBoundingClientRect().bottom > 100) || candidates.at(-1);
+        view.readPosition = anchor ? { key: anchor.dataset.readAnchor, text: anchor.textContent, chapterId: anchor.closest('[data-preview-chapter-id]')?.dataset.previewChapterId, top: anchor.getBoundingClientRect().top } : null;
+        view.readOpen = [...reader.querySelectorAll('details[open]')].map(node => node.dataset.readDetail);
+      };
+      const returnEditor = chapterId => {
+        remember(); view.readFocusChapter = chapterId || view.chapterId;
+        return transition(() => { view.chapterId = chapterId || view.chapterId; view.reading = false; view.restoreEditor = true; }, null);
+      };
+      const back = action('원고 편집', () => returnEditor(view.chapterId)); back.id = 'wbBookPreviewBack'; leadActions.append(back);
+      const outline = details('목차'); outline.id = 'wbBookPreviewOutline';
+      for (const chapter of projection.chapters) {
+        const jump = action(chapter.title, () => {
+          const target = [...reader.querySelectorAll('[data-preview-chapter-id]')].find(node => node.dataset.previewChapterId === chapter.id);
+          target?.focus({ preventScroll: true }); target?.scrollIntoView({ block: 'start' });
+        }, 'wb-reading-jump'); outline.append(jump);
+      }
+      const options = details('읽기·파일 설정', { open: !!view.readOptionsOpen }); options.id = 'wbBookPreviewOptions';
+      options.addEventListener('toggle', () => { if (active()) view.readOptionsOpen = options.open; });
+      const include = toggle('연결한 원문 본문도 포함', !!view.includeSources, value => {
+        remember(); view.readOptionsOpen = true; view.focusReadOptions = true; view.includeSources = value; redraw();
+      }); include.querySelector('input').id = 'wbBookPreviewIncludeSources';
+      options.append(include, notice('미리보기와 파일에 같은 내용을 포함합니다. HTML·Markdown 문법은 이 화면에서 텍스트로 표시합니다. 공개 게시하지 않습니다.'));
+      const download = action('책 원고 Markdown 받기', async () => {
+        await flush(); if (!active()) return;
+        const text = life.Books.markdown(getBundle(), session.state, book.id, { includeSources: !!view.includeSources });
+        const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown;charset=utf-8' })); urls.add(url);
+        const link = el('a'); link.href = url; link.download = 'haedo-book.md'; link.hidden = true;
+        document.body.append(link); link.click(); link.remove();
+        global.setTimeout(() => { URL.revokeObjectURL(url); urls.delete(url); }, 30000);
+      }); download.id = 'wbBookPreviewExport';
+      const toolbar = el('div', null, 'wb-reading-tools'); toolbar.append(outline, options, download); bodyNode.append(toolbar);
+      const intro = el('section', null, 'wb-reading-intro');
+      intro.append(el('p', '비공개 원고 · ' + (projection.fromYear || '미지정') + ' ~ ' + (projection.toYear || '미지정'), 'life-meta'));
+      if (projection.question) intro.append(el('p', projection.question, 'wb-reading-question'));
+      reader.append(intro);
+      function textBlocks(hostNode, text, key) {
+        // Preserve all text (including blank lines); paragraph anchors stay session-local.
+        const pieces = text.match(/[^\n]*(?:\n|$)/g)?.filter(Boolean) || [''];
+        if (pieces.length > 200) pieces.splice(199, pieces.length - 199, pieces.slice(199).join(''));
+        const content = el('div', null, 'wb-reading-text');
+        pieces.forEach((piece, index) => {
+          const node = el('span', piece); node.dataset.readAnchor = key + ':' + index; content.append(node);
+        }); hostNode.append(content);
+      }
+      function provenance(items, label, key) {
+        const box = details(label + ' · ' + items.length); box.dataset.readDetail = key;
+        box.open = view.readOpen.includes(key);
+        if (!items.length) box.append(notice('선택한 근거 원문이 없습니다.'));
+        items.forEach((item, index) => {
+          const row = el('section', null, 'wb-reading-source'); row.dataset.versionId = item.versionId;
+          row.dataset.readAnchor = key + ':' + index;
+          if (item.missing) row.append(el('p', '연결된 원문 없음'), notice('다른 버전으로 대체하지 않았습니다.'));
+          else {
+            const relation = { self: '내 기록', other: '다른 사람의 기록', unknown: '작성자 관계 미확인' };
+            row.append(el('h5', item.title), el('p', [
+              '원문 작성일: ' + (item.originalCreatedAt || '미확인'),
+              '원 작성자: ' + (item.originalAuthor.label || '미확인'),
+              '작성자 관계: ' + (relation[item.originalAuthor.relation] || relation.unknown),
+              '원문 URL: ' + (item.url || '미제공'),
+              '선택 버전: ' + item.versionNumber + '/' + item.versionTotal,
+              '본문 확보 범위: ' + item.coverage.status,
+              '누락: ' + (item.coverage.omissions.join(' · ') || '확인한 누락 없음')
+            ].join('\n'), 'life-meta wb-reading-provenance'));
+            if (projection.includeSources) {
+              if (item.body == null) row.append(notice('본문 미확보 · 링크만 보관했습니다.'));
+              else textBlocks(row, item.body, key + ':' + index + ':body');
+            }
+            const focusKey = 'book-preview:' + book.id + ':' + key + ':' + item.versionId;
+            const open = discoveryIcon('이 원문 버전 열기', 'book', () => { remember(); return openVersion(item.versionId, focusKey, active); });
+            open.dataset.focusKey = focusKey; row.append(open);
+          }
+          box.append(row);
+        }); return box;
+      }
+      projection.chapters.forEach((chapter, index) => {
+        const section = el('section', null, 'wb-reading-chapter'); section.dataset.previewChapterId = chapter.id; section.tabIndex = -1;
+        const titleRow = el('div', null, 'wb-reading-chapter-heading');
+        const title = el('h4', chapter.title); title.dataset.readAnchor = chapter.id + ':title';
+        const edit = action('이 장 편집', () => returnEditor(chapter.id)); edit.dataset.previewEdit = chapter.id;
+        titleRow.append(el('span', String(index + 1), 'wb-chapter-number'), title, edit); section.append(titleRow);
+        if (chapter.note) textBlocks(section, chapter.note, chapter.id + ':note');
+        else section.append(notice('아직 작성한 원고가 없습니다.'));
+        section.append(provenance(chapter.evidence, '이 장의 근거', chapter.id + ':evidence'));
+        chapter.insights.forEach((insight, n) => {
+          const thought = el('section', null, 'wb-reading-thought');
+          const heading = el('h5', '내 해석 ' + (n + 1)); heading.dataset.readAnchor = insight.id + ':title'; thought.append(heading);
+          if (!insight.statement.trim()) thought.append(notice('아직 작성하지 않은 해석'));
+          textBlocks(thought, insight.statement, insight.id + ':statement');
+          if (insight.uncertainty) { thought.append(el('h6', '아직 모르는 점')); textBlocks(thought, insight.uncertainty, insight.id + ':uncertainty'); }
+          thought.append(provenance(insight.supportEvidence, '근거로 연결한 원문', insight.id + ':support'), provenance(insight.counterEvidence, '반례로 연결한 원문', insight.id + ':counter'));
+          section.append(thought);
+        }); reader.append(section);
+      });
+      if (!projection.chapters.length) reader.append(empty('아직 구성한 장이 없습니다. 원고 편집에서 첫 장을 추가해 주세요.'));
+      reader.append(notice('원문 작성일은 경험 시기를 뜻하지 않습니다. 해석은 직접 쓴 생각이며 연결한 글이 그 생각을 증명하지는 않습니다.'));
+      bodyNode.append(reader);
+      // Save the view before navigating to another original; restore only this render.
+      const saved = view.readPosition;
+      global.requestAnimationFrame(() => {
+        if (!active() || !reader.isConnected) return;
+        const anchors = [...reader.querySelectorAll('[data-read-anchor]')].filter(node => node.getClientRects().length);
+        const exact = saved && anchors.find(node => node.dataset.readAnchor === saved.key);
+        const anchor = saved && (exact?.textContent === saved.text ? exact : anchors.find(node =>
+          node.closest('[data-preview-chapter-id]')?.dataset.previewChapterId === saved.chapterId && node.textContent === saved.text) || exact ||
+          anchors.find(node => node.dataset.readAnchor === saved.chapterId + ':title'));
+        const focus = view.focusReadOptions ? include.querySelector('input') : [...reader.querySelectorAll('[data-preview-edit]')].find(node => node.dataset.previewEdit === view.readFocusChapter) || anchor?.closest('[data-preview-chapter-id]') || reader;
+        view.focusReadOptions = false;
+        if (!focus.matches('button,input')) focus.tabIndex = -1; focus.focus({ preventScroll: true });
+        if (anchor) global.scrollBy(0, anchor.getBoundingClientRect().top - saved.top);
+        else { bodyNode.querySelector('#wbBookHeading')?.scrollIntoView({ block: 'start' }); }
+      });
     }
 
     function insightPanel(session, book, chapter, view, bookActive) {
