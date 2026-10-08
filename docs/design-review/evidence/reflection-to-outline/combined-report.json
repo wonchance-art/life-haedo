@@ -1,12 +1,12 @@
 {
-  "createdAt": "2026-10-08T21:56:09.983253+00:00",
+  "createdAt": "2026-10-08T22:03:47.663507+00:00",
   "scope": "Actual reflection and outline UI after UI-imported anonymous six sources/seven versions. 3 unique width journeys; basic 9 viewport screenshots and extra long-source/current-thought scenes separately recorded.",
   "pass": true,
   "checks": [
     {
       "width": 390,
-      "file": "run-2026-10-08T21-58-26-472Z.json",
-      "createdAt": "2026-10-08T21:58:26.472Z",
+      "file": "run-2026-10-08T22-02-57-577Z.json",
+      "createdAt": "2026-10-08T22:02:57.577Z",
       "result": {
         "width": 390,
         "pass": true,
@@ -219,8 +219,8 @@
     },
     {
       "width": 820,
-      "file": "run-2026-10-08T21-58-26-472Z.json",
-      "createdAt": "2026-10-08T21:58:26.472Z",
+      "file": "run-2026-10-08T22-02-57-577Z.json",
+      "createdAt": "2026-10-08T22:02:57.577Z",
       "result": {
         "width": 820,
         "pass": true,
@@ -398,8 +398,8 @@
     },
     {
       "width": 1440,
-      "file": "run-2026-10-08T21-58-26-472Z.json",
-      "createdAt": "2026-10-08T21:58:26.472Z",
+      "file": "run-2026-10-08T22-02-57-577Z.json",
+      "createdAt": "2026-10-08T22:02:57.577Z",
       "result": {
         "width": 1440,
         "pass": true,
@@ -6379,7 +6379,7 @@
     "assets/life/reflection.js": "4ad3400edde9d50927bb85df307aa52de0025bb5ddb04f0610c75403a6178353"
   },
   "finalRuntime": {
-    "assets/life/workbench-ui.js": "b00d836e303df4f79364f72fea64c88b9f9cdcf441b1ec0328706b42280ed112",
+    "assets/life/workbench-ui.js": "3f7bcddd9cf632ffb96e3a9d91335dc5d66c4e3db47a880b64992b296c92a570",
     "assets/life/workbench.css": "0b5cb7c4ed8cfdb31cfafb728ddebf73cda420b4149e29acca66e8c569b8e1eb",
     "assets/life/reflection.js": "4ad3400edde9d50927bb85df307aa52de0025bb5ddb04f0610c75403a6178353"
   },
@@ -6448,6 +6448,28 @@
           "delayedStorageWrite": false
         }
       ]
+    },
+    {
+      "file": "run-2026-10-08T22-00-51-818Z.json",
+      "createdAt": "2026-10-08T22:00:51.818Z",
+      "checks": 1,
+      "passed": 0,
+      "contracts": []
+    },
+    {
+      "file": "run-2026-10-08T22-02-57-577Z.json",
+      "createdAt": "2026-10-08T22:02:57.577Z",
+      "checks": 3,
+      "passed": 3,
+      "contracts": [
+        {
+          "name": "detached outline source does not open after same-task close",
+          "pass": true,
+          "width": 390,
+          "syntheticSameTask": true,
+          "delayedStorageWrite": false
+        }
+      ]
     }
   ],
   "resolvedFixtureIssues": [
@@ -6467,7 +6489,7 @@
     "Current-thought input remains below the selected reading list by design; sticky entry/return gives direct navigation.",
     "9 main screenshots are all from the same final UI run; initial 390 after screenshots were superseded after compact candidate-label/return changes."
   ],
-  "finalInteractionRun": "run-2026-10-08T21-58-26-472Z.json",
+  "finalInteractionRun": "run-2026-10-08T22-02-57-577Z.json",
   "contracts": [
     {
       "name": "detached outline source does not open after same-task close",
@@ -6490,5 +6512,28 @@
       }
     ],
     "explanation": "Candidate fields are temporary and entry flushes before showing the planner; no fake dirty composition or delayed write is injected. Enabled source click and close click happen in one synthetic JS task to exercise cancellation after the awaited boundary."
+  },
+  "resolvedAppIssues": [
+    {
+      "issue": "At the current-thought area, repeating the sticky write action replaced the remembered reading row with the last off-screen row; the subsequent return no longer restored the original reading position.",
+      "reproduction": "390px actual pointer/touch flow, one repeated sticky write action after arrival. Existing exact source position, internal scroll and focus assertions were unchanged.",
+      "failedRun": "run-2026-10-08T22-00-51-818Z.json",
+      "fix": "Root removed the last-row fallback; rememberReading updates noteReturn only when an actual intersecting reading row exists.",
+      "finalRun": "run-2026-10-08T22-02-57-577Z.json",
+      "result": "390/820/1440 passed; repeated write at 390 preserves the original exact source position, internal scroll and focus.",
+      "classification": "confirmed application navigation defect, separate from fixture/test expectation corrections"
+    }
+  ],
+  "finalVerification": {
+    "uniqueWidthJourneys": 3,
+    "passed": 3,
+    "extraControlledContracts": 1,
+    "interactionScreens": 10,
+    "consoleErrors": 0,
+    "pageErrors": 0,
+    "unexpectedExternalRequests": 0,
+    "remoteWrites": 0,
+    "repeatedWriteReturn390": true,
+    "baseScreensRerun": false
   }
 }

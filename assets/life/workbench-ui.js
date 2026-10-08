@@ -1448,8 +1448,9 @@
       const rememberReading = () => {
         const rows = [...selectedList.querySelectorAll('.wb-source')];
         const top = controls.getBoundingClientRect().bottom;
-        const row = rows.find(node => node.getBoundingClientRect().bottom > top) || rows.at(-1);
-        view.noteReturn = row ? { versionId: row.dataset.versionId, group: row.closest('[data-reflection-group]').dataset.reflectionGroup, top: row.getBoundingClientRect().top } : null;
+        const row = rows.find(node => node.getBoundingClientRect().bottom > top);
+        // Re-entering writing below the sources must keep the earlier reading position.
+        if (row) view.noteReturn = { versionId: row.dataset.versionId, group: row.closest('[data-reflection-group]').dataset.reflectionGroup, top: row.getBoundingClientRect().top };
       };
       const write = discoveryIcon('내 회고 쓰기', 'edit', () => {
         rememberReading(); note.input.focus({ preventScroll: true }); noteSection.scrollIntoView({ block: 'start' });

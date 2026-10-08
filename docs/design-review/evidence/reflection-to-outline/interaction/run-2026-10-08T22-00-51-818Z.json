@@ -1,0 +1,57 @@
+{
+  "createdAt": "2026-10-08T22:00:51.818Z",
+  "browser": "151.0.7922.173",
+  "scope": "Actual UI import and reflection/outline interaction; anonymous synthetic HTTP only. Touch and Korean plain input, not Apple/IME.",
+  "checks": [
+    {
+      "width": 390,
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(Math.abs(afterReading.top-beforeReading.top)<3)\n\n    at main (/workspace/life-haedo/tests/reflection-to-outline-browser.cjs:30:231)"
+    }
+  ],
+  "contracts": [],
+  "screens": [
+    {
+      "scene": "write-arrival",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "textarea",
+          "id": "wbReflectionNote",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "remoteWrites": 0,
+  "finishedAt": "2026-10-08T22:00:57.569Z",
+  "pass": false
+}
