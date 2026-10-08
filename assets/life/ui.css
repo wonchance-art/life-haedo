@@ -355,3 +355,22 @@ body.haedo-shell .haedo-account-host { top: 42px; right: max(calc(60px + env(saf
 @media (forced-colors: active) {
   .life-writing-title,.life-writing-body { border: 1px solid CanvasText; }
 }
+
+/* Configuration management keeps state and recovery in the existing quiet column. */
+.life-composition-sync { padding-block: 28px; border-bottom: 1px solid var(--line); }
+.life-sync-state-panel .life-sync-account { border: 0; padding-block: 0; }
+.life-composition-sync > h3 { font-size: 19px; line-height: 1.6; margin-bottom: 12px; }
+.life-composition-sync .life-help { margin-block: 10px; }
+.life-composition-sync .life-actions { flex-wrap: wrap; gap: 8px; margin-block: 16px; }
+.composition-comparison { margin-top: 24px; }
+.composition-side { margin-block: 20px; min-width: 0; }
+.composition-side h4 { font-size: 16px; line-height: 1.75; }
+.composition-side h5 { font-size: 15px; line-height: 1.75; margin-block: 12px 6px; }
+.composition-side .life-meta { margin-top: 6px; }
+.composition-side + .composition-side { padding-top: 20px; border-top: 1px solid var(--line); }
+.composition-side .life-details { margin-block: 8px; border: 0; max-height: 28rem; overflow: auto; scrollbar-color: var(--field-line) var(--paper-2); }
+.composition-side .life-details summary { position: sticky; top: 0; background: var(--paper); }
+.composition-entry,.composition-recovery { margin-block: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.composition-recovery .life-button { margin-top: 8px; }
+.composition-recovery:last-child { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
+.life-composition-sync > .composition-content > .life-details { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }

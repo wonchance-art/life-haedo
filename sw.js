@@ -1,5 +1,5 @@
 /* Versioned app shell. Personal documents remain in localStorage/IndexedDB. */
-const CACHE='haedo-v68';
+const CACHE='haedo-v69';
 const SHELL=['./','./index.html','./login.html','./workspace.html','./timeline.html',
   './goals.html','./habits.html','./privacy.html','./manifest.webmanifest','./icon.svg','./icon-maskable.svg',
   './vendor/daisyui.css','./vendor/daisyui-themes.css','./assets/app.css',
@@ -9,6 +9,7 @@ const SHELL=['./','./index.html','./login.html','./workspace.html','./timeline.h
   './assets/platform-data.js','./assets/platform-store.js','./assets/platform-ui.js','./assets/platform-life-remote.js','./assets/timeline-entry.js',
   './life.html','./vendor/idb/idb.js','./vendor/supabase/supabase.js','./assets/life/core.js','./assets/life/writing.js','./assets/life/writing-ui.js','./assets/life/workbench.js','./assets/life/rediscovery.js','./assets/life/share.js','./assets/life/share-remote.js','./assets/life/share-view.js','./assets/life/share-view.css','./assets/life/storage.js',
   './assets/life/remote.js','./assets/life/sync.js',
+  './assets/life/composition-remote.js','./assets/life/composition-sync.js','./assets/life/composition-ui.js',
   './assets/life/legacy.js','./assets/life/icons.js','./assets/life/workbench-ui.js','./assets/life/home.js','./assets/life/ui.js','./assets/life/ui.css','./assets/life/workbench.css','./assets/life/home.css','./assets/life/shell.js'];
 const shellURLs=new Set(SHELL.map(path=>new URL(path,self.registration.scope).href));
 const authParams=new Set(['code','access_token','refresh_token','token','token_hash','id_token','error','error_code','error_description']);

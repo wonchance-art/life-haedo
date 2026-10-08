@@ -113,6 +113,11 @@
       notify(event);
       try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Persistent state is authoritative. */ }
     }
+    function compositionChanged(state) {
+      const event = { type: 'composition_sync_changed', workspaceId: state.workspaceId, status: state.status, enabled: state.enabled };
+      notify(event);
+      try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Persistent state is authoritative. */ }
+    }
     function workbenchChanged(state) {
       const event = { type: 'workbench_changed', workspaceId: state.workspaceId, revision: state.revision };
       notify(event);
@@ -126,6 +131,9 @@
         if (channel) channel.onmessage = ({ data }) => {
           if (data?.sender !== sender && data?.type === 'sync_changed' && typeof data.workspaceId === 'string') {
             notify({ type: 'sync_changed', workspaceId: data.workspaceId });
+          }
+          if (data?.sender !== sender && data?.type === 'composition_sync_changed' && typeof data.workspaceId === 'string') {
+            notify({ type: 'composition_sync_changed', workspaceId: data.workspaceId });
           }
           if (data?.sender !== sender && data?.type === 'changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
@@ -431,9 +439,14 @@
         await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
         const previous = await workbenchValue(meta, workspaceId);
         if (previous.revision !== baseRevision) throw fault('workbench_conflict', '다른 탭에서 구성을 바꿨습니다. 입력을 보존하고 최신 구성을 확인해 주세요.');
+        const composition = await readCompositionState(meta, workspaceId, previous);
         state.revision = baseRevision + 1;
         workbench().validate(state);
         await meta.put({ key: `workbench:${workspaceId}`, value: state });
+        if (composition) {
+          composition.error = null; composition.status = compositionStatus(composition, state);
+          await writeCompositionState(meta, composition);
+        }
         return clone(state);
       });
       workbenchChanged(saved);
@@ -785,6 +798,326 @@
       syncChanged(result.metadata);
       return result;
     }
+    // Composition revisions are independent of material revisions. The original binding is
+    // a prerequisite, never an implicit request to connect or upload private material.
+    function compositionRow(input, workspaceId) {
+      if (!plain(input) || !Number.isSafeInteger(input.revision) || input.revision < 1 ||
+          !Number.isSafeInteger(input.source_revision) || input.source_revision < 1) {
+        throw fault('invalid_remote_snapshot', '서버 구성의 저장 버전을 확인할 수 없습니다.');
+      }
+      const row = clone(input);
+      workbench().validate(row.data);
+      if (row.workspace_id !== workspaceId || row.data.workspaceId !== workspaceId) {
+        throw fault('invalid_remote_snapshot', '서버 구성의 작업공간과 내용이 일치하지 않습니다.');
+      }
+      return { workspace_id: workspaceId, revision: row.revision, source_revision: row.source_revision, data: row.data,
+        ...(typeof row.updated_at === 'string' ? { updated_at: row.updated_at } : {}) };
+    }
+    function compositionStatus(sync, state) {
+      return sync.conflict ? 'conflict' : sync.outbox || state.revision !== sync.syncedLocalRevision ? 'pending' : 'synced';
+    }
+    function validateCompositionState(sync, workspaceId) {
+      try {
+        onlyFields(sync, ['format', 'workspaceId', 'binding', 'enabled', 'remoteRevision', 'sourceRevision',
+          'syncedLocalRevision', 'outbox', 'conflict', 'status', 'error', 'lastRecoveryId']);
+        if (sync.format !== 'life-composition-sync-v1' || sync.workspaceId !== workspaceId || typeof sync.enabled !== 'boolean' ||
+            !['pending', 'synced', 'conflict', 'error'].includes(sync.status) ||
+            !Number.isSafeInteger(sync.syncedLocalRevision) || sync.syncedLocalRevision < -1) throw new Error('metadata');
+        if (stablePayload(bindingValue(sync.binding, workspaceId)) !== stablePayload(sync.binding)) throw new Error('binding');
+        requireRevision(sync.remoteRevision); requireRevision(sync.sourceRevision);
+        if ((sync.remoteRevision === 0) !== (sync.sourceRevision === 0) ||
+            (sync.lastRecoveryId !== null && (typeof sync.lastRecoveryId !== 'string' || !sync.lastRecoveryId))) throw new Error('metadata');
+        if (sync.outbox !== null) {
+          const box = sync.outbox;
+          onlyFields(box, ['operationId', 'expectedRevision', 'sourceRevision', 'localRevision', 'data']);
+          requireId(box.operationId, '전송 작업'); requireRevision(box.expectedRevision); requireRevision(box.localRevision);
+          requireRevision(box.sourceRevision); workbench().validate(box.data);
+          if (box.data.workspaceId !== workspaceId || box.data.revision !== box.localRevision ||
+              box.expectedRevision !== sync.remoteRevision || box.sourceRevision < Math.max(1, sync.sourceRevision)) throw new Error('outbox');
+        }
+        if (sync.conflict !== null) {
+          const conflict = sync.conflict;
+          onlyFields(conflict, ['missing', 'row', 'remoteRevision', 'localRevision']);
+          requireRevision(conflict.remoteRevision); requireRevision(conflict.localRevision);
+          if (typeof conflict.missing !== 'boolean' || conflict.remoteRevision < sync.remoteRevision) throw new Error('conflict');
+          if (conflict.missing) { if (conflict.row !== null) throw new Error('missing'); }
+          else {
+            const row = compositionRow(conflict.row, workspaceId);
+            if (row.revision !== conflict.remoteRevision || row.source_revision < sync.sourceRevision) throw new Error('conflict');
+          }
+        }
+        if (sync.error !== null) {
+          onlyFields(sync.error, ['code', 'message']);
+          if (typeof sync.error.code !== 'string' || !/^[a-z0-9_]{1,80}$/.test(sync.error.code) ||
+              typeof sync.error.message !== 'string' || sync.error.message.length > 1000) throw new Error('error');
+        }
+        if ((sync.status === 'conflict') !== (sync.conflict !== null) ||
+            (sync.status === 'synced' && (sync.outbox || sync.error || sync.syncedLocalRevision < 0)) ||
+            (sync.status === 'error' && !sync.error) || (sync.status === 'pending' && sync.error) ||
+            (sync.remoteRevision === 0 && sync.syncedLocalRevision !== -1) ||
+            (sync.outbox && sync.outbox.localRevision <= sync.syncedLocalRevision)) throw new Error('consistency');
+      } catch (_) { throw fault('invalid_composition_metadata', '구성 동기화 정보를 확인할 수 없습니다. 기존 내용은 보존했습니다.'); }
+      return sync;
+    }
+    async function readCompositionState(meta, workspaceId, state) {
+      if (account) await assertOwner(meta, workspaceId);
+      const row = await meta.get(`compositionSync:${workspaceId}`);
+      if (row === undefined) return null;
+      const sync = validateCompositionState(row.value, workspaceId);
+      if (account && !sameAccount(account, sync.binding)) throw fault('account_mismatch', '현재 계정과 구성 연결 정보가 다릅니다.');
+      if (state && (sync.syncedLocalRevision > state.revision || sync.outbox?.localRevision > state.revision ||
+          sync.conflict?.localRevision > state.revision)) {
+        throw fault('invalid_composition_metadata', '구성 동기화 기준이 로컬 저장보다 앞서 있습니다. 기존 내용은 보존했습니다.');
+      }
+      const head = await meta.get(`compositionHead:${workspaceId}`);
+      if (sync.remoteRevision > 0) {
+        if (!head) throw fault('invalid_composition_metadata', '구성의 서버 비교 기준을 찾을 수 없습니다. 기존 내용은 보존했습니다.');
+        const value = compositionRow(head.value, workspaceId);
+        if (value.revision !== sync.remoteRevision || value.source_revision !== sync.sourceRevision ||
+            (state && state.revision === sync.syncedLocalRevision && stablePayload({ ...value.data, revision: state.revision }) !== stablePayload(state)) ||
+            (state && sync.status === 'synced' && state.revision !== sync.syncedLocalRevision)) {
+          throw fault('invalid_composition_metadata', '구성의 서버 비교 기준이 일치하지 않습니다. 기존 내용은 보존했습니다.');
+        }
+      } else if (head) throw fault('invalid_composition_metadata', '연결되지 않은 구성에 서버 비교 기준이 있습니다.');
+      return sync;
+    }
+    async function writeCompositionState(meta, sync) {
+      if (account && !sameAccount(account, sync.binding)) throw fault('account_mismatch', '현재 로그인 계정과 구성 동기화 계정이 다릅니다.');
+      validateCompositionState(sync, sync.workspaceId);
+      await meta.put({ key: `compositionSync:${sync.workspaceId}`, value: sync });
+      return clone(sync);
+    }
+    function authorizedComposition(sync, binding, enabled = true) {
+      if (account && !sameAccount(account, binding)) throw fault('account_mismatch', '현재 로그인 계정과 구성 동기화 계정이 다릅니다.');
+      if (!sync) throw fault('composition_not_configured', '이 작업공간의 구성 동기화를 먼저 연결하세요.');
+      if (stablePayload(sync.binding) !== stablePayload(binding)) throw fault('account_mismatch', '다른 계정에 연결된 구성입니다.');
+      if (enabled && !sync.enabled) throw fault('composition_paused', '구성 동기화가 중지되어 있습니다.');
+      return sync;
+    }
+    async function compositionSource(meta, workspaceId, binding, bundle, ready = true) {
+      if (account && !sameAccount(account, binding)) throw fault('account_mismatch', '현재 로그인 계정과 동기화 계정이 다릅니다.');
+      const source = await readSyncState(meta, workspaceId, bundle);
+      if (source && stablePayload(source.binding) !== stablePayload(binding)) {
+        throw fault('account_mismatch', '원문과 구성의 연결 계정이 다릅니다.');
+      }
+      if (!source || !source.enabled || (ready && (source.remoteRevision < 1 || source.status !== 'synced' ||
+          source.outbox || source.conflict || source.syncedLocalRevision !== bundle.revision))) {
+        throw fault('composition_source_pending', '원문 동기화를 먼저 완료해 주세요. 구성은 이 기기에 보존했습니다.');
+      }
+      return source;
+    }
+    async function checkCompositionRow(meta, sync, source, row) {
+      if (row.revision < revisionFloor(sync) || row.source_revision < Math.max(sync.sourceRevision, sync.conflict?.row?.source_revision || 0)) {
+        throw fault('stale_sync_result', '더 최신 구성 또는 원문 기준을 이미 확인했습니다. 다시 동기화하세요.');
+      }
+      if (row.source_revision > source.remoteRevision) {
+        throw fault('composition_source_pending', '이 구성에서 참조하는 원문을 먼저 받아 주세요. 기존 내용은 보존했습니다.');
+      }
+      const known = row.revision === sync.remoteRevision ? (await meta.get(`compositionHead:${sync.workspaceId}`))?.value :
+        row.revision === sync.conflict?.remoteRevision ? sync.conflict.row : null;
+      if (known && (row.source_revision !== known.source_revision || stablePayload(row.data) !== stablePayload(known.data))) {
+        throw fault('remote_revision_mismatch', '같은 서버 버전의 구성 내용이 달라졌습니다. 기존 내용은 보존했습니다.');
+      }
+    }
+    async function saveCompositionHead(meta, row) {
+      await meta.put({ key: `compositionHead:${row.workspace_id}`, value: clone(row) });
+    }
+    async function getCompositionState(workspaceId) {
+      requireId(workspaceId, '작업공간');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const state = await workbenchValue(meta, workspaceId);
+        return clone(await readCompositionState(meta, workspaceId, state));
+      });
+    }
+    async function bindCompositionSync(workspaceId, input) {
+      const binding = bindingValue(input, workspaceId);
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        await compositionSource(meta, workspaceId, binding, bundle);
+        const state = await workbenchValue(meta, workspaceId), previous = await readCompositionState(meta, workspaceId, state);
+        const sync = previous ? authorizedComposition(previous, binding, false) : {
+          format: 'life-composition-sync-v1', workspaceId, binding, enabled: true, remoteRevision: 0, sourceRevision: 0,
+          syncedLocalRevision: -1, outbox: null, conflict: null, status: 'pending', error: null, lastRecoveryId: null
+        };
+        sync.enabled = true; sync.error = null; sync.status = compositionStatus(sync, state);
+        return writeCompositionState(meta, sync);
+      });
+      compositionChanged(result); return result;
+    }
+    async function pauseCompositionSync(workspaceId, input) {
+      const binding = bindingValue(input, workspaceId);
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const state = await workbenchValue(meta, workspaceId);
+        const sync = authorizedComposition(await readCompositionState(meta, workspaceId, state), binding, false);
+        sync.enabled = false; return writeCompositionState(meta, sync);
+      });
+      compositionChanged(result); return result;
+    }
+    async function prepareCompositionUpload(workspaceId, input) {
+      const binding = bindingValue(input, workspaceId);
+      let event;
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const source = await compositionSource(meta, workspaceId, binding, bundle);
+        const state = await workbenchValue(meta, workspaceId);
+        const sync = authorizedComposition(await readCompositionState(meta, workspaceId, state), binding);
+        if (sync.conflict) throw fault('composition_conflict', '다른 기기의 구성을 먼저 비교해 주세요.');
+        if (sync.outbox) {
+          if (sync.outbox.sourceRevision > source.remoteRevision) throw fault('composition_source_pending', '전송 대기 구성에서 참조한 원문을 먼저 받아 주세요.');
+          return clone(sync.outbox);
+        }
+        if (state.revision === sync.syncedLocalRevision) return null;
+        if (source.remoteRevision < sync.sourceRevision) throw fault('stale_sync_result', '구성이 참조한 원문 기준보다 이전 자료입니다.');
+        sync.outbox = { operationId: core().id(), expectedRevision: sync.remoteRevision, sourceRevision: source.remoteRevision,
+          localRevision: state.revision, data: clone(state) };
+        sync.error = null; sync.status = 'pending'; event = await writeCompositionState(meta, sync);
+        return clone(sync.outbox);
+      });
+      if (event) compositionChanged(event); return result;
+    }
+    async function ackCompositionSync(workspaceId, input, operationId, remoteRevision) {
+      const binding = bindingValue(input, workspaceId);
+      requireId(operationId, '전송 작업'); requireRevision(remoteRevision);
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const source = await compositionSource(meta, workspaceId, binding, bundle);
+        const state = await workbenchValue(meta, workspaceId);
+        const sync = authorizedComposition(await readCompositionState(meta, workspaceId, state), binding);
+        const box = sync.outbox;
+        if (!box || box.operationId !== operationId || sync.conflict || remoteRevision !== box.expectedRevision + 1 ||
+            remoteRevision < revisionFloor(sync) || box.sourceRevision > source.remoteRevision) {
+          throw fault('stale_sync_result', '현재 구성 전송 작업과 다른 응답입니다. 다시 동기화하세요.');
+        }
+        await saveCompositionHead(meta, { workspace_id: workspaceId, revision: remoteRevision, source_revision: box.sourceRevision, data: box.data });
+        sync.remoteRevision = remoteRevision; sync.sourceRevision = box.sourceRevision; sync.syncedLocalRevision = box.localRevision;
+        sync.outbox = null; sync.error = null; sync.status = compositionStatus(sync, state);
+        return writeCompositionState(meta, sync);
+      });
+      compositionChanged(result); return result;
+    }
+    async function applyCompositionRemote(workspaceId, input, inputRow) {
+      const binding = bindingValue(input, workspaceId), row = compositionRow(inputRow, workspaceId);
+      let event, updated;
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const source = await compositionSource(meta, workspaceId, binding, bundle);
+        const state = await workbenchValue(meta, workspaceId);
+        const sync = authorizedComposition(await readCompositionState(meta, workspaceId, state), binding);
+        await checkCompositionRow(meta, sync, source, row);
+        if (sync.outbox || sync.conflict || state.revision !== sync.syncedLocalRevision) {
+          // An acknowledged unchanged remote head does not conflict with a newer local edit.
+          if (row.revision === sync.remoteRevision && !sync.conflict) return { status: 'stored', revision: state.revision };
+          sync.conflict = { missing: false, row, remoteRevision: row.revision, localRevision: state.revision };
+          sync.status = 'conflict'; sync.error = null; event = await writeCompositionState(meta, sync);
+          return { status: 'conflict', revision: state.revision };
+        }
+        if (row.revision === sync.remoteRevision) return { status: 'stored', revision: state.revision };
+        updated = { ...clone(row.data), revision: state.revision + 1 }; workbench().validate(updated);
+        await meta.put({ key: `workbench:${workspaceId}`, value: updated }); await saveCompositionHead(meta, row);
+        sync.remoteRevision = row.revision; sync.sourceRevision = row.source_revision; sync.syncedLocalRevision = updated.revision;
+        sync.error = null; sync.status = 'synced'; event = await writeCompositionState(meta, sync);
+        return { status: 'stored', revision: updated.revision };
+      });
+      if (updated) workbenchChanged(updated); if (event) compositionChanged(event); return result;
+    }
+    async function setCompositionConflict(workspaceId, input, inputRow) {
+      const binding = bindingValue(input, workspaceId), row = inputRow === null ? null : compositionRow(inputRow, workspaceId);
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const source = await compositionSource(meta, workspaceId, binding, bundle);
+        const state = await workbenchValue(meta, workspaceId);
+        const sync = authorizedComposition(await readCompositionState(meta, workspaceId, state), binding);
+        if (row) await checkCompositionRow(meta, sync, source, row);
+        sync.conflict = { missing: row === null, row, remoteRevision: row?.revision ?? revisionFloor(sync), localRevision: state.revision };
+        sync.error = null; sync.status = 'conflict'; return writeCompositionState(meta, sync);
+      });
+      compositionChanged(result); return result;
+    }
+    async function setCompositionError(workspaceId, input, inputError) {
+      const binding = bindingValue(input, workspaceId), error = clone(inputError);
+      if (error !== null) {
+        onlyFields(error, ['code', 'message'], 'invalid_request');
+        if (typeof error.code !== 'string' || !/^[a-z0-9_]{1,80}$/.test(error.code) ||
+            typeof error.message !== 'string' || error.message.length > 1000) throw fault('invalid_request', '정제된 구성 오류 정보가 필요합니다.');
+      }
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        await compositionSource(meta, workspaceId, binding, bundle, false);
+        const state = await workbenchValue(meta, workspaceId);
+        const sync = authorizedComposition(await readCompositionState(meta, workspaceId, state), binding);
+        sync.error = error; sync.status = error === null ? compositionStatus(sync, state) : sync.conflict ? 'conflict' : 'error';
+        return writeCompositionState(meta, sync);
+      });
+      compositionChanged(result); return result;
+    }
+    async function resolveCompositionSync(workspaceId, input, resolution) {
+      const binding = bindingValue(input, workspaceId), request = clone(resolution);
+      onlyFields(request, ['choice', 'expectedLocalRevision', 'remoteRow'], 'invalid_request');
+      if (!['local', 'remote'].includes(request.choice)) throw fault('invalid_request', '남길 구성을 선택하세요.');
+      requireRevision(request.expectedLocalRevision);
+      const row = request.remoteRow === null ? null : compositionRow(request.remoteRow, workspaceId);
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const source = await compositionSource(meta, workspaceId, binding, bundle);
+        const state = await workbenchValue(meta, workspaceId);
+        const sync = authorizedComposition(await readCompositionState(meta, workspaceId, state), binding);
+        if (sync.conflict?.missing) throw fault('remote_missing', '삭제된 서버 구성을 자동 재생성하지 않습니다. 백업을 보관하거나 연결을 중지하세요.');
+        if (!sync.conflict || !row || request.expectedLocalRevision !== state.revision ||
+            sync.conflict.localRevision !== state.revision || row.revision !== sync.conflict.remoteRevision ||
+            row.source_revision !== sync.conflict.row.source_revision || stablePayload(row.data) !== stablePayload(sync.conflict.row.data)) {
+          throw fault('composition_conflict_changed', '비교한 구성이 바뀌었습니다. 최신 양쪽 내용을 다시 확인하세요.');
+        }
+        await checkCompositionRow(meta, sync, source, row);
+        const recoveryId = core().id(), discarded = request.choice === 'remote' ? state : row.data;
+        // Keep exact references and material together before either side is replaced. The
+        // existing integrated-backup restore remaps this durable snapshot into a new copy.
+        await meta.add({ key: `compositionRecovery:${workspaceId}:${recoveryId}`, value: {
+          id: recoveryId, workspaceId, createdAt: new Date().toISOString(), bundle: clone(bundle), workbench: clone(discarded)
+        } });
+        const updated = request.choice === 'remote' ? { ...clone(row.data), revision: state.revision + 1 } : state;
+        workbench().validate(updated);
+        if (request.choice === 'remote') await meta.put({ key: `workbench:${workspaceId}`, value: updated });
+        await saveCompositionHead(meta, row);
+        sync.remoteRevision = row.revision; sync.sourceRevision = row.source_revision; sync.outbox = null; sync.conflict = null; sync.error = null;
+        sync.syncedLocalRevision = request.choice === 'remote' ? updated.revision : -1;
+        sync.status = request.choice === 'remote' ? 'synced' : 'pending'; sync.lastRecoveryId = recoveryId;
+        return { workbench: clone(updated), metadata: await writeCompositionState(meta, sync), recoveryId };
+      });
+      if (request.choice === 'remote') workbenchChanged(result.workbench);
+      compositionChanged(result.metadata); return result;
+    }
+    function compositionRecovery(value, workspaceId, id) {
+      onlyFields(value, ['id', 'workspaceId', 'createdAt', 'bundle', 'workbench'], 'invalid_recovery_copy');
+      if (value.id !== id || value.workspaceId !== workspaceId || typeof value.createdAt !== 'string' ||
+          !Number.isFinite(Date.parse(value.createdAt)) || value.bundle?.workspaceId !== workspaceId || value.workbench?.workspaceId !== workspaceId) {
+        throw fault('invalid_recovery_copy', '구성 복구 사본의 식별자를 확인할 수 없습니다.');
+      }
+      core().validateWorkspace(value.bundle); workbench().validate(value.workbench); return value;
+    }
+    async function listCompositionRecoveries(workspaceId) {
+      requireId(workspaceId, '작업공간');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const prefix = `compositionRecovery:${workspaceId}:`, entries = await meta.getAll(root.IDBKeyRange.bound(prefix, prefix + '\uffff'));
+        return entries.map(entry => {
+          const value = compositionRecovery(entry.value, workspaceId, entry.key.slice(prefix.length));
+          return { id: value.id, createdAt: value.createdAt, title: value.workbench.page.title };
+        }).sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+      });
+    }
+    async function readCompositionRecovery(workspaceId, id) {
+      requireId(workspaceId, '작업공간'); requireId(id, '복구 사본');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const entry = await meta.get(`compositionRecovery:${workspaceId}:${id}`);
+        if (!entry) throw fault('recovery_not_found', '구성 복구 사본을 찾을 수 없습니다.');
+        return clone(compositionRecovery(entry.value, workspaceId, id));
+      });
+    }
     function validateStageResult(value, bundle) {
       try {
         if (!plain(value) || Object.keys(value).length !== 2 ||
@@ -955,7 +1288,10 @@
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       commitLocal, saveStage, getStage, listStages, deleteStage, subscribe,
       getSyncState, bindSync, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,
-      setSyncConflict, setSyncError, resolveSync, listUnownedWorkspaces, importUnownedWorkspace };
+      setSyncConflict, setSyncError, resolveSync,
+      getCompositionState, bindCompositionSync, pauseCompositionSync, prepareCompositionUpload, ackCompositionSync,
+      applyCompositionRemote, setCompositionConflict, setCompositionError, resolveCompositionSync,
+      listCompositionRecoveries, readCompositionRecovery, listUnownedWorkspaces, importUnownedWorkspace };
     if (!account) Object.assign(api, { forAccount, clearAccount });
     return Object.freeze(api);
   }

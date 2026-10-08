@@ -377,3 +377,35 @@ Playwright의 저장소 공개 권고가 비어 있다는 사실만으로 끝내
 - **실제 앱과 익명 자료로 검사한다.** OAuth 쿼리를 로그에 쓰지 않는 `scripts/dev-server.py --port 4184`를 시작하고, 제한 시간 내 HTTP 200과 앱 셸 내용을 확인한 뒤 실행한다. 고정 시간 sleep만으로 준비 완료를 판단하지 않는다. `tests/unified-home-browser.cjs`와 `tests/core-experience-browser.cjs`는 합성 계정·자료와 가짜 Auth HTTP를 사용하며 운영 Supabase 자격 증명을 받지 않는다. 공개 빌드는 `check`와 `browser` **둘 다 성공해야** 시작한다.
 - **한 검사의 실패가 다음 진단을 막지 않는다.** 서버가 준비됐다면 두 스크립트를 각각 실행하고 실패 exit code를 유지한다. 서버는 종료 단계에서 정리하며, 항상 보고서 수집을 시도한다. `.local/core-experience/`, `.local/unified-home/`, `.local/quality-audit/after/`와 요청 내용을 기록하지 않는 서버 로그만 업로드한다. `.local`을 포함하기 위해 `include-hidden-files`를 켜되 전체 `.local`을 수집하지 않는다.
 - **검증 환경을 구분한다.** 이번 클라우드의 기존 브라우저 도구는 Playwright **1.57.0**이었으며 새 전용 lock과 섞어 보고하지 않는다. 새 1.63.0의 `npm ci`와 audit, 워크플로 YAML·Bash 구문·build 의존 관계 검사는 통과했다. 고정 Chromium의 로컬 다운로드는 `cdn.playwright.dev`에 대한 환경 네트워크 **403 Domain forbidden**으로 중단됐다. 따라서 기존 시스템 Chromium을 사용한 로컬 실행과 새 고정 Chromium을 내려받는 GitHub Actions 실행 결과를 구분해 후속 검증한다. 실제 GitHub CI·Apple 기기·한글 실물 IME 검증은 이 문서의 설치/구문 확인으로 대체하지 않는다.
+
+## 기기 간 구성 이어쓰기 — CRDT·복제 엔진과 기존 CAS 비교
+
+확인일 **2026-10-06 KST**. 사용 장면은 같은 계정의 A 기기에서 저장한 묶음·내 페이지 코멘트/순서/표시를 B 기기에서 이어 쓰고, 양쪽이 오프라인에서 편집했을 때 어느 쪽도 조용히 잃지 않는 것이다. 글쓰기·가져오기 초안, 공동 편집, 원문 수정, 공개 페이지 자동 갱신은 이번 범위가 아니다. [구현 전 계약](device-continuity.md)의 별도 구성 revision·명시 동의·정확 버전 참조를 기준으로 비교했다.
+
+**결정: 기존 Supabase RPC와 IndexedDB의 CAS·operation ID 영수증 계약을 구성에 별도로 적용한다. 새 동기화 라이브러리는 도입하지 않는다.** 이는 CAS가 자동 병합보다 우월하다는 주장이 아니다. 현재 사용 장면에서는 완결된 구성 한 건의 충돌을 감지하고 양쪽 사본을 복구할 수 있으면 된다. 새 엔진의 데이터 모델·저장 이력·전송 경로로 이전하는 비용을 추가해도 계정·동의·참조·공개 경계는 앱에서 별도로 책임져야 한다. 이 절은 선택 근거이며 운영 SQL 설치나 실제 기기 검증 완료의 증거가 아니다.
+
+### 최신 공식 배포와 적합성
+
+npm의 `latest`, GitHub의 최신 안정 릴리스, 해당 태그의 실제 라이선스 원문을 대조했다. prerelease 태그는 안정판으로 선택하지 않았다. 비교를 위해 패키지를 설치·실행하거나 앱 의존성을 바꾸지는 않았다.
+
+| 후보 | 확인한 안정판·라이선스·관리 상태 | 해도에 적용할 때의 이익과 비용 |
+| --- | --- | --- |
+| **Yjs 13.6.33 · MIT** | [npm](https://registry.npmjs.org/yjs), [공식 릴리스](https://github.com/yjs/yjs/releases/tag/v13.6.33), [태그 LICENSE](https://github.com/yjs/yjs/blob/v13.6.33/LICENSE). npm 게시 **2026-09-24 KST**. 최신 릴리스는 deep event observer의 `currentTarget` 수정이다. 저장소는 비보관 상태이며 10월에도 push가 있다. | [공식 README의 provider 계약](https://github.com/yjs/yjs/blob/v13.6.33/README.md#providers)은 네트워크와 영속 저장을 분리하며, 브라우저에서는 `y-indexeddb`와 네트워크 provider를 조합한다. 문자 단위 공동 편집에는 유력하지만 현재 JSON 구성을 Y.Map/Y.Array/Y.Text로 모델링하고, 인증된 update 전송·압축/보관·기존 JSON 백업 변환을 추가해야 한다. **설계 참고만**: 오프라인 영속성과 전송 수명을 분리한다. |
+| **Automerge JS 3.5.0 · MIT** | [npm](https://registry.npmjs.org/@automerge%2Fautomerge), [공식 릴리스](https://github.com/automerge/automerge/releases/tag/js/automerge-3.5.0), [태그 LICENSE](https://github.com/automerge/automerge/blob/js/automerge-3.5.0/LICENSE). npm 게시 **2026-09-16 KST**. 3.5.0은 변경 author metadata 추가와 큰 목록·rich text patch 복구, `__proto__` 할당 거부 등을 포함한다. 저장소는 비보관 상태이며 10월에도 push가 있다. | 오프라인 변경의 병합과 이력이 장점이다. [충돌 값 구현](https://github.com/automerge/automerge/blob/js/automerge-3.5.0/javascript/src/conflicts.ts)은 같은 속성의 여러 값을 조회할 수 있게 하므로, 충돌 없는 수렴이 사용자의 의도까지 자동 결정한다는 뜻은 아니다. Rust/WASM 기반 JS 배포의 로딩·PWA 캐시·구성 모델 이전·저장 이력/백업 정책을 새로 검증해야 한다. **설계 참고만**: 충돌하는 값을 숨겨 버리지 말고 복구 가능하게 노출한다. |
+| **RxDB 17.6.0 · Apache-2.0 core** | [npm](https://registry.npmjs.org/rxdb), [공식 릴리스](https://github.com/pubkey/rxdb/releases/tag/17.6.0), [태그 LICENSE](https://github.com/pubkey/rxdb/blob/17.6.0/LICENSE.txt). npm 게시 **2026-10-06 KST**. 이 릴리스는 replication 재시작·취소 후 쓰기·다중 탭 migration 정지 등 복구 수정도 포함한다. 저장소는 비보관 상태다. | [공식 Supabase 플러그인](https://github.com/pubkey/rxdb/blob/17.6.0/docs-src/docs/replication-supabase.md)은 optimistic push, checkpoint pull, Realtime을 제공해 세 후보 중 현재 인프라와 가장 가깝다. 그러나 현재의 RPC 전용 권한·JSON 스냅샷/영수증을 그대로 꽂는 어댑터는 아니다. 테이블 모델·삭제 표식·checkpoint/권한·로컬 컬렉션 이전이 필요하다. [기본 충돌 처리](https://github.com/pubkey/rxdb/blob/17.6.0/src/replication-protocol/default-conflict-handler.ts)는 master를 남기고 fork를 버리므로 해도의 양쪽 보존과 다르다. **설계 참고만**: 원자적 revision 검사와 실패 후 재개. [무료 Dexie 저장소와 Premium IndexedDB](https://github.com/pubkey/rxdb/blob/17.6.0/docs-src/docs/rx-storage-dexie.md)의 이용 범위도 구별한다. |
+
+Yjs 저장소의 현재 HEAD에 대한 GitHub 라이선스 요약은 `NOASSERTION`이었다. 따라서 라이선스 판단에는 이를 추측해서 쓰지 않고 **13.6.33 태그의 MIT 원문**을 사용했다. 14 prerelease나 이후 배포본의 조건을 이번 확인으로 보증하지 않는다. RxDB core의 Apache-2.0 확인도 Premium 제품 전체의 이용 허락을 뜻하지 않는다.
+
+보안은 세 저장소의 공개 권고 API([Yjs](https://api.github.com/repos/yjs/yjs/security-advisories?per_page=100)·[Automerge](https://api.github.com/repos/automerge/automerge/security-advisories?per_page=100)·[RxDB](https://api.github.com/repos/pubkey/rxdb/security-advisories?per_page=100))와 GitHub 전역 npm 권고([yjs](https://api.github.com/advisories?ecosystem=npm&affects=yjs&per_page=100)·[@automerge/automerge](https://api.github.com/advisories?ecosystem=npm&affects=%40automerge%2Fautomerge&per_page=100)·[rxdb](https://api.github.com/advisories?ecosystem=npm&affects=rxdb&per_page=100))를 조회했다. 모두 **HTTP 200, 빈 목록**이었다. Yjs의 runtime dependency `lib0`에 대한 [전역 npm 조회](https://api.github.com/advisories?ecosystem=npm&affects=lib0&per_page=100)도 빈 목록이었다. 전체 전이 의존성의 설치·audit를 실행한 것은 아니며 미공개 취약점 없음의 보증이 아니다.
+
+### 선택을 성립시키는 세 가지 복구 계약
+
+1. **충돌 감지 뒤 실제로 양쪽을 다시 열 수 있어야 한다.** 구성 한 건을 CAS로 저장하면 서로 다른 항목의 변경도 충돌할 수 있다. 기본 해결은 선택한 쪽을 남기되 선택하지 않은 쪽을 영속 사본으로 보존하는 것이다. 코멘트·순서·표시·제외 쌍까지 함께 보관하고, 비교 뒤 revision이 바뀌면 다시 선택하게 한다. 입력 중인 DOM 값과 한글 조합을 원격 응답으로 덮지 않는다. 현재 원문 동기화의 `core.makeBackup`/`restoreBackup`만 재사용하면 구성은 사본에 들어가지 않는다. 자료·구성의 같은 시점 스냅샷과 `Workbench.restoreBackup`의 참조 재매핑을 이용하거나, 원래 공간·버전 참조를 유지하는 별도 구성 사본을 내보내고 복구하는 경로가 필요하다. 사본 저장 실패 시 최신 구성 적용도 함께 실패해야 한다.
+2. **별도 revision은 원문과 구성 사이의 분산 트랜잭션이 아니다.** 구성의 source version이 B 기기에 아직 없거나 원문 업로드와 구성 업로드 사이 연결이 끊길 수 있다. 정확한 참조를 유지하고 미도착 상태를 표시하며, 원문을 받은 뒤 같은 버전으로 해소한다. 최신 버전으로 대체하거나 누락 항목을 제거하지 않는다. 원문 동기화가 충돌/중지/미완료이면 구성까지 모두 이어졌다고 표시하지 않는다. 서버가 요구하는 원문 revision/참조 검증과 클라이언트의 수신 순서를 정의하고, 오래된 응답·같은 revision의 다른 내용·계정 전환을 차단한다. 이런 경계는 CRDT로 바꾸어도 남는다.
+3. **구성 연결 동의는 원문 연결·로그인에서 자동 승계하지 않는다.** 기존 연결은 원문·발췌 범위였다. 추가 연결 화면에서 묶음, 페이지 코멘트와 표시 선택, 회고, 관련 기록 제외가 개인 서버로 전송됨을 알려야 한다. 초안·가져오기 파일 바이트·읽기 행동·공개 사본은 자동 포함하지 않는다. 오프라인의 ‘연결’ 클릭을 구현한다면 그 동의 범위와 계정/공간 binding을 영속화하고 재연결 시 서버 충돌부터 확인한다. 이번 UI가 최초 연결을 온라인에서만 허용한다면 실패 후 대기 업로드가 생긴 것처럼 표현하지 않는다. 중지는 이후 전송을 멈추는 동작이며 이미 보낸 서버 사본 삭제/공개 철회와 구별한다.
+
+검증 담당은 이번 구성 동기화의 구현·QA 담당자다. 최소 실험은 **두 독립 브라우저의 같은 기준 revision → 각각 오프라인 편집 → 연결 복귀 → 충돌 비교/양쪽 복구**, 성공 응답 유실 뒤 같은 operation ID 재시도, 로컬 사본 저장 실패, 원문 미도착, 중지·계정 전환 후 늦은 응답이다. 운영 설치 확인과 HTTP 검증, 브라우저 모의 기기 전환, 실제 Mac/iPad/iPhone 사용을 서로 대체하지 않는다.
+
+### 다시 선택할 조건
+
+같은 페이지를 자주 동시에 편집해 문서 단위 충돌이 실제 사용을 방해하면 먼저 항목 단위 revision이나 공통 조상 기반의 보수적 병합을 비교한다. 문자 단위 공동 편집·자동 이력 병합이 제품 요구가 되면 Yjs/Automerge를 익명 한글 편집·IME·삭제/재삽입·백업 변환 사례로 실험한다. 자료량이 커져 전체 스냅샷 전송·조회 지연이 측정되면 RxDB의 증분 복제를 실제 migration/권한 비용과 비교한다. 지금 유지하는 자체 CAS의 비용은 상태 기계·정합성·영수증·복구 UI의 회귀 검사이며, 비슷한 엔진을 무제한 복제하지 않고 공통 계약을 유지해야 한다.

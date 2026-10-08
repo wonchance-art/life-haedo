@@ -14,7 +14,9 @@
         left.key === right.key;
     } catch (_) { return false; }
   }
-  function clientFactory(auth) {
+  function clientFactory(auth, options = {}) {
+    const composition = options.scope === 'composition';
+    if (options.scope !== undefined && !composition) throw fault('invalid_request');
     if (!auth?.ready || !auth.client || typeof auth.verify !== "function")
       throw fault("auth_required");
     return (url, key) => {
@@ -121,12 +123,12 @@
         auth: borrowedAuth,
         from(table) {
           alive();
-          if (table !== "life_workspaces") throw fault("invalid_request");
+          if (composition || table !== "life_workspaces") throw fault("invalid_request");
           return query(auth.client.from(table));
         },
         rpc(name, args) {
           alive();
-          if (name !== "life_sync_put") throw fault("invalid_request");
+          if (composition ? !['life_composition_get', 'life_composition_put'].includes(name) : name !== "life_sync_put") throw fault("invalid_request");
           return query(auth.client.rpc(name, args));
         },
       };
