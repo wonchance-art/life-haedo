@@ -431,13 +431,29 @@
     const fence = '`'.repeat(longest + 1);
     return fence + 'text\n' + text + (text.endsWith('\n') ? '' : '\n') + fence + '\n';
   }
-  function searchSources(bundle, query = '') {
-    validateWorkspace(bundle);
+  function searchPattern(query, options = {}) {
     assert(typeof query === 'string' && query.length <= 500, 'invalid_query', '검색어는 500자 이내의 텍스트로 입력해 주세요.');
+    fields(options, ['ignoreKoreanSpacing'], '검색 옵션');
+    assert(options.ignoreKoreanSpacing === undefined || typeof options.ignoreKoreanSpacing === 'boolean', 'invalid_search_options', '한글 띄어쓰기 검색 옵션을 확인해 주세요.');
     const term = query.trim();
+    if (!term) return null;
+    // Only complete Hangul syllables can ignore horizontal spacing. Latin text,
+    // line breaks, punctuation and the raw source text remain unchanged.
+    const phrase = options.ignoreKoreanSpacing ? term.replace(/([\uac00-\ud7a3])[\p{Zs}\t]+(?=[\uac00-\ud7a3])/gu, '$1') : term;
+    let expression = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (options.ignoreKoreanSpacing) expression = expression.replace(/([\uac00-\ud7a3])(?=[\uac00-\ud7a3])/gu, '$1[\\p{Zs}\\t]*');
     // Native Unicode case folding keeps match.index on the unchanged UTF-16 text.
     // No global flag: reusing the literal expression cannot carry a lastIndex.
-    const pattern = term ? new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'iu') : null;
+    return new RegExp(expression, 'iu');
+  }
+  function matchesSearchText(text, query = '', options = {}) {
+    assert(typeof text === 'string', 'invalid_text', '검색할 텍스트를 확인해 주세요.');
+    const pattern = searchPattern(query, options);
+    return !pattern || pattern.test(text);
+  }
+  function searchSources(bundle, query = '', options = {}) {
+    validateWorkspace(bundle);
+    const pattern = searchPattern(query, options);
     const bySource = new Map();
     for (const version of bundle.sourceVersions) {
       if (!bySource.has(version.sourceId)) bySource.set(version.sourceId, []);
@@ -495,5 +511,5 @@
     return output.join('\n');
   }
 
-  return Object.freeze({ MAX_IMPORT_BYTES, createWorkspace, id, validateWorkspace, prepareImport, buildImportChanges, applyChanges, makeBackup, restoreBackup, searchSources, toMarkdown });
+  return Object.freeze({ MAX_IMPORT_BYTES, createWorkspace, id, validateWorkspace, prepareImport, buildImportChanges, applyChanges, makeBackup, restoreBackup, searchSources, matchesSearchText, toMarkdown });
 });

@@ -1,0 +1,921 @@
+{
+  "phase": "after",
+  "createdAt": "2026-10-07T15:52:18.795Z",
+  "base": "http://127.0.0.1:4187",
+  "browser": "151.0.7922.173",
+  "scope": "Anonymous Auth HTTP; actual SDK/isolated IDB; Linux Chromium viewport and composition-event simulation only; no production or Apple claims",
+  "methodology": "Batch fixture through existing prepareImport/commitLocal; seed cost excluded. Input event capture until second requestAnimationFrame measures app compute+render opportunity, not hardware latency. No timing threshold assertions on shared host.",
+  "checks": [
+    {
+      "name": "100 sources / 820px",
+      "pass": false,
+      "error": "page.waitForFunction: Timeout 30000ms exceeded.\n    at measureInput (/workspace/life-haedo/tests/search-quality-browser.cjs:55:14)\n    at async scopes (/workspace/life-haedo/tests/search-quality-browser.cjs:159:3)\n    at async main (/workspace/life-haedo/tests/search-quality-browser.cjs:232:78)"
+    },
+    {
+      "name": "100 sources / 390px",
+      "pass": true
+    },
+    {
+      "name": "1000 sources / 1440px",
+      "pass": true
+    },
+    {
+      "name": "1000 sources / 390px",
+      "pass": true
+    }
+  ],
+  "measurements": [
+    {
+      "count": 100,
+      "width": 390,
+      "fixture": {
+        "sourceCount": 100,
+        "versionCount": 101,
+        "bodyUtf16Units": 137341
+      },
+      "load": {
+        "cards": 40,
+        "domElements": 1047,
+        "listElements": 840,
+        "scrollHeight": 15486,
+        "navigation": {
+          "domContentLoadedMs": 120.39999999850988,
+          "loadEventMs": 120.59999999776483
+        },
+        "longTasks": [],
+        "reloadToReadyTwoFramesWallMs": 274
+      },
+      "common": [
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 26,
+          "cards": 40,
+          "domElements": 1087,
+          "listElements": 880,
+          "scrollHeight": 11931,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 24.099999997764826,
+          "cards": 40,
+          "domElements": 1087,
+          "listElements": 880,
+          "scrollHeight": 11931,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 26.699999999254942,
+          "cards": 40,
+          "domElements": 1087,
+          "listElements": 880,
+          "scrollHeight": 11931,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 22.300000000745058,
+          "cards": 40,
+          "domElements": 1087,
+          "listElements": 880,
+          "scrollHeight": 11931,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 27.600000001490116,
+          "cards": 40,
+          "domElements": 1087,
+          "listElements": 880,
+          "scrollHeight": 11931,
+          "inputFocused": true
+        }
+      ],
+      "commonMedianMs": 26,
+      "commonMaxMs": 27.600000001490116,
+      "rare": {
+        "query": "옛기억🌱구절",
+        "inputToTwoFramesMs": 27.400000002235174,
+        "cards": 1,
+        "domElements": 229,
+        "listElements": 22,
+        "scrollHeight": 844,
+        "inputFocused": true
+      },
+      "exactOldVersion": true,
+      "rawUtf16Locator": true,
+      "backQueryFocusScroll": true,
+      "compositionIntermediateSuppressed": true,
+      "compositionEndCards": 40,
+      "regression": {
+        "initial40": true,
+        "totalCountPreserved": true,
+        "appendKeepsExistingDomAndInformation": true,
+        "selectedVersionPreserved": true,
+        "firstNewRowFocused": true,
+        "expandedReturnQueryFocusScroll": true,
+        "queryFilterOptionReset40": true,
+        "lastBatchEnds": true,
+        "emptyHidesMore": true,
+        "spacingOptInTitleBodyNote": true,
+        "bodyRawRangePreserved": true,
+        "titleNoteNoInventedLocator": true,
+        "optionRestoredOnReturn": true,
+        "savedOutside40RemainsReachable": true
+      },
+      "longTasks": []
+    },
+    {
+      "count": 1000,
+      "width": 1440,
+      "fixture": {
+        "sourceCount": 1000,
+        "versionCount": 1001,
+        "bodyUtf16Units": 1373041
+      },
+      "load": {
+        "cards": 40,
+        "domElements": 1047,
+        "listElements": 840,
+        "scrollHeight": 10907,
+        "navigation": {
+          "domContentLoadedMs": 115,
+          "loadEventMs": 115.80000000074506
+        },
+        "longTasks": [],
+        "reloadToReadyTwoFramesWallMs": 565
+      },
+      "common": [
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 30,
+          "cards": 40,
+          "domElements": 1087,
+          "listElements": 880,
+          "scrollHeight": 9722,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 26.800000000745058,
+          "cards": 40,
+          "domElements": 1087,
+          "listElements": 880,
+          "scrollHeight": 9722,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 25.099999997764826,
+          "cards": 40,
+          "domElements": 1087,
+          "listElements": 880,
+          "scrollHeight": 9722,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 29,
+          "cards": 40,
+          "domElements": 1087,
+          "listElements": 880,
+          "scrollHeight": 9722,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 28.100000001490116,
+          "cards": 40,
+          "domElements": 1087,
+          "listElements": 880,
+          "scrollHeight": 9722,
+          "inputFocused": true
+        }
+      ],
+      "commonMedianMs": 28.100000001490116,
+      "commonMaxMs": 30,
+      "rare": {
+        "query": "옛기억🌱구절",
+        "inputToTwoFramesMs": 26.800000000745058,
+        "cards": 1,
+        "domElements": 229,
+        "listElements": 22,
+        "scrollHeight": 1020,
+        "inputFocused": true
+      },
+      "exactOldVersion": true,
+      "rawUtf16Locator": true,
+      "backQueryFocusScroll": true,
+      "compositionIntermediateSuppressed": true,
+      "compositionEndCards": 40,
+      "regression": {
+        "initial40": true,
+        "totalCountPreserved": true,
+        "appendKeepsExistingDomAndInformation": true,
+        "selectedVersionPreserved": true,
+        "firstNewRowFocused": true,
+        "expandedReturnQueryFocusScroll": true,
+        "queryFilterOptionReset40": true,
+        "lastBatchEnds": false,
+        "emptyHidesMore": true
+      },
+      "longTasks": []
+    },
+    {
+      "count": 1000,
+      "width": 390,
+      "fixture": {
+        "sourceCount": 1000,
+        "versionCount": 1001,
+        "bodyUtf16Units": 1373041
+      },
+      "load": {
+        "cards": 40,
+        "domElements": 1047,
+        "listElements": 840,
+        "scrollHeight": 15486,
+        "navigation": {
+          "domContentLoadedMs": 111.40000000223517,
+          "loadEventMs": 111.80000000074506
+        },
+        "longTasks": [],
+        "reloadToReadyTwoFramesWallMs": 572
+      },
+      "common": [
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 32.900000002235174,
+          "cards": 40,
+          "domElements": 1087,
+          "listElements": 880,
+          "scrollHeight": 11931,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 35.70000000298023,
+          "cards": 40,
+          "domElements": 1087,
+          "listElements": 880,
+          "scrollHeight": 11931,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 31.400000002235174,
+          "cards": 40,
+          "domElements": 1087,
+          "listElements": 880,
+          "scrollHeight": 11931,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 28.300000000745058,
+          "cards": 40,
+          "domElements": 1087,
+          "listElements": 880,
+          "scrollHeight": 11931,
+          "inputFocused": true
+        },
+        {
+          "query": "정원",
+          "inputToTwoFramesMs": 34.5,
+          "cards": 40,
+          "domElements": 1087,
+          "listElements": 880,
+          "scrollHeight": 11931,
+          "inputFocused": true
+        }
+      ],
+      "commonMedianMs": 32.900000002235174,
+      "commonMaxMs": 35.70000000298023,
+      "rare": {
+        "query": "옛기억🌱구절",
+        "inputToTwoFramesMs": 23.099999997764826,
+        "cards": 1,
+        "domElements": 229,
+        "listElements": 22,
+        "scrollHeight": 844,
+        "inputFocused": true
+      },
+      "exactOldVersion": true,
+      "rawUtf16Locator": true,
+      "backQueryFocusScroll": true,
+      "compositionIntermediateSuppressed": true,
+      "compositionEndCards": 40,
+      "regression": {
+        "initial40": true,
+        "totalCountPreserved": true,
+        "appendKeepsExistingDomAndInformation": true,
+        "selectedVersionPreserved": true,
+        "firstNewRowFocused": true,
+        "expandedReturnQueryFocusScroll": true,
+        "queryFilterOptionReset40": true,
+        "lastBatchEnds": false,
+        "emptyHidesMore": true
+      },
+      "longTasks": []
+    }
+  ],
+  "captures": [
+    {
+      "scene": "list",
+      "count": 100,
+      "width": 820,
+      "file": "browser-after-list-100-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 628,
+          "height": 44,
+          "lineHeight": "31.35px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 40
+      }
+    },
+    {
+      "scene": "common",
+      "count": 100,
+      "width": 820,
+      "file": "browser-after-common-100-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeSearch",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 6.818
+        },
+        "title": {
+          "width": 628,
+          "height": 44,
+          "lineHeight": "31.35px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 40
+      }
+    },
+    {
+      "scene": "expanded-return",
+      "count": 100,
+      "width": 820,
+      "file": "browser-after-expanded-return-100-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "",
+          "class": "life-button life-source-open",
+          "text": "자료 읽기: 전시와 정원에서 남긴 익명 관찰 0060",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 628,
+          "height": 44,
+          "lineHeight": "31.35px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 80
+      }
+    },
+    {
+      "scene": "spacing-body",
+      "count": 100,
+      "width": 820,
+      "file": "browser-after-spacing-body-100-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "",
+          "class": "life-button life-source-open",
+          "text": "자료 읽기: 본문 검사 자료",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 628,
+          "height": 44,
+          "lineHeight": "31.35px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 1
+      }
+    },
+    {
+      "scene": "saved-outside-window",
+      "count": 100,
+      "width": 820,
+      "file": "browser-after-saved-outside-window-100-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "",
+          "class": "life-button life-source-open",
+          "text": "자료 읽기: 마지막에 보관한 익명 원문",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 628,
+          "height": 44,
+          "lineHeight": "31.35px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 106
+      }
+    },
+    {
+      "scene": "list",
+      "count": 100,
+      "width": 390,
+      "file": "browser-after-list-100-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 350,
+          "height": 44,
+          "lineHeight": "31.35px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 40
+      }
+    },
+    {
+      "scene": "common",
+      "count": 100,
+      "width": 390,
+      "file": "browser-after-common-100-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeSearch",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 6.818
+        },
+        "title": {
+          "width": 350,
+          "height": 44,
+          "lineHeight": "31.35px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 40
+      }
+    },
+    {
+      "scene": "expanded-return",
+      "count": 100,
+      "width": 390,
+      "file": "browser-after-expanded-return-100-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "",
+          "class": "life-button life-source-open",
+          "text": "자료 읽기: 전시와 정원에서 남긴 익명 관찰 0060",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 350,
+          "height": 44,
+          "lineHeight": "31.35px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 80
+      }
+    },
+    {
+      "scene": "spacing-body",
+      "count": 100,
+      "width": 390,
+      "file": "browser-after-spacing-body-100-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "",
+          "class": "life-button life-source-open",
+          "text": "자료 읽기: 본문 검사 자료",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 350,
+          "height": 44,
+          "lineHeight": "31.35px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 1
+      }
+    },
+    {
+      "scene": "saved-outside-window",
+      "count": 100,
+      "width": 390,
+      "file": "browser-after-saved-outside-window-100-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "",
+          "class": "life-button life-source-open",
+          "text": "자료 읽기: 마지막에 보관한 익명 원문",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 350,
+          "height": 44,
+          "lineHeight": "31.35px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 106
+      }
+    },
+    {
+      "scene": "list",
+      "count": 1000,
+      "width": 1440,
+      "file": "browser-after-list-1000-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 700,
+          "height": 44,
+          "lineHeight": "31.35px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 40
+      }
+    },
+    {
+      "scene": "common",
+      "count": 1000,
+      "width": 1440,
+      "file": "browser-after-common-1000-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeSearch",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 6.818
+        },
+        "title": {
+          "width": 700,
+          "height": 44,
+          "lineHeight": "31.35px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 40
+      }
+    },
+    {
+      "scene": "expanded-return",
+      "count": 1000,
+      "width": 1440,
+      "file": "browser-after-expanded-return-1000-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "",
+          "class": "life-button life-source-open",
+          "text": "자료 읽기: 전시와 정원에서 남긴 익명 관찰 0060",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 700,
+          "height": 44,
+          "lineHeight": "31.35px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 80
+      }
+    },
+    {
+      "scene": "list",
+      "count": 1000,
+      "width": 390,
+      "file": "browser-after-list-1000-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 350,
+          "height": 44,
+          "lineHeight": "31.35px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 40
+      }
+    },
+    {
+      "scene": "common",
+      "count": 1000,
+      "width": 390,
+      "file": "browser-after-common-1000-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeSearch",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 6.818
+        },
+        "title": {
+          "width": 350,
+          "height": 44,
+          "lineHeight": "31.35px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 40
+      }
+    },
+    {
+      "scene": "expanded-return",
+      "count": 1000,
+      "width": 390,
+      "file": "browser-after-expanded-return-1000-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "",
+          "class": "life-button life-source-open",
+          "text": "자료 읽기: 전시와 정원에서 남긴 익명 관찰 0060",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 350,
+          "height": 44,
+          "lineHeight": "31.35px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 80
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "realRemoteWrites": 0
+}

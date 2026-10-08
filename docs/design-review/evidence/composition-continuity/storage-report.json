@@ -1,0 +1,128 @@
+{
+  "browser": "151.0.7922.173",
+  "capturedAt": "2026-10-05T15:38:13.305Z",
+  "environment": "Linux Chromium real IndexedDB and BroadcastChannel; anonymous explicit storage account scope, no real Auth/HTTP or Apple device verification",
+  "checks": [
+    {
+      "name": "composition opt-in requires explicitly connected, current material; no implicit binding or upload",
+      "pass": true,
+      "evidence": {
+        "unbound": "composition_source_pending",
+        "untouched": [
+          null,
+          null
+        ],
+        "paused": "composition_source_pending",
+        "disabled": true
+      }
+    },
+    {
+      "name": "pending upload is immutable after local edits and reload; exact receipt advances only its captured revision",
+      "pass": true,
+      "evidence": {
+        "retainedAcrossReload": true,
+        "capturedRevisionOnly": true,
+        "invalidReceiptsRejected": 2
+      }
+    },
+    {
+      "name": "same remote revision validates its acknowledged head even after local edits and never overwrites them",
+      "pass": true,
+      "evidence": {
+        "staleRemoteCannotReplaceLocal": true,
+        "changedAcknowledgedPayloadRejected": true
+      }
+    },
+    {
+      "name": "remote source revision cannot lead local material or regress an accepted dependency",
+      "pass": true,
+      "evidence": {
+        "futureSourceRejected": true,
+        "acceptedSourceFloor": 2,
+        "regressedSourceRejected": true
+      }
+    },
+    {
+      "name": "two tabs serialize competing remote applies and reject same revision with different payloads",
+      "pass": true,
+      "evidence": {
+        "committedRemoteApplies": 1,
+        "rejectedSameRevisionChanges": 1,
+        "separateTabNotification": true
+      }
+    },
+    {
+      "name": "racing local edits become a conflict; stale resolution cannot discard newly saved text",
+      "pass": true,
+      "evidence": {
+        "dirtyRemoteAdvanceBecomesConflict": true,
+        "newerDraftPreserved": true,
+        "staleResolutionWrites": 0
+      }
+    },
+    {
+      "name": "choosing remote atomically preserves unselected composition and exact material as a restorable backup",
+      "pass": true,
+      "evidence": {
+        "exactUnselectedNotesPreserved": true,
+        "originalVersionReferencesPreserved": true,
+        "integratedRestoreRemapsIds": true,
+        "activeWorkspaceUnchanged": true
+      }
+    },
+    {
+      "name": "choosing local preserves the remote composition and prepares a fresh CAS operation",
+      "pass": true,
+      "evidence": {
+        "remoteCommentPreserved": true,
+        "chosenLocalRevisionUnchanged": true,
+        "nextExpectedRemoteRevision": 2
+      }
+    },
+    {
+      "name": "aborted final metadata write rolls back composition, head, and recovery together",
+      "pass": true,
+      "evidence": {
+        "abortedWriteRolledBackAllRecords": true,
+        "phantomRecoveryCount": 0
+      }
+    },
+    {
+      "name": "pausing composition rejects late acknowledgement and apply while preserving its outbox",
+      "pass": true,
+      "evidence": {
+        "lateWritesRejected": 2,
+        "retryPayloadRetained": true
+      }
+    },
+    {
+      "name": "foreign account cannot inspect composition state or recovery snapshots from the same database",
+      "pass": true,
+      "evidence": {
+        "rejectedCrossAccountOperations": 6
+      }
+    },
+    {
+      "name": "corrupted revision metadata fails closed without replacing local composition",
+      "pass": true,
+      "evidence": {
+        "inconsistentMetadataRejected": true,
+        "localContentPreserved": true
+      }
+    },
+    {
+      "name": "browser reports no unexpected errors or external requests",
+      "pass": true,
+      "evidence": {
+        "consoleErrors": 0,
+        "pageErrors": 0,
+        "externalRequests": 0,
+        "remoteWrites": 0
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "unexpectedRequests": [],
+  "remoteWrites": 0
+}

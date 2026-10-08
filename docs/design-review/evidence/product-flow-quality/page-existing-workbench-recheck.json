@@ -1,0 +1,17 @@
+{
+  "createdAt": "2026-10-07T14:25:53.490Z",
+  "scope": "Real local app/SDK/IDB with anonymous HTTP interception; no live SQL/SNS or Apple-device verification",
+  "checks": [
+    {
+      "name": "create activity, select fixed sources, copy and edit page, preview and reload preserve data",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "realRemoteWrites": 0,
+  "browser": "151.0.7922.173"
+}

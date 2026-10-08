@@ -1,0 +1,251 @@
+{
+  "scope": "CI failure reproduction and explicit A navigation corrections; not combined with the earlier 21 scoped checks. Latest result per named case; earlier failures retained as execution history. App runtime unchanged.",
+  "suites": {
+    "workshop": {
+      "runs": [
+        {
+          "path": ".local/book-workshop/run-2026-10-08T21-26-16-770Z.json",
+          "createdAt": "2026-10-08T21:26:16.770Z",
+          "finishedAt": "2026-10-08T21:26:39.359Z",
+          "checks": [
+            {
+              "name": "UI originals to four-chapter workshop, revision, JSON, Markdown and PDF at 1440",
+              "pass": false,
+              "error": "TypeError: Cannot read properties of undefined (reading '0')\n    at /workspace/life-haedo/tests/book-workshop-browser.cjs:129:82\n    at async check (/workspace/life-haedo/tests/book-workshop-browser.cjs:112:11)\n    at async main (/workspace/life-haedo/tests/book-workshop-browser.cjs:117:43)"
+            },
+            {
+              "name": "UI originals to four-chapter workshop, revision, JSON, Markdown and PDF at 820",
+              "pass": false,
+              "error": "TypeError: Cannot read properties of undefined (reading '0')\n    at /workspace/life-haedo/tests/book-workshop-browser.cjs:129:82\n    at async check (/workspace/life-haedo/tests/book-workshop-browser.cjs:112:11)\n    at async main (/workspace/life-haedo/tests/book-workshop-browser.cjs:117:43)"
+            },
+            {
+              "name": "UI originals to four-chapter workshop, revision, JSON, Markdown and PDF at 390",
+              "pass": false,
+              "error": "TypeError: Cannot read properties of undefined (reading '0')\n    at /workspace/life-haedo/tests/book-workshop-browser.cjs:129:82\n    at async check (/workspace/life-haedo/tests/book-workshop-browser.cjs:112:11)\n    at async main (/workspace/life-haedo/tests/book-workshop-browser.cjs:117:43)"
+            },
+            {
+              "name": "outline choices survive close and changed reading range; failed and repeated create recovers one book",
+              "pass": true
+            }
+          ],
+          "consoleErrors": 0,
+          "pageErrors": 0,
+          "external": 0
+        },
+        {
+          "path": ".local/book-workshop/run-2026-10-08T21-27-12-801Z.json",
+          "createdAt": "2026-10-08T21:27:12.801Z",
+          "finishedAt": "2026-10-08T21:27:56.164Z",
+          "checks": [
+            {
+              "name": "UI originals to four-chapter workshop, revision, JSON, Markdown and PDF at 1440",
+              "pass": true
+            },
+            {
+              "name": "UI originals to four-chapter workshop, revision, JSON, Markdown and PDF at 820",
+              "pass": true
+            },
+            {
+              "name": "UI originals to four-chapter workshop, revision, JSON, Markdown and PDF at 390",
+              "pass": false,
+              "error": "locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[data-haedo-navigation] [data-haedo-section=\"manage\"]')\u001b[22m\n\u001b[2m    - locator resolved to <a aria-label=\"관리\" data-haedo-section=\"manage\" href=\"index.html?section=manage\" class=\"haedo-icon-button haedo-nav-link\">…</a>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    23 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is not visible\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n\n    at nav (/workspace/life-haedo/tests/unified-home-browser.cjs:23:17)\n    at /workspace/life-haedo/tests/book-workshop-browser.cjs:138:56\n    at async check (/workspace/life-haedo/tests/book-workshop-browser.cjs:112:11)\n    at async main (/workspace/life-haedo/tests/book-workshop-browser.cjs:117:43)"
+            },
+            {
+              "name": "outline choices survive close and changed reading range; failed and repeated create recovers one book",
+              "pass": true
+            }
+          ],
+          "consoleErrors": 0,
+          "pageErrors": 0,
+          "external": 0
+        },
+        {
+          "path": ".local/book-workshop/run-2026-10-08T21-28-17-251Z.json",
+          "createdAt": "2026-10-08T21:28:17.251Z",
+          "finishedAt": "2026-10-08T21:28:26.192Z",
+          "checks": [
+            {
+              "name": "UI originals to four-chapter workshop, revision, JSON, Markdown and PDF at 390",
+              "pass": true
+            }
+          ],
+          "consoleErrors": 0,
+          "pageErrors": 0,
+          "external": 0
+        }
+      ],
+      "latestChecks": {
+        "UI originals to four-chapter workshop, revision, JSON, Markdown and PDF at 1440": {
+          "pass": true,
+          "run": ".local/book-workshop/run-2026-10-08T21-27-12-801Z.json"
+        },
+        "UI originals to four-chapter workshop, revision, JSON, Markdown and PDF at 820": {
+          "pass": true,
+          "run": ".local/book-workshop/run-2026-10-08T21-27-12-801Z.json"
+        },
+        "UI originals to four-chapter workshop, revision, JSON, Markdown and PDF at 390": {
+          "pass": true,
+          "run": ".local/book-workshop/run-2026-10-08T21-28-17-251Z.json"
+        },
+        "outline choices survive close and changed reading range; failed and repeated create recovers one book": {
+          "pass": true,
+          "run": ".local/book-workshop/run-2026-10-08T21-27-12-801Z.json"
+        }
+      },
+      "pass": true
+    },
+    "completion": {
+      "runs": [
+        {
+          "path": ".local/book-completion/after/run-2026-10-08T21-26-56-129Z.json",
+          "createdAt": "2026-10-08T21:26:56.129Z",
+          "finishedAt": "2026-10-08T21:27:15.919Z",
+          "checks": [
+            {
+              "name": "restore, find chapter, edit, reload and exact evidence/output at 1440",
+              "pass": true
+            },
+            {
+              "name": "restore, find chapter, edit, reload and exact evidence/output at 820",
+              "pass": true
+            },
+            {
+              "name": "restore, find chapter, edit, reload and exact evidence/output at 390",
+              "pass": true
+            },
+            {
+              "name": "active-book limit, archived chapter/book, empty-book outline and account isolation",
+              "pass": false,
+              "error": "locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[data-haedo-navigation] [data-haedo-section=\"home\"]')\u001b[22m\n\u001b[2m    - locator resolved to <a aria-label=\"홈\" href=\"index.html\" data-haedo-section=\"home\" class=\"haedo-icon-button haedo-nav-link\">…</a>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    23 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is not visible\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n\n    at nav (/workspace/life-haedo/tests/unified-home-browser.cjs:23:17)\n    at home (/workspace/life-haedo/tests/book-completion-browser.cjs:28:35)\n    at /workspace/life-haedo/tests/book-completion-browser.cjs:81:13\n    at async check (/workspace/life-haedo/tests/book-completion-browser.cjs:55:11)\n    at async main (/workspace/life-haedo/tests/book-completion-browser.cjs:78:5)"
+            }
+          ],
+          "consoleErrors": 0,
+          "pageErrors": 0,
+          "external": 0
+        },
+        {
+          "path": ".local/book-completion/after/run-2026-10-08T21-27-37-468Z.json",
+          "createdAt": "2026-10-08T21:27:37.468Z",
+          "finishedAt": "2026-10-08T21:27:40.628Z",
+          "checks": [
+            {
+              "name": "active-book limit, archived chapter/book, empty-book outline and account isolation",
+              "pass": true
+            }
+          ],
+          "consoleErrors": 0,
+          "pageErrors": 0,
+          "external": 0
+        }
+      ],
+      "latestChecks": {
+        "restore, find chapter, edit, reload and exact evidence/output at 1440": {
+          "pass": true,
+          "run": ".local/book-completion/after/run-2026-10-08T21-26-56-129Z.json"
+        },
+        "restore, find chapter, edit, reload and exact evidence/output at 820": {
+          "pass": true,
+          "run": ".local/book-completion/after/run-2026-10-08T21-26-56-129Z.json"
+        },
+        "restore, find chapter, edit, reload and exact evidence/output at 390": {
+          "pass": true,
+          "run": ".local/book-completion/after/run-2026-10-08T21-26-56-129Z.json"
+        },
+        "active-book limit, archived chapter/book, empty-book outline and account isolation": {
+          "pass": true,
+          "run": ".local/book-completion/after/run-2026-10-08T21-27-37-468Z.json"
+        }
+      },
+      "pass": true
+    },
+    "import": {
+      "runs": [
+        {
+          "path": ".local/book-import/after/run-2026-10-08T21-27-35-042Z.json",
+          "createdAt": "2026-10-08T21:27:35.042Z",
+          "finishedAt": "2026-10-08T21:28:02.629Z",
+          "checks": [
+            {
+              "name": "chapter import, explicit exact link, source return and output at 1440",
+              "pass": true
+            },
+            {
+              "name": "chapter import, explicit exact link, source return and output at 820",
+              "pass": true
+            },
+            {
+              "name": "chapter import, explicit exact link, source return and output at 390",
+              "pass": true
+            },
+            {
+              "name": "prior exact duplicate is reused; cancelling or repeating a link does not alter original sources",
+              "pass": true
+            },
+            {
+              "name": "unrelated draft and current unaccepted import survive a return to the unchanged chapter",
+              "pass": false,
+              "error": "locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[data-haedo-navigation] [data-haedo-section=\"home\"]')\u001b[22m\n\u001b[2m    - locator resolved to <a aria-label=\"홈\" href=\"index.html\" data-haedo-section=\"home\" class=\"haedo-icon-button haedo-nav-link\">…</a>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    23 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is not visible\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n\n    at nav (/workspace/life-haedo/tests/unified-home-browser.cjs:23:17)\n    at /workspace/life-haedo/tests/book-import-browser.cjs:74:42\n    at async check (/workspace/life-haedo/tests/book-import-browser.cjs:51:11)\n    at async main (/workspace/life-haedo/tests/book-import-browser.cjs:73:5)"
+            },
+            {
+              "name": "chapter save failures preserve writing and separately stored source; retry adds the link once",
+              "pass": true
+            },
+            {
+              "name": "batch accepted files require explicit subset link and an account change cannot link old candidates",
+              "pass": true
+            }
+          ],
+          "consoleErrors": 0,
+          "pageErrors": 0,
+          "external": 0
+        },
+        {
+          "path": ".local/book-import/after/run-2026-10-08T21-29-05-638Z.json",
+          "createdAt": "2026-10-08T21:29:05.638Z",
+          "finishedAt": "2026-10-08T21:29:07.113Z",
+          "checks": [
+            {
+              "name": "unrelated draft and current unaccepted import survive a return to the unchanged chapter",
+              "pass": true
+            }
+          ],
+          "consoleErrors": 0,
+          "pageErrors": 0,
+          "external": 0
+        }
+      ],
+      "latestChecks": {
+        "chapter import, explicit exact link, source return and output at 1440": {
+          "pass": true,
+          "run": ".local/book-import/after/run-2026-10-08T21-27-35-042Z.json"
+        },
+        "chapter import, explicit exact link, source return and output at 820": {
+          "pass": true,
+          "run": ".local/book-import/after/run-2026-10-08T21-27-35-042Z.json"
+        },
+        "chapter import, explicit exact link, source return and output at 390": {
+          "pass": true,
+          "run": ".local/book-import/after/run-2026-10-08T21-27-35-042Z.json"
+        },
+        "prior exact duplicate is reused; cancelling or repeating a link does not alter original sources": {
+          "pass": true,
+          "run": ".local/book-import/after/run-2026-10-08T21-27-35-042Z.json"
+        },
+        "unrelated draft and current unaccepted import survive a return to the unchanged chapter": {
+          "pass": true,
+          "run": ".local/book-import/after/run-2026-10-08T21-29-05-638Z.json"
+        },
+        "chapter save failures preserve writing and separately stored source; retry adds the link once": {
+          "pass": true,
+          "run": ".local/book-import/after/run-2026-10-08T21-27-35-042Z.json"
+        },
+        "batch accepted files require explicit subset link and an account change cannot link old candidates": {
+          "pass": true,
+          "run": ".local/book-import/after/run-2026-10-08T21-27-35-042Z.json"
+        }
+      },
+      "pass": true
+    }
+  },
+  "pass": true
+}

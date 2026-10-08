@@ -1,0 +1,21 @@
+{
+  "createdAt": "2026-10-08T00:56:39.243Z",
+  "scope": "Real local app/SDK/IDB with anonymous HTTP interception; no live SQL/SNS or Apple-device verification",
+  "checks": [
+    {
+      "name": "invalid backup replaces valid candidate without installing anything",
+      "pass": true
+    },
+    {
+      "name": "discover uses actual stored versions and reflection counts selected scope only",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "realRemoteWrites": 0,
+  "browser": "151.0.7922.173"
+}

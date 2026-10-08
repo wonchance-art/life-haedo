@@ -5,7 +5,19 @@
 
 [배포 사이트](https://wonchance-art.github.io/life-haedo/) · 로컬 변경은 배포 전까지 사이트에 반영되지 않는다.
 
-[핵심 경험 품질 기준](docs/design-review/core-experience.md): 읽던 원문에서 `함께 읽을 기록`을 바로 열고 같은 버전·위치로 돌아온다. 내 페이지는 본문·코멘트를 먼저 보여주며 설정은 펼쳐 편집한다. 짧은 지시도 목표·범위·보존·완료 기준으로 구체화하고, 기능 검사·사용 흐름·시각 검토를 나눠 확인한다. 다음 우선순위는 [기기 간 이어쓰기](docs/life-tools-design/device-continuity.md)이며 구성·초안 동기화는 아직 구현되지 않았다.
+[핵심 경험 품질 기준](docs/design-review/core-experience.md): 읽던 원문에서 `함께 읽을 기록`을 바로 열고 같은 버전·위치로 돌아온다. 내 페이지는 본문·코멘트를 먼저 보여주며 설정은 펼쳐 편집한다. 짧은 지시도 목표·범위·보존·완료 기준으로 구체화하고, 기능 검사·사용 흐름·시각 검토를 나눠 확인한다. 후속 [구성 이어쓰기](docs/life-tools-design/device-continuity.md)는 명시 연결·양쪽 비교·복구 사본까지 구현했다. **신규 운영 SQL 설치와 배포는 대기 중**이며 [관리자 인계](docs/life-tools-design/composition-installation.md)를 따른다. 후속 [선택한 글쓰기 초안 이어쓰기](docs/design-review/writing-continuity.md)도 구현·검증했으며, 두 단계의 [Local 일괄 설치 순서](docs/life-tools-design/continuity-batch-installation.md)를 함께 준비했다.
+
+[첫 책 작업실](docs/design-review/book-workshop.md): 기록 선택 → 회고 → 연도/묶음별 목차 → 장별 집필·개정 → 전체 점검 → PDF로 이어집니다. 선행 기능과 함께 Local 병합·운영 적용을 기다리는 브랜치 구현이며, 배포 사이트의 현재 기능으로 단정하지 않습니다.
+
+[원고 중심 A안](docs/design-review/book-design-reset-integration.md): 비교 후 선택한 디자인을 실제 책 목록·집필·읽기에 적용했습니다. 원고를 앞세우고 목차·근거·관리는 펼쳐 사용합니다. 실제 앱 화면·기능 검증과 Local 인계는 연결 문서에서 확인할 수 있으며, 병합·배포와는 구분합니다.
+
+[독자용 책자](docs/design-review/book-edition.md): 책 전체를 표지·목차·본문·출처 부록으로 읽고, 장을 고쳐 다시 확인한 뒤 A5/A4 HTML·PDF로 받습니다. 기존 검토용 출력은 유지하며 해석과 원문 본문은 각각 선택합니다.
+
+[저장한 책으로 돌아오기](docs/design-review/book-completion.md): 홈에서 책과 목차를 찾고 원하는 장으로 바로 들어가 수정·출력합니다. 복원 전 책·장·개정본도 확인합니다.
+
+[장에 자료 가져오기](docs/design-review/book-import-return.md): 집필 중 자료를 가져와 정확한 원문 버전을 고르고, 같은 장에 명시 연결한 뒤 원고로 돌아옵니다. 자료 보관과 장 연결은 별도 저장입니다.
+
+[복원한 책으로 이어가기](docs/design-review/book-restore-entry.md): 통합 백업의 책 목록을 바로 열어 장을 선택하고 수정·출력합니다. 보관한 책과 기존 작업공간은 그대로 유지합니다.
 
 전체 화면의 최신 디자인은 [Life 기준 사이트 재구성](docs/design-review/life-design-site.md)을 따른다.
 
@@ -44,7 +56,7 @@
 
 [선택한 페이지 공개](docs/design-review/page-publication.md)는 별도 사본의 게시·갱신·철회와 로그인 없는 방문 화면, 다른 기기에서도 접근하는 소유자 관리 목록을 구현한다. 운영 설치·배포 상태는 해당 기록을 따른다. 구성 동기화와 공개 게시를 구분하며, 초안 편집만으로 공개본을 바꾸지 않는다.
 
-[영역별 최소 동작](docs/life-tools-design/working-sections.md): 기록의 `묶음`에서 원문을 묶고, `내 페이지`에서 보여줄 부분과 메모를 골라 비공개로 미리 본다. 도구의 [다시 찾기](docs/design-review/rediscovery.md)는 정확 검색과 기준 기록의 관련 자료 최대 3개·근거·제외/복원을 제공한다. 선택 자료 `회고`도 유지한다. 새 구성은 이 브라우저·계정·작업공간에 저장되며 기존 원문 동기화에는 포함되지 않는다. 다른 기기로 옮길 때는 관리의 `자료·구성 백업`을 사용한다. SNS 자동 연결·공개 게시·AI 분석 기능은 아니다.
+[영역별 최소 동작](docs/life-tools-design/working-sections.md): 기록의 `묶음`에서 원문을 묶고, `내 페이지`에서 보여줄 부분과 메모를 골라 비공개로 미리 본다. 도구의 [다시 찾기](docs/design-review/rediscovery.md)는 정확 검색과 기준 기록의 관련 자료 최대 3개·근거·제외/복원을 제공한다. 선택 자료 `회고`도 유지한다. 새 구성은 우선 이 브라우저·계정·작업공간에 저장된다. 기존 원문 동기화와 별개로 연결하는 [구성 이어쓰기](docs/life-tools-design/device-continuity.md)의 운영 준비 전에는 관리의 `자료·구성 백업`으로 다른 기기에 새 사본을 옮긴다. SNS 자동 연결·공개 게시·AI 분석 기능은 아니다.
 
 1. `가져오기`에서 Apple 메모·Obsidian·네이버 블로그·인스타그램 등 원천을 고르고 본문, UTF-8 `.txt`/`.md` 파일 또는 링크를 제공한다.
 2. 받은 원문과 누락 범위를 확인한다. `자료만 보관`으로 끝내거나 필요한 구절을 선택해 주제와 보완 메모를 붙인다.

@@ -57,4 +57,4 @@ description: life-haedo 정적 웹 앱의 기능 수정, 로컬 실행, SVG·저
 로컬에서 먼저 점검한다. 허용된 브랜치·푸시 범위에서 배포하고, 공개 URL에서 새 변경과 콘솔을 확인한다.
 첫 로드가 이전 서비스워커 문서면 한 번 더 새로고침한다. 변경을 확인하기 전까지 배포 완료로 보고하지 않는다.
 
-직접 글쓰기는 `assets/life/writing.js`·`writing-ui.js`와 `ui.js`의 `write` 화면이다. 저장한 글은 기존 원천/불변 버전을 재사용하고 `kind=writing` 초안은 브라우저 전용이다. `node tests/life-writing-browser.cjs`로 입력·충돌·발췌·백업·계정/공간 경계와 세 폭을 확인한다. 원문 제목은 현재 값이며 버전별 제목 이력을 약속하지 않는다. 새 라이브러리·SQL 없이 기존 원자 저장·동기화 계약을 유지한다.
+직접 글쓰기는 `assets/life/writing.js`·`writing-ui.js`와 `ui.js`의 `write` 화면이다. 저장한 글은 기존 원천/불변 버전을 재사용하고 `kind=writing` 초안은 기본 로컬 보관이며 writing-sync가 고른 한 편만 별도로 연결한다. 가져오기 검토는 포함하지 않는다. 종료 상태와 정확한 원문 쌍·새 미연결 초안 복구 계약은 `docs/design-review/writing-continuity.md`를 따른다. `node tests/life-writing-browser.cjs`로 입력·충돌·발췌·백업·계정/공간 경계와 세 폭을 확인한다. 원문 제목은 현재 값이며 버전별 제목 이력을 약속하지 않는다. 새 라이브러리 없이 기존 원자 저장·동기화 계약을 유지한다. 구성·초안 SQL의 운영 설치 여부는 `docs/life-tools-design/continuity-batch-installation.md`로 확인한다.

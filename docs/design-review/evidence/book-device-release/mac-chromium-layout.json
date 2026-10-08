@@ -1,0 +1,547 @@
+{
+  "createdAt": "2026-10-08T22:17:47.162Z",
+  "browser": "153.0.8010.12",
+  "scope": "Actual restored app: long title and mid-manuscript input/reading return. Plain Korean insertion and synthetic composition events only; not native Apple IME.",
+  "checks": [
+    {
+      "width": 390,
+      "pass": true,
+      "titleMetrics": {
+        "client": 162,
+        "scroll": 162,
+        "line": 40.5
+      },
+      "inputBefore": {
+        "start": 406,
+        "end": 406,
+        "scrollY": 590,
+        "top": -199.75,
+        "height": 1227,
+        "scrollHeight": 1227,
+        "focus": "wbChapterNote",
+        "characters": 837
+      },
+      "inputAfter": {
+        "start": 421,
+        "end": 421,
+        "scrollY": 590,
+        "top": -199.75,
+        "height": 1227,
+        "scrollHeight": 1227,
+        "focus": "wbChapterNote",
+        "characters": 852
+      },
+      "returned": {
+        "start": 421,
+        "end": 421,
+        "scrollY": 590,
+        "top": -199.75,
+        "height": 1227,
+        "scrollHeight": 1227,
+        "focus": "wbChapterNote",
+        "characters": 852
+      },
+      "readChapters": [
+        {
+          "id": "76346088-e80e-413b-b14d-8fc2dd0aecb7",
+          "top": -3455.5,
+          "bottom": 113.78125
+        },
+        {
+          "id": "5e0255b0-8a7c-40ee-9202-1b054373239f",
+          "top": 113.78125,
+          "bottom": 1771.84375
+        },
+        {
+          "id": "2816dcd9-06f4-4dc1-83c0-c7f6471db54c",
+          "top": 1771.84375,
+          "bottom": 3102.9375
+        },
+        {
+          "id": "f848d6b4-b7ba-49ef-92b6-07deb9af40b4",
+          "top": 3102.9375,
+          "bottom": 4434.03125
+        }
+      ],
+      "sourceToggleSelectionPreserved": true,
+      "saveError": {
+        "top": 64,
+        "bottom": 208.375,
+        "viewport": 844,
+        "text": "저장이 중단되었습니다. 입력을 확인하고 다시 저장하세요.\n\n초안 JSON 받기\n다시 저장"
+      },
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "width": 820,
+      "pass": true,
+      "titleMetrics": {
+        "client": 144,
+        "scroll": 144,
+        "line": 48
+      },
+      "inputBefore": {
+        "start": 512,
+        "end": 512,
+        "scrollY": 600,
+        "top": -199.75,
+        "height": 1000,
+        "scrollHeight": 1000,
+        "focus": "wbChapterNote",
+        "characters": 837
+      },
+      "inputAfter": {
+        "start": 527,
+        "end": 527,
+        "scrollY": 600,
+        "top": -199.75,
+        "height": 1037,
+        "scrollHeight": 1037,
+        "focus": "wbChapterNote",
+        "characters": 852
+      },
+      "returned": {
+        "start": 527,
+        "end": 527,
+        "scrollY": 600,
+        "top": -199.75,
+        "height": 1037,
+        "scrollHeight": 1037,
+        "focus": "wbChapterNote",
+        "characters": 852
+      },
+      "readChapters": [
+        {
+          "id": "02df2a2f-d0ba-4fab-b860-55a9b760a99d",
+          "top": -2978.75,
+          "bottom": 114.015625
+        },
+        {
+          "id": "9d0d18ec-845a-4a4d-9d3e-77f6c6f47d1e",
+          "top": 114.015625,
+          "bottom": 1479.828125
+        },
+        {
+          "id": "709e7dec-c0bf-405f-82d6-03ef2a7c4481",
+          "top": 1479.828125,
+          "bottom": 2567.40625
+        },
+        {
+          "id": "df02d61b-68d7-4117-8bc1-9f8c1b761eb9",
+          "top": 2567.40625,
+          "bottom": 3654.984375
+        }
+      ],
+      "sourceToggleSelectionPreserved": true,
+      "saveError": null,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "width": 1440,
+      "pass": true,
+      "titleMetrics": {
+        "client": 144,
+        "scroll": 144,
+        "line": 48
+      },
+      "inputBefore": {
+        "start": 542,
+        "end": 542,
+        "scrollY": 600,
+        "top": -199.75,
+        "height": 926,
+        "scrollHeight": 926,
+        "focus": "wbChapterNote",
+        "characters": 837
+      },
+      "inputAfter": {
+        "start": 557,
+        "end": 557,
+        "scrollY": 600,
+        "top": -199.75,
+        "height": 926,
+        "scrollHeight": 926,
+        "focus": "wbChapterNote",
+        "characters": 852
+      },
+      "returned": {
+        "start": 557,
+        "end": 557,
+        "scrollY": 600,
+        "top": -199.75,
+        "height": 926,
+        "scrollHeight": 926,
+        "focus": "wbChapterNote",
+        "characters": 852
+      },
+      "readChapters": [
+        {
+          "id": "9c405703-b6db-4bde-bd04-5e782d91faeb",
+          "top": -2571.75,
+          "bottom": 113.5
+        },
+        {
+          "id": "ac2a35f4-3997-4093-aaeb-86a2d6e5e039",
+          "top": 113.5,
+          "bottom": 1368.171875
+        },
+        {
+          "id": "7b6d6d9e-e56b-4b03-ab7e-7ec03d1c20ed",
+          "top": 1368.171875,
+          "bottom": 2455.75
+        },
+        {
+          "id": "f34194e0-e453-49c5-a6fa-317000a1447f",
+          "top": 2455.75,
+          "bottom": 3543.328125
+        }
+      ],
+      "sourceToggleSelectionPreserved": true,
+      "saveError": null,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    }
+  ],
+  "observations": [
+    {
+      "width": 390,
+      "titleMetrics": {
+        "client": 162,
+        "scroll": 162,
+        "line": 40.5
+      },
+      "inputBefore": {
+        "start": 406,
+        "end": 406,
+        "scrollY": 590,
+        "top": -199.75,
+        "height": 1227,
+        "scrollHeight": 1227,
+        "focus": "wbChapterNote",
+        "characters": 837
+      },
+      "inputAfter": {
+        "start": 421,
+        "end": 421,
+        "scrollY": 590,
+        "top": -199.75,
+        "height": 1227,
+        "scrollHeight": 1227,
+        "focus": "wbChapterNote",
+        "characters": 852
+      },
+      "afterSave": {
+        "start": 421,
+        "end": 421,
+        "scrollY": 590,
+        "top": -199.75,
+        "height": 1227,
+        "scrollHeight": 1227,
+        "focus": "wbChapterNote",
+        "characters": 852
+      },
+      "pointerRead": {
+        "scrollY": 590,
+        "top": -199.75
+      },
+      "beforeRead": {
+        "scrollY": 590,
+        "top": -199.75,
+        "start": 421,
+        "end": 421
+      },
+      "returned": {
+        "start": 421,
+        "end": 421,
+        "scrollY": 590,
+        "top": -199.75,
+        "height": 1227,
+        "scrollHeight": 1227,
+        "focus": "wbChapterNote",
+        "characters": 852
+      },
+      "readChapters": [
+        {
+          "id": "76346088-e80e-413b-b14d-8fc2dd0aecb7",
+          "top": -3455.5,
+          "bottom": 113.78125
+        },
+        {
+          "id": "5e0255b0-8a7c-40ee-9202-1b054373239f",
+          "top": 113.78125,
+          "bottom": 1771.84375
+        },
+        {
+          "id": "2816dcd9-06f4-4dc1-83c0-c7f6471db54c",
+          "top": 1771.84375,
+          "bottom": 3102.9375
+        },
+        {
+          "id": "f848d6b4-b7ba-49ef-92b6-07deb9af40b4",
+          "top": 3102.9375,
+          "bottom": 4434.03125
+        }
+      ]
+    },
+    {
+      "width": 820,
+      "titleMetrics": {
+        "client": 144,
+        "scroll": 144,
+        "line": 48
+      },
+      "inputBefore": {
+        "start": 512,
+        "end": 512,
+        "scrollY": 600,
+        "top": -199.75,
+        "height": 1000,
+        "scrollHeight": 1000,
+        "focus": "wbChapterNote",
+        "characters": 837
+      },
+      "inputAfter": {
+        "start": 527,
+        "end": 527,
+        "scrollY": 600,
+        "top": -199.75,
+        "height": 1037,
+        "scrollHeight": 1037,
+        "focus": "wbChapterNote",
+        "characters": 852
+      },
+      "afterSave": {
+        "start": 527,
+        "end": 527,
+        "scrollY": 600,
+        "top": -199.75,
+        "height": 1037,
+        "scrollHeight": 1037,
+        "focus": "wbChapterNote",
+        "characters": 852
+      },
+      "pointerRead": {
+        "scrollY": 600,
+        "top": -199.75
+      },
+      "beforeRead": {
+        "scrollY": 600,
+        "top": -199.75,
+        "start": 527,
+        "end": 527
+      },
+      "returned": {
+        "start": 527,
+        "end": 527,
+        "scrollY": 600,
+        "top": -199.75,
+        "height": 1037,
+        "scrollHeight": 1037,
+        "focus": "wbChapterNote",
+        "characters": 852
+      },
+      "readChapters": [
+        {
+          "id": "02df2a2f-d0ba-4fab-b860-55a9b760a99d",
+          "top": -2978.75,
+          "bottom": 114.015625
+        },
+        {
+          "id": "9d0d18ec-845a-4a4d-9d3e-77f6c6f47d1e",
+          "top": 114.015625,
+          "bottom": 1479.828125
+        },
+        {
+          "id": "709e7dec-c0bf-405f-82d6-03ef2a7c4481",
+          "top": 1479.828125,
+          "bottom": 2567.40625
+        },
+        {
+          "id": "df02d61b-68d7-4117-8bc1-9f8c1b761eb9",
+          "top": 2567.40625,
+          "bottom": 3654.984375
+        }
+      ]
+    },
+    {
+      "width": 1440,
+      "titleMetrics": {
+        "client": 144,
+        "scroll": 144,
+        "line": 48
+      },
+      "inputBefore": {
+        "start": 542,
+        "end": 542,
+        "scrollY": 600,
+        "top": -199.75,
+        "height": 926,
+        "scrollHeight": 926,
+        "focus": "wbChapterNote",
+        "characters": 837
+      },
+      "inputAfter": {
+        "start": 557,
+        "end": 557,
+        "scrollY": 600,
+        "top": -199.75,
+        "height": 926,
+        "scrollHeight": 926,
+        "focus": "wbChapterNote",
+        "characters": 852
+      },
+      "afterSave": {
+        "start": 557,
+        "end": 557,
+        "scrollY": 600,
+        "top": -199.75,
+        "height": 926,
+        "scrollHeight": 926,
+        "focus": "wbChapterNote",
+        "characters": 852
+      },
+      "pointerRead": {
+        "scrollY": 600,
+        "top": -199.75
+      },
+      "beforeRead": {
+        "scrollY": 600,
+        "top": -199.75,
+        "start": 557,
+        "end": 557
+      },
+      "returned": {
+        "start": 557,
+        "end": 557,
+        "scrollY": 600,
+        "top": -199.75,
+        "height": 926,
+        "scrollHeight": 926,
+        "focus": "wbChapterNote",
+        "characters": 852
+      },
+      "readChapters": [
+        {
+          "id": "9c405703-b6db-4bde-bd04-5e782d91faeb",
+          "top": -2571.75,
+          "bottom": 113.5
+        },
+        {
+          "id": "ac2a35f4-3997-4093-aaeb-86a2d6e5e039",
+          "top": 113.5,
+          "bottom": 1368.171875
+        },
+        {
+          "id": "7b6d6d9e-e56b-4b03-ab7e-7ec03d1c20ed",
+          "top": 1368.171875,
+          "bottom": 2455.75
+        },
+        {
+          "id": "f34194e0-e453-49c5-a6fa-317000a1447f",
+          "top": 2455.75,
+          "bottom": 3543.328125
+        }
+      ]
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "remoteWrites": 0,
+  "runtime": {
+    "assets/life/workbench-ui.js": "96016906feddc2ff8f43122c4bd881c8a718d36b37acfa730eb00a1974ccdfa0",
+    "assets/life/workbench.css": "fc77bf7cf73850562d3a5a4df2ad5319742423f7903518b4cf401a22d0b361ef"
+  },
+  "finishedAt": "2026-10-08T22:17:54.300Z",
+  "pass": true
+}

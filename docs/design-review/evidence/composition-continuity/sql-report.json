@@ -1,0 +1,24 @@
+{
+  "scope": "Network-isolated temporary PostgreSQL 17 container; synthetic auth.uid claims; no production or HTTP assertions",
+  "sqlRoleRlsRpcChecks": 163,
+  "installationMetadataChecks": 11,
+  "multiSessionChecks": 4,
+  "concurrency": [
+    "concurrent initial CAS: one stored, one conflict; revision one",
+    "concurrent identical retry: same result and one durable receipt",
+    "original update and composition share advisory lock; source floor observed after commit",
+    "same UUID in two accounts has independent advisory lock and state"
+  ],
+  "repeatMigrationPreservesOriginalsCompositionsReceipts": true,
+  "existingMetadataFingerprint": "b9ff085e00504cc2745c86173a5546a9",
+  "originalsUnchangedByMigration": true,
+  "migrationSha256": "9585ff0173932bc0afa509d6eb28a3f2957b7bca0ec285fa30ff7d19832cb935",
+  "serverVersion": "17.11",
+  "temporaryContainer": "life-composition-sql-20261006",
+  "temporaryContainerRemoved": true,
+  "testTransactionRolledBack": true,
+  "httpCheckerLocallyMocked": true,
+  "productionSqlExecuted": false,
+  "productionHttpExecuted": false,
+  "firstInstallPreservesExistingMetadataAndRecords": true
+}

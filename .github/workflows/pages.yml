@@ -28,7 +28,7 @@ jobs:
       - run: npm test
   browser:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
     env:
@@ -48,7 +48,7 @@ jobs:
       - name: Install Chromium and Korean fonts
         run: |
           node tests/browser-ci/node_modules/playwright/cli.js install --with-deps chromium
-          sudo apt-get install -y fonts-noto-cjk
+          sudo apt-get install -y fonts-noto-cjk poppler-utils
       - name: Select the pinned browser
         run: |
           node <<'NODE'
@@ -88,6 +88,111 @@ jobs:
       - name: Verify the core experience across screen sizes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/core-experience-browser.cjs
+      - name: Verify composition transactions and recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/composition-storage-browser.cjs
+      - name: Verify composition continuity across browser contexts
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/composition-sync-browser.cjs
+      - name: Verify selected writing draft transactions
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/writing-sync-storage-browser.cjs
+      - name: Verify selected writing drafts across browser contexts
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/writing-sync-browser.cjs
+      - name: Verify writing input survives delayed draft notifications
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/writing-sync-incoming-browser.cjs
+      - name: Verify reading selection and return context
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reading-quality-browser.cjs
+      - name: Verify reading and writing quality across screen sizes
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reading-writing-quality-browser.cjs
+      - name: Verify local reading position transactions
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reading-position-storage-browser.cjs
+      - name: Verify explicit reading resume and failure recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reading-resume-browser.cjs
+      - name: Verify import outcomes and review selection
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/import-flow-quality-browser.cjs
+      - name: Verify social source input and draft recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-social-import-browser.cjs
+      - name: Verify source reimport identity and immutable versions
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/source-reimport-browser.cjs
+      - name: Verify page ordering and preview return
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/page-flow-quality-browser.cjs
+      - name: Verify private page expression and preservation boundaries
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/page-expression-browser.cjs
+      - name: Verify explicit publication and revocation
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-share-browser.cjs
+      - name: Verify public expression and anonymous reading boundaries
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/public-expression-browser.cjs
+      - name: Verify import-to-page product flow
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/product-flow-quality-browser.cjs
+      - name: Verify Korean search and bounded result rendering
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/search-quality-browser.cjs
+      - name: Verify private reflection reading and manuscript boundaries
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reflection-reading-browser.cjs
+      - name: Verify book projects, chapter manuscripts and recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-projects-browser.cjs
+      - name: Verify private interpretations, evidence and exclusion boundaries
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-insights-browser.cjs
+      - name: Verify book reading, editing return and manuscript parity
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-preview-browser.cjs
+      - name: Verify manuscript page position and visible chapter editing
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-manuscript-layout-browser.cjs
+      - name: Verify immediate chapter editing with default motion
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: BOOK_MANUSCRIPT_LAYOUT_MOTION=no-preference node tests/book-manuscript-layout-browser.cjs
+      - name: Verify book editions, archive recovery and backup boundaries
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-history-browser.cjs
+      - name: Verify Korean PDF and private native print boundaries
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-print-browser.cjs
+      - name: Verify imported records through a four-chapter book and PDF
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-workshop-browser.cjs
+      - name: Verify workshop save retries and stale reload protection
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-workshop-recovery-browser.cjs
+      - name: Verify reader book layout, output choices and PDF
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-edition-browser.cjs
+      - name: Verify saved book re-entry and chapter navigation
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-completion-browser.cjs
+      - name: Verify chapter-scoped imports and explicit source linking
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-import-browser.cjs
+      - name: Verify chapter import receipts and recovery boundaries
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-import-recovery-browser.cjs
+      - name: Verify restored book entry and committed-copy recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-restore-entry-browser.cjs
+      - name: Verify keyboard focus during delayed home loading
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: ENTRY_TEST_MATCH='preserves focused recent' node tests/home-entry-browser.cjs
+      - name: Verify isolated expression-page design samples
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/expression-design-browser.cjs
       - name: Stop the local server
         if: always()
         run: |
@@ -103,6 +208,33 @@ jobs:
             .local/core-experience/
             .local/unified-home/
             .local/quality-audit/after/
+            .local/composition-sync/
+            .local/writing-sync/
+            .local/reading-quality/
+            .local/reading-writing-quality/
+            .local/book-design-reset-app/caret/
+            .local/reading-resume/
+            .local/product-flow-quality/
+            .local/search-quality/
+            .local/expression-design/
+            .local/page-expression/
+            .local/public-expression/
+            .local/source-reimport/
+            .local/reflection-reading/
+            .local/book-projects/
+            .local/book-insights/
+            .local/book-preview/
+            .local/book-history/
+            .local/book-print/
+            .local/book-workshop/
+            .local/book-workshop-recovery/
+            .local/book-edition/
+            .local/book-completion/after/
+            .local/book-import/after/
+            .local/book-import-recovery/
+            .local/book-restore-entry/after/
+            .local/life-social-import/
+            .local/share/
             .local/browser-ci/server.log
           include-hidden-files: true
           if-no-files-found: warn

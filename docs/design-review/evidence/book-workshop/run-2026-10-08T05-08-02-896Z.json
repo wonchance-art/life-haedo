@@ -1,0 +1,173 @@
+{
+  "createdAt": "2026-10-08T05:08:02.896Z",
+  "browser": "151.0.7922.173",
+  "scope": "UI-created anonymous originals and manuscripts only; real SDK and IndexedDB with synthetic Auth. No production access. Chromium widths/touch/keyboard, not Apple hardware, native IME, print-dialog Save confirmation or a usability study.",
+  "checks": [
+    {
+      "name": "UI originals to four-chapter workshop, revision, JSON, Markdown and PDF at 1440",
+      "pass": false,
+      "error": "locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#wbBookPreviewOpen')\u001b[22m\n\n    at /workspace/life-haedo/tests/book-workshop-browser.cjs:128:540\n    at async check (/workspace/life-haedo/tests/book-workshop-browser.cjs:109:11)\n    at async main (/workspace/life-haedo/tests/book-workshop-browser.cjs:114:43)"
+    },
+    {
+      "name": "UI originals to four-chapter workshop, revision, JSON, Markdown and PDF at 820",
+      "pass": false,
+      "error": "locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#wbBookPreviewOpen')\u001b[22m\n\n    at /workspace/life-haedo/tests/book-workshop-browser.cjs:128:540\n    at async check (/workspace/life-haedo/tests/book-workshop-browser.cjs:109:11)\n    at async main (/workspace/life-haedo/tests/book-workshop-browser.cjs:114:43)"
+    },
+    {
+      "name": "UI originals to four-chapter workshop, revision, JSON, Markdown and PDF at 390",
+      "pass": false,
+      "error": "locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#wbBookPreviewOpen')\u001b[22m\n\n    at /workspace/life-haedo/tests/book-workshop-browser.cjs:128:540\n    at async check (/workspace/life-haedo/tests/book-workshop-browser.cjs:109:11)\n    at async main (/workspace/life-haedo/tests/book-workshop-browser.cjs:114:43)"
+    },
+    {
+      "name": "outline choices survive close and changed reading range; failed and repeated create recovers one book",
+      "pass": false,
+      "error": "locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#wbError').getByRole('button', { name: '다시 저장', exact: true })\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" class=\"life-button\">다시 저장</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m  - element was detached from the DOM, retrying\u001b[22m\n\n    at arrangeReflection (/workspace/life-haedo/tests/book-workshop-browser.cjs:80:129)\n    at async /workspace/life-haedo/tests/book-workshop-browser.cjs:140:46\n    at async check (/workspace/life-haedo/tests/book-workshop-browser.cjs:109:11)\n    at async main (/workspace/life-haedo/tests/book-workshop-browser.cjs:139:5)"
+    }
+  ],
+  "visual": [
+    {
+      "scene": "outline-plan",
+      "width": 1440,
+      "screenshot": "outline-plan-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 648,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "outline-plan",
+      "width": 820,
+      "screenshot": "outline-plan-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 576,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "outline-plan",
+      "width": 390,
+      "screenshot": "outline-plan-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 300,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "empty-manuscript-review",
+      "width": 390,
+      "screenshot": "empty-manuscript-review-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    }
+  ],
+  "observations": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "operatingRemoteWrites": 0,
+  "pass": false,
+  "finishedAt": "2026-10-08T05:09:16.016Z"
+}

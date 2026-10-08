@@ -377,3 +377,278 @@ Playwright의 저장소 공개 권고가 비어 있다는 사실만으로 끝내
 - **실제 앱과 익명 자료로 검사한다.** OAuth 쿼리를 로그에 쓰지 않는 `scripts/dev-server.py --port 4184`를 시작하고, 제한 시간 내 HTTP 200과 앱 셸 내용을 확인한 뒤 실행한다. 고정 시간 sleep만으로 준비 완료를 판단하지 않는다. `tests/unified-home-browser.cjs`와 `tests/core-experience-browser.cjs`는 합성 계정·자료와 가짜 Auth HTTP를 사용하며 운영 Supabase 자격 증명을 받지 않는다. 공개 빌드는 `check`와 `browser` **둘 다 성공해야** 시작한다.
 - **한 검사의 실패가 다음 진단을 막지 않는다.** 서버가 준비됐다면 두 스크립트를 각각 실행하고 실패 exit code를 유지한다. 서버는 종료 단계에서 정리하며, 항상 보고서 수집을 시도한다. `.local/core-experience/`, `.local/unified-home/`, `.local/quality-audit/after/`와 요청 내용을 기록하지 않는 서버 로그만 업로드한다. `.local`을 포함하기 위해 `include-hidden-files`를 켜되 전체 `.local`을 수집하지 않는다.
 - **검증 환경을 구분한다.** 이번 클라우드의 기존 브라우저 도구는 Playwright **1.57.0**이었으며 새 전용 lock과 섞어 보고하지 않는다. 새 1.63.0의 `npm ci`와 audit, 워크플로 YAML·Bash 구문·build 의존 관계 검사는 통과했다. 고정 Chromium의 로컬 다운로드는 `cdn.playwright.dev`에 대한 환경 네트워크 **403 Domain forbidden**으로 중단됐다. 따라서 기존 시스템 Chromium을 사용한 로컬 실행과 새 고정 Chromium을 내려받는 GitHub Actions 실행 결과를 구분해 후속 검증한다. 실제 GitHub CI·Apple 기기·한글 실물 IME 검증은 이 문서의 설치/구문 확인으로 대체하지 않는다.
+
+## 기기 간 구성 이어쓰기 — CRDT·복제 엔진과 기존 CAS 비교
+
+확인일 **2026-10-06 KST**. 사용 장면은 같은 계정의 A 기기에서 저장한 묶음·내 페이지 코멘트/순서/표시를 B 기기에서 이어 쓰고, 양쪽이 오프라인에서 편집했을 때 어느 쪽도 조용히 잃지 않는 것이다. 글쓰기·가져오기 초안, 공동 편집, 원문 수정, 공개 페이지 자동 갱신은 이번 범위가 아니다. [구현 전 계약](device-continuity.md)의 별도 구성 revision·명시 동의·정확 버전 참조를 기준으로 비교했다.
+
+**결정: 기존 Supabase RPC와 IndexedDB의 CAS·operation ID 영수증 계약을 구성에 별도로 적용한다. 새 동기화 라이브러리는 도입하지 않는다.** 이는 CAS가 자동 병합보다 우월하다는 주장이 아니다. 현재 사용 장면에서는 완결된 구성 한 건의 충돌을 감지하고 양쪽 사본을 복구할 수 있으면 된다. 새 엔진의 데이터 모델·저장 이력·전송 경로로 이전하는 비용을 추가해도 계정·동의·참조·공개 경계는 앱에서 별도로 책임져야 한다. 이 절은 선택 근거이며 운영 SQL 설치나 실제 기기 검증 완료의 증거가 아니다.
+
+### 최신 공식 배포와 적합성
+
+npm의 `latest`, GitHub의 최신 안정 릴리스, 해당 태그의 실제 라이선스 원문을 대조했다. prerelease 태그는 안정판으로 선택하지 않았다. 비교를 위해 패키지를 설치·실행하거나 앱 의존성을 바꾸지는 않았다.
+
+| 후보 | 확인한 안정판·라이선스·관리 상태 | 해도에 적용할 때의 이익과 비용 |
+| --- | --- | --- |
+| **Yjs 13.6.33 · MIT** | [npm](https://registry.npmjs.org/yjs), [공식 릴리스](https://github.com/yjs/yjs/releases/tag/v13.6.33), [태그 LICENSE](https://github.com/yjs/yjs/blob/v13.6.33/LICENSE). npm 게시 **2026-09-24 KST**. 최신 릴리스는 deep event observer의 `currentTarget` 수정이다. 저장소는 비보관 상태이며 10월에도 push가 있다. | [공식 README의 provider 계약](https://github.com/yjs/yjs/blob/v13.6.33/README.md#providers)은 네트워크와 영속 저장을 분리하며, 브라우저에서는 `y-indexeddb`와 네트워크 provider를 조합한다. 문자 단위 공동 편집에는 유력하지만 현재 JSON 구성을 Y.Map/Y.Array/Y.Text로 모델링하고, 인증된 update 전송·압축/보관·기존 JSON 백업 변환을 추가해야 한다. **설계 참고만**: 오프라인 영속성과 전송 수명을 분리한다. |
+| **Automerge JS 3.5.0 · MIT** | [npm](https://registry.npmjs.org/@automerge%2Fautomerge), [공식 릴리스](https://github.com/automerge/automerge/releases/tag/js/automerge-3.5.0), [태그 LICENSE](https://github.com/automerge/automerge/blob/js/automerge-3.5.0/LICENSE). npm 게시 **2026-09-16 KST**. 3.5.0은 변경 author metadata 추가와 큰 목록·rich text patch 복구, `__proto__` 할당 거부 등을 포함한다. 저장소는 비보관 상태이며 10월에도 push가 있다. | 오프라인 변경의 병합과 이력이 장점이다. [충돌 값 구현](https://github.com/automerge/automerge/blob/js/automerge-3.5.0/javascript/src/conflicts.ts)은 같은 속성의 여러 값을 조회할 수 있게 하므로, 충돌 없는 수렴이 사용자의 의도까지 자동 결정한다는 뜻은 아니다. Rust/WASM 기반 JS 배포의 로딩·PWA 캐시·구성 모델 이전·저장 이력/백업 정책을 새로 검증해야 한다. **설계 참고만**: 충돌하는 값을 숨겨 버리지 말고 복구 가능하게 노출한다. |
+| **RxDB 17.6.0 · Apache-2.0 core** | [npm](https://registry.npmjs.org/rxdb), [공식 릴리스](https://github.com/pubkey/rxdb/releases/tag/17.6.0), [태그 LICENSE](https://github.com/pubkey/rxdb/blob/17.6.0/LICENSE.txt). npm 게시 **2026-10-06 KST**. 이 릴리스는 replication 재시작·취소 후 쓰기·다중 탭 migration 정지 등 복구 수정도 포함한다. 저장소는 비보관 상태다. | [공식 Supabase 플러그인](https://github.com/pubkey/rxdb/blob/17.6.0/docs-src/docs/replication-supabase.md)은 optimistic push, checkpoint pull, Realtime을 제공해 세 후보 중 현재 인프라와 가장 가깝다. 그러나 현재의 RPC 전용 권한·JSON 스냅샷/영수증을 그대로 꽂는 어댑터는 아니다. 테이블 모델·삭제 표식·checkpoint/권한·로컬 컬렉션 이전이 필요하다. [기본 충돌 처리](https://github.com/pubkey/rxdb/blob/17.6.0/src/replication-protocol/default-conflict-handler.ts)는 master를 남기고 fork를 버리므로 해도의 양쪽 보존과 다르다. **설계 참고만**: 원자적 revision 검사와 실패 후 재개. [무료 Dexie 저장소와 Premium IndexedDB](https://github.com/pubkey/rxdb/blob/17.6.0/docs-src/docs/rx-storage-dexie.md)의 이용 범위도 구별한다. |
+
+Yjs 저장소의 현재 HEAD에 대한 GitHub 라이선스 요약은 `NOASSERTION`이었다. 따라서 라이선스 판단에는 이를 추측해서 쓰지 않고 **13.6.33 태그의 MIT 원문**을 사용했다. 14 prerelease나 이후 배포본의 조건을 이번 확인으로 보증하지 않는다. RxDB core의 Apache-2.0 확인도 Premium 제품 전체의 이용 허락을 뜻하지 않는다.
+
+보안은 세 저장소의 공개 권고 API([Yjs](https://api.github.com/repos/yjs/yjs/security-advisories?per_page=100)·[Automerge](https://api.github.com/repos/automerge/automerge/security-advisories?per_page=100)·[RxDB](https://api.github.com/repos/pubkey/rxdb/security-advisories?per_page=100))와 GitHub 전역 npm 권고([yjs](https://api.github.com/advisories?ecosystem=npm&affects=yjs&per_page=100)·[@automerge/automerge](https://api.github.com/advisories?ecosystem=npm&affects=%40automerge%2Fautomerge&per_page=100)·[rxdb](https://api.github.com/advisories?ecosystem=npm&affects=rxdb&per_page=100))를 조회했다. 모두 **HTTP 200, 빈 목록**이었다. Yjs의 runtime dependency `lib0`에 대한 [전역 npm 조회](https://api.github.com/advisories?ecosystem=npm&affects=lib0&per_page=100)도 빈 목록이었다. 전체 전이 의존성의 설치·audit를 실행한 것은 아니며 미공개 취약점 없음의 보증이 아니다.
+
+### 선택을 성립시키는 세 가지 복구 계약
+
+1. **충돌 감지 뒤 실제로 양쪽을 다시 열 수 있어야 한다.** 구성 한 건을 CAS로 저장하면 서로 다른 항목의 변경도 충돌할 수 있다. 기본 해결은 선택한 쪽을 남기되 선택하지 않은 쪽을 영속 사본으로 보존하는 것이다. 코멘트·순서·표시·제외 쌍까지 함께 보관하고, 비교 뒤 revision이 바뀌면 다시 선택하게 한다. 입력 중인 DOM 값과 한글 조합을 원격 응답으로 덮지 않는다. 현재 원문 동기화의 `core.makeBackup`/`restoreBackup`만 재사용하면 구성은 사본에 들어가지 않는다. 자료·구성의 같은 시점 스냅샷과 `Workbench.restoreBackup`의 참조 재매핑을 이용하거나, 원래 공간·버전 참조를 유지하는 별도 구성 사본을 내보내고 복구하는 경로가 필요하다. 사본 저장 실패 시 최신 구성 적용도 함께 실패해야 한다.
+2. **별도 revision은 원문과 구성 사이의 분산 트랜잭션이 아니다.** 구성의 source version이 B 기기에 아직 없거나 원문 업로드와 구성 업로드 사이 연결이 끊길 수 있다. 정확한 참조를 유지하고 미도착 상태를 표시하며, 원문을 받은 뒤 같은 버전으로 해소한다. 최신 버전으로 대체하거나 누락 항목을 제거하지 않는다. 원문 동기화가 충돌/중지/미완료이면 구성까지 모두 이어졌다고 표시하지 않는다. 서버가 요구하는 원문 revision/참조 검증과 클라이언트의 수신 순서를 정의하고, 오래된 응답·같은 revision의 다른 내용·계정 전환을 차단한다. 이런 경계는 CRDT로 바꾸어도 남는다.
+3. **구성 연결 동의는 원문 연결·로그인에서 자동 승계하지 않는다.** 기존 연결은 원문·발췌 범위였다. 추가 연결 화면에서 묶음, 페이지 코멘트와 표시 선택, 회고, 관련 기록 제외가 개인 서버로 전송됨을 알려야 한다. 초안·가져오기 파일 바이트·읽기 행동·공개 사본은 자동 포함하지 않는다. 오프라인의 ‘연결’ 클릭을 구현한다면 그 동의 범위와 계정/공간 binding을 영속화하고 재연결 시 서버 충돌부터 확인한다. 이번 UI가 최초 연결을 온라인에서만 허용한다면 실패 후 대기 업로드가 생긴 것처럼 표현하지 않는다. 중지는 이후 전송을 멈추는 동작이며 이미 보낸 서버 사본 삭제/공개 철회와 구별한다.
+
+검증 담당은 이번 구성 동기화의 구현·QA 담당자다. 최소 실험은 **두 독립 브라우저의 같은 기준 revision → 각각 오프라인 편집 → 연결 복귀 → 충돌 비교/양쪽 복구**, 성공 응답 유실 뒤 같은 operation ID 재시도, 로컬 사본 저장 실패, 원문 미도착, 중지·계정 전환 후 늦은 응답이다. 운영 설치 확인과 HTTP 검증, 브라우저 모의 기기 전환, 실제 Mac/iPad/iPhone 사용을 서로 대체하지 않는다.
+
+### 다시 선택할 조건
+
+같은 페이지를 자주 동시에 편집해 문서 단위 충돌이 실제 사용을 방해하면 먼저 항목 단위 revision이나 공통 조상 기반의 보수적 병합을 비교한다. 문자 단위 공동 편집·자동 이력 병합이 제품 요구가 되면 Yjs/Automerge를 익명 한글 편집·IME·삭제/재삽입·백업 변환 사례로 실험한다. 자료량이 커져 전체 스냅샷 전송·조회 지연이 측정되면 RxDB의 증분 복제를 실제 migration/권한 비용과 비교한다. 지금 유지하는 자체 CAS의 비용은 상태 기계·정합성·영수증·복구 UI의 회귀 검사이며, 비슷한 엔진을 무제한 복제하지 않고 공통 계약을 유지해야 한다.
+
+## 선택한 글쓰기 초안 이어쓰기 — 같은 비교를 재사용하는 범위
+
+결정일 **2026-10-06 KST**. 같은 날 위 절에서 확인한 **Yjs 13.6.33·Automerge JS 3.5.0·RxDB 17.6.0**의 공식 배포·라이선스·공개 보안 권고 결과를 재사용한다. 초안 기능을 이유로 이를 다시 조회하거나 새 패키지를 설치하지 않았으며, 추가 보안 검사를 수행한 것으로 보고하지 않는다. 이번 사용 장면은 A에서 쓰던 **선택한 초안 한 건**을 B에서 받고 이어 쓰는 것이다. 문자 단위 공동 편집·실시간 커서 공유·가져오기 파일 전송은 포함하지 않는다.
+
+**결정: 기존 JSON 글쓰기 모델과 계정별 CAS·영수증 계약을 유지한다. 새 편집기·복제 라이브러리는 도입하지 않는다.** 기존 `Writing.validateDraft`의 `life-writing-draft-v1`에는 제목·본문·정확한 원문 기준과 `draft`/`applied` 상태가 이미 있다. 이를 CRDT 문서나 RxDB 컬렉션으로 옮기면 데이터 변환·PWA 배포·백업 호환성을 새로 검증해야 하지만, 명시 전송 동의와 기록 저장 이후의 종료 처리는 여전히 앱에서 해결해야 한다. 이번에는 초안 한 건의 충돌을 비교하고 선택하지 않은 입력을 다시 열 수 있으면 사용 장면을 충족한다.
+
+재사용과 분리의 기준은 다음과 같다.
+
+- **인증·모델을 재사용한다.** 공용 Auth가 검증한 SDK를 기존 제한 어댑터에서 빌리고, 글쓰기 전용 RPC 범위만 허용한다. 별도 로그인·세션 복사·SDK를 추가하지 않는다. `kind: writing`만 대상이며 가져오기 검토 초안은 전송하지 않는다. 본문 UTF-8 1 MiB 제한과 원문 수정 기준을 유지한다.
+- **저장 계약을 재사용하고 전송 단위는 분리한다.** 계정·작업공간·초안 ID를 고정한 독립 revision, 변경할 수 없는 outbox, operation ID 영수증, 계정/연결 세대 검사, 원문 선행 동기화를 사용한다. 기존 원문이나 구성 연결에서 모든 초안의 전송 동의를 자동 승계하지 않는다. 재시도·중지 후 재개·늦은 응답 차단의 검증 기준도 구성 이어쓰기와 공유한다. 공통 수명·인증 처리는 재사용하되 초안의 종료 규칙을 구성의 일반 JSON 교체와 같게 취급하지 않는다.
+- **충돌 사본은 기존 글쓰기에서 다시 연다.** 양쪽이 초안이면 선택하지 않은 쪽의 제목·본문·원문 기준을 새 미연결 초안으로 같은 로컬 트랜잭션에 보관한다. 기존 초안 목록·TXT 내보내기를 이용하며, 본문을 빠뜨리는 구성 백업에 초안을 억지로 넣지 않는다. 복구 사본 보관이 실패하면 선택 적용도 중단한다.
+- **기록 저장은 종료 상태와 정확한 원문을 연결한다.** 기존 원문 저장·초안 `applied`·로컬 영수증의 원자성을 유지한다. 서버의 `applied` 쓰기와 기기의 종료 상태 적용에는 원문 revision 도착뿐 아니라 `appliedResult`의 정확한 source/version 쌍 확인을 요구한다. 같은 초안 ID를 다시 `draft`로 만들지 않으며, 종료된 초안과 충돌한 입력은 새 미연결 초안으로 보존한다. 원문이 나중에 없어지면 자동으로 다른 버전에 연결하지 않고 보존 오류로 남긴다.
+
+이 계약은 **전역에서 한 번만 기록을 저장한다는 보장이 아니다.** A/B가 오프라인에서 각각 명시 저장하면 서로 다른 로컬 원문이 생길 수 있다. 기존 원문 CAS 충돌을 먼저 해결하고 양쪽 자료를 보존하며, 두 원문을 자동 합치거나 삭제하지 않는다. 종료 표시의 정확한 원문을 확인하지 못하면 동기화 완료로 표시하지 않는다. 전역 단일 저장이 제품 요구가 되면 서버의 저장 직렬화·원문과 초안의 원자적 확정 계약을 별도로 설계해야 한다. CRDT를 추가하는 것만으로 이 경계가 해결되지는 않는다.
+
+원격 변경으로 편집 DOM을 다시 만들지 않는 것도 도입 판단의 조건이다. 한글 조합·커서·저장 중 추가 입력을 보존하고, 새 서버 내용은 알린 뒤 명시적으로 다시 열거나 비교한다. 최소 검증은 두 기기의 오프라인 편집/동시 기록 저장, 종료 표시와 원문 도착 순서, 입력 중 원격 갱신, 영수증 응답 유실, 사본 저장 공간 부족, 계정·작업공간 전환이다. 잦은 문서 단위 충돌이 실제 글쓰기를 방해하거나 문자 단위 공동 편집이 필요해질 때 위 CRDT 비교를 다시 연다. 이 절은 채택 계약의 근거이며 구현 검사·운영 SQL 설치·실제 Apple 기기 검증의 완료 보고가 아니다.
+
+## 기억나는 한글 문구 찾기 — 검색 계약을 보존하는 작은 개선
+
+확인일 **2026-10-08 KST**(공식 조회 2026-10-07 15:42 UTC 이후). 이번 목표는 **기억나는 글자를 입력해 보관한 원문의 실제 버전·구간을 다시 여는 것**이다. 검색어 없이 관련 기록을 고르는 재발견의 의미·유용성 평가와 구분한다. [재발견 품질 평가](../design-review/rediscovery-quality.md)의 상투어 오탐을 검색 라이브러리 교체로 해결했다고 주장하지 않는다.
+
+**이번 선택: literal 검색을 기본으로 유지한다. 사용자가 선택한 경우에만 한글 음절 사이의 수평 공백을 유연하게 찾는 native 정규식 방식을 검증하고, 많은 결과의 UI는 40개씩 더보기로 나눈다. 새 runtime 검색 패키지는 도입하지 않는다.** 공백 유연 검색은 원문을 정규화한 별도 문자열에서 위치를 계산하지 않고 원문 자체에서 `match.index`와 실제 일치 문자열을 얻는 조건이다. 이는 구현·회귀 검증 전제의 선택이며 이 절만으로 기능 완료를 선언하지 않는다. 결과 40개씩 표시는 DOM 표시량에 대한 선택이고, 검색 계산 자체가 빨라졌다는 증거는 아니다.
+
+### 공식 배포 재확인과 적합성
+
+세 npm `latest`와 GitHub 최신 릴리스·기본 브랜치 commit·공개 보안 권고를 새로 조회했다. 실제 npm tarball의 SHA-512를 registry `dist.integrity`와 대조한 뒤 README·LICENSE를 읽었다. 패키지 설치·실행·앱 의존성 추가는 하지 않았다. 아래 링크의 이전 조사 버전과 같아도 이번 조회 결과와 과거 관찰을 구분한다.
+
+| 후보 | 이번에 확인한 배포·라이선스·유지관리 | 원문 검색에 맞는 부분과 도입하지 않는 이유 |
+| --- | --- | --- |
+| **Fuse.js 7.5.0 · Apache-2.0** | [npm](https://registry.npmjs.org/fuse.js/7.5.0) 게시 2026-07-13 17:23 UTC, [GitHub v7.5.0](https://github.com/krisk/Fuse/releases/tag/v7.5.0) 같은 날. 기본 브랜치 [최근 commit](https://github.com/krisk/Fuse/commit/edf2fb608eca0461508d1d71317e6e58309ffada)은 2026-08-09. [배포 LICENSE·README](https://github.com/krisk/Fuse/tree/457fe762c6418357896d78311f7def8c937a64f8)와 공식 tarball 확인. | 여러 단어를 기억하는 검색·오타 허용의 후속 비교에 적합하다. 7.5.0 README의 `useTokenSearch`, `tokenMatch: 'all'`, `includeMatches`를 작은 실험에 사용할 수 있다. 기본 token 방식의 `'any'`는 일부 단어만 일치해도 결과를 내므로 요구를 구분해야 한다. fuzzy의 여러 match 범위를 기존 단일 정확 locator로 그대로 바꿀 수 없고, 최신 릴리스 자체도 점수·순위 변경을 명시한다. **이번 공백 유연 검색에는 제외.** |
+| **MiniSearch 7.2.0 · MIT** | [npm](https://registry.npmjs.org/minisearch/7.2.0) 게시 2025-09-16. [최근 commit](https://github.com/lucaong/minisearch/commit/3d239d1c3ae7aef1bf5d8945dd7b5f0709f646f5)도 같은 날. GitHub `releases/latest`는 404여서 별도 최신 GitHub release 번호를 만들지 않는다. [태그의 README·LICENSE.txt](https://github.com/lucaong/minisearch/tree/v7.2.0)와 배포본 확인. | token/prefix/fuzzy와 필드 가중치가 있는 메모리 인덱스다. 기본 tokenizer는 Unicode 공백·구두점 분리이며 `tokenize`·`processTerm`을 바꿀 수 있다. 원문 버전별 ID를 인덱싱할 수 있지만 반환된 단어·필드 정보가 원문 UTF-16 구간을 대신하지 않는다. 현재의 작은 요구에는 인덱스 갱신·계정 전환 폐기·정확 구간 재탐색 부담이 추가된다. **이번에는 제외, 반복 질의·자료량 문제의 후속 비교 후보.** |
+| **FlexSearch 0.8.212 · Apache-2.0** | [npm](https://registry.npmjs.org/flexsearch/0.8.212) 게시 2025-09-06. GitHub 최신 [release 0.8.2](https://github.com/nextapps-de/flexsearch/releases/tag/0.8.2)는 2025-05-21로 npm 버전과 다르다. [최근 commit](https://github.com/nextapps-de/flexsearch/commit/f7ed963096a0792da7b2fd63bb7114b3fbac55ed)은 2026-05-29. [배포 commit의 README·LICENSE](https://github.com/nextapps-de/flexsearch/tree/20b36c243c4f65a6dc6f97f64d4dcfc12934aa92)와 tarball 확인. | CJK charset/encoder, 부분 검색, 문서 필드·worker·하이라이트 기능을 제공한다. CJK 지원을 한국어 조사·띄어쓰기·의미 이해 또는 정확 offset 보장의 증거로 취급하지 않는다. encoder/토큰화·인덱스 수명을 정하고 원문 좌표를 별도로 검증해야 한다. **이번에는 제외.** 대량 자료에서 실제 지연을 측정한 뒤 비교한다. |
+
+세 저장소는 조회 시 `archived=false`, `disabled=false`였고 해당 npm 버전의 runtime dependencies는 빈 객체 또는 미선언이었다. [Fuse 공개 권고](https://api.github.com/repos/krisk/Fuse/security-advisories?per_page=100), [MiniSearch 공개 권고](https://api.github.com/repos/lucaong/minisearch/security-advisories?per_page=100), [FlexSearch 공개 권고](https://api.github.com/repos/nextapps-de/flexsearch/security-advisories?per_page=100)는 모두 빈 목록이었다. 이는 해당 GitHub 저장소의 공개 목록 조회 결과이며 전체 취약점 부재·장기 지원의 보증이 아니다. SHA-512 무결성 대조를 패키지 서명 검증으로 표현하지 않는다. 공식 GitHub API·npm 접근은 성공했고 허용 정책을 우회하지 않았다. 조회 JSON과 읽은 배포 문서는 `.local/korean-search-review/`에 보관했다.
+
+### `Core.searchSources()`와의 공통 계약
+
+기존 함수는 검색어 양끝만 trim하고 메타문자를 escape한 native `iu` 정규식을 **변경하지 않은 원문**에서 실행한다. 본문에 처음 일치한 raw UTF-16 `[start,end)`와 `quote`를 반환한다. 한 원문의 이전 버전도 각각 찾고, 제목만 일치하면 현재 제목의 최신 버전만 연다. 본문 없는 링크는 `locator/quote/snippet=null`이다. UI의 내 메모 일치는 별도 경로로 정확한 `sourceRef`를 유지하며 내 메모 단어를 원문 위치로 꾸미지 않는다.
+
+어떤 후속 엔진도 아래 조건을 대신하지 못한다.
+
+- 인덱스의 단위와 결과 ID는 **원문 버전**이어야 한다. 같은 source의 여러 버전을 합쳐 문구를 만들거나 일치한 옛 버전을 최신으로 치환하지 않는다. 원문 제목에는 별도 버전 이력이 없다는 한계를 유지한다.
+- 정확 검색의 quote는 `original.slice(start,end)`와 같아야 한다. lowercase·NFC/NFD·공백 제거·형태소 분석을 거친 문자열의 offset을 raw 원문에 적용하지 않는다. fuzzy/다중어의 떨어진 구간을 한 문장처럼 합치지 않는다.
+- 공백 유연 옵션은 **한글 음절 사이 수평 공백**으로 제한하고 허용 문자의 범위를 테스트에 명시한다. 줄바꿈·문단·구두점·단어순서를 마음대로 건너뛰는 `.*` 검색으로 확대하지 않는다. NFD 정규화·조사 제거·동의어 이해·초성 검색은 별도 요구다.
+- 계정/작업공간·원천 필터·검색어/스크롤 복귀·한글 조합 완료 시점·기존 발췌 위치를 보존한다. 더보기는 검색 결과의 일부 표시일 뿐 검색 대상 버전이나 보관 데이터를 줄이지 않는다.
+
+직접 구현 선택의 유지 비용은 수평 공백의 경계, UTF-16·surrogate·CRLF·이전 버전 검증이다. 현재 native matcher와 locator 검증을 재사용할 수 있으므로 이 작은 요구에서는 검색 인덱스 도입 비용보다 작다. 여러 단어의 독립적 일치·오타·순위가 사용 장면에서 필요해지면 Fuse token search와 MiniSearch를 동일 자료로 비교한다. 그때도 literal 결과와 approximate 결과의 뜻을 구분하고 원문 대조를 유지한다.
+
+### 실측하기 좋은 작은 한글 질의셋
+
+아래는 **제안하는 검색 평가 입력**이며 세 엔진에서 실행한 벤치마크 결과가 아니다. query가 없는 재발견 후보 평가와 합산하지 않는다. 각 사례의 원문·버전 ID·예상 raw 구간을 미리 고정하고, 반환 결과에서 정답을 다시 만들어 검사하지 않는다.
+
+| 원문/상태 → 입력 질의 | 구분 | 확인할 기대 |
+| --- | --- | --- |
+| `빛과 나무의 간격이 눈에 들어왔다.` → `나무의 간격` | literal | 기본 검색에서 같은 버전과 정확 구간 |
+| `천천히 걸었다.` → `천천히걸었다` | 공백 유연 | 기본은 불일치, 옵션에서만 실제 공백을 포함한 quote |
+| `천천히걸었다.` → `천천히 걸었다` | 공백 유연 역방향 | 옵션 정책에 맞게 공백 없는 실제 quote, 원문 불변 |
+| `정원  산책`, `정원\t산책`, `정원\n산책` → `정원산책` | 수평/수직 경계 | 허용한 수평 공백만 연결하고 줄바꿈을 넘기지 않음 |
+| `정원의 산책은 조용했다.` → `정원 산책` | 조사 | 공백 옵션만으로 해결됐다고 주장하지 않음. 후속 어형 비교의 별도 항목 |
+| `빛과 나무의 간격` → `빛 간격`, `간격 나무` | 떨어진 다중어/순서 | 이번 literal·공백 옵션의 성공 조건으로 넣지 않음. 후속 token 방식의 별도 목표 |
+| `젖은 나뭇잎을 보았다.` → `나뭇입` | 오타 | 이번에는 불일치. fuzzy 후속 비교에서 무관 결과 증가도 함께 측정 |
+| NFC `산책` → 같은 글자의 NFD 입력 | Unicode 정규화 | 이번에는 동등 처리하지 않음. 후속 정규화는 raw 좌표 매핑을 별도 검증 |
+| `봄, a.b [기억]` → `봄`, `a.b`, `[기억]` | 짧은 한글/메타문자 | 1음절 검색과 문자 그대로의 검색 보존; 엔진 연산자로 해석하지 않음 |
+| raw `İ\r\n🌱AbC abc\r\n끝` → `aBc` | UTF-16/대소문자 | 첫 `AbC`의 raw `[5,8)`, quote 그대로. 반쪽 surrogate 검색 불가 |
+| 옛 버전 `기억할 구절`, 최신 `다른 내용` → `기억할` | 이전 버전 | 옛 버전 열기, 최신으로 대체하지 않음 |
+| 링크 제목 `박물관 예약 안내` → `박물관 예약`; 내 메모 `다음엔 북문` → 같은 질의 | 제목/메모 전용 | 각각 확보된 필드의 근거만 표시, 원문 본문 locator를 만들지 않음 |
+
+성능 실험은 동일 원문 세트를 100/1,000/10,000개 버전 규모로 고정하고 최초 준비시간·질의 p50/p95·메모리·반환 버전 수·40개 표시/더보기 시간을 분리한다. 같은 문자열 복제만으로 의미 정확도를 평가하지 않는다. 이전 버전·공백·CRLF·짧은 질의·잘못된 후보가 섞인 고정 사례에서 결과 정확성을 먼저 확인하고, 실제 기기 검증 없이 iPad/iPhone 성능 수치를 약속하지 않는다.
+
+## 책 프로젝트·목차·원고 — 기존 편집과 출처 모델 위에 구성 추가
+
+확인일 **2026-10-08 KST**. 이번 목표는 ‘20대’ 또는 나이와 무관한 특정 주제의 책을 만들고, 장의 순서·원고·근거를 보관한 뒤 책별 Markdown을 꺼내는 것이다. [회고와 책 설계](reflection-book.md)의 다음 구현 단위다. 자동 자기 분석·리치 편집·PDF 조판·공개 출판을 완료하는 범위가 아니다.
+
+**선택: mdBook과 novelWriter의 목차·자료 분리·선택 출력 설계를 참고하고, 새 의존성 없이 기존 textarea·Workbench 구성 저장·Reflection 원고 변환을 확장한다.** 외부 프로젝트 파일을 읽는 importer, 출판 엔진의 브라우저 내 실행, 소스 코드·아이콘·서식의 복사는 하지 않는다. 비교 도구를 설치·실행한 결과가 아니라 공식 배포·문서·설정 파일을 읽고 내린 결정이다.
+
+### 공식 배포·라이선스·유지관리
+
+두 저장소의 GitHub API에서 `releases/latest`, 저장소 상태, 기본 브랜치 최근 commit, 공개 보안 권고를 조회했다. 최신 안정 릴리스의 tree와 실제 `LICENSE`·README·패키지 설정·관련 가이드를 Contents API로 읽었다. 현재 브랜치의 라이선스 배지나 과거 기억만으로 태그의 배포 조건을 대신하지 않았다.
+
+| 후보 | 이번에 확인한 공식 배포·라이선스·유지관리 | 장/목차/원고에서 참고할 부분과 도입 판단 |
+| --- | --- | --- |
+| **mdBook v0.5.4 · MPL-2.0** | [최신 안정 릴리스](https://github.com/rust-lang/mdBook/releases/tag/v0.5.4) 게시 **2026-07-06 15:28 UTC**, 태그 tree `2ea30c00f00647d2b3f4c0f79b3e0e1eabc0b66d`. [LICENSE](https://github.com/rust-lang/mdBook/blob/v0.5.4/LICENSE)·[README](https://github.com/rust-lang/mdBook/blob/v0.5.4/README.md)·[Cargo.toml](https://github.com/rust-lang/mdBook/blob/v0.5.4/Cargo.toml)이 MPL-2.0으로 일치한다. 기본 브랜치 [최근 commit](https://github.com/rust-lang/mdBook/commit/d4658998d44112e873c90049767d7eb002169a2d)은 **2026-10-05**다. | [`SUMMARY.md` 가이드](https://github.com/rust-lang/mdBook/blob/v0.5.4/guide/src/format/summary.md)는 포함할 장·순서·계층·파일 위치를 별도 목차에 명시한다. 해도에는 **장 배열이 명시적 목차 순서**라는 원칙을 참고한다. 전체 도입은 Rust 도구와 Markdown 파일 기반 build를 추가하며, 계정별 편집·불변 원문 버전·근거 선택 저장은 별도로 필요하다. 태그는 Rust 1.88.0 이상을 명시한다. 이번 정적 앱 런타임에 도입하지 않음. |
+| **novelWriter v26.2.1 · GPL-3.0-or-later 및 동봉 자산 조건** | [최신 안정 릴리스](https://github.com/saga-soft/novelWriter/releases/tag/v26.2.1) 게시 **2026-09-26 17:37 UTC**, 태그 tree `99b0f48d923c80ed0301f690f5253795cfbfc466`. 기존 `vkbo/novelWriter` API가 공식 현재 저장소 **`saga-soft/novelWriter`**로 연결됨을 확인했다. [LICENSE.md](https://github.com/saga-soft/novelWriter/blob/v26.2.1/LICENSE.md)는 GPL v3 전문이며, [pyproject.toml](https://github.com/saga-soft/novelWriter/blob/v26.2.1/pyproject.toml)의 배포 라이선스 표현은 **`GPL-3.0-or-later AND Apache-2.0 AND CC-BY-4.0 AND ISC`**다. 동봉 자산을 GPL 하나로 뭉뚱그리지 않는다. 기본 브랜치 [최근 commit](https://github.com/saga-soft/novelWriter/commit/3ea0240bcca17e214ed772293f1ff932dbfe98a8)은 **2026-10-07**다. | [프로젝트 정리](https://github.com/saga-soft/novelWriter/blob/v26.2.1/docs/source/usage/organising_project.rst)는 원고 문서와 참고 노트를 구분하며, 일반 폴더 자체보다 **문서 순서**가 원고 구성에 쓰인다고 설명한다. [Manuscript Build](https://github.com/saga-soft/novelWriter/blob/v26.2.1/docs/source/user_interface/manuscript.rst)는 문서 선택과 문서 안에 포함할 내용 선택을 구분한다. 해도에는 **장 원고와 근거 원문 분리, 원문 본문의 명시적 출력 선택**을 참고한다. Python 3.11+·Qt6/PyQt6 데스크톱 앱이므로 iPad 브라우저 편집기의 직접 대체가 아니다. 독자 문법·프로젝트 파서·앱 전체를 도입하지 않음. |
+
+두 저장소는 조회 시 `archived=false`, `disabled=false`였고 최신 릴리스는 prerelease·draft가 아니었다. 최근 commit과 배포가 있다는 사실은 지속 지원이나 해도의 한글 입력·기기 적합성을 보증하지 않는다. novelWriter가 평문을 쓰더라도 README는 **Markdown에서 영감을 받은 문법과 별도 메타데이터**라고 설명한다. 일반 Markdown 내보내기가 novelWriter 프로젝트 형식과 곧바로 호환된다는 주장은 하지 않는다.
+
+### 보안 권고와 확인 한계
+
+[mdBook 공개 권고](https://api.github.com/repos/rust-lang/mdBook/security-advisories?per_page=100)는 **1건**이었다. [GHSA-gx5w-rrhp-f436 / CVE-2020-26297](https://github.com/rust-lang/mdBook/security/advisories/GHSA-gx5w-rrhp-f436)는 검색 질의의 XSS와 수정 버전 **0.4.5**를 명시한다. API의 영향 범위 문자열은 `>= 0.1.4`로 상한이 없으므로 그 문자열만 보고 이번 0.5.4가 같은 문제에 취약하다고 단정하지 않는다. HTML 검색 화면을 도입하면 생성물 갱신과 escape 경계를 관리해야 한다는 참고 근거다.
+
+[novelWriter 공개 권고](https://api.github.com/repos/saga-soft/novelWriter/security-advisories?per_page=100)는 조회에서 **0건**이었다. 이는 해당 GitHub 공개 목록만 확인한 결과이며 Python/Qt·Rust 전이 의존성 감사, 미공개 취약점 부재, 배포 바이너리 서명 검증을 뜻하지 않는다. 라이선스·문서 확인은 코드나 자산을 가져온 사실과도 구분한다.
+
+클라우드 런타임·네트워크 스킬, 현재 환경 상태와 정책 파일을 읽고 허용된 공식 GitHub API만 사용했다. 상속된 프록시와 TLS 검증을 유지했고 차단 목적지 재요청·중계·우회, 실제 계정 자료 수집·전송은 하지 않았다. 공개 응답과 읽은 태그 파일은 이번 작업의 임시 조사 경로 `/tmp/haedo-book-review-20261008/`에 보관했다. 이 임시 경로의 영구 보존을 약속하지 않으며 검토 근거는 위의 고정 버전 링크로 남긴다.
+
+### 해도에서 재사용할 경계
+
+1. **목차는 내용과 별도인 명시적 순서다.** optional `books`의 각 `chapters` 배열 순서를 사용한다. 날짜나 제목이 바뀌었다고 장을 자동 재배치하지 않는다. 프로젝트 기간은 설명용 메타데이터이며 근거 선택을 몰래 제한하는 필터가 아니다.
+2. **원고와 근거는 독립적으로 둔다.** 장의 `note`는 사용자가 지금 쓰는 원고이고, `versionIds`는 이미 보관한 정확 버전의 참조다. 같은 버전을 여러 장에서 사용해도 원문은 복제하지 않는다. 원문·현재 원고·타인 인용·후속 AI 제안을 한 본문으로 합쳐 저장하지 않는다.
+3. **기존 회고에서 복사해 시작한다.** 단일 `reflection`은 유지하며 사용자가 선택한 경우에만 새 책의 장에 선택 목록과 메모를 복사한다. 이후 책 편집이 기존 회고에 자동 전파되지 않는다.
+4. **출력 범위를 명시한다.** 책별 Markdown은 책 질문·장 원고·근거 출처가 기본이고, 원문 본문은 명시적으로 선택할 때만 포함한다. mdBook의 HTML renderer나 novelWriter의 Manuscript Build를 실행하지 않으며 이 파일을 PDF·인쇄본·두 도구의 프로젝트 백업으로 표시하지 않는다.
+5. **새 구조도 기존 보존 계약을 통과해야 한다.** 계정/공간 경계, CAS 충돌, 초안 입력 보존, 정확 버전, JSON 새 사본 복원의 ID 재매핑을 확장한다. SQL validator의 additive 갱신은 Local 설치·확인 대상이며 파일 작성만으로 서버가 책 구성을 받는다고 보고하지 않는다.
+
+장별 리치 서식, 여러 단계의 목차, 쪽나눔·각주·이미지·폰트 포함이 실제 원고 편집에서 필요해지면 이 도구들의 출력과 별도 조판 후보를 한글 샘플로 다시 비교한다. 지금은 기존 입력과 저장 경계를 재사용하는 비용이 새 데스크톱·Rust 기반을 연결하는 비용보다 작다. **책 모델·UI·브라우저·서버의 실제 상태는 [별도 구현 기록](../design-review/book-projects.md)을 따르며, 이 공식 조사로 통과를 대신하지 않는다.**
+
+## 장별 자기 해석·근거·반례 — 질적 분석과 주석 도구 참고
+
+확인일 **2026-10-08 KST**. 이번 목적은 장에 **사용자가 직접 쓴 해석, 뒷받침하는 원문, 반례가 되는 원문, 모르는 점**을 저장하고 다시 검토하는 것이다. 자동 주제 추론·AI 보고서·성격 평가가 아니다. [책 설계](reflection-book.md)의 optional `chapter.insights`로 다루며, 이번 근거는 **정확한 원문 버전 전체**이고 구절 locator는 없다.
+
+### 공식 배포와 실제 유지관리
+
+두 GitHub 저장소의 최근 release·commit·상태·공개 권고와 고정 버전의 실제 라이선스·문서·모델을 읽었다. **두 저장소 모두 `releases/latest`가 2019년 배포를 반환**했으므로 이를 현재 배포·소스의 최신 상태로 확대하지 않았다. Taguette는 공식 PyPI 버전과 GitHub 태그까지 대조했고 Hypothesis는 현재 소스 commit을 별도로 고정했다.
+
+| 후보 | 확인한 배포·라이선스·유지관리 | 참고할 설계와 직접 도입 판단 |
+| --- | --- | --- |
+| **Taguette 1.5.2 · BSD-3-Clause** | [공식 PyPI](https://pypi.org/pypi/taguette/json)의 최신 버전은 **1.5.2**, sdist 게시 **2025-12-08 22:17 UTC**, 철회되지 않은 배포다. [v1.5.2 태그](https://github.com/remram44/taguette/tree/v1.5.2) commit은 `bf23807d749dd15aed81ebfd6e3967f00d1353a1`이며 [pyproject.toml](https://github.com/remram44/taguette/blob/v1.5.2/pyproject.toml)의 버전·BSD-3-Clause와 [LICENSE.txt](https://github.com/remram44/taguette/blob/v1.5.2/LICENSE.txt)가 일치한다. [GitHub 마지막 release v0.5](https://github.com/remram44/taguette/releases/tag/v0.5)는 **2019-03-25**다. GitHub [최근 commit](https://github.com/remram44/taguette/commit/52fcdce95709375a4085cb10852bf7dd251ccb3d)은 **2026-09-28**. 현재 공식 README·패키지 메타데이터가 안내하는 주 저장소는 **GitLab**이며 그쪽 최신 이슈·commit까지 확인한 것은 아니다. | [README](https://github.com/remram44/taguette/blob/v1.5.2/README.rst)의 **사용자가 만든 코드로 구절을 분류하고 선택 결과를 내보내는 방식**을 참고한다. [모델](https://github.com/remram44/taguette/blob/v1.5.2/taguette/database/models.py)은 문서·구간 highlight·tag 관계를 분리한다. 이것이 사용자의 해석을 자동 입증하거나 근거/반례의 의미를 판정한다는 뜻은 아니다. 직접 도입하면 Python/Tornado·SQLAlchemy와 문서 변환·별도 프로젝트를 연결해야 한다. 이번 평문·버전 ID 연결에는 전체 앱·importer·구간 모델을 도입하지 않는다. |
+| **Hypothesis h · BSD-2-Clause, 현재 소스 참고** | [GitHub 마지막 release v0.39.0](https://github.com/hypothesis/h/releases/tag/v0.39.0)은 **2019-11-05**다. 이번에 읽은 기본 브랜치 [commit `66cd441`](https://github.com/hypothesis/h/commit/66cd44126b2700630eead3675f0c212b6a450f26)은 **2026-09-28**, 저장소 push 시점은 **2026-10-06**이다. 고정 commit의 [LICENSE](https://github.com/hypothesis/h/blob/66cd44126b2700630eead3675f0c212b6a450f26/LICENSE)는 BSD 2-Clause 전문이다. 현재 소스를 2019년 release의 코드나 새로운 안정판 번호로 표현하지 않는다. | [API 모델](https://github.com/hypothesis/h/blob/66cd44126b2700630eead3675f0c212b6a450f26/docs/_extra/api-reference/schemas/annotation.yaml)은 주석 본문과 대상 URI·selector·권한을 분리한다. Text Quote/Position selector는 **후속 구절 근거**를 검토할 참고다. [README](https://github.com/hypothesis/h/blob/66cd44126b2700630eead3675f0c212b6a450f26/README.md)는 h가 웹/API 서버이며 browser client는 별도라고 명시한다. 서버·client·계정/공유 경계를 해도에 연결하지 않고, 별도 주석 서비스로 개인 원문을 전송하지 않는다. |
+
+두 GitHub 저장소는 `archived=false`, `disabled=false`였다. 오래된 GitHub release만으로 유지관리 중단을 단정하지 않으며, 최근 commit만으로 배포 안정성이나 iPad 적합성을 보증하지도 않는다. Taguette PyPI 아카이브를 다운로드·설치·무결성 검증한 것은 아니며 이번 라이선스 본문 확인은 GitHub v1.5.2 태그를 기준으로 했다.
+
+### 보안 권고를 읽은 범위
+
+[Taguette 공개 권고](https://api.github.com/repos/remram44/taguette/security-advisories?per_page=100)는 3건이다. [태그/문서명 등의 XSS](https://github.com/remram44/taguette/security/advisories/GHSA-g9qw-g6rv-3889)와 [비밀번호 재설정 링크 변조](https://github.com/remram44/taguette/security/advisories/GHSA-7rc8-5c8q-jr6j)는 `<1.5.0` 영향·`1.5.0` 수정, [open redirect](https://github.com/remram44/taguette/security/advisories/GHSA-5923-r76v-mprm)는 `<=1.5.1` 영향·`1.5.2` 수정을 명시한다. 오래된 0.5 release를 신규 도입 기준으로 삼지 않는 이유이기도 하다. 수정 배포 확인은 전체 의존성에 문제가 없다는 보증이 아니다.
+
+[Hypothesis h 공개 권고](https://api.github.com/repos/hypothesis/h/security-advisories?per_page=100)는 0건이었다. 이는 h 저장소의 공개 목록 조회이며 별도 browser client·Python 의존성·운영 서비스 전체의 감사가 아니다. 두 도구의 인증·HTML 표시·외부 링크 처리 코드를 이번에 가져오지 않는다.
+
+현재 환경 상태와 네트워크 정책을 다시 확인하고, 앞서 읽은 런타임·네트워크 지침대로 공식 GitHub API와 허용된 PyPI만 요청했다. 프록시·TLS 검증을 유지했고 차단 우회·운영 계정 접근·개인 자료 수집은 하지 않았다. 공개 응답과 읽은 파일은 임시 경로 `/tmp/haedo-insight-review-20261008/`에 두고 고정 링크를 검토 근거로 남긴다.
+
+### 이번에 충분한 재사용과 바꿀 조건
+
+**설계 참고만 채택한다.** 현재 요구는 사용자가 쓰는 두 텍스트 필드(`statement`, `uncertainty`), 정확 버전 ID의 두 목록, 제외/복원 상태다. 기존 textarea·원문 선택기·계정별 Workbench 저장·CAS·Reflection Markdown·JSON 복원을 확장하면 되고, 새로운 주석 엔진이나 질적 분석 앱을 실행할 이유는 없다. 평문 작성과 원문 ID는 재사용하되 저장 한도·명시적 근거 선택·수정 후 저장·실패 복구는 앱에서 검사한다.
+
+Taguette의 구간 offset이나 Hypothesis의 selector를 이번 전체 버전 참조와 동등하게 취급하지 않는다. 같은 버전을 근거와 반례에 모두 선택할 수 있지만 어느 문장이 각각을 지지하는지는 아직 지정하지 않는다. ‘자료가 연결됨’과 ‘해석이 맞다고 검증됨’을 구분하고, 기록 개수·긍정/부정 목록 수로 확신도나 성격 점수를 만들지 않는다.
+
+실제 원고에서 ‘이 원문의 어느 구절인가’를 반복해서 찾거나 인용 위치를 보존해야 할 때, 기존 `sourceRefs`의 UTF-16 locator와 quote 대조를 먼저 비교하고 주석 selector의 필요성을 작은 샘플로 검토한다. 여러 연구자의 공동 코딩·PDF 좌표·외부 웹문서 주석 공유가 필요해지면 위 도구와 제공 범위를 다시 비교한다. AI 해석이 필요하면 근거 선택·생성 기원·제공처·전송 범위·수정 이력을 별도 계약으로 정한다. **이번 조사나 수동 해석 기능을 AI 보고서·주석 도구 통합 완료로 보고하지 않는다.**
+
+## 책 읽기·편집 복귀 — 같은 내용을 화면과 파일로 보기
+
+검토일 **2026-10-08 KST**. [책 읽기 단위](../design-review/book-reading.md)는 장 원고·현재 해석·근거를 읽고, 해당 장을 고친 뒤 돌아와 같은 범위의 Markdown을 받는 흐름이다. **저장 schema·SQL·새 parser/editor를 추가하지 않는다.** `Books.project`의 공통 출력 모델을 UI와 Markdown이 공유하고, 브라우저는 기존 DOM의 안전한 평문 표시와 textarea 편집을 재사용한다. 구현·브라우저 검사 결과는 별도 보고 전까지 미검증이다.
+
+### 공식 비교를 재사용하는 이유
+
+이번에는 같은 날 수행한 [mdBook·novelWriter 비교](#책-프로젝트목차원고--기존-편집과-출처-모델-위에-구성-추가)와 앞선 [기본 textarea·편집기 비교](#직접-글쓰기--기본-textarea와-편집기-비교)를 읽고 현재 코드에 대조했다. 새 네트워크 요청·최신 릴리스 재조회·패키지 설치를 수행한 것은 아니다. 이번 요구는 서식 엔진 선택이 아니라 **현재 구성의 읽기와 편집 연결**이므로 기존 검토를 재사용할 수 있다.
+
+| 선택지 | 이번 단위의 판단 |
+| --- | --- |
+| **mdBook v0.5.4의 목차·출력 구조 참고** | [`SUMMARY.md`](https://github.com/rust-lang/mdBook/blob/v0.5.4/guide/src/format/summary.md)의 명시적 장 순서와 [renderer 분리](https://github.com/rust-lang/mdBook/blob/v0.5.4/guide/src/format/configuration/renderers.md)는 같은 내용을 여러 출력에 사용하는 설계 근거다. Rust build·HTML renderer를 실행하거나 해도의 원고가 mdBook과 같은 화면이 된다고 약속하지 않는다. |
+| **novelWriter v26.2.1의 원고 읽기·선택 출력 참고** | [Manuscript Build](https://github.com/saga-soft/novelWriter/blob/v26.2.1/docs/source/user_interface/manuscript.rst)의 미리보기와 출력 범위 구분을 참고한다. Python/Qt 앱의 편집기·원고 문법을 이식하지 않는다. 기존 브라우저 저장·정확 버전·원문 복귀가 이번 흐름의 기반이다. |
+| **기존 DOM·textarea·Books/Reflection 재사용 — 채택** | 책·장·활성 해석·출처·선택 본문의 공통 출력 모델을 만들고 UI는 읽기 가능한 평문, 파일은 기존 Markdown으로 직렬화한다. 새 parser나 editor 없이도 읽기→기존 장 편집→복귀를 완결할 수 있다. |
+
+### Markdown 파일과 브라우저 표시의 차이
+
+현재 `Books.markdown`은 출처 메타데이터·보관 원문·구조화된 해석을 동적 길이의 코드 fence로 감싸고 **`chapter.note`는 사용자가 쓴 raw Markdown 문자열로 유지**한다. 따라서 ‘Markdown을 HTML로 바꿔 같은 모양을 보여준다’가 이번 선택은 아니다. 화면의 책/장 제목은 앱 구조로 배치하지만 원고 안의 `#`, `**`, 링크·이미지 구문·HTML은 `Text`/`textContent`로 **글자 그대로** 표시한다.
+
+공통 출력 모델은 장 순서, 포함된 해석, 근거/반례 역할, 정확 버전, 본문 포함 범위를 공유하기 위한 것이다. 화면 HTML을 Markdown으로 역변환하거나 Markdown fence를 파싱해 UI 모델을 재구성하지 않는다. 미리보기의 줄바꿈·글꼴·여백이 외부 Markdown 편집기나 인쇄물과 같다는 약속도 하지 않는다. 원문 URL은 출처 정보이며 본문·HTML·외부 embed를 자동 실행하거나 원격 원문을 새로 가져오지 않는다.
+
+유지해야 할 비용은 새 라이브러리 업데이트보다 **공통 출력 모델의 범위 대조, 저장 성공 뒤 전환, 정확한 장/원문 복귀, 실패 때 편집 내용 유지**다. 기본값과 명시적 본문 포함, 제외한 해석, 같은 버전의 여러 역할, 빈/없는 원문을 UI와 파일에서 비교해야 한다. SQL을 늘리지 않아도 이 사용자 흐름의 검증은 필요하다.
+
+실제 사용에서 서식이 적용된 원고를 읽거나 인쇄 조판을 확인해야 하면 Markdown parser/renderer와 sanitize·출처 경계를 작은 원고로 새로 비교한다. 그때는 raw 원고 보존·내보내기 호환·외부 리소스 요청·한글/각주를 함께 확인한다. 먼저 필요한 후속 단위는 **명시적으로 고른 원고 개정본 보존**, 그다음은 개인용/공개용 범위를 구분한 한글 PDF·책자 출력이다. 이번 읽기 화면을 개정 이력·PDF 미리보기·출판 완료로 표시하지 않는다.
+
+
+## 원고 개정본·복구와 한글 PDF — 2026-10-08 KST
+
+책의 개정본은 기존 Workbench CAS·JSON 백업·정확 버전 참조를 확장한다. 소스 본문 복사나 별도 version-control 엔진을 넣지 않는다. 앞서 검토한 novelWriter의 명시적인 원고 보관과 원고/참고자료 분리 원칙을 참고하고, 브라우저 계정/작업공간 및 기존 2 MiB 계약에 맞춰 작은 스냅샷을 사용한다. 개정본 한도를 넘으면 자동 정리하지 않는다.
+
+인쇄 담당이 다음 공식 배포·라이선스·유지보수 정보를 실제 조회했다. 도입 라이브러리는 없다.
+
+| 후보 | 확인한 공식 상태 | 적용 판단 |
+| --- | --- | --- |
+| 브라우저 `window.print()` | [print](https://developer.mozilla.org/en-US/docs/Web/API/Window/print), [afterprint](https://developer.mozilla.org/en-US/docs/Web/API/Window/afterprint_event). 반환은 파일 저장 증명이 아니며 afterprint도 저장 성공 판정 불가 | 채택. 평문 원고와 선택한 출처만 담은 독립 문서에 인쇄 CSS 적용. 추가 서버·패키지 없이 네이티브 PDF 저장 사용 |
+| Paged.js | [npm](https://registry.npmjs.org/pagedjs) 최신 배포 0.4.3(2023-07-06), MIT LICENSE.md. [공식 source](https://github.com/pagedjs/pagedjs/tree/677cdc1e537365e1b3c03c550e2463360164d3fc) main 최근 커밋 2026-10-06, archived=false. GitHub latest release endpoint 404로 npm 배포와 source 활동을 구분 | running header·정밀 조판이 실제 필요해질 때 후보. 현재 A4·장 나눔에 polyfill/fragmented-layout 엔진을 추가하지 않음 |
+| pdf-lib | [공식 v1.17.1](https://github.com/Hopding/pdf-lib/releases/tag/v1.17.1)(2021-11-06), MIT LICENSE.md. default branch 최근 커밋 2021-11-12와 repository pushed 2024-07-17을 구분, archived=false. [README](https://github.com/Hopding/pdf-lib/blob/v1.17.1/README.md)는 HTML/CSS embed 미지원·custom font에 별도 fontkit 요구 | 현재 제외. 한글 줄 배치·페이지 모델·폰트 자산 관리를 별도로 만들어야 하며 기존 브라우저 조판과 중복 |
+
+두 저장소의 공개 security-advisories API는 빈 배열이었다. 모든 취약점이 없다는 뜻은 아니다. 외부 CSS·폰트·이미지·변환 서버는 인쇄에 요청하지 않고 사용자가 제공한 HTML/Markdown도 실행하지 않는다. 최대 인쇄 문서 크기를 초과하면 잘라 출력하지 않고 오류와 재시도를 제공한다. 실제 인쇄/한글 PDF 결과는 [구현·검증](../design-review/book-recovery-print.md)에 기록한다.
+
+## 첫 책 만들기 — 시간·주제에서 목차와 원고로 연결
+
+확인일 **2026-10-08 KST**. 이번 목표는 **선택한 글을 시간·주제로 읽기 → 책의 질문 직접 적기 → 목차 후보 선택·수정 → 장 원고 쓰기 → 전체 읽기·검토·보관·출력**을 잇는 것이다. 새 편집기나 출판 엔진을 고르는 작업이 아니다. 기존 회고의 연도·묶음별 읽기, 책의 질문·장·정확 버전 참조, 원고 개정본과 인쇄를 연결한다.
+
+### 공식 상태 재확인과 참고한 설계
+
+이번 단위에서 공식 GitHub API의 최신 안정 릴리스·기본 브랜치 최근 commit·저장소 상태·공개 보안 권고를 다시 조회했다. 두 최신 버전이 앞선 [책 프로젝트 비교](#책-프로젝트목차원고--기존-편집과-출처-모델-위에-구성-추가)와 같음을 확인하고, 당시 해당 태그에서 읽은 실제 라이선스·패키지 설정·가이드를 다시 대조했다. 라이선스 본문을 이번에 새로 내려받거나 두 앱을 설치·실행한 것은 아니다.
+
+| 공식 후보 | 다시 확인한 상태와 고정 출처 | 이번 흐름에서 참고할 부분 |
+| --- | --- | --- |
+| **mdBook v0.5.4 · MPL-2.0** | [최신 안정판](https://github.com/rust-lang/mdBook/releases/tag/v0.5.4), 게시 2026-07-06. 기본 브랜치 [d465899](https://github.com/rust-lang/mdBook/commit/d4658998d44112e873c90049767d7eb002169a2d), 2026-10-05. 태그의 [LICENSE](https://github.com/rust-lang/mdBook/blob/v0.5.4/LICENSE)·[Cargo.toml](https://github.com/rust-lang/mdBook/blob/v0.5.4/Cargo.toml)의 MPL-2.0 확인 기록 유지 | [`SUMMARY.md`](https://github.com/rust-lang/mdBook/blob/v0.5.4/guide/src/format/summary.md)는 명시적인 장 순서와 아직 원고 파일이 없는 **draft chapter**를 구분한다. 해도에서도 목차 후보는 사용자가 고칠 수 있는 구성안이고, 빈 장은 앞으로 쓸 자리로 취급한다. 후보 수나 원고 유무를 글의 품질 점수로 만들지 않는다. |
+| **novelWriter v26.2.1 · GPL-3.0-or-later 및 동봉 자산 조건** | [최신 안정판](https://github.com/saga-soft/novelWriter/releases/tag/v26.2.1), 게시 2026-09-26. 기본 브랜치 [3ea0240](https://github.com/saga-soft/novelWriter/commit/3ea0240bcca17e214ed772293f1ff932dbfe98a8), 2026-10-07 UTC. [LICENSE.md](https://github.com/saga-soft/novelWriter/blob/v26.2.1/LICENSE.md)·[pyproject.toml](https://github.com/saga-soft/novelWriter/blob/v26.2.1/pyproject.toml)의 배포 표현 `GPL-3.0-or-later AND Apache-2.0 AND CC-BY-4.0 AND ISC`를 유지하며 API의 단일 라이선스 표기로 축약하지 않음 | [프로젝트 정리](https://github.com/saga-soft/novelWriter/blob/v26.2.1/docs/source/usage/organising_project.rst)의 원고와 참고 노트 분리·문서 순서, [Manuscript Build](https://github.com/saga-soft/novelWriter/blob/v26.2.1/docs/source/user_interface/manuscript.rst)의 구성 미리보기·포함 선택을 참고한다. 해도는 고른 원문을 장의 근거로 연결하고, 질문·현재 원고를 사용자가 직접 쓴다. |
+
+두 저장소는 이번 조회에서도 `archived=false`, `disabled=false`였고 릴리스는 draft·prerelease가 아니었다. [mdBook 공개 권고](https://api.github.com/repos/rust-lang/mdBook/security-advisories?per_page=100)는 기존 [검색 XSS 권고 1건](https://github.com/rust-lang/mdBook/security/advisories/GHSA-gx5w-rrhp-f436), [novelWriter 공개 권고](https://api.github.com/repos/saga-soft/novelWriter/security-advisories?per_page=100)는 0건으로 같았다. mdBook 권고의 수정 버전은 0.4.5이며 현재 버전의 취약 여부를 과거 영향 범위 문자열만으로 단정하지 않는다. 공개 권고 수는 전이 의존성 감사나 미공개 문제 부재를 뜻하지 않는다.
+
+### 기존 구현을 재사용하는 선택
+
+**두 프로젝트는 설계 참고이며 코드·자산·파일 importer·런타임 의존성을 가져오지 않는다.** mdBook 전체 도입은 Rust와 Markdown 파일 build를, novelWriter 전체 도입은 Python·Qt와 별도 프로젝트 형식을 추가한다. 어느 쪽도 해도의 계정별 저장, 정확한 과거 버전 선택, 실패한 입력 보존을 대신하지 않는다. 이번에 필요한 것은 새 서식 기능이 아니라 이미 읽고 고른 자료를 다시 찾지 않고 장에 배치하는 연결이다.
+
+| 흐름 | 재사용할 현재 구현 | 유지할 경계 |
+| --- | --- | --- |
+| 시간·주제에서 목차 후보 만들기 | [`Reflection.chronology/themes`](../../assets/life/reflection.js), 기존 원문 선택·출처 표시 | 원문 작성 연도와 경험 시기는 다르다. 주제는 사용자가 만든 묶음이며 AI 추론이 아니다. 작성 시기 미확인·묶음 밖 자료를 조용히 버리지 않는다. |
+| 질문·목차 확인 후 새 책 만들기 | [`Workbench`](../../assets/life/workbench.js)의 기존 `books` 필드·검증·저장, 기존 버튼·입력·`details` | 후보 제목과 포함 여부를 명시적으로 고른 뒤 새 책의 장 순서·정확 버전 연결로 저장한다. 기존 책·원문·회고를 덮어쓰지 않고, 회고 노트를 여러 장에 자동 복제하지 않는다. 질문은 사용자가 직접 작성한다. |
+| 장 원고 쓰고 전체 검토하기 | 기존 textarea·원문 왕복, [`Books.project`](../../assets/life/books.js)의 공통 출력 모델 | 빈 원고·없는 정확 참조·타인 글·본문 확보 범위처럼 확인 가능한 사실을 보여준다. 완성도 점수·자동 자기 분석·신념 판정을 만들지 않으며 빈 장도 계속 쓸 수 있다. |
+| 수정 전 원고 보관과 출력 | [`BookHistory`](../../assets/life/book-history.js), 기존 Markdown·[`BookPrint`](../../assets/life/book-print.js) | 개정본·JSON 복구와 읽기용 파일을 구분한다. 본문 포함은 명시 선택이며 인쇄 창을 열었다고 파일 저장 완료로 표시하지 않는다. |
+
+별도 단계 진행률 저장, 새 책 schema·SQL, Markdown parser, rich editor, 목차 UI 라이브러리는 추가하지 않는다. 기존 native CSS·입력과 계정/작업공간·저장 실패 경계를 재사용한다. **이번 연결 흐름의 구현·기능 검사·시각 검토는 담당 검증 전까지 미검증**이며 앞선 책·PDF 검사 결과를 새 흐름의 통과로 대체하지 않는다. 실제 Apple 기기의 입력·Files 체험과 사용자의 첫 책 완성도도 별도 판단이다.
+
+외부 자료는 허용된 공식 API로만 읽었고 프록시·TLS 검증을 유지했다. 패키지 설치·개인 자료 분석·외부 전송·공개 게시를 수행하지 않았다. 이후 실제 집필에서 여러 단계 목차·구절 인용 편집·각주·전문 조판이 필요한지 확인되면 해당 요구만 별도 비교한다.
+
+## 독자용 책자 출력 — 기본 인쇄와 전문 조판의 범위
+
+확인일 **2026-10-08 KST**. 이번 검토는 초고를 읽기 좋은 책자로 꺼내기 위한 **용지·여백·장 나눔·쪽번호·목차 링크**의 구현 선택이다. 독자용 표현은 읽을 파일의 편집 목적이며 공개 게시·자료 전송에 대한 새 동의가 아니다. 기존 [`BookPrint`](../../assets/life/book-print.js)의 선택 책 하나, 안전한 평문, 외부 리소스 없는 격리 문서, 계정/화면 전환 취소 경계를 기준으로 비교했다.
+
+### 공식 배포·라이선스·유지관리 재조회
+
+공식 GitHub API의 최신 release·기본 브랜치 commit·저장소 상태·공개 보안 권고와 공식 npm 메타데이터를 다시 읽었다. 아래 라이선스는 실제 배포 commit 또는 release 태그의 본문·패키지 설정으로 확인했다. 후보를 설치하거나 개인 원고를 외부 뷰어에 올리지는 않았다.
+
+| 후보 | 확인한 최신 배포와 라이선스 | 유지관리·기능과 도입 판단 |
+| --- | --- | --- |
+| **브라우저 CSS Paged Media + `window.print()`** | 새 패키지·라이선스 없음. [MDN `@page`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@page)와 [Paged Media 안내](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Paged_media), [공식 호환성 데이터](https://github.com/mdn/browser-compat-data/blob/d52747be1e963612aec91bee6677ba567ed90291/css/at-rules/page.json)를 읽음 | **이번 우선 선택.** 기본 용지·여백·명시적 장 나눔은 기존 CSS를 확장한다. 쪽번호는 지원 브라우저의 추가 표현으로 다루고, 내부 목차 링크와 자동 목차 쪽번호를 구분한다. 인쇄 설정과 PDF 결과는 실제 출력으로 확인해야 한다. |
+| **Paged.js 0.4.3 · MIT** | [공식 npm](https://registry.npmjs.org/pagedjs) latest는 **2023-07-06** 배포 0.4.3. GitHub `releases/latest`는 이번에도 404이며 이를 새 release가 있다고 해석하지 않음. npm의 배포 commit [`703297d`](https://github.com/pagedjs/pagedjs/tree/703297df075c6f3ba717e04c1de5315d31c3bd60)의 [LICENSE.md](https://github.com/pagedjs/pagedjs/blob/703297df075c6f3ba717e04c1de5315d31c3bd60/LICENSE.md)·[package.json](https://github.com/pagedjs/pagedjs/blob/703297df075c6f3ba717e04c1de5315d31c3bd60/package.json)에서 MIT 확인 | 공식 main [최근 commit](https://github.com/pagedjs/pagedjs/commit/677cdc1e537365e1b3c03c550e2463360164d3fc)은 **2026-10-06**. [배포 README](https://github.com/pagedjs/pagedjs/blob/703297df075c6f3ba717e04c1de5315d31c3bd60/README.md)는 `@page`를 클래스·카운터·생성 콘텐츠로 변환하는 polyfill과 페이지 분할을 설명하며 specs는 Chrome/Puppeteer 기반이다. 정밀한 페이지 미리보기·생성 콘텐츠가 실제 필수일 때 후보. 현재 단순 출력에 CSS parser·DOM 분할·런타임 의존성을 추가하지 않는다. |
+| **Vivliostyle.js / `@vivliostyle/core` 2.45.2 · AGPL-3.0** | [공식 v2.45.2](https://github.com/vivliostyle/vivliostyle.js/releases/tag/v2.45.2), 게시 **2026-09-23**. [npm core](https://registry.npmjs.org/@vivliostyle%2fcore) latest도 2.45.2로 일치. 태그 [LICENSE](https://github.com/vivliostyle/vivliostyle.js/blob/v2.45.2/LICENSE)는 GNU AGPL v3 전문, [core package](https://github.com/vivliostyle/vivliostyle.js/blob/v2.45.2/packages/core/package.json)의 표현은 `AGPL-3.0` | 기본 브랜치 [최근 commit](https://github.com/vivliostyle/vivliostyle.js/commit/6b2b9f508989594d183bc366d677e5e17363fcb1)은 **2026-10-07**. [지원 CSS](https://github.com/vivliostyle/vivliostyle.js/blob/v2.45.2/docs/supported-css-features.md)는 페이지 여백 영역, `target-counter()` 교차 참조, 각주·다양한 판형을 명시한다. 전문 조판·각주·자동 목차 쪽번호·다문서/EPUB 요구가 확정될 때 비교할 후보. 현재 원고 편집·저장과 다른 조판 엔진이므로 직접 도입하지 않는다. 향후 코드·배포본을 포함한다면 AGPL 및 [README](https://github.com/vivliostyle/vivliostyle.js/blob/v2.45.2/README.md)에 명시된 Apache-2.0 기반 코드의 조건을 함께 검토한다. |
+
+Paged.js와 Vivliostyle 저장소는 모두 `archived=false`, `disabled=false`였다. [Paged.js 공개 권고](https://api.github.com/repos/pagedjs/pagedjs/security-advisories?per_page=100)와 [Vivliostyle 공개 권고](https://api.github.com/repos/vivliostyle/vivliostyle.js/security-advisories?per_page=100)는 각각 빈 배열이었다. 이는 공개된 해당 GitHub 목록만 확인한 결과이며 전이 의존성 감사·배포 바이너리 검증·미공개 취약점 부재를 의미하지 않는다. 최신 소스 활동과 npm 안정 배포 시점을 구분한다.
+
+### 브라우저와 출력물의 차이
+
+MDN 호환성 데이터의 해당 파일 마지막 변경은 **2026-10-05**, commit `d52747be1e963612aec91bee6677ba567ed90291`이다. 이번에 조회한 내용은 다음과 같다.
+
+| 표현 | 확인된 지원과 실제 확인이 필요한 범위 |
+| --- | --- |
+| 용지 크기·방향·기본 여백 | `@page`와 `size`로 요청한다. BCD의 `size` 지원은 Chrome 15+, Firefox 95+, Safari 18.2+이며 `safari_ios`는 Safari를 따른다. OS 인쇄 창의 용지·배율·여백 선택이 최종 결과에 영향을 주므로 CSS 선언만으로 판형 적용 완료를 보고하지 않는다. |
+| 하단 쪽번호 영역 | `@bottom-center` 등 page-margin at-rule은 **Chrome 131+**, Firefox·Safari는 **지원 안 함**으로 기록되어 있고 iOS Safari는 mirror다. 지원 엔진에서는 페이지 카운터를 사용할 수 있지만 이를 모든 기기의 쪽번호 보장으로 표현하지 않는다. 미지원 시 원고가 사라지거나 조작을 막지 않고 쪽번호 없이 읽을 수 있어야 한다. |
+| 목차의 장 이동 링크 | 앱이 만든 목차 항목을 해당 장의 내부 `#id`로 연결하는 것과 목차에 실제 쪽수를 계산해 넣는 것은 다른 기능이다. PDF 내부 링크 보존·도착 장은 실제 생성 PDF에서 별도로 검사해야 한다. 위 `@page` BCD는 PDF 링크나 자동 목차 쪽수의 지원 증거가 아니다. |
+| 자동 목차 쪽수·각주·전문 조판 | 일반 `counter()`의 지원만으로 목적지의 인쇄 쪽수를 구하는 `target-counter()`까지 지원된다고 추정하지 않는다. Vivliostyle 공식 기능에는 교차 참조가 명시돼 있지만 이번 기본 브라우저 출력에서의 자동 목차 쪽수는 미확인이다. 양면 제본 배치·재단선·도련·출판용 파일 규격은 별도 범위다. MDN은 native 도련·재단선 지정이 아직 브라우저에서 지원되지 않는다고 설명한다. |
+
+착수 시 기존 인쇄는 `iframe.srcdoc`를 사용했다. [MDN iframe 설명과 예제](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe#embedding_source_code_in_an_iframe)는 `about:srcdoc`의 상대 URL 기준이 부모 문서이며, 내부 이동에는 `about:srcdoc#...`처럼 목적지를 명시해야 한다고 설명한다. 따라서 독립 HTML에서 `#장ID`가 동작했다는 결과를 실제 srcdoc 인쇄의 PDF 내부 링크 성공으로 대신하지 않는다. 이번 구현은 `base-uri 'none'` 경계를 유지하면서 미리보기·인쇄를 Blob 문서로 바꿔 같은 문서의 fragment를 사용한다. 실제 출력 경로에서 링크가 앱 주소·외부 주소가 아닌 해당 장으로 향하는지는 별도로 검증한다.
+
+조판 라이브러리가 브라우저 차이를 모두 없애는 것도 아니다. Vivliostyle의 해당 태그 [지원 문서](https://github.com/vivliostyle/vivliostyle.js/blob/v2.45.2/docs/supported-css-features.md)는 Safari/WebKit의 중첩 다단과 페이지 분할 차이를 명시한다. Paged.js의 Chromium 기반 specs를 실제 iPad·iPhone 검증으로 대신하지 않는다. iPad의 Chrome이라는 이름만으로 데스크톱 Chromium과 같은 인쇄 지원이라고 판단하지 않는다. 이번 조사에는 실제 Mac·iPad·iPhone·Files·OS 인쇄 창 검증이 없다.
+
+### 해도의 선택과 바꿀 조건
+
+**새 의존성 없이 현재 책 출력 모델과 native CSS를 재사용한다.** 독자용으로 담을 항목과 출처의 포함 범위는 앱에서 명시적으로 결정하고, 원고 텍스트나 원문을 HTML/Markdown으로 실행하지 않는다. 내부 목차 링크를 추가하더라도 원문 사이트·이미지·외부 글꼴을 자동으로 요청하는 통로로 넓히지 않는다. 현재 저장·백업·회고·개정본을 바꾸거나 독자용 출력을 공개 사본으로 전환하지 않는다.
+
+Paged.js/Vivliostyle 직접 도입은 패키지 크기뿐 아니라 **조판 스크립트의 실행 위치, DOM 분할 후 원고·출처 순서, 계정 전환 취소, 폰트 준비, 메모리·인쇄 완료 경계**를 다시 검증해야 한다. 지금 필요한 기본 판형·문단·장 나눔에 이 비용을 먼저 추가할 이유는 없다. 실제 원고에서 자동 목차 쪽번호·각주·양면 조판이 필수로 드러나면 두 후보의 동일 한글 원고 출력을 직접 비교하고 결정한다.
+
+이 절은 공식 자료 조사와 선택 근거다. 조사 뒤 수행한 새 독자용 화면·PDF 검증은 [책자 검토](../design-review/book-edition.md)에 별도로 기록했다. 기존 7쪽 PDF 검사나 라이브러리의 지원 표로 새 출력을 대신하지 않는다. 라이브러리·폰트 설치, 외부 AI, 운영 SQL·계정 자료·병합·배포 작업은 수행하지 않았다.

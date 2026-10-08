@@ -1,0 +1,152 @@
+{
+  "browser": "151.0.7922.173",
+  "capturedAt": "2026-10-06T01:58:29.705Z",
+  "environment": "Linux Chromium, real IndexedDB and BroadcastChannel; mock account, no real Auth/HTTP or Apple verification",
+  "checks": [
+    {
+      "name": "selection requires synced originals and applies only to writing, not import drafts",
+      "pass": true,
+      "evidence": {
+        "blocked": "writing_source_pending",
+        "untouched": null,
+        "pause": null,
+        "rejectedImport": "writing_draft_not_found",
+        "selected": 1,
+        "deletedImport": null
+      }
+    },
+    {
+      "name": "outbox survives later edits and reload; ack advances only captured revision",
+      "pass": true,
+      "evidence": {
+        "persistedImmutableReceipt": true,
+        "latestDraftKept": true
+      }
+    },
+    {
+      "name": "draft edits and pending metadata commit atomically; quota rollback preserves old text",
+      "pass": true,
+      "evidence": {
+        "atomicQuotaRollback": true
+      }
+    },
+    {
+      "name": "explicit remote install never overwrites existing draft and requires source floor",
+      "pass": true,
+      "evidence": {
+        "explicitSeparateInstall": true,
+        "versionChecks": true
+      }
+    },
+    {
+      "name": "normal conflict preserves loser as unlinked ordinary draft with exact base references",
+      "pass": true,
+      "evidence": {
+        "losingInputAndBasePreserved": true,
+        "sourceWrites": 0
+      }
+    },
+    {
+      "name": "multi-tab local edit invalidates stale resolution; valid local choice keeps remote text as new draft",
+      "pass": true,
+      "evidence": {
+        "staleChoiceRejected": true,
+        "broadcastReceived": true,
+        "localWinnerPreservesRemote": true
+      }
+    },
+    {
+      "name": "applied marker is atomic with saved originals and waits for their sync",
+      "pass": true,
+      "evidence": {
+        "originalAndTerminalAtomic": true,
+        "noDraftResurrection": true
+      }
+    },
+    {
+      "name": "remote applied conflict forks text without reviving same ID or modifying originals",
+      "pass": true,
+      "evidence": {
+        "canonicalAppliedPreserved": true,
+        "detachedRecovery": true,
+        "originalsUnchanged": true
+      }
+    },
+    {
+      "name": "local applied conflict keeps terminal marker and forks remote text for later deliberate save",
+      "pass": true,
+      "evidence": {
+        "pendingClosingMarker": true,
+        "otherTextDetached": true
+      }
+    },
+    {
+      "name": "applied source requires exact version pair and matching text, even at satisfied floor",
+      "pass": true,
+      "evidence": {
+        "missing": "writing_source_pending",
+        "mismatch": "writing_source_pending",
+        "state": "applied"
+      }
+    },
+    {
+      "name": "failed recovery write rolls back chosen draft, head and metadata together",
+      "pass": true,
+      "evidence": {
+        "recoveryAndWinnerAtomic": true
+      }
+    },
+    {
+      "name": "pause and missing head reject late writes; selected drafts cannot be silently deleted",
+      "pass": true,
+      "evidence": {
+        "lateWriteRejected": true,
+        "missingNotRecreated": true,
+        "selectedNotDeleted": true
+      }
+    },
+    {
+      "name": "fixed account prevents cross-account draft state, snapshots and list access",
+      "pass": true,
+      "evidence": {
+        "crossAccountOperationsRejected": 5
+      }
+    },
+    {
+      "name": "two tabs serialize competing remote payloads at one server revision",
+      "pass": true,
+      "evidence": {
+        "acceptedPayloads": 1,
+        "mismatchingPayloadsRejected": 1
+      }
+    },
+    {
+      "name": "failed terminal metadata write rolls back original, stage and operation receipt",
+      "pass": true,
+      "evidence": {
+        "originalStageReceiptAtomic": true,
+        "retryStoredOnce": true
+      }
+    },
+    {
+      "name": "malformed local metadata and draft kind replacement fail closed without text loss",
+      "pass": true,
+      "evidence": {
+        "invalidMetadataPreservesText": true,
+        "kindCannotBypassSync": true
+      }
+    },
+    {
+      "name": "no console/page errors or external requests",
+      "pass": true,
+      "evidence": {
+        "console": 0,
+        "page": 0,
+        "external": 0
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "unexpectedRequests": []
+}

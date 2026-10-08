@@ -1,0 +1,464 @@
+{
+  "createdAt": "2026-10-08T02:24:46.252Z",
+  "scope": "Actual book history/archive UI with bundled SDK, isolated IndexedDB and synthetic Auth HTTP; no production SQL, personal records, Apple hardware or PDF claims.",
+  "browser": "151.0.7922.173",
+  "pass": true,
+  "checks": [
+    {
+      "name": "A edition, B edit, reversible restore and book/chapter archive at 1440",
+      "pass": true,
+      "run": "run-2026-10-08T02-23-24-540Z.json",
+      "checkedAt": "2026-10-08T02:23:43.832Z"
+    },
+    {
+      "name": "A edition, B edit, reversible restore and book/chapter archive at 820",
+      "pass": true,
+      "run": "run-2026-10-08T02-23-24-540Z.json",
+      "checkedAt": "2026-10-08T02:23:43.832Z"
+    },
+    {
+      "name": "A edition, B edit, reversible restore and book/chapter archive at 390",
+      "pass": true,
+      "run": "run-2026-10-08T02-24-19-177Z.json",
+      "checkedAt": "2026-10-08T02:24:22.664Z"
+    },
+    {
+      "name": "edition count and serialized size limits reject capture and restoration atomically",
+      "pass": true,
+      "run": "run-2026-10-08T02-23-24-540Z.json",
+      "checkedAt": "2026-10-08T02:23:43.832Z"
+    },
+    {
+      "name": "failed history writes retain a recoverable draft and CAS refuses to overwrite another saved manuscript",
+      "pass": true,
+      "run": "run-2026-10-08T02-23-24-540Z.json",
+      "checkedAt": "2026-10-08T02:23:43.832Z"
+    },
+    {
+      "name": "backup restores archived books, chapters, editions and shared missing references under a new workspace",
+      "pass": true,
+      "run": "run-2026-10-08T02-23-24-540Z.json",
+      "checkedAt": "2026-10-08T02:23:43.832Z"
+    },
+    {
+      "name": "archived history remains private across account changes and workspace selection",
+      "pass": true,
+      "run": "run-2026-10-08T02-23-24-540Z.json",
+      "checkedAt": "2026-10-08T02:23:43.832Z"
+    }
+  ],
+  "visual": [
+    {
+      "scene": "editions",
+      "width": 1440,
+      "screenshot": "editions-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "run": "run-2026-10-08T02-23-24-540Z.json",
+      "checkedAt": "2026-10-08T02:23:43.832Z"
+    },
+    {
+      "scene": "archived-book",
+      "width": 1440,
+      "screenshot": "archived-book-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 700,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "run": "run-2026-10-08T02-23-24-540Z.json",
+      "checkedAt": "2026-10-08T02:23:43.832Z"
+    },
+    {
+      "scene": "editions",
+      "width": 820,
+      "screenshot": "editions-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "run": "run-2026-10-08T02-23-24-540Z.json",
+      "checkedAt": "2026-10-08T02:23:43.832Z"
+    },
+    {
+      "scene": "archived-book",
+      "width": 820,
+      "screenshot": "archived-book-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 628,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "run": "run-2026-10-08T02-23-24-540Z.json",
+      "checkedAt": "2026-10-08T02:23:43.832Z"
+    },
+    {
+      "scene": "empty-history",
+      "width": 390,
+      "screenshot": "empty-history-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "run": "run-2026-10-08T02-24-19-177Z.json",
+      "checkedAt": "2026-10-08T02:24:22.664Z"
+    },
+    {
+      "scene": "editions",
+      "width": 390,
+      "screenshot": "editions-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "run": "run-2026-10-08T02-24-19-177Z.json",
+      "checkedAt": "2026-10-08T02:24:22.664Z"
+    },
+    {
+      "scene": "archived-book",
+      "width": 390,
+      "screenshot": "archived-book-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 350,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "run": "run-2026-10-08T02-24-19-177Z.json",
+      "checkedAt": "2026-10-08T02:24:22.664Z"
+    },
+    {
+      "scene": "capacity-error",
+      "width": 390,
+      "screenshot": "capacity-error-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "run": "run-2026-10-08T02-23-24-540Z.json",
+      "checkedAt": "2026-10-08T02:23:43.832Z"
+    },
+    {
+      "scene": "save-error",
+      "width": 390,
+      "screenshot": "save-error-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "run": "run-2026-10-08T02-23-24-540Z.json",
+      "checkedAt": "2026-10-08T02:23:43.832Z"
+    },
+    {
+      "scene": "edition-content",
+      "width": 390,
+      "screenshot": "edition-content-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "run": "run-2026-10-08T02-24-19-177Z.json",
+      "checkedAt": "2026-10-08T02:24:22.664Z"
+    }
+  ],
+  "totals": {
+    "flows": 7,
+    "passed": 7,
+    "visualStates": 10,
+    "consoleErrors": 0,
+    "pageErrors": 0,
+    "externalRequests": 0,
+    "operatingRemoteWrites": 0
+  },
+  "executionHistory": [
+    {
+      "file": "run-2026-10-08T02-23-24-540Z.json",
+      "createdAt": "2026-10-08T02:23:24.540Z",
+      "finishedAt": "2026-10-08T02:23:43.832Z",
+      "checks": 7,
+      "passed": 7,
+      "scope": "Initial full seven-flow execution; no fixture or product failures."
+    },
+    {
+      "file": "run-2026-10-08T02-24-19-177Z.json",
+      "createdAt": "2026-10-08T02:24:19.177Z",
+      "finishedAt": "2026-10-08T02:24:22.664Z",
+      "checks": 1,
+      "passed": 1,
+      "scope": "Focused 390px flow adds keyboard lazy-edition content inspection and proves it does not write state; seven-flow suite not repeated."
+    }
+  ],
+  "manualImageReview": {
+    "files": [
+      "editions-1440.png",
+      "editions-390-viewport.png",
+      "save-error-390-viewport.png",
+      "edition-content-390.png"
+    ],
+    "findings": [
+      "Source and manuscript text remain readable; edition actions use existing shared style.",
+      "Mobile errors identify the pending unsaved draft and preserve JSON recovery and retry actions.",
+      "Expanding history intentionally moves the chapter editor below its retained editions; the editor is not removed."
+    ]
+  },
+  "limitations": [
+    "Chromium viewport and touch configuration only; no actual Mac/iPad/iPhone, screen reader, real Korean IME or Files validation.",
+    "Synthetic Auth HTTP with bundled SDK and actual isolated IndexedDB; no production SQL or remote storage writes.",
+    "PDF behavior belongs to the independent book-print suite, not this report."
+  ],
+  "runtime": {
+    "assets/life/workbench-ui.js": "8636c3fe98d9786ff6f5fbc1def5834aa93c5e183b28c6a51ec9a7f0762e4808",
+    "assets/life/workbench.js": "2c09fa016465227ef8e3acbbb075f5fd3d18d3be9a0cae1a3d97df7e4c28f1d5",
+    "assets/life/book-history.js": "e13caa6f462680c2a03b5b3771604fcdb99bb3913a6c5f53a7fe44cd75800bf7",
+    "assets/life/books.js": "080abc6b1e61576a005942fa437777f2a51a80f9dca284bf7f48ab6376ff1430",
+    "assets/life/workbench.css": "07e5863829e8772221b18f4c2c66067b204e2d08c57a2bd19dd701fc2a656267"
+  }
+}

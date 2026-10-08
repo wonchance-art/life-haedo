@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>해도 · 책 작업실 디자인 비교</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body>
+  <a class="skip" href="#main">본문으로</a>
+  <div class="specimen" aria-label="시안 비교 도구">
+    <span class="specimen-label">디자인 시안 · 익명 자료</span>
+    <div class="variant" role="group" aria-label="디자인 방향">
+      <button data-direction="A">A<span> 원고 중심</span></button>
+      <button data-direction="B">B<span> 편집 작업실</span></button>
+    </div>
+    <label class="state-label">상태 <select id="demoState"><option value="normal">기본</option><option value="many">많은 책</option><option value="empty">빈 목록</option><option value="loading">불러오는 중</option><option value="error">저장 실패</option></select></label>
+  </div>
+  <div class="sample-note">비공개 디자인 예시 · 편집 내용은 새로고침하면 사라집니다.</div>
+  <div id="app"></div>
+  <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+  <script src="../../assets/life/icons.js"></script>
+  <script src="sample.js"></script>
+  <script src="ui.js"></script>
+</body>
+</html>

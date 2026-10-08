@@ -1,0 +1,254 @@
+{
+  "book-preview": {
+    "createdAt": "2026-10-08T05:03:55.761Z",
+    "checks": [
+      {
+        "name": "private reading, exact originals, manuscript parity and chapter edit return at 1440",
+        "pass": true
+      },
+      {
+        "name": "private reading, exact originals, manuscript parity and chapter edit return at 820",
+        "pass": true
+      },
+      {
+        "name": "private reading, exact originals, manuscript parity and chapter edit return at 390",
+        "pass": true
+      },
+      {
+        "name": "failed saves block preview entry and return without losing the edited manuscript",
+        "pass": true
+      },
+      {
+        "name": "a delayed completed save cannot open the previous account preview after an account switch",
+        "pass": true
+      },
+      {
+        "name": "reading settings and manuscript content stay isolated between workspaces and accounts",
+        "pass": true
+      }
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "external": []
+  },
+  "reflection-reading": {
+    "createdAt": "2026-10-08T05:05:09.681Z",
+    "checks": [
+      {
+        "name": "selected exact versions, view-only periods/themes, note and Markdown at 1440",
+        "pass": true
+      },
+      {
+        "name": "selected exact versions, view-only periods/themes, note and Markdown at 820",
+        "pass": true
+      },
+      {
+        "name": "selected exact versions, view-only periods/themes, note and Markdown at 390",
+        "pass": true
+      },
+      {
+        "name": "invalid period recovery and failed note save preserve manuscript and prevent export or navigation",
+        "pass": true
+      },
+      {
+        "name": "integrated backup restores exact reflection versions and manuscript into an independent local copy",
+        "pass": true
+      }
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "external": []
+  },
+  "book-history": {
+    "createdAt": "2026-10-08T05:05:09.695Z",
+    "checks": [
+      {
+        "name": "A edition, B edit, reversible restore and book/chapter archive at 1440",
+        "pass": true
+      },
+      {
+        "name": "A edition, B edit, reversible restore and book/chapter archive at 820",
+        "pass": true
+      },
+      {
+        "name": "A edition, B edit, reversible restore and book/chapter archive at 390",
+        "pass": true
+      },
+      {
+        "name": "edition count and serialized size limits reject capture and restoration atomically",
+        "pass": true
+      },
+      {
+        "name": "failed history writes retain a recoverable draft and CAS refuses to overwrite another saved manuscript",
+        "pass": true
+      },
+      {
+        "name": "backup restores archived books, chapters, editions and shared missing references under a new workspace",
+        "pass": true
+      },
+      {
+        "name": "archived history remains private across account changes and workspace selection",
+        "pass": true
+      }
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "external": []
+  },
+  "book-print": {
+    "createdAt": "2026-10-08T05:05:40.717Z",
+    "checks": [
+      {
+        "name": "real A4 PDF preserves selectable Korean, whole text, chapter pagination and literal hostile text with no external request",
+        "pass": true
+      },
+      {
+        "name": "real native window.print can be requested from the sandboxed isolated iframe and cancelled afterward",
+        "pass": true
+      },
+      {
+        "name": "actual app print button flushes and projects only the selected book; original-body option is explicit and no state or remote upload changes",
+        "pass": true
+      }
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "external": []
+  },
+  "book-projects": {
+    "createdAt": "2026-10-08T05:10:25.546Z",
+    "checks": [
+      {
+        "name": "two books, exact chapter sources, reordered whole-book Markdown and reload at 1440",
+        "pass": true
+      },
+      {
+        "name": "two books, exact chapter sources, reordered whole-book Markdown and reload at 820",
+        "pass": true
+      },
+      {
+        "name": "two books, exact chapter sources, reordered whole-book Markdown and reload at 390",
+        "pass": true
+      },
+      {
+        "name": "failed chapter save preserves text and blocks project, chapter and export transitions",
+        "pass": true
+      },
+      {
+        "name": "concurrent IndexedDB chapter edits retain both manuscripts for explicit comparison",
+        "pass": true
+      },
+      {
+        "name": "integrated JSON restore remaps projects, exact versions and shared missing references",
+        "pass": true
+      },
+      {
+        "name": "books and legacy reflection remain isolated across workspaces and account changes",
+        "pass": true
+      }
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "external": []
+  },
+  "book-insights": {
+    "createdAt": "2026-10-08T05:10:44.302Z",
+    "checks": [
+      {
+        "name": "authored interpretation with exact support/counter, independent references and reversible export exclusion at 1440",
+        "pass": true
+      },
+      {
+        "name": "authored interpretation with exact support/counter, independent references and reversible export exclusion at 820",
+        "pass": true
+      },
+      {
+        "name": "authored interpretation with exact support/counter, independent references and reversible export exclusion at 390",
+        "pass": true
+      },
+      {
+        "name": "save failure and concurrent composition retain interpretation, uncertainty and both competing drafts",
+        "pass": true
+      },
+      {
+        "name": "JSON restores all interpretations including excluded entries and consistently remaps shared missing references",
+        "pass": true
+      },
+      {
+        "name": "interpretation selection remains private to its workspace and account across logout and return",
+        "pass": true
+      },
+      {
+        "name": "twenty-first exact evidence remains reachable with independent role pagination after reader return",
+        "pass": true
+      }
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "external": []
+  },
+  "record-arrange": {
+    "createdAt": "2026-10-08T05:05:16.174Z",
+    "checks": [
+      {
+        "name": "selection spans searches, reviews fixed versions and cancellation writes nothing",
+        "pass": true
+      },
+      {
+        "name": "hidden selections can be removed and a batch stops at one hundred fixed versions",
+        "pass": true
+      },
+      {
+        "name": "existing group receives a unique union and source coordinates remain intact",
+        "pass": true
+      },
+      {
+        "name": "reader keeps exact old version and quote return through review cancel and new group",
+        "pass": true
+      },
+      {
+        "name": "selected page entry is independent, respects toggles and survives backup restore",
+        "pass": true
+      },
+      {
+        "name": "review omission changes only the new page and reader arrange preserves unrelated list selection",
+        "pass": true
+      },
+      {
+        "name": "write failure preserves one accepted draft, blocks navigation and retries without duplicate",
+        "pass": true
+      },
+      {
+        "name": "workspace switch clears selection and late review cannot overwrite another section",
+        "pass": true
+      },
+      {
+        "name": "new saved composition preserves pending review and a deleted destination never becomes a new group silently",
+        "pass": true
+      },
+      {
+        "name": "pending review disappears across signout and another account",
+        "pass": true
+      },
+      {
+        "name": "keyboard selection and Korean composition keep review local until explicit apply",
+        "pass": true
+      },
+      {
+        "name": "visual selection empty many review loading and save error 1440",
+        "pass": true
+      },
+      {
+        "name": "visual selection empty many review loading and save error 820",
+        "pass": true
+      },
+      {
+        "name": "visual selection empty many review loading and save error 390",
+        "pass": true
+      }
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "external": []
+  }
+}

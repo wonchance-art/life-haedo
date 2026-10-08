@@ -1,0 +1,273 @@
+{
+  "generatedAt": "2026-10-07T15:48:26.453Z",
+  "runtime": {
+    "node": "v24.19.0",
+    "platform": "linux",
+    "arch": "x64",
+    "cpu": "AMD EPYC 9V74 80-Core Processor"
+  },
+  "scope": "Synchronous engine only; synthetic 1-version sources and no records, no UI/render/network/storage time. Full validation on every search. Three untimed warmups, fifteen warm samples, first timing reported separately. No timing pass/fail threshold.",
+  "sizes": [
+    {
+      "sourceCount": 100,
+      "versionCount": 100,
+      "recordCount": 0,
+      "contentUtf16Units": 165089,
+      "contentUtf8Bytes": 394293,
+      "validateWorkspace": {
+        "firstMs": 2.493,
+        "medianMs": 1.258,
+        "p95Ms": 5.269,
+        "samples": 15
+      },
+      "queries": [
+        {
+          "name": "empty",
+          "query": "",
+          "options": {},
+          "firstMs": 1.828,
+          "medianMs": 1.282,
+          "p95Ms": 4.415,
+          "samples": 15,
+          "resultCount": 100
+        },
+        {
+          "name": "absent",
+          "query": "없는검색표식",
+          "options": {},
+          "firstMs": 1.555,
+          "medianMs": 1.48,
+          "p95Ms": 6.148,
+          "samples": 15,
+          "resultCount": 0
+        },
+        {
+          "name": "selective-body",
+          "query": "특별한 표식",
+          "options": {},
+          "firstMs": 1.557,
+          "medianMs": 1.295,
+          "p95Ms": 1.786,
+          "samples": 15,
+          "resultCount": 1
+        },
+        {
+          "name": "common-body",
+          "query": "정원",
+          "options": {},
+          "firstMs": 1.43,
+          "medianMs": 1.181,
+          "p95Ms": 1.527,
+          "samples": 15,
+          "resultCount": 100
+        },
+        {
+          "name": "title-only",
+          "query": "제목전용표식",
+          "options": {},
+          "firstMs": 1.448,
+          "medianMs": 1.235,
+          "p95Ms": 2.095,
+          "samples": 15,
+          "resultCount": 1
+        },
+        {
+          "name": "spacing-literal",
+          "query": "자료의출처",
+          "options": {},
+          "firstMs": 1.185,
+          "medianMs": 1.141,
+          "p95Ms": 1.627,
+          "samples": 15,
+          "resultCount": 0
+        },
+        {
+          "name": "spacing-option",
+          "query": "자료의출처",
+          "options": {
+            "ignoreKoreanSpacing": true
+          },
+          "firstMs": 1.666,
+          "medianMs": 1.114,
+          "p95Ms": 1.358,
+          "samples": 15,
+          "resultCount": 100
+        }
+      ]
+    },
+    {
+      "sourceCount": 1000,
+      "versionCount": 1000,
+      "recordCount": 0,
+      "contentUtf16Units": 1651888,
+      "contentUtf8Bytes": 3943892,
+      "validateWorkspace": {
+        "firstMs": 12.397,
+        "medianMs": 11.731,
+        "p95Ms": 15.602,
+        "samples": 15
+      },
+      "queries": [
+        {
+          "name": "empty",
+          "query": "",
+          "options": {},
+          "firstMs": 11.27,
+          "medianMs": 11.683,
+          "p95Ms": 12.485,
+          "samples": 15,
+          "resultCount": 1000
+        },
+        {
+          "name": "absent",
+          "query": "없는검색표식",
+          "options": {},
+          "firstMs": 11.933,
+          "medianMs": 11.838,
+          "p95Ms": 13.245,
+          "samples": 15,
+          "resultCount": 0
+        },
+        {
+          "name": "selective-body",
+          "query": "특별한 표식",
+          "options": {},
+          "firstMs": 12.32,
+          "medianMs": 12.065,
+          "p95Ms": 13.698,
+          "samples": 15,
+          "resultCount": 1
+        },
+        {
+          "name": "common-body",
+          "query": "정원",
+          "options": {},
+          "firstMs": 12.859,
+          "medianMs": 11.611,
+          "p95Ms": 14.326,
+          "samples": 15,
+          "resultCount": 1000
+        },
+        {
+          "name": "title-only",
+          "query": "제목전용표식",
+          "options": {},
+          "firstMs": 11.506,
+          "medianMs": 11.399,
+          "p95Ms": 12.665,
+          "samples": 15,
+          "resultCount": 1
+        },
+        {
+          "name": "spacing-literal",
+          "query": "자료의출처",
+          "options": {},
+          "firstMs": 12.771,
+          "medianMs": 11.914,
+          "p95Ms": 13.639,
+          "samples": 15,
+          "resultCount": 0
+        },
+        {
+          "name": "spacing-option",
+          "query": "자료의출처",
+          "options": {
+            "ignoreKoreanSpacing": true
+          },
+          "firstMs": 12.041,
+          "medianMs": 12.325,
+          "p95Ms": 22.714,
+          "samples": 15,
+          "resultCount": 1000
+        }
+      ]
+    },
+    {
+      "sourceCount": 10000,
+      "versionCount": 10000,
+      "recordCount": 0,
+      "contentUtf16Units": 16528887,
+      "contentUtf8Bytes": 39448891,
+      "validateWorkspace": {
+        "firstMs": 132.53,
+        "medianMs": 127.704,
+        "p95Ms": 137.48,
+        "samples": 15
+      },
+      "queries": [
+        {
+          "name": "empty",
+          "query": "",
+          "options": {},
+          "firstMs": 120.307,
+          "medianMs": 128.536,
+          "p95Ms": 145.45,
+          "samples": 15,
+          "resultCount": 10000
+        },
+        {
+          "name": "absent",
+          "query": "없는검색표식",
+          "options": {},
+          "firstMs": 129.449,
+          "medianMs": 139.775,
+          "p95Ms": 188.146,
+          "samples": 15,
+          "resultCount": 0
+        },
+        {
+          "name": "selective-body",
+          "query": "특별한 표식",
+          "options": {},
+          "firstMs": 137.797,
+          "medianMs": 133.217,
+          "p95Ms": 137.052,
+          "samples": 15,
+          "resultCount": 1
+        },
+        {
+          "name": "common-body",
+          "query": "정원",
+          "options": {},
+          "firstMs": 119.791,
+          "medianMs": 132.406,
+          "p95Ms": 155.183,
+          "samples": 15,
+          "resultCount": 10000
+        },
+        {
+          "name": "title-only",
+          "query": "제목전용표식",
+          "options": {},
+          "firstMs": 135.374,
+          "medianMs": 153.439,
+          "p95Ms": 232.8,
+          "samples": 15,
+          "resultCount": 1
+        },
+        {
+          "name": "spacing-literal",
+          "query": "자료의출처",
+          "options": {},
+          "firstMs": 152.911,
+          "medianMs": 148.987,
+          "p95Ms": 227.223,
+          "samples": 15,
+          "resultCount": 0
+        },
+        {
+          "name": "spacing-option",
+          "query": "자료의출처",
+          "options": {
+            "ignoreKoreanSpacing": true
+          },
+          "firstMs": 157.145,
+          "medianMs": 207.568,
+          "p95Ms": 425.888,
+          "samples": 15,
+          "resultCount": 10000
+        }
+      ]
+    }
+  ]
+}

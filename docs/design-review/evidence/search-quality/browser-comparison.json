@@ -1,0 +1,64 @@
+{
+  "checks": "5/5 completed scenarios, composed from identified source runs",
+  "captures": 21,
+  "timingCorpus": "Identical 100/1000 anonymous sources, plus one exact older version. Dedicated three tiny spacing cases and one UI excerpt import are added only after timing. 820 is a new small functional case with no before benchmark.",
+  "comparison": [
+    {
+      "count": 100,
+      "width": 1440,
+      "beforeDomElements": 2303,
+      "afterDomElements": 1047,
+      "beforeReloadMs": 311,
+      "afterReloadMs": 298,
+      "beforeCommonMedianMs": 30.899999998509884,
+      "afterCommonMedianMs": 23.399999998509884,
+      "beforeCommonMaxMs": 48,
+      "afterCommonMaxMs": 26.100000001490116
+    },
+    {
+      "count": 100,
+      "width": 390,
+      "beforeDomElements": 2303,
+      "afterDomElements": 1047,
+      "beforeReloadMs": 270,
+      "afterReloadMs": 274,
+      "beforeCommonMedianMs": 28.199999999254942,
+      "afterCommonMedianMs": 26,
+      "beforeCommonMaxMs": 30.699999999254942,
+      "afterCommonMaxMs": 27.600000001490116
+    },
+    {
+      "count": 1000,
+      "width": 1440,
+      "beforeDomElements": 21203,
+      "afterDomElements": 1047,
+      "beforeReloadMs": 832,
+      "afterReloadMs": 565,
+      "beforeCommonMedianMs": 274.5999999977648,
+      "afterCommonMedianMs": 28.100000001490116,
+      "beforeCommonMaxMs": 291,
+      "afterCommonMaxMs": 30
+    },
+    {
+      "count": 1000,
+      "width": 390,
+      "beforeDomElements": 21203,
+      "afterDomElements": 1047,
+      "beforeReloadMs": 956,
+      "afterReloadMs": 572,
+      "beforeCommonMedianMs": 286.4000000022352,
+      "afterCommonMedianMs": 32.900000002235174,
+      "beforeCommonMaxMs": 305.1000000014901,
+      "afterCommonMaxMs": 35.70000000298023
+    }
+  ],
+  "metrics": {
+    "minimumTextContrast": 5.661,
+    "overflowFailures": 0,
+    "targetFailures": 0,
+    "inputFailures": 0,
+    "contrastFailures": 0
+  },
+  "diagnosis": "Earlier failures were test assumptions: store-only directly enters reader; a one-version reader has no version selector; unchanged native input value sends no input event; API fixture workspace creation does not update an already rendered management selector. Tests now use actual excerpt-save and workspace creation UI, exact stored raw-version identity, and real value changes. No app change requested for those diagnostics.",
+  "limits": "Anonymous Auth HTTP; actual SDK/isolated IDB; Linux Chromium viewport and composition-event simulation only; no production or Apple claims"
+}

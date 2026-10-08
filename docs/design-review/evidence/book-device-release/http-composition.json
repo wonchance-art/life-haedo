@@ -1,0 +1,23 @@
+{
+  "scope": "read-only anonymous deployed HTTP; authenticated get/put not exercised",
+  "checks": [
+    {
+      "check": "anonymous composition get denied",
+      "http": 401,
+      "code": "42501",
+      "passed": true
+    },
+    {
+      "check": "anonymous composition table denied",
+      "http": 401,
+      "code": "42501",
+      "passed": true
+    },
+    {
+      "check": "anonymous composition receipts denied",
+      "http": 401,
+      "code": "42501",
+      "passed": true
+    }
+  ]
+}

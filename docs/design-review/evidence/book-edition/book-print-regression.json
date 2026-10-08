@@ -1,0 +1,51 @@
+{
+  "createdAt": "2026-10-08T05:46:16.935Z",
+  "browser": "151.0.7922.173",
+  "scope": "Linux Chromium real PDF generation and Korean text extraction; anonymous actual app print-button capture. Not Apple hardware, native iOS dialog or user Save PDF confirmation.",
+  "checks": [
+    {
+      "name": "real A4 PDF preserves selectable Korean, whole text, chapter pagination and literal hostile text with no external request",
+      "pass": true
+    },
+    {
+      "name": "real native window.print can be requested from the sandboxed isolated iframe and cancelled afterward",
+      "pass": true
+    },
+    {
+      "name": "actual app print button flushes and projects only the selected book; original-body option is explicit and no state or remote upload changes",
+      "pass": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "operatingRemoteWrites": 0,
+  "pdfToolWarnings": [
+    {
+      "page": 1,
+      "message": "Syntax Warning: Bad bounding box in Type 3 glyph\nSyntax Warning: Bad bounding box in Type 3 glyph\nSyntax Warning: Bad bounding box in Type 3 glyph\nSyntax Warning: Bad bounding box in Type 3 glyph\nSyntax Warning: Bad bounding box in Type 3 glyph\nSyntax Warning: Bad bounding box in Type 3 glyph"
+    }
+  ],
+  "pdf": {
+    "filename": "anonymous-book.pdf",
+    "pages": 7,
+    "chapterTwoPage": 7,
+    "a4": true,
+    "koreanSelectable": true,
+    "all60ParagraphsPresent": true,
+    "requests": 0
+  },
+  "app": {
+    "viewport": 390,
+    "keyboard": true,
+    "touch": true,
+    "requestedTwice": true,
+    "defaultBodyOff": true,
+    "nativeDialogMethodCaptured": true,
+    "storageUnchanged": true,
+    "remoteWrites": 0
+  },
+  "pass": true,
+  "finishedAt": "2026-10-08T05:46:19.519Z"
+}

@@ -1,0 +1,19 @@
+{
+  "createdAt": "2026-10-06T02:03:47.252Z",
+  "scope": "Chromium DOM and actual Writing modules, controlled in-memory storage delays; no remote or operating data.",
+  "negativeControl": false,
+  "checks": [
+    {
+      "name": "a late old-draft response cannot attach its incoming notice to a rescued new draft",
+      "pass": true
+    },
+    {
+      "name": "a slower earlier revision cannot replace a newer applied notice or the active Korean input",
+      "pass": true
+    }
+  ],
+  "pageErrors": [],
+  "consoleErrors": [],
+  "externalRequests": [],
+  "browser": "151.0.7922.173"
+}

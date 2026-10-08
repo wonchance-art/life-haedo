@@ -54,6 +54,25 @@ function inspect() {
 async function openDetails(locator) {for(const detail of await locator.locator('details').all())if(!(await detail.evaluate(el=>el.open)))await detail.locator('summary').first().click();}
 async function save(page){await page.getByRole('button',{name:'지금 저장',exact:true}).click();await page.waitForFunction(()=>document.getElementById('wbStatus')?.dataset.state==='saved');}
 async function togglePreview(page){const on=await page.locator('#wbPagePreview').getAttribute('aria-pressed')!=='true';await page.locator('#wbPagePreview').click();await page.waitForFunction(on=>document.getElementById('wbPagePreview')?.getAttribute('aria-pressed')===String(on),on);if(on)await page.locator('#wbVisitor').waitFor();else await page.locator('#wbVisitor').waitFor({state:'detached'});}
+async function verifyPageBody(part,raw,{folded=false}={}) {
+  const body=part.locator('.wb-source-body'),shown=await body.textContent(),expand=part.locator('.wb-page-expand');
+  assert(shown.length>0,'A nonempty original must have a visible opening');
+  assert.equal(shown,raw.slice(0,shown.length),'The page opening must be an exact prefix of its fixed original version');
+  assert(!/[\uD800-\uDBFF]$/.test(shown),'The opening must not split an emoji surrogate pair');
+  assert(!(shown.endsWith('\r')&&raw[shown.length]==='\n'),'The opening must not split a CRLF pair');
+  if(folded)assert(shown.length<raw.length,'The long original should initially be folded');
+  if(shown!==raw) {
+    assert.equal(await expand.count(),1);assert.equal(await expand.getAttribute('aria-expanded'),'false');
+    assert.equal(await expand.getAttribute('aria-controls'),await body.getAttribute('id'));
+    await expand.click();assert.equal(await expand.getAttribute('aria-expanded'),'true');
+    assert.equal(await body.textContent(),raw,'Explicit expansion must show the entire unchanged original');
+    await expand.click();assert.equal(await expand.getAttribute('aria-expanded'),'false');
+    assert.equal(await body.textContent(),shown,'Folding again must preserve the same raw prefix');
+  } else {
+    assert.equal(await body.textContent(),raw);
+    if(await expand.isVisible())assert.equal(await expand.getAttribute('aria-expanded'),'true');
+  }
+}
 async function waitSaved(page,predicate) {
   const deadline=Date.now()+10000;let value;
   do{value=await current(page);if(predicate(value.workbench))return value;await page.waitForTimeout(30);}while(Date.now()<deadline);
@@ -104,8 +123,14 @@ async function main() {
       await entry.getByLabel('내 코멘트',{exact:true}).fill('첫 코멘트를 먼저 저장');await save(page);
       const note='다시 고친 내 코멘트 <img src=x onerror="window.__wbInjection=1"> & 🌱';await entry.getByLabel('내 코멘트',{exact:true}).fill(note);
       await entry.locator(`[data-part-version-id="${f.refs[2].versionId}"] input[type=checkbox]`).uncheck();await save(page);
-      await togglePreview(page);assert(await page.locator('#wbVisitor').isVisible());const text=await page.locator('#wbVisitor').textContent();assert(text.includes(oldBody));assert(!text.includes(newBody));assert(!text.includes('혼자 남긴 질문:'));assert(text.includes(note));assert.equal(await page.locator('#wbVisitor img').count(),0);assert.equal(await page.evaluate(()=>window.__wbInjection),undefined);assert.equal(await page.evaluate(()=>document.activeElement.id),'wbPagePreview');
-      await togglePreview(page);assert.equal(await page.evaluate(()=>document.activeElement.id),'wbPagePreview');await page.reload();await ready(page);await page.locator(`article[data-entry-id="${entryId}"]`).waitFor();await togglePreview(page);assert((await page.locator('#wbVisitor').textContent()).includes(note));
+      await togglePreview(page);assert(await page.locator('#wbVisitor').isVisible());const text=await page.locator('#wbVisitor').textContent();assert(!text.includes(newBody));assert(!text.includes('혼자 남긴 질문:'));assert(text.includes(note));assert.equal(await page.locator('#wbVisitor img').count(),0);assert.equal(await page.evaluate(()=>window.__wbInjection),undefined);assert.equal(await page.evaluate(()=>document.activeElement.id),'wbPagePreview');
+      await verifyPageBody(page.locator(`#wbVisitor [data-version-id="${f.refs[0].versionId}"]`),oldBody);
+      await togglePreview(page);
+      const resumedNote=entry.getByLabel('내 코멘트',{exact:true});
+      assert.equal(await resumedNote.evaluate(el=>el===document.activeElement),true);
+      assert.equal(await entry.locator('.wb-page-entry-edit').evaluate(el=>el.open),true);
+      assert.equal(await resumedNote.inputValue(),note);
+      await page.reload();await ready(page);await page.locator(`article[data-entry-id="${entryId}"]`).waitFor();await togglePreview(page);assert((await page.locator('#wbVisitor').textContent()).includes(note));
       const stored=await current(page);assert.equal(stored.workbench.groups[0].id,groupId);assert.equal(stored.workbench.page.entries[0].parts[2].enabled,false);assert.deepEqual(stored.bundle,original);
     });
     await check('editing or deleting an activity does not mutate an existing page copy',async({page})=>{
@@ -114,7 +139,7 @@ async function main() {
       await group.getByRole('button',{name:'묶음만 삭제',exact:true}).click();await save(page);const after=await current(page);assert.equal(after.workbench.groups.length,0);assert.deepEqual(after.workbench.page,before.workbench.page);assert.deepEqual(after.bundle,before.bundle);await go(page,'page');await togglePreview(page);assert((await page.locator('#wbVisitor').textContent()).includes('오후 네 시의 빛.'));
     });
     await check('missing fixed version stays missing and existing older version never substitutes latest',async({page})=>{
-      const f=await fixture(page);await seedComposition(page,f.refs);await page.evaluate(async()=>{const s=HaedoLife.Shell.storage,id=await s.getActive(),w=await s.readWorkbench(id);w.page.entries[0].parts.push({versionId:'missing-fixed-version',enabled:true});await s.saveWorkbench(id,w,w.revision);});await go(page,'page');await togglePreview(page);const visitor=page.locator('#wbVisitor');assert((await visitor.textContent()).includes(oldBody));assert(!(await visitor.textContent()).includes(newBody));assert.match(await visitor.locator('[data-version-id="missing-fixed-version"]').textContent(),/연결된 원문 없음/);assert.equal(await visitor.locator('[data-version-id="missing-fixed-version"] .wb-source-body').count(),0);
+      const f=await fixture(page);await seedComposition(page,f.refs);await page.evaluate(async()=>{const s=HaedoLife.Shell.storage,id=await s.getActive(),w=await s.readWorkbench(id);w.page.entries[0].parts.push({versionId:'missing-fixed-version',enabled:true});await s.saveWorkbench(id,w,w.revision);});await go(page,'page');await togglePreview(page);const visitor=page.locator('#wbVisitor');await verifyPageBody(visitor.locator(`[data-version-id="${f.refs[0].versionId}"]`),oldBody);assert(!(await visitor.textContent()).includes(newBody));assert.match(await visitor.locator('[data-version-id="missing-fixed-version"]').textContent(),/연결된 원문 없음/);assert.equal(await visitor.locator('[data-version-id="missing-fixed-version"] .wb-source-body').count(),0);
     });
     await check('page placement and visibility remain separate and toggles remove preview DOM',async({page})=>{
       const f=await fixture(page);await seedComposition(page,f.refs);await go(page,'page');let entry=page.locator('article[data-entry-id]').first();await openDetails(entry);await entry.getByRole('button',{name:'항목 고정 해제',exact:true}).click();await page.getByText('제목·소개·표시 설정',{exact:true}).click();await page.locator('#wbShowRecent').uncheck();await save(page);await togglePreview(page);assert.equal(await page.locator('#wbVisitor article').count(),0);assert.equal((await current(page)).workbench.page.entries[0].enabled,true);
@@ -161,5 +186,5 @@ async function main() {
   if(report.checks.some(c=>!c.pass)||report.consoleErrors.length||report.pageErrors.length||report.external.length)process.exitCode=1;
 }
 
-module.exports={fixture,current,seedComposition,abortWorkbenchWrites,go,inspect,longTitle,oldBody,newBody};
+module.exports={fixture,current,seedComposition,abortWorkbenchWrites,go,inspect,longTitle,oldBody,newBody,verifyPageBody};
 if(require.main===module)main().catch(error=>{console.error(error.stack);process.exitCode=1;});

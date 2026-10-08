@@ -4,6 +4,7 @@
   const ORIGINS = [['apple_notes', 'Apple 메모'], ['obsidian', 'Obsidian'], ['naver_blog', '네이버 블로그'], ['instagram', 'Instagram'], ['other', '기타']];
   const COVERAGE = { full_text: '제공한 본문 전체', partial: '선택한 본문 일부', link_only: '본문 미확보 · 링크만', unknown: '본문 확보 범위 미확인' };
   const MAX_TEXT_BYTES = 1024 * 1024;
+  const SEARCH_PAGE_SIZE = 40;
 
   function node(tag, text, className) {
     const el = document.createElement(tag);
@@ -89,7 +90,7 @@
     return display;
   }
 
-  async function mount(container, { storage, core, legacy, sync, auth, signal }) {
+  async function mount(container, { storage, core, legacy, sync, compositionSync, writingSync, auth, signal }) {
     if (signal?.aborted) throw new Error('화면 연결이 취소되었습니다.');
     let disposed = false;
     let unsubscribe = null;
@@ -102,16 +103,22 @@
     let dataRefreshSequence = 0;
     let dataRefreshPromise = Promise.resolve(false);
     let readerCleanup = null;
+    let readerWatch = null;
+    let readingResumeCleanup = null;
+    let readingResumePromise = Promise.resolve();
     let focusFrame = null;
     let unbindNavigation = null;
     let lastRecordMode = 'sources';
     let workbenchOpenOptions = null;
+    let chapterImport = null;
     let writingOpenOptions = null;
     let navigationGeneration = 0;
+    let renderGeneration = 0;
     let homeRenderPromise = Promise.resolve();
     const selectedVersions = new Set();
     let selectionReturn = null;
     let relatedOrigin = null;
+    let compositionPanel = null;
     const downloadUrls = new Set();
     const state = {
       bundle: null, workspaces: [], mode: 'sources', topic: '', topicsSearch: '', sourcesSearch: '', originFilter: '', returnContext: null, suppressReaderResume: false, sourceId: null,
@@ -122,8 +129,10 @@
       syncAccount: null, syncState: null, syncReadError: null, syncAccountKey: null,
       syncLoading: false, managementOpen: false, sourcesFiltersOpen: false, topicsFiltersOpen: false,
       selecting: false, readerArrangeOpen: false,
-      remoteRows: null, remoteRowsAccountKey: null, conflictView: null, conflictCopyId: null, restoreReturn: null
+      sourcesLimit: SEARCH_PAGE_SIZE, sourcesWindowKey: '', sourcesRevealVersionId: null, ignoreKoreanSpacing: false,
+      remoteRows: null, remoteRowsAccountKey: null, conflictView: null, conflictCopyId: null, restoreReturn: null, importResult: null
     };
+    const readingPosition = global.HaedoLife.ReadingPosition?.create({ storage });
     const root = node('div', null, 'life-app');
     const status = node('p', '', 'life-status');
     status.id = 'lifeSaveStatus';
@@ -143,7 +152,7 @@
     skip.href = '#lifeMain';
     root.append(skip, header, toolbar, recordSections, status, error, main);
     container.replaceChildren(root);
-    const workbenchModes = ['activities', 'page', 'discover', 'related', 'reflection', 'workbench-backup', 'public-pages'];
+    const workbenchModes = ['activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'public-pages'];
     const workbench = global.HaedoLife.WorkbenchUI?.create({
       storage, core, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce,
@@ -155,8 +164,13 @@
         selectionReturn = null;
       },
       onSelectionCancel: returnFromArrange,
+      onChapterImport: beginChapterImport,
+      onWorkbenchNavigate: ({ workspaceId, mode, planOpen = false }) => {
+        if (disposed || state.bundle?.workspaceId !== workspaceId || !['reflection', 'books'].includes(mode)) return;
+        return navigate(mode, { planOpen });
+      },
       onArrange: ({ workspaceId, versionIds, focusId }) => {
-        if (disposed || state.bundle?.workspaceId !== workspaceId || !['discover', 'related'].includes(state.mode)) return;
+        if (disposed || state.bundle?.workspaceId !== workspaceId || !['discover', 'related', 'reflection'].includes(state.mode)) return;
         return arrangeRecords('activities', [...new Set(versionIds)], focusId);
       },
       openSource: (sourceId, versionId, options = {}) => navigate('source', {
@@ -164,7 +178,7 @@
         returnContext: { mode: state.mode, workspaceId: state.bundle.workspaceId, scrollY: global.scrollY, focusKey: options.focusKey }
       }),
       beforeRestore: () => persistDrafts(),
-      onRestored: async ({ bundle }) => {
+      onRestored: async ({ bundle, workbench: restored }) => {
         if (disposed) return;
         const previousId = state.bundle.workspaceId;
         invalidateBatchContext();
@@ -176,20 +190,29 @@
         state.restoreReturn = { previousId, copyId: bundle.workspaceId };
         state.remoteChanged = false;
         resetSearchContext();
-        state.mode = 'page';
+        const hasBooks = !!restored?.books?.length;
+        state.mode = hasBooks ? 'books' : 'page';
+        workbenchOpenOptions = hasBooks ? { bookList: true } : null;
+        const workspaceToken = workspaceGeneration, navigationToken = navigationGeneration, mode = state.mode;
+        const current = () => !disposed && state.bundle?.workspaceId === bundle.workspaceId &&
+          workspaceToken === workspaceGeneration && navigationToken === navigationGeneration && state.mode === mode;
         connectSubscription();
-        // Installation already committed; keep the installed copy open even if list refresh fails.
-        try { await refreshData(); }
-        catch (_) { announce('사본은 저장됐습니다. 작업공간 목록은 다시 열 때 확인해 주세요.'); }
-        if (disposed) return;
+        // The transaction already committed. Show its copy before refreshing the
+        // workspace list, and never steal a newer screen or its keyboard focus.
         await render();
-        announce('자료와 구성을 새 사본으로 열었습니다. 이전 작업공간은 그대로 보관됩니다.');
+        if (!current()) return;
+        global.scrollTo({ top: 0, behavior: 'instant' });
+        main.querySelector('#lifeRestoreResult h3')?.focus({ preventScroll: true });
+        announce('자료와 구성을 새 사본으로 열었습니다. 이전 작업공간은 그대로 보관됩니다.', { quiet: true });
+        try { await refreshData(); }
+        catch (_) { if (current()) announce('사본은 저장됐습니다. 작업공간 목록은 다시 열 때 확인해 주세요.'); }
       }
     });
 
     const home = global.HaedoLife.HomeUI?.create({
       storage, core, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce, navigate,
+      renderReadingResume: parent => renderReadingResume(parent, 'home', 'home'),
       openSource: (sourceId, versionId) => navigate('source', {
         sourceId, sourceVersionId: versionId, locator: null,
         returnContext: { mode: 'home', workspaceId: state.bundle.workspaceId, scrollY: global.scrollY,
@@ -198,7 +221,7 @@
     });
 
     const writer = global.HaedoLife.WritingUI?.create({
-      storage, core, host: main, getBundle: () => state.bundle,
+      storage, core, writingSync, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce,
       onClose: () => navigate('sources'),
       onSaved: async ({ sourceId, sourceVersionId }) => {
@@ -794,7 +817,7 @@
       }
     }
 
-    async function commit(changes, stage, stageResult) {
+    async function commit(changes, stage, stageResult, onStored) {
       const request = {
         workspaceId: state.bundle.workspaceId, baseRevision: state.bundle.revision, changes
       };
@@ -814,6 +837,7 @@
       }
       if (result.status !== 'stored') throw new Error(result.error && result.error.message || '저장하지 못했습니다. 다시 시도하거나 내용을 복사해 주세요.');
       state.pendingOperation = null;
+      onStored?.(result);
       await refreshData();
       state.remoteChanged = false;
       return result;
@@ -824,12 +848,32 @@
       if (dirty()) await persistStage();
       await workbench?.flush();
       await writer?.flush();
+      await flushReadingPosition();
       if (disposed || token !== navigationGeneration) return;
+      // A previous excerpt/record save does not describe the draft being opened.
+      // Clear only after navigation can succeed; failed flushes keep their feedback.
+      if (mode === 'write' && state.mode !== 'write') announce('', { quiet: true });
       if (!['tools', 'manage', 'sync', 'transfer', ...workbenchModes].includes(mode) && !options?.preserveContext &&
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { selection, groupId, pagePreview, discovery, writing, ...viewOptions } = options || {};
+      const { selection, groupId, pagePreview, discovery, writing, reimport, book, bookList, chapterImport: chapterImportOptions, ...viewOptions } = options || {};
+      if (reimport) {
+        if (mode !== 'import' || state.bundle.workspaceId !== reimport.workspaceId) return;
+        const source = sourceFor(reimport.sourceId);
+        const version = state.bundle.sourceVersions.find(item => item.id === reimport.sourceVersionId && item.sourceId === source?.id);
+        if (!source || source.origin !== 'naver_blog' || !version) throw new Error('선택한 원문을 찾을 수 없습니다. 기존 자료를 다시 열어 주세요.');
+        newDraft();
+        Object.assign(state.stage.input, {
+          origin: source.origin, title: source.title, url: source.url || '', existingSourceId: source.id,
+          author: version.originalAuthor.label, authorRelation: version.originalAuthor.relation,
+          originalCreatedAt: version.originalCreatedAt, format: version.format
+        });
+        if (source.sourceKey) state.stage.input.fileName = source.sourceKey;
+        // A new capture has its own scope; do not inherit full_text or omissions.
+        state.editTick = 1;
+      }
+      if (!['import', 'batch', 'source'].includes(mode) && !chapterImportOptions) chapterImport = null;
       writingOpenOptions = mode === 'write' ? writing || {} : null;
       Object.assign(state, viewOptions, { mode });
       workbenchOpenOptions = workbenchModes.includes(mode) ? options : null;
@@ -839,9 +883,57 @@
       // lock the global navigation; Workbench owns stale-response guards.
       const rendering = render();
       if (!options?.selection) await rendering;
+      if (reimport) {
+        main.querySelector('#lifeImportText')?.focus();
+        await persistStage(true);
+      }
       if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
-      const heading = main.querySelector('h1,h2') || toolbar.querySelector('h1');
-      if (heading && !options?.groupId) heading.focus({ preventScroll: true });
+      const heading = (options?.chapterImport && (main.querySelector('#wbChapterImportHeading') || main.querySelector('#wbChapterNote'))) || (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || main.querySelector('h1,h2') || toolbar.querySelector('h1');
+      if (heading && !options?.groupId && !reimport) {
+        heading.focus({ preventScroll: true });
+        if (options?.book || options?.chapterImport) heading.scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    function currentChapterImport(context = chapterImport) {
+      return !!context && context === chapterImport && !disposed && context.workspaceId === state.bundle?.workspaceId && context.generation === workspaceGeneration;
+    }
+
+    async function beginChapterImport(target, { isCurrent = () => true } = {}) {
+      const generation = workspaceGeneration, navigation = navigationGeneration;
+      await persistDrafts();
+      if (disposed || generation !== workspaceGeneration || navigation !== navigationGeneration || state.mode !== 'books' || !isCurrent() || target.workspaceId !== state.bundle?.workspaceId) return;
+      // Existing import notes remain in their saved stages; this chapter starts a fresh review.
+      newDraft();
+      chapterImport = { ...target, generation, versionIds: [] };
+      try { await navigate('import'); }
+      catch (cause) { chapterImport = null; throw cause; }
+    }
+
+    async function returnToChapterImport() {
+      const context = chapterImport;
+      if (!currentChapterImport(context)) return;
+      await persistDrafts();
+      await refreshData();
+      if (!currentChapterImport(context)) return;
+      await navigate('books', { chapterImport: { workspaceId: context.workspaceId, bookId: context.bookId,
+        chapterId: context.chapterId, versionIds: context.versionIds.slice() } });
+      if (chapterImport === context) chapterImport = null;
+    }
+
+    function renderChapterImportReturn() {
+      if (!currentChapterImport() || !['import', 'batch', 'source'].includes(state.mode)) return;
+      const context = chapterImport;
+      const panel = node('section', null, 'life-chapter-import-return'); panel.id = 'lifeChapterImportContext';
+      panel.setAttribute('aria-label', context.bookTitle + ' · ' + context.chapterTitle + '에 자료 가져오기');
+      const heading = node('p', context.chapterTitle, 'life-chapter-import-title');
+      heading.title = context.bookTitle;
+      const back = button(context.versionIds.length ? '보관한 자료 확인' : '장으로 돌아가기', guarded(returnToChapterImport));
+      back.id = 'lifeChapterImportReturn';
+      panel.append(heading, node('p', context.versionIds.length
+        ? '자료 ' + context.versionIds.length + '개 보관 · 아직 장에 연결하지 않았습니다.'
+        : '자료를 확인한 뒤 이 장에 연결할 글을 고릅니다. 원고는 저장했습니다.', 'life-meta'), back);
+      main.prepend(panel);
     }
 
     function newDraft() {
@@ -867,13 +959,13 @@
       state.savedTick = state.editTick = 0;
       state.prepared = null;
       state.stageFailed = false;
-      state.importMethod = stage.input.text ? 'text' : stage.input.url ? 'link' : stage.input.fileName ? 'file' : 'text';
+      state.importMethod = stage.input.text || stage.input.existingSourceId ? 'text' : stage.input.url ? 'link' : stage.input.fileName ? 'file' : 'text';
       await navigate('import');
     }
 
     function sectionFor(mode) {
       if (mode === 'home') return 'home';
-      return ['tools', 'discover', 'reflection'].includes(mode) ? 'tools' : ['manage', 'sync', 'transfer', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
+      return ['tools', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'sync', 'transfer', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
     }
 
     function routeMode() {
@@ -881,9 +973,9 @@
       const section = params.get('section');
       const view = params.get('view');
       if (section === 'home') return 'home';
-      if (section === 'tools') return ['discover', 'reflection'].includes(view) ? view : 'tools';
+      if (section === 'tools') return ['discover', 'reflection', 'books'].includes(view) ? view : 'tools';
       if (section === 'manage') return ['transfer', 'sync', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
-      if (!section && ['transfer', 'sync', 'workbench-backup', 'public-pages', 'discover', 'reflection'].includes(view)) return view;
+      if (!section && ['transfer', 'sync', 'workbench-backup', 'public-pages', 'discover', 'reflection', 'books'].includes(view)) return view;
       if (['topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related'].includes(view)) return view;
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
     }
@@ -947,6 +1039,7 @@
       heading.tabIndex = -1;
       const headingGroup = node('div', null, 'haedo-heading-title');
       if (state.mode === 'write') heading.textContent = '글쓰기';
+      else if (state.mode === 'books') heading.textContent = '내 책';
       else if (state.mode === 'page') heading.textContent = '내 페이지';
       else if (state.mode === 'related') heading.textContent = '관련 기록';
       else if (section === 'records') {
@@ -1050,6 +1143,7 @@
       const list = node('div', null, 'life-destinations');
       list.append(actionRow('다시 찾기', '검색하고 관련 기록 이어 보기', 'search', () => navigate('discover')),
         actionRow('회고', '고른 자료를 돌아보고 메모', 'book', () => navigate('reflection')),
+        actionRow('책 만들기', '주제별로 글을 엮고 장별 원고 쓰기', 'book', () => navigate('books')),
         destinationRow('목표', '진행 중인 일과 다음 계획', 'goals.html', 'target'),
         destinationRow('습관', '반복할 일과 오늘의 체크', 'habits.html', 'check'));
       main.append(list);
@@ -1095,7 +1189,7 @@
       main.append(manage, management);
       const destinations = node('div', null, 'life-destinations');
       destinations.append(actionRow('공개 페이지 관리', '이 계정으로 게시한 페이지 확인·철회', 'link', () => navigate('public-pages')));
-      destinations.append(actionRow('자료·구성 백업', '원문과 묶음·내 페이지·회고를 함께 보관', 'download', () => navigate('workbench-backup')));
+      destinations.append(actionRow('자료·구성 백업', '원문과 묶음·내 페이지·회고·책을 함께 보관', 'download', () => navigate('workbench-backup')));
       destinations.append(actionRow('내보내기·사본 복원', '원문·발췌·출처를 파일로 보관', 'download', () => navigate('transfer'), '자료 백업·복원'));
       if (sync) destinations.append(actionRow('기기 간 동기화', '연결할 작업공간을 직접 선택', 'cloud', async () => {
         await navigate('sync'); await refreshSync();
@@ -1127,6 +1221,7 @@
     function resetSearchContext() {
       selectedVersions.clear();
       selectionReturn = null;
+      chapterImport = null;
       relatedOrigin = null;
       state.selecting = state.readerArrangeOpen = false;
       state.topic = state.topicsSearch = state.sourcesSearch = state.originFilter = '';
@@ -1134,6 +1229,11 @@
       state.topicFilterSearch = '';
       state.returnContext = null;
       state.suppressReaderResume = false;
+      state.importResult = null;
+      state.sourcesLimit = SEARCH_PAGE_SIZE;
+      state.sourcesWindowKey = '';
+      state.sourcesRevealVersionId = null;
+      state.ignoreKoreanSpacing = false;
     }
 
     async function arrangeRecords(mode, versionIds, returnFocusId) {
@@ -1145,7 +1245,7 @@
       selectionReturn = { workspaceId, versionIds: [...versionIds], mode: state.mode, sourceId: state.sourceId,
         sourceVersionId: state.sourceVersionId, locator: state.sourceSelection,
         returnContext: state.returnContext, scrollY: global.scrollY,
-        focusId: returnFocusId || (mode === 'activities' ? 'lifeArrangeGroups' : 'lifeArrangePage') };
+        focusId: returnFocusId || ({ activities: 'lifeArrangeGroups', page: 'lifeArrangePage', reflection: 'lifeArrangeReflection' }[mode]) };
       await navigate(mode, { selection: { workspaceId, versionIds: [...versionIds] }, pagePreview: false });
     }
 
@@ -1165,7 +1265,8 @@
     function arrangeActions(getVersions) {
       const actions = node('div', null, 'life-actions life-arrange-actions');
       [['activities', '묶음에 담기', 'link', 'lifeArrangeGroups', 'life-arrange-groups'],
-        ['page', '내 페이지에 담기', 'user', 'lifeArrangePage', 'life-arrange-page']].forEach(([mode, label, glyph, id, css]) => {
+        ['page', '내 페이지에 담기', 'user', 'lifeArrangePage', 'life-arrange-page'],
+        ['reflection', '회고에 담기', 'book', 'lifeArrangeReflection', 'life-arrange-reflection']].forEach(([mode, label, glyph, id, css]) => {
         const control = button(null, guarded(() => arrangeRecords(mode, getVersions())), css);
         control.id = id;
         control.append(global.HaedoLife.Icons.create(glyph), node('span', label));
@@ -1211,18 +1312,154 @@
 
     function resultFocusKey(mode, id, refIndex) { return mode + ':' + id + ':' + (refIndex ?? ''); }
 
+    async function flushReadingPosition() {
+      // Resume metadata is optional; its own status reports failures without
+      // blocking a draft save, navigation or the account's logout boundary.
+      try { await readerWatch?.flush(); } catch (_) { /* watchReader reports onError */ }
+    }
+
+    function renderReadingResume(parent, mode, prefix = 'life') {
+      readingResumeCleanup?.(); readingResumeCleanup = null;
+      const row = node('section', null, 'life-reading-resume');
+      row.id = prefix + 'ReadingResume';
+      row.setAttribute('aria-label', '이 브라우저의 읽기 위치');
+      row.hidden = true;
+      parent.append(row);
+      if (!readingPosition) return;
+      const workspaceId = state.bundle.workspaceId;
+      let stopped = false, sequence = 0;
+      const showing = () => !disposed && !stopped && row.isConnected && state.mode === mode && state.bundle?.workspaceId === workspaceId;
+      const showError = message => {
+        if (!showing()) return;
+        row.hidden = false;
+        let feedback = row.querySelector('.life-reading-resume-status');
+        if (!feedback) {
+          feedback = node('p', null, 'life-meta life-reading-resume-status');
+          feedback.setAttribute('role', 'status');
+          row.append(feedback);
+        }
+        feedback.textContent = message;
+      };
+      const action = (control, task, failureMessage = '읽기 위치를 확인하지 못했습니다. 다시 시도해 주세요.') => {
+        let running = false;
+        control.addEventListener('click', async () => {
+          if (running || !showing()) return;
+          running = true;
+          const hadFocus = document.activeElement === control;
+          control.disabled = true;
+          try { await task(); }
+          catch (_) { showError(failureMessage); }
+          finally {
+            running = false;
+            if (control.isConnected) {
+              control.disabled = false;
+              if (hadFocus && document.activeElement === document.body) control.focus({ preventScroll: true });
+            }
+          }
+        });
+        return control;
+      };
+      const draw = view => {
+        const focusId = row.contains(document.activeElement) ? document.activeElement.id : null;
+        row.replaceChildren();
+        row.hidden = view.status === 'empty';
+        if (row.hidden) return;
+        const copy = node('div', null, 'life-reading-resume-copy');
+        const source = state.bundle.sources.find(item => item.id === view.position?.sourceId);
+        const versions = state.bundle.sourceVersions.filter(item => item.sourceId === view.position?.sourceId);
+        const versionIndex = versions.findIndex(item => item.id === view.position?.sourceVersionId);
+        copy.append(node('p', source ? sourceLabel(source) : '저장한 원문 버전', 'life-reading-resume-title'),
+          node('p', '이 브라우저' + (versionIndex >= 0 && versionIndex < versions.length - 1 ? ' · 이전 버전' : ''), 'life-meta'));
+        row.append(copy);
+        if (view.status === 'available') {
+          const open = button('이어 읽기', () => {}, 'life-primary life-reading-resume-open');
+          open.prepend(global.HaedoLife.Icons.create('bookmark'));
+          open.id = prefix + 'ReadingResumeOpen';
+          open.dataset.focusKey = mode + ':reading-resume';
+          row.append(action(open, async () => {
+            const token = navigationGeneration;
+            const fresh = await readingPosition.read(workspaceId);
+            if (!showing() || token !== navigationGeneration) return;
+            if (fresh.status !== 'available' || !fresh.position) {
+              draw(fresh);
+              showError(fresh.status === 'empty' ? '읽기 위치가 지워졌습니다. 기록에서 원문을 선택해 주세요.' :
+                '저장한 원문 버전을 찾을 수 없습니다. 다른 버전으로 바꾸지 않았습니다.');
+              row.querySelector('.life-reading-resume-clear')?.focus({ preventScroll: true });
+              return;
+            }
+            if (fresh.revision !== view.revision || fresh.position.sourceId !== view.position.sourceId || fresh.position.sourceVersionId !== view.position.sourceVersionId ||
+                fresh.position.offset !== view.position.offset) {
+              draw(fresh);
+              showError('읽기 위치가 바뀌었습니다. 확인한 뒤 다시 이어 읽어 주세요.');
+              row.querySelector('.life-reading-resume-open')?.focus({ preventScroll: true });
+              return;
+            }
+            const { sourceId, sourceVersionId, offset } = fresh.position;
+            const fetched = await storage.read(workspaceId);
+            if (!showing() || token !== navigationGeneration) return;
+            const bundle = state.bundle.revision > fetched.revision ? state.bundle : fetched;
+            const version = bundle.sourceVersions.find(item => item.id === sourceVersionId && item.sourceId === sourceId);
+            if (!bundle.sources.some(item => item.id === sourceId) || !version || typeof version.contentText !== 'string' ||
+                !Number.isInteger(offset) || offset < 0 || offset > version.contentText.length) {
+              showError('저장한 원문 버전을 찾을 수 없습니다. 다른 버전으로 바꾸지 않았습니다.');
+              return;
+            }
+            state.bundle = bundle;
+            await navigate('source', { sourceId, sourceVersionId, locator: { start: offset, end: offset },
+              returnContext: { workspaceId, mode, scrollY: global.scrollY, focusKey: open.dataset.focusKey } });
+          }));
+        } else showError('저장한 원문 버전을 찾을 수 없습니다. 다른 버전으로 바꾸지 않았습니다.');
+        const clear = iconButton('읽기 위치 지우기', 'close', () => {}, 'life-reading-resume-clear');
+        clear.id = prefix + 'ReadingResumeClear';
+        row.append(action(clear, async () => {
+          const token = navigationGeneration;
+          const result = await readingPosition.clear(workspaceId, view.revision);
+          if (!showing() || token !== navigationGeneration) return;
+          if (result.status === 'conflict') {
+            await refresh();
+            if (!showing() || token !== navigationGeneration) return;
+            showError('읽기 위치가 바뀌었습니다. 확인한 뒤 다시 지워 주세요.');
+            row.querySelector('.life-reading-resume-clear')?.focus({ preventScroll: true });
+            return;
+          }
+          draw(result.state);
+          main.querySelector(mode === 'home' ? '#homeRecentTitle' : '#lifeSearch')?.focus({ preventScroll: true });
+        }, '읽기 위치를 지우지 못했습니다. 다시 시도해 주세요.'));
+        if (focusId) (row.querySelector('#' + focusId) || clear).focus({ preventScroll: true });
+      };
+      const refresh = async () => {
+        const token = ++sequence;
+        try {
+          const view = await readingPosition.read(workspaceId);
+          if (!showing() || token !== sequence) return;
+          draw(view);
+        } catch (_) {
+          if (!showing() || token !== sequence) return;
+          row.replaceChildren();
+          showError('읽기 위치를 불러오지 못했습니다.');
+          const retry = button('다시 확인', () => {});
+          retry.id = prefix + 'ReadingResumeRetry';
+          row.append(action(retry, refresh));
+        }
+      };
+      const unsubscribeReading = readingPosition.subscribe(workspaceId, refresh);
+      readingResumeCleanup = () => { stopped = true; sequence += 1; unsubscribeReading?.(); };
+      readingResumePromise = refresh();
+    }
+
     function openResult(mode, key, ref) {
-      const returnContext = { workspaceId: state.bundle.workspaceId, mode, focusKey: key, scrollY: global.scrollY };
+      const returnContext = { workspaceId: state.bundle.workspaceId, mode, focusKey: key, sourceVersionId: ref.sourceVersionId, scrollY: global.scrollY };
       return navigate('source', { sourceId: ref.sourceId, sourceVersionId: ref.sourceVersionId, locator: ref.locator || null, suppressReaderResume: mode === 'sources' && !!state.sourcesSearch.trim() && !ref.locator, returnContext });
     }
 
     async function returnToResults() {
       const context = state.returnContext;
       if (!context || context.workspaceId !== state.bundle.workspaceId) return navigate('sources', { returnContext: null });
-      await navigate(context.mode, { returnContext: null });
+      await navigate(context.mode, { returnContext: null, sourcesRevealVersionId: context.mode === 'sources' ? context.sourceVersionId || null : null });
       const restore = () => requestAnimationFrame(() => {
         if (disposed || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode) return;
-        const target = Array.from(main.querySelectorAll('[data-focus-key]')).find(el => el.dataset.focusKey === context.focusKey) || main.querySelector('#lifeSearch');
+        const target = Array.from(main.querySelectorAll('[data-focus-key]')).find(el => el.dataset.focusKey === context.focusKey) ||
+          (context.mode === 'sources' && Array.from(main.querySelectorAll('.life-source-open')).find(el => el.dataset.versionId === context.sourceVersionId)) || main.querySelector('#lifeSearch,h1,h2');
         const panel = target?.closest('[data-result-panel]');
         let ancestor = target?.parentElement;
         while (ancestor && ancestor !== main) { if (ancestor.tagName === 'DETAILS') ancestor.open = true; ancestor = ancestor.parentElement; }
@@ -1230,7 +1467,10 @@
         target?.focus({ preventScroll: true });
         global.scrollTo({ top: context.scrollY, behavior: 'instant' });
       });
-      if (context.mode === 'home') {
+      if (context.focusKey === context.mode + ':reading-resume') {
+        const pending = readingResumePromise;
+        pending.then(() => { if (pending === readingResumePromise) restore(); });
+      } else if (context.mode === 'home') {
         const pending = homeRenderPromise;
         pending.then(() => { if (pending === homeRenderPromise) restore(); });
       }
@@ -1238,7 +1478,7 @@
     }
 
     function searchReturnButton() {
-      const labels = { home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '내 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기' };
+      const labels = { home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '내 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
       const back = iconButton(labels[state.returnContext?.mode] || '검색 결과로 돌아가기', 'back', guarded(returnToResults));
       back.id = 'lifeSearchReturn';
       return back;
@@ -1445,8 +1685,20 @@
       main.append(heading);
       renderStages(main);
       const list = node('div', null, 'life-card-grid'); list.id = 'lifeSearchResults';
+      const importResult = node('div', null, 'life-actions');
+      importResult.id = 'lifeImportResult';
+      importResult.hidden = true;
       const count = searchCount();
       const origin = selectField('원천 필터', 'lifeOriginFilter', [['', '모든 원천'], ['writing', '내 글']].concat(ORIGINS), state.originFilter);
+      const spacing = field('한글 띄어쓰기 무시', 'checkbox', 'lifeSearchSpacing', '');
+      spacing.input.checked = state.ignoreKoreanSpacing;
+      const more = button('자료 더 보기', () => {
+        const start = list.children.length;
+        state.sourcesLimit += SEARCH_PAGE_SIZE;
+        update(true);
+        list.children[start]?.querySelector('.life-source-open')?.focus({ preventScroll: true });
+      });
+      more.id = 'lifeSearchMore';
       const selectionBar = node('section', null, 'life-selection-bar');
       selectionBar.id = 'lifeSelectionBar';
       selectionBar.setAttribute('aria-label', '선택한 기록 정리');
@@ -1473,7 +1725,7 @@
         const hiddenCount = [...selectedVersions].filter(id => !visible.has(id)).length;
         selectionSummaryText.textContent = '선택한 기록 ' + selectedVersions.size + '개';
         selectionStatus.textContent = selectedVersions.size ? (hiddenCount ? '현재 검색 결과 밖에서 선택한 기록 ' + hiddenCount + '개 포함' : '담을 곳에서 선택한 원문을 확인합니다.') : '정리할 기록을 선택해 주세요.';
-        controls.querySelectorAll('.life-arrange-groups,.life-arrange-page').forEach(control => { control.disabled = !selectedVersions.size; });
+        controls.querySelectorAll('.life-arrange-groups,.life-arrange-page,.life-arrange-reflection').forEach(control => { control.disabled = !selectedVersions.size; });
         selectionList.replaceChildren();
         selectedVersions.forEach(id => {
           const version = state.bundle.sourceVersions.find(item => item.id === id);
@@ -1487,12 +1739,23 @@
           selectionList.append(row);
         });
       }
-      const update = () => {
-        list.replaceChildren();
+      const update = (append = false) => {
         const query = state.sourcesSearch.trim();
-        const hits = core.searchSources(state.bundle, query);
+        const windowKey = JSON.stringify([state.bundle.workspaceId, query, state.originFilter, state.ignoreKoreanSpacing]);
+        if (state.sourcesWindowKey !== windowKey) {
+          state.sourcesWindowKey = windowKey;
+          state.sourcesLimit = SEARCH_PAGE_SIZE;
+          append = false;
+        }
+        const start = append ? list.children.length : 0;
+        if (!append) list.replaceChildren();
+        const searchOptions = { ignoreKoreanSpacing: state.ignoreKoreanSpacing };
+        const hits = core.searchSources(state.bundle, query, searchOptions);
         const byVersion = new Map(hits.map(hit => [hit.sourceVersionId, hit]));
-        const matchingRecords = state.bundle.records.filter(record => matchingText([record.text, record.topic, record.note].join('\n'), query));
+        const matchingRecords = query ? state.bundle.records.filter(record => {
+          const text = [record.text, record.topic, record.note].join('\n');
+          return state.ignoreKoreanSpacing ? core.matchesSearchText(text, query, searchOptions) : matchingText(text, query);
+        }) : state.bundle.records;
         // A note can match without the source text matching. Keep its exact version
         // and do not invent a source-text location for a user's own words.
         if (query) matchingRecords.forEach(record => record.sourceRefs.forEach(ref => {
@@ -1505,9 +1768,26 @@
           hits.push(hit);
         }));
         const matches = hits.filter(hit => !state.originFilter || (state.originFilter === 'writing' ? isOwnWriting(sourceFor(hit.sourceId)) : sourceFor(hit.sourceId).origin === state.originFilter));
+        const revealIndex = matches.findIndex(hit => hit.sourceVersionId === state.sourcesRevealVersionId);
+        if (revealIndex >= state.sourcesLimit) state.sourcesLimit = Math.ceil((revealIndex + 1) / SEARCH_PAGE_SIZE) * SEARCH_PAGE_SIZE;
+        state.sourcesRevealVersionId = null;
+        const imported = state.importResult;
+        importResult.replaceChildren();
+        const visibleMatches = matches.slice(0, state.sourcesLimit);
+        importResult.hidden = !imported || imported.workspaceId !== state.bundle.workspaceId || visibleMatches.some(hit => hit.sourceVersionId === imported.sourceVersionId);
+        if (!importResult.hidden) {
+          const source = sourceFor(imported.sourceId);
+          const key = resultFocusKey('sources', 'import-result-' + imported.sourceVersionId);
+          const open = button('보관한 원문 읽기', guarded(() => openResult('sources', key, imported)), 'life-primary');
+          open.id = 'lifeImportResultOpen';
+          open.dataset.focusKey = key;
+          open.prepend(global.HaedoLife.Icons.create('book'));
+          importResult.append(node('p', source ? sourceLabel(source) : '보관한 원문', 'life-meta'), open);
+        }
         updateSelection(matches);
-        count.textContent = '자료 ' + matches.length + '개' + (state.sourcesSearch.trim() ? ' · 일치한 버전별 결과' : ' · 최신 버전') + (state.originFilter ? ' · ' + originName(state.originFilter) : '');
-        matches.forEach(hit => {
+        count.textContent = '자료 ' + matches.length + '개' + (state.sourcesSearch.trim() ? ' · 일치한 버전별 결과' : ' · 최신 버전') + (state.originFilter ? ' · ' + originName(state.originFilter) : '') + (state.ignoreKoreanSpacing ? ' · 한글 띄어쓰기 무시' : '') + (matches.length > visibleMatches.length ? ' · ' + visibleMatches.length + '개 표시' : '');
+        more.hidden = matches.length <= visibleMatches.length;
+        visibleMatches.slice(start).forEach(hit => {
           const source = sourceFor(hit.sourceId);
           const version = state.bundle.sourceVersions.find(v => v.id === hit.sourceVersionId);
           const records = (query ? matchingRecords : state.bundle.records).filter(record => record.sourceRefs.some(ref =>
@@ -1588,13 +1868,18 @@
       filters.hidden = !state.sourcesFiltersOpen;
       filters.setAttribute('aria-label', '원천 필터');
       filters.append(origin.label);
+      filters.append(spacing.label);
       filters.append(button('저장한 문장 주제로 찾기', guarded(() => navigate('topics'))));
       const filter = iconButton('검색 필터', 'filter', () => {});
       filter.id = 'lifeFilterToggle';
       disclosure(filter, filters, { onChange: open => { state.sourcesFiltersOpen = open; } });
       bar.append(filter);
       origin.input.addEventListener('change', () => { state.originFilter = origin.input.value; update(); });
-      main.append(filters, selectionBar, count, list);
+      spacing.input.addEventListener('change', () => { state.ignoreKoreanSpacing = spacing.input.checked; update(); });
+      main.append(filters);
+      main.append(importResult);
+      renderReadingResume(main, 'sources');
+      main.append(selectionBar, count, list, more);
       update();
     }
 
@@ -1645,7 +1930,7 @@
       arrangePanel.setAttribute('aria-label', '읽던 원문 정리');
       arrangePanel.hidden = !state.readerArrangeOpen;
       arrangePanel.append(node('p', '현재 원문 버전을 담습니다.', 'life-meta'), arrangeActions(() => [version.id]));
-      disclosure(arrange, arrangePanel, { onChange: open => { state.readerArrangeOpen = open; } });
+      disclosure(arrange, arrangePanel, { onChange: open => { state.readerArrangeOpen = open; flushReadingPosition(); readerWatch?.suppress(); } });
       tools.append(back, arrange, info);
       if (isOwnWriting(source) && version.id === versions[versions.length - 1].id) {
         tools.append(iconButton('내 글 수정', 'edit', guarded(() => navigate('write', { writing: { sourceId: source.id, sourceVersionId: version.id } }))));
@@ -1666,10 +1951,21 @@
       details.id = 'lifeSourceDetails';
       details.hidden = true;
       details.setAttribute('aria-label', '출처와 포함 범위');
-      const setDetails = disclosure(info, details);
+      const setDetails = disclosure(info, details, { onChange: () => { flushReadingPosition(); readerWatch?.suppress(); } });
       const detailsHeading = node('div', null, 'life-panel-heading');
       detailsHeading.append(node('h3', '출처와 포함 범위'), iconButton('출처 정보 닫기', 'close', () => setDetails(false)));
       details.prepend(detailsHeading);
+      if (source.origin === 'naver_blog') {
+        const reimport = button('본문 추가·다시 가져오기', guarded(async () => {
+          const workspaceId = state.bundle.workspaceId;
+          // Keep any unfinished import and reading notes before creating a new draft.
+          await persistDrafts();
+          if (disposed || state.bundle.workspaceId !== workspaceId) return;
+          await navigate('import', { reimport: { workspaceId, sourceId: source.id, sourceVersionId: version.id } });
+        }));
+        reimport.id = 'lifeSourceReimport';
+        details.append(reimport);
+      }
       article.append(details);
       const openRelated = focusId => guarded(async () => {
         const origin = { workspaceId: state.bundle.workspaceId, sourceId: source.id, sourceVersionId: version.id,
@@ -1686,6 +1982,11 @@
       related.id = 'lifeReaderRelated';
       article.append(related);
       main.append(article);
+      // A list's scroll belongs to its return context, not to a newly opened
+      // original. Exact matches and this session's reader positions still win.
+      if (!state.locator && (suppressResume || !state.readerPositions.has(version.id))) {
+        global.scrollTo({ top: 0, behavior: 'instant' });
+      }
       if (version.contentText === null || version.contentText === undefined) {
         article.append(empty('본문 미확보 · 링크만 보관했습니다. 원래 출처를 열거나 본문을 제공해 새 버전으로 보관할 수 있습니다.'));
         state.locator = null;
@@ -1718,6 +2019,19 @@
       picked.id = 'lifeSelectedQuote';
       const topic = field('주제 (선택)', 'text', 'lifeSourceTopic', sourceDraft.topic);
       const note = field('연결 이유 또는 메모 (선택)', 'textarea', 'lifeSourceNote', sourceDraft.note);
+      const saveExcerpt = button('선택 구절 모음에 추가', guarded(async () => {
+        const range = state.sourceSelection;
+        if (!range || range.start === range.end) throw new Error('먼저 원문에서 발췌할 구절을 선택해 주세요.');
+        const prepared = { source, version, match: { kind: 'exact_duplicate', sourceId: source.id, sourceVersionId: version.id } };
+        const changes = core.buildImportChanges(state.bundle, prepared, [{ start: range.start, end: range.end, topic: topic.input.value, note: note.input.value }]);
+        state.readerPositions.set(version.id, { start: range.start, end: range.end, scrollY: readingScrollY });
+        await commit(changes);
+        state.sourceDrafts.delete(version.id);
+        render();
+        announce('모음에 반영됨 · 이 브라우저에 저장됨');
+      }), 'life-primary');
+      saveExcerpt.id = 'lifeSourceExcerptSave';
+      saveExcerpt.disabled = true;
       let readingScrollY = global.scrollY;
       let selectionOrigin = 'dom';
       const savePosition = () => {
@@ -1728,6 +2042,7 @@
         if (state.sourceDrafts.has(version.id)) state.sourceDrafts.get(version.id).range = { start, end };
         picked.textContent = start < end ? version.contentText.slice(start, end) : instruction;
         quote.dataset.hasSelection = String(start < end);
+        saveExcerpt.disabled = start >= end;
         savePosition();
       };
       const capture = event => {
@@ -1747,6 +2062,7 @@
         remember(start, end);
       };
       const restoreSelection = locator => {
+        readerWatch?.suppress();
         const start = Math.max(0, Math.min(version.contentText.length, locator.start));
         const end = Math.max(start, Math.min(version.contentText.length, locator.end));
         const range = document.createRange();
@@ -1766,10 +2082,14 @@
       global.addEventListener('scroll', savePosition, { passive: true });
       readerCleanup = () => {
         savePosition();
+        readerWatch?.close();
+        readerWatch = null;
         document.removeEventListener('selectionchange', capture);
         global.removeEventListener('scroll', savePosition);
       };
       const setPanel = disclosure(quote, panel, { onChange: open => {
+        flushReadingPosition();
+        readerWatch?.suppress();
         if (open) {
           capture();
           readingScrollY = global.scrollY;
@@ -1818,19 +2138,21 @@
         keyboardReader.input.focus({ preventScroll: true });
         keyboardReader.input.setSelectionRange(rawToDisplay(version.contentText, range.start), rawToDisplay(version.contentText, range.end));
       } });
-      panel.append(panelHeading, picked, keyboardToggle, keyboard, topic.label, note.label,
-        button('선택 구절 모음에 추가', guarded(async () => {
-          const range = state.sourceSelection;
-          if (!range || range.start === range.end) throw new Error('먼저 원문에서 발췌할 구절을 선택해 주세요.');
-          const prepared = { source, version, match: { kind: 'exact_duplicate', sourceId: source.id, sourceVersionId: version.id } };
-          const changes = core.buildImportChanges(state.bundle, prepared, [{ start: range.start, end: range.end, topic: topic.input.value, note: note.input.value }]);
-          state.readerPositions.set(version.id, { start: range.start, end: range.end, scrollY: readingScrollY });
-          await commit(changes);
-          state.sourceDrafts.delete(version.id);
-          render();
-          announce('모음에 반영됨 · 이 브라우저에 저장됨');
-        }), 'life-primary'));
+      panel.append(panelHeading, picked, keyboardToggle, keyboard, topic.label, note.label, saveExcerpt);
       article.append(panel);
+      const positionStatus = node('p', null, 'life-meta life-reading-position-status');
+      positionStatus.id = 'lifeReadingPositionStatus';
+      positionStatus.hidden = true;
+      positionStatus.setAttribute('role', 'status');
+      tools.after(positionStatus);
+      readerWatch = readingPosition?.watchReader({ workspaceId: state.bundle.workspaceId, sourceId: source.id, sourceVersionId: version.id,
+        reader, isReading: () => !disposed && reader.isConnected && state.mode === 'source' && panel.hidden && details.hidden && arrangePanel.hidden,
+        onSaved: () => { if (reader.isConnected && !disposed) positionStatus.hidden = true; },
+        onError: () => {
+          if (!reader.isConnected || disposed) return;
+          positionStatus.textContent = '읽기 위치를 보관하지 못했습니다. 원문과 발췌는 그대로 사용할 수 있습니다.';
+          positionStatus.hidden = false;
+        } });
       const locator = state.locator || (!suppressResume && state.readerPositions.get(version.id));
       if (locator) requestAnimationFrame(() => {
         if (!reader.isConnected) return;
@@ -1867,6 +2189,9 @@
     }
 
     async function prepareStage() {
+      if (state.stage.input.existingSourceId && !state.stage.input.text && state.importMethod !== 'link') {
+        throw new Error('새 본문을 붙여 넣거나 파일을 선택해 주세요. 본문 없이 보관하려면 링크 보관을 선택해 주세요.');
+      }
       const tick = state.editTick;
       const stageId = state.stage.stageId;
       await persistStage(true);
@@ -1886,13 +2211,23 @@
     function renderImport() {
       if (!state.stage || state.stage.state !== 'draft') newDraft();
       const input = state.stage.input;
+      const linkedSource = input.existingSourceId && sourceFor(input.existingSourceId);
+      const linkedNotice = node('p', '', 'life-help');
+      linkedNotice.id = 'lifeImportExistingSource';
+      const updateLinkNotice = () => {
+        linkedNotice.hidden = !linkedSource;
+        linkedNotice.textContent = input.existingSourceId
+          ? '보관한 자료의 새 본문을 검토합니다. 기존 버전은 그대로 남습니다.'
+          : '출처가 바뀌어 기존 자료 연결을 해제했습니다. 검토에서 같은 자료인지 다시 확인해 주세요.';
+      };
+      updateLinkNotice();
       if (validBatchStage(state.stage)) {
         state.batchId = state.stage.batchId;
         const back = button('파일 목록으로 돌아가기', guarded(() => navigate('batch'))); back.id = 'lifeBatchReturn'; main.append(back, node('p', '현재 검토: ' + (state.stage.fileLabel || input.fileName), 'life-help'));
         const item = currentBatch()?.items.find(row => row.stageId === state.stage.stageId);
         if (item && !item.unsaved) main.append(button('건너뛰기 · 초안 유지', guarded(() => skipBatchItem(item))));
       }
-      main.append(title(state.prepared ? '원문·출처 검토' : '선택한 기록 가져오기'));
+      main.append(title(state.prepared ? '원문·출처 검토' : linkedSource ? '보관한 글에 본문 추가' : '선택한 기록 가져오기'));
       const phase = node('p', state.prepared ? '확인 후 보관 · 아직 자료에 반영하지 않았습니다.' : '본문·텍스트 파일·링크를 선택해 검토합니다.', 'life-import-phase');
       phase.id = 'lifeImportPhase';
       main.append(phase);
@@ -1917,6 +2252,7 @@
         input.origin = origin.input.value = value;
         delete input.existingSourceId;
         delete input.forceSeparate;
+        updateLinkNotice();
         changedStage();
         updateWebFields();
         origin.input.focus({ preventScroll: true });
@@ -1936,6 +2272,11 @@
         let text;
         try { text = new TextDecoder('utf-8', { fatal: true }).decode(await selected.arrayBuffer()); }
         catch (_) { throw new Error('UTF-8로 읽을 수 없는 파일입니다. 원래 파일은 변경하지 않았습니다.'); }
+        if (input.fileName !== selected.name) {
+          delete input.existingSourceId;
+          delete input.forceSeparate;
+          updateLinkNotice();
+        }
         replaceDraftText(text);
         input.fileName = selected.name;
         input.format = /\.md$/i.test(selected.name) ? 'text/markdown' : 'text/plain';
@@ -1983,6 +2324,11 @@
       const author = field('원문 작성자 (모르면 비워 두기)', 'text', 'lifeImportAuthor', input.author);
       const relation = selectField('작성자 관계', 'lifeImportRelation', [['unknown', '미확인'], ['self', '내 기록 / 내 게시물'], ['other', '다른 사람의 기록 / 내가 저장한 게시물']], input.authorRelation || 'unknown');
       const originalDate = field('원문 작성일 (모르면 비워 두기)', 'date', 'lifeImportDate', input.originalCreatedAt);
+      // Existing dates may be free text; never hide a value the native date input rejects.
+      if (input.originalCreatedAt && originalDate.input.value !== input.originalCreatedAt) {
+        originalDate.input.type = 'text';
+        originalDate.input.value = input.originalCreatedAt;
+      }
       const coverage = selectField('포함한 본문 범위', 'lifeImportCoverage', [['unknown', '미확인'], ['partial', '선택한 본문 일부'], ['full_text', '제공한 본문 전체']], input.coverage && input.coverage.status === 'link_only' ? 'unknown' : input.coverage && input.coverage.status || 'unknown');
       const omissions = field('누락·미확인 항목 (선택)', 'text', 'lifeImportOmissions', (input.omissions || input.coverage && input.coverage.omissions || []).join(', '));
       omissions.input.placeholder = '예: 사진 미보관, 댓글 미포함';
@@ -2029,10 +2375,12 @@
       setMethod(state.importMethod);
       const bindings = [[origin.input, 'origin'], [name.input, 'title'], [url.input, 'url'], [body.input, 'text'], [author.input, 'author'], [relation.input, 'authorRelation'], [originalDate.input, 'originalCreatedAt']];
       bindings.forEach(([element, key]) => element.addEventListener('input', () => {
+        const identityChanged = ['origin', 'url'].includes(key) && input[key] !== element.value;
         if (key === 'text') replaceDraftText(element.value);
         else input[key] = element.value;
-        delete input.existingSourceId;
+        if (identityChanged) delete input.existingSourceId;
         delete input.forceSeparate;
+        updateLinkNotice();
         changedStage();
         if (['origin', 'url', 'text'].includes(key)) updateWebFields();
       }));
@@ -2044,7 +2392,10 @@
         newDraft();
         render();
       })));
-      form.append(methods, url.label, suggestion, origin.label, name.label, textPanel, filePanel, linkHelp, retained, webNotice, webScope, details, actions, webHelp);
+      // Reimport starts with the only new input; already known metadata remains editable below.
+      if (linkedSource) form.append(linkedNotice, methods, textPanel, filePanel, linkHelp, retained, webNotice, webScope, url.label, suggestion, origin.label, name.label, details, actions, webHelp);
+      else if (currentChapterImport()) form.append(methods, textPanel, filePanel, linkHelp, retained, webNotice, webScope, name.label, url.label, suggestion, origin.label, details, actions, webHelp);
+      else form.append(methods, url.label, suggestion, origin.label, name.label, textPanel, filePanel, linkHelp, retained, webNotice, webScope, details, actions, webHelp);
       if (state.stageFailed) form.append(button('새 검토 사본으로 보관', guarded(rescueStage)));
       if (state.stage.invalidatedExcerpts && state.stage.invalidatedExcerpts.length) {
         const invalid = node('details', null, 'life-details');
@@ -2081,6 +2432,7 @@
         await navigate('sources');
         announce('미적용 검토만 취소했습니다. 보관한 자료는 그대로 유지됩니다.');
       }));
+      cancel.classList.add('life-review-cancel');
       main.append(cancel);
     }
 
@@ -2123,10 +2475,17 @@
         const reader = field('확인할 원문 · 구절 선택', 'textarea', 'lifeReviewText', prepared.version.contentText);
         reader.input.readOnly = true;
         reader.input.className = 'life-source-text';
-        const selected = node('p', '필요한 구절을 선택해 발췌 후보로 추가할 수 있습니다.', 'life-selection');
+        const selectionInstruction = '필요한 구절을 선택해 발췌 후보로 추가할 수 있습니다.';
+        const selected = node('p', selectionInstruction, 'life-selection');
+        state.stageSelection = null;
         const capture = () => {
+          // Moving to a note or action must not replace the last intentional
+          // source choice with a textarea selection collapsed by focus loss.
+          if (document.activeElement !== reader.input && document.activeElement?.matches('input,textarea,select,button')) return;
           state.stageSelection = { start: displayToRaw(prepared.version.contentText, reader.input.selectionStart), end: displayToRaw(prepared.version.contentText, reader.input.selectionEnd) };
-          if (state.stageSelection.start < state.stageSelection.end) selected.textContent = prepared.version.contentText.slice(state.stageSelection.start, state.stageSelection.end);
+          const hasSelection = state.stageSelection.start < state.stageSelection.end;
+          selected.textContent = hasSelection ? prepared.version.contentText.slice(state.stageSelection.start, state.stageSelection.end) : selectionInstruction;
+          add.disabled = !hasSelection;
         };
         reader.input.addEventListener('select', capture);
         reader.input.addEventListener('keyup', capture);
@@ -2144,7 +2503,6 @@
         topic.input.addEventListener('input', keepNote);
         note.input.addEventListener('input', keepNote);
         const add = button('발췌 후보 추가', guarded(async () => {
-          capture();
           const range = state.stageSelection;
           if (!range || range.start === range.end) throw new Error('원문에서 구절을 먼저 선택해 주세요.');
           state.stage.excerpts.push({ start: range.start, end: range.end, topic: topic.input.value, note: note.input.value });
@@ -2156,6 +2514,7 @@
           candidates?.focus({ preventScroll: true });
           candidates?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
         }));
+        add.disabled = true;
         section.append(reader.label, selected, topic.label, note.label, add);
         draftExcerptList(section);
       } else section.append(empty('본문 미확보 · 링크만 보관합니다. 본문을 읽거나 요약했다고 표시하지 않습니다.'));
@@ -2172,17 +2531,42 @@
         if (!state.stage || state.stage.stageId !== snapshot.stageId || state.editTick !== tick) throw new Error('입력이 바뀌어 적용하지 않았습니다. 원문·발췌를 다시 확인해 주세요.');
         if (fresh.match.kind === 'overlap' && !snapshot.input.forceSeparate && !snapshot.input.existingSourceId) throw new Error('겹치는 자료를 비교해 같은 자료인지 별개 자료인지 먼저 선택해 주세요.');
         const changes = core.buildImportChanges(state.bundle, fresh, selected);
-        await commit(changes, snapshot, validBatchStage(snapshot) ? { sourceId: fresh.source.id, sourceVersionId: fresh.version.id } : undefined);
+        const chapterContext = chapterImport;
+        let confirmed = false;
+        try {
+          await commit(changes, snapshot, (validBatchStage(snapshot) || currentChapterImport(chapterContext))
+            ? { sourceId: fresh.source.id, sourceVersionId: fresh.version.id } : undefined, () => {
+            if (!currentChapterImport(chapterContext) || snapshot.workspaceId !== chapterContext.workspaceId) return;
+            confirmed = true;
+            if (!chapterContext.versionIds.includes(fresh.version.id)) chapterContext.versionIds.push(fresh.version.id);
+            // The source transaction already committed. A failed subsequent read must not replay it.
+            state.stage = state.prepared = null;
+            state.savedTick = state.editTick = 0;
+          });
+        } catch (cause) {
+          if (confirmed && currentChapterImport(chapterContext)) {
+            render();
+            announce('자료는 보관했습니다. 목록을 다시 불러온 뒤 장에 연결할 글을 확인해 주세요.');
+          }
+          throw cause;
+        }
+        if (disposed || state.bundle?.workspaceId !== snapshot.workspaceId) return;
+        if (!disposed && state.bundle?.workspaceId === snapshot.workspaceId && !validBatchStage(snapshot) && selected.length) state.importResult = {
+          workspaceId: snapshot.workspaceId, sourceId: fresh.source.id, sourceVersionId: fresh.version.id,
+          locator: { start: selected[0].start, end: selected[0].end }
+        };
         const retained = fresh.source.id;
         state.stage = null;
         state.prepared = null;
         state.savedTick = state.editTick = 0;
         if (validBatchStage(snapshot)) { state.batchId = snapshot.batchId; await navigate('batch'); }
+        else if (currentChapterImport(chapterContext)) { await returnToChapterImport(); return; }
         else if (excerpts.length) await navigate('sources');
         else await navigate('source', { sourceId: retained, sourceVersionId: fresh.version.id, locator: null });
         announce((excerpts.length ? '모음에 반영됨' : '자료 보관됨') + ' · 이 브라우저에 저장됨');
       };
       const storeOnly = button('자료만 보관', guarded(() => apply([])));
+      if (!state.stage.excerpts.length) storeOnly.classList.add('life-primary');
       storeOnly.disabled = unresolved;
       controls.append(storeOnly);
       if (state.stage.excerpts.length) {
@@ -2230,19 +2614,27 @@
     function renderRestoreResult() {
       const receipt = state.restoreReturn;
       if (!receipt || receipt.copyId !== state.bundle.workspaceId) return;
+      const books = state.mode === 'books';
+      const content = books ? main.querySelector('.life-workbench[data-mode="books"] .wb-content') : main;
+      if (!content || books && main.querySelector('#wbBookHeading')) return;
+      main.querySelector('#lifeRestoreResult')?.remove();
       const panel = node('section', null, 'life-restore-result');
+      if (books) panel.classList.add('life-restore-result-books');
       panel.id = 'lifeRestoreResult';
       panel.setAttribute('aria-label', '복원 결과');
-      const heading = node('h3', '새 사본을 열었습니다.');
+      const heading = node('h3', books ? '새 사본으로 복원했습니다' : '새 사본을 열었습니다.');
       heading.tabIndex = -1;
       const top = node('div', null, 'life-panel-heading');
       top.append(heading, iconButton('복원 안내 닫기', 'close', guarded(() => {
         state.restoreReturn = null;
         panel.remove();
-        toolbar.querySelector('h1')?.focus({ preventScroll: true });
+        (books ? main.querySelector('#wbBookList') : toolbar.querySelector('h1'))?.focus({ preventScroll: true });
       })));
-      panel.append(top, node('p', '이전 작업공간은 그대로 남아 있습니다. 이 사본의 자동 동기화는 연결하지 않았습니다.', 'life-help'));
-      panel.append(button('이전 작업공간으로 돌아가기', guarded(async () => {
+      panel.append(top);
+      const info = books ? node('details', null, 'life-details') : panel;
+      if (books) { info.append(node('summary', '복원 정보')); panel.append(info); }
+      info.append(node('p', '이전 작업공간은 그대로 남아 있습니다. 이 사본의 자동 동기화는 연결하지 않았습니다.', 'life-help'));
+      info.append(button('이전 작업공간으로 돌아가기', guarded(async () => {
         await persistDrafts();
         const previous = await storage.read(receipt.previousId);
         if (disposed) return;
@@ -2265,7 +2657,7 @@
         catch (_) { throw new Error('이전 작업공간을 열었고 복원 사본도 보관돼 있습니다. 목록 갱신에 실패했으니 관리에서 다시 확인해 주세요.'); }
         finally { toolbar.querySelector('h1')?.focus({ preventScroll: true }); }
       })));
-      main.prepend(panel);
+      content.prepend(panel);
     }
 
     function renderTransfer() {
@@ -2618,6 +3010,13 @@
       conflict.hidden = true;
       main.append(conflict);
       if (state.conflictView) renderConflict();
+      if (compositionSync && global.HaedoLife.CompositionUI) {
+        const compositionHost = node('section'); main.append(compositionHost);
+        const workspaceId = state.bundle.workspaceId;
+        compositionPanel = global.HaedoLife.CompositionUI.create({ host: compositionHost, manager: compositionSync,
+          storage, workspaceId, beforeAction: persistDrafts,
+          isCurrent: () => !disposed && state.mode === 'sync' && state.bundle?.workspaceId === workspaceId });
+      }
       const remoteSection = node('section', null, 'life-remote-section');
       remoteSection.append(node('h3', '서버 작업공간 받기'), node('p', '같은 계정으로 다른 기기에서 올린 작업공간을 선택해 받습니다.', 'life-help'));
       const list = node('div', null, 'life-remote-list');
@@ -2703,11 +3102,14 @@
 
     function render() {
       if (disposed) return;
+      const generation = ++renderGeneration, navigation = navigationGeneration;
+      compositionPanel?.dispose(); compositionPanel = null;
       homeRenderPromise = Promise.resolve();
       home?.leave();
       workbench?.leave();
       writer?.close();
       if (readerCleanup) { readerCleanup(); readerCleanup = null; }
+      readingResumeCleanup?.(); readingResumeCleanup = null;
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
       writeRoute(state.mode, false);
       renderHeader();
@@ -2727,9 +3129,11 @@
         const options = workbenchOpenOptions || {};
         workbenchOpenOptions = null;
         return Promise.resolve(workbench.render(state.mode, options)).then(() => {
-          if (!disposed && state.mode === 'page') renderRestoreResult();
+          if (!disposed && generation === renderGeneration && navigation === navigationGeneration &&
+              ['page', 'books'].includes(state.mode)) renderRestoreResult();
         }).catch(failure);
       }
+      renderChapterImportReturn();
       if (state.mode === 'tools') renderTools();
       else if (state.mode === 'manage') renderManagement();
       else if (state.mode === 'batch') renderBatch();
@@ -2754,9 +3158,12 @@
       if (dirty()) persistStage().catch(failure);
       if (workbench?.dirty()) workbench.flush().catch(failure);
       if (writer?.isDirty()) writer.flush().catch(failure);
+      flushReadingPosition();
     };
+    const pagehideReading = () => { flushReadingPosition(); };
     global.addEventListener('beforeunload', beforeUnload);
     document.addEventListener('visibilitychange', visibility);
+    global.addEventListener('pagehide', pagehideReading);
     if (sync) unsubscribeSync = sync.subscribe(event => {
       if (disposed) return;
       if (event && event.type === 'error' && event.error) failure(event.error);
@@ -2814,6 +3221,7 @@
       if (disposed) throw new Error('계정이 바뀌어 이전 초안을 보관할 수 없습니다.');
       await workbench?.flush();
       await writer?.flush();
+      await flushReadingPosition();
       if (disposed) throw new Error('계정이 바뀌어 이전 초안을 보관할 수 없습니다.');
       if (state.stage && dirty()) await persistStage();
       for (const [versionId, draft] of state.sourceDrafts) {
@@ -2842,6 +3250,9 @@
     function dispose() {
       if (disposed) return;
       disposed = true;
+      compositionPanel?.dispose(); compositionPanel = null;
+      compositionSync?.dispose();
+      writingSync?.dispose();
       home?.dispose();
       workbench?.dispose();
       writer?.dispose();
@@ -2850,6 +3261,8 @@
       root.removeEventListener('focusin', keepFocusVisible);
       if (focusFrame !== null) { global.cancelAnimationFrame(focusFrame); focusFrame = null; }
       if (readerCleanup) { readerCleanup(); readerCleanup = null; }
+      readingResumeCleanup?.(); readingResumeCleanup = null;
+      readingPosition?.dispose();
       invalidateBatchContext();
       state.batches.clear();
       state.allStages = [];
@@ -2866,6 +3279,7 @@
       if (sync && typeof sync.dispose === 'function') sync.dispose();
       global.removeEventListener('beforeunload', beforeUnload);
       document.removeEventListener('visibilitychange', visibility);
+      global.removeEventListener('pagehide', pagehideReading);
       downloadUrls.forEach(url => URL.revokeObjectURL(url));
       downloadUrls.clear();
       signal?.removeEventListener('abort', dispose);

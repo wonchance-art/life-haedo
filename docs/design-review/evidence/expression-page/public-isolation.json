@@ -1,0 +1,8 @@
+{
+  "baseline": "PR40 v74 fake-config public output",
+  "files": 70,
+  "same_files_and_bytes": true,
+  "sample_excluded": true,
+  "sample_assets_excluded": true,
+  "operating_service_accessed": false
+}

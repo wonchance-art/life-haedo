@@ -1,0 +1,27 @@
+{
+  "scope": "Isolated blank browser page; no app state, account, tokens, remote data or Apple-device access",
+  "playwright": "1.63.0",
+  "chromium": "151.0.7922.173",
+  "constantFalse": {
+    "predicate": "() => Promise.resolve(false)",
+    "timeoutMs": 1000,
+    "returnedValue": false,
+    "elapsedMs": 37,
+    "timedOut": false
+  },
+  "delayedTrue": {
+    "transitionAfterMs": 250,
+    "promisePredicate": {
+      "returnedValue": false,
+      "elapsedMs": 4,
+      "timedOut": false
+    },
+    "explicitlyAwaitedPolling": {
+      "returnedValue": true,
+      "checks": 10,
+      "elapsedMs": 268,
+      "deadlineMs": 1000
+    }
+  },
+  "conclusion": "A Promise-returning waitForFunction predicate can finish with false before the condition becomes true; explicitly awaited polling observes the true transition. This proves the wait boundary defect, not a complete reproduction of CI Chromium 153."
+}

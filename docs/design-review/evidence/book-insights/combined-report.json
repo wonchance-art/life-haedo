@@ -1,0 +1,347 @@
+{
+  "createdAt": "2026-10-08T01:42:45.711Z",
+  "scope": "Actual private books UI, SDK and isolated IndexedDB with anonymous intercepted HTTP. Chromium viewport/keyboard/touch only, no production SQL, Apple hardware or native IME.",
+  "pass": true,
+  "summary": {
+    "functionalFlows": {
+      "passed": 7,
+      "total": 7
+    },
+    "supplementaryEditorViewport": {
+      "passed": 1,
+      "total": 1
+    },
+    "visualStates": 6,
+    "minimumTextContrast": 6.05,
+    "consoleErrors": 0,
+    "pageErrors": 0,
+    "externalRequests": 0,
+    "operatingRemoteWrites": 0
+  },
+  "history": [
+    {
+      "file": "run-2026-10-08T01-40-28-529Z.json",
+      "createdAt": "2026-10-08T01:40:28.529Z",
+      "finishedAt": "2026-10-08T01:40:49.340Z",
+      "passed": 7,
+      "total": 7,
+      "description": "First full functional suite passed 7/7. No runtime fixes or repeat required."
+    },
+    {
+      "file": "focused-390-initial-environment.json",
+      "createdAt": "2026-10-08T01:41:38.474Z",
+      "finishedAt": "2026-10-08T01:41:39.108Z",
+      "description": "Supplementary standalone screenshot script omitted BASE_URL and attempted the harness default localhost4173. Connection refused before UI execution; not a functional-suite failure."
+    },
+    {
+      "file": "focused-390.json",
+      "createdAt": "2026-10-08T01:41:56.347Z",
+      "finishedAt": "2026-10-08T01:41:57.972Z",
+      "pass": true,
+      "description": "BASE_URL4184 specified; editor scrolled into 390px viewport with seeded anonymous interpretation. Values/contrast/controls/overflow and no external or remote writes verified. Full suite not repeated."
+    }
+  ],
+  "checks": [
+    {
+      "name": "authored interpretation with exact support/counter, independent references and reversible export exclusion at 1440",
+      "pass": true,
+      "sourceRun": "run-2026-10-08T01-40-28-529Z.json",
+      "checkedAt": "2026-10-08T01:40:28.529Z"
+    },
+    {
+      "name": "authored interpretation with exact support/counter, independent references and reversible export exclusion at 820",
+      "pass": true,
+      "sourceRun": "run-2026-10-08T01-40-28-529Z.json",
+      "checkedAt": "2026-10-08T01:40:28.529Z"
+    },
+    {
+      "name": "authored interpretation with exact support/counter, independent references and reversible export exclusion at 390",
+      "pass": true,
+      "sourceRun": "run-2026-10-08T01-40-28-529Z.json",
+      "checkedAt": "2026-10-08T01:40:28.529Z"
+    },
+    {
+      "name": "save failure and concurrent composition retain interpretation, uncertainty and both competing drafts",
+      "pass": true,
+      "sourceRun": "run-2026-10-08T01-40-28-529Z.json",
+      "checkedAt": "2026-10-08T01:40:28.529Z"
+    },
+    {
+      "name": "JSON restores all interpretations including excluded entries and consistently remaps shared missing references",
+      "pass": true,
+      "sourceRun": "run-2026-10-08T01-40-28-529Z.json",
+      "checkedAt": "2026-10-08T01:40:28.529Z"
+    },
+    {
+      "name": "interpretation selection remains private to its workspace and account across logout and return",
+      "pass": true,
+      "sourceRun": "run-2026-10-08T01-40-28-529Z.json",
+      "checkedAt": "2026-10-08T01:40:28.529Z"
+    },
+    {
+      "name": "twenty-first exact evidence remains reachable with independent role pagination after reader return",
+      "pass": true,
+      "sourceRun": "run-2026-10-08T01-40-28-529Z.json",
+      "checkedAt": "2026-10-08T01:40:28.529Z"
+    }
+  ],
+  "visual": [
+    {
+      "scene": "insight",
+      "width": 1440,
+      "screenshot": "insight-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "sourceRun": "run-2026-10-08T01-40-28-529Z.json",
+      "checkedAt": "2026-10-08T01:40:28.529Z"
+    },
+    {
+      "scene": "insight",
+      "width": 820,
+      "screenshot": "insight-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "sourceRun": "run-2026-10-08T01-40-28-529Z.json",
+      "checkedAt": "2026-10-08T01:40:28.529Z"
+    },
+    {
+      "scene": "empty",
+      "width": 390,
+      "screenshot": "empty-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "sourceRun": "run-2026-10-08T01-40-28-529Z.json",
+      "checkedAt": "2026-10-08T01:40:28.529Z"
+    },
+    {
+      "scene": "insight",
+      "width": 390,
+      "screenshot": "insight-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "sourceRun": "run-2026-10-08T01-40-28-529Z.json",
+      "checkedAt": "2026-10-08T01:40:28.529Z"
+    },
+    {
+      "scene": "save-error",
+      "width": 390,
+      "screenshot": "save-error-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "sourceRun": "run-2026-10-08T01-40-28-529Z.json",
+      "checkedAt": "2026-10-08T01:40:28.529Z"
+    },
+    {
+      "scene": "focused insight editor",
+      "width": 390,
+      "screenshot": "insight-390-focused.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "sourceRun": "focused-390.json",
+      "checkedAt": "2026-10-08T01:41:56.347Z"
+    }
+  ],
+  "observations": [
+    {
+      "width": 1440,
+      "userAuthored": true,
+      "exactOldSupportAndLatestCounter": true,
+      "sourceReturnFocus": true,
+      "generalChapterUnlinkPreservesInsightAndManuscript": true,
+      "defaultExportNoBodies": true,
+      "exclusionReversibleAndIndependent": true,
+      "legacyReflectionUnchanged": true,
+      "sourceRun": "run-2026-10-08T01-40-28-529Z.json"
+    },
+    {
+      "width": 820,
+      "userAuthored": true,
+      "exactOldSupportAndLatestCounter": true,
+      "sourceReturnFocus": true,
+      "generalChapterUnlinkPreservesInsightAndManuscript": true,
+      "defaultExportNoBodies": true,
+      "exclusionReversibleAndIndependent": true,
+      "legacyReflectionUnchanged": true,
+      "sourceRun": "run-2026-10-08T01-40-28-529Z.json"
+    },
+    {
+      "width": 390,
+      "userAuthored": true,
+      "exactOldSupportAndLatestCounter": true,
+      "sourceReturnFocus": true,
+      "generalChapterUnlinkPreservesInsightAndManuscript": true,
+      "defaultExportNoBodies": true,
+      "exclusionReversibleAndIndependent": true,
+      "legacyReflectionUnchanged": true,
+      "sourceRun": "run-2026-10-08T01-40-28-529Z.json"
+    }
+  ],
+  "limitations": [
+    "Actual app/SDK/IndexedDB with anonymous intercepted HTTP only; no production Supabase, SNS, SQL or private records.",
+    "Chromium viewport, keyboard and touch emulation are not Apple hardware, Files, VoiceOver or native Korean IME verification.",
+    "Author-written interpretations and linked evidence are tested as saved selections, not proof of a belief, AI analysis or autobiographical usefulness.",
+    "Primary viewport captures show page entry; supplementary insight-390-focused.png deliberately scrolls to the interpretation editor."
+  ]
+}

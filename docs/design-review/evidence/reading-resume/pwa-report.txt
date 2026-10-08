@@ -1,0 +1,10 @@
+PASS public home and anonymous private routes never mount account storage
+PASS Google-button PKCE HTTP fixture opens verified A scope without automatic upload
+PASS protected import/excerpt/source jump, reload and backup-copy restore work
+PASS logout/B login cannot list, read or render A and unowned data; A return restores its scope
+PASS failed management navigation and logout draft transactions preserve input without signing out
+PASS offline warm local editing survives cold-load lock and online re-verification
+PASS failed callback clears credentials from address and never exposes private UI
+PASS preserved Cloud haedo-v71 fixture upgrades atomically to haedo-v72 without altering old local data
+PASS unexpected console/page errors
+Platform integration: 9 passed, 0 failed; 2 intentional transport/callback errors. Anonymous HTTP only; no real Google OAuth/Apple proof.

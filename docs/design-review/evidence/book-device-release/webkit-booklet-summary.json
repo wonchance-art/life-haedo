@@ -1,0 +1,19 @@
+{
+  "browser": "26.6",
+  "scope": "Mac automated WebKit: real anonymous UI restore, Blob booklet preview, TOC and actual HTML download. No native Apple Files/PDF or real Auth.",
+  "checks": [
+    {
+      "name": "four exact Korean chapter notes, Blob preview, chapter 2 TOC and HTML download",
+      "pass": true,
+      "characters": 4353,
+      "htmlBytes": 17410,
+      "remoteWrites": 0
+    }
+  ],
+  "pass": false,
+  "consoleErrorCount": 12,
+  "pageErrorCount": 0,
+  "externalRequests": 0,
+  "generatedScriptTags": 0,
+  "consoleDiagnostic": "Sandbox blocked script execution during automated iframe inspection. Functional checks succeeded; raw aggregate remains false. Sandbox/CSP were not loosened."
+}

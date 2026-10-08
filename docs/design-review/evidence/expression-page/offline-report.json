@@ -1,0 +1,57 @@
+{
+  "browser": "151.0.7922.173",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "offline": true,
+  "url": "file:///workspace/life-haedo/docs/design-review/evidence/expression-page/expression-comparison.html",
+  "cases": [
+    {
+      "name": "A/B and expand/collapse exact raw old version",
+      "passed": true,
+      "aPrefixUnits": 123,
+      "bPrefixUnits": 90,
+      "fullRawUnits": 1543,
+      "expandFocus": "body",
+      "collapseFocus": "control"
+    },
+    {
+      "name": "Exact old source and page return",
+      "passed": true,
+      "sourceId": "exhibition-garden",
+      "versionId": "garden-old",
+      "returnY": 339,
+      "backY": 339,
+      "focus": "expressionOpen-exhibition-walk-0"
+    },
+    {
+      "name": "Memory-only note edit, preview return, fresh-document reset",
+      "passed": true,
+      "editedNote": "오프라인 비교에서 코멘트 수정과 미리보기 왕복을 확인했다.",
+      "editorFocusRestored": true,
+      "reloadRestoredInitialNote": true,
+      "reloadVariant": "a",
+      "nativeFileReloadVerified": false
+    }
+  ],
+  "fileNavigation": {
+    "passed": false,
+    "blockedByEnvironment": true,
+    "error": "page.goto: net::ERR_BLOCKED_BY_ADMINISTRATOR at file:///workspace/life-haedo/docs/design-review/evidence/expression-page/expression-comparison.html\nCall log:\n\u001b[2m  - navigating to \"file:///workspace/life-haedo/docs/design-review/evidence/expression-page/expression-comparison.html\", waiting until \"load\"\u001b[22m\n",
+    "failedRequests": []
+  },
+  "fallback": "Exact generated HTML bytes in offline about:blank context; file protocol not validated",
+  "reinitializationMethod": "New document with exact artifact bytes; native file reload remains blocked",
+  "requests": [],
+  "externalRequests": [],
+  "errors": [],
+  "cspViolations": [],
+  "failedRequests": [],
+  "passed": true,
+  "contentChecksPassed": true,
+  "requestedFileProtocolCheckPassed": false,
+  "result": "offline_content_checks_passed; file_protocol_blocked_by_environment",
+  "artifactBytes": 89365,
+  "artifactSha256": "469b65bfd5f730dfba4946d9402c212f546c7b4b3fdf0c0e3ecf229696a3e8fc"
+}

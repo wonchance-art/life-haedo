@@ -17,7 +17,7 @@ const errors = [], failures = [];
 let passed = 0;
 const settle = page => page.waitForFunction(() => !document.querySelector('.life-app[aria-busy="true"]'));
 async function click(page, name) {
-  if (['모아보기','원천 기록','가져오기','시간 보기'].includes(name)) await openSection(page, 'records');
+  if (['기록 검색','원천 기록','가져오기','시간 보기'].includes(name)) await openSection(page, 'records');
   if (['내보내기·사본 복원', '선택 파일 목록'].includes(name)) await openManagement(page);
   if (name === '로그아웃') await openAccount(page);
   await page.getByRole('button', { name, exact: true }).click(); await settle(page);
@@ -46,6 +46,7 @@ async function main() {
   const server = new FakeCloud();
   let number = 0;
   async function check(name, action) {
+    if (process.env.BATCH_TEST_MATCH && !new RegExp(process.env.BATCH_TEST_MATCH).test(name)) return;
     const device = 'batch-' + ++number;
     const context = await browser.newContext({ acceptDownloads: true, serviceWorkers: 'block', viewport: { width: 820, height: 1000 } });
     try {
@@ -140,7 +141,7 @@ async function main() {
       assert.equal((await stages(page)).length, 2); assert.ok((await stages(page)).some(s => s.input.text === '이 화면의 원문'));
       await click(page, '선택 파일 목록');
       await review(page, 0); assert.equal(await page.locator('#lifeImportText').inputValue(), '다른 탭에서 보관한 원문');
-      await click(page, '모아보기'); await page.locator('summary').filter({ hasText: /^검토 중 / }).click();
+      await click(page, '기록 검색'); await page.locator('summary').filter({ hasText: /^검토 중 / }).click();
       await click(page, 'race'); assert.equal(await page.locator('#lifeImportText').inputValue(), '이 화면의 원문');
     });
     await check('failed initial draft save can be edited, saved and reopened without stale memory text', async page => {
