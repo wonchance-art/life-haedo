@@ -1315,6 +1315,7 @@
       const view = session.reflectionView ||= { mode: 'time', from: '', to: '', shown: 40 };
       const reader = life.Reflection;
       surface.querySelector('.wb-heading h2').textContent = session.bookPlanOpen ? '목차 구성' : '회고';
+      saveControl.hidden = !!session.bookPlanOpen;
       if (session.bookPlanOpen) { bodyNode.append(bookPlanner(session, view)); return; }
       bodyNode.append(notice('당시의 글을 읽고 지금의 생각을 원고로 남깁니다.'));
       const guidance = details('20대의 글에서 시작하기');
