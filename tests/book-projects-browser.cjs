@@ -171,3 +171,5 @@ async function main() {
   console.log(JSON.stringify({ checks: report.checks.length, passed: report.checks.filter(check => check.pass).length, visual: report.visual.length, consoleErrors: report.consoleErrors.length, pageErrors: report.pageErrors.length, external: report.external.length, report: path.join(out, 'browser-report.json') })); if (!report.pass) process.exitCode = 1;
 }
 if (require.main === module) main().catch(error => { console.error(error); annotation(error); process.exitCode = 1; });
+
+module.exports = { fixture, go, current, save, details, download, capture, openBook, createBook, createChapter, chapterPicker, evidence, seedBooks, switchAccount, oldBody, latestBody, legacyNote, manuscript, specs };

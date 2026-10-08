@@ -1,0 +1,45 @@
+{
+  "createdAt": "2026-10-08T01:41:56.347Z",
+  "scope": "Supplementary 390px editor viewport only; earlier full functional suite is not repeated.",
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "visual": {
+    "scene": "focused insight editor",
+    "width": 390,
+    "screenshot": "insight-390-focused.png",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "horizontalOverflow": false,
+    "contrastFailures": [],
+    "minimumTextContrast": 6.05,
+    "smallTargets": [],
+    "spatialTargets": [],
+    "unnamed": [],
+    "smallInputs": [],
+    "focus": {
+      "tag": "body",
+      "id": "",
+      "class": "haedo-shell",
+      "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+      "visible": false,
+      "width": 3,
+      "contrast": 14.961
+    },
+    "title": {
+      "width": 1,
+      "height": 1,
+      "lineHeight": "30.4px",
+      "wordBreak": "keep-all",
+      "overflowWrap": "anywhere"
+    },
+    "reader": null,
+    "resultCount": 0
+  },
+  "pass": true,
+  "operatingRemoteWrites": 0,
+  "finishedAt": "2026-10-08T01:41:57.972Z"
+}

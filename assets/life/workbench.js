@@ -10,7 +10,7 @@
 
   const LIMITS = Object.freeze({ groups: 100, groupVersions: 1000, entries: 200, parts: 100,
     reflectionVersions: 1000, excludedPairs: 1000, books: 20, bookChapters: 100, chapterVersions: 1000,
-    title: 500, text: 20000, bytes: 2 * 1024 * 1024 });
+    chapterInsights: 100, insightVersions: 100, title: 500, text: 20000, bytes: 2 * 1024 * 1024 });
   const clone = value => JSON.parse(JSON.stringify(value));
   const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value) &&
     (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
@@ -101,9 +101,18 @@
           'invalid_workbench', '책의 시작 연도는 끝 연도보다 늦을 수 없습니다.');
         list(book.chapters, LIMITS.bookChapters);
         for (const chapter of book.chapters) {
-          fields(chapter, ['id', 'title', 'note', 'versionIds']);
+          fields(chapter, ['id', 'title', 'note', 'versionIds'], ['insights']);
           unique(chapter.id, ids); text(chapter.title, LIMITS.title, false); text(chapter.note, LIMITS.text);
           versionList(chapter.versionIds, LIMITS.chapterVersions);
+          if (Object.hasOwn(chapter, 'insights')) {
+            list(chapter.insights, LIMITS.chapterInsights);
+            for (const insight of chapter.insights) {
+              fields(insight, ['id', 'statement', 'uncertainty', 'supportVersionIds', 'counterVersionIds', 'excluded']);
+              unique(insight.id, ids); text(insight.statement, LIMITS.text); text(insight.uncertainty, LIMITS.text);
+              versionList(insight.supportVersionIds, LIMITS.insightVersions);
+              versionList(insight.counterVersionIds, LIMITS.insightVersions); bool(insight.excluded);
+            }
+          }
         }
       }
     }
@@ -155,12 +164,16 @@
       for (const item of value[key]) { used.add(item.id); if (item.entityId) used.add(item.entityId); }
     const referenced = workbench.groups.flatMap(group => group.versionIds).concat(
       workbench.page.entries.flatMap(entry => entry.parts.map(part => part.versionId)), workbench.reflection.versionIds,
-      (workbench.books || []).flatMap(book => book.chapters.flatMap(chapter => chapter.versionIds)));
+      (workbench.books || []).flatMap(book => book.chapters.flatMap(chapter => chapter.versionIds.concat(
+        (chapter.insights || []).flatMap(insight => insight.supportVersionIds.concat(insight.counterVersionIds))))));
     const excludedPairs = workbench.discovery?.excludedPairs || [];
     const sourceReferences = excludedPairs.flatMap(pair => [pair.seedSourceId, pair.candidateSourceId]);
     for (const value of referenced.concat(sourceReferences)) used.add(value);
     for (const item of workbench.groups.concat(workbench.page.entries)) used.add(item.id);
-    for (const book of workbench.books || []) { used.add(book.id); for (const chapter of book.chapters) used.add(chapter.id); }
+    for (const book of workbench.books || []) {
+      used.add(book.id);
+      for (const chapter of book.chapters) { used.add(chapter.id); for (const insight of chapter.insights || []) used.add(insight.id); }
+    }
     const freshId = () => {
       for (let attempt = 0; attempt < 1024; attempt++) { const value = core().id(); if (!used.has(value)) { used.add(value); return value; } }
       fail('id_collision', '사본 식별자를 만들지 못했습니다. 다시 시도해 주세요.');
@@ -180,6 +193,11 @@
       book.id = freshId();
       for (const chapter of book.chapters) {
         chapter.id = freshId(); chapter.versionIds = chapter.versionIds.map(value => versions.get(value));
+        for (const insight of chapter.insights || []) {
+          insight.id = freshId();
+          insight.supportVersionIds = insight.supportVersionIds.map(value => versions.get(value));
+          insight.counterVersionIds = insight.counterVersionIds.map(value => versions.get(value));
+        }
       }
     }
     for (const pair of excludedPairs) {

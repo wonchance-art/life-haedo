@@ -148,6 +148,9 @@ jobs:
       - name: Verify book projects, chapter manuscripts and recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-projects-browser.cjs
+      - name: Verify private interpretations, evidence and exclusion boundaries
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-insights-browser.cjs
       - name: Verify isolated expression-page design samples
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/expression-design-browser.cjs
@@ -179,6 +182,7 @@ jobs:
             .local/source-reimport/
             .local/reflection-reading/
             .local/book-projects/
+            .local/book-insights/
             .local/life-social-import/
             .local/share/
             .local/browser-ci/server.log

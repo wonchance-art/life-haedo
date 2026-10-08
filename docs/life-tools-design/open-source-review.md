@@ -512,4 +512,35 @@ Yjs 저장소의 현재 HEAD에 대한 GitHub 라이선스 요약은 `NOASSERTIO
 4. **출력 범위를 명시한다.** 책별 Markdown은 책 질문·장 원고·근거 출처가 기본이고, 원문 본문은 명시적으로 선택할 때만 포함한다. mdBook의 HTML renderer나 novelWriter의 Manuscript Build를 실행하지 않으며 이 파일을 PDF·인쇄본·두 도구의 프로젝트 백업으로 표시하지 않는다.
 5. **새 구조도 기존 보존 계약을 통과해야 한다.** 계정/공간 경계, CAS 충돌, 초안 입력 보존, 정확 버전, JSON 새 사본 복원의 ID 재매핑을 확장한다. SQL validator의 additive 갱신은 Local 설치·확인 대상이며 파일 작성만으로 서버가 책 구성을 받는다고 보고하지 않는다.
 
-장별 리치 서식, 여러 단계의 목차, 쪽나눔·각주·이미지·폰트 포함이 실제 원고 편집에서 필요해지면 이 도구들의 출력과 별도 조판 후보를 한글 샘플로 다시 비교한다. 지금은 기존 입력과 저장 경계를 재사용하는 비용이 새 데스크톱·Rust 기반을 연결하는 비용보다 작다. **책 모델·UI·브라우저·서버 검증은 구현 담당의 별도 결과를 기다리며, 이번 공식 조사로 통과를 대신하지 않는다.**
+장별 리치 서식, 여러 단계의 목차, 쪽나눔·각주·이미지·폰트 포함이 실제 원고 편집에서 필요해지면 이 도구들의 출력과 별도 조판 후보를 한글 샘플로 다시 비교한다. 지금은 기존 입력과 저장 경계를 재사용하는 비용이 새 데스크톱·Rust 기반을 연결하는 비용보다 작다. **책 모델·UI·브라우저·서버의 실제 상태는 [별도 구현 기록](../design-review/book-projects.md)을 따르며, 이 공식 조사로 통과를 대신하지 않는다.**
+
+## 장별 자기 해석·근거·반례 — 질적 분석과 주석 도구 참고
+
+확인일 **2026-10-08 KST**. 이번 목적은 장에 **사용자가 직접 쓴 해석, 뒷받침하는 원문, 반례가 되는 원문, 모르는 점**을 저장하고 다시 검토하는 것이다. 자동 주제 추론·AI 보고서·성격 평가가 아니다. [책 설계](reflection-book.md)의 optional `chapter.insights`로 다루며, 이번 근거는 **정확한 원문 버전 전체**이고 구절 locator는 없다.
+
+### 공식 배포와 실제 유지관리
+
+두 GitHub 저장소의 최근 release·commit·상태·공개 권고와 고정 버전의 실제 라이선스·문서·모델을 읽었다. **두 저장소 모두 `releases/latest`가 2019년 배포를 반환**했으므로 이를 현재 배포·소스의 최신 상태로 확대하지 않았다. Taguette는 공식 PyPI 버전과 GitHub 태그까지 대조했고 Hypothesis는 현재 소스 commit을 별도로 고정했다.
+
+| 후보 | 확인한 배포·라이선스·유지관리 | 참고할 설계와 직접 도입 판단 |
+| --- | --- | --- |
+| **Taguette 1.5.2 · BSD-3-Clause** | [공식 PyPI](https://pypi.org/pypi/taguette/json)의 최신 버전은 **1.5.2**, sdist 게시 **2025-12-08 22:17 UTC**, 철회되지 않은 배포다. [v1.5.2 태그](https://github.com/remram44/taguette/tree/v1.5.2) commit은 `bf23807d749dd15aed81ebfd6e3967f00d1353a1`이며 [pyproject.toml](https://github.com/remram44/taguette/blob/v1.5.2/pyproject.toml)의 버전·BSD-3-Clause와 [LICENSE.txt](https://github.com/remram44/taguette/blob/v1.5.2/LICENSE.txt)가 일치한다. [GitHub 마지막 release v0.5](https://github.com/remram44/taguette/releases/tag/v0.5)는 **2019-03-25**다. GitHub [최근 commit](https://github.com/remram44/taguette/commit/52fcdce95709375a4085cb10852bf7dd251ccb3d)은 **2026-09-28**. 현재 공식 README·패키지 메타데이터가 안내하는 주 저장소는 **GitLab**이며 그쪽 최신 이슈·commit까지 확인한 것은 아니다. | [README](https://github.com/remram44/taguette/blob/v1.5.2/README.rst)의 **사용자가 만든 코드로 구절을 분류하고 선택 결과를 내보내는 방식**을 참고한다. [모델](https://github.com/remram44/taguette/blob/v1.5.2/taguette/database/models.py)은 문서·구간 highlight·tag 관계를 분리한다. 이것이 사용자의 해석을 자동 입증하거나 근거/반례의 의미를 판정한다는 뜻은 아니다. 직접 도입하면 Python/Tornado·SQLAlchemy와 문서 변환·별도 프로젝트를 연결해야 한다. 이번 평문·버전 ID 연결에는 전체 앱·importer·구간 모델을 도입하지 않는다. |
+| **Hypothesis h · BSD-2-Clause, 현재 소스 참고** | [GitHub 마지막 release v0.39.0](https://github.com/hypothesis/h/releases/tag/v0.39.0)은 **2019-11-05**다. 이번에 읽은 기본 브랜치 [commit `66cd441`](https://github.com/hypothesis/h/commit/66cd44126b2700630eead3675f0c212b6a450f26)은 **2026-09-28**, 저장소 push 시점은 **2026-10-06**이다. 고정 commit의 [LICENSE](https://github.com/hypothesis/h/blob/66cd44126b2700630eead3675f0c212b6a450f26/LICENSE)는 BSD 2-Clause 전문이다. 현재 소스를 2019년 release의 코드나 새로운 안정판 번호로 표현하지 않는다. | [API 모델](https://github.com/hypothesis/h/blob/66cd44126b2700630eead3675f0c212b6a450f26/docs/_extra/api-reference/schemas/annotation.yaml)은 주석 본문과 대상 URI·selector·권한을 분리한다. Text Quote/Position selector는 **후속 구절 근거**를 검토할 참고다. [README](https://github.com/hypothesis/h/blob/66cd44126b2700630eead3675f0c212b6a450f26/README.md)는 h가 웹/API 서버이며 browser client는 별도라고 명시한다. 서버·client·계정/공유 경계를 해도에 연결하지 않고, 별도 주석 서비스로 개인 원문을 전송하지 않는다. |
+
+두 GitHub 저장소는 `archived=false`, `disabled=false`였다. 오래된 GitHub release만으로 유지관리 중단을 단정하지 않으며, 최근 commit만으로 배포 안정성이나 iPad 적합성을 보증하지도 않는다. Taguette PyPI 아카이브를 다운로드·설치·무결성 검증한 것은 아니며 이번 라이선스 본문 확인은 GitHub v1.5.2 태그를 기준으로 했다.
+
+### 보안 권고를 읽은 범위
+
+[Taguette 공개 권고](https://api.github.com/repos/remram44/taguette/security-advisories?per_page=100)는 3건이다. [태그/문서명 등의 XSS](https://github.com/remram44/taguette/security/advisories/GHSA-g9qw-g6rv-3889)와 [비밀번호 재설정 링크 변조](https://github.com/remram44/taguette/security/advisories/GHSA-7rc8-5c8q-jr6j)는 `<1.5.0` 영향·`1.5.0` 수정, [open redirect](https://github.com/remram44/taguette/security/advisories/GHSA-5923-r76v-mprm)는 `<=1.5.1` 영향·`1.5.2` 수정을 명시한다. 오래된 0.5 release를 신규 도입 기준으로 삼지 않는 이유이기도 하다. 수정 배포 확인은 전체 의존성에 문제가 없다는 보증이 아니다.
+
+[Hypothesis h 공개 권고](https://api.github.com/repos/hypothesis/h/security-advisories?per_page=100)는 0건이었다. 이는 h 저장소의 공개 목록 조회이며 별도 browser client·Python 의존성·운영 서비스 전체의 감사가 아니다. 두 도구의 인증·HTML 표시·외부 링크 처리 코드를 이번에 가져오지 않는다.
+
+현재 환경 상태와 네트워크 정책을 다시 확인하고, 앞서 읽은 런타임·네트워크 지침대로 공식 GitHub API와 허용된 PyPI만 요청했다. 프록시·TLS 검증을 유지했고 차단 우회·운영 계정 접근·개인 자료 수집은 하지 않았다. 공개 응답과 읽은 파일은 임시 경로 `/tmp/haedo-insight-review-20261008/`에 두고 고정 링크를 검토 근거로 남긴다.
+
+### 이번에 충분한 재사용과 바꿀 조건
+
+**설계 참고만 채택한다.** 현재 요구는 사용자가 쓰는 두 텍스트 필드(`statement`, `uncertainty`), 정확 버전 ID의 두 목록, 제외/복원 상태다. 기존 textarea·원문 선택기·계정별 Workbench 저장·CAS·Reflection Markdown·JSON 복원을 확장하면 되고, 새로운 주석 엔진이나 질적 분석 앱을 실행할 이유는 없다. 평문 작성과 원문 ID는 재사용하되 저장 한도·명시적 근거 선택·수정 후 저장·실패 복구는 앱에서 검사한다.
+
+Taguette의 구간 offset이나 Hypothesis의 selector를 이번 전체 버전 참조와 동등하게 취급하지 않는다. 같은 버전을 근거와 반례에 모두 선택할 수 있지만 어느 문장이 각각을 지지하는지는 아직 지정하지 않는다. ‘자료가 연결됨’과 ‘해석이 맞다고 검증됨’을 구분하고, 기록 개수·긍정/부정 목록 수로 확신도나 성격 점수를 만들지 않는다.
+
+실제 원고에서 ‘이 원문의 어느 구절인가’를 반복해서 찾거나 인용 위치를 보존해야 할 때, 기존 `sourceRefs`의 UTF-16 locator와 quote 대조를 먼저 비교하고 주석 selector의 필요성을 작은 샘플로 검토한다. 여러 연구자의 공동 코딩·PDF 좌표·외부 웹문서 주석 공유가 필요해지면 위 도구와 제공 범위를 다시 비교한다. AI 해석이 필요하면 근거 선택·생성 기원·제공처·전송 범위·수정 이력을 별도 계약으로 정한다. **이번 조사나 수동 해석 기능을 AI 보고서·주석 도구 통합 완료로 보고하지 않는다.**
