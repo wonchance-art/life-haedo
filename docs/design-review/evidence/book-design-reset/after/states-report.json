@@ -1,0 +1,218 @@
+[
+  {
+    "direction": "A",
+    "width": 1440,
+    "state": "empty",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  },
+  {
+    "direction": "A",
+    "width": 1440,
+    "state": "loading",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  },
+  {
+    "direction": "A",
+    "width": 1440,
+    "state": "many",
+    "errors": [],
+    "overflow": false,
+    "count": 40,
+    "smallTargets": []
+  },
+  {
+    "direction": "A",
+    "width": 1440,
+    "state": "error",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  },
+  {
+    "direction": "A",
+    "width": 820,
+    "state": "empty",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  },
+  {
+    "direction": "A",
+    "width": 820,
+    "state": "loading",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  },
+  {
+    "direction": "A",
+    "width": 820,
+    "state": "many",
+    "errors": [],
+    "overflow": false,
+    "count": 40,
+    "smallTargets": []
+  },
+  {
+    "direction": "A",
+    "width": 820,
+    "state": "error",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  },
+  {
+    "direction": "A",
+    "width": 390,
+    "state": "empty",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  },
+  {
+    "direction": "A",
+    "width": 390,
+    "state": "loading",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  },
+  {
+    "direction": "A",
+    "width": 390,
+    "state": "many",
+    "errors": [],
+    "overflow": false,
+    "count": 40,
+    "smallTargets": []
+  },
+  {
+    "direction": "A",
+    "width": 390,
+    "state": "error",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  },
+  {
+    "direction": "B",
+    "width": 1440,
+    "state": "empty",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  },
+  {
+    "direction": "B",
+    "width": 1440,
+    "state": "loading",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  },
+  {
+    "direction": "B",
+    "width": 1440,
+    "state": "many",
+    "errors": [],
+    "overflow": false,
+    "count": 40,
+    "smallTargets": []
+  },
+  {
+    "direction": "B",
+    "width": 1440,
+    "state": "error",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  },
+  {
+    "direction": "B",
+    "width": 820,
+    "state": "empty",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  },
+  {
+    "direction": "B",
+    "width": 820,
+    "state": "loading",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  },
+  {
+    "direction": "B",
+    "width": 820,
+    "state": "many",
+    "errors": [],
+    "overflow": false,
+    "count": 40,
+    "smallTargets": []
+  },
+  {
+    "direction": "B",
+    "width": 820,
+    "state": "error",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  },
+  {
+    "direction": "B",
+    "width": 390,
+    "state": "empty",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  },
+  {
+    "direction": "B",
+    "width": 390,
+    "state": "loading",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  },
+  {
+    "direction": "B",
+    "width": 390,
+    "state": "many",
+    "errors": [],
+    "overflow": false,
+    "count": 40,
+    "smallTargets": []
+  },
+  {
+    "direction": "B",
+    "width": 390,
+    "state": "error",
+    "errors": [],
+    "overflow": false,
+    "count": 0,
+    "smallTargets": []
+  }
+]
