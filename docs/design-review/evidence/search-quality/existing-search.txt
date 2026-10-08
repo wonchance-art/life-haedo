@@ -1,0 +1,8 @@
+PASS old-only body hit opens exact raw version/range and makes a faithful UTF16 excerpt
+PASS backward DOM selection preserves a repeated cross-line quote and keyboard fallback uses raw coordinates
+PASS body versions plus latest title match form a deduplicated union and open chosen version
+PASS title-only and link-only hits never invent matching body or URL text
+PASS IME waits for composition end; literal metacharacters and native case matching retain raw coordinates
+PASS source filters and topic queries return independently; a second excerpt reference opens its own source
+PASS search stays within workspace/account and never persists or transmits query state
+Search browser: 7 passed, 0 failed; 0 unexpected console/page errors. Synthetic Auth; Apple hardware untested.

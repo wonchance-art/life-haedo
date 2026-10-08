@@ -4,6 +4,7 @@
   const ORIGINS = [['apple_notes', 'Apple 메모'], ['obsidian', 'Obsidian'], ['naver_blog', '네이버 블로그'], ['instagram', 'Instagram'], ['other', '기타']];
   const COVERAGE = { full_text: '제공한 본문 전체', partial: '선택한 본문 일부', link_only: '본문 미확보 · 링크만', unknown: '본문 확보 범위 미확인' };
   const MAX_TEXT_BYTES = 1024 * 1024;
+  const SEARCH_PAGE_SIZE = 40;
 
   function node(tag, text, className) {
     const el = document.createElement(tag);
@@ -126,6 +127,7 @@
       syncAccount: null, syncState: null, syncReadError: null, syncAccountKey: null,
       syncLoading: false, managementOpen: false, sourcesFiltersOpen: false, topicsFiltersOpen: false,
       selecting: false, readerArrangeOpen: false,
+      sourcesLimit: SEARCH_PAGE_SIZE, sourcesWindowKey: '', sourcesRevealVersionId: null, ignoreKoreanSpacing: false,
       remoteRows: null, remoteRowsAccountKey: null, conflictView: null, conflictCopyId: null, restoreReturn: null, importResult: null
     };
     const readingPosition = global.HaedoLife.ReadingPosition?.create({ storage });
@@ -1145,6 +1147,10 @@
       state.returnContext = null;
       state.suppressReaderResume = false;
       state.importResult = null;
+      state.sourcesLimit = SEARCH_PAGE_SIZE;
+      state.sourcesWindowKey = '';
+      state.sourcesRevealVersionId = null;
+      state.ignoreKoreanSpacing = false;
     }
 
     async function arrangeRecords(mode, versionIds, returnFocusId) {
@@ -1358,17 +1364,18 @@
     }
 
     function openResult(mode, key, ref) {
-      const returnContext = { workspaceId: state.bundle.workspaceId, mode, focusKey: key, scrollY: global.scrollY };
+      const returnContext = { workspaceId: state.bundle.workspaceId, mode, focusKey: key, sourceVersionId: ref.sourceVersionId, scrollY: global.scrollY };
       return navigate('source', { sourceId: ref.sourceId, sourceVersionId: ref.sourceVersionId, locator: ref.locator || null, suppressReaderResume: mode === 'sources' && !!state.sourcesSearch.trim() && !ref.locator, returnContext });
     }
 
     async function returnToResults() {
       const context = state.returnContext;
       if (!context || context.workspaceId !== state.bundle.workspaceId) return navigate('sources', { returnContext: null });
-      await navigate(context.mode, { returnContext: null });
+      await navigate(context.mode, { returnContext: null, sourcesRevealVersionId: context.mode === 'sources' ? context.sourceVersionId || null : null });
       const restore = () => requestAnimationFrame(() => {
         if (disposed || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode) return;
-        const target = Array.from(main.querySelectorAll('[data-focus-key]')).find(el => el.dataset.focusKey === context.focusKey) || main.querySelector('#lifeSearch,h1,h2');
+        const target = Array.from(main.querySelectorAll('[data-focus-key]')).find(el => el.dataset.focusKey === context.focusKey) ||
+          (context.mode === 'sources' && Array.from(main.querySelectorAll('.life-source-open')).find(el => el.dataset.versionId === context.sourceVersionId)) || main.querySelector('#lifeSearch,h1,h2');
         const panel = target?.closest('[data-result-panel]');
         let ancestor = target?.parentElement;
         while (ancestor && ancestor !== main) { if (ancestor.tagName === 'DETAILS') ancestor.open = true; ancestor = ancestor.parentElement; }
@@ -1599,6 +1606,15 @@
       importResult.hidden = true;
       const count = searchCount();
       const origin = selectField('원천 필터', 'lifeOriginFilter', [['', '모든 원천'], ['writing', '내 글']].concat(ORIGINS), state.originFilter);
+      const spacing = field('한글 띄어쓰기 무시', 'checkbox', 'lifeSearchSpacing', '');
+      spacing.input.checked = state.ignoreKoreanSpacing;
+      const more = button('자료 더 보기', () => {
+        const start = list.children.length;
+        state.sourcesLimit += SEARCH_PAGE_SIZE;
+        update(true);
+        list.children[start]?.querySelector('.life-source-open')?.focus({ preventScroll: true });
+      });
+      more.id = 'lifeSearchMore';
       const selectionBar = node('section', null, 'life-selection-bar');
       selectionBar.id = 'lifeSelectionBar';
       selectionBar.setAttribute('aria-label', '선택한 기록 정리');
@@ -1639,12 +1655,23 @@
           selectionList.append(row);
         });
       }
-      const update = () => {
-        list.replaceChildren();
+      const update = (append = false) => {
         const query = state.sourcesSearch.trim();
-        const hits = core.searchSources(state.bundle, query);
+        const windowKey = JSON.stringify([state.bundle.workspaceId, query, state.originFilter, state.ignoreKoreanSpacing]);
+        if (state.sourcesWindowKey !== windowKey) {
+          state.sourcesWindowKey = windowKey;
+          state.sourcesLimit = SEARCH_PAGE_SIZE;
+          append = false;
+        }
+        const start = append ? list.children.length : 0;
+        if (!append) list.replaceChildren();
+        const searchOptions = { ignoreKoreanSpacing: state.ignoreKoreanSpacing };
+        const hits = core.searchSources(state.bundle, query, searchOptions);
         const byVersion = new Map(hits.map(hit => [hit.sourceVersionId, hit]));
-        const matchingRecords = state.bundle.records.filter(record => matchingText([record.text, record.topic, record.note].join('\n'), query));
+        const matchingRecords = query ? state.bundle.records.filter(record => {
+          const text = [record.text, record.topic, record.note].join('\n');
+          return state.ignoreKoreanSpacing ? core.matchesSearchText(text, query, searchOptions) : matchingText(text, query);
+        }) : state.bundle.records;
         // A note can match without the source text matching. Keep its exact version
         // and do not invent a source-text location for a user's own words.
         if (query) matchingRecords.forEach(record => record.sourceRefs.forEach(ref => {
@@ -1657,9 +1684,13 @@
           hits.push(hit);
         }));
         const matches = hits.filter(hit => !state.originFilter || (state.originFilter === 'writing' ? isOwnWriting(sourceFor(hit.sourceId)) : sourceFor(hit.sourceId).origin === state.originFilter));
+        const revealIndex = matches.findIndex(hit => hit.sourceVersionId === state.sourcesRevealVersionId);
+        if (revealIndex >= state.sourcesLimit) state.sourcesLimit = Math.ceil((revealIndex + 1) / SEARCH_PAGE_SIZE) * SEARCH_PAGE_SIZE;
+        state.sourcesRevealVersionId = null;
         const imported = state.importResult;
         importResult.replaceChildren();
-        importResult.hidden = !imported || imported.workspaceId !== state.bundle.workspaceId || matches.some(hit => hit.sourceVersionId === imported.sourceVersionId);
+        const visibleMatches = matches.slice(0, state.sourcesLimit);
+        importResult.hidden = !imported || imported.workspaceId !== state.bundle.workspaceId || visibleMatches.some(hit => hit.sourceVersionId === imported.sourceVersionId);
         if (!importResult.hidden) {
           const source = sourceFor(imported.sourceId);
           const key = resultFocusKey('sources', 'import-result-' + imported.sourceVersionId);
@@ -1670,8 +1701,9 @@
           importResult.append(node('p', source ? sourceLabel(source) : '보관한 원문', 'life-meta'), open);
         }
         updateSelection(matches);
-        count.textContent = '자료 ' + matches.length + '개' + (state.sourcesSearch.trim() ? ' · 일치한 버전별 결과' : ' · 최신 버전') + (state.originFilter ? ' · ' + originName(state.originFilter) : '');
-        matches.forEach(hit => {
+        count.textContent = '자료 ' + matches.length + '개' + (state.sourcesSearch.trim() ? ' · 일치한 버전별 결과' : ' · 최신 버전') + (state.originFilter ? ' · ' + originName(state.originFilter) : '') + (state.ignoreKoreanSpacing ? ' · 한글 띄어쓰기 무시' : '') + (matches.length > visibleMatches.length ? ' · ' + visibleMatches.length + '개 표시' : '');
+        more.hidden = matches.length <= visibleMatches.length;
+        visibleMatches.slice(start).forEach(hit => {
           const source = sourceFor(hit.sourceId);
           const version = state.bundle.sourceVersions.find(v => v.id === hit.sourceVersionId);
           const records = (query ? matchingRecords : state.bundle.records).filter(record => record.sourceRefs.some(ref =>
@@ -1752,16 +1784,18 @@
       filters.hidden = !state.sourcesFiltersOpen;
       filters.setAttribute('aria-label', '원천 필터');
       filters.append(origin.label);
+      filters.append(spacing.label);
       filters.append(button('저장한 문장 주제로 찾기', guarded(() => navigate('topics'))));
       const filter = iconButton('검색 필터', 'filter', () => {});
       filter.id = 'lifeFilterToggle';
       disclosure(filter, filters, { onChange: open => { state.sourcesFiltersOpen = open; } });
       bar.append(filter);
       origin.input.addEventListener('change', () => { state.originFilter = origin.input.value; update(); });
+      spacing.input.addEventListener('change', () => { state.ignoreKoreanSpacing = spacing.input.checked; update(); });
       main.append(filters);
       main.append(importResult);
       renderReadingResume(main, 'sources');
-      main.append(selectionBar, count, list);
+      main.append(selectionBar, count, list, more);
       update();
     }
 
