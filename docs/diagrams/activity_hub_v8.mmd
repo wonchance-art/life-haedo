@@ -1,0 +1,43 @@
+%% 2026-10-07. Product roadmap: implemented, active quality work, later candidates.
+%% Local owns production installation, merge, deployment and live validation.
+%%{init: {"theme":"base","look":"classic","htmlLabels":false,"themeVariables":{"primaryColor":"#ffffff","primaryTextColor":"#222126","primaryBorderColor":"#827B86","lineColor":"#827B86","clusterBkg":"#ffffff","clusterBorder":"#E9E7EB","edgeLabelBackground":"#ffffff","fontFamily":"Noto Sans CJK KR, sans-serif","fontSize":"16px"},"flowchart":{"curve":"linear","wrappingWidth":300,"nodeSpacing":36,"rankSpacing":48,"htmlLabels":false}}}%%
+flowchart TB
+  accTitle: 해도 v8 — 자료 통합부터 표현과 자기 이해까지
+  accDescr: 본문과 파일과 링크를 계정별 원문으로 보관하고 읽기와 검색과 관련 기록을 거쳐 묶음과 내 페이지를 구성한다. 이번 병렬 작업은 가져오기 저장 결과, 내 페이지 순서와 편집 복귀, 재발견 품질 평가다. 선택한 사본만 별도 검토 후 공개한다. 구성과 선택 초안의 기기 이어쓰기, 로컬 읽기 위치는 구현됐으며 운영 마무리는 Local 담당이다. 다음 후보는 많은 자료의 검색, 표현 화면, 비공개 자기 이해, 공식 경로의 수신 전용 연결과 외부 콘텐츠 발견이다. 후속 후보를 구현 완료로 표시하지 않는다.
+  INPUT["메모 · Obsidian · 블로그 · Instagram<br/>현재: 선택 본문 · TXT/MD · 링크"]
+  WRITE["현재: 직접 글쓰기<br/>로컬 초안 · 명시 저장 · 새 원문 버전"]
+  STORE[("계정별 개인 기록<br/>불변 원문 · 출처 · 구절 · 내 메모<br/>백업 · 선택 원문 동기화")]
+  READ["현재: 읽기 · 검색 · 발췌 · 다시 찾기<br/>이어 읽기: 이 브라우저의 정확 버전/위치"]
+  GROUP["현재: 해제 가능한 묶음<br/>원문을 합치거나 수정하지 않음"]
+  PAGE["현재: 내 페이지 선택 편집<br/>순서 · 표시 · 페이지 코멘트<br/>비공개 방문자 미리보기"]
+  REVIEW["별도 공개 검토<br/>고른 본문/구절 · 제목 · 출처 확인"]
+  PUBLIC[("공개 사본만 별도 저장<br/>명시 게시 · 갱신 · 철회")]
+  VISIT["로그인 없는 방문 화면<br/>개인 작업공간은 노출하지 않음"]
+  CONTINUE["구현: 구성 · 선택 초안 이어쓰기<br/>운영 마무리/실기 검증: Local<br/>개인 편집과 공개 사본은 별개"]
+  QUALITY["지금 병렬 작업<br/>가져오기 결과 · 페이지 순서/복귀<br/>한글 재발견 평가 · 독립 QA"]
+  SEARCH["다음 P1: 많은 자료에서 찾기<br/>한글 질의셋 · 규모/지연 측정<br/>알고리즘/인덱스 비교 후 선택"]
+  EXPRESSION["다음 P1: 표현 페이지 다듬기<br/>실제 자료로 피드/묶음/소개 비교"]
+  REFLECT["후속 P2: 비공개 자기 이해<br/>자료/기간 선택 · 원문 근거<br/>직접 정정 · 제외 · 저장"]
+  CONNECT["후속 P3: 수신 전용 원천 연결<br/>공식 경로 · 중복/갱신 · 중지/복구<br/>SNS 원본 쓰기 · 자동 공개 없음"]
+  EXTERNAL["후속 P3: 외부 콘텐츠 발견<br/>허용 제공처 · 출처 · 제시 이유"]
+  INPUT --> STORE
+  WRITE --> STORE
+  STORE --> READ --> GROUP --> PAGE
+  READ --> PAGE
+  PAGE --> REVIEW --> PUBLIC --> VISIT
+  STORE --> CONTINUE
+  PAGE --> CONTINUE
+  QUALITY -.-> INPUT
+  QUALITY -.-> READ
+  QUALITY -.-> PAGE
+  READ -.-> SEARCH
+  PAGE -.-> EXPRESSION
+  STORE -.-> REFLECT
+  CONNECT -.-> INPUT
+  SEARCH -.-> EXTERNAL
+  classDef current fill:#ffffff,stroke:#5442BC,stroke-width:1.6px,color:#222126;
+  classDef active fill:#F0ECFF,stroke:#5442BC,stroke-width:2px,color:#222126;
+  classDef future fill:#ffffff,stroke:#827B86,stroke-width:1.5px,stroke-dasharray:6 4,color:#222126;
+  class INPUT,WRITE,STORE,READ,GROUP,PAGE,REVIEW,PUBLIC,VISIT,CONTINUE current;
+  class QUALITY active;
+  class SEARCH,EXPRESSION,REFLECT,CONNECT,EXTERNAL future;

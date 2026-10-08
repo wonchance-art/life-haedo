@@ -217,3 +217,82 @@ test('invalid requests and unavailable seeds fail with actionable codes', async 
   data.state.discovery = { excludedPairs: [{ seedSourceId: data.refs[0].sourceId }] };
   assert.throws(() => related(data), { code: 'invalid_data' });
 });
+
+// Deliberately small cross-origin corpus. These are preservation fixtures, not
+// a claim that two literal terms establish useful semantic recommendations.
+const qualitySamples = [
+  { key: 'walk', origin: 'apple_notes', title: '비 온 뒤 동네 정원을 걷다', text: '정원 산책 중에 젖은 잎사귀와 낮은 담장을 살폈다. 천천히 둘러보며 호흡을 고르는 시간이 도움이 되었다.' },
+  { key: 'caption', origin: 'instagram', title: '주말 사진에 붙인 짧은 글', text: '정원 산책. 젖은 잎사귀의 빛과 담장 너머 꽃을 담았다. 비가 그친 뒤 풍경이 한층 맑았다.' },
+  { key: 'park', origin: 'obsidian', title: '도시의 녹지를 거니는 법', text: '정원의 산책은 목적지보다 주변을 살피는 과정에 가깝다. 나뭇잎을 자세히 바라보니 계절의 변화가 느껴졌다.' },
+  { key: 'link', origin: 'naver_blog', title: '정원 산책 행사 안내', text: null, url: 'https://example.org/garden' },
+  { key: 'novel', origin: 'obsidian', title: '소설 속 화자의 침묵', text: '화자의 대사가 짧아질수록 인물 사이의 긴장이 커졌다. 시점과 서술 순서를 따로 표시하는 작업이 도움이 되었다.' },
+  { key: 'meeting', origin: 'apple_notes', title: '팀 회의의 결정을 남기다', text: '담당자와 기한을 표로 분리했다. 회의가 끝난 뒤 결론부터 공유하는 방식이 도움이 되었다. 도움이 되었다.' },
+  { key: 'coffee', origin: 'apple_notes', title: '드립 커피 추출을 바꾸다', text: '드립 커피 추출 시간을 줄이고 분쇄도를 조절했다. 저울로 물의 양을 확인하는 과정이 도움이 되었다.' },
+  { key: 'brew', origin: 'naver_blog', title: '원두를 바꾼 아침', text: '드립 커피 추출 시간을 삼 분으로 맞췄다. 분쇄도를 조금 굵게 하니 쓴맛이 줄었다.' },
+  { key: 'train', origin: 'instagram', title: '막차를 기다린 저녁', text: '기차 출발 전에 플랫폼 번호를 확인했다. 환승 동선을 미리 살펴본 일이 도움이 되었다.' },
+  { key: 'updated', origin: 'apple_notes', title: '주말 관찰 노트', text: '정원 산책 사진을 분류했다.' },
+  { key: 'excluded', origin: 'instagram', title: '돌담 옆 화단', text: '정원 산책 중에 라벤더 향을 맡았다. 잎사귀의 색을 사진에 남겼다.' },
+  { key: 'recipe', origin: 'obsidian', title: '팬에 구운 채소', text: '불을 낮추고 가지를 천천히 뒤집었다. 굽기 전에 물기를 닦아낸 과정이 도움이 되었다.' }
+];
+
+test('cross-origin Korean corpus keeps literal evidence grounded, exact latest versions and directed exclusions', async () => {
+  const data = await fixture(qualitySamples.map(({ key, ...sample }) => sample));
+  const latest = await newer(data, 9, '목성 위성의 공전 주기를 조사했다. 망원경 배율과 구름의 움직임을 비교했다.');
+  data.state.discovery = { excludedPairs: [{ seedSourceId: data.refs[0].sourceId, candidateSourceId: data.refs[10].sourceId }] };
+  const before = JSON.stringify(data);
+  const pair = (left, right) => {
+    const ids = new Set([data.refs[left].sourceId, data.refs[right].sourceId]);
+    return rediscovery.related({ ...data.bundle, sources: data.bundle.sources.filter(item => ids.has(item.id)),
+      sourceVersions: data.bundle.sourceVersions.filter(item => ids.has(item.sourceId)) }, data.state, data.refs[left].versionId);
+  };
+  assert.equal(pair(0, 1)[0].versionId, data.refs[1].versionId);
+  assert.equal(pair(0, 3)[0].snippet, '');
+  assert.equal(pair(6, 7)[0].versionId, data.refs[7].versionId);
+  assert.deepEqual(pair(0, 9), [], 'The old garden candidate must not survive its unrelated latest version');
+  assert.equal(data.bundle.sourceVersions.at(-1).id, latest.versionId);
+  assert.deepEqual(pair(0, 10), []);
+  assert.equal(pair(10, 0)[0].versionId, data.refs[0].versionId);
+  // Check every eligible pair so the three-result cap cannot conceal bad references.
+  // False relevance from boilerplate is evaluated in rediscovery-quality.md.
+  for (let left = 0; left < data.refs.length; left++) for (let right = 0; right < data.refs.length; right++) {
+    if (left === right) continue;
+    for (const result of pair(left, right)) {
+      const seed = data.bundle.sourceVersions.find(item => item.id === data.refs[left].versionId);
+      const candidate = data.bundle.sourceVersions.find(item => item.id === result.versionId);
+      assert.equal(result.sourceId, data.refs[right].sourceId);
+      assert.equal(result.versionId, data.bundle.sourceVersions.filter(item => item.sourceId === result.sourceId).at(-1).id);
+      for (const reason of result.reasons.filter(reason => reason.kind === 'term')) {
+        assert((qualitySamples[left].title + '\n' + (seed.contentText || '')).includes(reason.label));
+        assert((qualitySamples[right].title + '\n' + (candidate.contentText || '')).includes(reason.label));
+      }
+      if (candidate.contentText === null) assert.equal(result.snippet, '');
+      else assert(candidate.contentText.includes(result.snippet.replace(/^…|…$/g, '')));
+    }
+  }
+  assert.equal(JSON.stringify(data), before);
+});
+
+test('help-related holdouts preserve substantive literal topics and explicit user topics in both directions', async () => {
+  const specs = [
+    [{ title: '이웃을 찾아간 오후', text: '도움이 필요한 이웃에게 연락했다.' }, { title: '주민센터 자원활동', text: '도움이 필요한 어르신에게 안부를 물었다.' }],
+    [{ title: '처음 온 사람을 위한 안내', text: '도움 요청 방법을 문서로 남겼다.' }, { title: '행사 현장 담당표', text: '도움 요청 창구를 한곳으로 모았다.' }],
+    [{ title: '저녁의 독서', text: '도움이 되었다. 천문학 망원경 관측법을 익혔다.' }, { title: '별자리 관찰', text: '도움이 되었다. 천문학 망원경 조작을 배웠다.' }]
+  ];
+  for (const pair of specs) {
+    const data = await fixture(pair), before = JSON.stringify(data);
+    for (const [seed, candidate] of [[0, 1], [1, 0]]) {
+      const result = related(data, seed)[0];
+      assert.equal(result.versionId, data.refs[candidate].versionId);
+      for (const reason of result.reasons) {
+        assert.equal(reason.kind, 'term');
+        assert(pair[seed].text.includes(reason.label)); assert(pair[candidate].text.includes(reason.label));
+      }
+    }
+    assert.equal(JSON.stringify(data), before);
+  }
+  const explicit = await fixture([{ title: '동네 연락망', text: '안부 전화를 나눴다.' },
+    { title: '생활 지원 모임', text: '식료품 배달 순서를 정했다.' }]);
+  for (const ref of explicit.refs) topic(explicit, ref, '도움이 필요한 이웃');
+  for (const seed of [0, 1]) assert.deepEqual(related(explicit, seed)[0].reasons,
+    [{ kind: 'topic', label: '도움이 필요한 이웃' }]);
+});
