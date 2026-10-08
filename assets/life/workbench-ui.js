@@ -1565,12 +1565,13 @@
       const books = state.books || [], activeBooks = books.filter(item => !item.archived);
       const book = activeBooks.find(item => item.id === view.bookId);
       const surfaceHeading = surface.querySelector('.wb-heading');
+      surfaceHeading.querySelector('h2').textContent = books.length ? '내 책' : MODES.books;
       surfaceHeading.classList.toggle('wb-heading-quiet', !!book);
       surfaceHeading.querySelector('h2').classList.toggle('life-sr-only', !!book);
       if (!book) {
         surfaceHeading.append(saveControl); saveControl.hidden = true;
         view.bookId = null; view.chapterId = null; view.reading = false; view.readPosition = null; view.editorPosition = null; view.includeSources = false; view.edition = false; view.editionOptions = null; view.editionPosition = null;
-        if (!activeBooks.length) bodyNode.append(empty('돌아보고 싶은 시기나 주제로 첫 책을 시작하세요.'));
+        if (!activeBooks.length) bodyNode.append(empty(books.length ? '모든 책을 보관 중입니다. 아래에서 원하는 책을 복구해 이어 쓸 수 있습니다.' : '돌아보고 싶은 시기나 주제로 첫 책을 시작하세요.'));
         const list = el('div', null, 'wb-book-list'); list.id = 'wbBookList'; list.tabIndex = -1;
         activeBooks.forEach(item => {
           const row = el('article', null, 'wb-row wb-book-row'); row.dataset.bookId = item.id;
@@ -1592,7 +1593,7 @@
           list.append(row);
         });
         bodyNode.append(list);
-        const archived = details('보관한 책 · ' + (books.length - activeBooks.length)); archived.id = 'wbArchivedBooks';
+        const archived = details('보관한 책 · ' + (books.length - activeBooks.length), { open: !activeBooks.length && books.length > 0 }); archived.id = 'wbArchivedBooks';
         for (const item of books.filter(value => value.archived)) {
           const row = el('div', null, 'wb-history-row'); row.append(el('p', item.title));
           const restore = action('책 복구', () => historyChange(value => life.BookHistory.archiveBook(value, item.id, false), () => {}, 'wbBookList'));
@@ -1600,7 +1601,7 @@
         }
         archived.append(notice('보관한 책도 개정본·원문 연결과 함께 백업·구성 이어쓰기에 남습니다.'));
         bodyNode.append(archived);
-        const createBox = details('새 책', { open: !activeBooks.length }); createBox.id = 'wbBookCreateBox';
+        const createBox = details('새 책', { open: !books.length }); createBox.id = 'wbBookCreateBox';
         const title = field('책 제목', '', { id: 'wbBookCreateTitle' }); title.input.placeholder = '예: 20대, 일과 쉼';
         async function addBook(fromReflection) {
           const value = title.input.value.trim();

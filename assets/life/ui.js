@@ -113,6 +113,7 @@
     let chapterImport = null;
     let writingOpenOptions = null;
     let navigationGeneration = 0;
+    let renderGeneration = 0;
     let homeRenderPromise = Promise.resolve();
     const selectedVersions = new Set();
     let selectionReturn = null;
@@ -177,7 +178,7 @@
         returnContext: { mode: state.mode, workspaceId: state.bundle.workspaceId, scrollY: global.scrollY, focusKey: options.focusKey }
       }),
       beforeRestore: () => persistDrafts(),
-      onRestored: async ({ bundle }) => {
+      onRestored: async ({ bundle, workbench: restored }) => {
         if (disposed) return;
         const previousId = state.bundle.workspaceId;
         invalidateBatchContext();
@@ -189,14 +190,22 @@
         state.restoreReturn = { previousId, copyId: bundle.workspaceId };
         state.remoteChanged = false;
         resetSearchContext();
-        state.mode = 'page';
+        const hasBooks = !!restored?.books?.length;
+        state.mode = hasBooks ? 'books' : 'page';
+        workbenchOpenOptions = hasBooks ? { bookList: true } : null;
+        const workspaceToken = workspaceGeneration, navigationToken = navigationGeneration, mode = state.mode;
+        const current = () => !disposed && state.bundle?.workspaceId === bundle.workspaceId &&
+          workspaceToken === workspaceGeneration && navigationToken === navigationGeneration && state.mode === mode;
         connectSubscription();
-        // Installation already committed; keep the installed copy open even if list refresh fails.
-        try { await refreshData(); }
-        catch (_) { announce('사본은 저장됐습니다. 작업공간 목록은 다시 열 때 확인해 주세요.'); }
-        if (disposed) return;
+        // The transaction already committed. Show its copy before refreshing the
+        // workspace list, and never steal a newer screen or its keyboard focus.
         await render();
-        announce('자료와 구성을 새 사본으로 열었습니다. 이전 작업공간은 그대로 보관됩니다.');
+        if (!current()) return;
+        global.scrollTo({ top: 0, behavior: 'instant' });
+        main.querySelector('#lifeRestoreResult h3')?.focus({ preventScroll: true });
+        announce('자료와 구성을 새 사본으로 열었습니다. 이전 작업공간은 그대로 보관됩니다.', { quiet: true });
+        try { await refreshData(); }
+        catch (_) { if (current()) announce('사본은 저장됐습니다. 작업공간 목록은 다시 열 때 확인해 주세요.'); }
       }
     });
 
@@ -2604,19 +2613,27 @@
     function renderRestoreResult() {
       const receipt = state.restoreReturn;
       if (!receipt || receipt.copyId !== state.bundle.workspaceId) return;
+      const books = state.mode === 'books';
+      const content = books ? main.querySelector('.life-workbench[data-mode="books"] .wb-content') : main;
+      if (!content || books && main.querySelector('#wbBookHeading')) return;
+      main.querySelector('#lifeRestoreResult')?.remove();
       const panel = node('section', null, 'life-restore-result');
+      if (books) panel.classList.add('life-restore-result-books');
       panel.id = 'lifeRestoreResult';
       panel.setAttribute('aria-label', '복원 결과');
-      const heading = node('h3', '새 사본을 열었습니다.');
+      const heading = node('h3', books ? '새 사본으로 복원했습니다' : '새 사본을 열었습니다.');
       heading.tabIndex = -1;
       const top = node('div', null, 'life-panel-heading');
       top.append(heading, iconButton('복원 안내 닫기', 'close', guarded(() => {
         state.restoreReturn = null;
         panel.remove();
-        toolbar.querySelector('h1')?.focus({ preventScroll: true });
+        (books ? main.querySelector('#wbBookList') : toolbar.querySelector('h1'))?.focus({ preventScroll: true });
       })));
-      panel.append(top, node('p', '이전 작업공간은 그대로 남아 있습니다. 이 사본의 자동 동기화는 연결하지 않았습니다.', 'life-help'));
-      panel.append(button('이전 작업공간으로 돌아가기', guarded(async () => {
+      panel.append(top);
+      const info = books ? node('details', null, 'life-details') : panel;
+      if (books) { info.append(node('summary', '복원 정보')); panel.append(info); }
+      info.append(node('p', '이전 작업공간은 그대로 남아 있습니다. 이 사본의 자동 동기화는 연결하지 않았습니다.', 'life-help'));
+      info.append(button('이전 작업공간으로 돌아가기', guarded(async () => {
         await persistDrafts();
         const previous = await storage.read(receipt.previousId);
         if (disposed) return;
@@ -2639,7 +2656,7 @@
         catch (_) { throw new Error('이전 작업공간을 열었고 복원 사본도 보관돼 있습니다. 목록 갱신에 실패했으니 관리에서 다시 확인해 주세요.'); }
         finally { toolbar.querySelector('h1')?.focus({ preventScroll: true }); }
       })));
-      main.prepend(panel);
+      content.prepend(panel);
     }
 
     function renderTransfer() {
@@ -3084,6 +3101,7 @@
 
     function render() {
       if (disposed) return;
+      const generation = ++renderGeneration, navigation = navigationGeneration;
       compositionPanel?.dispose(); compositionPanel = null;
       homeRenderPromise = Promise.resolve();
       home?.leave();
@@ -3110,7 +3128,8 @@
         const options = workbenchOpenOptions || {};
         workbenchOpenOptions = null;
         return Promise.resolve(workbench.render(state.mode, options)).then(() => {
-          if (!disposed && state.mode === 'page') renderRestoreResult();
+          if (!disposed && generation === renderGeneration && navigation === navigationGeneration &&
+              ['page', 'books'].includes(state.mode)) renderRestoreResult();
         }).catch(failure);
       }
       renderChapterImportReturn();
