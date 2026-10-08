@@ -1,0 +1,30 @@
+{
+  "createdAt": "2026-10-08T22:38:05.292Z",
+  "browser": "153.0.8010.12",
+  "scope": "Actual restored app: long title and mid-manuscript input/reading return. Plain Korean insertion and synthetic composition events only; not native Apple IME.",
+  "checks": [
+    {
+      "width": 820,
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: Outline jump then global writing edits the currently visible chapter, not the previous chapter trailing margin\n+ actual - expected\n\n+ '728272aa-c5d5-4104-87b2-5012a0eff8b3'\n- '252d9b61-91e6-45f9-b91e-50c3cc119385'\n\n    at main (/Users/chaeyeon/.codex/worktrees/book-device-release/life-haedo-cloud-pr-17-supabase/.local/book-device-release/layout-default-before.cjs:50:1696)"
+    }
+  ],
+  "observations": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "remoteWrites": 0,
+  "runtime": {
+    "assets/life/workbench-ui.js": "96016906feddc2ff8f43122c4bd881c8a718d36b37acfa730eb00a1974ccdfa0",
+    "assets/life/workbench.css": "fc77bf7cf73850562d3a5a4df2ad5319742423f7903518b4cf401a22d0b361ef"
+  },
+  "finishedAt": "2026-10-08T22:38:33.536Z",
+  "pass": false,
+  "sourceOverride": {
+    "head": "b39adb8",
+    "file": "assets/life/workbench-ui.js",
+    "scope": "Original runtime fulfilled only in isolated browser; no source or operating data modification"
+  },
+  "requestedMotion": "no-preference"
+}
