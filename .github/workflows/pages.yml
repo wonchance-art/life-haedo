@@ -172,6 +172,12 @@ jobs:
       - name: Verify saved book re-entry and chapter navigation
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-completion-browser.cjs
+      - name: Verify chapter-scoped imports and explicit source linking
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-import-browser.cjs
+      - name: Verify chapter import receipts and recovery boundaries
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-import-recovery-browser.cjs
       - name: Verify keyboard focus during delayed home loading
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: ENTRY_TEST_MATCH='preserves focused recent' node tests/home-entry-browser.cjs
@@ -214,6 +220,8 @@ jobs:
             .local/book-workshop-recovery/
             .local/book-edition/
             .local/book-completion/after/
+            .local/book-import/after/
+            .local/book-import-recovery/
             .local/life-social-import/
             .local/share/
             .local/browser-ci/server.log

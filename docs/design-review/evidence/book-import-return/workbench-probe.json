@@ -1,0 +1,12 @@
+{
+  "checks": [
+    {
+      "pass": true,
+      "name": "explicit reference with failed save and exact retry/caret preservation"
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": []
+}

@@ -1,0 +1,35 @@
+{
+  "createdAt": "2026-10-08T08:46:28.874Z",
+  "scope": "Actual local app/SDK/IDB, synthetic Auth HTTP and injected local faults; not Apple-device verification",
+  "checks": [
+    {
+      "name": "postcommit read failure keeps one exact source and explicit return connects without replay",
+      "pass": true
+    },
+    {
+      "name": "late begin after home cannot open an import or create a draft",
+      "pass": true
+    },
+    {
+      "name": "late begin after chapter cannot open an import or create a draft",
+      "pass": true
+    },
+    {
+      "name": "late begin after signout cannot open an import or create a draft",
+      "pass": true
+    },
+    {
+      "name": "archived target returns to the list without selecting another chapter or losing the source",
+      "pass": true
+    },
+    {
+      "name": "CAS conflict keeps the source and pending link for explicit comparison and exact retry",
+      "pass": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "browser": "151.0.7922.173"
+}
