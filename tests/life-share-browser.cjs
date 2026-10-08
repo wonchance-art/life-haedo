@@ -136,7 +136,7 @@ async function main(){
     const server=new ShareCloud(),device='share-'+report.checks.length,context=await contextFor(server,device,accounts.a,options),page=await context.newPage(),visitors=[];page.setDefaultTimeout(10000);observeShare(page,report,name);
     async function visitor(label='visitor',config=options,seed=null){const deviceId=device+'-'+label,c=await contextFor(server,deviceId,seed,config),p=await c.newPage();p.setDefaultTimeout(10000);observeShare(p,report,name+' '+label);visitors.push(c);return {page:p,context:c,device:deviceId};}
     try{await run({page,context,server,device,visitor});assert.equal(server.writes().length,0,'Publication must not upload a private workspace');report.checks.push({name,pass:true});console.log('PASS '+name);}
-    catch(error){report.checks.push({name,pass:false,error:error.stack});console.error('FAIL '+name+'\n'+error.stack);await page.screenshot({path:path.join(out,'failure-'+report.checks.length+'.png'),fullPage:true}).catch(()=>{});}
+    catch(error){report.checks.push({name,pass:false,error:error.stack});console.error('FAIL '+name+'\n'+error.stack);if(process.env.CI)console.log('::error::'+(name+'\n'+error.stack).replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A'));await page.screenshot({path:path.join(out,'failure-'+report.checks.length+'.png'),fullPage:true}).catch(()=>{});}
     finally{await Promise.allSettled(visitors.map(c=>c.close()));await context.close();}
   }
   async function publicState(page,state){await page.waitForFunction(state=>document.querySelector('#shareStatus')?.dataset.state===state,state);}

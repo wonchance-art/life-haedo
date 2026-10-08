@@ -580,6 +580,17 @@
     function changeShareChoices(session, change, focusClass, versionId) {
       const share = shareState(session);
       if (!share.open || ['loading', 'sending'].includes(share.phase)) return;
+      // Native details.toggle is queued. Capture the visible state before
+      // replacing controls so fast keyboard input cannot close its own panel.
+      const choices = bodyNode.querySelector('#wbShareChoices');
+      if (choices) {
+        share.choicesOpen = choices.open;
+        choices.querySelectorAll('.wb-share-part').forEach(part => {
+          const quote = part.querySelector('details');
+          if (quote?.open) share.quoteOpen.add(part.dataset.versionId);
+          else share.quoteOpen.delete(part.dataset.versionId);
+        });
+      }
       change(share.choices); share.error = ''; share.message = '';
       try { makeShareDraft(session); } catch (error) { share.error = shareError(error); }
       redraw();
@@ -690,7 +701,7 @@
         if (share.reviewRows.length) renderShareChoices(session, box, busy);
         if (share.draft) {
           const previewBox = el('section', null, 'wb-share-preview'); previewBox.id = 'wbSharePreview';
-          previewBox.append(el('h3', '공개 전 확인'), life.ShareView.render(share.draft.snapshot, { headingLevel: 3 })); box.append(previewBox);
+          previewBox.append(el('h3', '공개 전 확인'), life.ShareView.render(share.draft.snapshot, { headingLevel: 3, review: true })); box.append(previewBox);
           const consent = toggle('이 사본을 누구나 볼 수 있는 주소로 공개합니다.', share.consented, value => {
             share.consented = value; box.querySelector('#wbSharePublish').disabled = !value;
           }, { id: 'wbShareConsent' }); consent.querySelector('input').disabled = busy;

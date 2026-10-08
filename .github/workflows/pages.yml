@@ -28,7 +28,7 @@ jobs:
       - run: npm test
   browser:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
     env:
@@ -124,6 +124,12 @@ jobs:
       - name: Verify private page expression and preservation boundaries
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/page-expression-browser.cjs
+      - name: Verify explicit publication and revocation
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-share-browser.cjs
+      - name: Verify public expression and anonymous reading boundaries
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/public-expression-browser.cjs
       - name: Verify import-to-page product flow
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/product-flow-quality-browser.cjs
@@ -157,6 +163,8 @@ jobs:
             .local/search-quality/
             .local/expression-design/
             .local/page-expression/
+            .local/public-expression/
+            .local/share/
             .local/browser-ci/server.log
           include-hidden-files: true
           if-no-files-found: warn

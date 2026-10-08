@@ -1,15 +1,23 @@
 /* Public reading uses the same Life type, rhythm and quiet source controls. */
 .share-document { min-width: 0; overflow-wrap: anywhere; }
-.share-document :is(h1,h2,h3,h4,h5,h6,p,blockquote) { word-break: keep-all; overflow-wrap: anywhere; }
+.share-document :is(h1,h2,h3,h4,h5,h6,p,pre,blockquote) { word-break: keep-all; overflow-wrap: anywhere; }
 .share-title { font-size: 25px; font-weight: 700; line-height: 1.6; letter-spacing: -.025em; }
 .share-intro { margin-top: 16px; font-size: 17px; line-height: 1.9; white-space: pre-wrap; }
-.share-entry { padding-block: 32px; border-bottom: 1px solid var(--line); }
-.share-entry-title { font-size: 20px; line-height: 1.7; margin-bottom: 18px; }
-.share-source + .share-source { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); }
-.share-source-title { font-size: 16px; line-height: 1.75; margin-bottom: 12px; }
-.share-body { font-size: 18px; line-height: 1.95; white-space: pre-wrap; }
+.share-entry { padding-block: 26px; border-bottom: 1px solid var(--line); }
+.share-entry-title { font-size: 21px; line-height: 1.6; margin-bottom: 16px; }
+.share-source + .share-source { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.share-source-title { font-size: 16px; line-height: 1.75; margin-bottom: 4px; }
+.share-body { margin: 12px 0 0; font-family: inherit; font-size: 16px; line-height: 1.8; white-space: pre-wrap; scroll-margin-block: 24px; }
+.share-body[data-collapsed=true]::after { content: '…'; color: var(--ink-soft); }
+.share-source-actions { display: flex; align-items: start; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; }
+.share-expand { border: 0; background: transparent; padding-inline: 0; color: var(--color-primary); font-size: 13px; }
+.share-source-actions .share-details { margin-left: auto; min-width: 0; max-width: 100%; }
+.share-source-actions .share-details[open] { flex-basis: 100%; }
+.share-fold-note { margin-block: 0 16px; font-size: 13px; color: var(--ink-soft); }
 .share-caption { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; color: var(--ink-soft); }
-.share-source-meta { margin-top: 14px; color: var(--ink-soft); font-size: 13px; line-height: 1.85; }
+.share-source-meta { display: flex; flex-wrap: wrap; gap: 0 10px; color: var(--ink-soft); font-size: 12px; line-height: 1.85; }
+.share-source-scope,.share-source-omissions { margin-top: 3px; color: var(--ink-soft); font-size: 12px; line-height: 1.85; }
+.share-source-link { font-size: 13px; }
 .share-source-link { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; min-width: 44px; }
 .share-details { font-size: 12px; }
 .share-details > summary { display: flex; align-items: center; gap: 10px; min-height: 44px; width: fit-content; max-width: 100%; list-style: none; }
@@ -17,8 +25,8 @@
 .share-details > summary::after { content: ''; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); margin-top: -4px; }
 .share-details[open] > summary::after { transform: rotate(225deg); margin-top: 4px; }
 .share-details p { margin-block: 6px; white-space: pre-wrap; }
-.share-comment { margin-top: 24px; }
-.share-comment-body { font-size: 17px; line-height: 1.95; white-space: pre-wrap; }
+.share-comment { margin-top: 20px; }
+.share-comment-body { font-size: 16px; line-height: 1.9; white-space: pre-wrap; }
 .share-empty { margin-block: 32px; color: var(--ink-soft); }
 .share-page { padding: 16px 48px 72px; max-width: 796px; margin-inline: auto; }
 .share-header { display: flex; align-items: center; justify-content: space-between; min-height: 56px; margin-bottom: 28px; }
@@ -32,12 +40,12 @@
   .share-header { margin-bottom: 22px; }
   .share-title { font-size: 23px; }
   .share-entry { padding-block: 28px; }
-  .share-body,.share-comment-body { font-size: 17px; }
+  .share-body,.share-comment-body { font-size: 16px; }
 }
 @media(prefers-reduced-motion:reduce) { .share-page * { scroll-behavior: auto; transition: none; } }
 
 /* Public reading stays white; only the author's separate comment is tinted. */
-.share-comment { padding: 16px 18px; border-radius: var(--surface-radius); background: #f3f8f5; }
+.share-comment { padding: 14px 16px; border-radius: var(--control-radius); background: var(--mint); }
 .share-comment > .share-caption { color: var(--mint-ink); }
 .share-page .share-header { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 @media (max-width:700px) { .share-page { padding-inline: max(20px, env(safe-area-inset-left)) max(20px, env(safe-area-inset-right)); } }
