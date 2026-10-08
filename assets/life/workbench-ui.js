@@ -1575,9 +1575,20 @@
           const row = el('article', null, 'wb-row wb-book-row'); row.dataset.bookId = item.id;
           const text = el('div', null, 'wb-grow');
           text.append(el('h3', item.title), el('p', item.chapters.filter(chapter => !chapter.archived).length + '개 장', 'life-meta'));
-          row.append(text, discoveryIcon('책 열기', 'book', () => transition(() => {
-            view.bookId = item.id; view.chapterId = item.chapters.find(chapter => !chapter.archived)?.id || null; view.shown = 40;
-          }, 'wbBookHeading'))); list.append(row);
+          const openChapter = chapterId => transition(() => {
+            view.bookId = item.id; view.chapterId = chapterId; view.shown = 40;
+          }, chapterId ? 'wbChapterNote' : 'wbBookHeading');
+          row.append(text, discoveryIcon('책 열기', 'book', () => openChapter(item.chapters.find(chapter => !chapter.archived)?.id || null)));
+          const chapters = item.chapters.filter(chapter => !chapter.archived);
+          if (chapters.length) {
+            const outline = details('목차'); outline.classList.add('wb-book-list-outline');
+            chapters.forEach((chapter, index) => {
+              const open = action((index + 1) + '. ' + chapter.title, () => openChapter(chapter.id));
+              open.dataset.chapterId = chapter.id; outline.append(open);
+            });
+            row.append(outline);
+          }
+          list.append(row);
         });
         bodyNode.append(list);
         const archived = details('보관한 책 · ' + (books.length - activeBooks.length)); archived.id = 'wbArchivedBooks';
@@ -2231,6 +2242,13 @@
         const candidate = restoreCandidate;
         previewHost.append(el('h3', '복원 전 확인'), el('p', restoreName, 'life-meta'), el('p', candidate.bundle.title, 'wb-source-title'));
         previewHost.append(notice('자료 ' + candidate.bundle.sources.length + '개 · 원문 버전 ' + candidate.bundle.sourceVersions.length + '개 · 묶음 ' + candidate.workbench.groups.length + '개 · 페이지 항목 ' + candidate.workbench.page.entries.length + '개'));
+        const books = candidate.workbench.books || [];
+        const chapters = books.flatMap(book => book.chapters);
+        const activeChapters = books.filter(book => !book.archived).flatMap(book => book.chapters.filter(chapter => !chapter.archived));
+        const bookSummary = notice('책 ' + books.length + '권 · 활성 장 ' + activeChapters.length + '개 · 보관한 책 ' + books.filter(book => book.archived).length +
+          '권 · 보관한 장 ' + chapters.filter(chapter => chapter.archived).length + '개 · 개정본 ' + books.reduce((sum, book) => sum + (book.editions || []).length, 0) + '개');
+        bookSummary.id = 'wbRestoreBookSummary'; previewHost.append(bookSummary);
+        previewHost.append(notice('활성 장은 보관한 책의 장을 제외합니다. 보관한 장은 장별 보관 설정 기준이며, 개정본 안의 장은 중복 집계하지 않습니다.'));
         previewHost.append(notice('새 작업공간으로 복원합니다. 기존 공간은 유지되고 새 사본은 자동 동기화되지 않습니다.'));
         const install = action('새 사본으로 복원', async () => {
           if (installing) return;
@@ -2345,6 +2363,17 @@
         if (!session.state || session.edit === session.stored && session.remoteRevision > session.baseRevision) await load(session);
         if (!showing(token, session)) return;
         surface.setAttribute('aria-busy', 'false');
+        if (mode === 'books' && options.book !== undefined) {
+          const target = options.book;
+          const book = target?.workspaceId === bundle.workspaceId && (session.state.books || []).find(item => item.id === target.bookId && !item.archived);
+          const chapter = book && (target.chapterId === undefined ? book.chapters.find(item => !item.archived) : book.chapters.find(item => item.id === target.chapterId && !item.archived));
+          if (book && (target.chapterId === undefined || chapter)) {
+            session.bookView = { bookId: book.id, chapterId: chapter?.id || null, shown: 40, renderId: 0 };
+          } else {
+            session.bookView = null;
+            announce('선택한 책이나 장을 찾을 수 없습니다. 현재 작업공간의 책 목록에서 다시 골라 주세요.');
+          }
+        }
         redraw(); if (session.error) report(session.error, session);
         if (!incoming && mode === 'activities' && typeof options.groupId === 'string') revealGroup(options.groupId);
       } catch (error) {

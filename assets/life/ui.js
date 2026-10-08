@@ -845,7 +845,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { selection, groupId, pagePreview, discovery, writing, reimport, ...viewOptions } = options || {};
+      const { selection, groupId, pagePreview, discovery, writing, reimport, book, ...viewOptions } = options || {};
       if (reimport) {
         if (mode !== 'import' || state.bundle.workspaceId !== reimport.workspaceId) return;
         const source = sourceFor(reimport.sourceId);
@@ -875,8 +875,11 @@
         await persistStage(true);
       }
       if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
-      const heading = main.querySelector('h1,h2') || toolbar.querySelector('h1');
-      if (heading && !options?.groupId && !reimport) heading.focus({ preventScroll: true });
+      const heading = (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || main.querySelector('h1,h2') || toolbar.querySelector('h1');
+      if (heading && !options?.groupId && !reimport) {
+        heading.focus({ preventScroll: true });
+        if (options?.book) heading.scrollIntoView({ block: 'nearest' });
+      }
     }
 
     function newDraft() {

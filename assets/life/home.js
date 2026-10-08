@@ -130,6 +130,35 @@
       list.forEach(({ version }) => area.append(record(context, sourceInfo(version.id, bundle), { date: true })));
       return area;
     }
+    function books(context, state) {
+      const area = section(context, '내 책', 'homeBooks', () => navigate('books'));
+      const activeBooks = (state.books || []).filter(book => !book.archived);
+      if (!activeBooks.length) {
+        area.append(el('p', '모아 둔 글로 책을 시작할 수 있습니다.', 'life-meta home-empty-note'));
+        area.append(action(context, '책 만들기', () => navigate('books')));
+      }
+      activeBooks.slice(0, 3).forEach(book => {
+        const chapters = book.chapters.filter(chapter => !chapter.archived);
+        const open = chapterId => navigate('books', { book: { workspaceId: context.workspaceId, bookId: book.id, chapterId } });
+        const row = el('article', null, 'home-book'); row.dataset.bookId = book.id;
+        const button = action(context, '', () => open(), 'home-group');
+        const copy = el('span', null, 'home-group-copy');
+        copy.append(el('strong', book.title, 'home-clamp'), el('span', chapters.length + '개 장', 'life-meta'));
+        button.append(life.Icons.create('book'), copy, life.Icons.create('chevron'));
+        row.append(button);
+        if (chapters.length) {
+          const outline = el('details', null, 'home-book-outline');
+          outline.append(el('summary', '목차'));
+          chapters.forEach((chapter, index) => {
+            const entry = action(context, (index + 1) + '. ' + chapter.title, () => open(chapter.id), 'home-chapter');
+            entry.dataset.chapterId = chapter.id; outline.append(entry);
+          });
+          row.append(outline);
+        }
+        area.append(row);
+      });
+      return area;
+    }
     function groups(context, state) {
       const area = section(context, '기록 묶음', 'homeGroups', () => navigate('activities'));
       if (!state.groups.length) area.append(el('p', '관련된 기록을 묶어 정리할 수 있습니다.', 'life-meta home-empty-note'));
@@ -188,22 +217,22 @@
       context.error.hidden = true; context.error.setAttribute('role', 'alert');
       surface.append(quickLinks(context), context.error);
       renderReadingResume?.(surface);
-      surface.append(recent(context, bundle));
+      const recentRecords = recent(context, bundle);
       const composition = el('div', null, 'home-composition'); composition.id = 'homeComposition';
-      const status = el('p', '내 페이지와 기록 묶음 불러오는 중…', 'life-meta home-loading'); status.setAttribute('role', 'status');
-      composition.append(status); composition.setAttribute('aria-busy', 'true'); surface.append(composition); host.append(surface);
+      const status = el('p', '책과 구성을 불러오는 중…', 'life-meta home-loading'); status.setAttribute('role', 'status');
+      composition.append(status); composition.setAttribute('aria-busy', 'true'); surface.append(composition, recentRecords); host.append(surface);
       try {
         const state = await storage.readWorkbench(context.workspaceId);
         if (!showing(context)) return;
         if (state.workspaceId !== context.workspaceId) throw new Error('workspace_mismatch');
         life.Workbench.validate(state);
-        composition.replaceChildren(groups(context, state), pageSummary(context, state.page));
+        composition.replaceChildren(books(context, state), recentRecords, groups(context, state), pageSummary(context, state.page));
         composition.setAttribute('aria-busy', 'false');
       } catch (_) {
         if (!showing(context)) return;
         composition.setAttribute('aria-busy', 'false');
         const error = el('div', null, 'home-load-error'); error.setAttribute('role', 'status');
-        error.append(el('p', '내 페이지와 기록 묶음을 불러오지 못했습니다. 기록은 계속 열 수 있습니다.', 'life-meta'));
+        error.append(el('p', '책과 구성을 불러오지 못했습니다. 기록은 계속 열 수 있습니다.', 'life-meta'));
         error.append(action(context, '다시 불러오기', async () => { surface.remove(); await render(); }));
         composition.replaceChildren(error);
       }

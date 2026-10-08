@@ -68,3 +68,10 @@
 @media (prefers-reduced-motion: reduce) {
   .life-home :is(.home-shortcut,.home-group,.home-record-open) { transition: none; }
 }
+
+.home-book { border-bottom: 1px solid var(--line); }
+.home-book > .home-group { border-bottom: 0; }
+.home-book-outline { padding-bottom: 8px; }
+.home-book-outline > summary { display: list-item; min-height: 44px; padding: 11px 12px; margin-left: 34px; cursor: pointer; color: var(--ink-soft); font-size: 14px; }
+.home-book-outline > .home-chapter { display: block; width: 100%; padding: 12px; border: 0; background: transparent; text-align: left; line-height: 1.75; }
+.home-book-outline > .home-chapter:hover { background: var(--soft); }

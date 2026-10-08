@@ -289,3 +289,8 @@
   .wb-edition-frame { margin-inline: -8px; border-radius: 10px; }
   .wb-edition-edit .life-field { flex-basis: 100%; }
 }
+
+.wb-book-row { flex-wrap: wrap; }
+.wb-book-list-outline { flex: 0 0 100%; min-width: 0; }
+.wb-book-list-outline > .life-button { display: block; width: 100%; padding: 12px; border: 0; background: transparent; text-align: left; white-space: normal; line-height: 1.75; }
+.wb-book-list-outline > .life-button:hover { background: var(--soft); }
