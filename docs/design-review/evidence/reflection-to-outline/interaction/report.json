@@ -1,0 +1,576 @@
+{
+  "createdAt": "2026-10-08T22:02:57.577Z",
+  "browser": "151.0.7922.173",
+  "scope": "Actual UI import and reflection/outline interaction; anonymous synthetic HTTP only. Touch and Korean plain input, not Apple/IME.",
+  "checks": [
+    {
+      "width": 390,
+      "pass": true,
+      "beforeReading": {
+        "top": -140.421875,
+        "y": 503,
+        "bodyScroll": 3039
+      },
+      "arrived": {
+        "y": 2756,
+        "top": 241.03125,
+        "start": 920,
+        "end": 920,
+        "length": 920,
+        "client": 1445,
+        "scroll": 1445,
+        "focus": "wbReflectionNote"
+      },
+      "beforeInput": {
+        "y": 2756,
+        "top": 241.03125,
+        "start": 82,
+        "end": 82,
+        "length": 920,
+        "client": 1445,
+        "scroll": 1445,
+        "focus": "wbReflectionNote"
+      },
+      "afterInput": {
+        "y": 2756,
+        "top": 241.03125,
+        "start": 98,
+        "end": 98,
+        "length": 936,
+        "client": 1445,
+        "scroll": 1445,
+        "focus": "wbReflectionNote"
+      },
+      "afterReading": {
+        "top": -140.421875,
+        "y": 503,
+        "bodyScroll": 3039,
+        "focused": true
+      },
+      "planEntry": {
+        "y": 2756,
+        "top": 241.03125,
+        "start": 15,
+        "end": 36,
+        "length": 936,
+        "client": 1445,
+        "scroll": 1445,
+        "focus": "wbReflectionNote"
+      },
+      "planReturned": {
+        "y": 2756,
+        "top": 336.21875,
+        "start": 15,
+        "end": 36,
+        "length": 936,
+        "client": 1445,
+        "scroll": 1445,
+        "focus": "wbReflectionPlan"
+      },
+      "exactOldSourceAndFocus": true,
+      "plannerDraftUnwritten": true
+    },
+    {
+      "width": 820,
+      "pass": true,
+      "beforeReading": {
+        "top": -140.421875,
+        "y": 493,
+        "bodyScroll": 2248
+      },
+      "arrived": {
+        "y": 2526,
+        "top": 241.1875,
+        "start": 920,
+        "end": 920,
+        "length": 920,
+        "client": 1172,
+        "scroll": 1172,
+        "focus": "wbReflectionNote"
+      },
+      "beforeInput": {
+        "y": 2526,
+        "top": 241.1875,
+        "start": 82,
+        "end": 82,
+        "length": 920,
+        "client": 1172,
+        "scroll": 1172,
+        "focus": "wbReflectionNote"
+      },
+      "afterInput": {
+        "y": 2526,
+        "top": 241.1875,
+        "start": 98,
+        "end": 98,
+        "length": 936,
+        "client": 1172,
+        "scroll": 1172,
+        "focus": "wbReflectionNote"
+      },
+      "afterReading": {
+        "top": -140.421875,
+        "y": 493,
+        "bodyScroll": 2248,
+        "focused": true
+      },
+      "planEntry": {
+        "y": 2526,
+        "top": 241.1875,
+        "start": 15,
+        "end": 36,
+        "length": 936,
+        "client": 1172,
+        "scroll": 1172,
+        "focus": "wbReflectionNote"
+      },
+      "planReturned": {
+        "y": 2526,
+        "top": 241.1875,
+        "start": 15,
+        "end": 36,
+        "length": 936,
+        "client": 1172,
+        "scroll": 1172,
+        "focus": "wbReflectionPlan"
+      },
+      "exactOldSourceAndFocus": true,
+      "plannerDraftUnwritten": true
+    },
+    {
+      "width": 1440,
+      "pass": true,
+      "beforeReading": {
+        "top": -140.421875,
+        "y": 493,
+        "bodyScroll": 1792
+      },
+      "arrived": {
+        "y": 2526,
+        "top": 241.1875,
+        "start": 920,
+        "end": 920,
+        "length": 920,
+        "client": 1061,
+        "scroll": 1061,
+        "focus": "wbReflectionNote"
+      },
+      "beforeInput": {
+        "y": 2526,
+        "top": 241.1875,
+        "start": 82,
+        "end": 82,
+        "length": 920,
+        "client": 1061,
+        "scroll": 1061,
+        "focus": "wbReflectionNote"
+      },
+      "afterInput": {
+        "y": 2526,
+        "top": 241.1875,
+        "start": 98,
+        "end": 98,
+        "length": 936,
+        "client": 1061,
+        "scroll": 1061,
+        "focus": "wbReflectionNote"
+      },
+      "afterReading": {
+        "top": -140.421875,
+        "y": 493,
+        "bodyScroll": 1792,
+        "focused": true
+      },
+      "planEntry": {
+        "y": 2526,
+        "top": 241.1875,
+        "start": 15,
+        "end": 36,
+        "length": 936,
+        "client": 1061,
+        "scroll": 1061,
+        "focus": "wbReflectionNote"
+      },
+      "planReturned": {
+        "y": 2526,
+        "top": 241.1875,
+        "start": 15,
+        "end": 36,
+        "length": 936,
+        "client": 1061,
+        "scroll": 1061,
+        "focus": "wbReflectionPlan"
+      },
+      "exactOldSourceAndFocus": true,
+      "plannerDraftUnwritten": true
+    }
+  ],
+  "contracts": [
+    {
+      "name": "detached outline source does not open after same-task close",
+      "pass": true,
+      "width": 390,
+      "syntheticSameTask": true,
+      "delayedStorageWrite": false
+    }
+  ],
+  "screens": [
+    {
+      "scene": "write-arrival",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "textarea",
+          "id": "wbReflectionNote",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "read-return",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "div",
+          "id": "",
+          "class": "wb-source",
+          "text": "처음 일을 고르며 적어 둔 기준네이버 블로그 · 내 기록 · 제공한 본문 · 1/2 버전이 원문 버전 열기원문 작성일 · 2016-03-14첫 ",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "plan-source-return",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "",
+          "class": "life-button life-icon-button",
+          "text": "이 원문 버전 열기",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.889
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "save-error",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "write-arrival",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "textarea",
+          "id": "wbReflectionNote",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "read-return",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "div",
+          "id": "",
+          "class": "wb-source",
+          "text": "처음 일을 고르며 적어 둔 기준네이버 블로그 · 내 기록 · 제공한 본문 · 1/2 버전이 원문 버전 열기원문 작성일 · 2016-03-14첫 ",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "plan-source-return",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "",
+          "class": "life-button life-icon-button",
+          "text": "이 원문 버전 열기",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.889
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "write-arrival",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "textarea",
+          "id": "wbReflectionNote",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "read-return",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "div",
+          "id": "",
+          "class": "wb-source",
+          "text": "처음 일을 고르며 적어 둔 기준네이버 블로그 · 내 기록 · 제공한 본문 · 1/2 버전이 원문 버전 열기원문 작성일 · 2016-03-14첫 ",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "plan-source-return",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "",
+          "class": "life-button life-icon-button",
+          "text": "이 원문 버전 열기",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.889
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "remoteWrites": 0,
+  "finishedAt": "2026-10-08T22:03:16.292Z",
+  "pass": true
+}

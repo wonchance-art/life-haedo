@@ -364,3 +364,58 @@
   body:has(.life-workbench:is([data-book-scene=edit],[data-book-scene=read])) > .haedo-nav { display: none; }
 }
 .life-workbench[data-mode=books] > .wb-error { position: sticky; top: 64px; z-index: 30; max-height: 40dvh; overflow: auto; }
+
+/* Reflection → outline shares the approved manuscript-first A reading column. */
+.life-workbench[data-mode=reflection] { --color-primary: #684477; --soft: #f4edf6; --ink: #262330; --ink-soft: #6a6172; --line: #e9e3eb; }
+.life-app:has(.life-workbench[data-mode=reflection]) { max-width: 1000px; margin-inline: auto; padding-inline: 40px; border-radius: 0; }
+.life-workbench[data-reflection-scene] > .wb-heading { min-height: 0; margin: 0; }
+.life-workbench[data-mode=reflection] > .wb-storage-line { margin-top: 40px; padding-top: 12px; border-top: 1px solid var(--line); }
+.wb-reflection-bar,.wb-plan-actions { position: sticky; top: 0; z-index: 24; margin: 0 0 12px; padding: 10px 0; min-height: 64px; background: var(--paper); gap: 6px; flex-wrap: nowrap; }
+.wb-reflection-bar > .life-button { border: 0; padding-inline: 10px; }
+.wb-reflection-bar > [aria-pressed=true] { background: var(--soft); color: var(--color-primary); }
+#wbReflectionWrite { margin-left: auto; }
+#wbReflectionPlan { white-space: nowrap; background: var(--soft); color: var(--color-primary); }
+.wb-reflection-controls { align-items: start; gap: 0 20px; padding-block: 0 12px; border-bottom: 1px solid var(--line); }
+.wb-reflection-controls > * { flex: 1 1 auto; min-width: 0; }
+.wb-reflection-controls .wb-details { margin-block: 0; }
+.wb-reflection-controls > .wb-reflection-overview { margin: 0; padding: 0; border: 0; }
+#wbReflectionGroup { flex: 0 0 44px; margin-left: auto; border: 0; }
+.wb-reflection-controls:has(details[open]) > *:has(details[open]),.wb-reflection-controls > details[open] { flex-basis: 100%; }
+.wb-reflection-controls .wb-details > summary { font-size: 12px; }
+.wb-reflection-section { margin-block: 32px 44px; }
+.wb-reflection-section > h3 { font-size: 22px; margin-bottom: 12px; }
+.wb-reflection-section > .wb-source { padding-block: 22px 26px; }
+.wb-reflection-section .wb-source-title { font-size: 19px; font-weight: 650; line-height: 1.65; }
+.wb-reflection-opening { margin-block: 20px 8px; white-space: pre-wrap; font-size: 18px; line-height: 1.95; }
+.wb-reflection-section .wb-source:has(> details[open]) > .wb-reflection-opening { display: none; }
+.wb-reflection-section .wb-source > .wb-details { margin-bottom: 0; }
+.wb-reflection-reading pre { font-size: 18px; line-height: 1.95; }
+.wb-reflection-note { margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--line); scroll-margin-top: 84px; }
+.wb-reflection-note-heading { display: flex; align-items: center; justify-content: space-between; position: sticky; top: 64px; z-index: 23; background: var(--paper); min-height: 56px; }
+.wb-reflection-note-heading > h3 { margin: 0; font-size: 26px; }
+.wb-reflection-note .life-field > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+#wbReflectionNote { padding: 12px 0; min-height: 22rem; border: 0; border-radius: 0; background: transparent; font-size: 19px; line-height: 1.95; resize: none; overflow: hidden; }
+.wb-reflection-management { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line); }
+#wbReflectionReading { scroll-margin-top: 84px; }
+.wb-plan-actions { justify-content: space-between; margin-top: 0; }
+.wb-plan-actions > .life-button { border: 0; }
+.wb-plan-actions #wbPlanCreate { color: var(--color-primary); background: var(--soft); }
+.wb-book-plan > h3 { font-size: 26px; margin: 20px 0 12px; }
+.wb-book-plan #wbPlanTitle { font-size: 24px; padding: 8px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
+.wb-book-plan #wbPlanQuestion { min-height: 80px; background: transparent; }
+.wb-plan-chapter-line { display: flex; align-items: center; gap: 12px; }
+.wb-plan-chapter-line > .wb-check { flex: 0 0 56px; gap: 8px; font-size: 13px; color: var(--ink-soft); }
+.wb-plan-chapter-line > .life-field { flex: 1; margin: 0; }
+.wb-plan-chapter-line > .life-field > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.wb-plan-chapter-line input[type=text] { background: transparent; font-size: 18px; }
+.life-workbench[data-mode=reflection] > .wb-error { position: sticky; top: 64px; z-index: 30; max-height: 40dvh; overflow: auto; }
+@media (max-width: 1100px) and (min-width: 701px) { .life-app:has(.life-workbench[data-mode=reflection]) { margin-left: 92px; margin-right: 20px; } }
+@media (max-width: 700px) {
+  .life-app:has(.life-workbench[data-mode=reflection]) { width: 100%; margin: 0; padding: 8px max(20px,env(safe-area-inset-right)) 112px max(20px,env(safe-area-inset-left)); }
+  .wb-reflection-bar { gap: 2px; }
+  .wb-reflection-bar > .life-button { padding-inline: 8px; font-size: 13px; }
+  .wb-reflection-opening,.wb-reflection-reading pre,#wbReflectionNote { font-size: 17px; line-height: 1.9; }
+  .wb-reflection-section .wb-source-title { font-size: 18px; }
+  .wb-plan-chapter-line { gap: 8px; }
+  .wb-plan-chapter-line > .wb-check { flex-basis: 48px; }
+}
