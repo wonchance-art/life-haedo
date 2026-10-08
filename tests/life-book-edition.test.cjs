@@ -47,6 +47,7 @@ test('default and explicit review output retain the frozen pre-extension byte fi
 test('reader edition orders title-only cover, safe index TOC, manuscripts and mandatory chapter appendix', async () => {
   const f = await fixture(), projection = Books.project(f.bundle, f.state, 'book_private_id'), before = structuredClone(projection);
   const output = Print.document(projection, { mode: 'book' });
+  assert(output.includes('<meta name="viewport" content="width=device-width,initial-scale=1">'));
   assert(output.includes('data-haedo-print="v1" data-print-mode="book" data-print-paper="A5"')); assert(output.includes('@page { size: A5;'));
   const coverAt = output.indexOf('<header class="book-cover">'), tocAt = output.indexOf('<nav class="book-toc"'), firstAt = output.indexOf('<section class="chapter"'), appendixAt = output.indexOf('<section class="source-appendix"');
   assert(coverAt < tocAt && tocAt < firstAt && firstAt < appendixAt);

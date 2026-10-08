@@ -1,9 +1,9 @@
 {
   "runtime": {
-    "assets/life/book-print.js": "98c1780b2443c17751f24dae02c75d3a2438bee9c9540f255ea280ad37cc1e04",
+    "assets/life/book-print.js": "e745392b18d1675e8349959a37cdd19c089db14db055fe0e4fee7234d8a675b0",
     "assets/life/workbench-ui.js": "617ad26284a356de771d30e3c9d962e06b1719542d1b396d5d081a21fe156c9f",
     "assets/life/workbench.css": "0e333f24672d68e103fc919a592061f458ada9ff947e4c53d59b3b20970072f6",
-    "tests/book-edition-browser.cjs": "4460ecd05d5cf050c290bebed45b29f7261ff6eb8ae48390fe67464fea911e86"
+    "tests/book-edition-browser.cjs": "4fc1735cd6727729c3eb567ec8cb84253f13ffae3b047a054cc39bc52fc4bfed"
   },
   "unit": {
     "passed": 398,
@@ -44,5 +44,5 @@
     "Native print request captured; generated PDFs do not prove user OS Save dialog",
     "Managed file/data navigation blocked; downloaded HTML bytes served isolated and then switched offline"
   ],
-  "note": "Final test reporting labels distinguish PDF link text fragments from distinct destination pages; assertions and app runtime unchanged."
+  "note": "Final app and book suite hashes after standalone mobile viewport correction; local full suite 5/5 and unit398/398 re-run."
 }

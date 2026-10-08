@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-10-08T05:53:42.473Z",
+  "createdAt": "2026-10-08T06:17:25.671Z",
   "browser": "151.0.7922.173",
   "scope": "UI-created anonymous long Korean manuscript and exact source versions. Actual booklet preview/native-print input/offline HTML/Chromium PDF, with synthetic Auth only. No production, Apple hardware, native Save PDF confirmation or publication claims.",
   "checks": [
@@ -428,10 +428,6 @@
         8,
         9
       ],
-      "samePreviewHTMLAndPrint": true,
-      "nativeBlobPDF": null,
-      "offlineHTML": true,
-      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy",
       "PDFLinkTextFragments": 31,
       "PDFDestinationPages": [
         3,
@@ -439,7 +435,11 @@
         8,
         9,
         11
-      ]
+      ],
+      "samePreviewHTMLAndPrint": true,
+      "nativeBlobPDF": null,
+      "offlineHTML": true,
+      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy"
     },
     {
       "width": 1440,
@@ -454,10 +454,6 @@
         6,
         7
       ],
-      "samePreviewHTMLAndPrint": true,
-      "nativeBlobPDF": null,
-      "offlineHTML": true,
-      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy",
       "PDFLinkTextFragments": 31,
       "PDFDestinationPages": [
         3,
@@ -465,7 +461,11 @@
         6,
         7,
         8
-      ]
+      ],
+      "samePreviewHTMLAndPrint": true,
+      "nativeBlobPDF": null,
+      "offlineHTML": true,
+      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy"
     },
     {
       "width": 820,
@@ -480,28 +480,6 @@
         8,
         9
       ],
-      "samePreviewHTMLAndPrint": true,
-      "nativeBlobPDF": {
-        "filename": "book-a5-820-native-blob.pdf",
-        "chapterDestinations": [
-          3,
-          6,
-          8,
-          9
-        ],
-        "samePDFTextAndPages": true,
-        "nativeSaveDialog": false,
-        "PDFLinkTextFragments": 31,
-        "PDFDestinationPages": [
-          3,
-          6,
-          8,
-          9,
-          11
-        ]
-      },
-      "offlineHTML": true,
-      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy",
       "PDFLinkTextFragments": 31,
       "PDFDestinationPages": [
         3,
@@ -509,7 +487,29 @@
         8,
         9,
         11
-      ]
+      ],
+      "samePreviewHTMLAndPrint": true,
+      "nativeBlobPDF": {
+        "filename": "book-a5-820-native-blob.pdf",
+        "PDFLinkTextFragments": 31,
+        "PDFDestinationPages": [
+          3,
+          6,
+          8,
+          9,
+          11
+        ],
+        "chapterDestinations": [
+          3,
+          6,
+          8,
+          9
+        ],
+        "samePDFTextAndPages": true,
+        "nativeSaveDialog": false
+      },
+      "offlineHTML": true,
+      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy"
     },
     {
       "width": 820,
@@ -524,28 +524,6 @@
         6,
         7
       ],
-      "samePreviewHTMLAndPrint": true,
-      "nativeBlobPDF": {
-        "filename": "book-a4-820-native-blob.pdf",
-        "chapterDestinations": [
-          3,
-          5,
-          6,
-          7
-        ],
-        "samePDFTextAndPages": true,
-        "nativeSaveDialog": false,
-        "PDFLinkTextFragments": 31,
-        "PDFDestinationPages": [
-          3,
-          5,
-          6,
-          7,
-          8
-        ]
-      },
-      "offlineHTML": true,
-      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy",
       "PDFLinkTextFragments": 31,
       "PDFDestinationPages": [
         3,
@@ -553,7 +531,29 @@
         6,
         7,
         8
-      ]
+      ],
+      "samePreviewHTMLAndPrint": true,
+      "nativeBlobPDF": {
+        "filename": "book-a4-820-native-blob.pdf",
+        "PDFLinkTextFragments": 31,
+        "PDFDestinationPages": [
+          3,
+          5,
+          6,
+          7,
+          8
+        ],
+        "chapterDestinations": [
+          3,
+          5,
+          6,
+          7
+        ],
+        "samePDFTextAndPages": true,
+        "nativeSaveDialog": false
+      },
+      "offlineHTML": true,
+      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy"
     },
     {
       "width": 820,
@@ -568,10 +568,6 @@
         6,
         7
       ],
-      "samePreviewHTMLAndPrint": true,
-      "nativeBlobPDF": null,
-      "offlineHTML": true,
-      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy",
       "PDFLinkTextFragments": 31,
       "PDFDestinationPages": [
         3,
@@ -579,7 +575,11 @@
         6,
         7,
         8
-      ]
+      ],
+      "samePreviewHTMLAndPrint": true,
+      "nativeBlobPDF": null,
+      "offlineHTML": true,
+      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy"
     },
     {
       "width": 390,
@@ -594,10 +594,6 @@
         8,
         9
       ],
-      "samePreviewHTMLAndPrint": true,
-      "nativeBlobPDF": null,
-      "offlineHTML": true,
-      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy",
       "PDFLinkTextFragments": 31,
       "PDFDestinationPages": [
         3,
@@ -605,7 +601,11 @@
         8,
         9,
         11
-      ]
+      ],
+      "samePreviewHTMLAndPrint": true,
+      "nativeBlobPDF": null,
+      "offlineHTML": true,
+      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy"
     },
     {
       "width": 390,
@@ -620,10 +620,6 @@
         6,
         7
       ],
-      "samePreviewHTMLAndPrint": true,
-      "nativeBlobPDF": null,
-      "offlineHTML": true,
-      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy",
       "PDFLinkTextFragments": 31,
       "PDFDestinationPages": [
         3,
@@ -631,7 +627,11 @@
         6,
         7,
         8
-      ]
+      ],
+      "samePreviewHTMLAndPrint": true,
+      "nativeBlobPDF": null,
+      "offlineHTML": true,
+      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy"
     }
   ],
   "observations": [
@@ -702,6 +702,14 @@
       "editedChapterAndTextareaPositionPreserved": true,
       "exactPriorSourceVersion": true,
       "persistentOutputSettings": false
+    },
+    {
+      "standaloneMobileEmulation": {
+        "width": 390,
+        "layoutViewport": 390,
+        "horizontalOverflow": false,
+        "actualAppleDevice": false
+      }
     }
   ],
   "consoleErrors": [],
@@ -710,8 +718,7 @@
   "expectedErrors": 0,
   "operatingRemoteWrites": 0,
   "pass": true,
-  "finishedAt": "2026-10-08T05:54:18.693Z",
-  "finalRun": "run-2026-10-08T05-53-42-473Z.json",
+  "finishedAt": "2026-10-08T06:18:01.053Z",
   "runs": [
     {
       "file": "run-2026-10-08T05-48-34-174Z.json",
@@ -787,14 +794,18 @@
       "outputs": 7,
       "failures": [],
       "scope": "Final complete suite on frozen layout"
+    },
+    {
+      "file": "run-2026-10-08T06-17-25-671Z.json",
+      "createdAt": "2026-10-08T06:17:25.671Z",
+      "finishedAt": "2026-10-08T06:18:01.053Z",
+      "passed": 5,
+      "checks": 5,
+      "outputs": 7,
+      "failures": [],
+      "scope": "Final full rerun after standalone mobile viewport correction; actual mobile-emulated 390px layout assertion included"
     }
   ],
-  "runtimeFilesSHA256": {
-    "assets/life/book-print.js": "98c1780b2443c17751f24dae02c75d3a2438bee9c9540f255ea280ad37cc1e04",
-    "assets/life/workbench-ui.js": "617ad26284a356de771d30e3c9d962e06b1719542d1b396d5d081a21fe156c9f",
-    "assets/life/workbench.css": "0e333f24672d68e103fc919a592061f458ada9ff947e4c53d59b3b20970072f6",
-    "tests/book-edition-browser.cjs": "4460ecd05d5cf050c290bebed45b29f7261ff6eb8ae48390fe67464fea911e86"
-  },
   "scopeLimitations": [
     "1440/820/390 CSS viewports and touch-capable Chromium contexts, not physical iPad/iPhone/Mac Safari or IME verification.",
     "The native print API is reached with its exact Blob document; the OS print dialog is intercepted. PDFs are generated by Chromium printToPDF, not an OS Save PDF dialog.",
@@ -818,5 +829,12 @@
     "nativeBlobA5": "book-a5-820-native-blob.pdf",
     "nativeBlobA4": "book-a4-820-native-blob.pdf",
     "restorableSample": "reader-book-backup.json"
+  },
+  "finalRun": "run-2026-10-08T06-17-25-671Z.json",
+  "runtimeFilesSHA256": {
+    "assets/life/book-print.js": "e745392b18d1675e8349959a37cdd19c089db14db055fe0e4fee7234d8a675b0",
+    "assets/life/workbench-ui.js": "617ad26284a356de771d30e3c9d962e06b1719542d1b396d5d081a21fe156c9f",
+    "assets/life/workbench.css": "0e333f24672d68e103fc919a592061f458ada9ff947e4c53d59b3b20970072f6",
+    "tests/book-edition-browser.cjs": "4fc1735cd6727729c3eb567ec8cb84253f13ffae3b047a054cc39bc52fc4bfed"
   }
 }

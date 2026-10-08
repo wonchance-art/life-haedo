@@ -235,7 +235,7 @@ h4 { font-size: 10.5pt; font-weight: 700; margin: 5mm 0 2mm; }
         add('</article>');
       });
     }
-    add('<!doctype html><html lang="ko" data-haedo-print="v1" data-print-mode="book" data-print-paper="' + settings.paper + '"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer">');
+    add('<!doctype html><html lang="ko" data-haedo-print="v1" data-print-mode="book" data-print-paper="' + settings.paper + '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer">');
     add('<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'none\'; style-src \'unsafe-inline\'; img-src \'none\'; font-src \'none\'; connect-src \'none\'; object-src \'none\'; base-uri \'none\'; form-action \'none\'">');
     text('title', projection.title); add('<style>' + css + '</style></head><body><main><header class="book-cover">');
     text('h1', projection.title); add('</header><nav class="book-toc" aria-label="책 목차">'); text('h2', '목차'); add('<ol>');

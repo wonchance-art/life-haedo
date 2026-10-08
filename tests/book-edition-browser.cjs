@@ -107,10 +107,11 @@ async function output(page, context, report, width, paper, expectedNotes, { insi
   const filename = `book-${paper.toLowerCase()}-${width}${suffix}`, htmlPath = path.join(out, filename + '.html'), pdfPath = path.join(out, filename + '.pdf'); await fs.writeFile(htmlPath, raw.text);
   // Managed Chromium blocks file/data top-level URLs. A dedicated intercepted local
   // URL serves only these downloaded bytes, then networking is disabled before interaction/PDF.
-  const standaloneContext = await context.browser().newContext({ serviceWorkers: 'block' });
+  const standaloneContext = await context.browser().newContext({ serviceWorkers: 'block', ...(width === 390 ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } : {}) });
   try {
     const standaloneURL = base + '/__qa_booklet__/' + filename + '.html'; await standaloneContext.route('**/*', route => { if (route.request().url() === standaloneURL) return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: raw.text }); report.external.push(route.request().url()); return route.abort('blockedbyclient'); });
     const standalone = await standaloneContext.newPage(); observe(standalone, report, filename); await standalone.goto(standaloneURL); await standalone.evaluate(() => document.fonts.ready); await standaloneContext.setOffline(true);
+    if (width === 390) assert.equal(await standalone.evaluate(() => innerWidth === 390 && document.documentElement.scrollWidth <= innerWidth), true, 'Standalone mobile HTML uses the device viewport without desktop shrink-to-fit');
     assert.equal(await standalone.locator('script,img,iframe,object,embed,link').count(), 0); assert.equal(await standalone.locator('.book-cover h1').textContent(), title); assert.equal(await standalone.evaluate(() => !!globalThis.HaedoLife), false); await standalone.locator('.book-toc a[href="#haedo-book-chapter-2"]').click(); await standalone.waitForURL(url => url.hash === '#haedo-book-chapter-2'); assert.equal(await standalone.locator('#haedo-book-chapter-2').evaluate(el => Math.abs(el.getBoundingClientRect().top) < 2), true);
     await standalone.pdf({ path: pdfPath, preferCSSPageSize: true, printBackground: true, displayHeaderFooter: false });
   } finally { await standaloneContext.close(); }
