@@ -173,7 +173,13 @@ h4 { font-size: 10.5pt; font-weight: 700; margin: 5mm 0 2mm; }
 .insight { margin-top: 8mm; border-top: 0.3mm solid #b9c2bc; padding-top: 3mm; }
 .uncertainty,.empty { margin-top: 3mm; }
 .appendix-chapter + .appendix-chapter { margin-top: 12mm; }
-@media screen { body { width: 100%; max-width: ${settings.paper === 'A5' ? '148mm' : '210mm'}; margin: 0 auto; padding: 16px; } }
+@media screen {
+  body { width: 100%; max-width: ${settings.paper === 'A5' ? '148mm' : '210mm'}; margin: 0 auto; padding: 16px; font-size: 16px; line-height: 1.9; }
+  .book-toc,.chapter,.source-appendix { margin-top: 48px; }
+  .book-toc a { display: flex; align-items: center; min-height: 44px; }
+  .book-toc a:focus-visible { outline: 2px solid #315846; outline-offset: 3px; border-radius: 3px; }
+  .metadata,.empty,.scope,.chapter-number { font-size: 13px; }
+}
 @media print { body { max-width: none; } }
 `;
     function add(value) {

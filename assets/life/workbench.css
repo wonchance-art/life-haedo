@@ -270,3 +270,22 @@
 .wb-review-row h4 { font-size: 16px; line-height: 1.7; }
 .wb-review-row .life-meta { margin-block: 6px; line-height: 1.9; }
 .wb-review-row > .life-button { color: var(--color-primary); background: var(--soft); }
+
+/* Book output settings are session-only; the isolated document owns its typography. */
+.wb-edition-toolbar { display: flex; flex-wrap: wrap; align-items: start; gap: 8px 24px; margin-block: 12px; }
+.wb-edition-toolbar > .wb-details { margin: 0; }
+.wb-edition-toolbar > .wb-details[open] { flex-basis: 100%; }
+.wb-edition-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
+.wb-edition-controls .wb-check { min-height: 44px; }
+.wb-book-edition select { min-height: 44px; max-width: 100%; width: 100%; font: inherit; font-size: 16px; color: var(--ink); background: var(--surface, #fff); border: 1px solid var(--line); border-radius: 12px; padding: 10px 32px 10px 12px; }
+.wb-edition-controls > .life-field { min-width: 150px; }
+.wb-edition-frame { margin-block: 20px; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: #fff; }
+.wb-edition-frame iframe { display: block; width: 100%; height: min(76vh, 880px); min-height: 420px; border: 0; }
+.wb-edition-edit { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin-block: 20px; }
+.wb-edition-edit .life-field { flex: 1; min-width: 0; }
+#wbEditionStatus { margin-block: 12px; line-height: 1.7; }
+@media (max-width: 700px) {
+  .wb-edition-controls { display: grid; gap: 8px; }
+  .wb-edition-frame { margin-inline: -8px; border-radius: 10px; }
+  .wb-edition-edit .life-field { flex-basis: 100%; }
+}
