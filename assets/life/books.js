@@ -26,6 +26,7 @@
     if (typeof includeSources !== 'boolean') throw fault('invalid_book', '원문 본문 포함 선택을 확인해 주세요.');
     const book = (state.books || []).find(value => value.id === bookId);
     if (!book) throw fault('book_missing', '선택한 책을 찾을 수 없습니다. 다른 책으로 대체하지 않았습니다.');
+    if (book.archived) throw fault('book_archived', '보관한 책입니다. 책을 복구한 뒤 원고를 열어 주세요.');
     const sources = new Map(bundle.sources.map(source => [source.id, source]));
     const versions = new Map(bundle.sourceVersions.map(version => [version.id, version]));
     const totals = new Map(), numbers = new Map();
@@ -46,7 +47,7 @@
       return item;
     });
     return { id: book.id, title: book.title, fromYear: book.fromYear, toYear: book.toYear, question: book.question, includeSources,
-      chapters: book.chapters.map(chapter => ({ id: chapter.id, title: chapter.title, note: chapter.note,
+      chapters: book.chapters.filter(chapter => !chapter.archived).map(chapter => ({ id: chapter.id, title: chapter.title, note: chapter.note,
         versionIds: chapter.versionIds.slice(), evidence: select(chapter.versionIds),
         insights: (chapter.insights || []).filter(insight => !insight.excluded).map(insight => ({
           id: insight.id, statement: insight.statement, uncertainty: insight.uncertainty,

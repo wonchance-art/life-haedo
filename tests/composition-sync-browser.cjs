@@ -76,6 +76,12 @@ async function change(page, id, label) {
     const [active, excluded] = state.books[0].chapters[0].insights;
     active.statement = label + '의 현재 해석'; active.uncertainty = label + '에서 아직 모르는 점';
     excluded.statement = label + '의 제외한 해석'; excluded.uncertainty = label + '의 제외한 불확실성';
+    state.books[0].archived = label.includes('두 번째');
+    const edition = state.books[0].editions[0];
+    edition.label = label + '의 보관한 개정본'; edition.title = label + '의 당시 책 제목'; edition.question = label + '의 당시 질문';
+    edition.chapters[0].note = label + '의 개정본 원고\r\n🌱';
+    edition.chapters[0].insights[0].statement = label + '의 개정본 해석';
+    edition.chapters[0].insights[1].statement = label + '의 개정본 제외 해석';
     return storage.saveWorkbench(id, state, state.revision);
   }, { id, label });
 }
@@ -99,6 +105,13 @@ async function seed(page) {
         insights: [{ id: c.id(), statement: '직접 적은 현재 해석', uncertainty: '자료가 부족한 부분', supportVersionIds: [refs[0].versionId, 'missing_book_version'], counterVersionIds: [refs[1].versionId, refs[0].versionId, 'missing_insight_version'], excluded: false },
           { id: c.id(), statement: '원고에서 제외한 해석', uncertainty: '제외해도 보존할 불확실성', supportVersionIds: ['missing_insight_version'], counterVersionIds: [refs[1].versionId, 'missing_book_version'], excluded: true }] },
         { id: c.id(), title: '다시 읽으며', note: '두 번째 장의 원고', versionIds: [refs[0].versionId, refs[1].versionId, 'missing_book_version'] }] }];
+    const book = state.books[0]; book.archived = false; book.chapters[1].archived = true;
+    const chapters = structuredClone(book.chapters);
+    chapters.forEach(chapter => { chapter.id = c.id(); chapter.insights?.forEach(thought => { thought.id = c.id(); }); });
+    chapters[0].versionIds.push('missing_edition_version');
+    chapters[0].insights[0].counterVersionIds.push('missing_edition_version');
+    chapters[0].insights[1].supportVersionIds.push('missing_edition_version');
+    book.editions = [{ id: c.id(), label: '처음 보관한 개정본', createdAt: '2026-10-08T00:00:00.000Z', title: '개정 전 산책의 글', fromYear: '2019', toYear: '2025', question: '그때는 무엇이 중요했나?', chapters }];
     state.discovery = { excludedPairs: [{ seedSourceId: refs[0].sourceId, candidateSourceId: refs[1].sourceId }] };
     await s.saveWorkbench(bundle.workspaceId, state, state.revision);
     return { id: bundle.workspaceId, refs };
@@ -144,6 +157,12 @@ async function main() {
     for (const width of [1440, 820, 390]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 }); await page.evaluate(async () => { await document.fonts.ready; scrollTo(0, 0); });
       const metrics = await page.evaluate(inspect), file = scene + '-' + width + '.png';
+      if (scene === 'edition-comparison') {
+        metrics.editionHeading = await page.locator('.composition-edition > h6').first().evaluate(el => {
+          const style = getComputedStyle(el); return { size: style.fontSize, lineHeight: style.lineHeight, marginTop: style.marginTop, marginBottom: style.marginBottom };
+        });
+        assert(parseFloat(metrics.editionHeading.size) >= 14, 'Edition headings must remain readable');
+      }
       await page.screenshot({ path: path.join(out, file), fullPage: true }); report.captures.push({ scene, file, ...metrics });
       assert.equal(metrics.horizontalOverflow, false, scene + ' horizontal overflow'); assert.deepEqual(metrics.contrastFailures, [], scene + ' contrast'); assert.deepEqual(metrics.smallTargets, [], scene + ' 44px targets'); assert.deepEqual(metrics.unnamed, [], scene + ' accessible names'); assert.deepEqual(metrics.smallInputs, [], scene + ' 16px inputs');
     }
@@ -178,10 +197,19 @@ async function main() {
       for (const [index, label] of [[0, '두 번째 기기의 수정'], [1, '첫 기기의 수정']]) {
         const text = await b.page.locator('.composition-side').nth(index).locator('.composition-book').innerText();
         for (const value of [label + '의 현재 해석', label + '에서 아직 모르는 점', label + '의 제외한 해석', label + '의 제외한 불확실성',
-          '현재 해석 · 원고에서 제외', '뒷받침하는 글', '다른 관점의 글']) assert(text.includes(value), 'Conflict comparison omitted ' + value);
+          '현재 해석 · 원고에서 제외', '뒷받침하는 글', '다른 관점의 글', '보관한 장 · 현재 원고에서 제외',
+          label + '의 보관한 개정본', label + '의 당시 책 제목', label + '의 당시 질문', label + '의 개정본 원고',
+          label + '의 개정본 해석', label + '의 개정본 제외 해석', '2026-10-08T00:00:00.000Z', 'missing_edition_version']) assert(text.includes(value), 'Conflict comparison omitted ' + value);
       }
+      assert.match(await b.page.locator('.composition-side').nth(0).locator('.composition-book').innerText(), /보관한 책/);
+      assert.match(await b.page.locator('.composition-side').nth(1).locator('.composition-book').innerText(), /작업 중인 책/);
       const loser = copy((await composition(b.page, id)).books);
       await capture(b.page, 'comparison');
+      await b.page.locator('.composition-side > details').evaluateAll(elements => elements.forEach(details => {
+        const edition = details.querySelector('.composition-edition');
+        details.scrollTop += edition.getBoundingClientRect().top - details.getBoundingClientRect().top - details.querySelector('summary').getBoundingClientRect().height - 16;
+      }));
+      await capture(b.page, 'edition-comparison');
       await b.page.locator('#compositionUseRemote').focus(); await b.page.keyboard.press('Enter'); await waitStatus(b.page, 'synced');
       assert.equal((await composition(b.page, id)).page.title, '첫 기기의 수정');
       assert.match((await composition(b.page, id)).books[0].chapters[0].note, /첫 기기의 수정의 장 원고/);
@@ -220,14 +248,43 @@ async function main() {
         assert.equal(value.uncertainty, originalThoughts[index].uncertainty);
         assert.equal(value.excluded, originalThoughts[index].excluded);
       });
+      assert.equal(restoredBook.archived, loser[0].archived);
+      assert.equal(restoredBook.chapters[1].archived, true);
+      const restoredEdition = restoredBook.editions[0], oldEdition = loser[0].editions[0];
+      assert.notEqual(restoredEdition.id, oldEdition.id);
+      for (const key of ['label', 'createdAt', 'title', 'fromYear', 'toYear', 'question']) assert.equal(restoredEdition[key], oldEdition[key]);
+      const editionGap = restoredEdition.chapters[0].versionIds[2];
+      assert.notEqual(editionGap, 'missing_edition_version'); assert.notEqual(editionGap, mappedGap); assert.notEqual(editionGap, independentGap);
+      assert.equal(restored.bundle.sourceVersions.some(value => value.id === editionGap), false);
+      assert.deepEqual(restoredEdition.chapters[0].versionIds, [mappedOld, mappedGap, editionGap]);
+      assert.deepEqual(restoredEdition.chapters[0].insights[0].supportVersionIds, [mappedOld, mappedGap]);
+      assert.deepEqual(restoredEdition.chapters[0].insights[0].counterVersionIds, [mappedSecond, mappedOld, independentGap, editionGap]);
+      assert.deepEqual(restoredEdition.chapters[0].insights[1].supportVersionIds, [independentGap, editionGap]);
+      assert.deepEqual(restoredEdition.chapters[0].insights[1].counterVersionIds, [mappedSecond, mappedGap]);
+      assert.deepEqual(restoredEdition.chapters[1].versionIds, [mappedOld, mappedSecond, mappedGap]);
+      restoredEdition.chapters.forEach((chapter, index) => {
+        assert.notEqual(chapter.id, oldEdition.chapters[index].id);
+        for (const key of ['title', 'note', 'archived']) assert.equal(chapter[key], oldEdition.chapters[index][key]);
+        chapter.insights?.forEach((thought, thoughtIndex) => {
+          assert.notEqual(thought.id, oldEdition.chapters[index].insights[thoughtIndex].id);
+          for (const key of ['statement', 'uncertainty', 'excluded']) assert.equal(thought[key], oldEdition.chapters[index].insights[thoughtIndex][key]);
+        });
+      });
+      const allIds = [restoredBook.id, restoredEdition.id];
+      for (const chapter of [...restoredBook.chapters, ...restoredEdition.chapters]) allIds.push(chapter.id, ...(chapter.insights || []).map(value => value.id));
+      assert.equal(new Set(allIds).size, allIds.length, 'Current and archived editions must keep distinct entity identities');
       assert.equal((await composition(b.page, id)).page.title, '첫 기기의 수정');
     });
     await check('lost write acknowledgement replays durable operation after reload without a duplicate revision', async context => {
       const { server } = context, { a, id } = await paired(context); server.loseComposition.add('a');
       await change(a.page, id, '응답을 놓친 수정'); await sync(a.page, id);
       const pending = await metadata(a.page, id), revision = server.composition(accounts.a.id, id).revision; assert.ok(pending.outbox);
+      const durableBooks = copy((await composition(a.page, id)).books);
+      assert.deepEqual(pending.outbox.data.books, durableBooks);
       const operation = pending.outbox.operationId; await a.page.reload(); await ready(a.page); assert.equal((await metadata(a.page, id)).outbox.operationId, operation);
       server.loseComposition.delete('a'); assert.equal(await sync(a.page, id), null); assert.equal((await metadata(a.page, id)).outbox, null);
+      assert.deepEqual(server.composition(accounts.a.id, id).data.books, durableBooks);
+      assert.deepEqual((await composition(a.page, id)).books, durableBooks);
       assert.equal(server.composition(accounts.a.id, id).revision, revision); assert.ok(server.compositionWrites('a').filter(value => value.operation === operation).length >= 2);
     });
     await check('paused source or composition cannot upload; missing SQL stays an actionable preserved-local error', async ({ server, device }) => {

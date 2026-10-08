@@ -48,7 +48,7 @@ jobs:
       - name: Install Chromium and Korean fonts
         run: |
           node tests/browser-ci/node_modules/playwright/cli.js install --with-deps chromium
-          sudo apt-get install -y fonts-noto-cjk
+          sudo apt-get install -y fonts-noto-cjk poppler-utils
       - name: Select the pinned browser
         run: |
           node <<'NODE'
@@ -154,6 +154,12 @@ jobs:
       - name: Verify book reading, editing return and manuscript parity
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-preview-browser.cjs
+      - name: Verify book editions, archive recovery and backup boundaries
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-history-browser.cjs
+      - name: Verify Korean PDF and private native print boundaries
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-print-browser.cjs
       - name: Verify isolated expression-page design samples
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/expression-design-browser.cjs
@@ -187,6 +193,8 @@ jobs:
             .local/book-projects/
             .local/book-insights/
             .local/book-preview/
+            .local/book-history/
+            .local/book-print/
             .local/life-social-import/
             .local/share/
             .local/browser-ci/server.log

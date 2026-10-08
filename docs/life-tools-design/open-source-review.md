@@ -568,3 +568,18 @@ Taguette의 구간 offset이나 Hypothesis의 selector를 이번 전체 버전 �
 유지해야 할 비용은 새 라이브러리 업데이트보다 **공통 출력 모델의 범위 대조, 저장 성공 뒤 전환, 정확한 장/원문 복귀, 실패 때 편집 내용 유지**다. 기본값과 명시적 본문 포함, 제외한 해석, 같은 버전의 여러 역할, 빈/없는 원문을 UI와 파일에서 비교해야 한다. SQL을 늘리지 않아도 이 사용자 흐름의 검증은 필요하다.
 
 실제 사용에서 서식이 적용된 원고를 읽거나 인쇄 조판을 확인해야 하면 Markdown parser/renderer와 sanitize·출처 경계를 작은 원고로 새로 비교한다. 그때는 raw 원고 보존·내보내기 호환·외부 리소스 요청·한글/각주를 함께 확인한다. 먼저 필요한 후속 단위는 **명시적으로 고른 원고 개정본 보존**, 그다음은 개인용/공개용 범위를 구분한 한글 PDF·책자 출력이다. 이번 읽기 화면을 개정 이력·PDF 미리보기·출판 완료로 표시하지 않는다.
+
+
+## 원고 개정본·복구와 한글 PDF — 2026-10-08 KST
+
+책의 개정본은 기존 Workbench CAS·JSON 백업·정확 버전 참조를 확장한다. 소스 본문 복사나 별도 version-control 엔진을 넣지 않는다. 앞서 검토한 novelWriter의 명시적인 원고 보관과 원고/참고자료 분리 원칙을 참고하고, 브라우저 계정/작업공간 및 기존 2 MiB 계약에 맞춰 작은 스냅샷을 사용한다. 개정본 한도를 넘으면 자동 정리하지 않는다.
+
+인쇄 담당이 다음 공식 배포·라이선스·유지보수 정보를 실제 조회했다. 도입 라이브러리는 없다.
+
+| 후보 | 확인한 공식 상태 | 적용 판단 |
+| --- | --- | --- |
+| 브라우저 `window.print()` | [print](https://developer.mozilla.org/en-US/docs/Web/API/Window/print), [afterprint](https://developer.mozilla.org/en-US/docs/Web/API/Window/afterprint_event). 반환은 파일 저장 증명이 아니며 afterprint도 저장 성공 판정 불가 | 채택. 평문 원고와 선택한 출처만 담은 독립 문서에 인쇄 CSS 적용. 추가 서버·패키지 없이 네이티브 PDF 저장 사용 |
+| Paged.js | [npm](https://registry.npmjs.org/pagedjs) 최신 배포 0.4.3(2023-07-06), MIT LICENSE.md. [공식 source](https://github.com/pagedjs/pagedjs/tree/677cdc1e537365e1b3c03c550e2463360164d3fc) main 최근 커밋 2026-10-06, archived=false. GitHub latest release endpoint 404로 npm 배포와 source 활동을 구분 | running header·정밀 조판이 실제 필요해질 때 후보. 현재 A4·장 나눔에 polyfill/fragmented-layout 엔진을 추가하지 않음 |
+| pdf-lib | [공식 v1.17.1](https://github.com/Hopding/pdf-lib/releases/tag/v1.17.1)(2021-11-06), MIT LICENSE.md. default branch 최근 커밋 2021-11-12와 repository pushed 2024-07-17을 구분, archived=false. [README](https://github.com/Hopding/pdf-lib/blob/v1.17.1/README.md)는 HTML/CSS embed 미지원·custom font에 별도 fontkit 요구 | 현재 제외. 한글 줄 배치·페이지 모델·폰트 자산 관리를 별도로 만들어야 하며 기존 브라우저 조판과 중복 |
+
+두 저장소의 공개 security-advisories API는 빈 배열이었다. 모든 취약점이 없다는 뜻은 아니다. 외부 CSS·폰트·이미지·변환 서버는 인쇄에 요청하지 않고 사용자가 제공한 HTML/Markdown도 실행하지 않는다. 최대 인쇄 문서 크기를 초과하면 잘라 출력하지 않고 오류와 재시도를 제공한다. 실제 인쇄/한글 PDF 결과는 [구현·검증](../design-review/book-recovery-print.md)에 기록한다.

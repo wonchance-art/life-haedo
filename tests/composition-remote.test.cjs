@@ -11,11 +11,19 @@ const config = { url: 'https://composition-fixture.supabase.co', key: 'sb_publis
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { resolve, promise }; };
 const row = () => ({ workspace_id: ID, revision: 1, source_revision: 2, updated_at: '2026-10-06T00:00:00Z', data: Workbench.empty(ID) });
 const request = () => ({ workspaceId: ID, expectedRevision: 0, operationId: OP, sourceRevision: 2, data: Workbench.empty(ID) });
-const bookData = () => ({ id: 'book_exact', title: '비공개 책', fromYear: '2020', toYear: '', question: '달라진 생각',
+const bookData = () => { const book = { id: 'book_exact', title: '비공개 책', fromYear: '2020', toYear: '', question: '달라진 생각',
   chapters: [{ id: 'chapter_exact', title: '첫 장', note: '현재 원고\r\n🌱', versionIds: ['old_exact_version', 'missing_version'],
     insights: [{ id: 'insight_exact', statement: '직접 쓴 해석\r\n🌱', uncertainty: '아직 판단하지 못한 부분', supportVersionIds: ['old_exact_version', 'independent_missing'], counterVersionIds: ['old_exact_version'], excluded: false },
       { id: 'insight_excluded', statement: '', uncertainty: '', supportVersionIds: ['missing_version'], counterVersionIds: [], excluded: true }] },
-    { id: 'chapter_again', title: '다시 읽기', note: '', versionIds: ['old_exact_version'] }] });
+    { id: 'chapter_again', title: '다시 읽기', note: '', versionIds: ['old_exact_version'], archived: true }] };
+  book.archived = true;
+  const chapters = structuredClone(book.chapters);
+  chapters.forEach(chapter => { chapter.id += '_edition'; chapter.insights?.forEach(thought => { thought.id += '_edition'; }); });
+  chapters[0].versionIds.push('edition_missing_version');
+  chapters[0].insights[1].counterVersionIds.push('edition_missing_version');
+  book.editions = [{ id: 'edition_exact', label: '개정 전 원고', createdAt: '2026-10-08T00:00:00.000Z', title: '그때의 책', fromYear: '', toYear: '2025', question: '그때의 질문', chapters }];
+  return book;
+};
 function fixture() {
   const state = { authCalls: 0, calls: [], disposed: 0, authResult: { data: { user: { id: ID } }, error: null }, result: { data: row(), error: null } };
   const auth = { ready: true, config };
@@ -79,6 +87,9 @@ test('book reads preserve ordered exact and missing references in a detached con
   assert.deepEqual(result, before);
   result.data.books[0].chapters[0].insights[0].supportVersionIds.push('caller_insight_change');
   result.data.books[0].chapters[0].insights[1].excluded = false;
+  result.data.books[0].archived = false;
+  result.data.books[0].editions[0].chapters[1].archived = false;
+  result.data.books[0].editions[0].chapters[0].insights[1].counterVersionIds.push('caller_edition_change');
   result.data.books[0].chapters.reverse(); result.data.books[0].chapters[0].versionIds.push('caller_change');
   assert.deepEqual(state.result.data, before, 'Caller edits cannot rewrite remote chapter order or references');
   state.result.data.data.books[0].chapters[0].versionIds.push('old_exact_version');
@@ -94,12 +105,16 @@ test('old-server rejection retains the complete book write and retries without s
   const pending = adapter.write(input);
   input.data.books[0].chapters[0].note = '인증 중 새 입력';
   input.data.books[0].chapters[0].insights[0].statement = '인증 중 새 해석';
+  input.data.books[0].editions[0].label = '인증 중 다른 개정본';
+  input.data.books[0].archived = false;
   waiting.resolve(state.authResult);
   await assert.rejects(pending, error => error.code === 'invalid_request' && !error.message.includes('private'));
   const expected = { p_workspace_id: ID, p_expected_revision: 0, p_operation_id: OP, p_source_revision: 2, p_data: before.data };
   assert.deepEqual(state.calls[0].params, expected);
   assert.equal(input.data.books[0].chapters[0].note, '인증 중 새 입력', 'Failure must not overwrite local input');
   assert.equal(input.data.books[0].chapters[0].insights[0].statement, '인증 중 새 해석');
+  assert.equal(input.data.books[0].editions[0].label, '인증 중 다른 개정본');
+  assert.equal(input.data.books[0].archived, false);
   state.result = { data: { status: 'stored', revision: 1 }, error: null };
   assert.deepEqual(await adapter.write(before), { status: 'stored', revision: 1 });
   assert.deepEqual(state.calls[1].params, expected); adapter.dispose();
