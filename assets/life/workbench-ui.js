@@ -15,7 +15,7 @@
   function fault(code, message) { return Object.assign(new Error(message), { code }); }
 
   function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored,
-    onSelectionUsed = () => {}, onSelectionCancel = () => {}, onArrange = () => {},
+    onSelectionUsed = () => {}, onSelectionCancel = () => {}, onArrange = () => {}, onWorkbenchNavigate = () => {},
     shareRemoteFactory = () => life.ShareRemote?.createOwner({ auth: global.HaedoAuth }),
     sharePublicUrl = publicId => { const url = new URL('share.html', global.location.href); url.searchParams.set('id', publicId); return url.href; },
     beforeRestore = async () => {}, isDisposed = () => false }) {
@@ -222,6 +222,13 @@
       session.saving = task; updateStatus(session);
       await task;
       if (session.edit !== session.stored) return flushSession(session);
+      // Selection is consumed only after the accepted reflection draft is durable,
+      // including a later explicit retry after a failed transaction.
+      const accepted = session.reflectionSelection;
+      if (accepted && session.stored >= accepted.tick && workspaceIs(session)) {
+        session.reflectionSelection = null;
+        onSelectionUsed({ workspaceId: session.workspaceId, versionIds: accepted.versionIds });
+      }
     }
     async function flush() {
       if (installing) throw fault('restore_in_progress', '새 사본을 저장하는 중입니다. 완료 후 이동해 주세요.');
@@ -244,6 +251,12 @@
           updateStatus(session);
           if (!surface.querySelector('#wbReloadSaved')) {
             const reload = action('새 저장본 읽기', async () => {
+              // The banner may have appeared before this tab began editing.
+              // Recheck now; an old reload control must never discard a later draft.
+              if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 저장본을 확인해 주세요.');
+              if (session.edit !== session.stored || session.saving) {
+                throw fault('workbench_conflict', '현재 초안과 새 저장본을 먼저 비교해 주세요.');
+              }
               if (!incoming) { session.state = null; await render(mode); return; }
               const token = generation;
               cleanupView(); session.state = null;
@@ -341,6 +354,8 @@
 
     function renderActivities() {
       const session = current, state = session.state;
+      const reflection = action('회고에서 읽기', () => onWorkbenchNavigate({ workspaceId: session.workspaceId, mode: 'reflection' }));
+      reflection.id = 'wbGroupsReflection'; bodyNode.append(reflection);
       const add = el('form', null, 'wb-add-row');
       const title = field('새 묶음 이름', '', { id: 'wbGroupTitle' });
       const createButton = action('묶음 만들기', () => {
@@ -446,17 +461,21 @@
       }
       const title = field(mode === 'page' ? '항목 제목' : '새 묶음 이름', pending.title, { id: 'wbIncomingTitle' });
       let composing = false;
-      const apply = action(mode === 'page' ? '내 페이지에 추가' : '묶음에 담기', async () => {
+      const apply = action(mode === 'reflection' ? '회고에 담기' : mode === 'page' ? '내 페이지에 추가' : '묶음에 담기', async () => {
         if (incoming !== pending || pending.accepted || composing || !showing(token, session)) return;
         if (!validate()) { error.scrollIntoView({ block: 'nearest' }); return; }
         const ids = selected(), name = title.input.value.trim();
-        if ((mode === 'page' || !group.value) && !name) {
+        if (mode !== 'reflection' && (mode === 'page' || !group.value) && !name) {
           title.input.setCustomValidity(mode === 'page' ? '항목 제목을 입력해 주세요.' : '묶음 이름을 입력해 주세요.');
           title.input.reportValidity(); return;
         }
         const candidate = copy(session.state);
         let addedId;
-        if (mode === 'activities') {
+        if (mode === 'reflection') {
+          const union = [...new Set(candidate.reflection.versionIds.concat(ids))];
+          if (union.length > limits.reflectionVersions) { fail('회고에는 원문 ' + limits.reflectionVersions + '개까지 담을 수 있습니다.'); return; }
+          candidate.reflection.versionIds = union;
+        } else if (mode === 'activities') {
           if (group.value) {
             const existing = candidate.groups.find(item => item.id === group.value);
             if (!existing) { fail('선택한 묶음을 찾지 못했습니다. 묶음을 다시 선택해 주세요.'); return; }
@@ -476,18 +495,24 @@
         model.validate(candidate);
         // Accept once before writing. A failed save retains this draft and retries the same entry.
         pending.accepted = true; incoming = null;
-        session.state.groups = candidate.groups; session.state.page.entries = candidate.page.entries;
-        mark(session, false); redraw();
+        session.state.groups = candidate.groups; session.state.page.entries = candidate.page.entries; session.state.reflection = candidate.reflection;
+        mark(session, false);
+        if (mode === 'reflection') session.reflectionSelection = { tick: session.edit, versionIds: ids.slice() };
+        redraw();
         if (mode === 'activities') revealGroup(addedId);
-        else {
+        else if (mode === 'page') {
           const article = [...bodyNode.querySelectorAll('[data-entry-id]')].find(node => node.dataset.entryId === addedId);
           const editor = article?.querySelector('details');
           if (editor) { editor.open = true; editor.querySelector('summary')?.focus({ preventScroll: true }); }
           article?.scrollIntoView({ block: 'start' });
         }
         announceSafe('선택한 기록을 편집 초안에 담았습니다.', session);
-        try { onSelectionUsed({ workspaceId: session.workspaceId, versionIds: ids }); }
-        finally { await flushSession(session); }
+        if (mode === 'reflection') {
+          await flushSession(session);
+        } else {
+          try { onSelectionUsed({ workspaceId: session.workspaceId, versionIds: ids }); }
+          finally { await flushSession(session); }
+        }
       }, 'life-primary');
       apply.id = 'wbIncomingApply';
       title.input.addEventListener('compositionstart', () => { composing = true; apply.disabled = true; });
@@ -499,8 +524,9 @@
         if (!showing(token, session) || incoming !== pending) return;
         pending.groupId = group.value; title.wrapper.hidden = !!group.value; refresh();
       });
-      title.wrapper.hidden = mode === 'activities' && !!group.value;
+      title.wrapper.hidden = mode === 'reflection' || mode === 'activities' && !!group.value;
       box.append(title.wrapper);
+      if (mode === 'reflection') box.append(notice('기존 회고 선택에 정확한 원문 버전을 더합니다. 한 번에 100개, 회고 전체는 1,000개까지 담을 수 있습니다. 원문과 발췌는 그대로 남습니다.'));
       if (mode === 'page') box.append(notice('하나의 비공개 항목으로 담습니다. 추가한 뒤 본문·코멘트·표시 여부를 편집하고 미리볼 수 있습니다.'));
       const actions = el('div', null, 'life-actions');
       const cancel = action('취소', async () => {
@@ -1288,13 +1314,15 @@
       const session = current, token = generation, reflection = session.state.reflection;
       const view = session.reflectionView ||= { mode: 'time', from: '', to: '', shown: 40 };
       const reader = life.Reflection;
+      surface.querySelector('.wb-heading h2').textContent = session.bookPlanOpen ? '목차 구성' : '회고';
+      if (session.bookPlanOpen) { bodyNode.append(bookPlanner(session, view)); return; }
       bodyNode.append(notice('당시의 글을 읽고 지금의 생각을 원고로 남깁니다.'));
       const guidance = details('20대의 글에서 시작하기');
       guidance.append(notice('시간순으로 장면을 살핀 뒤 관계·일·배움처럼 나에게 중요한 주제로 돌아보세요. 나이와 기간은 글만으로 추정하지 않습니다. 기록이 적은 시기도 빈 삶을 뜻하지 않습니다.'));
       const pickerHost = el('div');
       const controls = el('div', null, 'life-actions');
       const time = action('연도별', () => { view.mode = 'time'; view.shown = 40; fill(); }); time.id = 'wbReflectionTime';
-      const theme = action('주제별', () => { view.mode = 'theme'; view.shown = 40; fill(); }); theme.id = 'wbReflectionThemes';
+      const theme = action('묶음별', () => { view.mode = 'theme'; view.shown = 40; fill(); }); theme.id = 'wbReflectionThemes';
       controls.append(time, theme);
       const period = details('작성 연도로 좁히기');
       const from = field('시작 연도', view.from, { id: 'wbReflectionFrom' });
@@ -1335,7 +1363,7 @@
         const years = reader.chronology(getBundle(), reflection.versionIds, view);
         const visible = years.flatMap(group => group.versionIds);
         const sections = view.mode === 'time' ? years : reader.themes(session.state, visible);
-        if (view.mode === 'theme') overview.append(notice('직접 만든 묶음으로 분류합니다. 묶음은 기록에서 편집하며, 여기서는 선택한 원문 버전만 보여줍니다.'));
+        if (view.mode === 'theme') overview.append(notice('직접 만든 묶음 기준입니다. 발췌의 주제와는 별개이며 선택한 정확한 원문 버전만 보여줍니다.'));
         if (visible.length !== reflection.versionIds.length) overview.append(notice('기간 밖의 선택 자료 ' + (reflection.versionIds.length - visible.length) + '개는 선택을 유지합니다. 원고 내보내기에는 선택 자료 전체가 포함됩니다.'));
         selectedList.replaceChildren();
         let shown = 0, total = sections.reduce((sum, group) => sum + group.versionIds.length, 0);
@@ -1365,7 +1393,21 @@
         more.hidden = shown >= total;
       };
       const readingControls = el('div', null, 'wb-reflection-controls'); readingControls.append(controls, period);
-      bodyNode.append(pickerHost, readingControls, overview, selectedList, more);
+      const plan = action('선택한 글로 목차 구성', async () => {
+        if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 목차를 구성해 주세요.');
+        await flush(); if (!showing(token, session)) return;
+        session.bookPlanOpen = true; redraw(); const target = bodyNode.querySelector('#wbPlanTitle'); target?.focus({ preventScroll: true }); target?.scrollIntoView({ block: 'center' });
+      }, 'life-primary'); plan.id = 'wbReflectionPlan';
+      const group = action('선택한 글 묶기', async () => {
+        const ids = reader.chronology(getBundle(), reflection.versionIds, view).flatMap(item => item.versionIds);
+        if (!ids.length) throw fault('empty_selection', '묶을 글을 먼저 선택해 주세요.');
+        if (ids.length > limits.groupVersions) throw fault('limit_reached', '한 번에 100개까지 묶을 수 있습니다. 작성 기간이나 회고 선택을 좁혀 주세요.');
+        await flush(); if (!showing(token, session)) return;
+        return onArrange({ workspaceId: session.workspaceId, versionIds: ids, focusId: 'wbReflectionGroup' });
+      }); group.id = 'wbReflectionGroup';
+      controls.append(plan, group);
+      bodyNode.append(pickerHost, readingControls);
+      bodyNode.append(overview, selectedList, more);
       const note = field('내 회고', reflection.note, { id: 'wbReflectionNote', multiline: true, max: limits.text,
         change: value => { reflection.note = value; } });
       note.input.rows = 12;
@@ -1396,6 +1438,104 @@
       exportBox.append(include, notice('내 회고와 선택한 자료의 출처를 파일로 받습니다. 보기 기간과 무관하게 선택 전체를 포함하며 공개 게시하지 않습니다. 원문·구성 복원에는 자료·구성 JSON 백업을 사용하세요.'), exportButton);
       bodyNode.append(note.wrapper, prompts, exportBox, guidance);
       refillPicker(); fill();
+    }
+
+    function bookPlanner(session, reflectionView) {
+      const token = generation;
+      const draft = session.bookPlan ||= { title: '', question: '', by: reflectionView.mode, from: reflectionView.from,
+        to: reflectionView.to, versionIds: session.state.reflection.versionIds.slice(), choices: {} };
+      const box = el('section', null, 'wb-book-plan'); box.id = 'wbBookPlan';
+      box.setAttribute('aria-labelledby', 'wbPlanHeading');
+      const heading = el('h3', '목차 구성', 'life-sr-only'); heading.id = 'wbPlanHeading';
+      const title = field('책 제목', draft.title, { id: 'wbPlanTitle' }); title.input.placeholder = '예: 나의 20대, 일과 쉼';
+      const question = field('이 책에서 돌아볼 질문', draft.question, { id: 'wbPlanQuestion', multiline: true, max: limits.text });
+      question.input.placeholder = '예: 잘해야 한다는 마음은 어떻게 달라졌을까?';
+      title.input.addEventListener('input', () => { draft.title = title.input.value; });
+      question.input.addEventListener('input', () => { draft.question = question.input.value; });
+      const modes = el('div', null, 'life-actions');
+      const list = el('ol', null, 'wb-plan-list'); list.id = 'wbPlanChapters';
+      const summary = el('p', '', 'life-meta'); summary.id = 'wbPlanSummary'; summary.setAttribute('role', 'status');
+      const choices = () => draft.choices[draft.by] ||= life.Books.outline(getBundle(), session.state, draft.versionIds,
+        { by: draft.by, from: draft.from, to: draft.to }).map(value => ({ ...value, selected: true }));
+      const count = () => {
+        const selected = choices().filter(item => item.selected);
+        summary.textContent = selected.length + '개 장 · 정확한 원문 버전 ' + new Set(selected.flatMap(item => item.versionIds)).size + '개';
+      };
+      const time = action('연도별 목차', () => { draft.by = 'time'; fill(); }); time.id = 'wbPlanTime';
+      const theme = action('묶음별 목차', () => { draft.by = 'theme'; fill(); }); theme.id = 'wbPlanThemes';
+      const refresh = action('현재 선택으로 후보 다시 만들기', () => {
+        if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 후보를 만들어 주세요.');
+        if (!global.confirm('목차 후보의 제목과 포함 선택을 새로 만들까요? 책 제목과 질문은 유지합니다.')) return;
+        draft.versionIds = session.state.reflection.versionIds.slice(); draft.from = reflectionView.from; draft.to = reflectionView.to;
+        draft.choices = {}; fill();
+      }); refresh.id = 'wbPlanRefresh';
+      modes.append(time, theme);
+      const fill = () => {
+        time.setAttribute('aria-pressed', String(draft.by === 'time')); theme.setAttribute('aria-pressed', String(draft.by === 'theme'));
+        list.replaceChildren();
+        for (const [index, item] of choices().entries()) {
+          const row = el('li', null, 'wb-plan-chapter'); row.dataset.planKey = item.key;
+          const check = toggle('장 ' + (index + 1) + ' 포함', item.selected, value => { item.selected = value; count(); });
+          const name = field('장 ' + (index + 1) + ' 제목', item.title, { id: 'wbPlanChapter' + index });
+          name.input.addEventListener('input', () => { item.title = name.input.value; });
+          const sources = details('연결할 원문 · ' + item.versionIds.length + '개');
+          // Names, authorship and exact versions are reviewable before anything is saved.
+          let shown = 0;
+          const more = action('연결할 원문 더 보기', () => fillSources());
+          const fillSources = () => {
+            const batch = item.versionIds.slice(shown, shown + 40); shown += batch.length;
+            batch.forEach(id => sources.insertBefore(sourceRow(id), more)); more.hidden = shown >= item.versionIds.length;
+          };
+          sources.append(more);
+          sources.addEventListener('toggle', () => { if (sources.open && !shown) fillSources(); });
+          row.append(check, name.wrapper, sources); list.append(row);
+        }
+        if (!choices().length) list.append(empty('선택한 기간의 글이 없습니다. 돌아볼 글을 고르거나 기간을 해제한 뒤 후보를 다시 만들어 주세요.'));
+        count();
+      };
+      const apply = action(draft.createdBookId ? '저장 후 책 열기' : '이 목차로 책 만들기', async () => {
+        if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 책을 만들어 주세요.');
+        await flush(); if (!showing(token, session)) return;
+        if (!draft.createdBookId) {
+          const result = life.Books.fromOutline(session.state, { title: draft.title.trim(), question: draft.question,
+            chapters: choices().filter(item => item.selected).map(item => ({ title: item.title.trim(), versionIds: item.versionIds.slice() })) }, { id: () => core.id() });
+          session.state = result.state; draft.createdBookId = result.bookId;
+          mark(session, false); redraw();
+          await flush(); if (!showing(token, session)) return;
+        }
+        session.bookView = { bookId: draft.createdBookId, chapterId: null, shown: 40, renderId: 0 };
+        await onWorkbenchNavigate({ workspaceId: session.workspaceId, mode: 'books' });
+        if (workspaceIs(session)) { session.bookPlan = null; session.bookPlanOpen = false; }
+      }, 'life-primary'); apply.id = 'wbPlanCreate';
+      const close = action('회고로 돌아가기', () => { session.bookPlanOpen = false; redraw(); bodyNode.querySelector('#wbReflectionPlan')?.focus(); }); close.id = 'wbPlanClose';
+      const actions = el('div', null, 'life-actions'); actions.append(apply, close);
+      box.append(heading, notice(draft.createdBookId ? '책 초안을 저장한 뒤 같은 책을 엽니다.' : '목차 후보는 이 화면에만 임시 보관합니다. 책 만들기를 눌러야 저장됩니다.'), title.wrapper, question.wrapper, modes,
+        notice('선택한 글의 작성 연도 또는 직접 만든 묶음에서 시작합니다. 장 제목과 포함 여부를 고른 뒤 만드세요. 먼저 3~5개 장으로 시작해도 좋습니다.'), list, summary);
+      const scope = details('후보 범위와 원문 보존');
+      scope.append(notice('후보를 만들 때의 회고 선택과 보기 기간(' + (draft.from || '제한 없음') + ' ~ ' + (draft.to || '제한 없음') + ')을 사용합니다. 작성 시기 미확인도 따로 남기며, 묶음이 겹치면 같은 버전을 여러 장에 연결할 수 있습니다. 기간 밖 자료와 회고 글은 원래 회고에 남습니다. 장 원고는 빈 상태로 시작하며 글을 자동 해석하거나 공개하지 않습니다.'), refresh);
+      box.append(scope, actions); fill();
+      if (draft.createdBookId) {
+        box.querySelectorAll('input,textarea,button').forEach(control => { if (![apply, close].includes(control)) control.disabled = true; });
+        box.insertBefore(notice('책 초안은 이미 만들었습니다. 저장을 완료한 뒤 같은 책을 엽니다.'), actions);
+      }
+      return box;
+    }
+
+    function bookReview(projection, editChapter) {
+      const result = life.Books.review(projection);
+      const box = details('원고 점검'); box.id = 'wbBookReview';
+      box.append(notice('선택한 원고의 상태만 확인합니다. 글의 완성도나 생각의 옳고 그름을 평가하지 않습니다.'));
+      const facts = [['blankNote', '아직 쓰지 않은 원고'], ['missing', '연결된 원문 없음'], ['otherAuthors', '다른 사람의 글'],
+        ['unknownAuthors', '작성자 관계 미확인'], ['linkOnly', '본문 미확보'], ['undated', '작성 시기 미확인']];
+      for (const chapter of result.chapters) {
+        const row = el('div', null, 'wb-review-row'); row.dataset.reviewChapter = chapter.id;
+        const issues = facts.filter(([key]) => chapter[key]).map(([key, label]) => label + (key === 'blankNote' ? '' : ' ' + chapter[key] + '개'));
+        row.append(el('h4', chapter.title), el('p', issues.join(' · ') || '빈 원고·출처 확인 항목 없음', 'life-meta'));
+        const edit = action('이 장 확인', () => editChapter(chapter.id)); edit.dataset.reviewEdit = chapter.id; row.append(edit); box.append(row);
+      }
+      if (!result.chapters.length) box.append(empty('목차에서 첫 장을 추가해 주세요.'));
+      box.append(notice('원문은 정확한 버전으로 연결하며 작성일을 경험 시기로 추정하지 않습니다. 타인 글과 미확인 자료는 내 생각의 근거인지 직접 검토하세요. 보관한 장·제외한 해석은 이번 출력에서 빠집니다.'));
+      return box;
     }
 
     function renderBooks() {
@@ -1465,6 +1605,8 @@
         fromReflection.disabled = !state.reflection.note && !state.reflection.versionIds.length;
         const actions = el('div', null, 'life-actions'); actions.append(add, fromReflection);
         createBox.append(title.wrapper, actions, notice('기존 회고로 시작하면 글과 선택한 원문 연결을 첫 장에 복사합니다. 기존 회고는 그대로 남습니다.'));
+        const plan = action('회고에서 목차 구성', () => onWorkbenchNavigate({ workspaceId: session.workspaceId, mode: 'reflection', planOpen: true }));
+        plan.id = 'wbBookPlanStart'; createBox.prepend(plan);
         bodyNode.append(createBox); return;
       }
       const back = action('책 목록', () => transition(() => { view.bookId = null; view.chapterId = null; }, 'wbBookList')); back.id = 'wbBooksBack';
@@ -1553,7 +1695,15 @@
         const updateLength = () => { length.textContent = chapter.note.length.toLocaleString('ko-KR') + ' / ' + limits.text.toLocaleString('ko-KR'); };
         note.input.addEventListener('input', updateLength); updateLength();
         note.input.setAttribute('aria-describedby', length.id);
-        editor.append(chapterName.wrapper, note.wrapper, length);
+        const chapterNavigation = el('div', null, 'life-actions wb-chapter-navigation');
+        const index = activeChapters.indexOf(chapter);
+        for (const [offset, label] of [[-1, '이전 장'], [1, '다음 장']]) {
+          const target = activeChapters[index + offset];
+          const control = action(label, () => transition(() => { view.chapterId = target.id; view.shown = 40; }, 'wbChapterNote'));
+          control.id = offset < 0 ? 'wbChapterPrevious' : 'wbChapterNext'; control.disabled = !target; chapterNavigation.append(control);
+        }
+        chapterNavigation.append(el('span', (index + 1) + ' / ' + activeChapters.length, 'life-meta'));
+        editor.append(chapterNavigation, chapterName.wrapper, note.wrapper, length);
         const archiveChapter = action('이 장 보관', () => {
           if (!global.confirm('이 장을 보관할까요? 현재 원고 출력에서 빠지며 목차의 보관한 장에서 복구할 수 있습니다.')) return;
           return historyChange(value => life.BookHistory.archiveChapter(value, book.id, chapter.id), () => { view.chapterId = null; view.readPosition = null; }, 'wbBookOutlineHeading');
@@ -1707,7 +1857,7 @@
         if (active()) announceSafe('인쇄 창에서 PDF로 저장하거나 프린터를 선택하세요. 실제 파일 보관은 직접 확인해 주세요.', session);
       }); print.id = 'wbBookPrint';
       viewCleanups.push(() => life.BookPrint?.cancel());
-      const toolbar = el('div', null, 'wb-reading-tools'); toolbar.append(outline, options, download, print); bodyNode.append(toolbar);
+      const toolbar = el('div', null, 'wb-reading-tools'); toolbar.append(outline, bookReview(projection, returnEditor), options, download, print); bodyNode.append(toolbar);
       const intro = el('section', null, 'wb-reading-intro');
       intro.append(el('p', '비공개 원고 · ' + (projection.fromYear || '미지정') + ' ~ ' + (projection.toYear || '미지정'), 'life-meta'));
       if (projection.question) intro.append(el('p', projection.question, 'wb-reading-question'));
@@ -2006,7 +2156,7 @@
       bodyNode.replaceChildren();
       if (saveControl) saveControl.hidden = ['public-pages', 'related'].includes(mode) || !!incoming || mode === 'page' && !!current.share?.open;
       if (mode === 'public-pages') { renderPublicPages(); return; }
-      if (incoming && ['activities', 'page'].includes(mode)) { renderIncoming(); updateStatus(current); return; }
+      if (incoming && ['activities', 'page', 'reflection'].includes(mode)) { renderIncoming(); updateStatus(current); return; }
       if (mode === 'activities') renderActivities();
       if (mode === 'page') renderPage();
       if (mode === 'discover' || mode === 'related') renderDiscover();
@@ -2031,8 +2181,9 @@
         view.seedVersionId = valid ? context.seedVersionId : null; view.chooserOpen = !valid;
         view.contextError = valid ? '' : '기준 기록의 작업공간이나 버전을 확인하지 못했습니다. 현재 공간에서 기록을 다시 골라 주세요.';
       }
+      if (mode === 'reflection' && options.planOpen) current.bookPlanOpen = true;
       incoming = null;
-      if (options.selection && ['activities', 'page'].includes(mode)) {
+      if (options.selection && ['activities', 'page', 'reflection'].includes(mode)) {
         const selection = options.selection;
         const validIds = Array.isArray(selection.versionIds) && selection.versionIds.length <= limits.groupVersions &&
           selection.versionIds.every(id => typeof id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(id));
