@@ -2384,6 +2384,7 @@
       })));
       // Reimport starts with the only new input; already known metadata remains editable below.
       if (linkedSource) form.append(linkedNotice, methods, textPanel, filePanel, linkHelp, retained, webNotice, webScope, url.label, suggestion, origin.label, name.label, details, actions, webHelp);
+      else if (currentChapterImport()) form.append(methods, textPanel, filePanel, linkHelp, retained, webNotice, webScope, name.label, url.label, suggestion, origin.label, details, actions, webHelp);
       else form.append(methods, url.label, suggestion, origin.label, name.label, textPanel, filePanel, linkHelp, retained, webNotice, webScope, details, actions, webHelp);
       if (state.stageFailed) form.append(button('새 검토 사본으로 보관', guarded(rescueStage)));
       if (state.stage.invalidatedExcerpts && state.stage.invalidatedExcerpts.length) {
