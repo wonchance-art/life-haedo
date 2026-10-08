@@ -1,0 +1,20 @@
+{
+  "createdAt": "2026-10-08T08:10:41.934Z",
+  "scope": "Actual local app/SDK/IDB, synthetic HTTP Auth; viewport simulation, not Apple device testing",
+  "checks": [
+    {
+      "name": "late home composition preserves focused recent original and exact keyboard opening",
+      "pass": true
+    },
+    {
+      "name": "late home composition cannot replace a different section",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "browser": "151.0.7922.173"
+}

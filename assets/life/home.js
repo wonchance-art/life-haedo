@@ -220,14 +220,16 @@
       renderReadingResume?.(surface);
       const recentRecords = recent(context, bundle);
       const composition = el('div', null, 'home-composition'); composition.id = 'homeComposition';
+      const summaries = el('div', null, 'home-summaries');
       const status = el('p', '책과 구성을 불러오는 중…', 'life-meta home-loading'); status.setAttribute('role', 'status');
-      composition.append(status); composition.setAttribute('aria-busy', 'true'); surface.append(composition, recentRecords); host.append(surface);
+      composition.append(status); composition.setAttribute('aria-busy', 'true'); surface.append(composition, recentRecords, summaries); host.append(surface);
       try {
         const state = await storage.readWorkbench(context.workspaceId);
         if (!showing(context)) return;
         if (state.workspaceId !== context.workspaceId) throw new Error('workspace_mismatch');
         life.Workbench.validate(state);
-        composition.replaceChildren(books(context, state), recentRecords, groups(context, state), pageSummary(context, state.page));
+        composition.replaceChildren(books(context, state));
+        summaries.replaceChildren(groups(context, state), pageSummary(context, state.page));
         composition.setAttribute('aria-busy', 'false');
       } catch (_) {
         if (!showing(context)) return;

@@ -173,6 +173,29 @@ async function main() {
       await page.locator('#lifeSearchReturn').click(); await settle(page); assert.equal(await page.locator('#lifeSearch').inputValue(), '원문 버전과 위치를 보존할 익명 발췌');
       await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, quoteKey); assert.deepEqual(await current(page), before);
     });
+    await check('late home composition preserves focused recent original and exact keyboard opening', async ({ page }) => {
+      const f = await fixture(page); await seedComposition(page, f.refs);
+      const before = await current(page);
+      await page.evaluate(() => { window.__homeHoldRead = true; window.__homeReadEntered = false; });
+      await nav(page, 'home'); await page.waitForFunction(() => __homeReadEntered);
+      assert.equal(await page.locator('#homeComposition').getAttribute('aria-busy'), 'true');
+      const record = page.locator('#homeRecent > .home-record').first();
+      const versionId = await record.getAttribute('data-version-id');
+      const expected = before.bundle.sourceVersions.find(version => version.id === versionId);
+      assert(expected, 'Recent record must identify an exact stored version');
+      const button = await record.locator('.home-record-open').elementHandle();
+      await button.focus();
+      const parent = await page.locator('#homeRecent').evaluateHandle(node => node.parentElement);
+      await page.evaluate(() => __homeReleaseRead());
+      await page.waitForFunction(() => document.querySelector('#homeComposition')?.getAttribute('aria-busy') === 'false');
+      assert.equal(await button.evaluate(node => node.isConnected && document.activeElement === node), true, 'A slow composition read must retain the focused original button');
+      assert.equal(await page.evaluate(node => document.querySelector('#homeRecent').parentElement === node, parent), true, 'Recent records must retain their parent during composition loading');
+      assert.deepEqual(await current(page), before);
+      await page.keyboard.press('Enter'); await settle(page);
+      await page.locator('#lifeSourceText').waitFor();
+      assert.equal(await page.locator('#lifeSourceText').textContent(), expected.contentText);
+      assert.deepEqual(await current(page), before);
+    });
     await check('late home composition cannot replace a different section', async ({ page }) => {
       const f = await fixture(page); await seedComposition(page, f.refs);
       await page.evaluate(() => { window.__homeHoldRead = true; window.__homeReadEntered = false; });

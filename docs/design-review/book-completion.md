@@ -29,12 +29,12 @@
 원문·정확 버전·출처·발췌·작성자 관계·제외한 해석·개정본·계정별 저장·구성 CAS·백업 형식·공개 범위를 변경하지 않았다. 홈은 쓰기를 하지 않고 모든 편집은 기존 책 편집기와 저장 보호를 거친다. 실제 운영 자료나 개인 인증정보를 사용하지 않았다.
 
 - 정적 검사: HTML 18·JS 58·참조 271/PWA 통과. Node 398/398.
-- [새 사용 흐름 4/4](evidence/book-completion/browser-report.json): 1440·820·390px의 실제 JSON 복원 → 홈 목차 → 둘째 장 수정·저장 → 새로고침 → 목록 목차 → 정확 원문 왕복/초점 → 전체 읽기·HTML. 별도 활성 책 3권 제한·보관 책/장 제외·빈 책·계정 분리 확인. 각 실행의 최신 케이스를 합산했으며 하나의 동시 실행 결과로 표현하지 않는다.
+- [새 사용 흐름 4/4](evidence/book-completion/browser-report.json): 1440·820·390px의 실제 JSON 복원 → 홈 목차 → 둘째 장 수정·저장 → 새로고침 → 목록 목차 → 정확 원문 왕복/초점 → 전체 읽기·HTML. 별도 활성 책 3권 제한·보관 책/장 제외·빈 책·계정 분리 확인. 마지막 홈 로딩 수정 후 같은 최종 코드에서 네 사례와 13개 시각 상태를 함께 재검증했다. 이전 분리 실행과 최초 실패 기록도 보존한다.
 - [기존 홈 진입 12/12](evidence/book-completion/home-entry.json), [공용 인증/탐색 13/13](evidence/book-completion/unified-home.json), [저장 실패·충돌·계정 변경 3/3](evidence/book-completion/workshop-recovery.json), [기존 책자 5/5](evidence/book-completion/edition-regression.json). [백업 안내 4/4](evidence/book-completion/backup-preview.json)는 별도 익명 검사이며 기존 책 보관/개정본 백업 회귀도 1/1 통과했다.
 - 신규 화면 13개 측정: 가로 넘침·44px 미만 조작·16px 미만 입력·이름 없는 조작·대비 실패 0. 3폭 홈/목차/복원 안내를 직접 열어 한글 제목·본문 위계도 별도 검토했다. 빈 홈의 버튼과 구분선이 붙은 문제는 기존 빈 상태 컨테이너 재사용으로 수정했다. 화면 크기 모사는 Apple 실기 검증이 아니다.
 - 820px에서 실제 내려받은 HTML을 앱 스크립트 없는 localhost 문서로 열어 [수정 후 PDF](evidence/book-completion/reopened-edited-book.pdf)를 생성하고 한글 수정문장을 추출해 확인했다. 실제 OS 인쇄 대화상자 저장이나 file:// 열기 성공을 뜻하지 않는다.
 
-Linux Chromium 151, 익명 모의 Auth/실제 SDK·IndexedDB로 검사했다. 콘솔·페이지 오류·예상 밖 외부 요청·운영 쓰기는 0이다. 최초 추가 경계 검사에서 ‘내 책 모두 보기’가 이전 책 편집기를 여는 실제 결함을 발견했다. 명시적인 목록 열기 옵션으로 수정했고 경계 재검사를 통과했다. 최초 실패 기록도 원본 실행 보고서에 보존했다.
+Linux Chromium 151, 익명 모의 Auth/실제 SDK·IndexedDB로 검사했다. 콘솔·페이지 오류·예상 밖 외부 요청·운영 쓰기는 0이다. 최초 추가 경계 검사에서 ‘내 책 모두 보기’가 이전 책 편집기를 여는 실제 결함을 발견했다. 명시적인 목록 열기 옵션으로 수정했고 경계 재검사를 통과했다. 최초 실패 기록도 원본 실행 보고서에 보존했다. 추가로 늦은 구성 로딩 때 최근 기록 버튼의 DOM 이동으로 키보드 초점을 잃는 결함을 수정했다. [초점 회귀 1/1](evidence/book-completion/home-focus.json)은 로딩 중 초점 → 로딩 완료 → Enter → 정확 원문 읽기와 저장 불변을 확인하며, 이전 home.js만 대체한 동일 검사는 초점 유지 조건에서 실패했다.
 
 [1440px 홈](evidence/book-completion/home-books-1440.png) · [820px 홈](evidence/book-completion/home-books-820.png) · [390px 홈](evidence/book-completion/home-books-390-viewport.png) · [목록의 목차](evidence/book-completion/book-list-outline-390-viewport.png) · [복원 안내](evidence/book-completion/restore-review-390-viewport.png)
 
