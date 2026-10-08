@@ -68,6 +68,14 @@
         book.chapters.forEach((chapter, index) => {
           manuscript.append(node('h6', (index + 1) + '. ' + chapter.title), node('p', chapter.note, 'life-note'));
           chapter.versionIds.forEach(id => manuscript.append(versionLine(id)));
+          for (const thought of chapter.insights || []) {
+            manuscript.append(node('p', '현재 해석' + (thought.excluded ? ' · 원고에서 제외' : ''), 'life-meta'),
+              node('p', thought.statement, 'life-note'), node('p', '아직 모르는 점: ' + thought.uncertainty, 'life-note'));
+            manuscript.append(node('p', '뒷받침하는 글', 'life-meta'));
+            thought.supportVersionIds.forEach(id => manuscript.append(versionLine(id)));
+            manuscript.append(node('p', '다른 관점의 글', 'life-meta'));
+            thought.counterVersionIds.forEach(id => manuscript.append(versionLine(id)));
+          }
         });
         details.append(manuscript);
       }

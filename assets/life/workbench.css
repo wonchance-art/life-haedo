@@ -206,3 +206,12 @@
 .life-workbench[data-mode=books] .life-tooltip { left: auto; right: 0; transform: none; }
 .life-workbench[data-mode=books] .wb-book-outline .life-tooltip { white-space: normal; width: max-content; max-width: 150px; }
 @media (forced-colors: active) { .wb-chapter-open[aria-current=true] { outline: 1px solid Highlight; } }
+
+.wb-insight-row { padding-block: 12px; border-bottom: 1px solid var(--line); }
+.wb-insight-row > p { font-size: 15px; line-height: 1.8; white-space: pre-wrap; }
+.wb-insight-row[data-current=true] > p { color: var(--color-primary); }
+.wb-insights-content > #wbInsightCreate { margin-block: 14px; }
+.wb-insight-editor { margin-block: 18px; padding-block: 10px 20px; border-bottom: 1px solid var(--line); }
+.wb-insight-editor > .life-field:first-child textarea { background: var(--mint); color: var(--mint-ink); }
+.wb-insight-sources > .wb-source { padding-block: 12px; border-bottom: 1px solid var(--line); }
+.wb-insight-editor > #wbInsightExclude { margin-top: 12px; }

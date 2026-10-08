@@ -1543,7 +1543,7 @@
         // Keep the exact source return target visible after returning from its reader.
         sourceBox.open = view.evidenceOpen === chapter.id;
         sourceBox.addEventListener('toggle', () => { if (active()) view.evidenceOpen = sourceBox.open ? chapter.id : null; });
-        editor.append(sourceBox); bodyNode.append(editor);
+        editor.append(insightPanel(session, book, chapter, view, active), sourceBox); bodyNode.append(editor);
       } else bodyNode.append(empty('첫 장을 추가해 글과 생각을 모아 보세요.'));
       const exportBox = details('책 원고 파일로 보관');
       const include = toggle('연결한 원문 본문도 포함', false, () => {}); include.querySelector('input').id = 'wbBookIncludeSources';
@@ -1556,8 +1556,94 @@
         document.body.append(link); link.click(); link.remove();
         global.setTimeout(() => { URL.revokeObjectURL(url); urls.delete(url); }, 30000);
       }); exportButton.id = 'wbBookExport';
-      exportBox.append(include, notice('이 책의 모든 장을 목차 순서대로 받습니다. 기본은 직접 쓴 원고와 출처 목록이며 공개 게시하지 않습니다. 복원에는 자료·구성 JSON 백업을 사용하세요.'), exportButton);
+      exportBox.append(include, notice('이 책의 모든 장과 제외하지 않은 생각을 목차 순서대로 받습니다. 기본은 직접 쓴 원고·해석·출처이며 공개 게시하지 않습니다. 제외한 생각을 이미 원고에 적었다면 그 문장은 직접 검토하세요. 복원에는 자료·구성 JSON 백업을 사용하세요.'), exportButton);
       bodyNode.append(exportBox);
+    }
+
+    function insightPanel(session, book, chapter, view, bookActive) {
+      const panel = details('생각과 근거'); panel.id = 'wbChapterInsights';
+      panel.open = view.insightsOpenChapter === chapter.id;
+      panel.addEventListener('toggle', () => { if (bookActive()) view.insightsOpenChapter = panel.open ? chapter.id : null; });
+      const content = el('div', null, 'wb-insights-content'); panel.append(content);
+      let turn = 0;
+      function fill() {
+        const stamp = ++turn, active = () => bookActive() && turn === stamp;
+        async function change(task, focusId) {
+          if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 생각을 바꿔 주세요.');
+          await flush(); if (!active()) return;
+          task(); fill();
+          const target = focusId && content.querySelector('#' + focusId);
+          target?.focus({ preventScroll: true }); target?.scrollIntoView({ block: 'nearest' });
+        }
+        const insights = chapter.insights || [], enabled = insights.filter(item => !item.excluded);
+        panel.querySelector('summary').textContent = '생각과 근거 · ' + enabled.length + '개';
+        content.replaceChildren();
+        const list = el('div', null, 'wb-insight-list');
+        const names = new Map();
+        function insightRow(item, excluded) {
+          const row = el('div', null, 'wb-row wb-insight-row'); row.dataset.insightId = item.id;
+          const name = el('p', item.statement.trim() ? item.statement.slice(0, 120) : '아직 적지 않은 생각', 'wb-grow'); names.set(item.id, name);
+          row.append(name, discoveryIcon(excluded ? '생각 복원' : '생각 열기', excluded ? 'plus' : 'edit', () => change(() => {
+            if (excluded) { item.excluded = false; mark(session); }
+            view.insightId = item.id;
+          }, 'wbInsightStatement')));
+          if (view.insightId === item.id) row.dataset.current = 'true';
+          return row;
+        }
+        enabled.forEach(item => list.append(insightRow(item, false)));
+        if (!enabled.length) list.append(notice('글을 읽으며 달라진 생각이나 아직 답하지 못한 질문을 남겨 보세요.'));
+        const add = action('생각 추가', () => change(() => {
+          if (insights.length >= limits.chapterInsights) throw fault('limit_reached', '한 장의 생각은 제외한 항목을 포함해 ' + limits.chapterInsights + '개까지 보관할 수 있습니다.');
+          const item = { id: core.id(), statement: '', uncertainty: '', supportVersionIds: [], counterVersionIds: [], excluded: false };
+          chapter.insights = insights.concat(item); view.insightId = item.id; mark(session);
+        }, 'wbInsightStatement')); add.id = 'wbInsightCreate';
+        content.append(list, add);
+        const item = insights.find(value => value.id === view.insightId && !value.excluded);
+        if (item) {
+          const editor = el('section', null, 'wb-insight-editor'); editor.dataset.activeInsightId = item.id;
+          const statement = field('지금의 생각', item.statement, { id: 'wbInsightStatement', multiline: true, max: limits.text, change: value => {
+            item.statement = value; names.get(item.id).textContent = value.trim() ? value.slice(0, 120) : '아직 적지 않은 생각';
+          } }); statement.input.rows = 5; statement.input.placeholder = '예: 예전에는 결과를 먼저 보았지만, 이제는 내가 선택한 이유를 더 오래 돌아본다.';
+          const uncertainty = field('아직 모르는 점', item.uncertainty, { id: 'wbInsightUncertainty', multiline: true, max: limits.text, change: value => { item.uncertainty = value; } });
+          uncertainty.input.rows = 3; uncertainty.input.placeholder = '다른 설명이 가능한지, 어떤 기록이 더 필요한지 적어 보세요.';
+          editor.append(statement.wrapper, notice('당시의 기록과 구분한 현재의 해석입니다. 연결한 글이 생각을 자동으로 증명하지는 않습니다.'));
+          for (const [role, key, label, pickerLabel] of [
+            ['Support', 'supportVersionIds', '뒷받침하는 글', '뒷받침할 원문 연결'],
+            ['Counter', 'counterVersionIds', '다른 관점의 글', '다른 관점의 원문 연결']
+          ]) {
+            const box = details(label + ' · ' + item[key].length + '개'); box.id = 'wbInsight' + role;
+            const pickerHost = el('div'), rows = el('div', null, 'wb-insight-sources'); rows.id = box.id + 'Rows';
+            const slot = item.id + ':' + role; view.insightShown ||= {};
+            let shown = view.insightShown[slot] || 20;
+            const more = action('연결한 글 더 보기', () => { shown += 20; view.insightShown[slot] = shown; sources(); });
+            const refill = () => pickerHost.replaceChildren(picker(pickerLabel, () => item[key], (id, selected) => {
+              item[key] = selected ? item[key].concat(id) : item[key].filter(value => value !== id);
+              mark(session); sources();
+            }, { max: limits.insightVersions }));
+            const sources = () => {
+              box.querySelector('summary').textContent = label + ' · ' + item[key].length + '개'; rows.replaceChildren();
+              for (const id of item[key].slice(0, shown)) {
+                const row = sourceRow(id, { focusKey: 'insight:' + book.id + ':' + chapter.id + ':' + item.id + ':' + role + ':' + id,
+                  isCurrent: active, remove: () => { item[key] = item[key].filter(value => value !== id); mark(session); refill(); sources(); box.querySelector('summary').focus(); } });
+                const info = sourceInfo(id); row.append(el('p', '원문 작성일 · ' + (info?.version.originalCreatedAt || '미확인'), 'life-meta')); rows.append(row);
+              }
+              if (!item[key].length) rows.append(notice(role === 'Support' ? '아직 연결한 근거가 없습니다. 기억이나 추정은 아직 모르는 점에 구분해 적어도 됩니다.' : '다른 관점의 글이 없다는 뜻은 아닙니다. 아직 찾지 못한 반례도 남겨 두세요.'));
+              more.hidden = item[key].length <= shown;
+            };
+            box.append(pickerHost, rows, more); refill(); sources(); editor.append(box);
+          }
+          const exclude = action('원고에서 제외', () => change(() => { item.excluded = true; view.insightId = null; mark(session); }, 'wbInsightExcludedSummary')); exclude.id = 'wbInsightExclude';
+          editor.append(uncertainty.wrapper, exclude, notice('제외하면 이 생각과 전용 근거는 책 파일에서 빠집니다. 장 원고에 이미 적은 문장과 별도로 연결한 글은 유지되며, 자료 삭제나 모든 분석에서의 제외는 아닙니다.'));
+          content.append(editor);
+        }
+        const removed = insights.filter(value => value.excluded);
+        if (removed.length) {
+          const excluded = details('제외한 생각 · ' + removed.length + '개'); excluded.id = 'wbInsightExcluded';
+          excluded.querySelector('summary').id = 'wbInsightExcludedSummary';
+          removed.forEach(value => excluded.append(insightRow(value, true))); content.append(excluded);
+        }
+      }
+      fill(); return panel;
     }
 
     function download(data, name) {
@@ -1588,7 +1674,12 @@
         text.push('\n회고 원문', ...state.reflection.versionIds.map(id => sourceName(id)), state.reflection.note);
         for (const book of state.books || []) {
           text.push('\n책: ' + book.title, '기간: ' + book.fromYear + ' ~ ' + book.toYear, book.question);
-          book.chapters.forEach((chapter, index) => text.push('\n' + (index + 1) + '. ' + chapter.title, chapter.note, ...chapter.versionIds.map(id => sourceName(id))));
+          book.chapters.forEach((chapter, index) => {
+            text.push('\n' + (index + 1) + '. ' + chapter.title, chapter.note, ...chapter.versionIds.map(id => sourceName(id)));
+            for (const thought of chapter.insights || []) text.push('\n현재 해석' + (thought.excluded ? ' · 원고에서 제외' : ''), thought.statement,
+              '아직 모르는 점: ' + thought.uncertainty, '뒷받침하는 글', ...thought.supportVersionIds.map(id => sourceName(id)),
+              '다른 관점의 글', ...thought.counterVersionIds.map(id => sourceName(id)));
+          });
         }
         return text.join('\n');
       }
