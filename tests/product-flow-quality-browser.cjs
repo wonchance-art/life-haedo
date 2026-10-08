@@ -8,6 +8,7 @@ const assert = require('node:assert/strict'), fs = require('node:fs/promises'), 
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, ready, shellReady, settle, nav, makeContext, observe } = require('./unified-home-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
+const { verifyPageBody } = require('./life-workbench-browser.cjs');
 const phase = process.env.FLOW_PHASE || 'after', baseline = phase === 'baseline';
 const out = path.resolve(__dirname, '../.local/product-flow-quality', phase);
 const quote = '한 장을 오래 보는 편이 기억에 도움이 됐다🌱';
@@ -101,7 +102,13 @@ async function main() {
         const entry = page.locator('.wb-page-entry').first(), entryId = await entry.getAttribute('data-entry-id'); await entry.locator('.wb-page-entry-edit > summary').click();
         await entry.getByLabel('내 코멘트', { exact: true }).fill(comment); await poll(page, state => state.workbench.page.entries[0].note === comment);
         await entry.locator(`[data-part-version-id="${refs.photo.versionId}"] input[type=checkbox]`).uncheck(); await poll(page, state => state.workbench.page.entries[0].parts[1].enabled === false); await shot('page-edited');
-        await page.locator('#wbPagePreview').click(); await page.locator('#wbVisitor').waitFor(); const visitor = await page.locator('#wbVisitor').textContent(); assert(visitor.includes(samples[0].text)); assert(visitor.includes(comment)); assert(!visitor.includes(samples[1].text)); await shot('page-preview');
+        await page.locator('#wbPagePreview').click(); await page.locator('#wbVisitor').waitFor();
+        const visitor = await page.locator('#wbVisitor').textContent();
+        if (baseline) assert(visitor.includes(samples[0].text));
+        else await verifyPageBody(page.locator(`#wbVisitor [data-version-id="${refs.walk.versionId}"]`), samples[0].text, { folded: true });
+        assert(visitor.includes(comment)); assert(!visitor.includes(samples[1].text));
+        assert.equal(await page.locator(`#wbVisitor [data-version-id="${refs.photo.versionId}"]`).count(), 0, 'A disabled source must be absent from the private preview');
+        await shot('page-preview');
         await page.locator('#wbPagePreview').click(); await page.locator('.wb-page-entry-edit > summary').waitFor();
         const editorOpenAfterPreview = await entry.locator('.wb-page-entry-edit').evaluate(el => el.open); report.observations.push({ scenario: 'page edit after preview', width: size.width, editorOpenAfterPreview });
         if (!baseline) assert.equal(editorOpenAfterPreview, true, 'Returning from preview must retain the editing context');
@@ -112,7 +119,10 @@ async function main() {
         const revisedState = await snapshot(page); assert.deepEqual(revisedState.bundle.records, sourceBundle.records); assert.deepEqual(revisedState.bundle.sourceVersions.find(version => version.id === refs.walk.versionId), sourceBundle.sourceVersions.find(version => version.id === refs.walk.versionId));
         await page.goto(base + '/index.html?section=records&view=page'); await ready(page); await page.locator(`.wb-page-entry[data-entry-id="${entryId}"]`).waitFor();
         assert.equal((await snapshot(page)).workbench.page.entries[0].parts[0].versionId, refs.walk.versionId);
-        await page.locator('#wbPagePreview').click(); await page.locator('#wbVisitor').waitFor(); assert((await page.locator('#wbVisitor').textContent()).includes(comment)); await shot('page-reopened');
+        await page.locator('#wbPagePreview').click(); await page.locator('#wbVisitor').waitFor();
+        if (baseline) assert((await page.locator('#wbVisitor').textContent()).includes(samples[0].text));
+        else await verifyPageBody(page.locator(`#wbVisitor [data-version-id="${refs.walk.versionId}"]`), samples[0].text, { folded: true });
+        assert((await page.locator('#wbVisitor').textContent()).includes(comment)); await shot('page-reopened');
         assert(!(await page.locator('#wbVisitor').textContent()).includes(changedMarker), 'A page copy must keep its selected old version after a newer original is imported');
         const publicContext = await makeContext(browser, server, 'anonymous-preview-' + size.width, null, { viewport: size, hasTouch: size.width <= 820 }), publicPage = await publicContext.newPage(); observe(publicPage, report, 'anonymous private preview ' + size.width);
         try { await publicPage.goto(base + '/index.html?section=records&view=page'); await shellReady(publicPage); assert.equal(await publicPage.locator('#lifeApp').isHidden(), true); assert.equal(await publicPage.locator('#wbVisitor').count(), 0); assert.deepEqual(await publicPage.evaluate(() => __homeDbOpens), []); }

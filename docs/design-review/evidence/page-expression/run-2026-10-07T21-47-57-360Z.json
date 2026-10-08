@@ -1,0 +1,35 @@
+{
+  "createdAt": "2026-10-07T21:47:57.360Z",
+  "browser": "151.0.7922.173",
+  "scope": "Actual private page/preview, bundled SDK and IndexedDB; synthetic intercepted publication; Chromium viewport/touch/keyboard, not Apple hardware or native IME.",
+  "checks": [
+    {
+      "name": "free-form dates, duplicate-source entry independence and responsive fold boundaries",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "observations": [
+    {
+      "scene": "responsive-duplicate-source",
+      "widths": [
+        701,
+        700,
+        390,
+        820
+      ],
+      "freeFormDatePreserved": true,
+      "unknownDateOmitted": true,
+      "eachEntryIndependent": true,
+      "expandedTextNodeRetained": true,
+      "selectedPhraseRetained": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "operatingRemoteWrites": 0,
+  "pass": true,
+  "finishedAt": "2026-10-07T21:47:58.519Z"
+}

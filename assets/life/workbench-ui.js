@@ -863,9 +863,53 @@
       bodyNode.append(box);
       if (!listing.started) { listing.started = true; loadPublicPages(); }
     }
+    // Display-only exact prefix: never write this text or expansion state to
+    // the workbench, source bundle, backup or public snapshot.
+    function pageOpening(text, narrow) {
+      const limit = narrow ? 90 : 150;
+      if (text.length <= limit + 40) return text;
+      let end = limit;
+      const paragraph = Math.max(text.lastIndexOf('\n\n', end), text.lastIndexOf('\r\n\r\n', end));
+      const space = Math.max(text.lastIndexOf(' ', end), text.lastIndexOf('\n', end));
+      if (paragraph > limit / 2) end = paragraph;
+      else if (space > limit / 2) end = space;
+      if (/^[\uDC00-\uDFFF]$/.test(text[end])) end -= 1;
+      if (text[end - 1] === '\r' && text[end] === '\n') end -= 1;
+      return text.slice(0, end);
+    }
+    function pageBody(text, entryId, versionId) {
+      const session = current, token = generation;
+      const expanded = session.pageExpanded ||= new Set();
+      const key = entryId + ':' + versionId;
+      const content = el('pre', null, 'wb-source-body');
+      content.id = 'wbPageBody-' + key; content.tabIndex = -1;
+      const button = el('button', '', 'life-button wb-page-expand'); button.type = 'button';
+      button.setAttribute('aria-controls', content.id);
+      const narrow = global.matchMedia('(max-width: 700px)');
+      function fill() {
+        const prefix = pageOpening(text, narrow.matches), canFold = prefix !== text;
+        const open = expanded.has(key);
+        const shownText = open ? text : prefix;
+        if (content.textContent !== shownText) content.textContent = shownText;
+        content.dataset.collapsed = String(canFold && !open);
+        button.hidden = !canFold; button.textContent = open ? '본문 접기' : '본문 펼치기';
+        button.setAttribute('aria-expanded', String(open));
+      }
+      button.addEventListener('click', () => {
+        if (!showing(token, session) || !button.isConnected || installing) return;
+        const open = !expanded.has(key);
+        if (open) expanded.add(key); else expanded.delete(key);
+        fill();
+        const target = open ? content : button;
+        target.focus({ preventScroll: true }); target.scrollIntoView({ block: open ? 'start' : 'nearest' });
+      });
+      narrow.addEventListener('change', fill);
+      viewCleanups.push(() => narrow.removeEventListener('change', fill));
+      fill(); return { content, button };
+    }
     function pagePart(part, entry, index) {
       const info = sourceInfo(part.versionId);
-      const section = el('div', null, 'wb-page-part'); section.dataset.versionId = part.versionId;
+      const section = el('div', null, 'wb-page-part wb-source'); section.dataset.versionId = part.versionId;
       if (!info) {
         section.append(el('p', '연결된 원문 없음', 'wb-source-title'), notice('이 버전은 현재 공간에 없습니다. 다른 버전으로 바꾸지 않았습니다.'));
         return section;
@@ -879,8 +923,30 @@
       else if (info.version.coverage.status === 'partial') metadata.push('일부 본문');
       else if (info.version.coverage.status === 'unknown') metadata.push('확보 범위 미확인');
       if (info.total > 1) metadata.push(info.number + '/' + info.total + ' 버전');
-      section.append(el('p', metadata.join(' · '), 'life-meta wb-page-source-meta'));
-      if (entry.showBody && info.version.contentText != null) section.append(el('p', info.version.contentText, 'wb-source-body'));
+      const meta = el('div', null, 'wb-page-metadata');
+      meta.append(el('p', metadata.join(' · '), 'life-meta wb-page-source-meta'));
+      // Imported dates may be free-form (or unknown). Preserve the selected
+      // version's value without inventing a timezone, precision or activity date.
+      if (info.version.originalCreatedAt) meta.append(el('p', '원문 작성일 ' + info.version.originalCreatedAt, 'life-meta wb-page-source-date'));
+      section.append(meta);
+      if (info.version.coverage.omissions.length) section.append(el('p', '포함되지 않은 내용 · ' + info.version.coverage.omissions.join(' · '), 'life-meta wb-page-omissions'));
+      const body = entry.showBody && info.version.contentText != null ? pageBody(info.version.contentText, entry.id, part.versionId) : null;
+      if (body) section.append(body.content);
+      const focusKey = 'page:body:' + entry.id + ':' + part.versionId;
+      const open = discoveryIcon('이 원문 버전 열기', 'book', () => openVersion(part.versionId, focusKey));
+      open.classList.add('wb-page-source-open'); open.dataset.focusKey = focusKey;
+      const sourceActions = el('div', null, 'life-actions wb-page-source-actions');
+      if (body) sourceActions.append(body.button);
+      if (info.source.url) {
+        try {
+          const url = new URL(info.source.url);
+          if (['http:', 'https:'].includes(url.protocol)) {
+            const link = el('a', '원문 출처', 'wb-source-link'); link.href = url.href;
+            link.target = '_blank'; link.rel = 'noopener noreferrer'; sourceActions.append(link);
+          }
+        } catch (_) { /* Invalid URLs never become links. */ }
+      }
+      sourceActions.append(open); section.append(sourceActions);
       return section;
     }
     function renderPage() {
@@ -1046,14 +1112,14 @@
       entries.sort((a, b) => Number(b.pinned) - Number(a.pinned));
       if (!entries.length) visitor.append(empty('표시할 항목이 없습니다. 편집에서 항목 표시를 켜 주세요.'));
       entries.forEach(entry => {
-        const article = el('article', null, 'wb-feed'); article.dataset.entryId = entry.id;
-        const head = el('div', null, 'wb-row'); head.append(el('h3', entry.title, 'wb-grow'));
+        const article = el('article', null, 'wb-feed wb-page-entry'); article.dataset.entryId = entry.id;
+        const head = el('div', null, 'wb-row wb-page-entry-heading'); head.append(el('h3', entry.title, 'wb-grow'));
         if (entry.pinned) { const pin = life.Icons.create('bookmark'); const note = el('span', '고정한 항목', 'life-sr-only'); head.append(pin, note); }
         article.append(head);
-        entry.parts.filter(part => part.enabled).forEach((part, index) => article.append(sourceRow(part.versionId, {
-          body: entry.showBody, previewOnly: true, hideTitle: index === 0 && sourceInfo(part.versionId)?.source.title === entry.title
-        })));
-        if (entry.showNote && entry.note) { const note = el('div', null, 'wb-comment'); note.append(el('p', '내 코멘트', 'life-meta'), el('p', entry.note, 'wb-comment-body')); article.append(note); }
+        const content = el('div', null, 'wb-page-content');
+        entry.parts.filter(part => part.enabled).forEach((part, index) => content.append(pagePart(part, entry, index)));
+        if (entry.showNote && entry.note) { const note = el('div', null, 'wb-comment'); note.append(el('p', '내 코멘트', 'life-meta'), el('p', entry.note, 'wb-comment-body')); content.append(note); }
+        article.append(content);
         visitor.append(article);
       });
       bodyNode.append(visitor);

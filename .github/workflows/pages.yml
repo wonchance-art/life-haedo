@@ -121,6 +121,9 @@ jobs:
       - name: Verify page ordering and preview return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/page-flow-quality-browser.cjs
+      - name: Verify private page expression and preservation boundaries
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/page-expression-browser.cjs
       - name: Verify import-to-page product flow
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/product-flow-quality-browser.cjs
@@ -153,6 +156,7 @@ jobs:
             .local/product-flow-quality/
             .local/search-quality/
             .local/expression-design/
+            .local/page-expression/
             .local/browser-ci/server.log
           include-hidden-files: true
           if-no-files-found: warn
