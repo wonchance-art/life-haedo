@@ -138,6 +138,8 @@ test('an account change between scheduling and running a timer rejects asynchron
 test('a durable lost-response outbox is replayed unchanged before reading the newer remote head', async t => {
   const f = fixture(t);
   f.state.local.revision = 2; f.state.local.reflection.note = '이어 쓰다 응답을 받지 못한 메모 🌱';
+  f.state.local.books = [{ id: 'book_pending', title: '응답을 잃은 책', fromYear: '', toYear: '', question: '',
+    chapters: [{ id: 'chapter_pending', title: '옛 글에서 시작', note: '보관한 책 원고\r\n🌱', versionIds: ['exact_old_version', 'missing_version'] }] }];
   f.state.meta.outbox = { operationId: OPERATION, expectedRevision: 1, sourceRevision: 1,
     localRevision: 2, data: copy(f.state.local) };
   f.state.meta.status = 'pending';
@@ -153,6 +155,24 @@ test('a durable lost-response outbox is replayed unchanged before reading the ne
   assert.equal(result.status, 'synced');
   assert.deepEqual(f.state.local, durableOutbox.data);
   assert.equal(f.state.mutations.includes('conflict'), false);
+});
+
+test('a failed book upload preserves the durable outbox and retries the same complete operation', async t => {
+  const f = fixture(t);
+  f.state.local.revision = 2;
+  f.state.local.books = [{ id: 'book_retry', title: '재시도할 책', fromYear: '', toYear: '', question: '그때와 지금',
+    chapters: [{ id: 'chapter_retry', title: '첫 장', note: '지워지면 안 되는 원고', versionIds: ['exact_old_version', 'missing_version'] }] }];
+  f.state.meta.outbox = { operationId: OPERATION, expectedRevision: 1, sourceRevision: 1, localRevision: 2, data: copy(f.state.local) };
+  f.state.meta.status = 'pending'; const durable = copy(f.state.meta.outbox), local = copy(f.state.local);
+  f.state.writeOverride = () => { throw Object.assign(new Error('fixture transport failure'), { code: 'network_error' }); };
+  await assert.rejects(f.manager.syncNow(WORKSPACE), { code: 'network_error' });
+  assert.deepEqual(f.state.meta.outbox, durable); assert.deepEqual(f.state.local, local);
+  assert.equal(f.state.mutations.includes('ack'), false);
+  f.state.row = { ...f.state.row, revision: 2, data: copy(durable.data) };
+  f.state.writeOverride = () => ({ status: 'stored', revision: 2 });
+  assert.equal((await f.manager.syncNow(WORKSPACE)).status, 'synced');
+  assert.deepEqual(f.state.sent, [{ workspaceId: WORKSPACE, ...durable }, { workspaceId: WORKSPACE, ...durable }]);
+  assert.equal(f.state.meta.outbox, null); assert.deepEqual(f.state.local.books, local.books);
 });
 
 test('late remote responses after A changes to B or returns to A cannot mutate local composition', async t => {

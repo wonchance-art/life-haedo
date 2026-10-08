@@ -9,7 +9,8 @@
   'use strict';
 
   const LIMITS = Object.freeze({ groups: 100, groupVersions: 1000, entries: 200, parts: 100,
-    reflectionVersions: 1000, excludedPairs: 1000, title: 500, text: 20000, bytes: 2 * 1024 * 1024 });
+    reflectionVersions: 1000, excludedPairs: 1000, books: 20, bookChapters: 100, chapterVersions: 1000,
+    title: 500, text: 20000, bytes: 2 * 1024 * 1024 });
   const clone = value => JSON.parse(JSON.stringify(value));
   const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value) &&
     (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
@@ -50,6 +51,10 @@
     for (const id of value) unique(id, seen);
   }
   function bool(value) { assert(typeof value === 'boolean', 'invalid_workbench', '구성의 표시 설정은 켜기 또는 끄기로 지정해 주세요.'); }
+  function year(value) {
+    assert(value === '' || typeof value === 'string' && /^[0-9]{4}$/.test(value) && Number(value) > 0,
+      'invalid_workbench', '책의 기간은 빈 값 또는 네 자리 연도로 입력해 주세요.');
+  }
   function core() {
     const value = root.HaedoLife?.Core || (typeof require === 'function' ? require('./core.js') : null);
     assert(value?.validateWorkspace && value?.makeBackup && value?.restoreBackup && value?.id,
@@ -63,7 +68,7 @@
       reflection: { versionIds: [], note: '' } };
   }
   function validate(state) {
-    fields(state, ['format', 'workspaceId', 'revision', 'groups', 'page', 'reflection'], ['discovery']);
+    fields(state, ['format', 'workspaceId', 'revision', 'groups', 'page', 'reflection'], ['discovery', 'books']);
     assert(state.format === 'life-workbench-v1', 'unsupported_workbench', '지원하는 구성 파일 형식이 아닙니다.');
     identifier(state.workspaceId);
     assert(Number.isSafeInteger(state.revision) && state.revision >= 0, 'invalid_revision', '구성 저장 버전을 확인해 주세요.');
@@ -86,6 +91,22 @@
     }
     fields(state.reflection, ['versionIds', 'note']);
     versionList(state.reflection.versionIds, LIMITS.reflectionVersions); text(state.reflection.note, LIMITS.text);
+    if (Object.hasOwn(state, 'books')) {
+      list(state.books, LIMITS.books);
+      for (const book of state.books) {
+        fields(book, ['id', 'title', 'fromYear', 'toYear', 'question', 'chapters']);
+        unique(book.id, ids); text(book.title, LIMITS.title, false); text(book.question, LIMITS.text);
+        year(book.fromYear); year(book.toYear);
+        assert(!book.fromYear || !book.toYear || Number(book.fromYear) <= Number(book.toYear),
+          'invalid_workbench', '책의 시작 연도는 끝 연도보다 늦을 수 없습니다.');
+        list(book.chapters, LIMITS.bookChapters);
+        for (const chapter of book.chapters) {
+          fields(chapter, ['id', 'title', 'note', 'versionIds']);
+          unique(chapter.id, ids); text(chapter.title, LIMITS.title, false); text(chapter.note, LIMITS.text);
+          versionList(chapter.versionIds, LIMITS.chapterVersions);
+        }
+      }
+    }
     if (Object.hasOwn(state, 'discovery')) {
       fields(state.discovery, ['excludedPairs']); list(state.discovery.excludedPairs, LIMITS.excludedPairs);
       const excluded = new Set();
@@ -99,7 +120,7 @@
       }
     }
     assert(new TextEncoder().encode(JSON.stringify(state)).length <= LIMITS.bytes,
-      'workbench_too_large', '활동·페이지 구성은 합계 2 MiB까지 보관할 수 있습니다.');
+      'workbench_too_large', '묶음·페이지·회고·책 구성은 합계 2 MiB까지 보관할 수 있습니다.');
     // Missing versions remain explicit references. Reading never substitutes a newer version.
     return true;
   }
@@ -133,11 +154,13 @@
     for (const value of [original, bundle]) for (const key of ['sources', 'sourceVersions', 'records', 'links', 'resumeHints', 'tombstones'])
       for (const item of value[key]) { used.add(item.id); if (item.entityId) used.add(item.entityId); }
     const referenced = workbench.groups.flatMap(group => group.versionIds).concat(
-      workbench.page.entries.flatMap(entry => entry.parts.map(part => part.versionId)), workbench.reflection.versionIds);
+      workbench.page.entries.flatMap(entry => entry.parts.map(part => part.versionId)), workbench.reflection.versionIds,
+      (workbench.books || []).flatMap(book => book.chapters.flatMap(chapter => chapter.versionIds)));
     const excludedPairs = workbench.discovery?.excludedPairs || [];
     const sourceReferences = excludedPairs.flatMap(pair => [pair.seedSourceId, pair.candidateSourceId]);
     for (const value of referenced.concat(sourceReferences)) used.add(value);
     for (const item of workbench.groups.concat(workbench.page.entries)) used.add(item.id);
+    for (const book of workbench.books || []) { used.add(book.id); for (const chapter of book.chapters) used.add(chapter.id); }
     const freshId = () => {
       for (let attempt = 0; attempt < 1024; attempt++) { const value = core().id(); if (!used.has(value)) { used.add(value); return value; } }
       fail('id_collision', '사본 식별자를 만들지 못했습니다. 다시 시도해 주세요.');
@@ -153,6 +176,12 @@
       for (const part of entry.parts) part.versionId = versions.get(part.versionId);
     }
     workbench.reflection.versionIds = workbench.reflection.versionIds.map(value => versions.get(value));
+    for (const book of workbench.books || []) {
+      book.id = freshId();
+      for (const chapter of book.chapters) {
+        chapter.id = freshId(); chapter.versionIds = chapter.versionIds.map(value => versions.get(value));
+      }
+    }
     for (const pair of excludedPairs) {
       pair.seedSourceId = sources.get(pair.seedSourceId);
       pair.candidateSourceId = sources.get(pair.candidateSourceId);
