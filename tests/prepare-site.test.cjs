@@ -7,7 +7,7 @@ const {spawnSync}=require('node:child_process');
 const root=path.resolve(__dirname,'..');
 function build(target){return spawnSync(process.execPath,['scripts/prepare-site.mjs',target],{cwd:root,encoding:'utf8',env:{...process.env,HAEDO_SUPABASE_URL:'https://life-sync-test.supabase.co',HAEDO_SUPABASE_KEY:'sb_publishable_anonymous_build_test'}});}
 test('repeat public build removes stale private canary and old SDK while preserving source config',async()=>{
-  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'haedo-public-build-'));
+  const dir=await fs.mkdtemp(path.join(await fs.realpath(os.tmpdir()),'haedo-public-build-'));
   const target=path.join(dir,'site'),source=await fs.readFile(path.join(root,'assets/platform-config.js'),'utf8');
   try{
     let result=build(target);assert.equal(result.status,0,result.stderr);
@@ -55,7 +55,7 @@ test('repeat public build removes stale private canary and old SDK while preserv
   }finally{await fs.rm(dir,{recursive:true,force:true});}
 });
 test('unowned nonempty output and source/symlink destinations are rejected without deleting files',async()=>{
-  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'haedo-build-guard-'));
+  const dir=await fs.mkdtemp(path.join(await fs.realpath(os.tmpdir()),'haedo-build-guard-'));
   try{
     const target=path.join(dir,'unowned');await fs.mkdir(target);await fs.writeFile(path.join(target,'keep.txt'),'keep');
     assert.notEqual(build(target).status,0);assert.equal(await fs.readFile(path.join(target,'keep.txt'),'utf8'),'keep');
