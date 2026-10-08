@@ -1,0 +1,351 @@
+{
+  "createdAt": "2026-10-08T00:58:57.810Z",
+  "browser": "151.0.7922.173",
+  "scope": "Actual reflection UI, SDK and IndexedDB with synthetic intercepted HTTP; Chromium viewport/touch/keyboard, not live accounts, AI self-analysis, Apple hardware or native IME.",
+  "checks": [
+    {
+      "name": "selected exact versions, view-only periods/themes, note and Markdown at 1440",
+      "pass": true
+    },
+    {
+      "name": "selected exact versions, view-only periods/themes, note and Markdown at 820",
+      "pass": true
+    },
+    {
+      "name": "selected exact versions, view-only periods/themes, note and Markdown at 390",
+      "pass": true
+    },
+    {
+      "name": "invalid period recovery and failed note save preserve manuscript and prevent export or navigation",
+      "pass": true
+    },
+    {
+      "name": "integrated backup restores exact reflection versions and manuscript into an independent local copy",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "scene": "chronology",
+      "width": 1440,
+      "screenshot": "chronology-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 648,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "themes-period",
+      "width": 1440,
+      "screenshot": "themes-period-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 648,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "chronology",
+      "width": 820,
+      "screenshot": "chronology-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 576,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "themes-period",
+      "width": 820,
+      "screenshot": "themes-period-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 576,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "empty",
+      "width": 390,
+      "screenshot": "empty-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 300,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "chronology",
+      "width": 390,
+      "screenshot": "chronology-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 300,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "themes-period",
+      "width": 390,
+      "screenshot": "themes-period-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 300,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "save-error",
+      "width": 390,
+      "screenshot": "save-error-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 300,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    }
+  ],
+  "observations": [
+    {
+      "width": 1440,
+      "selectedVersions": 8,
+      "filteredVisible": 5,
+      "unknownDatesVisible": 3,
+      "exactOldReaderAndReturn": true,
+      "noFilterPersistence": true,
+      "explicitQuestionAppend": true,
+      "defaultExportExcludesBodies": true,
+      "optInExportIncludesAllChosenExactBodies": true
+    },
+    {
+      "width": 820,
+      "selectedVersions": 8,
+      "filteredVisible": 5,
+      "unknownDatesVisible": 3,
+      "exactOldReaderAndReturn": true,
+      "noFilterPersistence": true,
+      "explicitQuestionAppend": true,
+      "defaultExportExcludesBodies": true,
+      "optInExportIncludesAllChosenExactBodies": true
+    },
+    {
+      "width": 390,
+      "selectedVersions": 8,
+      "filteredVisible": 5,
+      "unknownDatesVisible": 3,
+      "exactOldReaderAndReturn": true,
+      "noFilterPersistence": true,
+      "explicitQuestionAppend": true,
+      "defaultExportExcludesBodies": true,
+      "optInExportIncludesAllChosenExactBodies": true
+    },
+    {
+      "scene": "backup",
+      "schemaUnchanged": true,
+      "remappedExactVersions": 8,
+      "oldExcerptPreserved": true,
+      "originalWorkspaceUnchanged": true,
+      "newCopyUnbound": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "operatingRemoteWrites": 0,
+  "pass": true,
+  "finishedAt": "2026-10-08T00:59:07.554Z"
+}

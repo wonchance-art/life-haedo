@@ -306,7 +306,7 @@
       }
       return row;
     }
-    function picker(label, selected, change, { max = limits.groupVersions, single = false } = {}) {
+    function picker(label, selected, change, { max = limits.groupVersions, single = false, filter = () => true } = {}) {
       const box = details(label);
       const search = field('원문 제목·본문 찾기', '', {});
       search.input.type = 'search'; search.input.removeAttribute('maxLength');
@@ -317,7 +317,7 @@
         const bundle = getBundle(), needle = query.trim().toLocaleLowerCase('ko-KR');
         const versions = bundle.sourceVersions.slice().reverse().filter(version => {
           const info = sourceInfo(version.id, bundle);
-          return info && (!needle || (info.source.title + '\n' + (version.contentText || '')).toLocaleLowerCase('ko-KR').includes(needle));
+          return info && filter(version) && (!needle || (info.source.title + '\n' + (version.contentText || '')).toLocaleLowerCase('ko-KR').includes(needle));
         });
         list.replaceChildren();
         versions.slice(0, shown).forEach(version => {
@@ -1285,34 +1285,117 @@
       chooser.append(search.wrapper, count, list, more); bodyNode.append(relatedHost, chooser); fillRelated(); fill();
     }
     function renderReflection() {
-      const session = current, reflection = session.state.reflection;
-      bodyNode.append(notice('고른 자료를 돌아보고 내 생각을 적어보세요.'));
+      const session = current, token = generation, reflection = session.state.reflection;
+      const view = session.reflectionView ||= { mode: 'time', from: '', to: '', shown: 40 };
+      const reader = life.Reflection;
+      bodyNode.append(notice('당시의 글을 읽고 지금의 생각을 원고로 남깁니다.'));
+      const guidance = details('20대의 글에서 시작하기');
+      guidance.append(notice('시간순으로 장면을 살핀 뒤 관계·일·배움처럼 나에게 중요한 주제로 돌아보세요. 나이와 기간은 글만으로 추정하지 않습니다. 기록이 적은 시기도 빈 삶을 뜻하지 않습니다.'));
+      const pickerHost = el('div');
+      const controls = el('div', null, 'life-actions');
+      const time = action('연도별', () => { view.mode = 'time'; view.shown = 40; fill(); }); time.id = 'wbReflectionTime';
+      const theme = action('주제별', () => { view.mode = 'theme'; view.shown = 40; fill(); }); theme.id = 'wbReflectionThemes';
+      controls.append(time, theme);
+      const period = details('작성 연도로 좁히기');
+      const from = field('시작 연도', view.from, { id: 'wbReflectionFrom' });
+      const to = field('끝 연도', view.to, { id: 'wbReflectionTo' });
+      for (const input of [from.input, to.input]) { input.inputMode = 'numeric'; input.maxLength = 4; input.placeholder = '미지정'; }
+      const periodFields = el('div', null, 'wb-add-row'); periodFields.append(from.wrapper, to.wrapper);
+      const apply = action('기간 적용', () => {
+        reader.chronology(getBundle(), reflection.versionIds, { from: from.input.value, to: to.input.value });
+        view.from = from.input.value; view.to = to.input.value; view.shown = 40;
+        if (!session.error) clearError();
+        refillPicker(); fill();
+      }); apply.id = 'wbReflectionApplyPeriod';
+      const clear = action('기간 해제', () => { from.input.value = to.input.value = view.from = view.to = ''; view.shown = 40; if (!session.error) clearError(); refillPicker(); fill(); });
+      period.append(periodFields, apply, clear, notice('원문 작성 연도 기준이며 같은 연도 안은 선택순입니다. 경험 시기는 별도로 회고에 적어 주세요. 시기 미확인 자료도 남깁니다. 기간은 이번 화면의 보기 조건이며 선택·회고·백업에는 저장하지 않습니다.'));
       const overview = el('div', null, 'wb-reflection-overview'); overview.id = 'wbReflectionSummary';
-      const selectedList = el('div');
+      const selectedList = el('div', null, 'wb-reflection-reading'); selectedList.id = 'wbReflectionReading';
+      const more = action('기록 더 보기', () => { view.shown += 40; fill(); }); more.id = 'wbReflectionMore';
+      const included = () => new Set(reader.chronology(getBundle(), getBundle().sourceVersions.map(item => item.id), view).flatMap(group => group.versionIds));
+      const refillPicker = () => {
+        const allowed = included();
+        pickerHost.replaceChildren(picker('회고할 원문 선택', () => reflection.versionIds, (id, checked) => {
+          reflection.versionIds = checked ? reflection.versionIds.concat(id) : reflection.versionIds.filter(value => value !== id);
+          mark(session); fill();
+        }, { max: limits.reflectionVersions, filter: version => allowed.has(version.id) }));
+      };
       const fill = () => {
-        const infos = reflection.versionIds.map(id => sourceInfo(id));
-        const available = infos.filter(Boolean);
+        time.setAttribute('aria-pressed', String(view.mode === 'time')); theme.setAttribute('aria-pressed', String(view.mode === 'theme'));
+        const infos = reflection.versionIds.map(id => sourceInfo(id)), available = infos.filter(Boolean);
         const count = label => available.filter(info => info.version.originalAuthor.relation === label).length;
         overview.replaceChildren();
-        overview.append(el('p', '선택한 원문 버전 ' + reflection.versionIds.length + '개', 'wb-source-title'));
+        const summary = details('선택한 원문 버전 ' + reflection.versionIds.length + '개');
         const facts = el('dl', null, 'wb-facts');
         [['내 기록', count('self')], ['다른 사람의 기록', count('other')], ['작성자 관계 미확인', count('unknown')],
           ['본문 미확보', available.filter(info => info.version.contentText == null).length], ['연결된 원문 없음', infos.length - available.length]].forEach(([label, value]) => {
           facts.append(el('dt', label), el('dd', value + '개'));
         });
-        const detail = details('집계 기준');
-        detail.append(notice('선택한 원문 버전의 개수입니다. 경험 횟수나 관심의 강도를 뜻하지 않습니다.'));
-        overview.append(facts, detail);
+        summary.append(facts, notice('선택한 버전 수이며 경험 횟수·관심의 강도·나의 신념을 뜻하지 않습니다.')); overview.append(summary);
+        const years = reader.chronology(getBundle(), reflection.versionIds, view);
+        const visible = years.flatMap(group => group.versionIds);
+        const sections = view.mode === 'time' ? years : reader.themes(session.state, visible);
+        if (view.mode === 'theme') overview.append(notice('직접 만든 묶음으로 분류합니다. 묶음은 기록에서 편집하며, 여기서는 선택한 원문 버전만 보여줍니다.'));
+        if (visible.length !== reflection.versionIds.length) overview.append(notice('기간 밖의 선택 자료 ' + (reflection.versionIds.length - visible.length) + '개는 선택을 유지합니다. 원고 내보내기에는 선택 자료 전체가 포함됩니다.'));
         selectedList.replaceChildren();
-        reflection.versionIds.forEach(id => selectedList.append(sourceRow(id, { remove: () => { reflection.versionIds = reflection.versionIds.filter(value => value !== id); mark(session); redraw(); } })));
+        let shown = 0, total = sections.reduce((sum, group) => sum + group.versionIds.length, 0);
+        for (const group of sections) {
+          const ids = group.versionIds.slice(0, Math.max(0, view.shown - shown)); if (!ids.length) continue;
+          shown += ids.length;
+          const section = el('section', null, 'wb-reflection-section'); section.dataset.reflectionGroup = group.key;
+          section.append(el('h3', group.label));
+          for (const id of ids) {
+            const row = sourceRow(id, { focusKey: 'reflection:' + group.key + ':' + id, remove: () => { reflection.versionIds = reflection.versionIds.filter(value => value !== id); mark(session); refillPicker(); fill(); time.focus(); } });
+            const info = sourceInfo(id);
+            row.append(el('p', '원문 작성일 · ' + (info?.version.originalCreatedAt || '미확인'), 'life-meta'));
+            if (info?.version.contentText != null) {
+              const text = details('본문 읽기');
+              text.addEventListener('toggle', () => {
+                if (text.open && !text.querySelector('pre')) {
+                  const content = el('pre', info.version.contentText, 'wb-source-body'); content.tabIndex = 0; text.append(content);
+                }
+              });
+              row.append(text);
+            }
+            section.append(row);
+          }
+          selectedList.append(section);
+        }
+        if (!visible.length) selectedList.append(empty(reflection.versionIds.length ? '이 작성 기간에 해당하는 선택 자료가 없습니다. 기간을 해제하면 다시 볼 수 있습니다.' : '돌아볼 글을 골라 주세요. 기록이 없는 장면은 아래 회고에 직접 적어도 됩니다.'));
+        more.hidden = shown >= total;
       };
-      bodyNode.append(picker('회고할 원문 선택', () => reflection.versionIds, (id, checked) => {
-        reflection.versionIds = checked ? reflection.versionIds.concat(id) : reflection.versionIds.filter(value => value !== id);
-        mark(session); fill();
-      }, { max: limits.reflectionVersions }), overview, selectedList);
-      bodyNode.append(field('내 회고', reflection.note, { id: 'wbReflectionNote', multiline: true, max: limits.text,
-        change: value => { reflection.note = value; } }).wrapper);
-      fill();
+      const readingControls = el('div', null, 'wb-reflection-controls'); readingControls.append(controls, period);
+      bodyNode.append(pickerHost, readingControls, overview, selectedList, more);
+      const note = field('내 회고', reflection.note, { id: 'wbReflectionNote', multiline: true, max: limits.text,
+        change: value => { reflection.note = value; } });
+      note.input.rows = 12;
+      const prompts = details('회고 질문을 원고에 추가');
+      const questions = [
+        ['시간순 돌아보기', '## 시간순 돌아보기\n\n어떤 장면과 선택이 기억나는가?\n그때의 글과 지금의 기억은 어디서 다른가?\n생각이 바뀐 계기와 아직 설명하기 어려운 부분은 무엇인가?\n'],
+        ['주제별 돌아보기', '## 주제별 돌아보기\n\n관계·일·배움·취향 중 계속 돌아온 질문은 무엇인가?\n그 생각을 뒷받침하는 글과 다른 방향의 글은 무엇인가?\n지금도 이어갈 것과 내려놓고 싶은 것은 무엇인가?\n'],
+        ['책의 목차 구상', '## 책의 목차 구상\n\n이 글들을 엮어 누구에게 어떤 이야기를 들려주고 싶은가?\n첫 장면 / 변화의 계기 / 지금의 관점\n각 장에 넣을 글과 더 써야 할 장면\n']
+      ];
+      for (const [label, text] of questions) prompts.append(action(label, () => {
+        if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 질문을 추가해 주세요.');
+        const next = reflection.note + (reflection.note ? '\n\n' : '') + text;
+        if (next.length > limits.text) throw fault('limit_reached', '회고 길이를 줄인 뒤 추가해 주세요. 기존 내용은 유지했습니다.');
+        reflection.note = next; note.input.value = next; mark(session);
+        note.input.focus(); note.input.setSelectionRange(next.length, next.length);
+      }));
+      const exportBox = details('원고 파일로 보관');
+      const include = toggle('선택한 원문 본문도 포함', false, () => {}); include.querySelector('input').id = 'wbReflectionIncludeSources';
+      const exportButton = action('회고 원고 Markdown 받기', async () => {
+        await flush();
+        if (!showing(token, session)) return;
+        const text = reader.markdown(getBundle(), session.state, { includeSources: include.querySelector('input').checked });
+        const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown;charset=utf-8' })); urls.add(url);
+        const link = el('a'); link.href = url; link.download = 'haedo-reflection.md'; link.hidden = true;
+        document.body.append(link); link.click(); link.remove();
+        global.setTimeout(() => { URL.revokeObjectURL(url); urls.delete(url); }, 30000);
+      }); exportButton.id = 'wbReflectionExport';
+      exportBox.append(include, notice('내 회고와 선택한 자료의 출처를 파일로 받습니다. 보기 기간과 무관하게 선택 전체를 포함하며 공개 게시하지 않습니다. 원문·구성 복원에는 자료·구성 JSON 백업을 사용하세요.'), exportButton);
+      bodyNode.append(note.wrapper, prompts, exportBox, guidance);
+      refillPicker(); fill();
     }
 
     function download(data, name) {

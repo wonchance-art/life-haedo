@@ -167,3 +167,16 @@
   .wb-discovery-arrange,.wb-discovery-select { border: 1px solid ButtonText; }
   .wb-discovery-reasons { color: CanvasText; }
 }
+
+.wb-reflection-section { margin-block: 28px; }
+.wb-reflection-section > h3 { font-size: 20px; line-height: 1.6; }
+.wb-reflection-section > .wb-source { padding-block: 16px; border-bottom: 1px solid var(--line); }
+.wb-reflection-reading pre { font-family: inherit; font-size: 16px; line-height: 1.85; }
+#wbReflectionNote { min-height: 18rem; }
+
+.wb-reflection-controls { display: flex; flex-wrap: wrap; align-items: start; gap: 8px 16px; }
+.wb-reflection-controls > .life-actions { margin: 0; }
+.wb-reflection-controls > .wb-details { margin: 0; flex: 1 1 165px; }
+.wb-reflection-controls > .wb-details[open] { flex-basis: 100%; }
+.wb-reflection-overview > .wb-details { margin-block: 8px; }
+.wb-reflection-controls [aria-pressed=true] { background: var(--soft); color: var(--color-primary); border-color: currentColor; }

@@ -1,0 +1,144 @@
+{
+  "createdAt": "2026-10-08T01:02:01.248Z",
+  "browser": "151.0.7922.173",
+  "scope": "Actual reflection UI, SDK and IndexedDB with synthetic intercepted HTTP; Chromium viewport/touch/keyboard, not live accounts, AI self-analysis, Apple hardware or native IME.",
+  "checks": [
+    {
+      "name": "reading layout and exact source return focus at 1440",
+      "pass": true
+    },
+    {
+      "name": "reading layout and exact source return focus at 820",
+      "pass": true
+    },
+    {
+      "name": "reading layout and exact source return focus at 390",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "scene": "chronology",
+      "width": 1440,
+      "screenshot": "chronology-1440.png",
+      "firstRecordTop": 529.046875,
+      "firstBodyTop": 693.296875,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 648,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "chronology",
+      "width": 820,
+      "screenshot": "chronology-820.png",
+      "firstRecordTop": 529.046875,
+      "firstBodyTop": 693.296875,
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 576,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "chronology",
+      "width": 390,
+      "screenshot": "chronology-390.png",
+      "firstRecordTop": 489.046875,
+      "firstBodyTop": 679.546875,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 300,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    }
+  ],
+  "observations": [
+    {
+      "width": 390,
+      "exactOldReaderAndReturn": true,
+      "sourceButtonFocusRestored": true,
+      "noteAndSelectionUnchanged": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "operatingRemoteWrites": 0,
+  "pass": true,
+  "finishedAt": "2026-10-08T01:02:05.360Z"
+}
