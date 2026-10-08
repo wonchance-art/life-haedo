@@ -1,0 +1,27 @@
+{
+  "scope": "Network-isolated temporary PostgreSQL 17 container; synthetic auth.uid claims; no production or HTTP assertions",
+  "sqlRoleRlsRpcChecks": 159,
+  "installationMetadataChecks": 9,
+  "multiSessionChecks": 6,
+  "concurrency": [
+    "concurrent initial CAS: one stored, one conflict; revision one",
+    "concurrent identical retry: same result and one durable receipt",
+    "original update shared advisory lock; applied exact source/version verified after commit",
+    "concurrent closing transaction prevents a fresh-revision writer reopening applied",
+    "same workspace/draft UUID in two accounts has independent lock and state",
+    "original cascade deletion versus put returns missing without orphan draft/receipt"
+  ],
+  "repeatMigrationPreservesAllExistingRowsAndReceipts": true,
+  "existingMetadataFingerprint": "161b3c1426741679db630091b9e681de",
+  "migrationSha256": "b24e5f128f53ffc6f120b4e4b7550e7a70b0bd8b6cb31262cfb27863a8015e60",
+  "installationSha256": "8fc1e9636876ca82afd8eb0fbb8d43d5a4debdfda05373393ba999d197b5001b",
+  "serverVersion": "17.11",
+  "temporaryContainer": "life-writing-sql-20261006",
+  "productionSqlExecuted": false,
+  "productionHttpExecuted": false,
+  "firstInstallPreservesExistingMetadataAndRecords": true,
+  "httpCheckerLocallyMocked": true,
+  "httpCheckerMockCases": 5,
+  "testTransactionRolledBack": true,
+  "temporaryContainerRemoved": true
+}

@@ -1,4 +1,4 @@
-/* Authored plain text reuses immutable source versions. Drafts stay local. */
+/* Authored plain text reuses immutable source versions. This draft model has no network access. */
 (function (root, factory) {
   'use strict';
   const api = factory(root);

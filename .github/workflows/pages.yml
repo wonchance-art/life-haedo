@@ -94,6 +94,15 @@ jobs:
       - name: Verify composition continuity across browser contexts
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/composition-sync-browser.cjs
+      - name: Verify selected writing draft transactions
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/writing-sync-storage-browser.cjs
+      - name: Verify selected writing drafts across browser contexts
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/writing-sync-browser.cjs
+      - name: Verify writing input survives delayed draft notifications
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/writing-sync-incoming-browser.cjs
       - name: Stop the local server
         if: always()
         run: |
@@ -110,6 +119,7 @@ jobs:
             .local/unified-home/
             .local/quality-audit/after/
             .local/composition-sync/
+            .local/writing-sync/
             .local/browser-ci/server.log
           include-hidden-files: true
           if-no-files-found: warn

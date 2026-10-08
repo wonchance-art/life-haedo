@@ -5,7 +5,7 @@
 
 [배포 사이트](https://wonchance-art.github.io/life-haedo/) · 로컬 변경은 배포 전까지 사이트에 반영되지 않는다.
 
-[핵심 경험 품질 기준](docs/design-review/core-experience.md): 읽던 원문에서 `함께 읽을 기록`을 바로 열고 같은 버전·위치로 돌아온다. 내 페이지는 본문·코멘트를 먼저 보여주며 설정은 펼쳐 편집한다. 짧은 지시도 목표·범위·보존·완료 기준으로 구체화하고, 기능 검사·사용 흐름·시각 검토를 나눠 확인한다. 후속 [구성 이어쓰기](docs/life-tools-design/device-continuity.md)는 명시 연결·양쪽 비교·복구 사본까지 구현했다. **신규 운영 SQL 설치와 배포는 대기 중**이며 [관리자 인계](docs/life-tools-design/composition-installation.md)를 따른다. 글쓰기 초안 동기화는 후속이다.
+[핵심 경험 품질 기준](docs/design-review/core-experience.md): 읽던 원문에서 `함께 읽을 기록`을 바로 열고 같은 버전·위치로 돌아온다. 내 페이지는 본문·코멘트를 먼저 보여주며 설정은 펼쳐 편집한다. 짧은 지시도 목표·범위·보존·완료 기준으로 구체화하고, 기능 검사·사용 흐름·시각 검토를 나눠 확인한다. 후속 [구성 이어쓰기](docs/life-tools-design/device-continuity.md)는 명시 연결·양쪽 비교·복구 사본까지 구현했다. **신규 운영 SQL 설치와 배포는 대기 중**이며 [관리자 인계](docs/life-tools-design/composition-installation.md)를 따른다. 후속 [선택한 글쓰기 초안 이어쓰기](docs/design-review/writing-continuity.md)도 구현·검증했으며, 두 단계의 [Local 일괄 설치 순서](docs/life-tools-design/continuity-batch-installation.md)를 함께 준비했다.
 
 전체 화면의 최신 디자인은 [Life 기준 사이트 재구성](docs/design-review/life-design-site.md)을 따른다.
 
