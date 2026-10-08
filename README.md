@@ -15,6 +15,8 @@
 
 [장에 자료 가져오기](docs/design-review/book-import-return.md): 집필 중 자료를 가져와 정확한 원문 버전을 고르고, 같은 장에 명시 연결한 뒤 원고로 돌아옵니다. 자료 보관과 장 연결은 별도 저장입니다.
 
+[복원한 책으로 이어가기](docs/design-review/book-restore-entry.md): 통합 백업의 책 목록을 바로 열어 장을 선택하고 수정·출력합니다. 보관한 책과 기존 작업공간은 그대로 유지합니다.
+
 전체 화면의 최신 디자인은 [Life 기준 사이트 재구성](docs/design-review/life-design-site.md)을 따른다.
 
 후속 [자료 보관·복원·동기화](docs/design-review/life-management.md)는 JSON 내용 미리보기·새 사본 복원·이전 공간 복귀, 상태별 동기화 행동과 실패 복구를 정리한다. 연표 값과 계산은 유지한다.

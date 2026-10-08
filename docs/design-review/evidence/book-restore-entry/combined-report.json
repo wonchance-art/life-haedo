@@ -1,0 +1,456 @@
+{
+  "createdAt": "2026-10-08T10:54:11.986Z",
+  "scope": "Actual anonymous backup upload/restore and local transaction recovery. CSS viewport/touch simulation; not Apple devices, personal records or live services.",
+  "browser": "151.0.7922.173",
+  "pass": true,
+  "checks": [
+    {
+      "name": "restored book list, exact chapter editing and reader output at 1440",
+      "pass": true,
+      "checkedRun": "run-2026-10-08T10-53-49-772Z.json",
+      "checkedAt": "2026-10-08T10:54:00.387Z"
+    },
+    {
+      "name": "restored book list, exact chapter editing and reader output at 820",
+      "pass": true,
+      "checkedRun": "run-2026-10-08T10-53-49-772Z.json",
+      "checkedAt": "2026-10-08T10:54:00.387Z"
+    },
+    {
+      "name": "restored book list, exact chapter editing and reader output at 390",
+      "pass": true,
+      "checkedRun": "run-2026-10-08T10-53-49-772Z.json",
+      "checkedAt": "2026-10-08T10:54:00.387Z"
+    },
+    {
+      "name": "multiple books, archived-only and no-books choose explicit truthful destinations",
+      "pass": true,
+      "checkedRun": "run-2026-10-08T10-53-49-772Z.json",
+      "checkedAt": "2026-10-08T10:54:00.387Z"
+    },
+    {
+      "name": "before-install failure keeps the review and retry creates one copy",
+      "pass": true,
+      "checkedRun": "run-2026-10-08T10-53-49-772Z.json",
+      "checkedAt": "2026-10-08T10:54:00.387Z"
+    },
+    {
+      "name": "postcommit configuration or list read failure preserves the committed copy without duplicate install",
+      "pass": true,
+      "checkedRun": "run-2026-10-08T10-53-49-772Z.json",
+      "checkedAt": "2026-10-08T10:54:00.387Z"
+    },
+    {
+      "name": "delayed committed restore cannot take over another view or another account",
+      "pass": true,
+      "checkedRun": "run-2026-10-08T10-53-49-772Z.json",
+      "checkedAt": "2026-10-08T10:54:00.387Z"
+    }
+  ],
+  "visual": [
+    {
+      "scene": "restored-books",
+      "width": 1440,
+      "screenshot": "restored-books-1440.png",
+      "receiptTop": 222,
+      "firstBookTop": 343,
+      "scrollY": 0,
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 700,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "checkedRun": "run-2026-10-08T10-53-49-772Z.json",
+      "checkedAt": "2026-10-08T10:54:00.387Z"
+    },
+    {
+      "scene": "restored-books",
+      "width": 820,
+      "screenshot": "restored-books-820.png",
+      "receiptTop": 222,
+      "firstBookTop": 343,
+      "scrollY": 0,
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 628,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "checkedRun": "run-2026-10-08T10-53-49-772Z.json",
+      "checkedAt": "2026-10-08T10:54:00.387Z"
+    },
+    {
+      "scene": "restored-books",
+      "width": 390,
+      "screenshot": "restored-books-390.png",
+      "receiptTop": 182,
+      "firstBookTop": 303,
+      "scrollY": 0,
+      "viewport": {
+        "width": 390,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 350,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "checkedRun": "run-2026-10-08T10-53-49-772Z.json",
+      "checkedAt": "2026-10-08T10:54:00.387Z"
+    },
+    {
+      "scene": "restored-multiple",
+      "width": 390,
+      "screenshot": "restored-multiple-390.png",
+      "receiptTop": 182,
+      "firstBookTop": 303,
+      "scrollY": 0,
+      "viewport": {
+        "width": 390,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 350,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "checkedRun": "run-2026-10-08T10-53-49-772Z.json",
+      "checkedAt": "2026-10-08T10:54:00.387Z"
+    },
+    {
+      "scene": "restored-archived",
+      "width": 390,
+      "screenshot": "restored-archived-390.png",
+      "receiptTop": 182,
+      "firstBookTop": null,
+      "scrollY": 0,
+      "viewport": {
+        "width": 390,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 350,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "checkedRun": "run-2026-10-08T10-53-49-772Z.json",
+      "checkedAt": "2026-10-08T10:54:00.387Z"
+    },
+    {
+      "scene": "restored-none",
+      "width": 390,
+      "screenshot": "restored-none-390.png",
+      "receiptTop": 76,
+      "firstBookTop": null,
+      "scrollY": 0,
+      "viewport": {
+        "width": 390,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "checkedRun": "run-2026-10-08T10-53-49-772Z.json",
+      "checkedAt": "2026-10-08T10:54:00.387Z"
+    },
+    {
+      "scene": "restore-save-error",
+      "width": 390,
+      "screenshot": "restore-save-error-390.png",
+      "receiptTop": null,
+      "firstBookTop": null,
+      "scrollY": 0,
+      "viewport": {
+        "width": 390,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 300,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "checkedRun": "run-2026-10-08T10-53-49-772Z.json",
+      "checkedAt": "2026-10-08T10:54:00.387Z"
+    },
+    {
+      "scene": "restore-read-error",
+      "width": 820,
+      "screenshot": "restore-read-error-820.png",
+      "receiptTop": 305.1875,
+      "firstBookTop": null,
+      "scrollY": 0,
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 576,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "checkedRun": "run-2026-10-08T10-53-49-772Z.json",
+      "checkedAt": "2026-10-08T10:54:00.387Z"
+    }
+  ],
+  "observations": [
+    {
+      "width": 1440,
+      "previousPreserved": true,
+      "exactVersionAndExcerpt": true,
+      "editionAndExclusionPreserved": true,
+      "explicitChapterChoice": true,
+      "keyboardReaderReturn": true,
+      "localEditSurvivesReload": true
+    },
+    {
+      "PDF": "restored-edited-book.pdf",
+      "actualDownloadedHTML": true,
+      "completeEditedKoreanText": true,
+      "nativeOSSave": false
+    },
+    {
+      "width": 820,
+      "previousPreserved": true,
+      "exactVersionAndExcerpt": true,
+      "editionAndExclusionPreserved": true,
+      "explicitChapterChoice": true,
+      "keyboardReaderReturn": true,
+      "localEditSurvivesReload": true
+    },
+    {
+      "width": 390,
+      "previousPreserved": true,
+      "exactVersionAndExcerpt": true,
+      "editionAndExclusionPreserved": true,
+      "explicitChapterChoice": true,
+      "keyboardReaderReturn": true,
+      "localEditSurvivesReload": true
+    }
+  ],
+  "runs": [
+    {
+      "file": "run-2026-10-08T10-51-44-994Z.json",
+      "createdAt": "2026-10-08T10:51:44.994Z",
+      "finishedAt": "2026-10-08T10:51:46.598Z",
+      "checks": 1,
+      "passed": 1,
+      "scope": "Initial 390 full journey and viewport capture"
+    },
+    {
+      "file": "run-2026-10-08T10-52-05-527Z.json",
+      "createdAt": "2026-10-08T10:52:05.527Z",
+      "finishedAt": "2026-10-08T10:52:14.067Z",
+      "checks": 6,
+      "passed": 6,
+      "scope": "Remaining 1440/820 journeys, branch destinations and restore failure recovery"
+    },
+    {
+      "file": "run-2026-10-08T10-53-00-966Z.json",
+      "createdAt": "2026-10-08T10:53:00.966Z",
+      "finishedAt": "2026-10-08T10:53:02.956Z",
+      "checks": 1,
+      "passed": 1,
+      "scope": "Focused final workbench/list delay and account completion gate"
+    },
+    {
+      "file": "run-2026-10-08T10-53-49-772Z.json",
+      "createdAt": "2026-10-08T10:53:49.772Z",
+      "finishedAt": "2026-10-08T10:54:00.387Z",
+      "checks": 7,
+      "passed": 7,
+      "scope": "Final complete seven-case run after list heading, receipt CSS and asynchronous render guard changes; refreshed all final screenshots and output."
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "operatingRemoteWrites": 0,
+  "beforeReport": "../before/report.json",
+  "evidence": {
+    "html": "restored-edited-book.html",
+    "pdf": "restored-edited-book.pdf",
+    "pdfInfo": [
+      "Producer:        Skia/PDF m151",
+      "Pages:           12",
+      "Page size:       420 x 594.96 pts (A5)"
+    ]
+  },
+  "testSha256": "9c75621acddfd846ab57711d765f42893ff48e1749feccbfe5aa4a3b193549e6",
+  "limitations": [
+    "Chromium viewport and touch/reduced-motion settings; not physical Apple-device/IME/Files verification.",
+    "Anonymous versioned JSON and intercepted Auth only; no production service or private data.",
+    "PDF from the actual downloaded booklet HTML in an isolated page; not a native OS Save dialogue.",
+    "Failed workbench load initially shows restore receipt; its internal retry recreates the book list without repeating that receipt. No duplicate installation or data mutation."
+  ],
+  "initialFailures": [],
+  "finalRun": "run-2026-10-08T10-53-49-772Z.json"
+}
