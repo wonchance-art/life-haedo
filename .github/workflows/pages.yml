@@ -169,6 +169,12 @@ jobs:
       - name: Verify reader book layout, output choices and PDF
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-edition-browser.cjs
+      - name: Verify saved book re-entry and chapter navigation
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-completion-browser.cjs
+      - name: Verify keyboard focus during delayed home loading
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: ENTRY_TEST_MATCH='preserves focused recent' node tests/home-entry-browser.cjs
       - name: Verify isolated expression-page design samples
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/expression-design-browser.cjs
@@ -207,6 +213,7 @@ jobs:
             .local/book-workshop/
             .local/book-workshop-recovery/
             .local/book-edition/
+            .local/book-completion/after/
             .local/life-social-import/
             .local/share/
             .local/browser-ci/server.log

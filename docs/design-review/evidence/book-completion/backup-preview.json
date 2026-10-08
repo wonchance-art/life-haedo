@@ -1,0 +1,26 @@
+{
+  "checks": [
+    {
+      "name": "old v1 missing books",
+      "pass": true,
+      "summary": "책 0권 · 활성 장 0개 · 보관한 책 0권 · 보관한 장 0개 · 개정본 0개"
+    },
+    {
+      "name": "old v1 empty books",
+      "pass": true,
+      "summary": "책 0권 · 활성 장 0개 · 보관한 책 0권 · 보관한 장 0개 · 개정본 0개"
+    },
+    {
+      "name": "active/archive/edition counts exclude snapshot chapters",
+      "pass": true,
+      "summary": "책 2권 · 활성 장 1개 · 보관한 책 1권 · 보관한 장 1개 · 개정본 1개"
+    },
+    {
+      "name": "new copy install preserves originals and all counted structures",
+      "pass": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0
+}
