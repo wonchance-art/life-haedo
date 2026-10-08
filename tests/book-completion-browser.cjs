@@ -25,7 +25,16 @@ async function restore(page) {
     await page.locator('.life-workbench[data-mode="books"][aria-busy="false"]').waitFor(); assert.notEqual(await page.evaluate(() => HaedoLife.Shell.storage.getActive()), original.bundle.workspaceId); return current(page);
   } };
 }
-async function home(page) { await nav(page, 'home'); await page.locator('#homeBooks').waitFor(); }
+async function home(page) {
+  // Mobile writing intentionally hides the global dock. Leave through the
+  // visible book-list control before taking the normal Home navigation.
+  const homeLink = page.locator('[data-haedo-navigation] [data-haedo-section="home"]');
+  if (!await homeLink.isVisible()) {
+    await page.getByRole('button', { name: '책 목록', exact: true }).click();
+    await page.locator('#wbBookList').waitFor();
+  }
+  await nav(page, 'home'); await page.locator('#homeBooks').waitFor();
+}
 async function chapterFrom(page, container, chapter) {
   const outline = container.locator('details'); if (!await outline.evaluate(el => el.open)) await outline.locator(':scope > summary').click();
   await outline.locator(`button[data-chapter-id="${chapter.id}"]`).click();
