@@ -178,6 +178,9 @@ jobs:
       - name: Verify chapter import receipts and recovery boundaries
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-import-recovery-browser.cjs
+      - name: Verify restored book entry and committed-copy recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-restore-entry-browser.cjs
       - name: Verify keyboard focus during delayed home loading
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: ENTRY_TEST_MATCH='preserves focused recent' node tests/home-entry-browser.cjs
@@ -222,6 +225,7 @@ jobs:
             .local/book-completion/after/
             .local/book-import/after/
             .local/book-import-recovery/
+            .local/book-restore-entry/after/
             .local/life-social-import/
             .local/share/
             .local/browser-ci/server.log

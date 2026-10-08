@@ -212,6 +212,8 @@ textarea.life-source-text { min-height: 340px; max-height: 70vh; padding: 16px; 
 .life-restore-result { margin-bottom: 28px; padding: 18px 0 24px; border-bottom: 1px solid var(--line); }
 .life-restore-result h3 { margin: 0; font-size: 17px; }
 .life-restore-result .life-panel-heading { margin-bottom: 4px; }
+.life-restore-result-books { margin-bottom: 12px; padding: 0 0 16px; }
+.life-restore-result-books > .life-details { margin: 0; padding: 0; border: 0; }
 .life-sync-state-panel { padding: 20px 0 28px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
 .life-sync-state-panel > :is(h3,p) { margin: 0; word-break: keep-all; overflow-wrap: anywhere; }
 .life-sync-state-panel h3 { font-size: 18px; }

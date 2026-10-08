@@ -22,8 +22,7 @@ async function restore(page) {
   assert.match(await page.locator('#wbRestoreBookSummary').textContent(), /책 1권 · 활성 장 4개 · 보관한 책 0권 · 보관한 장 0개 · 개정본 1개/);
   return { original, install: async () => {
     await page.getByRole('button', { name: '새 사본으로 복원', exact: true }).click();
-    await page.waitForFunction(id => HaedoLife.Shell.storage.getActive().then(active => active !== id), original.bundle.workspaceId);
-    await page.locator('.life-workbench[data-mode="page"]').waitFor(); return current(page);
+    await page.locator('.life-workbench[data-mode="books"][aria-busy="false"]').waitFor(); assert.notEqual(await page.evaluate(() => HaedoLife.Shell.storage.getActive()), original.bundle.workspaceId); return current(page);
   } };
 }
 async function home(page) { await nav(page, 'home'); await page.locator('#homeBooks').waitFor(); }
