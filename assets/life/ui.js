@@ -1039,6 +1039,7 @@
       heading.tabIndex = -1;
       const headingGroup = node('div', null, 'haedo-heading-title');
       if (state.mode === 'write') heading.textContent = '글쓰기';
+      else if (state.mode === 'books') heading.textContent = '내 책';
       else if (state.mode === 'page') heading.textContent = '내 페이지';
       else if (state.mode === 'related') heading.textContent = '관련 기록';
       else if (section === 'records') {

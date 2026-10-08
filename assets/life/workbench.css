@@ -298,3 +298,69 @@
 .wb-chapter-import { margin-block: 20px; padding-block: 20px; border-block: 1px solid var(--line); }
 .wb-chapter-import > h3 { font-size: 18px; line-height: 1.7; }
 .wb-chapter-import > .life-actions { margin-top: 16px; }
+
+/* A · manuscript first. User-selected direction: book-design-reset.md.
+   UI-only: the existing fields, IDs, state transitions and projection remain. */
+.life-workbench[data-mode=books] { --color-primary: #684477; --soft: #f4edf6; --ink: #262330; --ink-soft: #6a6172; --line: #e9e3eb; }
+.life-app:has(.life-workbench[data-mode=books]) { max-width: 1000px; margin-inline: auto; padding-inline: 40px; border-radius: 0; }
+.life-app:has(.life-workbench[data-book-scene=edit],.life-workbench[data-book-scene=read]) > .life-toolbar { display: none; }
+.life-app:has(.life-workbench[data-book-scene=edit],.life-workbench[data-book-scene=read]) .life-main { padding-top: 0; }
+.life-workbench[data-mode=books] > .wb-storage-line { margin-top: 40px; padding-top: 12px; border-top: 1px solid var(--line); }
+.life-workbench[data-mode=books] .wb-book-row { display: block; padding-block: 24px 28px; }
+.life-workbench[data-mode=books] .wb-book-title-link { display: block; text-align: left; padding: 0; border: 0; background: transparent; font-size: 26px; font-weight: 650; line-height: 1.6; letter-spacing: -.025em; }
+.life-workbench[data-mode=books] .wb-book-title-link:hover { color: var(--color-primary); }
+.life-workbench[data-mode=books] .wb-book-opening { margin-top: 18px; font-size: 16px; line-height: 1.9; }
+.life-workbench[data-mode=books] .wb-book-row .life-meta { margin-top: 12px; }
+.life-workbench[data-mode=books] .wb-book-entry-actions { margin-top: 18px; gap: 12px; }
+.life-workbench[data-mode=books] .wb-book-list-outline { margin-top: 20px; }
+.life-workbench[data-mode=books] .wb-book-list-outline > .life-button { padding-left: 0; }
+.life-workbench[data-mode=books] .wb-book-lead { display: contents; }
+.life-workbench:is([data-book-scene=edit],[data-book-scene=read]) .wb-book-actions { position: sticky; top: 0; z-index: 25; min-height: 64px; flex-wrap: nowrap; gap: 6px; justify-content: flex-end; background: var(--paper); margin: 0 0 12px; padding-block: 8px; }
+.life-workbench:is([data-book-scene=edit],[data-book-scene=read]) #wbBooksBack { margin-right: auto; }
+.life-workbench:is([data-book-scene=edit],[data-book-scene=read]) .wb-book-actions > .life-button:not(.life-icon-button) { border: 0; background: var(--soft); color: var(--color-primary); }
+.life-workbench:is([data-book-scene=edit],[data-book-scene=read]) .wb-book-title { margin: 12px 0 24px; font-size: 15px; line-height: 1.75; font-weight: 400; color: var(--ink-soft); scroll-margin-top: 84px; }
+.life-workbench[data-book-scene=edit] .wb-book-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wb-toolbar-outline { margin: 0; flex: 0 0 44px; }
+.wb-toolbar-outline > summary { font-size: 0; width: 44px; height: 44px; justify-content: center; border-radius: 12px; }
+.wb-toolbar-outline > summary::after { display: none; }
+.wb-toolbar-outline[open] > summary { background: var(--soft); color: var(--color-primary); }
+.wb-outline-panel { position: absolute; top: calc(100% - 2px); left: 0; right: 0; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 16px; max-height: min(65dvh, 540px); overflow: auto; overscroll-behavior: contain; }
+.wb-book-editor { position: relative; scroll-margin-top: 84px; }
+.wb-chapter-navigation { margin: 12px 0 24px; gap: 6px; padding-right: 0; }
+.wb-chapter-navigation > .life-meta { order: -1; margin-left: 0; margin-right: auto; font-size: 12px; }
+.wb-chapter-navigation > .life-button { padding: 10px; border: 0; width: 44px; }
+.life-workbench[data-mode=books] .wb-manuscript-title { margin: 0 0 26px; }
+.life-workbench[data-mode=books] .wb-manuscript-body { margin: 0; }
+.life-workbench[data-mode=books] :is(#wbChapterTitle,#wbChapterNote) { display: block; width: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; resize: none; overflow: hidden; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; }
+.life-workbench[data-mode=books] #wbChapterTitle { min-height: 48px; font-size: 32px; font-weight: 650; line-height: 1.5; letter-spacing: -.025em; }
+.life-workbench[data-mode=books] #wbChapterNote { min-height: 22rem; font-size: 19px; line-height: 1.95; }
+.life-workbench[data-mode=books] .wb-book-length { margin: 20px 0 28px; font-size: 12px; }
+.life-workbench[data-mode=books] #wbChapterEvidence { margin: 0; }
+.life-workbench[data-mode=books] #wbChapterEvidence > summary { position: absolute; top: 0; right: 104px; font-size: 0; width: 44px; height: 44px; justify-content: center; border-radius: 12px; }
+.life-workbench[data-mode=books] #wbChapterEvidence > summary::after { display: none; }
+.life-workbench[data-mode=books] #wbChapterEvidence[open] { padding-block: 12px 28px; margin-bottom: 24px; border-bottom: 1px solid var(--line); }
+.life-workbench[data-mode=books] #wbChapterEvidence[open] > summary { background: var(--soft); color: var(--color-primary); }
+.life-workbench[data-mode=books] .wb-book-management { margin-top: 40px; padding-block: 24px; border-top: 1px solid var(--line); border-bottom: 0; justify-content: flex-start; align-items: flex-start; gap: 12px 20px; scroll-margin-top: 84px; }
+.life-workbench[data-mode=books] .wb-book-management > .wb-details { margin: 0; }
+.life-workbench[data-mode=books] .wb-book-management > .wb-details[open] { flex-basis: 100%; }
+.life-workbench[data-mode=books] .wb-book-reading { max-width: 680px; }
+.life-workbench[data-mode=books] .wb-reading-chapter { padding-top: 12px; scroll-margin-top: 90px; }
+.life-workbench[data-mode=books] .wb-reading-chapter + .wb-reading-chapter { padding-top: 48px; }
+.life-workbench[data-mode=books] .wb-reading-chapter-heading { align-items: center; margin-bottom: 28px; }
+.life-workbench[data-mode=books] .wb-reading-chapter-heading h4 { font-size: 30px; line-height: 1.55; }
+.life-workbench[data-mode=books] .wb-reading-text { font-size: 19px; line-height: 1.95; word-break: keep-all; }
+.life-workbench[data-mode=books] .wb-reading-thought { padding: 20px; border-radius: 12px; background: var(--mint); }
+.life-workbench[data-mode=books] .wb-reading-source .wb-reading-text,.life-workbench[data-mode=books] .wb-reading-thought .wb-reading-text { font-size: 16px; }
+.life-workbench[data-mode=books] .wb-reading-intro { margin-top: 30px; }
+@media (max-width: 1100px) and (min-width: 701px) { .life-app:has(.life-workbench[data-mode=books]) { margin-left: 92px; margin-right: 20px; } }
+@media (max-width: 700px) {
+  .life-app:has(.life-workbench[data-mode=books]) { width: 100%; margin: 0; padding: 8px max(20px,env(safe-area-inset-right)) 96px max(20px,env(safe-area-inset-left)); }
+  .life-workbench[data-mode=books] .wb-book-title-link { font-size: 23px; }
+  .life-workbench[data-mode=books] #wbChapterTitle { font-size: 27px; }
+  .life-workbench[data-mode=books] #wbChapterNote,.life-workbench[data-mode=books] .wb-reading-text { font-size: 17px; line-height: 1.9; }
+  .life-workbench[data-mode=books] .wb-reading-chapter-heading h4 { font-size: 26px; min-width: 9ch; }
+  .life-workbench[data-mode=books] .wb-book-actions { top: 0; }
+  .life-workbench[data-mode=books] .wb-reading-chapter-heading { gap: 8px; }
+  body:has(.life-workbench:is([data-book-scene=edit],[data-book-scene=read])) > .haedo-nav { display: none; }
+}
+.life-workbench[data-mode=books] > .wb-error { position: sticky; top: 64px; z-index: 30; max-height: 40dvh; overflow: auto; }
