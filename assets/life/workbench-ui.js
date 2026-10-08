@@ -15,7 +15,7 @@
   function fault(code, message) { return Object.assign(new Error(message), { code }); }
 
   function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored,
-    onSelectionUsed = () => {}, onSelectionCancel = () => {}, onArrange = () => {}, onWorkbenchNavigate = () => {},
+    onSelectionUsed = () => {}, onSelectionCancel = () => {}, onArrange = () => {}, onWorkbenchNavigate = () => {}, onChapterImport = () => {},
     shareRemoteFactory = () => life.ShareRemote?.createOwner({ auth: global.HaedoAuth }),
     sharePublicUrl = publicId => { const url = new URL('share.html', global.location.href); url.searchParams.set('id', publicId); return url.href; },
     beforeRestore = async () => {}, isDisposed = () => false }) {
@@ -280,6 +280,7 @@
         const result = await storage.readWorkbench(session.workspaceId);
         session.state = copy(result); session.baseRevision = result.revision;
         session.edit = 0; session.stored = 0; session.error = null;
+        session.chapterImport = null;
       })();
       try { await session.loading; } finally { session.loading = null; }
     }
@@ -1738,7 +1739,82 @@
           return historyChange(value => life.BookHistory.archiveChapter(value, book.id, chapter.id), () => { view.chapterId = null; view.readPosition = null; }, 'wbBookOutlineHeading');
         }); archiveChapter.id = 'wbChapterArchive'; editor.append(archiveChapter);
         const sourceBox = details('이 장의 근거 · ' + chapter.versionIds.length + '개'); sourceBox.id = 'wbChapterEvidence';
-        const pickerHost = el('div');
+        const importSources = action('자료 가져오기', async () => {
+          if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 자료를 가져와 주세요.');
+          await flush(); if (!active()) return;
+          view.editorPosition = { chapterId: chapter.id, start: note.input.selectionStart, end: note.input.selectionEnd,
+            direction: note.input.selectionDirection, top: note.input.scrollTop, left: note.input.scrollLeft };
+          await onChapterImport({ workspaceId: session.workspaceId, bookId: book.id, chapterId: chapter.id,
+            bookTitle: book.title, chapterTitle: chapter.title }, { isCurrent: active });
+        }); importSources.id = 'wbChapterImport'; sourceBox.append(importSources);
+        const pending = session.chapterImport;
+        const reviewing = pending && pending.bookId === book.id && pending.chapterId === chapter.id && pending.workspaceId === session.workspaceId;
+        importSources.hidden = !!reviewing;
+        if (reviewing) {
+          const review = el('section', null, 'wb-chapter-import'); review.id = 'wbChapterImportReview';
+          review.setAttribute('aria-labelledby', 'wbChapterImportHeading');
+          const heading = el('h3', chapter.title + ' · 자료 연결'); heading.id = 'wbChapterImportHeading'; heading.tabIndex = -1;
+          review.append(heading, notice('보관한 원문 중 연결할 정확한 버전을 선택해 주세요. 선택하지 않은 자료도 원문으로 보관됩니다.'));
+          const choices = [];
+          for (const id of pending.versionIds) {
+            const info = sourceInfo(id), row = sourceRow(id, { isCurrent: active,
+              focusKey: 'book-import:' + book.id + ':' + chapter.id + ':' + id });
+            const choice = toggle('이 버전 연결', pending.selected.has(id), checked => {
+              if (!active() || session.chapterImport !== pending || pending.accepted) return;
+              if (checked) pending.selected.add(id); else pending.selected.delete(id);
+              apply.disabled = !pending.selected.size;
+            });
+            const input = choice.querySelector('input'); input.dataset.versionId = id;
+            input.disabled = !info || !!pending.accepted; choices.push(input); row.append(choice); review.append(row);
+          }
+          const finish = () => {
+            session.chapterImport = null; view.restoreEditor = true; view.evidenceOpen = chapter.id; redraw();
+          };
+          const apply = action(pending.accepted ? '연결 저장 다시 시도' : '선택한 자료 연결', async () => {
+            if (!active() || session.chapterImport !== pending) return;
+            if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 자료를 연결해 주세요.');
+            const liveBook = session.state.books?.find(item => item.id === pending.bookId && !item.archived);
+            const liveChapter = liveBook?.chapters.find(item => item.id === pending.chapterId && !item.archived);
+            if (!liveChapter || getBundle()?.workspaceId !== pending.workspaceId) {
+              throw fault('chapter_missing', '선택한 책이나 장을 찾을 수 없습니다. 원문은 그대로 보관했습니다.');
+            }
+            if (pending.versionIds.some(id => pending.selected.has(id) && !sourceInfo(id))) {
+              throw fault('source_missing', '선택한 원문 버전을 찾을 수 없습니다. 다른 버전으로 바꾸지 않았습니다.');
+            }
+            if (!pending.accepted) {
+              await flush(); if (!active() || session.chapterImport !== pending) return;
+              const selected = pending.versionIds.filter(id => pending.selected.has(id));
+              if (!selected.length) throw fault('empty_selection', '연결할 자료를 먼저 선택해 주세요.');
+              const bundle = getBundle();
+              if (bundle?.workspaceId !== pending.workspaceId || selected.some(id => !sourceInfo(id, bundle))) {
+                throw fault('source_missing', '선택한 원문 버전을 찾을 수 없습니다. 다른 버전으로 바꾸지 않았습니다.');
+              }
+              const candidate = copy(session.state);
+              const targetBook = candidate.books?.find(item => item.id === pending.bookId && !item.archived);
+              const targetChapter = targetBook?.chapters.find(item => item.id === pending.chapterId && !item.archived);
+              if (!targetChapter) throw fault('chapter_missing', '선택한 책이나 장을 찾을 수 없습니다. 원문은 그대로 보관했습니다.');
+              targetChapter.versionIds = [...new Set(targetChapter.versionIds.concat(selected))];
+              model.validate(candidate);
+              // Keep the live editor objects: only the explicitly selected references change.
+              chapter.versionIds = targetChapter.versionIds;
+              mark(session, false); pending.accepted = true;
+              choices.forEach(input => { input.disabled = true; }); cancel.disabled = true;
+              apply.textContent = '연결 저장 다시 시도';
+            }
+            await flush();
+            if (!active() || session.chapterImport !== pending) return;
+            finish(); announceSafe('선택한 자료를 이 장에 연결했습니다.', session);
+          }, 'life-primary', () => !!pending.accepted || pending.selected.size > 0);
+          apply.id = 'wbChapterImportApply'; apply.disabled = !pending.accepted && !pending.selected.size;
+          const cancel = action('연결하지 않고 돌아가기', () => {
+            if (!active() || session.chapterImport !== pending) return;
+            if (pending.accepted) throw fault('pending_chapter_import', '연결 초안을 먼저 저장하거나 저장본과 비교해 주세요. 보관한 원문은 유지됩니다.');
+            finish();
+          }); cancel.id = 'wbChapterImportCancel'; cancel.disabled = !!pending.accepted;
+          const actions = el('div', null, 'life-actions'); actions.append(apply, cancel); review.append(actions); sourceBox.append(review);
+          sourceBox.open = true;
+        }
+        const pickerHost = el('div'); pickerHost.hidden = !!reviewing;
         const rows = el('div', null, 'wb-book-sources'); rows.id = 'wbChapterSources';
         const more = action('연결한 원문 더 보기', () => { view.shown += 40; fillSources(); }); more.id = 'wbChapterMore';
         const refillPicker = () => pickerHost.replaceChildren(picker('이 장에 원문 연결', () => chapter.versionIds, (id, selected) => {
@@ -1766,7 +1842,7 @@
         };
         sourceBox.append(pickerHost, rows, more); refillPicker(); fillSources();
         // Keep the exact source return target visible after returning from its reader.
-        sourceBox.open = view.evidenceOpen === chapter.id;
+        sourceBox.open = !!pending && pending.bookId === book.id && pending.chapterId === chapter.id || view.evidenceOpen === chapter.id;
         sourceBox.addEventListener('toggle', () => { if (active()) view.evidenceOpen = sourceBox.open ? chapter.id : null; });
         editor.append(insightPanel(session, book, chapter, view, active), sourceBox); bodyNode.append(editor);
       } else bodyNode.append(empty(book.chapters.length ? '선택한 장을 찾을 수 없습니다. 목차에서 편집할 장을 골라 주세요.' : '첫 장을 추가해 글과 생각을 모아 보세요.'));
@@ -1788,7 +1864,8 @@
         const input = bodyNode.querySelector('#wbChapterNote'), position = view.editorPosition;
         if (input) {
           if (position?.chapterId === view.chapterId) {
-            input.setSelectionRange(position.start, position.end); input.scrollTop = position.top;
+            input.setSelectionRange(position.start, position.end, position.direction); input.scrollTop = position.top;
+            if (position.left !== undefined) input.scrollLeft = position.left;
           }
           input.focus({ preventScroll: true }); input.scrollIntoView({ block: 'nearest' });
         }
@@ -2316,6 +2393,7 @@
       if (!alive()) return;
       const bundle = getBundle(); if (!bundle) return;
       cleanupView();
+      if (current && current.workspaceId !== bundle.workspaceId) current.chapterImport = null;
       const token = ++generation;
       visible = true; mode = MODES[nextMode] ? nextMode : 'activities'; current = sessionFor(bundle.workspaceId);
       if (typeof options.pagePreview === 'boolean') preview = options.pagePreview;
@@ -2364,7 +2442,30 @@
         if (!showing(token, session)) return;
         surface.setAttribute('aria-busy', 'false');
         if (mode === 'books' && options.bookList === true) session.bookView = null;
-        if (mode === 'books' && options.book !== undefined && options.bookList !== true) {
+        if (mode === 'books' && options.chapterImport !== undefined && options.bookList !== true) {
+          const target = options.chapterImport;
+          const book = target?.workspaceId === bundle.workspaceId && (session.state.books || []).find(item => item.id === target.bookId && !item.archived);
+          const chapter = book && book.chapters.find(item => item.id === target.chapterId && !item.archived);
+          const validIds = Array.isArray(target?.versionIds) && target.versionIds.length <= limits.chapterVersions &&
+            target.versionIds.every(id => typeof id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(id));
+          if (book && chapter && validIds) {
+            const previous = session.bookView;
+            session.bookView = previous?.bookId === book.id && previous.chapterId === chapter.id ? previous :
+              { bookId: book.id, chapterId: chapter.id, shown: 40, renderId: 0 };
+            session.bookView.reading = false; session.bookView.edition = false;
+            if (target.versionIds.length) {
+              session.chapterImport = { workspaceId: bundle.workspaceId, bookId: book.id, chapterId: chapter.id,
+                versionIds: [...new Set(target.versionIds)], selected: new Set(), accepted: false };
+              session.bookView.evidenceOpen = chapter.id;
+            } else {
+              session.chapterImport = null; session.bookView.restoreEditor = true;
+            }
+          } else {
+            session.bookView = null; session.chapterImport = null;
+            announce('가져올 자료를 연결할 책이나 장을 확인하지 못했습니다. 원문은 그대로 보관했습니다. 현재 작업공간의 책 목록에서 다시 골라 주세요.');
+          }
+        }
+        if (mode === 'books' && options.book !== undefined && options.chapterImport === undefined && options.bookList !== true) {
           const target = options.book;
           const book = target?.workspaceId === bundle.workspaceId && (session.state.books || []).find(item => item.id === target.bookId && !item.archived);
           const chapter = book && (target.chapterId === undefined ? book.chapters.find(item => !item.archived) : book.chapters.find(item => item.id === target.chapterId && !item.archived));
