@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>해도 · 표현 페이지 비교</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/life/ui.css">
+  <link rel="stylesheet" href="assets/life/workbench.css">
+  <link rel="stylesheet" href="assets/design-expression/ui.css">
+</head>
+<body>
+  <a class="life-skip" href="#expressionApp">본문으로 이동</a>
+  <header class="expression-review">
+    <details id="expressionReview">
+      <summary>표현 페이지 비교 · 익명 예시</summary>
+      <p class="life-meta">같은 8개 글을 비교합니다. 편집은 이 화면에서만 유지되며 새로고침하면 초기화됩니다. 실제 자료·게시에는 연결되지 않습니다.</p>
+      <label class="life-field"><span>상태 체험</span><select id="expressionState"><option value="normal">기본</option><option value="empty">빈 상태</option><option value="loading">로딩</option><option value="error">오류</option></select></label>
+    </details>
+    <div id="expressionVariant" class="life-actions" role="group" aria-label="표현 페이지 배치">
+      <button class="life-button" type="button" data-variant="a" aria-pressed="true">A · 글 중심</button>
+      <button class="life-button" type="button" data-variant="b" aria-pressed="false">B · 활동 구분</button>
+    </div>
+  </header>
+  <main id="expressionApp" class="life-app expression-shell" tabindex="-1"></main>
+  <p id="expressionStatus" class="life-sr-only" role="status"></p>
+  <noscript>이 비교 화면은 JavaScript를 사용합니다. 개인 자료나 계정에 접근하지 않습니다.</noscript>
+  <script src="assets/life/icons.js"></script>
+  <script src="assets/design-expression/sample-data.js"></script>
+  <script src="assets/design-expression/ui.js"></script>
+</body>
+</html>

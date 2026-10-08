@@ -127,6 +127,9 @@ jobs:
       - name: Verify Korean search and bounded result rendering
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/search-quality-browser.cjs
+      - name: Verify isolated expression-page design samples
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/expression-design-browser.cjs
       - name: Stop the local server
         if: always()
         run: |
@@ -149,6 +152,7 @@ jobs:
             .local/reading-resume/
             .local/product-flow-quality/
             .local/search-quality/
+            .local/expression-design/
             .local/browser-ci/server.log
           include-hidden-files: true
           if-no-files-found: warn

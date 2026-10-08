@@ -1,0 +1,57 @@
+/* Isolated comparison. Production tokens, icons and native controls are reused. */
+body { background: var(--canvas); }
+.expression-review { width: min(820px,calc(100% - 40px)); margin: 16px auto 0; }
+.expression-review summary { min-height: 44px; width: fit-content; max-width: 100%; padding-block: 10px; font-size: 13px; color: var(--ink-soft); }
+.expression-review .life-field { max-width: 260px; }
+#expressionVariant { margin-top: 8px; }
+#expressionVariant [aria-pressed=true] { background: var(--soft); color: var(--color-primary); border-color: transparent; font-weight: 600; }
+.expression-shell.life-app { width: min(820px,calc(100% - 40px)); margin: 16px auto 32px; padding: 24px 60px 64px; min-height: 65svh; }
+.expression-page-title { font-size: 25px; line-height: 1.6; }
+.expression-intro { margin-top: 8px; color: var(--ink-soft); font-size: 15px; line-height: 1.85; }
+.expression-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.expression-toolbar > .life-meta { font-size: 12px; }
+.expression-entry { padding-block: 30px; border-bottom: 1px solid var(--line); }
+.expression-entry-heading { display: flex; align-items: flex-start; gap: 12px; }
+.expression-entry-heading h2 { flex: 1; min-width: 0; font-size: 21px; line-height: 1.65; }
+.expression-entry-heading .life-icon-button { flex: none; }
+.expression-pin { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; color: var(--color-primary); font-size: 12px; }
+.expression-pin .life-glyph { width: 14px; height: 14px; }
+.expression-source { margin-top: 20px; }
+.expression-source + .expression-source { margin-top: 28px; }
+.expression-source h3 { font-size: 15px; font-weight: 600; line-height: 1.8; }
+.expression-source-meta { margin-top: 4px; font-size: 12px; color: var(--ink-soft); line-height: 1.9; }
+.expression-date { display: block; }
+.expression-body { margin: 12px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: keep-all; font: 17px/1.95 var(--life-font); }
+.expression-body[data-collapsed=true]::after { content: '…'; color: var(--ink-soft); }
+.expression-source-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; }
+.expression-text-button { display: inline-flex; align-items: center; gap: 6px; min-width: 44px; min-height: 44px; padding: 8px 0; border: 0; background: transparent; color: var(--color-primary); font: inherit; font-size: 13px; text-align: left; }
+.expression-source-actions .expression-open { margin-left: auto; color: var(--ink-soft); }
+.expression-source .life-help { margin-block: 12px 0; }
+.expression-comment { margin-top: 20px; padding: 14px 16px; border-radius: var(--control-radius); background: var(--mint); }
+.expression-comment > .life-meta { color: var(--mint-ink); }
+.expression-comment-body { margin-top: 5px; white-space: pre-wrap; overflow-wrap: anywhere; word-break: keep-all; font-size: 16px; line-height: 1.9; }
+.expression-editor { margin-top: 18px; }
+.expression-editor .life-field { margin-top: 0; }
+.expression-reader-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.expression-reader-heading h1 { font-size: 21px; flex: 1; }
+#expressionReader .expression-body { font-size: 18px; }
+.expression-state { padding-block: 36px; }
+.expression-state .life-button { margin-top: 16px; }
+/* B puts each source title/date and a shorter opening in a compact group. */
+[data-variant=b] .expression-entry { padding-block: 26px; }
+[data-variant=b] .expression-source { margin-top: 16px; }
+[data-variant=b] .expression-source + .expression-source { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 16px; }
+[data-variant=b] .expression-body { font-size: 16px; line-height: 1.8; margin-top: 8px; }
+[data-variant=b] .expression-source h3 { font-size: 16px; }
+[data-variant=b] .expression-source-meta { display: flex; flex-wrap: wrap; gap: 0 10px; }
+[data-variant=b] .expression-date { display: inline; }
+[data-variant=b] .expression-comment { margin-top: 16px; }
+@media (max-width: 700px) {
+  .expression-review { width: calc(100% - 40px); }
+  .expression-shell.life-app { width: 100%; margin-top: 16px; padding: 24px max(20px,env(safe-area-inset-right)) calc(48px + env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left)); border-radius: 0; }
+  .expression-page-title { font-size: 23px; }
+  .expression-entry-heading h2 { font-size: 20px; }
+  .expression-body { font-size: 17px; }
+  #expressionReader .expression-body { font-size: 17px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }

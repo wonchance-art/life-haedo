@@ -1,0 +1,176 @@
+{
+  "checks": "6/6 completed scenarios",
+  "captures": 42,
+  "normalGeometry": [
+    {
+      "variant": "a",
+      "width": 1440,
+      "firstBodyY": 534.1,
+      "firstCommentY": 1238.7,
+      "secondEntryY": 1416.6,
+      "firstBodyAboveFold": true,
+      "firstCommentAboveFold": false,
+      "secondEntryAboveFold": false,
+      "entryCount": 6
+    },
+    {
+      "variant": "b",
+      "width": 1440,
+      "firstBodyY": 501.1,
+      "firstCommentY": 890.5,
+      "secondEntryY": 1064.4,
+      "firstBodyAboveFold": true,
+      "firstCommentAboveFold": true,
+      "secondEntryAboveFold": false,
+      "entryCount": 6
+    },
+    {
+      "variant": "a",
+      "width": 820,
+      "firstBodyY": 534.1,
+      "firstCommentY": 1238.7,
+      "secondEntryY": 1416.6,
+      "firstBodyAboveFold": true,
+      "firstCommentAboveFold": false,
+      "secondEntryAboveFold": false,
+      "entryCount": 6
+    },
+    {
+      "variant": "b",
+      "width": 820,
+      "firstBodyY": 501.1,
+      "firstCommentY": 890.5,
+      "secondEntryY": 1064.4,
+      "firstBodyAboveFold": true,
+      "firstCommentAboveFold": true,
+      "secondEntryAboveFold": false,
+      "entryCount": 6
+    },
+    {
+      "variant": "a",
+      "width": 390,
+      "firstBodyY": 557,
+      "firstCommentY": 1129,
+      "secondEntryY": 1398.1,
+      "firstBodyAboveFold": true,
+      "firstCommentAboveFold": false,
+      "secondEntryAboveFold": false,
+      "entryCount": 6
+    },
+    {
+      "variant": "b",
+      "width": 390,
+      "firstBodyY": 524,
+      "firstCommentY": 993.8,
+      "secondEntryY": 1258.9,
+      "firstBodyAboveFold": true,
+      "firstCommentAboveFold": false,
+      "secondEntryAboveFold": false,
+      "entryCount": 6
+    }
+  ],
+  "metrics": {
+    "minimumTextContrast": 5.661,
+    "overflow": 0,
+    "smallTargets": 0,
+    "smallInputs": 0,
+    "contrastFailures": 0,
+    "unnamed": 0
+  },
+  "limits": "Standalone anonymous design samples in Linux Chromium at three viewports; touch/keyboard simulation, no Apple hardware, authentication, production UI, publishing or personal data",
+  "interpretation": "Document positions and above-fold flags describe this fixture at these viewports. They are not aesthetic scores, usefulness judgments, or real-device usability findings.",
+  "setupCorrection": "Initial focused check expected literal ISO date text. Corrected to native time.dateTime ISO values; formatted visible dates are intentional. Null dates expose no time rather than inventing dates. Other actual UI contracts were verified before expanding the matrix.",
+  "initialNormalGeometry": [
+    {
+      "variant": "a",
+      "width": 1440,
+      "firstBodyY": 534.1,
+      "firstCommentY": 1238.7,
+      "secondEntryY": 1416.6,
+      "firstBodyAboveFold": true,
+      "firstCommentAboveFold": false,
+      "secondEntryAboveFold": false,
+      "entryCount": 6
+    },
+    {
+      "variant": "b",
+      "width": 1440,
+      "firstBodyY": 501.1,
+      "firstCommentY": 890.5,
+      "secondEntryY": 1064.4,
+      "firstBodyAboveFold": true,
+      "firstCommentAboveFold": true,
+      "secondEntryAboveFold": false,
+      "entryCount": 6
+    },
+    {
+      "variant": "a",
+      "width": 820,
+      "firstBodyY": 534.1,
+      "firstCommentY": 1238.7,
+      "secondEntryY": 1416.6,
+      "firstBodyAboveFold": true,
+      "firstCommentAboveFold": false,
+      "secondEntryAboveFold": false,
+      "entryCount": 6
+    },
+    {
+      "variant": "b",
+      "width": 820,
+      "firstBodyY": 501.1,
+      "firstCommentY": 890.5,
+      "secondEntryY": 1064.4,
+      "firstBodyAboveFold": true,
+      "firstCommentAboveFold": true,
+      "secondEntryAboveFold": false,
+      "entryCount": 6
+    },
+    {
+      "variant": "a",
+      "width": 390,
+      "firstBodyY": 557,
+      "firstCommentY": 1129,
+      "secondEntryY": 1398.1,
+      "firstBodyAboveFold": true,
+      "firstCommentAboveFold": false,
+      "secondEntryAboveFold": false,
+      "entryCount": 6
+    },
+    {
+      "variant": "b",
+      "width": 390,
+      "firstBodyY": 524,
+      "firstCommentY": 993.8,
+      "secondEntryY": 1258.9,
+      "firstBodyAboveFold": true,
+      "firstCommentAboveFold": false,
+      "secondEntryAboveFold": false,
+      "entryCount": 6
+    }
+  ],
+  "focusedRecheck": {
+    "checks": "6/6 expansion/original-back/collapse focused scenarios after the final UI patch",
+    "captures": 18,
+    "originalDomPreserved": true,
+    "decorativeEllipsisOutsideTextContent": true,
+    "expandedBodyFocusedAndIntersectsViewport": true,
+    "initialFullFlowReport": "browser-initial-report.json",
+    "focusedReport": "browser-expansion-recheck-report.json",
+    "metrics": {
+      "minimumTextContrast": 5.661,
+      "overflow": 0,
+      "smallTargets": 0,
+      "smallInputs": 0,
+      "contrastFailures": 0,
+      "unnamed": 0
+    }
+  },
+  "manualImages": [
+    "a-normal-1440.png",
+    "b-normal-1440.png",
+    "a-normal-390.png",
+    "b-normal-390.png",
+    "recheck-a-expanded-390.png",
+    "recheck-b-normal-390.png"
+  ]
+}

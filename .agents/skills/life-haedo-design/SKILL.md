@@ -49,3 +49,5 @@ description: 해도의 화면 추가·수정·디자인 검토에 사용한다. 
 선택 초안의 기기 전환은 `docs/design-review/writing-continuity.md`를 따른다. 이어쓰기 조작은 본문 아래 접고, 원격 알림의 늦은 도착이 현재 stage·입력·초점을 바꾸지 않게 검증한다. 중지한 뒤 기록으로 저장한 글에도 완료 상태 재개 경로를 남긴다. `tests/writing-sync-browser.cjs`와 입력 경합 회귀를 기능/시각 검토에 구분해 사용한다.
 
 로컬 이어 읽기는 [읽기 위치](../../../docs/design-review/reading-resume.md)를 따른다. 홈·기록의 한 행에서만 명시적으로 열고 본문에 추가 상시 UI를 만들지 않는다. `이 브라우저`·이전 버전·없는 버전의 복구 상태를 보존하고, 프로그램 스크롤을 실제 읽기 입력으로 간주하지 않는다.
+
+표현 페이지의 A/B는 `expression-sample.html`과 [비교 결과](../../../docs/design-review/expression-page-comparison.md)에 둔다. 동일 익명 글의 독립 시안이며 운영 기본 배치가 아니다. B의 출처 구분·확인된 작성일·본문 펼침을 다음 통합 후보로 권고한다. 화면 접힘과 공개 사본 포함 범위를 혼동하지 않고, 펼친 뒤 읽기 영역이 실제 viewport와 교차하는지와 접기 초점 복귀를 확인한다.
