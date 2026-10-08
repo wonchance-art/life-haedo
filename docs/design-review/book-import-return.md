@@ -33,7 +33,7 @@ Linux Chromium 151, 격리된 익명 Auth HTTP와 실제 SDK·IndexedDB로 검�
 - 기존 배치 가져오기 **8/8**, 가져오기·발췌 3폭 **3/3**, [재가져오기 7/7](evidence/book-import-return/reimport-regression.json) 통과. 기존 source/version/record 컬렉션과 장 원고·개정본·발췌 좌표를 대조했다. 중복 가져오기도 정상 commit에 따라 작업공간 revision은 증가할 수 있다.
 - 신규 시각 상태 **13개**에서 가로 넘침·44px 미만 조작·16px 미만 입력·이름 없는 조작·대비 실패 0, 작은 글자 최저 대비 6.05:1. 세 폭의 실제 화면도 직접 열어 검토했다. 첫 시각 검토에서 390px 본문 입력이 아래에 밀려 있어, 장에서 시작한 폼은 본문/파일 → 출처 정보 순서로 고친 뒤 최종 전체 흐름을 다시 통과했다. 일반 가져오기의 기존 순서는 유지한다.
 
-콘솔·페이지 오류·예상 밖 외부 요청·운영 쓰기 0. 신규 테스트 초기에 Markdown이 UUID도 출력한다는 기대와 중복 commit의 작업공간 revision까지 불변이라는 기대가 잘못돼 실패했다. 기존 exporter/commit 계약을 확인해 실제 보존 대상(정확 버전/출처·본문 포함 범위, 원문 컬렉션과 장 참조)으로 수정했고 [실행 이력](evidence/book-import-return/combined-report.json)에 구분했다. 앱 저장 결함을 검사 조건 완화로 숨긴 사례가 아니다.
+로컬 검증의 콘솔·페이지 오류·예상 밖 외부 요청·운영 쓰기 0. 최초 최종 CI 실행 37752604900에서 기존 구성 동기화 단계가 실패했다. 같은 코드의 [로컬 재검사 9/9](evidence/book-import-return/composition-local-recheck.json)는 통과했고, Cloud 네트워크 정책이 CI 원본 로그 저장소 접근을 막아 최초 원인은 확정하지 못했다. 검사 조건은 바꾸지 않고 실패 stack을 GitHub annotation으로 남기는 진단을 추가했다. 최종 CI 상태는 PR #53에서 별도로 확인하며 최초 실패를 없었던 것으로 처리하지 않는다. 신규 테스트 초기에 Markdown이 UUID도 출력한다는 기대와 중복 commit의 작업공간 revision까지 불변이라는 기대가 잘못돼 실패했다. 기존 exporter/commit 계약을 확인해 실제 보존 대상(정확 버전/출처·본문 포함 범위, 원문 컬렉션과 장 참조)으로 수정했고 [실행 이력](evidence/book-import-return/combined-report.json)에 구분했다. 앱 저장 결함을 검사 조건 완화로 숨긴 사례가 아니다.
 
 ![본문 우선 가져오기](evidence/book-import-return/targeted-import-390-viewport.png)
 

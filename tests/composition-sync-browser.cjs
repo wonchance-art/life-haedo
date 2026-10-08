@@ -131,6 +131,11 @@ async function waitStatus(page, value) { await page.locator('#compositionStatus[
 async function receiveComposition(page) { await enable(page); await waitStatus(page, 'conflict'); await page.locator('#compositionCompare').click(); await page.locator('#compositionUseRemote').click(); await waitStatus(page, 'synced'); }
 function semantic(value) { const result = copy(value); delete result.revision; return result; }
 
+function annotation(error) {
+  if (process.env.GITHUB_ACTIONS) console.error('::error title=Composition continuity::' +
+    String(error.stack || error).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A'));
+}
+
 async function main() {
   await fs.mkdir(out, { recursive: true });
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
@@ -146,7 +151,7 @@ async function main() {
       const value = { context, page, name }; devices.push(value); await go(page); return value;
     };
     try { await action({ server, device }); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
-    catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); for (const value of devices) await value.page.screenshot({ path: path.join(out, 'failure-' + report.checks.length + '-' + value.name + '.png'), fullPage: true }).catch(() => {}); }
+    catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); annotation(error); for (const value of devices) await value.page.screenshot({ path: path.join(out, 'failure-' + report.checks.length + '-' + value.name + '.png'), fullPage: true }).catch(() => {}); }
     finally { if (server.heldComposition) server.heldComposition.release.resolve(); await Promise.all(devices.map(value => value.context.close())); }
   }
   const paired = async ({ server, device }) => {
@@ -400,4 +405,4 @@ async function main() {
   if (report.checks.some(value => !value.pass)) process.exitCode = 1;
 }
 module.exports = { CompositionCloud };
-if (require.main === module) main().catch(error => { console.error(error.stack); process.exitCode = 1; });
+if (require.main === module) main().catch(error => { console.error(error.stack); annotation(error); process.exitCode = 1; });
