@@ -1,0 +1,48 @@
+{
+  "runtime": {
+    "assets/life/book-print.js": "e745392b18d1675e8349959a37cdd19c089db14db055fe0e4fee7234d8a675b0",
+    "assets/life/workbench-ui.js": "617ad26284a356de771d30e3c9d962e06b1719542d1b396d5d081a21fe156c9f",
+    "assets/life/workbench.css": "0e333f24672d68e103fc919a592061f458ada9ff947e4c53d59b3b20970072f6",
+    "tests/book-edition-browser.cjs": "4fc1735cd6727729c3eb567ec8cb84253f13ffae3b047a054cc39bc52fc4bfed"
+  },
+  "unit": {
+    "passed": 398,
+    "failed": 0
+  },
+  "static": {
+    "html": 18,
+    "javascript": 58,
+    "localReferences": 271,
+    "pwa": true
+  },
+  "relatedRegressions": [
+    {
+      "suite": "book-preview",
+      "passed": 6,
+      "checks": 6,
+      "createdAt": "2026-10-08T05:45:18.516Z",
+      "report": "book-preview-regression.json"
+    },
+    {
+      "suite": "book-history",
+      "passed": 7,
+      "checks": 7,
+      "createdAt": "2026-10-08T05:46:47.963Z",
+      "report": "book-history-regression.json"
+    },
+    {
+      "suite": "book-print",
+      "passed": 3,
+      "checks": 3,
+      "createdAt": "2026-10-08T05:46:16.935Z",
+      "report": "book-print-regression.json"
+    }
+  ],
+  "limits": [
+    "Linux Chromium 151 viewport simulation; no actual Apple hardware",
+    "No production writes, merge, deploy or SQL",
+    "Native print request captured; generated PDFs do not prove user OS Save dialog",
+    "Managed file/data navigation blocked; downloaded HTML bytes served isolated and then switched offline"
+  ],
+  "note": "Final app and book suite hashes after standalone mobile viewport correction; local full suite 5/5 and unit398/398 re-run."
+}

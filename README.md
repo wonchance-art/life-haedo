@@ -9,6 +9,8 @@
 
 [첫 책 작업실](docs/design-review/book-workshop.md): 기록 선택 → 회고 → 연도/묶음별 목차 → 장별 집필·개정 → 전체 점검 → PDF로 이어집니다. 선행 기능과 함께 Local 병합·운영 적용을 기다리는 브랜치 구현이며, 배포 사이트의 현재 기능으로 단정하지 않습니다.
 
+[독자용 책자](docs/design-review/book-edition.md): 책 전체를 표지·목차·본문·출처 부록으로 읽고, 장을 고쳐 다시 확인한 뒤 A5/A4 HTML·PDF로 받습니다. 기존 검토용 출력은 유지하며 해석과 원문 본문은 각각 선택합니다.
+
 전체 화면의 최신 디자인은 [Life 기준 사이트 재구성](docs/design-review/life-design-site.md)을 따른다.
 
 후속 [자료 보관·복원·동기화](docs/design-review/life-management.md)는 JSON 내용 미리보기·새 사본 복원·이전 공간 복귀, 상태별 동기화 행동과 실패 복구를 정리한다. 연표 값과 계산은 유지한다.

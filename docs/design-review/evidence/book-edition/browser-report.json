@@ -1,0 +1,840 @@
+{
+  "createdAt": "2026-10-08T06:17:25.671Z",
+  "browser": "151.0.7922.173",
+  "scope": "UI-created anonymous long Korean manuscript and exact source versions. Actual booklet preview/native-print input/offline HTML/Chromium PDF, with synthetic Auth only. No production, Apple hardware, native Save PDF confirmation or publication claims.",
+  "checks": [
+    {
+      "name": "reader booklet A5/A4 preview, PDF links, options and edited regeneration at 1440",
+      "pass": true
+    },
+    {
+      "name": "reader booklet A5/A4 preview, PDF links, options and edited regeneration at 820",
+      "pass": true
+    },
+    {
+      "name": "reader booklet A5/A4 preview, PDF links, options and edited regeneration at 390",
+      "pass": true
+    },
+    {
+      "name": "failed save and renderer recovery preserve manuscript; late print cannot escape account switch",
+      "pass": true
+    },
+    {
+      "name": "empty book and empty chapter remain readable and editable without implied content",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "scene": "booklet-default",
+      "width": 1440,
+      "screenshot": "booklet-default-1440.png",
+      "frameMetrics": {
+        "width": 698,
+        "scrollWidth": 698,
+        "bodyFont": "16px",
+        "targets": [
+          44,
+          44,
+          44,
+          44,
+          44
+        ]
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "booklet-options",
+      "width": 1440,
+      "screenshot": "booklet-options-1440.png",
+      "frameMetrics": {
+        "width": 698,
+        "scrollWidth": 698,
+        "bodyFont": "16px",
+        "targets": [
+          44,
+          44,
+          44,
+          44,
+          44
+        ]
+      },
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "booklet-default",
+      "width": 820,
+      "screenshot": "booklet-default-820.png",
+      "frameMetrics": {
+        "width": 626,
+        "scrollWidth": 626,
+        "bodyFont": "16px",
+        "targets": [
+          44,
+          44,
+          44,
+          44,
+          44
+        ]
+      },
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "booklet-options",
+      "width": 820,
+      "screenshot": "booklet-options-820.png",
+      "frameMetrics": {
+        "width": 626,
+        "scrollWidth": 626,
+        "bodyFont": "16px",
+        "targets": [
+          44,
+          44,
+          44,
+          44,
+          44
+        ]
+      },
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "booklet-default",
+      "width": 390,
+      "screenshot": "booklet-default-390.png",
+      "frameMetrics": {
+        "width": 364,
+        "scrollWidth": 364,
+        "bodyFont": "16px",
+        "targets": [
+          44,
+          44,
+          44,
+          44,
+          44
+        ]
+      },
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "booklet-options",
+      "width": 390,
+      "screenshot": "booklet-options-390.png",
+      "frameMetrics": {
+        "width": 364,
+        "scrollWidth": 364,
+        "bodyFont": "16px",
+        "targets": [
+          44,
+          44,
+          44,
+          44,
+          44
+        ]
+      },
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "save-error",
+      "width": 390,
+      "screenshot": "save-error-390.png",
+      "frameMetrics": null,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "render-error",
+      "width": 390,
+      "screenshot": "render-error-390.png",
+      "frameMetrics": null,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "empty-book",
+      "width": 390,
+      "screenshot": "empty-book-390.png",
+      "frameMetrics": {
+        "width": 364,
+        "scrollWidth": 364,
+        "bodyFont": "16px",
+        "targets": [
+          44
+        ]
+      },
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    }
+  ],
+  "outputs": [
+    {
+      "width": 1440,
+      "paper": "A5",
+      "insights": false,
+      "sources": false,
+      "filename": "book-a5-1440.pdf",
+      "pages": 12,
+      "chapterPages": [
+        3,
+        6,
+        8,
+        9
+      ],
+      "PDFLinkTextFragments": 31,
+      "PDFDestinationPages": [
+        3,
+        6,
+        8,
+        9,
+        11
+      ],
+      "samePreviewHTMLAndPrint": true,
+      "nativeBlobPDF": null,
+      "offlineHTML": true,
+      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy"
+    },
+    {
+      "width": 1440,
+      "paper": "A4",
+      "insights": true,
+      "sources": true,
+      "filename": "book-a4-1440.pdf",
+      "pages": 10,
+      "chapterPages": [
+        3,
+        5,
+        6,
+        7
+      ],
+      "PDFLinkTextFragments": 31,
+      "PDFDestinationPages": [
+        3,
+        5,
+        6,
+        7,
+        8
+      ],
+      "samePreviewHTMLAndPrint": true,
+      "nativeBlobPDF": null,
+      "offlineHTML": true,
+      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy"
+    },
+    {
+      "width": 820,
+      "paper": "A5",
+      "insights": false,
+      "sources": false,
+      "filename": "book-a5-820.pdf",
+      "pages": 12,
+      "chapterPages": [
+        3,
+        6,
+        8,
+        9
+      ],
+      "PDFLinkTextFragments": 31,
+      "PDFDestinationPages": [
+        3,
+        6,
+        8,
+        9,
+        11
+      ],
+      "samePreviewHTMLAndPrint": true,
+      "nativeBlobPDF": {
+        "filename": "book-a5-820-native-blob.pdf",
+        "PDFLinkTextFragments": 31,
+        "PDFDestinationPages": [
+          3,
+          6,
+          8,
+          9,
+          11
+        ],
+        "chapterDestinations": [
+          3,
+          6,
+          8,
+          9
+        ],
+        "samePDFTextAndPages": true,
+        "nativeSaveDialog": false
+      },
+      "offlineHTML": true,
+      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy"
+    },
+    {
+      "width": 820,
+      "paper": "A4",
+      "insights": true,
+      "sources": true,
+      "filename": "book-a4-820.pdf",
+      "pages": 10,
+      "chapterPages": [
+        3,
+        5,
+        6,
+        7
+      ],
+      "PDFLinkTextFragments": 31,
+      "PDFDestinationPages": [
+        3,
+        5,
+        6,
+        7,
+        8
+      ],
+      "samePreviewHTMLAndPrint": true,
+      "nativeBlobPDF": {
+        "filename": "book-a4-820-native-blob.pdf",
+        "PDFLinkTextFragments": 31,
+        "PDFDestinationPages": [
+          3,
+          5,
+          6,
+          7,
+          8
+        ],
+        "chapterDestinations": [
+          3,
+          5,
+          6,
+          7
+        ],
+        "samePDFTextAndPages": true,
+        "nativeSaveDialog": false
+      },
+      "offlineHTML": true,
+      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy"
+    },
+    {
+      "width": 820,
+      "paper": "A4",
+      "insights": true,
+      "sources": false,
+      "filename": "book-a4-820-revised.pdf",
+      "pages": 10,
+      "chapterPages": [
+        3,
+        5,
+        6,
+        7
+      ],
+      "PDFLinkTextFragments": 31,
+      "PDFDestinationPages": [
+        3,
+        5,
+        6,
+        7,
+        8
+      ],
+      "samePreviewHTMLAndPrint": true,
+      "nativeBlobPDF": null,
+      "offlineHTML": true,
+      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy"
+    },
+    {
+      "width": 390,
+      "paper": "A5",
+      "insights": false,
+      "sources": false,
+      "filename": "book-a5-390.pdf",
+      "pages": 12,
+      "chapterPages": [
+        3,
+        6,
+        8,
+        9
+      ],
+      "PDFLinkTextFragments": 31,
+      "PDFDestinationPages": [
+        3,
+        6,
+        8,
+        9,
+        11
+      ],
+      "samePreviewHTMLAndPrint": true,
+      "nativeBlobPDF": null,
+      "offlineHTML": true,
+      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy"
+    },
+    {
+      "width": 390,
+      "paper": "A4",
+      "insights": true,
+      "sources": true,
+      "filename": "book-a4-390.pdf",
+      "pages": 10,
+      "chapterPages": [
+        3,
+        5,
+        6,
+        7
+      ],
+      "PDFLinkTextFragments": 31,
+      "PDFDestinationPages": [
+        3,
+        5,
+        6,
+        7,
+        8
+      ],
+      "samePreviewHTMLAndPrint": true,
+      "nativeBlobPDF": null,
+      "offlineHTML": true,
+      "standaloneTransport": "intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy"
+    }
+  ],
+  "observations": [
+    {
+      "width": 1440,
+      "realParagraphs": [
+        14,
+        6,
+        6,
+        6
+      ],
+      "manuscriptLengths": [
+        2065,
+        784,
+        698,
+        753
+      ],
+      "samePreviewHTMLPrint": true,
+      "reviewOptionsIndependent": true,
+      "editedChapterAndTextareaPositionPreserved": true,
+      "exactPriorSourceVersion": true,
+      "persistentOutputSettings": false
+    },
+    {
+      "backup": "reader-book-backup.json",
+      "restoredInNewWorkspace": true,
+      "chapters": 4,
+      "editions": 1,
+      "exactVersionAndExcerptPreserved": true,
+      "originalsUnchanged": true
+    },
+    {
+      "width": 820,
+      "realParagraphs": [
+        14,
+        6,
+        6,
+        6
+      ],
+      "manuscriptLengths": [
+        2065,
+        784,
+        698,
+        753
+      ],
+      "samePreviewHTMLPrint": true,
+      "reviewOptionsIndependent": true,
+      "editedChapterAndTextareaPositionPreserved": true,
+      "exactPriorSourceVersion": true,
+      "persistentOutputSettings": false
+    },
+    {
+      "width": 390,
+      "realParagraphs": [
+        14,
+        6,
+        6,
+        6
+      ],
+      "manuscriptLengths": [
+        2065,
+        784,
+        698,
+        753
+      ],
+      "samePreviewHTMLPrint": true,
+      "reviewOptionsIndependent": true,
+      "editedChapterAndTextareaPositionPreserved": true,
+      "exactPriorSourceVersion": true,
+      "persistentOutputSettings": false
+    },
+    {
+      "standaloneMobileEmulation": {
+        "width": 390,
+        "layoutViewport": 390,
+        "horizontalOverflow": false,
+        "actualAppleDevice": false
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "operatingRemoteWrites": 0,
+  "pass": true,
+  "finishedAt": "2026-10-08T06:18:01.053Z",
+  "runs": [
+    {
+      "file": "run-2026-10-08T05-48-34-174Z.json",
+      "createdAt": "2026-10-08T05:48:34.174Z",
+      "finishedAt": "2026-10-08T05:48:42.036Z",
+      "passed": 0,
+      "checks": 1,
+      "outputs": 0,
+      "failures": [
+        {
+          "check": "reader booklet A5/A4 preview, PDF links, options and edited regeneration at 820",
+          "classification": "Managed Chromium policy blocked top-level file/data navigation; no application defect. Final run uses identical downloaded bytes at a dedicated intercepted localhost URL and disables networking after load."
+        }
+      ],
+      "scope": "Development or focused check; not added to final passing count"
+    },
+    {
+      "file": "run-2026-10-08T05-50-50-562Z.json",
+      "createdAt": "2026-10-08T05:50:50.562Z",
+      "finishedAt": "2026-10-08T05:50:56.957Z",
+      "passed": 0,
+      "checks": 1,
+      "outputs": 0,
+      "failures": [
+        {
+          "check": "reader booklet A5/A4 preview, PDF links, options and edited regeneration at 820",
+          "classification": "Managed Chromium policy blocked top-level file/data navigation; no application defect. Final run uses identical downloaded bytes at a dedicated intercepted localhost URL and disables networking after load."
+        }
+      ],
+      "scope": "Development or focused check; not added to final passing count"
+    },
+    {
+      "file": "run-2026-10-08T05-51-26-173Z.json",
+      "createdAt": "2026-10-08T05:51:26.173Z",
+      "finishedAt": "2026-10-08T05:51:36.891Z",
+      "passed": 1,
+      "checks": 1,
+      "outputs": 3,
+      "failures": [],
+      "scope": "Development or focused check; not added to final passing count"
+    },
+    {
+      "file": "run-2026-10-08T05-52-23-020Z.json",
+      "createdAt": "2026-10-08T05:52:23.020Z",
+      "finishedAt": "2026-10-08T05:52:59.909Z",
+      "passed": 3,
+      "checks": 4,
+      "outputs": 4,
+      "failures": [
+        {
+          "check": "failed save and renderer recovery preserve manuscript; late print cannot escape account switch",
+          "classification": "Screenshot helper waited for an intentionally absent iframe on the save-error screen; fixed by checking existence first."
+        }
+      ],
+      "scope": "Development or focused check; not added to final passing count"
+    },
+    {
+      "file": "run-2026-10-08T05-53-12-484Z.json",
+      "createdAt": "2026-10-08T05:53:12.484Z",
+      "finishedAt": "2026-10-08T05:53:19.459Z",
+      "passed": 1,
+      "checks": 1,
+      "outputs": 0,
+      "failures": [],
+      "scope": "Development or focused check; not added to final passing count"
+    },
+    {
+      "file": "run-2026-10-08T05-53-42-473Z.json",
+      "createdAt": "2026-10-08T05:53:42.473Z",
+      "finishedAt": "2026-10-08T05:54:18.693Z",
+      "passed": 5,
+      "checks": 5,
+      "outputs": 7,
+      "failures": [],
+      "scope": "Final complete suite on frozen layout"
+    },
+    {
+      "file": "run-2026-10-08T06-17-25-671Z.json",
+      "createdAt": "2026-10-08T06:17:25.671Z",
+      "finishedAt": "2026-10-08T06:18:01.053Z",
+      "passed": 5,
+      "checks": 5,
+      "outputs": 7,
+      "failures": [],
+      "scope": "Final full rerun after standalone mobile viewport correction; actual mobile-emulated 390px layout assertion included"
+    }
+  ],
+  "scopeLimitations": [
+    "1440/820/390 CSS viewports and touch-capable Chromium contexts, not physical iPad/iPhone/Mac Safari or IME verification.",
+    "The native print API is reached with its exact Blob document; the OS print dialog is intercepted. PDFs are generated by Chromium printToPDF, not an OS Save PDF dialog.",
+    "Managed Chromium disallows standalone file:// and data: URLs. Unmodified HTML bytes are served from a dedicated synthetic local URL with no application scripts, then read/navigated/printed offline. Real file reopening is unverified.",
+    "PDF link counters describe extracted text fragments, not annotation count; the five distinct chapter/appendix destination pages are separately verified.",
+    "All records, Auth, IndexedDB and HTTP responses are synthetic; no production access or remote data writes."
+  ],
+  "manualVisualReview": {
+    "files": [
+      "a5-cover.png",
+      "a5-chapter.png",
+      "a5-appendix-start.png",
+      "booklet-default-390-viewport.png"
+    ],
+    "result": "Long Korean title remains inside the cover; paragraph separation and Korean text visible; appendix heading shares page with the first complete source block; compact mobile controls show the booklet frame in the initial viewport. Final short-paragraph and metadata pagination are also checked by PDF text/page assertions."
+  },
+  "artifacts": {
+    "A5Default": "book-a5-820.pdf",
+    "A4WithInsightsAndSources": "book-a4-820.pdf",
+    "A4RevisedWithoutSources": "book-a4-820-revised.pdf",
+    "nativeBlobA5": "book-a5-820-native-blob.pdf",
+    "nativeBlobA4": "book-a4-820-native-blob.pdf",
+    "restorableSample": "reader-book-backup.json"
+  },
+  "finalRun": "run-2026-10-08T06-17-25-671Z.json",
+  "runtimeFilesSHA256": {
+    "assets/life/book-print.js": "e745392b18d1675e8349959a37cdd19c089db14db055fe0e4fee7234d8a675b0",
+    "assets/life/workbench-ui.js": "617ad26284a356de771d30e3c9d962e06b1719542d1b396d5d081a21fe156c9f",
+    "assets/life/workbench.css": "0e333f24672d68e103fc919a592061f458ada9ff947e4c53d59b3b20970072f6",
+    "tests/book-edition-browser.cjs": "4fc1735cd6727729c3eb567ec8cb84253f13ffae3b047a054cc39bc52fc4bfed"
+  }
+}
