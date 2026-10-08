@@ -14,6 +14,15 @@ const {abortWorkbenchWrites}=require(root+'/tests/life-workbench-browser.cjs');
 const brief=({value,...position})=>({...position,characters:value.length});
 function annotation(error){if(process.env.GITHUB_ACTIONS)console.error('::error title=Book manuscript layout::'+String(error.stack||error).replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A'));}
 const snap=page=>page.locator('#wbChapterNote').evaluate(el=>({start:el.selectionStart,end:el.selectionEnd,scrollY,top:el.getBoundingClientRect().top,height:el.clientHeight,scrollHeight:el.scrollHeight,value:el.value,focus:document.activeElement?.id}));
+// Coordinate input needs the font/textarea layout and native caret reveal to
+// finish first. Keep the insertion/save/return invariants below unchanged.
+const settle=page=>page.evaluate(async()=>{
+ await document.fonts.ready;
+ await new Promise((resolve,reject)=>{
+  const began=performance.now();let previous='',stableAt=began;
+  const frame=now=>{const el=document.querySelector('#wbChapterNote'),rect=el.getBoundingClientRect(),next=[scrollY,rect.top,rect.height,el.selectionStart,el.selectionEnd].join(':');if(next!==previous){previous=next;stableAt=now;}if(now-began>=200&&now-stableAt>=150)resolve();else if(now-began>3000)reject(new Error('Manuscript layout did not settle before coordinate input'));else requestAnimationFrame(frame);};requestAnimationFrame(frame);
+ });
+});
 async function main(){
  await fs.mkdir(out,{recursive:true});const browser=await playwright().chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  const report={createdAt:new Date().toISOString(),browser:browser.version(),scope:'Actual restored app: long title and mid-manuscript input/reading return. Plain Korean insertion and synthetic composition events only; not native Apple IME.',checks:[],observations:[],consoleErrors:[],pageErrors:[],external:[],expectedErrors:0,remoteWrites:0};
@@ -31,8 +40,9 @@ async function main(){
    await page.locator('#wbChapterTitle').dispatchEvent('compositionstart');await page.locator('#wbChapterTitle').fill(title+'\n나의 기준');assert((await page.locator('#wbChapterTitle').inputValue()).includes('\n'));
    await page.locator('#wbChapterTitle').dispatchEvent('compositionend');const finalTitle=title+'나의 기준';assert.equal(await page.locator('#wbChapterTitle').inputValue(),finalTitle);
    const titleMetrics=await page.locator('#wbChapterTitle').evaluate(el=>({client:el.clientHeight,scroll:el.scrollHeight,line:parseFloat(getComputedStyle(el).lineHeight)}));assert(titleMetrics.client>titleMetrics.line*1.5);assert(titleMetrics.scroll<=titleMetrics.client+1);
-   await page.evaluate(()=>{const el=document.querySelector('#wbChapterNote');el.focus({preventScroll:true});scrollTo(0,scrollY+el.getBoundingClientRect().top+200)});
-   const inputBox=await page.locator('#wbChapterNote').boundingBox();await page.mouse.click(inputBox.x+Math.min(inputBox.width/2,160),360);const inputBefore=await snap(page);assert(inputBefore.start>0&&inputBefore.start<chapter.note.length);assert(inputBefore.scrollY>200);
+   await settle(page);
+   await page.evaluate(()=>{const el=document.querySelector('#wbChapterNote');el.focus({preventScroll:true});scrollTo({top:scrollY+el.getBoundingClientRect().top+200,behavior:'instant'})});await settle(page);
+   const inputBox=await page.locator('#wbChapterNote').boundingBox();await page.mouse.click(inputBox.x+Math.min(inputBox.width/2,160),360);await settle(page);const inputBefore=await snap(page);assert(inputBefore.start>0&&inputBefore.start<chapter.note.length);assert(inputBefore.scrollY>200);
    await page.keyboard.insertText(' 지금의 나로 다시 읽는다.');await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
    const inputAfter=await snap(page);assert(Math.abs(inputAfter.scrollY-inputBefore.scrollY)<2,'Auto height input must not jump the page');assert.equal(inputAfter.scrollHeight,inputAfter.height);assert.equal(inputAfter.start,inputBefore.start+' 지금의 나로 다시 읽는다.'.length);
    const finalNote=inputAfter.value;await page.waitForFunction(async({workspace,chapterId,note,title})=>{const w=await HaedoLife.Shell.storage.readWorkbench(workspace),c=w.books[0].chapters.find(c=>c.id===chapterId);return c.note===note&&c.title===title},{workspace:before.bundle.workspaceId,chapterId:chapter.id,note:finalNote,title:finalTitle});
