@@ -641,7 +641,7 @@ MDN 호환성 데이터의 해당 파일 마지막 변경은 **2026-10-05**, com
 | 목차의 장 이동 링크 | 앱이 만든 목차 항목을 해당 장의 내부 `#id`로 연결하는 것과 목차에 실제 쪽수를 계산해 넣는 것은 다른 기능이다. PDF 내부 링크 보존·도착 장은 실제 생성 PDF에서 별도로 검사해야 한다. 위 `@page` BCD는 PDF 링크나 자동 목차 쪽수의 지원 증거가 아니다. |
 | 자동 목차 쪽수·각주·전문 조판 | 일반 `counter()`의 지원만으로 목적지의 인쇄 쪽수를 구하는 `target-counter()`까지 지원된다고 추정하지 않는다. Vivliostyle 공식 기능에는 교차 참조가 명시돼 있지만 이번 기본 브라우저 출력에서의 자동 목차 쪽수는 미확인이다. 양면 제본 배치·재단선·도련·출판용 파일 규격은 별도 범위다. MDN은 native 도련·재단선 지정이 아직 브라우저에서 지원되지 않는다고 설명한다. |
 
-현재 인쇄는 `iframe.srcdoc`를 사용한다. [MDN iframe 설명과 예제](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe#embedding_source_code_in_an_iframe)는 `about:srcdoc`의 상대 URL 기준이 부모 문서이며, 내부 이동에는 `about:srcdoc#...`처럼 목적지를 명시해야 한다고 설명한다. 따라서 독립 HTML에서 `#장ID`가 동작했다는 결과를 실제 srcdoc 인쇄의 PDF 내부 링크 성공으로 대신하지 않는다. 현재 `base-uri 'none'` 경계를 유지하고, 실제 출력 경로에서 링크가 앱 주소·외부 주소가 아닌 해당 장으로 향하는지 확인한다.
+착수 시 기존 인쇄는 `iframe.srcdoc`를 사용했다. [MDN iframe 설명과 예제](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe#embedding_source_code_in_an_iframe)는 `about:srcdoc`의 상대 URL 기준이 부모 문서이며, 내부 이동에는 `about:srcdoc#...`처럼 목적지를 명시해야 한다고 설명한다. 따라서 독립 HTML에서 `#장ID`가 동작했다는 결과를 실제 srcdoc 인쇄의 PDF 내부 링크 성공으로 대신하지 않는다. 이번 구현은 `base-uri 'none'` 경계를 유지하면서 미리보기·인쇄를 Blob 문서로 바꿔 같은 문서의 fragment를 사용한다. 실제 출력 경로에서 링크가 앱 주소·외부 주소가 아닌 해당 장으로 향하는지는 별도로 검증한다.
 
 조판 라이브러리가 브라우저 차이를 모두 없애는 것도 아니다. Vivliostyle의 해당 태그 [지원 문서](https://github.com/vivliostyle/vivliostyle.js/blob/v2.45.2/docs/supported-css-features.md)는 Safari/WebKit의 중첩 다단과 페이지 분할 차이를 명시한다. Paged.js의 Chromium 기반 specs를 실제 iPad·iPhone 검증으로 대신하지 않는다. iPad의 Chrome이라는 이름만으로 데스크톱 Chromium과 같은 인쇄 지원이라고 판단하지 않는다. 이번 조사에는 실제 Mac·iPad·iPhone·Files·OS 인쇄 창 검증이 없다.
 
@@ -651,4 +651,4 @@ MDN 호환성 데이터의 해당 파일 마지막 변경은 **2026-10-05**, com
 
 Paged.js/Vivliostyle 직접 도입은 패키지 크기뿐 아니라 **조판 스크립트의 실행 위치, DOM 분할 후 원고·출처 순서, 계정 전환 취소, 폰트 준비, 메모리·인쇄 완료 경계**를 다시 검증해야 한다. 지금 필요한 기본 판형·문단·장 나눔에 이 비용을 먼저 추가할 이유는 없다. 실제 원고에서 자동 목차 쪽번호·각주·양면 조판이 필수로 드러나면 두 후보의 동일 한글 원고 출력을 직접 비교하고 결정한다.
 
-이 절은 공식 자료 조사와 선택 근거다. 새 독자용 화면·PDF의 기능·시각 검사는 **미검증**이며 기존 7쪽 PDF 검사나 라이브러리의 지원 표로 대신하지 않는다. 라이브러리·폰트 설치, 외부 AI, 운영 SQL·계정 자료·병합·배포 작업은 수행하지 않았다.
+이 절은 공식 자료 조사와 선택 근거다. 조사 뒤 수행한 새 독자용 화면·PDF 검증은 [책자 검토](../design-review/book-edition.md)에 별도로 기록했다. 기존 7쪽 PDF 검사나 라이브러리의 지원 표로 새 출력을 대신하지 않는다. 라이브러리·폰트 설치, 외부 AI, 운영 SQL·계정 자료·병합·배포 작업은 수행하지 않았다.

@@ -134,10 +134,10 @@ async function output(page, context, report, width, paper, expectedNotes, { insi
       const blobText = execFileSync('pdftotext', ['-layout', blobPath, '-'], { encoding: 'utf8' }), blobXML = execFileSync('pdftohtml', ['-xml', '-stdout', '-i', blobPath], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
       assert.equal(blobText, text, 'Native-print Blob document and downloaded HTML produce the same PDF text/pages');
       const blobTargets = [...blobXML.matchAll(/<a href="[^"]+#(\d+)"/g)].map(match => Number(match[1])); for (const at of chapterPages) assert(blobTargets.includes(at + 1));
-      nativeBlobPDF = { filename: path.basename(blobPath), PDFLinks: blobTargets.length, chapterDestinations: chapterPages.map(at => at + 1), samePDFTextAndPages: true, nativeSaveDialog: false };
+      nativeBlobPDF = { filename: path.basename(blobPath), PDFLinkTextFragments: blobTargets.length, PDFDestinationPages: [...new Set(blobTargets)], chapterDestinations: chapterPages.map(at => at + 1), samePDFTextAndPages: true, nativeSaveDialog: false };
     } finally { await blobPage.close(); await page.evaluate(url => URL.revokeObjectURL(url), blobURL); }
   }
-  await fs.writeFile(path.join(out, filename + '.txt'), text); report.outputs.push({ width, paper, insights, sources, filename: filename + '.pdf', pages: pages.length, chapterPages: chapterPages.map(at => at + 1), PDFLinks: links.length, samePreviewHTMLAndPrint: true, nativeBlobPDF, offlineHTML: true, standaloneTransport: 'intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy' });
+  await fs.writeFile(path.join(out, filename + '.txt'), text); report.outputs.push({ width, paper, insights, sources, filename: filename + '.pdf', pages: pages.length, chapterPages: chapterPages.map(at => at + 1), PDFLinkTextFragments: links.length, PDFDestinationPages: [...new Set(targets)], samePreviewHTMLAndPrint: true, nativeBlobPDF, offlineHTML: true, standaloneTransport: 'intercepted local HTML, offline after load; file and data navigation blocked by managed browser policy' });
   if (width === 820 && !suffix) for (const [at, scene] of [[1, 'cover'], [2, 'contents'], [chapterPages[0] + 1, 'chapter']]) execFileSync('pdftoppm', ['-f', String(at), '-singlefile', '-scale-to', '1400', '-png', pdfPath, path.join(out, `${paper.toLowerCase()}-${scene}`)], { stdio: ['ignore', 'pipe', 'pipe'] });
   return raw.text;
 }
