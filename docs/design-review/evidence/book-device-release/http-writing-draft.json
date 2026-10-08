@@ -1,0 +1,29 @@
+{
+  "scope": "read-only anonymous deployed HTTP; authenticated get/list/put not exercised",
+  "checks": [
+    {
+      "check": "anonymous writing draft get denied",
+      "http": 401,
+      "code": "42501",
+      "passed": true
+    },
+    {
+      "check": "anonymous writing draft list denied",
+      "http": 401,
+      "code": "42501",
+      "passed": true
+    },
+    {
+      "check": "anonymous writing draft table denied",
+      "http": 401,
+      "code": "42501",
+      "passed": true
+    },
+    {
+      "check": "anonymous writing draft receipts denied",
+      "http": 401,
+      "code": "42501",
+      "passed": true
+    }
+  ]
+}

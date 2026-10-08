@@ -1,0 +1,309 @@
+{
+  "verifiedAtClientDate": "2026-10-09 KST",
+  "sourceHead": "8afd77c033e404ba23ec8f3038e5a61fda8453a3",
+  "scope": "Exact predecessor migrations only; no personal row reads or test writes; Auth and existing sync/public contracts unchanged.",
+  "stages": [
+    {
+      "name": "life_compositions",
+      "migration": "supabase/migrations/20261006010000_life_compositions.sql",
+      "installationCheck": "supabase/tests/life-compositions-installation.sql",
+      "expected": 11,
+      "checks": [
+        {
+          "check_name": "composition deletion removes matching owner/workspace receipts",
+          "passed": true
+        },
+        {
+          "check_name": "composition identity and validation constraints",
+          "passed": true
+        },
+        {
+          "check_name": "original deletion removes only matching owner/workspace composition",
+          "passed": true
+        },
+        {
+          "check_name": "private RLS table life_composition_receipts",
+          "passed": true
+        },
+        {
+          "check_name": "private RLS table life_compositions",
+          "passed": true
+        },
+        {
+          "check_name": "routine public.life_composition_get(uuid)",
+          "passed": true
+        },
+        {
+          "check_name": "routine public.life_composition_ids_valid(jsonb,integer)",
+          "passed": true
+        },
+        {
+          "check_name": "routine public.life_composition_json_bytes(jsonb)",
+          "passed": true
+        },
+        {
+          "check_name": "routine public.life_composition_put(uuid,bigint,uuid,bigint,jsonb)",
+          "passed": true
+        },
+        {
+          "check_name": "routine public.life_composition_text_valid(jsonb,integer,boolean)",
+          "passed": true
+        },
+        {
+          "check_name": "routine public.life_composition_valid(jsonb)",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "life_writing_drafts",
+      "migration": "supabase/migrations/20261006020000_life_writing_drafts.sql",
+      "installationCheck": "supabase/tests/life-writing-drafts-installation.sql",
+      "expected": 9,
+      "checks": [
+        {
+          "check_name": "draft deletion removes matching owner/workspace/draft receipts",
+          "passed": true
+        },
+        {
+          "check_name": "draft identity and validation constraints",
+          "passed": true
+        },
+        {
+          "check_name": "original deletion removes matching owner/workspace drafts",
+          "passed": true
+        },
+        {
+          "check_name": "private RLS table life_writing_draft_receipts",
+          "passed": true
+        },
+        {
+          "check_name": "private RLS table life_writing_drafts",
+          "passed": true
+        },
+        {
+          "check_name": "routine public.life_writing_draft_get(uuid,uuid)",
+          "passed": true
+        },
+        {
+          "check_name": "routine public.life_writing_draft_list(uuid,uuid)",
+          "passed": true
+        },
+        {
+          "check_name": "routine public.life_writing_draft_put(uuid,uuid,bigint,uuid,bigint,jsonb)",
+          "passed": true
+        },
+        {
+          "check_name": "routine public.life_writing_draft_valid(jsonb)",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "life_composition_books",
+      "migration": "supabase/migrations/20261008010000_life_composition_books.sql",
+      "installationCheck": "supabase/tests/life-composition-books-installation.sql",
+      "expected": 12,
+      "checks": [
+        {
+          "check_name": "book chapters preserve missing exact references",
+          "passed": true
+        },
+        {
+          "check_name": "book missing field fails closed",
+          "passed": true
+        },
+        {
+          "check_name": "books null fails closed",
+          "passed": true
+        },
+        {
+          "check_name": "books validator retains private invoker contract",
+          "passed": true
+        },
+        {
+          "check_name": "chapter unknown field fails closed",
+          "passed": true
+        },
+        {
+          "check_name": "composition IDs stay globally unique",
+          "passed": true
+        },
+        {
+          "check_name": "duplicate chapter references rejected",
+          "passed": true
+        },
+        {
+          "check_name": "empty books array remains valid",
+          "passed": true
+        },
+        {
+          "check_name": "old v1 without books remains valid",
+          "passed": true
+        },
+        {
+          "check_name": "reversed period rejected",
+          "passed": true
+        },
+        {
+          "check_name": "UTF-16 title limit matches client",
+          "passed": true
+        },
+        {
+          "check_name": "year zero rejected",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "life_composition_insights",
+      "migration": "supabase/migrations/20261008020000_life_composition_insights.sql",
+      "installationCheck": "supabase/tests/life-composition-insights-installation.sql",
+      "expected": 13,
+      "checks": [
+        {
+          "check_name": "blank statement draft remains valid",
+          "passed": true
+        },
+        {
+          "check_name": "books without insights remain valid",
+          "passed": true
+        },
+        {
+          "check_name": "composition IDs stay globally unique",
+          "passed": true
+        },
+        {
+          "check_name": "cross role exact reference allowed",
+          "passed": true
+        },
+        {
+          "check_name": "excluded remains boolean",
+          "passed": true
+        },
+        {
+          "check_name": "insight missing field fails closed",
+          "passed": true
+        },
+        {
+          "check_name": "insight unknown field fails closed",
+          "passed": true
+        },
+        {
+          "check_name": "insights null fails closed",
+          "passed": true
+        },
+        {
+          "check_name": "insights validator retains private invoker contract",
+          "passed": true
+        },
+        {
+          "check_name": "missing role references outside chapter remain valid",
+          "passed": true
+        },
+        {
+          "check_name": "old v1 without books remains valid",
+          "passed": true
+        },
+        {
+          "check_name": "role reference duplicates rejected",
+          "passed": true
+        },
+        {
+          "check_name": "UTF-16 statement limit matches client",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "life_composition_editions",
+      "migration": "supabase/migrations/20261008030000_life_composition_editions.sql",
+      "installationCheck": "supabase/tests/life-composition-editions-installation.sql",
+      "expected": 16,
+      "checks": [
+        {
+          "check_name": "archive snapshot and missing references remain valid",
+          "passed": true
+        },
+        {
+          "check_name": "book archive null fails closed",
+          "passed": true
+        },
+        {
+          "check_name": "chapter archive string fails closed",
+          "passed": true
+        },
+        {
+          "check_name": "edition IDs cannot alias current chapters",
+          "passed": true
+        },
+        {
+          "check_name": "edition label cannot be blank",
+          "passed": true
+        },
+        {
+          "check_name": "edition missing field fails closed",
+          "passed": true
+        },
+        {
+          "check_name": "edition nesting rejected",
+          "passed": true
+        },
+        {
+          "check_name": "edition root archive rejected",
+          "passed": true
+        },
+        {
+          "check_name": "edition unknown field fails closed",
+          "passed": true
+        },
+        {
+          "check_name": "editions validator retains private invoker contract",
+          "passed": true
+        },
+        {
+          "check_name": "impossible calendar date rejected",
+          "passed": true
+        },
+        {
+          "check_name": "noncanonical UTC timestamp rejected",
+          "passed": true
+        },
+        {
+          "check_name": "old books and insights remain valid",
+          "passed": true
+        },
+        {
+          "check_name": "old v1 without books remains valid",
+          "passed": true
+        },
+        {
+          "check_name": "timestamp year zero rejected",
+          "passed": true
+        },
+        {
+          "check_name": "UTF-16 edition label limit matches client",
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "legacyBefore": [
+    {
+      "admin_role": "postgres",
+      "existing_table_count": 7,
+      "new_table_count": 0,
+      "new_routine_count": 0,
+      "legacy_fingerprint": "b77368358d0b9401184eace38c95ab18"
+    }
+  ],
+  "legacyAfter": [
+    {
+      "admin_role": "postgres",
+      "existing_table_count": 7,
+      "new_table_count": 4,
+      "new_routine_count": 10,
+      "legacy_fingerprint": "b77368358d0b9401184eace38c95ab18"
+    }
+  ]
+}
