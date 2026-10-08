@@ -1,0 +1,233 @@
+{
+  "createdAt": "2026-10-08T02:24:00.509Z",
+  "browser": "151.0.7922.173",
+  "environment": "Linux Chromium, two isolated browser contexts and real IndexedDB; anonymous HTTP simulator. Not live SQL/RLS, actual Apple hardware/IME/Files or Google OAuth.",
+  "checks": [
+    {
+      "name": "offline competing page edits require comparison; discarded side downloads and restores as a new copy",
+      "pass": true
+    }
+  ],
+  "captures": [
+    {
+      "scene": "comparison",
+      "file": "comparison-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "summary",
+        "id": "compositionDetails-remote",
+        "class": "",
+        "text": "내용과 표시 확인",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": {
+        "width": 700,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "comparison",
+      "file": "comparison-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "summary",
+        "id": "compositionDetails-remote",
+        "class": "",
+        "text": "내용과 표시 확인",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": {
+        "width": 628,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "comparison",
+      "file": "comparison-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "summary",
+        "id": "compositionDetails-remote",
+        "class": "",
+        "text": "내용과 표시 확인",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": {
+        "width": 350,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "edition-comparison",
+      "file": "edition-comparison-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "summary",
+        "id": "compositionDetails-remote",
+        "class": "",
+        "text": "내용과 표시 확인",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": {
+        "width": 700,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "editionHeading": {
+        "size": "14px",
+        "lineHeight": "24.5px",
+        "marginTop": "12px",
+        "marginBottom": "6px"
+      }
+    },
+    {
+      "scene": "edition-comparison",
+      "file": "edition-comparison-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "summary",
+        "id": "compositionDetails-remote",
+        "class": "",
+        "text": "내용과 표시 확인",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": {
+        "width": 628,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "editionHeading": {
+        "size": "14px",
+        "lineHeight": "24.5px",
+        "marginTop": "12px",
+        "marginBottom": "6px"
+      }
+    },
+    {
+      "scene": "edition-comparison",
+      "file": "edition-comparison-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "summary",
+        "id": "compositionDetails-remote",
+        "class": "",
+        "text": "내용과 표시 확인",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": {
+        "width": 350,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "editionHeading": {
+        "size": "14px",
+        "lineHeight": "24.5px",
+        "marginTop": "12px",
+        "marginBottom": "6px"
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 2,
+  "realRemoteWrites": 0
+}
