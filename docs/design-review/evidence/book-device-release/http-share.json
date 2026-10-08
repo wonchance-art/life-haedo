@@ -1,0 +1,34 @@
+{
+  "scope": "read-only deployed HTTP; no real owner publish/revoke or Google login",
+  "checks": [
+    {
+      "check": "anonymous exact-ID lookup and no-store",
+      "http": 200,
+      "passed": true
+    },
+    {
+      "check": "anonymous owner listing denied",
+      "http": 401,
+      "code": "42501",
+      "passed": true
+    },
+    {
+      "check": "anonymous owner status denied",
+      "http": 401,
+      "code": "42501",
+      "passed": true
+    },
+    {
+      "check": "anonymous base table denied",
+      "http": 401,
+      "code": "42501",
+      "passed": true
+    },
+    {
+      "check": "anonymous receipts denied",
+      "http": 401,
+      "code": "42501",
+      "passed": true
+    }
+  ]
+}

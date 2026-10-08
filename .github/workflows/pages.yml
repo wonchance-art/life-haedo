@@ -154,6 +154,12 @@ jobs:
       - name: Verify book reading, editing return and manuscript parity
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-preview-browser.cjs
+      - name: Verify manuscript page position and visible chapter editing
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-manuscript-layout-browser.cjs
+      - name: Verify immediate chapter editing with default motion
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: BOOK_MANUSCRIPT_LAYOUT_MOTION=no-preference node tests/book-manuscript-layout-browser.cjs
       - name: Verify book editions, archive recovery and backup boundaries
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-history-browser.cjs
@@ -206,6 +212,7 @@ jobs:
             .local/writing-sync/
             .local/reading-quality/
             .local/reading-writing-quality/
+            .local/book-design-reset-app/caret/
             .local/reading-resume/
             .local/product-flow-quality/
             .local/search-quality/

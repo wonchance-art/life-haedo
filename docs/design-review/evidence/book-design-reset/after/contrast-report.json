@@ -1,0 +1,65 @@
+[
+  {
+    "role": "A body",
+    "foreground": "#262330",
+    "background": "#ffffff",
+    "ratio": 15.38,
+    "passesText": true
+  },
+  {
+    "role": "A secondary",
+    "foreground": "#6a6172",
+    "background": "#ffffff",
+    "ratio": 5.89,
+    "passesText": true
+  },
+  {
+    "role": "A selection",
+    "foreground": "#684477",
+    "background": "#f4edf6",
+    "ratio": 6.82,
+    "passesText": true
+  },
+  {
+    "role": "A primary",
+    "foreground": "#ffffff",
+    "background": "#684477",
+    "ratio": 7.83,
+    "passesText": true
+  },
+  {
+    "role": "B body",
+    "foreground": "#253638",
+    "background": "#ffffff",
+    "ratio": 12.62,
+    "passesText": true
+  },
+  {
+    "role": "B secondary rail",
+    "foreground": "#56686b",
+    "background": "#f2f6f5",
+    "ratio": 5.37,
+    "passesText": true
+  },
+  {
+    "role": "B selection",
+    "foreground": "#23685f",
+    "background": "#e5f1ed",
+    "ratio": 5.64,
+    "passesText": true
+  },
+  {
+    "role": "B primary",
+    "foreground": "#ffffff",
+    "background": "#23685f",
+    "ratio": 6.53,
+    "passesText": true
+  },
+  {
+    "role": "error",
+    "foreground": "#7b2336",
+    "background": "#fbebed",
+    "ratio": 8.52,
+    "passesText": true
+  }
+]

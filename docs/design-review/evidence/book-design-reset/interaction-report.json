@@ -1,0 +1,2206 @@
+{
+  "createdAt": "2026-10-08T20:56:52.183Z",
+  "scope": "Offline standalone design comparison only. Memory editing, synthetic sample, no app Auth/storage/backend or physical Apple IME/Files validation.",
+  "browser": "151.0.7922.173",
+  "pass": true,
+  "checks": [
+    {
+      "name": "A chapter edit, reader return, provenance and export 1440",
+      "pass": true,
+      "checkedRun": "interaction-run-2026-10-08T20-53-51-601Z.json",
+      "checkedAt": "2026-10-08T20:53:59.569Z"
+    },
+    {
+      "name": "A chapter edit, reader return, provenance and export 820",
+      "pass": true,
+      "checkedRun": "interaction-run-2026-10-08T20-53-51-601Z.json",
+      "checkedAt": "2026-10-08T20:53:59.569Z"
+    },
+    {
+      "name": "A chapter edit, reader return, provenance and export 390",
+      "pass": true,
+      "checkedRun": "interaction-run-2026-10-08T20-54-26-401Z.json",
+      "checkedAt": "2026-10-08T20:54:31.078Z"
+    },
+    {
+      "name": "B chapter edit, reader return, provenance and export 1440",
+      "pass": true,
+      "checkedRun": "interaction-run-2026-10-08T20-54-26-401Z.json",
+      "checkedAt": "2026-10-08T20:54:31.078Z"
+    },
+    {
+      "name": "B chapter edit, reader return, provenance and export 820",
+      "pass": true,
+      "checkedRun": "interaction-run-2026-10-08T20-54-26-401Z.json",
+      "checkedAt": "2026-10-08T20:54:31.078Z"
+    },
+    {
+      "name": "B chapter edit, reader return, provenance and export 390",
+      "pass": true,
+      "checkedRun": "interaction-run-2026-10-08T20-54-26-401Z.json",
+      "checkedAt": "2026-10-08T20:54:31.078Z"
+    },
+    {
+      "name": "empty loading many states and search keyboard recovery",
+      "pass": true,
+      "checkedRun": "interaction-run-2026-10-08T20-53-51-601Z.json",
+      "checkedAt": "2026-10-08T20:53:59.569Z"
+    },
+    {
+      "name": "dirty draft survives error and state-switch recovery",
+      "pass": true,
+      "checkedRun": "interaction-run-2026-10-08T20-55-35-072Z.json",
+      "checkedAt": "2026-10-08T20:55:36.935Z"
+    },
+    {
+      "name": "new paragraph inserted before reading position returns to the original paragraph",
+      "pass": true,
+      "checkedRun": "interaction-run-2026-10-08T20-53-51-601Z.json",
+      "checkedAt": "2026-10-08T20:53:59.569Z"
+    },
+    {
+      "name": "dirty draft cannot be stranded by many state selection",
+      "pass": true,
+      "checkedRun": "interaction-run-2026-10-08T20-53-51-601Z.json",
+      "checkedAt": "2026-10-08T20:53:59.569Z"
+    },
+    {
+      "name": "source reveal keeps current draft and selection visible",
+      "pass": true,
+      "checkedRun": "interaction-run-2026-10-08T20-55-35-072Z.json",
+      "checkedAt": "2026-10-08T20:55:36.935Z"
+    }
+  ],
+  "observations": [
+    {
+      "tag": "A list 1440",
+      "width": 1440,
+      "overflow": false,
+      "bodyTop": 301.59375,
+      "controlWidths": [
+        {
+          "label": "A\n원고 중심",
+          "width": 90.828125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B\n편집 작업실",
+          "width": 102.453125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 제목 검색",
+          "width": 182.65625,
+          "height": 44,
+          "font": "16px"
+        },
+        {
+          "label": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "width": 602,
+          "height": 83.6875,
+          "font": "27px"
+        },
+        {
+          "label": "전체 읽기",
+          "width": 111.453125,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 81.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "잘하고 싶었던 마음",
+          "width": 230,
+          "height": 66.953125,
+          "font": "14px"
+        },
+        {
+          "label": "쉬는 동안 생긴 기준",
+          "width": 230,
+          "height": 66.96875,
+          "font": "14px"
+        },
+        {
+          "label": "함께 배우는 쪽으로",
+          "width": 230,
+          "height": 66.96875,
+          "font": "14px"
+        },
+        {
+          "label": "오래 좋아하는 것을 고르기",
+          "width": 230,
+          "height": 66.96875,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "A edit 1440",
+      "width": 1440,
+      "overflow": false,
+      "bodyTop": 348.59375,
+      "controlWidths": [
+        {
+          "label": "A\n원고 중심",
+          "width": 90.828125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B\n편집 작업실",
+          "width": 102.453125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 목록으로",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "목차",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "읽기",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "반영",
+          "width": 65.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "장 제목",
+          "width": 680,
+          "height": 50,
+          "font": "32px"
+        },
+        {
+          "label": "이 장의 원고",
+          "width": 680,
+          "height": 1076,
+          "font": "19px"
+        },
+        {
+          "label": "읽던 곳으로",
+          "width": 124.328125,
+          "height": 44,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "A read 1440",
+      "width": 1440,
+      "overflow": false,
+      "bodyTop": 401.890625,
+      "controlWidths": [
+        {
+          "label": "A\n원고 중심",
+          "width": 90.828125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B\n편집 작업실",
+          "width": 102.453125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 목록으로",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "목차",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "읽기",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "예시 원고 받기",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "1장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "2장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "3장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 2 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "4장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "예시 원고 받기",
+          "width": 141.125,
+          "height": 44,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "A list 820",
+      "width": 820,
+      "overflow": false,
+      "bodyTop": 284.59375,
+      "controlWidths": [
+        {
+          "label": "A\n원고 중심",
+          "width": 90.828125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B\n편집 작업실",
+          "width": 102.453125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 제목 검색",
+          "width": 182.65625,
+          "height": 44,
+          "font": "16px"
+        },
+        {
+          "label": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "width": 740,
+          "height": 80.59375,
+          "font": "26px"
+        },
+        {
+          "label": "전체 읽기",
+          "width": 111.453125,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 81.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "잘하고 싶었던 마음",
+          "width": 360,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "쉬는 동안 생긴 기준",
+          "width": 360,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "함께 배우는 쪽으로",
+          "width": 360,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "오래 좋아하는 것을 고르기",
+          "width": 360,
+          "height": 44,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "A edit 820",
+      "width": 820,
+      "overflow": false,
+      "bodyTop": 348.59375,
+      "controlWidths": [
+        {
+          "label": "A\n원고 중심",
+          "width": 90.828125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B\n편집 작업실",
+          "width": 102.453125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 목록으로",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "목차",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "읽기",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "반영",
+          "width": 65.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "장 제목",
+          "width": 680,
+          "height": 50,
+          "font": "32px"
+        },
+        {
+          "label": "이 장의 원고",
+          "width": 680,
+          "height": 1076,
+          "font": "19px"
+        },
+        {
+          "label": "읽던 곳으로",
+          "width": 124.328125,
+          "height": 44,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "A read 820",
+      "width": 820,
+      "overflow": false,
+      "bodyTop": 401.890625,
+      "controlWidths": [
+        {
+          "label": "A\n원고 중심",
+          "width": 90.828125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B\n편집 작업실",
+          "width": 102.453125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 목록으로",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "목차",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "읽기",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "예시 원고 받기",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "1장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "2장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "3장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 2 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "4장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "예시 원고 받기",
+          "width": 141.125,
+          "height": 44,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "A list 390",
+      "width": 390,
+      "overflow": false,
+      "bodyTop": 263,
+      "controlWidths": [
+        {
+          "label": "A",
+          "width": 44,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B",
+          "width": 44,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 제목 검색",
+          "width": 118.734375,
+          "height": 44,
+          "font": "16px"
+        },
+        {
+          "label": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "width": 350,
+          "height": 106.921875,
+          "font": "23px"
+        },
+        {
+          "label": "전체 읽기",
+          "width": 111.453125,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 81.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "잘하고 싶었던 마음",
+          "width": 350,
+          "height": 47.09375,
+          "font": "14px"
+        },
+        {
+          "label": "쉬는 동안 생긴 기준",
+          "width": 350,
+          "height": 47.09375,
+          "font": "14px"
+        },
+        {
+          "label": "함께 배우는 쪽으로",
+          "width": 350,
+          "height": 47.09375,
+          "font": "14px"
+        },
+        {
+          "label": "오래 좋아하는 것을 고르기",
+          "width": 350,
+          "height": 47.09375,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "A edit 390",
+      "width": 390,
+      "overflow": false,
+      "bodyTop": 303,
+      "controlWidths": [
+        {
+          "label": "A",
+          "width": 44,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B",
+          "width": 44,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 목록으로",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "목차",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 49.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "읽기",
+          "width": 49.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "반영",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "장 제목",
+          "width": 350,
+          "height": 50,
+          "font": "27px"
+        },
+        {
+          "label": "이 장의 원고",
+          "width": 350,
+          "height": 1391,
+          "font": "17px"
+        },
+        {
+          "label": "읽던 곳으로",
+          "width": 124.328125,
+          "height": 44,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "B list 1440",
+      "width": 1440,
+      "overflow": false,
+      "bodyTop": 277.59375,
+      "controlWidths": [
+        {
+          "label": "A\n원고 중심",
+          "width": 90.828125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B\n편집 작업실",
+          "width": 102.453125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 제목 검색",
+          "width": 182.65625,
+          "height": 44,
+          "font": "16px"
+        },
+        {
+          "label": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "width": 713.84375,
+          "height": 44,
+          "font": "23px"
+        },
+        {
+          "label": "잘하고 싶었던 마음",
+          "width": 850,
+          "height": 56.09375,
+          "font": "14px"
+        },
+        {
+          "label": "쉬는 동안 생긴 기준",
+          "width": 850,
+          "height": 56.09375,
+          "font": "14px"
+        },
+        {
+          "label": "함께 배우는 쪽으로",
+          "width": 850,
+          "height": 56.09375,
+          "font": "14px"
+        },
+        {
+          "label": "오래 좋아하는 것을 고르기",
+          "width": 850,
+          "height": 56.09375,
+          "font": "14px"
+        },
+        {
+          "label": "전체 읽기",
+          "width": 111.453125,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 81.765625,
+          "height": 44,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "B edit 1440",
+      "width": 1440,
+      "overflow": false,
+      "bodyTop": 326.59375,
+      "controlWidths": [
+        {
+          "label": "A\n원고 중심",
+          "width": 90.828125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B\n편집 작업실",
+          "width": 102.453125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 목록으로",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "읽기",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "반영",
+          "width": 65.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "내 책",
+          "width": 208,
+          "height": 47.390625,
+          "font": "13px"
+        },
+        {
+          "label": "잘하고 싶었던 마음",
+          "width": 208,
+          "height": 48.59375,
+          "font": "13px"
+        },
+        {
+          "label": "쉬는 동안 생긴 기준",
+          "width": 208,
+          "height": 48.59375,
+          "font": "13px"
+        },
+        {
+          "label": "함께 배우는 쪽으로",
+          "width": 208,
+          "height": 48.59375,
+          "font": "13px"
+        },
+        {
+          "label": "오래 좋아하는 것을 고르기",
+          "width": 208,
+          "height": 48.59375,
+          "font": "13px"
+        },
+        {
+          "label": "전체 읽기",
+          "width": 208,
+          "height": 47.390625,
+          "font": "13px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "장 제목",
+          "width": 650,
+          "height": 50,
+          "font": "28px"
+        },
+        {
+          "label": "이 장의 원고",
+          "width": 650,
+          "height": 897,
+          "font": "17px"
+        },
+        {
+          "label": "읽던 곳으로",
+          "width": 124.328125,
+          "height": 44,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "B list 820",
+      "width": 820,
+      "overflow": false,
+      "bodyTop": 277.59375,
+      "controlWidths": [
+        {
+          "label": "A\n원고 중심",
+          "width": 90.828125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B\n편집 작업실",
+          "width": 102.453125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 제목 검색",
+          "width": 182.65625,
+          "height": 44,
+          "font": "16px"
+        },
+        {
+          "label": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "width": 713.84375,
+          "height": 44,
+          "font": "23px"
+        },
+        {
+          "label": "잘하고 싶었던 마음",
+          "width": 768,
+          "height": 56.09375,
+          "font": "14px"
+        },
+        {
+          "label": "쉬는 동안 생긴 기준",
+          "width": 768,
+          "height": 56.09375,
+          "font": "14px"
+        },
+        {
+          "label": "함께 배우는 쪽으로",
+          "width": 768,
+          "height": 56.09375,
+          "font": "14px"
+        },
+        {
+          "label": "오래 좋아하는 것을 고르기",
+          "width": 768,
+          "height": 56.09375,
+          "font": "14px"
+        },
+        {
+          "label": "전체 읽기",
+          "width": 111.453125,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 81.765625,
+          "height": 44,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "B edit 820",
+      "width": 820,
+      "overflow": false,
+      "bodyTop": 326.59375,
+      "controlWidths": [
+        {
+          "label": "A\n원고 중심",
+          "width": 90.828125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B\n편집 작업실",
+          "width": 102.453125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 목록으로",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "읽기",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "반영",
+          "width": 65.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "내 책",
+          "width": 186,
+          "height": 47.390625,
+          "font": "13px"
+        },
+        {
+          "label": "잘하고 싶었던 마음",
+          "width": 186,
+          "height": 48.59375,
+          "font": "13px"
+        },
+        {
+          "label": "쉬는 동안 생긴 기준",
+          "width": 186,
+          "height": 48.59375,
+          "font": "13px"
+        },
+        {
+          "label": "함께 배우는 쪽으로",
+          "width": 186,
+          "height": 48.59375,
+          "font": "13px"
+        },
+        {
+          "label": "오래 좋아하는 것을 고르기",
+          "width": 186,
+          "height": 70.78125,
+          "font": "13px"
+        },
+        {
+          "label": "전체 읽기",
+          "width": 186,
+          "height": 47.390625,
+          "font": "13px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "장 제목",
+          "width": 562,
+          "height": 50,
+          "font": "28px"
+        },
+        {
+          "label": "이 장의 원고",
+          "width": 562,
+          "height": 996,
+          "font": "17px"
+        },
+        {
+          "label": "읽던 곳으로",
+          "width": 124.328125,
+          "height": 44,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "B list 390",
+      "width": 390,
+      "overflow": false,
+      "bodyTop": 271,
+      "controlWidths": [
+        {
+          "label": "A",
+          "width": 44,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B",
+          "width": 44,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 제목 검색",
+          "width": 118.734375,
+          "height": 44,
+          "font": "16px"
+        },
+        {
+          "label": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "width": 350,
+          "height": 106.921875,
+          "font": "23px"
+        },
+        {
+          "label": "잘하고 싶었던 마음",
+          "width": 350,
+          "height": 50.09375,
+          "font": "14px"
+        },
+        {
+          "label": "쉬는 동안 생긴 기준",
+          "width": 350,
+          "height": 50.09375,
+          "font": "14px"
+        },
+        {
+          "label": "함께 배우는 쪽으로",
+          "width": 350,
+          "height": 50.09375,
+          "font": "14px"
+        },
+        {
+          "label": "오래 좋아하는 것을 고르기",
+          "width": 350,
+          "height": 50.09375,
+          "font": "14px"
+        },
+        {
+          "label": "전체 읽기",
+          "width": 111.453125,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 81.765625,
+          "height": 44,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "B edit 390",
+      "width": 390,
+      "overflow": false,
+      "bodyTop": 321,
+      "controlWidths": [
+        {
+          "label": "A",
+          "width": 44,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B",
+          "width": 44,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 목록으로",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 49.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "읽기",
+          "width": 49.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "반영",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "현재 장 선택",
+          "width": 234,
+          "height": 44,
+          "font": "16px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 83.546875,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "장 제목",
+          "width": 350,
+          "height": 50,
+          "font": "27px"
+        },
+        {
+          "label": "이 장의 원고",
+          "width": 350,
+          "height": 1391,
+          "font": "17px"
+        },
+        {
+          "label": "읽던 곳으로",
+          "width": 124.328125,
+          "height": 44,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "empty action",
+      "behavior": "예시 책 열기 opens the actual sample reading view"
+    },
+    {
+      "tag": "states 390",
+      "width": 390,
+      "overflow": false,
+      "bodyTop": 263,
+      "controlWidths": [
+        {
+          "label": "A",
+          "width": 44,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B",
+          "width": 44,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 제목 검색",
+          "width": 118.734375,
+          "height": 44,
+          "font": "16px"
+        },
+        {
+          "label": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "width": 350,
+          "height": 106.921875,
+          "font": "23px"
+        },
+        {
+          "label": "전체 읽기",
+          "width": 111.453125,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 81.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "잘하고 싶었던 마음",
+          "width": 350,
+          "height": 47.09375,
+          "font": "14px"
+        },
+        {
+          "label": "쉬는 동안 생긴 기준",
+          "width": 350,
+          "height": 47.09375,
+          "font": "14px"
+        },
+        {
+          "label": "함께 배우는 쪽으로",
+          "width": 350,
+          "height": 47.09375,
+          "font": "14px"
+        },
+        {
+          "label": "오래 좋아하는 것을 고르기",
+          "width": 350,
+          "height": 47.09375,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "A read 390",
+      "width": 390,
+      "overflow": false,
+      "bodyTop": 344.59375,
+      "controlWidths": [
+        {
+          "label": "A",
+          "width": 44,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B",
+          "width": 44,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 목록으로",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "목차",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 49.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "읽기",
+          "width": 49.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "1장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "2장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "3장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 2 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "4장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "예시 원고 받기",
+          "width": 141.125,
+          "height": 44,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "reload",
+      "memoryOnlyChangesReset": true
+    },
+    {
+      "tag": "B read 1440",
+      "width": 1440,
+      "overflow": false,
+      "bodyTop": 360.78125,
+      "controlWidths": [
+        {
+          "label": "A\n원고 중심",
+          "width": 90.828125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B\n편집 작업실",
+          "width": 102.453125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 목록으로",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "읽기",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "예시 원고 받기",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "내 책",
+          "width": 208,
+          "height": 47.390625,
+          "font": "13px"
+        },
+        {
+          "label": "잘하고 싶었던 마음",
+          "width": 208,
+          "height": 48.59375,
+          "font": "13px"
+        },
+        {
+          "label": "쉬는 동안 생긴 기준 · 다시 읽기",
+          "width": 208,
+          "height": 70.78125,
+          "font": "13px"
+        },
+        {
+          "label": "함께 배우는 쪽으로",
+          "width": 208,
+          "height": 48.59375,
+          "font": "13px"
+        },
+        {
+          "label": "오래 좋아하는 것을 고르기",
+          "width": 208,
+          "height": 48.59375,
+          "font": "13px"
+        },
+        {
+          "label": "전체 읽기",
+          "width": 208,
+          "height": 47.390625,
+          "font": "13px"
+        },
+        {
+          "label": "1장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "2장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "3장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 2 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "4장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "예시 원고 받기",
+          "width": 141.125,
+          "height": 44,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "B read 820",
+      "width": 820,
+      "overflow": false,
+      "bodyTop": 360.78125,
+      "controlWidths": [
+        {
+          "label": "A\n원고 중심",
+          "width": 90.828125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B\n편집 작업실",
+          "width": 102.453125,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 목록으로",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "읽기",
+          "width": 53.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "예시 원고 받기",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "내 책",
+          "width": 186,
+          "height": 47.390625,
+          "font": "13px"
+        },
+        {
+          "label": "잘하고 싶었던 마음",
+          "width": 186,
+          "height": 48.59375,
+          "font": "13px"
+        },
+        {
+          "label": "쉬는 동안 생긴 기준 · 다시 읽기",
+          "width": 186,
+          "height": 70.78125,
+          "font": "13px"
+        },
+        {
+          "label": "함께 배우는 쪽으로",
+          "width": 186,
+          "height": 48.59375,
+          "font": "13px"
+        },
+        {
+          "label": "오래 좋아하는 것을 고르기",
+          "width": 186,
+          "height": 70.78125,
+          "font": "13px"
+        },
+        {
+          "label": "전체 읽기",
+          "width": 186,
+          "height": 47.390625,
+          "font": "13px"
+        },
+        {
+          "label": "1장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "2장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "3장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 2 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "4장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "예시 원고 받기",
+          "width": 141.125,
+          "height": 44,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "B read 390",
+      "width": 390,
+      "overflow": false,
+      "bodyTop": 416.59375,
+      "controlWidths": [
+        {
+          "label": "A",
+          "width": 44,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "B",
+          "width": 44,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "기본\n많은 책\n빈 목록\n불러오는 중\n저장 실패",
+          "width": 78,
+          "height": 44,
+          "font": "12px"
+        },
+        {
+          "label": "책 목록으로",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "집필",
+          "width": 49.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "읽기",
+          "width": 49.765625,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "현재 장 선택",
+          "width": 350,
+          "height": 44,
+          "font": "16px"
+        },
+        {
+          "label": "1장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "2장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "3장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 2 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "4장 편집",
+          "width": 44,
+          "height": 44,
+          "font": "14px"
+        },
+        {
+          "label": "원문 1 보기",
+          "width": 104.34375,
+          "height": 44,
+          "font": "13px"
+        },
+        {
+          "label": "예시 원고 받기",
+          "width": 141.125,
+          "height": 44,
+          "font": "14px"
+        }
+      ],
+      "storage": {
+        "idb": 0,
+        "local": 0,
+        "session": 0,
+        "fetch": 0,
+        "xhr": 0
+      },
+      "csp": []
+    },
+    {
+      "tag": "A source reveal",
+      "top": 223.59375,
+      "valueAndSelectionPreserved": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "unexpectedRequests": [],
+  "storage": [
+    {
+      "check": "A chapter edit, reader return, provenance and export 1440",
+      "idb": 0,
+      "local": 0,
+      "session": 0,
+      "fetch": 0,
+      "xhr": 0
+    },
+    {
+      "check": "A chapter edit, reader return, provenance and export 820",
+      "idb": 0,
+      "local": 0,
+      "session": 0,
+      "fetch": 0,
+      "xhr": 0
+    },
+    {
+      "check": "empty loading many states and search keyboard recovery",
+      "idb": 0,
+      "local": 0,
+      "session": 0,
+      "fetch": 0,
+      "xhr": 0
+    },
+    {
+      "check": "dirty draft survives error and state-switch recovery",
+      "idb": 0,
+      "local": 0,
+      "session": 0,
+      "fetch": 0,
+      "xhr": 0
+    },
+    {
+      "check": "dirty draft cannot be stranded by many state selection",
+      "idb": 0,
+      "local": 0,
+      "session": 0,
+      "fetch": 0,
+      "xhr": 0
+    },
+    {
+      "check": "new paragraph inserted before reading position returns to the original paragraph",
+      "idb": 0,
+      "local": 0,
+      "session": 0,
+      "fetch": 0,
+      "xhr": 0
+    },
+    {
+      "check": "A390 before reload",
+      "idb": 0,
+      "local": 0,
+      "session": 0,
+      "fetch": 0,
+      "xhr": 0
+    },
+    {
+      "check": "A chapter edit, reader return, provenance and export 390",
+      "idb": 0,
+      "local": 0,
+      "session": 0,
+      "fetch": 0,
+      "xhr": 0
+    },
+    {
+      "check": "B chapter edit, reader return, provenance and export 1440",
+      "idb": 0,
+      "local": 0,
+      "session": 0,
+      "fetch": 0,
+      "xhr": 0
+    },
+    {
+      "check": "B chapter edit, reader return, provenance and export 820",
+      "idb": 0,
+      "local": 0,
+      "session": 0,
+      "fetch": 0,
+      "xhr": 0
+    },
+    {
+      "check": "B chapter edit, reader return, provenance and export 390",
+      "idb": 0,
+      "local": 0,
+      "session": 0,
+      "fetch": 0,
+      "xhr": 0
+    },
+    {
+      "check": "dirty draft survives error and state-switch recovery",
+      "idb": 0,
+      "local": 0,
+      "session": 0,
+      "fetch": 0,
+      "xhr": 0
+    },
+    {
+      "check": "source reveal keeps current draft and selection visible",
+      "idb": 0,
+      "local": 0,
+      "session": 0,
+      "fetch": 0,
+      "xhr": 0
+    }
+  ],
+  "networkSummary": {
+    "allowed": "Initial local comparison.html document navigation, plus one explicit reload; context then set offline.",
+    "unexpectedRequests": 0,
+    "fetchXHR": 0,
+    "idb": 0,
+    "localStorage": 0,
+    "sessionStorage": 0
+  },
+  "runs": [
+    {
+      "file": "interaction-run-2026-10-08T20-50-20-416Z.json",
+      "createdAt": "2026-10-08T20:50:20.416Z",
+      "finishedAt": "2026-10-08T20:50:26.709Z",
+      "checks": 9,
+      "passed": 1,
+      "pageErrors": 0,
+      "phase": "Initial: state/error draft loss and ordinal-return issue found; six edit-button scroll assumptions also failed."
+    },
+    {
+      "file": "interaction-run-2026-10-08T20-51-32-850Z.json",
+      "createdAt": "2026-10-08T20:51:32.850Z",
+      "finishedAt": "2026-10-08T20:51:47.990Z",
+      "checks": 8,
+      "passed": 6,
+      "pageErrors": 1,
+      "phase": "Base routes pass after actual-click-position correction; dirty-many TypeError and ordinal-return confirmed."
+    },
+    {
+      "file": "interaction-run-2026-10-08T20-53-51-601Z.json",
+      "createdAt": "2026-10-08T20:53:51.601Z",
+      "finishedAt": "2026-10-08T20:53:59.569Z",
+      "checks": 10,
+      "passed": 6,
+      "pageErrors": 0,
+      "phase": "Rebuilt fixes: all recovery cases pass; four focus assertions unnecessarily required a specific paragraph ordinal."
+    },
+    {
+      "file": "interaction-run-2026-10-08T20-54-26-401Z.json",
+      "createdAt": "2026-10-08T20:54:26.401Z",
+      "finishedAt": "2026-10-08T20:54:31.078Z",
+      "checks": 4,
+      "passed": 4,
+      "pageErrors": 0,
+      "phase": "Four focused rechecks: same chapter focus and observed paragraph viewport offset pass."
+    },
+    {
+      "file": "interaction-run-2026-10-08T20-55-35-072Z.json",
+      "createdAt": "2026-10-08T20:55:35.072Z",
+      "finishedAt": "2026-10-08T20:55:36.935Z",
+      "checks": 2,
+      "passed": 2,
+      "pageErrors": 0,
+      "phase": "Final source-placement update: value/range/focus preserved; B mobile picker draft guard and clean selection confirmed."
+    }
+  ],
+  "resolvedFindings": [
+    {
+      "problem": "Entering simulated error discarded the current draft.",
+      "resolution": "Error state retains current chapter/draft; retry applies it."
+    },
+    {
+      "problem": "Dirty many-state stranded the editor and threw a null .status TypeError.",
+      "resolution": "Non-normal list states require applying the current draft first."
+    },
+    {
+      "problem": "A new preceding paragraph changed which text a saved ordinal pointed to.",
+      "resolution": "Restore matches saved paragraph text before falling back to its ordinal."
+    },
+    {
+      "problem": "Reaching a top edit button changed the observed reading position.",
+      "resolution": "Sticky header exposes current-chapter editing at the reading location; viewport offset verified."
+    },
+    {
+      "problem": "Empty action only filled the list, and mode buttons were 38px.",
+      "resolution": "Empty action now opens the example reading view; mode controls measure at least44px."
+    }
+  ],
+  "remainingLimits": [
+    "Prototype changes are memory-only and reset on reload; real app Auth/IDB/backup/PDF/publication not exercised.",
+    "A paragraph whose text is deleted or extensively rewritten falls back to its ordinal; the test covers unchanged passages after an insertion.",
+    "Read/edit button means selected chapter; passive scroll does not prove automatic current-chapter tracking.",
+    "The 40-book state repeats synthetic content and is not a large-library search or performance result.",
+    "Normal Korean input was sent through the browser; real Apple IME, virtual keyboard, native Files and OS print remain untested.",
+    "The standalone HTML embeds the entire anonymous sample, including excluded material; hidden/excluded UI is not confidential-data removal."
+  ],
+  "runtimeHashes": {
+    "design/book-workshop/ui.js": "e50590ec80f475b5babd0fcde9e1b3c17e941d72aa06155ed4bc602d7f91e794",
+    "design/book-workshop/ui.css": "2ad293b876a739d788fa7bc80d80a19fdd83e3a42c93a44944dae4265421d790",
+    "docs/design-review/evidence/book-design-reset/comparison.html": "75e9d0fd4388cc0f7d2c526b5607922a8d986d5c8bc186c5d6f8ea426ff9bcde"
+  }
+}

@@ -1,0 +1,236 @@
+[
+  {
+    "direction": "A",
+    "width": 1440,
+    "view": "list",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 209,
+    "body": null,
+    "textarea": null
+  },
+  {
+    "direction": "A",
+    "width": 1440,
+    "view": "edit",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 256,
+    "body": {
+      "fontSize": "19px",
+      "lineHeight": "37.05px"
+    },
+    "textarea": {
+      "client": 1002,
+      "scroll": 1002
+    }
+  },
+  {
+    "direction": "A",
+    "width": 1440,
+    "view": "read",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 309.296875,
+    "body": {
+      "fontSize": "19px",
+      "lineHeight": "37.05px"
+    },
+    "textarea": null
+  },
+  {
+    "direction": "A",
+    "width": 820,
+    "view": "list",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 192,
+    "body": null,
+    "textarea": null
+  },
+  {
+    "direction": "A",
+    "width": 820,
+    "view": "edit",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 256,
+    "body": {
+      "fontSize": "19px",
+      "lineHeight": "37.05px"
+    },
+    "textarea": {
+      "client": 1002,
+      "scroll": 1002
+    }
+  },
+  {
+    "direction": "A",
+    "width": 820,
+    "view": "read",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 309.296875,
+    "body": {
+      "fontSize": "19px",
+      "lineHeight": "37.05px"
+    },
+    "textarea": null
+  },
+  {
+    "direction": "A",
+    "width": 390,
+    "view": "list",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 172,
+    "body": null,
+    "textarea": null
+  },
+  {
+    "direction": "A",
+    "width": 390,
+    "view": "edit",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 212,
+    "body": {
+      "fontSize": "17px",
+      "lineHeight": "32.3px"
+    },
+    "textarea": {
+      "client": 1294,
+      "scroll": 1294
+    }
+  },
+  {
+    "direction": "A",
+    "width": 390,
+    "view": "read",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 253.59375,
+    "body": {
+      "fontSize": "17px",
+      "lineHeight": "32.3px"
+    },
+    "textarea": null
+  },
+  {
+    "direction": "B",
+    "width": 1440,
+    "view": "list",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 185,
+    "body": null,
+    "textarea": null
+  },
+  {
+    "direction": "B",
+    "width": 1440,
+    "view": "edit",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 234,
+    "body": {
+      "fontSize": "17px",
+      "lineHeight": "33.15px"
+    },
+    "textarea": {
+      "client": 831,
+      "scroll": 831
+    }
+  },
+  {
+    "direction": "B",
+    "width": 1440,
+    "view": "read",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 268.1875,
+    "body": {
+      "fontSize": "17px",
+      "lineHeight": "32.3px"
+    },
+    "textarea": null
+  },
+  {
+    "direction": "B",
+    "width": 820,
+    "view": "list",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 185,
+    "body": null,
+    "textarea": null
+  },
+  {
+    "direction": "B",
+    "width": 820,
+    "view": "edit",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 234,
+    "body": {
+      "fontSize": "17px",
+      "lineHeight": "33.15px"
+    },
+    "textarea": {
+      "client": 930,
+      "scroll": 930
+    }
+  },
+  {
+    "direction": "B",
+    "width": 820,
+    "view": "read",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 268.1875,
+    "body": {
+      "fontSize": "17px",
+      "lineHeight": "32.3px"
+    },
+    "textarea": null
+  },
+  {
+    "direction": "B",
+    "width": 390,
+    "view": "list",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 180,
+    "body": null,
+    "textarea": null
+  },
+  {
+    "direction": "B",
+    "width": 390,
+    "view": "edit",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 230,
+    "body": {
+      "fontSize": "17px",
+      "lineHeight": "32.3px"
+    },
+    "textarea": {
+      "client": 1294,
+      "scroll": 1294
+    }
+  },
+  {
+    "direction": "B",
+    "width": 390,
+    "view": "read",
+    "errors": [],
+    "overflow": false,
+    "contentTop": 325.59375,
+    "body": {
+      "fontSize": "17px",
+      "lineHeight": "32.3px"
+    },
+    "textarea": null
+  }
+]

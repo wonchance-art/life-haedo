@@ -1,0 +1,155 @@
+{
+  "phase": "Actual app scoped regressions before final visual/reading-boundary correction",
+  "checks": 18,
+  "passed": 18,
+  "runs": [
+    {
+      "suite": "reading",
+      "report": ".local/book-design-reset-app/regressions/reading-2026-10-08T21-06-42-001Z/report.json",
+      "startedAt": "2026-10-08T21:06:42.003Z",
+      "finishedAt": "2026-10-08T21:06:59.848Z",
+      "checks": [
+        {
+          "name": "private reading, exact originals, manuscript parity and chapter edit return at 1440",
+          "pass": true
+        },
+        {
+          "name": "private reading, exact originals, manuscript parity and chapter edit return at 820",
+          "pass": true
+        },
+        {
+          "name": "private reading, exact originals, manuscript parity and chapter edit return at 390",
+          "pass": true
+        },
+        {
+          "name": "failed saves block preview entry and return without losing the edited manuscript",
+          "pass": true
+        },
+        {
+          "name": "a delayed completed save cannot open the previous account preview after an account switch",
+          "pass": true
+        },
+        {
+          "name": "reading settings and manuscript content stay isolated between workspaces and accounts",
+          "pass": true
+        }
+      ],
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "external": 0,
+      "runtime": {
+        "assets/life/books.js": "8591c86c47a61aef2eb84e2a182ceb056d2bc4313c48ad9d8575563a9d75e2e0",
+        "assets/life/workbench-ui.js": "760e7a72d8379b161015dff406ff9dd7833f665c8864b33510ba0b458b50d2eb",
+        "assets/life/workbench.css": "7c2b2266851085d14758c12fdcd84050f2a139d0ba3e4e68a6e0d6c48f2a5474"
+      }
+    },
+    {
+      "suite": "chapter-import",
+      "report": ".local/book-design-reset-app/regressions/chapter-import-2026-10-08T21-06-59-848Z/report.json",
+      "startedAt": "2026-10-08T21:06:59.849Z",
+      "finishedAt": "2026-10-08T21:07:07.533Z",
+      "checks": [
+        {
+          "name": "chapter import, explicit exact link, source return and output at 390",
+          "pass": true
+        },
+        {
+          "name": "prior exact duplicate is reused; cancelling or repeating a link does not alter original sources",
+          "pass": true
+        },
+        {
+          "name": "chapter save failures preserve writing and separately stored source; retry adds the link once",
+          "pass": true
+        }
+      ],
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "external": 0,
+      "runtime": {}
+    },
+    {
+      "suite": "import-recovery",
+      "report": ".local/book-design-reset-app/regressions/import-recovery-2026-10-08T21-07-07-534Z/report.json",
+      "startedAt": "2026-10-08T21:07:07.534Z",
+      "finishedAt": "2026-10-08T21:07:10.633Z",
+      "checks": [
+        {
+          "name": "postcommit read failure keeps one exact source and explicit return connects without replay",
+          "pass": true
+        },
+        {
+          "name": "late begin after home cannot open an import or create a draft",
+          "pass": true
+        }
+      ],
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "external": 0,
+      "runtime": {}
+    },
+    {
+      "suite": "history",
+      "report": ".local/book-design-reset-app/regressions/history-2026-10-08T21-07-10-634Z/report.json",
+      "startedAt": "2026-10-08T21:07:10.634Z",
+      "finishedAt": "2026-10-08T21:07:16.879Z",
+      "checks": [
+        {
+          "name": "A edition, B edit, reversible restore and book/chapter archive at 390",
+          "pass": true
+        },
+        {
+          "name": "failed history writes retain a recoverable draft and CAS refuses to overwrite another saved manuscript",
+          "pass": true
+        }
+      ],
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "external": 0,
+      "runtime": {}
+    },
+    {
+      "suite": "edition",
+      "report": ".local/book-design-reset-app/regressions/edition-2026-10-08T21-07-16-879Z/report.json",
+      "startedAt": "2026-10-08T21:07:16.880Z",
+      "finishedAt": "2026-10-08T21:07:35.998Z",
+      "checks": [
+        {
+          "name": "reader booklet A5/A4 preview, PDF links, options and edited regeneration at 820",
+          "pass": true
+        },
+        {
+          "name": "failed save and renderer recovery preserve manuscript; late print cannot escape account switch",
+          "pass": true
+        }
+      ],
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "external": 0,
+      "runtime": {}
+    },
+    {
+      "suite": "restore-entry",
+      "report": ".local/book-design-reset-app/regressions/restore-entry-2026-10-08T21-07-35-998Z/report.json",
+      "startedAt": "2026-10-08T21:07:35.998Z",
+      "finishedAt": "2026-10-08T21:07:41.796Z",
+      "checks": [
+        {
+          "name": "multiple books, archived-only and no-books choose explicit truthful destinations",
+          "pass": true
+        },
+        {
+          "name": "postcommit configuration or list read failure preserves the committed copy without duplicate install",
+          "pass": true
+        },
+        {
+          "name": "delayed committed restore cannot take over another view or another account",
+          "pass": true
+        }
+      ],
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "external": 0,
+      "runtime": {}
+    }
+  ]
+}

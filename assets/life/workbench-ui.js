@@ -122,26 +122,41 @@
       button.append(life.Icons.create(glyph));
       return button;
     }
-    function field(label, value, { id, multiline = false, max = limits.title, change } = {}) {
+    function field(label, value, { id, multiline = false, wrapTitle = false, max = limits.title, change } = {}) {
       const wrapper = el('label', null, 'life-field');
       wrapper.append(el('span', label));
-      const input = el(multiline ? 'textarea' : 'input');
-      if (!multiline) input.type = 'text';
+      const input = el(multiline || wrapTitle ? 'textarea' : 'input');
+      if (!multiline && !wrapTitle) input.type = 'text';
       input.value = value;
       input.maxLength = max;
       if (id) input.id = id;
       if (multiline) input.rows = 4;
       const token = generation, session = current;
       let composing = false;
+      // Preserve WritingUI's single-line title contract while wrapping visually.
+      const normalizeTitle = () => {
+        if (!wrapTitle || composing || !/[\r\n]/.test(input.value)) return;
+        const { selectionStart: start, selectionEnd: end, selectionDirection: direction } = input;
+        const clean = text => text.replace(/[\r\n]/g, '');
+        const left = clean(input.value.slice(0, start)).length, right = clean(input.value.slice(0, end)).length;
+        input.value = clean(input.value); input.setSelectionRange(left, right, direction);
+      };
+      if (wrapTitle) {
+        input.rows = 1;
+        input.addEventListener('keydown', event => { if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229 && !composing) event.preventDefault(); });
+        input.addEventListener('beforeinput', event => { if (['insertLineBreak', 'insertParagraph'].includes(event.inputType) && !event.isComposing && !composing) event.preventDefault(); });
+      }
       input.addEventListener('compositionstart', () => { composing = true; session.composing.add(input); clearTimeout(session.timer); });
       input.addEventListener('input', () => {
         if (!showing(token, session) || installing) return;
+        normalizeTitle();
         change?.(input.value);
         if (change) mark(session, !composing && !input.isComposing);
       });
       const finish = () => {
         if (!composing) return;
         composing = false; session.composing.delete(input);
+        if (wrapTitle && input.isConnected && showing(token, session) && !installing) { normalizeTitle(); change?.(input.value); }
         if (workspaceIs(session) && session.edit !== session.stored) schedule(session);
       };
       input.addEventListener('compositionend', finish);
@@ -1552,7 +1567,8 @@
         change(); redraw();
         const target = focusId && bodyNode.querySelector('#' + focusId);
         target?.focus({ preventScroll: true });
-        target?.scrollIntoView({ block: 'nearest' });
+        const scrollTarget = focusId === 'wbChapterNote' ? target?.closest('.wb-book-editor') : target;
+        scrollTarget?.scrollIntoView({ block: focusId === 'wbChapterNote' ? 'start' : 'nearest', behavior: 'instant' });
       }
       async function historyChange(make, after = () => {}, focusId) {
         if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 원고를 보관해 주세요.');
@@ -1564,10 +1580,11 @@
       }
       const books = state.books || [], activeBooks = books.filter(item => !item.archived);
       const book = activeBooks.find(item => item.id === view.bookId);
+      surface.dataset.bookScene = !book ? 'list' : view.edition ? 'edition' : view.reading ? 'read' : 'edit';
       const surfaceHeading = surface.querySelector('.wb-heading');
       surfaceHeading.querySelector('h2').textContent = books.length ? '내 책' : MODES.books;
-      surfaceHeading.classList.toggle('wb-heading-quiet', !!book);
-      surfaceHeading.querySelector('h2').classList.toggle('life-sr-only', !!book);
+      surfaceHeading.classList.add('wb-heading-quiet');
+      surfaceHeading.querySelector('h2').classList.add('life-sr-only');
       if (!book) {
         surfaceHeading.append(saveControl); saveControl.hidden = true;
         view.bookId = null; view.chapterId = null; view.reading = false; view.readPosition = null; view.editorPosition = null; view.includeSources = false; view.edition = false; view.editionOptions = null; view.editionPosition = null;
@@ -1576,14 +1593,20 @@
         activeBooks.forEach(item => {
           const row = el('article', null, 'wb-row wb-book-row'); row.dataset.bookId = item.id;
           const text = el('div', null, 'wb-grow');
-          text.append(el('h3', item.title), el('p', item.chapters.filter(chapter => !chapter.archived).length + '개 장', 'life-meta'));
+          const chapters = item.chapters.filter(chapter => !chapter.archived);
+          const readBook = () => transition(() => { view.bookId = item.id; view.chapterId = chapters[0]?.id || null; view.reading = true; view.shown = 40; }, null);
+          const title = el('h3'); title.append(action(item.title, readBook, 'wb-book-title-link'));
+          text.append(title, el('p', [item.fromYear && item.toYear ? item.fromYear + '–' + item.toYear : item.fromYear || item.toYear, chapters.length + '개 장', '비공개'].filter(Boolean).join(' · '), 'life-meta'));
+          const opening = chapters.find(chapter => chapter.note.trim())?.note.split(/\n\s*\n/)[0];
+          if (opening) { const chars = Array.from(opening); text.append(el('p', chars.slice(0, 200).join('') + (chars.length > 200 ? '…' : ''), 'wb-book-opening')); }
           const openChapter = chapterId => transition(() => {
             view.bookId = item.id; view.chapterId = chapterId; view.shown = 40;
           }, chapterId ? 'wbChapterNote' : 'wbBookHeading');
-          row.append(text, discoveryIcon('책 열기', 'book', () => openChapter(item.chapters.find(chapter => !chapter.archived)?.id || null)));
-          const chapters = item.chapters.filter(chapter => !chapter.archived);
+          const entryActions = el('div', null, 'life-actions wb-book-entry-actions');
+          entryActions.append(action('전체 읽기', readBook, 'life-primary'), discoveryIcon('책 열기', 'edit', () => openChapter(chapters[0]?.id || null)));
+          row.append(text, entryActions);
           if (chapters.length) {
-            const outline = details('목차'); outline.classList.add('wb-book-list-outline');
+            const outline = details('목차', { open: activeBooks.length === 1 && chapters.length <= 6 }); outline.classList.add('wb-book-list-outline');
             chapters.forEach((chapter, index) => {
               const open = action((index + 1) + '. ' + chapter.title, () => openChapter(chapter.id));
               open.dataset.chapterId = chapter.id; outline.append(open);
@@ -1623,14 +1646,14 @@
         plan.id = 'wbBookPlanStart'; createBox.prepend(plan);
         bodyNode.append(createBox); return;
       }
-      const back = action('책 목록', () => transition(() => { view.bookId = null; view.chapterId = null; }, 'wbBookList')); back.id = 'wbBooksBack';
+      const back = discoveryIcon('책 목록', 'back', () => transition(() => { view.bookId = null; view.chapterId = null; }, 'wbBookList')); back.id = 'wbBooksBack';
       const heading = el('h3', book.title, 'wb-book-title'); heading.id = 'wbBookHeading'; heading.tabIndex = -1;
       const lead = el('div', null, 'wb-book-lead'), leadActions = el('div', null, 'wb-row wb-book-actions');
       saveControl.hidden = false; leadActions.append(back, saveControl); lead.append(leadActions, heading); bodyNode.append(lead);
       const openEdition = async (remember = () => {}) => {
         remember();
         const input = bodyNode.querySelector('#wbChapterNote');
-        const position = input && { chapterId: view.chapterId, start: input.selectionStart, end: input.selectionEnd, top: input.scrollTop };
+        const position = input && { chapterId: view.chapterId, start: input.selectionStart, end: input.selectionEnd, top: input.scrollTop, pageY: global.scrollY, inputTop: input.getBoundingClientRect().top };
         await transition(() => {
           if (position) view.editorPosition = position;
           view.editionReturn = !!view.reading; view.edition = true;
@@ -1649,13 +1672,13 @@
       }
       const openReading = action(view.readPosition ? '읽던 곳으로 돌아가기' : '전체 원고 읽기', async () => {
         const input = bodyNode.querySelector('#wbChapterNote');
-        const position = input && { chapterId: view.chapterId, start: input.selectionStart, end: input.selectionEnd, top: input.scrollTop };
+        const position = input && { chapterId: view.chapterId, start: input.selectionStart, end: input.selectionEnd, top: input.scrollTop, pageY: global.scrollY, inputTop: input.getBoundingClientRect().top };
         await transition(() => { view.editorPosition = position; view.reading = true; }, null);
       });
       openReading.id = view.readPosition ? 'wbBookPreviewReturn' : 'wbBookPreviewOpen';
+      openReading.setAttribute('aria-label', openReading.textContent); openReading.textContent = '읽기';
       leadActions.insertBefore(openReading, saveControl);
       const edition = action(view.editionOptions ? '책자 다시 보기' : '책자 만들기', () => openEdition()); edition.id = 'wbBookEditionOpen';
-      leadActions.insertBefore(edition, saveControl);
       const settings = details('책 설정'); settings.id = 'wbBookSettings';
       const title = field('책 제목', book.title, { id: 'wbBookTitle', change: value => { book.title = value; heading.textContent = value || '제목을 입력해 주세요'; } });
       const from = field('시작 연도', book.fromYear, { id: 'wbBookFromYear', max: 4, change: value => { book.fromYear = value; } });
@@ -1709,18 +1732,26 @@
       }
       archivedChapters.append(notice('보관한 장은 현재 원고·Markdown·인쇄에서 빠지며 백업에는 남습니다. 복구하면 원래 목차 위치에 다시 나타납니다.'));
       outline.append(archivedChapters);
-      const tools = el('div', null, 'wb-book-controls'); tools.append(outline, settings, bookEditions(session, book, view, historyChange)); bodyNode.append(tools);
+      const tools = el('div', null, 'wb-book-controls wb-book-management'); tools.id = 'wbBookManagement';
+      tools.append(settings, bookEditions(session, book, view, historyChange), edition);
+      const manage = discoveryIcon('책 설정·개정본·파일', 'settings', () => { tools.querySelector('summary')?.focus({ preventScroll: true }); tools.scrollIntoView({ block: 'start' }); });
+      leadActions.insertBefore(outline, openReading); leadActions.insertBefore(manage, saveControl);
+      outline.classList.add('wb-toolbar-outline');
+      const outlineSummary = outline.querySelector('summary'); outlineSummary.setAttribute('aria-label', '목차'); outlineSummary.title = '목차'; outlineSummary.append(life.Icons.create('book'));
+      const outlinePanel = el('div', null, 'wb-outline-panel'); while (outlineSummary.nextSibling) outlinePanel.append(outlineSummary.nextSibling); outline.append(outlinePanel);
       const chapter = view.chapterId ? activeChapters.find(item => item.id === view.chapterId) : activeChapters[0];
       if (chapter) {
         view.chapterId = chapter.id;
         const editor = el('section', null, 'wb-book-editor'); editor.dataset.activeChapterId = chapter.id;
-        const chapterName = field('장 제목', chapter.title, { id: 'wbChapterTitle', change: value => {
+        const chapterName = field('장 제목', chapter.title, { id: 'wbChapterTitle', wrapTitle: true, change: value => {
           chapter.title = value;
           const open = [...chapterList.querySelectorAll('[data-chapter-id]')].find(row => row.dataset.chapterId === chapter.id)?.querySelector('.wb-chapter-open');
           if (open) { open.textContent = value || '제목을 입력해 주세요'; open.setAttribute('aria-label', '장 열기: ' + value); }
         } });
         const note = field('이 장의 원고', chapter.note, { id: 'wbChapterNote', multiline: true, max: limits.text, change: value => { chapter.note = value; } });
         note.input.rows = 10; note.input.placeholder = '그때의 글을 읽으며 지금의 생각을 적어 보세요.';
+        chapterName.wrapper.classList.add('wb-manuscript-title'); note.wrapper.classList.add('wb-manuscript-body');
+        for (const wrapper of [chapterName.wrapper, note.wrapper]) wrapper.firstElementChild.classList.add('life-sr-only');
         const length = el('p', '', 'life-meta wb-book-length'); length.id = 'wbChapterLength';
         length.title = '일부 이모지는 두 글자로 계산됩니다.';
         const updateLength = () => { length.textContent = chapter.note.length.toLocaleString('ko-KR') + ' / ' + limits.text.toLocaleString('ko-KR'); };
@@ -1731,6 +1762,7 @@
         for (const [offset, label] of [[-1, '이전 장'], [1, '다음 장']]) {
           const target = activeChapters[index + offset];
           const control = action(label, () => transition(() => { view.chapterId = target.id; view.shown = 40; }, 'wbChapterNote'));
+          control.setAttribute('aria-label', label); control.title = label; control.replaceChildren(life.Icons.create(offset < 0 ? 'back' : 'arrow'));
           control.id = offset < 0 ? 'wbChapterPrevious' : 'wbChapterNext'; control.disabled = !target; chapterNavigation.append(control);
         }
         chapterNavigation.append(el('span', (index + 1) + ' / ' + activeChapters.length, 'life-meta'));
@@ -1738,13 +1770,13 @@
         const archiveChapter = action('이 장 보관', () => {
           if (!global.confirm('이 장을 보관할까요? 현재 원고 출력에서 빠지며 목차의 보관한 장에서 복구할 수 있습니다.')) return;
           return historyChange(value => life.BookHistory.archiveChapter(value, book.id, chapter.id), () => { view.chapterId = null; view.readPosition = null; }, 'wbBookOutlineHeading');
-        }); archiveChapter.id = 'wbChapterArchive'; editor.append(archiveChapter);
+        }); archiveChapter.id = 'wbChapterArchive'; tools.append(archiveChapter);
         const sourceBox = details('이 장의 근거 · ' + chapter.versionIds.length + '개'); sourceBox.id = 'wbChapterEvidence';
         const importSources = action('자료 가져오기', async () => {
           if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 자료를 가져와 주세요.');
           await flush(); if (!active()) return;
           view.editorPosition = { chapterId: chapter.id, start: note.input.selectionStart, end: note.input.selectionEnd,
-            direction: note.input.selectionDirection, top: note.input.scrollTop, left: note.input.scrollLeft };
+            direction: note.input.selectionDirection, top: note.input.scrollTop, left: note.input.scrollLeft, pageY: global.scrollY, inputTop: note.input.getBoundingClientRect().top };
           await onChapterImport({ workspaceId: session.workspaceId, bookId: book.id, chapterId: chapter.id,
             bookTitle: book.title, chapterTitle: chapter.title }, { isCurrent: active });
         }); importSources.id = 'wbChapterImport'; sourceBox.append(importSources);
@@ -1823,7 +1855,8 @@
           mark(session); fillSources();
         }, { max: limits.chapterVersions }));
         const fillSources = () => {
-          sourceBox.querySelector('summary').textContent = '이 장의 근거 · ' + chapter.versionIds.length + '개';
+          const summary = sourceBox.querySelector('summary'), label = '이 장의 근거 · ' + chapter.versionIds.length + '개';
+          summary.textContent = label; summary.setAttribute('aria-label', label); summary.title = label; summary.append(life.Icons.create('quote'));
           rows.replaceChildren();
           for (const id of chapter.versionIds.slice(0, view.shown)) {
             const row = sourceRow(id, { focusKey: 'books:' + book.id + ':' + chapter.id + ':' + id, isCurrent: active, remove: () => {
@@ -1846,6 +1879,26 @@
         sourceBox.open = !!pending && pending.bookId === book.id && pending.chapterId === chapter.id || view.evidenceOpen === chapter.id;
         sourceBox.addEventListener('toggle', () => { if (active()) view.evidenceOpen = sourceBox.open ? chapter.id : null; });
         editor.append(insightPanel(session, book, chapter, view, active), sourceBox); bodyNode.append(editor);
+        editor.insertBefore(sourceBox, chapterName.wrapper);
+        const fit = () => {
+          if (!active() || !note.input.isConnected) return;
+          // Measuring auto height can temporarily shrink the whole document and
+          // clamp its scroll offset. Restore the page, not the text or caret.
+          const position = { left: global.scrollX, top: global.scrollY, behavior: 'instant' };
+          for (const input of [chapterName.input, note.input]) {
+            const css = global.getComputedStyle(input); input.style.height = 'auto';
+            input.style.height = Math.ceil(input.scrollHeight + parseFloat(css.borderTopWidth) + parseFloat(css.borderBottomWidth)) + 'px';
+          }
+          global.scrollTo(position);
+        };
+        note.input.addEventListener('input', fit); chapterName.input.addEventListener('input', fit);
+        chapterName.input.addEventListener('compositionend', fit); fit();
+        let width = editor.getBoundingClientRect().width;
+        if (global.ResizeObserver) {
+          const observer = new global.ResizeObserver(() => { const next = editor.getBoundingClientRect().width; if (next !== width) { width = next; fit(); } });
+          observer.observe(editor); viewCleanups.push(() => observer.disconnect());
+        }
+        global.document.fonts?.ready.then(fit);
       } else bodyNode.append(empty(book.chapters.length ? '선택한 장을 찾을 수 없습니다. 목차에서 편집할 장을 골라 주세요.' : '첫 장을 추가해 글과 생각을 모아 보세요.'));
       const exportBox = details('책 원고 파일로 보관');
       const include = toggle('연결한 원문 본문도 포함', !!view.includeSources, value => { view.includeSources = value; }); include.querySelector('input').id = 'wbBookIncludeSources';
@@ -1859,7 +1912,7 @@
         global.setTimeout(() => { URL.revokeObjectURL(url); urls.delete(url); }, 30000);
       }); exportButton.id = 'wbBookExport';
       exportBox.append(include, notice('이 책의 보관하지 않은 장과 제외하지 않은 생각을 목차 순서대로 받습니다. 기본은 직접 쓴 원고·해석·출처이며 공개 게시하지 않습니다. 제외한 생각을 이미 원고에 적었다면 그 문장은 직접 검토하세요. 복원에는 자료·구성 JSON 백업을 사용하세요.'), exportButton);
-      bodyNode.append(exportBox);
+      tools.append(exportBox); bodyNode.append(tools);
       if (view.restoreEditor) {
         view.restoreEditor = false;
         const input = bodyNode.querySelector('#wbChapterNote'), position = view.editorPosition;
@@ -1868,7 +1921,10 @@
             input.setSelectionRange(position.start, position.end, position.direction); input.scrollTop = position.top;
             if (position.left !== undefined) input.scrollLeft = position.left;
           }
-          input.focus({ preventScroll: true }); input.scrollIntoView({ block: 'nearest' });
+          input.focus({ preventScroll: true });
+          if (position?.chapterId === view.chapterId && Number.isFinite(position.inputTop)) global.scrollBy({ top: input.getBoundingClientRect().top - position.inputTop, behavior: 'instant' });
+          else if (position?.chapterId === view.chapterId && Number.isFinite(position.pageY)) global.scrollTo({ top: position.pageY, behavior: 'instant' });
+          else input.scrollIntoView({ block: 'nearest', behavior: 'instant' });
         }
       }
     }
@@ -2044,15 +2100,31 @@
         remember(); view.readFocusChapter = chapterId || view.chapterId;
         return transition(() => { view.chapterId = chapterId || view.chapterId; view.reading = false; view.restoreEditor = true; }, null);
       };
-      const edition = action('책자 만들기', () => openEdition(remember)); edition.id = 'wbBookEditionOpen'; leadActions.append(edition);
-      const back = action('원고 편집', () => returnEditor(view.chapterId)); back.id = 'wbBookPreviewBack'; leadActions.append(back);
+      const edition = action('책자 만들기', () => openEdition(remember)); edition.id = 'wbBookEditionOpen';
+      const back = action('집필', () => {
+        // A previous chapter's trailing space can remain above a TOC destination.
+        // Edit the chapter occupying most of the unobscured reading viewport.
+        const top = Math.max(0, leadActions.getBoundingClientRect().bottom);
+        const visible = [...reader.querySelectorAll('[data-preview-chapter-id]')].map(node => {
+          const rect = node.getBoundingClientRect();
+          return { node, height: Math.max(0, Math.min(global.innerHeight, rect.bottom) - Math.max(top, rect.top)) };
+        }).filter(item => item.height > 0).sort((a, b) => b.height - a.height)[0]?.node;
+        return returnEditor(visible?.dataset.previewChapterId || view.chapterId);
+      }); back.setAttribute('aria-label', '원고 편집'); back.id = 'wbBookPreviewBack'; leadActions.append(back);
       const outline = details('목차'); outline.id = 'wbBookPreviewOutline';
       for (const chapter of projection.chapters) {
         const jump = action(chapter.title, () => {
+          outline.open = false;
           const target = [...reader.querySelectorAll('[data-preview-chapter-id]')].find(node => node.dataset.previewChapterId === chapter.id);
-          target?.focus({ preventScroll: true }); target?.scrollIntoView({ block: 'start' });
+          // The destination must be visible before a following edit action
+          // chooses the current chapter; CSS smooth scrolling is asynchronous.
+          target?.focus({ preventScroll: true }); target?.scrollIntoView({ block: 'start', behavior: 'instant' });
         }, 'wb-reading-jump'); outline.append(jump);
       }
+      outline.classList.add('wb-toolbar-outline');
+      const outlineSummary = outline.querySelector('summary'); outlineSummary.setAttribute('aria-label', '목차'); outlineSummary.title = '목차'; outlineSummary.append(life.Icons.create('book'));
+      const outlinePanel = el('div', null, 'wb-outline-panel'); while (outlineSummary.nextSibling) outlinePanel.append(outlineSummary.nextSibling); outline.append(outlinePanel);
+      leadActions.insertBefore(outline, back);
       const options = details('읽기·파일 설정', { open: !!view.readOptionsOpen }); options.id = 'wbBookPreviewOptions';
       options.addEventListener('toggle', () => { if (active()) view.readOptionsOpen = options.open; });
       const include = toggle('연결한 원문 본문도 포함', !!view.includeSources, value => {
@@ -2075,11 +2147,11 @@
         if (active()) announceSafe('인쇄 창에서 PDF로 저장하거나 프린터를 선택하세요. 실제 파일 보관은 직접 확인해 주세요.', session);
       }); print.id = 'wbBookPrint';
       viewCleanups.push(() => life.BookPrint?.cancel());
-      const toolbar = el('div', null, 'wb-reading-tools'); toolbar.append(outline, bookReview(projection, returnEditor), options, download, print); bodyNode.append(toolbar);
-      const intro = el('section', null, 'wb-reading-intro');
+      const toolbar = el('div', null, 'wb-reading-tools wb-book-management'); toolbar.id = 'wbBookReadingTools'; toolbar.append(bookReview(projection, returnEditor), options, edition, download, print);
+      const output = discoveryIcon('원고 점검·파일·인쇄', 'download', () => { toolbar.querySelector('summary')?.focus({ preventScroll: true }); toolbar.scrollIntoView({ block: 'start' }); }); leadActions.append(output);
+      const intro = details('책 소개'); intro.classList.add('wb-reading-intro');
       intro.append(el('p', '비공개 원고 · ' + (projection.fromYear || '미지정') + ' ~ ' + (projection.toYear || '미지정'), 'life-meta'));
       if (projection.question) intro.append(el('p', projection.question, 'wb-reading-question'));
-      reader.append(intro);
       function textBlocks(hostNode, text, key) {
         // Preserve all text (including blank lines); paragraph anchors stay session-local.
         const pieces = text.match(/[^\n]*(?:\n|$)/g)?.filter(Boolean) || [''];
@@ -2123,7 +2195,7 @@
         const section = el('section', null, 'wb-reading-chapter'); section.dataset.previewChapterId = chapter.id; section.tabIndex = -1;
         const titleRow = el('div', null, 'wb-reading-chapter-heading');
         const title = el('h4', chapter.title); title.dataset.readAnchor = chapter.id + ':title';
-        const edit = action('이 장 편집', () => returnEditor(chapter.id)); edit.dataset.previewEdit = chapter.id;
+        const edit = discoveryIcon('이 장 편집', 'edit', () => returnEditor(chapter.id)); edit.dataset.previewEdit = chapter.id;
         titleRow.append(el('span', String(index + 1), 'wb-chapter-number'), title, edit); section.append(titleRow);
         if (chapter.note) textBlocks(section, chapter.note, chapter.id + ':note');
         else section.append(notice('아직 작성한 원고가 없습니다.'));
@@ -2139,8 +2211,8 @@
         }); reader.append(section);
       });
       if (!projection.chapters.length) reader.append(empty('아직 구성한 장이 없습니다. 원고 편집에서 첫 장을 추가해 주세요.'));
-      reader.append(notice('원문 작성일은 경험 시기를 뜻하지 않습니다. 해석은 직접 쓴 생각이며 연결한 글이 그 생각을 증명하지는 않습니다.'));
-      bodyNode.append(reader);
+      reader.append(intro, notice('원문 작성일은 경험 시기를 뜻하지 않습니다. 해석은 직접 쓴 생각이며 연결한 글이 그 생각을 증명하지는 않습니다.'));
+      bodyNode.append(reader, toolbar);
       // Save the view before navigating to another original; restore only this render.
       const saved = view.readPosition;
       global.requestAnimationFrame(() => {
@@ -2153,8 +2225,8 @@
         const focus = view.focusReadOptions ? include.querySelector('input') : [...reader.querySelectorAll('[data-preview-edit]')].find(node => node.dataset.previewEdit === view.readFocusChapter) || anchor?.closest('[data-preview-chapter-id]') || reader;
         view.focusReadOptions = false;
         if (!focus.matches('button,input')) focus.tabIndex = -1; focus.focus({ preventScroll: true });
-        if (anchor) global.scrollBy(0, anchor.getBoundingClientRect().top - saved.top);
-        else { bodyNode.querySelector('#wbBookHeading')?.scrollIntoView({ block: 'start' }); }
+        if (anchor) global.scrollBy({ top: anchor.getBoundingClientRect().top - saved.top, behavior: 'instant' });
+        else { bodyNode.querySelector('#wbBookHeading')?.scrollIntoView({ block: 'start', behavior: 'instant' }); }
       });
     }
 
@@ -2436,7 +2508,9 @@
       bodyNode = el('div', null, 'wb-content'); bodyNode.append(notice('불러오는 중…'));
       const storageLine = el('div', null, 'wb-storage-line'); storageLine.append(statusNode, scope);
       storageLine.hidden = mode === 'public-pages' || mode === 'related';
-      surface.append(heading, storageLine, errorNode, bodyNode); host.replaceChildren(surface);
+      if (mode === 'books') surface.append(heading, errorNode, bodyNode, storageLine);
+      else surface.append(heading, storageLine, errorNode, bodyNode);
+      host.replaceChildren(surface);
       if (mode === 'public-pages') { surface.setAttribute('aria-busy', 'false'); redraw(); return; }
       try {
         if (!session.state || session.edit === session.stored && session.remoteRevision > session.baseRevision) await load(session);
