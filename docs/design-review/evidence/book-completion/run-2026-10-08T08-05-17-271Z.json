@@ -1,0 +1,57 @@
+{
+  "createdAt": "2026-10-08T08:05:17.271Z",
+  "browser": "151.0.7922.173",
+  "scope": "Anonymous actual JSON restore and existing-book return flow. CSS viewport/touch simulation, not Apple devices or native Save PDF. No production, real Auth or remote writes.",
+  "checks": [
+    {
+      "name": "active-book limit, archived chapter/book, empty-book outline and account isolation",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "scene": "home-active-books",
+      "width": 390,
+      "screenshot": "home-active-books-390.png",
+      "booksTop": 218.78125,
+      "chapterInputTop": null,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 33,
+        "height": 26,
+        "lineHeight": "25.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    }
+  ],
+  "observations": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "operatingRemoteWrites": 0,
+  "pass": true,
+  "finishedAt": "2026-10-08T08:05:19.652Z"
+}

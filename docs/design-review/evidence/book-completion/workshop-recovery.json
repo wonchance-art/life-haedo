@@ -1,0 +1,26 @@
+{
+  "createdAt": "2026-10-08T07:59:41.388Z",
+  "browser": "151.0.7922.173",
+  "scope": "Actual first-book UI, bundled SDK and isolated IndexedDB, with anonymous Auth HTTP and local fault/delay injection. Chromium viewports only; no real Google, production writes, Apple hardware or native IME.",
+  "checks": [
+    {
+      "name": "record selection enables reflection intake and a failed write consumes selection only after successful retry",
+      "pass": true
+    },
+    {
+      "name": "a reload banner from before editing cannot discard a newly created book after a CAS conflict; explicit comparison retries the same book",
+      "pass": true
+    },
+    {
+      "name": "a delayed successful book creation cannot navigate or expose the book after an account switch",
+      "pass": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "operatingRemoteWrites": 0,
+  "pass": true,
+  "finishedAt": "2026-10-08T07:59:45.710Z"
+}
