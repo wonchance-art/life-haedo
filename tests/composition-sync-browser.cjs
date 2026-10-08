@@ -117,14 +117,24 @@ async function seed(page) {
     return { id: bundle.workspaceId, refs };
   });
 }
+// Await the actual IndexedDB/manager result. A Promise returned to the browser's
+// waitForFunction predicate can be treated as truthy before it resolves.
+async function waitForState(page, predicate, arg) {
+  const deadline = Date.now() + 12000;
+  while (Date.now() < deadline) {
+    if (await page.evaluate(predicate, arg) === true) return;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  throw new Error('The persisted composition test condition did not become true.');
+}
 async function sourcesOn(page, id) {
   await page.getByRole('button', { name: '이 작업공간 동기화 시작', exact: true }).click();
-  await page.waitForFunction(id => HaedoLife.Shell.sync.getState(id).then(state => state.status === 'synced'), id);
+  await waitForState(page, id => HaedoLife.Shell.sync.getState(id).then(state => state.status === 'synced'), id);
 }
 async function receiveSources(page, id) {
   await page.getByRole('button', { name: '서버 작업공간 목록 확인', exact: true }).click();
   await page.locator('#lifeRemoteList').getByRole('button', { name: '이 작업공간 받기', exact: true }).click();
-  await page.waitForFunction(id => HaedoLife.Shell.storage.getActive().then(active => active === id), id); await settle(page); await go(page);
+  await waitForState(page, id => HaedoLife.Shell.storage.getActive().then(active => active === id), id); await settle(page); await go(page);
 }
 async function enable(page) { await page.locator('#compositionEnable').click(); await page.waitForFunction(() => document.querySelector('#lifeCompositionSync')?.getAttribute('aria-busy') === 'false'); }
 async function waitStatus(page, value) { await page.locator('#compositionStatus[data-state="' + value + '"]').waitFor(); }
@@ -226,7 +236,7 @@ async function main() {
       assert.deepEqual(backup.workbench.books, loser, 'Recovery JSON must preserve the complete losing manuscript and chapter order');
       for (const value of ['access_token', 'refresh_token', 'compositionSync:', 'outbox', cloud]) assert.equal(json.includes(value), false);
       await go(b.page, 'workbench-backup'); await b.page.locator('#wbRestoreFile').setInputFiles({ name: 'recovery.json', mimeType: 'application/json', buffer: Buffer.from(json) });
-      await b.page.locator('#wbRestoreInstall').click(); await b.page.waitForFunction(id => HaedoLife.Shell.storage.getActive().then(active => active !== id), id);
+      await b.page.locator('#wbRestoreInstall').click(); await waitForState(b.page, id => HaedoLife.Shell.storage.getActive().then(active => active !== id), id);
       const restored = await b.page.evaluate(async () => HaedoLife.Shell.storage.readWorkbenchSnapshot(await HaedoLife.Shell.storage.getActive()));
       assert.equal(restored.workbench.page.title, '두 번째 기기의 수정'); assert.notEqual(restored.bundle.workspaceId, id);
       assert.equal(restored.workbench.page.entries[0].parts[0].versionId, restored.bundle.sourceVersions[0].id);
