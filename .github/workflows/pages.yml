@@ -166,6 +166,9 @@ jobs:
       - name: Verify workshop save retries and stale reload protection
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-workshop-recovery-browser.cjs
+      - name: Verify reader book layout, output choices and PDF
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-edition-browser.cjs
       - name: Verify isolated expression-page design samples
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/expression-design-browser.cjs
@@ -203,6 +206,7 @@ jobs:
             .local/book-print/
             .local/book-workshop/
             .local/book-workshop-recovery/
+            .local/book-edition/
             .local/life-social-import/
             .local/share/
             .local/browser-ci/server.log
