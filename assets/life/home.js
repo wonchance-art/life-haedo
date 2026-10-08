@@ -10,7 +10,7 @@
     if (className) element.className = className;
     return element;
   }
-  function create({ storage, core, host, getBundle, navigate, openSource, isDisposed = () => false, announce = () => {} }) {
+  function create({ storage, core, host, getBundle, navigate, openSource, renderReadingResume, isDisposed = () => false, announce = () => {} }) {
     let disposed = false, generation = 0, visible = false;
     const alive = () => !disposed && !isDisposed();
     const showing = context => alive() && visible && context.token === generation && getBundle()?.workspaceId === context.workspaceId && context.surface.parentNode === host;
@@ -186,7 +186,9 @@
       const context = { token: ++generation, workspaceId: bundle.workspaceId, surface, error: el('p', null, 'life-error home-error') };
       visible = true;
       context.error.hidden = true; context.error.setAttribute('role', 'alert');
-      surface.append(quickLinks(context), context.error, recent(context, bundle));
+      surface.append(quickLinks(context), context.error);
+      renderReadingResume?.(surface);
+      surface.append(recent(context, bundle));
       const composition = el('div', null, 'home-composition'); composition.id = 'homeComposition';
       const status = el('p', '내 페이지와 기록 묶음 불러오는 중…', 'life-meta home-loading'); status.setAttribute('role', 'status');
       composition.append(status); composition.setAttribute('aria-busy', 'true'); surface.append(composition); host.append(surface);

@@ -148,6 +148,15 @@ html.auth-pending [data-private] { display: none !important; }
 .life-empty { padding: 40px 0; line-height: 1.9; color: var(--ink-soft); grid-column: 1/-1; overflow-wrap: anywhere; }
 .life-empty-state { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 10px; }
 .life-empty-state > .life-empty { flex-basis: 100%; padding-bottom: 14px; }
+/* One local reading position shares the home and records column. */
+.life-reading-resume { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; margin-block: 16px; padding-block: 14px; border-bottom: 1px solid var(--line); }
+.life-reading-resume-copy { flex: 1 1 200px; min-width: 0; }
+.life-reading-resume-title { color: var(--ink); font-size: 16px; font-weight: 550; line-height: 1.75; word-break: keep-all; overflow-wrap: anywhere; }
+.life-reading-resume-copy > .life-meta { margin-top: 4px; font-size: 12px; }
+.life-reading-resume :is(.life-reading-resume-open,.life-reading-resume-clear) { flex: none; }
+.life-reading-resume-status { flex-basis: 100%; margin: 0; }
+.life-reading-resume-copy ~ .life-reading-resume-status { order: 1; }
+.life-reading-position-status { margin-bottom: 16px; }
 .life-reader { max-width: 700px; margin: 0 auto; }
 .life-reader-tools { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 6px; padding: 8px 0; margin: -8px -10px 24px; border-bottom: 1px solid var(--line); background: var(--paper); }
 .life-reader-tools > :first-child { margin-right: auto; }
@@ -249,6 +258,7 @@ details.life-sync-account { display: block; width: 100%; margin: 12px 0 0; overf
   .life-heading { font-size: 19px; }
   .life-search-bar { gap: 4px; }
   .life-source-open { font-size: 18px; }
+  .life-reading-resume-copy { flex-basis: 100%; }
   .life-card { padding-block: 26px; }
   .life-reader-heading { font-size: 25px; }
   .life-reader-tools { margin-bottom: 26px; }

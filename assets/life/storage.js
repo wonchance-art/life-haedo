@@ -123,6 +123,11 @@
       notify(event);
       try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Persistent state is authoritative. */ }
     }
+    function readingPositionChanged(workspaceId, revision) {
+      const event = { type: 'reading_position_changed', workspaceId, revision };
+      notify(event);
+      try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Persistent state is authoritative. */ }
+    }
     function ensureChannel() {
       if (channel || options.channelFactory === null) return;
       try {
@@ -146,6 +151,10 @@
           if (data?.sender !== sender && data?.type === 'workbench_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
             notify({ type: 'workbench_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'reading_position_changed' && typeof data.workspaceId === 'string' &&
+              Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'reading_position_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
         };
       } catch (_) { channel = null; }
@@ -416,6 +425,81 @@
       requireId(workspaceId, '작업공간');
       return transaction(['bundles'], 'readonly', async tx => clone(await checkedBundle(tx.objectStore('bundles'), workspaceId, tx.objectStore('meta'))));
     }
+    // One local position per account/workspace. A cleared row keeps its revision
+    // so an older tab cannot recreate the position after the user removes it.
+    const readingPositionKey = workspaceId => `readingPosition:${accountKey}:${workspaceId}`;
+    function readingPositionScope(workspaceId) {
+      scopeGuard();
+      if (!account) throw fault('auth_scope_required', '로그인한 계정에서 읽던 위치를 확인해 주세요.');
+      requireId(workspaceId, '작업공간');
+    }
+    function readingPositionInput(input, withTimestamp = false) {
+      const invalid = () => fault('reading_position_invalid', '읽던 위치의 형식을 확인할 수 없습니다. 기존 위치는 보존했습니다.');
+      try {
+        onlyFields(input, ['sourceId', 'sourceVersionId', 'offset', ...(withTimestamp ? ['updatedAt'] : [])], 'reading_position_invalid');
+        if (typeof input.sourceId !== 'string' || !input.sourceId.trim() || typeof input.sourceVersionId !== 'string' ||
+            !input.sourceVersionId.trim() || !Number.isSafeInteger(input.offset) || input.offset < 0) throw invalid();
+        if (withTimestamp && (typeof input.updatedAt !== 'string' || !Number.isFinite(Date.parse(input.updatedAt)))) throw invalid();
+        return clone(input);
+      } catch (_) { throw invalid(); }
+    }
+    async function readingPositionValue(meta, workspaceId) {
+      const entry = await meta.get(readingPositionKey(workspaceId));
+      if (entry === undefined) return { revision: 0, position: null };
+      try {
+        const value = entry.value;
+        onlyFields(value, ['format', 'workspaceId', 'revision', 'position'], 'reading_position_invalid');
+        if (value.format !== 'life-reading-position-v1' || value.workspaceId !== workspaceId ||
+            !Number.isSafeInteger(value.revision) || value.revision < 1 || !Object.hasOwn(value, 'position')) throw new Error('position');
+        return { revision: value.revision, position: value.position === null ? null : readingPositionInput(value.position, true) };
+      } catch (_) { throw fault('reading_position_invalid', '읽던 위치 정보를 확인할 수 없습니다. 기존 위치는 보존했습니다.'); }
+    }
+    function readingPositionReference(bundle, position) {
+      const source = bundle.sources.find(value => value.id === position.sourceId);
+      const version = bundle.sourceVersions.find(value => value.id === position.sourceVersionId && value.sourceId === position.sourceId);
+      if (!source || !version || typeof version.contentText !== 'string' || version.coverage.status === 'link_only') return 'unavailable';
+      const { contentText: text } = version, { offset } = position;
+      if (offset > text.length) return 'invalid';
+      const previous = text.charCodeAt(offset - 1), next = text.charCodeAt(offset);
+      if (previous >= 0xD800 && previous <= 0xDBFF && next >= 0xDC00 && next <= 0xDFFF) return 'invalid';
+      return 'available';
+    }
+    function readingPositionState(value, bundle) {
+      return { revision: value.revision, position: clone(value.position),
+        status: value.position === null ? 'empty' : readingPositionReference(bundle, value.position) === 'available' ? 'available' : 'unavailable' };
+    }
+    async function readReadingPosition(workspaceId) {
+      readingPositionScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return readingPositionState(await readingPositionValue(meta, workspaceId), bundle);
+      });
+    }
+    async function writeReadingPosition(workspaceId, position, baseRevision) {
+      readingPositionScope(workspaceId); requireRevision(baseRevision, 'baseRevision');
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await readingPositionValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) return { status: 'conflict', state: readingPositionState(previous, bundle) };
+        if (position !== null) {
+          const reference = readingPositionReference(bundle, position);
+          if (reference === 'unavailable') throw fault('reading_position_unavailable', '읽던 원문 버전을 확인할 수 없습니다. 다른 버전으로 대신 저장하지 않았습니다.');
+          if (reference === 'invalid') throw fault('reading_position_invalid', '원문 안의 읽기 위치를 확인해 주세요. 기존 위치는 보존했습니다.');
+        }
+        if (baseRevision === Number.MAX_SAFE_INTEGER) throw fault('reading_position_invalid', '읽던 위치의 저장 기준을 확인할 수 없습니다.');
+        const saved = { format: 'life-reading-position-v1', workspaceId, revision: baseRevision + 1,
+          position: position === null ? null : { ...position, updatedAt: new Date().toISOString() } };
+        await meta.put({ key: readingPositionKey(workspaceId), value: saved });
+        return { status: 'stored', state: readingPositionState(saved, bundle) };
+      });
+      if (result.status === 'stored') readingPositionChanged(workspaceId, result.state.revision);
+      return result;
+    }
+    async function saveReadingPosition(workspaceId, input, baseRevision) {
+      readingPositionScope(workspaceId);
+      return writeReadingPosition(workspaceId, readingPositionInput(input), baseRevision);
+    }
+    async function clearReadingPosition(workspaceId, baseRevision) { return writeReadingPosition(workspaceId, null, baseRevision); }
     async function workbenchValue(meta, workspaceId) {
       const row = await meta.get(`workbench:${workspaceId}`);
       const state = row === undefined ? workbench().empty(workspaceId) : row.value;
@@ -1603,6 +1687,7 @@
     }
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, read, createWorkspace, installWorkspace, getActive, setActive,
+      readReadingPosition, saveReadingPosition, clearReadingPosition,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       commitLocal, saveStage, getStage, listStages, deleteStage, subscribe,
       getSyncState, bindSync, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,

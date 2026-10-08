@@ -47,3 +47,5 @@ description: 해도의 화면 추가·수정·디자인 검토에 사용한다. 
 재발견은 `docs/design-review/rediscovery.md`를 따른다. 기준·관련 원문·연결 근거를 한 열로 구분하고, 근거 없는 결과를 채우지 않는다. 기존 검색과 exact version 복귀를 유지하며 제외 범위와 복원을 설명한다. 표면 검사는 `node tests/life-rediscovery-browser.cjs`의 익명 한글 자료로 수행한다.
 
 선택 초안의 기기 전환은 `docs/design-review/writing-continuity.md`를 따른다. 이어쓰기 조작은 본문 아래 접고, 원격 알림의 늦은 도착이 현재 stage·입력·초점을 바꾸지 않게 검증한다. 중지한 뒤 기록으로 저장한 글에도 완료 상태 재개 경로를 남긴다. `tests/writing-sync-browser.cjs`와 입력 경합 회귀를 기능/시각 검토에 구분해 사용한다.
+
+로컬 이어 읽기는 [읽기 위치](../../../docs/design-review/reading-resume.md)를 따른다. 홈·기록의 한 행에서만 명시적으로 열고 본문에 추가 상시 UI를 만들지 않는다. `이 브라우저`·이전 버전·없는 버전의 복구 상태를 보존하고, 프로그램 스크롤을 실제 읽기 입력으로 간주하지 않는다.

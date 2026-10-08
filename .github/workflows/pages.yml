@@ -109,6 +109,12 @@ jobs:
       - name: Verify reading and writing quality across screen sizes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/reading-writing-quality-browser.cjs
+      - name: Verify local reading position transactions
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reading-position-storage-browser.cjs
+      - name: Verify explicit reading resume and failure recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reading-resume-browser.cjs
       - name: Stop the local server
         if: always()
         run: |
@@ -128,6 +134,7 @@ jobs:
             .local/writing-sync/
             .local/reading-quality/
             .local/reading-writing-quality/
+            .local/reading-resume/
             .local/browser-ci/server.log
           include-hidden-files: true
           if-no-files-found: warn

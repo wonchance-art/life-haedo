@@ -102,6 +102,9 @@
     let dataRefreshSequence = 0;
     let dataRefreshPromise = Promise.resolve(false);
     let readerCleanup = null;
+    let readerWatch = null;
+    let readingResumeCleanup = null;
+    let readingResumePromise = Promise.resolve();
     let focusFrame = null;
     let unbindNavigation = null;
     let lastRecordMode = 'sources';
@@ -125,6 +128,7 @@
       selecting: false, readerArrangeOpen: false,
       remoteRows: null, remoteRowsAccountKey: null, conflictView: null, conflictCopyId: null, restoreReturn: null
     };
+    const readingPosition = global.HaedoLife.ReadingPosition?.create({ storage });
     const root = node('div', null, 'life-app');
     const status = node('p', '', 'life-status');
     status.id = 'lifeSaveStatus';
@@ -191,6 +195,7 @@
     const home = global.HaedoLife.HomeUI?.create({
       storage, core, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce, navigate,
+      renderReadingResume: parent => renderReadingResume(parent, 'home', 'home'),
       openSource: (sourceId, versionId) => navigate('source', {
         sourceId, sourceVersionId: versionId, locator: null,
         returnContext: { mode: 'home', workspaceId: state.bundle.workspaceId, scrollY: global.scrollY,
@@ -825,6 +830,7 @@
       if (dirty()) await persistStage();
       await workbench?.flush();
       await writer?.flush();
+      await flushReadingPosition();
       if (disposed || token !== navigationGeneration) return;
       // A previous excerpt/record save does not describe the draft being opened.
       // Clear only after navigation can succeed; failed flushes keep their feedback.
@@ -1215,6 +1221,141 @@
 
     function resultFocusKey(mode, id, refIndex) { return mode + ':' + id + ':' + (refIndex ?? ''); }
 
+    async function flushReadingPosition() {
+      // Resume metadata is optional; its own status reports failures without
+      // blocking a draft save, navigation or the account's logout boundary.
+      try { await readerWatch?.flush(); } catch (_) { /* watchReader reports onError */ }
+    }
+
+    function renderReadingResume(parent, mode, prefix = 'life') {
+      readingResumeCleanup?.(); readingResumeCleanup = null;
+      const row = node('section', null, 'life-reading-resume');
+      row.id = prefix + 'ReadingResume';
+      row.setAttribute('aria-label', '이 브라우저의 읽기 위치');
+      row.hidden = true;
+      parent.append(row);
+      if (!readingPosition) return;
+      const workspaceId = state.bundle.workspaceId;
+      let stopped = false, sequence = 0;
+      const showing = () => !disposed && !stopped && row.isConnected && state.mode === mode && state.bundle?.workspaceId === workspaceId;
+      const showError = message => {
+        if (!showing()) return;
+        row.hidden = false;
+        let feedback = row.querySelector('.life-reading-resume-status');
+        if (!feedback) {
+          feedback = node('p', null, 'life-meta life-reading-resume-status');
+          feedback.setAttribute('role', 'status');
+          row.append(feedback);
+        }
+        feedback.textContent = message;
+      };
+      const action = (control, task, failureMessage = '읽기 위치를 확인하지 못했습니다. 다시 시도해 주세요.') => {
+        let running = false;
+        control.addEventListener('click', async () => {
+          if (running || !showing()) return;
+          running = true;
+          const hadFocus = document.activeElement === control;
+          control.disabled = true;
+          try { await task(); }
+          catch (_) { showError(failureMessage); }
+          finally {
+            running = false;
+            if (control.isConnected) {
+              control.disabled = false;
+              if (hadFocus && document.activeElement === document.body) control.focus({ preventScroll: true });
+            }
+          }
+        });
+        return control;
+      };
+      const draw = view => {
+        const focusId = row.contains(document.activeElement) ? document.activeElement.id : null;
+        row.replaceChildren();
+        row.hidden = view.status === 'empty';
+        if (row.hidden) return;
+        const copy = node('div', null, 'life-reading-resume-copy');
+        const source = state.bundle.sources.find(item => item.id === view.position?.sourceId);
+        const versions = state.bundle.sourceVersions.filter(item => item.sourceId === view.position?.sourceId);
+        const versionIndex = versions.findIndex(item => item.id === view.position?.sourceVersionId);
+        copy.append(node('p', source ? sourceLabel(source) : '저장한 원문 버전', 'life-reading-resume-title'),
+          node('p', '이 브라우저' + (versionIndex >= 0 && versionIndex < versions.length - 1 ? ' · 이전 버전' : ''), 'life-meta'));
+        row.append(copy);
+        if (view.status === 'available') {
+          const open = button('이어 읽기', () => {}, 'life-primary life-reading-resume-open');
+          open.prepend(global.HaedoLife.Icons.create('bookmark'));
+          open.id = prefix + 'ReadingResumeOpen';
+          open.dataset.focusKey = mode + ':reading-resume';
+          row.append(action(open, async () => {
+            const token = navigationGeneration;
+            const fresh = await readingPosition.read(workspaceId);
+            if (!showing() || token !== navigationGeneration) return;
+            if (fresh.status !== 'available' || !fresh.position) {
+              draw(fresh);
+              showError(fresh.status === 'empty' ? '읽기 위치가 지워졌습니다. 기록에서 원문을 선택해 주세요.' :
+                '저장한 원문 버전을 찾을 수 없습니다. 다른 버전으로 바꾸지 않았습니다.');
+              row.querySelector('.life-reading-resume-clear')?.focus({ preventScroll: true });
+              return;
+            }
+            if (fresh.revision !== view.revision || fresh.position.sourceId !== view.position.sourceId || fresh.position.sourceVersionId !== view.position.sourceVersionId ||
+                fresh.position.offset !== view.position.offset) {
+              draw(fresh);
+              showError('읽기 위치가 바뀌었습니다. 확인한 뒤 다시 이어 읽어 주세요.');
+              row.querySelector('.life-reading-resume-open')?.focus({ preventScroll: true });
+              return;
+            }
+            const { sourceId, sourceVersionId, offset } = fresh.position;
+            const fetched = await storage.read(workspaceId);
+            if (!showing() || token !== navigationGeneration) return;
+            const bundle = state.bundle.revision > fetched.revision ? state.bundle : fetched;
+            const version = bundle.sourceVersions.find(item => item.id === sourceVersionId && item.sourceId === sourceId);
+            if (!bundle.sources.some(item => item.id === sourceId) || !version || typeof version.contentText !== 'string' ||
+                !Number.isInteger(offset) || offset < 0 || offset > version.contentText.length) {
+              showError('저장한 원문 버전을 찾을 수 없습니다. 다른 버전으로 바꾸지 않았습니다.');
+              return;
+            }
+            state.bundle = bundle;
+            await navigate('source', { sourceId, sourceVersionId, locator: { start: offset, end: offset },
+              returnContext: { workspaceId, mode, scrollY: global.scrollY, focusKey: open.dataset.focusKey } });
+          }));
+        } else showError('저장한 원문 버전을 찾을 수 없습니다. 다른 버전으로 바꾸지 않았습니다.');
+        const clear = iconButton('읽기 위치 지우기', 'close', () => {}, 'life-reading-resume-clear');
+        clear.id = prefix + 'ReadingResumeClear';
+        row.append(action(clear, async () => {
+          const token = navigationGeneration;
+          const result = await readingPosition.clear(workspaceId, view.revision);
+          if (!showing() || token !== navigationGeneration) return;
+          if (result.status === 'conflict') {
+            await refresh();
+            if (!showing() || token !== navigationGeneration) return;
+            showError('읽기 위치가 바뀌었습니다. 확인한 뒤 다시 지워 주세요.');
+            row.querySelector('.life-reading-resume-clear')?.focus({ preventScroll: true });
+            return;
+          }
+          draw(result.state);
+          main.querySelector(mode === 'home' ? '#homeRecentTitle' : '#lifeSearch')?.focus({ preventScroll: true });
+        }, '읽기 위치를 지우지 못했습니다. 다시 시도해 주세요.'));
+        if (focusId) (row.querySelector('#' + focusId) || clear).focus({ preventScroll: true });
+      };
+      const refresh = async () => {
+        const token = ++sequence;
+        try {
+          const view = await readingPosition.read(workspaceId);
+          if (!showing() || token !== sequence) return;
+          draw(view);
+        } catch (_) {
+          if (!showing() || token !== sequence) return;
+          row.replaceChildren();
+          showError('읽기 위치를 불러오지 못했습니다.');
+          const retry = button('다시 확인', () => {});
+          retry.id = prefix + 'ReadingResumeRetry';
+          row.append(action(retry, refresh));
+        }
+      };
+      const unsubscribeReading = readingPosition.subscribe(workspaceId, refresh);
+      readingResumeCleanup = () => { stopped = true; sequence += 1; unsubscribeReading?.(); };
+      readingResumePromise = refresh();
+    }
+
     function openResult(mode, key, ref) {
       const returnContext = { workspaceId: state.bundle.workspaceId, mode, focusKey: key, scrollY: global.scrollY };
       return navigate('source', { sourceId: ref.sourceId, sourceVersionId: ref.sourceVersionId, locator: ref.locator || null, suppressReaderResume: mode === 'sources' && !!state.sourcesSearch.trim() && !ref.locator, returnContext });
@@ -1226,7 +1367,7 @@
       await navigate(context.mode, { returnContext: null });
       const restore = () => requestAnimationFrame(() => {
         if (disposed || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode) return;
-        const target = Array.from(main.querySelectorAll('[data-focus-key]')).find(el => el.dataset.focusKey === context.focusKey) || main.querySelector('#lifeSearch');
+        const target = Array.from(main.querySelectorAll('[data-focus-key]')).find(el => el.dataset.focusKey === context.focusKey) || main.querySelector('#lifeSearch,h1,h2');
         const panel = target?.closest('[data-result-panel]');
         let ancestor = target?.parentElement;
         while (ancestor && ancestor !== main) { if (ancestor.tagName === 'DETAILS') ancestor.open = true; ancestor = ancestor.parentElement; }
@@ -1234,7 +1375,10 @@
         target?.focus({ preventScroll: true });
         global.scrollTo({ top: context.scrollY, behavior: 'instant' });
       });
-      if (context.mode === 'home') {
+      if (context.focusKey === context.mode + ':reading-resume') {
+        const pending = readingResumePromise;
+        pending.then(() => { if (pending === readingResumePromise) restore(); });
+      } else if (context.mode === 'home') {
         const pending = homeRenderPromise;
         pending.then(() => { if (pending === homeRenderPromise) restore(); });
       }
@@ -1598,7 +1742,9 @@
       disclosure(filter, filters, { onChange: open => { state.sourcesFiltersOpen = open; } });
       bar.append(filter);
       origin.input.addEventListener('change', () => { state.originFilter = origin.input.value; update(); });
-      main.append(filters, selectionBar, count, list);
+      main.append(filters);
+      renderReadingResume(main, 'sources');
+      main.append(selectionBar, count, list);
       update();
     }
 
@@ -1649,7 +1795,7 @@
       arrangePanel.setAttribute('aria-label', '읽던 원문 정리');
       arrangePanel.hidden = !state.readerArrangeOpen;
       arrangePanel.append(node('p', '현재 원문 버전을 담습니다.', 'life-meta'), arrangeActions(() => [version.id]));
-      disclosure(arrange, arrangePanel, { onChange: open => { state.readerArrangeOpen = open; } });
+      disclosure(arrange, arrangePanel, { onChange: open => { state.readerArrangeOpen = open; flushReadingPosition(); readerWatch?.suppress(); } });
       tools.append(back, arrange, info);
       if (isOwnWriting(source) && version.id === versions[versions.length - 1].id) {
         tools.append(iconButton('내 글 수정', 'edit', guarded(() => navigate('write', { writing: { sourceId: source.id, sourceVersionId: version.id } }))));
@@ -1670,7 +1816,7 @@
       details.id = 'lifeSourceDetails';
       details.hidden = true;
       details.setAttribute('aria-label', '출처와 포함 범위');
-      const setDetails = disclosure(info, details);
+      const setDetails = disclosure(info, details, { onChange: () => { flushReadingPosition(); readerWatch?.suppress(); } });
       const detailsHeading = node('div', null, 'life-panel-heading');
       detailsHeading.append(node('h3', '출처와 포함 범위'), iconButton('출처 정보 닫기', 'close', () => setDetails(false)));
       details.prepend(detailsHeading);
@@ -1770,6 +1916,7 @@
         remember(start, end);
       };
       const restoreSelection = locator => {
+        readerWatch?.suppress();
         const start = Math.max(0, Math.min(version.contentText.length, locator.start));
         const end = Math.max(start, Math.min(version.contentText.length, locator.end));
         const range = document.createRange();
@@ -1789,10 +1936,14 @@
       global.addEventListener('scroll', savePosition, { passive: true });
       readerCleanup = () => {
         savePosition();
+        readerWatch?.close();
+        readerWatch = null;
         document.removeEventListener('selectionchange', capture);
         global.removeEventListener('scroll', savePosition);
       };
       const setPanel = disclosure(quote, panel, { onChange: open => {
+        flushReadingPosition();
+        readerWatch?.suppress();
         if (open) {
           capture();
           readingScrollY = global.scrollY;
@@ -1843,6 +1994,19 @@
       } });
       panel.append(panelHeading, picked, keyboardToggle, keyboard, topic.label, note.label, saveExcerpt);
       article.append(panel);
+      const positionStatus = node('p', null, 'life-meta life-reading-position-status');
+      positionStatus.id = 'lifeReadingPositionStatus';
+      positionStatus.hidden = true;
+      positionStatus.setAttribute('role', 'status');
+      tools.after(positionStatus);
+      readerWatch = readingPosition?.watchReader({ workspaceId: state.bundle.workspaceId, sourceId: source.id, sourceVersionId: version.id,
+        reader, isReading: () => !disposed && reader.isConnected && state.mode === 'source' && panel.hidden && details.hidden && arrangePanel.hidden,
+        onSaved: () => { if (reader.isConnected && !disposed) positionStatus.hidden = true; },
+        onError: () => {
+          if (!reader.isConnected || disposed) return;
+          positionStatus.textContent = '읽기 위치를 보관하지 못했습니다. 원문과 발췌는 그대로 사용할 수 있습니다.';
+          positionStatus.hidden = false;
+        } });
       const locator = state.locator || (!suppressResume && state.readerPositions.get(version.id));
       if (locator) requestAnimationFrame(() => {
         if (!reader.isConnected) return;
@@ -2728,6 +2892,7 @@
       workbench?.leave();
       writer?.close();
       if (readerCleanup) { readerCleanup(); readerCleanup = null; }
+      readingResumeCleanup?.(); readingResumeCleanup = null;
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
       writeRoute(state.mode, false);
       renderHeader();
@@ -2774,9 +2939,12 @@
       if (dirty()) persistStage().catch(failure);
       if (workbench?.dirty()) workbench.flush().catch(failure);
       if (writer?.isDirty()) writer.flush().catch(failure);
+      flushReadingPosition();
     };
+    const pagehideReading = () => { flushReadingPosition(); };
     global.addEventListener('beforeunload', beforeUnload);
     document.addEventListener('visibilitychange', visibility);
+    global.addEventListener('pagehide', pagehideReading);
     if (sync) unsubscribeSync = sync.subscribe(event => {
       if (disposed) return;
       if (event && event.type === 'error' && event.error) failure(event.error);
@@ -2834,6 +3002,7 @@
       if (disposed) throw new Error('계정이 바뀌어 이전 초안을 보관할 수 없습니다.');
       await workbench?.flush();
       await writer?.flush();
+      await flushReadingPosition();
       if (disposed) throw new Error('계정이 바뀌어 이전 초안을 보관할 수 없습니다.');
       if (state.stage && dirty()) await persistStage();
       for (const [versionId, draft] of state.sourceDrafts) {
@@ -2873,6 +3042,8 @@
       root.removeEventListener('focusin', keepFocusVisible);
       if (focusFrame !== null) { global.cancelAnimationFrame(focusFrame); focusFrame = null; }
       if (readerCleanup) { readerCleanup(); readerCleanup = null; }
+      readingResumeCleanup?.(); readingResumeCleanup = null;
+      readingPosition?.dispose();
       invalidateBatchContext();
       state.batches.clear();
       state.allStages = [];
@@ -2889,6 +3060,7 @@
       if (sync && typeof sync.dispose === 'function') sync.dispose();
       global.removeEventListener('beforeunload', beforeUnload);
       document.removeEventListener('visibilitychange', visibility);
+      global.removeEventListener('pagehide', pagehideReading);
       downloadUrls.forEach(url => URL.revokeObjectURL(url));
       downloadUrls.clear();
       signal?.removeEventListener('abort', dispose);
