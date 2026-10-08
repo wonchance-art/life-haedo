@@ -62,6 +62,9 @@ async function importExcerpt(page, title, raw, quote) {
   await page.locator('#lifeExcerptTopic').fill('다시 읽기'); await page.locator('#lifeExcerptNote').fill('출처를 기억할 익명 메모');
   await button(page, '발췌 후보 추가'); await button(page, '선택한 발췌 모음에 반영');
 }
+function annotation(message) {
+  if (process.env.GITHUB_ACTIONS) console.error('::error title=Unified home::' + String(message).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A'));
+}
 async function main() {
   await fs.mkdir('.local/unified-home', { recursive: true });
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
@@ -72,7 +75,7 @@ async function main() {
     const context = await makeContext(browser, server, device, seed), page = await context.newPage(); page.setDefaultTimeout(15000); observe(page, report, name);
     try { await run({ page, context, server, device }); assert.equal(server.writes().length, 0); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
     catch (error) {
-      report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack);
+      report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); annotation(name + '\n' + error.stack);
       await page.screenshot({ path: '.local/unified-home/failure-' + report.checks.length + '.png', fullPage: true }).catch(() => {});
     }
     finally { await context.close(); }
@@ -256,7 +259,8 @@ async function main() {
   }
   const failed = report.checks.filter(item => !item.pass).length;
   console.log(JSON.stringify({ passed: report.checks.length - failed, failed, consoleErrors: report.consoleErrors.length, pageErrors: report.pageErrors.length, expectedErrors: report.expectedErrors, realRemoteWrites: 0 }));
+  for (const error of [...report.consoleErrors, ...report.pageErrors]) annotation(JSON.stringify(error));
   if (failed || report.consoleErrors.length || report.pageErrors.length) process.exitCode = 1;
 }
 module.exports = { playwright, ready, shellReady, settle, nav, makeContext, observe, importExcerpt };
-if (require.main === module) main().catch(error => { console.error(error.stack); process.exitCode = 1; });
+if (require.main === module) main().catch(error => { console.error(error.stack); annotation(error.stack); process.exitCode = 1; });
