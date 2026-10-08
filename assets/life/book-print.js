@@ -164,10 +164,10 @@ h4 { font-size: 10.5pt; font-weight: 700; margin: 5mm 0 2mm; }
 .chapter-number { margin-bottom: 2mm; }
 .text,.metadata,.empty { white-space: pre-wrap; orphans: 3; widows: 3; }
 .prose { white-space: normal; }
-.prose > p { white-space: pre-wrap; orphans: 3; widows: 3; }
-.prose > p + p { margin-top: 1.8em; }
+.prose > p { white-space: pre-wrap; orphans: 3; widows: 3; break-inside: avoid; }
+.prose > p + p { margin-top: 1.2em; }
 .source { margin-top: 5mm; }
-.source-head { break-inside: avoid; break-after: avoid; }
+.source-head { break-inside: avoid; }
 .metadata { margin-top: 2mm; }
 .source-body { margin-top: 3mm; font-size: 9.5pt; }
 .insight { margin-top: 8mm; border-top: 0.3mm solid #b9c2bc; padding-top: 3mm; }
