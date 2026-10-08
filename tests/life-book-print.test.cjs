@@ -63,22 +63,27 @@ test('link-only and missing sources stay explicit and malformed or oversized pri
   const before = large.chapters[0].note; assert.throws(() => Print.document(large), { code: 'book_print_too_large' }); assert.equal(large.chapters[0].note, before);
 });
 
-function harness({ holdFonts = false, onFocus } = {}) {
+function harness({ holdFonts = false, onFocus, appendFails = false, urlFails = false } = {}) {
   let resolveFonts, printCalls = 0, restored = 0;
+  const urls = new Map(), revoked = []; let nextUrl = 0;
   const frames = [], events = () => { const listeners = new Map(); return {
     addEventListener(name, fn) { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name).add(fn); },
     removeEventListener(name, fn) { listeners.get(name)?.delete(fn); },
     emit(name) { for (const fn of [...(listeners.get(name) || [])]) fn(); }
   }; };
   const fontReady = holdFonts ? new Promise(resolve => { resolveFonts = resolve; }) : Promise.resolve();
-  const document = { activeElement: { isConnected: true, focus() { restored++; } }, body: { append(frame) { frame.isConnected = true; frames.push(frame); } },
+  const document = { activeElement: { isConnected: true, focus() { restored++; } }, body: { append(frame) { frames.push(frame); if (appendFails) throw new Error('Synthetic append failure'); frame.isConnected = true; } },
     createElement(tag) { assert.equal(tag, 'iframe'); const win = { ...events(), focus() { onFocus?.(); }, print() { printCalls++; } };
       return { ...events(), dataset: {}, style: {}, attributes: {}, isConnected: false, contentDocument: { documentElement: { dataset: { haedoPrint: 'v1' } }, fonts: { ready: fontReady } }, contentWindow: win,
         setAttribute(name, value) { this.attributes[name] = value; }, remove() { this.isConnected = false; } }; }
   };
-  const context = vm.createContext({ document, setTimeout, clearTimeout });
+  const URL = { createObjectURL(blob) { if (urlFails) throw new Error('Synthetic URL failure'); const url = 'blob:fixture/' + (++nextUrl); urls.set(url, blob); return url; },
+    revokeObjectURL(url) { revoked.push(url); urls.delete(url); } };
+  class Blob { constructor(parts) { this.html = parts.join(''); } }
+  const context = vm.createContext({ document, URL, Blob, setTimeout, clearTimeout });
   vm.runInContext(fs.readFileSync(require.resolve('../assets/life/book-print.js'), 'utf8'), context);
-  return { api: context.HaedoLife.BookPrint, frames, load: () => frames.at(-1).emit('load'), fonts: () => resolveFonts?.(), calls: () => printCalls, restored: () => restored };
+  return { api: context.HaedoLife.BookPrint, frames, load: () => frames.at(-1).emit('load'), fonts: () => resolveFonts?.(), calls: () => printCalls, restored: () => restored,
+    html: frame => urls.get(frame.src)?.html, urlCount: () => urls.size, revoked: () => revoked.slice() };
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
@@ -86,8 +91,10 @@ test('native print requests an isolated, sandboxed document and only reports req
   const h = harness(), task = h.api.print(minimal(), { isCurrent: () => true }); h.load(); const result = await task;
   assert.equal(result.requested, true); assert.equal(Object.hasOwn(result, 'saved'), false); assert.equal(h.calls(), 1);
   const frame = h.frames[0]; assert.equal(frame.attributes.sandbox, 'allow-same-origin allow-modals'); assert.equal(frame.referrerPolicy, 'no-referrer');
-  assert(frame.srcdoc.includes("default-src 'none'")); assert(frame.isConnected);
-  frame.contentWindow.emit('afterprint'); assert(!frame.isConnected); assert.equal(h.restored(), 1);
+  assert(h.html(frame).includes("default-src 'none'")); assert(frame.isConnected); assert.equal(h.urlCount(), 1);
+  assert.equal(Object.hasOwn(frame, 'srcdoc'), false); assert(frame.src.startsWith('blob:'));
+  frame.contentWindow.emit('afterprint'); assert(!frame.isConnected); assert.equal(h.restored(), 1); assert.equal(h.urlCount(), 0);
+  assert.deepEqual(h.revoked(), [frame.src]);
 });
 
 test('a required current-view guard rejects stale requests before frame creation', async () => {
@@ -99,7 +106,7 @@ test('cancel during iframe loading or font preparation prevents late print and c
   for (const afterLoad of [false, true]) {
     const h = harness({ holdFonts: true }), task = h.api.print(minimal(), { isCurrent: () => true });
     const rejection = assert.rejects(task, { code: 'book_print_cancelled' }); if (afterLoad) h.load(); h.api.cancel(); await rejection;
-    h.fonts(); await tick(); assert.equal(h.calls(), 0); assert(!h.frames[0].isConnected);
+    h.fonts(); await tick(); assert.equal(h.calls(), 0); assert(!h.frames[0].isConnected); assert.equal(h.urlCount(), 0);
   }
 });
 
@@ -115,4 +122,40 @@ test('duplicate preparation is rejected, while cancellation releases the pending
   const cancelled = assert.rejects(first, { code: 'book_print_cancelled' });
   await assert.rejects(h.api.print(minimal(), { isCurrent: () => true }), { code: 'book_print_busy' }); h.api.cancel(); await cancelled;
   const second = h.api.print(minimal(), { isCurrent: () => true }); h.load(); await second; assert.equal(h.calls(), 1); h.api.cancel(); assert(!h.frames[1].isConnected);
+});
+
+test('book printing forwards explicit options to the same isolated lifecycle without claiming a saved PDF', async () => {
+  const h = harness(), task = h.api.print(minimal(), { isCurrent: () => true, mode: 'book', paper: 'A4', includeInsights: false });
+  assert(h.html(h.frames[0]).includes('data-print-mode="book"')); assert(h.html(h.frames[0]).includes('@page { size: A4;'));
+  assert(!h.html(h.frames[0]).includes('무엇을 오래 좋아했을까?'));
+  h.load(); const result = await task; assert.equal(result.requested, true); assert.equal(Object.hasOwn(result, 'saved'), false);
+  h.frames[0].contentWindow.emit('afterprint'); assert(!h.frames[0].isConnected); assert.equal(h.restored(), 1); assert.equal(h.urlCount(), 0);
+});
+
+test('invalid book/review print options reject before frame creation and book font preparation remains cancellable', async () => {
+  const h = harness({ holdFonts: true });
+  for (const value of [{ mode: 'book', paper: 'Letter' }, { mode: 'review', paper: 'A5' }, { includeInsights: false }, { mode: 'book', includeInsights: 'yes' }])
+    await assert.rejects(h.api.print(minimal(), { isCurrent: () => true, ...value }), { code: 'invalid_book_print' });
+  assert.equal(h.frames.length, 0);
+  const task = h.api.print(minimal(), { isCurrent: () => true, mode: 'book' });
+  const rejection = assert.rejects(task, { code: 'book_print_cancelled' }); h.load(); h.api.cancel(); await rejection;
+  h.fonts(); await tick(); assert.equal(h.calls(), 0); assert(!h.frames[0].isConnected);
+});
+
+test('Blob URL creation and append errors clean up; completed dialogs retain the URL until an explicit replacement', async () => {
+  for (const setup of [{ urlFails: true }, { appendFails: true }]) {
+    const h = harness(setup);
+    await assert.rejects(h.api.print(minimal(), { isCurrent: () => true, mode: 'book' }), { code: 'book_print_unavailable' });
+    assert.equal(h.urlCount(), 0); assert.equal(h.calls(), 0);
+    assert(h.frames.every(frame => !frame.isConnected));
+    if (setup.appendFails) assert.equal(h.revoked().length, 1);
+  }
+  const h = harness();
+  const first = h.api.print(minimal(), { isCurrent: () => true }); h.load(); await first;
+  assert.equal(h.urlCount(), 1); // Safari may still have an open print dialog.
+  const previousUrl = h.frames[0].src;
+  const second = h.api.print(minimal(), { isCurrent: () => true, mode: 'book' });
+  assert.deepEqual(h.revoked(), [previousUrl]); assert.equal(h.urlCount(), 1);
+  h.load(); await second; const nextUrl = h.frames[1].src; h.api.cancel(); h.api.cancel();
+  assert.equal(h.urlCount(), 0); assert.deepEqual(h.revoked(), [previousUrl, nextUrl]);
 });

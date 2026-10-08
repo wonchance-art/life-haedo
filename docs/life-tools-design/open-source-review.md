@@ -613,3 +613,42 @@ Taguette의 구간 offset이나 Hypothesis의 selector를 이번 전체 버전 �
 별도 단계 진행률 저장, 새 책 schema·SQL, Markdown parser, rich editor, 목차 UI 라이브러리는 추가하지 않는다. 기존 native CSS·입력과 계정/작업공간·저장 실패 경계를 재사용한다. **이번 연결 흐름의 구현·기능 검사·시각 검토는 담당 검증 전까지 미검증**이며 앞선 책·PDF 검사 결과를 새 흐름의 통과로 대체하지 않는다. 실제 Apple 기기의 입력·Files 체험과 사용자의 첫 책 완성도도 별도 판단이다.
 
 외부 자료는 허용된 공식 API로만 읽었고 프록시·TLS 검증을 유지했다. 패키지 설치·개인 자료 분석·외부 전송·공개 게시를 수행하지 않았다. 이후 실제 집필에서 여러 단계 목차·구절 인용 편집·각주·전문 조판이 필요한지 확인되면 해당 요구만 별도 비교한다.
+
+## 독자용 책자 출력 — 기본 인쇄와 전문 조판의 범위
+
+확인일 **2026-10-08 KST**. 이번 검토는 초고를 읽기 좋은 책자로 꺼내기 위한 **용지·여백·장 나눔·쪽번호·목차 링크**의 구현 선택이다. 독자용 표현은 읽을 파일의 편집 목적이며 공개 게시·자료 전송에 대한 새 동의가 아니다. 기존 [`BookPrint`](../../assets/life/book-print.js)의 선택 책 하나, 안전한 평문, 외부 리소스 없는 격리 문서, 계정/화면 전환 취소 경계를 기준으로 비교했다.
+
+### 공식 배포·라이선스·유지관리 재조회
+
+공식 GitHub API의 최신 release·기본 브랜치 commit·저장소 상태·공개 보안 권고와 공식 npm 메타데이터를 다시 읽었다. 아래 라이선스는 실제 배포 commit 또는 release 태그의 본문·패키지 설정으로 확인했다. 후보를 설치하거나 개인 원고를 외부 뷰어에 올리지는 않았다.
+
+| 후보 | 확인한 최신 배포와 라이선스 | 유지관리·기능과 도입 판단 |
+| --- | --- | --- |
+| **브라우저 CSS Paged Media + `window.print()`** | 새 패키지·라이선스 없음. [MDN `@page`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@page)와 [Paged Media 안내](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Paged_media), [공식 호환성 데이터](https://github.com/mdn/browser-compat-data/blob/d52747be1e963612aec91bee6677ba567ed90291/css/at-rules/page.json)를 읽음 | **이번 우선 선택.** 기본 용지·여백·명시적 장 나눔은 기존 CSS를 확장한다. 쪽번호는 지원 브라우저의 추가 표현으로 다루고, 내부 목차 링크와 자동 목차 쪽번호를 구분한다. 인쇄 설정과 PDF 결과는 실제 출력으로 확인해야 한다. |
+| **Paged.js 0.4.3 · MIT** | [공식 npm](https://registry.npmjs.org/pagedjs) latest는 **2023-07-06** 배포 0.4.3. GitHub `releases/latest`는 이번에도 404이며 이를 새 release가 있다고 해석하지 않음. npm의 배포 commit [`703297d`](https://github.com/pagedjs/pagedjs/tree/703297df075c6f3ba717e04c1de5315d31c3bd60)의 [LICENSE.md](https://github.com/pagedjs/pagedjs/blob/703297df075c6f3ba717e04c1de5315d31c3bd60/LICENSE.md)·[package.json](https://github.com/pagedjs/pagedjs/blob/703297df075c6f3ba717e04c1de5315d31c3bd60/package.json)에서 MIT 확인 | 공식 main [최근 commit](https://github.com/pagedjs/pagedjs/commit/677cdc1e537365e1b3c03c550e2463360164d3fc)은 **2026-10-06**. [배포 README](https://github.com/pagedjs/pagedjs/blob/703297df075c6f3ba717e04c1de5315d31c3bd60/README.md)는 `@page`를 클래스·카운터·생성 콘텐츠로 변환하는 polyfill과 페이지 분할을 설명하며 specs는 Chrome/Puppeteer 기반이다. 정밀한 페이지 미리보기·생성 콘텐츠가 실제 필수일 때 후보. 현재 단순 출력에 CSS parser·DOM 분할·런타임 의존성을 추가하지 않는다. |
+| **Vivliostyle.js / `@vivliostyle/core` 2.45.2 · AGPL-3.0** | [공식 v2.45.2](https://github.com/vivliostyle/vivliostyle.js/releases/tag/v2.45.2), 게시 **2026-09-23**. [npm core](https://registry.npmjs.org/@vivliostyle%2fcore) latest도 2.45.2로 일치. 태그 [LICENSE](https://github.com/vivliostyle/vivliostyle.js/blob/v2.45.2/LICENSE)는 GNU AGPL v3 전문, [core package](https://github.com/vivliostyle/vivliostyle.js/blob/v2.45.2/packages/core/package.json)의 표현은 `AGPL-3.0` | 기본 브랜치 [최근 commit](https://github.com/vivliostyle/vivliostyle.js/commit/6b2b9f508989594d183bc366d677e5e17363fcb1)은 **2026-10-07**. [지원 CSS](https://github.com/vivliostyle/vivliostyle.js/blob/v2.45.2/docs/supported-css-features.md)는 페이지 여백 영역, `target-counter()` 교차 참조, 각주·다양한 판형을 명시한다. 전문 조판·각주·자동 목차 쪽번호·다문서/EPUB 요구가 확정될 때 비교할 후보. 현재 원고 편집·저장과 다른 조판 엔진이므로 직접 도입하지 않는다. 향후 코드·배포본을 포함한다면 AGPL 및 [README](https://github.com/vivliostyle/vivliostyle.js/blob/v2.45.2/README.md)에 명시된 Apache-2.0 기반 코드의 조건을 함께 검토한다. |
+
+Paged.js와 Vivliostyle 저장소는 모두 `archived=false`, `disabled=false`였다. [Paged.js 공개 권고](https://api.github.com/repos/pagedjs/pagedjs/security-advisories?per_page=100)와 [Vivliostyle 공개 권고](https://api.github.com/repos/vivliostyle/vivliostyle.js/security-advisories?per_page=100)는 각각 빈 배열이었다. 이는 공개된 해당 GitHub 목록만 확인한 결과이며 전이 의존성 감사·배포 바이너리 검증·미공개 취약점 부재를 의미하지 않는다. 최신 소스 활동과 npm 안정 배포 시점을 구분한다.
+
+### 브라우저와 출력물의 차이
+
+MDN 호환성 데이터의 해당 파일 마지막 변경은 **2026-10-05**, commit `d52747be1e963612aec91bee6677ba567ed90291`이다. 이번에 조회한 내용은 다음과 같다.
+
+| 표현 | 확인된 지원과 실제 확인이 필요한 범위 |
+| --- | --- |
+| 용지 크기·방향·기본 여백 | `@page`와 `size`로 요청한다. BCD의 `size` 지원은 Chrome 15+, Firefox 95+, Safari 18.2+이며 `safari_ios`는 Safari를 따른다. OS 인쇄 창의 용지·배율·여백 선택이 최종 결과에 영향을 주므로 CSS 선언만으로 판형 적용 완료를 보고하지 않는다. |
+| 하단 쪽번호 영역 | `@bottom-center` 등 page-margin at-rule은 **Chrome 131+**, Firefox·Safari는 **지원 안 함**으로 기록되어 있고 iOS Safari는 mirror다. 지원 엔진에서는 페이지 카운터를 사용할 수 있지만 이를 모든 기기의 쪽번호 보장으로 표현하지 않는다. 미지원 시 원고가 사라지거나 조작을 막지 않고 쪽번호 없이 읽을 수 있어야 한다. |
+| 목차의 장 이동 링크 | 앱이 만든 목차 항목을 해당 장의 내부 `#id`로 연결하는 것과 목차에 실제 쪽수를 계산해 넣는 것은 다른 기능이다. PDF 내부 링크 보존·도착 장은 실제 생성 PDF에서 별도로 검사해야 한다. 위 `@page` BCD는 PDF 링크나 자동 목차 쪽수의 지원 증거가 아니다. |
+| 자동 목차 쪽수·각주·전문 조판 | 일반 `counter()`의 지원만으로 목적지의 인쇄 쪽수를 구하는 `target-counter()`까지 지원된다고 추정하지 않는다. Vivliostyle 공식 기능에는 교차 참조가 명시돼 있지만 이번 기본 브라우저 출력에서의 자동 목차 쪽수는 미확인이다. 양면 제본 배치·재단선·도련·출판용 파일 규격은 별도 범위다. MDN은 native 도련·재단선 지정이 아직 브라우저에서 지원되지 않는다고 설명한다. |
+
+현재 인쇄는 `iframe.srcdoc`를 사용한다. [MDN iframe 설명과 예제](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe#embedding_source_code_in_an_iframe)는 `about:srcdoc`의 상대 URL 기준이 부모 문서이며, 내부 이동에는 `about:srcdoc#...`처럼 목적지를 명시해야 한다고 설명한다. 따라서 독립 HTML에서 `#장ID`가 동작했다는 결과를 실제 srcdoc 인쇄의 PDF 내부 링크 성공으로 대신하지 않는다. 현재 `base-uri 'none'` 경계를 유지하고, 실제 출력 경로에서 링크가 앱 주소·외부 주소가 아닌 해당 장으로 향하는지 확인한다.
+
+조판 라이브러리가 브라우저 차이를 모두 없애는 것도 아니다. Vivliostyle의 해당 태그 [지원 문서](https://github.com/vivliostyle/vivliostyle.js/blob/v2.45.2/docs/supported-css-features.md)는 Safari/WebKit의 중첩 다단과 페이지 분할 차이를 명시한다. Paged.js의 Chromium 기반 specs를 실제 iPad·iPhone 검증으로 대신하지 않는다. iPad의 Chrome이라는 이름만으로 데스크톱 Chromium과 같은 인쇄 지원이라고 판단하지 않는다. 이번 조사에는 실제 Mac·iPad·iPhone·Files·OS 인쇄 창 검증이 없다.
+
+### 해도의 선택과 바꿀 조건
+
+**새 의존성 없이 현재 책 출력 모델과 native CSS를 재사용한다.** 독자용으로 담을 항목과 출처의 포함 범위는 앱에서 명시적으로 결정하고, 원고 텍스트나 원문을 HTML/Markdown으로 실행하지 않는다. 내부 목차 링크를 추가하더라도 원문 사이트·이미지·외부 글꼴을 자동으로 요청하는 통로로 넓히지 않는다. 현재 저장·백업·회고·개정본을 바꾸거나 독자용 출력을 공개 사본으로 전환하지 않는다.
+
+Paged.js/Vivliostyle 직접 도입은 패키지 크기뿐 아니라 **조판 스크립트의 실행 위치, DOM 분할 후 원고·출처 순서, 계정 전환 취소, 폰트 준비, 메모리·인쇄 완료 경계**를 다시 검증해야 한다. 지금 필요한 기본 판형·문단·장 나눔에 이 비용을 먼저 추가할 이유는 없다. 실제 원고에서 자동 목차 쪽번호·각주·양면 조판이 필수로 드러나면 두 후보의 동일 한글 원고 출력을 직접 비교하고 결정한다.
+
+이 절은 공식 자료 조사와 선택 근거다. 새 독자용 화면·PDF의 기능·시각 검사는 **미검증**이며 기존 7쪽 PDF 검사나 라이브러리의 지원 표로 대신하지 않는다. 라이브러리·폰트 설치, 외부 AI, 운영 SQL·계정 자료·병합·배포 작업은 수행하지 않았다.
