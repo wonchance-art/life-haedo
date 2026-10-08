@@ -150,7 +150,7 @@
     skip.href = '#lifeMain';
     root.append(skip, header, toolbar, recordSections, status, error, main);
     container.replaceChildren(root);
-    const workbenchModes = ['activities', 'page', 'discover', 'related', 'reflection', 'workbench-backup', 'public-pages'];
+    const workbenchModes = ['activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'public-pages'];
     const workbench = global.HaedoLife.WorkbenchUI?.create({
       storage, core, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce,
@@ -904,7 +904,7 @@
 
     function sectionFor(mode) {
       if (mode === 'home') return 'home';
-      return ['tools', 'discover', 'reflection'].includes(mode) ? 'tools' : ['manage', 'sync', 'transfer', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
+      return ['tools', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'sync', 'transfer', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
     }
 
     function routeMode() {
@@ -912,9 +912,9 @@
       const section = params.get('section');
       const view = params.get('view');
       if (section === 'home') return 'home';
-      if (section === 'tools') return ['discover', 'reflection'].includes(view) ? view : 'tools';
+      if (section === 'tools') return ['discover', 'reflection', 'books'].includes(view) ? view : 'tools';
       if (section === 'manage') return ['transfer', 'sync', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
-      if (!section && ['transfer', 'sync', 'workbench-backup', 'public-pages', 'discover', 'reflection'].includes(view)) return view;
+      if (!section && ['transfer', 'sync', 'workbench-backup', 'public-pages', 'discover', 'reflection', 'books'].includes(view)) return view;
       if (['topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related'].includes(view)) return view;
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
     }
@@ -1081,6 +1081,7 @@
       const list = node('div', null, 'life-destinations');
       list.append(actionRow('다시 찾기', '검색하고 관련 기록 이어 보기', 'search', () => navigate('discover')),
         actionRow('회고', '고른 자료를 돌아보고 메모', 'book', () => navigate('reflection')),
+        actionRow('책 만들기', '주제별로 글을 엮고 장별 원고 쓰기', 'book', () => navigate('books')),
         destinationRow('목표', '진행 중인 일과 다음 계획', 'goals.html', 'target'),
         destinationRow('습관', '반복할 일과 오늘의 체크', 'habits.html', 'check'));
       main.append(list);
@@ -1126,7 +1127,7 @@
       main.append(manage, management);
       const destinations = node('div', null, 'life-destinations');
       destinations.append(actionRow('공개 페이지 관리', '이 계정으로 게시한 페이지 확인·철회', 'link', () => navigate('public-pages')));
-      destinations.append(actionRow('자료·구성 백업', '원문과 묶음·내 페이지·회고를 함께 보관', 'download', () => navigate('workbench-backup')));
+      destinations.append(actionRow('자료·구성 백업', '원문과 묶음·내 페이지·회고·책을 함께 보관', 'download', () => navigate('workbench-backup')));
       destinations.append(actionRow('내보내기·사본 복원', '원문·발췌·출처를 파일로 보관', 'download', () => navigate('transfer'), '자료 백업·복원'));
       if (sync) destinations.append(actionRow('기기 간 동기화', '연결할 작업공간을 직접 선택', 'cloud', async () => {
         await navigate('sync'); await refreshSync();
@@ -1413,7 +1414,7 @@
     }
 
     function searchReturnButton() {
-      const labels = { home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '내 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기' };
+      const labels = { home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '내 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
       const back = iconButton(labels[state.returnContext?.mode] || '검색 결과로 돌아가기', 'back', guarded(returnToResults));
       back.id = 'lifeSearchReturn';
       return back;

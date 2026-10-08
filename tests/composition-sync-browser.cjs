@@ -72,6 +72,7 @@ async function change(page, id, label) {
   return page.evaluate(async ({ id, label }) => {
     const storage = HaedoLife.Shell.storage, state = await storage.readWorkbench(id);
     state.page.title = label; state.page.entries[0].note = label + '의 코멘트: 원문은 그대로 두고 나의 생각만 이어 적는다.';
+    state.books[0].chapters[0].note = label + '의 장 원고: 그때의 글과 지금의 생각을 구별한다.\r\n🌱';
     return storage.saveWorkbench(id, state, state.revision);
   }, { id, label });
 }
@@ -90,6 +91,9 @@ async function seed(page) {
     state.page.title = '다시 읽고 고른 이번 주의 장면'; state.page.intro = '서로 다른 앱에 흩어진 글을 나의 흐름으로 묶었다.';
     state.page.entries.push({ id: c.id(), title: bundle.sources[0].title, parts: refs.map((value, index) => ({ versionId: value.versionId, enabled: index === 0 })), note: '다음 산책에서는 같은 나무를 찾아가기로 했다. 이 코멘트는 원문과 별도로 남긴 생각이다.', enabled: true, pinned: true, showBody: true, showNote: true });
     state.reflection = { note: '정답보다 다시 살펴볼 질문을 남겼다.', versionIds: [refs[1].versionId] };
+    state.books = [{ id: c.id(), title: '산책의 글을 엮는 비공개 책', fromYear: '2020', toYear: '', question: '같은 장소에서 생각은 어떻게 바뀌었나?',
+      chapters: [{ id: c.id(), title: '처음 남긴 장면', note: '첫 장의 현재 원고\r\n🌱 당시 본문과 구별한다.', versionIds: [refs[0].versionId, 'missing_book_version'] },
+        { id: c.id(), title: '다시 읽으며', note: '두 번째 장의 원고', versionIds: [refs[0].versionId, refs[1].versionId, 'missing_book_version'] }] }];
     state.discovery = { excludedPairs: [{ seedSourceId: refs[0].sourceId, candidateSourceId: refs[1].sourceId }] };
     await s.saveWorkbench(bundle.workspaceId, state, state.revision);
     return { id: bundle.workspaceId, refs };
@@ -163,19 +167,34 @@ async function main() {
       await sync(b.page, id); await waitStatus(b.page, 'conflict'); assert.equal((await composition(b.page, id)).page.title, '두 번째 기기의 수정');
       await b.page.locator('#compositionCompare').click(); await b.page.locator('#compositionComparison').waitFor();
       assert.match(await b.page.locator('#compositionComparison').innerText(), /첫 기기의 수정/); assert.match(await b.page.locator('#compositionComparison').innerText(), /두 번째 기기의 수정/);
+      for (const key of ['local', 'remote']) await b.page.locator('#compositionDetails-' + key).click();
+      assert.match(await b.page.locator('.composition-side').nth(0).locator('.composition-book').innerText(), /두 번째 기기의 수정의 장 원고/);
+      assert.match(await b.page.locator('.composition-side').nth(1).locator('.composition-book').innerText(), /첫 기기의 수정의 장 원고/);
+      const loser = copy((await composition(b.page, id)).books);
       await capture(b.page, 'comparison');
       await b.page.locator('#compositionUseRemote').focus(); await b.page.keyboard.press('Enter'); await waitStatus(b.page, 'synced');
       assert.equal((await composition(b.page, id)).page.title, '첫 기기의 수정');
+      assert.match((await composition(b.page, id)).books[0].chapters[0].note, /첫 기기의 수정의 장 원고/);
       await b.page.reload(); await ready(b.page); await b.page.locator('details[data-section="recovery"] > summary').click();
       const download = b.page.waitForEvent('download'); await b.page.locator('.composition-recovery').filter({ hasText: '두 번째 기기의 수정' }).locator('.composition-recovery-download').click();
       const file = await download, json = await fs.readFile(await file.path(), 'utf8'), backup = JSON.parse(json);
       assert.equal(backup.workbench.page.title, '두 번째 기기의 수정'); assert.equal(backup.sourceBackup.workspace.workspaceId, id);
+      assert.deepEqual(backup.workbench.books, loser, 'Recovery JSON must preserve the complete losing manuscript and chapter order');
       for (const value of ['access_token', 'refresh_token', 'compositionSync:', 'outbox', cloud]) assert.equal(json.includes(value), false);
       await go(b.page, 'workbench-backup'); await b.page.locator('#wbRestoreFile').setInputFiles({ name: 'recovery.json', mimeType: 'application/json', buffer: Buffer.from(json) });
       await b.page.locator('#wbRestoreInstall').click(); await b.page.waitForFunction(id => HaedoLife.Shell.storage.getActive().then(active => active !== id), id);
       const restored = await b.page.evaluate(async () => HaedoLife.Shell.storage.readWorkbenchSnapshot(await HaedoLife.Shell.storage.getActive()));
       assert.equal(restored.workbench.page.title, '두 번째 기기의 수정'); assert.notEqual(restored.bundle.workspaceId, id);
       assert.equal(restored.workbench.page.entries[0].parts[0].versionId, restored.bundle.sourceVersions[0].id);
+      const restoredBook = restored.workbench.books[0], mappedOld = restored.bundle.sourceVersions[0].id, mappedGap = restoredBook.chapters[0].versionIds[1];
+      assert.notEqual(restoredBook.id, loser[0].id);
+      assert.deepEqual(restoredBook.chapters.map(value => value.title), loser[0].chapters.map(value => value.title));
+      assert.deepEqual(restoredBook.chapters.map(value => value.note), loser[0].chapters.map(value => value.note));
+      assert.deepEqual(restoredBook.chapters[0].versionIds, [mappedOld, mappedGap]);
+      assert.deepEqual(restoredBook.chapters[1].versionIds, [mappedOld, restored.bundle.sourceVersions[1].id, mappedGap]);
+      assert.notEqual(mappedGap, 'missing_book_version');
+      assert.equal(restored.bundle.sourceVersions.some(value => value.id === mappedGap), false, 'Missing evidence must remain a gap');
+      assert(restoredBook.chapters.every((value, index) => value.id !== loser[0].chapters[index].id));
       assert.equal((await composition(b.page, id)).page.title, '첫 기기의 수정');
     });
     await check('lost write acknowledgement replays durable operation after reload without a duplicate revision', async context => {
@@ -206,6 +225,7 @@ async function main() {
       assert.equal(server.composition(accounts.a.id, id).data.page.title, '비교 뒤 더 쓴 구성');
       const recovery = await b.page.evaluate(async id => { const s = HaedoLife.Shell.storage, rows = await s.listCompositionRecoveries(id); return s.readCompositionRecovery(id, rows[0].id); }, id);
       assert.equal(recovery.workbench.page.title, '서버 쪽 이전 구성');
+      assert.match(recovery.workbench.books[0].chapters[0].note, /서버 쪽 이전 구성의 장 원고/);
     });
     await check('account switch cancels a held composition reply and never installs A into B', async context => {
       const { server } = context, { a, b, id } = await paired(context); await change(a.page, id, '이전 계정의 비공개 구성'); await sync(a.page, id);

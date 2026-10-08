@@ -11,6 +11,9 @@ const config = { url: 'https://composition-fixture.supabase.co', key: 'sb_publis
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { resolve, promise }; };
 const row = () => ({ workspace_id: ID, revision: 1, source_revision: 2, updated_at: '2026-10-06T00:00:00Z', data: Workbench.empty(ID) });
 const request = () => ({ workspaceId: ID, expectedRevision: 0, operationId: OP, sourceRevision: 2, data: Workbench.empty(ID) });
+const bookData = () => ({ id: 'book_exact', title: '비공개 책', fromYear: '2020', toYear: '', question: '달라진 생각',
+  chapters: [{ id: 'chapter_exact', title: '첫 장', note: '현재 원고\r\n🌱', versionIds: ['old_exact_version', 'missing_version'] },
+    { id: 'chapter_again', title: '다시 읽기', note: '', versionIds: ['old_exact_version'] }] });
 function fixture() {
   const state = { authCalls: 0, calls: [], disposed: 0, authResult: { data: { user: { id: ID } }, error: null }, result: { data: row(), error: null } };
   const auth = { ready: true, config };
@@ -66,6 +69,32 @@ test('write freezes scalar identity and content before awaiting account verifica
   waiting.resolve(state.authResult); assert.deepEqual(await pending, { status: 'stored', revision: 1 });
   assert.deepEqual(state.calls[0], { name: 'life_composition_put', params: { p_workspace_id: ID, p_expected_revision: 0, p_operation_id: OP, p_source_revision: 2, p_data: Workbench.empty(ID) } });
   adapter.dispose();
+});
+
+test('book reads preserve ordered exact and missing references in a detached configuration', async () => {
+  const { state, adapter } = fixture(); state.result.data.data.books = [bookData()];
+  const before = structuredClone(state.result.data), result = await adapter.read(ID);
+  assert.deepEqual(result, before);
+  result.data.books[0].chapters.reverse(); result.data.books[0].chapters[0].versionIds.push('caller_change');
+  assert.deepEqual(state.result.data, before, 'Caller edits cannot rewrite remote chapter order or references');
+  state.result.data.data.books[0].chapters[0].versionIds.push('old_exact_version');
+  await assert.rejects(adapter.read(ID), { code: 'invalid_remote_data' }); adapter.dispose();
+});
+
+test('old-server rejection retains the complete book write and retries without stripping or changing CAS identity', async () => {
+  const { state, adapter } = fixture(), input = request(); input.data.books = [bookData()];
+  const before = structuredClone(input), waiting = deferred(); state.authPending = waiting.promise;
+  state.result = { data: null, error: { code: '22023', message: 'private old validator rejects books' } };
+  const pending = adapter.write(input);
+  input.data.books[0].chapters[0].note = '인증 중 새 입력';
+  waiting.resolve(state.authResult);
+  await assert.rejects(pending, error => error.code === 'invalid_request' && !error.message.includes('private'));
+  const expected = { p_workspace_id: ID, p_expected_revision: 0, p_operation_id: OP, p_source_revision: 2, p_data: before.data };
+  assert.deepEqual(state.calls[0].params, expected);
+  assert.equal(input.data.books[0].chapters[0].note, '인증 중 새 입력', 'Failure must not overwrite local input');
+  state.result = { data: { status: 'stored', revision: 1 }, error: null };
+  assert.deepEqual(await adapter.write(before), { status: 'stored', revision: 1 });
+  assert.deepEqual(state.calls[1].params, expected); adapter.dispose();
 });
 
 test('CAS conflict and missing stay distinct from stored; malformed replies reject', async () => {

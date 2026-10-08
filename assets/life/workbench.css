@@ -180,3 +180,29 @@
 .wb-reflection-controls > .wb-details[open] { flex-basis: 100%; }
 .wb-reflection-overview > .wb-details { margin-block: 8px; }
 .wb-reflection-controls [aria-pressed=true] { background: var(--soft); color: var(--color-primary); border-color: currentColor; }
+
+/* One chapter at a time: the outline recedes while the manuscript stays in view. */
+.wb-book-row { padding-block: 20px; border-bottom: 1px solid var(--line); }
+.wb-book-row h3 { font-size: 18px; line-height: 1.7; }
+.wb-book-row .life-meta { margin-top: 4px; }
+.wb-book-lead { margin-block: 12px 16px; }
+.wb-book-actions { justify-content: space-between; }
+.wb-book-actions > #wbBooksBack { border: 0; padding-inline: 0; color: var(--ink-soft); }
+.wb-book-title { margin-top: 8px; font-size: 25px; line-height: 1.6; letter-spacing: -.02em; }
+.wb-book-controls { display: flex; flex-wrap: wrap; gap: 0 24px; margin-bottom: 20px; border-bottom: 1px solid var(--line); }
+.wb-book-controls > .wb-details { margin-block: 0 12px; }
+.wb-book-controls > .wb-details[open] { flex-basis: 100%; }
+.wb-book-outline { list-style: none; padding: 0; margin-block: 12px 20px; }
+.wb-book-outline > li { padding-block: 6px; border-bottom: 1px solid var(--line); }
+.wb-chapter-number { min-width: 1.5em; color: var(--ink-soft); font-size: 13px; font-variant-numeric: tabular-nums; }
+.wb-chapter-up > .life-glyph { transform: rotate(180deg); }
+.wb-chapter-open { flex: 1; min-width: 0; border: 0; text-align: left; font-size: 15px; background: transparent; }
+.wb-chapter-open[aria-current=true] { color: var(--color-primary); background: var(--soft); }
+.wb-book-editor > .life-field:first-child input { font-size: 20px; font-weight: 550; line-height: 1.6; }
+#wbChapterNote { min-height: 22rem; line-height: 1.95; }
+.wb-book-length { margin-top: -8px; font-size: 12px; }
+.wb-book-sources > .wb-source { padding-block: 16px; border-bottom: 1px solid var(--line); }
+.wb-book-sources pre { font-family: inherit; font-size: 16px; }
+.life-workbench[data-mode=books] .life-tooltip { left: auto; right: 0; transform: none; }
+.life-workbench[data-mode=books] .wb-book-outline .life-tooltip { white-space: normal; width: max-content; max-width: 150px; }
+@media (forced-colors: active) { .wb-chapter-open[aria-current=true] { outline: 1px solid Highlight; } }

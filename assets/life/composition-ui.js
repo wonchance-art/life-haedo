@@ -61,6 +61,16 @@
       if (data.reflection.note) details.append(node('h5', '회고'), node('p', data.reflection.note, 'life-note'));
       details.append(node('p', '회고에 고른 원문 ' + data.reflection.versionIds.length + '개 · 관련 기록 제외 ' + (data.discovery?.excludedPairs.length || 0) + '개', 'life-meta'));
       data.reflection.versionIds.forEach(id => details.append(versionLine(id)));
+      for (const book of data.books || []) {
+        const manuscript = node('section', null, 'composition-book');
+        manuscript.append(node('h5', '책: ' + book.title), node('p', '기간 ' + (book.fromYear || '미지정') + ' ~ ' + (book.toYear || '미지정'), 'life-meta'));
+        if (book.question) manuscript.append(node('p', book.question, 'life-note'));
+        book.chapters.forEach((chapter, index) => {
+          manuscript.append(node('h6', (index + 1) + '. ' + chapter.title), node('p', chapter.note, 'life-note'));
+          chapter.versionIds.forEach(id => manuscript.append(versionLine(id)));
+        });
+        details.append(manuscript);
+      }
       const sourceName = id => view.bundle.sources.find(value => value.id === id)?.title || '받지 못한 원문 · ' + id;
       data.discovery?.excludedPairs.forEach(pair => details.append(node('p', sourceName(pair.seedSourceId) + ' → ' + sourceName(pair.candidateSourceId) + ' · 관련 기록에서 제외', 'life-meta')));
       section.append(details); return section;
@@ -84,7 +94,7 @@
       body.replaceChildren();
       if (!state) { body.append(button('다시 확인', 'compositionRetry', refresh)); return; }
       if (!state.enabled) {
-        body.append(node('p', '묶음·내 페이지·회고·관련 기록 제외를 같은 계정의 서버에 보관합니다. 글쓰기 초안과 공개 사본은 포함하지 않습니다.', 'life-help'));
+        body.append(node('p', '묶음·내 페이지·회고·책·관련 기록 제외를 같은 계정의 서버에 보관합니다. 글쓰기 초안과 공개 사본은 포함하지 않습니다.', 'life-help'));
         body.append(node('p', '원문 동기화를 먼저 연결하세요. 서버에 구성이 있으면 양쪽 내용을 확인한 뒤 선택합니다.', 'life-help'));
         body.append(button(state.status === 'paused' ? '구성 이어쓰기 재개' : '구성 이어쓰기 시작', 'compositionEnable', async () => { await manager.enable(workspaceId); view = null; }, 'life-primary'));
       } else {

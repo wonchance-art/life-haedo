@@ -478,3 +478,38 @@ Yjs 저장소의 현재 HEAD에 대한 GitHub 라이선스 요약은 `NOASSERTIO
 | 링크 제목 `박물관 예약 안내` → `박물관 예약`; 내 메모 `다음엔 북문` → 같은 질의 | 제목/메모 전용 | 각각 확보된 필드의 근거만 표시, 원문 본문 locator를 만들지 않음 |
 
 성능 실험은 동일 원문 세트를 100/1,000/10,000개 버전 규모로 고정하고 최초 준비시간·질의 p50/p95·메모리·반환 버전 수·40개 표시/더보기 시간을 분리한다. 같은 문자열 복제만으로 의미 정확도를 평가하지 않는다. 이전 버전·공백·CRLF·짧은 질의·잘못된 후보가 섞인 고정 사례에서 결과 정확성을 먼저 확인하고, 실제 기기 검증 없이 iPad/iPhone 성능 수치를 약속하지 않는다.
+
+## 책 프로젝트·목차·원고 — 기존 편집과 출처 모델 위에 구성 추가
+
+확인일 **2026-10-08 KST**. 이번 목표는 ‘20대’ 또는 나이와 무관한 특정 주제의 책을 만들고, 장의 순서·원고·근거를 보관한 뒤 책별 Markdown을 꺼내는 것이다. [회고와 책 설계](reflection-book.md)의 다음 구현 단위다. 자동 자기 분석·리치 편집·PDF 조판·공개 출판을 완료하는 범위가 아니다.
+
+**선택: mdBook과 novelWriter의 목차·자료 분리·선택 출력 설계를 참고하고, 새 의존성 없이 기존 textarea·Workbench 구성 저장·Reflection 원고 변환을 확장한다.** 외부 프로젝트 파일을 읽는 importer, 출판 엔진의 브라우저 내 실행, 소스 코드·아이콘·서식의 복사는 하지 않는다. 비교 도구를 설치·실행한 결과가 아니라 공식 배포·문서·설정 파일을 읽고 내린 결정이다.
+
+### 공식 배포·라이선스·유지관리
+
+두 저장소의 GitHub API에서 `releases/latest`, 저장소 상태, 기본 브랜치 최근 commit, 공개 보안 권고를 조회했다. 최신 안정 릴리스의 tree와 실제 `LICENSE`·README·패키지 설정·관련 가이드를 Contents API로 읽었다. 현재 브랜치의 라이선스 배지나 과거 기억만으로 태그의 배포 조건을 대신하지 않았다.
+
+| 후보 | 이번에 확인한 공식 배포·라이선스·유지관리 | 장/목차/원고에서 참고할 부분과 도입 판단 |
+| --- | --- | --- |
+| **mdBook v0.5.4 · MPL-2.0** | [최신 안정 릴리스](https://github.com/rust-lang/mdBook/releases/tag/v0.5.4) 게시 **2026-07-06 15:28 UTC**, 태그 tree `2ea30c00f00647d2b3f4c0f79b3e0e1eabc0b66d`. [LICENSE](https://github.com/rust-lang/mdBook/blob/v0.5.4/LICENSE)·[README](https://github.com/rust-lang/mdBook/blob/v0.5.4/README.md)·[Cargo.toml](https://github.com/rust-lang/mdBook/blob/v0.5.4/Cargo.toml)이 MPL-2.0으로 일치한다. 기본 브랜치 [최근 commit](https://github.com/rust-lang/mdBook/commit/d4658998d44112e873c90049767d7eb002169a2d)은 **2026-10-05**다. | [`SUMMARY.md` 가이드](https://github.com/rust-lang/mdBook/blob/v0.5.4/guide/src/format/summary.md)는 포함할 장·순서·계층·파일 위치를 별도 목차에 명시한다. 해도에는 **장 배열이 명시적 목차 순서**라는 원칙을 참고한다. 전체 도입은 Rust 도구와 Markdown 파일 기반 build를 추가하며, 계정별 편집·불변 원문 버전·근거 선택 저장은 별도로 필요하다. 태그는 Rust 1.88.0 이상을 명시한다. 이번 정적 앱 런타임에 도입하지 않음. |
+| **novelWriter v26.2.1 · GPL-3.0-or-later 및 동봉 자산 조건** | [최신 안정 릴리스](https://github.com/saga-soft/novelWriter/releases/tag/v26.2.1) 게시 **2026-09-26 17:37 UTC**, 태그 tree `99b0f48d923c80ed0301f690f5253795cfbfc466`. 기존 `vkbo/novelWriter` API가 공식 현재 저장소 **`saga-soft/novelWriter`**로 연결됨을 확인했다. [LICENSE.md](https://github.com/saga-soft/novelWriter/blob/v26.2.1/LICENSE.md)는 GPL v3 전문이며, [pyproject.toml](https://github.com/saga-soft/novelWriter/blob/v26.2.1/pyproject.toml)의 배포 라이선스 표현은 **`GPL-3.0-or-later AND Apache-2.0 AND CC-BY-4.0 AND ISC`**다. 동봉 자산을 GPL 하나로 뭉뚱그리지 않는다. 기본 브랜치 [최근 commit](https://github.com/saga-soft/novelWriter/commit/3ea0240bcca17e214ed772293f1ff932dbfe98a8)은 **2026-10-07**다. | [프로젝트 정리](https://github.com/saga-soft/novelWriter/blob/v26.2.1/docs/source/usage/organising_project.rst)는 원고 문서와 참고 노트를 구분하며, 일반 폴더 자체보다 **문서 순서**가 원고 구성에 쓰인다고 설명한다. [Manuscript Build](https://github.com/saga-soft/novelWriter/blob/v26.2.1/docs/source/user_interface/manuscript.rst)는 문서 선택과 문서 안에 포함할 내용 선택을 구분한다. 해도에는 **장 원고와 근거 원문 분리, 원문 본문의 명시적 출력 선택**을 참고한다. Python 3.11+·Qt6/PyQt6 데스크톱 앱이므로 iPad 브라우저 편집기의 직접 대체가 아니다. 독자 문법·프로젝트 파서·앱 전체를 도입하지 않음. |
+
+두 저장소는 조회 시 `archived=false`, `disabled=false`였고 최신 릴리스는 prerelease·draft가 아니었다. 최근 commit과 배포가 있다는 사실은 지속 지원이나 해도의 한글 입력·기기 적합성을 보증하지 않는다. novelWriter가 평문을 쓰더라도 README는 **Markdown에서 영감을 받은 문법과 별도 메타데이터**라고 설명한다. 일반 Markdown 내보내기가 novelWriter 프로젝트 형식과 곧바로 호환된다는 주장은 하지 않는다.
+
+### 보안 권고와 확인 한계
+
+[mdBook 공개 권고](https://api.github.com/repos/rust-lang/mdBook/security-advisories?per_page=100)는 **1건**이었다. [GHSA-gx5w-rrhp-f436 / CVE-2020-26297](https://github.com/rust-lang/mdBook/security/advisories/GHSA-gx5w-rrhp-f436)는 검색 질의의 XSS와 수정 버전 **0.4.5**를 명시한다. API의 영향 범위 문자열은 `>= 0.1.4`로 상한이 없으므로 그 문자열만 보고 이번 0.5.4가 같은 문제에 취약하다고 단정하지 않는다. HTML 검색 화면을 도입하면 생성물 갱신과 escape 경계를 관리해야 한다는 참고 근거다.
+
+[novelWriter 공개 권고](https://api.github.com/repos/saga-soft/novelWriter/security-advisories?per_page=100)는 조회에서 **0건**이었다. 이는 해당 GitHub 공개 목록만 확인한 결과이며 Python/Qt·Rust 전이 의존성 감사, 미공개 취약점 부재, 배포 바이너리 서명 검증을 뜻하지 않는다. 라이선스·문서 확인은 코드나 자산을 가져온 사실과도 구분한다.
+
+클라우드 런타임·네트워크 스킬, 현재 환경 상태와 정책 파일을 읽고 허용된 공식 GitHub API만 사용했다. 상속된 프록시와 TLS 검증을 유지했고 차단 목적지 재요청·중계·우회, 실제 계정 자료 수집·전송은 하지 않았다. 공개 응답과 읽은 태그 파일은 이번 작업의 임시 조사 경로 `/tmp/haedo-book-review-20261008/`에 보관했다. 이 임시 경로의 영구 보존을 약속하지 않으며 검토 근거는 위의 고정 버전 링크로 남긴다.
+
+### 해도에서 재사용할 경계
+
+1. **목차는 내용과 별도인 명시적 순서다.** optional `books`의 각 `chapters` 배열 순서를 사용한다. 날짜나 제목이 바뀌었다고 장을 자동 재배치하지 않는다. 프로젝트 기간은 설명용 메타데이터이며 근거 선택을 몰래 제한하는 필터가 아니다.
+2. **원고와 근거는 독립적으로 둔다.** 장의 `note`는 사용자가 지금 쓰는 원고이고, `versionIds`는 이미 보관한 정확 버전의 참조다. 같은 버전을 여러 장에서 사용해도 원문은 복제하지 않는다. 원문·현재 원고·타인 인용·후속 AI 제안을 한 본문으로 합쳐 저장하지 않는다.
+3. **기존 회고에서 복사해 시작한다.** 단일 `reflection`은 유지하며 사용자가 선택한 경우에만 새 책의 장에 선택 목록과 메모를 복사한다. 이후 책 편집이 기존 회고에 자동 전파되지 않는다.
+4. **출력 범위를 명시한다.** 책별 Markdown은 책 질문·장 원고·근거 출처가 기본이고, 원문 본문은 명시적으로 선택할 때만 포함한다. mdBook의 HTML renderer나 novelWriter의 Manuscript Build를 실행하지 않으며 이 파일을 PDF·인쇄본·두 도구의 프로젝트 백업으로 표시하지 않는다.
+5. **새 구조도 기존 보존 계약을 통과해야 한다.** 계정/공간 경계, CAS 충돌, 초안 입력 보존, 정확 버전, JSON 새 사본 복원의 ID 재매핑을 확장한다. SQL validator의 additive 갱신은 Local 설치·확인 대상이며 파일 작성만으로 서버가 책 구성을 받는다고 보고하지 않는다.
+
+장별 리치 서식, 여러 단계의 목차, 쪽나눔·각주·이미지·폰트 포함이 실제 원고 편집에서 필요해지면 이 도구들의 출력과 별도 조판 후보를 한글 샘플로 다시 비교한다. 지금은 기존 입력과 저장 경계를 재사용하는 비용이 새 데스크톱·Rust 기반을 연결하는 비용보다 작다. **책 모델·UI·브라우저·서버 검증은 구현 담당의 별도 결과를 기다리며, 이번 공식 조사로 통과를 대신하지 않는다.**

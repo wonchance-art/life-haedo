@@ -45,7 +45,7 @@ try {
     'assets/platform.css', 'assets/platform-auth.js', 'assets/platform-data.js', 'assets/platform-store.js',
     'assets/platform-ui.js', 'assets/platform-life-remote.js', 'assets/timeline-entry.js',
     'assets/haedo-navigation.js', 'assets/haedo-shell.css', 'assets/timeline-shell.css',
-    'assets/life/core.js', 'assets/life/writing.js', 'assets/life/writing-ui.js', 'assets/life/workbench.js', 'assets/life/reflection.js', 'assets/life/rediscovery.js', 'assets/life/share.js', 'assets/life/share-remote.js', 'assets/life/share-view.js', 'assets/life/share-view.css', 'assets/life/share-page.js', 'assets/life/storage.js', 'assets/life/remote.js', 'assets/life/sync.js',
+    'assets/life/core.js', 'assets/life/writing.js', 'assets/life/writing-ui.js', 'assets/life/workbench.js', 'assets/life/reflection.js', 'assets/life/books.js', 'assets/life/rediscovery.js', 'assets/life/share.js', 'assets/life/share-remote.js', 'assets/life/share-view.js', 'assets/life/share-view.css', 'assets/life/share-page.js', 'assets/life/storage.js', 'assets/life/remote.js', 'assets/life/sync.js',
     'assets/life/composition-remote.js', 'assets/life/composition-sync.js', 'assets/life/composition-ui.js', 'assets/life/writing-remote.js', 'assets/life/writing-sync.js', 'assets/life/writing-sync-ui.js', 'assets/life/reading-position.js',
     'assets/life/legacy.js', 'assets/life/icons.js', 'assets/life/workbench-ui.js', 'assets/life/home.js', 'assets/life/ui.js', 'assets/life/ui.css', 'assets/life/workbench.css', 'assets/life/home.css', 'assets/life/shell.js',
     'vendor/daisyui.css', 'vendor/daisyui-themes.css', 'vendor/idb/idb.js', 'vendor/idb/LICENSE',

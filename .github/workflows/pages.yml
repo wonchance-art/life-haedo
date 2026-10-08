@@ -145,6 +145,9 @@ jobs:
       - name: Verify private reflection reading and manuscript boundaries
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/reflection-reading-browser.cjs
+      - name: Verify book projects, chapter manuscripts and recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-projects-browser.cjs
       - name: Verify isolated expression-page design samples
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/expression-design-browser.cjs
@@ -175,6 +178,7 @@ jobs:
             .local/public-expression/
             .local/source-reimport/
             .local/reflection-reading/
+            .local/book-projects/
             .local/life-social-import/
             .local/share/
             .local/browser-ci/server.log
