@@ -250,3 +250,23 @@
 .wb-edition h5 { margin-block: 20px 10px; font-size: 16px; }
 .wb-history-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.85; }
 #wbChapterArchive { margin-block: 4px 16px; color: var(--ink-soft); }
+
+/* Compose an outline from reviewed records; keep manuscripts and originals distinct. */
+.wb-book-plan { margin-block: 12px 32px; }
+
+.wb-book-plan .life-actions [aria-pressed=true] { color: var(--color-primary); background: var(--soft); }
+.wb-plan-list { list-style: none; padding: 0; margin-block: 20px; }
+.wb-plan-chapter { padding-block: 16px; border-bottom: 1px solid var(--line); }
+.wb-plan-chapter > .wb-check { color: var(--ink-soft); }
+.wb-plan-chapter > .life-field { margin-block: 8px; }
+.wb-plan-chapter > .wb-details { margin-block: 4px; }
+.wb-plan-chapter > .wb-details[open] { max-height: 26rem; overflow: auto; padding: 4px; }
+.wb-plan-chapter .wb-source { border-top: 1px solid var(--line); padding-block: 12px; }
+.wb-chapter-navigation { justify-content: flex-end; margin-bottom: 18px; }
+.wb-chapter-navigation > .life-meta { font-variant-numeric: tabular-nums; margin-left: auto; }
+.wb-chapter-navigation > .life-button { color: var(--ink-soft); background: transparent; border-color: transparent; }
+.wb-book-editor > .life-field:has(#wbChapterTitle) input { font-size: 20px; font-weight: 550; line-height: 1.6; }
+.wb-review-row { padding-block: 16px; border-bottom: 1px solid var(--line); }
+.wb-review-row h4 { font-size: 16px; line-height: 1.7; }
+.wb-review-row .life-meta { margin-block: 6px; line-height: 1.9; }
+.wb-review-row > .life-button { color: var(--color-primary); background: var(--soft); }

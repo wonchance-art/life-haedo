@@ -18,6 +18,85 @@
     const fence = '`'.repeat(length);
     return fence + '\n' + value + '\n' + fence;
   }
+  function outline(bundle, state, versionIds, { by = 'time', from = '', to = '' } = {}) {
+    const workbench = dependency('Workbench', './workbench.js', 'validate');
+    const core = dependency('Core', './core.js', 'validateWorkspace');
+    const reflection = dependency('Reflection', './reflection.js', 'chronology');
+    core.validateWorkspace(bundle); workbench.validate(state);
+    if (bundle.workspaceId !== state.workspaceId) throw fault('workspace_mismatch', '자료와 책의 작업공간이 다릅니다.');
+    if (!['time', 'theme'].includes(by) || !Array.isArray(versionIds) || Reflect.ownKeys(versionIds).length !== versionIds.length + 1 ||
+        Reflect.ownKeys(versionIds).some(key => key !== 'length' && (typeof key !== 'string' || !/^(0|[1-9]\d*)$/.test(key) || Number(key) >= versionIds.length)) ||
+        versionIds.some(id => typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(id)))
+      throw fault('invalid_book_outline', '목차의 분류와 선택한 원문 버전을 확인해 주세요.');
+    // The range is a deliberate view selection, never an inferred experience period.
+    const years = reflection.chronology(bundle, versionIds, { from, to });
+    const rows = by === 'time' ? years : reflection.themes(state, years.flatMap(row => row.versionIds));
+    return rows.map(row => ({ key: row.key, title: row.label, versionIds: row.versionIds.slice() }));
+  }
+  function fromOutline(state, input, { id } = {}) {
+    const workbench = dependency('Workbench', './workbench.js', 'validate');
+    workbench.validate(state);
+    const fields = (value, required, optional = []) => value !== null && typeof value === 'object' && !Array.isArray(value) &&
+      Reflect.ownKeys(value).every(key => required.includes(key) || optional.includes(key)) && required.every(key => Object.hasOwn(value, key));
+    const list = value => Array.isArray(value) && Reflect.ownKeys(value).length === value.length + 1 && Reflect.ownKeys(value).every(key => key === 'length' ||
+      typeof key === 'string' && /^(0|[1-9]\d*)$/.test(key) && Number(key) < value.length) &&
+      value.every((_, index) => Object.hasOwn(value, index));
+    if (!fields(input, ['title', 'chapters'], ['question']) || !list(input.chapters) || !input.chapters.length ||
+        input.chapters.some(chapter => !fields(chapter, ['title', 'versionIds']) || !list(chapter.versionIds) || !chapter.versionIds.length))
+      throw fault('invalid_book_outline', '원문을 선택한 장과 책 제목을 확인해 주세요.');
+    if ((state.books || []).length >= workbench.LIMITS.books || input.chapters.length > workbench.LIMITS.bookChapters)
+      throw fault('limit_reached', '책 또는 장의 최대 개수를 확인해 주세요. 기존 구성은 유지했습니다.');
+    const createId = id === undefined ? dependency('Core', './core.js', 'id').id : id;
+    if (typeof createId !== 'function') throw fault('invalid_book_outline', '책 식별자를 만드는 방법을 확인해 주세요.');
+    const used = new Set([state.workspaceId]);
+    const reserve = value => {
+      if (Array.isArray(value)) { value.forEach(reserve); return; }
+      if (!value || typeof value !== 'object') return;
+      for (const [key, item] of Object.entries(value)) {
+        if (key === 'id' || key.endsWith('Id')) used.add(item);
+        else if (key.endsWith('Ids') && Array.isArray(item)) item.forEach(value => used.add(value));
+        reserve(item);
+      }
+    };
+    reserve(state); reserve(input);
+    const fresh = () => {
+      for (let attempt = 0; attempt < 1024; attempt++) {
+        const value = createId();
+        if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value))
+          throw fault('invalid_id', '책 식별자를 확인해 주세요. 기존 구성은 유지했습니다.');
+        if (!used.has(value)) { used.add(value); return value; }
+      }
+      throw fault('id_collision', '책 식별자를 만들지 못했습니다. 기존 구성은 유지했습니다.');
+    };
+    const bookId = fresh();
+    const book = { id: bookId, title: input.title, fromYear: '', toYear: '', question: input.question === undefined ? '' : input.question,
+      chapters: input.chapters.map(chapter => ({ id: fresh(), title: chapter.title, note: '', versionIds: chapter.versionIds.slice() })) };
+    const next = JSON.parse(JSON.stringify(state));
+    next.books = (next.books || []).concat(book);
+    workbench.validate(next);
+    return { state: next, bookId };
+  }
+  function review(projection) {
+    const reflection = dependency('Reflection', './reflection.js', 'year');
+    if (!projection || !Array.isArray(projection.chapters))
+      throw fault('invalid_book_review', '검토할 책 원고를 확인해 주세요.');
+    const count = evidence => {
+      const unique = new Map(evidence.map(item => [item.versionId, item]));
+      const counts = { references: unique.size, missing: 0, otherAuthors: 0, unknownAuthors: 0, linkOnly: 0, undated: 0 };
+      for (const item of unique.values()) {
+        if (item.missing) { counts.missing++; continue; }
+        if (item.originalAuthor.relation === 'other') counts.otherAuthors++;
+        if (item.originalAuthor.relation === 'unknown') counts.unknownAuthors++;
+        if (item.coverage.status === 'link_only') counts.linkOnly++;
+        if (reflection.year(item.originalCreatedAt) === null) counts.undated++;
+      }
+      return counts;
+    };
+    const evidence = chapter => chapter.evidence.concat(chapter.insights.flatMap(insight => insight.supportEvidence.concat(insight.counterEvidence)));
+    const chapters = projection.chapters.map(chapter => ({ id: chapter.id, title: chapter.title, blankNote: !chapter.note.trim(), ...count(evidence(chapter)) }));
+    return { counts: { chapters: chapters.length, blankNotes: chapters.filter(chapter => chapter.blankNote).length,
+      ...count(projection.chapters.flatMap(evidence)) }, chapters };
+  }
   function project(bundle, state, bookId, { includeSources = false } = {}) {
     const workbench = dependency('Workbench', './workbench.js', 'validate');
     const core = dependency('Core', './core.js', 'validateWorkspace');
@@ -96,5 +175,5 @@
     });
     return output.join('\n') + '\n';
   }
-  return Object.freeze({ markdown, project });
+  return Object.freeze({ markdown, project, outline, fromOutline, review });
 });

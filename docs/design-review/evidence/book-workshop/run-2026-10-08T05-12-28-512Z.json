@@ -1,0 +1,145 @@
+{
+  "createdAt": "2026-10-08T05:12:28.512Z",
+  "layoutOnly": true,
+  "browser": "151.0.7922.173",
+  "scope": "UI-created anonymous originals and manuscripts only; real SDK and IndexedDB with synthetic Auth. No production access. Chromium widths/touch/keyboard, not Apple hardware, native IME, print-dialog Save confirmation or a usability study.",
+  "checks": [
+    {
+      "name": "Final planner layout and preserved reflection return at 1440",
+      "pass": true
+    },
+    {
+      "name": "Final planner layout and preserved reflection return at 820",
+      "pass": true
+    },
+    {
+      "name": "Final planner layout and preserved reflection return at 390",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "scene": "outline-plan",
+      "width": 1440,
+      "screenshot": "outline-plan-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 700,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "outline-plan",
+      "width": 820,
+      "screenshot": "outline-plan-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 628,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "outline-plan",
+      "width": 390,
+      "screenshot": "outline-plan-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 350,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    }
+  ],
+  "observations": [
+    {
+      "width": 1440,
+      "scope": "Final planner-only layout after UI import, exact selection, reflection/group return and candidate choices. No full export/recovery repeat."
+    },
+    {
+      "width": 820,
+      "scope": "Final planner-only layout after UI import, exact selection, reflection/group return and candidate choices. No full export/recovery repeat."
+    },
+    {
+      "width": 390,
+      "scope": "Final planner-only layout after UI import, exact selection, reflection/group return and candidate choices. No full export/recovery repeat."
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "operatingRemoteWrites": 0,
+  "pass": true,
+  "finishedAt": "2026-10-08T05:12:44.301Z"
+}

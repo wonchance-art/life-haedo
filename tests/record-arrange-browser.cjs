@@ -34,7 +34,20 @@ async function instrument(context) {
 }
 async function records(page) { await page.goto(base + '/index.html?section=records'); await ready(page); await page.locator('#lifeSelectionToggle').waitFor(); }
 async function selectMode(page) { if (await page.locator('#lifeSelectionToggle').getAttribute('aria-pressed') !== 'true') await page.locator('#lifeSelectionToggle').click(); }
-async function selectVersion(page, id) { const b = page.locator(`.life-source-select[data-version-id="${id}"]`); await b.waitFor(); if (await b.getAttribute('aria-pressed') !== 'true') await b.click(); }
+async function selectVersion(page, id) {
+  const b = page.locator(`.life-source-select[data-version-id="${id}"]`);
+  // Selection covers all results, but cards are rendered forty at a time.
+  // Reveal later results through the same control a user would use.
+  while (!(await b.count())) {
+    const more = page.locator('#lifeSearchMore');
+    assert(await more.isVisible(), 'Selected exact version is absent from the current search results');
+    const before = await page.locator('.life-source-card').count();
+    await more.click();
+    await page.waitForFunction(count => document.querySelectorAll('.life-source-card').length > count, before);
+  }
+  await b.waitFor();
+  if (await b.getAttribute('aria-pressed') !== 'true') await b.click();
+}
 async function oldSelection(page, f, extra = true) {
   await records(page); await selectMode(page); await page.locator('#lifeSearch').fill('처음 받은 본문'); await selectVersion(page, f.refs[0].versionId);
   if (extra) { await page.locator('#lifeSearch').fill('오후 네 시의 빛'); await selectVersion(page, f.refs[1].versionId); }

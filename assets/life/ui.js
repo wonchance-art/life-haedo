@@ -162,8 +162,12 @@
         selectionReturn = null;
       },
       onSelectionCancel: returnFromArrange,
+      onWorkbenchNavigate: ({ workspaceId, mode, planOpen = false }) => {
+        if (disposed || state.bundle?.workspaceId !== workspaceId || !['reflection', 'books'].includes(mode)) return;
+        return navigate(mode, { planOpen });
+      },
       onArrange: ({ workspaceId, versionIds, focusId }) => {
-        if (disposed || state.bundle?.workspaceId !== workspaceId || !['discover', 'related'].includes(state.mode)) return;
+        if (disposed || state.bundle?.workspaceId !== workspaceId || !['discover', 'related', 'reflection'].includes(state.mode)) return;
         return arrangeRecords('activities', [...new Set(versionIds)], focusId);
       },
       openSource: (sourceId, versionId, options = {}) => navigate('source', {
@@ -1182,7 +1186,7 @@
       selectionReturn = { workspaceId, versionIds: [...versionIds], mode: state.mode, sourceId: state.sourceId,
         sourceVersionId: state.sourceVersionId, locator: state.sourceSelection,
         returnContext: state.returnContext, scrollY: global.scrollY,
-        focusId: returnFocusId || (mode === 'activities' ? 'lifeArrangeGroups' : 'lifeArrangePage') };
+        focusId: returnFocusId || ({ activities: 'lifeArrangeGroups', page: 'lifeArrangePage', reflection: 'lifeArrangeReflection' }[mode]) };
       await navigate(mode, { selection: { workspaceId, versionIds: [...versionIds] }, pagePreview: false });
     }
 
@@ -1202,7 +1206,8 @@
     function arrangeActions(getVersions) {
       const actions = node('div', null, 'life-actions life-arrange-actions');
       [['activities', '묶음에 담기', 'link', 'lifeArrangeGroups', 'life-arrange-groups'],
-        ['page', '내 페이지에 담기', 'user', 'lifeArrangePage', 'life-arrange-page']].forEach(([mode, label, glyph, id, css]) => {
+        ['page', '내 페이지에 담기', 'user', 'lifeArrangePage', 'life-arrange-page'],
+        ['reflection', '회고에 담기', 'book', 'lifeArrangeReflection', 'life-arrange-reflection']].forEach(([mode, label, glyph, id, css]) => {
         const control = button(null, guarded(() => arrangeRecords(mode, getVersions())), css);
         control.id = id;
         control.append(global.HaedoLife.Icons.create(glyph), node('span', label));
@@ -1661,7 +1666,7 @@
         const hiddenCount = [...selectedVersions].filter(id => !visible.has(id)).length;
         selectionSummaryText.textContent = '선택한 기록 ' + selectedVersions.size + '개';
         selectionStatus.textContent = selectedVersions.size ? (hiddenCount ? '현재 검색 결과 밖에서 선택한 기록 ' + hiddenCount + '개 포함' : '담을 곳에서 선택한 원문을 확인합니다.') : '정리할 기록을 선택해 주세요.';
-        controls.querySelectorAll('.life-arrange-groups,.life-arrange-page').forEach(control => { control.disabled = !selectedVersions.size; });
+        controls.querySelectorAll('.life-arrange-groups,.life-arrange-page,.life-arrange-reflection').forEach(control => { control.disabled = !selectedVersions.size; });
         selectionList.replaceChildren();
         selectedVersions.forEach(id => {
           const version = state.bundle.sourceVersions.find(item => item.id === id);

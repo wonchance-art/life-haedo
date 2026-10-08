@@ -160,6 +160,12 @@ jobs:
       - name: Verify Korean PDF and private native print boundaries
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-print-browser.cjs
+      - name: Verify imported records through a four-chapter book and PDF
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-workshop-browser.cjs
+      - name: Verify workshop save retries and stale reload protection
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-workshop-recovery-browser.cjs
       - name: Verify isolated expression-page design samples
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/expression-design-browser.cjs
@@ -195,6 +201,8 @@ jobs:
             .local/book-preview/
             .local/book-history/
             .local/book-print/
+            .local/book-workshop/
+            .local/book-workshop-recovery/
             .local/life-social-import/
             .local/share/
             .local/browser-ci/server.log

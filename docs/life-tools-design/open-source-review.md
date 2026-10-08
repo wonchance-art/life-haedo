@@ -583,3 +583,33 @@ Taguette의 구간 offset이나 Hypothesis의 selector를 이번 전체 버전 �
 | pdf-lib | [공식 v1.17.1](https://github.com/Hopding/pdf-lib/releases/tag/v1.17.1)(2021-11-06), MIT LICENSE.md. default branch 최근 커밋 2021-11-12와 repository pushed 2024-07-17을 구분, archived=false. [README](https://github.com/Hopding/pdf-lib/blob/v1.17.1/README.md)는 HTML/CSS embed 미지원·custom font에 별도 fontkit 요구 | 현재 제외. 한글 줄 배치·페이지 모델·폰트 자산 관리를 별도로 만들어야 하며 기존 브라우저 조판과 중복 |
 
 두 저장소의 공개 security-advisories API는 빈 배열이었다. 모든 취약점이 없다는 뜻은 아니다. 외부 CSS·폰트·이미지·변환 서버는 인쇄에 요청하지 않고 사용자가 제공한 HTML/Markdown도 실행하지 않는다. 최대 인쇄 문서 크기를 초과하면 잘라 출력하지 않고 오류와 재시도를 제공한다. 실제 인쇄/한글 PDF 결과는 [구현·검증](../design-review/book-recovery-print.md)에 기록한다.
+
+## 첫 책 만들기 — 시간·주제에서 목차와 원고로 연결
+
+확인일 **2026-10-08 KST**. 이번 목표는 **선택한 글을 시간·주제로 읽기 → 책의 질문 직접 적기 → 목차 후보 선택·수정 → 장 원고 쓰기 → 전체 읽기·검토·보관·출력**을 잇는 것이다. 새 편집기나 출판 엔진을 고르는 작업이 아니다. 기존 회고의 연도·묶음별 읽기, 책의 질문·장·정확 버전 참조, 원고 개정본과 인쇄를 연결한다.
+
+### 공식 상태 재확인과 참고한 설계
+
+이번 단위에서 공식 GitHub API의 최신 안정 릴리스·기본 브랜치 최근 commit·저장소 상태·공개 보안 권고를 다시 조회했다. 두 최신 버전이 앞선 [책 프로젝트 비교](#책-프로젝트목차원고--기존-편집과-출처-모델-위에-구성-추가)와 같음을 확인하고, 당시 해당 태그에서 읽은 실제 라이선스·패키지 설정·가이드를 다시 대조했다. 라이선스 본문을 이번에 새로 내려받거나 두 앱을 설치·실행한 것은 아니다.
+
+| 공식 후보 | 다시 확인한 상태와 고정 출처 | 이번 흐름에서 참고할 부분 |
+| --- | --- | --- |
+| **mdBook v0.5.4 · MPL-2.0** | [최신 안정판](https://github.com/rust-lang/mdBook/releases/tag/v0.5.4), 게시 2026-07-06. 기본 브랜치 [d465899](https://github.com/rust-lang/mdBook/commit/d4658998d44112e873c90049767d7eb002169a2d), 2026-10-05. 태그의 [LICENSE](https://github.com/rust-lang/mdBook/blob/v0.5.4/LICENSE)·[Cargo.toml](https://github.com/rust-lang/mdBook/blob/v0.5.4/Cargo.toml)의 MPL-2.0 확인 기록 유지 | [`SUMMARY.md`](https://github.com/rust-lang/mdBook/blob/v0.5.4/guide/src/format/summary.md)는 명시적인 장 순서와 아직 원고 파일이 없는 **draft chapter**를 구분한다. 해도에서도 목차 후보는 사용자가 고칠 수 있는 구성안이고, 빈 장은 앞으로 쓸 자리로 취급한다. 후보 수나 원고 유무를 글의 품질 점수로 만들지 않는다. |
+| **novelWriter v26.2.1 · GPL-3.0-or-later 및 동봉 자산 조건** | [최신 안정판](https://github.com/saga-soft/novelWriter/releases/tag/v26.2.1), 게시 2026-09-26. 기본 브랜치 [3ea0240](https://github.com/saga-soft/novelWriter/commit/3ea0240bcca17e214ed772293f1ff932dbfe98a8), 2026-10-07 UTC. [LICENSE.md](https://github.com/saga-soft/novelWriter/blob/v26.2.1/LICENSE.md)·[pyproject.toml](https://github.com/saga-soft/novelWriter/blob/v26.2.1/pyproject.toml)의 배포 표현 `GPL-3.0-or-later AND Apache-2.0 AND CC-BY-4.0 AND ISC`를 유지하며 API의 단일 라이선스 표기로 축약하지 않음 | [프로젝트 정리](https://github.com/saga-soft/novelWriter/blob/v26.2.1/docs/source/usage/organising_project.rst)의 원고와 참고 노트 분리·문서 순서, [Manuscript Build](https://github.com/saga-soft/novelWriter/blob/v26.2.1/docs/source/user_interface/manuscript.rst)의 구성 미리보기·포함 선택을 참고한다. 해도는 고른 원문을 장의 근거로 연결하고, 질문·현재 원고를 사용자가 직접 쓴다. |
+
+두 저장소는 이번 조회에서도 `archived=false`, `disabled=false`였고 릴리스는 draft·prerelease가 아니었다. [mdBook 공개 권고](https://api.github.com/repos/rust-lang/mdBook/security-advisories?per_page=100)는 기존 [검색 XSS 권고 1건](https://github.com/rust-lang/mdBook/security/advisories/GHSA-gx5w-rrhp-f436), [novelWriter 공개 권고](https://api.github.com/repos/saga-soft/novelWriter/security-advisories?per_page=100)는 0건으로 같았다. mdBook 권고의 수정 버전은 0.4.5이며 현재 버전의 취약 여부를 과거 영향 범위 문자열만으로 단정하지 않는다. 공개 권고 수는 전이 의존성 감사나 미공개 문제 부재를 뜻하지 않는다.
+
+### 기존 구현을 재사용하는 선택
+
+**두 프로젝트는 설계 참고이며 코드·자산·파일 importer·런타임 의존성을 가져오지 않는다.** mdBook 전체 도입은 Rust와 Markdown 파일 build를, novelWriter 전체 도입은 Python·Qt와 별도 프로젝트 형식을 추가한다. 어느 쪽도 해도의 계정별 저장, 정확한 과거 버전 선택, 실패한 입력 보존을 대신하지 않는다. 이번에 필요한 것은 새 서식 기능이 아니라 이미 읽고 고른 자료를 다시 찾지 않고 장에 배치하는 연결이다.
+
+| 흐름 | 재사용할 현재 구현 | 유지할 경계 |
+| --- | --- | --- |
+| 시간·주제에서 목차 후보 만들기 | [`Reflection.chronology/themes`](../../assets/life/reflection.js), 기존 원문 선택·출처 표시 | 원문 작성 연도와 경험 시기는 다르다. 주제는 사용자가 만든 묶음이며 AI 추론이 아니다. 작성 시기 미확인·묶음 밖 자료를 조용히 버리지 않는다. |
+| 질문·목차 확인 후 새 책 만들기 | [`Workbench`](../../assets/life/workbench.js)의 기존 `books` 필드·검증·저장, 기존 버튼·입력·`details` | 후보 제목과 포함 여부를 명시적으로 고른 뒤 새 책의 장 순서·정확 버전 연결로 저장한다. 기존 책·원문·회고를 덮어쓰지 않고, 회고 노트를 여러 장에 자동 복제하지 않는다. 질문은 사용자가 직접 작성한다. |
+| 장 원고 쓰고 전체 검토하기 | 기존 textarea·원문 왕복, [`Books.project`](../../assets/life/books.js)의 공통 출력 모델 | 빈 원고·없는 정확 참조·타인 글·본문 확보 범위처럼 확인 가능한 사실을 보여준다. 완성도 점수·자동 자기 분석·신념 판정을 만들지 않으며 빈 장도 계속 쓸 수 있다. |
+| 수정 전 원고 보관과 출력 | [`BookHistory`](../../assets/life/book-history.js), 기존 Markdown·[`BookPrint`](../../assets/life/book-print.js) | 개정본·JSON 복구와 읽기용 파일을 구분한다. 본문 포함은 명시 선택이며 인쇄 창을 열었다고 파일 저장 완료로 표시하지 않는다. |
+
+별도 단계 진행률 저장, 새 책 schema·SQL, Markdown parser, rich editor, 목차 UI 라이브러리는 추가하지 않는다. 기존 native CSS·입력과 계정/작업공간·저장 실패 경계를 재사용한다. **이번 연결 흐름의 구현·기능 검사·시각 검토는 담당 검증 전까지 미검증**이며 앞선 책·PDF 검사 결과를 새 흐름의 통과로 대체하지 않는다. 실제 Apple 기기의 입력·Files 체험과 사용자의 첫 책 완성도도 별도 판단이다.
+
+외부 자료는 허용된 공식 API로만 읽었고 프록시·TLS 검증을 유지했다. 패키지 설치·개인 자료 분석·외부 전송·공개 게시를 수행하지 않았다. 이후 실제 집필에서 여러 단계 목차·구절 인용 편집·각주·전문 조판이 필요한지 확인되면 해당 요구만 별도 비교한다.

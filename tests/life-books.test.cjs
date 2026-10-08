@@ -175,7 +175,7 @@ test('browser and CommonJS expose the same frozen book helper', async () => {
   vm.runInContext('var {bundle,state}=JSON.parse(fixtureJSON)', context);
   assert.equal(vm.runInContext("HaedoLife.Books.markdown(bundle,state,'book_one')", context), Books.markdown(bundle, state, 'book_one'));
   assert.equal(Object.isFrozen(context.HaedoLife.Books), true);
-  assert.deepEqual(Object.keys(Books), ['markdown', 'project']);
+  assert.deepEqual(Object.keys(Books), ['markdown', 'project', 'outline', 'fromOutline', 'review']);
 });
 
 test('composition remote owns full book data before authorization and server rejection cannot strip books', async () => {

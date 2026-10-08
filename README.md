@@ -7,6 +7,8 @@
 
 [핵심 경험 품질 기준](docs/design-review/core-experience.md): 읽던 원문에서 `함께 읽을 기록`을 바로 열고 같은 버전·위치로 돌아온다. 내 페이지는 본문·코멘트를 먼저 보여주며 설정은 펼쳐 편집한다. 짧은 지시도 목표·범위·보존·완료 기준으로 구체화하고, 기능 검사·사용 흐름·시각 검토를 나눠 확인한다. 후속 [구성 이어쓰기](docs/life-tools-design/device-continuity.md)는 명시 연결·양쪽 비교·복구 사본까지 구현했다. **신규 운영 SQL 설치와 배포는 대기 중**이며 [관리자 인계](docs/life-tools-design/composition-installation.md)를 따른다. 후속 [선택한 글쓰기 초안 이어쓰기](docs/design-review/writing-continuity.md)도 구현·검증했으며, 두 단계의 [Local 일괄 설치 순서](docs/life-tools-design/continuity-batch-installation.md)를 함께 준비했다.
 
+[첫 책 작업실](docs/design-review/book-workshop.md): 기록 선택 → 회고 → 연도/묶음별 목차 → 장별 집필·개정 → 전체 점검 → PDF로 이어집니다. 선행 기능과 함께 Local 병합·운영 적용을 기다리는 브랜치 구현이며, 배포 사이트의 현재 기능으로 단정하지 않습니다.
+
 전체 화면의 최신 디자인은 [Life 기준 사이트 재구성](docs/design-review/life-design-site.md)을 따른다.
 
 후속 [자료 보관·복원·동기화](docs/design-review/life-management.md)는 JSON 내용 미리보기·새 사본 복원·이전 공간 복귀, 상태별 동기화 행동과 실패 복구를 정리한다. 연표 값과 계산은 유지한다.
