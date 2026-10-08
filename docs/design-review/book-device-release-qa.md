@@ -14,6 +14,7 @@ Cloud 인계 `8afd77c033e404ba23ec8f3038e5a61fda8453a3`와 PR #55를 대조했�
 - Mac Chromium의 좌표 입력 검사에서 글꼴·자동 높이·네이티브 커서 배치가 끝나기 전에 다음 동작을 보내 화면 이동을 입력에 잘못 귀속했다. 글꼴 준비와 좌표 입력 전 배치가 안정됐는지 확인하고, 준비용 스크롤을 즉시 이동으로 명시했다. 입력 후 화면 이동 <2px, 커서 이동, 저장 후 위치, 읽기 복귀 <3px의 기존 기준은 유지했다. 조합 중 값 계약과 실제 앱 구현은 변경하지 않았다.
 - 기본 움직임 설정에서는 목차 이동 직후 집필을 누르면 스크롤 애니메이션 중 앞 장을 고르는 결함을 추가 재현했다. 원래 런타임을 격리된 브라우저에만 전달한 820px 검사는 정확한 장 선택에서 실패했고, 수정 후 390·820·1440px는 3/3 통과했다. 책의 명시 탐색·읽던 위치 복원을 즉시 이동으로 바꿨다. CI에도 기본 움직임 설정의 동일 회귀를 추가했다. [수정 전](evidence/book-device-release/mac-chromium-default-motion-before.json), [수정 후](evidence/book-device-release/mac-chromium-default-motion.json).
 - 자동 높이 계산을 바꾸는 실험은 문제를 해결하지 못해 폐기했다. 승인된 A 디자인, 원문·버전·발췌·저장·동기화·백업·공개 모델을 보존한다. 최종 런타임 수정에 맞춰 서비스워커 캐시는 **v89**로 갱신한다.
+- 별도 기기 체험 브라우저에서 `ResizeObserver loop completed with undelivered notifications.` 오류 이벤트 한 개를 수집했다. 관찰 콜백에서 즉시 높이를 바꾸던 코드를 다음 화면 갱신으로 옮기고 화면을 닫으면 예약을 취소한다. [MDN의 관찰 오류 설명](https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver#observation_errors)을 참고했다(2026-10-09 확인). 기본 움직임에서 폭 변경 후 원고·선택·높이와 네이티브 window 오류 이벤트까지 검사했다. Chromium·WebKit 각 3/3 통과: [Chromium](evidence/book-device-release/mac-chromium-resize.json), [WebKit](evidence/book-device-release/mac-webkit-resize.json). 이 수정은 최종 통합 PR에서 추가한다.
 
 ## 기기와 대체 근거
 
@@ -26,6 +27,10 @@ Cloud 인계 `8afd77c033e404ba23ec8f3038e5a61fda8453a3`와 PR #55를 대조했�
 | iPad Chrome | 같은 Wi-Fi에서 접근 가능한 익명 체험 환경과 파일·체험 절차를 전달했다 | 사용자 조작 결과 미수신. IME·소프트 키보드·회전·분할 화면·Files 미완료. |
 
 [Mac 실제 Chrome 화면](evidence/book-device-release/mac-chrome-manuscript.jpg), [Chromium 결과](evidence/book-device-release/mac-chromium-layout.json), [WebKit 결과](evidence/book-device-release/mac-webkit-layout.json). 화면은 익명 원고이며 개인 브라우저 상단을 제외했다. 에이전트 검사를 사용자 사용 평가로 표현하지 않는다.
+
+Mac 검증용 앱에서 실제 받은 Markdown은 14,774바이트이며 네 장과 수정한 한글을 포함했다. 같은 앱의 Codex 내장 브라우저에서는 Blob 책자 미리보기가 지연돼 HTML/네이티브 PDF 저장을 완료하지 못했다. Mac의 독립 WebKit에서는 동일한 익명 새 사본의 네 장 원고 4,353자를 그대로 읽고, 책자 목차로 2장 이동 및 HTML 17,410바이트 다운로드를 확인했다. 다만 자동 프레임 검사 중 sandbox가 스크립트 실행을 차단했다는 콘솔 기록 12개가 있어 원래 전체 결과 `pass=false`를 유지한다. 생성 HTML에 script 태그는 없으며, 도구 주입 시도라는 해석은 추정이다. 기능 성공과 콘솔 무오류를 합산하지 않고 sandbox/CSP도 완화하지 않았다. [결과와 제한](evidence/book-device-release/webkit-booklet-summary.json), [WebKit 책자 화면](evidence/book-device-release/webkit-booklet.png).
+
+추가 Mac Chromium 검사에서 읽기 6개·책 재진입 4개·저장 복구 3개·새 사본 진입이 통과했다. 개정본 검사는 처음 6/7 뒤 로딩 시간 초과 사례 한 개만 다시 확인해 통과했다. 책자/PDF 검사는 1440·820px에서 출력 5개를 만들고 한글·포함 범위를 확인했지만 390px 및 실패 복구 사례의 후속 실행은 로딩/클릭 시간 초과가 남아 있어 Mac 전체 통과로 표시하지 않는다. 해당 범위는 PR #55 최신 전체 Chromium CI에서도 별도로 실행돼 통과했다. 최종 통합 커밋에서 같은 CI를 다시 확인한다.
 
 Apple 모바일의 키보드 가림·다운로드 동작은 아직 판단할 수 없다. 계정·자료 보존과 입력·실패 복구는 독립 회귀로 확인하고, 모바일 IME는 합성 조합 이벤트를 대체 근거로만 사용한다. 이 한계가 통과로 바뀌지 않으며 최초 iPad 체험에서 입력 손실·저장/파일 불능이 발견되면 추가 공개 변경을 중단하고 수정 또는 되돌린다.
 

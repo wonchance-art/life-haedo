@@ -31,6 +31,7 @@ async function main(){
   const server=new FakeCloud(),context=await makeContext(browser,server,'app-caret-'+width,accounts.a,{viewport:{width,height:width===390?844:1000},hasTouch:width<=820,reducedMotion:process.env.BOOK_MANUSCRIPT_LAYOUT_MOTION||'reduce'});
   await context.route('**/*',route=>{const url=new URL(route.request().url());if([new URL(base).origin,cloud].includes(url.origin))return route.fallback();report.external.push(url.origin);return route.abort()});
   const page=await context.newPage();page.setDefaultTimeout(12000);observe(page,report,''+width);
+  await page.addInitScript(()=>{window.__manuscriptWindowErrors=[];addEventListener('error',event=>window.__manuscriptWindowErrors.push(event.message||'Resource load error'));});
   try{
    const pending=await restore(page),before=await pending.install(),book=before.workbench.books[0],chapter=book.chapters[1];
    await chapterFrom(page,page.locator(`#wbBookList [data-book-id="${book.id}"]`),chapter);
@@ -50,6 +51,13 @@ async function main(){
    report.observations.push({width,titleMetrics,inputBefore:brief(inputBefore),inputAfter:brief(inputAfter),afterSave:brief(afterSave),pointerRead,beforeRead,returned:brief(returned),readChapters});assert(Math.abs(afterSave.scrollY-inputAfter.scrollY)<2,'Saving must not shift the manuscript');assert(Math.abs(pointerRead.scrollY-inputAfter.scrollY)<2,'Visible coordinate click does not auto-scroll the page');assert.equal(returned.focus,'wbChapterNote');assert.equal(returned.start,inputAfter.start);assert.equal(returned.end,inputAfter.end);assert.equal(returned.value,finalNote);assert(Math.abs(returned.top-inputAfter.top)<3,'Reading return keeps the same manuscript viewport offset');
    await page.locator('#wbChapterEvidence > summary').focus();await page.keyboard.press('Enter');const opened=await snap(page);assert.equal(opened.start,inputAfter.start);assert.equal(opened.end,inputAfter.end);assert.equal(opened.value,finalNote);assert.equal(await page.locator('#wbChapterTitle').inputValue(),finalTitle);
    await page.keyboard.press('Enter');const closed=await snap(page);assert.equal(closed.start,inputAfter.start);assert.equal(closed.value,finalNote);
+   // Width changes must resize the manuscript without losing its selection or
+   // writing to the source/edition data (viewport simulation, not Apple rotation).
+   await page.locator('#wbChapterNote').focus();const beforeResize=await snap(page);
+   const viewport={width,height:width===390?844:1000};
+   await page.setViewportSize({...viewport,width:width-24});await settle(page);
+   await page.setViewportSize(viewport);await settle(page);
+   const afterResize=await snap(page);assert.equal(afterResize.start,beforeResize.start);assert.equal(afterResize.end,beforeResize.end);assert.equal(afterResize.value,finalNote);assert.equal(afterResize.scrollHeight,afterResize.height);assert.deepEqual(await page.evaluate(()=>window.__manuscriptWindowErrors),[],'Native error events, including ResizeObserver delivery errors, remain empty');
    const stored=await current(page);assert.deepEqual(stored.bundle,before.bundle);assert.deepEqual(stored.workbench.books[0].editions,book.editions);assert.deepEqual(stored.workbench.reflection,before.workbench.reflection);
    await page.evaluate(()=>{document.activeElement?.blur();scrollTo(0,0)});await page.mouse.move(width-2,2);const metrics=await page.evaluate(inspect);assert.equal(metrics.horizontalOverflow,false);for(const key of['smallTargets','smallInputs','unnamed','contrastFailures'])assert.deepEqual(metrics[key],[]);
    await page.screenshot({path:path.join(out,`long-title-${width}.png`)});assert.equal(server.writes().length,0);

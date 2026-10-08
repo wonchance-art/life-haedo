@@ -1895,8 +1895,18 @@
         chapterName.input.addEventListener('compositionend', fit); fit();
         let width = editor.getBoundingClientRect().width;
         if (global.ResizeObserver) {
-          const observer = new global.ResizeObserver(() => { const next = editor.getBoundingClientRect().width; if (next !== width) { width = next; fit(); } });
-          observer.observe(editor); viewCleanups.push(() => observer.disconnect());
+          let fitFrame = null;
+          const observer = new global.ResizeObserver(() => {
+            const next = editor.getBoundingClientRect().width;
+            if (next === width) return;
+            width = next;
+            // Resize after observation delivery, rather than changing the
+            // observed layout while the browser is still notifying observers.
+            if (fitFrame === null) fitFrame = global.requestAnimationFrame(() => { fitFrame = null; fit(); });
+          });
+          observer.observe(editor); viewCleanups.push(() => {
+            observer.disconnect(); if (fitFrame !== null) global.cancelAnimationFrame(fitFrame);
+          });
         }
         global.document.fonts?.ready.then(fit);
       } else bodyNode.append(empty(book.chapters.length ? '선택한 장을 찾을 수 없습니다. 목차에서 편집할 장을 골라 주세요.' : '첫 장을 추가해 글과 생각을 모아 보세요.'));
