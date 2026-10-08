@@ -4,7 +4,7 @@
 
   const life = global.HaedoLife = global.HaedoLife || {};
   const ORIGINS = { apple_notes: 'Apple 메모', obsidian: 'Obsidian', naver_blog: '네이버 블로그', instagram: 'Instagram', other: '기타' };
-  const MODES = { activities: '묶음', page: '내 페이지', discover: '다시 찾기', related: '관련 기록', reflection: '회고', 'workbench-backup': '자료·구성 백업', 'public-pages': '공개한 페이지' };
+  const MODES = { activities: '묶음', page: '내 페이지', discover: '다시 찾기', related: '관련 기록', reflection: '회고', books: '책 만들기', 'workbench-backup': '자료·구성 백업', 'public-pages': '공개한 페이지' };
   const copy = value => JSON.parse(JSON.stringify(value));
   function el(tag, text, className) {
     const element = document.createElement(tag);
@@ -270,13 +270,13 @@
       })();
       try { await session.loading; } finally { session.loading = null; }
     }
-    async function openVersion(id, focusKey) {
+    async function openVersion(id, focusKey, isCurrent = () => true) {
       const session = current, token = generation, info = sourceInfo(id);
       if (!info) throw fault('source_missing', '연결된 원문이 없습니다. 새 버전으로 대신 열지 않았습니다.');
       await flush();
-      if (showing(token, session)) await openSource(info.source.id, info.version.id, { focusKey });
+      if (showing(token, session) && isCurrent()) await openSource(info.source.id, info.version.id, { focusKey });
     }
-    function sourceRow(id, { body = false, remove, previewOnly = false, hideTitle = false, showLink = false, focusKey } = {}) {
+    function sourceRow(id, { body = false, remove, previewOnly = false, hideTitle = false, showLink = false, focusKey, isCurrent } = {}) {
       const row = el('div', null, 'wb-source'); row.dataset.versionId = id;
       const info = sourceInfo(id);
       const head = el('div', null, 'wb-row');
@@ -285,7 +285,7 @@
       text.append(el('p', info ? sourceMeta(info) : '이 버전은 현재 공간에 없습니다. 다른 버전으로 바꾸지 않았습니다.', 'life-meta'));
       head.append(text);
       if (info && !previewOnly) {
-        const open = (focusKey ? discoveryIcon : icon)('이 원문 버전 열기', 'book', () => openVersion(id, focusKey));
+        const open = (focusKey ? discoveryIcon : icon)('이 원문 버전 열기', 'book', () => openVersion(id, focusKey, isCurrent));
         if (focusKey) open.dataset.focusKey = focusKey;
         head.append(open);
       }
@@ -1398,6 +1398,168 @@
       refillPicker(); fill();
     }
 
+    function renderBooks() {
+      const session = current, token = generation, state = session.state;
+      const view = session.bookView ||= { bookId: null, chapterId: null, shown: 40, renderId: 0 };
+      const renderId = ++view.renderId;
+      const active = () => showing(token, session) && view.renderId === renderId;
+      async function transition(change, focusId) {
+        if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 이동해 주세요.');
+        await flush();
+        if (!active()) return;
+        change(); redraw();
+        const target = focusId && bodyNode.querySelector('#' + focusId);
+        target?.focus({ preventScroll: true });
+        target?.scrollIntoView({ block: 'nearest' });
+      }
+      const books = state.books || [];
+      const book = books.find(item => item.id === view.bookId);
+      const surfaceHeading = surface.querySelector('.wb-heading');
+      surfaceHeading.classList.toggle('wb-heading-quiet', !!book);
+      surfaceHeading.querySelector('h2').classList.toggle('life-sr-only', !!book);
+      if (!book) {
+        surfaceHeading.append(saveControl); saveControl.hidden = true;
+        view.bookId = null; view.chapterId = null;
+        if (!books.length) bodyNode.append(empty('돌아보고 싶은 시기나 주제로 첫 책을 시작하세요.'));
+        const list = el('div', null, 'wb-book-list'); list.id = 'wbBookList'; list.tabIndex = -1;
+        books.forEach(item => {
+          const row = el('article', null, 'wb-row wb-book-row'); row.dataset.bookId = item.id;
+          const text = el('div', null, 'wb-grow');
+          text.append(el('h3', item.title), el('p', item.chapters.length + '개 장', 'life-meta'));
+          row.append(text, discoveryIcon('책 열기', 'book', () => transition(() => {
+            view.bookId = item.id; view.chapterId = item.chapters[0]?.id || null; view.shown = 40;
+          }, 'wbBookHeading'))); list.append(row);
+        });
+        bodyNode.append(list);
+        const createBox = details('새 책', { open: !books.length }); createBox.id = 'wbBookCreateBox';
+        const title = field('책 제목', '', { id: 'wbBookCreateTitle' }); title.input.placeholder = '예: 20대, 일과 쉼';
+        async function addBook(fromReflection) {
+          const value = title.input.value.trim();
+          if (!value) { title.input.focus(); throw fault('title_required', '책 제목을 입력해 주세요.'); }
+          await transition(() => {
+            if (books.length >= limits.books) throw fault('limit_reached', '책은 ' + limits.books + '권까지 만들 수 있습니다.');
+            const chapters = fromReflection ? [{ id: core.id(), title: '회고에서 시작한 글', note: state.reflection.note, versionIds: state.reflection.versionIds.slice() }] : [];
+            const next = { id: core.id(), title: value, fromYear: '', toYear: '', question: '', chapters };
+            state.books = books.concat(next); view.bookId = next.id; view.chapterId = chapters[0]?.id || null; view.shown = 40;
+            mark(session);
+          }, 'wbBookHeading');
+        }
+        const add = action('빈 책 만들기', () => addBook(false), 'life-primary'); add.id = 'wbBookCreate';
+        const fromReflection = action('기존 회고로 책 만들기', () => addBook(true)); fromReflection.id = 'wbBookFromReflection';
+        fromReflection.disabled = !state.reflection.note && !state.reflection.versionIds.length;
+        const actions = el('div', null, 'life-actions'); actions.append(add, fromReflection);
+        createBox.append(title.wrapper, actions, notice('기존 회고로 시작하면 글과 선택한 원문 연결을 첫 장에 복사합니다. 기존 회고는 그대로 남습니다.'));
+        bodyNode.append(createBox); return;
+      }
+      const back = action('책 목록', () => transition(() => { view.bookId = null; view.chapterId = null; }, 'wbBookList')); back.id = 'wbBooksBack';
+      const heading = el('h3', book.title, 'wb-book-title'); heading.id = 'wbBookHeading'; heading.tabIndex = -1;
+      const lead = el('div', null, 'wb-book-lead'), leadActions = el('div', null, 'wb-row wb-book-actions');
+      saveControl.hidden = false; leadActions.append(back, saveControl); lead.append(leadActions, heading); bodyNode.append(lead);
+      const settings = details('책 설정'); settings.id = 'wbBookSettings';
+      const title = field('책 제목', book.title, { id: 'wbBookTitle', change: value => { book.title = value; heading.textContent = value || '제목을 입력해 주세요'; } });
+      const from = field('시작 연도', book.fromYear, { id: 'wbBookFromYear', max: 4, change: value => { book.fromYear = value; } });
+      const to = field('끝 연도', book.toYear, { id: 'wbBookToYear', max: 4, change: value => { book.toYear = value; } });
+      for (const input of [from.input, to.input]) { input.inputMode = 'numeric'; input.placeholder = '선택 사항'; }
+      const period = el('div', null, 'wb-add-row'); period.append(from.wrapper, to.wrapper);
+      const question = field('이 책에서 돌아볼 질문', book.question, { id: 'wbBookQuestion', multiline: true, max: limits.text, change: value => { book.question = value; } });
+      settings.append(title.wrapper, period, notice('기간은 책의 범위를 적어 두는 정보입니다. 연결한 글을 자동으로 넣거나 빼지 않습니다. 비워 두면 기간을 제한하지 않습니다.'), question.wrapper);
+      const outline = details('목차', { open: !book.chapters.length }); outline.id = 'wbBookOutline';
+      const chapterList = el('ol', null, 'wb-book-outline');
+      book.chapters.forEach((chapter, index) => {
+        const row = el('li', null, 'wb-row'); row.dataset.chapterId = chapter.id;
+        const open = action(chapter.title, () => transition(() => { view.chapterId = chapter.id; view.shown = 40; }, 'wbChapterTitle'), 'wb-chapter-open');
+        open.setAttribute('aria-label', '장 열기: ' + chapter.title);
+        if (view.chapterId === chapter.id) open.setAttribute('aria-current', 'true');
+        const move = direction => transition(() => {
+          const at = book.chapters.indexOf(chapter), next = at + direction;
+          if (at < 0 || next < 0 || next >= book.chapters.length) return;
+          [book.chapters[at], book.chapters[next]] = [book.chapters[next], book.chapters[at]];
+          view.outlineOpen = true; mark(session);
+        }, 'wbBookOutlineHeading');
+        const up = discoveryIcon('위로 이동', 'chevron', () => move(-1)); up.classList.add('wb-chapter-up'); up.disabled = index === 0;
+        const down = discoveryIcon('아래로 이동', 'chevron', () => move(1)); down.disabled = index === book.chapters.length - 1;
+        row.append(el('span', String(index + 1), 'wb-chapter-number'), open, up, down); chapterList.append(row);
+      });
+      outline.querySelector('summary').id = 'wbBookOutlineHeading';
+      if (view.outlineOpen) { outline.open = true; view.outlineOpen = false; }
+      const addRow = el('div', null, 'wb-add-row');
+      const chapterTitle = field('새 장 제목', '', { id: 'wbChapterCreateTitle' }); chapterTitle.input.placeholder = '예: 처음 일하던 해';
+      const addChapter = action('장 추가', async () => {
+        const value = chapterTitle.input.value.trim();
+        if (!value) { chapterTitle.input.focus(); throw fault('title_required', '장 제목을 입력해 주세요.'); }
+        await transition(() => {
+          if (book.chapters.length >= limits.bookChapters) throw fault('limit_reached', '한 책은 ' + limits.bookChapters + '개 장까지 구성할 수 있습니다.');
+          const chapter = { id: core.id(), title: value, note: '', versionIds: [] };
+          book.chapters.push(chapter); view.chapterId = chapter.id; view.shown = 40; mark(session);
+        }, 'wbChapterNote');
+      }); addChapter.id = 'wbChapterCreate'; addRow.append(chapterTitle.wrapper, addChapter);
+      outline.append(chapterList, addRow);
+      const tools = el('div', null, 'wb-book-controls'); tools.append(outline, settings); bodyNode.append(tools);
+      const chapter = book.chapters.find(item => item.id === view.chapterId) || book.chapters[0];
+      if (chapter) {
+        view.chapterId = chapter.id;
+        const editor = el('section', null, 'wb-book-editor'); editor.dataset.activeChapterId = chapter.id;
+        const chapterName = field('장 제목', chapter.title, { id: 'wbChapterTitle', change: value => {
+          chapter.title = value;
+          const open = [...chapterList.querySelectorAll('[data-chapter-id]')].find(row => row.dataset.chapterId === chapter.id)?.querySelector('.wb-chapter-open');
+          if (open) { open.textContent = value || '제목을 입력해 주세요'; open.setAttribute('aria-label', '장 열기: ' + value); }
+        } });
+        const note = field('이 장의 원고', chapter.note, { id: 'wbChapterNote', multiline: true, max: limits.text, change: value => { chapter.note = value; } });
+        note.input.rows = 10; note.input.placeholder = '그때의 글을 읽으며 지금의 생각을 적어 보세요.';
+        const length = el('p', '', 'life-meta wb-book-length'); length.id = 'wbChapterLength';
+        length.title = '일부 이모지는 두 글자로 계산됩니다.';
+        const updateLength = () => { length.textContent = chapter.note.length.toLocaleString('ko-KR') + ' / ' + limits.text.toLocaleString('ko-KR'); };
+        note.input.addEventListener('input', updateLength); updateLength();
+        note.input.setAttribute('aria-describedby', length.id);
+        editor.append(chapterName.wrapper, note.wrapper, length);
+        const sourceBox = details('이 장의 근거 · ' + chapter.versionIds.length + '개'); sourceBox.id = 'wbChapterEvidence';
+        const pickerHost = el('div');
+        const rows = el('div', null, 'wb-book-sources'); rows.id = 'wbChapterSources';
+        const more = action('연결한 원문 더 보기', () => { view.shown += 40; fillSources(); }); more.id = 'wbChapterMore';
+        const refillPicker = () => pickerHost.replaceChildren(picker('이 장에 원문 연결', () => chapter.versionIds, (id, selected) => {
+          chapter.versionIds = selected ? chapter.versionIds.concat(id) : chapter.versionIds.filter(value => value !== id);
+          mark(session); fillSources();
+        }, { max: limits.chapterVersions }));
+        const fillSources = () => {
+          sourceBox.querySelector('summary').textContent = '이 장의 근거 · ' + chapter.versionIds.length + '개';
+          rows.replaceChildren();
+          for (const id of chapter.versionIds.slice(0, view.shown)) {
+            const row = sourceRow(id, { focusKey: 'books:' + book.id + ':' + chapter.id + ':' + id, isCurrent: active, remove: () => {
+              chapter.versionIds = chapter.versionIds.filter(value => value !== id); mark(session); refillPicker(); fillSources(); sourceBox.querySelector('summary').focus();
+            } });
+            const info = sourceInfo(id); row.append(el('p', '원문 작성일 · ' + (info?.version.originalCreatedAt || '미확인'), 'life-meta'));
+            if (info?.version.contentText != null) {
+              const read = details('본문 읽기');
+              read.addEventListener('toggle', () => {
+                if (read.open && !read.querySelector('pre')) { const text = el('pre', info.version.contentText, 'wb-source-body'); text.tabIndex = 0; read.append(text); }
+              }); row.append(read);
+            }
+            rows.append(row);
+          }
+          if (!chapter.versionIds.length) rows.append(notice('원문을 연결하지 않고 기억부터 적어도 됩니다. 원문 연결을 해제해도 원고는 지우지 않습니다.'));
+          more.hidden = chapter.versionIds.length <= view.shown;
+        };
+        sourceBox.append(pickerHost, rows, more); refillPicker(); fillSources();
+        // Keep the exact source return target visible after returning from its reader.
+        sourceBox.open = view.evidenceOpen === chapter.id;
+        sourceBox.addEventListener('toggle', () => { if (active()) view.evidenceOpen = sourceBox.open ? chapter.id : null; });
+        editor.append(sourceBox); bodyNode.append(editor);
+      } else bodyNode.append(empty('첫 장을 추가해 글과 생각을 모아 보세요.'));
+      const exportBox = details('책 원고 파일로 보관');
+      const include = toggle('연결한 원문 본문도 포함', false, () => {}); include.querySelector('input').id = 'wbBookIncludeSources';
+      const exportButton = action('책 원고 Markdown 받기', async () => {
+        if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 원고를 받아 주세요.');
+        await flush(); if (!active()) return;
+        const text = life.Books.markdown(getBundle(), state, book.id, { includeSources: include.querySelector('input').checked });
+        const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown;charset=utf-8' })); urls.add(url);
+        const link = el('a'); link.href = url; link.download = 'haedo-book.md'; link.hidden = true;
+        document.body.append(link); link.click(); link.remove();
+        global.setTimeout(() => { URL.revokeObjectURL(url); urls.delete(url); }, 30000);
+      }); exportButton.id = 'wbBookExport';
+      exportBox.append(include, notice('이 책의 모든 장을 목차 순서대로 받습니다. 기본은 직접 쓴 원고와 출처 목록이며 공개 게시하지 않습니다. 복원에는 자료·구성 JSON 백업을 사용하세요.'), exportButton);
+      bodyNode.append(exportBox);
+    }
+
     function download(data, name) {
       const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' }));
       urls.add(url);
@@ -1415,7 +1577,7 @@
       const saved = await storage.readWorkbench(session.workspaceId);
       if (!showing(token, session)) return;
       const compare = el('section', null, 'wb-conflict');
-      compare.append(el('h3', '구성 비교'), notice('내 초안을 적용하면 아래 저장본의 묶음·페이지·회고 구성이 바뀝니다. 보관한 원문은 바뀌지 않습니다.'));
+      compare.append(el('h3', '구성 비교'), notice('내 초안을 적용하면 아래 저장본의 묶음·페이지·회고·책 구성이 바뀝니다. 보관한 원문은 바뀌지 않습니다.'));
       function summary(state) {
         const text = ['묶음', ...state.groups.map(group => group.title + '\n' + group.versionIds.map(id => sourceName(id)).join('\n')),
           '\n페이지: ' + state.page.title, '소개 표시: ' + (state.page.showIntro ? '켬' : '끔'), state.page.intro,
@@ -1424,6 +1586,10 @@
           '항목 ' + (entry.enabled ? '표시' : '숨김') + ' · 고정 ' + (entry.pinned ? '켬' : '끔') + ' · 본문 ' + (entry.showBody ? '표시' : '숨김') + ' · 코멘트 ' + (entry.showNote ? '표시' : '숨김'),
           ...entry.parts.map(part => sourceName(part.versionId) + ' · ' + (part.enabled ? '표시' : '숨김')), entry.note));
         text.push('\n회고 원문', ...state.reflection.versionIds.map(id => sourceName(id)), state.reflection.note);
+        for (const book of state.books || []) {
+          text.push('\n책: ' + book.title, '기간: ' + book.fromYear + ' ~ ' + book.toYear, book.question);
+          book.chapters.forEach((chapter, index) => text.push('\n' + (index + 1) + '. ' + chapter.title, chapter.note, ...chapter.versionIds.map(id => sourceName(id))));
+        }
         return text.join('\n');
       }
       const mine = details('내 초안', { open: true }), theirs = details('다른 탭의 저장본', { open: true });
@@ -1437,7 +1603,7 @@
     }
     function renderBackup() {
       const session = current;
-      bodyNode.append(notice('보관한 원문·발췌와 묶음·페이지·회고 구성을 함께 담습니다. 미적용 가져오기 초안·사진·연표는 포함하지 않습니다.'));
+      bodyNode.append(notice('보관한 원문·발췌와 묶음·페이지·회고·책 구성을 함께 담습니다. 미적용 가져오기 초안·사진·연표는 포함하지 않습니다.'));
       const downloadButton = action('통합 JSON 받기', async () => {
         const token = generation;
         await flush();
@@ -1517,6 +1683,7 @@
       if (mode === 'page') renderPage();
       if (mode === 'discover' || mode === 'related') renderDiscover();
       if (mode === 'reflection') renderReflection();
+      if (mode === 'books') renderBooks();
       if (mode === 'workbench-backup') renderBackup();
       updateStatus(current);
     }

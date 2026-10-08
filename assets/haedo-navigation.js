@@ -69,7 +69,7 @@
   let initialSection = root.document.body.dataset.haedoSection;
   if (page === 'home' || page === 'life') {
     if (sections.some(section => section.id === fromQuery)) initialSection = fromQuery;
-    else if (['discover', 'reflection'].includes(query.get('view'))) initialSection = 'tools';
+    else if (['discover', 'reflection', 'books'].includes(query.get('view'))) initialSection = 'tools';
     else if (['transfer', 'sync', 'workbench-backup', 'public-pages'].includes(query.get('view'))) initialSection = 'manage';
     else if (['topics', 'sources', 'time', 'import', 'write', 'activities', 'page'].includes(query.get('view'))) initialSection = 'records';
   }
