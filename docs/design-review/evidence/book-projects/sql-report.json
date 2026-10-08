@@ -1,0 +1,21 @@
+{
+  "scope": "Network-isolated temporary PostgreSQL 17.11; synthetic claims; no production access or installation",
+  "checks": {
+    "life-compositions-installation.sql": 11,
+    "life-composition-books-installation.sql": 12,
+    "life-compositions.sql": 163,
+    "life-composition-books.sql": 109
+  },
+  "missingPrerequisiteBlocked": true,
+  "firstInstallAndReapplyPreserveExistingRecordsAndMetadata": true,
+  "unchangedMetadataFingerprint": "966e9c288ada19943eb6af7d2d062f78",
+  "migrationSha256": "d05a97a907b98bf9118a0d36cafad091d7b5ee25eb73f52e50ea33fbfbf5ef9d",
+  "installedValidatorKeepsSameOidOwnerAndPrivileges": true,
+  "testTransactionsRolledBack": true,
+  "serverVersion": "17.11",
+  "jsSqlContractParityCases": 193,
+  "baseValidatorOtherwiseByteIdentical": true,
+  "temporaryContainerRemoved": true,
+  "productionSqlExecuted": false,
+  "productionHttpExecuted": false
+}

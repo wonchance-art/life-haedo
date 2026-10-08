@@ -1,0 +1,117 @@
+{
+  "createdAt": "2026-10-08T01:18:26.704Z",
+  "browser": "151.0.7922.173",
+  "scope": "Actual private book UI, SDK and IndexedDB with intercepted anonymous Auth HTTP. Chromium viewports/keyboard/touch, not Apple hardware, native IME or production SQL.",
+  "checks": [
+    {
+      "name": "two books, exact chapter sources, reordered whole-book Markdown and reload at 1440",
+      "pass": false,
+      "error": "locator.waitFor: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#wbBookList') to be visible\u001b[22m\n\u001b[2m    28 × locator resolved to hidden <div tabindex=\"-1\" id=\"wbBookList\" class=\"wb-book-list\"></div>\u001b[22m\n\n    at bookList (/workspace/life-haedo/tests/book-projects-browser.cjs:57:163)\n    at async createBook (/workspace/life-haedo/tests/book-projects-browser.cjs:59:3)\n    at async /workspace/life-haedo/tests/book-projects-browser.cjs:102:23\n    at async check (/workspace/life-haedo/tests/book-projects-browser.cjs:95:11)\n    at async main (/workspace/life-haedo/tests/book-projects-browser.cjs:100:43)"
+    },
+    {
+      "name": "two books, exact chapter sources, reordered whole-book Markdown and reload at 820",
+      "pass": false,
+      "error": "locator.waitFor: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#wbBookList') to be visible\u001b[22m\n\u001b[2m    28 × locator resolved to hidden <div tabindex=\"-1\" id=\"wbBookList\" class=\"wb-book-list\"></div>\u001b[22m\n\n    at bookList (/workspace/life-haedo/tests/book-projects-browser.cjs:57:163)\n    at async createBook (/workspace/life-haedo/tests/book-projects-browser.cjs:59:3)\n    at async /workspace/life-haedo/tests/book-projects-browser.cjs:102:23\n    at async check (/workspace/life-haedo/tests/book-projects-browser.cjs:95:11)\n    at async main (/workspace/life-haedo/tests/book-projects-browser.cjs:100:43)"
+    },
+    {
+      "name": "two books, exact chapter sources, reordered whole-book Markdown and reload at 390",
+      "pass": false,
+      "error": "locator.waitFor: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#wbBookList') to be visible\u001b[22m\n\u001b[2m    28 × locator resolved to hidden <div tabindex=\"-1\" id=\"wbBookList\" class=\"wb-book-list\"></div>\u001b[22m\n\n    at bookList (/workspace/life-haedo/tests/book-projects-browser.cjs:57:163)\n    at async createBook (/workspace/life-haedo/tests/book-projects-browser.cjs:59:3)\n    at async /workspace/life-haedo/tests/book-projects-browser.cjs:102:23\n    at async check (/workspace/life-haedo/tests/book-projects-browser.cjs:95:11)\n    at async main (/workspace/life-haedo/tests/book-projects-browser.cjs:100:43)"
+    },
+    {
+      "name": "failed chapter save preserves text and blocks project, chapter and export transitions",
+      "pass": true
+    },
+    {
+      "name": "concurrent IndexedDB chapter edits retain both manuscripts for explicit comparison",
+      "pass": true
+    },
+    {
+      "name": "integrated JSON restore remaps projects, exact versions and shared missing references",
+      "pass": true
+    },
+    {
+      "name": "books and legacy reflection remain isolated across workspaces and account changes",
+      "pass": false,
+      "error": "locator.waitFor: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#wbBookList') to be visible\u001b[22m\n\u001b[2m    28 × locator resolved to hidden <div tabindex=\"-1\" id=\"wbBookList\" class=\"wb-book-list\"></div>\u001b[22m\n\n    at bookList (/workspace/life-haedo/tests/book-projects-browser.cjs:57:163)\n    at async createBook (/workspace/life-haedo/tests/book-projects-browser.cjs:59:3)\n    at async /workspace/life-haedo/tests/book-projects-browser.cjs:159:102\n    at async check (/workspace/life-haedo/tests/book-projects-browser.cjs:95:11)\n    at async main (/workspace/life-haedo/tests/book-projects-browser.cjs:157:5)"
+    }
+  ],
+  "visual": [
+    {
+      "scene": "empty",
+      "width": 390,
+      "screenshot": "empty-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 300,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "save-error",
+      "width": 390,
+      "screenshot": "save-error-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 300,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    }
+  ],
+  "observations": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "operatingRemoteWrites": 0,
+  "pass": false,
+  "finishedAt": "2026-10-08T01:19:21.911Z"
+}

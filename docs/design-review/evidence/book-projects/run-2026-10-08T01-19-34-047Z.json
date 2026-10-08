@@ -1,0 +1,302 @@
+{
+  "createdAt": "2026-10-08T01:19:34.047Z",
+  "browser": "151.0.7922.173",
+  "scope": "Actual private book UI, SDK and IndexedDB with intercepted anonymous Auth HTTP. Chromium viewports/keyboard/touch, not Apple hardware, native IME or production SQL.",
+  "checks": [
+    {
+      "name": "two books, exact chapter sources, reordered whole-book Markdown and reload at 1440",
+      "pass": true
+    },
+    {
+      "name": "two books, exact chapter sources, reordered whole-book Markdown and reload at 820",
+      "pass": true
+    },
+    {
+      "name": "two books, exact chapter sources, reordered whole-book Markdown and reload at 390",
+      "pass": true
+    },
+    {
+      "name": "books and legacy reflection remain isolated across workspaces and account changes",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "scene": "chapter",
+      "width": 1440,
+      "screenshot": "chapter-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 648,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "outline",
+      "width": 1440,
+      "screenshot": "outline-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 648,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "chapter",
+      "width": 820,
+      "screenshot": "chapter-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 576,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "outline",
+      "width": 820,
+      "screenshot": "outline-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 576,
+        "height": 34,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "empty",
+      "width": 390,
+      "screenshot": "empty-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 300,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "chapter",
+      "width": 390,
+      "screenshot": "chapter-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 300,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "outline",
+      "width": 390,
+      "screenshot": "outline-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 300,
+        "height": 30,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    }
+  ],
+  "observations": [
+    {
+      "width": 1440,
+      "books": 2,
+      "chapters": 3,
+      "exactOldVersionAndFocus": true,
+      "metadataDoesNotFilterSources": true,
+      "defaultBodyExportOff": true,
+      "entireBookExportPreservesChapterOrder": true,
+      "legacyReflectionUnchanged": true
+    },
+    {
+      "width": 820,
+      "books": 2,
+      "chapters": 3,
+      "exactOldVersionAndFocus": true,
+      "metadataDoesNotFilterSources": true,
+      "defaultBodyExportOff": true,
+      "entireBookExportPreservesChapterOrder": true,
+      "legacyReflectionUnchanged": true
+    },
+    {
+      "width": 390,
+      "books": 2,
+      "chapters": 3,
+      "exactOldVersionAndFocus": true,
+      "metadataDoesNotFilterSources": true,
+      "defaultBodyExportOff": true,
+      "entireBookExportPreservesChapterOrder": true,
+      "legacyReflectionUnchanged": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "operatingRemoteWrites": 0,
+  "pass": true,
+  "finishedAt": "2026-10-08T01:19:45.879Z"
+}
