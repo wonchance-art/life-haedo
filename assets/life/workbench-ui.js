@@ -1330,14 +1330,16 @@
       const session = current, token = generation, reflection = session.state.reflection;
       const view = session.reflectionView ||= { mode: 'time', from: '', to: '', shown: 40 };
       const reader = life.Reflection;
+      surface.dataset.reflectionScene = session.bookPlanOpen ? 'plan' : 'read';
       surface.querySelector('.wb-heading h2').textContent = session.bookPlanOpen ? '목차 구성' : '회고';
+      surface.querySelector('.wb-heading h2').classList.add('life-sr-only');
+      surface.querySelector('.wb-heading').classList.add('wb-heading-quiet');
       saveControl.hidden = !!session.bookPlanOpen;
       if (session.bookPlanOpen) { bodyNode.append(bookPlanner(session, view)); return; }
-      bodyNode.append(notice('당시의 글을 읽고 지금의 생각을 원고로 남깁니다.'));
       const guidance = details('20대의 글에서 시작하기');
       guidance.append(notice('시간순으로 장면을 살핀 뒤 관계·일·배움처럼 나에게 중요한 주제로 돌아보세요. 나이와 기간은 글만으로 추정하지 않습니다. 기록이 적은 시기도 빈 삶을 뜻하지 않습니다.'));
       const pickerHost = el('div');
-      const controls = el('div', null, 'life-actions');
+      const controls = el('div', null, 'life-actions wb-reflection-bar');
       const time = action('연도별', () => { view.mode = 'time'; view.shown = 40; fill(); }); time.id = 'wbReflectionTime';
       const theme = action('묶음별', () => { view.mode = 'theme'; view.shown = 40; fill(); }); theme.id = 'wbReflectionThemes';
       controls.append(time, theme);
@@ -1356,6 +1358,7 @@
       period.append(periodFields, apply, clear, notice('원문 작성 연도 기준이며 같은 연도 안은 선택순입니다. 경험 시기는 별도로 회고에 적어 주세요. 시기 미확인 자료도 남깁니다. 기간은 이번 화면의 보기 조건이며 선택·회고·백업에는 저장하지 않습니다.'));
       const overview = el('div', null, 'wb-reflection-overview'); overview.id = 'wbReflectionSummary';
       const selectedList = el('div', null, 'wb-reflection-reading'); selectedList.id = 'wbReflectionReading';
+      view.openSources ||= [];
       const more = action('기록 더 보기', () => { view.shown += 40; fill(); }); more.id = 'wbReflectionMore';
       const included = () => new Set(reader.chronology(getBundle(), getBundle().sourceVersions.map(item => item.id), view).flatMap(group => group.versionIds));
       const refillPicker = () => {
@@ -1394,11 +1397,23 @@
             const info = sourceInfo(id);
             row.append(el('p', '원문 작성일 · ' + (info?.version.originalCreatedAt || '미확인'), 'life-meta'));
             if (info?.version.contentText != null) {
+              const raw = info.version.contentText;
+              const opening = raw.split(/\n\s*\n/).find(part => part.trim()) || raw;
+              const chars = Array.from(opening);
+              row.append(el('p', chars.slice(0, 260).join('') + (chars.length > 260 ? '…' : ''), 'wb-reflection-opening'));
               const text = details('본문 읽기');
-              text.addEventListener('toggle', () => {
+              const key = group.key + ':' + id;
+              const populate = () => {
                 if (text.open && !text.querySelector('pre')) {
-                  const content = el('pre', info.version.contentText, 'wb-source-body'); content.tabIndex = 0; text.append(content);
+                  const content = el('pre', raw, 'wb-source-body'); content.tabIndex = 0; text.append(content);
                 }
+              };
+              text.open = view.openSources.includes(key); populate();
+              text.addEventListener('toggle', () => {
+                if (!text.isConnected || !showing(token, session)) return;
+                view.openSources = view.openSources.filter(value => value !== key);
+                if (text.open) view.openSources.push(key);
+                populate();
               });
               row.append(text);
             }
@@ -1409,25 +1424,46 @@
         if (!visible.length) selectedList.append(empty(reflection.versionIds.length ? '이 작성 기간에 해당하는 선택 자료가 없습니다. 기간을 해제하면 다시 볼 수 있습니다.' : '돌아볼 글을 골라 주세요. 기록이 없는 장면은 아래 회고에 직접 적어도 됩니다.'));
         more.hidden = shown >= total;
       };
-      const readingControls = el('div', null, 'wb-reflection-controls'); readingControls.append(controls, period);
+      const readingControls = el('div', null, 'wb-reflection-controls'); readingControls.append(pickerHost, period, overview);
       const plan = action('선택한 글로 목차 구성', async () => {
         if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 목차를 구성해 주세요.');
         await flush(); if (!showing(token, session)) return;
+        view.planPosition = { top: global.scrollY, start: note.input.selectionStart, end: note.input.selectionEnd, direction: note.input.selectionDirection };
         session.bookPlanOpen = true; redraw(); const target = bodyNode.querySelector('#wbPlanTitle'); target?.focus({ preventScroll: true }); target?.scrollIntoView({ block: 'center' });
       }, 'life-primary'); plan.id = 'wbReflectionPlan';
-      const group = action('선택한 글 묶기', async () => {
+      plan.setAttribute('aria-label', plan.textContent); plan.textContent = '목차 구성';
+      const group = discoveryIcon('선택한 글 묶기', 'link', async () => {
         const ids = reader.chronology(getBundle(), reflection.versionIds, view).flatMap(item => item.versionIds);
         if (!ids.length) throw fault('empty_selection', '묶을 글을 먼저 선택해 주세요.');
         if (ids.length > limits.groupVersions) throw fault('limit_reached', '한 번에 100개까지 묶을 수 있습니다. 작성 기간이나 회고 선택을 좁혀 주세요.');
         await flush(); if (!showing(token, session)) return;
         return onArrange({ workspaceId: session.workspaceId, versionIds: ids, focusId: 'wbReflectionGroup' });
       }); group.id = 'wbReflectionGroup';
-      controls.append(plan, group);
-      bodyNode.append(pickerHost, readingControls);
-      bodyNode.append(overview, selectedList, more);
+      readingControls.append(group);
       const note = field('내 회고', reflection.note, { id: 'wbReflectionNote', multiline: true, max: limits.text,
         change: value => { reflection.note = value; } });
       note.input.rows = 12;
+      const noteSection = el('section', null, 'wb-reflection-note'); noteSection.id = 'wbReflectionWriting';
+      noteSection.setAttribute('aria-label', '지금의 생각');
+      const rememberReading = () => {
+        const rows = [...selectedList.querySelectorAll('.wb-source')];
+        const top = controls.getBoundingClientRect().bottom;
+        const row = rows.find(node => node.getBoundingClientRect().bottom > top) || rows.at(-1);
+        view.noteReturn = row ? { versionId: row.dataset.versionId, group: row.closest('[data-reflection-group]').dataset.reflectionGroup, top: row.getBoundingClientRect().top } : null;
+      };
+      const write = discoveryIcon('내 회고 쓰기', 'edit', () => {
+        rememberReading(); note.input.focus({ preventScroll: true }); noteSection.scrollIntoView({ block: 'start' });
+      }); write.id = 'wbReflectionWrite';
+      const backToReading = discoveryIcon('읽던 자료로 돌아가기', 'back', () => {
+        const saved = view.noteReturn;
+        const row = [...selectedList.querySelectorAll('.wb-source')].find(node => node.dataset.versionId === saved?.versionId && node.closest('[data-reflection-group]').dataset.reflectionGroup === saved.group);
+        const target = row || selectedList;
+        target.tabIndex = -1; target.focus({ preventScroll: true });
+        if (row) global.scrollBy({ top: row.getBoundingClientRect().top - saved.top, behavior: 'instant' });
+        else target.scrollIntoView({ block: 'start' });
+      }); backToReading.id = 'wbReflectionReadReturn';
+      controls.append(write, plan, saveControl);
+      bodyNode.append(controls, readingControls, selectedList, more);
       const prompts = details('회고 질문을 원고에 추가');
       const questions = [
         ['시간순 돌아보기', '## 시간순 돌아보기\n\n어떤 장면과 선택이 기억나는가?\n그때의 글과 지금의 기억은 어디서 다른가?\n생각이 바뀐 계기와 아직 설명하기 어려운 부분은 무엇인가?\n'],
@@ -1439,6 +1475,7 @@
         const next = reflection.note + (reflection.note ? '\n\n' : '') + text;
         if (next.length > limits.text) throw fault('limit_reached', '회고 길이를 줄인 뒤 추가해 주세요. 기존 내용은 유지했습니다.');
         reflection.note = next; note.input.value = next; mark(session);
+        fitNote();
         note.input.focus(); note.input.setSelectionRange(next.length, next.length);
       }));
       const exportBox = details('원고 파일로 보관');
@@ -1453,7 +1490,25 @@
         global.setTimeout(() => { URL.revokeObjectURL(url); urls.delete(url); }, 30000);
       }); exportButton.id = 'wbReflectionExport';
       exportBox.append(include, notice('내 회고와 선택한 자료의 출처를 파일로 받습니다. 보기 기간과 무관하게 선택 전체를 포함하며 공개 게시하지 않습니다. 원문·구성 복원에는 자료·구성 JSON 백업을 사용하세요.'), exportButton);
-      bodyNode.append(note.wrapper, prompts, exportBox, guidance);
+      const noteHeading = el('div', null, 'wb-reflection-note-heading'); noteHeading.append(el('h3', '지금의 생각'), backToReading);
+      noteSection.append(noteHeading, notice('원문과 별도로 남기는 내 회고입니다.'), note.wrapper, prompts);
+      const management = el('div', null, 'wb-reflection-management'); management.append(exportBox, guidance);
+      bodyNode.append(noteSection, management);
+      const fitNote = () => {
+        if (!note.input.isConnected || !showing(token, session)) return;
+        const position = { left: global.scrollX, top: global.scrollY, behavior: 'instant' };
+        note.input.style.height = 'auto';
+        const css = global.getComputedStyle(note.input);
+        note.input.style.height = Math.ceil(note.input.scrollHeight + parseFloat(css.borderTopWidth) + parseFloat(css.borderBottomWidth)) + 'px';
+        global.scrollTo(position);
+      };
+      note.input.addEventListener('input', fitNote); fitNote();
+      let noteWidth = note.input.getBoundingClientRect().width;
+      if (global.ResizeObserver) {
+        const observer = new global.ResizeObserver(() => { const width = note.input.getBoundingClientRect().width; if (width !== noteWidth) { noteWidth = width; fitNote(); } });
+        observer.observe(note.input); viewCleanups.push(() => observer.disconnect());
+      }
+      global.document.fonts?.ready.then(fitNote);
       refillPicker(); fill();
     }
 
@@ -1461,12 +1516,14 @@
       const token = generation;
       const draft = session.bookPlan ||= { title: '', question: '', by: reflectionView.mode, from: reflectionView.from,
         to: reflectionView.to, versionIds: session.state.reflection.versionIds.slice(), choices: {} };
+      draft.sourceViews ||= {};
       const box = el('section', null, 'wb-book-plan'); box.id = 'wbBookPlan';
       box.setAttribute('aria-labelledby', 'wbPlanHeading');
-      const heading = el('h3', '목차 구성', 'life-sr-only'); heading.id = 'wbPlanHeading';
+      const heading = el('h3', '목차 구성'); heading.id = 'wbPlanHeading';
       const title = field('책 제목', draft.title, { id: 'wbPlanTitle' }); title.input.placeholder = '예: 나의 20대, 일과 쉼';
       const question = field('이 책에서 돌아볼 질문', draft.question, { id: 'wbPlanQuestion', multiline: true, max: limits.text });
       question.input.placeholder = '예: 잘해야 한다는 마음은 어떻게 달라졌을까?';
+      question.input.rows = 2;
       title.input.addEventListener('input', () => { draft.title = title.input.value; });
       question.input.addEventListener('input', () => { draft.question = question.input.value; });
       const modes = el('div', null, 'life-actions');
@@ -1478,13 +1535,17 @@
         const selected = choices().filter(item => item.selected);
         summary.textContent = selected.length + '개 장 · 정확한 원문 버전 ' + new Set(selected.flatMap(item => item.versionIds)).size + '개';
       };
-      const time = action('연도별 목차', () => { draft.by = 'time'; fill(); }); time.id = 'wbPlanTime';
-      const theme = action('묶음별 목차', () => { draft.by = 'theme'; fill(); }); theme.id = 'wbPlanThemes';
+      const changeMode = by => {
+        if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 목차 기준을 바꿔 주세요.');
+        draft.by = by; fill();
+      };
+      const time = action('연도별 목차', () => changeMode('time')); time.id = 'wbPlanTime';
+      const theme = action('묶음별 목차', () => changeMode('theme')); theme.id = 'wbPlanThemes';
       const refresh = action('현재 선택으로 후보 다시 만들기', () => {
         if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 후보를 만들어 주세요.');
         if (!global.confirm('목차 후보의 제목과 포함 선택을 새로 만들까요? 책 제목과 질문은 유지합니다.')) return;
         draft.versionIds = session.state.reflection.versionIds.slice(); draft.from = reflectionView.from; draft.to = reflectionView.to;
-        draft.choices = {}; fill();
+        draft.choices = {}; draft.sourceViews = {}; fill();
       }); refresh.id = 'wbPlanRefresh';
       modes.append(time, theme);
       const fill = () => {
@@ -1493,19 +1554,32 @@
         for (const [index, item] of choices().entries()) {
           const row = el('li', null, 'wb-plan-chapter'); row.dataset.planKey = item.key;
           const check = toggle('장 ' + (index + 1) + ' 포함', item.selected, value => { item.selected = value; count(); });
+          check.querySelector('input').setAttribute('aria-label', '장 ' + (index + 1) + ' 포함');
+          check.title = '장 ' + (index + 1) + ' 포함'; check.querySelector('span').textContent = String(index + 1);
           const name = field('장 ' + (index + 1) + ' 제목', item.title, { id: 'wbPlanChapter' + index });
           name.input.addEventListener('input', () => { item.title = name.input.value; });
-          const sources = details('연결할 원문 · ' + item.versionIds.length + '개');
+          const sourceKey = draft.by + ':' + item.key;
+          const sourceView = draft.sourceViews[sourceKey] ||= { open: false, shown: 40 };
+          const sources = details('연결할 원문 · ' + item.versionIds.length + '개', { open: sourceView.open });
           // Names, authorship and exact versions are reviewable before anything is saved.
           let shown = 0;
           const more = action('연결할 원문 더 보기', () => fillSources());
-          const fillSources = () => {
-            const batch = item.versionIds.slice(shown, shown + 40); shown += batch.length;
-            batch.forEach(id => sources.insertBefore(sourceRow(id), more)); more.hidden = shown >= item.versionIds.length;
+          const fillSources = (count = 40) => {
+            const batch = item.versionIds.slice(shown, shown + count); shown += batch.length;
+            sourceView.shown = Math.max(40, shown);
+            batch.forEach(id => sources.insertBefore(sourceRow(id, {
+              focusKey: 'book-plan:' + sourceKey + ':' + id, isCurrent: () => row.isConnected
+            }), more)); more.hidden = shown >= item.versionIds.length;
           };
           sources.append(more);
-          sources.addEventListener('toggle', () => { if (sources.open && !shown) fillSources(); });
-          row.append(check, name.wrapper, sources); list.append(row);
+          if (sources.open) fillSources(sourceView.shown);
+          sources.addEventListener('toggle', () => {
+            if (!sources.isConnected || !showing(token, session)) return;
+            sourceView.open = sources.open;
+            if (sources.open && !shown) fillSources(sourceView.shown);
+          });
+          const line = el('div', null, 'wb-plan-chapter-line'); line.append(check, name.wrapper);
+          row.append(line, sources); list.append(row);
         }
         if (!choices().length) list.append(empty('선택한 기간의 글이 없습니다. 돌아볼 글을 고르거나 기간을 해제한 뒤 후보를 다시 만들어 주세요.'));
         count();
@@ -1524,13 +1598,19 @@
         await onWorkbenchNavigate({ workspaceId: session.workspaceId, mode: 'books' });
         if (workspaceIs(session)) { session.bookPlan = null; session.bookPlanOpen = false; }
       }, 'life-primary'); apply.id = 'wbPlanCreate';
-      const close = action('회고로 돌아가기', () => { session.bookPlanOpen = false; redraw(); bodyNode.querySelector('#wbReflectionPlan')?.focus(); }); close.id = 'wbPlanClose';
-      const actions = el('div', null, 'life-actions'); actions.append(apply, close);
-      box.append(heading, notice(draft.createdBookId ? '책 초안을 저장한 뒤 같은 책을 엽니다.' : '목차 후보는 이 화면에만 임시 보관합니다. 책 만들기를 눌러야 저장됩니다.'), title.wrapper, question.wrapper, modes,
-        notice('선택한 글의 작성 연도 또는 직접 만든 묶음에서 시작합니다. 장 제목과 포함 여부를 고른 뒤 만드세요. 먼저 3~5개 장으로 시작해도 좋습니다.'), list, summary);
+      const close = action('회고로 돌아가기', () => {
+        if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 회고로 돌아가 주세요.');
+        session.bookPlanOpen = false; redraw();
+        const position = reflectionView.planPosition, input = bodyNode.querySelector('#wbReflectionNote');
+        if (input && position) input.setSelectionRange(position.start, position.end, position.direction);
+        bodyNode.querySelector('#wbReflectionPlan')?.focus({ preventScroll: !!position });
+        if (position) global.scrollTo({ top: position.top, behavior: 'instant' });
+      }); close.id = 'wbPlanClose';
+      const actions = el('div', null, 'life-actions wb-plan-actions'); actions.append(close, apply);
+      box.append(actions, heading, notice(draft.createdBookId ? '책 초안을 저장한 뒤 같은 책을 엽니다.' : '아직 저장 전입니다. 책 만들기를 눌러야 목차를 보관합니다.'), title.wrapper, question.wrapper, modes, list, summary);
       const scope = details('후보 범위와 원문 보존');
-      scope.append(notice('후보를 만들 때의 회고 선택과 보기 기간(' + (draft.from || '제한 없음') + ' ~ ' + (draft.to || '제한 없음') + ')을 사용합니다. 작성 시기 미확인도 따로 남기며, 묶음이 겹치면 같은 버전을 여러 장에 연결할 수 있습니다. 기간 밖 자료와 회고 글은 원래 회고에 남습니다. 장 원고는 빈 상태로 시작하며 글을 자동 해석하거나 공개하지 않습니다.'), refresh);
-      box.append(scope, actions); fill();
+      scope.append(notice('선택한 글의 작성 연도 또는 직접 만든 묶음에서 시작합니다. 장 제목과 포함 여부를 고른 뒤 만드세요. 후보를 만들 때의 회고 선택과 보기 기간(' + (draft.from || '제한 없음') + ' ~ ' + (draft.to || '제한 없음') + ')을 사용합니다. 작성 시기 미확인도 따로 남기며, 묶음이 겹치면 같은 버전을 여러 장에 연결할 수 있습니다. 기간 밖 자료와 회고 글은 원래 회고에 남습니다. 장 원고는 빈 상태로 시작하며 글을 자동 해석하거나 공개하지 않습니다.'), refresh);
+      box.append(scope); fill();
       if (draft.createdBookId) {
         box.querySelectorAll('input,textarea,button').forEach(control => { if (![apply, close].includes(control)) control.disabled = true; });
         box.insertBefore(notice('책 초안은 이미 만들었습니다. 저장을 완료한 뒤 같은 책을 엽니다.'), actions);
@@ -2506,7 +2586,7 @@
       bodyNode = el('div', null, 'wb-content'); bodyNode.append(notice('불러오는 중…'));
       const storageLine = el('div', null, 'wb-storage-line'); storageLine.append(statusNode, scope);
       storageLine.hidden = mode === 'public-pages' || mode === 'related';
-      if (mode === 'books') surface.append(heading, errorNode, bodyNode, storageLine);
+      if (['books', 'reflection'].includes(mode)) surface.append(heading, errorNode, bodyNode, storageLine);
       else surface.append(heading, storageLine, errorNode, bodyNode);
       host.replaceChildren(surface);
       if (mode === 'public-pages') { surface.setAttribute('aria-busy', 'false'); redraw(); return; }
