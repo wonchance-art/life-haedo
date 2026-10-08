@@ -1,0 +1,2874 @@
+{
+  "createdAt": "2026-10-08T21:13:10.959Z",
+  "phase": "Actual app A integration",
+  "scope": "Actual index.html + bundled SDK + isolated IndexedDB with anonymous reader-book-backup JSON restored through UI. Distinct from the memory-only comparison prototype; no physical Apple/IME/Files claims.",
+  "screens": [
+    {
+      "scene": "list",
+      "width": 390,
+      "height": 844,
+      "arrival": {
+        "scrollY": 0,
+        "focus": "wbBookList"
+      },
+      "content": {
+        "selector": "#wbBookList [data-book-id]",
+        "x": 20,
+        "y": 72,
+        "width": 350,
+        "height": 704.09375,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "24px 0px 28px",
+        "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록\n\n2016–2025 · 4개 장 · 비공개\n\n처음 면접을 보러 가던 아침에는 평소보다 일찍 집을 나섰다. 역 앞에서 커피를 사면서 회사 이름이 적힌 안내 문자를 몇 번이나 다시 읽었다. 무엇을 하게 될지보다 그 이름을 다른 사람에게 어떻게 말할지 먼저 생각했다는 사실은 한참 뒤에야 알아차렸다.\n\n전체 읽기\n목차\n",
+        "clientHeight": 703,
+        "scrollHeight": 703
+      },
+      "bodyFirstY": 72,
+      "screen": {
+        "width": 390,
+        "height": 844
+      },
+      "main": {
+        "selector": "#lifeMain",
+        "x": 20,
+        "y": 68,
+        "width": 350,
+        "height": 925.09375,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "4px 0px 0px",
+        "text": "내 책\n일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록\n\n2016–2025 · 4개 장 · 비공개\n\n처음 면접을 보러 가던 아침에는 평소보다 일찍 집을 나섰다. 역 앞에서 커피를 사면서 회사 이름이 적힌 안내 문자를 몇 번이나 다시 읽었다. 무엇을 하게 될지보다 그 이름을 다른 사람에게 어떻게 말할지 먼저 생각했다는 사실은 한참 뒤에야 알아차렸다.\n\n전체 읽기",
+        "clientHeight": 925,
+        "scrollHeight": 925
+      },
+      "bookTitle": null,
+      "storage": {
+        "selector": ".wb-storage-line",
+        "x": 20,
+        "y": 936.09375,
+        "width": 350,
+        "height": 57,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "12px 0px 0px",
+        "text": "이 브라우저에 저장됨\n\n저장 범위",
+        "clientHeight": 56,
+        "scrollHeight": 56
+      },
+      "actions": null,
+      "bookControls": null,
+      "chapterNavigation": null,
+      "chapterTitle": null,
+      "readingTools": null,
+      "intro": null,
+      "nav": {
+        "top": 772,
+        "height": 60
+      },
+      "controlsBeforeBody": [],
+      "controls": [
+        {
+          "id": "",
+          "name": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "tag": "BUTTON",
+          "y": 96,
+          "height": 110.390625
+        },
+        {
+          "id": "",
+          "name": "전체 읽기",
+          "tag": "BUTTON",
+          "y": 429.09375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 열기",
+          "tag": "BUTTON",
+          "y": 429.09375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "목차",
+          "tag": "SUMMARY",
+          "y": 493.09375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "1. 잘하고 싶었던 마음",
+          "tag": "BUTTON",
+          "y": 537.09375,
+          "height": 48.5
+        },
+        {
+          "id": "",
+          "name": "2. 쉬는 동안 생긴 기준",
+          "tag": "BUTTON",
+          "y": 585.59375,
+          "height": 48.5
+        },
+        {
+          "id": "",
+          "name": "3. 함께 배우는 쪽으로",
+          "tag": "BUTTON",
+          "y": 634.09375,
+          "height": 48.5
+        },
+        {
+          "id": "",
+          "name": "4. 오래 좋아하는 것을 고르기",
+          "tag": "BUTTON",
+          "y": 682.59375,
+          "height": 48.5
+        },
+        {
+          "id": "",
+          "name": "보관한 책 · 0",
+          "tag": "SUMMARY",
+          "y": 792.09375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "새 책",
+          "tag": "SUMMARY",
+          "y": 852.09375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "저장 범위",
+          "tag": "SUMMARY",
+          "y": 949.09375,
+          "height": 44
+        }
+      ],
+      "headings": [
+        {
+          "tag": "H2",
+          "text": "내 책",
+          "y": 71.5
+        },
+        {
+          "tag": "H3",
+          "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "y": 96
+        }
+      ],
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      },
+      "files": {
+        "viewport": "list-390.png",
+        "full": "list-390-full.png",
+        "arrival": null
+      }
+    },
+    {
+      "scene": "editor",
+      "width": 390,
+      "height": 844,
+      "arrival": {
+        "scrollY": 26,
+        "focus": "wbChapterNote"
+      },
+      "content": {
+        "selector": "#wbChapterNote",
+        "x": 20,
+        "y": 276.25,
+        "width": 350,
+        "height": 1292,
+        "fontSize": "17px",
+        "lineHeight": "32.3px",
+        "padding": "0px",
+        "text": "일을 잠시 멈춘 첫 주에는 달력이 유난히 넓어 보였다. 약속이 없는 오후를 자유라고 부르다가도 저녁이 되면 무엇을 했는지 설명해야 할 것 같았다. 메모를 열어 보니 쉬는 날에도 일을 했던 날과 같은 방식으로 자신을 채점하고 있었다.\n\n처음 바꾼 일은 거창한 계획이 아니었다. 일어나면 커튼을 열고 점심 한 끼를 직접 만드는 순서를 정했다. 오전에 실패하면 하루 전체를 포기하는 대신 오후에 할 ",
+        "clientHeight": 1292,
+        "scrollHeight": 1292
+      },
+      "bodyFirstY": 276.25,
+      "screen": {
+        "width": 390,
+        "height": 844
+      },
+      "main": {
+        "selector": "#lifeMain",
+        "x": 20,
+        "y": 8,
+        "width": 350,
+        "height": 1979.25,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "0px",
+        "text": "내 책\n목차\n읽기\n일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록\n2 / 4\n이 장의 근거 · 1개\n장 제목\n이 장의 원고\n\n837 / 20,000\n\n생각과 근거 · 0개\n책 설정\n개정본 · 1 / 10\n책자 만들기\n이 장 보관\n책 원고 파일로 보관\n\n이 브라우저에 저장됨\n\n저장 범위",
+        "clientHeight": 1979,
+        "scrollHeight": 1979
+      },
+      "bookTitle": {
+        "selector": "#wbBookHeading",
+        "x": 20,
+        "y": 84,
+        "width": 350,
+        "height": 26.25,
+        "fontSize": "15px",
+        "lineHeight": "26.25px",
+        "padding": "0px",
+        "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+        "clientHeight": 26,
+        "scrollHeight": 26
+      },
+      "storage": {
+        "selector": ".wb-storage-line",
+        "x": 20,
+        "y": 1930.25,
+        "width": 350,
+        "height": 57,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "12px 0px 0px",
+        "text": "이 브라우저에 저장됨\n\n저장 범위",
+        "clientHeight": 56,
+        "scrollHeight": 56
+      },
+      "actions": {
+        "selector": ".wb-book-actions",
+        "x": 20,
+        "y": 8,
+        "width": 350,
+        "height": 64,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "8px 0px",
+        "text": "목차\n읽기",
+        "clientHeight": 64,
+        "scrollHeight": 64
+      },
+      "bookControls": {
+        "selector": ".wb-book-controls",
+        "x": 20,
+        "y": 1721.25,
+        "width": 350,
+        "height": 169,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "24px 0px",
+        "text": "책 설정\n개정본 · 1 / 10\n책자 만들기\n이 장 보관\n책 원고 파일로 보관",
+        "clientHeight": 168,
+        "scrollHeight": 168
+      },
+      "chapterNavigation": {
+        "selector": ".wb-chapter-navigation",
+        "x": 20,
+        "y": 134.25,
+        "width": 350,
+        "height": 44,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "0px",
+        "text": "2 / 4",
+        "clientHeight": 44,
+        "scrollHeight": 44
+      },
+      "chapterTitle": {
+        "selector": "#wbChapterTitle",
+        "x": 20,
+        "y": 202.25,
+        "width": 350,
+        "height": 48,
+        "fontSize": "27px",
+        "lineHeight": "40.5px",
+        "padding": "0px",
+        "text": "쉬는 동안 생긴 기준",
+        "clientHeight": 48,
+        "scrollHeight": 48
+      },
+      "readingTools": null,
+      "intro": null,
+      "nav": {
+        "top": 0,
+        "height": 0
+      },
+      "controlsBeforeBody": [
+        {
+          "id": "wbBooksBack",
+          "name": "책 목록",
+          "tag": "BUTTON",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "wbBookOutlineHeading",
+          "name": "목차",
+          "tag": "SUMMARY",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "wbBookPreviewOpen",
+          "name": "전체 원고 읽기",
+          "tag": "BUTTON",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 설정·개정본·파일",
+          "tag": "BUTTON",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "지금 저장",
+          "tag": "BUTTON",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "wbChapterPrevious",
+          "name": "이전 장",
+          "tag": "BUTTON",
+          "y": 134.25,
+          "height": 44
+        },
+        {
+          "id": "wbChapterNext",
+          "name": "다음 장",
+          "tag": "BUTTON",
+          "y": 134.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 1개",
+          "tag": "SUMMARY",
+          "y": 134.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "",
+          "tag": "SUMMARY",
+          "y": 262.25,
+          "height": 44
+        },
+        {
+          "id": "wbChapterTitle",
+          "name": "장 제목",
+          "tag": "TEXTAREA",
+          "y": 202.25,
+          "height": 48
+        }
+      ],
+      "controls": [
+        {
+          "id": "wbBooksBack",
+          "name": "책 목록",
+          "tag": "BUTTON",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "wbBookOutlineHeading",
+          "name": "목차",
+          "tag": "SUMMARY",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "",
+          "tag": "SUMMARY",
+          "y": 1324.9375,
+          "height": 142.78125
+        },
+        {
+          "id": "wbBookPreviewOpen",
+          "name": "전체 원고 읽기",
+          "tag": "BUTTON",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 설정·개정본·파일",
+          "tag": "BUTTON",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "지금 저장",
+          "tag": "BUTTON",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "wbChapterPrevious",
+          "name": "이전 장",
+          "tag": "BUTTON",
+          "y": 134.25,
+          "height": 44
+        },
+        {
+          "id": "wbChapterNext",
+          "name": "다음 장",
+          "tag": "BUTTON",
+          "y": 134.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 1개",
+          "tag": "SUMMARY",
+          "y": 134.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "",
+          "tag": "SUMMARY",
+          "y": 262.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "",
+          "tag": "SUMMARY",
+          "y": 428.5,
+          "height": 44
+        },
+        {
+          "id": "wbChapterTitle",
+          "name": "장 제목",
+          "tag": "TEXTAREA",
+          "y": 202.25,
+          "height": 48
+        },
+        {
+          "id": "wbChapterNote",
+          "name": "이 장의 원고",
+          "tag": "TEXTAREA",
+          "y": 276.25,
+          "height": 1292
+        },
+        {
+          "id": "",
+          "name": "생각과 근거 · 0개",
+          "tag": "SUMMARY",
+          "y": 1637.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 설정",
+          "tag": "SUMMARY",
+          "y": 1746.25,
+          "height": 44
+        },
+        {
+          "id": "wbBookEditionsHeading",
+          "name": "개정본 · 1 / 10",
+          "tag": "SUMMARY",
+          "y": 1746.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "",
+          "tag": "SUMMARY",
+          "y": 2421.203125,
+          "height": 47.59375
+        },
+        {
+          "id": "wbBookEditionOpen",
+          "name": "책자 만들기",
+          "tag": "BUTTON",
+          "y": 1746.25,
+          "height": 44
+        },
+        {
+          "id": "wbChapterArchive",
+          "name": "이 장 보관",
+          "tag": "BUTTON",
+          "y": 1806.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 원고 파일로 보관",
+          "tag": "SUMMARY",
+          "y": 1802.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "저장 범위",
+          "tag": "SUMMARY",
+          "y": 1943.25,
+          "height": 44
+        }
+      ],
+      "headings": [
+        {
+          "tag": "H2",
+          "text": "내 책",
+          "y": 7.5
+        },
+        {
+          "tag": "H3",
+          "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "y": 84
+        }
+      ],
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      },
+      "files": {
+        "viewport": "editor-390.png",
+        "full": "editor-390-full.png",
+        "arrival": "editor-390-arrival.png"
+      }
+    },
+    {
+      "scene": "reading",
+      "width": 390,
+      "height": 844,
+      "arrival": {
+        "scrollY": 0,
+        "focus": "wbBookPreview"
+      },
+      "content": {
+        "selector": "#wbBookPreview .wb-reading-text",
+        "x": 20,
+        "y": 244.5,
+        "width": 350,
+        "height": 3165.09375,
+        "fontSize": "17px",
+        "lineHeight": "32.3px",
+        "padding": "0px",
+        "text": "처음 면접을 보러 가던 아침에는 평소보다 일찍 집을 나섰다. 역 앞에서 커피를 사면서 회사 이름이 적힌 안내 문자를 몇 번이나 다시 읽었다. 무엇을 하게 될지보다 그 이름을 다른 사람에게 어떻게 말할지 먼저 생각했다는 사실은 한참 뒤에야 알아차렸다.\n\n그날의 메모에는 질문과 답변보다 면접관의 표정이 더 자세히 남아 있다. 고개를 끄덕였다는 것, 다음 질문으로 빨리 넘어갔다는 것, 마지막에 수",
+        "clientHeight": 3165,
+        "scrollHeight": 3165
+      },
+      "bodyFirstY": 244.5,
+      "screen": {
+        "width": 390,
+        "height": 844
+      },
+      "main": {
+        "selector": "#lifeMain",
+        "x": 20,
+        "y": 8,
+        "width": 350,
+        "height": 8696.5,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "0px",
+        "text": "내 책\n목차\n집필\n일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록\n1\n잘하고 싶었던 마음\n처음 면접을 보러 가던 아침에는 평소보다 일찍 집을 나섰다. 역 앞에서 커피를 사면서 회사 이름이 적힌 안내 문자를 몇 번이나 다시 읽었다. 무엇을 하게 될지보다 그 이름을 다른 사람에게 어떻게 말할지 먼저 생각했다는 사실은 한참 뒤에야 알아차렸다.\n\n그날의 메모에는 질문",
+        "clientHeight": 8697,
+        "scrollHeight": 8697
+      },
+      "bookTitle": {
+        "selector": "#wbBookHeading",
+        "x": 20,
+        "y": 84,
+        "width": 350,
+        "height": 52.5,
+        "fontSize": "15px",
+        "lineHeight": "26.25px",
+        "padding": "0px",
+        "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+        "clientHeight": 53,
+        "scrollHeight": 53
+      },
+      "storage": {
+        "selector": ".wb-storage-line",
+        "x": 20,
+        "y": 8647.5,
+        "width": 350,
+        "height": 57,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "12px 0px 0px",
+        "text": "이 브라우저에 저장됨\n\n저장 범위",
+        "clientHeight": 56,
+        "scrollHeight": 56
+      },
+      "actions": {
+        "selector": ".wb-book-actions",
+        "x": 20,
+        "y": 8,
+        "width": 350,
+        "height": 64,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "8px 0px",
+        "text": "목차\n집필",
+        "clientHeight": 64,
+        "scrollHeight": 64
+      },
+      "bookControls": null,
+      "chapterNavigation": null,
+      "chapterTitle": null,
+      "readingTools": {
+        "selector": ".wb-reading-tools",
+        "x": 20,
+        "y": 8458.5,
+        "width": 350,
+        "height": 149,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "24px 0px",
+        "text": "원고 점검\n읽기·파일 설정\n책자 만들기\n책 원고 Markdown 받기\n인쇄 · PDF",
+        "clientHeight": 148,
+        "scrollHeight": 148
+      },
+      "intro": {
+        "selector": ".wb-reading-intro",
+        "x": 20,
+        "y": 8306.40625,
+        "width": 350,
+        "height": 44,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "0px",
+        "text": "책 소개",
+        "clientHeight": 44,
+        "scrollHeight": 44
+      },
+      "nav": {
+        "top": 0,
+        "height": 0
+      },
+      "controlsBeforeBody": [
+        {
+          "id": "wbBooksBack",
+          "name": "책 목록",
+          "tag": "BUTTON",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "목차",
+          "tag": "SUMMARY",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "wbBookPreviewBack",
+          "name": "원고 편집",
+          "tag": "BUTTON",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "원고 점검·파일·인쇄",
+          "tag": "BUTTON",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장 편집",
+          "tag": "BUTTON",
+          "y": 172.5,
+          "height": 44
+        }
+      ],
+      "controls": [
+        {
+          "id": "wbBooksBack",
+          "name": "책 목록",
+          "tag": "BUTTON",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "목차",
+          "tag": "SUMMARY",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "wbBookPreviewBack",
+          "name": "원고 편집",
+          "tag": "BUTTON",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "원고 점검·파일·인쇄",
+          "tag": "BUTTON",
+          "y": 18,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장 편집",
+          "tag": "BUTTON",
+          "y": 172.5,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 1",
+          "tag": "SUMMARY",
+          "y": 3425.59375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "근거로 연결한 원문 · 1",
+          "tag": "SUMMARY",
+          "y": 3778.859375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "반례로 연결한 원문 · 2",
+          "tag": "SUMMARY",
+          "y": 3838.859375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장 편집",
+          "tag": "BUTTON",
+          "y": 4003.859375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 1",
+          "tag": "SUMMARY",
+          "y": 5383.734375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장 편집",
+          "tag": "BUTTON",
+          "y": 5528.734375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 2",
+          "tag": "SUMMARY",
+          "y": 6747.125,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장 편집",
+          "tag": "BUTTON",
+          "y": 6910.421875,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 1",
+          "tag": "SUMMARY",
+          "y": 8179.40625,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 소개",
+          "tag": "SUMMARY",
+          "y": 8306.40625,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "원고 점검",
+          "tag": "SUMMARY",
+          "y": 8483.5,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "읽기·파일 설정",
+          "tag": "SUMMARY",
+          "y": 8483.5,
+          "height": 44
+        },
+        {
+          "id": "wbBookEditionOpen",
+          "name": "책자 만들기",
+          "tag": "BUTTON",
+          "y": 8483.5,
+          "height": 44
+        },
+        {
+          "id": "wbBookPreviewExport",
+          "name": "책 원고 Markdown 받기",
+          "tag": "BUTTON",
+          "y": 8539.5,
+          "height": 44
+        },
+        {
+          "id": "wbBookPrint",
+          "name": "인쇄 · PDF",
+          "tag": "BUTTON",
+          "y": 8539.5,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "저장 범위",
+          "tag": "SUMMARY",
+          "y": 8660.5,
+          "height": 44
+        }
+      ],
+      "headings": [
+        {
+          "tag": "H2",
+          "text": "내 책",
+          "y": 7.5
+        },
+        {
+          "tag": "H3",
+          "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "y": 84
+        },
+        {
+          "tag": "H4",
+          "text": "잘하고 싶었던 마음",
+          "y": 174.34375
+        },
+        {
+          "tag": "H4",
+          "text": "쉬는 동안 생긴 기준",
+          "y": 4005.703125
+        },
+        {
+          "tag": "H4",
+          "text": "함께 배우는 쪽으로",
+          "y": 5530.578125
+        },
+        {
+          "tag": "H4",
+          "text": "오래 좋아하는 것을 고르기",
+          "y": 6892.125
+        }
+      ],
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.384,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      },
+      "files": {
+        "viewport": "reading-390.png",
+        "full": "reading-390-full.png",
+        "arrival": null
+      }
+    },
+    {
+      "scene": "list",
+      "width": 820,
+      "height": 1000,
+      "arrival": {
+        "scrollY": 0,
+        "focus": "wbBookList"
+      },
+      "content": {
+        "selector": "#wbBookList [data-book-id]",
+        "x": 132,
+        "y": 110,
+        "width": 628,
+        "height": 616.109375,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "24px 0px 28px",
+        "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록\n\n2016–2025 · 4개 장 · 비공개\n\n처음 면접을 보러 가던 아침에는 평소보다 일찍 집을 나섰다. 역 앞에서 커피를 사면서 회사 이름이 적힌 안내 문자를 몇 번이나 다시 읽었다. 무엇을 하게 될지보다 그 이름을 다른 사람에게 어떻게 말할지 먼저 생각했다는 사실은 한참 뒤에야 알아차렸다.\n\n전체 읽기\n목차\n",
+        "clientHeight": 615,
+        "scrollHeight": 615
+      },
+      "bodyFirstY": 110,
+      "screen": {
+        "width": 820,
+        "height": 1000
+      },
+      "main": {
+        "selector": "#lifeMain",
+        "x": 132,
+        "y": 102,
+        "width": 628,
+        "height": 841.109375,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "8px 0px 0px",
+        "text": "내 책\n일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록\n\n2016–2025 · 4개 장 · 비공개\n\n처음 면접을 보러 가던 아침에는 평소보다 일찍 집을 나섰다. 역 앞에서 커피를 사면서 회사 이름이 적힌 안내 문자를 몇 번이나 다시 읽었다. 무엇을 하게 될지보다 그 이름을 다른 사람에게 어떻게 말할지 먼저 생각했다는 사실은 한참 뒤에야 알아차렸다.\n\n전체 읽기",
+        "clientHeight": 841,
+        "scrollHeight": 841
+      },
+      "bookTitle": null,
+      "storage": {
+        "selector": ".wb-storage-line",
+        "x": 132,
+        "y": 886.109375,
+        "width": 628,
+        "height": 57,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "12px 0px 0px",
+        "text": "이 브라우저에 저장됨\n\n저장 범위",
+        "clientHeight": 56,
+        "scrollHeight": 56
+      },
+      "actions": null,
+      "bookControls": null,
+      "chapterNavigation": null,
+      "chapterTitle": null,
+      "readingTools": null,
+      "intro": null,
+      "nav": {
+        "top": 24,
+        "height": 214
+      },
+      "controlsBeforeBody": [],
+      "controls": [
+        {
+          "id": "",
+          "name": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "tag": "BUTTON",
+          "y": 134,
+          "height": 83.1875
+        },
+        {
+          "id": "",
+          "name": "전체 읽기",
+          "tag": "BUTTON",
+          "y": 379.109375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 열기",
+          "tag": "BUTTON",
+          "y": 379.109375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "목차",
+          "tag": "SUMMARY",
+          "y": 443.109375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "1. 잘하고 싶었던 마음",
+          "tag": "BUTTON",
+          "y": 487.109375,
+          "height": 48.5
+        },
+        {
+          "id": "",
+          "name": "2. 쉬는 동안 생긴 기준",
+          "tag": "BUTTON",
+          "y": 535.609375,
+          "height": 48.5
+        },
+        {
+          "id": "",
+          "name": "3. 함께 배우는 쪽으로",
+          "tag": "BUTTON",
+          "y": 584.109375,
+          "height": 48.5
+        },
+        {
+          "id": "",
+          "name": "4. 오래 좋아하는 것을 고르기",
+          "tag": "BUTTON",
+          "y": 632.609375,
+          "height": 48.5
+        },
+        {
+          "id": "",
+          "name": "보관한 책 · 0",
+          "tag": "SUMMARY",
+          "y": 742.109375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "새 책",
+          "tag": "SUMMARY",
+          "y": 802.109375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "저장 범위",
+          "tag": "SUMMARY",
+          "y": 899.109375,
+          "height": 44
+        }
+      ],
+      "headings": [
+        {
+          "tag": "H2",
+          "text": "내 책",
+          "y": 109.5
+        },
+        {
+          "tag": "H3",
+          "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "y": 134
+        }
+      ],
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      },
+      "files": {
+        "viewport": "list-820.png",
+        "full": "list-820-full.png",
+        "arrival": null
+      }
+    },
+    {
+      "scene": "editor",
+      "width": 820,
+      "height": 1000,
+      "arrival": {
+        "scrollY": 54,
+        "focus": "wbChapterNote"
+      },
+      "content": {
+        "selector": "#wbChapterNote",
+        "x": 132,
+        "y": 304.25,
+        "width": 628,
+        "height": 1037,
+        "fontSize": "19px",
+        "lineHeight": "37.05px",
+        "padding": "0px",
+        "text": "일을 잠시 멈춘 첫 주에는 달력이 유난히 넓어 보였다. 약속이 없는 오후를 자유라고 부르다가도 저녁이 되면 무엇을 했는지 설명해야 할 것 같았다. 메모를 열어 보니 쉬는 날에도 일을 했던 날과 같은 방식으로 자신을 채점하고 있었다.\n\n처음 바꾼 일은 거창한 계획이 아니었다. 일어나면 커튼을 열고 점심 한 끼를 직접 만드는 순서를 정했다. 오전에 실패하면 하루 전체를 포기하는 대신 오후에 할 ",
+        "clientHeight": 1037,
+        "scrollHeight": 1037
+      },
+      "bodyFirstY": 304.25,
+      "screen": {
+        "width": 820,
+        "height": 1000
+      },
+      "main": {
+        "selector": "#lifeMain",
+        "x": 132,
+        "y": 36,
+        "width": 628,
+        "height": 1668.25,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "0px",
+        "text": "내 책\n목차\n읽기\n일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록\n2 / 4\n이 장의 근거 · 1개\n장 제목\n이 장의 원고\n\n837 / 20,000\n\n생각과 근거 · 0개\n책 설정\n개정본 · 1 / 10\n책자 만들기\n이 장 보관\n책 원고 파일로 보관\n\n이 브라우저에 저장됨\n\n저장 범위",
+        "clientHeight": 1668,
+        "scrollHeight": 1668
+      },
+      "bookTitle": {
+        "selector": "#wbBookHeading",
+        "x": 132,
+        "y": 112,
+        "width": 628,
+        "height": 26.25,
+        "fontSize": "15px",
+        "lineHeight": "26.25px",
+        "padding": "0px",
+        "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+        "clientHeight": 26,
+        "scrollHeight": 26
+      },
+      "storage": {
+        "selector": ".wb-storage-line",
+        "x": 132,
+        "y": 1647.25,
+        "width": 628,
+        "height": 57,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "12px 0px 0px",
+        "text": "이 브라우저에 저장됨\n\n저장 범위",
+        "clientHeight": 56,
+        "scrollHeight": 56
+      },
+      "actions": {
+        "selector": ".wb-book-actions",
+        "x": 132,
+        "y": 36,
+        "width": 628,
+        "height": 64,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "8px 0px",
+        "text": "목차\n읽기",
+        "clientHeight": 64,
+        "scrollHeight": 64
+      },
+      "bookControls": {
+        "selector": ".wb-book-controls",
+        "x": 132,
+        "y": 1494.25,
+        "width": 628,
+        "height": 113,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "24px 0px",
+        "text": "책 설정\n개정본 · 1 / 10\n책자 만들기\n이 장 보관\n책 원고 파일로 보관",
+        "clientHeight": 112,
+        "scrollHeight": 112
+      },
+      "chapterNavigation": {
+        "selector": ".wb-chapter-navigation",
+        "x": 132,
+        "y": 162.25,
+        "width": 628,
+        "height": 44,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "0px",
+        "text": "2 / 4",
+        "clientHeight": 44,
+        "scrollHeight": 44
+      },
+      "chapterTitle": {
+        "selector": "#wbChapterTitle",
+        "x": 132,
+        "y": 230.25,
+        "width": 628,
+        "height": 48,
+        "fontSize": "32px",
+        "lineHeight": "48px",
+        "padding": "0px",
+        "text": "쉬는 동안 생긴 기준",
+        "clientHeight": 48,
+        "scrollHeight": 48
+      },
+      "readingTools": null,
+      "intro": null,
+      "nav": {
+        "top": 24,
+        "height": 214
+      },
+      "controlsBeforeBody": [
+        {
+          "id": "wbBooksBack",
+          "name": "책 목록",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "wbBookOutlineHeading",
+          "name": "목차",
+          "tag": "SUMMARY",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "wbBookPreviewOpen",
+          "name": "전체 원고 읽기",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 설정·개정본·파일",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "지금 저장",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "wbChapterPrevious",
+          "name": "이전 장",
+          "tag": "BUTTON",
+          "y": 162.25,
+          "height": 44
+        },
+        {
+          "id": "wbChapterNext",
+          "name": "다음 장",
+          "tag": "BUTTON",
+          "y": 162.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 1개",
+          "tag": "SUMMARY",
+          "y": 162.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "",
+          "tag": "SUMMARY",
+          "y": 290.25,
+          "height": 44
+        },
+        {
+          "id": "wbChapterTitle",
+          "name": "장 제목",
+          "tag": "TEXTAREA",
+          "y": 230.25,
+          "height": 48
+        }
+      ],
+      "controls": [
+        {
+          "id": "wbBooksBack",
+          "name": "책 목록",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "wbBookOutlineHeading",
+          "name": "목차",
+          "tag": "SUMMARY",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "",
+          "tag": "SUMMARY",
+          "y": 1352.9375,
+          "height": 142.78125
+        },
+        {
+          "id": "wbBookPreviewOpen",
+          "name": "전체 원고 읽기",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 설정·개정본·파일",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "지금 저장",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "wbChapterPrevious",
+          "name": "이전 장",
+          "tag": "BUTTON",
+          "y": 162.25,
+          "height": 44
+        },
+        {
+          "id": "wbChapterNext",
+          "name": "다음 장",
+          "tag": "BUTTON",
+          "y": 162.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 1개",
+          "tag": "SUMMARY",
+          "y": 162.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "",
+          "tag": "SUMMARY",
+          "y": 290.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "",
+          "tag": "SUMMARY",
+          "y": 456.5,
+          "height": 44
+        },
+        {
+          "id": "wbChapterTitle",
+          "name": "장 제목",
+          "tag": "TEXTAREA",
+          "y": 230.25,
+          "height": 48
+        },
+        {
+          "id": "wbChapterNote",
+          "name": "이 장의 원고",
+          "tag": "TEXTAREA",
+          "y": 304.25,
+          "height": 1037
+        },
+        {
+          "id": "",
+          "name": "생각과 근거 · 0개",
+          "tag": "SUMMARY",
+          "y": 1410.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 설정",
+          "tag": "SUMMARY",
+          "y": 1519.25,
+          "height": 44
+        },
+        {
+          "id": "wbBookEditionsHeading",
+          "name": "개정본 · 1 / 10",
+          "tag": "SUMMARY",
+          "y": 1519.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "",
+          "tag": "SUMMARY",
+          "y": 2194.203125,
+          "height": 47.59375
+        },
+        {
+          "id": "wbBookEditionOpen",
+          "name": "책자 만들기",
+          "tag": "BUTTON",
+          "y": 1519.25,
+          "height": 44
+        },
+        {
+          "id": "wbChapterArchive",
+          "name": "이 장 보관",
+          "tag": "BUTTON",
+          "y": 1523.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 원고 파일로 보관",
+          "tag": "SUMMARY",
+          "y": 1519.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "저장 범위",
+          "tag": "SUMMARY",
+          "y": 1660.25,
+          "height": 44
+        }
+      ],
+      "headings": [
+        {
+          "tag": "H2",
+          "text": "내 책",
+          "y": 35.5
+        },
+        {
+          "tag": "H3",
+          "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "y": 112
+        }
+      ],
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      },
+      "files": {
+        "viewport": "editor-820.png",
+        "full": "editor-820-full.png",
+        "arrival": "editor-820-arrival.png"
+      }
+    },
+    {
+      "scene": "reading",
+      "width": 820,
+      "height": 1000,
+      "arrival": {
+        "scrollY": 4,
+        "focus": "wbBookPreview"
+      },
+      "content": {
+        "selector": "#wbBookPreview .wb-reading-text",
+        "x": 132,
+        "y": 248.75,
+        "width": 628,
+        "height": 2556.234375,
+        "fontSize": "19px",
+        "lineHeight": "37.05px",
+        "padding": "0px",
+        "text": "처음 면접을 보러 가던 아침에는 평소보다 일찍 집을 나섰다. 역 앞에서 커피를 사면서 회사 이름이 적힌 안내 문자를 몇 번이나 다시 읽었다. 무엇을 하게 될지보다 그 이름을 다른 사람에게 어떻게 말할지 먼저 생각했다는 사실은 한참 뒤에야 알아차렸다.\n\n그날의 메모에는 질문과 답변보다 면접관의 표정이 더 자세히 남아 있다. 고개를 끄덕였다는 것, 다음 질문으로 빨리 넘어갔다는 것, 마지막에 수",
+        "clientHeight": 2556,
+        "scrollHeight": 2556
+      },
+      "bodyFirstY": 248.75,
+      "screen": {
+        "width": 820,
+        "height": 1000
+      },
+      "main": {
+        "selector": "#lifeMain",
+        "x": 132,
+        "y": 36,
+        "width": 628,
+        "height": 7145.125,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "0px",
+        "text": "내 책\n목차\n집필\n일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록\n1\n잘하고 싶었던 마음\n처음 면접을 보러 가던 아침에는 평소보다 일찍 집을 나섰다. 역 앞에서 커피를 사면서 회사 이름이 적힌 안내 문자를 몇 번이나 다시 읽었다. 무엇을 하게 될지보다 그 이름을 다른 사람에게 어떻게 말할지 먼저 생각했다는 사실은 한참 뒤에야 알아차렸다.\n\n그날의 메모에는 질문",
+        "clientHeight": 7145,
+        "scrollHeight": 7145
+      },
+      "bookTitle": {
+        "selector": "#wbBookHeading",
+        "x": 132,
+        "y": 112,
+        "width": 628,
+        "height": 26.25,
+        "fontSize": "15px",
+        "lineHeight": "26.25px",
+        "padding": "0px",
+        "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+        "clientHeight": 26,
+        "scrollHeight": 26
+      },
+      "storage": {
+        "selector": ".wb-storage-line",
+        "x": 132,
+        "y": 7124.125,
+        "width": 628,
+        "height": 57,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "12px 0px 0px",
+        "text": "이 브라우저에 저장됨\n\n저장 범위",
+        "clientHeight": 56,
+        "scrollHeight": 56
+      },
+      "actions": {
+        "selector": ".wb-book-actions",
+        "x": 132,
+        "y": 36,
+        "width": 628,
+        "height": 64,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "8px 0px",
+        "text": "목차\n집필",
+        "clientHeight": 64,
+        "scrollHeight": 64
+      },
+      "bookControls": null,
+      "chapterNavigation": null,
+      "chapterTitle": null,
+      "readingTools": {
+        "selector": ".wb-reading-tools",
+        "x": 132,
+        "y": 6935.125,
+        "width": 628,
+        "height": 149,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "24px 0px",
+        "text": "원고 점검\n읽기·파일 설정\n책자 만들기\n책 원고 Markdown 받기\n인쇄 · PDF",
+        "clientHeight": 148,
+        "scrollHeight": 148
+      },
+      "intro": {
+        "selector": ".wb-reading-intro",
+        "x": 132,
+        "y": 6807.078125,
+        "width": 628,
+        "height": 44,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "0px",
+        "text": "책 소개",
+        "clientHeight": 44,
+        "scrollHeight": 44
+      },
+      "nav": {
+        "top": 24,
+        "height": 214
+      },
+      "controlsBeforeBody": [
+        {
+          "id": "wbBooksBack",
+          "name": "책 목록",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "목차",
+          "tag": "SUMMARY",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "wbBookPreviewBack",
+          "name": "원고 편집",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "원고 점검·파일·인쇄",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장 편집",
+          "tag": "BUTTON",
+          "y": 175.5,
+          "height": 44
+        }
+      ],
+      "controls": [
+        {
+          "id": "wbBooksBack",
+          "name": "책 목록",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "목차",
+          "tag": "SUMMARY",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "wbBookPreviewBack",
+          "name": "원고 편집",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "원고 점검·파일·인쇄",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장 편집",
+          "tag": "BUTTON",
+          "y": 175.5,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 1",
+          "tag": "SUMMARY",
+          "y": 2820.984375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "근거로 연결한 원문 · 1",
+          "tag": "SUMMARY",
+          "y": 3115.0625,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "반례로 연결한 원문 · 2",
+          "tag": "SUMMARY",
+          "y": 3175.0625,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장 편집",
+          "tag": "BUTTON",
+          "y": 3341.3125,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 1",
+          "tag": "SUMMARY",
+          "y": 4467.875,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장 편집",
+          "tag": "BUTTON",
+          "y": 4614.125,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 2",
+          "tag": "SUMMARY",
+          "y": 5555.453125,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장 편집",
+          "tag": "BUTTON",
+          "y": 5701.703125,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 1",
+          "tag": "SUMMARY",
+          "y": 6680.078125,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 소개",
+          "tag": "SUMMARY",
+          "y": 6807.078125,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "원고 점검",
+          "tag": "SUMMARY",
+          "y": 6960.125,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "읽기·파일 설정",
+          "tag": "SUMMARY",
+          "y": 6960.125,
+          "height": 44
+        },
+        {
+          "id": "wbBookEditionOpen",
+          "name": "책자 만들기",
+          "tag": "BUTTON",
+          "y": 6960.125,
+          "height": 44
+        },
+        {
+          "id": "wbBookPreviewExport",
+          "name": "책 원고 Markdown 받기",
+          "tag": "BUTTON",
+          "y": 6960.125,
+          "height": 44
+        },
+        {
+          "id": "wbBookPrint",
+          "name": "인쇄 · PDF",
+          "tag": "BUTTON",
+          "y": 7016.125,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "저장 범위",
+          "tag": "SUMMARY",
+          "y": 7137.125,
+          "height": 44
+        }
+      ],
+      "headings": [
+        {
+          "tag": "H2",
+          "text": "내 책",
+          "y": 35.5
+        },
+        {
+          "tag": "H3",
+          "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "y": 112
+        },
+        {
+          "tag": "H4",
+          "text": "잘하고 싶었던 마음",
+          "y": 174.25
+        },
+        {
+          "tag": "H4",
+          "text": "쉬는 동안 생긴 기준",
+          "y": 3340.0625
+        },
+        {
+          "tag": "H4",
+          "text": "함께 배우는 쪽으로",
+          "y": 4612.875
+        },
+        {
+          "tag": "H4",
+          "text": "오래 좋아하는 것을 고르기",
+          "y": 5700.453125
+        }
+      ],
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.384,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      },
+      "files": {
+        "viewport": "reading-820.png",
+        "full": "reading-820-full.png",
+        "arrival": "reading-820-arrival.png"
+      }
+    },
+    {
+      "scene": "list",
+      "width": 1440,
+      "height": 1000,
+      "arrival": {
+        "scrollY": 0,
+        "focus": "wbBookList"
+      },
+      "content": {
+        "selector": "#wbBookList [data-book-id]",
+        "x": 370,
+        "y": 110,
+        "width": 700,
+        "height": 616.109375,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "24px 0px 28px",
+        "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록\n\n2016–2025 · 4개 장 · 비공개\n\n처음 면접을 보러 가던 아침에는 평소보다 일찍 집을 나섰다. 역 앞에서 커피를 사면서 회사 이름이 적힌 안내 문자를 몇 번이나 다시 읽었다. 무엇을 하게 될지보다 그 이름을 다른 사람에게 어떻게 말할지 먼저 생각했다는 사실은 한참 뒤에야 알아차렸다.\n\n전체 읽기\n목차\n",
+        "clientHeight": 615,
+        "scrollHeight": 615
+      },
+      "bodyFirstY": 110,
+      "screen": {
+        "width": 1440,
+        "height": 1000
+      },
+      "main": {
+        "selector": "#lifeMain",
+        "x": 370,
+        "y": 102,
+        "width": 700,
+        "height": 841.109375,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "8px 0px 0px",
+        "text": "내 책\n일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록\n\n2016–2025 · 4개 장 · 비공개\n\n처음 면접을 보러 가던 아침에는 평소보다 일찍 집을 나섰다. 역 앞에서 커피를 사면서 회사 이름이 적힌 안내 문자를 몇 번이나 다시 읽었다. 무엇을 하게 될지보다 그 이름을 다른 사람에게 어떻게 말할지 먼저 생각했다는 사실은 한참 뒤에야 알아차렸다.\n\n전체 읽기",
+        "clientHeight": 841,
+        "scrollHeight": 841
+      },
+      "bookTitle": null,
+      "storage": {
+        "selector": ".wb-storage-line",
+        "x": 370,
+        "y": 886.109375,
+        "width": 700,
+        "height": 57,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "12px 0px 0px",
+        "text": "이 브라우저에 저장됨\n\n저장 범위",
+        "clientHeight": 56,
+        "scrollHeight": 56
+      },
+      "actions": null,
+      "bookControls": null,
+      "chapterNavigation": null,
+      "chapterTitle": null,
+      "readingTools": null,
+      "intro": null,
+      "nav": {
+        "top": 24,
+        "height": 214
+      },
+      "controlsBeforeBody": [],
+      "controls": [
+        {
+          "id": "",
+          "name": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "tag": "BUTTON",
+          "y": 134,
+          "height": 83.1875
+        },
+        {
+          "id": "",
+          "name": "전체 읽기",
+          "tag": "BUTTON",
+          "y": 379.109375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 열기",
+          "tag": "BUTTON",
+          "y": 379.109375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "목차",
+          "tag": "SUMMARY",
+          "y": 443.109375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "1. 잘하고 싶었던 마음",
+          "tag": "BUTTON",
+          "y": 487.109375,
+          "height": 48.5
+        },
+        {
+          "id": "",
+          "name": "2. 쉬는 동안 생긴 기준",
+          "tag": "BUTTON",
+          "y": 535.609375,
+          "height": 48.5
+        },
+        {
+          "id": "",
+          "name": "3. 함께 배우는 쪽으로",
+          "tag": "BUTTON",
+          "y": 584.109375,
+          "height": 48.5
+        },
+        {
+          "id": "",
+          "name": "4. 오래 좋아하는 것을 고르기",
+          "tag": "BUTTON",
+          "y": 632.609375,
+          "height": 48.5
+        },
+        {
+          "id": "",
+          "name": "보관한 책 · 0",
+          "tag": "SUMMARY",
+          "y": 742.109375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "새 책",
+          "tag": "SUMMARY",
+          "y": 802.109375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "저장 범위",
+          "tag": "SUMMARY",
+          "y": 899.109375,
+          "height": 44
+        }
+      ],
+      "headings": [
+        {
+          "tag": "H2",
+          "text": "내 책",
+          "y": 109.5
+        },
+        {
+          "tag": "H3",
+          "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "y": 134
+        }
+      ],
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      },
+      "files": {
+        "viewport": "list-1440.png",
+        "full": "list-1440-full.png",
+        "arrival": null
+      }
+    },
+    {
+      "scene": "editor",
+      "width": 1440,
+      "height": 1000,
+      "arrival": {
+        "scrollY": 54,
+        "focus": "wbChapterNote"
+      },
+      "content": {
+        "selector": "#wbChapterNote",
+        "x": 370,
+        "y": 304.25,
+        "width": 700,
+        "height": 926,
+        "fontSize": "19px",
+        "lineHeight": "37.05px",
+        "padding": "0px",
+        "text": "일을 잠시 멈춘 첫 주에는 달력이 유난히 넓어 보였다. 약속이 없는 오후를 자유라고 부르다가도 저녁이 되면 무엇을 했는지 설명해야 할 것 같았다. 메모를 열어 보니 쉬는 날에도 일을 했던 날과 같은 방식으로 자신을 채점하고 있었다.\n\n처음 바꾼 일은 거창한 계획이 아니었다. 일어나면 커튼을 열고 점심 한 끼를 직접 만드는 순서를 정했다. 오전에 실패하면 하루 전체를 포기하는 대신 오후에 할 ",
+        "clientHeight": 926,
+        "scrollHeight": 926
+      },
+      "bodyFirstY": 304.25,
+      "screen": {
+        "width": 1440,
+        "height": 1000
+      },
+      "main": {
+        "selector": "#lifeMain",
+        "x": 370,
+        "y": 36,
+        "width": 700,
+        "height": 1557.25,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "0px",
+        "text": "내 책\n목차\n읽기\n일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록\n2 / 4\n이 장의 근거 · 1개\n장 제목\n이 장의 원고\n\n837 / 20,000\n\n생각과 근거 · 0개\n책 설정\n개정본 · 1 / 10\n책자 만들기\n이 장 보관\n책 원고 파일로 보관\n\n이 브라우저에 저장됨\n\n저장 범위",
+        "clientHeight": 1557,
+        "scrollHeight": 1557
+      },
+      "bookTitle": {
+        "selector": "#wbBookHeading",
+        "x": 370,
+        "y": 112,
+        "width": 700,
+        "height": 26.25,
+        "fontSize": "15px",
+        "lineHeight": "26.25px",
+        "padding": "0px",
+        "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+        "clientHeight": 26,
+        "scrollHeight": 26
+      },
+      "storage": {
+        "selector": ".wb-storage-line",
+        "x": 370,
+        "y": 1536.25,
+        "width": 700,
+        "height": 57,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "12px 0px 0px",
+        "text": "이 브라우저에 저장됨\n\n저장 범위",
+        "clientHeight": 56,
+        "scrollHeight": 56
+      },
+      "actions": {
+        "selector": ".wb-book-actions",
+        "x": 370,
+        "y": 36,
+        "width": 700,
+        "height": 64,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "8px 0px",
+        "text": "목차\n읽기",
+        "clientHeight": 64,
+        "scrollHeight": 64
+      },
+      "bookControls": {
+        "selector": ".wb-book-controls",
+        "x": 370,
+        "y": 1383.25,
+        "width": 700,
+        "height": 113,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "24px 0px",
+        "text": "책 설정\n개정본 · 1 / 10\n책자 만들기\n이 장 보관\n책 원고 파일로 보관",
+        "clientHeight": 112,
+        "scrollHeight": 112
+      },
+      "chapterNavigation": {
+        "selector": ".wb-chapter-navigation",
+        "x": 370,
+        "y": 162.25,
+        "width": 700,
+        "height": 44,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "0px",
+        "text": "2 / 4",
+        "clientHeight": 44,
+        "scrollHeight": 44
+      },
+      "chapterTitle": {
+        "selector": "#wbChapterTitle",
+        "x": 370,
+        "y": 230.25,
+        "width": 700,
+        "height": 48,
+        "fontSize": "32px",
+        "lineHeight": "48px",
+        "padding": "0px",
+        "text": "쉬는 동안 생긴 기준",
+        "clientHeight": 48,
+        "scrollHeight": 48
+      },
+      "readingTools": null,
+      "intro": null,
+      "nav": {
+        "top": 24,
+        "height": 214
+      },
+      "controlsBeforeBody": [
+        {
+          "id": "wbBooksBack",
+          "name": "책 목록",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "wbBookOutlineHeading",
+          "name": "목차",
+          "tag": "SUMMARY",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "wbBookPreviewOpen",
+          "name": "전체 원고 읽기",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 설정·개정본·파일",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "지금 저장",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "wbChapterPrevious",
+          "name": "이전 장",
+          "tag": "BUTTON",
+          "y": 162.25,
+          "height": 44
+        },
+        {
+          "id": "wbChapterNext",
+          "name": "다음 장",
+          "tag": "BUTTON",
+          "y": 162.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 1개",
+          "tag": "SUMMARY",
+          "y": 162.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "",
+          "tag": "SUMMARY",
+          "y": 290.25,
+          "height": 44
+        },
+        {
+          "id": "wbChapterTitle",
+          "name": "장 제목",
+          "tag": "TEXTAREA",
+          "y": 230.25,
+          "height": 48
+        }
+      ],
+      "controls": [
+        {
+          "id": "wbBooksBack",
+          "name": "책 목록",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "wbBookOutlineHeading",
+          "name": "목차",
+          "tag": "SUMMARY",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "",
+          "tag": "SUMMARY",
+          "y": 1352.9375,
+          "height": 142.78125
+        },
+        {
+          "id": "wbBookPreviewOpen",
+          "name": "전체 원고 읽기",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 설정·개정본·파일",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "지금 저장",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "wbChapterPrevious",
+          "name": "이전 장",
+          "tag": "BUTTON",
+          "y": 162.25,
+          "height": 44
+        },
+        {
+          "id": "wbChapterNext",
+          "name": "다음 장",
+          "tag": "BUTTON",
+          "y": 162.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 1개",
+          "tag": "SUMMARY",
+          "y": 162.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "",
+          "tag": "SUMMARY",
+          "y": 290.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "",
+          "tag": "SUMMARY",
+          "y": 456.5,
+          "height": 44
+        },
+        {
+          "id": "wbChapterTitle",
+          "name": "장 제목",
+          "tag": "TEXTAREA",
+          "y": 230.25,
+          "height": 48
+        },
+        {
+          "id": "wbChapterNote",
+          "name": "이 장의 원고",
+          "tag": "TEXTAREA",
+          "y": 304.25,
+          "height": 926
+        },
+        {
+          "id": "",
+          "name": "생각과 근거 · 0개",
+          "tag": "SUMMARY",
+          "y": 1299.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 설정",
+          "tag": "SUMMARY",
+          "y": 1408.25,
+          "height": 44
+        },
+        {
+          "id": "wbBookEditionsHeading",
+          "name": "개정본 · 1 / 10",
+          "tag": "SUMMARY",
+          "y": 1408.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "",
+          "tag": "SUMMARY",
+          "y": 2083.203125,
+          "height": 47.59375
+        },
+        {
+          "id": "wbBookEditionOpen",
+          "name": "책자 만들기",
+          "tag": "BUTTON",
+          "y": 1408.25,
+          "height": 44
+        },
+        {
+          "id": "wbChapterArchive",
+          "name": "이 장 보관",
+          "tag": "BUTTON",
+          "y": 1412.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 원고 파일로 보관",
+          "tag": "SUMMARY",
+          "y": 1408.25,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "저장 범위",
+          "tag": "SUMMARY",
+          "y": 1549.25,
+          "height": 44
+        }
+      ],
+      "headings": [
+        {
+          "tag": "H2",
+          "text": "내 책",
+          "y": 35.5
+        },
+        {
+          "tag": "H3",
+          "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "y": 112
+        }
+      ],
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      },
+      "files": {
+        "viewport": "editor-1440.png",
+        "full": "editor-1440-full.png",
+        "arrival": "editor-1440-arrival.png"
+      }
+    },
+    {
+      "scene": "reading",
+      "width": 1440,
+      "height": 1000,
+      "arrival": {
+        "scrollY": 4,
+        "focus": "wbBookPreview"
+      },
+      "content": {
+        "selector": "#wbBookPreview .wb-reading-text",
+        "x": 380,
+        "y": 248.75,
+        "width": 680,
+        "height": 2445.09375,
+        "fontSize": "19px",
+        "lineHeight": "37.05px",
+        "padding": "0px",
+        "text": "처음 면접을 보러 가던 아침에는 평소보다 일찍 집을 나섰다. 역 앞에서 커피를 사면서 회사 이름이 적힌 안내 문자를 몇 번이나 다시 읽었다. 무엇을 하게 될지보다 그 이름을 다른 사람에게 어떻게 말할지 먼저 생각했다는 사실은 한참 뒤에야 알아차렸다.\n\n그날의 메모에는 질문과 답변보다 면접관의 표정이 더 자세히 남아 있다. 고개를 끄덕였다는 것, 다음 질문으로 빨리 넘어갔다는 것, 마지막에 수",
+        "clientHeight": 2445,
+        "scrollHeight": 2445
+      },
+      "bodyFirstY": 248.75,
+      "screen": {
+        "width": 1440,
+        "height": 1000
+      },
+      "main": {
+        "selector": "#lifeMain",
+        "x": 370,
+        "y": 36,
+        "width": 700,
+        "height": 6903.890625,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "0px",
+        "text": "내 책\n목차\n집필\n일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록\n1\n잘하고 싶었던 마음\n처음 면접을 보러 가던 아침에는 평소보다 일찍 집을 나섰다. 역 앞에서 커피를 사면서 회사 이름이 적힌 안내 문자를 몇 번이나 다시 읽었다. 무엇을 하게 될지보다 그 이름을 다른 사람에게 어떻게 말할지 먼저 생각했다는 사실은 한참 뒤에야 알아차렸다.\n\n그날의 메모에는 질문",
+        "clientHeight": 6904,
+        "scrollHeight": 6904
+      },
+      "bookTitle": {
+        "selector": "#wbBookHeading",
+        "x": 370,
+        "y": 112,
+        "width": 700,
+        "height": 26.25,
+        "fontSize": "15px",
+        "lineHeight": "26.25px",
+        "padding": "0px",
+        "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+        "clientHeight": 26,
+        "scrollHeight": 26
+      },
+      "storage": {
+        "selector": ".wb-storage-line",
+        "x": 370,
+        "y": 6882.890625,
+        "width": 700,
+        "height": 57,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "12px 0px 0px",
+        "text": "이 브라우저에 저장됨\n\n저장 범위",
+        "clientHeight": 56,
+        "scrollHeight": 56
+      },
+      "actions": {
+        "selector": ".wb-book-actions",
+        "x": 370,
+        "y": 36,
+        "width": 700,
+        "height": 64,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "8px 0px",
+        "text": "목차\n집필",
+        "clientHeight": 64,
+        "scrollHeight": 64
+      },
+      "bookControls": null,
+      "chapterNavigation": null,
+      "chapterTitle": null,
+      "readingTools": {
+        "selector": ".wb-reading-tools",
+        "x": 370,
+        "y": 6749.890625,
+        "width": 700,
+        "height": 93,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "24px 0px",
+        "text": "원고 점검\n읽기·파일 설정\n책자 만들기\n책 원고 Markdown 받기\n인쇄 · PDF",
+        "clientHeight": 92,
+        "scrollHeight": 92
+      },
+      "intro": {
+        "selector": ".wb-reading-intro",
+        "x": 380,
+        "y": 6621.84375,
+        "width": 680,
+        "height": 44,
+        "fontSize": "16px",
+        "lineHeight": "27.2px",
+        "padding": "0px",
+        "text": "책 소개",
+        "clientHeight": 44,
+        "scrollHeight": 44
+      },
+      "nav": {
+        "top": 24,
+        "height": 214
+      },
+      "controlsBeforeBody": [
+        {
+          "id": "wbBooksBack",
+          "name": "책 목록",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "목차",
+          "tag": "SUMMARY",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "wbBookPreviewBack",
+          "name": "원고 편집",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "원고 점검·파일·인쇄",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장 편집",
+          "tag": "BUTTON",
+          "y": 175.5,
+          "height": 44
+        }
+      ],
+      "controls": [
+        {
+          "id": "wbBooksBack",
+          "name": "책 목록",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "목차",
+          "tag": "SUMMARY",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "wbBookPreviewBack",
+          "name": "원고 편집",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "원고 점검·파일·인쇄",
+          "tag": "BUTTON",
+          "y": 46,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장 편집",
+          "tag": "BUTTON",
+          "y": 175.5,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 1",
+          "tag": "SUMMARY",
+          "y": 2709.84375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "근거로 연결한 원문 · 1",
+          "tag": "SUMMARY",
+          "y": 3003.921875,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "반례로 연결한 원문 · 2",
+          "tag": "SUMMARY",
+          "y": 3063.921875,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장 편집",
+          "tag": "BUTTON",
+          "y": 3230.171875,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 1",
+          "tag": "SUMMARY",
+          "y": 4319.6875,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장 편집",
+          "tag": "BUTTON",
+          "y": 4465.9375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 2",
+          "tag": "SUMMARY",
+          "y": 5407.265625,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장 편집",
+          "tag": "BUTTON",
+          "y": 5553.515625,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "이 장의 근거 · 1",
+          "tag": "SUMMARY",
+          "y": 6494.84375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "책 소개",
+          "tag": "SUMMARY",
+          "y": 6621.84375,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "원고 점검",
+          "tag": "SUMMARY",
+          "y": 6774.890625,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "읽기·파일 설정",
+          "tag": "SUMMARY",
+          "y": 6774.890625,
+          "height": 44
+        },
+        {
+          "id": "wbBookEditionOpen",
+          "name": "책자 만들기",
+          "tag": "BUTTON",
+          "y": 6774.890625,
+          "height": 44
+        },
+        {
+          "id": "wbBookPreviewExport",
+          "name": "책 원고 Markdown 받기",
+          "tag": "BUTTON",
+          "y": 6774.890625,
+          "height": 44
+        },
+        {
+          "id": "wbBookPrint",
+          "name": "인쇄 · PDF",
+          "tag": "BUTTON",
+          "y": 6774.890625,
+          "height": 44
+        },
+        {
+          "id": "",
+          "name": "저장 범위",
+          "tag": "SUMMARY",
+          "y": 6895.890625,
+          "height": 44
+        }
+      ],
+      "headings": [
+        {
+          "tag": "H2",
+          "text": "내 책",
+          "y": 35.5
+        },
+        {
+          "tag": "H3",
+          "text": "일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록",
+          "y": 112
+        },
+        {
+          "tag": "H4",
+          "text": "잘하고 싶었던 마음",
+          "y": 174.25
+        },
+        {
+          "tag": "H4",
+          "text": "쉬는 동안 생긴 기준",
+          "y": 3228.921875
+        },
+        {
+          "tag": "H4",
+          "text": "함께 배우는 쪽으로",
+          "y": 4464.6875
+        },
+        {
+          "tag": "H4",
+          "text": "오래 좋아하는 것을 고르기",
+          "y": 5552.265625
+        }
+      ],
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.384,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      },
+      "files": {
+        "viewport": "reading-1440.png",
+        "full": "reading-1440-full.png",
+        "arrival": "reading-1440-arrival.png"
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "remoteWrites": 0,
+  "browser": "151.0.7922.173",
+  "runtime": {
+    "assets/life/ui.js": "ab4b15d58cd5ae7de9b0ec31e81657f8792352c5e3bb65877ec40493a15fcd28",
+    "assets/life/ui.css": "169cc52beb58c09ae0592b994e56c748ce7079fe696b33616d0b2ddeef47adfc",
+    "assets/life/workbench-ui.js": "96016906feddc2ff8f43122c4bd881c8a718d36b37acfa730eb00a1974ccdfa0",
+    "assets/life/workbench.css": "fc77bf7cf73850562d3a5a4df2ad5319742423f7903518b4cf401a22d0b361ef"
+  },
+  "finishedAt": "2026-10-08T21:13:16.219Z",
+  "pass": true
+}

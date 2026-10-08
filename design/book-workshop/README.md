@@ -2,7 +2,7 @@
 
 2026-10-09: 비교 후 사용자가 **A · 원고 중심**을 선택했습니다. 이 폴더는 비교 당시 두 안을 보존하며, 실제 앱 적용은 별도 코드와 검증으로 진행합니다.
 
-**A와 B 모두 미선택 비교 시안이다. 운영 디자인 변경은 승인되지 않았다.** [방향 계약](../../docs/design-review/book-design-reset.md)의 책 선택 → 전체 읽기 → 장 집필 → 읽던 문단 복귀를 비교한다. [운영 DESIGN.md](../../DESIGN.md)는 보존하며 `.impeccable/design.json`은 생성·갱신하지 않는다(현재 파일 없음). 이 문서는 시안의 관찰값이며 운영 디자인 규칙을 대체하지 않는다.
+[방향 계약](../../docs/design-review/book-design-reset.md)의 책 선택 → 전체 읽기 → 장 집필 → 읽던 문단 복귀를 비교한다. 실제 적용은 [A안 앱 통합](../../docs/design-review/book-design-reset-integration.md)과 [운영 DESIGN.md](../../DESIGN.md)에 기록한다. 이 폴더는 계속 메모리 전용 비교 시안이며, 아래 토큰은 시안의 관찰값이다. `.impeccable/design.json`은 생성하지 않았다(실행기 미설치).
 
 ## 열기와 재생성
 
