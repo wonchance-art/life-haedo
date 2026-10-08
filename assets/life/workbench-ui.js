@@ -2363,7 +2363,8 @@
         if (!session.state || session.edit === session.stored && session.remoteRevision > session.baseRevision) await load(session);
         if (!showing(token, session)) return;
         surface.setAttribute('aria-busy', 'false');
-        if (mode === 'books' && options.book !== undefined) {
+        if (mode === 'books' && options.bookList === true) session.bookView = null;
+        if (mode === 'books' && options.book !== undefined && options.bookList !== true) {
           const target = options.book;
           const book = target?.workspaceId === bundle.workspaceId && (session.state.books || []).find(item => item.id === target.bookId && !item.archived);
           const chapter = book && (target.chapterId === undefined ? book.chapters.find(item => !item.archived) : book.chapters.find(item => item.id === target.chapterId && !item.archived));

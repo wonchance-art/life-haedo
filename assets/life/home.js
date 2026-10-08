@@ -131,11 +131,12 @@
       return area;
     }
     function books(context, state) {
-      const area = section(context, '내 책', 'homeBooks', () => navigate('books'));
+      const area = section(context, '내 책', 'homeBooks', () => navigate('books', { bookList: true }));
       const activeBooks = (state.books || []).filter(book => !book.archived);
       if (!activeBooks.length) {
-        area.append(el('p', '모아 둔 글로 책을 시작할 수 있습니다.', 'life-meta home-empty-note'));
-        area.append(action(context, '책 만들기', () => navigate('books')));
+        const empty = el('div', null, 'home-empty');
+        empty.append(el('p', '모아 둔 글로 책을 시작할 수 있습니다.', 'life-meta'), action(context, '책 만들기', () => navigate('books', { bookList: true })));
+        area.append(empty);
       }
       activeBooks.slice(0, 3).forEach(book => {
         const chapters = book.chapters.filter(chapter => !chapter.archived);
