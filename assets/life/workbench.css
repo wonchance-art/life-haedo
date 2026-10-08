@@ -242,3 +242,11 @@
   .wb-reading-chapter-heading h4 { font-size: 21px; }
   .wb-book-actions { flex-wrap: wrap; }
 }
+
+.wb-history-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding-block: 16px; border-bottom: 1px solid var(--line); }
+.wb-history-row > p { flex: 1; min-width: 12ch; overflow-wrap: anywhere; }
+.wb-edition { padding-block: 22px; border-bottom: 1px solid var(--line); }
+.wb-edition h4 { font-size: 17px; line-height: 1.7; overflow-wrap: anywhere; }
+.wb-edition h5 { margin-block: 20px 10px; font-size: 16px; }
+.wb-history-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.85; }
+#wbChapterArchive { margin-block: 4px 16px; color: var(--ink-soft); }
