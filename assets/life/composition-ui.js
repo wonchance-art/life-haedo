@@ -61,22 +61,32 @@
       if (data.reflection.note) details.append(node('h5', '회고'), node('p', data.reflection.note, 'life-note'));
       details.append(node('p', '회고에 고른 원문 ' + data.reflection.versionIds.length + '개 · 관련 기록 제외 ' + (data.discovery?.excludedPairs.length || 0) + '개', 'life-meta'));
       data.reflection.versionIds.forEach(id => details.append(versionLine(id)));
-      for (const book of data.books || []) {
-        const manuscript = node('section', null, 'composition-book');
-        manuscript.append(node('h5', '책: ' + book.title), node('p', '기간 ' + (book.fromYear || '미지정') + ' ~ ' + (book.toYear || '미지정'), 'life-meta'));
-        if (book.question) manuscript.append(node('p', book.question, 'life-note'));
-        book.chapters.forEach((chapter, index) => {
-          manuscript.append(node('h6', (index + 1) + '. ' + chapter.title), node('p', chapter.note, 'life-note'));
-          chapter.versionIds.forEach(id => manuscript.append(versionLine(id)));
+      function appendManuscript(target, value, historical = false) {
+        target.append(node('p', '기간 ' + (value.fromYear || '미지정') + ' ~ ' + (value.toYear || '미지정'), 'life-meta'));
+        if (value.question) target.append(node('p', value.question, 'life-note'));
+        value.chapters.forEach((chapter, index) => {
+          target.append(node('h6', (index + 1) + '. ' + chapter.title), node('p', chapter.archived ? (historical ? '보관한 장 · 당시 원고에서 제외' : '보관한 장 · 현재 원고에서 제외') : (historical ? '당시 원고의 장' : '현재 원고의 장'), 'life-meta'), node('p', chapter.note, 'life-note'));
+          chapter.versionIds.forEach(id => target.append(versionLine(id)));
           for (const thought of chapter.insights || []) {
-            manuscript.append(node('p', '현재 해석' + (thought.excluded ? ' · 원고에서 제외' : ''), 'life-meta'),
+            target.append(node('p', (historical ? '당시 해석' : '현재 해석') + (thought.excluded ? ' · 원고에서 제외' : ''), 'life-meta'),
               node('p', thought.statement, 'life-note'), node('p', '아직 모르는 점: ' + thought.uncertainty, 'life-note'));
-            manuscript.append(node('p', '뒷받침하는 글', 'life-meta'));
-            thought.supportVersionIds.forEach(id => manuscript.append(versionLine(id)));
-            manuscript.append(node('p', '다른 관점의 글', 'life-meta'));
-            thought.counterVersionIds.forEach(id => manuscript.append(versionLine(id)));
+            target.append(node('p', '뒷받침하는 글', 'life-meta'));
+            thought.supportVersionIds.forEach(id => target.append(versionLine(id)));
+            target.append(node('p', '다른 관점의 글', 'life-meta'));
+            thought.counterVersionIds.forEach(id => target.append(versionLine(id)));
           }
         });
+      }
+      for (const book of data.books || []) {
+        const manuscript = node('section', null, 'composition-book');
+        manuscript.append(node('h5', '책: ' + book.title), node('p', book.archived ? '보관한 책' : '작업 중인 책', 'life-meta'));
+        appendManuscript(manuscript, book);
+        manuscript.append(node('p', '보관한 개정본 ' + (book.editions?.length || 0) + '개', 'life-meta'));
+        for (const edition of book.editions || []) {
+          const snapshot = node('section', null, 'composition-edition');
+          snapshot.append(node('h6', '개정본: ' + edition.label), node('p', edition.createdAt, 'life-meta'), node('p', '당시 책 제목: ' + edition.title, 'life-note'));
+          appendManuscript(snapshot, edition, true); manuscript.append(snapshot);
+        }
         details.append(manuscript);
       }
       const sourceName = id => view.bundle.sources.find(value => value.id === id)?.title || '받지 못한 원문 · ' + id;

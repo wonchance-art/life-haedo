@@ -378,6 +378,7 @@ body.haedo-shell .haedo-account-host { top: 42px; right: max(calc(60px + env(saf
 .composition-side { margin-block: 20px; min-width: 0; }
 .composition-side h4 { font-size: 16px; line-height: 1.75; }
 .composition-side h5 { font-size: 15px; line-height: 1.75; margin-block: 12px 6px; }
+.composition-side h6 { font-size: 14px; line-height: 1.75; margin-block: 12px 6px; }
 .composition-side .life-meta { margin-top: 6px; }
 .composition-side + .composition-side { padding-top: 20px; border-top: 1px solid var(--line); }
 .composition-side .life-details { margin-block: 8px; border: 0; max-height: 28rem; overflow: auto; scrollbar-color: var(--field-line) var(--paper-2); }

@@ -12,6 +12,15 @@ const OPERATION = '44444444-4444-4444-8444-444444444444';
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 const cancelled = error => { assert.equal(error.code, 'request_cancelled'); return true; };
 
+function addArchivedEdition(book) {
+  book.archived = true; book.chapters[0].archived = true;
+  const chapters = copy(book.chapters);
+  chapters.forEach(chapter => { chapter.id += '_edition'; chapter.insights?.forEach(thought => { thought.id += '_edition'; }); });
+  chapters[0].versionIds.push('edition_missing_version');
+  chapters[0].insights[0].counterVersionIds.push('edition_missing_version');
+  book.editions = [{ id: book.id + '_edition', label: '전송할 개정본', createdAt: '2026-10-08T00:00:00.000Z', title: '그때의 책', fromYear: '', toYear: '', question: '그때의 질문', chapters }];
+}
+
 // Controller interleavings only. Real IndexedDB transactions/recovery and SQL CAS
 // are verified by composition-storage-browser.cjs and the local SQL suite.
 function fixture(t) {
@@ -141,6 +150,7 @@ test('a durable lost-response outbox is replayed unchanged before reading the ne
   f.state.local.books = [{ id: 'book_pending', title: '응답을 잃은 책', fromYear: '', toYear: '', question: '',
     chapters: [{ id: 'chapter_pending', title: '옛 글에서 시작', note: '보관한 책 원고\r\n🌱', versionIds: ['exact_old_version', 'missing_version'],
       insights: [{ id: 'insight_pending', statement: '재전송할 현재 해석', uncertainty: '', supportVersionIds: ['independent_missing'], counterVersionIds: ['exact_old_version'], excluded: false }] }] }];
+  addArchivedEdition(f.state.local.books[0]);
   f.state.meta.outbox = { operationId: OPERATION, expectedRevision: 1, sourceRevision: 1,
     localRevision: 2, data: copy(f.state.local) };
   f.state.meta.status = 'pending';
@@ -164,6 +174,7 @@ test('a failed book upload preserves the durable outbox and retries the same com
   f.state.local.books = [{ id: 'book_retry', title: '재시도할 책', fromYear: '', toYear: '', question: '그때와 지금',
     chapters: [{ id: 'chapter_retry', title: '첫 장', note: '지워지면 안 되는 원고', versionIds: ['exact_old_version', 'missing_version'],
       insights: [{ id: 'insight_retry', statement: '', uncertainty: '빈 해석의 입력 대기', supportVersionIds: ['independent_missing'], counterVersionIds: ['exact_old_version'], excluded: true }] }] }];
+  addArchivedEdition(f.state.local.books[0]);
   f.state.meta.outbox = { operationId: OPERATION, expectedRevision: 1, sourceRevision: 1, localRevision: 2, data: copy(f.state.local) };
   f.state.meta.status = 'pending'; const durable = copy(f.state.meta.outbox), local = copy(f.state.local);
   f.state.writeOverride = () => { throw Object.assign(new Error('fixture transport failure'), { code: 'network_error' }); };
