@@ -110,6 +110,7 @@
     let unbindNavigation = null;
     let lastRecordMode = 'sources';
     let workbenchOpenOptions = null;
+    let chapterImport = null;
     let writingOpenOptions = null;
     let navigationGeneration = 0;
     let homeRenderPromise = Promise.resolve();
@@ -162,6 +163,7 @@
         selectionReturn = null;
       },
       onSelectionCancel: returnFromArrange,
+      onChapterImport: beginChapterImport,
       onWorkbenchNavigate: ({ workspaceId, mode, planOpen = false }) => {
         if (disposed || state.bundle?.workspaceId !== workspaceId || !['reflection', 'books'].includes(mode)) return;
         return navigate(mode, { planOpen });
@@ -806,7 +808,7 @@
       }
     }
 
-    async function commit(changes, stage, stageResult) {
+    async function commit(changes, stage, stageResult, onStored) {
       const request = {
         workspaceId: state.bundle.workspaceId, baseRevision: state.bundle.revision, changes
       };
@@ -826,6 +828,7 @@
       }
       if (result.status !== 'stored') throw new Error(result.error && result.error.message || '저장하지 못했습니다. 다시 시도하거나 내용을 복사해 주세요.');
       state.pendingOperation = null;
+      onStored?.(result);
       await refreshData();
       state.remoteChanged = false;
       return result;
@@ -845,7 +848,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { selection, groupId, pagePreview, discovery, writing, reimport, book, bookList, ...viewOptions } = options || {};
+      const { selection, groupId, pagePreview, discovery, writing, reimport, book, bookList, chapterImport: chapterImportOptions, ...viewOptions } = options || {};
       if (reimport) {
         if (mode !== 'import' || state.bundle.workspaceId !== reimport.workspaceId) return;
         const source = sourceFor(reimport.sourceId);
@@ -861,6 +864,7 @@
         // A new capture has its own scope; do not inherit full_text or omissions.
         state.editTick = 1;
       }
+      if (!['import', 'batch', 'source'].includes(mode) && !chapterImportOptions) chapterImport = null;
       writingOpenOptions = mode === 'write' ? writing || {} : null;
       Object.assign(state, viewOptions, { mode });
       workbenchOpenOptions = workbenchModes.includes(mode) ? options : null;
@@ -875,11 +879,52 @@
         await persistStage(true);
       }
       if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
-      const heading = (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || main.querySelector('h1,h2') || toolbar.querySelector('h1');
+      const heading = (options?.chapterImport && (main.querySelector('#wbChapterImportHeading') || main.querySelector('#wbChapterNote'))) || (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || main.querySelector('h1,h2') || toolbar.querySelector('h1');
       if (heading && !options?.groupId && !reimport) {
         heading.focus({ preventScroll: true });
-        if (options?.book) heading.scrollIntoView({ block: 'nearest' });
+        if (options?.book || options?.chapterImport) heading.scrollIntoView({ block: 'nearest' });
       }
+    }
+
+    function currentChapterImport(context = chapterImport) {
+      return !!context && context === chapterImport && !disposed && context.workspaceId === state.bundle?.workspaceId && context.generation === workspaceGeneration;
+    }
+
+    async function beginChapterImport(target, { isCurrent = () => true } = {}) {
+      const generation = workspaceGeneration, navigation = navigationGeneration;
+      await persistDrafts();
+      if (disposed || generation !== workspaceGeneration || navigation !== navigationGeneration || state.mode !== 'books' || !isCurrent() || target.workspaceId !== state.bundle?.workspaceId) return;
+      // Existing import notes remain in their saved stages; this chapter starts a fresh review.
+      newDraft();
+      chapterImport = { ...target, generation, versionIds: [] };
+      try { await navigate('import'); }
+      catch (cause) { chapterImport = null; throw cause; }
+    }
+
+    async function returnToChapterImport() {
+      const context = chapterImport;
+      if (!currentChapterImport(context)) return;
+      await persistDrafts();
+      await refreshData();
+      if (!currentChapterImport(context)) return;
+      await navigate('books', { chapterImport: { workspaceId: context.workspaceId, bookId: context.bookId,
+        chapterId: context.chapterId, versionIds: context.versionIds.slice() } });
+      if (chapterImport === context) chapterImport = null;
+    }
+
+    function renderChapterImportReturn() {
+      if (!currentChapterImport() || !['import', 'batch', 'source'].includes(state.mode)) return;
+      const context = chapterImport;
+      const panel = node('section', null, 'life-chapter-import-return'); panel.id = 'lifeChapterImportContext';
+      panel.setAttribute('aria-label', context.bookTitle + ' · ' + context.chapterTitle + '에 자료 가져오기');
+      const heading = node('p', context.chapterTitle, 'life-chapter-import-title');
+      heading.title = context.bookTitle;
+      const back = button(context.versionIds.length ? '보관한 자료 확인' : '장으로 돌아가기', guarded(returnToChapterImport));
+      back.id = 'lifeChapterImportReturn';
+      panel.append(heading, node('p', context.versionIds.length
+        ? '자료 ' + context.versionIds.length + '개 보관 · 아직 장에 연결하지 않았습니다.'
+        : '자료를 확인한 뒤 이 장에 연결할 글을 고릅니다. 원고는 저장했습니다.', 'life-meta'), back);
+      main.prepend(panel);
     }
 
     function newDraft() {
@@ -1166,6 +1211,7 @@
     function resetSearchContext() {
       selectedVersions.clear();
       selectionReturn = null;
+      chapterImport = null;
       relatedOrigin = null;
       state.selecting = state.readerArrangeOpen = false;
       state.topic = state.topicsSearch = state.sourcesSearch = state.originFilter = '';
@@ -2474,7 +2520,26 @@
         if (!state.stage || state.stage.stageId !== snapshot.stageId || state.editTick !== tick) throw new Error('입력이 바뀌어 적용하지 않았습니다. 원문·발췌를 다시 확인해 주세요.');
         if (fresh.match.kind === 'overlap' && !snapshot.input.forceSeparate && !snapshot.input.existingSourceId) throw new Error('겹치는 자료를 비교해 같은 자료인지 별개 자료인지 먼저 선택해 주세요.');
         const changes = core.buildImportChanges(state.bundle, fresh, selected);
-        await commit(changes, snapshot, validBatchStage(snapshot) ? { sourceId: fresh.source.id, sourceVersionId: fresh.version.id } : undefined);
+        const chapterContext = chapterImport;
+        let confirmed = false;
+        try {
+          await commit(changes, snapshot, (validBatchStage(snapshot) || currentChapterImport(chapterContext))
+            ? { sourceId: fresh.source.id, sourceVersionId: fresh.version.id } : undefined, () => {
+            if (!currentChapterImport(chapterContext) || snapshot.workspaceId !== chapterContext.workspaceId) return;
+            confirmed = true;
+            if (!chapterContext.versionIds.includes(fresh.version.id)) chapterContext.versionIds.push(fresh.version.id);
+            // The source transaction already committed. A failed subsequent read must not replay it.
+            state.stage = state.prepared = null;
+            state.savedTick = state.editTick = 0;
+          });
+        } catch (cause) {
+          if (confirmed && currentChapterImport(chapterContext)) {
+            render();
+            announce('자료는 보관했습니다. 목록을 다시 불러온 뒤 장에 연결할 글을 확인해 주세요.');
+          }
+          throw cause;
+        }
+        if (disposed || state.bundle?.workspaceId !== snapshot.workspaceId) return;
         if (!disposed && state.bundle?.workspaceId === snapshot.workspaceId && !validBatchStage(snapshot) && selected.length) state.importResult = {
           workspaceId: snapshot.workspaceId, sourceId: fresh.source.id, sourceVersionId: fresh.version.id,
           locator: { start: selected[0].start, end: selected[0].end }
@@ -2484,6 +2549,7 @@
         state.prepared = null;
         state.savedTick = state.editTick = 0;
         if (validBatchStage(snapshot)) { state.batchId = snapshot.batchId; await navigate('batch'); }
+        else if (currentChapterImport(chapterContext)) { await returnToChapterImport(); return; }
         else if (excerpts.length) await navigate('sources');
         else await navigate('source', { sourceId: retained, sourceVersionId: fresh.version.id, locator: null });
         announce((excerpts.length ? '모음에 반영됨' : '자료 보관됨') + ' · 이 브라우저에 저장됨');
@@ -3046,6 +3112,7 @@
           if (!disposed && state.mode === 'page') renderRestoreResult();
         }).catch(failure);
       }
+      renderChapterImportReturn();
       if (state.mode === 'tools') renderTools();
       else if (state.mode === 'manage') renderManagement();
       else if (state.mode === 'batch') renderBatch();

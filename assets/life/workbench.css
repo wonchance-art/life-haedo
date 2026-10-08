@@ -294,3 +294,7 @@
 .wb-book-list-outline { flex: 0 0 100%; min-width: 0; }
 .wb-book-list-outline > .life-button { display: block; width: 100%; padding: 12px; border: 0; background: transparent; text-align: left; white-space: normal; line-height: 1.75; }
 .wb-book-list-outline > .life-button:hover { background: var(--soft); }
+
+.wb-chapter-import { margin-block: 20px; padding-block: 20px; border-block: 1px solid var(--line); }
+.wb-chapter-import > h3 { font-size: 18px; line-height: 1.7; }
+.wb-chapter-import > .life-actions { margin-top: 16px; }

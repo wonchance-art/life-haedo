@@ -402,3 +402,9 @@ body.haedo-shell .haedo-account-host { top: 42px; right: max(calc(60px + env(saf
 .writing-remote-row { padding-block: 12px; border-bottom: 1px solid var(--line); }
 .writing-remote-row button { text-align: left; word-break: keep-all; overflow-wrap: anywhere; }
 .life-writing-incoming { padding-block: 12px; border-bottom: 1px solid var(--line); }
+
+/* A temporary, explicit return to the chapter that started this import. */
+.life-chapter-import-return { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.life-chapter-import-title { flex: 1 1 60%; min-width: 0; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; word-break: keep-all; }
+.life-chapter-import-return > .life-meta { flex: 1 1 100%; order: 2; }
+.life-chapter-import-return > .life-button { flex-shrink: 0; }
