@@ -132,7 +132,7 @@
       busy: false, editTick: 0, savedTick: 0, stageFailed: false, status: '', error: '',
       pendingOperation: null, stageSelection: null, sourceSelection: null, stages: [], allStages: [], batches: new Map(), batchId: null,
       remoteChanged: false, readerPositions: new Map(), sourceDrafts: new Map(),
-      syncAccount: null, syncState: null, syncReadError: null, syncAccountKey: null,
+      syncAccount: null, syncState: null, syncReadError: null, syncAccountKey: null, syncWorkspaceId: null,
       syncLoading: false, managementOpen: false, sourcesFiltersOpen: false, topicsFiltersOpen: false,
       selecting: false, readerArrangeOpen: false,
       sourcesLimit: SEARCH_PAGE_SIZE, sourcesWindowKey: '', sourcesRevealVersionId: null, ignoreKoreanSpacing: false,
@@ -719,6 +719,7 @@
 
     function syncPresentation() {
       if (!sync) return { key: 'unavailable', label: '기기 간 자동 동기화 미연결', hint: '자료는 이 브라우저에 보관합니다. JSON 백업으로 사본을 옮길 수 있습니다.' };
+      if (state.syncWorkspaceId !== state.bundle?.workspaceId) return { key: 'loading', label: '동기화 상태 확인 중', hint: '현재 작업공간의 연결 상태를 확인합니다.' };
       if (state.syncReadError) return { key: 'read_error', label: '동기화 상태 확인 실패 · 자료는 이 브라우저에 보관', hint: '기존 연결은 유지합니다. 상태를 다시 확인해 주세요.' };
       if (state.syncLoading) return { key: 'loading', label: '동기화 상태 확인 중', hint: '연결 상태를 확인한 뒤 가능한 작업을 표시합니다.' };
       const item = state.syncState;
@@ -760,11 +761,13 @@
         const info = await sync.getState(workspaceId);
         if (disposed || sequence !== syncRefreshSequence || state.bundle.workspaceId !== workspaceId) return;
         state.syncState = info;
+        state.syncWorkspaceId = workspaceId;
         state.syncReadError = null;
         state.syncLoading = false;
 
       } catch (cause) {
-        if (disposed || sequence !== syncRefreshSequence) return;
+        if (disposed || sequence !== syncRefreshSequence || state.bundle.workspaceId !== workspaceId) return;
+        state.syncWorkspaceId = workspaceId;
         state.syncReadError = cause;
         state.syncLoading = false;
       }
@@ -775,6 +778,12 @@
       if (disposed) return;
       const scope = main.querySelector('.life-scope');
       if (scope) updateScope(scope);
+      const managementStatus = main.querySelector('#lifeManagementSyncStatus');
+      if (managementStatus) {
+        const presentation = syncPresentation();
+        managementStatus.textContent = '원문·발췌 · ' + presentation.label;
+        managementStatus.dataset.syncState = presentation.key;
+      }
       if (state.mode === 'sync') {
         if (state.conflictView && state.syncState && (!state.syncState.enabled || !state.syncState.conflict)) {
           state.conflictView = null;
@@ -794,7 +803,7 @@
       const matching = state.syncAccount && item?.binding && item.binding.userId === state.syncAccount.userId && item.binding.projectUrl === state.syncAccount.projectUrl;
       const mismatched = item?.binding && state.syncAccount && !matching;
       const passive = !state.syncReadError && !state.syncLoading && !item?.error && !item?.conflict && !mismatched && (!item?.binding || !item.enabled || (matching && item.status === 'synced'));
-      scope.classList.toggle('life-sr-only', state.mode === 'sync' || (sectionFor(state.mode) !== 'manage' && passive));
+      scope.classList.toggle('life-sr-only', ['sync', 'manage'].includes(state.mode) || (sectionFor(state.mode) !== 'manage' && passive));
     }
 
     async function syncAction(action, message, refreshLocal) {
@@ -1199,7 +1208,10 @@
     }
 
     function renderManagement() {
-      const manage = actionRow('자료 관리', '자료 ' + state.bundle.sources.length + '개 · 발췌 ' + state.bundle.records.length + '개', 'book', () => {}, state.bundle.title || '내 자료');
+      const manage = actionRow('자료 관리', '이 브라우저 · 자료 ' + state.bundle.sources.length + '개 · 발췌 ' + state.bundle.records.length + '개', 'book', () => {}, state.bundle.title || '내 자료');
+      manage.id = 'lifeCurrentWorkspace';
+      manage.setAttribute('aria-label', '자료 관리');
+      manage.setAttribute('aria-description', '현재 작업공간. 눌러 다른 작업공간을 선택합니다.');
       const management = node('section', null, 'life-management');
       management.id = 'lifeManagement';
       management.hidden = !state.managementOpen;
@@ -1236,15 +1248,29 @@
       management.append(workspace.label);
       if ([...state.batches.values()].some(batch => batch.workspaceId === state.bundle.workspaceId)) management.append(button('선택 파일 목록', guarded(() => navigate('batch'))));
       main.append(manage, management);
+      if (sync) {
+        const connection = actionRow('기기 간 동기화', '', 'cloud', async () => {
+          await navigate('sync'); await refreshSync();
+        });
+        const status = connection.querySelector('.life-meta');
+        status.id = 'lifeManagementSyncStatus';
+        status.setAttribute('role', 'status');
+        const presentation = syncPresentation();
+        status.textContent = '원문·발췌 · ' + presentation.label;
+        status.dataset.syncState = presentation.key;
+        main.append(connection, node('p', '묶음·내 페이지와 글쓰기 초안은 각각 연결합니다.', 'life-help life-management-note'));
+        refreshSync().catch(failure);
+      }
+      const backups = node('section', null, 'life-management-backups');
+      backups.setAttribute('aria-labelledby', 'lifeBackupChoices');
+      const heading = node('h2', '파일로 보관'); heading.id = 'lifeBackupChoices';
+      backups.append(heading);
       const destinations = node('div', null, 'life-destinations');
-      destinations.append(actionRow('공개 페이지 관리', '이 계정으로 게시한 페이지 확인·철회', 'link', () => navigate('public-pages')));
-      destinations.append(actionRow('자료·구성 백업', '원문과 묶음·내 페이지·회고·책을 함께 보관', 'download', () => navigate('workbench-backup')));
-      destinations.append(actionRow('내보내기·사본 복원', '원문·발췌·출처를 파일로 보관', 'download', () => navigate('transfer'), '자료 백업·복원'));
-      if (sync) destinations.append(actionRow('기기 간 동기화', '연결할 작업공간을 직접 선택', 'cloud', async () => {
-        await navigate('sync'); await refreshSync();
-      }));
-      destinations.append(destinationRow('연표·목표·습관 백업·복원', '자료 백업과 별도로 보관됩니다.', 'workspace.html?section=manage#backupAll', 'timeline'));
-      main.append(destinations);
+      destinations.append(actionRow('자료·구성 백업', '원문·발췌와 묶음·내 페이지·회고·책을 함께', 'download', () => navigate('workbench-backup')));
+      destinations.append(actionRow('내보내기·사본 복원', '자료만 JSON·Markdown으로 · 구성 제외', 'book', () => navigate('transfer')));
+      destinations.append(destinationRow('연표·목표·습관 백업·복원', '위 두 파일에 포함되지 않는 별도 자료', 'workspace.html?section=manage#backupAll', 'timeline'));
+      backups.append(destinations);
+      main.append(backups, actionRow('공개 페이지 관리', '게시한 사본 확인·철회 · 백업과 별도', 'link', () => navigate('public-pages')));
     }
 
     function renderStages(parent) {
@@ -2727,9 +2753,10 @@
     }
 
     function renderTransfer() {
-      main.append(title('내보내기·사본 복원'), node('p', '이 작업공간의 원문·발췌·메모·출처를 파일로 보관합니다. 파일에는 개인 자료가 포함됩니다.', 'life-help'));
-      main.append(node('p', '검토 초안과 기기에 보관하지 않은 사진·본문은 제외됩니다. 연표·목표·습관은 별도 백업입니다.', 'life-help'));
-      main.append(actionRow('묶음·내 페이지도 함께 백업', '아래 자료 전용 파일에는 페이지 구성과 회고가 포함되지 않습니다.', 'download', () => navigate('workbench-backup')));
+      main.append(title('내보내기·사본 복원'), node('p', '현재 작업공간의 원문·발췌·메모·출처만 담습니다.', 'life-help'));
+      const scope = node('details', null, 'life-details'); scope.id = 'lifeTransferScope';
+      scope.append(node('summary', '포함하지 않는 자료'), node('p', '묶음·내 페이지·회고·책, 글쓰기·가져오기 초안, 읽기 위치, 사진과 미확보 본문, 연표·목표·습관, 이미 게시한 사본은 포함하지 않습니다. 파일에는 개인 자료가 포함되니 보관 위치를 확인하세요.', 'life-help'));
+      main.append(scope, actionRow('묶음·내 페이지도 함께 백업', '구성까지 복원하려면 자료·구성 JSON을 받으세요.', 'download', () => navigate('workbench-backup')));
       const actions = node('section', null, 'life-destinations life-settings-section');
       const stamp = new Date().toISOString().slice(0, 10);
       actions.append(actionRow('JSON 백업', '새 작업공간 사본으로 복원할 수 있는 파일', 'download', async () => {
@@ -2937,7 +2964,7 @@
         restoreFocus();
         return;
       }
-      if (state.syncLoading) { restoreFocus(); return; }
+      if (state.syncLoading || presentation.key === 'loading') { restoreFocus(); return; }
       if (info?.error && presentation.key === 'error') panel.append(node('p', info.error.message || '서버에 연결하지 못했습니다.', 'life-error'));
       const matching = account && presentation.key !== 'mismatch' && (!info?.binding || (info.binding.projectUrl === account.projectUrl && info.binding.userId === account.userId));
       if (matching && (!info?.binding || !info.enabled)) actions.append(button('이 작업공간 동기화 시작', guarded(async () => {

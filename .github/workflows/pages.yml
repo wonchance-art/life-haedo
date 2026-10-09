@@ -193,6 +193,11 @@ jobs:
       - name: Verify subview location and safe contextual return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/subview-navigation-browser.cjs
+      - name: Verify management storage scope and backup recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: |
+          node tests/management-clarity-browser.cjs
+          node tests/life-management-browser.cjs
       - name: Verify isolated expression-page design samples
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/expression-design-browser.cjs
@@ -212,6 +217,8 @@ jobs:
             .local/unified-home/
             .local/home-entry/
             .local/subview-navigation/
+            .local/management-clarity/
+            .local/life-management/
             .local/quality-audit/after/
             .local/composition-sync/
             .local/writing-sync/
