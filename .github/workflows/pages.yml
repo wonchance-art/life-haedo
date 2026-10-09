@@ -190,6 +190,9 @@ jobs:
       - name: Verify home navigation, draft re-entry and responsive states
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/home-entry-browser.cjs
+      - name: Verify subview location and safe contextual return
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/subview-navigation-browser.cjs
       - name: Verify isolated expression-page design samples
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/expression-design-browser.cjs
@@ -208,6 +211,7 @@ jobs:
             .local/core-experience/
             .local/unified-home/
             .local/home-entry/
+            .local/subview-navigation/
             .local/quality-audit/after/
             .local/composition-sync/
             .local/writing-sync/
