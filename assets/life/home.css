@@ -4,8 +4,8 @@
 .home-shortcuts { display: flex; align-items: stretch; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 16px; background: var(--canvas, #f7f7fb); }
 .home-shortcut { flex: 1 1 0; gap: 9px; min-width: 0; min-height: 54px; padding: 8px; border: 0; border-radius: 11px; background: transparent; color: var(--ink); font-size: 14px; font-weight: 550; transition: background-color 160ms ease-out, color 160ms ease-out; }
 .home-shortcut > .life-glyph { box-sizing: content-box; width: 20px; height: 20px; padding: 7px; border-radius: 10px; color: var(--color-primary); background: var(--soft); }
-.home-shortcut[data-home-destination=page] > .life-glyph { color: var(--mint-ink, #356452); background: var(--mint, #edf7f3); }
-.home-shortcut[data-home-destination=tools] > .life-glyph { color: var(--sky-ink, #416187); background: var(--sky, #eff4fb); }
+.home-shortcut[data-home-destination=write] > .life-glyph { color: var(--mint-ink, #356452); background: var(--mint, #edf7f3); }
+.home-shortcut[data-home-destination=time] > .life-glyph { color: var(--sky-ink, #416187); background: var(--sky, #eff4fb); }
 .home-shortcut:hover:not(:disabled) { background: var(--paper); }
 .home-shortcut:active:not(:disabled) { background: var(--soft); color: var(--color-primary); }
 .home-shortcut:focus-visible { outline-offset: 1px; }

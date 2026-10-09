@@ -1092,7 +1092,8 @@
           await navigate('import');
         }));
         if (state.mode === 'import' || state.mode === 'batch') add.setAttribute('aria-current', 'page');
-        nav.append(add, iconButton('글쓰기', 'edit', guarded(() => navigate('write'))));
+        // Home exposes these actions with labels in its shortcut row.
+        if (section === 'records') nav.append(add, iconButton('글쓰기', 'edit', guarded(() => navigate('write'))));
         toolbar.append(nav);
       }
       if (state.remoteChanged) {
@@ -1201,6 +1202,7 @@
     function renderStages(parent) {
       if (!state.stages.length) return;
       const details = node('details', null, 'life-details');
+      details.id = 'lifeImportDrafts';
       details.append(node('summary', '검토 중 ' + state.stages.length + '개 · 이어서 확인'));
       const listedBatches = new Set();
       state.stages.forEach(stage => {
@@ -2228,6 +2230,21 @@
         if (item && !item.unsaved) main.append(button('건너뛰기 · 초안 유지', guarded(() => skipBatchItem(item))));
       }
       main.append(title(state.prepared ? '원문·출처 검토' : linkedSource ? '보관한 글에 본문 추가' : '선택한 기록 가져오기'));
+      if (!state.prepared && state.stages.some(stage => stage.stageId !== state.stage.stageId)) {
+        const resume = button('보관한 검토 이어서 열기', guarded(async () => {
+          // Use the existing navigation flush before exposing another draft.
+          // A failed save keeps this form and its current input in place.
+          await navigate('sources');
+          const token = navigationGeneration;
+          await refreshData();
+          if (disposed || state.mode !== 'sources' || token !== navigationGeneration) return;
+          render();
+          const drafts = main.querySelector('#lifeImportDrafts');
+          if (drafts) { drafts.open = true; drafts.querySelector('summary')?.focus(); }
+        }));
+        resume.id = 'lifeImportResume';
+        main.append(resume);
+      }
       const phase = node('p', state.prepared ? '확인 후 보관 · 아직 자료에 반영하지 않았습니다.' : '본문·텍스트 파일·링크를 선택해 검토합니다.', 'life-import-phase');
       phase.id = 'lifeImportPhase';
       main.append(phase);
