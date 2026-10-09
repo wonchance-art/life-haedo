@@ -34,6 +34,8 @@
     filter = "active",
     legacy,
     legacySaved = false,
+    legacyAccountCheck,
+    legacyLinking = false,
     syncWarning = "",
     conflictId,
     syncing = false,
@@ -296,6 +298,19 @@
     const list = byId("documentList"),
       k = model.keys(uid),
       docs = model.registry(localStorage, uid).docs;
+    let previous;
+    try { previous = model.legacyBackup(localStorage); } catch (_) { /* Keep recovery reachable without claiming absence. */ }
+    const sourceIds = new Set(docs.map(doc => doc.legacySource));
+    const available = previous?.docs.filter(doc => !sourceIds.has(doc.id)).length || 0;
+    const waiting = previous?.docs.some(source => docs.some(doc => doc.legacySource === source.id && doc.updated !== doc.syncedAt));
+    byId("timelineRecovery").hidden = !!docs.length && !available && !waiting && !previous?.raw.length && !!previous;
+    byId("recoverLegacy").hidden = !previous?.docs.length && !previous?.raw.length;
+    byId("openLegacy").hidden = byId("recoverLegacy").hidden;
+    byId("recoverySummary").textContent = available
+      ? "이 브라우저에 아직 계정에 연결하지 않은 연표 " + available + "개가 있습니다. 원본을 보관한 뒤 사본으로 연결할 수 있습니다."
+      : waiting ? "기존 연표의 기기 사본이 있습니다. 연결 화면에서 서버 저장을 다시 시도할 수 있습니다."
+      : previous?.raw.length ? "그대로 읽지 못한 기존 자료가 있습니다. 연결 화면에서 원본을 백업해 주세요."
+      : "현재 계정의 목록과 예전 기기·서버의 연표는 별도로 확인합니다. 기존 백업이 있으면 새 사본으로 가져오세요.";
     list.replaceChildren();
     for (const doc of docs) {
       const row = el("div", "document-row"),
@@ -332,7 +347,7 @@
     if (!docs.length)
       empty(
         list,
-        "아직 연결된 연표가 없습니다. 새 연표를 만들거나 기존 백업을 가져오세요.",
+        "현재 계정에 표시할 연표가 없습니다.",
         "새 연표",
         openNewTimeline,
       );
@@ -585,36 +600,44 @@
         toast("백업을 만들지 못했습니다. 기기의 원본은 보존했습니다.");
       }
     };
-    try {
-      legacy = model.legacyBackup(localStorage);
-      byId("openLegacy").hidden = !legacy.docs.length && !legacy.raw.length;
-    } catch (_) {
-      syncWarning = "기존 연표를 읽지 못했습니다. 기기의 원본은 보존했습니다.";
-    }
     byId("openLegacy").onclick = () => {
-      legacy = model.legacyBackup(localStorage);
+      if (legacyLinking) return;
+      try {
+        legacyAccountCheck = store.captureAccount();
+        if (auth.user?.id !== uid) throw new Error("계정이 변경됐습니다. 새로고침 후 다시 열어 주세요.");
+        legacy = model.legacyBackup(localStorage);
+      } catch (error) {
+        toast("기존 연표를 읽지 못했습니다. 원본은 보존했습니다. " + error.message);
+        return;
+      }
       legacySaved = false;
       byId("legacyOwnership").checked = false;
       byId("legacyImport").disabled = true;
+      byId("legacyImport").textContent = "내 계정에 사본 만들기";
       byId("legacySummary").textContent =
         "기기에 남아 있는 연표 " + legacy.docs.length + "개를 찾았습니다.";
       byId("legacyMessage").textContent = "";
       byId("importDialog").showModal();
     };
+    byId("recoverLegacy").onclick = () => byId("openLegacy").click();
+    byId("recoverBackup").onclick = () => byId("backupFile").click();
     byId("legacyBackup").onclick = () => {
       download(legacy, "haedo-original");
       legacySaved = true;
       byId("legacyImport").disabled =
-        !byId("legacyOwnership").checked || !legacy.docs.length;
+        legacyLinking || !byId("legacyOwnership").checked || !legacy.docs.length;
     };
     byId("legacyOwnership").onchange = () => {
       byId("legacyImport").disabled =
-        !legacySaved || !byId("legacyOwnership").checked || !legacy.docs.length;
+        legacyLinking || !legacySaved || !byId("legacyOwnership").checked || !legacy.docs.length;
     };
     byId("legacyImport").onclick = async () => {
-      if (!legacySaved || !byId("legacyOwnership").checked) return;
+      if (legacyLinking || !legacySaved || !byId("legacyOwnership").checked) return;
+      legacyLinking = true;
       byId("legacyImport").disabled = true;
+      byId("legacyImport").textContent = "사본 연결 중…";
       try {
+        legacyAccountCheck();
         const sources = new Set(
           model.registry(localStorage, uid).docs.map((doc) => doc.legacySource),
         );
@@ -622,26 +645,34 @@
           ...legacy,
           docs: legacy.docs.filter((doc) => !sources.has(doc.id)),
         };
-        if (!pending.docs.length) {
-          byId("legacyMessage").textContent =
-            "이 계정에 이미 사본을 연결했습니다.";
-          return;
-        }
-        const docs = model.importDocs(
+        if (pending.docs.length) model.importDocs(
           localStorage,
           uid,
           pending,
           undefined,
           true,
         );
+        // A failed upload already has account copies: retry their IDs, not the source import.
+        const sourceIds = new Set(legacy.docs.map(doc => doc.id));
+        const uploadIds = model.registry(localStorage, uid).docs
+          .filter(doc => sourceIds.has(doc.legacySource) && doc.updated !== doc.syncedAt)
+          .map(doc => doc.id);
         render();
-        await store.uploadDocuments(docs.map((doc) => doc.id));
+        await store.uploadDocuments(uploadIds);
+        legacyAccountCheck();
         byId("importDialog").close();
         toast("기존 연표 사본을 계정에 연결했습니다.");
       } catch (e) {
+        if (e.code === "account_changed" || auth.user?.id !== uid) return;
+        const message = /^HTTP \d+$/.test(e.message)
+          ? "서버에 저장하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요."
+          : e.message;
         byId("legacyMessage").textContent =
-          "기기 사본을 보존했습니다. " + e.message;
+          "기기 사본을 보존했습니다. " + message;
+        byId("legacyImport").textContent = "사본 연결 다시 시도";
         byId("legacyImport").disabled = false;
+      } finally {
+        legacyLinking = false;
       }
     };
     byId("importFile").onclick = () => byId("backupFile").click();
