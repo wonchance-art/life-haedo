@@ -194,7 +194,7 @@ async function main() {
       await selectMode(page); await page.locator('#lifeSearch').fill(''); await selectVersion(page,f.refs[2].versionId);
       await page.locator(`.life-source-card[data-version-id="${f.refs[1].versionId}"] .life-source-open`).click(); await settle(page);
       await page.locator('#lifeReaderArrange').click(); await review(page,'groups','#lifeReaderArrangePanel'); await apply(page,'읽던 원문만 따로 담기'); await waitSaved(page,w=>w.groups.length===1);
-      await page.getByRole('button',{name:'기록 목록',exact:true}).click(); await settle(page);
+      await nav(page, 'records');
       assert.equal(await page.locator(`.life-source-select[data-version-id="${f.refs[2].versionId}"]`).getAttribute('aria-pressed'),'true');
       assert.equal(await page.locator('.life-source-select[aria-pressed="true"]').count(),1);
       assert.deepEqual((await current(page)).workbench.page,after.workbench.page);

@@ -1,0 +1,15 @@
+PASS selection spans searches, reviews fixed versions and cancellation writes nothing
+PASS hidden selections can be removed and a batch stops at one hundred fixed versions
+PASS existing group receives a unique union and source coordinates remain intact
+PASS reader keeps exact old version and quote return through review cancel and new group
+PASS selected page entry is independent, respects toggles and survives backup restore
+PASS review omission changes only the new page and reader arrange preserves unrelated list selection
+PASS write failure preserves one accepted draft, blocks navigation and retries without duplicate
+PASS workspace switch clears selection and late review cannot overwrite another section
+PASS new saved composition preserves pending review and a deleted destination never becomes a new group silently
+PASS pending review disappears across signout and another account
+PASS keyboard selection and Korean composition keep review local until explicit apply
+PASS visual selection empty many review loading and save error 1440
+PASS visual selection empty many review loading and save error 820
+PASS visual selection empty many review loading and save error 390
+Record arrangement: 14/14 journeys; 18 visual states; console 0; page 0.
