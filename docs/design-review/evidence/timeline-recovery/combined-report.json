@@ -1,0 +1,311 @@
+{
+  "createdAt": "2026-10-09T01:48:27.580339+00:00",
+  "scope": "Actual workspace DOM, platform data/store/sync code, isolated synthetic legacy localStorage and anonymous Auth HTTP Response simulator. No production/private data.",
+  "pass": true,
+  "finalRun": "after/run-2026-10-09T01-48-05-558Z.json",
+  "baselineRun": "before/run-2026-10-09T01-45-24-549Z.json",
+  "checks": [
+    {
+      "name": "legacy-recovery-390",
+      "width": 390,
+      "pass": true,
+      "sameIdRetry": true,
+      "partialUploadRetry": true,
+      "localCopies": 2,
+      "simulatedPostAttempts": 3,
+      "originalBytesUnchanged": true
+    },
+    {
+      "name": "legacy-recovery-820",
+      "width": 820,
+      "pass": true,
+      "keyboardEntryAndEscape": true,
+      "backupBeforeImport": true
+    },
+    {
+      "name": "legacy-recovery-1440",
+      "width": 1440,
+      "pass": true,
+      "keyboardEntryAndEscape": true,
+      "backupBeforeImport": true
+    },
+    {
+      "name": "no-legacy-backup-entry",
+      "width": 390,
+      "pass": true,
+      "actualFileChooserAndImport": true
+    },
+    {
+      "name": "late-upload-account-change",
+      "width": 390,
+      "pass": true,
+      "latePreviousAccountSuccessSuppressed": true,
+      "newAccountCopies": 0,
+      "originalBytesUnchanged": true
+    },
+    {
+      "name": "remote-list-preserved",
+      "width": 820,
+      "pass": true,
+      "remoteDocumentUnchanged": true,
+      "backupThroughExistingManagement": true
+    }
+  ],
+  "screens": [
+    {
+      "scene": "recovery-found",
+      "width": 390,
+      "file": "recovery-found-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "platform haedo-shell",
+          "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "recovery-upload-failed",
+      "width": 390,
+      "file": "recovery-upload-failed-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "platform haedo-shell",
+          "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "recovery-found",
+      "width": 820,
+      "file": "recovery-found-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "platform haedo-shell",
+          "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "recovery-found",
+      "width": 1440,
+      "file": "recovery-found-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "platform haedo-shell",
+          "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "recovery-no-local",
+      "width": 390,
+      "file": "recovery-no-local-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "platform haedo-shell",
+          "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "recovery-remote-loaded",
+      "width": 820,
+      "file": "recovery-remote-loaded-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "platform haedo-shell",
+          "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "productionWrites": 0,
+  "originalRuns": [
+    {
+      "file": "before/run-2026-10-09T01-45-24-549Z.json",
+      "createdAt": "2026-10-09T01:45:24.549Z",
+      "checks": 1,
+      "passed": 1,
+      "classification": "confirmed previous application retry defect reproduced"
+    },
+    {
+      "file": "after/run-2026-10-09T01-46-13-314Z.json",
+      "createdAt": "2026-10-09T01:46:13.314Z",
+      "checks": 6,
+      "passed": 1,
+      "classification": "current app verification; preserve initial selector/wording expectation failures"
+    },
+    {
+      "file": "after/run-2026-10-09T01-46-35-520Z.json",
+      "createdAt": "2026-10-09T01:46:35.520Z",
+      "checks": 6,
+      "passed": 6,
+      "classification": "current app verification; preserve initial selector/wording expectation failures"
+    },
+    {
+      "file": "after/run-2026-10-09T01-48-05-558Z.json",
+      "createdAt": "2026-10-09T01:48:05.558Z",
+      "checks": 6,
+      "passed": 6,
+      "classification": "Final runtime including user-facing server failure recovery message; full 6 passed"
+    }
+  ],
+  "finalRuntime": {
+    "workspace.html": "f7b4c8a748d64afd53240a43c233b3d893fe66b770dfc83cb6ead738e2660828",
+    "assets/platform-ui.js": "d59b2521c6b1bed16928f504408fa89e807901aefa6cac0bdf4a5eefe158b1a4",
+    "assets/platform.css": "9be2a66f5887f6f2e6dbd741f1f0ac338e474280ba283a28ca717204e3efc31c",
+    "assets/haedo-shell.css": "8bab9a10f191eb693bb81d668ad460c930b27ef6c41a6723674b1e818fe15dfc",
+    "assets/platform-store.js": "453f7c3ab3b2452e9d9168ae960d08efa4c59553aa0b1b3cfb5c27ce8aeab22c",
+    "assets/platform-data.js": "bbf707e6684d0bba7f964ec946b7201cb703e7c31d9b0431989b38a65c494f63",
+    "assets/sync.js": "92b367b712c352ea375fd02b40d8a88700692a7292af8b8c6454d0dc300ed047"
+  },
+  "resolvedAppIssue": {
+    "baseline": "Initial POST500 preserved local copy, then next same-button click stopped at already-linked and never sent another POST. One valid legacy source + one malformed raw fixture.",
+    "fixVerification": "After uses two valid legacy sources + one malformed raw fixture: first upload succeeds, second POST500, retry sends only second same ID, 3 total POST attempts, 2 unique local/server copies, source bytes unchanged.",
+    "baselineCaptureRuntime": "before/runtime frozen before root app edits"
+  },
+  "testCorrections": [
+    {
+      "issue": "Initial after run over-specified recovery prose keywords instead of the displayed record count/account scope.",
+      "change": "Assert 2 record count and copy explanation; no-local branch asserts current account and previous device/server are separate."
+    },
+    {
+      "issue": "One timeline has separate title and edit links; all timeline href matches doubled row count.",
+      "change": "Count .document-title (one per record), keep independent persisted local/server copy and exact document assertions."
+    },
+    {
+      "issue": "Initial broad always-visible backup expectation conflicted with normal remote-only list.",
+      "change": "Parent clarified recovery area remains for empty/local/pending/malformed states; normal remote-only list hides recovery area and keeps existing backup management. Actual filechooser entry verified."
+    }
+  ],
+  "limitations": [
+    "No actual Google login, SDK auth flow or live Supabase/RLS verification; mocked Auth.request returns HTTP Response instances.",
+    "Viewport/touch emulation and keyboard actions are not Apple hardware, native Files, VoiceOver or IME tests.",
+    "Legacy storage is explicitly seeded with anonymous known fixtures; no real user storage examined.",
+    "Before contains 1 valid legacy timeline; after expands to 2 for partial-upload retry, so counts differ intentionally.",
+    "Lost acknowledgment after remote commit is not simulated as a failed-before-commit POST; existing CAS semantics remain outside this scope."
+  ],
+  "finalMessageReview": {
+    "from": "raw HTTP status",
+    "to": "server save failed with connection/retry guidance",
+    "dataAndRetryBehaviorChanged": false,
+    "fullFinalVerification": "after/run-2026-10-09T01-48-05-558Z.json"
+  }
+}
