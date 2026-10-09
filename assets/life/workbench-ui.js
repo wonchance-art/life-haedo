@@ -2381,7 +2381,10 @@
     }
     function renderBackup() {
       const session = current;
-      bodyNode.append(notice('보관한 원문·발췌와 묶음·페이지·회고·책 구성을 함께 담습니다. 미적용 가져오기 초안·사진·연표는 포함하지 않습니다.'));
+      bodyNode.append(notice('현재 작업공간의 원문·발췌·메모·출처와 묶음·내 페이지·회고·책을 함께 담습니다.'));
+      const scope = el('details', null, 'life-details'); scope.id = 'wbBackupScope';
+      scope.append(el('summary', '포함하지 않는 자료'), notice('글쓰기·가져오기 초안, 읽기 위치, 사진과 미확보 본문, 연표·목표·습관, 이미 게시한 사본은 포함하지 않습니다. 파일에는 개인 자료가 포함되니 보관 위치를 확인하세요.'));
+      bodyNode.append(scope);
       const downloadButton = action('통합 JSON 받기', async () => {
         const token = generation;
         await flush();
@@ -2461,7 +2464,7 @@
       rememberPageEditor();
       cleanupView();
       bodyNode.replaceChildren();
-      if (saveControl) saveControl.hidden = ['public-pages', 'related'].includes(mode) || !!incoming || mode === 'page' && !!current.share?.open;
+      if (saveControl) saveControl.hidden = ['public-pages', 'related', 'workbench-backup'].includes(mode) || !!incoming || mode === 'page' && !!current.share?.open;
       if (mode === 'public-pages') { renderPublicPages(); return; }
       if (incoming && ['activities', 'page', 'reflection'].includes(mode)) { renderIncoming(); updateStatus(current); return; }
       if (mode === 'activities') renderActivities();
@@ -2506,8 +2509,8 @@
       surface.dataset.workspaceId = bundle.workspaceId;
       const heading = el('div', null, 'wb-row wb-heading');
       const title = el('h2', MODES[mode], 'life-heading wb-grow'); title.tabIndex = -1;
-      if (mode === 'page' || mode === 'related') { heading.classList.add('wb-heading-quiet'); title.classList.add('life-sr-only'); }
-      saveControl = (mode === 'page' ? discoveryIcon : icon)('지금 저장', 'check', () => flush()); saveControl.hidden = ['public-pages', 'related'].includes(mode) || !!incoming;
+      if (['page', 'related', 'workbench-backup'].includes(mode)) { heading.classList.add('wb-heading-quiet'); title.classList.add('life-sr-only'); }
+      saveControl = (mode === 'page' ? discoveryIcon : icon)('지금 저장', 'check', () => flush()); saveControl.hidden = ['public-pages', 'related', 'workbench-backup'].includes(mode) || !!incoming;
       heading.append(title, saveControl);
       statusNode = el('p', '이 브라우저의 구성을 불러오는 중…', 'life-meta wb-save-status'); statusNode.id = 'wbStatus';
       statusNode.setAttribute('role', 'status'); statusNode.setAttribute('aria-live', 'polite');
@@ -2517,7 +2520,7 @@
       errorNode = el('div', null, 'life-error wb-error'); errorNode.id = 'wbError'; errorNode.setAttribute('role', 'alert'); errorNode.hidden = true;
       bodyNode = el('div', null, 'wb-content'); bodyNode.append(notice('불러오는 중…'));
       const storageLine = el('div', null, 'wb-storage-line'); storageLine.append(statusNode, scope);
-      storageLine.hidden = mode === 'public-pages' || mode === 'related';
+      storageLine.hidden = ['public-pages', 'related', 'workbench-backup'].includes(mode);
       if (mode === 'books') surface.append(heading, errorNode, bodyNode, storageLine);
       else surface.append(heading, storageLine, errorNode, bodyNode);
       host.replaceChildren(surface);

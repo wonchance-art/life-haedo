@@ -305,6 +305,14 @@ body[data-haedo-section=manage] .life-toolbar { padding-right: 50px; }
 .life-settings-section.life-destinations > :last-child { border-bottom: 0; }
 .life-management { margin-bottom: 0; padding: 20px 0 24px; }
 .life-management .life-panel-heading h2 { font-size: 16px; }
+.life-management-note { margin: 10px 0 0; font-size: 13px; }
+.life-management-backups { margin-top: 30px; }
+.life-management-backups > h2 { font-size: 15px; font-weight: 600; color: var(--ink-soft); }
+.life-management-backups .life-meta { word-break: keep-all; overflow-wrap: anywhere; }
+.life-management-backups .life-destination:not(:first-child) > .life-glyph:first-child { background: transparent; color: var(--ink-soft); }
+.life-management-backups .life-destination:not(:first-child) strong { font-size: 16px; }
+.life-management-backups .life-destination:not(:first-child) { min-height: 76px; padding-block: 16px; }
+#lifeManagementSyncStatus { overflow-wrap: anywhere; }
 .haedo-account-host .life-account { margin: 0; }
 .haedo-account-panel #lifeAccountLabel { margin: 0; }
 @media (max-width:700px) {
