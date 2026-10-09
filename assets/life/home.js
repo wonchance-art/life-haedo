@@ -14,14 +14,14 @@
     let disposed = false, generation = 0, visible = false;
     const alive = () => !disposed && !isDisposed();
     const showing = context => alive() && visible && context.token === generation && getBundle()?.workspaceId === context.workspaceId && context.surface.parentNode === host;
-    function action(context, label, task, className = '', { keepFocus = false } = {}) {
+    function action(context, label, task, className = '', { keepFocus = true } = {}) {
       const button = el('button', label, 'life-button' + (className ? ' ' + className : ''));
       button.type = 'button';
       let running = false;
       button.addEventListener('click', async () => {
         if (running || !showing(context) || !button.isConnected) return;
         running = true;
-        // Source navigation captures the focused result before removing this view.
+        // Navigation captures the focused entry before removing this view.
         // Native disabled would blur that button before its focus key is read.
         if (keepFocus) {
           button.focus({ preventScroll: true });
@@ -166,6 +166,7 @@
       state.groups.slice(0, 2).forEach(group => {
         const button = action(context, '', () => navigate('activities', { groupId: group.id }), 'home-group');
         button.dataset.groupId = group.id;
+        button.dataset.focusKey = 'home:group:' + group.id;
         const copy = el('span', null, 'home-group-copy');
         const missing = group.versionIds.filter(id => !sourceInfo(id)).length;
         copy.append(el('strong', group.title, 'home-clamp'), el('span', '연결한 기록 ' + group.versionIds.length + '개' + (missing ? ' · 원문 없음 ' + missing + '개' : ''), 'life-meta'));

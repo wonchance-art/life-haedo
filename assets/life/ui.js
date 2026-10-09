@@ -115,6 +115,12 @@
     let navigationGeneration = 0;
     let renderGeneration = 0;
     let homeRenderPromise = Promise.resolve();
+    let navigationTrigger = null;
+    const viewOrigins = new Map();
+    const parentViews = new Set(['home', 'sources', 'topics', 'tools', 'manage']);
+    const subviewTitles = { import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '내 페이지',
+      discover: '다시 찾기', sync: '기기 간 동기화', transfer: '자료 백업·복원',
+      'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
     const selectedVersions = new Set();
     let selectionReturn = null;
     let relatedOrigin = null;
@@ -222,8 +228,8 @@
 
     const writer = global.HaedoLife.WritingUI?.create({
       storage, core, writingSync, host: main, getBundle: () => state.bundle,
-      isDisposed: () => disposed, announce,
-      onClose: () => navigate('sources'),
+      isDisposed: () => disposed, announce, parentNavigation: true,
+      onClose: returnFromSubview,
       onSaved: async ({ sourceId, sourceVersionId }) => {
         if (disposed) return;
         const token = navigationGeneration, workspaceId = state.bundle?.workspaceId;
@@ -296,12 +302,14 @@
         root.setAttribute('aria-busy', 'true');
         clearError();
         const target = event && event.currentTarget;
+        navigationTrigger = target || document.activeElement;
         const editingControls = Array.from(root.querySelectorAll('input,select,textarea')).filter(control => !control.readOnly).map(control => [control, control.disabled]);
         editingControls.forEach(([control]) => { control.disabled = true; });
         if (target && target.tagName === 'BUTTON') target.disabled = true;
         try { await action(event); }
         catch (cause) { failure(cause); }
         finally {
+          navigationTrigger = null;
           state.busy = false;
           root.removeAttribute('aria-busy');
           editingControls.forEach(([control, disabled]) => { if (control.isConnected) control.disabled = disabled; });
@@ -845,11 +853,23 @@
 
     async function navigate(mode, options) {
       const token = ++navigationGeneration;
+      const from = state.mode;
+      const trigger = navigationTrigger || Array.from(main.querySelectorAll('[data-home-destination]')).find(el => el.dataset.homeDestination === mode) || document.activeElement;
+      const control = trigger?.matches?.('button,a,summary,input') ? trigger : null;
+      const origin = parentViews.has(from) ? { mode: from, workspaceId: state.bundle?.workspaceId, scrollY: global.scrollY,
+        focusKey: control?.dataset.focusKey, focusId: control?.id,
+        focusName: control?.getAttribute('aria-label') || control?.textContent, focusTag: control?.tagName } : null;
+      const returningFromReader = from === 'source' && state.returnContext?.mode === mode;
       if (dirty()) await persistStage();
       await workbench?.flush();
       await writer?.flush();
       await flushReadingPosition();
       if (disposed || token !== navigationGeneration) return;
+      if (subviewTitles[mode] && mode !== from && !options?.preserveContext && !returningFromReader) {
+        const inherited = sectionFor(mode) === sectionFor(from) ? viewOrigins.get(from) : null;
+        if (origin || inherited) viewOrigins.set(mode, origin || inherited);
+        else viewOrigins.delete(mode);
+      }
       // A previous excerpt/record save does not describe the draft being opened.
       // Clear only after navigation can succeed; failed flushes keep their feedback.
       if (mode === 'write' && state.mode !== 'write') announce('', { quiet: true });
@@ -1000,11 +1020,13 @@
         announce('먼저 보관한 작업공간을 선택해 주세요.');
         return;
       }
-      navigationGeneration += 1;
       const previousSection = sectionFor(state.mode);
-      if (section === previousSection) return;
+      const sectionRoot = section === 'records' ? 'sources' : section;
+      if (section === previousSection && state.mode === sectionRoot) return;
+      if (section === previousSection && state.mode === 'source' && ['sources', 'topics'].includes(state.returnContext?.mode)) return returnToResults();
+      navigationGeneration += 1;
       if (previousSection === 'records') lastRecordMode = state.mode;
-      const next = section === 'home' ? 'home' : section === 'records' ? lastRecordMode : section === 'tools' ? 'tools' : 'manage';
+      const next = section === previousSection ? sectionRoot : section === 'home' ? 'home' : section === 'records' ? lastRecordMode : section === 'tools' ? 'tools' : 'manage';
       // Save before changing URL so a failed draft write keeps the current view.
       if (dirty()) await persistStage();
       await workbench?.flush();
@@ -1024,6 +1046,30 @@
       catch (cause) { writeRoute(state.mode, false); throw cause; }
     });
 
+    function subviewOrigin() {
+      const origin = viewOrigins.get(state.mode);
+      if (origin?.workspaceId === state.bundle?.workspaceId) return origin;
+      const section = sectionFor(state.mode);
+      return { mode: section === 'records' ? 'sources' : section, workspaceId: state.bundle?.workspaceId, scrollY: 0 };
+    }
+
+    async function returnFromSubview() {
+      const origin = subviewOrigin();
+      await navigate(origin.mode, { preserveContext: true });
+      const token = navigationGeneration;
+      const restore = () => requestAnimationFrame(() => {
+        if (disposed || token !== navigationGeneration || state.mode !== origin.mode || state.bundle?.workspaceId !== origin.workspaceId) return;
+        const controls = [...root.querySelectorAll('button,a,summary,input')];
+        const target = (origin.focusKey && controls.find(el => el.dataset.focusKey === origin.focusKey)) ||
+          (origin.focusId && controls.find(el => el.id === origin.focusId)) || controls.find(el =>
+          el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeSearch,h1,h2') || toolbar.querySelector('h1');
+        target?.focus({ preventScroll: true });
+        global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
+      });
+      if (origin.mode === 'home') homeRenderPromise.then(restore);
+      else restore();
+    }
+
     function renderHeader() {
       if (disposed) return;
       const section = sectionFor(state.mode);
@@ -1038,22 +1084,24 @@
       const heading = node('h1', null, 'life-page-title');
       heading.tabIndex = -1;
       const headingGroup = node('div', null, 'haedo-heading-title');
-      if (state.mode === 'write') heading.textContent = '글쓰기';
+      if (subviewTitles[state.mode]) heading.textContent = subviewTitles[state.mode];
       else if (state.mode === 'books') heading.textContent = '내 책';
-      else if (state.mode === 'page') heading.textContent = '내 페이지';
       else if (state.mode === 'related') heading.textContent = '관련 기록';
       else if (section === 'records') {
         const records = button('기록', guarded(() => navigate('sources')), 'life-title-button');
         records.setAttribute('aria-label', '기록 목록');
         heading.append(records);
       } else heading.textContent = section === 'home' ? '홈' : section === 'tools' ? '도구' : '관리';
-      if (section === 'manage' && state.mode !== 'manage') {
-        headingGroup.append(iconButton('관리로 돌아가기', 'back', guarded(() => navigate('manage'))));
+      if (subviewTitles[state.mode]) {
+        const labels = { home: '홈으로 돌아가기', sources: '기록으로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '관리로 돌아가기' };
+        const back = iconButton(labels[subviewOrigin().mode] || labels.sources, 'back', guarded(returnFromSubview));
+        back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';
+        back.dataset.subviewReturn = 'true';
+        headingGroup.append(back);
       }
-      if (section === 'tools' && state.mode !== 'tools') {
+      if (section === 'tools' && state.mode !== 'tools' && !subviewTitles[state.mode]) {
         headingGroup.append(iconButton('도구로 돌아가기', 'back', guarded(() => navigate('tools'))));
       }
-      if (state.mode === 'page') headingGroup.append(iconButton('기록으로 돌아가기', 'back', guarded(() => navigate('sources'))));
       if (state.mode === 'related') {
         const back = iconButton(relatedOrigin?.workspaceId === state.bundle?.workspaceId ? '읽던 글로 돌아가기' : '기록으로 돌아가기', 'back', guarded(returnFromRelated));
         back.id = 'lifeRelatedReturn';
@@ -1221,6 +1269,7 @@
     }
 
     function resetSearchContext() {
+      viewOrigins.clear();
       selectedVersions.clear();
       selectionReturn = null;
       chapterImport = null;

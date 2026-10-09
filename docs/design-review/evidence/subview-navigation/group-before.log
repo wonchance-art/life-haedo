@@ -1,0 +1,6 @@
+FAIL renamed home group and page editing return to the same entry
+page.waitForFunction: Timeout 2000ms exceeded.
+    at /workspace/life-haedo-timeline-recovery/tests/subview-navigation-browser.cjs:89:18
+    at async check (/workspace/life-haedo-timeline-recovery/tests/subview-navigation-browser.cjs:33:11)
+    at async main (/workspace/life-haedo-timeline-recovery/tests/subview-navigation-browser.cjs:84:5)
+{"passed":0,"total":1,"visual":0,"console":0,"page":0}
