@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-10-09T04:40:31.292Z",
+  "createdAt": "2026-10-09T04:48:01.652Z",
   "scope": "Actual app/SDK/IDB, intercepted Auth; viewport/keyboard/touch simulation only",
   "checks": [
     {
@@ -24,6 +24,10 @@
     },
     {
       "name": "search, tool and management origins and active menu roots 390",
+      "pass": true
+    },
+    {
+      "name": "renamed home group and page editing return to the same entry",
       "pass": true
     },
     {

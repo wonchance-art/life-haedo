@@ -6,7 +6,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { FakeCloud, accounts, base, cloud } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, settle, nav, observe } = require('./unified-home-browser.cjs');
-const { fixture, current, abortWorkbenchWrites } = require('./life-workbench-browser.cjs');
+const { fixture, current, seedComposition, abortWorkbenchWrites } = require('./life-workbench-browser.cjs');
 const { instrumentStorage, inspectHome } = require('./home-entry-browser.cjs');
 const out = path.resolve('.local/subview-navigation');
 const report = { createdAt: new Date().toISOString(), scope: 'Actual app/SDK/IDB, intercepted Auth; viewport/keyboard/touch simulation only', checks: [], visual: [], consoleErrors: [], pageErrors: [], expectedErrors: 0 };
@@ -26,6 +26,7 @@ async function main() {
   await fs.mkdir(out, { recursive: true });
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] }); report.browser = browser.version();
   async function check(name, run, width = 820) {
+    if (process.env.SUBVIEW_TEST_MATCH && !new RegExp(process.env.SUBVIEW_TEST_MATCH).test(name)) return;
     const server = new FakeCloud(), context = await makeContext(browser, server, 'subview-' + report.checks.length, accounts.a, { viewport: { width, height: width === 390 ? 844 : 1000 }, hasTouch: width <= 820 });
     await context.route(`${cloud}/rest/v1/rpc/life_public_page_list`, route => route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '[]' }));
     await instrumentStorage(context); const page = await context.newPage(); page.setDefaultTimeout(12000); observe(page, report, name);
@@ -80,6 +81,17 @@ async function main() {
       }
       assert.deepEqual(await current(page), before);
     }, width);
+    await check('renamed home group and page editing return to the same entry', async ({ page }) => {
+      const f = await fixture(page); const { groupId } = await seedComposition(page, f.refs); await home(page);
+      await page.locator(`#homeGroups [data-group-id="${groupId}"]`).click(); await mode(page, 'activities');
+      await page.getByRole('textbox', { name: '묶음 이름', exact: true }).fill('새 이름으로 다듬은 산책 묶음');
+      await back(page, 'home');
+      await page.waitForFunction(id => document.activeElement?.dataset.groupId === id, groupId, { timeout: 2000 });
+      assert.match(await page.locator(`#homeGroups [data-group-id="${groupId}"]`).textContent(), /새 이름으로 다듬은 산책 묶음/);
+      await page.locator('#homePage').getByRole('button', { name: '편집', exact: true }).click(); await mode(page, 'page');
+      await back(page, 'home');
+      await page.waitForFunction(() => document.activeElement?.closest('#homePage') && document.activeElement.textContent === '편집');
+    }, 390);
     await check('failed import save blocks both return paths and retry preserves input', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await home(page); await page.locator('[data-home-destination="import"]').click(); await mode(page, 'import');
       await page.evaluate(() => { window.__homeFailStage = true; });
@@ -125,7 +137,7 @@ async function main() {
       }
     });
     assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []);
-  } finally { await browser.close(); await fs.writeFile(path.join(out, 'browser-report.json'), JSON.stringify(report, null, 2) + '\n'); }
+  } finally { await browser.close(); await fs.writeFile(path.join(out, process.env.SUBVIEW_TEST_MATCH ? 'recheck-report.json' : 'browser-report.json'), JSON.stringify(report, null, 2) + '\n'); }
   console.log(JSON.stringify({ passed: report.checks.filter(x => x.pass).length, total: report.checks.length, visual: report.visual.length, console: report.consoleErrors.length, page: report.pageErrors.length }));
   if (report.checks.some(x => !x.pass) || report.consoleErrors.length || report.pageErrors.length) process.exitCode = 1;
 }

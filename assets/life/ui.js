@@ -855,8 +855,10 @@
       const token = ++navigationGeneration;
       const from = state.mode;
       const trigger = navigationTrigger || Array.from(main.querySelectorAll('[data-home-destination]')).find(el => el.dataset.homeDestination === mode) || document.activeElement;
+      const control = trigger?.matches?.('button,a,summary,input') ? trigger : null;
       const origin = parentViews.has(from) ? { mode: from, workspaceId: state.bundle?.workspaceId, scrollY: global.scrollY,
-        focusId: trigger?.id, focusName: trigger?.getAttribute?.('aria-label') || trigger?.textContent, focusTag: trigger?.tagName } : null;
+        focusKey: control?.dataset.focusKey, focusId: control?.id,
+        focusName: control?.getAttribute('aria-label') || control?.textContent, focusTag: control?.tagName } : null;
       const returningFromReader = from === 'source' && state.returnContext?.mode === mode;
       if (dirty()) await persistStage();
       await workbench?.flush();
@@ -1058,7 +1060,8 @@
       const restore = () => requestAnimationFrame(() => {
         if (disposed || token !== navigationGeneration || state.mode !== origin.mode || state.bundle?.workspaceId !== origin.workspaceId) return;
         const controls = [...root.querySelectorAll('button,a,summary,input')];
-        const target = (origin.focusId && controls.find(el => el.id === origin.focusId)) || controls.find(el =>
+        const target = (origin.focusKey && controls.find(el => el.dataset.focusKey === origin.focusKey)) ||
+          (origin.focusId && controls.find(el => el.id === origin.focusId)) || controls.find(el =>
           el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeSearch,h1,h2') || toolbar.querySelector('h1');
         target?.focus({ preventScroll: true });
         global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
