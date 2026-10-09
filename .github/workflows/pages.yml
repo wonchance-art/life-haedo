@@ -187,9 +187,9 @@ jobs:
       - name: Verify restored book entry and committed-copy recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-restore-entry-browser.cjs
-      - name: Verify keyboard focus during delayed home loading
+      - name: Verify home navigation, draft re-entry and responsive states
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
-        run: ENTRY_TEST_MATCH='preserves focused recent' node tests/home-entry-browser.cjs
+        run: node tests/home-entry-browser.cjs
       - name: Verify isolated expression-page design samples
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/expression-design-browser.cjs
@@ -207,6 +207,7 @@ jobs:
           path: |
             .local/core-experience/
             .local/unified-home/
+            .local/home-entry/
             .local/quality-audit/after/
             .local/composition-sync/
             .local/writing-sync/
