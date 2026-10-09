@@ -1,0 +1,311 @@
+{
+  "createdAt": "2026-10-09T04:37:26.219Z",
+  "scope": "Actual local app/SDK/IDB, synthetic HTTP Auth; viewport simulation, not Apple device testing",
+  "checks": [
+    {
+      "name": "index starts at home, legacy life stays records, and quick links enter working sections",
+      "pass": true
+    },
+    {
+      "name": "home shows latest three originals and two groups without changing stored data",
+      "pass": true
+    },
+    {
+      "name": "home page summary preserves visibility, pinned placement and fixed source versions",
+      "pass": true
+    },
+    {
+      "name": "home original reader returns to its exact home control and records finds saved notes",
+      "pass": true
+    },
+    {
+      "name": "late home composition preserves focused recent original and exact keyboard opening",
+      "pass": true
+    },
+    {
+      "name": "late home composition cannot replace a different section",
+      "pass": true
+    },
+    {
+      "name": "late home composition cannot replace a newly selected workspace",
+      "pass": true
+    },
+    {
+      "name": "late home composition cannot reveal data after signout and another account login",
+      "pass": true
+    },
+    {
+      "name": "composition read failure keeps original records usable and retry recovers",
+      "pass": true
+    },
+    {
+      "name": "records many notes, duplicate references and collapsed fourth quote keep exact return context at three widths",
+      "pass": true
+    },
+    {
+      "name": "home shortcuts preserve drafts and reach timeline, tools and management 1440",
+      "pass": true
+    },
+    {
+      "name": "home shortcuts preserve drafts and reach timeline, tools and management 820",
+      "pass": true
+    },
+    {
+      "name": "home shortcuts preserve drafts and reach timeline, tools and management 390",
+      "pass": true
+    },
+    {
+      "name": "visual home empty populated loading error 1440",
+      "pass": true
+    },
+    {
+      "name": "visual home empty populated loading error 820",
+      "pass": true
+    },
+    {
+      "name": "visual home empty populated loading error 390",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "scene": "records-many",
+      "file": "records-many-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.012,
+      "measuredTexts": 106,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "records-note-search",
+      "file": "records-note-search-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.012,
+      "measuredTexts": 6,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "records-many",
+      "file": "records-many-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.012,
+      "measuredTexts": 86,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "records-note-search",
+      "file": "records-note-search-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.012,
+      "measuredTexts": 6,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "records-many",
+      "file": "records-many-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.012,
+      "measuredTexts": 86,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "records-note-search",
+      "file": "records-note-search-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.012,
+      "measuredTexts": 6,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "empty",
+      "file": "empty-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 16,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "populated",
+      "file": "populated-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 37,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "loading",
+      "file": "loading-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 17,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "error",
+      "file": "error-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 18,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "empty",
+      "file": "empty-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 16,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "populated",
+      "file": "populated-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 37,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "loading",
+      "file": "loading-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 17,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "error",
+      "file": "error-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 18,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "empty",
+      "file": "empty-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 16,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "populated",
+      "file": "populated-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 37,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "loading",
+      "file": "loading-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 17,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "error",
+      "file": "error-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 18,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "browser": "151.0.7922.173"
+}

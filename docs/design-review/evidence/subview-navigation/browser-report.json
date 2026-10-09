@@ -1,0 +1,208 @@
+{
+  "createdAt": "2026-10-09T04:40:31.292Z",
+  "scope": "Actual app/SDK/IDB, intercepted Auth; viewport/keyboard/touch simulation only",
+  "checks": [
+    {
+      "name": "home origin, keyboard/touch return and draft resume 1440",
+      "pass": true
+    },
+    {
+      "name": "home origin, keyboard/touch return and draft resume 820",
+      "pass": true
+    },
+    {
+      "name": "home origin, keyboard/touch return and draft resume 390",
+      "pass": true
+    },
+    {
+      "name": "search, tool and management origins and active menu roots 1440",
+      "pass": true
+    },
+    {
+      "name": "search, tool and management origins and active menu roots 820",
+      "pass": true
+    },
+    {
+      "name": "search, tool and management origins and active menu roots 390",
+      "pass": true
+    },
+    {
+      "name": "failed import save blocks both return paths and retry preserves input",
+      "pass": true
+    },
+    {
+      "name": "late home response cannot block navigation or steal focus after return",
+      "pass": true
+    },
+    {
+      "name": "page save failure blocks active records menu and contextual return",
+      "pass": true
+    },
+    {
+      "name": "direct deep links have stable parent fallback and no persistent origin data",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "scene": "write",
+      "file": "write-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 6,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "import",
+      "file": "import-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 18,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "time",
+      "file": "time-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 8,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "write",
+      "file": "write-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 6,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "import",
+      "file": "import-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 18,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "time",
+      "file": "time-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 8,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "write",
+      "file": "write-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 6,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "import",
+      "file": "import-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 18,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "time",
+      "file": "time-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 8,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "transfer",
+      "file": "transfer-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 18,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "transfer",
+      "file": "transfer-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 18,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "transfer",
+      "file": "transfer-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 6.05,
+      "measuredTexts": 18,
+      "contrastFailures": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "browser": "151.0.7922.173"
+}

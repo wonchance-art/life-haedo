@@ -1,0 +1,23 @@
+[
+  {
+    "mode": "write",
+    "heading": "글쓰기",
+    "back": []
+  },
+  {
+    "mode": "import",
+    "heading": "기록",
+    "back": []
+  },
+  {
+    "mode": "transfer",
+    "heading": "관리",
+    "back": [
+      "관리로 돌아가기"
+    ]
+  },
+  {
+    "selectedMenu": "manage",
+    "actualMode": "transfer"
+  }
+]
