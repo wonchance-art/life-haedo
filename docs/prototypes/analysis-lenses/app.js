@@ -34,7 +34,7 @@
     for(const original of available){
       const f=finding(original),article=node('article',undefined,'finding');article.dataset.finding=f.id;
       article.append(node('h3',f.title));
-      if(state.excluded.has(f.id)){article.append(node('p','보류한 해석 · 입력은 유지됩니다.','meta'),button('다시 살펴보기',()=>{state.excluded.delete(f.id);render();document.querySelector('[data-finding="'+f.id+'"] h3').scrollIntoView({block:'center'});}));panel.append(article);continue;}
+      if(state.excluded.has(f.id)){article.append(node('p','보류한 해석 · 입력은 유지됩니다.','meta'),button('다시 살펴보기',()=>{state.excluded.delete(f.id);render();const restored=document.querySelector('[data-finding="'+f.id+'"]');const focus=restored.querySelector(state.drafts.has(f.id)?'textarea':'summary');focus.focus();focus.scrollIntoView({block:'center'});}));panel.append(article);continue;}
       article.append(node('p','예시 해석 · 실제 AI 분석 아님','meta'),node('p',f.summary,'interpretation'));
       const valid=M.validateFinding(f,F.sources,current.versionIds).valid;
       if(valid)for(const ref of f.refs){const s=F.sources.find(s=>s.id===ref.versionId),e=node('div',undefined,'evidence');if(ref.role==='counter')e.append(node('p','함께 봐야 할 다른 방향의 근거','counter'));e.append(node('blockquote',ref.text));const b=button((s.date||'날짜 미확인')+' · '+s.title,()=>openSource(ref),'source-link');b.prepend(icon('quote'));b.setAttribute('aria-label',s.title+' 원문 확인');e.append(b);article.append(e);}
