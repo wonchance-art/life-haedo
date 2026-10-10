@@ -1,6 +1,7 @@
 /* Reader booklet output: UI-authored four-chapter manuscript; actual preview, HTML
  * and print document produce A5/A4 PDFs. Synthetic Auth, isolated IndexedDB only.
- * BASE_URL, PW_MODULE_PATH/PLAYWRIGHT_MODULE, CHROMIUM_PATH; BOOK_EDITION_MATCH. */
+ * BASE_URL, PW_MODULE_PATH/PLAYWRIGHT_MODULE, CHROMIUM_PATH; BOOK_EDITION_MATCH.
+ * WebKit smoke: BOOK_EDITION_ENGINE=webkit BOOK_EDITION_MATCH="blocked Blob". */
 'use strict';
 process.env.BASE_URL ||= 'http://127.0.0.1:4184';
 if (!process.env.PW_MODULE_PATH && process.env.PLAYWRIGHT_MODULE) process.env.PW_MODULE_PATH = process.env.PLAYWRIGHT_MODULE;
@@ -13,7 +14,7 @@ const { expand } = require('./book-insights-browser.cjs');
 const { abortWorkbenchWrites } = require('./life-workbench-browser.cjs');
 const { importUI, arrangeReflection, samples, chapters, bookQuestion, latestBody } = require('./book-workshop-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
-const out = path.resolve('.local/book-edition');
+const out = path.resolve(process.env.BOOK_EDITION_OUTPUT || '.local/book-edition');
 const title = '일과 쉼 사이에서 오래 좋아할 기준을 찾아서 — 네 번의 선택을 다시 읽는 기록';
 const activeStatement = '지금은 잘하는 사람으로 보이는 일과 오래 좋아할 조건을 구분해 보려 한다.';
 const uncertainty = '그때 말하지 않았던 사정이 있었을 수 있다. 남은 글만으로 모든 선택을 설명하지 않는다.';
@@ -76,6 +77,19 @@ async function edition(page, paper = 'A5', insights = false, sources = false) {
   await page.waitForFunction(({ paper, insights, sources }) => { const frame = document.querySelector('#wbEditionPreview'), doc = frame?.contentDocument; return document.querySelector('#wbEditionStatus')?.textContent.startsWith('책자 준비됨') && doc?.documentElement.dataset.printMode === 'book' && doc.documentElement.dataset.printPaper === paper && !!doc.querySelector('.insight') === insights && !!doc.querySelector('.source-body') === sources; }, { paper, insights, sources });
   return (await page.locator('#wbEditionPreview').elementHandle()).contentFrame();
 }
+async function previewDocument(frame) {
+  // Preview-only native destinations differ from standalone HTML/PDF. Verify the
+  // explicit local destination, then remove only this transport prefix for comparison.
+  return frame.evaluate(() => {
+    const clone = document.documentElement.cloneNode(true);
+    for (const link of clone.querySelectorAll('.book-toc a')) {
+      const href = link.getAttribute('href');
+      if (!/^about:srcdoc#haedo-book-(chapter-\d+|sources)$/.test(href)) throw Error('Unexpected preview contents destination');
+      link.setAttribute('href', href.slice('about:srcdoc'.length));
+    }
+    return clone.outerHTML;
+  });
+}
 async function capture(page, report, scene, width) {
   await page.mouse.move(width - 2, 2); await page.evaluate(async () => { document.activeElement?.blur(); scrollTo(0, 0); await document.fonts.ready; await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); });
   const metrics = await page.evaluate(inspect), file = `${scene}-${width}.png`; await page.screenshot({ path: path.join(out, file), fullPage: true }); if (width === 390) await page.screenshot({ path: path.join(out, `${scene}-${width}-viewport.png`) });
@@ -101,9 +115,9 @@ async function authenticate(page, account) {
   await page.waitForFunction(id => HaedoAuth.user?.id === id && HaedoLife.Shell?.storage && HaedoLife.Shell.sync?.getAccount()?.userId === id, account.id); await ready(page); await settle(page);
 }
 async function output(page, context, report, width, paper, expectedNotes, { insights = false, sources = false, suffix = '' } = {}) {
-  const frame = await edition(page, paper, insights, sources), view = await frame.evaluate(() => document.documentElement.outerHTML), raw = await download(page, '#wbEditionHTML');
-  assert.match(raw.name, /\.html$/); const parsed = await page.evaluate(html => new DOMParser().parseFromString(html, 'text/html').documentElement.outerHTML, raw.text); assert.equal(parsed, view, 'Downloaded HTML and actual preview have the same document');
-  await capturePrint(page); await page.locator('#wbEditionPrint').focus(); await page.keyboard.press('Enter'); await page.waitForFunction(() => __editionPrints.length === 1); assert.equal(await page.evaluate(() => __editionPrints[0]), view, 'Native print receives the exact preview document');
+  const frame = await edition(page, paper, insights, sources), view = await previewDocument(frame), raw = await download(page, '#wbEditionHTML');
+  assert.match(raw.name, /\.html$/); const parsed = await page.evaluate(html => new DOMParser().parseFromString(html, 'text/html').documentElement.outerHTML, raw.text); assert.equal(parsed, view, 'Downloaded HTML matches the preview after validating its local contents destinations');
+  await capturePrint(page); await page.locator('#wbEditionPrint').focus(); await page.keyboard.press('Enter'); await page.waitForFunction(() => __editionPrints.length === 1); assert.equal(await page.evaluate(() => __editionPrints[0]), view, 'Native print receives the canonical document with standalone contents destinations');
   const filename = `book-${paper.toLowerCase()}-${width}${suffix}`, htmlPath = path.join(out, filename + '.html'), pdfPath = path.join(out, filename + '.pdf'); await fs.writeFile(htmlPath, raw.text);
   // Managed Chromium blocks file/data top-level URLs. A dedicated intercepted local
   // URL serves only these downloaded bytes, then networking is disabled before interaction/PDF.
@@ -143,25 +157,70 @@ async function output(page, context, report, width, paper, expectedNotes, { insi
   return raw.text;
 }
 async function main() {
-  await fs.mkdir(out, { recursive: true }); const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
-  const report = { createdAt: new Date().toISOString(), browser: browser.version(), scope: 'UI-created anonymous long Korean manuscript and exact source versions. Actual booklet preview/native-print input/offline HTML/Chromium PDF, with synthetic Auth only. No production, Apple hardware, native Save PDF confirmation or publication claims.', checks: [], visual: [], outputs: [], observations: [], consoleErrors: [], pageErrors: [], external: [], expectedErrors: 0, operatingRemoteWrites: 0 };
+  await fs.mkdir(out, { recursive: true });
+  const engine = process.env.BOOK_EDITION_ENGINE || 'chromium';
+  assert(['chromium', 'webkit'].includes(engine));
+  const browser = await playwright()[engine].launch({ headless: true, ...(engine === 'chromium' ? { executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] } : {}) });
+  const report = { createdAt: new Date().toISOString(), browser: browser.version(), engine, scope: 'UI-created anonymous long Korean manuscript and exact source versions. Actual booklet preview/native-print input/offline HTML/Chromium PDF, with synthetic Auth only. No production, Apple hardware, native Save PDF confirmation or publication claims.', checks: [], visual: [], outputs: [], observations: [], consoleErrors: [], sandboxedHarnessScripts: [], pageErrors: [], external: [], expectedErrors: 0, operatingRemoteWrites: 0 };
   async function check(name, width, run) {
     if (process.env.BOOK_EDITION_MATCH && !new RegExp(process.env.BOOK_EDITION_MATCH).test(name)) return;
     const server = new FakeCloud(), context = await makeContext(browser, server, 'book-edition-' + report.checks.length, accounts.a, { viewport: { width, height: width === 390 ? 844 : 1000 }, hasTouch: width <= 820, reducedMotion: 'reduce' });
     await context.route('**/*', route => { const url = new URL(route.request().url()); if ([new URL(base).origin, cloud].includes(url.origin)) return route.fallback(); report.external.push(url.origin); return route.abort('blockedbyclient'); });
-    const page = await context.newPage(); page.setDefaultTimeout(12000); observe(page, report, name);
+    const page = await context.newPage(); page.setDefaultTimeout(12000);
+    observe(page, { ...report, consoleErrors: { push(entry) {
+      // Playwright's context init scripts also target srcdoc frames. Keep their
+      // sandbox rejection visible, separate from app errors; never enable scripts.
+      if (/^Blocked script execution in 'about:srcdoc(?:#haedo-book-(?:chapter-\d+|sources))?' because the document's frame is sandboxed and the 'allow-scripts' permission is not set\.$/.test(entry.message)) report.sandboxedHarnessScripts.push(entry);
+      else report.consoleErrors.push(entry);
+    } } }, name);
     try { await run({ page, context }); assert.equal(server.writes().length, 0); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
     catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); annotation(error); await page.screenshot({ path: path.join(out, 'failure-' + report.checks.length + '.png'), fullPage: true }).catch(() => {}); }
     finally { await context.close(); }
   }
   try {
+    for (const width of [1440, 820, 390]) await check(`blocked Blob preview still opens, navigates and downloads the complete restored book at ${width}`, width, async ({ page, context }) => {
+      // Reproduce an embedded browser that accepts downloads but never loads a
+      // Blob iframe. The manuscript must remain usable without relaxing its CSP.
+      await context.addInitScript(() => {
+        const src = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'src');
+        Object.defineProperty(HTMLIFrameElement.prototype, 'src', {
+          configurable: src.configurable, enumerable: src.enumerable, get: src.get,
+          set(value) { return src.set.call(this, String(value).startsWith('blob:') ? 'about:blank' : value); }
+        });
+      });
+      const pending = await require('./book-completion-browser.cjs').restore(page);
+      const restored = await pending.install(), book = restored.workbench.books[0];
+      await openBook(page, book.id); await page.locator('#wbBookEditionOpen').click();
+      const frame = await edition(page), appURL = page.url();
+      assert.equal(await frame.locator('.chapter').count(), 4);
+      assert.equal(await frame.locator('script,img,iframe,object,embed,link').count(), 0);
+      assert.equal(await page.locator('#wbEditionPreview').getAttribute('sandbox'), 'allow-same-origin');
+      assert.match(await frame.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content'), /script-src 'none'/);
+      await capture(page, report, 'blocked-blob', width);
+      for (const id of ['haedo-book-chapter-2', 'haedo-book-sources']) {
+        const link = frame.locator(`.book-toc a[href$="#${id}"]`);
+        if (id === 'haedo-book-sources') { await link.focus(); await page.keyboard.press('Enter'); }
+        else await link.click();
+        await page.waitForFunction(id => document.querySelector('#wbEditionPreview').contentWindow.location.hash === '#' + id, id);
+        assert.equal(page.url(), appURL, 'Contents navigation stays inside the preview');
+        assert.equal(await frame.locator('#' + id).evaluate(el => Math.abs(el.getBoundingClientRect().top) < 2), true);
+      }
+      const raw = await download(page, '#wbEditionHTML');
+      assert.equal(await page.evaluate(html => new DOMParser().parseFromString(html, 'text/html').documentElement.outerHTML, raw.text), await previewDocument(frame));
+      for (let i = 0; i < book.chapters.length; i++) assert.equal(await frame.locator(`#haedo-book-chapter-${i + 1} .manuscript`).textContent(), book.chapters[i].note);
+      assert.deepEqual(await current(page), restored, 'Preview and download preserve the restored book and original versions');
+      await page.locator('#wbEditionBack').click(); await page.locator('#wbChapterNote').waitFor();
+      assert.deepEqual((await current(page)).workbench, restored.workbench);
+      assert.deepEqual(await page.evaluate(id => HaedoLife.Shell.storage.read(id), pending.original.bundle.workspaceId), pending.original.bundle);
+      report.observations.push({ blockedBlobPreview: true, internalTOC: true, unchangedHTML: true, restoredManuscriptPreserved: true, scriptsBlocked: true });
+    });
     for (const width of [1440, 820, 390]) await check(`reader booklet A5/A4 preview, PDF links, options and edited regeneration at ${width}`, width, async ({ page, context }) => {
       const f = await manuscript(page); if (width === 820) { await expand(page, '#wbBookEditions'); await page.locator('#wbEditionLabel').fill('독자용 책자로 다듬기 전 네 장 원고'); await page.locator('#wbEditionCapture').click(); await save(page); } await page.locator('#wbBookPreviewOpen').click(); await expand(page, '#wbBookPreviewOptions'); await page.locator('#wbBookPreviewIncludeSources').check(); await page.locator('#wbBookEditionOpen').click(); let frame = await edition(page); const before = await current(page);
       assert.equal(await page.locator('#wbEditionPaper').inputValue(), 'A5'); assert.equal(await page.locator('#wbEditionInsights').isChecked(), false); assert.equal(await page.locator('#wbEditionSources').isChecked(), false, 'Reader booklet does not inherit review source-body opt-in'); assert.equal(await frame.locator('.book-cover').textContent(), title); assert.equal(await frame.locator('.book-toc a').count(), 5); assert.equal(await frame.locator('.chapter .source,.chapter .metadata').count(), 0); assert((await frame.locator('.source-appendix').textContent()).includes(f.refs.work.versionId)); assert(!(await frame.locator('body').textContent()).includes(f.refs.latest.versionId)); for (let i = 0; i < 4; i++) assert.equal(await frame.locator(`#haedo-book-chapter-${i + 1} .manuscript`).textContent(), notes[i]);
-      const appURL = page.url(); await frame.locator('.book-toc a[href="#haedo-book-chapter-2"]').click(); await page.waitForFunction(() => document.querySelector('#wbEditionPreview').contentWindow.location.hash === '#haedo-book-chapter-2'); assert.equal(page.url(), appURL); assert.equal(await page.locator('#wbBookEdition').isVisible(), true);
+      const appURL = page.url(); await frame.locator('.book-toc a[href$="#haedo-book-chapter-2"]').click(); await page.waitForFunction(() => document.querySelector('#wbEditionPreview').contentWindow.location.hash === '#haedo-book-chapter-2'); assert.equal(page.url(), appURL); assert.equal(await page.locator('#wbBookEdition').isVisible(), true);
       await frame.evaluate(() => scrollTo(0, 0)); await capture(page, report, 'booklet-default', width); await output(page, context, report, width, 'A5', notes);
       await page.locator('#wbEditionBack').click(); await page.locator('#wbBookPreview').waitFor(); assert.equal(await page.locator('#wbBookPreviewIncludeSources').isChecked(), true); await page.locator('#wbBookEditionOpen').click(); await edition(page); await expand(page, '#wbEditionSettings'); await page.locator('#wbEditionPaper').selectOption('A4'); await edition(page, 'A4'); await page.locator('#wbEditionInsights').check(); await edition(page, 'A4', true); await page.locator('#wbEditionSources').check(); frame = await edition(page, 'A4', true, true); assert((await frame.locator('.source-appendix').textContent()).includes('본문 미확보')); assert((await frame.locator('.source-appendix').textContent()).includes('사진과 댓글 미보관')); assert(!(await frame.locator('body').textContent()).includes(excludedStatement)); await capture(page, report, 'booklet-options', width); const initialHTML = await output(page, context, report, width, 'A4', notes, { insights: true, sources: true }); assert.deepEqual(await current(page), before, 'Only booklet settings and reading positions changed');
-      await page.locator('#wbEditionSources').uncheck(); frame = await edition(page, 'A4', true); await frame.locator('.book-toc a[href="#haedo-book-chapter-2"]').click(); await frame.locator('#haedo-book-chapter-2').evaluate(el => scrollTo(0, el.offsetTop + 80)); const anchorBefore = await frame.locator('#haedo-book-chapter-2').evaluate(el => el.getBoundingClientRect().top); await expand(page, '#wbEditionEditing'); await page.locator('#wbEditionEditChapter').selectOption(f.book.chapters[1].id); await page.locator('#wbEditionEdit').click(); await page.waitForFunction(title => document.querySelector('#wbChapterTitle')?.value === title, chapters[1][0]); const revised = notes[1] + '\n\n나중에 다시 읽고 고친 문장: 쉬는 시간을 설명할 말이 없던 날도 그 시기의 일부로 남긴다.'; await page.locator('#wbChapterNote').fill(revised); await page.locator('#wbChapterNote').evaluate(el => { el.focus(); el.setSelectionRange(45, 68); el.scrollTop = 80; }); const editorPosition = await page.locator('#wbChapterNote').evaluate(el => ({ start: el.selectionStart, end: el.selectionEnd, top: el.scrollTop })); await page.locator('#wbBookEditionOpen').click(); frame = await edition(page, 'A4', true); assert.equal(await frame.locator('#haedo-book-chapter-2 .manuscript').textContent(), revised); const anchorAfter = await frame.locator('#haedo-book-chapter-2').evaluate(el => el.getBoundingClientRect().top); assert(Math.abs(anchorAfter - anchorBefore) < 3, 'Booklet returns to its chapter offset after editing'); assert(!initialHTML.includes('나중에 다시 읽고 고친 문장')); const changedHTML = await download(page, '#wbEditionHTML'); assert(changedHTML.text.includes('나중에 다시 읽고 고친 문장')); assert(!changedHTML.text.includes(samples[0].text)); if (width === 820) { const revisedNotes = notes.slice(); revisedNotes[1] = revised; await output(page, context, report, width, 'A4', revisedNotes, { insights: true, suffix: '-revised' }); }
+      await page.locator('#wbEditionSources').uncheck(); frame = await edition(page, 'A4', true); await frame.locator('.book-toc a[href$="#haedo-book-chapter-2"]').click(); await frame.locator('#haedo-book-chapter-2').evaluate(el => scrollTo(0, el.offsetTop + 80)); const anchorBefore = await frame.locator('#haedo-book-chapter-2').evaluate(el => el.getBoundingClientRect().top); await expand(page, '#wbEditionEditing'); await page.locator('#wbEditionEditChapter').selectOption(f.book.chapters[1].id); await page.locator('#wbEditionEdit').click(); await page.waitForFunction(title => document.querySelector('#wbChapterTitle')?.value === title, chapters[1][0]); const revised = notes[1] + '\n\n나중에 다시 읽고 고친 문장: 쉬는 시간을 설명할 말이 없던 날도 그 시기의 일부로 남긴다.'; await page.locator('#wbChapterNote').fill(revised); await page.locator('#wbChapterNote').evaluate(el => { el.focus(); el.setSelectionRange(45, 68); el.scrollTop = 80; }); const editorPosition = await page.locator('#wbChapterNote').evaluate(el => ({ start: el.selectionStart, end: el.selectionEnd, top: el.scrollTop })); await page.locator('#wbBookEditionOpen').click(); frame = await edition(page, 'A4', true); assert.equal(await frame.locator('#haedo-book-chapter-2 .manuscript').textContent(), revised); const anchorAfter = await frame.locator('#haedo-book-chapter-2').evaluate(el => el.getBoundingClientRect().top); assert(Math.abs(anchorAfter - anchorBefore) < 3, 'Booklet returns to its chapter offset after editing'); assert(!initialHTML.includes('나중에 다시 읽고 고친 문장')); const changedHTML = await download(page, '#wbEditionHTML'); assert(changedHTML.text.includes('나중에 다시 읽고 고친 문장')); assert(!changedHTML.text.includes(samples[0].text)); if (width === 820) { const revisedNotes = notes.slice(); revisedNotes[1] = revised; await output(page, context, report, width, 'A4', revisedNotes, { insights: true, suffix: '-revised' }); }
       await page.locator('#wbEditionBack').click(); await page.locator('#wbChapterNote').waitFor(); const restoredPosition = await page.locator('#wbChapterNote').evaluate(el => ({ start: el.selectionStart, end: el.selectionEnd, top: el.scrollTop })); assert.deepEqual(restoredPosition, editorPosition); assert.equal(await page.locator('#wbChapterNote').inputValue(), revised); assert.deepEqual((await current(page)).bundle, f.bundle); assert.equal((await current(page)).workbench.books[0].chapters[1].note, revised);
       await page.reload(); await ready(page); await openBook(page, f.book.id); await page.locator('#wbBookEditionOpen').click(); await edition(page); assert.equal(await page.locator('#wbEditionPaper').inputValue(), 'A5'); assert.equal(await page.locator('#wbEditionInsights').isChecked(), false); assert.equal(await page.locator('#wbEditionSources').isChecked(), false); if (width === 820) {
         await page.locator('#wbEditionBack').click(); await go(page, 'workbench-backup'); const original = await current(page), backup = await download(page, '#wbBackupDownload'); await fs.writeFile(path.join(out, 'reader-book-backup.json'), backup.text); assert.deepEqual(JSON.parse(backup.text).workbench.books, original.workbench.books);
@@ -186,6 +245,6 @@ async function main() {
     });
     assert(report.checks.length > 0); report.pass = report.checks.every(check => check.pass) && !report.consoleErrors.length && !report.pageErrors.length && !report.external.length;
   } finally { await browser.close(); report.finishedAt = new Date().toISOString(); const json = JSON.stringify(report, null, 2); await fs.writeFile(path.join(out, 'run-' + report.createdAt.replace(/[:.]/g, '-') + '.json'), json); await fs.writeFile(path.join(out, 'browser-report.json'), json); }
-  console.log(JSON.stringify({ checks: report.checks.length, passed: report.checks.filter(check => check.pass).length, outputs: report.outputs.length, visual: report.visual.length, consoleErrors: report.consoleErrors.length, pageErrors: report.pageErrors.length, external: report.external.length, report: path.join(out, 'browser-report.json') })); if (!report.pass) process.exitCode = 1;
+  console.log(JSON.stringify({ checks: report.checks.length, passed: report.checks.filter(check => check.pass).length, outputs: report.outputs.length, visual: report.visual.length, consoleErrors: report.consoleErrors.length, sandboxedHarnessScripts: report.sandboxedHarnessScripts.length, pageErrors: report.pageErrors.length, external: report.external.length, report: path.join(out, 'browser-report.json') })); if (!report.pass) process.exitCode = 1;
 }
 if (require.main === module) main().catch(error => { console.error(error); annotation(error); process.exitCode = 1; });

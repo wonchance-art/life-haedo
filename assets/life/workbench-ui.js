@@ -2009,7 +2009,7 @@
       scope.append(notice('이 설정은 이 책을 여는 동안만 유지됩니다. 파일을 만들며 저장된 원고·공개 범위를 바꾸지 않습니다.'));
       const status = el('p', '', 'life-meta'); status.id = 'wbEditionStatus'; status.setAttribute('role', 'status');
       const frameHost = el('div', null, 'wb-edition-frame');
-      let ready = false, content = '', projection, seq = 0, timer, frame, frameURL;
+      let ready = false, content = '', projection, seq = 0, timer, frame;
       function rememberFrame() {
         if (!ready || !frame?.contentDocument) return;
         const doc = frame.contentDocument, win = frame.contentWindow;
@@ -2017,7 +2017,7 @@
         const anchor = anchors.filter(node => node.getBoundingClientRect().top <= 60).at(-1);
         view.editionPosition = { id: anchor?.id || null, top: anchor?.getBoundingClientRect().top || 0, y: win.scrollY };
       }
-      const clearFrame = () => { frameHost.replaceChildren(); if (frameURL) { URL.revokeObjectURL(frameURL); frameURL = null; } };
+      const clearFrame = () => { frameHost.replaceChildren(); };
       const printOptions = () => ({ mode: 'book', paper: settings.paper, includeInsights: settings.includeInsights });
       const available = () => active() && ready;
       const download = action('책자 HTML 받기', async () => {
@@ -2055,7 +2055,15 @@
             try {
               if (!active() || attempt !== seq || loaded || frame.contentDocument?.documentElement?.dataset.haedoPrint !== 'v1') return;
               loaded = true;
-              await frame.contentDocument.fonts.ready;
+              const doc = frame.contentDocument;
+              // Relative links in srcdoc resolve against the app. Explicit native
+              // preview links also work in WebKit's script-free sandbox; exported
+              // HTML and the independent print document retain their original # links.
+              doc.querySelectorAll('.book-toc a[href^="#"]').forEach(link => {
+                const fragment = link.getAttribute('href');
+                if (doc.getElementById(fragment.slice(1))) link.setAttribute('href', 'about:srcdoc' + fragment);
+              });
+              await doc.fonts.ready;
               if (!active() || attempt !== seq) return;
               const position = view.editionPosition;
               if (position) {
@@ -2066,8 +2074,7 @@
               status.textContent = '책자 준비됨 · 최종 쪽나눔은 인쇄 창에서 확인하세요.';
             } catch (error) { failed(error, attempt); }
           });
-          frameURL = URL.createObjectURL(new Blob([content], { type: 'text/html;charset=utf-8' }));
-          frame.src = frameURL; frameHost.append(frame);
+          frame.srcdoc = content; frameHost.append(frame);
           timer = global.setTimeout(() => failed(new Error('미리보기 준비가 지연됐습니다. 다시 시도해 주세요. 원고는 유지했습니다.'), attempt), 15000);
         } catch (error) { failed(error, attempt); }
       }
