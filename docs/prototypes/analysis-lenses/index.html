@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>돌아보기 · 해도 시제품</title><link rel="icon" href="data:,"><link rel="stylesheet" href="../../../assets/life/ui.css"><link rel="stylesheet" href="prototype.css"><script defer src="../../../assets/life/icons.js"></script><script defer src="fixtures.js"></script><script defer src="model.js"></script><script defer src="app.js"></script></head>
+<body><a class="life-skip" href="#results">본문으로</a><main id="prototype">
+<header><div><h1>돌아보기</h1><p class="meta">익명 시제품 · AI 실행 없음</p></div><button id="candidates" class="icon-label"><span data-icon="book"></span>장 후보 <span id="count">0</span></button></header>
+
+<div class="scope"><label for="period">글의 시기</label><select id="period"><option value="all">전체 · 2018–2026</option><option value="early">2018–2021</option><option value="recent">2022–2026</option></select></div>
+<details class="sample-info"><summary>예시 자료와 보관 범위</summary><p id="scope-info"></p><p>직접 만든 익명 글과 해석입니다. 실제 AI 실행·개인 자료 접근은 없습니다. 내 해석과 장 후보는 이 탭에서만 유지됩니다. 새로고침 전에 파일로 받아 주세요. 실제 책·백업에는 연결되지 않습니다.</p></details>
+<div id="tabs" role="tablist" aria-label="분석 관점"></div>
+<section id="results" role="tabpanel" tabindex="-1"></section><p id="status" role="status"></p>
+<footer>원문은 그대로, 해석은 내가 고칩니다.<br>자료가 없는 시기는 관심이 없었던 시기와 다릅니다.</footer>
+</main><dialog id="source-dialog" aria-labelledby="source-title"><div class="dialog-head"><h2 id="source-title"></h2><button data-close="source-dialog" aria-label="원문 닫기"><span data-icon="close"></span></button></div><p id="source-meta" class="meta"></p><p id="source-warning" class="meta"></p><div id="source-body"></div></dialog>
+<dialog id="candidate-dialog" aria-labelledby="candidate-title"><div class="dialog-head"><h2 id="candidate-title">장 후보</h2><button data-close="candidate-dialog" aria-label="장 후보 닫기"><span data-icon="close"></span></button></div><p class="meta">이 탭의 익명 시제품 자료입니다. 실제 책에 저장되지 않습니다.</p><div id="candidate-list"></div><div class="actions"><button id="download-json">JSON 받기</button><button id="download-md">Markdown 받기</button></div><p id="download-status" role="status"></p></dialog>
+</body></html>
