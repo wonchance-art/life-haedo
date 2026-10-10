@@ -1,0 +1,85 @@
+{
+  "format": "haedo-analysis-candidates-prototype-v1",
+  "synthetic": true,
+  "fixtureVersion": "haedo-lens-fixtures-v1",
+  "modelUsed": null,
+  "createdAt": "2026-10-10T14:52:57.389Z",
+  "notice": "익명 시제품의 장 후보입니다. 실제 책·백업 형식이 아닙니다.",
+  "candidates": [
+    {
+      "id": "change-standard",
+      "lens": "changes",
+      "title": "인정받고 싶다는 마음에, 내 기준을 더하다",
+      "proposal": {
+        "origin": "authored_example",
+        "templateVersion": 1,
+        "text": "인정을 원하는 마음이 사라졌다기보다, 내 질문도 선택의 기준에 놓으려는 변화로 읽힙니다.",
+        "alternative": "회사의 평가를 앞두고 쓴 글과 입사 전 글의 상황 차이일 수도 있습니다. 이것을 성장의 우열로 평가하지 않습니다."
+      },
+      "userInterpretation": "인정받고 싶은 마음은 남아 있다. 🌱\n다만 오래 궁금한 일을 함께 고르고 싶다. <img src=x onerror=alert(1)>",
+      "scope": {
+        "period": "all",
+        "versionIds": [
+          "v01",
+          "v02",
+          "v03",
+          "v04",
+          "v05",
+          "v06",
+          "v07",
+          "v08",
+          "v09",
+          "v10",
+          "v12",
+          "v14",
+          "v15"
+        ],
+        "count": 13,
+        "unknownDates": 1,
+        "omitted": {
+          "olderVersions": 1,
+          "otherAuthors": 2,
+          "missingBody": 0
+        }
+      },
+      "evidence": [
+        {
+          "versionId": "v01",
+          "start": 34,
+          "end": 76,
+          "text": "인정받는 일을 하고 싶다. 그래야 내가 잘 살고 있다는 느낌이 들 것 같다.",
+          "role": "support",
+          "sourceId": "s01",
+          "title": "첫 출근을 앞두고",
+          "date": "2018-02-12",
+          "relation": "self",
+          "coverage": "full_text"
+        },
+        {
+          "versionId": "v04",
+          "start": 27,
+          "end": 52,
+          "text": "다만 오래 궁금해할 수 있는 일을 하고 싶다.",
+          "role": "support",
+          "sourceId": "s04",
+          "title": "일을 고르는 기준",
+          "date": "2021-04-10",
+          "relation": "self",
+          "coverage": "full_text"
+        },
+        {
+          "versionId": "v08",
+          "start": 20,
+          "end": 68,
+          "text": "여전히 좋은 평가를 받고 싶다. 다만 그것이 내 선택의 유일한 기준은 아니었으면 한다.",
+          "role": "counter",
+          "sourceId": "s08",
+          "title": "평가를 앞둔 메모",
+          "date": "2025-01-11",
+          "relation": "self",
+          "coverage": "full_text"
+        }
+      ]
+    }
+  ]
+}
