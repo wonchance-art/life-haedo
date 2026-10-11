@@ -1,3 +1,5 @@
+> 후속: [검수 후 편집·파일 보관 개선](taste-page-editing.md)이 최신 상태입니다. 아래 검증과 메모리 전용 설명은 최초 시안 시점의 이력입니다.
+
 # 취향 페이지 시각 개편과 커스터마이징
 
 2026-10-11 · 디자인/구현 책임 root. [PR #65](https://github.com/wonchance-art/life-haedo/pull/65)의 후속 독립 시안. 운영 앱 미연결, 병합·배포는 Local 담당.
