@@ -17,3 +17,5 @@
 필요 시 기존 설치의 `PW_MODULE_PATH`, `CHROMIUM_PATH`를 지정한다. 운영 앱에 새 패키지를 설치하지 않는다.
 
 [설계·검토·Local 인계](../../design-review/collection-space.md)
+
+후속 [취향 페이지 편집 시안](../taste-page/README.md)에서 3가지 배치와 색·여백·내용 커스터마이징을 확인한다.

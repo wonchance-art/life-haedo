@@ -3,7 +3,9 @@ on:
   pull_request:
     paths:
       - 'docs/prototypes/collection-space/**'
+      - 'docs/prototypes/taste-page/**'
       - 'tests/collection-space-prototype-browser.cjs'
+      - 'tests/taste-page-prototype-browser.cjs'
       - '.github/workflows/collection-prototype.yml'
       - 'assets/life/ui.css'
       - 'assets/life/icons.js'
@@ -17,6 +19,7 @@ jobs:
     env:
       BASE_URL: http://127.0.0.1:4184
       COLLECTION_PROTOTYPE_OUTPUT: .local/collection-prototype-evidence
+      TASTE_PAGE_OUTPUT: .local/taste-page-evidence
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -70,12 +73,16 @@ jobs:
           node --check docs/prototypes/collection-space/app.js
           node --check docs/prototypes/collection-space/sample.js
           node tests/collection-space-prototype-browser.cjs
+          node --check docs/prototypes/taste-page/page.js
+          node tests/taste-page-prototype-browser.cjs
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: collection-prototype-evidence
-          path: .local/collection-prototype-evidence
+          path: |
+            .local/collection-prototype-evidence
+            .local/taste-page-evidence
       - name: Stop server
         if: always()
         run: |
