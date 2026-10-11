@@ -64,3 +64,57 @@ html[data-paper=warm] { --page-paper:#f7f5f1; --rule:#e1ded8; }
 [data-layout=archive] .feature-book .art.book { width:auto; }
 /* Keep the author visible in compact covers; crop the sample artwork first. */
 .book .photo { flex:0 1 auto; min-height:0; }
+/* Editing stays beside the page, so choices and their result remain visible. */
+#editor { position:fixed; inset:86px 16px 16px auto; margin:0; max-height:calc(100dvh - 102px); z-index:10; overflow:auto; }
+#editor .editor-heading { position:sticky; top:-24px; z-index:2; background:var(--page-paper); padding-block:8px; }
+body:has(#editor[open]) #page { margin-right:365px; }
+#page h1 { font-size:clamp(32px,3.5vw,50px); }
+.page-intro { padding-block:32px 38px; }
+.selected-items { list-style:none; padding:0; margin:0; }
+.selected-row { display:grid; grid-template-columns:minmax(0,1fr) repeat(3,44px); align-items:center; border-bottom:1px solid var(--rule); padding:8px 0; }
+.selected-row>span { font-size:12px; line-height:1.6; overflow-wrap:anywhere; word-break:keep-all; }
+.selected-row .icon-button { padding:10px; }
+.move-up svg { transform:rotate(-90deg); }.move-down svg { transform:rotate(90deg); }
+.file-label { position:relative; cursor:pointer; }
+.file-label input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+.file-label:focus-within { outline:2px solid var(--accent); outline-offset:2px; }
+#fileError { color:#9c2734; font-size:13px; line-height:1.7; }
+.empty-section { font-size:14px; color:var(--muted); line-height:1.8; padding:20px 0; }
+.feature-tools .object:not(.tool-object) { display:grid; grid-template-columns:64px minmax(0,1fr); align-items:center; gap:12px; padding-block:8px; }
+.feature-tools .object:not(.tool-object) .art { width:64px; margin:0; }
+.feature-tools .book-label { font-size:10px; padding:6px; }
+.feature-tools .book-author { font-size:8px; padding:4px; }
+.feature-tools .album-lettering { display:none; }
+.art.article { display:flex; align-items:center; justify-content:center; padding:20px; color:#39354a; background:#efedf5; font-size:20px; line-height:1.6; }
+.feature-tools .art.article { font-size:10px; padding:6px; }
+.feature-tools .object-title { margin:0; }
+@media(min-width:601px) and (max-width:1099px){body:has(#editor[open]) .feature-grid{grid-template-columns:1fr 1fr;gap:20px;}body:has(#editor[open]) .context{grid-column:1/-1;grid-row:auto;}body:has(#editor[open]) .page-intro{grid-template-columns:1fr;}body:has(#editor[open]) .collection-grid{grid-template-columns:repeat(2,minmax(0,1fr));}body:has(#editor[open]) #pageDescription{justify-self:start;}body:has(#editor[open]) h1{font-size:30px;}body:has(#editor[open]) .profile .quiet-link{display:none;}}
+@media(max-width:600px){
+ #page h1 { font-size:34px; }
+ .page-intro { gap:12px; padding-block:22px 24px; }
+ #pageDescription { font-size:13px; }
+ #editor { inset:auto 0 0; width:100%; max-height:45svh; padding:12px 20px calc(12px + env(safe-area-inset-bottom)); }
+ #editor .editor-heading { top:-12px; }
+ #editor .editor-bottom { bottom:-12px; }
+ body:has(#editor[open]) #page { margin-right:0; padding-bottom:48svh; }
+ .feature-tools .object:not(.tool-object) { grid-template-columns:48px minmax(0,1fr); gap:8px; }
+ .feature-tools .object:not(.tool-object) .art { width:48px; }
+ .feature-tools .book-label { font-size:8px; padding:4px; }
+ .feature-tools .book-author { font-size:6px; padding:2px; }
+}
+
+/* Mixed collections retain a common caption baseline without pretending every item is an album. */
+.collection-grid .tool-icon { width:76px; height:76px; border-radius:18px; }
+.collection-grid .tool-icon svg { width:36px; height:36px; }
+.collection-grid .art.kind-video { aspect-ratio:16/9; background:#e8eef5; }
+.collection-grid .art.kind-place { background:#edf0e7; }
+.collection-grid .art.kind-other { background:#f3f2f0; border:1px dashed #8b858e; font-size:16px; }
+.feature-tools .book-label,.feature-tools .book-author { display:none; }
+.feature-tools .book .photo { flex:1; }
+
+/* A longer selection becomes a full-width list instead of a narrow side column. */
+#page .feature-grid.many-items { grid-template-columns:1fr 1fr; }
+#page .many-items .context { grid-column:1/-1; grid-row:auto; display:block; }
+#page .many-items .personal-note { max-width:440px; margin-bottom:24px; }
+#page .many-items .feature-tools { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px 24px; }
+@media(max-width:1000px){#page .many-items .feature-tools{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px;}}
