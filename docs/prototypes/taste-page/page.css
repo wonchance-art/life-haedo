@@ -62,3 +62,5 @@ html[data-paper=warm] { --page-paper:#f7f5f1; --rule:#e1ded8; }
 @media(max-width:1000px){.collection-grid{--frame-height:190px;}}
 @media(max-width:600px){.collection-grid{--frame-height:184px;}.feature-book .object{width:100%;}}
 [data-layout=archive] .feature-book .art.book { width:auto; }
+/* Keep the author visible in compact covers; crop the sample artwork first. */
+.book .photo { flex:0 1 auto; min-height:0; }

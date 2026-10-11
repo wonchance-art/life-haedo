@@ -15,6 +15,8 @@ const base=process.env.BASE_URL||'http://127.0.0.1:4189',out=path.resolve(proces
   assert.equal(spills,0,'media frame contains artwork with editor open or closed');
   const bookRatios=await page.locator('.art.book').evaluateAll(ns=>ns.map(n=>n.getBoundingClientRect()).filter(r=>r.width).map(r=>r.width/r.height));
   assert.ok(bookRatios.every(r=>Math.abs(r-2/3)<.015),'portrait book ratio remains 2:3: '+JSON.stringify({width:page.viewportSize().width,layout:await page.locator('#page').getAttribute('data-layout'),bookRatios}));
+  const clippedAuthors=await page.locator('.book-author').evaluateAll(ns=>ns.filter(n=>{const a=n.closest('.book').getBoundingClientRect(),b=n.getBoundingClientRect();return a.width&&(b.bottom>a.bottom+1||b.top<a.top-1);}).length);
+  assert.equal(clippedAuthors,0,'book author stays inside compact cover');
   const result=await page.evaluate(()=>{
    const rgb=s=>(s.match(/[\d.]+/g)||[]).map(Number),lum=c=>c.slice(0,3).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;}).reduce((a,v,i)=>a+v*[.2126,.7152,.0722][i],0);
    const visible=n=>n.getBoundingClientRect().width>0&&getComputedStyle(n).visibility!=='hidden';
