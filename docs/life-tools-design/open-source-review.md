@@ -652,3 +652,11 @@ MDN 호환성 데이터의 해당 파일 마지막 변경은 **2026-10-05**, com
 Paged.js/Vivliostyle 직접 도입은 패키지 크기뿐 아니라 **조판 스크립트의 실행 위치, DOM 분할 후 원고·출처 순서, 계정 전환 취소, 폰트 준비, 메모리·인쇄 완료 경계**를 다시 검증해야 한다. 지금 필요한 기본 판형·문단·장 나눔에 이 비용을 먼저 추가할 이유는 없다. 실제 원고에서 자동 목차 쪽번호·각주·양면 조판이 필수로 드러나면 두 후보의 동일 한글 원고 출력을 직접 비교하고 결정한다.
 
 이 절은 공식 자료 조사와 선택 근거다. 조사 뒤 수행한 새 독자용 화면·PDF 검증은 [책자 검토](../design-review/book-edition.md)에 별도로 기록했다. 기존 7쪽 PDF 검사나 라이브러리의 지원 표로 새 출력을 대신하지 않는다. 라이브러리·폰트 설치, 외부 AI, 운영 SQL·계정 자료·병합·배포 작업은 수행하지 않았다.
+
+## 선택 자료의 읽기 관점 — 2026-10-11
+
+기존 Taguette/Hypothesis 비교와 PR #63의 독립 시제품을 실제 회고 자료의 **읽기 전용 근거 보기**에 적용한다. PyPI Taguette 1.5.2(BSD-3-Clause), npm Hypothesis client 1.1766.0(BSD-2-Clause)의 공식 최신 배포 메타데이터를 다시 확인했다. 위의 Hypothesis **h 서버**와 **client 패키지**는 다른 구성 요소이며 버전을 혼용하지 않는다. 라이선스·공개 권고 검토는 앞선 비교 범위를 이어가며 새로운 패키지를 설치하거나 코드를 가져오지 않았다.
+
+채택한 것은 사용자 묶음과 인용을 분리하고 원문으로 돌아가는 방식이다. 이번 관심은 실제 사용자 묶음, 질문은 물음표 구절의 기계적 추출, 변화는 사용자가 고른 두 글의 비교다. 의미 분석·자동 군집·외부 AI가 아니므로 Python 분석 서버나 주석 서비스가 필요하지 않다. `Reflection.chronology`, 정확 버전 sourceRow, 기존 원문 선택 복원, 공용 UI 토큰을 재사용한다. 새 모듈은 이 읽기 계산과 표시만 담당하며 저장 스키마·SQL·공개 API를 추가하지 않는다.
+
+[구현·한계·Local 통합](../design-review/reflection-lenses.md). 참고 출처: [Taguette PyPI](https://pypi.org/project/taguette/), [Taguette 공식 저장소](https://gitlab.com/remram44/taguette), [Hypothesis client](https://github.com/hypothesis/client), [npm 공식 메타데이터](https://registry.npmjs.org/hypothesis/latest).
