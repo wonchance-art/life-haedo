@@ -364,3 +364,19 @@
   body:has(.life-workbench:is([data-book-scene=edit],[data-book-scene=read])) > .haedo-nav { display: none; }
 }
 .life-workbench[data-mode=books] > .wb-error { position: sticky; top: 64px; z-index: 30; max-height: 40dvh; overflow: auto; }
+
+/* Read-only lens view; reuses the reflection and source-row typography. */
+.wb-lenses { padding: 24px 0; border-top: 1px solid var(--line); }
+.wb-lenses > .life-actions { margin: 20px 0; }
+.wb-lenses [aria-pressed="true"] { background: var(--soft); color: var(--color-primary); }
+.wb-lens-group { margin-top: 28px; }
+.wb-lens-source { padding: 20px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.wb-lens-source .wb-source { border: 0; padding: 0; margin: 0; }
+.wb-lens-quote { font-size: 18px; line-height: 1.9; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; margin: 16px 0 4px; }
+.wb-lens-choices { display: grid; gap: 16px; margin: 24px 0; }
+.wb-lens-choices label { display: grid; gap: 8px; min-width: 0; }
+.wb-lens-choices select { width: 100%; min-width: 0; min-height: 44px; font-size: 16px; border: 1px solid var(--field-line); border-radius: 12px; padding: 10px; background: var(--paper); }
+.wb-lens-prompt { margin-top: 24px; word-break: keep-all; overflow-wrap: anywhere; }
+@media (max-width: 700px) { .wb-lens-quote { font-size: 17px; } }
+
+.wb-lenses .wb-source-body { max-height: none; overflow: visible; overflow-wrap: anywhere; font-family: inherit; }
