@@ -1,0 +1,418 @@
+{
+  "checks": [
+    "ISBN input changes only source after explicit action and saves using v1 storage",
+    "Default rendering makes no image requests; mixed fixture preserves unsupported kinds",
+    "Opt-in shows aspect-preserving covers with source labels, no referral or data mutation",
+    "Opt-out cancels pending images and ignores late callbacks without changing saved data",
+    "Missing and tiny provider images fall back to title; detail retains an explicit source link",
+    "Editor preview is explicit; changing source clears stale image without modifying memo",
+    "Navigation, reload and workspace changes reset opt-in; backup restores source not image bytes",
+    "Offscreen images stay unloaded; bounded timeout falls back and clears the pending request",
+    "Touch browser can open a book, show its cover and turn it off"
+  ],
+  "visual": [
+    {
+      "scene": "disabled",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 37,
+      "contrastFailures": []
+    },
+    {
+      "scene": "loaded",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 33,
+      "contrastFailures": []
+    },
+    {
+      "scene": "loaded",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 33,
+      "contrastFailures": []
+    },
+    {
+      "scene": "loaded",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 33,
+      "contrastFailures": []
+    },
+    {
+      "scene": "loading",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 37,
+      "contrastFailures": []
+    },
+    {
+      "scene": "missing",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 37,
+      "contrastFailures": []
+    }
+  ],
+  "requests": [
+    {
+      "url": "https://covers.openlibrary.org/b/isbn/9780140328721-M.jpg?default=false",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "origin": "http://127.0.0.1:4184",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DjNQXAC9IVRw&format=json",
+      "headers": {
+        "accept": "*/*",
+        "origin": "http://127.0.0.1:4184",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://i.ytimg.com/vi/jNQXAC9IVRw/hqdefault.jpg",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://covers.openlibrary.org/b/isbn/9780140328721-M.jpg?default=false",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "origin": "http://127.0.0.1:4184",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://i.ytimg.com/vi/jNQXAC9IVRw/hqdefault.jpg",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://covers.openlibrary.org/b/isbn/9780140328721-M.jpg?default=false",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "origin": "http://127.0.0.1:4184",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://i.ytimg.com/vi/jNQXAC9IVRw/hqdefault.jpg",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://covers.openlibrary.org/b/isbn/9780140328721-M.jpg?default=false",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "origin": "http://127.0.0.1:4184",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://i.ytimg.com/vi/jNQXAC9IVRw/hqdefault.jpg",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://covers.openlibrary.org/b/isbn/9780140328721-M.jpg?default=false",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "origin": "http://127.0.0.1:4184",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DjNQXAC9IVRw&format=json",
+      "headers": {
+        "accept": "*/*",
+        "origin": "http://127.0.0.1:4184",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://i.ytimg.com/vi/jNQXAC9IVRw/hqdefault.jpg",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://covers.openlibrary.org/b/isbn/9780140328721-M.jpg?default=false",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "origin": "http://127.0.0.1:4184",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://covers.openlibrary.org/b/isbn/9780140328721-M.jpg?default=false",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "origin": "http://127.0.0.1:4184",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://covers.openlibrary.org/b/isbn/9780140328721-M.jpg?default=false",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "origin": "http://127.0.0.1:4184",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DjNQXAC9IVRw&format=json",
+      "headers": {
+        "accept": "*/*",
+        "origin": "http://127.0.0.1:4184",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://covers.openlibrary.org/b/isbn/9780140328721-M.jpg?default=false",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "origin": "http://127.0.0.1:4184",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://i.ytimg.com/vi/jNQXAC9IVRw/hqdefault.jpg",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://covers.openlibrary.org/b/olid/OL123003M-M.jpg?default=false",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "origin": "http://127.0.0.1:4184",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://covers.openlibrary.org/b/olid/OL123002M-M.jpg?default=false",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "origin": "http://127.0.0.1:4184",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://covers.openlibrary.org/b/olid/OL123001M-M.jpg?default=false",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "origin": "http://127.0.0.1:4184",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://covers.openlibrary.org/b/olid/OL123000M-M.jpg?default=false",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "origin": "http://127.0.0.1:4184",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    },
+    {
+      "url": "https://covers.openlibrary.org/b/olid/OL999999M-M.jpg?default=false",
+      "headers": {
+        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "origin": "http://127.0.0.1:4184",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"151\", \"Not=A?Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      },
+      "method": "GET"
+    }
+  ],
+  "pageErrors": [],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ],
+  "external": [],
+  "environment": "Linux Chromium; anonymous Auth and provider image fixtures; real IndexedDB. No live provider/Apple verification.",
+  "browser": "151.0.7922.173"
+}

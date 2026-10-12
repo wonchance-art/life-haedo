@@ -1,0 +1,13 @@
+PASS Actual collection entry, empty state and login return route
+PASS Register, reload, search and edit preserve literal Korean metadata
+PASS Storage failure keeps form input and blocks navigation until saved
+PASS Two-tab conflict compares latest and saves input as a separate copy
+PASS Archive and restore preserve the item identity and private note
+PASS Download and recover valid backup as new identities without overwriting
+PASS Invalid and oversized backup cannot replace saved entries
+PASS Account and workspace boundaries reject cross-account access; source and workbench remain unchanged
+PASS Mixed Korean collection, filters, keyboard, many entries and three viewport widths
+PASS Pending reads cannot block navigation or paint into another section; failed reads allow retry
+PASS IME composition does not submit, workspace switching does not mix collections, and management exposes backup scope
+PASS Touch viewport can add, open and return to an item
+Collection library: 12 journeys, 14 viewport states.
