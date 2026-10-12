@@ -88,6 +88,9 @@ jobs:
       - name: Verify the core experience across screen sizes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/core-experience-browser.cjs
+      - name: Verify private collection storage and recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/collection-library-browser.cjs
       - name: Verify composition transactions and recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/composition-storage-browser.cjs
@@ -205,6 +208,7 @@ jobs:
         with:
           name: browser-checks-${{ github.run_attempt }}
           path: |
+            .local/collection-library/
             .local/core-experience/
             .local/unified-home/
             .local/quality-audit/after/

@@ -152,6 +152,7 @@
     skip.href = '#lifeMain';
     root.append(skip, header, toolbar, recordSections, status, error, main);
     container.replaceChildren(root);
+    const collection = global.HaedoLife.CollectionUI?.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onSaved: clearError });
     const workbenchModes = ['activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'public-pages'];
     const workbench = global.HaedoLife.WorkbenchUI?.create({
       storage, core, host: main, getBundle: () => state.bundle,
@@ -848,6 +849,7 @@
       if (dirty()) await persistStage();
       await workbench?.flush();
       await writer?.flush();
+      collection?.flush();
       await flushReadingPosition();
       if (disposed || token !== navigationGeneration) return;
       // A previous excerpt/record save does not describe the draft being opened.
@@ -976,7 +978,7 @@
       if (section === 'tools') return ['discover', 'reflection', 'books'].includes(view) ? view : 'tools';
       if (section === 'manage') return ['transfer', 'sync', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
       if (!section && ['transfer', 'sync', 'workbench-backup', 'public-pages', 'discover', 'reflection', 'books'].includes(view)) return view;
-      if (['topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related'].includes(view)) return view;
+      if (['topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related', 'collection'].includes(view)) return view;
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
     }
 
@@ -987,7 +989,7 @@
       if (section === 'home' && !/\/life\.html$/.test(url.pathname)) url.searchParams.delete('section');
       else url.searchParams.set('section', section);
       const view = mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
-      if (['topics', 'time', 'import', 'write', 'sync', 'transfer', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
+      if (['topics', 'time', 'import', 'write', 'sync', 'transfer', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
       else url.searchParams.delete('view');
       const destination = url.pathname + url.search + url.hash;
       if (destination !== global.location.pathname + global.location.search + global.location.hash)
@@ -1009,6 +1011,7 @@
       if (dirty()) await persistStage();
       await workbench?.flush();
       await writer?.flush();
+      collection?.flush();
       if (disposed) return;
       writeRoute(next, push);
       await navigate(next, { preserveContext: true });
@@ -1033,7 +1036,7 @@
       toolbar.replaceChildren();
       toolbar.hidden = state.mode === 'source' && !state.remoteChanged;
       recordSections.replaceChildren();
-      const focused = ['write', 'source', 'page', 'related'].includes(state.mode);
+      const focused = ['write', 'source', 'page', 'related', 'collection'].includes(state.mode);
       recordSections.hidden = section !== 'records' || focused;
       const heading = node('h1', null, 'life-page-title');
       heading.tabIndex = -1;
@@ -1041,6 +1044,7 @@
       if (state.mode === 'write') heading.textContent = '글쓰기';
       else if (state.mode === 'books') heading.textContent = '내 책';
       else if (state.mode === 'page') heading.textContent = '내 페이지';
+      else if (state.mode === 'collection') heading.textContent = '컬렉션';
       else if (state.mode === 'related') heading.textContent = '관련 기록';
       else if (section === 'records') {
         const records = button('기록', guarded(() => navigate('sources')), 'life-title-button');
@@ -1053,7 +1057,7 @@
       if (section === 'tools' && state.mode !== 'tools') {
         headingGroup.append(iconButton('도구로 돌아가기', 'back', guarded(() => navigate('tools'))));
       }
-      if (state.mode === 'page') headingGroup.append(iconButton('기록으로 돌아가기', 'back', guarded(() => navigate('sources'))));
+      if (state.mode === 'page' || state.mode === 'collection') headingGroup.append(iconButton('기록으로 돌아가기', 'back', guarded(() => navigate('sources'))));
       if (state.mode === 'related') {
         const back = iconButton(relatedOrigin?.workspaceId === state.bundle?.workspaceId ? '읽던 글로 돌아가기' : '기록으로 돌아가기', 'back', guarded(returnFromRelated));
         back.id = 'lifeRelatedReturn';
@@ -1073,7 +1077,7 @@
           select.setAttribute('aria-pressed', String(state.selecting));
           recordSections.append(select);
         }
-        [['activities', '묶음'], ['page', '내 페이지']].forEach(([mode, label]) => {
+        [['collection', '컬렉션'], ['activities', '묶음'], ['page', '내 페이지']].forEach(([mode, label]) => {
           const tab = button(label, guarded(() => navigate(mode)));
           if (state.mode === mode || (mode === 'sources' && state.mode === 'source')) tab.setAttribute('aria-current', 'page');
           recordSections.append(tab);
@@ -1100,6 +1104,7 @@
           if (dirty()) await persistStage();
           await workbench?.flush();
           await writer?.flush();
+          collection?.flush();
           await refreshData();
           state.remoteChanged = false;
           state.prepared = null;
@@ -1189,6 +1194,7 @@
       main.append(manage, management);
       const destinations = node('div', null, 'life-destinations');
       destinations.append(actionRow('공개 페이지 관리', '이 계정으로 게시한 페이지 확인·철회', 'link', () => navigate('public-pages')));
+      destinations.append(actionRow('컬렉션 백업·복구', '컬렉션 정보·비공개 메모를 별도 파일로 보관', 'bookmark', async () => { await navigate('collection'); collection?.showBackup(); }));
       destinations.append(actionRow('자료·구성 백업', '원문과 묶음·내 페이지·회고·책을 함께 보관', 'download', () => navigate('workbench-backup')));
       destinations.append(actionRow('내보내기·사본 복원', '원문·발췌·출처를 파일로 보관', 'download', () => navigate('transfer'), '자료 백업·복원'));
       if (sync) destinations.append(actionRow('기기 간 동기화', '연결할 작업공간을 직접 선택', 'cloud', async () => {
@@ -3108,6 +3114,7 @@
       home?.leave();
       workbench?.leave();
       writer?.close();
+      collection?.leave();
       if (readerCleanup) { readerCleanup(); readerCleanup = null; }
       readingResumeCleanup?.(); readingResumeCleanup = null;
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
@@ -3120,6 +3127,7 @@
         homeRenderPromise = home.render().catch(failure);
         return;
       }
+      if (state.mode === 'collection' && collection) { collection.open().catch(failure); return; }
       if (state.mode === 'write' && writer) {
         const options = writingOpenOptions || {};
         writingOpenOptions = null;
@@ -3151,7 +3159,7 @@
     }
 
     const beforeUnload = event => {
-      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty()) { event.preventDefault(); event.returnValue = ''; }
+      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || collection?.dirty()) { event.preventDefault(); event.returnValue = ''; }
     };
     const visibility = () => {
       if (!document.hidden) return;
@@ -3221,6 +3229,7 @@
       if (disposed) throw new Error('계정이 바뀌어 이전 초안을 보관할 수 없습니다.');
       await workbench?.flush();
       await writer?.flush();
+      collection?.flush();
       await flushReadingPosition();
       if (disposed) throw new Error('계정이 바뀌어 이전 초안을 보관할 수 없습니다.');
       if (state.stage && dirty()) await persistStage();
@@ -3256,6 +3265,7 @@
       home?.dispose();
       workbench?.dispose();
       writer?.dispose();
+      collection?.dispose();
       unbindNavigation?.();
       global.removeEventListener('popstate', popstate);
       root.removeEventListener('focusin', keepFocusVisible);
