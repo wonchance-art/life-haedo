@@ -1,0 +1,9 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');
+const R=require('../assets/life/collection-reference.js');
+const item={type:'book',title:'작은 관찰의 기록',creator:'익명 저자',url:'https://example.org/book',note:'복사하면 안 되는 개인 메모',tags:['비밀'],details:{rights:'권리 메모'},id:'private-id'};
+test('Reference explicitly copies only visible bibliographic fields, never private context',()=>{const ref=R.from(item);assert.deepEqual(Object.keys(ref),['type','title','creator','url','text','caption']);assert.match(ref.text,/참고한 항목 · 책/);assert(!JSON.stringify(ref).includes('비밀'));assert(!JSON.stringify(ref).includes('개인 메모'));assert(!JSON.stringify(ref).includes('private-id'));assert(Object.isFrozen(ref));item.note='changed';assert(!ref.text.includes('changed'));});
+test('References validate URL safety, type, UTF-16 and title before insertion',()=>{for(const input of [{...item,url:'javascript:alert(1)'},{...item,url:'https://user:secret@example.org'},{...item,title:''},{...item,title:'\ud800'},{...item,type:'unknown'}])assert.throws(()=>R.from(input));});
+test('Unknown creator and no URL remain absent, without inferring authorship',()=>{assert.equal(R.from({type:'person',title:'좋아하는 인물'}).text,'참고한 항목 · 인물\n좋아하는 인물');assert.throws(()=>R.from({type:'person',title:'인물',creator:'추정'}));});
+test('Insertion preserves every original character on both sides and fixed snapshot',()=>{const ref=R.from(item);const result=R.insert('앞 문장\n뒤 문장',4,ref);assert.equal(result.text,'앞 문장\n\n'+ref.text+'\n\n뒤 문장');assert.equal(R.insert('',0,ref).text,ref.text);assert.throws(()=>R.insert('body',9,ref));});
+test('Insertion never splits a surrogate pair and avoids redundant blank paragraphs',()=>{const ref=R.from(item);assert.equal(R.insert('가🌱나',2,ref).text,'가🌱\n\n'+ref.text+'\n\n나');assert.equal(R.insert('앞\n\n뒤',3,ref).text,'앞\n\n'+ref.text+'\n\n뒤');});

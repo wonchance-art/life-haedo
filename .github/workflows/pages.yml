@@ -99,6 +99,9 @@ jobs:
       - name: Verify collection selection and note flow
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/collection-picker-browser.cjs
+      - name: Verify collection references in writing and private page
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/collection-insert-browser.cjs
       - name: Verify opt-in collection cover rendering
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/collection-media-browser.cjs
@@ -223,6 +226,7 @@ jobs:
             .local/collection-metadata/
             .local/collection-media/
             .local/collection-picker/
+            .local/collection-insert/
             .local/core-experience/
             .local/unified-home/
             .local/quality-audit/after/
