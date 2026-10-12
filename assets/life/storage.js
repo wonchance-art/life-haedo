@@ -548,6 +548,55 @@
       notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Saving succeeded; reload remains available. */ }
       return saved;
     }
+    // Page composer drafts stay local, outside composition sync and public copies.
+    const pagePosts = () => root.HaedoLife?.PagePosts || (typeof require === 'function' && require('./page-posts.js'));
+    function validatePageDrafts(value) {
+      if (!plain(value) || Object.keys(value).length !== 2 || !Object.hasOwn(value, 'revision') || !Object.hasOwn(value, 'posts')) throw fault('invalid_page_post', '초안 형식을 확인해 주세요.');
+      requireRevision(value.revision, 'revision'); pagePosts().validate(value.posts);
+      if (value.posts.some(post => post.status !== 'draft') || new TextEncoder().encode(JSON.stringify(value)).length > 2097152) throw fault('invalid_page_post', '초안은 2 MiB까지 보관할 수 있습니다.');
+    }
+    async function pageDraftsValue(meta, workspaceId) {
+      const row = await meta.get(`page-drafts:${workspaceId}`);
+      const value = row === undefined ? { revision: 0, posts: [] } : row.value;
+      validatePageDrafts(value); return value;
+    }
+    async function readPageDrafts(workspaceId) {
+      collectionScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await pageDraftsValue(meta, workspaceId));
+      });
+    }
+    async function savePageDrafts(workspaceId, input, baseRevision) {
+      collectionScope(workspaceId); requireRevision(baseRevision, 'baseRevision'); validatePageDrafts(input);
+      const value = clone(input);
+      if (value.revision !== baseRevision) throw fault('page_draft_conflict', '초안 저장 기준이 바뀌었습니다.');
+      return transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await pageDraftsValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) throw fault('page_draft_conflict', '다른 탭에서 초안이 바뀌었습니다. 입력을 파일로 보관한 뒤 다시 열어 주세요.');
+        value.revision++; validatePageDrafts(value); await meta.put({ key: `page-drafts:${workspaceId}`, value }); return clone(value);
+      });
+    }
+    async function savePagePost(workspaceId, draftId, draftRevision, baseRevision, options = {}) {
+      collectionScope(workspaceId); requireRevision(draftRevision, 'draftRevision'); requireRevision(baseRevision, 'baseRevision');
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await workbenchValue(meta, workspaceId), drafts = await pageDraftsValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) throw fault('workbench_conflict', '페이지가 바뀌었습니다. 초안을 보존했으니 새 저장본을 확인해 주세요.');
+        if (drafts.revision !== draftRevision) throw fault('page_draft_conflict', '다른 탭에서 초안이 바뀌었습니다. 입력을 보존했습니다.');
+        const draft = drafts.posts.find(post => post.id === draftId);
+        const finished = pagePosts().finish((previous.page.posts || []).concat(draft || []), draftId, new Date().toISOString(), options);
+        const state = clone(previous); state.page.posts = finished.posts; state.revision++; workbench().validate(state);
+        const composition = await readCompositionState(meta, workspaceId, previous);
+        drafts.posts = drafts.posts.filter(post => post.id !== draftId); drafts.revision++; validatePageDrafts(drafts);
+        await meta.put({ key: `workbench:${workspaceId}`, value: state });
+        await meta.put({ key: `page-drafts:${workspaceId}`, value: drafts });
+        if (composition) { composition.error = null; composition.status = compositionStatus(composition, state); await writeCompositionState(meta, composition); }
+        return { workbench: clone(state), drafts: clone(drafts), id: finished.id };
+      });
+      workbenchChanged(result.workbench); return result;
+    }
     async function workbenchValue(meta, workspaceId) {
       const row = await meta.get(`workbench:${workspaceId}`);
       const state = row === undefined ? workbench().empty(workspaceId) : row.value;
@@ -1736,7 +1785,7 @@
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, read, createWorkspace, installWorkspace, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
-      readCollection, saveCollection,
+      readCollection, saveCollection, readPageDrafts, savePageDrafts, savePagePost,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       commitLocal, saveStage, getStage, listStages, deleteStage, subscribe,
       getSyncState, bindSync, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,
