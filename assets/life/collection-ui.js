@@ -8,7 +8,7 @@
     let draft = null, baseline = '', selected = null, busy = false, conflict = null, restore = null, status = '', error = '', screen;
     let query = '', category = 'all', type = 'all', tag = '', archived = false, mode = 'cover', limit = 40, position = 0;
     const urls = new Set(), mediaCleanups = new Set(), imageMetadata = new Map();
-    let imagesEnabled = false;
+    let imagesEnabled = false, closePicker = null, compactEditor = false, editorInfoOpen = false;
     function clearMedia() { mediaCleanups.forEach(dispose => dispose()); mediaCleanups.clear(); }
     let backupOpen = false, lookupController = null, candidate = null, lookupMessage = '', lookupPending = false;
     function cancelLookup() { lookupController?.abort(); lookupController = null; lookupPending = false; candidate = null; lookupMessage = ''; }
@@ -37,6 +37,8 @@
       if (options.multiline) input.rows = 5;
       input.addEventListener('input', () => {
         options.change(input.value);
+        const summary = screen?.querySelector('.cl-selected-object');
+        if (summary && draft) { summary.querySelector('h3').textContent = draft.title; summary.lastElementChild.textContent = draft.creator; }
         const key = { Title: 'title', Url: 'url' }[name];
         if (key) { const choice = screen?.querySelector('[data-metadata-field="' + key + '"]'); if (choice) choice.checked = false; }
         const kind = screen?.querySelector('[data-metadata-field="type"]');
@@ -57,7 +59,7 @@
       screen.append(s, e);
     }
     async function open() {
-      clearMedia(); active = true; const token = ++sequence, next = getBundle().workspaceId;
+      closePicker?.(); closePicker = null; clearMedia(); active = true; const token = ++sequence, next = getBundle().workspaceId;
       if (workspaceId !== next) {
         imagesEnabled = false; imageMetadata.clear(); clearMedia(); workspaceId = next; state = null; draft = null; selected = null; restore = null; conflict = null; query = ''; category = type = 'all'; tag = ''; archived = false; status = error = '';
       }
@@ -73,9 +75,10 @@
       try { const loaded = await storage.readCollection(workspaceId); if (!current(token)) return; state = loaded; draw(); }
       catch (cause) { if (!current(token)) return; error = cause.message; draw(); }
     }
-    function leave() { clearMedia(); imageMetadata.clear(); imagesEnabled = false; cancelLookup(); backupOpen = false; active = false; sequence++; unsubscribe?.(); unsubscribe = null; }
+    function leave() { closePicker?.(); closePicker = null; clearMedia(); imageMetadata.clear(); imagesEnabled = false; cancelLookup(); backupOpen = false; active = false; sequence++; unsubscribe?.(); unsubscribe = null; }
     function draw() {
-      clearMedia(); cancelLookup();
+      if (compactEditor) editorInfoOpen = !!screen?.querySelector('.cl-edit-information')?.open;
+      closePicker?.(); closePicker = null; clearMedia(); cancelLookup();
       if (!active || !alive) return;
       screen = node('section', null, 'life-collection'); screen.setAttribute('aria-label', '컬렉션'); host.replaceChildren(screen);
       notice();
@@ -117,7 +120,7 @@
     }
     function library() {
       const actions = node('div', null, 'cl-actions');
-      actions.append(node('p', '이 브라우저 · 비공개', 'life-meta'), button('컬렉션 항목 추가', () => begin(), 'plus'), button('최신 내용 확인', reload, 'refresh'));
+      actions.append(node('p', '이 브라우저 · 비공개', 'life-meta'), button('컬렉션 항목 추가', pick, 'plus'), button('최신 내용 확인', reload, 'refresh'));
       screen.append(actions, imageToggle());
       const search = node('div', null, 'cl-search');
       search.append(field('컬렉션 검색', 'Query', query, { max: 500, change: value => { query = value; limit = 40; renderResults(); } }));
@@ -164,7 +167,7 @@
       if (!shown.length) {
         const empty = node('div', null, 'cl-empty'); empty.append(node('h2', state.items.length ? '찾는 항목이 없어요' : '좋아하는 것을 모아 보세요'));
         empty.append(node('p', state.items.length ? '검색어나 분류를 바꿔 보세요.' : '음악, 책, 작품, 도구와 인물을 한곳에 보관합니다.', 'life-help'));
-        empty.append(button(state.items.length ? '검색·분류 초기화' : '첫 항목 추가', () => { if (!state.items.length) return begin(); query = ''; category = type = 'all'; tag = ''; screen.querySelector('#clQuery').value = ''; screen.querySelector('#clTag').value = ''; renderFilters(); renderResults(); screen.querySelector('#clQuery').focus(); })); grid.append(empty); return;
+        empty.append(button(state.items.length ? '검색·분류 초기화' : '첫 항목 추가', () => { if (!state.items.length) return pick(); query = ''; category = type = 'all'; tag = ''; screen.querySelector('#clQuery').value = ''; screen.querySelector('#clTag').value = ''; renderFilters(); renderResults(); screen.querySelector('#clQuery').focus(); })); grid.append(empty); return;
       }
       for (const item of shown.slice(0, limit)) {
         const b = button(item.title, () => { position = root.scrollY; selected = item.id; status = error = ''; draw(); focusHeading(); }); b.className = 'cl-card'; b.dataset.itemId = item.id; b.replaceChildren();
@@ -201,9 +204,17 @@
       })); screen.append(manage);
     }
     function now(createdAt = '') { const date = new Date().toISOString(); return date < createdAt ? createdAt : date; }
-    function begin(item) {
+    function pick() {
+      const token = sequence;
+      closePicker = root.HaedoLife.CollectionPicker.open({ items: C.clone(state.items), isCurrent: () => current(token), onSelect: choice => {
+        closePicker = null; begin(choice.item, choice);
+      } });
+    }
+    function begin(item, options = {}) {
+      compactEditor = !!options.compact;
       draft = item ? C.clone(item) : { id: root.HaedoLife.Core.id(), type: 'music', title: '', creator: '', url: '', note: '', tags: [], details: {}, archived: false, createdAt: now(), updatedAt: now() };
-      selected = item?.id || null; baseline = item ? JSON.stringify(draft) : ''; conflict = null; error = status = ''; draw(); screen.querySelector('#clTitle').focus();
+      if (!item && options.seed) Object.assign(draft, options.seed);
+      selected = item?.id || null; baseline = item ? JSON.stringify(draft) : ''; conflict = null; error = status = ''; draw(); screen.querySelector(compactEditor ? '#clNote' : '#clTitle').focus();
     }
     function editor() {
       screen.append(node('h2', selected ? '항목 수정' : '컬렉션에 추가'));
@@ -229,6 +240,15 @@
       form.addEventListener('submit', async event => { event.preventDefault(); if (busy || composing) return; await saveDraft(); });
       screen.append(form); renderLookup();
       const imagePanel = node('details', null, 'cl-image-editor'); imagePanel.id = 'clImageEditor'; imagePanel.append(node('summary', '표지·썸네일')); fs.insertBefore(imagePanel, actions); renderImageEditor();
+      if (compactEditor) {
+        const information = node('details', null, 'cl-edit-information'); information.append(node('summary', '정보 수정')); information.open = editorInfoOpen;
+        const note = fs.querySelector('#clNote').closest('label');
+        for (const child of [...fs.children]) { if (child === note) break; information.append(child); }
+        information.append(imagePanel);
+        const object = node('div', null, 'cl-selected-object'); object.append(node('p', C.TYPES[draft.type], 'life-meta'), node('h3', draft.title), node('p', draft.creator, 'life-meta'));
+        fs.prepend(object); fs.insertBefore(information, note.nextSibling);
+        form.addEventListener('invalid', () => { information.open = true; }, true);
+      }
       if (conflict) {
         const panel = node('section', null, 'cl-conflict'); panel.setAttribute('aria-label', '다른 탭 변경 비교');
         panel.append(node('h3', '다른 탭의 변경과 비교'), node('p', '현재 입력은 위에 유지했습니다. 사본으로 저장하면 다른 탭의 항목도 그대로 남습니다.', 'life-help'));
