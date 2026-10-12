@@ -124,3 +124,6 @@ body:has(#editor[open]) #page { margin-right:365px; }
 .feature-tools .art.artwork { font-size:9px; padding:4px; }
 .artwork-meta { display:grid; grid-template-columns:100px minmax(0,1fr); gap:8px 16px; margin:20px 0; font-size:14px; line-height:1.7; }
 .artwork-meta dt { color:var(--muted); }.artwork-meta dd { margin:0; overflow-wrap:anywhere; }
+.art.film { display:grid; place-items:center; aspect-ratio:2/3; padding:8px; border:1px solid var(--rule); background:#eceef2; color:#4d5565; font-size:13px; text-align:center; }
+.collection-grid .art.film { width:min(100%,calc(var(--frame-height) * 2 / 3)); }
+.feature-tools .art.film { font-size:9px; padding:4px; }

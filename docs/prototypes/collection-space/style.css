@@ -78,3 +78,7 @@ dialog { width:min(640px,calc(100% - 40px)); max-height:85svh; padding:26px; bor
 /* This standalone page has no app dock; inherited dock spacing moves focused buttons under the pointer. */
 html { scroll-padding-bottom:0; }
 button,input,textarea,select,summary,[tabindex] { scroll-margin-bottom:0; }
+.cover[data-type=film] { width:106px; aspect-ratio:2/3; padding:8px; border:1px solid var(--line); background:#eceef2; color:#4d5565; font-size:12px; font-weight:400; text-align:center; }
+.compact .cover[data-type=film],.inserted-card .cover[data-type=film] { width:48px; font-size:8px; }
+.picker-grid .cover[data-type=film] { width:80px; font-size:11px; }
+#filmFields { border:0; padding:0; margin:16px 0; }
