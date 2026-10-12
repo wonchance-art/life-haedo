@@ -673,3 +673,7 @@ Paged.js/Vivliostyle 직접 도입은 패키지 크기뿐 아니라 **조판 스
 - 공개 보안 권고 API에서 5건을 확인했다: GHSA-f93m-7x4r-g296(SQL injection), GHSA-ghv9-wx77-wg5v(stored XSS), GHSA-mcjc-2c93-3r8c·GHSA-22xr-xvw5-m2r9(login redirect), GHSA-jcxx-2953-qvvw(cover upload SSRF). 이 서버를 설치하거나 로그인·업로드 endpoint를 호출하지 않는다. 고정 커버 GET과 검증된 식별자만 사용하며 제공자 보안 감사를 대신했다고 주장하지 않는다.
 - YouTube는 앞 절의 oEmbed를 재사용해 응답이 제공한 동일 영상의 `i.ytimg.com/vi/<id>/*.jpg`만 허용한다. 임의 `thumbnail_url`, 다른 영상, 쿼리·HTML/iframe은 사용하지 않는다. 썸네일은 영상 식별을 위한 비공개 표시이며 음악 앨범 표지나 원저작자 확정 근거로 쓰지 않는다. 실서비스 조회·이미지는 여전히 Local 확인 사항이다.
 - 선택: 네이티브 Image/IntersectionObserver/AbortController + 기존 컬렉션 URL. 이미지 라이브러리/임의 URL 프록시/이미지 파일 저장은 필요하지 않아 추가하지 않았다. 서비스워커·백업 형식을 늘리지 않고 이미지 캐시/미리보기만 화면 수명에 둔다. 기존 모듈 재사용으로 컬렉션 저장 v1/backup v1을 유지한다. 향후 이미지 편집·실제 오프라인 표지·공개 재사용·음악/영화/작품 제공자가 필요해질 때 라이선스·인증·유지 비용을 다시 비교한다.
+
+### 2026-10-12 · 컬렉션 선택창
+
+Radix Dialog 공식 npm 배포 1.3.1 / MIT와 최신 유지보수 변경을 확인했다. React 기반 도입 비용 때문에 설치하지 않고 native dialog·기존 조회/저장 모듈을 재사용한다. [비교 근거·출처·검증](../design-review/collection-picker.md)을 참고한다.
