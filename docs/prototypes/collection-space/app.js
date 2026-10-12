@@ -23,6 +23,7 @@
   function art(item) {
     const cover=el('span','cover '+item.tone); cover.dataset.type=item.type; cover.setAttribute('aria-hidden','true');
     if(item.type==='person'){cover.append(icon('user'));return cover;}
+    if(item.type==='music'&&['m1','m2','m3'].some(id=>item.id===id||item.id.startsWith(id+'-'))){cover.classList.add('sample-image',item.id.startsWith('m2')?'image-curtain':item.id.startsWith('m3')?'image-metal':'image-water');}
     if(item.type==='film'){cover.append(el('span','','포스터 미연결'));return cover;}
     if(item.type==='artwork'){cover.classList.add(item.orientation==='landscape'?'landscape':'portrait');cover.append(el('span','','이미지 미연결'));return cover;}
     if(item.cover) {cover.append(el('span','',item.cover));if(item.type!=='tool')cover.append(el('small','',item.creator));}
@@ -47,6 +48,9 @@
   function renderGrid() {
     const grid=$('grid');grid.replaceChildren();grid.classList.toggle('compact',state.mode==='compact');$('empty').hidden=true;
     $('count').textContent='';grid.removeAttribute('aria-busy');
+    const category=taxonomy.groups.find(group=>group.id===state.category);
+    $('scopePath').textContent=category?(category.label+(category.types.length>1&&state.type!=='all'?' / '+types[state.type]:'')):'전체';
+    $('clearType').hidden=state.category==='all';
     if(state.scenario==='loading'){grid.setAttribute('aria-busy','true');$('count').textContent='자료를 불러오는 중… (모사)';grid.append(button('불러오기 완료 보기',()=>setScenario('ready')));return;}
     if(state.scenario==='error'){const box=el('div','');box.append(el('p','form-error','자료를 불러오지 못했어요. (모사)'),button('다시 시도',()=>setScenario('ready')));grid.append(box);return;}
     const q=state.query.trim().toLocaleLowerCase('ko');
@@ -56,15 +60,15 @@
     $('empty').hidden=shown.length>0;
   }
   function setScenario(value){state.scenario=value;$('scenario').value=value;renderGrid();}
-  const modes=[['gallery','A · 표지 중심','표지로 둘러보고, 눌러서 자세히'],['compact','B · 메모 중심','제목과 내 메모를 함께 비교']];
-  for(const [id,label,hint] of modes){const b=button(label,()=>{state.mode=id;renderModes();renderGrid();});b.dataset.mode=id;$('viewModes').append(b);}
+  const modes=[['gallery','표지 보기','표지로 둘러보고, 눌러서 자세히'],['compact','메모 보기','제목과 내 메모를 함께 비교']];
+  for(const [id,label,hint] of modes){const b=button(label,()=>{state.mode=id;renderModes();renderGrid();},id==='gallery'?'workspace':'book');b.dataset.mode=id;$('viewModes').append(b);}
   function renderModes(){document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===state.mode)));$('modeHint').textContent=modes.find(m=>m[0]===state.mode)[2];}
   function renderTypes(){
     $('categories').replaceChildren();
     for(const group of [{id:'all',label:'전체'},...taxonomy.groups]){
       const b=button(group.label,()=>{
         state.category=group.id;state.type=group.types?.length===1?group.types[0]:'all';
-        renderTypes();renderGrid();$('categories').querySelector('[data-category="'+group.id+'"]').focus();
+        renderTypes();renderGrid();$('categories').querySelector('[data-category="'+group.id+'"]').focus({preventScroll:true});$('categories').querySelector('[data-category="'+group.id+'"]').scrollIntoView({block:'nearest',inline:'nearest'});
       });b.dataset.category=group.id;b.setAttribute('aria-pressed',String(state.category===group.id));$('categories').append(b);
     }
     const group=taxonomy.groups.find(group=>group.id===state.category);
@@ -75,6 +79,7 @@
       b.dataset.type=id;b.setAttribute('aria-pressed',String(state.type===id));$('types').append(b);
     }
   }
+  $('clearType').addEventListener('click',()=>{state.category='all';state.type='all';renderTypes();renderGrid();$('categories').querySelector('[data-category=all]').focus();});
   $('query').addEventListener('input',e=>{state.query=e.target.value;renderGrid();});
   $('collection').addEventListener('change',e=>{state.group=e.target.value;renderGrid();});
   $('scenario').addEventListener('change',e=>setScenario(e.target.value));

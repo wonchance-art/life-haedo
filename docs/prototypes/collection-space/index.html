@@ -12,18 +12,18 @@
 <a class="life-skip" href="#main">본문으로 이동</a>
 <header class="preview-bar"><span>해도 · 컬렉션 시안</span><span>가상 자료 / 새로고침하면 초기화</span></header>
 <main id="main" tabindex="-1">
-<div class="heading"><div><p class="breadcrumb">기록 / 컬렉션</p><h1>컬렉션</h1></div><div id="mainActions" class="actions"></div></div>
-<div class="mode-bar"><div id="viewModes" class="actions" aria-label="시안 비교"></div><span id="modeHint" class="muted"></span><a class="life-button" href="../taste-page/">내 페이지 꾸미기</a></div>
+<div class="heading"><h1>컬렉션</h1><div id="mainActions" class="actions"><a class="page-link" href="../taste-page/">내 페이지<span data-icon="arrow"></span></a></div></div>
+
 <section id="library" aria-label="컬렉션 보관함">
-<div class="library-tools"><label class="search"><span data-icon="search"></span><span class="life-sr-only">컬렉션 검색</span><input id="query" type="search" placeholder="제목, 만든 사람, 내 메모" autocomplete="off"></label><label class="collection-select"><span class="life-sr-only">모음 선택</span><select id="collection"><option value="all">모든 모음</option><option value="quiet">조용한 저녁</option><option value="make">만들고 싶은 것</option><option value="later">다음에 살펴볼 것</option></select></label></div>
+<div class="library-tools"><label class="search"><span data-icon="search"></span><span class="life-sr-only">컬렉션 검색</span><input id="query" type="search" placeholder="컬렉션 검색" autocomplete="off"></label><label class="collection-select"><span class="life-sr-only">모음 선택</span><select id="collection"><option value="all">모든 모음</option><option value="quiet">조용한 저녁</option><option value="make">만들고 싶은 것</option><option value="later">다음에 살펴볼 것</option></select></label></div>
 <nav id="categories" class="type-filters category-filters" aria-label="큰 분류"></nav><div id="types" class="type-filters" aria-label="종류로 보기"></div>
-<div class="results-line"><p id="count" role="status"></p><span>나에게만 보임</span></div>
+<div class="results-line mode-bar"><div class="result-summary"><p id="scopePath">전체</p><p id="count" role="status"></p><button id="clearType" class="clear-type" aria-label="분류 해제" title="분류 해제" hidden><span data-icon="close"></span></button></div><div id="viewModes" class="actions" aria-label="보기 방식"></div></div>
 <div id="grid" class="object-grid"></div><div id="empty" class="empty" hidden><h2>찾는 항목이 없어요</h2><p>다른 검색어나 종류로 찾아보세요.</p><button id="reset" class="life-button">검색·필터 초기화</button></div>
 </section>
 <section id="writing" hidden aria-label="글쓰기 시안"><div class="writer-heading"><button id="backLibrary" class="life-button">컬렉션으로</button><span class="muted">시안 안에서만 편집</span></div><label class="life-sr-only" for="draftTitle">글 제목</label><input id="draftTitle" class="draft-title" value="요즘 내 곁에 두고 싶은 것들" maxlength="200"><label class="life-sr-only" for="draftBody">글 본문</label><textarea id="draftBody" rows="7">퇴근 후에는 조금 느린 것을 고른다. 자주 듣는 음악과 읽다 접어 둔 책, 언젠가 만들어 보고 싶은 작은 도구들.
 
 서로 다른 곳에 있던 것들을 같이 놓으니, 요즘 내가 무엇에 마음을 쓰는지 조금 보인다.</textarea><div id="inserted" aria-label="글에 연결한 항목"></div><button id="pick" class="life-button life-primary">컬렉션에서 고르기</button><p class="writer-foot muted">연결 카드에는 제목·만든 사람만 표시합니다. 개인 메모는 넣지 않습니다.</p></section>
-<details class="review-controls"><summary>시안 검토 도구</summary><p>표지·이름은 가상 샘플입니다. 자동 조회·실제 저장·YouTube 재생은 연결하지 않았습니다.</p><label class="life-field"><span>화면 상태</span><select id="scenario"><option value="ready">기본 자료</option><option value="many">많은 자료 · 84개</option><option value="loading">불러오는 중 (모사)</option><option value="error">조회 오류 (모사)</option></select></label></details>
+<details class="review-controls"><summary>시안 정보·검토</summary><p id="modeHint" class="muted"></p><p>표지·이름은 가상 샘플이며 음악 이미지는 기존 AI 생성 표지입니다. 자동 조회·실제 저장·YouTube 재생은 연결하지 않았습니다.</p><label class="life-field"><span>화면 상태</span><select id="scenario"><option value="ready">기본 자료</option><option value="many">많은 자료 · 126개</option><option value="loading">불러오는 중 (모사)</option><option value="error">조회 오류 (모사)</option></select></label></details>
 <p id="notice" class="notice" role="status"></p>
 </main>
 <dialog id="detail" aria-labelledby="detailTitle"><div class="dialog-top"><h2 id="detailTitle"></h2><button class="life-icon-button" data-close="detail" aria-label="항목 닫기" title="항목 닫기"><span data-icon="close"></span></button></div><div id="detailContent"></div></dialog>

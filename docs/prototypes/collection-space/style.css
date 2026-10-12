@@ -92,3 +92,58 @@ button,input,textarea,select,summary,[tabindex] { scroll-margin-bottom:0; }
 .category-selects { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:18px 0; }
 .category-selects label { min-width:0; }.category-selects select { width:100%; min-width:0; }
 select:disabled { color:var(--ink-soft); opacity:1; }
+/* Current product references: compact search/navigation chrome; artwork retains its own shape. */
+main { max-width:1160px; padding-top:28px; }
+.heading { min-height:48px; margin-bottom:24px; }
+h1 { font-size:27px; letter-spacing:-.035em; }
+.page-link { display:inline-flex; align-items:center; gap:6px; min-height:44px; padding:8px; color:var(--ink-soft); font-size:13px; text-decoration:none; }
+.page-link svg { width:16px; height:16px; }
+.preview-bar { background:#f7f7f8; }
+.library-tools { margin-bottom:18px; }
+.search { border:1px solid #dedde3; border-radius:12px; background:#fff; }
+.search:focus-within { border-color:var(--color-primary); }
+.collection-select select { min-height:50px; border-color:#dedde3; border-radius:12px; }
+.category-filters,#types:not([hidden]) { flex-wrap:nowrap; overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:thin; gap:6px; padding-bottom:5px; }
+.type-filters button { flex:none; white-space:nowrap; min-height:44px; border-radius:10px; padding-inline:12px; }
+.category-filters button[aria-pressed=true] { color:#25242a; background:#eeedf2; }
+#types:not([hidden]) { margin-top:4px; padding-top:8px; border-top:0; }
+#types button { font-size:13px; }
+#types button[aria-pressed=true] { color:#385d51; background:#eaf3ef; }
+.results-line.mode-bar { padding:0; border:0; margin:12px 0 18px; justify-content:space-between; }
+.result-summary { display:flex; align-items:center; gap:10px; min-width:0; font-size:12px; }
+#scopePath { overflow-wrap:anywhere; }
+#count { white-space:nowrap; }
+.clear-type { display:grid; place-items:center; border:0; background:transparent; color:var(--ink-soft); min-width:44px; min-height:44px; padding:12px; }
+.clear-type svg { width:16px; height:16px; }
+#viewModes { flex-wrap:nowrap; gap:2px; }
+#viewModes button { min-width:44px; min-height:44px; border-radius:9px; }
+#viewModes button[aria-pressed=true] { color:#303442; background:#eeedf2; }
+.object-grid { gap:28px 24px; }
+.object-card .art-slot { background:transparent; border-radius:0; }
+.object-card .card-title { font-size:14px; font-weight:550; }
+.object-card:hover .card-title { text-decoration:underline; text-underline-offset:4px; }
+.cover.sample-image { position:relative; justify-content:flex-end; padding:12px; background:#172632; color:#fff; }
+.cover.sample-image::before { content:''; position:absolute; inset:0; background-image:url('../taste-page/media/cover-studies.png'); background-size:200% auto; }
+.cover.image-water::before { background-position:0 0; }.cover.image-curtain::before { background-position:100% 0; }.cover.image-metal::before { background-position:0 100%; }
+.cover.sample-image>span { position:relative; align-self:flex-start; font-size:11px; line-height:1.5; letter-spacing:.08em; background:#172632; color:#fff; padding:5px 7px; }
+.cover.sample-image small { display:none; }
+.compact .cover.sample-image>span,.inserted-card .cover.sample-image>span { display:none; }
+@media(max-width:600px){
+ main { padding:18px 20px 40px; }
+ .heading { margin-bottom:18px; gap:8px; }
+ h1 { font-size:24px; }
+ #mainActions { gap:0; flex-wrap:nowrap; }
+ .page-link { font-size:12px; padding-inline:6px; }
+ .library-tools { display:grid; grid-template-columns:minmax(0,1fr) 130px; gap:8px; margin-bottom:14px; }
+ .search { padding-inline:10px; }
+ .search input { min-width:0; }
+ .collection-select select { padding-inline:8px; }
+ .type-filters { margin-inline:-2px; }
+ .results-line.mode-bar { margin:8px 0 14px; gap:8px; flex-wrap:nowrap; }
+ .result-summary { gap:5px; }
+ .object-grid { gap:24px 18px; }
+ .cover.sample-image { padding:8px; }
+ .cover.sample-image>span { font-size:9px; }
+ .preview-bar { padding:8px 20px; }
+}
+@media(prefers-reduced-motion:no-preference){.type-filters button,#viewModes button { transition:background-color .14s ease,color .14s ease; }}
