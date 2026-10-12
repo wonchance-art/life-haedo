@@ -652,3 +652,22 @@ MDN 호환성 데이터의 해당 파일 마지막 변경은 **2026-10-05**, com
 Paged.js/Vivliostyle 직접 도입은 패키지 크기뿐 아니라 **조판 스크립트의 실행 위치, DOM 분할 후 원고·출처 순서, 계정 전환 취소, 폰트 준비, 메모리·인쇄 완료 경계**를 다시 검증해야 한다. 지금 필요한 기본 판형·문단·장 나눔에 이 비용을 먼저 추가할 이유는 없다. 실제 원고에서 자동 목차 쪽번호·각주·양면 조판이 필수로 드러나면 두 후보의 동일 한글 원고 출력을 직접 비교하고 결정한다.
 
 이 절은 공식 자료 조사와 선택 근거다. 조사 뒤 수행한 새 독자용 화면·PDF 검증은 [책자 검토](../design-review/book-edition.md)에 별도로 기록했다. 기존 7쪽 PDF 검사나 라이브러리의 지원 표로 새 출력을 대신하지 않는다. 라이브러리·폰트 설치, 외부 AI, 운영 SQL·계정 자료·병합·배포 작업은 수행하지 않았다.
+
+## 2026-10-11 · 대상 컬렉션의 시각·구조 비교
+
+앨범·책·도구를 같은 모음에서 고르고 글에 참조하는 [독립 시안](../design-review/collection-space.md)을 위해 공식 GitHub README의 화면과 API의 릴리스·활동·라이선스·공개 보안 권고를 확인했다. 공식 화면은 현재 실행 앱을 직접 사용한 결과가 아니며 README에 포함된 예시다. Ryot 이미지는 6.8.4 표기가 있는 과거 화면으로, 최신 10.5 UI라고 표현하지 않는다.
+
+| 후보 | 확인된 릴리스 / 라이선스 / 활동 | 참고·제외 판단 |
+| --- | --- | --- |
+| [Linkwarden](https://github.com/linkwarden/linkwarden) | [v2.16.3](https://github.com/linkwarden/linkwarden/releases/tag/v2.16.3), 2026-09-09. [AGPL-3.0](https://github.com/linkwarden/linkwarden/blob/v2.16.3/LICENSE.md). API의 마지막 push 2026-10-02, archived=false | [공식 화면](https://github.com/linkwarden/linkwarden/blob/main/assets/linkwarden-hero.png)의 링크·컬렉션 구분과 작은 선택 카드를 참고. 상시 사이드바·통계 패널·전체 웹페이지 캡처는 이번 간결한 보관함에 넣지 않음 |
+| [Ryot](https://github.com/IgnisDa/ryot) | latest-release API는 [v10.5.0](https://github.com/IgnisDa/ryot/releases/tag/v10.5.0), 2026-08-22 반환. [GPL-3.0](https://github.com/IgnisDa/ryot/blob/v10.5.0/LICENSE). 마지막 push 2026-10-11, archived=false | [공식 README 화면](https://github.com/IgnisDa/ryot/blob/main/apps/website/public/cta-image.png)의 작품 표지·만든 사람·종류별 정보 분리를 참고. 미디어 소비/진도/통계 중심 앱 전체 도입은 해도의 글·원문 모델과 목적이 다름 |
+
+보안 권고를 릴리스 날짜와 별도로 확인했다. Linkwarden은 [SSRF GHSA-5qpc-x7rv-hvmp](https://github.com/linkwarden/linkwarden/security/advisories/GHSA-5qpc-x7rv-hvmp), [아카이브 XSS GHSA-fjvg-mch3-j3vg](https://github.com/linkwarden/linkwarden/security/advisories/GHSA-fjvg-mch3-j3vg), [파일 포함 GHSA-rfc2-x8hr-536q](https://github.com/linkwarden/linkwarden/security/advisories/GHSA-rfc2-x8hr-536q)를 반환했다. Ryot은 [계정 탈취 GHSA-8m64-3w7v-9wfq](https://github.com/IgnisDa/ryot/security/advisories/GHSA-8m64-3w7v-9wfq), [다른 사용자 자료 읽기 GHSA-v2m5-469g-hjqw](https://github.com/IgnisDa/ryot/security/advisories/GHSA-v2m5-469g-hjqw), [S3 접근 GHSA-vxfm-87m3-9vh9](https://github.com/IgnisDa/ryot/security/advisories/GHSA-vxfm-87m3-9vh9), [연동 IDOR GHSA-cjxv-jj8g-vfvj](https://github.com/IgnisDa/ryot/security/advisories/GHSA-cjxv-jj8g-vfvj)를 반환했다. Ryot 권고의 수정 버전 10.5.2와 latest-release API의 10.5.0이 다르므로 latest 결과를 안전 버전으로 추천하지 않는다. 전체 취약점 감사나 수정 검증은 하지 않았다.
+
+**결정:** 두 프로젝트는 구조·시각 참고에 한정한다. 코드·이미지·패키지를 가져오거나 서비스를 실행하지 않았다. 전체 도입에는 별도 서버/DB·인증·라이선스 이행과 데이터 이전 비용이 생긴다. 이번 요구는 기존 `assets/life/ui.css`, `icons.js`, 네이티브 dialog/폼과 CSS grid로 비교할 수 있어 새 런타임 의존성이 없다. 가상 표지는 직접 만든 텍스트 디자인이다. 자동 메타데이터 공급자와 표지 라이선스는 실제 연결 착수 시 따로 확인한다.
+
+후속 커스터마이징 시안은 [취향 페이지 참고 기록](../design-review/taste-page.md)에 연결한다. Are.na/Cosmos/Apartamento/Literal/mmm.page의 실제 공식 페이지 응답·브라우저 화면과 CDN 미로딩 한계를 구분해 기록했다. 이들은 화면·제품 참고이며 오픈소스 라이선스를 전제로 코드를 도입하지 않았다. 이번 구현도 기존 CSS/아이콘과 native dialog/폼을 사용하며 새 의존성이 없다.
+
+### 2026-10-12 · 컬렉션 탐색 디자인 참고
+
+[공식 제품 화면 관찰 기록](../design-review/collection-current-patterns.md): Cosmos Explore와 Are.na Search의 탐색 구조를 비교했다. 오픈소스 코드 도입이 아닌 제품 구성 참고다. 기존 DOM/CSS/아이콘으로 구현해 새 의존성은 없으며, 이미지 피드 미로딩과 Raindrop 접속 실패를 근거 범위에서 구분했다.

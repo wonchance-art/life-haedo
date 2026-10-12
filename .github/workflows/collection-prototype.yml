@@ -1,0 +1,90 @@
+name: Collection prototype
+on:
+  pull_request:
+    paths:
+      - 'docs/prototypes/collection-space/**'
+      - 'docs/prototypes/taste-page/**'
+      - 'tests/collection-space-prototype-browser.cjs'
+      - 'tests/taste-page-prototype-browser.cjs'
+      - '.github/workflows/collection-prototype.yml'
+      - 'assets/life/ui.css'
+      - 'assets/life/icons.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prototype:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      BASE_URL: http://127.0.0.1:4184
+      COLLECTION_PROTOTYPE_OUTPUT: .local/collection-prototype-evidence
+      TASTE_PAGE_OUTPUT: .local/taste-page-evidence
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tests/browser-ci/package-lock.json
+      - name: Install pinned browser tooling
+        run: npm ci --prefix tests/browser-ci --ignore-scripts
+      - name: Install Chromium and Korean fonts
+        run: |
+          node tests/browser-ci/node_modules/playwright/cli.js install --with-deps chromium
+          sudo apt-get install -y fonts-noto-cjk poppler-utils
+      - name: Select the pinned browser
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const modulePath = path.resolve('tests/browser-ci/node_modules/playwright');
+          const browserPath = require(modulePath).chromium.executablePath();
+          if (!fs.existsSync(browserPath)) throw new Error('Pinned Chromium was not installed.');
+          fs.appendFileSync(process.env.GITHUB_ENV, `PW_MODULE_PATH=${modulePath}\nCHROMIUM_PATH=${browserPath}\n`);
+          NODE
+      - name: Start the OAuth-safe local server
+        id: server
+        run: |
+          mkdir -p .local/browser-ci
+          python3 scripts/dev-server.py --port 4184 > .local/browser-ci/server.log 2>&1 &
+          echo "HAEDO_CI_SERVER_PID=$!" >> "$GITHUB_ENV"
+          python3 <<'PY'
+          import time
+          import urllib.error
+          import urllib.request
+
+          deadline = time.monotonic() + 20
+          while True:
+              try:
+                  with urllib.request.urlopen('http://127.0.0.1:4184/index.html', timeout=1) as response:
+                      if response.status == 200 and b'id="lifeApp"' in response.read():
+                          break
+              except (OSError, urllib.error.URLError):
+                  pass
+              if time.monotonic() >= deadline:
+                  raise SystemExit('The local app shell did not become ready.')
+              time.sleep(0.2)
+          PY
+      - name: Verify collection prototype
+        run: |
+          node --check docs/prototypes/collection-space/app.js
+          node --check docs/prototypes/collection-space/sample.js
+          node --check docs/prototypes/collection-space/taxonomy.js
+          node tests/collection-space-prototype-browser.cjs
+          node --check docs/prototypes/taste-page/page.js
+          node tests/taste-page-prototype-browser.cjs
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: collection-prototype-evidence
+          path: |
+            .local/collection-prototype-evidence
+            .local/taste-page-evidence
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -n "${HAEDO_CI_SERVER_PID:-}" ]; then kill "$HAEDO_CI_SERVER_PID"; fi

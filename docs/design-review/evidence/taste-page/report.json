@@ -1,0 +1,39 @@
+{
+  "browser": "151.0.7922.173",
+  "checks": [
+    "fictional cover asset loaded",
+    "three layouts, readable Korean, 44px targets, contrast at 1440",
+    "three layouts, readable Korean, 44px targets, contrast at 820",
+    "three layouts, readable Korean, 44px targets, contrast at 390",
+    "preview preserves edited title",
+    "chosen album shown",
+    "preview is explicitly private",
+    "preview returns focus",
+    "fields survive preview",
+    "note and metadata hidden only in presentation",
+    "undo restores metadata",
+    "section order changes",
+    "empty presentation has recovery hint",
+    "modal tab stays inside",
+    "escape focus returns",
+    "reset restores original",
+    "reset is reversible",
+    "item opens and labels fictional source",
+    "item close returns focus",
+    "long unbroken Korean title and note do not overflow",
+    "reload honestly resets memory-only edits",
+    "touch customization works in simulation",
+    "no persistent stores or production connections"
+  ],
+  "minimumTextContrast": 5.265950707265308,
+  "errors": [],
+  "external": [],
+  "stores": {
+    "local": 0,
+    "session": 0,
+    "databases": 0,
+    "workers": 0,
+    "iframes": 0
+  },
+  "scope": "Standalone memory-only prototype; viewport/touch simulation, no Apple hardware, native IME, auth, save, sync or publishing verification"
+}
