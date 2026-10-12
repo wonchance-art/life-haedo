@@ -36,7 +36,7 @@
     for (const [entryIndex, entry] of snapshot.entries.entries()) {
       const article = node('article', null, 'share-entry');
       if (Object.hasOwn(entry, 'attachments')) {
-        const post = life.PagePostsView.post({body:entry.note || '', attachments:entry.attachments});
+        const post = life.PagePostsView.post({body:entry.note || '', attachments:entry.attachments}, { fold: !review });
         article.append(...post.childNodes); section.append(article); continue;
       }
       article.append(node('h' + (level + 1), entry.title, 'share-entry-title'));

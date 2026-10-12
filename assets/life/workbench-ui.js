@@ -1197,7 +1197,9 @@
       const entries = page.entries.filter(entry => entry.enabled && (entry.pinned || page.showRecent));
       entries.sort((a, b) => Number(b.pinned) - Number(a.pinned));
       const posts = (page.posts || []).filter(post => post.visibility === 'page');
-      posts.slice().sort((a,b) => b.createdAt.localeCompare(a.createdAt)).forEach(post => visitor.append(life.PagePostsView.post(post)));
+      const media = life.PageMedia.create(); viewCleanups.push(() => media.dispose());
+      if (posts.some(p => p.attachments.some(a => life.PageMedia.describe(a)))) visitor.append(media.control());
+      posts.slice().sort((a,b) => b.createdAt.localeCompare(a.createdAt)).forEach(post => visitor.append(life.PagePostsView.post(post, { media })));
       if (!entries.length && !posts.length) visitor.append(empty('표시할 항목이 없습니다. 편집에서 항목 표시를 켜 주세요.'));
       entries.forEach(entry => {
         const article = el('article', null, 'wb-feed wb-page-entry'); article.dataset.entryId = entry.id;

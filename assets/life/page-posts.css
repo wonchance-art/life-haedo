@@ -247,3 +247,231 @@
   padding: 8px;
   cursor: pointer;
 }
+
+/* Body-first feed. Media is optional and never changes the stored attachment. */
+.pp-body[data-folded="true"] {
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pp-read-more {
+  margin: -10px 0 12px;
+}
+.pp-attachment-title {
+  color: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.6;
+  text-decoration: none;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+a.pp-attachment-title {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+.pp-attachment {
+  align-items: stretch;
+  border-radius: 6px;
+}
+.pp-visual {
+  display: grid;
+  place-items: center;
+  flex: 0 0 96px;
+  min-height: 108px;
+}
+.pp-shape {
+  position: relative;
+  overflow: hidden;
+}
+.pp-shape img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  position: absolute;
+  inset: 0;
+}
+.pp-shape[data-media-state="ready"] {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.pp-shape[data-media-state="ready"] > svg {
+  visibility: hidden;
+}
+.pp-visual .pp-shape {
+  width: 84px;
+  height: 84px;
+  margin: 0;
+}
+.pp-attachment[data-type="book"] .pp-visual .pp-shape {
+  width: 66px;
+  height: 100px;
+}
+.pp-attachment[data-type="film"] .pp-visual .pp-shape {
+  width: 66px;
+  height: 100px;
+}
+.pp-visual:has(.pp-shape[data-media-state="ready"])
+  .pp-shape:has(img[src*="ytimg"]) {
+  width: 96px;
+  height: 72px;
+  border-radius: 4px;
+}
+.pp-attachments:not([data-count="1"]):not(.pp-attachments-compact) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.pp-attachments:not([data-count="1"]):not(.pp-attachments-compact)
+  .pp-attachment {
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+}
+.pp-attachments:not([data-count="1"]):not(.pp-attachments-compact) .pp-visual {
+  flex-basis: auto;
+  height: 148px;
+}
+.pp-attachments:not([data-count="1"]):not(.pp-attachments-compact)
+  .pp-visual
+  .pp-shape {
+  width: 124px;
+  height: 124px;
+}
+.pp-attachments:not([data-count="1"]):not(.pp-attachments-compact)
+  .pp-attachment[data-type="book"]
+  .pp-shape,
+.pp-attachments:not([data-count="1"]):not(.pp-attachments-compact)
+  .pp-attachment[data-type="film"]
+  .pp-shape {
+  width: 90px;
+  height: 138px;
+}
+.pp-attachments:not([data-count="1"]):not(.pp-attachments-compact)
+  .pp-visual
+  .pp-shape:has(img[src*="ytimg"]) {
+  width: 100%;
+  max-width: 240px;
+  height: 138px;
+}
+.pp-object-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-top: auto;
+}
+.pp-object-actions:empty {
+  display: none;
+}
+.pp-media-status {
+  width: 100%;
+}
+.pp-video-open {
+  gap: 6px;
+  padding-inline: 8px;
+}
+.pp-video-open svg {
+  width: 16px;
+  height: 16px;
+}
+.pp-attachments-compact .pp-visual {
+  flex-basis: 52px;
+  min-height: 64px;
+}
+.pp-attachments-compact .pp-visual .pp-shape {
+  width: 44px;
+  height: 44px;
+}
+.pp-attachments-compact .pp-attachment[data-type="book"] .pp-shape,
+.pp-attachments-compact .pp-attachment[data-type="film"] .pp-shape {
+  width: 38px;
+  height: 56px;
+}
+.pp-media-options {
+  font-size: 13px;
+  color: var(--life-muted, #666274);
+  max-width: 100%;
+}
+.pp-media-options summary {
+  min-height: 44px;
+  padding: 10px 8px;
+  cursor: pointer;
+}
+.pp-media-options p {
+  max-width: 36ch;
+  line-height: 1.6;
+}
+.pp-video-dialog {
+  width: min(720px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 20px;
+  border: 1px solid var(--life-border, #dddde5);
+  border-radius: 16px;
+  background: var(--life-surface, #fff);
+  color: var(--life-ink, #252432);
+  overflow-y: auto;
+}
+.pp-video-dialog::backdrop {
+  background: rgb(20 19 28 / 55%);
+}
+.pp-video-head {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.pp-video-head h2 {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  margin: 6px 0;
+  font-size: 18px;
+  line-height: 1.5;
+}
+.pp-video-head button {
+  flex: none;
+}
+.pp-player {
+  aspect-ratio: 16 / 9;
+  min-height: 200px;
+  background: #eeedf2;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.pp-player iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+  border: 0;
+}
+.pp-video-dialog .life-help {
+  line-height: 1.6;
+}
+.pp-video-dialog :focus-visible,
+.pp-attachment :focus-visible,
+.pp-media-options :focus-visible {
+  outline: 3px solid var(--life-accent, #685aad);
+  outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .pp-attachments:not([data-count="1"]):not(.pp-attachments-compact)
+    .pp-attachment {
+    padding: 10px;
+  }
+  .pp-attachment-title {
+    font-size: 14px;
+  }
+  .pp-video-dialog {
+    padding: 12px;
+  }
+}
+
+.pp-attachment-title[href]:hover {
+  text-decoration: underline;
+}
+.pp-video-dialog > .life-button {
+  margin-right: 4px;
+}

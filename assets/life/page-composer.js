@@ -31,6 +31,7 @@
       disposed = false,
       composing = false,
       error = null;
+    const media = life.PageMedia.create();
     const now = () => new Date().toISOString();
     const valid = () => !disposed && isCurrent();
     function message(value) {
@@ -192,6 +193,7 @@
       if (!host || !state || !valid()) return;
       dialogClose?.();
       dialogClose = null;
+      media.clear();
       host.replaceChildren();
       host.className = "pp-workspace";
       const bar = node("div", null, "pp-toolbar");
@@ -226,6 +228,15 @@
       );
       tools.append(input);
       bar.append(tools);
+      if (
+        getPosts().some((p) =>
+          p.attachments.some((a) => life.PageMedia.describe(a)),
+        ) ||
+        state.posts.some((p) =>
+          p.attachments.some((a) => life.PageMedia.describe(a)),
+        )
+      )
+        bar.append(media.control());
       host.append(bar);
       const status = node("p", "", "life-help pp-status");
       status.setAttribute("role", "status");
@@ -239,7 +250,7 @@
         .slice()
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       for (const p of posts) {
-        const article = life.PagePostsView.post(p),
+        const article = life.PagePostsView.post(p, { media }),
           meta = node("div", null, "pp-post-meta");
         meta.append(
           node(
@@ -294,7 +305,7 @@
         attached.replaceChildren();
         d.attachments.forEach((a, index) => {
           const row = node("div", null, "pp-edit-attachment");
-          row.append(life.PagePostsView.attachments([a]));
+          row.append(life.PagePostsView.attachments([a], { compact: true }));
           const actions = node("div", null, "pp-card-actions");
           const up = button(
             a.title + " 위로",
@@ -545,6 +556,7 @@
       }
     }
     function detach() {
+      media.reset();
       epoch++;
       dialogClose?.();
       dialogClose = null;
@@ -558,6 +570,7 @@
       dirty: () => !!saving || busy || edit !== stored,
       dispose() {
         disposed = true;
+        media.dispose();
         clearTimeout(timer);
         detach();
       },
