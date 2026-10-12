@@ -87,3 +87,8 @@ button,input,textarea,select,summary,[tabindex] { scroll-margin-bottom:0; }
 .compact .cover[data-type=person],.inserted-card .cover[data-type=person] { width:48px; padding:8px; }
 .picker-grid .cover[data-type=person] { width:88px; }
 #personFields { border:0; padding:0; margin:16px 0; }
+.category-filters { gap:4px; }
+#types:not([hidden]) { margin-top:10px; padding-top:10px; border-top:1px solid var(--line); }
+.category-selects { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:18px 0; }
+.category-selects label { min-width:0; }.category-selects select { width:100%; min-width:0; }
+select:disabled { color:var(--ink-soft); opacity:1; }

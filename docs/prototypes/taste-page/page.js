@@ -1,6 +1,7 @@
 /* Independent design study: explicit files only, no account or public writes. */
 (() => {
  'use strict';
+ const taxonomy=CollectionTaxonomy;
  const $ = id => document.getElementById(id), icons = HaedoLife.Icons;
  const subtitle = item => item.type==='person'?(item.field||'활동 분야 미확인'):item.creator;
  const items = new Map(CollectionSample.map(item => [item.id, structuredClone(item)]));
@@ -12,6 +13,7 @@
   featuredName:'요즘 곁에 둔 것', collectionName:'조용한 저녁',
   featuredItems:['m1','b1','t1','t2'], collectionItems:['m2','b2','m3','a1']
  };
+ taxonomy.categories($('addCategory'));taxonomy.leaves($('addType'),'all');
  let state = structuredClone(initial), history = [], editing = null, renderedItems = '', revision = 0, loading = false;
  const el = (tag, cls, text) => { const n=document.createElement(tag); if(cls)n.className=cls; if(text!==undefined)n.textContent=text; return n; };
  const announce = text => { $('status').textContent=text; };
@@ -97,10 +99,15 @@
     });row.append(b);
    }$('selectedItems').append(row);
   });
-  $('itemToAdd').replaceChildren(...[...items.values()].filter(item=>!ids.includes(item.id)).map(item=>{const option=el('option','',item.title+' · '+subtitle(item));option.value=item.id;return option;}));
-  $('itemToAdd').disabled=$('addItem').disabled=ids.length===items.size;
+  const previous=$('itemToAdd').value;
+  $('itemToAdd').replaceChildren(...[...items.values()].filter(item=>!ids.includes(item.id)&&taxonomy.matches(item.type,$('addCategory').value,$('addType').value)).map(item=>{const option=el('option','',item.title+' · '+subtitle(item));option.value=item.id;return option;}));
+  if([...$('itemToAdd').options].some(option=>option.value===previous))$('itemToAdd').value=previous;
+  const empty=$('itemToAdd').options.length===0;
+  $('itemToAdd').disabled=$('addItem').disabled=empty;$('noMatchingItems').hidden=!empty;
   if(focusId){const target=$(focusId);if(target&&!target.disabled)target.focus();else $('sectionTarget').focus();}
  }
+ $('addCategory').addEventListener('change',()=>{taxonomy.leaves($('addType'),$('addCategory').value);renderPicker();});
+ $('addType').addEventListener('change',()=>renderPicker());
  $('sectionTarget').addEventListener('change',()=>{editing=null;renderPicker();});
  $('sectionName').addEventListener('input',()=>change({[$('sectionTarget').value+'Name']:$('sectionName').value},'sectionName'));
  $('sectionName').addEventListener('blur',()=>{editing=null;});

@@ -72,6 +72,7 @@ jobs:
         run: |
           node --check docs/prototypes/collection-space/app.js
           node --check docs/prototypes/collection-space/sample.js
+          node --check docs/prototypes/collection-space/taxonomy.js
           node tests/collection-space-prototype-browser.cjs
           node --check docs/prototypes/taste-page/page.js
           node tests/taste-page-prototype-browser.cjs
