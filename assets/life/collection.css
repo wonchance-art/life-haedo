@@ -139,3 +139,11 @@
 }
 @media(prefers-reduced-motion:no-preference) { .cl-picker[open] { animation:cl-picker-in .16s ease-out; } }
 @keyframes cl-picker-in { from { transform:translateY(12px); opacity:.6; } to { transform:translateY(0); opacity:1; } }
+
+.cl-reference-dialog form { display:flex; flex-direction:column; min-height:0; margin-top:16px; }
+.cl-reference-dialog .cl-picker-foot { justify-content:space-between; gap:12px; }
+.cl-reference-dialog .cl-reference-preview { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.8; font-size:16px; padding:18px; margin:0 0 16px; border-radius:12px; background:#f0f6f2; color:#304f40; }
+.cl-reference-dialog summary { min-height:44px; padding:10px 0; cursor:pointer; }
+.cl-reference-dialog input { padding:10px; min-height:44px; border:1px solid var(--field-line); border-radius:8px; background:#fff; color:var(--ink); }
+.cl-reference-dialog .life-help { font-size:13px; line-height:1.8; }
+.cl-reference-dialog textarea { padding:10px; min-height:44px; border:1px solid var(--field-line); border-radius:8px; background:#fff; color:var(--ink); }

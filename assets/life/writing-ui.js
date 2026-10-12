@@ -15,7 +15,7 @@
     const workspaces = new Map(), urls = new Set();
     let disposed = false, visible = false, generation = 0, current = null;
     let surface = null, status = null, errorBox = null, saveButton = null, titleInput = null, bodyInput = null;
-    let syncPanel = null, incomingBox = null, titleResize = null;
+    let syncPanel = null, incomingBox = null, titleResize = null, closeCollection = null, collectionLoading = null;
     const subscriptions = new Map();
     const alive = () => !disposed && !isDisposed();
     const inWorkspace = session => alive() && getBundle()?.workspaceId === session.workspaceId;
@@ -79,6 +79,8 @@
         dirty: session.composing.size ? '작성 중' : '초안 보관 대기', draft: '이 브라우저에 초안 보관됨', empty: '새 글' };
       status.dataset.state = key; status.textContent = labels[key];
       if (saveButton) saveButton.disabled = session.stage.state === 'applied' || !!session.recordSaving || !!session.composing.size || !session.stage.text.trim();
+      const insert = surface.querySelector('#lifeWritingCollection'); if (insert) insert.disabled = collectionLoading || !!session.recordSaving || !!session.composing.size || session.stage.state !== 'draft';
+      const undo = surface.querySelector('#lifeWritingUndoCollection'); if (undo) undo.hidden = !session.referenceUndo || session.referenceUndo.after !== session.stage.text || session.stage.state !== 'draft';
       for (const input of [titleInput, bodyInput]) if (input) input.disabled = !!session.recordSaving || session.stage.state === 'applied';
       surface.querySelectorAll('#lifeWritingNew,.life-writing-draft,#lifeWritingRescue,#lifeWritingSaveCopy').forEach(control => {
         control.disabled = !!session.recordSaving || !!session.openingSaved;
@@ -262,8 +264,26 @@
       if (focusSummary) drafts.querySelector('summary')?.focus({ preventScroll: true });
       else if (focusStage) ([...drafts.querySelectorAll('[data-stage-id]')].find(item => item.dataset.stageId === focusStage) || drafts.querySelector('summary'))?.focus({ preventScroll: true });
     }
+    async function insertCollection(session) {
+      if (collectionLoading || session.recordSaving || session.composing.size || session.stage.state !== 'draft') return;
+      const token = generation, stageId = session.stage.stageId, text = session.stage.text, caret = bodyInput.selectionEnd;
+      const valid = () => showing(session, token) && session.stage.stageId === stageId && session.stage.state === 'draft' && !session.recordSaving;
+      const request = {}; collectionLoading = request; updateStatus(session);
+      try {
+        const collection = await storage.readCollection(session.workspaceId);
+        if (!valid()) return;
+        if (session.stage.text !== text) throw new Error('본문이 바뀌었습니다. 입력은 유지했으니 넣을 위치에서 다시 선택해 주세요.');
+        closeCollection?.(); closeCollection = life.CollectionInsert.open({ items: collection.items, label: '본문에 넣기', isCurrent: valid, onInsert: reference => {
+          if (!valid() || session.stage.text !== text) throw new Error('본문이 바뀌었습니다. 다시 선택해 주세요.');
+          const result = life.CollectionReference.insert(text, caret, reference);
+          session.referenceUndo = { before: text, after: result.text, caret }; session.stage.text = result.text; bodyInput.value = result.text; changed(session);
+          queueMicrotask(() => { if (valid()) { bodyInput.focus(); bodyInput.setSelectionRange(result.caret, result.caret); } });
+        } });
+      } finally { if (collectionLoading === request) { collectionLoading = null; if (valid()) updateStatus(session); } }
+    }
     function renderEditor(session) {
       if (!showing(session)) return;
+      closeCollection?.(); closeCollection = null;
       syncPanel?.dispose(); syncPanel = null;
       titleResize?.disconnect(); titleResize = null;
       surface.setAttribute('aria-busy', 'false'); surface.replaceChildren();
@@ -334,6 +354,8 @@
       const footer = el('div', null, 'life-writing-actions');
       footer.append(action('새 글', () => open({ newDraft: true }), { id: 'lifeWritingNew', glyph: 'plus' }),
         action('TXT 받기', () => download(session), { id: 'lifeWritingDownload', glyph: 'download' }), drafts);
+      footer.append(action('컬렉션 정보 넣기', () => insertCollection(session), { id: 'lifeWritingCollection', glyph: 'bookmark' }),
+        action('정보 넣기 되돌리기', () => { const undo = session.referenceUndo; if (!undo || session.stage.text !== undo.after || session.stage.state !== 'draft' || session.recordSaving) return; session.stage.text = undo.before; bodyInput.value = undo.before; session.referenceUndo = null; changed(session); bodyInput.focus(); bodyInput.setSelectionRange(undo.caret, undo.caret); }, { id: 'lifeWritingUndoCollection' }));
       surface.append(footer);
       if (writingSync && life.WritingSyncUI) {
         const syncHost = el('details'); syncHost.open = !!session.syncOpen; surface.append(syncHost);
@@ -349,6 +371,7 @@
       restoreEditor(session);
     }
     async function open(options = {}) {
+      closeCollection?.(); closeCollection = null; collectionLoading = null;
       if (!alive()) return;
       if (current && (isDirty() || current.composing.size)) await flush();
       rememberEditor();
@@ -390,6 +413,7 @@
       }
     }
     function close() {
+      closeCollection?.(); closeCollection = null; collectionLoading = null;
       rememberEditor(); titleResize?.disconnect(); titleResize = null;
       syncPanel?.dispose(); syncPanel = null; incomingBox = null;
       visible = false; generation += 1;

@@ -570,6 +570,22 @@
       announceSafe('내 페이지에 추가했습니다. 비공개 구성으로 보관합니다.', session);
       if (mode === 'page') redraw();
     }
+    async function addCollectionEntry() {
+      const session = current, token = generation;
+      if (session.state.page.entries.length >= limits.entries) throw fault('limit_reached', '내 페이지 항목은 ' + limits.entries + '개까지 만들 수 있습니다.');
+      const collection = await storage.readCollection(session.workspaceId);
+      if (!showing(token, session) || mode !== 'page' || preview) return;
+      const valid = () => showing(token, session) && mode === 'page' && !preview;
+      viewCleanups.push(life.CollectionInsert.open({ items: collection.items, label: '페이지에 넣기', isCurrent: valid, onInsert: reference => {
+        if (!valid()) return;
+        if (session.state.page.entries.length >= limits.entries) throw fault('limit_reached', '내 페이지 항목 개수를 확인해 주세요.');
+        const entry = { id: core.id(), title: reference.title, parts: [], note: reference.caption, pinned: false, enabled: true, showBody: false, showNote: true };
+        session.state.page.entries.push(entry); mark(session); redraw();
+        const article = bodyNode.querySelector('[data-entry-id="' + entry.id + '"]');
+        queueMicrotask(() => { if (valid() && article?.isConnected) { article.querySelector('.wb-page-entry-open')?.focus(); article.scrollIntoView({ block: 'nearest' }); } });
+        announceSafe('컬렉션 정보를 비공개 페이지에 넣었습니다. 공개 사본은 바뀌지 않았습니다.', session);
+      } }));
+    }
     function owner() {
       shareRemote ||= shareRemoteFactory();
       if (!shareRemote || !life.Share || !life.ShareView) throw fault('share_unavailable', '공개 기능을 불러오지 못했습니다. 새로고침한 뒤 다시 확인해 주세요.');
@@ -1015,9 +1031,10 @@
       switchButton.id = 'wbPagePreview'; switchButton.setAttribute('aria-pressed', String(preview));
       const actions = el('div', null, 'life-actions wb-page-actions');
       const publish = discoveryIcon('공개 사본 관리', 'link', () => openShare(session)); publish.id = 'wbPageShare';
-      actions.append(switchButton, publish);
+      actions.append(switchButton, discoveryIcon('컬렉션 정보 넣기', 'bookmark', addCollectionEntry), publish);
       if (saveControl) actions.append(saveControl);
       if (preview) {
+        actions.querySelector('[aria-label="컬렉션 정보 넣기"]')?.remove();
         bodyNode.append(actions, notice('비공개 미리보기')); renderVisitor(page); return;
       }
       const lead = el('div', null, 'wb-page-lead');
@@ -1082,7 +1099,7 @@
         const content = el('div', null, 'wb-page-content');
         const sourceContent = el('div', null, 'wb-page-parts');
         const note = el('div', null, 'wb-comment'), noteBody = el('p', '', 'wb-comment-body');
-        note.append(el('p', '내 코멘트', 'life-meta'), noteBody);
+        note.append(el('p', entry.parts.length ? '내 코멘트' : '내용', 'life-meta'), noteBody);
         const noContent = notice('표시할 내용이 없습니다. 항목 편집에서 원문이나 코멘트를 선택해 주세요.');
         content.append(sourceContent, note, noContent);
         const settings = details('항목 편집'); settings.classList.add('wb-page-entry-edit'); settings.id = 'wbPageEntryEdit-' + entry.id;
@@ -1121,9 +1138,9 @@
         pinned = discoveryIcon(entry.pinned ? '항목 고정 해제' : '항목 고정', 'bookmark', () => { entry.pinned = !entry.pinned; mark(session); refresh(); reorder(); }, entry.pinned);
         flags.append(enabled, pinned); settings.append(flags);
         settings.append(pageField(field('항목 제목', entry.title, { change: value => { entry.title = value; refresh(); } }), entry.id + ':title'));
-        settings.append(pageField(field('내 코멘트', entry.note, { multiline: true, max: limits.text, change: value => { entry.note = value; refresh(); } }), entry.id + ':note'));
+        settings.append(pageField(field(entry.parts.length ? '내 코멘트' : '내용', entry.note, { multiline: true, max: limits.text, change: value => { entry.note = value; refresh(); } }), entry.id + ':note'));
         settings.append(toggle('원문 본문 표시', entry.showBody, value => { entry.showBody = value; mark(session); refresh(); }));
-        settings.append(toggle('내 코멘트 표시', entry.showNote, value => { entry.showNote = value; mark(session); refresh(); }));
+        settings.append(toggle(entry.parts.length ? '내 코멘트 표시' : '내용 표시', entry.showNote, value => { entry.showNote = value; mark(session); refresh(); }));
         const partsHost = el('div', null, 'wb-page-part-settings');
         const refreshParts = () => {
           partsHost.replaceChildren();
@@ -1171,7 +1188,7 @@
         article.append(head);
         const content = el('div', null, 'wb-page-content');
         entry.parts.filter(part => part.enabled).forEach((part, index) => content.append(pagePart(part, entry, index)));
-        if (entry.showNote && entry.note) { const note = el('div', null, 'wb-comment'); note.append(el('p', '내 코멘트', 'life-meta'), el('p', entry.note, 'wb-comment-body')); content.append(note); }
+        if (entry.showNote && entry.note) { const note = el('div', null, 'wb-comment'); note.append(el('p', entry.parts.length ? '내 코멘트' : '내용', 'life-meta'), el('p', entry.note, 'wb-comment-body')); content.append(note); }
         article.append(content);
         visitor.append(article);
       });

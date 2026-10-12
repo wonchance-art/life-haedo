@@ -3,7 +3,7 @@
   'use strict';
   const C = root.HaedoLife.Collection, Metadata = root.HaedoLife.CollectionMetadata;
   const node = (tag, text, cls) => { const el = document.createElement(tag); if (text != null) el.textContent = text; if (cls) el.className = cls; return el; };
-  function open({ items, onSelect, isCurrent }) {
+  function open({ items, onSelect, isCurrent, purpose = 'edit' }) {
     const origin = document.activeElement, dialog = node('dialog', null, 'life-collection cl-picker');
     let alive = true, controller = null, kind = 'all', limit = 30, composing = false;
     const scrollStyle = document.body.style.overflow;
@@ -17,7 +17,7 @@
     function button(label, action, cls = 'life-button') {
       const el = node('button', label, cls); el.type = 'button'; el.addEventListener('click', action); return el;
     }
-    const head = node('header', null, 'cl-picker-head'), title = node('h2', '무엇을 담을까요?'); title.id = 'clPickerTitle';
+    const head = node('header', null, 'cl-picker-head'), title = node('h2', purpose === 'insert' ? '함께 넣을 항목' : '무엇을 담을까요?'); title.id = 'clPickerTitle';
     const exit = button('', close, 'life-icon-button'); exit.setAttribute('aria-label', '선택창 닫기'); exit.append(root.HaedoLife.Icons.create('close'));
     head.append(title, exit); dialog.setAttribute('aria-labelledby', title.id);
     const form = node('form', null, 'cl-picker-search'), input = node('input');
@@ -51,7 +51,7 @@
       find.hidden = !url; find.disabled = false; find.textContent = '링크 확인';
       const matched = items.filter(item => (kind === 'all' || item.type === kind) && (url && identity(item.url) === identity(value) || C.matches(item, { query: value, archived: item.archived })));
       message.textContent = matched.length ? `내 컬렉션 · ${matched.length}개` : value ? '아직 모아 둔 항목이 없어요.' : '좋아하는 것의 이름이나 링크로 시작하세요.';
-      for (const item of matched.slice(0, limit)) results.append(row(item, () => choose({ item, compact: true }), [item.creator || C.TYPES[item.type], item.archived ? '보관 중 · 메모 이어 쓰기' : '메모 이어 쓰기'].join(' · '), 'edit'));
+      for (const item of matched.slice(0, limit)) results.append(row(item, () => choose({ item, compact: true }), [item.creator || C.TYPES[item.type], purpose === 'insert' ? (item.archived ? '보관 중 · 정보 선택' : '정보 선택') : item.archived ? '보관 중 · 메모 이어 쓰기' : '메모 이어 쓰기'].join(' · '), purpose === 'insert' ? 'plus' : 'edit'));
       if (matched.length > limit) results.append(button('더 보기', () => { const first = limit; limit += 30; render(); results.querySelectorAll('.cl-pick-row')[first]?.focus(); }));
     }
     input.addEventListener('input', () => { limit = 30; render(); });
@@ -67,8 +67,8 @@
         const candidate = await Metadata.lookup(value, { signal: request.signal });
         if (!alive || !isCurrent() || controller !== request || request.signal.aborted) return;
         const existing = items.find(item => identity(item.url) === identity(candidate.url));
-        message.textContent = existing ? '이미 담아 둔 항목이에요. 메모를 이어 쓸 수 있어요.' : '정보를 확인하고 골라 주세요.';
-        remote.append(row(existing || candidate, () => choose(existing ? { item: existing, compact: true } : { seed: { title: candidate.title, type: candidate.type, url: candidate.url }, compact: true }), existing ? '내 컬렉션 · 메모 이어 쓰기' : `${candidate.provider} · ${candidate.attributionLabel}: ${candidate.attribution}`, existing ? 'edit' : 'plus'));
+        message.textContent = existing ? (purpose === 'insert' ? '내 컬렉션에 저장한 정보를 선택할 수 있어요.' : '이미 담아 둔 항목이에요. 메모를 이어 쓸 수 있어요.') : '정보를 확인하고 골라 주세요.';
+        remote.append(row(existing || candidate, () => choose(existing ? { item: existing, compact: true } : { seed: { title: candidate.title, type: candidate.type, url: candidate.url }, compact: true }), existing ? (purpose === 'insert' ? '내 컬렉션 · 정보 선택' : '내 컬렉션 · 메모 이어 쓰기') : `${candidate.provider} · ${candidate.attributionLabel}: ${candidate.attribution}`, existing && purpose !== 'insert' ? 'edit' : 'plus'));
       } catch (error) {
         if (!alive || !isCurrent() || controller !== request || request.signal.aborted) return;
         message.textContent = (error.message || '정보를 확인하지 못했어요.') + ' 직접 입력으로 이어갈 수 있어요.';
