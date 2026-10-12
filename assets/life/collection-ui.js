@@ -8,7 +8,8 @@
     let draft = null, baseline = '', selected = null, busy = false, conflict = null, restore = null, status = '', error = '', screen;
     let query = '', category = 'all', type = 'all', tag = '', archived = false, mode = 'cover', limit = 40, position = 0;
     const urls = new Set();
-    let backupOpen = false;
+    let backupOpen = false, lookupController = null, candidate = null, lookupMessage = '', lookupPending = false;
+    function cancelLookup() { lookupController?.abort(); lookupController = null; lookupPending = false; candidate = null; lookupMessage = ''; }
     const current = token => alive && !isDisposed() && active && token === sequence && getBundle()?.workspaceId === workspaceId;
     const dirty = () => busy || !!draft && JSON.stringify(draft) !== baseline;
     function flush() { if (dirty()) throw new Error('컬렉션 입력을 저장하거나 편집 취소한 뒤 이동해 주세요. 입력은 그대로 유지했습니다.'); }
@@ -32,7 +33,15 @@
       if (!options.multiline) input.type = options.type || 'text';
       input.maxLength = options.max || 500; input.required = !!options.required;
       if (options.multiline) input.rows = 5;
-      input.addEventListener('input', () => options.change(input.value));
+      input.addEventListener('input', () => {
+        options.change(input.value);
+        const key = { Title: 'title', Url: 'url' }[name];
+        if (key) { const choice = screen?.querySelector('[data-metadata-field="' + key + '"]'); if (choice) choice.checked = false; }
+        const kind = screen?.querySelector('[data-metadata-field="type"]');
+        if (kind && (draft?.creator || Object.values(draft?.details || {}).some(Boolean))) { kind.checked = false; kind.disabled = true; }
+        const apply = screen?.querySelector('#clApplyMetadata');
+        if (apply) apply.disabled = ![...screen.querySelectorAll('[data-metadata-field]')].some(el => el.checked && !el.disabled);
+      });
       wrap.append(input); return wrap;
     }
     function select(label, name, values, value, change) {
@@ -62,8 +71,9 @@
       try { const loaded = await storage.readCollection(workspaceId); if (!current(token)) return; state = loaded; draw(); }
       catch (cause) { if (!current(token)) return; error = cause.message; draw(); }
     }
-    function leave() { backupOpen = false; active = false; sequence++; unsubscribe?.(); unsubscribe = null; }
+    function leave() { cancelLookup(); backupOpen = false; active = false; sequence++; unsubscribe?.(); unsubscribe = null; }
     function draw() {
+      cancelLookup();
       if (!active || !alive) return;
       screen = node('section', null, 'life-collection'); screen.setAttribute('aria-label', '컬렉션'); host.replaceChildren(screen);
       notice();
@@ -172,24 +182,78 @@
       const leaf = select('세부 종류', 'Type', group.types.map(id => [id, C.TYPES[id]]), draft.type, value => { draft.type = value; draft.details = {}; draw(); screen.querySelector('#clType').focus(); }); leaf.querySelector('select').disabled = group.types.length === 1; kinds.append(leaf); fs.append(kinds);
       fs.append(field(draft.type === 'person' ? '이름' : '제목', 'Title', draft.title, { required: true, change: v => { draft.title = v; } }));
       if (draft.type !== 'person') fs.append(field(draft.type === 'film' ? '감독' : '만든 사람', 'Creator', draft.creator, { change: v => { draft.creator = v; } }));
-      fs.append(field('출처 주소', 'Url', draft.url, { type: 'url', max: C.LIMITS.url, change: v => { draft.url = v; } }));
+      fs.append(field('출처 주소', 'Url', draft.url, { type: 'url', max: C.LIMITS.url, change: v => { draft.url = v; cancelLookup(); renderLookup(); } }));
+      const lookup = node('section', null, 'cl-lookup'); lookup.id = 'clLookup'; lookup.setAttribute('aria-label', '출처 정보 조회'); fs.append(lookup);
       fs.append(field('주제 · 쉼표로 구분', 'Tags', draft.tags.join(', '), { max: 740, change: v => { draft.tags = [...new Set(v.split(',').map(s => s.trim()).filter(Boolean))]; } }));
       for (const key of C.TYPE_FIELDS[draft.type]) fs.append(field(C.DETAILS[key], key, draft.details[key] || '', { change: v => { draft.details[key] = v; } }));
       fs.append(field(draft.type === 'person' ? '좋아하는 이유 · 비공개' : '내 메모 · 비공개', 'Note', draft.note, { multiline: true, max: C.LIMITS.note, change: v => { draft.note = v; } }));
-      fs.append(node('p', '이 브라우저에만 저장합니다. 표지·자동 조회·기기 간 동기화는 아직 연결하지 않았습니다.', 'life-help'));
+      fs.append(node('p', '이 브라우저에만 저장합니다. 표지·기기 간 동기화는 아직 연결하지 않았습니다.', 'life-help'));
       const actions = node('div', null, 'cl-actions'); const save = node('button', '저장', 'life-button life-primary'); save.type = 'submit';
       actions.append(save, button('편집 취소', () => { if (dirty() && !root.confirm('저장하지 않은 입력을 버리고 돌아갈까요?')) return; const id = selected; draft = null; conflict = null; error = ''; if (id) { draw(); focusHeading(); } else back(); })); fs.append(actions);
       let composing = false;
       form.addEventListener('compositionstart', () => { composing = true; });
       form.addEventListener('compositionend', () => { composing = false; });
       form.addEventListener('submit', async event => { event.preventDefault(); if (busy || composing) return; await saveDraft(); });
-      screen.append(form);
+      screen.append(form); renderLookup();
       if (conflict) {
         const panel = node('section', null, 'cl-conflict'); panel.setAttribute('aria-label', '다른 탭 변경 비교');
         panel.append(node('h3', '다른 탭의 변경과 비교'), node('p', '현재 입력은 위에 유지했습니다. 사본으로 저장하면 다른 탭의 항목도 그대로 남습니다.', 'life-help'));
         const other = conflict.items.find(i => i.id === selected);
         if (other) { const details = node('details'); details.append(node('summary', '최신 항목 전체 정보'), node('pre', JSON.stringify(other, null, 2), 'cl-note')); panel.append(node('p', other.title), node('p', other.note || '메모 없음', 'cl-note'), details); }
         panel.append(button('내 입력을 새 사본으로 저장', () => saveDraft(true)), button('최신 변경 다시 비교', compare)); screen.append(panel);
+      }
+    }
+    function renderLookup() {
+      const panel = screen?.querySelector('#clLookup'); if (!panel) return;
+      const restoreFocus = panel.contains(document.activeElement);
+      panel.replaceChildren();
+      const actions = node('div', null, 'cl-actions');
+      const lookup = button(lookupPending ? '정보 조회 중…' : '주소로 정보 확인', startLookup); lookup.disabled = lookupPending; actions.append(lookup);
+      if (lookupPending) actions.append(button('조회 취소', () => { cancelLookup(); lookupMessage = '조회를 취소했습니다. 직접 입력을 계속할 수 있습니다.'; renderLookup(); }));
+      panel.append(actions, node('p', 'YouTube·GitHub에 영상·저장소 주소만 보내 조회합니다. 내 메모는 보내지 않습니다.', 'life-help'));
+      const message = node('p', lookupMessage, 'life-help'); message.setAttribute('role', 'status'); panel.append(message);
+      if (restoreFocus) (lookupPending ? actions.lastChild : lookup).focus({ preventScroll: true });
+      if (!candidate) return;
+      const result = candidate, preview = node('div', null, 'cl-candidate');
+      preview.append(node('h3', result.title), node('p', result.provider + ' · ' + result.attributionLabel + ': ' + (result.attribution || '미확인'), 'life-meta'));
+      const source = node('a', '조회한 출처 열기'); source.href = result.url; source.target = '_blank'; source.rel = 'noopener noreferrer'; preview.append(source);
+      preview.append(node('p', '적용할 항목만 선택하세요. 만든 사람·메모·주제·상세 정보는 그대로 둡니다.', 'life-help'));
+      const choices = [];
+      for (const [key, label] of [['title', '제목'], ['url', '출처 주소']]) {
+        const wrap = node('label', null, 'cl-lookup-choice'), input = node('input'); input.type = 'checkbox'; input.checked = !draft[key];
+        input.dataset.metadataField = key; wrap.append(input, node('span', label + ' · ' + result[key])); preview.append(wrap); choices.push([key, input]);
+      }
+      if (!selected && !draft.creator && !Object.values(draft.details).some(Boolean)) {
+        const wrap = node('label', null, 'cl-lookup-choice'), input = node('input'); input.type = 'checkbox'; input.checked = !draft.title; input.dataset.metadataField = 'type';
+        wrap.append(input, node('span', '종류 · ' + C.TYPES[result.type])); preview.append(wrap); choices.push(['type', input]);
+      }
+      const apply = button('선택한 정보 적용', () => {
+        if (candidate !== result) return;
+        for (const [key, input] of choices) if (input.checked && !input.disabled) {
+          if (key === 'type' && draft.type !== result.type) draft.details = {};
+          draft[key] = result[key];
+        }
+        // Creator/notes/details are never populated from an uploader or repository owner.
+        draw(); status = '선택한 정보를 입력에 적용했습니다. 확인 후 저장해 주세요.'; feedback(); screen.querySelector('#clTitle').focus();
+      });
+      apply.id = 'clApplyMetadata';
+      const updateApply = () => { apply.disabled = !choices.some(([, input]) => input.checked && !input.disabled); };
+      choices.forEach(([, input]) => input.addEventListener('change', updateApply)); updateApply();
+      preview.append(apply, button('조회 결과 닫기', () => { cancelLookup(); renderLookup(); screen.querySelector('#clUrl').focus(); }));
+      panel.append(preview);
+    }
+    async function startLookup() {
+      cancelLookup(); const token = sequence, original = draft, value = draft.url;
+      const controller = new AbortController(); lookupController = controller; lookupPending = true; lookupMessage = ''; renderLookup();
+      try {
+        const result = await root.HaedoLife.CollectionMetadata.lookup(value, { signal: controller.signal });
+        if (!current(token) || draft !== original || lookupController !== controller || draft.url !== value) return;
+        candidate = result; lookupMessage = '조회 결과입니다. 아직 입력하거나 저장하지 않았습니다.';
+      } catch (cause) {
+        if (!current(token) || draft !== original || lookupController !== controller) return;
+        lookupMessage = cause.message;
+      } finally {
+        if (current(token) && draft === original && lookupController === controller) { lookupPending = false; lookupController = null; renderLookup(); }
       }
     }
     async function commit(next, done) {
@@ -199,6 +263,7 @@
       finally { if (current(token)) { busy = false; feedback(); } }
     }
     async function saveDraft(asCopy = false) {
+      cancelLookup(); renderLookup();
       const token = sequence;
       try {
         const item = C.clone(draft); item.updatedAt = now(item.createdAt); C.validateItem(item);

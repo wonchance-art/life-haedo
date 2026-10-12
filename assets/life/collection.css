@@ -45,7 +45,7 @@
 .life-collection form { max-width:640px; margin-top:20px; }
 .cl-note { white-space:pre-wrap; overflow-wrap:anywhere; font-family:inherit; font-size:16px; line-height:1.9; }
 .cl-metadata { display:grid; grid-template-columns:100px minmax(0,1fr); gap:10px 16px; margin:24px 0; }
-.cl-metadata dt { color:var(--muted); }.cl-metadata dd { margin:0; overflow-wrap:anywhere; }
+.cl-metadata dt { color:var(--ink-soft); }.cl-metadata dd { margin:0; overflow-wrap:anywhere; }
 .cl-conflict { margin-top:24px; padding:20px; background:#f5f2f8; border-radius:12px; }
 .cl-conflict summary { padding:10px 0; min-height:44px; cursor:pointer; }
 @media(min-width:1100px) {
@@ -69,3 +69,19 @@
 .cl-cover>span { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:4; overflow:hidden; word-break:keep-all; overflow-wrap:anywhere; }
 .cl-cover small { flex:none; margin-top:8px; }
 .cl-caption strong { word-break:keep-all; overflow-wrap:anywhere; }
+
+.cl-lookup { margin:0 0 24px; padding:0 0 16px; border-bottom:1px solid var(--line); }
+.cl-candidate { padding:20px; background:#edf3ef; border-radius:12px; color:#304f40; }
+.cl-candidate h3 { margin:0 0 8px; font-size:19px; line-height:1.6; overflow-wrap:anywhere; }
+.cl-candidate .life-meta,.cl-candidate .life-help { color:#41614f; }
+.cl-candidate a { display:inline-flex; min-height:44px; align-items:center; color:#304f40; text-underline-offset:4px; }
+.cl-lookup-choice { display:flex; gap:10px; align-items:center; min-height:44px; padding:8px 0; font-size:15px; line-height:1.6; overflow-wrap:anywhere; }
+.life-collection .cl-lookup-choice input { width:44px; height:44px; min-height:44px; flex:none; accent-color:#41614f; }
+.cl-candidate>button { margin:12px 8px 0 0; }
+
+.life-collection .cl-lookup-choice input { appearance:none; border:0; background:transparent; padding:0; position:relative; border-radius:6px; cursor:pointer; }
+.cl-lookup-choice input::before { content:""; position:absolute; inset:12px; border:1px solid #587061; border-radius:4px; background:#fff; }
+.cl-lookup-choice input:checked::before { background:#41614f; border-color:#41614f; }
+.cl-lookup-choice input:checked::after { content:""; position:absolute; top:15px; left:19px; width:6px; height:10px; border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg); }
+.cl-lookup-choice input:disabled { opacity:.5; cursor:default; }
+@media(forced-colors:active) { .life-collection .cl-lookup-choice input { appearance:auto; } .cl-lookup-choice input::before,.cl-lookup-choice input::after { display:none; } }

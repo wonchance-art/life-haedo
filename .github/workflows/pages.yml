@@ -91,6 +91,9 @@ jobs:
       - name: Verify private collection storage and recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/collection-library-browser.cjs
+      - name: Verify collection metadata review and privacy
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/collection-metadata-browser.cjs
       - name: Verify composition transactions and recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/composition-storage-browser.cjs
@@ -209,6 +212,7 @@ jobs:
           name: browser-checks-${{ github.run_attempt }}
           path: |
             .local/collection-library/
+            .local/collection-metadata/
             .local/core-experience/
             .local/unified-home/
             .local/quality-audit/after/
