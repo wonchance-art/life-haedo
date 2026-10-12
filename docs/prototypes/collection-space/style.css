@@ -67,3 +67,14 @@ dialog { width:min(640px,calc(100% - 40px)); max-height:85svh; padding:26px; bor
 .inserted-card .cover[data-type=tool] > span { font-size:17px; }
 .picker-grid .cover[data-type=book] { font-size:13px; }
 #draftBody { word-break:keep-all; overflow-wrap:anywhere; }
+/* Artwork placeholders preserve orientation; no invented reproduction or remote image. */
+.cover[data-type=artwork] { width:120px; aspect-ratio:3/4; padding:8px; border:1px solid var(--line); background:#f3f1ed; color:#605b52; font-size:13px; font-weight:400; text-align:center; }
+.cover[data-type=artwork].landscape { width:178px; aspect-ratio:4/3; }
+.compact .cover[data-type=artwork],.inserted-card .cover[data-type=artwork] { width:48px; font-size:8px; }
+.picker-grid .cover[data-type=artwork] { width:88px; font-size:11px; }
+.artwork-meta { display:grid; grid-template-columns:100px minmax(0,1fr); gap:8px 16px; margin:20px 0; font-size:14px; line-height:1.7; }
+.artwork-meta dt { color:var(--ink-soft); }.artwork-meta dd { margin:0; overflow-wrap:anywhere; }
+#artworkFields { border:0; padding:0; margin:16px 0; }
+/* This standalone page has no app dock; inherited dock spacing moves focused buttons under the pointer. */
+html { scroll-padding-bottom:0; }
+button,input,textarea,select,summary,[tabindex] { scroll-margin-bottom:0; }

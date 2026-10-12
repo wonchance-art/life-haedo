@@ -118,3 +118,9 @@ body:has(#editor[open]) #page { margin-right:365px; }
 #page .many-items .personal-note { max-width:440px; margin-bottom:24px; }
 #page .many-items .feature-tools { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px 24px; }
 @media(max-width:1000px){#page .many-items .feature-tools{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px;}}
+.art.artwork { display:grid; place-items:center; aspect-ratio:4/3; padding:12px; border:1px solid var(--rule); background:#f3f1ed; color:#605b52; font-size:13px; font-weight:400; text-align:center; }
+.art.artwork.portrait { aspect-ratio:3/4; }
+.collection-grid .art.artwork.portrait { width:min(100%,calc(var(--frame-height) * .75)); }
+.feature-tools .art.artwork { font-size:9px; padding:4px; }
+.artwork-meta { display:grid; grid-template-columns:100px minmax(0,1fr); gap:8px 16px; margin:20px 0; font-size:14px; line-height:1.7; }
+.artwork-meta dt { color:var(--muted); }.artwork-meta dd { margin:0; overflow-wrap:anywhere; }

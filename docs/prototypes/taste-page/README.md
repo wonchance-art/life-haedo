@@ -1,6 +1,6 @@
 # 취향 페이지 · 브라우저 시안
 
-2026-10-11. 독립 HTML/CSS/JavaScript 시안이다. 12개 가상 자료를 고르고 배치해 페이지를 만들고, 시안 파일로 보관·다시 열 수 있다. 운영 내 페이지나 계정별 자료 저장은 아니다. 표지는 AI 생성 가상 이미지다.
+2026-10-11. 독립 HTML/CSS/JavaScript 시안이다. 14개 가상 자료를 고르고 배치해 페이지를 만들고, 시안 파일로 보관·다시 열 수 있다. 운영 내 페이지나 계정별 자료 저장은 아니다. 표지는 AI 생성 가상 이미지다.
 
 저장소 루트에서 `python3 scripts/dev-server.py --port 4189`로 시작한다. 같은 컴퓨터에서 경로 `/docs/prototypes/taste-page/`를 연다. Cloud loopback은 외부 접속 링크가 아니다. 기존 `/docs/prototypes/collection-space/`의 **내 페이지 꾸미기**에서도 들어간다.
 
@@ -18,3 +18,5 @@
 검사: `BASE_URL=http://127.0.0.1:4189 node tests/taste-page-prototype-browser.cjs`. 기존 설치를 쓰려면 `PW_MODULE_PATH`/`CHROMIUM_PATH`를 지정한다. 증거를 별도로 남기려면 `TASTE_PAGE_OUTPUT=.local/taste-page-review`를 지정한다.
 
 [최신 검수 수정·증거·Local 인계](../../design-review/taste-page-editing.md) · [이전 시안·참고 출처](../../design-review/taste-page.md)
+
+2026-10-12: 예술 작품 유형을 추가했다. 회화·사진 가상 자료와 세로/가로 이미지 미연결 표시를 제공한다. 보관함의 직접 입력에서는 작가·제작 연도·재료·소장처·출처 주소를 입력할 수 있다. 취향 페이지의 파일 보관은 가상 작품 ID를 포함하며 보관함에서 직접 추가한 임시 자료와 아직 공유되지 않는다. 실제 작품 이미지·자동 정보 조회는 미연결이다.

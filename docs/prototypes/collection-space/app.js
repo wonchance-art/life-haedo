@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const types = { all:'전체',music:'음악',book:'책',video:'영상',article:'글',tool:'도구',place:'장소',other:'기타' };
+  const types = { all:'전체',music:'음악',book:'책',video:'영상',article:'글',tool:'도구',place:'장소',artwork:'예술 작품',other:'기타' };
   const items = structuredClone(window.CollectionSample);
   const state = { type:'all', mode:'gallery', query:'', group:'all', scenario:'ready', selected:new Set(), pending:new Set() };
   const icon = name => HaedoLife.Icons.create(name);
@@ -21,6 +21,7 @@
   }));
   function art(item) {
     const cover=el('span','cover '+item.tone); cover.dataset.type=item.type; cover.setAttribute('aria-hidden','true');
+    if(item.type==='artwork'){cover.classList.add(item.orientation==='landscape'?'landscape':'portrait');cover.append(el('span','','이미지 미연결'));return cover;}
     if(item.cover) {cover.append(el('span','',item.cover));if(item.type!=='tool')cover.append(el('small','',item.creator));}
     else cover.append(icon(item.type==='tool'?'workspace':'bookmark'));
     return cover;
@@ -67,6 +68,7 @@
     $('detailTitle').textContent=item.title;
     const content=$('detailContent');content.replaceChildren();
     const hero=el('div','detail-hero'),info=el('div');info.append(el('p','',item.creator),el('p','',item.detail||types[item.type]));hero.append(art(item),info);content.append(hero);
+    if(item.type==='artwork'){const meta=el('dl','artwork-meta');for(const [key,label]of [['year','제작 연도'],['medium','재료·기법'],['holding','소장처'],['source','출처'],['rights','이미지 이용 조건']])meta.append(el('dt','',label),el('dd','',item[key]||'미확인'));content.append(meta);}
     const label=el('label','life-field');label.append(el('span','','내 메모 · 시안 안에서만 유지'));
     const note=el('textarea','detail-note');note.value=item.note;note.rows=4;note.maxLength=4000;label.append(note);content.append(label);
     const status=el('p','muted');status.setAttribute('role','status');
@@ -94,13 +96,17 @@
   $('pickerQuery').addEventListener('input',renderPicker);
   $('applySelection').addEventListener('click',()=>{state.selected=new Set(state.pending);renderInserted();$('picker').close();notify(`${state.selected.size}개 항목을 시안 글에 연결했습니다.`);});
   for(const [id,label]of Object.entries(types)){if(id==='all')continue;const opt=el('option','',label);opt.value=id;$('newType').append(opt);}
+  const updateArtFields=()=>{$('artworkFields').hidden=$('newType').value!=='artwork';};
+  $('newType').addEventListener('change',updateArtFields);
+  $('addForm').addEventListener('reset',()=>queueMicrotask(updateArtFields));
   $('addForm').addEventListener('submit',e=>{
     e.preventDefault();$('addError').textContent='';const title=$('newTitle').value.trim(),url=$('newUrl').value.trim();
     if(!title){$('addError').textContent='제목을 입력해 주세요.';$('newTitle').focus();return;}
     if(url&&!/^https?:\/\//i.test(url)){ $('addError').textContent='http 또는 https 주소를 입력해 주세요.';$('newUrl').focus();return; }
     const duplicate=items.find(i=>(url&&i.url===url)||(i.title===title&&i.type===$('newType').value));
     if(duplicate){$('addError').textContent='같은 제목·종류 또는 주소의 항목이 있어요. 기존 항목을 확인하거나 제목을 구분해 주세요.';return;}
-    items.unshift({id:crypto.randomUUID(),type:$('newType').value,title,creator:$('newCreator').value.trim()||'만든 사람 미확인',url,tone:'neutral',groups:[],note:'',detail:'직접 입력 · 표지 없음 · 시안 임시 항목'});
+    const artwork=$('newType').value==='artwork'?{year:$('newYear').value.trim(),medium:$('newMedium').value.trim(),holding:$('newHolding').value.trim(),source:url||'출처 미확인',rights:'이미지 이용 조건 미확인',orientation:$('newOrientation').value}:{};
+    items.unshift({...artwork,id:crypto.randomUUID(),type:$('newType').value,title,creator:$('newCreator').value.trim()||'만든 사람 미확인',url,tone:'neutral',groups:[],note:'',detail:'직접 입력 · 표지 없음 · 시안 임시 항목'});
     state.type='all';state.group='all';state.query='';$('query').value='';$('collection').value='all';setScenario('ready');renderTypes();$('add').close();$('addForm').reset();notify('시안에 추가했습니다. 실제 저장은 아니며 새로고침하면 초기화됩니다.');
   });
   renderModes();renderTypes();renderGrid();

@@ -33,7 +33,7 @@ const out=path.resolve(process.env.COLLECTION_PROTOTYPE_OUTPUT||'docs/design-rev
  try {
   await page.goto(base+'/docs/prototypes/collection-space/');
   await page.locator('#grid .object-card').first().waitFor();
-  check('12 mixed items',await page.locator('#grid .object-card').count()===12);
+  check('14 mixed items',await page.locator('#grid .object-card').count()===14);
   for(const width of [1440,820,390]){
    await page.setViewportSize({width,height:width===390?844:1000});
    await page.getByRole('button',{name:'A · 표지 중심',exact:true}).click();await inspect();await shot('gallery-'+width);
@@ -43,10 +43,12 @@ const out=path.resolve(process.env.COLLECTION_PROTOTYPE_OUTPUT||'docs/design-rev
    checks.push('grid/list, Korean titles, cover ratios, controls '+width);
   }
   await page.getByRole('button',{name:'A · 표지 중심',exact:true}).click();
+  await page.locator('#types').getByRole('button',{name:'예술 작품',exact:true}).click();check('artwork filter',await page.locator('#grid .object-card').count()===2);await shot('artworks-390');
+  await page.locator('#grid [data-id="art1"]').click();check('artwork source metadata separate from personal note',(await page.locator('#detail .artwork-meta').textContent()).includes('캔버스에 유채')&&(await page.locator('#detail .artwork-meta').textContent()).includes('이미지 이용 조건'));await page.keyboard.press('Escape');
   await page.locator('#types').getByRole('button',{name:'음악',exact:true}).click();check('music filter',await page.locator('#grid .object-card').count()===3);await shot('albums-390');
   await page.locator('#types').getByRole('button',{name:'책',exact:true}).click();check('book filter',await page.locator('#grid .object-card').count()===3);await shot('books-390');
   await page.locator('#query').fill('없는 항목');check('empty state',await page.locator('#empty').isVisible());await shot('empty-390');
-  await page.locator('#reset').click();check('reset keeps search focus',await page.locator('#query').evaluate(n=>n===document.activeElement));
+  await page.locator('#reset').click();await page.waitForFunction(()=>document.activeElement===document.getElementById('query'));check('reset keeps search focus',await page.locator('#query').evaluate(n=>n===document.activeElement));
   await page.locator('#collection').selectOption('make');check('collection mixes types',await page.locator('#grid .object-card').count()===5);await page.locator('#collection').selectOption('all');
   // Native dialog, Escape and opener restoration; keyboard activation rather than click only.
   const opener=page.locator('#grid [data-id="m1"]');await opener.focus();await page.keyboard.press('Enter');
@@ -71,11 +73,12 @@ const out=path.resolve(process.env.COLLECTION_PROTOTYPE_OUTPUT||'docs/design-rev
   await page.locator('#backLibrary').click();check('library object survives unlink',await page.locator('#grid [data-id="m1"]').count()===1);
   await page.getByRole('button',{name:'항목 추가',exact:true}).click();await page.locator('#newTitle').fill('느린 저녁');await page.getByRole('button',{name:'시안에 추가',exact:true}).click();check('duplicate is not silently merged',await page.locator('#addError').textContent()!=='');
   await page.locator('#newTitle').fill('표지 없는 새로운 책');await page.locator('#newType').selectOption('book');await page.locator('#newUrl').fill('javascript:alert(1)');await page.getByRole('button',{name:'시안에 추가',exact:true}).click();check('unsafe URL rejected',await page.locator('#addError').textContent()==='http 또는 https 주소를 입력해 주세요.');
-  await page.locator('#newUrl').fill('https://example.com/book');await page.getByRole('button',{name:'시안에 추가',exact:true}).click();check('manual fallback adds without cover',await page.locator('#grid .object-card').count()===13);
+  await page.locator('#newUrl').fill('https://example.com/book');await page.getByRole('button',{name:'시안에 추가',exact:true}).click();check('manual fallback adds without cover',await page.locator('#grid .object-card').count()===15);
   await page.locator('.review-controls summary').click();await page.locator('#scenario').selectOption('loading');check('loading announced',await page.locator('#grid').getAttribute('aria-busy')==='true');await shot('loading-1440');await page.getByRole('button',{name:'불러오기 완료 보기'}).click();
-  await page.locator('#scenario').selectOption('error');await shot('error-1440');await page.getByRole('button',{name:'다시 시도',exact:true}).click();check('error recovery preserves entries',await page.locator('#grid .object-card').count()===13);
-  await page.reload();await page.locator('#grid .object-card').first().waitFor();check('reload honestly resets prototype',await page.locator('#grid .object-card').count()===12);
-  await page.locator('.review-controls summary').click();await page.locator('#scenario').selectOption('many');check('many items',await page.locator('#grid .object-card').count()===84);
+  await page.locator('#scenario').selectOption('error');await shot('error-1440');await page.getByRole('button',{name:'다시 시도',exact:true}).click();check('error recovery preserves entries',await page.locator('#grid .object-card').count()===15);
+  await page.reload();await page.locator('#grid .object-card').first().waitFor();check('reload honestly resets prototype',await page.locator('#grid .object-card').count()===14);
+  await page.getByRole('button',{name:'항목 추가',exact:true}).click();await page.locator('#newType').selectOption('artwork');await page.locator('#newTitle').fill('시험용 조각');await page.locator('#newCreator').fill('가상 조각가');await page.locator('#newYear').fill('1990년경');await page.locator('#newMedium').fill('청동');await page.locator('#newHolding').fill('소장처 미상');await page.locator('#newUrl').fill('https://example.com/art');await page.getByRole('button',{name:'시안에 추가',exact:true}).click();await page.locator('#grid .object-card').first().click();check('manual artwork preserves uncertain date and source',(await page.locator('#detail .artwork-meta').textContent()).includes('1990년경')&&(await page.locator('#detail .artwork-meta').textContent()).includes('https://example.com/art'));await page.keyboard.press('Escape');await page.reload();
+  await page.locator('.review-controls summary').click();await page.locator('#scenario').selectOption('many');check('many items',await page.locator('#grid .object-card').count()===98);
   for(const width of [1440,820,390]){await page.setViewportSize({width,height:1000});await inspect();}
   const touch=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
   const touchPage=await touch.newPage();await touchPage.goto(base+'/docs/prototypes/collection-space/');

@@ -18,6 +18,7 @@
  function art(item){
    if(item.type==='tool'){const n=el('span','tool-icon'+(item.id==='t2'?' map':''));n.setAttribute('aria-hidden','true');n.append(icons.create(item.id==='t2'?'map':'workspace'));return n;}
    const n=el('span','art');n.setAttribute('aria-hidden','true');
+   if(item.type==='artwork'){n.classList.add('artwork',item.orientation==='landscape'?'landscape':'portrait');n.append(el('span','','이미지 미연결'));return n;}
    if(item.type==='music'){const image=el('span','photo '+({m1:'water',m2:'curtain',m3:'metal'}[item.id]||'water'));n.append(image,el('span','album-lettering',item.cover));}
    else if(item.type==='book'){n.classList.add('book');if(item.id==='b2')n.classList.add('cream');n.append(el('span','book-label',item.cover),el('span','photo '+(item.id==='b2'?'metal':'flower')),el('span','book-author',item.creator));}
    else {n.classList.add('article', 'kind-'+item.type);n.append(el('span','',item.cover||item.title));}
@@ -27,7 +28,7 @@
    const media=art(item);if(framed){const frame=el('span','media-frame');frame.append(media);b.append(frame);}else b.append(media);
    const info=el('span','object-info');info.append(el('span','object-title',item.title),el('span','object-creator',item.creator));b.append(info);b.addEventListener('click',()=>openItem(item));return b;
  }
- function openItem(item){$('itemTitle').textContent=item.title;const content=$('itemContent');content.replaceChildren(art(item),el('p','',item.creator),el('p','item-source',item.detail));if(!document.body.classList.contains('previewing'))content.append(el('p','item-note-label','샘플에 남긴 비공개 메모'),el('p','',item.note));content.append(el('p','item-source','가상 자료입니다. 실제 원문·재생은 연결하지 않았습니다.'));$('itemDialog').showModal();}
+ function openItem(item){$('itemTitle').textContent=item.title;const content=$('itemContent');content.replaceChildren(art(item),el('p','',item.creator),el('p','item-source',item.detail));if(item.type==='artwork'){const meta=el('dl','artwork-meta');for(const [key,label]of [['year','제작 연도'],['medium','재료·기법'],['holding','소장처'],['source','출처'],['rights','이미지 이용 조건']])meta.append(el('dt','',label),el('dd','',item[key]||'미확인'));content.append(meta);}if(!document.body.classList.contains('previewing'))content.append(el('p','item-note-label','샘플에 남긴 비공개 메모'),el('p','',item.note));content.append(el('p','item-source','가상 자료입니다. 실제 원문·재생은 연결하지 않았습니다.'));$('itemDialog').showModal();}
 
  const fields = {titleInput:'title',descriptionInput:'description',noteInput:'note',accentInput:'accent',paperInput:'paper',fontInput:'font',densityInput:'density',noteToggle:'noteVisible',metadataToggle:'metadata',featuredToggle:'featured',collectionToggle:'collection'};
  const choices = [['gallery','전시','workspace'],['editorial','글 중심','quote'],['archive','간결하게','book']];
