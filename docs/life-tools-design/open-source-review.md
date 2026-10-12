@@ -658,3 +658,10 @@ Paged.js/Vivliostyle 직접 도입은 패키지 크기뿐 아니라 **조판 스
 - 기존 동봉 [idb 8.0.3](https://github.com/jakearchibald/idb/tree/v8.0.3), ISC를 재사용한다. [npm 공식 latest](https://registry.npmjs.org/idb/latest)는 확인 시 8.0.4/ISC. GitHub 저장소는 archived=false, pushed_at=2026-10-06이며 공개 repository security-advisories 응답은 빈 목록이었다. 공개 알림 부재를 보안 보증으로 해석하지 않는다. GitHub latest-release API는 404라 배포 확인에는 npm을 사용했다.
 - [8.0.3…8.0.4 공식 비교](https://github.com/jakearchibald/idb/compare/v8.0.3...v8.0.4)는 NaN 읽기 수정과 바이트 절약이다. 이번 컬렉션은 JSON 가능한 문자열·유한 revision 등만 허용하며 NaN을 보관하지 않는다. 공통 저장소 라이브러리 교체를 이번 기능과 섞지 않고 기존 검증된 배포본을 유지한다.
 - 새 DB 라이브러리보다 기존 계정 소유권·원자 트랜잭션·BroadcastChannel 계약 재사용이 적합하다. 새 의존성과 DB 버전/운영 SQL은 없다. 자체 구현은 해도 컬렉션의 유형 검증·충돌/백업 의미·UI에 한정한다. [설계와 유지 범위](../design-review/collection-library.md).
+
+## 2026-10-12 — 컬렉션 공개 주소 메타데이터
+
+- GitHub 공식 [CORS 문서](https://docs.github.com/en/rest/using-the-rest-api/using-cors-and-jsonp-to-make-cross-origin-requests)는 [공식 docs 저장소 원문](https://github.com/github/docs/blob/main/content/rest/using-the-rest-api/using-cors-and-jsonp-to-make-cross-origin-requests.md)으로 확인했다(문서 사이트 직접 접속은 환경 차단). 공개 REST `/repos/{owner}/{repo}`를 자격 증명 없이 사용한다. 실제 API HTTP 200/ACAO `*`와 Linux Chromium 앱 어댑터 성공을 확인했다. 비인증 rate limit/403/429/404, 이름 변경 리디렉션을 수동 입력으로 복구한다. 지속 캐시나 자동 재조회는 없다.
+- [oEmbed 레지스트리 YouTube 항목](https://github.com/iamcal/oembed/blob/master/providers/youtube.yml)은 공식 배포 소스의 `https://www.youtube.com/oembed` 등록을 확인했다. 레지스트리 저장소는 MIT, archived=false, 당시 pushed_at=2026-10-10. 라이브러리 런타임을 배포하지 않는 데이터/규격 참고다. 등록된 playlist 전체를 지원한다고 표시하지 않고 단일 영상만 정규화한다. 환경에서 YouTube HTTP 연결은 프록시 403으로 실패했으므로 CORS/실서비스 성공은 Local 확인으로 남긴다. 원격 HTML/iframe/이미지는 사용하지 않는다.
+- 범용 Open Graph/메타데이터 스크래퍼는 임의 사이트 서버 조회·비밀 키·프록시·추가 의존성과 유지보수가 필요하다. 현재 정적 Pages의 두 제공자 읽기에 맞지 않아 도입하지 않는다. 기존 DOM/저장 모델과 네이티브 fetch/URL/AbortController를 재사용한 약 60줄의 어댑터를 선택했다. 외부 코드를 복사하거나 새 패키지를 설치하지 않았으므로 새 런타임 버전/라이선스 등록은 없다.
+- 검토를 바꿀 조건: 대상 사이트 확대, 인증 필요 API, 법적 근거를 갖춘 이미지 표시/캐시 요구. 그때 공식 배포/라이선스/유지보수/보안 권고와 제공자 약관을 다시 비교한다. 이번 조회를 작품 이미지 재사용 권한이나 아티스트 확정 근거로 삼지 않는다.

@@ -1,0 +1,7 @@
+PASS No automatic fetch; query sends canonical public resource only
+PASS Explicit selected application preserves author, memo and existing title; save/reload/backup match
+PASS Failed provider lookup and cancel retain form; unsupported input never requests
+PASS URL changes and editor cancellation discard late responses
+PASS YouTube candidate distinguishes channel from artist; typed changes during review survive
+PASS Empty draft can adopt video title/type without inventing an artist
+PASS New tool classification clears only empty incompatible detail keys

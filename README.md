@@ -132,3 +132,5 @@ Node 없이 화면만 실행하려면 `python3 scripts/dev-server.py`. 이 서�
 ### 컬렉션 보관함
 
 로그인 후 기록 → 컬렉션, 또는 `index.html?section=records&view=collection`에서 직접 입력·검색·수정·보관·전용 백업/사본 복구를 사용합니다. 이 브라우저의 계정·작업공간별 저장이며 표지 조회·자동 동기화·공개는 미연결입니다. [검증 증거와 Local 인계](docs/design-review/collection-library.md).
+
+컬렉션 출처 주소의 **주소로 정보 확인**에서 GitHub 저장소/YouTube 영상의 후보를 검토하고 선택한 제목·주소·종류만 입력에 적용할 수 있습니다. 저장은 별도이며 개인 메모·만든 사람은 자동 변경하지 않습니다. GitHub는 실제 브라우저 조회 확인, YouTube는 환경 네트워크 제한으로 모의 응답 검증까지입니다. [검증·Local 인계](docs/design-review/collection-metadata.md)를 참고하세요. 표지·임베드·기기 간 동기화는 이번 범위가 아닙니다.
