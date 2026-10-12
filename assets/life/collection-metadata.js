@@ -51,7 +51,8 @@
       const data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
       if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('잘못된 조회 응답입니다. 직접 입력해 주세요.');
       if (source.provider === 'GitHub' && data.private !== false) throw new Error('공개 저장소만 조회할 수 있습니다. 직접 입력해 주세요.');
-      return Object.freeze({ provider: source.provider, type: source.type, url: source.url,
+      const thumbnail = source.provider === 'YouTube' && typeof data.thumbnail_url === 'string' && /^https:\/\/i\.ytimg\.com\/vi\/[\w-]{11}\/(?:default|mqdefault|hqdefault|sddefault|maxresdefault)\.jpg$/.test(data.thumbnail_url) && data.thumbnail_url.split('/')[4] === new URL(source.url).searchParams.get('v') ? data.thumbnail_url : null;
+      return Object.freeze({ ...(thumbnail ? { thumbnail } : {}), provider: source.provider, type: source.type, url: source.url,
         title: clean(source.provider === 'GitHub' ? data.name : data.title, 500, true),
         attribution: clean(source.provider === 'GitHub' ? data.owner?.login : data.author_name, 500),
         attributionLabel: source.provider === 'GitHub' ? '저장소 소유자' : '게시 채널' });
