@@ -6,6 +6,10 @@
   'use strict';
   const life = root.HaedoLife = root.HaedoLife || {};
   const paths = {
+    disc: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/><path d="M7 9a6 6 0 0 1 2-2m6 10a6 6 0 0 0 2-2"/>',
+    play: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="m10 8 6 4-6 4Z"/>',
+    up: '<path d="m6 14 6-6 6 6"/>',
+
     book: '<path d="M12 5v16"/><path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z"/>',
     search: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
     bookmark: '<path d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"/>',

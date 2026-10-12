@@ -247,9 +247,10 @@
     }
     async function flush() {
       if (installing) throw fault('restore_in_progress', '새 사본을 저장하는 중입니다. 완료 후 이동해 주세요.');
+      await current?.composer?.flush();
       if (current?.state && current.edit !== current.stored || current?.saving) await flushSession(current);
     }
-    function dirty() { return installing || !!current && (current.edit !== current.stored || !!current.saving); }
+    function dirty() { return installing || !!current && (current.edit !== current.stored || !!current.saving || !!current.composer?.dirty()); }
     function sessionFor(id) {
       if (sessions.has(id)) return sessions.get(id);
       const session = { workspaceId: id, state: null, baseRevision: 0, edit: 0, stored: 0, remoteRevision: 0,
@@ -1029,7 +1030,39 @@
         lead.hidden = title.hidden && intro.hidden;
       };
       refreshLead(); bodyNode.append(lead, actions);
-      const pageSettings = details('제목·소개·표시 설정', { open: !page.entries.length }); pageSettings.classList.add('wb-page-settings');
+      const composerHost = el('section'); bodyNode.append(composerHost);
+      session.composer ||= life.PageComposer.create({ storage, workspaceId: session.workspaceId,
+        getPosts: () => session.state.page.posts || [], isCurrent: () => workspaceIs(session),
+        onDirty: () => updateStatus(session),
+        commit: async (draftId, draftRevision, options) => {
+          const token = generation; await flushSession(session);
+          if (!showing(token, session)) throw fault('workspace_changed', '화면이 바뀌었습니다. 초안을 유지했습니다.');
+          const controls = [...surface.querySelectorAll('button,input,textarea,select')].map(node => [node,node.disabled]);
+          controls.forEach(([node]) => { node.disabled = true; });
+          const task = storage.savePagePost(session.workspaceId, draftId, draftRevision, session.baseRevision, options);
+          session.saving = task;
+          try {
+            const result = await task;
+            // Keep legacy controls' state references; only posts/revision changed atomically.
+            session.state.page.posts = result.workbench.page.posts; session.state.revision = result.workbench.revision;
+            session.baseRevision = result.workbench.revision; session.remoteRevision = result.workbench.revision;
+            session.error = null; clearError();
+            if (session.share) { session.share.draft = null; session.share.consented = false; }
+            return result;
+          } catch (error) {
+            report(error, session);
+            if (error.code === 'workbench_conflict' && showing(token, session) && session.edit === session.stored) {
+              errorNode.append(action('페이지 다시 읽기', async () => {
+                await session.composer.flush(); session.state = null; await render('page');
+              }));
+            }
+            throw error;
+          }
+          finally { session.saving = null; controls.forEach(([node,disabled]) => { if(node.isConnected)node.disabled=disabled; }); updateStatus(session); }
+        } });
+      session.composer.mount(composerHost); viewCleanups.push(() => session.composer.detach());
+
+      const pageSettings = details('제목·소개·표시 설정'); pageSettings.classList.add('wb-page-settings');
       const pageField = (control, key) => {
         control.input.dataset.pageField = key;
         control.input.addEventListener('focus', () => { if (workspaceIs(session)) session.pageFieldFocus = key; });
@@ -1064,7 +1097,7 @@
           const peers = ordered.filter(item => item.pinned === entry.pinned), index = peers.indexOf(entry);
           const view = entryViews.get(entry.id); view.up.disabled = index === 0; view.down.disabled = index === peers.length - 1;
         });
-        none.hidden = page.entries.length > 0;
+        none.hidden = true;
         if (focus?.isConnected && document.activeElement !== focus) focus.focus({ preventScroll: true });
       }
       function move(entry, direction) {
@@ -1163,7 +1196,9 @@
       if (page.showIntro && page.intro) visitor.append(el('p', page.intro, 'wb-visitor-intro'));
       const entries = page.entries.filter(entry => entry.enabled && (entry.pinned || page.showRecent));
       entries.sort((a, b) => Number(b.pinned) - Number(a.pinned));
-      if (!entries.length) visitor.append(empty('표시할 항목이 없습니다. 편집에서 항목 표시를 켜 주세요.'));
+      const posts = (page.posts || []).filter(post => post.visibility === 'page');
+      posts.slice().sort((a,b) => b.createdAt.localeCompare(a.createdAt)).forEach(post => visitor.append(life.PagePostsView.post(post)));
+      if (!entries.length && !posts.length) visitor.append(empty('표시할 항목이 없습니다. 편집에서 항목 표시를 켜 주세요.'));
       entries.forEach(entry => {
         const article = el('article', null, 'wb-feed wb-page-entry'); article.dataset.entryId = entry.id;
         const head = el('div', null, 'wb-row wb-page-entry-heading'); head.append(el('h3', entry.title, 'wb-grow'));
@@ -2586,7 +2621,7 @@
     function dispose() {
       disposed = true; leave();
       shareRemote?.dispose();
-      sessions.forEach(session => { clearTimeout(session.timer); session.unsubscribe?.(); });
+      sessions.forEach(session => { clearTimeout(session.timer); session.composer?.dispose(); session.unsubscribe?.(); });
       urls.forEach(url => URL.revokeObjectURL(url)); urls.clear();
     }
     return Object.freeze({ render, flush, dirty, leave, dispose });

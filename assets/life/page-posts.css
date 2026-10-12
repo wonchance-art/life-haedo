@@ -1,0 +1,249 @@
+/* Quiet frame; post body and typed attachments carry the hierarchy. */
+.pp-workspace {
+  max-width: 760px;
+  margin: 0 auto;
+  width: 100%;
+  min-width: 0;
+}
+.pp-toolbar,
+.pp-compose-actions,
+.pp-post-meta,
+.pp-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pp-toolbar {
+  padding: 8px 0;
+  justify-content: flex-end;
+}
+.pp-status:empty {
+  display: none;
+}
+.pp-composer {
+  padding: 20px;
+  border: 1px solid var(--life-border, #dddde5);
+  border-radius: 20px;
+  background: var(--life-surface, #fff);
+  margin: 4px 0 20px;
+}
+.pp-composer textarea {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 17px;
+  line-height: 1.8;
+  resize: vertical;
+  min-height: 150px;
+  padding: 4px;
+  color: inherit;
+}
+.pp-compose-actions {
+  border-top: 1px solid var(--life-border, #dddde5);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+.pp-compose-actions select,
+.pp-manual input,
+.pp-manual select {
+  min-height: 44px;
+  font: inherit;
+  font-size: 16px;
+  max-width: 100%;
+  border: 1px solid var(--life-border, #dddde5);
+  border-radius: 10px;
+  background: var(--life-surface, #fff);
+  padding: 8px;
+  color: inherit;
+}
+.pp-save {
+  margin-left: auto;
+  background: var(--life-ink, #252432) !important;
+  color: var(--life-surface, #fff) !important;
+}
+.pp-body {
+  font-size: 17px;
+  line-height: 1.85;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  margin: 12px 0 18px;
+}
+.pp-post {
+  padding: 22px 0;
+  border-bottom: 1px solid var(--life-border, #dddde5);
+  outline-offset: 5px;
+}
+.pp-post-meta {
+  justify-content: space-between;
+}
+.pp-attachments {
+  display: grid;
+  gap: 4px;
+}
+.pp-attachment {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  min-height: 84px;
+  padding: 12px;
+  background: var(--life-soft, #f4f4f8);
+  color: inherit;
+  text-decoration: none;
+  border-radius: 12px;
+  min-width: 0;
+}
+.pp-attachment-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.pp-attachment-copy strong {
+  font-weight: 600;
+  line-height: 1.5;
+}
+.pp-shape {
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d9d9e2;
+  border-radius: 7px;
+  background: #eeeef6;
+  color: #4f4b65;
+}
+.pp-shape svg,
+.pp-attachment > svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.pp-attachment[data-type="book"] .pp-shape {
+  width: 38px;
+  height: 56px;
+  flex-basis: 38px;
+  margin: 0 7px;
+  border-radius: 2px 5px 5px 2px;
+  box-shadow: inset 3px 0 #d8d8e4;
+  background: #eceaf4;
+}
+.pp-attachment[data-type="film"] .pp-shape {
+  height: 64px;
+  width: 44px;
+  flex-basis: 44px;
+  margin: 0 4px;
+  background: #e6edf1;
+}
+.pp-attachment[data-type="person"] .pp-shape {
+  border-radius: 50%;
+  background: #f2e9e7;
+}
+.pp-attachment[data-type="music"] .pp-shape {
+  background: #e8ece5;
+}
+.pp-attachment[data-type="tool"] .pp-shape {
+  border-radius: 14px;
+  background: #e7edf5;
+}
+.pp-edit-attachment {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+.pp-edit-attachment > .pp-attachments {
+  flex: 1;
+  min-width: 0;
+}
+.pp-card-actions {
+  gap: 0;
+  flex-wrap: nowrap;
+}
+.pp-manual {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+}
+.pp-manual[hidden] {
+  display: none;
+}
+.pp-drafts summary,
+.pp-draft-tools summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 8px;
+}
+.pp-drafts .life-button,
+.pp-draft-tools .life-button {
+  display: block;
+}
+.pp-draft-tools input {
+  max-width: 240px;
+  font-size: 16px;
+  min-height: 44px;
+}
+.pp-empty {
+  padding: 48px 12px;
+  text-align: center;
+  line-height: 1.8;
+  color: var(--life-muted, #666274);
+}
+.share-entry .pp-body {
+  margin-top: 0;
+}
+.pp-composer .life-help {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 12px 0 0;
+}
+.pp-workspace :focus-visible {
+  outline: 2px solid var(--life-accent, #685aad);
+  outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .pp-composer {
+    padding: 14px;
+    border-radius: 14px;
+  }
+  .pp-post {
+    padding: 16px 0;
+  }
+  .pp-body {
+    font-size: 16px;
+    line-height: 1.85;
+  }
+  .pp-attachment {
+    padding: 10px;
+    gap: 10px;
+  }
+  .pp-compose-actions {
+    gap: 4px;
+  }
+  .pp-compose-actions .life-button {
+    padding-inline: 10px;
+  }
+  .pp-card-actions {
+    flex-direction: column;
+  }
+  .pp-draft-tools input {
+    max-width: 180px;
+  }
+}
+
+.pp-post-options summary {
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  cursor: pointer;
+}
