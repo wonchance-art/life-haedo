@@ -1,0 +1,20 @@
+PASS legacy composition without posts
+PASS saved posts with detached attachments
+PASS local draft prohibited
+PASS private attachment note rejected
+PASS credential URL rejected
+PASS bad date rejected
+PASS duplicate global ID rejected
+PASS empty post rejected
+PASS too many attachments
+PASS person creator rejected
+PASS scalar posts rejected
+PASS new public attachment snapshot
+PASS public private field blocked
+PASS ambiguous post and legacy parts blocked
+PASS old public copy unchanged
+PASS migration idempotent
+PASS anon private validation ACL
+PASS authenticated private validation ACL
+PASS readonly installation checks 8
+PASS total 26

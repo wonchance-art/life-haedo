@@ -677,3 +677,7 @@ Paged.js/Vivliostyle 직접 도입은 패키지 크기뿐 아니라 **조판 스
 ### 2026-10-12 · 컬렉션 선택창
 
 Radix Dialog 공식 npm 배포 1.3.1 / MIT와 최신 유지보수 변경을 확인했다. React 기반 도입 비용 때문에 설치하지 않고 native dialog·기존 조회/저장 모듈을 재사용한다. [비교 근거·출처·검증](../design-review/collection-picker.md)을 참고한다.
+
+### 2026-10-12 — 내 페이지 작성과 구조화된 첨부
+
+공식 npm `@radix-ui/react-dialog` 1.3.1/MIT와 공식 저장소 Dialog 변경 `925c88b773bb32aecf1b52a296a1a21ba7a720b9`를 다시 확인했다. 선택창은 선행 native dialog를 재사용하고 plain textarea·공통 아이콘·기존 IndexedDB CAS로 작성→첨부→피드를 구현했다. React/새 편집기/HTML 파서 도입은 필요한 행동에 비해 런타임·빌드·마이그레이션 비용이 커 채택하지 않았다. 새 앱 의존성은 없다. 자세한 [출처·선택 이유·검증](../design-review/page-composer.md)을 따른다.
