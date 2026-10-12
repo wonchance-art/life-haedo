@@ -111,3 +111,7 @@ PR #65의 독립 시안이다. 병합·배포는 Local 담당이며 운영 allow
 검증: 보관함 [52개](evidence/category-collections/library-report.json), 취향 페이지 [44개](evidence/category-collections/page-report.json) 확인 통과. 큰/작은 분류 전환, 검색 보존, 전체 복귀, 하나뿐인 종류 바로 선택, 글의 선택 유지, 없는 후보 안내, 분류 안 추가와 undo 포함. 확대된 큰/작은 분류 화면은 1440/820/390px에서 별도로 항목 수·넘침 없음·44px 조작 높이를 확인했다. `npm run check` HTML 18 / JS 59 / 참조 271 / PWA 및 변경 JS 구문 검사 통과. 공통 분류 파일을 CI 구문 검사에 추가했다. 실제 Apple 기기는 미검증이다.
 
 [1440px](evidence/category-collections/categories-1440.png) · [820px](evidence/category-collections/categories-820.png) · [390px](evidence/category-collections/categories-390.png) · [페이지 꾸미기 분류](evidence/category-collections/page-picker-390.png). 대표 화면을 직접 검토했다. 병합·배포는 Local 담당이며 시안을 운영 allowlist에 넣지 않는다.
+
+## 현재 제품 탐색 패턴 적용 (2026-10-12)
+
+[Cosmos·Are.na 관찰과 컬렉션 적용](collection-current-patterns.md)을 참고한다. 간결한 검색/가로 분류/보기 전환과 프레임 정리를 독립 컬렉션 시안에 적용했다. 이번 보관함 검사 56개 통과. 취향 페이지 편집 코드는 변경하지 않았다.

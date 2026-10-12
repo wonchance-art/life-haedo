@@ -667,3 +667,7 @@ Paged.js/Vivliostyle 직접 도입은 패키지 크기뿐 아니라 **조판 스
 **결정:** 두 프로젝트는 구조·시각 참고에 한정한다. 코드·이미지·패키지를 가져오거나 서비스를 실행하지 않았다. 전체 도입에는 별도 서버/DB·인증·라이선스 이행과 데이터 이전 비용이 생긴다. 이번 요구는 기존 `assets/life/ui.css`, `icons.js`, 네이티브 dialog/폼과 CSS grid로 비교할 수 있어 새 런타임 의존성이 없다. 가상 표지는 직접 만든 텍스트 디자인이다. 자동 메타데이터 공급자와 표지 라이선스는 실제 연결 착수 시 따로 확인한다.
 
 후속 커스터마이징 시안은 [취향 페이지 참고 기록](../design-review/taste-page.md)에 연결한다. Are.na/Cosmos/Apartamento/Literal/mmm.page의 실제 공식 페이지 응답·브라우저 화면과 CDN 미로딩 한계를 구분해 기록했다. 이들은 화면·제품 참고이며 오픈소스 라이선스를 전제로 코드를 도입하지 않았다. 이번 구현도 기존 CSS/아이콘과 native dialog/폼을 사용하며 새 의존성이 없다.
+
+### 2026-10-12 · 컬렉션 탐색 디자인 참고
+
+[공식 제품 화면 관찰 기록](../design-review/collection-current-patterns.md): Cosmos Explore와 Are.na Search의 탐색 구조를 비교했다. 오픈소스 코드 도입이 아닌 제품 구성 참고다. 기존 DOM/CSS/아이콘으로 구현해 새 의존성은 없으며, 이미지 피드 미로딩과 Raindrop 접속 실패를 근거 범위에서 구분했다.
