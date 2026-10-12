@@ -94,6 +94,9 @@ jobs:
       - name: Verify collection metadata review and privacy
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/collection-metadata-browser.cjs
+      - name: Verify opt-in collection cover rendering
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/collection-media-browser.cjs
       - name: Verify composition transactions and recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/composition-storage-browser.cjs
@@ -213,6 +216,7 @@ jobs:
           path: |
             .local/collection-library/
             .local/collection-metadata/
+            .local/collection-media/
             .local/core-experience/
             .local/unified-home/
             .local/quality-audit/after/

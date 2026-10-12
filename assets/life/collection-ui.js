@@ -1,13 +1,15 @@
 /* Account/workspace-scoped collection screen; explicit local saves. */
 (function (root) {
   'use strict';
-  const C = root.HaedoLife.Collection;
+  const C = root.HaedoLife.Collection, Media = root.HaedoLife.CollectionMedia;
   const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined && text !== null) n.textContent = text; if (cls) n.className = cls; return n; };
   function create({ storage, host, getBundle, isDisposed, onSaved }) {
     let alive = true, active = false, sequence = 0, workspaceId = null, state = null, unsubscribe = null;
     let draft = null, baseline = '', selected = null, busy = false, conflict = null, restore = null, status = '', error = '', screen;
     let query = '', category = 'all', type = 'all', tag = '', archived = false, mode = 'cover', limit = 40, position = 0;
-    const urls = new Set();
+    const urls = new Set(), mediaCleanups = new Set(), imageMetadata = new Map();
+    let imagesEnabled = false;
+    function clearMedia() { mediaCleanups.forEach(dispose => dispose()); mediaCleanups.clear(); }
     let backupOpen = false, lookupController = null, candidate = null, lookupMessage = '', lookupPending = false;
     function cancelLookup() { lookupController?.abort(); lookupController = null; lookupPending = false; candidate = null; lookupMessage = ''; }
     const current = token => alive && !isDisposed() && active && token === sequence && getBundle()?.workspaceId === workspaceId;
@@ -55,9 +57,9 @@
       screen.append(s, e);
     }
     async function open() {
-      active = true; const token = ++sequence, next = getBundle().workspaceId;
+      clearMedia(); active = true; const token = ++sequence, next = getBundle().workspaceId;
       if (workspaceId !== next) {
-        workspaceId = next; state = null; draft = null; selected = null; restore = null; conflict = null; query = ''; category = type = 'all'; tag = ''; archived = false; status = error = '';
+        imagesEnabled = false; imageMetadata.clear(); clearMedia(); workspaceId = next; state = null; draft = null; selected = null; restore = null; conflict = null; query = ''; category = type = 'all'; tag = ''; archived = false; status = error = '';
       }
       unsubscribe?.();
       unsubscribe = storage.subscribe(workspaceId, event => {
@@ -71,9 +73,9 @@
       try { const loaded = await storage.readCollection(workspaceId); if (!current(token)) return; state = loaded; draw(); }
       catch (cause) { if (!current(token)) return; error = cause.message; draw(); }
     }
-    function leave() { cancelLookup(); backupOpen = false; active = false; sequence++; unsubscribe?.(); unsubscribe = null; }
+    function leave() { clearMedia(); imageMetadata.clear(); imagesEnabled = false; cancelLookup(); backupOpen = false; active = false; sequence++; unsubscribe?.(); unsubscribe = null; }
     function draw() {
-      cancelLookup();
+      clearMedia(); cancelLookup();
       if (!active || !alive) return;
       screen = node('section', null, 'life-collection'); screen.setAttribute('aria-label', '컬렉션'); host.replaceChildren(screen);
       notice();
@@ -85,13 +87,38 @@
     function cover(item) {
       const box = node('span', null, 'cl-cover cl-' + item.type); box.setAttribute('aria-hidden', 'true');
       if (['person', 'tool', 'place', 'other'].includes(item.type)) box.append(root.HaedoLife.Icons.create({ person: 'user', tool: 'workspace', place: 'map', other: 'bookmark' }[item.type]));
-      else { box.append(node('span', item.title.slice(0, 60))); box.append(node('small', '표지 미연결')); }
+      else { box.append(node('span', item.title.slice(0, 60))); box.append(node('small', Media.describe(item) ? '이미지 꺼짐' : '표지 미연결')); }
+      if (imagesEnabled) loadImage(box, item);
       return box;
+    }
+    async function imageLookup(source, options) {
+      if (imageMetadata.has(source)) return imageMetadata.get(source);
+      const scope = workspaceId, result = await root.HaedoLife.CollectionMetadata.lookup(source, options);
+      if (alive && active && !isDisposed() && workspaceId === scope && !options.signal.aborted) {
+        if (imageMetadata.size >= 100) imageMetadata.delete(imageMetadata.keys().next().value);
+        imageMetadata.set(source, result);
+      }
+      return result;
+    }
+    function loadImage(box, item) {
+      const descriptor = Media.describe(item); if (!descriptor) return;
+      const small = box.querySelector('small');
+      mediaCleanups.add(Media.mount({ host: box, descriptor, lookup: imageLookup, onState: state => {
+        box.dataset.imageState = state; box.classList.toggle('cl-image-ready', state === 'ready');
+        if (small) small.textContent = state === 'loading' ? '이미지 불러오는 중' : state === 'error' ? '이미지 없음 · 출처 확인' : descriptor.provider;
+      } }));
+    }
+    function imageToggle() {
+      const wrap = node('div', null, 'cl-image-controls');
+      const toggle = button(imagesEnabled ? '외부 이미지 끄기' : '외부 이미지 보기', () => {
+        imagesEnabled = !imagesEnabled; draw(); screen.querySelector('#clImageToggle')?.focus({ preventScroll: true });
+      }); toggle.id = 'clImageToggle'; toggle.setAttribute('aria-pressed', String(imagesEnabled));
+      wrap.append(toggle, node('p', '켜면 Open Library·YouTube에서 이미지를 불러옵니다. 이 화면을 나가면 꺼집니다.', 'life-help')); return wrap;
     }
     function library() {
       const actions = node('div', null, 'cl-actions');
       actions.append(node('p', '이 브라우저 · 비공개', 'life-meta'), button('컬렉션 항목 추가', () => begin(), 'plus'), button('최신 내용 확인', reload, 'refresh'));
-      screen.append(actions);
+      screen.append(actions, imageToggle());
       const search = node('div', null, 'cl-search');
       search.append(field('컬렉션 검색', 'Query', query, { max: 500, change: value => { query = value; limit = 40; renderResults(); } }));
       search.querySelector('input').placeholder = '컬렉션 검색';
@@ -131,7 +158,7 @@
       }
     }
     function renderResults() {
-      const grid = screen.querySelector('#clGrid'); if (!grid) return; grid.replaceChildren(); grid.className = 'cl-grid' + (mode === 'note' ? ' cl-notes' : '');
+      const grid = screen.querySelector('#clGrid'); if (!grid) return; clearMedia(); grid.replaceChildren(); grid.className = 'cl-grid' + (mode === 'note' ? ' cl-notes' : '');
       const shown = state.items.filter(item => C.matches(item, { query, category, type, tag, archived }));
       screen.querySelector('#clCount').textContent = `${archived ? '보관한 항목 · ' : ''}${shown.length}개`;
       if (!shown.length) {
@@ -143,6 +170,7 @@
         const b = button(item.title, () => { position = root.scrollY; selected = item.id; status = error = ''; draw(); focusHeading(); }); b.className = 'cl-card'; b.dataset.itemId = item.id; b.replaceChildren();
         const art = node('span', null, 'cl-art'); art.append(cover(item));
         const copy = node('span', null, 'cl-caption'); copy.append(node('strong', item.title), node('span', item.type === 'person' ? item.details.field || C.TYPES[item.type] : item.creator || C.TYPES[item.type], 'life-meta'));
+        const provider = Media.describe(item); if (provider) copy.append(node('span', provider.provider + ' · ' + provider.label, 'cl-image-credit'));
         if (mode === 'note' && item.note) copy.append(node('span', item.note, 'cl-card-note'));
         b.append(art, copy); grid.append(b);
       }
@@ -155,6 +183,11 @@
       if (!item) { selected = null; library(); return; }
       const actions = node('div', null, 'cl-actions'); actions.append(button('컬렉션 목록으로', () => back(), 'back'), button('항목 수정', () => begin(item), 'edit'));
       screen.append(actions, node('h2', item.title), node('p', C.TYPES[item.type], 'life-meta'));
+      const descriptor = Media.describe(item);
+      if (descriptor) {
+        screen.append(imageToggle()); const figure = node('figure', null, 'cl-detail-image'); figure.append(cover(item));
+        const caption = node('figcaption'), source = node('a', descriptor.provider + ' · ' + descriptor.label); source.href = descriptor.source; source.target = '_blank'; source.rel = 'noopener noreferrer'; caption.append(source); figure.append(caption); screen.append(figure);
+      }
       const dl = node('dl', null, 'cl-metadata');
       if (item.creator) dl.append(node('dt', item.type === 'film' ? '감독' : '만든 사람'), node('dd', item.creator));
       for (const [key, value] of Object.entries(item.details)) if (value) dl.append(node('dt', C.DETAILS[key]), node('dd', value));
@@ -182,12 +215,12 @@
       const leaf = select('세부 종류', 'Type', group.types.map(id => [id, C.TYPES[id]]), draft.type, value => { draft.type = value; draft.details = {}; draw(); screen.querySelector('#clType').focus(); }); leaf.querySelector('select').disabled = group.types.length === 1; kinds.append(leaf); fs.append(kinds);
       fs.append(field(draft.type === 'person' ? '이름' : '제목', 'Title', draft.title, { required: true, change: v => { draft.title = v; } }));
       if (draft.type !== 'person') fs.append(field(draft.type === 'film' ? '감독' : '만든 사람', 'Creator', draft.creator, { change: v => { draft.creator = v; } }));
-      fs.append(field('출처 주소', 'Url', draft.url, { type: 'url', max: C.LIMITS.url, change: v => { draft.url = v; cancelLookup(); renderLookup(); } }));
+      fs.append(field('출처 주소', 'Url', draft.url, { type: 'url', max: C.LIMITS.url, change: v => { draft.url = v; clearMedia(); cancelLookup(); renderLookup(); renderImageEditor(); } }));
       const lookup = node('section', null, 'cl-lookup'); lookup.id = 'clLookup'; lookup.setAttribute('aria-label', '출처 정보 조회'); fs.append(lookup);
       fs.append(field('주제 · 쉼표로 구분', 'Tags', draft.tags.join(', '), { max: 740, change: v => { draft.tags = [...new Set(v.split(',').map(s => s.trim()).filter(Boolean))]; } }));
       for (const key of C.TYPE_FIELDS[draft.type]) fs.append(field(C.DETAILS[key], key, draft.details[key] || '', { change: v => { draft.details[key] = v; } }));
       fs.append(field(draft.type === 'person' ? '좋아하는 이유 · 비공개' : '내 메모 · 비공개', 'Note', draft.note, { multiline: true, max: C.LIMITS.note, change: v => { draft.note = v; } }));
-      fs.append(node('p', '이 브라우저에만 저장합니다. 표지·기기 간 동기화는 아직 연결하지 않았습니다.', 'life-help'));
+      fs.append(node('p', '이 브라우저에만 저장합니다. 기기 간 동기화는 아직 연결하지 않았습니다.', 'life-help'));
       const actions = node('div', null, 'cl-actions'); const save = node('button', '저장', 'life-button life-primary'); save.type = 'submit';
       actions.append(save, button('편집 취소', () => { if (dirty() && !root.confirm('저장하지 않은 입력을 버리고 돌아갈까요?')) return; const id = selected; draft = null; conflict = null; error = ''; if (id) { draw(); focusHeading(); } else back(); })); fs.append(actions);
       let composing = false;
@@ -195,6 +228,7 @@
       form.addEventListener('compositionend', () => { composing = false; });
       form.addEventListener('submit', async event => { event.preventDefault(); if (busy || composing) return; await saveDraft(); });
       screen.append(form); renderLookup();
+      const imagePanel = node('details', null, 'cl-image-editor'); imagePanel.id = 'clImageEditor'; imagePanel.append(node('summary', '표지·썸네일')); fs.insertBefore(imagePanel, actions); renderImageEditor();
       if (conflict) {
         const panel = node('section', null, 'cl-conflict'); panel.setAttribute('aria-label', '다른 탭 변경 비교');
         panel.append(node('h3', '다른 탭의 변경과 비교'), node('p', '현재 입력은 위에 유지했습니다. 사본으로 저장하면 다른 탭의 항목도 그대로 남습니다.', 'life-help'));
@@ -202,6 +236,30 @@
         if (other) { const details = node('details'); details.append(node('summary', '최신 항목 전체 정보'), node('pre', JSON.stringify(other, null, 2), 'cl-note')); panel.append(node('p', other.title), node('p', other.note || '메모 없음', 'cl-note'), details); }
         panel.append(button('내 입력을 새 사본으로 저장', () => saveDraft(true)), button('최신 변경 다시 비교', compare)); screen.append(panel);
       }
+    }
+    function renderImageEditor() {
+      const panel = screen?.querySelector('#clImageEditor'); if (!panel || !draft) return;
+      const open = panel.open; panel.replaceChildren(node('summary', '표지·썸네일')); panel.open = open;
+      panel.append(node('p', '책은 Open Library의 ISBN·책 주소, 영상은 YouTube 주소로 연결합니다. 앨범·영화·작품·인물 이미지는 아직 지원하지 않습니다.', 'life-help'));
+      if (draft.type === 'book') {
+        let value = '';
+        panel.append(field('ISBN · 10자리 또는 13자리', 'Isbn', '', { max: 24, change: v => { value = v; } }));
+        panel.append(button(draft.url ? 'ISBN 주소로 바꾸기' : 'ISBN 출처 연결', () => {
+          const source = Media.bookSource(value); if (!source) throw new Error('ISBN 번호와 마지막 검증 숫자를 확인해 주세요. 기존 출처는 유지했습니다.');
+          clearMedia(); cancelLookup(); draft.url = source; screen.querySelector('#clUrl').value = source; renderLookup(); renderImageEditor();
+          error = ''; status = 'ISBN 출처를 입력에 적용했습니다. 제목·저자를 확인한 뒤 저장해 주세요.'; feedback(); screen.querySelector('#clUrl').focus();
+        }));
+        panel.append(node('p', 'ISBN을 연결하면 출처 주소가 Open Library로 바뀝니다. 제목·저자와 기존 메모는 바꾸지 않습니다.', 'life-help'));
+      }
+      const descriptor = Media.describe(draft); if (!descriptor) return;
+      const preview = node('div', null, 'cl-image-preview');
+      panel.append(button('외부 이미지 확인', () => {
+        clearMedia(); preview.replaceChildren();
+        // Editor preview is an explicit one-image request, independent of list opt-in.
+        const box = node('span', null, 'cl-cover cl-' + draft.type); box.append(node('span', draft.title || '제목 미입력'), node('small', '이미지 불러오는 중')); preview.append(box); loadImage(box, draft);
+      }));
+      const source = node('a', descriptor.provider + ' · ' + descriptor.label + ' 출처', 'life-button'); source.href = descriptor.source; source.target = '_blank'; source.rel = 'noopener noreferrer'; panel.append(source, preview);
+      panel.append(node('p', '이미지 제공자에게 접속합니다. 이미지는 파일이나 백업에 복사하지 않으며, 출처 주소만 저장합니다.', 'life-help'));
     }
     function renderLookup() {
       const panel = screen?.querySelector('#clLookup'); if (!panel) return;
