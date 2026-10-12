@@ -94,6 +94,11 @@
       if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '활동·페이지 구성 모듈을 불러오지 못했습니다.');
       return value;
     };
+    const collection = () => {
+      const value = options.collection || root.HaedoLife?.Collection;
+      if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '컬렉션 모듈을 불러오지 못했습니다.');
+      return value;
+    };
     function notify(event) {
       if (disposed) return;
       const callbacks = event.type === 'error'
@@ -147,6 +152,9 @@
           if (data?.sender !== sender && data?.type === 'changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
             notify({ type: 'changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'collection_changed' && typeof data.workspaceId === 'string' && Number.isSafeInteger(data.revision)) {
+            notify({ type: 'collection_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
           if (data?.sender !== sender && data?.type === 'workbench_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
@@ -500,6 +508,46 @@
       return writeReadingPosition(workspaceId, readingPositionInput(input), baseRevision);
     }
     async function clearReadingPosition(workspaceId, baseRevision) { return writeReadingPosition(workspaceId, null, baseRevision); }
+    // Independent local metadata: does not alter source/workbench revisions or sync payloads.
+    function collectionScope(workspaceId) {
+      scopeGuard();
+      if (!account) throw fault('auth_scope_required', '로그인한 계정에서 컬렉션을 열어 주세요.');
+      requireId(workspaceId, '작업공간');
+    }
+    async function collectionValue(meta, workspaceId) {
+      const row = await meta.get(`collection:${workspaceId}`);
+      const value = row === undefined ? collection().empty(workspaceId) : row.value;
+      collection().validate(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '컬렉션의 작업공간을 확인해 주세요.');
+      return value;
+    }
+    async function readCollection(workspaceId) {
+      collectionScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, tx.objectStore('meta'));
+        return clone(await collectionValue(tx.objectStore('meta'), workspaceId));
+      });
+    }
+    async function saveCollection(workspaceId, input, baseRevision) {
+      collectionScope(workspaceId); requireRevision(baseRevision, 'baseRevision');
+      collection().validate(input);
+      const state = clone(input);
+      if (state.workspaceId !== workspaceId) throw fault('workspace_mismatch', '컬렉션의 작업공간이 다릅니다.');
+      if (state.revision !== baseRevision) throw fault('collection_conflict', '컬렉션 저장 기준이 바뀌었습니다. 입력을 보존했습니다.');
+      const saved = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await collectionValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) throw fault('collection_conflict', '다른 탭에서 컬렉션을 수정했습니다. 입력을 보존하고 최신 내용과 비교해 주세요.');
+        state.revision = baseRevision + 1;
+        collection().validate(state);
+        await meta.put({ key: `collection:${workspaceId}`, value: state });
+        return clone(state);
+      });
+      const event = { type: 'collection_changed', workspaceId, revision: saved.revision };
+      notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Saving succeeded; reload remains available. */ }
+      return saved;
+    }
     async function workbenchValue(meta, workspaceId) {
       const row = await meta.get(`workbench:${workspaceId}`);
       const state = row === undefined ? workbench().empty(workspaceId) : row.value;
@@ -1688,6 +1736,7 @@
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, read, createWorkspace, installWorkspace, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
+      readCollection, saveCollection,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       commitLocal, saveStage, getStage, listStages, deleteStage, subscribe,
       getSyncState, bindSync, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,
