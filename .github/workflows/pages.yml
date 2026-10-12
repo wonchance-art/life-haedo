@@ -28,7 +28,9 @@ jobs:
       - run: npm test
   browser:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Run 38261965693 reached this limit after successful collection checks.
+    # Keep all regression steps; allow the remaining book/browser suites to finish.
+    timeout-minutes: 45
     permissions:
       contents: read
     env:
