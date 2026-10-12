@@ -127,3 +127,6 @@ body:has(#editor[open]) #page { margin-right:365px; }
 .art.film { display:grid; place-items:center; aspect-ratio:2/3; padding:8px; border:1px solid var(--rule); background:#eceef2; color:#4d5565; font-size:13px; text-align:center; }
 .collection-grid .art.film { width:min(100%,calc(var(--frame-height) * 2 / 3)); }
 .feature-tools .art.film { font-size:9px; padding:4px; }
+.art.person { display:grid; place-items:center; width:min(100%,180px); margin-inline:auto; border-radius:50%; aspect-ratio:1; background:#e8ecef; color:#4c5b68; }
+.art.person svg { width:40%; height:40%; }
+.collection-grid .art.person { width:min(100%,var(--frame-height),140px); }

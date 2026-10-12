@@ -2,6 +2,7 @@
 (() => {
  'use strict';
  const $ = id => document.getElementById(id), icons = HaedoLife.Icons;
+ const subtitle = item => item.type==='person'?(item.field||'활동 분야 미확인'):item.creator;
  const items = new Map(CollectionSample.map(item => [item.id, structuredClone(item)]));
  const initial = {
   title:'느리게 듣고,\n오래 만드는 것.', description:'자주 듣는 음악과 읽다 접어 둔 책.\n언젠가 만들어 보고 싶은 작은 도구들.',
@@ -18,6 +19,7 @@
  function art(item){
    if(item.type==='tool'){const n=el('span','tool-icon'+(item.id==='t2'?' map':''));n.setAttribute('aria-hidden','true');n.append(icons.create(item.id==='t2'?'map':'workspace'));return n;}
    const n=el('span','art');n.setAttribute('aria-hidden','true');
+   if(item.type==='person'){n.classList.add('person');n.append(icons.create('user'));return n;}
    if(item.type==='film'){n.classList.add('film');n.append(el('span','','포스터 미연결'));return n;}
    if(item.type==='artwork'){n.classList.add('artwork',item.orientation==='landscape'?'landscape':'portrait');n.append(el('span','','이미지 미연결'));return n;}
    if(item.type==='music'){const image=el('span','photo '+({m1:'water',m2:'curtain',m3:'metal'}[item.id]||'water'));n.append(image,el('span','album-lettering',item.cover));}
@@ -27,9 +29,9 @@
  }
  function card(id,framed=false){const item=items.get(id),b=el('button','object'+(item.type==='tool'&&!framed?' tool-object':''));b.type='button';b.dataset.item=id;b.setAttribute('aria-label',item.title+' 자세히 보기');
    const media=art(item);if(framed){const frame=el('span','media-frame');frame.append(media);b.append(frame);}else b.append(media);
-   const info=el('span','object-info');info.append(el('span','object-title',item.title),el('span','object-creator',item.creator));b.append(info);b.addEventListener('click',()=>openItem(item));return b;
+   const info=el('span','object-info');info.append(el('span','object-title',item.title),el('span','object-creator',subtitle(item)));b.append(info);b.addEventListener('click',()=>openItem(item));return b;
  }
- function openItem(item){$('itemTitle').textContent=item.title;const content=$('itemContent');content.replaceChildren(art(item),el('p','',item.creator),el('p','item-source',item.detail));if(item.type==='artwork'){const meta=el('dl','artwork-meta');for(const [key,label]of [['year','제작 연도'],['medium','재료·기법'],['holding','소장처'],['source','출처'],['rights','이미지 이용 조건']])meta.append(el('dt','',label),el('dd','',item[key]||'미확인'));content.append(meta);}if(item.type==='film'){const meta=el('dl','artwork-meta film-meta');for(const [key,label]of [['creator','감독'],['year','개봉 연도'],['country','국가'],['duration','상영시간'],['source','출처'],['rights','포스터 이용 조건']])meta.append(el('dt','',label),el('dd','',item[key]||'미확인'));content.append(meta);}if(!document.body.classList.contains('previewing'))content.append(el('p','item-note-label','샘플에 남긴 비공개 메모'),el('p','',item.note));content.append(el('p','item-source','가상 자료입니다. 실제 원문·재생은 연결하지 않았습니다.'));$('itemDialog').showModal();}
+ function openItem(item){$('itemTitle').textContent=item.title;const content=$('itemContent');content.replaceChildren(art(item),el('p','',subtitle(item)),el('p','item-source',item.detail));if(item.type==='artwork'){const meta=el('dl','artwork-meta');for(const [key,label]of [['year','제작 연도'],['medium','재료·기법'],['holding','소장처'],['source','출처'],['rights','이미지 이용 조건']])meta.append(el('dt','',label),el('dd','',item[key]||'미확인'));content.append(meta);}if(item.type==='film'){const meta=el('dl','artwork-meta film-meta');for(const [key,label]of [['creator','감독'],['year','개봉 연도'],['country','국가'],['duration','상영시간'],['source','출처'],['rights','포스터 이용 조건']])meta.append(el('dt','',label),el('dd','',item[key]||'미확인'));content.append(meta);}if(item.type==='person'){const meta=el('dl','artwork-meta person-meta');for(const [key,label]of [['field','활동 분야'],['source','출처']])meta.append(el('dt','',label),el('dd','',item[key]||'미확인'));content.append(meta);}if(!document.body.classList.contains('previewing'))content.append(el('p','item-note-label',item.type==='person'?'좋아하는 이유 · 비공개 메모':'샘플에 남긴 비공개 메모'),el('p','',item.note));content.append(el('p','item-source','가상 자료입니다. 실제 원문·재생은 연결하지 않았습니다.'));$('itemDialog').showModal();}
 
  const fields = {titleInput:'title',descriptionInput:'description',noteInput:'note',accentInput:'accent',paperInput:'paper',fontInput:'font',densityInput:'density',noteToggle:'noteVisible',metadataToggle:'metadata',featuredToggle:'featured',collectionToggle:'collection'};
  const choices = [['gallery','전시','workspace'],['editorial','글 중심','quote'],['archive','간결하게','book']];
@@ -95,7 +97,7 @@
     });row.append(b);
    }$('selectedItems').append(row);
   });
-  $('itemToAdd').replaceChildren(...[...items.values()].filter(item=>!ids.includes(item.id)).map(item=>{const option=el('option','',item.title+' · '+item.creator);option.value=item.id;return option;}));
+  $('itemToAdd').replaceChildren(...[...items.values()].filter(item=>!ids.includes(item.id)).map(item=>{const option=el('option','',item.title+' · '+subtitle(item));option.value=item.id;return option;}));
   $('itemToAdd').disabled=$('addItem').disabled=ids.length===items.size;
   if(focusId){const target=$(focusId);if(target&&!target.disabled)target.focus();else $('sectionTarget').focus();}
  }

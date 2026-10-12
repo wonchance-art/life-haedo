@@ -82,3 +82,8 @@ button,input,textarea,select,summary,[tabindex] { scroll-margin-bottom:0; }
 .compact .cover[data-type=film],.inserted-card .cover[data-type=film] { width:48px; font-size:8px; }
 .picker-grid .cover[data-type=film] { width:80px; font-size:11px; }
 #filmFields { border:0; padding:0; margin:16px 0; }
+.cover[data-type=person] { width:120px; aspect-ratio:1; border-radius:50%; background:#e8ecef; color:#4c5b68; padding:20px; }
+.cover[data-type=person] svg { width:40%; height:40%; }
+.compact .cover[data-type=person],.inserted-card .cover[data-type=person] { width:48px; padding:8px; }
+.picker-grid .cover[data-type=person] { width:88px; }
+#personFields { border:0; padding:0; margin:16px 0; }
