@@ -11,7 +11,7 @@ const go = async page => { await page.goto(base + '/index.html?section=records&v
 const click = (page, name) => page.getByRole('button', { name, exact: true }).click();
 async function save(page) { await click(page, '저장'); await page.getByRole('button', { name: '항목 수정', exact: true }).waitFor(); }
 async function add(page, { title, category = 'content', type = 'book', note = '', creator = '', url = '' }) {
-  await click(page, '컬렉션 항목 추가'); await page.locator('#clCategory').selectOption(category);
+  await click(page, '컬렉션 항목 추가'); await click(page, '직접 입력'); await page.locator('#clCategory').selectOption(category);
   if (!(await page.locator('#clType').isDisabled())) await page.locator('#clType').selectOption(type);
   await page.locator('#clTitle').fill(title); if (await page.locator('#clCreator').count()) await page.locator('#clCreator').fill(creator);
   await page.locator('#clUrl').fill(url); await page.locator('#clTags').fill('관찰, 취향'); await page.locator('#clNote').fill(note); await save(page);
@@ -122,7 +122,7 @@ async function main() {
       await page.evaluate(()=>{window.__clReadFailure=false;}); await click(page,'컬렉션 다시 불러오기'); await page.locator('#clGrid').waitFor();
     });
     await check('IME composition does not submit, workspace switching does not mix collections, and management exposes backup scope', async () => {
-      await click(page,'컬렉션 항목 추가'); await page.locator('#clTitle').fill('한글 조합 중');
+      await click(page,'컬렉션 항목 추가'); await click(page,'직접 입력'); await page.locator('#clTitle').fill('한글 조합 중');
       const before=await read(page); await page.locator('#clTitle').dispatchEvent('compositionstart');
       await page.locator('#clForm').dispatchEvent('submit'); assert.deepEqual(await read(page),before);
       await page.locator('#clTitle').dispatchEvent('compositionend'); await save(page); await click(page,'컬렉션 목록으로');
@@ -133,7 +133,7 @@ async function main() {
     await check('Touch viewport can add, open and return to an item', async () => {
       const touch=await makeContext(browser,new FakeCloud(),'collection-touch',accounts.a,{viewport:{width:390,height:844},hasTouch:true});
       const p=await touch.newPage();p.on('pageerror',e=>report.errors.push(e.message));
-      try { await go(p); await p.getByRole('button',{name:'컬렉션 항목 추가',exact:true}).tap(); await p.locator('#clTitle').fill('터치로 담은 음악'); await save(p); await p.getByRole('button',{name:'컬렉션 목록으로',exact:true}).tap(); await p.locator('.cl-card').tap(); await p.getByRole('button',{name:'항목 수정',exact:true}).waitFor(); await p.getByRole('button',{name:'컬렉션 목록으로',exact:true}).tap(); assert.equal(await p.locator('.cl-card').evaluate(el=>el===document.activeElement),true); }
+      try { await go(p); await p.getByRole('button',{name:'컬렉션 항목 추가',exact:true}).tap();await p.getByRole('button',{name:'직접 입력',exact:true}).tap(); await p.locator('#clTitle').fill('터치로 담은 음악'); await save(p); await p.getByRole('button',{name:'컬렉션 목록으로',exact:true}).tap(); await p.locator('.cl-card').tap(); await p.getByRole('button',{name:'항목 수정',exact:true}).waitFor(); await p.getByRole('button',{name:'컬렉션 목록으로',exact:true}).tap(); assert.equal(await p.locator('.cl-card').evaluate(el=>el===document.activeElement),true); }
       finally { await touch.close(); }
     });
     assert.deepEqual(report.errors,[]); assert.deepEqual(report.external,[]);

@@ -207,7 +207,7 @@ async function main(){
         assert.ok((await stored(page)).sources.some(s=>s.title==='오프라인 보존'));
         if (await page.locator('.life-reader-tools').isVisible()) await page.locator('.life-reader-tools').getByRole('button').first().click();
         await click(page,'컬렉션'); await page.locator('#clGrid').waitFor();
-        await click(page,'컬렉션 항목 추가'); await page.locator('#clTitle').fill('오프라인 컬렉션');
+        await click(page,'컬렉션 항목 추가'); await click(page,'직접 입력'); await page.locator('#clTitle').fill('오프라인 컬렉션');
         await page.locator('#clNote').fill('온라인 재확인 뒤에도 남을 비공개 메모'); await click(page,'저장');
         await page.getByRole('button',{name:'항목 수정',exact:true}).waitFor();
         assert.ok(await page.evaluate(async()=>{const s=HaedoLife.Shell.storage;return(await s.readCollection(await s.getActive())).items.some(i=>i.title==='오프라인 컬렉션');}));
@@ -267,7 +267,7 @@ async function main(){
       assert.equal(visible.some(w=>w.workspaceId===fixture.bundle.workspaceId),oldHasAuth);
       const original=await p.evaluate(async ids=>{const db=await idb.openDB('life-tools-v1',1);try{return {bundle:await db.get('bundles',ids.workspaceId),stage:await db.get('staging',ids.stageId)};}finally{db.close();}},{workspaceId:fixture.bundle.workspaceId,stageId:fixture.stage.stageId});
       assert.deepEqual(original,fixture);assert.equal(await p.evaluate(()=>localStorage.getItem('caeyeon_life_registry')),'{"docs":[],"anonymous":"preserve-upgrade"}');
-      const modules=['life.html','assets/platform-auth.js','assets/platform-life-remote.js','assets/life/core.js','assets/life/storage.js','assets/life/icons.js','assets/life/ui.js','assets/life/home.js','assets/life/collection.js','assets/life/collection-media.js','assets/life/collection-metadata.js','assets/life/collection-ui.js','assets/life/collection.css','assets/life/workbench-ui.js','assets/life/workbench.css','assets/life/rediscovery.js','assets/life/reading-position.js','assets/life/ui.css','assets/life/writing-ui.js','assets/life/composition-remote.js','assets/life/composition-sync.js','assets/life/composition-ui.js','assets/life/writing-remote.js','assets/life/writing-sync.js','assets/life/writing-sync-ui.js','vendor/supabase/supabase.js'];
+      const modules=['life.html','assets/platform-auth.js','assets/platform-life-remote.js','assets/life/core.js','assets/life/storage.js','assets/life/icons.js','assets/life/ui.js','assets/life/home.js','assets/life/collection.js','assets/life/collection-media.js','assets/life/collection-metadata.js','assets/life/collection-picker.js','assets/life/collection-ui.js','assets/life/collection.css','assets/life/workbench-ui.js','assets/life/workbench.css','assets/life/rediscovery.js','assets/life/reading-position.js','assets/life/ui.css','assets/life/writing-ui.js','assets/life/composition-remote.js','assets/life/composition-sync.js','assets/life/composition-ui.js','assets/life/writing-remote.js','assets/life/writing-sync.js','assets/life/writing-sync-ui.js','vendor/supabase/supabase.js'];
       const runtime=await p.evaluate(async({name,modules})=>{
         if(!await caches.has(name))return [];
         const cache=await caches.open(name);
