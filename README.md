@@ -128,3 +128,7 @@ Node 없이 화면만 실행하려면 `python3 scripts/dev-server.py`. 이 서�
 - [이번 리뷰와 변경 기록](docs/review-update.md)
 
 스크러버·검색 등 일부 UX 패턴은 [Timelines Studio](https://github.com/sreegjl/timelines)(GPL-3.0)에서 착안해 독자 구현했다.
+
+### 컬렉션 보관함
+
+로그인 후 기록 → 컬렉션, 또는 `index.html?section=records&view=collection`에서 직접 입력·검색·수정·보관·전용 백업/사본 복구를 사용합니다. 이 브라우저의 계정·작업공간별 저장이며 표지 조회·자동 동기화·공개는 미연결입니다. [검증 증거와 Local 인계](docs/design-review/collection-library.md).

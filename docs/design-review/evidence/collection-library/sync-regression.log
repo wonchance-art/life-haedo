@@ -1,0 +1,15 @@
+PASS login alone never uploads local work; explicit opt-in uploads
+PASS second browser explicitly downloads same IDs without uploading its empty workspace
+PASS offline durable outbox survives lost write response and reload, replay is idempotent
+PASS clean pull retains saved and currently edited local import drafts
+PASS cold load without Auth verification stays locked until explicit re-verification
+PASS conflict remote choice preserves unselected local content in a separate unbound copy
+PASS conflict local choice preserves the remote version as a separate copy before CAS upload
+PASS pause and logout keep local work/outbox; another account cannot upload the old binding
+PASS late response from old account cannot apply after account switch
+PASS remote original-text hash mismatch cannot install or overwrite local data
+PASS real IDB: sync metadata abort rolls back local commit and a saved outbox survives two-tab preparation
+PASS backup excludes connection, auth session, password and sync metadata
+PASS schema_missing remains a local-preserving UI error with setup guidance
+PASS unexpected browser console/page errors
+Sync browser checks: 14 passed, 0 failed; 7 expected transport/schema console errors. HTTP simulator only; live RLS and Apple hardware not proven.

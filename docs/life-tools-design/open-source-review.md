@@ -652,3 +652,9 @@ MDN 호환성 데이터의 해당 파일 마지막 변경은 **2026-10-05**, com
 Paged.js/Vivliostyle 직접 도입은 패키지 크기뿐 아니라 **조판 스크립트의 실행 위치, DOM 분할 후 원고·출처 순서, 계정 전환 취소, 폰트 준비, 메모리·인쇄 완료 경계**를 다시 검증해야 한다. 지금 필요한 기본 판형·문단·장 나눔에 이 비용을 먼저 추가할 이유는 없다. 실제 원고에서 자동 목차 쪽번호·각주·양면 조판이 필수로 드러나면 두 후보의 동일 한글 원고 출력을 직접 비교하고 결정한다.
 
 이 절은 공식 자료 조사와 선택 근거다. 조사 뒤 수행한 새 독자용 화면·PDF 검증은 [책자 검토](../design-review/book-edition.md)에 별도로 기록했다. 기존 7쪽 PDF 검사나 라이브러리의 지원 표로 새 출력을 대신하지 않는다. 라이브러리·폰트 설치, 외부 AI, 운영 SQL·계정 자료·병합·배포 작업은 수행하지 않았다.
+
+## 2026-10-12 · 컬렉션 실제 저장
+
+- 기존 동봉 [idb 8.0.3](https://github.com/jakearchibald/idb/tree/v8.0.3), ISC를 재사용한다. [npm 공식 latest](https://registry.npmjs.org/idb/latest)는 확인 시 8.0.4/ISC. GitHub 저장소는 archived=false, pushed_at=2026-10-06이며 공개 repository security-advisories 응답은 빈 목록이었다. 공개 알림 부재를 보안 보증으로 해석하지 않는다. GitHub latest-release API는 404라 배포 확인에는 npm을 사용했다.
+- [8.0.3…8.0.4 공식 비교](https://github.com/jakearchibald/idb/compare/v8.0.3...v8.0.4)는 NaN 읽기 수정과 바이트 절약이다. 이번 컬렉션은 JSON 가능한 문자열·유한 revision 등만 허용하며 NaN을 보관하지 않는다. 공통 저장소 라이브러리 교체를 이번 기능과 섞지 않고 기존 검증된 배포본을 유지한다.
+- 새 DB 라이브러리보다 기존 계정 소유권·원자 트랜잭션·BroadcastChannel 계약 재사용이 적합하다. 새 의존성과 DB 버전/운영 SQL은 없다. 자체 구현은 해도 컬렉션의 유형 검증·충돌/백업 의미·UI에 한정한다. [설계와 유지 범위](../design-review/collection-library.md).
