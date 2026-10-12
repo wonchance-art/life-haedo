@@ -68,7 +68,10 @@
     if (value.format !== 'life-collection-v1') fail('지원하지 않는 컬렉션 형식입니다.');
     id(value.workspaceId);
     if (!Number.isSafeInteger(value.revision) || value.revision < 0) fail('컬렉션 저장 기준을 확인해 주세요.');
-    items(value.items); size(value); return value;
+    items(value.items); size(value);
+    // Reserve the export envelope too, so a successfully saved library can always be backed up.
+    size({ format: 'life-collection-backup-v1', exportedAt: '1970-01-01T00:00:00.000Z', items: value.items });
+    return value;
   }
   function makeBackup(value) { validate(value); const backup = { format: 'life-collection-backup-v1', exportedAt: new Date().toISOString(), items: clone(value.items) }; size(backup); return backup; }
   function readBackup(input) {

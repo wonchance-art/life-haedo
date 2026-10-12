@@ -34,3 +34,14 @@ test('Collection capacity rejection preserves both source and backup', () => {
   C.validate(state); const before = JSON.stringify(state); assert.throws(() => C.appendBackup(state, C.makeBackup(library()), () => 'new'), {code:'collection_limit'});
   assert.equal(JSON.stringify(state), before);
 });
+
+test('Storage budget reserves the backup envelope, preventing an unexportable full library', () => {
+  const state = { ...C.empty('w'), items: Array.from({length:220}, (_,i) => item({id:'i'+i,note:'x'.repeat(10000)})) };
+  const bytes = value => new TextEncoder().encode(JSON.stringify(value)).length;
+  let excess = bytes(state) - C.LIMITS.bytes;
+  for (const value of state.items) { const remove = Math.min(excess,value.note.length); value.note = value.note.slice(remove); excess -= remove; }
+  assert.equal(bytes(state),C.LIMITS.bytes);
+  assert.throws(() => C.validate(state),{code:'collection_limit'});
+  state.items.at(-1).note = state.items.at(-1).note.slice(100);
+  C.validate(state); assert(bytes(C.makeBackup(state)) <= C.LIMITS.bytes);
+});
