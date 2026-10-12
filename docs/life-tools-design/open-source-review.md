@@ -681,3 +681,10 @@ Radix Dialog 공식 npm 배포 1.3.1 / MIT와 최신 유지보수 변경을 확�
 ### 2026-10-12 — 내 페이지 작성과 구조화된 첨부
 
 공식 npm `@radix-ui/react-dialog` 1.3.1/MIT와 공식 저장소 Dialog 변경 `925c88b773bb32aecf1b52a296a1a21ba7a720b9`를 다시 확인했다. 선택창은 선행 native dialog를 재사용하고 plain textarea·공통 아이콘·기존 IndexedDB CAS로 작성→첨부→피드를 구현했다. React/새 편집기/HTML 파서 도입은 필요한 행동에 비해 런타임·빌드·마이그레이션 비용이 커 채택하지 않았다. 새 앱 의존성은 없다. 자세한 [출처·선택 이유·검증](../design-review/page-composer.md)을 따른다.
+
+## 2026-10-12 · 페이지 피드의 표지·영상
+
+- 공식 [lite-youtube-embed v0.3.4](https://github.com/paulirish/lite-youtube-embed/releases/tag/v0.3.4), 2025-11-10 배포를 GitHub releases API로 확인했다. [LICENSE](https://github.com/paulirish/lite-youtube-embed/blob/v0.3.4/LICENSE)의 실제 본문은 **Apache-2.0**이며 API의 `NOASSERTION`을 라이선스 부재로 해석하지 않는다. 최근 src 변경 `46977648f019187075c463dfad63e1b033a7d52c`(2025-11-10) 확인. 공개 security-advisories API 응답은 빈 배열이었다. 이것이 알려지지 않은 취약점 부재를 증명하지는 않는다.
+- 눌러야 iframe을 만드는 구성을 참고했다. 공식 소스는 hover/focus 시 preconnect, 기본 autoplay, 일부 환경의 별도 IFrame API 로딩을 포함한다. 해도의 외부 연결 기본 꺼짐, 재생 자동 시작 없음, 계정/화면 종료 시 해제 계약에는 **기존 CollectionMedia + native dialog를 연결하는 작은 PageMedia 어댑터**가 적합했다. 소스 복사·패키지 도입은 없다. iframe lifecycle과 제공자 변경을 유지 관리하는 비용은 남는다.
+- 공식 [YouTube player parameters](https://developers.google.com/youtube/player_parameters)의 `autoplay=0`, `playsinline=1`, 기본 JS API 비활성 계약을 확인했다. iframe은 고정된 youtube-nocookie.com 호스트와 검증한 영상 ID만 사용한다. 별도 iframe API·자동 재생·외부 SDK는 없다. `strict-origin-when-cross-origin`으로 페이지의 개인 경로/쿼리 대신 출처 origin만 전달한다. no-cookie 호스트는 무전송을 의미하지 않으므로 클릭 전 연결 안내를 유지한다.
+- 실제 사이트의 밀집 피드와 매체별 형태라는 기존 비교 방향은 유지하되, 음악 링크의 YouTube 영상을 실제 앨범 표지로 가장하지 않는다. [구현·한계·시각 근거](../design-review/profile-feed-media.md).

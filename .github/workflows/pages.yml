@@ -102,6 +102,9 @@ jobs:
       - name: Verify page composition, attachments and draft recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/page-composer-browser.cjs
+      - name: Verify profile feed media privacy and recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/profile-feed-media-browser.cjs
       - name: Verify opt-in collection cover rendering
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/collection-media-browser.cjs
@@ -227,6 +230,7 @@ jobs:
             .local/collection-media/
             .local/collection-picker/
             .local/page-composer/
+            .local/profile-feed-media/
             .local/core-experience/
             .local/unified-home/
             .local/quality-audit/after/
