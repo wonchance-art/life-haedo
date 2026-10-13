@@ -14,8 +14,7 @@ async function main() {
   const click = name => page.getByRole('button', { name, exact: true }).click();
   const open = async () => {
     await nav(page, 'tools'); await click('회고');
-    const detail = page.locator('details').filter({ has: page.locator('#wbReflectionToPage') });
-    await detail.locator(':scope>summary').click();
+    await page.locator('#wbReflectionUse').click();
   };
   const drafts = () => page.evaluate(async () => { const s = HaedoLife.Shell.storage; return s.readPageDrafts(await s.getActive()); });
   const copy = () => page.locator('#wbReflectionToPage').click();

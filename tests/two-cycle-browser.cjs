@@ -15,7 +15,7 @@ async function main(){await fs.mkdir(out,{recursive:true});const browser=await p
  const click=name=>page.getByRole('button',{name,exact:true}).click();
  const snap=async scene=>{for(const width of [1440,820,390]){await page.setViewportSize({width,height:1000});await page.screenshot({path:path.join(out,`${scene}-${width}.png`)});const metrics=await page.evaluate(inspect);report.visual.push({scene,width,metrics});assert(!metrics.horizontalOverflow);for(const k of ['smallTargets','smallInputs','unnamed','contrastFailures'])assert.deepEqual(metrics[k],[],scene+' '+k);}};
  const readDrafts=()=>page.evaluate(async()=>{const s=HaedoLife.Shell.storage;return s.readPageDrafts(await s.getActive());});
- const outputs=async()=>{const d=page.locator('details').filter({has:page.locator('#wbReflectionToPage')});if(!(await d.evaluate(e=>e.open)))await d.locator(':scope>summary').click();};
+ const outputs=async()=>{await page.locator('#wbReflectionFileOpen').click();};
  let original,refs,firstDraft;
  try{
  await check('Import original versions, excerpt, selected evidence and current thought through the UI',async()=>{

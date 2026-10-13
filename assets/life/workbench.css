@@ -394,7 +394,7 @@
 .wb-reflection-note-heading { display: flex; align-items: center; justify-content: space-between; position: sticky; top: 64px; z-index: 23; background: var(--paper); min-height: 56px; }
 .wb-reflection-note-heading > h3 { margin: 0; font-size: 26px; }
 .wb-reflection-note .life-field > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-#wbReflectionNote { padding: 12px 0; min-height: 22rem; border: 0; border-radius: 0; background: transparent; font-size: 19px; line-height: 1.95; resize: none; overflow: hidden; }
+#wbReflectionNote { padding: 12px 0; min-height: 8rem; border: 0; border-radius: 0; background: transparent; font-size: 19px; line-height: 1.95; resize: none; overflow: hidden; }
 .wb-reflection-management { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line); }
 #wbReflectionReading { scroll-margin-top: 84px; }
 .wb-plan-actions { justify-content: space-between; margin-top: 0; }
@@ -434,3 +434,8 @@
 @media (max-width: 700px) { .wb-lens-quote { font-size: 17px; } }
 
 .wb-lenses .wb-source-body { max-height: none; overflow: visible; overflow-wrap: anywhere; font-family: inherit; }
+
+/* Authored thought actions stay beside the writing, with detailed file scope below. */
+.wb-reflection-output { padding: 16px 0 8px; scroll-margin-top: 140px; }
+.wb-reflection-output .life-actions { gap: 8px; }
+.wb-reflection-output .life-help { margin: 8px 0 0; max-width: 65ch; }

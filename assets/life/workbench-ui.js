@@ -1499,7 +1499,7 @@
       readingControls.append(group);
       const note = field('내 회고', reflection.note, { id: 'wbReflectionNote', multiline: true, max: limits.text,
         change: value => { reflection.note = value; } });
-      note.input.rows = 12;
+      note.input.rows = 4;
       const noteSection = el('section', null, 'wb-reflection-note'); noteSection.id = 'wbReflectionWriting';
       noteSection.setAttribute('aria-label', '지금의 생각');
       const rememberReading = () => {
@@ -1521,7 +1521,10 @@
         if (row) global.scrollBy({ top: row.getBoundingClientRect().top - saved.top, behavior: 'instant' });
         else target.scrollIntoView({ block: 'start' });
       }); backToReading.id = 'wbReflectionReadReturn';
-      controls.append(write, plan, saveControl);
+      const useThought = discoveryIcon('내 생각 활용', 'download', () => {
+        output.scrollIntoView({ block: 'center', behavior: 'instant' }); continueWriting.focus({ preventScroll: true });
+      }); useThought.id = 'wbReflectionUse';
+      controls.append(write, plan, useThought, saveControl);
       bodyNode.append(controls, readingControls, lenses, selectedList, more);
       const prompts = details('회고 질문을 원고에 추가');
       const questions = [
@@ -1568,10 +1571,18 @@
         }
         return onWorkbenchNavigate({ workspaceId: session.workspaceId, mode: 'page', pageDraftId: draft.id });
       }); continueWriting.id = 'wbReflectionToPage';
-      exportBox.append(continueWriting, notice('직접 적은 현재 생각만 비공개 새 초안으로 복사합니다. 원문·근거·첨부는 자동으로 옮기지 않으며 회고 원본은 유지됩니다.'));
+      const output = el('section', null, 'wb-reflection-output'); output.id = 'wbReflectionOutput';
+      output.setAttribute('aria-label', '내 생각 활용');
+      continueWriting.textContent = '페이지 초안으로';
+      continueWriting.setAttribute('aria-label', '내 생각을 새 페이지 초안으로');
+      const fileAction = action('파일로 받기', () => {
+        exportBox.open = true; exportButton.focus({ preventScroll: true }); exportBox.scrollIntoView({ block: 'center', behavior: 'instant' });
+      }); fileAction.id = 'wbReflectionFileOpen';
+      const outputActions = el('div', null, 'life-actions'); outputActions.append(continueWriting, fileAction);
+      output.append(outputActions, notice('내 생각만 비공개 초안으로 옮기거나, 출처와 함께 파일로 보관합니다. 공개는 별도로 선택합니다.'));
       exportBox.append(include, notice('내 회고와 선택한 자료의 출처를 파일로 받습니다. 보기 기간과 무관하게 선택 전체를 포함하며 공개 게시하지 않습니다. 원문·구성 복원에는 자료·구성 JSON 백업을 사용하세요.'), exportButton);
       const noteHeading = el('div', null, 'wb-reflection-note-heading'); noteHeading.append(el('h3', '지금의 생각'), backToReading);
-      noteSection.append(noteHeading, notice('원문과 별도로 남기는 내 회고입니다.'), note.wrapper, prompts);
+      noteSection.append(noteHeading, notice('원문과 별도로 남기는 내 회고입니다.'), note.wrapper, output, prompts);
       const management = el('div', null, 'wb-reflection-management'); management.append(exportBox, guidance);
       bodyNode.append(noteSection, management);
       const fitNote = () => {
