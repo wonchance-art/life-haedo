@@ -696,3 +696,16 @@ Radix Dialog 공식 npm 배포 1.3.1 / MIT와 최신 유지보수 변경을 확�
 - 눌러야 iframe을 만드는 구성을 참고했다. 공식 소스는 hover/focus 시 preconnect, 기본 autoplay, 일부 환경의 별도 IFrame API 로딩을 포함한다. 해도의 외부 연결 기본 꺼짐, 재생 자동 시작 없음, 계정/화면 종료 시 해제 계약에는 **기존 CollectionMedia + native dialog를 연결하는 작은 PageMedia 어댑터**가 적합했다. 소스 복사·패키지 도입은 없다. iframe lifecycle과 제공자 변경을 유지 관리하는 비용은 남는다.
 - 공식 [YouTube player parameters](https://developers.google.com/youtube/player_parameters)의 `autoplay=0`, `playsinline=1`, 기본 JS API 비활성 계약을 확인했다. iframe은 고정된 youtube-nocookie.com 호스트와 검증한 영상 ID만 사용한다. 별도 iframe API·자동 재생·외부 SDK는 없다. `strict-origin-when-cross-origin`으로 페이지의 개인 경로/쿼리 대신 출처 origin만 전달한다. no-cookie 호스트는 무전송을 의미하지 않으므로 클릭 전 연결 안내를 유지한다.
 - 실제 사이트의 밀집 피드와 매체별 형태라는 기존 비교 방향은 유지하되, 음악 링크의 YouTube 영상을 실제 앨범 표지로 가장하지 않는다. [구현·한계·시각 근거](../design-review/profile-feed-media.md).
+
+
+## 통합 비공개 검색 — 2026-10-13 UTC
+
+공식 npm `latest` 메타데이터, 해당 버전 LICENSE, GitHub 저장소 상태와 공개 보안 권고 API를 확인했다. 새 의존성은 추가하지 않았다.
+
+| 후보 | 확인한 배포·라이선스 | 유지보수·보안 확인 | 이번 선택 |
+| --- | --- | --- | --- |
+| [MiniSearch](https://github.com/lucaong/minisearch) | [7.2.0 공식 배포](https://registry.npmjs.org/minisearch/latest), [태그 LICENSE.txt](https://github.com/lucaong/minisearch/blob/v7.2.0/LICENSE.txt), MIT | archived=false, 마지막 push 2025-09-16. 공개 저장소 security-advisories 응답 0건 | 인덱싱·접두/퍼지 검색은 유용하지만 이번 정확 문자·버전별 원문 위치 검색에 인덱스 갱신 계약을 추가할 이유가 부족해 미도입 |
+| [Fuse.js](https://github.com/krisk/Fuse) | [7.5.0 공식 배포](https://registry.npmjs.org/fuse.js/latest), [태그 LICENSE](https://github.com/krisk/Fuse/blob/v7.5.0/LICENSE), Apache-2.0 | archived=false, 마지막 push 2026-08-09. 공개 저장소 security-advisories 응답 0건 | 유사어 순위는 기본 문자 그대로 검색과 의미가 달라 미도입 |
+| 기존 `Core.searchSources` / `searchPattern` | 저장소 구현 재사용 | 기존 정확 버전·한글 공백·UTF-16 위치 검사에 신규 교차 저장소 검사를 추가 | 채택. 원문을 바꾸지 않고 저장한 페이지·컬렉션 필드와 결과 식별자만 읽기 전용으로 묶음 |
+
+권고 0건은 취약점 부재의 증명이 아니며 비공개 권고·전이 의존성을 감사한 결과도 아니다. 이번 코드는 외부 코드를 복사하거나 배포하지 않는다. 직접 유지할 범위는 저장소별 필드 투영, 종류별 제한 표시, 정확 항목 열기와 실패·계정/작업공간 변경 처리다. 검색 시 전체 로컬 자료를 읽는 방식의 대규모 성능은 미검증이다. 실제 자료에서 입력 지연이 확인되면 동일 익명 표본의 시간·메모리를 측정한 뒤 지연 실행/worker/인덱스를 비교한다. 인덱스만 추가하고 계정 삭제·변경에 남는 사본을 만들지 않는다.
