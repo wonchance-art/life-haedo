@@ -299,13 +299,13 @@
       })();
       try { await session.loading; } finally { session.loading = null; }
     }
-    async function openVersion(id, focusKey, isCurrent = () => true) {
+    async function openVersion(id, focusKey, isCurrent = () => true, locator = null) {
       const session = current, token = generation, info = sourceInfo(id);
       if (!info) throw fault('source_missing', '연결된 원문이 없습니다. 새 버전으로 대신 열지 않았습니다.');
       await flush();
-      if (showing(token, session) && isCurrent()) await openSource(info.source.id, info.version.id, { focusKey });
+      if (showing(token, session) && isCurrent()) await openSource(info.source.id, info.version.id, { focusKey, locator });
     }
-    function sourceRow(id, { body = false, remove, previewOnly = false, hideTitle = false, showLink = false, focusKey, isCurrent } = {}) {
+    function sourceRow(id, { body = false, remove, previewOnly = false, hideTitle = false, showLink = false, focusKey, isCurrent, locator = null } = {}) {
       const row = el('div', null, 'wb-source'); row.dataset.versionId = id;
       const info = sourceInfo(id);
       const head = el('div', null, 'wb-row');
@@ -314,7 +314,7 @@
       text.append(el('p', info ? sourceMeta(info) : '이 버전은 현재 공간에 없습니다. 다른 버전으로 바꾸지 않았습니다.', 'life-meta'));
       head.append(text);
       if (info && !previewOnly) {
-        const open = (focusKey ? discoveryIcon : icon)('이 원문 버전 열기', 'book', () => openVersion(id, focusKey, isCurrent));
+        const open = (focusKey ? discoveryIcon : icon)('이 원문 버전 열기', 'book', () => openVersion(id, focusKey, isCurrent, locator));
         if (focusKey) open.dataset.focusKey = focusKey;
         head.append(open);
       }
@@ -1340,8 +1340,8 @@
       guidance.append(notice('시간순으로 장면을 살핀 뒤 관계·일·배움처럼 나에게 중요한 주제로 돌아보세요. 나이와 기간은 글만으로 추정하지 않습니다. 기록이 적은 시기도 빈 삶을 뜻하지 않습니다.'));
       const pickerHost = el('div');
       const controls = el('div', null, 'life-actions wb-reflection-bar');
-      const time = action('연도별', () => { view.mode = 'time'; view.shown = 40; fill(); }); time.id = 'wbReflectionTime';
-      const theme = action('묶음별', () => { view.mode = 'theme'; view.shown = 40; fill(); }); theme.id = 'wbReflectionThemes';
+      const time = action('연도별', () => { view.mode = 'time'; view.lensesOpen = false; view.shown = 40; fill(); }); time.id = 'wbReflectionTime';
+      const theme = action('묶음별', () => { view.mode = 'theme'; view.lensesOpen = false; view.shown = 40; fill(); }); theme.id = 'wbReflectionThemes';
       controls.append(time, theme);
       const period = details('작성 연도로 좁히기');
       const from = field('시작 연도', view.from, { id: 'wbReflectionFrom' });
@@ -1369,7 +1369,7 @@
         }, { max: limits.reflectionVersions, filter: version => allowed.has(version.id) }));
       };
       const fill = () => {
-        time.setAttribute('aria-pressed', String(view.mode === 'time')); theme.setAttribute('aria-pressed', String(view.mode === 'theme'));
+        time.setAttribute('aria-pressed', String(!view.lensesOpen && view.mode === 'time')); theme.setAttribute('aria-pressed', String(!view.lensesOpen && view.mode === 'theme'));
         const infos = reflection.versionIds.map(id => sourceInfo(id)), available = infos.filter(Boolean);
         const count = label => available.filter(info => info.version.originalAuthor.relation === label).length;
         overview.replaceChildren();
@@ -1423,8 +1423,26 @@
         }
         if (!visible.length) selectedList.append(empty(reflection.versionIds.length ? '이 작성 기간에 해당하는 선택 자료가 없습니다. 기간을 해제하면 다시 볼 수 있습니다.' : '돌아볼 글을 골라 주세요. 기록이 없는 장면은 아래 회고에 직접 적어도 됩니다.'));
         more.hidden = shown >= total;
+        fillLenses();
       };
-      const readingControls = el('div', null, 'wb-reflection-controls'); readingControls.append(pickerHost, period, overview);
+      const lenses = el('div');
+      const lensToggle = action('관점으로 읽기', () => {
+        view.lensesOpen = !view.lensesOpen; fill();
+      }); lensToggle.id = 'wbReflectionLenses'; 
+      const fillLenses = () => {
+        lensToggle.setAttribute('aria-expanded', String(!!view.lensesOpen));
+        lensToggle.setAttribute('aria-pressed', String(!!view.lensesOpen));
+        plan.hidden = group.hidden = !!view.lensesOpen;
+        lensToggle.setAttribute('aria-controls', 'wbLensesHost');
+        lenses.hidden = !view.lensesOpen; selectedList.hidden = !!view.lensesOpen; overview.hidden = !!view.lensesOpen;
+        if (view.lensesOpen) {
+          more.hidden = true;
+          lenses.replaceChildren(life.ReflectionLensesUI.render({ bundle: getBundle(), workbench: session.state,
+            period: view, view: session.reflectionLensView ||= {}, sourceRow }));
+        } else lenses.replaceChildren();
+      };
+      lenses.id = 'wbLensesHost';
+      const readingControls = el('div', null, 'wb-reflection-controls'); readingControls.append(pickerHost, period, overview, lensToggle);
       const plan = action('선택한 글로 목차 구성', async () => {
         if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 목차를 구성해 주세요.');
         await flush(); if (!showing(token, session)) return;
@@ -1446,25 +1464,26 @@
       const noteSection = el('section', null, 'wb-reflection-note'); noteSection.id = 'wbReflectionWriting';
       noteSection.setAttribute('aria-label', '지금의 생각');
       const rememberReading = () => {
-        const rows = [...selectedList.querySelectorAll('.wb-source')];
+        const rows = [...(view.lensesOpen ? lenses : selectedList).querySelectorAll('.wb-source')];
         const top = controls.getBoundingClientRect().bottom;
         const row = rows.find(node => node.getBoundingClientRect().bottom > top);
         // Re-entering writing below the sources must keep the earlier reading position.
-        if (row) view.noteReturn = { versionId: row.dataset.versionId, group: row.closest('[data-reflection-group]').dataset.reflectionGroup, top: row.getBoundingClientRect().top };
+        if (row) view.noteReturn = { versionId: row.dataset.versionId, group: row.closest('[data-reflection-group]')?.dataset.reflectionGroup, lens: !!view.lensesOpen, focusKey: row.querySelector('[data-focus-key]')?.dataset.focusKey, top: row.getBoundingClientRect().top };
       };
       const write = discoveryIcon('내 회고 쓰기', 'edit', () => {
         rememberReading(); note.input.focus({ preventScroll: true }); noteSection.scrollIntoView({ block: 'start' });
       }); write.id = 'wbReflectionWrite';
       const backToReading = discoveryIcon('읽던 자료로 돌아가기', 'back', () => {
         const saved = view.noteReturn;
-        const row = [...selectedList.querySelectorAll('.wb-source')].find(node => node.dataset.versionId === saved?.versionId && node.closest('[data-reflection-group]').dataset.reflectionGroup === saved.group);
-        const target = row || selectedList;
+        const list = view.lensesOpen ? lenses : selectedList;
+        const row = [...list.querySelectorAll('.wb-source')].find(node => node.dataset.versionId === saved?.versionId && node.querySelector('[data-focus-key]')?.dataset.focusKey === saved.focusKey);
+        const target = row || list;
         target.tabIndex = -1; target.focus({ preventScroll: true });
         if (row) global.scrollBy({ top: row.getBoundingClientRect().top - saved.top, behavior: 'instant' });
         else target.scrollIntoView({ block: 'start' });
       }); backToReading.id = 'wbReflectionReadReturn';
       controls.append(write, plan, saveControl);
-      bodyNode.append(controls, readingControls, selectedList, more);
+      bodyNode.append(controls, readingControls, lenses, selectedList, more);
       const prompts = details('회고 질문을 원고에 추가');
       const questions = [
         ['시간순 돌아보기', '## 시간순 돌아보기\n\n어떤 장면과 선택이 기억나는가?\n그때의 글과 지금의 기억은 어디서 다른가?\n생각이 바뀐 계기와 아직 설명하기 어려운 부분은 무엇인가?\n'],

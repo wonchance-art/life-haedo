@@ -148,6 +148,9 @@ jobs:
       - name: Reflection and outline return flow
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/reflection-to-outline-browser.cjs
+      - name: Verify selected evidence lenses and exact source return
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reflection-lenses-browser.cjs
       - name: Verify book projects, chapter manuscripts and recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-projects-browser.cjs
@@ -241,6 +244,7 @@ jobs:
             .local/source-reimport/
             .local/reflection-reading/
             .local/reflection-to-outline/interaction/
+            .local/reflection-lenses/
             .local/book-projects/
             .local/book-insights/
             .local/book-preview/

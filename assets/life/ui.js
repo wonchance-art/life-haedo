@@ -180,7 +180,7 @@
         return arrangeRecords('activities', [...new Set(versionIds)], focusId);
       },
       openSource: (sourceId, versionId, options = {}) => navigate('source', {
-        sourceId, sourceVersionId: versionId, locator: null,
+        sourceId, sourceVersionId: versionId, locator: options.locator || null,
         returnContext: { mode: state.mode, workspaceId: state.bundle.workspaceId, scrollY: global.scrollY, focusKey: options.focusKey }
       }),
       beforeRestore: () => persistDrafts(),
