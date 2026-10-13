@@ -17,9 +17,12 @@ const errors = [], failures = [];
 let passed = 0;
 const settle = page => page.waitForFunction(() => !document.querySelector('.life-app[aria-busy="true"]'));
 async function click(page, name) {
-  if (['기록 검색','원천 기록','가져오기','시간 보기'].includes(name)) await openSection(page, 'records');
+  if (['기록 검색','원천 기록','가져오기','시간 보기'].includes(name)) {
+    await openSection(page, 'records');
+    if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'sources') { await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click(); await settle(page); }
+  }
   if (['내보내기·사본 복원', '선택 파일 목록'].includes(name)) await openManagement(page);
-  if (name === '기록 검색') { await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click(); await settle(page); return; }
+  if (name === '기록 검색') return;
   if (name === '로그아웃') await openAccount(page);
   await page.getByRole('button', { name, exact: true }).click(); await settle(page);
 }
