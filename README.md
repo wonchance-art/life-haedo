@@ -11,6 +11,8 @@
 
 [원고 중심 A안](docs/design-review/book-design-reset-integration.md): 비교 후 선택한 디자인을 실제 책 목록·집필·읽기에 적용했습니다. 원고를 앞세우고 목차·근거·관리는 펼쳐 사용합니다. 실제 앱 화면·기능 검증과 Local 인계는 연결 문서에서 확인할 수 있으며, 병합·배포와는 구분합니다.
 
+[회고에서 목차로](docs/design-review/reflection-to-outline.md): 선택한 글의 앞부분을 읽고 현재 생각을 쓰며, 읽던 자료와 목차 후보로 돌아오는 흐름을 같은 A안으로 연결했습니다. 별도 후속 브랜치이며 Local의 통합·배포를 기다립니다.
+
 [독자용 책자](docs/design-review/book-edition.md): 책 전체를 표지·목차·본문·출처 부록으로 읽고, 장을 고쳐 다시 확인한 뒤 A5/A4 HTML·PDF로 받습니다. 기존 검토용 출력은 유지하며 해석과 원문 본문은 각각 선택합니다.
 
 [저장한 책으로 돌아오기](docs/design-review/book-completion.md): 홈에서 책과 목차를 찾고 원하는 장으로 바로 들어가 수정·출력합니다. 복원 전 책·장·개정본도 확인합니다.
