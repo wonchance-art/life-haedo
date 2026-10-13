@@ -1466,7 +1466,7 @@
       const lenses = el('div');
       const lensToggle = action('관점으로 읽기', () => {
         view.lensesOpen = !view.lensesOpen; fill();
-      }); lensToggle.id = 'wbReflectionLenses'; 
+      }); lensToggle.id = 'wbReflectionLenses';
       const fillLenses = () => {
         lensToggle.setAttribute('aria-expanded', String(!!view.lensesOpen));
         lensToggle.setAttribute('aria-pressed', String(!!view.lensesOpen));
