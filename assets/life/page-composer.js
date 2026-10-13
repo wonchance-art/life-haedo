@@ -539,16 +539,22 @@
       host.append(form);
       update();
     }
-    async function mount(target) {
+    async function mount(target, { draftId = null } = {}) {
       host = target;
       const token = ++epoch;
       host.append(node("p", "초안을 불러오는 중…", "life-help"));
       try {
-        await load();
-        if (token === epoch && valid()) render();
+        if (draftId) {
+          await flush();
+          const fresh = await storage.readPageDrafts(workspaceId);
+          if (token !== epoch || !valid()) return;
+          if (!fresh.posts.some(p => p.id === draftId)) throw new Error('선택한 초안을 찾지 못했습니다. 초안 보관함에서 다시 확인해 주세요.');
+          state = fresh; active = draftId;
+        } else await load();
+        if (token === epoch && valid()) { render(); if (draftId) { const input = host?.querySelector('#ppBody'); input?.focus(); input?.setSelectionRange(0, 0); if (input) input.scrollTop = 0; } }
       } catch (e) {
         if (token === epoch) {
-          host.replaceChildren(button("다시 불러오기", () => mount(target)));
+          host.replaceChildren(button("다시 불러오기", () => mount(target, { draftId })));
           const p = node("p", e.message, "pp-status");
           p.setAttribute("role", "alert");
           host.append(p);

@@ -1060,7 +1060,8 @@
           }
           finally { session.saving = null; controls.forEach(([node,disabled]) => { if(node.isConnected)node.disabled=disabled; }); updateStatus(session); }
         } });
-      session.composer.mount(composerHost); viewCleanups.push(() => session.composer.detach());
+      const draftId = session.pageDraftId; session.pageDraftId = null;
+      session.composer.mount(composerHost, { draftId }); viewCleanups.push(() => session.composer.detach());
 
       const pageSettings = details('제목·소개·표시 설정'); pageSettings.classList.add('wb-page-settings');
       const pageField = (control, key) => {
@@ -1546,6 +1547,27 @@
         document.body.append(link); link.click(); link.remove();
         global.setTimeout(() => { URL.revokeObjectURL(url); urls.delete(url); }, 30000);
       }); exportButton.id = 'wbReflectionExport';
+      const continueWriting = action('내 생각을 새 페이지 초안으로', async () => {
+        if (session.composing.size) throw fault('input_in_progress', '입력을 마친 뒤 초안을 만들어 주세요.');
+        await flush(); if (!showing(token, session)) return;
+        const body = reflection.note;
+        if (!body.trim()) throw fault('empty_note', '현재 생각을 먼저 적어 주세요. 선택한 원문은 자동 복사하지 않습니다.');
+        const drafts = await storage.readPageDrafts(session.workspaceId);
+        if (!showing(token, session)) return;
+        const prior = session.reflectionDraftCopy;
+        let draft = prior?.body === body && drafts.posts.find(p => p.id === prior.id && p.status === 'draft' && p.body === body);
+        if (!draft) {
+          draft = life.PagePosts.draft((session.state.page.posts || []).concat(drafts.posts), core.id(), new Date().toISOString());
+          draft.body = body;
+          life.PagePosts.validate(drafts.posts.concat(draft));
+          drafts.posts.push(draft);
+          await storage.savePageDrafts(session.workspaceId, drafts, drafts.revision);
+          if (!showing(token, session)) return;
+          session.reflectionDraftCopy = { id: draft.id, body };
+        }
+        return onWorkbenchNavigate({ workspaceId: session.workspaceId, mode: 'page', pageDraftId: draft.id });
+      }); continueWriting.id = 'wbReflectionToPage';
+      exportBox.append(continueWriting, notice('직접 적은 현재 생각만 비공개 새 초안으로 복사합니다. 원문·근거·첨부는 자동으로 옮기지 않으며 회고 원본은 유지됩니다.'));
       exportBox.append(include, notice('내 회고와 선택한 자료의 출처를 파일로 받습니다. 보기 기간과 무관하게 선택 전체를 포함하며 공개 게시하지 않습니다. 원문·구성 복원에는 자료·구성 JSON 백업을 사용하세요.'), exportButton);
       const noteHeading = el('div', null, 'wb-reflection-note-heading'); noteHeading.append(el('h3', '지금의 생각'), backToReading);
       noteSection.append(noteHeading, notice('원문과 별도로 남기는 내 회고입니다.'), note.wrapper, prompts);
@@ -2636,6 +2658,7 @@
         view.seedVersionId = valid ? context.seedVersionId : null; view.chooserOpen = !valid;
         view.contextError = valid ? '' : '기준 기록의 작업공간이나 버전을 확인하지 못했습니다. 현재 공간에서 기록을 다시 골라 주세요.';
       }
+      if (mode === 'page' && typeof options.pageDraftId === 'string') { current.pageDraftId = options.pageDraftId; preview = false; }
       if (mode === 'reflection' && options.planOpen) current.bookPlanOpen = true;
       incoming = null;
       if (options.selection && ['activities', 'page', 'reflection'].includes(mode)) {

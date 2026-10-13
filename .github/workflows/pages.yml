@@ -102,6 +102,10 @@ jobs:
       - name: Verify page composition, attachments and draft recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/page-composer-browser.cjs
+      - name: Verify reflection draft copy conflicts and account boundaries
+        run: node tests/reflection-page-browser.cjs
+      - name: Verify the integrated input and output cycle
+        run: node tests/two-cycle-browser.cjs
       - name: Verify profile feed media privacy and recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/profile-feed-media-browser.cjs
@@ -248,6 +252,8 @@ jobs:
             .local/collection-picker/
             .local/page-composer/
             .local/profile-feed-media/
+            .local/reflection-page/
+            .local/two-cycle/
             .local/core-experience/
             .local/unified-home/
             .local/timeline-recovery/after/

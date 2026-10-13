@@ -172,9 +172,9 @@
       },
       onSelectionCancel: returnFromArrange,
       onChapterImport: beginChapterImport,
-      onWorkbenchNavigate: ({ workspaceId, mode, planOpen = false }) => {
-        if (disposed || state.bundle?.workspaceId !== workspaceId || !['reflection', 'books'].includes(mode)) return;
-        return navigate(mode, { planOpen });
+      onWorkbenchNavigate: ({ workspaceId, mode, planOpen = false, pageDraftId = null }) => {
+        if (disposed || state.bundle?.workspaceId !== workspaceId || !['reflection', 'books', 'page'].includes(mode)) return;
+        return navigate(mode, { planOpen, pageDraftId });
       },
       onArrange: ({ workspaceId, versionIds, focusId }) => {
         if (disposed || state.bundle?.workspaceId !== workspaceId || !['discover', 'related', 'reflection'].includes(state.mode)) return;
@@ -864,9 +864,9 @@
     async function navigate(mode, options) {
       const token = ++navigationGeneration;
       const from = state.mode;
-      const trigger = navigationTrigger || Array.from(main.querySelectorAll('[data-home-destination]')).find(el => el.dataset.homeDestination === mode) || document.activeElement;
+      const trigger = (from === 'reflection' && mode === 'page' && options?.pageDraftId ? main.querySelector('#wbReflectionToPage') : null) || navigationTrigger || Array.from(main.querySelectorAll('[data-home-destination]')).find(el => el.dataset.homeDestination === mode) || document.activeElement;
       const control = trigger?.matches?.('button,a,summary,input') ? trigger : null;
-      const origin = parentViews.has(from) ? { mode: from, workspaceId: state.bundle?.workspaceId, scrollY: global.scrollY,
+      const origin = (parentViews.has(from) || from === 'reflection' && mode === 'page' && options?.pageDraftId) ? { mode: from, workspaceId: state.bundle?.workspaceId, scrollY: global.scrollY,
         focusKey: control?.dataset.focusKey, focusId: control?.id,
         focusName: control?.getAttribute('aria-label') || control?.textContent, focusTag: control?.tagName } : null;
       const returningFromReader = from === 'source' && state.returnContext?.mode === mode;
@@ -888,7 +888,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { selection, groupId, pagePreview, discovery, writing, reimport, book, bookList, chapterImport: chapterImportOptions, ...viewOptions } = options || {};
+      const { selection, groupId, pagePreview, discovery, writing, reimport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, ...viewOptions } = options || {};
       if (reimport) {
         if (mode !== 'import' || state.bundle.workspaceId !== reimport.workspaceId) return;
         const source = sourceFor(reimport.sourceId);
@@ -1075,6 +1075,7 @@
         const target = (origin.focusKey && controls.find(el => el.dataset.focusKey === origin.focusKey)) ||
           (origin.focusId && controls.find(el => el.id === origin.focusId)) || controls.find(el =>
           el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeSearch,h1,h2') || toolbar.querySelector('h1');
+        for (let parent = target?.parentElement; parent && parent !== main; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
         target?.focus({ preventScroll: true });
         global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
       });
@@ -1098,6 +1099,7 @@
       const headingGroup = node('div', null, 'haedo-heading-title');
       if (subviewTitles[state.mode]) heading.textContent = subviewTitles[state.mode];
       else if (state.mode === 'books') heading.textContent = '내 책';
+      else if (state.mode === 'reflection') heading.textContent = '회고';
       else if (state.mode === 'related') heading.textContent = '관련 기록';
       else if (section === 'records') {
         const records = button('기록', guarded(() => navigate('sources')), 'life-title-button');
@@ -1105,7 +1107,7 @@
         heading.append(records);
       } else heading.textContent = section === 'home' ? '홈' : section === 'tools' ? '도구' : '관리';
       if (subviewTitles[state.mode]) {
-        const labels = { home: '홈으로 돌아가기', sources: '기록으로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '관리로 돌아가기' };
+        const labels = { reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '기록으로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '관리로 돌아가기' };
         const back = iconButton(labels[subviewOrigin().mode] || labels.sources, 'back', guarded(returnFromSubview));
         back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';
         back.dataset.subviewReturn = 'true';

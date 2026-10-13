@@ -78,4 +78,4 @@ async function main(){
   assert.deepEqual(report.errors,[]);assert(report.consoleErrors.every(t=>/429|ERR_FAILED/.test(t)),JSON.stringify(report.consoleErrors));
  }finally{if(release)release();await browser.close();await fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));}
 }
-main().catch(e=>{console.error(e);process.exitCode=1;});
+main().catch(e=>{console.error(e);if(process.env.GITHUB_ACTIONS)console.error('::error title=Collection picker::'+String(e.stack||e).replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A'));process.exitCode=1;});
