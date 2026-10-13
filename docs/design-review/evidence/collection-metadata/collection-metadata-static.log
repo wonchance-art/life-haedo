@@ -1,0 +1,2 @@
+PASS: 18 HTML pages, 62 JavaScript blocks/files, 283 local resource references, PWA manifest and shell.
+Browser interactions, remote resources and cloud sync need separate verification.

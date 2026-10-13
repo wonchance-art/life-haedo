@@ -660,3 +660,39 @@ Paged.js/Vivliostyle 직접 도입은 패키지 크기뿐 아니라 **조판 스
 채택한 것은 사용자 묶음과 인용을 분리하고 원문으로 돌아가는 방식이다. 이번 관심은 실제 사용자 묶음, 질문은 물음표 구절의 기계적 추출, 변화는 사용자가 고른 두 글의 비교다. 의미 분석·자동 군집·외부 AI가 아니므로 Python 분석 서버나 주석 서비스가 필요하지 않다. `Reflection.chronology`, 정확 버전 sourceRow, 기존 원문 선택 복원, 공용 UI 토큰을 재사용한다. 새 모듈은 이 읽기 계산과 표시만 담당하며 저장 스키마·SQL·공개 API를 추가하지 않는다.
 
 [구현·한계·Local 통합](../design-review/reflection-lenses.md). 참고 출처: [Taguette PyPI](https://pypi.org/project/taguette/), [Taguette 공식 저장소](https://gitlab.com/remram44/taguette), [Hypothesis client](https://github.com/hypothesis/client), [npm 공식 메타데이터](https://registry.npmjs.org/hypothesis/latest).
+
+## 2026-10-12 · 컬렉션 실제 저장
+
+- 기존 동봉 [idb 8.0.3](https://github.com/jakearchibald/idb/tree/v8.0.3), ISC를 재사용한다. [npm 공식 latest](https://registry.npmjs.org/idb/latest)는 확인 시 8.0.4/ISC. GitHub 저장소는 archived=false, pushed_at=2026-10-06이며 공개 repository security-advisories 응답은 빈 목록이었다. 공개 알림 부재를 보안 보증으로 해석하지 않는다. GitHub latest-release API는 404라 배포 확인에는 npm을 사용했다.
+- [8.0.3…8.0.4 공식 비교](https://github.com/jakearchibald/idb/compare/v8.0.3...v8.0.4)는 NaN 읽기 수정과 바이트 절약이다. 이번 컬렉션은 JSON 가능한 문자열·유한 revision 등만 허용하며 NaN을 보관하지 않는다. 공통 저장소 라이브러리 교체를 이번 기능과 섞지 않고 기존 검증된 배포본을 유지한다.
+- 새 DB 라이브러리보다 기존 계정 소유권·원자 트랜잭션·BroadcastChannel 계약 재사용이 적합하다. 새 의존성과 DB 버전/운영 SQL은 없다. 자체 구현은 해도 컬렉션의 유형 검증·충돌/백업 의미·UI에 한정한다. [설계와 유지 범위](../design-review/collection-library.md).
+
+## 2026-10-12 — 컬렉션 공개 주소 메타데이터
+
+- GitHub 공식 [CORS 문서](https://docs.github.com/en/rest/using-the-rest-api/using-cors-and-jsonp-to-make-cross-origin-requests)는 [공식 docs 저장소 원문](https://github.com/github/docs/blob/main/content/rest/using-the-rest-api/using-cors-and-jsonp-to-make-cross-origin-requests.md)으로 확인했다(문서 사이트 직접 접속은 환경 차단). 공개 REST `/repos/{owner}/{repo}`를 자격 증명 없이 사용한다. 실제 API HTTP 200/ACAO `*`와 Linux Chromium 앱 어댑터 성공을 확인했다. 비인증 rate limit/403/429/404, 이름 변경 리디렉션을 수동 입력으로 복구한다. 지속 캐시나 자동 재조회는 없다.
+- [oEmbed 레지스트리 YouTube 항목](https://github.com/iamcal/oembed/blob/master/providers/youtube.yml)은 공식 배포 소스의 `https://www.youtube.com/oembed` 등록을 확인했다. 레지스트리 저장소는 MIT, archived=false, 당시 pushed_at=2026-10-10. 라이브러리 런타임을 배포하지 않는 데이터/규격 참고다. 등록된 playlist 전체를 지원한다고 표시하지 않고 단일 영상만 정규화한다. 환경에서 YouTube HTTP 연결은 프록시 403으로 실패했으므로 CORS/실서비스 성공은 Local 확인으로 남긴다. 원격 HTML/iframe/이미지는 사용하지 않는다.
+- 범용 Open Graph/메타데이터 스크래퍼는 임의 사이트 서버 조회·비밀 키·프록시·추가 의존성과 유지보수가 필요하다. 현재 정적 Pages의 두 제공자 읽기에 맞지 않아 도입하지 않는다. 기존 DOM/저장 모델과 네이티브 fetch/URL/AbortController를 재사용한 약 60줄의 어댑터를 선택했다. 외부 코드를 복사하거나 새 패키지를 설치하지 않았으므로 새 런타임 버전/라이선스 등록은 없다.
+- 검토를 바꿀 조건: 대상 사이트 확대, 인증 필요 API, 법적 근거를 갖춘 이미지 표시/캐시 요구. 그때 공식 배포/라이선스/유지보수/보안 권고와 제공자 약관을 다시 비교한다. 이번 조회를 작품 이미지 재사용 권한이나 아티스트 확정 근거로 삼지 않는다.
+
+## 2026-10-13 — 출처에서 연결하는 책 표지·영상 썸네일
+
+- [Open Library](https://github.com/internetarchive/openlibrary)의 공식 master `4df22ff68db5d6544b865131dc449c8ef6a59351`과 커버 서버 [ASGI/CORS](https://github.com/internetarchive/openlibrary/blob/4df22ff68db5d6544b865131dc449c8ef6a59351/openlibrary/coverstore/asgi_app.py), [조회 구현](https://github.com/internetarchive/openlibrary/blob/4df22ff68db5d6544b865131dc449c8ef6a59351/openlibrary/coverstore/code.py), [실서비스 검사](https://github.com/internetarchive/openlibrary/blob/4df22ff68db5d6544b865131dc449c8ef6a59351/tests/integration/test_coverstore_prod.py), [실제 책 표지 템플릿](https://github.com/internetarchive/openlibrary/blob/4df22ff68db5d6544b865131dc449c8ef6a59351/openlibrary/templates/covers/book_cover.html)을 참고했다. repo archived=false, pushed_at=2026-10-12T20:40:53Z, 코드 라이선스 AGPL-3.0. 서버 서비스의 공식 현재 소스를 API 근거로 확인했으며 SDK 버전을 설치한 것이 아니다. 문서 사이트/실제 이미지에는 환경 403으로 접근하지 못했다.
+- 커버 API는 ISBN/edition과 M 크기, `default=false`를 사용한다. 서버의 `Access-Control-Allow-Origin:*`, credentials=false와 이미지/404 분기를 확인했다. 배포된 서버가 그 소스와 동일한지는 실 HTTP로 확인하지 못했으므로 라이브 CORS 성공으로 보고하지 않는다. 원본 비율 유지와 없음 상태를 채택하고 서버 코드를 복사하지 않았다. 코드 라이선스를 도서 표지 이미지의 재배포 허가로 해석하지 않는다.
+- 공개 보안 권고 API에서 5건을 확인했다: GHSA-f93m-7x4r-g296(SQL injection), GHSA-ghv9-wx77-wg5v(stored XSS), GHSA-mcjc-2c93-3r8c·GHSA-22xr-xvw5-m2r9(login redirect), GHSA-jcxx-2953-qvvw(cover upload SSRF). 이 서버를 설치하거나 로그인·업로드 endpoint를 호출하지 않는다. 고정 커버 GET과 검증된 식별자만 사용하며 제공자 보안 감사를 대신했다고 주장하지 않는다.
+- YouTube는 앞 절의 oEmbed를 재사용해 응답이 제공한 동일 영상의 `i.ytimg.com/vi/<id>/*.jpg`만 허용한다. 임의 `thumbnail_url`, 다른 영상, 쿼리·HTML/iframe은 사용하지 않는다. 썸네일은 영상 식별을 위한 비공개 표시이며 음악 앨범 표지나 원저작자 확정 근거로 쓰지 않는다. 실서비스 조회·이미지는 여전히 Local 확인 사항이다.
+- 선택: 네이티브 Image/IntersectionObserver/AbortController + 기존 컬렉션 URL. 이미지 라이브러리/임의 URL 프록시/이미지 파일 저장은 필요하지 않아 추가하지 않았다. 서비스워커·백업 형식을 늘리지 않고 이미지 캐시/미리보기만 화면 수명에 둔다. 기존 모듈 재사용으로 컬렉션 저장 v1/backup v1을 유지한다. 향후 이미지 편집·실제 오프라인 표지·공개 재사용·음악/영화/작품 제공자가 필요해질 때 라이선스·인증·유지 비용을 다시 비교한다.
+
+### 2026-10-12 · 컬렉션 선택창
+
+Radix Dialog 공식 npm 배포 1.3.1 / MIT와 최신 유지보수 변경을 확인했다. React 기반 도입 비용 때문에 설치하지 않고 native dialog·기존 조회/저장 모듈을 재사용한다. [비교 근거·출처·검증](../design-review/collection-picker.md)을 참고한다.
+
+### 2026-10-12 — 내 페이지 작성과 구조화된 첨부
+
+공식 npm `@radix-ui/react-dialog` 1.3.1/MIT와 공식 저장소 Dialog 변경 `925c88b773bb32aecf1b52a296a1a21ba7a720b9`를 다시 확인했다. 선택창은 선행 native dialog를 재사용하고 plain textarea·공통 아이콘·기존 IndexedDB CAS로 작성→첨부→피드를 구현했다. React/새 편집기/HTML 파서 도입은 필요한 행동에 비해 런타임·빌드·마이그레이션 비용이 커 채택하지 않았다. 새 앱 의존성은 없다. 자세한 [출처·선택 이유·검증](../design-review/page-composer.md)을 따른다.
+
+## 2026-10-12 · 페이지 피드의 표지·영상
+
+- 공식 [lite-youtube-embed v0.3.4](https://github.com/paulirish/lite-youtube-embed/releases/tag/v0.3.4), 2025-11-10 배포를 GitHub releases API로 확인했다. [LICENSE](https://github.com/paulirish/lite-youtube-embed/blob/v0.3.4/LICENSE)의 실제 본문은 **Apache-2.0**이며 API의 `NOASSERTION`을 라이선스 부재로 해석하지 않는다. 최근 src 변경 `46977648f019187075c463dfad63e1b033a7d52c`(2025-11-10) 확인. 공개 security-advisories API 응답은 빈 배열이었다. 이것이 알려지지 않은 취약점 부재를 증명하지는 않는다.
+- 눌러야 iframe을 만드는 구성을 참고했다. 공식 소스는 hover/focus 시 preconnect, 기본 autoplay, 일부 환경의 별도 IFrame API 로딩을 포함한다. 해도의 외부 연결 기본 꺼짐, 재생 자동 시작 없음, 계정/화면 종료 시 해제 계약에는 **기존 CollectionMedia + native dialog를 연결하는 작은 PageMedia 어댑터**가 적합했다. 소스 복사·패키지 도입은 없다. iframe lifecycle과 제공자 변경을 유지 관리하는 비용은 남는다.
+- 공식 [YouTube player parameters](https://developers.google.com/youtube/player_parameters)의 `autoplay=0`, `playsinline=1`, 기본 JS API 비활성 계약을 확인했다. iframe은 고정된 youtube-nocookie.com 호스트와 검증한 영상 ID만 사용한다. 별도 iframe API·자동 재생·외부 SDK는 없다. `strict-origin-when-cross-origin`으로 페이지의 개인 경로/쿼리 대신 출처 origin만 전달한다. no-cookie 호스트는 무전송을 의미하지 않으므로 클릭 전 연결 안내를 유지한다.
+- 실제 사이트의 밀집 피드와 매체별 형태라는 기존 비교 방향은 유지하되, 음악 링크의 YouTube 영상을 실제 앨범 표지로 가장하지 않는다. [구현·한계·시각 근거](../design-review/profile-feed-media.md).

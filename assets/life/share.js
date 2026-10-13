@@ -61,9 +61,10 @@
     list(snapshot.entries, LIMITS.entries);
     let total = 0;
     for (const entry of snapshot.entries) {
-      fields(entry, ['title', 'pinned', 'note', 'parts']); text(entry.title, LIMITS.title, true);
+      fields(entry, ['title', 'pinned', 'note', 'parts', 'attachments'], ['title', 'pinned', 'note', 'parts']);
+      if (Object.hasOwn(entry, 'attachments')) { postsModel().validateAttachments(entry.attachments); assert(Array.isArray(entry.parts) && entry.parts.length === 0); } text(entry.title, LIMITS.title, true);
       assert(typeof entry.pinned === 'boolean'); nullableText(entry.note, LIMITS.text); list(entry.parts, LIMITS.parts);
-      total += entry.parts.length; assert(total <= LIMITS.totalParts, '공개할 원문은 전체 200개까지 선택해 주세요.');
+      total += entry.parts.length + (entry.attachments?.length || 0); assert(total <= LIMITS.totalParts, '공개할 원문은 전체 200개까지 선택해 주세요.');
       for (const part of entry.parts) {
         fields(part, ['title', 'origin', 'url', 'author', 'originalCreatedAt', 'coverage', 'text', 'textKind']);
         text(part.title, LIMITS.title, true); assert(ORIGINS.includes(part.origin));
@@ -79,6 +80,7 @@
     }
     bytes(snapshot); return true;
   }
+  function postsModel() { return root.HaedoLife?.PagePosts || (typeof require === 'function' && require('./page-posts.js')); }
   function models() {
     const core = root.HaedoLife?.Core || (typeof require === 'function' ? require('./core.js') : null);
     const workbench = root.HaedoLife?.Workbench || (typeof require === 'function' ? require('./workbench.js') : null);
@@ -130,6 +132,7 @@
       }));
     for (const id of [...selected, ...quotes.keys()]) assert(rows.get(id)?.canIncludeBody,
       '지금 표시할 수 있는 본문만 선택해 주세요. 숨긴 항목이나 링크만 보관한 원문은 게시하지 않습니다.');
+    if (state.page.posts) entries.unshift(...postsModel().publicEntries(state.page.posts));
     const snapshot = { format: 'life-share-v1', title: state.page.title,
       intro: state.page.showIntro && state.page.intro ? state.page.intro : null, entries };
     validate(snapshot);

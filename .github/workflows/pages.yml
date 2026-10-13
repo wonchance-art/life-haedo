@@ -28,7 +28,9 @@ jobs:
       - run: npm test
   browser:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Run 38261965693 reached this limit after successful collection checks.
+    # Keep all regression steps; allow the remaining book/browser suites to finish.
+    timeout-minutes: 45
     permissions:
       contents: read
     env:
@@ -88,6 +90,24 @@ jobs:
       - name: Verify the core experience across screen sizes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/core-experience-browser.cjs
+      - name: Verify private collection storage and recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/collection-library-browser.cjs
+      - name: Verify collection metadata review and privacy
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/collection-metadata-browser.cjs
+      - name: Verify collection selection and note flow
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/collection-picker-browser.cjs
+      - name: Verify page composition, attachments and draft recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/page-composer-browser.cjs
+      - name: Verify profile feed media privacy and recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/profile-feed-media-browser.cjs
+      - name: Verify opt-in collection cover rendering
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/collection-media-browser.cjs
       - name: Verify composition transactions and recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/composition-storage-browser.cjs
@@ -222,6 +242,12 @@ jobs:
         with:
           name: browser-checks-${{ github.run_attempt }}
           path: |
+            .local/collection-library/
+            .local/collection-metadata/
+            .local/collection-media/
+            .local/collection-picker/
+            .local/page-composer/
+            .local/profile-feed-media/
             .local/core-experience/
             .local/unified-home/
             .local/timeline-recovery/after/

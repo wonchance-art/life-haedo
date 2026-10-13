@@ -1,0 +1,9 @@
+PASS ISBN input changes only source after explicit action and saves using v1 storage
+PASS Default rendering makes no image requests; mixed fixture preserves unsupported kinds
+PASS Opt-in shows aspect-preserving covers with source labels, no referral or data mutation
+PASS Opt-out cancels pending images and ignores late callbacks without changing saved data
+PASS Missing and tiny provider images fall back to title; detail retains an explicit source link
+PASS Editor preview is explicit; changing source clears stale image without modifying memo
+PASS Navigation, reload and workspace changes reset opt-in; backup restores source not image bytes
+PASS Offscreen images stay unloaded; bounded timeout falls back and clears the pending request
+PASS Touch browser can open a book, show its cover and turn it off

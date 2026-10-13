@@ -94,6 +94,11 @@
       if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '활동·페이지 구성 모듈을 불러오지 못했습니다.');
       return value;
     };
+    const collection = () => {
+      const value = options.collection || root.HaedoLife?.Collection;
+      if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '컬렉션 모듈을 불러오지 못했습니다.');
+      return value;
+    };
     function notify(event) {
       if (disposed) return;
       const callbacks = event.type === 'error'
@@ -147,6 +152,9 @@
           if (data?.sender !== sender && data?.type === 'changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
             notify({ type: 'changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'collection_changed' && typeof data.workspaceId === 'string' && Number.isSafeInteger(data.revision)) {
+            notify({ type: 'collection_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
           if (data?.sender !== sender && data?.type === 'workbench_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
@@ -500,6 +508,95 @@
       return writeReadingPosition(workspaceId, readingPositionInput(input), baseRevision);
     }
     async function clearReadingPosition(workspaceId, baseRevision) { return writeReadingPosition(workspaceId, null, baseRevision); }
+    // Independent local metadata: does not alter source/workbench revisions or sync payloads.
+    function collectionScope(workspaceId) {
+      scopeGuard();
+      if (!account) throw fault('auth_scope_required', '로그인한 계정에서 컬렉션을 열어 주세요.');
+      requireId(workspaceId, '작업공간');
+    }
+    async function collectionValue(meta, workspaceId) {
+      const row = await meta.get(`collection:${workspaceId}`);
+      const value = row === undefined ? collection().empty(workspaceId) : row.value;
+      collection().validate(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '컬렉션의 작업공간을 확인해 주세요.');
+      return value;
+    }
+    async function readCollection(workspaceId) {
+      collectionScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, tx.objectStore('meta'));
+        return clone(await collectionValue(tx.objectStore('meta'), workspaceId));
+      });
+    }
+    async function saveCollection(workspaceId, input, baseRevision) {
+      collectionScope(workspaceId); requireRevision(baseRevision, 'baseRevision');
+      collection().validate(input);
+      const state = clone(input);
+      if (state.workspaceId !== workspaceId) throw fault('workspace_mismatch', '컬렉션의 작업공간이 다릅니다.');
+      if (state.revision !== baseRevision) throw fault('collection_conflict', '컬렉션 저장 기준이 바뀌었습니다. 입력을 보존했습니다.');
+      const saved = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await collectionValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) throw fault('collection_conflict', '다른 탭에서 컬렉션을 수정했습니다. 입력을 보존하고 최신 내용과 비교해 주세요.');
+        state.revision = baseRevision + 1;
+        collection().validate(state);
+        await meta.put({ key: `collection:${workspaceId}`, value: state });
+        return clone(state);
+      });
+      const event = { type: 'collection_changed', workspaceId, revision: saved.revision };
+      notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Saving succeeded; reload remains available. */ }
+      return saved;
+    }
+    // Page composer drafts stay local, outside composition sync and public copies.
+    const pagePosts = () => root.HaedoLife?.PagePosts || (typeof require === 'function' && require('./page-posts.js'));
+    function validatePageDrafts(value) {
+      if (!plain(value) || Object.keys(value).length !== 2 || !Object.hasOwn(value, 'revision') || !Object.hasOwn(value, 'posts')) throw fault('invalid_page_post', '초안 형식을 확인해 주세요.');
+      requireRevision(value.revision, 'revision'); pagePosts().validate(value.posts);
+      if (value.posts.some(post => post.status !== 'draft') || new TextEncoder().encode(JSON.stringify(value)).length > 2097152) throw fault('invalid_page_post', '초안은 2 MiB까지 보관할 수 있습니다.');
+    }
+    async function pageDraftsValue(meta, workspaceId) {
+      const row = await meta.get(`page-drafts:${workspaceId}`);
+      const value = row === undefined ? { revision: 0, posts: [] } : row.value;
+      validatePageDrafts(value); return value;
+    }
+    async function readPageDrafts(workspaceId) {
+      collectionScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await pageDraftsValue(meta, workspaceId));
+      });
+    }
+    async function savePageDrafts(workspaceId, input, baseRevision) {
+      collectionScope(workspaceId); requireRevision(baseRevision, 'baseRevision'); validatePageDrafts(input);
+      const value = clone(input);
+      if (value.revision !== baseRevision) throw fault('page_draft_conflict', '초안 저장 기준이 바뀌었습니다.');
+      return transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await pageDraftsValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) throw fault('page_draft_conflict', '다른 탭에서 초안이 바뀌었습니다. 입력을 파일로 보관한 뒤 다시 열어 주세요.');
+        value.revision++; validatePageDrafts(value); await meta.put({ key: `page-drafts:${workspaceId}`, value }); return clone(value);
+      });
+    }
+    async function savePagePost(workspaceId, draftId, draftRevision, baseRevision, options = {}) {
+      collectionScope(workspaceId); requireRevision(draftRevision, 'draftRevision'); requireRevision(baseRevision, 'baseRevision');
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await workbenchValue(meta, workspaceId), drafts = await pageDraftsValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) throw fault('workbench_conflict', '페이지가 바뀌었습니다. 초안을 보존했으니 새 저장본을 확인해 주세요.');
+        if (drafts.revision !== draftRevision) throw fault('page_draft_conflict', '다른 탭에서 초안이 바뀌었습니다. 입력을 보존했습니다.');
+        const draft = drafts.posts.find(post => post.id === draftId);
+        const finished = pagePosts().finish((previous.page.posts || []).concat(draft || []), draftId, new Date().toISOString(), options);
+        const state = clone(previous); state.page.posts = finished.posts; state.revision++; workbench().validate(state);
+        const composition = await readCompositionState(meta, workspaceId, previous);
+        drafts.posts = drafts.posts.filter(post => post.id !== draftId); drafts.revision++; validatePageDrafts(drafts);
+        await meta.put({ key: `workbench:${workspaceId}`, value: state });
+        await meta.put({ key: `page-drafts:${workspaceId}`, value: drafts });
+        if (composition) { composition.error = null; composition.status = compositionStatus(composition, state); await writeCompositionState(meta, composition); }
+        return { workbench: clone(state), drafts: clone(drafts), id: finished.id };
+      });
+      workbenchChanged(result.workbench); return result;
+    }
     async function workbenchValue(meta, workspaceId) {
       const row = await meta.get(`workbench:${workspaceId}`);
       const state = row === undefined ? workbench().empty(workspaceId) : row.value;
@@ -1688,6 +1785,7 @@
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, read, createWorkspace, installWorkspace, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
+      readCollection, saveCollection, readPageDrafts, savePageDrafts, savePagePost,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       commitLocal, saveStage, getStage, listStages, deleteStage, subscribe,
       getSyncState, bindSync, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,

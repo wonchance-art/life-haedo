@@ -86,6 +86,7 @@
       'dependency_unavailable', '자료 모듈을 불러오지 못했습니다.');
     return value;
   }
+  function postsModel() { return root.HaedoLife?.PagePosts || (typeof require === 'function' && require('./page-posts.js')); }
   function empty(workspaceId) {
     identifier(workspaceId);
     return { format: 'life-workbench-v1', workspaceId, revision: 0, groups: [],
@@ -103,7 +104,8 @@
       fields(group, ['id', 'title', 'versionIds']); unique(group.id, ids); text(group.title, LIMITS.title, false);
       versionList(group.versionIds, LIMITS.groupVersions);
     }
-    fields(state.page, ['title', 'intro', 'showIntro', 'showRecent', 'entries']);
+    fields(state.page, ['title', 'intro', 'showIntro', 'showRecent', 'entries'], ['posts']);
+    if (Object.hasOwn(state.page, 'posts')) { postsModel().validate(state.page.posts, ids); assert(state.page.posts.every(post => post.status === 'saved'), 'invalid_workbench', '작성 중인 초안은 로컬 초안 보관함에 저장해 주세요.'); }
     text(state.page.title, LIMITS.title, false); text(state.page.intro, LIMITS.text);
     bool(state.page.showIntro); bool(state.page.showRecent); list(state.page.entries, LIMITS.entries);
     for (const entry of state.page.entries) {
@@ -189,7 +191,7 @@
     const excludedPairs = workbench.discovery?.excludedPairs || [];
     const sourceReferences = excludedPairs.flatMap(pair => [pair.seedSourceId, pair.candidateSourceId]);
     for (const value of referenced.concat(sourceReferences)) used.add(value);
-    for (const item of workbench.groups.concat(workbench.page.entries)) used.add(item.id);
+    for (const item of workbench.groups.concat(workbench.page.entries, workbench.page.posts || [])) { used.add(item.id); if (item.replaces) used.add(item.replaces); }
     for (const book of workbench.books || []) {
       used.add(book.id);
       for (const edition of book.editions || []) used.add(edition.id);
@@ -209,6 +211,7 @@
       entry.id = freshId();
       for (const part of entry.parts) part.versionId = versions.get(part.versionId);
     }
+    if (workbench.page.posts) workbench.page.posts = postsModel().remap(workbench.page.posts, freshId);
     workbench.reflection.versionIds = workbench.reflection.versionIds.map(value => versions.get(value));
     for (const book of workbench.books || []) {
       book.id = freshId();

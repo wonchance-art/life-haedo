@@ -1,0 +1,22 @@
+/* Isolated PostgreSQL-WASM semantics; no production SQL or personal data. */
+'use strict';const assert=require('node:assert/strict'),fs=require('node:fs');
+const {PGlite}=require(process.env.PGLITE_MODULE_PATH||'@electric-sql/pglite');
+const W=require('../assets/life/workbench.js'),P=require('../assets/life/page-posts.js'),S=require('../assets/life/share.js');
+(async()=>{const db=new PGlite();let count=0;try{
+await db.exec("create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;grant usage on schema auth to anon,authenticated;");
+for(const file of fs.readdirSync('supabase/migrations').sort().filter(f=>!f.includes('platform_accounts')))await db.exec(fs.readFileSync('supabase/migrations/'+file,'utf8'));
+const state=W.empty('test_workspace'),d=P.draft([],'post','2026-10-12T01:00:00.000Z');d.body='비 오는 저녁\n생각을 정리한다.🌱';d.visibility='page';d.attachments=[P.attachment({type:'music',title:'걷는 마음',creator:'익명 음악가',url:'https://example.org/music'})];state.page.posts=P.finish([d],d.id,d.createdAt).posts;
+async function parity(name,value,fn,validate,expected){let js=true;try{validate(value);}catch(_){js=false;}const sql=(await db.query('select public.'+fn+'($1::jsonb) as ok',[JSON.stringify(value)])).rows[0].ok;assert.equal(js,expected,name+' JS');assert.equal(sql,expected,name+' SQL');count++;console.log('PASS '+name);}
+const comp=(name,value,expected)=>parity(name,value,'life_composition_valid',W.validate,expected);
+await comp('legacy composition without posts',W.empty('test_workspace'),true);await comp('saved posts with detached attachments',state,true);
+for(const [name,edit]of [
+ ['local draft prohibited',s=>s.page.posts[0].status='draft'],['private attachment note rejected',s=>s.page.posts[0].attachments[0].note='private'],['credential URL rejected',s=>s.page.posts[0].attachments[0].url='https://u:p@example.org'],['bad date rejected',s=>s.page.posts[0].updatedAt='2026-02-30T01:00:00.000Z'],['duplicate global ID rejected',s=>s.groups.push({id:'post',title:'group',versionIds:[]})],['empty post rejected',s=>{s.page.posts[0].body='';s.page.posts[0].attachments=[];}],['too many attachments',s=>s.page.posts[0].attachments=Array(13).fill(s.page.posts[0].attachments[0])],['person creator rejected',s=>s.page.posts[0].attachments[0].type='person'],['scalar posts rejected',s=>s.page.posts={}]]){const copy=structuredClone(state);edit(copy);await comp(name,copy,false);}
+const snapshot={format:'life-share-v1',title:'내 페이지',intro:null,entries:P.publicEntries(state.page.posts)};
+await parity('new public attachment snapshot',snapshot,'life_public_page_valid',S.validate,true);
+const bad=structuredClone(snapshot);bad.entries[0].attachments[0].note='private';await parity('public private field blocked',bad,'life_public_page_valid',S.validate,false);
+const mixed=structuredClone(snapshot);mixed.entries[0].parts=[{}];await parity('ambiguous post and legacy parts blocked',mixed,'life_public_page_valid',S.validate,false);
+const legacy={format:'life-share-v1',title:'기존 페이지',intro:null,entries:[{title:'기존 글',note:'이전 생각',parts:[],pinned:false}]};await parity('old public copy unchanged',legacy,'life_public_page_valid',S.validate,true);
+await db.exec(fs.readFileSync('supabase/migrations/20261012010000_life_page_posts.sql','utf8'));await comp('migration idempotent',state,true);
+for(const role of ['anon','authenticated']){const row=(await db.query("select has_function_privilege($1,'public.life_page_attachments_valid(jsonb)','EXECUTE') as helper,has_function_privilege($1,'public.life_composition_valid(jsonb)','EXECUTE') as composition,has_function_privilege($1,'public.life_public_page_valid(jsonb)','EXECUTE') as snapshot",[role])).rows[0];assert.deepEqual(row,{helper:false,composition:false,snapshot:false});count++;console.log('PASS '+role+' private validation ACL');}
+const installation=await db.exec(fs.readFileSync('supabase/tests/life-page-posts-installation.sql','utf8'));const rows=installation.flatMap(r=>r.rows||[]);assert.equal(rows.length,8);assert(rows.every(r=>r.passed===true));count+=rows.length;console.log('PASS readonly installation checks '+rows.length);console.log('PASS total '+count);
+}finally{await db.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

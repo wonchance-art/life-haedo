@@ -1,5 +1,7 @@
 # 해도 통합 흐름 · v8
 
+2026-10-12 현재 작업 우선순위는 [프로필·취향·기록 흐름](product-roadmap-20261012.mmd)과 [갱신한 로드맵](../life-tools-design/roadmap.md#현재-실행-로드맵--2026-10-12)을 따른다. 아래 v8은 전체 통합/공개 경계의 참고 도식이며 책 확장 우선순위는 최신 요청에 따라 보류다.
+
 2026-10-07 최신 전체 흐름은 [v8 Mermaid](activity_hub_v8.mmd)·[SVG](rendered/activity_hub_v8.svg)다. 실선은 구현된 흐름, 보라색 영역은 현재 병렬 품질 작업, 점선은 후속 후보와 작업 관계다. 구현과 운영 적용은 별개이며 구성·선택 초안의 운영 마무리는 Local이 담당한다. 우선순위·착수 조건·모델/effort는 [현재 로드맵](../life-tools-design/roadmap.md#현재-실행-로드맵--2026-10-07)을 따른다.
 
 ![해도 전체 제품 흐름과 다음 단계](rendered/activity_hub_v8.svg)
@@ -57,3 +59,5 @@
 v1은 개인 백업에 있으며 v2·v3·v4 Mermaid와 SVG는 그대로 보존한다. [v3 비교·검증 기록](README-v3.md), [v4 원본](activity_hub_v4.mmd)·[v4 SVG](rendered/activity_hub_v4.svg)는 당시 구상이다. v4에서 후속으로 표시했던 묶음·내 페이지 편집·비공개 미리보기는 이후 로컬 기능으로 연결됐다. 이번 v5는 실제 공개 사본의 권한·철회 계약을 더한다.
 
 Mermaid **12.1.0 / MIT**의 기존 격리 설치와 [재현 스크립트](../../scripts/render-diagrams.cjs)를 재사용했다. 앱 의존성을 추가하지 않았다. `node scripts/render-diagrams.cjs activity_hub_v5.mmd`로 다시 렌더할 수 있으며 기본 실행의 v3 결과는 바꾸지 않는다. v5의 13개 노드·16개 연결, 한글, 접근 가능한 제목/설명, 네이티브 SVG를 확인했다. 라벨/전체 경계 밖 텍스트·외부 리소스/요청·console/pageerror는 모두 0개다. 이 검사는 문서 도식 렌더이며 공개 앱 기능이나 Apple 실제 기기를 검증한 결과가 아니다.
+
+2026-10-12 제품 방향 도식은 같은 Mermaid 12.1.0 격리 설치로 렌더했다. [PNG](rendered/product-roadmap-20261012.png) · [SVG](rendered/product-roadmap-20261012.svg) · [검증 기록](rendered/product-roadmap-20261012.report.json). 8개 노드/8개 연결, 한글·접근 가능한 제목/설명, 경계 밖 텍스트·외부 요청·콘솔/페이지 오류 0을 확인했다. `node scripts/render-diagrams.cjs product-roadmap-20261012.mmd`로 재생성한다. 도식은 방향 설명이며 후속 기능 구현 완료를 뜻하지 않는다.
