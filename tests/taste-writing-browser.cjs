@@ -42,7 +42,7 @@ async function main(){
   });
   await check('Explicit book search, review editable author/work metadata, preserve body and collection',async()=>{
    await click('음악·책·대상 붙이기');await page.locator('#clPickerQuery').fill('느린 관찰');assert.equal(report.requests.length,0);
-   await page.locator('#clPickerQuery').dispatchEvent('compositionstart');await click('책 찾기 · Open Library');assert.equal(report.requests.length,0);await page.locator('#clPickerQuery').dispatchEvent('compositionend');
+   await page.locator('#clPickerQuery').dispatchEvent('compositionstart');await click('책 찾기 · Open Library');assert.equal(report.requests.length,0);await page.keyboard.press('Escape');assert.equal(await page.getByRole('dialog').count(),1);await page.locator('#clPickerQuery').dispatchEvent('compositionend');
    await click('책 찾기 · Open Library');await page.locator('.cl-picker-remote .cl-pick-row').waitFor();
    assert.match(await page.locator('.cl-picker-remote').innerText(),/판본 미지정/);
    for(const w of [1440,820,390])await snap('book-results',w);

@@ -130,13 +130,17 @@
       } finally { if (alive && controller === request) { controller = null; find.disabled = false; find.textContent = '링크 확인'; } }
     });
     dialog.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && !composing && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); close(); return; }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (!composing && !event.isComposing && event.keyCode !== 229) close();
+        return;
+      }
       if (event.key !== 'Tab') return;
       const controls = [...dialog.querySelectorAll('button,input,select,summary')].filter(el => !el.disabled && el.getClientRects().length);
       const target = event.shiftKey && document.activeElement === controls[0] ? controls.at(-1) : !event.shiftKey && document.activeElement === controls.at(-1) ? controls[0] : null;
       if (target) { event.preventDefault(); target.focus(); }
     });
-    dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
+    dialog.addEventListener('cancel', event => { event.preventDefault(); if (!composing) close(); });
     let backdrop = false;
     dialog.addEventListener('pointerdown', event => { backdrop = event.target === dialog && outside(event); });
     dialog.addEventListener('click', event => { if (backdrop && event.target === dialog && outside(event)) close(); backdrop = false; });
