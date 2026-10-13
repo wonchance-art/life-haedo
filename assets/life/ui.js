@@ -561,6 +561,31 @@
         excerpts: [], createdAt: now, updatedAt: now };
     }
 
+    async function readBatchFile(batch, item, file, origin, token, contextAlive) {
+      item.readToken = token; item.status = 'reading'; updateBatchPanel();
+      try {
+        if (!/\.(txt|md)$/i.test(file.name)) throw new Error('UTF-8 .txt 또는 .md 파일만 지원합니다. 폴더·ZIP·사진은 가져오지 않습니다.');
+        if (file.size > MAX_TEXT_BYTES) throw new Error('이 파일이 1 MiB를 넘습니다. 필요한 내용을 나누어 다시 선택해 주세요.');
+        let text;
+        try { text = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer()); }
+        catch (_) { throw new Error('UTF-8로 읽을 수 없습니다. 원래 파일은 변경하지 않았습니다.'); }
+        if (!contextAlive() || token !== batchGeneration || batch.stopped || item.readToken !== token) return;
+        const stage = batchStage(file, batch, item.index, text, origin);
+        item.unsaved = stage;
+        item.status = 'saving'; updateBatchPanel();
+        const saved = await storage.saveStage(stage);
+        if (!contextAlive()) return;
+        item.stageId = saved.stageId;
+        item.status = 'draft';
+        item.message = text ? '' : '빈 파일 · 내용을 보완해야 자료로 보관할 수 있습니다.';
+        delete item.unsaved;
+      } catch (cause) {
+        if (!contextAlive() || item.readToken !== token || (!item.unsaved && token !== batchGeneration)) return;
+        item.status = 'failed';
+        item.message = item.unsaved ? '초안 보관 실패 · 입력은 이 화면에만 있습니다. 다시 보관하거나 복사해 주세요.' : (cause?.message || '파일을 읽지 못했습니다. 다시 선택해 주세요.');
+      }
+    }
+
     async function startBatch(files, origin) {
       if (disposed || !files.length) return;
       if (state.busy) throw new Error('현재 검토 처리가 끝난 뒤 파일을 선택해 주세요.');
@@ -572,8 +597,8 @@
       const token = ++batchGeneration;
       if (dirty()) await persistStage();
       if (!contextAlive() || token !== batchGeneration) return;
-      const batch = { id: core.id(), workspaceId, total: files.length, reading: true, recovered: false,
-        items: files.map((file, index) => ({ index, label: file.name, status: 'unread' })) };
+      const batch = { id: core.id(), workspaceId, total: files.length, reading: true, processToken: token, recovered: false,
+        items: files.map((file, index) => ({ index, label: file.name, bytes: file.size, origin, status: 'unread' })) };
       state.batches.set(batchKey(batch.workspaceId, batch.id), batch);
       state.batchId = batch.id;
       state.mode = 'batch';
@@ -582,34 +607,13 @@
       for (let index = 0; index < files.length; index++) {
         if (!contextAlive() || token !== batchGeneration || batch.stopped) break;
         const file = files[index], item = batch.items[index];
-        item.status = 'reading'; updateBatchPanel();
-        try {
-          if (!/\.(txt|md)$/i.test(file.name)) throw new Error('UTF-8 .txt 또는 .md 파일만 지원합니다. 폴더·ZIP·사진은 가져오지 않습니다.');
-          if (file.size > MAX_TEXT_BYTES) throw new Error('이 파일이 1 MiB를 넘습니다. 필요한 내용을 나누어 다시 선택해 주세요.');
-          let text;
-          try { text = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer()); }
-          catch (_) { throw new Error('UTF-8로 읽을 수 없습니다. 원래 파일은 변경하지 않았습니다.'); }
-          if (!contextAlive() || token !== batchGeneration || batch.stopped) break;
-          const stage = batchStage(file, batch, index, text, origin);
-          item.unsaved = stage;
-          item.status = 'saving'; updateBatchPanel();
-          const saved = await storage.saveStage(stage);
-          if (!contextAlive()) return;
-          item.stageId = saved.stageId;
-          item.status = 'draft';
-          item.message = text ? '' : '빈 파일 · 내용을 보완해야 자료로 보관할 수 있습니다.';
-          delete item.unsaved;
-        } catch (cause) {
-          if (!contextAlive()) return;
-          item.status = 'failed';
-          item.message = item.unsaved ? '초안 보관 실패 · 입력은 이 화면에만 있습니다. 다시 보관하거나 복사해 주세요.' : (cause?.message || '파일을 읽지 못했습니다. 다시 선택해 주세요.');
-        }
+        await readBatchFile(batch, item, file, origin, token, contextAlive);
         if (!contextAlive()) return;
         if (state.mode === 'batch' && state.batchId === batch.id) updateBatchPanel();
         if (token !== batchGeneration || batch.stopped) break;
       }
       if (!contextAlive()) return;
-      batch.reading = false;
+      if (batch.processToken === token) batch.reading = false;
       // A stopped save may still have completed atomically; retain its confirmed result.
       if (state.mode === 'batch' && state.batchId === batch.id) updateBatchPanel();
       if (token === batchGeneration) {
@@ -618,6 +622,29 @@
         renderHeader(); updateBatchPanel();
         announce('선택한 파일의 처리를 마쳤습니다. 각 초안을 확인해 자료로 보관해 주세요.');
       }
+    }
+
+    async function retryBatchFile(batch, item, file) {
+      if (!file || disposed || !batchContext(batch.workspaceId)) return;
+      if (state.busy || batch.reading || item.unsaved || item.stageId || !['failed', 'unread'].includes(item.status)) throw new Error('현재 파일 처리가 끝난 뒤 다시 선택해 주세요. 보관된 초안은 그대로 유지됩니다.');
+      const totalBytes = batch.items.reduce((sum, row) => sum + (row === item ? file.size : row.bytes || 0), 0);
+      if (file.size > MAX_TEXT_BYTES || totalBytes > 5 * MAX_TEXT_BYTES) throw new Error('파일당 1 MiB, 선택 묶음 전체 5 MiB까지 다시 선택할 수 있습니다. 기존 결과는 유지됩니다.');
+      const workspaceToken = workspaceGeneration, token = ++batchGeneration;
+      const contextAlive = () => batchContext(batch.workspaceId) && workspaceToken === workspaceGeneration;
+      if (dirty()) await persistStage();
+      if (!contextAlive() || token !== batchGeneration) return;
+      batch.stopped = false; batch.reading = true; batch.processToken = token;
+      item.label = file.name; item.bytes = file.size; item.message = '';
+      await readBatchFile(batch, item, file, item.origin || 'other', token, contextAlive);
+      if (!contextAlive()) return;
+      if (state.mode === 'batch' && state.batchId === batch.id) updateBatchPanel();
+      // A new selection can supersede a stopped read. Do not stop its active state.
+      if (token !== batchGeneration) return;
+      batch.reading = false;
+      await refreshData();
+      if (!contextAlive() || token !== batchGeneration) return;
+      renderHeader(); updateBatchPanel();
+      announce(item.status === 'draft' ? '이 파일의 검토초안을 보관했습니다. 다른 파일의 결과는 유지됩니다.' : '이 파일을 다시 읽지 못했습니다. 원래 파일과 나머지 결과는 유지됩니다.');
     }
 
     function renderBatchPicker(parent) {
@@ -661,7 +688,9 @@
     }
 
     function renderBatch() {
-      main.append(title('선택한 파일'), node('p', '파일별 원문을 확인하고 보관하거나 건너뛰세요. 저장된 검토초안과 보관 결과만 다시 열기에서 복구됩니다. 실패·미읽음 파일은 다시 선택해야 합니다.', 'life-help'));
+      main.append(title('선택한 파일'), node('p', '각 파일을 검토해 보관하세요. 실패한 파일만 다시 선택할 수 있습니다.', 'life-help'));
+      const scopeHelp = node('details', null, 'life-details'); scopeHelp.append(node('summary', '파일 보관 범위'), node('p', '선택만으로 자료를 확정하지 않습니다. 저장된 검토초안과 보관 결과는 다시 열 수 있습니다. 새로고침 후에는 저장되지 않은 파일을 다시 선택해야 합니다.', 'life-help'));
+      main.append(scopeHelp);
       const batches = [...state.batches.values()].filter(batch => batch.workspaceId === state.bundle.workspaceId);
       if (!currentBatch() && batches.length) state.batchId = batches[batches.length - 1].id;
       if (batches.length > 1) {
@@ -720,6 +749,16 @@
             item.stageId = saved.stageId; item.status = 'draft'; delete item.unsaved; item.message = '';
             await refreshData(); updateBatchPanel(); announce('검토 중 보관됨 · 이 브라우저에 임시 보관했습니다.');
           })));
+        }
+        if (!batch.reading && ['failed', 'unread'].includes(item.status) && !item.unsaved && !item.stageId) {
+          const retry = field('이 파일 다시 선택', 'file', 'lifeBatchRetry-' + item.index, '');
+          retry.input.accept = '.txt,.md,text/plain,text/markdown';
+          retry.input.addEventListener('change', async () => {
+            const file = retry.input.files[0]; retry.input.value = ''; clearError();
+            try { await retryBatchFile(batch, item, file); } catch (cause) { failure(cause); }
+          });
+          retry.label.hidden = true;
+          actions.append(button('이 파일 다시 선택', () => retry.input.click()), retry.label);
         }
         if (item.status === 'applied' && item.result) actions.append(button('보관한 원문 열기', guarded(() => navigate('source', { sourceId: item.result.sourceId, sourceVersionId: item.result.sourceVersionId, locator: null }))));
         else if (item.status === 'applied') actions.append(node('p', '이전 보관 결과입니다. 원천 기록 목록에서 자료를 찾아주세요.', 'life-help'));
