@@ -35,6 +35,9 @@
 .p-filter button[aria-pressed=true]::after { content: ''; position: absolute; bottom: 3px; left: calc(50% - 2px); width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
 .p-empty { padding: 32px 0; color: var(--ink-soft); font-size: 14px; line-height: 1.8; }
 .p-empty p { margin-bottom: 20px; }
+.p-timeline-recovery { padding: 16px 0 20px; border-bottom: 1px solid var(--line); }
+.p-timeline-recovery .p-import-tools { margin-top: 8px; }
+.p-timeline-recovery details { margin-top: 8px; }
 .document-row { display: flex; flex-direction: column; gap: 12px; padding: 28px 0; border-bottom: 1px solid var(--line); min-width: 0; }
 .document-title { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink); font-size: 19px; font-weight: 700; line-height: 1.65; text-decoration: none; word-break: keep-all; overflow-wrap: anywhere; }
 .document-title:hover { color: var(--color-primary); }

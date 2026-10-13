@@ -47,6 +47,17 @@
         </div>
       </header>
       <div class="p-status-line"><span id="syncMessage" role="status">기기 사본을 확인합니다.</span></div>
+      <section id="timelineRecovery" class="p-timeline-recovery" aria-label="기존 연표 찾기" hidden>
+        <p id="recoverySummary" class="p-muted"></p>
+        <div class="p-import-tools">
+          <button id="recoverLegacy" class="p-button primary" hidden>기존 연표 연결</button>
+          <button id="recoverBackup" class="p-text-link">연표 백업 가져오기</button>
+        </div>
+        <details>
+          <summary class="p-text-link">다른 기기의 연표가 보이지 않나요?</summary>
+          <p class="p-muted">예전에 사용한 기기·브라우저와 같은 사이트 주소에서 확인해 주세요. 이전 로그인 계정도 확인하고, 그곳의 연표 JSON 백업을 여기로 가져올 수 있습니다. 이 목록이 비어 있어도 다른 기기의 저장본이나 예전 서버 자료가 삭제됐다는 뜻은 아닙니다.</p>
+        </details>
+      </section>
       <section class="space-documents" aria-label="연표 목록">
         <div id="documentList"></div>
       </section>

@@ -1,0 +1,53 @@
+{
+  "createdAt": "2026-10-09T01:46:13.314Z",
+  "phase": "after",
+  "browser": "151.0.7922.173",
+  "scope": "Real platform model/store and workspace DOM; anonymous Auth request returns simulated HTTP Responses. No live credentials/production calls.",
+  "checks": [
+    {
+      "name": "legacy-recovery-390",
+      "width": 390,
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /기기|기존/. Input:\n\n'이 브라우저에 아직 계정에 연결하지 않은 연표 2개가 있습니다. 원본을 보관한 뒤 사본으로 연결할 수 있습니다.'\n\n    at /workspace/life-haedo-timeline-recovery/tests/platform-recovery-browser.cjs:64:234\n    at async run (/workspace/life-haedo-timeline-recovery/tests/platform-recovery-browser.cjs:60:371)\n    at async main (/workspace/life-haedo-timeline-recovery/tests/platform-recovery-browser.cjs:62:61)"
+    },
+    {
+      "name": "legacy-recovery-820",
+      "width": 820,
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /기기|기존/. Input:\n\n'이 브라우저에 아직 계정에 연결하지 않은 연표 2개가 있습니다. 원본을 보관한 뒤 사본으로 연결할 수 있습니다.'\n\n    at /workspace/life-haedo-timeline-recovery/tests/platform-recovery-browser.cjs:64:234\n    at async run (/workspace/life-haedo-timeline-recovery/tests/platform-recovery-browser.cjs:60:371)\n    at async main (/workspace/life-haedo-timeline-recovery/tests/platform-recovery-browser.cjs:62:61)"
+    },
+    {
+      "name": "legacy-recovery-1440",
+      "width": 1440,
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /기기|기존/. Input:\n\n'이 브라우저에 아직 계정에 연결하지 않은 연표 2개가 있습니다. 원본을 보관한 뒤 사본으로 연결할 수 있습니다.'\n\n    at /workspace/life-haedo-timeline-recovery/tests/platform-recovery-browser.cjs:64:234\n    at async run (/workspace/life-haedo-timeline-recovery/tests/platform-recovery-browser.cjs:60:371)\n    at async main (/workspace/life-haedo-timeline-recovery/tests/platform-recovery-browser.cjs:62:61)"
+    },
+    {
+      "name": "no-legacy-backup-entry",
+      "width": 390,
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /삭제|없|찾/. Input:\n\n'현재 계정의 목록과 예전 기기·서버의 연표는 별도로 확인합니다. 기존 백업이 있으면 새 사본으로 가져오세요.'\n\n    at /workspace/life-haedo-timeline-recovery/tests/platform-recovery-browser.cjs:78:149\n    at async run (/workspace/life-haedo-timeline-recovery/tests/platform-recovery-browser.cjs:60:371)\n    at async main (/workspace/life-haedo-timeline-recovery/tests/platform-recovery-browser.cjs:77:4)"
+    },
+    {
+      "name": "late-upload-account-change",
+      "width": 390,
+      "pass": true,
+      "latePreviousAccountSuccessSuppressed": true,
+      "newAccountCopies": 0,
+      "originalBytesUnchanged": true
+    },
+    {
+      "name": "remote-list-preserved",
+      "width": 820,
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n2 !== 1\n\n    at /workspace/life-haedo-timeline-recovery/tests/platform-recovery-browser.cjs:92:83\n    at async run (/workspace/life-haedo-timeline-recovery/tests/platform-recovery-browser.cjs:60:371)\n    at async main (/workspace/life-haedo-timeline-recovery/tests/platform-recovery-browser.cjs:91:4)"
+    }
+  ],
+  "screens": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "productionWrites": 0,
+  "finishedAt": "2026-10-09T01:46:15.522Z",
+  "pass": false
+}

@@ -1,0 +1,114 @@
+{
+  "createdAt": "2026-10-09T01:45:24.549Z",
+  "phase": "before",
+  "browser": "151.0.7922.173",
+  "scope": "Real platform model/store and workspace DOM; anonymous Auth request returns simulated HTTP Responses. No live credentials/production calls.",
+  "checks": [
+    {
+      "name": "legacy-recovery-390",
+      "width": 390,
+      "pass": true,
+      "confirmedAppDefect": "Retry stops at already-connected message without re-upload",
+      "postAttempts": 1,
+      "localCopies": 1
+    }
+  ],
+  "screens": [
+    {
+      "scene": "recovery-found",
+      "width": 390,
+      "file": "recovery-found-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "platform haedo-shell",
+          "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "recovery-upload-failed",
+      "width": 390,
+      "file": "recovery-upload-failed-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "platform haedo-shell",
+          "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "retry-stuck",
+      "width": 390,
+      "file": "retry-stuck-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "platform haedo-shell",
+          "text": "본문으로 이동\n    홈기록도구관리\n\n    \n      로그인을 확인하고 있습니다.\n      로그인 화면다시 확인\n    \n    <p cl",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "productionWrites": 0,
+  "finishedAt": "2026-10-09T01:45:25.286Z",
+  "pass": true
+}

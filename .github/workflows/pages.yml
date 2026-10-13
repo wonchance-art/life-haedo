@@ -85,6 +85,9 @@ jobs:
       - name: Verify unified entry and account boundaries
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/unified-home-browser.cjs
+      - name: Verify legacy timeline recovery and failed-upload retry
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/platform-recovery-browser.cjs
       - name: Verify the core experience across screen sizes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/core-experience-browser.cjs
@@ -207,6 +210,7 @@ jobs:
           path: |
             .local/core-experience/
             .local/unified-home/
+            .local/timeline-recovery/after/
             .local/quality-audit/after/
             .local/composition-sync/
             .local/writing-sync/
