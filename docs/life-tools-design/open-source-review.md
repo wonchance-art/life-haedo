@@ -709,3 +709,16 @@ Radix Dialog 공식 npm 배포 1.3.1 / MIT와 최신 유지보수 변경을 확�
 | 기존 `Core.searchSources` / `searchPattern` | 저장소 구현 재사용 | 기존 정확 버전·한글 공백·UTF-16 위치 검사에 신규 교차 저장소 검사를 추가 | 채택. 원문을 바꾸지 않고 저장한 페이지·컬렉션 필드와 결과 식별자만 읽기 전용으로 묶음 |
 
 권고 0건은 취약점 부재의 증명이 아니며 비공개 권고·전이 의존성을 감사한 결과도 아니다. 이번 코드는 외부 코드를 복사하거나 배포하지 않는다. 직접 유지할 범위는 저장소별 필드 투영, 종류별 제한 표시, 정확 항목 열기와 실패·계정/작업공간 변경 처리다. 검색 시 전체 로컬 자료를 읽는 방식의 대규모 성능은 미검증이다. 실제 자료에서 입력 지연이 확인되면 동일 익명 표본의 시간·메모리를 측정한 뒤 지연 실행/worker/인덱스를 비교한다. 인덱스만 추가하고 계정 삭제·변경에 남는 사본을 만들지 않는다.
+
+
+## 입력·활용 품질 묶음 — 2026-10-13 KST
+
+파일 한 건의 읽기 실패를 성공한 다른 초안과 분리해 다시 선택하는 요구다. 공식 npm `latest` 배포 tarball의 integrity를 검증하고 동봉 LICENSE를 읽었다. 비교만 수행했고 다운로드 코드를 실행하거나 앱에 설치하지 않았다.
+
+| 후보 | 확인한 공식 배포·유지 상태 | 라이선스·공개 보안 권고 | 선택 |
+| --- | --- | --- | --- |
+| [Uppy Core](https://github.com/transloadit/uppy) | [@uppy/core 6.2.0](https://registry.npmjs.org/@uppy/core/latest), archived=false, push 2026-10-12 | 동봉 MIT. 저장소 공개 권고 1건: [GHSA-6g8p-fj8f-2wqf](https://github.com/transloadit/uppy/security/advisories/GHSA-6g8p-fj8f-2wqf)는 별도 `@uppy/companion <7.0.2`의 SSRF/OAuth redirect이며 Core 취약점으로 일반화하지 않음 | 대규모 업로드/제공자 플러그인에는 유용하나 현재 로컬 TXT/MD 검토·CAS와 별도 상태 계층을 만들 이유가 없어 미도입 |
+| [FilePond](https://github.com/pqina/filepond) | [4.32.12](https://registry.npmjs.org/filepond/latest), archived=false, push 2026-10-02 | 동봉 MIT. 저장소 공개 security-advisories 응답 0건 | 업로드/미디어 처리 UI보다 현재 파일 목록과 성공 초안 보존이 우선이므로 미도입 |
+| 기존 File 입력·TextDecoder·검토초안 CAS | 현재 앱의 파일 선택/용량/UTF-8 처리와 IndexedDB 저장 | 원문 바이트/텍스트 구별, 입력 실패/중단/계정 변경을 브라우저로 재검증 | 채택. 최초 선택과 한 행 재선택이 같은 읽기 함수를 재사용 |
+
+공개 권고 수는 전체 취약점 부재나 전이 의존성 감사가 아니다. MiniSearch/Fuse의 당일 공식 배포 비교는 위 통합 검색 절을 재사용했으며 이번에는 측정한 중복 순회를 제거하고 한 화면 세션의 결과만 재사용했다. 회고 활용은 기존 PagePosts·파일 출력·공통 아이콘/버튼을 재배치했다. 새로운 저장소·편집기·업로드 서버·의존성은 없다.

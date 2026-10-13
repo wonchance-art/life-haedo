@@ -1,0 +1,192 @@
+{
+  "browser": "151.0.7922.173",
+  "scope": "Linux model-only timings, 7 samples including cold first call; CDP heap is a point-in-time reading without forced GC. No IDB load, DOM paint or Apple hardware claim.",
+  "samples": [
+    {
+      "implementation": "before",
+      "count": 100,
+      "query": "산책",
+      "serializedBytes": 464225,
+      "p50": 2.599999964237213,
+      "p95": 11.199999988079071,
+      "heapUsedBytes": 5500016
+    },
+    {
+      "implementation": "before",
+      "count": 100,
+      "query": "기억표식",
+      "serializedBytes": 464225,
+      "p50": 2.299999952316284,
+      "p95": 3.5,
+      "heapUsedBytes": 4638772
+    },
+    {
+      "implementation": "before",
+      "count": 100,
+      "query": "없는검색어",
+      "serializedBytes": 464225,
+      "p50": 2.300000011920929,
+      "p95": 3.300000011920929,
+      "heapUsedBytes": 4708392
+    },
+    {
+      "implementation": "after",
+      "count": 100,
+      "query": "산책",
+      "serializedBytes": 464225,
+      "p50": 1.899999976158142,
+      "p95": 2.599999964237213,
+      "heapUsedBytes": 5433104
+    },
+    {
+      "implementation": "after",
+      "count": 100,
+      "query": "기억표식",
+      "serializedBytes": 464225,
+      "p50": 2.100000023841858,
+      "p95": 2.800000011920929,
+      "heapUsedBytes": 3668684
+    },
+    {
+      "implementation": "after",
+      "count": 100,
+      "query": "없는검색어",
+      "serializedBytes": 464225,
+      "p50": 1.699999988079071,
+      "p95": 1.899999976158142,
+      "heapUsedBytes": 3787956
+    },
+    {
+      "implementation": "before",
+      "count": 1000,
+      "query": "산책",
+      "serializedBytes": 4645625,
+      "p50": 28.5,
+      "p95": 40.5,
+      "heapUsedBytes": 18703656
+    },
+    {
+      "implementation": "before",
+      "count": 1000,
+      "query": "기억표식",
+      "serializedBytes": 4645625,
+      "p50": 44.5,
+      "p95": 51.30000001192093,
+      "heapUsedBytes": 16669160
+    },
+    {
+      "implementation": "before",
+      "count": 1000,
+      "query": "없는검색어",
+      "serializedBytes": 4645625,
+      "p50": 19.299999952316284,
+      "p95": 27.69999998807907,
+      "heapUsedBytes": 15954356
+    },
+    {
+      "implementation": "after",
+      "count": 1000,
+      "query": "산책",
+      "serializedBytes": 4645625,
+      "p50": 24.30000001192093,
+      "p95": 28.80000001192093,
+      "heapUsedBytes": 17083908
+    },
+    {
+      "implementation": "after",
+      "count": 1000,
+      "query": "기억표식",
+      "serializedBytes": 4645625,
+      "p50": 16.899999976158142,
+      "p95": 18.80000001192093,
+      "heapUsedBytes": 21217332
+    },
+    {
+      "implementation": "after",
+      "count": 1000,
+      "query": "없는검색어",
+      "serializedBytes": 4645625,
+      "p50": 16.5,
+      "p95": 20,
+      "heapUsedBytes": 15011028
+    },
+    {
+      "implementation": "before",
+      "count": 5000,
+      "query": "산책",
+      "serializedBytes": 23253625,
+      "p50": 92.80000001192093,
+      "p95": 117.80000001192093,
+      "heapUsedBytes": 76529612
+    },
+    {
+      "implementation": "before",
+      "count": 5000,
+      "query": "기억표식",
+      "serializedBytes": 23253625,
+      "p50": 280.69999998807907,
+      "p95": 303.80000001192093,
+      "heapUsedBytes": 87438636
+    },
+    {
+      "implementation": "before",
+      "count": 5000,
+      "query": "없는검색어",
+      "serializedBytes": 23253625,
+      "p50": 96.5,
+      "p95": 117.10000002384186,
+      "heapUsedBytes": 93467556
+    },
+    {
+      "implementation": "after",
+      "count": 5000,
+      "query": "산책",
+      "serializedBytes": 23253625,
+      "p50": 83.19999998807907,
+      "p95": 104.90000003576279,
+      "heapUsedBytes": 93909264
+    },
+    {
+      "implementation": "after",
+      "count": 5000,
+      "query": "기억표식",
+      "serializedBytes": 23253625,
+      "p50": 103.89999997615814,
+      "p95": 111.39999997615814,
+      "heapUsedBytes": 93612820
+    },
+    {
+      "implementation": "after",
+      "count": 5000,
+      "query": "없는검색어",
+      "serializedBytes": 23253625,
+      "p50": 84.19999998807907,
+      "p95": 104.5,
+      "heapUsedBytes": 94294832
+    }
+  ],
+  "ui": {
+    "count": 1000,
+    "samples": [
+      {
+        "query": "없는검색어",
+        "inputToTwoFramesMs": 29.099999964237213
+      },
+      {
+        "query": "기억표식",
+        "inputToTwoFramesMs": 43.200000047683716
+      },
+      {
+        "query": "산책",
+        "inputToTwoFramesMs": 72
+      },
+      {
+        "query": "기억표식",
+        "inputToTwoFramesMs": 30
+      }
+    ],
+    "cachedKindToTwoFramesMs": 34.09999996423721,
+    "renderedRows": 20,
+    "navigationAndLoadMs": 657.1380639999988
+  }
+}
