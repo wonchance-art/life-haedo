@@ -98,15 +98,56 @@
         if (result.incomplete) message.textContent += ' 제공자가 일부 결과만 보냈습니다.';
         for (const candidate of result.results) {
           const existing = items.find(item => identity(item.url) === identity(candidate.url));
-          remote.append(row(existing || candidate, () => choose(existing ? { item: existing, compact: true } : {
+          const group = node('div', null, 'cl-candidate');
+          group.append(row(existing || candidate, () => choose(existing ? { item: existing, compact: true } : {
             seed: { type: candidate.type, title: candidate.title, creator: candidate.creator, url: candidate.url }, compact: false, review: candidate.provider + ' · ' + candidate.detail
           }), existing ? '내 컬렉션 · ' + (attaching ? '글에 붙이기' : '메모 이어 쓰기') : [candidate.provider, candidate.attribution ? candidate.attributionLabel + ': ' + candidate.attribution : '작성자 정보 없음', candidate.detail].filter(Boolean).join(' · ')));
+          if (candidate.type === 'book' && /^https:\/\/openlibrary\.org\/works\/OL[0-9]+W$/.test(candidate.url)) {
+            const editions = node('section', null, 'cl-editions');
+            const open = button('판본 찾기', () => loadEditions(candidate, editions, 0, open));
+            open.setAttribute('aria-label', candidate.title + ' · 판본 찾기');
+            group.append(open, editions);
+          }
+          remote.append(group);
         }
       } catch (error) {
         if (!alive || !isCurrent() || controller !== request || request.signal.aborted) return;
         message.textContent = (error.message || '검색하지 못했습니다.') + ' 직접 입력으로 이어갈 수 있어요.';
       } finally {
         if (alive && controller === request) { controller = null; bookSearch.disabled = projectSearch.disabled = false; remote.removeAttribute('aria-busy'); }
+      }
+    }
+    async function loadEditions(work, host, offset, trigger) {
+      if (composing || controller || !alive || !isCurrent()) return;
+      const request = new AbortController(); controller = request;
+      trigger.disabled = true; host.setAttribute('aria-busy','true');
+      const status = node('p','판본 확인 중…','life-help'); status.setAttribute('role','status');
+      host.replaceChildren(status);
+      try {
+        const key = 'editions:' + work.url + ':' + offset;
+        const result = searchCache.get(key) || await Metadata.editions(work.url, offset, {signal:request.signal});
+        if (!alive || !isCurrent() || controller !== request || request.signal.aborted || !host.isConnected) return;
+        if (searchCache.size >= 12) searchCache.delete(searchCache.keys().next().value);
+        searchCache.set(key,result);
+        status.textContent = result.results.length ? '언어·출판사·발행일을 확인하세요. 판본의 저자·번역자는 직접 확인해 주세요.' : '이 범위에서 확인 가능한 판본이 없어요. 작품 정보로 계속하거나 직접 입력할 수 있어요.';
+        for (const edition of result.results) {
+          const existing = items.find(item => identity(item.url) === identity(edition.url));
+          host.append(row(existing || edition, () => choose(existing ? {item:existing,compact:true} : {
+            seed:{type:'book',title:edition.title,creator:'',url:edition.url},compact:false,
+            review:'Open Library · ' + edition.detail + ' · 작품 저자: ' + (work.creator || '미상') + ' · 판본의 저자·번역자는 확인 후 입력'
+          }), edition.detail));
+        }
+        const pages = node('div',null,'cl-picker-providers');
+        if (offset > 0) pages.append(button('이전 판본', () => loadEditions(work,host,offset-6,trigger)));
+        if (result.hasMore) pages.append(button('다음 판본', () => loadEditions(work,host,offset+6,trigger)));
+        host.append(pages);
+        host.tabIndex=-1; host.focus({preventScroll:true}); host.scrollIntoView({block:'nearest'});
+      } catch (error) {
+        if (!alive || !isCurrent() || controller !== request || request.signal.aborted || !host.isConnected) return;
+        status.textContent = (error.message || '판본 정보를 받지 못했어요.') + ' 작품 정보는 그대로 사용할 수 있습니다.';
+        host.append(button('판본 다시 확인', () => loadEditions(work,host,offset,trigger)));
+      } finally {
+        if (alive && controller === request) {controller=null;trigger.disabled=false;host.removeAttribute('aria-busy');}
       }
     }
     input.addEventListener('input', () => { limit = 30; render(); });

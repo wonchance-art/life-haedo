@@ -148,3 +148,7 @@
 .cl-pick-note { margin:0 0 8px 62px; font-size:14px; }
 .cl-pick-note summary { min-height:44px; display:flex; align-items:center; cursor:pointer; color:var(--ink-soft); }
 .cl-pick-note p { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.7; margin:4px 0 12px; }
+
+.cl-candidate { padding-bottom:8px; }
+.cl-editions:not(:empty) { margin:12px 0; padding:12px; background:#fff; border-radius:12px; }
+.cl-editions .life-help { line-height:1.7; font-size:13px; }

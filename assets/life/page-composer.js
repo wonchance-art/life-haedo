@@ -250,7 +250,7 @@
         .slice()
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       for (const p of posts) {
-        const article = life.PagePostsView.post(p, { media }),
+        const article = life.PagePostsView.post(p, { media, onCollect: collectAttachment }),
           meta = node("div", null, "pp-post-meta");
         meta.append(
           node(
@@ -274,6 +274,22 @@
           ),
         );
       host.append(feed);
+    }
+    async function collectAttachment(value) {
+      const token = epoch;
+      if (!valid() || !host?.isConnected) return '';
+      const item = life.Collection.fromAttachment(value, life.Core.id(), now());
+      const collection = await storage.readCollection(workspaceId);
+      if (!valid() || token !== epoch || !host?.isConnected) return '';
+      const existing = life.Collection.attachmentMatch(collection.items,item);
+      if (existing) return existing.archived ? '보관함에 있는 항목입니다. 기존 메모를 유지했습니다.' : '이미 컬렉션에 있습니다. 기존 메모를 유지했습니다.';
+      collection.items.push(item);
+      try { await storage.saveCollection(workspaceId,collection,collection.revision); }
+      catch (e) {
+        if (e.code === 'collection_conflict') throw new Error('다른 탭에서 컬렉션이 바뀌었습니다. 다시 누르면 최신 항목을 확인합니다.');
+        throw e;
+      }
+      return valid() && token === epoch ? '컬렉션에 보관했습니다. 글과 별도로 이 브라우저에 저장됩니다.' : '';
     }
     function editor(d) {
       const form = node("section", null, "pp-composer");

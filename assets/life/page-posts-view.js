@@ -9,7 +9,7 @@
     if (cls) n.className = cls;
     return n;
   };
-  function attachments(values, { media = null, compact = false } = {}) {
+  function attachments(values, { media = null, compact = false, onCollect = null } = {}) {
     life.PagePosts.validateAttachments(values);
     const list = node("div", null, "pp-attachments");
     list.dataset.count = String(values.length);
@@ -98,13 +98,28 @@
           actions.append(play);
         }
       }
+      if (onCollect) {
+        const collect = node('button', null, 'life-icon-button pp-collect');
+        collect.type='button'; collect.title='컬렉션에 보관';
+        collect.setAttribute('aria-label', item.title + ' · 컬렉션에 보관');
+        collect.append(life.Icons.create('bookmark'));
+        const status = node('span','', 'life-meta pp-collect-status'); status.setAttribute('role','status');
+        collect.addEventListener('click',async()=>{
+          if (collect.disabled) return;
+          collect.disabled=true; status.textContent='보관 중…';
+          try { const message=await onCollect(item); if (status.isConnected) status.textContent=message; }
+          catch (error) { if(status.isConnected) status.textContent=(error.message || '보관하지 못했습니다.')+' 글은 유지됩니다. 다시 시도할 수 있습니다.'; }
+          finally { if(collect.isConnected) collect.disabled=false; }
+        });
+        actions.append(collect,status);
+      }
       copy.append(actions);
       card.append(copy);
       list.append(card);
     }
     return list;
   }
-  function post(value, { media = null, fold = true } = {}) {
+  function post(value, { media = null, fold = true, onCollect = null } = {}) {
     const article = node("article", null, "pp-post");
     article.dataset.postId = value.id || "";
     article.tabIndex = -1;
@@ -129,7 +144,7 @@
       }
     }
     if (value.attachments.length)
-      article.append(attachments(value.attachments, { media }));
+      article.append(attachments(value.attachments, { media, onCollect }));
     return article;
   }
   life.PagePostsView = { attachments, post };
