@@ -738,3 +738,9 @@ Open Library 기본 비식별 요청 제한은 초당 1회, GitHub 비인증 검
 [Open Library 공개 권고](https://api.github.com/repos/internetarchive/openlibrary/security-advisories)에는 조회 시 5건(SQL injection, stored XSS, 두 open redirect, cover upload SSRF), [Octokit REST 공개 권고](https://api.github.com/repos/octokit/rest.js/security-advisories)는 0건이었다. 이는 공개 목록 결과이며 서비스/의존성 전체의 무결성 보증이 아니다. 제공자 HTML·임의 응답 URL·이미지·계정 코드를 실행하지 않고, 제한된 JSON을 `textContent`로 표시하며 정해진 HTTPS API만 호출한다.
 
 실제 Linux Chromium에서 앱 어댑터로 Open Library `채식주의자` 후보 1개(저자 `Han Kang`, 작품 ID `OL17334243W`), GitHub `idb` 후보 6개를 받았다. 익명 공개 검색만 수행했으며 실계정/개인 글 전송 없음. 한국어 검색 품질·판본 완전성을 이 두 검색으로 일반화하지 않는다. [실행 증거](../design-review/evidence/taste-writing/live-providers.json).
+
+## 판본·컬렉션 재사용과 다음 제공자 — 2026-10-14 KST
+
+[Open Library 공식 Books 문서](https://openlibrary.org/dev/docs/api/books)의 작품별 `/editions.json`을 직접 읽고 실제 브라우저에서 확인했다. #77의 라이선스·정책 검토를 재사용하며 기존 제한 JSON fetch에 판본 투영만 추가했다. 작품에 속한 판본인지 `works`로 확인하고 저자·번역자 이름을 추정하지 않는다. 작품/판본의 식별자가 달라 동일 제목 자동 병합은 부적절하므로, 컬렉션 보관은 기존 모델·CAS의 정확 출처 일치 규칙을 사용했다. 새 SDK·런타임·저장 스키마 없음.
+
+영화·예술 작품·인물의 공식 소스·현재 릴리스/유지보수·라이선스와 실제로 확인하지 못한 조건은 [후속 제공자 비교](../design-review/taste-provider-expansion.md)에 정리했다. AIC 서버 코드를 설치하는 대신 기존 명시적 후보 검토를 재사용하는 방향을 우선한다. 차단된 API/약관 확인이나 한국어 검색 실험은 완료로 표현하지 않는다.
