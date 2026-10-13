@@ -166,6 +166,9 @@ jobs:
       - name: Verify Korean search and bounded result rendering
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/search-quality-browser.cjs
+      - name: Verify private unified search and exact item return
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/unified-search-browser.cjs
       - name: Verify private reflection reading and manuscript boundaries
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/reflection-reading-browser.cjs
@@ -246,6 +249,7 @@ jobs:
         with:
           name: browser-checks-${{ github.run_attempt }}
           path: |
+            .local/unified-search/
             .local/collection-library/
             .local/collection-metadata/
             .local/collection-media/

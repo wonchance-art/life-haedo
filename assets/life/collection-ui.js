@@ -8,6 +8,7 @@
     let draft = null, baseline = '', selected = null, busy = false, conflict = null, restore = null, status = '', error = '', screen;
     let query = '', category = 'all', type = 'all', tag = '', archived = false, mode = 'cover', limit = 40, position = 0;
     const urls = new Set(), mediaCleanups = new Set(), imageMetadata = new Map();
+    let requestedItemId = null;
     let imagesEnabled = false, closePicker = null, compactEditor = false, editorInfoOpen = false;
     function clearMedia() { mediaCleanups.forEach(dispose => dispose()); mediaCleanups.clear(); }
     let backupOpen = false, lookupController = null, candidate = null, lookupMessage = '', lookupPending = false;
@@ -58,11 +59,13 @@
       const s = node('p', status, 'life-status'); s.id = 'clStatus'; s.setAttribute('role', 'status'); s.hidden = !status;
       screen.append(s, e);
     }
-    async function open() {
+    async function open({ itemId = null } = {}) {
       closePicker?.(); closePicker = null; clearMedia(); active = true; const token = ++sequence, next = getBundle().workspaceId;
       if (workspaceId !== next) {
         imagesEnabled = false; imageMetadata.clear(); clearMedia(); workspaceId = next; state = null; draft = null; selected = null; restore = null; conflict = null; query = ''; category = type = 'all'; tag = ''; archived = false; status = error = '';
       }
+      requestedItemId = itemId;
+      if (itemId && !dirty()) { draft = null; selected = null; baseline = ''; }
       unsubscribe?.();
       unsubscribe = storage.subscribe(workspaceId, event => {
         if (!current(token) || event.type !== 'collection_changed' || busy || event.revision <= (state?.revision ?? -1)) return;
@@ -72,7 +75,7 @@
       state = null;
       host.replaceChildren(node('p', '컬렉션을 불러오는 중…', 'life-help'));
       host.firstChild.setAttribute('role', 'status');
-      try { const loaded = await storage.readCollection(workspaceId); if (!current(token)) return; state = loaded; draw(); }
+      try { const loaded = await storage.readCollection(workspaceId); if (!current(token)) return; state = loaded; if (itemId) { selected = state.items.some(i => i.id === itemId) ? itemId : null; if (!selected) error = '선택한 항목이 없습니다. 검색 결과를 다시 불러와 주세요.'; } draw(); if (itemId) focusHeading(); }
       catch (cause) { if (!current(token)) return; error = cause.message; draw(); }
     }
     function leave() { closePicker?.(); closePicker = null; clearMedia(); imageMetadata.clear(); imagesEnabled = false; cancelLookup(); backupOpen = false; active = false; sequence++; unsubscribe?.(); unsubscribe = null; }
@@ -82,7 +85,7 @@
       if (!active || !alive) return;
       screen = node('section', null, 'life-collection'); screen.setAttribute('aria-label', '컬렉션'); host.replaceChildren(screen);
       notice();
-      if (!state) { screen.append(button('컬렉션 다시 불러오기', () => { error = ''; return open(); })); return; }
+      if (!state) { screen.append(button('컬렉션 다시 불러오기', () => { error = ''; return open({ itemId: requestedItemId }); })); return; }
       if (draft) { editor(); feedback(); return; }
       if (selected) { detail(); feedback(); return; }
       library(); feedback();

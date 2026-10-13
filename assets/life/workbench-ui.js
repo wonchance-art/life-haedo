@@ -1061,7 +1061,8 @@
           finally { session.saving = null; controls.forEach(([node,disabled]) => { if(node.isConnected)node.disabled=disabled; }); updateStatus(session); }
         } });
       const draftId = session.pageDraftId; session.pageDraftId = null;
-      session.composer.mount(composerHost, { draftId }); viewCleanups.push(() => session.composer.detach());
+      const postId = session.searchTarget?.postId; session.searchTarget = null;
+      session.composer.mount(composerHost, { draftId, postId }); viewCleanups.push(() => session.composer.detach());
 
       const pageSettings = details('제목·소개·표시 설정'); pageSettings.classList.add('wb-page-settings');
       const pageField = (control, key) => {
@@ -2658,6 +2659,7 @@
         view.seedVersionId = valid ? context.seedVersionId : null; view.chooserOpen = !valid;
         view.contextError = valid ? '' : '기준 기록의 작업공간이나 버전을 확인하지 못했습니다. 현재 공간에서 기록을 다시 골라 주세요.';
       }
+      if (mode === 'page') { current.searchTarget = options.searchTarget || null; if (options.searchTarget) { preview = false; if (current.share) current.share.open = false; } }
       if (mode === 'page' && typeof options.pageDraftId === 'string') { current.pageDraftId = options.pageDraftId; preview = false; }
       if (mode === 'reflection' && options.planOpen) current.bookPlanOpen = true;
       incoming = null;
@@ -2693,7 +2695,7 @@
       host.replaceChildren(surface);
       if (mode === 'public-pages') { surface.setAttribute('aria-busy', 'false'); redraw(); return; }
       try {
-        if (!session.state || session.edit === session.stored && session.remoteRevision > session.baseRevision) await load(session);
+        if (!session.state || session.edit === session.stored && (options.searchTarget || session.remoteRevision > session.baseRevision)) await load(session);
         if (!showing(token, session)) return;
         surface.setAttribute('aria-busy', 'false');
         if (mode === 'books' && options.bookList === true) session.bookView = null;
@@ -2731,7 +2733,13 @@
             announce('선택한 책이나 장을 찾을 수 없습니다. 현재 작업공간의 책 목록에서 다시 골라 주세요.');
           }
         }
-        redraw(); if (session.error) report(session.error, session);
+        redraw();
+        if (mode === 'page' && options.searchTarget?.entryId) {
+          const entry = [...bodyNode.querySelectorAll('[data-entry-id]')].find(el => el.dataset.entryId === options.searchTarget.entryId);
+          if (entry) { const editor = entry.querySelector('.wb-page-entry-edit'); if (editor) editor.open = true; entry.tabIndex = -1; entry.focus({ preventScroll: true }); entry.scrollIntoView({ block: 'start' }); }
+          else report(fault('entry_missing', '선택한 구성 항목이 없습니다. 검색 결과를 다시 불러와 주세요.'), session);
+        }
+        if (session.error) report(session.error, session);
         if (!incoming && mode === 'activities' && typeof options.groupId === 'string') revealGroup(options.groupId);
       } catch (error) {
         if (!showing(token, session)) return;

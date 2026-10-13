@@ -148,6 +148,7 @@ async function applicationChecks(browser, observe) {
   async function click(name) {
     if (name === '내보내기·사본 복원') await openManagement(page);
     if (['기록 목록','기록 검색','가져오기','시간 보기'].includes(name)) await openSection(page, 'records');
+    if(name==='기록 검색') { await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click(); await settle(); return; }
     await page.getByRole('button',{name,exact:true}).click(); await settle();
   }
   async function mounted() {

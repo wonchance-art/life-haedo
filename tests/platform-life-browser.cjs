@@ -69,6 +69,7 @@ async function main(){
   async function click(page,name){
     if(['모아보기','기록 검색','가져오기','시간 보기'].includes(name))await openSection(page,'records');
     if(['기기 간 동기화','내보내기·사본 복원'].includes(name))await openManagement(page);
+    if(name==='기록 검색') { await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click(); await settle(page); return; }
     if(name==='로그아웃')await openAccount(page);
     await page.getByRole('button',{name,exact:true}).click();await settle(page);
   }
@@ -267,7 +268,7 @@ async function main(){
       assert.equal(visible.some(w=>w.workspaceId===fixture.bundle.workspaceId),oldHasAuth);
       const original=await p.evaluate(async ids=>{const db=await idb.openDB('life-tools-v1',1);try{return {bundle:await db.get('bundles',ids.workspaceId),stage:await db.get('staging',ids.stageId)};}finally{db.close();}},{workspaceId:fixture.bundle.workspaceId,stageId:fixture.stage.stageId});
       assert.deepEqual(original,fixture);assert.equal(await p.evaluate(()=>localStorage.getItem('caeyeon_life_registry')),'{"docs":[],"anonymous":"preserve-upgrade"}');
-      const modules=['life.html','assets/platform-auth.js','assets/platform-life-remote.js','assets/life/core.js','assets/life/storage.js','assets/life/icons.js','assets/life/ui.js','assets/life/home.js','assets/life/collection.js','assets/life/collection-media.js','assets/life/collection-metadata.js','assets/life/collection-picker.js','assets/life/collection-ui.js','assets/life/collection.css','assets/life/workbench-ui.js','assets/life/reflection-lenses.js','assets/life/reflection-lenses-ui.js','assets/life/workbench.css','assets/life/rediscovery.js','assets/life/reading-position.js','assets/life/ui.css','assets/life/writing-ui.js','assets/life/composition-remote.js','assets/life/composition-sync.js','assets/life/composition-ui.js','assets/life/writing-remote.js','assets/life/writing-sync.js','assets/life/writing-sync-ui.js','vendor/supabase/supabase.js'];
+      const modules=['life.html','assets/platform-auth.js','assets/platform-life-remote.js','assets/life/core.js','assets/life/unified-search.js','assets/life/unified-search-ui.js','assets/life/storage.js','assets/life/icons.js','assets/life/ui.js','assets/life/home.js','assets/life/collection.js','assets/life/collection-media.js','assets/life/collection-metadata.js','assets/life/collection-picker.js','assets/life/collection-ui.js','assets/life/collection.css','assets/life/workbench-ui.js','assets/life/reflection-lenses.js','assets/life/reflection-lenses-ui.js','assets/life/workbench.css','assets/life/rediscovery.js','assets/life/reading-position.js','assets/life/ui.css','assets/life/writing-ui.js','assets/life/composition-remote.js','assets/life/composition-sync.js','assets/life/composition-ui.js','assets/life/writing-remote.js','assets/life/writing-sync.js','assets/life/writing-sync-ui.js','vendor/supabase/supabase.js'];
       const runtime=await p.evaluate(async({name,modules})=>{
         if(!await caches.has(name))return [];
         const cache=await caches.open(name);

@@ -14,6 +14,7 @@ function playwright() {
 const settle = page => page.waitForFunction(() => !document.querySelector('.life-app[aria-busy="true"]'));
 async function click(page, name) {
   if (['기록 목록','기록 검색','가져오기','시간 보기'].includes(name)) await openSection(page, 'records');
+  if (name === '기록 검색') { await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click(); await settle(page); return; }
   if (name === '로그아웃') await openAccount(page);
   await page.getByRole('button', { name, exact: true }).click(); await settle(page);
 }

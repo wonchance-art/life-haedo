@@ -160,7 +160,8 @@ async function main() {
       assert.equal(await page.locator('#lifeSearchReturn').getAttribute('aria-label'), '홈으로 돌아가기');
       await page.locator('#lifeSearchReturn').click(); await settle(page); await page.locator('#homePage').waitFor();
       await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, key);
-      await page.getByRole('button', { name: '기록 검색', exact: true }).click(); await settle(page);
+      await nav(page, 'records'); await settle(page);
+      if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'sources') await nav(page, 'records');
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'sources');
       assert.equal(await page.locator('.life-record-sections').count(), 0);
       assert.deepEqual(await page.locator('.life-record-actions button').allTextContents(), ['기록 선택', '컬렉션', '묶음', '내 페이지']);

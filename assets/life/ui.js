@@ -117,8 +117,10 @@
     let homeRenderPromise = Promise.resolve();
     let navigationTrigger = null;
     const viewOrigins = new Map();
-    const parentViews = new Set(['home', 'sources', 'topics', 'tools', 'manage']);
-    const subviewTitles = { collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '내 페이지',
+    let findRenderPromise = Promise.resolve();
+    let collectionOpenOptions = null;
+    const parentViews = new Set(['find', 'home', 'sources', 'topics', 'tools', 'manage']);
+    const subviewTitles = { find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '내 페이지',
       discover: '다시 찾기', sync: '기기 간 동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
     const selectedVersions = new Set();
@@ -159,6 +161,18 @@
     root.append(skip, header, toolbar, recordSections, status, error, main);
     container.replaceChildren(root);
     const collection = global.HaedoLife.CollectionUI?.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onSaved: clearError });
+    const unifiedSearch = global.HaedoLife.UnifiedSearchUI.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed,
+      onOpen: guarded(async row => {
+        const workspaceId = state.bundle.workspaceId;
+        if (row.kind === 'source') {
+          await refreshData();
+          if (disposed || state.mode !== 'find' || state.bundle?.workspaceId !== workspaceId) return;
+          if (!state.bundle.sourceVersions.some(v => v.id === row.sourceVersionId && v.sourceId === row.sourceId)) throw new Error('이 원문 버전을 찾을 수 없습니다. 검색 결과를 다시 불러와 주세요.');
+          return openResult('find', row.key, row);
+        }
+        if (row.kind === 'page') return navigate('page', { pagePreview: false, searchTarget: { postId: row.postId, entryId: row.entryId } });
+        return navigate('collection', { collectionItemId: row.itemId });
+      }) });
     const workbenchModes = ['activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'public-pages'];
     const workbench = global.HaedoLife.WorkbenchUI?.create({
       storage, core, host: main, getBundle: () => state.bundle,
@@ -888,7 +902,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { selection, groupId, pagePreview, discovery, writing, reimport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, ...viewOptions } = options || {};
+      const { selection, groupId, pagePreview, discovery, writing, reimport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, collectionItemId, ...viewOptions } = options || {};
       if (reimport) {
         if (mode !== 'import' || state.bundle.workspaceId !== reimport.workspaceId) return;
         const source = sourceFor(reimport.sourceId);
@@ -905,6 +919,7 @@
         state.editTick = 1;
       }
       if (!['import', 'batch', 'source'].includes(mode) && !chapterImportOptions) chapterImport = null;
+      collectionOpenOptions = mode === 'collection' ? { itemId: collectionItemId } : null;
       writingOpenOptions = mode === 'write' ? writing || {} : null;
       Object.assign(state, viewOptions, { mode });
       workbenchOpenOptions = workbenchModes.includes(mode) ? options : null;
@@ -918,9 +933,10 @@
         main.querySelector('#lifeImportText')?.focus();
         await persistStage(true);
       }
+      if (mode === 'find') main.querySelector('#lifeFindQuery')?.focus();
       if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
       const heading = (options?.chapterImport && (main.querySelector('#wbChapterImportHeading') || main.querySelector('#wbChapterNote'))) || (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || main.querySelector('h1,h2') || toolbar.querySelector('h1');
-      if (heading && !options?.groupId && !reimport) {
+      if (heading && mode !== 'find' && !options?.searchTarget && !options?.collectionItemId && !options?.groupId && !reimport) {
         heading.focus({ preventScroll: true });
         if (options?.book || options?.chapterImport) heading.scrollIntoView({ block: 'nearest' });
       }
@@ -1007,7 +1023,7 @@
       if (section === 'tools') return ['discover', 'reflection', 'books'].includes(view) ? view : 'tools';
       if (section === 'manage') return ['transfer', 'sync', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
       if (!section && ['transfer', 'sync', 'workbench-backup', 'public-pages', 'discover', 'reflection', 'books'].includes(view)) return view;
-      if (['topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related', 'collection'].includes(view)) return view;
+      if (['topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related', 'collection', 'find'].includes(view)) return view;
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
     }
 
@@ -1074,12 +1090,13 @@
         const controls = [...root.querySelectorAll('button,a,summary,input')];
         const target = (origin.focusKey && controls.find(el => el.dataset.focusKey === origin.focusKey)) ||
           (origin.focusId && controls.find(el => el.id === origin.focusId)) || controls.find(el =>
-          el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeSearch,h1,h2') || toolbar.querySelector('h1');
+          el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2') || toolbar.querySelector('h1');
         for (let parent = target?.parentElement; parent && parent !== main; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
         target?.focus({ preventScroll: true });
         global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
       });
-      if (origin.mode === 'home') homeRenderPromise.then(restore);
+      if (origin.mode === 'find') findRenderPromise.then(restore);
+      else if (origin.mode === 'home') homeRenderPromise.then(restore);
       else restore();
     }
 
@@ -1087,12 +1104,13 @@
       if (disposed) return;
       const section = sectionFor(state.mode);
       global.HaedoNavigation?.activate(section);
+      status.hidden = state.mode === 'find';
       header.replaceChildren();
       toolbar.classList.add('haedo-page-heading');
       toolbar.replaceChildren();
       toolbar.hidden = state.mode === 'source' && !state.remoteChanged;
       recordSections.replaceChildren();
-      const focused = ['write', 'source', 'page', 'related', 'collection'].includes(state.mode);
+      const focused = ['write', 'source', 'page', 'related', 'collection', 'find'].includes(state.mode);
       recordSections.hidden = section !== 'records' || focused;
       const heading = node('h1', null, 'life-page-title');
       heading.tabIndex = -1;
@@ -1107,7 +1125,7 @@
         heading.append(records);
       } else heading.textContent = section === 'home' ? '홈' : section === 'tools' ? '도구' : '관리';
       if (subviewTitles[state.mode]) {
-        const labels = { reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '기록으로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '관리로 돌아가기' };
+        const labels = { find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '기록으로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '관리로 돌아가기' };
         const back = iconButton(labels[subviewOrigin().mode] || labels.sources, 'back', guarded(returnFromSubview));
         back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';
         back.dataset.subviewReturn = 'true';
@@ -1144,7 +1162,7 @@
       if (!focused && (section === 'records' || section === 'home')) {
         const nav = node('nav', null, 'life-nav life-context-nav');
         nav.setAttribute('aria-label', '기록 보기');
-        [['sources', '기록 검색', 'search'], ...(section === 'records' ? [['time', '시간 보기', 'timeline']] : [])].forEach(([mode, label, icon]) => {
+        (section === 'records' ? [['time', '시간 보기', 'timeline']] : []).forEach(([mode, label, icon]) => {
           const tab = iconButton(label, icon, guarded(() => navigate(mode)));
           if (state.mode === mode || mode === 'sources' && state.mode === 'source') tab.setAttribute('aria-current', 'page');
           nav.append(tab);
@@ -1158,7 +1176,10 @@
         if (section === 'records') nav.append(add, iconButton('글쓰기', 'edit', guarded(() => navigate('write'))));
         toolbar.append(nav);
       }
-      if (state.remoteChanged) {
+      if (!['source', 'find'].includes(state.mode)) {
+        const find = iconButton('통합 검색', 'search', guarded(() => navigate('find'))); find.id = 'lifeFindOpen'; toolbar.append(find);
+      }
+      if (state.remoteChanged && state.mode !== 'find') {
         const refresh = button('최신 내용 확인', guarded(async () => {
           if (dirty()) await persistStage();
           await workbench?.flush();
@@ -1302,6 +1323,7 @@
     }
 
     function resetSearchContext() {
+      unifiedSearch?.reset();
       viewOrigins.clear();
       selectedVersions.clear();
       selectionReturn = null;
@@ -1533,17 +1555,18 @@
 
     function openResult(mode, key, ref) {
       const returnContext = { workspaceId: state.bundle.workspaceId, mode, focusKey: key, sourceVersionId: ref.sourceVersionId, scrollY: global.scrollY };
-      return navigate('source', { sourceId: ref.sourceId, sourceVersionId: ref.sourceVersionId, locator: ref.locator || null, suppressReaderResume: mode === 'sources' && !!state.sourcesSearch.trim() && !ref.locator, returnContext });
+      return navigate('source', { sourceId: ref.sourceId, sourceVersionId: ref.sourceVersionId, locator: ref.locator || null, suppressReaderResume: (mode === 'find' || mode === 'sources' && !!state.sourcesSearch.trim()) && !ref.locator, returnContext });
     }
 
     async function returnToResults() {
       const context = state.returnContext;
       if (!context || context.workspaceId !== state.bundle.workspaceId) return navigate('sources', { returnContext: null });
       await navigate(context.mode, { returnContext: null, sourcesRevealVersionId: context.mode === 'sources' ? context.sourceVersionId || null : null });
+      const navigation = navigationGeneration;
       const restore = () => requestAnimationFrame(() => {
-        if (disposed || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode) return;
+        if (disposed || navigation !== navigationGeneration || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode) return;
         const target = Array.from(main.querySelectorAll('[data-focus-key]')).find(el => el.dataset.focusKey === context.focusKey) ||
-          (context.mode === 'sources' && Array.from(main.querySelectorAll('.life-source-open')).find(el => el.dataset.versionId === context.sourceVersionId)) || main.querySelector('#lifeSearch,h1,h2');
+          (context.mode === 'sources' && Array.from(main.querySelectorAll('.life-source-open')).find(el => el.dataset.versionId === context.sourceVersionId)) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2');
         const panel = target?.closest('[data-result-panel]');
         let ancestor = target?.parentElement;
         while (ancestor && ancestor !== main) { if (ancestor.tagName === 'DETAILS') ancestor.open = true; ancestor = ancestor.parentElement; }
@@ -1558,6 +1581,7 @@
         const pending = homeRenderPromise;
         pending.then(() => { if (pending === homeRenderPromise) restore(); });
       }
+      else if (context.mode === 'find') findRenderPromise.then(restore);
       else restore();
     }
 
@@ -3209,6 +3233,7 @@
       workbench?.leave();
       writer?.close();
       collection?.leave();
+      unifiedSearch?.leave();
       if (readerCleanup) { readerCleanup(); readerCleanup = null; }
       readingResumeCleanup?.(); readingResumeCleanup = null;
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
@@ -3221,7 +3246,8 @@
         homeRenderPromise = home.render().catch(failure);
         return;
       }
-      if (state.mode === 'collection' && collection) { collection.open().catch(failure); return; }
+      if (state.mode === 'find') { findRenderPromise = unifiedSearch.open().catch(failure); return; }
+      if (state.mode === 'collection' && collection) { const options = collectionOpenOptions || {}; collectionOpenOptions = null; collection.open(options).catch(failure); return; }
       if (state.mode === 'write' && writer) {
         const options = writingOpenOptions || {};
         writingOpenOptions = null;
@@ -3360,6 +3386,7 @@
       workbench?.dispose();
       writer?.dispose();
       collection?.dispose();
+      unifiedSearch?.dispose();
       unbindNavigation?.();
       global.removeEventListener('popstate', popstate);
       root.removeEventListener('focusin', keepFocusVisible);

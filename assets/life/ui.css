@@ -418,3 +418,22 @@ body.haedo-shell .haedo-account-host { top: 42px; right: max(calc(60px + env(saf
 .life-chapter-import-title { flex: 1 1 60%; min-width: 0; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; word-break: keep-all; }
 .life-chapter-import-return > .life-meta { flex: 1 1 100%; order: 2; }
 .life-chapter-import-return > .life-button { flex-shrink: 0; }
+
+/* Unified private search: source identities stay separate; results use the reading column. */
+.life-find { max-width: 760px; margin-inline: auto; }
+.life-find-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-block: 16px; }
+.life-find-tabs button[aria-pressed="true"] { background: var(--soft); color: var(--ink); }
+.life-find .life-check { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.life-find-heading { font-size: 15px; margin: 28px 0 8px; }
+.life-find-result { display: flex; justify-content: flex-start; align-items: flex-start; width: 100%; gap: 14px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 20px 0; background: transparent; text-align: left; }
+.life-find-icon { flex: 0 0 24px; padding-top: 4px; }
+.life-find-icon svg { width: 22px; height: 22px; }
+.life-find-copy { display: grid; flex: 1; gap: 7px; min-width: 0; overflow-wrap: anywhere; }
+.life-find-copy strong { font-size: 17px; font-weight: 600; line-height: 1.55; }
+.life-find-snippet { font-size: 16px; font-weight: 400; line-height: 1.75; white-space: pre-line; }
+.life-find .life-search-field { flex: 1; min-width: 0; }
+.life-find input[type="search"] { width: 100%; min-width: 0; font-size: 16px; }
+@media (max-width: 520px) { .life-find-result { gap: 10px; } .life-find-copy strong { font-size: 16px; } }
+
+.life-find input[type="search"]:focus-visible { outline: none; }
+.life-find input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
