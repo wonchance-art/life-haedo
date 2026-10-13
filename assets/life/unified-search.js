@@ -28,14 +28,20 @@
     if (bundle) {
       const sources = new Map(bundle.sources.map(s => [s.id, s]));
       const hits = new Map(core.searchSources(bundle, query, options).map(h => [h.sourceVersionId, h]));
+      const versionsBySource = new Map(), versionPositions = new Map();
+      for (const version of bundle.sourceVersions) {
+        const versions = versionsBySource.get(version.sourceId) || [];
+        versionPositions.set(version.id, versions.length); versions.push(version);
+        versionsBySource.set(version.sourceId, versions);
+      }
       for (const record of bundle.records) {
         const found = field([['발췌', record.text], ['내 메모', record.note], ['주제', record.topic]]);
         if (!found) continue;
         for (const ref of record.sourceRefs) {
           if (hits.has(ref.sourceVersionId) || !sources.has(ref.sourceId)) continue;
-          const versions = bundle.sourceVersions.filter(v => v.sourceId === ref.sourceId);
-          const index = versions.findIndex(v => v.id === ref.sourceVersionId);
-          if (index < 0) continue;
+          const versions = versionsBySource.get(ref.sourceId) || [];
+          const index = versionPositions.get(ref.sourceVersionId);
+          if (index === undefined || versions[index]?.id !== ref.sourceVersionId) continue;
           hits.set(ref.sourceVersionId, { sourceId: ref.sourceId, sourceVersionId: ref.sourceVersionId, versionIndex: index + 1, versionCount: versions.length, locator: ref.locator, found });
         }
       }

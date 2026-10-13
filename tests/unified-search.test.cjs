@@ -35,3 +35,9 @@ test('literal matching never treats HTML, regex, Latin spacing or newlines as fu
  assert.equal(core.findSearchText('한\n글','한글',{ignoreKoreanSpacing:true}),null);assert.equal(core.findSearchText('open source','opensource',{ignoreKoreanSpacing:true}),null);
  const text='🌱<script>값</script>';const hit=core.findSearchText(text,'<script>');assert.equal(hit.start,2);assert.equal(text.slice(hit.start,hit.end),hit.text);
 });
+test('record-only metadata resolves each exact version position without borrowing latest body', async () => {
+ const {bundle,first,second}=await fixture();
+ bundle.records.push({id:core.id(),kind:'excerpt',text:'첫 줄',topic:'분류표식',note:'나의 메모',sourceRefs:[{sourceId:first.source.id,sourceVersionId:first.version.id,locator:{start:0,end:3}}],provenance:{kind:'user'},revision:1,createdAt:bundle.createdAt,updatedAt:bundle.updatedAt});
+ const before=structuredClone(bundle),rows=model.search({bundle},'분류표식');
+ assert.equal(rows.length,1);assert.equal(rows[0].sourceVersionId,first.version.id);assert.equal(rows[0].versionIndex,1);assert.equal(rows[0].versionCount,2);assert.equal(rows[0].field,'주제');assert.notEqual(rows[0].sourceVersionId,second.version.id);assert.deepEqual(bundle,before);
+});

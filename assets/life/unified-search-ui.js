@@ -5,15 +5,19 @@
   function create({ storage, host, getBundle, isDisposed, onOpen }) {
     let scope = null, active = false, generation = 0, unsubscribe;
     let query = '', kind = 'all', spacing = false, archived = false, limits = {};
-    let data = {}, errors = [], section, input, list, status, tabs, changed, composing = false;
+    let data = {}, dataRevision = 0, cached = null, errors = [], section, input, list, status, tabs, changed, composing = false;
     const current = token => active && !isDisposed() && token === generation && getBundle()?.workspaceId === scope;
     const button = (label, action) => { const b = el('button', label, 'life-button'); b.type = 'button'; b.addEventListener('click', action); return b; };
-    function leave() { active = false; generation++; unsubscribe?.(); unsubscribe = null; data = {}; }
+    function leave() { active = false; generation++; unsubscribe?.(); unsubscribe = null; data = {}; cached = null; dataRevision++; }
     function reset() { leave(); scope = null; query = ''; kind = 'all'; spacing = archived = false; limits = {}; }
     function draw() {
       if (!active || !section.isConnected) return;
       const focusKey = list.querySelector(':focus')?.dataset.focusKey;
-      const rows = M.search(data, query, { ignoreKoreanSpacing: spacing, archived });
+      // Changing visible kinds or limits never rescans unchanged source bodies.
+      if (!cached || cached.revision !== dataRevision || cached.query !== query || cached.spacing !== spacing || cached.archived !== archived) {
+        cached = { revision: dataRevision, query, spacing, archived, rows: M.search(data, query, { ignoreKoreanSpacing: spacing, archived }) };
+      }
+      const rows = cached.rows;
       list.replaceChildren();
       tabs.querySelectorAll('button').forEach(b => {
         const count = rows.filter(r => b.dataset.kind === 'all' || r.kind === b.dataset.kind).length;
@@ -51,11 +55,11 @@
       if (focusKey) [...list.querySelectorAll('[data-focus-key]')].find(b => b.dataset.focusKey === focusKey)?.focus({ preventScroll: true });
     }
     async function reload() {
-      const token = ++generation; data = {}; errors = []; changed.hidden = true;
+      const token = ++generation; data = {}; dataRevision++; cached = null; errors = []; changed.hidden = true;
       status.setAttribute('role', 'status'); status.textContent = '이 작업공간의 자료를 불러오는 중…'; section.setAttribute('aria-busy', 'true'); draw();
       const reads = [['bundle', '원문', () => storage.read(scope)], ['workbench', '페이지', () => storage.readWorkbench(scope)], ['collection', '컬렉션', () => storage.readCollection(scope)]];
       await Promise.all(reads.map(async ([key, label, read]) => {
-        try { const value = await read(); if (!current(token)) return; data[key] = value; }
+        try { const value = await read(); if (!current(token)) return; data[key] = value; dataRevision++; }
         catch (_) { if (!current(token)) return; errors.push(label); }
         if (current(token)) draw();
       }));
