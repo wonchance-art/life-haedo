@@ -10,7 +10,7 @@
     if (className) node.className = className;
     return node;
   }
-  function create({ host, storage, core, writingSync, getBundle, isDisposed = () => false, announce = () => {}, onSaved = () => {}, onClose = () => {} }) {
+  function create({ host, storage, core, writingSync, getBundle, parentNavigation = false, isDisposed = () => false, announce = () => {}, onSaved = () => {}, onClose = () => {} }) {
     const model = life.Writing;
     const workspaces = new Map(), urls = new Set();
     let disposed = false, visible = false, generation = 0, current = null;
@@ -268,7 +268,7 @@
       titleResize?.disconnect(); titleResize = null;
       surface.setAttribute('aria-busy', 'false'); surface.replaceChildren();
       const actions = el('div', null, 'life-writing-actions');
-      actions.append(action('기록으로 돌아가기', async () => { await flush(); if (showing(session)) await onClose(); }, { id: 'lifeWritingClose', glyph: 'back' }));
+      if (!parentNavigation) actions.append(action('기록으로 돌아가기', async () => { await flush(); if (showing(session)) await onClose(); }, { id: 'lifeWritingClose', glyph: 'back' }));
       status = el('p', '', 'life-meta life-writing-status'); status.id = 'lifeWritingStatus'; status.setAttribute('role', 'status'); actions.append(status);
       saveButton = action('기록에 저장', () => saveRecord(session), { id: 'lifeWritingSave', primary: true }); actions.append(saveButton); surface.append(actions);
       incomingBox = el('div', null, 'life-writing-incoming'); incomingBox.id = 'lifeWritingIncoming'; incomingBox.setAttribute('role', 'status'); incomingBox.hidden = true; surface.append(incomingBox);
@@ -385,7 +385,8 @@
         if (!options.stageId && !options.sourceId && !options.newDraft && current && inWorkspace(current) && current.stage.state === 'draft') { renderEditor(current); report(current, error); }
         else {
           current = null; surface.replaceChildren(el('p', errorMessage(error), 'life-writing-error'));
-          surface.append(action('다시 불러오기', () => open(options), { id: 'lifeWritingReload' }), action('기록으로 돌아가기', onClose, { id: 'lifeWritingClose' }));
+          surface.append(action('다시 불러오기', () => open(options), { id: 'lifeWritingReload' }));
+          if (!parentNavigation) surface.append(action('기록으로 돌아가기', onClose, { id: 'lifeWritingClose' }));
         }
       }
     }

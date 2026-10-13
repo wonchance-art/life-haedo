@@ -14,14 +14,14 @@
     let disposed = false, generation = 0, visible = false;
     const alive = () => !disposed && !isDisposed();
     const showing = context => alive() && visible && context.token === generation && getBundle()?.workspaceId === context.workspaceId && context.surface.parentNode === host;
-    function action(context, label, task, className = '', { keepFocus = false } = {}) {
+    function action(context, label, task, className = '', { keepFocus = true } = {}) {
       const button = el('button', label, 'life-button' + (className ? ' ' + className : ''));
       button.type = 'button';
       let running = false;
       button.addEventListener('click', async () => {
         if (running || !showing(context) || !button.isConnected) return;
         running = true;
-        // Source navigation captures the focused result before removing this view.
+        // Navigation captures the focused entry before removing this view.
         // Native disabled would blur that button before its focus key is read.
         if (keepFocus) {
           button.focus({ preventScroll: true });
@@ -104,8 +104,8 @@
     }
     function quickLinks(context) {
       const nav = el('nav', null, 'home-shortcuts'); nav.setAttribute('aria-label', '빠른 진입');
-      [['기록', 'quote', 'sources'], ['내 페이지', 'user', 'page'], ['도구', 'workspace', 'tools']].forEach(([label, glyph, mode]) => {
-        const button = action(context, '', () => navigate(mode, mode === 'page' ? { pagePreview: false } : undefined), 'home-shortcut');
+      [['가져오기', 'plus', 'import'], ['글쓰기', 'edit', 'write'], ['연표', 'timeline', 'time']].forEach(([label, glyph, mode]) => {
+        const button = action(context, '', () => navigate(mode), 'home-shortcut');
         button.dataset.homeDestination = mode;
         button.append(life.Icons.create(glyph), el('span', label)); nav.append(button);
       });
@@ -166,6 +166,7 @@
       state.groups.slice(0, 2).forEach(group => {
         const button = action(context, '', () => navigate('activities', { groupId: group.id }), 'home-group');
         button.dataset.groupId = group.id;
+        button.dataset.focusKey = 'home:group:' + group.id;
         const copy = el('span', null, 'home-group-copy');
         const missing = group.versionIds.filter(id => !sourceInfo(id)).length;
         copy.append(el('strong', group.title, 'home-clamp'), el('span', '연결한 기록 ' + group.versionIds.length + '개' + (missing ? ' · 원문 없음 ' + missing + '개' : ''), 'life-meta'));
@@ -220,22 +221,20 @@
       renderReadingResume?.(surface);
       const recentRecords = recent(context, bundle);
       const composition = el('div', null, 'home-composition'); composition.id = 'homeComposition';
-      const summaries = el('div', null, 'home-summaries');
-      const status = el('p', '책과 구성을 불러오는 중…', 'life-meta home-loading'); status.setAttribute('role', 'status');
-      composition.append(status); composition.setAttribute('aria-busy', 'true'); surface.append(composition, recentRecords, summaries); host.append(surface);
+      const status = el('p', '저장한 구성을 불러오는 중…', 'life-meta home-loading'); status.setAttribute('role', 'status');
+      composition.append(status); composition.setAttribute('aria-busy', 'true'); surface.append(recentRecords, composition); host.append(surface);
       try {
         const state = await storage.readWorkbench(context.workspaceId);
         if (!showing(context)) return;
         if (state.workspaceId !== context.workspaceId) throw new Error('workspace_mismatch');
         life.Workbench.validate(state);
-        composition.replaceChildren(books(context, state));
-        summaries.replaceChildren(groups(context, state), pageSummary(context, state.page));
+        composition.replaceChildren(groups(context, state), pageSummary(context, state.page), books(context, state));
         composition.setAttribute('aria-busy', 'false');
       } catch (_) {
         if (!showing(context)) return;
         composition.setAttribute('aria-busy', 'false');
         const error = el('div', null, 'home-load-error'); error.setAttribute('role', 'status');
-        error.append(el('p', '책과 구성을 불러오지 못했습니다. 기록은 계속 열 수 있습니다.', 'life-meta'));
+        error.append(el('p', '저장한 구성을 불러오지 못했습니다. 기록은 계속 열 수 있습니다.', 'life-meta'));
         error.append(action(context, '다시 불러오기', async () => { surface.remove(); await render(); }));
         composition.replaceChildren(error);
       }

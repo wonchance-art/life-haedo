@@ -1,0 +1,461 @@
+{
+  "createdAt": "2026-10-09T02:30:14.343Z",
+  "browser": "151.0.7922.173",
+  "base": "http://127.0.0.1:4188",
+  "scope": "Real local UI, SDK, isolated IndexedDB and anonymous Auth HTTP; Chromium viewport/touch simulation only",
+  "checks": [
+    {
+      "name": "trusted scroll then reload and explicit older-version resume 1440",
+      "pass": true
+    },
+    {
+      "name": "trusted scroll then reload and explicit older-version resume 820",
+      "pass": true
+    },
+    {
+      "name": "trusted scroll then reload and explicit older-version resume 390",
+      "pass": true
+    },
+    {
+      "name": "trusted selection keeps exact raw UTF16 offset and viewport reflow resumes that character",
+      "pass": true
+    },
+    {
+      "name": "native Chromium touch gesture stores a visible reading character",
+      "pass": true
+    },
+    {
+      "name": "search location wins and source/excerpt/arrangement panels do not become reading positions",
+      "pass": true
+    },
+    {
+      "name": "clear cancels delayed reading work and old-tab candidates cannot resurrect it",
+      "pass": true
+    },
+    {
+      "name": "workspace and account boundaries keep local reading points private",
+      "pass": true
+    },
+    {
+      "name": "stale displayed point refreshes without jumping and link or missing exact versions never fall back",
+      "pass": true
+    },
+    {
+      "name": "native reading-position write failure preserves original reading and prior durable point",
+      "pass": true
+    },
+    {
+      "name": "native reading-position read failure and malformed metadata keep home usable with retry",
+      "pass": true
+    },
+    {
+      "name": "reading position never leaks into original backup or uploads",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "scene": "home-position",
+      "file": "home-position-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 95,
+        "height": 26,
+        "lineHeight": "25.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "reader-resumed",
+      "file": "reader-resumed-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "div",
+        "id": "lifeSourceText",
+        "class": "life-source-text",
+        "text": "보관한 원문",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": {
+        "width": 700,
+        "size": "18px",
+        "lineHeight": "35.1px",
+        "selectedText": ""
+      },
+      "resultCount": 0
+    },
+    {
+      "scene": "records-position",
+      "file": "records-position-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.661,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 700,
+        "height": 44,
+        "lineHeight": "31.35px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 2
+    },
+    {
+      "scene": "home-position",
+      "file": "home-position-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 95,
+        "height": 26,
+        "lineHeight": "25.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "reader-resumed",
+      "file": "reader-resumed-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "div",
+        "id": "lifeSourceText",
+        "class": "life-source-text",
+        "text": "보관한 원문",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": {
+        "width": 628,
+        "size": "18px",
+        "lineHeight": "35.1px",
+        "selectedText": ""
+      },
+      "resultCount": 0
+    },
+    {
+      "scene": "records-position",
+      "file": "records-position-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.661,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 628,
+        "height": 44,
+        "lineHeight": "31.35px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 2
+    },
+    {
+      "scene": "home-position",
+      "file": "home-position-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 95,
+        "height": 26,
+        "lineHeight": "25.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "reader-resumed",
+      "file": "reader-resumed-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "div",
+        "id": "lifeSourceText",
+        "class": "life-source-text",
+        "text": "보관한 원문",
+        "visible": true,
+        "width": 3,
+        "contrast": 7.286
+      },
+      "title": null,
+      "reader": {
+        "width": 350,
+        "size": "17px",
+        "lineHeight": "33.15px",
+        "selectedText": ""
+      },
+      "resultCount": 0
+    },
+    {
+      "scene": "records-position",
+      "file": "records-position-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.661,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 350,
+        "height": 59,
+        "lineHeight": "31.35px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 2
+    },
+    {
+      "scene": "home-unavailable",
+      "file": "home-unavailable-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "button",
+        "id": "homeReadingResumeClear",
+        "class": "life-button life-icon-button life-reading-resume-clear",
+        "text": "읽기 위치 지우기",
+        "visible": false,
+        "width": 3,
+        "contrast": 6.05
+      },
+      "title": {
+        "width": 95,
+        "height": 26,
+        "lineHeight": "25.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    },
+    {
+      "scene": "home-read-error",
+      "file": "home-read-error-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "h2",
+        "id": "homeRecentTitle",
+        "class": "",
+        "text": "최근 담은 기록",
+        "visible": false,
+        "width": 3,
+        "contrast": 15.987
+      },
+      "title": {
+        "width": 95,
+        "height": 26,
+        "lineHeight": "25.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0
+    }
+  ],
+  "observations": [
+    {
+      "width": 1440,
+      "savedOffset": 2732,
+      "top": 368.515625,
+      "bottom": 394.515625,
+      "viewportHeight": 1000,
+      "scrollY": 3199,
+      "version": "7c9e0ecd-d883-4804-99f1-900bcb58a160",
+      "selected": ""
+    },
+    {
+      "width": 820,
+      "savedOffset": 2728,
+      "top": 368.515625,
+      "bottom": 394.515625,
+      "viewportHeight": 1000,
+      "scrollY": 3199,
+      "version": "08baa9c2-ec08-4854-a8fe-f7d2f254c11f",
+      "selected": ""
+    },
+    {
+      "width": 390,
+      "savedOffset": 2550,
+      "top": 314.796875,
+      "bottom": 339.796875,
+      "viewportHeight": 844,
+      "scrollY": 4672,
+      "version": "cebca07d-8ede-4dd0-b732-c6ccd02a715a",
+      "selected": ""
+    },
+    {
+      "scenario": "reading-position failure recovery",
+      "previousRevision": 1,
+      "recoveredRevision": 2,
+      "feedbackVisibleAfterSuccess": false
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "realRemoteWrites": 0
+}

@@ -75,7 +75,7 @@ async function unchanged(page, initial, ids) {
   if (ids) assert.deepEqual((await workspaces(page)).map(w => w.workspaceId).sort(), ids);
 }
 async function sourceMemo(page, title, note) {
-  await nav(page, 'records'); await button(page, '원천 기록');
+  await nav(page, 'records'); await page.locator('#lifeSearch').waitFor();
   await page.locator('#lifeSearch').fill(title);
   await button(page, '자료 읽기: ' + title);
   const selected = await page.locator('#lifeSourceText').evaluate(el => {
@@ -192,7 +192,7 @@ async function main() {
       savedMemo(previousStages, '복원 전에 원문에서 작성 중인 메모🌱', first);
       assert.deepEqual(await stagesFor(page, restored.workspaceId), []);
       const second = await sourceMemo(page, source.title, '새 사본에서 복귀 전에 작성 중인 다른 메모📚');
-      await button(page, '모아보기');
+      await page.locator('#lifeSearchReturn').click(); await settle(page);
       assert.deepEqual(await stagesFor(page, restored.workspaceId), []);
       await button(page, '이전 작업공간으로 돌아가기');
       assert.equal((await bundle(page)).workspaceId, initial.original.workspaceId);
@@ -211,7 +211,7 @@ async function main() {
       assert.deepEqual(await stagesFor(page, initial.original.workspaceId), []);
       await abortStageWrites(page, false); await button(page, '새 사본으로 복원');
       const restored = await bundle(page); savedMemo(await stagesFor(page, initial.original.workspaceId), '복원 실패 후에도 보존할 메모', first);
-      const second = await sourceMemo(page, source.title, '복귀 실패 후에도 새 사본에 남길 메모'); await button(page, '모아보기');
+      const second = await sourceMemo(page, source.title, '복귀 실패 후에도 새 사본에 남길 메모'); await page.locator('#lifeSearchReturn').click(); await settle(page);
       await abortStageWrites(page, true); await button(page, '이전 작업공간으로 돌아가기');
       assert.ok(await page.evaluate(() => __boundaryStageAborts > 0));
       assert.equal((await bundle(page)).workspaceId, restored.workspaceId); assert.equal(await page.locator('#lifeRestoreResult').isVisible(), true);
@@ -225,22 +225,23 @@ async function main() {
       const initial = await fixture(page); await transfer(page); await choose(page, initial.backup); await button(page, '새 사본으로 복원');
       const restored = await bundle(page);
       await page.evaluate(id => {
-        const put = IDBObjectStore.prototype.put, get = IDBObjectStore.prototype.get;
-        window.__returnOriginal = { put, get }; window.__returnReadAborts = 0;
+        const put = IDBObjectStore.prototype.put, getAll = IDBObjectStore.prototype.getAll;
+        window.__returnOriginal = { put, getAll }; window.__returnReadAborts = 0;
         IDBObjectStore.prototype.put = function (value, ...rest) {
           const request = put.call(this, value, ...rest);
           if (this.name === 'meta' && value.value === id) this.transaction.addEventListener('complete', () => { window.__returnReadFailureId = id; });
           return request;
         };
-        IDBObjectStore.prototype.get = function (key) {
-          if (this.name === 'bundles' && key === window.__returnReadFailureId) { window.__returnReadFailureId = null; __returnReadAborts++; this.transaction.abort(); throw new DOMException('Anonymous post-return read failure', 'AbortError'); }
-          return get.call(this, key);
+        // Fail the post-activation list refresh, not a concurrent sync status read.
+        IDBObjectStore.prototype.getAll = function (...args) {
+          if (this.name === 'bundles' && window.__returnReadFailureId) { window.__returnReadFailureId = null; __returnReadAborts++; this.transaction.abort(); throw new DOMException('Anonymous post-return list failure', 'AbortError'); }
+          return getAll.apply(this, args);
         };
       }, initial.original.workspaceId);
       await button(page, '이전 작업공간으로 돌아가기'); assert.ok(await page.evaluate(() => __returnReadAborts > 0));
-      await page.evaluate(() => { IDBObjectStore.prototype.put = __returnOriginal.put; IDBObjectStore.prototype.get = __returnOriginal.get; });
+      await page.evaluate(() => { IDBObjectStore.prototype.put = __returnOriginal.put; IDBObjectStore.prototype.getAll = __returnOriginal.getAll; });
       assert.equal((await bundle(page)).workspaceId, initial.original.workspaceId);
-      assert.equal(await page.locator('#lifeRestoreResult').count(), 0); assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'topics');
+      assert.equal(await page.locator('#lifeRestoreResult').count(), 0); assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'sources');
       assert.match(await page.locator('#lifeError').innerText(), /이전 작업공간을 열었고.*사본도 보관/);
       await unchanged(page, initial); assert.deepEqual(await page.evaluate(id => HaedoLife.Shell.storage.read(id), restored.workspaceId), restored);
       assert.equal(server.writes().length, 0);
@@ -258,7 +259,9 @@ async function main() {
     });
     await check('sync failure preserves local data and keeps retry next to the visible status', async ({ page, server, device }) => {
       const initial = await fixture(page); await syncing(page); await enable(page); server.offline.add(device); page.expectedAuthFailure = true;
-      await button(page, '지금 동기화'); assert.match(await page.locator('#lifeSyncStatus').innerText(), /실패|오류|연결|확인/);
+      await button(page, '지금 동기화');
+      await page.waitForFunction(() => /실패|오류|연결|확인/.test(document.querySelector('#lifeSyncStatus')?.textContent || ''));
+      assert.match(await page.locator('#lifeSyncStatus').innerText(), /실패|오류|연결|확인/);
       assert.equal(await page.getByRole('button', { name: '지금 동기화', exact: true }).isVisible(), true); await unchanged(page, initial);
       server.offline.delete(device); await button(page, '지금 동기화'); await unchanged(page, initial);
     });

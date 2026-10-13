@@ -1,0 +1,12 @@
+PASS home origin, keyboard/touch return and draft resume 1440
+PASS home origin, keyboard/touch return and draft resume 820
+PASS home origin, keyboard/touch return and draft resume 390
+PASS search, tool and management origins and active menu roots 1440
+PASS search, tool and management origins and active menu roots 820
+PASS search, tool and management origins and active menu roots 390
+PASS renamed home group and page editing return to the same entry
+PASS failed import save blocks both return paths and retry preserves input
+PASS late home response cannot block navigation or steal focus after return
+PASS page save failure blocks active records menu and contextual return
+PASS direct deep links have stable parent fallback and no persistent origin data
+{"passed":11,"total":11,"visual":12,"console":0,"page":0}

@@ -12,12 +12,12 @@ const { fixture, current, seedComposition, oldBody, newBody } = require('./life-
 const out = path.resolve(__dirname, '../.local/home-entry');
 const report = { createdAt: new Date().toISOString(), scope: 'Actual local app/SDK/IDB, synthetic HTTP Auth; viewport simulation, not Apple device testing', checks: [], visual: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, external: [] };
 
-// Wrap only the read boundary, preserving real ownership checks and IndexedDB.
+// Inject read/save failures at the storage boundary; successful calls use real IndexedDB.
 // A captured successful read can arrive late, like a slow device read already in flight.
 async function instrumentStorage(context) {
   await context.route(`${base}/assets/life/storage.js`, async route => {
     const response = await route.fetch(), source = await response.text();
-    const hook = `\n;(()=>{const original=HaedoLife.Storage;HaedoLife.Storage=Object.freeze({...original,forAccount(...args){const actual=original.forAccount(...args);return Object.freeze({...actual,async readWorkbench(...readArgs){window.__homeReadCount=(window.__homeReadCount||0)+1;if(window.__homeFailRead)throw Object.assign(new Error('익명 검사에서 구성 읽기를 중단했습니다.'),{code:'home_fixture_read'});const result=await actual.readWorkbench(...readArgs);if(window.__homeHoldRead){window.__homeReadEntered=true;window.__homeHeldWorkspace=readArgs[0];await new Promise(resolve=>{window.__homeReleaseRead=()=>{window.__homeHoldRead=false;resolve();};});}window.__homeReadFinished=(window.__homeReadFinished||0)+1;return result;}});}});})();`;
+    const hook = `\n;(()=>{const original=HaedoLife.Storage;HaedoLife.Storage=Object.freeze({...original,forAccount(...args){const actual=original.forAccount(...args);return Object.freeze({...actual,async saveStage(...saveArgs){if(window.__homeFailStage)throw new Error('익명 검사: 초안 저장 실패');return actual.saveStage(...saveArgs);},async readWorkbench(...readArgs){window.__homeReadCount=(window.__homeReadCount||0)+1;if(window.__homeFailRead)throw Object.assign(new Error('익명 검사에서 구성 읽기를 중단했습니다.'),{code:'home_fixture_read'});const result=await actual.readWorkbench(...readArgs);if(window.__homeHoldRead){window.__homeReadEntered=true;window.__homeHeldWorkspace=readArgs[0];await new Promise(resolve=>{window.__homeReleaseRead=()=>{window.__homeHoldRead=false;resolve();};});}window.__homeReadFinished=(window.__homeReadFinished||0)+1;return result;}});}});})();`;
     await route.fulfill({ response, body: source + hook });
   });
   await context.addInitScript(() => {
@@ -97,7 +97,7 @@ async function main() {
       assert.equal(await page.locator('[data-haedo-navigation] a').count(), 4);
       assert.equal(await page.locator('a[data-haedo-section="home"]').getAttribute('aria-current'), 'page');
       assert.equal(await page.locator('#homeFirstImport').isVisible(), true);
-      for (const [destination, expected] of [['sources', 'sources'], ['page', 'page'], ['tools', 'tools']]) {
+      for (const [destination, expected] of [['import', 'import'], ['write', 'write'], ['time', 'time']]) {
         await page.locator(`[data-home-destination="${destination}"]`).click(); await settle(page);
         await page.waitForFunction(expected => document.querySelector('#lifeMain')?.dataset.mode === expected, expected);
         await home(page);
@@ -160,7 +160,7 @@ async function main() {
       assert.equal(await page.locator('#lifeSearchReturn').getAttribute('aria-label'), '홈으로 돌아가기');
       await page.locator('#lifeSearchReturn').click(); await settle(page); await page.locator('#homePage').waitFor();
       await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, key);
-      await page.locator('[data-home-destination="sources"]').click(); await settle(page);
+      await page.getByRole('button', { name: '기록 검색', exact: true }).click(); await settle(page);
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'sources');
       assert.equal(await page.locator('.life-record-sections').count(), 0);
       assert.deepEqual(await page.locator('.life-record-actions button').allTextContents(), ['기록 선택', '묶음', '내 페이지']);
@@ -185,10 +185,12 @@ async function main() {
       assert(expected, 'Recent record must identify an exact stored version');
       const button = await record.locator('.home-record-open').elementHandle();
       await button.focus();
+      const beforeTop = await button.evaluate(node => node.getBoundingClientRect().top);
       const parent = await page.locator('#homeRecent').evaluateHandle(node => node.parentElement);
       await page.evaluate(() => __homeReleaseRead());
       await page.waitForFunction(() => document.querySelector('#homeComposition')?.getAttribute('aria-busy') === 'false');
       assert.equal(await button.evaluate(node => node.isConnected && document.activeElement === node), true, 'A slow composition read must retain the focused original button');
+      assert.equal(await button.evaluate(node => node.getBoundingClientRect().top), beforeTop, 'Late composition must not move the recent record under the user');
       assert.equal(await page.evaluate(node => document.querySelector('#homeRecent').parentElement === node, parent), true, 'Recent records must retain their parent during composition loading');
       assert.deepEqual(await current(page), before);
       await page.keyboard.press('Enter'); await settle(page);
@@ -244,11 +246,11 @@ async function main() {
       assert.equal(await page.locator('#homePage').count(), 0);
       await page.evaluate(() => { window.__homeFailRead = false; }); await page.getByRole('button', { name: '다시 불러오기', exact: true }).click();
       await page.locator('#homePage').waitFor(); assert.deepEqual(await current(page), before);
-      await page.locator('[data-home-destination="sources"]').focus(); await page.keyboard.press('Tab');
-      assert.equal(await page.evaluate(() => document.activeElement.dataset.homeDestination), 'page');
+      await page.locator('[data-home-destination="import"]').focus(); await page.keyboard.press('Tab');
+      assert.equal(await page.evaluate(() => document.activeElement.dataset.homeDestination), 'write');
       const focus = await page.evaluate(() => ({ visible: document.activeElement.matches(':focus-visible'), outline: getComputedStyle(document.activeElement).outlineWidth }));
       assert(focus.visible); assert(parseFloat(focus.outline) >= 3); await page.keyboard.press('Enter');
-      await page.locator('.life-workbench[data-mode="page"]').waitFor();
+      await page.locator('#lifeWritingBody').waitFor();
     });
     await check('records many notes, duplicate references and collapsed fourth quote keep exact return context at three widths', async ({ page }) => {
       const f = await fixture(page, { many: true });
@@ -277,9 +279,63 @@ async function main() {
       }
       assert.deepEqual(await current(page), before);
     });
+    for (const size of [{ width: 1440, height: 1000 }, { width: 820, height: 1000 }, { width: 390, height: 844 }]) await check('home shortcuts preserve drafts and reach timeline, tools and management ' + size.width, async ({ page }) => {
+      await freshHome(page);
+      assert.equal(await page.getByRole('button', { name: '가져오기', exact: true }).count(), 1);
+      assert.equal(await page.getByRole('button', { name: '글쓰기', exact: true }).count(), 1);
+      const start = page.locator('[data-home-destination="import"]');
+      if (size.width <= 820) await start.tap(); else { await start.focus(); await page.keyboard.press('Enter'); }
+      await page.locator('#lifeImportTitle').fill('옮겨 적는 중인 산책 기록');
+      await page.locator('#lifeImportText').fill('아직 저장을 확정하지 않은 원문과 출처를 그대로 둡니다.');
+      await home(page); await page.locator('[data-home-destination="import"]').click();
+      assert.equal(await page.locator('#lifeImportTitle').inputValue(), '옮겨 적는 중인 산책 기록');
+      assert.equal(await page.locator('#lifeImportText').inputValue(), '아직 저장을 확정하지 않은 원문과 출처를 그대로 둡니다.');
+      await home(page); await page.locator('[data-home-destination="write"]').click();
+      await page.locator('#lifeWritingTitle').fill('오늘 다시 생각한 일');
+      await page.locator('#lifeWritingBody').fill('내가 쓰던 초안은 홈에 다녀와도 이어 쓸 수 있어야 한다.');
+      await home(page); await page.locator('[data-home-destination="write"]').click();
+      assert.equal(await page.locator('#lifeWritingTitle').inputValue(), '오늘 다시 생각한 일');
+      assert.equal(await page.locator('#lifeWritingBody').inputValue(), '내가 쓰던 초안은 홈에 다녀와도 이어 쓸 수 있어야 한다.');
+      await home(page); await page.locator('[data-home-destination="time"]').click();
+      await page.getByRole('link', { name: /연표 목록/ }).click();
+      await page.waitForURL(url => url.pathname.endsWith('/workspace.html'));
+      await page.locator('[data-haedo-navigation] a[data-haedo-section="home"]').click(); await ready(page);
+      await page.locator('#homeRecent').waitFor();
+      await nav(page, 'tools'); assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'tools');
+      await nav(page, 'manage'); assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'manage');
+      await home(page);
+      assert.equal((await current(page)).bundle.sources.length, 0, 'Opening areas must not commit an import or writing draft');
+      await page.locator('[data-home-destination="import"]').click();
+      // A full document navigation starts a fresh capture. Resume explicitly,
+      // rather than guessing which saved draft should replace the new input.
+      if (size.width === 390) {
+        await page.evaluate(() => { window.__homeFailStage = true; });
+        await page.locator('#lifeImportTitle').fill('실패해도 남아야 할 두 번째 검토');
+        await page.locator('#lifeImportText').fill('원래 검토를 열기 전에 이 입력도 보관합니다.');
+        await page.getByRole('button', { name: '보관한 검토 이어서 열기', exact: true }).click(); await settle(page);
+        assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'import');
+        assert.equal(await page.locator('#lifeImportText').inputValue(), '원래 검토를 열기 전에 이 입력도 보관합니다.');
+        await page.evaluate(() => { window.__homeFailStage = false; });
+        await page.getByRole('button', { name: '검토 내용 보관', exact: true }).click(); await settle(page);
+      }
+      await page.getByRole('button', { name: '보관한 검토 이어서 열기', exact: true }).click();
+      await page.waitForFunction(() => document.querySelector('#lifeImportDrafts')?.open === true);
+      assert.equal(await page.locator('#lifeImportDrafts').evaluate(el => el.open), true);
+      if (size.width === 390) assert.equal(await page.getByRole('button', { name: '실패해도 남아야 할 두 번째 검토', exact: true }).count(), 1);
+      await page.getByRole('button', { name: '옮겨 적는 중인 산책 기록', exact: true }).click();
+      assert.equal(await page.locator('#lifeImportTitle').inputValue(), '옮겨 적는 중인 산책 기록');
+      await home(page); await page.locator('[data-home-destination="write"]').click();
+      assert.equal(await page.locator('#lifeWritingBody').inputValue(), '내가 쓰던 초안은 홈에 다녀와도 이어 쓸 수 있어야 한다.');
+    }, { viewport: size, hasTouch: size.width <= 820 });
     for (const size of [{ width: 1440, height: 1000 }, { width: 820, height: 1000 }, { width: 390, height: 844 }]) await check('visual home empty populated loading error ' + size.width, async ({ page }) => {
       await freshHome(page); await snapshot(page, 'empty', size);
       const f = await fixture(page, { many: true }); await seedComposition(page, f.refs); await home(page); await snapshot(page, 'populated', size);
+      const placement = await page.evaluate(() => {
+        const recent = document.querySelector('#homeRecent'), first = recent.querySelector('.home-record-open');
+        return { firstBottom: first.getBoundingClientRect().bottom, compositionBelow: recent.getBoundingClientRect().bottom <= document.querySelector('#homeComposition').getBoundingClientRect().top };
+      });
+      assert(placement.firstBottom < size.height - 96, 'A real record title must appear above the mobile dock on first entry');
+      assert(placement.compositionBelow, 'Recent records must precede saved composition summaries');
       await nav(page, 'tools'); await page.evaluate(() => { window.__homeHoldRead = true; window.__homeReadEntered = false; });
       await nav(page, 'home'); await page.waitForFunction(() => __homeReadEntered); await snapshot(page, 'loading', size);
       await page.evaluate(() => __homeReleaseRead()); await page.locator('#homePage').waitFor();

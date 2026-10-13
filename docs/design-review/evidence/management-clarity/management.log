@@ -1,0 +1,15 @@
+PASS restore preview identifies file, title, counts and incomplete coverage without installing; cancel preserves original and drafts
+PASS invalid file after valid preview removes the older candidate and leaves all saved work intact
+PASS explicit restore makes an unbound remapped copy, preserves exact source references, and returns to the previous workspace
+PASS an interrupted restore leaves the preview retryable and creates only one complete copy after retry
+PASS a post-install read failure reports the saved copy and removes the old confirmation instead of offering duplicate installation
+PASS boundary: unsaved source selections and notes are preserved separately before restore and before return
+PASS boundary: source draft transaction failure blocks both restore and return until a successful retry
+PASS boundary: a post-return read failure shows the previous workspace and preserves the restored copy after activation commits
+PASS sync starts only by explicit action, folds account details, and offers a clear paused/resume path without losing data
+PASS sync failure preserves local data and keeps retry next to the visible status
+PASS conflict keeps both original-version texts and notes available beside the two preservation choices
+PASS a newer server revision invalidates the older comparison and requires a fresh review without creating a recovery copy
+PASS boundary: deleting the server workspace during comparison invalidates stale choices without writing or making a recovery copy
+PASS boundary: pausing while conflict resolution is reading the server removes comparison choices and offers only restart
+{"passed":14,"failed":0,"consoleErrors":0,"pageErrors":0,"expectedErrors":1,"realRemoteWrites":0}

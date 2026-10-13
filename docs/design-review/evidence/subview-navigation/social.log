@@ -1,0 +1,10 @@
+PASS recognized exact hosts only suggest an origin; explicit acceptance preserves URL spelling and never commits
+PASS lookalike, credential, malformed and non-HTTP addresses have no platform suggestion; manual choice remains authoritative
+PASS accepting a source suggestion preserves reviewed metadata and exact excerpt candidates
+PASS invalid URL review preserves pasted body and details and recovers after correcting only the URL
+PASS naver_blog pasted partial body → exact excerpt/source → JSON backup and remapped copy preserves provenance
+PASS instagram pasted partial body → exact excerpt/source → JSON backup and remapped copy preserves provenance
+PASS link-only preview neither fetches nor marks body obtained; adding a body starts with unknown coverage
+PASS file CRLF content and raw UTF-16 locators survive source acceptance and input-method switches
+PASS uncommitted social draft resumes after reload with body, URL, source and inclusion decisions intact
+{"passed":9,"failed":0,"consoleErrors":0,"pageErrors":0,"externalRequests":0,"realRemoteWrites":0}
