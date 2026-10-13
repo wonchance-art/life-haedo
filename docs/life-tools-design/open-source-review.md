@@ -722,3 +722,19 @@ Radix Dialog 공식 npm 배포 1.3.1 / MIT와 최신 유지보수 변경을 확�
 | 기존 File 입력·TextDecoder·검토초안 CAS | 현재 앱의 파일 선택/용량/UTF-8 처리와 IndexedDB 저장 | 원문 바이트/텍스트 구별, 입력 실패/중단/계정 변경을 브라우저로 재검증 | 채택. 최초 선택과 한 행 재선택이 같은 읽기 함수를 재사용 |
 
 공개 권고 수는 전체 취약점 부재나 전이 의존성 감사가 아니다. MiniSearch/Fuse의 당일 공식 배포 비교는 위 통합 검색 절을 재사용했으며 이번에는 측정한 중복 순회를 제거하고 한 화면 세션의 결과만 재사용했다. 회고 활용은 기존 PagePosts·파일 출력·공통 아이콘/버튼을 재배치했다. 새로운 저장소·편집기·업로드 서버·의존성은 없다.
+
+## 이름으로 책·프로젝트 찾기 — 2026-10-13
+
+기존 `CollectionMetadata`의 제한된 JSON 요청과 native dialog/평문 행/수정 폼을 재사용했다. 새 런타임 패키지·서버·저장 구조는 추가하지 않는다.
+
+| 공식 출처와 확인 | 선택과 한계 |
+| --- | --- |
+| [Open Library Search API](https://openlibrary.org/dev/docs/api/search), [사용 지침](https://openlibrary.org/developers/api), [데이터 권리 안내](https://openlibrary.org/developers/licensing) 모두 HTTP 200 확인. `/search.json`의 `key,title,author_name,first_publish_year`, `limit=6` 사용 | 사람의 명시적 책 찾기에 한정. 입력마다 요청·대량 수집·계정 연결 없음. 작품 ID를 사용하며 특정 판본·번역·표지로 추정하지 않는다. 데이터 권리 안내는 Internet Archive가 새 권리를 주장하지 않지만 기여분·관할에 기존 권리가 있을 수 있다고 명시한다. 이를 CC0 또는 모든 콘텐츠의 자유 이용으로 확대하지 않는다. 제목·저자·원천 링크만 사용하며 본문·표지는 가져오지 않는다. |
+| [Open Library 공식 소스](https://github.com/internetarchive/openlibrary/tree/510e39f1d3d39bb5ab2191e6e5678bc7aeba5922), [LICENSE](https://github.com/internetarchive/openlibrary/blob/510e39f1d3d39bb5ab2191e6e5678bc7aeba5922/LICENSE): AGPL-3.0. 저장소 미보관, 최신 push 2026-10-13. 확인한 master SHA를 고정하며 이를 안정 릴리스라고 부르지 않는다. | 코드 설치/복사 없이 공식 API만 사용. 대규모 자체 호스팅은 현재 정적 앱의 요구와 맞지 않는다. |
+| [GitHub 검색 API 공식 문서](https://github.com/github/docs/blob/main/content/rest/search/search.md), [Octokit REST v22.0.1](https://github.com/octokit/rest.js/releases/tag/v22.0.1) 2025-10-31, [MIT LICENSE](https://github.com/octokit/rest.js/blob/v22.0.1/LICENSE). 미보관, 최신 push 2026-10-13 | 공개 저장소 검색 1개 endpoint 때문에 전체 SDK를 새로 넣지 않는다. 기존 fetch/AbortController/64KiB 응답 제한 재사용. `private:false`와 정규화된 저장소 경로 확인. 소유자와 저자/아티스트를 혼동하지 않는다. |
+
+Open Library 기본 비식별 요청 제한은 초당 1회, GitHub 비인증 검색은 분당 10회다. 앱은 각각 최소 1.1초/6.1초 간격, 한 선택창에서 최대 12개 검색 응답 재사용, 자동 재시도 없음으로 요청을 줄인다. 앱 차원의 간격이 여러 탭·공유 IP의 제공자 제한을 보장하지는 않으므로 403/429는 직접 입력 또는 나중에 재시도로 복구한다. 브라우저 User-Agent에 임의 연락처를 넣거나 고식별 한도를 주장하지 않는다. 향후 빈번한 공용 서비스 사용은 Open Library 앱 등록·운영 용량 정책을 다시 확인한다.
+
+[Open Library 공개 권고](https://api.github.com/repos/internetarchive/openlibrary/security-advisories)에는 조회 시 5건(SQL injection, stored XSS, 두 open redirect, cover upload SSRF), [Octokit REST 공개 권고](https://api.github.com/repos/octokit/rest.js/security-advisories)는 0건이었다. 이는 공개 목록 결과이며 서비스/의존성 전체의 무결성 보증이 아니다. 제공자 HTML·임의 응답 URL·이미지·계정 코드를 실행하지 않고, 제한된 JSON을 `textContent`로 표시하며 정해진 HTTPS API만 호출한다.
+
+실제 Linux Chromium에서 앱 어댑터로 Open Library `채식주의자` 후보 1개(저자 `Han Kang`, 작품 ID `OL17334243W`), GitHub `idb` 후보 6개를 받았다. 익명 공개 검색만 수행했으며 실계정/개인 글 전송 없음. 한국어 검색 품질·판본 완전성을 이 두 검색으로 일반화하지 않는다. [실행 증거](../design-review/evidence/taste-writing/live-providers.json).

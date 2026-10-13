@@ -99,6 +99,9 @@ jobs:
       - name: Verify collection selection and note flow
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/collection-picker-browser.cjs
+      - name: Verify explicit taste search and writing flow
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/taste-writing-browser.cjs
       - name: Verify page composition, attachments and draft recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/page-composer-browser.cjs
@@ -258,6 +261,7 @@ jobs:
             .local/collection-metadata/
             .local/collection-media/
             .local/collection-picker/
+            .local/taste-writing/
             .local/page-composer/
             .local/profile-feed-media/
             .local/reflection-page/
