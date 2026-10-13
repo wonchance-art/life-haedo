@@ -34,6 +34,7 @@ Linux Chromium **151.0.7922.173** / Playwright **1.63.0**, 익명 모의 Auth와
 - [통합 흐름](evidence/input-output-quality/report.json) **6/6**, 홈·부분 실패·검색·원문·활용·비공개 피드 **18개 화면 상태**(1440·820·390px). 실제 파일 선택/재선택 → 검토 → 출처 입력 → 보관을 거쳤다. CRLF 원본과 정확한 버전 보존, 수정한 페이지와 회고 분리, 변경 후 검색 캐시 갱신, 중단된 이전 파일 읽기가 새 재시도를 덮지 않음을 확인했다. console/pageerror/외부 요청 0.
 - 회고→페이지 실패/충돌 **5**, 전체 순환 **9**, 기존 통합 검색 **9**, 여러 파일 가져오기 **8**, 회고/목차 왕복 **3**, 회고 읽기 **5**, 가져오기/발췌/복귀 **3**, 블로그·Instagram 수동 입력 **9** 통과. 기존 전체 순환에서 비공개 저장·모의 게시/철회·JSON 새 사본 복원도 확인했다.
 - 공개 산출물 플랫폼 **9/9**, **SW v99→v100**과 기존 자료 보존. 의도적 전송/콜백 실패 3건은 별도. 실제 Google·운영 HTTP를 증명하는 검사가 아니다.
+- 첫 GitHub 전체 실행의 기존 홈 검사에서 로그아웃 전후 같은 `index.html` 경로 때문에 이전 문서가 사라지는 도중 평가하는 경합을 확인했다(`Execution context was destroyed`). 계정 간 자료 차단 단언을 유지하고 새 문서 식별자가 생성된 뒤 검사하도록 보정했다. [보정 후 로컬 홈 13/13](evidence/input-output-quality/home-boundary-report.json), 예상 오프라인 오류 1건 별도. 앱 인증 코드는 변경하지 않았다.
 - 새 통합 브라우저 검사는 GitHub CI에 추가하고 보고서를 artifact로 보관한다. 최종 커밋의 전체 CI 결과는 PR에서 확인하며 Cloud의 Chromium151과 GitHub 고정 브라우저를 구분한다.
 
 [이전 390px](evidence/input-output-quality/output-before-390.png) · [개선 390px](evidence/input-output-quality/output-after-390.png) · [820px](evidence/input-output-quality/output-after-820.png) · [1440px](evidence/input-output-quality/output-after-1440.png) · [파일 부분 실패](evidence/input-output-quality/import-partial-390.png) · [비공개 피드](evidence/input-output-quality/private-feed-390.png).

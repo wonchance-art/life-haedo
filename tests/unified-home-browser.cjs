@@ -25,6 +25,17 @@ async function nav(page, section) {
 }
 async function button(page, name) { await page.getByRole('button', { name, exact: true }).click(); await settle(page); }
 const stored = page => page.evaluate(async () => HaedoLife.Shell.storage.read(await HaedoLife.Shell.storage.getActive()));
+async function logoutToPublicHome(page) {
+  await openAccount(page);
+  const previousDocument = await page.evaluate(() => __homeInstance);
+  await button(page, '로그아웃');
+  // Both the private view and the redirect use index.html. Matching pathname
+  // can resolve on the old document, before location.replace commits.
+  await page.waitForFunction(previous => window.__homeInstance && __homeInstance !== previous, previousDocument);
+  await shellReady(page);
+  assert.equal(new URL(page.url()).pathname, '/index.html');
+}
+
 async function makeContext(browser, server, device, seed = accounts.a, options = {}) {
   const context = await browser.newContext({ serviceWorkers: 'block', acceptDownloads: true, viewport: { width: 820, height: 1000 }, ...options });
   await platformContext(context, server, device, seed);
@@ -222,13 +233,13 @@ async function main() {
     await check('account change cannot reveal previous home content and returning account recovers its own data', async ({ page, server, device }) => {
       await page.goto(base + '/index.html'); await ready(page); await importExcerpt(page, '익명 A 기록', 'A만 읽을 구절', 'A만 읽을 구절');
       const id = (await stored(page)).workspaceId;
-      await openAccount(page); await button(page, '로그아웃'); await page.waitForURL(url => url.pathname.endsWith('/index.html')); await shellReady(page);
+      await logoutToPublicHome(page);
       assert.equal(await page.locator('#lifeApp').isHidden(), true); assert.doesNotMatch(await page.locator('body').innerText(), /A만 읽을 구절/);
       server.oauthAccounts.set(device, accounts.b); await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click(); await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
       assert.equal((await stored(page)).sources.length, 0);
       assert.equal(await page.evaluate(async id => { try { await HaedoLife.Shell.storage.read(id); return false; } catch (_) { return true; } }, id), true);
       assert.doesNotMatch(await page.locator('body').innerText(), /A만 읽을 구절/);
-      await openAccount(page); await button(page, '로그아웃'); await page.waitForURL(url => url.pathname.endsWith('/index.html')); await shellReady(page);
+      await logoutToPublicHome(page);
       server.oauthAccounts.set(device, accounts.a); await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click(); await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
       assert.equal((await stored(page)).workspaceId, id); assert.equal((await stored(page)).records[0].text, 'A만 읽을 구절');
     });
