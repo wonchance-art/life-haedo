@@ -69,14 +69,46 @@
         attributionLabel: source.provider === 'GitHub' ? '저장소 소유자' : '게시 채널' });
   }
   const nextSearch = new Map(); // Only timestamps; never retain queries or account data.
+  function pace(provider) {
+    const now = Date.now();
+    if (now < (nextSearch.get(provider) || 0)) throw new Error('조회 간격을 두고 잠시 뒤 다시 검색해 주세요.');
+    nextSearch.set(provider, now + (provider === 'projects' ? 6100 : 1100));
+  }
+  async function editions(workUrl, offset = 0, options = {}) {
+    if (typeof workUrl !== 'string' || !/^https:\/\/openlibrary\.org\/works\/OL[0-9]+W$/.test(workUrl) || !Number.isSafeInteger(offset) || offset < 0 || offset > 600 || offset % 6) throw new Error('책의 작품 주소와 판본 범위를 확인해 주세요.');
+    if (options.signal?.aborted) throw new DOMException('조회 취소', 'AbortError');
+    // An explicit edition click may follow its work search immediately. Wait one slot, never retry a response.
+    const delay = Math.max(0, (nextSearch.get('books') || 0) - Date.now());
+    if (delay) await new Promise((resolve,reject) => {
+      const abort = () => {clearTimeout(timer); options.signal?.removeEventListener('abort',abort); reject(new DOMException('조회 취소','AbortError'));};
+      const timer = setTimeout(() => {options.signal?.removeEventListener('abort',abort); resolve();},delay);
+      if(options.signal?.aborted) abort(); else options.signal?.addEventListener('abort',abort,{once:true});
+    });
+    pace('books');
+    const data = await requestJSON(workUrl + '/editions.json?limit=6&offset=' + offset, options);
+    if (!Array.isArray(data.entries)) throw new Error('판본 응답 형식이 맞지 않습니다.');
+    const results = [], workKey = new URL(workUrl).pathname;
+    const list = value => value == null ? '' : value.map(v => clean(v, 500)).join(' · ');
+    for (const row of data.entries.slice(0, 6)) {
+      try {
+        if (!/^\/books\/OL[0-9]{1,12}M$/.test(row.key) || !Array.isArray(row.works) || !row.works.some(w => w.key === workKey)) continue;
+        const languages = row.languages == null ? '' : row.languages.map(v => {
+          const code = /^\/languages\/([a-z]{3})$/.exec(v.key)?.[1];
+          if (!code) throw new Error('Invalid language');
+          return ({kor:'한국어',eng:'영어',jpn:'일본어',chi:'중국어',fre:'프랑스어',ger:'독일어',spa:'스페인어'})[code] || code;
+        }).join(' · ');
+        results.push(Object.freeze({provider:'Open Library',type:'book',title:clean(row.title,500,true),creator:'',url:'https://openlibrary.org'+row.key,
+          detail: [languages || '언어 미상', list(row.publishers) || '출판사 미상', clean(row.publish_date,500) || '발행일 미상'].join(' · ')}));
+      } catch (_) { /* Keep only editions explicitly associated with the selected work. */ }
+    }
+    return Object.freeze({results:Object.freeze(results),offset,hasMore:offset < 600 && data.entries.length > 0 && Number.isSafeInteger(data.size) && data.size > offset + 6});
+  }
   async function search(provider, query, options = {}) {
     if (!['books', 'projects'].includes(provider)) throw new Error('지원하지 않는 검색입니다.');
     query = clean(query, 160, true).trim();
     if (query.length < 2) throw new Error('검색어를 두 글자 이상 입력해 주세요.');
     if (options.signal?.aborted) throw new DOMException('조회 취소', 'AbortError');
-    const now = Date.now();
-    if (now < (nextSearch.get(provider) || 0)) throw new Error('조회 간격을 두고 잠시 뒤 다시 검색해 주세요.');
-    nextSearch.set(provider, now + (provider === 'projects' ? 6100 : 1100));
+    pace(provider);
     const endpoint = provider === 'books' ? new URL('https://openlibrary.org/search.json') : new URL('https://api.github.com/search/repositories');
     endpoint.searchParams.set('q', query);
     if (provider === 'books') {
@@ -104,5 +136,5 @@
     }
     return Object.freeze({ results: Object.freeze(results), incomplete: data.incomplete_results === true });
   }
-  return Object.freeze({ identify, lookup, search });
+  return Object.freeze({ identify, lookup, search, editions });
 });

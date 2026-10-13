@@ -92,5 +92,15 @@
     return item.archived === archived && (category === 'all' || groupFor(item.type)?.id === category) && (type === 'all' || item.type === type) && (!tag || item.tags.includes(tag)) &&
       [item.title, item.creator, item.note, item.url, ...item.tags, ...Object.values(item.details)].join('\n').toLocaleLowerCase('ko').includes(q);
   }
-  return Object.freeze({ TYPES, GROUPS, DETAILS, TYPE_FIELDS, LIMITS, empty, validate, validateItem, makeBackup, readBackup, appendBackup, matches, groupFor, clone });
+  // Explicitly retain attachment metadata only; never copy a page body or a private note.
+  function fromAttachment(value, itemId, timestamp) {
+    const item = { id:itemId, type:value.type, title:value.title, creator:value.creator, url:value.url,
+      note:'', tags:[], details:{}, archived:false, createdAt:timestamp, updatedAt:timestamp };
+    validateItem(item); return item;
+  }
+  function attachmentMatch(values, attachment) {
+    return values.find(item => item.type === attachment.type && (attachment.url ? item.url === attachment.url :
+      !item.url && item.title.trim() === attachment.title.trim() && item.creator.trim() === attachment.creator.trim())) || null;
+  }
+  return Object.freeze({ TYPES, GROUPS, DETAILS, TYPE_FIELDS, LIMITS, empty, validate, validateItem, makeBackup, readBackup, appendBackup, matches, groupFor, clone, fromAttachment, attachmentMatch });
 });
