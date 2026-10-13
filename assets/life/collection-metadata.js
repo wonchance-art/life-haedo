@@ -32,14 +32,15 @@
     if (required && !value.trim()) throw new Error('제목 정보가 없습니다. 직접 입력해 주세요.');
     return value;
   }
-  async function lookup(value, { fetcher = globalThis.fetch, signal, timeout = 10000 } = {}) {
-    const source = identify(value), controller = new AbortController();
+  async function requestJSON(endpoint, { fetcher = globalThis.fetch, signal, timeout = 10000 } = {}) {
+    const controller = new AbortController();
     const cancel = () => controller.abort();
     if (signal?.aborted) cancel(); else signal?.addEventListener('abort', cancel, { once: true });
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; cancel(); }, timeout);
     try {
-      const response = await fetcher(source.endpoint, { method: 'GET', credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error', cache: 'no-store', signal: controller.signal });
+      if (controller.signal.aborted) throw new DOMException('조회 취소', 'AbortError');
+      const response = await fetcher(endpoint, { method: 'GET', credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error', cache: 'no-store', signal: controller.signal });
       if ([403, 429].includes(response.status)) throw new Error('제공자가 조회를 제한했습니다. 잠시 뒤 다시 시도하거나 직접 입력해 주세요.');
       if (response.status === 404 || response.status === 401) throw new Error('공개 정보를 찾지 못했습니다. 주소를 확인하거나 직접 입력해 주세요.');
       if (!response.ok) throw new Error('정보를 받지 못했습니다. 잠시 뒤 다시 시도하거나 직접 입력해 주세요.');
@@ -50,12 +51,7 @@
       const bytes = new Uint8Array(size); let offset = 0; for (const part of parts) { bytes.set(part, offset); offset += part.byteLength; }
       const data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
       if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('잘못된 조회 응답입니다. 직접 입력해 주세요.');
-      if (source.provider === 'GitHub' && data.private !== false) throw new Error('공개 저장소만 조회할 수 있습니다. 직접 입력해 주세요.');
-      const thumbnail = source.provider === 'YouTube' && typeof data.thumbnail_url === 'string' && /^https:\/\/i\.ytimg\.com\/vi\/[\w-]{11}\/(?:default|mqdefault|hqdefault|sddefault|maxresdefault)\.jpg$/.test(data.thumbnail_url) && data.thumbnail_url.split('/')[4] === new URL(source.url).searchParams.get('v') ? data.thumbnail_url : null;
-      return Object.freeze({ ...(thumbnail ? { thumbnail } : {}), provider: source.provider, type: source.type, url: source.url,
-        title: clean(source.provider === 'GitHub' ? data.name : data.title, 500, true),
-        attribution: clean(source.provider === 'GitHub' ? data.owner?.login : data.author_name, 500),
-        attributionLabel: source.provider === 'GitHub' ? '저장소 소유자' : '게시 채널' });
+      return data;
     } catch (error) {
       if (timedOut) throw new Error('조회 시간이 초과됐습니다. 다시 시도하거나 직접 입력해 주세요.');
       if (signal?.aborted) throw new DOMException('조회 취소', 'AbortError');
@@ -63,5 +59,50 @@
       throw error;
     } finally { clearTimeout(timer); signal?.removeEventListener('abort', cancel); }
   }
-  return Object.freeze({ identify, lookup });
+  async function lookup(value, options = {}) {
+    const source = identify(value), data = await requestJSON(source.endpoint, options);
+      if (source.provider === 'GitHub' && data.private !== false) throw new Error('공개 저장소만 조회할 수 있습니다. 직접 입력해 주세요.');
+      const thumbnail = source.provider === 'YouTube' && typeof data.thumbnail_url === 'string' && /^https:\/\/i\.ytimg\.com\/vi\/[\w-]{11}\/(?:default|mqdefault|hqdefault|sddefault|maxresdefault)\.jpg$/.test(data.thumbnail_url) && data.thumbnail_url.split('/')[4] === new URL(source.url).searchParams.get('v') ? data.thumbnail_url : null;
+      return Object.freeze({ ...(thumbnail ? { thumbnail } : {}), provider: source.provider, type: source.type, url: source.url,
+        title: clean(source.provider === 'GitHub' ? data.name : data.title, 500, true),
+        attribution: clean(source.provider === 'GitHub' ? data.owner?.login : data.author_name, 500),
+        attributionLabel: source.provider === 'GitHub' ? '저장소 소유자' : '게시 채널' });
+  }
+  const nextSearch = new Map(); // Only timestamps; never retain queries or account data.
+  async function search(provider, query, options = {}) {
+    if (!['books', 'projects'].includes(provider)) throw new Error('지원하지 않는 검색입니다.');
+    query = clean(query, 160, true).trim();
+    if (query.length < 2) throw new Error('검색어를 두 글자 이상 입력해 주세요.');
+    if (options.signal?.aborted) throw new DOMException('조회 취소', 'AbortError');
+    const now = Date.now();
+    if (now < (nextSearch.get(provider) || 0)) throw new Error('조회 간격을 두고 잠시 뒤 다시 검색해 주세요.');
+    nextSearch.set(provider, now + (provider === 'projects' ? 6100 : 1100));
+    const endpoint = provider === 'books' ? new URL('https://openlibrary.org/search.json') : new URL('https://api.github.com/search/repositories');
+    endpoint.searchParams.set('q', query);
+    if (provider === 'books') {
+      endpoint.searchParams.set('fields', 'key,title,author_name,first_publish_year');
+      endpoint.searchParams.set('limit', '6');
+    } else endpoint.searchParams.set('per_page', '6');
+    const data = await requestJSON(endpoint.href, options), rows = provider === 'books' ? data.docs : data.items;
+    if (!Array.isArray(rows)) throw new Error('검색 응답 형식이 맞지 않습니다. 직접 입력해 주세요.');
+    const results = [];
+    for (const row of rows.slice(0, 6)) {
+      try {
+        if (provider === 'books') {
+          if (!/^\/works\/OL[0-9]+W$/.test(row.key)) continue;
+          const creator = row.author_name == null ? '' : row.author_name.map(name => clean(name, 500)).join(', ');
+          results.push(Object.freeze({ provider: 'Open Library', type: 'book', title: clean(row.title, 500, true), creator: clean(creator, 500),
+            url: 'https://openlibrary.org' + row.key, attribution: creator, attributionLabel: '저자',
+            detail: '작품 정보 · 판본 미지정' + (Number.isInteger(row.first_publish_year) && row.first_publish_year > 0 && row.first_publish_year < 10000 ? ' · 첫 출간 ' + row.first_publish_year : '') }));
+        } else {
+          if (row.private !== false) continue;
+          const source = identify('https://github.com/' + clean(row.full_name, 150, true));
+          results.push(Object.freeze({ provider: 'GitHub', type: 'tool', title: clean(row.name, 500, true), creator: '', url: source.url,
+            attribution: clean(row.owner?.login, 500), attributionLabel: '저장소 소유자', detail: clean(row.description, 500) }));
+        }
+      } catch (_) { /* Skip an invalid candidate without losing other valid matches. */ }
+    }
+    return Object.freeze({ results: Object.freeze(results), incomplete: data.incomplete_results === true });
+  }
+  return Object.freeze({ identify, lookup, search });
 });
