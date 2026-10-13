@@ -446,6 +446,11 @@
     // No global flag: reusing the literal expression cannot carry a lastIndex.
     return new RegExp(expression, 'iu');
   }
+  function findSearchText(text, query = '', options = {}) {
+    assert(typeof text === 'string', 'invalid_text', '검색할 텍스트를 확인해 주세요.');
+    const match = searchPattern(query, options)?.exec(text);
+    return match ? { start: match.index, end: match.index + match[0].length, text: match[0] } : null;
+  }
   function matchesSearchText(text, query = '', options = {}) {
     assert(typeof text === 'string', 'invalid_text', '검색할 텍스트를 확인해 주세요.');
     const pattern = searchPattern(query, options);
@@ -511,5 +516,5 @@
     return output.join('\n');
   }
 
-  return Object.freeze({ MAX_IMPORT_BYTES, createWorkspace, id, validateWorkspace, prepareImport, buildImportChanges, applyChanges, makeBackup, restoreBackup, searchSources, matchesSearchText, toMarkdown });
+  return Object.freeze({ MAX_IMPORT_BYTES, createWorkspace, id, validateWorkspace, prepareImport, buildImportChanges, applyChanges, makeBackup, restoreBackup, searchSources, matchesSearchText, findSearchText, toMarkdown });
 });

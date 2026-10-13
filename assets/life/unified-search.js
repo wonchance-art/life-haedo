@@ -1,0 +1,67 @@
+/* Read-only projection. No saved index, remote queries, draft or publication reads. */
+(function (root, factory) {
+  const api = factory(typeof module === 'object' && module.exports ? require('./core.js') : root.HaedoLife.Core);
+  root.HaedoLife ||= {}; root.HaedoLife.UnifiedSearch = api;
+  if (typeof module === 'object' && module.exports) module.exports = api;
+})(globalThis, function (core) {
+  'use strict';
+  const labels = { source: '원문', page: '페이지', collection: '컬렉션' };
+  function excerpt(text, match) {
+    let start = Math.max(0, (match?.start || 0) - 55), end = Math.min(text.length, (match?.end || 0) + 140);
+    if (start && /[\uDC00-\uDFFF]/.test(text[start])) start--;
+    if (end < text.length && /[\uDC00-\uDFFF]/.test(text[end])) end++;
+    return (start ? '…' : '') + text.slice(start, end) + (end < text.length ? '…' : '');
+  }
+  function search({ bundle, workbench, collection }, query, { ignoreKoreanSpacing = false, archived = false } = {}) {
+    const options = { ignoreKoreanSpacing }, rows = [];
+    // Validate even when all stores failed or the query is blank.
+    core.matchesSearchText('', query, options);
+    if (!query.trim()) return rows;
+    const field = fields => {
+      for (const [label, text] of fields) {
+        if (typeof text !== 'string') continue;
+        const match = core.findSearchText(text, query, options);
+        if (match) return { field: label, snippet: excerpt(text, match) };
+      }
+      return null;
+    };
+    if (bundle) {
+      const sources = new Map(bundle.sources.map(s => [s.id, s]));
+      const hits = new Map(core.searchSources(bundle, query, options).map(h => [h.sourceVersionId, h]));
+      for (const record of bundle.records) {
+        const found = field([['발췌', record.text], ['내 메모', record.note], ['주제', record.topic]]);
+        if (!found) continue;
+        for (const ref of record.sourceRefs) {
+          if (hits.has(ref.sourceVersionId) || !sources.has(ref.sourceId)) continue;
+          const versions = bundle.sourceVersions.filter(v => v.sourceId === ref.sourceId);
+          const index = versions.findIndex(v => v.id === ref.sourceVersionId);
+          if (index < 0) continue;
+          hits.set(ref.sourceVersionId, { sourceId: ref.sourceId, sourceVersionId: ref.sourceVersionId, versionIndex: index + 1, versionCount: versions.length, locator: ref.locator, found });
+        }
+      }
+      for (const hit of hits.values()) {
+        const title = sources.get(hit.sourceId).title || '제목 없는 원문';
+        rows.push({ kind: 'source', key: 'find:source:' + hit.sourceVersionId, title, meta: `원문 · ${hit.versionIndex}/${hit.versionCount} 버전`,
+          ...hit, ...(hit.found || { field: hit.matchedBy === 'body' ? '본문' : '제목', snippet: hit.quote ? hit.snippet.before + hit.quote + hit.snippet.after : title }) });
+      }
+    }
+    if (workbench) {
+      for (const post of workbench.page.posts || []) {
+        if (post.status !== 'saved') continue;
+        const found = field([['본문', post.body], ...post.attachments.flatMap(a => [['첨부 제목', a.title], ['첨부 창작자', a.creator], ['첨부 출처', a.url]])]);
+        if (found) rows.push({ kind: 'page', key: 'find:post:' + post.id, postId: post.id, title: post.body.split('\n').find(s => s.trim())?.slice(0, 160) || post.attachments[0]?.title || '페이지 글', meta: '페이지 글 · ' + (post.visibility === 'private' ? '비공개' : '공개 후보'), ...found });
+      }
+      for (const entry of workbench.page.entries) {
+        const found = field([['제목', entry.title], ['내 코멘트', entry.note]]);
+        if (found) rows.push({ kind: 'page', key: 'find:entry:' + entry.id, entryId: entry.id, title: entry.title || '페이지 항목', meta: '페이지 구성 · ' + (entry.enabled ? '편집 사본' : '표시 꺼짐'), ...found });
+      }
+    }
+    if (collection) for (const item of collection.items) {
+      if (item.archived && !archived) continue;
+      const found = field([['제목', item.title], ['만든 사람', item.creator], ['비공개 메모', item.note], ['주제', item.tags.join(' · ')], ['출처', item.url], ...Object.values(item.details).map(v => ['세부 정보', v])]);
+      if (found) rows.push({ kind: 'collection', key: 'find:collection:' + item.id, itemId: item.id, type: item.type, title: item.title, meta: '컬렉션' + (item.archived ? ' · 보관 중' : ''), ...found });
+    }
+    return rows;
+  }
+  return Object.freeze({ search, labels });
+});
