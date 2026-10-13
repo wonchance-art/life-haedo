@@ -6,6 +6,8 @@
   function open({ items, onSelect, isCurrent, purpose }) {
     const attaching = purpose === 'attach';
     const origin = document.activeElement, dialog = node('dialog', null, 'life-collection cl-picker');
+    const searchCache = new Map();
+    let topic = '';
     let alive = true, controller = null, kind = 'all', limit = 30, composing = false;
     const scrollStyle = document.body.style.overflow;
     function cancel() { controller?.abort(); controller = null; }
@@ -33,8 +35,19 @@
     }
     const body = node('div', null, 'cl-picker-body'), results = node('div', null, 'cl-picker-results'), remote = node('section', null, 'cl-picker-remote');
     const message = node('p', '', 'life-help'); message.setAttribute('role', 'status');
-    const hint = node('p', '이름은 내 컬렉션에서 찾아요. YouTube·GitHub는 링크로 확인할 수 있어요.', 'life-help'); hint.id = 'clPickerHelp'; input.setAttribute('aria-describedby', hint.id);
-    body.append(hint, remote, message, results);
+    const hint = node('p', '입력 중에는 내 컬렉션만 찾아요. 외부 검색을 누르면 검색어가 해당 제공자에게 전송됩니다.', 'life-help'); hint.id = 'clPickerHelp'; input.setAttribute('aria-describedby', hint.id);
+    const external = node('div', null, 'cl-picker-providers');
+    const bookSearch = button('책 찾기 · Open Library', () => search('books'));
+    const projectSearch = button('프로젝트 찾기 · GitHub', () => search('projects'));
+    external.append(bookSearch, projectSearch);
+    const topics = node('select'); topics.id = 'clPickerTopic'; topics.setAttribute('aria-label', '내 컬렉션 주제');
+    const allTopics = node('option', '모든 주제'); allTopics.value = ''; topics.append(allTopics);
+    for (const tag of [...new Set(items.flatMap(item => item.tags || []))].sort((a,b) => a.localeCompare(b, 'ko'))) {
+      const option = node('option', tag); option.value = tag; topics.append(option);
+    }
+    topics.hidden = topics.options.length === 1;
+    topics.addEventListener('change', () => { topic = topics.value; limit = 30; render(); });
+    body.append(hint, external, remote, topics, message, results);
     const foot = node('footer', null, 'cl-picker-foot');
     foot.append(button('직접 입력', () => { const value = input.value.trim(); choose({ seed: { type: kind === 'all' ? 'music' : kind, title: /^https?:\/\//i.test(value) ? '' : value.slice(0, C.LIMITS.title), url: /^https?:\/\//i.test(value) ? value : '' }, compact: false }); }));
     dialog.append(head, form, filters, body, foot);
@@ -47,13 +60,54 @@
       b.append(shape, copy, root.HaedoLife.Icons.create(glyph)); return b;
     }
     function render() {
-      cancel(); remote.replaceChildren(); results.replaceChildren();
+      cancel(); remote.removeAttribute('aria-busy'); remote.replaceChildren(); results.replaceChildren();
       const value = input.value.trim(), url = /^https?:\/\//i.test(value);
       find.hidden = !url; find.disabled = false; find.textContent = '링크 확인';
-      const matched = items.filter(item => (kind === 'all' || item.type === kind) && (url && identity(item.url) === identity(value) || C.matches(item, { query: value, archived: item.archived })));
+      external.hidden = url || value.length < 2;
+      bookSearch.disabled = projectSearch.disabled = false;
+      const matched = items.filter(item => (kind === 'all' || item.type === kind) && (!topic || item.tags?.includes(topic)) && (url && identity(item.url) === identity(value) || C.matches(item, { query: value, archived: item.archived })));
       message.textContent = matched.length ? `내 컬렉션 · ${matched.length}개` : value ? '아직 모아 둔 항목이 없어요.' : '좋아하는 것의 이름이나 링크로 시작하세요.';
-      for (const item of matched.slice(0, limit)) results.append(row(item, () => choose({ item, compact: true }), [item.creator || C.TYPES[item.type], attaching ? '글에 붙이기' : item.archived ? '보관 중 · 메모 이어 쓰기' : '메모 이어 쓰기'].join(' · '), attaching ? 'plus' : 'edit'));
+      for (const item of matched.slice(0, limit)) {
+        const group = node('div', null, 'cl-pick-item');
+        group.append(row(item, () => choose({ item, compact: true }), [item.creator || C.TYPES[item.type], attaching ? '글에 붙이기' : item.archived ? '보관 중 · 메모 이어 쓰기' : '메모 이어 쓰기'].join(' · '), attaching ? 'plus' : 'edit'));
+        if (item.note || item.tags?.length) {
+          const detail = node('details', null, 'cl-pick-note');
+          detail.append(node('summary', '내 메모·주제'));
+          if (item.note) detail.append(node('p', item.note));
+          if (item.tags?.length) detail.append(node('p', item.tags.join(' · '), 'life-meta'));
+          if (attaching) detail.append(node('p', '메모와 주제는 글에 복사하지 않습니다.', 'life-meta'));
+          group.append(detail);
+        }
+        results.append(group);
+      }
       if (matched.length > limit) results.append(button('더 보기', () => { const first = limit; limit += 30; render(); results.querySelectorAll('.cl-pick-row')[first]?.focus(); }));
+    }
+    async function search(provider) {
+      if (composing || controller || !alive || !isCurrent()) return;
+      const query = input.value.trim(); if (query.length < 2 || /^https?:\/\//i.test(query)) return;
+      const request = new AbortController(); controller = request;
+      bookSearch.disabled = projectSearch.disabled = true; remote.replaceChildren();
+      message.textContent = '검색 중…'; remote.setAttribute('aria-busy', 'true');
+      try {
+        const key = provider + ':' + query;
+        const result = searchCache.get(key) || await Metadata.search(provider, query, { signal: request.signal });
+        if (!alive || !isCurrent() || controller !== request || request.signal.aborted) return;
+        if (searchCache.size >= 12) searchCache.delete(searchCache.keys().next().value);
+        searchCache.set(key, result);
+        message.textContent = result.results.length ? '후보를 선택해 정보를 확인해 주세요.' : '찾은 후보가 없어요. 검색어를 바꾸거나 직접 입력하세요.';
+        if (result.incomplete) message.textContent += ' 제공자가 일부 결과만 보냈습니다.';
+        for (const candidate of result.results) {
+          const existing = items.find(item => identity(item.url) === identity(candidate.url));
+          remote.append(row(existing || candidate, () => choose(existing ? { item: existing, compact: true } : {
+            seed: { type: candidate.type, title: candidate.title, creator: candidate.creator, url: candidate.url }, compact: false, review: candidate.provider + ' · ' + candidate.detail
+          }), existing ? '내 컬렉션 · ' + (attaching ? '글에 붙이기' : '메모 이어 쓰기') : [candidate.provider, candidate.attribution ? candidate.attributionLabel + ': ' + candidate.attribution : '작성자 정보 없음', candidate.detail].filter(Boolean).join(' · ')));
+        }
+      } catch (error) {
+        if (!alive || !isCurrent() || controller !== request || request.signal.aborted) return;
+        message.textContent = (error.message || '검색하지 못했습니다.') + ' 직접 입력으로 이어갈 수 있어요.';
+      } finally {
+        if (alive && controller === request) { controller = null; bookSearch.disabled = projectSearch.disabled = false; remote.removeAttribute('aria-busy'); }
+      }
     }
     input.addEventListener('input', () => { limit = 30; render(); });
     form.addEventListener('compositionstart', () => { composing = true; });
@@ -76,8 +130,9 @@
       } finally { if (alive && controller === request) { controller = null; find.disabled = false; find.textContent = '링크 확인'; } }
     });
     dialog.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !composing && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); close(); return; }
       if (event.key !== 'Tab') return;
-      const controls = [...dialog.querySelectorAll('button,input')].filter(el => !el.disabled && el.getClientRects().length);
+      const controls = [...dialog.querySelectorAll('button,input,select,summary')].filter(el => !el.disabled && el.getClientRects().length);
       const target = event.shiftKey && document.activeElement === controls[0] ? controls.at(-1) : !event.shiftKey && document.activeElement === controls.at(-1) ? controls[0] : null;
       if (target) { event.preventDefault(); target.focus(); }
     });

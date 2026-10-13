@@ -347,9 +347,10 @@
       const manual = node("div", null, "pp-manual");
       manual.hidden = true;
       form.append(manual);
-      function enter(seed) {
+      function enter(seed, review) {
         manual.hidden = false;
         manual.replaceChildren();
+        if (review) manual.append(node("p", review, "life-help"));
         const select = node("select");
         select.setAttribute("aria-label", "첨부 종류");
         for (const [key, label] of Object.entries(life.Collection.TYPES)) {
@@ -388,9 +389,11 @@
               ),
             });
             manual.hidden = true;
+            add.focus({ preventScroll: true });
           }),
           button("입력 취소", () => {
             manual.hidden = true;
+            add.focus({ preventScroll: true });
           }),
         );
         inputs.title.focus();
@@ -424,7 +427,7 @@
                     if (value.item) attach(value.item);
                     else if (value.compact && value.seed.title)
                       attach({ ...value.seed, creator: "" });
-                    else enter(value.seed || {});
+                    else enter(value.seed || {}, value.review);
                   } catch (e) {
                     message(e);
                   }

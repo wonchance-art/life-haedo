@@ -139,3 +139,12 @@
 }
 @media(prefers-reduced-motion:no-preference) { .cl-picker[open] { animation:cl-picker-in .16s ease-out; } }
 @keyframes cl-picker-in { from { transform:translateY(12px); opacity:.6; } to { transform:translateY(0); opacity:1; } }
+
+/* Explicit provider search shares the local picker; never an autocomplete request. */
+.cl-picker-providers { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 16px; }
+.cl-picker-providers[hidden] { display:none; }
+.cl-picker-providers button { flex:1 1 200px; font-size:13px; }
+#clPickerTopic { min-height:44px; max-width:100%; font:inherit; font-size:16px; margin:12px 0 0; padding:8px 12px; color:var(--ink); background:#fff; border:1px solid #827b86; border-radius:12px; }
+.cl-pick-note { margin:0 0 8px 62px; font-size:14px; }
+.cl-pick-note summary { min-height:44px; display:flex; align-items:center; cursor:pointer; color:var(--ink-soft); }
+.cl-pick-note p { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.7; margin:4px 0 12px; }

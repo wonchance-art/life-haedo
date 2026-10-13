@@ -439,3 +439,6 @@
 .wb-reflection-output { padding: 16px 0 8px; scroll-margin-top: 140px; }
 .wb-reflection-output .life-actions { gap: 8px; }
 .wb-reflection-output .life-help { margin: 8px 0 0; max-width: 65ch; }
+
+/* Preview width is a temporary reading check, never a publication setting. */
+.wb-visitor.wb-visitor-narrow { max-width:390px; margin-inline:auto; }

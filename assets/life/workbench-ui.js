@@ -1019,6 +1019,13 @@
       actions.append(switchButton, publish);
       if (saveControl) actions.append(saveControl);
       if (preview) {
+        const narrow = action('좁은 폭으로 보기', () => {
+          const visitor = surface.querySelector('#wbVisitor');
+          const enabled = visitor.classList.toggle('wb-visitor-narrow');
+          narrow.setAttribute('aria-pressed', String(enabled));
+        });
+        narrow.id = 'wbPageNarrow'; narrow.setAttribute('aria-pressed', 'false');
+        actions.append(narrow);
         bodyNode.append(actions, notice('비공개 미리보기')); renderVisitor(page); return;
       }
       const lead = el('div', null, 'wb-page-lead');
