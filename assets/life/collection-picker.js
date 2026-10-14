@@ -4,7 +4,8 @@
   const C = root.HaedoLife.Collection, Metadata = root.HaedoLife.CollectionMetadata;
   const node = (tag, text, cls) => { const el = document.createElement(tag); if (text != null) el.textContent = text; if (cls) el.className = cls; return el; };
   function open({ items, onSelect, isCurrent, purpose }) {
-    const attaching = purpose === 'attach';
+    const boarding = purpose === 'board', attaching = boarding || purpose === 'attach';
+    const attachAction = boarding ? '9칸에 담기' : '글에 붙이기', attachTarget = boarding ? '9칸 구성' : '글';
     const origin = document.activeElement, dialog = node('dialog', null, 'life-collection cl-picker');
     const searchCache = new Map();
     let topic = '';
@@ -20,7 +21,7 @@
     function button(label, action, cls = 'life-button') {
       const el = node('button', label, cls); el.type = 'button'; el.addEventListener('click', action); return el;
     }
-    const head = node('header', null, 'cl-picker-head'), title = node('h2', attaching ? '글에 무엇을 붙일까요?' : '무엇을 담을까요?'); title.id = 'clPickerTitle';
+    const head = node('header', null, 'cl-picker-head'), title = node('h2', boarding ? '9칸에 무엇을 담을까요?' : attaching ? '글에 무엇을 붙일까요?' : '무엇을 담을까요?'); title.id = 'clPickerTitle';
     const exit = button('', close, 'life-icon-button'); exit.setAttribute('aria-label', '선택창 닫기'); exit.append(root.HaedoLife.Icons.create('close'));
     head.append(title, exit); dialog.setAttribute('aria-labelledby', title.id);
     const form = node('form', null, 'cl-picker-search'), input = node('input');
@@ -76,13 +77,13 @@
       message.textContent = matched.length ? `내 컬렉션 · ${matched.length}개` : value ? '아직 모아 둔 항목이 없어요.' : '좋아하는 것의 이름이나 링크로 시작하세요.';
       for (const item of matched.slice(0, limit)) {
         const group = node('div', null, 'cl-pick-item');
-        group.append(row(item, () => choose({ item, compact: true }), [item.creator || C.TYPES[item.type], attaching ? '글에 붙이기' : item.archived ? '보관 중 · 메모 이어 쓰기' : '메모 이어 쓰기'].join(' · '), attaching ? 'plus' : 'edit'));
+        group.append(row(item, () => choose({ item, compact: true }), [item.creator || C.TYPES[item.type], attaching ? attachAction : item.archived ? '보관 중 · 메모 이어 쓰기' : '메모 이어 쓰기'].join(' · '), attaching ? 'plus' : 'edit'));
         if (item.note || item.tags?.length) {
           const detail = node('details', null, 'cl-pick-note');
           detail.append(node('summary', '내 메모·주제'));
           if (item.note) detail.append(node('p', item.note));
           if (item.tags?.length) detail.append(node('p', item.tags.join(' · '), 'life-meta'));
-          if (attaching) detail.append(node('p', '메모와 주제는 글에 복사하지 않습니다.', 'life-meta'));
+          if (attaching) detail.append(node('p', '메모와 주제는 ' + attachTarget + '에 복사하지 않습니다.', 'life-meta'));
           group.append(detail);
         }
         results.append(group);
@@ -112,7 +113,7 @@
           const group = node('div', null, 'cl-candidate');
           group.append(row(existing || candidate, () => choose(existing ? { item: existing, compact: true } : {
             seed: { type: candidate.type, title: candidate.title, creator: candidate.creator, url: candidate.url }, compact: false, review: candidate.provider + ' · ' + candidate.detail
-          }), existing ? '내 컬렉션 · ' + (attaching ? '글에 붙이기' : '메모 이어 쓰기') : [candidate.provider, candidate.attribution ? candidate.attributionLabel + ': ' + candidate.attribution : '작성자 정보 없음', candidate.detail].filter(Boolean).join(' · ')));
+          }), existing ? '내 컬렉션 · ' + (attaching ? attachAction : '메모 이어 쓰기') : [candidate.provider, candidate.attribution ? candidate.attributionLabel + ': ' + candidate.attribution : '작성자 정보 없음', candidate.detail].filter(Boolean).join(' · ')));
           if (candidate.type === 'book' && /^https:\/\/openlibrary\.org\/works\/OL[0-9]+W$/.test(candidate.url)) {
             const editions = node('section', null, 'cl-editions');
             const open = button('판본 찾기', () => loadEditions(candidate, editions, 0, open));
@@ -187,11 +188,11 @@
         const candidate = await Metadata.lookup(value, { signal: request.signal });
         if (!alive || !isCurrent() || controller !== request || request.signal.aborted) return;
         const existing = items.find(item => identity(item.url) === identity(candidate.url));
-        message.textContent = existing ? (attaching ? '컬렉션에서 찾았어요. 글에 붙일 수 있어요.' : '이미 담아 둔 항목이에요. 메모를 이어 쓸 수 있어요.') : '정보를 확인하고 골라 주세요.';
+        message.textContent = existing ? (attaching ? boarding ? '컬렉션에서 찾았어요. 9칸에 담을 수 있어요.' : '컬렉션에서 찾았어요. 글에 붙일 수 있어요.' : '이미 담아 둔 항목이에요. 메모를 이어 쓸 수 있어요.') : '정보를 확인하고 골라 주세요.';
         remote.append(row(existing || candidate, () => choose(existing ? { item: existing, compact: true } : {
           seed: { title: candidate.title, type: candidate.type, url: candidate.url, ...(candidate.type === 'artwork' ? {creator:candidate.creator} : {}) },
           compact: candidate.type !== 'artwork', review: candidate.type === 'artwork' ? candidate.provider + ' · ' + candidate.detail : ''
-        }), existing ? (attaching ? '내 컬렉션 · 글에 붙이기' : '내 컬렉션 · 메모 이어 쓰기') : [candidate.provider,candidate.attributionLabel + ': ' + (candidate.attribution || '미확인'),candidate.detail].filter(Boolean).join(' · '), existing && !attaching ? 'edit' : 'plus'));
+        }), existing ? ('내 컬렉션 · ' + (attaching ? attachAction : '메모 이어 쓰기')) : [candidate.provider,candidate.attributionLabel + ': ' + (candidate.attribution || '미확인'),candidate.detail].filter(Boolean).join(' · '), existing && !attaching ? 'edit' : 'plus'));
       } catch (error) {
         if (!alive || !isCurrent() || controller !== request || request.signal.aborted) return;
         message.textContent = (error.message || '정보를 확인하지 못했어요.') + ' 직접 입력으로 이어갈 수 있어요.';

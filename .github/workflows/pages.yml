@@ -126,6 +126,9 @@ jobs:
       - name: Verify page draft conflict comparison and copy recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/page-draft-conflict-browser.cjs
+      - name: Verify nine-slot boards, local preservation and file round trips
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/nine-board-browser.cjs
       - name: Verify reflection draft copy conflicts and account boundaries
         run: node tests/reflection-page-browser.cjs
       - name: Verify the integrated input and output cycle
@@ -291,6 +294,7 @@ jobs:
             .local/attachment-edit/
             .local/page-draft-recovery/
             .local/page-draft-conflict/
+            .local/nine-board/
             .local/profile-feed-media/
             .local/reflection-page/
             .local/two-cycle/

@@ -75,9 +75,10 @@
       const hasUnappliedAttachment = !!session.composer?.hasUnappliedAttachment?.();
       const draftConflict = !!session.composer?.hasDraftConflict?.();
       const composerDirty = !!session.composer?.dirty?.();
+      const nineDirty = !!session.nine?.dirty();
       statusNode.textContent = !session.state ? '구성을 불러오지 못함' : session.saving ? '이 브라우저에 저장 중…' : session.error ? '저장하지 못함 · 초안 유지' : incoming ? '선택 검토 중 · 아직 추가하지 않음' :
-        hasUnappliedAttachment ? '첨부 입력 미반영' : draftConflict ? '초안 충돌 · 입력 유지' : composerDirty ? '초안 저장 전 변경 있음' : session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : '이 브라우저에 저장됨';
-      statusNode.dataset.state = session.error ? 'error' : draftConflict || composerDirty || hasUnappliedAttachment || session.edit !== session.stored ? 'dirty' : 'saved';
+        hasUnappliedAttachment ? '첨부 입력 미반영' : draftConflict ? '초안 충돌 · 입력 유지' : nineDirty ? '9칸 구성 저장 전 변경 있음' : composerDirty ? '초안 저장 전 변경 있음' : session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : '이 브라우저에 저장됨';
+      statusNode.dataset.state = session.error ? 'error' : nineDirty || draftConflict || composerDirty || hasUnappliedAttachment || session.edit !== session.stored ? 'dirty' : 'saved';
       if (mode === 'related') surface.querySelector('.wb-storage-line').hidden = !!session.state && !session.saving && !session.error && session.edit === session.stored && session.remoteRevision <= session.baseRevision;
     }
     function clearError() { if (errorNode) { errorNode.hidden = true; errorNode.replaceChildren(); delete errorNode.dataset.code; } }
@@ -253,9 +254,10 @@
     async function flush() {
       if (installing) throw fault('restore_in_progress', '새 사본을 저장하는 중입니다. 완료 후 이동해 주세요.');
       await current?.composer?.flush();
+      await current?.nine?.flush();
       if (current?.state && current.edit !== current.stored || current?.saving) await flushSession(current);
     }
-    function dirty() { return installing || !!current && (current.edit !== current.stored || !!current.saving || !!current.composer?.dirty()); }
+    function dirty() { return installing || !!current && (current.edit !== current.stored || !!current.saving || !!current.composer?.dirty() || !!current.nine?.dirty()); }
     function sessionFor(id) {
       if (sessions.has(id)) return sessions.get(id);
       const session = { workspaceId: id, state: null, baseRevision: 0, edit: 0, stored: 0, remoteRevision: 0,
@@ -279,6 +281,7 @@
                 throw fault('workbench_conflict', '현재 초안과 새 저장본을 먼저 비교해 주세요.');
               }
               await session.composer?.flush();
+              await session.nine?.flush();
               if (!incoming) { session.state = null; await render(mode); return; }
               const token = generation;
               cleanupView(); session.state = null;
@@ -1011,6 +1014,20 @@
     }
     function renderPage() {
       const session = current, page = session.state.page;
+      if (session.nineOpen) {
+        const back = action('내 페이지로 돌아가기', async () => {
+          const token = generation; await session.nine.flush(); if (!showing(token, session)) return;
+          session.nineOpen = false; clearError(); redraw(); surface.querySelector('#wbPageNine')?.focus();
+        });
+        bodyNode.append(back);
+        const nineHost = el('section'); bodyNode.append(nineHost);
+        session.nine ||= life.NineBoardUI.create({ storage, workspaceId: session.workspaceId,
+          isCurrent: () => workspaceIs(session), onDirty: () => {
+            if (['nine_input_pending', 'nine_input_in_progress', 'nine_busy'].includes(errorNode?.dataset.code) && !session.nine.hasBlockedInput()) clearError();
+            updateStatus(session);
+          } });
+        session.nine.mount(nineHost); viewCleanups.push(() => session.nine.detach()); return;
+      }
       if (session.share?.open) { renderSharePanel(session); return; }
       const switchButton = action(preview ? '편집으로 돌아가기' : '방문자 미리보기', async () => {
         const token = generation;
@@ -1023,6 +1040,10 @@
       const actions = el('div', null, 'life-actions wb-page-actions');
       const publish = discoveryIcon('공개 사본 관리', 'link', () => openShare(session)); publish.id = 'wbPageShare';
       actions.append(switchButton, publish);
+      const nine = action('9칸 구성', async () => {
+        const token = generation; await flush(); if (!showing(token, session)) return;
+        rememberPageEditor(); session.nineOpen = true; redraw(); bodyNode.querySelector('.nb-workspace')?.scrollIntoView({ block: 'start' });
+      }); nine.id = 'wbPageNine'; actions.append(nine);
       if (saveControl) actions.append(saveControl);
       if (preview) {
         const narrow = action('좁은 폭으로 보기', () => {
@@ -2659,7 +2680,7 @@
       rememberPageEditor();
       cleanupView();
       bodyNode.replaceChildren();
-      if (saveControl) saveControl.hidden = ['public-pages', 'related', 'workbench-backup'].includes(mode) || !!incoming || mode === 'page' && !!current.share?.open;
+      if (saveControl) saveControl.hidden = ['public-pages', 'related', 'workbench-backup'].includes(mode) || !!incoming || mode === 'page' && (!!current.share?.open || !!current.nineOpen);
       if (mode === 'public-pages') { renderPublicPages(); return; }
       if (incoming && ['activities', 'page', 'reflection'].includes(mode)) { renderIncoming(); updateStatus(current); return; }
       if (mode === 'activities') renderActivities();

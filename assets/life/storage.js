@@ -548,6 +548,35 @@
       notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Saving succeeded; reload remains available. */ }
       return saved;
     }
+    // Nine-slot boards are independently scoped local data, with their own file backup.
+    const nineBoard = () => root.HaedoLife?.NineBoard || (typeof require === 'function' && require('./nine-board.js'));
+    async function nineBoardValue(meta, workspaceId) {
+      const row = await meta.get(`nine-board:${workspaceId}`);
+      const value = row === undefined ? nineBoard().empty(workspaceId) : row.value;
+      nineBoard().validate(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '9칸 구성의 작업공간이 다릅니다.');
+      return value;
+    }
+    async function readNineBoard(workspaceId) {
+      collectionScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await nineBoardValue(meta, workspaceId));
+      });
+    }
+    async function saveNineBoard(workspaceId, input, baseRevision) {
+      collectionScope(workspaceId); requireRevision(baseRevision, 'baseRevision'); nineBoard().validate(input);
+      const value = clone(input);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '9칸 구성의 작업공간이 다릅니다.');
+      if (value.revision !== baseRevision) throw fault('nine_board_conflict', '9칸 구성의 저장 기준이 바뀌었습니다.');
+      return transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await nineBoardValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) throw fault('nine_board_conflict', '다른 탭에서 9칸 구성이 바뀌었습니다. 내 변경을 새 사본으로 보관해 주세요.');
+        value.revision++; nineBoard().validate(value);
+        await meta.put({ key: `nine-board:${workspaceId}`, value }); return clone(value);
+      });
+    }
     // Page composer drafts stay local, outside composition sync and public copies.
     const pagePosts = () => root.HaedoLife?.PagePosts || (typeof require === 'function' && require('./page-posts.js'));
     function validatePageDrafts(value) {
@@ -1785,7 +1814,7 @@
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, read, createWorkspace, installWorkspace, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
-      readCollection, saveCollection, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, readPageDrafts, savePageDrafts, savePagePost,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       commitLocal, saveStage, getStage, listStages, deleteStage, subscribe,
       getSyncState, bindSync, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,

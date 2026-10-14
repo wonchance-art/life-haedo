@@ -115,6 +115,20 @@ function operation(bundle, id = 'op-1', extra = {}) {
   return { operationId: id, workspaceId: bundle.workspaceId, baseRevision: bundle.revision,
     changes: { put: { records: [{ id: 'r-example', text: '익명 검증 자료' }] } }, ...extra };
 }
+test('nine-slot boards have independent atomic CAS, completion rollback and account ownership', async t => {
+  const {storage:base,control}=syncFixture();t.after(()=>base.close());
+  const M=require('../assets/life/nine-board.js'),a=base.forAccount(accountA),bundle=await initialImport(a),original=await a.readWorkbenchSnapshot(bundle.workspaceId);
+  const empty=await a.readNineBoard(bundle.workspaceId);assert.deepEqual(empty,M.empty(bundle.workspaceId));
+  const input=structuredClone(empty);input.boards=[M.create(()=>Core.id())];input.boards[0].title='대표 선택';
+  const saved=await a.saveNineBoard(bundle.workspaceId,input,0);assert.equal(saved.revision,1);assert.equal(input.revision,0);
+  await assert.rejects(a.saveNineBoard(bundle.workspaceId,input,0),{code:'nine_board_conflict'});assert.deepEqual(await a.readNineBoard(bundle.workspaceId),saved);
+  const next=structuredClone(saved);next.boards[0].title='실패해도 보존';control.failCompletion=true;await assert.rejects(a.saveNineBoard(bundle.workspaceId,next,1),{code:'storage_aborted'});assert.deepEqual(await a.readNineBoard(bundle.workspaceId),saved);assert.deepEqual(await a.readWorkbenchSnapshot(bundle.workspaceId),original);
+  const b=base.forAccount(accountB);await assert.rejects(b.readNineBoard(bundle.workspaceId),{code:'workspace_access_denied'});await assert.rejects(b.saveNineBoard(bundle.workspaceId,next,1),{code:'workspace_access_denied'});
+  const again=base.forAccount(accountA),before=await again.readNineBoard(bundle.workspaceId);
+  control.afterWrite=({name,value})=>{if(name==='meta'&&value.key.startsWith('nine-board:')){control.afterWrite=null;base.forAccount(accountB);}};
+  await assert.rejects(again.saveNineBoard(bundle.workspaceId,next,1),{code:'storage_scope_closed'});
+  assert.deepEqual(await base.forAccount(accountA).readNineBoard(bundle.workspaceId),before);
+});
 function draft(bundle, id = 'stage-1') {
   return { stageId: id, workspaceId: bundle.workspaceId, revision: 0, input: { text: '' }, excerpts: [], state: 'draft' };
 }

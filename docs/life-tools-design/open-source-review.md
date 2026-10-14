@@ -762,3 +762,9 @@ Open Library 기본 비식별 요청 제한은 초당 1회, GitHub 비인증 검
 ## 2026-10-14 초안 충돌 비교 확장
 
 #84의 PageComposer 미리보기/명시 복원·PagePosts 검증과 기존 idb 8.0.3 트랜잭션/CAS를 다시 사용했다. 비교 기준은 실제 성공 payload이며 미변경 자료의 재추가나 일부 변경 누락을 막는 도메인 규칙만 추가했다. 저장 엔진·파서·모달 라이브러리·스키마를 새로 도입하지 않으므로 새로운 패키지 선정/설치가 필요하지 않다. [결정·실패/경합·저장 중 입력 검수](../design-review/page-draft-conflict.md).
+
+## 2026-10-14 영역별 9칸 구성
+
+공식 GitHub API로 현재 [GridStack v14.0.0](https://github.com/gridstack/gridstack.js/releases/tag/v14.0.0)(2026-09-21 릴리스, MIT)와 [idb v8.0.4](https://github.com/jakearchibald/idb/tree/v8.0.4)(ISC)를 확인했다. 양 저장소의 공개 security-advisories 응답은 빈 배열이었다. 비공개 권고나 전체 의존성 감사 완료를 뜻하지 않는다. idb는 GitHub releases/latest가 없으므로 공식 tags·package 및 [8.0.3 대비 차이](https://github.com/jakearchibald/idb/compare/v8.0.3...v8.0.4)를 확인했다. NaN 값 읽기 수정이며 이번 데이터는 엄격한 문자열/배열/객체와 safe integer revision이다. 동봉한 8.0.3의 기존 트랜잭션 완료 계약을 재사용하고 이번 기능에서 vendor 업그레이드 범위를 넓히지 않는다.
+
+GridStack 직접 도입은 드래그/가변 크기 대시보드에 적합하다. 이번의 고정 3×3·최대 9개·키보드/터치 동등한 선택과 버튼 순서 변경에는 CSS Grid/native input을 쓰는 편이 요구를 작게 유지한다. 배치 아이디어만 참고하고 라이브러리 코드는 복사하지 않았다. 자체 구현은 저장 snapshot/계정 CAS/복구 규칙이며, 기존 CollectionPicker·PagePosts.attachment·PagePostsView·idb 저장 엔진을 재사용한다. 새 패키지·네트워크 SDK·프레임워크는 없다. [선택 근거·복구·검증](../design-review/nine-board.md).
