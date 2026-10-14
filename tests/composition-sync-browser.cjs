@@ -297,6 +297,9 @@ async function main() {
       const durableBooks = copy((await composition(a.page, id)).books);
       assert.deepEqual(pending.outbox.data.books, durableBooks);
       const operation = pending.outbox.operationId; await a.page.reload(); await ready(a.page); assert.equal((await metadata(a.page, id)).outbox.operationId, operation);
+      // The private UI opens before source authentication finishes on reload.
+      // Replay still requires the verified source connection, just as initial opt-in does.
+      await waitForState(a.page, id => HaedoLife.Shell.sync.getState(id).then(state => state.enabled && state.status === 'synced'), id);
       server.loseComposition.delete('a'); assert.equal(await sync(a.page, id), null); assert.equal((await metadata(a.page, id)).outbox, null);
       assert.deepEqual(server.composition(accounts.a.id, id).data.books, durableBooks);
       assert.deepEqual((await composition(a.page, id)).books, durableBooks);
