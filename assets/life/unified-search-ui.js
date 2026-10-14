@@ -2,7 +2,7 @@
   'use strict';
   const life = root.HaedoLife, M = life.UnifiedSearch;
   const el = (tag, text, cls) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (cls) n.className = cls; return n; };
-  function create({ storage, host, getBundle, isDisposed, onOpen }) {
+  function create({ storage, host, getBundle, isDisposed, onOpen, onReload }) {
     let scope = null, active = false, generation = 0, unsubscribe;
     let query = '', kind = 'all', spacing = false, archived = false, limits = {};
     let data = {}, dataRevision = 0, cached = null, errors = [], section, input, list, status, tabs, changed, composing = false;
@@ -55,9 +55,10 @@
       if (focusKey) [...list.querySelectorAll('[data-focus-key]')].find(b => b.dataset.focusKey === focusKey)?.focus({ preventScroll: true });
     }
     async function reload() {
+      onReload?.();
       const token = ++generation; data = {}; dataRevision++; cached = null; errors = []; changed.hidden = true;
       status.setAttribute('role', 'status'); status.textContent = '이 작업공간의 자료를 불러오는 중…'; section.setAttribute('aria-busy', 'true'); draw();
-      const reads = [['bundle', '원문', () => storage.read(scope)], ['workbench', '페이지', () => storage.readWorkbench(scope)], ['collection', '컬렉션', () => storage.readCollection(scope)]];
+      const reads = [['bundle', '원문', () => storage.read(scope)], ['workbench', '페이지', () => storage.readWorkbench(scope)], ['collection', '컬렉션', () => storage.readCollection(scope)], ['nineBoard', '9칸 구성', () => storage.readNineBoard(scope)]];
       await Promise.all(reads.map(async ([key, label, read]) => {
         try { const value = await read(); if (!current(token)) return; data[key] = value; dataRevision++; }
         catch (_) { if (!current(token)) return; errors.push(label); }
@@ -75,7 +76,7 @@
       section = el('section', null, 'life-find'); section.setAttribute('aria-label', '통합 검색'); section.id = 'lifeFind';
       const bar = el('div', null, 'life-search-bar'); bar.append(life.Icons.create('search'));
       const label = el('label', null, 'life-search-field'); label.append(el('span', '통합 검색어', 'life-sr-only'));
-      input = el('input'); input.type = 'search'; input.id = 'lifeFindQuery'; input.maxLength = 500; input.value = query; input.placeholder = '원문·페이지·컬렉션 검색'; label.append(input);
+      input = el('input'); input.type = 'search'; input.id = 'lifeFindQuery'; input.maxLength = 500; input.value = query; input.placeholder = '원문·페이지·컬렉션·9칸 구성 검색'; label.append(input);
       const update = () => { query = input.value; limits = {}; draw(); };
       input.addEventListener('compositionstart', () => { composing = true; });
       input.addEventListener('compositionend', () => { composing = false; update(); });
@@ -84,7 +85,7 @@
       tabs = el('div', null, 'life-find-tabs'); tabs.setAttribute('role', 'group'); tabs.setAttribute('aria-label', '검색할 종류');
       for (const [key, title] of [['all', '전체'], ...Object.entries(M.labels)]) { const b = button(title, () => { kind = key; draw(); }); b.dataset.kind = key; tabs.append(b); }
       const options = el('details', null, 'life-details'); options.append(el('summary', '검색 범위·옵션'));
-      options.append(el('p', '현재 계정·작업공간의 보관 원문과 발췌·메모, 저장한 페이지 글·구성의 코멘트, 컬렉션을 검색합니다. 작성 중인 초안·책 원고·공개 서버 사본은 포함하지 않습니다. 검색어는 저장하거나 전송하지 않습니다.', 'life-help'));
+      options.append(el('p', '현재 계정·작업공간의 보관 원문과 발췌·메모, 저장한 페이지 글·구성의 코멘트, 컬렉션, 저장한 9칸 구성·영역·선택 이유를 검색합니다. 작성 중인 초안·미반영 입력·가져올 파일 후보·책 원고·공개 서버 사본은 포함하지 않습니다. 검색어는 저장하거나 전송하지 않습니다.', 'life-help'));
       const checkbox = (text, value, change) => { const wrap = el('label', null, 'life-check'), box = el('input'); box.type = 'checkbox'; box.checked = value; box.addEventListener('change', () => { change(box.checked); limits = {}; draw(); }); wrap.append(box, el('span', text)); return wrap; };
       options.append(checkbox('한글 띄어쓰기 무시', spacing, v => { spacing = v; }), checkbox('보관한 컬렉션 포함', archived, v => { archived = v; }));
       status = el('p', '', 'life-help'); status.id = 'lifeFindStatus'; status.setAttribute('role', 'status');
@@ -92,7 +93,7 @@
       list = el('div'); list.id = 'lifeFindResults';
       section.append(bar, tabs, options, status, changed, list); host.replaceChildren(section);
       unsubscribe?.(); unsubscribe = storage.subscribe(scope, event => {
-        if (active && ['changed', 'workbench_changed', 'collection_changed'].includes(event.type)) { changed.hidden = false; changed.textContent = '변경된 자료 다시 읽기'; }
+        if (active && ['changed', 'workbench_changed', 'collection_changed', 'nine_board_changed'].includes(event.type)) { changed.hidden = false; changed.textContent = '변경된 자료 다시 읽기'; }
       });
       return reload();
     }

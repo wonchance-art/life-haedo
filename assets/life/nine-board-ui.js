@@ -79,7 +79,7 @@
     function renderTiles(target,a,{edit=false}={}){
       const grid=el('ol',null,'nb-grid');grid.setAttribute('aria-label',(a.title||'영역')+' · 최대 9개');
       for(let i=0;i<9;i++){
-        const item=a.items[i],cell=el('li',null,'nb-cell');
+        const item=a.items[i],cell=el('li',null,'nb-cell');cell.dataset.itemIndex=String(i);cell.tabIndex=-1;
         if(item){
           const card=life.PagePostsView.attachments([item.attachment],{compact:true});cell.append(card);
           if(item.reason){const reason=details('선택 이유');reason.classList.add('nb-reason');reason.append(el('p',item.reason,'nb-text'));cell.append(reason);}
@@ -207,11 +207,15 @@
       if(b)files.append(button('HTML 보기 파일 받기',async()=>{await flush();download(M.html(board()),'haedo-nine-board.html','text/html;charset=utf-8');}));files.append(file);host.append(files);renderImport(host);
       if(failure)report(failure);else message();
     }
-    async function mount(target){
+    async function mount(target,searchTarget=null){
       host=target;const token=++epoch;host.className='nb-workspace';host.replaceChildren(el('p','9칸 구성 불러오는 중…','life-help'));
       try{if(!state||!dirty()){const next=await storage.readNineBoard(workspaceId);if(!valid()||token!==epoch||host!==target)return;state=next;base=structuredClone(next.boards);stored=tick;clear();}
+        if(searchTarget){const found=life.UnifiedSearch.resolveNineTarget(state,searchTarget);selected=found.board.id;areaId=found.area?.id||found.board.areas[0]?.id;preview=true;overview=!found.area;editing=null;}
         if(!board()){selected=state.boards[0]?.id;areaId=board()?.areas[0]?.id;}render();
-      }catch(cause){if(!valid()||token!==epoch)return;host.replaceChildren(el('p',cause.message||'불러오지 못했습니다.','life-error'),button('다시 불러오기',()=>mount(target)));}
+        if(searchTarget){const focus=searchTarget.itemIndex!=null?host.querySelector('.nb-grid [data-item-index="'+searchTarget.itemIndex+'"]'):host.querySelector(searchTarget.areaId?'.nb-area-heading':'.nb-display');
+          if(searchTarget.itemIndex!=null&&focus?.querySelector('.nb-reason'))focus.querySelector('.nb-reason').open=true;
+          focus?.focus({preventScroll:true});focus?.scrollIntoView({block:'nearest'});}
+      }catch(cause){if(!valid()||token!==epoch)return;const alert=el('p',cause.message||'불러오지 못했습니다.','life-error');alert.setAttribute('role','alert');host.replaceChildren(alert,button('다시 불러오기',()=>mount(target,searchTarget)));}
     }
     function detach(){epoch++;clearTimeout(timer);picker?.();picker=null;importUpdate=null;host=null;status=null;error=null;editorHost=null;for(const u of urls)URL.revokeObjectURL(u);urls.clear();}
     return {mount,flush,dirty,detach,hasBlockedInput:()=>!!manual||pendingFields.size>0||composing.size>0||busy};

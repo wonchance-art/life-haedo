@@ -161,7 +161,7 @@
     root.append(skip, header, toolbar, recordSections, status, error, main);
     container.replaceChildren(root);
     const collection = global.HaedoLife.CollectionUI?.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onSaved: clearError });
-    const unifiedSearch = global.HaedoLife.UnifiedSearchUI.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed,
+    const unifiedSearch = global.HaedoLife.UnifiedSearchUI.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onReload: clearError,
       onOpen: guarded(async row => {
         const workspaceId = state.bundle.workspaceId;
         if (row.kind === 'source') {
@@ -171,6 +171,13 @@
           return openResult('find', row.key, row);
         }
         if (row.kind === 'page') return navigate('page', { pagePreview: false, searchTarget: { postId: row.postId, entryId: row.entryId } });
+        if (row.kind === 'nine') {
+          const token = navigationGeneration;
+          const values = await storage.readNineBoard(workspaceId);
+          if (disposed || token !== navigationGeneration || state.mode !== 'find' || state.bundle?.workspaceId !== workspaceId) return;
+          global.HaedoLife.UnifiedSearch.resolveNineTarget(values, row.nineTarget);
+          return navigate('page', { nineTarget: row.nineTarget });
+        }
         return navigate('collection', { collectionItemId: row.itemId });
       }) });
     const workbenchModes = ['activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'public-pages'];
@@ -941,7 +948,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { selection, groupId, pagePreview, discovery, writing, reimport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, collectionItemId, ...viewOptions } = options || {};
+      const { selection, groupId, pagePreview, discovery, writing, reimport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, ...viewOptions } = options || {};
       if (reimport) {
         if (mode !== 'import' || state.bundle.workspaceId !== reimport.workspaceId) return;
         const source = sourceFor(reimport.sourceId);
@@ -975,7 +982,7 @@
       if (mode === 'find') main.querySelector('#lifeFindQuery')?.focus();
       if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
       const heading = (options?.chapterImport && (main.querySelector('#wbChapterImportHeading') || main.querySelector('#wbChapterNote'))) || (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || main.querySelector('h1,h2') || toolbar.querySelector('h1');
-      if (heading && mode !== 'find' && !options?.searchTarget && !options?.collectionItemId && !options?.groupId && !reimport) {
+      if (heading && mode !== 'find' && !options?.searchTarget && !options?.nineTarget && !options?.collectionItemId && !options?.groupId && !reimport) {
         heading.focus({ preventScroll: true });
         if (options?.book || options?.chapterImport) heading.scrollIntoView({ block: 'nearest' });
       }

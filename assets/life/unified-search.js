@@ -5,14 +5,24 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (core) {
   'use strict';
-  const labels = { source: '원문', page: '페이지', collection: '컬렉션' };
+  const labels = { source: '원문', page: '페이지', collection: '컬렉션', nine: '9칸 구성' };
+  const itemText = item => [item.attachment.type, item.attachment.title, item.attachment.creator, item.attachment.url, item.reason];
+  const staleNine = () => new Error('검색한 9칸 구성이 바뀌었습니다. 검색 결과를 다시 불러와 주세요.');
+  function resolveNineTarget(state, target) {
+    const board = state?.boards.find(b => b.id === target?.boardId);
+    const area = board?.areas.find(a => a.id === target.areaId);
+    const item = area?.items[target.itemIndex];
+    const value = target?.itemIndex != null ? item && itemText(item) : target?.areaId ? area && [area.title, area.note] : board && [board.title, board.intro];
+    if (!value || JSON.stringify(value) !== target.snapshot) throw staleNine();
+    return { board, area, item };
+  }
   function excerpt(text, match) {
     let start = Math.max(0, (match?.start || 0) - 55), end = Math.min(text.length, (match?.end || 0) + 140);
     if (start && /[\uDC00-\uDFFF]/.test(text[start])) start--;
     if (end < text.length && /[\uDC00-\uDFFF]/.test(text[end])) end++;
     return (start ? '…' : '') + text.slice(start, end) + (end < text.length ? '…' : '');
   }
-  function search({ bundle, workbench, collection }, query, { ignoreKoreanSpacing = false, archived = false } = {}) {
+  function search({ bundle, workbench, collection, nineBoard }, query, { ignoreKoreanSpacing = false, archived = false } = {}) {
     const options = { ignoreKoreanSpacing }, rows = [];
     // Validate even when all stores failed or the query is blank.
     core.matchesSearchText('', query, options);
@@ -67,7 +77,21 @@
       const found = field([['제목', item.title], ['만든 사람', item.creator], ['비공개 메모', item.note], ['주제', item.tags.join(' · ')], ['출처', item.url], ...Object.values(item.details).map(v => ['세부 정보', v])]);
       if (found) rows.push({ kind: 'collection', key: 'find:collection:' + item.id, itemId: item.id, type: item.type, title: item.title, meta: '컬렉션' + (item.archived ? ' · 보관 중' : ''), ...found });
     }
+    if (nineBoard) for (const board of nineBoard.boards) {
+      const title = board.title || '제목 없는 구성';
+      const add = (fields, target, name, meta, key) => {
+        const found = field(fields);
+        if (found) rows.push({ kind: 'nine', key: 'find:nine:' + key, title: name, meta: '9칸 구성 · ' + meta, nineTarget: target, ...found });
+      };
+      add([['구성 제목', board.title], ['구성 소개', board.intro]], { boardId: board.id, snapshot: JSON.stringify([board.title, board.intro]) }, title, '비공개', board.id);
+      for (const [areaIndex, area] of board.areas.entries()) {
+        const name = area.title || '영역 ' + (areaIndex + 1), key = board.id + ':' + area.id;
+        add([['영역 이름', area.title], ['영역 설명', area.note]], { boardId: board.id, areaId: area.id, snapshot: JSON.stringify([area.title, area.note]) }, title + ' · ' + name, '비공개 영역', key);
+        area.items.forEach((item, itemIndex) => add([['항목 제목', item.attachment.title], ['만든 사람', item.attachment.creator], ['출처', item.attachment.url], ['선택 이유', item.reason]],
+          { boardId: board.id, areaId: area.id, itemIndex, snapshot: JSON.stringify(itemText(item)) }, item.attachment.title, title + ' · ' + name + ' · ' + (itemIndex + 1) + '번째 칸', key + ':' + itemIndex));
+      }
+    }
     return rows;
   }
-  return Object.freeze({ search, labels });
+  return Object.freeze({ search, labels, resolveNineTarget });
 });

@@ -772,3 +772,9 @@ GridStack 직접 도입은 드래그/가변 크기 대시보드에 적합하다.
 ## 2026-10-14 9칸 구성의 선택 파일 복구
 
 기존 v1 parser/backup/copies와 idb 8.0.3의 트랜잭션 완료·CAS를 확장했다. 구성 내용의 정확한 중복 표시와 native checkbox/details만 추가하고, 초안 선택 복구의 기본 미선택/명시 복사 원칙을 재사용한다. 위 공식 릴리스/라이선스 확인과 GridStack 미도입 근거를 유지한다. 새로운 기반 모듈·외부 파서·파일/모달 라이브러리는 도입하지 않았다. [현재/전체 범위·선택·경합 계약](../design-review/nine-board-selective-recovery.md).
+
+## 저장한 9칸 구성의 검색 확장 — 2026-10-14 UTC
+
+새 엔진 대신 기존 `UnifiedSearch`의 읽기 전용 필드 투영·`Core.findSearchText`·저장소 구독·왕복 탐색을 재사용한다. 이날 npm 공식 registry의 최신판은 Fuse.js 7.5.0(게시 2026-07-13, Apache-2.0), MiniSearch 7.2.0(2025-09-16, MIT)으로 기존 고정 태그 LICENSE/README 검토와 같았다. 공식 GitHub 저장소는 모두 archived=false, 최근 pushed_at은 각각 2026-08-09/2025-09-16이며 공개 security-advisories 목록은 각각 0개였다. 이것을 전체 취약점 부재로 해석하지 않는다. 출처: [Fuse npm](https://registry.npmjs.org/fuse.js), [MiniSearch npm](https://registry.npmjs.org/minisearch), [Fuse 저장소](https://github.com/krisk/Fuse), [MiniSearch 저장소](https://github.com/lucaong/minisearch).
+
+도입 후보의 fuzzy/token 인덱스는 정확한 문자열 검색·계정/공간 폐기·저장본 재읽기·동일 항목 확인을 대신하지 못한다. 이번에는 이미 검증한 구현에 구성·영역·항목 필드만 더한다. 직접 유지할 부분은 작은 투영과 안정된 ID/정확 항목 스냅샷 확인이다. 실제 자료량에서 반복 검색 지연이나 오타 검색 요구가 확인되면 엔진 비교를 재개한다. 새 의존성·인덱스 저장·검색어 전송은 추가하지 않는다.

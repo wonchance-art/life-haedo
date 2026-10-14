@@ -253,7 +253,9 @@ async function main(){
         await s.commitLocal({operationId:c.id(),workspaceId:b.workspaceId,baseRevision:b.revision,changes:c.buildImportChanges(b,prepared,[])});
         const stage=await s.saveStage({stageId:c.id(),workspaceId:b.workspaceId,revision:0,state:'draft',input:{origin:'other',title:'이전 검토초안',text:'미적용 원문 유지'},excerpts:[]});
         await s.setActive(b.workspaceId);
-        localStorage.setItem('caeyeon_life_registry','{"docs":[],"anonymous":"preserve-upgrade"}');return {bundle:await s.read(b.workspaceId),stage};
+        let nine;
+        if(s.readNineBoard&&HaedoLife.NineBoard){const v=await s.readNineBoard(b.workspaceId),board=HaedoLife.NineBoard.create(c.id);board.title='이전 버전의 선택 구성';board.areas[0].items.push({attachment:{type:'book',title:'보존할 대상',creator:'익명 창작자',url:'https://example.org/original'},reason:'🌱 이전 선택 이유\r\n정확한 출처를 유지한다.'});v.boards.push(board);nine=await s.saveNineBoard(b.workspaceId,v,v.revision);}
+        localStorage.setItem('caeyeon_life_registry','{"docs":[],"anonymous":"preserve-upgrade"}');return {bundle:await s.read(b.workspaceId),stage,...(nine?{nine}:{})};
       });
       currentSite=site;await p.evaluate(async()=>{const registration=await navigator.serviceWorker.getRegistration();await registration.update();});
       await waitForPage(p,async names=>{
@@ -267,8 +269,11 @@ async function main(){
       const visible=await p.evaluate(()=>HaedoLife.Shell.storage.listWorkspaces());
       assert.equal(visible.some(w=>w.workspaceId===fixture.bundle.workspaceId),oldHasAuth);
       const original=await p.evaluate(async ids=>{const db=await idb.openDB('life-tools-v1',1);try{return {bundle:await db.get('bundles',ids.workspaceId),stage:await db.get('staging',ids.stageId)};}finally{db.close();}},{workspaceId:fixture.bundle.workspaceId,stageId:fixture.stage.stageId});
-      assert.deepEqual(original,fixture);assert.equal(await p.evaluate(()=>localStorage.getItem('caeyeon_life_registry')),'{"docs":[],"anonymous":"preserve-upgrade"}');
+      assert.deepEqual(original,{bundle:fixture.bundle,stage:fixture.stage});
+      if(fixture.nine)assert.deepEqual(await p.evaluate(id=>HaedoLife.Shell.storage.readNineBoard(id),fixture.bundle.workspaceId),fixture.nine,'Existing nine board data must survive the shell upgrade exactly.');
+      assert.equal(await p.evaluate(()=>localStorage.getItem('caeyeon_life_registry')),'{"docs":[],"anonymous":"preserve-upgrade"}');
       const modules=['life.html','assets/platform-auth.js','assets/platform-life-remote.js','assets/life/core.js','assets/life/unified-search.js','assets/life/unified-search-ui.js','assets/life/storage.js','assets/life/icons.js','assets/life/ui.js','assets/life/home.js','assets/life/collection.js','assets/life/collection-media.js','assets/life/collection-metadata.js','assets/life/collection-picker.js','assets/life/collection-ui.js','assets/life/collection.css','assets/life/workbench-ui.js','assets/life/reflection-lenses.js','assets/life/reflection-lenses-ui.js','assets/life/workbench.css','assets/life/rediscovery.js','assets/life/reading-position.js','assets/life/ui.css','assets/life/writing-ui.js','assets/life/composition-remote.js','assets/life/composition-sync.js','assets/life/composition-ui.js','assets/life/writing-remote.js','assets/life/writing-sync.js','assets/life/writing-sync-ui.js','vendor/supabase/supabase.js'];
+      modules.push('assets/life/nine-board.js','assets/life/nine-board-ui.js','assets/life/nine-board.css');
       const runtime=await p.evaluate(async({name,modules})=>{
         if(!await caches.has(name))return [];
         const cache=await caches.open(name);

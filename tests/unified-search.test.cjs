@@ -30,6 +30,26 @@ test('identical source and page/collection text keep separate identities and sto
 test('partial failures allow independent stores and blank queries expose no inventory',()=>{
  assert.deepEqual(model.search({},'본문'),[]);assert.deepEqual(model.search({},'  '),[]);assert.throws(()=>model.search({},'x'.repeat(501)),{code:'invalid_query'});
 });
+test('saved nine boards project distinct board, area and item matches without changing data', () => {
+ const item = {attachment:{type:'book',title:'한 권',creator:'익명 창작자',url:'https://example.org/source'},reason:'🌱오래 좋아할 기준\r\n다음 줄'};
+ const nineBoard = {boards:[{id:'b',title:'작은 발견',intro:'산책 소개',areas:[{id:'a',title:'읽을 문장',note:'느린 관찰',items:[item,structuredClone(item)]}]}]};
+ const before=structuredClone(nineBoard);
+ for(const [q,field] of [['작은 발견','구성 제목'],['산책','구성 소개'],['느린 관찰','영역 설명'],['창작자','만든 사람'],['example.org','출처']]) {
+  const rows=model.search({nineBoard},q);assert.equal(rows[0].kind,'nine');assert.equal(rows[0].field,field);
+  model.resolveNineTarget(nineBoard,rows[0].nineTarget);
+ }
+ const rows=model.search({nineBoard},'오래좋아할',{ignoreKoreanSpacing:true});assert.equal(rows.length,2);assert.notEqual(rows[0].key,rows[1].key);assert.match(rows[0].snippet,/🌱오래 좋아할 기준/);
+ assert.equal(model.search({nineBoard},'오래좋아할').length,0);assert.deepEqual(model.search({nineBoard},' '),[]);assert.deepEqual(nineBoard,before);
+});
+test('a changed or reordered nine target is never replaced by another item or first board', () => {
+ const item=title=>({attachment:{type:'book',title,creator:'',url:''},reason:'선택 이유'});
+ const nineBoard={boards:[{id:'b',title:'구성',intro:'',areas:[{id:'a',title:'영역',note:'',items:[item('찾을 대상'),item('다른 대상')]}]}]};
+ const target=model.search({nineBoard},'찾을 대상')[0].nineTarget;
+ const edit=structuredClone(nineBoard);edit.boards[0].areas[0].items[0].reason+=' 변경';assert.throws(()=>model.resolveNineTarget(edit,target),/다시 불러와/);
+ edit.boards[0].areas[0].items.reverse();assert.throws(()=>model.resolveNineTarget(edit,target),/다시 불러와/);
+ assert.throws(()=>model.resolveNineTarget({boards:[]},target),/다시 불러와/);
+ const stable=structuredClone(nineBoard);stable.boards[0].title='새 구성 이름';assert.equal(model.resolveNineTarget(stable,target).item.attachment.title,'찾을 대상');
+});
 test('literal matching never treats HTML, regex, Latin spacing or newlines as fuzzy matches',()=>{
  assert.equal(core.findSearchText('a.b [x]','a.b').text,'a.b');assert.equal(core.findSearchText('aXb','a.b'),null);
  assert.equal(core.findSearchText('한\n글','한글',{ignoreKoreanSpacing:true}),null);assert.equal(core.findSearchText('open source','opensource',{ignoreKoreanSpacing:true}),null);

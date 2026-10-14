@@ -156,6 +156,9 @@
           if (data?.sender !== sender && data?.type === 'collection_changed' && typeof data.workspaceId === 'string' && Number.isSafeInteger(data.revision)) {
             notify({ type: 'collection_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
+          if (data?.sender !== sender && data?.type === 'nine_board_changed' && typeof data.workspaceId === 'string' && Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'nine_board_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
           if (data?.sender !== sender && data?.type === 'workbench_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
             notify({ type: 'workbench_changed', workspaceId: data.workspaceId, revision: data.revision });
@@ -569,13 +572,16 @@
       const value = clone(input);
       if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '9칸 구성의 작업공간이 다릅니다.');
       if (value.revision !== baseRevision) throw fault('nine_board_conflict', '9칸 구성의 저장 기준이 바뀌었습니다.');
-      return transaction(['bundles', 'meta'], 'readwrite', async tx => {
+      const saved = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
         const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
         const previous = await nineBoardValue(meta, workspaceId);
         if (previous.revision !== baseRevision) throw fault('nine_board_conflict', '다른 탭에서 9칸 구성이 바뀌었습니다. 내 변경을 새 사본으로 보관해 주세요.');
         value.revision++; nineBoard().validate(value);
         await meta.put({ key: `nine-board:${workspaceId}`, value }); return clone(value);
       });
+      const event = { type: 'nine_board_changed', workspaceId, revision: saved.revision };
+      notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Committed data remains authoritative. */ }
+      return saved;
     }
     // Page composer drafts stay local, outside composition sync and public copies.
     const pagePosts = () => root.HaedoLife?.PagePosts || (typeof require === 'function' && require('./page-posts.js'));

@@ -1026,7 +1026,8 @@
             if (['nine_input_pending', 'nine_input_in_progress', 'nine_busy'].includes(errorNode?.dataset.code) && !session.nine.hasBlockedInput()) clearError();
             updateStatus(session);
           } });
-        session.nine.mount(nineHost); viewCleanups.push(() => session.nine.detach()); return;
+        const target = session.nineTarget; session.nineTarget = null;
+        session.nine.mount(nineHost, target); viewCleanups.push(() => session.nine.detach()); return;
       }
       if (session.share?.open) { renderSharePanel(session); return; }
       const switchButton = action(preview ? '편집으로 돌아가기' : '방문자 미리보기', async () => {
@@ -2708,7 +2709,12 @@
         view.seedVersionId = valid ? context.seedVersionId : null; view.chooserOpen = !valid;
         view.contextError = valid ? '' : '기준 기록의 작업공간이나 버전을 확인하지 못했습니다. 현재 공간에서 기록을 다시 골라 주세요.';
       }
-      if (mode === 'page') { current.searchTarget = options.searchTarget || null; if (options.searchTarget) { preview = false; if (current.share) current.share.open = false; } }
+      if (mode === 'page') {
+        current.searchTarget = options.searchTarget || null; current.nineTarget = options.nineTarget || null;
+        if (options.searchTarget || options.nineTarget) {
+          current.nineOpen = !!options.nineTarget; preview = false; if (current.share) current.share.open = false;
+        }
+      }
       if (mode === 'page' && typeof options.pageDraftId === 'string') { current.pageDraftId = options.pageDraftId; preview = false; }
       if (mode === 'reflection' && options.planOpen) current.bookPlanOpen = true;
       incoming = null;

@@ -29,9 +29,12 @@ flowchart TB
         ACTION["개인 판단 · 다음 행동"]
         GOALS["목표 · 습관"]
         MANUSCRIPT["개인 글 · 책 원고"]
+        NINE["비공개 9칸 구성<br/>영역 · 대상 · 선택 이유"]
         FILE["Markdown · HTML · PDF"]
         ACTION --> GOALS
         MANUSCRIPT --> FILE
+        NINE -->|선택한 구성 JSON · HTML| FILE
+        NINE -.->|통합 검색으로 다시 찾기| READ
     end
 
     subgraph PUBLIC["선택해 내보내는 아웃풋"]
@@ -45,6 +48,7 @@ flowchart TB
 
     OUTPUT --> ACTION
     OUTPUT --> MANUSCRIPT
+    OUTPUT --> NINE
     OUTPUT --> EDIT
     GOALS --> FEEDBACK
     FILE --> FEEDBACK
