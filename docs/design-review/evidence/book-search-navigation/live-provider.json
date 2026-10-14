@@ -1,0 +1,97 @@
+{
+  "date": "2026-10-14 KST",
+  "browser": "151.0.7922.173",
+  "queries": [
+    {
+      "query": "채식주의자",
+      "visible": 1,
+      "hasMore": false,
+      "top": [
+        {
+          "title": "채식주의자",
+          "url": "https://openlibrary.org/works/OL17334243W"
+        }
+      ]
+    },
+    {
+      "query": "The Vegetarian",
+      "visible": 6,
+      "hasMore": true,
+      "top": [
+        {
+          "title": "채식주의자",
+          "url": "https://openlibrary.org/works/OL17334243W"
+        },
+        {
+          "title": "Herb, the Vegetarian Dragon",
+          "url": "https://openlibrary.org/works/OL5823742W"
+        }
+      ]
+    },
+    {
+      "query": "소년이 온다",
+      "visible": 1,
+      "hasMore": false,
+      "top": [
+        {
+          "title": "소년이 온다",
+          "url": "https://openlibrary.org/works/OL17764836W"
+        }
+      ]
+    },
+    {
+      "query": "Human Acts",
+      "visible": 6,
+      "hasMore": true,
+      "top": [
+        {
+          "title": "소년이 온다",
+          "url": "https://openlibrary.org/works/OL17764836W"
+        },
+        {
+          "title": "The human act of caring",
+          "url": "https://openlibrary.org/works/OL11560677W"
+        }
+      ]
+    },
+    {
+      "query": "데미안",
+      "visible": 1,
+      "hasMore": false,
+      "top": [
+        {
+          "title": "데미안 ; 향수",
+          "url": "https://openlibrary.org/works/OL44762552W"
+        }
+      ]
+    },
+    {
+      "query": "Demian",
+      "visible": 6,
+      "hasMore": true,
+      "top": [
+        {
+          "title": "Demian",
+          "url": "https://openlibrary.org/works/OL30457295W"
+        },
+        {
+          "title": "Demian / Siddhartha",
+          "url": "https://openlibrary.org/works/OL872737W"
+        }
+      ]
+    }
+  ],
+  "koreanEdition": {
+    "results": [
+      {
+        "provider": "Open Library",
+        "type": "book",
+        "title": "채식주의자",
+        "creator": "",
+        "url": "https://openlibrary.org/books/OL23965279M",
+        "detail": "한국어 · Ch'angbi · Chʻangbi · 2007"
+      }
+    ],
+    "hasMore": false
+  }
+}

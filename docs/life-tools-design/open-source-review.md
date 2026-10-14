@@ -744,3 +744,7 @@ Open Library 기본 비식별 요청 제한은 초당 1회, GitHub 비인증 검
 [Open Library 공식 Books 문서](https://openlibrary.org/dev/docs/api/books)의 작품별 `/editions.json`을 직접 읽고 실제 브라우저에서 확인했다. #77의 라이선스·정책 검토를 재사용하며 기존 제한 JSON fetch에 판본 투영만 추가했다. 작품에 속한 판본인지 `works`로 확인하고 저자·번역자 이름을 추정하지 않는다. 작품/판본의 식별자가 달라 동일 제목 자동 병합은 부적절하므로, 컬렉션 보관은 기존 모델·CAS의 정확 출처 일치 규칙을 사용했다. 새 SDK·런타임·저장 스키마 없음.
 
 영화·예술 작품·인물의 공식 소스·현재 릴리스/유지보수·라이선스와 실제로 확인하지 못한 조건은 [후속 제공자 비교](../design-review/taste-provider-expansion.md)에 정리했다. AIC 서버 코드를 설치하는 대신 기존 명시적 후보 검토를 재사용하는 방향을 우선한다. 차단된 API/약관 확인이나 한국어 검색 실험은 완료로 표현하지 않는다.
+
+## 책 검색 다음 결과와 한국어판 — 2026-10-14
+
+[Open Library Search API 공식 문서](https://openlibrary.org/dev/docs/api/search)의 `page`, `language:kor`, `editions`와 선택 필드를 직접 확인했다. 언어 순위 힌트 `lang`과 필터를 구분하고, 하위 판본은 현재 대표 한 개만 반환한다는 제한을 UI에 표시한다. 기존 #77~#78의 공식 소스·라이선스 검토와 제한 JSON 어댑터를 재사용했으며 새 패키지/런타임/서버를 도입하지 않았다. [구현과 실제 한글/원어 검색 6개 비교](../design-review/book-search-navigation.md)에 채택 이유·정확 판본·누락 한계를 기록했다. 외부 검색 라이브러리는 제공자 색인 누락을 해결하지 못해 추가하지 않았다.
