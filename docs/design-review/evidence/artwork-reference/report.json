@@ -1,0 +1,107 @@
+{
+  "checks": [
+    "Museum link enters artwork review without a request; explicit source popup preserves manuscript",
+    "Save failure keeps artwork/source/body, retry and explicit collection retention preserve private scope",
+    "Collection source review keeps artwork details, notes and backup independent of page attachments"
+  ],
+  "visual": [
+    {
+      "scene": "artwork-review",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 20,
+      "contrastFailures": []
+    },
+    {
+      "scene": "artwork-review",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 20,
+      "contrastFailures": []
+    },
+    {
+      "scene": "artwork-review",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 20,
+      "contrastFailures": []
+    },
+    {
+      "scene": "save-error",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.514,
+      "measuredTexts": 16,
+      "contrastFailures": []
+    },
+    {
+      "scene": "collection-review",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 29,
+      "contrastFailures": []
+    },
+    {
+      "scene": "collection-review",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 29,
+      "contrastFailures": []
+    },
+    {
+      "scene": "collection-review",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 29,
+      "contrastFailures": []
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [],
+  "external": [
+    "https://www.artic.edu/artworks/129884/starry-night-and-the-astronauts"
+  ],
+  "environment": "Linux Chromium; anonymous mock Auth and museum source popup; real IndexedDB. No live museum API/Apple hardware/production writes.",
+  "browser": "151.0.7922.173"
+}

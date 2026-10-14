@@ -748,3 +748,7 @@ Open Library 기본 비식별 요청 제한은 초당 1회, GitHub 비인증 검
 ## 책 검색 다음 결과와 한국어판 — 2026-10-14
 
 [Open Library Search API 공식 문서](https://openlibrary.org/dev/docs/api/search)의 `page`, `language:kor`, `editions`와 선택 필드를 직접 확인했다. 언어 순위 힌트 `lang`과 필터를 구분하고, 하위 판본은 현재 대표 한 개만 반환한다는 제한을 UI에 표시한다. 기존 #77~#78의 공식 소스·라이선스 검토와 제한 JSON 어댑터를 재사용했으며 새 패키지/런타임/서버를 도입하지 않았다. [구현과 실제 한글/원어 검색 6개 비교](../design-review/book-search-navigation.md)에 채택 이유·정확 판본·누락 한계를 기록했다. 외부 검색 라이브러리는 제공자 색인 누락을 해결하지 못해 추가하지 않았다.
+
+## 작품 출처의 수동 검토 — 2026-10-14
+
+시카고 미술관의 [공식 API 문서 원본](https://github.com/art-institute-of-chicago/data-aggregator/blob/780e6c86025d5f80387dac7574d0f056bf26ff1a/docs/.sections/preface.md)에 있는 작품 링크 형식을 참고했다. [이전 제공자 검토](../design-review/taste-provider-expansion.md)의 소스/라이선스 범위를 유지하고 기존 CollectionPicker·Share.safeURL·수동 폼을 재사용했다. URL 식별에 SDK·서버 전체 도입은 필요하지 않다. 실제 API/현재 약관은 환경 접근 적용 후 확인해야 하므로 자동 검색이나 이미지 연결은 추가하지 않았다. [구현·검증·외부 조건](../design-review/artwork-reference.md).
