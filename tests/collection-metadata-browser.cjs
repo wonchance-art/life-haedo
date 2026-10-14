@@ -38,7 +38,7 @@ async function main(){
   });
   await check('Failed provider lookup and cancel retain form; unsupported input never requests',async()=>{
    mode='error';await click('주소로 정보 확인');await page.getByText('제공자가 조회를 제한했습니다.',{exact:false}).waitFor();await snap('error',390);assert.equal(await page.locator('#clNote').inputValue(),'외부로 보내지 않을 생각');
-   await page.locator('#clUrl').fill('https://example.org/article');const count=report.requests.length;await click('주소로 정보 확인');await page.getByText('YouTube 영상 또는 GitHub 공개 저장소 주소를 넣어 주세요.',{exact:false}).waitFor();assert.equal(report.requests.length,count);
+   await page.locator('#clUrl').fill('https://example.org/article');const count=report.requests.length;await click('주소로 정보 확인');await page.getByText(/다른 주소는 직접 입력해 저장할 수 있습니다/).waitFor();assert.equal(report.requests.length,count);
   });
   await check('URL changes and editor cancellation discard late responses',async()=>{
    mode='hold';await page.locator('#clUrl').fill('https://youtu.be/jNQXAC9IVRw?si=tracking');await click('주소로 정보 확인');await page.getByRole('button',{name:'조회 취소',exact:true}).waitFor();await snap('loading',390);await page.waitForFunction(()=>true);while(!release)await new Promise(r=>setTimeout(r,10));await page.locator('#clUrl').fill('https://example.org/new');mode='ok';release();release=null;await page.waitForTimeout(100);assert.equal(await page.locator('.cl-candidate').count(),0);assert.equal(await page.locator('#clUrl').inputValue(),'https://example.org/new');
