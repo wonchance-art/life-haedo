@@ -111,6 +111,9 @@ jobs:
       - name: Verify manual artwork source review and private preservation
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/artwork-reference-browser.cjs
+      - name: Verify explicit artwork metadata selection and recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/artwork-metadata-browser.cjs
       - name: Verify page composition, attachments and draft recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/page-composer-browser.cjs
@@ -274,6 +277,7 @@ jobs:
             .local/edition-collection/
             .local/book-search-navigation/
             .local/artwork-reference/
+            .local/artwork-metadata/
             .local/page-composer/
             .local/profile-feed-media/
             .local/reflection-page/

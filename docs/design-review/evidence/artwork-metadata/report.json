@@ -1,0 +1,309 @@
+{
+  "checks": [
+    "Explicit artwork search, IME guard, literal Korean empty result and manual recovery",
+    "Combined title/artist query, next-page error recovery, keyboard and cached previous candidates",
+    "Editable review, failed save/retry, reload, private attachment and explicit collection retention",
+    "Link lookup matches existing slug/canonical identity without overwriting personal title or note",
+    "Input/close cancels delayed provider results and never revives selection or loses body",
+    "Collection link review uses explicit field choices; editing creator clears its choice; detail/note/backup preserved"
+  ],
+  "visual": [
+    {
+      "scene": "empty",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "예술 작품"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "도구"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "인물"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.56,
+      "measuredTexts": 20,
+      "contrastFailures": []
+    },
+    {
+      "scene": "search",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.414,
+      "measuredTexts": 34,
+      "contrastFailures": []
+    },
+    {
+      "scene": "search",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.414,
+      "measuredTexts": 34,
+      "contrastFailures": []
+    },
+    {
+      "scene": "search",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "예술 작품"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "도구"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "인물"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.414,
+      "measuredTexts": 34,
+      "contrastFailures": []
+    },
+    {
+      "scene": "page-error",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "예술 작품"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "도구"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "인물"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.414,
+      "measuredTexts": 34,
+      "contrastFailures": []
+    },
+    {
+      "scene": "review",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 20,
+      "contrastFailures": []
+    },
+    {
+      "scene": "review",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 20,
+      "contrastFailures": []
+    },
+    {
+      "scene": "review",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 20,
+      "contrastFailures": []
+    },
+    {
+      "scene": "save-error",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.514,
+      "measuredTexts": 16,
+      "contrastFailures": []
+    },
+    {
+      "scene": "loading",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "예술 작품"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "도구"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "인물"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.091,
+      "measuredTexts": 19,
+      "contrastFailures": []
+    },
+    {
+      "scene": "collection-review",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 41,
+      "contrastFailures": []
+    },
+    {
+      "scene": "collection-review",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 41,
+      "contrastFailures": []
+    },
+    {
+      "scene": "collection-review",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 41,
+      "contrastFailures": []
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+    "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "requests": [
+    "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22%EB%AA%A8%EB%84%A4%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%2C%22artist_display%22%5D%2C%22type%22%3A%22cross_fields%22%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22artist_display%22%2C%22date_display%22%2C%22medium_display%22%5D%2C%22limit%22%3A6%2C%22page%22%3A1%7D",
+    "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22Van+Gogh%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%2C%22artist_display%22%5D%2C%22type%22%3A%22cross_fields%22%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22artist_display%22%2C%22date_display%22%2C%22medium_display%22%5D%2C%22limit%22%3A6%2C%22page%22%3A1%7D",
+    "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22La+Grande+Jatte+Seurat%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%2C%22artist_display%22%5D%2C%22type%22%3A%22cross_fields%22%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22artist_display%22%2C%22date_display%22%2C%22medium_display%22%5D%2C%22limit%22%3A6%2C%22page%22%3A1%7D",
+    "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22La+Grande+Jatte+Seurat%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%2C%22artist_display%22%5D%2C%22type%22%3A%22cross_fields%22%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22artist_display%22%2C%22date_display%22%2C%22medium_display%22%5D%2C%22limit%22%3A6%2C%22page%22%3A2%7D",
+    "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22La+Grande+Jatte+Seurat%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%2C%22artist_display%22%5D%2C%22type%22%3A%22cross_fields%22%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22artist_display%22%2C%22date_display%22%2C%22medium_display%22%5D%2C%22limit%22%3A6%2C%22page%22%3A2%7D",
+    "https://api.artic.edu/api/v1/artworks/27992?fields=id,title,artist_title,artist_display,date_display,medium_display",
+    "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22Hokusai%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%2C%22artist_display%22%5D%2C%22type%22%3A%22cross_fields%22%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22artist_display%22%2C%22date_display%22%2C%22medium_display%22%5D%2C%22limit%22%3A6%2C%22page%22%3A1%7D",
+    "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22Monet%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%2C%22artist_display%22%5D%2C%22type%22%3A%22cross_fields%22%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22artist_display%22%2C%22date_display%22%2C%22medium_display%22%5D%2C%22limit%22%3A6%2C%22page%22%3A1%7D",
+    "https://api.artic.edu/api/v1/artworks/27992?fields=id,title,artist_title,artist_display,date_display,medium_display"
+  ],
+  "environment": "Linux Chromium; mock Auth/AIC responses and real IndexedDB. Live AIC adapter verification is separate.",
+  "browser": "151.0.7922.173"
+}

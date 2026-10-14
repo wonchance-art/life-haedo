@@ -39,7 +39,8 @@
     const external = node('div', null, 'cl-picker-providers');
     const bookSearch = button('책 찾기 · Open Library', () => search('books'));
     const projectSearch = button('프로젝트 찾기 · GitHub', () => search('projects'));
-    external.append(bookSearch, projectSearch);
+    const artworkSearch = button('작품 찾기 · 시카고 미술관', () => search('artworks'));
+    external.append(bookSearch, projectSearch, artworkSearch);
     const topics = node('select'); topics.id = 'clPickerTopic'; topics.setAttribute('aria-label', '내 컬렉션 주제');
     const allTopics = node('option', '모든 주제'); allTopics.value = ''; topics.append(allTopics);
     for (const tag of [...new Set(items.flatMap(item => item.tags || []))].sort((a,b) => a.localeCompare(b, 'ko'))) {
@@ -68,9 +69,9 @@
     function render() {
       cancel(); remote.inert = false; remote.removeAttribute('aria-busy'); remote.replaceChildren(); results.replaceChildren();
       const value = input.value.trim(), url = /^https?:\/\//i.test(value);
-      find.hidden = !url; find.disabled = false; find.textContent = Metadata.reference(value) ? '작품 정보 입력' : '링크 확인';
+      find.hidden = !url; find.disabled = false; find.textContent = Metadata.reference(value) ? '작품 정보 확인' : '링크 확인';
       external.hidden = url || value.length < 2;
-      bookSearch.disabled = projectSearch.disabled = false;
+      bookSearch.disabled = projectSearch.disabled = artworkSearch.disabled = false;
       const matched = items.filter(item => (kind === 'all' || item.type === kind) && (!topic || item.tags?.includes(topic)) && (url && identity(item.url) === identity(value) || C.matches(item, { query: value, archived: item.archived })));
       message.textContent = matched.length ? `내 컬렉션 · ${matched.length}개` : value ? '아직 모아 둔 항목이 없어요.' : '좋아하는 것의 이름이나 링크로 시작하세요.';
       for (const item of matched.slice(0, limit)) {
@@ -93,7 +94,8 @@
       const query = input.value.trim(); if (query.length < 2 || /^https?:\/\//i.test(query)) return;
       const request = new AbortController(); controller = request;
       const previousFocus = document.activeElement, pageNavigation = remote.contains(previousFocus);
-      bookSearch.disabled = projectSearch.disabled = true; remote.inert = true;
+      let errorFocus = null;
+      bookSearch.disabled = projectSearch.disabled = artworkSearch.disabled = true; remote.inert = true;
       message.textContent = '검색 중…'; remote.setAttribute('aria-busy', 'true');
       try {
         const key = provider + ':' + query + ':' + page;
@@ -103,6 +105,7 @@
         searchCache.set(key, result);
         remote.replaceChildren();
         message.textContent = result.results.length ? '후보를 선택해 정보를 확인해 주세요.' : '찾은 후보가 없어요. 검색어를 바꾸거나 직접 입력하세요.';
+        if (provider === 'artworks') remote.append(node('p','시카고 미술관 소장 작품입니다. 원어 제목·작가 이름으로 검색해 주세요. 한국어 검색은 제한적입니다.','life-help'));
         if (result.incomplete) message.textContent += ' 제공자가 일부 결과만 보냈습니다.';
         for (const candidate of result.results) {
           const existing = items.find(item => identity(item.url) === identity(candidate.url));
@@ -121,21 +124,21 @@
           }
           remote.append(group);
         }
-        if (provider === 'books' && (page > 1 || result.hasMore)) {
+        if (['books','artworks'].includes(provider) && (page > 1 || result.hasMore)) {
           remote.append(node('p', `검색 결과 · ${page}쪽`, 'life-help'));
           const pages = node('div',null,'cl-picker-providers');
           if (page > 1) pages.append(button('이전 검색 결과', () => search(provider,page-1)));
           if (result.hasMore) pages.append(button('다음 검색 결과', () => search(provider,page+1)));
           remote.append(pages);
         }
-        if (page > 1 || pageNavigation) { remote.inert = false; remote.tabIndex=-1; remote.focus({preventScroll:true}); remote.scrollIntoView({block:'nearest'}); }
+        if (pageNavigation || document.activeElement === document.body || document.activeElement === previousFocus) { remote.inert = false; remote.tabIndex=-1; remote.focus({preventScroll:true}); remote.scrollIntoView({block:'nearest'}); }
       } catch (error) {
         if (!alive || !isCurrent() || controller !== request || request.signal.aborted) return;
         message.textContent = (error.message || '검색하지 못했습니다.') + ' 직접 입력으로 이어갈 수 있어요.';
         remote.inert = false;
-        if (pageNavigation && previousFocus.isConnected) previousFocus.focus({preventScroll:true});
+        if (previousFocus.isConnected && (pageNavigation || document.activeElement === document.body || document.activeElement === previousFocus)) errorFocus = previousFocus;
       } finally {
-        if (alive && controller === request) { controller = null; bookSearch.disabled = projectSearch.disabled = false; remote.inert = false; remote.removeAttribute('aria-busy'); }
+        if (alive && controller === request) { controller = null; bookSearch.disabled = projectSearch.disabled = artworkSearch.disabled = false; remote.inert = false; remote.removeAttribute('aria-busy'); errorFocus?.focus({preventScroll:true}); }
       }
     }
     async function loadEditions(work, host, offset, trigger, korean = false) {
@@ -178,7 +181,6 @@
     form.addEventListener('submit', async event => {
       event.preventDefault(); if (composing || controller || !alive || !isCurrent()) return;
       const value = input.value.trim(); if (!/^https?:\/\//i.test(value)) return;
-      if (Metadata.reference(value)) { manualChoice(); return; }
       cancel(); const request = new AbortController(); controller = request;
       remote.replaceChildren(); find.disabled = true; find.textContent = '확인 중…'; message.textContent = '링크 정보를 확인하고 있어요.';
       try {
@@ -186,11 +188,14 @@
         if (!alive || !isCurrent() || controller !== request || request.signal.aborted) return;
         const existing = items.find(item => identity(item.url) === identity(candidate.url));
         message.textContent = existing ? (attaching ? '컬렉션에서 찾았어요. 글에 붙일 수 있어요.' : '이미 담아 둔 항목이에요. 메모를 이어 쓸 수 있어요.') : '정보를 확인하고 골라 주세요.';
-        remote.append(row(existing || candidate, () => choose(existing ? { item: existing, compact: true } : { seed: { title: candidate.title, type: candidate.type, url: candidate.url }, compact: true }), existing ? (attaching ? '내 컬렉션 · 글에 붙이기' : '내 컬렉션 · 메모 이어 쓰기') : `${candidate.provider} · ${candidate.attributionLabel}: ${candidate.attribution}`, existing && !attaching ? 'edit' : 'plus'));
+        remote.append(row(existing || candidate, () => choose(existing ? { item: existing, compact: true } : {
+          seed: { title: candidate.title, type: candidate.type, url: candidate.url, ...(candidate.type === 'artwork' ? {creator:candidate.creator} : {}) },
+          compact: candidate.type !== 'artwork', review: candidate.type === 'artwork' ? candidate.provider + ' · ' + candidate.detail : ''
+        }), existing ? (attaching ? '내 컬렉션 · 글에 붙이기' : '내 컬렉션 · 메모 이어 쓰기') : [candidate.provider,candidate.attributionLabel + ': ' + (candidate.attribution || '미확인'),candidate.detail].filter(Boolean).join(' · '), existing && !attaching ? 'edit' : 'plus'));
       } catch (error) {
         if (!alive || !isCurrent() || controller !== request || request.signal.aborted) return;
         message.textContent = (error.message || '정보를 확인하지 못했어요.') + ' 직접 입력으로 이어갈 수 있어요.';
-      } finally { if (alive && controller === request) { controller = null; find.disabled = false; find.textContent = '링크 확인'; } }
+      } finally { if (alive && controller === request) { controller = null; find.disabled = false; find.textContent = Metadata.reference(input.value.trim()) ? '작품 정보 확인' : '링크 확인'; } }
     });
     dialog.addEventListener('keydown', event => {
       if (event.key === 'Escape') {

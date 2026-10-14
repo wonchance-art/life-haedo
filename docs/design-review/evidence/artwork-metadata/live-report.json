@@ -1,0 +1,33 @@
+{
+  "scope": "Live official AIC + anonymous mocked Auth and real local IndexedDB; not production data, Google login or Apple hardware",
+  "browser": "151.0.7922.173",
+  "requests": [
+    "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22Monet%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%2C%22artist_display%22%5D%2C%22type%22%3A%22cross_fields%22%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22artist_display%22%2C%22date_display%22%2C%22medium_display%22%5D%2C%22limit%22%3A6%2C%22page%22%3A1%7D",
+    "https://api.artic.edu/api/v1/artworks/27992?fields=id,title,artist_title,artist_display,date_display,medium_display",
+    "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22%EB%AA%A8%EB%84%A4%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%2C%22artist_display%22%5D%2C%22type%22%3A%22cross_fields%22%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22artist_display%22%2C%22date_display%22%2C%22medium_display%22%5D%2C%22limit%22%3A6%2C%22page%22%3A1%7D"
+  ],
+  "checks": [
+    {
+      "name": "Live search returns Monet attribution",
+      "candidate": "Stacks of Wheat (End of Summer)\n시카고 미술관 · 작가 표기: Claude Monet (French, 1840–1926) · 1890–91 · Oil on canvas"
+    },
+    {
+      "name": "Live selection/private save/reload",
+      "attachment": {
+        "type": "artwork",
+        "title": "Stacks of Wheat (End of Summer)",
+        "creator": "Claude Monet (French, 1840–1926)",
+        "url": "https://www.artic.edu/artworks/64818"
+      }
+    },
+    {
+      "name": "Live exact artwork link lookup",
+      "title": "A Sunday on La Grande Jatte — 1884"
+    },
+    {
+      "name": "Live Korean query stays empty, no translation/fallback"
+    }
+  ],
+  "errors": [],
+  "consoleErrors": []
+}

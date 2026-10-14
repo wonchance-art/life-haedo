@@ -2,6 +2,8 @@
 
 2026-10-14 KST. PR #80 후속. 두 도메인의 환경 반영 확인과 공식 API 실험을 재개했다. 자동 작품 검색 연결은 약관 본문 확인이 남아 있다.
 
+후속 [작품 메타데이터 선택 구현](artwork-metadata-selection.md)에서 공식 API의 메타데이터 제공 근거로 이미지·설명문을 제외한 연결을 진행했다. 제목·작가 결합 검색·직접 링크 조회·비공개 저장을 실제 앱/API로 검증했다. 이 문서의 보류와 single-field AND 실험은 당시 이력이다. 약관 본문 확인 완료로 갱신한 것은 아니다.
+
 ## 접속 확인
 
 `api.artic.edu`와 `www.artic.edu`는 환경 설정의 custom/effective 목록과 실행기의 `/etc/codex/network-policy.json`에 모두 있다. 환경은 running, 설정/관측 revision 3, observations_current=true다. 상태 도구의 network_policy.state는 여전히 unknown이므로 enforced로 보고하지 않는다. 실제 프록시 경유 요청은 아래처럼 성공했다.

@@ -40,7 +40,7 @@
         options.change(input.value);
         const summary = screen?.querySelector('.cl-selected-object');
         if (summary && draft) { summary.querySelector('h3').textContent = draft.title; summary.lastElementChild.textContent = draft.creator; }
-        const key = { Title: 'title', Url: 'url' }[name];
+        const key = { Title: 'title', Url: 'url', Creator: 'creator' }[name];
         if (key) { const choice = screen?.querySelector('[data-metadata-field="' + key + '"]'); if (choice) choice.checked = false; }
         const kind = screen?.querySelector('[data-metadata-field="type"]');
         if (kind && (draft?.creator || Object.values(draft?.details || {}).some(Boolean))) { kind.checked = false; kind.disabled = true; }
@@ -292,23 +292,22 @@
       if (reference) {
         const source = node('a','원출처 열기 · 새 탭','life-button');
         source.href = reference.url; source.target = '_blank'; source.rel = 'noopener noreferrer';
-        panel.append(source,node('p',reference.provider + ' 작품 링크입니다. 자동 정보 조회는 아직 지원하지 않습니다. 원출처에서 제목·작가를 확인하세요.','life-help'));
-        if (restoreFocus) source.focus({preventScroll:true});
-        return;
+        panel.append(source);
       }
       const actions = node('div', null, 'cl-actions');
       const lookup = button(lookupPending ? '정보 조회 중…' : '주소로 정보 확인', startLookup); lookup.disabled = lookupPending; actions.append(lookup);
       if (lookupPending) actions.append(button('조회 취소', () => { cancelLookup(); lookupMessage = '조회를 취소했습니다. 직접 입력을 계속할 수 있습니다.'; renderLookup(); }));
-      panel.append(actions, node('p', 'YouTube·GitHub에 영상·저장소 주소만 보내 조회합니다. 내 메모는 보내지 않습니다.', 'life-help'));
+      panel.append(actions, node('p', reference ? '시카고 미술관에 작품 번호만 보내 조회합니다. 내 메모는 보내지 않습니다.' : 'YouTube·GitHub에 영상·저장소 주소만 보내 조회합니다. 내 메모는 보내지 않습니다.', 'life-help'));
       const message = node('p', lookupMessage, 'life-help'); message.setAttribute('role', 'status'); panel.append(message);
       if (restoreFocus) (lookupPending ? actions.lastChild : lookup).focus({ preventScroll: true });
       if (!candidate) return;
       const result = candidate, preview = node('div', null, 'cl-candidate');
       preview.append(node('h3', result.title), node('p', result.provider + ' · ' + result.attributionLabel + ': ' + (result.attribution || '미확인'), 'life-meta'));
+      if (result.detail) preview.append(node('p',result.detail,'life-meta'));
       const source = node('a', '조회한 출처 열기'); source.href = result.url; source.target = '_blank'; source.rel = 'noopener noreferrer'; preview.append(source);
-      preview.append(node('p', '적용할 항목만 선택하세요. 만든 사람·메모·주제·상세 정보는 그대로 둡니다.', 'life-help'));
+      preview.append(node('p', result.type === 'artwork' ? '적용할 항목만 선택하세요. 작가 표기도 확인 후 선택할 수 있습니다. 메모·주제·상세 정보는 그대로 둡니다.' : '적용할 항목만 선택하세요. 만든 사람·메모·주제·상세 정보는 그대로 둡니다.', 'life-help'));
       const choices = [];
-      for (const [key, label] of [['title', '제목'], ['url', '출처 주소']]) {
+      for (const [key, label] of [['title', '제목'], ['url', '출처 주소'], ...(result.type === 'artwork' && draft.type !== 'person' && result.creator ? [['creator','작가 표기']] : [])]) {
         const wrap = node('label', null, 'cl-lookup-choice'), input = node('input'); input.type = 'checkbox'; input.checked = !draft[key];
         input.dataset.metadataField = key; wrap.append(input, node('span', label + ' · ' + result[key])); preview.append(wrap); choices.push([key, input]);
       }
@@ -322,7 +321,7 @@
           if (key === 'type' && draft.type !== result.type) draft.details = {};
           draft[key] = result[key];
         }
-        // Creator/notes/details are never populated from an uploader or repository owner.
+        // Only an explicitly selected artwork attribution can populate creator; never an uploader/owner.
         draw(); status = '선택한 정보를 입력에 적용했습니다. 확인 후 저장해 주세요.'; feedback(); screen.querySelector('#clTitle').focus();
       });
       apply.id = 'clApplyMetadata';

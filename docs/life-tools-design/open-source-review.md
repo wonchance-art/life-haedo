@@ -751,4 +751,6 @@ Open Library 기본 비식별 요청 제한은 초당 1회, GitHub 비인증 검
 
 ## 작품 출처의 수동 검토 — 2026-10-14
 
+후속 [작품 메타데이터 연결](../design-review/artwork-metadata-selection.md)에서는 현재 공식 API의 메타데이터 라이선스/통합 안내와 실제 CORS·앱 흐름을 근거로 REST 조회를 진행했다. 공식 데이터 저장소는 메타데이터와 이미지/미디어 라이선스를 구분한다. 기존 native fetch/제한 JSON·명시 선택·CAS를 재사용했고 서버 코드·wrapper·SDK는 도입하지 않았다. 이미지·설명문과 약관 전체 본문 확인 완료는 범위에 포함하지 않는다. 아래 수동 단계의 미연결 설명은 당시 이력이다.
+
 시카고 미술관의 [공식 API 문서 원본](https://github.com/art-institute-of-chicago/data-aggregator/blob/780e6c86025d5f80387dac7574d0f056bf26ff1a/docs/.sections/preface.md)에 있는 작품 링크 형식을 참고했다. [이전 제공자 검토](../design-review/taste-provider-expansion.md)의 소스/라이선스 범위를 유지하고 기존 CollectionPicker·Share.safeURL·수동 폼을 재사용했다. URL 식별에 SDK·서버 전체 도입은 필요하지 않다. 실제 API/현재 약관은 환경 접근 적용 후 확인해야 하므로 자동 검색이나 이미지 연결은 추가하지 않았다. [구현·검증·외부 조건](../design-review/artwork-reference.md).

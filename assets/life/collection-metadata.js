@@ -5,11 +5,18 @@
   else (root.HaedoLife ||= {}).CollectionMetadata = api;
 })(globalThis, function () {
   'use strict';
+  const artworkFields = 'id,title,artist_title,artist_display,date_display,medium_display';
   function identify(value) {
-    const fail = () => { throw new Error('YouTube 영상 또는 GitHub 공개 저장소 주소를 넣어 주세요. 다른 주소는 직접 입력해 저장할 수 있습니다.'); };
+    const fail = () => { throw new Error('YouTube 영상·GitHub 공개 저장소·시카고 미술관 작품 주소를 넣어 주세요. 다른 주소는 직접 입력해 저장할 수 있습니다.'); };
     if (typeof value !== 'string' || value.length > 2048 || /[\s\\]/u.test(value)) return fail();
     let url; try { url = new URL(value); } catch (_) { return fail(); }
     if (url.protocol !== 'https:' || url.username || url.password || url.port) return fail();
+    if (reference(value)) {
+      const id = Number(url.pathname.split('/')[2]);
+      return Object.freeze({ provider: '시카고 미술관', type: 'artwork', id,
+        url: 'https://www.artic.edu/artworks/' + id,
+        endpoint: 'https://api.artic.edu/api/v1/artworks/' + id + '?fields=' + artworkFields });
+    }
     if (url.hostname === 'github.com' || url.hostname === 'www.github.com') {
       const match = /^\/([A-Za-z0-9][A-Za-z0-9-]{0,38})\/([A-Za-z0-9_.-]{1,100})\/?$/.exec(url.pathname);
       if (!match || ['.', '..'].includes(match[2])) return fail();
@@ -68,7 +75,15 @@
     } finally { clearTimeout(timer); signal?.removeEventListener('abort', cancel); }
   }
   async function lookup(value, options = {}) {
-    const source = identify(value), data = await requestJSON(source.endpoint, options);
+    const source = identify(value);
+    if (source.type === 'artwork') {
+      if (options.signal?.aborted) throw new DOMException('조회 취소', 'AbortError');
+      await paceProvider('artworks', options);
+      const data = await requestJSON(source.endpoint, options);
+      if (data.data?.id !== source.id) throw new Error('작품의 출처를 확인하지 못했습니다. 직접 입력해 주세요.');
+      return artworkCandidate(data.data);
+    }
+    const data = await requestJSON(source.endpoint, options);
       if (source.provider === 'GitHub' && data.private !== false) throw new Error('공개 저장소만 조회할 수 있습니다. 직접 입력해 주세요.');
       const thumbnail = source.provider === 'YouTube' && typeof data.thumbnail_url === 'string' && /^https:\/\/i\.ytimg\.com\/vi\/[\w-]{11}\/(?:default|mqdefault|hqdefault|sddefault|maxresdefault)\.jpg$/.test(data.thumbnail_url) && data.thumbnail_url.split('/')[4] === new URL(source.url).searchParams.get('v') ? data.thumbnail_url : null;
       return Object.freeze({ ...(thumbnail ? { thumbnail } : {}), provider: source.provider, type: source.type, url: source.url,
@@ -82,15 +97,26 @@
     if (now < (nextSearch.get(provider) || 0)) throw new Error('조회 간격을 두고 잠시 뒤 다시 검색해 주세요.');
     nextSearch.set(provider, now + (provider === 'projects' ? 6100 : 1100));
   }
-  async function paceBooks(options) {
+  async function paceProvider(provider, options) {
     // Wait for one explicit follow-up request; never retry a failed response.
-    const delay = Math.max(0, (nextSearch.get('books') || 0) - Date.now());
+    const delay = Math.max(0, (nextSearch.get(provider) || 0) - Date.now());
     if (delay) await new Promise((resolve,reject) => {
       const abort = () => {clearTimeout(timer); options.signal?.removeEventListener('abort',abort); reject(new DOMException('조회 취소','AbortError'));};
       const timer = setTimeout(() => {options.signal?.removeEventListener('abort',abort); resolve();},delay);
       if(options.signal?.aborted) abort(); else options.signal?.addEventListener('abort',abort,{once:true});
     });
-    pace('books');
+    if (options.signal?.aborted) throw new DOMException('조회 취소', 'AbortError');
+    pace(provider);
+  }
+  const paceBooks = options => paceProvider('books', options);
+  function artworkCandidate(row) {
+    if (!row || !Number.isSafeInteger(row.id) || row.id < 1 || row.id > 9999999999) throw new Error('작품 정보 형식이 맞지 않습니다.');
+    // Keep attribution qualifiers ("Attributed to", "Style of", etc.), not just a preferred name.
+    const display = clean(typeof row.artist_display === 'string' ? row.artist_display.replace(/\r?\n/g, ' · ') : row.artist_display, 500);
+    const creator = display || clean(row.artist_title, 500);
+    return Object.freeze({ provider: '시카고 미술관', type: 'artwork', title: clean(row.title, 500, true), creator,
+      url: 'https://www.artic.edu/artworks/' + row.id, attribution: creator, attributionLabel: '작가 표기',
+      detail: [clean(row.date_display, 500) || '제작 시기 미상', clean(row.medium_display, 500) || '재료 미상'].join(' · ') });
   }
   async function editions(workUrl, offset = 0, options = {}) {
     if (typeof workUrl !== 'string' || !/^https:\/\/openlibrary\.org\/works\/OL[0-9]+W$/.test(workUrl) || !Number.isSafeInteger(offset) || offset < 0 || offset > 600 || offset % 6) throw new Error('책의 작품 주소와 판본 범위를 확인해 주세요.');
@@ -141,12 +167,25 @@
     return Object.freeze({results:Object.freeze(results),hasMore:false});
   }
   async function search(provider, query, options = {}) {
-    if (!['books', 'projects'].includes(provider)) throw new Error('지원하지 않는 검색입니다.');
+    if (!['books', 'projects', 'artworks'].includes(provider)) throw new Error('지원하지 않는 검색입니다.');
     query = clean(query, 160, true).trim();
     if (query.length < 2) throw new Error('검색어를 두 글자 이상 입력해 주세요.');
     if (options.signal?.aborted) throw new DOMException('조회 취소', 'AbortError');
     const page = options.page ?? 1;
-    if (!Number.isSafeInteger(page) || page < 1 || page > 100 || (provider !== 'books' && page !== 1)) throw new Error('검색 범위를 확인해 주세요.');
+    if (!Number.isSafeInteger(page) || page < 1 || page > 100 || (provider === 'projects' && page !== 1)) throw new Error('검색 범위를 확인해 주세요.');
+    if (provider === 'artworks') {
+      await paceProvider(provider, options);
+      const endpoint = new URL('https://api.artic.edu/api/v1/artworks/search');
+      endpoint.searchParams.set('params', JSON.stringify({query:{multi_match:{query,fields:['title','artist_title','artist_display'],type:'cross_fields',operator:'and'}},fields:artworkFields.split(','),limit:6,page}));
+      const data = await requestJSON(endpoint.href, options);
+      if (!Array.isArray(data.data)) throw new Error('검색 응답 형식이 맞지 않습니다. 직접 입력해 주세요.');
+      const results = [], ids = new Set();
+      for (const row of data.data.slice(0,6)) {
+        try { const item = artworkCandidate(row); if (!ids.has(row.id)) { results.push(item); ids.add(row.id); } }
+        catch (_) { /* Invalid candidates never replace a valid source. */ }
+      }
+      return Object.freeze({results:Object.freeze(results),page,hasMore:page < 100 && data.data.length > 0 && Number.isSafeInteger(data.pagination?.total) && data.pagination.total > page * 6});
+    }
     if (provider === 'books' && page > 1) await paceBooks(options); else pace(provider);
     const endpoint = provider === 'books' ? new URL('https://openlibrary.org/search.json') : new URL('https://api.github.com/search/repositories');
     endpoint.searchParams.set('q', query);
