@@ -1,0 +1,65 @@
+{
+  "date": "2026-10-14 KST",
+  "runtimePolicy": {
+    "type": "restricted",
+    "hostsPresent": {
+      "api.artic.edu": true,
+      "www.artic.edu": true
+    }
+  },
+  "environmentStatus": {
+    "observations_current": true,
+    "observed_phase": "running",
+    "spec_revision": "3",
+    "observed_spec_revision": "3",
+    "network_policy_state": "unknown"
+  },
+  "httpChecks": [
+    {
+      "url": "https://api.artic.edu/api/v1/artworks/27992?fields=id,title,image_id,is_public_domain",
+      "status": 200
+    },
+    {
+      "url": "https://api.artic.edu/docs/",
+      "status": 200
+    },
+    {
+      "url": "https://www.artic.edu/artworks/27992/a-sunday-on-la-grande-jatte-1884",
+      "status": 200
+    },
+    {
+      "url": "https://www.artic.edu/terms",
+      "status": 403,
+      "bodyTitle": "Just a moment...",
+      "diagnosis": "Cloudflare challenge, not proxy destination-policy denial; also reproduced in isolated Chromium"
+    }
+  ],
+  "defaultQExperiment": {
+    "queries": [
+      "모네",
+      "고흐",
+      "호쿠사이",
+      "그랑드 자트",
+      "별이 빛나는 밤",
+      "Monet",
+      "Van Gogh",
+      "Hokusai",
+      "La Grande Jatte",
+      "Starry Night"
+    ],
+    "totalForEach": 133165,
+    "koreanFirstResultForEach": {
+      "id": 11,
+      "title": "Self-Portrait",
+      "artist_title": "Walter Shirlaw"
+    },
+    "note": "Observed in live q-only experiment; strict-query report is separately retained. Do not use total or HTTP 200 to establish semantic relevance."
+  },
+  "notPerformed": [
+    "App search integration",
+    "Image requests",
+    "Production writes",
+    "Merge or deployment",
+    "Actual Apple hardware"
+  ]
+}
