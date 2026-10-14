@@ -33,6 +33,13 @@
   function backup(values){boards(values);return {format:'life-nine-board-backup-v1',boards:clone(values)};}
   function readBackup(value){fields(value,['format','boards']);if(value.format!=='life-nine-board-backup-v1')fail('9칸 구성 JSON 파일을 골라 주세요.');boards(value.boards);return clone(value.boards);}
   function copies(values,fresh){boards(values);const next=clone(values);for(const b of next){b.id=fresh();for(const a of b.areas)a.id=fresh();}boards(next);return next;}
+  function reviewBoards(existing,incoming){
+    boards(existing);boards(incoming);
+    // Presentation text, ordered selections and exact sources define a duplicate, not local IDs.
+    const key=b=>JSON.stringify([b.title,b.intro,b.areas.map(a=>[a.title,a.note,a.items.map(i=>[i.attachment.type,i.attachment.title,i.attachment.creator,i.attachment.url,i.reason])])]);
+    const saved=new Set(existing.map(key)),seen=new Set();
+    return incoming.map(b=>{const value=key(b),result={existing:saved.has(value),file:seen.has(value)};seen.add(value);return result;});
+  }
   function changed(base,current){boards(base);boards(current);const key=b=>JSON.stringify([b.title,b.intro,b.areas.map(a=>[a.id,a.title,a.note,a.items.map(i=>[i.attachment.type,i.attachment.title,i.attachment.creator,i.attachment.url,i.reason])])]);const before=new Map(base.map(b=>[b.id,key(b)]));return current.filter(b=>before.get(b.id)!==key(b)).map(clone);}
   const escape=s=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function html(board){
@@ -40,5 +47,5 @@
     const content=board.areas.map((a,index)=>'<section><h2>'+escape(a.title||'영역 '+(index+1))+'</h2><p>'+escape(a.note)+'</p><ol>'+a.items.map(i=>'<li><strong>'+escape(i.attachment.title)+'</strong><p class="meta">'+escape([i.attachment.creator,types[i.attachment.type]].filter(Boolean).join(' · '))+'</p><p>'+escape(i.reason)+'</p>'+(i.attachment.url?'<a href="'+escape(i.attachment.url)+'" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">출처 열기</a>':'')+'</li>').join('')+'</ol></section>').join('');
     return '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'"><title>'+escape(board.title||'9칸 구성')+'</title><style>body{margin:0;background:#fff;color:#292536;font:17px/1.65 system-ui,sans-serif}main{max-width:1080px;margin:auto;padding:32px 20px}h1{font-size:32px}h2{font-size:24px;margin:40px 0 8px}p{white-space:pre-wrap;overflow-wrap:anywhere}ol{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;list-style:none;padding:0}li{border:1px solid #d7d2df;border-radius:12px;padding:18px;min-width:0;overflow-wrap:anywhere}strong{font-size:19px}a{color:#4a3865;display:inline-flex;min-height:44px;align-items:center}.meta{font-size:14px;color:#595264}@media(max-width:640px){ol{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:360px){ol{grid-template-columns:1fr}}@media print{li{break-inside:avoid}main{padding:0}a{min-height:0}}</style><main><h1>'+escape(board.title||'9칸 구성')+'</h1><p>'+escape(board.intro)+'</p>'+content+'</main></html>';
   }
-  return Object.freeze({LIMITS,validate,boards,empty,create,snapshot,backup,readBackup,copies,changed,html});
+  return Object.freeze({LIMITS,validate,boards,empty,create,snapshot,backup,readBackup,copies,changed,reviewBoards,html});
 });

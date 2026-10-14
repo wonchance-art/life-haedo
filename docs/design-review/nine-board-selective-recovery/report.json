@@ -1,0 +1,101 @@
+{
+  "checks": [
+    "Current JSON contains exactly the chosen board; all-backup explicitly retains every board in the old v1 format",
+    "File review starts unselected, marks exact duplicates, previews source/reason and copies only selected content with fresh IDs",
+    "A duplicate may be explicitly copied; failed atomic install keeps original rows, chosen checks and the same review DOM for retry",
+    "Real two-tab install conflict preserves file choices; reading latest then retrying appends selected copies to the competing saved version",
+    "Capacity guides allow a subset, refuse a full-store append, keep backups usable, and safely cancel or inspect an empty file",
+    "New file choices and leaving the view ignore late reads; hidden metadata is rejected and unrelated original stores remain exact"
+  ],
+  "visual": [
+    {
+      "name": "selection",
+      "width": 1440,
+      "height": 1000,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 63,
+      "contrastFailures": []
+    },
+    {
+      "name": "selection",
+      "width": 820,
+      "height": 1000,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 63,
+      "contrastFailures": []
+    },
+    {
+      "name": "selection",
+      "width": 390,
+      "height": 1000,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 63,
+      "contrastFailures": []
+    },
+    {
+      "name": "selection-landscape",
+      "width": 844,
+      "height": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 63,
+      "contrastFailures": []
+    },
+    {
+      "name": "selection-split",
+      "width": 540,
+      "height": 720,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 63,
+      "contrastFailures": []
+    },
+    {
+      "name": "failed-install",
+      "width": 390,
+      "height": 1000,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 44,
+      "contrastFailures": []
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [],
+  "external": [],
+  "scope": "Anonymous mocked Auth, real IndexedDB/two tabs/files. Linux Chromium viewport simulations, no Apple hardware or production writes.",
+  "browser": "151.0.7922.173"
+}

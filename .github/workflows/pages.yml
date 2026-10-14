@@ -129,6 +129,9 @@ jobs:
       - name: Verify nine-slot boards, local preservation and file round trips
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/nine-board-browser.cjs
+      - name: Verify selective board recovery and explicit export scopes
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/nine-board-recovery-browser.cjs
       - name: Verify reflection draft copy conflicts and account boundaries
         run: node tests/reflection-page-browser.cjs
       - name: Verify the integrated input and output cycle
@@ -295,6 +298,7 @@ jobs:
             .local/page-draft-recovery/
             .local/page-draft-conflict/
             .local/nine-board/
+            .local/nine-board-recovery/
             .local/profile-feed-media/
             .local/reflection-page/
             .local/two-cycle/

@@ -22,3 +22,12 @@ test('capacity and aggregate UTF-8 budget reject without trimming saved content'
  let n=0;const values=Array.from({length:20},()=>M.create(()=> 'id_'+(++n)));assert(M.boards(values));const before=structuredClone(values);assert.throws(()=>M.boards(values.concat(M.create(()=> 'id_'+(++n)))));assert.deepEqual(values,before);
  const a=sample();a.areas=Array.from({length:9},(_,i)=>({id:'area_'+i,title:'영역',note:'',items:Array.from({length:9},()=>({...M.snapshot({type:'other',title:'원본'}),reason:'한'.repeat(20000)}))}));assert.throws(()=>M.boards([a]));assert.equal(a.areas[8].items[8].reason.length,20000);
 });
+test('duplicate review ignores local IDs and object key order but keeps exact titles, reasons, sources and item order',()=>{
+ const first=sample();first.areas[0].items[0].reason='나의 선택 이유';const duplicate={...structuredClone(first),id:'different',areas:first.areas.map(a=>({...structuredClone(a),id:'different_area'}))};
+ duplicate.areas[0].items[0].attachment={url:duplicate.areas[0].items[0].attachment.url,creator:'익명 저자',title:'빛의 간격',type:'book'};
+ const reason={...structuredClone(duplicate),id:'reason',areas:[{...structuredClone(duplicate.areas[0]),id:'reason_area'}]};reason.areas[0].items[0].reason+=' ';
+ const url={...structuredClone(duplicate),id:'url',areas:[{...structuredClone(duplicate.areas[0]),id:'url_area'}]};url.areas[0].items[0].attachment.url+='&edition=2';
+ const repeat={...structuredClone(duplicate),id:'repeat',areas:[{...structuredClone(duplicate.areas[0]),id:'repeat_area'}]},before=structuredClone(first);
+ assert.deepEqual(M.reviewBoards([first],[duplicate,reason,url,repeat]),[{existing:true,file:false},{existing:false,file:false},{existing:false,file:false},{existing:true,file:true}]);assert.deepEqual(first,before);
+ const pair=sample();pair.areas[0].items.push(M.snapshot({type:'music',title:'노래'}));const reversed=structuredClone(pair);reversed.areas[0].items.reverse();assert.deepEqual(M.reviewBoards([pair],[reversed]),[{existing:false,file:false}]);
+});

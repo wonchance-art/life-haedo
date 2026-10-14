@@ -5,14 +5,14 @@
   const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
   function create({storage,workspaceId,isCurrent,onDirty=()=>{}}){
     let state=null,base=[],host=null,status=null,error=null,selected=null,areaId=null,editing=null,preview=false,overview=false;
-    let tick=0,stored=0,timer=null,saving=null,failure=null,epoch=0,manual=null,picker=null,candidate=null,busy=false;
+    let tick=0,stored=0,timer=null,saving=null,failure=null,epoch=0,manual=null,picker=null,candidate=null,busy=false,importUpdate=null;
     const composing=new Set(),pendingFields=new Set(),urls=new Set(),fresh=()=>life.Core.id(),valid=()=>isCurrent(),board=()=>state?.boards.find(b=>b.id===selected),area=()=>board()?.areas.find(a=>a.id===areaId);
     const fault=(code,message)=>Object.assign(new Error(message),{code});
     function dirty(){return !!manual||pendingFields.size>0||composing.size>0||!!saving||busy||tick!==stored;}
     function message(){
       if(!host?.isConnected||!status||!valid())return;
       status.textContent=failure?'저장하지 못함 · 입력 유지':pendingFields.size?'문자·용량 확인 필요 · 입력 유지':manual?'대상 입력 중 · 아직 담지 않음':saving?'이 브라우저에 저장 중…':tick!==stored?'저장 전 변경 있음':'이 브라우저에 저장됨';
-      status.dataset.state=failure?'error':dirty()?'dirty':'saved';onDirty();
+      status.dataset.state=failure?'error':dirty()?'dirty':'saved';importUpdate?.();onDirty();
     }
     function report(cause){failure=cause;if(error?.isConnected&&valid()){error.textContent=cause.message||'저장하지 못했습니다. 입력은 유지됩니다. 파일을 보관하거나 다시 시도해 주세요.';error.hidden=false;const recovery=host.querySelector('.nb-recovery');if(recovery){recovery.hidden=false;recovery.children[1].hidden=cause.code!=='nine_board_conflict';}}message();}
     function clear(){failure=null;if(error){error.textContent='';error.hidden=true;}const recovery=host?.querySelector('.nb-recovery');if(recovery)recovery.hidden=true;message();}
@@ -33,8 +33,8 @@
     }
     function button(label,task,cls='life-button'){
       const b=el('button',label,cls);b.type='button';b.addEventListener('click',async()=>{
-        if(!valid()||!b.isConnected||busy)return;b.disabled=true;
-        try{await task();}catch(cause){report(cause);}finally{if(b.isConnected)b.disabled=false;}
+        if(!valid()||!b.isConnected||busy||b.dataset.pending==='true')return;b.disabled=true;b.dataset.pending='true';
+        try{await task();}catch(cause){report(cause);}finally{delete b.dataset.pending;if(b.isConnected){b.disabled=false;importUpdate?.();}}
       });return b;
     }
     function field(label,value,change,{multiline=false,max=500,id}={}){
@@ -59,7 +59,7 @@
       const url=URL.createObjectURL(new Blob([value],{type}));urls.add(url);const a=el('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();
       setTimeout(()=>{URL.revokeObjectURL(url);urls.delete(url);},1000);
     }
-    function backup(){if(!state)return;if(pendingFields.size)throw new Error('문자와 용량을 확인한 뒤 파일을 받아 주세요.');if(manual)throw new Error('대상을 담거나 입력 취소를 누른 뒤 파일을 받아 주세요.');download(JSON.stringify(M.backup(state.boards),null,2),'haedo-nine-board.json','application/json');}
+    function backup(current=false){if(!state)return;if(composing.size)throw new Error('입력을 마친 뒤 파일을 받아 주세요.');if(pendingFields.size)throw new Error('문자와 용량을 확인한 뒤 파일을 받아 주세요.');if(manual)throw new Error('대상을 담거나 입력 취소를 누른 뒤 파일을 받아 주세요.');const values=current?[board()]:state.boards;download(JSON.stringify(M.backup(values),null,2),current?'haedo-nine-board.json':'haedo-nine-boards-backup.json','application/json');}
     async function recover(){
       guard();clearTimeout(timer);if(saving)await saving.catch(()=>{});const token=epoch,changes=M.changed(base,state.boards),active=selected,activeArea=board()?.areas.findIndex(a=>a.id===areaId);
       const input=document.activeElement,position=input?.id&&host.contains(input)?{id:input.id,start:input.selectionStart,end:input.selectionEnd,direction:input.selectionDirection}:null;
@@ -125,17 +125,42 @@
       editorHost.append(form);form.scrollIntoView({block:'nearest'});message();
     }
     function renderImport(target){
-      if(!candidate)return;const review=el('section',null,'nb-import');review.append(el('h3','파일 사본 확인'),el('p',candidate.length+'개 구성 · 기존 구성을 유지하고 새 사본으로 추가합니다.','life-help'));
-      for(const b of candidate){const d=details(b.title||'제목 없는 구성');d.append(el('p',b.intro,'nb-text'));for(const a of b.areas){d.append(el('h4',a.title||'이름 없는 영역'),el('p',a.note,'nb-text'));renderTiles(d,a);}review.append(d);}
-      review.append(button('새 사본으로 추가',async()=>{
-        guard();await flush();const token=epoch,added=M.copies(candidate,fresh),next={...state,boards:state.boards.concat(added)};M.validate(next);busy=true;const unlock=lock();message();
+      if(!candidate)return;
+      const incoming=candidate,review=el('section',null,'nb-import'),flags=M.reviewBoards(state.boards,incoming.boards);review.tabIndex=-1;review.setAttribute('aria-label','9칸 구성 파일 확인');
+      review.append(el('h3','파일 사본 확인'),el('p',incoming.boards.length+'개 구성 · 필요한 것만 선택하세요. 기존 구성은 유지하고 새 사본으로 추가합니다.','life-help'));
+      const count=el('p','','life-help nb-import-count');count.setAttribute('role','status');review.append(count);
+      const controls=el('div',null,'life-actions'),checks=[];
+      function update(){
+        if(candidate!==incoming||!valid()||!review.isConnected)return;
+        checks.forEach(([b,input])=>input.checked=incoming.chosen.has(b.id));
+        const available=M.LIMITS.boards-state.boards.length,size=incoming.chosen.size;
+        count.textContent=`선택 ${size}개 · 추가할 수 있는 구성 ${available}개`+(size>available?' · 선택을 줄여 주세요.':'');
+        apply.disabled=!size||size>available||busy||apply.dataset.pending==='true';
+      }
+      const all=button('모두 선택',()=>{guard();incoming.boards.forEach(b=>incoming.chosen.add(b.id));update();});
+      const none=button('선택 해제',()=>{guard();incoming.chosen.clear();update();});all.disabled=none.disabled=!incoming.boards.length;controls.append(all,none);review.append(controls);
+      incoming.boards.forEach((b,index)=>{
+        const row=el('section',null,'nb-import-row'),label=el('label',null,'nb-import-select'),input=el('input'),copy=el('span');
+        input.type='checkbox';input.setAttribute('aria-label',(b.title||'제목 없는 구성')+' · 복구 선택');checks.push([b,input]);
+        const total=b.areas.reduce((sum,a)=>sum+a.items.length,0),duplicate=[flags[index].existing?'같은 내용이 이미 보관되어 있습니다.':'',flags[index].file?'파일 안에 같은 내용이 있습니다.':''].filter(Boolean).join(' ');
+        copy.append(el('strong',b.title||'제목 없는 구성'),el('span',`${b.areas.length}개 영역 · ${total}개 항목`,'life-meta'));
+        if(duplicate)copy.append(el('span',duplicate+' 별도 사본이 필요하면 선택하세요.','life-meta nb-import-duplicate'));
+        input.addEventListener('change',()=>{if(input.checked)incoming.chosen.add(b.id);else incoming.chosen.delete(b.id);update();});label.append(input,copy);row.append(label);
+        const d=details('내용 확인');d.append(el('p',b.intro,'nb-text'));for(const a of b.areas){d.append(el('h4',a.title||'이름 없는 영역'),el('p',a.note,'nb-text'));renderTiles(d,a);}row.append(d);review.append(row);
+      });
+      if(!incoming.boards.length)review.append(el('p','파일에 담긴 구성이 없습니다. 다른 JSON 파일을 골라 주세요.','life-help'));
+      const apply=button('선택한 구성 새 사본으로 추가',async()=>{
+        guard();await flush();if(candidate!==incoming)return;
+        const chosen=incoming.boards.filter(b=>incoming.chosen.has(b.id));if(!chosen.length)throw new Error('복구할 구성을 선택해 주세요.');
+        const token=epoch,added=M.copies(chosen,fresh),next={...state,boards:state.boards.concat(added)};M.validate(next);busy=true;const unlock=lock();message();
         try{const saved=await storage.saveNineBoard(workspaceId,next,next.revision);if(!valid()||token!==epoch)return;state=saved;base=structuredClone(saved.boards);stored=tick;selected=added[0]?.id||selected;areaId=board()?.areas[0]?.id;candidate=null;clear();render();}
         finally{busy=false;unlock();message();}
-      }),button('파일 취소',()=>{guard();candidate=null;render();}));target.append(review);
+      });
+      review.append(apply,button('파일 취소',()=>{guard();candidate=null;render();const file=host.querySelector('input[type=file]');file.closest('details').open=true;file.focus();}));target.append(review);importUpdate=update;update();
     }
     function render(){
       if(!host?.isConnected||!valid()||!state)return;
-      host.replaceChildren();host.className='nb-workspace';
+      importUpdate=null;host.replaceChildren();host.className='nb-workspace';
       const toolbar=el('div',null,'life-actions nb-toolbar'),selector=el('select');selector.id='nbSelect';selector.setAttribute('aria-label','9칸 구성 선택');
       for(const b of state.boards){const o=el('option',b.title||'제목 없는 구성');o.value=b.id;selector.append(o);}selector.value=selected||'';selector.hidden=!state.boards.length;
       selector.addEventListener('change',async()=>{const next=selector.value;try{await flush();selected=next;areaId=board()?.areas[0]?.id;editing=null;overview=false;render();}catch(cause){selector.value=selected;report(cause);}});
@@ -143,7 +168,7 @@
       status=el('p','','life-meta nb-status');status.setAttribute('role','status');error=el('p','','life-error nb-error');error.setAttribute('role','alert');error.hidden=true;
       host.append(toolbar,status,error);
       const recovery=el('div',null,'life-actions nb-recovery');
-      recovery.append(button('다시 저장',async()=>{await flush();clear();}),button('내 변경을 새 사본으로 보관',recover),button('JSON 백업 받기',()=>{if(composing.size)throw new Error('입력을 마친 뒤 파일을 받아 주세요.');backup();}));
+      recovery.append(button('다시 저장',async()=>{await flush();clear();}),button('내 변경을 새 사본으로 보관',recover),button('전체 구성 JSON 백업 받기',()=>backup()));
       recovery.children[1].hidden=failure?.code!=='nine_board_conflict';recovery.hidden=!failure;host.append(recovery);
       const b=board();if(!b){host.append(el('p','한 영역부터 시작하세요. 영역은 최대 9개, 영역마다 항목은 최대 9개입니다.','life-help'));}
       else{
@@ -174,10 +199,11 @@
           }
         }
       }
-      const files=details('파일 보관·가져오기');files.append(el('p','이 브라우저에만 보관되며 공개 사본·구성 동기화·자료 백업에 포함되지 않습니다. JSON은 다시 편집할 수 있는 사본입니다. HTML은 제목·선택 이유·출처가 담긴 보기 파일이며, 공개 링크가 아닙니다.','life-help'));
+      const files=details('파일 보관·가져오기');files.classList.add('nb-files');files.append(el('p','이 브라우저에만 보관되며 공개 사본·구성 동기화·자료 백업에 포함되지 않습니다. 현재 구성 JSON에는 지금 고른 구성 하나만, 전체 백업에는 모든 구성이 담깁니다. HTML은 현재 구성의 제목·선택 이유·출처가 담긴 보기 파일이며, 공개 링크가 아닙니다.','life-help'));
       const file=el('input');file.type='file';file.accept='.json,application/json';file.setAttribute('aria-label','9칸 구성 JSON 파일');let sequence=0;
-      file.addEventListener('change',async()=>{const input=file.files[0],request=++sequence,token=epoch;file.value='';if(!input)return;try{guard();candidate=null;host.querySelector('.nb-import')?.remove();await flush();if(input.size>M.LIMITS.bytes)throw new Error('파일은 2 MiB까지 불러올 수 있습니다.');const value=M.readBackup(JSON.parse(await input.text()));if(!valid()||token!==epoch||request!==sequence||!file.isConnected)return;guard();candidate=value;clear();render();host.querySelector('.nb-import')?.scrollIntoView({block:'start'});}catch(cause){if(valid()&&token===epoch&&request===sequence&&file.isConnected)report(cause);}});
-      files.append(button('JSON 백업 받기',()=>{if(composing.size)throw new Error('입력을 마친 뒤 파일을 받아 주세요.');backup();}));
+      file.addEventListener('change',async()=>{const input=file.files[0],request=++sequence,token=epoch;file.value='';if(!input)return;try{guard();candidate=null;host.querySelector('.nb-import')?.remove();await flush();if(input.size>M.LIMITS.bytes)throw new Error('파일은 2 MiB까지 불러올 수 있습니다.');const value=M.readBackup(JSON.parse(await input.text()));if(!valid()||token!==epoch||request!==sequence||!file.isConnected)return;guard();candidate={boards:value,chosen:new Set()};clear();render();const review=host.querySelector('.nb-import');review.focus({preventScroll:true});review.scrollIntoView({block:'start'});}catch(cause){if(valid()&&token===epoch&&request===sequence&&file.isConnected)report(cause);}});
+      if(b)files.append(button('현재 구성 JSON 받기',()=>backup(true)));
+      files.append(button('전체 구성 JSON 백업 받기',()=>backup()));
       if(b)files.append(button('HTML 보기 파일 받기',async()=>{await flush();download(M.html(board()),'haedo-nine-board.html','text/html;charset=utf-8');}));files.append(file);host.append(files);renderImport(host);
       if(failure)report(failure);else message();
     }
@@ -187,7 +213,7 @@
         if(!board()){selected=state.boards[0]?.id;areaId=board()?.areas[0]?.id;}render();
       }catch(cause){if(!valid()||token!==epoch)return;host.replaceChildren(el('p',cause.message||'불러오지 못했습니다.','life-error'),button('다시 불러오기',()=>mount(target)));}
     }
-    function detach(){epoch++;clearTimeout(timer);picker?.();picker=null;host=null;status=null;error=null;editorHost=null;for(const u of urls)URL.revokeObjectURL(u);urls.clear();}
+    function detach(){epoch++;clearTimeout(timer);picker?.();picker=null;importUpdate=null;host=null;status=null;error=null;editorHost=null;for(const u of urls)URL.revokeObjectURL(u);urls.clear();}
     return {mount,flush,dirty,detach,hasBlockedInput:()=>!!manual||pendingFields.size>0||composing.size>0||busy};
   }
   life.NineBoardUI={create};

@@ -31,6 +31,11 @@
 .nb-workspace textarea,.nb-workspace input,.nb-workspace select { font-size: 16px; min-height: 44px; max-width: 100%; }
 .nb-import { border-top: 1px solid var(--line); margin-top: 32px; padding-top: 20px; }
 .nb-import h4 { font-size: 20px; margin-top: 28px; }
+.nb-import-row { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 16px; }
+.nb-import-select { display: flex; align-items: flex-start; gap: 12px; min-height: 44px; padding-block: 8px; cursor: pointer; }
+.nb-import-select > span { min-width: 0; }
+.nb-import-select .life-meta { display: block; margin-top: 4px; }
+.nb-workspace .nb-import-select input { width: 18px; height: 18px; min-height: 0; flex: 0 0 18px; margin: 6px 0; accent-color: var(--color-primary); }
 .nb-grid a { text-underline-offset: .2em; }
 @media (max-width: 700px) {
   .nb-grid,.nb-areas { gap: 6px; }
