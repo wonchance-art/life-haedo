@@ -2185,6 +2185,7 @@
       saveExcerpt.id = 'lifeSourceExcerptSave';
       saveExcerpt.disabled = true;
       let readingScrollY = global.scrollY;
+      let readerInteracted = false;
       let selectionOrigin = 'dom';
       const savePosition = () => {
         state.readerPositions.set(version.id, { ...(state.sourceSelection || { start: 0, end: 0 }), scrollY: panel.hidden ? global.scrollY : readingScrollY });
@@ -2198,6 +2199,7 @@
         savePosition();
       };
       const capture = event => {
+        if (['pointerup', 'keyup'].includes(event?.type)) readerInteracted = true;
         if (!reader.isConnected || document.activeElement?.matches('input,textarea')) return;
         // A textarea selection leaves the document's earlier Range intact.
         // Keep the keyboard choice when opening/closing tools; only a fresh
@@ -2227,7 +2229,7 @@
         remember(start, end);
         return range;
       };
-      reader.addEventListener('pointerdown', () => { selectionOrigin = 'dom'; });
+      reader.addEventListener('pointerdown', () => { selectionOrigin = 'dom'; readerInteracted = true; });
       reader.addEventListener('pointerup', capture);
       reader.addEventListener('keyup', capture);
       document.addEventListener('selectionchange', capture);
@@ -2307,7 +2309,8 @@
         } });
       const locator = state.locator || (!suppressResume && state.readerPositions.get(version.id));
       if (locator) requestAnimationFrame(() => {
-        if (!reader.isConnected) return;
+        // A fresh user choice takes priority over a navigation restore queued before it.
+        if (!reader.isConnected || readerInteracted) return;
         const range = restoreSelection(locator);
         if (locator.scrollY !== undefined) global.scrollTo({ top: locator.scrollY, behavior: 'instant' });
         else {
