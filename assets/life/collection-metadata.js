@@ -26,6 +26,14 @@
     const canonical = 'https://www.youtube.com/watch?v=' + id;
     return Object.freeze({ provider: 'YouTube', type: 'video', url: canonical, endpoint: 'https://www.youtube.com/oembed?url=' + encodeURIComponent(canonical) + '&format=json' });
   }
+  // A source hint, not a fetched or verified artwork record. Preserve the exact input URL.
+  function reference(value) {
+    if (typeof value !== 'string' || value.length > 2048 || /[\s\\]/u.test(value)) return null;
+    let url; try { url = new URL(value); } catch (_) { return null; }
+    if (url.protocol !== 'https:' || url.username || url.password || url.port || url.search || url.hash) return null;
+    if (url.hostname !== 'www.artic.edu' || !/^\/artworks\/[1-9][0-9]{0,9}(?:\/[A-Za-z0-9-]+)?\/?$/.test(url.pathname)) return null;
+    return Object.freeze({provider:'시카고 미술관',type:'artwork',url:value});
+  }
   function clean(value, max, required = false) {
     if (value === undefined || value === null) value = '';
     if (typeof value !== 'string' || value.length > max || /[\u0000-\u001f\u007f]/u.test(value) || !value.isWellFormed()) throw new Error('제공된 정보 형식이 맞지 않습니다. 직접 입력해 주세요.');
@@ -169,5 +177,5 @@
     return Object.freeze({ results: Object.freeze(results), incomplete: data.incomplete_results === true, page,
       hasMore: provider === 'books' && page < 100 && rows.length > 0 && Number.isSafeInteger(data.numFound ?? data.num_found) && (data.numFound ?? data.num_found) > page * 6 });
   }
-  return Object.freeze({ identify, lookup, search, editions, koreanEdition });
+  return Object.freeze({ identify, reference, lookup, search, editions, koreanEdition });
 });
