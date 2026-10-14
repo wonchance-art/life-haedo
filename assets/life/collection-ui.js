@@ -288,6 +288,14 @@
       const panel = screen?.querySelector('#clLookup'); if (!panel) return;
       const restoreFocus = panel.contains(document.activeElement);
       panel.replaceChildren();
+      const reference = root.HaedoLife.CollectionMetadata.reference(draft.url);
+      if (reference) {
+        const source = node('a','원출처 열기 · 새 탭','life-button');
+        source.href = reference.url; source.target = '_blank'; source.rel = 'noopener noreferrer';
+        panel.append(source,node('p',reference.provider + ' 작품 링크입니다. 자동 정보 조회는 아직 지원하지 않습니다. 원출처에서 제목·작가를 확인하세요.','life-help'));
+        if (restoreFocus) source.focus({preventScroll:true});
+        return;
+      }
       const actions = node('div', null, 'cl-actions');
       const lookup = button(lookupPending ? '정보 조회 중…' : '주소로 정보 확인', startLookup); lookup.disabled = lookupPending; actions.append(lookup);
       if (lookupPending) actions.append(button('조회 취소', () => { cancelLookup(); lookupMessage = '조회를 취소했습니다. 직접 입력을 계속할 수 있습니다.'; renderLookup(); }));

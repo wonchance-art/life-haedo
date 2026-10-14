@@ -390,7 +390,21 @@
           inputs[key] = input;
           manual.append(input);
         }
+        const source = node("a", "원출처 열기", "life-button");
+        source.target = "_blank"; source.rel = "noopener noreferrer";
+        source.setAttribute("aria-label", "원출처 열기 · 새 탭");
+        function refreshSource() {
+          try {
+            const url = life.Share.safeURL(inputs.url.value);
+            source.hidden = !url;
+            if (url) source.href = url; else source.removeAttribute("href");
+          } catch (_) { source.hidden = true; source.removeAttribute("href"); }
+        }
+        inputs.url.addEventListener("input", refreshSource);
+        refreshSource(); manual.append(source);
         const creator = () => {
+          const label = select.value === "artwork" ? "작가" : "아티스트·저자";
+          inputs.creator.setAttribute("aria-label", label); inputs.creator.placeholder = label;
           inputs.creator.disabled = select.value === "person";
           if (inputs.creator.disabled) inputs.creator.value = "";
         };

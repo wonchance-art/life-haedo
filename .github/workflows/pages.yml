@@ -108,6 +108,9 @@ jobs:
       - name: Verify book search pages and Korean edition recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-search-navigation-browser.cjs
+      - name: Verify manual artwork source review and private preservation
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/artwork-reference-browser.cjs
       - name: Verify page composition, attachments and draft recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/page-composer-browser.cjs
@@ -270,6 +273,7 @@ jobs:
             .local/taste-writing/
             .local/edition-collection/
             .local/book-search-navigation/
+            .local/artwork-reference/
             .local/page-composer/
             .local/profile-feed-media/
             .local/reflection-page/

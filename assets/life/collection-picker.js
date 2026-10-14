@@ -49,7 +49,13 @@
     topics.addEventListener('change', () => { topic = topics.value; limit = 30; render(); });
     body.append(hint, external, remote, topics, message, results);
     const foot = node('footer', null, 'cl-picker-foot');
-    foot.append(button('직접 입력', () => { const value = input.value.trim(); choose({ seed: { type: kind === 'all' ? 'music' : kind, title: /^https?:\/\//i.test(value) ? '' : value.slice(0, C.LIMITS.title), url: /^https?:\/\//i.test(value) ? value : '' }, compact: false }); }));
+    function manualChoice() {
+      const value = input.value.trim(), reference = Metadata.reference(value), isURL = /^https?:\/\//i.test(value);
+      choose({seed:{type:kind === 'all' ? reference?.type || 'music' : kind,
+        title:isURL ? '' : value.slice(0,C.LIMITS.title),url:isURL ? value : ''},compact:false,
+        review:reference ? reference.provider + ' 작품 링크입니다. 정보를 조회한 것은 아닙니다. 원출처에서 제목·작가를 확인해 입력하세요.' : ''});
+    }
+    foot.append(button('직접 입력', manualChoice));
     dialog.append(head, form, filters, body, foot);
     function identity(url) { try { return Metadata.identify(url)?.url || url; } catch (_) { return url; } }
     function row(item, action, subtitle, glyph = 'plus') {
@@ -62,7 +68,7 @@
     function render() {
       cancel(); remote.inert = false; remote.removeAttribute('aria-busy'); remote.replaceChildren(); results.replaceChildren();
       const value = input.value.trim(), url = /^https?:\/\//i.test(value);
-      find.hidden = !url; find.disabled = false; find.textContent = '링크 확인';
+      find.hidden = !url; find.disabled = false; find.textContent = Metadata.reference(value) ? '작품 정보 입력' : '링크 확인';
       external.hidden = url || value.length < 2;
       bookSearch.disabled = projectSearch.disabled = false;
       const matched = items.filter(item => (kind === 'all' || item.type === kind) && (!topic || item.tags?.includes(topic)) && (url && identity(item.url) === identity(value) || C.matches(item, { query: value, archived: item.archived })));
@@ -172,6 +178,7 @@
     form.addEventListener('submit', async event => {
       event.preventDefault(); if (composing || controller || !alive || !isCurrent()) return;
       const value = input.value.trim(); if (!/^https?:\/\//i.test(value)) return;
+      if (Metadata.reference(value)) { manualChoice(); return; }
       cancel(); const request = new AbortController(); controller = request;
       remote.replaceChildren(); find.disabled = true; find.textContent = '확인 중…'; message.textContent = '링크 정보를 확인하고 있어요.';
       try {
