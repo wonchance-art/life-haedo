@@ -40,6 +40,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The PWA gate installs an actual earlier shell from local Git history.
+          fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
@@ -61,6 +63,8 @@ jobs:
           if (!fs.existsSync(browserPath)) throw new Error('Pinned Chromium was not installed.');
           fs.appendFileSync(process.env.GITHUB_ENV, `PW_MODULE_PATH=${modulePath}\nCHROMIUM_PATH=${browserPath}\n`);
           NODE
+      - name: Verify generated app shell, offline storage and preserved PWA update
+        run: node scripts/verify-prepared-site.mjs
       - name: Start the OAuth-safe local server
         id: server
         run: |
@@ -273,6 +277,8 @@ jobs:
         with:
           name: browser-checks-${{ github.run_attempt }}
           path: |
+            .local/prepared-site-check/baseline.json
+            .local/prepared-site-check/platform-report.txt
             .local/flow-quality/
             .local/unified-search/
             .local/collection-library/

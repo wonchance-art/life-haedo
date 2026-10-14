@@ -27,12 +27,38 @@ async function main(){await fs.mkdir(out,{recursive:true});const browser=await p
  const snapshot=()=>page.evaluate(async()=>{const s=HaedoLife.Shell.storage,id=await s.getActive();return {bundle:await s.read(id),wb:await s.readWorkbench(id),cl:await s.readCollection(id),drafts:await s.readPageDrafts(id)};});
  let f,before;
  try{
- await page.goto(base+'/index.html');await ready(page);f=await fixture(page);before=await snapshot();await page.locator('#lifeFindOpen').click();await wait();
+ await page.goto(base+'/index.html');await ready(page);f=await fixture(page);
+ // Mount against the saved fixture, including its second workspace. A search
+ // result must not incidentally refresh unrelated management lists.
+ await page.reload();await ready(page);before=await snapshot();await page.locator('#lifeFindOpen').click();await wait();
  await check('Home opens one private search; blank and no-match states do not list stored contents',async()=>{assert.equal(await page.locator('#lifeFindQuery').evaluate(e=>e===document.activeElement),true);assert.equal(await rows().count(),0);await snap('empty');await query('없는결과');assert.equal(await rows().count(),0);await snap('no-match');});
  await check('Mixed results distinguish originals, saved pages, private notes and bounded collection groups',async()=>{await query('산책');assert.equal(await page.locator('.life-find-group').count(),3);assert.equal(await page.locator('[data-focus-key][data-kind=source]').count(),5);assert.equal(await page.locator('[data-focus-key][data-kind=collection]').count(),5);await snap('mixed');await click('원문 20개 더 보기');assert.equal(await page.locator('[data-focus-key][data-kind=source]').count(),25);await click('컬렉션 20개 더 보기');assert.equal(await page.locator('[data-focus-key][data-kind=collection]').count(),23);assert.deepEqual(await snapshot(),before);});
  await check('Exact old version and raw Korean range reopen; returning keeps query, limits and focused result',async()=>{
   const target=page.locator('[data-focus-key="find:source:'+f.refs[0].sourceVersionId+'"]');await target.focus();await page.keyboard.press('Enter');await page.locator('#lifeSourceText').waitFor();assert.equal(await page.locator('#lifeSourceText').textContent(),f.old);await page.locator('#lifeSearchReturn').click();await wait();await page.waitForFunction(key=>document.activeElement?.dataset.focusKey===key,'find:source:'+f.refs[0].sourceVersionId);assert.equal(await page.locator('#lifeFindQuery').inputValue(),'산책');assert.equal(await page.locator('[data-focus-key][data-kind=source]').count(),25);
   await page.getByText('검색 범위·옵션',{exact:true}).click();await page.getByRole('checkbox',{name:'한글 띄어쓰기 무시',exact:true}).check();await query('오래좋아할');assert.equal(await page.locator('[data-focus-key][data-kind=source]').count(),1);await rows().first().click();await page.locator('#lifeSourceText').waitFor();await page.waitForFunction(()=>getSelection().toString()==='오래 좋아할');await page.locator('#lifeSearchReturn').click();await wait();
+ });
+ await check('Exact original opening ignores failed workspace/draft lists but still requires the original read',async()=>{
+  await query('산책');
+  const target=()=>page.locator('[data-focus-key="find:source:'+f.refs[0].sourceVersionId+'"]');
+  await page.evaluate(()=>{
+   window.__searchOriginalGet=IDBObjectStore.prototype.get;window.__searchWorkspaceAll=IDBObjectStore.prototype.getAll;window.__searchStageAll=IDBIndex.prototype.getAll;
+   window.__searchAuxFailures=0;window.__searchOriginalFail=false;
+   IDBObjectStore.prototype.getAll=function(...args){const request=__searchWorkspaceAll.apply(this,args);if(this.name==='bundles'){__searchAuxFailures++;this.transaction.abort();}return request;};
+   IDBIndex.prototype.getAll=function(...args){const request=__searchStageAll.apply(this,args);if(this.objectStore.name==='staging'){__searchAuxFailures++;this.objectStore.transaction.abort();}return request;};
+   IDBObjectStore.prototype.get=function(key){const request=__searchOriginalGet.call(this,key);if(__searchOriginalFail&&this.name==='bundles')this.transaction.abort();return request;};
+  });
+  try {
+   const rejected=await page.evaluate(async workspaceId=>{const s=HaedoLife.Shell.storage;return (await Promise.allSettled([s.listWorkspaces(),s.listStages(workspaceId)])).map(result=>result.status);},f.workspaceId);
+   assert.deepEqual(rejected,['rejected','rejected']);assert.equal(await page.evaluate(()=>__searchAuxFailures),2);
+   await target().click();await page.locator('#lifeSourceText').waitFor();assert.equal(await page.locator('#lifeSourceText').textContent(),f.old);
+   await page.locator('#lifeSearchReturn').click();await wait();await page.waitForFunction(key=>document.activeElement?.dataset.focusKey===key,'find:source:'+f.refs[0].sourceVersionId);
+   assert.equal(await page.locator('#lifeFindQuery').inputValue(),'산책');assert.equal(await page.evaluate(()=>__searchAuxFailures),2);
+   await page.evaluate(()=>{__searchOriginalFail=true;});await target().click();await settle(page);
+   assert.equal(await page.locator('#lifeSourceText').count(),0);assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'),'find');
+   assert.equal(await page.locator('#lifeError:not([hidden])').count(),1);assert.equal(await page.locator('#lifeFindQuery').inputValue(),'산책');
+   await page.evaluate(()=>{__searchOriginalFail=false;});await target().click();await page.locator('#lifeSourceText').waitFor();assert.equal(await page.locator('#lifeSourceText').textContent(),f.old);
+   await page.locator('#lifeSearchReturn').click();await wait();assert.deepEqual(await snapshot(),before);
+  } finally {await page.evaluate(()=>{IDBObjectStore.prototype.get=__searchOriginalGet;IDBObjectStore.prototype.getAll=__searchWorkspaceAll;IDBIndex.prototype.getAll=__searchStageAll;});}
  });
  await check('Saved page opens its exact expanded post without creating an edit draft; contextual return works',async()=>{
   await query('끝문장');await rows().first().click();const post=page.locator('[data-post-id="'+f.postId+'"]');await post.waitFor();await page.waitForFunction(id=>document.activeElement?.dataset.postId===id,f.postId);assert.equal(await post.locator('.pp-body').getAttribute('data-folded'),'false');assert.deepEqual(await snapshot(),before);await click('검색 결과로 돌아가기');await wait();await page.waitForFunction(key=>document.activeElement?.dataset.focusKey===key,'find:post:'+f.postId);assert.equal(await page.locator('#lifeFindQuery').inputValue(),'끝문장');

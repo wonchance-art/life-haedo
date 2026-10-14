@@ -44,7 +44,12 @@ async function main(){
    await page.locator('.cl-pick-row').tap();assert.equal(await page.locator('#clNote').evaluate(e=>e===document.activeElement),true);assert.equal(await page.locator('#clNote').inputValue(),'지난 계절의 생각');assert.equal(await page.locator('#clTitle').isVisible(),false);
    await page.locator('#clNote').fill('다시 읽으며 새롭게 발견한 생각.\n느리게 관찰하는 태도를 기억하고 싶다.');
    for(const w of [1440,820,390])await snap('note-first',w,'.life-collection');
-   assert.deepEqual(await read(),before);await click('저장');await go();const after=await read();assert.equal(after.items.length,1);assert.equal(after.items[0].id,before.items[0].id);assert.match(after.items[0].note,/새롭게/);
+   assert.deepEqual(await read(),before);await click('저장');
+   // A click does not await the async submit/IndexedDB transaction. Reload
+   // only after the app has confirmed the save and left the editing form.
+   await page.locator('#clForm').waitFor({state:'detached'});
+   await page.waitForFunction(()=>document.querySelector('.life-collection')?.getAttribute('aria-busy')==='false'&&document.querySelector('#clStatus')?.textContent==='이 브라우저에 저장했습니다.');
+   await go();const after=await read();assert.equal(after.items.length,1);assert.equal(after.items[0].id,before.items[0].id);assert.match(after.items[0].note,/새롭게/);
    const backup=await page.evaluate(s=>HaedoLife.Collection.readBackup(JSON.stringify(HaedoLife.Collection.makeBackup(s))),after);assert.deepEqual(backup.items,after.items);
   });
   await check('Explicit URL lookup, IME protection, channel not artist; choose then save',async()=>{

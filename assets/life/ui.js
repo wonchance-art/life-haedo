@@ -165,8 +165,13 @@
       onOpen: guarded(async row => {
         const workspaceId = state.bundle.workspaceId;
         if (row.kind === 'source') {
-          await refreshData();
-          if (disposed || state.mode !== 'find' || state.bundle?.workspaceId !== workspaceId) return;
+          const workspaceToken = workspaceGeneration, navigationToken = navigationGeneration;
+          const fetched = await storage.read(workspaceId);
+          if (disposed || workspaceToken !== workspaceGeneration || navigationToken !== navigationGeneration ||
+              state.mode !== 'find' || state.bundle?.workspaceId !== workspaceId) return;
+          // Opening an exact search result needs its original, not unrelated
+          // workspace lists or import/writing drafts. Keep newer local state.
+          if (fetched.revision >= state.bundle.revision) state.bundle = fetched;
           if (!state.bundle.sourceVersions.some(v => v.id === row.sourceVersionId && v.sourceId === row.sourceId)) throw new Error('이 원문 버전을 찾을 수 없습니다. 검색 결과를 다시 불러와 주세요.');
           return openResult('find', row.key, row);
         }

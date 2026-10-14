@@ -42,9 +42,22 @@ async function main(){
     return match[1];
   };
   const newCache=await cacheName(site);
+  // Verify the complete installed shell, including newly added modules and config.
+  const shellSource=await fs.readFile(path.join(site,'sw.js'),'utf8');
+  const shellList=shellSource.match(/const SHELL\s*=\s*(\[[\s\S]*?\]);/);
+  if(!shellList)throw new Error('The generated service worker has no static shell list.');
+  const modules=Array.from(shellList[1].matchAll(/['"](\.\/[^'"]*)['"]/g),match=>match[1]);
+  assert.ok(modules.length>0,'The generated shell must contain local resources.');
+  assert.equal(new Set(modules).size,modules.length,'Shell paths must be unique.');
   await new Promise(resolve=>web.listen(0,'127.0.0.1',resolve));
   process.env.BASE_URL=`http://127.0.0.1:${web.address().port}`;
   const {FakeCloud,platformContext,accounts,cloud,base,openManagement,openAccount,openSection}=require('./life-sync-browser.cjs');
+  for(const directory of [site,...oldSites]) {
+    const config=await fs.readFile(path.join(directory,'assets/platform-config.js'),'utf8');
+    const payload=config.match(/^window\.HAEDO_CONFIG=Object\.freeze\(([\s\S]*)\);\s*$/);
+    assert.ok(payload,'Use an anonymous prepare-site output.');
+    assert.deepEqual(JSON.parse(payload[1]),{url:cloud,key:'sb_publishable_anonymous_browser_test_only'},'Generated-site checks require simulator configuration.');
+  }
   const pw=require(process.env.PW_MODULE_PATH||'/opt/codex/cua_node/lib/node_modules/playwright');
   const browser=await pw.chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
   const server=new FakeCloud(),contexts=[];
@@ -59,6 +72,9 @@ async function main(){
   async function context(name,seed=null){
     const value=await browser.newContext({acceptDownloads:true,viewport:{width:1180,height:900}});contexts.push(value);
     await platformContext(value,server,name,seed);
+    // Use the generated config bytes too; the common fixture's route would
+    // otherwise replace this resource and invalidate complete-shell hashes.
+    await value.unroute(`${base}/assets/platform-config.js`);
     await value.addInitScript(()=>{
       window.__productDbOpens=[];const original=IDBFactory.prototype.open;
       IDBFactory.prototype.open=function(...args){__productDbOpens.push({name:args[0],verified:!!globalThis.HaedoAuth?.user});return original.apply(this,args);};
@@ -268,7 +284,6 @@ async function main(){
       assert.equal(visible.some(w=>w.workspaceId===fixture.bundle.workspaceId),oldHasAuth);
       const original=await p.evaluate(async ids=>{const db=await idb.openDB('life-tools-v1',1);try{return {bundle:await db.get('bundles',ids.workspaceId),stage:await db.get('staging',ids.stageId)};}finally{db.close();}},{workspaceId:fixture.bundle.workspaceId,stageId:fixture.stage.stageId});
       assert.deepEqual(original,fixture);assert.equal(await p.evaluate(()=>localStorage.getItem('caeyeon_life_registry')),'{"docs":[],"anonymous":"preserve-upgrade"}');
-      const modules=['life.html','assets/platform-auth.js','assets/platform-life-remote.js','assets/life/core.js','assets/life/unified-search.js','assets/life/unified-search-ui.js','assets/life/storage.js','assets/life/icons.js','assets/life/ui.js','assets/life/home.js','assets/life/collection.js','assets/life/collection-media.js','assets/life/collection-metadata.js','assets/life/collection-picker.js','assets/life/collection-ui.js','assets/life/collection.css','assets/life/workbench-ui.js','assets/life/reflection-lenses.js','assets/life/reflection-lenses-ui.js','assets/life/workbench.css','assets/life/rediscovery.js','assets/life/reading-position.js','assets/life/ui.css','assets/life/writing-ui.js','assets/life/composition-remote.js','assets/life/composition-sync.js','assets/life/composition-ui.js','assets/life/writing-remote.js','assets/life/writing-sync.js','assets/life/writing-sync-ui.js','vendor/supabase/supabase.js'];
       const runtime=await p.evaluate(async({name,modules})=>{
         if(!await caches.has(name))return [];
         const cache=await caches.open(name);
@@ -279,7 +294,7 @@ async function main(){
         }));
       },{name:newCache,modules});
       const {createHash}=require('node:crypto');
-      const expected=await Promise.all(modules.map(async path=>({path,hash:createHash('sha256').update(await fs.readFile(require('node:path').join(site,path))).digest('hex')})));
+      const expected=await Promise.all(modules.map(async file=>({path:file,hash:createHash('sha256').update(await fs.readFile(path.join(site,file==='./'?'index.html':file))).digest('hex')})));
       assert.deepEqual(runtime,expected,'The installed modules must match the complete new release.');await old.close();
       });
     }
