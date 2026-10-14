@@ -19,6 +19,7 @@
     onDirty = () => {},
   }) {
     let state = null,
+      basePosts = [],
       loading = null,
       edit = 0,
       stored = 0,
@@ -33,17 +34,22 @@
       composing = false,
       attachmentReview = null,
       importRequest = 0,
+      draftConflict = false,
+      recoveryLoading = false,
       error = null;
     const media = life.PageMedia.create();
     const now = () => new Date().toISOString();
     const valid = () => !disposed && isCurrent();
     function message(value) {
       error = value;
+      if (value?.code === "page_draft_conflict") draftConflict = true;
       if (host) {
         const n = host.querySelector(".pp-status");
         if (n) {
-          n.textContent = value?.message || value || "";
+          n.textContent = value?.code === "page_draft_conflict" ? "다른 탭에서 초안이 바뀌었습니다. 내 입력을 유지했으니 최신 초안과 비교해 주세요." : value?.message || value || "";
           n.setAttribute("role", value && typeof value !== "string" ? "alert" : "status");
+          if (draftConflict)
+            n.append(button("최신 초안과 비교", openDraftRecovery));
         }
       }
     }
@@ -75,7 +81,7 @@
         loading = storage
           .readPageDrafts(workspaceId)
           .then((value) => {
-            state = value;
+            adopt(value);
           })
           .finally(() => {
             loading = null;
@@ -87,6 +93,11 @@
       onDirty();
       clearTimeout(timer);
       if (!composing) timer = setTimeout(() => persistDraft().catch(message), 650);
+    }
+    function adopt(value) {
+      state = value;
+      basePosts = structuredClone(value.posts);
+      draftConflict = false;
     }
     async function persistDraft() {
       clearTimeout(timer);
@@ -103,6 +114,8 @@
         .savePageDrafts(workspaceId, payload, state.revision)
         .then((result) => {
           state.revision = result.revision;
+          basePosts = structuredClone(result.posts);
+          draftConflict = false;
           stored = tick;
           error = null;
         })
@@ -177,10 +190,43 @@
       const date = draftDate.format(new Date(d.updatedAt));
       return [kind, date, "첨부 " + d.attachments.length + "개"].join(" · ");
     }
-    function reviewImport(incoming, token) {
+    function draftDetail(d, { restoring = true, local = false } = {}) {
+      const detail = node("details", null, "pp-import-detail");
+      detail.append(node("summary", "본문·첨부 확인"));
+      if (d.visibility === "page") detail.append(node("p", restoring ? local ? "공개 후보였던 내용도 비공개 새 초안으로 보관합니다." : "파일에서는 공개 후보입니다. 복원하면 비공개 초안이 됩니다." : "보관함의 공개 후보 초안입니다. 공개 게시와는 별도입니다.", "life-help"));
+      if (d.body) detail.append(node("p", d.body, "pp-body"));
+      if (d.attachments.length) {
+        const attachments = life.PagePostsView.attachments(d.attachments, { compact: true });
+        d.attachments.forEach((a, i) => {
+          if (a.url) attachments.children[i].querySelector(".pp-attachment-copy").append(node("span", a.url, "life-meta pp-import-url"));
+        });
+        detail.append(attachments);
+      }
+      if (!d.body && !d.attachments.length) detail.append(node("p", "본문과 첨부가 없는 빈 초안입니다.", "life-help"));
+      return detail;
+    }
+    async function openDraftRecovery() {
+      if (recoveryLoading) return;
+      requireAppliedAttachment();
+      clearTimeout(timer);
+      const token = epoch;
+      recoveryLoading = true;
+      try {
+        if (saving) await saving.catch(() => {});
+        const latest = await storage.readPageDrafts(workspaceId);
+        if (!valid() || token !== epoch || !host?.isConnected) return;
+        requireAppliedAttachment();
+        const changed = M.changedDrafts(basePosts, state.posts);
+        const input = host.querySelector("#ppBody");
+        const position = input ? { draftId: active, start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection, scrollTop: input.scrollTop } : null;
+        reviewImport(changed, token, { recovery: true, latest, position });
+      } finally { recoveryLoading = false; }
+    }
+    function reviewImport(incoming, token, { recovery = false, latest: comparison = null, position = null } = {}) {
       dialogClose?.();
       const origin = document.activeElement, scroll = document.body.style.overflow;
       const dialog = node("dialog", null, "life-collection cl-picker pp-draft-import");
+      dialog.classList.toggle("pp-draft-conflict", recovery);
       let alive = true, storing = false;
       function close() {
         if (!alive) return;
@@ -188,44 +234,50 @@
         document.body.style.overflow = scroll;
         dialogClose = null;
         if (origin?.isConnected) origin.focus({ preventScroll: true });
+        else if (recovery && valid()) host?.querySelector("#ppBody")?.focus({ preventScroll: true });
       }
       const current = () => alive && valid() && token === epoch && host?.isConnected;
-      const head = node("header", null, "cl-picker-head"), title = node("h2", "불러올 초안 확인");
+      const head = node("header", null, "cl-picker-head"), title = node("h2", recovery ? "초안 충돌 확인" : "불러올 초안 확인");
       title.id = "ppImportTitle"; dialog.setAttribute("aria-labelledby", title.id);
-      const exit = button("초안 불러오기 취소", close, "close");
+      const exit = button(recovery ? "충돌 비교 닫기" : "초안 불러오기 취소", close, "close");
       head.append(title, exit);
       const body = node("div", null, "cl-picker-body");
-      const hint = node("p", "선택한 내용은 비공개 새 초안으로 보관합니다. 기존 글과 초안을 덮어쓰지 않고, 원래 글의 수정 연결도 가져오지 않습니다.", "life-help");
+      const hint = node("p", recovery ? "내 변경은 모두 비공개 새 초안으로 보관하고 최신 보관함을 함께 엽니다. 다른 탭의 초안과 저장한 글은 유지합니다. 수정하던 글의 연결은 새 사본에서 끊습니다." : "선택한 내용은 비공개 새 초안으로 보관합니다. 기존 글과 초안을 덮어쓰지 않고, 원래 글의 수정 연결도 가져오지 않습니다.", "life-help");
       hint.id = "ppImportHelp"; dialog.setAttribute("aria-describedby", hint.id); body.append(hint);
       const status = node("p", "", "life-help pp-import-status"); status.setAttribute("role", "status");
       const choices = [], badges = [];
-      let reviewed = M.reviewDrafts(state.posts, incoming);
+      let reviewed = M.reviewDrafts(comparison?.posts || state.posts, incoming);
+      if (recovery) {
+        const saved = node("details", null, "pp-conflict-saved");
+        saved.append(node("summary", "현재 보관된 초안 " + comparison.posts.length + "개"));
+        for (const d of comparison.posts.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))) {
+          const row = node("section", null, "pp-import-row");
+          row.append(node("strong", draftTitle(d)), node("p", draftDescription(d), "life-meta"), draftDetail(d, { restoring: false }));
+          saved.append(row);
+        }
+        if (!comparison.posts.length) saved.append(node("p", "현재 보관함에는 초안이 없습니다.", "life-help"));
+        body.append(saved, node("h3", "내 변경 " + incoming.length + "개"));
+        if (!incoming.length) body.append(node("p", "마지막 보관본 이후 달라진 내 초안은 없습니다.", "life-help"));
+      }
       for (const [index, d] of incoming.entries()) {
-        const row = node("section", null, "pp-import-row"), label = node("label", null, "pp-import-choice"), input = node("input");
-        input.type = "checkbox"; input.checked = !reviewed[index].existing && !reviewed[index].file;
+        const row = node("section", null, "pp-import-row"), label = node(recovery ? "div" : "label", null, "pp-import-choice"), input = node("input");
+        input.type = "checkbox"; input.checked = recovery || !reviewed[index].existing && !reviewed[index].file;
+        input.disabled = recovery;
         const copy = node("span", null, "pp-draft-copy"), name = node("strong", draftTitle(d)), meta = node("span", draftDescription(d), "life-meta");
         const badge = node("span", "", "life-meta pp-import-duplicate");
         name.id = "ppImportName-" + index; meta.id = "ppImportMeta-" + index; badge.id = "ppImportDuplicate-" + index;
         input.setAttribute("aria-labelledby", name.id); input.setAttribute("aria-describedby", meta.id + " " + badge.id);
-        copy.append(name, meta, badge); label.append(input, copy); row.append(label);
-        const detail = node("details", null, "pp-import-detail"); detail.append(node("summary", "본문·첨부 확인"));
-        if (d.visibility === "page") detail.append(node("p", "파일에서는 공개 후보입니다. 복원하면 비공개 초안이 됩니다.", "life-help"));
-        if (d.body) detail.append(node("p", d.body, "pp-body"));
-        if (d.attachments.length) {
-          const attachments = life.PagePostsView.attachments(d.attachments, { compact: true });
-          d.attachments.forEach((a, i) => {
-            if (a.url) attachments.children[i].querySelector(".pp-attachment-copy").append(node("span", a.url, "life-meta pp-import-url"));
-          });
-          detail.append(attachments);
-        }
-        if (!d.body && !d.attachments.length) detail.append(node("p", "본문과 첨부가 없는 빈 초안입니다.", "life-help"));
+        copy.append(name, meta, badge);
+        if (!recovery) label.append(input);
+        label.append(copy); row.append(label);
+        const detail = draftDetail(d, { local: recovery });
         row.append(detail); body.append(row); choices.push(input); badges.push(badge);
       }
       function duplicateLabels() {
         badges.forEach((badge, i) => { badge.textContent = reviewed[i].existing ? "같은 본문·첨부가 보관함에 있습니다." : reviewed[i].file ? "파일 안에 같은 본문·첨부가 있습니다." : ""; });
       }
       const foot = node("footer", null, "cl-picker-foot"), count = node("span", "", "life-meta"); count.setAttribute("role", "status");
-      const apply = button("선택한 초안 불러오기", async () => {
+      const apply = button(recovery ? incoming.length ? "내 변경을 새 초안으로 보관" : "최신 초안 열기" : "선택한 초안 불러오기", async () => {
         if (!current() || storing) return;
         storing = true; busy = true; onDirty();
         const controls = [...dialog.querySelectorAll("button,input")].map((el) => [el, el.disabled]);
@@ -234,8 +286,13 @@
         try {
           const latest = await storage.readPageDrafts(workspaceId);
           if (!current()) return;
+          if (recovery && !incoming.length) {
+            adopt(latest); stored = edit;
+            active = latest.posts.some(d => d.id === active) ? active : null;
+            close(); message(null); render(); host?.querySelector("#ppBody")?.focus(); onDirty(); return;
+          }
           const nextReview = M.reviewDrafts(latest.posts, incoming);
-          if (nextReview.some((r, i) => choices[i].checked && r.existing && !reviewed[i].existing)) {
+          if (!recovery && nextReview.some((r, i) => choices[i].checked && r.existing && !reviewed[i].existing)) {
             reviewed = nextReview; duplicateLabels();
             throw new Error("다른 탭에서 같은 내용이 보관되었습니다. 선택을 확인하고 다시 눌러 주세요.");
           }
@@ -245,26 +302,34 @@
           const candidate = { revision: latest.revision, posts: latest.posts.concat(added) };
           const result = await storage.savePageDrafts(workspaceId, candidate, latest.revision);
           if (!current()) return;
-          state = result; stored = edit; active = added[0].id;
+          const resume = recovery ? selected.findIndex(d => d.id === position?.draftId) : 0;
+          adopt(result); stored = edit; active = added[Math.max(0, resume)].id;
           close(); message(null); render();
           host?.querySelector("#ppBody")?.focus();
+          if (recovery && resume >= 0 && position) {
+            const input = host.querySelector("#ppBody");
+            input?.setSelectionRange(position.start, position.end, position.direction);
+            if (input) input.scrollTop = position.scrollTop;
+          }
           message(added.length + "개를 비공개 새 초안으로 보관했습니다.");
         } catch (e) {
           if (!current()) return;
           status.setAttribute("role", "alert");
-          status.textContent = (e.code === "page_draft_conflict" ? "다른 탭에서 초안이 바뀌었습니다." : e.message) + " 기존 초안과 파일 선택은 유지했습니다. 다시 시도할 수 있습니다.";
+          status.textContent = (e.code === "page_draft_conflict" ? "다른 탭에서 초안이 바뀌었습니다." : e.message) + (recovery ? " 내 변경과 최신 보관본은 유지했습니다. 다시 시도하거나 초안 파일을 받을 수 있습니다." : " 기존 초안과 파일 선택은 유지했습니다. 다시 시도할 수 있습니다.");
         } finally {
           storing = false; busy = false;
           controls.forEach(([el, disabled]) => { if (el.isConnected) el.disabled = disabled; });
           onDirty(); if (current()) { selection(); apply.focus({ preventScroll: true }); }
         }
       });
-      function selection() { const n = choices.filter((el) => el.checked).length; count.textContent = incoming.length + "개 중 " + n + "개 선택"; apply.disabled = n === 0; }
+      function selection() { const n = choices.filter((el) => el.checked).length; count.textContent = recovery ? "내 변경 " + n + "개" : incoming.length + "개 중 " + n + "개 선택"; apply.disabled = !recovery && n === 0; }
       choices.forEach((input) => input.addEventListener("change", selection));
-      foot.append(count, apply); body.append(status); dialog.append(head, body, foot);
+      foot.append(count);
+      if (recovery) foot.append(button("내 초안 파일 받기", backup));
+      foot.append(apply); body.append(status); dialog.append(head, body, foot);
       dialog.addEventListener("cancel", (event) => { event.preventDefault(); if (!storing) close(); });
       dialogClose = close; duplicateLabels(); selection(); document.body.append(dialog); document.body.style.overflow = "hidden"; dialog.showModal();
-      choices[0].focus();
+      if (recovery) exit.focus(); else choices[0].focus();
     }
     async function begin(target = null) {
       requireAppliedAttachment();
@@ -639,7 +704,7 @@
         try {
           await flush();
           const result = await commit(d.id, state.revision, { asNew });
-          state = result.drafts;
+          adopt(result.drafts);
           stored = edit;
           active = null;
           render();
@@ -692,7 +757,7 @@
           saving = storage
             .savePageDrafts(workspaceId, candidate, state.revision)
             .then((result) => {
-              state = result;
+              adopt(result);
             });
           try {
             await saving;
@@ -723,7 +788,7 @@
           const fresh = await storage.readPageDrafts(workspaceId);
           if (token !== epoch || !valid()) return;
           if (!fresh.posts.some(p => p.id === draftId)) throw new Error('선택한 초안을 찾지 못했습니다. 초안 보관함에서 다시 확인해 주세요.');
-          state = fresh; active = draftId;
+          adopt(fresh); active = draftId;
         } else await load();
         if (token === epoch && valid()) { render();
           if (postId) {
@@ -754,6 +819,7 @@
       detach,
       flush,
       hasUnappliedAttachment: () => !!attachmentReview,
+      hasDraftConflict: () => draftConflict,
       dirty: () => !!saving || busy || edit !== stored || !!attachmentReview,
       dispose() {
         disposed = true;

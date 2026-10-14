@@ -61,6 +61,7 @@
       return !!target;
     }
     function errorText(error) {
+      if (error?.code === 'page_draft_conflict') return '다른 탭에서 초안이 바뀌었습니다. 내 입력은 남아 있습니다. 글쓰기에서 최신 초안과 비교해 주세요.';
       if (error?.code === 'workbench_conflict') return '다른 곳에서 구성이 바뀌었습니다. 현재 초안을 유지했습니다. 저장본과 비교해 주세요.';
       if (error?.code === 'storage_quota') return '저장 공간이 부족합니다. 현재 초안을 유지했습니다. JSON 사본을 받아 보관한 뒤 다시 저장해 주세요.';
       if (error?.code === 'storage_scope_closed' || error?.code === 'workspace_access_denied') return '계정 또는 작업공간이 바뀌어 저장을 멈췄습니다. 원래 공간에서 다시 확인해 주세요.';
@@ -72,9 +73,11 @@
     function updateStatus(session) {
       if (!visible || current !== session || !workspaceIs(session) || !statusNode) return;
       const hasUnappliedAttachment = !!session.composer?.hasUnappliedAttachment?.();
+      const draftConflict = !!session.composer?.hasDraftConflict?.();
+      const composerDirty = !!session.composer?.dirty?.();
       statusNode.textContent = !session.state ? '구성을 불러오지 못함' : session.saving ? '이 브라우저에 저장 중…' : session.error ? '저장하지 못함 · 초안 유지' : incoming ? '선택 검토 중 · 아직 추가하지 않음' :
-        hasUnappliedAttachment ? '첨부 입력 미반영' : session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : '이 브라우저에 저장됨';
-      statusNode.dataset.state = session.error ? 'error' : hasUnappliedAttachment || session.edit !== session.stored ? 'dirty' : 'saved';
+        hasUnappliedAttachment ? '첨부 입력 미반영' : draftConflict ? '초안 충돌 · 입력 유지' : composerDirty ? '초안 저장 전 변경 있음' : session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : '이 브라우저에 저장됨';
+      statusNode.dataset.state = session.error ? 'error' : draftConflict || composerDirty || hasUnappliedAttachment || session.edit !== session.stored ? 'dirty' : 'saved';
       if (mode === 'related') surface.querySelector('.wb-storage-line').hidden = !!session.state && !session.saving && !session.error && session.edit === session.stored && session.remoteRevision <= session.baseRevision;
     }
     function clearError() { if (errorNode) { errorNode.hidden = true; errorNode.replaceChildren(); delete errorNode.dataset.code; } }
@@ -1045,6 +1048,7 @@
         getPosts: () => session.state.page.posts || [], isCurrent: () => workspaceIs(session),
         onDirty: () => {
           if (errorNode?.dataset.code === 'attachment_review_pending' && !session.composer?.hasUnappliedAttachment()) clearError();
+          if (errorNode?.dataset.code === 'page_draft_conflict' && !session.composer?.hasDraftConflict()) clearError();
           updateStatus(session);
         },
         commit: async (draftId, draftRevision, options) => {

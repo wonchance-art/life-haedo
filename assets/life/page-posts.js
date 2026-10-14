@@ -283,6 +283,17 @@
     draftList(posts.concat(added));
     return added;
   }
+  function changedDrafts(base, current) {
+    draftList(base);
+    draftList(current);
+    const key = (p) => JSON.stringify([
+      p.replaces, p.baseUpdatedAt, p.body,
+      p.attachments.map((a) => [a.type, a.title, a.creator, a.url]),
+      p.visibility, p.createdAt, p.updatedAt,
+    ]);
+    const originals = new Map(base.map((p) => [p.id, key(p)]));
+    return current.filter((p) => originals.get(p.id) !== key(p)).map(clone);
+  }
   return Object.freeze({
     LIMITS,
     attachment,
@@ -295,5 +306,6 @@
     readDraftBackup,
     reviewDrafts,
     restoreDrafts,
+    changedDrafts,
   });
 });

@@ -29,3 +29,12 @@ test('restore selected drafts is isolated, private, detached and refuses capacit
  added[0].attachments[0].title='사본 수정';assert.deepEqual(d,original);
  assert.throws(()=>M.restoreDrafts(base,[d],()=> 'existing'));assert.throws(()=>M.restoreDrafts(Array.from({length:200},(_,i)=>({...d,id:'d_'+i})),[d],()=> 'extra'));
 });
+test('draft recovery copies only local additions or changed values, never resurrects unchanged or deleted drafts',()=>{
+ const a=M.draft([saved()],'a',time,'post'),b={...structuredClone(a),id:'b'},base=[a,b],original=structuredClone(base);
+ const changed={...structuredClone(a),body:'변경한 내 본문',visibility:'page'},added={...structuredClone(a),id:'new'};
+ const result=M.changedDrafts(base,[changed,added]);assert.deepEqual(result,[changed,added]);assert.deepEqual(base,original);
+ result[0].attachments[0].title='사본만 변경';assert.deepEqual(base,original);assert.equal(changed.attachments[0].title,a.attachments[0].title);
+ assert.deepEqual(M.changedDrafts(base,[structuredClone(a)]),[]);
+ const reordered={...structuredClone(a),attachments:a.attachments.map(v=>({url:v.url,creator:v.creator,title:v.title,type:v.type}))};assert.deepEqual(M.changedDrafts(base,[reordered,b]),[]);
+ for(const field of ['visibility','replaces','baseUpdatedAt','createdAt','updatedAt']){const d=structuredClone(a);d[field]=field==='visibility'?'page':field==='replaces'?'different_post':'2026-10-12T01:00:01.000Z';if(field==='createdAt')d.updatedAt=d.createdAt;assert.equal(M.changedDrafts(base,[d,b]).length,1,field);}
+});

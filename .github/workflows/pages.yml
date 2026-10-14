@@ -123,6 +123,9 @@ jobs:
       - name: Verify selective page draft recovery and atomic conflicts
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/page-draft-recovery-browser.cjs
+      - name: Verify page draft conflict comparison and copy recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/page-draft-conflict-browser.cjs
       - name: Verify reflection draft copy conflicts and account boundaries
         run: node tests/reflection-page-browser.cjs
       - name: Verify the integrated input and output cycle
@@ -287,6 +290,7 @@ jobs:
             .local/page-composer/
             .local/attachment-edit/
             .local/page-draft-recovery/
+            .local/page-draft-conflict/
             .local/profile-feed-media/
             .local/reflection-page/
             .local/two-cycle/

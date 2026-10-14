@@ -270,6 +270,31 @@
   gap: 8px;
   flex-wrap: wrap;
 }
+.pp-status .life-button {
+  margin: 8px 0 0 8px;
+}
+.pp-conflict-saved > summary {
+  min-height: 44px;
+  padding: 10px 0;
+  cursor: pointer;
+}
+.pp-conflict-saved .pp-import-row > strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.pp-conflict-saved .pp-import-detail {
+  margin-left: 0;
+}
+.pp-draft-conflict .pp-import-detail {
+  margin-left: 0;
+}
+.pp-draft-conflict .pp-import-choice {
+  cursor: default;
+}
+.pp-draft-import h3 {
+  margin: 20px 0 8px;
+  font-size: 16px;
+}
 .pp-empty {
   padding: 48px 12px;
   text-align: center;
