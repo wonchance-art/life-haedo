@@ -241,6 +241,48 @@
         attachments: clone(p.attachments),
       }));
   }
+  function draftList(posts) {
+    validate(posts);
+    if (posts.some((p) => p.status !== "draft"))
+      fail("작성 중인 초안만 불러올 수 있습니다.");
+  }
+  function readDraftBackup(value) {
+    fields(value, ["format", "posts"]);
+    if (value.format !== "life-page-drafts-v1")
+      fail("페이지 초안 파일을 골라 주세요.");
+    draftList(value.posts);
+    return clone(value.posts);
+  }
+  function reviewDrafts(posts, incoming) {
+    draftList(posts);
+    draftList(incoming);
+    // Identity, dates and visibility are deliberately excluded. Text, order and URLs are exact.
+    const key = (p) => JSON.stringify([
+      p.body,
+      p.attachments.map((a) => [a.type, a.title, a.creator, a.url]),
+    ]);
+    const existing = new Set(posts.map(key)),
+      seen = new Set();
+    return incoming.map((p) => {
+      const content = key(p),
+        result = { existing: existing.has(content), file: seen.has(content) };
+      seen.add(content);
+      return result;
+    });
+  }
+  function restoreDrafts(posts, incoming, fresh) {
+    draftList(posts);
+    draftList(incoming);
+    const added = incoming.map((p) => ({
+      ...clone(p),
+      id: fresh(),
+      replaces: null,
+      baseUpdatedAt: null,
+      visibility: "private",
+    }));
+    draftList(posts.concat(added));
+    return added;
+  }
   return Object.freeze({
     LIMITS,
     attachment,
@@ -250,5 +292,8 @@
     finish,
     remap,
     publicEntries,
+    readDraftBackup,
+    reviewDrafts,
+    restoreDrafts,
   });
 });

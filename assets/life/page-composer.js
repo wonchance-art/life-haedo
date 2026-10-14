@@ -3,6 +3,7 @@
   "use strict";
   const life = root.HaedoLife,
     M = life.PagePosts;
+  const draftDate = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
   const node = (tag, text, cls) => {
     const n = document.createElement(tag);
     if (text != null) n.textContent = text;
@@ -31,6 +32,7 @@
       disposed = false,
       composing = false,
       attachmentReview = null,
+      importRequest = 0,
       error = null;
     const media = life.PageMedia.create();
     const now = () => new Date().toISOString();
@@ -41,7 +43,7 @@
         const n = host.querySelector(".pp-status");
         if (n) {
           n.textContent = value?.message || value || "";
-          n.setAttribute("role", value ? "alert" : "status");
+          n.setAttribute("role", value && typeof value !== "string" ? "alert" : "status");
         }
       }
     }
@@ -151,36 +153,118 @@
     async function importDrafts(file) {
       if (!file) return;
       requireAppliedAttachment();
+      const token = epoch, request = ++importRequest;
       if (file.size > 2097152)
         throw new Error("2 MiB 이하의 초안 파일을 골라 주세요.");
-      const value = JSON.parse(
-        new TextDecoder("utf-8", { fatal: true }).decode(
-          await file.arrayBuffer(),
-        ),
-      );
-      if (
-        !value ||
-        value.format !== "life-page-drafts-v1" ||
-        Object.keys(value).some((k) => !["format", "posts"].includes(k))
-      )
-        throw new Error("페이지 초안 파일을 골라 주세요.");
-      M.validate(value.posts);
-      if (value.posts.some((p) => p.status !== "draft"))
-        throw new Error("작성 중인 초안만 불러올 수 있습니다.");
-      if (!valid()) return;
-      const added = value.posts.map((p) => ({
-        ...p,
-        id: life.Core.id(),
-        replaces: null,
-        baseUpdatedAt: null,
-        visibility: "private",
-      }));
-      M.validate(state.posts.concat(added));
-      state.posts.push(...added);
-      mark();
+      let value;
+      try {
+        value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(await file.arrayBuffer()));
+      } catch (_) {
+        throw new Error("초안 파일을 읽지 못했습니다. UTF-8 JSON 파일인지 확인해 주세요. 기존 초안은 유지했습니다.");
+      }
+      const incoming = M.readDraftBackup(value);
+      if (!valid() || token !== epoch || request !== importRequest || !host?.isConnected) return;
       await flush();
-      active = added[0]?.id || null;
-      render();
+      if (!valid() || token !== epoch || request !== importRequest || !host?.isConnected) return;
+      if (!incoming.length) { message("파일에 작성 중인 초안이 없습니다. 기존 초안은 유지했습니다."); return; }
+      reviewImport(incoming, token);
+    }
+    function draftTitle(d) {
+      return Array.from(d.body.trim().split("\n")[0]).slice(0, 80).join("") || d.attachments[0]?.title || "작성 중인 글";
+    }
+    function draftDescription(d) {
+      const kind = d.replaces ? getPosts().some((p) => p.id === d.replaces) ? "수정 초안" : "수정 초안 · 원래 글 없음" : "새 글";
+      const date = draftDate.format(new Date(d.updatedAt));
+      return [kind, date, "첨부 " + d.attachments.length + "개"].join(" · ");
+    }
+    function reviewImport(incoming, token) {
+      dialogClose?.();
+      const origin = document.activeElement, scroll = document.body.style.overflow;
+      const dialog = node("dialog", null, "life-collection cl-picker pp-draft-import");
+      let alive = true, storing = false;
+      function close() {
+        if (!alive) return;
+        alive = false; dialog.close(); dialog.remove();
+        document.body.style.overflow = scroll;
+        dialogClose = null;
+        if (origin?.isConnected) origin.focus({ preventScroll: true });
+      }
+      const current = () => alive && valid() && token === epoch && host?.isConnected;
+      const head = node("header", null, "cl-picker-head"), title = node("h2", "불러올 초안 확인");
+      title.id = "ppImportTitle"; dialog.setAttribute("aria-labelledby", title.id);
+      const exit = button("초안 불러오기 취소", close, "close");
+      head.append(title, exit);
+      const body = node("div", null, "cl-picker-body");
+      const hint = node("p", "선택한 내용은 비공개 새 초안으로 보관합니다. 기존 글과 초안을 덮어쓰지 않고, 원래 글의 수정 연결도 가져오지 않습니다.", "life-help");
+      hint.id = "ppImportHelp"; dialog.setAttribute("aria-describedby", hint.id); body.append(hint);
+      const status = node("p", "", "life-help pp-import-status"); status.setAttribute("role", "status");
+      const choices = [], badges = [];
+      let reviewed = M.reviewDrafts(state.posts, incoming);
+      for (const [index, d] of incoming.entries()) {
+        const row = node("section", null, "pp-import-row"), label = node("label", null, "pp-import-choice"), input = node("input");
+        input.type = "checkbox"; input.checked = !reviewed[index].existing && !reviewed[index].file;
+        const copy = node("span", null, "pp-draft-copy"), name = node("strong", draftTitle(d)), meta = node("span", draftDescription(d), "life-meta");
+        const badge = node("span", "", "life-meta pp-import-duplicate");
+        name.id = "ppImportName-" + index; meta.id = "ppImportMeta-" + index; badge.id = "ppImportDuplicate-" + index;
+        input.setAttribute("aria-labelledby", name.id); input.setAttribute("aria-describedby", meta.id + " " + badge.id);
+        copy.append(name, meta, badge); label.append(input, copy); row.append(label);
+        const detail = node("details", null, "pp-import-detail"); detail.append(node("summary", "본문·첨부 확인"));
+        if (d.visibility === "page") detail.append(node("p", "파일에서는 공개 후보입니다. 복원하면 비공개 초안이 됩니다.", "life-help"));
+        if (d.body) detail.append(node("p", d.body, "pp-body"));
+        if (d.attachments.length) {
+          const attachments = life.PagePostsView.attachments(d.attachments, { compact: true });
+          d.attachments.forEach((a, i) => {
+            if (a.url) attachments.children[i].querySelector(".pp-attachment-copy").append(node("span", a.url, "life-meta pp-import-url"));
+          });
+          detail.append(attachments);
+        }
+        if (!d.body && !d.attachments.length) detail.append(node("p", "본문과 첨부가 없는 빈 초안입니다.", "life-help"));
+        row.append(detail); body.append(row); choices.push(input); badges.push(badge);
+      }
+      function duplicateLabels() {
+        badges.forEach((badge, i) => { badge.textContent = reviewed[i].existing ? "같은 본문·첨부가 보관함에 있습니다." : reviewed[i].file ? "파일 안에 같은 본문·첨부가 있습니다." : ""; });
+      }
+      const foot = node("footer", null, "cl-picker-foot"), count = node("span", "", "life-meta"); count.setAttribute("role", "status");
+      const apply = button("선택한 초안 불러오기", async () => {
+        if (!current() || storing) return;
+        storing = true; busy = true; onDirty();
+        const controls = [...dialog.querySelectorAll("button,input")].map((el) => [el, el.disabled]);
+        controls.forEach(([el]) => { el.disabled = true; });
+        status.setAttribute("role", "status"); status.textContent = "초안을 보관하는 중…";
+        try {
+          const latest = await storage.readPageDrafts(workspaceId);
+          if (!current()) return;
+          const nextReview = M.reviewDrafts(latest.posts, incoming);
+          if (nextReview.some((r, i) => choices[i].checked && r.existing && !reviewed[i].existing)) {
+            reviewed = nextReview; duplicateLabels();
+            throw new Error("다른 탭에서 같은 내용이 보관되었습니다. 선택을 확인하고 다시 눌러 주세요.");
+          }
+          const selected = incoming.filter((_, i) => choices[i].checked);
+          if (!selected.length) throw new Error("불러올 초안을 선택해 주세요.");
+          const added = M.restoreDrafts(latest.posts, selected, life.Core.id);
+          const candidate = { revision: latest.revision, posts: latest.posts.concat(added) };
+          const result = await storage.savePageDrafts(workspaceId, candidate, latest.revision);
+          if (!current()) return;
+          state = result; stored = edit; active = added[0].id;
+          close(); message(null); render();
+          host?.querySelector("#ppBody")?.focus();
+          message(added.length + "개를 비공개 새 초안으로 보관했습니다.");
+        } catch (e) {
+          if (!current()) return;
+          status.setAttribute("role", "alert");
+          status.textContent = (e.code === "page_draft_conflict" ? "다른 탭에서 초안이 바뀌었습니다." : e.message) + " 기존 초안과 파일 선택은 유지했습니다. 다시 시도할 수 있습니다.";
+        } finally {
+          storing = false; busy = false;
+          controls.forEach(([el, disabled]) => { if (el.isConnected) el.disabled = disabled; });
+          onDirty(); if (current()) { selection(); apply.focus({ preventScroll: true }); }
+        }
+      });
+      function selection() { const n = choices.filter((el) => el.checked).length; count.textContent = incoming.length + "개 중 " + n + "개 선택"; apply.disabled = n === 0; }
+      choices.forEach((input) => input.addEventListener("change", selection));
+      foot.append(count, apply); body.append(status); dialog.append(head, body, foot);
+      dialog.addEventListener("cancel", (event) => { event.preventDefault(); if (!storing) close(); });
+      dialogClose = close; duplicateLabels(); selection(); document.body.append(dialog); document.body.style.overflow = "hidden"; dialog.showModal();
+      choices[0].focus();
     }
     async function begin(target = null) {
       requireAppliedAttachment();
@@ -216,23 +300,19 @@
       host.className = "pp-workspace";
       const bar = node("div", null, "pp-toolbar");
       bar.append(button("글쓰기", () => begin(), "edit"));
-      const drafts = state.posts.filter((p) => p.id !== active);
+      const drafts = state.posts.filter((p) => p.id !== active).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
       if (drafts.length) {
         const list = node("details", null, "pp-drafts");
         list.append(node("summary", "초안 " + drafts.length));
-        for (const d of drafts)
-          list.append(
-            button(
-              d.body.trim().slice(0, 45) ||
-                d.attachments[0]?.title ||
-                "작성 중인 글",
-              () => {
-                requireAppliedAttachment();
-                active = d.id;
-                render();
-              },
-            ),
-          );
+        for (const d of drafts) {
+          const name = draftTitle(d), row = button(name, () => {
+            requireAppliedAttachment(); active = d.id; render();
+            host?.querySelector("#ppBody")?.focus();
+          });
+          row.classList.add("pp-draft-row"); row.setAttribute("aria-label", name); row.replaceChildren(node("strong", name));
+          const meta = node("span", draftDescription(d), "life-meta"); meta.id = "ppDraftMeta-" + d.id;
+          row.setAttribute("aria-describedby", meta.id); row.append(meta); list.append(row);
+        }
         bar.append(list);
       }
       const tools = node("details", null, "pp-draft-tools");

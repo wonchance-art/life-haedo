@@ -754,3 +754,7 @@ Open Library 기본 비식별 요청 제한은 초당 1회, GitHub 비인증 검
 후속 [작품 메타데이터 연결](../design-review/artwork-metadata-selection.md)에서는 현재 공식 API의 메타데이터 라이선스/통합 안내와 실제 CORS·앱 흐름을 근거로 REST 조회를 진행했다. 공식 데이터 저장소는 메타데이터와 이미지/미디어 라이선스를 구분한다. 기존 native fetch/제한 JSON·명시 선택·CAS를 재사용했고 서버 코드·wrapper·SDK는 도입하지 않았다. 이미지·설명문과 약관 전체 본문 확인 완료는 범위에 포함하지 않는다. 아래 수동 단계의 미연결 설명은 당시 이력이다.
 
 시카고 미술관의 [공식 API 문서 원본](https://github.com/art-institute-of-chicago/data-aggregator/blob/780e6c86025d5f80387dac7574d0f056bf26ff1a/docs/.sections/preface.md)에 있는 작품 링크 형식을 참고했다. [이전 제공자 검토](../design-review/taste-provider-expansion.md)의 소스/라이선스 범위를 유지하고 기존 CollectionPicker·Share.safeURL·수동 폼을 재사용했다. URL 식별에 SDK·서버 전체 도입은 필요하지 않다. 실제 API/현재 약관은 환경 접근 적용 후 확인해야 하므로 자동 검색이나 이미지 연결은 추가하지 않았다. [구현·검증·외부 조건](../design-review/artwork-reference.md).
+
+## 2026-10-14 내 페이지 초안 선택 복구 재사용
+
+새 기반 모듈이나 의존성을 도입하는 작업이 아니다. 기존 `PagePosts`의 엄격 검증·평문 `PagePostsView`·선택창의 네이티브 dialog/CSS와 이미 동봉한 idb 8.0.3(ISC)의 저장 트랜잭션/CAS를 확장했다. 별도 파일 파서·모달·저장 라이브러리 도입은 이 작은 v1 JSON 선택 복구에 불필요하며 설치·버전·스키마 유지 비용을 늘린다. 라이브러리 코드를 새로 복사하거나 라이선스 조건을 바꾸지 않았다. 기존 [idb 트랜잭션 완료 계약](https://github.com/jakearchibald/idb/blob/v8.0.3/README.md)을 재사용하고 새 저장 구조가 필요해질 때 최신 릴리스·권고를 다시 조사한다. [구현·실패/경합·파일 재사용 검증](../design-review/page-draft-recovery.md).

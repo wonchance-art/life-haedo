@@ -120,6 +120,9 @@ jobs:
       - name: Verify attachment editing and unapplied input preservation
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/attachment-edit-browser.cjs
+      - name: Verify selective page draft recovery and atomic conflicts
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/page-draft-recovery-browser.cjs
       - name: Verify reflection draft copy conflicts and account boundaries
         run: node tests/reflection-page-browser.cjs
       - name: Verify the integrated input and output cycle
@@ -283,6 +286,7 @@ jobs:
             .local/artwork-metadata/
             .local/page-composer/
             .local/attachment-edit/
+            .local/page-draft-recovery/
             .local/profile-feed-media/
             .local/reflection-page/
             .local/two-cycle/

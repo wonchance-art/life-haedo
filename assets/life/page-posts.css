@@ -191,6 +191,85 @@
   font-size: 16px;
   min-height: 44px;
 }
+.pp-drafts[open] {
+  flex-basis: 100%;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.pp-drafts .pp-draft-row {
+  width: 100%;
+  text-align: left;
+  white-space: normal;
+  padding: 12px;
+  border: 0;
+  border-bottom: 1px solid var(--life-border, #dddde5);
+  border-radius: 0;
+  background: transparent;
+}
+.pp-drafts .pp-draft-row:hover {
+  background: var(--life-soft, #f4f4f8);
+}
+.pp-draft-row strong,
+.pp-draft-row span,
+.pp-draft-copy > * {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.pp-draft-row strong,
+.pp-draft-copy strong {
+  font-weight: 600;
+  line-height: 1.6;
+}
+.pp-draft-import .cl-picker-body {
+  min-height: 0;
+}
+.pp-import-row {
+  border-top: 1px solid var(--line);
+  padding: 12px 0;
+}
+.pp-import-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.pp-draft-import .pp-import-choice input {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  margin: 4px 0 0;
+  accent-color: var(--life-accent, #685aad);
+}
+.pp-draft-copy {
+  min-width: 0;
+  flex: 1;
+}
+.pp-draft-copy .life-meta {
+  line-height: 1.7;
+}
+.pp-import-duplicate:empty,
+.pp-import-status:empty {
+  display: none;
+}
+.pp-import-detail {
+  margin-left: 32px;
+}
+.pp-import-detail summary {
+  min-height: 44px;
+  padding: 10px 0;
+  cursor: pointer;
+  font-size: 14px;
+}
+.pp-import-detail .pp-body {
+  font-size: 16px;
+}
+.pp-draft-import .cl-picker-foot {
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .pp-empty {
   padding: 48px 12px;
   text-align: center;
