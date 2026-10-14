@@ -117,6 +117,9 @@ jobs:
       - name: Verify page composition, attachments and draft recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/page-composer-browser.cjs
+      - name: Verify attachment editing and unapplied input preservation
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/attachment-edit-browser.cjs
       - name: Verify reflection draft copy conflicts and account boundaries
         run: node tests/reflection-page-browser.cjs
       - name: Verify the integrated input and output cycle
@@ -279,6 +282,7 @@ jobs:
             .local/artwork-reference/
             .local/artwork-metadata/
             .local/page-composer/
+            .local/attachment-edit/
             .local/profile-feed-media/
             .local/reflection-page/
             .local/two-cycle/

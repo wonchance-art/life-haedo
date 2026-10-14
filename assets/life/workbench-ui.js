@@ -71,15 +71,17 @@
     }
     function updateStatus(session) {
       if (!visible || current !== session || !workspaceIs(session) || !statusNode) return;
+      const hasUnappliedAttachment = !!session.composer?.hasUnappliedAttachment?.();
       statusNode.textContent = !session.state ? '구성을 불러오지 못함' : session.saving ? '이 브라우저에 저장 중…' : session.error ? '저장하지 못함 · 초안 유지' : incoming ? '선택 검토 중 · 아직 추가하지 않음' :
-        session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : '이 브라우저에 저장됨';
-      statusNode.dataset.state = session.error ? 'error' : session.edit !== session.stored ? 'dirty' : 'saved';
+        hasUnappliedAttachment ? '첨부 입력 미반영' : session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : '이 브라우저에 저장됨';
+      statusNode.dataset.state = session.error ? 'error' : hasUnappliedAttachment || session.edit !== session.stored ? 'dirty' : 'saved';
       if (mode === 'related') surface.querySelector('.wb-storage-line').hidden = !!session.state && !session.saving && !session.error && session.edit === session.stored && session.remoteRevision <= session.baseRevision;
     }
-    function clearError() { if (errorNode) { errorNode.hidden = true; errorNode.replaceChildren(); } }
+    function clearError() { if (errorNode) { errorNode.hidden = true; errorNode.replaceChildren(); delete errorNode.dataset.code; } }
     function report(error, session = current) {
       if (!session || !visible || current !== session || !workspaceIs(session) || !errorNode) return;
       errorNode.hidden = false;
+      errorNode.dataset.code = error?.code || '';
       errorNode.replaceChildren(el('p', errorText(error)));
       if (session.state && session.edit !== session.stored) {
         const actions = el('div', null, 'life-actions');
@@ -273,6 +275,7 @@
               if (session.edit !== session.stored || session.saving) {
                 throw fault('workbench_conflict', '현재 초안과 새 저장본을 먼저 비교해 주세요.');
               }
+              await session.composer?.flush();
               if (!incoming) { session.state = null; await render(mode); return; }
               const token = generation;
               cleanupView(); session.state = null;
@@ -1040,7 +1043,10 @@
       const composerHost = el('section'); bodyNode.append(composerHost);
       session.composer ||= life.PageComposer.create({ storage, workspaceId: session.workspaceId,
         getPosts: () => session.state.page.posts || [], isCurrent: () => workspaceIs(session),
-        onDirty: () => updateStatus(session),
+        onDirty: () => {
+          if (errorNode?.dataset.code === 'attachment_review_pending' && !session.composer?.hasUnappliedAttachment()) clearError();
+          updateStatus(session);
+        },
         commit: async (draftId, draftRevision, options) => {
           const token = generation; await flushSession(session);
           if (!showing(token, session)) throw fault('workspace_changed', '화면이 바뀌었습니다. 초안을 유지했습니다.');

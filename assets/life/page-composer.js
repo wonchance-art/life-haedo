@@ -30,6 +30,7 @@
       busy = false,
       disposed = false,
       composing = false,
+      attachmentReview = null,
       error = null;
     const media = life.PageMedia.create();
     const now = () => new Date().toISOString();
@@ -83,13 +84,13 @@
       edit++;
       onDirty();
       clearTimeout(timer);
-      if (!composing) timer = setTimeout(() => flush().catch(message), 650);
+      if (!composing) timer = setTimeout(() => persistDraft().catch(message), 650);
     }
-    async function flush() {
+    async function persistDraft() {
       clearTimeout(timer);
       if (saving) {
         await saving;
-        return flush();
+        return persistDraft();
       }
       if (!state || edit === stored) return;
       if (!valid())
@@ -112,9 +113,24 @@
           onDirty();
         });
       await saving;
-      if (edit !== stored) return flush();
+      if (edit !== stored) return persistDraft();
+    }
+    function requireAppliedAttachment() {
+      if (attachmentReview) {
+        attachmentReview.focus();
+        const pending = new Error(attachmentReview.composing ? '한글 입력을 마친 뒤 첨부에 반영해 주세요. 입력은 그대로 남아 있습니다.' : '첨부 입력을 먼저 반영하거나 입력 취소를 눌러 주세요. 글과 입력은 그대로 남아 있습니다.');
+        pending.code = 'attachment_review_pending';
+        throw pending;
+      }
+      if (composing) throw new Error('한글 입력을 마친 뒤 다시 시도해 주세요.');
+    }
+    async function flush() {
+      // The accepted body/attachments can autosave while the separate review is still on screen.
+      await persistDraft();
+      requireAppliedAttachment();
     }
     function backup() {
+      requireAppliedAttachment();
       const blob = new Blob(
           [
             JSON.stringify(
@@ -134,6 +150,7 @@
     }
     async function importDrafts(file) {
       if (!file) return;
+      requireAppliedAttachment();
       if (file.size > 2097152)
         throw new Error("2 MiB 이하의 초안 파일을 골라 주세요.");
       const value = JSON.parse(
@@ -166,6 +183,7 @@
       render();
     }
     async function begin(target = null) {
+      requireAppliedAttachment();
       await load();
       const previous = state.posts.find((p) =>
         target
@@ -209,6 +227,7 @@
                 d.attachments[0]?.title ||
                 "작성 중인 글",
               () => {
+                requireAppliedAttachment();
                 active = d.id;
                 render();
               },
@@ -224,7 +243,7 @@
       input.accept = ".json,application/json";
       input.setAttribute("aria-label", "초안 파일 불러오기");
       input.addEventListener("change", () =>
-        importDrafts(input.files[0]).catch(message),
+        importDrafts(input.files[0]).catch(message).finally(() => { input.value = ''; }),
       );
       tools.append(input);
       bar.append(tools);
@@ -318,32 +337,44 @@
       const attached = node("div", null, "pp-edit-attachments");
       form.append(attached);
       function update() {
+        if (attached.contains(manual)) form.insertBefore(manual, attached.nextSibling);
         attached.replaceChildren();
         d.attachments.forEach((a, index) => {
           const row = node("div", null, "pp-edit-attachment");
+          row.dataset.attachmentIndex = String(index);
           row.append(life.PagePostsView.attachments([a], { compact: true }));
           const actions = node("div", null, "pp-card-actions");
           const up = button(
             a.title + " 위로",
             () => {
+              requireAppliedAttachment();
               [d.attachments[index - 1], d.attachments[index]] = [
                 d.attachments[index],
                 d.attachments[index - 1],
               ];
               mark();
               update();
+              focusAttachment(index - 1);
             },
             "up",
           );
           up.disabled = index === 0;
+          const editAttachment = button(a.title + " 첨부 정보 수정", () => {
+            requireAppliedAttachment();
+            enter(a, '이 글에 붙인 정보만 수정합니다. 컬렉션 원본은 바꾸지 않습니다.', a);
+          }, "edit");
+          editAttachment.classList.add('pp-attachment-edit');
           actions.append(
             up,
+            editAttachment,
             button(
               a.title + " 첨부 해제",
               () => {
+                requireAppliedAttachment();
                 d.attachments.splice(index, 1);
                 mark();
                 update();
+                focusAttachment(Math.min(index, d.attachments.length - 1));
               },
               "close",
             ),
@@ -351,6 +382,10 @@
           row.append(actions);
           attached.append(row);
         });
+      }
+      function focusAttachment(index) {
+        const row = attached.querySelector('[data-attachment-index="' + index + '"]');
+        (row?.querySelector('.pp-attachment-edit') || add).focus({preventScroll:true});
       }
       function attach(value) {
         if (d.attachments.length >= M.LIMITS.attachments)
@@ -363,10 +398,20 @@
       const manual = node("div", null, "pp-manual");
       manual.hidden = true;
       form.append(manual);
-      function enter(seed, review) {
+      manual.addEventListener('compositionstart', () => { if (attachmentReview) attachmentReview.composing = true; });
+      manual.addEventListener('compositionend', () => { if (attachmentReview) attachmentReview.composing = false; });
+      manual.addEventListener('keydown', event => {
+        if (event.key === 'Enter' && (attachmentReview?.composing || event.isComposing || event.keyCode === 229)) event.preventDefault();
+      });
+      function enter(seed, review, target = null) {
+        requireAppliedAttachment();
+        const targetRow = target && attached.querySelector('[data-attachment-index="' + d.attachments.indexOf(target) + '"]');
+        if (targetRow) attached.insertBefore(manual, targetRow.nextSibling);
+        else form.insertBefore(manual, attached.nextSibling);
         manual.hidden = false;
         manual.replaceChildren();
         if (review) manual.append(node("p", review, "life-help"));
+        manual.append(node('p', target ? '수정 반영 후 글을 저장하세요.' : '첨부를 눌러 반영한 뒤 글을 저장하세요.', 'life-help'));
         const select = node("select");
         select.setAttribute("aria-label", "첨부 종류");
         for (const [key, label] of Object.entries(life.Collection.TYPES)) {
@@ -410,20 +455,33 @@
         };
         select.addEventListener("change", creator);
         creator();
+        const pending = { composing: false, focus: () => { if (!pending.composing) inputs.title.focus({preventScroll:true}); } };
+        attachmentReview = pending;
+        onDirty();
         manual.append(
-          button("첨부", () => {
-            attach({
+          button(target ? "수정 반영" : "첨부", () => {
+            if (pending.composing) throw new Error('한글 입력을 마친 뒤 다시 시도해 주세요.');
+            const next = M.attachment({
               type: select.value,
               ...Object.fromEntries(
                 Object.entries(inputs).map(([k, v]) => [k, v.value]),
               ),
             });
+            const index = target ? d.attachments.indexOf(target) : -1;
+            if (target && index < 0) throw new Error('수정할 첨부를 찾지 못했습니다. 입력은 그대로 남아 있습니다.');
+            if (target) { d.attachments[index] = next; d.updatedAt = now(); mark(); update(); }
+            else attach(next);
+            attachmentReview = null;
             manual.hidden = true;
-            add.focus({ preventScroll: true });
+            message(null); onDirty();
+            if (target) focusAttachment(index); else add.focus({ preventScroll: true });
           }),
           button("입력 취소", () => {
+            if (pending.composing) throw new Error('한글 입력을 마친 뒤 다시 시도해 주세요.');
+            attachmentReview = null;
             manual.hidden = true;
-            add.focus({ preventScroll: true });
+            message(null); onDirty();
+            if (target) focusAttachment(d.attachments.indexOf(target)); else add.focus({ preventScroll: true });
           }),
         );
         inputs.title.focus();
@@ -432,6 +490,7 @@
         add = button(
           "음악·책·대상 붙이기",
           async () => {
+            requireAppliedAttachment();
             const token = epoch;
             add.disabled = true;
             try {
@@ -492,6 +551,7 @@
       );
       async function finish(asNew = false) {
         if (composing) return;
+        requireAppliedAttachment();
         busy = true;
         form
           .querySelectorAll("button,input,textarea,select")
@@ -536,6 +596,7 @@
       if (d.replaces) more.append(button("새 글로 저장", () => finish(true)));
       more.append(
         button("초안 버리기", async () => {
+          requireAppliedAttachment();
           if (!root.confirm("이 초안만 버릴까요? 저장한 글은 유지됩니다."))
             return;
           await flush();
@@ -606,12 +667,14 @@
       dialogClose = null;
       host = null;
       composing = false;
+      attachmentReview = null;
     }
     return {
       mount,
       detach,
       flush,
-      dirty: () => !!saving || busy || edit !== stored,
+      hasUnappliedAttachment: () => !!attachmentReview,
+      dirty: () => !!saving || busy || edit !== stored || !!attachmentReview,
       dispose() {
         disposed = true;
         media.dispose();
