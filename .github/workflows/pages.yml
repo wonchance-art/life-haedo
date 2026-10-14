@@ -105,6 +105,9 @@ jobs:
       - name: Verify edition choice and explicit collection retention
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/edition-collection-browser.cjs
+      - name: Verify book search pages and Korean edition recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-search-navigation-browser.cjs
       - name: Verify page composition, attachments and draft recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/page-composer-browser.cjs
@@ -266,6 +269,7 @@ jobs:
             .local/collection-picker/
             .local/taste-writing/
             .local/edition-collection/
+            .local/book-search-navigation/
             .local/page-composer/
             .local/profile-feed-media/
             .local/reflection-page/

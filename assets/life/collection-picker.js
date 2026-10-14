@@ -60,7 +60,7 @@
       b.append(shape, copy, root.HaedoLife.Icons.create(glyph)); return b;
     }
     function render() {
-      cancel(); remote.removeAttribute('aria-busy'); remote.replaceChildren(); results.replaceChildren();
+      cancel(); remote.inert = false; remote.removeAttribute('aria-busy'); remote.replaceChildren(); results.replaceChildren();
       const value = input.value.trim(), url = /^https?:\/\//i.test(value);
       find.hidden = !url; find.disabled = false; find.textContent = '링크 확인';
       external.hidden = url || value.length < 2;
@@ -82,18 +82,20 @@
       }
       if (matched.length > limit) results.append(button('더 보기', () => { const first = limit; limit += 30; render(); results.querySelectorAll('.cl-pick-row')[first]?.focus(); }));
     }
-    async function search(provider) {
+    async function search(provider, page = 1) {
       if (composing || controller || !alive || !isCurrent()) return;
       const query = input.value.trim(); if (query.length < 2 || /^https?:\/\//i.test(query)) return;
       const request = new AbortController(); controller = request;
-      bookSearch.disabled = projectSearch.disabled = true; remote.replaceChildren();
+      const previousFocus = document.activeElement, pageNavigation = remote.contains(previousFocus);
+      bookSearch.disabled = projectSearch.disabled = true; remote.inert = true;
       message.textContent = '검색 중…'; remote.setAttribute('aria-busy', 'true');
       try {
-        const key = provider + ':' + query;
-        const result = searchCache.get(key) || await Metadata.search(provider, query, { signal: request.signal });
+        const key = provider + ':' + query + ':' + page;
+        const result = searchCache.get(key) || await Metadata.search(provider, query, { signal: request.signal, page });
         if (!alive || !isCurrent() || controller !== request || request.signal.aborted) return;
         if (searchCache.size >= 12) searchCache.delete(searchCache.keys().next().value);
         searchCache.set(key, result);
+        remote.replaceChildren();
         message.textContent = result.results.length ? '후보를 선택해 정보를 확인해 주세요.' : '찾은 후보가 없어요. 검색어를 바꾸거나 직접 입력하세요.';
         if (result.incomplete) message.textContent += ' 제공자가 일부 결과만 보냈습니다.';
         for (const candidate of result.results) {
@@ -106,30 +108,43 @@
             const editions = node('section', null, 'cl-editions');
             const open = button('판본 찾기', () => loadEditions(candidate, editions, 0, open));
             open.setAttribute('aria-label', candidate.title + ' · 판본 찾기');
-            group.append(open, editions);
+            const korean = button('한국어판 찾기', () => loadEditions(candidate, editions, 0, korean, true));
+            korean.setAttribute('aria-label', candidate.title + ' · 한국어판 찾기');
+            const actions = node('div',null,'cl-picker-providers cl-edition-actions'); actions.append(korean,open);
+            group.append(actions, editions);
           }
           remote.append(group);
         }
+        if (provider === 'books' && (page > 1 || result.hasMore)) {
+          remote.append(node('p', `검색 결과 · ${page}쪽`, 'life-help'));
+          const pages = node('div',null,'cl-picker-providers');
+          if (page > 1) pages.append(button('이전 검색 결과', () => search(provider,page-1)));
+          if (result.hasMore) pages.append(button('다음 검색 결과', () => search(provider,page+1)));
+          remote.append(pages);
+        }
+        if (page > 1 || pageNavigation) { remote.inert = false; remote.tabIndex=-1; remote.focus({preventScroll:true}); remote.scrollIntoView({block:'nearest'}); }
       } catch (error) {
         if (!alive || !isCurrent() || controller !== request || request.signal.aborted) return;
         message.textContent = (error.message || '검색하지 못했습니다.') + ' 직접 입력으로 이어갈 수 있어요.';
+        remote.inert = false;
+        if (pageNavigation && previousFocus.isConnected) previousFocus.focus({preventScroll:true});
       } finally {
-        if (alive && controller === request) { controller = null; bookSearch.disabled = projectSearch.disabled = false; remote.removeAttribute('aria-busy'); }
+        if (alive && controller === request) { controller = null; bookSearch.disabled = projectSearch.disabled = false; remote.inert = false; remote.removeAttribute('aria-busy'); }
       }
     }
-    async function loadEditions(work, host, offset, trigger) {
+    async function loadEditions(work, host, offset, trigger, korean = false) {
       if (composing || controller || !alive || !isCurrent()) return;
       const request = new AbortController(); controller = request;
       trigger.disabled = true; host.setAttribute('aria-busy','true');
       const status = node('p','판본 확인 중…','life-help'); status.setAttribute('role','status');
       host.replaceChildren(status);
       try {
-        const key = 'editions:' + work.url + ':' + offset;
-        const result = searchCache.get(key) || await Metadata.editions(work.url, offset, {signal:request.signal});
+        const key = 'editions:' + work.url + ':' + offset + ':' + korean;
+        const result = searchCache.get(key) || await (korean ? Metadata.koreanEdition(work.url, {signal:request.signal}) : Metadata.editions(work.url, offset, {signal:request.signal}));
         if (!alive || !isCurrent() || controller !== request || request.signal.aborted || !host.isConnected) return;
         if (searchCache.size >= 12) searchCache.delete(searchCache.keys().next().value);
         searchCache.set(key,result);
-        status.textContent = result.results.length ? '언어·출판사·발행일을 확인하세요. 판본의 저자·번역자는 직접 확인해 주세요.' : '이 범위에서 확인 가능한 판본이 없어요. 작품 정보로 계속하거나 직접 입력할 수 있어요.';
+        status.textContent = korean ? (result.results.length ? '한국어판 대표 후보입니다. 전체 판본 목록은 아닙니다. 저자·번역자를 확인해 주세요.' : '제공자 검색에서 한국어판을 확인하지 못했어요. 전체 판본을 찾아보거나 직접 입력할 수 있어요.') : result.results.length ? '언어·출판사·발행일을 확인하세요. 판본의 저자·번역자는 직접 확인해 주세요.' : '이 범위에서 확인 가능한 판본이 없어요. 작품 정보로 계속하거나 직접 입력할 수 있어요.';
         for (const edition of result.results) {
           const existing = items.find(item => identity(item.url) === identity(edition.url));
           host.append(row(existing || edition, () => choose(existing ? {item:existing,compact:true} : {
@@ -138,14 +153,14 @@
           }), edition.detail));
         }
         const pages = node('div',null,'cl-picker-providers');
-        if (offset > 0) pages.append(button('이전 판본', () => loadEditions(work,host,offset-6,trigger)));
+        if (!korean && offset > 0) pages.append(button('이전 판본', () => loadEditions(work,host,offset-6,trigger)));
         if (result.hasMore) pages.append(button('다음 판본', () => loadEditions(work,host,offset+6,trigger)));
         host.append(pages);
         host.tabIndex=-1; host.focus({preventScroll:true}); host.scrollIntoView({block:'nearest'});
       } catch (error) {
         if (!alive || !isCurrent() || controller !== request || request.signal.aborted || !host.isConnected) return;
         status.textContent = (error.message || '판본 정보를 받지 못했어요.') + ' 작품 정보는 그대로 사용할 수 있습니다.';
-        host.append(button('판본 다시 확인', () => loadEditions(work,host,offset,trigger)));
+        host.append(button('판본 다시 확인', () => loadEditions(work,host,offset,trigger,korean)));
       } finally {
         if (alive && controller === request) {controller=null;trigger.disabled=false;host.removeAttribute('aria-busy');}
       }
@@ -177,7 +192,7 @@
         return;
       }
       if (event.key !== 'Tab') return;
-      const controls = [...dialog.querySelectorAll('button,input,select,summary')].filter(el => !el.disabled && el.getClientRects().length);
+      const controls = [...dialog.querySelectorAll('button,input,select,summary')].filter(el => !el.disabled && !el.closest('[inert]') && el.getClientRects().length);
       const target = event.shiftKey && document.activeElement === controls[0] ? controls.at(-1) : !event.shiftKey && document.activeElement === controls.at(-1) ? controls[0] : null;
       if (target) { event.preventDefault(); target.focus(); }
     });

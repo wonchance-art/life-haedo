@@ -152,3 +152,5 @@
 .cl-candidate { padding-bottom:8px; }
 .cl-editions:not(:empty) { margin:12px 0; padding:12px; background:#fff; border-radius:12px; }
 .cl-editions .life-help { line-height:1.7; font-size:13px; }
+
+.cl-edition-actions button { flex:1 1 100px; }
