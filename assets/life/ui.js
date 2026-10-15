@@ -170,7 +170,14 @@
           if (!state.bundle.sourceVersions.some(v => v.id === row.sourceVersionId && v.sourceId === row.sourceId)) throw new Error('이 원문 버전을 찾을 수 없습니다. 검색 결과를 다시 불러와 주세요.');
           return openResult('find', row.key, row);
         }
-        if (row.kind === 'page') return navigate('page', { pagePreview: false, searchTarget: { postId: row.postId, entryId: row.entryId } });
+        if (row.kind === 'page') {
+          if (row.photoPostId) {
+            const token = navigationGeneration, photo = await storage.readPhotoPost(workspaceId, row.photoPostId);
+            if (disposed || token !== navigationGeneration || state.mode !== 'find' || state.bundle?.workspaceId !== workspaceId) return;
+            if (photo.status !== 'saved') throw new Error('저장한 사진 글을 찾을 수 없습니다. 검색 결과를 다시 불러와 주세요.');
+          }
+          return navigate('page', { pagePreview: false, searchTarget: { postId: row.postId, entryId: row.entryId, photoPostId: row.photoPostId } });
+        }
         if (row.kind === 'nine') {
           const token = navigationGeneration;
           const values = await storage.readNineBoard(workspaceId);
@@ -183,7 +190,7 @@
     const workbenchModes = ['activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'public-pages'];
     const workbench = global.HaedoLife.WorkbenchUI?.create({
       storage, core, host: main, getBundle: () => state.bundle,
-      isDisposed: () => disposed, announce,
+      isDisposed: () => disposed, announce, onLocalSaved: clearError,
       onSelectionUsed: ({ workspaceId, versionIds }) => {
         if (disposed || state.bundle?.workspaceId !== workspaceId) return;
         const consumed = selectionReturn?.workspaceId === workspaceId ? selectionReturn.versionIds : versionIds;

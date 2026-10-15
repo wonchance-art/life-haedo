@@ -14,7 +14,7 @@
   }
   function fault(code, message) { return Object.assign(new Error(message), { code }); }
 
-  function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored,
+  function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored, onLocalSaved = () => {},
     onSelectionUsed = () => {}, onSelectionCancel = () => {}, onArrange = () => {}, onWorkbenchNavigate = () => {}, onChapterImport = () => {},
     shareRemoteFactory = () => life.ShareRemote?.createOwner({ auth: global.HaedoAuth }),
     sharePublicUrl = publicId => { const url = new URL('share.html', global.location.href); url.searchParams.set('id', publicId); return url.href; },
@@ -255,9 +255,10 @@
       if (installing) throw fault('restore_in_progress', '새 사본을 저장하는 중입니다. 완료 후 이동해 주세요.');
       await current?.composer?.flush();
       await current?.nine?.flush();
+      await current?.photoPosts?.flush();
       if (current?.state && current.edit !== current.stored || current?.saving) await flushSession(current);
     }
-    function dirty() { return installing || !!current && (current.edit !== current.stored || !!current.saving || !!current.composer?.dirty() || !!current.nine?.dirty()); }
+    function dirty() { return installing || !!current && (current.edit !== current.stored || !!current.saving || !!current.composer?.dirty() || !!current.nine?.dirty() || !!current.photoPosts?.dirty()); }
     function sessionFor(id) {
       if (sessions.has(id)) return sessions.get(id);
       const session = { workspaceId: id, state: null, baseRevision: 0, edit: 0, stored: 0, remoteRevision: 0,
@@ -282,6 +283,7 @@
               }
               await session.composer?.flush();
               await session.nine?.flush();
+              await session.photoPosts?.flush();
               if (!incoming) { session.state = null; await render(mode); return; }
               const token = generation;
               cleanupView(); session.state = null;
@@ -1065,6 +1067,9 @@
         lead.hidden = title.hidden && intro.hidden;
       };
       refreshLead(); bodyNode.append(lead, actions);
+      const photoHost = el('section'); bodyNode.append(photoHost);
+      session.photoPosts ||= life.PhotoPostUI.create({ storage, workspaceId: session.workspaceId, isCurrent: () => workspaceIs(session), onDirty: () => updateStatus(session), onSaved: onLocalSaved, beforeOpen: async () => { await session.composer?.flush(); } });
+      session.photoPosts.mount(photoHost, { postId: session.searchTarget?.photoPostId || null, reset: !!session.searchTarget && !session.searchTarget.photoPostId }); viewCleanups.push(() => session.photoPosts.detach());
       const composerHost = el('section'); bodyNode.append(composerHost);
       session.composer ||= life.PageComposer.create({ storage, workspaceId: session.workspaceId,
         getPosts: () => session.state.page.posts || [], isCurrent: () => workspaceIs(session),
@@ -2600,7 +2605,7 @@
       const session = current;
       bodyNode.append(notice('현재 작업공간의 원문·발췌·메모·출처와 묶음·내 페이지·회고·책을 함께 담습니다.'));
       const scope = el('details', null, 'life-details'); scope.id = 'wbBackupScope';
-      scope.append(el('summary', '포함하지 않는 자료'), notice('글쓰기·가져오기 초안, 읽기 위치, 사진과 미확보 본문, 연표·목표·습관, 이미 게시한 사본은 포함하지 않습니다. 파일에는 개인 자료가 포함되니 보관 위치를 확인하세요.'));
+      scope.append(el('summary', '포함하지 않는 자료'), notice('글쓰기·가져오기 초안, 사진 글·원본(별도 ZIP), 읽기 위치와 미확보 본문, 연표·목표·습관, 이미 게시한 사본은 포함하지 않습니다. 파일에는 개인 자료가 포함되니 보관 위치를 확인하세요.'));
       bodyNode.append(scope);
       const downloadButton = action('통합 JSON 받기', async () => {
         const token = generation;
@@ -2812,7 +2817,7 @@
     function dispose() {
       disposed = true; leave();
       shareRemote?.dispose();
-      sessions.forEach(session => { clearTimeout(session.timer); session.composer?.dispose(); session.unsubscribe?.(); });
+      sessions.forEach(session => { clearTimeout(session.timer); session.composer?.dispose(); session.photoPosts?.dispose(); session.unsubscribe?.(); });
       urls.forEach(url => URL.revokeObjectURL(url)); urls.clear();
     }
     return Object.freeze({ render, flush, dirty, leave, dispose });

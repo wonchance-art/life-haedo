@@ -22,7 +22,7 @@
     if (end < text.length && /[\uDC00-\uDFFF]/.test(text[end])) end++;
     return (start ? '…' : '') + text.slice(start, end) + (end < text.length ? '…' : '');
   }
-  function search({ bundle, workbench, collection, nineBoard }, query, { ignoreKoreanSpacing = false, archived = false } = {}) {
+  function search({ bundle, workbench, collection, nineBoard, photoPosts }, query, { ignoreKoreanSpacing = false, archived = false } = {}) {
     const options = { ignoreKoreanSpacing }, rows = [];
     // Validate even when all stores failed or the query is blank.
     core.matchesSearchText('', query, options);
@@ -71,6 +71,11 @@
         const found = field([['제목', entry.title], ['내 코멘트', entry.note]]);
         if (found) rows.push({ kind: 'page', key: 'find:entry:' + entry.id, entryId: entry.id, title: entry.title || '페이지 항목', meta: '페이지 구성 · ' + (entry.enabled ? '편집 사본' : '표시 꺼짐'), ...found });
       }
+    }
+    if (photoPosts) for (const post of photoPosts) {
+      if (post.status !== 'saved') continue;
+      const found = field([['제목', post.title], ['본문·사진 설명', post.body]]);
+      if (found) rows.push({ kind: 'page', key: 'find:photo-post:' + post.id, photoPostId: post.id, title: post.title || '제목 없는 사진 글', meta: '사진 글 · 비공개 · 이 브라우저', ...found });
     }
     if (collection) for (const item of collection.items) {
       if (item.archived && !archived) continue;

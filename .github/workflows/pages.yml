@@ -135,6 +135,9 @@ jobs:
       - name: Verify nine board search, exact target and preserved return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/nine-board-search-browser.cjs
+      - name: Verify original photo editor, exact bytes and recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/photo-post-browser.cjs
       - name: Verify reflection draft copy conflicts and account boundaries
         run: node tests/reflection-page-browser.cjs
       - name: Verify the integrated input and output cycle
@@ -303,6 +306,7 @@ jobs:
             .local/nine-board/
             .local/nine-board-recovery/
             .local/nine-board-search/
+            .local/photo-post/
             .local/profile-feed-media/
             .local/reflection-page/
             .local/two-cycle/

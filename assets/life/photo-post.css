@@ -1,0 +1,330 @@
+.photo-posts {
+  margin-block: 16px 28px;
+  color: var(--ink);
+}
+.photo-posts .photo-status:empty {
+  display: none;
+}
+.photo-posts .photo-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 8px;
+  width: 100%;
+  padding: 20px 0;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+.photo-entry-excerpt {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.wb-content:has(> .photo-posts[data-mode="edit"]) > :not(.photo-posts),
+.wb-content:has(> .photo-posts[data-mode="read"]) > :not(.photo-posts) {
+  display: none;
+}
+.photo-editor {
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+}
+#photoTitle {
+  width: 100%;
+  font: inherit;
+  font-size: clamp(24px, 4vw, 32px);
+  font-weight: 650;
+  color: var(--ink);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 20px 0;
+  background: transparent;
+  min-height: 64px;
+}
+.photo-posts .photo-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  font-family: inherit;
+}
+.photo-posts .ql-toolbar button {
+  width: auto;
+  min-width: 44px;
+  min-height: 44px;
+  height: auto;
+  padding: 12px;
+  color: var(--ink);
+}
+.photo-posts .ql-toolbar button svg {
+  width: 20px;
+  height: 20px;
+}
+.photo-posts .ql-toolbar .life-button {
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 12px;
+}
+.photo-posts .ql-picker {
+  color: var(--ink);
+  height: 44px;
+  font: inherit;
+}
+.photo-posts .ql-picker-label {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+.photo-posts .ql-picker-item {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.photo-posts .ql-picker-options {
+  background: var(--paper);
+}
+.photo-posts .ql-container {
+  font: inherit;
+  border: 0;
+  color: var(--ink);
+}
+.photo-posts .ql-editor {
+  min-height: 320px;
+  padding: 28px 0;
+  font-size: 18px;
+  line-height: 1.95;
+  overflow-wrap: anywhere;
+}
+.photo-posts .ql-editor.ql-blank::before {
+  color: var(--ink-soft);
+  left: 0;
+  right: 0;
+  font-style: normal;
+}
+.photo-posts .ql-editor p,
+.photo-posts .ql-editor blockquote {
+  margin-block: 0 18px;
+}
+.photo-posts .ql-editor h1 {
+  font-size: 1.7em;
+}
+.photo-posts .ql-editor h2 {
+  font-size: 1.35em;
+}
+.photo-posts .ql-snow .ql-stroke {
+  stroke: var(--ink);
+}
+.photo-posts .ql-snow .ql-fill {
+  fill: var(--ink);
+}
+.photo-posts .ql-snow .ql-active .ql-stroke {
+  stroke: var(--color-primary);
+}
+.photo-block,
+.photo-read-image {
+  margin: 28px 0;
+}
+.photo-block img,
+.photo-read-image img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  margin-inline: auto;
+  image-orientation: from-image;
+}
+.photo-block {
+  cursor: pointer;
+  min-height: 44px;
+}
+.photo-block.photo-selected {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 4px;
+}
+.photo-posts figcaption {
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.7;
+  text-align: center;
+  margin-top: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.photo-inspector {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  flex-wrap: wrap;
+  position: fixed;
+  z-index: 12;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(720px, calc(100vw - 32px));
+  max-height: 50dvh;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: 0 8px 24px rgb(20 18 35 / 0.12);
+}
+.photo-inspector[hidden] {
+  display: none;
+}
+.photo-inspector label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 220px;
+}
+.photo-inspector input {
+  width: 100%;
+  min-height: 44px;
+  font: inherit;
+  font-size: 16px;
+}
+.photo-original-info {
+  flex-basis: 100%;
+}
+.photo-save {
+  margin-top: 20px;
+}
+.photo-import {
+  padding-block: 24px;
+  border-block: 1px solid var(--line);
+}
+.photo-article {
+  max-width: 760px;
+  margin: 32px auto;
+  font-size: 18px;
+  line-height: 1.95;
+  overflow-wrap: anywhere;
+}
+.photo-article .photo-read-heading {
+  font-size: clamp(28px, 5vw, 36px);
+  margin: 0 0 12px;
+}
+.photo-line {
+  white-space: pre-wrap;
+  margin-block: 0 18px;
+}
+.photo-article blockquote {
+  border-left: 3px solid var(--line);
+  padding-left: 20px;
+}
+.photo-article h3.photo-line {
+  font-size: 1.7em;
+}
+.photo-article h4.photo-line {
+  font-size: 1.35em;
+}
+.photo-expand {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+.photo-viewer {
+  width: min(1280px, 96vw);
+  max-width: 96vw;
+  max-height: 94dvh;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper, #fff);
+  color: var(--ink, #20212a);
+}
+.photo-viewer::backdrop {
+  background: rgb(15 18 26 / 0.65);
+}
+.photo-viewer h2 {
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+.photo-viewer button {
+  min-height: 44px;
+}
+.photo-original {
+  overflow: auto;
+  max-height: 70dvh;
+  margin-top: 20px;
+}
+.photo-original img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: auto;
+}
+.photo-actual-size img {
+  max-width: none;
+  margin: 0;
+}
+@media (max-width: 600px) {
+  .photo-posts .ql-editor,
+  .photo-article {
+    font-size: 17px;
+  }
+  .photo-toolbar {
+    gap: 0;
+  }
+  .photo-viewer {
+    padding: 12px;
+  }
+  .photo-posts .ql-snow .ql-tooltip {
+    left: 0 !important;
+    max-width: calc(100vw - 40px);
+    white-space: normal;
+  }
+  .photo-posts .ql-tooltip input {
+    max-width: 60vw;
+    font-size: 16px;
+    min-height: 44px;
+  }
+}
+
+.photo-posts .ql-snow .ql-picker.ql-header .ql-picker-label::before,
+.photo-posts .ql-snow .ql-picker.ql-header .ql-picker-item::before {
+  content: "본문";
+}
+.photo-posts .ql-snow .ql-picker.ql-header [data-value="1"]::before {
+  content: "큰 제목";
+}
+.photo-posts .ql-snow .ql-picker.ql-header [data-value="2"]::before {
+  content: "작은 제목";
+}
+.photo-posts .ql-snow .ql-tooltip::before {
+  content: "링크";
+}
+.photo-posts .ql-snow .ql-tooltip a.ql-action::after {
+  content: "적용";
+}
+.photo-posts .ql-snow .ql-tooltip a.ql-remove::before {
+  content: "해제";
+}
+.photo-posts .ql-snow .ql-tooltip input {
+  min-height: 44px;
+  font-size: 16px;
+}
+.photo-posts .ql-snow .ql-tooltip a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px;
+}
+.life-workbench:has(.photo-posts[data-mode="edit"]) > .wb-storage-line,
+.life-workbench:has(.photo-posts[data-mode="read"]) > .wb-storage-line {
+  display: none;
+}

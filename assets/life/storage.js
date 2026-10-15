@@ -159,6 +159,7 @@
           if (data?.sender !== sender && data?.type === 'nine_board_changed' && typeof data.workspaceId === 'string' && Number.isSafeInteger(data.revision) && data.revision >= 1) {
             notify({ type: 'nine_board_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
+          if (data?.sender !== sender && data?.type === 'photo_posts_changed' && typeof data.workspaceId === 'string') notify({ type: 'photo_posts_changed', workspaceId: data.workspaceId });
           if (data?.sender !== sender && data?.type === 'workbench_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
             notify({ type: 'workbench_changed', workspaceId: data.workspaceId, revision: data.revision });
@@ -582,6 +583,46 @@
       const event = { type: 'nine_board_changed', workspaceId, revision: saved.revision };
       notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Committed data remains authoritative. */ }
       return saved;
+    }
+    const photoPost = () => root.HaedoLife?.PhotoPost || (typeof require === 'function' && require('./photo-post.js'));
+    async function listPhotoPosts(workspaceId) {
+      collectionScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone((await meta.get(`photo-posts:${workspaceId}`))?.value || []);
+      });
+    }
+    async function readPhotoPost(workspaceId, postId) {
+      collectionScope(workspaceId); requireId(postId, '사진 글');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const value = (await meta.get(`photo-post:${workspaceId}:${postId}`))?.value;
+        if (!value) throw fault('photo_post_missing', '사진 글이 바뀌었거나 없습니다. 목록을 다시 확인해 주세요.');
+        photoPost().validate(value); return clone(value);
+      });
+    }
+    async function savePhotoPost(workspaceId, input, baseRevision) {
+      collectionScope(workspaceId); requireRevision(baseRevision); photoPost().validate(input);
+      const value = photoPost().compact(input);
+      if (value.revision !== baseRevision) throw fault('photo_post_conflict', '사진 글 저장 기준이 바뀌었습니다. 입력을 보존했습니다.');
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const key = `photo-post:${workspaceId}:${value.id}`, previous = (await meta.get(key))?.value;
+        if ((previous?.revision || 0) !== baseRevision || !previous && baseRevision !== 0) throw fault('photo_post_conflict', '다른 탭에서 사진 글을 수정했습니다. 입력은 남아 있습니다. 백업하거나 새 사본으로 보관해 주세요.');
+        let index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
+        if (value.status === 'saved' && value.replaces) {
+          const targetKey = `photo-post:${workspaceId}:${value.replaces.id}`, target = (await meta.get(targetKey))?.value;
+          if (!target || target.revision !== value.replaces.revision || target.status !== 'saved') throw fault('photo_post_conflict', '원래 사진 글이 변경됐습니다. 수정 초안은 유지했습니다. 새 글로 저장할 수 있습니다.');
+          await meta.delete(targetKey); index = index.filter(item => item.id !== target.id); value.createdAt = target.createdAt; value.replaces = null;
+        }
+        value.revision = baseRevision + 1; photoPost().validate(value);
+        const summary = { id: value.id, title: value.title, status: value.status, revision: value.revision, updatedAt: value.updatedAt, body: photoPost().plainText(value), photos: value.photos.length };
+        const at = index.findIndex(item => item.id === value.id); if (at < 0) index.push(summary); else index[at] = summary;
+        if (index.length > 200) throw fault('photo_post_limit', '사진 글과 초안은 합계 200개까지 보관할 수 있습니다.');
+        await meta.put({ key, value }); await meta.put({ key: `photo-posts:${workspaceId}`, value: index }); return clone(value);
+      });
+      const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
+      return result;
     }
     // Page composer drafts stay local, outside composition sync and public copies.
     const pagePosts = () => root.HaedoLife?.PagePosts || (typeof require === 'function' && require('./page-posts.js'));
@@ -1820,7 +1861,7 @@
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, read, createWorkspace, installWorkspace, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
-      readCollection, saveCollection, readNineBoard, saveNineBoard, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, listPhotoPosts, readPhotoPost, savePhotoPost, readPageDrafts, savePageDrafts, savePagePost,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       commitLocal, saveStage, getStage, listStages, deleteStage, subscribe,
       getSyncState, bindSync, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,

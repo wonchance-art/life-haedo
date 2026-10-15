@@ -778,3 +778,11 @@ GridStack 직접 도입은 드래그/가변 크기 대시보드에 적합하다.
 새 엔진 대신 기존 `UnifiedSearch`의 읽기 전용 필드 투영·`Core.findSearchText`·저장소 구독·왕복 탐색을 재사용한다. 이날 npm 공식 registry의 최신판은 Fuse.js 7.5.0(게시 2026-07-13, Apache-2.0), MiniSearch 7.2.0(2025-09-16, MIT)으로 기존 고정 태그 LICENSE/README 검토와 같았다. 공식 GitHub 저장소는 모두 archived=false, 최근 pushed_at은 각각 2026-08-09/2025-09-16이며 공개 security-advisories 목록은 각각 0개였다. 이것을 전체 취약점 부재로 해석하지 않는다. 출처: [Fuse npm](https://registry.npmjs.org/fuse.js), [MiniSearch npm](https://registry.npmjs.org/minisearch), [Fuse 저장소](https://github.com/krisk/Fuse), [MiniSearch 저장소](https://github.com/lucaong/minisearch).
 
 도입 후보의 fuzzy/token 인덱스는 정확한 문자열 검색·계정/공간 폐기·저장본 재읽기·동일 항목 확인을 대신하지 못한다. 이번에는 이미 검증한 구현에 구성·영역·항목 필드만 더한다. 직접 유지할 부분은 작은 투영과 안정된 ID/정확 항목 스냅샷 확인이다. 실제 자료량에서 반복 검색 지연이나 오타 검색 요구가 확인되면 엔진 비교를 재개한다. 새 의존성·인덱스 저장·검색어 전송은 추가하지 않는다.
+
+## 사진 글 편집·원본 ZIP 보관 — 2026-10-15 KST
+
+사용자 요구는 대량 사진 관리가 아닌 블로그처럼 글과 사진을 편하게 편집·읽고 원본 해상도를 보존하는 것이다. 직접 contenteditable/선택·IME·실행 취소 엔진을 새로 만드는 대신 **Quill 2.0.3(BSD-3-Clause)** 공식 일반 script 배포와 Snow CSS를 재사용했다. [npm](https://registry.npmjs.org/quill)의 latest/게시일(2024-11-30)과 [공식 최신 release v2.0.3](https://github.com/slab/quill/releases/tag/v2.0.3)을 대조했다. [저장소](https://github.com/slab/quill)는 archived=false, pushed_at=2025-07-25, 공개 security-advisories 목록 0개였다. 장기 지원이나 전체 취약점 부재의 증거로 해석하지 않는다. 공식 tarball의 LICENSE를 읽고 SHA-512 registry integrity를 대조한 뒤 dist/quill.js·quill.snow.css만 vendor에 보관했다.
+
+사진을 base64 JSON에 넣거나 ZIP 엔진을 직접 만드는 대안 대신 **fflate 0.8.3(MIT)**의 공식 UMD를 재사용했다. [npm](https://registry.npmjs.org/fflate)의 latest/게시일(2026-05-16)과 [공식 release v0.8.3](https://github.com/101arrowz/fflate/releases/tag/v0.8.3)이 일치했고 저장소 archived=false, pushed_at=2026-05-16, 공개 advisories 0개였다. 배포본 LICENSE/registry SHA-512를 확인했다. ZIP은 원본을 level=0으로 담으며 이미지 재인코딩을 하지 않는다. 입력은 파일 수·펼친 크기·중복/경로·manifest 필드·사진 해시를 검사한다.
+
+채택 이유: 정적 앱에 새 빌드/서버 없이 동봉·오프라인 사용 가능하며 기존 편집/저장 형식을 건드리지 않는다. 자체 유지 범위는 제한된 Delta 필드 검증, 원본 사진 embed, 계정/공간별 CAS, 읽기 DOM, 백업 새 사본 복원이다. ProseMirror/Tiptap처럼 더 큰 확장형 편집기를 도입해 기존 화면 전체와 빌드를 바꾸는 것은 이번 작은 요구에 비해 범위가 크다. 직접 구현한 rich-text 엔진은 선택/IME/undo 유지 비용 때문에 제외했다. 실제 Apple 한글/Files 체험과 보안 후속 권고는 적용 때 다시 확인한다.

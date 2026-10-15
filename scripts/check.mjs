@@ -50,7 +50,7 @@ async function javascriptFiles(dir) {
   }));
   return groups.flat();
 }
-for (const name of ['sw.js', ...(await javascriptFiles('scripts')), ...(await javascriptFiles('assets')), ...(await javascriptFiles('vendor/idb')), ...(await javascriptFiles('vendor/supabase'))]) {
+for (const name of ['sw.js', ...(await javascriptFiles('scripts')), ...(await javascriptFiles('assets')), ...(await javascriptFiles('vendor/idb')), ...(await javascriptFiles('vendor/supabase')), ...(await javascriptFiles('vendor/quill')), ...(await javascriptFiles('vendor/fflate'))]) {
   const result = spawnSync(process.execPath, ['--check', resolve(root, name)], { encoding: 'utf8' });
   assert.equal(result.status, 0, `${name}: ${result.stderr || result.error || 'syntax check failed'}`);
   scriptCount++;

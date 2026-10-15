@@ -30,6 +30,10 @@ test('identical source and page/collection text keep separate identities and sto
 test('partial failures allow independent stores and blank queries expose no inventory',()=>{
  assert.deepEqual(model.search({},'본문'),[]);assert.deepEqual(model.search({},'  '),[]);assert.throws(()=>model.search({},'x'.repeat(501)),{code:'invalid_query'});
 });
+test('photo post search reads saved text and captions from summaries, excludes drafts and preserves identities',()=>{
+ const photoPosts=[{id:'p',title:'여행 사진',status:'saved',body:'함께 걸으며 바라본 풍경'},{id:'d',title:'여행 초안',status:'draft',body:'비공개 작성 중'}];
+ const before=structuredClone(photoPosts),rows=model.search({photoPosts},'풍경');assert.equal(rows.length,1);assert.equal(rows[0].photoPostId,'p');assert.equal(rows[0].kind,'page');assert.equal(model.search({photoPosts},'작성 중').length,0);assert.deepEqual(photoPosts,before);
+});
 test('saved nine boards project distinct board, area and item matches without changing data', () => {
  const item = {attachment:{type:'book',title:'한 권',creator:'익명 창작자',url:'https://example.org/source'},reason:'🌱오래 좋아할 기준\r\n다음 줄'};
  const nineBoard = {boards:[{id:'b',title:'작은 발견',intro:'산책 소개',areas:[{id:'a',title:'읽을 문장',note:'느린 관찰',items:[item,structuredClone(item)]}]}]};

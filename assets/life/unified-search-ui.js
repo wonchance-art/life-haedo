@@ -58,7 +58,7 @@
       onReload?.();
       const token = ++generation; data = {}; dataRevision++; cached = null; errors = []; changed.hidden = true;
       status.setAttribute('role', 'status'); status.textContent = '이 작업공간의 자료를 불러오는 중…'; section.setAttribute('aria-busy', 'true'); draw();
-      const reads = [['bundle', '원문', () => storage.read(scope)], ['workbench', '페이지', () => storage.readWorkbench(scope)], ['collection', '컬렉션', () => storage.readCollection(scope)], ['nineBoard', '9칸 구성', () => storage.readNineBoard(scope)]];
+      const reads = [['bundle', '원문', () => storage.read(scope)], ['workbench', '페이지', () => storage.readWorkbench(scope)], ['collection', '컬렉션', () => storage.readCollection(scope)], ['nineBoard', '9칸 구성', () => storage.readNineBoard(scope)], ['photoPosts', '사진 글', () => storage.listPhotoPosts(scope)]];
       await Promise.all(reads.map(async ([key, label, read]) => {
         try { const value = await read(); if (!current(token)) return; data[key] = value; dataRevision++; }
         catch (_) { if (!current(token)) return; errors.push(label); }
@@ -93,7 +93,7 @@
       list = el('div'); list.id = 'lifeFindResults';
       section.append(bar, tabs, options, status, changed, list); host.replaceChildren(section);
       unsubscribe?.(); unsubscribe = storage.subscribe(scope, event => {
-        if (active && ['changed', 'workbench_changed', 'collection_changed', 'nine_board_changed'].includes(event.type)) { changed.hidden = false; changed.textContent = '변경된 자료 다시 읽기'; }
+        if (active && ['changed', 'workbench_changed', 'collection_changed', 'nine_board_changed', 'photo_posts_changed'].includes(event.type)) { changed.hidden = false; changed.textContent = '변경된 자료 다시 읽기'; }
       });
       return reload();
     }
