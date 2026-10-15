@@ -1067,11 +1067,29 @@
         lead.hidden = title.hidden && intro.hidden;
       };
       refreshLead(); bodyNode.append(lead, actions);
+      const postFeed = el('section', null, 'pp-feed photo-feed wb-post-feed');
+      postFeed.setAttribute('aria-label', '내 글 피드');
+      let plainRows = [], photoRows = [];
+      const mergeFeed = () => {
+        const rows = plainRows.filter(n => n.matches('.pp-post')).concat(photoRows);
+        rows.sort((a, b) => (b.dataset.postDate || '').localeCompare(a.dataset.postDate || '') ||
+          (a.dataset.postId || a.dataset.photoPostId).localeCompare(b.dataset.postId || b.dataset.photoPostId));
+        const ordered = rows.length ? rows : plainRows, focus = document.activeElement;
+        const keepFocus = postFeed.contains(focus);
+        [...postFeed.children].filter(node => !ordered.includes(node)).forEach(node => node.remove());
+        ordered.forEach((node, index) => {
+          if (postFeed.children[index] !== node) postFeed.insertBefore(node, postFeed.children[index] || null);
+        });
+        if (keepFocus && focus.isConnected && document.activeElement !== focus) focus.focus({ preventScroll: true });
+      };
       const photoHost = el('section'); bodyNode.append(photoHost);
       session.photoPosts ||= life.PhotoPostUI.create({ storage, workspaceId: session.workspaceId, isCurrent: () => workspaceIs(session), onDirty: () => updateStatus(session), onSaved: onLocalSaved, beforeOpen: async () => { await session.composer?.flush(); } });
-      session.photoPosts.mount(photoHost, { postId: session.searchTarget?.photoPostId || null, reset: !!session.searchTarget && !session.searchTarget.photoPostId }); viewCleanups.push(() => session.photoPosts.detach());
-      const composerHost = el('section'); bodyNode.append(composerHost);
+      session.photoPosts.mount(photoHost, { postId: session.searchTarget?.photoPostId || null, reset: !!session.searchTarget && !session.searchTarget.photoPostId,
+        listHost: postFeed, onFeed: rows => { photoRows = rows; mergeFeed(); } }); viewCleanups.push(() => session.photoPosts.detach());
+      const composerHost = el('section'); bodyNode.insertBefore(composerHost, photoHost);
       session.composer ||= life.PageComposer.create({ storage, workspaceId: session.workspaceId,
+        onNewPost: () => session.photoPosts.begin(),
+        onFeed: rows => session.pageFeed?.plain(rows), getFeedHost: () => session.pageFeed?.host,
         getPosts: () => session.state.page.posts || [], isCurrent: () => workspaceIs(session),
         onDirty: () => {
           if (errorNode?.dataset.code === 'attachment_review_pending' && !session.composer?.hasUnappliedAttachment()) clearError();
@@ -1104,9 +1122,11 @@
           }
           finally { session.saving = null; controls.forEach(([node,disabled]) => { if(node.isConnected)node.disabled=disabled; }); updateStatus(session); }
         } });
+      session.pageFeed = { host: postFeed, plain: rows => { plainRows = rows; mergeFeed(); } };
       const draftId = session.pageDraftId; session.pageDraftId = null;
       const postId = session.searchTarget?.postId; session.searchTarget = null;
       session.composer.mount(composerHost, { draftId, postId }); viewCleanups.push(() => session.composer.detach());
+      bodyNode.append(postFeed);
 
       const pageSettings = details('제목·소개·표시 설정'); pageSettings.classList.add('wb-page-settings');
       const pageField = (control, key) => {

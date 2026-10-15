@@ -10,7 +10,7 @@ async function main(){
  const context=await makeContext(browser,new FakeCloud(),'artwork-reference',accounts.a,{viewport:{width:1440,height:1000},hasTouch:true});let permitSource=false;
  await context.route('**/*',async route=>{const u=new URL(route.request().url());if([new URL(base).origin,cloud].includes(u.origin))return route.fallback();report.external.push(route.request().url());assert(permitSource&&route.request().url()===source,'Unexpected automatic external request');return route.fulfill({contentType:'text/html',body:'<!doctype html><title>Mock museum source</title><p>모의 미술관 출처</p>'});});
  const page=await context.newPage();page.setDefaultTimeout(12000);page.on('pageerror',e=>report.errors.push(e.message));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
- const click=name=>page.getByRole('button',{name,exact:true}).click();
+ const click=async name=>{if(name==='글쓰기')return require('./page-composer-entry.cjs').openLegacy(page);await page.getByRole('button',{name,exact:true}).click();};
  const read=()=>page.evaluate(async()=>{const s=HaedoLife.Shell.storage,w=await s.getActive();return {collection:await s.readCollection(w),wb:await s.readWorkbench(w),bundle:await s.read(w)};});
  const check=async(name,fn)=>{await fn();report.checks.push(name);console.log('PASS '+name);};
  async function snap(scene,width,selector='.life-workbench'){

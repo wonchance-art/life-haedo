@@ -18,7 +18,7 @@ async function main(){
   return route.fulfill({contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify(url.hostname==='openlibrary.org'?{docs:mode==='empty'?[]:[{key:'/works/OL123W',title:'느린 관찰의 기록 — 일상에서 새로운 질문을 발견하는 방법',author_name:['익명 저자'],first_publish_year:2021}]}:{items:[{private:false,name:'작은 기록 도구',full_name:'sample-studio/notes',owner:{login:'sample-studio'},description:'읽고 쓰는 일을 돕는 오픈소스 프로젝트'}]})});
  });
  const page=await context.newPage();page.setDefaultTimeout(12000);page.on('pageerror',e=>report.errors.push(e.message));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
- const click=name=>page.getByRole('button',{name,exact:true}).click();
+ const click=async name=>{if(name==='글쓰기')return require('./page-composer-entry.cjs').openLegacy(page);await page.getByRole('button',{name,exact:true}).click();};
  const go=async()=>{await page.goto(base+'/index.html?section=records&view=page');await ready(page);await page.locator('.pp-toolbar').waitFor();};
  const read=()=>page.evaluate(async()=>{const s=HaedoLife.Shell.storage,w=await s.getActive();return {wb:await s.readWorkbench(w),collection:await s.readCollection(w),bundle:await s.read(w)};});
  const check=async(name,fn)=>{await fn();report.checks.push(name);console.log('PASS '+name);};

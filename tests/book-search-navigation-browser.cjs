@@ -18,7 +18,7 @@ async function main(){
   return route.fulfill({json:{numFound:7,docs:n===1?Array.from({length:6},(_,i)=>({key:'/works/OL'+(300+i)+'W',title:'관찰과 기록 '+(i+1),author_name:['익명 저자']})):[{key:'/works/OL123W',title:'관찰의 기록',author_name:['작품 저자']}]}});
  });
  const page=await context.newPage();page.setDefaultTimeout(12000);page.on('pageerror',e=>report.errors.push(e.message));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
- const click=name=>page.getByRole('button',{name,exact:true}).click();
+ const click=async name=>{if(name==='글쓰기')return require('./page-composer-entry.cjs').openLegacy(page);await page.getByRole('button',{name,exact:true}).click();};
  const read=()=>page.evaluate(async()=>{const s=HaedoLife.Shell.storage,w=await s.getActive();return {collection:await s.readCollection(w),wb:await s.readWorkbench(w),bundle:await s.read(w)};});
  const check=async(name,fn)=>{await fn();report.checks.push(name);console.log('PASS '+name);};
  async function snap(scene,width){

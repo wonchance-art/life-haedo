@@ -68,4 +68,5 @@
 
 ## 사진 글
 
+- 내 페이지의 기본 `글쓰기`는 `PhotoPostUI.begin()`을 사용하며 사진 없는 새 글도 같은 로컬 형식으로 쓴다. 기존 첨부 글은 원래 작성기로 수정하고 새 대상 첨부 글은 접힌 호환 경로로 보존한다. 공통 피드는 두 저장 형식을 변환하지 않고 수정일 순서로 합친다. 설명은 사진 아래의 안정된 DOM에서 편집하며 Quill embed/history API 결합을 버전 변경 시 재검수한다. [진입·피드·설명·저장 흐름](docs/design-review/blog-editor-flow.md)을 따른다.
 - 사진 글은 `photo-post*.js`의 제한된 Delta와 원본 Blob을 계정/작업공간별 로컬 메타데이터에 보관한다. JPEG·PNG·WebP의 전달된 원본 바이트/해상도·순서·설명·대체 텍스트를 유지하며 자동 리사이즈/재압축·원격 업로드·공개를 하지 않는다. 기존 `page.posts`/일반 초안·구성 동기화·공개 payload·JSON 백업과 섞지 않는다. 사진 포함 ZIP 새 사본 복원과 실제 해시/픽셀 검증, 저장 실패·두 탭 CAS·기존 작성기 입력 보호는 [사진 글 검수](docs/design-review/photo-post-editor.md)를 따른다. 미반영 입력/한글 조합/사진 처리 중 이동으로 입력을 버리지 않는다. Quill·fflate는 공식 vendor 배포와 LICENSE를 보존한다.

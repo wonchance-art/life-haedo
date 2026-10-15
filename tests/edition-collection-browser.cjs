@@ -17,7 +17,7 @@ async function main(){
   return route.fulfill({json:{size:8,entries:mode==='empty'?[]:Array.from({length:offset?2:6},(_,i)=>({key:'/books/OL'+(100+offset+i)+'M',title:offset?'관찰의 기록 — 우리가 살던 계절을 다시 읽는 한국어판':'Observation '+i,works:[{key:'/works/OL123W'}],languages:[{key:'/languages/'+(offset?'kor':'eng')}],publishers:[offset?'익명 출판사':'Sample Press'],publish_date:offset?'2021':'2017'}))}});
  });
  const page=await context.newPage();page.setDefaultTimeout(12000);page.on('pageerror',e=>report.errors.push(e.message));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
- const click=name=>page.getByRole('button',{name,exact:true}).click();
+ const click=async name=>{if(name==='글쓰기')return require('./page-composer-entry.cjs').openLegacy(page);await page.getByRole('button',{name,exact:true}).click();};
  const go=async()=>{await page.goto(base+'/index.html?section=records&view=page');await ready(page);await page.locator('.pp-toolbar').waitFor();};
  const read=()=>page.evaluate(async()=>{const s=HaedoLife.Shell.storage,w=await s.getActive();return {collection:await s.readCollection(w),wb:await s.readWorkbench(w),bundle:await s.read(w)};});
  const check=async(name,fn)=>{await fn();report.checks.push(name);console.log('PASS '+name);};

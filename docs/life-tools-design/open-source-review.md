@@ -785,4 +785,12 @@ GridStack 직접 도입은 드래그/가변 크기 대시보드에 적합하다.
 
 사진을 base64 JSON에 넣거나 ZIP 엔진을 직접 만드는 대안 대신 **fflate 0.8.3(MIT)**의 공식 UMD를 재사용했다. [npm](https://registry.npmjs.org/fflate)의 latest/게시일(2026-05-16)과 [공식 release v0.8.3](https://github.com/101arrowz/fflate/releases/tag/v0.8.3)이 일치했고 저장소 archived=false, pushed_at=2026-05-16, 공개 advisories 0개였다. 배포본 LICENSE/registry SHA-512를 확인했다. ZIP은 원본을 level=0으로 담으며 이미지 재인코딩을 하지 않는다. 입력은 파일 수·펼친 크기·중복/경로·manifest 필드·사진 해시를 검사한다.
 
-채택 이유: 정적 앱에 새 빌드/서버 없이 동봉·오프라인 사용 가능하며 기존 편집/저장 형식을 건드리지 않는다. 자체 유지 범위는 제한된 Delta 필드 검증, 원본 사진 embed, 계정/공간별 CAS, 읽기 DOM, 백업 새 사본 복원이다. ProseMirror/Tiptap처럼 더 큰 확장형 편집기를 도입해 기존 화면 전체와 빌드를 바꾸는 것은 이번 작은 요구에 비해 범위가 크다. 직접 구현한 rich-text 엔진은 선택/IME/undo 유지 비용 때문에 제외했다. 실제 Apple 한글/Files 체험과 보안 후속 권고는 적용 때 다시 확인한다.
+채택 이유: 정적 앱에 새 빌드/서버 없이 동봉·오프라인 사용 가능하며 기존 편집/저장 형식을 건드리지 않는다. 자체 유지 범위는 제한된 Delta 필드 검증, 원본 사진 embed, 계정/공간별 CAS, 읽기 DOM, 백업 새 사본 복원이다. 직접 구현한 rich-text 엔진은 선택/IME/undo 유지 비용 때문에 제외했다. 실제 Apple 한글/Files 체험과 보안 후속 권고는 적용 때 다시 확인한다. **선정 이유 보정:** Tiptap은 일반 JavaScript도 지원하며 기존 화면 전체나 앱 빌드를 반드시 바꿔야 하는 것은 아니다. 현재 교체 비용은 커스텀 사진 노드·배포 의존성·기존 Delta/ZIP 이관·저장/읽기 어댑터와 재검증에 있다. 아래 제품 비교로 근거를 보완했다.
+
+## 블로그 편집기 제품·엔진 재비교 — 2026-10-15 KST
+
+사용자 요청으로 Ghost/Koenig, 네이버 SmartEditor ONE/2, WordPress/Gutenberg, Tiptap, Editor.js/Image Tool, Quill, Lexical, TOAST UI Editor를 공식 기능·최신 배포·라이선스·유지보수·공개 보안 권고와 대조했다. [비교표·현재 부족한 흐름·선택을 바꿀 조건·출처](../design-review/blog-editor-comparison.md). 외부 제품의 동일 과제 실사용 비교는 하지 않았다.
+
+Ghost와 ONE의 본문·사진 중심 흐름은 설계 참고, Quill은 현재 저장/복구 호환성을 유지하며 단기 사용, Tiptap 3.32.0(MIT)은 엔진 교체 비교의 우선 후보로 둔다. TOAST 저장소는 보관 상태, SmartEditor2는 ONE과 다른 오래된 제품이므로 신규 직접 도입을 권하지 않는다. 옛 Koenig 저장소의 보관은 개발 중단이 아니라 Ghost/koenig로 이동한 결과다. 원본 화질은 엔진이 대신 보장하지 않으므로 원본 저장·표시·확대·ZIP 계약을 유지한다. 새 패키지/코드를 추가하지 않았으며, 먼저 두 작성 진입점·사진 설명 패널·긴 글 저장/읽기·실제 Apple 입력을 개선/검수할 대상으로 정했다.
+
+후속 [글쓰기 흐름 개선](../design-review/blog-editor-flow.md)은 기존 Quill 2.0.3의 embed 갱신·Delta handler/history를 재사용해 설명 입력 DOM을 보존했다. 공식 고정 태그의 scroll/core 코드를 확인했다. UI 진입·수정일 피드·상단 저장만 연결하며 모델/ZIP/vendor 버전은 유지한다. 신규 라이브러리를 설치하거나 다른 편집기 코드를 복사하지 않았다.

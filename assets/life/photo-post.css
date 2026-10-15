@@ -5,7 +5,8 @@
 .photo-posts .photo-status:empty {
   display: none;
 }
-.photo-posts .photo-entry {
+.photo-posts .photo-entry,
+.wb-post-feed .photo-entry {
   display: flex;
   flex-direction: column;
   align-items: start;
@@ -17,10 +18,114 @@
   border-bottom: 1px solid var(--line);
   border-radius: 0;
   background: transparent;
+  position: relative;
+  min-height: 96px;
+}
+.photo-entry:has(.photo-entry-cover) {
+  padding-right: 116px;
+}
+.photo-entry-cover {
+  position: absolute;
+  right: 0;
+  top: 24px;
+  width: 96px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.wb-post-feed {
+  max-width: 760px;
+  margin-inline: auto;
+}
+.wb-content:has(.pp-composer) > .wb-post-feed {
+  display: none;
+}
+.pp-legacy-writing > summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+.pp-legacy-writing[open] {
+  flex-basis: 100%;
+}
+.photo-editor-tools {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  background: var(--paper);
+}
+.photo-commandbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 64px;
+  padding-block: 8px;
+}
+.photo-commandbar .photo-status {
+  flex: 1;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  min-width: 0;
+}
+.photo-commandbar > button {
+  flex: none;
+}
+.photo-commandbar > button:nth-of-type(2) {
+  background: var(--ink);
+  color: var(--paper);
+}
+.photo-more {
+  position: relative;
+  margin: 0;
+  flex: none;
+  border: 0;
+  padding: 0;
+}
+.photo-more > summary {
+  min-height: 44px;
+  min-width: 44px;
+  padding-inline: 4px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 14px;
+}
+.photo-more-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  width: min(300px, calc(100vw - 40px));
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  z-index: 9;
+}
+.photo-more-menu > button {
+  display: block;
+  margin-block: 8px;
 }
 .photo-entry-excerpt {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.75;
+}
+.photo-entry > strong {
+  font-size: 18px;
+  line-height: 1.6;
+}
+.photo-files {
+  margin: 0;
 }
 .wb-content:has(> .photo-posts[data-mode="edit"]) > :not(.photo-posts),
 .wb-content:has(> .photo-posts[data-mode="read"]) > :not(.photo-posts) {
@@ -48,9 +153,6 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  position: sticky;
-  top: 0;
-  z-index: 4;
   padding: 8px 0;
   border: 0;
   border-bottom: 1px solid var(--line);
@@ -143,12 +245,32 @@
   image-orientation: from-image;
 }
 .photo-block {
-  cursor: pointer;
   min-height: 44px;
+  scroll-margin-top: 200px;
 }
 .photo-block.photo-selected {
-  outline: 3px solid var(--color-primary);
-  outline-offset: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.photo-select {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.photo-caption-text {
+  min-height: 44px;
+  padding: 8px;
+  border: 0;
+  font: inherit;
+  color: var(--ink-soft);
+  background: transparent;
+  white-space: pre-wrap;
+  cursor: text;
+}
+.photo-selected > figcaption {
+  display: none;
 }
 .photo-posts figcaption {
   color: var(--ink-soft);
@@ -161,22 +283,12 @@
 }
 .photo-inspector {
   display: flex;
-  align-items: end;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  position: fixed;
-  z-index: 12;
-  bottom: calc(84px + env(safe-area-inset-bottom));
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(720px, calc(100vw - 32px));
-  max-height: 50dvh;
-  overflow: auto;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  width: 100%;
+  padding: 12px 0;
   background: var(--paper);
-  box-shadow: 0 8px 24px rgb(20 18 35 / 0.12);
 }
 .photo-inspector[hidden] {
   display: none;
@@ -185,13 +297,46 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  flex: 1 1 220px;
+  width: 100%;
+  font-size: 14px;
 }
-.photo-inspector input {
+.photo-inspector input,
+.photo-inspector textarea {
   width: 100%;
   min-height: 44px;
   font: inherit;
   font-size: 16px;
+  padding: 10px;
+  border: 1px solid var(--field-line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+}
+.photo-inspector textarea {
+  resize: vertical;
+  line-height: 1.7;
+  min-height: 64px;
+}
+.photo-settings {
+  margin: 0;
+  flex: 1;
+}
+.photo-settings > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+.photo-settings[open] {
+  flex-basis: 100%;
+}
+.photo-settings > button {
+  margin: 8px 8px 0 0;
+}
+.photo-inspector .photo-caption-label {
+  flex-basis: 100%;
 }
 .photo-original-info {
   flex-basis: 100%;

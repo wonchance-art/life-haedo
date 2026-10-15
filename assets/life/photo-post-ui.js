@@ -9,6 +9,20 @@
     return n;
   };
   const Embed = root.Quill.import("blots/block/embed");
+  const Delta = root.Quill.import("delta");
+  // Retain patches let captions participate in Quill history without replacing
+  // the figure or the focused input. The persisted document still uses inserts.
+  Delta.registerEmbed("photo", {
+    compose: (base, change) => ({ ...base, ...change }),
+    invert: (change, base) =>
+      Object.fromEntries(Object.keys(change).map((key) => [key, base[key]])),
+    transform: (a, b, priority) =>
+      priority
+        ? Object.fromEntries(
+            Object.entries(b).filter(([key]) => !Object.hasOwn(a, key)),
+          )
+        : b,
+  });
   const photoSources = new Map();
   class Photo extends Embed {
     static blotName = "photo";
@@ -18,27 +32,55 @@
       const n = super.create();
       n.dataset.photoId = v.id;
       n.dataset.alt = v.alt || "";
+      n.dataset.caption = v.caption || "";
       n.setAttribute("contenteditable", "false");
-      n.setAttribute("role", "button");
+      n.setAttribute("role", "group");
       n.setAttribute(
         "aria-label",
         (v.caption || v.alt || "사진") + " · 사진 설명·순서 편집",
       );
-      n.tabIndex = 0;
+      n.tabIndex = -1;
       const img = el("img");
       img.alt = v.alt || v.caption || "첨부 사진";
       const src = v.src || photoSources.get(v.id);
       if (src) img.src = src;
-      const caption = el("figcaption", v.caption || "");
-      caption.hidden = !v.caption;
-      n.append(img, caption);
+      const select = el("button", null, "photo-select");
+      select.type = "button";
+      select.setAttribute("aria-label", "사진 설명·순서 편집");
+      select.append(img);
+      const caption = el("figcaption"),
+        add = el("button", v.caption || "사진 설명 추가", "photo-caption-text");
+      add.type = "button";
+      add.setAttribute("aria-label", "사진 설명 편집");
+      caption.append(add);
+      n.append(select, caption);
       return n;
+    }
+    updateContent(change) {
+      const n = this.domNode,
+        value = { ...Photo.value(n), ...change };
+      n.dataset.caption = value.caption;
+      n.dataset.alt = value.alt;
+      n.querySelector("img").alt = value.alt || value.caption || "첨부 사진";
+      n.setAttribute(
+        "aria-label",
+        (value.caption || value.alt || "사진") + " · 사진 설명·순서 편집",
+      );
+      n.querySelector(".photo-caption-text").textContent =
+        value.caption || "사진 설명 추가";
+      for (const [name, text] of [
+        ["사진 설명", value.caption],
+        ["사진 대체 텍스트", value.alt],
+      ]) {
+        const input = n.querySelector('[aria-label="' + name + '"]');
+        if (input && input.value !== text) input.value = text;
+      }
     }
     static value(n) {
       return {
         id: n.dataset.photoId,
         alt: n.dataset.alt || "",
-        caption: n.querySelector("figcaption")?.textContent || "",
+        caption: n.dataset.caption || "",
       };
     }
   }
@@ -65,7 +107,11 @@
       error = null,
       selected = null,
       unsubscribe = null,
-      disposed = false;
+      disposed = false,
+      feedListener = null,
+      coverObserver = null,
+      feedHost = null,
+      feedControls = [];
     let status, inspector, captionInput, altInput;
     const urls = new Set(),
       photoUrls = new Map();
@@ -78,6 +124,8 @@
       return u;
     };
     function cleanup() {
+      coverObserver?.disconnect();
+      coverObserver = null;
       closeViewer?.();
       closeViewer = null;
       for (const id of photoUrls.keys()) photoSources.delete(id);
@@ -118,10 +166,23 @@
     }
     function setBusy(value) {
       busy = value;
+      if (value && !feedControls.length) {
+        feedControls = [...(feedHost?.querySelectorAll("button") || [])].map(
+          (n) => [n, n.disabled],
+        );
+        feedControls.forEach(([n]) => {
+          n.disabled = true;
+        });
+      } else if (!value) {
+        feedControls.forEach(([n, disabled]) => {
+          if (n.isConnected) n.disabled = disabled;
+        });
+        feedControls = [];
+      }
       if (host) {
         host.setAttribute("aria-busy", String(value));
         host
-          .querySelectorAll("button,input,select")
+          .querySelectorAll("button,input,textarea,select")
           .forEach((n) => (n.disabled = value));
       }
       editor?.enable(!value);
@@ -146,6 +207,7 @@
         await saving;
         return persist();
       }
+      if (mode === "edit" && selected?.isConnected) changePhoto();
       if (!doc || mode !== "edit" || dirtyTick === storedTick) return;
       guard();
       M.validate(doc);
@@ -171,6 +233,7 @@
       if (dirtyTick !== storedTick) return persist();
     }
     async function flush() {
+      if (mode === "edit" && selected?.isConnected) changePhoto();
       if (
         !busy &&
         !composing &&
@@ -208,6 +271,22 @@
       mode = "list";
       error = null;
       render();
+    }
+    async function begin() {
+      try {
+        const token = epoch;
+        await flush();
+        await beforeOpen();
+        if (!current(token)) return;
+        doc = M.create(life.Core.id);
+        mode = "edit";
+        dirtyTick = storedTick = 0;
+        error = null;
+        render();
+        host.querySelector("#photoTitle")?.focus();
+      } catch (e) {
+        if (valid()) showStatus(e);
+      }
     }
     async function open(id, editing = false) {
       const token = epoch;
@@ -456,11 +535,14 @@
       await persist();
     }
     function selectPhoto(node) {
+      guard();
+      if (selected !== node) editor.history.cutoff();
       selected = node;
       const value = Photo.value(node);
       captionInput.value = value.caption;
       altInput.value = value.alt;
       inspector.hidden = false;
+      node.append(inspector);
       const photo = doc.photos.find((p) => p.id === value.id);
       inspector.querySelector(".photo-original-info").textContent =
         photo.width + " × " + photo.height + " · 원본 보관";
@@ -471,14 +553,14 @@
     function changePhoto() {
       guard();
       if (!selected?.isConnected) return;
-      const at = editor.getIndex(root.Quill.find(selected)),
-        value = Photo.value(selected),
+      const value = Photo.value(selected),
         p = doc.photos.find((p) => p.id === value.id);
       const next = {
         ...value,
         caption: captionInput.value,
         alt: altInput.value,
       };
+      if (next.caption === value.caption && next.alt === value.alt) return;
       M.validate({
         ...doc,
         ops: doc.ops.map((op) =>
@@ -487,16 +569,27 @@
             : op,
         ),
       });
-      const Delta = root.Quill.import("delta");
-      editor.updateContents(
-        new Delta()
-          .retain(at)
-          .delete(1)
-          .insert({ photo: imageValue(p, next) }),
-        "user",
-      );
-      selected = host.querySelector('[data-photo-id="' + p.id + '"]');
-      selected?.classList.add("photo-selected");
+      const blot = root.Quill.find(selected),
+        patch = { caption: next.caption, alt: next.alt };
+      blot.updateContent(patch);
+      blot.scroll.emitEmbedUpdate(blot, patch);
+    }
+    function closePhoto(focus = true) {
+      if (!selected) return;
+      guard();
+      changePhoto();
+      const at = editor.getIndex(root.Quill.find(selected));
+      editor.history.cutoff();
+      inspector.hidden = true;
+      host.append(inspector);
+      selected.classList.remove("photo-selected");
+      selected = null;
+      if (focus)
+        editor.setSelection(
+          Math.min(at + 1, editor.getLength() - 1),
+          0,
+          "user",
+        );
     }
     function movePhoto(direction) {
       guard();
@@ -511,12 +604,14 @@
       if (direction > 0) destination += peer.length() - 1;
       const value = Photo.value(selected),
         p = doc.photos.find((p) => p.id === value.id);
+      inspector.hidden = true;
+      host.append(inspector);
       editor.history.cutoff();
       editor.deleteText(at, 1, "user");
       editor.insertEmbed(destination, "photo", imageValue(p, value), "user");
       editor.history.cutoff();
       selected = host.querySelector('[data-photo-id="' + p.id + '"]');
-      selected?.classList.add("photo-selected");
+      if (selected) selectPhoto(selected);
       selected?.scrollIntoView({ block: "nearest" });
     }
     function renderEditor() {
@@ -526,12 +621,28 @@
       title.value = doc.title;
       title.placeholder = "제목";
       title.maxLength = 500;
-      title.setAttribute("aria-label", "사진 글 제목");
+      title.setAttribute("aria-label", "글 제목");
       title.addEventListener("input", () => {
         doc.title = title.value;
         mark();
       });
-      form.append(title);
+      const sticky = el("div", null, "photo-editor-tools"),
+        commands = el("div", null, "photo-commandbar");
+      const more = el("details", null, "photo-more life-details");
+      const menu = el("div", null, "photo-more-menu");
+      more.append(el("summary", "더 보기"), menu);
+      menu.append(
+        button("사진 포함 백업", backup),
+        button("초안 다시 저장", persist),
+      );
+      if (doc.replaces) menu.append(button("새 글로 저장", () => finish(true)));
+      commands.append(
+        button("닫기", list),
+        status,
+        button("글 저장", () => finish()),
+        more,
+      );
+      sticky.append(commands);
       const toolbar = el("div", null, "photo-toolbar");
       toolbar.setAttribute("role", "toolbar");
       toolbar.setAttribute("aria-label", "본문 서식");
@@ -588,7 +699,8 @@
         photoInput,
       );
       const area = el("div", null, "photo-quill");
-      form.append(toolbar, area);
+      sticky.append(toolbar);
+      form.append(sticky, title, area);
       host.append(form);
       editor = new root.Quill(area, {
         theme: "snow",
@@ -634,7 +746,7 @@
         "silent",
       );
       editor.history.clear();
-      editor.root.setAttribute("aria-label", "사진 글 본문");
+      editor.root.setAttribute("aria-label", "글 본문");
       editor.root.setAttribute("role", "textbox");
       editor.root.setAttribute("aria-multiline", "true");
       editor.root.setAttribute("spellcheck", "true");
@@ -651,12 +763,14 @@
         mark();
       });
       editor.root.addEventListener("click", (e) => {
+        if (inspector.contains(e.target)) return;
         const n = e.target.closest(".photo-block");
-        if (n) selectPhoto(n);
+        run(() => (n ? selectPhoto(n) : closePhoto(false)));
       });
       editor.root.addEventListener(
         "keydown",
         (e) => {
+          if (inspector.contains(e.target)) return;
           const n = e.target.closest(".photo-block");
           if (n && ["Enter", " "].includes(e.key)) {
             e.preventDefault();
@@ -700,61 +814,98 @@
       inspector.setAttribute("aria-label", "선택한 사진 편집");
       const captionLabel = el("label", "사진 설명"),
         altLabel = el("label", "대체 텍스트");
-      captionInput = el("input");
+      captionLabel.className = "photo-caption-label";
+      captionInput = el("textarea");
+      captionInput.rows = 2;
+      captionInput.placeholder = "사진에 담긴 이야기를 남겨 보세요.";
       captionInput.setAttribute("aria-label", "사진 설명");
       captionInput.maxLength = 2000;
       altInput = el("input");
       altInput.setAttribute("aria-label", "사진 대체 텍스트");
       altInput.maxLength = 2000;
       for (const input of [captionInput, altInput]) {
-        input.addEventListener("compositionstart", () => {
+        input.addEventListener("compositionstart", (e) => {
+          e.stopPropagation();
           composing = true;
           clearTimeout(timer);
         });
-        input.addEventListener("compositionend", () => {
+        input.addEventListener("compositionend", (e) => {
+          e.stopPropagation();
           composing = false;
           run(changePhoto);
         });
-        input.addEventListener("input", () => {
+        input.addEventListener("input", (e) => {
+          e.stopPropagation();
           if (!composing) run(changePhoto);
         });
+        input.addEventListener("blur", () => editor.history.cutoff());
       }
+      for (const event of ["keydown", "paste", "drop"])
+        inspector.addEventListener(event, (e) => {
+          e.stopPropagation();
+          if (event === "keydown" && e.key === "Escape") {
+            e.preventDefault();
+            run(() => closePhoto());
+          }
+          if (
+            event === "keydown" &&
+            (e.ctrlKey || e.metaKey) &&
+            !e.altKey &&
+            ["z", "y"].includes(e.key.toLowerCase()) &&
+            !composing &&
+            !e.isComposing
+          ) {
+            e.preventDefault();
+            const input = e.target,
+              start = input.selectionStart,
+              end = input.selectionEnd;
+            run(() => {
+              guard();
+              editor.history[
+                e.key.toLowerCase() === "y" || e.shiftKey ? "redo" : "undo"
+              ]();
+              if (input.isConnected && input.matches("input,textarea")) {
+                input.focus({ preventScroll: true });
+                input.setSelectionRange(
+                  Math.min(start, input.value.length),
+                  Math.min(end, input.value.length),
+                );
+              }
+            });
+          }
+        });
       captionLabel.append(captionInput);
       altLabel.append(altInput);
-      inspector.append(
+      const settings = el("details", null, "life-details photo-settings");
+      settings.append(
+        el("summary", "사진 설정"),
         el("p", "", "life-meta photo-original-info"),
-        captionLabel,
         altLabel,
         button("사진 앞으로", () => movePhoto(-1)),
         button("사진 뒤로", () => movePhoto(1)),
         button("사진 빼기", () => {
           guard();
           if (selected?.isConnected) {
+            inspector.hidden = true;
+            host.append(inspector);
+            editor.history.cutoff();
             editor.deleteText(
               editor.getIndex(root.Quill.find(selected)),
               1,
               "user",
             );
+            editor.history.cutoff();
             selected = null;
             inspector.hidden = true;
           }
         }),
-        button("사진 편집 닫기", () => {
-          inspector.hidden = true;
-          editor.focus();
-        }),
+      );
+      inspector.append(
+        captionLabel,
+        settings,
+        button("사진 편집 닫기", () => closePhoto()),
       );
       host.append(inspector);
-      const actions = el("div", null, "life-actions photo-save");
-      actions.append(
-        button("글 저장", () => finish()),
-        button("사진 포함 백업", backup),
-        button("닫기", list),
-        button("초안 다시 저장", persist),
-      );
-      if (doc.replaces)
-        actions.append(button("새 글로 저장", () => finish(true)));
-      host.append(actions);
       const recovery = el("details", null, "life-details");
       recovery.append(
         el("summary", "저장 충돌 복구"),
@@ -770,7 +921,7 @@
           await persist();
         }),
       );
-      host.append(recovery);
+      menu.append(recovery);
     }
     function render() {
       if (!host || !valid()) return;
@@ -783,20 +934,6 @@
       host.append(status);
       if (mode === "list") {
         const toolbar = el("div", null, "life-actions");
-        toolbar.append(
-          button("사진 글쓰기", async () => {
-            const token = epoch;
-            await flush();
-            await beforeOpen();
-            if (!current(token)) return;
-            doc = M.create(life.Core.id);
-            mode = "edit";
-            dirtyTick = storedTick = 0;
-            error = null;
-            render();
-            host.querySelector("#photoTitle")?.focus();
-          }),
-        );
         const file = el("input");
         file.type = "file";
         file.accept = ".zip,application/zip";
@@ -862,10 +999,13 @@
             }
           });
         });
-        toolbar.append(
+        const files = el("details", null, "life-details photo-files");
+        files.append(
+          el("summary", "사진 글 파일"),
           button("사진 글 백업 열기", () => file.click()),
           file,
         );
+        toolbar.append(files);
         host.append(toolbar);
         const scope = el("details", null, "life-details");
         scope.append(
@@ -876,9 +1016,9 @@
             "life-help",
           ),
         );
-        host.append(scope);
+        files.append(scope);
         const list = el("div", null, "photo-feed");
-        host.append(list);
+        if (!feedListener) host.append(list);
         storage
           .listPhotoPosts(workspaceId)
           .then((rows) => {
@@ -889,12 +1029,15 @@
               const b = button("", () => open(item.id));
               b.classList.add("photo-entry");
               b.dataset.photoPostId = item.id;
+              b.dataset.postDate = item.updatedAt;
               b.append(
                 el(
                   "span",
                   item.status === "draft"
                     ? "작성 중"
-                    : "비공개 · 사진 " + item.photos + "장",
+                    : item.photos
+                      ? "비공개 · 사진 " + item.photos + "장"
+                      : "비공개",
                   "life-meta",
                 ),
                 el("strong", item.title || "제목 없는 글"),
@@ -905,7 +1048,38 @@
                 ),
               );
               list.append(b);
+              if (item.photos) {
+                const cover = el("img", null, "photo-entry-cover");
+                cover.alt = "";
+                cover.width = 96;
+                cover.height = 72;
+                cover.loading = "lazy";
+                b.prepend(cover);
+                (coverObserver ||= new IntersectionObserver((entries) => {
+                  for (const entry of entries)
+                    if (entry.isIntersecting) {
+                      coverObserver?.unobserve(entry.target);
+                      storage
+                        .readPhotoPost(workspaceId, entry.target.dataset.postId)
+                        .then((value) => {
+                          if (!current(token) || !entry.target.isConnected)
+                            return;
+                          const first = value.ops.find((op) => op.insert?.photo)
+                            ?.insert.photo.id;
+                          const photo = value.photos.find(
+                            (p) => p.id === first,
+                          );
+                          if (photo) entry.target.src = url(photo.blob);
+                        })
+                        .catch(() => {
+                          if (current(token)) entry.target.remove();
+                        });
+                    }
+                })).observe(cover);
+                cover.dataset.postId = item.id;
+              }
             }
+            feedListener?.([...list.children]);
             status.textContent = "";
           })
           .catch((e) => {
@@ -932,8 +1106,13 @@
       }
       showStatus(error);
     }
-    async function mount(target, { postId = null, reset = false } = {}) {
+    async function mount(
+      target,
+      { postId = null, reset = false, onFeed = null, listHost = null } = {},
+    ) {
       host = target;
+      feedListener = onFeed;
+      feedHost = listHost;
       host.className = "photo-posts";
       unsubscribe?.();
       unsubscribe = storage.subscribe(workspaceId, (event) => {
@@ -983,11 +1162,18 @@
       cleanup();
       host = null;
       status = null;
+      feedListener = null;
+      feedControls.forEach(([n, disabled]) => {
+        if (n.isConnected) n.disabled = disabled;
+      });
+      feedControls = [];
+      feedHost = null;
       unsubscribe?.();
       unsubscribe = null;
     }
     return {
       mount,
+      begin,
       flush,
       dirty: () => busy || dirtyTick !== storedTick,
       detach,

@@ -17,6 +17,9 @@
     commit,
     isCurrent,
     onDirty = () => {},
+    onNewPost = null,
+    onFeed = null,
+    getFeedHost = null,
   }) {
     let state = null,
       basePosts = [],
@@ -364,7 +367,12 @@
       host.replaceChildren();
       host.className = "pp-workspace";
       const bar = node("div", null, "pp-toolbar");
-      bar.append(button("글쓰기", () => begin(), "edit"));
+      bar.append(button("글쓰기", onNewPost || (() => begin()), "edit"));
+      if (onNewPost) {
+        const legacy = node("details", null, "pp-legacy-writing");
+        legacy.append(node("summary", "기존 글·첨부"), button("대상 첨부 글쓰기", () => begin()));
+        bar.append(legacy);
+      }
       const drafts = state.posts.filter((p) => p.id !== active).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
       if (drafts.length) {
         const list = node("details", null, "pp-drafts");
@@ -427,6 +435,7 @@
           button("글 수정", () => begin(p.id), "edit"),
         );
         article.prepend(meta);
+        article.dataset.postDate = p.updatedAt;
         feed.append(article);
       }
       if (!posts.length && !d)
@@ -437,7 +446,8 @@
             "pp-empty",
           ),
         );
-      host.append(feed);
+      if (onFeed) onFeed([...feed.children]);
+      else host.append(feed);
     }
     async function collectAttachment(value) {
       const token = epoch;
@@ -709,7 +719,7 @@
           active = null;
           render();
           if (!valid() || !host) return;
-          const target = [...host.querySelectorAll("[data-post-id]")].find(
+          const target = [...(getFeedHost?.() || host).querySelectorAll("[data-post-id]")].find(
             (el) => el.dataset.postId === result.id,
           );
           target?.focus({ preventScroll: true });
@@ -792,7 +802,7 @@
         } else await load();
         if (token === epoch && valid()) { render();
           if (postId) {
-            const post = [...host.querySelectorAll('[data-post-id]')].find(el => el.dataset.postId === postId);
+            const post = [...(getFeedHost?.() || host).querySelectorAll('[data-post-id]')].find(el => el.dataset.postId === postId);
             if (!post) throw new Error('선택한 글이 없습니다. 검색 결과를 다시 불러와 주세요.');
             post.querySelector('.pp-read-more[aria-expanded="false"]')?.click(); post.focus({ preventScroll: true }); post.scrollIntoView({ block: 'start' });
           } if (draftId) { const input = host?.querySelector('#ppBody'); input?.focus(); input?.setSelectionRange(0, 0); if (input) input.scrollTop = 0; } }
