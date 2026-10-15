@@ -1,0 +1,69 @@
+{
+  "checks": [
+    "Edit at the 12-attachment limit; pending save/close/new draft/order/delete/navigation/export are blocked, body still autosaves",
+    "Cancel preserves original identity/order; IME apply/cancel cannot commit half-input; invalid URL retains review",
+    "Saved post failure/retry preserves old saved attachments; final identity/date/order/collection and backup remain correct",
+    "Person conversion clears only the reviewed creator; cancel/remove/reorder preserve unrelated attachment snapshots",
+    "New manual input cannot be silently omitted; same draft file can be reselected after a blocked import",
+    "Second-tab saved revision cannot discard an unapplied review; conflict recovery saves a separate copy"
+  ],
+  "visual": [
+    {
+      "scene": "pending-review",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.514,
+      "measuredTexts": 52,
+      "contrastFailures": []
+    },
+    {
+      "scene": "pending-review",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.514,
+      "measuredTexts": 52,
+      "contrastFailures": []
+    },
+    {
+      "scene": "pending-review",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.514,
+      "measuredTexts": 52,
+      "contrastFailures": []
+    },
+    {
+      "scene": "save-error",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.514,
+      "measuredTexts": 44,
+      "contrastFailures": []
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [],
+  "external": [],
+  "environment": "Linux Chromium, anonymous mock Auth, real IndexedDB; no real Google/Apple/production writes.",
+  "browser": "151.0.7922.173"
+}

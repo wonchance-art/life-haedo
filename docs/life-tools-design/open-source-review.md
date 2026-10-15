@@ -794,3 +794,10 @@ GridStack 직접 도입은 드래그/가변 크기 대시보드에 적합하다.
 Ghost와 ONE의 본문·사진 중심 흐름은 설계 참고, Quill은 현재 저장/복구 호환성을 유지하며 단기 사용, Tiptap 3.32.0(MIT)은 엔진 교체 비교의 우선 후보로 둔다. TOAST 저장소는 보관 상태, SmartEditor2는 ONE과 다른 오래된 제품이므로 신규 직접 도입을 권하지 않는다. 옛 Koenig 저장소의 보관은 개발 중단이 아니라 Ghost/koenig로 이동한 결과다. 원본 화질은 엔진이 대신 보장하지 않으므로 원본 저장·표시·확대·ZIP 계약을 유지한다. 새 패키지/코드를 추가하지 않았으며, 먼저 두 작성 진입점·사진 설명 패널·긴 글 저장/읽기·실제 Apple 입력을 개선/검수할 대상으로 정했다.
 
 후속 [글쓰기 흐름 개선](../design-review/blog-editor-flow.md)은 기존 Quill 2.0.3의 embed 갱신·Delta handler/history를 재사용해 설명 입력 DOM을 보존했다. 공식 고정 태그의 scroll/core 코드를 확인했다. UI 진입·수정일 피드·상단 저장만 연결하며 모델/ZIP/vendor 버전은 유지한다. 신규 라이브러리를 설치하거나 다른 편집기 코드를 복사하지 않았다.
+
+
+## 같은 작성기의 첨부·보관·읽기 파일 — 2026-10-15 KST
+
+같은 날의 위 공식 릴리스/라이선스/공개 권고 대조와 [편집기 비교](../design-review/blog-editor-comparison.md)를 재사용했다. Quill 2.0.3·fflate 0.8.3을 유지하며 새 엔진/패키지는 추가하지 않는다. 첨부는 기존 CollectionPicker·PagePosts.attachment/validateAttachments·PagePostsView를 작은 어댑터로 연결한다. 새 검색 SDK나 별도 첨부 데이터 모델은 기존 메타데이터 검토·출처·개인 메모 제외 규칙을 중복시키므로 도입하지 않았다.
+
+사진 탐색은 이미 사용한 native dialog, 독립 읽기 HTML은 기존 안전한 읽기 DOM + native FileReader/Blob 다운로드를 재사용한다. HTML 생성기를 추가해도 계정 폐기·입력 보호·원본 바이트 계약을 대신하지 못한다. 직접 유지 범위는 v1/v2 검증·ZIP manifest 호환, 보관 CAS, 뷰어 URL 수명, 제한된 정적 스타일이다. HTML에서 편집/복원하지 않으므로 편집기 런타임을 동봉하지 않는다. 사용자 장면·파일 재사용·한계는 [검수 기록](../design-review/blog-writing-completion.md)에 둔다.

@@ -14,6 +14,23 @@
   });
   const fault = (message, code = "invalid_photo_post") =>
     Object.assign(new Error(message), { code });
+  const posts = () =>
+    root.HaedoLife?.PagePosts ||
+    (typeof require === "function" && require("./page-posts.js"));
+  function manifest(d) {
+    return {
+      format:
+        d.format === "life-photo-post-v1"
+          ? "life-photo-post-backup-v1"
+          : "life-photo-post-backup-v2",
+      title: d.title,
+      ops: d.ops,
+      photos: d.photos.map(({ blob, ...metadata }) => metadata),
+      ...(d.format === "life-photo-post-v2"
+        ? { attachments: d.attachments }
+        : {}),
+    };
+  }
   const plain = (v) =>
     v &&
     typeof v === "object" &&
@@ -155,6 +172,7 @@
       throw fault("원본 사진 파일이 누락됐습니다.");
   }
   function validate(d) {
+    const v2 = d?.format === "life-photo-post-v2";
     fields(d, [
       "format",
       "id",
@@ -166,12 +184,18 @@
       "updatedAt",
       "ops",
       "photos",
+      ...(v2 ? ["attachments", "archived"] : []),
     ]);
     if (
-      d.format !== "life-photo-post-v1" ||
+      !["life-photo-post-v1", "life-photo-post-v2"].includes(d.format) ||
       !["draft", "saved"].includes(d.status)
     )
       throw fault("사진 글 형식을 확인해 주세요.");
+    if (v2) {
+      if (typeof d.archived !== "boolean")
+        throw fault("글의 보관 상태를 확인해 주세요.");
+      posts().validateAttachments(d.attachments);
+    }
     id(d.id);
     revision(d.revision);
     text(d.title, 500);
@@ -201,12 +225,7 @@
       );
     const used = ops(d.ops, ids);
     const manifestBytes = new TextEncoder().encode(
-      JSON.stringify({
-        format: "life-photo-post-backup-v1",
-        title: d.title,
-        ops: d.ops,
-        photos: d.photos.map(({ blob, ...metadata }) => metadata),
-      }),
+      JSON.stringify(manifest(d)),
     ).length;
     if (manifestBytes > 2 * 1024 * 1024)
       throw fault(
@@ -216,7 +235,8 @@
       d.status === "saved" &&
       !d.title.trim() &&
       !plainText(d).trim() &&
-      !used.size
+      !used.size &&
+      !(d.attachments || []).length
     )
       throw fault("글을 쓰거나 사진을 붙여 주세요.");
     return used;
@@ -226,10 +246,16 @@
       .map((op) =>
         typeof op.insert === "string" ? op.insert : op.insert.photo.caption,
       )
-      .join("");
+      .join("") +
+    ((d.attachments || []).length
+      ? "\n" +
+        d.attachments
+          .map((a) => [a.title, a.creator, a.url].filter(Boolean).join(" · "))
+          .join("\n")
+      : "");
   function create(makeId, time = new Date().toISOString()) {
     return {
-      format: "life-photo-post-v1",
+      format: "life-photo-post-v2",
       id: makeId(),
       revision: 0,
       title: "",
@@ -239,7 +265,20 @@
       updatedAt: time,
       ops: [{ insert: "\n" }],
       photos: [],
+      attachments: [],
+      archived: false,
     };
+  }
+  function upgrade(input) {
+    validate(input);
+    const d = structuredClone(input);
+    if (d.format === "life-photo-post-v1")
+      Object.assign(d, {
+        format: "life-photo-post-v2",
+        attachments: [],
+        archived: false,
+      });
+    return d;
   }
   function compact(d) {
     const used = validate(d),
@@ -320,21 +359,12 @@
     (typeof require === "function" && require("../../vendor/fflate/fflate.js"));
   async function backup(input) {
     const d = compact(input),
-      files = {},
-      photos = [];
+      files = {};
     for (const p of d.photos) {
-      const { blob, ...meta } = p;
-      photos.push(meta);
+      const { blob } = p;
       files["photos/" + p.id] = new Uint8Array(await blob.arrayBuffer());
     }
-    files["manifest.json"] = zip().strToU8(
-      JSON.stringify({
-        format: "life-photo-post-backup-v1",
-        title: d.title,
-        ops: d.ops,
-        photos,
-      }),
-    );
+    files["manifest.json"] = zip().strToU8(JSON.stringify(manifest(d)));
     return new Blob([zip().zipSync(files, { level: 0 })], {
       type: "application/zip",
     });
@@ -385,9 +415,18 @@
     } catch (_) {
       throw fault("사진 글 백업의 내용을 확인해 주세요.");
     }
-    fields(m, ["format", "title", "ops", "photos"]);
+    const v2 = m?.format === "life-photo-post-backup-v2";
+    fields(m, [
+      "format",
+      "title",
+      "ops",
+      "photos",
+      ...(v2 ? ["attachments"] : []),
+    ]);
     if (
-      m.format !== "life-photo-post-backup-v1" ||
+      !["life-photo-post-backup-v1", "life-photo-post-backup-v2"].includes(
+        m.format,
+      ) ||
       !Array.isArray(m.photos) ||
       m.photos.length > 20 ||
       Object.keys(files).length !== m.photos.length + 1
@@ -397,6 +436,7 @@
       ids = new Map();
     d.title = m.title;
     d.ops = m.ops;
+    d.attachments = v2 ? structuredClone(m.attachments) : [];
     const oldIds = new Set();
     for (const p of m.photos) {
       photo(p, false);
@@ -429,6 +469,7 @@
   return Object.freeze({
     LIMITS,
     create,
+    upgrade,
     validate,
     compact,
     plainText,

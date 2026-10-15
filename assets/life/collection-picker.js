@@ -3,7 +3,7 @@
   'use strict';
   const C = root.HaedoLife.Collection, Metadata = root.HaedoLife.CollectionMetadata;
   const node = (tag, text, cls) => { const el = document.createElement(tag); if (text != null) el.textContent = text; if (cls) el.className = cls; return el; };
-  function open({ items, onSelect, isCurrent, purpose }) {
+  function open({ items, onSelect, isCurrent, purpose, onClose = () => {} }) {
     const boarding = purpose === 'board', attaching = boarding || purpose === 'attach';
     const attachAction = boarding ? '9칸에 담기' : '글에 붙이기', attachTarget = boarding ? '9칸 구성' : '글';
     const origin = document.activeElement, dialog = node('dialog', null, 'life-collection cl-picker');
@@ -16,6 +16,7 @@
       if (!alive) return; alive = false; cancel(); dialog.close(); dialog.remove();
       document.body.style.overflow = scrollStyle;
       if (origin?.isConnected) origin.focus({ preventScroll: true });
+      onClose();
     }
     function choose(value) { if (!alive || !isCurrent()) { close(); return; } close(); onSelect(value); }
     function button(label, action, cls = 'life-button') {

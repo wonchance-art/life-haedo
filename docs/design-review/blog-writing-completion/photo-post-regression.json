@@ -1,0 +1,549 @@
+{
+  "checks": [
+    "Entering the photo editor cannot hide an unsaved legacy draft after a failed transaction",
+    "A blog-style editor inserts unchanged 4032px originals between paragraphs; formatting, captions and undo preserve bytes",
+    "Inline captions keep the same focused input through spaces, newlines, composition and history; save remains reachable in a long post",
+    "Saving, full-size reading, original download and reload retain dimensions and all text/photo order",
+    "One default entry creates text-only posts and a shared dated feed preserves existing attachment posts and original photo previews",
+    "ZIP export and explicit restore create a private draft with new ids and exact original hashes",
+    "A failed IndexedDB write blocks departure, keeps the same editor/caret and can be retried without changing the saved original",
+    "Concurrent saved-post edits preserve the competing original and offer an explicit new saved copy",
+    "Invalid photo types, remote image paste and failed imports do not replace text or install hidden photos",
+    "Two tabs editing one draft preserve both versions through explicit fresh-draft recovery",
+    "A competing save cannot replace file-review choices; rereading waits for explicit restore or cancellation",
+    "Photos stay scoped to the verified account and workspace; original records, drafts and 9-slot boards remain exact"
+  ],
+  "visual": [
+    {
+      "scene": "editor",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "textarea",
+          "id": "",
+          "class": "",
+          "text": "사진 설명",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "editor",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "textarea",
+          "id": "",
+          "class": "",
+          "text": "사진 설명",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "editor",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "textarea",
+          "id": "",
+          "class": "",
+          "text": "사진 설명",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "inline-caption",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "사진 설정",
+          "visible": false,
+          "width": 3,
+          "contrast": 6.05
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "inline-caption",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "사진 설정",
+          "visible": false,
+          "width": 3,
+          "contrast": 6.05
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "inline-caption",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "사진 설정",
+          "visible": false,
+          "width": 3,
+          "contrast": 6.05
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "reading",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "h2",
+          "id": "",
+          "class": "photo-read-heading",
+          "text": "산책에서 남긴 두 장의 사진",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "reading",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "h2",
+          "id": "",
+          "class": "photo-read-heading",
+          "text": "산책에서 남긴 두 장의 사진",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "reading",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "h2",
+          "id": "",
+          "class": "photo-read-heading",
+          "text": "산책에서 남긴 두 장의 사진",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "mixed-feed",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.514,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "mixed-feed",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.514,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "mixed-feed",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.514,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "restore-review",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.514,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "section",
+          "id": "",
+          "class": "photo-import",
+          "text": "사진 글 복원 확인",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "restore-review",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.514,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "section",
+          "id": "",
+          "class": "photo-import",
+          "text": "사진 글 복원 확인",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "restore-review",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.514,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "section",
+          "id": "",
+          "class": "photo-import",
+          "text": "사진 글 복원 확인",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [],
+  "external": [],
+  "scope": "Synthetic images, anonymous Auth and actual account-scoped IndexedDB. Linux Chromium; no live server or Apple-device claims.",
+  "browser": "151.0.7922.173",
+  "pass": true
+}

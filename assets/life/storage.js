@@ -609,6 +609,8 @@
         const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
         const key = `photo-post:${workspaceId}:${value.id}`, previous = (await meta.get(key))?.value;
         if ((previous?.revision || 0) !== baseRevision || !previous && baseRevision !== 0) throw fault('photo_post_conflict', '다른 탭에서 사진 글을 수정했습니다. 입력은 남아 있습니다. 백업하거나 새 사본으로 보관해 주세요.');
+        if (previous) photoPost().validate(previous);
+        if (previous?.format === 'life-photo-post-v2' && value.format === 'life-photo-post-v1') throw fault('photo_post_update_required', '첨부와 보관 상태가 있는 새 형식입니다. 최신 작성기에서 다시 열어 주세요.');
         let index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
         if (value.status === 'saved' && value.replaces) {
           const targetKey = `photo-post:${workspaceId}:${value.replaces.id}`, target = (await meta.get(targetKey))?.value;
@@ -616,7 +618,7 @@
           await meta.delete(targetKey); index = index.filter(item => item.id !== target.id); value.createdAt = target.createdAt; value.replaces = null;
         }
         value.revision = baseRevision + 1; photoPost().validate(value);
-        const summary = { id: value.id, title: value.title, status: value.status, revision: value.revision, updatedAt: value.updatedAt, body: photoPost().plainText(value), photos: value.photos.length };
+        const summary = { id: value.id, title: value.title, status: value.status, revision: value.revision, updatedAt: value.updatedAt, body: photoPost().plainText(value), photos: value.photos.length, attachments: (value.attachments || []).length, archived: value.archived === true };
         const at = index.findIndex(item => item.id === value.id); if (at < 0) index.push(summary); else index[at] = summary;
         if (index.length > 200) throw fault('photo_post_limit', '사진 글과 초안은 합계 200개까지 보관할 수 있습니다.');
         await meta.put({ key, value }); await meta.put({ key: `photo-posts:${workspaceId}`, value: index }); return clone(value);

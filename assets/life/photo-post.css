@@ -109,6 +109,13 @@
   display: block;
   margin-block: 8px;
 }
+.photo-read-actions .photo-more {
+  flex-basis: 100%;
+}
+.photo-read-actions .photo-more-menu {
+  position: static;
+  max-width: 100%;
+}
 .photo-entry-excerpt {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -123,6 +130,57 @@
 .photo-entry > strong {
   font-size: 18px;
   line-height: 1.6;
+}
+.photo-retained > summary {
+  min-height: 44px;
+  cursor: pointer;
+}
+.photo-retained h3 {
+  margin-top: 24px;
+  font-size: 17px;
+}
+.photo-retained .photo-entry {
+  padding-block: 16px;
+}
+.photo-attachments {
+  padding-block: 16px 32px;
+}
+.photo-edit-attachment {
+  margin-block: 16px;
+}
+.photo-edit-attachment > .life-actions {
+  gap: 8px;
+  margin-top: 8px;
+}
+.photo-attachment-review {
+  padding: 16px 0;
+  border-block: 1px solid var(--line);
+}
+.photo-attachment-review label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-block: 12px;
+  font-size: 14px;
+}
+.photo-attachment-review input,
+.photo-attachment-review select {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--field-line);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 16px;
+}
+.photo-viewer .life-actions {
+  flex-wrap: wrap;
+}
+.photo-viewer-position {
+  font-variant-numeric: tabular-nums;
 }
 .photo-files {
   margin: 0;

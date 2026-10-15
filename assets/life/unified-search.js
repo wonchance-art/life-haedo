@@ -73,6 +73,7 @@
       }
     }
     if (photoPosts) for (const post of photoPosts) {
+      if (post.archived) continue;
       if (post.status !== 'saved') continue;
       const found = field([['제목', post.title], ['본문·사진 설명', post.body]]);
       if (found) rows.push({ kind: 'page', key: 'find:photo-post:' + post.id, photoPostId: post.id, title: post.title || '제목 없는 사진 글', meta: '사진 글 · 비공개 · 이 브라우저', ...found });

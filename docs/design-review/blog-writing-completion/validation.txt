@@ -1,0 +1,34 @@
+
+> check
+> node scripts/check.mjs
+
+PASS: 18 HTML pages, 79 JavaScript blocks/files, 350 local resource references, PWA manifest and shell.
+Browser interactions, remote resources and cloud sync need separate verification.
+
+✔ account switch aborts delayed writing read write and list responses without touching shared session (4.972604ms)
+ℹ tests 481
+ℹ suites 0
+ℹ pass 481
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6811.420815
+
+PASS public home and anonymous private routes never mount account storage
+PASS Google-button PKCE HTTP fixture opens verified A scope without automatic upload
+PASS protected import/excerpt/source jump, reload and backup-copy restore work
+PASS logout/B login cannot list, read or render A and unowned data; A return restores its scope
+PASS failed management navigation and logout draft transactions preserve input without signing out
+PASS offline warm local editing survives cold-load lock and online re-verification
+PASS failed callback clears credentials from address and never exposes private UI
+PASS preserved Cloud haedo-v114 fixture upgrades atomically to haedo-v115 without altering old local data
+PASS unexpected console/page errors
+Platform integration: 9 passed, 0 failed; 3 intentional transport/callback errors. Anonymous HTTP only; no real Google OAuth/Apple proof.
+
+PASS UI import to related reading, exact pair group, page editing and reload
+PASS related return preserves older reader version, selection, scroll and previous search
+PASS after related and page 1440
+PASS after related and page 820
+PASS after related and page 390
+Core experience: 5/5, visual 6, console 0, page 0.

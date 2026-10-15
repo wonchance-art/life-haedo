@@ -20,3 +20,19 @@ test('compacting removes only unused photo bytes and leaves all typed text and r
 test('saved rich text always fits the same metadata budget accepted by its own ZIP restore',()=>{
  const d=M.create(c.id);d.ops=Array.from({length:1200},()=>({insert:'x',attributes:{link:'https://example.org/'+ 'a'.repeat(1900)}})).concat({insert:'\n'});assert.throws(()=>M.validate(d),/서식 정보/);
 });
+test('v1 documents and ZIPs remain readable without mutation; explicit upgrade preserves ids, text and exact originals',async()=>{
+ const {d}=await fixture();d.format='life-photo-post-v1';delete d.attachments;delete d.archived;const before=structuredClone(d);
+ const archive=await M.backup(d),files=zip.unzipSync(new Uint8Array(await archive.arrayBuffer())),manifest=JSON.parse(zip.strFromU8(files['manifest.json']));assert.equal(manifest.format,'life-photo-post-backup-v1');assert(!Object.hasOwn(manifest,'attachments'));
+ const upgraded=M.upgrade(d);assert.equal(upgraded.format,'life-photo-post-v2');assert.equal(upgraded.id,d.id);assert.deepEqual(upgraded.attachments,[]);assert.equal(upgraded.archived,false);assert.equal(upgraded.photos[0].digest,d.photos[0].digest);
+ const restored=await M.readBackup(archive,c.id);assert.equal(restored.format,'life-photo-post-v2');assert.deepEqual(restored.attachments,[]);assert.equal(restored.archived,false);assert.deepEqual(await restored.photos[0].blob.arrayBuffer(),await d.photos[0].blob.arrayBuffer());assert.deepEqual(d,before);
+});
+test('v2 backup preserves reviewed attachment order and attribution, while restoration creates an unarchived private draft',async()=>{
+ const {d}=await fixture();d.attachments=[{type:'book',title:'여행 중 읽은 책',creator:'익명 저자',url:'https://example.org/book'},{type:'place',title:'산책한 장소',creator:'',url:'https://example.org/place'}];d.archived=true;const before=structuredClone(d);
+ const copy=await M.readBackup(await M.backup(d),c.id);assert.deepEqual(copy.attachments,d.attachments);assert.equal(copy.archived,false);assert.equal(copy.status,'draft');assert.match(M.plainText(copy),/여행 중 읽은 책/);assert.match(M.plainText(copy),/익명 저자/);assert.deepEqual(d,before);
+});
+test('attachments and archive state use the existing strict boundary; arbitrary notes, HTML metadata and unsafe links cannot enter a rich post',async()=>{
+ const {d}=await fixture(),base={type:'music',title:'산책 음악',creator:'익명',url:'https://example.org/music'};
+ for(const bad of [{...base,note:'must not copy'},{...base,tags:['private']},{...base,url:'javascript:alert(1)'},{...base,type:'script'}]){const v=structuredClone(d);v.attachments=[bad];assert.throws(()=>M.validate(v));}
+ const many=structuredClone(d);many.attachments=Array.from({length:13},()=>({...base}));assert.throws(()=>M.validate(many));
+ const state=structuredClone(d);state.archived='false';assert.throws(()=>M.validate(state));const legacy=structuredClone(d);legacy.format='life-photo-post-v1';assert.throws(()=>M.validate(legacy));
+});

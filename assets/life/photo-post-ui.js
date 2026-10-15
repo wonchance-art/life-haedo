@@ -111,7 +111,9 @@
       feedListener = null,
       coverObserver = null,
       feedHost = null,
-      feedControls = [];
+      feedControls = [],
+      controls = [],
+      attachmentUI = null;
     let status, inspector, captionInput, altInput;
     const urls = new Set(),
       photoUrls = new Map();
@@ -124,6 +126,8 @@
       return u;
     };
     function cleanup() {
+      attachmentUI?.dispose();
+      attachmentUI = null;
       coverObserver?.disconnect();
       coverObserver = null;
       closeViewer?.();
@@ -166,6 +170,7 @@
     }
     function setBusy(value) {
       busy = value;
+      if (value) clearTimeout(timer);
       if (value && !feedControls.length) {
         feedControls = [...(feedHost?.querySelectorAll("button") || [])].map(
           (n) => [n, n.disabled],
@@ -181,17 +186,40 @@
       }
       if (host) {
         host.setAttribute("aria-busy", String(value));
-        host
-          .querySelectorAll("button,input,textarea,select")
-          .forEach((n) => (n.disabled = value));
+        if (value && !controls.length) {
+          controls = [
+            ...host.querySelectorAll("button,input,textarea,select"),
+          ].map((n) => [n, n.disabled]);
+          controls.forEach(([n]) => {
+            n.disabled = true;
+          });
+        } else if (!value) {
+          controls.forEach(([n, disabled]) => {
+            if (n.isConnected) n.disabled = disabled;
+          });
+          controls = [];
+        }
       }
       editor?.enable(!value);
       onDirty();
+      if (
+        !value &&
+        valid() &&
+        mode === "edit" &&
+        dirtyTick !== storedTick &&
+        !composing &&
+        !saving
+      ) {
+        clearTimeout(timer);
+        timer = setTimeout(() => persist().catch(showStatus), 500);
+      }
     }
-    function guard() {
+    function guard(acceptedOnly = false) {
       if (!valid()) throw new Error("작업공간이 바뀌었습니다.");
       if (busy) throw new Error("사진 처리를 마친 뒤 이동해 주세요.");
       if (composing) throw new Error("한글 입력을 마친 뒤 다시 시도해 주세요.");
+      if (!acceptedOnly && attachmentUI?.composing())
+        throw new Error("첨부의 한글 입력을 마친 뒤 다시 시도해 주세요.");
     }
     function mark() {
       dirtyTick++;
@@ -209,7 +237,7 @@
       }
       if (mode === "edit" && selected?.isConnected) changePhoto();
       if (!doc || mode !== "edit" || dirtyTick === storedTick) return;
-      guard();
+      guard(true);
       M.validate(doc);
       const tick = dirtyTick,
         payload = structuredClone(doc),
@@ -233,6 +261,7 @@
       if (dirtyTick !== storedTick) return persist();
     }
     async function flush() {
+      attachmentUI?.flush();
       if (mode === "edit" && selected?.isConnected) changePhoto();
       if (
         !busy &&
@@ -254,13 +283,20 @@
         urls.delete(u);
       }, 30000);
     }
-    async function backup() {
+    function outputSnapshot() {
       guard();
-      if (!doc) return;
+      attachmentUI?.flush();
+      if (mode === "edit" && selected?.isConnected) changePhoto();
       M.validate(doc);
+      return M.compact(doc);
+    }
+    async function backup() {
+      const value = outputSnapshot(),
+        token = epoch;
       setBusy(true);
       try {
-        download(await M.backup(doc), "haedo-photo-post.zip");
+        const blob = await M.backup(value);
+        if (current(token)) download(blob, "haedo-photo-post.zip");
       } finally {
         setBusy(false);
       }
@@ -278,7 +314,41 @@
         await flush();
         await beforeOpen();
         if (!current(token)) return;
-        doc = M.create(life.Core.id);
+        setBusy(true);
+        try {
+          const rows = await storage.listPhotoPosts(workspaceId);
+          if (!current(token)) return;
+          const row = rows.find(
+            (v) =>
+              v.status === "draft" &&
+              !v.archived &&
+              !v.title.trim() &&
+              !v.body.trim() &&
+              !v.photos &&
+              !v.attachments,
+          );
+          let empty = row
+            ? await storage.readPhotoPost(workspaceId, row.id).catch((e) => {
+                if (e.code !== "photo_post_missing") throw e;
+                return null;
+              })
+            : null;
+          if (!current(token)) return;
+          if (
+            empty &&
+            (empty.status !== "draft" ||
+              empty.archived ||
+              empty.replaces ||
+              empty.title.trim() ||
+              M.plainText(empty).trim() ||
+              empty.photos.length ||
+              empty.attachments?.length)
+          )
+            empty = null;
+          doc = empty ? M.upgrade(empty) : M.create(life.Core.id);
+        } finally {
+          setBusy(false);
+        }
         mode = "edit";
         dirtyTick = storedTick = 0;
         error = null;
@@ -313,7 +383,11 @@
           doc = next;
           dirtyTick = storedTick = 0;
         }
-        mode = editing || next.status === "draft" ? "edit" : "read";
+        mode =
+          !next.archived && (editing || next.status === "draft")
+            ? "edit"
+            : "read";
+        if (mode === "edit") doc = M.upgrade(doc);
         error = null;
         render();
       } finally {
@@ -323,7 +397,7 @@
     async function finish(asNew = false) {
       guard();
       const token = epoch;
-      await persist();
+      await flush();
       if (!current(token)) return;
       const payload = structuredClone(doc);
       payload.status = "saved";
@@ -348,53 +422,182 @@
         setBusy(false);
       }
     }
+    async function archive(value) {
+      await flush();
+      guard();
+      const token = epoch,
+        next = M.upgrade(doc);
+      next.archived = value;
+      next.updatedAt = new Date().toISOString();
+      setBusy(true);
+      try {
+        const saved = await storage.savePhotoPost(
+          workspaceId,
+          next,
+          doc.revision,
+        );
+        if (!current(token)) return;
+        doc = saved;
+        dirtyTick = storedTick = 0;
+        mode = value ? "read" : saved.status === "draft" ? "edit" : "read";
+        error = null;
+        render();
+      } finally {
+        setBusy(false);
+      }
+    }
+    async function duplicate() {
+      await flush();
+      guard();
+      const token = epoch,
+        next = M.upgrade(doc),
+        now = new Date().toISOString();
+      Object.assign(next, {
+        id: life.Core.id(),
+        revision: 0,
+        status: "draft",
+        archived: false,
+        replaces: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      setBusy(true);
+      try {
+        const saved = await storage.savePhotoPost(workspaceId, next, 0);
+        if (!current(token)) return;
+        doc = saved;
+        dirtyTick = storedTick = 0;
+        mode = "edit";
+        error = null;
+        render();
+        host.querySelector("#photoTitle")?.focus();
+      } finally {
+        setBusy(false);
+      }
+    }
     function viewer(p, caption, origin) {
       closeViewer?.();
+      const documentId = doc.id,
+        photos = new Map(doc.photos.map((photo) => [photo.id, photo]));
+      const items = doc.ops
+        .filter((op) => op.insert?.photo)
+        .map((op) => ({
+          ...op.insert.photo,
+          photo: photos.get(op.insert.photo.id),
+        }));
+      let at = items.findIndex((item) => item.id === p.id),
+        full = false,
+        source = null,
+        closed = false;
       const dialog = el("dialog", null, "photo-viewer"),
         bar = el("div", null, "life-actions"),
-        title = el("h2", caption || "원본 사진");
+        title = el("h2");
       title.id = "photoViewerTitle";
       dialog.setAttribute("aria-labelledby", title.id);
-      const img = el("img");
-      img.src = url(p.blob);
-      img.alt = caption || "첨부 사진";
-      const stage = el("div", null, "photo-original");
+      const position = el("p", "", "life-meta photo-viewer-position");
+      position.setAttribute("role", "status");
+      const img = el("img"),
+        stage = el("div", null, "photo-original");
+      stage.tabIndex = 0;
+      stage.setAttribute("aria-label", "원본 사진 보기");
       stage.append(img);
-      let full = false;
+      const release = () => {
+        if (source) {
+          URL.revokeObjectURL(source);
+          urls.delete(source);
+          source = null;
+        }
+      };
+      const show = (index) => {
+        at = index;
+        const item = items[at],
+          photo = item.photo;
+        release();
+        source = url(photo.blob);
+        img.src = source;
+        img.alt = item.alt || item.caption || photo.name;
+        title.textContent = item.caption || photo.name;
+        position.textContent =
+          at +
+          1 +
+          " / " +
+          items.length +
+          " · " +
+          photo.width +
+          " × " +
+          photo.height +
+          " · 원본";
+        previous.disabled = at === 0;
+        next.disabled = at === items.length - 1;
+        stage.scrollTo(0, 0);
+      };
+      const previous = button("이전 사진", () => show(at - 1)),
+        next = button("다음 사진", () => show(at + 1));
       const zoom = button("원본 크기로 보기", () => {
         full = !full;
         stage.classList.toggle("photo-actual-size", full);
         zoom.textContent = full ? "화면에 맞추기" : "원본 크기로 보기";
         zoom.setAttribute("aria-pressed", String(full));
+        if (full) stage.focus();
       });
       zoom.setAttribute("aria-pressed", "false");
       const exit = button("사진 닫기", () => dialog.close());
       bar.append(
+        previous,
+        next,
         zoom,
-        button("원본 내려받기", () => download(p.blob, p.name)),
+        button("원본 내려받기", () =>
+          download(items[at].photo.blob, items[at].photo.name),
+        ),
         exit,
       );
-      dialog.append(
-        title,
-        el("p", p.width + " × " + p.height + " · 원본", "life-meta"),
-        bar,
-        stage,
-      );
+      dialog.append(title, position, bar, stage);
+      dialog.addEventListener("keydown", (e) => {
+        if (full || e.altKey || e.ctrlKey || e.metaKey) return;
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+          e.preventDefault();
+          show(
+            Math.max(
+              0,
+              Math.min(
+                items.length - 1,
+                at + (e.key === "ArrowRight" ? 1 : -1),
+              ),
+            ),
+          );
+        }
+      });
+      const overflow = document.body.style.overflow;
       document.body.append(dialog);
+      document.body.style.overflow = "hidden";
       const cleanup = () => {
+        if (closed) return;
+        closed = true;
+        release();
         dialog.remove();
+        document.body.style.overflow = overflow;
         closeViewer = null;
-        if (origin?.isConnected) origin.focus();
+        if (valid() && mode === "read" && doc?.id === documentId) {
+          const target =
+            host.querySelector(
+              '.photo-expand[data-photo-id="' + items[at].id + '"]',
+            ) || origin;
+          if (target?.isConnected) {
+            target.focus({ preventScroll: true });
+            target.scrollIntoView({ block: "nearest" });
+          }
+        }
       };
       dialog.addEventListener("close", cleanup, { once: true });
       closeViewer = () => {
         dialog.close();
-        if (dialog.isConnected) cleanup();
+        cleanup();
       };
+      show(at);
       dialog.showModal();
       exit.focus();
     }
-    function renderRead(target, value) {
+    function renderRead(target, value, portable = false) {
       const photos = new Map(value.photos.map((p) => [p.id, p]));
       let line = document.createDocumentFragment(),
         listNode = null,
@@ -436,19 +639,24 @@
           const p = photos.get(op.insert.photo.id),
             figure = el("figure", null, "photo-read-image"),
             image = el("img"),
-            b = button("", () =>
-              viewer(p, op.insert.photo.caption || op.insert.photo.alt, b),
-            );
+            b = portable
+              ? el("span")
+              : button("", () =>
+                  viewer(p, op.insert.photo.caption || op.insert.photo.alt, b),
+                );
           b.className = "photo-expand";
-          b.setAttribute(
-            "aria-label",
-            (op.insert.photo.caption || p.name) + " · 사진 크게 보기",
-          );
-          image.src = url(p.blob);
+          b.dataset.photoId = p.id;
+          if (!portable)
+            b.setAttribute(
+              "aria-label",
+              (op.insert.photo.caption || p.name) + " · 사진 크게 보기",
+            );
+          if (!portable) image.src = url(p.blob);
+          else image.dataset.photoId = p.id;
           image.alt = op.insert.photo.alt || op.insert.photo.caption || p.name;
           image.width = p.width;
           image.height = p.height;
-          image.loading = "lazy";
+          image.loading = portable ? "eager" : "lazy";
           b.append(image);
           figure.append(b);
           if (op.insert.photo.caption)
@@ -484,6 +692,74 @@
         });
       }
       if (line.childNodes.length) endLine();
+      if ((value.attachments || []).length)
+        target.append(life.PagePostsView.attachments(value.attachments));
+    }
+    async function exportHTML() {
+      const value = outputSnapshot(),
+        token = epoch;
+      setBusy(true);
+      try {
+        const page = document.implementation.createHTMLDocument(
+          value.title || "제목 없는 글",
+        );
+        page.documentElement.lang = "ko";
+        const charset = page.createElement("meta");
+        charset.setAttribute("charset", "utf-8");
+        page.head.prepend(charset);
+        const meta = (name, content, http = false) => {
+          const n = page.createElement("meta");
+          n.setAttribute(http ? "http-equiv" : "name", name);
+          n.content = content;
+          page.head.append(n);
+        };
+        meta("viewport", "width=device-width, initial-scale=1");
+        meta("referrer", "no-referrer");
+        meta(
+          "Content-Security-Policy",
+          "default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'",
+          true,
+        );
+        const style = page.createElement("style");
+        style.textContent =
+          "*{box-sizing:border-box}body{margin:0;color:#262330;background:#fff;font:18px/1.95 -apple-system,BlinkMacSystemFont,'Noto Sans',sans-serif}article{max-width:800px;margin:auto;padding:40px 24px;overflow-wrap:anywhere}h1{font-size:2em;line-height:1.5}h3{font-size:1.7em}h4{font-size:1.35em}.photo-line{white-space:pre-wrap;margin:0 0 18px}figure{margin:28px 0}img{display:block;width:auto;max-width:100%;height:auto;margin:auto}figcaption{font-size:15px;line-height:1.7;text-align:center;white-space:pre-wrap}blockquote{margin-inline:0;padding-left:20px;border-left:2px solid #ddd}a{color:#524094;overflow-wrap:anywhere}.pp-attachments{margin-top:36px}.pp-attachment{padding:18px 0;border-top:1px solid #ddd}.pp-shape,.pp-object-actions{display:none}.pp-attachment-copy{display:flex;flex-direction:column}.pp-attachment-title{display:block;min-height:44px}.life-meta{font-size:14px;color:#665e70}@media(max-width:600px){body{font-size:17px}article{padding:24px 20px}}@media print{article{max-width:none;padding:0}img{max-height:90vh;object-fit:contain}figure{break-inside:avoid}}";
+        page.head.append(style);
+        const article = page.createElement("article"),
+          heading = page.createElement("h1");
+        heading.textContent = value.title || "제목 없는 글";
+        article.append(heading);
+        renderRead(article, value, true);
+        for (const photo of value.photos) {
+          const data = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () =>
+              reject(
+                new Error("원본 사진을 읽지 못했습니다. 글은 유지됩니다."),
+              );
+            reader.readAsDataURL(photo.blob);
+          });
+          if (!current(token)) return;
+          article.querySelector('img[data-photo-id="' + photo.id + '"]').src =
+            data;
+        }
+        article
+          .querySelectorAll("[data-photo-id]")
+          .forEach((n) => n.removeAttribute("data-photo-id"));
+        article
+          .querySelectorAll("a")
+          .forEach((n) => n.setAttribute("referrerpolicy", "no-referrer"));
+        page.body.append(article);
+        if (current(token))
+          download(
+            new Blob(["<!doctype html>\n", page.documentElement.outerHTML], {
+              type: "text/html;charset=utf-8",
+            }),
+            "haedo-post.html",
+          );
+      } finally {
+        setBusy(false);
+      }
     }
     function imageValue(p, info = {}) {
       if (!photoUrls.has(p.id)) photoUrls.set(p.id, url(p.blob));
@@ -633,6 +909,9 @@
       more.append(el("summary", "더 보기"), menu);
       menu.append(
         button("사진 포함 백업", backup),
+        button("HTML 읽기 파일 받기", exportHTML),
+        button("사본으로 이어 쓰기", duplicate),
+        button("보관함으로 옮기기", () => archive(true)),
         button("초안 다시 저장", persist),
       );
       if (doc.replaces) menu.append(button("새 글로 저장", () => finish(true)));
@@ -906,6 +1185,27 @@
         button("사진 편집 닫기", () => closePhoto()),
       );
       host.append(inspector);
+      const attachments = el("section", null, "photo-attachments");
+      form.append(attachments);
+      attachmentUI = life.PhotoPostAttachments.create({
+        host: attachments,
+        storage,
+        workspaceId,
+        getValues: () => doc.attachments || [],
+        isCurrent: valid,
+        onDirty,
+        report: showStatus,
+        onChange: (values) => {
+          guard();
+          const next = M.upgrade(doc);
+          next.attachments = structuredClone(values);
+          M.validate(next);
+          doc.attachments = next.attachments;
+          doc.format = next.format;
+          doc.archived = next.archived;
+          mark();
+        },
+      });
       const recovery = el("details", null, "life-details");
       recovery.append(
         el("summary", "저장 충돌 복구"),
@@ -966,9 +1266,15 @@
                 el(
                   "p",
                   candidate.photos.length +
-                    "장 · 원본 포함 · 비공개 새 초안으로 복원",
+                    "장 · 첨부 " +
+                    candidate.attachments.length +
+                    "개 · 원본 포함 · 비공개 새 초안으로 복원",
                 ),
               );
+              if (candidate.attachments.length)
+                review.append(
+                  life.PagePostsView.attachments(candidate.attachments),
+                );
               review.append(
                 button("새 초안으로 복원", async () => {
                   setBusy(true);
@@ -1019,6 +1325,27 @@
         files.append(scope);
         const list = el("div", null, "photo-feed");
         if (!feedListener) host.append(list);
+        const retained = el("details", null, "life-details photo-retained"),
+          retainedTitle = el("summary", "초안·보관함");
+        const drafts = el("div", null, "photo-draft-list"),
+          archived = el("div", null, "photo-archived-list");
+        const draftHeading = el("h3", "작성 중인 글"),
+          archiveHeading = el("h3", "보관함"),
+          archiveHelp = el(
+            "p",
+            "보관한 글과 사진은 그대로 남습니다. 글을 열어 목록으로 복원할 수 있습니다.",
+            "life-help",
+          );
+        retained.hidden = true;
+        retained.append(
+          retainedTitle,
+          draftHeading,
+          drafts,
+          archiveHeading,
+          archiveHelp,
+          archived,
+        );
+        host.append(retained);
         storage
           .listPhotoPosts(workspaceId)
           .then((rows) => {
@@ -1047,7 +1374,12 @@
                   "photo-entry-excerpt",
                 ),
               );
-              list.append(b);
+              (item.archived
+                ? archived
+                : item.status === "draft"
+                  ? drafts
+                  : list
+              ).append(b);
               if (item.photos) {
                 const cover = el("img", null, "photo-entry-cover");
                 cover.alt = "";
@@ -1079,6 +1411,16 @@
                 cover.dataset.postId = item.id;
               }
             }
+            retained.hidden =
+              !drafts.children.length && !archived.children.length;
+            retainedTitle.textContent =
+              "초안 " +
+              drafts.children.length +
+              " · 보관함 " +
+              archived.children.length;
+            draftHeading.hidden = !drafts.children.length;
+            archiveHeading.hidden = archiveHelp.hidden =
+              !archived.children.length;
             feedListener?.([...list.children]);
             status.textContent = "";
           })
@@ -1090,17 +1432,38 @@
           });
       } else if (mode === "edit") renderEditor();
       else {
-        const actions = el("div", null, "life-actions");
+        const actions = el("div", null, "life-actions photo-read-actions");
         actions.append(
           button("사진 글 목록", list),
-          button("글 수정", () => open(doc.id, true)),
+          doc.archived
+            ? button("목록으로 복원", () => archive(false))
+            : button("글 수정", () => open(doc.id, true)),
           button("사진 포함 백업", backup),
         );
+        const more = el("details", null, "photo-more life-details"),
+          menu = el("div", null, "photo-more-menu");
+        more.append(el("summary", "더 보기"), menu);
+        menu.append(
+          button("HTML 읽기 파일 받기", exportHTML),
+          button("사본으로 이어 쓰기", duplicate),
+        );
+        if (!doc.archived)
+          menu.append(button("보관함으로 옮기기", () => archive(true)));
+        actions.append(more);
         host.append(actions);
         const article = el("article", null, "photo-article"),
           heading = el("h2", doc.title || "제목 없는 글", "photo-read-heading");
         heading.tabIndex = -1;
-        article.append(heading, el("p", "비공개 · 이 브라우저", "life-meta"));
+        article.append(
+          heading,
+          el(
+            "p",
+            (doc.archived ? "보관함 · " : "") +
+              (doc.status === "draft" ? "초안 · " : "비공개 · ") +
+              "이 브라우저",
+            "life-meta",
+          ),
+        );
         renderRead(article, doc);
         host.append(article);
       }
@@ -1167,6 +1530,10 @@
         if (n.isConnected) n.disabled = disabled;
       });
       feedControls = [];
+      controls.forEach(([n, disabled]) => {
+        if (n.isConnected) n.disabled = disabled;
+      });
+      controls = [];
       feedHost = null;
       unsubscribe?.();
       unsubscribe = null;
@@ -1175,7 +1542,8 @@
       mount,
       begin,
       flush,
-      dirty: () => busy || dirtyTick !== storedTick,
+      dirty: () =>
+        busy || dirtyTick !== storedTick || !!attachmentUI?.pending(),
       detach,
       dispose() {
         disposed = true;

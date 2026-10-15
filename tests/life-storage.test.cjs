@@ -115,6 +115,15 @@ function operation(bundle, id = 'op-1', extra = {}) {
   return { operationId: id, workspaceId: bundle.workspaceId, baseRevision: bundle.revision,
     changes: { put: { records: [{ id: 'r-example', text: '익명 검증 자료' }] } }, ...extra };
 }
+test('rich-post archive CAS, attachment preservation and index writes are atomic; format downgrade and foreign scope cannot erase metadata',async t=>{
+ const {storage:base,control}=syncFixture();t.after(()=>base.close());const M=require('../assets/life/photo-post.js'),a=base.forAccount(accountA),bundle=await initialImport(a),w=bundle.workspaceId;
+ const d=M.create(Core.id);d.status='saved';d.title='여행과 책';d.ops=[{insert:'보존할 본문\n'}];d.attachments=[{type:'book',title:'산책의 기록',creator:'익명 저자',url:'https://example.org/book'}];const saved=await a.savePhotoPost(w,d,0);
+ const legacy=structuredClone(saved);legacy.format='life-photo-post-v1';delete legacy.attachments;delete legacy.archived;await assert.rejects(a.savePhotoPost(w,legacy,saved.revision),{code:'photo_post_update_required'});
+ const next=structuredClone(saved);next.archived=true;next.updatedAt=new Date(Date.parse(saved.updatedAt)+1000).toISOString();control.failCompletion=true;await assert.rejects(a.savePhotoPost(w,next,saved.revision),{code:'storage_aborted'});assert.deepEqual(await a.readPhotoPost(w,saved.id),saved);assert.equal((await a.listPhotoPosts(w))[0].archived,false);
+ const archived=await a.savePhotoPost(w,next,saved.revision);assert.equal((await a.listPhotoPosts(w))[0].archived,true);assert.deepEqual(archived.attachments,saved.attachments);await assert.rejects(a.savePhotoPost(w,saved,saved.revision),{code:'photo_post_conflict'});
+ const restored=structuredClone(archived);restored.archived=false;const active=await a.savePhotoPost(w,restored,archived.revision);assert.equal(active.archived,false);assert.deepEqual(active.ops,saved.ops);assert.deepEqual(active.attachments,saved.attachments);
+ const b=base.forAccount(accountB);await assert.rejects(b.readPhotoPost(w,saved.id),{code:'workspace_access_denied'});await assert.rejects(b.savePhotoPost(w,restored,restored.revision),{code:'workspace_access_denied'});
+});
 test('nine-slot boards have independent atomic CAS, completion rollback and account ownership', async t => {
   const {storage:base,control}=syncFixture();t.after(()=>base.close());
   const M=require('../assets/life/nine-board.js'),a=base.forAccount(accountA),bundle=await initialImport(a),original=await a.readWorkbenchSnapshot(bundle.workspaceId);

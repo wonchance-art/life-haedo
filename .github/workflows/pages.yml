@@ -138,6 +138,9 @@ jobs:
       - name: Verify original photo editor, exact bytes and recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/photo-post-browser.cjs
+      - name: Verify blog attachments, archive, original gallery and portable HTML
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/blog-writing-completion-browser.cjs
       - name: Verify reflection draft copy conflicts and account boundaries
         run: node tests/reflection-page-browser.cjs
       - name: Verify the integrated input and output cycle
@@ -307,6 +310,7 @@ jobs:
             .local/nine-board-recovery/
             .local/nine-board-search/
             .local/photo-post/
+            .local/blog-writing-completion/
             .local/profile-feed-media/
             .local/reflection-page/
             .local/two-cycle/
