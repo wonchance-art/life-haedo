@@ -1,0 +1,130 @@
+{
+  "checks": [
+    "Self-contained report separates manual groups and informational categories, with no scripts or external resources",
+    "Native details shows the unchanged target, exact basename candidate and source occurrences without applying a link"
+  ],
+  "visual": [
+    {
+      "scene": "summary",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 15.379,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "",
+          "text": "노트 연결 검토판단할 노트 4개 묶음 · 5회 참조원본에 없는 첨부·외부 상대 주소·보관된 보조 파일 4회는 아래 보관 정보로 구분했습니다. 경",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.379
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "summary",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 15.379,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "",
+          "text": "노트 연결 검토판단할 노트 4개 묶음 · 5회 참조원본에 없는 첨부·외부 상대 주소·보관된 보조 파일 4회는 아래 보관 정보로 구분했습니다. 경",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.379
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "candidate",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.176,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "이동/책 · 노트 경로 확인 · 1회",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.379
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "candidate",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.176,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "이동/책 · 노트 경로 확인 · 1회",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.379
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [],
+  "external": [],
+  "scope": "Anonymous standalone report reopened over local HTTP; real private report stays outside the app. Chromium viewport simulation, no Apple Files/device proof.",
+  "browser": "151.0.7922.173",
+  "pass": true
+}

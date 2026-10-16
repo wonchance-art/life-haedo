@@ -76,3 +76,5 @@
 ## Obsidian 보관함
 
 - `scripts/import-obsidian-vault.mjs`는 오프라인 원문 보존 어댑터다. 노트/보조 파일을 기존 v1 JSON으로 나누며 개인 원본·감사 목록·Git bundle은 앱 저장소 밖에만 둔다. 원문을 재작성하거나 추출 YAML을 사용자 발췌로 만들지 않는다. 내부 노트 연결은 `links.kind=obsidian_link`의 순서 있는 정확 버전 참조 두 개를 사용한다. 파일 경로를 유지하며 확정할 수 없는 연결은 자동 선택하지 않는다. [계약·검수](docs/design-review/obsidian-vault-integration.md)를 따른다.
+
+- 검토 보고서는 기존 감사 참조 전체를 유지한 채 `review.html/json`으로 사용자 판단 대상과 첨부/외부 상대 주소/보조 파일 안내를 구분한다. 동일 파일명 후보는 제안이며 확정 연결하지 않는다. 상대 경로·자기 앵커의 목적지가 다르면 묶지 않고, 개인 보고서는 앱 저장소/CI 밖에 둔다.

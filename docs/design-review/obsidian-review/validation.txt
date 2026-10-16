@@ -1,0 +1,29 @@
+
+> check
+> node scripts/check.mjs
+
+PASS: 18 HTML pages, 82 JavaScript blocks/files, 350 local resource references, PWA manifest and shell.
+Browser interactions, remote resources and cloud sync need separate verification.
+
+✔ account switch aborts delayed writing read write and list responses without touching shared session (4.464201ms)
+ℹ tests 491
+ℹ suites 0
+ℹ pass 491
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 14017.776668
+
+Obsidian review: 2/2, visual 4, console/page/external 0.
+
+PASS A v1 post stays unchanged; one editor accepts original photos and an existing book without private collection context
+PASS Unapplied attachment input and composition block save/export/navigation; edit, cancel and reorder preserve the body and collection
+PASS Portable HTML contains exact original bytes and readable Korean/attribution, with no scripts, runtime URLs or automatic external requests
+PASS The original viewer navigates the document order, downloads the current original and releases image URLs while returning focus to the viewed photo
+PASS A separate draft copy preserves originals and attachments without changing the saved post or collection
+PASS Archive failure leaves the reader and index unchanged; a retry hides the post from normal feed/search and explicit restoration keeps every byte
+PASS Another tab archiving the original cannot be overwritten by an older edit; explicit new-copy recovery preserves both
+PASS Empty drafts are reused and unfinished posts live in the explicit draft area rather than the normal saved feed
+PASS Both v1 and v2 ZIPs show a review before installing a new unarchived draft with remapped IDs and unchanged originals
+PASS Legacy records and private collection context remain exact; another account cannot read or overwrite the rich post

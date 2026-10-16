@@ -10,6 +10,7 @@ import { resolve, dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { buildVault } from "./lib/obsidian-vault.mjs";
+import { renderReviewHTML } from "./lib/obsidian-review.mjs";
 const project = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2),
   values = {};
@@ -87,11 +88,17 @@ async function main() {
     ["notes.json", result.notesBackup],
     ["supporting-files.json", result.filesBackup],
     ["private-audit.json", result.manifest],
+    ["review.json", result.review],
   ])
     await writeFile(join(output, name), JSON.stringify(value), {
       flag: "wx",
       mode: 0o600,
     });
+  await writeFile(
+    join(output, "review.html"),
+    renderReviewHTML(result.review),
+    { flag: "wx", mode: 0o600 },
+  );
   execFileSync(
     "git",
     [
@@ -114,6 +121,7 @@ async function main() {
       notes: result.notesBackup.workspace.sources.length,
       supportingFiles: result.filesBackup.workspace.sources.length,
       references,
+      review: result.review.summary,
       verified: true,
     }),
   );

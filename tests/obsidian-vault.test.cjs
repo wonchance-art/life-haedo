@@ -171,6 +171,17 @@ test("CLI exports outside the app, pins a clean Git tree and refuses symlinks, d
     const summary = JSON.parse(cli(output));
     assert.equal(summary.files, 1);
     assert.equal(summary.verified, true);
+    const review = JSON.parse(
+      await fs.readFile(path.join(output, "review.json"), "utf8"),
+    );
+    assert.equal(review.summary.reviewGroups, 0);
+    const html = await fs.readFile(path.join(output, "review.html"), "utf8");
+    assert(html.includes("노트 연결 검토"));
+    for (const name of ["review.json", "review.html"])
+      assert.equal(
+        (await fs.stat(path.join(output, name))).mode & 0o777,
+        0o600,
+      );
     assert(!JSON.stringify(summary).includes("익명 기록"));
     const snapshot = await fs.readFile(path.join(output, "notes.json"));
     assert.throws(() => cli(output));

@@ -807,3 +807,5 @@ Ghost와 ONE의 본문·사진 중심 흐름은 설계 참고, Quill은 현재 �
 기존 Core의 자료·해시·JSON 새 사본 복원과 Node/Git 표준 기능을 재사용한다. 새 Markdown 엔진·YAML 실행기·패키지는 도입하지 않는다. 공식 [Obsidian 내부 링크 문서](https://github.com/obsidianmd/obsidian-help/blob/master/en/Linking%20notes%20and%20files/Internal%20links.md)의 Wikilink/Markdown, URL 인코딩, 제목·블록 표현을 확인했다. Wikilink의 문자 `%`와 Markdown URL의 인코딩을 구분하고 원문은 바꾸지 않는다.
 
 직접 도입 후보 [obsidian-export](https://github.com/zoni/obsidian-export)는 최신 공식 release `v25.3.0`(2025-03-25), 저장소 archived=false/pushed_at=2026-10-15, 공개 security-advisories 0개를 확인했다. GitHub의 SPDX는 NOASSERTION이며 LICENSE 원문은 재배포 조건 두 개와 특허 허여를 포함한다. 전체 취약점 부재를 뜻하지 않는다. 이 도구의 Obsidian→Markdown 변환은 유용하지만 이번의 불변 원문/정확 발췌 위치/기존 JSON 복원에는 본문 재작성이 필요하지 않다. 소스 코드를 복사하거나 실행 파일을 설치하지 않았다. 자체 유지 부분은 오프라인 경로/바이트 검증·보존 어댑터·제한된 노트 참조 스캐너이며 일반 Markdown 렌더러라고 표현하지 않는다. 복잡한 링크가 반복되면 원문과 참조 인덱스를 분리한 parser 도입을 다시 비교한다. [선택·보존·사용·검수](../design-review/obsidian-vault-integration.md).
+
+같은 날의 검토 목록 갱신은 이 오프라인 어댑터에 감사 투영·중복 묶음·native details 기반 정적 읽기 보고서만 더한다. 기존 공식 표현/도구 비교를 유지하며 새 parser·패키지·네트워크 요청을 추가하지 않는다. 원문/연결을 바꾸지 않는 사유 분류와 명확한 경로 후보를 자체 유지하며, 실제 전체 파일 대조와 익명 HTML 재열기로 검증한다.

@@ -141,7 +141,7 @@ async function main() {
       assert.equal(await dialog.getByRole('button', { name: '다음 사진', exact: true }).isDisabled(), true); assert.equal(await page.evaluate(u => __revoked.includes(u), firstURL), true);
       const file = await getDownload(() => click('원본 내려받기')); assert.equal(hash(file.bytes), hash(Buffer.from(images[1].data, 'base64')));
       await click('이전 사진'); await click('원본 크기로 보기'); assert.equal(await page.locator('.photo-actual-size').count(), 1); await click('다음 사진'); await capture(page, 'viewer', [390, 820]);
-      const lastURL = await dialog.locator('img').getAttribute('src'); await page.keyboard.press('Escape'); assert.equal(await page.getByRole('dialog').count(), 0); assert.equal(await page.evaluate(u => __revoked.includes(u), lastURL), true);
+      const lastURL = await dialog.locator('img').getAttribute('src'); await page.keyboard.press('Escape'); await page.locator('.photo-viewer').waitFor({ state: 'detached' }); assert.equal(await page.getByRole('dialog').count(), 0); assert.equal(await page.evaluate(u => __revoked.includes(u), lastURL), true);
       assert.equal(await page.locator('.photo-expand').nth(1).evaluate(n => n === document.activeElement), true);
     });
 

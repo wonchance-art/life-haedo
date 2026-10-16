@@ -2,6 +2,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import Core from "../../assets/life/core.js";
+import { classifyReferences } from "./obsidian-review.mjs";
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const problem = (code) => Object.assign(new Error(code), { code });
 const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
@@ -261,5 +262,10 @@ export async function buildVault(
     entries.length
   )
     throw problem("vault_count_mismatch");
-  return { notesBackup, filesBackup, manifest };
+  return {
+    notesBackup,
+    filesBackup,
+    manifest,
+    review: classifyReferences(manifest),
+  };
 }
