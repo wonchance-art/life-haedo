@@ -141,3 +141,7 @@ Node 없이 화면만 실행하려면 `python3 scripts/dev-server.py`. 이 서�
 컬렉션의 **외부 이미지 보기**는 책(Open Library ISBN/edition)·영상(YouTube)의 표지/썸네일을 선택적으로 표시합니다. 책 편집의 **표지·썸네일**에서 ISBN을 출처로 연결할 수 있으며 저장·백업 형식은 그대로입니다. 외부 이미지는 기본 꺼짐이고 파일로 백업하지 않습니다. [검증 화면·제공자 접속 제한·Local 인계](docs/design-review/collection-covers.md). 현재 Cloud 검증은 이미지 응답 fixture 기준이며 실제 제공자 접속은 네트워크 설정 또는 Local 검증이 필요합니다.
 
 컬렉션 `+`는 **찾기 → 선택 → 메모 → 저장**으로 이어집니다. 이름은 내 컬렉션에서 찾고, YouTube·GitHub는 링크를 명시 조회합니다. 기존 항목은 메모를 이어 쓰고 신규 후보는 정보를 확인한 뒤 저장합니다. [화면·검증·Local 인계](docs/design-review/collection-picker.md). 외부 음악/장소 이름 검색과 글·프로필 첨부는 후속입니다.
+
+### Obsidian 보관함 전체 가져오기
+
+깨끗한 Git 보관함은 `node scripts/import-obsidian-vault.mjs --vault /private/vault --output /private/new-export --repository https://github.com/OWNER/REPO`로 변환합니다. 모든 Markdown과 보조 파일을 각각 `notes.json`·`supporting-files.json`에 보존하고, 전체 Git 이력·해시/미해결 참조 목록도 남깁니다. 개인 출력은 앱 저장소 밖에만 생성합니다. 로그인 후 관리의 내보내기·사본 복원에서 JSON을 새 작업공간으로 복원하세요. [범위·보존·사용 순서·한계](docs/design-review/obsidian-vault-integration.md).

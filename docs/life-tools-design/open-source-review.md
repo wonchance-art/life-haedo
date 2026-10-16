@@ -801,3 +801,9 @@ Ghost와 ONE의 본문·사진 중심 흐름은 설계 참고, Quill은 현재 �
 같은 날의 위 공식 릴리스/라이선스/공개 권고 대조와 [편집기 비교](../design-review/blog-editor-comparison.md)를 재사용했다. Quill 2.0.3·fflate 0.8.3을 유지하며 새 엔진/패키지는 추가하지 않는다. 첨부는 기존 CollectionPicker·PagePosts.attachment/validateAttachments·PagePostsView를 작은 어댑터로 연결한다. 새 검색 SDK나 별도 첨부 데이터 모델은 기존 메타데이터 검토·출처·개인 메모 제외 규칙을 중복시키므로 도입하지 않았다.
 
 사진 탐색은 이미 사용한 native dialog, 독립 읽기 HTML은 기존 안전한 읽기 DOM + native FileReader/Blob 다운로드를 재사용한다. HTML 생성기를 추가해도 계정 폐기·입력 보호·원본 바이트 계약을 대신하지 못한다. 직접 유지 범위는 v1/v2 검증·ZIP manifest 호환, 보관 CAS, 뷰어 URL 수명, 제한된 정적 스타일이다. HTML에서 편집/복원하지 않으므로 편집기 런타임을 동봉하지 않는다. 사용자 장면·파일 재사용·한계는 [검수 기록](../design-review/blog-writing-completion.md)에 둔다.
+
+## Obsidian 보관함 전체 통합 — 2026-10-16 KST
+
+기존 Core의 자료·해시·JSON 새 사본 복원과 Node/Git 표준 기능을 재사용한다. 새 Markdown 엔진·YAML 실행기·패키지는 도입하지 않는다. 공식 [Obsidian 내부 링크 문서](https://github.com/obsidianmd/obsidian-help/blob/master/en/Linking%20notes%20and%20files/Internal%20links.md)의 Wikilink/Markdown, URL 인코딩, 제목·블록 표현을 확인했다. Wikilink의 문자 `%`와 Markdown URL의 인코딩을 구분하고 원문은 바꾸지 않는다.
+
+직접 도입 후보 [obsidian-export](https://github.com/zoni/obsidian-export)는 최신 공식 release `v25.3.0`(2025-03-25), 저장소 archived=false/pushed_at=2026-10-15, 공개 security-advisories 0개를 확인했다. GitHub의 SPDX는 NOASSERTION이며 LICENSE 원문은 재배포 조건 두 개와 특허 허여를 포함한다. 전체 취약점 부재를 뜻하지 않는다. 이 도구의 Obsidian→Markdown 변환은 유용하지만 이번의 불변 원문/정확 발췌 위치/기존 JSON 복원에는 본문 재작성이 필요하지 않다. 소스 코드를 복사하거나 실행 파일을 설치하지 않았다. 자체 유지 부분은 오프라인 경로/바이트 검증·보존 어댑터·제한된 노트 참조 스캐너이며 일반 Markdown 렌더러라고 표현하지 않는다. 복잡한 링크가 반복되면 원문과 참조 인덱스를 분리한 parser 도입을 다시 비교한다. [선택·보존·사용·검수](../design-review/obsidian-vault-integration.md).

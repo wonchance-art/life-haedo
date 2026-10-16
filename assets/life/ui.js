@@ -2053,6 +2053,7 @@
         COVERAGE[version.coverage.status] || COVERAGE.unknown,
         '누락/미확인: ' + (version.coverage.omissions.length ? version.coverage.omissions.join(', ') : (isOwnWriting(source) ? '없음' : '별도 표시 없음 · 사진은 자동 수집하지 않음'))];
       lines.forEach(text => details.append(node('p', text, 'life-meta')));
+      if (source.sourceKey) details.append(node('p', '원본 경로: ' + source.sourceKey, 'life-meta life-source-url'));
       if (source.url) {
         const href = safeUrl(source.url);
         if (href) {
@@ -2063,6 +2064,47 @@
           details.append(node('p', source.url, 'life-meta life-source-url'), link, node('p', '외부 출처는 연결이 필요하며 삭제·비공개 상태일 수 있습니다.', 'life-help'));
         }
       }
+      return details;
+    }
+
+    function obsidianConnections(versionId) {
+      const matches = [];
+      const seen = new Set();
+      const sources = new Map(state.bundle.sources.map(source => [source.id, source]));
+      const versions = new Map(state.bundle.sourceVersions.map(version => [version.id, version]));
+      for (const link of state.bundle.links) {
+        if (link.kind !== 'obsidian_link' || link.sourceRefs?.length !== 2) continue;
+        const [from, to] = link.sourceRefs;
+        const outgoing = from.sourceVersionId === versionId;
+        if (!outgoing && to.sourceVersionId !== versionId) continue;
+        const target = outgoing ? to : from;
+        const key = (outgoing ? 'out:' : 'in:') + target.sourceVersionId;
+        if (seen.has(key)) continue;
+        const source = sources.get(target.sourceId), version = versions.get(target.sourceVersionId);
+        if (!source || !version || version.sourceId !== source.id) continue;
+        seen.add(key); matches.push({ target, source, outgoing });
+      }
+      if (!matches.length) return null;
+      const details = node('details', null, 'life-details life-obsidian-links');
+      const list = node('div'), more = button('연결된 노트 더 보기', () => append());
+      details.append(node('summary', '연결된 노트 ' + matches.length), list, more);
+      let count = 0;
+      const append = () => {
+        for (const item of matches.slice(count, count + SEARCH_PAGE_SIZE)) {
+          const row = node('div', null, 'life-backup-source');
+          const open = button(sourceLabel(item.source), guarded(() => navigate('source', {
+            sourceId: item.target.sourceId, sourceVersionId: item.target.sourceVersionId, locator: item.target.locator
+          })));
+          open.dataset.linkedVersion = item.target.sourceVersionId;
+          row.append(node('p', item.outgoing ? '이 노트에서 연결' : '이 노트를 연결한 원문', 'life-meta'), open);
+          if (item.source.sourceKey) row.append(node('p', item.source.sourceKey, 'life-meta life-source-url'));
+          list.append(row);
+        }
+        count = Math.min(count + SEARCH_PAGE_SIZE, matches.length);
+        more.hidden = count >= matches.length;
+      };
+      let loaded = false;
+      details.addEventListener('toggle', () => { if (details.open && !loaded) { loaded = true; append(); } });
       return details;
     }
 
@@ -2128,6 +2170,8 @@
         details.append(reimport);
       }
       article.append(details);
+      const connections = obsidianConnections(version.id);
+      if (connections) article.append(connections);
       const openRelated = focusId => guarded(async () => {
         const origin = { workspaceId: state.bundle.workspaceId, sourceId: source.id, sourceVersionId: version.id,
           locator: state.sourceSelection ? { ...state.sourceSelection } : null,
@@ -2778,15 +2822,25 @@
     function backupContents(bundle) {
       const details = node('details', null, 'life-details life-backup-contents');
       details.append(node('summary', '백업에 담긴 원문 확인'));
-      if (!bundle.sources.length) details.append(empty('보관된 원문이 없는 작업공간입니다.'));
-      bundle.sources.forEach(source => {
-        const row = node('div', null, 'life-backup-source');
-        const versions = bundle.sourceVersions.filter(version => version.sourceId === source.id);
-        row.append(node('strong', sourceLabel(source)), node('p', sourceOrigin(source) + ' · 원문 버전 ' + versions.length + '개', 'life-meta'));
-        const coverage = [...new Set(versions.map(version => COVERAGE[version.coverage.status] || COVERAGE.unknown))];
-        row.append(node('p', coverage.join(' · '), 'life-meta'));
-        details.append(row);
-      });
+      if (!bundle.sources.length) { details.append(empty('보관된 원문이 없는 작업공간입니다.')); return details; }
+      const bySource = new Map();
+      for (const version of bundle.sourceVersions) {
+        const versions = bySource.get(version.sourceId) || []; versions.push(version); bySource.set(version.sourceId, versions);
+      }
+      const list = node('div'), more = button('백업 원문 더 보기', () => append());
+      details.append(list, more);
+      let count = 0, loaded = false;
+      const append = () => {
+        for (const source of bundle.sources.slice(count, count + SEARCH_PAGE_SIZE)) {
+          const row = node('div', null, 'life-backup-source'), versions = bySource.get(source.id) || [];
+          row.append(node('strong', sourceLabel(source)), node('p', sourceOrigin(source) + ' · 원문 버전 ' + versions.length + '개', 'life-meta'));
+          if (source.sourceKey) row.append(node('p', source.sourceKey, 'life-meta life-source-url'));
+          const coverage = [...new Set(versions.map(version => COVERAGE[version.coverage.status] || COVERAGE.unknown))];
+          row.append(node('p', coverage.join(' · '), 'life-meta')); list.append(row);
+        }
+        count = Math.min(count + SEARCH_PAGE_SIZE, bundle.sources.length); more.hidden = count >= bundle.sources.length;
+      };
+      details.addEventListener('toggle', () => { if (details.open && !loaded) { loaded = true; append(); } });
       return details;
     }
 

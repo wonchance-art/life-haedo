@@ -72,3 +72,7 @@
 - 사진 글은 `photo-post*.js`의 제한된 Delta와 원본 Blob을 계정/작업공간별 로컬 메타데이터에 보관한다. JPEG·PNG·WebP의 전달된 원본 바이트/해상도·순서·설명·대체 텍스트를 유지하며 자동 리사이즈/재압축·원격 업로드·공개를 하지 않는다. 기존 `page.posts`/일반 초안·구성 동기화·공개 payload·JSON 백업과 섞지 않는다. 사진 포함 ZIP 새 사본 복원과 실제 해시/픽셀 검증, 저장 실패·두 탭 CAS·기존 작성기 입력 보호는 [사진 글 검수](docs/design-review/photo-post-editor.md)를 따른다. 미반영 입력/한글 조합/사진 처리 중 이동으로 입력을 버리지 않는다. Quill·fflate는 공식 vendor 배포와 LICENSE를 보존한다.
 
 - 사진 글 v2는 검토한 첨부와 보관 상태를 추가한다. v1 읽기/ZIP을 유지하고 편집 때만 메모리에서 승격하며 v2→v1 저장은 차단한다. 초안·보관함은 별도 접힌 목록에 두고 보관 글을 일반 피드/검색에서 제외한다. 보관/복원도 문서·요약의 CAS 트랜잭션이며 원본을 삭제하지 않는다. HTML은 원본 바이트를 포함한 독립 읽기 파일이고 ZIP 새 초안 복원과 구분한다. [첨부·보관·읽기 파일 계약](docs/design-review/blog-writing-completion.md)을 따른다.
+
+## Obsidian 보관함
+
+- `scripts/import-obsidian-vault.mjs`는 오프라인 원문 보존 어댑터다. 노트/보조 파일을 기존 v1 JSON으로 나누며 개인 원본·감사 목록·Git bundle은 앱 저장소 밖에만 둔다. 원문을 재작성하거나 추출 YAML을 사용자 발췌로 만들지 않는다. 내부 노트 연결은 `links.kind=obsidian_link`의 순서 있는 정확 버전 참조 두 개를 사용한다. 파일 경로를 유지하며 확정할 수 없는 연결은 자동 선택하지 않는다. [계약·검수](docs/design-review/obsidian-vault-integration.md)를 따른다.

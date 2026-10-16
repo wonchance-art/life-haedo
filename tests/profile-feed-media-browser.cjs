@@ -201,6 +201,11 @@ async function main() {
         await page
           .getByRole("button", { name: "외부 이미지 보기", exact: true })
           .click();
+        // Images load only when their actual shape is visible. A toolbar click
+        // can leave the second shape outside the viewport on CI Chromium.
+        await page.locator(".pp-shape").nth(0).scrollIntoViewIfNeeded();
+        await page.locator(".pp-shape img").first().waitFor();
+        await page.locator(".pp-shape").nth(1).scrollIntoViewIfNeeded();
         await page.locator(".pp-shape img").nth(1).waitFor();
         await page.locator(".pp-media-options summary").click();
         for (const width of [1440, 820, 390]) {
