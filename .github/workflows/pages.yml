@@ -294,6 +294,9 @@ jobs:
       - name: Verify blog drafts, mixed posts, focused writing and exact home return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-user-journeys-browser.cjs
+      - name: Verify home writing entry, scoped search and lazy photo recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/home-refinement-browser.cjs
       - name: Verify subview location and safe contextual return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/subview-navigation-browser.cjs
@@ -320,6 +323,7 @@ jobs:
         with:
           name: browser-checks-${{ github.run_attempt }}
           path: |
+            .local/home-refinement/qa/
             .local/blog-journeys/after/
             .local/sns-blog/after/
             .local/blog-platform/*.json

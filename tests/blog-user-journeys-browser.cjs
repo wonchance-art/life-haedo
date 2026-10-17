@@ -14,7 +14,7 @@ const { playwright, ready, shellReady, settle, makeContext, observe, nav } = req
 const { inspect } = require('../scripts/check-site-design.cjs');
 const phase = process.env.JOURNEY_PHASE || 'after';
 assert(['before', 'after'].includes(phase));
-const out = path.resolve('.local/blog-journeys', phase);
+const out = process.env.JOURNEY_OUT_DIR ? path.resolve(process.env.JOURNEY_OUT_DIR) : path.resolve('.local/blog-journeys', phase);
 const sizes = [{ width: 1440, height: 1000 }, { width: 820, height: 1000 }, { width: 390, height: 844 }];
 const report = { phase, createdAt: new Date().toISOString(), scope: 'Linux Chromium simulated viewports/touch, actual app and account-scoped IndexedDB; anonymous intercepted Auth/share HTTP. No live OAuth/remote DB, native IME, Apple hardware, PWA or deployment evidence.', checks: [], visual: [], qualityFailures: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, external: [] };
 async function instrumentStorage(context) {
@@ -27,6 +27,13 @@ async function instrumentStorage(context) {
 async function home(page) {
   await nav(page, 'home'); await page.locator('#homePosts[aria-busy="false"]').waitFor();
 }
+async function searchInput(page) {
+  const input = page.locator('#homePostSearch');
+  if (!await input.isVisible()) await page.locator('.home-search-toggle').click();
+  await input.waitFor({ state: 'visible' });
+  return input;
+}
+async function fillSearch(page, text) { await (await searchInput(page)).fill(text); }
 async function openHome(page) { await page.goto(base + '/index.html'); await ready(page); await page.locator('#homePosts[aria-busy="false"]').waitFor(); }
 async function snap(page, scene) {
   if (process.env.JOURNEY_NO_SNAP) return;
@@ -132,13 +139,13 @@ async function main() {
         await openHome(page); const refs = await seedMixed(page); await page.reload(); await ready(page); await home(page);
         const posts = page.locator('#homePosts .home-post'); assert.equal(await posts.count(), 3);
         assert.equal(await page.locator(`#homePosts [data-source-id="${refs.imported}"]`).count(), 0);
-        await page.locator('#homePostSearch').fill('세 형식 공통검색'); await page.waitForFunction(() => document.querySelectorAll('#homePosts .home-post').length === 3);
+        await fillSearch(page, '세 형식 공통검색'); await page.waitForFunction(() => document.querySelectorAll('#homePosts .home-post').length === 3);
         await snap(page, 'home');
         await page.locator(`#homePosts [data-source-id="${refs.source}"][data-version-id="${refs.version}"] .home-post-open`).click(); await settle(page);
         assert.equal(await page.locator('#lifeSourceText').textContent(), refs.sourceText);
         await page.locator('#lifeSearchReturn').click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
         assert.equal(await page.locator('#homePostSearch').inputValue(), '세 형식 공통검색');
-        await page.locator('#homePostSearch').fill(''); await page.locator('#homeTab-drafts').click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
+        await fillSearch(page, ''); await page.locator('#homeTab-drafts').click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
         assert.equal(await page.locator('#homePosts .home-draft').count(), 3);
         for (const kind of ['photo-draft', 'plain-draft', 'source-draft']) assert.equal(await page.locator(`#homePosts [data-draft-kind="${kind}"]`).count(), 1);
         await snap(page, 'drafts'); await page.locator(`[data-draft-id="${refs.photoDraft}"] .home-draft-open`).click(); await page.locator('.ql-editor').waitFor(); assert.equal(await page.locator('#photoTitle').inputValue(), '이어 쓸 실제 사진 초안');
@@ -147,19 +154,19 @@ async function main() {
         assert.equal((await documents(page)).docs.find(doc => doc.id === refs.photoDraft).status, 'draft');
         await page.locator('#homeTab-archive').click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
         assert.equal(await page.locator('#homePosts .home-post').count(), 1); assert.equal(await page.locator(`[data-photo-post-id="${refs.archived}"]`).count(), 1); await snap(page, 'archive');
-        await page.locator('#homeTab-posts').click(); await page.locator('#homePosts[aria-busy="false"]').waitFor(); await page.locator('#homePostSearch').fill('보관함에만');
+        await page.locator('#homeTab-posts').click(); await page.locator('#homePosts[aria-busy="false"]').waitFor(); await fillSearch(page, '보관함에만');
         await page.waitForFunction(() => document.querySelectorAll('#homePosts .home-post').length === 0);
       });
       await check('legacy posts edit through their original composer and profile edits return to the same filtered home', async ({ page }) => {
         await openHome(page); const refs = await seedMixed(page); await page.reload(); await ready(page); await home(page);
-        await page.locator('#homePostSearch').fill('세 형식 공통검색'); await page.waitForFunction(() => document.querySelectorAll('#homePosts .home-post').length === 3);
+        await fillSearch(page, '세 형식 공통검색'); await page.waitForFunction(() => document.querySelectorAll('#homePosts .home-post').length === 3);
         await page.locator(`[data-post-id="${refs.legacy}"] .home-post-open`).click(); await page.locator('.pp-post').waitFor();
         assert.equal(await page.locator('.photo-editor').count(), 0); await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('#ppBody').waitFor();
         await page.locator('#ppBody').fill('세 형식 공통검색 기존 첨부 글 — 실제 수정\n이전 형식으로 저장된 본문을 수정합니다.');
         await page.locator('.pp-composer').getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('#ppBody').waitFor({ state: 'detached' });
         await page.getByRole('button', { name: '내 글로 돌아가기', exact: true }).last().click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
         assert.equal(await page.locator('#homePostSearch').inputValue(), '세 형식 공통검색'); assert.match(await page.locator(`[data-post-id="${refs.legacy}"]`).innerText(), /실제 수정/);
-        await page.locator('.home-profile-open').first().click(); await page.locator('#wbPageTitle').waitFor();
+        await page.getByRole('button', { name: '프로필 편집', exact: true }).click(); await page.locator('#wbPageTitle').waitFor();
         assert.equal(await page.locator('.wb-post-feed').count(), 0, 'Profile editing must not mount a second private post list');
         await page.locator('#wbPageTitle').fill('새 이름으로 이어 쓰는 블로그'); await page.locator('#wbPageIntro').fill('목록을 벗어나지 않고 소개를 정돈합니다.'); await snap(page, 'profile');
         await page.getByRole('button', { name: '저장하고 돌아가기', exact: true }).click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
@@ -171,7 +178,7 @@ async function main() {
         assert.equal(await page.locator('#homePosts .home-post').count(), 20);
         await page.getByRole('button', { name: '글 20개 더 보기', exact: true }).click(); assert.equal(await page.locator('#homePosts .home-post').count(), 27);
         await page.locator('#homePosts .home-post').nth(25).locator('.home-post-open').click(); await page.locator('.photo-article').waitFor(); await page.getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await page.locator('#homePosts[aria-busy="false"]').waitFor(); assert.equal(await page.locator('#homePosts .home-post').count(), 27);
-        const query = page.locator('#homePostSearch'); await query.fill('오래된 글도'); await page.waitForFunction(() => document.querySelectorAll('#homePosts .home-post').length === 9);
+        const query = await searchInput(page); await query.fill('오래된 글도'); await page.waitForFunction(() => document.querySelectorAll('#homePosts .home-post').length === 9);
         await query.dispatchEvent('compositionstart'); await query.fill('아직 조합 중인 검색');
         assert.equal(await page.locator('#homePosts .home-post').count(), 9, 'Composition must not erase the existing reading results');
         await query.dispatchEvent('compositionend', { data: '검색' }); await page.waitForFunction(() => document.querySelectorAll('#homePosts .home-post').length === 0);
@@ -186,7 +193,7 @@ async function main() {
       });
       await check('saving a post outside the current search keeps the query until an explicit reveal action', async ({ page }) => {
         await openHome(page); const sample = await seed(page, 1); await page.reload(); await ready(page); await home(page);
-        await page.locator('#homePostSearch').fill('산책에서'); await page.locator(`#homePosts [data-photo-post-id="${sample.ids[0]}"] .home-post-open`).click(); await page.locator('.photo-article').waitFor();
+        await fillSearch(page, '산책에서'); await page.locator(`#homePosts [data-photo-post-id="${sample.ids[0]}"] .home-post-open`).click(); await page.locator('.photo-article').waitFor();
         await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('#photoTitle').fill('완전히 다른 제목으로 바꾼 글'); await page.locator('.ql-editor').fill('본문의 검색어도 명시적으로 고쳤습니다.');
         await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor(); await page.getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
         assert.equal(await page.locator('#homePostSearch').inputValue(), '산책에서'); assert.equal(await page.locator('#homePosts .home-post').count(), 0);
@@ -201,7 +208,7 @@ async function main() {
         await page.evaluate(() => { window.__journeyFailWorkbench = false; }); await page.locator('#homePosts').getByRole('button', { name: /다시/ }).first().click(); await page.locator(`[data-post-id="${refs.legacy}"]`).waitFor();
         await nav(page, 'tools'); await page.evaluate(() => { window.__journeyFailList = true; }); await home(page);
         assert.equal(await page.locator(`#homePosts [data-source-id="${refs.source}"]`).count(), 1); assert.equal(await page.locator(`[data-post-id="${refs.legacy}"]`).count(), 1); assert.equal(await page.locator('#homeFirstWrite').count(), 0);
-        await page.locator('#homePostSearch').fill('no matching result'); assert.equal(await page.locator('#homePosts .home-first-post').count(), 0, 'An incomplete search must not claim no matches'); assert.equal(await page.locator('#homePosts .home-load-error').count(), 1);
+        await fillSearch(page, 'no matching result'); assert.equal(await page.locator('#homePosts .home-first-post').count(), 0, 'An incomplete search must not claim no matches'); assert.equal(await page.locator('#homePosts .home-load-error').count(), 1);
       });
       await check('changing workspace while a real old list read is held preserves the selected workspace and its empty state', async ({ page }) => {
         await openHome(page); const sample = await seed(page);
@@ -225,7 +232,7 @@ async function main() {
     }
     if (phase === 'before') await check('immutable before: home, profile, saved reading and writing at three widths', async ({ page }) => {
       await openHome(page); const sample = await seed(page); await page.reload(); await ready(page); await home(page); await snap(page, 'home');
-      await page.locator('.home-profile-open').first().click(); await page.locator('.wb-profile').waitFor(); await snap(page, 'profile');
+      await page.getByRole('button', { name: '프로필 편집', exact: true }).click(); await page.locator('.wb-profile').waitFor(); await snap(page, 'profile');
       await home(page); await page.locator(`#homePosts [data-photo-post-id="${sample.ids[0]}"] .home-post-open`).click(); await page.locator('.photo-article').waitFor(); await snap(page, 'reading');
       await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('.ql-editor').waitFor(); await snap(page, 'writing');
     });

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-17T16:32:00Z",
+  "generatedAt": "2026-10-17T17:01:15Z",
   "title": "Design System: 해도",
   "extensions": {
     "colorMeta": {
@@ -109,7 +109,7 @@
       {
         "name": "compact-navigation",
         "value": "761px–1100px",
-        "purpose": "88px 예약·64px 탐색·52px 링크."
+        "purpose": "88px 예약·64px 탐색·60px 아이콘과 라벨 링크."
       },
       {
         "name": "mobile-shell",
@@ -182,10 +182,11 @@
           "초안",
           "보관함"
         ],
-        "search": "내 글 검색; 현재 탭의 전체 읽기 결과; 조합 중 갱신 보류; 부분 실패는 빈 결과와 구별",
+        "search": "탭 옆에서 펼치는 내 글 검색; 현재 탭의 전체 읽기 결과; 검색어·펼침 보존; 조합 중 갱신 보류; 부분 실패는 빈 결과와 구별",
         "pageSize": 20,
-        "empty": "첫 글 쓰기 하나; 중복 작성 행 숨김",
-        "drafts": "새 글 초안과 기존 글 수정 중 구별; 실제 최신 초안 이어쓰기"
+        "empty": "글·초안·보관함이 모두 없으면 첫 글 쓰기 하나; 작성 행·탭·검색 숨김",
+        "drafts": "새 글 초안과 기존 글 수정 중 구별; 글 탭에서만 최신 초안 이어쓰기",
+        "feed": "글별 동일 작성자·아바타 반복 없이 날짜·비공개·브라우저 보관 표시; 모든 사진 프레임을 화면 접근 때 지연 조회"
       },
       "writer": {
         "entryFocus": "본문",
@@ -201,7 +202,7 @@
         "reading": "탭·검색·표시 범위·원래 항목 위치·초점 보존",
         "saved": "실제 저장된 항목 우선; 검색에 가려지면 이유와 명시적 해제 제공"
       },
-      "profile": "이름·소개·소개 표시 편집만 제공; 대표 글 목록은 홈",
+      "profile": "이름·소개·소개 표시 편집만 제공; 소개 숨김 반영; 독립 실패와 재시도; 대표 글 목록은 홈",
       "preservation": "사진/리치 글, 기존 첨부 글, 원천 글과 각 초안을 표시 어댑터로 합침; 자동 변환·공개·동기화 없음"
     }
   },
@@ -265,7 +266,7 @@
       "kind": "custom",
       "description": "홈 대표 목록의 글·초안·보관함. 선택선·aria-selected·키보드 이동으로 현재 상태를 표시한다.",
       "html": "<div class=\"ds-tabs\" role=\"tablist\" aria-label=\"내 글 상태\"><button type=\"button\" role=\"tab\" aria-selected=\"true\" aria-controls=\"ds-posts\">글</button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\" aria-controls=\"ds-posts\">초안 2</button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\" aria-controls=\"ds-posts\">보관함</button></div><div id=\"ds-posts\" role=\"tabpanel\" aria-label=\"글\"></div>",
-      "css": ".ds-tabs{display:flex;border-bottom:1px solid var(--haedo-line,#ececee);font-family:var(--haedo-font,\"Apple SD Gothic Neo\",\"Noto Sans CJK KR\",\"Malgun Gothic\",sans-serif)}.ds-tabs button{position:relative;flex:1;min-height:52px;padding:12px 8px;border:0;border-radius:0;background:transparent;color:var(--haedo-muted,#66666f);font-family:inherit;font-size:14px;font-weight:550;line-height:1.6;cursor:pointer}.ds-tabs button[aria-selected=true]{color:var(--haedo-ink,#18181b);font-weight:700}.ds-tabs button[aria-selected=true]::after{position:absolute;bottom:-1px;left:20%;right:20%;height:2px;background:currentColor;content:\"\"}.ds-tabs button:hover{background:var(--haedo-canvas,#f7f7f8)}.ds-tabs button:focus-visible{outline:3px solid var(--haedo-focus,#3156d3);outline-offset:3px}"
+      "css": ".ds-tabs{display:flex;border-bottom:1px solid var(--haedo-line,#ececee);font-family:var(--haedo-font,\"Apple SD Gothic Neo\",\"Noto Sans CJK KR\",\"Malgun Gothic\",sans-serif)}.ds-tabs button{position:relative;flex:1;min-height:44px;padding:8px;border:0;border-radius:0;background:transparent;color:var(--haedo-muted,#66666f);font-family:inherit;font-size:14px;font-weight:550;line-height:1.6;cursor:pointer}.ds-tabs button[aria-selected=true]{color:var(--haedo-ink,#18181b);font-weight:700}.ds-tabs button[aria-selected=true]::after{position:absolute;bottom:-1px;left:20%;right:20%;height:2px;background:currentColor;content:\"\"}.ds-tabs button:hover{background:var(--haedo-canvas,#f7f7f8)}.ds-tabs button:focus-visible{outline:3px solid var(--haedo-focus,#3156d3);outline-offset:3px}"
     },
     {
       "name": "이어 쓸 초안 행",

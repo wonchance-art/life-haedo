@@ -14,29 +14,28 @@
     let disposed = false, generation = 0, visible = false;
     let libraryOpen = false, libraryWorkspace = null;
     const mediaUrls = new Set();
-    let listState = { workspaceId: null, tab: 'posts', query: '', limit: 20 };
+    let mediaObserver = null, mediaGeneration = 0;
+    let listState = { workspaceId: null, tab: 'posts', query: '', searchExpanded: false, limit: 20 };
     const ROW_LIMIT = 20;
     const TAB_LABELS = { posts: '글', drafts: '초안', archive: '보관함' };
     function captureState() { return { ...listState, libraryOpen }; }
     function adoptState(workspaceId, incoming) {
-      if (listState.workspaceId !== workspaceId) { listState = { workspaceId, tab: 'posts', query: '', limit: ROW_LIMIT }; libraryOpen = false; }
+      if (listState.workspaceId !== workspaceId) { listState = { workspaceId, tab: 'posts', query: '', searchExpanded: false, limit: ROW_LIMIT }; libraryOpen = false; }
       if (incoming?.workspaceId !== workspaceId) return;
       listState = { workspaceId, tab: Object.hasOwn(TAB_LABELS, incoming.tab) ? incoming.tab : 'posts',
         query: typeof incoming.query === 'string' ? incoming.query.slice(0, 1000) : '',
+        searchExpanded: incoming.searchExpanded === true || (typeof incoming.query === 'string' && !!incoming.query.trim()),
         limit: Number.isSafeInteger(incoming.limit) ? Math.max(ROW_LIMIT, Math.min(incoming.limit, 10000)) : ROW_LIMIT };
       libraryOpen = incoming.libraryOpen === true;
     }
-    function clearMedia() { mediaUrls.forEach(url => URL.revokeObjectURL(url)); mediaUrls.clear(); }
+    function clearMedia() {
+      mediaGeneration += 1; mediaObserver?.disconnect(); mediaObserver = null;
+      mediaUrls.forEach(url => URL.revokeObjectURL(url)); mediaUrls.clear();
+    }
     function initials(name) { return !name || name === '내 블로그' ? '나' : Array.from(String(name).replace(/\s+/g, '')).slice(0, 2).join(''); }
     function avatar(context) {
       const mark = el('span', initials(context.profile.name), 'home-avatar');
       mark.setAttribute('aria-hidden', 'true'); return mark;
-    }
-    function profileAction(context, className, focusKey) {
-      const button = action(context, '', () => navigate('page', { blogContext: true, pageProfileEdit: true }), className);
-      button.setAttribute('aria-label', '프로필 편집'); button.dataset.focusKey = focusKey;
-      button.append(avatar(context), el('span', context.profile.name, 'home-author-name'));
-      return button;
     }
     function libraryAnchor(context) {
       const focused = document.activeElement;
@@ -140,7 +139,8 @@
     }
     function quickLinks(context) {
       const nav = el('nav', null, 'home-blog-actions'); nav.setAttribute('aria-label', '내 블로그');
-      const prompt = el('span', '어떤 이야기를 남길까요?', 'home-compose-prompt');
+      const prompt = action(context, '어떤 이야기를 남길까요?', () => navigate('page', { blogContext: true, pageCompose: true }), 'home-compose-prompt');
+      prompt.dataset.focusKey = 'home:action:prompt';
       const write = action(context, '새 글 쓰기', () => navigate('page', { blogContext: true, pageCompose: true }), 'life-primary home-blog-write');
       write.dataset.homeDestination = 'write'; write.dataset.focusKey = 'home:action:write';
       nav.append(prompt, write); context.composeActions = nav;
@@ -148,9 +148,10 @@
     }
     function profileHeader(context) {
       const header = el('div', null, 'home-profile-bar');
-      const profile = profileAction(context, 'home-profile-open', 'home:profile');
+      const profile = el('div', null, 'home-profile-open');
+      profile.append(avatar(context), el('span', context.profile.name, 'home-author-name'));
       const copy = el('div', null, 'home-profile-copy');
-      const intro = el('p', '생각과 일상을 글로 남기는 내 공간입니다.', 'home-blog-description');
+      const intro = el('p', '', 'home-blog-description'); intro.hidden = true;
       copy.append(profile, intro);
       const manage = action(context, '프로필 편집', () => navigate('page', { blogContext: true, pageProfileEdit: true }), 'home-blog-action');
       manage.dataset.homeDestination = 'page'; manage.dataset.focusKey = 'home:action:page';
@@ -189,36 +190,59 @@
       return rows;
     }
     function postCover(context, row, article, open) {
-      if (row.kind !== 'photo' || !row.photos || context.photoReads >= 4) return;
-      context.photoReads += 1;
+      if (row.kind !== 'photo' || !row.photos) return;
+      const epoch = mediaGeneration;
       const frame = action(context, '', open, 'home-post-media');
       frame.setAttribute('aria-label', '사진이 있는 글 열기'); frame.dataset.focusKey = 'home:photo:' + row.id;
       frame.setAttribute('aria-busy', 'true');
       const image = el('img', null, 'home-post-cover'); image.alt = ''; image.loading = 'lazy'; image.decoding = 'async';
-      frame.append(image); article.append(frame);
+      const status = el('span', '사진 불러오는 중…', 'life-meta home-photo-loading');
+      frame.append(status); article.append(frame);
+      const current = () => showing(context) && epoch === mediaGeneration && frame.isConnected;
       const removeCover = () => {
-        if (!showing(context) || !frame.isConnected) return;
-        const focused = document.activeElement === frame;
+        if (!current()) return;
         frame.setAttribute('aria-busy', 'false');
         frame.replaceChildren(el('span', '사진을 표시하지 못했어요. 글을 열어 확인해 주세요.', 'life-meta home-photo-error'));
-        if (focused) frame.focus({ preventScroll: true });
       };
-      storage.readPhotoPost(context.workspaceId, row.id).then(doc => {
-        if (!showing(context) || !frame.isConnected) return;
-        if (doc.status !== 'saved' || doc.archived !== !!row.archived) throw new Error('post_changed');
-        const embedded = doc.ops.find(op => op.insert?.photo)?.insert.photo;
-        const photo = doc.photos.find(item => item.id === embedded?.id);
-        if (!photo?.blob) throw new Error('photo_missing');
-        const url = URL.createObjectURL(photo.blob); mediaUrls.add(url);
-        image.alt = embedded.alt || embedded.caption || '';
-        image.src = url;
-        frame.setAttribute('aria-busy', 'false');
-        image.addEventListener('error', () => {
-          if (!showing(context)) return;
-          removeCover();
-          URL.revokeObjectURL(url); mediaUrls.delete(url);
-        }, { once: true });
-      }).catch(removeCover);
+      const readCover = async () => {
+        if (!current()) return;
+        try {
+          const doc = await storage.readPhotoPost(context.workspaceId, row.id);
+          if (!current()) return;
+          if (doc.status !== 'saved' || doc.archived !== !!row.archived) throw new Error('post_changed');
+          const embedded = doc.ops.find(op => op.insert?.photo)?.insert.photo;
+          const photo = doc.photos.find(item => item.id === embedded?.id);
+          if (!photo?.blob) throw new Error('photo_missing');
+          const url = URL.createObjectURL(photo.blob); mediaUrls.add(url);
+          image.alt = embedded.alt || embedded.caption || '';
+          image.addEventListener('load', () => { if (current()) frame.setAttribute('aria-busy', 'false'); }, { once: true });
+          image.addEventListener('error', () => {
+            removeCover(); URL.revokeObjectURL(url); mediaUrls.delete(url);
+          }, { once: true });
+          image.src = url; frame.replaceChildren(image);
+        } catch (_) { removeCover(); }
+      };
+      if (typeof global.IntersectionObserver === 'function') {
+        if (!mediaObserver) mediaObserver = new global.IntersectionObserver(entries => {
+          entries.forEach(entry => {
+            if (!entry.isIntersecting) return;
+            mediaObserver?.unobserve(entry.target);
+            const loadCover = entry.target._homeLoadCover;
+            delete entry.target._homeLoadCover; loadCover?.();
+          });
+        }, { rootMargin: '320px 0px' });
+        frame._homeLoadCover = readCover; mediaObserver.observe(frame);
+      } else Promise.resolve().then(readCover);
+    }
+    function modifiedDate(value, prefix = '수정 ') {
+      const date = new Date(value);
+      if (!Number.isFinite(date.getTime())) return null;
+      const options = { month: 'long', day: 'numeric' };
+      if (date.getFullYear() !== new Date().getFullYear()) options.year = 'numeric';
+      const time = el('time', prefix + new Intl.DateTimeFormat('ko-KR', options).format(date));
+      time.dateTime = value;
+      time.title = prefix + new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }).format(date);
+      return time;
     }
     function blogPost(context, row) {
       const article = el('article', null, 'home-post'); article.dataset.homeKind = row.kind;
@@ -227,17 +251,11 @@
       else if (row.kind === 'source') { article.dataset.sourceId = row.id; article.dataset.versionId = row.versionId; }
       else article.dataset.postId = row.id;
       const open = () => row.kind === 'source' ? openVersion(context, row.versionId) : navigate('page', { blogContext: true, pagePreview: false, searchTarget: target });
-      const byline = el('div', null, 'home-post-byline');
-      byline.append(profileAction(context, 'home-post-author', 'home:author:' + row.kind + ':' + row.id));
-      const date = new Date(row.updatedAt), meta = el('p', null, 'life-meta home-post-meta');
-      if (Number.isFinite(date.getTime())) {
-        const time = el('time', new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(date));
-        time.dateTime = row.updatedAt;
-        time.title = new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }).format(date);
-        meta.append(time, document.createTextNode(' · '));
-      }
+      const meta = el('p', null, 'life-meta home-post-meta');
+      const time = modifiedDate(row.updatedAt, row.kind === 'source' ? '저장 ' : '수정 ');
+      if (time) meta.append(time, document.createTextNode(' · '));
       meta.append(document.createTextNode(row.kind === 'photo' ? '비공개 · 이 브라우저에 보관' : row.kind === 'source' ? '기록 글 · 비공개' : '첨부 글 · 비공개'));
-      byline.append(meta); article.append(byline);
+      article.append(meta);
       const content = el('div', null, 'home-post-content'), heading = el('h3');
       const label = String(row.title || '').trim() || (snippet(row.body) || row.attachments?.[0]?.title || '사진이 있는 글');
       const button = action(context, label, open, 'home-post-open' + (row.kind === 'plain' || !String(row.title || '').trim() ? ' home-post-prose' : ''));
@@ -269,12 +287,13 @@
       copy.append(el('span', row.editing === true ? '기존 글 수정 중' : row.editing === false ? '새 글 초안' : '작성 중인 글', 'life-meta'),
         el('strong', String(row.title || '').trim() || snippet(row.body) || '내용을 기다리는 초안'));
       if (row.title?.trim() && row.body?.trim()) copy.append(el('span', snippet(row.body), 'home-draft-excerpt'));
-      const date = new Date(row.updatedAt);
-      if (Number.isFinite(date.getTime())) { const time = el('time', new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(date), 'life-meta'); time.dateTime = row.updatedAt; copy.append(time); }
+      const time = modifiedDate(row.updatedAt);
+      if (time) { time.className = 'life-meta'; copy.append(time); }
       open.append(copy, el('span', '이어쓰기', 'home-draft-resume')); article.append(open); return article;
     }
     function resultRows(context) {
       const rows = latestOwnPosts(getBundle()), errors = [];
+      context.workbenchState = null;
       const { results } = context;
       const read = (key, label, use) => {
         const result = results[key];
@@ -283,13 +302,15 @@
       };
       read('workbench', '기존 글', state => {
         if (state.workspaceId !== context.workspaceId) throw new Error('workspace_mismatch');
-        life.Workbench.validate(state);
+        life.Workbench.validate(state); context.workbenchState = state;
         rows.push(...(state.page.posts || []).filter(post => post.status === 'saved').map(post => ({ ...post, kind: 'plain', tab: 'posts' })));
         const title = String(state.page.title || '').trim();
         context.profile.name = title && title !== '내 페이지' ? title : '내 블로그';
         context.surface.querySelectorAll('.home-author-name').forEach(node => { node.textContent = context.profile.name; });
         context.surface.querySelectorAll('.home-avatar').forEach(node => { node.textContent = initials(context.profile.name); });
-        context.surface.querySelector('.home-blog-description').textContent = state.page.showIntro && state.page.intro ? snippet(state.page.intro) : '생각과 일상을 글로 남기는 내 공간입니다.';
+        const intro = context.surface.querySelector('.home-blog-description');
+        intro.textContent = state.page.showIntro ? snippet(state.page.intro) : '';
+        intro.hidden = !intro.textContent;
       });
       read('photo', '이 브라우저의 글·초안·보관함', posts => {
         if (!Array.isArray(posts)) throw new Error('invalid_posts');
@@ -304,6 +325,7 @@
         rows.push(...stages.filter(stage => life.Writing?.isDraft(stage) && stage.state === 'draft').map(stage => ({ ...stage,
           id: stage.stageId, body: stage.text, kind: 'source-draft', tab: 'drafts', editing: !!stage.sourceId })));
       });
+      context.profileStatus.hidden = !!context.workbenchState;
       rows.forEach(row => { if (!row.tab) row.tab = 'posts'; });
       const timestamp = row => Number.isFinite(Date.parse(row.updatedAt)) ? Date.parse(row.updatedAt) : 0;
       rows.sort((a, b) => timestamp(b) - timestamp(a) || (a.kind + ':' + a.id).localeCompare(b.kind + ':' + b.id));
@@ -325,22 +347,58 @@
         });
         tabs.append(button);
       }
+      const toolbar = el('div', null, 'home-list-toolbar');
+      const toggle = iconAction(context, '내 글 검색 열기', 'search', () => {
+        if (listState.query.trim()) {
+          context.searchInput.focus({ preventScroll: true }); return;
+        }
+        listState.searchExpanded = !listState.searchExpanded;
+        syncSearch(context);
+        (listState.searchExpanded ? context.searchInput : toggle).focus({ preventScroll: true });
+      });
+      toggle.classList.add('home-search-toggle'); toggle.dataset.focusKey = 'home:search-toggle';
+      toggle.setAttribute('aria-controls', 'homeSearchPanel');
+      toolbar.append(tabs, toggle);
+      const panel = el('div', null, 'home-search-panel'); panel.id = 'homeSearchPanel';
       const search = el('div', null, 'home-search');
       const label = el('label', '내 글 검색', 'life-sr-only'); label.htmlFor = 'homePostSearch';
       const input = el('input'); input.type = 'search'; input.id = 'homePostSearch'; input.placeholder = '내 글 검색'; input.maxLength = 1000;
       input.value = listState.query; input.dataset.focusKey = 'home:search'; input.autocomplete = 'off';
       let composing = false;
-      const apply = () => { if (composing || !showing(context)) return; listState.query = input.value; listState.limit = ROW_LIMIT; updateList(context, true); };
+      const apply = () => {
+        if (composing || !showing(context)) return;
+        listState.query = input.value; listState.searchExpanded = true; listState.limit = ROW_LIMIT; updateList(context, true);
+      };
       input.addEventListener('compositionstart', () => { composing = true; });
       input.addEventListener('compositionend', () => { composing = false; apply(); });
       input.addEventListener('input', apply);
-      search.append(label, life.Icons.create('search'), input);
-      const scope = el('p', '내가 작성한 글과 초안에서 찾습니다.', 'life-meta home-search-scope');
-      controls.append(tabs, search, scope); area.append(controls);
-      context.tabs = tabs;
+      input.addEventListener('keydown', event => {
+        if (event.key !== 'Escape' || listState.query.trim() || composing) return;
+        event.preventDefault(); listState.searchExpanded = false; syncSearch(context); toggle.focus({ preventScroll: true });
+      });
+      const clear = action(context, '검색어 지우기', () => {
+        listState.query = ''; listState.limit = ROW_LIMIT; input.value = ''; updateList(context, true);
+        (context.controls.hidden ? context.list.querySelector('#homeFirstWrite') : input)?.focus({ preventScroll: true });
+      }, 'home-search-clear'); clear.dataset.focusKey = 'home:search-clear';
+      search.append(label, life.Icons.create('search'), input, clear);
+      const scope = el('p', '', 'life-meta home-search-scope');
+      panel.append(search, scope); controls.append(toolbar, panel); area.append(controls);
+      context.tabs = tabs; context.controls = controls; context.searchPanel = panel; context.searchToggle = toggle;
+      context.searchInput = input; context.searchScope = scope; context.searchClear = clear; syncSearch(context);
       context.list = el('div', null, 'home-post-list'); context.list.id = 'homePostList'; context.list.setAttribute('role', 'tabpanel'); context.list.tabIndex = -1;
       context.feedback = el('p', null, 'life-sr-only'); context.feedback.setAttribute('role', 'status'); context.feedback.setAttribute('aria-live', 'polite');
       area.append(context.list, context.feedback);
+    }
+    function syncSearch(context) {
+      const expanded = listState.searchExpanded || !!listState.query.trim();
+      context.searchPanel.hidden = !expanded;
+      context.searchToggle.setAttribute('aria-expanded', String(expanded));
+      const label = listState.query.trim() ? '검색어 수정' : expanded ? '내 글 검색 닫기' : '내 글 검색 열기';
+      context.searchToggle.setAttribute('aria-label', label); context.searchToggle.title = label;
+      context.searchToggle.querySelector('.life-tooltip').textContent = label;
+      context.searchScope.textContent = TAB_LABELS[listState.tab] + ' 탭의 제목과 본문에서 찾습니다. 최근 수정·저장 순입니다.';
+      context.searchInput.placeholder = TAB_LABELS[listState.tab] + '에서 검색';
+      context.searchClear.hidden = !listState.query;
     }
     function matchesQuery(row) {
       const query = listState.query.trim().toLocaleLowerCase('ko-KR');
@@ -362,10 +420,13 @@
     function updateList(context, userAction = false) {
       if (!showing(context)) return;
       if (userAction) context.area.style.minHeight = '';
-      clearMedia(); context.photoReads = 0;
+      clearMedia();
       const { rows, errors } = resultRows(context), query = listState.query.trim().toLocaleLowerCase('ko-KR');
+      if (!rows.length && !errors.length && !query) listState.tab = 'posts';
+      context.controls.hidden = !rows.length && !errors.length && !query;
+      syncSearch(context);
       context.resumeRow = rows.find(row => row.tab === 'drafts') || null;
-      context.resume.hidden = !context.resumeRow;
+      context.resume.hidden = !context.resumeRow || listState.tab !== 'posts' || !!query;
       if (context.resumeRow) context.resumeLabel.textContent = String(context.resumeRow.title || '').trim() || snippet(context.resumeRow.body) || '작성 중인 초안';
       const counts = Object.fromEntries(Object.keys(TAB_LABELS).map(tab => [tab, rows.filter(row => row.tab === tab).length]));
       for (const button of context.tabs.children) {
@@ -375,6 +436,7 @@
       }
       context.composeActions.hidden = !errors.length && counts.posts === 0 && listState.tab === 'posts' && !query;
       context.composeActions.querySelector('.home-blog-write').dataset.focusKey = context.composeActions.hidden ? 'home:action:hidden-write' : 'home:action:write';
+      context.composeActions.querySelector('.home-compose-prompt').dataset.focusKey = context.composeActions.hidden ? 'home:action:hidden-prompt' : 'home:action:prompt';
       context.list.setAttribute('aria-labelledby', 'homeTab-' + listState.tab);
       const matched = rows.filter(row => row.tab === listState.tab && matchesQuery(row));
       const fragment = document.createDocumentFragment();
@@ -390,7 +452,7 @@
         const empty = el('div', null, 'home-first-post');
         const title = query ? '일치하는 내 글이 없어요.' : listState.tab === 'drafts' ? '작성 중인 초안이 없어요.' : listState.tab === 'archive' ? '보관한 글이 없어요.' : '첫 글을 써보세요.';
         empty.append(el('h3', title), el('p', query ? '현재 탭의 제목과 본문에서 찾았어요. 검색어나 탭을 바꿔보세요.' : listState.tab === 'drafts' ? '작성 중 닫은 글은 여기에 남습니다.' : listState.tab === 'archive' ? '보관을 지원하는 글만 여기에 표시됩니다.' : '한 문장부터 시작해도 좋아요. 먼저 비공개로 저장됩니다.', 'home-text'));
-        if (query) empty.append(action(context, '검색어 지우기', () => { listState.query = ''; listState.limit = ROW_LIMIT; const input = context.surface.querySelector('#homePostSearch'); input.value = ''; updateList(context, true); input.focus({ preventScroll: true }); }));
+        if (query) empty.append(action(context, '검색어 지우기', () => { listState.query = ''; listState.limit = ROW_LIMIT; const input = context.surface.querySelector('#homePostSearch'); input.value = ''; updateList(context, true); (context.controls.hidden ? context.list.querySelector('#homeFirstWrite') : input)?.focus({ preventScroll: true }); }));
         else if (listState.tab === 'posts') { const start = action(context, '첫 글 쓰기', () => navigate('page', { blogContext: true, pageCompose: true }), 'life-primary'); start.id = 'homeFirstWrite'; start.dataset.homeDestination = 'write'; start.dataset.focusKey = 'home:action:write'; empty.append(start); }
         fragment.append(empty);
       }
@@ -417,7 +479,7 @@
       keys.forEach((key, index) => { context.results[key] = results[index]; });
       const anchor = libraryAnchor(context);
       const libraryTop = anchor ? context.materials.getBoundingClientRect().top + global.scrollY : null;
-      updateList(context);
+      updateList(context); reconcileLibrary(context);
       // At the top of the document a shrinking composer cannot be corrected by
       // scrolling upward. Keep its former space while a library entry has focus.
       if (anchor && document.activeElement === anchor.element && anchor.element.isConnected) {
@@ -425,6 +487,14 @@
         if (shrink > 0.5) context.area.style.minHeight = Math.ceil(context.area.getBoundingClientRect().height + shrink) + 'px';
       }
       restoreAnchor(anchor);
+    }
+    function reconcileLibrary(context) {
+      const state = context.workbenchState;
+      if (!state || context.libraryState === state) return;
+      context.libraryState = state;
+      context.materials.querySelectorAll('#homeGroups, #homeBooks').forEach(node => node.remove());
+      if (state.groups.length) context.materials.append(groups(context, state));
+      if ((state.books || []).some(book => !book.archived)) context.materials.append(books(context, state));
     }
     async function enrichDrafts(context) {
       if (!showing(context) || listState.tab !== 'drafts' || context.draftLoading || context.results.photo?.status !== 'fulfilled' || !Array.isArray(context.results.photo.value)) return;
@@ -513,11 +583,16 @@
       adoptState(bundle.workspaceId, options.homeState);
       clearMedia();
       const surface = el('div', null, 'life-home'); surface.id = 'lifeHome';
-      const context = { token: ++generation, workspaceId: bundle.workspaceId, surface, profile: { name: '내 블로그' }, photoReads: 0,
+      const context = { token: ++generation, workspaceId: bundle.workspaceId, surface, profile: { name: '내 블로그' },
         results: {}, photoDrafts: new Map(), draftRead: 0, error: el('p', null, 'life-error home-error') };
       visible = true;
       context.error.hidden = true; context.error.setAttribute('role', 'alert');
-      const lead = el('div', null, 'home-blog-lead'); lead.append(profileHeader(context), quickLinks(context));
+      const lead = el('div', null, 'home-blog-lead');
+      context.profileStatus = el('div', null, 'home-profile-status home-load-error'); context.profileStatus.hidden = true;
+      context.profileStatus.setAttribute('role', 'status');
+      context.profileStatus.append(el('p', '프로필과 기존 글 정보를 불러오지 못했어요.', 'life-meta'),
+        action(context, '프로필 다시 불러오기', () => load(context, ['workbench'])));
+      lead.append(profileHeader(context), context.profileStatus, quickLinks(context));
       context.resume = action(context, '', () => context.resumeRow && openRow(context, context.resumeRow), 'home-resume');
       context.resume.dataset.focusKey = 'home:resume'; context.resume.hidden = true;
       context.resumeLabel = el('span', null, 'home-resume-title');
@@ -547,11 +622,6 @@
             context.list.before(notice);
           }
         }
-      }
-      const state = context.results.workbench?.status === 'fulfilled' ? context.results.workbench.value : null;
-      if (state && Array.isArray(state.groups)) {
-        if (state.groups.length) materials.append(groups(context, state));
-        if ((state.books || []).some(book => !book.archived)) materials.append(books(context, state));
       }
     }
     function leave() { generation += 1; visible = false; clearMedia(); }

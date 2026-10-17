@@ -12,7 +12,7 @@ const { ShareCloud } = require('./life-share-browser.cjs');
 const { playwright, ready, shellReady, settle, makeContext, observe, nav } = require('./unified-home-browser.cjs');
 const { inspectHome } = require('./home-entry-browser.cjs');
 
-const out = path.resolve(__dirname, '../.local/blog-platform');
+const out = process.env.BLOG_OUT_DIR ? path.resolve(process.env.BLOG_OUT_DIR) : path.resolve(__dirname, '../.local/blog-platform');
 const sizes = [{ width: 1440, height: 1000 }, { width: 820, height: 1000 }, { width: 390, height: 844 }];
 const report = { createdAt: new Date().toISOString(), scope: 'Linux Chromium viewport simulation; actual local application/SDK/IndexedDB, intercepted anonymous HTTP Auth. No live OAuth/DB, Apple hardware or deployment claim.', checks: [], visual: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, external: [] };
 

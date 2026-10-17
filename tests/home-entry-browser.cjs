@@ -9,7 +9,7 @@ const path = require('node:path');
 const { FakeCloud, accounts, cloud, base, openAccount } = require('./life-sync-browser.cjs');
 const { playwright, ready, settle, makeContext, observe, nav } = require('./unified-home-browser.cjs');
 const { fixture, current, seedComposition, oldBody, newBody } = require('./life-workbench-browser.cjs');
-const out = path.resolve(__dirname, '../.local/home-entry');
+const out = process.env.ENTRY_OUT_DIR ? path.resolve(process.env.ENTRY_OUT_DIR) : path.resolve(__dirname, '../.local/home-entry');
 const report = { createdAt: new Date().toISOString(), scope: 'Actual local app/SDK/IDB, synthetic HTTP Auth; viewport simulation, not Apple device testing', checks: [], visual: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, external: [] };
 
 // Inject read/save failures at the storage boundary; successful calls use real IndexedDB.
@@ -264,7 +264,7 @@ async function main() {
     await check('composition read failure keeps original records usable and retry recovers', async ({ page }) => {
       const f = await fixture(page); await seedComposition(page, f.refs); const before = await current(page);
       await page.evaluate(() => { window.__homeFailRead = true; }); await home(page);
-      await page.locator('.home-load-error').waitFor(); assert.equal(await page.locator('#homeRecent > .home-record').count(), 3);
+      await page.locator('#homePosts .home-load-error').waitFor(); assert.equal(await page.locator('#homeRecent > .home-record').count(), 3);
       assert.equal(await page.locator('#homePage').count(), 0);
       await page.evaluate(() => { window.__homeFailRead = false; }); await page.getByRole('button', { name: '다시 불러오기', exact: true }).click();
       await page.locator('#homeComposition[aria-busy="false"]').waitFor(); assert.deepEqual(await current(page), before);

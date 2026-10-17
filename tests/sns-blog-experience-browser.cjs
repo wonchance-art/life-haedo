@@ -15,7 +15,7 @@ const { playwright, ready, shellReady, settle, makeContext, observe, nav } = req
 const { inspect } = require('../scripts/check-site-design.cjs');
 const phase = process.env.SNS_PHASE || 'after';
 assert(['before', 'after'].includes(phase));
-const out = path.resolve('.local/sns-blog', phase);
+const out = process.env.SNS_OUT_DIR ? path.resolve(process.env.SNS_OUT_DIR) : path.resolve('.local/sns-blog', phase);
 const sizes = [{ width: 1440, height: 1000 }, { width: 820, height: 1000 }, { width: 390, height: 844 }];
 const report = { phase, createdAt: new Date().toISOString(), scope: 'Linux Chromium viewport/touch simulation; anonymous HTTP Auth/share simulator, real local app/SDK/IndexedDB. Synthetic 1800×1200 image. No real Google/remote DB, Apple hardware, native IME, PWA or deployment claim.', checks: [], visual: [], qualityFailures: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, external: [] };
 
@@ -86,7 +86,7 @@ async function snap(page, scene) {
       for (const key of ['smallTargets', 'smallInputs', 'unnamed', 'contrastFailures']) if (metrics[key].length) report.qualityFailures.push({ scene, width: size.width, check: key, details: metrics[key] });
       if (scene !== 'public') {
         const aligned = metrics.navigation.map(item => item.label).join(',') === '홈,자료실,도구,설정' && metrics.navigation.every(item => item.width >= 44 && item.height >= 44 && item.iconWidth === 20 && item.iconHeight === 20 &&
-          (item.mode === 'rail' ? item.centeredX < 1 && item.centeredY < 1 && !item.labelVisible : item.mode === 'bottom' ? item.centeredX < 1 && item.labelVisible && item.labelTop >= 3 && item.labelTop <= 5 : item.iconLeft === 16 && item.centeredY < 1 && item.labelVisible && item.labelGap === 16));
+          (['rail', 'bottom'].includes(item.mode) ? item.centeredX < 1 && item.labelVisible && item.labelTop >= 3 && item.labelTop <= 5 : item.iconLeft === 16 && item.centeredY < 1 && item.labelVisible && item.labelGap === 16));
         if (scene === 'writing' && size.width <= 760) {
           const focusedWriting = await page.evaluate(() => document.body.dataset.writingFocus === 'true');
           if (metrics.navigation.length || !focusedWriting) report.qualityFailures.push({ scene, width: size.width, check: 'focusedMobileWriting', details: metrics.navigation });
@@ -163,7 +163,10 @@ async function main() {
       await login(page, server, device); const sample = await seed(page); await page.reload(); await ready(page); await home(page);
       assert((await page.evaluate(() => __homeDbOpens)).every(item => item.verified));
       if (phase === 'after') {
-        assert.equal(await page.locator('#homePosts .home-post-author').count(), 3);
+        assert.equal(await page.locator('#homePosts .home-post-author').count(), 0);
+        const metadata = await page.locator('#homePosts .home-post-meta').allTextContents();
+        assert.equal(metadata.length, 3);
+        metadata.forEach(text => assert.match(text, /비공개 · 이 브라우저에 보관/));
         assert.equal(await page.locator('.home-profile-open .home-avatar').innerText(), '느린');
       }
       await exactCover(page, sample.postIds[0], sample.width); await snap(page, 'feed');

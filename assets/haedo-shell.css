@@ -121,9 +121,8 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
 .haedo-privacy-link{grid-column:1/-1;justify-self:start;display:inline-flex;align-items:center;min-height:44px;margin-top:10px;color:var(--haedo-muted);font-size:12px}
 @media(max-width:1100px) and (min-width:761px){
  :root{--haedo-nav-width:88px}
- .haedo-nav{width:64px;left:12px;align-items:center}.haedo-nav .haedo-nav-link{width:52px;justify-content:center;padding:14px}
- .haedo-nav-text{display:none}.haedo-brand{padding:8px 2px;font-size:20px;gap:0}.haedo-brand-mark{display:none}
- .haedo-nav .haedo-nav-link:focus-visible>.haedo-tooltip{display:block}
+ .haedo-nav{width:64px;left:12px;align-items:center}.haedo-nav .haedo-nav-link{width:64px;height:60px;flex-basis:60px;flex-direction:column;justify-content:center;gap:4px;padding:8px 4px;font-size:12px}
+ .haedo-brand{padding:8px 2px;font-size:20px;gap:0}.haedo-brand-mark{display:none}
  .haedo-welcome{grid-template-columns:1fr;padding:24px 32px;max-width:680px}
  .haedo-welcome-post{max-width:460px}
 }
