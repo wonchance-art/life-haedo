@@ -165,7 +165,16 @@ async function main() {
   };
   const capture = async scene => {
     for (const width of [1440, 820, 390]) {
-      await page.setViewportSize({ width, height: 1000 }); await page.evaluate(() => document.fonts.ready);
+      await page.setViewportSize({ width, height: 1000 });
+      // Measure the final reading surface after its finite entrance motion;
+      // ready data can precede the 220ms fade, without changing its real colors.
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+        await new Promise(requestAnimationFrame);
+        await Promise.all(document.getAnimations().filter(animation =>
+          Number.isFinite(animation.effect?.getComputedTiming().endTime)
+        ).map(animation => animation.finished.catch(() => {})));
+      });
       const metrics = await page.evaluate(inspect);
       assert.equal(metrics.horizontalOverflow, false); for (const key of ['smallTargets', 'smallInputs', 'unnamed', 'contrastFailures']) assert.deepEqual(metrics[key], [], scene + ' ' + key);
       const file = scene + '-' + width + '.png'; await page.screenshot({ path: path.join(out, file), fullPage: true }); report.visual.push({ scene, width, file, metrics });

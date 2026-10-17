@@ -99,9 +99,18 @@ async function main() {
     finally { await context.close(); }
   }
   async function capture(page, scene, size) {
-    await page.evaluate(() => document.fonts.ready); await page.evaluate(() => { document.activeElement?.blur(); scrollTo({ top: 0, behavior: 'instant' }); });
+    const motion = await page.evaluate(async () => {
+      await document.fonts.ready; document.activeElement?.blur(); scrollTo({ top: 0, behavior: 'instant' });
+      // Navigation may queue its entrance after rendering. Observe the settled
+      // screen, including its real final opacity, without disabling motion.
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const main = document.querySelector('#lifeMain'), opacityBefore = getComputedStyle(main).opacity;
+      const finite = document.getAnimations().filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime));
+      await Promise.all(finite.map(animation => animation.finished.catch(() => {})));
+      return { waitedAnimations: finite.length, opacityBefore, opacityAfter: getComputedStyle(main).opacity };
+    });
     const metrics = await page.evaluate(inspect), experience = await page.evaluate(experienceMetrics, { scene, title: samples[0].title }), file = scene + '-' + size.width + '.png';
-    await page.screenshot({ path: path.join(audit, file) }); report.visual.push({ scene, file, ...metrics, experience });
+    await page.screenshot({ path: path.join(audit, file) }); report.visual.push({ scene, file, ...metrics, experience, motion });
     assert(!metrics.horizontalOverflow, scene + ' overflow'); for (const key of ['smallTargets', 'smallInputs', 'unnamed', 'contrastFailures']) assert.deepEqual(metrics[key], [], scene + ' ' + key);
     if (!baseline && scene === 'page') { assert.equal(experience.visibleTitleOccurrences, 1, 'One source title should not repeat in the default page entry'); assert.equal(experience.visibleComment, true, 'Default page should show its own comment'); }
   }

@@ -28,7 +28,8 @@ async function main(){
   if(action==='reorder')a.items.reverse();if(action==='note')a.note='변경된 영역 설명';if(action==='remove')b.areas=b.areas.filter(x=>x.id!==a.id);
   await s.saveNineBoard(id,v,v.revision);
  },action);
- const snap=async scene=>{for(const width of [1440,820,390]){await page.setViewportSize({width,height:1000});await page.evaluate(()=>document.fonts.ready);const metrics=await page.evaluate(inspect);report.visual.push({scene,width,metrics});assert.equal(metrics.horizontalOverflow,false);for(const key of ['smallTargets','smallInputs','unnamed','contrastFailures'])assert.deepEqual(metrics[key],[],scene+' '+width+' '+key);await page.screenshot({path:path.join(out,scene+'-'+width+'.png')});}};
+ // Audit the settled surface after real finite entrance motion; keep every layout/contrast assertion.
+ const snap=async scene=>{for(const width of [1440,820,390]){await page.setViewportSize({width,height:1000});await page.evaluate(async()=>{await document.fonts.ready;await new Promise(resolve=>requestAnimationFrame(resolve));await Promise.all(document.getAnimations().filter(animation=>Number.isFinite(animation.effect?.getComputedTiming().endTime)).map(animation=>animation.finished.catch(()=>{})));});const metrics=await page.evaluate(inspect);report.visual.push({scene,width,metrics});assert.equal(metrics.horizontalOverflow,false);for(const key of ['smallTargets','smallInputs','unnamed','contrastFailures'])assert.deepEqual(metrics[key],[],scene+' '+width+' '+key);await page.screenshot({path:path.join(out,scene+'-'+width+'.png')});}};
  let f,before;
  try{
   await page.goto(base+'/index.html');await ready(page);f=await fixture(page);before=await snapshot();await other.goto(base+'/index.html');await ready(other);await open();

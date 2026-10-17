@@ -17,6 +17,8 @@ body.haedo-shell:not(.haedo-timeline) { overflow-x: clip; }
   margin-inline: -24px; padding: env(safe-area-inset-top,0px) 24px 0;
   border-bottom: 1px solid var(--line); background: var(--paper);
 }
+/* Reflection already owns sticky writing/outline actions at the top edge. */
+.haedo-shell:has(.life-workbench[data-reflection-scene]) .life-toolbar.haedo-page-heading { position: static; }
 .haedo-shell :is(.life-button,.p-button,.photo-icon-button,.haedo-icon-button) {
   transition: transform 100ms cubic-bezier(.16,1,.3,1), background-color 140ms ease-out, color 140ms ease-out, border-color 140ms ease-out;
 }
