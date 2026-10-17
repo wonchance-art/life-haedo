@@ -101,8 +101,9 @@ async function main() {
     report.checks.push(name);
     console.log("PASS " + name);
   };
-  const snap = async (name, width) => {
+  const snap = async (name, width, target = null) => {
     await page.setViewportSize({ width, height: 1000 });
+    if (target) await target.scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(out, `${name}-${width}.png`) });
     const m = await page.evaluate(inspect);
     report.visual.push({ name, ...m });
@@ -116,6 +117,8 @@ async function main() {
     const d = page.locator(".pp-toolbar .pp-media-options");
     if (!(await d.evaluate((e) => e.open))) await d.locator("summary").click();
   };
+  const musicCard = page.locator('.pp-attachment[data-type="music"]');
+  const bookCard = page.locator('.pp-attachment[data-type="book"]');
   try {
     await go();
     await check(
@@ -136,7 +139,9 @@ async function main() {
       for (let i = 7; i >= 0; i--) {
         const d = M.draft(
           wb.page.posts,
-          HaedoLife.Core.id(),
+          // Same-time edits sort by ID in the merged feed. Keep unsupported
+          // attachments first so media checks cannot depend on wall-clock speed.
+          "feed_" + (i === 0 ? 8 : i),
           new Date(Date.UTC(2026, 9, 12, 12 - i)).toISOString(),
         );
         d.visibility = i === 0 ? "page" : "private";
@@ -176,13 +181,24 @@ async function main() {
         wb.page.posts = M.finish(
           wb.page.posts.concat(d),
           d.id,
-          new Date().toISOString(),
+          "2026-10-13T12:00:00.000Z",
         ).posts;
       }
       await s.saveWorkbench(w, wb, wb.revision);
     });
     await go();
     const before = await read();
+    report.attachmentOrder = await page.locator(".pp-attachment").evaluateAll(
+      cards => cards.map(card => ({
+        type: card.dataset.type,
+        media: !!card.querySelector(".pp-media-status"),
+      })),
+    );
+    assert.deepEqual(report.attachmentOrder[0], { type: "film", media: false });
+    assert.deepEqual(report.attachmentOrder.slice(-2), [
+      { type: "music", media: true },
+      { type: "book", media: true },
+    ]);
     await page.evaluate(() => scrollTo(0, 0));
     await snap("profile", 1440);
     await check(
@@ -201,16 +217,19 @@ async function main() {
         await page
           .getByRole("button", { name: "외부 이미지 보기", exact: true })
           .click();
-        // Images load only when their actual shape is visible. A toolbar click
-        // can leave the second shape outside the viewport on CI Chromium.
-        await page.locator(".pp-shape").nth(0).scrollIntoViewIfNeeded();
-        await page.locator(".pp-shape img").first().waitFor();
-        await page.locator(".pp-shape").nth(1).scrollIntoViewIfNeeded();
-        await page.locator(".pp-shape img").nth(1).waitFor();
+        // The feed can start with unsupported attachments when edit times tie.
+        // Reveal and verify each actual source instead of unrelated shape ordinals.
+        for (const [card, source] of [
+          [musicCard, 'https://i.ytimg.com/vi/M7lc1UVf-VE/hqdefault.jpg'],
+          [bookCard, 'https://covers.openlibrary.org/b/isbn/9780140328721-M.jpg?default=false'],
+        ]) {
+          await card.locator('.pp-shape').scrollIntoViewIfNeeded();
+          await card.locator('.pp-shape img').waitFor();
+          assert.equal(await card.locator('.pp-shape img').getAttribute('src'), source);
+        }
         await page.locator(".pp-media-options summary").click();
         for (const width of [1440, 820, 390]) {
-          await page.locator(".pp-feed").scrollIntoViewIfNeeded();
-          await snap("feed-images", width);
+          await snap("feed-images", width, musicCard);
         }
         assert.deepEqual(await read(), before);
       },
@@ -253,22 +272,16 @@ async function main() {
         await page
           .getByRole("button", { name: "외부 이미지 보기", exact: true })
           .click();
-        await page.locator(".pp-visual").first().scrollIntoViewIfNeeded();
-        await page
+        await musicCard.locator(".pp-visual").scrollIntoViewIfNeeded();
+        await musicCard
           .locator(".pp-image-retry")
-          .first()
           .waitFor({ state: "visible" });
         for (const width of [1440, 820, 390]) {
-          await page.setViewportSize({ width, height: 1000 });
-          await page
-            .locator(".pp-feed .pp-post")
-            .first()
-            .evaluate((e) => e.scrollIntoView());
-          await snap("image-error", width);
+          await snap("image-error", width, musicCard);
         }
         failImage = false;
-        await page.locator(".pp-image-retry").first().click();
-        await page.locator(".pp-shape img").first().waitFor();
+        await musicCard.locator(".pp-image-retry").click();
+        await musicCard.locator(".pp-shape img").waitFor();
         assert.equal(
           await page.locator(".pp-attachment-title[href]").count(),
           9,
@@ -331,12 +344,11 @@ async function main() {
         await page
           .getByRole("button", { name: "외부 이미지 보기", exact: true })
           .click();
-        await page.locator(".pp-visual").first().scrollIntoViewIfNeeded();
-        await page
+        await musicCard.locator(".pp-visual").scrollIntoViewIfNeeded();
+        await musicCard
           .locator('.pp-visual[data-media-state="loading"]')
-          .first()
           .waitFor();
-        for (const width of [1440, 820, 390]) await snap("loading", width);
+        for (const width of [1440, 820, 390]) await snap("loading", width, musicCard);
         await page
           .getByRole("button", { name: "방문자 미리보기", exact: true })
           .click();
