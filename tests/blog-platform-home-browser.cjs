@@ -12,7 +12,7 @@ const { ShareCloud } = require('./life-share-browser.cjs');
 const { playwright, ready, shellReady, settle, makeContext, observe, nav } = require('./unified-home-browser.cjs');
 const { inspectHome } = require('./home-entry-browser.cjs');
 
-const out = path.resolve(__dirname, '../.local/blog-platform');
+const out = process.env.BLOG_OUT_DIR ? path.resolve(process.env.BLOG_OUT_DIR) : path.resolve(__dirname, '../.local/blog-platform');
 const sizes = [{ width: 1440, height: 1000 }, { width: 820, height: 1000 }, { width: 390, height: 844 }];
 const report = { createdAt: new Date().toISOString(), scope: 'Linux Chromium viewport simulation; actual local application/SDK/IndexedDB, intercepted anonymous HTTP Auth. No live OAuth/DB, Apple hardware or deployment claim.', checks: [], navigation: [], visual: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, external: [] };
 
@@ -26,9 +26,15 @@ async function instrumentStorage(context) {
   });
 }
 async function home(page) {
+  if (!await page.locator('[data-haedo-navigation] a[data-haedo-section="home"]').isVisible()) {
+    if (await page.locator('.photo-editor').isVisible()) await page.getByRole('button', { name: '닫기', exact: true }).click();
+    else await page.locator('[data-subview-return]').click();
+    await settle(page);
+  }
   await nav(page, 'home');
   await page.locator('#homePosts[aria-busy="false"]').waitFor();
   await page.locator('#homeComposition[aria-busy="false"]').waitFor();
+  if (await page.locator('#homeTab-posts').getAttribute('aria-selected') !== 'true') await page.locator('#homeTab-posts').click();
 }
 async function openHome(page) {
   const started = Date.now();
@@ -73,7 +79,7 @@ async function preserved(page) {
   });
 }
 async function writePost(page, title = '산책 끝에 남긴 생각') {
-  await page.locator('[data-home-destination="write"]').click();
+  if (!await page.locator('.photo-editor').isVisible()) await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').click();
   await page.locator('#photoTitle').waitFor();
   assert.equal(await page.locator('#lifeWritingBody').count(), 0, 'Home must use the established blog editor');
   await page.locator('#photoTitle').fill(title);
@@ -122,12 +128,12 @@ async function main() {
       server.oauthAccounts.set(device, accounts.a);
       await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click();
       await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
-      await page.locator('#homePosts[aria-busy="false"]').waitFor();
-      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'home');
-      assert.equal(await page.locator('#homeFirstWrite').isVisible(), true);
+      await page.locator('#photoTitle').waitFor();
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'page');
+      assert.equal(await page.locator('.ql-editor').evaluate(node => node === document.activeElement), true, 'First-write intent must survive login and focus the body');
       assert.equal(await page.locator('.home-posts-error').count(), 0);
       assert((await page.evaluate(() => __homeDbOpens)).every(item => item.verified));
-      await snapshot(page, 'empty');
+      await snapshot(page, 'first-writing', '.photo-editor');
       const before = await preserved(page), post = await writePost(page);
       assert.deepEqual(await preserved(page), before, 'Writing a local blog post must preserve other data formats');
       await home(page);
@@ -151,7 +157,8 @@ async function main() {
       await page.locator(`#homePosts .home-post[data-photo-post-id="${post.id}"] .home-post-open`).click();
       await page.locator('.photo-article').waitFor();
       assert.match(await page.locator('.photo-article').innerText(), /산책 끝에 남긴 생각/);
-      await page.getByRole('button', { name: '사진 글 목록', exact: true }).click();
+      await page.getByRole('button', { name: '내 글로 돌아가기', exact: true }).click();
+      await page.goto(base + '/index.html?view=page'); await ready(page);
       await page.locator('#wbPageShare').click(); await page.locator('#wbSharePanel').waitFor();
       assert.match(await page.locator('#wbSharePanel').innerText(), /포함되지|미지원|공개.*지원/);
       assert(!(await page.locator('#wbSharePanel').innerText()).includes(post.title), 'Local blog body must not silently enter the old public-copy payload');
@@ -169,25 +176,27 @@ async function main() {
         await page.evaluate(key => { window[key] = false; }, flag);
         await page.locator('.home-posts-error').getByRole('button').click();
         await page.locator(`#homePosts .home-post[data-photo-post-id="${post.id}"]`).waitFor();
+        await page.locator('.home-posts-error').waitFor({ state: 'detached' });
         assert.equal(await page.locator('.home-posts-error').count(), 0);
       }
       assert.equal((await documents(page)).docs.find(doc => doc.id === post.id).title, post.title);
     });
     await check('new home writing preserves an existing draft and exits preview nine-grid and share states', async ({ page }) => {
       await openHome(page);
-      await page.locator('[data-home-destination="write"]').click(); await page.locator('#photoTitle').waitFor();
+      await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').click(); await page.locator('#photoTitle').waitFor();
       await page.locator('#photoTitle').fill('계속 보관할 이전 블로그 초안');
       await page.locator('.ql-editor').fill('새 글을 시작해도 이 입력을 덮어쓰지 않습니다.');
       await home(page);
       const previous = (await documents(page)).docs.find(doc => doc.title === '계속 보관할 이전 블로그 초안');
       assert(previous && previous.status === 'draft');
       assert.equal(await page.locator('#homePosts .home-post').count(), 0, 'Unfinished drafts must not appear as saved posts');
-      await page.locator('[data-home-destination="write"]').click(); await page.locator('#photoTitle').waitFor();
+      await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').click(); await page.locator('#photoTitle').waitFor();
       assert.equal(await page.locator('#photoTitle').inputValue(), '');
       assert.equal(await page.locator('.ql-editor').innerText(), '\n');
       assert.deepEqual((await documents(page)).docs.find(doc => doc.id === previous.id), previous);
       await page.getByRole('button', { name: '닫기', exact: true }).click();
-      await require('./photo-post-entry.cjs').openPost(page, previous.id); await page.locator('#photoTitle').waitFor();
+      await home(page); await page.locator('#homeTab-drafts').click();
+      await page.locator('.home-draft[data-draft-id="' + previous.id + '"] .home-draft-open').click(); await page.locator('#photoTitle').waitFor();
       assert.equal(await page.locator('#photoTitle').inputValue(), previous.title);
       await home(page);
       for (const mode of ['preview', 'nine', 'share']) {
@@ -197,13 +206,15 @@ async function main() {
           await page.locator('[data-home-destination="preview"]').click();
         }
         else {
-          await page.locator('.home-profile-bar').getByRole('button', { name: '내 프로필 보기', exact: true }).click();
+          // The home profile action now opens profile settings; use the preserved
+          // selected-material page deep link for its nine/share state guards.
+          await page.goto(base + '/index.html?view=page'); await ready(page);
           if (await page.locator('.photo-editor').isVisible()) await page.getByRole('button', { name: '닫기', exact: true }).click();
           if (await page.locator('.photo-article').isVisible()) await page.getByRole('button', { name: '사진 글 목록', exact: true }).click();
           await page.locator(mode === 'nine' ? '#wbPageNine' : '#wbPageShare').click();
         }
         await page.locator(mode === 'preview' ? '#wbVisitor' : mode === 'nine' ? '.nb-workspace' : '#wbSharePanel').waitFor();
-        await home(page); await page.locator('[data-home-destination="write"]').click(); await page.locator('#photoTitle').waitFor();
+        await home(page); await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').click(); await page.locator('#photoTitle').waitFor();
         assert.equal(await page.locator('#photoTitle').isVisible(), true, mode + ' must not trap the new-post action');
         assert.equal(await page.locator('#photoTitle').inputValue(), '');
         assert.deepEqual((await documents(page)).docs.find(doc => doc.id === previous.id), previous);
@@ -213,7 +224,7 @@ async function main() {
     await check('a delayed editor mount cannot start a post after leaving the page', async ({ page }) => {
       await openHome(page); const before = await documents(page);
       await page.evaluate(() => { window.__blogHoldDrafts = true; window.__blogHeldDrafts = false; });
-      await page.locator('[data-home-destination="write"]').click(); await page.waitForFunction(() => __blogHeldDrafts);
+      await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').click(); await page.waitForFunction(() => __blogHeldDrafts);
       await nav(page, 'tools'); const finished = await page.evaluate(() => window.__blogDraftReads || 0);
       await page.evaluate(() => __blogReleaseDrafts()); await page.waitForFunction(n => __blogDraftReads > n, finished);
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'tools');
@@ -239,6 +250,7 @@ async function main() {
       assert(!(await page.locator('body').innerText()).includes(post.title));
       server.oauthAccounts.set(device, accounts.b); await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click();
       await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
+      await page.locator('#photoTitle').waitFor(); await page.getByRole('button', { name: '닫기', exact: true }).click();
       await page.locator('#homePosts[aria-busy="false"]').waitFor();
       assert.equal((await documents(page)).rows.length, 0);
       assert.equal(await page.locator('#homeFirstWrite').isVisible(), true);

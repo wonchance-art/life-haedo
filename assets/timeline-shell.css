@@ -176,8 +176,8 @@ body.haedo-timeline { padding-left: var(--haedo-nav-width, 72px); }
   .haedo-timeline .records-active .tool-actions { grid-column: 2; grid-row: 1; }
   .haedo-timeline .records-active .workspace-actions { grid-column: 3; grid-row: 1; }
 }
-@media (max-width: 700px) {
-  body.haedo-timeline { padding-left: 0; padding-bottom: calc(104px + env(safe-area-inset-bottom)); }
+@media (max-width: 760px) {
+  body.haedo-timeline { padding-left: 0; padding-bottom: var(--haedo-dock-clearance, calc(84px + env(safe-area-inset-bottom))); }
   .haedo-timeline header .wrap { padding-top: 16px; }
   .haedo-timeline .haedo-page-heading { margin-bottom: 16px; }
   .haedo-timeline #sec-canvas { padding-bottom: 24px; }

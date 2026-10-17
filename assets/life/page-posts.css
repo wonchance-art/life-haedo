@@ -593,3 +593,11 @@ a.pp-attachment-title {
 .pp-video-dialog > .life-button {
   margin-right: 4px;
 }
+
+/* A Home-opened legacy article reads and edits without a second feed. */
+.pp-workspace[data-standalone=true] > .pp-toolbar { justify-content:space-between; padding-block:0 12px; }
+.pp-workspace[data-standalone=true] > .pp-feed > .pp-post { padding-top:12px; border-bottom:0; }
+.pp-workspace[data-standalone=true] > .pp-feed .pp-body { font-size:18px; line-height:1.95; }
+.pp-workspace[data-standalone=true] > .pp-composer { padding-top:8px; }
+.pp-workspace[data-standalone=true] > .life-button:last-child { margin-block:32px 16px; }
+@media (max-width:760px) { .pp-workspace[data-standalone=true] > .pp-feed .pp-body { font-size:17px; } }

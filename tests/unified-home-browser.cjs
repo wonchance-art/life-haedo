@@ -30,9 +30,9 @@ async function assertCommonNavigation(page) {
     section: link.dataset.haedoSection, href: link.getAttribute('href'), label: link.getAttribute('aria-label')
   }))), [
     { section: 'home', href: 'index.html', label: '홈' },
-    { section: 'records', href: 'index.html?section=records', label: '기록' },
+    { section: 'records', href: 'index.html?section=records', label: '자료실' },
     { section: 'tools', href: 'index.html?section=tools', label: '도구' },
-    { section: 'manage', href: 'index.html?section=manage', label: '관리' }
+    { section: 'manage', href: 'index.html?section=manage', label: '설정' }
   ]);
   const brand = page.locator('[data-haedo-navigation] .haedo-brand');
   assert.equal(await brand.count(), 1); assert.equal(await brand.getAttribute('href'), 'index.html');
@@ -210,7 +210,7 @@ async function main() {
       const raw = '아직 발췌하지 않은 원문도 첫 화면에서 다시 읽는다. '.repeat(14);
       await page.locator('.home-library > summary').click();
       await button(page, '자료 가져오기'); await page.locator('#lifeImportTitle').fill('발췌 전 보관한 익명 자료'); await page.locator('#lifeImportText').fill(raw);
-      await button(page, '원문·출처 확인'); await button(page, '자료만 보관'); await button(page, '기록으로 돌아가기');
+      await button(page, '원문·출처 확인'); await button(page, '자료만 보관'); await button(page, '자료실로 돌아가기');
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'sources');
       const card = page.locator('#lifeSearchResults .life-source-card'); assert.equal(await card.count(), 1);
       assert((await card.locator('.life-search-context').textContent()).startsWith(raw.slice(0, 100))); // Unified list still shows the stored original, even without saved quotes.

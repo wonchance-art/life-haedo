@@ -36,9 +36,10 @@ async function main() {
   };
   const go = async (p = page) => {
     await p.goto(base + '/index.html?section=records&view=page', { waitUntil: 'domcontentloaded' }); await ready(p);
+    const compatibility = p.locator('.wb-page-compatibility'); if (await compatibility.count() && !await compatibility.evaluate(n => n.open)) await compatibility.locator(':scope > summary').click();
     await p.getByRole('button', { name: '글쓰기', exact: true }).waitFor();
   };
-  const stored = p => (p || page).waitForFunction(() => document.querySelector('.photo-status')?.textContent === '초안이 이 브라우저에 저장됨');
+  const stored = p => (p || page).waitForFunction(() => document.querySelector('.photo-status')?.textContent === '초안 보관됨');
   const read = () => page.evaluate(async () => {
     const s = HaedoLife.Shell.storage, w = await s.getActive(), index = await s.listPhotoPosts(w);
     return { w, index, docs: await Promise.all(index.map(v => s.readPhotoPost(w, v.id))) };

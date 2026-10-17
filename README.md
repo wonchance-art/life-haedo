@@ -3,7 +3,7 @@
 내 생각과 일상을 글로 쓰고, 기록과 취향을 모으는 개인 블로그.
 메인은 실제 프로필·짧은 글쓰기·사진과 본문이 이어지는 SNS형 피드를 보여주고, 기존 메모·연표·목표·습관은 자료실과 도구에서 이어 쓴다. 빌드 없이 정적 호스팅에서 실행한다.
 
-[SNS형 UX·UI 설계와 검수](docs/design-review/sns-blog-experience.md) · [블로그 중심 방향과 공개 후속](docs/life-tools-design/blog-platform-direction.md) · [메인 구현·검수](docs/design-review/blog-platform-home.md). 새 글·사진의 브라우저 비공개 보관과 기존 선택 내용의 공개 사본은 다른 범위다.
+[사용 흐름 중심 개편·검수](docs/design-review/blog-user-journeys.md) · [SNS형 UX·UI 설계와 검수](docs/design-review/sns-blog-experience.md) · [블로그 중심 방향과 공개 후속](docs/life-tools-design/blog-platform-direction.md) · [메인 구현·검수](docs/design-review/blog-platform-home.md). 새 글·사진의 브라우저 비공개 보관과 기존 선택 내용의 공개 사본은 다른 범위다.
 
 [글 관리·원본 사진·선택 공개](docs/life-tools-design/blog-completion.md)를 연결했습니다. 홈의 **글 관리**에서 저장 글·초안을 찾고, 한 글씩 내 계정 서버에 비공개 보관하거나 공개할 사진을 골라 게시·갱신·철회합니다. 방문자는 별도 블로그 주소에서 목록과 글을 읽습니다. 원문에서 선택한 구절은 인용 글이나 9칸 구성으로 연결하며 정확한 버전으로 돌아갑니다. 새 인용의 구조화된 근거는 현재 브라우저에 별도로 보관하므로 사진 ZIP·글별 서버 보관에는 포함되지 않습니다.
 

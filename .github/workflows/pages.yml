@@ -300,6 +300,12 @@ jobs:
       - name: Verify SNS blog reading, writing and preservation across screen sizes
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/sns-blog-experience-browser.cjs
+      - name: Verify blog drafts, mixed posts, focused writing and exact home return
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/blog-user-journeys-browser.cjs
+      - name: Verify home writing entry, scoped search and lazy photo recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/home-refinement-browser.cjs
       - name: Verify subview location and safe contextual return
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/subview-navigation-browser.cjs
@@ -326,6 +332,8 @@ jobs:
         with:
           name: browser-checks-${{ matrix.group }}-${{ github.run_attempt }}
           path: |
+            .local/home-refinement/qa/
+            .local/blog-journeys/after/
             .local/sns-blog/after/
             .local/blog-platform/*.json
             .local/blog-platform/*.png

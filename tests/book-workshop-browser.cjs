@@ -35,11 +35,11 @@ const excludedStatement = '초기에 적었지만 이번 원고에서는 제외�
 const button = async (page, name) => { await page.getByRole('button', { name, exact: true }).click(); await settle(page); };
 function annotation(error) { if (process.env.GITHUB_ACTIONS) console.error('::error title=Book workshop::' + String(error.stack || error).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')); }
 async function records(page) {
-  if (await page.getByRole('button', { name: '기록으로 돌아가기', exact: true }).isVisible()) await button(page, '기록으로 돌아가기');
+  if (await page.getByRole('button', { name: '자료실로 돌아가기', exact: true }).isVisible()) await button(page, '자료실로 돌아가기');
   else if (await page.locator('#lifeSearchReturn').isVisible()) { await page.locator('#lifeSearchReturn').click(); await settle(page); }
   await nav(page, 'records');
-  if (await page.getByRole('button', { name: '기록으로 돌아가기', exact: true }).isVisible()) await button(page, '기록으로 돌아가기');
-  if (await page.getByRole('button', { name: '기록 목록', exact: true }).isVisible()) await button(page, '기록 목록');
+  if (await page.getByRole('button', { name: '자료실로 돌아가기', exact: true }).isVisible()) await button(page, '자료실로 돌아가기');
+  if (await page.getByRole('button', { name: '자료실', exact: true }).isVisible()) await button(page, '자료실');
   await page.locator('#lifeSearch').waitFor();
 }
 async function tools(page, name) { await nav(page, 'tools'); if (await page.getByRole('button', { name: '도구로 돌아가기', exact: true }).isVisible()) await button(page, '도구로 돌아가기'); await button(page, name); }
