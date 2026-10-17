@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#f7f7f8">
+  <meta name="description" content="작성자가 선택해 공개한 글과 사진을 읽는 해도 블로그">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: https://*.supabase.co; connect-src https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <title>블로그 · 해도</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/life/ui.css">
+  <link rel="stylesheet" href="assets/life/blog-public.css">
+</head>
+<body>
+  <a class="life-skip" href="#blogContent">본문으로 이동</a>
+  <main class="blog-page">
+    <header class="blog-header">
+      <a class="blog-brand" href="index.html" aria-label="해도 홈">해도</a>
+      <button id="blogRefresh" class="life-button" type="button">공개 상태 다시 확인</button>
+    </header>
+    <a id="blogBack" class="blog-back" hidden>블로그 글 목록</a>
+    <p id="blogStatus" class="blog-status" role="status" aria-live="polite">공개한 글을 확인하고 있습니다…</p>
+    <div id="blogContent" tabindex="-1"></div>
+    <p id="blogUpdated" class="blog-date" hidden></p>
+    <noscript><p>공개한 글을 확인하려면 JavaScript를 허용해 주세요.</p></noscript>
+  </main>
+  <script src="assets/platform-config.js"></script>
+  <script src="assets/life/collection.js"></script>
+  <script src="assets/life/share.js"></script>
+  <script src="assets/life/page-posts.js"></script>
+  <script src="assets/life/photo-post.js"></script>
+  <script src="assets/life/blog.js"></script>
+  <script src="assets/life/blog-public.js"></script>
+  <script src="assets/life/blog-public-ui.js"></script>
+</body>
+</html>

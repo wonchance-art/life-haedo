@@ -113,7 +113,9 @@
       feedHost = null,
       feedControls = [],
       controls = [],
-      attachmentUI = null;
+      attachmentUI = null,
+      readBackAction = null,
+      readBackText = "사진 글 목록";
     let status, inspector, captionInput, altInput;
     const urls = new Set(),
       photoUrls = new Map();
@@ -1351,7 +1353,7 @@
           el("summary", "사진 글 보관 안내"),
           el(
             "p",
-            "사진 글과 원본은 현재 계정·작업공간의 이 브라우저에만 보관합니다. 사진 포함 ZIP 백업으로 다른 기기에 옮길 수 있습니다. 일반 자료·구성 JSON, 기기 간 동기화와 공개 사본에는 포함되지 않습니다. JPEG·PNG·WebP 원본을 재압축하거나 해상도를 줄이지 않습니다.",
+            "글과 사진은 먼저 이 브라우저에 보관합니다. 글 관리에서 한 편씩 서버 보관·선택 공개할 수 있습니다. 일반 자료·구성 JSON과 기존 전체 동기화에는 포함되지 않습니다. 사진 포함 ZIP으로 원본을 옮길 수 있으며 해상도와 바이트를 줄이지 않습니다. 원문 근거 연결 정보는 ZIP에 포함되지 않지만 인용 본문과 출처 URL은 유지합니다.",
             "life-help",
           ),
         );
@@ -1467,7 +1469,11 @@
       else {
         const actions = el("div", null, "life-actions photo-read-actions");
         actions.append(
-          iconControl(button("사진 글 목록", list), "back", "사진 글 목록"),
+          iconControl(button(readBackText, async () => {
+            if (!readBackAction) return list();
+            const token = epoch; await flush();
+            if (current(token)) await readBackAction();
+          }), "back", readBackText),
           doc.archived
             ? button("목록으로 복원", () => archive(false))
             : button("글 수정", () => open(doc.id, true)),
@@ -1503,12 +1509,14 @@
     }
     async function mount(
       target,
-      { postId = null, expectedRevision = null, reset = false, onFeed = null, listHost = null } = {},
+      { postId = null, expectedRevision = null, reset = false, onFeed = null, listHost = null, onReadBack = null, readBackLabel = "사진 글 목록" } = {},
     ) {
       if ((reset || postId) && doc) await flush();
       host = target;
       feedListener = onFeed;
       feedHost = listHost;
+      readBackAction = onReadBack;
+      readBackText = readBackLabel;
       host.className = "photo-posts";
       unsubscribe?.();
       unsubscribe = storage.subscribe(workspaceId, (event) => {

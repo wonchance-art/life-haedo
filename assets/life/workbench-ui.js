@@ -1043,7 +1043,7 @@
             updateStatus(session);
           } });
         const target = session.nineTarget,reference=session.nineReference; session.nineTarget = null;session.nineReference=null;
-        session.nine.mount(nineHost, target,reference).then(()=>{
+        session.nineMount=session.nine.mount(nineHost, target,reference).then(()=>{
           const focus=session.ninePostReturn?.focusKey;if(!focus||!nineHost.isConnected)return;
           const control=[...nineHost.querySelectorAll('[data-focus-key]')].find(node=>node.dataset.focusKey===focus);
           if(control){control.closest('details').open=true;control.focus({preventScroll:true});control.scrollIntoView({block:'nearest'});}session.ninePostReturn=null;
@@ -1109,10 +1109,11 @@
         });
         if (keepFocus && focus.isConnected && document.activeElement !== focus) focus.focus({ preventScroll: true });
       };
-      if(session.ninePostReturn)bodyNode.append(action('9칸 구성으로 돌아가기',async()=>{await session.photoPosts?.flush();session.ninePostReference=null;session.nineOpen=true;redraw();}));
       const photoHost = el('section'); bodyNode.append(photoHost);
       session.photoPosts ||= life.PhotoPostUI.create({ storage, workspaceId: session.workspaceId, isCurrent: () => workspaceIs(session), onDirty: () => updateStatus(session), onSaved: onLocalSaved, beforeOpen: async () => { await session.composer?.flush(); } });
       const photoMount = session.photoPosts.mount(photoHost, { postId: session.searchTarget?.photoPostId || null, expectedRevision: session.ninePostReference?.postRevision ?? session.searchTarget?.photoPostRevision, reset: beginPost || showProfile || !!session.searchTarget && !session.searchTarget.photoPostId,
+        onReadBack:session.ninePostReturn?async()=>{const token=generation;await session.photoPosts.flush();if(!showing(token,session))return;session.ninePostReference=null;session.nineOpen=true;redraw();}:null,
+        readBackLabel:session.ninePostReturn?'9칸 구성으로 돌아가기':undefined,
         listHost: postFeed, onFeed: rows => { photoRows = rows; mergeFeed(); } }); viewCleanups.push(() => session.photoPosts.detach());
       const composerHost = el('section'); bodyNode.insertBefore(composerHost, photoHost);
       session.composer ||= life.PageComposer.create({ storage, workspaceId: session.workspaceId,
@@ -2776,6 +2777,7 @@
         current.pageProfile = options.pageProfile === true || options.pageProfileEdit === true;
         current.pageProfileEdit = options.pageProfileEdit === true;
         if (current.pageProfile) {
+          current.ninePostReference=null;current.ninePostReturn=null;
           current.nineOpen = false; preview = false; if (current.share) current.share.open = false;
         }
         if (typeof options.pagePreview === 'boolean' && !options.nineTarget && !options.nineReference) {
@@ -2866,6 +2868,7 @@
           }
         }
         redraw();
+        if(mode==='page'&&session.nineOpen&&session.nineMount){await session.nineMount;if(!showing(token,session))return;}
         if (mode === 'page' && options.searchTarget?.entryId) {
           const entry = [...bodyNode.querySelectorAll('[data-entry-id]')].find(el => el.dataset.entryId === options.searchTarget.entryId);
           if (entry) { const editor = entry.querySelector('.wb-page-entry-edit'); if (editor) editor.open = true; entry.tabIndex = -1; entry.focus({ preventScroll: true }); entry.scrollIntoView({ block: 'start' }); }

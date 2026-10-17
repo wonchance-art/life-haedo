@@ -14,7 +14,7 @@ const { inspectHome } = require('./home-entry-browser.cjs');
 
 const out = path.resolve(__dirname, '../.local/blog-platform');
 const sizes = [{ width: 1440, height: 1000 }, { width: 820, height: 1000 }, { width: 390, height: 844 }];
-const report = { createdAt: new Date().toISOString(), scope: 'Linux Chromium viewport simulation; actual local application/SDK/IndexedDB, intercepted anonymous HTTP Auth. No live OAuth/DB, Apple hardware or deployment claim.', checks: [], visual: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, external: [] };
+const report = { createdAt: new Date().toISOString(), scope: 'Linux Chromium viewport simulation; actual local application/SDK/IndexedDB, intercepted anonymous HTTP Auth. No live OAuth/DB, Apple hardware or deployment claim.', checks: [], navigation: [], visual: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, external: [] };
 
 // Faults surround real storage calls. A held result is a genuine read completed
 // before signout/workspace navigation, rather than fabricated private data.
@@ -31,7 +31,15 @@ async function home(page) {
   await page.locator('#homeComposition[aria-busy="false"]').waitFor();
 }
 async function openHome(page) {
-  await page.goto(base + '/index.html', { waitUntil: 'domcontentloaded' });
+  const started = Date.now();
+  // Loading the full unbundled app exceeded 12s under concurrent browser work,
+  // before any storage gate was armed. Keep action/account assertions at 12s.
+  await page.goto(base + '/index.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  report.navigation.push({ elapsedMs: Date.now() - started, ...await page.evaluate(() => {
+    const navigation = performance.getEntriesByType('navigation')[0];
+    return { responseEndMs: navigation?.responseEnd, domContentLoadedMs: navigation?.domContentLoadedEventEnd,
+      resources: performance.getEntriesByType('resource').length };
+  }) });
   await ready(page);
   await page.locator('#homePosts[aria-busy="false"]').waitFor();
   await page.locator('#homeComposition[aria-busy="false"]').waitFor();
@@ -189,7 +197,7 @@ async function main() {
           await page.locator('[data-home-destination="preview"]').click();
         }
         else {
-          await page.locator('[data-home-destination="page"]').click();
+          await page.locator('.home-profile-bar').getByRole('button', { name: '내 프로필 보기', exact: true }).click();
           if (await page.locator('.photo-editor').isVisible()) await page.getByRole('button', { name: '닫기', exact: true }).click();
           if (await page.locator('.photo-article').isVisible()) await page.getByRole('button', { name: '사진 글 목록', exact: true }).click();
           await page.locator(mode === 'nine' ? '#wbPageNine' : '#wbPageShare').click();

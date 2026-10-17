@@ -119,7 +119,8 @@
     const viewOrigins = new Map();
     let findRenderPromise = Promise.resolve();
     let collectionOpenOptions = null;
-    let blogManager = null, blogOpenOptions = null;
+    let blogManager = null, blogOpenOptions = null, blogManagerWorkspace = null;
+    const blogViews = new Map();
     const blogSync = global.HaedoLife.BlogSync?.create({ storage, auth });
     const parentViews = new Set(['blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
     const subviewTitles = { blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '내 페이지',
@@ -167,8 +168,13 @@
       onOpen: guarded(async row => {
         const workspaceId = state.bundle.workspaceId;
         if (row.kind === 'source') {
-          await refreshData();
-          if (disposed || state.mode !== 'find' || state.bundle?.workspaceId !== workspaceId) return;
+          const workspaceToken = workspaceGeneration, navigationToken = navigationGeneration;
+          const fetched = await storage.read(workspaceId);
+          if (disposed || workspaceToken !== workspaceGeneration || navigationToken !== navigationGeneration ||
+              state.mode !== 'find' || state.bundle?.workspaceId !== workspaceId) return;
+          // Exact search reading only needs this workspace's originals. Unrelated
+          // workspace/staging failures must not prevent opening a verified version.
+          if (fetched.revision >= state.bundle.revision) state.bundle = fetched;
           if (!state.bundle.sourceVersions.some(v => v.id === row.sourceVersionId && v.sourceId === row.sourceId)) throw new Error('이 원문 버전을 찾을 수 없습니다. 검색 결과를 다시 불러와 주세요.');
           return openResult('find', row.key, row);
         }
@@ -1294,17 +1300,31 @@
       main.append(list);
     }
 
+    async function openManagedSource(workspaceId, target, context = {}, reference = null) {
+      const workspaceToken = workspaceGeneration, navigationToken = navigationGeneration;
+      const fetched = await storage.read(workspaceId);
+      const current = () => !disposed && workspaceToken === workspaceGeneration && navigationToken === navigationGeneration &&
+        state.mode === 'blog' && state.bundle?.workspaceId === workspaceId;
+      if (!current()) return;
+      if (fetched.revision >= state.bundle.revision) state.bundle = fetched;
+      if (!state.bundle.sourceVersions.some(version => version.id === target.sourceVersionId && version.sourceId === target.sourceId)) throw new Error('이 원문 버전을 찾을 수 없습니다. 다른 버전으로 바꾸지 않았습니다.');
+      if (reference) await global.HaedoLife.SourceReference.resolve(state.bundle, reference);
+      if (!current()) return;
+      return navigate('source', { ...target, returnContext: { mode: 'blog', workspaceId, scrollY: global.scrollY, focusKey: context.focusKey } });
+    }
+
     async function renderBlogManager() {
       const workspaceId = state.bundle.workspaceId;
       const host = node('section'); host.id = 'lifeBlogManager'; main.append(host);
       const instance = global.HaedoLife.BlogManager.create({ storage, workspaceId, auth, blogSync,
+        onOpenEvidence: (reference, context = {}) => openManagedSource(workspaceId, { sourceId: reference.sourceId, sourceVersionId: reference.sourceVersionId, locator: { ...reference.locator } }, context, reference),
         isCurrent: () => !disposed && state.mode === 'blog' && state.bundle?.workspaceId === workspaceId,
         openPost: (postId, options = {}) => navigate('page', { searchTarget: { photoPostId: postId, photoPostRevision: options.expectedRevision }, pagePreview: false }),
-        openLegacy: row => row.kind === 'source' ? navigate('source', { sourceId: row.id, sourceVersionId: row.versionId, locator: null }) :
+        openLegacy: (row, context = {}) => row.kind === 'source' ? openManagedSource(workspaceId, { sourceId: row.id, sourceVersionId: row.versionId, locator: null }, context) :
           row.kind === 'writing-draft' ? navigate('write', { writing: { stageId: row.id } }) :
           row.kind === 'page-draft' ? navigate('page', { pageDraftId: row.id }) : navigate('page', { searchTarget: { postId: row.id }, pagePreview: false })
       });
-      blogManager = instance; const options = blogOpenOptions || {}; blogOpenOptions = null;
+      blogManager = instance; blogManagerWorkspace = workspaceId; const options = { viewState: blogViews.get(workspaceId), ...(blogOpenOptions || {}) }; blogOpenOptions = null;
       await instance.mount(host, options);
     }
 
@@ -1661,7 +1681,7 @@
     }
 
     function searchReturnButton() {
-      const labels = { home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '내 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
+      const labels = { blog: '글 관리로 돌아가기', home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '내 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
       const back = iconButton(labels[state.returnContext?.mode] || '검색 결과로 돌아가기', 'back', guarded(returnToResults));
       back.id = 'lifeSearchReturn';
       return back;
@@ -3446,7 +3466,8 @@
       if (disposed) return;
       const generation = ++renderGeneration, navigation = navigationGeneration;
       compositionPanel?.dispose(); compositionPanel = null;
-      blogManager?.dispose(); blogManager = null;
+      if (blogManager && blogManagerWorkspace) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
+      blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null;
       homeRenderPromise = Promise.resolve();
       home?.leave();
       workbench?.leave();
@@ -3601,7 +3622,8 @@
       if (disposed) return;
       disposed = true;
       compositionPanel?.dispose(); compositionPanel = null;
-      blogManager?.dispose(); blogManager = null;
+      if (blogManager && blogManagerWorkspace) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
+      blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null;
       compositionSync?.dispose();
       writingSync?.dispose();
       blogSync?.dispose();

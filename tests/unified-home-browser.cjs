@@ -194,7 +194,8 @@ async function main() {
     await check('a home with originals and no excerpts shows real text and opens the complete original', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page);
       const raw = '아직 발췌하지 않은 원문도 첫 화면에서 다시 읽는다. '.repeat(14);
-      await button(page, '가져오기'); await page.locator('#lifeImportTitle').fill('발췌 전 보관한 익명 자료'); await page.locator('#lifeImportText').fill(raw);
+      await page.locator('.home-library > summary').click();
+      await button(page, '자료 가져오기'); await page.locator('#lifeImportTitle').fill('발췌 전 보관한 익명 자료'); await page.locator('#lifeImportText').fill(raw);
       await button(page, '원문·출처 확인'); await button(page, '자료만 보관'); await button(page, '기록으로 돌아가기');
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'sources');
       const card = page.locator('#lifeSearchResults .life-source-card'); assert.equal(await card.count(), 1);

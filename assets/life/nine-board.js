@@ -8,6 +8,7 @@
   const P=()=>root.HaedoLife?.PagePosts || require('./page-posts.js');
   const R=()=>root.HaedoLife?.SourceReference || require('./source-reference.js');
   const clone=v=>structuredClone(v);
+  const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
   function fail(message){throw Object.assign(new Error(message),{code:'invalid_nine_board'});}
   function fields(v,keys){if(!v||typeof v!=='object'||![Object.prototype,null].includes(Object.getPrototypeOf(v))||Reflect.ownKeys(v).length!==keys.length||keys.some(k=>!Object.hasOwn(v,k)))fail('9칸 구성의 형식을 확인해 주세요.');}
   function text(v,max){if(typeof v!=='string'||v.length>max||/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(v))fail('글자와 길이를 확인해 주세요.');for(let i=0;i<v.length;i++){const c=v.charCodeAt(i);if(c>=0xd800&&c<=0xdbff){const n=v.charCodeAt(++i);if(!(n>=0xdc00&&n<=0xdfff))fail('글자를 확인해 주세요.');}else if(c>=0xdc00&&c<=0xdfff)fail('글자를 확인해 주세요.');}}
@@ -40,11 +41,11 @@
   function reviewBoards(existing,incoming){
     boards(existing,hasReferences(existing));boards(incoming,hasReferences(incoming));
     // Presentation text, ordered selections and exact sources define a duplicate, not local IDs.
-    const key=b=>JSON.stringify([b.title,b.intro,b.areas.map(a=>[a.title,a.note,a.items.map(i=>[i.attachment.type,i.attachment.title,i.attachment.creator,i.attachment.url,i.reason,i.reference||null])])]);
+    const key=b=>JSON.stringify([b.title,b.intro,b.areas.map(a=>[a.title,a.note,a.items.map(i=>[i.attachment.type,i.attachment.title,i.attachment.creator,i.attachment.url,i.reason,canonical(i.reference||null)])])]);
     const saved=new Set(existing.map(key)),seen=new Set();
     return incoming.map(b=>{const value=key(b),result={existing:saved.has(value),file:seen.has(value)};seen.add(value);return result;});
   }
-  function changed(base,current){boards(base,hasReferences(base));boards(current,hasReferences(current));const key=b=>JSON.stringify([b.title,b.intro,b.areas.map(a=>[a.id,a.title,a.note,a.items.map(i=>[i.attachment.type,i.attachment.title,i.attachment.creator,i.attachment.url,i.reason,i.reference||null])])]);const before=new Map(base.map(b=>[b.id,key(b)]));return current.filter(b=>before.get(b.id)!==key(b)).map(clone);}
+  function changed(base,current){boards(base,hasReferences(base));boards(current,hasReferences(current));const key=b=>JSON.stringify([b.title,b.intro,b.areas.map(a=>[a.id,a.title,a.note,a.items.map(i=>[i.attachment.type,i.attachment.title,i.attachment.creator,i.attachment.url,i.reason,canonical(i.reference||null)])])]);const before=new Map(base.map(b=>[b.id,key(b)]));return current.filter(b=>before.get(b.id)!==key(b)).map(clone);}
   const escape=s=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function html(board){
     boards([board],hasReferences([board]));const types=(root.HaedoLife?.Collection || require('./collection.js')).TYPES;

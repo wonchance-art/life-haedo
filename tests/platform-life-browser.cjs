@@ -42,9 +42,22 @@ async function main(){
     return match[1];
   };
   const newCache=await cacheName(site);
+  const verifyPreparedConfig=process.env.VERIFY_PREPARED_CONFIG==='1',verifyAllShell=process.env.VERIFY_ALL_SHELL==='1';
+  let allShellModules;
+  if(verifyAllShell){
+    const source=await fs.readFile(path.join(site,'sw.js'),'utf8'),list=source.match(/const SHELL\s*=\s*(\[[\s\S]*?\]);/);
+    assert.ok(list,'The generated service worker must declare its static shell.');
+    allShellModules=Array.from(list[1].matchAll(/['"](\.\/[^'"]*)['"]/g),match=>match[1]);
+    assert.ok(allShellModules.length>0);assert.equal(new Set(allShellModules).size,allShellModules.length);
+  }
   await new Promise(resolve=>web.listen(0,'127.0.0.1',resolve));
   process.env.BASE_URL=`http://127.0.0.1:${web.address().port}`;
   const {FakeCloud,platformContext,accounts,cloud,base,openManagement,openAccount,openSection}=require('./life-sync-browser.cjs');
+  if(verifyPreparedConfig)for(const directory of [site,...oldSites]){
+    const source=await fs.readFile(path.join(directory,'assets/platform-config.js'),'utf8'),payload=source.match(/^window\.HAEDO_CONFIG=Object\.freeze\(([\s\S]*)\);\s*$/);
+    assert.ok(payload,'Use an anonymous prepare-site output.');
+    assert.deepEqual(JSON.parse(payload[1]),{url:cloud,key:'sb_publishable_anonymous_browser_test_only'},'Prepared-site verification only accepts simulator configuration.');
+  }
   const pw=require(process.env.PW_MODULE_PATH||'/opt/codex/cua_node/lib/node_modules/playwright');
   const browser=await pw.chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
   const server=new FakeCloud(),contexts=[];
@@ -59,6 +72,7 @@ async function main(){
   async function context(name,seed=null){
     const value=await browser.newContext({acceptDownloads:true,viewport:{width:1180,height:900}});contexts.push(value);
     await platformContext(value,server,name,seed);
+    if(verifyPreparedConfig)await value.unroute(`${base}/assets/platform-config.js`);
     await value.addInitScript(()=>{
       window.__productDbOpens=[];const original=IDBFactory.prototype.open;
       IDBFactory.prototype.open=function(...args){__productDbOpens.push({name:args[0],verified:!!globalThis.HaedoAuth?.user});return original.apply(this,args);};
@@ -272,10 +286,12 @@ async function main(){
       assert.deepEqual(original,{bundle:fixture.bundle,stage:fixture.stage});
       if(fixture.nine)assert.deepEqual(await p.evaluate(id=>HaedoLife.Shell.storage.readNineBoard(id),fixture.bundle.workspaceId),fixture.nine,'Existing nine board data must survive the shell upgrade exactly.');
       assert.equal(await p.evaluate(()=>localStorage.getItem('caeyeon_life_registry')),'{"docs":[],"anonymous":"preserve-upgrade"}');
-      const modules=['life.html','assets/platform-auth.js','assets/platform-life-remote.js','assets/life/core.js','assets/life/unified-search.js','assets/life/unified-search-ui.js','assets/life/storage.js','assets/life/icons.js','assets/life/ui.js','assets/life/home.js','assets/life/collection.js','assets/life/collection-media.js','assets/life/collection-metadata.js','assets/life/collection-picker.js','assets/life/collection-ui.js','assets/life/collection.css','assets/life/workbench-ui.js','assets/life/reflection-lenses.js','assets/life/reflection-lenses-ui.js','assets/life/workbench.css','assets/life/rediscovery.js','assets/life/reading-position.js','assets/life/ui.css','assets/life/writing-ui.js','assets/life/composition-remote.js','assets/life/composition-sync.js','assets/life/composition-ui.js','assets/life/writing-remote.js','assets/life/writing-sync.js','assets/life/writing-sync-ui.js','vendor/supabase/supabase.js'];
+      const modules=verifyAllShell?[...allShellModules]:['life.html','assets/platform-auth.js','assets/platform-life-remote.js','assets/life/core.js','assets/life/unified-search.js','assets/life/unified-search-ui.js','assets/life/storage.js','assets/life/icons.js','assets/life/ui.js','assets/life/home.js','assets/life/collection.js','assets/life/collection-media.js','assets/life/collection-metadata.js','assets/life/collection-picker.js','assets/life/collection-ui.js','assets/life/collection.css','assets/life/workbench-ui.js','assets/life/reflection-lenses.js','assets/life/reflection-lenses-ui.js','assets/life/workbench.css','assets/life/rediscovery.js','assets/life/reading-position.js','assets/life/ui.css','assets/life/writing-ui.js','assets/life/composition-remote.js','assets/life/composition-sync.js','assets/life/composition-ui.js','assets/life/writing-remote.js','assets/life/writing-sync.js','assets/life/writing-sync-ui.js','vendor/supabase/supabase.js'];
+      if(!verifyAllShell){
       modules.push('assets/life/nine-board.js','assets/life/nine-board-ui.js','assets/life/nine-board.css');
       modules.push('assets/life/obsidian-decisions.js','assets/life/obsidian-package.js');
       modules.push('assets/life/photo-post-attachments.js','assets/life/photo-post.js','assets/life/photo-post-ui.js','assets/life/photo-post.css','vendor/quill/quill.js','vendor/quill/quill.snow.css','vendor/fflate/fflate.js');
+      }
       const runtime=await p.evaluate(async({name,modules})=>{
         if(!await caches.has(name))return [];
         const cache=await caches.open(name);
@@ -286,7 +302,7 @@ async function main(){
         }));
       },{name:newCache,modules});
       const {createHash}=require('node:crypto');
-      const expected=await Promise.all(modules.map(async path=>({path,hash:createHash('sha256').update(await fs.readFile(require('node:path').join(site,path))).digest('hex')})));
+      const expected=await Promise.all(modules.map(async file=>({path:file,hash:createHash('sha256').update(await fs.readFile(path.join(site,file==='./'?'index.html':file))).digest('hex')})));
       assert.deepEqual(runtime,expected,'The installed modules must match the complete new release.');await old.close();
       });
     }

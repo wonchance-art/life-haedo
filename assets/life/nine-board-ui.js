@@ -91,7 +91,7 @@
               guard();await flush();const token=epoch;
               const target=ref.kind==='source'?await life.SourceReference.resolve(await getBundle(),ref.value):await life.SourceReference.resolvePost({workspaceId,post:await storage.readPhotoPost(workspaceId,ref.value.postId)},ref.value);
               if(valid()&&token===epoch)await onOpenReference({kind:ref.kind,target,reference:ref.value,focusKey:open.dataset.focusKey});
-            });open.dataset.focusKey='nine:reference:'+selected+':'+a.id+':'+i;evidence.append(open);}cell.append(evidence);
+            });open.dataset.focusKey='nine:reference:'+selected+':'+a.id+':'+i;open.setAttribute('aria-label','정확한 근거 열기: '+ref.value.title+' · '+ref.value.quote.replace(/\s+/g,' ').slice(0,60));evidence.append(open);}cell.append(evidence);
           }
           if(item.reason){const reason=details('선택 이유');reason.classList.add('nb-reason');reason.append(el('p',item.reason,'nb-text'));cell.append(reason);}
           if(edit){const editButton=button('수정',()=>{guard();editing=i;renderEditor();host.querySelector('#nbItemTitle')?.focus();});editButton.setAttribute('aria-label',item.attachment.title+' · 수정');cell.append(editButton);}
@@ -239,6 +239,7 @@
         }
       }
       const files=details('파일 보관·가져오기');files.classList.add('nb-files');files.append(el('p','이 브라우저에만 보관되며 공개 사본·구성 동기화·자료 백업에 포함되지 않습니다. 현재 구성 JSON에는 지금 고른 구성 하나만, 전체 백업에는 모든 구성이 담깁니다. HTML은 현재 구성의 제목·선택 이유·출처가 담긴 보기 파일이며, 공개 링크가 아닙니다.','life-help'));
+      if(M.hasReferences(state.boards))files.append(el('p','직접 담은 근거 구절도 JSON과 HTML에 포함됩니다. JSON은 원문 버전의 식별자를 보존하며, 다른 작업공간으로 옮기면 자동 연결하지 않습니다. 선택하지 않은 원문 본문이나 사진 파일은 복사하지 않습니다.','life-help'));
       const file=el('input');file.type='file';file.accept='.json,application/json';file.setAttribute('aria-label','9칸 구성 JSON 파일');let sequence=0;
       file.addEventListener('change',async()=>{const input=file.files[0],request=++sequence,token=epoch;file.value='';if(!input)return;try{guard();candidate=null;host.querySelector('.nb-import')?.remove();await flush();if(input.size>M.LIMITS.bytes)throw new Error('파일은 2 MiB까지 불러올 수 있습니다.');const value=M.readBackup(JSON.parse(await input.text()));if(!valid()||token!==epoch||request!==sequence||!file.isConnected)return;guard();candidate={boards:value,chosen:new Set()};clear();render();const review=host.querySelector('.nb-import');review.focus({preventScroll:true});review.scrollIntoView({block:'start'});}catch(cause){if(valid()&&token===epoch&&request===sequence&&file.isConnected)report(cause);}});
       if(b)files.append(button('현재 구성 JSON 받기',()=>backup(true)));

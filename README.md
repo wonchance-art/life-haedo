@@ -5,6 +5,11 @@
 
 [SNS형 UX·UI 설계와 검수](docs/design-review/sns-blog-experience.md) · [블로그 중심 방향과 공개 후속](docs/life-tools-design/blog-platform-direction.md) · [메인 구현·검수](docs/design-review/blog-platform-home.md). 새 글·사진의 브라우저 비공개 보관과 기존 선택 내용의 공개 사본은 다른 범위다.
 
+[글 관리·원본 사진·선택 공개](docs/life-tools-design/blog-completion.md)를 연결했습니다. 홈의 **글 관리**에서 저장 글·초안을 찾고, 한 글씩 내 계정 서버에 비공개 보관하거나 공개할 사진을 골라 게시·갱신·철회합니다. 방문자는 별도 블로그 주소에서 목록과 글을 읽습니다. 원문에서 선택한 구절은 인용 글이나 9칸 구성으로 연결하며 정확한 버전으로 돌아갑니다. 새 인용의 구조화된 근거는 현재 브라우저에 별도로 보관하므로 사진 ZIP·글별 서버 보관에는 포함되지 않습니다.
+
+서버의 비공개 버킷·RPC·원본 사진 Edge는 설치·권한 확인을 마쳤습니다. 이 브랜치의 프런트엔드는 아직 Pages에 배포하지 않았으며, 개인 자료를 시험 게시하지 않았습니다. [운영 설치 기록](docs/life-tools-design/blog-installation.md).
+
+
 [배포 사이트](https://wonchance-art.github.io/life-haedo/) · 로컬 변경은 배포 전까지 사이트에 반영되지 않는다.
 
 [핵심 경험 품질 기준](docs/design-review/core-experience.md): 읽던 원문에서 `함께 읽을 기록`을 바로 열고 같은 버전·위치로 돌아온다. 내 페이지는 본문·코멘트를 먼저 보여주며 설정은 펼쳐 편집한다. 짧은 지시도 목표·범위·보존·완료 기준으로 구체화하고, 기능 검사·사용 흐름·시각 검토를 나눠 확인한다. 후속 [구성 이어쓰기](docs/life-tools-design/device-continuity.md)는 명시 연결·양쪽 비교·복구 사본까지 구현했다. **신규 운영 SQL 설치와 배포는 대기 중**이며 [관리자 인계](docs/life-tools-design/composition-installation.md)를 따른다. 후속 [선택한 글쓰기 초안 이어쓰기](docs/design-review/writing-continuity.md)도 구현·검증했으며, 두 단계의 [Local 일괄 설치 순서](docs/life-tools-design/continuity-batch-installation.md)를 함께 준비했다.
@@ -29,7 +34,7 @@
 
 [웹 글·출처 가져오기](docs/design-review/social-import.md)는 네이버 블로그·Instagram 링크의 원천 설정 제안, 복사한 본문·포함 범위 검토, 출처 주소 대조를 제공한다. 링크만으로 본문·사진·영상을 수집하지 않는다.
 
-[첫 접속 홈과 기록 통합](docs/design-review/home-entry-proposal.md)은 최근 기록·묶음·내 페이지 요약을 현재 작업공간에서 보여준다. 묶음과 페이지 구성은 여전히 이 브라우저에만 저장되며 공개 게시가 아니다.
+[첫 접속 홈과 기록 통합](docs/design-review/home-entry-proposal.md)은 최근 기록·묶음·내 페이지 요약을 현재 작업공간에서 보여준다. 묶음과 페이지 구성의 저장·이어쓰기·선택 공개는 글별 서버 보관과 별도다.
 
 [기록 정리](docs/design-review/record-to-page.md): 기록의 체크 아이콘으로 여러 원문을 고른 뒤 묶음/내 페이지에 담는다. 읽던 원문은 연결 아이콘으로 바로 전달한다. 다음 화면에서 버전과 담을 곳을 확인하며 선택·취소만으로 저장하지 않는다.
 
