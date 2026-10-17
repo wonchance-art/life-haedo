@@ -129,6 +129,7 @@ async function main() {
       await app.locator(".life-obsidian-links > summary").click();
       const target = app.locator("[data-linked-version]").filter({ hasText: "대상" }); await target.click();
       await app.waitForFunction(() => document.querySelector(".life-reader-heading")?.textContent === "대상");
+      await app.waitForFunction(() => getSelection()?.toString() === "# 실제 제목");
       const exact = await app.evaluate(() => { const s = getSelection(); return s?.toString(); });
       assert.equal(exact, "# 실제 제목");
       await app.locator(".life-obsidian-links > summary").click();
