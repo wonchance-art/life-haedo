@@ -736,22 +736,27 @@
       changed(bundle.workspaceId, bundle.revision); workbenchChanged(state);
       return installed;
     }
-    async function installWorkspace(input) {
-      const bundle = clone(input);
-      core().validateWorkspace(bundle);
+    async function installWorkspaces(input) {
+      if (!Array.isArray(input) || input.length < 1 || input.length > 2) throw fault('invalid_request', '새 사본은 한 번에 1~2개 작업공간으로 복원할 수 있습니다.');
+      const copies = clone(input);
+      copies.forEach(bundle => core().validateWorkspace(bundle));
+      if (new Set(copies.map(bundle => bundle.workspaceId)).size !== copies.length) throw fault('workspace_exists', '복원할 작업공간 식별자가 중복됩니다.');
       const installed = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
-        const bundles = tx.objectStore('bundles');
-        if (await bundles.get(bundle.workspaceId) || await workspaceOwner(tx.objectStore('meta'), bundle.workspaceId)) {
-          throw fault('workspace_exists', '같은 작업공간이 이미 있습니다. 새 사본으로 복원하세요.');
+        const bundles = tx.objectStore('bundles'), meta = tx.objectStore('meta');
+        for (const bundle of copies) {
+          if (await bundles.get(bundle.workspaceId) || await workspaceOwner(meta, bundle.workspaceId)) throw fault('workspace_exists', '같은 작업공간이 이미 있습니다. 새 사본으로 복원하세요.');
         }
-        await bundles.add(bundle);
-        await saveOwner(tx.objectStore('meta'), bundle.workspaceId);
-        await tx.objectStore('meta').put({ key: activeKey, value: bundle.workspaceId });
-        return clone(bundle);
+        for (const bundle of copies) {
+          await bundles.add(bundle);
+          await saveOwner(meta, bundle.workspaceId);
+        }
+        await meta.put({ key: activeKey, value: copies[0].workspaceId });
+        return clone(copies);
       });
-      changed(bundle.workspaceId, bundle.revision);
+      for (const bundle of copies) changed(bundle.workspaceId, bundle.revision);
       return installed;
     }
+    async function installWorkspace(input) { return (await installWorkspaces([input]))[0]; }
     async function createWorkspace(title) {
       return installWorkspace(core().createWorkspace(title === undefined ? {} : { title }));
     }
@@ -1861,7 +1866,7 @@
       };
     }
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
-      listWorkspaces, read, createWorkspace, installWorkspace, getActive, setActive,
+      listWorkspaces, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
       readCollection, saveCollection, readNineBoard, saveNineBoard, listPhotoPosts, readPhotoPost, savePhotoPost, readPageDrafts, savePageDrafts, savePagePost,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,

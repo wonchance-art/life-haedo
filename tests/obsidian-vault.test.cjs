@@ -177,6 +177,11 @@ test("CLI exports outside the app, pins a clean Git tree and refuses symlinks, d
     assert.equal(review.summary.reviewGroups, 0);
     const html = await fs.readFile(path.join(output, "review.html"), "utf8");
     assert(html.includes("노트 연결 검토"));
+    const packageReader = require("../assets/life/obsidian-package.js");
+    const packed = await packageReader.read(new Blob([await fs.readFile(path.join(output, "vault-package.zip"))]));
+    assert.equal(packed.notes.sources.length, 1);
+    assert.equal(packed.files.sources.length, 0);
+    assert.equal((await fs.stat(path.join(output, "vault-package.zip"))).mode & 0o777, 0o600);
     for (const name of ["review.json", "review.html"])
       assert.equal(
         (await fs.stat(path.join(output, name))).mode & 0o777,

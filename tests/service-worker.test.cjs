@@ -32,7 +32,7 @@ test('complete offline shell includes every runtime module', async () => {
     'assets/platform-ui.js', 'assets/platform.css', 'assets/platform-life-remote.js', 'assets/timeline-entry.js',
     'assets/haedo-navigation.js', 'assets/haedo-shell.css', 'assets/timeline-shell.css',
     'life.html', 'vendor/idb/idb.js', 'vendor/supabase/supabase.js', 'assets/life/core.js', 'assets/life/writing.js', 'assets/life/writing-ui.js', 'assets/life/workbench.js', 'assets/life/reflection-lenses.js', 'assets/life/reflection-lenses-ui.js', 'assets/life/rediscovery.js', 'assets/life/storage.js', 'assets/life/legacy.js',
-    'assets/life/remote.js', 'assets/life/sync.js',
+    'assets/life/remote.js', 'assets/life/sync.js', 'assets/life/obsidian-decisions.js', 'assets/life/obsidian-package.js',
     'assets/life/icons.js', 'assets/life/workbench-ui.js', 'assets/life/home.js', 'assets/life/ui.js', 'assets/life/ui.css', 'assets/life/workbench.css', 'assets/life/home.css', 'assets/life/shell.js'])
     assert.ok(h.state().resources.some(r => r.url.endsWith(name)), name);
 });

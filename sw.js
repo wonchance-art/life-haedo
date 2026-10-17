@@ -1,6 +1,7 @@
 /* Versioned app shell. Personal documents remain in localStorage/IndexedDB. */
-const CACHE='haedo-v116';
+const CACHE='haedo-v117';
 const SHELL=['./','./index.html','./login.html','./workspace.html','./timeline.html',
+  './assets/life/obsidian-decisions.js','./assets/life/obsidian-package.js',
   './goals.html','./habits.html','./privacy.html','./manifest.webmanifest','./icon.svg','./icon-maskable.svg',
   './vendor/daisyui.css','./vendor/daisyui-themes.css','./assets/app.css',
   './assets/data.js','./assets/sync.js','./assets/app.js','./assets/workspace.js',

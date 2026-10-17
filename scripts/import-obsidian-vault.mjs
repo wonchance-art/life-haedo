@@ -12,6 +12,7 @@ import { execFileSync } from "node:child_process";
 import { buildVault } from "./lib/obsidian-vault.mjs";
 import { renderReviewHTML } from "./lib/obsidian-review.mjs";
 import { renderDecisionTool } from "./lib/obsidian-decision-tool.mjs";
+import Zip from "../vendor/fflate/fflate.js";
 const project = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2),
   values = {};
@@ -115,6 +116,10 @@ async function main() {
   );
   const { chmod } = await import("node:fs/promises");
   await chmod(join(output, "repository.bundle"), 0o600);
+  const archive = {};
+  for (const name of ["notes.json", "supporting-files.json", "private-audit.json", "review.json", "review.html", "repository.bundle", "review-tool.html"])
+    archive[name] = new Uint8Array(await readFile(join(output, name)));
+  await writeFile(join(output, "vault-package.zip"), Zip.zipSync(archive, { level: 0 }), { flag: "wx", mode: 0o600 });
   const { references } = result.manifest;
   console.log(
     JSON.stringify({

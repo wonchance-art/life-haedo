@@ -97,10 +97,14 @@
   }
   function jsonBlob(value) { return new Blob([JSON.stringify(value)], { type: "application/json" }); }
   async function openFiles(event) {
-    const chosen = [...event.target.files]; event.target.value = "";
+    let chosen = [...event.target.files]; event.target.value = "";
     if (!chosen.length || (dirty && !confirm("기존 선택을 교체합니다. 선택 파일이나 ZIP을 보관했는지 확인하세요."))) return;
     lock(true); status("파일과 원문 해시를 확인하고 있습니다…");
     try {
+      if (chosen.length === 1 && /\.zip$/i.test(chosen[0].name)) {
+        const { unpacked } = await globalThis.HaedoLife.ObsidianPackage.unpack(chosen[0], { keepArchive: true });
+        chosen = Object.entries(unpacked).map(([name, bytes]) => new File([bytes], name));
+      }
       const next = new Map(); let bytes = 0;
       for (const file of chosen) {
         bytes += file.size;

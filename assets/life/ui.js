@@ -2819,9 +2819,9 @@
       announce('파일을 만들었습니다. 파일 앱 또는 다운로드에서 저장 위치와 내용을 확인해 주세요.');
     }
 
-    function backupContents(bundle) {
+    function backupContents(bundle, label = '백업에 담긴 원문 확인') {
       const details = node('details', null, 'life-details life-backup-contents');
-      details.append(node('summary', '백업에 담긴 원문 확인'));
+      details.append(node('summary', label));
       if (!bundle.sources.length) { details.append(empty('보관된 원문이 없는 작업공간입니다.')); return details; }
       const bySource = new Map();
       for (const version of bundle.sourceVersions) {
@@ -2867,6 +2867,16 @@
       const info = books ? node('details', null, 'life-details') : panel;
       if (books) { info.append(node('summary', '복원 정보')); panel.append(info); }
       info.append(node('p', '이전 작업공간은 그대로 남아 있습니다. 이 사본의 자동 동기화는 연결하지 않았습니다.', 'life-help'));
+      for (const copy of receipt.copies || []) {
+        if (copy.workspaceId === state.bundle.workspaceId) continue;
+        info.append(button('함께 복원한 공간 열기: ' + copy.title, guarded(async () => {
+          await persistDrafts();
+          const target = await storage.read(copy.workspaceId);
+          if (disposed) return;
+          await storage.setActive(target.workspaceId);
+          await openRestoredWorkspaces([target, ...(receipt.copies || []).filter(row => row.workspaceId !== target.workspaceId)], receipt.previousId);
+        })));
+      }
       info.append(button('이전 작업공간으로 돌아가기', guarded(async () => {
         await persistDrafts();
         const previous = await storage.read(receipt.previousId);
@@ -2891,6 +2901,70 @@
         finally { toolbar.querySelector('h1')?.focus({ preventScroll: true }); }
       })));
       content.prepend(panel);
+    }
+
+    async function openRestoredWorkspaces(installed, previousId) {
+      if (disposed) return;
+      const active = installed[0];
+      invalidateBatchContext();
+      state.bundle = active;
+      state.restoreReturn = { previousId, copyId: active.workspaceId, copies: installed.map(copy => ({ workspaceId: copy.workspaceId, title: copy.title })) };
+      state.stage = state.prepared = state.sourceId = state.sourceVersionId = null;
+      state.sourceDrafts.clear(); state.readerPositions.clear(); state.stages = []; state.allStages = [];
+      for (const copy of installed) if (!state.workspaces.some(row => row.workspaceId === copy.workspaceId)) state.workspaces.push({ workspaceId: copy.workspaceId, title: copy.title });
+      resetSearchContext(); state.mode = 'sources'; connectSubscription(); render();
+      global.scrollTo({ top: 0, behavior: 'instant' });
+      announce('새 작업공간 사본을 열었습니다. 이전 작업공간은 그대로 유지됩니다. 자동 동기화는 연결하지 않았습니다.', { quiet: true });
+      main.querySelector('#lifeRestoreResult h3')?.focus({ preventScroll: true });
+      // Already committed: a later refresh error must never offer another installation.
+      try { await refreshData(); render(); }
+      catch (_) { throw new Error('사본은 이 브라우저에 보관됐습니다. 작업공간 목록을 갱신하지 못했으니 관리에서 다시 확인해 주세요.'); }
+      finally { main.querySelector('#lifeRestoreResult h3')?.focus({ preventScroll: true }); }
+    }
+
+    function renderObsidianRestore() {
+      const section = node('section', null, 'life-settings-section'); section.id = 'lifeObsidianRestore';
+      const picker = field('Obsidian 변환 ZIP 선택', 'file', 'lifeObsidianFile', '');
+      picker.input.accept = '.zip,application/zip';
+      const preview = node('div', null, 'life-restore-preview'); preview.id = 'lifeObsidianPreview'; preview.setAttribute('aria-live', 'polite');
+      let candidate = null;
+      picker.input.addEventListener('change', guarded(async () => {
+        candidate = null; preview.replaceChildren();
+        const file = picker.input.files[0]; if (!file) return;
+        preview.append(node('p', 'ZIP의 원문·출처·해시를 확인하고 있습니다. 아직 복원하지 않았습니다.', 'life-help'));
+        try { candidate = await global.HaedoLife.ObsidianPackage.read(file); }
+        catch (cause) { preview.replaceChildren(); throw cause; }
+        if (disposed) return;
+        preview.replaceChildren(); const data = candidate, s = data.summary;
+        preview.append(node('h4', data.notes.title || 'Obsidian 노트'), node('p', file.name, 'life-meta'),
+          node('p', '노트 ' + s.notes + '개 · 보조 파일 ' + s.files + '개 · 노트 연결 ' + s.links + '개'),
+          node('p', '최초 감사 기준: 검토 ' + s.reviewGroups + '묶음 / ' + s.reviewOccurrences + '회 · 보관 정보 ' + s.informationalOccurrences + '회. 선택 반영 뒤에도 원래 감사는 유지됩니다.', 'life-help'),
+          backupContents(data.notes, '노트 원문 확인'));
+        const source = node('details', null, 'life-details');
+        source.append(node('summary', 'Git 출처 확인'), node('p', data.repositoryUrl, 'life-meta life-source-url'), node('p', data.ref, 'life-meta life-source-url'));
+        preview.append(source);
+        const support = field('보조 파일도 별도 작업공간으로 함께 복원', 'checkbox', 'lifeObsidianIncludeFiles', '');
+        support.input.checked = s.files > 0; support.input.disabled = !s.files;
+        if (s.files) preview.append(support.label, backupContents(data.files, '보조 파일 원문 확인'));
+        preview.append(node('p', '선택한 공간을 한 번에 새 사본으로 저장합니다. 원본 ZIP과 기존 작업공간은 유지합니다. 감사·검토 HTML·Git 이력·선택 이력은 원본 ZIP에 남으며 앱에 설치하거나 실행하지 않습니다.', 'life-help'));
+        const actions = node('div', null, 'life-actions');
+        actions.append(button('Obsidian 새 사본으로 복원', guarded(async () => {
+          const selected = candidate; if (!selected) return;
+          await persistDrafts();
+          const previousId = state.bundle.workspaceId;
+          const copies = [selected.notes]; if (support.input.checked && s.files) copies.push(selected.files);
+          const installed = await storage.installWorkspaces(copies);
+          candidate = null; preview.replaceChildren(); picker.input.value = '';
+          await openRestoredWorkspaces(installed, previousId);
+        }), 'life-primary'), button('Obsidian 복원 취소', guarded(() => {
+          candidate = null; preview.replaceChildren(); picker.input.value = '';
+          global.requestAnimationFrame(() => { if (!disposed && picker.input.isConnected) picker.input.focus({ preventScroll: true }); });
+          announce('복원을 취소했습니다. ZIP과 현재 작업공간은 그대로 유지됩니다.');
+        })));
+        preview.append(actions);
+      }));
+      section.append(node('h3', 'Obsidian 패키지에서 복원'), node('p', '변환기 또는 연결 검토 도구에서 만든 ZIP을 해제하지 않고 엽니다. 일반 보관함 ZIP과 사진 글 ZIP은 각 가져오기 경로를 사용하세요.', 'life-help'), picker.label, preview);
+      return section;
     }
 
     function renderTransfer() {
@@ -2945,26 +3019,7 @@
           if (disposed) return;
           candidate = null;
           preview.replaceChildren();
-          invalidateBatchContext();
-          state.bundle = installed;
-          state.restoreReturn = { previousId, copyId: installed.workspaceId };
-          state.stage = null;
-          state.prepared = null;
-          state.sourceDrafts.clear();
-          state.stages = [];
-          state.allStages = [];
-          state.workspaces = [...state.workspaces, { workspaceId: installed.workspaceId, title: installed.title }];
-          resetSearchContext();
-          state.mode = 'sources';
-          connectSubscription();
-          render();
-          global.scrollTo({ top: 0, behavior: 'instant' });
-          announce('새 작업공간 사본을 열었습니다. 이전 작업공간은 그대로 유지됩니다. 자동 동기화는 연결하지 않았습니다.', { quiet: true });
-          main.querySelector('#lifeRestoreResult h3')?.focus({ preventScroll: true });
-          // Installation already committed. A later list/read failure must not offer to install it again.
-          try { await refreshData(); render(); }
-          catch (_) { throw new Error('사본은 이 브라우저에 보관됐습니다. 작업공간 목록을 갱신하지 못했으니 관리에서 다시 확인해 주세요.'); }
-          finally { main.querySelector('#lifeRestoreResult h3')?.focus({ preventScroll: true }); }
+          await openRestoredWorkspaces([installed], previousId);
         }), 'life-primary'), button('복원 취소', guarded(() => {
           candidate = null;
           preview.replaceChildren();
@@ -2976,7 +3031,7 @@
       }));
       const restoreSection = node('section', null, 'life-settings-section');
       restoreSection.append(node('h3', '백업에서 복원'), restore.label, preview, node('p', '다른 기기로 옮긴 백업은 별도 사본입니다. 여러 기기의 변경이 서로 자동 반영되지 않습니다.', 'life-help'));
-      main.append(restoreSection);
+      main.append(restoreSection, renderObsidianRestore());
       const workspaceName = field('새 작업공간 이름', 'text', 'lifeNewWorkspaceName', '');
       const workspaceSection = node('section', null, 'life-settings-section');
       workspaceSection.append(node('h3', '새 작업공간'), workspaceName.label, button('빈 작업공간 만들기', guarded(async () => {

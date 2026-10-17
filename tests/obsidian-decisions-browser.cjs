@@ -101,7 +101,7 @@ async function main() {
       const restored = await Core.restoreBackup(Buffer.from(zipFiles["notes.json"]).toString());
       assert.equal(restored.links.length, 2);
       assert.deepEqual(restored.sourceVersions.map((v) => v.contentText), f.result.notesBackup.workspace.sourceVersions.map((v) => v.contentText));
-      await page.locator("#package-files").setInputFiles(files(zipFiles));
+      await page.locator("#package-files").setInputFiles({ name: "selected-copy.zip", mimeType: "application/zip", buffer: zip });
       await page.getByText("원문 확인을 마쳤습니다.", { exact: false }).waitFor();
       await page.locator("#decisions-file").setInputFiles({ name: "decisions.json", mimeType: "application/json", buffer: saved });
       await page.getByText("선택 파일을 확인했습니다.", { exact: false }).waitFor(); await page.locator("#preview").click();

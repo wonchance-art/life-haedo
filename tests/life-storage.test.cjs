@@ -301,6 +301,33 @@ function syncFixture() {
   const storage = createStorage({ idb: adapter.idb, core: Core, channelFactory: null });
   return { ...adapter, storage };
 }
+test('workspace pair installation is atomic across second-write failure, duplicate IDs and account replacement', async t => {
+  const { storage: base, control } = syncFixture(); t.after(() => base.close());
+  let a = base.forAccount(accountA); const previous = await a.createWorkspace('기존 자료');
+  const pair = [Core.createWorkspace({ title: '노트 사본' }), Core.createWorkspace({ title: '보조 파일 사본' })];
+  control.afterWrite = ({ name, method, value }) => {
+    if (name === 'bundles' && method === 'add' && value.workspaceId === pair[0].workspaceId) control.failWrite = { name: 'bundles', method: 'add' };
+  };
+  await assert.rejects(a.installWorkspaces(pair), { code: 'storage_quota' });
+  control.afterWrite = null;
+  assert.deepEqual((await a.listWorkspaces()).map(w => w.workspaceId), [previous.workspaceId]);
+  assert.equal(await a.getActive(), previous.workspaceId);
+  await assert.rejects(a.installWorkspaces([pair[0], pair[0]]), { code: 'workspace_exists' });
+  await a.installWorkspace(pair[1]);
+  await assert.rejects(a.installWorkspaces(pair), { code: 'workspace_exists' });
+  await assert.rejects(a.read(pair[0].workspaceId), { code: 'workspace_access_denied' });
+  const next = [Core.createWorkspace(), Core.createWorkspace()]; let b;
+  control.afterWrite = ({ name, method }) => {
+    if (name === 'bundles' && method === 'add') { control.afterWrite = null; b = base.forAccount(accountB); }
+  };
+  await assert.rejects(a.installWorkspaces(next), { code: 'storage_scope_closed' });
+  assert.deepEqual(await b.listWorkspaces(), []);
+  a = base.forAccount(accountA);
+  for (const copy of next) await assert.rejects(a.read(copy.workspaceId), { code: 'workspace_access_denied' });
+  const installed = await a.installWorkspaces(next);
+  assert.equal(installed.length, 2); assert.equal(await a.getActive(), next[0].workspaceId);
+  for (const copy of installed) assert.equal(await a.getSyncState(copy.workspaceId), null);
+});
 function bindingFor(bundle, userId = 'account-a') {
   return { projectUrl: 'https://anonymous-test.supabase.co', userId, remoteId: bundle.workspaceId };
 }
