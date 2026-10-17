@@ -16,6 +16,20 @@ const oldBody='작품 사이의 빈자리에 오래 머물렀다.\r\n보존할 �
 const newBody='최신 원문으로 바뀌면 안 되는 문장.\r\n이 버전에서는 기록한 장소와 관찰이 달라졌다.';
 
 async function go(page,view='activities') {await page.goto(`${base}/index.html?section=${sections[view]}&view=${view}`);await ready(page);await page.locator(`.life-workbench[data-mode="${view}"]`).waitFor();await page.waitForFunction(()=>!document.querySelector('.life-workbench')?.getAttribute('aria-busy')||document.querySelector('.life-workbench')?.getAttribute('aria-busy')==='false');}
+async function storedState(page, view) {
+  const status=page.locator('#wbStatus[data-state="saved"]'); await status.waitFor({state:'attached'});
+  assert.equal(await status.textContent(),'이 브라우저에 저장됨');
+  if(view==='workbench-backup') {
+    assert.equal(await status.isHidden(),true);
+    assert.equal(await page.locator('#wbBackupDownload').isVisible(),true);
+    assert.equal(await page.locator('#wbRestoreFile').isVisible(),true);
+    const scope=page.locator('#wbBackupScope');
+    if(!await scope.evaluate(node=>node.open))await scope.locator(':scope > summary').click();
+    assert.equal(await scope.locator('.wb-notice').isVisible(),true);
+    assert.match(await scope.textContent(),/글쓰기·가져오기 초안, 사진 글·원본\(별도 ZIP\)/);
+    await scope.locator(':scope > summary').click();
+  } else assert.equal(await status.isVisible(),true);
+}
 async function current(page) {return page.evaluate(async()=>{const s=HaedoLife.Shell.storage,id=await s.getActive();return {bundle:await s.read(id),workbench:await s.readWorkbench(id)};});}
 async function fixture(page,{many=false}={}) {
   await go(page);
@@ -109,7 +123,7 @@ async function main() {
   }
   try {
     await check('all five real sections open with empty local compositions',async({page})=>{
-      for(const view of Object.keys(sections)){await go(page,view);await page.locator('#wbStatus[data-state="saved"]').waitFor();assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="'+sections[view]+'"]').getAttribute('aria-current'),'page');assert.equal(await page.locator('#wbError').isHidden(),true);}
+      for(const view of Object.keys(sections)){await go(page,view);await storedState(page,view);assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="'+sections[view]+'"]').getAttribute('aria-current'),'page');assert.equal(await page.locator('#wbError').isHidden(),true);}
       const value=await current(page);assert.equal(value.bundle.sources.length,0);assert.deepEqual(value.workbench.groups,[]);assert.deepEqual(value.workbench.page.entries,[]);
     });
     await check('create activity, select fixed sources, copy and edit page, preview and reload preserve data',async({page})=>{
@@ -176,7 +190,7 @@ async function main() {
     },{readGate:true});
     for(const size of [{width:1440,height:1000},{width:820,height:1000},{width:390,height:844}])await check('visual populated empty loading error '+size.width,async({page,context})=>{
       await go(page);await page.locator('#wbCreateGroup').waitFor();await snapshot(page,'empty-activities',size);const f=await fixture(page,{many:true});await seedComposition(page,f.refs);
-      for(const view of Object.keys(sections)){await go(page,view);await page.locator('#wbStatus[data-state="saved"]').waitFor();if(view==='activities')await openDetails(page.locator('article[data-group-id]').first());if(view==='discover')await page.locator('#wbDiscoverQuery').fill('산책');await snapshot(page,view,size);if(view==='page'){await togglePreview(page);await snapshot(page,'visitor',size);}}
+      for(const view of Object.keys(sections)){await go(page,view);await storedState(page,view);if(view==='activities')await openDetails(page.locator('article[data-group-id]').first());if(view==='discover')await page.locator('#wbDiscoverQuery').fill('산책');await snapshot(page,view,size);if(view==='page'){await togglePreview(page);await snapshot(page,'visitor',size);}}
       await go(page,'page');await page.getByText('제목·소개·표시 설정',{exact:true}).click();await abortWorkbenchWrites(page,true);await page.locator('#wbPageIntro').fill('저장 오류에서도 유지되는 익명 초안');await page.getByRole('button',{name:'지금 저장',exact:true}).click();await page.locator('#wbError').waitFor({state:'visible'});await snapshot(page,'save-error',size);await abortWorkbenchWrites(page,false);await page.getByRole('button',{name:'다시 저장',exact:true}).click();await waitSaved(page,w=>w.page.intro==='저장 오류에서도 유지되는 익명 초안');
       await context.addInitScript(()=>{window.__wbHoldRead=true;});await page.reload();await ready(page);await page.waitForFunction(()=>window.__wbReadEntered);assert.match(await page.locator('#wbStatus').textContent(),/불러오는 중/);await snapshot(page,'loading',size);await page.evaluate(()=>window.__wbReleaseRead());await page.locator('#wbStatus[data-state="saved"]').waitFor();assert.equal((await current(page)).workbench.page.intro,'저장 오류에서도 유지되는 익명 초안');
     },{viewport:size,hasTouch:size.width<=820,readGate:true});

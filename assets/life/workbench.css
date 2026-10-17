@@ -301,8 +301,8 @@
 
 /* A · manuscript first. User-selected direction: book-design-reset.md.
    UI-only: the existing fields, IDs, state transitions and projection remain. */
-.life-workbench[data-mode=books] { --color-primary: #684477; --soft: #f4edf6; --ink: #262330; --ink-soft: #6a6172; --line: #e9e3eb; }
-.life-app:has(.life-workbench[data-mode=books]) { max-width: 1000px; margin-inline: auto; padding-inline: 40px; border-radius: 0; }
+.life-workbench[data-mode=books] { --color-primary:var(--haedo-accent,#18181b); --soft:var(--haedo-selected,#f0f0f2); --ink:var(--haedo-ink,#18181b); --ink-soft:var(--haedo-muted,#66666f); --line:var(--haedo-line,#ececee); }
+.life-app:has(.life-workbench[data-mode=books]) { max-width:768px; margin-inline:auto; padding-inline:24px; border-radius:0; }
 .life-app:has(.life-workbench[data-book-scene=edit],.life-workbench[data-book-scene=read]) > .life-toolbar { display: none; }
 .life-app:has(.life-workbench[data-book-scene=edit],.life-workbench[data-book-scene=read]) .life-main { padding-top: 0; }
 .life-workbench[data-mode=books] > .wb-storage-line { margin-top: 40px; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -352,7 +352,6 @@
 .life-workbench[data-mode=books] .wb-reading-thought { padding: 20px; border-radius: 12px; background: var(--mint); }
 .life-workbench[data-mode=books] .wb-reading-source .wb-reading-text,.life-workbench[data-mode=books] .wb-reading-thought .wb-reading-text { font-size: 16px; }
 .life-workbench[data-mode=books] .wb-reading-intro { margin-top: 30px; }
-@media (max-width: 1100px) and (min-width: 701px) { .life-app:has(.life-workbench[data-mode=books]) { margin-left: 92px; margin-right: 20px; } }
 @media (max-width: 700px) {
   .life-app:has(.life-workbench[data-mode=books]) { width: 100%; margin: 0; padding: 8px max(20px,env(safe-area-inset-right)) 96px max(20px,env(safe-area-inset-left)); }
   .life-workbench[data-mode=books] .wb-book-title-link { font-size: 23px; }
@@ -366,8 +365,8 @@
 .life-workbench[data-mode=books] > .wb-error { position: sticky; top: 64px; z-index: 30; max-height: 40dvh; overflow: auto; }
 
 /* Reflection → outline shares the approved manuscript-first A reading column. */
-.life-workbench[data-mode=reflection] { --color-primary: #684477; --soft: #f4edf6; --ink: #262330; --ink-soft: #6a6172; --line: #e9e3eb; }
-.life-app:has(.life-workbench[data-mode=reflection]) { max-width: 1000px; margin-inline: auto; padding-inline: 40px; border-radius: 0; }
+.life-workbench[data-mode=reflection] { --color-primary:var(--haedo-accent,#18181b); --soft:var(--haedo-selected,#f0f0f2); --ink:var(--haedo-ink,#18181b); --ink-soft:var(--haedo-muted,#66666f); --line:var(--haedo-line,#ececee); }
+.life-app:has(.life-workbench[data-mode=reflection]) { max-width:768px; margin-inline:auto; padding-inline:24px; border-radius:0; }
 .life-workbench[data-reflection-scene] > .wb-heading { min-height: 0; margin: 0; }
 .life-workbench[data-mode=reflection] > .wb-storage-line { margin-top: 40px; padding-top: 12px; border-top: 1px solid var(--line); }
 .wb-reflection-bar,.wb-plan-actions { position: sticky; top: 0; z-index: 24; margin: 0 0 12px; padding: 10px 0; min-height: 64px; background: var(--paper); gap: 6px; flex-wrap: nowrap; }
@@ -409,7 +408,6 @@
 .wb-plan-chapter-line > .life-field > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .wb-plan-chapter-line input[type=text] { background: transparent; font-size: 18px; }
 .life-workbench[data-mode=reflection] > .wb-error { position: sticky; top: 64px; z-index: 30; max-height: 40dvh; overflow: auto; }
-@media (max-width: 1100px) and (min-width: 701px) { .life-app:has(.life-workbench[data-mode=reflection]) { margin-left: 92px; margin-right: 20px; } }
 @media (max-width: 700px) {
   .life-app:has(.life-workbench[data-mode=reflection]) { width: 100%; margin: 0; padding: 8px max(20px,env(safe-area-inset-right)) 112px max(20px,env(safe-area-inset-left)); }
   .wb-reflection-bar { gap: 2px; }
@@ -442,3 +440,38 @@
 
 /* Preview width is a temporary reading check, never a publication setting. */
 .wb-visitor.wb-visitor-narrow { max-width:390px; margin-inline:auto; }
+
+/* A personal profile leads into one quiet, chronological blog feed. */
+.life-workbench[data-mode=page] { max-width:680px; margin-inline:auto; }
+.wb-profile { display:grid; grid-template-columns:72px minmax(0,1fr) auto; align-items:start; gap:20px; padding:24px 0 28px; margin:0; }
+.wb-profile-avatar { display:grid; place-items:center; width:72px; height:72px; border-radius:50%; background:#f0f0f2; color:var(--ink,#18181b); font-size:28px; font-weight:650; line-height:1; user-select:none; }
+.wb-profile-identity { min-width:0; padding-top:2px; }
+.wb-profile-title { margin:0; color:var(--ink,#18181b); font-size:25px; font-weight:750; line-height:1.4; letter-spacing:-.025em; }
+.wb-profile-intro { margin:10px 0 0; max-width:48ch; color:var(--ink-soft,#66666f); font-size:15px; line-height:1.8; white-space:pre-wrap; }
+.wb-profile-edit-action { min-height:44px; margin-top:4px; padding-inline:16px; border-radius:999px; font-size:13px; font-weight:650; white-space:nowrap; }
+.life-workbench[data-mode=page] .wb-page-actions { gap:4px; min-height:56px; margin:0 0 24px; padding:6px 0; border-top:1px solid var(--line,#ececee); border-bottom:1px solid var(--line,#ececee); }
+.wb-page-actions > #wbPagePreview { margin-right:auto; padding-inline:0 12px; border:0; border-radius:12px; color:var(--ink-soft,#66666f); font-size:13px; background:transparent; }
+.wb-page-actions > #wbPagePreview[aria-pressed=true] { color:var(--ink,#18181b); font-weight:650; }
+.life-workbench[data-mode=page] .wb-page-actions > #wbPageSettings { margin-left:0; }
+.life-workbench[data-mode=page] .wb-post-feed { max-width:680px; }
+.life-workbench[data-mode=page] > .wb-storage-line { margin-top:28px; padding-top:16px; border-top:1px solid var(--line,#ececee); }
+.life-workbench[data-mode=page] .wb-page-setup { margin-top:28px; padding-top:10px; border-top:1px solid var(--line,#ececee); }
+.life-workbench[data-mode=page] .wb-page-entry-heading h3 { font-size:20px; font-weight:700; }
+.life-workbench[data-mode=page] .wb-page-content .wb-comment { padding:16px 0; border-radius:0; background:transparent; }
+.life-workbench[data-mode=page] .wb-page-content .wb-comment .life-meta { color:var(--ink-soft,#66666f); }
+.life-workbench[data-mode=page] .wb-page-content .wb-comment-body { font-size:16px; line-height:1.9; }
+.life-workbench[data-mode=page]:has(.photo-posts[data-mode=edit]) :is(.wb-profile,.wb-page-actions) { display:none; }
+.wb-visitor { max-width:680px; margin:18px auto 0; }
+.wb-visitor-profile { grid-template-columns:64px minmax(0,1fr); gap:18px; border-bottom:1px solid var(--line,#ececee); margin-bottom:8px; }
+.wb-visitor-profile .wb-profile-avatar { width:64px; height:64px; font-size:25px; }
+@media(max-width:700px) {
+  .wb-profile { grid-template-columns:56px minmax(0,1fr); gap:14px; padding:18px 0 24px; }
+  .wb-profile-avatar { width:56px; height:56px; font-size:23px; }
+  .wb-profile-title { font-size:23px; }
+  .wb-profile-intro { margin-top:8px; font-size:14px; }
+  .wb-profile-edit-action { grid-column:1 / -1; width:100%; margin-top:2px; }
+  .life-workbench[data-mode=page] .wb-page-actions { margin-bottom:20px; }
+  .wb-page-actions > #wbPagePreview { font-size:12px; }
+  .wb-visitor-profile { grid-template-columns:56px minmax(0,1fr); }
+  .wb-visitor-profile .wb-profile-avatar { width:56px; height:56px; font-size:23px; }
+}

@@ -13,6 +13,7 @@
     return element;
   }
   function fault(code, message) { return Object.assign(new Error(message), { code }); }
+  const profileInitials = name => !name || name === '내 블로그' ? '나' : Array.from(name.replace(/\s+/g, '')).slice(0, 2).join('');
 
   function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored, onLocalSaved = () => {},
     onSelectionUsed = () => {}, onSelectionCancel = () => {}, onArrange = () => {}, onWorkbenchNavigate = () => {}, onChapterImport = () => {},
@@ -1018,7 +1019,8 @@
     function renderPage() {
       const session = current, page = session.state.page;
       const token = generation, beginPost = session.pageCompose === true;
-      session.pageCompose = false;
+      const showProfile = session.pageProfile === true, editProfile = session.pageProfileEdit === true;
+      session.pageCompose = session.pageProfile = session.pageProfileEdit = false;
       if (session.nineOpen) {
         const back = action('내 페이지로 돌아가기', async () => {
           const token = generation; await session.nine.flush(); if (!showing(token, session)) return;
@@ -1046,7 +1048,7 @@
       const actions = el('div', null, 'life-actions wb-page-actions');
       const publish = discoveryIcon('공개 사본 관리', 'link', () => openShare(session)); publish.id = 'wbPageShare';
       actions.append(switchButton, publish);
-      const nine = action('9칸 구성', async () => {
+      const nine = discoveryIcon('9칸 구성', 'workspace', async () => {
         const token = generation; await flush(); if (!showing(token, session)) return;
         rememberPageEditor(); session.nineOpen = true; redraw(); bodyNode.querySelector('.nb-workspace')?.scrollIntoView({ block: 'start' });
       }); nine.id = 'wbPageNine'; actions.append(nine);
@@ -1061,13 +1063,22 @@
         actions.append(narrow);
         bodyNode.append(actions, notice('비공개 미리보기')); renderVisitor(page); return;
       }
-      const lead = el('div', null, 'wb-page-lead');
-      const title = el('h2', '', 'wb-visitor-title'), intro = el('p', '', 'wb-visitor-intro');
-      lead.append(title, intro);
+      const lead = el('header', null, 'wb-page-lead wb-profile'); lead.setAttribute('aria-label', '내 프로필');
+      const avatar = el('span', '', 'wb-profile-avatar'); avatar.setAttribute('aria-hidden', 'true');
+      const identity = el('div', null, 'wb-profile-identity');
+      const title = el('h2', '', 'wb-visitor-title wb-profile-title'), intro = el('p', '', 'wb-visitor-intro wb-profile-intro');
+      identity.append(title, intro);
+      const profileEdit = action('프로필 편집', () => {
+        pageSettings.open = true;
+        pageSettings.querySelector('#wbPageTitle')?.focus({ preventScroll: true });
+        pageSettings.scrollIntoView({ block: 'nearest' });
+      });
+      profileEdit.id = 'wbProfileEdit'; profileEdit.classList.add('wb-profile-edit-action'); profileEdit.setAttribute('aria-controls', 'wbProfileSettings');
+      lead.append(avatar, identity, profileEdit);
       const refreshLead = () => {
-        title.textContent = page.title; title.hidden = !page.title.trim() || page.title === MODES.page;
+        const name = page.title.trim() && page.title !== MODES.page ? page.title : '내 블로그';
+        title.textContent = name; avatar.textContent = profileInitials(name);
         intro.textContent = page.intro; intro.hidden = !page.showIntro || !page.intro;
-        lead.hidden = title.hidden && intro.hidden;
       };
       refreshLead(); bodyNode.append(lead, actions);
       const postFeed = el('section', null, 'pp-feed photo-feed wb-post-feed');
@@ -1087,7 +1098,7 @@
       };
       const photoHost = el('section'); bodyNode.append(photoHost);
       session.photoPosts ||= life.PhotoPostUI.create({ storage, workspaceId: session.workspaceId, isCurrent: () => workspaceIs(session), onDirty: () => updateStatus(session), onSaved: onLocalSaved, beforeOpen: async () => { await session.composer?.flush(); } });
-      const photoMount = session.photoPosts.mount(photoHost, { postId: session.searchTarget?.photoPostId || null, reset: beginPost || !!session.searchTarget && !session.searchTarget.photoPostId,
+      const photoMount = session.photoPosts.mount(photoHost, { postId: session.searchTarget?.photoPostId || null, reset: beginPost || showProfile || !!session.searchTarget && !session.searchTarget.photoPostId,
         listHost: postFeed, onFeed: rows => { photoRows = rows; mergeFeed(); } }); viewCleanups.push(() => session.photoPosts.detach());
       const composerHost = el('section'); bodyNode.insertBefore(composerHost, photoHost);
       session.composer ||= life.PageComposer.create({ storage, workspaceId: session.workspaceId,
@@ -1134,7 +1145,7 @@
       }).catch(error => { if (showing(token, session) && photoHost.isConnected) report(error, session); });
       bodyNode.append(postFeed);
 
-      const pageSettings = details('제목·소개·표시 설정'); pageSettings.classList.add('wb-page-settings');
+      const pageSettings = details('제목·소개·표시 설정'); pageSettings.classList.add('wb-page-settings'); pageSettings.id = 'wbProfileSettings';
       const pageField = (control, key) => {
         control.input.dataset.pageField = key;
         control.input.addEventListener('focus', () => { if (workspaceIs(session)) session.pageFieldFocus = key; });
@@ -1261,11 +1272,16 @@
       });
       reorder(); bodyNode.append(entriesHost, none, setup);
       restorePageEditor(session);
+      if (editProfile && showing(token, session)) profileEdit.click();
     }
     function renderVisitor(page) {
       const visitor = el('section', null, 'wb-visitor'); visitor.id = 'wbVisitor'; visitor.setAttribute('aria-label', '비공개 방문자 미리보기');
-      if (page.title !== MODES.page) visitor.append(el('h3', page.title, 'wb-visitor-title'));
-      if (page.showIntro && page.intro) visitor.append(el('p', page.intro, 'wb-visitor-intro'));
+      const name = page.title.trim() && page.title !== MODES.page ? page.title : '내 블로그';
+      const profile = el('header', null, 'wb-profile wb-visitor-profile');
+      const avatar = el('span', profileInitials(name), 'wb-profile-avatar'); avatar.setAttribute('aria-hidden', 'true');
+      const identity = el('div', null, 'wb-profile-identity'); identity.append(el('h3', name, 'wb-visitor-title wb-profile-title'));
+      if (page.showIntro && page.intro) identity.append(el('p', page.intro, 'wb-visitor-intro wb-profile-intro'));
+      profile.append(avatar, identity); visitor.append(profile);
       const entries = page.entries.filter(entry => entry.enabled && (entry.pinned || page.showRecent));
       entries.sort((a, b) => Number(b.pinned) - Number(a.pinned));
       const posts = (page.posts || []).filter(post => post.visibility === 'page');
@@ -2742,11 +2758,17 @@
       }
       if (mode === 'page') {
         current.searchTarget = options.searchTarget || null; current.nineTarget = options.nineTarget || null;
+        current.pageProfile = options.pageProfile === true || options.pageProfileEdit === true;
+        current.pageProfileEdit = options.pageProfileEdit === true;
+        if (current.pageProfile) {
+          current.nineOpen = false; preview = false; if (current.share) current.share.open = false;
+        }
         if (typeof options.pagePreview === 'boolean' && !options.nineTarget) {
           current.nineOpen = false; if (current.share) current.share.open = false;
         }
         current.pageCompose = options.pageCompose === true;
         if (current.pageCompose) {
+          current.pageProfile = current.pageProfileEdit = false;
           current.searchTarget = null; current.nineTarget = null; current.pageDraftId = null;
           current.nineOpen = false; preview = false; if (current.share) current.share.open = false;
         }
@@ -2784,7 +2806,7 @@
       bodyNode = el('div', null, 'wb-content'); bodyNode.append(notice('불러오는 중…'));
       const storageLine = el('div', null, 'wb-storage-line'); storageLine.append(statusNode, scope);
       storageLine.hidden = ['public-pages', 'related', 'workbench-backup'].includes(mode);
-      if (['books', 'reflection'].includes(mode)) surface.append(heading, errorNode, bodyNode, storageLine);
+      if (['books', 'reflection', 'page'].includes(mode)) surface.append(heading, errorNode, bodyNode, storageLine);
       else surface.append(heading, storageLine, errorNode, bodyNode);
       host.replaceChildren(surface);
       if (mode === 'public-pages') { surface.setAttribute('aria-busy', 'false'); redraw(); return; }

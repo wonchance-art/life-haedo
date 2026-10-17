@@ -57,6 +57,7 @@
 
 ## 스킬
 
+- SNS형 시각 체계: `DESIGN.md`와 `.impeccable/design.json`이 현행 규칙이다. 흰색/차콜, 본문·실제 사진 피드, 데스크톱 라벨 탐색·760px 이하 화면 끝 하단 탐색을 사용한다. 이전 라벤더·민트·떠 있는 탐색띠는 비교 이력이다. 아바타는 실제 제목에서 얻은 이니셜이며 가짜 반응·팔로워·동작 없는 사회적 조작을 추가하지 않는다. 원본·공개·저장 경계는 시각 변경과 독립적으로 유지한다.
 - 화면 추가·수정·시각 검토: `.agents/skills/life-haedo-design/SKILL.md`. 제품 사실은 `PRODUCT.md`, 공통 시각 기준과 현재 확정 상태는 `DESIGN.md`를 따른다. 공통 토큰·컴포넌트 재사용, 한글 자료가 있는 화면의 브라우저 검토, 기능 회귀와 시각 검토의 구분을 새 기능에도 적용한다. 여러 에이전트가 작업할 때 디자인 책임자 한 명이 공통 스타일을 통합한다.
 - 공식 Impeccable 4.5.0: `.agents/skills/impeccable/SKILL.md`. 프로젝트 지침 배포본이며 자동 엔진·launcher·hook은 비활성이다. 도입 범위와 출처는 `docs/design-review/impeccable.md`에 기록한다.
 - 앱 수정·실행·브라우저 검증: `.agents/skills/life-haedo-dev/SKILL.md`.

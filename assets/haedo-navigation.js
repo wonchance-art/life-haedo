@@ -28,12 +28,26 @@
     control.append(text);
   }
   root.document.querySelectorAll('[data-haedo-navigation]').forEach(nav => {
+    const brand = root.document.createElement('a');
+    brand.className = 'haedo-brand'; brand.href = 'index.html'; brand.setAttribute('aria-label', '해도 홈');
+    const mark = root.document.createElement('img'); mark.className = 'haedo-brand-mark'; mark.src = 'icon.svg'; mark.alt = ''; mark.width = 28; mark.height = 28;
+    const wordmark = root.document.createElement('span'); wordmark.textContent = '해도';
+    brand.append(mark, wordmark);
+    brand.addEventListener('click', event => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !handlers.size) return;
+      event.preventDefault();
+      for (const handler of handlers) handler('home');
+    });
+    nav.append(brand);
     for (const item of sections) {
       const link = root.document.createElement('a');
       link.className = 'haedo-icon-button haedo-nav-link';
       link.href = item.href; link.dataset.haedoSection = item.id;
       link.setAttribute('aria-label', item.label);
       link.append(root.HaedoLife.Icons.create(item.glyph));
+      const label = root.document.createElement('span');
+      label.className = 'haedo-nav-text'; label.setAttribute('aria-hidden', 'true'); label.textContent = item.label;
+      link.append(label);
       tooltip(link, item.label);
       link.addEventListener('click', event => {
         if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !handlers.size) return;

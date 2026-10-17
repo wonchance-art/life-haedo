@@ -1,6 +1,6 @@
 # 자료 화면 디자인 비교
 
-최신 디자인은 [Life 기준 사이트 전체 재구성](life-design-site.md)입니다.
+최신 디자인은 [SNS형 블로그 UX·UI](sns-blog-experience.md)입니다. [Life 기준 사이트 전체 재구성](life-design-site.md)은 앞선 이력입니다.
 
 후속 구현은 [자료 보관·복원·동기화의 다음 행동](life-management.md)입니다. 복원 미리보기·이전 공간 복귀·상태별 동기화와 오류 복구를 개선했습니다.
 
