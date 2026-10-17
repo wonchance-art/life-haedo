@@ -122,3 +122,22 @@ test("unknown note suffixes and unsupported relative URLs stay reviewable instea
   assert.equal(r.summary.reviewGroups, 2);
   assert.equal(r.summary.categories.missing_note, 2);
 });
+test("saved-file reporting follows local, rooted and nested path precedence without changing exact imported references", async () => {
+  const { buildVault } = await import("../scripts/lib/obsidian-vault.mjs");
+  const text = '[로컬](config.svg) [상대](./config.svg) [루트](/config.svg) [중첩](folder/config.svg) [인코딩](./그림%20%25%26.svg#%EC%A0%9C%EB%AA%A9) [[./그림 %&.svg|표시 <이름>]]';
+  const r = await buildVault([
+    entry("a/from.md", text),
+    entry("config.svg", "root"), entry("a/config.svg", "local"),
+    entry("folder/config.svg", "root nested"), entry("a/folder/config.svg", "local nested"),
+    entry("a/그림 %&.svg", "exact special path"),
+  ], options);
+  const rows = r.review.informational;
+  assert.deepEqual(rows.map(row => row.savedPath), ["a/config.svg", "a/config.svg", "config.svg", "folder/config.svg", "a/그림 %&.svg", "a/그림 %&.svg"]);
+  assert.deepEqual(rows[0].requestedPaths.slice(0, 2), ["a/config.svg", "config.svg"]);
+  assert.equal(rows[4].target, "./그림 %&.svg#제목");
+  assert.equal(rows[5].target, "./그림 %&.svg");
+  assert.equal(r.notesBackup.workspace.sourceVersions[0].contentText, text);
+  assert.equal(r.notesBackup.workspace.links.length, 0);
+  assert.deepEqual(rows.map(({ path, target, locator, reason }) => ({ path, target, locator, reason })), r.manifest.unresolvedReferences);
+  assert.equal(text.slice(rows[5].locator.start, rows[5].locator.end), "[[./그림 %&.svg|표시 <이름>]]");
+});

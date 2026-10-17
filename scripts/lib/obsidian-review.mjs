@@ -39,12 +39,9 @@ function requestedPaths(source, target) {
       names.flatMap((name) =>
         name.startsWith("/")
           ? [name.slice(1)]
-          : [
-              name,
-              path.posix.normalize(
-                path.posix.join(path.posix.dirname(source), name),
-              ),
-            ],
+          : name.startsWith(".") || !name.includes("/")
+            ? [path.posix.join(path.posix.dirname(source), name), name]
+            : [name, path.posix.join(path.posix.dirname(source), name)],
       ),
     ),
   ];

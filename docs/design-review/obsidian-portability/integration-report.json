@@ -1,0 +1,18 @@
+{
+  "checks": [
+    "Pinned Git files, ignored-file exclusion, BOM/CRLF/emoji/empty bytes and initial app ZIP restoration",
+    "Explicit choices, pending references, private permissions and generated ZIP/Core restoration preserve full bodies and remapped exact links",
+    "Stale choice and overwrite failures leave no partial output; same-destination retry and repeated application remain reusable without duplicate links",
+    "Byte-identical Git bundle restores tracked files and earlier tagged history while the original checkout remains unchanged"
+  ],
+  "scope": "Synthetic local Git and offline Node CLIs/shared app readers only; no private vault, browser, account, database or network.",
+  "pass": true,
+  "files": 9,
+  "notes": 6,
+  "supportingFiles": 3,
+  "explicitChoices": 2,
+  "links": 2,
+  "pendingReferences": 2,
+  "gitCommits": 2,
+  "generatedArchiveFiles": 9
+}

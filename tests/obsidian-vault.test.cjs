@@ -238,3 +238,108 @@ test("Wikilinks keep literal percent characters and prefer the local note over a
   );
   assert.deepEqual(targets, ["percent", "local"]);
 });
+
+test("comments and code delimiters cannot fabricate or hide visible references, retaining original UTF-16 ranges", async () => {
+  const { references } = await load();
+  const cases = [
+    ["😀 <!-- [[hidden]] -->\r\n[[visible]]", ["visible"]],
+    ["<!--\n```md\n[[hidden]]\n-->\n[[visible]]", ["visible"]],
+    ["%%\n~~~md\n[[hidden]]\n%%\n[[visible]]", ["visible"]],
+    ["`a`` [[hidden]] still code` [[visible]]", ["visible"]],
+    ["``a``` [[hidden]] still code`` [[visible]]", ["visible"]],
+    ["\\` [[visible]] \\`", ["visible"]],
+    ["\\`` [[hidden]] ` [[visible]]", ["visible"]],
+    ["`` unmatched ` [[visible]]", ["visible"]],
+    ["<!-- unclosed [[hidden]]", []],
+    ["```md\r\n%% [[hidden]] %%\r\n```\r\n[[visible]]", ["visible"]],
+  ];
+  for (const [text, expected] of cases) {
+    const found = references(text);
+    assert.deepEqual(found.map(item => item.target), expected, text);
+    for (const ref of found) assert.equal(text.slice(ref.start, ref.end), "[[" + ref.target + "]]", text);
+  }
+});
+
+test("fragment destinations ignore code and comments and require independent block IDs while retaining raw lines", async () => {
+  const { buildVault } = await load();
+  const target = "\ufeff😀\r\n```md\r\n# Hidden\r\nfenced ^proof\r\n```\r\n" +
+    "<!--\r\n# Hidden\r\ncomment ^proof\r\n-->\r\n%%\r\n# Hidden\r\ncomment ^proof\r\n%%\r\n" +
+    "`\r\n# Hidden\r\ninline ^proof\r\n`\r\njoined^proof\r\n" +
+    "# Hidden\r\nreal 🌱 block ^proof\r\n";
+  const result = await buildVault([
+    entry("from.md", "[[target#Hidden]] [[target#^proof]]"), entry("target.md", target),
+  ], options);
+  assert.equal(result.manifest.references.unresolvedAnchors, 0);
+  const links = result.notesBackup.workspace.links;
+  assert.equal(links.length, 2);
+  assert.deepEqual(links.map(link => {
+    const locator = link.sourceRefs[1].locator;
+    return target.slice(locator.start, locator.end);
+  }), ["# Hidden", "real 🌱 block ^proof"]);
+  assert.equal(links[0].sourceRefs[1].locator.start, target.lastIndexOf("# Hidden"));
+  assert.equal(links[1].sourceRefs[1].locator.start, target.indexOf("real 🌱 block"));
+  assert.equal(result.notesBackup.workspace.sourceVersions[1].contentText, target);
+});
+
+test("fake code/comment headings and joined block suffixes remain unresolved instead of acquiring invented locations", async () => {
+  const { buildVault } = await load();
+  const result = await buildVault([
+    entry("from.md", "[[target#Hidden]] [[target#^proof]] [[target#Head]]"),
+    entry("target.md", "~~~\n# Hidden\ntext ^proof\n~~~\n<!-- # Hidden -->\njoined^proof\n# Head `code`\n"),
+  ], options);
+  assert.equal(result.manifest.references.unresolvedAnchors, 3);
+  assert(result.notesBackup.workspace.links.every(link => link.sourceRefs[1].locator === null));
+  assert(result.manifest.unresolvedReferences.every(ref => ref.reason === "anchor_missing"));
+});
+
+test("encoded external schemes stay external and encoded filename fragments cannot select a different existing note", async () => {
+  const { references, buildVault } = await load();
+  for (const destination of ["https%3A%2F%2Fexample.org", "%2F%2Fexample.org", "mailto%3Aanonymous%40example.invalid", "https%3A%2F%2Fexample.org%2Ffile%23name"]) {
+    assert.deepEqual(references("[external](" + destination + ")"), []);
+  }
+  const body = "[filename](file%23part.md) [heading](file.md#Section%23one) [[literal%23name]]";
+  const result = await buildVault([
+    entry("from.md", body), entry("file.md", "# part.md\n# Section#one\n"),
+    entry("file#part.md", "correct filename"), entry("literal%23name.md", "literal percent"),
+  ], options);
+  assert.equal(result.manifest.references.invalid, 1);
+  assert.equal(result.manifest.references.resolved, 2);
+  assert.deepEqual(result.manifest.unresolvedReferences.map(ref => ref.reason), ["invalid"]);
+  assert.equal(result.manifest.unresolvedReferences[0].target, "file%23part.md");
+  const bundle = result.notesBackup.workspace;
+  assert.deepEqual(bundle.links.map(link => link.note), ["file.md#Section#one", "literal%23name"]);
+  assert.equal(body.slice(result.manifest.unresolvedReferences[0].locator.start, result.manifest.unresolvedReferences[0].locator.end), "[filename](file%23part.md)");
+});
+
+test("masked destination text never becomes a different filename; formatting in labels and quoted titles preserves the real path", async () => {
+  const { buildVault } = await load();
+  const text = "[[target#`code`]] [target](tar`code`get.md) [a `code` label](<target.md> \"title\") [[target|`alias`]]";
+  const result = await buildVault([
+    entry("from.md", text), entry("target.md", "# code\nreal target"), entry("tar      get.md", "wrong target"),
+  ], options);
+  assert.equal(result.manifest.references.invalid, 2);
+  assert.equal(result.manifest.references.resolved, 2);
+  assert.deepEqual(result.notesBackup.workspace.links.map(link => link.note), ["target.md", "target"]);
+  assert.deepEqual(result.manifest.unresolvedReferences.map(ref => ref.target), ["target#`code`", "tar`code`get.md"]);
+  for (const link of result.notesBackup.workspace.links) {
+    const target = result.notesBackup.workspace.sources.find(source => source.id === link.sourceRefs[1].sourceId);
+    assert.equal(target.sourceKey, "target.md");
+  }
+});
+
+test("unsupported parentheses and truncated wrappers cannot connect an unrelated prefix filename", async () => {
+  const { buildVault } = await load();
+  const text = '[x](name(part).md) [x](<name).md>) [x](target.md "part) title") [exact](name%28part%29.md)';
+  const result = await buildVault([
+    entry("from.md", text), entry("name(part.md", "wrong parenthesis"), entry("name(part).md", "correct parenthesis"),
+    entry("<name.md", "wrong angle"), entry("name).md", "correct angle"),
+    entry('target.md "part.md', "wrong title"), entry("target.md", "correct title"),
+  ], options);
+  assert.equal(result.manifest.references.invalid, 3);
+  assert.equal(result.manifest.references.resolved, 1);
+  const bundle = result.notesBackup.workspace;
+  assert.equal(bundle.links.length, 1);
+  assert.equal(bundle.sources.find(source => source.id === bundle.links[0].sourceRefs[1].sourceId).sourceKey, "name(part).md");
+  assert.equal(bundle.sourceVersions[0].contentText, text);
+  assert(result.manifest.unresolvedReferences.every(ref => ref.reason === "invalid"));
+});

@@ -1,7 +1,10 @@
 /* Offline CLI: all validation precedes output; no account/workspace writes. */
 import { join } from "node:path";
 import Decisions from "./lib/obsidian-decisions.js";
-import { readPackage, readPrivateFile, privateDestination, writeNewPackage } from "./lib/private-vault-files.mjs";
+import Package from "../assets/life/obsidian-package.js";
+import Zip from "../vendor/fflate/fflate.js";
+import { renderDecisionTool } from "./lib/obsidian-decision-tool.mjs";
+import { PACKAGE_FILES, readPackage, readPrivateFile, privateDestination, writeNewPackage } from "./lib/private-vault-files.mjs";
 const values = {};
 async function main() {
   const args = process.argv.slice(2);
@@ -24,9 +27,21 @@ async function main() {
     history = JSON.parse((await readPrivateFile(join(root, "applications.json"))).toString());
     if (!Array.isArray(history)) throw new Error("invalid_history");
   } catch (e) { if (e.code !== "ENOENT") throw e; }
+  let tool;
+  try { tool = await readPrivateFile(join(root, "review-tool.html")); }
+  catch (e) { if (e.code !== "ENOENT") throw e; }
+  // Existing tools are retained as opaque bytes, never imported or executed.
+  if (!tool) tool = await renderDecisionTool();
   const result = { ...files, "notes.json": JSON.stringify(applied.notesBackup),
-    "decisions.json": JSON.stringify(applied.decisions), "applications.json": JSON.stringify([...history, applied.history]) };
-  await writeNewPackage(output, result);
+    "decisions.json": JSON.stringify(applied.decisions), "applications.json": JSON.stringify([...history, applied.history]),
+    "review-tool.html": tool };
+  const archive = {};
+  for (const name of [...PACKAGE_FILES, "decisions.json", "applications.json", "review-tool.html"])
+    archive[name] = typeof result[name] === "string" ? new TextEncoder().encode(result[name]) : new Uint8Array(result[name]);
+  result["vault-package.zip"] = Zip.zipSync(archive, { level: 0 });
+  // Verify the exact transport using the app reader; fresh validation copies are discarded.
+  await Package.read(new Blob([result["vault-package.zip"]]));
+  await writeNewPackage(output, result, [root]);
   console.log(JSON.stringify({ written: true, ...preview.summary, originalFilesPreserved: true }));
 }
 main().catch((e) => {

@@ -1,0 +1,21 @@
+{
+  "unitPassed": 551,
+  "unitFailed": 0,
+  "static": {
+    "html": 18,
+    "javascript": 90,
+    "localReferences": 356
+  },
+  "offlineCliIntegration": true,
+  "scale": {
+    "files": 6899,
+    "rawBytes": 14635235,
+    "notes": 3479,
+    "supportingFiles": 3420,
+    "allBodiesAndPathsMatch": true
+  },
+  "appRuntimeFilesChanged": false,
+  "otherSessionFilesChanged": false,
+  "privateAccountDataWritten": false,
+  "deployed": false
+}
