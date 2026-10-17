@@ -17,7 +17,7 @@ async function main(){
  const open=async()=>{if(integrated){await page.locator('[data-haedo-navigation] [data-haedo-section="manage"]').click();await page.locator('#lifeOriginalAttachmentsOpen').click();await page.locator('#lifeOriginalAttachments').waitFor();}else await page.evaluate(async()=>{window.__originalsDialog=await LifeOriginalAttachmentsUI.open();});};
  const upload=async(buffer=f.zip)=>{await page.locator('#originalAttachmentsFile').setInputFiles({name:'anonymous-part.zip',mimeType:'application/zip',buffer});await page.locator('#originalAttachmentsInstall').waitFor();};
  const workspace=()=>page.evaluate(async()=>{const s=HaedoLife.Shell.storage;return JSON.stringify({rows:await s.listWorkspaces(),active:await s.getActive()});});
- let baseline,id;
+ let baseline,batchBaseline,id;
  try{
   await page.goto(base+'/index.html?section=manage');await ready(page);await inject();baseline=await workspace();
   await check('verified account preview/cancel and invalid ZIP leave existing materials untouched',async()=>{
@@ -87,6 +87,37 @@ async function main(){
    assert.equal(await page.locator('#lifeVersion').inputValue(),seeded.versionId);assert.notEqual(seeded.versionId,seeded.latestId);
    assert.equal(await page.evaluate(()=>HaedoLife.Shell.storage.getActive()),seeded.workspaceId);assert.equal(await page.evaluate(id=>HaedoLife.Shell.storage.read(id).then(JSON.stringify),seeded.workspaceId),seeded.before);
    await page.locator('#lifeSearchReturn').click();await page.locator('#lifeOriginalAttachmentsOpen').waitFor();
+  });
+  await check('multiple parts validate together; duplicate, mixed and broken selections store nothing',async()=>{
+   batchBaseline=await workspace();await open();
+   const file=(buffer,name)=>({name,mimeType:'application/zip',buffer});
+   const first=fixture(r=>{r.partCount=2;}),second=fixture(r=>{r.part=2;r.partCount=2;});
+   await page.locator('#originalAttachmentsFile').setInputFiles([file(second.zip,'part-2.zip'),file(first.zip,'part-1.zip')]);
+   await page.locator('#originalAttachmentsInstall').waitFor();
+   assert.match(await page.locator('#originalAttachmentsReview').innerText(),/선택 2\/2개 파트.*10개/);
+   assert.equal(await page.locator('.original-attachments-copy').count(),2);assert.equal(await workspace(),batchBaseline);
+   for(const width of[1440,820,390]){await page.setViewportSize({width,height:1000});await page.locator('#lifeOriginalAttachments').evaluate(n=>n.scrollTop=0);
+    assert.equal(await page.locator('#lifeOriginalAttachments').evaluate(n=>n.scrollWidth>n.clientWidth+1),false);
+    const target=path.join(out,'originals-batch-'+width+'.png');await page.screenshot({path:target});report.screenshots.push({width,path:target});}
+   await page.getByRole('button',{name:'보관 취소',exact:true}).click();
+   const mixed=fixture(r=>{r.part=2;r.partCount=2;r.sourceHead='b'.repeat(40);r.entries.filter(e=>e.role==='git-note-version').forEach(e=>e.sourceGitCommit=r.sourceHead);});
+   for(const pair of[[file(first.zip,'first.zip'),file(first.zip,'duplicate.zip')],[file(first.zip,'first.zip'),file(mixed.zip,'mixed.zip')],[file(first.zip,'first.zip'),file(Buffer.from('broken'),'broken.zip')]]){
+    await page.locator('#originalAttachmentsFile').setInputFiles(pair);await page.locator('#originalAttachmentsError:not([hidden])').waitFor();
+    assert.equal(await page.locator('#originalAttachmentsInstall').count(),0);assert.equal(await page.locator('.original-attachments-copy').count(),2);
+   }
+  });
+  await check('partial batch failure retries only the remaining part and preserves ZIP bytes after reload',async()=>{
+   const first=fixture(r=>{r.partCount=2;}),second=fixture(r=>{r.part=2;r.partCount=2;});
+   await page.locator('#originalAttachmentsFile').setInputFiles([{name:'part-2.zip',mimeType:'application/zip',buffer:second.zip},{name:'part-1.zip',mimeType:'application/zip',buffer:first.zip}]);await page.locator('#originalAttachmentsInstall').waitFor();
+   await page.evaluate(()=>{const add=IDBObjectStore.prototype.add;let count=0;window.__originalBatchAdd=add;IDBObjectStore.prototype.add=function(...args){const req=add.apply(this,args);if(this.name==='copies'&&++count===2)this.transaction.abort();return req;};});
+   await page.locator('#originalAttachmentsInstall').click();await page.locator('#originalAttachmentsError:not([hidden])').waitFor();
+   assert.equal(await page.locator('.original-attachments-copy').count(),3);assert.match(await page.locator('#originalAttachmentsReview').innerText(),/1개 보관 완료.*남은 1개/);
+   await page.evaluate(()=>{IDBObjectStore.prototype.add=__originalBatchAdd;});
+   await page.locator('#originalAttachmentsInstall').click();await page.waitForFunction(()=>document.querySelectorAll('.original-attachments-copy').length===4);
+   assert.equal(await workspace(),batchBaseline);assert.match(await page.locator('#originalAttachmentsStatus').innerText(),/2개 파트.*보관/);
+   const zipEvent=page.waitForEvent('download');await page.locator('.original-attachments-copy').filter({hasText:'파트 2/2'}).getByRole('button',{name:'파트 원본 ZIP 받기',exact:true}).click();assert.equal(sha(await fs.readFile(await(await zipEvent).path())),sha(second.zip));
+   await page.reload();await ready(page);await inject();await open();assert.equal(await page.locator('.original-attachments-copy').count(),4);assert.equal(await workspace(),batchBaseline);
+   await page.locator('#lifeOriginalAttachments').getByRole('button',{name:'닫기',exact:true}).click();
   });
   await check('real Auth binding switch closes dialog; other account cannot query raw IDs or paths',async()=>{
    await open();await page.evaluate(async()=>{await HaedoAuth.signOut();});await page.waitForFunction(()=>!document.querySelector('#lifeOriginalAttachments'));
