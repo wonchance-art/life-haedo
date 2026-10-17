@@ -13,8 +13,9 @@ const report = { createdAt: new Date().toISOString(), scope: 'Actual app/SDK/IDB
 const heading = page => page.locator('#lifeApp .haedo-page-heading h1');
 async function mode(page, name) { await settle(page); await page.waitForFunction(name => document.querySelector('#lifeMain')?.dataset.mode === name, name); }
 async function back(page, target) {
-  if (await page.locator('.photo-editor').isVisible() && !await page.locator('[data-subview-return]').count()) await page.getByRole('button', { name: '닫기', exact: true }).click();
-  else await page.locator('[data-subview-return]').click();
+  const contextualReturn = page.locator('[data-subview-return]:visible');
+  if (await page.locator('.photo-editor').isVisible() && !await contextualReturn.count()) await page.getByRole('button', { name: '닫기', exact: true }).click();
+  else await contextualReturn.click();
   await mode(page, target);
 }
 async function openLibrary(page) {

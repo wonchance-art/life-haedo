@@ -121,7 +121,8 @@
       readBackText = "사진 글 목록",
       committed = false,
       standalone = false;
-    let status, inspector, captionInput, altInput, recoveryActions;
+    let status, statusText, inspector, captionInput, altInput, recoveryActions;
+    let dismissControls = null;
     const urls = new Set(),
       photoUrls = new Map();
     let closeViewer = null;
@@ -133,6 +134,9 @@
       return u;
     };
     function cleanup() {
+      if (status) root.HaedoMotion?.cancel(status);
+      dismissControls?.();
+      dismissControls = null;
       attachmentUI?.dispose();
       attachmentUI = null;
       coverObserver?.disconnect();
@@ -161,9 +165,16 @@
               : doc?.revision
                 ? "초안 보관됨"
                 : "사진 없이도 바로 쓸 수 있어요");
-        if (status.textContent !== message) status.textContent = message;
+        const state = e instanceof Error ? "error" : e ? "notice" :
+          dirtyTick !== storedTick ? "pending" :
+          mode === "read" && committed ? "success" : doc?.revision ? "draft" : "idle";
+        const changed = status.dataset.state !== state || statusText.textContent !== message;
+        if (statusText.textContent !== message) statusText.textContent = message;
+        status.dataset.state = state;
         const role = e instanceof Error ? "alert" : "status";
         if (status.getAttribute("role") !== role) status.setAttribute("role", role);
+        if (state === "error" && changed)
+          root.HaedoMotion?.feedback(status, { state: "error" });
       }
       if (recoveryActions) {
         if (e?.code === "photo_post_conflict")
@@ -173,6 +184,49 @@
           recoveryActions.dataset.conflict !== "true";
       }
       onDirty();
+    }
+    function committedFeedback() {
+      // Only an explicit successful store reaches this path. Draft autosaves
+      // remain quiet, and a stale callback cannot animate a later screen.
+      const token = epoch;
+      root.requestAnimationFrame(() => {
+        if (!current(token) || mode !== "read" || !committed || error ||
+          status.dataset.state !== "success") return;
+        root.HaedoMotion?.enter(host, { kind: "reveal" });
+        root.HaedoMotion?.feedback(status, { state: "saved" });
+      });
+    }
+    function bindDisclosureControls(target) {
+      const selector = ".photo-more[open],.photo-format-options[open]";
+      const closeOutside = (event) => {
+        for (const detail of target.querySelectorAll(selector))
+          if (!detail.contains(event.target)) detail.open = false;
+      };
+      const closeWithEscape = (event) => {
+        if (event.key !== "Escape") return;
+        const opened = [...target.querySelectorAll(selector)];
+        if (!opened.length) return;
+        const active = opened.find((detail) => detail.contains(document.activeElement));
+        opened.forEach((detail) => { detail.open = false; });
+        active?.querySelector("summary")?.focus({ preventScroll: true });
+        event.preventDefault();
+        event.stopPropagation();
+      };
+      const closeAction = (event) => {
+        const detail = event.target.closest(".photo-more-menu button")?.closest(".photo-more");
+        if (!detail) return;
+        const restoreFocus = detail.contains(document.activeElement);
+        detail.open = false;
+        if (restoreFocus) detail.querySelector("summary")?.focus({ preventScroll: true });
+      };
+      document.addEventListener("pointerdown", closeOutside);
+      target.addEventListener("keydown", closeWithEscape);
+      target.addEventListener("click", closeAction);
+      return () => {
+        document.removeEventListener("pointerdown", closeOutside);
+        target.removeEventListener("keydown", closeWithEscape);
+        target.removeEventListener("click", closeAction);
+      };
     }
     function button(label, task) {
       const b = el("button", label, "life-button");
@@ -407,7 +461,7 @@
       }
     }
     async function open(id, editing = false, expectedRevision = null) {
-      const token = epoch;
+      const token = epoch, wasReading = mode === "read";
       await flush();
       await beforeOpen();
       if (!current(token)) return;
@@ -465,6 +519,13 @@
         error = null;
         committed = false;
         render();
+        if (wasReading && mode === "edit") {
+          const rendered = epoch;
+          root.requestAnimationFrame(() => {
+            if (current(rendered) && mode === "edit")
+              root.HaedoMotion?.enter(host, { kind: "compose" });
+          });
+        }
         if (mode === "edit") editor?.focus();
       } finally {
         setBusy(false);
@@ -495,6 +556,7 @@
         error = null;
         committed = true;
         render();
+        committedFeedback();
         host.querySelector(".photo-read-heading")?.focus();
         onSaved();
         onCommitted({ id: saved.id, previousId, status: saved.status });
@@ -575,6 +637,7 @@
         error = null;
         committed = nextStatus === "saved";
         render();
+        if (committed) committedFeedback();
         if (mode === "edit") editor?.focus();
         else host.querySelector(".photo-read-heading")?.focus();
         onSaved();
@@ -1361,6 +1424,11 @@
       onModeChange({ mode, id: doc?.id || null });
       status = el("p", "", "life-help photo-status");
       status.setAttribute("role", "status");
+      status.setAttribute("aria-atomic", "true");
+      const check = glyph("check");
+      check.classList.add("photo-status-check");
+      statusText = el("span", "", "photo-status-text");
+      status.append(check, statusText);
       host.append(status);
       if (mode === "list") {
         const toolbar = el("div", null, "life-actions");
@@ -1552,7 +1620,7 @@
             archiveHeading.hidden = archiveHelp.hidden =
               !archived.children.length;
             feedListener?.([...list.children]);
-            status.textContent = "";
+            statusText.textContent = "";
           })
           .catch((e) => {
             if (current(token)) {
@@ -1607,6 +1675,7 @@
         article.append(returnAction);
         host.append(article);
       }
+      dismissControls = bindDisclosureControls(host);
       showStatus(error);
     }
     async function mount(
@@ -1639,7 +1708,7 @@
           });
           reload.classList.add("photo-reload");
           host.append(reload);
-          status.textContent =
+          statusText.textContent =
             "다른 탭에서 사진 글이 바뀌었습니다. 목록을 다시 확인해 주세요.";
         }
       });

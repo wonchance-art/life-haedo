@@ -366,6 +366,7 @@
         }
         listState.searchExpanded = !listState.searchExpanded;
         syncSearch(context);
+        if (listState.searchExpanded) global.HaedoMotion?.enter(context.searchPanel, { kind: 'reveal' });
         (listState.searchExpanded ? context.searchInput : toggle).focus({ preventScroll: true });
       });
       toggle.classList.add('home-search-toggle'); toggle.dataset.focusKey = 'home:search-toggle';
@@ -431,6 +432,7 @@
     }
     function updateList(context, userAction = false) {
       if (!showing(context)) return;
+      const previousTab = context.renderedTab;
       if (userAction) context.area.style.minHeight = '';
       clearMedia();
       const { rows, errors } = resultRows(context), query = listState.query.trim().toLocaleLowerCase('ko-KR');
@@ -477,6 +479,8 @@
       }
       const focused = document.activeElement, focusKey = context.list.contains(focused) ? focused?.dataset.focusKey : null;
       context.list.replaceChildren(fragment);
+      context.renderedTab = listState.tab;
+      if (userAction && previousTab && previousTab !== listState.tab) global.HaedoMotion?.enter(context.list, { kind: 'tab' });
       if (focusKey) [...context.list.querySelectorAll('[data-focus-key]')].find(item => item.dataset.focusKey === focusKey)?.focus({ preventScroll: true });
       context.feedback.textContent = applicable.length ? '일부 목록을 확인하지 못했어요.' : TAB_LABELS[listState.tab] + ' ' + matched.length + '개' + (query ? ' 검색됨' : '');
       context.area.setAttribute('aria-busy', 'false');
@@ -641,6 +645,8 @@
       // state before navigation makes that event's original context stale.
       captureLibraryState();
       libraryElement = null;
+      global.HaedoMotion?.cancel(host.querySelector('#homePostList'));
+      global.HaedoMotion?.cancel(host.querySelector('#homeSearchPanel'));
       generation += 1; visible = false; clearMedia();
     }
     function dispose() { leave(); disposed = true; }

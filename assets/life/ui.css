@@ -280,7 +280,7 @@ details.life-sync-account { display: block; width: 100%; margin: 12px 0 0; overf
 .life-toolbar .life-title-button:hover { color: var(--color-primary); }
 .life-toolbar .life-refresh { flex-basis: 100%; }
 .life-toolbar[hidden] { display: none; }
-body[data-haedo-section=manage] .life-toolbar { padding-right: 50px; }
+body.haedo-shell[data-haedo-section=manage] .life-toolbar.haedo-page-heading { padding-right: 74px; }
 .life-nav.life-context-nav { position: static; z-index: auto; width: auto; display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 6px; margin: 0; padding: 0; border: 0; background: transparent; }
 .life-context-nav .life-tooltip { top: calc(100% + 6px); bottom: auto; left: auto; right: 0; transform: none; }
 .life-context-nav > :first-child .life-tooltip, .life-context-nav > :last-child .life-tooltip { left: auto; right: 0; transform: none; }
@@ -326,10 +326,10 @@ body[data-haedo-section=manage] .life-toolbar { padding-right: 50px; }
 .life-app :is(.life-primary,.life-icon-button):active:not(:disabled) { background: #e9e9ed; }
 .life-app :is(.life-card,.life-destination,.life-field) { scroll-margin-top: 76px; }
 .life-app :is(.life-picker-list,.life-selection-list,.life-source-text,.life-conflict-content) { overscroll-behavior-block: contain; }
-body.haedo-shell .haedo-account-host { top: 42px; right: max(calc(60px + env(safe-area-inset-right)), calc((100% - 772px) / 2)); }
+body.haedo-shell .haedo-account-host { top: calc(env(safe-area-inset-top, 0px) + (var(--haedo-header-height, 64px) - 44px) / 2); right: max(48px, calc((100% - var(--haedo-nav-width) - 720px) / 2)); }
 @supports (text-wrap: pretty) { .life-help,.life-destination-copy .life-meta { text-wrap: pretty; } }
 @media (max-width: 700px) {
-  body.haedo-shell .haedo-account-host { top: 18px; right: max(20px, env(safe-area-inset-right)); }
+  body.haedo-shell .haedo-account-host { top: calc(env(safe-area-inset-top, 0px) + (var(--haedo-header-height, 60px) - 44px) / 2); right: max(20px, env(safe-area-inset-right)); }
   .life-toolbar.haedo-page-heading { margin-bottom: 4px; }
   .life-search-bar { gap: 4px; margin-top: 8px; }
   .life-record-actions .life-button { padding-inline: 12px; }
@@ -467,4 +467,9 @@ div.life-source-text { font-size:18px;line-height:1.95;letter-spacing:-.01em; }
  .life-main { padding-top:16px; }
  .life-reader-heading { font-size:26px;line-height:1.5; }
  div.life-source-text { font-size:17px;line-height:1.95; }
+}
+
+/* The account control shares the heading row, outside its sticky surface. */
+@media (max-width: 760px) {
+  body.haedo-shell[data-haedo-section=manage] .life-toolbar.haedo-page-heading { padding-right: 70px; }
 }

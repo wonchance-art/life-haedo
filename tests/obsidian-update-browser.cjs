@@ -79,6 +79,17 @@ async function integrated() {
       const oldIds = await page.evaluate(async () => (await HaedoLife.Shell.storage.listWorkspaces()).map(w => w.workspaceId));
       const oldActive = await page.evaluate(() => HaedoLife.Shell.storage.getActive());
       await page.locator('#lifeObsidianUpdateOpen').click(); await page.locator('#obsidianUpdateBefore').waitFor();
+      const header = await page.evaluate(() => {
+        const search = document.querySelector('#lifeFindOpen'), account = document.querySelector('#lifeAccountToggle');
+        const box = node => { const r = node.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; };
+        const s = box(search), a = box(account);
+        return { search: s, account: a, overlap: Math.min(s.x + s.width, a.x + a.width) > Math.max(s.x, a.x) && Math.min(s.y + s.height, a.y + a.height) > Math.max(s.y, a.y), searchReceivesPointer: document.elementFromPoint(s.x + s.width / 2, s.y + s.height / 2)?.closest('#lifeFindOpen') === search };
+      });
+      report.header ||= []; report.header.push({ width, ...header });
+      await page.screenshot({ path: '.local/obsidian-update/' + width + '-integrated-header.png' });
+      assert.equal(header.overlap, false, 'account and search touch targets overlap at ' + width);
+      assert.equal(header.searchReceivesPointer, true, 'account intercepts the search button at ' + width);
+
       await page.locator('#obsidianUpdateBefore').setInputFiles({ name: 'anonymous-before.zip', mimeType: 'application/zip', buffer: before });
       await page.locator('#obsidianUpdateAfter').setInputFiles({ name: 'anonymous-after.zip', mimeType: 'application/zip', buffer: after });
       await page.locator('#obsidianUpdateCompare').click();
@@ -100,11 +111,28 @@ async function integrated() {
       await page.reload(); await ready(page);
       const afterReload = await page.evaluate(async () => (await HaedoLife.Shell.storage.listWorkspaces()).map(w => w.workspaceId));
       assert.deepEqual(afterReload.sort(), ids.sort());
+      // Long real management titles must leave both account and search usable.
+      await page.locator('[data-haedo-navigation] [data-haedo-section=manage]').click();
+      await page.locator('#lifePreservationOpen').click(); await page.locator('#lifePreservation').waitFor();
+      assert.match(await page.locator('.life-toolbar').innerText(), /보관 범위·근거 파일/);
+      await page.locator('#lifeAccountToggle').focus();
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'lifeAccountToggle');
+      await page.locator('#lifeAccountToggle').click();
+      assert.equal(await page.locator('#lifeAccountToggle').evaluate(node => node.parentElement.open), true);
+      await page.locator('#lifeAccountToggle').click();
+      assert.equal(await page.locator('#lifeAccountToggle').evaluate(node => node.parentElement.open), false);
+      await page.locator('#lifeFindOpen').focus();
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'lifeFindOpen');
+      await page.screenshot({ path: '.local/obsidian-update/' + width + '-integrated-long-title.png' });
+      await page.locator('#lifeFindOpen').click(); await page.locator('#lifeFindQuery').waitFor();
+      await page.locator('[data-haedo-navigation] [data-haedo-section=manage]').click();
+      await page.locator('#lifeObsidianUpdateOpen').waitFor();
       report.remoteWrites += server.requests.filter(r => r.kind === 'write').length;
-      report.sizes.push({ width, managementRoute: true, activeWorkspacePreserved: true, oldPreserved: oldIds.length, restored: ids.length - oldIds.length, reloadPreserved: true });
+      report.sizes.push({ width, managementRoute: true, activeWorkspacePreserved: true, oldPreserved: oldIds.length, restored: ids.length - oldIds.length, reloadPreserved: true, longTitleAccountFocus: true, longTitleSearchClick: true, returnedToManagement: true });
       await context.close();
     }
     assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.consoleErrors, []);
-    await fs.writeFile('.local/obsidian-update/integration-report.json', JSON.stringify(report, null, 2)); console.log(JSON.stringify(report, null, 2));
-  } finally { await browser.close(); }
+    console.log(JSON.stringify(report, null, 2));
+  } catch (error) { report.failure = error.message; throw error; }
+  finally { await fs.writeFile('.local/obsidian-update/integration-report.json', JSON.stringify(report, null, 2)); await browser.close(); }
 }

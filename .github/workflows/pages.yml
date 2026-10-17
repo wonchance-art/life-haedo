@@ -318,6 +318,9 @@ jobs:
       - name: Verify home writing entry, scoped search and lazy photo recovery
         if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/home-refinement-browser.cjs
+      - name: Verify app navigation, interrupted motion and real save feedback
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/app-motion-browser.cjs
       - name: Verify subview location and safe contextual return
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/subview-navigation-browser.cjs
@@ -344,6 +347,7 @@ jobs:
         with:
           name: browser-checks-${{ matrix.group }}-${{ github.run_attempt }}
           path: |
+            .local/app-native/qa/
             .local/home-refinement/qa/
             .local/blog-journeys/after/
             .local/sns-blog/after/

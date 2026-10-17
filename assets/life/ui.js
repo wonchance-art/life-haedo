@@ -114,8 +114,11 @@
     let writingOpenOptions = null;
     let navigationGeneration = 0;
     let renderGeneration = 0;
+    let navigationRender = null, mainRenderPromise = Promise.resolve(), inputGeneration = 0;
+    const sectionPositions = new Map();
     let homeRenderPromise = Promise.resolve();
     let homeRenderOptions = null, blogPageTask = false, blogMode = null, blogCommitted = null;
+    let blogEntryScroll = null;
     let navigationTrigger = null;
     const viewOrigins = new Map();
     let findRenderPromise = Promise.resolve();
@@ -166,6 +169,12 @@
     skip.href = '#lifeMain';
     root.append(skip, header, toolbar, recordSections, status, error, main);
     container.replaceChildren(root);
+    const editingInput = () => { inputGeneration += 1; global.HaedoMotion?.cancel(main); };
+    main.addEventListener('input', editingInput);
+    main.addEventListener('compositionstart', editingInput);
+    main.addEventListener('pointerdown', editingInput);
+    main.addEventListener('keydown', editingInput);
+    main.addEventListener('wheel', editingInput, { passive: true });
     const collection = global.HaedoLife.CollectionUI?.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onSaved: clearError });
     const unifiedSearch = global.HaedoLife.UnifiedSearchUI.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onReload: clearError,
       onOpen: guarded(async row => {
@@ -206,9 +215,24 @@
       onBlogModeChange: context => {
         if (disposed || state.mode !== 'page') return;
         if (!blogPageTask || !['edit', 'read', 'profile'].includes(context.mode)) { global.requestAnimationFrame(syncWritingFocus); return; }
+        const previousMode = blogMode;
         blogMode = context.mode;
         if (context.committed && context.id) blogCommitted = { kind: context.kind === 'legacy' ? 'plain' : context.kind, id: context.id, committed: true };
         renderHeader();
+        const entryScroll = blogEntryScroll;
+        blogEntryScroll = null;
+        if (entryScroll) requestAnimationFrame(entryScroll);
+        // PhotoPostUI owns its internal read/edit surface. Legacy page tasks
+        // finish their redraw in this turn, without rebuilding the app chrome.
+        if (context.kind !== 'photo' && previousMode && previousMode !== blogMode && navigationRender === null) {
+          const navigation = navigationGeneration, generation = renderGeneration, workspace = workspaceGeneration;
+          const workspaceId = state.bundle?.workspaceId, account = state.syncAccountKey, input = inputGeneration, mode = blogMode;
+          requestAnimationFrame(() => {
+            if (disposed || navigation !== navigationGeneration || generation !== renderGeneration || workspace !== workspaceGeneration ||
+                state.bundle?.workspaceId !== workspaceId || account !== state.syncAccountKey || state.mode !== 'page' || blogMode !== mode || input !== inputGeneration || state.error) return;
+            global.HaedoMotion?.enter(main, { kind: mode === 'edit' || mode === 'profile' ? 'compose' : context.committed ? 'reveal' : 'back' });
+          });
+        }
       },
       onSelectionUsed: ({ workspaceId, versionIds }) => {
         if (disposed || state.bundle?.workspaceId !== workspaceId) return;
@@ -525,7 +549,7 @@
 
     function batchKey(workspaceId, batchId) { return workspaceId + '|' + batchId; }
 
-    function invalidateBatchContext() { workspaceGeneration += 1; stopBatchReading(); resetSearchContext(); }
+    function invalidateBatchContext() { workspaceGeneration += 1; sectionPositions.clear(); blogEntryScroll = null; global.HaedoMotion?.cancel(main); stopBatchReading(); resetSearchContext(); }
 
     function validBatchStage(stage) {
       return typeof stage.batchId === 'string' && /^[a-f0-9-]{36}$/i.test(stage.batchId) &&
@@ -839,6 +863,9 @@
         if (disposed || sequence !== syncRefreshSequence || state.bundle.workspaceId !== workspaceId) return;
         const accountKey = syncAccountKey(account);
         if (accountKey !== state.syncAccountKey) {
+          sectionPositions.clear();
+          blogEntryScroll = null;
+          global.HaedoMotion?.cancel(main);
           state.remoteRows = null;
           state.remoteRowsAccountKey = null;
           state.conflictView = null;
@@ -952,7 +979,15 @@
     async function navigate(mode, options) {
       options ||= {};
       const token = ++navigationGeneration;
+      const workspace = workspaceGeneration, workspaceId = state.bundle?.workspaceId, account = state.syncAccountKey;
+      const current = () => !disposed && token === navigationGeneration && workspace === workspaceGeneration &&
+        workspaceId === state.bundle?.workspaceId && account === state.syncAccountKey;
       const from = state.mode;
+      const fromSection = sectionFor(from);
+      const changedTask = mode !== from || mode === 'source' && (options.sourceId !== undefined && options.sourceId !== state.sourceId ||
+        options.sourceVersionId !== undefined && options.sourceVersionId !== state.sourceVersionId) ||
+        mode === 'page' && (options.pageCompose || options.pageProfileEdit || options.pageDraftId || options.searchTarget || options.nineTarget) ||
+        mode === 'write' && options.writing;
       const focused = main.contains(document.activeElement) && document.activeElement.matches?.('button,a,summary,input') ? document.activeElement : null;
       const requestedTrigger = options?.originFocusKey && Array.from(main.querySelectorAll('[data-focus-key]')).find(el => el.dataset.focusKey === options.originFocusKey);
       const trigger = requestedTrigger || (from === 'reflection' && mode === 'page' && options?.pageDraftId ? main.querySelector('#wbReflectionToPage') : null) || navigationTrigger || focused || Array.from(main.querySelectorAll('[data-home-destination]')).find(el => el.dataset.homeDestination === mode) || document.activeElement;
@@ -972,7 +1007,7 @@
       await writer?.flush();
       collection?.flush();
       await flushReadingPosition();
-      if (disposed || token !== navigationGeneration) return;
+      if (!current()) return false;
       if (subviewTitles[mode] && mode !== from && !options?.preserveContext && !returningFromReader) {
         const inherited = sectionFor(mode) === sectionFor(from) ? viewOrigins.get(from) : null;
         if (origin || inherited) viewOrigins.set(mode, origin || inherited);
@@ -991,7 +1026,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { selection, groupId, pagePreview, discovery, writing, reimport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, ...viewOptions } = options || {};
+      const { navigationMotion, sectionPosition, selection, groupId, pagePreview, discovery, writing, reimport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, ...viewOptions } = options || {};
       if (reimport) {
         if (mode !== 'import' || state.bundle.workspaceId !== reimport.workspaceId) return;
         const source = sourceFor(reimport.sourceId);
@@ -1017,11 +1052,47 @@
       writeRoute(mode, false);
       // Incoming records are only a review. A slow configuration read must not
       // lock the global navigation; Workbench owns stale-response guards.
+      const resetEntryScroll = changedTask && !options.preserveContext && navigationMotion !== 'back' && !sectionPosition &&
+        mode !== 'source' && !options.locator && !options.homeAnchor && !searchTarget?.entryId && !nineTarget &&
+        !collectionItemId && !groupId && !book && !chapterImportOptions && !selection;
+      if (resetEntryScroll) global.scrollTo({ top: 0, behavior: 'instant' });
+      const entryInput = inputGeneration, entryGeneration = renderGeneration + 1;
+      // Standalone post mounts finish after Workbench's shell render. Their
+      // final target reveal must leave the new reader's title and return visible.
+      blogEntryScroll = resetEntryScroll && mode === 'page' && blogPageTask ? () => {
+        if (current() && state.mode === 'page' && renderGeneration === entryGeneration && inputGeneration === entryInput)
+          global.scrollTo({ top: 0, behavior: 'instant' });
+      } : null;
+      navigationRender = token;
       const rendering = render();
+      const generation = renderGeneration, input = inputGeneration;
+      const rendered = () => current() && generation === renderGeneration && state.mode === mode;
+      // Motion observes a completed navigation; it never holds input or focus.
+      // In particular, a late home load must not move content being edited.
+      Promise.resolve(mainRenderPromise).then(() => {
+        if (navigationRender === token) navigationRender = null;
+        if (!rendered()) return;
+        if (sectionPosition && input === inputGeneration && !options.homeAnchor && !options.searchTarget && !options.locator)
+          global.scrollTo({ top: sectionPosition.scrollY, behavior: 'instant' });
+        if (!changedTask || state.error || input !== inputGeneration) return;
+        const kind = navigationMotion || (fromSection !== sectionFor(mode) ? 'tab' :
+          mode === 'write' || mode === 'import' || mode === 'page' && (options.pageCompose || options.pageProfileEdit || options.pageDraftId) ? 'compose' : 'push');
+        const sections = ['home', 'records', 'tools', 'manage'];
+        const direction = kind === 'tab' && sections.indexOf(sectionFor(mode)) < sections.indexOf(fromSection) ? -1 : 1;
+        const enter = () => {
+          if (rendered() && !state.error && input === inputGeneration) global.HaedoMotion?.enter(main, { kind, direction });
+        };
+        // Source locators measure an unchanged range in their already queued
+        // frame. Start the transform afterwards so its offset cannot leak in.
+        if (mode === 'source') requestAnimationFrame(enter);
+        else enter();
+      }).catch(failure);
       if (!options?.selection) await rendering;
+      if (!rendered()) return false;
       if (reimport) {
         main.querySelector('#lifeImportText')?.focus();
         await persistStage(true);
+        if (!rendered()) return false;
       }
       if (mode === 'find') main.querySelector('#lifeFindQuery')?.focus();
       if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
@@ -1030,6 +1101,7 @@
         heading.focus({ preventScroll: true });
         if (options?.book || options?.chapterImport) heading.scrollIntoView({ block: 'nearest' });
       }
+      return true;
     }
 
     function currentChapterImport(context = chapterImport) {
@@ -1054,7 +1126,7 @@
       await refreshData();
       if (!currentChapterImport(context)) return;
       await navigate('books', { chapterImport: { workspaceId: context.workspaceId, bookId: context.bookId,
-        chapterId: context.chapterId, versionIds: context.versionIds.slice() } });
+        chapterId: context.chapterId, versionIds: context.versionIds.slice() }, navigationMotion: 'back' });
       if (chapterImport === context) chapterImport = null;
     }
 
@@ -1143,7 +1215,10 @@
       const sectionRoot = section === 'records' ? 'sources' : section;
       if (section === previousSection && state.mode === sectionRoot) return;
       if (section === previousSection && state.mode === 'source' && ['sources', 'topics'].includes(state.returnContext?.mode)) return returnToResults();
-      navigationGeneration += 1;
+      const token = ++navigationGeneration, workspace = workspaceGeneration, workspaceId = state.bundle.workspaceId;
+      const account = state.syncAccountKey;
+      const position = { mode: state.mode, scrollY: global.scrollY,
+        ...(state.mode === 'home' ? { homeState: home?.captureState() } : {}) };
       if (previousSection === 'records') lastRecordMode = state.mode;
       const next = section === previousSection ? sectionRoot : section === 'home' ? 'home' : section === 'records' ? lastRecordMode : section === 'tools' ? 'tools' : 'manage';
       // Save before changing URL so a failed draft write keeps the current view.
@@ -1155,9 +1230,14 @@
       await workbench?.flush();
       await writer?.flush();
       collection?.flush();
-      if (disposed) return;
+      if (disposed || token !== navigationGeneration || workspace !== workspaceGeneration ||
+          workspaceId !== state.bundle?.workspaceId || account !== state.syncAccountKey) return;
+      if (section !== previousSection) sectionPositions.set(previousSection, position);
+      const saved = section !== previousSection ? sectionPositions.get(section) : null;
+      const sectionPosition = saved?.mode === next ? saved : section !== previousSection && next !== 'source' ? { scrollY: 0 } : null;
       writeRoute(next, push);
-      await navigate(next, { preserveContext: true });
+      await navigate(next, { preserveContext: true, navigationMotion: section === previousSection ? 'back' : 'tab',
+        ...(sectionPosition ? { sectionPosition, homeState: sectionPosition.homeState } : {}) });
     }
 
     const popstate = guarded(async () => {
@@ -1166,7 +1246,7 @@
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
       if (mode === 'sources' && lastRecordMode === 'source') mode = 'source';
       if (mode === 'import' && lastRecordMode === 'batch') mode = 'batch';
-      try { await navigate(mode, { preserveContext: true }); }
+      try { await navigate(mode, { preserveContext: true, navigationMotion: 'tab' }); }
       catch (cause) { writeRoute(state.mode, false); throw cause; }
     });
 
@@ -1180,7 +1260,7 @@
     async function returnFromSubview() {
       const origin = subviewOrigin();
       const anchor = state.mode === 'page' && blogPageTask && origin.mode === 'home' && origin.homeState?.tab !== 'drafts' ? blogCommitted : null;
-      await navigate(origin.mode, { preserveContext: true, homeState: origin.homeState, homeAnchor: anchor });
+      if (await navigate(origin.mode, { preserveContext: true, homeState: origin.homeState, homeAnchor: anchor, navigationMotion: 'back' }) === false) return;
       const token = navigationGeneration;
       const restore = () => requestAnimationFrame(() => {
         if (disposed || token !== navigationGeneration || state.mode !== origin.mode || state.bundle?.workspaceId !== origin.workspaceId || anchor) return;
@@ -1204,7 +1284,7 @@
       if (!context.committed || !context.id || context.kind === 'profile') return returnFromSubview();
       const anchor = { kind: context.kind === 'legacy' ? 'plain' : context.kind, id: context.id, committed: true };
       const homeState = { ...origin.homeState, workspaceId: origin.workspaceId, tab: 'posts' };
-      await navigate('home', { preserveContext: true, homeState, homeAnchor: anchor });
+      await navigate('home', { preserveContext: true, homeState, homeAnchor: anchor, navigationMotion: 'back' });
     }
 
     function syncWritingFocus() {
@@ -1242,7 +1322,7 @@
         heading.append(records);
       } else heading.textContent = section === 'home' ? '내 블로그' : section === 'tools' ? '도구' : '설정';
       if (subviewTitles[state.mode] && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
-        const labels = { find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '자료실로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '설정으로 돌아가기' };
+        const labels = { blog: '글 관리로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '자료실로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '설정으로 돌아가기' };
         const back = iconButton(labels[subviewOrigin().mode] || labels.sources, 'back', guarded(returnFromSubview));
         back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';
         back.dataset.subviewReturn = 'true';
@@ -1374,10 +1454,10 @@
       const instance = global.HaedoLife.BlogManager.create({ storage, workspaceId, auth, blogSync,
         onOpenEvidence: (reference, context = {}) => openManagedSource(workspaceId, { sourceId: reference.sourceId, sourceVersionId: reference.sourceVersionId, locator: { ...reference.locator } }, context, reference),
         isCurrent: () => !disposed && state.mode === 'blog' && state.bundle?.workspaceId === workspaceId,
-        openPost: (postId, options = {}) => navigate('page', { searchTarget: { photoPostId: postId, photoPostRevision: options.expectedRevision }, pagePreview: false, originFocusKey: options.focusKey }),
+        openPost: (postId, options = {}) => navigate('page', { blogContext: true, searchTarget: { photoPostId: postId, photoPostRevision: options.expectedRevision }, pagePreview: false, originFocusKey: options.focusKey }),
         openLegacy: (row, context = {}) => row.kind === 'source' ? openManagedSource(workspaceId, { sourceId: row.id, sourceVersionId: row.versionId, locator: null }, context) :
           row.kind === 'writing-draft' ? navigate('write', { writing: { stageId: row.id }, originFocusKey: context.focusKey }) :
-          row.kind === 'page-draft' ? navigate('page', { pageDraftId: row.id, originFocusKey: context.focusKey }) : navigate('page', { searchTarget: { postId: row.id }, pagePreview: false, originFocusKey: context.focusKey })
+          row.kind === 'page-draft' ? navigate('page', { blogContext: true, pageDraftId: row.id, originFocusKey: context.focusKey }) : navigate('page', { blogContext: true, searchTarget: { postId: row.id }, pagePreview: false, originFocusKey: context.focusKey })
       });
       blogManager = instance; blogManagerWorkspace = workspaceId; const options = { viewState: blogViews.get(workspaceId), ...(blogOpenOptions || {}) }; blogOpenOptions = null;
       await instance.mount(host, options);
@@ -1580,12 +1660,13 @@
 
     async function returnFromArrange() {
       const context = selectionReturn;
-      if (!context || context.workspaceId !== state.bundle?.workspaceId) return navigate('sources');
-      await navigate(context.mode, { sourceId: context.sourceId, sourceVersionId: context.sourceVersionId,
+      if (!context || context.workspaceId !== state.bundle?.workspaceId) return navigate('sources', { navigationMotion: 'back' });
+      if (await navigate(context.mode, { sourceId: context.sourceId, sourceVersionId: context.sourceVersionId,
         locator: context.locator, returnContext: context.returnContext, preserveContext: true,
-        readerArrangeOpen: context.mode === 'source' });
+        readerArrangeOpen: context.mode === 'source', navigationMotion: 'back' }) === false) return;
+      const navigation = navigationGeneration;
       requestAnimationFrame(() => {
-        if (disposed || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode) return;
+        if (disposed || navigation !== navigationGeneration || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode) return;
         main.querySelector('#' + context.focusId)?.focus({ preventScroll: true });
         global.scrollTo({ top: context.scrollY, behavior: 'instant' });
       });
@@ -1783,8 +1864,8 @@
 
     async function returnToResults() {
       const context = state.returnContext;
-      if (!context || context.workspaceId !== state.bundle.workspaceId) return navigate('sources', { returnContext: null });
-      await navigate(context.mode, { returnContext: null, homeState: context.homeState, homeAnchor: context.homeAnchor, sourcesRevealVersionId: context.mode === 'sources' ? context.sourceVersionId || null : null });
+      if (!context || context.workspaceId !== state.bundle.workspaceId) return navigate('sources', { returnContext: null, navigationMotion: 'back' });
+      if (await navigate(context.mode, { returnContext: null, homeState: context.homeState, homeAnchor: context.homeAnchor, navigationMotion: 'back', sourcesRevealVersionId: context.mode === 'sources' ? context.sourceVersionId || null : null }) === false) return;
       const navigation = navigationGeneration;
       const restore = () => requestAnimationFrame(() => {
         if (disposed || navigation !== navigationGeneration || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode || context.homeAnchor) return;
@@ -1817,11 +1898,12 @@
 
     async function returnFromRelated() {
       const origin = relatedOrigin;
-      if (!origin || origin.workspaceId !== state.bundle?.workspaceId) return navigate('sources', { returnContext: null });
-      await navigate('source', { sourceId: origin.sourceId, sourceVersionId: origin.sourceVersionId,
-        locator: origin.locator, returnContext: origin.returnContext, suppressReaderResume: false });
+      if (!origin || origin.workspaceId !== state.bundle?.workspaceId) return navigate('sources', { returnContext: null, navigationMotion: 'back' });
+      if (await navigate('source', { sourceId: origin.sourceId, sourceVersionId: origin.sourceVersionId,
+        locator: origin.locator, returnContext: origin.returnContext, suppressReaderResume: false, navigationMotion: 'back' }) === false) return;
+      const navigation = navigationGeneration;
       requestAnimationFrame(() => {
-        if (disposed || state.bundle?.workspaceId !== origin.workspaceId || state.mode !== 'source' || state.sourceVersionId !== origin.sourceVersionId) return;
+        if (disposed || navigation !== navigationGeneration || state.bundle?.workspaceId !== origin.workspaceId || state.mode !== 'source' || state.sourceVersionId !== origin.sourceVersionId) return;
         main.querySelector('#' + (origin.focusId || 'lifeReaderRelated'))?.focus({ preventScroll: true });
         global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
       });
@@ -3593,6 +3675,8 @@
     function render() {
       if (disposed) return;
       const generation = ++renderGeneration, navigation = navigationGeneration;
+      global.HaedoMotion?.cancel(main);
+      mainRenderPromise = Promise.resolve();
       compositionPanel?.dispose(); compositionPanel = null;
       if (blogManager && blogManagerWorkspace) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
       blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null;
@@ -3615,22 +3699,23 @@
         // Home's configuration read must not lock independent navigation.
         const options = homeRenderOptions || {}; homeRenderOptions = null;
         homeRenderPromise = home.render(options).catch(failure);
+        mainRenderPromise = homeRenderPromise;
         return;
       }
-      if (state.mode === 'obsidian-update') return renderObsidianUpdate().catch(failure);
-      if (state.mode === 'preservation') return renderPreservation().catch(failure);
-      if (state.mode === 'blog') return renderBlogManager().catch(failure);
-      if (state.mode === 'find') { findRenderPromise = unifiedSearch.open().catch(failure); return; }
-      if (state.mode === 'collection' && collection) { const options = collectionOpenOptions || {}; collectionOpenOptions = null; collection.open(options).catch(failure); return; }
+      if (state.mode === 'obsidian-update') return mainRenderPromise = renderObsidianUpdate().catch(failure);
+      if (state.mode === 'preservation') return mainRenderPromise = renderPreservation().catch(failure);
+      if (state.mode === 'blog') return mainRenderPromise = renderBlogManager().catch(failure);
+      if (state.mode === 'find') { findRenderPromise = unifiedSearch.open().catch(failure); mainRenderPromise = findRenderPromise; return; }
+      if (state.mode === 'collection' && collection) { const options = collectionOpenOptions || {}; collectionOpenOptions = null; mainRenderPromise = collection.open(options).catch(failure); return; }
       if (state.mode === 'write' && writer) {
         const options = writingOpenOptions || {};
         writingOpenOptions = null;
-        return writer.open(options).catch(failure);
+        return mainRenderPromise = writer.open(options).catch(failure);
       }
       if (workbenchModes.includes(state.mode) && workbench) {
         const options = workbenchOpenOptions || {};
         workbenchOpenOptions = null;
-        return Promise.resolve(workbench.render(state.mode, options)).then(() => {
+        return mainRenderPromise = Promise.resolve(workbench.render(state.mode, options)).then(() => {
           if (!disposed && generation === renderGeneration && navigation === navigationGeneration &&
               ['page', 'books'].includes(state.mode)) { syncWritingFocus(); renderRestoreResult(); }
         }).catch(failure);
@@ -3782,6 +3867,11 @@
       unbindNavigation?.();
       global.removeEventListener('popstate', popstate);
       root.removeEventListener('focusin', keepFocusVisible);
+      main.removeEventListener('input', editingInput);
+      main.removeEventListener('compositionstart', editingInput);
+      main.removeEventListener('pointerdown', editingInput);
+      main.removeEventListener('keydown', editingInput);
+      main.removeEventListener('wheel', editingInput);
       if (focusFrame !== null) { global.cancelAnimationFrame(focusFrame); focusFrame = null; }
       if (readerCleanup) { readerCleanup(); readerCleanup = null; }
       readingResumeCleanup?.(); readingResumeCleanup = null;
