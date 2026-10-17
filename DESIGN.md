@@ -2,38 +2,41 @@
 name: 해도
 description: 글과 사진을 중심으로 쓰고 읽는 개인 블로그
 colors:
-  primary: "#18181b"
-  primary-hover: "#34343a"
-  link: "#3156d3"
+  primary: "#145b50"
+  ink: "#182522"
+  primary-hover: "#104a41"
+  link: "#145b50"
+  focus: "#267a69"
   paper: "#ffffff"
-  canvas: "#f7f7f8"
-  soft: "#f5f5f6"
-  selected: "#f0f0f2"
-  muted: "#66666f"
-  line: "#ececee"
-  field-line: "#8b8b95"
+  canvas: "#f4f6f5"
+  soft: "#f4f7f5"
+  selected: "#eaf1ed"
+  muted: "#5d6b65"
+  line: "#e3e9e6"
+  field-line: "#86968d"
   button-line: "#d5d5db"
-  selection: "#e7ecff"
+  selection: "#dcece4"
   error: "#a3243d"
   error-soft: "#fff2f4"
 typography:
   body:
-    fontFamily: '"Apple SD Gothic Neo", "Noto Sans CJK KR", "Malgun Gothic", sans-serif'
+    fontFamily: '"Pretendard Variable", "Apple SD Gothic Neo", "Noto Sans CJK KR", "Malgun Gothic", sans-serif'
     fontSize: "16px"
     lineHeight: 1.65
   page-title:
-    fontSize: "21px"
-    fontWeight: 700
+    fontSize: "22px"
+    fontWeight: 750
     lineHeight: 1.5
     letterSpacing: "-0.025em"
   feed-title:
-    fontSize: "22px"
-    fontWeight: 650
-    lineHeight: 1.55
-    letterSpacing: "-0.025em"
+    fontSize: "26px"
+    fontWeight: 750
+    lineHeight: 1.45
+    letterSpacing: "-0.03em"
   feed-body:
-    fontSize: "16px"
-    lineHeight: 1.85
+    fontSize: "17px"
+    fontWeight: 450
+    lineHeight: 1.8
   reading:
     fontSize: "18px"
     lineHeight: 1.85
@@ -43,7 +46,7 @@ typography:
 rounded:
   control: "12px"
   navigation: "14px"
-  media: "16px"
+  media: "14px"
   sample: "20px"
   pill: "999px"
 spacing:
@@ -59,19 +62,19 @@ components:
   button-primary:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.paper}"
-    rounded: "{rounded.pill}"
+    rounded: "{rounded.control}"
     padding: "8px 16px"
   button-primary-hover:
     backgroundColor: "{colors.primary-hover}"
     textColor: "{colors.paper}"
   button-secondary:
     backgroundColor: "{colors.paper}"
-    textColor: "{colors.primary}"
+    textColor: "{colors.ink}"
     rounded: "{rounded.control}"
     padding: "8px 16px"
   input:
     backgroundColor: "{colors.paper}"
-    textColor: "{colors.primary}"
+    textColor: "{colors.ink}"
     rounded: "{rounded.control}"
     padding: "10px 12px"
   navigation:
@@ -81,8 +84,8 @@ components:
     height: "52px"
   feed-row:
     backgroundColor: "{colors.paper}"
-    textColor: "{colors.primary}"
-    padding: "24px"
+    textColor: "{colors.ink}"
+    padding: "28px 24px"
 ---
 
 # Design System: 해도
@@ -91,9 +94,9 @@ components:
 
 **기준: 글과 사진이 먼저 보이는 개인 블로그.**
 
-2026-10-18 KST 사용자의 사용 흐름 중심 전체 UX·UI 개편 요청을 반영한 현재 기준이다. 쓰기 → 초안 보관/명시 저장 → 읽기 → 출발 목록 복귀를 하나의 흐름으로 연결한다. 흰 읽기 면·차콜 본문·실제 글과 사진·짧은 작성 진입·작은 프로필을 사용한다. 이전 라벤더 바탕·보라 주행동·떠 있는 작은 탐색띠는 과거 이력이며 새 공통 프레임으로 재도입하지 않는다.
+2026-10-18 KST 사용자의 사용 흐름 개편 이후 시각 디자인 교체 요청을 반영한 현재 기준이다. 쓰기 → 초안 보관/명시 저장 → 읽기 → 출발 목록 복귀의 동작을 보존하면서 흰 읽기 면·옅은 초록 회색 캔버스·짙은 틸 조작·Pretendard 활자로 한국어 개인 블로그의 위계를 만든다. 실제 프로필 이름과 글 제목을 키우고 전역 프레임은 물러난다. 큰 표지나 가짜 반응 수로 정체성을 대신하지 않는다.
 
-구현된 CSS·컴포넌트에서 추출했다. [제품 사실](PRODUCT.md), [저장·보존 계약](AGENTS.md), [앞선 시각 조사·구현](docs/design-review/sns-blog-experience.md)과 [사용 흐름 구현·검증](docs/design-review/blog-user-journeys.md)은 별도 근거다. 공식 Impeccable의 [문서화 지침](.agents/skills/impeccable/reference/document.md)을 수동 적용했으며 context·detect·doctor 엔진을 설치·실행하지 않았다. 사용자의 명시적 시각 정체 교체에 따라 현재 체계를 갱신하고 기존 세부 계약·역사 링크를 병합했다.
+구현된 CSS·컴포넌트에서 추출했다. [현재 시각 계약](.impeccable/blog-visual-direction.md)과 [시각 개편·검증](docs/design-review/blog-visual-redesign.md)이 이번 변경의 근거다. [제품 사실](PRODUCT.md), [저장·보존 계약](AGENTS.md), [앞선 시각 조사·구현](docs/design-review/sns-blog-experience.md), [사용 흐름 구현·검증](docs/design-review/blog-user-journeys.md)은 보존한다. 공식 Impeccable의 [문서화 지침](.agents/skills/impeccable/reference/document.md)을 수동 적용했으며 context·detect·doctor 엔진을 설치·실행하지 않았다. 과거 흰색/차콜 주 행동·시스템 글꼴과 이전 라벤더·종이색·명조·떠 있는 탐색띠는 당시의 시각 이력이다. 기존 행동·저장·공개 계약은 계속 유효하다.
 
 - 실제 글과 사진이 화면의 중심이다.
 - 넓은 화면의 라벨 탐색과 좁은 화면의 하단 탐색이 같은 목적지를 연다.
@@ -102,24 +105,25 @@ components:
 
 ## Colors
 
-기계가 읽는 값은 frontmatter가 기준이며 [공통 셸](assets/haedo-shell.css)과 [자료 UI](assets/life/ui.css)에 대응한다. 차콜은 본문과 검정 주 행동, 파랑은 링크·초점·작성기 서식 선택에 쓴다. 흰색은 콘텐츠 면, 캔버스 회색은 바깥, 옅은 선택색은 현재 위치·짧은 조작 상태다. 보조 글자와 placeholder도 실제 표면에서 읽을 수 있어야 한다. 오류는 색·문제·복구 문구를 함께 표시한다.
+기계가 읽는 값은 frontmatter가 기준이며 [공통 셸](assets/haedo-shell.css)과 [자료 UI](assets/life/ui.css)에 대응한다. 짙은 본문색과 틸 주 행동색은 별도 역할이다. 링크는 틸, 키보드 초점은 더 밝은 틸, 흰색은 콘텐츠 면이다. 옅은 초록 회색은 바깥 캔버스, 선택색은 현재 위치·짧은 조작 상태에 쓴다. 보조 글자와 placeholder도 실제 표면에서 읽을 수 있어야 한다. 오류는 색·문제·복구 문구를 함께 표시한다.
 
 책·회고도 현재 공통 토큰을 사용한다. 이전 A 원고 중심의 읽기·편집·근거 구조는 보존하되 당시 보라 팔레트를 지역 예외로 고정하지 않는다. 연표의 곡선·예정·행복도 색은 데이터 의미를 보존한다.
 
 ## Typography
 
-기존 한글 산세리프 순서를 유지한다. 장식 글꼴·명조·모노스페이스를 공통 본문에 추가하지 않는다. 한글 단어 우선 줄바꿈과 긴 제목·주소의 화면 내 줄바꿈을 쓴다.
+공식 Pretendard Variable 1.3.9를 자체 호스팅하고 기존 한글 시스템 글꼴을 fallback으로 유지한다. [공통 글꼴 CSS](assets/haedo-type.css)의 `@font-face`는 100–900 가변 굵기와 `font-display:swap`을 사용한다. 외부 글꼴 요청은 필요 없다. 출처·선택 비교·파일 해시·SIL OFL 1.1은 [글꼴 기록](vendor/pretendard/README.md)과 [라이선스](vendor/pretendard/LICENSE.txt)에 보존한다. 한글 단어 우선 줄바꿈과 긴 제목·주소의 화면 내 줄바꿈을 쓴다.
 
 | 역할 | 실제 구현 |
 | --- | --- |
 | 공통 페이지 제목 | page-title 토큰. 같은 제목을 연달아 반복하지 않는다 |
-| 홈 글 제목 | feed-title 토큰, 760px 이하 20px·최대 두 줄 |
-| 홈 본문 / 메타 | feed-body / metadata 토큰. 본문은 최대 네 줄의 실제 앞부분 |
+| 홈 글 제목 | feed-title 토큰, 760px 이하 24px·최대 두 줄 |
+| 홈 본문 / 메타 | feed-body / metadata 토큰. 760px 이하 본문 16px/1.85. 최대 네 줄의 실제 앞부분과 하단 메타 |
 | 신형 글 작성 제목 | 선택 입력. 30px/1.45·650, 600px 이하 26px. 비어 있을 때 17px 안내 |
 | 신형 글 읽기 제목 | 36px/1.4·700, 600px 이하 30px |
 | 신형 글 본문 | reading 토큰, 600px 이하 17px |
 | 원문 제목 / 본문 | 30px/1.5 / 18px/1.95, 760px 이하 26px / 17px |
-| 프로필 제목 | 25px/1.4·750, 700px 이하 23px |
+| 홈 프로필 이름 | 넓은 화면 28px·750, 760px 이하 24px·700. 44px 이니셜과 실제 이름 |
+| 선택 자료 페이지 프로필 제목 | 기존 25px/1.4·750, 700px 이하 23px |
 | 입력 | 16px 이상, 원문의 공백·줄바꿈·서식 보존 |
 
 책의 집필·읽기 활자는 Components에 유지한다. 한글 열 폭을 영어 ch 권장값이나 임의 글자 수와 동일하게 보고하지 않는다.
@@ -135,7 +139,7 @@ components:
 - **600px 이하:** 신형 글 작성/읽기 활자와 서식 조작이 대응한다.
 - **홈 컨테이너 560px 이상:** 자료실의 출처와 날짜를 한 행에 놓을 수 있다.
 
-상단 공통 제목은 64px, 모바일 60px이며 현재 위치와 복귀를 담당한다. 신형 작성은 실제 비고정 제목이 스크롤로 사라지므로 저장·상태 명령 행을 viewport의 top:0에 sticky로 붙인다. 제목·서식·본문은 그 아래 자연스럽게 스크롤하며 상단 60/64px의 빈 고정 간격을 남기지 않는다. 로그인 전에는 개인 탐색을 감추고 최대 900px 소개·가상 글 예시를 보이며 1100px 이하 한 열로 바뀐다. 책·회고도 공통 표면에 맞추고 단일 원고 열은 보존한다. 연표는 차트의 작업 폭과 데이터 의미를 유지한다.
+상단 공통 제목은 현재 위치와 복귀를 담당한다. 홈은 중복 화면명을 15px 보조 크기로 낮추고 프로필을 앞세운다. 다른 화면의 제목 크기는 page-title 토큰을 따른다. 신형 작성은 실제 비고정 제목이 스크롤로 사라지므로 저장·상태 명령 행을 viewport의 top:0에 sticky로 붙인다. 제목·서식·본문은 그 아래 자연스럽게 스크롤하며 상단 60/64px의 빈 고정 간격을 남기지 않는다. 로그인 전에는 개인 탐색을 감추고 최대 900px 소개·가상 글 예시를 보이며 1100px 이하 한 열로 바뀐다. 책·회고도 공통 표면에 맞추고 단일 원고 열은 보존한다. 연표는 차트의 작업 폭과 데이터 의미를 유지한다.
 
 하위 화면은 실제 작업 이름과 복귀 조작을 쓴다. 홈·검색·도구·설정의 초점·스크롤을 복원하고 직접 링크는 기본 상위 목록으로 복구한다. 느린 조회가 이미 펼친 자료실의 초점·읽기 위치를 밀지 않게 한다. [하위 탐색](docs/design-review/subview-navigation.md)·[핵심 경험](docs/design-review/core-experience.md)을 따른다.
 
@@ -145,15 +149,15 @@ components:
 
 ## Shapes
 
-주 행동은 pill, 일반 입력·조작은 control, 탐색 선택면은 navigation 반경이다. 아이콘은 20px SVG와 최소 44px 조작을 구분한다. 모바일 앱·탐색은 화면 가장자리에 이어진다.
+주 행동·일반 입력·조작은 control, 탐색 선택면은 navigation 반경이다. 아이콘은 20px SVG와 최소 44px 조작을 구분한다. 모바일 앱·탐색은 화면 가장자리에 이어진다.
 
-홈 사진은 4:3 cover 미리보기·media 반경이고 760px 이하 control 반경이다. 미리보기 자르기는 원본 변경이 아니다. 작성·읽기 사진은 원비율로 표시하고 원본 뷰어·다운로드를 유지한다. 프로필은 실제 페이지 제목의 공백을 뺀 두 글자 이니셜이며 기본 내 블로그는 ‘나’다. 인물 사진·닉네임·계정 ID를 꾸며내지 않는다.
+홈 사진은 4:3 cover 미리보기·14px media 반경이다. 미리보기 자르기는 원본 변경이 아니다. 작성·읽기 사진은 원비율로 표시하고 원본 뷰어·다운로드를 유지한다. 프로필은 실제 페이지 제목의 공백을 뺀 두 글자 이니셜이며 기본 내 블로그는 ‘나’다. 인물 사진·닉네임·계정 ID를 꾸며내지 않는다.
 
 ## Components
 
 ### 공통 조작·탐색·필드
 
-[탐색](assets/haedo-navigation.js)의 홈·자료실·도구·설정의 표시 이름과 계정 경계를 유지한다. 내부 목적지 ID는 home·records·tools·manage이며 기존 주소와 연결된다. 검정 주 행동에는 짧은 행동 이름을 쓰고 보조 동작은 얇은 경계·글자·아이콘으로 표현한다. 현재 위치는 aria-current로 표시한다. 공통 초점은 파란 3px, 신형 작성·첨부는 지역 2px outline이며 하단 메뉴·sticky 조작에 가려지지 않아야 한다.
+[탐색](assets/haedo-navigation.js)의 홈·자료실·도구·설정의 표시 이름과 계정 경계를 유지한다. 내부 목적지 ID는 home·records·tools·manage이며 기존 주소와 연결된다. 틸 주 행동에는 짧은 행동 이름을 쓰고 보조 동작은 얇은 경계·글자·아이콘으로 표현한다. 현재 위치는 aria-current로 표시한다. 공통 초점은 틸 3px, 신형 작성·첨부는 지역 2px outline이며 하단 메뉴·sticky 조작에 가려지지 않아야 한다.
 
 반응은 150–180ms 색 변화 중심이고 공통 아이콘 눌림은 작은 축소(scale .96)다. 본문 등장·전체 화면 캡처 전환·구절 선택·철회에 애니메이션을 걸지 않는다. reduced-motion은 전환·애니메이션·부드러운 스크롤을 없애고 forced-colors는 초점·현재 위치·경계를 남긴다.
 
@@ -161,11 +165,11 @@ components:
 
 ### 개인 홈·프로필·피드
 
-홈이 내 글의 대표 목록이다. 작은 프로필 다음에 작성 진입, `글 / 초안 / 보관함` 탭과 실제 내용이 이어진다. 글·초안·보관한 글이 모두 없는 첫 화면은 `첫 글 쓰기` 한 버튼을 두고 작성 행·탭·검색은 감춘다. 일반 홈의 작성 안내도 버튼으로 동작하며 `새 글 쓰기`와 함께 클릭·키보드로 작성기를 연다. 초안 탭에는 같은 초안을 여는 별도 최신 초안 행을 반복하지 않는다.
+홈이 내 글의 대표 목록이다. 44px 이니셜과 실제 이름 다음에 얇은 경계·14px 반경으로 묶인 작성 진입, `글 / 초안 / 보관함` 탭과 실제 내용이 이어진다. 760px 이하 프로필 편집은 44px 연필 조작이며 접근 가능한 이름·title `프로필 편집`을 유지한다. 글·초안·보관한 글이 모두 없는 첫 화면은 `첫 글 쓰기` 한 버튼을 두고 작성 행·탭·검색은 감춘다. 일반 홈의 작성 안내도 버튼으로 동작하며 `새 글 쓰기`와 함께 클릭·키보드로 작성기를 연다. 초안 탭에는 같은 초안을 여는 별도 최신 초안 행을 반복하지 않는다.
 
 탭은 최소 44px 높이·14px 글자·선택 아래 2px 선이다. `aria-selected`와 좌우/Home/End 키를 지원한다. 검색은 탭 옆 조작으로 펼치며 현재 탭에서 찾는다는 범위를 표시한다. 입력은 48px 이상 높이·16px 글자·실제 라벨을 쓰며 한글 조합 중 목록을 다시 계산하지 않는다. 초안은 첫 문장·수정 시각·새 글/기존 글 수정 상태로 표시한다. 글은 20개씩 더 보여주며 전체 검색 범위를 표시 개수로 제한하지 않는다. 부분 조회 실패는 확인된 내용과 재시도를 남기고 결과 없음으로 표시하지 않는다.
 
-같은 작성자의 홈에서는 글마다 이름·아바타를 반복하지 않고 선택 제목·본문 일부·사진을 먼저 읽는다. 날짜·비공개·브라우저 보관 범위는 작은 메타 행에 남긴다. 날짜는 로컬 달력 기준이며 지난 연도에는 연도를 표시한다. 기본 작성기의 제목 없는 글은 실제 첫 문장을 목록 진입으로 쓰고 큰 `제목 없는 글`을 반복하지 않는다. 사진 미리보기는 첫 네 글에 한정하지 않고 화면에 접근하는 프레임을 지연 조회한다. 가짜 좋아요·댓글·팔로워·공개 글 수는 없다. 프로필의 실제 제목에서 얻은 이니셜만 사용한다. 프로필 편집은 이름·소개·소개 표시와 저장 후 복귀를 담당하며 소개 숨김은 실제 홈 문구에도 적용한다.
+같은 작성자의 홈에서는 글마다 이름·아바타를 반복하지 않고 선택 제목·본문 일부·사진을 먼저 읽는다. 날짜·비공개·브라우저 보관 범위는 글 아래 읽기 조작과 함께 작은 메타 행에 남긴다. 날짜는 로컬 달력 기준이며 지난 연도에는 연도를 표시한다. 기본 작성기의 제목 없는 글은 실제 첫 문장을 목록 진입으로 쓰고 큰 `제목 없는 글`을 반복하지 않는다. 사진 미리보기는 첫 네 글에 한정하지 않고 화면에 접근하는 프레임을 지연 조회한다. 가짜 좋아요·댓글·팔로워·공개 글 수는 없다. 프로필의 실제 제목에서 얻은 이니셜만 사용한다. 프로필 편집은 이름·소개·소개 표시와 저장 후 복귀를 담당하며 소개 숨김은 실제 홈 문구에도 적용한다.
 
 읽기·수정·프로필에서 복귀하면 출발 탭·검색어·검색 펼침·표시 범위와 초점을 유지한다. 저장 직후에는 새 저장 항목을 기준으로 복귀하고 검색 조건 때문에 숨겨지면 이유와 명시적 검색 해제 조작을 제공한다. 새 글과 기존 글 수정 초안은 함께 구별하며 새 글 진입이 기존 초안을 덮어쓰지 않는다. 프로필 조회 실패는 독립된 재시도로 안내하고 읽을 수 있는 글을 막지 않는다.
 
@@ -242,7 +246,7 @@ components:
 
 책 화면은 사용자가 선택한 [A · 원고 중심](docs/design-review/book-design-reset.md)을 `assets/life/workbench-ui.js`와 `workbench.css`에 적용한다. 흰 본문 한 열에서 책 선택 → 전체 읽기 → 장 집필 → 읽던 문단 복귀를 이어 간다. B의 상시 목차 열은 비교 이력으로만 남긴다. 책 목록의 제목과 `전체 읽기`는 읽기로, 연필 아이콘과 장별 목차는 집필로 연결한다. 기간·실제 장 수·첫 원고 문단을 보여 주고 편집 날짜·완료율을 추정하지 않는다.
 
-책·회고의 색은 현재 공통 셸 토큰을 따른다. 기존 한글 산세리프·20px 도형·44px 조작을 유지한다. 앱 표면은 공통 768px, 전체 읽기는 최대 680px이며 700px 이하에서는 좌우 최소 20px와 안전 영역을 둔다. 집필 제목은 32px/1.5·650, 본문은 19px/1.95다. 모바일은 각각 27px와 17px/1.9이며, 읽기 장 제목은 30px/1.55에서 모바일 26px로 줄인다. 원고 활자 값은 책 화면에 한정하며 현재 공통 팔레트·탐색 배치를 유지한다.
+책·회고의 색은 현재 공통 셸 토큰을 따른다. 공통 Pretendard 한글 산세리프·20px 도형·44px 조작을 유지한다. 앱 표면은 공통 768px, 전체 읽기는 최대 680px이며 700px 이하에서는 좌우 최소 20px와 안전 영역을 둔다. 집필 제목은 32px/1.5·650, 본문은 19px/1.95다. 모바일은 각각 27px와 17px/1.9이며, 읽기 장 제목은 30px/1.55에서 모바일 26px로 줄인다. 원고 활자 값은 책 화면에 한정하며 현재 공통 팔레트·탐색 배치를 유지한다.
 
 집필·읽기의 상단에는 높이 최소 64px의 흰 sticky 조작 행을 두고 반복 도구 제목을 숨긴다. 목차와 장 근거는 아이콘으로 펼치며 접근 가능한 이름·현재 위치를 유지한다. 모바일 집필·읽기는 하단 전역 탐색을 숨기고 책 목록 복귀를 상단에 남긴다. 책 설정·개정본·장 보관·책자·원고 파일은 원고 아래에 모으고 상단 관리 아이콘으로 이동한다. 읽기의 원고 점검·파일·인쇄도 아래에서 조작한다. 접힌 조작의 이동·초점 경로를 보존하고 기존 기능을 삭제하지 않는다.
 

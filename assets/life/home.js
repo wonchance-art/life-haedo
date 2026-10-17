@@ -139,7 +139,8 @@
     }
     function quickLinks(context) {
       const nav = el('nav', null, 'home-blog-actions'); nav.setAttribute('aria-label', '내 블로그');
-      const prompt = action(context, '어떤 이야기를 남길까요?', () => navigate('page', { blogContext: true, pageCompose: true }), 'home-compose-prompt');
+      const prompt = action(context, '', () => navigate('page', { blogContext: true, pageCompose: true }), 'home-compose-prompt');
+      prompt.append(life.Icons.create('edit'), el('span', '어떤 이야기를 남길까요?', 'home-compose-label'));
       prompt.dataset.focusKey = 'home:action:prompt';
       const write = action(context, '새 글 쓰기', () => navigate('page', { blogContext: true, pageCompose: true }), 'life-primary home-blog-write');
       write.dataset.homeDestination = 'write'; write.dataset.focusKey = 'home:action:write';
@@ -149,11 +150,13 @@
     function profileHeader(context) {
       const header = el('div', null, 'home-profile-bar');
       const profile = el('div', null, 'home-profile-open');
-      profile.append(avatar(context), el('span', context.profile.name, 'home-author-name'));
+      profile.append(avatar(context), el('h2', context.profile.name, 'home-author-name'));
       const copy = el('div', null, 'home-profile-copy');
       const intro = el('p', '', 'home-blog-description'); intro.hidden = true;
       copy.append(profile, intro);
-      const manage = action(context, '프로필 편집', () => navigate('page', { blogContext: true, pageProfileEdit: true }), 'home-blog-action');
+      const manage = action(context, '', () => navigate('page', { blogContext: true, pageProfileEdit: true }), 'home-blog-action');
+      manage.setAttribute('aria-label', '프로필 편집'); manage.title = '프로필 편집';
+      manage.append(life.Icons.create('edit'), el('span', '프로필 편집', 'home-profile-edit-label'));
       manage.dataset.homeDestination = 'page'; manage.dataset.focusKey = 'home:action:page';
       header.append(copy, manage); return header;
     }
@@ -256,7 +259,6 @@
       const time = modifiedDate(row.updatedAt, row.kind === 'source' ? '저장 ' : '수정 ');
       if (time) meta.append(time, document.createTextNode(' · '));
       meta.append(document.createTextNode(row.kind === 'photo' ? '비공개 · 이 브라우저에 보관' : row.kind === 'source' ? '기록 글 · 비공개' : '첨부 글 · 비공개'));
-      article.append(meta);
       const content = el('div', null, 'home-post-content'), heading = el('h3');
       const label = String(row.title || '').trim() || (snippet(row.body) || row.attachments?.[0]?.title || '사진이 있는 글');
       const button = action(context, label, open, 'home-post-open' + (row.kind === 'plain' || !String(row.title || '').trim() ? ' home-post-prose' : ''));
@@ -271,7 +273,7 @@
       const footer = el('div', null, 'home-post-footer');
       const read = action(context, '글 읽기', open, 'home-post-read'); read.dataset.focusKey = 'home:read:' + row.kind + ':' + row.id;
       read.append(life.Icons.create('arrow'));
-      footer.append(read); article.append(footer);
+      footer.append(meta, read); article.append(footer);
       return article;
     }
     function openRow(context, row) {
