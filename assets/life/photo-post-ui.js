@@ -145,6 +145,11 @@
       closeViewer = null;
       for (const id of photoUrls.keys()) photoSources.delete(id);
       photoUrls.clear();
+      // Cancel visible/lazy image consumers before revoking their object URLs.
+      // A new draft can replace the feed while a cover request is still pending.
+      host?.querySelectorAll("img").forEach((image) => {
+        if (urls.has(image.getAttribute("src"))) image.removeAttribute("src");
+      });
       for (const u of urls) URL.revokeObjectURL(u);
       urls.clear();
       editor = null;

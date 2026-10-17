@@ -8,7 +8,7 @@ const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { openPost } = require('./photo-post-entry.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
 const out = path.resolve('.local/blog-writing-completion');
-const report = { checks: [], visual: [], errors: [], consoleErrors: [], external: [], scope: 'Anonymous Auth, synthetic originals and real IndexedDB. Exported HTML reopened over local HTTP in a fresh context; file:// navigation is blocked by this environment. Linux Chromium; no production or Apple-device proof.' };
+const report = { checks: [], visual: [], errors: [], consoleErrors: [], external: [], scope: 'Anonymous Auth, synthetic originals and real IndexedDB. Exported HTML reopened over local HTTP in a fresh context. Playwright Chromium viewport checks; no production or mobile Apple-device proof.' };
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 
 async function main() {
@@ -21,11 +21,16 @@ async function main() {
     if ([new URL(base).origin, cloud].includes(u.origin)) return route.fallback();
     report.external.push(u.origin); return route.abort();
   });
+  let currentCheck = 'setup'; report.consoleDetails = []; report.requestFailures = [];
+  const resourceLabel = value => { const u = new URL(value); return u.protocol === 'blob:' ? 'blob:' + u.origin + '/<object-url>' : u.origin + u.pathname; };
   const page = await context.newPage(), other = await context.newPage();
   const observe = p => {
     p.setDefaultTimeout(15000); p.setDefaultNavigationTimeout(30000);
     p.on('pageerror', e => report.errors.push(e.message));
-    p.on('console', m => { if (m.type() === 'error') report.consoleErrors.push(m.text()); });
+    p.on('console', m => { if (m.type() === 'error') { report.consoleErrors.push(m.text()); report.consoleDetails.push({ check: currentCheck, message: m.text(), location: { ...m.location(), url: m.location().url ? resourceLabel(m.location().url) : '' } }); } });
+    p.on('requestfailed', request => {
+      const row = { check: currentCheck, resource: resourceLabel(request.url()), error: request.failure()?.errorText }; report.requestFailures.push(row);
+    });
   };
   observe(page); observe(other);
   const click = async (name, p = page) => p.getByRole('button', { name, exact: true }).click();
@@ -48,10 +53,16 @@ async function main() {
     const s = HaedoLife.Shell.storage, w = await s.getActive();
     return { bundle: await s.read(w), wb: await s.readWorkbench(w), drafts: await s.readPageDrafts(w), collection: await s.readCollection(w), nine: await s.readNineBoard(w) };
   });
-  const check = async (name, task) => { await task(); report.checks.push(name); console.log('PASS ' + name); };
+  const check = async (name, task) => { currentCheck = name; console.log('START ' + name); await task(); report.checks.push(name); console.log('PASS ' + name); };
   const capture = async (p, scene, widths = [1440, 390]) => {
     for (const width of widths) {
-      await p.setViewportSize({ width, height: 1000 }); await p.evaluate(() => document.fonts.ready);
+      await p.setViewportSize({ width, height: 1000 });
+      // Contrast belongs to the final reading surface; allow finite UI fades
+      // to end naturally without cancelling motion or relaxing the threshold.
+      await p.evaluate(async () => {
+        await document.fonts.ready; await new Promise(requestAnimationFrame);
+        await Promise.all(document.getAnimations().filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime)).map(animation => animation.finished.catch(() => {})));
+      });
       const metrics = await p.evaluate(inspect); report.visual.push({ scene, width, metrics });
       assert.equal(metrics.horizontalOverflow, false, scene + ' overflow');
       for (const key of ['smallTargets', 'smallInputs', 'unnamed', 'contrastFailures']) assert.deepEqual(metrics[key], [], scene + ' ' + key);
@@ -175,6 +186,16 @@ async function main() {
       const before = await read(), empty = before.docs.find(v => v.status === 'draft' && !v.title.trim() && !v.photos.length && !v.attachments.length && !v.ops.some(op => typeof op.insert === 'string' && op.insert.trim()));
       assert(empty); await click('닫기'); await page.locator('.photo-retained > summary').click(); await page.locator('.photo-draft-list [data-photo-post-id="' + empty.id + '"]').waitFor(); assert.equal(await page.locator('.wb-post-feed [data-photo-post-id="' + empty.id + '"]').count(), 0);
       await click('글쓰기'); await page.locator('.ql-editor').waitFor(); await page.locator('#photoTitle').fill('같은 초안에서 이어 쓴 글'); await stored(); const after = await read(); assert.equal(after.index.length, before.index.length); assert.equal(after.docs.find(v => v.title === '같은 초안에서 이어 쓴 글').id, empty.id); await click('닫기');
+      // Exercise the quick list -> draft -> list path before forcing lazy
+      // covers to load, so decode waits cannot hide premature URL revocation.
+      const covers = page.locator('.photo-entry-cover[src^="blob:"]:visible'); await covers.first().waitFor();
+      for (const cover of await covers.all()) {
+        const decoded = await cover.evaluate(async image => {
+          image.scrollIntoView({ block: 'center', behavior: 'instant' }); await image.decode();
+          return image.isConnected && image.complete && image.naturalWidth > 0;
+        });
+        assert.equal(decoded, true, 'A cover must remain reachable after draft transitions');
+      }
     });
 
     await check('Both v1 and v2 ZIPs show a review before installing a new unarchived draft with remapped IDs and unchanged originals', async () => {
@@ -196,9 +217,12 @@ async function main() {
     });
     assert.deepEqual(report.errors, []); assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.external, []); report.pass = true;
   } catch (e) {
+    report.failure = { check: currentCheck, message: String(e.stack || e) };
     await page.screenshot({ path: path.join(out, 'failure.png'), fullPage: true }).catch(() => {}); throw e;
   } finally {
-    await fs.writeFile(path.join(out, 'report.json'), JSON.stringify(report, null, 2)); await portableContext?.close(); await browser.close();
+    await fs.writeFile(path.join(out, 'report.json'), JSON.stringify(report, null, 2)); console.log('CLEANUP report written');
+    await portableContext?.close(); console.log('CLEANUP portable context closed');
+    await browser.close(); console.log('CLEANUP browser closed');
   }
 }
 main().catch(e => { console.error(e); process.exitCode = 1; });
