@@ -2,10 +2,11 @@
 const assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path');
 const {playwright,ready,makeContext}=require('./unified-home-browser.cjs');
 const {FakeCloud,accounts,base,cloud}=require('./life-sync-browser.cjs');
+const {openCompatibility}=require('./page-composer-entry.cjs');
 const {inspect}=require('./life-workbench-browser.cjs'),M=require('../assets/life/nine-board.js');
 const out=path.resolve('.local/nine-board-recovery'),report={checks:[],visual:[],errors:[],consoleErrors:[],external:[],scope:'Anonymous mocked Auth, real IndexedDB/two tabs/files. Linux Chromium viewport simulations, no Apple hardware or production writes.'};
 async function main(){
- await fs.mkdir(out,{recursive:true});const browser=await playwright().chromium.launch({executablePath:'/usr/bin/chromium',args:['--no-sandbox']});report.browser=browser.version();
+ await fs.mkdir(out,{recursive:true});const browser=await playwright().chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});report.browser=browser.version();
  const context=await makeContext(browser,new FakeCloud(),'nine-recovery',accounts.a,{viewport:{width:1440,height:1000},hasTouch:true});
  await context.route('**/*',route=>{const u=new URL(route.request().url());if([new URL(base).origin,cloud].includes(u.origin))return route.fallback();report.external.push(u.origin);return route.abort();});
  const page=await context.newPage(),other=await context.newPage();for(const p of [page,other]){p.setDefaultTimeout(12000);p.on('pageerror',e=>report.errors.push(e.message));p.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});}
@@ -46,11 +47,11 @@ async function main(){
   await check('New file choices and leaving the view ignore late reads; hidden metadata is rejected and unrelated original stores remain exact',async()=>{
    await page.evaluate(()=>{window.__text=File.prototype.text;File.prototype.text=async function(){const value=await __text.call(this);if(this.name==='late.json'){window.__fileHeld=true;await new Promise(resolve=>window.__releaseFile=resolve);}return value;};});const before=await read();await file().setInputFiles({name:'late.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(single))});await page.waitForFunction(()=>window.__fileHeld);
    const newest=M.copies(single.boards,fresh);newest[0].title='나중에 고른 파일을 유지';await load(M.backup(newest),'newest.json');await page.evaluate(()=>__releaseFile());await page.waitForFunction(()=>document.querySelector('.nb-import-row strong')?.textContent==='나중에 고른 파일을 유지');assert.equal(await rows().count(),1);assert.deepEqual((await read()).nine,before.nine);
-   await page.evaluate(()=>window.__fileHeld=false);await file().setInputFiles({name:'late.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(single))});await page.waitForFunction(()=>window.__fileHeld);await click('내 페이지로 돌아가기');await page.locator('.pp-toolbar').waitFor();await page.evaluate(()=>__releaseFile());await page.locator('#wbPageNine').click();await page.locator('.nb-status').waitFor();assert.equal(await review().count(),0);
+   await page.evaluate(()=>window.__fileHeld=false);await file().setInputFiles({name:'late.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(single))});await page.waitForFunction(()=>window.__fileHeld);await click('내 페이지로 돌아가기');await openCompatibility(page);await page.evaluate(()=>__releaseFile());await page.locator('#wbPageNine').click();await page.locator('.nb-status').waitFor();assert.equal(await review().count(),0);
    const bad=structuredClone(single);bad.boards[0].areas[0].items[0].attachment.note='숨은 개인 메모';await page.locator('.nb-files > summary').click();await file().setInputFiles({name:'bad.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(bad))});await page.locator('.nb-error').waitFor({state:'visible'});assert.equal(await review().count(),0);assert.deepEqual((await read()).nine,before.nine);const after=await read();for(const key of ['collection','wb','bundle','drafts'])assert.deepEqual(after[key],original[key]);
   });
   assert.deepEqual(report.errors,[]);assert.deepEqual(report.consoleErrors,[]);assert.deepEqual(report.external,[]);
- }catch(e){await page.screenshot({path:path.join(out,'failure.png'),fullPage:true});throw e;}
+ }catch(e){report.failure=e.stack;console.error('Original failure: '+e.stack);await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(capture=>console.error('Failure screenshot unavailable: '+capture.message));throw e;}
  finally{await fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));await context.close();await browser.close();}
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});

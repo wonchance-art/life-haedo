@@ -1128,7 +1128,8 @@
       refreshLead(); bodyNode.append(lead, actions);
       const blogTask = !!session.blogContext;
       const photoTask = blogTask && session.blogKind === 'photo';
-      const compatibility = details('기존 글·초안·사진 파일', { open: !!session.pageCompatibilityOpen || !!session.pageDraftId || !!session.searchTarget?.postId || !!session.searchTarget?.photoPostId || beginPost }); compatibility.classList.add('wb-page-compatibility');
+      const openCompatibility = !!session.pageDraftId || !!session.searchTarget?.postId || !!session.searchTarget?.photoPostId || beginPost;
+      const compatibility = details('기존 글·초안·사진 파일', { open: !!session.pageCompatibilityOpen || openCompatibility }); compatibility.classList.add('wb-page-compatibility');
       compatibility.addEventListener('toggle', () => {
         if (!workspaceIs(session) || !compatibility.isConnected) return;
         session.pageCompatibilityOpen = compatibility.open;
@@ -1343,6 +1344,9 @@
       });
       reorder(); bodyNode.append(entriesHost, none, setup);
       restorePageEditor(session);
+      // An explicit reading/editing destination must stay visible even when
+      // the previous general page had its compatibility section collapsed.
+      if (openCompatibility) compatibility.open = true;
       if (editProfile && showing(token, session)) profileEdit.click();
     }
     function renderVisitor(page) {

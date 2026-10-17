@@ -84,7 +84,7 @@ async function main() {
   const go = async () => {
     await page.goto(base + "/index.html?section=records&view=page");
     await ready(page);
-    await page.locator(".pp-toolbar").waitFor();
+    await require("./page-composer-entry.cjs").openCompatibility(page);
   };
   const read = () =>
     page.evaluate(async () => {

@@ -89,6 +89,7 @@ async function main() {
       assert.equal(await page.locator('#photoTitle').inputValue(), '산책 뒤 남긴 생각');
       assert.equal((await page.locator('.ql-editor').innerText()).trim(), '홈으로 돌아갔다가 다시 이어 쓸 한글 초안.');
       await back(page, 'home');
+      await page.waitForFunction(() => document.querySelector('#homeComposition')?.getAttribute('aria-busy') === 'false');
       assert.equal(await page.locator('#homeTab-drafts').getAttribute('aria-selected'), 'true');
       await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, homeDraftFocusKey);
 

@@ -29,7 +29,7 @@ async function main(){
  const second=async()=>{await click('다음 검색 결과');await page.getByText('검색 결과 · 2쪽',{exact:true}).waitFor();};
  const korean=()=>click('관찰의 기록 · 한국어판 찾기');
  try{
-  await page.goto(base+'/index.html?section=records&view=page');await ready(page);await page.locator('.pp-toolbar').waitFor();const original=await read();
+  await page.goto(base+'/index.html?section=records&view=page');await ready(page);await require('./page-composer-entry.cjs').openCompatibility(page);const original=await read();
   await click('글쓰기');await page.locator('#ppBody').fill('다른 언어로 읽었을 때와 지금의 생각을 비교하고 싶다. 이 본문은 검색어나 컬렉션 메모로 전송되지 않는다.');
   await check('Paginate beyond six candidates; failed page preserves candidates and keyboard recovery',async()=>{
    await search();assert.equal(report.requests.length,1);assert.equal(await page.locator('.cl-candidate').count(),6);
@@ -43,7 +43,7 @@ async function main(){
    for(const w of [1440,820,390])await snap('korean-edition',w);
    await page.locator('.cl-editions .cl-pick-row').click();assert.equal(await page.getByLabel('출처 링크',{exact:true}).inputValue(),'https://openlibrary.org/books/OL456M');assert.equal(await page.getByLabel('아티스트·저자',{exact:true}).inputValue(),'');await page.getByLabel('아티스트·저자',{exact:true}).fill('확인한 창작자');await click('첨부');assert.match(await page.locator('#ppBody').inputValue(),/다른 언어/);await click('저장');await page.locator('.pp-collect').waitFor();
    const saved=await read();assert.deepEqual(saved.bundle,original.bundle);assert.deepEqual(saved.collection,original.collection);assert.equal(saved.wb.page.posts[0].visibility,'private');assert.equal(saved.wb.page.posts[0].attachments[0].url,'https://openlibrary.org/books/OL456M');
-   await page.reload();await ready(page);await page.locator('.pp-collect').waitFor();assert.equal((await read()).wb.page.posts[0].attachments[0].url,'https://openlibrary.org/books/OL456M');
+   await page.reload();await ready(page);await require('./page-composer-entry.cjs').openCompatibility(page);await page.locator('.pp-collect').waitFor();assert.equal((await read()).wb.page.posts[0].attachments[0].url,'https://openlibrary.org/books/OL456M');
   });
   await check('Empty/error/late Korean response retains manual input and never revives a closed or changed selection',async()=>{
    await click('글쓰기');await page.locator('#ppBody').fill('실패해도 남겨야 하는 새 글');

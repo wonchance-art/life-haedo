@@ -4,7 +4,7 @@ const { playwright } = require("./unified-home-browser.cjs"), { inspect } = requ
 const Photo = require("../assets/life/photo-post.js"), Blog = require("../assets/life/blog.js");
 (async () => {
   const out = path.resolve(".local/blog-public"), base = process.env.BASE_URL || "http://127.0.0.1:4173", origin = new URL(base).origin; await fs.mkdir(out, { recursive: true });
-  const browser = await playwright().chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--no-sandbox"] });
+  const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium", args: ["--no-sandbox"] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } }), page = await context.newPage();
   const report = { checks: [], visual: [], errors: [], consoleErrors: [], external: [], scope: "Anonymous HTTP mocks, real local public HTML/renderer; no account/DB/Apple device." };
   try {
