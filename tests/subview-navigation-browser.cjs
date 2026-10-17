@@ -130,7 +130,11 @@ async function main() {
       await page.goto(base + '/index.html'); await ready(page); await home(page);
       await page.waitForFunction(() => __subviewToggleGate.held);
       const before = await current(page);
-      await page.locator('[data-home-destination="write"]').focus(); await page.keyboard.press('Enter'); await mode(page, 'page');
+      const write = page.locator('[data-home-destination="write"]:visible');
+      assert.equal(await write.count(), 1, 'One visible writing destination');
+      await write.focus(); await page.keyboard.press('Enter'); await mode(page, 'page');
+      // The route changes before the asynchronous photo editor finishes mounting.
+      await page.locator('#photoTitle').waitFor();
       await page.evaluate(() => __subviewReleaseToggle());
       assert.equal(await page.evaluate(() => __subviewToggleGate.released), true);
       await back(page, 'home');

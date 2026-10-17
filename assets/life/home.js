@@ -18,7 +18,12 @@
     let listState = { workspaceId: null, tab: 'posts', query: '', searchExpanded: false, limit: 20 };
     const ROW_LIMIT = 20;
     const TAB_LABELS = { posts: '글', drafts: '초안', archive: '보관함' };
-    function captureState() { return { ...listState, libraryOpen }; }
+    function captureState() {
+      // Native toggle delivery can lag behind keyboard navigation. Capture the
+      // visible DOM before leave() so return state cannot restore stale folds.
+      const currentLibrary = visible && libraryElement?.isConnected && host.contains(libraryElement) && libraryWorkspace === getBundle()?.workspaceId;
+      return { ...listState, libraryOpen: currentLibrary ? libraryElement.open : libraryOpen };
+    }
     function adoptState(workspaceId, incoming) {
       if (listState.workspaceId !== workspaceId) { listState = { workspaceId, tab: 'posts', query: '', searchExpanded: false, limit: ROW_LIMIT }; libraryOpen = false; }
       if (incoming?.workspaceId !== workspaceId) return;

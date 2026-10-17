@@ -6,6 +6,7 @@ const {ShareCloud}=require('./life-share-browser.cjs');
 const {importUI,arrangeReflection,latestBody}=require('./book-workshop-browser.cjs');
 const {current,abortWorkbenchWrites}=require('./life-workbench-browser.cjs');
 const {inspect}=require('../scripts/check-site-design.cjs');
+const {openCompatibility}=require('./page-composer-entry.cjs');
 const out=path.resolve('.local/two-cycle'),thought='좋아하는 일을 다시 만날 시간을 남겨 두기\n\n예전에는 잘하는 모습부터 보여 주고 싶었다. 지금은 오래 궁금한 것을 천천히 읽어 보고 싶다. 타인의 문장은 그 사람의 생각으로 남겨 둔다.\n\n다음 질문: 주말에 같은 길을 걸으면 무엇을 새로 알아차릴까?';
 const report={checks:[],visual:[],pageErrors:[],consoleErrors:[],external:[],scope:'Anonymous Korean imports via actual UI, real IndexedDB, mock Auth and publication HTTP. No production, AI or real Apple devices.'};
 async function main(){await fs.mkdir(out,{recursive:true});const browser=await playwright().chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});report.browser=browser.version();const server=new ShareCloud(),context=await makeContext(browser,server,'two-cycle',accounts.a,{viewport:{width:1440,height:1000},hasTouch:true});
@@ -37,7 +38,7 @@ async function main(){await fs.mkdir(out,{recursive:true});const browser=await p
  });
  await check('Attach a taste without preregistration, save, revisit and preserve the source reflection',async()=>{
   await click('음악·책·대상 붙이기');await page.locator('#clPickerQuery').fill('조용한 산책을 위한 음악');await click('직접 입력');await page.getByRole('textbox',{name:'아티스트·저자',exact:true}).fill('익명 음악가');await page.getByRole('textbox',{name:'출처 링크',exact:true}).fill('https://example.org/anonymous-music');await click('첨부');await click('저장');await page.locator('.pp-feed .pp-post').waitFor();assert.equal((await current(page)).workbench.reflection.note,thought);assert.equal((await current(page)).workbench.page.posts[0].visibility,'private');await click('방문자 미리보기');assert.equal(await page.locator('#wbVisitor .pp-post').count(),0);await click('편집으로 돌아가기');await snap('saved-feed');
-  await page.reload();await ready(page);await page.locator('.pp-feed .pp-post').waitFor();assert.equal((await current(page)).workbench.page.posts[0].body,thought);
+  await page.reload();await ready(page);await openCompatibility(page);await page.locator('.pp-feed .pp-post').waitFor();assert.equal((await current(page)).workbench.page.posts[0].body,thought);
  });
  await check('Select output explicitly, publish mock copy, read it and revoke it without leaking the source',async()=>{
   await page.locator('.pp-feed').getByRole('button',{name:'글 수정',exact:true}).click();await page.locator('#ppVisibility').selectOption('page');await click('저장');await page.locator('#wbPageShare').click();await page.locator('#wbSharePreview').waitFor();assert.equal(server.publicationWrites().length,0);await snap('output-review');await page.locator('#wbShareConsent').check();await page.locator('#wbSharePublish').click();await page.locator('#wbShareUrl').waitFor({state:'visible'});const url=await page.locator('#wbShareUrl').getAttribute('href'),row=[...server.pages.values()][0];assert(JSON.stringify(row.snapshot).includes(JSON.stringify(thought)));assert(!JSON.stringify(row.snapshot).includes(refs.work.versionId));assert(!JSON.stringify(row.snapshot).includes(original.sourceVersions.find(v=>v.id===refs.other.versionId).contentText));

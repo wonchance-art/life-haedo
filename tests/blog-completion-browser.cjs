@@ -174,7 +174,7 @@ async function main() {
   const manager = async p => { await nav(p, 'home'); await p.locator('[data-home-destination="blog"]').click(); await p.locator('.blog-manager-list[data-state="ready"]').waitFor(); };
   const row = (p, id) => p.locator('.blog-post[data-post-id="' + id + '"]');
   const savedPost = async (p, title, images = []) => {
-    await nav(p, 'home'); await p.locator('[data-home-destination="write"]').click(); await p.locator('#photoTitle').fill(title);
+    await nav(p, 'home'); await p.locator('[data-home-destination="write"]:visible').click(); await p.locator('#photoTitle').fill(title);
     await p.locator('.ql-editor').fill('기억한 풍경을 내 말로 남깁니다. 🌱\n이 글만 직접 골라 공개합니다.');
     if (images.length) {
       await p.evaluate(() => { const q = Quill.find(document.querySelector('.ql-container')); q.setSelection(q.getLength() - 1, 0, 'silent'); });

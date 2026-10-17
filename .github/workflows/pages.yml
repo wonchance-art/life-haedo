@@ -383,6 +383,7 @@ jobs:
             .local/preservation/
             .local/nine-board-image/
             .local/original-attachments/
+            .local/original-attachments-integrated/
             .local/obsidian-update/
             .local/subview-navigation/
             .local/management-clarity/

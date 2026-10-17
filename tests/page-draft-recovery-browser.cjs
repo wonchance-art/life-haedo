@@ -19,7 +19,7 @@ async function main() {
  const page = await context.newPage(); page.setDefaultTimeout(12000);
  const observe=p=>{p.on('pageerror',e=>report.errors.push(e.message));p.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});};observe(page);
  const click=name=>page.getByRole('button',{name,exact:true}).click();
- const go=async()=>{await page.goto(base+'/index.html?section=records&view=page');await ready(page);await page.locator('.pp-toolbar').waitFor();};
+ const go=async()=>{await page.goto(base+'/index.html?section=records&view=page');await ready(page);await require('./page-composer-entry.cjs').openCompatibility(page);};
  const read=()=>page.evaluate(async()=>{const s=HaedoLife.Shell.storage,w=await s.getActive();return {workspaceId:w,drafts:await s.readPageDrafts(w),wb:await s.readWorkbench(w),bundle:await s.read(w),collection:await s.readCollection(w)};});
  const check=async(name,fn)=>{await fn();report.checks.push(name);console.log('PASS '+name);};
  const file=posts=>({name:'anonymous-drafts.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'life-page-drafts-v1',posts}))});
@@ -75,7 +75,7 @@ async function main() {
    await click('초안 닫기');await page.locator('#ppBody').waitFor({state:'detached'});await page.locator('.pp-draft-tools summary').click();const download=page.waitForEvent('download');await click('초안 파일 받기');const exported=JSON.parse(await fs.readFile(await (await download).path(),'utf8'));assert.equal(exported.format,'life-page-drafts-v1');assert.deepEqual(exported.posts,after.drafts.posts);exportedBackup=exported;
   });
   await check('Fresh competing draft prompts another review; merging preserves its edits and intentional duplicate copy',async()=>{
-   const other=await context.newPage();observe(other);await other.goto(base+'/index.html?section=records&view=page');await ready(other);await other.locator('.pp-toolbar').waitFor();
+   const other=await context.newPage();observe(other);await other.goto(base+'/index.html?section=records&view=page');await ready(other);await require('./page-composer-entry.cjs').openCompatibility(other);
    const competing={...structuredClone(unique),id:'competing_file',body:'파일 검토 중 다른 탭에서도 보관한 내용'};await choose(file([competing]));await dialog().waitFor();
    await other.evaluate(async d=>{const s=HaedoLife.Shell.storage,w=await s.getActive(),v=await s.readPageDrafts(w);v.posts[0].body+='\n다른 탭의 새 수정';v.posts.push({...d,id:HaedoLife.Core.id(),visibility:'private',replaces:null,baseUpdatedAt:null});await s.savePageDrafts(w,v,v.revision);},competing);
    const before=await read();await click('선택한 초안 불러오기');await dialog().getByText(/다른 탭에서 같은 내용/).waitFor();assert.deepEqual((await read()).drafts,before.drafts);assert(await checks().first().isChecked());assert.match(await dialog().innerText(),/같은 본문·첨부가 보관함/);
@@ -84,7 +84,7 @@ async function main() {
   });
   await check('Real second-tab CAS race leaves no partial addition; retry merges the latest data',async()=>{
    const race={...structuredClone(unique),id:'race_file',body:'두 탭의 저장 경합 뒤 복구할 파일 내용'};await choose(file([race]));await dialog().waitFor();await page.evaluate(()=>window.__holdDraftRead=true);
-   await click('선택한 초안 불러오기');await page.waitForFunction(()=>window.__readHeld);const other=await context.newPage();observe(other);await other.goto(base+'/index.html?section=records&view=page');await ready(other);await other.locator('.pp-toolbar').waitFor();
+   await click('선택한 초안 불러오기');await page.waitForFunction(()=>window.__readHeld);const other=await context.newPage();observe(other);await other.goto(base+'/index.html?section=records&view=page');await ready(other);await require('./page-composer-entry.cjs').openCompatibility(other);
    await other.evaluate(async()=>{const s=HaedoLife.Shell.storage,w=await s.getActive(),v=await s.readPageDrafts(w);v.posts[0].body+='\nCAS 경합에서 먼저 저장한 문장';await s.savePageDrafts(w,v,v.revision);});const before=await read();
    await page.evaluate(()=>__releaseDraftRead());await dialog().getByText(/다른 탭에서 초안이 바뀌었습니다/).waitFor();assert.deepEqual((await read()).drafts,before.drafts);assert(await checks().first().isChecked());assert(await page.getByRole('button',{name:'선택한 초안 불러오기',exact:true}).isEnabled());await click('선택한 초안 불러오기');await dialog().waitFor({state:'detached'});const after=await read();assert.deepEqual(after.drafts.posts.slice(0,-1),before.drafts.posts);assert.equal(after.drafts.posts.filter(p=>p.body===race.body).length,1);await other.close();await click('초안 닫기');await page.locator('#ppBody').waitFor({state:'detached'});
   });
