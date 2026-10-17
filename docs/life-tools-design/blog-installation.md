@@ -4,8 +4,8 @@
 
 ## 설치한 구성
 
-- 로컬 migration: `supabase/migrations/20261017143539_life_blog_originals.sql`. Supabase CLI `migration new`로 생성했다. SHA-256 `d8f82a704b37326275b323ff173658d7277e7a57a8911c86d0fb3023e8cba769`.
-- 운영 migration 이력: `20261017144744_life_blog_originals`. MCP 설치 시 부여한 이력 번호이며 같은 SQL이다. 로컬 파일을 이 번호로 중복 생성하거나 재설치하지 않는다.
+- 로컬 migration: `supabase/migrations/20261017144744_life_blog_originals.sql`. Supabase CLI `migration new`로 최초 `20261017143539_life_blog_originals.sql`을 생성한 뒤, 실제 운영 이력 번호와 일치하도록 파일 이름만 정리했다. SHA-256 `d8f82a704b37326275b323ff173658d7277e7a57a8911c86d0fb3023e8cba769`.
+- 운영 migration 이력: `20261017144744_life_blog_originals`. MCP 설치 시 부여한 이력 번호이며 로컬 파일과 같은 SQL이다. 이전 이름의 중복 파일은 남기지 않았고, SQL 재설치나 운영 이력 수정 없이 로컬 경로만 맞췄다.
 - `haedo_blog_private`의 문서·원본 선언·작업 영수증·공개 이름·게시 사본 5개 테이블. 모두 RLS를 켜고 클라이언트 직접 접근을 허용하지 않는다. 명시한 소유자/익명 RPC로만 접근한다.
 - 비공개 Storage 버킷 `haedo-blog-originals`, JPEG·PNG·WebP 파일당 최대 64 MiB. 이 버킷의 원본을 덮어쓰거나 삭제하는 클라이언트 정책은 없다. 다른 버킷의 기존 정책은 유지한다.
 - `haedo-blog-media` Edge 버전 1, ACTIVE. 파일 SHA-256 `ee036ae4ffc606526795810362148c72df59b6831f471a2f2d4f9905bed11813`. 익명 사진 읽기를 위해 JWT 게이트를 끄고 함수 자체에서 공개 글 토큰·공개 사진 ID의 현재 유효성을 검사한다. 서비스 키는 서버 환경에만 둔다.

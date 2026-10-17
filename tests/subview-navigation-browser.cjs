@@ -36,15 +36,29 @@ async function main() {
     if (process.env.SUBVIEW_TEST_MATCH && !new RegExp(process.env.SUBVIEW_TEST_MATCH).test(name)) return;
     const server = new FakeCloud(), context = await makeContext(browser, server, 'subview-' + report.checks.length, accounts.a, { viewport: { width, height: width === 390 ? 844 : 1000 }, hasTouch: width <= 820 });
     await context.route(`${cloud}/rest/v1/rpc/life_public_page_list`, route => route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '[]' }));
+    await context.addInitScript(() => {
+      window.__subviewEvents = [];
+      const identify = target => {
+        const node = target instanceof Element ? target.closest('button,a,summary,input,textarea') || target : null;
+        return { tag: node?.tagName, id: node?.id, home: node?.dataset.homeDestination, focusKey: node?.dataset.focusKey };
+      };
+      for (const type of ['focusin', 'keydown', 'keyup', 'click']) document.addEventListener(type, event => {
+        if ((type === 'keydown' || type === 'keyup') && event.key !== 'Enter') return;
+        __subviewEvents.push({ type, key: event.key, time: performance.now(), mode: document.querySelector('#lifeMain')?.dataset.mode,
+          target: identify(event.target), active: identify(document.activeElement), libraryOpen: document.querySelector('.home-library')?.open });
+        if (__subviewEvents.length > 120) __subviewEvents.shift();
+      }, true);
+    });
     await instrumentStorage(context); const page = await context.newPage(); page.setDefaultTimeout(12000); observe(page, report, name);
     try { await run({ page, context, server }); assert.equal(server.writes().length, 0); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
-    catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); await page.screenshot({ path: path.join(out, 'failure-' + report.checks.length + '.png') }).catch(() => {}); }
+    catch (error) { const trace = await page.evaluate(() => ({ mode: document.querySelector('#lifeMain')?.dataset.mode, events: window.__subviewEvents })).catch(() => null); report.checks.push({ name, pass: false, destination: page.subviewDestination, error: error.stack, trace }); console.error('FAIL ' + name + '\n' + error.stack + '\n' + JSON.stringify({ destination: page.subviewDestination, trace })); await page.screenshot({ path: path.join(out, 'failure-' + report.checks.length + '.png') }).catch(() => {}); }
     finally { await context.close(); }
   }
   try {
     for (const width of [1440, 820, 390]) await check('home origin, keyboard/touch return and draft resume ' + width, async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await home(page);
       for (const [destination, targetMode, title] of [['write', 'page', '내 페이지'], ['import', 'import', '가져오기'], ['time', 'time', '연표']]) {
+        page.subviewDestination = destination;
         const start = page.locator(`[data-home-destination="${destination}"]`);
         if (width === 1440) { await start.focus(); await page.keyboard.press('Enter'); } else await start.tap();
         await mode(page, targetMode); assert.equal(await heading(page).textContent(), title);
@@ -84,6 +98,43 @@ async function main() {
       assert.equal(await page.locator('#lifeWritingBody').inputValue(), '기존 평문 작성기의 입력도 복귀 뒤 이어집니다.');
       assert.equal((await current(page)).bundle.sources.length, 0);
     }, width);
+    await check('delayed native library toggle preserves keyboard destinations after home return', async ({ page, context }) => {
+      // Native toggle notification may run after navigation. Hold only its first
+      // listener delivery; DOM state, keyboard events, navigation and IDB stay real.
+      await context.addInitScript(() => {
+        const add = EventTarget.prototype.addEventListener;
+        window.__subviewToggleGate = { held: false, released: false };
+        EventTarget.prototype.addEventListener = function (type, listener, options) {
+          if (type === 'toggle' && this instanceof Element && this.matches('.home-library') && typeof listener === 'function') {
+            return add.call(this, type, function (event) {
+              if (!__subviewToggleGate.held && this.open) {
+                __subviewToggleGate.held = true;
+                const target = this;
+                window.__subviewReleaseToggle = () => { __subviewToggleGate.released = true; listener.call(target, event); };
+              } else listener.call(this, event);
+            }, options);
+          }
+          return add.call(this, type, listener, options);
+        };
+      });
+      await page.goto(base + '/index.html'); await ready(page); await home(page);
+      await page.waitForFunction(() => __subviewToggleGate.held);
+      const before = await current(page);
+      await page.locator('[data-home-destination="write"]').focus(); await page.keyboard.press('Enter'); await mode(page, 'page');
+      await page.evaluate(() => __subviewReleaseToggle());
+      assert.equal(await page.evaluate(() => __subviewToggleGate.released), true);
+      await back(page, 'home');
+      await page.waitForFunction(() => document.activeElement?.dataset.homeDestination === 'write');
+      assert.equal(await page.locator('.home-library').evaluate(node => node.open), true, 'opening survives a native toggle delivered after leaving home');
+      page.subviewDestination = 'import';
+      await page.locator('[data-home-destination="import"]').focus();
+      assert.equal(await page.evaluate(() => document.activeElement?.dataset.homeDestination), 'import');
+      await page.keyboard.press('Enter'); await mode(page, 'import');
+      assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '홈으로 돌아가기');
+      await back(page, 'home');
+      await page.waitForFunction(() => document.activeElement?.dataset.homeDestination === 'import');
+      assert.deepEqual(await current(page), before);
+    }, 1440);
     for (const width of [1440, 820, 390]) await check('search, tool and management origins and active menu roots ' + width, async ({ page }) => {
       await fixture(page, { many: true }); await nav(page, 'records'); await mode(page, 'sources');
       const before = await current(page);

@@ -11,7 +11,7 @@ import { stripTypeScriptTypes } from "node:module";
 const run = promisify(execFile), root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const image = "postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3";
 const container = `haedo-blog-postgres-${Date.now()}${process.pid}`;
-const migration = "supabase/migrations/20261017143539_life_blog_originals.sql";
+const migration = "supabase/migrations/20261017144744_life_blog_originals.sql";
 let owns = false;
 const keep = process.argv.slice(2).includes("--keep");
 if (process.argv.slice(2).some((arg) => arg !== "--keep")) throw new Error("Only --keep is supported");

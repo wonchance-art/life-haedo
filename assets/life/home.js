@@ -12,7 +12,7 @@
   }
   function create({ storage, core, host, getBundle, navigate, openSource, renderReadingResume, isDisposed = () => false, announce = () => {} }) {
     let disposed = false, generation = 0, visible = false;
-    let libraryOpen = false, libraryWorkspace = null;
+    let libraryOpen = false, libraryWorkspace = null, libraryElement = null;
     const mediaUrls = new Set();
     function clearMedia() { mediaUrls.forEach(url => URL.revokeObjectURL(url)); mediaUrls.clear(); }
     function initials(name) { return !name || name === '내 블로그' ? '나' : Array.from(String(name).replace(/\s+/g, '')).slice(0, 2).join(''); }
@@ -148,6 +148,7 @@
     function library(context, bundle) {
       const area = el('details', null, 'home-library');
       if (libraryWorkspace !== context.workspaceId) { libraryOpen = false; libraryWorkspace = context.workspaceId; }
+      libraryElement = area;
       area.open = libraryOpen;
       area.addEventListener('toggle', () => { if (showing(context)) libraryOpen = area.open; });
       const summary = el('summary');
@@ -425,7 +426,15 @@
       composition.setAttribute('aria-busy', 'false');
       restoreAnchor(anchor);
     }
-    function leave() { generation += 1; visible = false; clearMedia(); }
+    function leave() {
+      // A native details toggle is queued asynchronously. Preserve its current
+      // state before navigation makes that event's original context stale.
+      if (visible && libraryElement?.isConnected && host.contains(libraryElement) && libraryWorkspace === getBundle()?.workspaceId) {
+        libraryOpen = libraryElement.open;
+      }
+      libraryElement = null;
+      generation += 1; visible = false; clearMedia();
+    }
     function dispose() { leave(); disposed = true; }
     return Object.freeze({ render, leave, dispose });
   }

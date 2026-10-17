@@ -130,16 +130,16 @@ jobs:
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/page-draft-recovery-browser.cjs
       - name: Verify page draft conflict comparison and copy recovery
-        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/page-draft-conflict-browser.cjs
       - name: Verify nine-slot boards, local preservation and file round trips
-        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/nine-board-browser.cjs
       - name: Verify selective board recovery and explicit export scopes
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/nine-board-recovery-browser.cjs
       - name: Verify nine board search, exact target and preserved return
-        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/nine-board-search-browser.cjs
       - name: Verify original photo editor, exact bytes and recovery
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
