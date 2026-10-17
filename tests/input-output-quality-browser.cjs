@@ -30,7 +30,7 @@ async function main() {
   const selectFiles = async files => { await records(); await click('가져오기'); await click('텍스트 파일'); await page.locator('#lifeBatchPicker summary').click(); await page.locator('#lifeBatchFiles').setInputFiles(files); };
   let retained, original;
   try {
-    await page.goto(base + '/index.html'); await ready(page); await page.locator('#homePage').waitFor(); await snap('home');
+    await page.goto(base + '/index.html'); await ready(page); await page.locator('#homePosts[aria-busy="false"]').waitFor(); await snap('home');
     await check('Partial file failure keeps successful draft; only failed row is reselected and committed', async () => {
       await selectFiles([file('walk.md', raw), file('bad.txt', Buffer.from([0xc3, 0x28]))]);
       await row(0).filter({ hasText: '검토 중 보관됨' }).waitFor(); await row(1).filter({ hasText: '실패' }).waitFor();

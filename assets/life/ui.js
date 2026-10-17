@@ -931,7 +931,8 @@
     async function navigate(mode, options) {
       const token = ++navigationGeneration;
       const from = state.mode;
-      const trigger = (from === 'reflection' && mode === 'page' && options?.pageDraftId ? main.querySelector('#wbReflectionToPage') : null) || navigationTrigger || Array.from(main.querySelectorAll('[data-home-destination]')).find(el => el.dataset.homeDestination === mode) || document.activeElement;
+      const focused = main.contains(document.activeElement) && document.activeElement.matches?.('button,a,summary,input') ? document.activeElement : null;
+      const trigger = (from === 'reflection' && mode === 'page' && options?.pageDraftId ? main.querySelector('#wbReflectionToPage') : null) || navigationTrigger || focused || Array.from(main.querySelectorAll('[data-home-destination]')).find(el => el.dataset.homeDestination === mode) || document.activeElement;
       const control = trigger?.matches?.('button,a,summary,input') ? trigger : null;
       const origin = (parentViews.has(from) || from === 'reflection' && mode === 'page' && options?.pageDraftId) ? { mode: from, workspaceId: state.bundle?.workspaceId, scrollY: global.scrollY,
         focusKey: control?.dataset.focusKey, focusId: control?.id,
@@ -1176,7 +1177,7 @@
         const records = button('기록', guarded(() => navigate('sources')), 'life-title-button');
         records.setAttribute('aria-label', '기록 목록');
         heading.append(records);
-      } else heading.textContent = section === 'home' ? '홈' : section === 'tools' ? '도구' : '관리';
+      } else heading.textContent = section === 'home' ? '내 블로그' : section === 'tools' ? '도구' : '관리';
       if (subviewTitles[state.mode]) {
         const labels = { find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '기록으로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '관리로 돌아가기' };
         const back = iconButton(labels[subviewOrigin().mode] || labels.sources, 'back', guarded(returnFromSubview));

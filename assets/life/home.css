@@ -1,14 +1,33 @@
 /* Home shares the white reading surface. Tint marks controls and private state only. */
 .life-home { min-width: 0; container-type: inline-size; container-name: personal-home; }
 .life-home :is(p,span,strong,button) { overflow-wrap: anywhere; word-break: keep-all; }
-.home-shortcuts { display: flex; align-items: stretch; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 16px; background: var(--canvas, #f7f7fb); }
-.home-shortcut { flex: 1 1 0; gap: 9px; min-width: 0; min-height: 54px; padding: 8px; border: 0; border-radius: 11px; background: transparent; color: var(--ink); font-size: 14px; font-weight: 550; transition: background-color 160ms ease-out, color 160ms ease-out; }
-.home-shortcut > .life-glyph { box-sizing: content-box; width: 20px; height: 20px; padding: 7px; border-radius: 10px; color: var(--color-primary); background: var(--soft); }
-.home-shortcut[data-home-destination=write] > .life-glyph { color: var(--mint-ink, #356452); background: var(--mint, #edf7f3); }
-.home-shortcut[data-home-destination=time] > .life-glyph { color: var(--sky-ink, #416187); background: var(--sky, #eff4fb); }
-.home-shortcut:hover:not(:disabled) { background: var(--paper); }
-.home-shortcut:active:not(:disabled) { background: var(--soft); color: var(--color-primary); }
-.home-shortcut:focus-visible { outline-offset: 1px; }
+.home-blog-lead { padding: 5px 0 4px; }
+.home-blog-title { margin: 0 0 10px; color: var(--ink); font-size: 24px; font-weight: 650; line-height: 1.6; letter-spacing: -.02em; }
+.home-blog-description { color: var(--ink-soft); font-size: 15px; line-height: 1.8; }
+.home-blog-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 18px; }
+.home-blog-actions > .life-button { min-height: 44px; gap: 8px; padding-inline: 15px; }
+.home-blog-actions > .home-blog-write { font-weight: 650; }
+.home-blog-actions > .home-blog-action { color: var(--ink-soft); border-color: transparent; }
+.home-blog-actions > .home-blog-action:hover:not(:disabled) { color: var(--color-primary); background: var(--soft); }
+.home-post { padding: 22px 0 25px; border-bottom: 1px solid var(--line); }
+.home-post-open { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; width: 100%; min-height: 44px; overflow: hidden; border: 0; border-radius: 0; padding: 0; color: var(--ink); font-size: 21px; font-weight: 650; line-height: 1.65; letter-spacing: -.02em; text-align: left; }
+.home-post-open:hover:not(:disabled),.home-post-open:active:not(:disabled) { color: var(--color-primary); background: transparent; }
+.home-post-prose { -webkit-line-clamp: 3; font-size: 17px; font-weight: 500; line-height: 1.85; letter-spacing: normal; }
+.home-post-excerpt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.home-post-meta { margin-top: 12px; font-size: 12px; line-height: 1.7; }
+.home-first-post { padding: 26px 0 30px; border-bottom: 1px solid var(--line); }
+.home-first-post > h3 { color: var(--ink); font-size: 21px; font-weight: 600; line-height: 1.6; }
+.home-first-post > .home-text { color: var(--ink-soft); font-size: 15px; }
+.home-first-post > .life-button { margin-top: 20px; }
+.home-library { margin-top: 36px; border-top: 1px solid var(--line); }
+.home-library > summary { min-height: 64px; padding: 18px 0; cursor: pointer; color: var(--ink); font-size: 15px; font-weight: 600; }
+.home-library > summary::marker { color: var(--ink-soft); }
+.home-library > summary > .life-meta { margin-left: 12px; font-size: 12px; font-weight: 400; }
+.home-library[open] > summary { border-bottom: 1px solid var(--line); }
+.home-library-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+.home-library-actions > .life-button { min-height: 44px; color: var(--ink-soft); font-size: 14px; }
+.home-library-preview-note { margin-top: 10px; font-size: 12px; line-height: 1.8; }
+.home-library .home-section { margin-top: 22px; }
 .home-section { min-width: 0; margin-top: 28px; }
 .home-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
 .home-section-heading > h2 { font-size: 16px; font-weight: 650; letter-spacing: -.02em; }
@@ -59,14 +78,17 @@
   #homeRecent > .home-record > .home-date { margin-top: 9px; white-space: nowrap; }
 }
 @media (max-width: 700px) {
-  .home-shortcuts { gap: 4px; padding: 5px; }
-  .home-shortcut { gap: 7px; padding-inline: 4px; font-size: 13px; }
+  .home-blog-actions { gap: 5px; }
+  .home-blog-actions > .life-button { padding-inline: 11px; font-size: 13px; }
+  .home-post-open { font-size: 19px; }
+  .home-post-prose { font-size: 16px; }
+  .home-library > summary > .life-meta { display: block; margin: 6px 0 0 17px; }
   .home-section { margin-top: 24px; }
   .home-record-open { font-size: 17px; }
   .home-section-heading { gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .life-home :is(.home-shortcut,.home-group,.home-record-open) { transition: none; }
+  .life-home :is(.home-blog-actions > .life-button,.home-group,.home-record-open,.home-post-open) { transition: none; }
 }
 
 .home-book { border-bottom: 1px solid var(--line); }

@@ -7,7 +7,7 @@ if (!process.env.PW_MODULE_PATH && process.env.PLAYWRIGHT_MODULE) process.env.PW
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { FakeCloud, accounts, password, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, settle, observe, nav } = require('./unified-home-browser.cjs');
-const { restore, chapterFrom } = require('./book-completion-browser.cjs');
+const { restore, chapterFrom, openLibrary } = require('./book-completion-browser.cjs');
 const { current, save, details, download } = require('./book-projects-browser.cjs');
 const { expand } = require('./book-insights-browser.cjs');
 const { field } = require('./source-reimport-browser.cjs');
@@ -19,7 +19,7 @@ const quote = '쉬는 동안 만든 작은 기준을 계속 지켜 보고 싶었
 const raw = '다시 일을 시작한 첫 주에는 점심을 먹고 십 분쯤 밖에 나갔다.\n\n' + quote + '\n\n일하는 날과 쉬는 날을 서로 다른 삶처럼 나누지 않아도 된다는 생각이 들었다.';
 const stages = page => page.evaluate(async () => HaedoLife.Shell.storage.listStages(await HaedoLife.Shell.storage.getActive()));
 function annotation(error) { if (process.env.GITHUB_ACTIONS) console.error('::error title=Book import::' + String(error.stack || error).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')); }
-async function setup(page) { const pending = await restore(page), original = await pending.install(); await nav(page, 'home'); await page.locator('#homeBooks').waitFor(); const book = original.workbench.books[0], chapter = book.chapters[1]; await chapterFrom(page, page.locator(`#homeBooks [data-book-id="${book.id}"]`), chapter); return { original, book, chapter }; }
+async function setup(page) { const pending = await restore(page), original = await pending.install(); await nav(page, 'home'); await openLibrary(page); await page.locator('#homeBooks').waitFor(); const book = original.workbench.books[0], chapter = book.chapters[1]; await chapterFrom(page, page.locator(`#homeBooks [data-book-id="${book.id}"]`), chapter); return { original, book, chapter }; }
 async function begin(page) { await expand(page, '#wbChapterEvidence'); await page.locator('#wbChapterImport').click(); await page.locator('#lifeImportText').waitFor(); }
 async function input(page, options = {}) {
   await field(page, 'Origin', options.origin || 'apple_notes'); await field(page, 'Title', options.title || title); if (options.url) await field(page, 'Url', options.url); await field(page, 'Text', options.text || raw);
@@ -71,7 +71,7 @@ async function main() {
       }
     });
     await check('unrelated draft and current unaccepted import survive a return to the unchanged chapter', 390, async ({ page }) => {
-      const f = await setup(page); await page.locator('#wbBooksBack').click(); await page.locator('#wbBookList').waitFor(); await nav(page, 'home'); await page.getByRole('button', { name: '가져오기', exact:true }).click(); await field(page, 'Title', '다른 글의 보관 전 초안'); await field(page, 'Text', '이전에 검토하던 별도 글의 본문'); await nav(page, 'home'); await page.locator('#homeBooks').waitFor(); await chapterFrom(page, page.locator(`#homeBooks [data-book-id="${f.book.id}"]`), f.chapter); const draft = (await stages(page)).find(stage => stage.input?.title === '다른 글의 보관 전 초안'); assert(draft);
+      const f = await setup(page); await page.locator('#wbBooksBack').click(); await page.locator('#wbBookList').waitFor(); await nav(page, 'home'); await openLibrary(page); await page.getByRole('button', { name: '자료 가져오기', exact:true }).click(); await field(page, 'Title', '다른 글의 보관 전 초안'); await field(page, 'Text', '이전에 검토하던 별도 글의 본문'); await nav(page, 'home'); await openLibrary(page); await page.locator('#homeBooks').waitFor(); await chapterFrom(page, page.locator(`#homeBooks [data-book-id="${f.book.id}"]`), f.chapter); const draft = (await stages(page)).find(stage => stage.input?.title === '다른 글의 보관 전 초안'); assert(draft);
       await begin(page); assert.equal(await page.locator('#lifeImportText').inputValue(), ''); await input(page, { title:'다음에 검토할 글', text:'아직 원문과 출처를 확인하지 않은 문장.' }); await page.locator('#lifeChapterImportReturn').click(); await page.locator('#wbChapterNote').waitFor(); assert.equal(await page.locator('#wbChapterImportReview').count(), 0); assert.equal(await page.locator('#wbChapterTitle').inputValue(), f.chapter.title); assert.deepEqual(await current(page), f.original); const savedDrafts = await stages(page); assert.deepEqual(savedDrafts.find(stage => stage.stageId === draft.stageId), draft); assert(savedDrafts.some(stage => stage.input?.title === '다음에 검토할 글' && stage.input.text === '아직 원문과 출처를 확인하지 않은 문장.'));
     });
     await check('chapter save failures preserve writing and separately stored source; retry adds the link once', 390, async ({ page }) => {

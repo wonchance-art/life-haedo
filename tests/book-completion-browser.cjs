@@ -25,6 +25,11 @@ async function restore(page) {
     await page.locator('.life-workbench[data-mode="books"][aria-busy="false"]').waitFor(); assert.notEqual(await page.evaluate(() => HaedoLife.Shell.storage.getActive()), original.bundle.workspaceId); return current(page);
   } };
 }
+async function openLibrary(page) {
+  await page.locator('#homeComposition[aria-busy="false"]').waitFor();
+  const library = page.locator('.home-library');
+  if (!await library.evaluate(node => node.open)) await library.locator(':scope > summary').click();
+}
 async function home(page) {
   // Mobile writing intentionally hides the global dock. Leave through the
   // visible book-list control before taking the normal Home navigation.
@@ -33,7 +38,7 @@ async function home(page) {
     await page.getByRole('button', { name: '책 목록', exact: true }).click();
     await page.locator('#wbBookList').waitFor();
   }
-  await nav(page, 'home'); await page.locator('#homeBooks').waitFor();
+  await nav(page, 'home'); await openLibrary(page);
 }
 async function chapterFrom(page, container, chapter) {
   const outline = container.locator('details'); if (!await outline.evaluate(el => el.open)) await outline.locator(':scope > summary').click();
@@ -89,7 +94,10 @@ async function main() {
       const empty = await createBook(page, '짧은 산문을 모으는 다음 책'); await createBook(page, '나중에 다듬을 독서 기록'); const fourth = await createBook(page, '아직 목차를 만들지 않은 여행 기록');
       await home(page); assert.equal(await page.locator('#homeBooks article[data-book-id]').count(), 3); assert.equal(await page.locator(`#homeBooks [data-book-id="${fourth.id}"]`).count(), 0); const first = page.locator(`#homeBooks [data-book-id="${book.id}"]`); await first.locator('summary').click(); assert.equal(await first.locator('button[data-chapter-id]').count(), 3); assert.equal(await first.locator(`[data-chapter-id="${book.chapters[3].id}"]`).count(), 0); assert.equal(await page.locator(`#homeBooks [data-book-id="${empty.id}"] details`).count(), 0); await capture(page, report, 'home-active-books', 390);
       await page.getByRole('button', { name: '내 책 모두 보기', exact: true }).click(); await page.locator('#wbBookList').waitFor(); assert.equal(await page.locator('#wbBookList [data-book-id]').count(), 4); await openBook(page, book.id); await details(page, '책 설정'); page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: '책 보관', exact: true }).click(); await page.waitForFunction(({ workspace, id }) => HaedoLife.Shell.storage.readWorkbench(workspace).then(state => state.books.find(book => book.id === id).archived === true), { workspace: restored.bundle.workspaceId, id: book.id }); await home(page); assert.equal(await page.locator('#homeBooks article[data-book-id]').count(), 3); assert.equal(await page.locator(`#homeBooks [data-book-id="${book.id}"]`).count(), 0); assert.equal(await page.locator(`#homeBooks [data-book-id="${fourth.id}"]`).count(), 1);
-      await account(page, accounts.b); await home(page); assert.equal(await page.locator('#homeBooks article[data-book-id]').count(), 0); assert.equal(await page.locator('#homeBooks').getByRole('button', { name: '책 만들기', exact: true }).count(), 1); await account(page, accounts.a); await home(page); assert.equal(await page.locator('#homeBooks article[data-book-id]').count(), 3); assert.deepEqual((await current(page)).bundle, restored.bundle);
+      await account(page, accounts.b); await home(page); assert.equal(await page.locator('#homeBooks article[data-book-id]').count(), 0);
+      await nav(page, 'tools'); await page.getByRole('button', { name: '책 만들기', exact: true }).click(); await page.locator('#wbBookCreateTitle').waitFor();
+      assert.equal(await page.locator('#wbBookList [data-book-id]').count(), 0); assert.equal(await page.getByRole('button', { name: '빈 책 만들기', exact: true }).count(), 1);
+      await account(page, accounts.a); await home(page); assert.equal(await page.locator('#homeBooks article[data-book-id]').count(), 3); assert.deepEqual((await current(page)).bundle, restored.bundle);
     });
     assert(report.checks.length); report.pass = report.checks.every(c => c.pass) && !report.consoleErrors.length && !report.pageErrors.length && !report.external.length;
   } finally { await browser.close(); report.finishedAt = new Date().toISOString(); const json = JSON.stringify(report, null, 2); await fs.writeFile(path.join(out, 'run-' + report.createdAt.replace(/[:.]/g, '-') + '.json'), json); await fs.writeFile(path.join(out, 'browser-report.json'), json); }
@@ -97,4 +105,4 @@ async function main() {
 }
 if (require.main === module) main().catch(error => { console.error(error); annotation(error); process.exitCode = 1; });
 
-module.exports = { restore, chapterFrom };
+module.exports = { restore, chapterFrom, openLibrary };
