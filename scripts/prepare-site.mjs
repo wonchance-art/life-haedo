@@ -51,6 +51,7 @@ try {
     'vendor/daisyui.css', 'vendor/daisyui-themes.css', 'vendor/idb/idb.js', 'vendor/idb/LICENSE',
     'vendor/supabase/supabase.js', 'vendor/supabase/LICENSE', 'vendor/lucide/LICENSE',
     'assets/haedo-type.css', 'vendor/pretendard/PretendardVariable.woff2', 'vendor/pretendard/LICENSE.txt',
+    'assets/haedo-motion.js', 'assets/haedo-motion.css',
     'icon.svg', 'icon-maskable.svg', 'manifest.webmanifest', 'sw.js',
     'supabase/migrations/20261003085426_life_sync_workspaces.sql',
     'supabase/migrations/20261006010000_life_compositions.sql', 'supabase/migrations/20261006020000_life_writing_drafts.sql']) {
