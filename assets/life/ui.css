@@ -1,16 +1,17 @@
+@import url("../haedo-type.css");
 /* Shared production material UI. Content-first tokens from the approved preview. */
 :root {
   color-scheme: light;
-  --paper: #fff; --paper-2: #f5f5f6; --ink: #18181b; --ink-soft: #66666f;
-  --line: #ececee; --field: #fff; --field-line: #8b8b95;
-  --color-primary: #18181b; --color-error: #a3243d; --soft: #f0f0f2;
-  --canvas: var(--haedo-canvas, #f7f7f8); --mint: #f5f5f6; --mint-ink: #44444b;
-  --sky: #f3f4f7; --sky-ink: #414858; --error-soft: #fff2f4;
+  --paper: #fff; --paper-2: #f4f7f5; --ink: #182522; --ink-soft: #5d6b65;
+  --line: #e3e9e6; --field: #fff; --field-line: #86968d;
+  --color-primary: #145b50; --color-error: #a3243d; --soft: #eaf1ed;
+  --canvas: var(--haedo-canvas, #f4f6f5); --mint: #f4f7f5; --mint-ink: #425c50;
+  --sky: #f2f6f5; --sky-ink: #36594e; --error-soft: #fff2f4;
   --control-radius: 12px; --surface-radius: 16px; --motion-quick: 150ms;
-  --life-font: "Apple SD Gothic Neo", "Noto Sans CJK KR", "Malgun Gothic", sans-serif;
+  --life-font: var(--haedo-font);
 }
 * { box-sizing: border-box; }
-html { background: var(--canvas); color: var(--ink); scroll-behavior: smooth; scrollbar-color: #a29baa var(--canvas); }
+html { background: var(--canvas); color: var(--ink); scroll-behavior: smooth; scrollbar-color: #a2afa7 var(--canvas); }
 body { margin: 0; background: var(--paper); font: 16px/1.7 var(--life-font); }
 button,input,textarea,select { font: inherit; color: inherit; }
 button,a,input,textarea,select,summary { -webkit-tap-highlight-color: transparent; }
