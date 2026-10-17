@@ -3,7 +3,7 @@
 내 생각과 일상을 글로 쓰고, 기록과 취향을 모으는 개인 블로그.
 메인은 실제 프로필·짧은 글쓰기·사진과 본문이 이어지는 SNS형 피드를 보여주고, 기존 메모·연표·목표·습관은 자료실과 도구에서 이어 쓴다. 빌드 없이 정적 호스팅에서 실행한다.
 
-[SNS형 UX·UI 설계와 검수](docs/design-review/sns-blog-experience.md) · [블로그 중심 방향과 공개 후속](docs/life-tools-design/blog-platform-direction.md) · [메인 구현·검수](docs/design-review/blog-platform-home.md). 새 글·사진의 브라우저 비공개 보관과 기존 선택 내용의 공개 사본은 다른 범위다.
+[사용 흐름 중심 개편·검수](docs/design-review/blog-user-journeys.md) · [SNS형 UX·UI 설계와 검수](docs/design-review/sns-blog-experience.md) · [블로그 중심 방향과 공개 후속](docs/life-tools-design/blog-platform-direction.md) · [메인 구현·검수](docs/design-review/blog-platform-home.md). 새 글·사진의 브라우저 비공개 보관과 기존 선택 내용의 공개 사본은 다른 범위다.
 
 [배포 사이트](https://wonchance-art.github.io/life-haedo/) · 로컬 변경은 배포 전까지 사이트에 반영되지 않는다.
 

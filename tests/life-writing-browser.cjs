@@ -25,9 +25,9 @@ async function records(page){
  if(await page.locator('.life-reader').isVisible()){
   await page.locator('.life-reader-tools > button').first().click();await settle(page);
  }
- const back=page.getByRole('button',{name:'기록으로 돌아가기',exact:true});
+ const back=page.getByRole('button',{name:'자료실로 돌아가기',exact:true});
  if(await back.isVisible())await back.click();
- const heading=page.getByRole('button',{name:'기록 목록',exact:true});
+ const heading=page.getByRole('button',{name:'자료실',exact:true});
  if(await heading.isVisible())await heading.click();
  await settle(page);await page.locator('#lifeSearch').waitFor();
 }

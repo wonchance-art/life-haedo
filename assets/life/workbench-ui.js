@@ -4,7 +4,7 @@
 
   const life = global.HaedoLife = global.HaedoLife || {};
   const ORIGINS = { apple_notes: 'Apple 메모', obsidian: 'Obsidian', naver_blog: '네이버 블로그', instagram: 'Instagram', other: '기타' };
-  const MODES = { activities: '묶음', page: '내 페이지', discover: '다시 찾기', related: '관련 기록', reflection: '회고', books: '책 만들기', 'workbench-backup': '자료·구성 백업', 'public-pages': '공개한 페이지' };
+  const MODES = { activities: '묶음', page: '선택 자료 페이지', discover: '다시 찾기', related: '관련 기록', reflection: '회고', books: '책 만들기', 'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
   const copy = value => JSON.parse(JSON.stringify(value));
   function el(tag, text, className) {
     const element = document.createElement(tag);
@@ -16,6 +16,7 @@
   const profileInitials = name => !name || name === '내 블로그' ? '나' : Array.from(name.replace(/\s+/g, '')).slice(0, 2).join('');
 
   function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored, onLocalSaved = () => {},
+    onBlogReturn = () => {}, onBlogModeChange = () => {},
     onSelectionUsed = () => {}, onSelectionCancel = () => {}, onArrange = () => {}, onWorkbenchNavigate = () => {}, onChapterImport = () => {},
     shareRemoteFactory = () => life.ShareRemote?.createOwner({ auth: global.HaedoAuth }),
     sharePublicUrl = publicId => { const url = new URL('share.html', global.location.href); url.searchParams.set('id', publicId); return url.href; },
@@ -40,6 +41,7 @@
       if (!visible || mode !== 'page' || preview || incoming || current?.share?.open || !bodyNode?.isConnected || !bodyNode.querySelector('.wb-page-entries')) return;
       current.pageEditorView = { revision: current.baseRevision,
         openEntries: [...bodyNode.querySelectorAll('.wb-page-entry-edit[open]')].map(node => node.closest('[data-entry-id]').dataset.entryId),
+        compatibilityOpen: !!bodyNode.querySelector('.wb-page-compatibility')?.open,
         settingsOpen: !!bodyNode.querySelector('.wb-page-settings')?.open, addOpen: !!bodyNode.querySelector('.wb-page-add')?.open,
         fields: [...bodyNode.querySelectorAll('[data-page-field]')].map(input => ({ key: input.dataset.pageField,
           start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection, top: input.scrollTop, left: input.scrollLeft })) };
@@ -48,7 +50,7 @@
       const view = session.pageEditorView;
       if (!view || view.revision !== session.baseRevision || preview) return false;
       bodyNode.querySelectorAll('.wb-page-entry-edit').forEach(node => { node.open = view.openEntries.includes(node.closest('[data-entry-id]').dataset.entryId); });
-      for (const [selector, open] of [['.wb-page-settings', view.settingsOpen], ['.wb-page-add', view.addOpen]]) {
+      for (const [selector, open] of [['.wb-page-settings', view.settingsOpen], ['.wb-page-add', view.addOpen], ['.wb-page-compatibility', view.compatibilityOpen]]) {
         const node = bodyNode.querySelector(selector); if (node) node.open = open;
       }
       const inputs = [...bodyNode.querySelectorAll('[data-page-field]')];
@@ -1016,11 +1018,41 @@
       sourceActions.append(open); section.append(sourceActions);
       return section;
     }
+    function notifyPostMode(session, kind, context) {
+      const view = session.postEditorView;
+      if (!view || !showing(view.token, session) || !view.hosts[kind]?.isConnected || context.mode === 'detached') return;
+      view.modes[kind] = context.mode;
+      if (session.blogContext) {
+        if (session.blogKind !== kind) return;
+      } else if (['edit', 'read'].includes(context.mode)) {
+        view.active = kind;
+      } else if (view.active && view.active !== kind && ['edit', 'read'].includes(view.modes[view.active])) {
+        return;
+      } else view.active = null;
+      surface.dataset.postEditor = kind;
+      onBlogModeChange({ ...context, kind });
+    }
+    function renderBlogProfile(session) {
+      const page = session.state.page;
+      const form = el('section', null, 'wb-blog-profile-form'); form.id = 'wbProfileSettings';
+      form.setAttribute('aria-label', '프로필 편집');
+      const title = field('블로그 이름', page.title === '내 페이지' || page.title === MODES.page ? '' : page.title, { id: 'wbPageTitle', change: value => { page.title = value; } });
+      title.input.placeholder = '내 블로그';
+      const intro = field('소개', page.intro, { id: 'wbPageIntro', multiline: true, max: limits.text, change: value => { page.intro = value; } });
+      const done = action('저장하고 돌아가기', async () => { await flush(); if (workspaceIs(session)) await onBlogReturn({ kind: 'profile', committed: true }); }, 'life-primary');
+      done.id = 'wbProfileDone';
+      form.append(title.wrapper, intro.wrapper, toggle('소개 표시', page.showIntro, value => { page.showIntro = value; mark(session); }, { id: 'wbShowIntro' }), notice('이름과 소개는 내 블로그와 선택 자료 페이지에서 사용합니다. 기존 공개 사본은 별도로 갱신해야 바뀝니다.'), done);
+      bodyNode.append(form);
+      if (saveControl) saveControl.hidden = true;
+      onBlogModeChange({ mode: 'profile', kind: 'profile' });
+      title.input.focus({ preventScroll: true });
+    }
     function renderPage() {
       const session = current, page = session.state.page;
       const token = generation, beginPost = session.pageCompose === true;
       const showProfile = session.pageProfile === true, editProfile = session.pageProfileEdit === true;
       session.pageCompose = session.pageProfile = session.pageProfileEdit = false;
+      if (session.blogContext && (editProfile || session.blogProfile)) { renderBlogProfile(session); return; }
       if (session.nineOpen) {
         const back = action('내 페이지로 돌아가기', async () => {
           const token = generation; await session.nine.flush(); if (!showing(token, session)) return;
@@ -1076,11 +1108,26 @@
       profileEdit.id = 'wbProfileEdit'; profileEdit.classList.add('wb-profile-edit-action'); profileEdit.setAttribute('aria-controls', 'wbProfileSettings');
       lead.append(avatar, identity, profileEdit);
       const refreshLead = () => {
-        const name = page.title.trim() && page.title !== MODES.page ? page.title : '내 블로그';
+        const name = page.title.trim() && !['내 페이지', MODES.page].includes(page.title) ? page.title : '내 블로그';
         title.textContent = name; avatar.textContent = profileInitials(name);
         intro.textContent = page.intro; intro.hidden = !page.showIntro || !page.intro;
       };
       refreshLead(); bodyNode.append(lead, actions);
+      const blogTask = !!session.blogContext;
+      const photoTask = blogTask && session.blogKind === 'photo';
+      const compatibility = details('기존 글·초안·사진 파일', { open: !!session.pageCompatibilityOpen || !!session.pageDraftId || !!session.searchTarget?.postId || !!session.searchTarget?.photoPostId || beginPost }); compatibility.classList.add('wb-page-compatibility');
+      compatibility.addEventListener('toggle', () => {
+        if (!workspaceIs(session) || !compatibility.isConnected) return;
+        session.pageCompatibilityOpen = compatibility.open;
+        const view = session.postEditorView, kind = view?.active;
+        if (kind) notifyPostMode(session, kind, { mode: view.modes[kind] });
+      });
+      const taskHost = blogTask ? bodyNode : compatibility;
+      if (blogTask) {
+        lead.hidden = true; actions.hidden = true;
+        if (saveControl) saveControl.hidden = true;
+        surface.querySelector('.wb-storage-line').hidden = true;
+      } else bodyNode.append(compatibility);
       const postFeed = el('section', null, 'pp-feed photo-feed wb-post-feed');
       postFeed.setAttribute('aria-label', '내 글 피드');
       let plainRows = [], photoRows = [];
@@ -1096,13 +1143,21 @@
         });
         if (keepFocus && focus.isConnected && document.activeElement !== focus) focus.focus({ preventScroll: true });
       };
-      const photoHost = el('section'); bodyNode.append(photoHost);
-      session.photoPosts ||= life.PhotoPostUI.create({ storage, workspaceId: session.workspaceId, isCurrent: () => workspaceIs(session), onDirty: () => updateStatus(session), onSaved: onLocalSaved, beforeOpen: async () => { await session.composer?.flush(); } });
-      const photoMount = session.photoPosts.mount(photoHost, { postId: session.searchTarget?.photoPostId || null, reset: beginPost || showProfile || !!session.searchTarget && !session.searchTarget.photoPostId,
+      const photoHost = el('section'); taskHost.append(photoHost); photoHost.hidden = blogTask && !photoTask;
+      const composerHost = el('section'); taskHost.insertBefore(composerHost, photoHost); composerHost.hidden = photoTask;
+      session.postEditorView = { token, hosts: { photo: photoHost, legacy: composerHost }, modes: {}, active: null };
+      session.photoPosts ||= life.PhotoPostUI.create({ storage, workspaceId: session.workspaceId, isCurrent: () => workspaceIs(session), onDirty: () => updateStatus(session), onSaved: onLocalSaved,
+        onReturn: async context => { if (!session.blogContext) return false; await onBlogReturn({ ...context, kind: 'photo' }); return true; },
+        onCommitted: context => { if (session.blogContext) session.blogCommitted = { ...context, kind: 'photo' }; notifyPostMode(session, 'photo', { ...context, mode: 'read', committed: true }); },
+        onModeChange: context => notifyPostMode(session, 'photo', context),
+        beforeOpen: async () => { await session.composer?.flush(); } });
+      const photoMount = session.photoPosts.mount(photoHost, { standalone: blogTask, postId: session.searchTarget?.photoPostId || null, reset: beginPost || showProfile || !!session.searchTarget && !session.searchTarget.photoPostId,
         listHost: postFeed, onFeed: rows => { photoRows = rows; mergeFeed(); } }); viewCleanups.push(() => session.photoPosts.detach());
-      const composerHost = el('section'); bodyNode.insertBefore(composerHost, photoHost);
       session.composer ||= life.PageComposer.create({ storage, workspaceId: session.workspaceId,
         onNewPost: () => session.photoPosts.begin(),
+        onReturn: context => session.blogContext && onBlogReturn({ ...context, kind: 'legacy' }),
+        onCommitted: context => { if (session.blogContext) session.blogCommitted = { ...context, kind: 'legacy' }; notifyPostMode(session, 'legacy', { ...context, mode: 'read', committed: true }); },
+        onModeChange: context => notifyPostMode(session, 'legacy', context),
         onFeed: rows => session.pageFeed?.plain(rows), getFeedHost: () => session.pageFeed?.host,
         getPosts: () => session.state.page.posts || [], isCurrent: () => workspaceIs(session),
         onDirty: () => {
@@ -1129,7 +1184,7 @@
             report(error, session);
             if (error.code === 'workbench_conflict' && showing(token, session) && session.edit === session.stored) {
               errorNode.append(action('페이지 다시 읽기', async () => {
-                await session.composer.flush(); session.state = null; await render('page');
+                await session.composer.flush(); const context = session.composer.context(); session.state = null; await render('page', { blogContext: session.blogContext, pageDraftId: context.draftId, searchTarget: context.postId ? { postId: context.postId } : null });
               }));
             }
             throw error;
@@ -1139,12 +1194,13 @@
       session.pageFeed = { host: postFeed, plain: rows => { plainRows = rows; mergeFeed(); } };
       const draftId = session.pageDraftId; session.pageDraftId = null;
       const postId = session.searchTarget?.postId; session.searchTarget = null;
-      const composerMount = session.composer.mount(composerHost, { draftId, postId }); viewCleanups.push(() => session.composer.detach());
+      const composerMount = session.composer.mount(composerHost, { draftId, postId, standalone: blogTask && !photoTask }); viewCleanups.push(() => session.composer.detach());
       if (beginPost) Promise.all([photoMount, composerMount]).then(() => {
         if (showing(token, session) && photoHost.isConnected) return session.photoPosts.begin();
       }).catch(error => { if (showing(token, session) && photoHost.isConnected) report(error, session); });
-      bodyNode.append(postFeed);
+      if (!blogTask) compatibility.append(postFeed);
 
+      if (blogTask) return;
       const pageSettings = details('제목·소개·표시 설정'); pageSettings.classList.add('wb-page-settings'); pageSettings.id = 'wbProfileSettings';
       const pageField = (control, key) => {
         control.input.dataset.pageField = key;
@@ -1276,7 +1332,7 @@
     }
     function renderVisitor(page) {
       const visitor = el('section', null, 'wb-visitor'); visitor.id = 'wbVisitor'; visitor.setAttribute('aria-label', '비공개 방문자 미리보기');
-      const name = page.title.trim() && page.title !== MODES.page ? page.title : '내 블로그';
+      const name = page.title.trim() && !['내 페이지', MODES.page].includes(page.title) ? page.title : '내 블로그';
       const profile = el('header', null, 'wb-profile wb-visitor-profile');
       const avatar = el('span', profileInitials(name), 'wb-profile-avatar'); avatar.setAttribute('aria-hidden', 'true');
       const identity = el('div', null, 'wb-profile-identity'); identity.append(el('h3', name, 'wb-visitor-title wb-profile-title'));
@@ -2757,6 +2813,10 @@
         view.contextError = valid ? '' : '기준 기록의 작업공간이나 버전을 확인하지 못했습니다. 현재 공간에서 기록을 다시 골라 주세요.';
       }
       if (mode === 'page') {
+        current.blogContext = options.blogContext === true;
+        current.blogProfile = options.blogContext === true && options.pageProfileEdit === true;
+        current.blogKind = options.pageCompose || options.searchTarget?.photoPostId ? 'photo' : 'legacy';
+        current.blogCommitted = null;
         current.searchTarget = options.searchTarget || null; current.nineTarget = options.nineTarget || null;
         current.pageProfile = options.pageProfile === true || options.pageProfileEdit === true;
         current.pageProfileEdit = options.pageProfileEdit === true;

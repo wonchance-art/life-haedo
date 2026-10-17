@@ -78,6 +78,10 @@
 }
 .photo-command-state { flex: 1; min-width: 0; }
 .photo-command-scope { display: block; color: var(--ink, #18181b); font-size: 13px; font-weight: 600; line-height: 1.5; }
+.photo-editing-label { display: block; font-size: 12px; color: var(--ink-soft, #66666f); line-height: 1.6; }
+.photo-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; }
+.photo-recovery-actions[hidden] { display: none; }
+.photo-recovery-actions > button { font-size: 13px; padding: 8px 12px; }
 .photo-commandbar .photo-status {
   margin: 2px 0 0;
   font-size: 12px;
@@ -145,6 +149,8 @@
 .photo-more-menu > button:hover { background: var(--soft, #f7f7f8); }
 .photo-read-actions { max-width: 680px; margin-inline: auto; gap: 8px; padding-block: 8px; flex-wrap: nowrap; }
 .photo-read-actions > :nth-child(2) { margin-right: auto; }
+.photo-read-actions.photo-read-standalone > :first-child { margin-right: auto; }
+.photo-read-actions.photo-read-standalone > :nth-child(2) { margin-right: 0; }
 .photo-read-actions .photo-more-menu { max-width: calc(100vw - 40px); }
 .photo-entry-excerpt {
   white-space: pre-wrap;
@@ -233,18 +239,18 @@
 #photoTitle {
   width: 100%;
   font: inherit;
-  font-size: 34px;
+  font-size: 30px;
   font-weight: 650;
   color: var(--ink);
   border: 0;
   border-radius: 0;
-  padding: 32px 0 24px;
+  padding: 24px 0 18px;
   background: transparent;
-  min-height: 96px;
+  min-height: 80px;
   letter-spacing: -.035em;
   line-height: 1.45;
 }
-#photoTitle::placeholder { color: var(--ink-soft, #66666f); }
+#photoTitle::placeholder { color: var(--ink-soft, #66666f); font-size: 17px; font-weight: 400; letter-spacing: 0; }
 #photoTitle:focus-visible { outline-offset: 5px; border-radius: 2px; }
 .photo-posts .photo-toolbar {
   display: flex;
@@ -482,6 +488,7 @@
   margin: 0 0 16px;
 }
 .photo-article .photo-read-meta { margin: 0 0 36px; font-size: 13px; line-height: 1.7; color: var(--ink-soft, #66666f); }
+.photo-read-return { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line, #ececee); }
 .photo-line {
   white-space: pre-wrap;
   margin-block: 0 18px;
@@ -545,7 +552,7 @@
   .photo-commandbar > .photo-save { padding-inline: 16px; }
   .photo-command-scope { font-size: 12px; }
   .photo-commandbar .photo-status { font-size: 11px; }
-  #photoTitle { font-size: 28px; min-height: 88px; padding-block: 26px 20px; }
+  #photoTitle { font-size: 26px; min-height: 72px; padding-block: 20px 16px; }
   .photo-article { margin-top: 28px; }
   .photo-article .photo-read-heading { font-size: 30px; }
   .photo-article .photo-read-meta { margin-bottom: 28px; }

@@ -360,7 +360,7 @@
   .life-workbench[data-mode=books] .wb-reading-chapter-heading h4 { font-size: 26px; min-width: 9ch; }
   .life-workbench[data-mode=books] .wb-book-actions { top: 0; }
   .life-workbench[data-mode=books] .wb-reading-chapter-heading { gap: 8px; }
-  body:has(.life-workbench:is([data-book-scene=edit],[data-book-scene=read])) > .haedo-nav { display: none; }
+  body:has(.life-workbench[data-book-scene=edit]) > .haedo-nav { display: none; }
 }
 .life-workbench[data-mode=books] > .wb-error { position: sticky; top: 64px; z-index: 30; max-height: 40dvh; overflow: auto; }
 
@@ -475,3 +475,12 @@
   .wb-visitor-profile { grid-template-columns:56px minmax(0,1fr); }
   .wb-visitor-profile .wb-profile-avatar { width:56px; height:56px; font-size:23px; }
 }
+
+/* One representative blog list lives at Home; page tools focus on their task. */
+.wb-blog-profile-form { display:grid; gap:24px; max-width:680px; padding-bottom:32px; }
+.wb-blog-profile-form .life-field { margin:0; }
+.wb-blog-profile-form .life-note { margin:0; }
+.wb-blog-profile-form > .life-primary { justify-self:start; }
+.wb-page-compatibility { margin-top:28px; border-top:1px solid var(--line); }
+.wb-page-compatibility > summary { min-height:52px; padding-block:14px; }
+.wb-page-compatibility[open] { padding-bottom:24px; border-bottom:1px solid var(--line); }

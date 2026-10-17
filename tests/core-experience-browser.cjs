@@ -72,7 +72,7 @@ function experienceMetrics({ scene, title }) {
   return { firstContentY: contents[0] ? +(contents[0].getBoundingClientRect().top + scrollY).toFixed(2) : null, visibleTitleOccurrences: duplicates.length, visibleComment: !!entry && [...entry.querySelectorAll('.wb-comment-body')].some(visible), relatedSeedVersionId: document.querySelector('#wbDiscoverySeed')?.dataset.versionId || null, openDetails: [...document.querySelectorAll('details[open]')].filter(visible).map(el => el.querySelector('summary')?.textContent) };
 }
 async function importThroughUI(page, sample) {
-  const back = page.getByRole('button', { name: '기록으로 돌아가기', exact: true });
+  const back = page.getByRole('button', { name: '자료실로 돌아가기', exact: true });
   if (await back.isVisible()) { await back.click(); await settle(page); }
   await page.getByRole('button', { name: '가져오기', exact: true }).click();
   await page.locator('#lifeImportOrigin').selectOption(sample.origin); await page.locator('#lifeImportTitle').fill(sample.title);
@@ -109,7 +109,7 @@ async function main() {
     if (!baseline) await check('UI import to related reading, exact pair group, page editing and reload', async ({ page }) => {
       await go(page, 'records'); const refs = {};
       for (const sample of samples) refs[sample.key] = await importThroughUI(page, sample);
-      await page.getByRole('button', { name: '기록으로 돌아가기', exact: true }).click(); await page.locator('#lifeSearch').fill('관찰의 속도');
+      await page.getByRole('button', { name: '자료실로 돌아가기', exact: true }).click(); await page.locator('#lifeSearch').fill('관찰의 속도');
       await page.locator('.life-source-open[data-version-id="' + refs.walk.versionId + '"]').click(); await page.locator('#lifeSourceText').waitFor(); assert.equal(await page.locator('#lifeSourceText').textContent(), samples[0].text);
       const original = (await current(page)).bundle;
       await page.evaluate(() => { window.__coreSeedChoices = 0; document.addEventListener('click', event => { if (event.target.closest('.wb-discovery-select')) window.__coreSeedChoices++; }); });
@@ -121,7 +121,7 @@ async function main() {
       await page.locator('.wb-discovery-result[data-version-id="' + refs.photo.versionId + '"] .wb-discovery-arrange').click(); await page.locator('#wbIncomingSelection').waitFor();
       assert.deepEqual(await page.locator('#wbIncomingSelection input[data-version-id]:checked').evaluateAll(nodes => nodes.map(node => node.dataset.versionId)), [refs.walk.versionId, refs.photo.versionId]);
       await page.locator('#wbIncomingTitle').fill(samples[0].title); await page.locator('#wbIncomingApply').click(); let state = await saved(page); assert.equal(state.workbench.groups.length, 1); assert.deepEqual(state.bundle, original);
-      await page.locator('article[data-group-id]').getByRole('button', { name: '이 묶음을 내 페이지에 추가', exact: true }).click(); await saved(page); await page.getByRole('button', { name: '내 페이지', exact: true }).click(); await page.locator('.wb-page-entry').waitFor();
+      await page.locator('article[data-group-id]').getByRole('button', { name: '이 묶음을 내 페이지에 추가', exact: true }).click(); await saved(page); await page.getByRole('button', { name: '선택 자료 페이지', exact: true }).click(); await page.locator('.wb-page-entry').waitFor();
       const entry = page.locator('.wb-page-entry').first(), entryId = await entry.getAttribute('data-entry-id');
       await verifyPageBody(entry.locator('.wb-page-content [data-version-id="' + refs.walk.versionId + '"]'), samples[0].text, { folded: true });
       await entry.locator('.wb-page-entry-edit > summary').click(); const note = entry.getByLabel('내 코멘트', { exact: true });

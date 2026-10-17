@@ -20,6 +20,9 @@
     onNewPost = null,
     onFeed = null,
     getFeedHost = null,
+    onReturn = null,
+    onModeChange = () => {},
+    onCommitted = () => {},
   }) {
     let state = null,
       basePosts = [],
@@ -30,6 +33,9 @@
       timer = null,
       host = null,
       active = null,
+      standalone = false,
+      readId = null,
+      committedId = null,
       dialogClose = null,
       epoch = 0,
       busy = false,
@@ -359,6 +365,14 @@
       render();
       host?.querySelector("#ppBody")?.focus();
     }
+    async function returnToPosts() {
+      await flush();
+      if (onReturn && standalone) {
+        await onReturn({ id: committedId || readId || active, committed: !!committedId });
+        return;
+      }
+      active = null; readId = null; render();
+    }
     function render() {
       if (!host || !state || !valid()) return;
       dialogClose?.();
@@ -366,15 +380,18 @@
       media.clear();
       host.replaceChildren();
       host.className = "pp-workspace";
+      host.dataset.standalone = String(standalone);
+      onModeChange({ mode: active ? "edit" : readId ? "read" : "list", id: active || readId });
       const bar = node("div", null, "pp-toolbar");
-      bar.append(button("글쓰기", onNewPost || (() => begin()), "edit"));
-      if (onNewPost) {
+      if (standalone) bar.append(button("내 글로 돌아가기", returnToPosts, "back"));
+      else bar.append(button("글쓰기", onNewPost || (() => begin()), "edit"));
+      if (onNewPost && !standalone) {
         const legacy = node("details", null, "pp-legacy-writing");
         legacy.append(node("summary", "기존 글·첨부"), button("대상 첨부 글쓰기", () => begin()));
         bar.append(legacy);
       }
       const drafts = state.posts.filter((p) => p.id !== active).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-      if (drafts.length) {
+      if (drafts.length && !standalone) {
         const list = node("details", null, "pp-drafts");
         list.append(node("summary", "초안 " + drafts.length));
         for (const d of drafts) {
@@ -399,7 +416,7 @@
         importDrafts(input.files[0]).catch(message).finally(() => { input.value = ''; }),
       );
       tools.append(input);
-      bar.append(tools);
+      if (!standalone || active) bar.append(tools);
       if (
         getPosts().some((p) =>
           p.attachments.some((a) => life.PageMedia.describe(a)),
@@ -419,6 +436,7 @@
       const feed = node("section", null, "pp-feed");
       feed.setAttribute("aria-label", "내 글 피드");
       const posts = getPosts()
+        .filter(p => !standalone || !active && p.id === readId)
         .slice()
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       for (const p of posts) {
@@ -438,7 +456,7 @@
         article.dataset.postDate = p.updatedAt;
         feed.append(article);
       }
-      if (!posts.length && !d)
+      if (!posts.length && !d && !standalone)
         feed.append(
           node(
             "p",
@@ -446,8 +464,12 @@
             "pp-empty",
           ),
         );
-      if (onFeed) onFeed([...feed.children]);
+      if (onFeed && !standalone) onFeed([...feed.children]);
       else host.append(feed);
+      if (standalone && readId && posts.length) {
+        host.querySelector('.pp-read-more[aria-expanded="false"]')?.click();
+        host.append(button("내 글로 돌아가기", returnToPosts));
+      }
     }
     async function collectAttachment(value) {
       const token = epoch;
@@ -717,9 +739,12 @@
           adopt(result.drafts);
           stored = edit;
           active = null;
+          if (standalone) { readId = result.id; committedId = result.id; }
           render();
+          onCommitted({ id: result.id, previousId: d.replaces || null, status: "saved" });
+          if (standalone) message("비공개 글을 저장했어요.");
           if (!valid() || !host) return;
-          const target = [...(getFeedHost?.() || host).querySelectorAll("[data-post-id]")].find(
+          const target = [...(standalone ? host : getFeedHost?.() || host).querySelectorAll("[data-post-id]")].find(
             (el) => el.dataset.postId === result.id,
           );
           target?.focus({ preventScroll: true });
@@ -734,15 +759,13 @@
           }
         }
       }
-      const save = button("저장", () => finish());
+      const save = button(standalone ? "글 저장" : "저장", () => finish());
       save.classList.add("pp-save");
       bottom.append(
         add,
         scope,
         button("초안 닫기", async () => {
-          await flush();
-          active = null;
-          render();
+          await returnToPosts();
         }),
         save,
       );
@@ -788,8 +811,9 @@
       host.append(form);
       update();
     }
-    async function mount(target, { draftId = null, postId = null } = {}) {
-      host = target;
+    async function mount(target, { draftId = null, postId = null, standalone: isolated = false } = {}) {
+      host = target; standalone = isolated; readId = isolated ? postId : null; committedId = null;
+      if (isolated && !draftId) active = null;
       const token = ++epoch;
       host.append(node("p", "초안을 불러오는 중…", "life-help"));
       try {
@@ -802,13 +826,13 @@
         } else await load();
         if (token === epoch && valid()) { render();
           if (postId) {
-            const post = [...(getFeedHost?.() || host).querySelectorAll('[data-post-id]')].find(el => el.dataset.postId === postId);
+            const post = [...(standalone ? host : getFeedHost?.() || host).querySelectorAll('[data-post-id]')].find(el => el.dataset.postId === postId);
             if (!post) throw new Error('선택한 글이 없습니다. 검색 결과를 다시 불러와 주세요.');
             post.querySelector('.pp-read-more[aria-expanded="false"]')?.click(); post.focus({ preventScroll: true }); post.scrollIntoView({ block: 'start' });
           } if (draftId) { const input = host?.querySelector('#ppBody'); input?.focus(); input?.setSelectionRange(0, 0); if (input) input.scrollTop = 0; } }
       } catch (e) {
         if (token === epoch) {
-          host.replaceChildren(button("다시 불러오기", () => mount(target, { draftId, postId })));
+          host.replaceChildren(button("다시 불러오기", () => mount(target, { draftId, postId, standalone: isolated })));
           const p = node("p", e.message, "pp-status");
           p.setAttribute("role", "alert");
           host.append(p);
@@ -816,6 +840,7 @@
       }
     }
     function detach() {
+      onModeChange({ mode: "detached", id: active || readId });
       media.reset();
       epoch++;
       dialogClose?.();
@@ -826,6 +851,7 @@
     }
     return {
       mount,
+      context: () => ({ draftId: active, postId: readId, standalone }),
       detach,
       flush,
       hasUnappliedAttachment: () => !!attachmentReview,

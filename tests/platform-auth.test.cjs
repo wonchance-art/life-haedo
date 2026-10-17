@@ -64,6 +64,15 @@ test('private routes include life and remove unknown query values and external r
   assert.equal(validConfig({ ...config, key: 'sb_secret_hidden' }, 'localhost'), false);
 });
 
+test('first writing intent survives login only as the exact local home flag', () => {
+  assert.equal(safeNext('index.html?compose=1&code=discarded&next=https://evil.invalid#token'), 'index.html?compose=1');
+  assert.equal(safeNext('index.html?compose=other'), 'index.html');
+  assert.equal(safeNext('index.html?compose=1%26access_token%3Dhidden'), 'index.html');
+  assert.equal(safeNext('life.html?compose=1'), 'life.html');
+  assert.equal(safeNext('timeline.html?compose=1'), 'timeline.html');
+  assert.equal(safeNext('https://evil.invalid/index.html?compose=1'), 'index.html');
+});
+
 test('unified home return accepts only known sections and material views', () => {
   assert.equal(safeNext(), 'index.html');
   assert.equal(safeNext('index.html?section=home&code=discarded#token'), 'index.html?section=home');

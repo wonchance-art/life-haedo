@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-17T14:37:14Z",
+  "generatedAt": "2026-10-17T16:32:00Z",
   "title": "Design System: 해도",
   "extensions": {
     "colorMeta": {
@@ -148,10 +148,61 @@
         "assets/life/workbench.css",
         "assets/life/collection.css",
         "assets/life/share-view.css",
-        "assets/platform.css"
+        "assets/platform.css",
+        "assets/haedo-navigation.js",
+        "assets/life/home.js",
+        "assets/life/ui.js",
+        "assets/life/workbench-ui.js",
+        "assets/life/photo-post-ui.js",
+        "assets/life/page-composer.js"
       ],
       "engine": "설치되지 않은 context·detect·doctor 엔진은 실행하지 않았다.",
-      "scope": "사용자가 승인한 SNS 시각 정체 교체의 실제 토큰·컴포넌트 문서화. 공개·기기 간 저장 범위는 PRODUCT.md·AGENTS.md를 따른다."
+      "scope": "2026-10-18 KST 승인한 사용 흐름 중심 SNS 블로그 개편의 실제 토큰·컴포넌트·행동 문서화. 기존 색·간격 primitive와 저장·공개·계정 경계를 유지한다."
+    },
+    "behaviorContracts": {
+      "navigation": {
+        "labels": [
+          "홈",
+          "자료실",
+          "도구",
+          "설정"
+        ],
+        "internalIds": [
+          "home",
+          "records",
+          "tools",
+          "manage"
+        ],
+        "mobileWriting": "760px 이하 작성 중 하단 탐색 숨김; 닫으면 복원; 작성기 닫기 한 조작 유지"
+      },
+      "home": {
+        "canonicalList": true,
+        "tabs": [
+          "글",
+          "초안",
+          "보관함"
+        ],
+        "search": "내 글 검색; 현재 탭의 전체 읽기 결과; 조합 중 갱신 보류; 부분 실패는 빈 결과와 구별",
+        "pageSize": 20,
+        "empty": "첫 글 쓰기 하나; 중복 작성 행 숨김",
+        "drafts": "새 글 초안과 기존 글 수정 중 구별; 실제 최신 초안 이어쓰기"
+      },
+      "writer": {
+        "entryFocus": "본문",
+        "title": "선택 입력; 30px/1.45/650, 600px 이하 26px; placeholder17px",
+        "draftStates": [
+          "초안 보관 중…",
+          "초안 보관됨"
+        ],
+        "commit": "글 저장 후 읽기 화면",
+        "failure": "입력 유지; 오류 가까운 다시 저장·백업·새 사본 경로"
+      },
+      "return": {
+        "reading": "탭·검색·표시 범위·원래 항목 위치·초점 보존",
+        "saved": "실제 저장된 항목 우선; 검색에 가려지면 이유와 명시적 해제 제공"
+      },
+      "profile": "이름·소개·소개 표시 편집만 제공; 대표 글 목록은 홈",
+      "preservation": "사진/리치 글, 기존 첨부 글, 원천 글과 각 초안을 표시 어댑터로 합침; 자동 변환·공개·동기화 없음"
     }
   },
   "components": [
@@ -183,8 +234,8 @@
       "name": "라벨 탐색",
       "kind": "nav",
       "refersTo": "navigation",
-      "description": "넓은 화면의 현재 위치. 모바일에서는 실제 앱의 하단 탐색 규칙을 따른다.",
-      "html": "<nav class=\"ds-nav\" aria-label=\"주 메뉴\"><a href=\"#home\" aria-current=\"page\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m3 10 9-7 9 7v10H3z\"/><path d=\"M9 20v-7h6v7\"/></svg><span>홈</span></a><a href=\"#records\"><span>기록</span></a><a href=\"#tools\"><span>도구</span></a><a href=\"#manage\"><span>관리</span></a></nav>",
+      "description": "홈·자료실·도구·설정의 현재 위치. 모바일 작성 중 감추고 닫으면 복원한다.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"주 메뉴\"><a href=\"#home\" aria-current=\"page\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m3 10 9-7 9 7v10H3z\"/><path d=\"M9 20v-7h6v7\"/></svg><span>홈</span></a><a href=\"#records\"><span>자료실</span></a><a href=\"#tools\"><span>도구</span></a><a href=\"#manage\"><span>설정</span></a></nav>",
       "css": ".ds-nav{display:flex;flex-direction:column;gap:8px;width:192px;font:550 16px/1.5 var(--haedo-font, \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif)}.ds-nav a{display:flex;align-items:center;gap:16px;min-height:52px;padding:12px 16px;border-radius:14px;color:var(--haedo-muted,#66666f);text-decoration:none}.ds-nav a[aria-current=page]{background:var(--haedo-selected,#f0f0f2);color:var(--haedo-ink,#18181b);font-weight:700}.ds-nav a:hover{background:var(--haedo-selected,#f0f0f2);color:var(--haedo-ink,#18181b)}.ds-nav a:active{transform:scale(.96)}.ds-nav a:focus-visible{outline:3px solid var(--haedo-focus,#3156d3);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-nav a{transform:none}}"
     },
     {
@@ -205,20 +256,34 @@
     {
       "name": "실제 제목 이니셜 프로필",
       "kind": "custom",
-      "description": "이름·소개는 실제 페이지 값. 아래 스니펫은 명시적 디자인 예시.",
+      "description": "기존 선택 자료 페이지의 호환 헤더. 기본 홈은 44px 이니셜·작은 이름을 쓰며 프로필 편집은 독립 폼이다.",
       "html": "<section class=\"ds-profile\" aria-label=\"디자인 예시 프로필\"><span class=\"ds-avatar\" aria-hidden=\"true\">예시</span><div><h2>예시 블로그</h2><p>읽고 걷고, 마음에 남은 것을 씁니다.</p></div></section>",
       "css": ".ds-profile{display:grid;grid-template-columns:72px minmax(0,1fr);gap:20px;padding:24px 0 28px;font-family:var(--haedo-font, \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif);color:var(--haedo-ink,#18181b)}.ds-avatar{display:grid;place-items:center;width:72px;height:72px;border-radius:50%;background:var(--haedo-selected,#f0f0f2);font-size:28px;font-weight:650;line-height:1}.ds-profile h2{margin:0;font-size:25px;font-weight:750;line-height:1.4;letter-spacing:-.025em}.ds-profile p{margin:10px 0 0;color:var(--haedo-muted,#66666f);font-size:15px;line-height:1.8;white-space:pre-wrap}"
+    },
+    {
+      "name": "내 글 상태 탭",
+      "kind": "custom",
+      "description": "홈 대표 목록의 글·초안·보관함. 선택선·aria-selected·키보드 이동으로 현재 상태를 표시한다.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\" aria-label=\"내 글 상태\"><button type=\"button\" role=\"tab\" aria-selected=\"true\" aria-controls=\"ds-posts\">글</button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\" aria-controls=\"ds-posts\">초안 2</button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\" aria-controls=\"ds-posts\">보관함</button></div><div id=\"ds-posts\" role=\"tabpanel\" aria-label=\"글\"></div>",
+      "css": ".ds-tabs{display:flex;border-bottom:1px solid var(--haedo-line,#ececee);font-family:var(--haedo-font,\"Apple SD Gothic Neo\",\"Noto Sans CJK KR\",\"Malgun Gothic\",sans-serif)}.ds-tabs button{position:relative;flex:1;min-height:52px;padding:12px 8px;border:0;border-radius:0;background:transparent;color:var(--haedo-muted,#66666f);font-family:inherit;font-size:14px;font-weight:550;line-height:1.6;cursor:pointer}.ds-tabs button[aria-selected=true]{color:var(--haedo-ink,#18181b);font-weight:700}.ds-tabs button[aria-selected=true]::after{position:absolute;bottom:-1px;left:20%;right:20%;height:2px;background:currentColor;content:\"\"}.ds-tabs button:hover{background:var(--haedo-canvas,#f7f7f8)}.ds-tabs button:focus-visible{outline:3px solid var(--haedo-focus,#3156d3);outline-offset:3px}"
+    },
+    {
+      "name": "이어 쓸 초안 행",
+      "kind": "custom",
+      "description": "새 글 초안·기존 글 수정 중을 구분하는 간결한 목록. 실제 첫 문장과 수정 시각을 보여준다.",
+      "html": "<article class=\"ds-draft\"><button type=\"button\"><span><small>새 글 초안 · 디자인 예시</small><strong>산책 중에 떠오른 생각을 이어 씁니다.</strong><small>10월 18일</small></span><b>이어쓰기</b></button></article>",
+      "css": ".ds-draft{border-bottom:1px solid var(--haedo-line,#ececee);font-family:var(--haedo-font,\"Apple SD Gothic Neo\",\"Noto Sans CJK KR\",\"Malgun Gothic\",sans-serif)}.ds-draft button{display:flex;align-items:center;justify-content:space-between;gap:20px;width:100%;min-height:104px;padding:20px 0;border:0;background:var(--haedo-paper,#fff);color:var(--haedo-ink,#18181b);text-align:left;cursor:pointer}.ds-draft button>span{display:flex;min-width:0;flex:1;flex-direction:column;gap:5px}.ds-draft strong{font-size:17px;font-weight:600;line-height:1.7;overflow-wrap:anywhere;word-break:keep-all}.ds-draft small{color:var(--haedo-muted,#66666f);font-size:12px;line-height:1.75}.ds-draft b{flex:none;font-size:13px;font-weight:600}.ds-draft button:hover{background:var(--haedo-canvas,#f7f7f8)}.ds-draft button:focus-visible{outline:3px solid var(--haedo-focus,#3156d3);outline-offset:3px}@media(max-width:760px){.ds-draft button{gap:12px;padding-block:18px}.ds-draft strong{font-size:16px}}"
     }
   ],
   "narrative": {
-    "northStar": "글과 사진이 먼저 보이는 개인 블로그",
-    "overview": "흰 읽기 면·차콜 본문·실제 글과 사진·짧은 작성 진입·작은 프로필을 사용한다. 개인 보관·현재 브라우저·선택 공개는 실제 상태대로 구분하며 이전 라벤더·보라 주행동·떠 있는 작은 탐색띠를 공통 체계로 재도입하지 않는다.",
+    "northStar": "쓰고 저장한 글을 다시 읽는 개인 블로그",
+    "overview": "흰 읽기 면·차콜 본문·실제 글과 사진의 시각 체계 위에 쓰기→초안 보관/명시 저장→읽기→출발 목록 복귀를 연결한다. 홈이 내 글의 대표 목록이며 선택 자료와 기존 공개 사본은 자료실·설정의 별도 과업으로 보존한다.",
     "keyCharacteristics": [
-      "실제 제목·본문·사진",
-      "라벨 있는 탐색과 작은 프로필",
-      "명확한 작성·비공개 저장",
-      "평평한 피드·가는 구분선",
-      "한글·접근성·복구 보존"
+      "홈 대표 목록과 글·초안·보관함",
+      "선택 제목·본문부터 쓰기",
+      "초안 보관과 명시 저장의 구별",
+      "탭·검색·정확 항목으로 복귀",
+      "한글·접근성·원본·실패 복구 보존"
     ],
     "rules": [
       {
