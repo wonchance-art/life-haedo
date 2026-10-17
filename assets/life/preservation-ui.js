@@ -185,6 +185,9 @@
     }
     async function prepare() {
       if (!postIds.size && !boardIds.size) throw new Error('파일에 담을 글이나 9칸 구성을 먼저 선택해 주세요.');
+      // A fresh review must never expose the previous candidate as ready while
+      // its source snapshot and exact dependencies are still being checked.
+      clearReview();
       const result = await service.prepare({ postIds: [...postIds], boardIds: [...boardIds], ...(scope ? { unownedWorkspaceId: scope } : {}) });
       if (!valid()) return; showReview(result, 'export'); announce('포함할 자료를 확인했습니다. 내용을 검토한 뒤 ZIP을 받아 주세요.');
     }
@@ -216,7 +219,16 @@
       status = node('p', '', 'life-meta'); status.id = 'preservationStatus'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
       error = node('p', '', 'life-error'); error.id = 'preservationError'; error.setAttribute('role', 'alert'); error.hidden = true;
       surface.append(node('h2', '자료별 보관 범위'), node('p', '이 브라우저·서버·파일은 서로 다른 보관 범위입니다. 현재 작업공간의 자료를 종류별로 확인합니다.', 'life-help'), button('보관 현황 다시 확인', refresh, 'preservationRefresh'), status, error);
-      const jump = node('a', '선택 자료·파일 복원으로 이동', 'preservation-jump'); jump.href = '#preservationTransport'; surface.insertBefore(jump, status);
+      const jump = node('a', '선택 자료·파일 복원으로 이동', 'preservation-jump'); jump.href = '#preservationTransport';
+      jump.addEventListener('click', event => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        if (!valid()) return;
+        // Hash navigation also fires the app's popstate router and remounts
+        // this view. Move focus and scroll without discarding the selection.
+        transport.focus({ preventScroll: true }); transport.scrollIntoView({ block: 'start', behavior: 'instant' });
+      });
+      surface.insertBefore(jump, status);
       inventoryHost = node('div', null, 'preservation-inventory'); inventoryHost.id = 'preservationInventory'; surface.append(inventoryHost);
       const transport = node('section', null, 'preservation-transport'); transport.id = 'preservationTransport'; transport.tabIndex = -1; transport.append(node('h2', '선택한 자료와 근거 옮기기'), node('p', '저장한 글이나 9칸 구성을 고르면 필요한 근거 원문도 파일에 함께 담습니다. 사진 원본과 원문 전체 본문이 포함될 수 있으므로 포함 범위를 먼저 확인해 주세요.', 'life-help'));
       selectionHost = node('div'); selectionHost.id = 'preservationSelection'; transport.append(selectionHost);

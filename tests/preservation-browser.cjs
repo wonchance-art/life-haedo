@@ -181,8 +181,22 @@ async function main() {
       assert.equal(await page.locator('#preservationPostSelection input[data-post-id]').count(), 3, 'Unsaved drafts must not be export candidates');
       assert.equal(await page.locator('#preservationBoardSelection input[data-board-id]').count(), 2);
       await capture('inventory');
+      await page.locator('#preservationPostSelection input[data-post-id="' + fixture.postId + '"]').check();
+      const jumpBefore = await page.evaluate(() => {
+        window.__preservationJumpRoot = document.querySelector('#lifePreservation');
+        window.__preservationJumpTarget = document.querySelector('#preservationTransport');
+        return { url: location.href, selected: [...__preservationJumpRoot.querySelectorAll('input[data-post-id]:checked')].map(input => input.dataset.postId) };
+      });
       await page.locator('a[href="#preservationTransport"]').click();
-      assert.equal(await page.locator('#preservationTransport').evaluate(node => node === document.activeElement), true);
+      await page.waitForFunction(() => document.activeElement === window.__preservationJumpTarget);
+      const jumpAfter = await page.evaluate(() => ({ url: location.href,
+        selected: [...document.querySelectorAll('#lifePreservation input[data-post-id]:checked')].map(input => input.dataset.postId),
+        sameRoot: __preservationJumpRoot === document.querySelector('#lifePreservation'),
+        sameTarget: __preservationJumpTarget === document.querySelector('#preservationTransport') }));
+      assert.equal(jumpAfter.url, jumpBefore.url, 'An in-page jump must not re-enter the app router through fragment history');
+      assert.equal(jumpAfter.sameRoot, true); assert.equal(jumpAfter.sameTarget, true);
+      assert.deepEqual(jumpAfter.selected, [fixture.postId]); assert.deepEqual(jumpAfter.selected, jumpBefore.selected);
+      await page.locator('#preservationPostSelection input[data-post-id="' + fixture.postId + '"]').uncheck();
       assert.equal(await page.locator('#lifePreservation input[type="checkbox"]:checked').count(), 0);
       assert.deepEqual(await state(page, fixture.workspaceId), original); await prepare(fixture);
       assert.match(await page.locator('#preservationExportReview').innerText(), /9칸이 참조한 저장 글/);
@@ -326,11 +340,11 @@ async function main() {
       await page.goto(base + '/login.html?next=index.html');
       await page.locator('#googleLogin').click();
       await page.waitForURL(url => url.pathname === '/index.html'); await ready(page);
-      const blocked = await page.evaluate(async id => { const s = HaedoLife.Shell.storage; const rows = await s.listWorkspaces(); let readDenied = false;
-        try { await s.readPreservationSnapshot(id, { postIds: [], boardIds: [] }); } catch (_) { readDenied = true; }
-        return { ids: rows.map(row => row.workspaceId), readDenied };
-      }, fixture.workspaceId);
-      assert(!blocked.ids.includes(fixture.workspaceId)); assert.equal(blocked.readDenied, true);
+      const blocked = await page.evaluate(async ({ workspaceId, postId }) => { const s = HaedoLife.Shell.storage; const rows = await s.listWorkspaces(); let readError = null;
+        try { await s.readPreservationSnapshot(workspaceId, { postIds: [postId], boardIds: [] }); } catch (error) { readError = error.code; }
+        return { ids: rows.map(row => row.workspaceId), readError };
+      }, fixture);
+      assert(!blocked.ids.includes(fixture.workspaceId)); assert.equal(blocked.readError, 'workspace_access_denied');
       await enter(); assert.equal(await page.locator('#preservationPostSelection input').count(), 0); assert.equal(await page.locator('#preservationBoardSelection input').count(), 0);
     });
     await check('Unowned direct-copy rechecks changed originals and newly claimed ownership after actual photo decoding, then copies only a fresh selection', async () => {
@@ -356,7 +370,21 @@ async function main() {
       assert.deepEqual(await legacyRows(page, old.workspaceId), changed);
       assert.equal(await page.evaluate(() => HaedoLife.Shell.storage.getActive()), activeBefore);
       assert(!changed.rows.some(row => row.key === 'owner:' + old.workspaceId), 'A failed copy cannot claim legacy ownership');
-      await page.locator('#preservationPrepareExport').click(); await page.locator('#preservationExportReview[data-state="ready"]').waitFor();
+      await page.evaluate(() => {
+        window.__preservationOldExportReview = document.querySelector('#preservationExportReview');
+        window.__preservationHoldSnapshot = true; window.__preservationSnapshotHeld = false;
+      });
+      await page.locator('#preservationPrepareExport').click(); await page.waitForFunction(() => window.__preservationSnapshotHeld === true);
+      assert.equal(await page.locator('#lifePreservation').getAttribute('data-state'), 'busy');
+      assert.equal(await page.locator('#lifePreservation').getAttribute('aria-busy'), 'true');
+      assert.equal(await page.evaluate(() => window.__preservationOldExportReview.isConnected), false);
+      assert.equal(await page.locator('#preservationExportReview,#preservationDownload,#preservationRestorePrepared').count(), 0, 'Rechecking must remove the old candidate while the real snapshot read is held');
+      await page.evaluate(() => { window.__preservationHoldSnapshot = false; window.__preservationReleaseSnapshot(); });
+      await page.waitForFunction(() => {
+        const review = document.querySelector('#preservationExportReview');
+        return document.querySelector('#lifePreservation')?.dataset.state === 'ready' && review?.dataset.state === 'ready' && review !== window.__preservationOldExportReview;
+      });
+      assert.equal(await page.locator('#lifePreservation').getAttribute('aria-busy'), 'false');
       assert.match(await page.locator('#preservationExportReview').innerText(), /검증 도중 다른 창에서 바뀐/);
       await page.locator('#preservationRestorePrepared').click(); await page.locator('#preservationRestored').waitFor();
       const copiedId = await page.locator('#lifePreservation').getAttribute('data-restore-workspace-id');
