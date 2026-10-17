@@ -147,6 +147,9 @@ jobs:
       - name: Verify readable Obsidian review categories and candidate report
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/obsidian-review-browser.cjs
+      - name: Verify private Obsidian decisions, copy export and restoration
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/obsidian-decisions-browser.cjs
       - name: Verify reflection draft copy conflicts and account boundaries
         run: node tests/reflection-page-browser.cjs
       - name: Verify the integrated input and output cycle
@@ -319,6 +322,7 @@ jobs:
             .local/blog-writing-completion/
             .local/obsidian-vault/
             .local/obsidian-review/
+            .local/obsidian-decisions/
             .local/profile-feed-media/
             .local/reflection-page/
             .local/two-cycle/

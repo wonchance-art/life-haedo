@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { buildVault } from "./lib/obsidian-vault.mjs";
 import { renderReviewHTML } from "./lib/obsidian-review.mjs";
+import { renderDecisionTool } from "./lib/obsidian-decision-tool.mjs";
 const project = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2),
   values = {};
@@ -99,6 +100,7 @@ async function main() {
     renderReviewHTML(result.review),
     { flag: "wx", mode: 0o600 },
   );
+  await writeFile(join(output, "review-tool.html"), await renderDecisionTool(), { flag: "wx", mode: 0o600 });
   execFileSync(
     "git",
     [
