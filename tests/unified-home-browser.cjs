@@ -134,7 +134,8 @@ async function main() {
     await check('Google PKCE fixture returns to selected home section with only allowed query state', async ({ page, server, device }) => {
       server.oauthAccounts.set(device, accounts.a);
       await page.goto(base + '/index.html?section=manage&view=transfer&unknown=drop'); await shellReady(page);
-      await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click();
+      // General login preserves the destination; the first-write CTA has its own compose intent.
+      await page.locator('[data-life-return-login]').click(); await page.locator('#googleLogin').click();
       await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
       const url = new URL(page.url()); assert.equal(url.searchParams.get('section'), 'manage'); assert.equal(url.searchParams.get('view'), 'transfer');
       assert.equal(url.searchParams.has('unknown'), false); assert.equal(url.searchParams.has('code'), false);
@@ -150,7 +151,7 @@ async function main() {
       let release;
       const handlerReady = new Promise(resolve => { release = resolve; });
       await context.route('**/assets/platform-ui.js', async route => { await handlerReady; await route.fallback(); });
-      const navigation = page.locator('[data-life-login]').click();
+      const navigation = page.locator('[data-life-return-login]').click();
       try {
         await page.locator('#googleLogin').waitFor({ state: 'visible' });
         assert.equal(await page.locator('#googleLogin').isDisabled(), true);
@@ -251,16 +252,16 @@ async function main() {
       const id = (await stored(page)).workspaceId;
       await logoutToPublicHome(page);
       assert.equal(await page.locator('#lifeApp').isHidden(), true); assert.doesNotMatch(await page.locator('body').innerText(), /A만 읽을 구절/);
-      server.oauthAccounts.set(device, accounts.b); await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click(); await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
+      server.oauthAccounts.set(device, accounts.b); await page.locator('[data-life-return-login]').click(); await page.locator('#googleLogin').click(); await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
       assert.equal((await stored(page)).sources.length, 0);
       assert.equal(await page.evaluate(async id => { try { await HaedoLife.Shell.storage.read(id); return false; } catch (_) { return true; } }, id), true);
       assert.doesNotMatch(await page.locator('body').innerText(), /A만 읽을 구절/);
       await logoutToPublicHome(page);
-      server.oauthAccounts.set(device, accounts.a); await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click(); await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
+      server.oauthAccounts.set(device, accounts.a); await page.locator('[data-life-return-login]').click(); await page.locator('#googleLogin').click(); await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
       assert.equal((await stored(page)).workspaceId, id); assert.equal((await stored(page)).records[0].text, 'A만 읽을 구절');
     });
     await check('a late verification response after signout cannot remount the previous private home', async ({ page, context }) => {
-      await page.goto(base + '/index.html'); await ready(page);
+      await page.goto(base + '/index.html', { waitUntil: 'domcontentloaded' }); await ready(page);
       await importExcerpt(page, '지연 검증 익명 원문', '늦은 응답 비공개 구절', '늦은 응답 비공개 구절');
       let release, entered; const gate = new Promise(resolve => { release = resolve; }), arrived = new Promise(resolve => { entered = resolve; });
       await context.route(`${cloud}/auth/v1/user`, async route => { entered(); await gate; return route.fallback(); });

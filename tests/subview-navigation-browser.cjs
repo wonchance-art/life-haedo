@@ -141,10 +141,11 @@ async function main() {
           return add.call(this, type, listener, options);
         };
       });
-      await page.goto(base + '/index.html'); await ready(page); await home(page);
+      await page.goto(base + '/index.html', { waitUntil: 'domcontentloaded' }); await ready(page); await home(page);
       await page.waitForFunction(() => __subviewToggleGate.held);
       const before = await current(page);
       await page.locator('[data-home-destination="write"]:visible').focus(); await page.keyboard.press('Enter'); await mode(page, 'page');
+      await page.locator('#photoTitle').waitFor();
       await page.evaluate(() => __subviewReleaseToggle());
       assert.equal(await page.evaluate(() => __subviewToggleGate.released), true);
       await back(page, 'home');

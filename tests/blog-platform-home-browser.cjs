@@ -119,7 +119,7 @@ async function main() {
   }
   try {
     await check('public explanation to first private saved post and exact reopening at three widths', async ({ page, server, device }) => {
-      await page.goto(base + '/index.html'); await shellReady(page);
+      await page.goto(base + '/index.html', { waitUntil: 'domcontentloaded' }); await shellReady(page);
       assert.equal(await page.locator('#lifeWelcome').isVisible(), true);
       assert.match(await page.locator('#lifeWelcome').innerText(), /블로그/);
       assert.deepEqual(await page.evaluate(() => __homeDbOpens), []);

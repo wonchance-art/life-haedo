@@ -32,6 +32,7 @@ const Photo = require("../assets/life/photo-post.js"), Blog = require("../assets
     page.on("pageerror", (e) => report.errors.push(e.message)); page.on("console", (m) => { if (m.type() === "error") report.consoleErrors.push(m.text()); });
     await page.goto(base + "/blog.html?post=" + post); await page.locator(".blog-title").waitFor();
     await page.waitForFunction(() => document.querySelector(".blog-photo img")?.naturalWidth === 1600);
+    assert.equal(await page.evaluate(async () => { await document.fonts.ready; return [...document.fonts].some(font => font.family.replaceAll('"', '') === "Pretendard Variable" && font.status === "loaded"); }), true, "Public article loads the same self-hosted Korean font under its actual CSP");
     assert.equal(await page.locator(".blog-document script").count(), 0); assert.match(await page.locator(".blog-document").innerText(), /<script>/);
     for (const width of [1440, 820, 390]) {
       await page.setViewportSize({ width, height: 1000 }); const metrics = await page.evaluate(inspect); report.visual.push({ width, metrics });

@@ -50,11 +50,16 @@
             const row = await remote.read(state.remoteId); guard(c); if (!row) throw fault('remote_missing');
             if (row.revision !== state.remoteRevision) {
               await writeState(c, state, { status: 'conflict', error: null, conflict: { remoteRevision: row.revision, localRevision: post.revision, remoteTitle: row.data.title, updatedAt: row.updated_at } });
+              return getState(ws, id);
             } else {
               if (!state.remoteManifest || canonical(row.data) !== canonical(state.remoteManifest)) throw fault('invalid_remote_data');
-              await writeState(c, state, { publication: row.publication, error: null });
+              state = await writeState(c, state, { publication: row.publication, error: null });
+              const manifest = blog.pack(photoPost.compact(post)); manifest.id = state.remoteId; manifest.replaces = null;
+              // Received copies have new photo/ops IDs even at the same local
+              // revision. Align those IDs through the existing verified CAS path
+              // before a publication can select them on the server.
+              if (canonical(manifest) === canonical(row.data)) return getState(ws, id);
             }
-            return getState(ws, id);
           }
           if (!state.pending) {
             const manifest = blog.pack(photoPost.compact(post)); manifest.id = state.remoteId; manifest.replaces = null;
