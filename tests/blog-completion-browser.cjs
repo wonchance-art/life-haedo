@@ -171,7 +171,7 @@ async function main() {
   const click = async (p, name) => { await p.getByRole('button', { name, exact: true }).click(); await settle(p); await p.waitForFunction(() => !document.querySelector('.blog-manager[aria-busy="true"]')); };
   const data = p => p.evaluate(async () => { const s = HaedoLife.Shell.storage, workspaceId = await s.getActive(), rows = await s.listPhotoPosts(workspaceId); return { workspaceId, rows, docs: await Promise.all(rows.map(row => s.readPhotoPost(workspaceId, row.id))) }; });
   const preserved = p => p.evaluate(async () => { const s = HaedoLife.Shell.storage, id = await s.getActive(); return { bundle: await s.read(id), workbench: await s.readWorkbench(id), nine: await s.readNineBoard(id), collection: await s.readCollection(id) }; });
-  const manager = async p => { await nav(p, 'home'); await p.locator('[data-home-destination="blog"]').click(); await p.locator('.blog-manager-list[data-state="ready"]').waitFor(); };
+  const manager = async p => { await nav(p, 'manage'); await p.getByRole('button', { name: '글 관리', exact: true }).click(); await p.locator('.blog-manager-list[data-state="ready"]').waitFor(); };
   const row = (p, id) => p.locator('.blog-post[data-post-id="' + id + '"]');
   const savedPost = async (p, title, images = []) => {
     await nav(p, 'home'); await p.locator('[data-home-destination="write"]:visible').click(); await p.locator('#photoTitle').fill(title);
@@ -304,6 +304,32 @@ async function main() {
       const firstAsset = server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: photoPost.doc.id }).assets[photoPost.doc.photos[0].id];
       assert.equal(server.sql('select count(*) from storage.objects where bucket_id=' + literal(firstAsset.bucket) + ' and name=' + literal(firstAsset.path) + ';', { owner: accounts.b.id, role: 'authenticated' }), 0);
       assert.throws(() => server.rpc(null, 'life_blog_public_media', { p_token: photoToken, p_photo_id: '00000000-0000-4000-8000-000000000000' }), error => error.code === '42501');
+      // Receiving remaps photo IDs. Publishing immediately must first align
+      // that exact manifest through verified private CAS, rather than submit
+      // the new selection against the previous device's photo IDs.
+      await manager(second.page); await review(second.page, received.id, [received.photos[0].id]);
+      const receivedURL = await publishedURL(second.page), receivedToken = new URL(receivedURL).searchParams.get('post');
+      assert.notEqual(receivedURL, photoURL, 'Republishing after withdrawal must not reactivate the revoked address');
+      assert.equal(server.rpc(null, 'life_blog_public_read', { p_token: photoToken }), null);
+      const receivedRemote = server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: photoPost.doc.id });
+      assert.deepEqual(receivedRemote.data.photos.map(photo => photo.id), received.photos.map(photo => photo.id));
+      const receivedPublic = server.rpc(null, 'life_blog_public_read', { p_token: receivedToken }).snapshot;
+      assert.equal(receivedPublic.photos.length, 1); assert.notEqual(receivedPublic.photos[0].id, received.photos[0].id);
+      assert.equal(receivedPublic.photos[0].digest, received.photos[0].digest);
+      assert(!JSON.stringify(receivedPublic).includes(received.photos[1].digest));
+      await visitor.page.goto(receivedURL); await publicState(visitor.page, 'published');
+      const receivedImage = visitor.page.locator('#blogContent img'); assert.equal(await receivedImage.count(), 1);
+      await receivedImage.scrollIntoViewIfNeeded(); await receivedImage.evaluate(node => node.decode());
+      assert.deepEqual(await receivedImage.evaluate(node => [node.naturalWidth, node.naturalHeight]), [4032, 3024]);
+      assert.equal(await receivedImage.getAttribute('alt'), '합성 원본 풍경 0');
+      assert.equal(await visitor.page.locator('#blogContent figcaption').innerText(), '직접 남긴 사진 설명 0');
+      const receivedSrc = await receivedImage.getAttribute('src');
+      assert.equal(await visitor.page.evaluate(async url => { const bytes = await (await fetch(url, { credentials: 'omit', cache: 'no-store' })).arrayBuffer(); return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(n => n.toString(16).padStart(2, '0')).join(''); }, receivedSrc), received.photos[0].digest);
+      await click(second.page, '공개 철회'); await visitor.page.locator('#blogRefresh').click(); await publicState(visitor.page, 'missing');
+      assert.equal(await visitor.page.locator('#blogContent').innerText(), '');
+      assert.equal(await visitor.page.evaluate(async url => (await fetch(url, { credentials: 'omit', cache: 'no-store' })).status, receivedSrc), 404);
+      assert.equal(server.rpc(null, 'life_blog_public_media', { p_token: receivedToken, p_photo_id: receivedPublic.photos[0].id }, 'service_role'), null);
+      assert.deepEqual(await preserved(second.page), before); assert.deepEqual(await preserved(page), original);
     });
     assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.external, []);
     report.pass = true;

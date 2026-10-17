@@ -1222,6 +1222,39 @@ test('rich post replacement retains exact evidence and stable remote binding inc
   await assert.rejects(a.writeBlogSyncState(ws, first.id, binding, binding.revision), { code: 'blog_state_conflict' });
 });
 
+test('independent rich post copies keep exact older evidence atomically without inheriting replacement or server authority', async t => {
+  const f = syncFixture(); t.after(() => f.storage.close());
+  const a = f.storage.forAccount(accountA), original = await initialImport(a), ws = original.workspaceId;
+  const M = require('../assets/life/photo-post.js'), R = require('../assets/life/source-reference.js');
+  const source = original.sources[0], version = original.sourceVersions.find(row => row.sourceId === source.id);
+  const ref = await R.build({ bundle: original, sourceId: source.id, versionId: version.id, locator: { start: 0, end: 3 } });
+  const doc = M.create(Core.id); doc.title = '정확한 예전 원문 근거'; doc.status = 'saved'; doc.ops = [{ insert: ref.quote + '\n' }];
+  const saved = await a.savePhotoPostWithEvidence(ws, doc, 0, [ref], 0);
+  const remote = await a.writeBlogSyncState(ws, saved.id, { enabled: true, remoteId: Core.id(), remoteRevision: 1 }, 0);
+  const prepared = await Core.prepareImport({ origin: source.origin, existingSourceId: source.id, title: source.title, text: '새 원문 버전은 이전 인용을 대신하지 않습니다.' }, original);
+  assert.equal((await a.commitLocal({ workspaceId: ws, operationId: Core.id(), baseRevision: original.revision, changes: Core.buildImportChanges(original, prepared, []) })).status, 'stored');
+  const editing = { ...structuredClone(saved), id: Core.id(), revision: 0, status: 'draft', replaces: { id: saved.id, revision: saved.revision } };
+  const draft = await a.savePhotoPost(ws, editing, 0);
+  assert.deepEqual(await a.readPostEvidence(ws, draft.id), { revision: 0, refs: [] });
+  const inherited = await a.readPostEvidence(ws, draft.replaces.id), copy = { ...draft, id: Core.id(), revision: 0, replaces: null };
+  const before = structuredClone(f.rows);
+  f.control.afterWrite = ({ name, value }) => {
+    if (name !== 'meta' || value.key !== `post-evidence:${ws}:${copy.id}`) return;
+    f.control.afterWrite = null; throw new DOMException('anonymous late sidecar failure', 'AbortError');
+  };
+  await assert.rejects(a.savePhotoPostWithEvidence(ws, copy, 0, inherited.refs, 0), { code: 'storage_aborted' });
+  assert.deepEqual(f.rows, before);
+  const independent = await a.savePhotoPostWithEvidence(ws, copy, 0, inherited.refs, 0);
+  assert.equal(independent.replaces, null); assert.equal(independent.revision, 1);
+  assert.deepEqual((await a.readPostEvidence(ws, independent.id)).refs, [ref]);
+  assert.deepEqual(await R.resolve(await a.read(ws), ref), { sourceId: source.id, sourceVersionId: version.id, locator: ref.locator });
+  assert.equal(await a.readBlogSyncState(ws, independent.id), null);
+  assert.deepEqual(await a.readBlogSyncState(ws, saved.id), remote);
+  assert.deepEqual(await a.readPhotoPost(ws, saved.id), saved); assert.deepEqual(await a.readPhotoPost(ws, draft.id), draft);
+  await a.savePostEvidence(ws, draft.id, { refs: [] }, 0);
+  assert.deepEqual(await a.readPostEvidence(ws, draft.id), { revision: 1, refs: [] });
+});
+
 async function preservationFixture(t) {
   const fixture = syncFixture(); t.after(() => fixture.storage.close());
   const base = fixture.storage, a = base.forAccount(accountA), bundle = await initialImport(a), ws = bundle.workspaceId;

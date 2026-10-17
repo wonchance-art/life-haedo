@@ -18,12 +18,12 @@
     let listState = { workspaceId: null, tab: 'posts', query: '', searchExpanded: false, limit: 20 };
     const ROW_LIMIT = 20;
     const TAB_LABELS = { posts: '글', drafts: '초안', archive: '보관함' };
-    function captureState() {
-      // Native toggle delivery can lag behind keyboard navigation. Capture the
-      // visible DOM before leave() so return state cannot restore stale folds.
-      const currentLibrary = visible && libraryElement?.isConnected && host.contains(libraryElement) && libraryWorkspace === getBundle()?.workspaceId;
-      return { ...listState, libraryOpen: currentLibrary ? libraryElement.open : libraryOpen };
+    function captureLibraryState() {
+      if (visible && libraryElement?.isConnected && host.contains(libraryElement) && libraryWorkspace === getBundle()?.workspaceId) {
+        libraryOpen = libraryElement.open;
+      }
     }
+    function captureState() { captureLibraryState(); return { ...listState, libraryOpen }; }
     function adoptState(workspaceId, incoming) {
       if (listState.workspaceId !== workspaceId) { listState = { workspaceId, tab: 'posts', query: '', searchExpanded: false, limit: ROW_LIMIT }; libraryOpen = false; }
       if (incoming?.workspaceId !== workspaceId) return;
@@ -639,9 +639,7 @@
     function leave() {
       // A native details toggle is queued asynchronously. Preserve its current
       // state before navigation makes that event's original context stale.
-      if (visible && libraryElement?.isConnected && host.contains(libraryElement) && libraryWorkspace === getBundle()?.workspaceId) {
-        libraryOpen = libraryElement.open;
-      }
+      captureLibraryState();
       libraryElement = null;
       generation += 1; visible = false; clearMedia();
     }

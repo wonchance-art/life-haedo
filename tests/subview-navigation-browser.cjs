@@ -63,7 +63,7 @@ async function main() {
       await page.goto(base + '/index.html'); await ready(page); await home(page);
       for (const [destination, targetMode, title] of [['write', 'page', '글쓰기'], ['import', 'import', '가져오기'], ['time', 'time', '연표']]) {
         page.subviewDestination = destination;
-        const start = page.locator(`[data-home-destination="${destination}"]:visible${destination === 'write' ? ', #homeFirstWrite' : ''}`);
+        const start = page.locator(`[data-home-destination="${destination}"]:visible`);
         if (width === 1440) { await start.focus(); await page.keyboard.press('Enter'); } else await start.tap();
         await mode(page, targetMode);
         if (destination === 'write') await page.locator('#photoTitle').waitFor();
@@ -80,7 +80,21 @@ async function main() {
         await capture(page, destination, width);
         await back(page, 'home'); await page.waitForFunction(destination => document.activeElement?.dataset.homeDestination === destination || destination === 'write' && document.activeElement?.id === 'homeFirstWrite', destination);
       }
-      await page.locator('[data-home-destination="blog"]').click(); await mode(page, 'blog');
+      await page.locator('#homeTab-drafts').click();
+      const homeDraft = page.locator('.home-draft[data-draft-kind="photo-draft"] .home-draft-open');
+      const homeDraftFocusKey = await homeDraft.getAttribute('data-focus-key');
+      assert(homeDraftFocusKey, 'The home draft must retain its exact return target');
+      await homeDraft.click(); await mode(page, 'page');
+      await page.locator('#photoTitle').waitFor();
+      assert.equal(await page.locator('#photoTitle').inputValue(), '산책 뒤 남긴 생각');
+      assert.equal((await page.locator('.ql-editor').innerText()).trim(), '홈으로 돌아갔다가 다시 이어 쓸 한글 초안.');
+      await back(page, 'home');
+      assert.equal(await page.locator('#homeTab-drafts').getAttribute('aria-selected'), 'true');
+      await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, homeDraftFocusKey);
+
+      // Keep the separate manager-origin return contract as well as home resume.
+      await nav(page, 'manage');
+      await page.getByRole('button', { name: '글 관리', exact: true }).click(); await mode(page, 'blog');
       await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
       const draftButton = page.getByRole('button', { name: '산책 뒤 남긴 생각', exact: true });
       const draftFocusKey = await draftButton.getAttribute('data-focus-key');
@@ -91,7 +105,7 @@ async function main() {
       assert.equal((await page.locator('.ql-editor').innerText()).trim(), '홈으로 돌아갔다가 다시 이어 쓸 한글 초안.');
       await back(page, 'blog');
       await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, draftFocusKey);
-      await back(page, 'home'); await openLibrary(page);
+      await back(page, 'manage'); await home(page);
       await page.locator('[data-home-destination="import"]').click(); await mode(page, 'import');
       assert.equal(await page.locator('#lifeImportText').inputValue(), '원문을 자동 확정하지 않습니다.');
       assert.equal((await current(page)).bundle.sources.length, 0);
@@ -127,7 +141,7 @@ async function main() {
           return add.call(this, type, listener, options);
         };
       });
-      await page.goto(base + '/index.html'); await ready(page); await home(page);
+      await page.goto(base + '/index.html', { waitUntil: 'domcontentloaded' }); await ready(page); await home(page);
       await page.waitForFunction(() => __subviewToggleGate.held);
       const before = await current(page);
       const write = page.locator('[data-home-destination="write"]:visible');

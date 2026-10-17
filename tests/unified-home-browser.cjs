@@ -136,6 +136,7 @@ async function main() {
     await check('Google PKCE fixture returns to selected home section with only allowed query state', async ({ page, server, device }) => {
       server.oauthAccounts.set(device, accounts.a);
       await page.goto(base + '/index.html?section=manage&view=transfer&unknown=drop'); await shellReady(page);
+      // General login preserves the destination; the first-write CTA has its own compose intent.
       await page.locator('[data-life-return-login]').click(); await page.locator('#googleLogin').click();
       await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
       const url = new URL(page.url()); assert.equal(url.searchParams.get('section'), 'manage'); assert.equal(url.searchParams.get('view'), 'transfer');
@@ -265,7 +266,7 @@ async function main() {
       assert.equal((await stored(page)).workspaceId, id); assert.equal((await stored(page)).records[0].text, 'A만 읽을 구절');
     });
     await check('a late verification response after signout cannot remount the previous private home', async ({ page, context }) => {
-      await page.goto(base + '/index.html'); await ready(page);
+      await page.goto(base + '/index.html', { waitUntil: 'domcontentloaded' }); await ready(page);
       await importExcerpt(page, '지연 검증 익명 원문', '늦은 응답 비공개 구절', '늦은 응답 비공개 구절');
       let release, entered; const gate = new Promise(resolve => { release = resolve; }), arrived = new Promise(resolve => { entered = resolve; });
       await context.route(`${cloud}/auth/v1/user`, async route => { entered(); await gate; return route.fallback(); });

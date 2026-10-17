@@ -2832,11 +2832,11 @@
         view.contextError = valid ? '' : '기준 기록의 작업공간이나 버전을 확인하지 못했습니다. 현재 공간에서 기록을 다시 골라 주세요.';
       }
       if (mode === 'page') {
-        if(options.searchTarget&&options.searchTarget.photoPostId!==current.ninePostReference?.postId){current.ninePostReference=null;current.ninePostReturn=null;}
         current.blogContext = options.blogContext === true;
         current.blogProfile = options.blogContext === true && options.pageProfileEdit === true;
         current.blogKind = options.pageCompose || options.searchTarget?.photoPostId ? 'photo' : 'legacy';
         current.blogCommitted = null;
+        if(options.searchTarget&&options.searchTarget.photoPostId!==current.ninePostReference?.postId){current.ninePostReference=null;current.ninePostReturn=null;}
         current.searchTarget = options.searchTarget || null; current.nineTarget = options.nineTarget || null;current.nineReference=options.nineReference||null;
         current.pageProfile = options.pageProfile === true || options.pageProfileEdit === true;
         current.pageProfileEdit = options.pageProfileEdit === true;

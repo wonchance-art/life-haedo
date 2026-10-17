@@ -1102,7 +1102,7 @@
 
     function sectionFor(mode) {
       if (mode === 'home' || mode === 'page' && blogPageTask || mode === 'write' && viewOrigins.get('write')?.mode === 'home' || mode === 'source' && (state.returnContext?.mode === 'home' || state.returnContext?.mode === 'page' && blogPageTask)) return 'home';
-      return ['tools', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'sync', 'transfer', 'preservation', 'obsidian-update', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
+      return ['tools', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'blog', 'sync', 'transfer', 'preservation', 'obsidian-update', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
     }
 
     function routeMode() {
@@ -1112,8 +1112,8 @@
       if (params.get('compose') === '1') return 'page';
       if (section === 'home' && !view) return 'home';
       if (section === 'tools') return ['discover', 'reflection', 'books'].includes(view) ? view : 'tools';
-      if (section === 'manage') return ['transfer', 'sync', 'preservation', 'obsidian-update', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
-      if (!section && ['transfer', 'sync', 'preservation', 'obsidian-update', 'workbench-backup', 'public-pages', 'discover', 'reflection', 'books'].includes(view)) return view;
+      if (section === 'manage') return ['blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
+      if (!section && ['blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'workbench-backup', 'public-pages', 'discover', 'reflection', 'books'].includes(view)) return view;
       if (['blog', 'topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related', 'collection', 'find'].includes(view)) return view;
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
     }

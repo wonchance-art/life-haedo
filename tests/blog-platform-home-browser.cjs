@@ -119,7 +119,7 @@ async function main() {
   }
   try {
     await check('public explanation to first private saved post and exact reopening at three widths', async ({ page, server, device }) => {
-      await page.goto(base + '/index.html'); await shellReady(page);
+      await page.goto(base + '/index.html', { waitUntil: 'domcontentloaded' }); await shellReady(page);
       assert.equal(await page.locator('#lifeWelcome').isVisible(), true);
       assert.match(await page.locator('#lifeWelcome').innerText(), /블로그/);
       assert.deepEqual(await page.evaluate(() => __homeDbOpens), []);
@@ -206,6 +206,8 @@ async function main() {
           await page.locator('[data-home-destination="preview"]').click();
         }
         else {
+          // The home profile action now opens profile settings; use the preserved
+          // selected-material page deep link for its nine/share state guards.
           await page.goto(base + '/index.html?view=page'); await ready(page);
           if (await page.locator('.photo-editor').isVisible()) await page.getByRole('button', { name: '닫기', exact: true }).click();
           if (await page.locator('.photo-article').isVisible()) await page.getByRole('button', { name: '사진 글 목록', exact: true }).click();

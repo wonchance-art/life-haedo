@@ -530,6 +530,21 @@
     }
     // Recovery must not write the conflicted draft first. Keep its identity and
     // revision intact until a fresh document has actually committed.
+    async function independentEvidence(token, postId, replacedId) {
+      const read = async id => {
+        const value = await storage.readPostEvidence(workspaceId, id);
+        if (!current(token)) return null;
+        if (!Number.isSafeInteger(value?.revision) || value.revision < 0 || !Array.isArray(value.refs))
+          throw Object.assign(new Error('글의 원문 근거를 확인하지 못했습니다. 현재 입력은 유지합니다.'), { code: 'invalid_source_reference' });
+        return value;
+      };
+      let evidence = await read(postId);
+      // Editing drafts inherit the saved post's evidence only on replacement.
+      // An independent copy must explicitly retain it; an intentional empty
+      // evidence row (revision > 0) takes precedence over that fallback.
+      if (evidence?.revision === 0 && replacedId) evidence = await read(replacedId);
+      return evidence;
+    }
     async function saveIndependent(nextStatus = "draft") {
       guard();
       clearTimeout(timer);
@@ -550,7 +565,9 @@
       });
       setBusy(true);
       try {
-        const saved = await storage.savePhotoPost(workspaceId, next, 0);
+        const evidence = await independentEvidence(token, doc.id, doc.replaces?.id);
+        if (!current(token)) return;
+        const saved = await storage.savePhotoPostWithEvidence(workspaceId, next, 0, evidence.refs, 0);
         if (!current(token)) return;
         doc = saved;
         dirtyTick = storedTick = 0;
@@ -1547,12 +1564,14 @@
       else {
         const actions = el("div", null, "life-actions photo-read-actions");
         actions.classList.toggle("photo-read-standalone", standalone);
-          actions.append(
-          ...(!standalone ? [iconControl(button(readBackText, async () => {
-            if (!readBackAction) return list();
+        if (readBackAction)
+          actions.append(iconControl(button(readBackText, async () => {
             const token = epoch; await flush();
             if (current(token)) await readBackAction();
-          }), "back", readBackText)] : []),
+          }), "back", readBackText));
+        else if (!standalone)
+          actions.append(iconControl(button("사진 글 목록", list), "back", "사진 글 목록"));
+        actions.append(
           doc.archived
             ? button("목록으로 복원", () => archive(false))
             : button("글 수정", () => open(doc.id, true)),

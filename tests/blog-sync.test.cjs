@@ -40,6 +40,7 @@ async function fixture(count = 2) {
     async publish(id, revision, operation, options) { stats.publishes.push({ id, revision, operation, options: copy(options) }); const row = rows.get(id);
       if (publicReceipts.has(operation)) return copy(publicReceipts.get(operation));
       if (row.revision !== revision || (row.publication?.revision || 0) !== options.expectedPublicRevision) throw fault('blog_conflict');
+      if (options.photoIds.some(id => !row.data.photos.some(photo => photo.id === id))) throw fault('invalid_request');
       row.publication = { token: row.publication?.token || Core.id(), blogToken: WS, revision: options.expectedPublicRevision + 1, active: true };
       const result = { status: 'published', ...row.publication }; publicReceipts.set(operation, copy(result));
       if (stats.losePublish) { stats.losePublish = false; throw fault('network_error'); } return result;
@@ -72,7 +73,62 @@ test('receive validates every original, then creates an independent atomic local
   f.assets.set(asset.path, original); f.stats.failInstall = true; await assert.rejects(f.manager.receive(WS, f.d.id)); assert.equal(f.posts.size, 1); f.stats.failInstall = false;
   const received = await f.manager.receive(WS, f.d.id); assert.notEqual(received.post.id, f.d.id); assert.notEqual(received.post.photos[0].id, f.d.photos[0].id);
   assert.equal(received.post.ops[1].insert.photo.id, received.post.photos[0].id); assert.equal(await Photo.digest(received.post.photos[0].blob), f.d.photos[0].digest);
-  assert.deepEqual(f.posts.get(f.d.id), f.d); await f.manager.sync(WS, received.localPostId); assert.equal(f.stats.saves.length, 1); f.manager.dispose();
+  assert.deepEqual(f.posts.get(f.d.id), f.d); await f.manager.sync(WS, received.localPostId); assert.equal(f.stats.saves.length, 2);
+  assert.deepEqual(f.rows.get(f.d.id).data.photos.map(photo => photo.id), received.post.photos.map(photo => photo.id)); f.manager.dispose();
+});
+test('received photos can be published immediately using their remapped IDs, then identical manifests skip further private writes', async () => {
+  const f = await fixture(); await f.manager.connect(WS, f.d.id); const original = copy(f.posts.get(f.d.id));
+  const received = await f.manager.receive(WS, f.d.id), before = copy(received.post);
+  const published = await f.manager.publish(WS, received.localPostId, { photoIds: [received.post.photos[0].id], expectedLocalRevision: received.post.revision, expectedRemoteRevision: 1, expectedPublicRevision: 0 });
+  assert.equal(published.active, true); assert.equal(f.stats.saves.length, 2); assert.equal(f.rows.size, 1); assert.equal(f.rows.get(f.d.id).revision, 2);
+  assert.deepEqual(f.stats.publishes[0].options.photoIds, [received.post.photos[0].id]); assert.equal(f.stats.publishes[0].revision, 2);
+  assert.equal(f.stats.uploads, 4); assert.equal(f.assets.size, 4);
+  assert.deepEqual(f.posts.get(received.localPostId), before); assert.deepEqual(f.posts.get(f.d.id), original);
+  await f.manager.sync(WS, received.localPostId); assert.equal(f.stats.saves.length, 2); assert.equal(f.stats.uploads, 4);
+  f.manager.dispose();
+});
+test('receiving two identical originals preserves both distinct photo IDs, captions and exact selected publication', async () => {
+  const f = await fixture(), first = f.d.photos[0];
+  Object.assign(f.d.photos[1], { blob: first.blob, digest: first.digest, size: first.size }); f.posts.set(f.d.id, copy(f.d));
+  await f.manager.connect(WS, f.d.id); const received = await f.manager.receive(WS, f.d.id), ids = received.post.photos.map(photo => photo.id);
+  assert.notEqual(ids[0], ids[1]); assert.equal(received.post.photos[0].digest, received.post.photos[1].digest);
+  await f.manager.publish(WS, received.localPostId, { photoIds: [ids[1]], expectedLocalRevision: 1, expectedRemoteRevision: 1, expectedPublicRevision: 0 });
+  const manifest = f.rows.get(f.d.id).data;
+  assert.deepEqual(manifest.photos.map(photo => photo.id), ids); assert.deepEqual(manifest.ops.filter(op => op.insert?.photo).map(op => [op.insert.photo.id, op.insert.photo.caption]), [[ids[0], '사진 설명 0'], [ids[1], '사진 설명 1']]);
+  assert.deepEqual(f.stats.publishes[0].options.photoIds, [ids[1]]); assert.equal(f.assets.size, 4); f.manager.dispose();
+});
+test('received photo alignment retains remote CAS conflicts and rejects same-version server mutation before uploading', async () => {
+  for (const change of ['same-version', 'new-revision']) {
+    const f = await fixture(); await f.manager.connect(WS, f.d.id); const received = await f.manager.receive(WS, f.d.id), before = copy(received.post);
+    const row = f.rows.get(f.d.id); row.data.title = '다른 기기의 보존할 원문'; if (change === 'new-revision') row.revision++;
+    await assert.rejects(f.manager.publish(WS, received.localPostId, { photoIds: [received.post.photos[0].id], expectedLocalRevision: 1, expectedRemoteRevision: 1, expectedPublicRevision: 0 }), { code: change === 'same-version' ? 'invalid_remote_data' : 'blog_conflict' });
+    assert.equal(f.stats.saves.length, 1); assert.equal(f.stats.uploads, 2); assert.equal(f.stats.publishes.length, 0);
+    assert.equal(row.data.title, '다른 기기의 보존할 원문'); assert.deepEqual(f.posts.get(received.localPostId), before);
+    if (change === 'new-revision') assert.equal(f.states.get(received.localPostId).conflict.remoteRevision, 2);
+    f.manager.dispose();
+  }
+});
+test('received photo alignment preserves an intervening remote edit and replays a lost response with the same durable operation', async () => {
+  for (const change of ['during-upload', 'lost-response']) {
+    const f = await fixture(); await f.manager.connect(WS, f.d.id); const received = await f.manager.receive(WS, f.d.id), before = copy(received.post);
+    const options = { photoIds: [received.post.photos[0].id], expectedLocalRevision: 1, expectedRemoteRevision: 1, expectedPublicRevision: 0 };
+    if (change === 'during-upload') {
+      const entered = deferred(), held = deferred(), upload = f.remote.uploadAsset;
+      f.remote.uploadAsset = async (...args) => { entered.resolve(); await held.promise; return upload(...args); };
+      const publishing = f.manager.publish(WS, received.localPostId, options); await entered.promise;
+      const row = f.rows.get(f.d.id); row.revision++; row.data.title = '전송 중 다른 기기의 변경'; held.resolve();
+      await assert.rejects(publishing, { code: 'blog_conflict' });
+      assert.equal(row.revision, 2); assert.equal(row.data.title, '전송 중 다른 기기의 변경'); assert.equal(f.stats.publishes.length, 0);
+      assert.equal(f.states.get(received.localPostId).conflict.remoteRevision, 2);
+    } else {
+      f.stats.loseSave = true; await assert.rejects(f.manager.publish(WS, received.localPostId, options), { code: 'network_error' });
+      const operation = f.states.get(received.localPostId).pending.operationId;
+      await f.manager.publish(WS, received.localPostId, options);
+      assert.equal(f.stats.saves.at(-1).operationId, operation); assert.deepEqual(f.stats.saves.at(-1), f.stats.saves.at(-2));
+      assert.equal(f.rows.get(f.d.id).revision, 2); assert.equal(f.stats.publishes.length, 1); assert.equal(f.stats.uploads, 4);
+    }
+    assert.deepEqual(f.posts.get(received.localPostId), before); assert.deepEqual(f.posts.get(f.d.id), f.d); f.manager.dispose();
+  }
 });
 test('CAS conflict changes neither side; choosing local first retains a full remote recovery copy', async () => {
   const f = await fixture(0); await f.manager.connect(WS, f.d.id);
