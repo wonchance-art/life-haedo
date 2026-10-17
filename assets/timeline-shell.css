@@ -1,6 +1,9 @@
 /* Timeline chrome shares the reading frame. Chart colors, geometry and data stay in app.css/app.js. */
 html:has(> body.haedo-timeline) { scroll-behavior: auto; }
-body.haedo-timeline { padding-left: 72px; }
+body.haedo-timeline { padding-left: var(--haedo-nav-width, 72px); }
+@media (min-width: 1101px) {
+  body.haedo-timeline { padding-left: max(var(--haedo-nav-width, 216px), calc((100vw - 1000px) / 2 + 208px)); }
+}
 .haedo-timeline > header { overflow: visible; padding: 0; border: 0; z-index: 30; }
 .haedo-timeline > header::after { display: none; }
 .haedo-timeline .wrap, .haedo-timeline #sec-canvas .wrap {
@@ -9,7 +12,7 @@ body.haedo-timeline { padding-left: 72px; }
 .haedo-timeline header .wrap { padding-top: 24px; padding-bottom: 0; }
 .haedo-timeline .haedo-page-heading { margin-bottom: 20px; }
 .haedo-timeline .haedo-heading-title h1 { min-width: 0; padding-block: 6px; }
-.haedo-timeline .haedo-heading-title h1:focus-visible { outline: 3px solid var(--haedo-accent); outline-offset: 4px; }
+.haedo-timeline .haedo-heading-title h1:focus-visible { outline: 3px solid var(--haedo-focus, #3156d3); outline-offset: 4px; }
 .haedo-timeline #sec-canvas { padding: 0 0 72px; }
 .haedo-timeline .document-tools { display: flex; padding: 0; margin: 0; gap: 0; border: 0; background: transparent; box-shadow: none; border-radius: 0; }
 .haedo-timeline .db-dot { position: relative; width: 44px; height: 44px; }
@@ -56,7 +59,7 @@ body.haedo-timeline { padding-left: 72px; }
 .haedo-timeline :is(.tool-button.on, #btnMap.on, #btnGrid.on) { color: var(--haedo-accent); background: var(--haedo-soft); }
 .haedo-timeline :is(#btnMap, #btnGrid, #btnSearch) { color: var(--haedo-muted); }
 .haedo-timeline #btnAdd { background: var(--haedo-ink); color: var(--haedo-paper); }
-.haedo-timeline #btnAdd:hover { background: var(--haedo-accent); }
+.haedo-timeline #btnAdd:hover { background: #343439; }
 .haedo-timeline :is(button, select):disabled { opacity: .4; }
 .haedo-timeline .tool-select summary { min-height: 44px; padding-inline: 8px; border-radius: 8px; color: var(--haedo-ink); font-size: 14px; gap: 6px; }
 .haedo-timeline .tool-select summary > .ui-icon:first-child { width: 20px; height: 20px; }
@@ -73,8 +76,8 @@ body.haedo-timeline { padding-left: 72px; }
 .haedo-timeline :is(.canvas-frame, .canvas-inner) { margin: 0; padding: 0; border: 0; border-radius: 0; background: var(--haedo-paper); box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; animation: none; transform: none; }
 .haedo-timeline #tl { border: 0; border-radius: 0; }
 .haedo-timeline #tl text { font-family: var(--haedo-font); }
-.haedo-timeline #tl:focus-visible { outline: 3px solid var(--haedo-accent); outline-offset: -3px; }
-.haedo-timeline #tl [tabindex="0"]:focus-visible { outline: 3px solid var(--haedo-accent); outline-offset: 3px; }
+.haedo-timeline #tl:focus-visible { outline: 3px solid var(--haedo-focus, #3156d3); outline-offset: -3px; }
+.haedo-timeline #tl [tabindex="0"]:focus-visible { outline: 3px solid var(--haedo-focus, #3156d3); outline-offset: 3px; }
 /* app.js emits these direct-child attributes for age, today and the half-step axis labels.
  * Exclude grouped event/layer labels so focus dimming and all semantic plot colors remain intact. */
 .haedo-timeline #tl > text[font-size="9.5"][opacity="0.85"] { fill: var(--haedo-muted); opacity: 1; }
@@ -121,7 +124,7 @@ body.haedo-timeline { padding-left: 72px; }
 .haedo-timeline .pop-ed { width: 360px; padding: 20px; gap: 16px; }
 .haedo-timeline :is(.dt-edit, .pe-title, .pe-desc, .pe-month, .pe-num, #fillText, #nbName, #nbBirth) { min-height: 44px; padding: 9px 10px; border: 1px solid var(--field-line); border-radius: 8px; background: var(--haedo-paper); color: var(--haedo-ink); font: 400 16px/1.65 var(--haedo-font) !important; }
 .haedo-timeline .dt-edit:hover { background: var(--haedo-paper); border-color: var(--field-line); }
-.haedo-timeline .dt-edit:focus { outline: 3px solid var(--haedo-accent); outline-offset: 2px; background: var(--haedo-paper); }
+.haedo-timeline .dt-edit:focus { outline: 3px solid var(--haedo-focus, #3156d3); outline-offset: 2px; background: var(--haedo-paper); }
 .haedo-timeline .dt-edit.bad { border-color: #a3243d; }
 .haedo-timeline .pe-title { font-weight: 650 !important; }
 .haedo-timeline .pe-desc { min-height: 100px; }
@@ -133,7 +136,7 @@ body.haedo-timeline { padding-left: 72px; }
 .haedo-timeline :is(.dt-lab, .lay-tag) input[type=checkbox]::before { content: ''; position: absolute; inset: 12px; border: 1px solid var(--field-line); border-radius: 4px; background: var(--haedo-paper); }
 .haedo-timeline :is(.dt-lab, .lay-tag) input[type=checkbox]:checked::before { background: var(--haedo-accent); border-color: var(--haedo-accent); }
 .haedo-timeline :is(.dt-lab, .lay-tag) input[type=checkbox]:checked::after { content: ''; position: absolute; left: 18px; top: 16px; width: 6px; height: 10px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); }
-.haedo-timeline :is(.btn, .pe-done, .pe-btn) { min-height: 44px; min-width: 44px; height: auto; padding: 9px 16px; background: var(--haedo-soft); color: var(--haedo-ink); border: 0; border-radius: 8px; box-shadow: none; text-shadow: none; font-size: 14px; }
+.haedo-timeline :is(.btn, .pe-done, .pe-btn) { min-height: 44px; min-width: 44px; height: auto; padding: 9px 16px; background: var(--haedo-soft); color: var(--haedo-ink); border: 0; border-radius: 999px; box-shadow: none; text-shadow: none; font-size: 14px; }
 .haedo-timeline :is(.btn-primary, .pe-done) { background: var(--haedo-ink); color: var(--haedo-paper); }
 .haedo-timeline :is(.btn-error, .danger) { color: #a3243d; background: #fff3f5; }
 .haedo-timeline .pe-actions, .haedo-timeline .pe-footer { border-color: var(--haedo-line); color: var(--haedo-muted); font-size: 12px; gap: 8px; }
@@ -199,3 +202,7 @@ body.haedo-timeline { padding-left: 72px; }
   .haedo-timeline .search-date { grid-column: 2; }
   .haedo-timeline .toast-message { bottom: calc(84px + env(safe-area-inset-bottom)); }
 }
+
+/* Shared neutral browser surfaces; plot paints and user-selected colors remain untouched. */
+.haedo-timeline :is(.pop-ed,.ctx,.search-panel,.timeline-summary-panel) :focus-visible { outline: 3px solid var(--haedo-focus, #3156d3); outline-offset: 3px; }
+.haedo-timeline :is(input,textarea)::placeholder { color: var(--haedo-muted); opacity: 1; }

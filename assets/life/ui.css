@@ -1,11 +1,11 @@
 /* Shared production material UI. Content-first tokens from the approved preview. */
 :root {
   color-scheme: light;
-  --paper: #fff; --paper-2: #f6f5f8; --ink: #222126; --ink-soft: #65616a;
-  --line: #e9e7eb; --field: #fff; --field-line: #827b86;
-  --color-primary: #5442bc; --color-error: #a3243d; --soft: #eeebff;
-  --canvas: var(--haedo-canvas, #f7f7fb); --mint: #edf7f3; --mint-ink: #356452;
-  --sky: #eff4fb; --sky-ink: #416187; --error-soft: #fff2f4;
+  --paper: #fff; --paper-2: #f5f5f6; --ink: #18181b; --ink-soft: #66666f;
+  --line: #ececee; --field: #fff; --field-line: #8b8b95;
+  --color-primary: #18181b; --color-error: #a3243d; --soft: #f0f0f2;
+  --canvas: var(--haedo-canvas, #f7f7f8); --mint: #f5f5f6; --mint-ink: #44444b;
+  --sky: #f3f4f7; --sky-ink: #414858; --error-soft: #fff2f4;
   --control-radius: 12px; --surface-radius: 16px; --motion-quick: 150ms;
   --life-font: "Apple SD Gothic Neo", "Noto Sans CJK KR", "Malgun Gothic", sans-serif;
 }
@@ -48,8 +48,8 @@ h4 { font-size: 16px; line-height: 1.7; }
 .life-actions,.life-topic-list,.life-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; }
 .life-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; min-width: 44px; max-width: 100%; padding: 8px 14px; border: 1px solid var(--field-line); border-radius: var(--control-radius); background: var(--paper); font-size: 14px; line-height: 1.6; text-align: center; white-space: normal; overflow-wrap: anywhere; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, border-color var(--motion-quick) ease; }
 @media (hover: hover) and (pointer: fine) { .life-button:hover { background: var(--paper-2); } }
-.life-primary { border-color: transparent; color: var(--color-primary); background: var(--soft); font-weight: 600; }
-@media (hover: hover) and (pointer: fine) { .life-primary:hover { background: #e4defd; } }
+.life-primary { border-color: var(--ink); color: #fff; background: var(--ink); font-weight: 650; border-radius: 999px; }
+@media (hover: hover) and (pointer: fine) { .life-primary:hover { background: #34343a; color: #fff; } }
 .life-icon-button { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 12px; border: 0; border-radius: 50%; background: transparent; color: var(--ink-soft); text-decoration: none; transition: color 180ms ease, background 180ms ease; }
 @media (hover: hover) and (pointer: fine) { .life-icon-button:hover { background: var(--paper-2); color: var(--ink); } }
 .life-icon-button[aria-current=page],.life-icon-button[aria-pressed=true],.life-icon-button[aria-expanded=true] { color: var(--color-primary); background: var(--soft); }
@@ -322,7 +322,7 @@ body[data-haedo-section=manage] .life-toolbar { padding-right: 50px; }
 
 /* App controls retain native selection, scrolling and keyboard behavior. */
 .life-app :is(input[type=checkbox],input[type=radio]) { accent-color: var(--color-primary); }
-.life-app :is(.life-primary,.life-icon-button):active:not(:disabled) { background: #e4defd; }
+.life-app :is(.life-primary,.life-icon-button):active:not(:disabled) { background: #e9e9ed; }
 .life-app :is(.life-card,.life-destination,.life-field) { scroll-margin-top: 76px; }
 .life-app :is(.life-picker-list,.life-selection-list,.life-source-text,.life-conflict-content) { overscroll-behavior-block: contain; }
 body.haedo-shell .haedo-account-host { top: 42px; right: max(calc(60px + env(safe-area-inset-right)), calc((100% - 772px) / 2)); }
@@ -437,3 +437,33 @@ body.haedo-shell .haedo-account-host { top: 42px; right: max(calc(60px + env(saf
 
 .life-find input[type="search"]:focus-visible { outline: none; }
 .life-find input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+
+/* SNS blog system: shared lists, reading and task surfaces. */
+body.haedo-shell .life-app { width:calc(100% - 48px);max-width:768px;min-height:100svh;margin:0 auto;padding:0 24px 72px;border-radius:0;background:var(--paper); }
+.life-toolbar,.life-main,.life-status,.life-error { max-width:720px; }
+.life-header { position:sticky;top:0;z-index:35;background:var(--paper);margin-inline:-24px;padding-inline:24px;border-bottom:1px solid var(--line); }
+.life-toolbar.haedo-page-heading { min-height:var(--haedo-header-height,64px);margin-bottom:0; }
+.life-main { padding-top:20px; }
+.life-toolbar .life-title-button { font-weight:700; }
+.life-button { border-color:#d5d5db;border-radius:12px;font-weight:550;padding-inline:16px; }
+.life-button:focus-visible,.life-icon-button:focus-visible { outline-color:var(--haedo-focus,#3156d3); }
+.life-icon-button[aria-current=page]::before { display:none; }
+.life-card { border-radius:0;box-shadow:none;padding-block:24px; }
+.life-source-card { border-radius:0;box-shadow:none; }
+.life-reader-heading { font-size:30px;line-height:1.5;letter-spacing:-.035em;margin-bottom:18px; }
+div.life-source-text { font-size:18px;line-height:1.95;letter-spacing:-.01em; }
+.life-reader-meta { font-size:12px;line-height:1.8; }
+.life-reader-tools { padding:12px 0;border-block:1px solid var(--line); }
+.life-field :is(input,textarea,select) { border-radius:12px;background:var(--paper);border-color:var(--field-line);font-size:16px; }
+.life-search-box :is(input,textarea) { background:var(--paper-2);border-color:transparent; }
+.life-topic-button,.life-chip { border-radius:999px; }
+.life-help { font-size:13px;line-height:1.8; }
+.life-rows>.life-button,.life-tool-list>.life-button { justify-content:flex-start;text-align:left; }
+.life-manage-section { border-radius:0;box-shadow:none; }
+@media(max-width:760px){
+ body.haedo-shell .life-app { width:100%;max-width:none;margin:0;padding:0 20px 28px;border-radius:0;min-height:calc(100svh - var(--haedo-dock-clearance,84px)); }
+ .life-header { margin-inline:-20px;padding-inline:20px; }
+ .life-main { padding-top:16px; }
+ .life-reader-heading { font-size:26px;line-height:1.5; }
+ div.life-source-text { font-size:17px;line-height:1.95; }
+}

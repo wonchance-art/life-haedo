@@ -1,6 +1,6 @@
 /* Quiet frame; post body and typed attachments carry the hierarchy. */
 .pp-workspace {
-  max-width: 760px;
+  max-width: 680px;
   margin: 0 auto;
   width: 100%;
   min-width: 0;
@@ -22,11 +22,13 @@
   display: none;
 }
 .pp-composer {
-  padding: 20px;
-  border: 1px solid var(--life-border, #dddde5);
-  border-radius: 20px;
-  background: var(--life-surface, #fff);
-  margin: 4px 0 20px;
+  padding: 24px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line, #ececee);
+  border-radius: 0;
+  background: var(--paper, #fff);
+  margin: 0 0 24px;
+  caret-color: #3156d3;
 }
 .pp-composer textarea {
   display: block;
@@ -42,7 +44,7 @@
   color: inherit;
 }
 .pp-compose-actions {
-  border-top: 1px solid var(--life-border, #dddde5);
+  border-top: 1px solid var(--line, #ececee);
   padding-top: 12px;
   margin-top: 12px;
 }
@@ -53,16 +55,20 @@
   font: inherit;
   font-size: 16px;
   max-width: 100%;
-  border: 1px solid var(--life-border, #dddde5);
-  border-radius: 10px;
-  background: var(--life-surface, #fff);
+  border: 1px solid var(--line, #ececee);
+  border-radius: 12px;
+  background: var(--paper, #fff);
   padding: 8px;
   color: inherit;
 }
 .pp-save {
   margin-left: auto;
-  background: var(--life-ink, #252432) !important;
-  color: var(--life-surface, #fff) !important;
+  background: var(--ink, #18181b) !important;
+  color: #fff !important;
+  border: 0;
+  border-radius: 999px;
+  padding-inline: 20px;
+  font-weight: 600;
 }
 .pp-body {
   font-size: 17px;
@@ -73,24 +79,28 @@
   margin: 12px 0 18px;
 }
 .pp-post {
-  padding: 22px 0;
-  border-bottom: 1px solid var(--life-border, #dddde5);
+  padding: 28px 0;
+  border-bottom: 1px solid var(--line, #ececee);
   outline-offset: 5px;
+  color: var(--ink, #18181b);
 }
 .pp-post-meta {
   justify-content: space-between;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-soft, #66666f);
 }
 .pp-attachments {
   display: grid;
-  gap: 4px;
+  gap: 10px;
 }
 .pp-attachment {
   display: flex;
   gap: 14px;
   align-items: center;
   min-height: 84px;
-  padding: 12px;
-  background: var(--life-soft, #f4f4f8);
+  padding: 16px;
+  background: var(--soft, #f7f7f8);
   color: inherit;
   text-decoration: none;
   border-radius: 12px;
@@ -114,10 +124,10 @@
   flex: 0 0 52px;
   display: grid;
   place-items: center;
-  border: 1px solid #d9d9e2;
-  border-radius: 7px;
-  background: #eeeef6;
-  color: #4f4b65;
+  border: 1px solid var(--line, #ececee);
+  border-radius: 10px;
+  background: var(--paper, #fff);
+  color: var(--ink-soft, #66666f);
 }
 .pp-shape svg,
 .pp-attachment > svg {
@@ -131,26 +141,26 @@
   flex-basis: 38px;
   margin: 0 7px;
   border-radius: 2px 5px 5px 2px;
-  box-shadow: inset 3px 0 #d8d8e4;
-  background: #eceaf4;
+  box-shadow: inset 2px 0 var(--line, #ececee);
+  background: var(--paper, #fff);
 }
 .pp-attachment[data-type="film"] .pp-shape {
   height: 64px;
   width: 44px;
   flex-basis: 44px;
   margin: 0 4px;
-  background: #e6edf1;
+  background: var(--paper, #fff);
 }
 .pp-attachment[data-type="person"] .pp-shape {
   border-radius: 50%;
-  background: #f2e9e7;
+  background: var(--paper, #fff);
 }
 .pp-attachment[data-type="music"] .pp-shape {
-  background: #e8ece5;
+  background: var(--paper, #fff);
 }
 .pp-attachment[data-type="tool"] .pp-shape {
   border-radius: 14px;
-  background: #e7edf5;
+  background: var(--paper, #fff);
 }
 .pp-edit-attachment {
   display: flex;
@@ -176,11 +186,14 @@
 }
 .pp-drafts summary,
 .pp-draft-tools summary {
+  min-width: 44px;
   min-height: 44px;
   display: flex;
   align-items: center;
   cursor: pointer;
-  padding: 8px;
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--ink-soft, #66666f);
 }
 .pp-drafts .life-button,
 .pp-draft-tools .life-button {
@@ -200,14 +213,14 @@
   width: 100%;
   text-align: left;
   white-space: normal;
-  padding: 12px;
+  padding: 16px 0;
   border: 0;
-  border-bottom: 1px solid var(--life-border, #dddde5);
+  border-bottom: 1px solid var(--line, #ececee);
   border-radius: 0;
   background: transparent;
 }
 .pp-drafts .pp-draft-row:hover {
-  background: var(--life-soft, #f4f4f8);
+  background: var(--soft, #f7f7f8);
 }
 .pp-draft-row strong,
 .pp-draft-row span,
@@ -239,7 +252,7 @@
   width: 22px;
   height: 22px;
   margin: 4px 0 0;
-  accent-color: var(--life-accent, #685aad);
+  accent-color: #3156d3;
 }
 .pp-draft-copy {
   min-width: 0;
@@ -296,10 +309,10 @@
   font-size: 16px;
 }
 .pp-empty {
-  padding: 48px 12px;
+  padding: 24px 12px;
   text-align: center;
   line-height: 1.8;
-  color: var(--life-muted, #666274);
+  color: var(--ink-soft, #66666f);
 }
 .share-entry .pp-body {
   margin-top: 0;
@@ -310,16 +323,16 @@
   margin: 12px 0 0;
 }
 .pp-workspace :focus-visible {
-  outline: 2px solid var(--life-accent, #685aad);
+  outline: 2px solid #3156d3;
   outline-offset: 3px;
 }
 @media (max-width: 600px) {
   .pp-composer {
-    padding: 14px;
-    border-radius: 14px;
+    padding: 20px 0;
+    border-radius: 0;
   }
   .pp-post {
-    padding: 16px 0;
+    padding: 24px 0;
   }
   .pp-body {
     font-size: 16px;
@@ -348,7 +361,8 @@
   min-height: 44px;
   display: flex;
   align-items: center;
-  padding: 8px;
+  padding: 10px;
+  border-radius: 50%;
   cursor: pointer;
 }
 
@@ -378,7 +392,7 @@ a.pp-attachment-title {
 }
 .pp-attachment {
   align-items: stretch;
-  border-radius: 6px;
+  border-radius: 14px;
 }
 .pp-visual {
   display: grid;
@@ -495,7 +509,7 @@ a.pp-attachment-title {
 }
 .pp-media-options {
   font-size: 13px;
-  color: var(--life-muted, #666274);
+  color: var(--ink-soft, #66666f);
   max-width: 100%;
 }
 .pp-media-options summary {
@@ -511,10 +525,10 @@ a.pp-attachment-title {
   width: min(720px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px);
   padding: 20px;
-  border: 1px solid var(--life-border, #dddde5);
+  border: 1px solid var(--line, #ececee);
   border-radius: 16px;
-  background: var(--life-surface, #fff);
-  color: var(--life-ink, #252432);
+  background: var(--paper, #fff);
+  color: var(--ink, #18181b);
   overflow-y: auto;
 }
 .pp-video-dialog::backdrop {
@@ -540,7 +554,7 @@ a.pp-attachment-title {
 .pp-player {
   aspect-ratio: 16 / 9;
   min-height: 200px;
-  background: #eeedf2;
+  background: var(--soft, #f7f7f8);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -557,7 +571,7 @@ a.pp-attachment-title {
 .pp-video-dialog :focus-visible,
 .pp-attachment :focus-visible,
 .pp-media-options :focus-visible {
-  outline: 3px solid var(--life-accent, #685aad);
+  outline: 2px solid #3156d3;
   outline-offset: 3px;
 }
 @media (max-width: 600px) {

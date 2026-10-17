@@ -288,6 +288,9 @@ jobs:
       - name: Verify blog home, private writing and exact saved-post return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-platform-home-browser.cjs
+      - name: Verify SNS blog reading, writing and preservation across screen sizes
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/sns-blog-experience-browser.cjs
       - name: Verify subview location and safe contextual return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/subview-navigation-browser.cjs
@@ -314,6 +317,7 @@ jobs:
         with:
           name: browser-checks-${{ github.run_attempt }}
           path: |
+            .local/sns-blog/after/
             .local/blog-platform/*.json
             .local/blog-platform/*.png
             .local/blog-platform/*.log

@@ -13,6 +13,29 @@
   function create({ storage, core, host, getBundle, navigate, openSource, renderReadingResume, isDisposed = () => false, announce = () => {} }) {
     let disposed = false, generation = 0, visible = false;
     let libraryOpen = false, libraryWorkspace = null;
+    const mediaUrls = new Set();
+    function clearMedia() { mediaUrls.forEach(url => URL.revokeObjectURL(url)); mediaUrls.clear(); }
+    function initials(name) { return !name || name === '내 블로그' ? '나' : Array.from(String(name).replace(/\s+/g, '')).slice(0, 2).join(''); }
+    function avatar(context) {
+      const mark = el('span', initials(context.profile.name), 'home-avatar');
+      mark.setAttribute('aria-hidden', 'true'); return mark;
+    }
+    function profileAction(context, className, focusKey) {
+      const button = action(context, '', () => navigate('page', { pageProfile: true }), className);
+      button.setAttribute('aria-label', '내 프로필 보기'); button.dataset.focusKey = focusKey;
+      button.append(avatar(context), el('span', context.profile.name, 'home-author-name'));
+      return button;
+    }
+    function libraryAnchor(context) {
+      const focused = document.activeElement;
+      return context.materials?.contains(focused) ? { element: focused, top: focused.getBoundingClientRect().top } : null;
+    }
+    function restoreAnchor(anchor) {
+      if (anchor && anchor.element.isConnected && document.activeElement === anchor.element) {
+        const displacement = anchor.element.getBoundingClientRect().top - anchor.top;
+        if (Math.abs(displacement) > 0.5) global.scrollBy({ top: displacement, left: 0, behavior: 'instant' });
+      }
+    }
     const alive = () => !disposed && !isDisposed();
     const showing = context => alive() && visible && context.token === generation && getBundle()?.workspaceId === context.workspaceId && context.surface.parentNode === host;
     function action(context, label, task, className = '', { keepFocus = true } = {}) {
@@ -105,14 +128,22 @@
     }
     function quickLinks(context) {
       const nav = el('nav', null, 'home-blog-actions'); nav.setAttribute('aria-label', '내 블로그');
-      [['글쓰기', 'edit', 'write', { pageCompose: true }], ['글 관리', null, 'blog', {}]].forEach(([label, glyph, destination, options], index) => {
-        const button = action(context, '', () => navigate(index === 0 ? 'page' : destination, options), index === 0 ? 'life-primary home-blog-write' : 'home-blog-action');
-        button.dataset.homeDestination = destination;
-        button.dataset.focusKey = 'home:action:' + destination;
-        if (glyph) button.append(life.Icons.create(glyph));
-        button.append(el('span', label)); nav.append(button);
-      });
+      const prompt = action(context, '어떤 이야기를 남길까요?', () => navigate('page', { pageCompose: true }), 'home-compose-prompt');
+      prompt.dataset.focusKey = 'home:action:prompt';
+      const write = action(context, '글쓰기', () => navigate('page', { pageCompose: true }), 'life-primary home-blog-write');
+      write.dataset.homeDestination = 'write'; write.dataset.focusKey = 'home:action:write';
+      nav.append(prompt, write);
       return nav;
+    }
+    function profileHeader(context) {
+      const header = el('div', null, 'home-profile-bar');
+      const profile = profileAction(context, 'home-profile-open', 'home:profile');
+      const copy = el('div', null, 'home-profile-copy');
+      const intro = el('p', '생각과 일상을 글로 남기는 내 공간입니다.', 'home-blog-description');
+      copy.append(profile, intro);
+      const manage = action(context, '글 관리', () => navigate('blog'), 'home-blog-action');
+      manage.dataset.homeDestination = 'blog'; manage.dataset.focusKey = 'home:action:blog';
+      header.append(copy, manage); return header;
     }
     function library(context, bundle) {
       const area = el('details', null, 'home-library');
@@ -146,6 +177,38 @@
       });
       return rows;
     }
+    function postCover(context, row, article, open) {
+      if (row.kind !== 'photo' || !row.photos || context.photoReads >= 3) return;
+      context.photoReads += 1;
+      const frame = action(context, '', open, 'home-post-media');
+      frame.setAttribute('aria-label', '사진이 있는 글 열기'); frame.dataset.focusKey = 'home:photo:' + row.id;
+      frame.setAttribute('aria-busy', 'true');
+      const image = el('img', null, 'home-post-cover'); image.alt = ''; image.loading = 'lazy'; image.decoding = 'async';
+      frame.append(image); article.append(frame);
+      const removeCover = () => {
+        if (!showing(context) || !frame.isConnected) return;
+        const focused = document.activeElement === frame, anchor = libraryAnchor(context);
+        frame.remove();
+        if (focused) article.querySelector('.home-post-open')?.focus({ preventScroll: true });
+        restoreAnchor(anchor);
+      };
+      storage.readPhotoPost(context.workspaceId, row.id).then(doc => {
+        if (!showing(context) || !frame.isConnected) return;
+        if (doc.status !== 'saved' || doc.archived) throw new Error('post_changed');
+        const embedded = doc.ops.find(op => op.insert?.photo)?.insert.photo;
+        const photo = doc.photos.find(item => item.id === embedded?.id);
+        if (!photo?.blob) throw new Error('photo_missing');
+        const url = URL.createObjectURL(photo.blob); mediaUrls.add(url);
+        image.alt = embedded.alt || embedded.caption || '';
+        image.src = url;
+        frame.setAttribute('aria-busy', 'false');
+        image.addEventListener('error', () => {
+          if (!showing(context)) return;
+          removeCover();
+          URL.revokeObjectURL(url); mediaUrls.delete(url);
+        }, { once: true });
+      }).catch(removeCover);
+    }
     function blogPost(context, row) {
       const article = el('article', null, 'home-post');
       const target = row.kind === 'photo' ? { photoPostId: row.id } : { postId: row.id };
@@ -153,22 +216,32 @@
       else if (row.kind === 'source') { article.dataset.sourceId = row.id; article.dataset.versionId = row.versionId; }
       else article.dataset.postId = row.id;
       const open = () => row.kind === 'source' ? openVersion(context, row.versionId) : navigate('page', { pagePreview: false, searchTarget: target });
-      const heading = el('h3');
+      const byline = el('div', null, 'home-post-byline');
+      byline.append(profileAction(context, 'home-post-author', 'home:author:' + row.kind + ':' + row.id));
+      const date = new Date(row.updatedAt), meta = el('p', null, 'life-meta home-post-meta');
+      if (Number.isFinite(date.getTime())) {
+        const time = el('time', new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(date));
+        time.dateTime = row.updatedAt;
+        time.title = new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }).format(date);
+        meta.append(time, document.createTextNode(' · '));
+      }
+      meta.append(document.createTextNode(row.kind === 'photo' ? '비공개 · 이 브라우저에 보관' : row.kind === 'source' ? '기록 글 · 비공개' : '첨부 글 · 비공개'));
+      byline.append(meta); article.append(byline);
+      const content = el('div', null, 'home-post-content'), heading = el('h3');
       const label = String(row.title || '').trim() || (row.kind === 'photo' ? '제목 없는 글' : snippet(row.body) || row.attachments?.[0]?.title || '첨부한 글');
       const button = action(context, label, open, 'home-post-open' + (row.kind === 'plain' ? ' home-post-prose' : ''));
       button.dataset.focusKey = 'home:post:' + row.kind + ':' + row.id;
-      heading.append(button); article.append(heading);
-      if (row.kind !== 'plain' && row.body?.trim()) article.append(el('p', snippet(row.body), 'home-text home-post-excerpt'));
-      const meta = el('p', null, 'life-meta home-post-meta');
-      const date = new Date(row.updatedAt);
-      if (Number.isFinite(date.getTime())) {
-        const time = el('time', new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'numeric', day: 'numeric' }).format(date));
-        time.dateTime = row.updatedAt; meta.append(time, document.createTextNode(' · '));
+      heading.append(button); content.append(heading);
+      if (row.kind !== 'plain' && row.body?.trim()) content.append(el('p', snippet(row.body), 'home-text home-post-excerpt'));
+      if (row.kind === 'plain' && row.attachments?.length) {
+        const attached = el('p', row.attachments.map(item => item.title).join(' · '), 'home-post-attachments');
+        content.append(attached);
       }
-      meta.append(document.createTextNode(row.kind === 'photo' ? '비공개 · 이 브라우저에 보관' : row.kind === 'source' ? '기록 글 · 비공개' : '첨부 글 · 비공개'));
-      if (row.photos) meta.append(document.createTextNode(' · 사진 ' + row.photos + '장'));
-      if (row.kind === 'plain' && row.attachments?.length) meta.append(document.createTextNode(' · 첨부 ' + row.attachments.length + '개'));
-      article.append(meta);
+      article.append(content); postCover(context, row, article, open);
+      const footer = el('div', null, 'home-post-footer');
+      const read = action(context, '글 읽기', open, 'home-post-read'); read.dataset.focusKey = 'home:read:' + row.kind + ':' + row.id;
+      read.append(life.Icons.create('arrow'));
+      footer.append(read); article.append(footer);
       return article;
     }
     function renderPosts(context, area, bundle, workbenchResult, photoResult) {
@@ -183,6 +256,12 @@
       if (photoResult.status === 'fulfilled') rows.push(...photoResult.value.filter(post => post.status === 'saved' && !post.archived).map(post => ({ ...post, kind: 'photo' })));
       const timestamp = row => Number.isFinite(Date.parse(row.updatedAt)) ? Date.parse(row.updatedAt) : 0;
       rows.sort((a, b) => timestamp(b) - timestamp(a) || (a.kind + ':' + a.id).localeCompare(b.kind + ':' + b.id));
+      if (state) {
+        const title = String(state.page.title || '').trim();
+        context.profile.name = title && title !== '내 페이지' ? title : '내 블로그';
+        context.surface.querySelectorAll('.home-author-name').forEach(node => { node.textContent = context.profile.name; });
+        context.surface.querySelectorAll('.home-avatar').forEach(node => { node.textContent = initials(context.profile.name); });
+      }
       rows.slice(0, 5).forEach(row => area.append(blogPost(context, row)));
       const failed = workbenchResult.status === 'rejected' || photoResult.status === 'rejected';
       if (failed) {
@@ -301,19 +380,20 @@
       if (!alive()) return;
       const bundle = getBundle();
       if (!bundle) return;
+      clearMedia();
       const surface = el('div', null, 'life-home'); surface.id = 'lifeHome';
-      const context = { token: ++generation, workspaceId: bundle.workspaceId, surface, error: el('p', null, 'life-error home-error') };
+      const context = { token: ++generation, workspaceId: bundle.workspaceId, surface, profile: { name: '내 블로그' }, photoReads: 0, error: el('p', null, 'life-error home-error') };
       visible = true;
       context.error.hidden = true; context.error.setAttribute('role', 'alert');
       const lead = el('div', null, 'home-blog-lead');
-      lead.append(el('p', '생각과 일상을 글로 남기는 내 공간입니다.', 'home-blog-description'), quickLinks(context));
+      lead.append(profileHeader(context), quickLinks(context));
       surface.append(lead, context.error);
       const composition = el('div', null, 'home-composition'); composition.id = 'homeComposition';
       const posts = section(context, '최근 글', 'homePosts');
       posts.setAttribute('aria-busy', 'true');
       const status = el('p', '저장한 글을 불러오는 중…', 'life-meta home-loading'); status.setAttribute('role', 'status');
       posts.append(status); composition.append(posts); composition.setAttribute('aria-busy', 'true');
-      const materials = library(context, bundle);
+      const materials = library(context, bundle); context.materials = materials;
       surface.append(composition, materials); host.append(surface);
       const results = await Promise.allSettled([
         storage.readWorkbench(context.workspaceId),
@@ -322,17 +402,12 @@
       if (!showing(context)) return;
       // A late title or post list may grow above an already-open library.
       // Keep its active control at the same reading position without fixing heights.
-      const focused = document.activeElement;
-      const anchor = materials.contains(focused) ? { element: focused, top: focused.getBoundingClientRect().top } : null;
+      const anchor = libraryAnchor(context);
       status.remove();
       try {
         const state = renderPosts(context, posts, bundle, results[0], results[1]);
         if (state) {
           const page = state.page;
-          if (page.title && page.title !== '내 페이지' && page.title !== '내 블로그') {
-            const title = el('h2', page.title, 'home-blog-title');
-            lead.prepend(title);
-          }
           if (page.showIntro && page.intro) {
             lead.querySelector('.home-blog-description').textContent = snippet(page.intro);
           }
@@ -348,12 +423,9 @@
         posts.append(error);
       }
       composition.setAttribute('aria-busy', 'false');
-      if (anchor && anchor.element.isConnected && document.activeElement === anchor.element) {
-        const displacement = anchor.element.getBoundingClientRect().top - anchor.top;
-        if (Math.abs(displacement) > 0.5) global.scrollBy({ top: displacement, left: 0, behavior: 'instant' });
-      }
+      restoreAnchor(anchor);
     }
-    function leave() { generation += 1; visible = false; }
+    function leave() { generation += 1; visible = false; clearMedia(); }
     function dispose() { leave(); disposed = true; }
     return Object.freeze({ render, leave, dispose });
   }

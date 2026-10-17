@@ -1,25 +1,46 @@
 /* Home shares the white reading surface. Tint marks controls and private state only. */
 .life-home { min-width: 0; container-type: inline-size; container-name: personal-home; }
 .life-home :is(p,span,strong,button) { overflow-wrap: anywhere; word-break: keep-all; }
-.home-blog-lead { padding: 5px 0 4px; }
-.home-blog-title { margin: 0 0 10px; color: var(--ink); font-size: 24px; font-weight: 650; line-height: 1.6; letter-spacing: -.02em; }
-.home-blog-description { color: var(--ink-soft); font-size: 15px; line-height: 1.8; }
-.home-blog-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 18px; }
-.home-blog-actions > .life-button { min-height: 44px; gap: 8px; padding-inline: 15px; }
-.home-blog-actions > .home-blog-write { font-weight: 650; }
-.home-blog-actions > .home-blog-action { color: var(--ink-soft); border-color: transparent; }
-.home-blog-actions > .home-blog-action:hover:not(:disabled) { color: var(--color-primary); background: var(--soft); }
-.home-post { padding: 22px 0 25px; border-bottom: 1px solid var(--line); }
-.home-post-open { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; width: 100%; min-height: 44px; overflow: hidden; border: 0; border-radius: 0; padding: 0; color: var(--ink); font-size: 21px; font-weight: 650; line-height: 1.65; letter-spacing: -.02em; text-align: left; }
-.home-post-open:hover:not(:disabled),.home-post-open:active:not(:disabled) { color: var(--color-primary); background: transparent; }
-.home-post-prose { -webkit-line-clamp: 3; font-size: 17px; font-weight: 500; line-height: 1.85; letter-spacing: normal; }
-.home-post-excerpt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
-.home-post-meta { margin-top: 12px; font-size: 12px; line-height: 1.7; }
-.home-first-post { padding: 26px 0 30px; border-bottom: 1px solid var(--line); }
-.home-first-post > h3 { color: var(--ink); font-size: 21px; font-weight: 600; line-height: 1.6; }
-.home-first-post > .home-text { color: var(--ink-soft); font-size: 15px; }
-.home-first-post > .life-button { margin-top: 20px; }
-.home-library { margin-top: 36px; border-top: 1px solid var(--line); }
+.home-blog-lead { padding: 8px 0 24px; }
+.home-profile-bar { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.home-profile-copy { flex: 1; min-width: 0; }
+.home-profile-open,.home-post-author { display: inline-flex; align-items: flex-start; justify-content: flex-start; gap: 12px; max-width: 100%; min-height: 44px; border: 0; padding: 0; background: transparent; text-align: left; }
+.home-profile-open:hover:not(:disabled),.home-post-author:hover:not(:disabled) { background: transparent; }
+.home-avatar { display: flex; flex: 0 0 44px; align-items: center; justify-content: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 50%; background: var(--canvas); color: var(--ink); font-size: 13px; font-weight: 650; line-height: 1; letter-spacing: -.03em; }
+.home-profile-open > .home-author-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; min-width: 0; padding-top: 1px; color: var(--ink); font-size: 17px; font-weight: 650; line-height: 1.5; letter-spacing: -.02em; }
+.home-blog-description { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: -16px 0 0 56px; color: var(--ink-soft); font-size: 13px; line-height: 1.7; }
+.home-profile-bar > .home-blog-action { flex: none; min-height: 44px; border-color: var(--line); border-radius: 999px; padding-inline: 14px; background: var(--paper); color: var(--ink); font-size: 13px; font-weight: 550; }
+.home-blog-actions { display: flex; align-items: center; gap: 12px; margin-top: 22px; }
+.home-blog-actions > .home-compose-prompt { display: block; flex: 1; min-width: 0; min-height: 48px; border: 0; border-radius: 999px; padding: 12px 18px; background: var(--canvas); color: var(--ink-soft); font-size: 15px; text-align: left; }
+.home-blog-actions > .home-compose-prompt:hover:not(:disabled) { background: var(--paper-2); color: var(--ink); }
+.home-blog-actions > .home-blog-write { flex: none; min-height: 44px; border-radius: 999px; padding-inline: 20px; font-size: 14px; font-weight: 650; }
+#homePosts { margin-top: 0; }
+#homePosts > .home-section-heading { min-height: 52px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+#homePosts > .home-section-heading > h2 { position: relative; padding: 14px 0; font-size: 14px; font-weight: 650; line-height: 1.6; }
+#homePosts > .home-section-heading > h2::after { position: absolute; bottom: -1px; left: 0; width: 100%; height: 2px; background: var(--ink); content: ''; }
+.home-post { min-width: 0; margin-inline: -24px; padding: 24px; border-bottom: 1px solid var(--line); }
+.home-post-byline { min-width: 0; margin-bottom: 18px; }
+.home-post-author { width: 100%; }
+.home-post-author > .home-author-name { overflow: hidden; min-width: 0; padding-top: 1px; color: var(--ink); font-size: 14px; font-weight: 650; line-height: 1.5; white-space: nowrap; text-overflow: ellipsis; }
+.home-post-meta { margin: -18px 0 0 56px; font-size: 12px; line-height: 1.75; }
+.home-post-content { min-width: 0; }
+.home-post-open { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; width: 100%; min-height: 44px; overflow: hidden; border: 0; border-radius: 0; padding: 0; background: transparent; color: var(--ink); font-size: 22px; font-weight: 650; line-height: 1.55; letter-spacing: -.025em; text-align: left; }
+.home-post-open:hover:not(:disabled),.home-post-open:active:not(:disabled) { color: var(--ink); background: transparent; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.home-post-prose { -webkit-line-clamp: 4; font-size: 16px; font-weight: 400; line-height: 1.85; letter-spacing: normal; }
+.home-post-excerpt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; margin-top: 8px; font-size: 16px; line-height: 1.85; }
+.home-post-attachments { margin-top: 12px; color: var(--ink-soft); font-size: 13px; line-height: 1.7; }
+.home-post-media { display: block; width: 100%; min-height: 0; aspect-ratio: 4 / 3; overflow: hidden; margin-top: 18px; border: 0; border-radius: 16px; padding: 0; background: var(--canvas); }
+.home-post-media:hover:not(:disabled) { background: var(--canvas); }
+.home-post-cover { display: block; width: 100%; height: 100%; object-fit: cover; }
+.home-post-footer { display: flex; justify-content: flex-end; margin-top: 8px; }
+.home-post-read { min-height: 44px; border: 0; border-radius: 999px; padding: 8px 0 8px 12px; background: transparent; color: var(--ink-soft); font-size: 13px; }
+.home-post-read:hover:not(:disabled) { background: transparent; color: var(--ink); }
+.home-post-read > .life-glyph { width: 16px; height: 16px; }
+.home-first-post { padding: 40px 0 44px; text-align: center; }
+.home-first-post > h3 { color: var(--ink); font-size: 22px; font-weight: 650; line-height: 1.6; letter-spacing: -.025em; }
+.home-first-post > .home-text { max-width: 34ch; margin: 10px auto 0; color: var(--ink-soft); font-size: 14px; line-height: 1.85; }
+.home-first-post > .life-button { margin-top: 22px; border-radius: 999px; }
+.home-library { margin-top: 24px; border-top: 1px solid var(--line); }
 .home-library > summary { min-height: 64px; padding: 18px 0; cursor: pointer; color: var(--ink); font-size: 15px; font-weight: 600; }
 .home-library > summary::marker { color: var(--ink-soft); }
 .home-library > summary > .life-meta { margin-left: 12px; font-size: 12px; font-weight: 400; }
@@ -54,7 +75,7 @@
 .home-group > .life-glyph { color: var(--ink-soft); }
 .home-group > .life-glyph:first-child { box-sizing: content-box; width: 20px; height: 20px; padding: 7px; border-radius: 10px; background: var(--soft); color: var(--color-primary); }
 .home-group > .life-glyph:last-child { transform: rotate(-90deg); }
-.home-page-scope { display: inline-block; margin: 4px 0 12px; padding: 3px 8px; border-radius: 6px; color: var(--mint-ink, #356452); background: var(--mint, #edf7f3); font-size: 12px; font-weight: 500; }
+.home-page-scope { display: inline-block; margin: 4px 0 12px; padding: 3px 0; color: var(--ink-soft); font-size: 12px; font-weight: 500; }
 .home-page-title { font-size: 19px; margin-top: 16px; }
 .home-intro { margin-bottom: 18px; }
 .home-page-entry { min-width: 0; padding: 16px 0 20px; border-bottom: 1px solid var(--line); }
@@ -77,11 +98,18 @@
   #homeRecent > .home-record > :is(h3,.home-text) { grid-column: 1 / -1; }
   #homeRecent > .home-record > .home-date { margin-top: 9px; white-space: nowrap; }
 }
-@media (max-width: 700px) {
-  .home-blog-actions { gap: 5px; }
-  .home-blog-actions > .life-button { padding-inline: 11px; font-size: 13px; }
-  .home-post-open { font-size: 19px; }
+@media (max-width: 760px) {
+  .home-blog-lead { padding-top: 4px; padding-bottom: 20px; }
+  .home-blog-actions { gap: 10px; margin-top: 20px; }
+  .home-blog-actions > .home-compose-prompt { padding-inline: 14px; font-size: 14px; }
+  .home-blog-actions > .home-blog-write { padding-inline: 17px; }
+  .home-profile-bar { gap: 8px; }
+  .home-profile-bar > .home-blog-action { padding-inline: 12px; font-size: 12px; }
+  .home-post { margin-inline: -20px; padding: 20px; }
+  .home-post-open { font-size: 20px; }
   .home-post-prose { font-size: 16px; }
+  .home-post-media { border-radius: 12px; }
+  .home-post-byline { margin-bottom: 16px; }
   .home-library > summary > .life-meta { display: block; margin: 6px 0 0 17px; }
   .home-section { margin-top: 24px; }
   .home-record-open { font-size: 17px; }

@@ -1299,7 +1299,7 @@
       const host = node('section'); host.id = 'lifeBlogManager'; main.append(host);
       const instance = global.HaedoLife.BlogManager.create({ storage, workspaceId, auth, blogSync,
         isCurrent: () => !disposed && state.mode === 'blog' && state.bundle?.workspaceId === workspaceId,
-        openPost: postId => navigate('page', { searchTarget: { photoPostId: postId }, pagePreview: false }),
+        openPost: (postId, options = {}) => navigate('page', { searchTarget: { photoPostId: postId, photoPostRevision: options.expectedRevision }, pagePreview: false }),
         openLegacy: row => row.kind === 'source' ? navigate('source', { sourceId: row.id, sourceVersionId: row.versionId, locator: null }) :
           row.kind === 'writing-draft' ? navigate('write', { writing: { stageId: row.id } }) :
           row.kind === 'page-draft' ? navigate('page', { pageDraftId: row.id }) : navigate('page', { searchTarget: { postId: row.id }, pagePreview: false })

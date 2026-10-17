@@ -142,6 +142,7 @@
     function showStatus(e) {
       error = e || null;
       if (status) {
+        status.hidden = mode === "read" && !e;
         status.textContent =
           e?.message ||
           e ||
@@ -159,6 +160,30 @@
       b.type = "button";
       b.addEventListener("click", () => run(task));
       return b;
+    }
+    function glyph(name) {
+      const paths = {
+        more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+        image: '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.5"/><path d="m21 15-5-5L5 21"/>',
+        undo: '<path d="m9 5-5 5 5 5"/><path d="M4 10h10a6 6 0 0 1 6 6v3"/>',
+        redo: '<path d="m15 5 5 5-5 5"/><path d="M20 10H10a6 6 0 0 0-6 6v3"/>',
+      };
+      if (!Object.hasOwn(paths, name)) return life.Icons.create(name);
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      for (const [key, value] of Object.entries({
+        width: "20", height: "20", viewBox: "0 0 24 24", fill: "none",
+        stroke: "currentColor", "stroke-width": "1.8", "stroke-linecap": "round",
+        "stroke-linejoin": "round", "aria-hidden": "true", focusable: "false",
+      })) svg.setAttribute(key, value);
+      svg.innerHTML = paths[name]; // Fixed local control geometry, never document content.
+      return svg;
+    }
+    function iconControl(node, name, label) {
+      node.classList.add("photo-icon-button");
+      node.setAttribute("aria-label", label);
+      node.title = label;
+      node.replaceChildren(glyph(name), el("span", label, "life-sr-only"));
+      return node;
     }
     async function run(task) {
       if (busy || !valid()) return;
@@ -908,7 +933,7 @@
         commands = el("div", null, "photo-commandbar");
       const more = el("details", null, "photo-more life-details");
       const menu = el("div", null, "photo-more-menu");
-      more.append(el("summary", "더 보기"), menu);
+      more.append(iconControl(el("summary"), "more", "더 보기"), menu);
       menu.append(
         button("사진 포함 백업", backup),
         button("HTML 읽기 파일 받기", exportHTML),
@@ -917,16 +942,24 @@
         button("초안 다시 저장", persist),
       );
       if (doc.replaces) menu.append(button("새 글로 저장", () => finish(true)));
-      commands.append(
-        button("닫기", list),
-        status,
-        button("글 저장", () => finish()),
-        more,
-      );
+      const commandState = el("div", null, "photo-command-state"),
+        save = button("글 저장", () => finish());
+      commandState.append(el("span", "비공개 · 이 브라우저", "photo-command-scope"), status);
+      save.classList.add("photo-save");
+      save.title = "이 브라우저에 비공개로 저장";
+      commands.append(iconControl(button("닫기", list), "close", "닫기"), commandState, save, more);
       sticky.append(commands);
       const toolbar = el("div", null, "photo-toolbar");
       toolbar.setAttribute("role", "toolbar");
       toolbar.setAttribute("aria-label", "본문 서식");
+      const primaryFormats = el("span", null, "photo-format-primary"),
+        extraFormats = el("details", null, "photo-format-options"),
+        formatSummary = el("summary"),
+        formatPanel = el("span", null, "photo-format-panel");
+      formatSummary.setAttribute("aria-label", "추가 서식");
+      formatSummary.title = "추가 서식";
+      formatSummary.append(el("span", "서식"), glyph("chevron"));
+      extraFormats.append(formatSummary, formatPanel);
       const heading = el("select");
       heading.className = "ql-header";
       heading.setAttribute("aria-label", "문단 종류");
@@ -939,7 +972,7 @@
         o.value = value;
         heading.append(o);
       }
-      toolbar.append(heading);
+      formatPanel.append(heading);
       for (const [key, name, value] of [
         ["bold", "굵게"],
         ["italic", "기울임"],
@@ -956,11 +989,12 @@
         if (value) b.value = value;
         b.setAttribute("aria-label", name);
         b.title = name;
-        toolbar.append(b);
+        (key === "bold" || key === "link" ? primaryFormats : formatPanel).append(b);
       }
       const undo = button("실행 취소", () => editor.history.undo()),
         redo = button("다시 실행", () => editor.history.redo());
-      toolbar.append(undo, redo);
+      const history = el("span", null, "photo-history");
+      history.append(iconControl(undo, "undo", "실행 취소"), iconControl(redo, "redo", "다시 실행"));
       const photoInput = el("input");
       photoInput.type = "file";
       photoInput.multiple = true;
@@ -973,15 +1007,12 @@
         photoInput.value = "";
         run(() => insertFiles(files));
       });
-      toolbar.append(
-        button("사진", () => {
-          photoInput.click();
-        }),
-        photoInput,
-      );
+      const insertPhoto = button("사진", () => photoInput.click());
+      insertPhoto.classList.add("photo-insert-photo");
+      insertPhoto.prepend(glyph("image"));
+      toolbar.append(insertPhoto, primaryFormats, extraFormats, history, photoInput);
       const area = el("div", null, "photo-quill");
-      sticky.append(toolbar);
-      form.append(sticky, title, area);
+      form.append(sticky, title, toolbar, area);
       host.append(form);
       editor = new root.Quill(area, {
         theme: "snow",
@@ -1436,15 +1467,15 @@
       else {
         const actions = el("div", null, "life-actions photo-read-actions");
         actions.append(
-          button("사진 글 목록", list),
+          iconControl(button("사진 글 목록", list), "back", "사진 글 목록"),
           doc.archived
             ? button("목록으로 복원", () => archive(false))
             : button("글 수정", () => open(doc.id, true)),
-          button("사진 포함 백업", backup),
+          iconControl(button("사진 포함 백업", backup), "download", "사진 포함 백업"),
         );
         const more = el("details", null, "photo-more life-details"),
           menu = el("div", null, "photo-more-menu");
-        more.append(el("summary", "더 보기"), menu);
+        more.append(iconControl(el("summary"), "more", "더 보기"), menu);
         menu.append(
           button("HTML 읽기 파일 받기", exportHTML),
           button("사본으로 이어 쓰기", duplicate),
@@ -1456,16 +1487,15 @@
         const article = el("article", null, "photo-article"),
           heading = el("h2", doc.title || "제목 없는 글", "photo-read-heading");
         heading.tabIndex = -1;
-        article.append(
-          heading,
-          el(
-            "p",
-            (doc.archived ? "보관함 · " : "") +
-              (doc.status === "draft" ? "초안 · " : "비공개 · ") +
-              "이 브라우저",
-            "life-meta",
-          ),
-        );
+        const metadata = el("p", (doc.archived ? "보관함 · " : "") +
+          (doc.status === "draft" ? "초안 · " : "비공개 · ") + "이 브라우저", "life-meta photo-read-meta");
+        const modified = new Date(doc.updatedAt);
+        if (Number.isFinite(modified.getTime())) {
+          const time = el("time", new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium" }).format(modified));
+          time.dateTime = doc.updatedAt;
+          metadata.append(document.createTextNode(" · 수정 "), time);
+        }
+        article.append(heading, metadata);
         renderRead(article, doc);
         host.append(article);
       }

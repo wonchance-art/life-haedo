@@ -100,7 +100,8 @@ async function main() {
     await check('index starts at home, legacy life stays records, and quick links enter working sections', async ({ page }) => {
       await freshHome(page);
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'home');
-      assert.equal(await page.locator('[data-haedo-navigation] a').count(), 4);
+      assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section]').count(), 4);
+      assert.equal(await page.locator('[data-haedo-navigation] .haedo-brand').getAttribute('href'), 'index.html');
       assert.equal(await page.locator('a[data-haedo-section="home"]').getAttribute('aria-current'), 'page');
       assert.equal(await page.locator('#homeFirstWrite').isVisible(), true);
       for (const [destination, expected] of [['import', 'import'], ['write', 'page'], ['time', 'time']]) {
