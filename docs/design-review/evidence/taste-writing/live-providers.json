@@ -1,0 +1,35 @@
+{
+  "browser": "151.0.7922.173",
+  "results": [
+    {
+      "provider": "books",
+      "query": "채식주의자",
+      "count": 1,
+      "first": {
+        "provider": "Open Library",
+        "type": "book",
+        "title": "채식주의자",
+        "creator": "Han Kang",
+        "url": "https://openlibrary.org/works/OL17334243W",
+        "attribution": "Han Kang",
+        "attributionLabel": "저자",
+        "detail": "작품 정보 · 판본 미지정 · 첫 출간 2007"
+      }
+    },
+    {
+      "provider": "projects",
+      "query": "idb",
+      "count": 6,
+      "first": {
+        "provider": "GitHub",
+        "type": "tool",
+        "title": "idb",
+        "creator": "",
+        "url": "https://github.com/facebook/idb",
+        "attribution": "facebook",
+        "attributionLabel": "저장소 소유자",
+        "detail": "idb is a flexible command line interface for automating iOS simulators and devices"
+      }
+    }
+  ]
+}

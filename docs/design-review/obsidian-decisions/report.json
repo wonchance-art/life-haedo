@@ -1,0 +1,197 @@
+{
+  "checks": [
+    "Local file validation shows candidates without auto-selecting or contacting any endpoint",
+    "Exact heading selection repairs an existing document link; save/reopen and stale input preserve current choices",
+    "Preview exports only the chosen references with exact original auxiliary bytes and reusable decisions/history",
+    "Generated notes restore through the account UI as a new workspace; exact links/backlinks and a fresh backup retain original text",
+    "Whole-scale anonymous 6,899-file review loads 60 groups/152 occurrences and exports a selected new copy without changing the audit"
+  ],
+  "visual": [
+    {
+      "scene": "compare",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "",
+          "text": "노트 연결 선택원문을 대조하고 필요한 연결만 새 비공개 사본에 담습니다.\n가져온 파일파일 선택·바꾸기같은 변환 폴더의 아래 6개 파일을 함께 선",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "compare",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "",
+          "text": "노트 연결 선택원문을 대조하고 필요한 연결만 새 비공개 사본에 담습니다.\n가져온 파일파일 선택·바꾸기같은 변환 폴더의 아래 6개 파일을 함께 선",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "compare",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "",
+          "text": "노트 연결 선택원문을 대조하고 필요한 연결만 새 비공개 사본에 담습니다.\n가져온 파일파일 선택·바꾸기같은 변환 폴더의 아래 6개 파일을 함께 선",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "preview",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "h2",
+          "id": "preview-title",
+          "class": "",
+          "text": "변경 미리보기",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.616
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "preview",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "h2",
+          "id": "preview-title",
+          "class": "",
+          "text": "변경 미리보기",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.616
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "preview",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.661,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "h2",
+          "id": "preview-title",
+          "class": "",
+          "text": "변경 미리보기",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.616
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [],
+  "external": [],
+  "scope": "Anonymous standalone local HTTP tool; real IndexedDB and mock Auth for restoration. No real private files or Apple device/Files proof.",
+  "browser": "151.0.7922.173",
+  "wholeScale": {
+    "files": 6899,
+    "reviewGroups": 60,
+    "occurrences": 152,
+    "loadMs": 5457
+  },
+  "pass": true
+}

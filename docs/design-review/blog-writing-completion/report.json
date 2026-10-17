@@ -1,0 +1,500 @@
+{
+  "checks": [
+    "A v1 post stays unchanged; one editor accepts original photos and an existing book without private collection context",
+    "Unapplied attachment input and composition block save/export/navigation; edit, cancel and reorder preserve the body and collection",
+    "Portable HTML contains exact original bytes and readable Korean/attribution, with no scripts, runtime URLs or automatic external requests",
+    "The original viewer navigates the document order, downloads the current original and releases image URLs while returning focus to the viewed photo",
+    "A separate draft copy preserves originals and attachments without changing the saved post or collection",
+    "Archive failure leaves the reader and index unchanged; a retry hides the post from normal feed/search and explicit restoration keeps every byte",
+    "Another tab archiving the original cannot be overwritten by an older edit; explicit new-copy recovery preserves both",
+    "Empty drafts are reused and unfinished posts live in the explicit draft area rather than the normal saved feed",
+    "Both v1 and v2 ZIPs show a review before installing a new unarchived draft with remapped IDs and unchanged originals",
+    "Legacy records and private collection context remain exact; another account cannot read or overwrite the rich post"
+  ],
+  "visual": [
+    {
+      "scene": "attachment-review",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.514,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "더 보기",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "attachment-review",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.514,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "더 보기",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "reading",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.514,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "h2",
+          "id": "",
+          "class": "photo-read-heading",
+          "text": "여행에서 읽고 들은 것들 <기록>",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "reading",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.514,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "h2",
+          "id": "",
+          "class": "photo-read-heading",
+          "text": "여행에서 읽고 들은 것들 <기록>",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "reading-menu",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.514,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "더 보기",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "reading-menu",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.514,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "더 보기",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "portable",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.176,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "",
+          "text": "여행에서 읽고 들은 것들 <기록>사진과 책, 장소를 함께 남기는 여행 기록.두 번째 문장도 같은 본문에 남긴다.산책한 장소장소여행에서 읽은 책 ",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.379
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "portable",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.176,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "",
+          "text": "여행에서 읽고 들은 것들 <기록>사진과 책, 장소를 함께 남기는 여행 기록.두 번째 문장도 같은 본문에 남긴다.산책한 장소장소여행에서 읽은 책 ",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.379
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "viewer",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.514,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "viewer",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.514,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "archive",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "초안 0 · 보관함 1",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "archive",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "초안 0 · 보관함 1",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "restore-review",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.514,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "section",
+          "id": "",
+          "class": "photo-import",
+          "text": "사진 글 복원 확인",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "restore-review",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.514,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "section",
+          "id": "",
+          "class": "photo-import",
+          "text": "사진 글 복원 확인",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [],
+  "external": [],
+  "scope": "Anonymous Auth, synthetic originals and real IndexedDB. Exported HTML reopened over local HTTP in a fresh context; file:// navigation is blocked by this environment. Linux Chromium; no production or Apple-device proof.",
+  "browser": "151.0.7922.173",
+  "pass": true
+}

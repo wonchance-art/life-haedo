@@ -1,0 +1,439 @@
+{
+  "checks": [
+    "Stored board root opens the chosen board overview and returning preserves exact result focus",
+    "Area description and spaced Korean reason open the exact area and item with the reason visible",
+    "All saved items are searchable; kind, expanded limit and focus survive return without persisting the query",
+    "A two-tab reorder invalidates the item snapshot and offers reload; changed and removed areas never open replacements",
+    "An aborted save sends no change notice; a committed save does, and a board read failure retains page results",
+    "Opening saved posts after a board leaves the board; unapplied edits block return and remain on screen",
+    "Late board reads cannot reopen a departed screen; another workspace and account cannot see the query or board"
+  ],
+  "visual": [
+    {
+      "scene": "board-overview",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "section",
+          "id": "",
+          "class": "nb-display",
+          "text": "읽을 문장9 / 9개읽을 문장 — 나에게 돌아오는 이야기 1읽을 문장 — 나에게 돌아오는 이야기 2읽을 문장 — 나에게 돌아오는 이야기 3읽을 ",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "board-overview",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "section",
+          "id": "",
+          "class": "nb-display",
+          "text": "읽을 문장9 / 9개읽을 문장 — 나에게 돌아오는 이야기 1읽을 문장 — 나에게 돌아오는 이야기 2읽을 문장 — 나에게 돌아오는 이야기 3읽을 ",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "board-overview",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "section",
+          "id": "",
+          "class": "nb-display",
+          "text": "읽을 문장9 / 9개읽을 문장 — 나에게 돌아오는 이야기 1읽을 문장 — 나에게 돌아오는 이야기 2읽을 문장 — 나에게 돌아오는 이야기 3읽을 ",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "exact-reason",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "li",
+          "id": "",
+          "class": "nb-cell",
+          "text": "들으며 걷기 — 나에게 돌아오는 이야기 7익명 창작자 · 음악선택 이유🌱 오래 좋아할 기준\r\n산책하며 다시 떠올린 이유.",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "exact-reason",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "li",
+          "id": "",
+          "class": "nb-cell",
+          "text": "들으며 걷기 — 나에게 돌아오는 이야기 7익명 창작자 · 음악선택 이유🌱 오래 좋아할 기준\r\n산책하며 다시 떠올린 이유.",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "exact-reason",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "li",
+          "id": "",
+          "class": "nb-cell",
+          "text": "들으며 걷기 — 나에게 돌아오는 이야기 7익명 창작자 · 음악선택 이유🌱 오래 좋아할 기준\r\n산책하며 다시 떠올린 이유.",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "search-results",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "",
+          "class": "life-button life-find-result",
+          "text": "9칸 구성 · 산책의 작은 발견들 · 다시 볼 작품 · 7번째 칸다시 볼 작품 — 나에게 돌아오는 이야기 7산책에서 다시 생각할 문장 7선택 이",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 700,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "search-results",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "",
+          "class": "life-button life-find-result",
+          "text": "9칸 구성 · 산책의 작은 발견들 · 다시 볼 작품 · 7번째 칸다시 볼 작품 — 나에게 돌아오는 이야기 7산책에서 다시 생각할 문장 7선택 이",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 628,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "search-results",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "",
+          "class": "life-button life-find-result",
+          "text": "9칸 구성 · 산책의 작은 발견들 · 다시 볼 작품 · 7번째 칸다시 볼 작품 — 나에게 돌아오는 이야기 7산책에서 다시 생각할 문장 7선택 이",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 350,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "partial-failure",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "",
+          "class": "life-button",
+          "text": "전체 1",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 700,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "partial-failure",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "",
+          "class": "life-button",
+          "text": "전체 1",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 628,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "partial-failure",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "",
+          "class": "life-button",
+          "text": "전체 1",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 350,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [],
+  "external": [],
+  "scope": "Anonymous account-scoped IndexedDB and Linux Chromium; Apple hardware and production installation unverified.",
+  "browser": "151.0.7922.173",
+  "pass": true
+}

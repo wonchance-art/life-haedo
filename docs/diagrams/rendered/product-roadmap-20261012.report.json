@@ -1,0 +1,35 @@
+{
+  "renderer": {
+    "name": "mermaid",
+    "version": "12.1.0",
+    "license": "MIT"
+  },
+  "capturedAt": "2026-10-12T22:36:22.896Z",
+  "font": "Noto Sans CJK KR",
+  "environment": "Linux Chromium; documentation render, not an Apple device test",
+  "completed": true,
+  "diagrams": [
+    {
+      "source": "product-roadmap-20261012.mmd",
+      "sourceSha256": "96326f27444099622cfed09615b0df92a4f3602e3f2d436344350795059015ac",
+      "svgSha256": "e95cb26e10bca94ff87a8d80d99daa7726f2c3daad41bfce4ebfe5e9352c1530",
+      "title": "해도 제품 방향과 현재 위치",
+      "description": "내 페이지에서 직접 글을 쓰고 선택한 취향이나 기존 기록을 붙입니다. 개인 보관과 명시적 공개를 구분하고 자기 이해는 후속, 책 확장은 보류합니다.",
+      "width": 777.4696044921875,
+      "height": 817.5999755859375,
+      "nodes": 8,
+      "edges": 8,
+      "textElements": 14,
+      "koreanText": true,
+      "koreanFontReady": true,
+      "outOfBounds": [],
+      "clippedLabels": [],
+      "externalReferences": [],
+      "foreignObjects": 0
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "externalRequests": [],
+  "browser": "151.0.7922.173"
+}

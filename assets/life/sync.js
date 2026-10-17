@@ -19,6 +19,7 @@
     stale_conflict: '비교 후 내용이나 버전이 바뀌었습니다. 다시 비교한 뒤 선택해 주세요.',
     remote_invalid: '서버 자료의 형식 또는 버전이 맞지 않아 적용하지 않았습니다.',
     remote_revision_regressed: '서버 버전이 이전보다 낮아 적용하지 않았습니다.',
+    remote_revision_mismatch: '같은 서버 버전의 내용이 달라졌습니다. 이 브라우저의 자료는 보존했습니다.',
     schema_missing: '서버에 자료 동기화 준비가 필요합니다. 연결 도움말을 확인해 주세요.',
     payload_too_large: '동기화할 자료가 서버의 크기 제한을 넘었습니다. 로컬 자료는 보존됩니다.',
     network_error: '서버 연결을 확인해 주세요. 전송 대기 작업은 보존됩니다.',
@@ -345,10 +346,9 @@
           const local = await storage.read(remoteId); guard(context);
           if (state.outbox || local.revision !== state.syncedLocalRevision || state.conflict) throw fault('workspace_conflict');
           if (row.revision < state.remoteRevision) throw fault('remote_revision_regressed');
-          if (row.revision > state.remoteRevision) {
-            const applied = await storage.applySyncRemote(remoteId, expected, row); guard(context);
-            if (applied.status !== 'stored') { await storage.setSyncConflict(remoteId, expected, row); throw fault('workspace_conflict'); }
-          }
+          // Equal revisions must still verify the complete acknowledged snapshot.
+          const applied = await storage.applySyncRemote(remoteId, expected, row); guard(context);
+          if (applied.status !== 'stored') { await storage.setSyncConflict(remoteId, expected, row); throw fault('workspace_conflict'); }
           result = await storage.read(remoteId);
         } else result = await storage.installSyncRemote(row, expected);
         guard(context); watch(remoteId); emit('state', remoteId);
@@ -403,6 +403,8 @@
             emit('state', context.workspaceId); continue;
           }
           if (!dirty) {
+            const applied = await storage.applySyncRemote(context.workspaceId, expected, row); guard(context);
+            if (applied.status !== 'stored') return observeConflict(context, expected, row);
             if (state.error) { await storage.setSyncError(context.workspaceId, expected, null); guard(context); }
             return getState(context.workspaceId);
           }

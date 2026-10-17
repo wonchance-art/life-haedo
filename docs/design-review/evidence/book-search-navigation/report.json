@@ -1,0 +1,330 @@
+{
+  "checks": [
+    "Paginate beyond six candidates; failed page preserves candidates and keyboard recovery",
+    "Explicit Korean edition review saves exact edition, preserving body/source/private scope and collection",
+    "Empty/error/late Korean response retains manual input and never revives a closed or changed selection"
+  ],
+  "visual": [
+    {
+      "scene": "page-error",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "예술 작품"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "도구"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "인물"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.414,
+      "measuredTexts": 44,
+      "contrastFailures": []
+    },
+    {
+      "scene": "search-page",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.414,
+      "measuredTexts": 24,
+      "contrastFailures": []
+    },
+    {
+      "scene": "search-page",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.414,
+      "measuredTexts": 24,
+      "contrastFailures": []
+    },
+    {
+      "scene": "search-page",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "예술 작품"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "도구"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "인물"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.414,
+      "measuredTexts": 24,
+      "contrastFailures": []
+    },
+    {
+      "scene": "korean-edition",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.414,
+      "measuredTexts": 27,
+      "contrastFailures": []
+    },
+    {
+      "scene": "korean-edition",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.414,
+      "measuredTexts": 27,
+      "contrastFailures": []
+    },
+    {
+      "scene": "korean-edition",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "예술 작품"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "도구"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "인물"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.414,
+      "measuredTexts": 27,
+      "contrastFailures": []
+    },
+    {
+      "scene": "korean-empty",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "예술 작품"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "도구"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "인물"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.414,
+      "measuredTexts": 25,
+      "contrastFailures": []
+    },
+    {
+      "scene": "korean-error",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "예술 작품"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "도구"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "인물"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.414,
+      "measuredTexts": 26,
+      "contrastFailures": []
+    },
+    {
+      "scene": "korean-loading",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "예술 작품"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "도구"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "인물"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.414,
+      "measuredTexts": 25,
+      "contrastFailures": []
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+    "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "requests": [
+    "/search.json?q=%EA%B4%80%EC%B0%B0%EC%9D%98+%EA%B8%B0%EB%A1%9D&fields=key%2Ctitle%2Cauthor_name%2Cfirst_publish_year&limit=6",
+    "/search.json?q=%EA%B4%80%EC%B0%B0%EC%9D%98+%EA%B8%B0%EB%A1%9D&fields=key%2Ctitle%2Cauthor_name%2Cfirst_publish_year&limit=6&page=2",
+    "/search.json?q=%EA%B4%80%EC%B0%B0%EC%9D%98+%EA%B8%B0%EB%A1%9D&fields=key%2Ctitle%2Cauthor_name%2Cfirst_publish_year&limit=6&page=2",
+    "/search.json?q=key%3A%2Fworks%2FOL123W+language%3Akor&fields=key%2Ceditions%2Ceditions.key%2Ceditions.title%2Ceditions.language%2Ceditions.publisher%2Ceditions.publish_date&limit=1",
+    "/search.json?q=%EA%B4%80%EC%B0%B0%EC%9D%98+%EA%B8%B0%EB%A1%9D&fields=key%2Ctitle%2Cauthor_name%2Cfirst_publish_year&limit=6",
+    "/search.json?q=%EA%B4%80%EC%B0%B0%EC%9D%98+%EA%B8%B0%EB%A1%9D&fields=key%2Ctitle%2Cauthor_name%2Cfirst_publish_year&limit=6&page=2",
+    "/search.json?q=key%3A%2Fworks%2FOL123W+language%3Akor&fields=key%2Ceditions%2Ceditions.key%2Ceditions.title%2Ceditions.language%2Ceditions.publisher%2Ceditions.publish_date&limit=1",
+    "/search.json?q=%EA%B4%80%EC%B0%B0%EC%9D%98+%EA%B8%B0%EB%A1%9D&fields=key%2Ctitle%2Cauthor_name%2Cfirst_publish_year&limit=6",
+    "/search.json?q=%EA%B4%80%EC%B0%B0%EC%9D%98+%EA%B8%B0%EB%A1%9D&fields=key%2Ctitle%2Cauthor_name%2Cfirst_publish_year&limit=6&page=2",
+    "/search.json?q=key%3A%2Fworks%2FOL123W+language%3Akor&fields=key%2Ceditions%2Ceditions.key%2Ceditions.title%2Ceditions.language%2Ceditions.publisher%2Ceditions.publish_date&limit=1",
+    "/search.json?q=key%3A%2Fworks%2FOL123W+language%3Akor&fields=key%2Ceditions%2Ceditions.key%2Ceditions.title%2Ceditions.language%2Ceditions.publisher%2Ceditions.publish_date&limit=1",
+    "/search.json?q=%EA%B4%80%EC%B0%B0%EC%9D%98+%EA%B8%B0%EB%A1%9D&fields=key%2Ctitle%2Cauthor_name%2Cfirst_publish_year&limit=6",
+    "/search.json?q=%EA%B4%80%EC%B0%B0%EC%9D%98+%EA%B8%B0%EB%A1%9D&fields=key%2Ctitle%2Cauthor_name%2Cfirst_publish_year&limit=6&page=2",
+    "/search.json?q=key%3A%2Fworks%2FOL123W+language%3Akor&fields=key%2Ceditions%2Ceditions.key%2Ceditions.title%2Ceditions.language%2Ceditions.publisher%2Ceditions.publish_date&limit=1"
+  ],
+  "environment": "Linux Chromium; anonymous mock Auth/provider, real IndexedDB. Not Apple hardware or production data.",
+  "browser": "151.0.7922.173"
+}

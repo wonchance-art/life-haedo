@@ -1,0 +1,89 @@
+{
+  "checks": [
+    "Compare only local changes; cancel preserves textarea/cursor and latest deleted/added drafts",
+    "Failed comparison read keeps conflict action, current DOM and inputs available for a direct retry",
+    "Recovery failure and file fallback preserve inputs; retry copies all changes exactly and resumes active caret",
+    "New conflict uses the successful recovery as baseline; deterministic second-tab race creates no partial copy",
+    "Unapplied attachments and IME block recovery comparison until inputs are accepted",
+    "A reverted local change reloads latest drafts without making unnecessary copies",
+    "Full latest storage keeps all local input and file fallback until another tab frees capacity",
+    "Input typed during an unfinished save is compared against the actual persisted payload"
+  ],
+  "visual": [
+    {
+      "name": "compare",
+      "width": 1440,
+      "height": 1000,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.552,
+      "measuredTexts": 33,
+      "contrastFailures": []
+    },
+    {
+      "name": "compare",
+      "width": 820,
+      "height": 1000,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.552,
+      "measuredTexts": 33,
+      "contrastFailures": []
+    },
+    {
+      "name": "compare",
+      "width": 390,
+      "height": 1000,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.552,
+      "measuredTexts": 33,
+      "contrastFailures": []
+    },
+    {
+      "name": "compare-landscape",
+      "width": 844,
+      "height": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.552,
+      "measuredTexts": 33,
+      "contrastFailures": []
+    },
+    {
+      "name": "failure",
+      "width": 390,
+      "height": 1000,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.091,
+      "measuredTexts": 16,
+      "contrastFailures": []
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [],
+  "external": [],
+  "scope": "Anonymous mocked Auth, real IndexedDB and two tabs. Linux Chromium, no production writes or Apple hardware.",
+  "browser": "151.0.7922.173"
+}

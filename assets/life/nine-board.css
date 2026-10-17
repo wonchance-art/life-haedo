@@ -1,0 +1,56 @@
+/* The selection itself is the surface: a 3 × 3 grid, with controls outside it. */
+.nb-workspace { max-width: 1080px; margin: 20px auto; min-width: 0; }
+.nb-toolbar,.nb-area-nav { gap: 8px; margin: 16px 0; }
+.nb-toolbar select { max-width: 100%; min-height: 44px; font-size: 16px; }
+.nb-status { min-height: 24px; }
+.nb-title { font-size: 30px; line-height: 1.3; margin: 28px 0 12px; overflow-wrap: anywhere; }
+.nb-area-heading { font-size: 24px; line-height: 1.4; margin: 28px 0 8px; overflow-wrap: anywhere; }
+.nb-text { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 70ch; }
+.nb-details { margin: 16px 0; }
+.nb-details > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+.nb-details[open] > summary { margin-bottom: 12px; }
+.nb-grid,.nb-areas { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; padding: 0; margin: 20px 0 32px; list-style: none; }
+.nb-cell { min-width: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); padding: 12px; overflow-wrap: anywhere; }
+.nb-grid .pp-attachments { display: block; margin: 0; }
+.nb-grid .pp-attachment { display: block; border: 0; background: transparent; border-radius: 0; padding: 0; }
+.nb-grid .pp-visual { height: 80px; min-height: 0; }
+.nb-grid .pp-shape { height: 68px; width: 48px; }
+.nb-grid .pp-attachment-copy { min-width: 0; padding: 8px 0; }
+.nb-grid .pp-attachment-title { font-size: 17px; min-height: 44px; display: flex; align-items: center; overflow-wrap: anywhere; }
+.nb-reason { margin: 0; font-size: 15px; }
+.nb-reason > summary { min-height: 44px; }
+.nb-cell > button { min-height: 44px; }
+.nb-empty { width: 100%; min-height: 164px !important; border: 0; background: transparent; }
+.nb-empty-read { min-height: 164px; display: flex; align-items: center; justify-content: center; background: transparent; }
+.nb-area-summary { padding: 16px; border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+.nb-area-open { font-size: 20px; text-align: left; overflow-wrap: anywhere; max-width: 100%; }
+.nb-area-summary ul { padding-left: 20px; font-size: 15px; overflow-wrap: anywhere; }
+.nb-area-summary li { margin: 8px 0; }
+.nb-item-editor { max-width: 680px; border-top: 1px solid var(--line); padding: 24px 0; margin: 24px 0; }
+.nb-item-editor h3 { font-size: 22px; margin: 0 0 20px; }
+.nb-workspace textarea,.nb-workspace input,.nb-workspace select { font-size: 16px; min-height: 44px; max-width: 100%; }
+.nb-import { border-top: 1px solid var(--line); margin-top: 32px; padding-top: 20px; }
+.nb-import h4 { font-size: 20px; margin-top: 28px; }
+.nb-import-row { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 16px; }
+.nb-import-select { display: flex; align-items: flex-start; gap: 12px; min-height: 44px; padding-block: 8px; cursor: pointer; }
+.nb-import-select > span { min-width: 0; }
+.nb-import-select .life-meta { display: block; margin-top: 4px; }
+.nb-workspace .nb-import-select input { width: 18px; height: 18px; min-height: 0; flex: 0 0 18px; margin: 6px 0; accent-color: var(--color-primary); }
+.nb-grid a { text-underline-offset: .2em; }
+.nb-image-export { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 20px; }
+.nb-image-export > label { width: 100%; }
+.nb-image-export > select { flex: 1 1 180px; min-width: 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); }
+.nb-image-export > p { width: 100%; margin: 4px 0 0; }
+@media (max-width: 700px) {
+  .nb-grid,.nb-areas { gap: 6px; }
+  .nb-cell { padding: 8px; }
+  .nb-grid .pp-visual { height: 52px; }
+  .nb-grid .pp-shape { height: 44px; width: 32px; }
+  .nb-grid .pp-attachment-title { font-size: 16px; }
+  .nb-grid .life-meta { font-size: 13px; }
+  .nb-empty { min-height: 140px !important; }
+  .nb-empty-read { min-height: 140px; }
+  .nb-area-summary { padding: 8px; }
+  .nb-area-open { font-size: 17px; padding: 4px; }
+  .nb-area-summary ul { padding-left: 16px; font-size: 14px; }
+}

@@ -1,0 +1,72 @@
+unit-all
+✔ account switch aborts delayed writing read write and list responses without touching shared session (2.74742ms)
+ℹ tests 487
+ℹ suites 0
+ℹ pass 487
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6460.361294
+
+check
+
+> check
+> node scripts/check.mjs
+
+PASS: 18 HTML pages, 81 JavaScript blocks/files, 350 local resource references, PWA manifest and shell.
+Browser interactions, remote resources and cloud sync need separate verification.
+
+
+core
+PASS UI import to related reading, exact pair group, page editing and reload
+PASS related return preserves older reader version, selection, scroll and previous search
+PASS after related and page 1440
+PASS after related and page 820
+PASS after related and page 390
+Core experience: 5/5, visual 6, console 0, page 0.
+
+
+search
+PASS Home opens one private search; blank and no-match states do not list stored contents
+PASS Mixed results distinguish originals, saved pages, private notes and bounded collection groups
+PASS Exact old version and raw Korean range reopen; returning keeps query, limits and focused result
+PASS Saved page opens its exact expanded post without creating an edit draft; contextual return works
+PASS Collection exact detail, explicit archived scope and editing failure preserve the search origin
+PASS Drafts excluded, composition input does not query midway, query never enters the URL
+PASS A failed collection read retains source/page results and retries without losing query
+PASS Late reads cannot replace another screen; separate account has no query or results
+PASS Switching workspace clears query, filters and all previous results
+
+
+profile-media
+PASS Empty page stays clean and has no provider requests
+PASS Many Korean posts retain body priority without fetching on hover or focus
+PASS Explicit images load exact-source covers and thumbnails without altering stored data
+PASS Video opens only by click, closes on Escape and restores focus
+PASS Image failure preserves source, retry works, turning off clears loaded images
+PASS Leaving and remounting the page resets image permission
+PASS Long-body fold affects presentation only; public review preserves full content and never enables media
+PASS Loading state cancels late images when the view closes
+PASS Page hiding removes an open player and resets imagery
+PASS Player timeout keeps source available and ignores a late load
+
+
+import-flow
+PASS filtered import → exact excerpt → saved original access 1440
+PASS filtered import → exact excerpt → saved original access 820
+PASS filtered import → exact excerpt → saved original access 390
+{"passed":3,"total":3,"consoleErrors":0,"pageErrors":0}
+
+
+platform
+PASS public home and anonymous private routes never mount account storage
+PASS Google-button PKCE HTTP fixture opens verified A scope without automatic upload
+PASS protected import/excerpt/source jump, reload and backup-copy restore work
+PASS logout/B login cannot list, read or render A and unowned data; A return restores its scope
+PASS failed management navigation and logout draft transactions preserve input without signing out
+PASS offline warm local editing survives cold-load lock and online re-verification
+PASS failed callback clears credentials from address and never exposes private UI
+PASS preserved Cloud haedo-v115 fixture upgrades atomically to haedo-v116 without altering old local data
+PASS unexpected console/page errors
+Platform integration: 9 passed, 0 failed; 3 intentional transport/callback errors. Anonymous HTTP only; no real Google OAuth/Apple proof.

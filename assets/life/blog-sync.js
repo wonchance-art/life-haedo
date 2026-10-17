@@ -1,0 +1,202 @@
+/* Explicit per-post transfer. Original local documents and remote conflicts remain intact. */
+(function (root, factory) {
+  'use strict'; const api = factory(root); (root.HaedoLife ||= {}).BlogSync = api;
+  if (typeof module === 'object' && module.exports) module.exports = api;
+})(globalThis, function (root) {
+  'use strict';
+  function create({ storage, auth = root.HaedoAuth, blog = root.HaedoLife?.Blog,
+    photoPost = root.HaedoLife?.PhotoPost, remote = root.HaedoLife?.BlogRemote?.create({ auth, blog }),
+    makeId = () => root.crypto.randomUUID() } = {}) {
+    const cleaner = root.HaedoLife?.BlogRemote?.clean || (error => error);
+    const fault = code => cleaner({ code });
+    if (!storage?.account || !storage.readBlogSyncState || !storage.writeBlogSyncState || !auth || !remote || !blog?.pack || !photoPost?.validate) throw fault('auth_required');
+    const owner = storage.account, queues = new Map(), listeners = new Set(), generations = new Map(); let disposed = false;
+    const canonical = value => Array.isArray(value) ? '[' + value.map(canonical).join(',') + ']' : value && typeof value === 'object' ? '{' + Object.keys(value).sort().map(name => JSON.stringify(name) + ':' + canonical(value[name])).join(',') + '}' : JSON.stringify(value);
+    const key = (ws, id) => ws + '/' + id;
+    const same = value => value?.userId === owner.userId && value?.projectUrl === owner.projectUrl;
+    const context = (ws, id) => ({ ws, id, epoch: auth.epoch, generation: generations.get(key(ws, id)) || 0 });
+    function guard(c) { if (disposed || !same(auth.getAccount()) || c.epoch !== auth.epoch || c.generation !== (generations.get(key(c.ws, c.id)) || 0)) throw fault('request_cancelled'); }
+    async function verified(c) { guard(c); const user = await auth.verify(); guard(c); if (user?.id !== owner.userId) throw fault('auth_required'); }
+    const emit = (ws, id) => { if (!disposed) for (const listener of listeners) { try { listener({ workspaceId: ws, localPostId: id }); } catch (_) {} } };
+    function serial(ws, id, action) {
+      const k = key(ws, id), previous = queues.get(k) || Promise.resolve();
+      const next = previous.catch(() => {}).then(action); queues.set(k, next);
+      next.finally(() => { if (queues.get(k) === next) queues.delete(k); }).catch(() => {}); return next;
+    }
+    async function readState(c) { const state = await storage.readBlogSyncState(c.ws, c.id); guard(c); return state; }
+    async function writeState(c, state, changes) {
+      guard(c); const result = await storage.writeBlogSyncState(c.ws, c.id, { ...state, ...changes }, state?.revision || 0); guard(c); emit(c.ws, c.id); return result;
+    }
+    async function readPost(c) { const post = await storage.readPhotoPost(c.ws, c.id); guard(c); photoPost.validate(post); return post; }
+    async function getState(ws, id) {
+      const c = context(ws, id); guard(c); const state = await readState(c), post = await readPost(c);
+      return { ...(state || {}), workspaceId: ws, localPostId: id, enabled: !!state?.enabled,
+        status: !state ? 'not_enabled' : !state.enabled ? 'paused' : state.conflict ? 'conflict' : state.error ? 'error' : state.pending || state.localRevision !== post.revision ? 'pending' : 'synced' };
+    }
+    async function rememberError(c, error) {
+      try { guard(c); const current = await readState(c); if (current?.enabled) await writeState(c, current, { status: 'error', error: cleaner(error).code || 'network_error' }); } catch (_) { /* Keep durable pending state if metadata cannot be updated. */ }
+    }
+    async function transfer(ws, id, enable) {
+      return serial(ws, id, async () => {
+        const c = context(ws, id);
+        try {
+          await verified(c); let post = await readPost(c), state = await readState(c);
+          if (post.status !== 'saved') throw fault('invalid_request');
+          if (enable && !state?.enabled) state = await writeState(c, state, { enabled: true, remoteId: state?.remoteId || post.id,
+            remoteWorkspaceId: state?.remoteWorkspaceId || ws, remoteRevision: state?.remoteRevision || 0, localRevision: state?.localRevision || 0,
+            publication: state?.publication || null, pending: state?.pending || null, status: 'pending', error: null });
+          if (!state) throw fault('not_enabled'); if (!state.enabled) throw fault('sync_paused'); if (state.conflict) return getState(ws, id);
+          if (!state.pending && state.localRevision === post.revision && state.remoteRevision > 0) {
+            const row = await remote.read(state.remoteId); guard(c); if (!row) throw fault('remote_missing');
+            if (row.revision !== state.remoteRevision) {
+              await writeState(c, state, { status: 'conflict', error: null, conflict: { remoteRevision: row.revision, localRevision: post.revision, remoteTitle: row.data.title, updatedAt: row.updated_at } });
+              return getState(ws, id);
+            } else {
+              if (!state.remoteManifest || canonical(row.data) !== canonical(state.remoteManifest)) throw fault('invalid_remote_data');
+              state = await writeState(c, state, { publication: row.publication, error: null });
+              const manifest = blog.pack(photoPost.compact(post)); manifest.id = state.remoteId; manifest.replaces = null;
+              // Received copies have new photo/ops IDs even at the same local
+              // revision. Align those IDs through the existing verified CAS path
+              // before a publication can select them on the server.
+              if (canonical(manifest) === canonical(row.data)) return getState(ws, id);
+            }
+          }
+          if (!state.pending) {
+            const manifest = blog.pack(photoPost.compact(post)); manifest.id = state.remoteId; manifest.replaces = null;
+            // Verify every original before preparing any remote asset or document write.
+            await blog.hydrate(manifest, new Map(manifest.photos.map(photo => [photo.id, post.photos.find(item => item.id === photo.id).blob]))); guard(c);
+            state = await writeState(c, state, { status: 'pending', error: null, pending: {
+              operationId: makeId(), manifest, expectedRevision: state.remoteRevision, localRevision: post.revision
+            } });
+          }
+          const pending = structuredClone(state.pending);
+          for (const photo of pending.manifest.photos) {
+            const local = post.photos.find(item => item.id === photo.id && item.digest === photo.digest);
+            if (!local) {
+              const asset = await remote.prepareAsset(state.remoteId, photo); guard(c);
+              if (!asset.exists) { state = await writeState(c, state, { pending: null, error: 'local_changed' }); throw fault('local_changed'); }
+            } else { await remote.uploadAsset(state.remoteId, photo, local.blob); guard(c); }
+          }
+          // Pause/account changes during a photo upload cannot commit the document.
+          const current = await readState(c); if (!current?.enabled || current.pending?.operationId !== pending.operationId) throw fault('request_cancelled');
+          const result = await remote.save({ workspaceId: state.remoteWorkspaceId, postId: state.remoteId,
+            expectedRevision: pending.expectedRevision, operationId: pending.operationId, data: pending.manifest }); guard(c);
+          if (result.status === 'stored') {
+            state = await writeState(c, current, { remoteRevision: result.revision, remoteManifest: pending.manifest, localRevision: pending.localRevision, pending: null, conflict: null, error: null, status: 'synced' });
+          } else if (result.status === 'conflict') {
+            const other = await remote.read(state.remoteId); guard(c);
+            state = await writeState(c, current, { status: 'conflict', error: null, conflict: { remoteRevision: other?.revision || result.revision,
+              localRevision: post.revision, remoteTitle: other?.data?.title || '', updatedAt: other?.updated_at || null } });
+          } else throw fault('remote_missing');
+          return getState(ws, id);
+        } catch (error) { await rememberError(c, error); throw cleaner(error); }
+      });
+    }
+    async function list(ws) {
+      const c = context(ws, '*'); await verified(c); await storage.read(ws); guard(c);
+      const rows = await remote.list(null); guard(c); return rows;
+    }
+    function freshCopy(input) {
+      const post = structuredClone(input), ids = new Map(); post.id = makeId(); post.revision = 0; post.replaces = null; post.status = 'saved';
+      for (const photo of post.photos) { const next = makeId(); ids.set(photo.id, next); photo.id = next; }
+      post.ops = post.ops.map(op => typeof op.insert === 'string' ? op : { ...op, insert: { photo: { ...op.insert.photo, id: ids.get(op.insert.photo.id) } } });
+      photoPost.validate(post); return post;
+    }
+    async function receive(ws, remoteId) {
+      return serial(ws, 'receive:' + remoteId, async () => {
+        const c = context(ws, 'receive:' + remoteId); await verified(c); await storage.read(ws); guard(c);
+        const row = await remote.read(remoteId); guard(c); if (!row) throw fault('remote_missing');
+        const blobs = new Map();
+        for (const photo of row.data.photos) { const blob = await remote.downloadAsset(row.assets[photo.id]); guard(c); blobs.set(photo.id, blob); }
+        const original = await blog.hydrate(row.data, blobs); guard(c);
+        const post = await storage.savePhotoPost(ws, freshCopy(original), 0); guard(c);
+        const installed = context(ws, post.id); let syncError = null;
+        try { await writeState(installed, null, { enabled: true, remoteId, remoteWorkspaceId: row.workspace_id, remoteRevision: row.revision,
+          localRevision: post.revision, remoteManifest: row.data, publication: row.publication, pending: null, conflict: null, status: 'synced', error: null }); }
+        catch (error) { guard(c); syncError = cleaner(error).code || 'network_error'; }
+        emit(ws, post.id); return { post, localPostId: post.id, newLocalPostId: post.id, remoteId, revision: row.revision, syncError };
+      });
+    }
+    async function pause(ws, id) {
+      const k = key(ws, id); generations.set(k, (generations.get(k) || 0) + 1);
+      const c = context(ws, id); await verified(c); const state = await readState(c);
+      if (state) await writeState(c, state, { enabled: false, status: 'paused', error: null }); return getState(ws, id);
+    }
+    async function finishPublication(c, state) {
+      let result;
+      try { result = await remote.publish(state.remoteId, state.publishPending.expectedRevision, state.publishPending.operationId, { ...state.publishPending.selection, expectedPublicRevision: state.publishPending.expectedPublicRevision }); guard(c); }
+      catch (error) {
+        if (error.code === 'blog_conflict') {
+          const row = await remote.read(state.remoteId); guard(c);
+          await writeState(c, state, { publication: row?.publication || null, publishPending: null });
+        }
+        throw error;
+      }
+      const current = await remote.read(state.remoteId); guard(c);
+      await writeState(c, state, { publication: current?.publication || { token: result.token, blogToken: result.blogToken, revision: result.revision, active: true }, publishPending: null });
+      if (!current?.publication?.active || current.publication.revision !== result.revision) throw fault('blog_conflict');
+      return { ...result, publicUrl: new URL('blog.html?post=' + result.token, root.location?.href || owner.projectUrl + '/').href, blogUrl: new URL('blog.html?blog=' + result.blogToken, root.location?.href || owner.projectUrl + '/').href };
+    }
+    async function publish(ws, id, options = {}) {
+      const choices = structuredClone(options), c = context(ws, id); await verified(c);
+      const initial = await readPost(c);
+      if (initial.revision !== choices.expectedLocalRevision) throw fault('local_changed');
+      const before = await readState(c);
+      const selection = { photoIds: choices.photoIds || [], author: choices.author || { name: '', intro: '' } };
+      if (before?.publishPending) {
+        if (before.publishPending.localRevision !== initial.revision || canonical(before.publishPending.selection) !== canonical(selection)) throw fault('local_changed');
+        return serial(ws, id, async () => {
+          const state = await readState(c), current = await readPost(c);
+          if (current.revision !== initial.revision || state?.publishPending?.operationId !== before.publishPending.operationId) throw fault('local_changed');
+          return finishPublication(c, state);
+        });
+      }
+      if (choices.expectedRemoteRevision !== undefined && choices.expectedRemoteRevision !== (before?.remoteRevision || 0) || choices.expectedPublicRevision !== undefined && choices.expectedPublicRevision !== (before?.publication?.revision || 0)) throw fault('local_changed');
+      await blog.publicSnapshot(initial, { photoIds: choices.photoIds || [], author: choices.author || { name: '', intro: '' } }); guard(c);
+      const synced = await transfer(ws, id, true); guard(c); if (synced.status !== 'synced') throw fault('blog_conflict');
+      return serial(ws, id, async () => {
+        let state = await readState(c); const latest = await readPost(c);
+        if (latest.revision !== choices.expectedLocalRevision || state.localRevision !== latest.revision) throw fault('local_changed');
+        if (choices.expectedPublicRevision !== undefined && choices.expectedPublicRevision !== (state.publication?.revision || 0)) throw fault('local_changed');
+        if (state.publishPending && JSON.stringify(state.publishPending.selection) !== JSON.stringify(selection)) throw fault('operation_mismatch');
+        if (!state.publishPending) state = await writeState(c, state, { publishPending: { operationId: makeId(), expectedRevision: state.remoteRevision, expectedPublicRevision: state.publication?.revision || 0, localRevision: latest.revision, selection } });
+        return finishPublication(c, state);
+      });
+    }
+    async function unpublish(ws, id, options = {}) {
+      const expected = options.expectedPublicRevision;
+      return serial(ws, id, async () => {
+        const c = context(ws, id); await verified(c); let state = await readState(c);
+        if (!state?.publication) throw fault('remote_missing');
+        if (expected !== undefined && state.publication.revision !== expected) throw fault('local_changed');
+        if (!state.unpublishPending) state = await writeState(c, state, { unpublishPending: { operationId: makeId(), expectedRevision: state.publication.revision } });
+        let result;
+        try { result = await remote.unpublish(state.remoteId, state.unpublishPending.expectedRevision, state.unpublishPending.operationId); guard(c); }
+        catch (error) {
+          if (error.code === 'blog_conflict') { const row = await remote.read(state.remoteId); guard(c); await writeState(c, state, { publication: row?.publication || null, unpublishPending: null }); }
+          throw error;
+        }
+        const current = await remote.read(state.remoteId); guard(c);
+        await writeState(c, state, { publication: current?.publication || { ...state.publication, active: false, revision: result.revision }, unpublishPending: null });
+        if (current?.publication?.active || current?.publication?.revision !== result.revision) throw fault('blog_conflict');
+        return result;
+      });
+    }
+    async function resolve(ws, id, choice) {
+      const c = context(ws, id); await verified(c); const state = await readState(c);
+      if (!state?.conflict) throw fault('blog_conflict');
+      if (choice === 'remote') { const result = await receive(ws, state.remoteId); guard(c); await pause(ws, id); return result; }
+      if (choice !== 'local') throw fault('invalid_request');
+      const before = await readPost(c), row = await remote.read(state.remoteId); guard(c);
+      if (!row || row.revision !== state.conflict.remoteRevision || before.revision !== state.conflict.localRevision) throw fault('local_changed');
+      const recovery = await receive(ws, state.remoteId); guard(c); await pause(ws, recovery.localPostId); guard(c);
+      const latest = await readState(c); await writeState(c, latest, { remoteRevision: row.revision, localRevision: 0, pending: null, conflict: null, error: null });
+      const result = await transfer(ws, id, true); return { ...result, recoveryLocalPostId: recovery.localPostId };
+    }
+    return Object.freeze({ list, connect: (ws, id) => transfer(ws, id, true), save: (ws, id) => transfer(ws, id, true),
+      sync: (ws, id) => transfer(ws, id, false), receive, pause, publish, unpublish, resolve, getState,
+      subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+      dispose() { if (disposed) return; disposed = true; listeners.clear(); remote.dispose?.(); } });
+  }
+  return Object.freeze({ create });
+});

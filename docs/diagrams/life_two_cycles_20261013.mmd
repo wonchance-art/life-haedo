@@ -1,0 +1,95 @@
+flowchart TB
+    HOME["해도 홈"] --> AUTH["Google 로그인 · 개인 공간"]
+
+    subgraph INPUTS["인풋의 출발점"]
+        SOURCES["Apple 메모 · Obsidian<br/>블로그 · Instagram"]
+        EXPERIENCE["읽기 · 만남 · 생활 경험"]
+        WRITING["직접 쓴 글 · 생각 · 질문"]
+    end
+
+    subgraph A["순환 A — 취하기 · 활용하기 · 선택해 내보내기"]
+        INPUT["인풋 선택<br/>가져올 자료 · 범위"]
+        STORE["개인 보관<br/>원문 · 정확 버전 · 출처"]
+        READ["읽기 · 검색 · 발췌"]
+        CONNECT["연결 · 회고 · 질문<br/>근거와 다른 해석 검토"]
+        THINK["내 생각 형성·수정<br/>채택 · 보류 · 제외"]
+        OUTPUT["아웃풋 선택<br/>내용 · 형식 · 대상 · 채널"]
+        FEEDBACK["새 경험 · 반응 · 질문"]
+
+        INPUT --> STORE --> READ --> CONNECT --> THINK --> OUTPUT
+        FEEDBACK --> INPUT
+    end
+
+    AUTH --> STORE
+    SOURCES --> INPUT
+    EXPERIENCE --> INPUT
+    WRITING --> INPUT
+
+    subgraph PRIVATE["나에게 돌아오는 아웃풋"]
+        ACTION["개인 판단 · 다음 행동"]
+        GOALS["목표 · 습관"]
+        MANUSCRIPT["개인 글 · 책 원고"]
+        NINE["비공개 9칸 구성<br/>영역 · 대상 · 선택 이유"]
+        FILE["Markdown · HTML · PDF"]
+        ACTION --> GOALS
+        MANUSCRIPT --> FILE
+        NINE -->|선택한 구성 JSON · HTML| FILE
+        NINE -.->|통합 검색으로 다시 찾기| READ
+    end
+
+    subgraph PUBLIC["선택해 내보내는 아웃풋"]
+        EDIT["보여줄 내용 선택·편집"]
+        PREVIEW["미리보기<br/>내용 · 출처 · 공개 범위 확인"]
+        PUBLISH["내 페이지 · 공유 모음<br/>명시적 게시 · 갱신 · 철회"]
+        CHANNEL["후속: 대상별 전달·외부 채널<br/>채널별 범위와 실행 방식 설계"]
+        EDIT --> PREVIEW --> PUBLISH
+        PUBLISH -.-> CHANNEL
+    end
+
+    OUTPUT --> ACTION
+    OUTPUT --> MANUSCRIPT
+    OUTPUT --> NINE
+    OUTPUT --> EDIT
+    GOALS --> FEEDBACK
+    FILE --> FEEDBACK
+    PUBLISH --> FEEDBACK
+    CHANNEL -.-> FEEDBACK
+
+    subgraph FUNCTIONS["순환을 돕는 기능"]
+        TIMELINE["연표<br/>시간 · 사건 · 변화"]
+        COLLECTION["컬렉션<br/>관심 대상 · 내 메모"]
+        BOOK["책 작업실<br/>목차 · 집필 · 전체 읽기 · 개정본"]
+        MANAGEMENT["관리<br/>계정 · 공간 · 동기화 · 백업·복원"]
+    end
+
+    STORE --> TIMELINE
+    STORE --> COLLECTION
+    COLLECTION --> CONNECT
+    THINK --> BOOK
+    BOOK --> MANUSCRIPT
+    MANAGEMENT --- STORE
+
+    subgraph B["순환 B — 사용하면서 시스템 개선"]
+        USE["실제 사용"]
+        ISSUE["불편 · 유용성 확인"]
+        COMPARE["작은 개선 가설<br/>비교 · 선택"]
+        IMPLEMENT["선택한 개선 구현"]
+        VERIFY["관련 검증<br/>데이터 보존 · 실패 복구"]
+        RELEASE["필요한 병합·배포<br/>라이브 확인"]
+
+        USE --> ISSUE --> COMPARE --> IMPLEMENT --> VERIFY --> RELEASE --> USE
+    end
+
+    READ -. "사용 피드백" .-> USE
+    BOOK -. "사용 피드백" .-> USE
+    PUBLISH -. "사용 피드백" .-> USE
+    RELEASE -. "개선한 흐름으로 복귀" .-> READ
+
+    subgraph ROADMAP["개발 우선순위 — 각 단계에서 두 순환 연결"]
+        P0["P0 안전한 진입·복귀<br/>기존 자료 · 저장 · 복원"]
+        P1["P1 첫 순환 완주<br/>기존 글 → 회고 → 결과물/행동 → 다시 회고"]
+        P2["P2 인풋 맥락 확대<br/>컬렉션 · 대상 · 메모"]
+        P3["P3 선택 아웃풋 완성<br/>글 · 첨부 · 미리보기 · 공개"]
+        P4["P4 반복·이동 부담 감소<br/>원천 수신 · 기기 연속성 · 생활 연결"]
+        P0 --> P1 --> P2 --> P3 --> P4
+    end

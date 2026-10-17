@@ -1,7 +1,18 @@
 # 해도 — life-haedo
 
-기존 메모·글의 자료 모아보기와 개인 연표·목표·습관을 함께 사용하는 생활 도구.
-홈·기록·도구·관리를 오가며, 빌드 없이 정적 호스팅에서 실행한다.
+내 생각과 일상을 글로 쓰고, 기록과 취향을 모으는 개인 블로그.
+메인은 실제 프로필·짧은 글쓰기·사진과 본문이 이어지는 SNS형 피드를 보여주고, 기존 메모·연표·목표·습관은 자료실과 도구에서 이어 쓴다. 빌드 없이 정적 호스팅에서 실행한다.
+
+[사용 흐름 중심 개편·검수](docs/design-review/blog-user-journeys.md) · [SNS형 UX·UI 설계와 검수](docs/design-review/sns-blog-experience.md) · [블로그 중심 방향과 공개 후속](docs/life-tools-design/blog-platform-direction.md) · [메인 구현·검수](docs/design-review/blog-platform-home.md). 새 글·사진의 브라우저 비공개 보관과 기존 선택 내용의 공개 사본은 다른 범위다.
+
+[글 관리·원본 사진·선택 공개](docs/life-tools-design/blog-completion.md)를 연결했습니다. **설정 → 글 관리**에서 저장 글·초안을 찾고, 한 글씩 내 계정 서버에 비공개 보관하거나 공개할 사진을 골라 게시·갱신·철회합니다. 방문자는 별도 블로그 주소에서 목록과 글을 읽습니다. 원문에서 선택한 구절은 인용 글이나 9칸 구성으로 연결하며 정확한 버전으로 돌아갑니다. 새 인용의 구조화된 근거는 현재 브라우저에 별도로 보관하므로 사진 ZIP·글별 서버 보관에는 포함되지 않습니다.
+
+서버의 비공개 버킷·RPC·원본 사진 Edge는 설치·권한 확인을 마쳤습니다. 이 브랜치의 프런트엔드는 아직 Pages에 배포하지 않았으며, 개인 자료를 시험 게시하지 않았습니다. [운영 설치 기록](docs/life-tools-design/blog-installation.md).
+
+[보관 범위·정확한 근거 파일](docs/design-review/preservation-portability.md): **관리 → 보관 범위·근거 파일**에서 자료별 브라우저·서버·파일 범위를 확인하고, 선택한 저장 글·원본 사진·9칸·필요한 정확 원문 버전을 비공개 ZIP으로 옮깁니다. 파일 내용을 확인한 뒤 현재 로그인한 계정의 새 작업공간에 복원하면 같은 옛 원문 구절과 저장 글 근거를 다시 열 수 있습니다. 계정 미연결 공간의 선택 자료도 원본을 보존한 새 사본으로 가져옵니다. 이 전용 파일은 기존 사진 ZIP·전체 자료 백업·글별 서버 보관과 구분하며 서버 연결·공개를 자동 시작하지 않습니다.
+
+
+[통합 릴리스·여행 글 검수와 배포 준비](docs/life-tools-design/blog-release-integration.md): 완료된 홈·작성기·시각 개편과 원본 보관·선택 공개·정확한 근거 파일을 한 후보에서 검수합니다. 이후 진행 중인 애니메이션은 별도이며, main 병합·서비스 배포·실제 Google/Apple 기기 체험과 구분합니다.
 
 [배포 사이트](https://wonchance-art.github.io/life-haedo/) · 로컬 변경은 배포 전까지 사이트에 반영되지 않는다.
 
@@ -10,6 +21,8 @@
 [첫 책 작업실](docs/design-review/book-workshop.md): 기록 선택 → 회고 → 연도/묶음별 목차 → 장별 집필·개정 → 전체 점검 → PDF로 이어집니다. 선행 기능과 함께 Local 병합·운영 적용을 기다리는 브랜치 구현이며, 배포 사이트의 현재 기능으로 단정하지 않습니다.
 
 [원고 중심 A안](docs/design-review/book-design-reset-integration.md): 비교 후 선택한 디자인을 실제 책 목록·집필·읽기에 적용했습니다. 원고를 앞세우고 목차·근거·관리는 펼쳐 사용합니다. 실제 앱 화면·기능 검증과 Local 인계는 연결 문서에서 확인할 수 있으며, 병합·배포와는 구분합니다.
+
+[회고에서 목차로](docs/design-review/reflection-to-outline.md): 선택한 글의 앞부분을 읽고 현재 생각을 쓰며, 읽던 자료와 목차 후보로 돌아오는 흐름을 같은 A안으로 연결했습니다. 별도 후속 브랜치이며 Local의 통합·배포를 기다립니다.
 
 [독자용 책자](docs/design-review/book-edition.md): 책 전체를 표지·목차·본문·출처 부록으로 읽고, 장을 고쳐 다시 확인한 뒤 A5/A4 HTML·PDF로 받습니다. 기존 검토용 출력은 유지하며 해석과 원문 본문은 각각 선택합니다.
 
@@ -25,7 +38,7 @@
 
 [웹 글·출처 가져오기](docs/design-review/social-import.md)는 네이버 블로그·Instagram 링크의 원천 설정 제안, 복사한 본문·포함 범위 검토, 출처 주소 대조를 제공한다. 링크만으로 본문·사진·영상을 수집하지 않는다.
 
-[첫 접속 홈과 기록 통합](docs/design-review/home-entry-proposal.md)은 최근 기록·묶음·내 페이지 요약을 현재 작업공간에서 보여준다. 묶음과 페이지 구성은 여전히 이 브라우저에만 저장되며 공개 게시가 아니다.
+[첫 접속 홈과 기록 통합](docs/design-review/home-entry-proposal.md)은 최근 기록·묶음·내 페이지 요약을 현재 작업공간에서 보여준다. 묶음과 페이지 구성의 저장·이어쓰기·선택 공개는 글별 서버 보관과 별도다.
 
 [기록 정리](docs/design-review/record-to-page.md): 기록의 체크 아이콘으로 여러 원문을 고른 뒤 묶음/내 페이지에 담는다. 읽던 원문은 연결 아이콘으로 바로 전달한다. 다음 화면에서 버전과 담을 곳을 확인하며 선택·취소만으로 저장하지 않는다.
 
@@ -45,6 +58,7 @@
 - 데이터는 브라우저 localStorage에 저장된다. 저장 상태는 상단에 표시된다. 브라우저 데이터 삭제에 대비해 파일 백업을 보관한다.
 - 로그인은 공용 Supabase SDK의 Google OAuth·PKCE를 사용한다. 사용자가 별도 DB 키나 비밀번호를 입력하지 않는다. 운영 Google 제공자·콜백 등록과 Mac Comet에서의 실제 로그인·개인 화면 복귀를 확인했다. 공용 인증 PR #17은 병합되었으며 사용자의 정상 작동 확인을 받은 기반이다. 이번 디자인 검증과 이전 인증 검증은 구분한다.
 - 계정 간 서버 접근은 RLS, 기기 자료 노출은 계정별 저장과 화면 보호로 제한한다. 기존 무소유 연표는 원본 백업·본인 확인 후 새 계정 사본으로 연결한다.
+- [기존 연표 찾기·연결 재시도](docs/timeline-recovery.md): 빈 목록에서 기기 원본 연결과 JSON 백업 가져오기를 찾고, 서버 저장 실패 뒤 같은 사본으로 재시도한다. 실제 개인 연표의 복구 여부와 앱 개선을 구분한다.
 
 ## 자료 모아보기
 
@@ -128,3 +142,21 @@ Node 없이 화면만 실행하려면 `python3 scripts/dev-server.py`. 이 서�
 - [이번 리뷰와 변경 기록](docs/review-update.md)
 
 스크러버·검색 등 일부 UX 패턴은 [Timelines Studio](https://github.com/sreegjl/timelines)(GPL-3.0)에서 착안해 독자 구현했다.
+
+### 컬렉션 보관함
+
+로그인 후 기록 → 컬렉션, 또는 `index.html?section=records&view=collection`에서 직접 입력·검색·수정·보관·전용 백업/사본 복구를 사용합니다. 이 브라우저의 계정·작업공간별 저장이며 자동 동기화·공개는 미연결입니다. [검증 증거와 Local 인계](docs/design-review/collection-library.md).
+
+컬렉션 출처 주소의 **주소로 정보 확인**에서 GitHub 저장소/YouTube 영상의 후보를 검토하고 선택한 제목·주소·종류만 입력에 적용할 수 있습니다. 저장은 별도이며 개인 메모·만든 사람은 자동 변경하지 않습니다. GitHub는 실제 브라우저 조회 확인, YouTube는 환경 네트워크 제한으로 모의 응답 검증까지입니다. [검증·Local 인계](docs/design-review/collection-metadata.md)를 참고하세요. 표지·임베드·기기 간 동기화는 이번 범위가 아닙니다.
+
+컬렉션의 **외부 이미지 보기**는 책(Open Library ISBN/edition)·영상(YouTube)의 표지/썸네일을 선택적으로 표시합니다. 책 편집의 **표지·썸네일**에서 ISBN을 출처로 연결할 수 있으며 저장·백업 형식은 그대로입니다. 외부 이미지는 기본 꺼짐이고 파일로 백업하지 않습니다. [검증 화면·제공자 접속 제한·Local 인계](docs/design-review/collection-covers.md). 현재 Cloud 검증은 이미지 응답 fixture 기준이며 실제 제공자 접속은 네트워크 설정 또는 Local 검증이 필요합니다.
+
+컬렉션 `+`는 **찾기 → 선택 → 메모 → 저장**으로 이어집니다. 이름은 내 컬렉션에서 찾고, YouTube·GitHub는 링크를 명시 조회합니다. 기존 항목은 메모를 이어 쓰고 신규 후보는 정보를 확인한 뒤 저장합니다. [화면·검증·Local 인계](docs/design-review/collection-picker.md). 외부 음악/장소 이름 검색과 글·프로필 첨부는 후속입니다.
+
+### Obsidian 보관함 전체 가져오기
+
+깨끗한 Git 보관함은 `node scripts/import-obsidian-vault.mjs --vault /private/vault --output /private/new-export --repository https://github.com/OWNER/REPO`로 변환합니다. 모든 Markdown과 보조 파일을 각각 `notes.json`·`supporting-files.json`에 보존하고, 전체 Git 이력·해시/미해결 참조 목록도 남깁니다. `review.html`·`review.json`은 판단할 노트와 첨부/외부 주소/보조 파일 안내를 구분하고 중복 참조를 묶습니다. 개인 출력은 앱 저장소 밖에만 생성합니다. 로그인 후 관리의 내보내기·사본 복원에서 JSON을 새 작업공간으로 복원하세요. [범위·보존·사용 순서·한계](docs/design-review/obsidian-vault-integration.md).
+
+`review-tool.html`에서는 같은 폴더의 변환 파일 6개를 선택해 원문/후보를 비교하고, 참조별 선택 저장·재열기 → 변경 미리보기 → 새 사본 ZIP을 사용할 수 있습니다. 기존 패키지에는 `node scripts/create-obsidian-review-tool.mjs --output /private/review-tool.html`로 도구만 추가하세요. CLI의 `node scripts/apply-obsidian-decisions.mjs --input PATH --decisions FILE --preview`는 검증·집계만, `--output NEW_PRIVATE_PATH`는 별도 새 패키지를 만듭니다. 실제 연결은 명시 선택만 반영하며 원문과 기존 작업공간을 유지합니다. [사용 순서·보존·검수](docs/design-review/obsidian-decisions.md).
+
+변환기는 `vault-package.zip`도 만듭니다. 관리 → 내보내기·사본 복원의 **Obsidian 패키지에서 복원**에서 이 ZIP 또는 검토 도구의 새 사본 ZIP을 그대로 선택하세요. 노트와 선택한 보조 파일 공간을 한 번에 새 사본으로 복원하며 저장 실패 시 둘 다 반영하지 않습니다. 검토 도구도 ZIP 직접 열기를 지원합니다. [ZIP 검토·동시 복원·기존 공간 보존](docs/design-review/obsidian-package.md). [서버 받기·정확 위치·검색 복귀 품질 검수](docs/design-review/obsidian-hardening.md). 로컬 브라우저 검사는 `BASE_URL=http://127.0.0.1:4173`을 명시하면 `npm run dev`와 주소를 맞출 수 있습니다.

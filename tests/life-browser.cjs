@@ -147,7 +147,11 @@ async function applicationChecks(browser, observe) {
   const settle = () => page.waitForFunction(() => !document.querySelector('.life-app[aria-busy="true"]'));
   async function click(name) {
     if (name === '내보내기·사본 복원') await openManagement(page);
-    if (['기록 목록','기록 검색','가져오기','시간 보기'].includes(name)) await openSection(page, 'records');
+    if (['자료실','기록 검색','가져오기','시간 보기'].includes(name)) {
+      await openSection(page, 'records');
+      if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'sources') { await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click(); await settle(); }
+    }
+    if (['기록 검색', '자료실'].includes(name)) return;
     await page.getByRole('button',{name,exact:true}).click(); await settle();
   }
   async function mounted() {
@@ -218,7 +222,7 @@ async function applicationChecks(browser, observe) {
       await click('검토 내용 보관');
       assert.match(await page.locator('#lifeSaveStatus').textContent(),/검토 중 보관됨/);
       await page.reload(); await mounted();
-      await click('기록 목록');
+      await click('자료실');
       await page.getByText(/검토 중 \d+개 · 이어서 확인/).click();
       await click('익명 이어쓰기 초안');
       assert.equal(await page.locator('#lifeImportText').inputValue(),'아직 확정하지 않은 검토 내용');

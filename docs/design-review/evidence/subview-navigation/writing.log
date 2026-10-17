@@ -1,0 +1,13 @@
+PASS blank composition stays private; draft resumes after section change and reload before explicit save
+PASS editing makes an immutable version; old quote and JSON copy keep exact original locations
+PASS writing and import drafts coexist without converting or consuming each other
+PASS real staging and commit aborts preserve text, block failed navigation and retry once
+PASS another tab draft conflict preserves both texts and recovery creates a separate draft
+PASS own-writing filter excludes imported self text and only app writing offers edit
+PASS concurrent source revision keeps the newer saved head and preserves current writing as a new source
+PASS drafts remain separate across workspaces and account changes
+PASS Korean composition waits for completion and keyboard controls preserve focus
+PASS visual blank long Korean and saving error 1440
+PASS visual blank long Korean and saving error 820
+PASS visual blank long Korean and saving error 390
+Direct writing: 12/12; visual 9; console 0; page 0.

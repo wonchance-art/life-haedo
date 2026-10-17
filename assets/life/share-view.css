@@ -49,3 +49,26 @@
 .share-comment > .share-caption { color: var(--mint-ink); }
 .share-page .share-header { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 @media (max-width:700px) { .share-page { padding-inline: max(20px, env(safe-area-inset-left)) max(20px, env(safe-area-inset-right)); } }
+
+/* Public copies use the same author-first profile and unframed reading feed. */
+.share-document { max-width:680px; margin-inline:auto; }
+.share-profile { display:grid; grid-template-columns:64px minmax(0,1fr); align-items:start; gap:18px; padding:18px 0 28px; border-bottom:1px solid var(--line,#ececee); }
+.share-profile-avatar { display:grid; place-items:center; width:64px; height:64px; border-radius:50%; background:#f0f0f2; color:var(--ink,#18181b); font-size:25px; font-weight:650; line-height:1; user-select:none; }
+.share-profile-identity { min-width:0; }
+.share-profile .share-title { margin:0; font-size:26px; font-weight:750; line-height:1.45; letter-spacing:-.025em; }
+.share-profile .share-intro { margin-top:10px; color:var(--ink-soft,#66666f); font-size:15px; line-height:1.85; }
+.share-entry { padding-block:28px; }
+.share-entry-title { font-size:22px; font-weight:700; line-height:1.6; }
+.share-body,.share-comment-body { color:var(--ink,#18181b); font-size:17px; line-height:1.95; }
+.share-comment { padding:16px 0 0; border-radius:0; background:transparent; }
+.share-comment > .share-caption { color:var(--ink-soft,#66666f); }
+.share-expand,.share-source-link { color:var(--link,#3156d3); }
+.share-page { max-width:776px; }
+@media(max-width:700px) {
+  .share-profile { grid-template-columns:56px minmax(0,1fr); gap:14px; padding-block:16px 24px; }
+  .share-profile-avatar { width:56px; height:56px; font-size:23px; }
+  .share-profile .share-title { font-size:23px; }
+  .share-profile .share-intro { font-size:14px; }
+  .share-entry-title { font-size:20px; }
+  .share-body,.share-comment-body { font-size:16px; line-height:1.9; }
+}

@@ -1,0 +1,12 @@
+{
+  "browser": "151.0.7922.173",
+  "scope": "Live API CORS from an isolated loopback browser origin. Not an app integration/deployment test.",
+  "status": 200,
+  "type": "cors",
+  "data": {
+    "id": 27992,
+    "title": "A Sunday on La Grande Jatte — 1884",
+    "artist_title": "Georges Seurat"
+  },
+  "origin": "http://127.0.0.1:4186"
+}

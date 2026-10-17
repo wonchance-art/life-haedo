@@ -1,0 +1,91 @@
+{
+  "createdAt": "2026-10-08T21:50:45.184Z",
+  "browser": "151.0.7922.173",
+  "scope": "Actual UI import and reflection/outline interaction; anonymous synthetic HTTP only. Touch and Korean plain input, not Apple/IME.",
+  "checks": [
+    {
+      "width": 390,
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n... Skipped lines\n\n  {\n    bundle: {\n      createdAt: '2026-10-08T21:50:45.565Z',\n      links: [],\n      records: [\n...\n        note: '잘하고 싶은 마음에서 오래 좋아할 기준으로 옮겨 간 네 장면을 엮고 싶다. 다른 사람의 글은 내 경험과 나란히 두되 같은 신념으로 합치지 않는다.\\n' +\n+         ' 지금은 조금 다르게 읽힌다.\\n' +\n-         '\\n' +\n          '일을 잠시 멈춘 첫 주에는 달력이 유난히 넓어 보였다. 약속이 없는 오후를 자유라고 부르다가도 저녁이 되면 무엇을 했는지 설명해야 할 것 같았다. 메모를 열어 보니 쉬는 날에도 일을 했던 날과 같은 방식으로 자신을 채점하고 있었다.\\n' +\n          '\\n' +\n          '처음 바꾼 일은 거창한 계획이 아니었다. 일어나면 커튼을 열고 점심 한 끼를 직접 만드는 순서를 정했다. 오전에 실패하면 하루 전체를 포기하는 대신 오후에 할 수 있는 작은 일을 골랐다. 이 순서는 성과를 늘리기보다 다시 시작할 자리를 만드는 데 도움이 됐다.\\n' +\n          '\\n' +\n          '가까운 공원을 걷던 날에는 나무 이름을 몰라도 멈춰 볼 수 있었다. 사진을 남기지 않은 길의 모양을 집에 돌아와 적었다. 기록을 잘 남기기 위해 경험하는 것이 아니라 지나간 경험을 다시 알아차리려고 기록한다는 감각이 조금 생겼다.\\n' +\n...\n      },\n+     revision: 3,\n-     revision: 2,\n      workspaceId: '416470ab-8bcc-41fc-bc8d-3ca5c7e50b7b'\n    }\n  }\n\n    at main (/workspace/life-haedo/.local/reflection-to-outline/interaction.cjs:25:1320)"
+    }
+  ],
+  "screens": [
+    {
+      "scene": "write-arrival",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "textarea",
+          "id": "wbReflectionNote",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "read-return",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.889,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "div",
+          "id": "",
+          "class": "wb-source",
+          "text": "처음 일을 고르며 적어 둔 기준네이버 블로그 · 내 기록 · 제공한 본문 · 1/2 버전이 원문 버전 열기원문 작성일 · 2016-03-14첫 ",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "remoteWrites": 0,
+  "finishedAt": "2026-10-08T21:50:50.331Z",
+  "pass": false
+}

@@ -19,13 +19,18 @@ const code = expected => value => { assert.equal(value.code, expected); return t
 function fixture(t, options = {}) {
   const state = { saved: options.saved ? copy(CONFIG) : null, session: account('a'), offline: false,
     calls: 0, adapters: [], meta: null, local: Core.createWorkspace(), row: null, copies: [], errors: [], writes: 0,
-    localCalls: [], sent: [], logoutCalls: 0 };
+    localCalls: [], sent: [], logoutCalls: 0, applied: [] };
   const events = new Map(), visibility = new Map();
   const storage = {
     ...(options.owner ? { account: copy(options.owner) } : {}),
     async listWorkspaces() { state.localCalls.push('list'); return state.meta ? [{ workspaceId: state.local.workspaceId }] : []; },
     async getSyncState() { state.localCalls.push('state'); const result = copy(state.meta); if (state.stateGate) await state.stateGate.promise; return result; },
     async read() { state.localCalls.push('read'); return copy(state.local); },
+    async applySyncRemote(_id, _binding, row) {
+      state.applied.push(copy(row));
+      if (state.applyError) throw error(state.applyError);
+      return { status: state.applyConflict ? 'conflict' : 'stored', revision: state.local.revision };
+    },
     subscribe() { return () => {}; },
     async prepareSyncUpload() { if (state.prepareError) throw error(state.prepareError); return null; },
     async ackSync(_id, _binding, operationId, revision) {
@@ -178,6 +183,58 @@ test('Storage size failure is normalized without exposing server detail or repla
   });
   assert.deepEqual(f.state.local, original); assert.equal(f.state.writes, 0);
   assert.equal(f.state.errors.at(-1).code, 'payload_too_large');
+});
+
+async function acknowledgedFixture(t) {
+  const f = fixture(t); await f.login('a'); f.bind();
+  f.state.meta.remoteRevision = 1; f.state.meta.syncedLocalRevision = f.state.local.revision;
+  f.state.meta.status = 'synced';
+  f.state.row = { id: f.state.local.workspaceId, title: f.state.local.title, revision: 1,
+    data: copy(f.state.local), updated_at: '2026-10-03T00:00:00Z' };
+  return f;
+}
+
+test('explicit download validates equal-revision snapshots through storage and preserves local data on integrity failure', async t => {
+  const f = await acknowledgedFixture(t), before = copy(f.state.local);
+  f.state.row.title = f.state.row.data.title = '같은 서버 버전에서 달라진 제목';
+  f.state.applyError = 'remote_revision_mismatch';
+  await assert.rejects(f.manager.download(before.workspaceId), code('remote_revision_mismatch'));
+  assert.equal(f.state.applied.length, 1); assert.deepEqual(f.state.applied[0], f.state.row);
+  assert.deepEqual(f.state.local, before); assert.equal(f.state.writes, 0);
+  f.state.applyError = null; f.state.row.title = f.state.row.data.title = before.title;
+  assert.deepEqual(copy(await f.manager.download(before.workspaceId)), before);
+  assert.equal(f.state.applied.length, 2); assert.equal(f.state.writes, 0);
+});
+
+test('automatic sync checks equal-revision snapshots before clearing errors and observes concurrent local edits as conflict', async t => {
+  const f = await acknowledgedFixture(t), before = copy(f.state.local);
+  f.state.applyError = 'remote_revision_mismatch';
+  await assert.rejects(f.manager.syncNow(before.workspaceId), value => {
+    assert.equal(value.code, 'remote_revision_mismatch'); assert.match(value.message, /같은 서버 버전/);
+    assert.doesNotMatch(value.message, /private server/); return true;
+  });
+  assert.equal(f.state.applied.length, 1); assert.equal(f.state.errors.at(-1).code, 'remote_revision_mismatch');
+  assert.deepEqual(f.state.local, before); assert.equal(f.state.writes, 0);
+  f.state.applyError = null;
+  assert.equal((await f.manager.syncNow(before.workspaceId)).error, null);
+  assert.equal(f.state.applied.length, 2); assert.equal(f.state.errors.at(-1), null);
+  f.state.applyConflict = true;
+  assert.equal((await f.manager.syncNow(before.workspaceId)).status, 'conflict');
+  assert.deepEqual(f.state.meta.conflict.row, f.state.row);
+  assert.deepEqual(f.state.local, before); assert.equal(f.state.writes, 0);
+});
+
+test('equal-revision downloads preserve dirty and pending local work; lower and missing server heads remain rejected', async t => {
+  const f = await acknowledgedFixture(t), before = copy(f.state.local);
+  f.state.local.revision++;
+  await assert.rejects(f.manager.download(before.workspaceId), code('workspace_conflict'));
+  f.state.local = copy(before); f.state.meta.outbox = { operationId: Core.id() };
+  await assert.rejects(f.manager.download(before.workspaceId), code('workspace_conflict'));
+  f.state.meta.outbox = null; f.state.meta.remoteRevision = 2;
+  await assert.rejects(f.manager.download(before.workspaceId), code('remote_revision_regressed'));
+  f.state.row = null;
+  await assert.rejects(f.manager.download(before.workspaceId), code('remote_missing'));
+  assert.deepEqual(f.state.local, before); assert.equal(f.state.applied.length, 0); assert.equal(f.state.writes, 0);
 });
 
 async function conflictFixture(t, options = {}) {

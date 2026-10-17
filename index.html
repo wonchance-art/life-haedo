@@ -3,16 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="description" content="여러 곳에 남긴 기록을 모아 읽고 정리하는 개인 생활 도구">
-  <meta name="theme-color" content="#F7F7FB">
-  <title>해도 · 홈</title>
+  <meta name="description" content="내 생각과 일상을 글로 쓰고, 기록과 취향을 모으는 개인 블로그. 먼저 비공개로 보관하고 공개할 내용은 직접 고릅니다.">
+  <meta name="theme-color" content="#ffffff">
+  <title>해도 · 내 블로그</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preload" href="vendor/pretendard/PretendardVariable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="assets/life/ui.css">
+  <link rel="stylesheet" href="assets/life/page-posts.css">
+  <link rel="stylesheet" href="vendor/quill/quill.snow.css">
+  <link rel="stylesheet" href="assets/life/photo-post.css">
+  <link rel="stylesheet" href="assets/life/nine-board.css">
   <link rel="stylesheet" href="assets/life/workbench.css">
   <link rel="stylesheet" href="assets/life/share-view.css">
   <link rel="stylesheet" href="assets/life/home.css">
+  <link rel="stylesheet" href="assets/life/collection.css">
   <link rel="stylesheet" href="assets/haedo-shell.css">
+  <link rel="stylesheet" href="assets/life/blog-public.css">
+  <link rel="stylesheet" href="assets/life/blog-manager.css">
+  <link rel="stylesheet" href="assets/life/preservation.css">
+  <link rel="stylesheet" href="assets/life/original-attachments.css">
+  <link rel="stylesheet" href="assets/haedo-motion.css">
 </head>
 <body class="haedo-shell" data-page="home" data-life-home="true" data-haedo-section="home">
   <nav class="haedo-nav" data-haedo-navigation aria-label="주 메뉴"></nav>
@@ -28,12 +39,33 @@
     </details>
   </div>
   <main id="lifeWelcome" class="haedo-welcome" hidden>
-    <header class="haedo-page-heading"><div class="haedo-heading-title"><h1>해도</h1></div></header>
+    <header class="haedo-page-heading"><div class="haedo-heading-title"><h1>해도</h1></div><div class="haedo-heading-actions"><a class="life-button" href="login.html?next=index.html" data-life-return-login>로그인</a></div></header>
     <section class="haedo-welcome-copy">
-      <h2>모아둔 기록을 이어 읽으세요.</h2>
-      <p>여러 곳에 남긴 글과 메모를 한곳에서 읽고 정리합니다.</p>
-      <a class="life-button life-primary" href="login.html?next=index.html" data-life-login>Google로 계속하기<span data-haedo-icon="arrow" aria-hidden="true"></span></a>
+      <h2>생각은 글로.<br>취향은 나답게.</h2>
+      <p>내 이야기를 쓰는 블로그.<br>사진과 좋아하는 것, 마음에 남은 기록을 모아 나만의 이야기를 이어가세요.</p>
+      <a class="life-button life-primary" href="login.html?next=index.html%3Fcompose%3D1" data-life-login="compose">첫 글 쓰기<span data-haedo-icon="arrow" aria-hidden="true"></span></a>
+      <p class="haedo-blog-scope">새 글과 사진은 먼저 비공개로 보관합니다. 글 관리에서 글 한 편씩 서버에 보관하고, 공개할 글과 사진을 직접 고를 수 있습니다.</p>
+      <details class="haedo-blog-example">
+        <summary>어떻게 사용할 수 있나요?</summary>
+        <div>
+          <p class="haedo-blog-example-label">가상 사용 예시</p>
+          <h3>산책하면서 떠올린 생각</h3>
+          <p>오래 머물고 싶은 장소에 대해 짧은 글을 쓰고 사진을 붙입니다. 예전에 적어둔 메모를 자료실에서 다시 읽으며 생각을 보탭니다.</p>
+          <p>저장한 글은 내 블로그에서 다시 읽고 고칠 수 있습니다. 기존 자료에서 고른 내용의 공개 사본은 별도로 검토하고 공개합니다.</p>
+        </div>
+      </details>
     </section>
+    <article class="haedo-welcome-post" aria-label="가상 블로그 예시">
+      <header class="haedo-welcome-author">
+        <span class="haedo-welcome-avatar" aria-hidden="true">예</span>
+        <div><strong>느리게 모으는 일상</strong><small>예시 블로그 · 가상 자료</small></div>
+      </header>
+      <h3>좋아하는 장소를 기록하는 일</h3>
+      <p>매일 걷던 길에서 잠시 멈췄다. 늘 지나치던 빛이 오늘은 조금 다르게 보였다.</p>
+      <p>사진 한 장과 짧은 생각을 남기고, 예전에 적어둔 메모를 다시 읽었다. 나의 글은 그렇게 이어진다.</p>
+      <blockquote class="haedo-welcome-quote">마음에 남은 것을 모으다 보면,<br>나만의 이야기가 된다.</blockquote>
+      <footer class="haedo-welcome-post-footer">직접 쓴 글 · 나만 보는 기록에서 시작</footer>
+    </article>
     <a class="haedo-privacy-link" href="privacy.html">개인정보 안내</a>
   </main>
   <noscript>생활 자료를 열려면 브라우저에서 JavaScript를 허용해주세요. 기존 기록은 변경되지 않습니다.</noscript>
@@ -47,12 +79,29 @@
   <script src="assets/platform-data.js"></script>
   <script src="assets/life/core.js"></script>
   <script src="assets/life/writing.js"></script>
+  <script src="assets/life/page-posts.js"></script>
+  <script src="vendor/quill/quill.js"></script>
+  <script src="vendor/fflate/fflate.js"></script>
+  <script src="assets/life/obsidian-decisions.js"></script>
+  <script src="assets/life/obsidian-package.js"></script>
+  <script src="assets/life/obsidian-update.js"></script>
+  <script src="assets/life/obsidian-update-ui.js"></script>
+  <script src="assets/life/original-attachments.js"></script>
+  <script src="assets/life/original-attachments-ui.js"></script>
+  <script src="assets/life/photo-post.js"></script>
+  <script src="assets/life/nine-board.js"></script>
+  <script src="assets/life/page-posts-view.js"></script>
   <script src="assets/life/workbench.js"></script>
   <script src="assets/life/reflection.js"></script>
+  <script src="assets/life/reflection-lenses.js"></script>
+  <script src="assets/life/reflection-lenses-ui.js"></script>
   <script src="assets/life/books.js"></script>
   <script src="assets/life/book-history.js"></script>
   <script src="assets/life/book-print.js"></script>
   <script src="assets/life/rediscovery.js"></script>
+  <script src="assets/life/collection.js"></script>
+  <script src="assets/life/source-reference.js"></script>
+  <script src="assets/life/blog.js"></script>
   <script src="assets/life/storage.js"></script>
   <script src="assets/life/remote.js"></script>
   <script src="assets/platform-life-remote.js"></script>
@@ -66,13 +115,34 @@
   <script src="assets/life/reading-position.js"></script>
   <script src="assets/life/legacy.js"></script>
   <script src="assets/life/icons.js"></script>
+  <script src="assets/haedo-motion.js"></script>
   <script src="assets/haedo-navigation.js"></script>
   <script src="assets/life/share.js"></script>
   <script src="assets/life/share-remote.js"></script>
   <script src="assets/life/share-view.js"></script>
+  <script src="assets/life/page-media.js"></script>
+  <script src="assets/life/page-composer.js"></script>
+  <script src="assets/life/photo-post-attachments.js"></script>
+  <script src="assets/life/photo-post-ui.js"></script>
+  <script src="assets/life/nine-board-ui.js"></script>
   <script src="assets/life/workbench-ui.js"></script>
   <script src="assets/life/home.js"></script>
   <script src="assets/life/writing-ui.js"></script>
+  <script src="assets/life/collection-metadata.js"></script>
+  <script src="assets/life/collection-media.js"></script>
+  <script src="assets/life/collection-picker.js"></script>
+  <script src="assets/life/collection-ui.js"></script>
+  <script src="assets/life/unified-search.js"></script>
+  <script src="assets/life/unified-search-ui.js"></script>
+  <script src="assets/life/blog-evidence.js"></script>
+  <script src="assets/life/blog-remote.js"></script>
+  <script src="assets/life/blog-sync.js"></script>
+  <script src="assets/life/blog-public-ui.js"></script>
+  <script src="assets/life/blog-manager.js"></script>
+  <script src="assets/life/preservation-references.js"></script>
+  <script src="assets/life/preservation-package.js"></script>
+  <script src="assets/life/preservation.js"></script>
+  <script src="assets/life/preservation-ui.js"></script>
   <script src="assets/life/ui.js"></script>
   <script src="assets/life/shell.js"></script>
 </body>

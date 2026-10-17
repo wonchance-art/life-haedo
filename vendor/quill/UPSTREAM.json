@@ -1,0 +1,13 @@
+{
+  "package": "quill",
+  "version": "2.0.3",
+  "source": "https://registry.npmjs.org/quill/-/quill-2.0.3.tgz",
+  "verified": "registry SHA-512 integrity; official distribution and license",
+  "sha256": {
+    "quill.snow.css": "1c7948cd13aa92fac6390319bc1e5e461823da171519d3a768db56164f871636",
+    "LICENSE": "395c12b616d6f58238b4be39284d4d9221b58dd6e1f1e34d9ab537e34abbb022",
+    "quill.js": "f6157c72ac9b3f51cdead426335688a027b12405d9d6a4daadd38a676b2d7ff2",
+    "quill.js.LICENSE.txt": "7b1938804d68d96764233d0a148a7501f39e547e6ae2dead4b16836e9b8d123c",
+    "THIRD_PARTY_NOTICES.txt": "0ae863260da224f3d826093eb246fbab151549ce34fbbf18d80f51533f969b40"
+  }
+}

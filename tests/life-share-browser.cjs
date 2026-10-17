@@ -123,6 +123,7 @@ function observeShare(page,report,name){
   page.on('console',event=>{if(event.type()!=='error')return;if(page.expectedShareFailure&&event.location().url.startsWith(cloud)&&/Failed to load resource:.*(?:ERR_FAILED|ERR_INTERNET_DISCONNECTED|status of 404)/.test(event.text()))report.expectedErrors++;else report.consoleErrors.push({check:name,message:event.text()});});
 }
 
+module.exports.ShareCloud = ShareCloud;
 async function main(){
   await fs.mkdir(out,{recursive:true});
   const report={createdAt:new Date().toISOString(),scope:'Actual local app/SDK/IndexedDB with anonymous HTTP share-RPC simulator; not live SQL/RLS, Apple hardware or real Google login',checks:[],visual:[],consoleErrors:[],pageErrors:[],expectedErrors:0,external:[]};

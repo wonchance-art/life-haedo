@@ -24,7 +24,32 @@ async function nav(page, section) {
   assert.equal(await control.getAttribute('aria-current'), 'page');
 }
 async function button(page, name) { await page.getByRole('button', { name, exact: true }).click(); await settle(page); }
+async function assertCommonNavigation(page) {
+  // The brand is another home link, separate from the four section controls.
+  assert.deepEqual(await page.locator('[data-haedo-navigation] a[data-haedo-section]').evaluateAll(links => links.map(link => ({
+    section: link.dataset.haedoSection, href: link.getAttribute('href'), label: link.getAttribute('aria-label')
+  }))), [
+    { section: 'home', href: 'index.html', label: '홈' },
+    { section: 'records', href: 'index.html?section=records', label: '자료실' },
+    { section: 'tools', href: 'index.html?section=tools', label: '도구' },
+    { section: 'manage', href: 'index.html?section=manage', label: '설정' }
+  ]);
+  const brand = page.locator('[data-haedo-navigation] .haedo-brand');
+  assert.equal(await brand.count(), 1); assert.equal(await brand.getAttribute('href'), 'index.html');
+  assert.equal(await brand.getAttribute('aria-label'), '해도 홈');
+}
 const stored = page => page.evaluate(async () => HaedoLife.Shell.storage.read(await HaedoLife.Shell.storage.getActive()));
+async function logoutToPublicHome(page) {
+  await openAccount(page);
+  const previousDocument = await page.evaluate(() => __homeInstance);
+  await button(page, '로그아웃');
+  // Both the private view and the redirect use index.html. Matching pathname
+  // can resolve on the old document, before location.replace commits.
+  await page.waitForFunction(previous => window.__homeInstance && __homeInstance !== previous, previousDocument);
+  await shellReady(page);
+  assert.equal(new URL(page.url()).pathname, '/index.html');
+}
+
 async function makeContext(browser, server, device, seed = accounts.a, options = {}) {
   const context = await browser.newContext({ serviceWorkers: 'block', acceptDownloads: true, viewport: { width: 820, height: 1000 }, ...options });
   await platformContext(context, server, device, seed);
@@ -86,8 +111,10 @@ async function main() {
         await page.goto(base + '/index.html' + suffix); await shellReady(page);
         assert.equal(new URL(page.url()).pathname, '/index.html'); assert.equal(await page.locator('#lifeWelcome').isVisible(), true);
         assert.equal(await page.locator('#lifeApp').isHidden(), true); assert.deepEqual(await page.evaluate(() => __homeDbOpens), []);
-        assert.equal(await page.locator('[data-haedo-navigation] a').count(), 4);
-        assert.equal(await page.locator('[data-life-login]').isVisible(), true);
+        await assertCommonNavigation(page);
+        assert.equal(await page.locator('[data-life-login=compose]').isVisible(), true);
+        assert.equal(await page.locator('[data-life-return-login]').isVisible(), true);
+        assert.match(await page.locator('[data-life-login=compose]').getAttribute('href'), /compose%3D1/);
       }
     }, null);
     await check('public readonly home does not mount even an authenticated account', async ({ page }) => {
@@ -109,7 +136,8 @@ async function main() {
     await check('Google PKCE fixture returns to selected home section with only allowed query state', async ({ page, server, device }) => {
       server.oauthAccounts.set(device, accounts.a);
       await page.goto(base + '/index.html?section=manage&view=transfer&unknown=drop'); await shellReady(page);
-      await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click();
+      // General login preserves the destination; the first-write CTA has its own compose intent.
+      await page.locator('[data-life-return-login]').click(); await page.locator('#googleLogin').click();
       await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
       const url = new URL(page.url()); assert.equal(url.searchParams.get('section'), 'manage'); assert.equal(url.searchParams.get('view'), 'transfer');
       assert.equal(url.searchParams.has('unknown'), false); assert.equal(url.searchParams.has('code'), false);
@@ -125,7 +153,7 @@ async function main() {
       let release;
       const handlerReady = new Promise(resolve => { release = resolve; });
       await context.route('**/assets/platform-ui.js', async route => { await handlerReady; await route.fallback(); });
-      const navigation = page.locator('[data-life-login]').click();
+      const navigation = page.locator('[data-life-return-login]').click();
       try {
         await page.locator('#googleLogin').waitFor({ state: 'visible' });
         assert.equal(await page.locator('#googleLogin').isDisabled(), true);
@@ -140,7 +168,8 @@ async function main() {
     await check('import draft and reviewed exact excerpt survive tools/manage switching without page reload', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); const instance = await page.evaluate(() => __homeInstance);
       const raw = '통합 홈에서 보관할 본문\r\n다시 읽을 문장🌱\r\n끝 문장', quote = '다시 읽을 문장🌱';
-      await button(page, '가져오기'); await page.locator('#lifeImportTitle').fill('전환 중 보존할 익명 초안'); await page.locator('#lifeImportText').fill(raw);
+      await page.locator('.home-library > summary').click();
+      await button(page, '자료 가져오기'); await page.locator('#lifeImportTitle').fill('전환 중 보존할 익명 초안'); await page.locator('#lifeImportText').fill(raw);
       await nav(page, 'tools'); await nav(page, 'manage'); await nav(page, 'records'); await button(page, '가져오기');
       assert.equal(await page.locator('#lifeImportTitle').inputValue(), '전환 중 보존할 익명 초안');
       assert.equal(await page.locator('#lifeImportText').inputValue(), raw.replaceAll('\r\n', '\n'));
@@ -169,8 +198,10 @@ async function main() {
       assert.equal(await page.locator('#lifeSearch').inputValue(), '출처를 기억할');
       await page.waitForFunction(value => document.activeElement?.dataset.focusKey === value, key);
       await openManagement(page); await button(page, '내보내기·사본 복원');
-      assert.match(await page.locator('#lifeMain').innerText(), /연표·목표·습관은 별도 백업/);
-      assert.match(await page.locator('#lifeMain').innerText(), /자료 전용 파일에는 페이지 구성과 회고가 포함되지/);
+      await page.locator('#lifeTransferScope summary').focus(); await page.keyboard.press('Enter');
+      const scope = await page.locator('#lifeTransferScope').innerText();
+      assert.match(scope, /연표·목표·습관.*포함하지 않습니다/);
+      assert.match(scope, /묶음·내 페이지·회고·책.*포함하지 않습니다/);
       const download = page.waitForEvent('download'); await button(page, 'JSON 백업');
       const backup = JSON.parse(await fs.readFile(await (await download).path(), 'utf8'));
       assert.equal(backup.format, 'life-tools-backup-v1'); assert.equal(backup.manifest.stagingIncluded, false);
@@ -180,8 +211,8 @@ async function main() {
     await check('a home with originals and no excerpts shows real text and opens the complete original', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page);
       const raw = '아직 발췌하지 않은 원문도 첫 화면에서 다시 읽는다. '.repeat(14);
-      await button(page, '가져오기'); await page.locator('#lifeImportTitle').fill('발췌 전 보관한 익명 자료'); await page.locator('#lifeImportText').fill(raw);
-      await button(page, '원문·출처 확인'); await button(page, '자료만 보관'); await button(page, '기록으로 돌아가기');
+      await nav(page, 'records'); await button(page, '가져오기'); await page.locator('#lifeImportTitle').fill('발췌 전 보관한 익명 자료'); await page.locator('#lifeImportText').fill(raw);
+      await button(page, '원문·출처 확인'); await button(page, '자료만 보관'); await button(page, '자료실로 돌아가기');
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'sources');
       const card = page.locator('#lifeSearchResults .life-source-card'); assert.equal(await card.count(), 1);
       assert((await card.locator('.life-search-context').textContent()).startsWith(raw.slice(0, 100))); // Unified list still shows the stored original, even without saved quotes.
@@ -189,13 +220,17 @@ async function main() {
       await card.locator('h3 .life-source-open').click(); await settle(page);
       assert.equal(await page.locator('#lifeSourceText').textContent(), raw);
       await page.locator('#lifeSearchReturn').click(); await settle(page); assert.equal(await card.count(), 1);
+      await nav(page, 'home'); await page.locator('.home-library > summary').click();
+      const recent = page.locator('#homeRecent'); assert((await recent.innerText()).includes(raw.slice(0, 100)));
+      await recent.getByRole('button', { name: '발췌 전 보관한 익명 자료', exact: true }).click(); await settle(page);
+      assert.equal(await page.locator('#lifeSourceText').textContent(), raw);
     });
     await check('tools lead to existing goal/habit editors and account timeline list with the same four-way navigation', async ({ page }) => {
       await page.goto(base + '/index.html?section=tools'); await ready(page);
       for (const target of ['goals', 'habits']) {
         await page.locator('#lifeMain a[href="' + target + '.html"]').click();
         await page.waitForFunction(target => document.body.dataset.page === target && !document.querySelector('[data-private]').hidden, target);
-        assert.equal(await page.locator('[data-haedo-navigation] a').count(), 4);
+        await assertCommonNavigation(page);
         assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="tools"]').getAttribute('aria-current'), 'page');
         await page.locator('#addItem').click(); assert.equal(await page.locator('#itemDialog').isVisible(), true);
         await page.keyboard.press('Escape'); await nav(page, 'tools'); await ready(page);
@@ -203,7 +238,7 @@ async function main() {
       await nav(page, 'records'); await button(page, '시간 보기');
       await page.locator('#lifeMain a[href="workspace.html"]').click();
       await page.waitForFunction(() => document.body.dataset.page === 'workspace' && !document.querySelector('[data-private]').hidden);
-      assert.equal(await page.locator('[data-haedo-navigation] a').count(), 4);
+      await assertCommonNavigation(page);
       await page.locator('#newTimeline').click(); assert.equal(await page.locator('#timelineDialog').isVisible(), true); await page.keyboard.press('Escape');
     });
     await check('history keeps a management subview and a legacy life sync link keeps its destination', async ({ page }) => {
@@ -220,18 +255,18 @@ async function main() {
     await check('account change cannot reveal previous home content and returning account recovers its own data', async ({ page, server, device }) => {
       await page.goto(base + '/index.html'); await ready(page); await importExcerpt(page, '익명 A 기록', 'A만 읽을 구절', 'A만 읽을 구절');
       const id = (await stored(page)).workspaceId;
-      await openAccount(page); await button(page, '로그아웃'); await page.waitForURL(url => url.pathname.endsWith('/index.html')); await shellReady(page);
+      await logoutToPublicHome(page);
       assert.equal(await page.locator('#lifeApp').isHidden(), true); assert.doesNotMatch(await page.locator('body').innerText(), /A만 읽을 구절/);
-      server.oauthAccounts.set(device, accounts.b); await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click(); await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
+      server.oauthAccounts.set(device, accounts.b); await page.locator('[data-life-return-login]').click(); await page.locator('#googleLogin').click(); await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
       assert.equal((await stored(page)).sources.length, 0);
       assert.equal(await page.evaluate(async id => { try { await HaedoLife.Shell.storage.read(id); return false; } catch (_) { return true; } }, id), true);
       assert.doesNotMatch(await page.locator('body').innerText(), /A만 읽을 구절/);
-      await openAccount(page); await button(page, '로그아웃'); await page.waitForURL(url => url.pathname.endsWith('/index.html')); await shellReady(page);
-      server.oauthAccounts.set(device, accounts.a); await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click(); await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
+      await logoutToPublicHome(page);
+      server.oauthAccounts.set(device, accounts.a); await page.locator('[data-life-return-login]').click(); await page.locator('#googleLogin').click(); await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
       assert.equal((await stored(page)).workspaceId, id); assert.equal((await stored(page)).records[0].text, 'A만 읽을 구절');
     });
     await check('a late verification response after signout cannot remount the previous private home', async ({ page, context }) => {
-      await page.goto(base + '/index.html'); await ready(page);
+      await page.goto(base + '/index.html', { waitUntil: 'domcontentloaded' }); await ready(page);
       await importExcerpt(page, '지연 검증 익명 원문', '늦은 응답 비공개 구절', '늦은 응답 비공개 구절');
       let release, entered; const gate = new Promise(resolve => { release = resolve; }), arrived = new Promise(resolve => { entered = resolve; });
       await context.route(`${cloud}/auth/v1/user`, async route => { entered(); await gate; return route.fallback(); });

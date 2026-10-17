@@ -94,6 +94,11 @@
       if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '활동·페이지 구성 모듈을 불러오지 못했습니다.');
       return value;
     };
+    const collection = () => {
+      const value = options.collection || root.HaedoLife?.Collection;
+      if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '컬렉션 모듈을 불러오지 못했습니다.');
+      return value;
+    };
     function notify(event) {
       if (disposed) return;
       const callbacks = event.type === 'error'
@@ -148,6 +153,13 @@
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
             notify({ type: 'changed', workspaceId: data.workspaceId, revision: data.revision });
           }
+          if (data?.sender !== sender && data?.type === 'collection_changed' && typeof data.workspaceId === 'string' && Number.isSafeInteger(data.revision)) {
+            notify({ type: 'collection_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'nine_board_changed' && typeof data.workspaceId === 'string' && Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'nine_board_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'photo_posts_changed' && typeof data.workspaceId === 'string') notify({ type: 'photo_posts_changed', workspaceId: data.workspaceId });
           if (data?.sender !== sender && data?.type === 'workbench_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
             notify({ type: 'workbench_changed', workspaceId: data.workspaceId, revision: data.revision });
@@ -500,6 +512,388 @@
       return writeReadingPosition(workspaceId, readingPositionInput(input), baseRevision);
     }
     async function clearReadingPosition(workspaceId, baseRevision) { return writeReadingPosition(workspaceId, null, baseRevision); }
+    // Independent local metadata: does not alter source/workbench revisions or sync payloads.
+    function collectionScope(workspaceId) {
+      scopeGuard();
+      if (!account) throw fault('auth_scope_required', '로그인한 계정에서 컬렉션을 열어 주세요.');
+      requireId(workspaceId, '작업공간');
+    }
+    async function collectionValue(meta, workspaceId) {
+      const row = await meta.get(`collection:${workspaceId}`);
+      const value = row === undefined ? collection().empty(workspaceId) : row.value;
+      collection().validate(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '컬렉션의 작업공간을 확인해 주세요.');
+      return value;
+    }
+    async function readCollection(workspaceId) {
+      collectionScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, tx.objectStore('meta'));
+        return clone(await collectionValue(tx.objectStore('meta'), workspaceId));
+      });
+    }
+    async function saveCollection(workspaceId, input, baseRevision) {
+      collectionScope(workspaceId); requireRevision(baseRevision, 'baseRevision');
+      collection().validate(input);
+      const state = clone(input);
+      if (state.workspaceId !== workspaceId) throw fault('workspace_mismatch', '컬렉션의 작업공간이 다릅니다.');
+      if (state.revision !== baseRevision) throw fault('collection_conflict', '컬렉션 저장 기준이 바뀌었습니다. 입력을 보존했습니다.');
+      const saved = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await collectionValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) throw fault('collection_conflict', '다른 탭에서 컬렉션을 수정했습니다. 입력을 보존하고 최신 내용과 비교해 주세요.');
+        state.revision = baseRevision + 1;
+        collection().validate(state);
+        await meta.put({ key: `collection:${workspaceId}`, value: state });
+        return clone(state);
+      });
+      const event = { type: 'collection_changed', workspaceId, revision: saved.revision };
+      notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Saving succeeded; reload remains available. */ }
+      return saved;
+    }
+    // Nine-slot boards are independently scoped local data, with their own file backup.
+    const nineBoard = () => root.HaedoLife?.NineBoard || (typeof require === 'function' && require('./nine-board.js'));
+    async function nineBoardValue(meta, workspaceId) {
+      const row = await meta.get(`nine-board:${workspaceId}`);
+      const value = row === undefined ? nineBoard().empty(workspaceId) : row.value;
+      nineBoard().validate(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '9칸 구성의 작업공간이 다릅니다.');
+      return value;
+    }
+    async function readNineBoard(workspaceId) {
+      collectionScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await nineBoardValue(meta, workspaceId));
+      });
+    }
+    async function saveNineBoard(workspaceId, input, baseRevision) {
+      collectionScope(workspaceId); requireRevision(baseRevision, 'baseRevision'); nineBoard().validate(input);
+      const value = clone(input);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '9칸 구성의 작업공간이 다릅니다.');
+      if (value.revision !== baseRevision) throw fault('nine_board_conflict', '9칸 구성의 저장 기준이 바뀌었습니다.');
+      const saved = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await nineBoardValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) throw fault('nine_board_conflict', '다른 탭에서 9칸 구성이 바뀌었습니다. 내 변경을 새 사본으로 보관해 주세요.');
+        value.revision++; nineBoard().validate(value);
+        await meta.put({ key: `nine-board:${workspaceId}`, value }); return clone(value);
+      });
+      const event = { type: 'nine_board_changed', workspaceId, revision: saved.revision };
+      notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Committed data remains authoritative. */ }
+      return saved;
+    }
+    const photoPost = () => root.HaedoLife?.PhotoPost || (typeof require === 'function' && require('./photo-post.js'));
+    async function listPhotoPosts(workspaceId) {
+      collectionScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone((await meta.get(`photo-posts:${workspaceId}`))?.value || []);
+      });
+    }
+    async function readPhotoPost(workspaceId, postId) {
+      collectionScope(workspaceId); requireId(postId, '사진 글');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const value = (await meta.get(`photo-post:${workspaceId}:${postId}`))?.value;
+        if (!value) throw fault('photo_post_missing', '사진 글이 바뀌었거나 없습니다. 목록을 다시 확인해 주세요.');
+        photoPost().validate(value); return clone(value);
+      });
+    }
+    async function savePhotoPost(workspaceId, input, baseRevision, evidenceRequest = null) {
+      collectionScope(workspaceId); requireRevision(baseRevision); photoPost().validate(input);
+      const value = photoPost().compact(input);
+      const evidence = evidenceRequest === null ? null : { refs: checkedEvidence(evidenceRequest.refs, workspaceId), baseRevision: evidenceRequest.baseRevision };
+      if (evidence) requireRevision(evidence.baseRevision);
+      if (value.revision !== baseRevision) throw fault('photo_post_conflict', '사진 글 저장 기준이 바뀌었습니다. 입력을 보존했습니다.');
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        if (evidence) {
+          checkEvidenceTargets(evidence.refs, bundle);
+          const priorEvidence = (await meta.get(`post-evidence:${workspaceId}:${value.id}`))?.value || { revision: 0, refs: [] };
+          if (priorEvidence.revision !== evidence.baseRevision) throw fault('post_evidence_conflict', '다른 탭에서 글의 원문 근거가 바뀌었습니다. 입력은 유지합니다.');
+        }
+        const key = `photo-post:${workspaceId}:${value.id}`, previous = (await meta.get(key))?.value;
+        if ((previous?.revision || 0) !== baseRevision || !previous && baseRevision !== 0) throw fault('photo_post_conflict', '다른 탭에서 사진 글을 수정했습니다. 입력은 남아 있습니다. 백업하거나 새 사본으로 보관해 주세요.');
+        if (previous) photoPost().validate(previous);
+        if (previous?.format === 'life-photo-post-v2' && value.format === 'life-photo-post-v1') throw fault('photo_post_update_required', '첨부와 보관 상태가 있는 새 형식입니다. 최신 작성기에서 다시 열어 주세요.');
+        let index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
+        if (value.status === 'saved' && value.replaces) {
+          const targetKey = `photo-post:${workspaceId}:${value.replaces.id}`, target = (await meta.get(targetKey))?.value;
+          if (!target || target.revision !== value.replaces.revision || target.status !== 'saved') throw fault('photo_post_conflict', '원래 사진 글이 변경됐습니다. 수정 초안은 유지했습니다. 새 글로 저장할 수 있습니다.');
+          const inheritedEvidence = (await meta.get(`post-evidence:${workspaceId}:${target.id}`))?.value;
+          if (!evidence && inheritedEvidence && !(await meta.get(`post-evidence:${workspaceId}:${value.id}`))) {
+            checkEvidenceTargets(checkedEvidence(inheritedEvidence.refs, workspaceId), bundle);
+            await meta.put({ key: `post-evidence:${workspaceId}:${value.id}`, value: { revision: 1, refs: clone(inheritedEvidence.refs) } });
+          }
+          const priorBlog = (await meta.get(`blog-sync:${workspaceId}:${target.id}`))?.value;
+          if (priorBlog && !(await meta.get(`blog-sync:${workspaceId}:${value.id}`))) {
+            const binding = { ...clone(priorBlog), revision: 1, localRevision: 0, publishPending: null, unpublishPending: null, status: priorBlog.enabled ? 'pending' : 'paused' };
+            if (binding.pending) binding.pending.localRevision = 0;
+            await meta.put({ key: `blog-sync:${workspaceId}:${value.id}`, value: binding });
+            await meta.delete(`blog-sync:${workspaceId}:${target.id}`);
+          }
+          await meta.delete(targetKey); index = index.filter(item => item.id !== target.id); value.createdAt = target.createdAt; value.replaces = null;
+        }
+        value.revision = baseRevision + 1; photoPost().validate(value);
+        const summary = { id: value.id, title: value.title, status: value.status, revision: value.revision, updatedAt: value.updatedAt, body: photoPost().plainText(value), photos: value.photos.length, attachments: (value.attachments || []).length, archived: value.archived === true };
+        const at = index.findIndex(item => item.id === value.id); if (at < 0) index.push(summary); else index[at] = summary;
+        if (index.length > 200) throw fault('photo_post_limit', '사진 글과 초안은 합계 200개까지 보관할 수 있습니다.');
+        await meta.put({ key, value }); await meta.put({ key: `photo-posts:${workspaceId}`, value: index });
+        if (evidence) await meta.put({ key: `post-evidence:${workspaceId}:${value.id}`, value: { revision: evidence.baseRevision + 1, refs: clone(evidence.refs) } });
+        return clone(value);
+      });
+      const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
+      return result;
+    }
+    function checkedEvidence(refs, workspaceId) {
+      if (!Array.isArray(refs) || refs.length > 64) throw fault('invalid_source_reference', '원문 근거는 64개까지 보관할 수 있습니다.');
+      const api = root.HaedoLife?.SourceReference || (typeof require === 'function' && require('./source-reference.js'));
+      for (const ref of refs) {
+        api.validate(ref);
+        if (ref.workspaceId !== workspaceId) throw fault('workspace_access_denied', '다른 작업공간의 원문 근거를 저장하지 않았습니다.');
+      }
+      return clone(refs);
+    }
+    function checkEvidenceTargets(refs, bundle) {
+      for (const ref of refs) {
+        const version = bundle.sourceVersions.find(v => v.id === ref.sourceVersionId && v.sourceId === ref.sourceId);
+        if (!bundle.sources.some(s => s.id === ref.sourceId) || !version || version.contentHash !== ref.contentHash ||
+            typeof version.contentText !== 'string' || version.contentText.slice(ref.locator.start, ref.locator.end) !== ref.quote) {
+          throw fault('invalid_source_reference', '선택한 정확한 원문 근거를 확인하지 못했습니다. 다른 버전으로 바꾸지 않았습니다.');
+        }
+      }
+    }
+    async function readPostEvidence(workspaceId, postId) {
+      collectionScope(workspaceId); requireId(postId, '글');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const value = (await meta.get(`post-evidence:${workspaceId}:${postId}`))?.value || { revision: 0, refs: [] };
+        checkedEvidence(value.refs, workspaceId); return clone(value);
+      });
+    }
+    async function savePostEvidence(workspaceId, postId, input, baseRevision) {
+      collectionScope(workspaceId); requireId(postId, '글'); requireRevision(baseRevision);
+      const refs = checkedEvidence(input.refs, workspaceId);
+      return transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        if (!(await meta.get(`photo-post:${workspaceId}:${postId}`))) throw fault('photo_post_missing', '근거를 연결할 글을 찾지 못했습니다.');
+        checkEvidenceTargets(refs, bundle);
+        const key = `post-evidence:${workspaceId}:${postId}`, previous = (await meta.get(key))?.value || { revision: 0 };
+        if (previous.revision !== baseRevision) throw fault('post_evidence_conflict', '다른 탭에서 원문 근거가 바뀌었습니다.');
+        const value = { revision: baseRevision + 1, refs }; await meta.put({ key, value }); return clone(value);
+      });
+    }
+    function savePhotoPostWithEvidence(workspaceId, input, baseRevision, refs, evidenceBaseRevision) {
+      return savePhotoPost(workspaceId, input, baseRevision, { refs, baseRevision: evidenceBaseRevision });
+    }
+    // A private, selected copy has no server binding. Read its dependencies in
+    // one transaction; hashing/ZIP work happens later on this owned snapshot.
+    function preservationOptions(input, selection = false) {
+      const value = input === undefined ? {} : clone(input);
+      onlyFields(value, selection ? ['postIds', 'boardIds', 'unowned'] : ['unowned'], 'invalid_preservation');
+      if (value.unowned !== undefined && typeof value.unowned !== 'boolean') throw fault('invalid_preservation', '기존 자료의 계정 범위를 확인해 주세요.');
+      if (selection) {
+        for (const [key, max] of [['postIds', 20], ['boardIds', 20]]) {
+          value[key] ??= [];
+          if (!Array.isArray(value[key]) || value[key].length > max || new Set(value[key]).size !== value[key].length) throw fault('invalid_preservation', '보관할 글과 구성을 다시 선택해 주세요.');
+          value[key].forEach(id => requireId(id, '선택 항목'));
+        }
+        if (!value.postIds.length && !value.boardIds.length) throw fault('invalid_preservation', '보관할 글 또는 9칸 구성을 선택해 주세요.');
+      }
+      return value;
+    }
+    async function preservationBundle(tx, workspaceId, unowned) {
+      const bundles = tx.objectStore('bundles'), meta = tx.objectStore('meta');
+      if (!unowned) return checkedBundle(bundles, workspaceId, meta);
+      if (await workspaceOwner(meta, workspaceId)) throw fault('workspace_access_denied', '계정에 연결된 자료는 기존 자료 가져오기로 열 수 없습니다.');
+      const bundle = await bundles.get(workspaceId);
+      if (!bundle) throw fault('workspace_not_found', '보관할 작업공간을 찾지 못했습니다.');
+      core().validateWorkspace(bundle); return bundle;
+    }
+    function photoSummary(doc) {
+      return { id: doc.id, title: doc.title, status: doc.status, revision: doc.revision, updatedAt: doc.updatedAt,
+        body: photoPost().plainText(doc), photos: doc.photos.length, attachments: (doc.attachments || []).length, archived: doc.archived === true };
+    }
+    async function readPreservationCatalog(workspaceId, options) {
+      collectionScope(workspaceId); const settings = preservationOptions(options);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const bundle = await preservationBundle(tx, workspaceId, settings.unowned), meta = tx.objectStore('meta');
+        const index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
+        if (!Array.isArray(index) || index.length > 200 || index.some(row => !plain(row) || typeof row.id !== 'string' || !['saved', 'draft'].includes(row.status)) || new Set(index.map(row => row.id)).size !== index.length) throw fault('invalid_preservation', '저장 글 목록을 확인하지 못했습니다. 기존 자료를 보존했습니다.');
+        const posts = index.filter(row => row.status === 'saved').map(row => {
+          if (typeof row.title !== 'string' || typeof row.body !== 'string' || typeof row.updatedAt !== 'string' || !Number.isSafeInteger(row.revision) || row.revision < 1 || !Number.isSafeInteger(row.photos) || row.photos < 0) throw fault('invalid_preservation', '저장 글 목록을 확인하지 못했습니다.');
+          return { id: row.id, title: row.title, status: row.status, revision: row.revision, updatedAt: row.updatedAt,
+            body: row.body, photos: row.photos, attachments: row.attachments || 0, archived: row.archived === true };
+        });
+        const state = await nineBoardValue(meta, workspaceId);
+        return clone({ workspace: { workspaceId, title: bundle.title, revision: bundle.revision }, posts,
+          boards: state.boards.map(board => ({ id: board.id, title: board.title, areas: board.areas.length, itemCount: board.areas.reduce((sum, area) => sum + area.items.length, 0) })) });
+      });
+    }
+    async function readPreservationSnapshot(workspaceId, options) {
+      collectionScope(workspaceId); const settings = preservationOptions(options, true);
+      return transaction(['bundles', 'meta'], 'readonly', tx => preservationSnapshot(tx, workspaceId, settings));
+    }
+    async function preservationSnapshot(tx, workspaceId, settings) {
+      const bundle = await preservationBundle(tx, workspaceId, settings.unowned), meta = tx.objectStore('meta');
+      const state = await nineBoardValue(meta, workspaceId), wanted = new Set(settings.boardIds);
+      const boards = state.boards.filter(board => wanted.has(board.id));
+      if (boards.length !== wanted.size) throw fault('preservation_source_changed', '선택한 9칸 구성이 바뀌었습니다. 다시 확인해 주세요.');
+      const postIds = new Set(settings.postIds), postRefs = [];
+      for (const board of boards) for (const area of board.areas) for (const item of area.items) if (item.reference) {
+        const ref = item.reference.value;
+        if (ref.workspaceId !== workspaceId) throw fault('workspace_access_denied', '다른 작업공간의 근거는 자동으로 가져오지 않습니다.');
+        if (item.reference.kind === 'post') { postIds.add(ref.postId); postRefs.push(ref); }
+        else checkEvidenceTargets(checkedEvidence([ref], workspaceId), bundle);
+      }
+      if (postIds.size > 20) throw fault('invalid_preservation', '선택한 글과 필수 근거 글은 20개까지 보관할 수 있습니다.');
+      const posts = [];
+      for (const postId of postIds) {
+        const doc = (await meta.get(`photo-post:${workspaceId}:${postId}`))?.value;
+        if (!doc || doc.id !== postId) throw fault('photo_post_missing', '선택한 글 또는 필요한 근거 글을 찾지 못했습니다.');
+        photoPost().validate(doc);
+        if (doc.status !== 'saved') throw fault('invalid_preservation', '명시적으로 저장한 글만 보관 파일에 담을 수 있습니다.');
+        const evidence = (await meta.get(`post-evidence:${workspaceId}:${postId}`))?.value || { revision: 0, refs: [] };
+        onlyFields(evidence, ['revision', 'refs'], 'invalid_preservation'); requireRevision(evidence.revision);
+        checkEvidenceTargets(checkedEvidence(evidence.refs, workspaceId), bundle);
+        for (const ref of postRefs.filter(ref => ref.postId === postId)) {
+          if (doc.revision !== ref.postRevision || doc.archived || photoPost().plainText(doc).slice(ref.locator.start, ref.locator.end) !== ref.quote) throw fault('preservation_source_changed', '9칸에서 참조한 정확한 저장 글이 바뀌었습니다. 최신 글로 바꾸지 않았습니다.');
+        }
+        posts.push({ doc, evidence });
+      }
+      return clone({ bundle, posts, nineBoard: { ...state, boards } });
+    }
+    function preservationSelectionPayload(snapshot, expected) {
+      const sourceIds = new Set(expected.bundle.sources.map(row => row.id)), versionIds = new Set(expected.bundle.sourceVersions.map(row => row.id));
+      return stablePayload({ workspaceId: snapshot.bundle.workspaceId,
+        sources: snapshot.bundle.sources.filter(row => sourceIds.has(row.id)),
+        sourceVersions: snapshot.bundle.sourceVersions.filter(row => versionIds.has(row.id)),
+        posts: snapshot.posts.map(({ doc, evidence }) => ({ doc: { ...doc, photos: doc.photos.map(({ blob, ...metadata }) => metadata) }, evidence })),
+        boards: snapshot.nineBoard.boards });
+    }
+    const preservationReferences = () => root.HaedoLife?.PreservationReferences || (typeof require === 'function' && require('./preservation-references.js'));
+    async function installPreservationCopy(input, options) {
+      scopeGuard();
+      if (!account) throw fault('auth_scope_required', '현재 로그인 계정에 새 비공개 사본으로 복원해 주세요.');
+      const candidate = clone(input), settings = options === undefined ? {} : clone(options), references = preservationReferences();
+      onlyFields(settings, ['source'], 'invalid_preservation');
+      if (!references?.validate) throw fault('dependency_unavailable', '보관 파일의 근거 검증기를 불러오지 못했습니다.');
+      let expected = null, selected = null, expectedPayload = null;
+      if (settings.source !== undefined) {
+        onlyFields(settings.source, ['workspaceId', 'unowned', 'expected'], 'invalid_preservation');
+        requireId(settings.source.workspaceId, '이전 작업공간');
+        if (settings.source.unowned !== undefined && typeof settings.source.unowned !== 'boolean') throw fault('invalid_preservation', '기존 자료의 계정 범위를 확인해 주세요.');
+        expected = await references.validate(settings.source.expected); scopeGuard();
+        if (expected.bundle.workspaceId !== settings.source.workspaceId) throw fault('workspace_access_denied', '검토한 원본 작업공간과 일치하지 않습니다.');
+        selected = preservationOptions({ unowned: settings.source.unowned, postIds: expected.posts.map(({ doc }) => doc.id), boardIds: expected.nineBoard.boards.map(board => board.id) }, true);
+        expectedPayload = preservationSelectionPayload(expected, expected);
+      }
+      // Never await crypto or image decoding inside the IndexedDB transaction.
+      const value = await references.validate(candidate); scopeGuard();
+      const { bundle, posts, nineBoard: state } = value;
+      if (bundle.revision !== 0 || state.revision !== 0 || posts.some(({ doc, evidence }) => doc.revision !== 1 || doc.replaces !== null || evidence.revision !== 1) ||
+          bundle.sources.some(source => source.revision !== 1) || bundle.sourceVersions.some(version => version.revision !== undefined && version.revision !== 1)) throw fault('invalid_preservation', '새 사본의 저장 기준을 확인해 주세요.');
+      for (const { doc } of posts) if (doc.photos.length) {
+        const transport = root.HaedoLife?.Blog || (typeof require === 'function' && require('./blog.js'));
+        if (!transport?.pack || !transport?.hydrate) throw fault('dependency_unavailable', '원본 사진 검증기를 불러오지 못했습니다.');
+        await transport.hydrate(transport.pack(doc), new Map(doc.photos.map(photo => [photo.id, photo.blob]))); scopeGuard();
+      }
+      const installed = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const bundles = tx.objectStore('bundles'), meta = tx.objectStore('meta'), workspaceId = bundle.workspaceId;
+        if (expected) {
+          let current;
+          try { current = await preservationSnapshot(tx, settings.source.workspaceId, selected); }
+          catch (error) {
+            if (['photo_post_missing', 'workspace_not_found', 'invalid_preservation', 'invalid_source_reference', 'preservation_source_changed'].includes(error.code)) throw fault('preservation_source_changed', '검토한 글·구성·근거가 바뀌었습니다. 다시 확인한 뒤 새 사본을 만들어 주세요.');
+            throw error;
+          }
+          if (preservationSelectionPayload(current, expected) !== expectedPayload) throw fault('preservation_source_changed', '검토한 글·구성·근거가 바뀌었습니다. 원본을 유지하고 복원을 중지했습니다.');
+        }
+        if (await bundles.get(workspaceId) || (await meta.getAllKeys()).some(key => typeof key === 'string' && key.split(':').includes(workspaceId))) throw fault('workspace_exists', '같은 작업공간의 자료가 이미 있습니다. 새 사본을 다시 준비해 주세요.');
+        await bundles.add(bundle); await saveOwner(meta, workspaceId);
+        for (const { doc, evidence } of posts) {
+          await meta.put({ key: `photo-post:${workspaceId}:${doc.id}`, value: doc });
+          await meta.put({ key: `post-evidence:${workspaceId}:${doc.id}`, value: evidence });
+        }
+        await meta.put({ key: `photo-posts:${workspaceId}`, value: posts.map(({ doc }) => photoSummary(doc)) });
+        await meta.put({ key: `nine-board:${workspaceId}`, value: state });
+        await meta.put({ key: activeKey, value: workspaceId });
+        return clone(value);
+      });
+      changed(bundle.workspaceId, bundle.revision);
+      return installed;
+    }
+    async function readBlogSyncState(workspaceId, postId) {
+      collectionScope(workspaceId); requireId(postId, '글');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone((await meta.get(`blog-sync:${workspaceId}:${postId}`))?.value || null);
+      });
+    }
+    async function writeBlogSyncState(workspaceId, postId, input, baseRevision = 0) {
+      collectionScope(workspaceId); requireId(postId, '글'); requireRevision(baseRevision);
+      let serialized;
+      try { serialized = JSON.stringify(input); } catch (_) { throw fault('invalid_blog_state', '글 연결 정보를 확인해 주세요.'); }
+      if (!plain(input) || typeof serialized !== 'string' || new TextEncoder().encode(serialized).length > 8388608) throw fault('invalid_blog_state', '글 연결 정보는 8 MiB까지 보관할 수 있습니다.');
+      const value = { ...JSON.parse(serialized), revision: baseRevision + 1 };
+      return transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const key = `blog-sync:${workspaceId}:${postId}`, prior = (await meta.get(key))?.value;
+        if ((prior?.revision || 0) !== baseRevision) throw fault('blog_state_conflict', '다른 탭에서 글의 연결 상태가 바뀌었습니다. 원문은 유지합니다.');
+        await meta.put({ key, value }); return clone(value);
+      });
+    }
+    // Page composer drafts stay local, outside composition sync and public copies.
+    const pagePosts = () => root.HaedoLife?.PagePosts || (typeof require === 'function' && require('./page-posts.js'));
+    function validatePageDrafts(value) {
+      if (!plain(value) || Object.keys(value).length !== 2 || !Object.hasOwn(value, 'revision') || !Object.hasOwn(value, 'posts')) throw fault('invalid_page_post', '초안 형식을 확인해 주세요.');
+      requireRevision(value.revision, 'revision'); pagePosts().validate(value.posts);
+      if (value.posts.some(post => post.status !== 'draft') || new TextEncoder().encode(JSON.stringify(value)).length > 2097152) throw fault('invalid_page_post', '초안은 2 MiB까지 보관할 수 있습니다.');
+    }
+    async function pageDraftsValue(meta, workspaceId) {
+      const row = await meta.get(`page-drafts:${workspaceId}`);
+      const value = row === undefined ? { revision: 0, posts: [] } : row.value;
+      validatePageDrafts(value); return value;
+    }
+    async function readPageDrafts(workspaceId) {
+      collectionScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await pageDraftsValue(meta, workspaceId));
+      });
+    }
+    async function savePageDrafts(workspaceId, input, baseRevision) {
+      collectionScope(workspaceId); requireRevision(baseRevision, 'baseRevision'); validatePageDrafts(input);
+      const value = clone(input);
+      if (value.revision !== baseRevision) throw fault('page_draft_conflict', '초안 저장 기준이 바뀌었습니다.');
+      return transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await pageDraftsValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) throw fault('page_draft_conflict', '다른 탭에서 초안이 바뀌었습니다. 입력을 파일로 보관한 뒤 다시 열어 주세요.');
+        value.revision++; validatePageDrafts(value); await meta.put({ key: `page-drafts:${workspaceId}`, value }); return clone(value);
+      });
+    }
+    async function savePagePost(workspaceId, draftId, draftRevision, baseRevision, options = {}) {
+      collectionScope(workspaceId); requireRevision(draftRevision, 'draftRevision'); requireRevision(baseRevision, 'baseRevision');
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await workbenchValue(meta, workspaceId), drafts = await pageDraftsValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) throw fault('workbench_conflict', '페이지가 바뀌었습니다. 초안을 보존했으니 새 저장본을 확인해 주세요.');
+        if (drafts.revision !== draftRevision) throw fault('page_draft_conflict', '다른 탭에서 초안이 바뀌었습니다. 입력을 보존했습니다.');
+        const draft = drafts.posts.find(post => post.id === draftId);
+        const finished = pagePosts().finish((previous.page.posts || []).concat(draft || []), draftId, new Date().toISOString(), options);
+        const state = clone(previous); state.page.posts = finished.posts; state.revision++; workbench().validate(state);
+        const composition = await readCompositionState(meta, workspaceId, previous);
+        drafts.posts = drafts.posts.filter(post => post.id !== draftId); drafts.revision++; validatePageDrafts(drafts);
+        await meta.put({ key: `workbench:${workspaceId}`, value: state });
+        await meta.put({ key: `page-drafts:${workspaceId}`, value: drafts });
+        if (composition) { composition.error = null; composition.status = compositionStatus(composition, state); await writeCompositionState(meta, composition); }
+        return { workbench: clone(state), drafts: clone(drafts), id: finished.id };
+      });
+      workbenchChanged(result.workbench); return result;
+    }
     async function workbenchValue(meta, workspaceId) {
       const row = await meta.get(`workbench:${workspaceId}`);
       const state = row === undefined ? workbench().empty(workspaceId) : row.value;
@@ -561,22 +955,27 @@
       changed(bundle.workspaceId, bundle.revision); workbenchChanged(state);
       return installed;
     }
-    async function installWorkspace(input) {
-      const bundle = clone(input);
-      core().validateWorkspace(bundle);
+    async function installWorkspaces(input) {
+      if (!Array.isArray(input) || input.length < 1 || input.length > 2) throw fault('invalid_request', '새 사본은 한 번에 1~2개 작업공간으로 복원할 수 있습니다.');
+      const copies = clone(input);
+      copies.forEach(bundle => core().validateWorkspace(bundle));
+      if (new Set(copies.map(bundle => bundle.workspaceId)).size !== copies.length) throw fault('workspace_exists', '복원할 작업공간 식별자가 중복됩니다.');
       const installed = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
-        const bundles = tx.objectStore('bundles');
-        if (await bundles.get(bundle.workspaceId) || await workspaceOwner(tx.objectStore('meta'), bundle.workspaceId)) {
-          throw fault('workspace_exists', '같은 작업공간이 이미 있습니다. 새 사본으로 복원하세요.');
+        const bundles = tx.objectStore('bundles'), meta = tx.objectStore('meta');
+        for (const bundle of copies) {
+          if (await bundles.get(bundle.workspaceId) || await workspaceOwner(meta, bundle.workspaceId)) throw fault('workspace_exists', '같은 작업공간이 이미 있습니다. 새 사본으로 복원하세요.');
         }
-        await bundles.add(bundle);
-        await saveOwner(tx.objectStore('meta'), bundle.workspaceId);
-        await tx.objectStore('meta').put({ key: activeKey, value: bundle.workspaceId });
-        return clone(bundle);
+        for (const bundle of copies) {
+          await bundles.add(bundle);
+          await saveOwner(meta, bundle.workspaceId);
+        }
+        await meta.put({ key: activeKey, value: copies[0].workspaceId });
+        return clone(copies);
       });
-      changed(bundle.workspaceId, bundle.revision);
+      for (const bundle of copies) changed(bundle.workspaceId, bundle.revision);
       return installed;
     }
+    async function installWorkspace(input) { return (await installWorkspaces([input]))[0]; }
     async function createWorkspace(title) {
       return installWorkspace(core().createWorkspace(title === undefined ? {} : { title }));
     }
@@ -1686,9 +2085,11 @@
       };
     }
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
-      listWorkspaces, read, createWorkspace, installWorkspace, getActive, setActive,
+      listWorkspaces, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
+      readPreservationCatalog, readPreservationSnapshot, installPreservationCopy,
       commitLocal, saveStage, getStage, listStages, deleteStage, subscribe,
       getSyncState, bindSync, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,
       setSyncConflict, setSyncError, resolveSync,

@@ -9,8 +9,10 @@ permissions:
   pages: write
   id-token: write
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  # PR verification must not queue behind unrelated reviews or live deployments.
+  # Main/manual deployments retain their shared, non-cancelling group.
+  group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.event.pull_request.number) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -26,9 +28,15 @@ jobs:
           package-manager-cache: false
       - run: npm run check
       - run: npm test
-  browser:
+  browser_suites:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Keep every existing suite, but give four independent fixture groups their
+    # own server/browser so a long serial job cannot omit the final checks.
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2, 3, 4]
+    timeout-minutes: 25
     permissions:
       contents: read
     env:
@@ -83,116 +91,250 @@ jobs:
               time.sleep(0.2)
           PY
       - name: Verify unified entry and account boundaries
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/unified-home-browser.cjs
       - name: Verify the core experience across screen sizes
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/core-experience-browser.cjs
+      - name: Verify private collection storage and recovery
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/collection-library-browser.cjs
+      - name: Verify collection metadata review and privacy
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/collection-metadata-browser.cjs
+      - name: Verify collection selection and note flow
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/collection-picker-browser.cjs
+      - name: Verify explicit taste search and writing flow
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/taste-writing-browser.cjs
+      - name: Verify edition choice and explicit collection retention
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/edition-collection-browser.cjs
+      - name: Verify book search pages and Korean edition recovery
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/book-search-navigation-browser.cjs
+      - name: Verify manual artwork source review and private preservation
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/artwork-reference-browser.cjs
+      - name: Verify explicit artwork metadata selection and recovery
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/artwork-metadata-browser.cjs
+      - name: Verify page composition, attachments and draft recovery
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/page-composer-browser.cjs
+      - name: Verify attachment editing and unapplied input preservation
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/attachment-edit-browser.cjs
+      - name: Verify selective page draft recovery and atomic conflicts
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/page-draft-recovery-browser.cjs
+      - name: Verify page draft conflict comparison and copy recovery
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/page-draft-conflict-browser.cjs
+      - name: Verify selected originals, exact evidence and atomic account copies
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/preservation-browser.cjs
+      - name: Verify exact source evidence from a saved photo post
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/photo-post-evidence-browser.cjs
+      - name: Verify nine-slot boards, local preservation and file round trips
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/nine-board-browser.cjs
+      - name: Verify selected nine-slot PNG and exact backup preservation
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/nine-board-image-browser.cjs
+      - name: Verify original attachment parts and local account boundaries
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: ORIGINALS_INTEGRATED=1 node tests/original-attachments-browser.cjs
+      - name: Verify selected Obsidian updates and immutable recovery
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: OBSIDIAN_INTEGRATED=1 node tests/obsidian-update-browser.cjs
+      - name: Verify selective board recovery and explicit export scopes
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/nine-board-recovery-browser.cjs
+      - name: Verify nine board search, exact target and preserved return
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/nine-board-search-browser.cjs
+      - name: Verify original photo editor, exact bytes and recovery
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/photo-post-browser.cjs
+      - name: Verify blog attachments, archive, original gallery and portable HTML
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/blog-writing-completion-browser.cjs
+      - name: Verify whole Obsidian vault restore, links and private boundaries
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/obsidian-vault-browser.cjs
+      - name: Verify readable Obsidian review categories and candidate report
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/obsidian-review-browser.cjs
+      - name: Verify private Obsidian decisions, copy export and restoration
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/obsidian-decisions-browser.cjs
+      - name: Verify direct Obsidian ZIP review and atomic workspace pair restore
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/obsidian-package-browser.cjs
+      - name: Verify server workspace receipt and unsaved memo preservation
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/obsidian-receive-browser.cjs
+      - name: Verify large Obsidian search and exact-position return
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/obsidian-reading-scale-browser.cjs
+      - name: Verify reflection draft copy conflicts and account boundaries
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reflection-page-browser.cjs
+      - name: Verify the integrated input and output cycle
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/two-cycle-browser.cjs
+      - name: Verify profile feed media privacy and recovery
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/profile-feed-media-browser.cjs
+      - name: Verify opt-in collection cover rendering
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/collection-media-browser.cjs
       - name: Verify composition transactions and recovery
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/composition-storage-browser.cjs
       - name: Verify composition continuity across browser contexts
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/composition-sync-browser.cjs
       - name: Verify selected writing draft transactions
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/writing-sync-storage-browser.cjs
       - name: Verify selected writing drafts across browser contexts
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/writing-sync-browser.cjs
       - name: Verify writing input survives delayed draft notifications
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/writing-sync-incoming-browser.cjs
       - name: Verify reading selection and return context
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/reading-quality-browser.cjs
       - name: Verify reading and writing quality across screen sizes
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/reading-writing-quality-browser.cjs
       - name: Verify local reading position transactions
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/reading-position-storage-browser.cjs
       - name: Verify explicit reading resume and failure recovery
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/reading-resume-browser.cjs
       - name: Verify import outcomes and review selection
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/import-flow-quality-browser.cjs
       - name: Verify social source input and draft recovery
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-social-import-browser.cjs
       - name: Verify source reimport identity and immutable versions
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/source-reimport-browser.cjs
       - name: Verify page ordering and preview return
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/page-flow-quality-browser.cjs
       - name: Verify private page expression and preservation boundaries
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/page-expression-browser.cjs
       - name: Verify explicit publication and revocation
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-share-browser.cjs
       - name: Verify public expression and anonymous reading boundaries
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/public-expression-browser.cjs
       - name: Verify import-to-page product flow
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/product-flow-quality-browser.cjs
       - name: Verify Korean search and bounded result rendering
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/search-quality-browser.cjs
+      - name: Verify input recovery to private thought output
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/input-output-quality-browser.cjs
+      - name: Verify private unified search and exact item return
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/unified-search-browser.cjs
       - name: Verify private reflection reading and manuscript boundaries
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/reflection-reading-browser.cjs
+      - name: Reflection and outline return flow
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reflection-to-outline-browser.cjs
+      - name: Verify selected evidence lenses and exact source return
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/reflection-lenses-browser.cjs
       - name: Verify book projects, chapter manuscripts and recovery
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-projects-browser.cjs
       - name: Verify private interpretations, evidence and exclusion boundaries
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-insights-browser.cjs
       - name: Verify book reading, editing return and manuscript parity
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-preview-browser.cjs
       - name: Verify manuscript page position and visible chapter editing
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-manuscript-layout-browser.cjs
       - name: Verify immediate chapter editing with default motion
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: BOOK_MANUSCRIPT_LAYOUT_MOTION=no-preference node tests/book-manuscript-layout-browser.cjs
       - name: Verify book editions, archive recovery and backup boundaries
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-history-browser.cjs
       - name: Verify Korean PDF and private native print boundaries
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-print-browser.cjs
       - name: Verify imported records through a four-chapter book and PDF
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-workshop-browser.cjs
       - name: Verify workshop save retries and stale reload protection
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-workshop-recovery-browser.cjs
       - name: Verify reader book layout, output choices and PDF
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-edition-browser.cjs
       - name: Verify saved book re-entry and chapter navigation
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-completion-browser.cjs
       - name: Verify chapter-scoped imports and explicit source linking
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-import-browser.cjs
       - name: Verify chapter import receipts and recovery boundaries
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-import-recovery-browser.cjs
       - name: Verify restored book entry and committed-copy recovery
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/book-restore-entry-browser.cjs
-      - name: Verify keyboard focus during delayed home loading
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
-        run: ENTRY_TEST_MATCH='preserves focused recent' node tests/home-entry-browser.cjs
+      - name: Verify home navigation, draft re-entry and responsive states
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/home-entry-browser.cjs
+      - name: Verify blog home, private writing and exact saved-post return
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/blog-platform-home-browser.cjs
+      - name: Verify SNS blog reading, writing and preservation across screen sizes
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/sns-blog-experience-browser.cjs
+      - name: Verify blog drafts, mixed posts, focused writing and exact home return
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/blog-user-journeys-browser.cjs
+      - name: Verify home writing entry, scoped search and lazy photo recovery
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/home-refinement-browser.cjs
+      - name: Verify app navigation, interrupted motion and real save feedback
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/app-motion-browser.cjs
+      - name: Verify subview location and safe contextual return
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/subview-navigation-browser.cjs
+      - name: Verify management storage scope and backup recovery
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: |
+          node tests/management-clarity-browser.cjs
+          node tests/life-management-browser.cjs
       - name: Verify isolated expression-page design samples
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/expression-design-browser.cjs
+      - name: Verify timeline recovery and retry
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/platform-recovery-browser.cjs
       - name: Stop the local server
         if: always()
         run: |
@@ -203,10 +345,57 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: browser-checks-${{ github.run_attempt }}
+          name: browser-checks-${{ matrix.group }}-${{ github.run_attempt }}
           path: |
+            .local/app-native/qa/
+            .local/home-refinement/qa/
+            .local/blog-journeys/after/
+            .local/sns-blog/after/
+            .local/blog-platform/*.json
+            .local/blog-platform/*.png
+            .local/blog-platform/*.log
+            .local/flow-quality/
+            .local/unified-search/
+            .local/collection-library/
+            .local/collection-metadata/
+            .local/collection-media/
+            .local/collection-picker/
+            .local/taste-writing/
+            .local/edition-collection/
+            .local/book-search-navigation/
+            .local/artwork-reference/
+            .local/artwork-metadata/
+            .local/page-composer/
+            .local/attachment-edit/
+            .local/page-draft-recovery/
+            .local/page-draft-conflict/
+            .local/nine-board/
+            .local/nine-board-recovery/
+            .local/nine-board-search/
+            .local/photo-post/
+            .local/blog-writing-completion/
+            .local/obsidian-vault/
+            .local/obsidian-review/
+            .local/obsidian-decisions/
+            .local/obsidian-package/
+            .local/obsidian-receive/
+            .local/obsidian-reading-scale/
+            .local/profile-feed-media/
+            .local/reflection-page/
+            .local/two-cycle/
             .local/core-experience/
             .local/unified-home/
+            .local/timeline-recovery/after/
+            .local/home-entry/
+            .local/preservation/
+            .local/nine-board-image/
+            .local/original-attachments/
+            .local/original-attachments-integrated/
+            .local/obsidian-update/
+            .local/photo-post-evidence/
+            .local/subview-navigation/
+            .local/management-clarity/
+            .local/life-management/
             .local/quality-audit/after/
             .local/composition-sync/
             .local/writing-sync/
@@ -221,6 +410,8 @@ jobs:
             .local/public-expression/
             .local/source-reimport/
             .local/reflection-reading/
+            .local/reflection-to-outline/interaction/
+            .local/reflection-lenses/
             .local/book-projects/
             .local/book-insights/
             .local/book-preview/
@@ -239,9 +430,146 @@ jobs:
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 7
+  browser:
+    # Preserve the existing required-check name while all four suites must pass.
+    needs: browser_suites
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    steps:
+      - name: Require every browser suite group
+        env:
+          HAEDO_BROWSER_RESULT: ${{ needs.browser_suites.result }}
+        run: test "$HAEDO_BROWSER_RESULT" = success
+  blog:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      CI: "true"
+      BASE_URL: http://127.0.0.1:4184
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tests/browser-ci/package-lock.json
+      - name: Install pinned browser tooling
+        run: npm ci --prefix tests/browser-ci --ignore-scripts
+      - name: Install Chromium and Korean fonts
+        run: |
+          node tests/browser-ci/node_modules/playwright/cli.js install --with-deps chromium
+          sudo apt-get install -y fonts-noto-cjk poppler-utils
+      - name: Select the pinned browser
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const modulePath = path.resolve('tests/browser-ci/node_modules/playwright');
+          const browserPath = require(modulePath).chromium.executablePath();
+          if (!fs.existsSync(browserPath)) throw new Error('Pinned Chromium was not installed.');
+          fs.appendFileSync(process.env.GITHUB_ENV, `PW_MODULE_PATH=${modulePath}\nCHROMIUM_PATH=${browserPath}\n`);
+          NODE
+      - name: Start the OAuth-safe local server
+        id: server
+        run: |
+          mkdir -p .local/browser-ci
+          python3 scripts/dev-server.py --port 4184 > .local/browser-ci/server.log 2>&1 &
+          echo "HAEDO_CI_SERVER_PID=$!" >> "$GITHUB_ENV"
+          python3 <<'PY'
+          import time
+          import urllib.error
+          import urllib.request
+
+          deadline = time.monotonic() + 20
+          while True:
+              try:
+                  with urllib.request.urlopen('http://127.0.0.1:4184/index.html', timeout=1) as response:
+                      if response.status == 200 and b'id="lifeApp"' in response.read():
+                          break
+              except (OSError, urllib.error.URLError):
+                  pass
+              if time.monotonic() >= deadline:
+                  raise SystemExit('The local app shell did not become ready.')
+              time.sleep(0.2)
+          PY
+      - name: Verify isolated SQL, RLS, simultaneous CAS and original media handler
+        id: backend
+        run: node scripts/check-blog-backend.mjs --keep
+      - name: Select the isolated QA database
+        if: steps.backend.outcome == 'success'
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync('.local/blog-backend/report.json', 'utf8'));
+          if (!report.pass || !/^haedo-blog-postgres-[0-9]+$/.test(report.container)) throw new Error('Invalid local fixture');
+          fs.appendFileSync(process.env.GITHUB_ENV, `BLOG_POSTGRES_CONTAINER=${report.container}\nBLOG_POSTGRES_DATABASE=haedo_blog_qa_ci\n`);
+          NODE
+      - name: Verify real SQL and browser publication journeys
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: node tests/blog-completion-browser.cjs --prepare-database
+      - name: Verify private post manager and exact provenance return
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/blog-manager-browser.cjs
+      - name: Verify anonymous original-photo reading
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/blog-public-browser.cjs
+      - name: Verify exact quotes, nine-area selections and storage failure recovery
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/nine-board-evidence-browser.cjs
+      - name: Verify isolated source opening and exact search return
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/search-source-isolation-browser.cjs
+      - name: Verify generated configuration and complete installed shell hashes
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        env:
+          PREVIOUS_RELEASE: "9479866"
+        run: node scripts/verify-prepared-site.mjs
+      - name: Verify the actual previous service worker updates without losing originals
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/blog-release-browser.cjs
+      - name: Stop this job's isolated fixture and local server
+        if: always()
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs'), { execFileSync } = require('node:child_process');
+          if (fs.existsSync('.local/blog-backend/report.json')) {
+            const report = JSON.parse(fs.readFileSync('.local/blog-backend/report.json', 'utf8'));
+            if (!/^haedo-blog-postgres-[0-9]+$/.test(report.container)) throw new Error('Invalid local fixture');
+            execFileSync('docker', ['rm', '--force', '--volumes', report.container], { stdio: 'inherit' });
+          }
+          NODE
+          if [[ -n "${HAEDO_CI_SERVER_PID:-}" ]]; then
+            kill "$HAEDO_CI_SERVER_PID" || true
+          fi
+      - name: Retain anonymous blog evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: blog-checks-${{ github.run_attempt }}
+          path: |
+            .local/blog-backend/
+            .local/blog-completion/
+            .local/blog-manager/
+            .local/blog-public/
+            .local/preservation/
+            .local/source-evidence/
+            .local/search-source-isolation/
+            .local/prepared-site-check/platform-report.txt
+            .local/prepared-site-check/baseline.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
   build:
     if: github.event_name != 'pull_request'
-    needs: [check, browser]
+    needs: [check, browser, blog]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

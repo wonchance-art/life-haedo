@@ -1,0 +1,378 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-17T17:29:53.980296Z",
+  "title": "Design System: 해도",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "짙은 틸 주 행동"
+      },
+      "link": {
+        "role": "secondary",
+        "displayName": "틸 링크"
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "흰 읽기 면"
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "옅은 초록 회색 캔버스"
+      },
+      "soft": {
+        "role": "neutral",
+        "displayName": "보조 조작 면"
+      },
+      "selected": {
+        "role": "neutral",
+        "displayName": "현재 탐색·선택"
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "보조 글자"
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "피드 구분선"
+      },
+      "field-line": {
+        "role": "neutral",
+        "displayName": "입력 경계"
+      },
+      "error": {
+        "role": "semantic",
+        "displayName": "오류와 복구"
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "짙은 본문"
+      },
+      "focus": {
+        "role": "secondary",
+        "displayName": "키보드 초점"
+      }
+    },
+    "typographyMeta": {
+      "body": {
+        "displayName": "한글 기본 본문",
+        "purpose": "공통 셸. 실제 글에서는 feed-body·reading 역할을 사용한다."
+      },
+      "page-title": {
+        "displayName": "현재 화면 제목",
+        "purpose": "현재 작업·복귀 맥락. 프로필·글 제목 반복을 줄인다."
+      },
+      "feed-title": {
+        "displayName": "피드 글 제목",
+        "purpose": "홈의 실제 글 제목 최대 두 줄. 넓은 화면 26px, 760px 이하 24px, 750 굵기."
+      },
+      "feed-body": {
+        "displayName": "피드 본문 일부",
+        "purpose": "실제 글 앞부분 최대 네 줄. 넓은 화면 17px/1.8·450, 760px 이하 16px/1.85."
+      },
+      "reading": {
+        "displayName": "신형 글 읽기",
+        "purpose": "680px 열. 600px 이하 17px."
+      },
+      "metadata": {
+        "displayName": "출처·보관 상태",
+        "purpose": "비공개·이 브라우저·정확한 보관 맥락."
+      }
+    },
+    "shadows": [
+      {
+        "name": "account-menu",
+        "value": "0 10px 32px rgb(24 24 27 / .09)",
+        "purpose": "실제 계정 메뉴의 겹침 깊이. 기본 피드 행에는 사용하지 않는다."
+      },
+      {
+        "name": "home-selected-tab",
+        "value": "0 1px 3px rgb(24 37 34 / .08)",
+        "purpose": "홈 세 상태 탭의 실제 현재 선택면만 얕게 구분한다."
+      }
+    ],
+    "motion": [
+      {
+        "name": "shell-control-color",
+        "value": "140ms ease-out",
+        "purpose": "공통 셸 실제 버튼의 색·배경·경계 반응. 기존 지역 조작의 개별 값은 해당 CSS를 따른다."
+      },
+      {
+        "name": "shell-control-press",
+        "value": "100ms cubic-bezier(.16,1,.3,1); scale(.975); nav glyph scale(.9)",
+        "purpose": "실제 버튼의 누름. 탐색 링크의 크기·좌표는 유지하고 도형만 축소한다."
+      },
+      {
+        "name": "icon-color",
+        "value": "180ms ease",
+        "purpose": "자료 UI 아이콘의 기존 색·배경 반응."
+      },
+      {
+        "name": "navigation-enter",
+        "value": "push 220ms; back 200ms; tab 160ms; compose 260ms; reveal 180ms; cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "연결된 실제 화면의 이동 관계. 문단별·스크롤 reveal에는 사용하지 않는다."
+      },
+      {
+        "name": "navigation-indicator",
+        "value": "220ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "성공한 이동의 aria-current 요소를 따라가는 별도 장식 표시. 크기 변경·모션 감소에는 즉시 배치한다."
+      },
+      {
+        "name": "result-feedback",
+        "value": "140ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "실제 명시 저장·실패 안내의 opacity 반응. 초안 자동 저장은 조용히 유지한다."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "spatial motion skipped; active animations canceled; static state visible; scroll-behavior:auto",
+        "purpose": "모션 감소·숨김·미지원에서도 현재 상태·의미·조작·초점을 유지한다."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "desktop-navigation",
+        "value": "1101px",
+        "purpose": "216px 예약·192px 라벨 탐색."
+      },
+      {
+        "name": "compact-navigation",
+        "value": "761px–1100px",
+        "purpose": "88px 예약·64px 탐색·60px 아이콘과 라벨 링크."
+      },
+      {
+        "name": "mobile-shell",
+        "value": "760px",
+        "purpose": "전체 너비·하단 탐색 66px+safe-area·84px+safe-area 본문 여백."
+      },
+      {
+        "name": "profile-and-platform",
+        "value": "700px",
+        "purpose": "프로필·공개 읽기·지역 도구·하단 시트."
+      },
+      {
+        "name": "photo-writing",
+        "value": "600px",
+        "purpose": "신형 작성·읽기 활자와 서식 밀도."
+      },
+      {
+        "name": "home-metadata-container",
+        "value": "560px",
+        "purpose": "미디어쿼리가 아닌 personal-home 컨테이너의 출처·날짜 한 행."
+      }
+    ],
+    "focus": {
+      "shared": "3px solid var(--haedo-focus,#3156d3); outline-offset:3px",
+      "photoAndAttachment": "2px solid #3156d3; outline-offset:3px",
+      "selection": "background:var(--selection,#dcece4)",
+      "forcedColors": "Canvas·CanvasText·Highlight로 현재 위치·초점·경계를 유지한다."
+    },
+    "provenance": {
+      "mode": "scan",
+      "sources": [
+        "assets/haedo-shell.css",
+        "assets/haedo-type.css",
+        "assets/life/ui.css",
+        "assets/life/home.css",
+        "assets/life/photo-post.css",
+        "assets/life/workbench.css",
+        "assets/life/collection.css",
+        "assets/life/share-view.css",
+        "assets/platform.css",
+        "assets/haedo-navigation.js",
+        "assets/life/home.js",
+        "assets/life/ui.js",
+        "assets/life/workbench-ui.js",
+        "assets/life/photo-post-ui.js",
+        "assets/life/page-composer.js",
+        "assets/haedo-motion.css",
+        "assets/haedo-motion.js"
+      ],
+      "engine": "설치되지 않은 context·detect·doctor 엔진은 실행하지 않았다.",
+      "scope": "2026-10-18 KST 블로그 시각 기준과 후속 앱 탐색·모션의 실제 CSS·컴포넌트 문서화. 저장·공개·계정 경계는 유지한다.",
+      "visualContract": ".impeccable/blog-visual-direction.md",
+      "font": {
+        "family": "Pretendard Variable",
+        "version": "1.3.9",
+        "file": "vendor/pretendard/PretendardVariable.woff2",
+        "license": "vendor/pretendard/LICENSE.txt",
+        "record": "vendor/pretendard/README.md",
+        "cssWeightRange": "100 900",
+        "display": "swap",
+        "externalRequests": false
+      },
+      "motionContract": ".impeccable/app-native-direction.md",
+      "motionReview": "docs/design-review/app-native-experience.md"
+    },
+    "behaviorContracts": {
+      "navigation": {
+        "labels": [
+          "홈",
+          "자료실",
+          "도구",
+          "설정"
+        ],
+        "internalIds": [
+          "home",
+          "records",
+          "tools",
+          "manage"
+        ],
+        "mobileWriting": "760px 이하 작성 중 하단 탐색 숨김; 닫으면 복원; 작성기 닫기 한 조작 유지",
+        "motion": "성공한 저장·flush와 현재 렌더 확인 뒤 실제 화면에 적용; 기존 실제 요소만 사용; 입력·연속 이동·계정/공간 변경에서 취소",
+        "scroll": "브라우저 문서 스크롤·caret·한글 조합 유지; 본문 nested scroller·스크롤 가로채기 없음; 화면 세션 복귀와 정확 목적지 우선",
+        "fallback": "WAAPI 미지원·모션 감소·숨김에서도 같은 상태와 조작을 즉시 제공; 기본 콘텐츠 항상 표시",
+        "privateContent": "DOM 복제·View Transitions 스냅샷·개인 본문의 별도 outgoing 캐시 없음",
+        "integration": "8개 기존 앱 표면에서 셸 뒤 motion CSS·탐색 전 motion JS 로드; 오프라인 캐시·준비 묶음 포함",
+        "shell": "흰 sticky 제목·복귀 행 top0/z35/safe-area-top; 좌우24px·760px이하20px; 작성 중 바깥 header와 형제 toolbar 숨김"
+      },
+      "home": {
+        "canonicalList": true,
+        "tabs": [
+          "글",
+          "초안",
+          "보관함"
+        ],
+        "search": "탭 옆에서 펼치는 내 글 검색; 현재 탭의 전체 읽기 결과; 검색어·펼침 보존; 조합 중 갱신 보류; 부분 실패는 빈 결과와 구별",
+        "pageSize": 20,
+        "empty": "글·초안·보관함이 모두 없으면 첫 글 쓰기 하나; 작성 행·탭·검색 숨김",
+        "drafts": "새 글 초안과 기존 글 수정 중 구별; 글 탭에서만 최신 초안 이어쓰기",
+        "feed": "글별 동일 작성자·아바타 반복 없이 실제 제목·본문을 먼저 표시; 날짜·비공개·브라우저 보관은 하단 메타; 모든 사진 프레임을 화면 접근 때 지연 조회",
+        "tabsAppearance": "3px 안쪽 여백·2px 간격·12px 바탕 반경; 조작 최소44px·9px 반경; 현재 탭 흰 면·작은 그림자; 이전 선택선 숨김"
+      },
+      "writer": {
+        "entryFocus": "본문",
+        "title": "선택 입력; 30px/1.45/650, 600px 이하 26px; placeholder17px",
+        "draftStates": [
+          "초안 보관 중…",
+          "초안 보관됨"
+        ],
+        "commit": "글 저장 후 읽기 화면",
+        "failure": "입력 유지; 오류 가까운 다시 저장·백업·새 사본 경로",
+        "feedback": "실제 명시 저장 후 읽기에서 체크·비공개 저장 문구; 실패에는 alert·입력·복구 조작 유지; 자동 저장은 성공 모션 없음",
+        "shell": "신형 작성 중 바깥 제목 행·main 상단 여백 숨김; safe-area를 둔 작성기 닫기·저장·상태 sticky 행 하나; 자연 문서 스크롤"
+      },
+      "return": {
+        "reading": "탭·검색·표시 범위·원래 항목 위치·초점 보존",
+        "saved": "실제 저장된 항목 우선; 검색에 가려지면 이유와 명시적 해제 제공",
+        "readingEntry": "새 읽기는 상단 제목; 정확 검색 구간·기존 읽기·뒤로 복귀·영역 위치를 우선하고 목록 scroll을 임의로 물려주지 않는다."
+      },
+      "profile": "이름·소개·소개 표시 편집만 제공; 소개 숨김 반영; 독립 실패와 재시도; 대표 글 목록은 홈",
+      "preservation": "사진/리치 글, 기존 첨부 글, 원천 글과 각 초안을 표시 어댑터로 합침; 자동 변환·공개·동기화 없음"
+    }
+  },
+  "components": [
+    {
+      "name": "주 행동",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "새 글·저장처럼 현재 문맥에서 우선하는 실제 행동.",
+      "html": "<button class=\"ds-primary\">글쓰기</button>",
+      "css": ".ds-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:44px;min-height:44px;padding:8px 16px;font:550 14px/1.6 var(--haedo-font, \"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif);cursor:pointer;transition:background 150ms ease,color 150ms ease,border-color 150ms ease;border:1px solid var(--haedo-accent,#145b50);border-radius:12px;background:var(--haedo-accent,#145b50);color:#fff;font-weight:650}.ds-primary:hover{background:#104a41;border-color:#104a41}.ds-primary:active{background:#0c3d35}.ds-primary:focus-visible{outline:3px solid var(--haedo-focus,#267a69);outline-offset:3px}.ds-primary:disabled{opacity:.55;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-primary{transition:none}}"
+    },
+    {
+      "name": "보조 행동",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "실제 제목·내용·복구를 조작하는 일반 버튼.",
+      "html": "<button class=\"ds-secondary\">다시 불러오기</button>",
+      "css": ".ds-secondary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:44px;min-height:44px;padding:8px 16px;font:550 14px/1.6 var(--haedo-font, \"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif);cursor:pointer;transition:background 150ms ease,color 150ms ease,border-color 150ms ease;border:1px solid #d5d5db;border-radius:12px;background:var(--haedo-paper,#fff);color:var(--haedo-ink,#182522)}.ds-secondary:hover{background:var(--haedo-soft,#f4f7f5)}.ds-secondary:active{background:var(--haedo-selected,#eaf1ed)}.ds-secondary:focus-visible{outline:3px solid var(--haedo-focus,#267a69);outline-offset:3px}.ds-secondary:disabled{opacity:.55;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-secondary{transition:none}}"
+    },
+    {
+      "name": "라벨 있는 입력",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "정확한 의미가 있는 입력. 검색·프로필·관리의 실제 필드에 사용.",
+      "html": "<label class=\"ds-field\"><span>소개</span><input type=\"text\" placeholder=\"블로그를 소개해 주세요\"></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:7px;color:var(--haedo-ink,#182522);font:550 13px/1.6 var(--haedo-font, \"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif)}.ds-field input{width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--field-line,#86968d);border-radius:12px;background:var(--haedo-paper,#fff);color:var(--haedo-ink,#182522);font:400 16px/1.65 var(--haedo-font, \"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif);caret-color:var(--haedo-ink,#182522)}.ds-field input::placeholder{color:var(--haedo-muted,#5d6b65);opacity:1}.ds-field input:hover{border-color:var(--haedo-muted,#5d6b65)}.ds-field input:focus-visible{outline:3px solid var(--haedo-focus,#267a69);outline-offset:3px}"
+    },
+    {
+      "name": "라벨 탐색",
+      "kind": "nav",
+      "refersTo": "navigation",
+      "description": "홈·자료실·도구·설정의 현재 위치. 모바일 작성 중 감추고 닫으면 복원한다.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"주 메뉴\"><a href=\"#home\" aria-current=\"page\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m3 10 9-7 9 7v10H3z\"/><path d=\"M9 20v-7h6v7\"/></svg><span>홈</span></a><a href=\"#records\"><span>자료실</span></a><a href=\"#tools\"><span>도구</span></a><a href=\"#manage\"><span>설정</span></a></nav>",
+      "css": ".ds-nav{display:flex;flex-direction:column;gap:8px;width:192px;font:550 16px/1.5 var(--haedo-font, \"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif)}.ds-nav a{display:flex;align-items:center;gap:16px;min-height:52px;padding:12px 16px;border-radius:14px;color:var(--haedo-muted,#5d6b65);text-decoration:none}.ds-nav a[aria-current=page]{background:var(--haedo-selected,#eaf1ed);color:var(--haedo-accent,#145b50);font-weight:700}.ds-nav a:hover{background:var(--haedo-selected,#eaf1ed);color:var(--haedo-ink,#182522)}.ds-nav a:active{transform:none}.ds-nav a:focus-visible{outline:3px solid var(--haedo-focus,#267a69);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-nav a{transform:none}}"
+    },
+    {
+      "name": "컬렉션 선택 필터",
+      "kind": "chip",
+      "description": "실제 컬렉션 종류·주제의 선택. 선택 여부를 색과 aria-pressed로 표시.",
+      "html": "<button class=\"ds-chip\" aria-pressed=\"true\">책</button>",
+      "css": ".ds-chip{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:44px;min-height:44px;padding:8px 16px;font:550 14px/1.6 var(--haedo-font, \"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif);cursor:pointer;transition:background 150ms ease,color 150ms ease,border-color 150ms ease;border:1px solid transparent;border-radius:999px;background:transparent;color:var(--haedo-ink,#182522);white-space:nowrap}.ds-chip[aria-pressed=true]{background:var(--haedo-ink,#182522);color:#fff}.ds-chip:hover{background:var(--haedo-selected,#eaf1ed)}.ds-chip[aria-pressed=true]:hover{background:#343439}.ds-chip:focus-visible{outline:3px solid var(--haedo-focus,#267a69);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-chip{transition:none}}"
+    },
+    {
+      "name": "본문 중심 피드 행",
+      "kind": "custom",
+      "refersTo": "feed-row",
+      "description": "실제 제목·본문 일부·비공개 보관 상태. 미디어는 존재하는 글에서만 보인다.",
+      "html": "<article class=\"ds-post\"><button class=\"ds-title\">산책 끝에 남긴 생각</button><p class=\"ds-body\">걷다가 잠시 멈춰 본 풍경을 글로 남깁니다. 다음에 다시 읽을 내 생각입니다.</p><footer class=\"ds-footer\"><p class=\"ds-meta\">디자인 예시 · 비공개 · 이 브라우저에 보관</p><button class=\"ds-read\">글 읽기</button></footer></article>",
+      "css": ".ds-post{padding:28px 24px;border-bottom:1px solid var(--haedo-line,#e3e9e6);background:var(--haedo-paper,#fff);color:var(--haedo-ink,#182522);font-family:var(--haedo-font,\"Pretendard Variable\",\"Apple SD Gothic Neo\",\"Noto Sans CJK KR\",\"Malgun Gothic\",sans-serif)}.ds-title{display:block;width:100%;min-height:44px;padding:0;border:0;background:transparent;color:var(--haedo-ink,#182522);font:750 26px/1.45 var(--haedo-font,\"Pretendard Variable\",\"Apple SD Gothic Neo\",sans-serif);letter-spacing:-.03em;text-align:left;cursor:pointer}.ds-title:hover{color:var(--haedo-accent,#145b50);text-decoration:underline;text-underline-offset:5px}.ds-title:focus-visible,.ds-read:focus-visible{outline:3px solid var(--haedo-focus,#267a69);outline-offset:3px}.ds-body{margin:12px 0 0;font-size:17px;font-weight:450;line-height:1.8;word-break:keep-all;overflow-wrap:anywhere}.ds-footer{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 16px;min-height:44px;margin-top:14px}.ds-meta{flex:1;min-width:160px;margin:0;color:var(--haedo-muted,#5d6b65);font-size:12px;line-height:1.75}.ds-read{min-height:44px;padding:8px 0 8px 12px;border:0;background:transparent;color:var(--haedo-accent,#145b50);font-family:inherit;font-size:13px;font-weight:650;line-height:1.6;cursor:pointer}.ds-read:hover{text-decoration:underline;text-underline-offset:4px}@media(max-width:760px){.ds-title{font-size:24px}.ds-body{font-size:16px;line-height:1.85}}"
+    },
+    {
+      "name": "실제 제목 이니셜 프로필",
+      "kind": "custom",
+      "description": "홈은 실제 이름·44px 이니셜의 큰 위계를 쓴다. 기존 선택 자료 페이지의 72px 헤더는 호환 표면이다.",
+      "html": "<section class=\"ds-profile\" aria-label=\"디자인 예시 프로필\"><span class=\"ds-avatar\" aria-hidden=\"true\">예시</span><h2>예시 블로그</h2><p>읽고 걷고, 마음에 남은 것을 씁니다.</p></section>",
+      "css": ".ds-profile{display:grid;grid-template-columns:44px minmax(0,1fr);column-gap:12px;align-content:center;min-height:44px;padding:8px 0 12px;font-family:var(--haedo-font,\"Pretendard Variable\",\"Apple SD Gothic Neo\",\"Noto Sans CJK KR\",\"Malgun Gothic\",sans-serif);color:var(--haedo-ink,#182522)}.ds-avatar{display:grid;grid-column:1;grid-row:1/3;align-self:center;place-items:center;width:44px;height:44px;border:1px solid var(--haedo-line,#e3e9e6);border-radius:50%;background:var(--haedo-selected,#eaf1ed);color:var(--haedo-accent,#145b50);font-size:15px;font-weight:700;line-height:1}.ds-profile h2{grid-column:2;grid-row:1;margin:0;font-size:28px;font-weight:750;line-height:1.3;letter-spacing:-.03em;overflow-wrap:anywhere;word-break:keep-all}.ds-profile p{grid-column:2;grid-row:2;margin:2px 0 0;color:var(--haedo-muted,#5d6b65);font-size:13px;line-height:1.6;overflow-wrap:anywhere;word-break:keep-all}@media(max-width:760px){.ds-profile h2{font-size:24px;font-weight:700}}"
+    },
+    {
+      "name": "내 글 상태 탭",
+      "kind": "custom",
+      "description": "홈 대표 목록의 글·초안·보관함. 흰 현재 선택면·aria-selected·키보드 이동으로 현재 상태를 표시한다.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\" aria-label=\"내 글 상태\"><button type=\"button\" role=\"tab\" aria-selected=\"true\" aria-controls=\"ds-posts\">글</button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\" aria-controls=\"ds-posts\">초안 2</button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\" aria-controls=\"ds-posts\">보관함</button></div><div id=\"ds-posts\" role=\"tabpanel\" aria-label=\"글\"></div>",
+      "css": ".ds-tabs{display:flex;gap:2px;padding:3px;border-radius:12px;background:var(--haedo-soft,#f4f7f5);font-family:var(--haedo-font,\"Pretendard Variable\", \"Apple SD Gothic Neo\",\"Noto Sans CJK KR\",\"Malgun Gothic\",sans-serif)}.ds-tabs button{position:relative;flex:1;min-height:44px;padding:8px;border:0;border-radius:9px;background:transparent;color:var(--haedo-muted,#5d6b65);font-family:inherit;font-size:14px;font-weight:550;line-height:1.6;cursor:pointer}.ds-tabs button[aria-selected=true]{background:var(--haedo-paper,#fff);box-shadow:0 1px 3px rgb(24 37 34 / .08);color:var(--haedo-accent,#145b50);font-weight:700}.ds-tabs button:hover{background:var(--haedo-canvas,#f4f6f5)}.ds-tabs button:focus-visible{outline:3px solid var(--haedo-focus,#267a69);outline-offset:3px}"
+    },
+    {
+      "name": "이어 쓸 초안 행",
+      "kind": "custom",
+      "description": "새 글 초안·기존 글 수정 중을 구분하는 간결한 목록. 실제 첫 문장과 수정 시각을 보여준다.",
+      "html": "<article class=\"ds-draft\"><button type=\"button\"><span><small>새 글 초안 · 디자인 예시</small><strong>산책 중에 떠오른 생각을 이어 씁니다.</strong><small>10월 18일</small></span><b>이어쓰기</b></button></article>",
+      "css": ".ds-draft{border-bottom:1px solid var(--haedo-line,#e3e9e6);font-family:var(--haedo-font,\"Pretendard Variable\", \"Apple SD Gothic Neo\",\"Noto Sans CJK KR\",\"Malgun Gothic\",sans-serif)}.ds-draft button{display:flex;align-items:center;justify-content:space-between;gap:20px;width:100%;min-height:104px;padding:20px 0;border:0;background:var(--haedo-paper,#fff);color:var(--haedo-ink,#182522);text-align:left;cursor:pointer}.ds-draft button>span{display:flex;min-width:0;flex:1;flex-direction:column;gap:5px}.ds-draft strong{font-size:17px;font-weight:600;line-height:1.7;overflow-wrap:anywhere;word-break:keep-all}.ds-draft small{color:var(--haedo-muted,#5d6b65);font-size:12px;line-height:1.75}.ds-draft b{flex:none;font-size:13px;font-weight:600}.ds-draft button:hover{background:var(--haedo-canvas,#f4f6f5)}.ds-draft button:focus-visible{outline:3px solid var(--haedo-focus,#267a69);outline-offset:3px}@media(max-width:760px){.ds-draft button{gap:12px;padding-block:18px}.ds-draft strong{font-size:16px}}"
+    },
+    {
+      "name": "한 행의 작성 진입",
+      "kind": "custom",
+      "description": "두 실제 버튼이 같은 작성기를 여는 홈 진입. 입력 필드로 위장하지 않으며 14px 경계 안에서 행동을 묶는다.",
+      "html": "<nav class=\"ds-compose\" aria-label=\"내 블로그\"><button class=\"ds-prompt\" type=\"button\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m14 5 5 5M4 20l5-1 11-11a3.5 3.5 0 0 0-5-5L4 14v6Z\"/></svg><span>어떤 이야기를 남길까요?</span></button><button class=\"ds-write\" type=\"button\">새 글 쓰기</button></nav>",
+      "css": ".ds-compose{display:flex;align-items:center;gap:8px;padding:5px;border:1px solid var(--haedo-line,#e3e9e6);border-radius:14px;background:var(--haedo-paper,#fff);font-family:var(--haedo-font,\"Pretendard Variable\",\"Apple SD Gothic Neo\",sans-serif)}.ds-compose button{display:flex;align-items:center;justify-content:center;gap:10px;min-width:44px;min-height:44px;border:0;font-family:inherit;cursor:pointer}.ds-prompt{justify-content:flex-start;flex:1;min-width:0;padding:10px 12px;border-radius:9px;background:transparent;color:var(--haedo-muted,#5d6b65);font-size:15px;font-weight:500;text-align:left}.ds-prompt svg{flex:none;color:var(--haedo-accent,#145b50)}.ds-prompt span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-prompt:hover{background:var(--haedo-selected,#eaf1ed);color:var(--haedo-accent,#145b50)}.ds-write{flex:none;padding:8px 18px;border-radius:10px;background:var(--haedo-accent,#145b50);color:#fff;font-size:14px;font-weight:700}.ds-write:hover{background:#104a41}.ds-write:active{background:#0c3d35}.ds-compose button:focus-visible{outline:3px solid var(--haedo-focus,#267a69);outline-offset:3px}@media(max-width:760px){.ds-compose{gap:4px}.ds-prompt{gap:8px;padding-inline:8px}.ds-write{padding-inline:14px}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "쓰고 저장한 글을 다시 읽는 개인 블로그",
+    "overview": "흰 읽기 면·옅은 초록 회색 캔버스·짙은 틸 조작과 자체 호스팅 Pretendard로 실제 프로필과 글 제목의 위계를 세운다. 앞선 쓰기→초안 보관/명시 저장→읽기→출발 목록 복귀와 선택 자료·공개 사본의 경계를 보존한다. 후속 앱 탐색은 안정된 조작·현재 메뉴와 실제 이동의 짧은 방향성을 연결하며 기본 문서 스크롤과 입력을 유지한다.",
+    "keyCharacteristics": [
+      "실제 이름과 글 제목의 분명한 한글 활자 위계",
+      "본문과 별도인 틸 주 행동·선택·초점",
+      "얇은 경계의 한 작성 행",
+      "평평한 흰 읽기 열과 실제 사진",
+      "입력·정확 복귀·공개·보존 경계 유지"
+    ],
+    "rules": [
+      {
+        "name": "실제 내용 우선",
+        "body": "없는 작가·사진·핸들·사회적 지표를 만들지 않는다.",
+        "section": "components"
+      },
+      {
+        "name": "상태의 범위",
+        "body": "저장·공개·동기화·숨김을 같은 성공이나 권한으로 표시하지 않는다.",
+        "section": "components"
+      },
+      {
+        "name": "평평한 피드",
+        "body": "기본 글 행에 그림자·색 카드·둥근 프레임을 겹치지 않는다.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "실제 한글 내용·원본 사진·상태로 화면을 설명한다.",
+      "44px 조작·16px 입력·실제 대비·초점과 안전 영역을 확인한다.",
+      "기능 검사·시각 판단·실기·OAuth·운영 DB·배포를 구분한다."
+    ],
+    "donts": [
+      "가짜 좋아요·댓글·팔로워를 추가하지 않는다.",
+      "신형 글·사진을 공개 가능·자동 동기화로 표시하지 않는다.",
+      "시각 변경 때문에 원문·버전·입력 DOM·계정 격리·백업을 바꾸지 않는다."
+    ]
+  }
+}

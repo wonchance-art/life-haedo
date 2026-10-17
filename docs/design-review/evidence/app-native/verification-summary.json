@@ -1,0 +1,244 @@
+{
+  "date": "2026-10-17 UTC",
+  "browser": "151.0.7922.173",
+  "scope": "Linux Chromium native WAAPI/rAF, actual app and account-scoped IndexedDB; intercepted anonymous Auth. Emulated viewports/touch/keyboard, no Apple hardware, IME, live OAuth/DB, publication or deployment.",
+  "codeBaseline": "f3f5c52f77b841873ff1c5b934b5c26509ec54a1 plus app-native working changes",
+  "staticCheck": {
+    "passed": true,
+    "html": 18,
+    "javascript": 91,
+    "localReferences": 377
+  },
+  "nodeTests": {
+    "passed": 520,
+    "failed": 0
+  },
+  "appNative": {
+    "checks": [
+      {
+        "name": "push, back and tab paint real intermediate native animation frames",
+        "pass": true
+      },
+      {
+        "name": "composer has one header, immediate body focus and reachable controls at five viewport shapes",
+        "pass": true
+      },
+      {
+        "name": "failed draft flush preserves input, header and committed menu without false entrance or save feedback",
+        "pass": true
+      },
+      {
+        "name": "reduced motion at load keeps compose, save and return immediately usable",
+        "pass": true
+      },
+      {
+        "name": "changing reduced motion during a running entrance cancels its effects without blocking another action",
+        "pass": true
+      },
+      {
+        "name": "rapid section taps end at the last destination and indicator paints inside its selected link",
+        "pass": true
+      },
+      {
+        "name": "filtered home reader returns exact query, tab, focus and scroll",
+        "pass": true
+      },
+      {
+        "name": "main section scroll memory survives round trips without changing the filtered home list",
+        "pass": true
+      },
+      {
+        "name": "late private list work cannot animate or repaint after navigation, workspace switch or signout",
+        "pass": true
+      }
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "externalRequests": [],
+    "frameEvidence": [
+      {
+        "kind": "push",
+        "animations": 1
+      },
+      {
+        "kind": "back",
+        "animations": 1
+      },
+      {
+        "kind": "tab",
+        "animations": 1
+      },
+      {
+        "kind": "compose",
+        "animations": 1
+      }
+    ]
+  },
+  "regressions": {
+    "home": {
+      "passed": 10,
+      "total": 10,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "captures": 0
+    },
+    "journeys": {
+      "passed": 8,
+      "total": 8,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "captures": 0
+    },
+    "sns": {
+      "passed": 2,
+      "total": 2,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "captures": 27
+    }
+  },
+  "visual": {
+    "screens": 25,
+    "intermediateCaptures": 4,
+    "viewports": [
+      {
+        "width": 1440,
+        "height": 1000
+      },
+      {
+        "width": 820,
+        "height": 1000
+      },
+      {
+        "width": 390,
+        "height": 844
+      },
+      {
+        "width": 320,
+        "height": 568
+      },
+      {
+        "width": 844,
+        "height": 390
+      }
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "checks": [
+      {
+        "name": "global home scroll restored",
+        "before": 420,
+        "after": 420
+      }
+    ],
+    "reducedMotion": {
+      "matches": true,
+      "running": []
+    },
+    "inspection": {
+      "rounds": 2,
+      "fixedTogether": [
+        "outer composer header duplicate",
+        "320px photo label wrapping",
+        "composer blue focus/caret",
+        "push reading scroll restoration",
+        "reverse tab motion direction"
+      ],
+      "final": "Final 25 viewport screenshots and 4 in-progress screenshots inspected with actual video-derived frames. App files not changed by visual reviewer.",
+      "limitations": [
+        "Linux Chromium simulated touch/viewports only; no Apple hardware, native keyboard/IME, real OAuth, remote cloud writes or deployment verification."
+      ],
+      "actualNavFrames": "actual-nav-motion-frames.jpg: 6 actual raw-video frames at 25fps beginning 1.88 seconds, home→library, inspected visually for persistent chrome and no blank destination.",
+      "disposition": "PASS after one batched correction and one confirmation. No remaining visual blocker found in tested viewports."
+    },
+    "video": {
+      "file": "haedo-native-flow.mp4",
+      "durationSeconds": 12.08,
+      "fps": 25,
+      "source": "Continuous real Linux Chromium screen recording; only initial 0.5s fixture boot removed, no acceleration or overlays."
+    }
+  },
+  "artifacts": [
+    "haedo-native-flow.mp4",
+    "mobile-flow.png",
+    "actual-nav-motion-frames.jpg",
+    "home-390x844.png",
+    "home-1440x1000.png",
+    "writing-focused-390x844.png",
+    "writing-focused-1440x1000.png",
+    "saved-reading-390x844.png",
+    "saved-reading-1440x1000.png"
+  ],
+  "limitations": [
+    "Simulated touch/viewports in Linux Chromium, not Apple hardware.",
+    "Actual Apple IME, native virtual keyboard, VoiceOver and app lifecycle require device verification.",
+    "Anonymous mock Auth and isolated IndexedDB; no live OAuth, remote DB writes or deployment."
+  ],
+  "pwa": {
+    "scope": "Actual HEAD f3f5c52 archived v123 → prepared current v124; real SW/cache/IDB with anonymous intercepted HTTP only. No production, Google OAuth, Apple-device or deployment proof. App and existing test source unchanged during this verification. Ephemeral servers closed; shared 4173 untouched.",
+    "passed": [
+      "public home and anonymous private routes never mount account storage",
+      "Google-button PKCE HTTP fixture opens verified A scope without automatic upload",
+      "protected import/excerpt/source jump, reload and backup-copy restore work",
+      "logout/B login cannot list, read or render A and unowned data; A return restores its scope",
+      "failed management navigation and logout draft transactions preserve input without signing out",
+      "offline warm local editing survives cold-load lock and online re-verification",
+      "failed callback clears credentials from address and never exposes private UI",
+      "preserved Cloud haedo-v123 fixture upgrades atomically to haedo-v124 without altering old local data",
+      "unexpected console/page errors"
+    ],
+    "failed": 0,
+    "intentionalTransportCallbackErrors": 2,
+    "unexpectedConsolePageErrors": 0,
+    "completeCachedResponsesChecked": 95,
+    "allCachedResponseHashesMatchPrepared": true,
+    "motionAssets": [
+      {
+        "path": "assets/haedo-motion.js",
+        "sourceSha256": "a0f99e6b765196cbde8b65d689773056f1e979c6d556e1e8632dda8517a9db37",
+        "preparedSha256": "a0f99e6b765196cbde8b65d689773056f1e979c6d556e1e8632dda8517a9db37",
+        "cachedSha256": "a0f99e6b765196cbde8b65d689773056f1e979c6d556e1e8632dda8517a9db37",
+        "identical": true
+      },
+      {
+        "path": "assets/haedo-motion.css",
+        "sourceSha256": "fefe95e0b86325743f1431215882fe5f989299d8f33271cb61b6f7f05ceae1e7",
+        "preparedSha256": "fefe95e0b86325743f1431215882fe5f989299d8f33271cb61b6f7f05ceae1e7",
+        "cachedSha256": "fefe95e0b86325743f1431215882fe5f989299d8f33271cb61b6f7f05ceae1e7",
+        "identical": true
+      }
+    ],
+    "offlineMotion": {
+      "report": "motion-cache-offline-report.json",
+      "warmOfflineWAAPINav": true,
+      "animationCount": 4,
+      "noWAAPIFallback": {
+        "waapiAvailable": false,
+        "savedRows": 1,
+        "containsInput": true,
+        "homeVisible": true
+      },
+      "remoteWrites": 0
+    },
+    "pass": true,
+    "fixture": {
+      "sourceHead": "f3f5c52f77b841873ff1c5b934b5c26509ec54a1",
+      "previousCache": "haedo-v123",
+      "currentCache": "haedo-v124",
+      "mockOnly": true
+    },
+    "sourceMatchesPreparedResponses": 94,
+    "offlineAssets": [
+      {
+        "path": "assets/haedo-motion.js",
+        "status": 200,
+        "bytes": 2944
+      },
+      {
+        "path": "assets/haedo-motion.css",
+        "status": 200,
+        "bytes": 3095
+      }
+    ]
+  }
+}

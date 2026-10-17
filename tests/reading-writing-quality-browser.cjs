@@ -111,16 +111,23 @@ async function main() {
       await page.locator('#lifeWritingBody').fill(longBody); await draftSaved(page);
       await page.locator('#lifeWritingBody').evaluate(el => { el.focus(); el.setSelectionRange(610, 640, 'backward'); el.scrollTop = 970; });
       const editorPosition = await page.locator('#lifeWritingBody').evaluate(el => ({ start: el.selectionStart, end: el.selectionEnd, direction: el.selectionDirection, scrollTop: el.scrollTop }));
-      await page.locator('[data-haedo-navigation] [data-haedo-section="tools"]').click(); await settle(page);
-      await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click(); await settle(page); await page.locator('#lifeWritingBody').waitFor(); await frames(page);
+      const tools = page.locator('[data-haedo-navigation] [data-haedo-section="tools"]');
+      const closeBeforeSection = !await tools.isVisible();
+      // Compact writing intentionally hides the dock. Leave through the visible
+      // writer close control, then revisit the same draft through the sections.
+      if (closeBeforeSection) { await activate(page.locator('#lifeWritingClose')); await settle(page); }
+      await activate(tools); await settle(page);
+      await activate(page.locator('[data-haedo-navigation] [data-haedo-section="records"]')); await settle(page);
+      if (closeBeforeSection) { await activate(page.getByRole('button', { name: '글쓰기', exact: true })); await settle(page); }
+      await page.locator('#lifeWritingBody').waitFor(); await frames(page);
       const resumed = await page.locator('#lifeWritingBody').evaluate(el => ({ start: el.selectionStart, end: el.selectionEnd, direction: el.selectionDirection, scrollTop: el.scrollTop }));
-      verify(`${size.width} section return keeps body selection direction and inner scroll`, JSON.stringify(editorPosition) === JSON.stringify(resumed) && await page.locator('#lifeWritingBody').inputValue() === longBody, { before: editorPosition, after: resumed });
+      verify(`${size.width} ${closeBeforeSection ? 'writer close and section return' : 'section return'} keeps body selection direction and inner scroll`, JSON.stringify(editorPosition) === JSON.stringify(resumed) && await page.locator('#lifeWritingBody').inputValue() === longBody, { before: editorPosition, after: resumed });
       await activate(page.locator('#lifeWritingNew')); await page.locator('#lifeWritingBody').waitFor(); await frames(page);
       verify(`${size.width} new draft has independent position and text`, await page.locator('#lifeWritingBody').evaluate(el => !el.value && el.selectionStart === 0 && el.selectionEnd === 0 && el.scrollTop === 0));
       await page.locator('#lifeWritingTitle').fill('실패에서 복구하는 다른 익명 초안'); await draftSaved(page);
       await abortDraftWrites(page, true); await page.locator('#lifeWritingBody').fill('실패 후에도 입력을 유지하는 익명 본문.'); await page.locator('#lifeWritingError').waitFor({ state: 'visible' });
       await capture(page, 'writer-error', size); assert.equal(await page.locator('#lifeWritingBody').inputValue(), '실패 후에도 입력을 유지하는 익명 본문.');
-      await page.locator('[data-haedo-navigation] [data-haedo-section="tools"]').click(); await page.locator('#lifeError').waitFor({ state: 'visible' });
+      await activate(await tools.isVisible() ? tools : page.locator('#lifeWritingClose')); await page.locator('#lifeError').waitFor({ state: 'visible' });
       verify(`${size.width} failed navigation preserves writing error and input`, await page.locator('#lifeWritingError').isVisible() && await page.locator('#lifeWritingStatus').getAttribute('data-state') === 'error' && await page.locator('#lifeWritingBody').inputValue() === '실패 후에도 입력을 유지하는 익명 본문.');
       await abortDraftWrites(page, false); await activate(page.locator('#lifeWritingRetry')); await draftSaved(page);
       await page.locator('#lifeWritingSave').focus(); await page.keyboard.press('Enter'); await page.locator('#lifeSourceText').waitFor(); await settle(page); assert.equal(await page.locator('#lifeSourceText').textContent(), '실패 후에도 입력을 유지하는 익명 본문.');

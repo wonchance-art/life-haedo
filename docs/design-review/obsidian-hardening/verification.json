@@ -1,0 +1,22 @@
+{
+  "unit": {
+    "passed": 519,
+    "failed": 0
+  },
+  "browser": {
+    "receipt": 3,
+    "sync": 14,
+    "zipRestore": 5,
+    "connectionReview": 5,
+    "readingScale": 4,
+    "coreExperience": 5,
+    "pwa117To118": 9
+  },
+  "visualWidths": [
+    1440,
+    820,
+    390
+  ],
+  "privateAccountDataWritten": false,
+  "deployed": false
+}

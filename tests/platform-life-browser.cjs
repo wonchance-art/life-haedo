@@ -42,9 +42,22 @@ async function main(){
     return match[1];
   };
   const newCache=await cacheName(site);
+  const verifyPreparedConfig=process.env.VERIFY_PREPARED_CONFIG==='1',verifyAllShell=process.env.VERIFY_ALL_SHELL==='1';
+  let allShellModules;
+  if(verifyAllShell){
+    const source=await fs.readFile(path.join(site,'sw.js'),'utf8'),list=source.match(/const SHELL\s*=\s*(\[[\s\S]*?\]);/);
+    assert.ok(list,'The generated service worker must declare its static shell.');
+    allShellModules=Array.from(list[1].matchAll(/['"](\.\/[^'"]*)['"]/g),match=>match[1]);
+    assert.ok(allShellModules.length>0);assert.equal(new Set(allShellModules).size,allShellModules.length);
+  }
   await new Promise(resolve=>web.listen(0,'127.0.0.1',resolve));
   process.env.BASE_URL=`http://127.0.0.1:${web.address().port}`;
   const {FakeCloud,platformContext,accounts,cloud,base,openManagement,openAccount,openSection}=require('./life-sync-browser.cjs');
+  if(verifyPreparedConfig)for(const directory of [site,...oldSites]){
+    const source=await fs.readFile(path.join(directory,'assets/platform-config.js'),'utf8'),payload=source.match(/^window\.HAEDO_CONFIG=Object\.freeze\(([\s\S]*)\);\s*$/);
+    assert.ok(payload,'Use an anonymous prepare-site output.');
+    assert.deepEqual(JSON.parse(payload[1]),{url:cloud,key:'sb_publishable_anonymous_browser_test_only'},'Prepared-site verification only accepts simulator configuration.');
+  }
   const pw=require(process.env.PW_MODULE_PATH||'/opt/codex/cua_node/lib/node_modules/playwright');
   const browser=await pw.chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
   const server=new FakeCloud(),contexts=[];
@@ -59,6 +72,7 @@ async function main(){
   async function context(name,seed=null){
     const value=await browser.newContext({acceptDownloads:true,viewport:{width:1180,height:900}});contexts.push(value);
     await platformContext(value,server,name,seed);
+    if(verifyPreparedConfig)await value.unroute(`${base}/assets/platform-config.js`);
     await value.addInitScript(()=>{
       window.__productDbOpens=[];const original=IDBFactory.prototype.open;
       IDBFactory.prototype.open=function(...args){__productDbOpens.push({name:args[0],verified:!!globalThis.HaedoAuth?.user});return original.apply(this,args);};
@@ -69,6 +83,7 @@ async function main(){
   async function click(page,name){
     if(['모아보기','기록 검색','가져오기','시간 보기'].includes(name))await openSection(page,'records');
     if(['기기 간 동기화','내보내기·사본 복원'].includes(name))await openManagement(page);
+    if(name==='기록 검색') { await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click(); await settle(page); return; }
     if(name==='로그아웃')await openAccount(page);
     await page.getByRole('button',{name,exact:true}).click();await settle(page);
   }
@@ -205,6 +220,12 @@ async function main(){
       try{
         await importText(page,'오프라인 보존','오프라인에서도 저장할 익명 내용');
         assert.ok((await stored(page)).sources.some(s=>s.title==='오프라인 보존'));
+        if (await page.locator('.life-reader-tools').isVisible()) await page.locator('.life-reader-tools').getByRole('button').first().click();
+        await click(page,'컬렉션'); await page.locator('#clGrid').waitFor();
+        await click(page,'컬렉션 항목 추가'); await click(page,'직접 입력'); await page.locator('#clTitle').fill('오프라인 컬렉션');
+        await page.locator('#clNote').fill('온라인 재확인 뒤에도 남을 비공개 메모'); await click(page,'저장');
+        await page.getByRole('button',{name:'항목 수정',exact:true}).waitFor();
+        assert.ok(await page.evaluate(async()=>{const s=HaedoLife.Shell.storage;return(await s.readCollection(await s.getActive())).items.some(i=>i.title==='오프라인 컬렉션');}));
         await page.reload();await page.waitForFunction(()=>globalThis.HaedoLife?.Shell);await page.evaluate(()=>HaedoLife.Shell.ready);
         assert.ok(await page.locator('#lifeApp').isHidden());assert.equal(await page.evaluate(()=>HaedoLife.Shell.storage),null);
         assert.deepEqual(await page.evaluate(()=>__productDbOpens),[],'unverified cold load opened private IDB');
@@ -212,6 +233,7 @@ async function main(){
       }finally{server.offline.delete('platform');await ctx.setOffline(false);page.expectedTransport=false;}
       await click(page,'다시 확인');await ready(page);
       assert.ok((await stored(page)).sources.some(s=>s.title==='오프라인 보존'));
+      assert.ok(await page.evaluate(async()=>{const s=HaedoLife.Shell.storage;return(await s.readCollection(await s.getActive())).items.some(i=>i.note==='온라인 재확인 뒤에도 남을 비공개 메모');}));
       const cached=await page.evaluate(async name=>{
         const cache=await caches.open(name);return(await cache.keys()).map(request=>request.url);
       },newCache);
@@ -245,7 +267,9 @@ async function main(){
         await s.commitLocal({operationId:c.id(),workspaceId:b.workspaceId,baseRevision:b.revision,changes:c.buildImportChanges(b,prepared,[])});
         const stage=await s.saveStage({stageId:c.id(),workspaceId:b.workspaceId,revision:0,state:'draft',input:{origin:'other',title:'이전 검토초안',text:'미적용 원문 유지'},excerpts:[]});
         await s.setActive(b.workspaceId);
-        localStorage.setItem('caeyeon_life_registry','{"docs":[],"anonymous":"preserve-upgrade"}');return {bundle:await s.read(b.workspaceId),stage};
+        let nine;
+        if(s.readNineBoard&&HaedoLife.NineBoard){const v=await s.readNineBoard(b.workspaceId),board=HaedoLife.NineBoard.create(c.id);board.title='이전 버전의 선택 구성';board.areas[0].items.push({attachment:{type:'book',title:'보존할 대상',creator:'익명 창작자',url:'https://example.org/original'},reason:'🌱 이전 선택 이유\r\n정확한 출처를 유지한다.'});v.boards.push(board);nine=await s.saveNineBoard(b.workspaceId,v,v.revision);}
+        localStorage.setItem('caeyeon_life_registry','{"docs":[],"anonymous":"preserve-upgrade"}');return {bundle:await s.read(b.workspaceId),stage,...(nine?{nine}:{})};
       });
       currentSite=site;await p.evaluate(async()=>{const registration=await navigator.serviceWorker.getRegistration();await registration.update();});
       await waitForPage(p,async names=>{
@@ -259,8 +283,15 @@ async function main(){
       const visible=await p.evaluate(()=>HaedoLife.Shell.storage.listWorkspaces());
       assert.equal(visible.some(w=>w.workspaceId===fixture.bundle.workspaceId),oldHasAuth);
       const original=await p.evaluate(async ids=>{const db=await idb.openDB('life-tools-v1',1);try{return {bundle:await db.get('bundles',ids.workspaceId),stage:await db.get('staging',ids.stageId)};}finally{db.close();}},{workspaceId:fixture.bundle.workspaceId,stageId:fixture.stage.stageId});
-      assert.deepEqual(original,fixture);assert.equal(await p.evaluate(()=>localStorage.getItem('caeyeon_life_registry')),'{"docs":[],"anonymous":"preserve-upgrade"}');
-      const modules=['life.html','assets/platform-auth.js','assets/platform-life-remote.js','assets/life/core.js','assets/life/storage.js','assets/life/icons.js','assets/life/ui.js','assets/life/home.js','assets/life/workbench-ui.js','assets/life/workbench.css','assets/life/rediscovery.js','assets/life/reading-position.js','assets/life/ui.css','assets/life/writing-ui.js','assets/life/composition-remote.js','assets/life/composition-sync.js','assets/life/composition-ui.js','assets/life/writing-remote.js','assets/life/writing-sync.js','assets/life/writing-sync-ui.js','vendor/supabase/supabase.js'];
+      assert.deepEqual(original,{bundle:fixture.bundle,stage:fixture.stage});
+      if(fixture.nine)assert.deepEqual(await p.evaluate(id=>HaedoLife.Shell.storage.readNineBoard(id),fixture.bundle.workspaceId),fixture.nine,'Existing nine board data must survive the shell upgrade exactly.');
+      assert.equal(await p.evaluate(()=>localStorage.getItem('caeyeon_life_registry')),'{"docs":[],"anonymous":"preserve-upgrade"}');
+      const modules=verifyAllShell?[...allShellModules]:['life.html','assets/platform-auth.js','assets/platform-life-remote.js','assets/life/core.js','assets/life/unified-search.js','assets/life/unified-search-ui.js','assets/life/storage.js','assets/life/icons.js','assets/life/ui.js','assets/life/home.js','assets/life/collection.js','assets/life/collection-media.js','assets/life/collection-metadata.js','assets/life/collection-picker.js','assets/life/collection-ui.js','assets/life/collection.css','assets/life/workbench-ui.js','assets/life/reflection-lenses.js','assets/life/reflection-lenses-ui.js','assets/life/workbench.css','assets/life/rediscovery.js','assets/life/reading-position.js','assets/life/ui.css','assets/life/writing-ui.js','assets/life/composition-remote.js','assets/life/composition-sync.js','assets/life/composition-ui.js','assets/life/writing-remote.js','assets/life/writing-sync.js','assets/life/writing-sync-ui.js','vendor/supabase/supabase.js'];
+      if(!verifyAllShell){
+      modules.push('assets/life/nine-board.js','assets/life/nine-board-ui.js','assets/life/nine-board.css');
+      modules.push('assets/life/obsidian-decisions.js','assets/life/obsidian-package.js');
+      modules.push('assets/life/photo-post-attachments.js','assets/life/photo-post.js','assets/life/photo-post-ui.js','assets/life/photo-post.css','vendor/quill/quill.js','vendor/quill/quill.snow.css','vendor/fflate/fflate.js');
+      }
       const runtime=await p.evaluate(async({name,modules})=>{
         if(!await caches.has(name))return [];
         const cache=await caches.open(name);
@@ -271,7 +302,7 @@ async function main(){
         }));
       },{name:newCache,modules});
       const {createHash}=require('node:crypto');
-      const expected=await Promise.all(modules.map(async path=>({path,hash:createHash('sha256').update(await fs.readFile(require('node:path').join(site,path))).digest('hex')})));
+      const expected=await Promise.all(modules.map(async file=>({path:file,hash:createHash('sha256').update(await fs.readFile(path.join(site,file==='./'?'index.html':file))).digest('hex')})));
       assert.deepEqual(runtime,expected,'The installed modules must match the complete new release.');await old.close();
       });
     }

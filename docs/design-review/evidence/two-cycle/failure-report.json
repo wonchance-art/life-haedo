@@ -1,0 +1,12 @@
+{
+  "checks": [
+    "Blank reflection does not create a draft",
+    "Active Korean composition remains in the reflection without copying",
+    "Draft CAS rejects a stale copy and preserves the other tab and authored thought",
+    "Explicit retry reloads current drafts; editing a copied draft never rewrites reflection or overwrites the edited copy",
+    "Other account has no copied thought or draft"
+  ],
+  "errors": [],
+  "consoleErrors": [],
+  "pass": true
+}

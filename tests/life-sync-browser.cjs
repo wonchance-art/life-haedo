@@ -163,7 +163,7 @@ async function openSection(page, section) {
 }
 async function openManagement(page) {
   await openSection(page, 'manage');
-  const back = page.getByRole('button',{name:'관리로 돌아가기',exact:true});
+  const back = page.getByRole('button',{name:'설정으로 돌아가기',exact:true});
   if (await back.isVisible()) { await back.click(); await settle(page); }
   const button = page.getByRole('button',{name:'자료 관리',exact:true});
   if (await button.getAttribute('aria-expanded') !== 'true') { await button.click(); await settle(page); }

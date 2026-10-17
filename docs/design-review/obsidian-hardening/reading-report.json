@@ -1,0 +1,141 @@
+{
+  "checks": [
+    "3479 notes retain bounded 40/80 source results and full search counts",
+    "Source search follows an exact old-version heading and returns to the same query and result",
+    "Unified search bounds large results and keeps query, expanded count and exact result focus after note links",
+    "Switching accounts in the same browser isolates existing IndexedDB notes and restores the original account intact"
+  ],
+  "timings": [
+    {
+      "selector": "#lifeSearch",
+      "query": "관찰 기록",
+      "elapsedMs": 421
+    },
+    {
+      "selector": "#lifeSearch",
+      "query": "시작표식",
+      "elapsedMs": 294
+    },
+    {
+      "selector": "#lifeFindQuery",
+      "query": "관찰 기록",
+      "elapsedMs": 162
+    }
+  ],
+  "visual": [
+    {
+      "scene": "distinct-heading-links",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "연결된 노트 2",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": {
+          "width": 700,
+          "size": "18px",
+          "lineHeight": "35.1px",
+          "selectedText": ""
+        },
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "distinct-heading-links",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "연결된 노트 2",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": {
+          "width": 628,
+          "size": "18px",
+          "lineHeight": "35.1px",
+          "selectedText": ""
+        },
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "distinct-heading-links",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "연결된 노트 2",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": {
+          "width": 350,
+          "size": "17px",
+          "lineHeight": "33.15px",
+          "selectedText": ""
+        },
+        "resultCount": 0
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "scope": "Synthetic 3479-note vault, intercepted anonymous Auth, real IndexedDB; no operating data, remote upload or Apple hardware.",
+  "browser": "151.0.7922.173",
+  "corpus": {
+    "notes": 3479,
+    "versions": 3480,
+    "links": 2,
+    "bodyUtf16Units": 1818568
+  },
+  "pass": true
+}

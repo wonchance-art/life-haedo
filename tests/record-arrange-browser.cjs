@@ -189,12 +189,12 @@ async function main() {
       await page.locator(`#wbIncomingSelection input[data-version-id="${f.refs[1].versionId}"]`).uncheck();
       await apply(page,'검토에서 원문 하나만 고른 항목'); const after=await waitSaved(page,w=>w.page.entries.length===1);
       assert.deepEqual(after.workbench.page.entries[0].parts.map(p=>p.versionId),[f.refs[0].versionId]);
-      await page.getByRole('button',{name:'기록으로 돌아가기',exact:true}).click(); await settle(page);
+      await page.getByRole('button',{name:'자료실로 돌아가기',exact:true}).click(); await settle(page);
       assert.equal(await page.locator('.life-source-select[aria-pressed="true"]').count(),0);
       await selectMode(page); await page.locator('#lifeSearch').fill(''); await selectVersion(page,f.refs[2].versionId);
       await page.locator(`.life-source-card[data-version-id="${f.refs[1].versionId}"] .life-source-open`).click(); await settle(page);
       await page.locator('#lifeReaderArrange').click(); await review(page,'groups','#lifeReaderArrangePanel'); await apply(page,'읽던 원문만 따로 담기'); await waitSaved(page,w=>w.groups.length===1);
-      await page.getByRole('button',{name:'기록 목록',exact:true}).click(); await settle(page);
+      await nav(page, 'records');
       assert.equal(await page.locator(`.life-source-select[data-version-id="${f.refs[2].versionId}"]`).getAttribute('aria-pressed'),'true');
       assert.equal(await page.locator('.life-source-select[aria-pressed="true"]').count(),1);
       assert.deepEqual((await current(page)).workbench.page,after.workbench.page);
@@ -215,7 +215,7 @@ async function main() {
       await page.evaluate(() => __arrangeReleaseRead()); await page.waitForFunction(n => window.__arrangeReadsFinished > n, finished);
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'tools'); assert.equal(await page.locator('#wbIncomingSelection').count(), 0);
       await nav(page, 'manage'); await page.getByRole('button', { name: '자료 관리', exact: true }).click(); await page.locator('#lifeWorkspace').selectOption(other); await settle(page); await nav(page, 'records');
-      await page.getByRole('button', { name: '기록 목록', exact: true }).click(); await settle(page); assert.equal(await page.locator('.life-source-select[aria-pressed="true"]').count(), 0);
+      await page.getByRole('button', { name: '자료실', exact: true }).click(); await settle(page); assert.equal(await page.locator('.life-source-select[aria-pressed="true"]').count(), 0);
       assert.equal((await current(page)).bundle.workspaceId, other); assert.equal((await current(page)).workbench.page.entries.length, 0);
       assert.equal(await page.evaluate(async id => (await HaedoLife.Shell.storage.readWorkbench(id)).page.entries.length, f.workspaceId), 0);
     });

@@ -1,0 +1,29 @@
+{
+  "scope": "Synthetic 6899 tracked files, local Git and offline CLIs only; no private records, remote account, browser or deployment.",
+  "checks": [
+    "6899 tracked long-path files through both actual offline CLIs",
+    "Every restored sourceKey and body byte/SHA matches Git input",
+    "Opaque auxiliary/report/tool/Git bundle bytes preserved",
+    "Original Git HEAD and clean checkout unchanged"
+  ],
+  "timings": [
+    {
+      "script": "import-obsidian-vault.mjs",
+      "elapsedMs": 9275
+    },
+    {
+      "script": "apply-obsidian-decisions.mjs",
+      "elapsedMs": 24632
+    }
+  ],
+  "pass": true,
+  "trackedFiles": 6899,
+  "notes": 3479,
+  "supportingFiles": 3420,
+  "comparedBodies": 6899,
+  "links": 3478,
+  "treeListingBytes": 1818990,
+  "rawBytes": 14635235,
+  "originalFilesUnchanged": true,
+  "sourceCommitUnchanged": true
+}

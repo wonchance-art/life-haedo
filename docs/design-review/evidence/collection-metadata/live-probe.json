@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-12",
+  "github": {
+    "endpoint": "https://api.github.com/repos/jakearchibald/idb",
+    "httpStatus": 200,
+    "accessControlAllowOrigin": "*",
+    "browser": "Linux Chromium 151.0.7922.173, inherited session proxy, localhost app origin",
+    "actualAppAdapterResult": { "provider": "GitHub", "title": "idb", "type": "tool", "source": "https://github.com/jakearchibald/idb", "attributionLabel": "저장소 소유자" }
+  },
+  "youtube": {
+    "endpoint": "https://www.youtube.com/oembed",
+    "liveResult": "Environment proxy CONNECT rejected with HTTP 403; provider response and CORS not observed",
+    "registry": "https://github.com/iamcal/oembed/blob/master/providers/youtube.yml",
+    "followUp": "Local real-browser public video lookup; no proxy workaround"
+  },
+  "productionWrites": 0,
+  "realUserRecordsUsed": false
+}

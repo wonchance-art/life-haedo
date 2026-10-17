@@ -652,3 +652,178 @@ MDN 호환성 데이터의 해당 파일 마지막 변경은 **2026-10-05**, com
 Paged.js/Vivliostyle 직접 도입은 패키지 크기뿐 아니라 **조판 스크립트의 실행 위치, DOM 분할 후 원고·출처 순서, 계정 전환 취소, 폰트 준비, 메모리·인쇄 완료 경계**를 다시 검증해야 한다. 지금 필요한 기본 판형·문단·장 나눔에 이 비용을 먼저 추가할 이유는 없다. 실제 원고에서 자동 목차 쪽번호·각주·양면 조판이 필수로 드러나면 두 후보의 동일 한글 원고 출력을 직접 비교하고 결정한다.
 
 이 절은 공식 자료 조사와 선택 근거다. 조사 뒤 수행한 새 독자용 화면·PDF 검증은 [책자 검토](../design-review/book-edition.md)에 별도로 기록했다. 기존 7쪽 PDF 검사나 라이브러리의 지원 표로 새 출력을 대신하지 않는다. 라이브러리·폰트 설치, 외부 AI, 운영 SQL·계정 자료·병합·배포 작업은 수행하지 않았다.
+
+## 선택 자료의 읽기 관점 — 2026-10-11
+
+기존 Taguette/Hypothesis 비교와 PR #63의 독립 시제품을 실제 회고 자료의 **읽기 전용 근거 보기**에 적용한다. PyPI Taguette 1.5.2(BSD-3-Clause), npm Hypothesis client 1.1766.0(BSD-2-Clause)의 공식 최신 배포 메타데이터를 다시 확인했다. 위의 Hypothesis **h 서버**와 **client 패키지**는 다른 구성 요소이며 버전을 혼용하지 않는다. 라이선스·공개 권고 검토는 앞선 비교 범위를 이어가며 새로운 패키지를 설치하거나 코드를 가져오지 않았다.
+
+채택한 것은 사용자 묶음과 인용을 분리하고 원문으로 돌아가는 방식이다. 이번 관심은 실제 사용자 묶음, 질문은 물음표 구절의 기계적 추출, 변화는 사용자가 고른 두 글의 비교다. 의미 분석·자동 군집·외부 AI가 아니므로 Python 분석 서버나 주석 서비스가 필요하지 않다. `Reflection.chronology`, 정확 버전 sourceRow, 기존 원문 선택 복원, 공용 UI 토큰을 재사용한다. 새 모듈은 이 읽기 계산과 표시만 담당하며 저장 스키마·SQL·공개 API를 추가하지 않는다.
+
+[구현·한계·Local 통합](../design-review/reflection-lenses.md). 참고 출처: [Taguette PyPI](https://pypi.org/project/taguette/), [Taguette 공식 저장소](https://gitlab.com/remram44/taguette), [Hypothesis client](https://github.com/hypothesis/client), [npm 공식 메타데이터](https://registry.npmjs.org/hypothesis/latest).
+
+## 2026-10-12 · 컬렉션 실제 저장
+
+- 기존 동봉 [idb 8.0.3](https://github.com/jakearchibald/idb/tree/v8.0.3), ISC를 재사용한다. [npm 공식 latest](https://registry.npmjs.org/idb/latest)는 확인 시 8.0.4/ISC. GitHub 저장소는 archived=false, pushed_at=2026-10-06이며 공개 repository security-advisories 응답은 빈 목록이었다. 공개 알림 부재를 보안 보증으로 해석하지 않는다. GitHub latest-release API는 404라 배포 확인에는 npm을 사용했다.
+- [8.0.3…8.0.4 공식 비교](https://github.com/jakearchibald/idb/compare/v8.0.3...v8.0.4)는 NaN 읽기 수정과 바이트 절약이다. 이번 컬렉션은 JSON 가능한 문자열·유한 revision 등만 허용하며 NaN을 보관하지 않는다. 공통 저장소 라이브러리 교체를 이번 기능과 섞지 않고 기존 검증된 배포본을 유지한다.
+- 새 DB 라이브러리보다 기존 계정 소유권·원자 트랜잭션·BroadcastChannel 계약 재사용이 적합하다. 새 의존성과 DB 버전/운영 SQL은 없다. 자체 구현은 해도 컬렉션의 유형 검증·충돌/백업 의미·UI에 한정한다. [설계와 유지 범위](../design-review/collection-library.md).
+
+## 2026-10-12 — 컬렉션 공개 주소 메타데이터
+
+- GitHub 공식 [CORS 문서](https://docs.github.com/en/rest/using-the-rest-api/using-cors-and-jsonp-to-make-cross-origin-requests)는 [공식 docs 저장소 원문](https://github.com/github/docs/blob/main/content/rest/using-the-rest-api/using-cors-and-jsonp-to-make-cross-origin-requests.md)으로 확인했다(문서 사이트 직접 접속은 환경 차단). 공개 REST `/repos/{owner}/{repo}`를 자격 증명 없이 사용한다. 실제 API HTTP 200/ACAO `*`와 Linux Chromium 앱 어댑터 성공을 확인했다. 비인증 rate limit/403/429/404, 이름 변경 리디렉션을 수동 입력으로 복구한다. 지속 캐시나 자동 재조회는 없다.
+- [oEmbed 레지스트리 YouTube 항목](https://github.com/iamcal/oembed/blob/master/providers/youtube.yml)은 공식 배포 소스의 `https://www.youtube.com/oembed` 등록을 확인했다. 레지스트리 저장소는 MIT, archived=false, 당시 pushed_at=2026-10-10. 라이브러리 런타임을 배포하지 않는 데이터/규격 참고다. 등록된 playlist 전체를 지원한다고 표시하지 않고 단일 영상만 정규화한다. 환경에서 YouTube HTTP 연결은 프록시 403으로 실패했으므로 CORS/실서비스 성공은 Local 확인으로 남긴다. 원격 HTML/iframe/이미지는 사용하지 않는다.
+- 범용 Open Graph/메타데이터 스크래퍼는 임의 사이트 서버 조회·비밀 키·프록시·추가 의존성과 유지보수가 필요하다. 현재 정적 Pages의 두 제공자 읽기에 맞지 않아 도입하지 않는다. 기존 DOM/저장 모델과 네이티브 fetch/URL/AbortController를 재사용한 약 60줄의 어댑터를 선택했다. 외부 코드를 복사하거나 새 패키지를 설치하지 않았으므로 새 런타임 버전/라이선스 등록은 없다.
+- 검토를 바꿀 조건: 대상 사이트 확대, 인증 필요 API, 법적 근거를 갖춘 이미지 표시/캐시 요구. 그때 공식 배포/라이선스/유지보수/보안 권고와 제공자 약관을 다시 비교한다. 이번 조회를 작품 이미지 재사용 권한이나 아티스트 확정 근거로 삼지 않는다.
+
+## 2026-10-13 — 출처에서 연결하는 책 표지·영상 썸네일
+
+- [Open Library](https://github.com/internetarchive/openlibrary)의 공식 master `4df22ff68db5d6544b865131dc449c8ef6a59351`과 커버 서버 [ASGI/CORS](https://github.com/internetarchive/openlibrary/blob/4df22ff68db5d6544b865131dc449c8ef6a59351/openlibrary/coverstore/asgi_app.py), [조회 구현](https://github.com/internetarchive/openlibrary/blob/4df22ff68db5d6544b865131dc449c8ef6a59351/openlibrary/coverstore/code.py), [실서비스 검사](https://github.com/internetarchive/openlibrary/blob/4df22ff68db5d6544b865131dc449c8ef6a59351/tests/integration/test_coverstore_prod.py), [실제 책 표지 템플릿](https://github.com/internetarchive/openlibrary/blob/4df22ff68db5d6544b865131dc449c8ef6a59351/openlibrary/templates/covers/book_cover.html)을 참고했다. repo archived=false, pushed_at=2026-10-12T20:40:53Z, 코드 라이선스 AGPL-3.0. 서버 서비스의 공식 현재 소스를 API 근거로 확인했으며 SDK 버전을 설치한 것이 아니다. 문서 사이트/실제 이미지에는 환경 403으로 접근하지 못했다.
+- 커버 API는 ISBN/edition과 M 크기, `default=false`를 사용한다. 서버의 `Access-Control-Allow-Origin:*`, credentials=false와 이미지/404 분기를 확인했다. 배포된 서버가 그 소스와 동일한지는 실 HTTP로 확인하지 못했으므로 라이브 CORS 성공으로 보고하지 않는다. 원본 비율 유지와 없음 상태를 채택하고 서버 코드를 복사하지 않았다. 코드 라이선스를 도서 표지 이미지의 재배포 허가로 해석하지 않는다.
+- 공개 보안 권고 API에서 5건을 확인했다: GHSA-f93m-7x4r-g296(SQL injection), GHSA-ghv9-wx77-wg5v(stored XSS), GHSA-mcjc-2c93-3r8c·GHSA-22xr-xvw5-m2r9(login redirect), GHSA-jcxx-2953-qvvw(cover upload SSRF). 이 서버를 설치하거나 로그인·업로드 endpoint를 호출하지 않는다. 고정 커버 GET과 검증된 식별자만 사용하며 제공자 보안 감사를 대신했다고 주장하지 않는다.
+- YouTube는 앞 절의 oEmbed를 재사용해 응답이 제공한 동일 영상의 `i.ytimg.com/vi/<id>/*.jpg`만 허용한다. 임의 `thumbnail_url`, 다른 영상, 쿼리·HTML/iframe은 사용하지 않는다. 썸네일은 영상 식별을 위한 비공개 표시이며 음악 앨범 표지나 원저작자 확정 근거로 쓰지 않는다. 실서비스 조회·이미지는 여전히 Local 확인 사항이다.
+- 선택: 네이티브 Image/IntersectionObserver/AbortController + 기존 컬렉션 URL. 이미지 라이브러리/임의 URL 프록시/이미지 파일 저장은 필요하지 않아 추가하지 않았다. 서비스워커·백업 형식을 늘리지 않고 이미지 캐시/미리보기만 화면 수명에 둔다. 기존 모듈 재사용으로 컬렉션 저장 v1/backup v1을 유지한다. 향후 이미지 편집·실제 오프라인 표지·공개 재사용·음악/영화/작품 제공자가 필요해질 때 라이선스·인증·유지 비용을 다시 비교한다.
+
+### 2026-10-12 · 컬렉션 선택창
+
+Radix Dialog 공식 npm 배포 1.3.1 / MIT와 최신 유지보수 변경을 확인했다. React 기반 도입 비용 때문에 설치하지 않고 native dialog·기존 조회/저장 모듈을 재사용한다. [비교 근거·출처·검증](../design-review/collection-picker.md)을 참고한다.
+
+### 2026-10-12 — 내 페이지 작성과 구조화된 첨부
+
+공식 npm `@radix-ui/react-dialog` 1.3.1/MIT와 공식 저장소 Dialog 변경 `925c88b773bb32aecf1b52a296a1a21ba7a720b9`를 다시 확인했다. 선택창은 선행 native dialog를 재사용하고 plain textarea·공통 아이콘·기존 IndexedDB CAS로 작성→첨부→피드를 구현했다. React/새 편집기/HTML 파서 도입은 필요한 행동에 비해 런타임·빌드·마이그레이션 비용이 커 채택하지 않았다. 새 앱 의존성은 없다. 자세한 [출처·선택 이유·검증](../design-review/page-composer.md)을 따른다.
+
+## 2026-10-12 · 페이지 피드의 표지·영상
+
+- 공식 [lite-youtube-embed v0.3.4](https://github.com/paulirish/lite-youtube-embed/releases/tag/v0.3.4), 2025-11-10 배포를 GitHub releases API로 확인했다. [LICENSE](https://github.com/paulirish/lite-youtube-embed/blob/v0.3.4/LICENSE)의 실제 본문은 **Apache-2.0**이며 API의 `NOASSERTION`을 라이선스 부재로 해석하지 않는다. 최근 src 변경 `46977648f019187075c463dfad63e1b033a7d52c`(2025-11-10) 확인. 공개 security-advisories API 응답은 빈 배열이었다. 이것이 알려지지 않은 취약점 부재를 증명하지는 않는다.
+- 눌러야 iframe을 만드는 구성을 참고했다. 공식 소스는 hover/focus 시 preconnect, 기본 autoplay, 일부 환경의 별도 IFrame API 로딩을 포함한다. 해도의 외부 연결 기본 꺼짐, 재생 자동 시작 없음, 계정/화면 종료 시 해제 계약에는 **기존 CollectionMedia + native dialog를 연결하는 작은 PageMedia 어댑터**가 적합했다. 소스 복사·패키지 도입은 없다. iframe lifecycle과 제공자 변경을 유지 관리하는 비용은 남는다.
+- 공식 [YouTube player parameters](https://developers.google.com/youtube/player_parameters)의 `autoplay=0`, `playsinline=1`, 기본 JS API 비활성 계약을 확인했다. iframe은 고정된 youtube-nocookie.com 호스트와 검증한 영상 ID만 사용한다. 별도 iframe API·자동 재생·외부 SDK는 없다. `strict-origin-when-cross-origin`으로 페이지의 개인 경로/쿼리 대신 출처 origin만 전달한다. no-cookie 호스트는 무전송을 의미하지 않으므로 클릭 전 연결 안내를 유지한다.
+- 실제 사이트의 밀집 피드와 매체별 형태라는 기존 비교 방향은 유지하되, 음악 링크의 YouTube 영상을 실제 앨범 표지로 가장하지 않는다. [구현·한계·시각 근거](../design-review/profile-feed-media.md).
+
+
+## 통합 비공개 검색 — 2026-10-13 UTC
+
+공식 npm `latest` 메타데이터, 해당 버전 LICENSE, GitHub 저장소 상태와 공개 보안 권고 API를 확인했다. 새 의존성은 추가하지 않았다.
+
+| 후보 | 확인한 배포·라이선스 | 유지보수·보안 확인 | 이번 선택 |
+| --- | --- | --- | --- |
+| [MiniSearch](https://github.com/lucaong/minisearch) | [7.2.0 공식 배포](https://registry.npmjs.org/minisearch/latest), [태그 LICENSE.txt](https://github.com/lucaong/minisearch/blob/v7.2.0/LICENSE.txt), MIT | archived=false, 마지막 push 2025-09-16. 공개 저장소 security-advisories 응답 0건 | 인덱싱·접두/퍼지 검색은 유용하지만 이번 정확 문자·버전별 원문 위치 검색에 인덱스 갱신 계약을 추가할 이유가 부족해 미도입 |
+| [Fuse.js](https://github.com/krisk/Fuse) | [7.5.0 공식 배포](https://registry.npmjs.org/fuse.js/latest), [태그 LICENSE](https://github.com/krisk/Fuse/blob/v7.5.0/LICENSE), Apache-2.0 | archived=false, 마지막 push 2026-08-09. 공개 저장소 security-advisories 응답 0건 | 유사어 순위는 기본 문자 그대로 검색과 의미가 달라 미도입 |
+| 기존 `Core.searchSources` / `searchPattern` | 저장소 구현 재사용 | 기존 정확 버전·한글 공백·UTF-16 위치 검사에 신규 교차 저장소 검사를 추가 | 채택. 원문을 바꾸지 않고 저장한 페이지·컬렉션 필드와 결과 식별자만 읽기 전용으로 묶음 |
+
+권고 0건은 취약점 부재의 증명이 아니며 비공개 권고·전이 의존성을 감사한 결과도 아니다. 이번 코드는 외부 코드를 복사하거나 배포하지 않는다. 직접 유지할 범위는 저장소별 필드 투영, 종류별 제한 표시, 정확 항목 열기와 실패·계정/작업공간 변경 처리다. 검색 시 전체 로컬 자료를 읽는 방식의 대규모 성능은 미검증이다. 실제 자료에서 입력 지연이 확인되면 동일 익명 표본의 시간·메모리를 측정한 뒤 지연 실행/worker/인덱스를 비교한다. 인덱스만 추가하고 계정 삭제·변경에 남는 사본을 만들지 않는다.
+
+
+## 입력·활용 품질 묶음 — 2026-10-13 KST
+
+파일 한 건의 읽기 실패를 성공한 다른 초안과 분리해 다시 선택하는 요구다. 공식 npm `latest` 배포 tarball의 integrity를 검증하고 동봉 LICENSE를 읽었다. 비교만 수행했고 다운로드 코드를 실행하거나 앱에 설치하지 않았다.
+
+| 후보 | 확인한 공식 배포·유지 상태 | 라이선스·공개 보안 권고 | 선택 |
+| --- | --- | --- | --- |
+| [Uppy Core](https://github.com/transloadit/uppy) | [@uppy/core 6.2.0](https://registry.npmjs.org/@uppy/core/latest), archived=false, push 2026-10-12 | 동봉 MIT. 저장소 공개 권고 1건: [GHSA-6g8p-fj8f-2wqf](https://github.com/transloadit/uppy/security/advisories/GHSA-6g8p-fj8f-2wqf)는 별도 `@uppy/companion <7.0.2`의 SSRF/OAuth redirect이며 Core 취약점으로 일반화하지 않음 | 대규모 업로드/제공자 플러그인에는 유용하나 현재 로컬 TXT/MD 검토·CAS와 별도 상태 계층을 만들 이유가 없어 미도입 |
+| [FilePond](https://github.com/pqina/filepond) | [4.32.12](https://registry.npmjs.org/filepond/latest), archived=false, push 2026-10-02 | 동봉 MIT. 저장소 공개 security-advisories 응답 0건 | 업로드/미디어 처리 UI보다 현재 파일 목록과 성공 초안 보존이 우선이므로 미도입 |
+| 기존 File 입력·TextDecoder·검토초안 CAS | 현재 앱의 파일 선택/용량/UTF-8 처리와 IndexedDB 저장 | 원문 바이트/텍스트 구별, 입력 실패/중단/계정 변경을 브라우저로 재검증 | 채택. 최초 선택과 한 행 재선택이 같은 읽기 함수를 재사용 |
+
+공개 권고 수는 전체 취약점 부재나 전이 의존성 감사가 아니다. MiniSearch/Fuse의 당일 공식 배포 비교는 위 통합 검색 절을 재사용했으며 이번에는 측정한 중복 순회를 제거하고 한 화면 세션의 결과만 재사용했다. 회고 활용은 기존 PagePosts·파일 출력·공통 아이콘/버튼을 재배치했다. 새로운 저장소·편집기·업로드 서버·의존성은 없다.
+
+## 이름으로 책·프로젝트 찾기 — 2026-10-13
+
+기존 `CollectionMetadata`의 제한된 JSON 요청과 native dialog/평문 행/수정 폼을 재사용했다. 새 런타임 패키지·서버·저장 구조는 추가하지 않는다.
+
+| 공식 출처와 확인 | 선택과 한계 |
+| --- | --- |
+| [Open Library Search API](https://openlibrary.org/dev/docs/api/search), [사용 지침](https://openlibrary.org/developers/api), [데이터 권리 안내](https://openlibrary.org/developers/licensing) 모두 HTTP 200 확인. `/search.json`의 `key,title,author_name,first_publish_year`, `limit=6` 사용 | 사람의 명시적 책 찾기에 한정. 입력마다 요청·대량 수집·계정 연결 없음. 작품 ID를 사용하며 특정 판본·번역·표지로 추정하지 않는다. 데이터 권리 안내는 Internet Archive가 새 권리를 주장하지 않지만 기여분·관할에 기존 권리가 있을 수 있다고 명시한다. 이를 CC0 또는 모든 콘텐츠의 자유 이용으로 확대하지 않는다. 제목·저자·원천 링크만 사용하며 본문·표지는 가져오지 않는다. |
+| [Open Library 공식 소스](https://github.com/internetarchive/openlibrary/tree/510e39f1d3d39bb5ab2191e6e5678bc7aeba5922), [LICENSE](https://github.com/internetarchive/openlibrary/blob/510e39f1d3d39bb5ab2191e6e5678bc7aeba5922/LICENSE): AGPL-3.0. 저장소 미보관, 최신 push 2026-10-13. 확인한 master SHA를 고정하며 이를 안정 릴리스라고 부르지 않는다. | 코드 설치/복사 없이 공식 API만 사용. 대규모 자체 호스팅은 현재 정적 앱의 요구와 맞지 않는다. |
+| [GitHub 검색 API 공식 문서](https://github.com/github/docs/blob/main/content/rest/search/search.md), [Octokit REST v22.0.1](https://github.com/octokit/rest.js/releases/tag/v22.0.1) 2025-10-31, [MIT LICENSE](https://github.com/octokit/rest.js/blob/v22.0.1/LICENSE). 미보관, 최신 push 2026-10-13 | 공개 저장소 검색 1개 endpoint 때문에 전체 SDK를 새로 넣지 않는다. 기존 fetch/AbortController/64KiB 응답 제한 재사용. `private:false`와 정규화된 저장소 경로 확인. 소유자와 저자/아티스트를 혼동하지 않는다. |
+
+Open Library 기본 비식별 요청 제한은 초당 1회, GitHub 비인증 검색은 분당 10회다. 앱은 각각 최소 1.1초/6.1초 간격, 한 선택창에서 최대 12개 검색 응답 재사용, 자동 재시도 없음으로 요청을 줄인다. 앱 차원의 간격이 여러 탭·공유 IP의 제공자 제한을 보장하지는 않으므로 403/429는 직접 입력 또는 나중에 재시도로 복구한다. 브라우저 User-Agent에 임의 연락처를 넣거나 고식별 한도를 주장하지 않는다. 향후 빈번한 공용 서비스 사용은 Open Library 앱 등록·운영 용량 정책을 다시 확인한다.
+
+[Open Library 공개 권고](https://api.github.com/repos/internetarchive/openlibrary/security-advisories)에는 조회 시 5건(SQL injection, stored XSS, 두 open redirect, cover upload SSRF), [Octokit REST 공개 권고](https://api.github.com/repos/octokit/rest.js/security-advisories)는 0건이었다. 이는 공개 목록 결과이며 서비스/의존성 전체의 무결성 보증이 아니다. 제공자 HTML·임의 응답 URL·이미지·계정 코드를 실행하지 않고, 제한된 JSON을 `textContent`로 표시하며 정해진 HTTPS API만 호출한다.
+
+실제 Linux Chromium에서 앱 어댑터로 Open Library `채식주의자` 후보 1개(저자 `Han Kang`, 작품 ID `OL17334243W`), GitHub `idb` 후보 6개를 받았다. 익명 공개 검색만 수행했으며 실계정/개인 글 전송 없음. 한국어 검색 품질·판본 완전성을 이 두 검색으로 일반화하지 않는다. [실행 증거](../design-review/evidence/taste-writing/live-providers.json).
+
+## 판본·컬렉션 재사용과 다음 제공자 — 2026-10-14 KST
+
+[Open Library 공식 Books 문서](https://openlibrary.org/dev/docs/api/books)의 작품별 `/editions.json`을 직접 읽고 실제 브라우저에서 확인했다. #77의 라이선스·정책 검토를 재사용하며 기존 제한 JSON fetch에 판본 투영만 추가했다. 작품에 속한 판본인지 `works`로 확인하고 저자·번역자 이름을 추정하지 않는다. 작품/판본의 식별자가 달라 동일 제목 자동 병합은 부적절하므로, 컬렉션 보관은 기존 모델·CAS의 정확 출처 일치 규칙을 사용했다. 새 SDK·런타임·저장 스키마 없음.
+
+영화·예술 작품·인물의 공식 소스·현재 릴리스/유지보수·라이선스와 실제로 확인하지 못한 조건은 [후속 제공자 비교](../design-review/taste-provider-expansion.md)에 정리했다. AIC 서버 코드를 설치하는 대신 기존 명시적 후보 검토를 재사용하는 방향을 우선한다. 차단된 API/약관 확인이나 한국어 검색 실험은 완료로 표현하지 않는다.
+
+## 책 검색 다음 결과와 한국어판 — 2026-10-14
+
+[Open Library Search API 공식 문서](https://openlibrary.org/dev/docs/api/search)의 `page`, `language:kor`, `editions`와 선택 필드를 직접 확인했다. 언어 순위 힌트 `lang`과 필터를 구분하고, 하위 판본은 현재 대표 한 개만 반환한다는 제한을 UI에 표시한다. 기존 #77~#78의 공식 소스·라이선스 검토와 제한 JSON 어댑터를 재사용했으며 새 패키지/런타임/서버를 도입하지 않았다. [구현과 실제 한글/원어 검색 6개 비교](../design-review/book-search-navigation.md)에 채택 이유·정확 판본·누락 한계를 기록했다. 외부 검색 라이브러리는 제공자 색인 누락을 해결하지 못해 추가하지 않았다.
+
+## 작품 출처의 수동 검토 — 2026-10-14
+
+후속 [작품 메타데이터 연결](../design-review/artwork-metadata-selection.md)에서는 현재 공식 API의 메타데이터 라이선스/통합 안내와 실제 CORS·앱 흐름을 근거로 REST 조회를 진행했다. 공식 데이터 저장소는 메타데이터와 이미지/미디어 라이선스를 구분한다. 기존 native fetch/제한 JSON·명시 선택·CAS를 재사용했고 서버 코드·wrapper·SDK는 도입하지 않았다. 이미지·설명문과 약관 전체 본문 확인 완료는 범위에 포함하지 않는다. 아래 수동 단계의 미연결 설명은 당시 이력이다.
+
+시카고 미술관의 [공식 API 문서 원본](https://github.com/art-institute-of-chicago/data-aggregator/blob/780e6c86025d5f80387dac7574d0f056bf26ff1a/docs/.sections/preface.md)에 있는 작품 링크 형식을 참고했다. [이전 제공자 검토](../design-review/taste-provider-expansion.md)의 소스/라이선스 범위를 유지하고 기존 CollectionPicker·Share.safeURL·수동 폼을 재사용했다. URL 식별에 SDK·서버 전체 도입은 필요하지 않다. 실제 API/현재 약관은 환경 접근 적용 후 확인해야 하므로 자동 검색이나 이미지 연결은 추가하지 않았다. [구현·검증·외부 조건](../design-review/artwork-reference.md).
+
+## 2026-10-14 내 페이지 초안 선택 복구 재사용
+
+새 기반 모듈이나 의존성을 도입하는 작업이 아니다. 기존 `PagePosts`의 엄격 검증·평문 `PagePostsView`·선택창의 네이티브 dialog/CSS와 이미 동봉한 idb 8.0.3(ISC)의 저장 트랜잭션/CAS를 확장했다. 별도 파일 파서·모달·저장 라이브러리 도입은 이 작은 v1 JSON 선택 복구에 불필요하며 설치·버전·스키마 유지 비용을 늘린다. 라이브러리 코드를 새로 복사하거나 라이선스 조건을 바꾸지 않았다. 기존 [idb 트랜잭션 완료 계약](https://github.com/jakearchibald/idb/blob/v8.0.3/README.md)을 재사용하고 새 저장 구조가 필요해질 때 최신 릴리스·권고를 다시 조사한다. [구현·실패/경합·파일 재사용 검증](../design-review/page-draft-recovery.md).
+
+## 2026-10-14 초안 충돌 비교 확장
+
+#84의 PageComposer 미리보기/명시 복원·PagePosts 검증과 기존 idb 8.0.3 트랜잭션/CAS를 다시 사용했다. 비교 기준은 실제 성공 payload이며 미변경 자료의 재추가나 일부 변경 누락을 막는 도메인 규칙만 추가했다. 저장 엔진·파서·모달 라이브러리·스키마를 새로 도입하지 않으므로 새로운 패키지 선정/설치가 필요하지 않다. [결정·실패/경합·저장 중 입력 검수](../design-review/page-draft-conflict.md).
+
+## 2026-10-14 영역별 9칸 구성
+
+공식 GitHub API로 현재 [GridStack v14.0.0](https://github.com/gridstack/gridstack.js/releases/tag/v14.0.0)(2026-09-21 릴리스, MIT)와 [idb v8.0.4](https://github.com/jakearchibald/idb/tree/v8.0.4)(ISC)를 확인했다. 양 저장소의 공개 security-advisories 응답은 빈 배열이었다. 비공개 권고나 전체 의존성 감사 완료를 뜻하지 않는다. idb는 GitHub releases/latest가 없으므로 공식 tags·package 및 [8.0.3 대비 차이](https://github.com/jakearchibald/idb/compare/v8.0.3...v8.0.4)를 확인했다. NaN 값 읽기 수정이며 이번 데이터는 엄격한 문자열/배열/객체와 safe integer revision이다. 동봉한 8.0.3의 기존 트랜잭션 완료 계약을 재사용하고 이번 기능에서 vendor 업그레이드 범위를 넓히지 않는다.
+
+GridStack 직접 도입은 드래그/가변 크기 대시보드에 적합하다. 이번의 고정 3×3·최대 9개·키보드/터치 동등한 선택과 버튼 순서 변경에는 CSS Grid/native input을 쓰는 편이 요구를 작게 유지한다. 배치 아이디어만 참고하고 라이브러리 코드는 복사하지 않았다. 자체 구현은 저장 snapshot/계정 CAS/복구 규칙이며, 기존 CollectionPicker·PagePosts.attachment·PagePostsView·idb 저장 엔진을 재사용한다. 새 패키지·네트워크 SDK·프레임워크는 없다. [선택 근거·복구·검증](../design-review/nine-board.md).
+
+## 2026-10-14 9칸 구성의 선택 파일 복구
+
+기존 v1 parser/backup/copies와 idb 8.0.3의 트랜잭션 완료·CAS를 확장했다. 구성 내용의 정확한 중복 표시와 native checkbox/details만 추가하고, 초안 선택 복구의 기본 미선택/명시 복사 원칙을 재사용한다. 위 공식 릴리스/라이선스 확인과 GridStack 미도입 근거를 유지한다. 새로운 기반 모듈·외부 파서·파일/모달 라이브러리는 도입하지 않았다. [현재/전체 범위·선택·경합 계약](../design-review/nine-board-selective-recovery.md).
+
+## 저장한 9칸 구성의 검색 확장 — 2026-10-14 UTC
+
+새 엔진 대신 기존 `UnifiedSearch`의 읽기 전용 필드 투영·`Core.findSearchText`·저장소 구독·왕복 탐색을 재사용한다. 이날 npm 공식 registry의 최신판은 Fuse.js 7.5.0(게시 2026-07-13, Apache-2.0), MiniSearch 7.2.0(2025-09-16, MIT)으로 기존 고정 태그 LICENSE/README 검토와 같았다. 공식 GitHub 저장소는 모두 archived=false, 최근 pushed_at은 각각 2026-08-09/2025-09-16이며 공개 security-advisories 목록은 각각 0개였다. 이것을 전체 취약점 부재로 해석하지 않는다. 출처: [Fuse npm](https://registry.npmjs.org/fuse.js), [MiniSearch npm](https://registry.npmjs.org/minisearch), [Fuse 저장소](https://github.com/krisk/Fuse), [MiniSearch 저장소](https://github.com/lucaong/minisearch).
+
+도입 후보의 fuzzy/token 인덱스는 정확한 문자열 검색·계정/공간 폐기·저장본 재읽기·동일 항목 확인을 대신하지 못한다. 이번에는 이미 검증한 구현에 구성·영역·항목 필드만 더한다. 직접 유지할 부분은 작은 투영과 안정된 ID/정확 항목 스냅샷 확인이다. 실제 자료량에서 반복 검색 지연이나 오타 검색 요구가 확인되면 엔진 비교를 재개한다. 새 의존성·인덱스 저장·검색어 전송은 추가하지 않는다.
+
+## 사진 글 편집·원본 ZIP 보관 — 2026-10-15 KST
+
+사용자 요구는 대량 사진 관리가 아닌 블로그처럼 글과 사진을 편하게 편집·읽고 원본 해상도를 보존하는 것이다. 직접 contenteditable/선택·IME·실행 취소 엔진을 새로 만드는 대신 **Quill 2.0.3(BSD-3-Clause)** 공식 일반 script 배포와 Snow CSS를 재사용했다. [npm](https://registry.npmjs.org/quill)의 latest/게시일(2024-11-30)과 [공식 최신 release v2.0.3](https://github.com/slab/quill/releases/tag/v2.0.3)을 대조했다. [저장소](https://github.com/slab/quill)는 archived=false, pushed_at=2025-07-25, 공개 security-advisories 목록 0개였다. 장기 지원이나 전체 취약점 부재의 증거로 해석하지 않는다. 공식 tarball의 LICENSE를 읽고 SHA-512 registry integrity를 대조한 뒤 dist/quill.js·quill.snow.css만 vendor에 보관했다.
+
+사진을 base64 JSON에 넣거나 ZIP 엔진을 직접 만드는 대안 대신 **fflate 0.8.3(MIT)**의 공식 UMD를 재사용했다. [npm](https://registry.npmjs.org/fflate)의 latest/게시일(2026-05-16)과 [공식 release v0.8.3](https://github.com/101arrowz/fflate/releases/tag/v0.8.3)이 일치했고 저장소 archived=false, pushed_at=2026-05-16, 공개 advisories 0개였다. 배포본 LICENSE/registry SHA-512를 확인했다. ZIP은 원본을 level=0으로 담으며 이미지 재인코딩을 하지 않는다. 입력은 파일 수·펼친 크기·중복/경로·manifest 필드·사진 해시를 검사한다.
+
+채택 이유: 정적 앱에 새 빌드/서버 없이 동봉·오프라인 사용 가능하며 기존 편집/저장 형식을 건드리지 않는다. 자체 유지 범위는 제한된 Delta 필드 검증, 원본 사진 embed, 계정/공간별 CAS, 읽기 DOM, 백업 새 사본 복원이다. 직접 구현한 rich-text 엔진은 선택/IME/undo 유지 비용 때문에 제외했다. 실제 Apple 한글/Files 체험과 보안 후속 권고는 적용 때 다시 확인한다. **선정 이유 보정:** Tiptap은 일반 JavaScript도 지원하며 기존 화면 전체나 앱 빌드를 반드시 바꿔야 하는 것은 아니다. 현재 교체 비용은 커스텀 사진 노드·배포 의존성·기존 Delta/ZIP 이관·저장/읽기 어댑터와 재검증에 있다. 아래 제품 비교로 근거를 보완했다.
+
+## 블로그 편집기 제품·엔진 재비교 — 2026-10-15 KST
+
+사용자 요청으로 Ghost/Koenig, 네이버 SmartEditor ONE/2, WordPress/Gutenberg, Tiptap, Editor.js/Image Tool, Quill, Lexical, TOAST UI Editor를 공식 기능·최신 배포·라이선스·유지보수·공개 보안 권고와 대조했다. [비교표·현재 부족한 흐름·선택을 바꿀 조건·출처](../design-review/blog-editor-comparison.md). 외부 제품의 동일 과제 실사용 비교는 하지 않았다.
+
+Ghost와 ONE의 본문·사진 중심 흐름은 설계 참고, Quill은 현재 저장/복구 호환성을 유지하며 단기 사용, Tiptap 3.32.0(MIT)은 엔진 교체 비교의 우선 후보로 둔다. TOAST 저장소는 보관 상태, SmartEditor2는 ONE과 다른 오래된 제품이므로 신규 직접 도입을 권하지 않는다. 옛 Koenig 저장소의 보관은 개발 중단이 아니라 Ghost/koenig로 이동한 결과다. 원본 화질은 엔진이 대신 보장하지 않으므로 원본 저장·표시·확대·ZIP 계약을 유지한다. 새 패키지/코드를 추가하지 않았으며, 먼저 두 작성 진입점·사진 설명 패널·긴 글 저장/읽기·실제 Apple 입력을 개선/검수할 대상으로 정했다.
+
+후속 [글쓰기 흐름 개선](../design-review/blog-editor-flow.md)은 기존 Quill 2.0.3의 embed 갱신·Delta handler/history를 재사용해 설명 입력 DOM을 보존했다. 공식 고정 태그의 scroll/core 코드를 확인했다. UI 진입·수정일 피드·상단 저장만 연결하며 모델/ZIP/vendor 버전은 유지한다. 신규 라이브러리를 설치하거나 다른 편집기 코드를 복사하지 않았다.
+
+
+## 같은 작성기의 첨부·보관·읽기 파일 — 2026-10-15 KST
+
+같은 날의 위 공식 릴리스/라이선스/공개 권고 대조와 [편집기 비교](../design-review/blog-editor-comparison.md)를 재사용했다. Quill 2.0.3·fflate 0.8.3을 유지하며 새 엔진/패키지는 추가하지 않는다. 첨부는 기존 CollectionPicker·PagePosts.attachment/validateAttachments·PagePostsView를 작은 어댑터로 연결한다. 새 검색 SDK나 별도 첨부 데이터 모델은 기존 메타데이터 검토·출처·개인 메모 제외 규칙을 중복시키므로 도입하지 않았다.
+
+사진 탐색은 이미 사용한 native dialog, 독립 읽기 HTML은 기존 안전한 읽기 DOM + native FileReader/Blob 다운로드를 재사용한다. HTML 생성기를 추가해도 계정 폐기·입력 보호·원본 바이트 계약을 대신하지 못한다. 직접 유지 범위는 v1/v2 검증·ZIP manifest 호환, 보관 CAS, 뷰어 URL 수명, 제한된 정적 스타일이다. HTML에서 편집/복원하지 않으므로 편집기 런타임을 동봉하지 않는다. 사용자 장면·파일 재사용·한계는 [검수 기록](../design-review/blog-writing-completion.md)에 둔다.
+
+## Obsidian 보관함 전체 통합 — 2026-10-16 KST
+
+기존 Core의 자료·해시·JSON 새 사본 복원과 Node/Git 표준 기능을 재사용한다. 새 Markdown 엔진·YAML 실행기·패키지는 도입하지 않는다. 공식 [Obsidian 내부 링크 문서](https://github.com/obsidianmd/obsidian-help/blob/master/en/Linking%20notes%20and%20files/Internal%20links.md)의 Wikilink/Markdown, URL 인코딩, 제목·블록 표현을 확인했다. Wikilink의 문자 `%`와 Markdown URL의 인코딩을 구분하고 원문은 바꾸지 않는다.
+
+직접 도입 후보 [obsidian-export](https://github.com/zoni/obsidian-export)는 최신 공식 release `v25.3.0`(2025-03-25), 저장소 archived=false/pushed_at=2026-10-15, 공개 security-advisories 0개를 확인했다. GitHub의 SPDX는 NOASSERTION이며 LICENSE 원문은 재배포 조건 두 개와 특허 허여를 포함한다. 전체 취약점 부재를 뜻하지 않는다. 이 도구의 Obsidian→Markdown 변환은 유용하지만 이번의 불변 원문/정확 발췌 위치/기존 JSON 복원에는 본문 재작성이 필요하지 않다. 소스 코드를 복사하거나 실행 파일을 설치하지 않았다. 자체 유지 부분은 오프라인 경로/바이트 검증·보존 어댑터·제한된 노트 참조 스캐너이며 일반 Markdown 렌더러라고 표현하지 않는다. 복잡한 링크가 반복되면 원문과 참조 인덱스를 분리한 parser 도입을 다시 비교한다. [선택·보존·사용·검수](../design-review/obsidian-vault-integration.md).
+
+같은 날의 검토 목록 갱신은 이 오프라인 어댑터에 감사 투영·중복 묶음·native details 기반 정적 읽기 보고서만 더한다. 기존 공식 표현/도구 비교를 유지하며 새 parser·패키지·네트워크 요청을 추가하지 않는다. 원문/연결을 바꾸지 않는 사유 분류와 명확한 경로 후보를 자체 유지하며, 실제 전체 파일 대조와 익명 HTML 재열기로 검증한다.
+
+2026-10-17 연결 선택 도구도 기존 Core·native file API·fflate를 재사용한다. 공식 [fflate 최신 릴리스](https://github.com/101arrowz/fflate/releases/tag/v0.8.3)는 `v0.8.3`(2026-05-16), archived=false·동일 날짜 유지 이력·MIT·공개 security-advisories 0개를 GitHub API로 재확인했다. 전체 취약점 부재를 뜻하지 않는다. 기존 vendor를 그대로 쓰고 독립 도구 HTML에도 MIT 원문을 포함한다. 새 ZIP 엔진/프레임워크/DB와 원문 재작성 도구 도입 대신, 해도의 정확 버전/감사/선택 계약을 잇는 공유 어댑터만 자체 유지한다. 무압축 ZIP은 기존 사진 글 방식을 따르며, 큰 압축 작업/원격 서비스가 필요해지면 실측 후 다시 비교한다. [구현·검수](../design-review/obsidian-decisions.md).
+
+## 선택한 글·근거의 비공개 이동 — 2026-10-18 KST
+
+새 ZIP/저장 엔진 대신 동봉한 **fflate 0.8.3(MIT)**·**idb 8.0.3(ISC)**와 기존 PhotoPost·Blog.hydrate·Core·SourceReference·NineBoard 검증을 재사용한다. 라이브러리는 파일 압축과 트랜잭션을 담당하고, 선택 의존성의 최소 투영·정확 버전/구절 확인·새 사본 ID 매핑만 앱의 도메인 어댑터로 유지한다. 전체 계정 백업 엔진이나 CMS·프레임워크 교체는 이 요구의 선행 조건이 아니다. [제품·보존 계약](../design-review/preservation-portability.md)을 따른다.
+
+ZIP 담당은 공식 [최신 릴리스 API](https://api.github.com/repos/101arrowz/fflate/releases/latest)에서 v0.8.3·2026-05-16 03:02:37 UTC, [저장소](https://api.github.com/repos/101arrowz/fflate)의 archived=false/disabled=false·2026-05-16 유지 이력을 확인했다. [고정 태그 LICENSE](https://github.com/101arrowz/fflate/blob/v0.8.3/LICENSE)는 MIT·Copyright 2026 Arjun Barrett이며 동봉 고지와 일치한다. 릴리스에는 Zip64 extra buffer over-read 수정이 명시돼 있다. 공개 security-advisories 재조회는 현재 GitHub 연결에서 지원하지 않는 endpoint로 실패했다. 이번에 권고 0건을 다시 확인했다거나 취약점 부재를 보증하지 않는다. 기존 level 0 ZIP과 고정 경로·파일 수/크기·UTF-8·사진 서명/해시/픽셀 검증을 유지하며 새 의존성을 설치하지 않는다.
+
+담당자의 합성 DEFLATE 실험에서 중앙 헤더의 펼친 크기를 줄이면 fflate가 실제 내용의 접두 버퍼만 반환할 수 있음을 확인했다. 원래 압축된 JPEG·PNG·WebP를 몇 장 옮기는 이번 요구에는 새 형식을 stored 0 전용으로 제한한다. fflate는 ZIP 생성/읽기 엔진으로 유지하고, 그 전에 연속된 로컬 payload·중앙 목록·두 헤더의 경로/크기/CRC32를 실제 바이트와 대조한다. 일반 ZIP 지원이나 기존 ZIP 형식의 동작 변경은 아니다. 전체 메모리 방식의 256 MiB 상한을 실제 Apple 기기 처리 보장으로 표현하지 않는다.
+
+저장 검토 담당은 공식 [npm latest](https://registry.npmjs.org/idb/latest)의 8.0.4/ISC와 [저장소](https://api.github.com/repos/jakearchibald/idb)의 archived=false/disabled=false·2026-10-06 유지 이력을 확인했다. 이번 공개 보안 권고 재조회 성공은 확인하지 않았다. 기존 8.0.3의 [LICENSE](https://github.com/jakearchibald/idb/blob/v8.0.3/LICENSE)와 [트랜잭션 문서](https://github.com/jakearchibald/idb/blob/v8.0.3/README.md#transaction-lifetime)를 직접 읽었다. 외부 await 중 트랜잭션이 자동 종료될 수 있으며 `tx.done`이 최종 커밋 완료의 신호다. 따라서 ZIP·사진/본문 해시 검증은 저장 전에 마치고, 기존 계정 범위/CAS/원자 트랜잭션 어댑터를 확장한다. 기존 저장소 전반의 vendor 업그레이드와 새 파일 복원 계약을 함께 바꾸지 않는다. 새 모듈의 실제 검사·실기·배포 결과는 위 구현 기록에서 별도로 보고한다.
+
+## 원본 첨부·선택 갱신·9칸 PNG — 2026-10-18
+
+- 원본 ZIP: 공식 fflate v0.8.3/MIT와 기존 ZIP 모듈을 비교했다. 원본 파트는 ZIP_STORED만 쓰므로 Blob.slice/CRC/SHA 기반 제한 읽기를 선택해 489 MB 전체 복사를 피한다. 임의 ZIP/ZIP64를 지원하지 않는다. [공식 출처·검증·한도](../design-review/original-attachments.md#구현-선택).
+- 갱신: 공식 jsdiff v9.0.0/BSD-3-Clause·패치 파서 보안 권고와 archived diff-match-patch를 비교했다. 자동 패치가 필요 없으므로 기존 ObsidianPackage/Core/SHA/원자 사본 복원에 작은 경로 비교 어댑터만 더했다. [출처·선택을 바꿀 조건](../design-review/obsidian-update.md#오픈소스-선택과-반대-검토).
+- PNG: 기존 NineBoard 모델과 브라우저 Canvas를 재사용해 별도 그래픽 의존성 없이 한 영역만 출력한다. 전체 편집 데이터는 기존 JSON/HTML이 보존한다. [범위·실패 복구](../design-review/nine-board-image.md).

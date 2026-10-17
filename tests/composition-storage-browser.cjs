@@ -10,7 +10,7 @@ const base = (process.env.BASE_URL || 'http://127.0.0.1:4184').replace(/\/$/, ''
 if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname)) throw new Error('Local anonymous server required');
 const harnessPath = '/__composition_storage_harness__.html';
 const harness = '<!doctype html><html lang="ko"><meta charset="utf-8"><title>익명 구성 저장 검사</title><link rel="icon" href="data:,"><main>저장 계층 검사</main>' +
-  ['vendor/idb/idb.js', 'assets/life/core.js', 'assets/life/workbench.js', 'assets/life/storage.js'].map(file => `<script src="/${file}"></script>`).join('') + '</html>';
+  ['vendor/idb/idb.js', 'assets/life/core.js', 'assets/life/workbench.js', 'assets/life/collection.js', 'assets/life/page-posts.js', 'assets/life/share.js', 'assets/life/storage.js'].map(file => `<script src="/${file}"></script>`).join('') + '</html>';
 const owner = { projectUrl: 'https://composition-storage-test.supabase.co', userId: '11111111-1111-4111-8111-111111111111' };
 async function installHelpers(page, account = owner) {
   await page.evaluate(async account => {
@@ -244,6 +244,21 @@ async function main() {
       });
       assert.equal(result.rejected, 'invalid_composition_metadata'); assert.equal(result.save, 'invalid_composition_metadata'); assert.deepEqual(result.after, result.before);
       return { inconsistentMetadataRejected: true, localContentPreserved: true };
+    });
+    await check('page drafts stay out of composition outbox while explicit saved posts synchronize', async () => {
+      const page = await open();
+      const result = await page.evaluate(async () => {
+        const {id} = await fixture(); await compositionReady(id);
+        const drafts = await S.readPageDrafts(id), now = new Date().toISOString(), P = HaedoLife.PagePosts;
+        const post = P.draft([], HaedoLife.Core.id(), now); post.body = '명시적으로 저장할 내 글';
+        const privateDraft = P.draft([post], HaedoLife.Core.id(), now); privateDraft.body = 'LOCAL_DRAFT_NEVER_UPLOAD';
+        drafts.posts.push(post, privateDraft); const ds = await S.savePageDrafts(id, drafts, drafts.revision);
+        const before = await S.prepareCompositionUpload(id, binding(id));
+        const state = await S.readWorkbench(id); await S.savePagePost(id, post.id, ds.revision, state.revision);
+        const box = await S.prepareCompositionUpload(id, binding(id));
+        return {before,posts:box.data.page.posts,privateLeaked:JSON.stringify(box).includes('LOCAL_DRAFT_NEVER_UPLOAD'),local:(await S.readPageDrafts(id)).posts.length};
+      });
+      assert.equal(result.before,null); assert.equal(result.posts.length,1); assert.equal(result.posts[0].body,'명시적으로 저장할 내 글'); assert.equal(result.privateLeaked,false); assert.equal(result.local,1);
     });
     await check('browser reports no unexpected errors or external requests', async () => {
       assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.unexpectedRequests, []);

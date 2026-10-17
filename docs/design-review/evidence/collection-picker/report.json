@@ -1,0 +1,428 @@
+{
+  "checks": [
+    "Empty picker: local text only, keyboard focus trap, Escape restores focus, manual query preserved",
+    "Saved selection edits same identity, compact note first, explicit save, reload and backup",
+    "Explicit URL lookup, IME protection, channel not artist; choose then save",
+    "Canonical duplicate opens existing, including under a different kind filter",
+    "Lookup failure retains URL; query changes and close reject late responses",
+    "Compact editor save failure retains memo; editing information reveals required fields",
+    "Compact metadata controls retain expansion and draft through type changes",
+    "Many long Korean entries, archived identity and compact conflict recovery"
+  ],
+  "visual": [
+    {
+      "scene": "empty",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.091,
+      "measuredTexts": 16,
+      "contrastFailures": []
+    },
+    {
+      "scene": "empty",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.091,
+      "measuredTexts": 16,
+      "contrastFailures": []
+    },
+    {
+      "scene": "empty",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "예술 작품"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "도구"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "인물"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.091,
+      "measuredTexts": 16,
+      "contrastFailures": []
+    },
+    {
+      "scene": "saved-choice",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.091,
+      "measuredTexts": 18,
+      "contrastFailures": []
+    },
+    {
+      "scene": "saved-choice",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.091,
+      "measuredTexts": 18,
+      "contrastFailures": []
+    },
+    {
+      "scene": "saved-choice",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "예술 작품"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "도구"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "인물"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.091,
+      "measuredTexts": 18,
+      "contrastFailures": []
+    },
+    {
+      "scene": "note-first",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 9,
+      "contrastFailures": []
+    },
+    {
+      "scene": "note-first",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 9,
+      "contrastFailures": []
+    },
+    {
+      "scene": "note-first",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.05,
+      "measuredTexts": 9,
+      "contrastFailures": []
+    },
+    {
+      "scene": "link-choice",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.56,
+      "measuredTexts": 19,
+      "contrastFailures": []
+    },
+    {
+      "scene": "link-choice",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.56,
+      "measuredTexts": 19,
+      "contrastFailures": []
+    },
+    {
+      "scene": "link-choice",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "예술 작품"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "도구"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "인물"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 5.56,
+      "measuredTexts": 19,
+      "contrastFailures": []
+    },
+    {
+      "scene": "error",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "예술 작품"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "도구"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "인물"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.091,
+      "measuredTexts": 17,
+      "contrastFailures": []
+    },
+    {
+      "scene": "loading",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "예술 작품"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "도구"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "인물"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.091,
+      "measuredTexts": 17,
+      "contrastFailures": []
+    },
+    {
+      "scene": "many-items",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.091,
+      "measuredTexts": 77,
+      "contrastFailures": []
+    },
+    {
+      "scene": "many-items",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.091,
+      "measuredTexts": 77,
+      "contrastFailures": []
+    },
+    {
+      "scene": "many-items",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [
+        {
+          "tag": "button",
+          "id": "",
+          "name": "예술 작품"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "도구"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "인물"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "장소"
+        },
+        {
+          "tag": "button",
+          "id": "",
+          "name": "기타"
+        }
+      ],
+      "smallTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "font": "\"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+      "minTextContrast": 6.091,
+      "measuredTexts": 77,
+      "contrastFailures": []
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "requests": [
+    "https://www.youtube.com",
+    "https://www.youtube.com",
+    "https://api.github.com",
+    "https://api.github.com",
+    "https://api.github.com"
+  ],
+  "environment": "Linux Chromium, mock Auth/provider responses, real IndexedDB. No Apple hardware or production writes.",
+  "browser": "151.0.7922.173"
+}

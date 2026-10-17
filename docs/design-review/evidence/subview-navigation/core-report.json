@@ -1,0 +1,288 @@
+{
+  "createdAt": "2026-10-09T04:37:28.069Z",
+  "baseline": false,
+  "browser": "151.0.7922.173",
+  "checks": [
+    {
+      "name": "UI import to related reading, exact pair group, page editing and reload",
+      "pass": true
+    },
+    {
+      "name": "related return preserves older reader version, selection, scroll and previous search",
+      "pass": true
+    },
+    {
+      "name": "after related and page 1440",
+      "pass": true
+    },
+    {
+      "name": "after related and page 820",
+      "pass": true
+    },
+    {
+      "name": "after related and page 390",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "scene": "related",
+      "file": "related-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "experience": {
+        "firstContentY": 429.84,
+        "visibleTitleOccurrences": 0,
+        "visibleComment": false,
+        "relatedSeedVersionId": "72e6b261-40e5-475f-bd32-eb439b727274",
+        "openDetails": []
+      }
+    },
+    {
+      "scene": "page",
+      "file": "page-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "experience": {
+        "firstContentY": 434.98,
+        "visibleTitleOccurrences": 1,
+        "visibleComment": true,
+        "relatedSeedVersionId": null,
+        "openDetails": []
+      }
+    },
+    {
+      "scene": "related",
+      "file": "related-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "experience": {
+        "firstContentY": 429.84,
+        "visibleTitleOccurrences": 0,
+        "visibleComment": false,
+        "relatedSeedVersionId": "41ed7cbd-2a87-4f25-9561-316bdd07e80a",
+        "openDetails": []
+      }
+    },
+    {
+      "scene": "page",
+      "file": "page-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "experience": {
+        "firstContentY": 434.98,
+        "visibleTitleOccurrences": 1,
+        "visibleComment": true,
+        "relatedSeedVersionId": null,
+        "openDetails": []
+      }
+    },
+    {
+      "scene": "related",
+      "file": "related-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "experience": {
+        "firstContentY": 390.09,
+        "visibleTitleOccurrences": 0,
+        "visibleComment": false,
+        "relatedSeedVersionId": "d921c08e-d9a5-4a53-b83b-9c06521e6fe4",
+        "openDetails": []
+      }
+    },
+    {
+      "scene": "page",
+      "file": "page-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 6.05,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.961
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "experience": {
+        "firstContentY": 398.98,
+        "visibleTitleOccurrences": 1,
+        "visibleComment": true,
+        "relatedSeedVersionId": null,
+        "openDetails": []
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "productionWrites": 0,
+  "scope": "Anonymous actual UI/SDK/IndexedDB benchmark; scene-specific observations, not a universal UX pass mark or real Apple test",
+  "journey": {
+    "importedSamples": 4,
+    "relatedEntryActions": 1,
+    "seedReselections": 0,
+    "exactPairPreserved": true,
+    "sourceBundleUnchanged": true,
+    "pageReloaded": true
+  },
+  "readerReturn": {
+    "originalScrollY": 118,
+    "restoredScrollY": 118,
+    "selectionPreserved": true
+  }
+}

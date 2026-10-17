@@ -5,14 +5,17 @@
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
-const { FakeCloud, base, cloud, openManagement } = require('./life-sync-browser.cjs');
+const { FakeCloud, base, cloud, openManagement, openSection } = require('./life-sync-browser.cjs');
 const { playwright, ready, settle, makeContext, observe } = require('./unified-home-browser.cjs');
 const button = async (page, name) => { await page.getByRole('button', { name, exact: true }).click(); await settle(page); };
 const bundle = page => page.evaluate(async () => HaedoLife.Shell.storage.read(await HaedoLife.Shell.storage.getActive()));
 const stages = page => page.evaluate(async () => HaedoLife.Shell.storage.listStages(await HaedoLife.Shell.storage.getActive()));
 const sourceFile = (name, text) => ({ name, mimeType: /\.md$/i.test(name) ? 'text/markdown' : 'text/plain', buffer: Buffer.from(text) });
 const suggestion = page => page.locator('#lifeImportOriginSuggestion button');
-async function openImport(page) { await page.goto(base + '/index.html'); await ready(page); await button(page, '가져오기'); }
+async function openImport(page) {
+  await page.goto(base + '/index.html'); await ready(page);
+  await openSection(page, 'records'); await button(page, '가져오기');
+}
 async function exposeField(page, selector) {
   const control = page.locator(selector);
   if (!(await control.isVisible())) await control.locator('xpath=ancestor::details[1]').locator('summary').click();
@@ -180,7 +183,7 @@ async function main() {
       const raw = '앱을 닫기 전에 확인하던 본문🌱\n남겨 둔 두 번째 문장', url = 'https://www.instagram.com/p/Anonymous_draft/?igsh=keep#caption';
       await page.locator('#lifeImportTitle').fill('이어서 확인할 익명 게시물'); await page.locator('#lifeImportUrl').fill(url); await button(page, 'Instagram으로 설정');
       await page.locator('#lifeImportText').fill(raw); await sourceDetails(page, { Coverage: 'partial', Author: '익명 작성자', Relation: 'self', Omissions: '사진 미보관' });
-      const draft = await savedDraft(page); await page.reload(); await ready(page); await button(page, '기록 목록');
+      const draft = await savedDraft(page); await page.reload(); await ready(page); await button(page, '자료실로 돌아가기');
       await page.getByText(/검토 중 \d+개 · 이어서 확인/).click(); await button(page, '이어서 확인할 익명 게시물');
       assert.equal(await page.locator('#lifeImportText').inputValue(), raw); assert.equal(await page.locator('#lifeImportUrl').inputValue(), url);
       assert.equal(await page.locator('#lifeImportOrigin').inputValue(), 'instagram'); assert.equal(await page.locator('#lifeImportCoverage').inputValue(), 'partial');

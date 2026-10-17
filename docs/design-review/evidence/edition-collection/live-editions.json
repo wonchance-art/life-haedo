@@ -1,0 +1,69 @@
+{
+  "browser": "151.0.7922.173",
+  "result": {
+    "work": {
+      "provider": "Open Library",
+      "type": "book",
+      "title": "채식주의자",
+      "creator": "Han Kang",
+      "url": "https://openlibrary.org/works/OL17334243W",
+      "attribution": "Han Kang",
+      "attributionLabel": "저자",
+      "detail": "작품 정보 · 판본 미지정 · 첫 출간 2007"
+    },
+    "editions": {
+      "results": [
+        {
+          "provider": "Open Library",
+          "type": "book",
+          "title": "素食者",
+          "creator": "",
+          "url": "https://openlibrary.org/books/OL62554442M",
+          "detail": "중국어 · 四川文艺出版社·磨铁 · 2024年7月"
+        },
+        {
+          "provider": "Open Library",
+          "type": "book",
+          "title": "Vegetariana",
+          "creator": "",
+          "url": "https://openlibrary.org/books/OL40221151M",
+          "detail": "언어 미상 · Editura Grupul Editorial Art · Oct 28, 2016"
+        },
+        {
+          "provider": "Open Library",
+          "type": "book",
+          "title": "Die Vegetarierin",
+          "creator": "",
+          "url": "https://openlibrary.org/books/OL46536171M",
+          "detail": "언어 미상 · Argon Verlag GmbH · Dec 01, 2016"
+        },
+        {
+          "provider": "Open Library",
+          "type": "book",
+          "title": "La vegetariana",
+          "creator": "",
+          "url": "https://openlibrary.org/books/OL47162323M",
+          "detail": "언어 미상 · Rata · Mar 22, 2017"
+        },
+        {
+          "provider": "Open Library",
+          "type": "book",
+          "title": "De vegetarier",
+          "creator": "",
+          "url": "https://openlibrary.org/books/OL47171968M",
+          "detail": "언어 미상 · 출판사 미상 · 발행일 미상"
+        },
+        {
+          "provider": "Open Library",
+          "type": "book",
+          "title": "De vegetarier",
+          "creator": "",
+          "url": "https://openlibrary.org/books/OL47171969M",
+          "detail": "언어 미상 · 출판사 미상 · 발행일 미상"
+        }
+      ],
+      "offset": 0,
+      "hasMore": true
+    }
+  }
+}

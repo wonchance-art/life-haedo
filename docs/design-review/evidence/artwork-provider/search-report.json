@@ -1,0 +1,441 @@
+{
+  "checkedAt": "2026-10-14T02:12:15.028300+00:00",
+  "scope": "Live anonymous official metadata only; no images, accounts, app integration or translation",
+  "queries": [
+    {
+      "query": "모네",
+      "endpoint": "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22%EB%AA%A8%EB%84%A4%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%5D%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22date_display%22%2C%22medium_display%22%2C%22is_public_domain%22%5D%2C%22limit%22%3A6%7D",
+      "status": 200,
+      "cors": "*",
+      "total": 0,
+      "results": [],
+      "license": {
+        "license_text": "The `description` field in this response is licensed under a Creative Commons Attribution 4.0 Generic License (CC-By) and the Terms and Conditions of artic.edu. All other data in this response is licensed under a Creative Commons Zero (CC0) 1.0 designation and the Terms and Conditions of artic.edu.",
+        "license_links": [
+          "https://creativecommons.org/publicdomain/zero/1.0/",
+          "https://www.artic.edu/terms"
+        ],
+        "version": "1.16"
+      }
+    },
+    {
+      "query": "Monet",
+      "endpoint": "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22Monet%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%5D%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22date_display%22%2C%22medium_display%22%2C%22is_public_domain%22%5D%2C%22limit%22%3A6%7D",
+      "status": 200,
+      "cors": "*",
+      "total": 49,
+      "results": [
+        {
+          "_score": 57829.797,
+          "id": 64818,
+          "title": "Stacks of Wheat (End of Summer)",
+          "date_display": "1890–91",
+          "medium_display": "Oil on canvas",
+          "is_public_domain": true,
+          "artist_title": "Claude Monet"
+        },
+        {
+          "_score": 19258.707,
+          "id": 16568,
+          "title": "Water Lilies",
+          "date_display": "1906",
+          "medium_display": "Oil on canvas",
+          "is_public_domain": true,
+          "artist_title": "Claude Monet"
+        },
+        {
+          "_score": 17843.256,
+          "id": 16571,
+          "title": "Arrival of the Normandy Train, Gare Saint-Lazare",
+          "date_display": "1877",
+          "medium_display": "Oil on canvas",
+          "is_public_domain": true,
+          "artist_title": "Claude Monet"
+        },
+        {
+          "_score": 17024.223,
+          "id": 14598,
+          "title": "The Beach at Sainte-Adresse",
+          "date_display": "1867",
+          "medium_display": "Oil on canvas",
+          "is_public_domain": true,
+          "artist_title": "Claude Monet"
+        },
+        {
+          "_score": 57.34797,
+          "id": 14620,
+          "title": "Cliff Walk at Pourville",
+          "date_display": "1882",
+          "medium_display": "Oil on canvas",
+          "is_public_domain": true,
+          "artist_title": "Claude Monet"
+        },
+        {
+          "_score": 56.585663,
+          "id": 87088,
+          "title": "Water Lily Pond",
+          "date_display": "1900",
+          "medium_display": "Oil on canvas",
+          "is_public_domain": true,
+          "artist_title": "Claude Monet"
+        }
+      ],
+      "license": {
+        "license_text": "The `description` field in this response is licensed under a Creative Commons Attribution 4.0 Generic License (CC-By) and the Terms and Conditions of artic.edu. All other data in this response is licensed under a Creative Commons Zero (CC0) 1.0 designation and the Terms and Conditions of artic.edu.",
+        "license_links": [
+          "https://creativecommons.org/publicdomain/zero/1.0/",
+          "https://www.artic.edu/terms"
+        ],
+        "version": "1.16"
+      }
+    },
+    {
+      "query": "고흐",
+      "endpoint": "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22%EA%B3%A0%ED%9D%90%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%5D%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22date_display%22%2C%22medium_display%22%2C%22is_public_domain%22%5D%2C%22limit%22%3A6%7D",
+      "status": 200,
+      "cors": "*",
+      "total": 0,
+      "results": [],
+      "license": {
+        "license_text": "The `description` field in this response is licensed under a Creative Commons Attribution 4.0 Generic License (CC-By) and the Terms and Conditions of artic.edu. All other data in this response is licensed under a Creative Commons Zero (CC0) 1.0 designation and the Terms and Conditions of artic.edu.",
+        "license_links": [
+          "https://creativecommons.org/publicdomain/zero/1.0/",
+          "https://www.artic.edu/terms"
+        ],
+        "version": "1.16"
+      }
+    },
+    {
+      "query": "Van Gogh",
+      "endpoint": "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22Van+Gogh%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%5D%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22date_display%22%2C%22medium_display%22%2C%22is_public_domain%22%5D%2C%22limit%22%3A6%7D",
+      "status": 200,
+      "cors": "*",
+      "total": 22,
+      "results": [
+        {
+          "_score": 3649563,
+          "id": 28560,
+          "title": "The Bedroom",
+          "date_display": "1889",
+          "medium_display": "Oil on canvas",
+          "is_public_domain": true,
+          "artist_title": "Vincent van Gogh"
+        },
+        {
+          "_score": 18649.383,
+          "id": 80607,
+          "title": "Self-Portrait",
+          "date_display": "1887",
+          "medium_display": "Oil on artist's board, mounted on cradled panel",
+          "is_public_domain": true,
+          "artist_title": "Vincent van Gogh"
+        },
+        {
+          "_score": 81.7176,
+          "id": 14586,
+          "title": "The Poet's Garden",
+          "date_display": "1888",
+          "medium_display": "Oil on canvas",
+          "is_public_domain": true,
+          "artist_title": "Vincent van Gogh"
+        },
+        {
+          "_score": 80.3355,
+          "id": 28862,
+          "title": "A Peasant Woman Digging in Front of Her Cottage",
+          "date_display": "c. 1885",
+          "medium_display": "Oil on canvas",
+          "is_public_domain": true,
+          "artist_title": "Vincent van Gogh"
+        },
+        {
+          "_score": 79.94483,
+          "id": 79349,
+          "title": "The Drinkers",
+          "date_display": "1890",
+          "medium_display": "Oil on canvas",
+          "is_public_domain": true,
+          "artist_title": "Vincent van Gogh"
+        },
+        {
+          "_score": 79.83984,
+          "id": 109314,
+          "title": "Fishing in Spring, the Pont de Clichy (Asnières)",
+          "date_display": "1887",
+          "medium_display": "Oil on canvas",
+          "is_public_domain": true,
+          "artist_title": "Vincent van Gogh"
+        }
+      ],
+      "license": {
+        "license_text": "The `description` field in this response is licensed under a Creative Commons Attribution 4.0 Generic License (CC-By) and the Terms and Conditions of artic.edu. All other data in this response is licensed under a Creative Commons Zero (CC0) 1.0 designation and the Terms and Conditions of artic.edu.",
+        "license_links": [
+          "https://creativecommons.org/publicdomain/zero/1.0/",
+          "https://www.artic.edu/terms"
+        ],
+        "version": "1.16"
+      }
+    },
+    {
+      "query": "호쿠사이",
+      "endpoint": "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22%ED%98%B8%EC%BF%A0%EC%82%AC%EC%9D%B4%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%5D%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22date_display%22%2C%22medium_display%22%2C%22is_public_domain%22%5D%2C%22limit%22%3A6%7D",
+      "status": 200,
+      "cors": "*",
+      "total": 0,
+      "results": [],
+      "license": {
+        "license_text": "The `description` field in this response is licensed under a Creative Commons Attribution 4.0 Generic License (CC-By) and the Terms and Conditions of artic.edu. All other data in this response is licensed under a Creative Commons Zero (CC0) 1.0 designation and the Terms and Conditions of artic.edu.",
+        "license_links": [
+          "https://creativecommons.org/publicdomain/zero/1.0/",
+          "https://www.artic.edu/terms"
+        ],
+        "version": "1.16"
+      }
+    },
+    {
+      "query": "Hokusai",
+      "endpoint": "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22Hokusai%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%5D%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22date_display%22%2C%22medium_display%22%2C%22is_public_domain%22%5D%2C%22limit%22%3A6%7D",
+      "status": 200,
+      "cors": "*",
+      "total": 592,
+      "results": [
+        {
+          "_score": 76635.8,
+          "id": 89503,
+          "title": "Under the Wave off Kanagawa (Kanagawa oki nami ura), also known as The Great Wave, from the series \"Thirty-Six Views of Mount Fuji (Fugaku sanjurokkei)\"",
+          "date_display": "1830/33",
+          "medium_display": "Color woodblock print; oban",
+          "is_public_domain": true,
+          "artist_title": "Katsushika Hokusai"
+        },
+        {
+          "_score": 46.05739,
+          "id": 24645,
+          "title": "Under the Wave off Kanagawa (Kanagawa oki nami ura), also known as The Great Wave, from the series \"Thirty-Six Views of Mount Fuji (Fugaku sanjūrokkei)\"",
+          "date_display": "1830/33",
+          "medium_display": "Color woodblock print; oban",
+          "is_public_domain": true,
+          "artist_title": "Katsushika Hokusai"
+        },
+        {
+          "_score": 38.7128,
+          "id": 21720,
+          "title": "Cranes on snow-covered pine",
+          "date_display": "c. 1834",
+          "medium_display": "Color woodblock print; vertical nagaban",
+          "is_public_domain": true,
+          "artist_title": "Katsushika Hokusai"
+        },
+        {
+          "_score": 35.145367,
+          "id": 87008,
+          "title": "Shower Below the Summit (Sanka hakuu), from the series \"Thirty-Six Views of Mount Fuji (Fugaku sanjurokkei)\"",
+          "date_display": "c. 1830/33",
+          "medium_display": "Color woodblock print; oban",
+          "is_public_domain": true,
+          "artist_title": "Katsushika Hokusai"
+        },
+        {
+          "_score": 34.979027,
+          "id": 33398,
+          "title": "Iris, from The Picture Book of Realistic Paintings of Hokusai (Hokusai shashin gafu)",
+          "date_display": "c. 1814",
+          "medium_display": "Color woodblock print (album sheet)",
+          "is_public_domain": true,
+          "artist_title": "Katsushika Hokusai"
+        },
+        {
+          "_score": 34.811035,
+          "id": 77333,
+          "title": "Under the Wave off Kanagawa (Kanagawa oki nami ura), also known as The Great Wave, from the series \"Thirty-Six Views of Mount Fuji (Fugaku sanjurokkei)\"",
+          "date_display": "1830/33",
+          "medium_display": "Color woodblock print; oban",
+          "is_public_domain": true,
+          "artist_title": "Katsushika Hokusai"
+        }
+      ],
+      "license": {
+        "license_text": "The `description` field in this response is licensed under a Creative Commons Attribution 4.0 Generic License (CC-By) and the Terms and Conditions of artic.edu. All other data in this response is licensed under a Creative Commons Zero (CC0) 1.0 designation and the Terms and Conditions of artic.edu.",
+        "license_links": [
+          "https://creativecommons.org/publicdomain/zero/1.0/",
+          "https://www.artic.edu/terms"
+        ],
+        "version": "1.16"
+      }
+    },
+    {
+      "query": "그랑드 자트",
+      "endpoint": "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22%EA%B7%B8%EB%9E%91%EB%93%9C+%EC%9E%90%ED%8A%B8%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%5D%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22date_display%22%2C%22medium_display%22%2C%22is_public_domain%22%5D%2C%22limit%22%3A6%7D",
+      "status": 200,
+      "cors": "*",
+      "total": 0,
+      "results": [],
+      "license": {
+        "license_text": "The `description` field in this response is licensed under a Creative Commons Attribution 4.0 Generic License (CC-By) and the Terms and Conditions of artic.edu. All other data in this response is licensed under a Creative Commons Zero (CC0) 1.0 designation and the Terms and Conditions of artic.edu.",
+        "license_links": [
+          "https://creativecommons.org/publicdomain/zero/1.0/",
+          "https://www.artic.edu/terms"
+        ],
+        "version": "1.16"
+      }
+    },
+    {
+      "query": "La Grande Jatte",
+      "endpoint": "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22La+Grande+Jatte%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%5D%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22date_display%22%2C%22medium_display%22%2C%22is_public_domain%22%5D%2C%22limit%22%3A6%7D",
+      "status": 200,
+      "cors": "*",
+      "total": 8,
+      "results": [
+        {
+          "_score": 522744.5,
+          "id": 27992,
+          "title": "A Sunday on La Grande Jatte — 1884",
+          "date_display": "1884–86, border added 1888–89",
+          "medium_display": "Oil on canvas",
+          "is_public_domain": true,
+          "artist_title": "Georges Seurat"
+        },
+        {
+          "_score": 111.80716,
+          "id": 61616,
+          "title": "Oil Sketch for \"A Sunday on La Grande Jatte — 1884\"",
+          "date_display": "1884",
+          "medium_display": "Oil on panel",
+          "is_public_domain": true,
+          "artist_title": "Georges Seurat"
+        },
+        {
+          "_score": 106.18447,
+          "id": 154022,
+          "title": "Trees (study for La Grande Jatte)",
+          "date_display": "1884",
+          "medium_display": "Black Conté crayon, on white laid paper, laid down on cream board",
+          "is_public_domain": true,
+          "artist_title": "Georges Seurat"
+        },
+        {
+          "_score": 101.84297,
+          "id": 150773,
+          "title": "Seated Woman with a Parasol (study for La Grande Jatte)",
+          "date_display": "1884/85",
+          "medium_display": "Black Conté crayon on ivory laid paper",
+          "is_public_domain": true,
+          "artist_title": "Georges Seurat"
+        },
+        {
+          "_score": 93.69892,
+          "id": 69697,
+          "title": "Tree Trunks (study for La Grande Jatte)",
+          "date_display": "1884",
+          "medium_display": "Black Conté crayon on ivory laid paper",
+          "is_public_domain": true,
+          "artist_title": "Georges Seurat"
+        },
+        {
+          "_score": 91.22414,
+          "id": 150774,
+          "title": "Woman Walking with a Parasol (study for La Grande Jatte)",
+          "date_display": "1884",
+          "medium_display": "Conté crayon on cream laid paper",
+          "is_public_domain": true,
+          "artist_title": "Georges Seurat"
+        }
+      ],
+      "license": {
+        "license_text": "The `description` field in this response is licensed under a Creative Commons Attribution 4.0 Generic License (CC-By) and the Terms and Conditions of artic.edu. All other data in this response is licensed under a Creative Commons Zero (CC0) 1.0 designation and the Terms and Conditions of artic.edu.",
+        "license_links": [
+          "https://creativecommons.org/publicdomain/zero/1.0/",
+          "https://www.artic.edu/terms"
+        ],
+        "version": "1.16"
+      }
+    },
+    {
+      "query": "별이 빛나는 밤",
+      "endpoint": "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22%EB%B3%84%EC%9D%B4+%EB%B9%9B%EB%82%98%EB%8A%94+%EB%B0%A4%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%5D%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22date_display%22%2C%22medium_display%22%2C%22is_public_domain%22%5D%2C%22limit%22%3A6%7D",
+      "status": 200,
+      "cors": "*",
+      "total": 0,
+      "results": [],
+      "license": {
+        "license_text": "The `description` field in this response is licensed under a Creative Commons Attribution 4.0 Generic License (CC-By) and the Terms and Conditions of artic.edu. All other data in this response is licensed under a Creative Commons Zero (CC0) 1.0 designation and the Terms and Conditions of artic.edu.",
+        "license_links": [
+          "https://creativecommons.org/publicdomain/zero/1.0/",
+          "https://www.artic.edu/terms"
+        ],
+        "version": "1.16"
+      }
+    },
+    {
+      "query": "Starry Night",
+      "endpoint": "https://api.artic.edu/api/v1/artworks/search?params=%7B%22query%22%3A%7B%22multi_match%22%3A%7B%22query%22%3A%22Starry+Night%22%2C%22fields%22%3A%5B%22title%22%2C%22artist_title%22%5D%2C%22operator%22%3A%22and%22%7D%7D%2C%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22artist_title%22%2C%22date_display%22%2C%22medium_display%22%2C%22is_public_domain%22%5D%2C%22limit%22%3A6%7D",
+      "status": 200,
+      "cors": "*",
+      "total": 7,
+      "results": [
+        {
+          "_score": 7313411,
+          "id": 129884,
+          "title": "Starry Night and the Astronauts",
+          "date_display": "1972",
+          "medium_display": "Acrylic on canvas",
+          "artist_title": "Alma Thomas",
+          "is_public_domain": false
+        },
+        {
+          "_score": 74.56405,
+          "id": 5577,
+          "title": "Alassio: Starry Night",
+          "date_display": "1928",
+          "medium_display": "Lithograph on thin cream laid paper",
+          "artist_title": "John Copley",
+          "is_public_domain": false
+        },
+        {
+          "_score": 74.252,
+          "id": 44228,
+          "title": "Starry night",
+          "date_display": "1967/72",
+          "medium_display": "Color lithograph on white wove paper",
+          "artist_title": "Arthur Secunda",
+          "is_public_domain": false
+        },
+        {
+          "_score": 53.14758,
+          "id": 18553,
+          "title": "Alassio: Starry Night",
+          "date_display": "1928",
+          "medium_display": "Lithograph on ivory laid paper",
+          "artist_title": "John Copley",
+          "is_public_domain": false
+        },
+        {
+          "_score": 27.273771,
+          "id": 278828,
+          "title": "Starry Night",
+          "date_display": "1900-05",
+          "medium_display": "Pen and black ink on tan wove paper",
+          "artist_title": "Dirk Hidde Nijland",
+          "is_public_domain": false
+        },
+        {
+          "_score": 25.024902,
+          "id": 6752,
+          "title": "Alassio: Starry Night",
+          "date_display": "1928",
+          "medium_display": "Lithograph on paper",
+          "artist_title": "John Copley",
+          "is_public_domain": false
+        }
+      ],
+      "license": {
+        "license_text": "The `description` field in this response is licensed under a Creative Commons Attribution 4.0 Generic License (CC-By) and the Terms and Conditions of artic.edu. All other data in this response is licensed under a Creative Commons Zero (CC0) 1.0 designation and the Terms and Conditions of artic.edu.",
+        "license_links": [
+          "https://creativecommons.org/publicdomain/zero/1.0/",
+          "https://www.artic.edu/terms"
+        ],
+        "version": "1.16"
+      }
+    }
+  ]
+}

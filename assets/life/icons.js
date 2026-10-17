@@ -1,16 +1,21 @@
 /* Shared UI SVGs. Lucide 1.51.0 geometry: vendor/lucide/ (ISC + Feather MIT).
  * quote: Haedo's approved A. settings/download/cloud/home/user/workspace/timeline/target/check/map:
- * edit and the above are locally authored conventional UI geometry; no added library or remote asset.
+ * refresh/edit and the above are locally authored conventional UI geometry; no added library or remote asset.
  */
 (function (root) {
   'use strict';
   const life = root.HaedoLife = root.HaedoLife || {};
   const paths = {
+    disc: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/><path d="M7 9a6 6 0 0 1 2-2m6 10a6 6 0 0 0 2-2"/>',
+    play: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="m10 8 6 4-6 4Z"/>',
+    up: '<path d="m6 14 6-6 6 6"/>',
+
     book: '<path d="M12 5v16"/><path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z"/>',
     search: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
     bookmark: '<path d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"/>',
     quote: '<path d="M10 12H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v8a6 6 0 0 1-6 6M21 12h-5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v8a6 6 0 0 1-6 6"/>',
     edit: '<path d="m14 5 5 5M4 20l5-1 11-11a3.5 3.5 0 0 0-5-5L4 14v6Z"/>',
+    refresh: '<path d="M20 9a8 8 0 0 0-13.7-3.7L3 9m0-6v6h6M4 15a8 8 0 0 0 13.7 3.7L21 15m0 6v-6h-6"/>',
     plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
     back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
     arrow: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',

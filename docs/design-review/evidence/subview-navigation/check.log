@@ -1,0 +1,6 @@
+
+> check
+> node scripts/check.mjs
+
+PASS: 18 HTML pages, 59 JavaScript blocks/files, 271 local resource references, PWA manifest and shell.
+Browser interactions, remote resources and cloud sync need separate verification.

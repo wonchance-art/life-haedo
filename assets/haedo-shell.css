@@ -1,143 +1,159 @@
-/* One frame for the material feed and every Haedo surface. */
+@import url("./haedo-type.css");
+/* Shared SNS-blog frame. Product data and chart meaning stay in their modules. */
 :root {
-  --haedo-paper: #fff; --haedo-ink: #222126; --haedo-muted: #65616a;
-  --haedo-canvas: #f7f7fb; --haedo-selected: #eeebff;
-  --haedo-line: #e9e7eb; --haedo-soft: #f6f5f8; --haedo-accent: #5442bc;
-  --haedo-radius: 16px; --haedo-control-radius: 12px; --haedo-dock-clearance: 0px;
-  --haedo-font: "Apple SD Gothic Neo", "Noto Sans CJK KR", "Malgun Gothic", sans-serif;
-  --life-font: var(--haedo-font); --field-line: #827b86; --color-primary: #5442bc;
-  --color-error: #a3243d; --soft: var(--haedo-selected);
-  scroll-padding-top: 24px; scroll-padding-bottom: var(--haedo-dock-clearance);
+  --haedo-paper:#fff; --haedo-ink:#182522; --haedo-muted:#5d6b65;
+  --haedo-canvas:#f4f6f5; --haedo-selected:#eaf1ed; --haedo-soft:#f4f7f5;
+  --haedo-line:#e3e9e6; --haedo-accent:#145b50; --haedo-link:#145b50; --haedo-focus:#267a69;
+  --haedo-radius:16px; --haedo-control-radius:12px; --haedo-nav-width:216px;
+  --haedo-dock-clearance:0px; --haedo-header-height:64px;
+  --life-font:var(--haedo-font); --field-line:#86968d; --color-primary:var(--haedo-accent);
+  --color-error:#a3243d; --soft:var(--haedo-selected);
+  --life-ink:var(--haedo-ink); --life-muted:var(--haedo-muted); --life-border:var(--haedo-line); --life-surface:var(--haedo-paper);
+  scroll-padding-top:80px; scroll-padding-bottom:var(--haedo-dock-clearance);
 }
 body.haedo-shell {
-  margin: 0; min-height: 100vh; min-height: 100svh; background: var(--haedo-canvas); color: var(--haedo-ink);
-  font: 16px/1.7 var(--haedo-font); letter-spacing: 0;
+  margin:0; min-height:100vh; min-height:100svh; padding-left:var(--haedo-nav-width);
+  background:var(--haedo-canvas); color:var(--haedo-ink); font:16px/1.65 var(--haedo-font);
+  letter-spacing:0; -webkit-font-smoothing:antialiased;
 }
 body.haedo-shell:not(.haedo-timeline) {
-  --paper: #fff; --paper-2: #f6f5f8; --panel: #fff; --field: #fff;
-  --ink: #222126; --ink-soft: #65616a; --line: #e9e7eb;
-  --water-deep: #5442bc; --cinnabar: #a3243d;
+  --paper:#fff; --paper-2:#f4f7f5; --panel:#fff; --field:#fff;
+  --ink:var(--haedo-ink); --ink-soft:var(--haedo-muted); --line:var(--haedo-line);
+  --water-deep:var(--haedo-accent); --cinnabar:#a3243d;
+  --mint:#f4f7f5; --mint-ink:#425c50; --sky:#f2f6f5; --sky-ink:#36594e;
 }
-.haedo-shell *, .haedo-shell *::before, .haedo-shell *::after { box-sizing: border-box; }
-body.haedo-shell::before { display: none; }
-.haedo-shell [hidden] { display: none !important; }
-.haedo-shell :is(button, input, select, textarea) { font-family: inherit; }
-.haedo-shell :is(a, button, summary, input, select, textarea):focus-visible { outline: 3px solid var(--haedo-accent); outline-offset: 3px; }
-.haedo-shell :is(a, button, summary, input, select, textarea, [tabindex]) { scroll-margin-top: 20px; scroll-margin-bottom: var(--haedo-dock-clearance); }
-.haedo-shell ::selection { background: var(--haedo-selected); color: var(--haedo-ink); }
-.haedo-shell :is(input, textarea) { caret-color: var(--haedo-accent); }
-.haedo-shell :is(input, textarea)::placeholder { color: var(--haedo-muted); opacity: 1; }
-.haedo-shell a { text-underline-offset: 4px; }
-.haedo-shell :is(button, a, summary) { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-.haedo-shell :is(button, summary) { cursor: pointer; }
-.haedo-shell :is(button, input, select, textarea):disabled { cursor: not-allowed; }
-.haedo-nav {
-  position: fixed; z-index: 60; inset: 24px auto auto 8px; width: 56px;
-  left: max(8px, env(safe-area-inset-left, 0px));
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-  padding: 6px 5px; border: 1px solid var(--haedo-line); border-radius: var(--haedo-radius);
-  background: var(--haedo-paper); color: var(--haedo-muted);
-  font: 14px/1.6 var(--haedo-font);
+.haedo-shell *, .haedo-shell *::before, .haedo-shell *::after{box-sizing:border-box}
+body.haedo-shell::before{display:none}
+.haedo-shell [hidden]{display:none!important}
+.haedo-shell :is(button,input,select,textarea){font-family:inherit}
+.haedo-shell :is(a,button,summary,input,select,textarea):focus-visible{outline:3px solid var(--haedo-focus);outline-offset:3px}
+.haedo-shell :is(a,button,summary,input,select,textarea,[tabindex]){scroll-margin-top:80px;scroll-margin-bottom:var(--haedo-dock-clearance)}
+.haedo-shell ::selection{background:#dcece4;color:var(--haedo-ink)}
+.haedo-shell :is(input,textarea){caret-color:var(--haedo-ink)}
+.haedo-shell :is(input,textarea)::placeholder{color:var(--haedo-muted);opacity:1}
+.haedo-shell a{text-underline-offset:4px}
+.haedo-shell :is(button,a,summary){-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.haedo-shell :is(button,summary){cursor:pointer}
+.haedo-shell :is(button,input,select,textarea):disabled{cursor:not-allowed}
+.haedo-nav{
+  position:fixed;z-index:60;top:24px;left:max(16px,calc((100vw - 1000px)/2));
+  width:192px;display:flex;flex-direction:column;align-items:stretch;gap:8px;
+  padding:0;background:transparent;border:0;border-radius:0;
+  color:var(--haedo-muted);font:15px/1.5 var(--haedo-font);
 }
-.haedo-icon-button {
-  position: relative; display: inline-flex; align-items: center; justify-content: center;
-  flex: 0 0 44px; width: 44px; height: 44px; min-width: 44px; min-height: 44px;
-  padding: 12px; border: 0; border-radius: var(--haedo-control-radius); background: transparent;
-  color: var(--haedo-muted); text-decoration: none !important;
-  transition: color 150ms ease-out, background-color 150ms ease-out;
+.haedo-brand{
+  display:flex;align-items:center;gap:10px;min-width:44px;min-height:60px;padding:8px 16px;margin-bottom:20px;
+  color:var(--haedo-accent);font-size:29px;font-weight:800;letter-spacing:-.04em;text-decoration:none;
 }
-.haedo-shell .haedo-icon-button { color: var(--haedo-muted); }
-@media (hover: hover) and (pointer: fine) {
-  .haedo-shell .haedo-icon-button:hover { background: var(--haedo-soft); color: var(--haedo-ink); }
+.haedo-brand-mark{display:none;width:28px;height:28px;flex:none}
+.haedo-icon-button{
+  position:relative;display:inline-flex;align-items:center;justify-content:center;
+  flex:0 0 44px;width:44px;height:44px;min-width:44px;min-height:44px;
+  padding:12px;border:0;border-radius:12px;background:transparent;color:var(--haedo-muted);text-decoration:none!important;
+  transition:color 150ms ease-out,background-color 150ms ease-out,transform 150ms ease-out;
 }
-.haedo-shell .haedo-icon-button:active:not(:disabled) { background: var(--haedo-selected); color: var(--haedo-accent); }
-.haedo-shell .haedo-icon-button[aria-current=page], .haedo-shell .haedo-icon-button[aria-expanded=true] { color: var(--haedo-accent); }
-.haedo-shell .haedo-nav-link[aria-current=page] { background: var(--haedo-selected); }
-.haedo-nav-link[aria-current=page]::before {
-  content: ''; position: absolute; bottom: 1px; width: 4px; height: 4px; border-radius: 50%; background: currentColor;
+.haedo-shell .haedo-icon-button{color:var(--haedo-muted)}
+.haedo-nav .haedo-nav-link{justify-content:flex-start;gap:16px;flex:0 0 52px;width:100%;height:52px;padding:12px 16px;border-radius:14px;font-size:16px}
+.haedo-nav-text{display:block;font-weight:550}
+.haedo-nav-link[aria-current=page] .haedo-nav-text{font-weight:700}
+.haedo-shell .haedo-nav-link[aria-current=page]{color:var(--haedo-accent);background:var(--haedo-selected)}
+.haedo-nav-link[aria-current=page]::before{display:none}
+.haedo-icon-button .life-glyph,[data-haedo-icon]{display:block;flex:none;width:20px;height:20px}
+.haedo-tooltip{
+  display:none;position:absolute;z-index:100;top:calc(100% + 6px);right:0;
+  width:max-content;max-width:min(220px,calc(100vw - 48px));padding:6px 10px;
+  border-radius:7px;background:var(--haedo-ink);color:var(--haedo-paper);
+  font:400 12px/1.6 var(--haedo-font);word-break:keep-all;overflow-wrap:anywhere;pointer-events:none;
 }
-.haedo-icon-button .life-glyph, [data-haedo-icon] { display: block; flex: none; width: 20px; height: 20px; }
-.haedo-tooltip {
-  display: none; position: absolute; z-index: 100; top: calc(100% + 6px); right: 0;
-  width: max-content; max-width: min(220px, calc(100vw - 48px)); padding: 4px 9px;
-  border-radius: 5px; background: var(--haedo-ink); color: var(--haedo-paper);
-  font: 400 12px/1.6 var(--haedo-font); word-break: keep-all; overflow-wrap: anywhere; pointer-events: none;
+.haedo-icon-button:focus-visible>.haedo-tooltip{display:block}
+.haedo-icon-button[data-tooltip-dismissed=true]>.haedo-tooltip{display:none!important}
+.haedo-nav .haedo-tooltip{top:50%;left:calc(100% + 8px);right:auto;transform:translateY(-50%)}
+.haedo-nav .haedo-nav-link>.haedo-tooltip{display:none}
+@media(hover:hover) and (pointer:fine){
+ .haedo-shell .haedo-icon-button:hover{background:var(--haedo-selected);color:var(--haedo-ink)}
+ .haedo-icon-button:hover>.haedo-tooltip{display:block}
+ .haedo-brand:hover{opacity:.72}
+ .haedo-nav .haedo-nav-link>.haedo-tooltip{display:none}
 }
-.haedo-icon-button:focus-visible > .haedo-tooltip { display: block; }
-@media (hover: hover) and (pointer: fine) { .haedo-icon-button:hover > .haedo-tooltip { display: block; } }
-.haedo-icon-button[data-tooltip-dismissed=true] > .haedo-tooltip { display: none; }
-.haedo-nav .haedo-tooltip { top: 50%; left: calc(100% + 8px); right: auto; transform: translateY(-50%); }
-.haedo-page-heading {
-  display: flex; align-items: center; justify-content: space-between; min-height: 56px;
-  gap: 16px; margin: 0 0 24px; padding: 0; border: 0;
+.haedo-icon-button:active:not(:disabled){background:var(--haedo-selected);transform:scale(.96)}
+.haedo-shell .haedo-icon-button:is([aria-current=page],[aria-expanded=true]){color:var(--haedo-accent)}
+.haedo-page-heading{display:flex;align-items:center;justify-content:space-between;min-height:64px;gap:16px;margin:0 0 24px;padding:0;border:0}
+.haedo-heading-title,.haedo-heading-actions{display:flex;align-items:center;gap:6px;min-width:0}
+.haedo-heading-title{flex:1}.haedo-heading-actions{flex:none}
+.haedo-page-heading h1{margin:0;color:var(--haedo-ink);font:750 22px/1.5 var(--haedo-font);letter-spacing:-.03em;overflow-wrap:anywhere;word-break:keep-all}
+.haedo-shell:has(#lifeMain[data-mode=home]) .life-toolbar.haedo-page-heading{min-height:56px;margin-bottom:0}
+.haedo-shell:has(#lifeMain[data-mode=home]) .life-toolbar h1{font-size:15px;font-weight:600;letter-spacing:-.01em;color:var(--haedo-muted)}
+.haedo-page-heading h1::after{display:none}
+.haedo-heading-title>.haedo-icon-button{margin-left:-12px}
+.haedo-account{position:relative}.haedo-account>summary{list-style:none}.haedo-account>summary::-webkit-details-marker{display:none}
+.haedo-account[open]>summary{color:var(--haedo-ink)}
+.haedo-account-panel{
+ position:absolute;z-index:70;right:0;top:54px;width:260px;max-width:calc(100vw - 40px);padding:20px;
+ border:1px solid var(--haedo-line);border-radius:16px;background:var(--haedo-paper);overflow-wrap:anywhere;
+ display:flex;flex-direction:column;align-items:stretch;gap:14px;box-shadow:0 10px 32px rgb(24 24 27 / .09);
 }
-.haedo-heading-title, .haedo-heading-actions { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.haedo-heading-title { flex: 1; }
-.haedo-heading-actions { flex: none; }
-.haedo-page-heading h1 { margin: 0; color: var(--haedo-ink); font: 700 21px/1.5 var(--haedo-font); letter-spacing: -.025em; overflow-wrap: anywhere; word-break: keep-all; }
-.haedo-page-heading h1::after { display: none; }
-.haedo-heading-title > .haedo-icon-button { margin-left: -12px; }
-.haedo-account { position: relative; }
-.haedo-account > summary { list-style: none; }
-.haedo-account > summary::-webkit-details-marker { display: none; }
-.haedo-account[open] > summary { color: var(--haedo-accent); }
-.haedo-account-panel {
-  position: absolute; z-index: 70; right: 0; top: 54px; width: 260px;
-  max-width: calc(100vw - 48px); padding: 20px; border: 1px solid var(--haedo-line);
-  border-radius: var(--haedo-radius); background: var(--haedo-paper); overflow-wrap: anywhere;
-  display: flex; flex-direction: column; align-items: stretch; gap: 14px;
+.haedo-account-panel .p-account{margin:0;color:var(--haedo-muted);font-size:13px}
+.haedo-account-host{position:absolute;z-index:45;top:12px;right:max(48px,calc((100% - var(--haedo-nav-width) - 720px)/2));width:44px}
+body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
+.haedo-shell .life-primary,.haedo-shell .p-button.primary{background:var(--haedo-accent);color:#fff;border-color:var(--haedo-accent);border-radius:12px;font-weight:650}
+.haedo-shell .life-primary:hover:not(:disabled),.haedo-shell .p-button.primary:hover:not(:disabled){background:#104a41;border-color:#104a41;color:#fff}
+.haedo-shell .life-primary:active:not(:disabled),.haedo-shell .p-button.primary:active:not(:disabled){background:#0c3d35;color:#fff}
+.haedo-shell .photo-commandbar > .photo-save{background:var(--haedo-accent);border-radius:12px}
+.haedo-shell .photo-commandbar > .photo-save:hover{background:#104a41}
+.haedo-welcome{
+ width:calc(100% - 48px);max-width:900px;margin:24px auto;padding:24px 40px 44px;min-height:calc(100svh - 48px);
+ border-radius:0;background:var(--haedo-paper);display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.9fr);gap:32px 36px;align-content:start;
 }
-.haedo-account-panel .p-account { margin: 0; color: var(--haedo-muted); font-size: 13px; }
-.haedo-account-host { position: absolute; z-index: 45; top: 30px; right: max(48px, calc((100% - 772px) / 2)); width: 44px; }
-body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost { display: none; }
-.haedo-welcome {
-  width: calc(100% - 40px); max-width: 820px; margin: 20px auto; padding: 16px 60px 80px;
-  min-height: calc(100vh - 40px); min-height: calc(100svh - 40px);
-  border-radius: 24px; background: var(--haedo-paper);
+.haedo-welcome>.haedo-page-heading{grid-column:1/-1;margin-bottom:18px}
+.haedo-welcome-copy{padding:8px 0;min-width:0}
+.haedo-welcome-copy h2{margin:0;font-size:40px;font-weight:750;line-height:1.3;letter-spacing:-.035em;word-break:keep-all}
+.haedo-welcome-copy p{margin:18px 0 26px;font-size:15px;line-height:1.9;color:var(--haedo-muted);word-break:keep-all}
+.haedo-welcome .life-primary{min-height:48px;padding:10px 22px;gap:14px;text-decoration:none}
+.haedo-welcome-copy .haedo-blog-scope{margin:18px 0 0;font-size:12px;line-height:1.8}
+.haedo-blog-example{margin-top:24px;border-top:1px solid var(--haedo-line)}
+.haedo-blog-example summary{min-height:44px;padding:12px 0;font-size:14px;cursor:pointer}
+.haedo-blog-example>div{padding:8px 0 4px}.haedo-blog-example h3{margin:6px 0 0;font-size:18px}
+.haedo-welcome-copy .haedo-blog-example p{margin:10px 0;font-size:14px}
+.haedo-welcome-post{align-self:start;margin:10px 0 0;padding:24px;border:1px solid var(--haedo-line);border-radius:20px;background:white}
+.haedo-welcome-author{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.haedo-welcome-avatar{display:flex;align-items:center;justify-content:center;width:40px;height:40px;flex:none;background:var(--haedo-selected);color:var(--haedo-accent);border-radius:50%;font-size:15px;font-weight:700}
+.haedo-welcome-author strong{display:block;font-size:14px}.haedo-welcome-author small{display:block;margin-top:2px;font-size:11px;color:var(--haedo-muted)}
+.haedo-welcome-post h3{font-size:22px;line-height:1.55;letter-spacing:-.03em;margin:0 0 12px}
+.haedo-welcome-post p{font-size:15px;line-height:1.9;margin:0 0 16px}
+.haedo-welcome-quote{padding:14px 16px;margin:18px 0;background:var(--haedo-soft);border-radius:12px;font-size:14px;line-height:1.85}
+.haedo-welcome-post-footer{padding-top:16px;border-top:1px solid var(--haedo-line);color:var(--haedo-muted);font-size:11px}
+.haedo-privacy-link{grid-column:1/-1;justify-self:start;display:inline-flex;align-items:center;min-height:44px;margin-top:10px;color:var(--haedo-muted);font-size:12px}
+@media(max-width:1100px) and (min-width:761px){
+ :root{--haedo-nav-width:88px}
+ .haedo-nav{width:64px;left:12px;align-items:center}.haedo-nav .haedo-nav-link{width:64px;height:60px;flex-basis:60px;flex-direction:column;justify-content:center;gap:4px;padding:8px 4px;font-size:12px}
+ .haedo-brand{padding:8px 2px;font-size:20px;gap:0}.haedo-brand-mark{display:none}
+ .haedo-welcome{grid-template-columns:1fr;padding:24px 32px;max-width:680px}
+ .haedo-welcome-post{max-width:460px}
 }
-.haedo-welcome .haedo-page-heading { margin-bottom: 48px; }
-.haedo-welcome-copy { max-width: 460px; padding: 24px 0 32px; border-bottom: 1px solid var(--haedo-line); }
-.haedo-welcome-copy h2 { margin: 0; font-size: 26px; line-height: 1.55; letter-spacing: -.025em; word-break: keep-all; }
-.haedo-welcome-copy p { margin: 12px 0 28px; font-size: 15px; line-height: 1.85; color: var(--haedo-muted); word-break: keep-all; }
-.haedo-welcome .life-primary { gap: 14px; }
-.haedo-privacy-link { display: flex; align-items: center; min-height: 44px; width: fit-content; margin-top: 18px; color: var(--haedo-muted); font-size: 12px; }
-body.platform.haedo-shell, body:has(> #lifeWelcome:not([hidden])) {
-  padding-left: calc(72px + env(safe-area-inset-left, 0px)); padding-right: env(safe-area-inset-right, 0px);
+@media(max-width:760px){
+ :root{--haedo-nav-width:0px;--haedo-dock-clearance:calc(84px + env(safe-area-inset-bottom,0px));--haedo-header-height:60px}
+ html:has(> body[data-writing-focus]){--haedo-dock-clearance:calc(16px + env(safe-area-inset-bottom,0px))}
+ body.haedo-shell{padding-left:0;padding-right:0;padding-bottom:var(--haedo-dock-clearance)}
+ body.haedo-shell[data-writing-focus] > .haedo-nav{display:none}
+ .haedo-nav{inset:auto 0 0;left:0;right:0;top:auto;width:100%;height:calc(66px + env(safe-area-inset-bottom,0px));flex-direction:row;align-items:stretch;justify-content:space-around;gap:0;padding:4px max(12px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));border:0;border-top:1px solid var(--haedo-line);border-radius:0;background:#fff}
+ .haedo-nav .haedo-brand{display:none}.haedo-nav .haedo-nav-link{flex:1 1 0;min-width:44px;width:auto;height:56px;min-height:56px;flex-direction:column;justify-content:center;gap:4px;padding:6px 8px;border-radius:12px;background:none!important;font-size:10px}
+ .haedo-nav-text{display:block;font-weight:500}.haedo-nav-link[aria-current=page] .haedo-nav-text{font-weight:750}
+ .haedo-nav .haedo-nav-link>.haedo-tooltip{display:none!important}
+ .haedo-page-heading{min-height:60px;gap:8px;margin-bottom:18px}.haedo-heading-title,.haedo-heading-actions{gap:2px}
+ .haedo-account-host{top:10px;right:20px}.haedo-welcome{width:100%;max-width:none;min-height:calc(100svh - var(--haedo-dock-clearance));margin:0;padding:4px 24px 36px;grid-template-columns:1fr;gap:20px;border-radius:0}
+ .haedo-welcome>.haedo-page-heading{margin-bottom:10px}.haedo-welcome-copy{padding:8px 0}.haedo-welcome-copy h2{font-size:30px;line-height:1.45}
+ .haedo-welcome-copy p{font-size:15px}.haedo-welcome-post{margin:0;padding:20px}.haedo-welcome-post h3{font-size:21px}
+ .haedo-privacy-link{margin-top:0}
 }
-html.auth-pending body.haedo-shell > .haedo-nav { visibility: visible; }
-@media (max-width: 700px) {
-  :root { --haedo-dock-clearance: calc(96px + env(safe-area-inset-bottom, 0px)); }
-  .haedo-nav {
-    inset: auto 12px 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-    left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
-    width: calc(100% - 24px);
-    width: calc(100% - max(12px, env(safe-area-inset-left, 0px)) - max(12px, env(safe-area-inset-right, 0px)));
-    max-width: 312px; height: 60px; margin-inline: auto;
-    flex-direction: row; justify-content: space-around; gap: 8px; padding: 7px 12px;
-    border-radius: var(--haedo-radius);
-  }
-  .haedo-nav .haedo-tooltip { top: auto; bottom: calc(100% + 6px); left: 50%; right: auto; transform: translateX(-50%); }
-  body.platform.haedo-shell { padding-left: 0; padding-right: 0; padding-bottom: var(--haedo-dock-clearance); }
-  body:has(> #lifeWelcome:not([hidden])) { padding-left: 0; padding-right: 0; }
-  .haedo-page-heading { gap: 8px; margin-bottom: 20px; }
-  .haedo-heading-title, .haedo-heading-actions { gap: 2px; }
-  .haedo-account-host { top: 22px; right: 24px; }
-  .haedo-welcome {
-    width: 100%; max-width: none; margin: 0; padding: 12px max(20px, env(safe-area-inset-right, 0px)) calc(104px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px));
-    min-height: 100vh; min-height: 100svh; border-radius: 0;
-  }
-  .haedo-welcome .haedo-page-heading { margin-bottom: 32px; }
-  .haedo-welcome-copy h2 { font-size: 24px; }
+@media(prefers-reduced-motion:reduce){:root{scroll-behavior:auto}.haedo-icon-button{transition:none}}
+@media(forced-colors:active){
+ body.haedo-shell,.haedo-nav,.haedo-account-panel{background:Canvas;color:CanvasText}
+ .haedo-account-panel{border-color:CanvasText}.haedo-shell .haedo-icon-button{color:ButtonText}
+ .haedo-shell .haedo-nav-link[aria-current=page]{color:Highlight;outline:2px solid Highlight;outline-offset:-2px}
+ .haedo-shell :is(a,button,summary,input,select,textarea):focus-visible{outline-color:Highlight}
+ .haedo-tooltip{background:CanvasText;color:Canvas;border:1px solid CanvasText}
 }
-@media (prefers-reduced-motion: reduce) {
-  :root { scroll-behavior: auto; }
-  .haedo-icon-button { transition: none; }
-}
-@media (forced-colors: active) {
-  body.haedo-shell, .haedo-nav, .haedo-account-panel { background: Canvas; color: CanvasText; }
-  .haedo-nav, .haedo-account-panel { border-color: CanvasText; }
-  .haedo-shell .haedo-icon-button { color: ButtonText; }
-  .haedo-shell .haedo-nav-link[aria-current=page] { color: Highlight; outline: 2px solid Highlight; outline-offset: -2px; }
-  .haedo-shell :is(a, button, summary, input, select, textarea):focus-visible { outline-color: Highlight; }
-  .haedo-tooltip { background: Canvas; color: CanvasText; border: 1px solid CanvasText; }
-}
+.haedo-brand-mark { filter:grayscale(1); }
+body.haedo-shell:has(> #lifeWelcome:not([hidden])) { padding-left:0; }
+body:has(> #lifeWelcome:not([hidden])) > .haedo-nav { display:none; }
+@media(max-width:760px){body.haedo-shell:has(> #lifeWelcome:not([hidden])) {padding-bottom:0;}}

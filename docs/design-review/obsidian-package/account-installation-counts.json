@@ -1,0 +1,19 @@
+{
+  "accountVerified": true,
+  "installed": true,
+  "newWorkspaces": 2,
+  "notes": 3479,
+  "supportingFiles": 3420,
+  "importedSources": 6899,
+  "importedLinks": 2568,
+  "existingWorkspacesPreserved": 1,
+  "existingSourcesPreserved": 6,
+  "totalAccountWorkspaces": 3,
+  "totalAccountSources": 6905,
+  "fullServerSnapshotHashesMatch": true,
+  "bodyHashMismatches": 0,
+  "ownerRlsAssertionsPassed": true,
+  "foreignSubjectReadCount": 0,
+  "temporaryObjectsRemaining": 0,
+  "publicPagesWritten": 0
+}

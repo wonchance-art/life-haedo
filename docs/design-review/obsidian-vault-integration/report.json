@@ -1,0 +1,222 @@
+{
+  "checks": [
+    "Whole-vault restore validates every note before installation; collapsed review renders 40 at a time and cancellation keeps the prior workspace",
+    "Exact pinned note links and backlinks open preserved text and heading positions; source path is visible and reload preserves all 3,479 notes",
+    "A new JSON backup restores exact bodies/paths/link references under new IDs and excludes all drafts and private source connections",
+    "All 3,420 auxiliary files restore independently as plain text without excerpts or execution, keeping both earlier workspaces"
+  ],
+  "visual": [
+    {
+      "scene": "restore-review",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 700,
+          "height": 34,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "restore-review",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 350,
+          "height": 30,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "note-links",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "연결된 노트 1",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": {
+          "width": 700,
+          "size": "18px",
+          "lineHeight": "35.1px",
+          "selectedText": ""
+        },
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "note-links",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "summary",
+          "id": "",
+          "class": "",
+          "text": "연결된 노트 1",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.987
+        },
+        "title": null,
+        "reader": {
+          "width": 350,
+          "size": "17px",
+          "lineHeight": "33.15px",
+          "selectedText": ""
+        },
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "note-source",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "lifeSourceInfoToggle",
+          "class": "life-button life-icon-button",
+          "text": "출처 정보",
+          "visible": false,
+          "width": 3,
+          "contrast": 7.023
+        },
+        "title": null,
+        "reader": {
+          "width": 700,
+          "size": "18px",
+          "lineHeight": "35.1px",
+          "selectedText": "[[익명 노트 1#목적지]]"
+        },
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "note-source",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "lifeSourceInfoToggle",
+          "class": "life-button life-icon-button",
+          "text": "출처 정보",
+          "visible": false,
+          "width": 3,
+          "contrast": 7.286
+        },
+        "title": null,
+        "reader": {
+          "width": 350,
+          "size": "17px",
+          "lineHeight": "33.15px",
+          "selectedText": "[[익명 노트 1#목적지]]"
+        },
+        "resultCount": 0
+      }
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [],
+  "external": [],
+  "scope": "Anonymous Auth and 6,899 synthetic files. Actual private notes remain outside the app repository. Chromium viewport simulation; no Apple device proof.",
+  "browser": "151.0.7922.173",
+  "pass": true
+}

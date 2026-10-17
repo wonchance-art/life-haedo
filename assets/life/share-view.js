@@ -31,10 +31,20 @@
     const renderId = ++rendering;
     let hasFold = false;
     section.setAttribute('aria-label', '공개할 페이지');
-    section.append(node('h' + level, snapshot.title, 'share-title'));
-    if (snapshot.intro) section.append(node('p', snapshot.intro, 'share-intro'));
+    const profile = node('header', null, 'share-profile');
+    const initials = snapshot.title === '내 블로그' ? '나' : Array.from(snapshot.title.replace(/\s+/g, '')).slice(0, 2).join('') || '나';
+    const avatar = node('span', initials, 'share-profile-avatar');
+    avatar.setAttribute('aria-hidden', 'true');
+    const identity = node('div', null, 'share-profile-identity');
+    identity.append(node('h' + level, snapshot.title, 'share-title'));
+    if (snapshot.intro) identity.append(node('p', snapshot.intro, 'share-intro'));
+    profile.append(avatar, identity); section.append(profile);
     for (const [entryIndex, entry] of snapshot.entries.entries()) {
       const article = node('article', null, 'share-entry');
+      if (Object.hasOwn(entry, 'attachments')) {
+        const post = life.PagePostsView.post({body:entry.note || '', attachments:entry.attachments}, { fold: !review });
+        article.append(...post.childNodes); section.append(article); continue;
+      }
       article.append(node('h' + (level + 1), entry.title, 'share-entry-title'));
       for (const [index, part] of entry.parts.entries()) {
         const source = node('section', null, 'share-source');

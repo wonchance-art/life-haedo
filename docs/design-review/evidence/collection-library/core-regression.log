@@ -1,0 +1,6 @@
+PASS UI import to related reading, exact pair group, page editing and reload
+PASS related return preserves older reader version, selection, scroll and previous search
+PASS after related and page 1440
+PASS after related and page 820
+PASS after related and page 390
+Core experience: 5/5, visual 6, console 0, page 0.
