@@ -13,7 +13,14 @@ const report = { createdAt: new Date().toISOString(), scope: 'Actual app/SDK/IDB
 const heading = page => page.locator('#lifeApp .haedo-page-heading h1');
 async function mode(page, name) { await settle(page); await page.waitForFunction(name => document.querySelector('#lifeMain')?.dataset.mode === name, name); }
 async function back(page, target) { await page.locator('[data-subview-return]').click(); await mode(page, target); }
-async function home(page) { await nav(page, 'home'); await page.waitForFunction(() => document.querySelector('#homeComposition')?.getAttribute('aria-busy') === 'false'); }
+async function openLibrary(page) {
+  const library = page.locator('.home-library');
+  if (!await library.evaluate(node => node.open)) await library.locator(':scope > summary').click();
+}
+async function home(page) {
+  await nav(page, 'home'); await page.waitForFunction(() => document.querySelector('#homeComposition')?.getAttribute('aria-busy') === 'false');
+  await openLibrary(page);
+}
 async function capture(page, scene, width) {
   await page.evaluate(async () => { await document.fonts.ready; document.activeElement?.blur(); scrollTo({ top: 0, behavior: 'instant' }); }); await page.mouse.move(0, 0);
   const metrics = await page.evaluate(inspectHome, '#lifeApp');
@@ -37,22 +44,36 @@ async function main() {
   try {
     for (const width of [1440, 820, 390]) await check('home origin, keyboard/touch return and draft resume ' + width, async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await home(page);
-      for (const [destination, title] of [['write', '글쓰기'], ['import', '가져오기'], ['time', '연표']]) {
+      for (const [destination, targetMode, title] of [['write', 'page', '내 페이지'], ['import', 'import', '가져오기'], ['time', 'time', '연표']]) {
         const start = page.locator(`[data-home-destination="${destination}"]`);
         if (width === 1440) { await start.focus(); await page.keyboard.press('Enter'); } else await start.tap();
-        await mode(page, destination); assert.equal(await heading(page).textContent(), title);
+        await mode(page, targetMode); assert.equal(await heading(page).textContent(), title);
         assert.equal(await page.locator('[data-subview-return]').count(), 1);
-        if (destination === 'write') assert.equal(await page.locator('#lifeWritingClose').count(), 1);
+        if (destination === 'write') await page.locator('#photoTitle').waitFor();
         assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '홈으로 돌아가기');
-        if (destination === 'write') { await page.locator('#lifeWritingTitle').fill('산책 뒤 남긴 생각'); await page.locator('#lifeWritingBody').fill('홈으로 돌아갔다가 다시 이어 쓸 한글 초안.'); }
+        if (destination === 'write') { await page.locator('#photoTitle').fill('산책 뒤 남긴 생각'); await page.locator('.ql-editor').fill('홈으로 돌아갔다가 다시 이어 쓸 한글 초안.'); }
         if (destination === 'import') { await page.locator('#lifeImportTitle').fill('아직 검토 중인 기록'); await page.locator('#lifeImportText').fill('원문을 자동 확정하지 않습니다.'); }
         await capture(page, destination, width);
         await back(page, 'home'); await page.waitForFunction(destination => document.activeElement?.dataset.homeDestination === destination, destination);
       }
-      await page.locator('[data-home-destination="write"]').click(); await mode(page, 'write');
-      assert.equal(await page.locator('#lifeWritingBody').inputValue(), '홈으로 돌아갔다가 다시 이어 쓸 한글 초안.');
+      await page.locator('[data-home-destination="page"]').click(); await mode(page, 'page');
+      await page.locator('#photoTitle').waitFor();
+      assert.equal(await page.locator('#photoTitle').inputValue(), '산책 뒤 남긴 생각');
+      assert.equal((await page.locator('.ql-editor').innerText()).trim(), '홈으로 돌아갔다가 다시 이어 쓸 한글 초안.');
       await back(page, 'home'); await page.locator('[data-home-destination="import"]').click(); await mode(page, 'import');
       assert.equal(await page.locator('#lifeImportText').inputValue(), '원문을 자동 확정하지 않습니다.');
+      assert.equal((await current(page)).bundle.sources.length, 0);
+
+      // The record writer remains a separate preserved entry, reached through records.
+      await nav(page, 'records'); await mode(page, 'sources');
+      await page.getByRole('button', { name: '글쓰기', exact: true }).click(); await mode(page, 'write');
+      assert.equal(await page.locator('#lifeWritingClose').count(), 1);
+      await page.locator('#lifeWritingTitle').fill('기록 작성기의 이전 초안');
+      await page.locator('#lifeWritingBody').fill('기존 평문 작성기의 입력도 복귀 뒤 이어집니다.');
+      await back(page, 'sources');
+      await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '글쓰기');
+      await page.getByRole('button', { name: '글쓰기', exact: true }).click(); await mode(page, 'write');
+      assert.equal(await page.locator('#lifeWritingBody').inputValue(), '기존 평문 작성기의 입력도 복귀 뒤 이어집니다.');
       assert.equal((await current(page)).bundle.sources.length, 0);
     }, width);
     for (const width of [1440, 820, 390]) await check('search, tool and management origins and active menu roots ' + width, async ({ page }) => {

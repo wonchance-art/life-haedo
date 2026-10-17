@@ -12,6 +12,7 @@
   }
   function create({ storage, core, host, getBundle, navigate, openSource, renderReadingResume, isDisposed = () => false, announce = () => {} }) {
     let disposed = false, generation = 0, visible = false;
+    let libraryOpen = false, libraryWorkspace = null;
     const alive = () => !disposed && !isDisposed();
     const showing = context => alive() && visible && context.token === generation && getBundle()?.workspaceId === context.workspaceId && context.surface.parentNode === host;
     function action(context, label, task, className = '', { keepFocus = true } = {}) {
@@ -69,7 +70,7 @@
       return parts.join(' · ');
     }
     function snippet(text) {
-      const normalized = text.replace(/\s+/g, ' ').trim();
+      const normalized = String(text || '').replace(/\s+/g, ' ').trim();
       const characters = Array.from(normalized);
       return characters.length > 200 ? characters.slice(0, 200).join('') + '…' : normalized;
     }
@@ -103,13 +104,100 @@
       return article;
     }
     function quickLinks(context) {
-      const nav = el('nav', null, 'home-shortcuts'); nav.setAttribute('aria-label', '빠른 진입');
-      [['가져오기', 'plus', 'import'], ['글쓰기', 'edit', 'write'], ['연표', 'timeline', 'time']].forEach(([label, glyph, mode]) => {
-        const button = action(context, '', () => navigate(mode), 'home-shortcut');
-        button.dataset.homeDestination = mode;
-        button.append(life.Icons.create(glyph), el('span', label)); nav.append(button);
+      const nav = el('nav', null, 'home-blog-actions'); nav.setAttribute('aria-label', '내 블로그');
+      [['글쓰기', 'edit', 'write', { pageCompose: true }], ['글 관리', null, 'page', { pagePreview: false }]].forEach(([label, glyph, destination, options], index) => {
+        const button = action(context, '', () => navigate('page', options), index === 0 ? 'life-primary home-blog-write' : 'home-blog-action');
+        button.dataset.homeDestination = destination;
+        button.dataset.focusKey = 'home:action:' + destination;
+        if (glyph) button.append(life.Icons.create(glyph));
+        button.append(el('span', label)); nav.append(button);
       });
       return nav;
+    }
+    function library(context, bundle) {
+      const area = el('details', null, 'home-library');
+      if (libraryWorkspace !== context.workspaceId) { libraryOpen = false; libraryWorkspace = context.workspaceId; }
+      area.open = libraryOpen;
+      area.addEventListener('toggle', () => { if (showing(context)) libraryOpen = area.open; });
+      const summary = el('summary');
+      summary.append(el('span', '자료실과 도구'), el('span', '가져온 기록 · 묶음 · 책', 'life-meta'));
+      area.append(summary);
+      const nav = el('nav', null, 'home-library-actions'); nav.setAttribute('aria-label', '자료실');
+      [['자료 가져오기', 'import'], ['가져온 기록', 'sources'], ['컬렉션', 'collection'], ['연표', 'time']].forEach(([label, mode]) => {
+        const button = action(context, label, () => navigate(mode));
+        button.dataset.homeDestination = mode;
+        button.dataset.focusKey = 'home:library:' + mode;
+        nav.append(button);
+      });
+      const preview = action(context, '선택한 내용 미리보기', () => navigate('page', { pagePreview: true }));
+      preview.dataset.homeDestination = 'preview';
+      preview.dataset.focusKey = 'home:library:preview';
+      nav.append(preview);
+      area.append(nav, el('p', '미리보기에는 기록에서 고른 내용과 기존 첨부 글이 표시됩니다.', 'life-meta home-library-preview-note'));
+      renderReadingResume?.(area);
+      if (bundle.sources.length) area.append(recent(context, bundle));
+      return area;
+    }
+    function latestOwnPosts(bundle) {
+      const rows = [];
+      bundle.sources.filter(source => life.Writing?.isOwnSource(source, bundle)).forEach(source => {
+        const version = life.Writing.latestVersion(bundle, source.id);
+        if (version) rows.push({ id: source.id, kind: 'source', title: source.title, body: version.contentText, updatedAt: version.importedAt, versionId: version.id });
+      });
+      return rows;
+    }
+    function blogPost(context, row) {
+      const article = el('article', null, 'home-post');
+      const target = row.kind === 'photo' ? { photoPostId: row.id } : { postId: row.id };
+      if (row.kind === 'photo') article.dataset.photoPostId = row.id;
+      else if (row.kind === 'source') { article.dataset.sourceId = row.id; article.dataset.versionId = row.versionId; }
+      else article.dataset.postId = row.id;
+      const open = () => row.kind === 'source' ? openVersion(context, row.versionId) : navigate('page', { pagePreview: false, searchTarget: target });
+      const heading = el('h3');
+      const label = String(row.title || '').trim() || (row.kind === 'photo' ? '제목 없는 글' : snippet(row.body) || row.attachments?.[0]?.title || '첨부한 글');
+      const button = action(context, label, open, 'home-post-open' + (row.kind === 'plain' ? ' home-post-prose' : ''));
+      button.dataset.focusKey = 'home:post:' + row.kind + ':' + row.id;
+      heading.append(button); article.append(heading);
+      if (row.kind !== 'plain' && row.body?.trim()) article.append(el('p', snippet(row.body), 'home-text home-post-excerpt'));
+      const meta = el('p', null, 'life-meta home-post-meta');
+      const date = new Date(row.updatedAt);
+      if (Number.isFinite(date.getTime())) {
+        const time = el('time', new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'numeric', day: 'numeric' }).format(date));
+        time.dateTime = row.updatedAt; meta.append(time, document.createTextNode(' · '));
+      }
+      meta.append(document.createTextNode(row.kind === 'photo' ? '비공개 · 이 브라우저에 보관' : row.kind === 'source' ? '기록 글 · 비공개' : '첨부 글 · 비공개'));
+      if (row.photos) meta.append(document.createTextNode(' · 사진 ' + row.photos + '장'));
+      if (row.kind === 'plain' && row.attachments?.length) meta.append(document.createTextNode(' · 첨부 ' + row.attachments.length + '개'));
+      article.append(meta);
+      return article;
+    }
+    function renderPosts(context, area, bundle, workbenchResult, photoResult) {
+      const rows = latestOwnPosts(bundle);
+      let state = null;
+      if (workbenchResult.status === 'fulfilled') {
+        state = workbenchResult.value;
+        if (state.workspaceId !== context.workspaceId) throw new Error('workspace_mismatch');
+        life.Workbench.validate(state);
+        rows.push(...(state.page.posts || []).filter(post => post.status === 'saved').map(post => ({ ...post, kind: 'plain' })));
+      }
+      if (photoResult.status === 'fulfilled') rows.push(...photoResult.value.filter(post => post.status === 'saved' && !post.archived).map(post => ({ ...post, kind: 'photo' })));
+      const timestamp = row => Number.isFinite(Date.parse(row.updatedAt)) ? Date.parse(row.updatedAt) : 0;
+      rows.sort((a, b) => timestamp(b) - timestamp(a) || (a.kind + ':' + a.id).localeCompare(b.kind + ':' + b.id));
+      rows.slice(0, 5).forEach(row => area.append(blogPost(context, row)));
+      const failed = workbenchResult.status === 'rejected' || photoResult.status === 'rejected';
+      if (failed) {
+        const error = el('div', null, 'home-posts-error home-load-error'); error.setAttribute('role', 'status');
+        error.append(el('p', rows.length ? '일부 글을 불러오지 못했습니다. 보이지 않는 글은 다시 불러와 확인해 주세요.' : '글 목록을 불러오지 못했습니다. 다시 불러와 확인해 주세요.', 'life-meta'));
+        error.append(action(context, '다시 불러오기', async () => { context.surface.remove(); await render(); }));
+        area.append(error);
+      } else if (!rows.length) {
+        const empty = el('div', null, 'home-first-post');
+        empty.append(el('h3', '첫 글을 써보세요.'), el('p', '일상이나 생각을 자유롭게 남겨보세요. 글은 먼저 비공개로 저장됩니다.', 'home-text'));
+        const start = action(context, '첫 글 쓰기', () => navigate('page', { pageCompose: true }), 'life-primary');
+        start.id = 'homeFirstWrite'; empty.append(start); area.append(empty);
+      }
+      area.setAttribute('aria-busy', 'false');
+      return state;
     }
     function recent(context, bundle) {
       const area = section(context, '최근 담은 기록', 'homeRecent', () => navigate('sources'));
@@ -217,26 +305,52 @@
       const context = { token: ++generation, workspaceId: bundle.workspaceId, surface, error: el('p', null, 'life-error home-error') };
       visible = true;
       context.error.hidden = true; context.error.setAttribute('role', 'alert');
-      surface.append(quickLinks(context), context.error);
-      renderReadingResume?.(surface);
-      const recentRecords = recent(context, bundle);
+      const lead = el('div', null, 'home-blog-lead');
+      lead.append(el('p', '생각과 일상을 글로 남기는 내 공간입니다.', 'home-blog-description'), quickLinks(context));
+      surface.append(lead, context.error);
       const composition = el('div', null, 'home-composition'); composition.id = 'homeComposition';
-      const status = el('p', '저장한 구성을 불러오는 중…', 'life-meta home-loading'); status.setAttribute('role', 'status');
-      composition.append(status); composition.setAttribute('aria-busy', 'true'); surface.append(recentRecords, composition); host.append(surface);
+      const posts = section(context, '최근 글', 'homePosts');
+      posts.setAttribute('aria-busy', 'true');
+      const status = el('p', '저장한 글을 불러오는 중…', 'life-meta home-loading'); status.setAttribute('role', 'status');
+      posts.append(status); composition.append(posts); composition.setAttribute('aria-busy', 'true');
+      const materials = library(context, bundle);
+      surface.append(composition, materials); host.append(surface);
+      const results = await Promise.allSettled([
+        storage.readWorkbench(context.workspaceId),
+        storage.listPhotoPosts(context.workspaceId)
+      ]);
+      if (!showing(context)) return;
+      // A late title or post list may grow above an already-open library.
+      // Keep its active control at the same reading position without fixing heights.
+      const focused = document.activeElement;
+      const anchor = materials.contains(focused) ? { element: focused, top: focused.getBoundingClientRect().top } : null;
+      status.remove();
       try {
-        const state = await storage.readWorkbench(context.workspaceId);
-        if (!showing(context)) return;
-        if (state.workspaceId !== context.workspaceId) throw new Error('workspace_mismatch');
-        life.Workbench.validate(state);
-        composition.replaceChildren(groups(context, state), pageSummary(context, state.page), books(context, state));
-        composition.setAttribute('aria-busy', 'false');
+        const state = renderPosts(context, posts, bundle, results[0], results[1]);
+        if (state) {
+          const page = state.page;
+          if (page.title && page.title !== '내 페이지' && page.title !== '내 블로그') {
+            const title = el('h2', page.title, 'home-blog-title');
+            lead.prepend(title);
+          }
+          if (page.showIntro && page.intro) {
+            lead.querySelector('.home-blog-description').textContent = snippet(page.intro);
+          }
+          if (state.groups.length) materials.append(groups(context, state));
+          if (page.entries.length) materials.append(pageSummary(context, page));
+          if ((state.books || []).some(book => !book.archived)) materials.append(books(context, state));
+        }
       } catch (_) {
-        if (!showing(context)) return;
-        composition.setAttribute('aria-busy', 'false');
-        const error = el('div', null, 'home-load-error'); error.setAttribute('role', 'status');
-        error.append(el('p', '저장한 구성을 불러오지 못했습니다. 기록은 계속 열 수 있습니다.', 'life-meta'));
+        posts.setAttribute('aria-busy', 'false');
+        const error = el('div', null, 'home-posts-error home-load-error'); error.setAttribute('role', 'status');
+        error.append(el('p', '글 목록을 불러오지 못했습니다. 가져온 기록은 자료실에서 열 수 있습니다.', 'life-meta'));
         error.append(action(context, '다시 불러오기', async () => { surface.remove(); await render(); }));
-        composition.replaceChildren(error);
+        posts.append(error);
+      }
+      composition.setAttribute('aria-busy', 'false');
+      if (anchor && anchor.element.isConnected && document.activeElement === anchor.element) {
+        const displacement = anchor.element.getBoundingClientRect().top - anchor.top;
+        if (Math.abs(displacement) > 0.5) global.scrollBy({ top: displacement, left: 0, behavior: 'instant' });
       }
     }
     function leave() { generation += 1; visible = false; }

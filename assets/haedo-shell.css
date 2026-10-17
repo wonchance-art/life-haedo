@@ -100,6 +100,13 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost { display: no
 .haedo-welcome-copy h2 { margin: 0; font-size: 26px; line-height: 1.55; letter-spacing: -.025em; word-break: keep-all; }
 .haedo-welcome-copy p { margin: 12px 0 28px; font-size: 15px; line-height: 1.85; color: var(--haedo-muted); word-break: keep-all; }
 .haedo-welcome .life-primary { gap: 14px; }
+.haedo-welcome-copy .haedo-blog-scope { margin: 18px 0 0; font-size: 13px; }
+.haedo-blog-example { margin-top: 24px; border-top: 1px solid var(--haedo-line); }
+.haedo-blog-example summary { min-height: 44px; padding: 12px 0; font-size: 14px; cursor: pointer; }
+.haedo-blog-example > div { padding: 8px 0 4px; }
+.haedo-blog-example h3 { margin: 6px 0 0; font-size: 18px; }
+.haedo-welcome-copy .haedo-blog-example p { margin: 10px 0; font-size: 14px; }
+.haedo-welcome-copy .haedo-blog-example .haedo-blog-example-label { font-size: 12px; }
 .haedo-privacy-link { display: flex; align-items: center; min-height: 44px; width: fit-content; margin-top: 18px; color: var(--haedo-muted); font-size: 12px; }
 body.platform.haedo-shell, body:has(> #lifeWelcome:not([hidden])) {
   padding-left: calc(72px + env(safe-area-inset-left, 0px)); padding-right: env(safe-area-inset-right, 0px);

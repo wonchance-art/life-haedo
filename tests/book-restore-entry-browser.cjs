@@ -12,7 +12,7 @@ const { execFileSync } = require('node:child_process');
 const { FakeCloud, accounts, password, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, settle, observe, nav } = require('./unified-home-browser.cjs');
 const { current, save, download } = require('./book-projects-browser.cjs');
-const { chapterFrom } = require('./book-completion-browser.cjs');
+const { chapterFrom, openLibrary } = require('./book-completion-browser.cjs');
 const { expand } = require('./book-insights-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
 const out = path.resolve('.local/book-restore-entry/after');
@@ -210,7 +210,7 @@ async function main() {
       for (const delayed of ['workbench', 'list']) {
         const previous = await prepare(page, fixture); await page.evaluate(delayed => { window.__restoreHold = delayed; }, delayed);
         const click = page.locator('#wbRestoreInstall').click(); await page.waitForFunction(delayed => window.__restoreGateEntered === delayed, delayed);
-        await nav(page, 'home'); await page.locator('#homeBooks').waitFor();
+        await nav(page, 'home'); await openLibrary(page); await page.locator('#homeBooks').waitFor();
         const nextFocus = page.locator('#homeBooks article[data-book-id] > button').first(); await nextFocus.focus(); const focusId = await nextFocus.locator('..').getAttribute('data-book-id');
         await page.evaluate(() => window.__restoreGateRelease()); await click;
         await page.waitForFunction(delayed => window.__restoreReadReturned === delayed, delayed); await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));

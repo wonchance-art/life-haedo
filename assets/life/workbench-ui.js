@@ -711,6 +711,7 @@
       const status = el('p', share.phase === 'loading' ? '공개 상태를 확인하는 중…' : share.phase === 'sending' ? '서버에 요청 중…' :
         !share.loaded ? '공개 상태 확인 필요' : share.head?.status === 'published' ? '공개 중' : share.head?.status === 'revoked' ? '공개 철회됨' : '아직 게시하지 않음', 'life-meta');
       status.id = 'wbShareStatus'; status.setAttribute('role', 'status'); box.append(status);
+      box.append(notice('새 글쓰기에서 저장한 글과 사진은 이 공개 사본에 포함되지 않습니다. 기존 기록과 첨부 글에서 선택한 내용만 검토해 공개할 수 있습니다.'));
       const error = el('p', share.error, 'wb-incoming-error'); error.id = 'wbShareError'; error.setAttribute('role', 'alert'); error.hidden = !share.error; box.append(error);
       if (share.message) box.append(notice(share.message));
       let pending = null, pendingError = null;
@@ -1016,6 +1017,8 @@
     }
     function renderPage() {
       const session = current, page = session.state.page;
+      const token = generation, beginPost = session.pageCompose === true;
+      session.pageCompose = false;
       if (session.nineOpen) {
         const back = action('내 페이지로 돌아가기', async () => {
           const token = generation; await session.nine.flush(); if (!showing(token, session)) return;
@@ -1084,7 +1087,7 @@
       };
       const photoHost = el('section'); bodyNode.append(photoHost);
       session.photoPosts ||= life.PhotoPostUI.create({ storage, workspaceId: session.workspaceId, isCurrent: () => workspaceIs(session), onDirty: () => updateStatus(session), onSaved: onLocalSaved, beforeOpen: async () => { await session.composer?.flush(); } });
-      session.photoPosts.mount(photoHost, { postId: session.searchTarget?.photoPostId || null, reset: !!session.searchTarget && !session.searchTarget.photoPostId,
+      const photoMount = session.photoPosts.mount(photoHost, { postId: session.searchTarget?.photoPostId || null, reset: beginPost || !!session.searchTarget && !session.searchTarget.photoPostId,
         listHost: postFeed, onFeed: rows => { photoRows = rows; mergeFeed(); } }); viewCleanups.push(() => session.photoPosts.detach());
       const composerHost = el('section'); bodyNode.insertBefore(composerHost, photoHost);
       session.composer ||= life.PageComposer.create({ storage, workspaceId: session.workspaceId,
@@ -1125,7 +1128,10 @@
       session.pageFeed = { host: postFeed, plain: rows => { plainRows = rows; mergeFeed(); } };
       const draftId = session.pageDraftId; session.pageDraftId = null;
       const postId = session.searchTarget?.postId; session.searchTarget = null;
-      session.composer.mount(composerHost, { draftId, postId }); viewCleanups.push(() => session.composer.detach());
+      const composerMount = session.composer.mount(composerHost, { draftId, postId }); viewCleanups.push(() => session.composer.detach());
+      if (beginPost) Promise.all([photoMount, composerMount]).then(() => {
+        if (showing(token, session) && photoHost.isConnected) return session.photoPosts.begin();
+      }).catch(error => { if (showing(token, session) && photoHost.isConnected) report(error, session); });
       bodyNode.append(postFeed);
 
       const pageSettings = details('제목·소개·표시 설정'); pageSettings.classList.add('wb-page-settings');
@@ -2736,14 +2742,22 @@
       }
       if (mode === 'page') {
         current.searchTarget = options.searchTarget || null; current.nineTarget = options.nineTarget || null;
-        if (options.searchTarget || options.nineTarget) {
+        if (typeof options.pagePreview === 'boolean' && !options.nineTarget) {
+          current.nineOpen = false; if (current.share) current.share.open = false;
+        }
+        current.pageCompose = options.pageCompose === true;
+        if (current.pageCompose) {
+          current.searchTarget = null; current.nineTarget = null; current.pageDraftId = null;
+          current.nineOpen = false; preview = false; if (current.share) current.share.open = false;
+        }
+        if (!current.pageCompose && (options.searchTarget || options.nineTarget)) {
           current.nineOpen = !!options.nineTarget; preview = false; if (current.share) current.share.open = false;
         }
       }
-      if (mode === 'page' && typeof options.pageDraftId === 'string') { current.pageDraftId = options.pageDraftId; preview = false; }
+      if (mode === 'page' && !current.pageCompose && typeof options.pageDraftId === 'string') { current.pageDraftId = options.pageDraftId; preview = false; }
       if (mode === 'reflection' && options.planOpen) current.bookPlanOpen = true;
       incoming = null;
-      if (options.selection && ['activities', 'page', 'reflection'].includes(mode)) {
+      if (options.selection && ['activities', 'page', 'reflection'].includes(mode) && !(mode === 'page' && current.pageCompose)) {
         const selection = options.selection;
         const validIds = Array.isArray(selection.versionIds) && selection.versionIds.length <= limits.groupVersions &&
           selection.versionIds.every(id => typeof id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(id));
