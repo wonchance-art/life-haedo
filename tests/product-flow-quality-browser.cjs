@@ -98,7 +98,7 @@ async function main() {
         assert.deepEqual(await page.locator('#wbIncomingSelection input[data-version-id]:checked').evaluateAll(nodes => nodes.map(node => node.dataset.versionId)), [refs.walk.versionId, refs.photo.versionId]);
         await page.locator('#wbIncomingTitle').fill('전시와 산책에서 함께 남긴 빛과 공간'); await page.locator('#wbIncomingApply').click(); await poll(page, state => state.workbench.groups.length === 1);
         await page.locator('article[data-group-id]').first().getByRole('button', { name: '이 묶음을 내 페이지에 추가', exact: true }).click(); await poll(page, state => state.workbench.page.entries.length === 1);
-        await page.getByRole('button', { name: '내 페이지', exact: true }).click(); await page.locator('.wb-page-entry').waitFor();
+        await page.getByRole('button', { name: '선택 자료 페이지', exact: true }).click(); await page.locator('.wb-page-entry').waitFor();
         const entry = page.locator('.wb-page-entry').first(), entryId = await entry.getAttribute('data-entry-id'); await entry.locator('.wb-page-entry-edit > summary').click();
         await entry.getByLabel('내 코멘트', { exact: true }).fill(comment); await poll(page, state => state.workbench.page.entries[0].note === comment);
         await entry.locator(`[data-part-version-id="${refs.photo.versionId}"] input[type=checkbox]`).uncheck(); await poll(page, state => state.workbench.page.entries[0].parts[1].enabled === false); await shot('page-edited');

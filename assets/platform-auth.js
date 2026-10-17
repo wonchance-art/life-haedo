@@ -15,6 +15,7 @@
         if (homeSections.has(url.searchParams.get('section'))) params.set('section', url.searchParams.get('section'));
         if (materialViews.has(url.searchParams.get('view'))) params.set('view', url.searchParams.get('view'));
       }
+      if (url.pathname === '/index.html' && url.searchParams.get('compose') === '1') params.set('compose', '1');
       if (url.pathname === '/workspace.html' && url.searchParams.get('section') === 'manage') params.set('section', 'manage');
       if (url.pathname === '/timeline.html') {
         if (['records', 'map'].includes(url.searchParams.get('view'))) params.set('view', url.searchParams.get('view'));

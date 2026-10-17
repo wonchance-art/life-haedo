@@ -51,6 +51,7 @@ try {
     'assets/life/legacy.js', 'assets/life/icons.js', 'assets/life/workbench-ui.js', 'assets/life/collection.js','assets/life/collection-media.js','assets/life/collection-metadata.js','assets/life/collection-picker.js','assets/life/collection-ui.js','assets/life/collection.css', 'assets/life/home.js', 'assets/life/ui.js', 'assets/life/ui.css', 'assets/life/workbench.css', 'assets/life/home.css', 'assets/life/shell.js',
     'vendor/daisyui.css', 'vendor/daisyui-themes.css', 'vendor/idb/idb.js', 'vendor/idb/LICENSE',
     'vendor/supabase/supabase.js', 'vendor/supabase/LICENSE', 'vendor/lucide/LICENSE',
+    'assets/haedo-type.css', 'vendor/pretendard/PretendardVariable.woff2', 'vendor/pretendard/LICENSE.txt',
     'icon.svg', 'icon-maskable.svg', 'manifest.webmanifest', 'sw.js',
     'supabase/migrations/20261003085426_life_sync_workspaces.sql',
     'supabase/migrations/20261006010000_life_compositions.sql', 'supabase/migrations/20261006020000_life_writing_drafts.sql']) {

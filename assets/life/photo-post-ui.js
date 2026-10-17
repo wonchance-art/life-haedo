@@ -91,6 +91,9 @@
     isCurrent,
     onDirty = () => {},
     onSaved = () => {},
+    onCommitted = () => {},
+    onReturn = null,
+    onModeChange = () => {},
     beforeOpen = async () => {},
   }) {
     let host = null,
@@ -115,8 +118,10 @@
       controls = [],
       attachmentUI = null,
       readBackAction = null,
-      readBackText = "사진 글 목록";
-    let status, inspector, captionInput, altInput;
+      readBackText = "사진 글 목록",
+      committed = false,
+      standalone = false;
+    let status, inspector, captionInput, altInput, recoveryActions;
     const urls = new Set(),
       photoUrls = new Map();
     let closeViewer = null;
@@ -140,20 +145,32 @@
       urls.clear();
       editor = null;
       selected = null;
+      recoveryActions = null;
     }
     function showStatus(e) {
       error = e || null;
       if (status) {
-        status.hidden = mode === "read" && !e;
-        status.textContent =
+        status.hidden = mode === "read" && !e && !committed;
+        const message =
           e?.message ||
           e ||
           (dirtyTick !== storedTick
-            ? "초안 저장 대기 중…"
-            : doc?.status === "saved"
-              ? "이 브라우저에 저장됨"
-              : "초안이 이 브라우저에 저장됨");
-        status.setAttribute("role", e instanceof Error ? "alert" : "status");
+            ? "초안 보관 중…"
+            : mode === "read" && committed
+              ? "비공개 글을 저장했어요"
+              : doc?.revision
+                ? "초안 보관됨"
+                : "사진 없이도 바로 쓸 수 있어요");
+        if (status.textContent !== message) status.textContent = message;
+        const role = e instanceof Error ? "alert" : "status";
+        if (status.getAttribute("role") !== role) status.setAttribute("role", role);
+      }
+      if (recoveryActions) {
+        if (e?.code === "photo_post_conflict")
+          recoveryActions.dataset.conflict = "true";
+        recoveryActions.hidden = !e;
+        recoveryActions.querySelector(".photo-recovery-copy").hidden =
+          recoveryActions.dataset.conflict !== "true";
       }
       onDirty();
     }
@@ -330,9 +347,12 @@
     }
     async function list() {
       await flush();
+      if (onReturn && (await onReturn({ id: doc?.id || null, committed })) !== false)
+        return;
       doc = null;
       mode = "list";
       error = null;
+      committed = false;
       render();
     }
     async function begin() {
@@ -379,8 +399,9 @@
         mode = "edit";
         dirtyTick = storedTick = 0;
         error = null;
+        committed = false;
         render();
-        host.querySelector("#photoTitle")?.focus();
+        editor?.focus();
       } catch (e) {
         if (valid()) showStatus(e);
       }
@@ -397,7 +418,31 @@
         if (expectedRevision !== null && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || next.revision !== expectedRevision))
           throw Object.assign(new Error('글이 바뀌었습니다. 목록을 다시 확인해 최신 글을 직접 열어 주세요.'), { code: 'photo_post_changed' });
         if (editing && next.status === "saved") {
-          doc = {
+          const rows = await storage.listPhotoPosts(workspaceId);
+          if (!current(token)) return;
+          let retained = null;
+          // The index deliberately contains no editor metadata or original
+          // blobs. Read candidates one at a time, without retaining all photos.
+          const drafts = rows
+            .filter((item) => item.status === "draft" && !item.archived)
+            .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+          for (const row of drafts) {
+            const candidate = await storage.readPhotoPost(workspaceId, row.id)
+              .catch((e) => {
+                if (e.code !== "photo_post_missing") throw e;
+                return null;
+              });
+            if (!current(token)) return;
+            if (
+              candidate?.status === "draft" && !candidate.archived &&
+              candidate.replaces?.id === next.id &&
+              candidate.replaces.revision === next.revision
+            ) {
+              retained = candidate;
+              break;
+            }
+          }
+          doc = retained || {
             ...structuredClone(next),
             id: life.Core.id(),
             revision: 0,
@@ -406,7 +451,7 @@
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
-          dirtyTick = 1;
+          dirtyTick = retained ? 0 : 1;
           storedTick = 0;
         } else {
           doc = next;
@@ -418,19 +463,22 @@
             : "read";
         if (mode === "edit") doc = M.upgrade(doc);
         error = null;
+        committed = false;
         render();
+        if (mode === "edit") editor?.focus();
       } finally {
         setBusy(false);
       }
     }
     async function finish(asNew = false) {
+      if (asNew) return saveIndependent("saved");
       guard();
       const token = epoch;
       await flush();
       if (!current(token)) return;
       const payload = structuredClone(doc);
+      const previousId = payload.replaces?.id || payload.id;
       payload.status = "saved";
-      if (asNew) payload.replaces = null;
       payload.updatedAt = new Date().toISOString();
       M.validate(payload);
       setBusy(true);
@@ -445,8 +493,11 @@
         dirtyTick = storedTick = 0;
         mode = "read";
         error = null;
+        committed = true;
         render();
         host.querySelector(".photo-read-heading")?.focus();
+        onSaved();
+        onCommitted({ id: saved.id, previousId, status: saved.status });
       } finally {
         setBusy(false);
       }
@@ -470,21 +521,28 @@
         dirtyTick = storedTick = 0;
         mode = value ? "read" : saved.status === "draft" ? "edit" : "read";
         error = null;
+        committed = false;
         render();
+        onSaved();
       } finally {
         setBusy(false);
       }
     }
-    async function duplicate() {
-      await flush();
+    // Recovery must not write the conflicted draft first. Keep its identity and
+    // revision intact until a fresh document has actually committed.
+    async function saveIndependent(nextStatus = "draft") {
       guard();
-      const token = epoch,
-        next = M.upgrade(doc),
+      clearTimeout(timer);
+      const token = epoch;
+      if (saving) await saving.catch(() => {});
+      if (!current(token)) return;
+      const next = M.upgrade(outputSnapshot()),
         now = new Date().toISOString();
+      const previousId = doc.replaces?.id || doc.id;
       Object.assign(next, {
         id: life.Core.id(),
         revision: 0,
-        status: "draft",
+        status: nextStatus,
         archived: false,
         replaces: null,
         createdAt: now,
@@ -496,14 +554,20 @@
         if (!current(token)) return;
         doc = saved;
         dirtyTick = storedTick = 0;
-        mode = "edit";
+        mode = nextStatus === "saved" ? "read" : "edit";
         error = null;
+        committed = nextStatus === "saved";
         render();
-        host.querySelector("#photoTitle")?.focus();
+        if (mode === "edit") editor?.focus();
+        else host.querySelector(".photo-read-heading")?.focus();
+        onSaved();
+        if (committed)
+          onCommitted({ id: saved.id, previousId, status: saved.status });
       } finally {
         setBusy(false);
       }
     }
+    const duplicate = () => saveIndependent("draft");
     function viewer(p, caption, origin) {
       closeViewer?.();
       const documentId = doc.id,
@@ -730,7 +794,7 @@
       setBusy(true);
       try {
         const page = document.implementation.createHTMLDocument(
-          value.title || "제목 없는 글",
+          value.title || M.plainText(value).trim().split(/\r?\n/)[0]?.slice(0, 100) || "내 글",
         );
         page.documentElement.lang = "ko";
         const charset = page.createElement("meta");
@@ -751,12 +815,14 @@
         );
         const style = page.createElement("style");
         style.textContent =
-          "*{box-sizing:border-box}body{margin:0;color:#262330;background:#fff;font:18px/1.95 -apple-system,BlinkMacSystemFont,'Noto Sans',sans-serif}article{max-width:800px;margin:auto;padding:40px 24px;overflow-wrap:anywhere}h1{font-size:2em;line-height:1.5}h3{font-size:1.7em}h4{font-size:1.35em}.photo-line{white-space:pre-wrap;margin:0 0 18px}figure{margin:28px 0}img{display:block;width:auto;max-width:100%;height:auto;margin:auto}figcaption{font-size:15px;line-height:1.7;text-align:center;white-space:pre-wrap}blockquote{margin-inline:0;padding-left:20px;border-left:2px solid #ddd}a{color:#524094;overflow-wrap:anywhere}.pp-attachments{margin-top:36px}.pp-attachment{padding:18px 0;border-top:1px solid #ddd}.pp-shape,.pp-object-actions{display:none}.pp-attachment-copy{display:flex;flex-direction:column}.pp-attachment-title{display:block;min-height:44px}.life-meta{font-size:14px;color:#665e70}@media(max-width:600px){body{font-size:17px}article{padding:24px 20px}}@media print{article{max-width:none;padding:0}img{max-height:90vh;object-fit:contain}figure{break-inside:avoid}}";
+          "*{box-sizing:border-box}body{margin:0;color:#18181b;background:#fff;font:18px/1.95 -apple-system,BlinkMacSystemFont,'Noto Sans',sans-serif}article{max-width:680px;margin:auto;padding:40px 24px;overflow-wrap:anywhere}h1{font-size:2em;line-height:1.5}h3{font-size:1.7em}h4{font-size:1.35em}.photo-line{white-space:pre-wrap;margin:0 0 18px}figure{margin:28px 0}img{display:block;width:auto;max-width:100%;height:auto;margin:auto}figcaption{font-size:15px;line-height:1.7;text-align:center;white-space:pre-wrap}blockquote{margin-inline:0;padding-left:20px;border-left:2px solid #ddd}a{color:#3156d3;overflow-wrap:anywhere}.pp-attachments{margin-top:36px}.pp-attachment{padding:18px 0;border-top:1px solid #ddd}.pp-shape,.pp-object-actions{display:none}.pp-attachment-copy{display:flex;flex-direction:column}.pp-attachment-title{display:block;min-height:44px}.life-meta{font-size:14px;color:#66666f}@media(max-width:600px){body{font-size:17px}article{padding:24px 20px}}@media print{article{max-width:none;padding:0}img{max-height:90vh;object-fit:contain}figure{break-inside:avoid}}";
         page.head.append(style);
         const article = page.createElement("article"),
           heading = page.createElement("h1");
-        heading.textContent = value.title || "제목 없는 글";
-        article.append(heading);
+        if (value.title.trim()) {
+          heading.textContent = value.title;
+          article.append(heading);
+        } else article.setAttribute("aria-label", "내 글");
         renderRead(article, value, true);
         for (const photo of value.photos) {
           const data = await new Promise((resolve, reject) => {
@@ -924,10 +990,19 @@
         title = el("input");
       title.id = "photoTitle";
       title.value = doc.title;
-      title.placeholder = "제목";
+      title.placeholder = "제목 추가 (선택)";
       title.maxLength = 500;
       title.setAttribute("aria-label", "글 제목");
       title.addEventListener("input", () => {
+        doc.title = title.value;
+        mark();
+      });
+      title.addEventListener("compositionstart", () => {
+        composing = true;
+        clearTimeout(timer);
+      });
+      title.addEventListener("compositionend", () => {
+        composing = false;
         doc.title = title.value;
         mark();
       });
@@ -947,10 +1022,22 @@
       const commandState = el("div", null, "photo-command-state"),
         save = button("글 저장", () => finish());
       commandState.append(el("span", "비공개 · 이 브라우저", "photo-command-scope"), status);
+      if (doc.replaces)
+        commandState.prepend(el("span", "기존 글 수정 중", "photo-editing-label"));
       save.classList.add("photo-save");
       save.title = "이 브라우저에 비공개로 저장";
       commands.append(iconControl(button("닫기", list), "close", "닫기"), commandState, save, more);
       sticky.append(commands);
+      recoveryActions = el("div", null, "photo-recovery-actions");
+      recoveryActions.hidden = true;
+      recoveryActions.append(
+        button("다시 보관", persist),
+        button("현재 입력 백업", backup),
+      );
+      const recoverCopy = button("현재 입력을 새 초안으로 보관", duplicate);
+      recoverCopy.classList.add("photo-recovery-copy");
+      recoveryActions.append(recoverCopy);
+      sticky.append(recoveryActions);
       const toolbar = el("div", null, "photo-toolbar");
       toolbar.setAttribute("role", "toolbar");
       toolbar.setAttribute("aria-label", "본문 서식");
@@ -1018,7 +1105,7 @@
       host.append(form);
       editor = new root.Quill(area, {
         theme: "snow",
-        placeholder: "글을 쓰고 사진을 넣어 보세요.",
+        placeholder: "어떤 이야기를 남길까요?",
         formats: [
           "bold",
           "italic",
@@ -1244,17 +1331,7 @@
       const recovery = el("details", null, "life-details");
       recovery.append(
         el("summary", "저장 충돌 복구"),
-        button("내 입력을 새 초안으로 보관", async () => {
-          guard();
-          if (saving) await saving.catch(() => {});
-          doc = structuredClone(doc);
-          doc.id = life.Core.id();
-          doc.revision = 0;
-          doc.status = "draft";
-          doc.replaces = null;
-          mark();
-          await persist();
-        }),
+        button("내 입력을 새 초안으로 보관", duplicate),
       );
       menu.append(recovery);
     }
@@ -1264,6 +1341,7 @@
       const token = ++epoch;
       host.replaceChildren();
       host.dataset.mode = mode;
+      onModeChange({ mode, id: doc?.id || null });
       status = el("p", "", "life-help photo-status");
       status.setAttribute("role", "status");
       host.append(status);
@@ -1297,7 +1375,7 @@
               const review = el("section", null, "photo-import");
               review.setAttribute("aria-label", "사진 글 복원 확인");
               review.append(
-                el("h3", candidate.title || "제목 없는 글"),
+                el("h3", candidate.title || "가져올 글 확인"),
                 el(
                   "p",
                   candidate.photos.length +
@@ -1402,13 +1480,13 @@
                       : "비공개",
                   "life-meta",
                 ),
-                el("strong", item.title || "제목 없는 글"),
-                el(
+              );
+              if (item.title.trim()) b.append(el("strong", item.title));
+              b.append(el(
                   "span",
                   item.body.trim().slice(0, 120),
                   "photo-entry-excerpt",
-                ),
-              );
+                ));
               (item.archived
                 ? archived
                 : item.status === "draft"
@@ -1468,12 +1546,13 @@
       } else if (mode === "edit") renderEditor();
       else {
         const actions = el("div", null, "life-actions photo-read-actions");
-        actions.append(
-          iconControl(button(readBackText, async () => {
+        actions.classList.toggle("photo-read-standalone", standalone);
+          actions.append(
+          ...(!standalone ? [iconControl(button(readBackText, async () => {
             if (!readBackAction) return list();
             const token = epoch; await flush();
             if (current(token)) await readBackAction();
-          }), "back", readBackText),
+          }), "back", readBackText)] : []),
           doc.archived
             ? button("목록으로 복원", () => archive(false))
             : button("글 수정", () => open(doc.id, true)),
@@ -1491,7 +1570,8 @@
         actions.append(more);
         host.append(actions);
         const article = el("article", null, "photo-article"),
-          heading = el("h2", doc.title || "제목 없는 글", "photo-read-heading");
+          heading = el("h2", doc.title || (doc.photos.length ? "사진 " + doc.photos.length + "장" : "내 글"), "photo-read-heading");
+        if (!doc.title.trim()) heading.classList.add("life-sr-only");
         heading.tabIndex = -1;
         const metadata = el("p", (doc.archived ? "보관함 · " : "") +
           (doc.status === "draft" ? "초안 · " : "비공개 · ") + "이 브라우저", "life-meta photo-read-meta");
@@ -1503,16 +1583,20 @@
         }
         article.append(heading, metadata);
         renderRead(article, doc);
+        const returnAction = el("div", null, "photo-read-return");
+        returnAction.append(button("내 글로 돌아가기", list));
+        article.append(returnAction);
         host.append(article);
       }
       showStatus(error);
     }
     async function mount(
       target,
-      { postId = null, expectedRevision = null, reset = false, onFeed = null, listHost = null, onReadBack = null, readBackLabel = "사진 글 목록" } = {},
+      { postId = null, expectedRevision = null, reset = false, onFeed = null, listHost = null, onReadBack = null, readBackLabel = "사진 글 목록", standalone: isolated = false } = {},
     ) {
       if ((reset || postId) && doc) await flush();
       host = target;
+      standalone = isolated;
       feedListener = onFeed;
       feedHost = listHost;
       readBackAction = onReadBack;
@@ -1544,6 +1628,7 @@
         doc = null;
         mode = "list";
         error = null;
+        committed = false;
         dirtyTick = storedTick = 0;
       }
       render();
@@ -1551,7 +1636,7 @@
         try {
           await open(postId, false, expectedRevision);
           if (host?.isConnected && valid()) {
-            const h = host.querySelector(".photo-read-heading,#photoTitle");
+            const h = host.querySelector(".photo-read-heading,.ql-editor");
             h?.focus({ preventScroll: true });
             h?.scrollIntoView({ block: "nearest" });
           }
@@ -1578,6 +1663,7 @@
       feedHost = null;
       unsubscribe?.();
       unsubscribe = null;
+      onModeChange({ mode: "detached", id: doc?.id || null });
     }
     return {
       mount,

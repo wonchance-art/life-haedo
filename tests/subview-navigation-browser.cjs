@@ -12,7 +12,11 @@ const out = path.resolve('.local/subview-navigation');
 const report = { createdAt: new Date().toISOString(), scope: 'Actual app/SDK/IDB, intercepted Auth; viewport/keyboard/touch simulation only', checks: [], visual: [], consoleErrors: [], pageErrors: [], expectedErrors: 0 };
 const heading = page => page.locator('#lifeApp .haedo-page-heading h1');
 async function mode(page, name) { await settle(page); await page.waitForFunction(name => document.querySelector('#lifeMain')?.dataset.mode === name, name); }
-async function back(page, target) { await page.locator('[data-subview-return]').click(); await mode(page, target); }
+async function back(page, target) {
+  if (await page.locator('.photo-editor').isVisible() && !await page.locator('[data-subview-return]').count()) await page.getByRole('button', { name: '닫기', exact: true }).click();
+  else await page.locator('[data-subview-return]').click();
+  await mode(page, target);
+}
 async function openLibrary(page) {
   const library = page.locator('.home-library');
   if (!await library.evaluate(node => node.open)) await library.locator(':scope > summary').click();
@@ -57,18 +61,24 @@ async function main() {
   try {
     for (const width of [1440, 820, 390]) await check('home origin, keyboard/touch return and draft resume ' + width, async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await home(page);
-      for (const [destination, targetMode, title] of [['write', 'page', '내 페이지'], ['import', 'import', '가져오기'], ['time', 'time', '연표']]) {
+      for (const [destination, targetMode, title] of [['write', 'page', '글쓰기'], ['import', 'import', '가져오기'], ['time', 'time', '연표']]) {
         page.subviewDestination = destination;
-        const start = page.locator(`[data-home-destination="${destination}"]`);
+        const start = page.locator(`[data-home-destination="${destination}"]:visible${destination === 'write' ? ', #homeFirstWrite' : ''}`);
         if (width === 1440) { await start.focus(); await page.keyboard.press('Enter'); } else await start.tap();
-        await mode(page, targetMode); assert.equal(await heading(page).textContent(), title);
-        assert.equal(await page.locator('[data-subview-return]').count(), 1);
+        await mode(page, targetMode);
         if (destination === 'write') await page.locator('#photoTitle').waitFor();
-        assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '홈으로 돌아가기');
+        assert.equal(await heading(page).textContent(), title);
+        if (destination === 'write') {
+          assert.equal(await page.locator('[data-subview-return]').count(), 0, 'Editor keeps one close action');
+          assert.equal(await page.getByRole('button', { name: '닫기', exact: true }).count(), 1);
+        } else {
+          assert.equal(await page.locator('[data-subview-return]').count(), 1);
+          assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '홈으로 돌아가기');
+        }
         if (destination === 'write') { await page.locator('#photoTitle').fill('산책 뒤 남긴 생각'); await page.locator('.ql-editor').fill('홈으로 돌아갔다가 다시 이어 쓸 한글 초안.'); }
         if (destination === 'import') { await page.locator('#lifeImportTitle').fill('아직 검토 중인 기록'); await page.locator('#lifeImportText').fill('원문을 자동 확정하지 않습니다.'); }
         await capture(page, destination, width);
-        await back(page, 'home'); await page.waitForFunction(destination => document.activeElement?.dataset.homeDestination === destination, destination);
+        await back(page, 'home'); await page.waitForFunction(destination => document.activeElement?.dataset.homeDestination === destination || destination === 'write' && document.activeElement?.id === 'homeFirstWrite', destination);
       }
       await page.locator('[data-home-destination="blog"]').click(); await mode(page, 'blog');
       await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
@@ -140,11 +150,11 @@ async function main() {
       const before = await current(page);
       await page.locator('#lifeSearch').fill('산책');
       const resultIds = await page.locator('#lifeSearchResults .life-source-open').evaluateAll(nodes => nodes.map(node => node.dataset.versionId));
-      await page.getByRole('button', { name: '내 페이지', exact: true }).click(); await mode(page, 'page');
-      assert.equal(await heading(page).textContent(), '내 페이지'); await back(page, 'sources');
+      await page.getByRole('button', { name: '선택 자료 페이지', exact: true }).click(); await mode(page, 'page');
+      assert.equal(await heading(page).textContent(), '선택 자료 페이지'); await back(page, 'sources');
       assert.equal(await page.locator('#lifeSearch').inputValue(), '산책');
       assert.deepEqual(await page.locator('#lifeSearchResults .life-source-open').evaluateAll(nodes => nodes.map(node => node.dataset.versionId)), resultIds);
-      await page.waitForFunction(() => document.activeElement?.textContent === '내 페이지');
+      await page.waitForFunction(() => document.activeElement?.textContent === '선택 자료 페이지');
       await page.getByRole('button', { name: '가져오기', exact: true }).click(); await mode(page, 'import');
       await nav(page, 'records'); await mode(page, 'sources'); assert.equal(await page.locator('#lifeSearch').inputValue(), '산책');
       await nav(page, 'tools'); await page.getByRole('button', { name: '다시 찾기', exact: true }).click(); await mode(page, 'discover');
@@ -168,9 +178,10 @@ async function main() {
       await back(page, 'home');
       await page.waitForFunction(id => document.activeElement?.dataset.groupId === id, groupId, { timeout: 2000 });
       assert.match(await page.locator(`#homeGroups [data-group-id="${groupId}"]`).textContent(), /새 이름으로 다듬은 산책 묶음/);
-      await page.locator('#homePage').getByRole('button', { name: '편집', exact: true }).click(); await mode(page, 'page');
+      await page.locator('[data-home-destination="page"]').click(); await mode(page, 'page');
+      await page.locator('#wbPageTitle').waitFor();
       await back(page, 'home');
-      await page.waitForFunction(() => document.activeElement?.closest('#homePage') && document.activeElement.textContent === '편집');
+      await page.waitForFunction(() => document.activeElement?.dataset.homeDestination === 'page');
     }, 390);
     await check('failed import save blocks both return paths and retry preserves input', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await home(page); await page.locator('[data-home-destination="import"]').click(); await mode(page, 'import');
@@ -211,7 +222,7 @@ async function main() {
       assert.equal((await current(page)).workbench.page.intro, '돌아가기 실패에도 보존할 소개');
     });
     await check('direct deep links have stable parent fallback and no persistent origin data', async ({ page }) => {
-      for (const [view, title, parent] of [['import','가져오기','sources'], ['write','글쓰기','sources'], ['time','연표','sources'], ['activities','묶음','sources'], ['page','내 페이지','sources'], ['discover','다시 찾기','tools'], ['transfer','자료 백업·복원','manage'], ['sync','기기 간 동기화','manage'], ['workbench-backup','자료·구성 백업','manage'], ['public-pages','공개 페이지 관리','manage']]) {
+      for (const [view, title, parent] of [['import','가져오기','sources'], ['write','글쓰기','sources'], ['time','연표','sources'], ['activities','묶음','sources'], ['page','선택 자료 페이지','sources'], ['discover','다시 찾기','tools'], ['transfer','자료 백업·복원','manage'], ['sync','기기 간 동기화','manage'], ['workbench-backup','자료·구성 백업','manage'], ['public-pages','공개 페이지 관리','manage']]) {
         await page.goto(base + '/index.html?view=' + view); await ready(page); await mode(page, view);
         const before = await current(page); assert.equal(await heading(page).textContent(), title); await back(page, parent); assert.deepEqual(await current(page), before);
       }

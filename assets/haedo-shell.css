@@ -1,12 +1,12 @@
+@import url("./haedo-type.css");
 /* Shared SNS-blog frame. Product data and chart meaning stay in their modules. */
 :root {
-  --haedo-paper:#fff; --haedo-ink:#18181b; --haedo-muted:#66666f;
-  --haedo-canvas:#f7f7f8; --haedo-selected:#f0f0f2; --haedo-soft:#f5f5f6;
-  --haedo-line:#ececee; --haedo-accent:#18181b; --haedo-link:#3156d3; --haedo-focus:#3156d3;
+  --haedo-paper:#fff; --haedo-ink:#182522; --haedo-muted:#5d6b65;
+  --haedo-canvas:#f4f6f5; --haedo-selected:#eaf1ed; --haedo-soft:#f4f7f5;
+  --haedo-line:#e3e9e6; --haedo-accent:#145b50; --haedo-link:#145b50; --haedo-focus:#267a69;
   --haedo-radius:16px; --haedo-control-radius:12px; --haedo-nav-width:216px;
   --haedo-dock-clearance:0px; --haedo-header-height:64px;
-  --haedo-font:"Apple SD Gothic Neo","Noto Sans CJK KR","Malgun Gothic",sans-serif;
-  --life-font:var(--haedo-font); --field-line:#8b8b95; --color-primary:#18181b;
+  --life-font:var(--haedo-font); --field-line:#86968d; --color-primary:var(--haedo-accent);
   --color-error:#a3243d; --soft:var(--haedo-selected);
   --life-ink:var(--haedo-ink); --life-muted:var(--haedo-muted); --life-border:var(--haedo-line); --life-surface:var(--haedo-paper);
   scroll-padding-top:80px; scroll-padding-bottom:var(--haedo-dock-clearance);
@@ -17,10 +17,10 @@ body.haedo-shell {
   letter-spacing:0; -webkit-font-smoothing:antialiased;
 }
 body.haedo-shell:not(.haedo-timeline) {
-  --paper:#fff; --paper-2:#f5f5f6; --panel:#fff; --field:#fff;
-  --ink:#18181b; --ink-soft:#66666f; --line:#ececee;
-  --water-deep:#18181b; --cinnabar:#a3243d;
-  --mint:#f5f5f6; --mint-ink:#44444b; --sky:#f3f4f7; --sky-ink:#414858;
+  --paper:#fff; --paper-2:#f4f7f5; --panel:#fff; --field:#fff;
+  --ink:var(--haedo-ink); --ink-soft:var(--haedo-muted); --line:var(--haedo-line);
+  --water-deep:var(--haedo-accent); --cinnabar:#a3243d;
+  --mint:#f4f7f5; --mint-ink:#425c50; --sky:#f2f6f5; --sky-ink:#36594e;
 }
 .haedo-shell *, .haedo-shell *::before, .haedo-shell *::after{box-sizing:border-box}
 body.haedo-shell::before{display:none}
@@ -28,7 +28,7 @@ body.haedo-shell::before{display:none}
 .haedo-shell :is(button,input,select,textarea){font-family:inherit}
 .haedo-shell :is(a,button,summary,input,select,textarea):focus-visible{outline:3px solid var(--haedo-focus);outline-offset:3px}
 .haedo-shell :is(a,button,summary,input,select,textarea,[tabindex]){scroll-margin-top:80px;scroll-margin-bottom:var(--haedo-dock-clearance)}
-.haedo-shell ::selection{background:#e7ecff;color:var(--haedo-ink)}
+.haedo-shell ::selection{background:#dcece4;color:var(--haedo-ink)}
 .haedo-shell :is(input,textarea){caret-color:var(--haedo-ink)}
 .haedo-shell :is(input,textarea)::placeholder{color:var(--haedo-muted);opacity:1}
 .haedo-shell a{text-underline-offset:4px}
@@ -43,9 +43,9 @@ body.haedo-shell::before{display:none}
 }
 .haedo-brand{
   display:flex;align-items:center;gap:10px;min-width:44px;min-height:60px;padding:8px 16px;margin-bottom:20px;
-  color:var(--haedo-ink);font-size:25px;font-weight:750;letter-spacing:-.04em;text-decoration:none;
+  color:var(--haedo-accent);font-size:29px;font-weight:800;letter-spacing:-.04em;text-decoration:none;
 }
-.haedo-brand-mark{display:block;width:28px;height:28px;flex:none}
+.haedo-brand-mark{display:none;width:28px;height:28px;flex:none}
 .haedo-icon-button{
   position:relative;display:inline-flex;align-items:center;justify-content:center;
   flex:0 0 44px;width:44px;height:44px;min-width:44px;min-height:44px;
@@ -56,7 +56,7 @@ body.haedo-shell::before{display:none}
 .haedo-nav .haedo-nav-link{justify-content:flex-start;gap:16px;flex:0 0 52px;width:100%;height:52px;padding:12px 16px;border-radius:14px;font-size:16px}
 .haedo-nav-text{display:block;font-weight:550}
 .haedo-nav-link[aria-current=page] .haedo-nav-text{font-weight:700}
-.haedo-shell .haedo-nav-link[aria-current=page]{color:var(--haedo-ink);background:var(--haedo-selected)}
+.haedo-shell .haedo-nav-link[aria-current=page]{color:var(--haedo-accent);background:var(--haedo-selected)}
 .haedo-nav-link[aria-current=page]::before{display:none}
 .haedo-icon-button .life-glyph,[data-haedo-icon]{display:block;flex:none;width:20px;height:20px}
 .haedo-tooltip{
@@ -76,11 +76,13 @@ body.haedo-shell::before{display:none}
  .haedo-nav .haedo-nav-link>.haedo-tooltip{display:none}
 }
 .haedo-icon-button:active:not(:disabled){background:var(--haedo-selected);transform:scale(.96)}
-.haedo-shell .haedo-icon-button:is([aria-current=page],[aria-expanded=true]){color:var(--haedo-ink)}
+.haedo-shell .haedo-icon-button:is([aria-current=page],[aria-expanded=true]){color:var(--haedo-accent)}
 .haedo-page-heading{display:flex;align-items:center;justify-content:space-between;min-height:64px;gap:16px;margin:0 0 24px;padding:0;border:0}
 .haedo-heading-title,.haedo-heading-actions{display:flex;align-items:center;gap:6px;min-width:0}
 .haedo-heading-title{flex:1}.haedo-heading-actions{flex:none}
-.haedo-page-heading h1{margin:0;color:var(--haedo-ink);font:700 21px/1.5 var(--haedo-font);letter-spacing:-.025em;overflow-wrap:anywhere;word-break:keep-all}
+.haedo-page-heading h1{margin:0;color:var(--haedo-ink);font:750 22px/1.5 var(--haedo-font);letter-spacing:-.03em;overflow-wrap:anywhere;word-break:keep-all}
+.haedo-shell:has(#lifeMain[data-mode=home]) .life-toolbar.haedo-page-heading{min-height:56px;margin-bottom:0}
+.haedo-shell:has(#lifeMain[data-mode=home]) .life-toolbar h1{font-size:15px;font-weight:600;letter-spacing:-.01em;color:var(--haedo-muted)}
 .haedo-page-heading h1::after{display:none}
 .haedo-heading-title>.haedo-icon-button{margin-left:-12px}
 .haedo-account{position:relative}.haedo-account>summary{list-style:none}.haedo-account>summary::-webkit-details-marker{display:none}
@@ -93,16 +95,18 @@ body.haedo-shell::before{display:none}
 .haedo-account-panel .p-account{margin:0;color:var(--haedo-muted);font-size:13px}
 .haedo-account-host{position:absolute;z-index:45;top:12px;right:max(48px,calc((100% - var(--haedo-nav-width) - 720px)/2));width:44px}
 body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
-.haedo-shell .life-primary{background:var(--haedo-ink);color:#fff;border-color:var(--haedo-ink);border-radius:999px;font-weight:650}
-.haedo-shell .life-primary:hover:not(:disabled){background:#34343a;border-color:#34343a;color:#fff}
-.haedo-shell .life-primary:active:not(:disabled){background:#45454d;color:#fff}
+.haedo-shell .life-primary,.haedo-shell .p-button.primary{background:var(--haedo-accent);color:#fff;border-color:var(--haedo-accent);border-radius:12px;font-weight:650}
+.haedo-shell .life-primary:hover:not(:disabled),.haedo-shell .p-button.primary:hover:not(:disabled){background:#104a41;border-color:#104a41;color:#fff}
+.haedo-shell .life-primary:active:not(:disabled),.haedo-shell .p-button.primary:active:not(:disabled){background:#0c3d35;color:#fff}
+.haedo-shell .photo-commandbar > .photo-save{background:var(--haedo-accent);border-radius:12px}
+.haedo-shell .photo-commandbar > .photo-save:hover{background:#104a41}
 .haedo-welcome{
  width:calc(100% - 48px);max-width:900px;margin:24px auto;padding:24px 40px 44px;min-height:calc(100svh - 48px);
  border-radius:0;background:var(--haedo-paper);display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.9fr);gap:32px 36px;align-content:start;
 }
 .haedo-welcome>.haedo-page-heading{grid-column:1/-1;margin-bottom:18px}
 .haedo-welcome-copy{padding:8px 0;min-width:0}
-.haedo-welcome-copy h2{margin:0;font-size:34px;line-height:1.4;letter-spacing:-.035em;word-break:keep-all}
+.haedo-welcome-copy h2{margin:0;font-size:40px;font-weight:750;line-height:1.3;letter-spacing:-.035em;word-break:keep-all}
 .haedo-welcome-copy p{margin:18px 0 26px;font-size:15px;line-height:1.9;color:var(--haedo-muted);word-break:keep-all}
 .haedo-welcome .life-primary{min-height:48px;padding:10px 22px;gap:14px;text-decoration:none}
 .haedo-welcome-copy .haedo-blog-scope{margin:18px 0 0;font-size:12px;line-height:1.8}
@@ -112,7 +116,7 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
 .haedo-welcome-copy .haedo-blog-example p{margin:10px 0;font-size:14px}
 .haedo-welcome-post{align-self:start;margin:10px 0 0;padding:24px;border:1px solid var(--haedo-line);border-radius:20px;background:white}
 .haedo-welcome-author{display:flex;align-items:center;gap:12px;margin-bottom:20px}
-.haedo-welcome-avatar{display:flex;align-items:center;justify-content:center;width:40px;height:40px;flex:none;background:#f0f0f2;border-radius:50%;font-size:15px;font-weight:700}
+.haedo-welcome-avatar{display:flex;align-items:center;justify-content:center;width:40px;height:40px;flex:none;background:var(--haedo-selected);color:var(--haedo-accent);border-radius:50%;font-size:15px;font-weight:700}
 .haedo-welcome-author strong{display:block;font-size:14px}.haedo-welcome-author small{display:block;margin-top:2px;font-size:11px;color:var(--haedo-muted)}
 .haedo-welcome-post h3{font-size:22px;line-height:1.55;letter-spacing:-.03em;margin:0 0 12px}
 .haedo-welcome-post p{font-size:15px;line-height:1.9;margin:0 0 16px}
@@ -121,15 +125,16 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
 .haedo-privacy-link{grid-column:1/-1;justify-self:start;display:inline-flex;align-items:center;min-height:44px;margin-top:10px;color:var(--haedo-muted);font-size:12px}
 @media(max-width:1100px) and (min-width:761px){
  :root{--haedo-nav-width:88px}
- .haedo-nav{width:64px;left:12px;align-items:center}.haedo-nav .haedo-nav-link{width:52px;justify-content:center;padding:14px}
- .haedo-nav-text{display:none}.haedo-brand{padding:8px 2px;font-size:20px;gap:0}.haedo-brand-mark{display:none}
- .haedo-nav .haedo-nav-link:focus-visible>.haedo-tooltip{display:block}
+ .haedo-nav{width:64px;left:12px;align-items:center}.haedo-nav .haedo-nav-link{width:64px;height:60px;flex-basis:60px;flex-direction:column;justify-content:center;gap:4px;padding:8px 4px;font-size:12px}
+ .haedo-brand{padding:8px 2px;font-size:20px;gap:0}.haedo-brand-mark{display:none}
  .haedo-welcome{grid-template-columns:1fr;padding:24px 32px;max-width:680px}
  .haedo-welcome-post{max-width:460px}
 }
 @media(max-width:760px){
  :root{--haedo-nav-width:0px;--haedo-dock-clearance:calc(84px + env(safe-area-inset-bottom,0px));--haedo-header-height:60px}
+ html:has(> body[data-writing-focus]){--haedo-dock-clearance:calc(16px + env(safe-area-inset-bottom,0px))}
  body.haedo-shell{padding-left:0;padding-right:0;padding-bottom:var(--haedo-dock-clearance)}
+ body.haedo-shell[data-writing-focus] > .haedo-nav{display:none}
  .haedo-nav{inset:auto 0 0;left:0;right:0;top:auto;width:100%;height:calc(66px + env(safe-area-inset-bottom,0px));flex-direction:row;align-items:stretch;justify-content:space-around;gap:0;padding:4px max(12px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));border:0;border-top:1px solid var(--haedo-line);border-radius:0;background:#fff}
  .haedo-nav .haedo-brand{display:none}.haedo-nav .haedo-nav-link{flex:1 1 0;min-width:44px;width:auto;height:56px;min-height:56px;flex-direction:column;justify-content:center;gap:4px;padding:6px 8px;border-radius:12px;background:none!important;font-size:10px}
  .haedo-nav-text{display:block;font-weight:500}.haedo-nav-link[aria-current=page] .haedo-nav-text{font-weight:750}

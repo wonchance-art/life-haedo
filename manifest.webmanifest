@@ -1,13 +1,13 @@
 {
   "name": "해도",
   "short_name": "해도",
-  "description": "연표, 목표, 습관과 가져온 자료를 관리하는 개인 기록 공간",
+  "description": "글과 사진을 쓰고, 기록과 취향을 모으는 개인 블로그",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#F7F7FB",
-  "theme_color": "#F7F7FB",
+  "background_color": "#f4f6f5",
+  "theme_color": "#ffffff",
   "lang": "ko",
   "icons": [
     {

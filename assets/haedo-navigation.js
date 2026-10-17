@@ -3,9 +3,9 @@
   'use strict';
   const sections = [
     { id: 'home', label: '홈', glyph: 'home', href: 'index.html' },
-    { id: 'records', label: '기록', glyph: 'quote', href: 'index.html?section=records' },
+    { id: 'records', label: '자료실', glyph: 'quote', href: 'index.html?section=records' },
     { id: 'tools', label: '도구', glyph: 'workspace', href: 'index.html?section=tools' },
-    { id: 'manage', label: '관리', glyph: 'settings', href: 'index.html?section=manage' }
+    { id: 'manage', label: '설정', glyph: 'settings', href: 'index.html?section=manage' }
   ];
   const handlers = new Set();
   function activate(section) {

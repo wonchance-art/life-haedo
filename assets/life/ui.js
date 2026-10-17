@@ -115,6 +115,7 @@
     let navigationGeneration = 0;
     let renderGeneration = 0;
     let homeRenderPromise = Promise.resolve();
+    let homeRenderOptions = null, blogPageTask = false, blogMode = null, blogCommitted = null;
     let navigationTrigger = null;
     const viewOrigins = new Map();
     let findRenderPromise = Promise.resolve();
@@ -124,7 +125,7 @@
     const blogViews = new Map();
     const blogSync = global.HaedoLife.BlogSync?.create({ storage, auth });
     const parentViews = new Set(['blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
-    const subviewTitles = { preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '내 페이지',
+    const subviewTitles = { preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
       discover: '다시 찾기', sync: '기기 간 동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
     const selectedVersions = new Set();
@@ -200,6 +201,14 @@
     const workbench = global.HaedoLife.WorkbenchUI?.create({
       storage, core, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce, onLocalSaved: clearError,
+      onBlogReturn: returnFromBlog,
+      onBlogModeChange: context => {
+        if (disposed || state.mode !== 'page') return;
+        if (!blogPageTask || !['edit', 'read', 'profile'].includes(context.mode)) { global.requestAnimationFrame(syncWritingFocus); return; }
+        blogMode = context.mode;
+        if (context.committed && context.id) blogCommitted = { kind: context.kind === 'legacy' ? 'plain' : context.kind, id: context.id, committed: true };
+        renderHeader();
+      },
       onSelectionUsed: ({ workspaceId, versionIds }) => {
         if (disposed || state.bundle?.workspaceId !== workspaceId) return;
         const consumed = selectionReturn?.workspaceId === workspaceId ? selectionReturn.versionIds : versionIds;
@@ -255,12 +264,12 @@
 
     const home = global.HaedoLife.HomeUI?.create({
       storage, core, host: main, getBundle: () => state.bundle,
-      isDisposed: () => disposed, announce, navigate,
+      isDisposed: () => disposed, announce, navigate: (mode, options = {}) => navigate(mode, mode === 'page' && (options.pageCompose || options.pageProfileEdit || options.pageDraftId || options.searchTarget) ? { ...options, blogContext: true } : options),
       renderReadingResume: parent => renderReadingResume(parent, 'home', 'home'),
       openSource: (sourceId, versionId) => navigate('source', {
         sourceId, sourceVersionId: versionId, locator: null,
         returnContext: { mode: 'home', workspaceId: state.bundle.workspaceId, scrollY: global.scrollY,
-          focusKey: document.activeElement?.dataset.focusKey }
+          focusKey: document.activeElement?.dataset.focusKey, homeState: home?.captureState() }
       })
     });
 
@@ -275,8 +284,10 @@
         if (disposed || state.mode !== 'write' || token !== navigationGeneration || state.bundle?.workspaceId !== workspaceId ||
             !state.bundle?.sourceVersions.some(version => version.id === sourceVersionId && version.sourceId === sourceId)) return;
         state.remoteChanged = false;
-        await navigate('source', { sourceId, sourceVersionId, locator: null });
-        announce('글을 저장했습니다. 공개하려면 내 페이지에서 별도로 선택해 주세요.');
+        const origin = viewOrigins.get('write');
+        const returnContext = origin?.mode === 'home' && origin.workspaceId === workspaceId ? { ...origin, homeState: { ...origin.homeState, tab: 'posts' }, homeAnchor: { kind: 'source', id: sourceId, committed: true } } : null;
+        await navigate('source', { sourceId, sourceVersionId, locator: null, ...(returnContext ? { returnContext } : {}) });
+        announce('비공개 글을 저장했습니다.');
       }
     });
 
@@ -938,6 +949,7 @@
     }
 
     async function navigate(mode, options) {
+      options ||= {};
       const token = ++navigationGeneration;
       const from = state.mode;
       const focused = main.contains(document.activeElement) && document.activeElement.matches?.('button,a,summary,input') ? document.activeElement : null;
@@ -946,7 +958,9 @@
       const control = trigger?.matches?.('button,a,summary,input') ? trigger : null;
       const origin = (parentViews.has(from) || from === 'reflection' && mode === 'page' && options?.pageDraftId) ? { mode: from, workspaceId: state.bundle?.workspaceId, scrollY: global.scrollY,
         focusKey: control?.dataset.focusKey, focusId: control?.id,
-        focusName: control?.getAttribute('aria-label') || control?.textContent, focusTag: control?.tagName } : null;
+        focusName: control?.getAttribute('aria-label') || control?.textContent, focusTag: control?.tagName,
+        ...(from === 'home' ? { homeState: home?.captureState() } : {}) } :
+        from === 'source' && mode === 'write' && state.returnContext?.mode === 'home' ? { ...state.returnContext } : null;
       const returningFromReader = from === 'source' && state.returnContext?.mode === mode;
       if (dirty()) await persistStage();
       await preservationUI?.flush();
@@ -961,6 +975,12 @@
         if (origin || inherited) viewOrigins.set(mode, origin || inherited);
         else viewOrigins.delete(mode);
       }
+      if (mode === 'page') {
+        blogPageTask = options.blogContext === true || options.preserveContext === true && blogPageTask;
+        if (options.blogContext === true) options = { ...options, homeTab: origin?.homeState?.tab || 'posts' };
+        if (!options.preserveContext) { blogMode = options.pageProfileEdit ? 'profile' : options.pageCompose || options.pageDraftId ? 'edit' : null; blogCommitted = null; }
+      }
+      if (mode === 'home') homeRenderOptions = { homeState: options.homeState, homeAnchor: options.homeAnchor };
       // A previous excerpt/record save does not describe the draft being opened.
       // Clear only after navigation can succeed; failed flushes keep their feedback.
       if (mode === 'write' && state.mode !== 'write') announce('', { quiet: true });
@@ -1003,7 +1023,7 @@
       if (mode === 'find') main.querySelector('#lifeFindQuery')?.focus();
       if (mode === 'sync' || mode === 'transfer') global.scrollTo({ top: 0, behavior: 'instant' });
       const heading = (options?.chapterImport && (main.querySelector('#wbChapterImportHeading') || main.querySelector('#wbChapterNote'))) || (options?.book && main.querySelector(options.book.chapterId ? '#wbChapterNote' : '#wbBookHeading')) || main.querySelector('h1,h2') || toolbar.querySelector('h1');
-      if (heading && mode !== 'find' && !options?.searchTarget && !options?.nineTarget && !options?.collectionItemId && !options?.groupId && !reimport) {
+      if (heading && mode !== 'find' && mode !== 'write' && !(mode === 'page' && blogPageTask && blogMode === 'edit') && !options?.searchTarget && !options?.nineTarget && !options?.collectionItemId && !options?.groupId && !reimport) {
         heading.focus({ preventScroll: true });
         if (options?.book || options?.chapterImport) heading.scrollIntoView({ block: 'nearest' });
       }
@@ -1078,7 +1098,7 @@
     }
 
     function sectionFor(mode) {
-      if (mode === 'home') return 'home';
+      if (mode === 'home' || mode === 'page' && blogPageTask || mode === 'write' && viewOrigins.get('write')?.mode === 'home' || mode === 'source' && (state.returnContext?.mode === 'home' || state.returnContext?.mode === 'page' && blogPageTask)) return 'home';
       return ['tools', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'sync', 'transfer', 'preservation', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
     }
 
@@ -1086,7 +1106,8 @@
       const params = new URLSearchParams(global.location.search);
       const section = params.get('section');
       const view = params.get('view');
-      if (section === 'home') return 'home';
+      if (params.get('compose') === '1') return 'page';
+      if (section === 'home' && !view) return 'home';
       if (section === 'tools') return ['discover', 'reflection', 'books'].includes(view) ? view : 'tools';
       if (section === 'manage') return ['transfer', 'sync', 'preservation', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
       if (!section && ['transfer', 'sync', 'preservation', 'workbench-backup', 'public-pages', 'discover', 'reflection', 'books'].includes(view)) return view;
@@ -1098,6 +1119,7 @@
       if (!global.HaedoNavigation) return;
       const url = new URL(global.location.href);
       const section = sectionFor(mode);
+      url.searchParams.delete('compose');
       if (section === 'home' && !/\/life\.html$/.test(url.pathname)) url.searchParams.delete('section');
       else url.searchParams.set('section', section);
       const view = mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
@@ -1152,26 +1174,46 @@
 
     async function returnFromSubview() {
       const origin = subviewOrigin();
-      await navigate(origin.mode, { preserveContext: true });
+      const anchor = state.mode === 'page' && blogPageTask && origin.mode === 'home' && origin.homeState?.tab !== 'drafts' ? blogCommitted : null;
+      await navigate(origin.mode, { preserveContext: true, homeState: origin.homeState, homeAnchor: anchor });
       const token = navigationGeneration;
       const restore = () => requestAnimationFrame(() => {
-        if (disposed || token !== navigationGeneration || state.mode !== origin.mode || state.bundle?.workspaceId !== origin.workspaceId) return;
+        if (disposed || token !== navigationGeneration || state.mode !== origin.mode || state.bundle?.workspaceId !== origin.workspaceId || anchor) return;
         const controls = [...root.querySelectorAll('button,a,summary,input')];
         const target = (origin.focusKey && controls.find(el => el.dataset.focusKey === origin.focusKey)) ||
           (origin.focusId && controls.find(el => el.id === origin.focusId)) || controls.find(el =>
           el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2') || toolbar.querySelector('h1');
         for (let parent = target?.parentElement; parent && parent !== main; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
         target?.focus({ preventScroll: true });
-        global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
+        if (!anchor) global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
       });
       if (origin.mode === 'find') findRenderPromise.then(restore);
       else if (origin.mode === 'home') homeRenderPromise.then(restore);
       else restore();
     }
 
+    async function returnFromBlog(context = {}) {
+      if (disposed || state.mode !== 'page' || !blogPageTask) return;
+      const origin = subviewOrigin();
+      if (origin.mode !== 'home' || origin.workspaceId !== state.bundle?.workspaceId) return returnFromSubview();
+      if (!context.committed || !context.id || context.kind === 'profile') return returnFromSubview();
+      const anchor = { kind: context.kind === 'legacy' ? 'plain' : context.kind, id: context.id, committed: true };
+      const homeState = { ...origin.homeState, workspaceId: origin.workspaceId, tab: 'posts' };
+      await navigate('home', { preserveContext: true, homeState, homeAnchor: anchor });
+    }
+
+    function syncWritingFocus() {
+      if (disposed) return;
+      const editing = state.mode === 'write' || state.mode === 'page' && (blogPageTask && blogMode === 'edit' ||
+        [...main.querySelectorAll('.photo-editor,.pp-composer')].some(element => element.getClientRects().length > 0));
+      if (editing) document.body.dataset.writingFocus = 'true';
+      else delete document.body.dataset.writingFocus;
+    }
+
     function renderHeader() {
       if (disposed) return;
       const section = sectionFor(state.mode);
+      syncWritingFocus();
       global.HaedoNavigation?.activate(section);
       status.hidden = state.mode === 'find';
       header.replaceChildren();
@@ -1184,17 +1226,18 @@
       const heading = node('h1', null, 'life-page-title');
       heading.tabIndex = -1;
       const headingGroup = node('div', null, 'haedo-heading-title');
-      if (subviewTitles[state.mode]) heading.textContent = subviewTitles[state.mode];
+      if (state.mode === 'page' && blogPageTask) heading.textContent = blogMode === 'profile' ? '프로필 편집' : blogMode === 'edit' ? '글쓰기' : '글 읽기';
+      else if (subviewTitles[state.mode]) heading.textContent = subviewTitles[state.mode];
       else if (state.mode === 'books') heading.textContent = '내 책';
       else if (state.mode === 'reflection') heading.textContent = '회고';
       else if (state.mode === 'related') heading.textContent = '관련 기록';
       else if (section === 'records') {
-        const records = button('기록', guarded(() => navigate('sources')), 'life-title-button');
-        records.setAttribute('aria-label', '기록 목록');
+        const records = button('자료실', guarded(() => navigate('sources')), 'life-title-button');
+        records.setAttribute('aria-label', '자료실 목록');
         heading.append(records);
-      } else heading.textContent = section === 'home' ? '내 블로그' : section === 'tools' ? '도구' : '관리';
-      if (subviewTitles[state.mode]) {
-        const labels = { find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '기록으로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '관리로 돌아가기' };
+      } else heading.textContent = section === 'home' ? '내 블로그' : section === 'tools' ? '도구' : '설정';
+      if (subviewTitles[state.mode] && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
+        const labels = { find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '자료실로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '설정으로 돌아가기' };
         const back = iconButton(labels[subviewOrigin().mode] || labels.sources, 'back', guarded(returnFromSubview));
         back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';
         back.dataset.subviewReturn = 'true';
@@ -1204,7 +1247,7 @@
         headingGroup.append(iconButton('도구로 돌아가기', 'back', guarded(() => navigate('tools'))));
       }
       if (state.mode === 'related') {
-        const back = iconButton(relatedOrigin?.workspaceId === state.bundle?.workspaceId ? '읽던 글로 돌아가기' : '기록으로 돌아가기', 'back', guarded(returnFromRelated));
+        const back = iconButton(relatedOrigin?.workspaceId === state.bundle?.workspaceId ? '읽던 글로 돌아가기' : '자료실로 돌아가기', 'back', guarded(returnFromRelated));
         back.id = 'lifeRelatedReturn';
         headingGroup.append(back);
       }
@@ -1222,7 +1265,7 @@
           select.setAttribute('aria-pressed', String(state.selecting));
           recordSections.append(select);
         }
-        [['collection', '컬렉션'], ['activities', '묶음'], ['page', '내 페이지']].forEach(([mode, label]) => {
+        [['collection', '컬렉션'], ['activities', '묶음'], ['page', '선택 자료 페이지']].forEach(([mode, label]) => {
           const tab = button(label, guarded(() => navigate(mode)));
           if (state.mode === mode || (mode === 'sources' && state.mode === 'source')) tab.setAttribute('aria-current', 'page');
           recordSections.append(tab);
@@ -1506,7 +1549,7 @@
     function arrangeActions(getVersions) {
       const actions = node('div', null, 'life-actions life-arrange-actions');
       [['activities', '묶음에 담기', 'link', 'lifeArrangeGroups', 'life-arrange-groups'],
-        ['page', '내 페이지에 담기', 'user', 'lifeArrangePage', 'life-arrange-page'],
+        ['page', '선택 자료 페이지에 담기', 'user', 'lifeArrangePage', 'life-arrange-page'],
         ['reflection', '회고에 담기', 'book', 'lifeArrangeReflection', 'life-arrange-reflection']].forEach(([mode, label, glyph, id, css]) => {
         const control = button(null, guarded(() => arrangeRecords(mode, getVersions())), css);
         control.id = id;
@@ -1696,10 +1739,10 @@
     async function returnToResults() {
       const context = state.returnContext;
       if (!context || context.workspaceId !== state.bundle.workspaceId) return navigate('sources', { returnContext: null });
-      await navigate(context.mode, { returnContext: null, sourcesRevealVersionId: context.mode === 'sources' ? context.sourceVersionId || null : null });
+      await navigate(context.mode, { returnContext: null, homeState: context.homeState, homeAnchor: context.homeAnchor, sourcesRevealVersionId: context.mode === 'sources' ? context.sourceVersionId || null : null });
       const navigation = navigationGeneration;
       const restore = () => requestAnimationFrame(() => {
-        if (disposed || navigation !== navigationGeneration || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode) return;
+        if (disposed || navigation !== navigationGeneration || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode || context.homeAnchor) return;
         const target = Array.from(main.querySelectorAll('[data-focus-key]')).find(el => el.dataset.focusKey === context.focusKey) ||
           (context.mode === 'sources' && Array.from(main.querySelectorAll('.life-source-open')).find(el => el.dataset.versionId === context.sourceVersionId)) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2');
         const panel = target?.closest('[data-result-panel]');
@@ -1707,7 +1750,7 @@
         while (ancestor && ancestor !== main) { if (ancestor.tagName === 'DETAILS') ancestor.open = true; ancestor = ancestor.parentElement; }
         if (panel?.hidden) Array.from(main.querySelectorAll('[aria-controls]')).find(el => el.getAttribute('aria-controls') === panel.id)?.click();
         target?.focus({ preventScroll: true });
-        global.scrollTo({ top: context.scrollY, behavior: 'instant' });
+        if (!context.homeAnchor) global.scrollTo({ top: context.scrollY, behavior: 'instant' });
       });
       if (context.focusKey === context.mode + ':reading-resume') {
         const pending = readingResumePromise;
@@ -1721,7 +1764,7 @@
     }
 
     function searchReturnButton() {
-      const labels = { blog: '글 관리로 돌아가기', home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '내 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
+      const labels = { blog: '글 관리로 돌아가기', home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
       const back = iconButton(labels[state.returnContext?.mode] || '검색 결과로 돌아가기', 'back', guarded(returnToResults));
       back.id = 'lifeSearchReturn';
       return back;
@@ -2204,7 +2247,7 @@
       const source = sourceFor(state.sourceId);
       const versions = state.bundle.sourceVersions.filter(v => v.sourceId === state.sourceId);
       const version = state.sourceVersionId ? versions.find(v => v.id === state.sourceVersionId) : versions.slice(-1)[0];
-      if (!source || !version) { main.append(title('요청한 원문 버전을 찾을 수 없습니다.'), node('p', '다른 버전으로 자동 전환하지 않았습니다. 최신 내용 확인 후 다시 찾아 주세요.', 'life-help'), state.returnContext ? searchReturnButton() : button('원천 기록으로 돌아가기', guarded(() => navigate('sources')))); state.locator = null; return; }
+      if (!source || !version) { main.append(title('요청한 원문 버전을 찾을 수 없습니다.'), node('p', '다른 버전으로 자동 전환하지 않았습니다. 최신 내용 확인 후 다시 찾아 주세요.', 'life-help'), state.returnContext ? searchReturnButton() : button('자료실로 돌아가기', guarded(() => navigate('sources')))); state.locator = null; return; }
       state.sourceVersionId = version.id;
       const batch = currentBatch();
       if (batch && batch.items.some(item => item.result?.sourceVersionId === version.id)) {
@@ -2212,7 +2255,7 @@
       }
       const article = node('article', null, 'life-reader');
       const tools = node('div', null, 'life-reader-tools');
-      const back = state.returnContext ? searchReturnButton() : iconButton('기록으로 돌아가기', 'back', guarded(() => navigate('sources')));
+      const back = state.returnContext ? searchReturnButton() : iconButton('자료실로 돌아가기', 'back', guarded(() => navigate('sources')));
       const info = iconButton('출처 정보', 'info', () => {});
       info.id = 'lifeSourceInfoToggle';
       const arrange = iconButton('이 원문 담기', 'link', () => {});
@@ -3524,7 +3567,8 @@
       main.replaceChildren();
       if (state.mode === 'home' && home) {
         // Home's configuration read must not lock independent navigation.
-        homeRenderPromise = home.render().catch(failure);
+        const options = homeRenderOptions || {}; homeRenderOptions = null;
+        homeRenderPromise = home.render(options).catch(failure);
         return;
       }
       if (state.mode === 'preservation') return renderPreservation().catch(failure);
@@ -3541,7 +3585,7 @@
         workbenchOpenOptions = null;
         return Promise.resolve(workbench.render(state.mode, options)).then(() => {
           if (!disposed && generation === renderGeneration && navigation === navigationGeneration &&
-              ['page', 'books'].includes(state.mode)) renderRestoreResult();
+              ['page', 'books'].includes(state.mode)) { syncWritingFocus(); renderRestoreResult(); }
         }).catch(failure);
       }
       renderChapterImportReturn();
@@ -3594,6 +3638,13 @@
     }
     if (disposed) return { dispose };
     state.mode = routeMode();
+    if (new URLSearchParams(global.location.search).get('compose') === '1') {
+      blogPageTask = true; blogMode = 'edit';
+      workbenchOpenOptions = { pageCompose: true, blogContext: true, homeTab: 'posts' };
+      viewOrigins.set('page', { mode: 'home', workspaceId: active, scrollY: 0, homeState: { workspaceId: active, tab: 'posts', query: '', limit: 20 } });
+      const url = new URL(global.location.href); url.searchParams.delete('compose');
+      global.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    }
     if (active) {
       state.bundle = await storage.read(active);
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
@@ -3663,6 +3714,7 @@
 
     function dispose() {
       if (disposed) return;
+      delete document.body.dataset.writingFocus;
       disposed = true;
       compositionPanel?.dispose(); compositionPanel = null;
       if (blogManager && blogManagerWorkspace) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
