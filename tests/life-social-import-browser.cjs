@@ -5,14 +5,17 @@
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
-const { FakeCloud, base, cloud, openManagement } = require('./life-sync-browser.cjs');
+const { FakeCloud, base, cloud, openManagement, openSection } = require('./life-sync-browser.cjs');
 const { playwright, ready, settle, makeContext, observe } = require('./unified-home-browser.cjs');
 const button = async (page, name) => { await page.getByRole('button', { name, exact: true }).click(); await settle(page); };
 const bundle = page => page.evaluate(async () => HaedoLife.Shell.storage.read(await HaedoLife.Shell.storage.getActive()));
 const stages = page => page.evaluate(async () => HaedoLife.Shell.storage.listStages(await HaedoLife.Shell.storage.getActive()));
 const sourceFile = (name, text) => ({ name, mimeType: /\.md$/i.test(name) ? 'text/markdown' : 'text/plain', buffer: Buffer.from(text) });
 const suggestion = page => page.locator('#lifeImportOriginSuggestion button');
-async function openImport(page) { await page.goto(base + '/index.html'); await ready(page); await button(page, '가져오기'); }
+async function openImport(page) {
+  await page.goto(base + '/index.html'); await ready(page);
+  await openSection(page, 'records'); await button(page, '가져오기');
+}
 async function exposeField(page, selector) {
   const control = page.locator(selector);
   if (!(await control.isVisible())) await control.locator('xpath=ancestor::details[1]').locator('summary').click();

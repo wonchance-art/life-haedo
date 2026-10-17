@@ -482,11 +482,12 @@ jobs:
       - name: Verify real SQL and browser publication journeys
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: node tests/blog-completion-browser.cjs --prepare-database
-      - name: Verify private post manager and anonymous original-photo reading
+      - name: Verify private post manager and exact provenance return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
-        run: |
-          node tests/blog-manager-browser.cjs
-          node tests/blog-public-browser.cjs
+        run: node tests/blog-manager-browser.cjs
+      - name: Verify anonymous original-photo reading
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/blog-public-browser.cjs
       - name: Verify exact quotes, nine-area selections and storage failure recovery
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/nine-board-evidence-browser.cjs
@@ -526,6 +527,7 @@ jobs:
             .local/blog-manager/
             .local/blog-public/
             .local/source-evidence/
+            .local/search-source-isolation/
             .local/prepared-site-check/platform-report.txt
             .local/prepared-site-check/baseline.json
           include-hidden-files: true

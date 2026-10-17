@@ -305,6 +305,10 @@
 .life-app:has(.life-workbench[data-mode=books]) { max-width:768px; margin-inline:auto; padding-inline:24px; border-radius:0; }
 .life-app:has(.life-workbench[data-book-scene=edit],.life-workbench[data-book-scene=read]) > .life-toolbar { display: none; }
 .life-app:has(.life-workbench[data-book-scene=edit],.life-workbench[data-book-scene=read]) .life-main { padding-top: 0; }
+/* These scenes replace the shared header with their own sticky toolbar.
+   Chapter anchors already reserve its height; toolbar controls need no reveal gap. */
+html:has(.life-workbench:is([data-book-scene=edit],[data-book-scene=read])) { scroll-padding-top: 0; }
+.life-workbench:is([data-book-scene=edit],[data-book-scene=read]) .wb-book-actions :is(button,summary) { scroll-margin-block: 0; }
 .life-workbench[data-mode=books] > .wb-storage-line { margin-top: 40px; padding-top: 12px; border-top: 1px solid var(--line); }
 .life-workbench[data-mode=books] .wb-book-row { display: block; padding-block: 24px 28px; }
 .life-workbench[data-mode=books] .wb-book-title-link { display: block; text-align: left; padding: 0; border: 0; background: transparent; font-size: 26px; font-weight: 650; line-height: 1.6; letter-spacing: -.025em; }
@@ -368,6 +372,9 @@
 .life-workbench[data-mode=reflection] { --color-primary:var(--haedo-accent,#18181b); --soft:var(--haedo-selected,#f0f0f2); --ink:var(--haedo-ink,#18181b); --ink-soft:var(--haedo-muted,#66666f); --line:var(--haedo-line,#ececee); }
 .life-app:has(.life-workbench[data-mode=reflection]) { max-width:768px; margin-inline:auto; padding-inline:24px; border-radius:0; }
 .life-workbench[data-reflection-scene] > .wb-heading { min-height: 0; margin: 0; }
+/* The reflection toolbar also owns the top edge. Preserve the reading target
+   when repeated writing entry would otherwise reveal a preceding source sliver. */
+html:has(.life-workbench[data-reflection-scene]) { scroll-padding-top: 0; }
 .life-workbench[data-mode=reflection] > .wb-storage-line { margin-top: 40px; padding-top: 12px; border-top: 1px solid var(--line); }
 .wb-reflection-bar,.wb-plan-actions { position: sticky; top: 0; z-index: 24; margin: 0 0 12px; padding: 10px 0; min-height: 64px; background: var(--paper); gap: 6px; flex-wrap: nowrap; }
 .wb-reflection-bar > .life-button { border: 0; padding-inline: 10px; }

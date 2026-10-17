@@ -48,7 +48,7 @@ async function main() {
       await page.locator('#lifeSearchReturn').click(); await settle(page); await target().waitFor();
     });
     await check('a held old-account original read cannot render its private body after signout', async () => {
-      await page.evaluate(() => { window.__sourceHoldRead = true; }); await target().click(); await page.waitForFunction(() => __sourceReadHeld);
+      await page.evaluate(() => { window.__sourceHoldRead = true; }); await target().click(); await page.waitForFunction(() => window.__sourceReadHeld === true);
       const completed = await page.evaluate(() => window.__sourceReads || 0);
       await page.evaluate(() => { window.__sourceSignout = HaedoAuth.client.auth.signOut({ scope: 'local' }); });
       await page.waitForFunction(() => !HaedoLife.Shell.storage && document.querySelector('#lifeApp').hidden);

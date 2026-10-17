@@ -24,6 +24,20 @@ async function nav(page, section) {
   assert.equal(await control.getAttribute('aria-current'), 'page');
 }
 async function button(page, name) { await page.getByRole('button', { name, exact: true }).click(); await settle(page); }
+async function assertCommonNavigation(page) {
+  // The brand is another home link, separate from the four section controls.
+  assert.deepEqual(await page.locator('[data-haedo-navigation] a[data-haedo-section]').evaluateAll(links => links.map(link => ({
+    section: link.dataset.haedoSection, href: link.getAttribute('href'), label: link.getAttribute('aria-label')
+  }))), [
+    { section: 'home', href: 'index.html', label: '홈' },
+    { section: 'records', href: 'index.html?section=records', label: '기록' },
+    { section: 'tools', href: 'index.html?section=tools', label: '도구' },
+    { section: 'manage', href: 'index.html?section=manage', label: '관리' }
+  ]);
+  const brand = page.locator('[data-haedo-navigation] .haedo-brand');
+  assert.equal(await brand.count(), 1); assert.equal(await brand.getAttribute('href'), 'index.html');
+  assert.equal(await brand.getAttribute('aria-label'), '해도 홈');
+}
 const stored = page => page.evaluate(async () => HaedoLife.Shell.storage.read(await HaedoLife.Shell.storage.getActive()));
 async function logoutToPublicHome(page) {
   await openAccount(page);
@@ -97,7 +111,7 @@ async function main() {
         await page.goto(base + '/index.html' + suffix); await shellReady(page);
         assert.equal(new URL(page.url()).pathname, '/index.html'); assert.equal(await page.locator('#lifeWelcome').isVisible(), true);
         assert.equal(await page.locator('#lifeApp').isHidden(), true); assert.deepEqual(await page.evaluate(() => __homeDbOpens), []);
-        assert.equal(await page.locator('[data-haedo-navigation] a').count(), 4);
+        await assertCommonNavigation(page);
         assert.equal(await page.locator('[data-life-login]').isVisible(), true);
       }
     }, null);
@@ -210,7 +224,7 @@ async function main() {
       for (const target of ['goals', 'habits']) {
         await page.locator('#lifeMain a[href="' + target + '.html"]').click();
         await page.waitForFunction(target => document.body.dataset.page === target && !document.querySelector('[data-private]').hidden, target);
-        assert.equal(await page.locator('[data-haedo-navigation] a').count(), 4);
+        await assertCommonNavigation(page);
         assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="tools"]').getAttribute('aria-current'), 'page');
         await page.locator('#addItem').click(); assert.equal(await page.locator('#itemDialog').isVisible(), true);
         await page.keyboard.press('Escape'); await nav(page, 'tools'); await ready(page);
@@ -218,7 +232,7 @@ async function main() {
       await nav(page, 'records'); await button(page, '시간 보기');
       await page.locator('#lifeMain a[href="workspace.html"]').click();
       await page.waitForFunction(() => document.body.dataset.page === 'workspace' && !document.querySelector('[data-private]').hidden);
-      assert.equal(await page.locator('[data-haedo-navigation] a').count(), 4);
+      await assertCommonNavigation(page);
       await page.locator('#newTimeline').click(); assert.equal(await page.locator('#timelineDialog').isVisible(), true); await page.keyboard.press('Escape');
     });
     await check('history keeps a management subview and a legacy life sync link keeps its destination', async ({ page }) => {

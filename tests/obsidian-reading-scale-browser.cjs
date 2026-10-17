@@ -117,7 +117,12 @@ async function main() {
     });
     await check('Switching accounts in the same browser isolates existing IndexedDB notes and restores the original account intact', async () => {
       const login = async account => {
-        await openAccount(page); await page.getByRole('button', { name: '로그아웃', exact: true }).click();
+        await openAccount(page);
+        const previousDocument = await page.evaluate(() => window.__homeInstance);
+        await page.getByRole('button', { name: '로그아웃', exact: true }).click();
+        // The authenticated view and logout redirect both use index.html.
+        // Wait for the new document before starting the next login navigation.
+        await page.waitForFunction(previous => window.__homeInstance && window.__homeInstance !== previous, previousDocument);
         await page.waitForFunction(() => globalThis.HaedoAuth && !HaedoAuth.user && location.pathname.endsWith('/index.html'));
         server.oauthAccounts.set('obsidian-reading-scale', account);
         await page.goto(base + '/login.html?next=life.html');

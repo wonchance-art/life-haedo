@@ -106,7 +106,9 @@ async function main() {
       assert.equal(await page.locator("#lifeObsidianFile").count(), 0);
       assert.equal(await page.getByRole("button", { name: "Obsidian 새 사본으로 복원", exact: true }).count(), 0);
       const after = await active(); assert.equal(after.spaces, before.spaces + 1); assert.equal(after.sources, 5);
-      await page.getByRole("button", { name: "이전 작업공간으로 돌아가기", exact: true }).click(); assert.equal((await active()).id, before.id);
+      await page.getByRole("button", { name: "이전 작업공간으로 돌아가기", exact: true }).click();
+      // A dispatched click does not await the guarded IndexedDB switch.
+      await settle(page); assert.equal((await active()).id, before.id);
     });
     await check("A full 6,899-file anonymous ZIP restores two workspaces atomically, with lazy review and no data loss", async () => {
       const { buildVault } = await import("../scripts/lib/obsidian-vault.mjs"), { renderReviewHTML } = await import("../scripts/lib/obsidian-review.mjs");

@@ -56,11 +56,19 @@ async function main() {
         await capture(page, destination, width);
         await back(page, 'home'); await page.waitForFunction(destination => document.activeElement?.dataset.homeDestination === destination, destination);
       }
-      await page.locator('[data-home-destination="page"]').click(); await mode(page, 'page');
+      await page.locator('[data-home-destination="blog"]').click(); await mode(page, 'blog');
+      await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
+      const draftButton = page.getByRole('button', { name: '산책 뒤 남긴 생각', exact: true });
+      const draftFocusKey = await draftButton.getAttribute('data-focus-key');
+      assert(draftFocusKey?.startsWith('blog:post:photo:'));
+      await draftButton.click(); await mode(page, 'page');
       await page.locator('#photoTitle').waitFor();
       assert.equal(await page.locator('#photoTitle').inputValue(), '산책 뒤 남긴 생각');
       assert.equal((await page.locator('.ql-editor').innerText()).trim(), '홈으로 돌아갔다가 다시 이어 쓸 한글 초안.');
-      await back(page, 'home'); await page.locator('[data-home-destination="import"]').click(); await mode(page, 'import');
+      await back(page, 'blog');
+      await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, draftFocusKey);
+      await back(page, 'home'); await openLibrary(page);
+      await page.locator('[data-home-destination="import"]').click(); await mode(page, 'import');
       assert.equal(await page.locator('#lifeImportText').inputValue(), '원문을 자동 확정하지 않습니다.');
       assert.equal((await current(page)).bundle.sources.length, 0);
 

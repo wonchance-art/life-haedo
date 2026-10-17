@@ -8,7 +8,7 @@ const assert = require('node:assert/strict'), fs = require('node:fs/promises'), 
 const { playwright, makeContext, ready } = require('./unified-home-browser.cjs');
 const { FakeCloud, accounts } = require('./life-sync-browser.cjs');
 const base = process.env.BASE_URL, out = path.resolve(__dirname, '../.local/blog-manager');
-const report = { scope: 'Linux Chromium, synthetic local documents and injected transport/failures. Actual shared models and public renderer. No live OAuth, DB, publication or Apple device claim.', checks: [], visual: [], consoleErrors: [], pageErrors: [] };
+const report = { scope: 'Linux Chromium, synthetic local documents and injected transport/failures. Actual shared models and public renderer. No live OAuth, DB, publication or Apple device claim.', node: process.version, checks: [], visual: [], consoleErrors: [], pageErrors: [] };
 async function main() {
   await fs.mkdir(out, { recursive: true });
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
@@ -220,6 +220,11 @@ async function main() {
     }
     if (!process.env.BLOG_MANAGER_TEST_MATCH || /provenance/i.test(process.env.BLOG_MANAGER_TEST_MATCH)) {
       const context = await makeContext(browser, new FakeCloud(), 'manager-provenance-idb', accounts.a);
+      await context.route(base + '/assets/life/storage.js', async route => {
+        const response = await route.fetch(), source = await response.text();
+        const hook = `;(()=>{const original=HaedoLife.Storage;HaedoLife.Storage=Object.freeze({...original,forAccount(...args){const actual=original.forAccount(...args);return Object.freeze({...actual,async listPhotoPosts(...values){const rows=await actual.listPhotoPosts(...values);if(window.__managerHoldReturn){window.__managerReturnWaiting=true;window.__managerReturnPromise ||= new Promise(resolve=>{window.__managerReleaseReturn=()=>{window.__managerHoldReturn=false;resolve();};});await window.__managerReturnPromise;}return rows;}});}});})();`;
+        await route.fulfill({ response, body: source + hook });
+      });
       const page = await context.newPage(); page.setDefaultTimeout(20000);
       page.on('pageerror', error => report.pageErrors.push({ check: 'exact provenance roundtrip', message: error.message }));
       page.on('console', event => { if (event.type() === 'error') report.consoleErrors.push({ check: 'exact provenance roundtrip', message: event.text() }); });
@@ -266,11 +271,18 @@ async function main() {
           const text = document.querySelector('#lifeSourceText')?.firstChild, selection = getSelection(); if (!text || selection?.rangeCount !== 1) return false;
           const range = selection.getRangeAt(0); return range.startContainer === text && range.endContainer === text && range.startOffset === locator.start && range.endOffset === locator.end && text.data.slice(range.startOffset, range.endOffset) === quote;
         }, fixture);
+        // The manager host and controls arrive before its asynchronous IDB list.
+        // Hold a real completed read to exercise that ordering on every browser.
+        await page.evaluate(() => { window.__managerHoldReturn = true; });
         await page.locator('#lifeSearchReturn').click(); await page.locator('#lifeBlogManager').waitFor();
+        await page.waitForFunction(() => window.__managerReturnWaiting === true);
+        assert.equal(await page.locator('.blog-post').count(), 0);
+        await page.evaluate(() => window.__managerReleaseReturn());
+        await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
+        await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, focusKey);
         assert.equal(await page.locator('#blogManagerSearch').inputValue(), '원문 연결필터');
         assert.equal(await page.locator('#blogManagerFilter').inputValue(), 'draft');
         assert.equal(await page.locator('.blog-post').count(), 45);
-        await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, focusKey);
         assert.equal(await page.locator(`.blog-post[data-post-id="${fixture.postId}"] .blog-manager-evidence details`).evaluate(n => n.open), true);
         assert.equal(await page.evaluate(async () => { const s = HaedoLife.Shell.storage; return JSON.stringify(await s.read(await s.getActive())); }), before);
         assert.equal((await page.evaluate(async id => { const s = HaedoLife.Shell.storage; return s.readPostEvidence(await s.getActive(), id); }, fixture.postId)).refs[0].sourceVersionId, fixture.versionId);

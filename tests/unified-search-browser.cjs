@@ -27,7 +27,10 @@ async function main(){await fs.mkdir(out,{recursive:true});const browser=await p
  const snapshot=()=>page.evaluate(async()=>{const s=HaedoLife.Shell.storage,id=await s.getActive();return {bundle:await s.read(id),wb:await s.readWorkbench(id),cl:await s.readCollection(id),drafts:await s.readPageDrafts(id)};});
  let f,before;
  try{
- await page.goto(base+'/index.html');await ready(page);f=await fixture(page);before=await snapshot();await page.locator('#lifeFindOpen').click();await wait();
+ await page.goto(base+'/index.html');await ready(page);f=await fixture(page);
+ // API-seeded workspaces must be loaded by the UI, without relying on an
+ // unrelated exact-source opening to refresh its workspace selector.
+ await page.reload();await ready(page);before=await snapshot();await page.locator('#lifeFindOpen').click();await wait();
  await check('Home opens one private search; blank and no-match states do not list stored contents',async()=>{assert.equal(await page.locator('#lifeFindQuery').evaluate(e=>e===document.activeElement),true);assert.equal(await rows().count(),0);await snap('empty');await query('없는결과');assert.equal(await rows().count(),0);await snap('no-match');});
  await check('Mixed results distinguish originals, saved pages, private notes and bounded collection groups',async()=>{await query('산책');assert.equal(await page.locator('.life-find-group').count(),3);assert.equal(await page.locator('[data-focus-key][data-kind=source]').count(),5);assert.equal(await page.locator('[data-focus-key][data-kind=collection]').count(),5);await snap('mixed');await click('원문 20개 더 보기');assert.equal(await page.locator('[data-focus-key][data-kind=source]').count(),25);await click('컬렉션 20개 더 보기');assert.equal(await page.locator('[data-focus-key][data-kind=collection]').count(),23);assert.deepEqual(await snapshot(),before);});
  await check('Exact old version and raw Korean range reopen; returning keeps query, limits and focused result',async()=>{

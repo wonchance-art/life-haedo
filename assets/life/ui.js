@@ -940,7 +940,8 @@
       const token = ++navigationGeneration;
       const from = state.mode;
       const focused = main.contains(document.activeElement) && document.activeElement.matches?.('button,a,summary,input') ? document.activeElement : null;
-      const trigger = (from === 'reflection' && mode === 'page' && options?.pageDraftId ? main.querySelector('#wbReflectionToPage') : null) || navigationTrigger || focused || Array.from(main.querySelectorAll('[data-home-destination]')).find(el => el.dataset.homeDestination === mode) || document.activeElement;
+      const requestedTrigger = options?.originFocusKey && Array.from(main.querySelectorAll('[data-focus-key]')).find(el => el.dataset.focusKey === options.originFocusKey);
+      const trigger = requestedTrigger || (from === 'reflection' && mode === 'page' && options?.pageDraftId ? main.querySelector('#wbReflectionToPage') : null) || navigationTrigger || focused || Array.from(main.querySelectorAll('[data-home-destination]')).find(el => el.dataset.homeDestination === mode) || document.activeElement;
       const control = trigger?.matches?.('button,a,summary,input') ? trigger : null;
       const origin = (parentViews.has(from) || from === 'reflection' && mode === 'page' && options?.pageDraftId) ? { mode: from, workspaceId: state.bundle?.workspaceId, scrollY: global.scrollY,
         focusKey: control?.dataset.focusKey, focusId: control?.id,
@@ -965,7 +966,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { selection, groupId, pagePreview, discovery, writing, reimport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, ...viewOptions } = options || {};
+      const { selection, groupId, pagePreview, discovery, writing, reimport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, ...viewOptions } = options || {};
       if (reimport) {
         if (mode !== 'import' || state.bundle.workspaceId !== reimport.workspaceId) return;
         const source = sourceFor(reimport.sourceId);
@@ -1319,10 +1320,10 @@
       const instance = global.HaedoLife.BlogManager.create({ storage, workspaceId, auth, blogSync,
         onOpenEvidence: (reference, context = {}) => openManagedSource(workspaceId, { sourceId: reference.sourceId, sourceVersionId: reference.sourceVersionId, locator: { ...reference.locator } }, context, reference),
         isCurrent: () => !disposed && state.mode === 'blog' && state.bundle?.workspaceId === workspaceId,
-        openPost: (postId, options = {}) => navigate('page', { searchTarget: { photoPostId: postId, photoPostRevision: options.expectedRevision }, pagePreview: false }),
+        openPost: (postId, options = {}) => navigate('page', { searchTarget: { photoPostId: postId, photoPostRevision: options.expectedRevision }, pagePreview: false, originFocusKey: options.focusKey }),
         openLegacy: (row, context = {}) => row.kind === 'source' ? openManagedSource(workspaceId, { sourceId: row.id, sourceVersionId: row.versionId, locator: null }, context) :
-          row.kind === 'writing-draft' ? navigate('write', { writing: { stageId: row.id } }) :
-          row.kind === 'page-draft' ? navigate('page', { pageDraftId: row.id }) : navigate('page', { searchTarget: { postId: row.id }, pagePreview: false })
+          row.kind === 'writing-draft' ? navigate('write', { writing: { stageId: row.id }, originFocusKey: context.focusKey }) :
+          row.kind === 'page-draft' ? navigate('page', { pageDraftId: row.id, originFocusKey: context.focusKey }) : navigate('page', { searchTarget: { postId: row.id }, pagePreview: false, originFocusKey: context.focusKey })
       });
       blogManager = instance; blogManagerWorkspace = workspaceId; const options = { viewState: blogViews.get(workspaceId), ...(blogOpenOptions || {}) }; blogOpenOptions = null;
       await instance.mount(host, options);

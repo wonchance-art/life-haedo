@@ -47,7 +47,7 @@ async function fixture(page, { draft = false } = {}) {
     return { original: value, backup };
   }, backupTitle);
   await page.reload(); await ready(page);
-  if (draft) { await button(page, '가져오기'); await page.locator('#lifeImportTitle').fill('아직 확정하지 않은 읽기 메모'); await page.locator('#lifeImportText').fill('복원 중에도 보존할 검토 내용🌱'); await button(page, '검토 내용 보관'); }
+  if (draft) { await nav(page, 'records'); await button(page, '가져오기'); await page.locator('#lifeImportTitle').fill('아직 확정하지 않은 읽기 메모'); await page.locator('#lifeImportText').fill('복원 중에도 보존할 검토 내용🌱'); await button(page, '검토 내용 보관'); }
   data.stages = await page.evaluate(id => HaedoLife.Shell.storage.listStages(id), data.original.workspaceId);
   return data;
 }

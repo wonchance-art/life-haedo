@@ -87,7 +87,9 @@ try {
  docker(["run", "--detach", "--name", container, "--network", "none", "--tmpfs", "/var/lib/postgresql/data", "-e", "POSTGRES_HOST_AUTH_METHOD=trust", image]); owns = true;
  let ready = false;
  for (let i = 0; i < 100; i++) {
-  try { docker(["exec", container, "pg_isready", "-U", "postgres", "--quiet"]); ready = true; break; }
+  // The image first starts a temporary socket-only initialization server.
+  // TCP becomes ready only after that server stops and the final one starts.
+  try { docker(["exec", container, "pg_isready", "--host=127.0.0.1", "-U", "postgres", "--quiet"]); ready = true; break; }
   catch (_) { await new Promise((done) => setTimeout(done, 100)); }
  }
  if (!ready) throw new Error("isolated PostgreSQL did not start");
