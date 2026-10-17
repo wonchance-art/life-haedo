@@ -52,5 +52,58 @@
     const content=board.areas.map((a,index)=>'<section><h2>'+escape(a.title||'영역 '+(index+1))+'</h2><p>'+escape(a.note)+'</p><ol>'+a.items.map(i=>'<li><strong>'+escape(i.attachment.title)+'</strong><p class="meta">'+escape([i.attachment.creator,types[i.attachment.type]].filter(Boolean).join(' · '))+'</p><p>'+escape(i.reason)+'</p>'+(i.reference?'<blockquote>'+escape(i.reference.value.quote)+'</blockquote>':'')+(i.attachment.url?'<a href="'+escape(i.attachment.url)+'" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">출처 열기</a>':'')+'</li>').join('')+'</ol></section>').join('');
     return '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'"><title>'+escape(board.title||'9칸 구성')+'</title><style>body{margin:0;background:#fff;color:#292536;font:17px/1.65 system-ui,sans-serif}main{max-width:1080px;margin:auto;padding:32px 20px}h1{font-size:32px}h2{font-size:24px;margin:40px 0 8px}p{white-space:pre-wrap;overflow-wrap:anywhere}ol{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;list-style:none;padding:0}li{border:1px solid #d7d2df;border-radius:12px;padding:18px;min-width:0;overflow-wrap:anywhere}strong{font-size:19px}a{color:#4a3865;display:inline-flex;min-height:44px;align-items:center}.meta{font-size:14px;color:#595264}@media(max-width:640px){ol{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:360px){ol{grid-template-columns:1fr}}@media print{li{break-inside:avoid}main{padding:0}a{min-height:0}}</style><main><h1>'+escape(board.title||'9칸 구성')+'</h1><p>'+escape(board.intro)+'</p>'+content+'</main></html>';
   }
-  return Object.freeze({LIMITS,validate,boards,empty,create,snapshot,evidenceSnapshot,reference,hasReferences,backup,readBackup,copies,changed,reviewBoards,html});
+  function imageContent(board,areaId){
+    boards([board],hasReferences([board]));
+    const area=board.areas.find(value=>value.id===areaId);
+    if(!area)fail('이미지로 받을 영역을 골라 주세요.');
+    // The image is a presentation copy: never promote private notes or evidence.
+    return {title:board.title||'9칸 구성',areaTitle:area.title||'이름 없는 영역',
+      items:Array.from({length:9},(_,index)=>area.items[index]?clone(area.items[index].attachment):null)};
+  }
+  function imageLines(context,value,width,limit){
+    const parts=typeof Intl.Segmenter==='function'?[...new Intl.Segmenter('ko',{granularity:'grapheme'}).segment(value)].map(part=>part.segment):Array.from(value);
+    const lines=[];let line='';
+    for(const part of parts){
+      if(part==='\n'||part==='\r'||part==='\r\n'){lines.push(line);line='';continue;}
+      const next=line+part;
+      if(context.measureText(next).width<=width){line=next;continue;}
+      const space=line.lastIndexOf(' ');
+      if(space>0){lines.push(line.slice(0,space));line=line.slice(space+1)+part;}
+      else{lines.push(line);line=part;}
+    }
+    if(line||!lines.length)lines.push(line);
+    if(lines.length>limit){lines.length=limit;let last=Array.from(lines[limit-1]);while(last.length&&context.measureText(last.join('')+'…').width>width)last.pop();lines[limit-1]=last.join('')+'…';}
+    return lines;
+  }
+  async function png(board,areaId,{document=root.document}={}){
+    const content=imageContent(board,areaId),canvas=document?.createElement?.('canvas');
+    if(!canvas?.getContext||!canvas.toBlob)fail('이 브라우저에서 PNG를 만들지 못했습니다. JSON이나 HTML로 보관해 주세요.');
+    canvas.width=1800;canvas.height=2100;
+    const context=canvas.getContext('2d');
+    if(!context)fail('이미지 그리기를 시작하지 못했습니다. 원래 구성은 그대로입니다.');
+    if(document.fonts?.ready)await document.fonts.ready;
+    const font='"Apple SD Gothic Neo", "Noto Sans CJK KR", "Malgun Gothic", sans-serif';
+    const draw=(value,x,y,width,{size=30,weight=400,lineHeight=42,limit=3,color='#18181b'}={})=>{
+      context.font=weight+' '+size+'px '+font;context.fillStyle=color;
+      const lines=imageLines(context,value,width,limit);for(const [index,line] of lines.entries())context.fillText(line,x,y+index*lineHeight);
+      return lines.length*lineHeight;
+    };
+    context.fillStyle='#ffffff';context.fillRect(0,0,1800,2100);context.textBaseline='top';
+    draw(content.title,72,58,1656,{size:56,weight:700,lineHeight:70,limit:2});
+    draw(content.areaTitle,72,211,1656,{size:32,weight:500,lineHeight:44,limit:1,color:'#66666f'});
+    const types=(root.HaedoLife?.Collection||require('./collection.js')).TYPES;
+    for(const [index,item] of content.items.entries()){
+      const x=72+(index%3)*560,y=284+Math.floor(index/3)*560;
+      context.strokeStyle='#d5d5db';context.lineWidth=2;context.strokeRect(x,y,536,536);
+      draw(String(index+1),x+28,y+25,480,{size:23,lineHeight:32,limit:1,color:'#66666f'});
+      if(!item){draw('빈 칸',x+28,y+87,480,{size:32,lineHeight:44,limit:1,color:'#66666f'});continue;}
+      draw(item.title,x+28,y+84,480,{size:34,weight:700,lineHeight:47,limit:5});
+      draw([item.creator,types[item.type]].filter(Boolean).join(' · '),x+28,y+337,480,{size:25,lineHeight:35,limit:2,color:'#66666f'});
+      draw(item.url||'출처 주소 없음',x+28,y+426,480,{size:23,lineHeight:31,limit:3,color:'#66666f'});
+    }
+    draw('제목 · 만든 사람 · 종류 · 출처만 포함 · 긴 글은 …로 줄여 표시',72,1988,1656,{size:23,lineHeight:32,limit:1,color:'#66666f'});
+    draw('이미지는 보기용입니다. 전체 내용은 JSON/HTML, 사본 복원은 JSON을 이용하세요.',72,2028,1656,{size:23,lineHeight:32,limit:1,color:'#66666f'});
+    return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(Object.assign(new Error('PNG를 만들지 못했습니다. 원래 구성은 그대로입니다.'),{code:'nine_board_image_failed'})),'image/png'));
+  }
+  return Object.freeze({LIMITS,validate,boards,empty,create,snapshot,evidenceSnapshot,reference,hasReferences,backup,readBackup,copies,changed,reviewBoards,html,imageContent,png});
 });

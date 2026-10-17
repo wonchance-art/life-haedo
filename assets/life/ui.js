@@ -122,10 +122,11 @@
     let collectionOpenOptions = null;
     let blogManager = null, blogOpenOptions = null, blogManagerWorkspace = null;
     let preservationUI = null;
+    let obsidianUpdateUI = null, originalAttachmentsUI = null;
     const blogViews = new Map();
     const blogSync = global.HaedoLife.BlogSync?.create({ storage, auth });
     const parentViews = new Set(['blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
-    const subviewTitles = { preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
+    const subviewTitles = { 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
       discover: '다시 찾기', sync: '기기 간 동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
     const selectedVersions = new Set();
@@ -964,6 +965,8 @@
       const returningFromReader = from === 'source' && state.returnContext?.mode === mode;
       if (dirty()) await persistStage();
       await preservationUI?.flush();
+      await obsidianUpdateUI?.flush();
+      await originalAttachmentsUI?.flush();
       await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
@@ -984,7 +987,7 @@
       // A previous excerpt/record save does not describe the draft being opened.
       // Clear only after navigation can succeed; failed flushes keep their feedback.
       if (mode === 'write' && state.mode !== 'write') announce('', { quiet: true });
-      if (!['tools', 'manage', 'sync', 'transfer', 'preservation', ...workbenchModes].includes(mode) && !options?.preserveContext &&
+      if (!['tools', 'manage', 'sync', 'transfer', 'preservation', 'obsidian-update', ...workbenchModes].includes(mode) && !options?.preserveContext &&
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
@@ -1099,7 +1102,7 @@
 
     function sectionFor(mode) {
       if (mode === 'home' || mode === 'page' && blogPageTask || mode === 'write' && viewOrigins.get('write')?.mode === 'home' || mode === 'source' && (state.returnContext?.mode === 'home' || state.returnContext?.mode === 'page' && blogPageTask)) return 'home';
-      return ['tools', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'sync', 'transfer', 'preservation', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
+      return ['tools', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'sync', 'transfer', 'preservation', 'obsidian-update', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
     }
 
     function routeMode() {
@@ -1109,8 +1112,8 @@
       if (params.get('compose') === '1') return 'page';
       if (section === 'home' && !view) return 'home';
       if (section === 'tools') return ['discover', 'reflection', 'books'].includes(view) ? view : 'tools';
-      if (section === 'manage') return ['transfer', 'sync', 'preservation', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
-      if (!section && ['transfer', 'sync', 'preservation', 'workbench-backup', 'public-pages', 'discover', 'reflection', 'books'].includes(view)) return view;
+      if (section === 'manage') return ['transfer', 'sync', 'preservation', 'obsidian-update', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
+      if (!section && ['transfer', 'sync', 'preservation', 'obsidian-update', 'workbench-backup', 'public-pages', 'discover', 'reflection', 'books'].includes(view)) return view;
       if (['blog', 'topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related', 'collection', 'find'].includes(view)) return view;
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
     }
@@ -1123,7 +1126,7 @@
       if (section === 'home' && !/\/life\.html$/.test(url.pathname)) url.searchParams.delete('section');
       else url.searchParams.set('section', section);
       const view = mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
-      if (['blog', 'topics', 'time', 'import', 'write', 'sync', 'transfer', 'preservation', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
+      if (['blog', 'topics', 'time', 'import', 'write', 'sync', 'transfer', 'preservation', 'obsidian-update', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
       else url.searchParams.delete('view');
       const destination = url.pathname + url.search + url.hash;
       if (destination !== global.location.pathname + global.location.search + global.location.hash)
@@ -1146,6 +1149,8 @@
       // Save before changing URL so a failed draft write keeps the current view.
       if (dirty()) await persistStage();
       await preservationUI?.flush();
+      await obsidianUpdateUI?.flush();
+      await originalAttachmentsUI?.flush();
       await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
@@ -1295,6 +1300,8 @@
         const refresh = button('최신 내용 확인', guarded(async () => {
           if (dirty()) await persistStage();
           await preservationUI?.flush();
+      await obsidianUpdateUI?.flush();
+      await originalAttachmentsUI?.flush();
           await blogManager?.flush();
           await workbench?.flush();
           await writer?.flush();
@@ -1409,6 +1416,37 @@
       preservationUI = instance; await instance.mount(host);
     }
 
+    async function openOriginalSource(match) {
+      if (disposed) return;
+      await persistDrafts();
+      const bundle = await storage.read(match.workspaceId);
+      if (disposed) return;
+      const version = bundle.sourceVersions.find(row => row.id === match.versionId);
+      if (!version) throw new Error('정확한 원문 버전을 찾지 못했습니다. 원본 파일은 보관됩니다.');
+      await storage.setActive(bundle.workspaceId);
+      if (disposed) return;
+      invalidateBatchContext(); state.bundle = bundle;
+      state.stage = state.prepared = null; state.sourceId = state.sourceVersionId = null;
+      state.sourceDrafts.clear(); state.readerPositions.clear(); state.remoteChanged = false; resetSearchContext();
+      await refreshData(); if (disposed) return;
+      connectSubscription();
+      return navigate('source', { sourceId: version.sourceId, sourceVersionId: version.id, returnContext: { mode: 'manage', workspaceId: bundle.workspaceId } });
+    }
+
+    async function renderObsidianUpdate() {
+      const workspaceToken = workspaceGeneration, workspaceId = state.bundle.workspaceId;
+      const isCurrent = () => !disposed && workspaceToken === workspaceGeneration && state.mode === 'obsidian-update';
+      const host = node('section'); main.append(host);
+      const instance = global.HaedoLife.ObsidianUpdateUI.create({ storage, isCurrent,
+        async onRestored() {
+          if (!isCurrent()) return;
+          await storage.setActive(workspaceId);
+          const rows = await storage.listWorkspaces(); if (isCurrent()) state.workspaces = rows;
+        }
+      });
+      obsidianUpdateUI = instance; await instance.mount(host);
+    }
+
     function renderManagement() {
       const manage = actionRow('자료 관리', '이 브라우저 · 자료 ' + state.bundle.sources.length + '개 · 발췌 ' + state.bundle.records.length + '개', 'book', () => {}, state.bundle.title || '내 자료');
       manage.id = 'lifeCurrentWorkspace';
@@ -1463,6 +1501,13 @@
         main.append(connection, node('p', '묶음·내 페이지와 글쓰기 초안은 각각 연결합니다.', 'life-help life-management-note'));
         refreshSync().catch(failure);
       }
+      const updates = actionRow('Obsidian 갱신', '이전·새 사본 비교 · 선택 변경을 새 작업공간에 보존', 'refresh', () => navigate('obsidian-update'));
+      updates.id = 'lifeObsidianUpdateOpen'; main.append(updates);
+      const originals = actionRow('원본 첨부 보관', '분할 파일의 PDF·사진·노트 원본을 이 계정의 브라우저에 보관', 'download', async () => {
+        originalAttachmentsUI?.dispose();
+        originalAttachmentsUI = await global.LifeOriginalAttachmentsUI.open({ auth, storage, onOpenSource: match => openOriginalSource(match).catch(failure) });
+      });
+      originals.id = 'lifeOriginalAttachmentsOpen'; main.append(originals);
       const preservation = actionRow('보관 범위·근거 파일', '자료별 보관 위치 확인 · 선택 글·9칸과 정확한 원문 근거 옮기기', 'download', () => navigate('preservation'));
       preservation.id = 'lifePreservationOpen'; main.append(preservation);
       const backups = node('section', null, 'life-management-backups');
@@ -3552,6 +3597,7 @@
       if (blogManager && blogManagerWorkspace) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
       blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null;
       preservationUI?.dispose(); preservationUI = null;
+      obsidianUpdateUI?.dispose(); obsidianUpdateUI = null;
       homeRenderPromise = Promise.resolve();
       home?.leave();
       workbench?.leave();
@@ -3571,6 +3617,7 @@
         homeRenderPromise = home.render(options).catch(failure);
         return;
       }
+      if (state.mode === 'obsidian-update') return renderObsidianUpdate().catch(failure);
       if (state.mode === 'preservation') return renderPreservation().catch(failure);
       if (state.mode === 'blog') return renderBlogManager().catch(failure);
       if (state.mode === 'find') { findRenderPromise = unifiedSearch.open().catch(failure); return; }
@@ -3606,7 +3653,7 @@
     }
 
     const beforeUnload = event => {
-      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || collection?.dirty() || blogManager?.dirty() || preservationUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
+      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || collection?.dirty() || blogManager?.dirty() || preservationUI?.dirty() || obsidianUpdateUI?.dirty() || originalAttachmentsUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
     };
     const visibility = () => {
       if (!document.hidden) return;
@@ -3682,6 +3729,8 @@
     async function persistDrafts() {
       if (disposed) throw new Error('계정이 바뀌어 이전 초안을 보관할 수 없습니다.');
       await preservationUI?.flush();
+      await obsidianUpdateUI?.flush();
+      await originalAttachmentsUI?.flush();
       await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
@@ -3716,10 +3765,12 @@
       if (disposed) return;
       delete document.body.dataset.writingFocus;
       disposed = true;
+      originalAttachmentsUI?.dispose(); originalAttachmentsUI = null;
       compositionPanel?.dispose(); compositionPanel = null;
       if (blogManager && blogManagerWorkspace) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
       blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null;
       preservationUI?.dispose(); preservationUI = null;
+      obsidianUpdateUI?.dispose(); obsidianUpdateUI = null;
       compositionSync?.dispose();
       writingSync?.dispose();
       blogSync?.dispose();

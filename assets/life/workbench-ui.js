@@ -1050,6 +1050,7 @@
     function renderPage() {
       const session = current, page = session.state.page;
       const token = generation, beginPost = session.pageCompose === true;
+      const requestedPost = !!session.pageDraftId || !!session.searchTarget?.postId || !!session.searchTarget?.photoPostId;
       const showProfile = session.pageProfile === true, editProfile = session.pageProfileEdit === true;
       session.pageCompose = session.pageProfile = session.pageProfileEdit = false;
       if (session.blogContext && (editProfile || session.blogProfile)) { renderBlogProfile(session); return; }
@@ -1343,6 +1344,9 @@
       });
       reorder(); bodyNode.append(entriesHost, none, setup);
       restorePageEditor(session);
+      // An exact post/draft request takes precedence over an earlier collapsed
+      // editor view. Otherwise a nine-board reference opens behind that fold.
+      if (requestedPost || beginPost) compatibility.open = true;
       if (editProfile && showing(token, session)) profileEdit.click();
     }
     function renderVisitor(page) {

@@ -821,3 +821,9 @@ ZIP 담당은 공식 [최신 릴리스 API](https://api.github.com/repos/101arro
 담당자의 합성 DEFLATE 실험에서 중앙 헤더의 펼친 크기를 줄이면 fflate가 실제 내용의 접두 버퍼만 반환할 수 있음을 확인했다. 원래 압축된 JPEG·PNG·WebP를 몇 장 옮기는 이번 요구에는 새 형식을 stored 0 전용으로 제한한다. fflate는 ZIP 생성/읽기 엔진으로 유지하고, 그 전에 연속된 로컬 payload·중앙 목록·두 헤더의 경로/크기/CRC32를 실제 바이트와 대조한다. 일반 ZIP 지원이나 기존 ZIP 형식의 동작 변경은 아니다. 전체 메모리 방식의 256 MiB 상한을 실제 Apple 기기 처리 보장으로 표현하지 않는다.
 
 저장 검토 담당은 공식 [npm latest](https://registry.npmjs.org/idb/latest)의 8.0.4/ISC와 [저장소](https://api.github.com/repos/jakearchibald/idb)의 archived=false/disabled=false·2026-10-06 유지 이력을 확인했다. 이번 공개 보안 권고 재조회 성공은 확인하지 않았다. 기존 8.0.3의 [LICENSE](https://github.com/jakearchibald/idb/blob/v8.0.3/LICENSE)와 [트랜잭션 문서](https://github.com/jakearchibald/idb/blob/v8.0.3/README.md#transaction-lifetime)를 직접 읽었다. 외부 await 중 트랜잭션이 자동 종료될 수 있으며 `tx.done`이 최종 커밋 완료의 신호다. 따라서 ZIP·사진/본문 해시 검증은 저장 전에 마치고, 기존 계정 범위/CAS/원자 트랜잭션 어댑터를 확장한다. 기존 저장소 전반의 vendor 업그레이드와 새 파일 복원 계약을 함께 바꾸지 않는다. 새 모듈의 실제 검사·실기·배포 결과는 위 구현 기록에서 별도로 보고한다.
+
+## 원본 첨부·선택 갱신·9칸 PNG — 2026-10-18
+
+- 원본 ZIP: 공식 fflate v0.8.3/MIT와 기존 ZIP 모듈을 비교했다. 원본 파트는 ZIP_STORED만 쓰므로 Blob.slice/CRC/SHA 기반 제한 읽기를 선택해 489 MB 전체 복사를 피한다. 임의 ZIP/ZIP64를 지원하지 않는다. [공식 출처·검증·한도](../design-review/original-attachments.md#구현-선택).
+- 갱신: 공식 jsdiff v9.0.0/BSD-3-Clause·패치 파서 보안 권고와 archived diff-match-patch를 비교했다. 자동 패치가 필요 없으므로 기존 ObsidianPackage/Core/SHA/원자 사본 복원에 작은 경로 비교 어댑터만 더했다. [출처·선택을 바꿀 조건](../design-review/obsidian-update.md#오픈소스-선택과-반대-검토).
+- PNG: 기존 NineBoard 모델과 브라우저 Canvas를 재사용해 별도 그래픽 의존성 없이 한 영역만 출력한다. 전체 편집 데이터는 기존 JSON/HTML이 보존한다. [범위·실패 복구](../design-review/nine-board-image.md).

@@ -35,9 +35,17 @@ async function applicationRoots() {
 const within = (path, root) => path === root || path.startsWith(root.endsWith(sep) ? root : root + sep);
 export async function privateDestination(path, protectedRoots = []) {
   const output = resolve(path), destination = await actualDestination(output);
+  // A system alias (Mac /var -> /private/var) can precede an outward
+  // symlink inside the application. Check every traversed parent as well as
+  // the final target, so that alias cannot hide the protected application.
+  const ancestors = [];
+  for (let cursor = output; ; cursor = dirname(cursor)) {
+    ancestors.push(await actualDestination(cursor));
+    if (dirname(cursor) === cursor) break;
+  }
   for (const value of [...await applicationRoots(), ...protectedRoots]) {
     const root = resolve(value), actual = await actualDestination(root);
-    if (within(output, root) || within(destination, actual)) throw problem("private_output_required");
+    if (within(output, root) || within(destination, actual) || ancestors.some(parent => within(parent, actual))) throw problem("private_output_required");
   }
   return output;
 }

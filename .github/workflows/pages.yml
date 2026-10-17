@@ -138,6 +138,15 @@ jobs:
       - name: Verify nine-slot boards, local preservation and file round trips
         if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/nine-board-browser.cjs
+      - name: Verify selected nine-slot PNG and exact backup preservation
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/nine-board-image-browser.cjs
+      - name: Verify original attachment parts and local account boundaries
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: ORIGINALS_INTEGRATED=1 node tests/original-attachments-browser.cjs
+      - name: Verify selected Obsidian updates and immutable recovery
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: OBSIDIAN_INTEGRATED=1 node tests/obsidian-update-browser.cjs
       - name: Verify selective board recovery and explicit export scopes
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/nine-board-recovery-browser.cjs
@@ -301,10 +310,10 @@ jobs:
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/sns-blog-experience-browser.cjs
       - name: Verify blog drafts, mixed posts, focused writing and exact home return
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-user-journeys-browser.cjs
       - name: Verify home writing entry, scoped search and lazy photo recovery
-        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/home-refinement-browser.cjs
       - name: Verify subview location and safe contextual return
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
@@ -372,6 +381,9 @@ jobs:
             .local/timeline-recovery/after/
             .local/home-entry/
             .local/preservation/
+            .local/nine-board-image/
+            .local/original-attachments/
+            .local/obsidian-update/
             .local/subview-navigation/
             .local/management-clarity/
             .local/life-management/

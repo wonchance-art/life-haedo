@@ -158,7 +158,9 @@
       manage.setAttribute('aria-label', '프로필 편집'); manage.title = '프로필 편집';
       manage.append(life.Icons.create('edit'), el('span', '프로필 편집', 'home-profile-edit-label'));
       manage.dataset.homeDestination = 'page'; manage.dataset.focusKey = 'home:action:page';
-      const manager = action(context, '글 관리', () => navigate('blog'), 'home-blog-action');
+      const manager = action(context, '', () => navigate('blog'), 'home-blog-action');
+      manager.setAttribute('aria-label', '글 관리'); manager.title = '글 관리';
+      manager.append(life.Icons.create('filter'), el('span', '글 관리', 'home-profile-edit-label'));
       manager.dataset.homeDestination = 'blog'; manager.dataset.focusKey = 'home:action:blog';
       header.append(copy, manage, manager); return header;
     }

@@ -61,6 +61,13 @@
       setTimeout(()=>{URL.revokeObjectURL(url);urls.delete(url);},1000);
     }
     function backup(current=false){if(!state)return;if(composing.size)throw new Error('입력을 마친 뒤 파일을 받아 주세요.');if(pendingFields.size)throw new Error('문자와 용량을 확인한 뒤 파일을 받아 주세요.');if(manual)throw new Error('대상을 담거나 입력 취소를 누른 뒤 파일을 받아 주세요.');const values=current?[board()]:state.boards;download(JSON.stringify(M.backup(values),null,2),current?'haedo-nine-board.json':'haedo-nine-boards-backup.json','application/json');}
+    async function image(areaId){
+      await flush();guard();const token=epoch,source=structuredClone(board());
+      clear();busy=true;const unlock=lock();message();
+      try{const blob=await M.png(source,areaId);if(!valid()||token!==epoch||!host?.isConnected)return;download(blob,'haedo-nine-board.png','image/png');}
+      catch(cause){if(valid()&&token===epoch&&error?.isConnected){error.textContent=cause.message||'PNG를 만들지 못했습니다. JSON이나 HTML로 보관해 주세요.';error.hidden=false;}}
+      finally{busy=false;unlock();message();}
+    }
     async function recover(){
       guard();clearTimeout(timer);if(saving)await saving.catch(()=>{});const token=epoch,changes=M.changed(base,state.boards),active=selected,activeArea=board()?.areas.findIndex(a=>a.id===areaId);
       const input=document.activeElement,position=input?.id&&host.contains(input)?{id:input.id,start:input.selectionStart,end:input.selectionEnd,direction:input.selectionDirection}:null;
@@ -245,6 +252,12 @@
       if(b)files.append(button('현재 구성 JSON 받기',()=>backup(true)));
       files.append(button('전체 구성 JSON 백업 받기',()=>backup()));
       if(b)files.append(button('HTML 보기 파일 받기',async()=>{await flush();download(M.html(board()),'haedo-nine-board.html','text/html;charset=utf-8');}));files.append(file);host.append(files);renderImport(host);
+      if(b?.areas.length){
+        const imageExport=el('div',null,'nb-image-export'),label=el('label','이미지로 받을 영역'),areas=el('select');areas.id='nbImageArea';label.htmlFor=areas.id;
+        for(const [index,a] of b.areas.entries()){const option=el('option',a.title||'영역 '+(index+1));option.value=a.id;areas.append(option);}areas.value=area()?.id||b.areas[0].id;
+        const help=el('p','PNG는 고른 영역의 3×3 제목·만든 사람·종류·출처만 담습니다. 사진·선택 이유·인용 근거는 자동 포함하지 않습니다. 긴 글은 …로 줄이며 이미지로 사본을 복원할 수 없습니다. 전체 내용은 JSON/HTML을 함께 보관하세요.','life-help');
+        imageExport.append(label,areas,button('선택 영역 PNG 받기',()=>image(areas.value)),help);files.append(imageExport);
+      }
       if(failure)report(failure);else message();
     }
     async function mount(target,searchTarget=null,incomingReference=null){

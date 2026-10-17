@@ -43,6 +43,7 @@ try {
   for (const path of ['blog.html', 'assets/life/source-reference.js', 'assets/life/blog.js', 'assets/life/blog-evidence.js', 'assets/life/blog-remote.js', 'assets/life/blog-sync.js', 'assets/life/blog-public-ui.js', 'assets/life/blog-manager.js', 'assets/life/blog-public.js', 'assets/life/blog-public.css', 'assets/life/blog-manager.css', 'index.html', 'login.html', 'workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'privacy.html', 'life.html', 'share.html',
     'assets/app.css', 'assets/app.js', 'assets/data.js', 'assets/sync.js', 'assets/workspace.js',
     'assets/platform.css', 'assets/platform-auth.js', 'assets/platform-data.js', 'assets/platform-store.js',
+    'assets/life/obsidian-update.js', 'assets/life/obsidian-update-ui.js', 'assets/life/original-attachments.js', 'assets/life/original-attachments-ui.js', 'assets/life/original-attachments.css',
     'assets/life/preservation-references.js', 'assets/life/preservation-package.js', 'assets/life/preservation.js', 'assets/life/preservation-ui.js', 'assets/life/preservation.css',
     'assets/platform-ui.js', 'assets/platform-life-remote.js', 'assets/timeline-entry.js',
     'assets/haedo-navigation.js', 'assets/haedo-shell.css', 'assets/timeline-shell.css',

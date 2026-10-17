@@ -37,6 +37,10 @@
 .nb-import-select .life-meta { display: block; margin-top: 4px; }
 .nb-workspace .nb-import-select input { width: 18px; height: 18px; min-height: 0; flex: 0 0 18px; margin: 6px 0; accent-color: var(--color-primary); }
 .nb-grid a { text-underline-offset: .2em; }
+.nb-image-export { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 20px; }
+.nb-image-export > label { width: 100%; }
+.nb-image-export > select { flex: 1 1 180px; min-width: 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); }
+.nb-image-export > p { width: 100%; margin: 4px 0 0; }
 @media (max-width: 700px) {
   .nb-grid,.nb-areas { gap: 6px; }
   .nb-cell { padding: 8px; }
