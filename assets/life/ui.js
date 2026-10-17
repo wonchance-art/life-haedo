@@ -120,10 +120,11 @@
     let findRenderPromise = Promise.resolve();
     let collectionOpenOptions = null;
     let blogManager = null, blogOpenOptions = null, blogManagerWorkspace = null;
+    let preservationUI = null;
     const blogViews = new Map();
     const blogSync = global.HaedoLife.BlogSync?.create({ storage, auth });
     const parentViews = new Set(['blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
-    const subviewTitles = { blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '내 페이지',
+    const subviewTitles = { preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '내 페이지',
       discover: '다시 찾기', sync: '기기 간 동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
     const selectedVersions = new Set();
@@ -948,6 +949,7 @@
         focusName: control?.getAttribute('aria-label') || control?.textContent, focusTag: control?.tagName } : null;
       const returningFromReader = from === 'source' && state.returnContext?.mode === mode;
       if (dirty()) await persistStage();
+      await preservationUI?.flush();
       await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
@@ -962,7 +964,7 @@
       // A previous excerpt/record save does not describe the draft being opened.
       // Clear only after navigation can succeed; failed flushes keep their feedback.
       if (mode === 'write' && state.mode !== 'write') announce('', { quiet: true });
-      if (!['tools', 'manage', 'sync', 'transfer', ...workbenchModes].includes(mode) && !options?.preserveContext &&
+      if (!['tools', 'manage', 'sync', 'transfer', 'preservation', ...workbenchModes].includes(mode) && !options?.preserveContext &&
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
@@ -1077,7 +1079,7 @@
 
     function sectionFor(mode) {
       if (mode === 'home') return 'home';
-      return ['tools', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'sync', 'transfer', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
+      return ['tools', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'sync', 'transfer', 'preservation', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
     }
 
     function routeMode() {
@@ -1086,8 +1088,8 @@
       const view = params.get('view');
       if (section === 'home') return 'home';
       if (section === 'tools') return ['discover', 'reflection', 'books'].includes(view) ? view : 'tools';
-      if (section === 'manage') return ['transfer', 'sync', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
-      if (!section && ['transfer', 'sync', 'workbench-backup', 'public-pages', 'discover', 'reflection', 'books'].includes(view)) return view;
+      if (section === 'manage') return ['transfer', 'sync', 'preservation', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
+      if (!section && ['transfer', 'sync', 'preservation', 'workbench-backup', 'public-pages', 'discover', 'reflection', 'books'].includes(view)) return view;
       if (['blog', 'topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related', 'collection', 'find'].includes(view)) return view;
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
     }
@@ -1099,7 +1101,7 @@
       if (section === 'home' && !/\/life\.html$/.test(url.pathname)) url.searchParams.delete('section');
       else url.searchParams.set('section', section);
       const view = mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
-      if (['blog', 'topics', 'time', 'import', 'write', 'sync', 'transfer', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
+      if (['blog', 'topics', 'time', 'import', 'write', 'sync', 'transfer', 'preservation', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
       else url.searchParams.delete('view');
       const destination = url.pathname + url.search + url.hash;
       if (destination !== global.location.pathname + global.location.search + global.location.hash)
@@ -1121,6 +1123,7 @@
       const next = section === previousSection ? sectionRoot : section === 'home' ? 'home' : section === 'records' ? lastRecordMode : section === 'tools' ? 'tools' : 'manage';
       // Save before changing URL so a failed draft write keeps the current view.
       if (dirty()) await persistStage();
+      await preservationUI?.flush();
       await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
@@ -1248,8 +1251,9 @@
       if (state.remoteChanged && state.mode !== 'find') {
         const refresh = button('최신 내용 확인', guarded(async () => {
           if (dirty()) await persistStage();
+          await preservationUI?.flush();
           await blogManager?.flush();
-      await workbench?.flush();
+          await workbench?.flush();
           await writer?.flush();
           collection?.flush();
           await refreshData();
@@ -1329,6 +1333,39 @@
       await instance.mount(host, options);
     }
 
+    async function renderPreservation() {
+      const workspaceId = state.bundle.workspaceId, workspaceToken = workspaceGeneration;
+      const isCurrent = () => !disposed && workspaceToken === workspaceGeneration &&
+        state.mode === 'preservation' && state.bundle?.workspaceId === workspaceId;
+      const host = node('section'); host.id = 'lifePreservationHost'; main.append(host);
+      const service = global.HaedoLife.Preservation.create({ storage, workspaceId, isCurrent });
+      const instance = global.HaedoLife.PreservationUI.create({ service, isCurrent,
+        async onRestored() {
+          const workspaces = await storage.listWorkspaces();
+          if (isCurrent()) state.workspaces = workspaces;
+        },
+        async onOpen(id) {
+          if (!isCurrent()) return;
+          await persistDrafts();
+          const [bundle, workspaces, stages] = await Promise.all([storage.read(id), storage.listWorkspaces(), storage.listStages(id)]);
+          if (!isCurrent()) return;
+          await storage.setActive(id);
+          if (!isCurrent()) return;
+          invalidateBatchContext();
+          state.bundle = bundle; state.stage = null; state.prepared = null;
+          state.sourceId = state.sourceVersionId = null; state.sourceDrafts.clear();
+          state.readerPositions.clear(); state.remoteChanged = false; resetSearchContext();
+          state.workspaces = workspaces;
+          const imports = stages.filter(stage => stage.kind !== 'writing');
+          state.allStages = imports; state.stages = imports.filter(stage => stage.state === 'draft'); mergeBatches(imports);
+          connectSubscription();
+          state.mode = 'blog'; render();
+          announce('복원한 글과 원문 근거를 열었습니다. 원래 작업공간은 유지됩니다.');
+        }
+      });
+      preservationUI = instance; await instance.mount(host);
+    }
+
     function renderManagement() {
       const manage = actionRow('자료 관리', '이 브라우저 · 자료 ' + state.bundle.sources.length + '개 · 발췌 ' + state.bundle.records.length + '개', 'book', () => {}, state.bundle.title || '내 자료');
       manage.id = 'lifeCurrentWorkspace';
@@ -1383,6 +1420,8 @@
         main.append(connection, node('p', '묶음·내 페이지와 글쓰기 초안은 각각 연결합니다.', 'life-help life-management-note'));
         refreshSync().catch(failure);
       }
+      const preservation = actionRow('보관 범위·근거 파일', '자료별 보관 위치 확인 · 선택 글·9칸과 정확한 원문 근거 옮기기', 'download', () => navigate('preservation'));
+      preservation.id = 'lifePreservationOpen'; main.append(preservation);
       const backups = node('section', null, 'life-management-backups');
       backups.setAttribute('aria-labelledby', 'lifeBackupChoices');
       const heading = node('h2', '파일로 보관'); heading.id = 'lifeBackupChoices';
@@ -3469,6 +3508,7 @@
       compositionPanel?.dispose(); compositionPanel = null;
       if (blogManager && blogManagerWorkspace) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
       blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null;
+      preservationUI?.dispose(); preservationUI = null;
       homeRenderPromise = Promise.resolve();
       home?.leave();
       workbench?.leave();
@@ -3487,6 +3527,7 @@
         homeRenderPromise = home.render().catch(failure);
         return;
       }
+      if (state.mode === 'preservation') return renderPreservation().catch(failure);
       if (state.mode === 'blog') return renderBlogManager().catch(failure);
       if (state.mode === 'find') { findRenderPromise = unifiedSearch.open().catch(failure); return; }
       if (state.mode === 'collection' && collection) { const options = collectionOpenOptions || {}; collectionOpenOptions = null; collection.open(options).catch(failure); return; }
@@ -3521,7 +3562,7 @@
     }
 
     const beforeUnload = event => {
-      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || collection?.dirty() || blogManager?.dirty()) { event.preventDefault(); event.returnValue = ''; }
+      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || collection?.dirty() || blogManager?.dirty() || preservationUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
     };
     const visibility = () => {
       if (!document.hidden) return;
@@ -3589,6 +3630,7 @@
     // Call inside guarded actions; the public logout hook checks its own boundary.
     async function persistDrafts() {
       if (disposed) throw new Error('계정이 바뀌어 이전 초안을 보관할 수 없습니다.');
+      await preservationUI?.flush();
       await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
@@ -3625,6 +3667,7 @@
       compositionPanel?.dispose(); compositionPanel = null;
       if (blogManager && blogManagerWorkspace) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
       blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null;
+      preservationUI?.dispose(); preservationUI = null;
       compositionSync?.dispose();
       writingSync?.dispose();
       blogSync?.dispose();

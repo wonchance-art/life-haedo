@@ -25,6 +25,8 @@
 
 ## 지켜야 할 제품 규칙
 
+- `preservation*.js`는 선택 저장 글·원본 사진·9칸과 필요한 정확한 원문 버전의 비공개 전용 파일 경로다. 기존 Core·PhotoPost·Blog.hydrate·SourceReference·NineBoard·fflate를 재사용한다. 참조한 원문 버전의 전체 본문 포함을 사전에 안내하고 개인 메모/발췌·미선택 자료·초안·서버 연결·공개 상태는 포함하지 않는다. 구조화 인용 sidecar는 이 전용 파일에서만 함께 이동하며 글별 서버 보관/기존 사진 ZIP 계약은 유지한다. 복원은 새 ID·명시 계정의 새 작업공간이며 원문/사진/근거/9칸/소유 정보를 단일 트랜잭션으로 설치한다. 계정 미연결 자료만 명시 사본화할 수 있고 다른 계정의 공간을 이메일로 추정해 가져오지 않는다. [계약·검수](docs/design-review/preservation-portability.md)를 따른다.
+
 - 블로그 글별 보관·공개는 `blog-remote.js`/`blog-sync.js`/`blog-manager.js`와 `haedo_blog_private`를 사용한다. 기존 원문·구성·공개 페이지 RPC에 사진을 끼워 넣지 않는다. 기본 사진 공개 선택은 0개, 전체 글 원본의 비공개 서버 전송과 선택 사진 원본의 EXIF/GPS 공개는 별도 명시 동의다. 공개는 비공개 문서·공개본 이중 revision과 영속 작업 영수증으로 확인한다. 익명 `blog.html`은 Auth/개인 저장소를 열지 않고, 사진 Edge는 새 요청마다 현재 게시 상태를 검사한다. [모델·검수](docs/life-tools-design/blog-completion.md)와 [운영 설치](docs/life-tools-design/blog-installation.md)를 따른다. 인용 sidecar는 로컬이며, 원문/저장 글 9칸 참조의 정확 버전을 최신으로 치환하지 않는다.
 
 

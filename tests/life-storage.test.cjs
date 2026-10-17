@@ -65,6 +65,7 @@ function memoryAdapter() {
           return {
             async get(key) { return structuredClone(map.get(encode(key))); },
             async getAll() { return structuredClone([...map.values()]); },
+            async getAllKeys() { return [...map.keys()].map(key => JSON.parse(key)); },
             put: value => requestWrite('put', value), add: value => requestWrite('add', value), delete: key => requestWrite('delete', key),
             index(field) { return { async getAll(value) { return structuredClone([...map.values()].filter(row => row[field] === value)); } }; }
           };
@@ -1219,4 +1220,226 @@ test('rich post replacement retains exact evidence and stable remote binding inc
   assert.equal(migrated.localRevision, 0); assert.equal(migrated.pending.localRevision, 0);
   assert.equal(await a.readBlogSyncState(ws, first.id), null);
   await assert.rejects(a.writeBlogSyncState(ws, first.id, binding, binding.revision), { code: 'blog_state_conflict' });
+});
+
+async function preservationFixture(t) {
+  const fixture = syncFixture(); t.after(() => fixture.storage.close());
+  const base = fixture.storage, a = base.forAccount(accountA), bundle = await initialImport(a), ws = bundle.workspaceId;
+  const M = require('../assets/life/photo-post.js'), R = require('../assets/life/source-reference.js'), N = require('../assets/life/nine-board.js');
+  const source = bundle.sources[0], version = bundle.sourceVersions.find(v => v.sourceId === source.id);
+  const ref = await R.build({ bundle, sourceId: source.id, versionId: version.id, locator: { start: 0, end: 3 } });
+  const post = title => { const doc = M.create(Core.id); doc.status = 'saved'; doc.title = title; doc.ops = [{ insert: title + '\n' }]; return doc; };
+  const selected = await a.savePhotoPostWithEvidence(ws, post('직접 선택한 글'), 0, [ref], 0);
+  const dependency = await a.savePhotoPostWithEvidence(ws, post('9칸의 필수 근거 글'), 0, [ref], 0);
+  const draft = post('선택하지 않은 작성 초안'); draft.status = 'draft'; await a.savePhotoPost(ws, draft, 0);
+  const state = N.empty(ws), board = N.create(Core.id); board.title = '내가 선택한 근거';
+  board.areas[0].items = [N.evidenceSnapshot({ kind: 'post', value: await R.buildPost({ workspaceId: ws, post: dependency }) }), N.evidenceSnapshot({ kind: 'source', value: ref })];
+  state.format = 'life-nine-board-v2'; state.boards = [board]; const nine = await a.saveNineBoard(ws, state, 0);
+  return { ...fixture, base, a, bundle, ws, selected, dependency, draft, nine, ref };
+}
+
+test('preservation catalog avoids blobs and snapshot reads selected saved posts, evidence and required exact board dependencies atomically', async t => {
+  const f = await preservationFixture(t), before = f.control.transactions.length;
+  const catalog = await f.a.readPreservationCatalog(f.ws);
+  assert.deepEqual(catalog.posts.map(row => row.id), [f.selected.id, f.dependency.id]);
+  assert.deepEqual(catalog.boards, [{ id: f.nine.boards[0].id, title: '내가 선택한 근거', areas: 1, itemCount: 2 }]);
+  assert.equal(f.control.transactions.length, before + 1);
+  const count = f.control.transactions.length;
+  const snapshot = await f.a.readPreservationSnapshot(f.ws, { postIds: [f.selected.id], boardIds: [f.nine.boards[0].id] });
+  assert.equal(f.control.transactions.length, count + 1);
+  assert.equal(f.control.transactions.at(-1).mode, 'readonly');
+  assert.deepEqual(snapshot.posts.map(({ doc }) => doc.id), [f.selected.id, f.dependency.id]);
+  assert.deepEqual(snapshot.posts[0].evidence, { revision: 1, refs: [f.ref] });
+  assert.deepEqual(snapshot.bundle, f.bundle); assert.deepEqual(snapshot.nineBoard, f.nine);
+  snapshot.posts[0].doc.title = '호출자 변경'; snapshot.posts[0].evidence.refs[0].quote = '변경';
+  assert.deepEqual(await f.a.readPhotoPost(f.ws, f.selected.id), f.selected);
+  assert.deepEqual((await f.a.readPostEvidence(f.ws, f.selected.id)).refs, [f.ref]);
+});
+
+test('preservation snapshot refuses stale exact post versions, draft selection, missing selections and foreign-workspace references', async t => {
+  const f = await preservationFixture(t);
+  await assert.rejects(f.a.readPreservationSnapshot(f.ws, {}), { code: 'invalid_preservation' });
+  await assert.rejects(f.a.readPreservationSnapshot(f.ws, { postIds: [f.selected.id, f.selected.id] }), { code: 'invalid_preservation' });
+  await assert.rejects(f.a.readPreservationSnapshot(f.ws, { postIds: [f.draft.id] }), { code: 'invalid_preservation' });
+  await assert.rejects(f.a.readPreservationSnapshot(f.ws, { boardIds: [Core.id()] }), { code: 'preservation_source_changed' });
+  await f.a.savePhotoPost(f.ws, { ...f.dependency, title: '새 revision' }, f.dependency.revision);
+  await assert.rejects(f.a.readPreservationSnapshot(f.ws, { boardIds: [f.nine.boards[0].id] }), { code: 'preservation_source_changed' });
+  const foreign = structuredClone(f.nine); foreign.boards[0].areas[0].items = [foreign.boards[0].areas[0].items[1]]; foreign.boards[0].areas[0].items[0].reference.value.workspaceId = Core.id();
+  await f.a.saveNineBoard(f.ws, foreign, foreign.revision);
+  await assert.rejects(f.a.readPreservationSnapshot(f.ws, { boardIds: [foreign.boards[0].id] }), { code: 'workspace_access_denied' });
+  assert.deepEqual(await f.a.readPhotoPost(f.ws, f.selected.id), f.selected);
+});
+
+test('preservation unowned catalog and snapshot require explicit access and reject both explicit owners and old sync ownership', async t => {
+  const f = await preservationFixture(t), encode = JSON.stringify;
+  const b = f.base.forAccount(accountB);
+  await assert.rejects(b.readPreservationCatalog(f.ws, { unowned: true }), { code: 'workspace_access_denied' });
+  f.rows.get('meta').delete(encode(`owner:${f.ws}`));
+  await assert.rejects(b.readPreservationSnapshot(f.ws, { postIds: [f.selected.id] }), { code: 'workspace_access_denied' });
+  assert.equal((await b.readPreservationCatalog(f.ws, { unowned: true })).posts.length, 2);
+  assert.equal((await b.readPreservationSnapshot(f.ws, { postIds: [f.selected.id], unowned: true })).posts.length, 1);
+  assert.equal(f.rows.get('meta').has(encode(`owner:${f.ws}`)), false);
+  const sync = { binding: bindingFor(f.bundle) };
+  f.rows.get('meta').set(encode(`sync:${f.ws}`), { key: `sync:${f.ws}`, value: sync });
+  await assert.rejects(b.readPreservationCatalog(f.ws, { unowned: true }), { code: 'workspace_access_denied' });
+  await assert.rejects(b.readPreservationSnapshot(f.ws, { postIds: [f.selected.id], unowned: true }), { code: 'workspace_access_denied' });
+  await assert.rejects(f.base.readPreservationCatalog(f.ws), { code: 'auth_scope_required' });
+});
+
+test('preservation copy installs exact remapped dependencies into the authenticated account and excludes all original sync/public bindings', async t => {
+  const f = await preservationFixture(t), R = require('../assets/life/preservation-references.js');
+  const original = structuredClone(f.rows), snapshot = await f.a.readPreservationSnapshot(f.ws, { postIds: [f.selected.id], boardIds: [f.nine.boards[0].id] });
+  const selected = await R.select(snapshot, { postIds: [f.selected.id], boardIds: [f.nine.boards[0].id] });
+  const copy = await R.copy(selected), b = f.base.forAccount(accountB), installed = await b.installPreservationCopy(copy);
+  assert.deepEqual(installed, copy); assert.notEqual(installed.bundle.workspaceId, f.ws);
+  assert.equal(await b.getActive(), copy.bundle.workspaceId);
+  for (const { doc, evidence } of copy.posts) {
+    assert.deepEqual(await b.readPhotoPost(copy.bundle.workspaceId, doc.id), doc);
+    assert.deepEqual(await b.readPostEvidence(copy.bundle.workspaceId, doc.id), evidence);
+    assert.equal(await b.readBlogSyncState(copy.bundle.workspaceId, doc.id), null);
+  }
+  assert.deepEqual(await b.readNineBoard(copy.bundle.workspaceId), copy.nineBoard);
+  assert.equal(await b.getSyncState(copy.bundle.workspaceId), null);
+  assert.deepEqual(f.rows.get('meta').get(JSON.stringify(`owner:${copy.bundle.workspaceId}`)).value, accountB);
+  for (const [store, values] of original) for (const [key, value] of values) {
+    assert.deepEqual(f.rows.get(store).get(key), value);
+  }
+  const a = f.base.forAccount(accountA);
+  await assert.rejects(a.read(copy.bundle.workspaceId), { code: 'workspace_access_denied' });
+  assert.deepEqual(await a.read(f.ws), f.bundle);
+});
+
+test('preservation install abort, synchronous failure and account replacement roll back posts, evidence, owners and activation together', async t => {
+  const f = await preservationFixture(t), R = require('../assets/life/preservation-references.js');
+  const snapshot = await f.a.readPreservationSnapshot(f.ws, { postIds: [f.selected.id], boardIds: [f.nine.boards[0].id] });
+  const selected = await R.select(snapshot, { postIds: [f.selected.id], boardIds: [f.nine.boards[0].id] });
+  for (const point of ['completion', 'evidence', 'account']) {
+    const a = f.base.forAccount(accountA), copy = await R.copy(selected), before = structuredClone(f.rows), events = [];
+    a.subscribe(copy.bundle.workspaceId, event => events.push(event));
+    if (point === 'completion') f.control.failCompletion = true;
+    else f.control.beforeWrite = ({ name, value }) => {
+      if (name !== 'meta' || !value?.key?.startsWith(`post-evidence:${copy.bundle.workspaceId}:`)) return;
+      f.control.beforeWrite = null;
+      if (point === 'account') f.base.forAccount(accountB);
+      else throw new DOMException('synchronous evidence failure', 'InvalidStateError');
+    };
+    await assert.rejects(a.installPreservationCopy(copy), { code: point === 'account' ? 'storage_scope_closed' : point === 'evidence' ? 'storage_unavailable' : 'storage_aborted' });
+    assert.deepEqual(f.rows, before); assert.deepEqual(events, []);
+    const again = f.base.forAccount(accountA);
+    assert.deepEqual(await again.installPreservationCopy(copy), copy);
+    await assert.rejects(again.installPreservationCopy(copy), { code: 'workspace_exists' });
+  }
+});
+
+test('preservation install refuses orphan metadata collisions and non-fresh revision candidates before changing any data', async t => {
+  const f = await preservationFixture(t), R = require('../assets/life/preservation-references.js');
+  const snapshot = await f.a.readPreservationSnapshot(f.ws, { postIds: [f.selected.id] });
+  const copy = await R.copy(await R.select(snapshot, { postIds: [f.selected.id], boardIds: [] }));
+  const corrupt = structuredClone(copy); corrupt.posts[0].doc.revision = 2;
+  const before = structuredClone(f.rows);
+  await assert.rejects(f.a.installPreservationCopy(corrupt), { code: 'invalid_preservation' });
+  assert.deepEqual(f.rows, before);
+  const orphanKey = `blog-sync:${copy.bundle.workspaceId}:${copy.posts[0].doc.id}`;
+  f.rows.get('meta').set(JSON.stringify(orphanKey), { key: orphanKey, value: { publication: { token: Core.id() } } });
+  const orphan = structuredClone(f.rows);
+  await assert.rejects(f.a.installPreservationCopy(copy), { code: 'workspace_exists' });
+  assert.deepEqual(f.rows, orphan);
+});
+
+test('preservation installation verifies original photo bytes before any transaction and preserves exact valid bytes', async t => {
+  const f = await preservationFixture(t), R = require('../assets/life/preservation-references.js'), M = require('../assets/life/photo-post.js');
+  const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a3ioAAAAASUVORK5CYII=', 'base64');
+  const blob = new Blob([bytes], { type: 'image/png' }), photo = { id: Core.id(), name: '합성 원본.png', type: 'image/png', size: blob.size, width: 1, height: 1, digest: await M.digest(blob), blob };
+  const doc = { ...f.selected, photos: [photo], ops: [{ insert: { photo: { id: photo.id, caption: '원본 설명', alt: '합성 사진' } } }, { insert: '\n' }] };
+  const saved = await f.a.savePhotoPost(f.ws, doc, f.selected.revision);
+  const snapshot = await f.a.readPreservationSnapshot(f.ws, { postIds: [saved.id] });
+  const copy = await R.copy(await R.select(snapshot, { postIds: [saved.id], boardIds: [] }));
+  const corrupt = structuredClone(copy), changed = Buffer.from(bytes); changed[30] ^= 1;
+  corrupt.posts[0].doc.photos[0].blob = new Blob([changed], { type: 'image/png' });
+  const before = structuredClone(f.rows), transactions = f.control.transactions.length;
+  await assert.rejects(f.a.installPreservationCopy(corrupt), { code: 'invalid_blog_photo' });
+  assert.equal(f.control.transactions.length, transactions); assert.deepEqual(f.rows, before);
+  const installed = await f.a.installPreservationCopy(copy);
+  const read = await f.a.readPhotoPost(installed.bundle.workspaceId, installed.posts[0].doc.id);
+  assert.deepEqual(Buffer.from(await read.photos[0].blob.arrayBuffer()), bytes);
+  assert.notEqual(read.photos[0].id, photo.id); assert.equal(read.photos[0].digest, photo.digest);
+});
+
+test('preservation async validation owns its input and an account switch before the write transaction cannot install a late copy', async t => {
+  const f = await preservationFixture(t), R = require('../assets/life/preservation-references.js');
+  const snapshot = await f.a.readPreservationSnapshot(f.ws, { postIds: [f.selected.id] });
+  const original = await R.copy(await R.select(snapshot, { postIds: [f.selected.id], boardIds: [] }));
+  const previous = globalThis.HaedoLife.PreservationReferences;
+  t.after(() => { globalThis.HaedoLife.PreservationReferences = previous; });
+  for (const changeAccount of [false, true]) {
+    const a = f.base.forAccount(accountA), copy = changeAccount ? await R.copy(await R.select(snapshot, { postIds: [f.selected.id], boardIds: [] })) : structuredClone(original);
+    let enter, release; const entered = new Promise(resolve => { enter = resolve; }), gate = new Promise(resolve => { release = resolve; });
+    globalThis.HaedoLife.PreservationReferences = { ...R, async validate(input) { const result = await R.validate(input); enter(); await gate; return result; } };
+    const before = structuredClone(f.rows), count = f.control.transactions.length, pending = a.installPreservationCopy(copy);
+    await entered;
+    copy.posts[0].doc.title = '호출자가 검증 중 바꾼 제목';
+    if (changeAccount) f.base.forAccount(accountB);
+    release();
+    if (changeAccount) { await assert.rejects(pending, { code: 'storage_scope_closed' }); assert.equal(f.control.transactions.length, count); assert.deepEqual(f.rows, before); }
+    else { const installed = await pending; assert.equal(installed.posts[0].doc.title, original.posts[0].doc.title); }
+    globalThis.HaedoLife.PreservationReferences = previous;
+  }
+});
+
+test('preservation local copy compares selected posts, evidence and board contents inside its final installation transaction', async t => {
+  const f = await preservationFixture(t), R = require('../assets/life/preservation-references.js');
+  const other = createStorage({ idb: f.idb, core: Core, channelFactory: null, account: accountA }); t.after(() => other.close());
+  const originalReferences = globalThis.HaedoLife.PreservationReferences;
+  t.after(() => { globalThis.HaedoLife.PreservationReferences = originalReferences; });
+  for (const point of ['post', 'evidence', 'board']) {
+    const selection = { postIds: [f.selected.id], boardIds: point === 'board' ? [f.nine.boards[0].id] : [] };
+    const expected = await R.select(await f.a.readPreservationSnapshot(f.ws, selection), selection), copy = await R.copy(expected);
+    let enter, release; const entered = new Promise(resolve => { enter = resolve; }), gate = new Promise(resolve => { release = resolve; });
+    globalThis.HaedoLife.PreservationReferences = { ...R, async validate(input) {
+      const result = await R.validate(input); if (input.bundle.workspaceId === copy.bundle.workspaceId) { enter(); await gate; } return result;
+    } };
+    const pending = f.a.installPreservationCopy(copy, { source: { workspaceId: f.ws, unowned: false, expected } });
+    await entered;
+    if (point === 'post') { const doc = await other.readPhotoPost(f.ws, f.selected.id); await other.savePhotoPost(f.ws, { ...doc, title: '최종 검증 중 원본 편집' }, doc.revision); }
+    if (point === 'evidence') { const evidence = await other.readPostEvidence(f.ws, f.selected.id); await other.savePostEvidence(f.ws, f.selected.id, { refs: [] }, evidence.revision); }
+    if (point === 'board') { const state = await other.readNineBoard(f.ws); state.boards[0].title = '최종 검증 중 구성 편집'; await other.saveNineBoard(f.ws, state, state.revision); }
+    const changed = structuredClone(f.rows); release();
+    await assert.rejects(pending, { code: 'preservation_source_changed' });
+    assert.deepEqual(f.rows, changed); assert.equal(await f.a.getActive(), f.ws);
+    globalThis.HaedoLife.PreservationReferences = originalReferences;
+  }
+});
+
+test('preservation final source CAS permits unrelated records, posts and boards but rejects a newly owned unowned source', async t => {
+  const f = await preservationFixture(t), R = require('../assets/life/preservation-references.js'), N = require('../assets/life/nine-board.js');
+  const other = createStorage({ idb: f.idb, core: Core, channelFactory: null, account: accountA }); t.after(() => other.close());
+  const originalReferences = globalThis.HaedoLife.PreservationReferences;
+  t.after(() => { globalThis.HaedoLife.PreservationReferences = originalReferences; });
+  for (const point of ['unrelated', 'owner']) {
+    if (point === 'owner') f.rows.get('meta').delete(JSON.stringify(`owner:${f.ws}`));
+    const selection = { postIds: [f.selected.id], boardIds: [] }, unowned = point === 'owner';
+    const expected = await R.select(await f.a.readPreservationSnapshot(f.ws, { ...selection, unowned }), selection), copy = await R.copy(expected);
+    let enter, release; const entered = new Promise(resolve => { enter = resolve; }), gate = new Promise(resolve => { release = resolve; });
+    globalThis.HaedoLife.PreservationReferences = { ...R, async validate(input) {
+      const result = await R.validate(input); if (input.bundle.workspaceId === copy.bundle.workspaceId) { enter(); await gate; } return result;
+    } };
+    const pending = f.a.installPreservationCopy(copy, { source: { workspaceId: f.ws, unowned, expected } });
+    await entered;
+    if (point === 'unrelated') {
+      const doc = await other.readPhotoPost(f.ws, f.dependency.id); await other.savePhotoPost(f.ws, { ...doc, title: '선택하지 않은 글 편집' }, doc.revision);
+      const state = await other.readNineBoard(f.ws); state.boards.push(N.create(Core.id)); await other.saveNineBoard(f.ws, state, state.revision);
+      const bundle = await other.read(f.ws), prepared = await Core.prepareImport({ origin: 'other', title: '별도 원문', text: '선택에 없는 새로운 자료입니다.' }, bundle);
+      assert.equal((await other.commitLocal({ workspaceId: f.ws, operationId: Core.id(), baseRevision: bundle.revision, changes: Core.buildImportChanges(bundle, prepared, []) })).status, 'stored');
+    } else {
+      // A legacy owner-free workspace becomes bound while its review is open.
+      f.rows.get('meta').set(JSON.stringify(`owner:${f.ws}`), { key: `owner:${f.ws}`, value: accountB });
+    }
+    const changed = structuredClone(f.rows); release();
+    if (point === 'owner') { await assert.rejects(pending, { code: 'workspace_access_denied' }); assert.deepEqual(f.rows, changed); }
+    else {
+      const installed = await pending; assert.equal(installed.bundle.workspaceId, copy.bundle.workspaceId);
+      assert.deepEqual(await f.a.readPhotoPost(copy.bundle.workspaceId, copy.posts[0].doc.id), copy.posts[0].doc);
+    }
+    globalThis.HaedoLife.PreservationReferences = originalReferences;
+  }
 });

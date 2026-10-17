@@ -811,3 +811,13 @@ Ghost와 ONE의 본문·사진 중심 흐름은 설계 참고, Quill은 현재 �
 같은 날의 검토 목록 갱신은 이 오프라인 어댑터에 감사 투영·중복 묶음·native details 기반 정적 읽기 보고서만 더한다. 기존 공식 표현/도구 비교를 유지하며 새 parser·패키지·네트워크 요청을 추가하지 않는다. 원문/연결을 바꾸지 않는 사유 분류와 명확한 경로 후보를 자체 유지하며, 실제 전체 파일 대조와 익명 HTML 재열기로 검증한다.
 
 2026-10-17 연결 선택 도구도 기존 Core·native file API·fflate를 재사용한다. 공식 [fflate 최신 릴리스](https://github.com/101arrowz/fflate/releases/tag/v0.8.3)는 `v0.8.3`(2026-05-16), archived=false·동일 날짜 유지 이력·MIT·공개 security-advisories 0개를 GitHub API로 재확인했다. 전체 취약점 부재를 뜻하지 않는다. 기존 vendor를 그대로 쓰고 독립 도구 HTML에도 MIT 원문을 포함한다. 새 ZIP 엔진/프레임워크/DB와 원문 재작성 도구 도입 대신, 해도의 정확 버전/감사/선택 계약을 잇는 공유 어댑터만 자체 유지한다. 무압축 ZIP은 기존 사진 글 방식을 따르며, 큰 압축 작업/원격 서비스가 필요해지면 실측 후 다시 비교한다. [구현·검수](../design-review/obsidian-decisions.md).
+
+## 선택한 글·근거의 비공개 이동 — 2026-10-18 KST
+
+새 ZIP/저장 엔진 대신 동봉한 **fflate 0.8.3(MIT)**·**idb 8.0.3(ISC)**와 기존 PhotoPost·Blog.hydrate·Core·SourceReference·NineBoard 검증을 재사용한다. 라이브러리는 파일 압축과 트랜잭션을 담당하고, 선택 의존성의 최소 투영·정확 버전/구절 확인·새 사본 ID 매핑만 앱의 도메인 어댑터로 유지한다. 전체 계정 백업 엔진이나 CMS·프레임워크 교체는 이 요구의 선행 조건이 아니다. [제품·보존 계약](../design-review/preservation-portability.md)을 따른다.
+
+ZIP 담당은 공식 [최신 릴리스 API](https://api.github.com/repos/101arrowz/fflate/releases/latest)에서 v0.8.3·2026-05-16 03:02:37 UTC, [저장소](https://api.github.com/repos/101arrowz/fflate)의 archived=false/disabled=false·2026-05-16 유지 이력을 확인했다. [고정 태그 LICENSE](https://github.com/101arrowz/fflate/blob/v0.8.3/LICENSE)는 MIT·Copyright 2026 Arjun Barrett이며 동봉 고지와 일치한다. 릴리스에는 Zip64 extra buffer over-read 수정이 명시돼 있다. 공개 security-advisories 재조회는 현재 GitHub 연결에서 지원하지 않는 endpoint로 실패했다. 이번에 권고 0건을 다시 확인했다거나 취약점 부재를 보증하지 않는다. 기존 level 0 ZIP과 고정 경로·파일 수/크기·UTF-8·사진 서명/해시/픽셀 검증을 유지하며 새 의존성을 설치하지 않는다.
+
+담당자의 합성 DEFLATE 실험에서 중앙 헤더의 펼친 크기를 줄이면 fflate가 실제 내용의 접두 버퍼만 반환할 수 있음을 확인했다. 원래 압축된 JPEG·PNG·WebP를 몇 장 옮기는 이번 요구에는 새 형식을 stored 0 전용으로 제한한다. fflate는 ZIP 생성/읽기 엔진으로 유지하고, 그 전에 연속된 로컬 payload·중앙 목록·두 헤더의 경로/크기/CRC32를 실제 바이트와 대조한다. 일반 ZIP 지원이나 기존 ZIP 형식의 동작 변경은 아니다. 전체 메모리 방식의 256 MiB 상한을 실제 Apple 기기 처리 보장으로 표현하지 않는다.
+
+저장 검토 담당은 공식 [npm latest](https://registry.npmjs.org/idb/latest)의 8.0.4/ISC와 [저장소](https://api.github.com/repos/jakearchibald/idb)의 archived=false/disabled=false·2026-10-06 유지 이력을 확인했다. 이번 공개 보안 권고 재조회 성공은 확인하지 않았다. 기존 8.0.3의 [LICENSE](https://github.com/jakearchibald/idb/blob/v8.0.3/LICENSE)와 [트랜잭션 문서](https://github.com/jakearchibald/idb/blob/v8.0.3/README.md#transaction-lifetime)를 직접 읽었다. 외부 await 중 트랜잭션이 자동 종료될 수 있으며 `tx.done`이 최종 커밋 완료의 신호다. 따라서 ZIP·사진/본문 해시 검증은 저장 전에 마치고, 기존 계정 범위/CAS/원자 트랜잭션 어댑터를 확장한다. 기존 저장소 전반의 vendor 업그레이드와 새 파일 복원 계약을 함께 바꾸지 않는다. 새 모듈의 실제 검사·실기·배포 결과는 위 구현 기록에서 별도로 보고한다.

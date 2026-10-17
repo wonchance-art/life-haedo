@@ -132,6 +132,9 @@ jobs:
       - name: Verify page draft conflict comparison and copy recovery
         if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/page-draft-conflict-browser.cjs
+      - name: Verify selected originals, exact evidence and atomic account copies
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/preservation-browser.cjs
       - name: Verify nine-slot boards, local preservation and file round trips
         if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/nine-board-browser.cjs
@@ -360,6 +363,7 @@ jobs:
             .local/unified-home/
             .local/timeline-recovery/after/
             .local/home-entry/
+            .local/preservation/
             .local/subview-navigation/
             .local/management-clarity/
             .local/life-management/
@@ -526,6 +530,7 @@ jobs:
             .local/blog-completion/
             .local/blog-manager/
             .local/blog-public/
+            .local/preservation/
             .local/source-evidence/
             .local/search-source-isolation/
             .local/prepared-site-check/platform-report.txt
