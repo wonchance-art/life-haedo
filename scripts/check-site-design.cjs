@@ -32,7 +32,13 @@ const representatives = new Set(['home-feed-desktop', 'home-tools-desktop', 'hom
 async function clean(page) { await page.evaluate(() => document.activeElement.blur()); await page.mouse.move(0, 0); }
 async function platformReady(page) { await page.waitForFunction(() => globalThis.HaedoAuth?.user && document.querySelector('[data-private]')?.hidden === false && !document.querySelector('#syncRetry')?.disabled); }
 // Shared computed-style audit logic extended to generic platform skip links and native controls.
-function inspect() {
+async function inspect() {
+  // Audit the settled surface, not a transient entrance fade. Deliberately
+  // paused frames and infinite/loading animations must remain inspectable.
+  await document.fonts?.ready;
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const moving = document.getAnimations().filter(animation => animation.playState === 'running' && animation.playbackRate !== 0 && Number.isFinite(animation.effect?.getComputedTiming().endTime));
+  await Promise.all(moving.map(animation => animation.finished.catch(() => {})));
   const visible = el => el.checkVisibility({ visibilityProperty: true }) && !el.closest('[hidden], [inert], .life-sr-only, .sr-only') && !el.matches('.skip-link:not(:focus), .life-skip:not(:focus)') && el.getBoundingClientRect().width > 1;
   const canvas = document.createElement('canvas').getContext('2d');
   function rgba(value) {
