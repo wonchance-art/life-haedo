@@ -133,6 +133,11 @@
       urls.add(u);
       return u;
     };
+    function retireImageURL(value) {
+      // show() may assign another src in this task. Let the final queued image
+      // update cancel the previous request before retiring its URL.
+      queueMicrotask(() => queueMicrotask(() => URL.revokeObjectURL(value)));
+    }
     function cleanup() {
       if (status) root.HaedoMotion?.cancel(status);
       dismissControls?.();
@@ -150,7 +155,7 @@
       host?.querySelectorAll("img").forEach((image) => {
         if (urls.has(image.getAttribute("src"))) image.removeAttribute("src");
       });
-      for (const u of urls) URL.revokeObjectURL(u);
+      for (const u of urls) retireImageURL(u);
       urls.clear();
       editor = null;
       selected = null;
@@ -681,7 +686,8 @@
       stage.append(img);
       const release = () => {
         if (source) {
-          URL.revokeObjectURL(source);
+          img.removeAttribute("src");
+          retireImageURL(source);
           urls.delete(source);
           source = null;
         }
