@@ -119,8 +119,10 @@
     const viewOrigins = new Map();
     let findRenderPromise = Promise.resolve();
     let collectionOpenOptions = null;
-    const parentViews = new Set(['find', 'home', 'sources', 'topics', 'tools', 'manage']);
-    const subviewTitles = { find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '내 페이지',
+    let blogManager = null, blogOpenOptions = null;
+    const blogSync = global.HaedoLife.BlogSync?.create({ storage, auth });
+    const parentViews = new Set(['blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
+    const subviewTitles = { blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '내 페이지',
       discover: '다시 찾기', sync: '기기 간 동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
     const selectedVersions = new Set();
@@ -939,6 +941,7 @@
         focusName: control?.getAttribute('aria-label') || control?.textContent, focusTag: control?.tagName } : null;
       const returningFromReader = from === 'source' && state.returnContext?.mode === mode;
       if (dirty()) await persistStage();
+      await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
       collection?.flush();
@@ -973,6 +976,7 @@
         state.editTick = 1;
       }
       if (!['import', 'batch', 'source'].includes(mode) && !chapterImportOptions) chapterImport = null;
+      blogOpenOptions = mode === 'blog' ? { evidenceSeed: options?.evidenceSeed } : null;
       collectionOpenOptions = mode === 'collection' ? { itemId: collectionItemId } : null;
       writingOpenOptions = mode === 'write' ? writing || {} : null;
       Object.assign(state, viewOptions, { mode });
@@ -1077,7 +1081,7 @@
       if (section === 'tools') return ['discover', 'reflection', 'books'].includes(view) ? view : 'tools';
       if (section === 'manage') return ['transfer', 'sync', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
       if (!section && ['transfer', 'sync', 'workbench-backup', 'public-pages', 'discover', 'reflection', 'books'].includes(view)) return view;
-      if (['topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related', 'collection', 'find'].includes(view)) return view;
+      if (['blog', 'topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related', 'collection', 'find'].includes(view)) return view;
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
     }
 
@@ -1088,7 +1092,7 @@
       if (section === 'home' && !/\/life\.html$/.test(url.pathname)) url.searchParams.delete('section');
       else url.searchParams.set('section', section);
       const view = mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
-      if (['topics', 'time', 'import', 'write', 'sync', 'transfer', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
+      if (['blog', 'topics', 'time', 'import', 'write', 'sync', 'transfer', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
       else url.searchParams.delete('view');
       const destination = url.pathname + url.search + url.hash;
       if (destination !== global.location.pathname + global.location.search + global.location.hash)
@@ -1110,6 +1114,7 @@
       const next = section === previousSection ? sectionRoot : section === 'home' ? 'home' : section === 'records' ? lastRecordMode : section === 'tools' ? 'tools' : 'manage';
       // Save before changing URL so a failed draft write keeps the current view.
       if (dirty()) await persistStage();
+      await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
       collection?.flush();
@@ -1164,7 +1169,7 @@
       toolbar.replaceChildren();
       toolbar.hidden = state.mode === 'source' && !state.remoteChanged;
       recordSections.replaceChildren();
-      const focused = ['write', 'source', 'page', 'related', 'collection', 'find'].includes(state.mode);
+      const focused = ['blog', 'write', 'source', 'page', 'related', 'collection', 'find'].includes(state.mode);
       recordSections.hidden = section !== 'records' || focused;
       const heading = node('h1', null, 'life-page-title');
       heading.tabIndex = -1;
@@ -1236,7 +1241,8 @@
       if (state.remoteChanged && state.mode !== 'find') {
         const refresh = button('최신 내용 확인', guarded(async () => {
           if (dirty()) await persistStage();
-          await workbench?.flush();
+          await blogManager?.flush();
+      await workbench?.flush();
           await writer?.flush();
           collection?.flush();
           await refreshData();
@@ -1286,6 +1292,20 @@
         destinationRow('목표', '진행 중인 일과 다음 계획', 'goals.html', 'target'),
         destinationRow('습관', '반복할 일과 오늘의 체크', 'habits.html', 'check'));
       main.append(list);
+    }
+
+    async function renderBlogManager() {
+      const workspaceId = state.bundle.workspaceId;
+      const host = node('section'); host.id = 'lifeBlogManager'; main.append(host);
+      const instance = global.HaedoLife.BlogManager.create({ storage, workspaceId, auth, blogSync,
+        isCurrent: () => !disposed && state.mode === 'blog' && state.bundle?.workspaceId === workspaceId,
+        openPost: postId => navigate('page', { searchTarget: { photoPostId: postId }, pagePreview: false }),
+        openLegacy: row => row.kind === 'source' ? navigate('source', { sourceId: row.id, sourceVersionId: row.versionId, locator: null }) :
+          row.kind === 'writing-draft' ? navigate('write', { writing: { stageId: row.id } }) :
+          row.kind === 'page-draft' ? navigate('page', { pageDraftId: row.id }) : navigate('page', { searchTarget: { postId: row.id }, pagePreview: false })
+      });
+      blogManager = instance; const options = blogOpenOptions || {}; blogOpenOptions = null;
+      await instance.mount(host, options);
     }
 
     function renderManagement() {
@@ -1352,6 +1372,7 @@
       destinations.append(destinationRow('연표·목표·습관 백업·복원', '위 두 파일에 포함되지 않는 별도 자료', 'workspace.html?section=manage#backupAll', 'timeline'));
       destinations.append(actionRow('컬렉션 백업·복구', '컬렉션 정보·비공개 메모를 별도 파일로 보관', 'bookmark', async () => { await navigate('collection'); collection?.showBackup(); }));
       backups.append(destinations);
+      main.append(actionRow('글 관리', '저장한 글·초안·사진 원본·선택 공개', 'edit', () => navigate('blog')));
       main.append(backups, actionRow('공개 페이지 관리', '게시한 사본 확인·철회 · 백업과 별도', 'link', () => navigate('public-pages')));
     }
 
@@ -2143,6 +2164,22 @@
       arrangePanel.append(node('p', '현재 원문 버전을 담습니다.', 'life-meta'), arrangeActions(() => [version.id]));
       disclosure(arrange, arrangePanel, { onChange: open => { state.readerArrangeOpen = open; flushReadingPosition(); readerWatch?.suppress(); } });
       tools.append(back, arrange, info);
+      const useQuote = button('선택 구절로 글 쓰기', guarded(() => {
+        const locator = state.sourceSelection && { ...state.sourceSelection };
+        if (!locator || locator.start >= locator.end) throw new Error('먼저 본문에서 인용할 구절을 선택해 주세요.');
+        return navigate('blog', { evidenceSeed: { sourceId: source.id, versionId: version.id, locator } });
+      }));
+      const useNine = button('선택 구절을 9칸에 담기', guarded(async () => {
+        const locator = state.sourceSelection && { ...state.sourceSelection };
+        if (!locator || locator.start >= locator.end) throw new Error('먼저 본문에서 담을 구절을 선택해 주세요.');
+        const workspaceId = state.bundle.workspaceId, token = navigationGeneration;
+        const reference = await global.HaedoLife.SourceReference.build({ bundle: state.bundle, sourceId: source.id, versionId: version.id, locator });
+        if (disposed || token !== navigationGeneration || state.bundle?.workspaceId !== workspaceId) return;
+        return navigate('page', { nineReference: { kind: 'source', value: reference } });
+      }));
+      useQuote.id = 'lifeSourceToBlog'; useNine.id = 'lifeSourceToNine';
+      useQuote.disabled = useNine.disabled = true;
+      arrangePanel.append(useQuote, useNine);
       if (isOwnWriting(source) && version.id === versions[versions.length - 1].id) {
         tools.append(iconButton('내 글 수정', 'edit', guarded(() => navigate('write', { writing: { sourceId: source.id, sourceVersionId: version.id } }))));
       }
@@ -2257,6 +2294,7 @@
         picked.textContent = start < end ? version.contentText.slice(start, end) : instruction;
         quote.dataset.hasSelection = String(start < end);
         saveExcerpt.disabled = start >= end;
+        useQuote.disabled = useNine.disabled = start >= end;
         savePosition();
       };
       const capture = event => {
@@ -3408,6 +3446,7 @@
       if (disposed) return;
       const generation = ++renderGeneration, navigation = navigationGeneration;
       compositionPanel?.dispose(); compositionPanel = null;
+      blogManager?.dispose(); blogManager = null;
       homeRenderPromise = Promise.resolve();
       home?.leave();
       workbench?.leave();
@@ -3426,6 +3465,7 @@
         homeRenderPromise = home.render().catch(failure);
         return;
       }
+      if (state.mode === 'blog') return renderBlogManager().catch(failure);
       if (state.mode === 'find') { findRenderPromise = unifiedSearch.open().catch(failure); return; }
       if (state.mode === 'collection' && collection) { const options = collectionOpenOptions || {}; collectionOpenOptions = null; collection.open(options).catch(failure); return; }
       if (state.mode === 'write' && writer) {
@@ -3459,7 +3499,7 @@
     }
 
     const beforeUnload = event => {
-      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || collection?.dirty()) { event.preventDefault(); event.returnValue = ''; }
+      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || collection?.dirty() || blogManager?.dirty()) { event.preventDefault(); event.returnValue = ''; }
     };
     const visibility = () => {
       if (!document.hidden) return;
@@ -3527,6 +3567,7 @@
     // Call inside guarded actions; the public logout hook checks its own boundary.
     async function persistDrafts() {
       if (disposed) throw new Error('계정이 바뀌어 이전 초안을 보관할 수 없습니다.');
+      await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
       collection?.flush();
@@ -3560,8 +3601,10 @@
       if (disposed) return;
       disposed = true;
       compositionPanel?.dispose(); compositionPanel = null;
+      blogManager?.dispose(); blogManager = null;
       compositionSync?.dispose();
       writingSync?.dispose();
+      blogSync?.dispose();
       home?.dispose();
       workbench?.dispose();
       writer?.dispose();

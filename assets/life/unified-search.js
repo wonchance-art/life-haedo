@@ -6,7 +6,10 @@
 })(globalThis, function (core) {
   'use strict';
   const labels = { source: '원문', page: '페이지', collection: '컬렉션', nine: '9칸 구성' };
-  const itemText = item => [item.attachment.type, item.attachment.title, item.attachment.creator, item.attachment.url, item.reason];
+  const canonicalReference = value => Array.isArray(value) ? value.map(canonicalReference) : value && typeof value === 'object' ?
+    Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalReference(value[key])])) : value;
+  const itemText = item => [item.attachment.type, item.attachment.title, item.attachment.creator, item.attachment.url, item.reason,
+    ...(item.reference ? [canonicalReference(item.reference)] : [])];
   const staleNine = () => new Error('검색한 9칸 구성이 바뀌었습니다. 검색 결과를 다시 불러와 주세요.');
   function resolveNineTarget(state, target) {
     const board = state?.boards.find(b => b.id === target?.boardId);

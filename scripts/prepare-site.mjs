@@ -40,7 +40,7 @@ let previous;
 try {
   // Publish runtime files explicitly. Design previews, samples and future
   // internal assets must not become public just by living under assets/vendor.
-  for (const path of ['index.html', 'login.html', 'workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'privacy.html', 'life.html', 'share.html',
+  for (const path of ['blog.html', 'assets/life/source-reference.js', 'assets/life/blog.js', 'assets/life/blog-evidence.js', 'assets/life/blog-remote.js', 'assets/life/blog-sync.js', 'assets/life/blog-public-ui.js', 'assets/life/blog-manager.js', 'assets/life/blog-public.js', 'assets/life/blog-public.css', 'assets/life/blog-manager.css', 'index.html', 'login.html', 'workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'privacy.html', 'life.html', 'share.html',
     'assets/app.css', 'assets/app.js', 'assets/data.js', 'assets/sync.js', 'assets/workspace.js',
     'assets/platform.css', 'assets/platform-auth.js', 'assets/platform-data.js', 'assets/platform-store.js',
     'assets/platform-ui.js', 'assets/platform-life-remote.js', 'assets/timeline-entry.js',

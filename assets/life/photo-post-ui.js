@@ -358,7 +358,7 @@
         if (valid()) showStatus(e);
       }
     }
-    async function open(id, editing = false) {
+    async function open(id, editing = false, expectedRevision = null) {
       const token = epoch;
       await flush();
       await beforeOpen();
@@ -367,6 +367,8 @@
       try {
         const next = await storage.readPhotoPost(workspaceId, id);
         if (!current(token)) return;
+        if (expectedRevision !== null && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || next.revision !== expectedRevision))
+          throw Object.assign(new Error('글이 바뀌었습니다. 목록을 다시 확인해 최신 글을 직접 열어 주세요.'), { code: 'photo_post_changed' });
         if (editing && next.status === "saved") {
           doc = {
             ...structuredClone(next),
@@ -1471,8 +1473,9 @@
     }
     async function mount(
       target,
-      { postId = null, reset = false, onFeed = null, listHost = null } = {},
+      { postId = null, expectedRevision = null, reset = false, onFeed = null, listHost = null } = {},
     ) {
+      if ((reset || postId) && doc) await flush();
       host = target;
       feedListener = onFeed;
       feedHost = listHost;
@@ -1508,7 +1511,7 @@
       render();
       if (postId) {
         try {
-          await open(postId);
+          await open(postId, false, expectedRevision);
           if (host?.isConnected && valid()) {
             const h = host.querySelector(".photo-read-heading,#photoTitle");
             h?.focus({ preventScroll: true });

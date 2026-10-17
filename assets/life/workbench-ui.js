@@ -1026,13 +1026,26 @@
         });
         bodyNode.append(back);
         const nineHost = el('section'); bodyNode.append(nineHost);
-        session.nine ||= life.NineBoardUI.create({ storage, workspaceId: session.workspaceId,
+        session.nine ||= life.NineBoardUI.create({ storage, workspaceId: session.workspaceId, getBundle,
+          onOpenReference: async ({kind,target,reference,focusKey}) => {
+            const token=generation;await flush();if(!showing(token,session))return;
+            if(kind==='source')return openSource(target.sourceId,target.sourceVersionId,{focusKey,locator:target.locator});
+            const post=await storage.readPhotoPost(session.workspaceId,target.postId);
+            await life.SourceReference.resolvePost({workspaceId:session.workspaceId,post},reference);
+            if(!showing(token,session))return;
+            session.ninePostReturn={focusKey};session.ninePostReference=reference;session.nineOpen=false;
+            session.searchTarget={photoPostId:target.postId};redraw();
+          },
           isCurrent: () => workspaceIs(session), onDirty: () => {
             if (['nine_input_pending', 'nine_input_in_progress', 'nine_busy'].includes(errorNode?.dataset.code) && !session.nine.hasBlockedInput()) clearError();
             updateStatus(session);
           } });
-        const target = session.nineTarget; session.nineTarget = null;
-        session.nine.mount(nineHost, target); viewCleanups.push(() => session.nine.detach()); return;
+        const target = session.nineTarget,reference=session.nineReference; session.nineTarget = null;session.nineReference=null;
+        session.nine.mount(nineHost, target,reference).then(()=>{
+          const focus=session.ninePostReturn?.focusKey;if(!focus||!nineHost.isConnected)return;
+          const control=[...nineHost.querySelectorAll('[data-focus-key]')].find(node=>node.dataset.focusKey===focus);
+          if(control){control.closest('details').open=true;control.focus({preventScroll:true});control.scrollIntoView({block:'nearest'});}session.ninePostReturn=null;
+        }); viewCleanups.push(() => session.nine.detach()); return;
       }
       if (session.share?.open) { renderSharePanel(session); return; }
       const switchButton = action(preview ? '편집으로 돌아가기' : '방문자 미리보기', async () => {
@@ -1085,9 +1098,10 @@
         });
         if (keepFocus && focus.isConnected && document.activeElement !== focus) focus.focus({ preventScroll: true });
       };
+      if(session.ninePostReturn)bodyNode.append(action('9칸 구성으로 돌아가기',async()=>{await session.photoPosts?.flush();session.ninePostReference=null;session.nineOpen=true;redraw();}));
       const photoHost = el('section'); bodyNode.append(photoHost);
       session.photoPosts ||= life.PhotoPostUI.create({ storage, workspaceId: session.workspaceId, isCurrent: () => workspaceIs(session), onDirty: () => updateStatus(session), onSaved: onLocalSaved, beforeOpen: async () => { await session.composer?.flush(); } });
-      const photoMount = session.photoPosts.mount(photoHost, { postId: session.searchTarget?.photoPostId || null, reset: beginPost || !!session.searchTarget && !session.searchTarget.photoPostId,
+      const photoMount = session.photoPosts.mount(photoHost, { postId: session.searchTarget?.photoPostId || null, expectedRevision:session.ninePostReference?.postRevision, reset: beginPost || !!session.searchTarget && !session.searchTarget.photoPostId,
         listHost: postFeed, onFeed: rows => { photoRows = rows; mergeFeed(); } }); viewCleanups.push(() => session.photoPosts.detach());
       const composerHost = el('section'); bodyNode.insertBefore(composerHost, photoHost);
       session.composer ||= life.PageComposer.create({ storage, workspaceId: session.workspaceId,
@@ -2741,17 +2755,19 @@
         view.contextError = valid ? '' : '기준 기록의 작업공간이나 버전을 확인하지 못했습니다. 현재 공간에서 기록을 다시 골라 주세요.';
       }
       if (mode === 'page') {
-        current.searchTarget = options.searchTarget || null; current.nineTarget = options.nineTarget || null;
-        if (typeof options.pagePreview === 'boolean' && !options.nineTarget) {
+        if(options.searchTarget&&options.searchTarget.photoPostId!==current.ninePostReference?.postId){current.ninePostReference=null;current.ninePostReturn=null;}
+        current.searchTarget = options.searchTarget || null; current.nineTarget = options.nineTarget || null;current.nineReference=options.nineReference||null;
+        if (typeof options.pagePreview === 'boolean' && !options.nineTarget&&!options.nineReference) {
           current.nineOpen = false; if (current.share) current.share.open = false;
         }
         current.pageCompose = options.pageCompose === true;
         if (current.pageCompose) {
+          current.ninePostReference=null;current.ninePostReturn=null;
           current.searchTarget = null; current.nineTarget = null; current.pageDraftId = null;
           current.nineOpen = false; preview = false; if (current.share) current.share.open = false;
         }
-        if (!current.pageCompose && (options.searchTarget || options.nineTarget)) {
-          current.nineOpen = !!options.nineTarget; preview = false; if (current.share) current.share.open = false;
+        if (!current.pageCompose && (options.searchTarget || options.nineTarget||options.nineReference)) {
+          current.nineOpen = !!options.nineTarget||!!options.nineReference; preview = false; if (current.share) current.share.open = false;
         }
       }
       if (mode === 'page' && !current.pageCompose && typeof options.pageDraftId === 'string') { current.pageDraftId = options.pageDraftId; preview = false; }

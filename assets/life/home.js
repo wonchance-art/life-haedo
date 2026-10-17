@@ -105,8 +105,8 @@
     }
     function quickLinks(context) {
       const nav = el('nav', null, 'home-blog-actions'); nav.setAttribute('aria-label', '내 블로그');
-      [['글쓰기', 'edit', 'write', { pageCompose: true }], ['글 관리', null, 'page', { pagePreview: false }]].forEach(([label, glyph, destination, options], index) => {
-        const button = action(context, '', () => navigate('page', options), index === 0 ? 'life-primary home-blog-write' : 'home-blog-action');
+      [['글쓰기', 'edit', 'write', { pageCompose: true }], ['글 관리', null, 'blog', {}]].forEach(([label, glyph, destination, options], index) => {
+        const button = action(context, '', () => navigate(index === 0 ? 'page' : destination, options), index === 0 ? 'life-primary home-blog-write' : 'home-blog-action');
         button.dataset.homeDestination = destination;
         button.dataset.focusKey = 'home:action:' + destination;
         if (glyph) button.append(life.Icons.create(glyph));

@@ -3,12 +3,13 @@
   'use strict';
   const life=root.HaedoLife ||= {},M=life.NineBoard;
   const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
-  function create({storage,workspaceId,isCurrent,onDirty=()=>{}}){
+  function create({storage,workspaceId,isCurrent,onDirty=()=>{},getBundle=()=>storage.read(workspaceId),onOpenReference=()=>{throw new Error('원문 열기를 연결하지 못했습니다. 구절과 출처는 그대로 보관됩니다.');}}){
     let state=null,base=[],host=null,status=null,error=null,selected=null,areaId=null,editing=null,preview=false,overview=false;
     let tick=0,stored=0,timer=null,saving=null,failure=null,epoch=0,manual=null,picker=null,candidate=null,busy=false,importUpdate=null;
+    let evidencePicker=null,evidencePending=false,incoming=null;
     const composing=new Set(),pendingFields=new Set(),urls=new Set(),fresh=()=>life.Core.id(),valid=()=>isCurrent(),board=()=>state?.boards.find(b=>b.id===selected),area=()=>board()?.areas.find(a=>a.id===areaId);
     const fault=(code,message)=>Object.assign(new Error(message),{code});
-    function dirty(){return !!manual||pendingFields.size>0||composing.size>0||!!saving||busy||tick!==stored;}
+    function dirty(){return evidencePending||!!manual||pendingFields.size>0||composing.size>0||!!saving||busy||tick!==stored;}
     function message(){
       if(!host?.isConnected||!status||!valid())return;
       status.textContent=failure?'저장하지 못함 · 입력 유지':pendingFields.size?'문자·용량 확인 필요 · 입력 유지':manual?'대상 입력 중 · 아직 담지 않음':saving?'이 브라우저에 저장 중…':tick!==stored?'저장 전 변경 있음':'이 브라우저에 저장됨';
@@ -16,7 +17,7 @@
     }
     function report(cause){failure=cause;if(error?.isConnected&&valid()){error.textContent=cause.message||'저장하지 못했습니다. 입력은 유지됩니다. 파일을 보관하거나 다시 시도해 주세요.';error.hidden=false;const recovery=host.querySelector('.nb-recovery');if(recovery){recovery.hidden=false;recovery.children[1].hidden=cause.code!=='nine_board_conflict';}}message();}
     function clear(){failure=null;if(error){error.textContent='';error.hidden=true;}const recovery=host?.querySelector('.nb-recovery');if(recovery)recovery.hidden=true;message();}
-    function guard(){if(!valid())throw new Error('작업공간이 바뀌었습니다.');if(composing.size)throw fault('nine_input_in_progress','입력을 마친 뒤 다시 시도해 주세요.');if(pendingFields.size)throw fault('nine_input_pending','입력은 남아 있습니다. 문자와 전체 용량을 확인해 내용을 줄인 뒤 다시 시도해 주세요.');if(manual)throw fault('nine_input_pending','대상을 담거나 입력 취소를 누른 뒤 다시 시도해 주세요.');if(busy)throw fault('nine_busy','저장을 마친 뒤 다시 시도해 주세요.');}
+    function guard(){if(!valid())throw new Error('작업공간이 바뀌었습니다.');if(evidencePending)throw fault('nine_input_pending','원문 선택을 마치거나 취소해 주세요.');if(composing.size)throw fault('nine_input_in_progress','입력을 마친 뒤 다시 시도해 주세요.');if(pendingFields.size)throw fault('nine_input_pending','입력은 남아 있습니다. 문자와 전체 용량을 확인해 내용을 줄인 뒤 다시 시도해 주세요.');if(manual)throw fault('nine_input_pending','대상을 담거나 입력 취소를 누른 뒤 다시 시도해 주세요.');if(busy)throw fault('nine_busy','저장을 마친 뒤 다시 시도해 주세요.');}
     function mark(){tick++;clearTimeout(timer);message();if(failure?.code!=='nine_board_conflict')timer=setTimeout(()=>{if(!composing.size&&!manual&&!pendingFields.size&&!busy)flush().catch(report);},450);}
     async function flush(){
       guard();clearTimeout(timer);timer=null;
@@ -66,7 +67,7 @@
       busy=true;const unlock=lock();message();
       try{
         const latest=await storage.readNineBoard(workspaceId);if(!valid()||token!==epoch)return;
-        const added=M.copies(changes,fresh),next={...latest,boards:latest.boards.concat(added)};M.validate(next);
+        const added=M.copies(changes,fresh),next={...latest,format:M.hasReferences(latest.boards.concat(added))?'life-nine-board-v2':latest.format,boards:latest.boards.concat(added)};M.validate(next);
         const saved=added.length?await storage.saveNineBoard(workspaceId,next,latest.revision):latest;
         if(!valid()||token!==epoch)return;
         const index=changes.findIndex(b=>b.id===active);state=saved;base=structuredClone(saved.boards);stored=tick;selected=added[index]?.id||saved.boards.find(b=>b.id===active)?.id||saved.boards[0]?.id;
@@ -82,6 +83,16 @@
         const item=a.items[i],cell=el('li',null,'nb-cell');cell.dataset.itemIndex=String(i);cell.tabIndex=-1;
         if(item){
           const card=life.PagePostsView.attachments([item.attachment],{compact:true});cell.append(card);
+          if(item.reference){
+            const ref=item.reference,linked=ref.value.workspaceId===workspaceId;
+            const evidence=details('보관한 근거');evidence.append(el('blockquote',ref.value.quote,'life-quote'));
+            evidence.append(el('p',linked?'당시 선택한 정확한 버전':'다른 작업공간의 근거 · 구절만 보존됨','life-meta'));
+            if(linked){const open=button('정확한 근거 열기',async()=>{
+              guard();await flush();const token=epoch;
+              const target=ref.kind==='source'?await life.SourceReference.resolve(await getBundle(),ref.value):await life.SourceReference.resolvePost({workspaceId,post:await storage.readPhotoPost(workspaceId,ref.value.postId)},ref.value);
+              if(valid()&&token===epoch)await onOpenReference({kind:ref.kind,target,reference:ref.value,focusKey:open.dataset.focusKey});
+            });open.dataset.focusKey='nine:reference:'+selected+':'+a.id+':'+i;evidence.append(open);}cell.append(evidence);
+          }
           if(item.reason){const reason=details('선택 이유');reason.classList.add('nb-reason');reason.append(el('p',item.reason,'nb-text'));cell.append(reason);}
           if(edit){const editButton=button('수정',()=>{guard();editing=i;renderEditor();host.querySelector('#nbItemTitle')?.focus();});editButton.setAttribute('aria-label',item.attachment.title+' · 수정');cell.append(editButton);}
         }else if(edit){const add=button('담기',()=>pick(a),'life-button nb-empty');add.setAttribute('aria-label',(i+1)+'번째 칸에 담기');cell.append(add);}else{cell.classList.add('nb-empty-read');cell.append(el('span','빈 칸','life-meta'));}
@@ -96,7 +107,27 @@
         onSelect:value=>{picker=null;if(!valid()||token!==epoch)return;manual={areaId:a.id,seed:value.item||value.seed||{},review:value.review||''};renderEditor();host.querySelector('#nbItemTitle')?.focus();message();}});
     }
     let editorHost=null;
-    function validateItems(a,items){M.validate({...state,boards:state.boards.map(b=>b.id===selected?{...b,areas:b.areas.map(value=>value===a?{...value,items}:value)}:b)});}
+    function validateItems(a,items){const values=state.boards.map(b=>b.id===selected?{...b,areas:b.areas.map(value=>value===a?{...value,items}:value)}:b),format=M.hasReferences(values)?'life-nine-board-v2':state.format;M.validate({...state,format,boards:values});return format;}
+    async function pickEvidence(a){
+      guard();if(a.items.length>=9)throw new Error('영역마다 항목을 9개까지 담을 수 있습니다.');await flush();
+      const token=epoch,panel=el('section',null,'nb-evidence-picker');editorHost.replaceChildren(panel);evidencePending=true;message();
+      const cancel=()=>{evidencePicker?.dispose();evidencePicker=null;evidencePending=false;panel.remove();message();};
+      const accept=value=>{if(!valid()||token!==epoch||!panel.isConnected)return;M.reference(value);const seed=M.evidenceSnapshot(value);cancel();manual={areaId:a.id,seed:seed.attachment,reference:value};renderEditor();};
+      const sourceHost=el('div');panel.append(el('h3','원문·저장 글 고르기'));
+      panel.append(button('원문 구절 고르기',async()=>{
+        sourceHost.replaceChildren();evidencePicker?.dispose();
+        evidencePicker=life.BlogEvidence.create({host:sourceHost,getBundle,isCurrent:()=>valid()&&token===epoch,
+          heading:'원문 구절 고르기',applyLabel:'이 구절 선택',includeThought:false,onApply:({reference})=>accept({kind:'source',value:reference}),onCancel:cancel});
+        await evidencePicker.open();
+      }),button('저장한 글 고르기',async()=>{
+        evidencePicker?.dispose();evidencePicker=null;const rows=await storage.listPhotoPosts(workspaceId);if(!valid()||token!==epoch||!panel.isConnected)return;
+        sourceHost.replaceChildren();const saved=rows.filter(row=>row.status==='saved'&&!row.archived);let count=0;
+        const append=()=>{for(const row of saved.slice(count,count+40))sourceHost.append(button(row.title||'제목 없는 저장 글',async()=>{
+          const post=await storage.readPhotoPost(workspaceId,row.id),ref=await life.SourceReference.buildPost({workspaceId,post});accept({kind:'post',value:ref});
+        }));count+=40;more.hidden=count>=saved.length;};
+        const more=button('저장 글 더 보기',append);if(!saved.length)sourceHost.append(el('p','저장한 글이 없습니다.','life-help'));append();sourceHost.append(more);
+      }),button('선택 취소',cancel),sourceHost);
+    }
     function renderEditor(){
       if(!editorHost)return;editorHost.replaceChildren();const a=area();if(!a)return;
       if(!manual&&editing==null)return;
@@ -111,15 +142,17 @@
         const f=field(label,values[key],v=>values[key]=v,{multiline:key==='reason',max,id:key==='title'?'nbItemTitle':undefined});form.append(f.wrapper);
       }
       if(manual.review)form.append(el('p',manual.review,'life-help'));
+      const retainedReference=current?.reference||manual.reference;
+      if(retainedReference)form.append(el('blockquote',retainedReference.value.quote,'life-quote'),el('p','선택 이유는 직접 입력합니다. 원문과 저장 글은 수정하지 않습니다.','life-help'));
       const actions=el('div',null,'life-actions'),apply=el('button',current?'반영':'담기','life-button');apply.type='submit';
       actions.append(apply,button('입력 취소',()=>{if(composing.size)throw new Error('입력을 마친 뒤 취소해 주세요.');manual=null;editing=null;clear();if(tick!==stored)mark();render();host.querySelector('.nb-area-heading')?.focus();}));form.append(actions);
       form.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.isComposing||composing.size||e.keyCode===229))e.preventDefault();});
       form.addEventListener('submit',e=>{e.preventDefault();if(composing.size||!valid())return;try{
-        const item={attachment:life.PagePosts.attachment(values),reason:values.reason};validateItems(a,current?a.items.map((old,i)=>i===editing?item:old):a.items.concat(item));
+        const item={attachment:life.PagePosts.attachment(values),reason:values.reason,...(retainedReference?{reference:structuredClone(retainedReference)}:{})};const format=validateItems(a,current?a.items.map((old,i)=>i===editing?item:old):a.items.concat(item));state.format=format;
         if(current)a.items[editing]=item;else a.items.push(item);manual=null;editing=null;clear();mark();render();host.querySelector('.nb-area-heading')?.focus();
       }catch(cause){report(cause);}});
       if(current){
-        actions.append(button('앞으로 이동',()=>{if(composing.size)throw new Error('입력을 마친 뒤 이동해 주세요.');if(editing<=0)return;const item={attachment:life.PagePosts.attachment(values),reason:values.reason};const next=structuredClone(a.items);next[editing]=item;validateItems(a,next);a.items[editing]=item;const from=editing;[a.items[from-1],a.items[from]]=[a.items[from],a.items[from-1]];manual=null;editing=null;clear();mark();render();}),button('영역에서 빼기',()=>{if(composing.size)throw new Error('입력을 마친 뒤 빼 주세요.');a.items.splice(editing,1);manual=null;editing=null;clear();mark();render();}));
+        actions.append(button('앞으로 이동',()=>{if(composing.size)throw new Error('입력을 마친 뒤 이동해 주세요.');if(editing<=0)return;const item={attachment:life.PagePosts.attachment(values),reason:values.reason,...(retainedReference?{reference:structuredClone(retainedReference)}:{})};const next=structuredClone(a.items);next[editing]=item;validateItems(a,next);a.items[editing]=item;const from=editing;[a.items[from-1],a.items[from]]=[a.items[from],a.items[from-1]];manual=null;editing=null;clear();mark();render();}),button('영역에서 빼기',()=>{if(composing.size)throw new Error('입력을 마친 뒤 빼 주세요.');a.items.splice(editing,1);manual=null;editing=null;clear();mark();render();}));
         actions.children[2].disabled=editing===0;
       }
       editorHost.append(form);form.scrollIntoView({block:'nearest'});message();
@@ -152,7 +185,7 @@
       const apply=button('선택한 구성 새 사본으로 추가',async()=>{
         guard();await flush();if(candidate!==incoming)return;
         const chosen=incoming.boards.filter(b=>incoming.chosen.has(b.id));if(!chosen.length)throw new Error('복구할 구성을 선택해 주세요.');
-        const token=epoch,added=M.copies(chosen,fresh),next={...state,boards:state.boards.concat(added)};M.validate(next);busy=true;const unlock=lock();message();
+        const token=epoch,added=M.copies(chosen,fresh),next={...state,format:M.hasReferences(state.boards.concat(added))?'life-nine-board-v2':state.format,boards:state.boards.concat(added)};M.validate(next);busy=true;const unlock=lock();message();
         try{const saved=await storage.saveNineBoard(workspaceId,next,next.revision);if(!valid()||token!==epoch)return;state=saved;base=structuredClone(saved.boards);stored=tick;selected=added[0]?.id||selected;areaId=board()?.areas[0]?.id;candidate=null;clear();render();}
         finally{busy=false;unlock();message();}
       });
@@ -170,6 +203,12 @@
       const recovery=el('div',null,'life-actions nb-recovery');
       recovery.append(button('다시 저장',async()=>{await flush();clear();}),button('내 변경을 새 사본으로 보관',recover),button('전체 구성 JSON 백업 받기',()=>backup()));
       recovery.children[1].hidden=failure?.code!=='nine_board_conflict';recovery.hidden=!failure;host.append(recovery);
+      if(incoming){
+        const review=el('section',null,'nb-incoming');review.setAttribute('aria-label','담을 원문 근거');
+        review.append(el('h3',incoming.value.title||'선택한 근거'),el('blockquote',incoming.value.quote,'life-quote'));
+        const apply=button('선택한 영역에 담기',()=>{guard();const a=area();if(!a)throw new Error('구성과 영역을 먼저 골라 주세요.');if(a.items.length>=9)throw new Error('영역마다 항목을 9개까지 담을 수 있습니다.');const snapshot=M.evidenceSnapshot(incoming);manual={areaId:a.id,seed:snapshot.attachment,reference:incoming};incoming=null;preview=false;overview=false;render();});
+        apply.disabled=!area()||area().items.length>=9;review.append(el('p',area()?'대상 영역: '+(area().title||'이름 없는 영역'):'새 구성과 영역을 만들거나 기존 구성을 고르세요.','life-help'),apply,button('담기 취소',()=>{incoming=null;render();}));host.append(review);
+      }
       const b=board();if(!b){host.append(el('p','한 영역부터 시작하세요. 영역은 최대 9개, 영역마다 항목은 최대 9개입니다.','life-help'));}
       else{
         const mode=el('div',null,'life-actions');mode.append(button(preview?'편집하기':'9칸 미리보기',async()=>{await flush();preview=!preview;overview=b.areas.length>1;render();host.querySelector('.nb-display')?.focus();}));host.append(mode);
@@ -195,7 +234,7 @@
               const settings=details('영역 설명·관리');settings.append(field('영역 설명',a.note,v=>{a.note=v;mark();},{multiline:true,max:20000,id:'nbAreaNote'}).wrapper);
               const remove=button('빈 영역 삭제',()=>{guard();if(a.items.length||a.note||a.title)throw new Error('영역 이름·설명·항목을 비운 뒤 삭제할 수 있습니다.');b.areas=b.areas.filter(x=>x!==a);areaId=b.areas[0]?.id;mark();render();});remove.disabled=b.areas.length<=1||!!a.items.length||!!a.note||!!a.title;settings.append(remove);display.append(settings);
             }
-            renderTiles(display,a,{edit:!preview});editorHost=el('div');display.append(editorHost);if(!preview)renderEditor();
+            renderTiles(display,a,{edit:!preview});editorHost=el('div');display.append(editorHost);if(!preview){const evidence=button('원문·저장 글 담기',()=>pickEvidence(a));evidence.disabled=a.items.length>=9;display.append(evidence);renderEditor();}
           }
         }
       }
@@ -207,9 +246,10 @@
       if(b)files.append(button('HTML 보기 파일 받기',async()=>{await flush();download(M.html(board()),'haedo-nine-board.html','text/html;charset=utf-8');}));files.append(file);host.append(files);renderImport(host);
       if(failure)report(failure);else message();
     }
-    async function mount(target,searchTarget=null){
+    async function mount(target,searchTarget=null,incomingReference=null){
       host=target;const token=++epoch;host.className='nb-workspace';host.replaceChildren(el('p','9칸 구성 불러오는 중…','life-help'));
       try{if(!state||!dirty()){const next=await storage.readNineBoard(workspaceId);if(!valid()||token!==epoch||host!==target)return;state=next;base=structuredClone(next.boards);stored=tick;clear();}
+        if(incomingReference){M.reference(incomingReference);incoming=structuredClone(incomingReference);preview=false;overview=false;}
         if(searchTarget){const found=life.UnifiedSearch.resolveNineTarget(state,searchTarget);selected=found.board.id;areaId=found.area?.id||found.board.areas[0]?.id;preview=true;overview=!found.area;editing=null;}
         if(!board()){selected=state.boards[0]?.id;areaId=board()?.areas[0]?.id;}render();
         if(searchTarget){const focus=searchTarget.itemIndex!=null?host.querySelector('.nb-grid [data-item-index="'+searchTarget.itemIndex+'"]'):host.querySelector(searchTarget.areaId?'.nb-area-heading':'.nb-display');
@@ -217,8 +257,8 @@
           focus?.focus({preventScroll:true});focus?.scrollIntoView({block:'nearest'});}
       }catch(cause){if(!valid()||token!==epoch)return;const alert=el('p',cause.message||'불러오지 못했습니다.','life-error');alert.setAttribute('role','alert');host.replaceChildren(alert,button('다시 불러오기',()=>mount(target,searchTarget)));}
     }
-    function detach(){epoch++;clearTimeout(timer);picker?.();picker=null;importUpdate=null;host=null;status=null;error=null;editorHost=null;for(const u of urls)URL.revokeObjectURL(u);urls.clear();}
-    return {mount,flush,dirty,detach,hasBlockedInput:()=>!!manual||pendingFields.size>0||composing.size>0||busy};
+    function detach(){epoch++;clearTimeout(timer);picker?.();picker=null;evidencePicker?.dispose();evidencePicker=null;evidencePending=false;incoming=null;importUpdate=null;host=null;status=null;error=null;editorHost=null;for(const u of urls)URL.revokeObjectURL(u);urls.clear();}
+    return {mount,flush,dirty,detach,hasBlockedInput:()=>evidencePending||!!manual||pendingFields.size>0||composing.size>0||busy};
   }
   life.NineBoardUI={create};
 })(globalThis);

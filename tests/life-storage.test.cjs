@@ -1168,3 +1168,55 @@ test('workbench account isolation rejects foreign reads and account replacement 
   const anotherProject = base.forAccount({ ...accountA, projectUrl: 'https://different-project.supabase.co' });
   await assert.rejects(anotherProject.readWorkbench(original.workspaceId), { code: 'workspace_access_denied' });
 });
+
+
+test('blog state CAS is account scoped and evidence/post/index commits are atomic across late failure', async t => {
+  const { storage: base, control } = syncFixture(); t.after(() => base.close());
+  const M = require('../assets/life/photo-post.js'), R = require('../assets/life/source-reference.js');
+  const a = base.forAccount(accountA), bundle = await initialImport(a), ws = bundle.workspaceId;
+  const source = bundle.sources[0], version = bundle.sourceVersions.find(v => v.sourceId === source.id);
+  const ref = await R.build({ bundle, sourceId: source.id, versionId: version.id, locator: { start: 0, end: Math.min(3,version.contentText.length) } });
+  const doc = M.create(Core.id); doc.title = '근거와 계정 보존'; doc.ops = [{ insert: '작성 중인 본문\n' }];
+  assert.deepEqual(await a.readPostEvidence(ws, doc.id), { revision: 0, refs: [] });
+  let failed = false;
+  control.afterWrite = ({ name, value }) => { if (name === 'meta' && value.key?.startsWith('post-evidence:')) { failed = true; control.afterWrite = null; throw new DOMException('anonymous late evidence failure', 'AbortError'); } };
+  await assert.rejects(a.savePhotoPostWithEvidence(ws, doc, 0, [ref], 0), { code: 'storage_aborted' });
+  assert.equal(failed, true); assert.deepEqual(await a.listPhotoPosts(ws), []);
+  assert.deepEqual(await a.readPostEvidence(ws, doc.id), { revision: 0, refs: [] });
+  const saved = await a.savePhotoPostWithEvidence(ws, doc, 0, [ref], 0);
+  assert.equal(saved.revision, 1); assert.deepEqual((await a.readPostEvidence(ws, doc.id)).refs, [ref]);
+  await assert.rejects(a.savePhotoPostWithEvidence(ws, saved, 1, [], 0), { code: 'post_evidence_conflict' });
+  assert.deepEqual(await a.readPhotoPost(ws, doc.id), saved);
+  const other = structuredClone(ref); other.quote = 'x'.repeat(other.quote.length);
+  await assert.rejects(a.savePostEvidence(ws, doc.id, { refs: [other] }, 1), { code: 'invalid_source_reference' });
+  assert.equal(await a.readBlogSyncState(ws, doc.id), null);
+  const state = await a.writeBlogSyncState(ws, doc.id, { enabled: true, remoteRevision: 4 }, 0);
+  assert.equal(state.revision, 1); assert.equal(state.remoteRevision, 4);
+  await assert.rejects(a.writeBlogSyncState(ws, doc.id, { enabled: false }, 0), { code: 'blog_state_conflict' });
+  assert.deepEqual(await a.readBlogSyncState(ws, doc.id), state);
+  const b = base.forAccount(accountB);
+  await assert.rejects(b.readBlogSyncState(ws, doc.id), { code: 'workspace_access_denied' });
+  await assert.rejects(b.readPostEvidence(ws, doc.id), { code: 'workspace_access_denied' });
+});
+
+test('rich post replacement retains exact evidence and stable remote binding including pending operation receipt', async t => {
+  const { storage: base } = syncFixture(); t.after(() => base.close());
+  const M = require('../assets/life/photo-post.js'), R = require('../assets/life/source-reference.js');
+  const a = base.forAccount(accountA), bundle = await initialImport(a), ws = bundle.workspaceId;
+  const source = bundle.sources[0], version = bundle.sourceVersions.find(v => v.sourceId === source.id);
+  const ref = await R.build({ bundle, sourceId: source.id, versionId: version.id, locator: { start: 0, end: 3 } });
+  const doc = M.create(Core.id); doc.status = 'saved'; doc.title = '원래 글'; doc.ops = [{ insert: '원래 본문\n' }];
+  const first = await a.savePhotoPostWithEvidence(ws, doc, 0, [ref], 0);
+  const binding = await a.writeBlogSyncState(ws, first.id, { enabled: true, remoteId: Core.id(), remoteRevision: 2, localRevision: first.revision,
+    pending: { operationId: Core.id(), localRevision: first.revision, manifest: { title: '응답 유실된 이전 사본' } },
+    publishPending: { operationId: Core.id(), photoIds: ['old-photo'] }, unpublishPending: { operationId: Core.id() } }, 0);
+  const edit = { ...first, id: Core.id(), revision: 0, replaces: { id: first.id, revision: first.revision }, title: '수정 글' };
+  const next = await a.savePhotoPost(ws, edit, 0);
+  assert.deepEqual((await a.readPostEvidence(ws, next.id)).refs, [ref]);
+  const migrated = await a.readBlogSyncState(ws, next.id);
+  assert.equal(migrated.remoteId, binding.remoteId); assert.equal(migrated.pending.operationId, binding.pending.operationId);
+  assert.equal(migrated.publishPending, null); assert.equal(migrated.unpublishPending, null);
+  assert.equal(migrated.localRevision, 0); assert.equal(migrated.pending.localRevision, 0);
+  assert.equal(await a.readBlogSyncState(ws, first.id), null);
+  await assert.rejects(a.writeBlogSyncState(ws, first.id, binding, binding.revision), { code: 'blog_state_conflict' });
+});

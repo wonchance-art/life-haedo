@@ -151,7 +151,8 @@ async function main() {
     await check('import draft and reviewed exact excerpt survive tools/manage switching without page reload', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); const instance = await page.evaluate(() => __homeInstance);
       const raw = '통합 홈에서 보관할 본문\r\n다시 읽을 문장🌱\r\n끝 문장', quote = '다시 읽을 문장🌱';
-      await button(page, '가져오기'); await page.locator('#lifeImportTitle').fill('전환 중 보존할 익명 초안'); await page.locator('#lifeImportText').fill(raw);
+      await page.locator('.home-library > summary').click();
+      await button(page, '자료 가져오기'); await page.locator('#lifeImportTitle').fill('전환 중 보존할 익명 초안'); await page.locator('#lifeImportText').fill(raw);
       await nav(page, 'tools'); await nav(page, 'manage'); await nav(page, 'records'); await button(page, '가져오기');
       assert.equal(await page.locator('#lifeImportTitle').inputValue(), '전환 중 보존할 익명 초안');
       assert.equal(await page.locator('#lifeImportText').inputValue(), raw.replaceAll('\r\n', '\n'));
