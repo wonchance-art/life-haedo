@@ -17,12 +17,16 @@
     if (!file || !Number.isSafeInteger(file.size) || file.size < 22 || file.size > LIMIT) fail("Obsidian ZIP은 256MiB 이하의 변환 패키지를 선택해 주세요.");
     const bytes = new Uint8Array(await file.arrayBuffer());
     if (bytes.byteLength > LIMIT) fail("Obsidian ZIP 크기가 너무 큽니다.");
-    const seen = new Set(); let total = 0, unpacked;
+    const seen = new Set(), sizes = new Map(); let total = 0, unpacked;
     try {
       unpacked = zip.unzipSync(bytes, { filter: (entry) => {
         if (!allowed.includes(entry.name) || seen.has(entry.name)) fail("중복되거나 지원하지 않는 ZIP 경로입니다. 변환 결과 ZIP을 선택해 주세요.");
         seen.add(entry.name); total += entry.originalSize;
         if (!Number.isSafeInteger(entry.originalSize) || entry.originalSize < 0 || entry.originalSize > FILE_LIMIT || total > LIMIT) fail("ZIP을 펼친 크기가 제한을 넘었습니다. 원래 패키지를 확인해 주세요.");
+        // fflate copies stored entries by compressed size, so their originalSize alone is not a bound.
+        if (!Number.isSafeInteger(entry.size) || entry.size < 0 || entry.size > bytes.byteLength ||
+          ![0, 8].includes(entry.compression) || (entry.compression === 0 && entry.size !== entry.originalSize)) fail("ZIP 파일의 크기나 압축 정보가 일치하지 않습니다. 원래 패키지를 확인해 주세요.");
+        sizes.set(entry.name, entry.originalSize);
         return keepArchive || readable.includes(entry.name);
       } });
     } catch (e) {
@@ -30,6 +34,7 @@
       fail("Obsidian ZIP을 읽지 못했습니다. 원래 파일은 그대로 유지됩니다.");
     }
     if (required.some((name) => !seen.has(name))) fail("변환 파일 6개가 담긴 Obsidian ZIP을 선택해 주세요. 일반 보관함 ZIP이나 사진 글 ZIP과 다릅니다.");
+    for (const [name, data] of Object.entries(unpacked)) if (data.byteLength !== sizes.get(name)) fail("ZIP에 기록된 크기와 펼친 파일이 일치하지 않습니다. 원래 패키지를 확인해 주세요.");
     return { unpacked, names: [...seen] };
   }
   async function read(file) {

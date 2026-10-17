@@ -57,10 +57,15 @@ function memoryAdapter() {
             control.afterWrite?.({ name, method, value });
             return key;
           }
+          function requestWrite(method, value) {
+            // Native IDB requests can throw before returning their promise.
+            control.beforeWrite?.({ name, method, value });
+            return write(method, value);
+          }
           return {
             async get(key) { return structuredClone(map.get(encode(key))); },
             async getAll() { return structuredClone([...map.values()]); },
-            put: value => write('put', value), add: value => write('add', value), delete: key => write('delete', key),
+            put: value => requestWrite('put', value), add: value => requestWrite('add', value), delete: key => requestWrite('delete', key),
             index(field) { return { async getAll(value) { return structuredClone([...map.values()].filter(row => row[field] === value)); } }; }
           };
         }
@@ -328,6 +333,71 @@ test('workspace pair installation is atomic across second-write failure, duplica
   assert.equal(installed.length, 2); assert.equal(await a.getActive(), next[0].workspaceId);
   for (const copy of installed) assert.equal(await a.getSyncState(copy.workspaceId), null);
 });
+test('workspace pair failures preserve all rows, account metadata, active selection and notifications before a successful retry', async t => {
+  for (const point of ['first_owner', 'second_owner', 'active', 'completion', 'synchronous_second_add']) await t.test(point, async t => {
+    const { storage: base, control, rows } = syncFixture(); t.after(() => base.close());
+    const a = base.forAccount(accountA), previous = await initialImport(a);
+    const pair = [Core.createWorkspace({ title: '노트 사본' }), Core.createWorkspace({ title: '보조 파일 사본' })];
+    const originalInput = structuredClone(pair), before = structuredClone(rows), events = [];
+    for (const copy of pair) a.subscribe(copy.workspaceId, event => events.push(event));
+    if (point === 'completion') control.failCompletion = true;
+    else if (point === 'synchronous_second_add') control.beforeWrite = ({ name, method, value }) => {
+      if (name === 'bundles' && method === 'add' && value.workspaceId === pair[1].workspaceId) {
+        control.beforeWrite = null;
+        throw new DOMException('anonymous request failure', 'InvalidStateError');
+      }
+    };
+    else control.afterWrite = ({ name, value }) => {
+      const key = point === 'active' ? `activeWorkspace:${JSON.stringify([accountA.projectUrl, accountA.userId])}`
+        : `owner:${pair[point === 'first_owner' ? 0 : 1].workspaceId}`;
+      if (name === 'meta' && value.key === key) {
+        control.afterWrite = null;
+        throw new DOMException('anonymous metadata failure', 'AbortError');
+      }
+    };
+    await assert.rejects(a.installWorkspaces(pair), { code: point === 'synchronous_second_add' ? 'storage_unavailable' : 'storage_aborted' });
+    assert.deepEqual(rows, before);
+    assert.deepEqual(pair, originalInput);
+    assert.deepEqual(events, []);
+    assert.equal(await a.getActive(), previous.workspaceId);
+    assert.deepEqual(await a.read(previous.workspaceId), previous);
+    const installed = await a.installWorkspaces(pair);
+    assert.deepEqual(installed, originalInput);
+    assert.equal(await a.getActive(), pair[0].workspaceId);
+    assert.deepEqual(events.map(event => [event.type, event.workspaceId]), pair.map(copy => ['changed', copy.workspaceId]));
+    for (const copy of pair) {
+      assert.deepEqual(rows.get('meta').get(JSON.stringify(`owner:${copy.workspaceId}`)).value, accountA);
+      assert.equal(await a.getSyncState(copy.workspaceId), null);
+      assert.deepEqual(await a.read(copy.workspaceId), copy);
+    }
+    installed[0].title = '호출자가 바꾼 반환 사본';
+    assert.equal((await a.read(pair[0].workspaceId)).title, originalInput[0].title);
+  });
+});
+test('account replacement after pair ownership or active-pointer writes rolls back the complete installation', async t => {
+  for (const point of ['second_owner', 'active']) await t.test(point, async t => {
+    const { storage: base, control, rows } = syncFixture(); t.after(() => base.close());
+    const a = base.forAccount(accountA), previous = await a.createWorkspace('기존 자료');
+    const pair = [Core.createWorkspace(), Core.createWorkspace()], before = structuredClone(rows), events = [];
+    for (const copy of pair) a.subscribe(copy.workspaceId, event => events.push(event));
+    let b;
+    control.afterWrite = ({ name, value }) => {
+      if (name === 'meta' && (point === 'second_owner' ? value.key === `owner:${pair[1].workspaceId}` : value.key.startsWith('activeWorkspace:'))) {
+        control.afterWrite = null;
+        b = base.forAccount(accountB);
+      }
+    };
+    await assert.rejects(a.installWorkspaces(pair), { code: 'storage_scope_closed' });
+    assert.deepEqual(rows, before);
+    assert.deepEqual(events, []);
+    assert.deepEqual(await b.listWorkspaces(), []);
+    assert.equal(await b.getActive(), null);
+    const again = base.forAccount(accountA);
+    assert.equal(await again.getActive(), previous.workspaceId);
+    assert.deepEqual((await again.listWorkspaces()).map(value => value.workspaceId), [previous.workspaceId]);
+    assert.equal((await again.installWorkspaces(pair)).length, 2);
+  });
+});
 function bindingFor(bundle, userId = 'account-a') {
   return { projectUrl: 'https://anonymous-test.supabase.co', userId, remoteId: bundle.workspaceId };
 }
@@ -458,6 +528,9 @@ test('remote apply requires a clean workspace, preserves staging and rejects imm
   await assert.rejects(storage.applySyncRemote(bundle.workspaceId, binding, serverRow(bundle, 1)), { code: 'stale_sync_result' });
   const equivocation = Core.applyChanges(bundle, noteChanges(bundle, '같은 서버 버전에서 바뀐 내용'));
   await assert.rejects(storage.applySyncRemote(bundle.workspaceId, binding, serverRow(equivocation, 2)), { code: 'remote_revision_mismatch' });
+  const retitled = { ...bundle, title: '원문 해시는 같지만 서버 제목이 달라짐' };
+  await assert.rejects(storage.applySyncRemote(bundle.workspaceId, binding, serverRow(retitled, 2)), { code: 'remote_revision_mismatch' });
+  assert.deepEqual(await storage.read(bundle.workspaceId), bundle);
   bundle = await editNote(storage, bundle, '전송 전 로컬 메모');
   assert.equal((await storage.applySyncRemote(bundle.workspaceId, binding, serverRow(next, 3))).status, 'conflict');
   assert.equal((await storage.read(bundle.workspaceId)).records[0].note, '전송 전 로컬 메모');

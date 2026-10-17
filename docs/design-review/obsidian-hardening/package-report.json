@@ -1,0 +1,129 @@
+{
+  "checks": [
+    "ZIP preview verifies notes/supporting files and preserves the old workspace on cancellation or invalid input",
+    "Aborting the second IndexedDB insert rolls back both copies; retry installs exactly two owned unsynced workspaces",
+    "Restored notes open exact chosen targets and backlinks; support/source switching and fresh backups retain original bytes",
+    "Notes-only selection creates one copy; a postcommit refresh failure keeps saved copies and removes installation actions",
+    "A full 6,899-file anonymous ZIP restores two workspaces atomically, with lazy review and no data loss"
+  ],
+  "visual": [
+    {
+      "scene": "review",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 700,
+          "height": 34,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "review",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 628,
+          "height": 34,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "review",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 6.05,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "홈기록도구관리\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@example.inva",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.961
+        },
+        "title": {
+          "width": 350,
+          "height": 30,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "errors": [],
+  "external": [],
+  "scope": "Anonymous package ZIP and mock Auth; real IndexedDB transactions. No personal vault data, production account or Apple Files/device proof.",
+  "browser": "151.0.7922.173",
+  "wholeScale": {
+    "files": 6899,
+    "notes": 3479,
+    "supporting": 3420,
+    "verifiedBodyHashesAndPaths": 6899,
+    "elapsedMs": 17646
+  },
+  "pass": true
+}

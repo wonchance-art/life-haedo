@@ -67,7 +67,7 @@ async function main() {
       await page.getByRole("alert").waitFor(); assert.deepEqual(await active(), original);
       await page.evaluate(() => { IDBObjectStore.prototype.add = window.__pairAdd; delete window.__pairAdd; });
       await page.getByRole("button", { name: "Obsidian 새 사본으로 복원", exact: true }).click();
-      await page.locator("#lifeRestoreResult").waitFor(); const current = await active(); notesId = current.id;
+      await page.locator("#lifeRestoreResult").waitFor(); await settle(page); const current = await active(); notesId = current.id;
       assert.equal(current.sources, 5); assert.equal(current.links, 2); assert.equal(current.spaces, original.spaces + 2);
       const all = await page.evaluate(async () => { const s = HaedoLife.Shell.storage, rows = await s.listWorkspaces(); return Promise.all(rows.map(async row => ({ ...row, sync: await s.getSyncState(row.workspaceId) }))); });
       filesId = all.find(row => row.title.includes("보조 파일")).workspaceId;
@@ -75,10 +75,12 @@ async function main() {
     });
     await check("Restored notes open exact chosen targets and backlinks; support/source switching and fresh backups retain original bytes", async () => {
       await page.getByRole("button", { name: "함께 복원한 공간 열기: 익명 검토 · 보조 파일", exact: true }).click();
+      await settle(page);
       assert.equal((await active()).id, filesId);
       const body = await page.evaluate(async () => { const s = HaedoLife.Shell.storage, b = await s.read(await s.getActive()); return { text: b.sourceVersions[0].contentText, records: b.records.length }; });
       assert.deepEqual(body, { text: "private: anonymous", records: 0 });
       await page.getByRole("button", { name: "함께 복원한 공간 열기: 익명 검토", exact: true }).click();
+      await settle(page);
       assert.equal((await active()).id, notesId);
       await page.locator("#lifeSearch").fill("이전/책");
       await page.waitForFunction(() => document.querySelectorAll('.life-source-card').length === 1);
@@ -89,7 +91,9 @@ async function main() {
       await page.locator(".life-obsidian-links > summary").click();
       await page.locator("[data-linked-version]").filter({ hasText: "대상" }).click();
       await page.waitForFunction(() => getSelection()?.toString() === "# 실제 제목");
-      await page.locator(".life-obsidian-links > summary").click(); assert.match(await page.locator(".life-obsidian-links").innerText(), /이 노트를 연결한 원문/);
+      await page.locator(".life-obsidian-links > summary").click();
+      await page.locator(".life-obsidian-links").getByText("이 노트를 연결한 원문", { exact: true }).waitFor();
+      assert.match(await page.locator(".life-obsidian-links").innerText(), /이 노트를 연결한 원문/);
       const roundtrip = await page.evaluate(async () => { const s = HaedoLife.Shell.storage, c = HaedoLife.Core, b = await s.read(await s.getActive()), copy = await c.restoreBackup(c.makeBackup(b)); return { texts: copy.sourceVersions.map(v => v.contentText), links: copy.links.length }; });
       assert.deepEqual(roundtrip.texts, f.result.notesBackup.workspace.sourceVersions.map(v => v.contentText)); assert.equal(roundtrip.links, 2);
       await page.reload(); await ready(page); assert.equal((await active()).id, notesId);
@@ -110,7 +114,9 @@ async function main() {
       entries.push(...Array.from({ length: 3420 }, (_, i) => ({ path: "metadata/" + i + ".yaml", bytes: Buffer.from("anonymous: true\n") })));
       const data = await buildVault(entries, { repositoryUrl: "https://github.com/example/anonymous", ref: "b".repeat(40) });
       const files = { "notes.json": Buffer.from(JSON.stringify(data.notesBackup)), "supporting-files.json": Buffer.from(JSON.stringify(data.filesBackup)), "private-audit.json": Buffer.from(JSON.stringify(data.manifest)), "review.json": Buffer.from(JSON.stringify(data.review)), "review.html": Buffer.from(renderReviewHTML(data.review)), "repository.bundle": f.files["repository.bundle"] };
-      await go(); const before = await active(), start = Date.now(); await load(zip(files));
+      await go(); const before = await active();
+      const beforeIds = await page.evaluate(async () => (await HaedoLife.Shell.storage.listWorkspaces()).map(row => row.workspaceId));
+      const start = Date.now(); await load(zip(files));
       assert.match(await page.locator("#lifeObsidianPreview").innerText(), /노트 3479개 · 보조 파일 3420개/);
       assert.equal(await page.locator("#lifeObsidianPreview .life-backup-source").count(), 0);
       await page.locator("#lifeObsidianPreview .life-backup-contents").first().locator("summary").click();
@@ -121,7 +127,34 @@ async function main() {
       assert.equal(await page.locator("#lifeObsidianPreview .life-backup-source").count(), 80);
       await page.getByRole("button", { name: "Obsidian 새 사본으로 복원", exact: true }).click(); await page.locator("#lifeRestoreResult").waitFor();
       const after = await active(); assert.equal(after.sources, 3479); assert.equal(after.spaces, before.spaces + 2);
-      report.wholeScale = { files: 6899, notes: 3479, supporting: 3420, elapsedMs: Date.now() - start };
+      const snapshots = await page.evaluate(async ({ beforeIds, notesId }) => {
+        const s = HaedoLife.Shell.storage, rows = (await s.listWorkspaces()).filter(row => !beforeIds.includes(row.workspaceId));
+        const snapshots = [];
+        for (const row of rows) {
+          const bundle = await s.read(row.workspaceId), paths = new Map(bundle.sources.map(source => [source.id, source.sourceKey]));
+          const bodies = [];
+          for (const version of bundle.sourceVersions) {
+            const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(version.contentText)));
+            const hash = [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
+            bodies.push([paths.get(version.sourceId), version.contentHash, hash, version.format]);
+          }
+          bodies.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+          snapshots.push({ notes: row.workspaceId === notesId, sources: bundle.sources.length, versions: bundle.sourceVersions.length, bodies });
+        }
+        return snapshots;
+      }, { beforeIds, notesId: after.id });
+      assert.equal(snapshots.length, 2);
+      const expectedBodies = bundle => {
+        const paths = new Map(bundle.sources.map(source => [source.id, source.sourceKey]));
+        return bundle.sourceVersions.map(version => [paths.get(version.sourceId), version.contentHash, version.contentHash, version.format])
+          .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+      };
+      const notes = snapshots.find(snapshot => snapshot.notes), supporting = snapshots.find(snapshot => !snapshot.notes);
+      assert.equal(notes.sources, 3479); assert.equal(notes.versions, 3479);
+      assert.equal(supporting.sources, 3420); assert.equal(supporting.versions, 3420);
+      assert.deepEqual(notes.bodies, expectedBodies(data.notesBackup.workspace));
+      assert.deepEqual(supporting.bodies, expectedBodies(data.filesBackup.workspace));
+      report.wholeScale = { files: 6899, notes: 3479, supporting: 3420, verifiedBodyHashesAndPaths: 6899, elapsedMs: Date.now() - start };
     });
     assert.deepEqual(report.errors, []); assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.external, []); report.pass = true;
   } finally { await fs.writeFile(path.join(out, "report.json"), JSON.stringify(report, null, 2)); await browser.close(); }

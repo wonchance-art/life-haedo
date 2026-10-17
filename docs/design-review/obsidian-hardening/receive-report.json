@@ -1,0 +1,11 @@
+{
+  "checks": [
+    "draft persistence failure stops receipt before any local workspace switch",
+    "successful receipt durably saves previous memo and switching back remains usable",
+    "received snapshot remains open when subsequent workspace list refresh fails"
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "scope": "Synthetic Auth/server only; real Chromium and IndexedDB. No production or Apple hardware proof.",
+  "pass": true
+}

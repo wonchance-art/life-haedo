@@ -70,6 +70,31 @@ test("stale bindings, token/range/hash edits, duplicate decisions and unknown ca
   const anchor = h.items.find((i) => i.reason === "anchor_missing");
   assert.throws(() => D.preview(h, D.makeDecisions(h, [{ id: anchor.id, targetPath: "대상.md", targetLocator: null }])), { code: "target_locator_required" });
 });
+test("caller edits to the public review projection cannot grant candidates or change verified summary counts", async () => {
+  const { h } = await setup(), d = select(h), item = book(h);
+  item.candidatePaths.push("대상.md");
+  item.locator.start++;
+  item.token = "changed display";
+  h.informationalOccurrences = 999;
+  h.binding.ref = "b".repeat(40);
+  assert.throws(() => D.makeDecisions(h, [{ id: item.id, targetPath: "대상.md", targetLocator: null }]), { code: "unknown_candidate" });
+  const altered = copy(d); altered.decisions[0].targetPath = "대상.md";
+  assert.throws(() => D.preview(h, altered), { code: "unknown_candidate" });
+  assert.deepEqual(D.preview(h, d).summary, { added: 1, located: 0, unchanged: 0, deferred: 3, informational: 1 });
+});
+test("overlapping audit occurrences fail before they can become multiple choices for one source token", async () => {
+  const { files } = await setup();
+  for (const modify of [(locator) => locator.start++, (locator) => locator.end--]) {
+    const data = input(files), audit = JSON.parse(data.audit), review = JSON.parse(data.review);
+    const original = audit.unresolvedReferences.find((ref) => ref.target === "이전/책"), overlapping = copy(original);
+    modify(overlapping.locator); audit.unresolvedReferences.push(overlapping);
+    const group = review.groups.find((g) => g.target === original.target), occurrence = copy(group.occurrences[0]);
+    occurrence.locator = copy(overlapping.locator); group.occurrences.push(occurrence);
+    review.summary.reviewOccurrences++; review.summary.unresolvedOccurrences++;
+    data.audit = JSON.stringify(audit); data.review = JSON.stringify(review);
+    await assert.rejects(D.openPackage(data), { code: "overlapping_reference" });
+  }
+});
 test("a failed new-package write removes only its own partial output and never replaces existing directories", async () => {
   const { writeNewPackage } = await import("../scripts/lib/private-vault-files.mjs");
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "haedo-write-failure-")), output = path.join(root, "new");

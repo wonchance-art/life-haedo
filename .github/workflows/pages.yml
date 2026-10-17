@@ -9,8 +9,10 @@ permissions:
   pages: write
   id-token: write
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  # PR verification must not queue behind unrelated reviews or live deployments.
+  # Main/manual deployments retain their shared, non-cancelling group.
+  group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.event.pull_request.number) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -153,6 +155,12 @@ jobs:
       - name: Verify direct Obsidian ZIP review and atomic workspace pair restore
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/obsidian-package-browser.cjs
+      - name: Verify server workspace receipt and unsaved memo preservation
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/obsidian-receive-browser.cjs
+      - name: Verify large Obsidian search and exact-position return
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/obsidian-reading-scale-browser.cjs
       - name: Verify reflection draft copy conflicts and account boundaries
         run: node tests/reflection-page-browser.cjs
       - name: Verify the integrated input and output cycle
@@ -327,6 +335,8 @@ jobs:
             .local/obsidian-review/
             .local/obsidian-decisions/
             .local/obsidian-package/
+            .local/obsidian-receive/
+            .local/obsidian-reading-scale/
             .local/profile-feed-media/
             .local/reflection-page/
             .local/two-cycle/

@@ -88,6 +88,15 @@
       check(!refs.has(id), "duplicate_reference");
       refs.set(id, { ...ref, id, token: origin.text.slice(ref.locator.start, ref.locator.end), candidatePaths: candidates(audit, ref) });
     }
+    const ranges = new Map();
+    for (const ref of refs.values()) {
+      if (!ranges.has(ref.path)) ranges.set(ref.path, []);
+      ranges.get(ref.path).push(ref.locator);
+    }
+    for (const locators of ranges.values()) {
+      locators.sort((a, b) => a.start - b.start || a.end - b.end);
+      for (let i = 1; i < locators.length; i++) check(locators[i].start >= locators[i - 1].end, "overlapping_reference");
+    }
     check(review.format === "haedo-vault-review-v1" && review.ref === audit.ref && review.repositoryUrl === audit.repositoryUrl && Array.isArray(review.groups) && Array.isArray(review.informational), "review_mismatch");
     const items = [], groups = [], seen = new Set(), groupIds = new Set();
     for (const group of review.groups) {
@@ -102,7 +111,7 @@
         seen.add(ref.id); ids.push(ref.id);
         const origin = verified.byPath.get(ref.path);
         items.push({ id: ref.id, groupId: group.id, path: ref.path, target: ref.target, reason: ref.reason,
-          locator: clone(ref.locator), token: ref.token, candidatePaths: ref.candidatePaths,
+          locator: clone(ref.locator), token: ref.token, candidatePaths: clone(ref.candidatePaths),
           excerpt: origin.text.slice(Math.max(0, ref.locator.start - 200), ref.locator.end + 200) });
       }
       groups.push({ id: group.id, target: group.target, ids });
@@ -120,7 +129,8 @@
     const binding = { repositoryUrl: audit.repositoryUrl, ref: audit.ref, auditSha256: await hash(auditText) };
     const handle = { binding: clone(binding), groups, items, totalReferences: refs.size,
       informationalOccurrences: review.informational.length };
-    contexts.set(handle, { ...verified, filesBackup: verifiedFiles.backup, audit, binding, refs, eligible });
+    contexts.set(handle, { ...verified, filesBackup: verifiedFiles.backup, audit, binding, refs, eligible,
+      informationalOccurrences: review.informational.length });
     return handle;
   }
   function context(handle) { const ctx = contexts.get(handle); check(ctx, "package_required"); return ctx; }
@@ -189,7 +199,7 @@
       located: changes.filter((c) => c.action === "locate").length,
       unchanged: changes.filter((c) => c.action === "unchanged").length,
       deferred: ctx.eligible.size - changes.length,
-      informational: handle.informationalOccurrences,
+      informational: ctx.informationalOccurrences,
     } };
   }
   async function apply(handle, input) {

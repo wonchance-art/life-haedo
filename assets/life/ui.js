@@ -2078,11 +2078,11 @@
         const outgoing = from.sourceVersionId === versionId;
         if (!outgoing && to.sourceVersionId !== versionId) continue;
         const target = outgoing ? to : from;
-        const key = (outgoing ? 'out:' : 'in:') + target.sourceVersionId;
+        const key = (outgoing ? 'out:' : 'in:') + target.sourceVersionId + ':' + (target.locator ? target.locator.start + ':' + target.locator.end : 'document');
         if (seen.has(key)) continue;
         const source = sources.get(target.sourceId), version = versions.get(target.sourceVersionId);
         if (!source || !version || version.sourceId !== source.id) continue;
-        seen.add(key); matches.push({ target, source, outgoing });
+        seen.add(key); matches.push({ target, source, version, outgoing });
       }
       if (!matches.length) return null;
       const details = node('details', null, 'life-details life-obsidian-links');
@@ -2092,11 +2092,18 @@
       const append = () => {
         for (const item of matches.slice(count, count + SEARCH_PAGE_SIZE)) {
           const row = node('div', null, 'life-backup-source');
+          const locationText = item.target.locator && typeof item.version.contentText === 'string' ? item.version.contentText.slice(item.target.locator.start, item.target.locator.end).slice(0, 100) : '';
           const open = button(sourceLabel(item.source), guarded(() => navigate('source', {
-            sourceId: item.target.sourceId, sourceVersionId: item.target.sourceVersionId, locator: item.target.locator
+            sourceId: item.target.sourceId, sourceVersionId: item.target.sourceVersionId, locator: item.target.locator, returnContext: state.returnContext
           })));
           open.dataset.linkedVersion = item.target.sourceVersionId;
+          if (item.target.locator) {
+            open.dataset.linkedStart = item.target.locator.start;
+            open.dataset.linkedEnd = item.target.locator.end;
+            if (locationText) open.setAttribute('aria-label', sourceLabel(item.source) + ' · ' + locationText.replace(/\s+/g, ' '));
+          }
           row.append(node('p', item.outgoing ? '이 노트에서 연결' : '이 노트를 연결한 원문', 'life-meta'), open);
+          if (locationText) row.append(node('p', locationText, 'life-meta'));
           if (item.source.sourceKey) row.append(node('p', item.source.sourceKey, 'life-meta life-source-url'));
           list.append(row);
         }
@@ -3263,7 +3270,7 @@
         details.append(node('summary', '서버 정보'), node('p', '서버 버전 ' + row.revision, 'life-meta'));
         card.append(details);
         card.append(button('이 작업공간 받기', guarded(async () => {
-          if (dirty()) await persistStage();
+          await persistDrafts();
           const before = state.syncAccountKey;
           invalidateBatchContext();
           const received = await sync.download(row.id);
@@ -3271,17 +3278,24 @@
           if (before !== state.syncAccountKey) throw new Error('계정이 바뀌어 이전 화면으로 전환하지 않았습니다. 로컬 자료는 유지됩니다.');
           if (!received || !received.workspaceId) throw new Error('받은 작업공간을 확인하지 못했습니다. 기존 자료를 유지합니다.');
           const downloaded = await storage.read(received.workspaceId);
+          if (disposed) return;
           invalidateBatchContext();
-        await storage.setActive(received.workspaceId);
+          await storage.setActive(received.workspaceId);
+          if (disposed) return;
           state.bundle = downloaded;
-          state.stage = state.prepared = null;
+          state.stage = state.prepared = state.sourceId = state.sourceVersionId = null;
+          state.sourceDrafts.clear(); state.readerPositions.clear(); state.stages = []; state.allStages = [];
+          state.remoteChanged = false; state.restoreReturn = null;
+          if (!state.workspaces.some(item => item.workspaceId === downloaded.workspaceId)) state.workspaces.push({ workspaceId: downloaded.workspaceId, title: downloaded.title });
           resetSearchContext();
           state.mode = 'sources';
-          await refreshData();
+          writeRoute('sources', false);
           connectSubscription();
-          await refreshSync();
           render();
           announce('선택한 서버 작업공간을 받았습니다. 기존 로컬 작업공간은 그대로 유지됩니다.');
+          // Receipt is already durable; a later list failure must leave its reading view open.
+          try { await refreshData(); render(); }
+          catch (_) { throw new Error('받은 자료는 이 브라우저에 보관됐습니다. 작업공간 목록 갱신에 실패했으니 관리에서 다시 확인해 주세요.'); }
         })));
         parent.append(card);
       });

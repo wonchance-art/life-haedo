@@ -180,7 +180,7 @@
       output["notes.json"] = encode(applied.notesBackup); output["decisions.json"] = encode(applied.decisions);
       output["applications.json"] = encode([...applicationHistory, applied.history]);
       download("obsidian-selected-copy.zip", new Blob([globalThis.fflate.zipSync(output, { level: 0 })], { type: "application/zip" }));
-      status("새 사본 ZIP 다운로드를 요청했습니다. 새 폴더에 풀고 notes.json을 새 작업공간으로 복원해 확인하세요.");
+      status("새 사본 ZIP 다운로드를 요청했습니다. 해도의 관리 → 내보내기·사본 복원으로 이동해 ‘Obsidian 패키지에서 복원’에 ZIP을 선택하세요.");
     } catch (e) {
       if (messages[e.code]) error(e);
       else status("새 ZIP을 만들지 못했습니다. 선택은 그대로입니다. 선택 파일을 보관한 뒤 다시 시도하세요.", true);

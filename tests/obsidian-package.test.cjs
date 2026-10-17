@@ -4,6 +4,15 @@ const { zipSync } = require("../vendor/fflate/fflate.js");
 const P = require("../assets/life/obsidian-package.js"), D = require("../assets/life/obsidian-decisions.js");
 const { fixture, input } = require("./fixtures/obsidian-decisions.cjs");
 const blob = (files) => new Blob([zipSync(files, { level: 0 })]);
+function changeCentralEntry(bytes, name, change) {
+  const packed = Buffer.from(bytes);
+  let at = 0;
+  while ((at = packed.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]), at)) !== -1) {
+    if (packed.subarray(at + 46, at + 46 + packed.readUInt16LE(at + 28)).toString() === name) { change(packed, at); return packed; }
+    at += 4;
+  }
+  throw new Error(`fixture entry not found: ${name}`);
+}
 test("private package restores verified original and reviewed notes/files under fresh IDs without interpreting HTML, archive or history", async () => {
   const { files, result } = await fixture(), a = await P.read(blob(files)), b = await P.read(blob(files));
   assert.equal(a.notes.sources.length, 5); assert.equal(a.files.sources.length, 1);
@@ -43,4 +52,21 @@ test("standalone unpack can retain exact archive bytes while app read decodes on
   const data = await P.unpack(packed), all = await P.unpack(packed, { keepArchive: true });
   assert.deepEqual(Object.keys(data.unpacked).sort(), ["notes.json", "private-audit.json", "review.json", "supporting-files.json"]);
   for (const [name, bytes] of Object.entries(files)) assert.deepEqual(Buffer.from(all.unpacked[name]), bytes);
+});
+test("stored entry metadata cannot understate restored or retained bytes, including files skipped by the app", async () => {
+  const { files } = await fixture(), packed = await blob(files).arrayBuffer();
+  for (const name of ["notes.json", "repository.bundle"]) {
+    const understated = changeCentralEntry(packed, name, (bytes, at) => bytes.writeUInt32LE(1, at + 24));
+    await assert.rejects(P.unpack(new Blob([understated])), { code: "invalid_obsidian_package" });
+    await assert.rejects(P.unpack(new Blob([understated]), { keepArchive: true }), { code: "invalid_obsidian_package" });
+  }
+  const unsupported = changeCentralEntry(packed, "repository.bundle", (bytes, at) => bytes.writeUInt16LE(99, at + 10));
+  await assert.rejects(P.unpack(new Blob([unsupported])), { code: "invalid_obsidian_package" });
+});
+test("deflated entries must return their complete declared output rather than a shorter truncated file", async () => {
+  const { files } = await fixture(), packed = zipSync(files, { level: 6 });
+  const valid = await P.unpack(new Blob([packed]), { keepArchive: true });
+  for (const [name, bytes] of Object.entries(files)) assert.deepEqual(Buffer.from(valid.unpacked[name]), bytes);
+  const overstated = changeCentralEntry(packed, "notes.json", (bytes, at) => bytes.writeUInt32LE(files["notes.json"].length + 1, at + 24));
+  await assert.rejects(P.unpack(new Blob([overstated])), { code: "invalid_obsidian_package" });
 });
