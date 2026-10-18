@@ -1,0 +1,25 @@
+{
+  "protectedProductFiles": {
+    "assets/life/interest-analysis.js": true,
+    "assets/life/interest-profile.js": true,
+    "assets/life/interest-policy.js": true,
+    "assets/life/interest-ui.js": true,
+    "assets/life/interest-model-worker.js": true,
+    "assets/life/interest-model-loader.js": true,
+    "assets/life/storage.js": true,
+    "sw.js": true,
+    "package.json": true
+  },
+  "frozenArtifacts": {
+    "candidate.mjs": true,
+    "run-experiment.cjs": true,
+    "private-heldout.json": true,
+    "preregistration.md": true,
+    "evaluate-heldout.py": true,
+    "input-only.json": true
+  },
+  "originalHeadUnchanged": true,
+  "originalWorkingTreeClean": true,
+  "analysisEnabled": false,
+  "verificationBasis": "Protected policy bytes match initial snapshot; frozen artifact bytes match independent pre-inference seal."
+}

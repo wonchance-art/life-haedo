@@ -8,7 +8,7 @@
 - `Xenova/paraphrase-multilingual-MiniLM-L12-v2` revision `2c4055b12046f11709e9df2c122e59ffbdc2f900`: upstream 고정 카드의 Apache-2.0, conversion base_model 연결, q8 공식 크기/SHA와 실제 별도 다운로드 SHA를 대조했다. 변환 recipe/source commit 전체 재현성은 입증하지 않았다. [고정 변환 카드](https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/tree/2c4055b12046f11709e9df2c122e59ffbdc2f900). MODEL-02 추출 품질이 미달해 실제 자동 분석 버튼은 꺼 두었다.
 - 한국어 NLI가 명시된 `onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX` revision `cdc8277b4682665e2f2e87cd83da7da07b153d75`: conversion/upstream MIT, 모델/토크나이저/WASM registry와 q8 338,341,610-byte metadata를 확인했다. 새 12쌍에서 후속 가능성만 통과했고 앱 모델·의존성으로 도입하지 않았다. [고정 공식 변환](https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/tree/cdc8277b4682665e2f2e87cd83da7da07b153d75).
 
-직접 keyword 확장/임계값 상향은 부정·인용의 의미를 해결하지 못해 채택하지 않았다. 문맥 embedding 보완은 독립 48문서 실험에서 기각했다. NLI는 새 독립 전체 출력 평가·입력 포함 범위·CPU/실기 비용을 확인한 뒤 판단할 후속 후보이며, 현재 선택은 수동 관심 보관이다.
+직접 keyword 확장/임계값 상향은 부정·인용의 의미를 해결하지 못해 채택하지 않았다. 문맥 embedding 보완은 독립 48문서 실험에서 기각했다. 이어서 후보 생성·NLI를 분리한 [MODEL-03 새 60문서 검증](../design-review/interest-extraction-model03.md)을 실제 CPU로 실행했다. 질문 구간 검출은 18/18이었으나 최종 주제·질문은 0개로 현재 파이프라인도 기각했다. 준비 포함 약 169초, 관측 브라우저 합산 RSS 최대 약 652MiB이며 Apple 실기 성능은 미검증이다. 작은 NLI 12쌍의 성공을 전체 추출 채택으로 바꾸지 않는다. 현재 선택은 수동 관심 보관이며 외부 글 발견 구현을 추가 모델 연구로 막지 않는다.
 
 
 확인일: 2026-10-03 UTC. 공식 저장소·태그별 LICENSE·릴리스·문서를 읽은 초기 비교다.

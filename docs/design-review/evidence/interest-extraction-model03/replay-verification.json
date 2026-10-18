@@ -1,0 +1,11 @@
+{
+  "method": "Clean package copy, byte-exact ZIP extraction, standard-library-only rescoring, lossless wrapper normalization and cache funnel reconstruction; no inference/network.",
+  "copyPath": "/tmp/haedo-model03-package-kamjdaay/evidence",
+  "checks": {
+    "heldout-result.json": true,
+    "heldout-result.normalized.json": true,
+    "stage-funnel.json": true
+  },
+  "archiveBytesPreserved": true,
+  "pass": true
+}

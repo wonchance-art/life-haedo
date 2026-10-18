@@ -1,0 +1,109 @@
+{
+  "checkedDateKST": "2026-10-19",
+  "runtimeExecutionPassed": true,
+  "qualityDecision": "Independent frozen evaluation only; runtime success does not establish quality/adoption.",
+  "sourceIntegrity": {
+    "runnerSHA256": "8ad9ded2b878bfe3e056828ef522a682d31038055efae5a87bd03a9dc7012802",
+    "candidateSHA256": "a9424f1996df1844b4baec8ae8beaa3d160577fd553ec724603529fffc7d3075",
+    "inputOnlySHA256": "4e1caab4d96ac542c776f60c92ee4188c4afaaff6e9a9feb1b7e371de66e0a8b",
+    "runnerMatchedFreeze": true,
+    "candidateMatchedFreeze": true,
+    "inputBundleUnchanged": true
+  },
+  "artifacts": {
+    "heldout-output.json": "92a8e57fab4bae8db0898a270dab6bec2bec96067535c5edfffdeec1df76a957",
+    "heldout-runtime.json": "98fafd4fbb627bad1d1a837f754a32bf8e17aea7828fe601fab07f507d833658",
+    "heldout-coverage.json": "6eb143a990d9fadab628b63794935f5bd281362adcbde8ad5a318f2822329a16",
+    "heldout-runner-freeze.json": "994ea824054bdef60072882267cb89bd6bfa461f594927dca84a26eb08faeee5",
+    "heldout-attempts.json": "1a2b567ed8f39836a3c98e26537abe6624adbd1b1d3c9ff040b3fe6e0b5255d8"
+  },
+  "documents": 60,
+  "browser": "151.0.7922.173",
+  "device": "wasm",
+  "dtype": "q8",
+  "numThreads": 1,
+  "stages": [
+    {
+      "kind": "embedding",
+      "modelId": "Xenova/paraphrase-multilingual-MiniLM-L12-v2",
+      "revision": "2c4055b12046f11709e9df2c122e59ffbdc2f900",
+      "preparedMs": 17761,
+      "inferenceMs": 6138.100000000559,
+      "phaseMs": 25033,
+      "disposed": true
+    },
+    {
+      "kind": "nli",
+      "modelId": "onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX",
+      "revision": "cdc8277b4682665e2f2e87cd83da7da07b153d75",
+      "preparedMs": 40173.200000000186,
+      "inferenceMs": 101497.39999999478,
+      "phaseMs": 143808,
+      "disposed": true
+    }
+  ],
+  "inferenceAndCandidateMs": 168846,
+  "cumulativeAttemptWallMs": 169206,
+  "attempts": 1,
+  "cache": {
+    "counts": {
+      "embeddingRequested": 210,
+      "embeddingCacheHits": 60,
+      "embeddingInferred": 144,
+      "nliRequested": 506,
+      "nliCacheHits": 27,
+      "nliInferred": 479
+    },
+    "inCallbackDuplicateEmbeddingInputs": 6,
+    "cacheSHA256": "74556d74cedcf8db362cb6e9fe57a7b35500c951a84cc1b03c945c4331ae4468",
+    "originalInferenceMs": {
+      "embedding": 6138.100000000559,
+      "nli": 101497.39999999478
+    },
+    "resumedEntries": 0
+  },
+  "tokens": {
+    "measurementRows": 623,
+    "maximumActualModelTokens": 182,
+    "truncatedInputs": 0,
+    "wholeDocumentMaximumTokens": {
+      "embedding": 3099,
+      "nli": 3241
+    },
+    "wholeDocumentOver512": {
+      "embedding": 3,
+      "nli": 3
+    },
+    "wholeDocumentCountsAreTokenizationOnly": true
+  },
+  "coverage": {
+    "embeddingFullNonWhitespaceDocuments": 60,
+    "nliPremiseFullNonWhitespaceDocuments": 57,
+    "nliAnyInputFullNonWhitespaceDocuments": 57,
+    "limitation": "Three long documents have fragmented-sentence scope abstention and incomplete NLI coverage. All-body semantic verification must not be claimed; independent evaluation retains false negatives/abstention."
+  },
+  "memory": {
+    "sampledPeakSummedBrowserRSSBytes": 683806720,
+    "method": "250ms samples of /proc browser process tree VmRSS; sum includes shared pages more than once, misses sub-interval peaks, excludes runner Node. Per-process VmHWM is lifetime, not a simultaneous unique-memory measurement."
+  },
+  "network": {
+    "mutableMainPaths": 0,
+    "nonGETOrBody": 0,
+    "violations": 0,
+    "blockedFetches": 0,
+    "browserErrors": 0,
+    "credentials": "Public allowlisted GET only; cookies/auth headers/body rejected, credentials omitted; HTTPS proxy preserved with local-only bypass and TLS verification enabled."
+  },
+  "provenanceMethod": {
+    "onnx": "Expected byte count and SHA256 are matched against fixed official Hub LFS metadata; the browser weight byte stream is not separately digested.",
+    "wasm": "Exact ORT versioned public URL is executed; binary byte digest is not measured.",
+    "jsonAndRuntime": "Actual fetched JSON assets and standalone runtime script are SHA256 digested."
+  },
+  "developmentLimit": "The exact source bytes of the two public calibration runners were not snapshotted before later observability changes. Their hashes/freezes/raw results remain; this limits exact development-run reproducibility. Final heldout runner 8ad9... is preserved unchanged. Public development costs are separately recorded in public-runtime-costs.json and excluded from the heldout 15-minute ledger.",
+  "unverified": [
+    "Actual Apple devices and browsers",
+    "Production latency/memory and user usefulness",
+    "Live accounts or deployment",
+    "Independent quality approval"
+  ]
+}

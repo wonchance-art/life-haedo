@@ -1,0 +1,330 @@
+{
+  "purpose": "Final archive checksums; separate from independent pre-inference seal. Manifest excludes itself; extract raw-results.zip for byte-exact full evidence.",
+  "archive": {
+    "path": "raw-results.zip",
+    "bytes": 819499,
+    "sha256": "7485f73407e0218ac5eca5a46028b4b94cebea2da8b2816305b7d57fe54baeaa"
+  },
+  "files": [
+    {
+      "path": "EXPERIMENT.md",
+      "storage": "loose",
+      "bytes": 3119,
+      "sha256": "9c3f8f4b28d6774acbd0fd7f687b5c6359ff5bd6cdc84d2794c4e482fd0fcf8a"
+    },
+    {
+      "path": "README.md",
+      "storage": "loose",
+      "bytes": 3662,
+      "sha256": "a02d2e0ebb183099babcd8630af7dbb9c85e7a977a1be459d0f57d4a6260bee4"
+    },
+    {
+      "path": "build-private-heldout.py",
+      "storage": "loose",
+      "bytes": 19227,
+      "sha256": "4cfe9fbc840ddcdd944c7f1e3b910e31dd4964760e0f22673a12b45fc46c24aa"
+    },
+    {
+      "path": "candidate-freeze.json",
+      "storage": "loose",
+      "bytes": 1758,
+      "sha256": "0e81cffd64281d7c4c19db8c830b01d120270e69364ec4b16b910b29a9bbc515"
+    },
+    {
+      "path": "candidate.mjs",
+      "storage": "loose",
+      "bytes": 27031,
+      "sha256": "a9424f1996df1844b4baec8ae8beaa3d160577fd553ec724603529fffc7d3075"
+    },
+    {
+      "path": "candidate.test.mjs",
+      "storage": "loose",
+      "bytes": 8348,
+      "sha256": "19bf0f237bc39add0183d51954f1ddffe6c4ce00cd2f61f9898fe30df9f06f75"
+    },
+    {
+      "path": "create-dev-alternatives.py",
+      "storage": "loose",
+      "bytes": 2061,
+      "sha256": "862705c2214d9115779776d42b43325d403151e3dbee292c0234ff85f256f101"
+    },
+    {
+      "path": "create-dev.py",
+      "storage": "loose",
+      "bytes": 3250,
+      "sha256": "8f4d59d07c25a4ff7d25ddfc2a43349340900a35c0fdd8ad85f4933dd6d4974e"
+    },
+    {
+      "path": "design.json",
+      "storage": "loose",
+      "bytes": 6834,
+      "sha256": "044564b2ca8870d5c35e1ce8b9010de29f16dfeec666507f199a02d078252593"
+    },
+    {
+      "path": "dev-report.md",
+      "storage": "loose",
+      "bytes": 5000,
+      "sha256": "88f82c4a00f3c8df9cf2d18720ad37acc76d17b1164b050aaefab9b9f9401c87"
+    },
+    {
+      "path": "document-validation.json",
+      "storage": "loose",
+      "bytes": 84,
+      "sha256": "496d76350d58b5394ccabce79401a7a05cd673bbf71d794fa390c5e015e906a0"
+    },
+    {
+      "path": "evaluate-heldout.py",
+      "storage": "loose",
+      "bytes": 23511,
+      "sha256": "0f03792c9dff7f905cd88c525fe2d2ad2e9c3adfa8acb09ab2456d9b13a3808d"
+    },
+    {
+      "path": "evaluate-normalized-wrapper.py",
+      "storage": "loose",
+      "bytes": 4060,
+      "sha256": "180664103a2b5581dc850c5dc6b8e720e48c0b08bf5703a88c272fdf38687692"
+    },
+    {
+      "path": "heldout-attempts.json",
+      "storage": "loose",
+      "bytes": 698,
+      "sha256": "1a2b567ed8f39836a3c98e26537abe6624adbd1b1d3c9ff040b3fe6e0b5255d8"
+    },
+    {
+      "path": "heldout-report.md",
+      "storage": "loose",
+      "bytes": 900,
+      "sha256": "87637b0561cdb0f8f7a1198e5e7e891f1207b3f13170063796e44722b295f719"
+    },
+    {
+      "path": "heldout-report.normalized.md",
+      "storage": "loose",
+      "bytes": 856,
+      "sha256": "811e6ae1d05024a3ba8a337cf517f7b65a124728d827e58a2326ac3e77e85c7d"
+    },
+    {
+      "path": "heldout-runner-freeze.json",
+      "storage": "loose",
+      "bytes": 2377,
+      "sha256": "994ea824054bdef60072882267cb89bd6bfa461f594927dca84a26eb08faeee5"
+    },
+    {
+      "path": "input-only.json",
+      "storage": "loose",
+      "bytes": 47764,
+      "sha256": "4e1caab4d96ac542c776f60c92ee4188c4afaaff6e9a9feb1b7e371de66e0a8b"
+    },
+    {
+      "path": "integration-review.md",
+      "storage": "loose",
+      "bytes": 22742,
+      "sha256": "72b2cc6d77975c8d0f6b7987a58acab4420ad83adc57521032d4602fa369b31d"
+    },
+    {
+      "path": "model-decision.md",
+      "storage": "loose",
+      "bytes": 16464,
+      "sha256": "993bafb04548c815cf7469a23a9da2412edf89631b79476a5cad4daca2f4ca39"
+    },
+    {
+      "path": "preregistration.md",
+      "storage": "loose",
+      "bytes": 11458,
+      "sha256": "ec8b2640527c5cf995ef691576ea1ac056f192523f2ce67fac01a8d5deb56511"
+    },
+    {
+      "path": "preservation-review.md",
+      "storage": "loose",
+      "bytes": 16294,
+      "sha256": "d84bbc092e21cb238146fd5556d0cdbd4b0b4f0570dd48838cb078683fc97aca"
+    },
+    {
+      "path": "private-heldout.json",
+      "storage": "loose",
+      "bytes": 87529,
+      "sha256": "b56296da7ac356cbc9918b5b80026536f00ffbca7bf9a1f9d74c73756e9e46cf"
+    },
+    {
+      "path": "product-after-audit.json",
+      "storage": "loose",
+      "bytes": 836,
+      "sha256": "3b6fc728107c0f732ecf27a7d62665156d66a0c15f62f1183f6322f347f35669"
+    },
+    {
+      "path": "product-before.json",
+      "storage": "loose",
+      "bytes": 1089,
+      "sha256": "d5c59d2a1542f16afd1db91c0dc22ec4c9e2ff344b7fbed57d37cc7332ed9a32"
+    },
+    {
+      "path": "public-calibration-labels.json",
+      "storage": "loose",
+      "bytes": 571,
+      "sha256": "dede2e1e67bcf78ee73a2ade0a01e87b797e0d44e9e94f0a90b338b58f679752"
+    },
+    {
+      "path": "public-calibration-output.json",
+      "storage": "loose",
+      "bytes": 9962,
+      "sha256": "79ada95e3e34d11d16252addddda924e1b0c3313df8955c5785b24c0b86e8e1f"
+    },
+    {
+      "path": "public-calibration-runner-freeze.json",
+      "storage": "loose",
+      "bytes": 1550,
+      "sha256": "2972f9625621c432ec130313376b6238ffbd76fdf296247dfe093d28635aa687"
+    },
+    {
+      "path": "public-calibration.json",
+      "storage": "loose",
+      "bytes": 4430,
+      "sha256": "7f94b88059f030e664f2ac648cb1f30508732f78eb2b41e6432af98a8f40ff99"
+    },
+    {
+      "path": "public-template-comparison-attempts.json",
+      "storage": "loose",
+      "bytes": 571,
+      "sha256": "01ccab353f21e5f51328ac33fd88e69f49eb85d37e3b44a3cd5211888be7b8a0"
+    },
+    {
+      "path": "public-template-comparison-output.json",
+      "storage": "loose",
+      "bytes": 20232,
+      "sha256": "8632b6fd214c01469bfc6a7d29e899521c7c53a17a9db6af5901fce5ba3df001"
+    },
+    {
+      "path": "public-template-comparison-runner-freeze.json",
+      "storage": "loose",
+      "bytes": 1550,
+      "sha256": "9ab8ac9344dc342237922fef0ff9649af2e0929e3a180f1fedd319685814368a"
+    },
+    {
+      "path": "public-template-comparison.json",
+      "storage": "loose",
+      "bytes": 7551,
+      "sha256": "9d54c7c69f4d2c5b4c34bea66e499fae53741b5347cea74dc39a8b436e32d88b"
+    },
+    {
+      "path": "replay-verification.json",
+      "storage": "loose",
+      "bytes": 421,
+      "sha256": "18492572bc7b6e11fd9e581240c73cfebeec704d448c3f56697c2cb5dc47e21a"
+    },
+    {
+      "path": "run-experiment.cjs",
+      "storage": "loose",
+      "bytes": 35610,
+      "sha256": "8ad9ded2b878bfe3e056828ef522a682d31038055efae5a87bd03a9dc7012802"
+    },
+    {
+      "path": "runtime-normalization-audit.json",
+      "storage": "loose",
+      "bytes": 2535,
+      "sha256": "fa94687bf8af03e05ad4338e1974188c75e3e19079a4115750b9023f7da91d98"
+    },
+    {
+      "path": "runtime-summary.json",
+      "storage": "loose",
+      "bytes": 4697,
+      "sha256": "20d8ccd0d70f2d2f2dc684857f7a9ef1e9c33cdef4394543ed8f27e635adbc5f"
+    },
+    {
+      "path": "seal.json",
+      "storage": "loose",
+      "bytes": 1322,
+      "sha256": "f4d1b05f1b11790dec353ae7746d1ad5ccc46898da42842f64fe97336c77316b"
+    },
+    {
+      "path": "semantic-review.json",
+      "storage": "loose",
+      "bytes": 7660,
+      "sha256": "b501e6d195bc880ee5aca4d956c9be6c63c2fae0cc75a526f2ec075f3681fcca"
+    },
+    {
+      "path": "semantic-review.md",
+      "storage": "loose",
+      "bytes": 6399,
+      "sha256": "5b0966dee44b14442cb83081b7a0b89a984ddc6118ed3da351548755a348b8ac"
+    },
+    {
+      "path": "stage-funnel.py",
+      "storage": "loose",
+      "bytes": 9023,
+      "sha256": "10e577238fb876f184a665d61fb7e3bfd3e171a225d8806ea863aa2b191e88fb"
+    },
+    {
+      "path": "heldout-cache-a237d4dfc5615366.jsonl",
+      "storage": "raw-results.zip",
+      "bytes": 1506605,
+      "sha256": "74556d74cedcf8db362cb6e9fe57a7b35500c951a84cc1b03c945c4331ae4468"
+    },
+    {
+      "path": "heldout-coverage.json",
+      "storage": "raw-results.zip",
+      "bytes": 81019,
+      "sha256": "6eb143a990d9fadab628b63794935f5bd281362adcbde8ad5a318f2822329a16"
+    },
+    {
+      "path": "heldout-output.json",
+      "storage": "raw-results.zip",
+      "bytes": 495497,
+      "sha256": "92a8e57fab4bae8db0898a270dab6bec2bec96067535c5edfffdeec1df76a957"
+    },
+    {
+      "path": "heldout-result.json",
+      "storage": "raw-results.zip",
+      "bytes": 316714,
+      "sha256": "9192ff6b4ffc6b5f198734c731b20608ebf2cc926651506fe0e9ecd3531e848b"
+    },
+    {
+      "path": "heldout-result.normalized.json",
+      "storage": "raw-results.zip",
+      "bytes": 316710,
+      "sha256": "00d56a543170ef348a4c88c4880f6e81eda08ae1dccc724f3ca3f12b8cff732f"
+    },
+    {
+      "path": "heldout-runtime.json",
+      "storage": "raw-results.zip",
+      "bytes": 491185,
+      "sha256": "98fafd4fbb627bad1d1a837f754a32bf8e17aea7828fe601fab07f507d833658"
+    },
+    {
+      "path": "heldout-runtime.normalized.json",
+      "storage": "raw-results.zip",
+      "bytes": 490681,
+      "sha256": "ea1530bdf1630eae887f16dd61df9e4cc102aa5ad835c77b0763b56825b9896a"
+    },
+    {
+      "path": "public-calibration-cache-5a0215015b73399f.jsonl",
+      "storage": "raw-results.zip",
+      "bytes": 8259,
+      "sha256": "97052c21e5d944f3cf9784ac44ad73684de8a87ff0ffa584ad6fd39b453a2295"
+    },
+    {
+      "path": "public-calibration-runtime.json",
+      "storage": "raw-results.zip",
+      "bytes": 56925,
+      "sha256": "dd2185277343b27cab01a04a88ab93ad946c9992f63eca3af2d8f1c150d67c39"
+    },
+    {
+      "path": "public-template-comparison-cache-295e31551f95c51b.jsonl",
+      "storage": "raw-results.zip",
+      "bytes": 19141,
+      "sha256": "9b303dd28f41e80fe11df9e6cdbd923d35dd4438afd38c23f7bbabf6815ed8eb"
+    },
+    {
+      "path": "public-template-comparison-runtime.json",
+      "storage": "raw-results.zip",
+      "bytes": 63094,
+      "sha256": "34508e1919cb0dfb20ca5ae61fbf639461c6368cebeb1791f2542b0bbf042e4b"
+    },
+    {
+      "path": "stage-funnel.json",
+      "storage": "raw-results.zip",
+      "bytes": 68032,
+      "sha256": "140f764c14bcab413df677b7e26746f4efe8a4341e3c9ddbb91cdd49074459bd"
+    }
+  ],
+  "frozenSealMatches": true,
+  "candidateFreezeMatches": true
+}

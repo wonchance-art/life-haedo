@@ -1,0 +1,16 @@
+{
+  "activeHead": "5137e52b7e510be5102347268a286a32538bef46",
+  "originalHead": "88ccfe5e381a37818a46e7abdaabfc48cff58c56",
+  "originalStatus": "",
+  "protectedFiles": {
+    "assets/life/interest-analysis.js": "d52a7236fa046e892f849662c654cc5c57b071b479e1df10aa3e9b21a2335c01",
+    "assets/life/interest-profile.js": "22bec3d5f138a5176386ee6da5528efc77374ba928d09f2d6025a9f89ebb4c54",
+    "assets/life/interest-policy.js": "30714a08141a84b6afdc8916d95be032d5fc8c09398d3ded7d712c3b8c33a352",
+    "assets/life/interest-ui.js": "17bf97d985f78bbcc5165d7dcfb99894389daa0eb7ed4968581f06fbe27ebb8a",
+    "assets/life/interest-model-worker.js": "79a29363a4a71754405f3822b805bb9f2b9d3fe7f59cc453c9a9dff607fd0504",
+    "assets/life/interest-model-loader.js": "982f7eb6fb99e2dc4bedce3aba6de349cad2ad6caa2269747cad00e42a61e63c",
+    "assets/life/storage.js": "97869e67b1f85f63c5467eef47738870fe485e3a7c2d3f7db8566eb69f49c1b4",
+    "sw.js": "3081da4bca878b00c076349073b02895ffb1be956275055d89d48c5767f187b1",
+    "package.json": "15ee99a209d8d1cdf3614e72ded00c988132a00faeeb8e7c38e24f0150cfd6e9"
+  }
+}

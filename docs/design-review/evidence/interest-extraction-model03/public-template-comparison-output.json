@@ -1,0 +1,772 @@
+{
+  "pairs": [
+    {
+      "id": "topic-reading-positive:alt1",
+      "entailment": 0.2899230851281512,
+      "pairId": "topic-reading-positive:alt1",
+      "stage": null,
+      "premiseCharacters": 29,
+      "hypothesisCharacters": 21,
+      "logits": [
+        -0.07728087902069092,
+        0.5601369738578796,
+        -0.6613934636116028
+      ],
+      "probabilities": [
+        0.2899230851281512,
+        0.5484156676262123,
+        0.16166124724563646
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 40,
+      "actualInputTokens": 40,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 372.20000000018626
+    },
+    {
+      "id": "topic-reading-positive:alt2",
+      "entailment": 0.33018881334515116,
+      "pairId": "topic-reading-positive:alt2",
+      "stage": null,
+      "premiseCharacters": 29,
+      "hypothesisCharacters": 38,
+      "logits": [
+        0.10057871788740158,
+        0.6014960408210754,
+        -0.8713943362236023
+      ],
+      "probabilities": [
+        0.33018881334515116,
+        0.5448889298341717,
+        0.12492225682067719
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 34,
+      "actualInputTokens": 34,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 271.79999999981374
+    },
+    {
+      "id": "topic-reading-positive:alt3",
+      "entailment": 0.49970216048874905,
+      "pairId": "topic-reading-positive:alt3",
+      "stage": null,
+      "premiseCharacters": 29,
+      "hypothesisCharacters": 39,
+      "logits": [
+        0.6108732223510742,
+        0.44934290647506714,
+        -1.2839072942733765
+      ],
+      "probabilities": [
+        0.49970216048874905,
+        0.4251669545567613,
+        0.07513088495448983
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 38,
+      "actualInputTokens": 38,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 241.09999999962747
+    },
+    {
+      "id": "topic-reading-positive:alt4",
+      "entailment": 0.6003017057109349,
+      "pairId": "topic-reading-positive:alt4",
+      "stage": null,
+      "premiseCharacters": 29,
+      "hypothesisCharacters": 20,
+      "logits": [
+        0.7208437919616699,
+        -0.012884589843451977,
+        -0.9627067446708679
+      ],
+      "probabilities": [
+        0.6003017057109349,
+        0.2882142104300411,
+        0.11148408385902409
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 40,
+      "actualInputTokens": 40,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 172.40000000037253
+    },
+    {
+      "id": "topic-reading-denial:alt1",
+      "entailment": 0.36632034184806955,
+      "pairId": "topic-reading-denial:alt1",
+      "stage": null,
+      "premiseCharacters": 33,
+      "hypothesisCharacters": 21,
+      "logits": [
+        0.012731531634926796,
+        0.015888627618551254,
+        -0.3065250813961029
+      ],
+      "probabilities": [
+        0.36632034184806955,
+        0.3674786778548964,
+        0.2662009802970341
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 40,
+      "actualInputTokens": 40,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 228.09999999962747
+    },
+    {
+      "id": "topic-reading-denial:alt2",
+      "entailment": 0.48998962740735164,
+      "pairId": "topic-reading-denial:alt2",
+      "stage": null,
+      "premiseCharacters": 33,
+      "hypothesisCharacters": 38,
+      "logits": [
+        0.342965304851532,
+        -0.10506102442741394,
+        -0.5684083700180054
+      ],
+      "probabilities": [
+        0.48998962740735164,
+        0.31304842562977997,
+        0.19696194696286845
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 34,
+      "actualInputTokens": 34,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 172.29999999981374
+    },
+    {
+      "id": "topic-reading-denial:alt3",
+      "entailment": 0.2829416002172969,
+      "pairId": "topic-reading-denial:alt3",
+      "stage": null,
+      "premiseCharacters": 33,
+      "hypothesisCharacters": 39,
+      "logits": [
+        -0.13664476573467255,
+        0.4853602945804596,
+        -0.5346787571907043
+      ],
+      "probabilities": [
+        0.2829416002172969,
+        0.52702373053571,
+        0.19003466924699308
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 38,
+      "actualInputTokens": 38,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 160.19999999925494
+    },
+    {
+      "id": "topic-reading-denial:alt4",
+      "entailment": 0.12932112429753861,
+      "pairId": "topic-reading-denial:alt4",
+      "stage": null,
+      "premiseCharacters": 33,
+      "hypothesisCharacters": 20,
+      "logits": [
+        -0.7143682241439819,
+        -0.48818689584732056,
+        0.986533522605896
+      ],
+      "probabilities": [
+        0.12932112429753861,
+        0.16214321291295344,
+        0.7085356627895079
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 40,
+      "actualInputTokens": 40,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 168.6000000005588
+    },
+    {
+      "id": "topic-tech-positive:alt1",
+      "entailment": 0.04965147189136408,
+      "pairId": "topic-tech-positive:alt1",
+      "stage": null,
+      "premiseCharacters": 36,
+      "hypothesisCharacters": 21,
+      "logits": [
+        -1.089072346687317,
+        1.777783989906311,
+        -0.6452013254165649
+      ],
+      "probabilities": [
+        0.04965147189136408,
+        0.8729553176428927,
+        0.07739321046574324
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 42,
+      "actualInputTokens": 42,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 175.29999999981374
+    },
+    {
+      "id": "topic-tech-positive:alt2",
+      "entailment": 0.05977602568052663,
+      "pairId": "topic-tech-positive:alt2",
+      "stage": null,
+      "premiseCharacters": 36,
+      "hypothesisCharacters": 41,
+      "logits": [
+        -0.8044071197509766,
+        1.8954203128814697,
+        -0.9646337628364563
+      ],
+      "probabilities": [
+        0.05977602568052663,
+        0.8892977486917009,
+        0.05092622562777262
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 38,
+      "actualInputTokens": 38,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 170.79999999981374
+    },
+    {
+      "id": "topic-tech-positive:alt3",
+      "entailment": 0.09499322459575422,
+      "pairId": "topic-tech-positive:alt3",
+      "stage": null,
+      "premiseCharacters": 36,
+      "hypothesisCharacters": 75,
+      "logits": [
+        -0.1807970106601715,
+        2.0480992794036865,
+        -1.6185564994812012
+      ],
+      "probabilities": [
+        0.09499322459575422,
+        0.8824497609423299,
+        0.022557014461915936
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 45,
+      "actualInputTokens": 45,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 187.79999999981374
+    },
+    {
+      "id": "topic-tech-positive:alt4",
+      "entailment": 0.16632427498993352,
+      "pairId": "topic-tech-positive:alt4",
+      "stage": null,
+      "premiseCharacters": 36,
+      "hypothesisCharacters": 18,
+      "logits": [
+        -0.16363397240638733,
+        1.3741565942764282,
+        -1.1907000541687012
+      ],
+      "probabilities": [
+        0.16632427498993352,
+        0.7741223324059978,
+        0.059553392604068674
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 40,
+      "actualInputTokens": 40,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 165.5
+    },
+    {
+      "id": "topic-tech-negative:alt1",
+      "entailment": 0.016860496239688817,
+      "pairId": "topic-tech-negative:alt1",
+      "stage": null,
+      "premiseCharacters": 28,
+      "hypothesisCharacters": 21,
+      "logits": [
+        -1.1200153827667236,
+        2.933582305908203,
+        -1.4682854413986206
+      ],
+      "probabilities": [
+        0.016860496239688817,
+        0.9712375409748908,
+        0.011901962785420356
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 37,
+      "actualInputTokens": 37,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 156.29999999981374
+    },
+    {
+      "id": "topic-tech-negative:alt2",
+      "entailment": 0.009752475601377616,
+      "pairId": "topic-tech-negative:alt2",
+      "stage": null,
+      "premiseCharacters": 28,
+      "hypothesisCharacters": 41,
+      "logits": [
+        -1.1718233823776245,
+        3.4431369304656982,
+        -1.7619688510894775
+      ],
+      "probabilities": [
+        0.009752475601377616,
+        0.984842247434942,
+        0.005405276963680365
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 33,
+      "actualInputTokens": 33,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 142.90000000037253
+    },
+    {
+      "id": "topic-tech-negative:alt3",
+      "entailment": 0.06580317983369546,
+      "pairId": "topic-tech-negative:alt3",
+      "stage": null,
+      "premiseCharacters": 28,
+      "hypothesisCharacters": 75,
+      "logits": [
+        -0.34139949083328247,
+        2.292623519897461,
+        -1.6613918542861938
+      ],
+      "probabilities": [
+        0.06580317983369546,
+        0.9166183336126893,
+        0.017578486553615148
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 40,
+      "actualInputTokens": 40,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 167.09999999962747
+    },
+    {
+      "id": "topic-tech-negative:alt4",
+      "entailment": 0.03786744312969008,
+      "pairId": "topic-tech-negative:alt4",
+      "stage": null,
+      "premiseCharacters": 28,
+      "hypothesisCharacters": 18,
+      "logits": [
+        -0.8872382640838623,
+        2.3181774616241455,
+        -1.1854325532913208
+      ],
+      "probabilities": [
+        0.03786744312969008,
+        0.9340289638575974,
+        0.02810359301271269
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 35,
+      "actualInputTokens": 35,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 166.70000000018626
+    },
+    {
+      "id": "topic-health-positive:alt1",
+      "entailment": 0.16633920639775282,
+      "pairId": "topic-health-positive:alt1",
+      "stage": null,
+      "premiseCharacters": 39,
+      "hypothesisCharacters": 24,
+      "logits": [
+        -0.29280826449394226,
+        1.2077035903930664,
+        -0.9317927956581116
+      ],
+      "probabilities": [
+        0.16633920639775282,
+        0.7458622788443942,
+        0.0877985147578531
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 46,
+      "actualInputTokens": 46,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 195.69999999925494
+    },
+    {
+      "id": "topic-health-positive:alt2",
+      "entailment": 0.24084163275179274,
+      "pairId": "topic-health-positive:alt2",
+      "stage": null,
+      "premiseCharacters": 39,
+      "hypothesisCharacters": 42,
+      "logits": [
+        0.0719088613986969,
+        1.1328840255737305,
+        -1.264000415802002
+      ],
+      "probabilities": [
+        0.24084163275179274,
+        0.6958365258907582,
+        0.06332184135744914
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 42,
+      "actualInputTokens": 42,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 180.5
+    },
+    {
+      "id": "topic-health-positive:alt3",
+      "entailment": 0.453739421359841,
+      "pairId": "topic-health-positive:alt3",
+      "stage": null,
+      "premiseCharacters": 39,
+      "hypothesisCharacters": 52,
+      "logits": [
+        0.48854777216911316,
+        0.499833345413208,
+        -1.1588068008422852
+      ],
+      "probabilities": [
+        0.453739421359841,
+        0.4588891349107661,
+        0.08737144372939282
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 44,
+      "actualInputTokens": 44,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 178.09999999962747
+    },
+    {
+      "id": "topic-health-positive:alt4",
+      "entailment": 0.3040793228547902,
+      "pairId": "topic-health-positive:alt4",
+      "stage": null,
+      "premiseCharacters": 39,
+      "hypothesisCharacters": 24,
+      "logits": [
+        0.16100364923477173,
+        0.8535468578338623,
+        -1.077480673789978
+      ],
+      "probabilities": [
+        0.3040793228547902,
+        0.6077914458401953,
+        0.08812923130501443
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 48,
+      "actualInputTokens": 48,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 197.70000000018626
+    },
+    {
+      "id": "topic-health-negative:alt1",
+      "entailment": 0.22947983906907576,
+      "pairId": "topic-health-negative:alt1",
+      "stage": null,
+      "premiseCharacters": 39,
+      "hypothesisCharacters": 24,
+      "logits": [
+        -0.23804429173469543,
+        0.7530137300491333,
+        -0.6481231451034546
+      ],
+      "probabilities": [
+        0.22947983906907576,
+        0.6182378167807757,
+        0.15228234415014857
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 39,
+      "actualInputTokens": 39,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 164
+    },
+    {
+      "id": "topic-health-negative:alt2",
+      "entailment": 0.1141280751044587,
+      "pairId": "topic-health-negative:alt2",
+      "stage": null,
+      "premiseCharacters": 39,
+      "hypothesisCharacters": 42,
+      "logits": [
+        -0.6349362730979919,
+        1.275249719619751,
+        -0.6272251009941101
+      ],
+      "probabilities": [
+        0.1141280751044587,
+        0.7708603866717025,
+        0.11501153822383885
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 35,
+      "actualInputTokens": 35,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 150.90000000037253
+    },
+    {
+      "id": "topic-health-negative:alt3",
+      "entailment": 0.3080036830747575,
+      "pairId": "topic-health-negative:alt3",
+      "stage": null,
+      "premiseCharacters": 39,
+      "hypothesisCharacters": 52,
+      "logits": [
+        -0.05717070773243904,
+        0.44944795966148376,
+        -0.5898251533508301
+      ],
+      "probabilities": [
+        0.3080036830747575,
+        0.5111844113304858,
+        0.18081190559475688
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 37,
+      "actualInputTokens": 37,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 155.5
+    },
+    {
+      "id": "topic-health-negative:alt4",
+      "entailment": 0.19737831488978466,
+      "pairId": "topic-health-negative:alt4",
+      "stage": null,
+      "premiseCharacters": 39,
+      "hypothesisCharacters": 24,
+      "logits": [
+        -0.3287178874015808,
+        0.8721399307250977,
+        -0.6251763701438904
+      ],
+      "probabilities": [
+        0.19737831488978466,
+        0.6558814692132023,
+        0.14674021589701308
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 41,
+      "actualInputTokens": 41,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 166.70000000018626
+    },
+    {
+      "id": "control-quoted:alt1",
+      "entailment": 0.4726477215294951,
+      "pairId": "control-quoted:alt1",
+      "stage": null,
+      "premiseCharacters": 46,
+      "hypothesisCharacters": 25,
+      "logits": [
+        0.46732428669929504,
+        0.3505539894104004,
+        -1.02011239528656
+      ],
+      "probabilities": [
+        0.4726477215294951,
+        0.4205570066455172,
+        0.10679527182498776
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 51,
+      "actualInputTokens": 51,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 207.59999999962747
+    },
+    {
+      "id": "control-quoted:alt2",
+      "entailment": 0.2671304264674565,
+      "pairId": "control-quoted:alt2",
+      "stage": null,
+      "premiseCharacters": 46,
+      "hypothesisCharacters": 42,
+      "logits": [
+        -0.049498848617076874,
+        0.7793160676956177,
+        -0.8416112065315247
+      ],
+      "probabilities": [
+        0.2671304264674565,
+        0.6118896428325951,
+        0.12097993069994852
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 45,
+      "actualInputTokens": 45,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 181.69999999925494
+    },
+    {
+      "id": "control-prose:alt1",
+      "entailment": 0.18042614277454497,
+      "pairId": "control-prose:alt1",
+      "stage": null,
+      "premiseCharacters": 32,
+      "hypothesisCharacters": 25,
+      "logits": [
+        -0.34280917048454285,
+        1.0086621046066284,
+        -0.7294588685035706
+      ],
+      "probabilities": [
+        0.18042614277454497,
+        0.6970051418309077,
+        0.12256871539454732
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 45,
+      "actualInputTokens": 45,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 182.29999999981374
+    },
+    {
+      "id": "control-prose:alt2",
+      "entailment": 0.09612396624369486,
+      "pairId": "control-prose:alt2",
+      "stage": null,
+      "premiseCharacters": 32,
+      "hypothesisCharacters": 42,
+      "logits": [
+        -0.5512431859970093,
+        1.6184152364730835,
+        -0.9852005243301392
+      ],
+      "probabilities": [
+        0.09612396624369486,
+        0.8415934809603127,
+        0.06228255279599237
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 39,
+      "actualInputTokens": 39,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 163.5
+    },
+    {
+      "id": "question-direct:alt1",
+      "entailment": 0.15389540765438983,
+      "pairId": "question-direct:alt1",
+      "stage": null,
+      "premiseCharacters": 35,
+      "hypothesisCharacters": 13,
+      "logits": [
+        -0.31108853220939636,
+        1.293522596359253,
+        -0.9611849188804626
+      ],
+      "probabilities": [
+        0.15389540765438983,
+        0.7657718880918348,
+        0.0803327042537753
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 39,
+      "actualInputTokens": 39,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 161
+    },
+    {
+      "id": "question-direct:alt2",
+      "entailment": 0.3624126645949872,
+      "pairId": "question-direct:alt2",
+      "stage": null,
+      "premiseCharacters": 35,
+      "hypothesisCharacters": 51,
+      "logits": [
+        0.4507061243057251,
+        0.9267230033874512,
+        -1.4488482475280762
+      ],
+      "probabilities": [
+        0.3624126645949872,
+        0.5833576126646366,
+        0.05422972274037604
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 43,
+      "actualInputTokens": 43,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 177.29999999981374
+    },
+    {
+      "id": "question-quoted-command:alt1",
+      "entailment": 0.11250999036528497,
+      "pairId": "question-quoted-command:alt1",
+      "stage": null,
+      "premiseCharacters": 35,
+      "hypothesisCharacters": 13,
+      "logits": [
+        -0.4406326413154602,
+        1.5536385774612427,
+        -1.0545015335083008
+      ],
+      "probabilities": [
+        0.11250999036528497,
+        0.8265936663238942,
+        0.060896343310820916
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 35,
+      "actualInputTokens": 35,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 148.3999999994412
+    },
+    {
+      "id": "question-quoted-command:alt2",
+      "entailment": 0.25975679733553586,
+      "pairId": "question-quoted-command:alt2",
+      "stage": null,
+      "premiseCharacters": 35,
+      "hypothesisCharacters": 51,
+      "logits": [
+        0.14039146900177002,
+        1.0996341705322266,
+        -1.2865769863128662
+      ],
+      "probabilities": [
+        0.25975679733553586,
+        0.6778923502744848,
+        0.062350852389979436
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 39,
+      "actualInputTokens": 39,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 162.69999999925494
+    }
+  ]
+}

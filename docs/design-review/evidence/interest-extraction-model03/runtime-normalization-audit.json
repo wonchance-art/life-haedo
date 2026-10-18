@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "reason": "Frozen scorer accepted direct list or per-document map; runner stored {rows:[...],elapsedMs}. The row wrapper is a representation difference, not a score change.",
+  "allowedChangedContainer": "wholeDocumentTokenCounts.embedding",
+  "transform": "Move rows[] to embedding[documentId] objects; preserve every row verbatim and preserve elapsedMs/any other wrapper metadata in place.",
+  "originalRuntimeSHA256": "98fafd4fbb627bad1d1a837f754a32bf8e17aea7828fe601fab07f507d833658",
+  "normalizedRuntimeSHA256": "ea1530bdf1630eae887f16dd61df9e4cc102aa5ad835c77b0763b56825b9896a",
+  "rowsPreservedExactly": 60,
+  "nonRowMetadataPreservedExactly": true,
+  "allOtherRuntimeFieldsDeepEqual": true,
+  "scoreThresholdLabelsOrSourceChanged": false,
+  "originalProtectedFilesUnchanged": {
+    "heldout-runtime.json": "98fafd4fbb627bad1d1a837f754a32bf8e17aea7828fe601fab07f507d833658",
+    "heldout-result.json": "9192ff6b4ffc6b5f198734c731b20608ebf2cc926651506fe0e9ecd3531e848b",
+    "heldout-report.md": "87637b0561cdb0f8f7a1198e5e7e891f1207b3f13170063796e44722b295f719",
+    "private-heldout.json": "b56296da7ac356cbc9918b5b80026536f00ffbca7bf9a1f9d74c73756e9e46cf",
+    "preregistration.md": "ec8b2640527c5cf995ef691576ea1ac056f192523f2ce67fac01a8d5deb56511",
+    "evaluate-heldout.py": "0f03792c9dff7f905cd88c525fe2d2ad2e9c3adfa8acb09ab2456d9b13a3808d",
+    "candidate.mjs": "a9424f1996df1844b4baec8ae8beaa3d160577fd553ec724603529fffc7d3075",
+    "run-experiment.cjs": "8ad9ded2b878bfe3e056828ef522a682d31038055efae5a87bd03a9dc7012802",
+    "heldout-output.json": "92a8e57fab4bae8db0898a270dab6bec2bec96067535c5edfffdeec1df76a957",
+    "heldout-coverage.json": "6eb143a990d9fadab628b63794935f5bd281362adcbde8ad5a318f2822329a16"
+  },
+  "metricObjectsIdentical": true,
+  "decisionUnchanged": true,
+  "gateDifferences": {
+    "allThreeWholeBodiesConfirmedOver512Tokens": {
+      "original": false,
+      "normalized": true
+    }
+  },
+  "command": [
+    "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+    "/workspace/model-03-validation/normalized-evaluation/evaluate-heldout.py",
+    "--candidate-output",
+    "/workspace/model-03-validation/heldout-output.json",
+    "--runtime",
+    "/workspace/model-03-validation/heldout-runtime.normalized.json",
+    "--coverage",
+    "/workspace/model-03-validation/heldout-coverage.json",
+    "--seal",
+    "/workspace/model-03-validation/seal.json",
+    "--output",
+    "/workspace/model-03-validation/heldout-result.normalized.json"
+  ]
+}

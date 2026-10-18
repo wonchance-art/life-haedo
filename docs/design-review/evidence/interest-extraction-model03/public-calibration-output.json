@@ -1,0 +1,388 @@
+{
+  "pairs": [
+    {
+      "id": "topic-reading-positive",
+      "entailment": 0.1787250891311028,
+      "pairId": "topic-reading-positive",
+      "stage": null,
+      "premiseCharacters": 29,
+      "hypothesisCharacters": 48,
+      "logits": [
+        -0.39640963077545166,
+        0.9308555126190186,
+        -0.5894260406494141
+      ],
+      "probabilities": [
+        0.1787250891311028,
+        0.6739217146211158,
+        0.14735319624778132
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 57,
+      "actualInputTokens": 57,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 484.29999999981374
+    },
+    {
+      "id": "topic-reading-denial",
+      "entailment": 0.0954184024870786,
+      "pairId": "topic-reading-denial",
+      "stage": null,
+      "premiseCharacters": 33,
+      "hypothesisCharacters": 48,
+      "logits": [
+        -1.025598168373108,
+        0.7584946155548096,
+        0.23456107079982758
+      ],
+      "probabilities": [
+        0.0954184024870786,
+        0.568137940350584,
+        0.3364436571623375
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 57,
+      "actualInputTokens": 57,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 398.8999999994412
+    },
+    {
+      "id": "topic-tech-positive",
+      "entailment": 0.1241233010300768,
+      "pairId": "topic-tech-positive",
+      "stage": null,
+      "premiseCharacters": 36,
+      "hypothesisCharacters": 47,
+      "logits": [
+        -0.6083895564079285,
+        1.1827771663665771,
+        -0.5500636100769043
+      ],
+      "probabilities": [
+        0.1241233010300768,
+        0.7442984951072382,
+        0.131578203862685
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 59,
+      "actualInputTokens": 59,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 239.70000000018626
+    },
+    {
+      "id": "topic-tech-negative",
+      "entailment": 0.06049945738609821,
+      "pairId": "topic-tech-negative",
+      "stage": null,
+      "premiseCharacters": 28,
+      "hypothesisCharacters": 47,
+      "logits": [
+        -0.8193798065185547,
+        1.864099144935608,
+        -0.9323790073394775
+      ],
+      "probabilities": [
+        0.06049945738609821,
+        0.8854653691290846,
+        0.05403517348481719
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 54,
+      "actualInputTokens": 54,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 233.80000000074506
+    },
+    {
+      "id": "topic-health-positive",
+      "entailment": 0.18464553310821924,
+      "pairId": "topic-health-positive",
+      "stage": null,
+      "premiseCharacters": 39,
+      "hypothesisCharacters": 47,
+      "logits": [
+        -0.3087504506111145,
+        1.0226293802261353,
+        -0.7715511918067932
+      ],
+      "probabilities": [
+        0.18464553310821924,
+        0.6991167696507576,
+        0.11623769724102294
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 61,
+      "actualInputTokens": 61,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 296.5
+    },
+    {
+      "id": "topic-health-negative",
+      "entailment": 0.0674332717420537,
+      "pairId": "topic-health-negative",
+      "stage": null,
+      "premiseCharacters": 39,
+      "hypothesisCharacters": 47,
+      "logits": [
+        -0.9713444709777832,
+        1.5322128534317017,
+        -0.4991142451763153
+      ],
+      "probabilities": [
+        0.0674332717420537,
+        0.824432991114199,
+        0.1081337371437472
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 54,
+      "actualInputTokens": 54,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 220.29999999981374
+    },
+    {
+      "id": "control-quoted",
+      "entailment": 0.23563757409751218,
+      "pairId": "control-quoted",
+      "stage": null,
+      "premiseCharacters": 46,
+      "hypothesisCharacters": 44,
+      "logits": [
+        -0.1206602230668068,
+        0.8956788182258606,
+        -0.8530793786048889
+      ],
+      "probabilities": [
+        0.23563757409751218,
+        0.6510809378279419,
+        0.11328148807454586
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 62,
+      "actualInputTokens": 62,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 243.90000000037253
+    },
+    {
+      "id": "control-prose",
+      "entailment": 0.1616497846500148,
+      "pairId": "control-prose",
+      "stage": null,
+      "premiseCharacters": 32,
+      "hypothesisCharacters": 44,
+      "logits": [
+        -0.4293883144855499,
+        1.0535078048706055,
+        -0.6771750450134277
+      ],
+      "probabilities": [
+        0.1616497846500148,
+        0.7121782928194679,
+        0.1261719225305172
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 56,
+      "actualInputTokens": 56,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 223.8999999994412
+    },
+    {
+      "id": "question-direct",
+      "entailment": 0.20298485595867885,
+      "pairId": "question-direct",
+      "stage": null,
+      "premiseCharacters": 35,
+      "hypothesisCharacters": 34,
+      "logits": [
+        -0.3812330961227417,
+        0.7251996994018555,
+        -0.48335176706314087
+      ],
+      "probabilities": [
+        0.20298485595867885,
+        0.6137355718191706,
+        0.18327957222215066
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 52,
+      "actualInputTokens": 52,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 215.40000000037253
+    },
+    {
+      "id": "question-indirect",
+      "entailment": 0.32760332433291467,
+      "pairId": "question-indirect",
+      "stage": null,
+      "premiseCharacters": 34,
+      "hypothesisCharacters": 34,
+      "logits": [
+        0.1051531657576561,
+        0.6228135824203491,
+        -0.8773439526557922
+      ],
+      "probabilities": [
+        0.32760332433291467,
+        0.5497501576087409,
+        0.12264651805834445
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 53,
+      "actualInputTokens": 53,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 209.90000000037253
+    },
+    {
+      "id": "question-statement",
+      "entailment": 0.0934163179973122,
+      "pairId": "question-statement",
+      "stage": null,
+      "premiseCharacters": 23,
+      "hypothesisCharacters": 34,
+      "logits": [
+        -0.7804660201072693,
+        1.357548475265503,
+        -0.5798223614692688
+      ],
+      "probabilities": [
+        0.0934163179973122,
+        0.7924112691293745,
+        0.11417241287331317
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 43,
+      "actualInputTokens": 43,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 176.40000000037253
+    },
+    {
+      "id": "question-quoted-command",
+      "entailment": 0.2057003189286967,
+      "pairId": "question-quoted-command",
+      "stage": null,
+      "premiseCharacters": 35,
+      "hypothesisCharacters": 34,
+      "logits": [
+        -0.34237322211265564,
+        0.7726418375968933,
+        -0.5508411526679993
+      ],
+      "probabilities": [
+        0.2057003189286967,
+        0.6273065940366525,
+        0.16699308703465085
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 48,
+      "actualInputTokens": 48,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 192.20000000018626
+    },
+    {
+      "id": "question-same-forward",
+      "entailment": 0.41424942567937445,
+      "pairId": "question-same-forward",
+      "stage": null,
+      "premiseCharacters": 35,
+      "hypothesisCharacters": 34,
+      "logits": [
+        0.5391272306442261,
+        0.7811484336853027,
+        -1.4256768226623535
+      ],
+      "probabilities": [
+        0.41424942567937445,
+        0.5276797011035955,
+        0.058070873217030076
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 54,
+      "actualInputTokens": 54,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 214
+    },
+    {
+      "id": "question-same-backward",
+      "entailment": 0.5570009969009132,
+      "pairId": "question-same-backward",
+      "stage": null,
+      "premiseCharacters": 34,
+      "hypothesisCharacters": 35,
+      "logits": [
+        0.6961041688919067,
+        0.24648870527744293,
+        -1.152508020401001
+      ],
+      "probabilities": [
+        0.5570009969009132,
+        0.35529611412379725,
+        0.08770288897528954
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 54,
+      "actualInputTokens": 54,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 217.20000000018626
+    },
+    {
+      "id": "question-different-forward",
+      "entailment": 0.2766560142937727,
+      "pairId": "question-different-forward",
+      "stage": null,
+      "premiseCharacters": 35,
+      "hypothesisCharacters": 22,
+      "logits": [
+        -0.07871752977371216,
+        0.6616820693016052,
+        -0.7368378043174744
+      ],
+      "probabilities": [
+        0.2766560142937727,
+        0.5800849207470711,
+        0.14325906495915625
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 47,
+      "actualInputTokens": 47,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 189.79999999981374
+    },
+    {
+      "id": "question-different-backward",
+      "entailment": 0.11579869974907266,
+      "pairId": "question-different-backward",
+      "stage": null,
+      "premiseCharacters": 22,
+      "hypothesisCharacters": 35,
+      "logits": [
+        -0.5918936729431152,
+        1.3162031173706055,
+        -0.7023481726646423
+      ],
+      "probabilities": [
+        0.11579869974907266,
+        0.7805120096576255,
+        0.10368929059330191
+      ],
+      "entailmentIndex": 0,
+      "untruncatedTokens": 47,
+      "actualInputTokens": 47,
+      "tokenLimit": 512,
+      "truncated": false,
+      "elapsedMs": 189
+    }
+  ]
+}

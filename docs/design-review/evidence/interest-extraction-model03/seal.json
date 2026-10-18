@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 3,
+  "status": "independently_frozen_before_heldout_inference",
+  "exportedAtUTC": "2026-10-18T16:28:57.603493+00:00",
+  "documentCount": 60,
+  "fixtureSHA256": "b56296da7ac356cbc9918b5b80026536f00ffbca7bf9a1f9d74c73756e9e46cf",
+  "preregistrationSHA256": "ec8b2640527c5cf995ef691576ea1ac056f192523f2ce67fac01a8d5deb56511",
+  "evaluatorSHA256": "0f03792c9dff7f905cd88c525fe2d2ad2e9c3adfa8acb09ab2456d9b13a3808d",
+  "candidateSHA256": "a9424f1996df1844b4baec8ae8beaa3d160577fd553ec724603529fffc7d3075",
+  "runnerSHA256": "8ad9ded2b878bfe3e056828ef522a682d31038055efae5a87bd03a9dc7012802",
+  "inputSHA256": "4e1caab4d96ac542c776f60c92ee4188c4afaaff6e9a9feb1b7e371de66e0a8b",
+  "inputOnlyPath": "/workspace/model-03-validation/input-only.json",
+  "candidateFreezePath": "/workspace/model-03-validation/candidate-freeze.json",
+  "inputFields": [
+    "id",
+    "text",
+    "originalAuthor.relation"
+  ],
+  "hiddenFieldsNeverExported": [
+    "expectedTopicIds",
+    "allowedTopicSpans",
+    "forbiddenPositiveSpans",
+    "questions",
+    "tags",
+    "longPosition",
+    "bodySHA256",
+    "questionClusters"
+  ],
+  "postFreezePolicy": "No candidate/evaluator/fixture/template/threshold edits based on held-out outcomes. Runtime completion retries must preserve original attempt records and frozen hashes."
+}

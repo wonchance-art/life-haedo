@@ -1,0 +1,64 @@
+{
+  "runnerSHA256": "8ad9ded2b878bfe3e056828ef522a682d31038055efae5a87bd03a9dc7012802",
+  "inputSHA256": "4e1caab4d96ac542c776f60c92ee4188c4afaaff6e9a9feb1b7e371de66e0a8b",
+  "candidateSHA256": "a9424f1996df1844b4baec8ae8beaa3d160577fd553ec724603529fffc7d3075",
+  "runFingerprint": "a237d4dfc56153660ed4c02d9b654326464f4365334258e0a7af7d3d1ec1dbe8",
+  "runtime": {
+    "version": "4.3.1",
+    "url": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1/dist/transformers.min.js",
+    "device": "wasm",
+    "dtype": "q8",
+    "numThreads": 1,
+    "models": {
+      "embedding": {
+        "id": "Xenova/paraphrase-multilingual-MiniLM-L12-v2",
+        "revision": "2c4055b12046f11709e9df2c122e59ffbdc2f900",
+        "bytes": 118308126,
+        "sha256": "66fc00f5f29afcaff34092e1bdd20008ca3918265a82fb9695a551e510cc4ebc",
+        "upstream": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "upstreamRevision": "b8ef00830037f9868450f778081ea683e900fe39",
+        "license": "apache-2.0",
+        "dimensions": 384,
+        "ceiling": 512
+      },
+      "nli": {
+        "id": "onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX",
+        "revision": "cdc8277b4682665e2f2e87cd83da7da07b153d75",
+        "bytes": 338341610,
+        "sha256": "f1920d10296efd121a601b2161e8de9fa0c934a6c0331cd1764fd09a06a83041",
+        "license": "mit",
+        "ceiling": 512,
+        "id2label": {
+          "0": "entailment",
+          "1": "neutral",
+          "2": "contradiction"
+        },
+        "entailmentIndex": 0
+      }
+    }
+  },
+  "config": {
+    "version": "model-03-extractive-nli-v1",
+    "maxDocuments": 100,
+    "maxDocumentCharacters": 200000,
+    "maxTotalCharacters": 2000000,
+    "maxPassages": 20000,
+    "passageCharacters": 240,
+    "topicShortlist": 3,
+    "questionNeighbours": 5,
+    "maxNliPairs": 10000,
+    "maxWallMilliseconds": 900000,
+    "embeddingBatch": 16,
+    "nliBatch": 16,
+    "modelTokenCeiling": 512,
+    "maxTopicOutputs": 10,
+    "maxQuestionPairOutputs": 1000,
+    "maxQuestionCandidates": 2000,
+    "topicEntailment": 0.55,
+    "controlEntailment": 0.45,
+    "questionhoodEntailment": 0.55,
+    "questionEntailment": 0.55
+  },
+  "taxonomySHA256": "ccf5b6111c7ee8b9c5bf0797c2d31396307ae8cec534828b1895fc406577a60f",
+  "templateSHA256": "3a7181c2343568192b1aaef07fa5f906ccd491421c13439bf6c2e27cead7a467"
+}
