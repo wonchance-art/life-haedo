@@ -68,19 +68,21 @@
     "tests/discovery-feed-update.test.cjs": "4e2f58d4fd90d3d3b49875cf6c219c033589cf6263c3b5c2f46cd19ae6347b7b",
     "tests/discovery-evaluation.test.cjs": "7cac649ac2b64540d0c8e7683497d252eaf6e8293c311cb4f7e846fd82f5826f",
     "tests/life-discovery.test.cjs": "27d73e4e497f144711bcfcf4a438d10b62696ef5eed8492159c1116760c25427",
-    "tests/life-external-discovery-browser.cjs": "816187bb1b8cf35755a1a1d0cc6c3cc63e94e0e4fd2134f93a9c7b420e7b8e38",
+    "tests/life-external-discovery-browser.cjs": "ae78f21e79d6c9d7ae3a8b29f73cd208f490db07636f3945d5180ea3563fe3fb",
     "tests/life-external-discovery-pwa-browser.cjs": "8fe71eba3df5eeb8ae9778de8c893d55cba4b3939f36b00a88c190311af77ae9",
     "tests/fixtures/external-discovery/sw-v130.js": "ceee25a2669398a40787766c4692db1fdb91363831e5dbf0b0c44d3c45dddf2b"
   },
   "evidenceSHA256": {
     "actual-books-1440.png": "c5520b1141958af6d617ae8187486f2c3ff28d9466fe87555c01fb15390af685",
     "actual-books-390.png": "56de6f9002196a2047dcd1d25b0ad5c875e0e6c478caecfc97ac37ef36f17bcc",
-    "browser.json": "e0040941e9a432b91e4500d2c38e606673f4ba425fed4e02e0c700d992627995",
+    "browser.json": "acaac5e6b055383b65e0af4a64ce51299c0d2faff5c03027c270f2383acff6ec",
+    "ci-regression.json": "a550e6e1a6366d52e554f3016d1d435b1a27a7b4768677fad6743047de116433",
     "comparison.md": "50eb01f6e1e649342bb7581187a916da748ab126fbe0081da2429da0066e149a",
     "evaluation-bundle.zip": "0defb3ab31bf5393fefa4dabbae6fa27cbf80c205ff6bfa0a46b2a2fd3cfed31",
     "frozen.json": "21a0fe3759b7baee28f126a24b3241f7b59e752d1a07761b552eee400b4bf236",
     "pwa.json": "2de3809feaf84321de32bdff2c815c8073e8da1a5e28d2661f3aceee6373552b",
     "runtime-review.json": "054dbb70bf960c7cac573523374e21022c77721b5a6617b0f8d2317bddbbad6b",
     "source-update.json": "3bdb050fcaa083169024602e41927375fee17cdbc9422755aa96dade1058bccb"
-  }
+  },
+  "ciRegression": "ci-regression.json"
 }

@@ -60,4 +60,6 @@ collector의 query 파서가 `%20`을 `+`로, `%2f`를 `%2F`로 바꾸는 실제
 
 독립 브라우저 검수의 최종 결과는 [browser.json](evidence/discovery-expansion/browser.json), 시각 캡처와 CI는 [manifest.json](evidence/discovery-expansion/manifest.json)을 따른다. 새 두 출처의 native 원문 새 탭·복귀·기존 3단계 명시 링크 보관·중복 제외와 기존 피드백/원문/관심/workbench 보존을 확인한다. publisher popup 응답은 가로챈 합성 응답이며 실제 원문 페이지 읽기로 세지 않는다. 실제 공개 RSS GET과 익명 Auth/합성 오류 주입을 분리했다. 앞선 commit26093f3의 CI는 전체 성공을 확인했다. 이번 HEAD의 CI와 운영 배포는 별도다.
 
+CI `39155636667`에서는 새 두 출처·PWA가 통과했지만 로그아웃 뒤 계정 전환 검사 1개가 `ERR_ABORTED`로 실패했다. 실제 logout 응답과 다음 login 문서 요청을 조절해 같은 경합을 재현했다. 개인 영역/저장소 닫힘은 SDK 종료와 자동 공개 홈 이동보다 먼저 끝나므로, 검사가 새 문서와 공개 홈 표시를 확인한 뒤 다음 login으로 이동하도록 보완했다. 임의 sleep·오류 무시·timeout 증가는 추가하지 않았고 계정 격리 검증은 유지했다. [재현·수정 기록](evidence/discovery-expansion/ci-regression.json)에 실패 CI와 로컬 재검증을 구분한다. 최종 CI 상태는 PR의 현재 HEAD를 따른다.
+
 다음 P1은 접근 가능한 실행본에서 사용자 평가 양식으로 두 순서의 읽을 만함·이미 앎·무관함·조작 부담을 확인하는 것이다. 남은 0개 관심은 사용자 평가에서 필요성이 확인된 허용 공급 또는 사용자가 직접 고른 관심 표현으로 보완한다. 출처명·임의 동의어·제목 부분 분해로 수를 채우지 않는다. 실제 Google·Mac/iPad/iPhone·운영 버전/캐시 검증은 미완료이며 릴리스 권한 안에서 진행한다. 자동 추출 연구는 P2로 유지하고 새 가설·비용 상한·독립 평가가 준비될 때 재개한다. [최신 로드맵](../life-tools-design/roadmap.md).

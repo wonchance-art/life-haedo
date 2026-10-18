@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-10-18T18:42:59.694Z",
+  "createdAt": "2026-10-18T18:49:51.213Z",
   "scope": "Real local app/Core/SDK/IndexedDB and checked-in public catalogue; synthetic edge HTTP and publisher popup interception identified per check. No live OAuth/account/publisher, model inference, Apple hardware or user usefulness validation.",
   "checks": [
     {

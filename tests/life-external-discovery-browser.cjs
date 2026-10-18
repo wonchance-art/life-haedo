@@ -251,9 +251,17 @@ async function main() {
     await check('synthetic late feed response after actual logout cannot reveal prior account feedback', async ({ page, context, server, device }) => {
       const feed = await feedRoute(context), data = await seed(page); await open(page);
       await card(page, 'related-link').locator('[data-discovery-feedback="already_read"]').click(); await idle(page);
+      const previousDocument = await page.evaluate(() => __homeInstance);
       const arrived = feed.nextRequest(); feed.hold = true; await page.locator('#discoveryRefresh').click(); await arrived;
       try { await nav(page, 'manage'); await openAccount(page); await page.locator('#lifeLogout').click(); await page.waitForFunction(() => globalThis.HaedoLife?.Shell && document.querySelector('#lifeApp')?.hidden && !globalThis.HaedoLife.Shell.storage); }
       finally { feed.release(); }
+      // Invalidation hides private data before SDK sign-out finishes and replaces
+      // this document with index.html. Starting a new goto during that interval
+      // races the pending replacement. Verify the new public document first;
+      // pathname alone also matches the private document we just left.
+      await page.waitForFunction(previous => window.__homeInstance && __homeInstance !== previous, previousDocument);
+      await page.locator('#lifeWelcome').waitFor({ state: 'visible' });
+      assert.equal(new URL(page.url()).pathname, '/index.html');
       assert.equal(await page.evaluate(() => HaedoAuth.user), null); server.oauthAccounts.set(device, accounts.b);
       await page.goto(base + '/login.html?next=' + encodeURIComponent('index.html?section=tools&view=external-discovery')); await page.locator('#googleLogin').click(); await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page); await page.locator('#discoveryReview').waitFor(); await idle(page);
       const after = await state(page); assert.deepEqual(after.interest.manual, []); assert.deepEqual(after.feedback.feedback, []); assert.equal(after.bundle.sources.length, 0);
