@@ -1,0 +1,23 @@
+{
+  "createdAt": "2026-10-18T07:21:57.286Z",
+  "scope": "Generated anonymous Obsidian Markdown only; actual app/SDK/IndexedDB and two tabs, intercepted Auth HTTP. No private notes, screenshots, operating SQL, source fetches, Apple hardware or native IME.",
+  "checks": [
+    {
+      "name": "late metadata reads and in-flight hashes cannot repaint newer metadata, navigation or workspace",
+      "pass": true,
+      "evidence": {
+        "staleReadAfterPeerClearBlocked": true,
+        "staleReadNavigationBlocked": true,
+        "staleHashNavigationBlocked": true,
+        "staleWorkspaceReadBlocked": true
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "realRemoteWrites": 0,
+  "browser": "151.0.7922.173",
+  "finishedAt": "2026-10-18T07:22:00.239Z"
+}

@@ -1,0 +1,158 @@
+{
+  "createdAt": "2026-10-18T07:23:40.849409+00:00",
+  "scope": "Actual Linux Chromium app with generated 96-note plus 1 supporting-record fixture, intercepted anonymous Auth HTTP and actual account-isolated IndexedDB. No private classification files, real source requests, production DB, actual Apple devices or native IME.",
+  "browser": "151.0.7922.173",
+  "initialFrozenBatchScreens": 9,
+  "readerCompositionConfirmationScreens": 3,
+  "finalSelectedScenes": 9,
+  "finalSceneChecks": [
+    {
+      "scene": "preview",
+      "width": 1440,
+      "pass": true,
+      "horizontalOverflow": false,
+      "contrastFailures": 0,
+      "smallInputs": 0,
+      "unnamedControls": 0,
+      "actionControlsUnder44": 0,
+      "minTextContrast": 5.15
+    },
+    {
+      "scene": "filters",
+      "width": 1440,
+      "pass": true,
+      "horizontalOverflow": false,
+      "contrastFailures": 0,
+      "smallInputs": 0,
+      "unnamedControls": 0,
+      "actionControlsUnder44": 0,
+      "minTextContrast": 5.15
+    },
+    {
+      "scene": "preview",
+      "width": 820,
+      "pass": true,
+      "horizontalOverflow": false,
+      "contrastFailures": 0,
+      "smallInputs": 0,
+      "unnamedControls": 0,
+      "actionControlsUnder44": 0,
+      "minTextContrast": 5.15
+    },
+    {
+      "scene": "filters",
+      "width": 820,
+      "pass": true,
+      "horizontalOverflow": false,
+      "contrastFailures": 0,
+      "smallInputs": 0,
+      "unnamedControls": 0,
+      "actionControlsUnder44": 0,
+      "minTextContrast": 5.15
+    },
+    {
+      "scene": "preview",
+      "width": 390,
+      "pass": true,
+      "horizontalOverflow": false,
+      "contrastFailures": 0,
+      "smallInputs": 0,
+      "unnamedControls": 0,
+      "actionControlsUnder44": 0,
+      "minTextContrast": 5.59
+    },
+    {
+      "scene": "filters",
+      "width": 390,
+      "pass": true,
+      "horizontalOverflow": false,
+      "contrastFailures": 0,
+      "smallInputs": 0,
+      "unnamedControls": 0,
+      "actionControlsUnder44": 0,
+      "minTextContrast": 5.59
+    },
+    {
+      "scene": "reader-detail",
+      "width": 1440,
+      "pass": true,
+      "horizontalOverflow": false,
+      "contrastFailures": 0,
+      "smallInputs": 0,
+      "unnamedControls": 0,
+      "actionControlsUnder44": 0,
+      "minTextContrast": 5.15
+    },
+    {
+      "scene": "reader-detail",
+      "width": 820,
+      "pass": true,
+      "horizontalOverflow": false,
+      "contrastFailures": 0,
+      "smallInputs": 0,
+      "unnamedControls": 0,
+      "actionControlsUnder44": 0,
+      "minTextContrast": 5.15
+    },
+    {
+      "scene": "reader-detail",
+      "width": 390,
+      "pass": true,
+      "horizontalOverflow": false,
+      "contrastFailures": 0,
+      "smallInputs": 0,
+      "unnamedControls": 0,
+      "actionControlsUnder44": 0,
+      "minTextContrast": 5.59
+    }
+  ],
+  "nonActionDocumentRegionExceptions": [
+    {
+      "scene": "reader-detail",
+      "width": 1440,
+      "id": "lifeSourceText",
+      "role": "document",
+      "height": 35.1,
+      "reason": "Keyboard focus region for unchanged original text, not an action control. One-line synthetic body is 35.1px high. Apply 44px minimum to action controls; retain this raw generic-audit observation."
+    },
+    {
+      "scene": "reader-detail",
+      "width": 820,
+      "id": "lifeSourceText",
+      "role": "document",
+      "height": 35.1,
+      "reason": "Keyboard focus region for unchanged original text, not an action control. One-line synthetic body is 35.1px high. Apply 44px minimum to action controls; retain this raw generic-audit observation."
+    }
+  ],
+  "rawInitialReport": "visual-raw.json",
+  "rawReaderConfirmationReport": "visual-reader-confirmation.json",
+  "consoleErrors": [],
+  "pageErrors": [],
+  "externalRequests": [],
+  "remoteWrites": 0,
+  "originalBundleUnchanged": true,
+  "exactOlderBodyVerified": true,
+  "anonymousFixtureOnly": {
+    "generatedNotes": 96,
+    "supportingRecords": 1,
+    "realClassificationFileUsed": false
+  },
+  "representatives": [
+    "preview-390.png",
+    "filters-1440.png",
+    "reader-detail-390.png"
+  ],
+  "review": {
+    "surface": "Current teal app surface, not unselected A/B/C concepts.",
+    "preview": "Counts, scope, unchanged-original explanation and explicit apply are readable; mobile apply/cancel remain above fixed navigation.",
+    "filters": "Four native selects form four columns at 1440/820 and two columns at 390. All are 44px high and 16px text. Long option values clip inside native controls; distinguishing prefixes remain visible and the card footer displays the full source label.",
+    "reader": "Candidate heading, source/kind/topic candidate labels and review reasons remain separate from original source facts. The exact older body is unchanged and visible in final detail framing.",
+    "fold": "Automatic first-pass/local-scope explanation is inside the management disclosure and disappears when closed. The visible topic filter still says candidate. Root reviewed this observation and kept the UI frozen; no extra copy/layout change.",
+    "decision": "No blocking visual defects observed in final scope. App and test sources were not modified."
+  },
+  "limits": [
+    "Linux Chromium viewport/touch simulation only; no actual Mac/iPad/iPhone, native IME, VoiceOver or Apple Files verification.",
+    "Native select clipping and chooser rendering reflect Chromium; actual device picker behavior is not verified.",
+    "Visual inspection and synthetic data preservation do not establish topic classification accuracy on private records."
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "createdAt": "2026-10-18T07:23:41.894461+00:00",
+  "baseURL": "http://127.0.0.1:4173",
+  "sharedServerPreserved": true,
+  "sourceFilesModified": false,
+  "scope": "Existing browser regression suites against the frozen local app, anonymous SDK/Auth fixtures and real IndexedDB. Linux Chromium emulation; no actual Apple hardware, OAuth, production database or deployment proof.",
+  "appMotion": {
+    "passed": 9,
+    "total": 9,
+    "consoleErrors": 0,
+    "pageErrors": 0,
+    "external": 0,
+    "report": "app-motion-report.json",
+    "log": "app-motion.log",
+    "visualDir": ".local/app-native/qa"
+  },
+  "subviewNavigation": {
+    "passed": 11,
+    "total": 11,
+    "visualFrames": 12,
+    "consoleErrors": 0,
+    "pageErrors": 0,
+    "report": "subview-navigation-report.json",
+    "log": "subview-navigation.log",
+    "visualDir": ".local/subview-navigation"
+  },
+  "newDefects": []
+}

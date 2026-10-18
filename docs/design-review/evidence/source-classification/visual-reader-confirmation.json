@@ -1,0 +1,256 @@
+{
+  "createdAt": "2026-10-18T07:22:58.032Z",
+  "scope": "Actual Linux Chromium app with generated 96-note plus 1 supporting-record fixture, intercepted anonymous Auth HTTP and actual account-isolated IndexedDB. No private classification files, real source requests, production DB, actual Apple devices or native IME.",
+  "captures": [
+    {
+      "scene": "reader-detail",
+      "width": 1440,
+      "file": "reader-detail-1440.png",
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [
+          {
+            "tag": "div",
+            "id": "lifeSourceText",
+            "class": "life-source-text",
+            "text": "보관한 원문",
+            "spatial": false,
+            "width": 700,
+            "height": 35.1
+          }
+        ],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": null,
+        "reader": {
+          "width": 700,
+          "size": "18px",
+          "lineHeight": "35.1px",
+          "selectedText": "이전원문의끝표식🌱"
+        },
+        "resultCount": 0
+      },
+      "layout": {
+        "scrollY": 316,
+        "main": {
+          "x": 468,
+          "y": -316,
+          "width": 720,
+          "height": 1243.71875,
+          "bottom": 927.71875
+        },
+        "panelOpen": null,
+        "preview": null,
+        "filters": [],
+        "originalBody": {
+          "x": 478,
+          "y": 785.234375,
+          "width": 700,
+          "height": 35.09375,
+          "bottom": 820.328125
+        },
+        "readerInfo": {
+          "x": 478,
+          "y": 36.625,
+          "width": 700,
+          "height": 661.21875,
+          "bottom": 697.84375
+        },
+        "visibleExplanation": [
+          "분류 후보분류 출처: 익명 출처 1 · 여러 기기에 흩어진 메모와 기록자료 유형: 익명 저장 글 · 다른 자료와 함께 남긴 문장주제 후보: 익명 읽기 · 오래 남겨 두고 다시 읽는 문장확인이 필요한 내용출처 확인 필요주제 확인 필요"
+        ],
+        "titleFont": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+      }
+    },
+    {
+      "scene": "reader-detail",
+      "width": 820,
+      "file": "reader-detail-820.png",
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [
+          {
+            "tag": "div",
+            "id": "lifeSourceText",
+            "class": "life-source-text",
+            "text": "보관한 원문",
+            "spatial": false,
+            "width": 636,
+            "height": 35.1
+          }
+        ],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": null,
+        "reader": {
+          "width": 636,
+          "size": "18px",
+          "lineHeight": "35.1px",
+          "selectedText": "이전원문의끝표식🌱"
+        },
+        "resultCount": 0
+      },
+      "layout": {
+        "scrollY": 316,
+        "main": {
+          "x": 136,
+          "y": -316,
+          "width": 636,
+          "height": 1243.71875,
+          "bottom": 927.71875
+        },
+        "panelOpen": null,
+        "preview": null,
+        "filters": [],
+        "originalBody": {
+          "x": 136,
+          "y": 785.234375,
+          "width": 636,
+          "height": 35.09375,
+          "bottom": 820.328125
+        },
+        "readerInfo": {
+          "x": 136,
+          "y": 36.625,
+          "width": 636,
+          "height": 661.21875,
+          "bottom": 697.84375
+        },
+        "visibleExplanation": [
+          "분류 후보분류 출처: 익명 출처 1 · 여러 기기에 흩어진 메모와 기록자료 유형: 익명 저장 글 · 다른 자료와 함께 남긴 문장주제 후보: 익명 읽기 · 오래 남겨 두고 다시 읽는 문장확인이 필요한 내용출처 확인 필요주제 확인 필요"
+        ],
+        "titleFont": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+      }
+    },
+    {
+      "scene": "reader-detail",
+      "width": 390,
+      "file": "reader-detail-390.png",
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.59,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": null,
+        "reader": {
+          "width": 350,
+          "size": "17px",
+          "lineHeight": "33.15px",
+          "selectedText": "이전원문의끝표식🌱"
+        },
+        "resultCount": 0
+      },
+      "layout": {
+        "scrollY": 576,
+        "main": {
+          "x": 20,
+          "y": -576,
+          "width": 350,
+          "height": 1308.40625,
+          "bottom": 732.40625
+        },
+        "panelOpen": null,
+        "preview": null,
+        "filters": [],
+        "originalBody": {
+          "x": 20,
+          "y": 558.734375,
+          "width": 350,
+          "height": 66.28125,
+          "bottom": 625.015625
+        },
+        "readerInfo": {
+          "x": 20,
+          "y": -235.375,
+          "width": 350,
+          "height": 706.71875,
+          "bottom": 471.34375
+        },
+        "visibleExplanation": [
+          "분류 후보분류 출처: 익명 출처 1 · 여러 기기에 흩어진 메모와 기록자료 유형: 익명 저장 글 · 다른 자료와 함께 남긴 문장주제 후보: 익명 읽기 · 오래 남겨 두고 다시 읽는 문장확인이 필요한 내용출처 확인 필요주제 확인 필요"
+        ],
+        "titleFont": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+      }
+    }
+  ],
+  "checks": [
+    {
+      "name": "reader-detail 1440 geometry/accessibility",
+      "pass": false
+    },
+    {
+      "name": "1440 original bundle unchanged and exact older raw body shown",
+      "pass": true
+    },
+    {
+      "name": "reader-detail 820 geometry/accessibility",
+      "pass": false
+    },
+    {
+      "name": "820 original bundle unchanged and exact older raw body shown",
+      "pass": true
+    },
+    {
+      "name": "reader-detail 390 geometry/accessibility",
+      "pass": true
+    },
+    {
+      "name": "390 original bundle unchanged and exact older raw body shown",
+      "pass": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "remoteWrites": 0,
+  "browser": "151.0.7922.173",
+  "finishedAt": "2026-10-18T07:23:07.407Z"
+}

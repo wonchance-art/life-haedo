@@ -123,6 +123,8 @@
     const viewOrigins = new Map();
     let findRenderPromise = Promise.resolve();
     let collectionOpenOptions = null;
+    let sourceResultsUpdate = null, readerClassificationUpdate = null;
+    let sourcesRenderPromise = Promise.resolve();
     const parentViews = new Set(['find', 'home', 'sources', 'topics', 'tools', 'manage']);
     const subviewTitles = { find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
       discover: '다시 찾기', sync: '기기 간 동기화', transfer: '자료 백업·복원',
@@ -171,6 +173,15 @@
     main.addEventListener('keydown', editingInput);
     main.addEventListener('wheel', editingInput, { passive: true });
     const collection = global.HaedoLife.CollectionUI?.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onSaved: clearError });
+    const sourceClassification = global.HaedoLife.SourceClassificationUI?.create({
+      storage, getBundle: () => state.bundle, isDisposed: () => disposed,
+      isCurrent: () => !disposed && ['sources', 'source'].includes(state.mode),
+      onChange: () => {
+        if (disposed) return;
+        if (state.mode === 'sources') sourceResultsUpdate?.();
+        else if (state.mode === 'source') readerClassificationUpdate?.();
+      }
+    });
     const unifiedSearch = global.HaedoLife.UnifiedSearchUI.create({ storage, host: main, getBundle: () => state.bundle, isDisposed: () => disposed, onReload: clearError,
       onOpen: guarded(async row => {
         const workspaceId = state.bundle.workspaceId;
@@ -855,6 +866,7 @@
         if (accountKey !== state.syncAccountKey) {
           sectionPositions.clear();
           blogEntryScroll = null;
+          if (state.syncAccountKey !== null) sourceClassification?.reset();
           global.HaedoMotion?.cancel(main);
           state.remoteRows = null;
           state.remoteRowsAccountKey = null;
@@ -1241,9 +1253,10 @@
       const origin = subviewOrigin();
       const anchor = state.mode === 'page' && blogPageTask && origin.mode === 'home' && origin.homeState?.tab !== 'drafts' ? blogCommitted : null;
       if (await navigate(origin.mode, { preserveContext: true, homeState: origin.homeState, homeAnchor: anchor, navigationMotion: 'back' }) === false) return;
-      const token = navigationGeneration;
+      const token = navigationGeneration, restoreInput = inputGeneration;
       const restore = () => requestAnimationFrame(() => {
-        if (disposed || token !== navigationGeneration || state.mode !== origin.mode || state.bundle?.workspaceId !== origin.workspaceId || anchor) return;
+        if (disposed || token !== navigationGeneration || state.mode !== origin.mode || state.bundle?.workspaceId !== origin.workspaceId || anchor ||
+            origin.mode === 'sources' && restoreInput !== inputGeneration) return;
         const controls = [...root.querySelectorAll('button,a,summary,input')];
         const target = (origin.focusKey && controls.find(el => el.dataset.focusKey === origin.focusKey)) ||
           (origin.focusId && controls.find(el => el.id === origin.focusId)) || controls.find(el =>
@@ -1254,6 +1267,7 @@
       });
       if (origin.mode === 'find') findRenderPromise.then(restore);
       else if (origin.mode === 'home') homeRenderPromise.then(restore);
+      else if (origin.mode === 'sources') sourcesRenderPromise.then(restore);
       else restore();
     }
 
@@ -1501,6 +1515,9 @@
 
     function resetSearchContext() {
       unifiedSearch?.reset();
+      sourceResultsUpdate = readerClassificationUpdate = null;
+      if (!disposed) sourceClassification?.reset();
+      sourcesRenderPromise = Promise.resolve();
       viewOrigins.clear();
       selectedVersions.clear();
       selectionReturn = null;
@@ -1538,7 +1555,9 @@
       if (await navigate(context.mode, { sourceId: context.sourceId, sourceVersionId: context.sourceVersionId,
         locator: context.locator, returnContext: context.returnContext, preserveContext: true,
         readerArrangeOpen: context.mode === 'source', navigationMotion: 'back' }) === false) return;
-      const navigation = navigationGeneration;
+      const navigation = navigationGeneration, restoreInput = inputGeneration;
+      if (context.mode === 'sources') await sourcesRenderPromise;
+      if (disposed || navigation !== navigationGeneration || context.mode === 'sources' && restoreInput !== inputGeneration) return;
       requestAnimationFrame(() => {
         if (disposed || navigation !== navigationGeneration || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode) return;
         main.querySelector('#' + context.focusId)?.focus({ preventScroll: true });
@@ -1740,9 +1759,10 @@
       const context = state.returnContext;
       if (!context || context.workspaceId !== state.bundle.workspaceId) return navigate('sources', { returnContext: null, navigationMotion: 'back' });
       if (await navigate(context.mode, { returnContext: null, homeState: context.homeState, homeAnchor: context.homeAnchor, navigationMotion: 'back', sourcesRevealVersionId: context.mode === 'sources' ? context.sourceVersionId || null : null }) === false) return;
-      const navigation = navigationGeneration;
+      const navigation = navigationGeneration, restoreInput = inputGeneration;
       const restore = () => requestAnimationFrame(() => {
-        if (disposed || navigation !== navigationGeneration || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode || context.homeAnchor) return;
+        if (disposed || navigation !== navigationGeneration || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode || context.homeAnchor ||
+            context.mode === 'sources' && restoreInput !== inputGeneration) return;
         const target = Array.from(main.querySelectorAll('[data-focus-key]')).find(el => el.dataset.focusKey === context.focusKey) ||
           (context.mode === 'sources' && Array.from(main.querySelectorAll('.life-source-open')).find(el => el.dataset.versionId === context.sourceVersionId)) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2');
         const panel = target?.closest('[data-result-panel]');
@@ -1754,12 +1774,13 @@
       });
       if (context.focusKey === context.mode + ':reading-resume') {
         const pending = readingResumePromise;
-        pending.then(() => { if (pending === readingResumePromise) restore(); });
+        Promise.all([pending, context.mode === 'sources' ? sourcesRenderPromise : null]).then(() => { if (pending === readingResumePromise) restore(); });
       } else if (context.mode === 'home') {
         const pending = homeRenderPromise;
         pending.then(() => { if (pending === homeRenderPromise) restore(); });
       }
       else if (context.mode === 'find') findRenderPromise.then(restore);
+      else if (context.mode === 'sources') sourcesRenderPromise.then(restore);
       else restore();
     }
 
@@ -1967,10 +1988,14 @@
     }
 
     function renderSources() {
+      const workspaceId = state.bundle.workspaceId, generation = renderGeneration;
       const heading = title('기록');
       heading.classList.add('life-sr-only');
       main.append(heading);
       renderStages(main);
+      const classificationManager = sourceClassification ? node('div', null, 'life-classification-manager-host') : null;
+      const classificationFilters = sourceClassification ? node('div', null, 'life-classification-filters-host') : null;
+      if (classificationManager) main.append(classificationManager);
       const list = node('div', null, 'life-card-grid'); list.id = 'lifeSearchResults';
       const importResult = node('div', null, 'life-actions');
       importResult.id = 'lifeImportResult';
@@ -2028,7 +2053,8 @@
       }
       const update = (append = false) => {
         const query = state.sourcesSearch.trim();
-        const windowKey = JSON.stringify([state.bundle.workspaceId, query, state.originFilter, state.ignoreKoreanSpacing]);
+        const windowKey = JSON.stringify([state.bundle.workspaceId, query, state.originFilter, state.ignoreKoreanSpacing,
+          sourceClassification?.getFilterState() || null]);
         if (state.sourcesWindowKey !== windowKey) {
           state.sourcesWindowKey = windowKey;
           state.sourcesLimit = SEARCH_PAGE_SIZE;
@@ -2054,7 +2080,8 @@
           byVersion.set(ref.sourceVersionId, hit);
           hits.push(hit);
         }));
-        const matches = hits.filter(hit => !state.originFilter || (state.originFilter === 'writing' ? isOwnWriting(sourceFor(hit.sourceId)) : sourceFor(hit.sourceId).origin === state.originFilter));
+        const matches = hits.filter(hit => (!state.originFilter || (state.originFilter === 'writing' ? isOwnWriting(sourceFor(hit.sourceId)) : sourceFor(hit.sourceId).origin === state.originFilter)) &&
+          (!sourceClassification || sourceClassification.matches(hit.sourceVersionId)));
         const revealIndex = matches.findIndex(hit => hit.sourceVersionId === state.sourcesRevealVersionId);
         if (revealIndex >= state.sourcesLimit) state.sourcesLimit = Math.ceil((revealIndex + 1) / SEARCH_PAGE_SIZE) * SEARCH_PAGE_SIZE;
         state.sourcesRevealVersionId = null;
@@ -2117,6 +2144,9 @@
           }
           const footer = node('div', null, 'life-feed-footer');
           const facts = [sourceOrigin(source)];
+          const classified = sourceClassification?.metadata(version.id);
+          if (classified?.source?.label) facts.push('분류 출처: ' + classified.source.label);
+          if (classified?.status === 'changed') facts.push('분류 다시 확인 필요');
           if (version.coverage.status !== 'full_text') facts.push(({ partial: '본문 일부', link_only: '본문 미확보', unknown: '범위 미확인' })[version.coverage.status] || '범위 미확인');
           if (hit.versionIndex < hit.versionCount) facts.push('이전 버전');
           if (state.sourcesSearch.trim() && hit.matchedBy === 'title') facts.push('제목 일치');
@@ -2164,10 +2194,43 @@
       origin.input.addEventListener('change', () => { state.originFilter = origin.input.value; update(); });
       spacing.input.addEventListener('change', () => { state.ignoreKoreanSpacing = spacing.input.checked; update(); });
       main.append(filters);
+      if (classificationFilters) main.append(classificationFilters);
       main.append(importResult);
       renderReadingResume(main, 'sources');
       main.append(selectionBar, count, list, more);
+      sourceResultsUpdate = () => {
+        if (disposed || generation !== renderGeneration || state.mode !== 'sources' || state.bundle?.workspaceId !== workspaceId || !list.isConnected) return;
+        const focusedKey = list.contains(document.activeElement) ? document.activeElement.dataset.focusKey : null;
+        update();
+        if (focusedKey) Array.from(list.querySelectorAll('[data-focus-key]')).find(control => control.dataset.focusKey === focusedKey)?.focus({ preventScroll: true });
+      };
       update();
+      if (sourceClassification) {
+        sourceClassification.mount(classificationManager);
+        sourceClassification.mountFilters(classificationFilters);
+        sourcesRenderPromise = Promise.resolve(sourceClassification.refresh()).catch(() => {});
+        mainRenderPromise = sourcesRenderPromise;
+      }
+    }
+
+    function fillClassificationMetadata(host, versionId) {
+      const classified = sourceClassification?.metadata(versionId);
+      host.replaceChildren();
+      host.hidden = !classified;
+      if (!classified) return;
+      host.append(node('h4', '분류 후보'));
+      if (classified.status === 'changed') {
+        host.append(node('p', '이 버전의 본문 일치를 확인하지 못했습니다. 분류 후보를 표시하지 않습니다.', 'life-meta'));
+        return;
+      }
+      if (classified.source?.label) host.append(node('p', '분류 출처: ' + classified.source.label, 'life-meta'));
+      if (classified.kind?.label) host.append(node('p', '자료 유형: ' + classified.kind.label, 'life-meta'));
+      if (classified.topicLabels?.length) host.append(node('p', '주제 후보: ' + classified.topicLabels.join(' · '), 'life-meta'));
+      if (classified.reviewReasonLabels?.length) {
+        const reasons = node('ul', null, 'life-meta');
+        classified.reviewReasonLabels.forEach(reason => reasons.append(node('li', reason)));
+        host.append(node('p', '확인이 필요한 내용', 'life-meta'), reasons);
+      }
     }
 
     function metadata(source, version, expanded = false) {
@@ -2189,6 +2252,11 @@
           link.rel = 'noopener noreferrer';
           details.append(node('p', source.url, 'life-meta life-source-url'), link, node('p', '외부 출처는 연결이 필요하며 삭제·비공개 상태일 수 있습니다.', 'life-help'));
         }
+      }
+      if (sourceClassification) {
+        const classified = node('section', null, 'life-classification-info');
+        fillClassificationMetadata(classified, version.id);
+        details.append(classified);
       }
       return details;
     }
@@ -2287,6 +2355,15 @@
       details.id = 'lifeSourceDetails';
       details.hidden = true;
       details.setAttribute('aria-label', '출처와 포함 범위');
+      if (sourceClassification) {
+        const classificationInfo = details.querySelector('.life-classification-info');
+        const generation = renderGeneration, workspaceId = state.bundle.workspaceId;
+        readerClassificationUpdate = () => {
+          if (disposed || generation !== renderGeneration || state.mode !== 'source' || state.bundle?.workspaceId !== workspaceId || !classificationInfo?.isConnected) return;
+          fillClassificationMetadata(classificationInfo, version.id);
+        };
+        Promise.resolve(sourceClassification.refresh()).catch(() => {});
+      }
       const setDetails = disclosure(info, details, { onChange: () => { flushReadingPosition(); readerWatch?.suppress(); } });
       const detailsHeading = node('div', null, 'life-panel-heading');
       detailsHeading.append(node('h3', '출처와 포함 범위'), iconButton('출처 정보 닫기', 'close', () => setDetails(false)));
@@ -3534,6 +3611,10 @@
       const generation = ++renderGeneration, navigation = navigationGeneration;
       global.HaedoMotion?.cancel(main);
       mainRenderPromise = Promise.resolve();
+      sourcesRenderPromise = Promise.resolve();
+      sourceResultsUpdate = readerClassificationUpdate = null;
+      if (!['sources', 'source'].includes(state.mode)) sourceClassification?.leave();
+      else if (state.mode === 'source') sourceClassification?.cancelStage();
       compositionPanel?.dispose(); compositionPanel = null;
       homeRenderPromise = Promise.resolve();
       home?.leave();
@@ -3704,6 +3785,7 @@
       writer?.dispose();
       collection?.dispose();
       unifiedSearch?.dispose();
+      sourceClassification?.dispose();
       unbindNavigation?.();
       global.removeEventListener('popstate', popstate);
       root.removeEventListener('focusin', keepFocusVisible);

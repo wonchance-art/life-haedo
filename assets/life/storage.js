@@ -5,6 +5,7 @@
   const DB_NAME = 'life-tools-v1';
   const DB_VERSION = 1;
   const SYNC_MAX_BYTES = 16 * 1024 * 1024;
+  const SOURCE_CLASSIFICATION_MAX_BYTES = 32 * 1024 * 1024;
   const COLLECTIONS = ['sources', 'sourceVersions', 'records', 'links', 'resumeHints', 'tombstones'];
   const clone = value => structuredClone(value);
   const plain = value => value !== null && typeof value === 'object' &&
@@ -133,6 +134,11 @@
       notify(event);
       try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Persistent state is authoritative. */ }
     }
+    function sourceClassificationChanged(workspaceId, revision) {
+      const event = { type: 'source_classification_changed', workspaceId, revision };
+      notify(event);
+      try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Persistent state is authoritative. */ }
+    }
     function ensureChannel() {
       if (channel || options.channelFactory === null) return;
       try {
@@ -167,6 +173,11 @@
           if (data?.sender !== sender && data?.type === 'reading_position_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 1) {
             notify({ type: 'reading_position_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'source_classification_changed' &&
+              typeof data.workspaceId === 'string' && data.workspaceId.trim() &&
+              Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'source_classification_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
         };
       } catch (_) { channel = null; }
@@ -512,6 +523,77 @@
       return writeReadingPosition(workspaceId, readingPositionInput(input), baseRevision);
     }
     async function clearReadingPosition(workspaceId, baseRevision) { return writeReadingPosition(workspaceId, null, baseRevision); }
+    // Classification is a local sidecar. A valid schema does not prove that any
+    // record matches a source in this workspace; the read-only projection checks that.
+    const sourceClassificationKey = workspaceId => `sourceClassification:${accountKey}:${workspaceId}`;
+    function sourceClassificationScope(workspaceId) {
+      scopeGuard();
+      if (!account) throw fault('auth_scope_required', '로그인한 계정에서 자료 분류를 확인해 주세요.');
+      requireId(workspaceId, '작업공간');
+    }
+    function sourceClassificationInput(input) {
+      const model = options.sourceClassification || root.HaedoLife?.SourceClassification;
+      if (!model?.validate) throw fault('dependency_unavailable', '자료 분류 모듈을 불러오지 못했습니다.');
+      try {
+        const value = model.validate(input);
+        if (!plain(value) || value.format !== 'life-source-classification-v1') throw new Error('classification');
+        const json = JSON.stringify(value);
+        if (new TextEncoder().encode(json).byteLength > SOURCE_CLASSIFICATION_MAX_BYTES) {
+          throw fault('source_classification_too_large', '분류표는 32MiB 이하의 JSON 파일로 나누어 주세요.');
+        }
+        return clone(value);
+      } catch (error) {
+        if (error?.code === 'source_classification_too_large') throw error;
+        throw fault('source_classification_invalid', '자료 분류표의 형식을 확인할 수 없습니다. 기존 분류는 보존했습니다.');
+      }
+    }
+    async function sourceClassificationValue(meta, workspaceId) {
+      const row = await meta.get(sourceClassificationKey(workspaceId));
+      if (row === undefined) return { revision: 0, manifest: null };
+      try {
+        const value = row.value;
+        onlyFields(value, ['format', 'workspaceId', 'revision', 'manifest'], 'source_classification_invalid');
+        if (value.format !== 'life-source-classification-state-v1' || value.workspaceId !== workspaceId ||
+            !Number.isSafeInteger(value.revision) || value.revision < 1 || !Object.hasOwn(value, 'manifest')) throw new Error('classification');
+        return { revision: value.revision, manifest: value.manifest === null ? null : sourceClassificationInput(value.manifest) };
+      } catch (_) {
+        throw fault('source_classification_invalid', '저장한 자료 분류표를 확인할 수 없습니다. 기존 분류는 보존했습니다.');
+      }
+    }
+    async function readSourceClassification(workspaceId) {
+      sourceClassificationScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return sourceClassificationValue(meta, workspaceId);
+      });
+    }
+    async function writeSourceClassification(workspaceId, manifest, baseRevision) {
+      sourceClassificationScope(workspaceId); requireRevision(baseRevision, 'baseRevision');
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await sourceClassificationValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) return { status: 'conflict', state: previous };
+        if (baseRevision === Number.MAX_SAFE_INTEGER) {
+          throw fault('source_classification_invalid', '자료 분류의 저장 기준을 확인할 수 없습니다.');
+        }
+        const state = { revision: baseRevision + 1, manifest };
+        await meta.put({ key: sourceClassificationKey(workspaceId), value: {
+          format: 'life-source-classification-state-v1', workspaceId, ...state
+        } });
+        return { status: 'stored', state: clone(state) };
+      });
+      if (result.status === 'stored') sourceClassificationChanged(workspaceId, result.state.revision);
+      return result;
+    }
+    async function saveSourceClassification(workspaceId, manifest, baseRevision) {
+      sourceClassificationScope(workspaceId);
+      return writeSourceClassification(workspaceId, sourceClassificationInput(manifest), baseRevision);
+    }
+    async function clearSourceClassification(workspaceId, baseRevision) {
+      return writeSourceClassification(workspaceId, null, baseRevision);
+    }
     // Independent local metadata: does not alter source/workbench revisions or sync payloads.
     function collectionScope(workspaceId) {
       scopeGuard();
@@ -1868,6 +1950,7 @@
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
+      readSourceClassification, saveSourceClassification, clearSourceClassification,
       readCollection, saveCollection, readNineBoard, saveNineBoard, listPhotoPosts, readPhotoPost, savePhotoPost, readPageDrafts, savePageDrafts, savePagePost,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       commitLocal, saveStage, getStage, listStages, deleteStage, subscribe,

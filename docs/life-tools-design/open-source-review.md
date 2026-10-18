@@ -811,3 +811,9 @@ Ghost와 ONE의 본문·사진 중심 흐름은 설계 참고, Quill은 현재 �
 같은 날의 검토 목록 갱신은 이 오프라인 어댑터에 감사 투영·중복 묶음·native details 기반 정적 읽기 보고서만 더한다. 기존 공식 표현/도구 비교를 유지하며 새 parser·패키지·네트워크 요청을 추가하지 않는다. 원문/연결을 바꾸지 않는 사유 분류와 명확한 경로 후보를 자체 유지하며, 실제 전체 파일 대조와 익명 HTML 재열기로 검증한다.
 
 2026-10-17 연결 선택 도구도 기존 Core·native file API·fflate를 재사용한다. 공식 [fflate 최신 릴리스](https://github.com/101arrowz/fflate/releases/tag/v0.8.3)는 `v0.8.3`(2026-05-16), archived=false·동일 날짜 유지 이력·MIT·공개 security-advisories 0개를 GitHub API로 재확인했다. 전체 취약점 부재를 뜻하지 않는다. 기존 vendor를 그대로 쓰고 독립 도구 HTML에도 MIT 원문을 포함한다. 새 ZIP 엔진/프레임워크/DB와 원문 재작성 도구 도입 대신, 해도의 정확 버전/감사/선택 계약을 잇는 공유 어댑터만 자체 유지한다. 무압축 ZIP은 기존 사진 글 방식을 따르며, 큰 압축 작업/원격 서비스가 필요해지면 실측 후 다시 비교한다. [구현·검수](../design-review/obsidian-decisions.md).
+
+## 분류 JSON과 자료실 연결 — 2026-10-18 UTC
+
+기존 Core·Storage/CAS·네이티브 File/Blob·WebCrypto를 재사용한다. 직접 도입할 외부 분류 서비스는 비공개 메타데이터 전송과 별도 계정/API를 요구하고, 범용 importer/상태 라이브러리는 현재의 정확 원문 버전·허용 필드·계정별 저장 계약을 대신하지 못한다. 이번 범위는 기존 분류 결과의 검증·연결이므로 새 패키지 없이 작은 정규화/연결 어댑터를 유지하는 쪽을 선택했다. 자체 유지 비용은 입력 제한·허용 목록·경로/commit/실제 본문 해시 대조·부분 연결·저장 충돌 회귀다. 대용량 응답성이나 외부 형식 지원이 실제 병목이 되면 그 요구에 맞춰 다시 비교한다.
+
+신규 의존성·SDK·DB/schema/API 변경은 없으며 최신 릴리스·라이선스·보안 권고를 이번 작업에서 원격 조사한 것으로 표현하지 않는다. 현재 HTTP 허용 정책에는 supabase.com이 없어 Supabase 문서·changelog를 조회하지 않았다. 기존 Supabase SDK·서버 동작은 바꾸지 않는다. 계정 경계는 익명 모의 Auth 회귀로 확인하며 실제 Google OAuth·운영 DB 검증과 구분한다. [사용 흐름·저장 범위·검증](../design-review/source-classification.md).

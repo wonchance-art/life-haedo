@@ -1,0 +1,10 @@
+PASS push, back and tab paint real intermediate native animation frames
+PASS composer has one header, immediate body focus and reachable controls at five viewport shapes
+PASS failed draft flush preserves input, header and committed menu without false entrance or save feedback
+PASS reduced motion at load keeps compose, save and return immediately usable
+PASS changing reduced motion during a running entrance cancels its effects without blocking another action
+PASS rapid section taps end at the last destination and indicator paints inside its selected link
+PASS filtered home reader returns exact query, tab, focus and scroll
+PASS main section scroll memory survives round trips without changing the filtered home list
+PASS late private list work cannot animate or repaint after navigation, workspace switch or signout
+{"passed":9,"failed":0,"consoleErrors":0,"pageErrors":0,"external":0}

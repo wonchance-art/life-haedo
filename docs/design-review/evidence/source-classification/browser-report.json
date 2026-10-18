@@ -1,0 +1,124 @@
+{
+  "createdAt": "2026-10-18T07:21:06.351Z",
+  "scope": "Generated anonymous Obsidian Markdown only; actual app/SDK/IndexedDB and two tabs, intercepted Auth HTTP. No private notes, screenshots, operating SQL, source fetches, Apple hardware or native IME.",
+  "checks": [
+    {
+      "name": "explicit review/apply, four intersecting filters, exact old reader/back, sanitized export and reload 1440",
+      "pass": true,
+      "evidence": {
+        "generatedContentNotes": 96,
+        "generatedSupportingMetadata": 1,
+        "originalVersions": 98,
+        "explicitSave": true,
+        "intersectingResults": 6,
+        "unclassifiedFilterExcludedSupportingMetadata": true,
+        "exactReturnScrollY": 0,
+        "priorVersionsUnchanged": true,
+        "exportedOnlyNormalizedMetadata": true
+      }
+    },
+    {
+      "name": "explicit review/apply, four intersecting filters, exact old reader/back, sanitized export and reload 390",
+      "pass": true,
+      "evidence": {
+        "generatedContentNotes": 96,
+        "generatedSupportingMetadata": 1,
+        "originalVersions": 98,
+        "explicitSave": true,
+        "intersectingResults": 6,
+        "unclassifiedFilterExcludedSupportingMetadata": true,
+        "exactReturnScrollY": 351,
+        "priorVersionsUnchanged": true,
+        "exportedOnlyNormalizedMetadata": true
+      }
+    },
+    {
+      "name": "wrong commit/path/hash and changed actual bytes never match by title; another workspace has no automatic classification",
+      "pass": true,
+      "evidence": {
+        "rejectedIdentityVariants": [
+          {
+            "mode": "commit",
+            "matched": 0,
+            "mappedVersions": 0,
+            "stale": 0,
+            "unmatched": 97
+          },
+          {
+            "mode": "path",
+            "matched": 0,
+            "mappedVersions": 0,
+            "stale": 0,
+            "unmatched": 97
+          },
+          {
+            "mode": "hash",
+            "matched": 0,
+            "mappedVersions": 0,
+            "stale": 97,
+            "unmatched": 0
+          },
+          {
+            "mode": "actualBytes",
+            "matched": 0,
+            "mappedVersions": 0,
+            "stale": 97,
+            "unmatched": 0
+          }
+        ],
+        "sameTitledDistinctPaths": true,
+        "workspaceAutomaticCarryover": false
+      }
+    },
+    {
+      "name": "failed metadata writes preserve review and originals; explicit clear leaves a tombstone rejecting delayed saves",
+      "pass": true,
+      "evidence": {
+        "abortedWritePreservedInput": true,
+        "clearRequiredSeparateConfirmation": true,
+        "clearRevision": 2,
+        "delayedSaveStatus": "conflict"
+      }
+    },
+    {
+      "name": "two real tabs race one CAS revision and cannot overwrite a later clear",
+      "pass": true,
+      "evidence": {
+        "winningConcurrentWrites": 1,
+        "conflicts": 1,
+        "clearRevision": 2,
+        "staleRev1Rejected": true,
+        "delayedPostSaveRevision3SuppressedAfterPeerRevision4": true
+      }
+    },
+    {
+      "name": "late metadata reads and in-flight hashes cannot repaint newer metadata, navigation or workspace",
+      "pass": false,
+      "error": "locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#sourceClassification .sc-panel-content[aria-busy=\"false\"]') to be visible\u001b[22m\n\u001b[2m    34 × locator resolved to hidden <div aria-busy=\"false\" class=\"sc-panel-content\">…</div>\u001b[22m\n\n    at /workspace/haedo-blog-platform/tests/source-classification-browser.cjs:188:88\n    at async check (/workspace/haedo-blog-platform/tests/source-classification-browser.cjs:91:28)\n    at async main (/workspace/haedo-blog-platform/tests/source-classification-browser.cjs:182:5)"
+    },
+    {
+      "name": "signout during actual hashing clears private candidates and the next account cannot read them",
+      "pass": true,
+      "evidence": {
+        "sameContextAccountSwitch": true,
+        "inFlightHashDisposed": true,
+        "previousWorkspaceOwnerDenied": true
+      }
+    },
+    {
+      "name": "anonymous entry never opens account storage or reads a private classification",
+      "pass": true,
+      "evidence": {
+        "privateIdbOpens": 0,
+        "classificationReads": 0
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "realRemoteWrites": 0,
+  "browser": "151.0.7922.173",
+  "finishedAt": "2026-10-18T07:21:42.174Z"
+}

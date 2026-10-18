@@ -1,0 +1,1395 @@
+{
+  "createdAt": "2026-10-18T07:24:52.652Z",
+  "scope": "Linux Chromium, preserved actual Git static release, real prepared service workers/cache/IndexedDB and synthetic intercepted Auth HTTP. No personal source package, live Google/Supabase, Apple hardware or deployment.",
+  "sourceHead": "81325007ca46b31c1a399e26afd68b2f79883f79",
+  "previous": {
+    "cache": "haedo-v124",
+    "archive": "/workspace/haedo-blog-platform/.local/source-classification/pwa-before",
+    "prepared": "/workspace/haedo-blog-platform/.local/source-classification/pwa/previous",
+    "allCopiedRuntimeFilesMatch": true,
+    "copiedRuntimeFileCount": 107
+  },
+  "current": {
+    "cache": "haedo-v125",
+    "prepared": "/workspace/haedo-blog-platform/.local/source-classification/pwa/current",
+    "allCopiedRuntimeFilesMatchFrozenSource": true,
+    "copiedRuntimeFileCount": 110
+  },
+  "integration": {
+    "test": "tests/platform-life-browser.cjs",
+    "passed": [
+      "public home and anonymous private routes never mount account storage",
+      "Google-button PKCE HTTP fixture opens verified A scope without automatic upload",
+      "protected import/excerpt/source jump, reload and backup-copy restore work",
+      "logout/B login cannot list, read or render A and unowned data; A return restores its scope",
+      "failed management navigation and logout draft transactions preserve input without signing out",
+      "offline warm local editing survives cold-load lock and online re-verification",
+      "failed callback clears credentials from address and never exposes private UI",
+      "preserved Cloud haedo-v124 fixture upgrades atomically to haedo-v125 without altering old local data",
+      "unexpected console/page errors"
+    ],
+    "failed": [],
+    "intentionalTransportCallbackErrors": 3,
+    "unexpectedConsolePageErrors": 0,
+    "originalTestModified": false
+  },
+  "upgradePreservation": [
+    "Old worker cache replaced atomically by active v125 worker.",
+    "Source bundle and review draft preserved exactly.",
+    "Nine-board configuration and source/reason text preserved exactly.",
+    "Legacy localStorage registry preserved exactly.",
+    "Original account ownership and cold offline authentication boundary retained."
+  ],
+  "preparedRuntimeHashes": [
+    {
+      "path": "assets/app.css",
+      "sourceSha256": "091203eadbe2fa8202d84137d848b59e2e1a9bb06d6f3685d6a234638bef715d",
+      "preparedSha256": "091203eadbe2fa8202d84137d848b59e2e1a9bb06d6f3685d6a234638bef715d",
+      "identical": true
+    },
+    {
+      "path": "assets/app.js",
+      "sourceSha256": "a01975a9f039653886ee7d598682cd6bb4e8100491e1b0fc5b4cdb72effb893f",
+      "preparedSha256": "a01975a9f039653886ee7d598682cd6bb4e8100491e1b0fc5b4cdb72effb893f",
+      "identical": true
+    },
+    {
+      "path": "assets/data.js",
+      "sourceSha256": "04c38b381c9e9126508576999f3fcf95195b3a5ae417723486917f6768612af2",
+      "preparedSha256": "04c38b381c9e9126508576999f3fcf95195b3a5ae417723486917f6768612af2",
+      "identical": true
+    },
+    {
+      "path": "assets/haedo-motion.css",
+      "sourceSha256": "fefe95e0b86325743f1431215882fe5f989299d8f33271cb61b6f7f05ceae1e7",
+      "preparedSha256": "fefe95e0b86325743f1431215882fe5f989299d8f33271cb61b6f7f05ceae1e7",
+      "identical": true
+    },
+    {
+      "path": "assets/haedo-motion.js",
+      "sourceSha256": "a0f99e6b765196cbde8b65d689773056f1e979c6d556e1e8632dda8517a9db37",
+      "preparedSha256": "a0f99e6b765196cbde8b65d689773056f1e979c6d556e1e8632dda8517a9db37",
+      "identical": true
+    },
+    {
+      "path": "assets/haedo-navigation.js",
+      "sourceSha256": "1a01c85f3122e1674239442fee09ba16f44fce5a3601fd08792a3f6b7bb83f04",
+      "preparedSha256": "1a01c85f3122e1674239442fee09ba16f44fce5a3601fd08792a3f6b7bb83f04",
+      "identical": true
+    },
+    {
+      "path": "assets/haedo-shell.css",
+      "sourceSha256": "c530f9b52ccef987c3390bff2c27d3ebfe8c0830c9e45152a49b67a8150884ce",
+      "preparedSha256": "c530f9b52ccef987c3390bff2c27d3ebfe8c0830c9e45152a49b67a8150884ce",
+      "identical": true
+    },
+    {
+      "path": "assets/haedo-type.css",
+      "sourceSha256": "3b659fc183b590223111ae38dff5d814846f543d9dcb25b0764909919759e208",
+      "preparedSha256": "3b659fc183b590223111ae38dff5d814846f543d9dcb25b0764909919759e208",
+      "identical": true
+    },
+    {
+      "path": "assets/life/book-history.js",
+      "sourceSha256": "e13caa6f462680c2a03b5b3771604fcdb99bb3913a6c5f53a7fe44cd75800bf7",
+      "preparedSha256": "e13caa6f462680c2a03b5b3771604fcdb99bb3913a6c5f53a7fe44cd75800bf7",
+      "identical": true
+    },
+    {
+      "path": "assets/life/book-print.js",
+      "sourceSha256": "e745392b18d1675e8349959a37cdd19c089db14db055fe0e4fee7234d8a675b0",
+      "preparedSha256": "e745392b18d1675e8349959a37cdd19c089db14db055fe0e4fee7234d8a675b0",
+      "identical": true
+    },
+    {
+      "path": "assets/life/books.js",
+      "sourceSha256": "8591c86c47a61aef2eb84e2a182ceb056d2bc4313c48ad9d8575563a9d75e2e0",
+      "preparedSha256": "8591c86c47a61aef2eb84e2a182ceb056d2bc4313c48ad9d8575563a9d75e2e0",
+      "identical": true
+    },
+    {
+      "path": "assets/life/collection-media.js",
+      "sourceSha256": "ce8ce19daa6433d3a075e81bf1732c03d5cabc57dddd9ee7ffcee0d9874f5da8",
+      "preparedSha256": "ce8ce19daa6433d3a075e81bf1732c03d5cabc57dddd9ee7ffcee0d9874f5da8",
+      "identical": true
+    },
+    {
+      "path": "assets/life/collection-metadata.js",
+      "sourceSha256": "b434251643a32b1af799fe3629d018c7618c81cb0594983f528e56a91e3a238f",
+      "preparedSha256": "b434251643a32b1af799fe3629d018c7618c81cb0594983f528e56a91e3a238f",
+      "identical": true
+    },
+    {
+      "path": "assets/life/collection-picker.js",
+      "sourceSha256": "6c0ab622c007ac4da8af41c54610136cbec20742e6a0a62b8811dcbb4c1347fe",
+      "preparedSha256": "6c0ab622c007ac4da8af41c54610136cbec20742e6a0a62b8811dcbb4c1347fe",
+      "identical": true
+    },
+    {
+      "path": "assets/life/collection-ui.js",
+      "sourceSha256": "b7a34d51f6f38efcd61d15a8a826559ee0778fdcd32d6ecb686dc8bbc4061387",
+      "preparedSha256": "b7a34d51f6f38efcd61d15a8a826559ee0778fdcd32d6ecb686dc8bbc4061387",
+      "identical": true
+    },
+    {
+      "path": "assets/life/collection.css",
+      "sourceSha256": "14ac8e3a6010eea3e17891d2638b32cadb6f78779eea795ddcd78e5151ecee24",
+      "preparedSha256": "14ac8e3a6010eea3e17891d2638b32cadb6f78779eea795ddcd78e5151ecee24",
+      "identical": true
+    },
+    {
+      "path": "assets/life/collection.js",
+      "sourceSha256": "9823822b7980ce4b2ea689548da74a6709f0e1ddbe755c046f0b3a73722ea056",
+      "preparedSha256": "9823822b7980ce4b2ea689548da74a6709f0e1ddbe755c046f0b3a73722ea056",
+      "identical": true
+    },
+    {
+      "path": "assets/life/composition-remote.js",
+      "sourceSha256": "7fd5bcde36e83a3489edac53aee9be95c33e8c1e979e278ceec1e409879aec03",
+      "preparedSha256": "7fd5bcde36e83a3489edac53aee9be95c33e8c1e979e278ceec1e409879aec03",
+      "identical": true
+    },
+    {
+      "path": "assets/life/composition-sync.js",
+      "sourceSha256": "2d6609a98a61b4f7e60f71b76358d50f5af890b60cd8bfb8b369e28735e7c53b",
+      "preparedSha256": "2d6609a98a61b4f7e60f71b76358d50f5af890b60cd8bfb8b369e28735e7c53b",
+      "identical": true
+    },
+    {
+      "path": "assets/life/composition-ui.js",
+      "sourceSha256": "17ff0aa4a938f4db8878e880bebb4634bb858abdf6f9d292abb395a33d32583c",
+      "preparedSha256": "17ff0aa4a938f4db8878e880bebb4634bb858abdf6f9d292abb395a33d32583c",
+      "identical": true
+    },
+    {
+      "path": "assets/life/core.js",
+      "sourceSha256": "6ad03c873ea3411dc7f8a432e7637502d1ce59271253db04e229429f99308ff4",
+      "preparedSha256": "6ad03c873ea3411dc7f8a432e7637502d1ce59271253db04e229429f99308ff4",
+      "identical": true
+    },
+    {
+      "path": "assets/life/home.css",
+      "sourceSha256": "0fde92d1cebed4c5d37569754ce00a6dfdbfdd8d635085fa423fbbeec6626b2c",
+      "preparedSha256": "0fde92d1cebed4c5d37569754ce00a6dfdbfdd8d635085fa423fbbeec6626b2c",
+      "identical": true
+    },
+    {
+      "path": "assets/life/home.js",
+      "sourceSha256": "81d2d4b2f0a7ad40a05766b0e5d5bf7c89b51f2ea7d984fe384ed0403e4ce861",
+      "preparedSha256": "81d2d4b2f0a7ad40a05766b0e5d5bf7c89b51f2ea7d984fe384ed0403e4ce861",
+      "identical": true
+    },
+    {
+      "path": "assets/life/icons.js",
+      "sourceSha256": "cdb597b7103d0423ef9a2178daaef5d6825ba2dc3624c2feb3868e58a6c55b36",
+      "preparedSha256": "cdb597b7103d0423ef9a2178daaef5d6825ba2dc3624c2feb3868e58a6c55b36",
+      "identical": true
+    },
+    {
+      "path": "assets/life/legacy.js",
+      "sourceSha256": "d3607c3c230217af96ede51f38798dd06ba04d9b4995683523e3631146aab53f",
+      "preparedSha256": "d3607c3c230217af96ede51f38798dd06ba04d9b4995683523e3631146aab53f",
+      "identical": true
+    },
+    {
+      "path": "assets/life/nine-board-ui.js",
+      "sourceSha256": "284cc1c7221175acd08bde871a1a3dce842cab179e4fcaefbe35d2aab831bc8c",
+      "preparedSha256": "284cc1c7221175acd08bde871a1a3dce842cab179e4fcaefbe35d2aab831bc8c",
+      "identical": true
+    },
+    {
+      "path": "assets/life/nine-board.css",
+      "sourceSha256": "0903c1e7522d71472ff8464c84f8a1144b299126b573b27efc2c678ef1065273",
+      "preparedSha256": "0903c1e7522d71472ff8464c84f8a1144b299126b573b27efc2c678ef1065273",
+      "identical": true
+    },
+    {
+      "path": "assets/life/nine-board.js",
+      "sourceSha256": "e9e1e5651f3d88486737b06076400d0e93e8ec9020d9ffdf57676236774ac4da",
+      "preparedSha256": "e9e1e5651f3d88486737b06076400d0e93e8ec9020d9ffdf57676236774ac4da",
+      "identical": true
+    },
+    {
+      "path": "assets/life/obsidian-decisions.js",
+      "sourceSha256": "6bb40024a88fb9a2f542d93937cf9b52a1df87e17a12b7b6963266772d39006c",
+      "preparedSha256": "6bb40024a88fb9a2f542d93937cf9b52a1df87e17a12b7b6963266772d39006c",
+      "identical": true
+    },
+    {
+      "path": "assets/life/obsidian-package.js",
+      "sourceSha256": "1def7b1e393fcdbf8c917eb132c17047e83806acc32f4582dff7c255632e6d5a",
+      "preparedSha256": "1def7b1e393fcdbf8c917eb132c17047e83806acc32f4582dff7c255632e6d5a",
+      "identical": true
+    },
+    {
+      "path": "assets/life/page-composer.js",
+      "sourceSha256": "36fc73ad185b5e153758a342de5146e3c04314d20adbf88aed78783acbb8bbf5",
+      "preparedSha256": "36fc73ad185b5e153758a342de5146e3c04314d20adbf88aed78783acbb8bbf5",
+      "identical": true
+    },
+    {
+      "path": "assets/life/page-media.js",
+      "sourceSha256": "01c5271d2ec5e42b471d9ef41a14ded94449c765156b3d0d9a81e5366c5c977f",
+      "preparedSha256": "01c5271d2ec5e42b471d9ef41a14ded94449c765156b3d0d9a81e5366c5c977f",
+      "identical": true
+    },
+    {
+      "path": "assets/life/page-posts-view.js",
+      "sourceSha256": "1ef5673352aa51ae58bea4ca0d02d8c39c2fda363092e195ac0ef802c7ba0233",
+      "preparedSha256": "1ef5673352aa51ae58bea4ca0d02d8c39c2fda363092e195ac0ef802c7ba0233",
+      "identical": true
+    },
+    {
+      "path": "assets/life/page-posts.css",
+      "sourceSha256": "5c7751482fc631656f14568c4d647dea1f9ff096cb76d0044737cb6b36f5fde7",
+      "preparedSha256": "5c7751482fc631656f14568c4d647dea1f9ff096cb76d0044737cb6b36f5fde7",
+      "identical": true
+    },
+    {
+      "path": "assets/life/page-posts.js",
+      "sourceSha256": "87ff4a24fd9802908410b98e9cdee3ea704145b5f55b4dcb62a4b175342d1e47",
+      "preparedSha256": "87ff4a24fd9802908410b98e9cdee3ea704145b5f55b4dcb62a4b175342d1e47",
+      "identical": true
+    },
+    {
+      "path": "assets/life/photo-post-attachments.js",
+      "sourceSha256": "93aa9e69372cb202d31bea3a3f61cfb15dd8b071c4194070ec30434f39b11280",
+      "preparedSha256": "93aa9e69372cb202d31bea3a3f61cfb15dd8b071c4194070ec30434f39b11280",
+      "identical": true
+    },
+    {
+      "path": "assets/life/photo-post-ui.js",
+      "sourceSha256": "e2c12c54705bb67435d03cc8d15777ee830119a224e0db0fb506777e0bba582e",
+      "preparedSha256": "e2c12c54705bb67435d03cc8d15777ee830119a224e0db0fb506777e0bba582e",
+      "identical": true
+    },
+    {
+      "path": "assets/life/photo-post.css",
+      "sourceSha256": "8e4c889d733427d36503ec9921cda6868f535198bba033c69a3f7529ca8829ba",
+      "preparedSha256": "8e4c889d733427d36503ec9921cda6868f535198bba033c69a3f7529ca8829ba",
+      "identical": true
+    },
+    {
+      "path": "assets/life/photo-post.js",
+      "sourceSha256": "62888bfc7a0568419dc10107d8c412805bf6a0874d357e04df6b87a80372c048",
+      "preparedSha256": "62888bfc7a0568419dc10107d8c412805bf6a0874d357e04df6b87a80372c048",
+      "identical": true
+    },
+    {
+      "path": "assets/life/reading-position.js",
+      "sourceSha256": "944acfd286632a1cbf5801c13a5ee37ba936f9725ac6432f9709016579d48ebd",
+      "preparedSha256": "944acfd286632a1cbf5801c13a5ee37ba936f9725ac6432f9709016579d48ebd",
+      "identical": true
+    },
+    {
+      "path": "assets/life/rediscovery.js",
+      "sourceSha256": "f714124e7a6143a5969b12691d5a05bd48fbbf14e494566deb77a6dfd2a710d2",
+      "preparedSha256": "f714124e7a6143a5969b12691d5a05bd48fbbf14e494566deb77a6dfd2a710d2",
+      "identical": true
+    },
+    {
+      "path": "assets/life/reflection-lenses-ui.js",
+      "sourceSha256": "ff9d78e5150a7349acdfa7360cca285abc8ac7a465c4cd4fd5a8141b3b3155d0",
+      "preparedSha256": "ff9d78e5150a7349acdfa7360cca285abc8ac7a465c4cd4fd5a8141b3b3155d0",
+      "identical": true
+    },
+    {
+      "path": "assets/life/reflection-lenses.js",
+      "sourceSha256": "6cf25ab3c89c6d7ea3df6331c411723f990b615d02a282a737e134910626155f",
+      "preparedSha256": "6cf25ab3c89c6d7ea3df6331c411723f990b615d02a282a737e134910626155f",
+      "identical": true
+    },
+    {
+      "path": "assets/life/reflection.js",
+      "sourceSha256": "4ad3400edde9d50927bb85df307aa52de0025bb5ddb04f0610c75403a6178353",
+      "preparedSha256": "4ad3400edde9d50927bb85df307aa52de0025bb5ddb04f0610c75403a6178353",
+      "identical": true
+    },
+    {
+      "path": "assets/life/remote.js",
+      "sourceSha256": "abf9f977845aea550f9e0cb95f7b9cf8200469e1b0819a77a728f88e89146a13",
+      "preparedSha256": "abf9f977845aea550f9e0cb95f7b9cf8200469e1b0819a77a728f88e89146a13",
+      "identical": true
+    },
+    {
+      "path": "assets/life/share-page.js",
+      "sourceSha256": "a63ce2be9da5e10fea189b798f2a09912f1aa92379b8e7d149781a0c432f875c",
+      "preparedSha256": "a63ce2be9da5e10fea189b798f2a09912f1aa92379b8e7d149781a0c432f875c",
+      "identical": true
+    },
+    {
+      "path": "assets/life/share-remote.js",
+      "sourceSha256": "1541c9d39ca0d9d04fd9cdfa1153d5741cb0f69fd764008d9db2fa401cd72076",
+      "preparedSha256": "1541c9d39ca0d9d04fd9cdfa1153d5741cb0f69fd764008d9db2fa401cd72076",
+      "identical": true
+    },
+    {
+      "path": "assets/life/share-view.css",
+      "sourceSha256": "59593654eef5d9dfdde3fa2bbda26493e5d0b0cb911c12235440c22d0dbb0b36",
+      "preparedSha256": "59593654eef5d9dfdde3fa2bbda26493e5d0b0cb911c12235440c22d0dbb0b36",
+      "identical": true
+    },
+    {
+      "path": "assets/life/share-view.js",
+      "sourceSha256": "df8291f3faf87f50d1368b5c24be269e5e2ee11305350bb22f6a06d9b966e071",
+      "preparedSha256": "df8291f3faf87f50d1368b5c24be269e5e2ee11305350bb22f6a06d9b966e071",
+      "identical": true
+    },
+    {
+      "path": "assets/life/share.js",
+      "sourceSha256": "c2912f21ec84ad884711a4d2b537bea546a14d2c6e6fe3ea1126e0ab5c6c1b1b",
+      "preparedSha256": "c2912f21ec84ad884711a4d2b537bea546a14d2c6e6fe3ea1126e0ab5c6c1b1b",
+      "identical": true
+    },
+    {
+      "path": "assets/life/shell.js",
+      "sourceSha256": "eab3f0225b93c6a15b055714dedcedb210b43798e754f1fe30a01ffacce88bb6",
+      "preparedSha256": "eab3f0225b93c6a15b055714dedcedb210b43798e754f1fe30a01ffacce88bb6",
+      "identical": true
+    },
+    {
+      "path": "assets/life/source-classification-ui.js",
+      "sourceSha256": "6578318327d82d2b9eeb09d58272d7d6babac57688e623961c7e39fa9b87293f",
+      "preparedSha256": "6578318327d82d2b9eeb09d58272d7d6babac57688e623961c7e39fa9b87293f",
+      "identical": true
+    },
+    {
+      "path": "assets/life/source-classification.css",
+      "sourceSha256": "b335d7709b70fae7195c339fb0770ad2283c1a2d60853327cec65b6d44a10a71",
+      "preparedSha256": "b335d7709b70fae7195c339fb0770ad2283c1a2d60853327cec65b6d44a10a71",
+      "identical": true
+    },
+    {
+      "path": "assets/life/source-classification.js",
+      "sourceSha256": "052d0d70c3ccec403c2400baea4a92fd5f3a55227fd988348e720a95eb2d0fff",
+      "preparedSha256": "052d0d70c3ccec403c2400baea4a92fd5f3a55227fd988348e720a95eb2d0fff",
+      "identical": true
+    },
+    {
+      "path": "assets/life/storage.js",
+      "sourceSha256": "2af0bd9b44738fcc5ea4b88cd719d57a89ac16f40557c59e2678edc61c6a3618",
+      "preparedSha256": "2af0bd9b44738fcc5ea4b88cd719d57a89ac16f40557c59e2678edc61c6a3618",
+      "identical": true
+    },
+    {
+      "path": "assets/life/sync.js",
+      "sourceSha256": "50648949a8141c2c951f514bb4625b930e3857eac155d7b75925644844576ebd",
+      "preparedSha256": "50648949a8141c2c951f514bb4625b930e3857eac155d7b75925644844576ebd",
+      "identical": true
+    },
+    {
+      "path": "assets/life/ui.css",
+      "sourceSha256": "fa91e1a9d2ad267b1263610713819c88b62b27e70921bc8b73ee4b0984edac24",
+      "preparedSha256": "fa91e1a9d2ad267b1263610713819c88b62b27e70921bc8b73ee4b0984edac24",
+      "identical": true
+    },
+    {
+      "path": "assets/life/ui.js",
+      "sourceSha256": "44a633606d9f3e3e4442befc04b48720d59ddbdf4395f0015c5242a653eeea89",
+      "preparedSha256": "44a633606d9f3e3e4442befc04b48720d59ddbdf4395f0015c5242a653eeea89",
+      "identical": true
+    },
+    {
+      "path": "assets/life/unified-search-ui.js",
+      "sourceSha256": "d53bf58d35286105e982c9d441a5bca81366ff4ec020036ea0e44dde39a149a7",
+      "preparedSha256": "d53bf58d35286105e982c9d441a5bca81366ff4ec020036ea0e44dde39a149a7",
+      "identical": true
+    },
+    {
+      "path": "assets/life/unified-search.js",
+      "sourceSha256": "b1208397785430eec5352ed3aa7d9dbcbdebd1ff5b2c120c4b2e78fd6437af65",
+      "preparedSha256": "b1208397785430eec5352ed3aa7d9dbcbdebd1ff5b2c120c4b2e78fd6437af65",
+      "identical": true
+    },
+    {
+      "path": "assets/life/workbench-ui.js",
+      "sourceSha256": "a4e91733ca0021e6512cba0a1da7b59da0da2410b971e59735b0a6a1d9a55c23",
+      "preparedSha256": "a4e91733ca0021e6512cba0a1da7b59da0da2410b971e59735b0a6a1d9a55c23",
+      "identical": true
+    },
+    {
+      "path": "assets/life/workbench.css",
+      "sourceSha256": "7775ff214588b0d267d3527a0380ba540ce6acc7eb7eaff2f2eb7d08569718dd",
+      "preparedSha256": "7775ff214588b0d267d3527a0380ba540ce6acc7eb7eaff2f2eb7d08569718dd",
+      "identical": true
+    },
+    {
+      "path": "assets/life/workbench.js",
+      "sourceSha256": "c38e7ed8d62ffdd3397749853bd37fe9e941f8c11b508948e6cabd1fdcbade17",
+      "preparedSha256": "c38e7ed8d62ffdd3397749853bd37fe9e941f8c11b508948e6cabd1fdcbade17",
+      "identical": true
+    },
+    {
+      "path": "assets/life/writing-remote.js",
+      "sourceSha256": "16fe61c3730f1549da58cd247a4d49db6c8308331c8031d42ad39a51d6bf8db2",
+      "preparedSha256": "16fe61c3730f1549da58cd247a4d49db6c8308331c8031d42ad39a51d6bf8db2",
+      "identical": true
+    },
+    {
+      "path": "assets/life/writing-sync-ui.js",
+      "sourceSha256": "c7b18d5e10342406404bf9f00ee24874b164498fb4c50a00fef2753230086056",
+      "preparedSha256": "c7b18d5e10342406404bf9f00ee24874b164498fb4c50a00fef2753230086056",
+      "identical": true
+    },
+    {
+      "path": "assets/life/writing-sync.js",
+      "sourceSha256": "2316527b91c5bf3c867794a8e3c27be2cc01f5d6ff44a920e2ca7117822685ed",
+      "preparedSha256": "2316527b91c5bf3c867794a8e3c27be2cc01f5d6ff44a920e2ca7117822685ed",
+      "identical": true
+    },
+    {
+      "path": "assets/life/writing-ui.js",
+      "sourceSha256": "8daaf970cae7d02f35a9eb0e17ed2e02978af9614ecc7bc782c60707d4d67a2c",
+      "preparedSha256": "8daaf970cae7d02f35a9eb0e17ed2e02978af9614ecc7bc782c60707d4d67a2c",
+      "identical": true
+    },
+    {
+      "path": "assets/life/writing.js",
+      "sourceSha256": "0d9fd8a7765a8cba1133f53a9f6cd43fd29e9d96c2a2bb67f1ed324cfdb4b4e7",
+      "preparedSha256": "0d9fd8a7765a8cba1133f53a9f6cd43fd29e9d96c2a2bb67f1ed324cfdb4b4e7",
+      "identical": true
+    },
+    {
+      "path": "assets/platform-auth.js",
+      "sourceSha256": "4bec4ef147d0c4b299e4ee87e9bc2d37a064b4814ae794608a6b6a1ac33c6b6c",
+      "preparedSha256": "4bec4ef147d0c4b299e4ee87e9bc2d37a064b4814ae794608a6b6a1ac33c6b6c",
+      "identical": true
+    },
+    {
+      "path": "assets/platform-data.js",
+      "sourceSha256": "bbf707e6684d0bba7f964ec946b7201cb703e7c31d9b0431989b38a65c494f63",
+      "preparedSha256": "bbf707e6684d0bba7f964ec946b7201cb703e7c31d9b0431989b38a65c494f63",
+      "identical": true
+    },
+    {
+      "path": "assets/platform-life-remote.js",
+      "sourceSha256": "49e1836fc6d880f63a4faa5cf4c674ee79c5dd9aa2d536e671894e91c8cca679",
+      "preparedSha256": "49e1836fc6d880f63a4faa5cf4c674ee79c5dd9aa2d536e671894e91c8cca679",
+      "identical": true
+    },
+    {
+      "path": "assets/platform-store.js",
+      "sourceSha256": "453f7c3ab3b2452e9d9168ae960d08efa4c59553aa0b1b3cfb5c27ce8aeab22c",
+      "preparedSha256": "453f7c3ab3b2452e9d9168ae960d08efa4c59553aa0b1b3cfb5c27ce8aeab22c",
+      "identical": true
+    },
+    {
+      "path": "assets/platform-ui.js",
+      "sourceSha256": "d59b2521c6b1bed16928f504408fa89e807901aefa6cac0bdf4a5eefe158b1a4",
+      "preparedSha256": "d59b2521c6b1bed16928f504408fa89e807901aefa6cac0bdf4a5eefe158b1a4",
+      "identical": true
+    },
+    {
+      "path": "assets/platform.css",
+      "sourceSha256": "bac9d9b6c72e7c4d0b6edad051ed493ffd4b763078df9daf0f2573dc9ab619dd",
+      "preparedSha256": "bac9d9b6c72e7c4d0b6edad051ed493ffd4b763078df9daf0f2573dc9ab619dd",
+      "identical": true
+    },
+    {
+      "path": "assets/sync.js",
+      "sourceSha256": "92b367b712c352ea375fd02b40d8a88700692a7292af8b8c6454d0dc300ed047",
+      "preparedSha256": "92b367b712c352ea375fd02b40d8a88700692a7292af8b8c6454d0dc300ed047",
+      "identical": true
+    },
+    {
+      "path": "assets/timeline-entry.js",
+      "sourceSha256": "dcdb7c2edca1b172dc2b735dd0b01c2b0acb02bf9c125ed103ef8b8ba1ecf721",
+      "preparedSha256": "dcdb7c2edca1b172dc2b735dd0b01c2b0acb02bf9c125ed103ef8b8ba1ecf721",
+      "identical": true
+    },
+    {
+      "path": "assets/timeline-shell.css",
+      "sourceSha256": "fa148bbe0e8b44bcfae7927c9d56ba3251ab0ddb4dbcb5bb39a4eee88f55bf01",
+      "preparedSha256": "fa148bbe0e8b44bcfae7927c9d56ba3251ab0ddb4dbcb5bb39a4eee88f55bf01",
+      "identical": true
+    },
+    {
+      "path": "assets/workspace.js",
+      "sourceSha256": "e6b2d1d13ab0278b8521cfb1b70cd55c088713a4742b19d2931f06af615188c3",
+      "preparedSha256": "e6b2d1d13ab0278b8521cfb1b70cd55c088713a4742b19d2931f06af615188c3",
+      "identical": true
+    },
+    {
+      "path": "goals.html",
+      "sourceSha256": "325b085551622946521caa91a905748dd85b9e429998b5050a69764b996822d8",
+      "preparedSha256": "325b085551622946521caa91a905748dd85b9e429998b5050a69764b996822d8",
+      "identical": true
+    },
+    {
+      "path": "habits.html",
+      "sourceSha256": "0aa1f5488e7be0f16f0e4e9a68fd3e0c684af3e26fe7dee0312d9dd8c28df7f5",
+      "preparedSha256": "0aa1f5488e7be0f16f0e4e9a68fd3e0c684af3e26fe7dee0312d9dd8c28df7f5",
+      "identical": true
+    },
+    {
+      "path": "icon-maskable.svg",
+      "sourceSha256": "4e9cea26b183c7caeae273b91842051dda1ce83421d48472c73d107c98310205",
+      "preparedSha256": "4e9cea26b183c7caeae273b91842051dda1ce83421d48472c73d107c98310205",
+      "identical": true
+    },
+    {
+      "path": "icon.svg",
+      "sourceSha256": "2c55caa4e2279b9276113432ee763d033ab381497ecc3554348e22b3199006a2",
+      "preparedSha256": "2c55caa4e2279b9276113432ee763d033ab381497ecc3554348e22b3199006a2",
+      "identical": true
+    },
+    {
+      "path": "index.html",
+      "sourceSha256": "147709e8425841af1b6ce6ed635f047c3f02295fab4a0c4e32079a88bac50f97",
+      "preparedSha256": "147709e8425841af1b6ce6ed635f047c3f02295fab4a0c4e32079a88bac50f97",
+      "identical": true
+    },
+    {
+      "path": "life.html",
+      "sourceSha256": "0dc094f886a9eeb704b4cdced4a91797e7ae1cbbb64db92288df89e606bcf98c",
+      "preparedSha256": "0dc094f886a9eeb704b4cdced4a91797e7ae1cbbb64db92288df89e606bcf98c",
+      "identical": true
+    },
+    {
+      "path": "login.html",
+      "sourceSha256": "ae24445dc6e34c3e4a89b627cdfc9ca5b46b9749013e2688aa04d2b5abed7f12",
+      "preparedSha256": "ae24445dc6e34c3e4a89b627cdfc9ca5b46b9749013e2688aa04d2b5abed7f12",
+      "identical": true
+    },
+    {
+      "path": "manifest.webmanifest",
+      "sourceSha256": "1e9812b96881ab8cf560cd053a75c1e9d040aef928ce5a54aa9411f740900d8e",
+      "preparedSha256": "1e9812b96881ab8cf560cd053a75c1e9d040aef928ce5a54aa9411f740900d8e",
+      "identical": true
+    },
+    {
+      "path": "privacy.html",
+      "sourceSha256": "8d9ed304be683d4cfa3208ebc8c4679dbf464dce6fd2c3a0095b9ca2eb9064f1",
+      "preparedSha256": "8d9ed304be683d4cfa3208ebc8c4679dbf464dce6fd2c3a0095b9ca2eb9064f1",
+      "identical": true
+    },
+    {
+      "path": "share.html",
+      "sourceSha256": "021ad6b28539d20560d3dde82d949e0619c907033f9dea8c7c03d6678e04da35",
+      "preparedSha256": "021ad6b28539d20560d3dde82d949e0619c907033f9dea8c7c03d6678e04da35",
+      "identical": true
+    },
+    {
+      "path": "supabase/migrations/20261003085426_life_sync_workspaces.sql",
+      "sourceSha256": "9bcbb8e814c998da885d6d289ff3433ccdf03e2e0c8db952b3ff914ed307acf6",
+      "preparedSha256": "9bcbb8e814c998da885d6d289ff3433ccdf03e2e0c8db952b3ff914ed307acf6",
+      "identical": true
+    },
+    {
+      "path": "supabase/migrations/20261006010000_life_compositions.sql",
+      "sourceSha256": "9585ff0173932bc0afa509d6eb28a3f2957b7bca0ec285fa30ff7d19832cb935",
+      "preparedSha256": "9585ff0173932bc0afa509d6eb28a3f2957b7bca0ec285fa30ff7d19832cb935",
+      "identical": true
+    },
+    {
+      "path": "supabase/migrations/20261006020000_life_writing_drafts.sql",
+      "sourceSha256": "b24e5f128f53ffc6f120b4e4b7550e7a70b0bd8b6cb31262cfb27863a8015e60",
+      "preparedSha256": "b24e5f128f53ffc6f120b4e4b7550e7a70b0bd8b6cb31262cfb27863a8015e60",
+      "identical": true
+    },
+    {
+      "path": "sw.js",
+      "sourceSha256": "f60f425a186a130fb27a0df31548e1f4b9d07db9b3502e04616a2fad87294a78",
+      "preparedSha256": "f60f425a186a130fb27a0df31548e1f4b9d07db9b3502e04616a2fad87294a78",
+      "identical": true
+    },
+    {
+      "path": "timeline.html",
+      "sourceSha256": "cc1ab4bc9f86d1fefa34072b2a8e6c583b344f12ed889a3b1f6fcab92bcb11d0",
+      "preparedSha256": "cc1ab4bc9f86d1fefa34072b2a8e6c583b344f12ed889a3b1f6fcab92bcb11d0",
+      "identical": true
+    },
+    {
+      "path": "vendor/daisyui-themes.css",
+      "sourceSha256": "ebfc2b7f91d6cbc239ccadf73c076bfc44fad3752cc151192cfaa7384ffe9cbf",
+      "preparedSha256": "ebfc2b7f91d6cbc239ccadf73c076bfc44fad3752cc151192cfaa7384ffe9cbf",
+      "identical": true
+    },
+    {
+      "path": "vendor/daisyui.css",
+      "sourceSha256": "1904f2730af6388c948fea24e9cfba96282e6dbbe41bb55c97fcf05c22c43b88",
+      "preparedSha256": "1904f2730af6388c948fea24e9cfba96282e6dbbe41bb55c97fcf05c22c43b88",
+      "identical": true
+    },
+    {
+      "path": "vendor/fflate/LICENSE",
+      "sourceSha256": "0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551",
+      "preparedSha256": "0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551",
+      "identical": true
+    },
+    {
+      "path": "vendor/fflate/fflate.js",
+      "sourceSha256": "462ef8041fc970e3615a20a9dd2b2e3047a073b2da729ef4f02b634bba8b7b83",
+      "preparedSha256": "462ef8041fc970e3615a20a9dd2b2e3047a073b2da729ef4f02b634bba8b7b83",
+      "identical": true
+    },
+    {
+      "path": "vendor/idb/LICENSE",
+      "sourceSha256": "873a2f333fda393ec3464f4579209b019d98e97c3bf498b10e85f630162fd708",
+      "preparedSha256": "873a2f333fda393ec3464f4579209b019d98e97c3bf498b10e85f630162fd708",
+      "identical": true
+    },
+    {
+      "path": "vendor/idb/idb.js",
+      "sourceSha256": "ff4b3763d5b8e7981f606cb3d46df37ac5b7fc1d4b4eca34da129b47219edd59",
+      "preparedSha256": "ff4b3763d5b8e7981f606cb3d46df37ac5b7fc1d4b4eca34da129b47219edd59",
+      "identical": true
+    },
+    {
+      "path": "vendor/lucide/LICENSE",
+      "sourceSha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57",
+      "preparedSha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57",
+      "identical": true
+    },
+    {
+      "path": "vendor/pretendard/LICENSE.txt",
+      "sourceSha256": "b04538c9abec39a3db75108cf0af0fd9c77032fe8aa2cf38345b4d250e98e38e",
+      "preparedSha256": "b04538c9abec39a3db75108cf0af0fd9c77032fe8aa2cf38345b4d250e98e38e",
+      "identical": true
+    },
+    {
+      "path": "vendor/pretendard/PretendardVariable.woff2",
+      "sourceSha256": "9599f12fd42fc0bce1cd50b47a0c022e108d7aa64dd0d1bb0ed44f3282d900b4",
+      "preparedSha256": "9599f12fd42fc0bce1cd50b47a0c022e108d7aa64dd0d1bb0ed44f3282d900b4",
+      "identical": true
+    },
+    {
+      "path": "vendor/quill/LICENSE",
+      "sourceSha256": "395c12b616d6f58238b4be39284d4d9221b58dd6e1f1e34d9ab537e34abbb022",
+      "preparedSha256": "395c12b616d6f58238b4be39284d4d9221b58dd6e1f1e34d9ab537e34abbb022",
+      "identical": true
+    },
+    {
+      "path": "vendor/quill/THIRD_PARTY_NOTICES.txt",
+      "sourceSha256": "0ae863260da224f3d826093eb246fbab151549ce34fbbf18d80f51533f969b40",
+      "preparedSha256": "0ae863260da224f3d826093eb246fbab151549ce34fbbf18d80f51533f969b40",
+      "identical": true
+    },
+    {
+      "path": "vendor/quill/quill.js",
+      "sourceSha256": "f6157c72ac9b3f51cdead426335688a027b12405d9d6a4daadd38a676b2d7ff2",
+      "preparedSha256": "f6157c72ac9b3f51cdead426335688a027b12405d9d6a4daadd38a676b2d7ff2",
+      "identical": true
+    },
+    {
+      "path": "vendor/quill/quill.js.LICENSE.txt",
+      "sourceSha256": "7b1938804d68d96764233d0a148a7501f39e547e6ae2dead4b16836e9b8d123c",
+      "preparedSha256": "7b1938804d68d96764233d0a148a7501f39e547e6ae2dead4b16836e9b8d123c",
+      "identical": true
+    },
+    {
+      "path": "vendor/quill/quill.snow.css",
+      "sourceSha256": "1c7948cd13aa92fac6390319bc1e5e461823da171519d3a768db56164f871636",
+      "preparedSha256": "1c7948cd13aa92fac6390319bc1e5e461823da171519d3a768db56164f871636",
+      "identical": true
+    },
+    {
+      "path": "vendor/supabase/LICENSE",
+      "sourceSha256": "334dd6820e2eaeab2064e7c59001b810566728a28a41a7c1dbf69bbee17d0936",
+      "preparedSha256": "334dd6820e2eaeab2064e7c59001b810566728a28a41a7c1dbf69bbee17d0936",
+      "identical": true
+    },
+    {
+      "path": "vendor/supabase/supabase.js",
+      "sourceSha256": "59d39487c3589843b410322d8a3d562ce022aba1e5ccb16898ef3fb2a0da2ecd",
+      "preparedSha256": "59d39487c3589843b410322d8a3d562ce022aba1e5ccb16898ef3fb2a0da2ecd",
+      "identical": true
+    },
+    {
+      "path": "workspace.html",
+      "sourceSha256": "466da4115dd30009d0aef8f85c94296141deb7fd975b3ada5c56a716411957e4",
+      "preparedSha256": "466da4115dd30009d0aef8f85c94296141deb7fd975b3ada5c56a716411957e4",
+      "identical": true
+    }
+  ],
+  "previousPreparedRuntimeHashes": [
+    {
+      "path": "assets/app.css",
+      "sourceSha256": "091203eadbe2fa8202d84137d848b59e2e1a9bb06d6f3685d6a234638bef715d",
+      "preparedSha256": "091203eadbe2fa8202d84137d848b59e2e1a9bb06d6f3685d6a234638bef715d",
+      "identical": true
+    },
+    {
+      "path": "assets/app.js",
+      "sourceSha256": "a01975a9f039653886ee7d598682cd6bb4e8100491e1b0fc5b4cdb72effb893f",
+      "preparedSha256": "a01975a9f039653886ee7d598682cd6bb4e8100491e1b0fc5b4cdb72effb893f",
+      "identical": true
+    },
+    {
+      "path": "assets/data.js",
+      "sourceSha256": "04c38b381c9e9126508576999f3fcf95195b3a5ae417723486917f6768612af2",
+      "preparedSha256": "04c38b381c9e9126508576999f3fcf95195b3a5ae417723486917f6768612af2",
+      "identical": true
+    },
+    {
+      "path": "assets/haedo-motion.css",
+      "sourceSha256": "fefe95e0b86325743f1431215882fe5f989299d8f33271cb61b6f7f05ceae1e7",
+      "preparedSha256": "fefe95e0b86325743f1431215882fe5f989299d8f33271cb61b6f7f05ceae1e7",
+      "identical": true
+    },
+    {
+      "path": "assets/haedo-motion.js",
+      "sourceSha256": "a0f99e6b765196cbde8b65d689773056f1e979c6d556e1e8632dda8517a9db37",
+      "preparedSha256": "a0f99e6b765196cbde8b65d689773056f1e979c6d556e1e8632dda8517a9db37",
+      "identical": true
+    },
+    {
+      "path": "assets/haedo-navigation.js",
+      "sourceSha256": "1a01c85f3122e1674239442fee09ba16f44fce5a3601fd08792a3f6b7bb83f04",
+      "preparedSha256": "1a01c85f3122e1674239442fee09ba16f44fce5a3601fd08792a3f6b7bb83f04",
+      "identical": true
+    },
+    {
+      "path": "assets/haedo-shell.css",
+      "sourceSha256": "c530f9b52ccef987c3390bff2c27d3ebfe8c0830c9e45152a49b67a8150884ce",
+      "preparedSha256": "c530f9b52ccef987c3390bff2c27d3ebfe8c0830c9e45152a49b67a8150884ce",
+      "identical": true
+    },
+    {
+      "path": "assets/haedo-type.css",
+      "sourceSha256": "3b659fc183b590223111ae38dff5d814846f543d9dcb25b0764909919759e208",
+      "preparedSha256": "3b659fc183b590223111ae38dff5d814846f543d9dcb25b0764909919759e208",
+      "identical": true
+    },
+    {
+      "path": "assets/life/book-history.js",
+      "sourceSha256": "e13caa6f462680c2a03b5b3771604fcdb99bb3913a6c5f53a7fe44cd75800bf7",
+      "preparedSha256": "e13caa6f462680c2a03b5b3771604fcdb99bb3913a6c5f53a7fe44cd75800bf7",
+      "identical": true
+    },
+    {
+      "path": "assets/life/book-print.js",
+      "sourceSha256": "e745392b18d1675e8349959a37cdd19c089db14db055fe0e4fee7234d8a675b0",
+      "preparedSha256": "e745392b18d1675e8349959a37cdd19c089db14db055fe0e4fee7234d8a675b0",
+      "identical": true
+    },
+    {
+      "path": "assets/life/books.js",
+      "sourceSha256": "8591c86c47a61aef2eb84e2a182ceb056d2bc4313c48ad9d8575563a9d75e2e0",
+      "preparedSha256": "8591c86c47a61aef2eb84e2a182ceb056d2bc4313c48ad9d8575563a9d75e2e0",
+      "identical": true
+    },
+    {
+      "path": "assets/life/collection-media.js",
+      "sourceSha256": "ce8ce19daa6433d3a075e81bf1732c03d5cabc57dddd9ee7ffcee0d9874f5da8",
+      "preparedSha256": "ce8ce19daa6433d3a075e81bf1732c03d5cabc57dddd9ee7ffcee0d9874f5da8",
+      "identical": true
+    },
+    {
+      "path": "assets/life/collection-metadata.js",
+      "sourceSha256": "b434251643a32b1af799fe3629d018c7618c81cb0594983f528e56a91e3a238f",
+      "preparedSha256": "b434251643a32b1af799fe3629d018c7618c81cb0594983f528e56a91e3a238f",
+      "identical": true
+    },
+    {
+      "path": "assets/life/collection-picker.js",
+      "sourceSha256": "6c0ab622c007ac4da8af41c54610136cbec20742e6a0a62b8811dcbb4c1347fe",
+      "preparedSha256": "6c0ab622c007ac4da8af41c54610136cbec20742e6a0a62b8811dcbb4c1347fe",
+      "identical": true
+    },
+    {
+      "path": "assets/life/collection-ui.js",
+      "sourceSha256": "b7a34d51f6f38efcd61d15a8a826559ee0778fdcd32d6ecb686dc8bbc4061387",
+      "preparedSha256": "b7a34d51f6f38efcd61d15a8a826559ee0778fdcd32d6ecb686dc8bbc4061387",
+      "identical": true
+    },
+    {
+      "path": "assets/life/collection.css",
+      "sourceSha256": "14ac8e3a6010eea3e17891d2638b32cadb6f78779eea795ddcd78e5151ecee24",
+      "preparedSha256": "14ac8e3a6010eea3e17891d2638b32cadb6f78779eea795ddcd78e5151ecee24",
+      "identical": true
+    },
+    {
+      "path": "assets/life/collection.js",
+      "sourceSha256": "9823822b7980ce4b2ea689548da74a6709f0e1ddbe755c046f0b3a73722ea056",
+      "preparedSha256": "9823822b7980ce4b2ea689548da74a6709f0e1ddbe755c046f0b3a73722ea056",
+      "identical": true
+    },
+    {
+      "path": "assets/life/composition-remote.js",
+      "sourceSha256": "7fd5bcde36e83a3489edac53aee9be95c33e8c1e979e278ceec1e409879aec03",
+      "preparedSha256": "7fd5bcde36e83a3489edac53aee9be95c33e8c1e979e278ceec1e409879aec03",
+      "identical": true
+    },
+    {
+      "path": "assets/life/composition-sync.js",
+      "sourceSha256": "2d6609a98a61b4f7e60f71b76358d50f5af890b60cd8bfb8b369e28735e7c53b",
+      "preparedSha256": "2d6609a98a61b4f7e60f71b76358d50f5af890b60cd8bfb8b369e28735e7c53b",
+      "identical": true
+    },
+    {
+      "path": "assets/life/composition-ui.js",
+      "sourceSha256": "17ff0aa4a938f4db8878e880bebb4634bb858abdf6f9d292abb395a33d32583c",
+      "preparedSha256": "17ff0aa4a938f4db8878e880bebb4634bb858abdf6f9d292abb395a33d32583c",
+      "identical": true
+    },
+    {
+      "path": "assets/life/core.js",
+      "sourceSha256": "6ad03c873ea3411dc7f8a432e7637502d1ce59271253db04e229429f99308ff4",
+      "preparedSha256": "6ad03c873ea3411dc7f8a432e7637502d1ce59271253db04e229429f99308ff4",
+      "identical": true
+    },
+    {
+      "path": "assets/life/home.css",
+      "sourceSha256": "0fde92d1cebed4c5d37569754ce00a6dfdbfdd8d635085fa423fbbeec6626b2c",
+      "preparedSha256": "0fde92d1cebed4c5d37569754ce00a6dfdbfdd8d635085fa423fbbeec6626b2c",
+      "identical": true
+    },
+    {
+      "path": "assets/life/home.js",
+      "sourceSha256": "81d2d4b2f0a7ad40a05766b0e5d5bf7c89b51f2ea7d984fe384ed0403e4ce861",
+      "preparedSha256": "81d2d4b2f0a7ad40a05766b0e5d5bf7c89b51f2ea7d984fe384ed0403e4ce861",
+      "identical": true
+    },
+    {
+      "path": "assets/life/icons.js",
+      "sourceSha256": "cdb597b7103d0423ef9a2178daaef5d6825ba2dc3624c2feb3868e58a6c55b36",
+      "preparedSha256": "cdb597b7103d0423ef9a2178daaef5d6825ba2dc3624c2feb3868e58a6c55b36",
+      "identical": true
+    },
+    {
+      "path": "assets/life/legacy.js",
+      "sourceSha256": "d3607c3c230217af96ede51f38798dd06ba04d9b4995683523e3631146aab53f",
+      "preparedSha256": "d3607c3c230217af96ede51f38798dd06ba04d9b4995683523e3631146aab53f",
+      "identical": true
+    },
+    {
+      "path": "assets/life/nine-board-ui.js",
+      "sourceSha256": "284cc1c7221175acd08bde871a1a3dce842cab179e4fcaefbe35d2aab831bc8c",
+      "preparedSha256": "284cc1c7221175acd08bde871a1a3dce842cab179e4fcaefbe35d2aab831bc8c",
+      "identical": true
+    },
+    {
+      "path": "assets/life/nine-board.css",
+      "sourceSha256": "0903c1e7522d71472ff8464c84f8a1144b299126b573b27efc2c678ef1065273",
+      "preparedSha256": "0903c1e7522d71472ff8464c84f8a1144b299126b573b27efc2c678ef1065273",
+      "identical": true
+    },
+    {
+      "path": "assets/life/nine-board.js",
+      "sourceSha256": "e9e1e5651f3d88486737b06076400d0e93e8ec9020d9ffdf57676236774ac4da",
+      "preparedSha256": "e9e1e5651f3d88486737b06076400d0e93e8ec9020d9ffdf57676236774ac4da",
+      "identical": true
+    },
+    {
+      "path": "assets/life/obsidian-decisions.js",
+      "sourceSha256": "6bb40024a88fb9a2f542d93937cf9b52a1df87e17a12b7b6963266772d39006c",
+      "preparedSha256": "6bb40024a88fb9a2f542d93937cf9b52a1df87e17a12b7b6963266772d39006c",
+      "identical": true
+    },
+    {
+      "path": "assets/life/obsidian-package.js",
+      "sourceSha256": "1def7b1e393fcdbf8c917eb132c17047e83806acc32f4582dff7c255632e6d5a",
+      "preparedSha256": "1def7b1e393fcdbf8c917eb132c17047e83806acc32f4582dff7c255632e6d5a",
+      "identical": true
+    },
+    {
+      "path": "assets/life/page-composer.js",
+      "sourceSha256": "36fc73ad185b5e153758a342de5146e3c04314d20adbf88aed78783acbb8bbf5",
+      "preparedSha256": "36fc73ad185b5e153758a342de5146e3c04314d20adbf88aed78783acbb8bbf5",
+      "identical": true
+    },
+    {
+      "path": "assets/life/page-media.js",
+      "sourceSha256": "01c5271d2ec5e42b471d9ef41a14ded94449c765156b3d0d9a81e5366c5c977f",
+      "preparedSha256": "01c5271d2ec5e42b471d9ef41a14ded94449c765156b3d0d9a81e5366c5c977f",
+      "identical": true
+    },
+    {
+      "path": "assets/life/page-posts-view.js",
+      "sourceSha256": "1ef5673352aa51ae58bea4ca0d02d8c39c2fda363092e195ac0ef802c7ba0233",
+      "preparedSha256": "1ef5673352aa51ae58bea4ca0d02d8c39c2fda363092e195ac0ef802c7ba0233",
+      "identical": true
+    },
+    {
+      "path": "assets/life/page-posts.css",
+      "sourceSha256": "5c7751482fc631656f14568c4d647dea1f9ff096cb76d0044737cb6b36f5fde7",
+      "preparedSha256": "5c7751482fc631656f14568c4d647dea1f9ff096cb76d0044737cb6b36f5fde7",
+      "identical": true
+    },
+    {
+      "path": "assets/life/page-posts.js",
+      "sourceSha256": "87ff4a24fd9802908410b98e9cdee3ea704145b5f55b4dcb62a4b175342d1e47",
+      "preparedSha256": "87ff4a24fd9802908410b98e9cdee3ea704145b5f55b4dcb62a4b175342d1e47",
+      "identical": true
+    },
+    {
+      "path": "assets/life/photo-post-attachments.js",
+      "sourceSha256": "93aa9e69372cb202d31bea3a3f61cfb15dd8b071c4194070ec30434f39b11280",
+      "preparedSha256": "93aa9e69372cb202d31bea3a3f61cfb15dd8b071c4194070ec30434f39b11280",
+      "identical": true
+    },
+    {
+      "path": "assets/life/photo-post-ui.js",
+      "sourceSha256": "e2c12c54705bb67435d03cc8d15777ee830119a224e0db0fb506777e0bba582e",
+      "preparedSha256": "e2c12c54705bb67435d03cc8d15777ee830119a224e0db0fb506777e0bba582e",
+      "identical": true
+    },
+    {
+      "path": "assets/life/photo-post.css",
+      "sourceSha256": "8e4c889d733427d36503ec9921cda6868f535198bba033c69a3f7529ca8829ba",
+      "preparedSha256": "8e4c889d733427d36503ec9921cda6868f535198bba033c69a3f7529ca8829ba",
+      "identical": true
+    },
+    {
+      "path": "assets/life/photo-post.js",
+      "sourceSha256": "62888bfc7a0568419dc10107d8c412805bf6a0874d357e04df6b87a80372c048",
+      "preparedSha256": "62888bfc7a0568419dc10107d8c412805bf6a0874d357e04df6b87a80372c048",
+      "identical": true
+    },
+    {
+      "path": "assets/life/reading-position.js",
+      "sourceSha256": "944acfd286632a1cbf5801c13a5ee37ba936f9725ac6432f9709016579d48ebd",
+      "preparedSha256": "944acfd286632a1cbf5801c13a5ee37ba936f9725ac6432f9709016579d48ebd",
+      "identical": true
+    },
+    {
+      "path": "assets/life/rediscovery.js",
+      "sourceSha256": "f714124e7a6143a5969b12691d5a05bd48fbbf14e494566deb77a6dfd2a710d2",
+      "preparedSha256": "f714124e7a6143a5969b12691d5a05bd48fbbf14e494566deb77a6dfd2a710d2",
+      "identical": true
+    },
+    {
+      "path": "assets/life/reflection-lenses-ui.js",
+      "sourceSha256": "ff9d78e5150a7349acdfa7360cca285abc8ac7a465c4cd4fd5a8141b3b3155d0",
+      "preparedSha256": "ff9d78e5150a7349acdfa7360cca285abc8ac7a465c4cd4fd5a8141b3b3155d0",
+      "identical": true
+    },
+    {
+      "path": "assets/life/reflection-lenses.js",
+      "sourceSha256": "6cf25ab3c89c6d7ea3df6331c411723f990b615d02a282a737e134910626155f",
+      "preparedSha256": "6cf25ab3c89c6d7ea3df6331c411723f990b615d02a282a737e134910626155f",
+      "identical": true
+    },
+    {
+      "path": "assets/life/reflection.js",
+      "sourceSha256": "4ad3400edde9d50927bb85df307aa52de0025bb5ddb04f0610c75403a6178353",
+      "preparedSha256": "4ad3400edde9d50927bb85df307aa52de0025bb5ddb04f0610c75403a6178353",
+      "identical": true
+    },
+    {
+      "path": "assets/life/remote.js",
+      "sourceSha256": "abf9f977845aea550f9e0cb95f7b9cf8200469e1b0819a77a728f88e89146a13",
+      "preparedSha256": "abf9f977845aea550f9e0cb95f7b9cf8200469e1b0819a77a728f88e89146a13",
+      "identical": true
+    },
+    {
+      "path": "assets/life/share-page.js",
+      "sourceSha256": "a63ce2be9da5e10fea189b798f2a09912f1aa92379b8e7d149781a0c432f875c",
+      "preparedSha256": "a63ce2be9da5e10fea189b798f2a09912f1aa92379b8e7d149781a0c432f875c",
+      "identical": true
+    },
+    {
+      "path": "assets/life/share-remote.js",
+      "sourceSha256": "1541c9d39ca0d9d04fd9cdfa1153d5741cb0f69fd764008d9db2fa401cd72076",
+      "preparedSha256": "1541c9d39ca0d9d04fd9cdfa1153d5741cb0f69fd764008d9db2fa401cd72076",
+      "identical": true
+    },
+    {
+      "path": "assets/life/share-view.css",
+      "sourceSha256": "59593654eef5d9dfdde3fa2bbda26493e5d0b0cb911c12235440c22d0dbb0b36",
+      "preparedSha256": "59593654eef5d9dfdde3fa2bbda26493e5d0b0cb911c12235440c22d0dbb0b36",
+      "identical": true
+    },
+    {
+      "path": "assets/life/share-view.js",
+      "sourceSha256": "df8291f3faf87f50d1368b5c24be269e5e2ee11305350bb22f6a06d9b966e071",
+      "preparedSha256": "df8291f3faf87f50d1368b5c24be269e5e2ee11305350bb22f6a06d9b966e071",
+      "identical": true
+    },
+    {
+      "path": "assets/life/share.js",
+      "sourceSha256": "c2912f21ec84ad884711a4d2b537bea546a14d2c6e6fe3ea1126e0ab5c6c1b1b",
+      "preparedSha256": "c2912f21ec84ad884711a4d2b537bea546a14d2c6e6fe3ea1126e0ab5c6c1b1b",
+      "identical": true
+    },
+    {
+      "path": "assets/life/shell.js",
+      "sourceSha256": "eab3f0225b93c6a15b055714dedcedb210b43798e754f1fe30a01ffacce88bb6",
+      "preparedSha256": "eab3f0225b93c6a15b055714dedcedb210b43798e754f1fe30a01ffacce88bb6",
+      "identical": true
+    },
+    {
+      "path": "assets/life/storage.js",
+      "sourceSha256": "59c893f38493404a0905a05d59a2bc30a865acab015d1510de6c8ba2e5eefd2e",
+      "preparedSha256": "59c893f38493404a0905a05d59a2bc30a865acab015d1510de6c8ba2e5eefd2e",
+      "identical": true
+    },
+    {
+      "path": "assets/life/sync.js",
+      "sourceSha256": "50648949a8141c2c951f514bb4625b930e3857eac155d7b75925644844576ebd",
+      "preparedSha256": "50648949a8141c2c951f514bb4625b930e3857eac155d7b75925644844576ebd",
+      "identical": true
+    },
+    {
+      "path": "assets/life/ui.css",
+      "sourceSha256": "fa91e1a9d2ad267b1263610713819c88b62b27e70921bc8b73ee4b0984edac24",
+      "preparedSha256": "fa91e1a9d2ad267b1263610713819c88b62b27e70921bc8b73ee4b0984edac24",
+      "identical": true
+    },
+    {
+      "path": "assets/life/ui.js",
+      "sourceSha256": "f85860fa0445908db8da7d0ce4ee67ae8a12298487ea441eb2110f04a538714e",
+      "preparedSha256": "f85860fa0445908db8da7d0ce4ee67ae8a12298487ea441eb2110f04a538714e",
+      "identical": true
+    },
+    {
+      "path": "assets/life/unified-search-ui.js",
+      "sourceSha256": "d53bf58d35286105e982c9d441a5bca81366ff4ec020036ea0e44dde39a149a7",
+      "preparedSha256": "d53bf58d35286105e982c9d441a5bca81366ff4ec020036ea0e44dde39a149a7",
+      "identical": true
+    },
+    {
+      "path": "assets/life/unified-search.js",
+      "sourceSha256": "b1208397785430eec5352ed3aa7d9dbcbdebd1ff5b2c120c4b2e78fd6437af65",
+      "preparedSha256": "b1208397785430eec5352ed3aa7d9dbcbdebd1ff5b2c120c4b2e78fd6437af65",
+      "identical": true
+    },
+    {
+      "path": "assets/life/workbench-ui.js",
+      "sourceSha256": "a4e91733ca0021e6512cba0a1da7b59da0da2410b971e59735b0a6a1d9a55c23",
+      "preparedSha256": "a4e91733ca0021e6512cba0a1da7b59da0da2410b971e59735b0a6a1d9a55c23",
+      "identical": true
+    },
+    {
+      "path": "assets/life/workbench.css",
+      "sourceSha256": "7775ff214588b0d267d3527a0380ba540ce6acc7eb7eaff2f2eb7d08569718dd",
+      "preparedSha256": "7775ff214588b0d267d3527a0380ba540ce6acc7eb7eaff2f2eb7d08569718dd",
+      "identical": true
+    },
+    {
+      "path": "assets/life/workbench.js",
+      "sourceSha256": "c38e7ed8d62ffdd3397749853bd37fe9e941f8c11b508948e6cabd1fdcbade17",
+      "preparedSha256": "c38e7ed8d62ffdd3397749853bd37fe9e941f8c11b508948e6cabd1fdcbade17",
+      "identical": true
+    },
+    {
+      "path": "assets/life/writing-remote.js",
+      "sourceSha256": "16fe61c3730f1549da58cd247a4d49db6c8308331c8031d42ad39a51d6bf8db2",
+      "preparedSha256": "16fe61c3730f1549da58cd247a4d49db6c8308331c8031d42ad39a51d6bf8db2",
+      "identical": true
+    },
+    {
+      "path": "assets/life/writing-sync-ui.js",
+      "sourceSha256": "c7b18d5e10342406404bf9f00ee24874b164498fb4c50a00fef2753230086056",
+      "preparedSha256": "c7b18d5e10342406404bf9f00ee24874b164498fb4c50a00fef2753230086056",
+      "identical": true
+    },
+    {
+      "path": "assets/life/writing-sync.js",
+      "sourceSha256": "2316527b91c5bf3c867794a8e3c27be2cc01f5d6ff44a920e2ca7117822685ed",
+      "preparedSha256": "2316527b91c5bf3c867794a8e3c27be2cc01f5d6ff44a920e2ca7117822685ed",
+      "identical": true
+    },
+    {
+      "path": "assets/life/writing-ui.js",
+      "sourceSha256": "8daaf970cae7d02f35a9eb0e17ed2e02978af9614ecc7bc782c60707d4d67a2c",
+      "preparedSha256": "8daaf970cae7d02f35a9eb0e17ed2e02978af9614ecc7bc782c60707d4d67a2c",
+      "identical": true
+    },
+    {
+      "path": "assets/life/writing.js",
+      "sourceSha256": "0d9fd8a7765a8cba1133f53a9f6cd43fd29e9d96c2a2bb67f1ed324cfdb4b4e7",
+      "preparedSha256": "0d9fd8a7765a8cba1133f53a9f6cd43fd29e9d96c2a2bb67f1ed324cfdb4b4e7",
+      "identical": true
+    },
+    {
+      "path": "assets/platform-auth.js",
+      "sourceSha256": "4bec4ef147d0c4b299e4ee87e9bc2d37a064b4814ae794608a6b6a1ac33c6b6c",
+      "preparedSha256": "4bec4ef147d0c4b299e4ee87e9bc2d37a064b4814ae794608a6b6a1ac33c6b6c",
+      "identical": true
+    },
+    {
+      "path": "assets/platform-data.js",
+      "sourceSha256": "bbf707e6684d0bba7f964ec946b7201cb703e7c31d9b0431989b38a65c494f63",
+      "preparedSha256": "bbf707e6684d0bba7f964ec946b7201cb703e7c31d9b0431989b38a65c494f63",
+      "identical": true
+    },
+    {
+      "path": "assets/platform-life-remote.js",
+      "sourceSha256": "49e1836fc6d880f63a4faa5cf4c674ee79c5dd9aa2d536e671894e91c8cca679",
+      "preparedSha256": "49e1836fc6d880f63a4faa5cf4c674ee79c5dd9aa2d536e671894e91c8cca679",
+      "identical": true
+    },
+    {
+      "path": "assets/platform-store.js",
+      "sourceSha256": "453f7c3ab3b2452e9d9168ae960d08efa4c59553aa0b1b3cfb5c27ce8aeab22c",
+      "preparedSha256": "453f7c3ab3b2452e9d9168ae960d08efa4c59553aa0b1b3cfb5c27ce8aeab22c",
+      "identical": true
+    },
+    {
+      "path": "assets/platform-ui.js",
+      "sourceSha256": "d59b2521c6b1bed16928f504408fa89e807901aefa6cac0bdf4a5eefe158b1a4",
+      "preparedSha256": "d59b2521c6b1bed16928f504408fa89e807901aefa6cac0bdf4a5eefe158b1a4",
+      "identical": true
+    },
+    {
+      "path": "assets/platform.css",
+      "sourceSha256": "bac9d9b6c72e7c4d0b6edad051ed493ffd4b763078df9daf0f2573dc9ab619dd",
+      "preparedSha256": "bac9d9b6c72e7c4d0b6edad051ed493ffd4b763078df9daf0f2573dc9ab619dd",
+      "identical": true
+    },
+    {
+      "path": "assets/sync.js",
+      "sourceSha256": "92b367b712c352ea375fd02b40d8a88700692a7292af8b8c6454d0dc300ed047",
+      "preparedSha256": "92b367b712c352ea375fd02b40d8a88700692a7292af8b8c6454d0dc300ed047",
+      "identical": true
+    },
+    {
+      "path": "assets/timeline-entry.js",
+      "sourceSha256": "dcdb7c2edca1b172dc2b735dd0b01c2b0acb02bf9c125ed103ef8b8ba1ecf721",
+      "preparedSha256": "dcdb7c2edca1b172dc2b735dd0b01c2b0acb02bf9c125ed103ef8b8ba1ecf721",
+      "identical": true
+    },
+    {
+      "path": "assets/timeline-shell.css",
+      "sourceSha256": "fa148bbe0e8b44bcfae7927c9d56ba3251ab0ddb4dbcb5bb39a4eee88f55bf01",
+      "preparedSha256": "fa148bbe0e8b44bcfae7927c9d56ba3251ab0ddb4dbcb5bb39a4eee88f55bf01",
+      "identical": true
+    },
+    {
+      "path": "assets/workspace.js",
+      "sourceSha256": "e6b2d1d13ab0278b8521cfb1b70cd55c088713a4742b19d2931f06af615188c3",
+      "preparedSha256": "e6b2d1d13ab0278b8521cfb1b70cd55c088713a4742b19d2931f06af615188c3",
+      "identical": true
+    },
+    {
+      "path": "goals.html",
+      "sourceSha256": "325b085551622946521caa91a905748dd85b9e429998b5050a69764b996822d8",
+      "preparedSha256": "325b085551622946521caa91a905748dd85b9e429998b5050a69764b996822d8",
+      "identical": true
+    },
+    {
+      "path": "habits.html",
+      "sourceSha256": "0aa1f5488e7be0f16f0e4e9a68fd3e0c684af3e26fe7dee0312d9dd8c28df7f5",
+      "preparedSha256": "0aa1f5488e7be0f16f0e4e9a68fd3e0c684af3e26fe7dee0312d9dd8c28df7f5",
+      "identical": true
+    },
+    {
+      "path": "icon-maskable.svg",
+      "sourceSha256": "4e9cea26b183c7caeae273b91842051dda1ce83421d48472c73d107c98310205",
+      "preparedSha256": "4e9cea26b183c7caeae273b91842051dda1ce83421d48472c73d107c98310205",
+      "identical": true
+    },
+    {
+      "path": "icon.svg",
+      "sourceSha256": "2c55caa4e2279b9276113432ee763d033ab381497ecc3554348e22b3199006a2",
+      "preparedSha256": "2c55caa4e2279b9276113432ee763d033ab381497ecc3554348e22b3199006a2",
+      "identical": true
+    },
+    {
+      "path": "index.html",
+      "sourceSha256": "8c81866fc3c5652c7aa62c137edff67e28b9936801dc699e2f0a05bc938381ab",
+      "preparedSha256": "8c81866fc3c5652c7aa62c137edff67e28b9936801dc699e2f0a05bc938381ab",
+      "identical": true
+    },
+    {
+      "path": "life.html",
+      "sourceSha256": "8580eb719fc4b8a396f31e57de0f7488fb13ae6aa6563a66661458406dca65d1",
+      "preparedSha256": "8580eb719fc4b8a396f31e57de0f7488fb13ae6aa6563a66661458406dca65d1",
+      "identical": true
+    },
+    {
+      "path": "login.html",
+      "sourceSha256": "ae24445dc6e34c3e4a89b627cdfc9ca5b46b9749013e2688aa04d2b5abed7f12",
+      "preparedSha256": "ae24445dc6e34c3e4a89b627cdfc9ca5b46b9749013e2688aa04d2b5abed7f12",
+      "identical": true
+    },
+    {
+      "path": "manifest.webmanifest",
+      "sourceSha256": "1e9812b96881ab8cf560cd053a75c1e9d040aef928ce5a54aa9411f740900d8e",
+      "preparedSha256": "1e9812b96881ab8cf560cd053a75c1e9d040aef928ce5a54aa9411f740900d8e",
+      "identical": true
+    },
+    {
+      "path": "privacy.html",
+      "sourceSha256": "8d9ed304be683d4cfa3208ebc8c4679dbf464dce6fd2c3a0095b9ca2eb9064f1",
+      "preparedSha256": "8d9ed304be683d4cfa3208ebc8c4679dbf464dce6fd2c3a0095b9ca2eb9064f1",
+      "identical": true
+    },
+    {
+      "path": "share.html",
+      "sourceSha256": "021ad6b28539d20560d3dde82d949e0619c907033f9dea8c7c03d6678e04da35",
+      "preparedSha256": "021ad6b28539d20560d3dde82d949e0619c907033f9dea8c7c03d6678e04da35",
+      "identical": true
+    },
+    {
+      "path": "supabase/migrations/20261003085426_life_sync_workspaces.sql",
+      "sourceSha256": "9bcbb8e814c998da885d6d289ff3433ccdf03e2e0c8db952b3ff914ed307acf6",
+      "preparedSha256": "9bcbb8e814c998da885d6d289ff3433ccdf03e2e0c8db952b3ff914ed307acf6",
+      "identical": true
+    },
+    {
+      "path": "supabase/migrations/20261006010000_life_compositions.sql",
+      "sourceSha256": "9585ff0173932bc0afa509d6eb28a3f2957b7bca0ec285fa30ff7d19832cb935",
+      "preparedSha256": "9585ff0173932bc0afa509d6eb28a3f2957b7bca0ec285fa30ff7d19832cb935",
+      "identical": true
+    },
+    {
+      "path": "supabase/migrations/20261006020000_life_writing_drafts.sql",
+      "sourceSha256": "b24e5f128f53ffc6f120b4e4b7550e7a70b0bd8b6cb31262cfb27863a8015e60",
+      "preparedSha256": "b24e5f128f53ffc6f120b4e4b7550e7a70b0bd8b6cb31262cfb27863a8015e60",
+      "identical": true
+    },
+    {
+      "path": "sw.js",
+      "sourceSha256": "9b3cb3fdbd7b3eef4dcfc8909a7a0eb664ad2152506ba264d1014abda6ddeb96",
+      "preparedSha256": "9b3cb3fdbd7b3eef4dcfc8909a7a0eb664ad2152506ba264d1014abda6ddeb96",
+      "identical": true
+    },
+    {
+      "path": "timeline.html",
+      "sourceSha256": "cc1ab4bc9f86d1fefa34072b2a8e6c583b344f12ed889a3b1f6fcab92bcb11d0",
+      "preparedSha256": "cc1ab4bc9f86d1fefa34072b2a8e6c583b344f12ed889a3b1f6fcab92bcb11d0",
+      "identical": true
+    },
+    {
+      "path": "vendor/daisyui-themes.css",
+      "sourceSha256": "ebfc2b7f91d6cbc239ccadf73c076bfc44fad3752cc151192cfaa7384ffe9cbf",
+      "preparedSha256": "ebfc2b7f91d6cbc239ccadf73c076bfc44fad3752cc151192cfaa7384ffe9cbf",
+      "identical": true
+    },
+    {
+      "path": "vendor/daisyui.css",
+      "sourceSha256": "1904f2730af6388c948fea24e9cfba96282e6dbbe41bb55c97fcf05c22c43b88",
+      "preparedSha256": "1904f2730af6388c948fea24e9cfba96282e6dbbe41bb55c97fcf05c22c43b88",
+      "identical": true
+    },
+    {
+      "path": "vendor/fflate/LICENSE",
+      "sourceSha256": "0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551",
+      "preparedSha256": "0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551",
+      "identical": true
+    },
+    {
+      "path": "vendor/fflate/fflate.js",
+      "sourceSha256": "462ef8041fc970e3615a20a9dd2b2e3047a073b2da729ef4f02b634bba8b7b83",
+      "preparedSha256": "462ef8041fc970e3615a20a9dd2b2e3047a073b2da729ef4f02b634bba8b7b83",
+      "identical": true
+    },
+    {
+      "path": "vendor/idb/LICENSE",
+      "sourceSha256": "873a2f333fda393ec3464f4579209b019d98e97c3bf498b10e85f630162fd708",
+      "preparedSha256": "873a2f333fda393ec3464f4579209b019d98e97c3bf498b10e85f630162fd708",
+      "identical": true
+    },
+    {
+      "path": "vendor/idb/idb.js",
+      "sourceSha256": "ff4b3763d5b8e7981f606cb3d46df37ac5b7fc1d4b4eca34da129b47219edd59",
+      "preparedSha256": "ff4b3763d5b8e7981f606cb3d46df37ac5b7fc1d4b4eca34da129b47219edd59",
+      "identical": true
+    },
+    {
+      "path": "vendor/lucide/LICENSE",
+      "sourceSha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57",
+      "preparedSha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57",
+      "identical": true
+    },
+    {
+      "path": "vendor/pretendard/LICENSE.txt",
+      "sourceSha256": "b04538c9abec39a3db75108cf0af0fd9c77032fe8aa2cf38345b4d250e98e38e",
+      "preparedSha256": "b04538c9abec39a3db75108cf0af0fd9c77032fe8aa2cf38345b4d250e98e38e",
+      "identical": true
+    },
+    {
+      "path": "vendor/pretendard/PretendardVariable.woff2",
+      "sourceSha256": "9599f12fd42fc0bce1cd50b47a0c022e108d7aa64dd0d1bb0ed44f3282d900b4",
+      "preparedSha256": "9599f12fd42fc0bce1cd50b47a0c022e108d7aa64dd0d1bb0ed44f3282d900b4",
+      "identical": true
+    },
+    {
+      "path": "vendor/quill/LICENSE",
+      "sourceSha256": "395c12b616d6f58238b4be39284d4d9221b58dd6e1f1e34d9ab537e34abbb022",
+      "preparedSha256": "395c12b616d6f58238b4be39284d4d9221b58dd6e1f1e34d9ab537e34abbb022",
+      "identical": true
+    },
+    {
+      "path": "vendor/quill/THIRD_PARTY_NOTICES.txt",
+      "sourceSha256": "0ae863260da224f3d826093eb246fbab151549ce34fbbf18d80f51533f969b40",
+      "preparedSha256": "0ae863260da224f3d826093eb246fbab151549ce34fbbf18d80f51533f969b40",
+      "identical": true
+    },
+    {
+      "path": "vendor/quill/quill.js",
+      "sourceSha256": "f6157c72ac9b3f51cdead426335688a027b12405d9d6a4daadd38a676b2d7ff2",
+      "preparedSha256": "f6157c72ac9b3f51cdead426335688a027b12405d9d6a4daadd38a676b2d7ff2",
+      "identical": true
+    },
+    {
+      "path": "vendor/quill/quill.js.LICENSE.txt",
+      "sourceSha256": "7b1938804d68d96764233d0a148a7501f39e547e6ae2dead4b16836e9b8d123c",
+      "preparedSha256": "7b1938804d68d96764233d0a148a7501f39e547e6ae2dead4b16836e9b8d123c",
+      "identical": true
+    },
+    {
+      "path": "vendor/quill/quill.snow.css",
+      "sourceSha256": "1c7948cd13aa92fac6390319bc1e5e461823da171519d3a768db56164f871636",
+      "preparedSha256": "1c7948cd13aa92fac6390319bc1e5e461823da171519d3a768db56164f871636",
+      "identical": true
+    },
+    {
+      "path": "vendor/supabase/LICENSE",
+      "sourceSha256": "334dd6820e2eaeab2064e7c59001b810566728a28a41a7c1dbf69bbee17d0936",
+      "preparedSha256": "334dd6820e2eaeab2064e7c59001b810566728a28a41a7c1dbf69bbee17d0936",
+      "identical": true
+    },
+    {
+      "path": "vendor/supabase/supabase.js",
+      "sourceSha256": "59d39487c3589843b410322d8a3d562ce022aba1e5ccb16898ef3fb2a0da2ecd",
+      "preparedSha256": "59d39487c3589843b410322d8a3d562ce022aba1e5ccb16898ef3fb2a0da2ecd",
+      "identical": true
+    },
+    {
+      "path": "workspace.html",
+      "sourceSha256": "466da4115dd30009d0aef8f85c94296141deb7fd975b3ada5c56a716411957e4",
+      "preparedSha256": "466da4115dd30009d0aef8f85c94296141deb7fd975b3ada5c56a716411957e4",
+      "identical": true
+    }
+  ],
+  "cacheReport": "cache-report.json",
+  "cachedResponseCount": 98,
+  "all98CachedResponseHashesMatchPrepared": true,
+  "newAssets": [
+    {
+      "path": "assets/life/source-classification.js",
+      "sourceSha256": "052d0d70c3ccec403c2400baea4a92fd5f3a55227fd988348e720a95eb2d0fff",
+      "preparedSha256": "052d0d70c3ccec403c2400baea4a92fd5f3a55227fd988348e720a95eb2d0fff",
+      "cachedSha256": "052d0d70c3ccec403c2400baea4a92fd5f3a55227fd988348e720a95eb2d0fff",
+      "identical": true
+    },
+    {
+      "path": "assets/life/source-classification-ui.js",
+      "sourceSha256": "6578318327d82d2b9eeb09d58272d7d6babac57688e623961c7e39fa9b87293f",
+      "preparedSha256": "6578318327d82d2b9eeb09d58272d7d6babac57688e623961c7e39fa9b87293f",
+      "cachedSha256": "6578318327d82d2b9eeb09d58272d7d6babac57688e623961c7e39fa9b87293f",
+      "identical": true
+    },
+    {
+      "path": "assets/life/source-classification.css",
+      "sourceSha256": "b335d7709b70fae7195c339fb0770ad2283c1a2d60853327cec65b6d44a10a71",
+      "preparedSha256": "b335d7709b70fae7195c339fb0770ad2283c1a2d60853327cec65b6d44a10a71",
+      "cachedSha256": "b335d7709b70fae7195c339fb0770ad2283c1a2d60853327cec65b6d44a10a71",
+      "identical": true
+    }
+  ],
+  "offlineAssetResponses": [
+    {
+      "path": "/assets/life/source-classification.js",
+      "status": 200,
+      "fromServiceWorker": true
+    },
+    {
+      "path": "/assets/life/source-classification-ui.js",
+      "status": 200,
+      "fromServiceWorker": true
+    },
+    {
+      "path": "/assets/life/source-classification.css",
+      "status": 200,
+      "fromServiceWorker": true
+    }
+  ],
+  "offlineSyntheticClassificationAndBundlePreserved": true,
+  "cacheRemoteWrites": 0,
+  "pass": true
+}
