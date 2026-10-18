@@ -36,12 +36,16 @@
     async function rememberError(c, error) {
       try { guard(c); const current = await readState(c); if (current?.enabled) await writeState(c, current, { status: 'error', error: cleaner(error).code || 'network_error' }); } catch (_) { /* Keep durable pending state if metadata cannot be updated. */ }
     }
-    async function transfer(ws, id, enable) {
+    async function transfer(ws, id, enable, options = {}) {
+      const expectedManifest = options.expectedManifest ? structuredClone(options.expectedManifest) : null;
       return serial(ws, id, async () => {
         const c = context(ws, id);
         try {
           await verified(c); let post = await readPost(c), state = await readState(c);
           if (post.status !== 'saved') throw fault('invalid_request');
+          // An explicit preparation review authorizes this frozen manifest and
+          // its original blobs, even if another tab edits the document later.
+          if (expectedManifest && canonical(blog.pack(photoPost.compact(post))) !== canonical(expectedManifest)) throw fault('local_changed');
           if (enable && !state?.enabled) state = await writeState(c, state, { enabled: true, remoteId: state?.remoteId || post.id,
             remoteWorkspaceId: state?.remoteWorkspaceId || ws, remoteRevision: state?.remoteRevision || 0, localRevision: state?.localRevision || 0,
             publication: state?.publication || null, pending: state?.pending || null, status: 'pending', error: null });
@@ -76,6 +80,10 @@
             } });
           }
           const pending = structuredClone(state.pending);
+          if (expectedManifest) {
+            const expected = structuredClone(expectedManifest); expected.id = state.remoteId; expected.replaces = null;
+            if (canonical(pending.manifest) !== canonical(expected)) throw fault('local_changed');
+          }
           for (const photo of pending.manifest.photos) {
             const local = post.photos.find(item => item.id === photo.id && item.digest === photo.digest);
             if (!local) {
@@ -211,7 +219,7 @@
       const latest = await readState(c); await writeState(c, latest, { remoteRevision: row.revision, publication: row.publication, localRevision: 0, pending: null, conflict: null, error: null });
       const result = await transfer(ws, id, true); return { ...result, recoveryLocalPostId: recovery.localPostId };
     }
-    return Object.freeze({ list, connect: (ws, id) => transfer(ws, id, true), save: (ws, id) => transfer(ws, id, true),
+    return Object.freeze({ list, connect: (ws, id, options) => transfer(ws, id, true, options), save: (ws, id, options) => transfer(ws, id, true, options),
       sync: (ws, id) => transfer(ws, id, false), receive, pause, publish, unpublish, resolve, getState,
       subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
       dispose() { if (disposed) return; disposed = true; listeners.clear(); remote.dispose?.(); } });

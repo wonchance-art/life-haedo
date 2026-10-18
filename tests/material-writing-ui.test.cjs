@@ -146,3 +146,25 @@ test('resolving a temporary quote guard clears its old warning after successful 
   await f.input('#mwTitle', '저장할 변경'); f.setBeforeSave(() => { throw Object.assign(Error('보존해야 할 실제 저장 실패'), { code: 'storage_failed' }); }); await f.click('#mwPreview'); assert.match(f.get('.mw-error').textContent, /실제 저장 실패/);
   f.setPending(true); await f.click('#mwPreview'); f.setPending(false); await f.click('#mwPreview'); assert.match(f.get('.mw-error').textContent, /실제 저장 실패/); assert.equal(f.get('.mw-status').dataset.state, 'error');
 });
+
+test('selection notifications are local only and explicit reload adopts a received plan after a successful flush', async t => {
+  const events = [], f = await fixture(t, { onPlanChange: value => events.push(value) });
+  assert.equal(events.at(-1).planId, f.ui.getView().planId);
+  const incoming = f.M.create(f.C.id); incoming.title = '받은 준비'; const latest = f.db(); latest.plans.push(incoming); latest.revision++; f.setDb(latest);
+  await f.ui.reload({ planId: incoming.id }); assert.equal(f.ui.getView().planId, incoming.id); assert.equal(f.get('#mwTitle').value, '받은 준비'); assert.equal(events.at(-1).planId, incoming.id);
+  const count = events.length; await f.input('#mwTitle', '기기 안에서 고친 제목'); await f.ui.flush(); assert.equal(events.length, count);
+});
+
+test('explicit reload keeps composing and delayed new input DOM instead of replacing it with a late snapshot', async t => {
+  const f = await fixture(t), title = f.get('#mwTitle'); await title.emit('compositionstart'); title.value = '한글 조합'; await assert.rejects(f.ui.reload({}), { code: 'material_input_in_progress' }); assert.ok(f.get('#mwTitle') === title);
+  await title.emit('compositionend'); await f.ui.flush();
+  const wait = deferred(), read = f.storage.readMaterialWriting; f.storage.readMaterialWriting = async () => { const value = await read(); await wait.promise; return value; };
+  const reload = f.ui.reload({}); await settle(); await f.input('#mwTitle', '늦은 조회 중 새 입력'); wait.resolve(); await assert.rejects(reload, { code: 'material_input_pending' });
+  assert.ok(f.get('#mwTitle') === title); assert.equal(title.value, '늦은 조회 중 새 입력'); f.storage.readMaterialWriting = read; await f.ui.flush(); assert.equal(f.db().plans[0].title, '늦은 조회 중 새 입력');
+});
+
+test('connected creation delegates the frozen preparation revision and keeps foreign-device refusal without a local draft', async t => {
+  const calls = [], f = await fixture(t, { onCreatePost: async value => { calls.push(value); throw Object.assign(Error('다른 기기에서 글을 작성 중입니다'), { code: 'material_output_elsewhere' }); } });
+  await f.preview(); await f.click('#mwCreate'); assert.equal(f.creates(), 0); assert.equal(f.handoffs.length, 0); assert.deepEqual(calls, [{ workspaceId: f.bundle.workspaceId, planId: f.ui.getView().planId, expectedRevision: f.db().revision }]);
+  assert.match(f.get('.mw-error').textContent, /다른 기기/); assert.equal(f.host.querySelector('#mwConsent'), null); assert.equal(f.db().plans[0].output, null);
+});

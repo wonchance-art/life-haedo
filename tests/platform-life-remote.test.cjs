@@ -51,6 +51,16 @@ test("life transport borrows the platform client and verifies the account on the
   assert.equal(s.calls, 1);
   s.client.auth.dispose();
 });
+
+test("material continuity scope permits only its three private RPCs and retains account cancellation", async () => {
+  const s = setup(), client = bridge.clientFactory(s.auth, { scope: 'material' })(config.url, config.key);
+  assert.throws(() => client.from('life_workspaces'), { code: 'invalid_request' });
+  for (const name of ['life_sync_put', 'life_composition_put', 'life_writing_draft_put']) assert.throws(() => client.rpc(name, {}), { code: 'invalid_request' });
+  for (const name of ['life_material_get', 'life_material_list', 'life_material_put']) await client.rpc(name, {});
+  const builder = client.rpc('life_material_get', {}); s.change({ id: 'B' });
+  await assert.rejects(Promise.resolve(builder), { code: 'request_cancelled' });
+  client.auth.dispose(); s.client.auth.dispose();
+});
 test("separate projects, keys and password login cannot override the platform account", async () => {
   const s = setup();
   assert.throws(() => bridge.clientFactory(s.auth)("https://other.supabase.co", config.key), { code: "project_mismatch" });

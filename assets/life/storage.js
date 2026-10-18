@@ -765,17 +765,50 @@
       photoPost().validate(post); return { postId: post.id, revision: post.revision, planRevision, created: false };
     }
     async function createMaterialWritingPost(workspaceId, planId, expectedRevision) {
+      return materialWritingPost(workspaceId, planId, expectedRevision, false);
+    }
+    function ownedMaterialClaim(state) {
+      const output = state?.head?.data?.output;
+      return state?.enabled && !state.pending && !state.conflict && output && state.localClaim?.postId === output.postId && state.localClaim.claimId === output.claimId;
+    }
+    async function finishMaterialContinuityClaim(workspaceId, planId, expectedRevision) {
+      const result = await materialWritingPost(workspaceId, planId, expectedRevision, true);
+      if (result.created) return result;
+      // A preparation connected after an existing local handoff also needs the
+      // canonical post identity before the saved replacement migrates its ID.
+      await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const state = await materialContinuityState(meta, workspaceId, planId);
+        if (!ownedMaterialClaim(state)) throw fault('material_output_elsewhere', '이 기기에서 확인한 글쓰기 권한을 다시 확인해 주세요.');
+        const plan = (await materialWritingValue(meta, workspaceId)).plans.find(value => value.id === planId);
+        if (plan?.output?.postId !== result.postId) throw fault('material_continuity_changed', '연결한 글이 바뀌었습니다. 다시 확인해 주세요.');
+        await seedMaterialBlog(meta, workspaceId, result.postId, state);
+      });
+      return result;
+    }
+    async function seedMaterialBlog(meta, workspaceId, postId, state) {
+      const key = `blog-sync:${workspaceId}:${postId}`, prior = (await meta.get(key))?.value;
+      if (prior && prior.remoteId !== state.output.postId) throw fault('material_continuity_conflict', '기존 글의 다른 서버 연결을 바꾸지 않았습니다.');
+      if (!prior) await meta.put({ key, value: materialBlogState(state.output.postId, state.head.data.bundle.workspaceId, 0, null, 0, null, false) });
+    }
+    async function materialWritingPost(workspaceId, planId, expectedRevision, connected) {
       collectionScope(workspaceId); requireId(planId, '글 준비'); requireRevision(expectedRevision);
       const initial = await transaction(['bundles', 'meta'], 'readonly', async tx => {
         const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta), state = await materialWritingValue(meta, workspaceId);
         const plan = state.plans.find(value => value.id === planId);
         if (!plan) throw fault('material_writing_missing', '선택한 글 준비를 찾지 못했습니다.');
+        const continuity = await materialContinuityState(meta, workspaceId, planId);
+        if (connected && !ownedMaterialClaim(continuity)) throw fault('material_output_elsewhere', '다른 기기의 글쓰기를 새 초안으로 만들지 않았습니다.');
         if (plan.output) return { result: await materialOutput(meta, workspaceId, plan, state.revision) };
+        if (connected && continuity.output.state !== 'writing') throw fault('material_output_pending', '완성 글을 정확한 원본으로 먼저 받아 주세요.');
+        if (connected && materialCanonicalPayload(materialSnapshotData(bundle, plan, continuity)) !== materialCanonicalPayload(continuity.head.data)) throw fault('material_continuity_changed', '서버에서 확인한 준비와 정확한 원문이 바뀌었습니다.');
+        if (continuity && !connected) throw fault('material_claim_required', '연결된 준비는 서버에서 글쓰기 권한을 확인한 뒤 이어 써 주세요.');
         if (state.revision !== expectedRevision) throw fault('material_writing_conflict', '준비가 바뀌었습니다. 최신 개요를 다시 검토해 주세요.');
-        return clone({ state, plan, bundle });
+        return clone({ state, plan, bundle, continuity });
       });
       if (initial.result) return initial.result;
       const projected = materialWriting().project(initial.state, planId, () => core().id()), doc = photoPost().compact(projected.doc), refs = checkedEvidence(projected.refs, workspaceId);
+      if (connected) doc.id = initial.continuity.output.postId;
       if (doc.revision !== 0 || doc.status !== 'draft' || doc.replaces !== null || doc.archived) throw fault('invalid_material_writing', '새 비공개 글 초안으로만 이어 쓸 수 있습니다.');
       const reference = root.HaedoLife?.SourceReference || (typeof require === 'function' && require('./source-reference.js'));
       // Hash verification yields only before the write transaction. Its exact
@@ -787,7 +820,11 @@
         if (!plan) throw fault('material_writing_missing', '선택한 글 준비가 바뀌었습니다.');
         // A lost reply or another tab may already have completed this exact
         // handoff. Resuming it never creates a second document.
+        const continuity = await materialContinuityState(meta, workspaceId, planId);
+        if (connected && (!ownedMaterialClaim(continuity) || stablePayload(continuity) !== stablePayload(initial.continuity))) throw fault('material_continuity_changed', '글쓰기 확인 뒤 준비 연결이 바뀌었습니다.');
+        if (!connected && continuity) throw fault('material_claim_required', '연결된 준비는 서버에서 글쓰기 권한을 확인한 뒤 이어 써 주세요.');
         if (plan.output) return materialOutput(meta, workspaceId, plan, state.revision);
+        if (connected && materialCanonicalPayload(materialSnapshotData(bundle, plan, continuity)) !== materialCanonicalPayload(continuity.head.data)) throw fault('material_continuity_changed', '검토한 준비와 정확한 원문이 바뀌었습니다. 새 글을 만들지 않았습니다.');
         if (state.revision !== expectedRevision || stablePayload(plan) !== stablePayload(initial.plan)) throw fault('material_writing_conflict', '검토한 준비가 바뀌었습니다. 새 글을 만들지 않았습니다.');
         checkEvidenceTargets(refs, bundle);
         for (const ref of refs) {
@@ -798,6 +835,7 @@
         plan.output = { postId: post.id }; state.revision++; materialWriting().validate(state);
         await meta.put({ key: `material-writing:${workspaceId}`, value: state });
         await meta.put({ key: materialOutputKey(workspaceId, planId), value: clone(plan.output) });
+        if (connected) await seedMaterialBlog(meta, workspaceId, post.id, continuity);
         return { postId: post.id, revision: post.revision, planRevision: state.revision, created: true };
       });
       if (result.created) {
@@ -819,6 +857,351 @@
       }
       if (!changedPlans) return null;
       state.revision++; materialWriting().validate(state); await meta.put({ key: `material-writing:${workspaceId}`, value: state }); return state.revision;
+    }
+    const materialContinuity = () => root.HaedoLife?.MaterialContinuity || (typeof require === 'function' && require('./material-continuity.js'));
+    const materialContinuityKey = (workspaceId, planId) => `material-continuity:${workspaceId}:${planId}`;
+    const materialInstallKey = remoteId => `material-continuity-install:${accountKey}:${remoteId}`;
+    function materialBinding(value) {
+      onlyFields(value, ['projectUrl', 'userId'], 'invalid_material_continuity');
+      const binding = accountValue(value);
+      if (!account || !sameAccount(account, binding)) throw fault('account_mismatch', '현재 계정의 준비 연결만 사용할 수 있습니다.');
+      return binding;
+    }
+    function materialRemoteRow(input) {
+      onlyFields(input, ['id', 'revision', 'data', 'updated_at'], 'invalid_material_continuity');
+      requireId(input.id, '서버 준비'); requireRevision(input.revision);
+      if (!input.revision) throw fault('invalid_material_continuity', '서버 준비 버전을 확인해 주세요.');
+      materialContinuity().validate(input.data);
+      if (input.updated_at !== undefined && typeof input.updated_at !== 'string') throw fault('invalid_material_continuity', '서버 수정 시각을 확인해 주세요.');
+      return clone(input);
+    }
+    function materialMapping(mapping, workspaceId) {
+      if (mapping === null) return;
+      onlyFields(mapping, ['workspaceId', 'sourceIds', 'versionIds', 'planIds', 'materialIds', 'blockIds'], 'invalid_material_continuity');
+      onlyFields(mapping.workspaceId, ['from', 'to'], 'invalid_material_continuity');
+      requireId(mapping.workspaceId.from, '원래 작업공간');
+      if (mapping.workspaceId.to !== workspaceId) throw fault('workspace_mismatch', '준비 사본의 작업공간 연결이 다릅니다.');
+      const used = new Set([workspaceId]);
+      for (const name of ['sourceIds', 'versionIds', 'planIds', 'materialIds', 'blockIds']) {
+        if (!plain(mapping[name])) throw fault('invalid_material_continuity', '준비 식별자 연결을 확인해 주세요.');
+        for (const [from, to] of Object.entries(mapping[name])) {
+          requireId(from, '원래 항목'); requireId(to, '사본 항목');
+          if (used.has(to)) throw fault('invalid_material_continuity', '준비 식별자 연결이 중복됐습니다.'); used.add(to);
+        }
+      }
+    }
+    function validateMaterialContinuityState(value, workspaceId) {
+      onlyFields(value, ['revision', 'binding', 'enabled', 'remoteId', 'remoteRevision', 'head', 'mapping', 'output', 'pending', 'conflict', 'localClaim', 'error'], 'invalid_material_continuity');
+      requireRevision(value.revision); materialBinding(value.binding); requireId(value.remoteId, '서버 준비'); requireRevision(value.remoteRevision);
+      if (typeof value.enabled !== 'boolean') throw fault('invalid_material_continuity', '준비 연결 상태를 확인해 주세요.');
+      materialMapping(value.mapping, workspaceId);
+      if (value.head !== null) {
+        const row = materialRemoteRow(value.head);
+        if (row.id !== value.remoteId || row.revision !== value.remoteRevision || stablePayload(row.data.output) !== stablePayload(value.output)) throw fault('invalid_material_continuity', '준비의 서버 비교 기준이 다릅니다.');
+      } else if (value.remoteRevision !== 0 || value.output !== null) throw fault('invalid_material_continuity', '준비의 서버 비교 기준이 없습니다.');
+      if (value.pending !== null) {
+        onlyFields(value.pending, ['operationId', 'expectedRevision', 'data', 'fingerprint'], 'invalid_material_continuity');
+        requireId(value.pending.operationId, '전송 작업'); requireRevision(value.pending.expectedRevision); materialContinuity().validate(value.pending.data);
+        if (value.pending.expectedRevision !== value.remoteRevision || !/^[a-f0-9]{64}$/.test(value.pending.fingerprint)) throw fault('invalid_material_continuity', '준비 전송 기준을 확인해 주세요.');
+      }
+      if (value.conflict !== null) {
+        onlyFields(value.conflict, ['row', 'localFingerprint'], 'invalid_material_continuity');
+        if (value.conflict.row !== null && (materialRemoteRow(value.conflict.row).id !== value.remoteId || value.conflict.row.revision < value.remoteRevision)) throw fault('invalid_material_continuity', '충돌한 준비의 서버 기준이 다릅니다.');
+        if (!/^[a-f0-9]{64}$/.test(value.conflict.localFingerprint)) throw fault('invalid_material_continuity', '충돌한 준비의 비교 기준이 없습니다.');
+      }
+      if (value.localClaim !== null) {
+        onlyFields(value.localClaim, ['claimId', 'postId'], 'invalid_material_continuity'); requireId(value.localClaim.claimId, '글쓰기 확인'); requireId(value.localClaim.postId, '완성 글');
+        const output = value.pending?.data.output || value.output;
+        if (!output || output.claimId !== value.localClaim.claimId || output.postId !== value.localClaim.postId) throw fault('invalid_material_continuity', '이 기기의 글쓰기 확인 정보가 다릅니다.');
+      }
+      if (value.error !== null && (typeof value.error !== 'string' || !/^[a-z0-9_]{1,100}$/.test(value.error))) throw fault('invalid_material_continuity', '정리된 준비 오류 코드가 필요합니다.');
+      return value;
+    }
+    function materialOutputProgress(before, after) {
+      if (!before) return;
+      if (!after || before.postId !== after.postId || before.claimId !== after.claimId || before.state === 'saved' && (after.state !== 'saved' || after.revision < before.revision)) throw fault('invalid_material_continuity', '이미 확인한 글쓰기 연결을 지우거나 되돌릴 수 없습니다.');
+    }
+    async function materialContinuityState(meta, workspaceId, planId) {
+      const state = (await meta.get(materialContinuityKey(workspaceId, planId)))?.value || null;
+      if (state) validateMaterialContinuityState(state, workspaceId);
+      return state;
+    }
+    async function readMaterialContinuityState(workspaceId, planId) {
+      collectionScope(workspaceId); requireId(planId, '글 준비');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await materialContinuityState(meta, workspaceId, planId));
+      });
+    }
+    async function writeMaterialContinuityState(workspaceId, planId, input, baseRevision = 0) {
+      collectionScope(workspaceId); requireId(planId, '글 준비'); requireRevision(baseRevision);
+      const value = clone(input); value.revision = baseRevision + 1; validateMaterialContinuityState(value, workspaceId);
+      for (const data of [value.head?.data, value.pending?.data, value.conflict?.row?.data].filter(Boolean)) { await materialContinuity().verify(data); scopeGuard(); }
+      let planRevision;
+      const saved = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const wrapper = await materialWritingValue(meta, workspaceId); planRevision = wrapper.revision;
+        if (!wrapper.plans.some(plan => plan.id === planId)) throw fault('material_writing_missing', '연결할 글 준비를 찾지 못했습니다.');
+        const prior = await materialContinuityState(meta, workspaceId, planId);
+        if ((prior?.revision || 0) !== baseRevision) throw fault('material_continuity_conflict', '다른 탭에서 준비 연결이 바뀌었습니다. 다시 확인해 주세요.');
+        if (prior && (prior.remoteId !== value.remoteId || value.remoteRevision < prior.remoteRevision)) throw fault('stale_sync_result', '준비 연결을 오래된 서버 기준으로 바꾸지 않았습니다.');
+        if (prior?.head && value.head && (prior.head.data.bundle.workspaceId !== value.head.data.bundle.workspaceId || prior.head.data.plan.id !== value.head.data.plan.id)) throw fault('invalid_material_continuity', '서버 준비의 고정 식별자를 바꾸지 않았습니다.');
+        materialOutputProgress(prior?.output, value.output);
+        if (prior?.head && value.head?.revision === prior.head.revision && stablePayload(prior.head.data) !== stablePayload(value.head.data)) throw fault('remote_revision_mismatch', '같은 서버 버전의 준비 내용이 다릅니다.');
+        const receipt = (await meta.get(materialInstallKey(value.remoteId)))?.value;
+        if (receipt && (receipt.workspaceId !== workspaceId || receipt.planId !== planId)) throw fault('material_continuity_exists', '이 서버 준비는 이미 다른 로컬 준비에 연결돼 있습니다.');
+        await meta.put({ key: materialContinuityKey(workspaceId, planId), value });
+        await meta.put({ key: materialInstallKey(value.remoteId), value: { workspaceId, planId } }); return clone(value);
+      });
+      materialWritingChanged(workspaceId, planRevision); return saved;
+    }
+    async function findMaterialContinuity(remoteId) {
+      scopeGuard(); requireId(remoteId, '서버 준비'); if (!account) throw fault('auth_scope_required', '확인된 계정으로 준비를 받아 주세요.');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), receipt = (await meta.get(materialInstallKey(remoteId)))?.value;
+        if (!receipt) return null;
+        onlyFields(receipt, ['workspaceId', 'planId'], 'invalid_material_continuity');
+        await checkedBundle(tx.objectStore('bundles'), receipt.workspaceId, meta);
+        const state = await materialContinuityState(meta, receipt.workspaceId, receipt.planId);
+        if (!state || state.remoteId !== remoteId || !(await materialWritingValue(meta, receipt.workspaceId)).plans.some(plan => plan.id === receipt.planId)) throw fault('material_writing_missing', '이미 받은 준비의 연결을 찾지 못했습니다. 새 준비를 자동 생성하지 않습니다.');
+        return clone(receipt);
+      });
+    }
+    function mapMaterialOutput(output, mapping) {
+      if (!output || output.state !== 'saved' || !mapping) return clone(output);
+      return { ...clone(output), refs: output.refs.map(ref => ({ ...clone(ref), workspaceId: mapping.workspaceId.to,
+        sourceId: mapping.sourceIds[ref.sourceId] || ref.sourceId, sourceVersionId: mapping.versionIds[ref.sourceVersionId] || ref.sourceVersionId })) };
+    }
+    function canonicalMaterialRefs(refs, mapping) {
+      if (!mapping) return clone(refs);
+      const sources = new Map(Object.entries(mapping.sourceIds).map(([from, to]) => [to, from])), versions = new Map(Object.entries(mapping.versionIds).map(([from, to]) => [to, from]));
+      return refs.map(ref => ({ ...clone(ref), workspaceId: mapping.workspaceId.from, sourceId: sources.get(ref.sourceId) || ref.sourceId, sourceVersionId: versions.get(ref.sourceVersionId) || ref.sourceVersionId }));
+    }
+    function materialSnapshotData(bundle, plan, state, override) {
+      const model = materialContinuity(), data = model.snapshot(bundle, plan, mapMaterialOutput(override === undefined ? state?.output || null : override, state?.mapping));
+      if (!state?.mapping) return data;
+      const inverse = new Map(); for (const name of ['sourceIds', 'versionIds', 'planIds', 'materialIds', 'blockIds']) for (const [from, to] of Object.entries(state.mapping[name])) inverse.set(to, from);
+      return model.remap(data, state.mapping.workspaceId.from, id => inverse.get(id) || id).data;
+    }
+    async function materialSnapshot(tx, workspaceId, planId, override) {
+      const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta), wrapper = await materialWritingValue(meta, workspaceId), plan = wrapper.plans.find(value => value.id === planId);
+      if (!plan) throw fault('material_writing_missing', '선택한 글 준비를 찾지 못했습니다.');
+      const state = await materialContinuityState(meta, workspaceId, planId), data = materialSnapshotData(bundle, plan, state, override);
+      let post = null, refs = [], editingDrafts = [];
+      if (plan.output) {
+        post = (await meta.get(`photo-post:${workspaceId}:${plan.output.postId}`))?.value;
+        if (!post) throw fault('material_writing_output_missing', '연결한 글을 찾지 못했습니다. 새 글을 자동 생성하지 않습니다.');
+        photoPost().validate(post);
+        const evidence = await meta.get(`post-evidence:${workspaceId}:${post.id}`); refs = checkedEvidence(evidence === undefined ? [] : evidence.value.refs, workspaceId);
+        if (post.status === 'saved') {
+          const index = (await meta.get(`photo-posts:${workspaceId}`))?.value || [];
+          for (const summary of index) if (summary.status === 'draft' && !summary.archived) {
+            const draft = (await meta.get(`photo-post:${workspaceId}:${summary.id}`))?.value;
+            if (!draft) throw fault('photo_post_missing', '수정 중인 글을 찾지 못했습니다. 기존 준비와 글을 유지합니다.');
+            photoPost().validate(draft);
+            if (draft.status !== 'draft' || draft.archived || draft.replaces?.id !== post.id || draft.replaces.revision !== post.revision) continue;
+            const own = await meta.get(`post-evidence:${workspaceId}:${draft.id}`), actual = checkedEvidence(own === undefined ? refs : own.value.refs, workspaceId);
+            editingDrafts.push({ post: clone(draft), refs: canonicalMaterialRefs(actual, state?.mapping) });
+          }
+          editingDrafts.sort((a, b) => a.post.id < b.post.id ? -1 : a.post.id > b.post.id ? 1 : 0);
+        }
+      }
+      return clone({ data, localRevision: wrapper.revision, plan, post, refs: canonicalMaterialRefs(refs, state?.mapping), editingDrafts, state });
+    }
+    async function readMaterialContinuitySnapshot(workspaceId, planId, options = {}) {
+      collectionScope(workspaceId); requireId(planId, '글 준비');
+      onlyFields(options, ['output'], 'invalid_material_continuity'); const override = options.output === undefined ? undefined : clone(options.output);
+      const value = await transaction(['bundles', 'meta'], 'readonly', tx => materialSnapshot(tx, workspaceId, planId, override));
+      await materialContinuity().verify(value.data); scopeGuard();
+      value.fingerprint = await materialContinuity().fingerprint(value.data); scopeGuard(); return value;
+    }
+    function materialSnapshotGuard(value) {
+      return stablePayload({ data: value.data, output: value.plan.output, review: materialReviewPayload(value), stateRevision: value.state?.revision || 0 });
+    }
+    function materialReviewPayload(value) {
+      const blog = root.HaedoLife?.Blog || (typeof require === 'function' && require('./blog.js'));
+      return stablePayload({ post: value.post ? blog.pack(photoPost().compact(value.post)) : null, refs: value.refs,
+        editingDrafts: (value.editingDrafts || []).map(value => ({ post: blog.pack(photoPost().compact(value.post)), refs: value.refs })) });
+    }
+    function materialCanonicalPayload(data) {
+      const value = clone(data);
+      for (const name of ['sources', 'sourceVersions']) value.bundle[name].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+      return stablePayload(value);
+    }
+    function freshMaterialState(remoteId, row, mapping) {
+      return { revision: 1, binding: clone(account), enabled: true, remoteId, remoteRevision: row.revision, head: clone(row), mapping,
+        output: clone(row.data.output), pending: null, conflict: null, localClaim: null, error: null };
+    }
+    function materialRemapped(data, workspaceId, previous, keepIds = false) {
+      const all = new Map();
+      if (previous) for (const name of ['sourceIds', 'versionIds', 'planIds', 'materialIds', 'blockIds']) for (const [from, to] of Object.entries(previous[name])) all.set(from, to);
+      const mapped = materialContinuity().remap(data, workspaceId, id => all.get(id) || (keepIds ? id : core().id()));
+      if (previous) for (const name of ['sourceIds', 'versionIds', 'planIds', 'materialIds', 'blockIds']) mapped.mapping[name] = { ...previous[name], ...mapped.mapping[name] };
+      return mapped;
+    }
+    function materialLocalPost(input) {
+      const doc = photoPost().compact(input), ids = new Map(); doc.id = core().id(); doc.revision = 0; doc.replaces = null;
+      for (const photo of doc.photos) { const id = core().id(); ids.set(photo.id, id); photo.id = id; }
+      doc.ops = doc.ops.map(op => typeof op.insert === 'string' ? op : { ...op, insert: { photo: { ...op.insert.photo, id: ids.get(op.insert.photo.id) } } });
+      photoPost().validate(doc); return doc;
+    }
+    function materialBlogState(remoteId, workspaceId, remoteRevision, manifest, localRevision, prior = null, enabled = true) {
+      return { ...(prior || {}), revision: (prior?.revision || 0) + 1, enabled, remoteId, remoteWorkspaceId: workspaceId, remoteRevision,
+        remoteManifest: clone(manifest), localRevision, pending: null, conflict: null, publishPending: null, unpublishPending: null,
+        publication: prior?.publication || null, status: enabled ? 'synced' : 'paused', error: null };
+    }
+    async function installMaterialPost(tx, workspaceId, mapped, original, remoteWorkspaceId, priorPlan, preserveLocal, blogRow = null) {
+      const meta = tx.objectStore('meta'), output = mapped.data.output;
+      const oldPost = priorPlan?.output && (await meta.get(`photo-post:${workspaceId}:${priorPlan.output.postId}`))?.value;
+      const oldBinding = oldPost && (await meta.get(`blog-sync:${workspaceId}:${oldPost.id}`))?.value;
+      if (!output || output.state !== 'saved') {
+        if (!oldPost || output && (oldPost.id === output.postId || oldBinding?.remoteId === output.postId)) return priorPlan?.output || null;
+        if (preserveLocal) return null;
+        throw fault('local_changed', '이 기기의 기존 글은 유지합니다. 양쪽 준비와 글을 보존하는 선택을 먼저 확인해 주세요.');
+      }
+      if (oldPost && oldBinding?.remoteId === output.postId && oldBinding.remoteRevision === output.revision && oldBinding.localRevision === oldPost.revision && !oldBinding.pending && !oldBinding.conflict) {
+        if (original && stablePayload(oldBinding.remoteManifest) !== stablePayload((root.HaedoLife?.Blog || require('./blog.js')).pack(original))) throw fault('remote_revision_mismatch', '같은 서버 버전의 글 본문이 다릅니다.');
+        return { postId: oldPost.id };
+      }
+      if (oldPost && !preserveLocal && (!oldBinding || oldBinding.localRevision !== oldPost.revision || oldBinding.pending || oldBinding.conflict)) throw fault('local_changed', '이 기기의 글을 수정 중입니다. 양쪽 글을 보존할 방법을 먼저 선택해 주세요.');
+      if (!original) throw fault('material_output_pending', '완성 글의 정확한 원본을 먼저 받아 주세요.');
+      const doc = materialLocalPost(original), saved = await writePhotoPost(tx, workspaceId, doc, 0, { refs: mapped.data.output.refs, baseRevision: 0 }, null);
+      const blog = root.HaedoLife?.Blog || require('./blog.js');
+      const state = materialBlogState(output.postId, blogRow?.workspace_id || remoteWorkspaceId, output.revision, blog.pack(original), saved.revision);
+      state.publication = clone(blogRow?.publication || null);
+      await meta.put({ key: `blog-sync:${workspaceId}:${saved.id}`, value: state });
+      return { postId: saved.id };
+    }
+    async function materialNewWorkspace(tx, data, post, boundRow = null, blogRow = null, privateRecovery = false) {
+      const bundle = core().createWorkspace({ title: data.plan.title || '받은 글 준비' }), workspaceId = bundle.workspaceId;
+      const mapped = materialRemapped(data, workspaceId, null), plan = mapped.data.plan;
+      bundle.sources = mapped.data.bundle.sources; bundle.sourceVersions = mapped.data.bundle.sourceVersions; core().validateWorkspace(bundle);
+      const bundles = tx.objectStore('bundles'), meta = tx.objectStore('meta');
+      if (await bundles.get(workspaceId)) throw fault('workspace_exists', '새 준비 공간이 이미 있습니다. 다시 시도해 주세요.');
+      await bundles.add(bundle); await saveOwner(meta, workspaceId);
+      if (privateRecovery && post) {
+        const saved = await writePhotoPost(tx, workspaceId, materialLocalPost(post), 0, { refs: mapped.data.output.refs, baseRevision: 0 }, null);
+        plan.output = { postId: saved.id };
+      } else plan.output = await installMaterialPost(tx, workspaceId, mapped, post, data.bundle.workspaceId, null, false, blogRow);
+      const wrapper = { ...materialWriting().empty(workspaceId), revision: 1, plans: [plan] }; materialWriting().validate(wrapper);
+      await meta.put({ key: `material-writing:${workspaceId}`, value: wrapper });
+      if (plan.output) await meta.put({ key: materialOutputKey(workspaceId, plan.id), value: clone(plan.output) });
+      if (boundRow) {
+        const state = freshMaterialState(boundRow.id, boundRow, mapped.mapping); validateMaterialContinuityState(state, workspaceId);
+        await meta.put({ key: materialContinuityKey(workspaceId, plan.id), value: state });
+        await meta.put({ key: materialInstallKey(boundRow.id), value: { workspaceId, planId: plan.id } });
+      }
+      return { workspaceId, planId: plan.id, postId: plan.output?.postId || null, existing: false, bundle: clone(bundle), planRevision: wrapper.revision };
+    }
+    async function installMaterialContinuity(inputRow, options = {}) {
+      scopeGuard(); if (!account) throw fault('auth_scope_required', '확인된 계정에 준비 사본을 받아 주세요.');
+      onlyFields(options, ['target', 'expectedFingerprint', 'expectedReview', 'preserveLocal', 'preserveRemote', 'post', 'blogRow'], 'invalid_material_continuity');
+      const row = materialRemoteRow(inputRow), settings = clone(options), model = materialContinuity();
+      let expectedReview = null;
+      if (settings.expectedReview !== undefined) {
+        onlyFields(settings.expectedReview, ['post', 'refs', 'editingDrafts'], 'invalid_material_continuity');
+        expectedReview = stablePayload({ ...settings.expectedReview, editingDrafts: settings.expectedReview.editingDrafts || [] });
+      }
+      await model.verify(row.data); scopeGuard();
+      let original = settings.post || null;
+      if (original) {
+        photoPost().validate(original);
+        if (row.data.output?.state !== 'saved' || original.id !== row.data.output.postId || original.status !== 'saved' || original.replaces !== null) throw fault('invalid_material_continuity', '검토한 완성 글과 서버 준비의 연결이 다릅니다.');
+        const blog = root.HaedoLife?.Blog || require('./blog.js'); original = await blog.hydrate(blog.pack(original), new Map(original.photos.map(photo => [photo.id, photo.blob]))); scopeGuard();
+        if (settings.blogRow && (settings.blogRow.id !== row.data.output.postId || settings.blogRow.revision !== row.data.output.revision || typeof settings.blogRow.workspace_id !== 'string' || stablePayload(settings.blogRow.data) !== stablePayload(blog.pack(original)))) throw fault('invalid_material_continuity', '서버 완성 글의 버전·본문·연결이 다릅니다.');
+      }
+      if (settings.preserveLocal !== undefined && typeof settings.preserveLocal !== 'boolean' || settings.preserveRemote !== undefined && typeof settings.preserveRemote !== 'boolean' || settings.preserveLocal && settings.preserveRemote) throw fault('invalid_material_continuity', '한 번에 보존할 충돌 쪽을 선택해 주세요.');
+      let target = settings.target || await findMaterialContinuity(row.id), before = null;
+      if (target) {
+        onlyFields(target, ['workspaceId', 'planId'], 'invalid_material_continuity');
+        before = await readMaterialContinuitySnapshot(target.workspaceId, target.planId); scopeGuard();
+        if (settings.expectedFingerprint !== before.fingerprint) throw fault('material_continuity_changed', '비교한 준비가 바뀌었습니다. 양쪽 내용을 다시 확인해 주세요.');
+        if (expectedReview !== null && materialReviewPayload(before) !== expectedReview) throw fault('material_continuity_changed', '비교한 글 본문이나 정확한 근거가 바뀌었습니다. 양쪽 내용을 다시 확인해 주세요.');
+      }
+      const installed = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), receipt = (await meta.get(materialInstallKey(row.id)))?.value;
+        if (!target) {
+          if (receipt) throw fault('material_continuity_exists', '다른 탭에서 이미 이 준비를 받았습니다. 기존 준비를 다시 열어 주세요.');
+          if (row.data.output?.state === 'saved' && !original) throw fault('material_output_pending', '완성 글의 정확한 원본을 먼저 받아 주세요.');
+          const result = await materialNewWorkspace(tx, row.data, original, row, settings.blogRow);
+          await meta.put({ key: activeKey, value: result.workspaceId }); return result;
+        }
+        const current = await materialSnapshot(tx, target.workspaceId, target.planId), state = current.state;
+        if (expectedReview !== null && materialReviewPayload(current) !== expectedReview) throw fault('material_continuity_changed', '글 본문이나 정확한 근거가 검토 뒤 바뀌었습니다. 입력은 유지합니다.');
+        if (materialSnapshotGuard(current) !== materialSnapshotGuard(before)) throw fault('material_continuity_changed', '원문·준비·연결한 글이 검토 뒤 바뀌었습니다. 입력은 유지합니다.');
+        if (!state || state.remoteId !== row.id || receipt?.workspaceId !== target.workspaceId || receipt?.planId !== target.planId) throw fault('material_continuity_exists', '준비의 계정별 연결이 다릅니다.');
+        if (!state.enabled) throw fault('material_paused', '이어쓰기가 중지된 준비는 변경하지 않았습니다. 다시 연결한 뒤 받아 주세요.');
+        if (row.revision < state.remoteRevision || row.revision < (state.conflict?.row?.revision || 0)) throw fault('stale_sync_result', '더 최신 서버 준비를 이미 확인했습니다.');
+        if (state.head?.revision === row.revision && stablePayload(state.head.data) !== stablePayload(row.data)) throw fault('remote_revision_mismatch', '같은 서버 버전의 준비 내용이 다릅니다.');
+        if (state.head && (state.head.data.bundle.workspaceId !== row.data.bundle.workspaceId || state.head.data.plan.id !== row.data.plan.id)) throw fault('invalid_material_continuity', '서버 준비의 고정 식별자가 바뀌었습니다.');
+        materialOutputProgress(state.output, row.data.output);
+        if (current.editingDrafts.length && !settings.preserveLocal && !settings.preserveRemote) throw fault('local_changed', '이 글을 수정 중인 초안이 있습니다. 양쪽 글과 초안을 먼저 비교해 주세요.');
+        let recovery = null, editingRecovery = [];
+        if (settings.preserveLocal) {
+          const bundle = await checkedBundle(tx.objectStore('bundles'), target.workspaceId, meta);
+          // An edited local result and its actual sidecar are kept together in
+          // a private recovery workspace; no server/public binding is copied.
+          const recoveryOutput = current.post ? mapMaterialOutput({ state: 'saved', postId: core().id(), claimId: core().id(), revision: 1, refs: current.refs }, state.mapping) : null;
+          recovery = await materialNewWorkspace(tx, model.snapshot(bundle, current.plan, recoveryOutput), current.post, null, null, true);
+          for (const editing of current.editingDrafts) {
+            const descriptor = mapMaterialOutput({ state: 'saved', postId: core().id(), claimId: core().id(), revision: 1, refs: editing.refs }, state.mapping);
+            const installed = await materialNewWorkspace(tx, model.snapshot(bundle, current.plan, descriptor), editing.post, null, null, true);
+            editingRecovery.push({ workspaceId: installed.workspaceId, planId: installed.planId, postId: installed.postId });
+          }
+        }
+        if (settings.preserveRemote) {
+          recovery = await materialNewWorkspace(tx, row.data, original, null, null, true);
+          const oldBlog = current.post && (await meta.get(`blog-sync:${target.workspaceId}:${current.post.id}`))?.value;
+          const differentOutput = current.post && (oldBlog?.remoteId || current.post.id) !== row.data.output?.postId;
+          let localRecovery = null, planRevision = current.localRevision, output = current.plan.output;
+          const bundle = clone(await checkedBundle(tx.objectStore('bundles'), target.workspaceId, meta));
+          if (differentOutput) {
+            const descriptor = mapMaterialOutput({ state: 'saved', postId: core().id(), claimId: core().id(), revision: 1, refs: current.refs }, state.mapping);
+            localRecovery = await materialNewWorkspace(tx, model.snapshot(bundle, current.plan, descriptor), current.post, null, null, true);
+            for (const editing of current.editingDrafts) {
+              const descriptor = mapMaterialOutput({ state: 'saved', postId: core().id(), claimId: core().id(), revision: 1, refs: editing.refs }, state.mapping);
+              const installed = await materialNewWorkspace(tx, model.snapshot(bundle, current.plan, descriptor), editing.post, null, null, true);
+              editingRecovery.push({ workspaceId: installed.workspaceId, planId: installed.planId, postId: installed.postId });
+            }
+            const wrapper = clone(await materialWritingValue(meta, target.workspaceId)); wrapper.plans.find(plan => plan.id === target.planId).output = null; wrapper.revision++; planRevision = wrapper.revision; output = null;
+            await meta.delete(materialOutputKey(target.workspaceId, target.planId)); await meta.put({ key: `material-writing:${target.workspaceId}`, value: wrapper });
+          }
+          const mapped = materialRemapped(row.data, target.workspaceId, state.mapping, state.mapping === null); let appended = false;
+          immutableVersions(bundle, mapped.data.bundle);
+          // The chosen local plan and source metadata stay authoritative, while
+          // the winning output's exact evidence dependencies become available.
+          for (const name of ['sources', 'sourceVersions']) for (const item of mapped.data.bundle[name]) if (!bundle[name].some(value => value.id === item.id)) { bundle[name].push(item); appended = true; }
+          if (appended) { bundle.revision++; bundle.updatedAt = new Date().toISOString(); core().validateWorkspace(bundle); await tx.objectStore('bundles').put(bundle); }
+          state.revision++; state.remoteRevision = row.revision; state.head = clone(row); state.output = clone(row.data.output); state.pending = null; state.conflict = null; state.error = null;
+          state.mapping = mapped.mapping;
+          if (state.localClaim && (state.output?.postId !== state.localClaim.postId || state.output?.claimId !== state.localClaim.claimId)) state.localClaim = null;
+          validateMaterialContinuityState(state, target.workspaceId);
+          await meta.put({ key: materialContinuityKey(target.workspaceId, target.planId), value: state });
+          return { ...target, postId: output?.postId || null, existing: true, bundle: clone(bundle), planRevision,
+            recoveryWorkspaceId: recovery.workspaceId, recoveryPlanId: recovery.planId,
+            ...(localRecovery ? { localRecoveryWorkspaceId: localRecovery.workspaceId, localRecoveryPlanId: localRecovery.planId } : {}), ...(editingRecovery.length ? { editingRecovery } : {}) };
+        }
+        const mapped = materialRemapped(row.data, target.workspaceId, state.mapping, state.mapping === null), bundle = clone(await checkedBundle(tx.objectStore('bundles'), target.workspaceId, meta));
+        if (mapped.data.plan.id !== target.planId) throw fault('invalid_material_continuity', '서버 준비의 고정 식별자가 바뀌었습니다.');
+        immutableVersions(bundle, mapped.data.bundle);
+        for (const name of ['sources', 'sourceVersions']) for (const item of mapped.data.bundle[name]) {
+          const at = bundle[name].findIndex(existing => existing.id === item.id); if (at < 0) bundle[name].push(item); else bundle[name][at] = item;
+        }
+        bundle.revision++; bundle.updatedAt = new Date().toISOString(); core().validateWorkspace(bundle); await tx.objectStore('bundles').put(bundle);
+        const wrapper = clone(await materialWritingValue(meta, target.workspaceId)), at = wrapper.plans.findIndex(plan => plan.id === target.planId), plan = mapped.data.plan;
+        plan.output = await installMaterialPost(tx, target.workspaceId, mapped, original, row.data.bundle.workspaceId, current.plan, !!settings.preserveLocal, settings.blogRow);
+        wrapper.plans[at] = plan; wrapper.revision++; materialWriting().validate(wrapper);
+        if (plan.output) await meta.put({ key: materialOutputKey(target.workspaceId, plan.id), value: clone(plan.output) });
+        else if (current.plan.output) await meta.delete(materialOutputKey(target.workspaceId, plan.id));
+        await meta.put({ key: `material-writing:${target.workspaceId}`, value: wrapper });
+        Object.assign(state, { revision: state.revision + 1, remoteRevision: row.revision, head: clone(row), output: clone(row.data.output), mapping: mapped.mapping, pending: null, conflict: null, error: null });
+        if (state.localClaim && (state.output?.postId !== state.localClaim.postId || state.output?.claimId !== state.localClaim.claimId)) state.localClaim = null;
+        validateMaterialContinuityState(state, target.workspaceId); await meta.put({ key: materialContinuityKey(target.workspaceId, target.planId), value: state });
+        return { ...target, postId: plan.output?.postId || null, existing: true, bundle: clone(bundle), planRevision: wrapper.revision,
+          ...(recovery ? { recoveryWorkspaceId: recovery.workspaceId, recoveryPlanId: recovery.planId } : {}), ...(editingRecovery.length ? { editingRecovery } : {}) };
+      });
+      changed(installed.workspaceId, installed.bundle.revision); materialWritingChanged(installed.workspaceId, installed.planRevision);
+      return installed;
     }
     const blogSeries = () => root.HaedoLife?.BlogSeries || (typeof require === 'function' && require('./blog-series.js'));
     const seriesPostKey = (workspaceId, seriesId, itemId) => `blog-series-post:${workspaceId}:${seriesId}:${itemId}`;
@@ -2339,6 +2722,7 @@
       listWorkspaces, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
       readCollection, saveCollection, readNineBoard, saveNineBoard, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
+      readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, finishMaterialContinuityClaim,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       readPreservationCatalog, readPreservationSnapshot, installPreservationCopy,
       commitLocal, saveStage, getStage, listStages, deleteStage, subscribe,

@@ -70,6 +70,36 @@ test('selected saved post uploads exact originals before one CAS document commit
   assert.equal(f.rows.size, 1); assert.equal(f.states.size, 1); assert.equal(f.rows.get(f.d.id).data.photos.some(p => p.blob), false);
   await f.manager.sync(WS, f.d.id); assert.equal(f.stats.saves.length, 1); assert.equal(f.stats.uploads, 2); f.manager.dispose();
 });
+
+test('an explicit reviewed manifest rejects another tab edit during authentication before uploading any original', async () => {
+  const f = await fixture(), expectedManifest = Blog.pack(Photo.compact(f.d)), held = deferred(), started = deferred();
+  f.auth.verify = async () => { started.resolve(); await held.promise; return { id: UID }; };
+  const saving = f.manager.save(WS, f.d.id, { expectedManifest });
+  await started.promise; const changed = f.posts.get(f.d.id); changed.title = '검토 뒤 새 비공개 본문'; changed.revision++;
+  held.resolve(); await assert.rejects(saving, { code: 'local_changed' });
+  assert.equal(f.stats.uploads, 0); assert.equal(f.stats.prepares, 0); assert.equal(f.stats.saves.length, 0);
+  f.manager.dispose();
+});
+
+test('a post edited during original upload sends only the frozen reviewed content and leaves the newer local post pending', async () => {
+  const f = await fixture(), expectedManifest = Blog.pack(Photo.compact(f.d)), held = deferred(), started = deferred();
+  const upload = f.remote.uploadAsset; f.remote.uploadAsset = async (...args) => { started.resolve(); await held.promise; return upload(...args); };
+  const saving = f.manager.save(WS, f.d.id, { expectedManifest }); await started.promise;
+  const changed = f.posts.get(f.d.id); changed.title = 'UNREVIEWED_PRIVATE_TEXT'; changed.revision++;
+  held.resolve(); const result = await saving;
+  assert.deepEqual(f.rows.get(f.d.id).data, expectedManifest); assert.equal(result.status, 'pending');
+  assert.equal(f.posts.get(f.d.id).title, 'UNREVIEWED_PRIVATE_TEXT'); f.manager.dispose();
+});
+
+test('reviewing a different post version cannot silently replay a pending original transfer from the older review', async () => {
+  const f = await fixture(), first = Blog.pack(Photo.compact(f.d)); f.stats.failPhoto = f.d.photos[0].id;
+  await assert.rejects(f.manager.save(WS, f.d.id, { expectedManifest: first }), { code: 'network_error' });
+  const operation = f.states.get(f.d.id).pending.operationId, prepared = f.stats.prepares;
+  const changed = f.posts.get(f.d.id); changed.title = '새 검토의 다른 본문'; changed.revision++; f.stats.failPhoto = null;
+  await assert.rejects(f.manager.save(WS, f.d.id, { expectedManifest: Blog.pack(Photo.compact(changed)) }), { code: 'local_changed' });
+  assert.equal(f.states.get(f.d.id).pending.operationId, operation); assert.equal(f.stats.prepares, prepared); assert.equal(f.stats.saves.length, 0);
+  f.manager.dispose();
+});
 test('partial photo failure leaves only private prepared assets and durable request; retry reuses completed originals', async () => {
   const f = await fixture(); f.stats.failPhoto = f.d.photos[1].id;
   await assert.rejects(f.manager.connect(WS, f.d.id), { code: 'network_error' }); assert.equal(f.rows.size, 0); assert.equal(f.stats.uploads, 1);

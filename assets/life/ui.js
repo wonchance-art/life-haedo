@@ -211,6 +211,10 @@
     const workbench = global.HaedoLife.WorkbenchUI?.create({
       storage, core, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce, onLocalSaved: clearError,
+      onBundleUpdated: bundle => {
+        if (disposed || state.bundle?.workspaceId !== bundle.workspaceId || bundle.revision < state.bundle.revision) return;
+        state.bundle = bundle; state.remoteChanged = false; resetSearchContext(); renderHeader();
+      },
       onBlogReturn: returnFromBlog,
       onBlogModeChange: context => {
         if (disposed || state.mode !== 'page') return;

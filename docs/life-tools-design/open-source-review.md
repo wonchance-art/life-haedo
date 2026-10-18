@@ -22,6 +22,19 @@
 자체 구현을 선택한다면 후보가 충족하지 못하는 요구와 직접 유지할 범위를 짧게 적는다.
 큰 기반 모듈을 다 만든 뒤 라이브러리를 찾아보는 순서로 진행하지 않는다. 해당 단계의 소수 후보와 작은 실행 검증으로 결정을 내린다.
 
+## 자료 준비 한 개의 명시 기기 이어쓰기 — 2026-10-19 KST
+
+공식 조회일 2026-10-18 UTC(2026-10-19 KST). [준비 기기 전환 계약](../design-review/material-continuity.md)은 선택한 준비·정확 원문 closure와 연결된 완성 글을 명시적으로 보관/받는 기능이다. 문자 단위 자동 합동 편집과 비교하되 기존 Core/SourceReference·idb·CAS/영속 영수증·BlogSync·동봉 Supabase SDK를 우선 재사용한다.
+
+| 후보 | 공식 릴리스·라이선스·유지보수 | 이번 요구와의 차이·선택 |
+| --- | --- | --- |
+| [Automerge](https://github.com/automerge/automerge/releases/tag/js/automerge-3.5.0) | 최신 확인 `js/automerge-3.5.0`, 2026-09-16T14:25:23Z. [해당 태그 LICENSE](https://raw.githubusercontent.com/automerge/automerge/js/automerge-3.5.0/LICENSE) MIT, repo archived/disabled=false·pushed 2026-10-17 | 공식 README의 CRDT/오프라인 자동 병합은 새 자료 모델·전송/영속화 계층이 필요하다. 정확 원문 버전·글 claim·의미 충돌 보존은 별도 앱 검증이므로 직접 도입 보류 |
+| [Yjs](https://github.com/yjs/yjs/releases/tag/v13.6.33) | 최신 확인 `v13.6.33`, 2026-09-23T16:37:33Z. [해당 태그 LICENSE](https://raw.githubusercontent.com/yjs/yjs/v13.6.33/LICENSE) MIT, repo archived/disabled=false·pushed 2026-10-18 | 편집기 통합/공동 편집·오프라인 CRDT와 provider 구성이 목표다. 이번 명시 한 개 CAS 이어쓰기에는 편집기·형식·전송 계층을 더 바꿀 이유가 없어 직접 도입 보류 |
+
+추가 공식 근거: [Automerge README](https://github.com/automerge/automerge), [Yjs README](https://github.com/yjs/yjs), 각 저장소의 [Automerge 공개 권고](https://github.com/automerge/automerge/security/advisories)·[Yjs 공개 권고](https://github.com/yjs/yjs/security/advisories). 권고 API는 커넥터 미지원으로 조회하지 못했고 공식 페이지의 ‘게시된 권고 없음’을 확인했다. 이는 취약점 부재나 전이 의존성 감사 완료가 아니다. 실제 공동 편집·문자 단위 자동 병합이 필요해지면 당시 버전·provider·라이선스·입력/오프라인 요구를 다시 대조한다.
+
+Supabase의 현재 공식 [upsert 문서](https://supabase.com/docs/reference/javascript/upsert)는 `onConflict` 열에 따른 insert/update를 설명하며 앱의 revision CAS·영수증·충돌 양쪽 보존을 대신하지 않는다. 공식 [Storage ownership](https://supabase.com/docs/guides/storage/security/ownership)은 `owner_id` 자체가 접근제어가 아니고 RLS가 필요함을 명시한다. 따라서 기존 `auth.verify`·계정 소유 RPC·CAS/응답 유실 복구를 재사용한다. 새로 설치하거나 SDK 버전을 갱신한 것은 아니다. `changelog.md`는 웹 도구의 markdown 형식 미지원과 직접 요청 403으로 현재 변경 내역 확인이 제한되었고, 확인한 공식 search_docs API 문서와 한계를 분리한다. 이번 조사에서 운영 DB/Storage·개인 계정은 읽거나 변경하지 않았다.
+
 ## 자료 비교·개요에서 기존 글 완성 — 2026-10-19 KST
 
 공식 조회일은 2026-10-18 UTC(2026-10-19 KST). 자료를 나란히 읽고 필요한 구절·자기 문단을 고르는 이번 작업에 diff·드래그 라이브러리가 필요한지 비교했다. 새 의존성을 추가하지 않으며 기존 SourceReference/BlogEvidence·PhotoPost/Quill·idb·근거 파일을 재사용한다.

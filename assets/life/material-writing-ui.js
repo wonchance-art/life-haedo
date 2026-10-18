@@ -3,7 +3,7 @@
   'use strict';
   const life = root.HaedoLife ||= {};
   const el = (tag, text, cls) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (cls) n.className = cls; return n; };
-  function create({ storage, workspaceId, getBundle = () => storage.read(workspaceId), isCurrent = () => true, onDirty = () => {}, onOpenSource, onOpenPost, onClose }) {
+  function create({ storage, workspaceId, getBundle = () => storage.read(workspaceId), isCurrent = () => true, onDirty = () => {}, onOpenSource, onOpenPost, onClose, onPlanChange = () => {}, onCreatePost }) {
     const M = life.MaterialWriting, fresh = () => life.Core.id(), clone = value => structuredClone(value);
     let state = null, selected = null, host = null, surface = null, status = null, error = null, selector = null, blocks = null, copies = null, output = null;
     let sources = null, sourcesTask = null, sourceLoading = false, sourceView = null, sourcePlanId = null, view = null;
@@ -20,6 +20,9 @@
       if (!mounted() || !status) return;
       status.textContent = failure ? '저장하지 못함 · 입력 유지' : pendingFields.size ? '입력 확인 필요 · 입력 유지' : sourceLoading ? '자료를 불러오는 중…' : sources?.pending() ? '자료의 구절·입력을 마치거나 취소해 주세요.' : composing.size ? '입력 중' : saving ? '이 브라우저에 저장 중…' : tick !== stored ? '저장 전 변경 있음' : '이 브라우저에 비공개로 저장됨';
       status.dataset.state = failure ? 'error' : dirty() ? 'dirty' : 'saved';
+      for (const id of ['mwContinue', 'mwCreate', 'mwPreview']) {
+        const control = surface.querySelector('#' + id); if (control) control.disabled = sourceLoading || acting;
+      }
       const recovery = surface.querySelector('.mw-recovery');
       if (recovery) { recovery.hidden = !failure; recovery.querySelector('#mwRecover').hidden = !conflict(); }
       onDirty();
@@ -153,7 +156,9 @@
       await flushInternal(); guard(); if (!mounted()) return;
       if (accepted && accepted.tick !== tick) throw new Error('검토한 준비가 바뀌었습니다. 전체 글 미리보기를 다시 확인해 주세요.');
       const token = epoch, version = tick, baseline = JSON.stringify({ ...owner, output: null }), baseRevision = state.revision;
-      let result = await storage.createMaterialWritingPost(workspaceId, owner.id, baseRevision);
+      let result = typeof onCreatePost === 'function'
+        ? await onCreatePost({ workspaceId, planId: owner.id, expectedRevision: baseRevision })
+        : await storage.createMaterialWritingPost(workspaceId, owner.id, baseRevision);
       if (!mounted(token) || plan() !== owner) return;
       owner.output = { postId: result.postId }; stored = version; clearReview(); renderOutput();
       // A newly created output changes only this plan's receipt. A resume may
@@ -236,6 +241,7 @@
       if (!mounted()) return;
       clearReview(); if (sources) { sourceView = sourcePlanId === selected ? sources.getView?.() || sourceView : null; sources.dispose(); sources = null; }
       surface.replaceChildren(); composing.clear(); pendingFields.clear();
+      onPlanChange({ planId: selected });
       const toolbar = el('div', null, 'life-actions mw-toolbar'); selector = el('select'); selector.id = 'mwPlanSelect'; selector.setAttribute('aria-label', '작성 준비 선택');
       selector.addEventListener('change', async () => {
         const next = selector.value; try { await flush(); if (!mounted()) return; selected = next; sourceView = null; view = null; clear(); await render(); } catch (cause) { selector.value = selected || ''; report(cause); }
@@ -290,12 +296,24 @@
         const alert = el('p', cause.message || '작성 준비를 불러오지 못했습니다.', 'life-error'); alert.setAttribute('role', 'alert'); surface.replaceChildren(alert, button('작성 준비 다시 불러오기', () => mount(target, { planId })));
       }
     }
+    async function reload({ planId = null } = {}) {
+      await flush(); guard(); if (!mounted()) return;
+      const token = epoch, version = tick, previous = selected;
+      const next = await storage.readMaterialWriting(workspaceId);
+      if (!mounted(token)) return;
+      guard();
+      if (tick !== version || selected !== previous || acting || navigating) throw fault('material_input_pending', '조회하는 동안 입력이 바뀌었습니다. 현재 입력을 보관한 뒤 다시 불러와 주세요.');
+      M.validate(next); rememberView(); state = clone(next); stored = tick;
+      selected = planId || selected; if (!plan()) selected = state.plans[0]?.id || null;
+      if (selected !== previous) { sourceView = null; view = null; }
+      clear(); await render(); if (mounted(token)) restoreView();
+    }
     function detach() {
       rememberView(); epoch++; clearTimeout(timer); timer = null; clearReview(); sources?.dispose(); sources = null; sourcesTask = null; sourceLoading = false;
       host = surface = status = error = selector = blocks = copies = output = null; composing.clear(); pendingFields.clear();
     }
     function dispose() { detach(); disposed = true; state = null; sourceView = view = null; }
-    return { mount, flush, dirty, detach, dispose, getView: () => ({ planId: selected }) };
+    return { mount, reload, flush, dirty, detach, dispose, getView: () => ({ planId: selected }) };
   }
   life.MaterialWritingUI = Object.freeze({ create });
 })(globalThis);

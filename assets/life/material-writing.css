@@ -41,6 +41,19 @@
 .mw-output-tools.is-open{margin-top:0;border-top:0}
 #mwOutputTool{margin-top:28px;scroll-margin-top:24px}
 #mwOutputTool>button{margin-bottom:20px}
+.mw-continuity{min-width:0;margin-block:28px}
+.mc-panel{min-width:0;border-block:1px solid var(--line,#e3e9e6);padding-block:16px}
+.mc-panel>summary{display:list-item;min-height:44px;box-sizing:border-box;padding-block:10px;cursor:pointer;font-weight:600}
+.mc-detail,.mc-review-content,.mc-remote-content,.mc-conflict{min-width:0;margin-block:20px}
+.mc-payload{min-width:0;padding-block:8px 20px}
+.mc-text{white-space:pre-wrap!important;overflow-wrap:anywhere;word-break:normal;font:inherit;line-height:1.8;max-width:100%;box-sizing:border-box}
+.mc-originals>summary{min-height:44px;box-sizing:border-box;padding-block:10px;cursor:pointer}
+.mc-server-list,.mc-outline{padding-inline-start:24px;min-width:0}
+.mc-server-list>li,.mc-outline>li{min-width:0;margin-block:16px}
+.mc-panel .blog-manager-check{display:flex;align-items:center;gap:10px;min-height:44px;box-sizing:border-box;padding-block:8px;cursor:pointer;line-height:1.7}
+.mc-panel .blog-manager-check input[type=checkbox]{flex:0 0 20px;width:20px;height:20px;margin:0}
+.mc-panel [hidden]{display:none!important}
+.mc-panel :focus-visible{outline:3px solid var(--haedo-focus,#267a69);outline-offset:3px}
 .mw-workspace :focus-visible,.mw-output-tools :focus-visible{outline:3px solid var(--haedo-focus,#267a69);outline-offset:3px}
 .mw-workspace [hidden],.mw-output-tools [hidden]{display:none!important}
 @media(max-width:760px){.mw-compare{grid-template-columns:minmax(0,1fr);gap:20px}.mw-workspace label:has(>.mw-compare-select){display:none}.mw-material-body{min-height:240px}.mw-toolbar{gap:8px}.mw-toolbar select{flex-basis:100%}.mw-blocks{padding-left:24px}.mw-workspace h2{font-size:22px}}

@@ -18,7 +18,7 @@
   function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored, onLocalSaved = () => {},
     onBlogReturn = () => {}, onBlogModeChange = () => {},
     onSelectionUsed = () => {}, onSelectionCancel = () => {}, onArrange = () => {}, onWorkbenchNavigate = () => {}, onChapterImport = () => {},
-    shareRemoteFactory = () => life.ShareRemote?.createOwner({ auth: global.HaedoAuth }),
+    onBundleUpdated = () => {}, shareRemoteFactory = () => life.ShareRemote?.createOwner({ auth: global.HaedoAuth }),
     sharePublicUrl = publicId => { const url = new URL('share.html', global.location.href); url.searchParams.set('id', publicId); return url.href; },
     beforeRestore = async () => {}, isDisposed = () => false }) {
     const model = life.Workbench;
@@ -1054,12 +1054,15 @@
     }
     function renderMaterialWriting(session, token) {
       const active = () => showing(token, session) && session.materialOpen;
+      session.materialContinuity ||= life.MaterialContinuitySync.create({ storage, auth: global.HaedoAuth });
       const prepareHost = el('section'), output = el('section', null, 'mw-output-tools');
+      const continuityHost = el('section', null, 'mw-continuity');
+      let continuityUI = null;
       const outputHeading = el('h3', '완성 글 활용'), outputActions = el('div', null, 'life-actions');
       const toolHost = el('section'); toolHost.id = 'mwOutputTool'; toolHost.hidden = true;
       let manager = null, sync = null, preservation = null, toolSequence = 0;
-      const closeTool = () => { toolSequence++; manager?.dispose(); sync?.dispose(); preservation?.dispose(); manager = sync = preservation = null; toolHost.replaceChildren(); toolHost.hidden = true; prepareHost.hidden = false; outputActions.hidden = false; output.classList.remove('is-open'); outputHeading.textContent = '완성 글 활용'; };
-      const tool = { flush: async () => { await manager?.flush(); preservation?.flush(); }, dirty: () => !!manager?.dirty() || !!preservation?.dirty() };
+      const closeTool = () => { toolSequence++; manager?.dispose(); sync?.dispose(); preservation?.dispose(); manager = sync = preservation = null; toolHost.replaceChildren(); toolHost.hidden = true; prepareHost.hidden = false; continuityHost.hidden = false; outputActions.hidden = false; output.classList.remove('is-open'); outputHeading.textContent = '완성 글 활용'; };
+      const tool = { flush: async () => { await manager?.flush(); preservation?.flush(); await continuityUI?.flush(); }, dirty: () => !!manager?.dirty() || !!preservation?.dirty() || !!continuityUI?.dirty() };
       session.materialTool = tool;
       const openPost = async context => {
         const targetCurrent = () => active() && session.materialUI?.getView().planId === context.planId;
@@ -1101,10 +1104,32 @@
         getBundle: () => storage.read(session.workspaceId), isCurrent: () => workspaceIs(session),
         onDirty: () => updateStatus(session), onOpenSource: context => session.materialCallbacks.source(context),
         onOpenPost: context => session.materialCallbacks.openPost(context),
+        onCreatePost: context => session.materialContinuity.handoff(session.workspaceId, context.planId, context.expectedRevision),
+        onPlanChange: () => { if (active()) continuityUI?.refresh().catch(error => { if (active()) report(error, session); }); },
         onClose: async () => { if (!session.materialOpen || !workspaceIs(session)) return; session.materialOpen = false; clearError(); redraw(); surface.querySelector('#wbPageMaterialWriting')?.focus(); } });
       session.materialCallbacks = { source, openPost };
       const mount = session.materialUI.mount(prepareHost, { planId: session.materialPlanId || null });
       mount.catch(error => { if (active()) report(error, session); });
+      continuityUI = life.MaterialContinuityUI.create({ host: continuityHost, manager: session.materialContinuity, workspaceId: session.workspaceId,
+        getPlanId: () => session.materialUI.getView().planId, beforeAction: () => session.materialUI.flush(),
+        onDirty: () => updateStatus(session), isCurrent: active,
+        onReceived: async result => {
+          if (!active()) return;
+          const selectedBefore = session.materialUI.getView().planId;
+          const stillReceiving = () => active() && session.materialUI.getView().planId === selectedBefore;
+          if (result.workspaceId === session.workspaceId) {
+            const bundle = await storage.read(result.workspaceId); if (!stillReceiving()) return;
+            await onBundleUpdated(bundle); if (!stillReceiving()) return;
+            session.materialPlanId = result.planId;
+            await session.materialUI.reload({ planId: result.planId }); return;
+          }
+          const next = sessionFor(result.workspaceId); next.materialOpen = true; next.materialPlanId = result.planId;
+          await beforeRestore(); if (!stillReceiving()) return;
+          const bundle = await storage.read(result.workspaceId); if (!stillReceiving()) return;
+          await storage.setActive(result.workspaceId); if (!stillReceiving()) return;
+          await onRestored?.({ bundle });
+        } });
+      mount.then(() => { if (active()) return continuityUI.refresh(); }).catch(error => { if (active()) report(error, session); });
       output.append(outputHeading, el('p', '준비에서 만든 글을 저장한 뒤 공개 내용을 검토하거나, 그 글과 채택한 정확한 근거를 파일로 보관합니다. 비교 메모와 질문은 이 파일에 들어가지 않습니다.', 'life-help'));
       async function openOutput(kind) {
         const planId = session.materialUI.getView().planId;
@@ -1116,7 +1141,7 @@
         if (!plan?.output) throw fault('material_output_missing', '먼저 미리보기를 확인해 글 초안을 만들어 주세요.');
         const doc = await storage.readPhotoPost(session.workspaceId, plan.output.postId); if (!requested()) return;
         if (kind === 'file' && doc.status !== 'saved') throw fault('material_output_draft', '작성기에서 글을 저장한 뒤 근거 파일로 보관해 주세요.');
-        session.materialPlanId = planId; closeTool(); toolHost.hidden = false; prepareHost.hidden = true; outputActions.hidden = true; output.classList.add('is-open'); outputHeading.textContent = doc.title || '제목 없는 글';
+        session.materialPlanId = planId; closeTool(); toolHost.hidden = false; prepareHost.hidden = true; continuityHost.hidden = true; outputActions.hidden = true; output.classList.add('is-open'); outputHeading.textContent = doc.title || '제목 없는 글';
         const mountedSequence = toolSequence;
         const currentTool = () => active() && mountedSequence === toolSequence && session.materialUI.getView().planId === planId;
         const close = action('활용 화면 닫기', async () => { await tool.flush(); if (active()) closeTool(); });
@@ -1142,8 +1167,8 @@
       }
       const manage = action('이 글 공개·보관 관리', () => openOutput('public')); manage.id = 'mwManageOutput';
       const preserve = action('이 글 근거 파일 보관·복원', () => openOutput('file')); preserve.id = 'mwPreserveOutput';
-      outputActions.append(manage, preserve); output.append(outputActions, toolHost); bodyNode.append(prepareHost, output);
-      viewCleanups.push(() => { session.materialUI.detach(); closeTool(); if (session.materialTool === tool) session.materialTool = null; });
+      outputActions.append(manage, preserve); output.append(outputActions, toolHost); bodyNode.append(prepareHost, continuityHost, output);
+      viewCleanups.push(() => { continuityUI.dispose(); session.materialUI.detach(); closeTool(); if (session.materialTool === tool) session.materialTool = null; });
     }
     function renderPage() {
       const session = current, page = session.state.page;
@@ -3180,7 +3205,7 @@
     function dispose() {
       disposed = true; leave();
       shareRemote?.dispose();
-      sessions.forEach(session => { clearTimeout(session.timer); session.composer?.dispose(); session.photoPosts?.dispose(); session.seriesEditor?.dispose(); session.seriesReader?.dispose(); session.unsubscribe?.(); });
+      sessions.forEach(session => { clearTimeout(session.timer); session.composer?.dispose(); session.photoPosts?.dispose(); session.materialUI?.dispose(); session.materialContinuity?.dispose(); session.seriesEditor?.dispose(); session.seriesReader?.dispose(); session.unsubscribe?.(); });
       urls.forEach(url => URL.revokeObjectURL(url)); urls.clear();
     }
     return Object.freeze({ render, flush, dirty, leave, dispose });
