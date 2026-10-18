@@ -6,8 +6,8 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const script = path.resolve(__dirname, '../scripts/update-discovery-feed.py');
-const ids = ['naver-d2', 'seoul-culture', 'woowahan-tech'];
-const hosts = ['d2.naver.com', 'news.seoul.go.kr', 'techblog.woowahan.com'];
+const ids = ['naver-d2', 'seoul-culture', 'woowahan-tech', 'readersnews-books', 'seoul-environment'];
+const hosts = ['d2.naver.com', 'news.seoul.go.kr', 'techblog.woowahan.com', 'www.readersnews.com', 'news.seoul.go.kr'];
 const first = '2026-10-18T12:00:00Z';
 const next = '2026-10-19T12:00:00Z';
 
@@ -42,7 +42,7 @@ test('official metadata contract distinguishes publication, update, fetch and ri
   const w = workspace(t);
   assert.equal(update(w).status, 0);
   const c = JSON.parse(fs.readFileSync(w.output));
-  assert.equal(c.articles.length, 3);
+  assert.equal(c.articles.length, ids.length);
   assert.equal(c.schemaVersion, 1);
   assert.equal(c.generatedAt, first);
   for (const s of c.sources) {
@@ -117,7 +117,7 @@ for (const failure of ['missing', 'malformed', 'entity', 'robots']) {
     assert.equal(s.lastAttemptAt, next);
     delete old.bodyText;
     assert.deepEqual(after.articles.find(a => a.sourceId === 'naver-d2'), old);
-    assert.equal(after.sources.filter(s => s.status === 'ok').length, 2);
+    assert.equal(after.sources.filter(s => s.status === 'ok').length, ids.length - 1);
     assert.equal(after.sources.find(s => s.id === 'seoul-culture').lastSuccessAt, next);
     assert.doesNotMatch(JSON.stringify(after), /DO_NOT_RETAIN_BODY/);
     assert.equal(JSON.parse(fs.readFileSync(w.report)).sources[0].retainedArticles, 1);
@@ -165,4 +165,64 @@ with m.tempfile.TemporaryDirectory() as d:
  print(json.dumps({'preserved':p.read_text()=='previous','files':[x.name for x in m.Path(d).iterdir()]}))
 `);
   assert.deepEqual(actual, { preserved: true, files: ['feed.json'] });
+});
+
+test('collector and browser canonical query identities agree without reserializing required values', () => {
+  const Discovery = require('../assets/life/discovery.js');
+  const urls = [
+    'https://d2.naver.com/article?q=one%20two&sig=a~b&x=%2f&x=2&utm_source=feed#detail',
+    'https://d2.naver.com/article?sig=a%2Bb%2fc&ref=feed&source=official&fbclid=x',
+    'https://d2.naver.com/article?empty=&flag&newsId=42&%75tm_source=feed&MC_EID=x',
+    'https://d2.naver.com/article?q=서울&sig=~a+%2f&%FFbad=value&utm_medium=r',
+    "https://d2.naver.com/article?q='quoted'&id=1&id=2&gclid=x"
+  ];
+  const actual = python(`\nurls=${JSON.stringify(urls)}\nprint(json.dumps([m.approved_url(url,['d2.naver.com'],canonical=True) for url in urls]))\n`);
+  assert.deepEqual(actual, urls.map(Discovery.canonicalUrl));
+  assert.match(actual[0], /q=one%20two&sig=a~b&x=%2f&x=2$/);
+  assert.match(actual[1], /sig=a%2Bb%2fc&ref=feed&source=official$/);
+});
+
+test('future publication timestamps remain labeled and cannot outrank genuinely published metadata', () => {
+  const actual = python(`
+now=m.datetime(2026,10,18,12,tzinfo=m.timezone.utc)
+xml=b'<rss><channel><item><title>Future</title><link>https://d2.naver.com/future</link><pubDate>2026-10-18T20:00:00Z</pubDate></item><item><title>Published</title><link>https://d2.naver.com/published</link><pubDate>2026-10-18T11:00:00Z</pubDate></item></channel></rss>'
+articles,_=m.parse_feed(xml,m.SOURCES[0],now)
+print(json.dumps({'ordered':[a['title'] for a in articles],'future':articles[1],'futureSortDate':m.article_date(articles[1]),'grace':m.parse_date('2026-10-18T12:05:00Z',m.SOURCES[0],now),'afterGrace':m.parse_date('2026-10-18T12:05:01Z',m.SOURCES[0],now),'seoulLocal':m.parse_date('2026-10-18 21:00:00',m.SOURCES[1],now),'invalid':m.parse_date('2026-02-30T00:00:00Z',m.SOURCES[0],now)}))
+`);
+  assert.deepEqual(actual.ordered, ['Published', 'Future']);
+  assert.equal(actual.future.publishedAt, '2026-10-18T20:00:00Z');
+  assert.equal(actual.future.dateStatus, 'future'); assert.equal(actual.future.dateBasis, 'unknown');
+  assert.equal(actual.futureSortDate, ''); assert.equal(actual.grace[1], 'valid'); assert.equal(actual.afterGrace[1], 'future');
+  assert.deepEqual(actual.seoulLocal, ['2026-10-18T12:00:00Z', 'valid']); assert.deepEqual(actual.invalid, [null, 'invalid']);
+});
+
+for (const damage of ['lastSuccessAt', 'lastAttemptAt', 'generatedAt', 'success-after-attempt']) {
+  test(`corrupt prior ${damage} is refused before replacing any existing catalog bytes`, t => {
+    const w = workspace(t); assert.equal(update(w).status, 0);
+    const before = JSON.parse(fs.readFileSync(w.output));
+    if (damage === 'generatedAt') before.generatedAt = 'invalid';
+    else if (damage === 'success-after-attempt') { before.sources[0].lastSuccessAt = next; before.sources[0].lastAttemptAt = first; }
+    else before.sources[0][damage] = 'not-a-date';
+    const bytes = JSON.stringify(before); fs.writeFileSync(w.output, bytes);
+    assert.equal(update(w, next).status, 1); assert.equal(fs.readFileSync(w.output, 'utf8'), bytes);
+  });
+}
+
+test('robots denial or service failure cannot be treated as missing policy; rights remain metadata-only', () => {
+  const actual = python(`
+import urllib.error
+source=m.SOURCES[0]
+def missing(url,source,limit):raise urllib.error.HTTPError(url,404,'not found',{},None)
+def unavailable(url,source,limit):raise urllib.error.HTTPError(url,503,'unavailable',{},None)
+def denied(url,source,limit):return b'User-agent: *\\nDisallow: /\\n',{'sha256':'fixture'}
+results={'missing':m.check_robots(source,missing)['status']}
+for key,fetcher in [('unavailable',unavailable),('denied',denied)]:
+ try:m.check_robots(source,fetcher);results[key]='accepted'
+ except Exception:results[key]='rejected'
+unreviewed=m.copy.deepcopy(source);unreviewed['rights']['mode']='full_text_allowed'
+try:m.parse_feed(b'<rss><channel/></rss>',unreviewed,m.datetime.now(m.timezone.utc));results['rights']='accepted'
+except m.FeedError:results['rights']='rejected'
+print(json.dumps(results))
+`);
+  assert.deepEqual(actual, { missing: 'not_provided', unavailable: 'rejected', denied: 'rejected', rights: 'rejected' });
 });

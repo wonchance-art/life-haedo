@@ -1,0 +1,56 @@
+{
+  "createdAt": "2026-10-18T18:42:33.816Z",
+  "oldCache": "haedo-v130",
+  "newCache": "haedo-v131",
+  "passed": 9,
+  "browser": "151.0.7922.173",
+  "shellAssets": 126,
+  "catalogGETs": 7,
+  "consoleErrors": 0,
+  "pageErrors": 0,
+  "modelRequests": 0,
+  "unexpectedExternal": 0,
+  "expectedTransportErrors": 6,
+  "blockedProbes": [
+    {
+      "rejected": true
+    },
+    {
+      "rejected": true
+    },
+    {
+      "rejected": true
+    }
+  ],
+  "installed": [
+    {
+      "file": "assets/life/discovery.js",
+      "sha256": "bf514ade159c5b7a815c07123ad7d1e6905596a87ab1cb7eadc9f04c9c329196"
+    },
+    {
+      "file": "assets/life/discovery-profile.js",
+      "sha256": "3d7424eeb3db46fcf9f933544a7a2ba925e5a01de0615051b79f877dbc62d7d5"
+    },
+    {
+      "file": "assets/life/discovery-ui.js",
+      "sha256": "f002f061016175cd35c4adc0a7ba5bc103cec043057793e1681c34eb39e13efe"
+    },
+    {
+      "file": "assets/life/discovery.css",
+      "sha256": "90dd0c14a622bea454dd16bb6e2b5a5e2d8d3eaed85294b6e7b9bc8cf6423905"
+    }
+  ],
+  "installedMatchesCurrent": true,
+  "newSwSHA256": "ff3dbfeddc0e6c182f371b49e053edbc51b4b343d8b28194c61481472c25df18",
+  "feedSHA256": "6a6c63e520328e283d01ca8283a6b9c2259295f5c37fc05d2fb49b27ba057684",
+  "coreSHA256": "bf514ade159c5b7a815c07123ad7d1e6905596a87ab1cb7eadc9f04c9c329196",
+  "testSHA256": "8fe71eba3df5eeb8ae9778de8c893d55cba4b3939f36b00a88c190311af77ae9",
+  "fixtureV129SHA256": "3081da4bca878b00c076349073b02895ffb1be956275055d89d48c5767f187b1",
+  "fixtureV130SHA256": "ceee25a2669398a40787766c4692db1fdb91363831e5dbf0b0c44d3c45dddf2b",
+  "pwaReportSHA256": "2de3809feaf84321de32bdff2c815c8073e8da1a5e28d2661f3aceee6373552b",
+  "prepareSite": {
+    "pass": 2,
+    "fail": 0,
+    "logSHA256": "578985b9cd8eeadda8cc4bfd7773215e35b959b03e780368fabfee74fc2d4371"
+  }
+}

@@ -9,7 +9,9 @@
   const ALLOWED_SOURCES = Object.freeze({
     'naver-d2': Object.freeze(['d2.naver.com']),
     'seoul-culture': Object.freeze(['news.seoul.go.kr']),
-    'woowahan-tech': Object.freeze(['techblog.woowahan.com'])
+    'woowahan-tech': Object.freeze(['techblog.woowahan.com']),
+    'readersnews-books': Object.freeze(['www.readersnews.com']),
+    'seoul-environment': Object.freeze(['news.seoul.go.kr'])
   });
   // Small, public and inspectable equivalences. No broader topic inference.
   const ALIASES = Object.freeze([
@@ -132,7 +134,9 @@
   const word = value => !!value && /[\p{L}\p{N}_]/u.test(value);
   function endBoundary(value, end, term) {
     if (!word(term[term.length - 1]) || !word(value[end])) return true;
-    return /[가-힣]/.test(term) && /^(?:(?:으로|에서|에게|부터|까지|보다|처럼|와|과|은|는|이|가|을|를|의|에|로|도|만)){1,3}(?=$|[^\p{L}\p{N}_])/u.test(value.slice(end));
+    // Korean particles also attach to Latin terms (AI가, AI에게). The suffix
+    // must finish at a real boundary; arbitrary continuations remain excluded.
+    return /^(?:(?:으로|에서|에게|부터|까지|보다|처럼|와|과|은|는|이|가|을|를|의|에|로|도|만)){1,3}(?=$|[^\p{L}\p{N}_])/u.test(value.slice(end));
   }
   function spans(value, term) {
     const haystack = fold(value), needle = fold(term); const result = []; let start = 0;

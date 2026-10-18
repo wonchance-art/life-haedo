@@ -1,0 +1,128 @@
+{
+  "createdAt": "2026-10-18T18:42:33.816Z",
+  "checks": [
+    "actual v130 installs without fetching catalog, original sites or model assets",
+    "v130 -> current worker preserves exact originals, workbench, manual interests and feedback",
+    "new local modules match installed hashes; public feed and model weights stay outside app SHELL",
+    "explicit catalog load uses one fixed public URL and separates browser receipt from collection time",
+    "a newer published catalog is fetched without worker update and failed refresh returns explicitly stale data",
+    "verified offline session saves private feedback and cached-shell reload preserves it",
+    "excluded feedback can be restored after reload without mutating source data or manual interests",
+    "catalog with no previous cache fails visibly; strict offline Auth still blocks private boot and recovery preserves data",
+    "catalog query, authorization and body probes fail before reaching the static host"
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedTransportErrors": [
+    "Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+    "Failed to load resource: net::ERR_FAILED",
+    "Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+    "Failed to load resource: net::ERR_FAILED",
+    "Failed to load resource: net::ERR_FAILED",
+    "Failed to load resource: net::ERR_FAILED"
+  ],
+  "modelRequests": [],
+  "unexpectedExternal": [],
+  "catalogRequests": [
+    {
+      "method": "GET",
+      "queryCount": 0,
+      "hasCookie": false,
+      "hasAuthorization": false,
+      "hasBody": false,
+      "referer": null
+    },
+    {
+      "method": "GET",
+      "queryCount": 0,
+      "hasCookie": false,
+      "hasAuthorization": false,
+      "hasBody": false,
+      "referer": null
+    },
+    {
+      "method": "GET",
+      "queryCount": 0,
+      "hasCookie": false,
+      "hasAuthorization": false,
+      "hasBody": false,
+      "referer": null
+    },
+    {
+      "method": "GET",
+      "queryCount": 0,
+      "hasCookie": false,
+      "hasAuthorization": false,
+      "hasBody": false,
+      "referer": null
+    },
+    {
+      "method": "GET",
+      "queryCount": 0,
+      "hasCookie": false,
+      "hasAuthorization": false,
+      "hasBody": false,
+      "referer": null
+    },
+    {
+      "method": "GET",
+      "queryCount": 0,
+      "hasCookie": false,
+      "hasAuthorization": false,
+      "hasBody": false,
+      "referer": null
+    },
+    {
+      "method": "GET",
+      "queryCount": 0,
+      "hasCookie": false,
+      "hasAuthorization": false,
+      "hasBody": false,
+      "referer": null
+    }
+  ],
+  "blockedProbes": [
+    {
+      "rejected": true
+    },
+    {
+      "rejected": true
+    },
+    {
+      "rejected": true
+    }
+  ],
+  "scope": "Real Chromium SDK/IndexedDB/Service Worker. Only v130 sw.js is prior code; all app modules are current. Real prepared public catalog served by an anonymous local fixture; synthetic title/build-time update for freshness tests. Mocked Auth response during cached-shell reload is separate from strict offline Auth refusal. No production, Apple device, upstream collection or model validation.",
+  "oldCache": "haedo-v130",
+  "newCache": "haedo-v131",
+  "oldSwSHA256": "ceee25a2669398a40787766c4692db1fdb91363831e5dbf0b0c44d3c45dddf2b",
+  "newSwSHA256": "ff3dbfeddc0e6c182f371b49e053edbc51b4b343d8b28194c61481472c25df18",
+  "browser": "151.0.7922.173",
+  "installed": [
+    {
+      "file": "assets/life/discovery.js",
+      "sha256": "bf514ade159c5b7a815c07123ad7d1e6905596a87ab1cb7eadc9f04c9c329196"
+    },
+    {
+      "file": "assets/life/discovery-profile.js",
+      "sha256": "3d7424eeb3db46fcf9f933544a7a2ba925e5a01de0615051b79f877dbc62d7d5"
+    },
+    {
+      "file": "assets/life/discovery-ui.js",
+      "sha256": "f002f061016175cd35c4adc0a7ba5bc103cec043057793e1681c34eb39e13efe"
+    },
+    {
+      "file": "assets/life/discovery.css",
+      "sha256": "90dd0c14a622bea454dd16bb6e2b5a5e2d8d3eaed85294b6e7b9bc8cf6423905"
+    }
+  ],
+  "shellAssets": 126,
+  "catalogFreshness": {
+    "firstGeneratedAt": "2026-10-18T18:41:59Z",
+    "updatedGeneratedAt": "2026-10-18T18:42:40.689Z",
+    "browserFetchedAt": "2026-10-18T18:42:39.758Z",
+    "fallbackPreservedBrowserFetchedAt": "2026-10-18T18:42:39.758Z"
+  },
+  "realRemoteWrites": 0,
+  "pass": true
+}

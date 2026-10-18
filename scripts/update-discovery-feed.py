@@ -48,6 +48,14 @@ SOURCES = (
      'feedUrl': 'https://techblog.woowahan.com/feed/', 'allowedHosts': ['techblog.woowahan.com'],
      'language': 'ko', 'timezone': '+09:00', 'rights': {'mode': 'metadata_only',
      'label': '원문 권리 유지 · 제목과 링크 정보만 제공', 'url': 'https://techblog.woowahan.com/'}},
+    {'id': 'readersnews-books', 'name': '독서신문', 'url': 'https://www.readersnews.com/',
+     'feedUrl': 'https://www.readersnews.com/rss/allArticle.xml', 'allowedHosts': ['www.readersnews.com'],
+     'language': 'ko', 'timezone': '+09:00', 'rights': {'mode': 'metadata_only',
+     'label': '공식 RSS 제목·링크 이용 범위 · 본문 미확보', 'url': 'https://www.readersnews.com/rssIndex.html'}},
+    {'id': 'seoul-environment', 'name': '서울시 환경', 'url': 'https://news.seoul.go.kr/env',
+     'feedUrl': 'https://news.seoul.go.kr/env/feed', 'allowedHosts': ['news.seoul.go.kr'],
+     'language': 'ko', 'timezone': '+09:00', 'rights': {'mode': 'metadata_only',
+     'label': '원문별 이용 조건 확인 · 제목과 링크 정보만 제공', 'url': 'https://news.seoul.go.kr/env'}},
 )
 
 
@@ -107,9 +115,11 @@ def parse_date(value, source, now):
         if date.tzinfo is None:
             # Seoul's official RSS emits local post_date without an offset.
             date = date.replace(tzinfo=timezone(timedelta(hours=9))) if source.get('timezone') == '+09:00' else None
-        if date is None or date > now + timedelta(days=1):
+        if date is None:
             return None, 'invalid'
-        return iso(date), 'valid'
+        # Keep the official timestamp, but never call a scheduled/future item
+        # a published fresh item. This matches the browser's five-minute grace.
+        return iso(date), 'future' if date > now + timedelta(minutes=5) else 'valid'
     except (ValueError, TypeError, OverflowError):
         return None, 'invalid'
 
@@ -129,9 +139,25 @@ def approved_url(value, hosts, *, canonical=False):
         query = parsed.query
         fragment = parsed.fragment
         if canonical:
-            pairs = [(key, val) for key, val in urllib.parse.parse_qsl(query, keep_blank_values=True)
-                     if not key.lower().startswith('utm_') and key.lower() not in TRACKING]
-            query = urllib.parse.urlencode(pairs)
+            # Do not decode/re-encode identity values: parse_qsl/urlencode
+            # changes %20 to +, percent-escape case and signed query spelling.
+            # Decode just each key to recognize known marketing parameters.
+            parts = query.split('&') if query else []
+            kept = []
+            for part in parts:
+                key = part.split('=', 1)[0]
+                try:
+                    key = urllib.parse.unquote_plus(key, encoding='utf-8', errors='strict')
+                except UnicodeError:
+                    pass
+                if not key.lower().startswith('utm_') and key.lower() not in TRACKING:
+                    kept.append(part)
+            query = '&'.join(kept)
+            # Match the browser URL constructor for unescaped Unicode and the
+            # HTTPS special-query encode set without changing existing %XX,
+            # plus signs, duplicate keys, delimiters or key order.
+            safe_query = ''.join(chr(code) for code in range(33, 127) if chr(code) not in '\"#<>\'')
+            query = urllib.parse.quote(query, safe=safe_query, encoding='utf-8', errors='strict')
             fragment = ''
         return urllib.parse.urlunsplit(('https', host, parsed.path or '/', query, fragment))
     except FeedError:
@@ -236,12 +262,20 @@ def author_name(value):
     return value[:120] or None
 
 
+def article_date(article):
+    if article.get('dateStatus') == 'valid':
+        return article.get('publishedAt') or ''
+    if article.get('updatedDateStatus') == 'valid':
+        return article.get('updatedAt') or ''
+    return ''
+
+
 def parse_feed(body, source, now, limit=20):
     if source['rights']['mode'] != 'metadata_only':
         raise FeedError('검토되지 않은 재배포 권한')
     if len(body) > MAX_FEED_BYTES:
         raise FeedError('피드 크기 제한 초과')
-    # The three reviewed feeds are UTF-8. Reject other encodings before inspecting XML
+    # The reviewed feeds are UTF-8. Reject other encodings before inspecting XML
     # so a UTF-16 declaration cannot bypass the DTD/entity check with NUL bytes.
     try:
         decoded = body.decode('utf-8-sig')
@@ -293,7 +327,7 @@ def parse_feed(body, source, now, limit=20):
             canonical = approved_url(url, source['allowedHosts'], canonical=True)
             published, date_status = parse_date(published_raw, source, now)
             updated, updated_status = parse_date(updated_raw, source, now)
-            date_basis = 'published' if published else 'updated' if updated else 'unknown'
+            date_basis = 'published' if date_status == 'valid' else 'updated' if updated_status == 'valid' else 'unknown'
             article = {
                 'id': 'article-' + source['id'] + '-' + hashlib.sha256(canonical.encode()).hexdigest()[:20],
                 'sourceId': source['id'], 'url': url, 'canonicalUrl': canonical, 'title': title,
@@ -303,11 +337,11 @@ def parse_feed(body, source, now, limit=20):
                 'summary': '', 'coverage': 'link_only', 'rights': copy.deepcopy(source['rights']), 'fetchedAt': iso(now),
             }
             prior = articles.get(canonical)
-            if prior is None or (published or updated or '') > (prior['publishedAt'] or prior['updatedAt'] or ''):
+            if prior is None or article_date(article) > article_date(prior):
                 articles[canonical] = article
         except (FeedError, ValueError, TypeError):
             rejected += 1
-    ordered = sorted(articles.values(), key=lambda item: (item['publishedAt'] or item['updatedAt'] or '', item['canonicalUrl']), reverse=True)
+    ordered = sorted(articles.values(), key=lambda item: (article_date(item), item['canonicalUrl']), reverse=True)
     if not ordered:
         raise FeedError('허용되는 글 항목이 없는 피드')
     return ordered[:limit], {'feedEntries': len(entries), 'acceptedEntries': len(ordered), 'rejectedEntries': rejected}
@@ -366,7 +400,7 @@ def refresh_one(source, previous, now, fetcher):
         stage = 'parse'
         articles, stats = parse_feed(body, source, now)
         public.update({'lastSuccessAt':iso(now),'fetchedAt':iso(now),'status':'ok','stale':False,'error':None,
-                       'entryCount':len(articles),'latestArticleAt':max((a['publishedAt'] or a['updatedAt'] or '' for a in articles),default=None) or None})
+                       'entryCount':len(articles),'latestArticleAt':max((article_date(a) for a in articles),default=None) or None})
         evidence.update(stats)
         evidence['status'] = 'ok'
         return public, articles, evidence
@@ -420,6 +454,38 @@ def load_previous(path):
     previous = json.loads(path.read_text(encoding='utf-8'))
     if not isinstance(previous,dict) or previous.get('schemaVersion')!=1 or not isinstance(previous.get('sources'),list) or not isinstance(previous.get('articles'),list):
         raise FeedError('기존 카탈로그 형식 오류: 파일 보존')
+    try:
+        generated = previous.get('generatedAt')
+        if not isinstance(generated, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z', generated):
+            raise ValueError('invalid timestamp')
+        datetime.fromisoformat(generated.replace('Z', '+00:00'))
+    except ValueError as cause:
+        raise FeedError('기존 카탈로그 시각 형식 오류: 파일 보존') from cause
+    source_ids = set()
+    for source in previous['sources']:
+        if not isinstance(source, dict) or not isinstance(source.get('id'), str) or not source['id'] or source['id'] in source_ids:
+            raise FeedError('기존 공급 상태 형식 오류: 파일 보존')
+        source_ids.add(source['id'])
+        if source.get('status') not in ('ok', 'error', 'never_fetched') or not isinstance(source.get('stale'), bool):
+            raise FeedError('기존 공급 상태 형식 오류: 파일 보존')
+        stamps = {}
+        for field in ('lastSuccessAt', 'lastAttemptAt'):
+            value = source.get(field)
+            if value is None:
+                stamps[field] = None
+                continue
+            try:
+                if not isinstance(value, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z', value):
+                    raise ValueError('invalid timestamp')
+                stamps[field] = datetime.fromisoformat(value.replace('Z', '+00:00'))
+            except ValueError as cause:
+                raise FeedError('기존 공급 시각 형식 오류: 파일 보존') from cause
+        if source['status'] == 'error' and stamps['lastAttemptAt'] is None:
+            raise FeedError('기존 공급 시도 시각 없음: 파일 보존')
+        if source['status'] == 'ok' and (stamps['lastSuccessAt'] is None or stamps['lastAttemptAt'] is None):
+            raise FeedError('기존 공급 성공 시각 없음: 파일 보존')
+        if stamps['lastSuccessAt'] and stamps['lastAttemptAt'] and stamps['lastSuccessAt'] > stamps['lastAttemptAt']:
+            raise FeedError('기존 공급 시각 순서 오류: 파일 보존')
     return previous
 
 

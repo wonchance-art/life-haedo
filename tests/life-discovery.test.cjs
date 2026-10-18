@@ -34,6 +34,16 @@ test('manual labels alone drive retrieval; inferred interests and positive words
   assert.equal(rank(catalog, '인공지능에는 관심이 없다').items.length, 0);
   assert.equal(rank(catalog, '기술과 과학').items.length, 0);
 });
+test('reviewed book and environment sources accept their exact HTTPS hosts while rejecting lookalikes', () => {
+  for (const [sourceId, host] of [['readersnews-books', 'www.readersnews.com'], ['seoul-environment', 'news.seoul.go.kr']]) {
+    const catalog = feed([article('new-public', '신간 소개')]);
+    Object.assign(catalog.sources[0], { id: sourceId, name: '검토한 공개 출처', url: `https://${host}/`, feedUrl: `https://${host}/feed` });
+    Object.assign(catalog.articles[0], { sourceId, url: `https://${host}/article?id=1` });
+    assert.equal(rank(catalog, '신간').items.length, 1);
+    catalog.articles[0].url = `https://${host}.evil.example/article?id=1`;
+    assert.equal(rank(catalog, '신간').items.length, 0);
+  }
+});
 test('Korean particles are boundaries while unrelated word substrings and English substrings are rejected', () => {
   const catalog = feed([article('actor', '배우와 배경을 살펴본다'), article('pear', '배를 기르는 방법'), article('rail', 'RAIL PAID details'), article('ai', 'AI tools')]);
   const korean = rank(catalog, '배'); assert.deepEqual(korean.items.map(row => row.article.id), ['pear']); assert.equal(korean.items[0].reasons[0].quote, '배');
@@ -42,6 +52,20 @@ test('Korean particles are boundaries while unrelated word substrings and Englis
 test('ambiguous broad translations are not silently added to a manual topic', () => {
   const result = rank(feed([article('city', 'Reading city railway guide')]), '독서'); assert.equal(result.items.length, 0);
   assert(Discovery.ALIASES.some(group => group.includes('artificial intelligence')));
+});
+test('Latin interest terms accept complete Korean particles without admitting arbitrary continuations', () => {
+  const catalog = feed([
+    article('ai-subject', '😀 AI가 분석한 결과'), article('ai-object', 'AI에게 실패를 묻다'),
+    article('ai-chain', 'AI에서도 확인한 표현'), article('wrong-word', 'RAIL PAID details'),
+    article('wrong-tail', 'AI가나다 이야기'), article('performance-brand', '공연봄날 운영 안내')
+  ]);
+  const result = rank(catalog, 'AI');
+  assert.deepEqual(result.items.map(row => row.article.id).sort(), ['ai-chain', 'ai-object', 'ai-subject']);
+  for (const row of result.items) for (const reason of row.reasons) {
+    assert.equal(reason.field, 'title'); assert.equal(reason.quote, 'AI');
+    assert.equal(row.article.title.slice(reason.start, reason.end), reason.quote);
+  }
+  assert.equal(rank(catalog, '공연').items.length, 0);
 });
 test('every reason reproduces the exact public field span including emoji and CRLF offsets', () => {
   const catalog = feed([article('offsets', '😀 인공지능의 연구\r\n이야기', { tags: ['인공지능'] })]); const result = rank(catalog);

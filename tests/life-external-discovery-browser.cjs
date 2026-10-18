@@ -8,6 +8,8 @@ process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { createHash } = require('node:crypto');
+const Discovery = require('../assets/life/discovery.js');
 const { FakeCloud, accounts, cloud, base, openAccount } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, settle, nav } = require('./unified-home-browser.cjs');
 const out = path.resolve(process.env.EXTERNAL_DISCOVERY_OUTPUT || path.join(__dirname, '../.local/external-discovery-browser'));
@@ -77,6 +79,12 @@ async function returnToDiscovery(page) {
 }
 async function main() {
   await fs.mkdir(out, { recursive: true });
+  const publicFeedPath = path.resolve(__dirname, '../assets/life/discovery-feed.json'), corePath = path.resolve(__dirname, '../assets/life/discovery.js');
+  const sha = value => createHash('sha256').update(value).digest('hex');
+  const feedBytes = await fs.readFile(publicFeedPath), coreBytes = await fs.readFile(corePath), publicFeed = JSON.parse(feedBytes);
+  report.catalogue = { sha256: sha(feedBytes), coreSHA256: sha(coreBytes), generatedAt: publicFeed.generatedAt, articles: publicFeed.articles.length };
+  if (process.env.EXTERNAL_DISCOVERY_FEED_SHA) assert.equal(report.catalogue.sha256, process.env.EXTERNAL_DISCOVERY_FEED_SHA);
+  if (process.env.EXTERNAL_DISCOVERY_CORE_SHA) assert.equal(report.catalogue.coreSHA256, process.env.EXTERNAL_DISCOVERY_CORE_SHA);
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
   report.browser = browser.version();
   async function check(name, run, { synthetic = true, width = 820 } = {}) {
@@ -127,6 +135,40 @@ async function main() {
       const imported = await state(page); assert.equal(imported.bundle.sources.length, before.bundle.sources.length + 1); const source = imported.bundle.sources.find(x => x.url === articleUrl); assert(source); assert.equal(imported.bundle.sourceVersions.find(x => x.sourceId === source.id).contentText, null);
       await page.getByRole('button', { name: '새 글 찾기로 돌아가기', exact: true }).click(); await page.locator('#discoveryReview').waitFor(); await idle(page); assert.equal(await card(page, articleId).count(), 0);
       await open(page, 'life.html'); assert.equal(await page.locator('#discoveryReview').count(), 1); assert.equal(await card(page, articleId).count(), 0);
+    }, { synthetic: false });
+    for (const [interest, sourceId] of [['신간', 'readersnews-books'], ['공연', 'seoul-environment']]) await check('checked-in expanded source ' + sourceId + ' explicit link import, original return, duplicate exclusion and prior feedback preservation', async ({ page, context }) => {
+      await seed(page, '전시'); await open(page);
+      const oldArticle = publicFeed.articles.find(article => article.sourceId === 'seoul-culture' && Discovery.rank(publicFeed, { profile: { manual: [{ id: 'qa', label: '전시' }] }, mode: 'related' }).items.some(item => item.article.id === article.id));
+      assert(oldArticle, 'Existing culture article remains supplied');
+      await card(page, oldArticle.id).locator('[data-discovery-feedback="not_relevant"]').click(); await idle(page);
+      const feedbackBefore = (await state(page)).feedback; assert(feedbackBefore.feedback.some(row => row.canonicalUrl === Discovery.canonicalUrl(oldArticle.url)));
+      await interests(page, interest); await open(page); const before = await state(page);
+      const ids = await page.locator('[data-discovery-id]').evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId));
+      const article = publicFeed.articles.find(row => row.sourceId === sourceId && ids.includes(row.id));
+      assert(article, interest + ' has an actual visible article from the newly allowed source');
+      assert(Discovery.ALLOWED_SOURCES[sourceId].includes(new URL(article.url).hostname));
+      assert.equal(article.coverage, 'link_only'); assert.equal(article.rights.mode, 'metadata_only');
+      if (interest === '신간') for (const width of [390, 1440]) {
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+        const audit = await page.evaluate(() => ({ viewport: innerWidth, documentWidth: document.documentElement.scrollWidth })); assert(audit.documentWidth <= audit.viewport, 'Actual new-source horizontal overflow');
+        const file = 'actual-new-books-' + width + '.png'; await page.screenshot({ path: path.join(out, file), fullPage: true });
+        report.visual.push({ width, syntheticFeed: false, sourceId, interest, file, audit });
+      }
+      const original = card(page, article.id).locator('[data-discovery-open]'); assert.equal(await original.getAttribute('href'), article.url); assert.equal(await original.getAttribute('target'), '_blank'); assert.match(await original.getAttribute('rel'), /noreferrer/);
+      await original.focus(); const popupPromise = context.waitForEvent('page'); await original.click(); const popup = await popupPromise; await popup.waitForLoadState('domcontentloaded');
+      assert.deepEqual(await popup.evaluate(() => ({ referrer: document.referrer, opener: window.opener === null })), { referrer: '', opener: true }); await popup.close(); await page.bringToFront();
+      assert.deepEqual(await page.locator('[data-discovery-id]').evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId)), ids); assert.equal(await original.evaluate(node => node === document.activeElement), true); assert.deepEqual(await state(page), before);
+      await card(page, article.id).locator('[data-discovery-import]').click(); await page.locator('#lifeImportTitle').waitFor(); assert.equal(await page.locator('#lifeImportTitle').inputValue(), article.title); assert.equal(await page.locator('#lifeImportUrl').inputValue(), article.url); assert.equal(await page.locator('#lifeImportText').inputValue(), ''); assert.deepEqual(await state(page), before);
+      await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await page.locator('.life-review').waitFor(); assert.match(await page.locator('.life-review').textContent(), /본문 미확보|링크/); assert.deepEqual(await state(page), before);
+      await page.getByRole('button', { name: '자료만 보관', exact: true }).click(); await page.locator('.life-reader').waitFor();
+      const after = await state(page), stored = after.bundle.sources.find(row => row.url === article.url); assert(stored); assert.equal(after.bundle.sources.length, before.bundle.sources.length + 1);
+      const version = after.bundle.sourceVersions.find(row => row.sourceId === stored.id); assert.equal(version.contentText, null); assert.equal(version.coverage.status, 'link_only');
+      for (const source of before.bundle.sources) assert.deepEqual(after.bundle.sources.find(row => row.id === source.id), source);
+      for (const version of before.bundle.sourceVersions) assert.deepEqual(after.bundle.sourceVersions.find(row => row.id === version.id), version);
+      assert.deepEqual(after.workbench, before.workbench); assert.deepEqual(after.interest, before.interest); assert.deepEqual(after.feedback, feedbackBefore);
+      await page.getByRole('button', { name: '새 글 찾기로 돌아가기', exact: true }).click(); await page.locator('#discoveryReview').waitFor(); await idle(page); assert.equal(await card(page, article.id).count(), 0);
+      await page.reload(); await ready(page); await page.locator('#discoveryReview').waitFor(); await idle(page); assert.equal(await card(page, article.id).count(), 0); assert.deepEqual((await state(page)).feedback, feedbackBefore);
+      await interests(page, '전시'); await open(page); assert.equal(await card(page, oldArticle.id).count(), 0); assert.deepEqual((await state(page)).feedback, feedbackBefore); assert.equal((await state(page)).bundle.sources.length, before.bundle.sources.length + 1);
     }, { synthetic: false });
     await check('synthetic related versus same-source latest, noreferrer popup return and exact list focus', async ({ page, context }) => {
       await feedRoute(context); await seed(page); await open(page); const before = await state(page);
@@ -230,8 +272,8 @@ async function main() {
       assert(audit.documentWidth <= audit.viewport, 'Horizontal overflow'); for (const c of audit.controls) { assert(c.width >= 44, c.label + ' control width'); assert(c.height >= 44, c.label + ' control height'); }
       const file = 'discovery-' + width + '.png'; await page.screenshot({ path: path.join(out, file), fullPage: true }); report.visual.push({ width, syntheticFeed: true, file, audit });
     }, { width });
-  } finally { await browser.close(); await fs.writeFile(path.join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n'); }
+  } finally { await browser.close(); report.catalogue.unchanged = sha(await fs.readFile(publicFeedPath)) === report.catalogue.sha256 && sha(await fs.readFile(corePath)) === report.catalogue.coreSHA256; await fs.writeFile(path.join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n'); }
   console.log(`External discovery: ${report.checks.filter(x => x.pass).length}/${report.checks.length}; console ${report.consoleErrors.length}; page ${report.pageErrors.length}; privacy ${report.privacyViolations.length}; external ${report.external.length}.`);
-  if (report.checks.some(x => !x.pass) || report.consoleErrors.length || report.pageErrors.length || report.privacyViolations.length || report.external.length || report.modelRequests.length) process.exitCode = 1;
+  if (report.checks.some(x => !x.pass) || report.consoleErrors.length || report.pageErrors.length || report.privacyViolations.length || report.external.length || report.modelRequests.length || !report.catalogue.unchanged) process.exitCode = 1;
 }
 if (require.main === module) main().catch(error => { console.error(error.stack); process.exitCode = 1; });

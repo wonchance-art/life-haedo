@@ -1,5 +1,9 @@
 # 오픈소스 검토와 재사용 결정
 
+## 공급 보완·비교 준비 — 2026-10-19 KST
+
+앞선 feedparser 6.0.14/BSD-2-Clause와 Python 표준 XML 보안·idb 비교를 재사용한다. 고정 피드 2개를 추가하되 새 parser/검색/모델 패키지는 도입하지 않는다. collector와 브라우저의 query 정체성·미래 날짜 해석을 맞추고 새 RSS도 같은 제한 파서·robots·권리·원자 저장 계약을 통과시켰다. Node 비교 CLI는 기존 Discovery.rank/validateFeed/canonicalUrl을 그대로 재사용하며 공개 고정 표본의 두 순서를 읽기 전용으로 투영한다. 별도 추천 엔진·개인자료 전송·사용자 판단 자동 생성·기존 검토 덮어쓰기는 추가하지 않는다. 새 인덱스/라이브러리 도입은 실제 크기·오타/의미 검색 요구가 기존 계약보다 나을 때 다시 비교한다. [선택·공식 권리 근거·미채택 대안·검수](../design-review/discovery-expansion.md).
+
 ## 외부 글 공급·일치 표현 검색 — 2026-10-19 KST
 
 공급은 고정된 공식 RSS2/Atom의 제목·URL·공식 날짜·작성자·분류만 다룬다. 공식 PyPI의 **feedparser 6.0.14 / BSD-2-Clause / 2026-07-30**과 공식 저장소·공개 보안 공지를 확인했다. 공개 공지 0개는 취약점 부재 보증이 아니다. 다양한 피드 복구·본문 처리가 필요하지 않아 Python 표준 urllib/robotparser/ElementTree/HTMLParser로 제한된 어댑터를 유지한다. Python 3.12.14 / Expat 2.8.3에서 DTD/entity·미검토 인코딩 거절, 크기·항목·시간·HTTPS/호스트 제한, 실패 시 이전 성공 보존을 검수했다. 임의 출처·복잡한 형식이 필요해지면 범용 파서를 직접 확장하기보다 feedparser 재사용을 재비교한다. [공식 링크·권리·실제 실행·실패 증거](../design-review/discovery-sources.md).
