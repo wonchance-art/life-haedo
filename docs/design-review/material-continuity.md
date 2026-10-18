@@ -87,6 +87,8 @@ saved output은 기존 BlogSync로 보관한 **정확 원격 글 revision**에 �
 
 첫 통합 CI에서 기존 자료 비교 검사의 좁은 화면/한글 조합 즉시 단언이 실패했다. 실제 `MediaQueryList.change` 전달만 일시 보류하면 화면 폭은 이미 390px지만 두 자료의 DOM과 이전 active ID가 남고, 조합 노드는 연결된 상태여도 첫 노트와는 달라 원래 단언이 실패했다. 같은 네이티브 이벤트를 전달하면 동일 조합 노드가 유일한 노트로 유지되고 선택 자료도 전환됐다. `.local/material-continuity/source-resize-held-before.log`에 양쪽 지표와 원래 실패를 보존했다. 런타임 변경 없이 검사에서 실제 선택 자료·본문/노트 각 1개의 좁은 화면 정착을 기다리며, 동일 노드·한글 값·양쪽 대기 구절 취소 단언과 기존 시간 제한은 유지한다.
 
+다음 CI에서는 기존 9칸 공개 검사가 계정 전환 직후 새 저장소의 첫 작업공간 생성보다 먼저 원본을 읽어 실패했다. 실제 SDK 전환과 임시 mount 보류로 새 계정 조건은 참이지만 active ID는 null·앱은 숨김 상태인 경계를 재현했다. 기존 `ready`·`settle` 뒤에는 새 UUID의 빈 작업공간이 정상 조회됐다(`.local/nine-public-ci189/account-ready-proof.json`). 양쪽 계정 전환에서 이 기존 준비 함수를 기다리도록 검사만 보완하며, 늦은 이전 계정 응답 차단·양쪽 원본 불변·비공개 제목 비노출 단언과 런타임은 유지한다.
+
 ### 원격/SQL 확인과 설치 조건
 
 원격/SQL 담당의 `.local/material-continuity/backend-report.json`·`backend-final.log`는 수송 단위 3개와 실제 격리 PostgreSQL 8개 흐름 통과를 기록한다. 소유자별 비공개 테이블/RLS·직접 테이블 권한 0·고정 search path, 두 실제 DB 연결의 claim CAS, 실제 글 행 잠금과 종료 경합, UTF-16/잘못된 NULL 거절, 원문 후보 3,000개 중 선택 closure·목록 20개 keyset, 같은 migration 재적용 뒤 기존 head/영수증의 SHA 보존을 포함한다. 이를 운영 설치나 실제 Google 인증 통과로 표시하지 않는다.

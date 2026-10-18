@@ -297,11 +297,13 @@ async function main() {
       for (let n = 0; !held && n < 100; n++) await new Promise(resolve => setTimeout(resolve, 20)); assert(held, 'The actual state read was held');
       await page.evaluate(async value => { await HaedoAuth.client.auth.setSession({ access_token: value.access_token, refresh_token: value.refresh_token }); await HaedoAuth.verify(); }, session(accounts.b));
       await page.waitForFunction(id => HaedoAuth.user?.id === id && HaedoLife.Shell.storage?.account?.userId === id, accounts.b.id);
+      await ready(page); await settle(page);
       const accountB = await original(); release(); await preparation; await owner.unroute(cloud + '/rest/v1/rpc/life_public_page_get');
       await page.waitForFunction(() => !document.getElementById('nineShare')); assert.deepEqual(await original(), accountB);
       assert(!(await page.locator('body').innerText()).includes('PRIVATE_BOARD_TITLE'));
       await page.evaluate(async value => { await HaedoAuth.client.auth.setSession({ access_token: value.access_token, refresh_token: value.refresh_token }); await HaedoAuth.verify(); }, session(accounts.a));
-      await page.waitForFunction(id => HaedoAuth.user?.id === id && HaedoLife.Shell.storage?.account?.userId === id, accounts.a.id); assert.deepEqual(await original(), before);
+      await page.waitForFunction(id => HaedoAuth.user?.id === id && HaedoLife.Shell.storage?.account?.userId === id, accounts.a.id);
+      await ready(page); await settle(page); assert.deepEqual(await original(), before);
     });
     await check('A public area deleted from private storage remains discoverable and revocable through the existing public page manager', async () => {
       const prior = await original();
