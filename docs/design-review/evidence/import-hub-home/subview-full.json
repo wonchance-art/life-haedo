@@ -1,0 +1,213 @@
+{
+  "createdAt": "2026-10-18T10:35:03.634Z",
+  "scope": "Actual app/SDK/IDB, intercepted Auth; viewport/keyboard/touch simulation only",
+  "checks": [
+    {
+      "name": "home origin, keyboard/touch return and draft resume 1440",
+      "pass": true
+    },
+    {
+      "name": "home origin, keyboard/touch return and draft resume 820",
+      "pass": true
+    },
+    {
+      "name": "home origin, keyboard/touch return and draft resume 390",
+      "pass": true
+    },
+    {
+      "name": "search, tool and management origins and active menu roots 1440",
+      "pass": true
+    },
+    {
+      "name": "search, tool and management origins and active menu roots 820",
+      "pass": true
+    },
+    {
+      "name": "search, tool and management origins and active menu roots 390",
+      "pass": true
+    },
+    {
+      "name": "renamed home group and page editing return to the same entry",
+      "pass": false,
+      "error": "locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[data-subview-return]')\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" aria-label=\"내 글로 돌아가기\" id=\"lifeSubviewReturn\" data-subview-return=\"true\" class=\"life-button life-icon-button\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is not visible\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    23 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is not visible\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n\n    at back (/workspace/haedo-blog-platform/tests/subview-navigation-browser.cjs:18:52)\n    at async /workspace/haedo-blog-platform/tests/subview-navigation-browser.cjs:126:7\n    at async check (/workspace/haedo-blog-platform/tests/subview-navigation-browser.cjs:45:11)\n    at async main (/workspace/haedo-blog-platform/tests/subview-navigation-browser.cjs:117:5)"
+    },
+    {
+      "name": "failed import save blocks both return paths and retry preserves input",
+      "pass": true
+    },
+    {
+      "name": "late home response cannot block navigation or steal focus after return",
+      "pass": true
+    },
+    {
+      "name": "page save failure blocks active records menu and contextual return",
+      "pass": true
+    },
+    {
+      "name": "direct deep links have stable parent fallback and no persistent origin data",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "scene": "write",
+      "file": "write-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 7,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "import",
+      "file": "import-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 19,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "time",
+      "file": "time-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 9,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "write",
+      "file": "write-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 7,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "import",
+      "file": "import-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 19,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "time",
+      "file": "time-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 9,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "write",
+      "file": "write-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 7,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "import",
+      "file": "import-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 19,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "time",
+      "file": "time-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 9,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "transfer",
+      "file": "transfer-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 21,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "transfer",
+      "file": "transfer-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 21,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "transfer",
+      "file": "transfer-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 21,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "browser": "151.0.7922.173"
+}

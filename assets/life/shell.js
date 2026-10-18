@@ -5,8 +5,10 @@
   const auth = root.HaedoAuth;
   const publicHome = root.document.body?.dataset.lifeHome === 'true';
   let mounted, sync, compositionSync, writingSync, scopedStorage, controller, showing, generation = 0, activeKey = null, starting, leaving = false, suspended = false;
-  function loginPath(compose = false) {
-    const next = auth?.safeNext(compose && publicHome ? 'index.html?compose=1' : (publicHome ? 'index.html' : 'life.html') + root.location.search) || (publicHome ? 'index.html' : 'life.html');
+  function loginPath(intent = '') {
+    const target = publicHome && intent === 'import' ? 'index.html?collect=1' :
+      publicHome && intent === 'compose' ? 'index.html?compose=1' : (publicHome ? 'index.html' : 'life.html') + root.location.search;
+    const next = auth?.safeNext(target) || (publicHome ? 'index.html' : 'life.html');
     return 'login.html?next=' + encodeURIComponent(next);
   }
   function isReadOnly() {
@@ -48,7 +50,7 @@
     if (!publicHome || suspended) return;
     const welcome = root.document.getElementById('lifeWelcome');
     if (welcome) {
-      welcome.querySelectorAll('[data-life-login],[data-life-return-login]').forEach(link => { link.href = loginPath(link.dataset.lifeLogin === 'compose'); });
+      welcome.querySelectorAll('[data-life-login],[data-life-return-login]').forEach(link => { link.href = loginPath(link.dataset.lifeLogin); });
       welcome.hidden = false;
     }
     root.document.getElementById('lifeStartup').hidden = true;

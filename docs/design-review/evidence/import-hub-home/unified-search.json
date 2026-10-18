@@ -1,0 +1,510 @@
+{
+  "checks": [
+    "Home opens one private search; blank and no-match states do not list stored contents",
+    "Mixed results distinguish originals, saved pages, private notes and bounded collection groups",
+    "Exact old version and raw Korean range reopen; returning keeps query, limits and focused result",
+    "Saved page opens its exact expanded post without creating an edit draft; contextual return works",
+    "Collection exact detail, explicit archived scope and editing failure preserve the search origin",
+    "Drafts excluded, composition input does not query midway, query never enters the URL",
+    "A failed collection read retains source/page results and retries without losing query",
+    "Late reads cannot replace another screen; separate account has no query or results",
+    "Switching workspace clears query, filters and all previous results"
+  ],
+  "visual": [
+    {
+      "scene": "empty",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 4.913,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "empty",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "empty",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "no-match",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "no-match",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "no-match",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.59,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": null,
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "mixed",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 720,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "mixed",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 636,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "mixed",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.59,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 350,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "partial-error",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.038,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 720,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "partial-error",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 636,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "partial-error",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.59,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 350,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "loading",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 720,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "loading",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 636,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "loading",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.59,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 350,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "scope": "Anonymous Auth fixture, actual account-scoped IndexedDB; Linux viewport/IME event simulation, no production or Apple hardware.",
+  "browser": "151.0.7922.173",
+  "pass": true
+}

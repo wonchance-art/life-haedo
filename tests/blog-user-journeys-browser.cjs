@@ -10,7 +10,8 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { ShareCloud } = require('./life-share-browser.cjs');
-const { playwright, ready, shellReady, settle, makeContext, observe, nav } = require('./unified-home-browser.cjs');
+const { playwright, shellReady, settle, makeContext, observe } = require('./unified-home-browser.cjs');
+const { nav, openWritings, ready } = require('./writings-navigation.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
 const phase = process.env.JOURNEY_PHASE || 'after';
 assert(['before', 'after'].includes(phase));
@@ -115,13 +116,15 @@ async function main() {
   }
   try {
     if (phase === 'after') {
-      await check('first write starts in body, saves a titleless private post, reads and returns to the exact saved row', async ({ page, server, device }) => {
+      await check('public import entry preserves private titleless writing in the writing library and exact saved-row return', async ({ page, server, device }) => {
         await page.goto(base + '/index.html'); await shellReady(page);
         assert.deepEqual(await page.evaluate(() => __homeDbOpens), []); await snap(page, 'public');
         server.oauthAccounts.set(device, accounts.a);
-        await page.locator('[data-life-login="compose"]').click(); await page.locator('#googleLogin').click();
-        await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page); await page.locator('.ql-editor').waitFor();
-        await page.waitForFunction(() => document.activeElement?.classList.contains('ql-editor')); assert.equal(new URL(page.url()).searchParams.has('compose'), false); assert((await page.evaluate(() => __homeDbOpens)).every(item => item.verified));
+        await page.locator('[data-life-login="import"]').click(); await page.locator('#googleLogin').click();
+        await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
+        assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'import'); await page.locator('#lifeImportText').waitFor();
+        await openWritings(page); await page.locator('#homeFirstWrite').click(); await page.locator('.ql-editor').waitFor();
+        await page.waitForFunction(() => document.activeElement?.classList.contains('ql-editor')); assert.equal(new URL(page.url()).searchParams.has('collect'), false); assert((await page.evaluate(() => __homeDbOpens)).every(item => item.verified));
         assert.equal(await page.locator('#photoTitle').inputValue(), '');
         const text = '제목을 짓지 않아도 한 문장부터 남깁니다. 🌱'; await page.locator('.ql-editor').fill(text); await snap(page, 'writing');
         await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor();
@@ -129,10 +132,10 @@ async function main() {
         assert.doesNotMatch(await page.locator('.photo-article').innerText(), /제목 없는 글/);
         assert.match(await page.locator('.photo-status').innerText(), /비공개 글을 저장했어요/);
         const data = await documents(page), saved = data.docs.find(doc => doc.status === 'saved'); assert(saved); assert.equal(saved.title, ''); assert(saved.ops.some(op => typeof op.insert === 'string' && op.insert.includes(text)));
-        await snap(page, 'titleless-reading'); await page.getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
+        await snap(page, 'titleless-reading'); await page.locator('#lifeMain').getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
         const row = page.locator(`#homePosts [data-photo-post-id="${saved.id}"]`); assert.equal(await row.count(), 1); assert.doesNotMatch(await row.innerText(), /제목 없는 글/);
         await row.locator('.home-post-open').click(); await page.locator('.photo-article').waitFor(); assert.match(await page.locator('.photo-article').innerText(), /제목을 짓지 않아도/);
-        await page.getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
+        await page.locator('#lifeMain').getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
         await assertPostCommitLibraryReturn(page);
       }, null);
       await check('one searchable list retains all three formats, real drafts and archive without importing self-labelled sources', async ({ page }) => {
@@ -164,7 +167,7 @@ async function main() {
         assert.equal(await page.locator('.photo-editor').count(), 0); await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('#ppBody').waitFor();
         await page.locator('#ppBody').fill('세 형식 공통검색 기존 첨부 글 — 실제 수정\n이전 형식으로 저장된 본문을 수정합니다.');
         await page.locator('.pp-composer').getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('#ppBody').waitFor({ state: 'detached' });
-        await page.getByRole('button', { name: '내 글로 돌아가기', exact: true }).last().click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
+        await page.locator('#lifeMain').getByRole('button', { name: '내 글로 돌아가기', exact: true }).last().click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
         assert.equal(await page.locator('#homePostSearch').inputValue(), '세 형식 공통검색'); assert.match(await page.locator(`[data-post-id="${refs.legacy}"]`).innerText(), /실제 수정/);
         await page.getByRole('button', { name: '프로필 편집', exact: true }).click(); await page.locator('#wbPageTitle').waitFor();
         assert.equal(await page.locator('.wb-post-feed').count(), 0, 'Profile editing must not mount a second private post list');
@@ -177,7 +180,7 @@ async function main() {
         await openHome(page); await seed(page, 27); await page.reload(); await ready(page); await home(page);
         assert.equal(await page.locator('#homePosts .home-post').count(), 20);
         await page.getByRole('button', { name: '글 20개 더 보기', exact: true }).click(); assert.equal(await page.locator('#homePosts .home-post').count(), 27);
-        await page.locator('#homePosts .home-post').nth(25).locator('.home-post-open').click(); await page.locator('.photo-article').waitFor(); await page.getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await page.locator('#homePosts[aria-busy="false"]').waitFor(); assert.equal(await page.locator('#homePosts .home-post').count(), 27);
+        await page.locator('#homePosts .home-post').nth(25).locator('.home-post-open').click(); await page.locator('.photo-article').waitFor(); await page.locator('#lifeMain').getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await page.locator('#homePosts[aria-busy="false"]').waitFor(); assert.equal(await page.locator('#homePosts .home-post').count(), 27);
         const query = await searchInput(page); await query.fill('오래된 글도'); await page.waitForFunction(() => document.querySelectorAll('#homePosts .home-post').length === 9);
         await query.dispatchEvent('compositionstart'); await query.fill('아직 조합 중인 검색');
         assert.equal(await page.locator('#homePosts .home-post').count(), 9, 'Composition must not erase the existing reading results');
@@ -185,7 +188,7 @@ async function main() {
         await query.fill('오래된 글도'); await page.waitForFunction(() => document.querySelectorAll('#homePosts .home-post').length === 9);
         const row = page.locator('#homePosts .home-post').nth(6), id = await row.getAttribute('data-photo-post-id'); await row.locator('.home-post-open').click(); await page.locator('.photo-article').waitFor();
         await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('.ql-editor').waitFor(); await page.locator('.ql-editor').fill('검색 문맥을 유지하며 다시 저장한 본문');
-        await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor(); await page.getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
+        await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor(); await page.locator('#lifeMain').getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
         assert.equal(await query.inputValue(), '오래된 글도'); assert.equal(await page.locator('#homeTab-posts').getAttribute('aria-selected'), 'true'); assert.equal(await page.locator('#homePosts .home-post').count(), 9);
         const storedEdit = (await documents(page)).docs.find(doc => doc.status === 'saved' && doc.ops.some(op => typeof op.insert === 'string' && op.insert.includes('검색 문맥을 유지하며 다시 저장한 본문'))); assert(storedEdit);
         const visible = await page.locator(`#homePosts [data-photo-post-id="${storedEdit.id}"]`).evaluate(node => { const box = node.getBoundingClientRect(); return box.bottom > 0 && box.top < innerHeight; }); assert(visible, 'The just-saved matching row must remain visible after its sort position changes');
@@ -195,7 +198,7 @@ async function main() {
         await openHome(page); const sample = await seed(page, 1); await page.reload(); await ready(page); await home(page);
         await fillSearch(page, '산책에서'); await page.locator(`#homePosts [data-photo-post-id="${sample.ids[0]}"] .home-post-open`).click(); await page.locator('.photo-article').waitFor();
         await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('#photoTitle').fill('완전히 다른 제목으로 바꾼 글'); await page.locator('.ql-editor').fill('본문의 검색어도 명시적으로 고쳤습니다.');
-        await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor(); await page.getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
+        await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor(); await page.locator('#lifeMain').getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await page.locator('#homePosts[aria-busy="false"]').waitFor();
         assert.equal(await page.locator('#homePostSearch').inputValue(), '산책에서'); assert.equal(await page.locator('#homePosts .home-post').count(), 0);
         const reveal = page.getByRole('button', { name: '검색어 지우고 저장한 글 보기', exact: true }); await reveal.waitFor(); await reveal.click();
         assert.equal(await page.locator('#homePostSearch').inputValue(), ''); assert.equal(await page.locator('#homePosts .home-post').count(), 1); assert.match(await page.locator('#homePosts .home-post').innerText(), /완전히 다른 제목/);

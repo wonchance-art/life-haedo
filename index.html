@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="description" content="내 생각과 일상을 글로 쓰고, 기록과 취향을 모으는 개인 블로그. 먼저 비공개로 보관하고 공개할 내용은 직접 고릅니다.">
+  <meta name="description" content="블로그와 메모 앱에 흩어진 내 글을 가져와 한곳에서 읽고 찾는 개인 글 보관함. 본문과 출처를 함께 비공개로 보관합니다.">
   <meta name="theme-color" content="#ffffff">
-  <title>해도 · 내 블로그</title>
+  <title>해도 · 흩어진 내 글을 한곳에서</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="preload" href="vendor/pretendard/PretendardVariable.woff2" as="font" type="font/woff2" crossorigin>
@@ -38,36 +38,34 @@
   <main id="lifeWelcome" class="haedo-welcome" hidden>
     <header class="haedo-page-heading"><div class="haedo-heading-title"><h1>해도</h1></div><div class="haedo-heading-actions"><a class="life-button" href="login.html?next=index.html" data-life-return-login>로그인</a></div></header>
     <section class="haedo-welcome-copy">
-      <h2>생각은 글로.<br>취향은 나답게.</h2>
-      <p>내 이야기를 쓰는 블로그.<br>사진과 좋아하는 것, 마음에 남은 기록을 모아 나만의 이야기를 이어가세요.</p>
-      <a class="life-button life-primary" href="login.html?next=index.html%3Fcompose%3D1" data-life-login="compose">첫 글 쓰기<span data-haedo-icon="arrow" aria-hidden="true"></span></a>
-      <p class="haedo-blog-scope">먼저 비공개로 시작해요. 새 글과 사진은 이 브라우저에 보관돼요.</p>
+      <h2>흩어진 내 글을,<br>한곳에서.</h2>
+      <p>블로그와 메모 앱에 남긴 글을 가져와 한 목록에서 읽고 찾으세요. 본문과 출처를 함께 비공개로 보관합니다.</p>
+      <a class="life-button life-primary" href="login.html?next=index.html%3Fcollect%3D1" data-life-login="import">글 가져오기<span data-haedo-icon="arrow" aria-hidden="true"></span></a>
+      <p class="haedo-blog-scope">본문 붙여넣기 · UTF-8 .txt/.md 파일<br>원본 사이트의 글과 주소를 직접 복사해 가져옵니다.</p>
       <details class="haedo-blog-example">
-        <summary>어떻게 사용할 수 있나요?</summary>
+        <summary>가져오는 방법</summary>
         <div>
-          <p class="haedo-blog-example-label">가상 사용 예시</p>
-          <h3>산책하면서 떠올린 생각</h3>
-          <p>오래 머물고 싶은 장소에 대해 짧은 글을 쓰고 사진을 붙입니다. 예전에 적어둔 메모를 자료실에서 다시 읽으며 생각을 보탭니다.</p>
-          <p>저장한 글은 내 블로그에서 다시 읽고 고칠 수 있습니다. 기존 자료에서 고른 내용의 공개 사본은 별도로 검토하고 공개합니다.</p>
+          <h3>파일 또는 본문으로 가져오기</h3>
+          <p>로그인 후 글 본문을 붙여 넣거나 UTF-8 .txt/.md 파일을 선택합니다. 원본 주소와 출처를 확인한 뒤 보관합니다.</p>
+          <p>주소만 제공하면 링크만 보관합니다. 본문이 필요하면 원본에서 직접 복사해 주세요.</p>
+          <p>Obsidian 변환 ZIP은 로그인 후 설정의 ‘내보내기·사본 복원’에서 엽니다. 일반 보관함 ZIP과 구분해 선택합니다.</p>
         </div>
       </details>
     </section>
-    <article class="haedo-welcome-post" aria-label="가상 블로그 예시">
-      <header class="haedo-welcome-author">
-        <span class="haedo-welcome-avatar" aria-hidden="true">예</span>
-        <div><strong>느리게 모으는 일상</strong><small>예시 블로그 · 가상 자료</small></div>
-      </header>
-      <h3>좋아하는 장소를 기록하는 일</h3>
-      <p>매일 걷던 길에서 잠시 멈췄다. 늘 지나치던 빛이 오늘은 조금 다르게 보였다.</p>
-      <p>사진 한 장과 짧은 생각을 남기고, 예전에 적어둔 메모를 다시 읽었다. 나의 글은 그렇게 이어진다.</p>
-      <blockquote class="haedo-welcome-quote">마음에 남은 것을 모으다 보면,<br>나만의 이야기가 된다.</blockquote>
-      <footer class="haedo-welcome-post-footer">직접 쓴 글 · 나만 보는 기록에서 시작</footer>
+    <article class="haedo-welcome-post" aria-labelledby="welcomeSourcesTitle">
+      <h3 id="welcomeSourcesTitle">여러 곳의 글을 한곳에서</h3>
+      <p class="haedo-example-note">가상 자료 · 화면 설명용 예시</p>
+      <ol class="haedo-welcome-sources">
+        <li><span class="haedo-example-origin">Obsidian</span><strong>비가 그친 뒤의 아침</strong><p>창문을 열자 젖은 나무 냄새가 들어왔다. 커피를 내리는 동안 오늘 쓰고 싶은 문장을 생각했다.</p></li>
+        <li><span class="haedo-example-origin">Apple 메모</span><strong>오래 머물고 싶은 곳</strong><p>익숙한 골목에도 처음 보는 빛이 있다. 천천히 걸으며 오늘의 장면을 남겼다.</p></li>
+        <li><span class="haedo-example-origin">네이버 블로그</span><strong>다시 읽고 싶은 문장</strong><p>좋은 문장은 읽을 때마다 조금 다른 곳에 닿는다.</p></li>
+      </ol>
     </article>
     <a class="haedo-privacy-link" href="privacy.html">개인정보 안내</a>
   </main>
-  <noscript>생활 자료를 열려면 브라우저에서 JavaScript를 허용해주세요. 기존 기록은 변경되지 않습니다.</noscript>
+  <noscript>글 보관함을 열려면 브라우저에서 JavaScript를 허용해주세요. 기존 기록은 변경되지 않습니다.</noscript>
   <div id="lifeStartup" role="status" aria-live="polite">홈을 여는 중입니다.</div>
-  <div id="lifeApp" data-private hidden aria-label="내 기록 공간"></div>
+  <div id="lifeApp" data-private hidden aria-label="내 글 보관함"></div>
   <script src="vendor/idb/idb.js"></script>
   <script src="vendor/supabase/supabase.js"></script>
   <script src="assets/platform-config.js"></script>

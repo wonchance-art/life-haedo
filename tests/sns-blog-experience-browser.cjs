@@ -11,7 +11,8 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { ShareCloud } = require('./life-share-browser.cjs');
-const { playwright, ready, shellReady, settle, makeContext, observe, nav } = require('./unified-home-browser.cjs');
+const { playwright, shellReady, settle, makeContext, observe } = require('./unified-home-browser.cjs');
+const { nav, openWritings, ready } = require('./writings-navigation.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
 const phase = process.env.SNS_PHASE || 'after';
 assert(['before', 'after'].includes(phase));
@@ -154,7 +155,7 @@ async function main() {
   async function login(page, server, device) {
     server.oauthAccounts.set(device, accounts.a); await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click();
     await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
-    if (phase === 'after') { await page.locator('#photoTitle').waitFor(); await page.getByRole('button', { name: '닫기', exact: true }).click(); }
+    if (phase === 'after') { await page.locator('#lifeImportTitle').waitFor(); await openWritings(page); }
     await page.locator('#homePosts[aria-busy="false"]').waitFor();
   }
   try {

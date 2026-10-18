@@ -93,6 +93,7 @@
     onSaved = () => {},
     onCommitted = () => {},
     onReturn = null,
+    getReturnLabel = () => "내 글로 돌아가기",
     onModeChange = () => {},
     beforeOpen = async () => {},
   }) {
@@ -1646,7 +1647,7 @@
         article.append(heading, metadata);
         renderRead(article, doc);
         const returnAction = el("div", null, "photo-read-return");
-        returnAction.append(button("내 글로 돌아가기", list));
+        returnAction.append(button(getReturnLabel(), list));
         article.append(returnAction);
         host.append(article);
       }

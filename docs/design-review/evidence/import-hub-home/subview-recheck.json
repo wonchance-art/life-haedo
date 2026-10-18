@@ -1,0 +1,15 @@
+{
+  "createdAt": "2026-10-18T10:38:48.628Z",
+  "scope": "Actual app/SDK/IDB, intercepted Auth; viewport/keyboard/touch simulation only",
+  "checks": [
+    {
+      "name": "renamed home group and page editing return to the same entry",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "browser": "151.0.7922.173"
+}

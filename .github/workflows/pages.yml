@@ -300,6 +300,9 @@ jobs:
       - name: Verify private classification import, exact source binding and filtered return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/source-classification-browser.cjs
+      - name: Verify import hub home and retained writing library
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/import-hub-home-browser.cjs
       - name: Verify app navigation, interrupted motion and real save feedback
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/app-motion-browser.cjs
@@ -330,6 +333,7 @@ jobs:
           name: browser-checks-${{ github.run_attempt }}
           path: |
             .local/source-classification/browser-report.json
+            .local/import-hub-home/
             .local/app-native/qa/
             .local/home-refinement/qa/
             .local/blog-journeys/after/

@@ -1,0 +1,64 @@
+{
+  "createdAt": "2026-10-18T10:41:54.076Z",
+  "verificationMode": "Initial full runs plus focused reruns; not a single final full-suite execution.",
+  "auth": {
+    "passed": 23,
+    "command": "node --test tests/platform-auth.test.cjs"
+  },
+  "unified": {
+    "uniquePassed": 13,
+    "checks": [
+      "public readonly home does not mount even an authenticated account",
+      "server verification completes before any account storage opens",
+      "Google PKCE fixture returns to selected home section with only allowed query state",
+      "Google PKCE collection intent opens import and consumes only its allowed home flag",
+      "reader quote/search context and backup scope remain exact through common navigation",
+      "history keeps a management subview and a legacy life sync link keeps its destination",
+      "account change cannot reveal previous home content and returning account recovers its own data",
+      "a late verification response after signout cannot remount the previous private home",
+      "failed server verification shows recoverable error without opening private storage",
+      "anonymous common home is usable in all sections without redirect or private IDB",
+      "import draft and reviewed exact excerpt survive tools/manage switching without page reload",
+      "tools lead to existing goal/habit editors and account timeline list with the same four-way navigation",
+      "a home with originals and no excerpts shows real text and opens the complete original"
+    ],
+    "initialReport": ".local/unified-home/browser-report.json",
+    "initial": {
+      "passed": 9,
+      "failed": 4
+    },
+    "intermediateEvidence": ".local/home-collection-entry/unified-home/intermediate-recheck-output.txt",
+    "intermediate": {
+      "passed": 3,
+      "failed": 1,
+      "source": "Actual tool output session 69149 / chunk c6c416; recovered because fixed report filename was overwritten."
+    },
+    "finalFocusedReport": ".local/unified-home/recheck-report.json",
+    "finalFocused": {
+      "passed": 1,
+      "failed": 0
+    }
+  },
+  "blog": {
+    "uniquePassed": 6,
+    "checks": [
+      "failed post and composition reads never claim an empty blog and can be retried",
+      "new home writing preserves an existing draft and exits preview nine-grid and share states",
+      "a delayed editor mount cannot start a post after leaving the page",
+      "late saved-post response cannot replace the selected section",
+      "late account A post reads cannot reveal content after signout and account B login",
+      "public collection entry retains the explicit private writing flow and exact reopening at three widths"
+    ],
+    "initialReport": ".local/home-collection-entry/blog-platform/browser-report.json",
+    "initial": {
+      "passed": 5,
+      "failed": 1
+    },
+    "finalFocusedReport": ".local/home-collection-entry/blog-platform/recheck-report.json",
+    "finalFocused": {
+      "passed": 1,
+      "failed": 0
+    }
+  },
+  "scope": "Synthetic account/HTTP/local IndexedDB only; no production access or Apple-device evidence."
+}

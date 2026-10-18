@@ -1,0 +1,66 @@
+{
+  "checks": [
+    {
+      "name": "anonymous common home is usable in all sections without redirect or private IDB",
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n5 !== 4\n\n    at /workspace/haedo-blog-platform/tests/unified-home-browser.cjs:100:16\n    at async check (/workspace/haedo-blog-platform/tests/unified-home-browser.cjs:87:11)\n    at async main (/workspace/haedo-blog-platform/tests/unified-home-browser.cjs:95:5)"
+    },
+    {
+      "name": "public readonly home does not mount even an authenticated account",
+      "pass": true
+    },
+    {
+      "name": "server verification completes before any account storage opens",
+      "pass": true
+    },
+    {
+      "name": "Google PKCE fixture returns to selected home section with only allowed query state",
+      "pass": true
+    },
+    {
+      "name": "Google PKCE collection intent opens import and consumes only its allowed home flag",
+      "pass": true
+    },
+    {
+      "name": "import draft and reviewed exact excerpt survive tools/manage switching without page reload",
+      "pass": false,
+      "error": "locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '가져오기', exact: true })\u001b[22m\n\n    at button (/workspace/haedo-blog-platform/tests/unified-home-browser.cjs:26:91)\n    at /workspace/haedo-blog-platform/tests/unified-home-browser.cjs:155:13\n    at async check (/workspace/haedo-blog-platform/tests/unified-home-browser.cjs:87:11)\n    at async main (/workspace/haedo-blog-platform/tests/unified-home-browser.cjs:152:5)"
+    },
+    {
+      "name": "reader quote/search context and backup scope remain exact through common navigation",
+      "pass": true
+    },
+    {
+      "name": "a home with originals and no excerpts shows real text and opens the complete original",
+      "pass": false,
+      "error": "locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '가져오기', exact: true })\u001b[22m\n\n    at button (/workspace/haedo-blog-platform/tests/unified-home-browser.cjs:26:91)\n    at /workspace/haedo-blog-platform/tests/unified-home-browser.cjs:197:13\n    at async check (/workspace/haedo-blog-platform/tests/unified-home-browser.cjs:87:11)\n    at async main (/workspace/haedo-blog-platform/tests/unified-home-browser.cjs:194:5)"
+    },
+    {
+      "name": "tools lead to existing goal/habit editors and account timeline list with the same four-way navigation",
+      "pass": false,
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n5 !== 4\n\n    at /workspace/haedo-blog-platform/tests/unified-home-browser.cjs:212:16\n    at async check (/workspace/haedo-blog-platform/tests/unified-home-browser.cjs:87:11)\n    at async main (/workspace/haedo-blog-platform/tests/unified-home-browser.cjs:207:5)"
+    },
+    {
+      "name": "history keeps a management subview and a legacy life sync link keeps its destination",
+      "pass": true
+    },
+    {
+      "name": "account change cannot reveal previous home content and returning account recovers its own data",
+      "pass": true
+    },
+    {
+      "name": "a late verification response after signout cannot remount the previous private home",
+      "pass": true
+    },
+    {
+      "name": "failed server verification shows recoverable error without opening private storage",
+      "pass": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 1,
+  "realRemoteWrites": 0,
+  "capturedAt": "2026-10-18T10:36:28.872Z",
+  "browser": "151.0.7922.173"
+}

@@ -5,7 +5,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { FakeCloud, accounts, base, cloud } = require('./life-sync-browser.cjs');
-const { playwright, makeContext, ready, settle, nav, observe } = require('./unified-home-browser.cjs');
+const { playwright, makeContext, settle, observe } = require('./unified-home-browser.cjs');
+const { nav, openWritings, ready } = require('./writings-navigation.cjs');
 const { fixture, current, seedComposition, abortWorkbenchWrites } = require('./life-workbench-browser.cjs');
 const { instrumentStorage, inspectHome } = require('./home-entry-browser.cjs');
 const out = path.resolve('.local/subview-navigation');
@@ -13,7 +14,8 @@ const report = { createdAt: new Date().toISOString(), scope: 'Actual app/SDK/IDB
 const heading = page => page.locator('#lifeApp .haedo-page-heading h1');
 async function mode(page, name) { await settle(page); await page.waitForFunction(name => document.querySelector('#lifeMain')?.dataset.mode === name, name); }
 async function back(page, target) {
-  if (await page.locator('.photo-editor').isVisible() && !await page.locator('[data-subview-return]').count()) await page.getByRole('button', { name: '닫기', exact: true }).click();
+  if (await page.locator('#wbProfileDone').isVisible()) await page.getByRole('button', { name: '저장하고 돌아가기', exact: true }).click();
+  else if (await page.locator('.photo-editor').isVisible() && !await page.locator('[data-subview-return]').count()) await page.getByRole('button', { name: '닫기', exact: true }).click();
   else await page.locator('[data-subview-return]').click();
   await mode(page, target);
 }
@@ -59,19 +61,19 @@ async function main() {
           assert.equal(await page.getByRole('button', { name: '닫기', exact: true }).count(), 1);
         } else {
           assert.equal(await page.locator('[data-subview-return]').count(), 1);
-          assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '홈으로 돌아가기');
+          assert.equal(await page.locator('[data-subview-return]').getAttribute('aria-label'), '내 글로 돌아가기');
         }
         if (destination === 'write') { await page.locator('#photoTitle').fill('산책 뒤 남긴 생각'); await page.locator('.ql-editor').fill('홈으로 돌아갔다가 다시 이어 쓸 한글 초안.'); }
         if (destination === 'import') { await page.locator('#lifeImportTitle').fill('아직 검토 중인 기록'); await page.locator('#lifeImportText').fill('원문을 자동 확정하지 않습니다.'); }
         await capture(page, destination, width);
-        await back(page, 'home'); await page.waitForFunction(destination => document.activeElement?.dataset.homeDestination === destination || destination === 'write' && document.activeElement?.id === 'homeFirstWrite', destination);
+        await back(page, 'writings'); await page.waitForFunction(destination => document.activeElement?.dataset.homeDestination === destination || destination === 'write' && document.activeElement?.id === 'homeFirstWrite', destination);
       }
       await page.locator('#homeTab-drafts').click();
       await page.locator('.home-draft[data-draft-kind="photo-draft"] .home-draft-open').click(); await mode(page, 'page');
       await page.locator('#photoTitle').waitFor();
       assert.equal(await page.locator('#photoTitle').inputValue(), '산책 뒤 남긴 생각');
       assert.equal((await page.locator('.ql-editor').innerText()).trim(), '홈으로 돌아갔다가 다시 이어 쓸 한글 초안.');
-      await back(page, 'home'); await page.locator('[data-home-destination="import"]').click(); await mode(page, 'import');
+      await back(page, 'writings'); await page.locator('[data-home-destination="import"]').click(); await mode(page, 'import');
       assert.equal(await page.locator('#lifeImportText').inputValue(), '원문을 자동 확정하지 않습니다.');
       assert.equal((await current(page)).bundle.sources.length, 0);
 
@@ -117,12 +119,12 @@ async function main() {
       const f = await fixture(page); const { groupId } = await seedComposition(page, f.refs); await home(page);
       await page.locator(`#homeGroups [data-group-id="${groupId}"]`).click(); await mode(page, 'activities');
       await page.getByRole('textbox', { name: '묶음 이름', exact: true }).fill('새 이름으로 다듬은 산책 묶음');
-      await back(page, 'home');
+      await back(page, 'writings');
       await page.waitForFunction(id => document.activeElement?.dataset.groupId === id, groupId, { timeout: 2000 });
       assert.match(await page.locator(`#homeGroups [data-group-id="${groupId}"]`).textContent(), /새 이름으로 다듬은 산책 묶음/);
       await page.locator('[data-home-destination="page"]').click(); await mode(page, 'page');
       await page.locator('#wbPageTitle').waitFor();
-      await back(page, 'home');
+      await back(page, 'writings');
       await page.waitForFunction(() => document.activeElement?.dataset.homeDestination === 'page');
     }, 390);
     await check('failed import save blocks both return paths and retry preserves input', async ({ page }) => {
@@ -133,14 +135,14 @@ async function main() {
         const url = page.url(); await control.click(); await settle(page); assert.equal(page.url(), url); assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'import'); assert.equal(await page.locator('#lifeImportText').inputValue(), '실패해도 남아야 할 입력');
       }
       await page.evaluate(() => { window.__homeFailStage = false; });
-      await page.getByRole('button', { name: '검토 내용 보관', exact: true }).click(); await settle(page); await back(page, 'home');
+      await page.getByRole('button', { name: '검토 내용 보관', exact: true }).click(); await settle(page); await back(page, 'writings');
       await page.locator('[data-home-destination="import"]').click(); await mode(page, 'import'); assert.equal(await page.locator('#lifeImportText').inputValue(), '실패해도 남아야 할 입력');
     }, 390);
     await check('late home response cannot block navigation or steal focus after return', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); await home(page);
       await page.locator('[data-home-destination="import"]').click(); await mode(page, 'import');
       await page.evaluate(() => { window.__homeHoldRead = true; window.__homeReadEntered = false; });
-      await back(page, 'home'); await page.waitForFunction(() => __homeReadEntered);
+      await back(page, 'writings'); await page.waitForFunction(() => __homeReadEntered);
       await nav(page, 'tools'); await mode(page, 'tools');
       const focus = await page.evaluate(() => document.activeElement?.outerHTML);
       await page.evaluate(() => __homeReleaseRead());

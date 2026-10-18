@@ -69,9 +69,10 @@
       status.textContent = errors.length ? errors.join('·') + '을 불러오지 못했습니다. 나머지 결과는 사용할 수 있습니다.' : '';
       if (errors.length) { status.setAttribute('role', 'alert'); changed.hidden = false; changed.textContent = '불러오기 다시 시도'; }
     }
-    async function open() {
+    async function open(openOptions = {}) {
       const next = getBundle().workspaceId;
       if (scope !== next) reset();
+      if (typeof openOptions.query === 'string') { query = openOptions.query.slice(0, 500); kind = 'all'; limits = {}; }
       scope = next; active = true; composing = false;
       section = el('section', null, 'life-find'); section.setAttribute('aria-label', '통합 검색'); section.id = 'lifeFind';
       const bar = el('div', null, 'life-search-bar'); bar.append(life.Icons.create('search'));

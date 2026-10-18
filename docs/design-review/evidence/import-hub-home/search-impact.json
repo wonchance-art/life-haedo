@@ -1,0 +1,82 @@
+{
+  "createdAt": "2026-10-18T10:43:31.955Z",
+  "scope": "Synthetic anonymous HTTP, actual account-scoped IndexedDB/Blobs, Linux Chromium; no operating accounts, private package, deployment or native Apple claim.",
+  "suites": [
+    {
+      "name": "unified-search",
+      "passed": 9,
+      "report": ".local/unified-search/report.json",
+      "checks": [
+        "Home opens one private search; blank and no-match states do not list stored contents",
+        "Mixed results distinguish originals, saved pages, private notes and bounded collection groups",
+        "Exact old version and raw Korean range reopen; returning keeps query, limits and focused result",
+        "Saved page opens its exact expanded post without creating an edit draft; contextual return works",
+        "Collection exact detail, explicit archived scope and editing failure preserve the search origin",
+        "Drafts excluded, composition input does not query midway, query never enters the URL",
+        "A failed collection read retains source/page results and retries without losing query",
+        "Late reads cannot replace another screen; separate account has no query or results",
+        "Switching workspace clears query, filters and all previous results"
+      ],
+      "unexpectedConsolePageErrors": 0,
+      "externalRequests": 0,
+      "visualCount": 15
+    },
+    {
+      "name": "nine-board-search",
+      "passed": 7,
+      "report": ".local/nine-board-search/report.json",
+      "checks": [
+        "Stored board root opens the chosen board overview and returning preserves exact result focus",
+        "Area description and spaced Korean reason open the exact area and item with the reason visible",
+        "All saved items are searchable; kind, expanded limit and focus survive return without persisting the query",
+        "A two-tab reorder invalidates the item snapshot and offers reload; changed and removed areas never open replacements",
+        "An aborted save sends no change notice; a committed save does, and a board read failure retains page results",
+        "Opening saved posts after a board leaves the board; unapplied edits block return and remain on screen",
+        "Late board reads cannot reopen a departed screen; another workspace and account cannot see the query or board"
+      ],
+      "unexpectedConsolePageErrors": 0,
+      "externalRequests": 0,
+      "visualCount": 12
+    },
+    {
+      "name": "photo-post",
+      "passed": 13,
+      "report": ".local/photo-post/report.json",
+      "checks": [
+        "Entering the photo editor cannot hide an unsaved legacy draft after a failed transaction",
+        "A blog-style editor inserts unchanged 4032px originals between paragraphs; formatting, captions and undo preserve bytes",
+        "Inline captions keep the same focused input through spaces, newlines, composition and history; save remains reachable in a long post",
+        "Saving, full-size reading, original download and reload retain dimensions and all text/photo order",
+        "One default entry creates text-only posts and a shared dated feed preserves existing attachment posts and original photo previews",
+        "Editing a saved post resumes its matching retained edit draft without replacing the saved post or making another draft",
+        "ZIP export and explicit restore create a private draft with new ids and exact original hashes",
+        "A failed IndexedDB write blocks departure, keeps the same editor/caret and can be retried without changing the saved original",
+        "Concurrent saved-post edits preserve the competing original and offer an explicit new saved copy",
+        "Invalid photo types, remote image paste and failed imports do not replace text or install hidden photos",
+        "A conflicted draft can make a fresh memory copy even when its original CAS fails; copy failure retains the same editor and every original byte",
+        "A competing save cannot replace file-review choices; rereading waits for explicit restore or cancellation",
+        "Photos stay scoped to the verified account and workspace; original records, drafts and 9-slot boards remain exact"
+      ],
+      "unexpectedConsolePageErrors": 0,
+      "externalRequests": 0,
+      "visualCount": 15
+    }
+  ],
+  "totalChecks": 29,
+  "nineBoardCaptureFix": {
+    "initialFailureCount": 7,
+    "initialContrastRatios": [
+      3.642
+    ],
+    "preservedFailureReport": ".local/home-collection-entry/nine-board-contrast/original-suite-report.json",
+    "preservedFailureImage": ".local/home-collection-entry/nine-board-contrast/original-suite-failure.png",
+    "singleFixtureDiagnostic": ".local/home-collection-entry/nine-board-contrast/report.json",
+    "change": "Await natural completion of finite document animations before the existing contrast/target/overflow inspection. All assertion thresholds remain unchanged.",
+    "nineBoardCssChanged": false,
+    "uiCssChanged": false,
+    "workbenchCssChanged": false,
+    "sourceBaseline": "8a7c6f1",
+    "rerunCountAfterCaptureFix": 1
+  },
+  "pass": true
+}

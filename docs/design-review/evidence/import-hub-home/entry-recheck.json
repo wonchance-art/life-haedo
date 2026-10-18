@@ -1,0 +1,16 @@
+{
+  "createdAt": "2026-10-18T10:37:23.904Z",
+  "scope": "Actual local app/SDK/IDB, synthetic HTTP Auth; viewport simulation, not Apple device testing",
+  "checks": [
+    {
+      "name": "home original reader returns to its exact home control and records finds saved notes",
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "browser": "151.0.7922.173"
+}

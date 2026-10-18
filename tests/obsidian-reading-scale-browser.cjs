@@ -1,6 +1,7 @@
 /* Synthetic 3,479-note vault through the actual app and account-scoped IndexedDB.
  * No private vault, operating account, remote writes or Apple-device claims. */
 'use strict';
+const { openSearch } = require('./search-navigation.cjs');
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { playwright, makeContext, ready, settle } = require('./unified-home-browser.cjs');
 const { FakeCloud, accounts, cloud, base, openAccount } = require('./life-sync-browser.cjs');
@@ -98,7 +99,7 @@ async function main() {
       await page.locator('#lifeSearchReturn').click(); await page.locator('#lifeSearch').waitFor();
     });
     await check('Unified search bounds large results and keeps query, expanded count and exact result focus after note links', async () => {
-      await page.locator('#lifeFindOpen').click(); await page.locator('#lifeFind[aria-busy="false"]').waitFor();
+      await openSearch(page); await page.locator('#lifeFind[aria-busy="false"]').waitFor();
       await timedQuery('#lifeFindQuery', '관찰 기록');
       assert.match(await page.locator('.life-find-tabs [data-kind="source"]').textContent(), /3479/);
       assert.equal(await page.locator('.life-find-result[data-kind="source"]').count(), 5);

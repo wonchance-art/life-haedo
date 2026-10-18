@@ -21,6 +21,7 @@
     onFeed = null,
     getFeedHost = null,
     onReturn = null,
+    getReturnLabel = () => "내 글로 돌아가기",
     onModeChange = () => {},
     onCommitted = () => {},
   }) {
@@ -383,7 +384,7 @@
       host.dataset.standalone = String(standalone);
       onModeChange({ mode: active ? "edit" : readId ? "read" : "list", id: active || readId });
       const bar = node("div", null, "pp-toolbar");
-      if (standalone) bar.append(button("내 글로 돌아가기", returnToPosts, "back"));
+      if (standalone) bar.append(button(getReturnLabel(), returnToPosts, "back"));
       else bar.append(button("글쓰기", onNewPost || (() => begin()), "edit"));
       if (onNewPost && !standalone) {
         const legacy = node("details", null, "pp-legacy-writing");
@@ -468,7 +469,7 @@
       else host.append(feed);
       if (standalone && readId && posts.length) {
         host.querySelector('.pp-read-more[aria-expanded="false"]')?.click();
-        host.append(button("내 글로 돌아가기", returnToPosts));
+        host.append(button(getReturnLabel(), returnToPosts));
       }
     }
     async function collectAttachment(value) {

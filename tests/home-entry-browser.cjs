@@ -7,7 +7,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { FakeCloud, accounts, cloud, base, openAccount } = require('./life-sync-browser.cjs');
-const { playwright, ready, settle, makeContext, observe, nav } = require('./unified-home-browser.cjs');
+const { playwright, settle, makeContext, observe } = require('./unified-home-browser.cjs');
+const { nav, openWritings, ready } = require('./writings-navigation.cjs');
 const { fixture, current, seedComposition, oldBody, newBody } = require('./life-workbench-browser.cjs');
 const out = process.env.ENTRY_OUT_DIR ? path.resolve(process.env.ENTRY_OUT_DIR) : path.resolve(__dirname, '../.local/home-entry');
 const report = { createdAt: new Date().toISOString(), scope: 'Actual local app/SDK/IDB, synthetic HTTP Auth; viewport simulation, not Apple device testing', checks: [], visual: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, external: [] };
@@ -104,12 +105,12 @@ async function main() {
     finally { await context.close(); }
   }
   try {
-    await check('index starts at home, legacy life stays records, and quick links enter working sections', async ({ page }) => {
+    await check('retained writing library, legacy records and quick links enter working sections', async ({ page }) => {
       await freshHome(page);
-      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'home');
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'writings');
       assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section]').count(), 4);
       assert.equal(await page.locator('[data-haedo-navigation] .haedo-brand').getAttribute('href'), 'index.html');
-      assert.equal(await page.locator('a[data-haedo-section="home"]').getAttribute('aria-current'), 'page');
+      assert.equal(await page.locator('a[data-haedo-section="records"]').getAttribute('aria-current'), 'page');
       assert.equal(await page.locator('#homeFirstWrite').isVisible(), true);
       for (const [destination, expected] of [['import', 'import'], ['write', 'page'], ['time', 'time']]) {
         await page.locator(`[data-home-destination="${destination}"]:visible${destination === 'write' ? ', #homeFirstWrite' : ''}`).click(); await settle(page);
@@ -175,7 +176,7 @@ async function main() {
       const key = await open.getAttribute('data-focus-key'); await open.click(); await settle(page);
       assert.equal(await page.locator('#lifeSourceText').textContent(), expectedText);
       assert.equal(await page.locator('#lifeVersion').inputValue(), expectedId);
-      assert.equal(await page.locator('#lifeSearchReturn').getAttribute('aria-label'), '홈으로 돌아가기');
+      assert.equal(await page.locator('#lifeSearchReturn').getAttribute('aria-label'), '내 글로 돌아가기');
       await page.locator('#lifeSearchReturn').click(); await settle(page); await page.locator('#homeRecent').waitFor();
       await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, key);
       await nav(page, 'records'); await settle(page);

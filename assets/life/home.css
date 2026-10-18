@@ -1,4 +1,4 @@
-/* A personal journal: strong authored type, a quiet reading surface, one action ink. */
+/* Home collection and the preserved writing gallery share the existing type and ink. */
 .life-home { min-width: 0; container-type: inline-size; container-name: personal-home; }
 .life-home :is(p,span,strong,button) { overflow-wrap: anywhere; word-break: keep-all; }
 .home-blog-lead { padding: 8px 0 12px; }
@@ -181,3 +181,69 @@
 .home-saved-filter-notice { padding: 16px 0; border-bottom: 1px solid var(--line); }
 .home-saved-filter-notice > .life-meta { font-size: 13px; line-height: 1.8; }
 .home-saved-filter-notice > .life-button { min-height: 44px; margin-top: 10px; }
+
+/* Collection home: search and import stay visible; real material defines the page. */
+.life-home.home-hub { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 0 12px; align-items: start; padding-top: 4px; }
+.home-hub-search { display: flex; align-items: center; min-width: 0; min-height: 48px; margin: 0; border: 1px solid var(--field-line); border-radius: 12px; background: var(--paper); }
+.home-hub-search:focus-within { outline: 2px solid var(--haedo-focus,var(--color-primary)); outline-offset: 3px; }
+.home-hub-search > input { flex: 1; width: 100%; min-width: 0; min-height: 46px; border: 0; border-radius: 12px; padding: 10px 0 10px 14px; background: transparent; color: var(--ink); font: inherit; font-size: 16px; line-height: 1.5; }
+.home-hub-search > input:focus-visible { outline: none; }
+.home-hub-search > .home-hub-search-submit { display: inline-flex; flex: 0 0 44px; align-items: center; justify-content: center; width: 44px; height: 44px; min-width: 44px; min-height: 44px; margin: 0 1px 0 0; border: 0; border-radius: 10px; padding: 12px; background: transparent; color: var(--ink-soft); }
+.home-hub-search-submit > .life-glyph { width: 20px; height: 20px; flex: none; }
+.home-hub-search-submit:hover:not(:disabled) { color: var(--color-primary); background: var(--soft); }
+.home-hub-actions { display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0; }
+.home-hub .home-hub-actions > .life-button { min-width: 104px; min-height: 48px; margin: 0; padding: 10px 16px; font-size: 14px; font-weight: 650; line-height: 1.5; white-space: nowrap; }
+.home-hub > :not(.home-hub-search,.home-hub-actions) { grid-column: 1 / -1; min-width: 0; }
+.home-hub #homeReadingResumeHost:not(:has(> .life-reading-resume:not([hidden]))) { display: none; }
+.home-hub #homeReadingResumeHost { margin: 24px 0 0; }
+.home-hub .life-reading-resume { gap: 8px; margin: 0; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.home-hub .life-reading-resume-copy { flex: 1 1 160px; min-width: 0; }
+.home-hub .life-reading-resume-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 16px; font-weight: 600; line-height: 1.6; }
+.home-hub .life-reading-resume-copy > .life-meta { margin-top: 4px; font-size: 13px; }
+.home-hub .life-reading-resume > .life-reading-resume-open { min-height: 44px; border-color: transparent; padding-inline: 10px; background: transparent; color: var(--color-primary); font-size: 13px; white-space: nowrap; }
+.home-hub .life-reading-resume > .life-reading-resume-open:hover:not(:disabled) { background: var(--soft); color: var(--color-primary); border-color: transparent; }
+.home-hub .life-reading-resume-open > .life-glyph { display: none; }
+.home-hub .life-reading-resume-clear { width: 44px; min-width: 44px; height: 44px; padding: 12px; }
+.home-hub #homeRecent { margin-top: 28px; }
+.home-hub #homeRecent > .home-section-heading { align-items: center; gap: 12px; min-height: 44px; margin: 0 0 4px; padding: 0; border: 0; }
+.home-hub #homeRecentTitle { margin: 0; padding: 0; color: var(--ink); font-size: 20px; font-weight: 700; line-height: 1.5; letter-spacing: -.025em; }
+.home-hub .home-hub-all { flex: none; min-height: 44px; border: 0; border-radius: 10px; padding: 10px 0 10px 12px; background: transparent; color: var(--ink-soft); font-size: 13px; line-height: 1.7; }
+.home-hub .home-hub-all:hover:not(:disabled) { color: var(--color-primary); background: transparent; text-decoration: underline; text-underline-offset: 4px; }
+.home-recent-list { min-width: 0; }
+.home-recent-item { display: flow-root; min-width: 0; margin: 0; padding: 18px 0 20px; border-bottom: 1px solid var(--line); }
+.home-recent-content { display: flow-root; min-width: 0; }
+.home-recent-item > h3 { margin: 0; font: inherit; }
+.home-recent-open { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; width: 100%; min-height: 44px; margin: 0; border: 0; border-radius: 0; padding: 0; background: transparent; color: var(--ink); font-size: 20px; font-weight: 650; line-height: 1.5; letter-spacing: -.025em; text-align: left; }
+.home-recent-open:hover:not(:disabled),.home-recent-open:active:not(:disabled) { background: transparent; color: var(--color-primary); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.home-recent-excerpt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; margin-top: 3px; color: var(--ink-soft); font-size: 15px; line-height: 1.7; }
+.home-recent-meta { margin-top: 7px; color: var(--ink-soft); font-size: 13px; line-height: 1.7; }
+.home-recent-thumbnail { float: right; display: block; width: 80px; height: 80px; overflow: hidden; margin: 4px 0 4px 20px; border: 0; border-radius: 10px; padding: 0; background: var(--paper-2); object-fit: cover; }
+.home-recent-thumbnail > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.home-recent-thumbnail > :is(.home-photo-loading,.home-photo-error) { display: grid; place-content: center; width: 100%; height: 100%; padding: 4px; font-size: 12px; line-height: 1.5; }
+.home-hub .home-hub-empty { padding-block: 24px; border-bottom: 1px solid var(--line); }
+.home-hub .home-hub-empty h3 { font-size: 20px; font-weight: 650; line-height: 1.6; }
+.home-hub .home-hub-empty .home-text { max-width: 44ch; margin-top: 8px; color: var(--ink-soft); font-size: 15px; line-height: 1.8; }
+.home-hub-secondary { margin-top: 16px; }
+.home-hub .home-hub-secondary > .home-hub-write { min-height: 44px; border: 0; border-radius: 10px; padding: 10px 0; background: transparent; color: var(--ink-soft); font-size: 14px; line-height: 1.7; }
+.home-hub .home-hub-secondary > .home-hub-write:hover:not(:disabled) { background: transparent; color: var(--color-primary); text-decoration: underline; text-underline-offset: 4px; }
+@media (max-width: 760px) {
+  .life-home.home-hub { column-gap: 8px; padding-top: 0; }
+  .home-hub .home-hub-actions > .life-button { padding-inline: 12px; }
+  .home-hub-search > input { padding-left: 12px; }
+  .home-hub #homeReadingResumeHost { margin-top: 20px; }
+  .home-hub .life-reading-resume { flex-wrap: wrap; gap: 4px; padding-block: 14px; }
+  .home-hub .life-reading-resume-copy { flex: 1 1 140px; }
+  .home-hub .life-reading-resume-title { font-size: 15px; }
+  .home-hub .life-reading-resume > .life-reading-resume-open { padding-inline: 8px; }
+  .home-hub #homeRecent { margin-top: 24px; }
+  .home-hub #homeRecentTitle { font-size: 20px; }
+  .home-recent-item { padding-block: 16px 18px; }
+  .home-recent-open { font-size: 18px; line-height: 1.55; }
+  .home-recent-excerpt { font-size: 14px; }
+  .home-recent-thumbnail { width: 64px; height: 64px; margin-left: 14px; border-radius: 8px; }
+}
+@media (max-width: 350px) {
+  .life-home.home-hub { grid-template-columns: minmax(0,1fr); row-gap: 8px; }
+  .home-hub-actions { justify-content: flex-start; }
+  .home-hub .life-reading-resume-copy { flex-basis: 100%; }
+}

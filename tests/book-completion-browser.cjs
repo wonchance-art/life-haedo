@@ -7,7 +7,8 @@ if (!process.env.PW_MODULE_PATH && process.env.PLAYWRIGHT_MODULE) process.env.PW
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { FakeCloud, accounts, password, cloud, base } = require('./life-sync-browser.cjs');
-const { playwright, makeContext, ready, settle, observe, nav } = require('./unified-home-browser.cjs');
+const { playwright, makeContext, ready, settle, observe } = require('./unified-home-browser.cjs');
+const { nav } = require('./writings-navigation.cjs');
 const { current, save, details, download, openBook, createBook } = require('./book-projects-browser.cjs');
 const { expand } = require('./book-insights-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');

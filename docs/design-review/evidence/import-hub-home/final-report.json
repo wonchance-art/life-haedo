@@ -1,0 +1,587 @@
+{
+  "verifiedAt": "2026-10-18T10:38:28.783Z",
+  "scope": "Local Chromium, actual app/SDK/IDB; synthetic Auth and generated samples. No actual Apple/IME/Google/production verification.",
+  "base": "http://127.0.0.1:4173",
+  "browser": "151.0.7922.173",
+  "method": "One initial seven-flow run and twelve-scene batch. After aligning selectors with the approved internal return UI and refreshing app state after direct IDB fixture seeding, only the affected three flows were rerun; a final mixed-flow-only check corrected the draft-row selector. The latest result for each acceptance criterion is reported below; no single final full-suite run is claimed.",
+  "checks": [
+    {
+      "name": "public import intent, explicit review, aborted write and retry",
+      "pass": true,
+      "evidence": "browser-report.json"
+    },
+    {
+      "name": "confirmed empty home exposes search and import without false resume",
+      "pass": true,
+      "evidence": "browser-report.json"
+    },
+    {
+      "name": "thirteen imported originals: recent six, global search, exact reader and link-only",
+      "pass": true,
+      "evidence": "browser-report.json"
+    },
+    {
+      "name": "mixed originals and saved writing share six recent rows; drafts and archive remain accessible",
+      "pass": true,
+      "evidence": "mixed-confirmation/browser-report.json"
+    },
+    {
+      "name": "resume is conditional and preserves the exact older immutable BOM/CRLF version",
+      "pass": true,
+      "evidence": "browser-report.json"
+    },
+    {
+      "name": "read failures preserve known originals and retry before declaring an empty home",
+      "pass": true,
+      "evidence": "confirmation/browser-report.json"
+    },
+    {
+      "name": "late reads cannot replace navigation, a new workspace, or the next account",
+      "pass": true,
+      "evidence": "confirmation/browser-report.json"
+    }
+  ],
+  "passed": 7,
+  "failed": 0,
+  "evidenceRuns": [
+    {
+      "file": "browser-report.json",
+      "passed": 4,
+      "failed": 3
+    },
+    {
+      "file": "confirmation/browser-report.json",
+      "passed": 2,
+      "failed": 1
+    },
+    {
+      "file": "mixed-confirmation/browser-report.json",
+      "passed": 1,
+      "failed": 0
+    }
+  ],
+  "initialFailureCauses": [
+    "Hidden outer-header return selector after approved duplicate-header removal; actual inner return remained usable.",
+    "Direct IDB fixture writes were not followed by app reload, leaving the in-memory bundle/workspace list stale.",
+    "Drafts use .home-draft rows, while the initial selector expected .home-post."
+  ],
+  "productDefectsConfirmed": [],
+  "captures": [
+    {
+      "scene": "public",
+      "file": "public-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.59,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        \n        로",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "home": {
+        "recent": 0,
+        "visibleResume": false,
+        "duplicateIds": [],
+        "rowText": []
+      }
+    },
+    {
+      "scene": "public",
+      "file": "public-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.59,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        \n        로",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "home": {
+        "recent": 0,
+        "visibleResume": false,
+        "duplicateIds": [],
+        "rowText": []
+      }
+    },
+    {
+      "scene": "public",
+      "file": "public-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.59,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        \n        로",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "home": {
+        "recent": 0,
+        "visibleResume": false,
+        "duplicateIds": [],
+        "rowText": []
+      }
+    },
+    {
+      "scene": "empty",
+      "file": "empty-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 71,
+        "height": 30,
+        "lineHeight": "30px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "home": {
+        "recent": 0,
+        "visibleResume": false,
+        "duplicateIds": [],
+        "rowText": []
+      }
+    },
+    {
+      "scene": "empty",
+      "file": "empty-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 71,
+        "height": 30,
+        "lineHeight": "30px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "home": {
+        "recent": 0,
+        "visibleResume": false,
+        "duplicateIds": [],
+        "rowText": []
+      }
+    },
+    {
+      "scene": "empty",
+      "file": "empty-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.59,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 71,
+        "height": 30,
+        "lineHeight": "30px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "home": {
+        "recent": 0,
+        "visibleResume": false,
+        "duplicateIds": [],
+        "rowText": []
+      }
+    },
+    {
+      "scene": "imported-only",
+      "file": "imported-only-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 71,
+        "height": 30,
+        "lineHeight": "30px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "home": {
+        "recent": 6,
+        "visibleResume": false,
+        "duplicateIds": [],
+        "rowText": [
+          "외부 블로그 익명 기록 0모든 자료 검색표식 최신 원문 🌱 이전 버전의 BOM과 줄바꿈은 그대로 보존합니다.가져옴 10월 18일 · Obsidian · 작성자 관계 미확인 · 확보 범위 미확인",
+          "본문 없이 주소만 보관한 익명 글가져옴 10월 18일 · Obsidian · 작성자 관계 미확인 · 링크만 보관 · 본문 미확보",
+          "긴 한국어 제목도 줄을 넘기며 읽을 수 있도록 보관한 익명 산책과 독서에 관한 아주 긴 기록모든 자료 검색표식 11. 외부에 남긴 익명의 글을 보관합니다. 🌱 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 …가져옴 10월 18일 · 네이버 블로그 · 작성자 관계 미확인",
+          "외부 블로그 익명 기록 10모든 자료 검색표식 10. 외부에 남긴 익명의 글을 보관합니다. 🌱 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다.가져옴 10월 18일 · Obsidian · 작성자 관계 미확인",
+          "외부 블로그 익명 기록 9모든 자료 검색표식 9. 외부에 남긴 익명의 글을 보관합니다. 🌱 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다.가져옴 10월 18일 · 네이버 블로그 · 작성자 관계 미확인",
+          "외부 블로그 익명 기록 8모든 자료 검색표식 8. 외부에 남긴 익명의 글을 보관합니다. 🌱 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다.가져옴 10월 18일 · Obsidian · 작성자 관계 미확인"
+        ]
+      }
+    },
+    {
+      "scene": "imported-only",
+      "file": "imported-only-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 71,
+        "height": 30,
+        "lineHeight": "30px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "home": {
+        "recent": 6,
+        "visibleResume": false,
+        "duplicateIds": [],
+        "rowText": [
+          "외부 블로그 익명 기록 0모든 자료 검색표식 최신 원문 🌱 이전 버전의 BOM과 줄바꿈은 그대로 보존합니다.가져옴 10월 18일 · Obsidian · 작성자 관계 미확인 · 확보 범위 미확인",
+          "본문 없이 주소만 보관한 익명 글가져옴 10월 18일 · Obsidian · 작성자 관계 미확인 · 링크만 보관 · 본문 미확보",
+          "긴 한국어 제목도 줄을 넘기며 읽을 수 있도록 보관한 익명 산책과 독서에 관한 아주 긴 기록모든 자료 검색표식 11. 외부에 남긴 익명의 글을 보관합니다. 🌱 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 …가져옴 10월 18일 · 네이버 블로그 · 작성자 관계 미확인",
+          "외부 블로그 익명 기록 10모든 자료 검색표식 10. 외부에 남긴 익명의 글을 보관합니다. 🌱 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다.가져옴 10월 18일 · Obsidian · 작성자 관계 미확인",
+          "외부 블로그 익명 기록 9모든 자료 검색표식 9. 외부에 남긴 익명의 글을 보관합니다. 🌱 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다.가져옴 10월 18일 · 네이버 블로그 · 작성자 관계 미확인",
+          "외부 블로그 익명 기록 8모든 자료 검색표식 8. 외부에 남긴 익명의 글을 보관합니다. 🌱 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다.가져옴 10월 18일 · Obsidian · 작성자 관계 미확인"
+        ]
+      }
+    },
+    {
+      "scene": "imported-only",
+      "file": "imported-only-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.59,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 71,
+        "height": 30,
+        "lineHeight": "30px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "home": {
+        "recent": 6,
+        "visibleResume": false,
+        "duplicateIds": [],
+        "rowText": [
+          "외부 블로그 익명 기록 0모든 자료 검색표식 최신 원문 🌱 이전 버전의 BOM과 줄바꿈은 그대로 보존합니다.가져옴 10월 18일 · Obsidian · 작성자 관계 미확인 · 확보 범위 미확인",
+          "본문 없이 주소만 보관한 익명 글가져옴 10월 18일 · Obsidian · 작성자 관계 미확인 · 링크만 보관 · 본문 미확보",
+          "긴 한국어 제목도 줄을 넘기며 읽을 수 있도록 보관한 익명 산책과 독서에 관한 아주 긴 기록모든 자료 검색표식 11. 외부에 남긴 익명의 글을 보관합니다. 🌱 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 …가져옴 10월 18일 · 네이버 블로그 · 작성자 관계 미확인",
+          "외부 블로그 익명 기록 10모든 자료 검색표식 10. 외부에 남긴 익명의 글을 보관합니다. 🌱 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다.가져옴 10월 18일 · Obsidian · 작성자 관계 미확인",
+          "외부 블로그 익명 기록 9모든 자료 검색표식 9. 외부에 남긴 익명의 글을 보관합니다. 🌱 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다.가져옴 10월 18일 · 네이버 블로그 · 작성자 관계 미확인",
+          "외부 블로그 익명 기록 8모든 자료 검색표식 8. 외부에 남긴 익명의 글을 보관합니다. 🌱 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다.가져옴 10월 18일 · Obsidian · 작성자 관계 미확인"
+        ]
+      }
+    },
+    {
+      "scene": "mixed",
+      "file": "mixed-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 71,
+        "height": 30,
+        "lineHeight": "30px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "home": {
+        "recent": 6,
+        "visibleResume": false,
+        "duplicateIds": [],
+        "rowText": [
+          "직접 쓴 익명 기록모든 자료 검색표식 직접 쓴 원문의 정확한 본문 🌱저장 10월 18일 · 내 글 · 내 기록",
+          "모든 자료 검색표식 익명 첨부 글 다른 저장 형식의 본문도 그대로 보관합니다.수정 10월 18일 · 직접 쓴 첨부 글 · 비공개",
+          "그림과 함께 남긴 익명의 사진 글모든 자료 검색표식 익명 사진 글. 직접 그린 모양만 표시합니다. 검증용으로 직접 그린 익명 이미지수정 10월 18일 · 직접 쓴 글 · 이 브라우저에 보관",
+          "외부 블로그 익명 기록 0모든 자료 검색표식 최신 원문 🌱 이전 버전의 BOM과 줄바꿈은 그대로 보존합니다.가져옴 10월 18일 · Obsidian · 작성자 관계 미확인 · 확보 범위 미확인",
+          "본문 없이 주소만 보관한 익명 글가져옴 10월 18일 · Obsidian · 작성자 관계 미확인 · 링크만 보관 · 본문 미확보",
+          "긴 한국어 제목도 줄을 넘기며 읽을 수 있도록 보관한 익명 산책과 독서에 관한 아주 긴 기록모든 자료 검색표식 11. 외부에 남긴 익명의 글을 보관합니다. 🌱 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 …가져옴 10월 18일 · 네이버 블로그 · 작성자 관계 미확인"
+        ]
+      }
+    },
+    {
+      "scene": "mixed",
+      "file": "mixed-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 71,
+        "height": 30,
+        "lineHeight": "30px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "home": {
+        "recent": 6,
+        "visibleResume": false,
+        "duplicateIds": [],
+        "rowText": [
+          "직접 쓴 익명 기록모든 자료 검색표식 직접 쓴 원문의 정확한 본문 🌱저장 10월 18일 · 내 글 · 내 기록",
+          "모든 자료 검색표식 익명 첨부 글 다른 저장 형식의 본문도 그대로 보관합니다.수정 10월 18일 · 직접 쓴 첨부 글 · 비공개",
+          "그림과 함께 남긴 익명의 사진 글모든 자료 검색표식 익명 사진 글. 직접 그린 모양만 표시합니다. 검증용으로 직접 그린 익명 이미지수정 10월 18일 · 직접 쓴 글 · 이 브라우저에 보관",
+          "외부 블로그 익명 기록 0모든 자료 검색표식 최신 원문 🌱 이전 버전의 BOM과 줄바꿈은 그대로 보존합니다.가져옴 10월 18일 · Obsidian · 작성자 관계 미확인 · 확보 범위 미확인",
+          "본문 없이 주소만 보관한 익명 글가져옴 10월 18일 · Obsidian · 작성자 관계 미확인 · 링크만 보관 · 본문 미확보",
+          "긴 한국어 제목도 줄을 넘기며 읽을 수 있도록 보관한 익명 산책과 독서에 관한 아주 긴 기록모든 자료 검색표식 11. 외부에 남긴 익명의 글을 보관합니다. 🌱 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 …가져옴 10월 18일 · 네이버 블로그 · 작성자 관계 미확인"
+        ]
+      }
+    },
+    {
+      "scene": "mixed",
+      "file": "mixed-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.59,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 71,
+        "height": 30,
+        "lineHeight": "30px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "home": {
+        "recent": 6,
+        "visibleResume": false,
+        "duplicateIds": [],
+        "rowText": [
+          "직접 쓴 익명 기록모든 자료 검색표식 직접 쓴 원문의 정확한 본문 🌱저장 10월 18일 · 내 글 · 내 기록",
+          "모든 자료 검색표식 익명 첨부 글 다른 저장 형식의 본문도 그대로 보관합니다.수정 10월 18일 · 직접 쓴 첨부 글 · 비공개",
+          "그림과 함께 남긴 익명의 사진 글모든 자료 검색표식 익명 사진 글. 직접 그린 모양만 표시합니다. 검증용으로 직접 그린 익명 이미지수정 10월 18일 · 직접 쓴 글 · 이 브라우저에 보관",
+          "외부 블로그 익명 기록 0모든 자료 검색표식 최신 원문 🌱 이전 버전의 BOM과 줄바꿈은 그대로 보존합니다.가져옴 10월 18일 · Obsidian · 작성자 관계 미확인 · 확보 범위 미확인",
+          "본문 없이 주소만 보관한 익명 글가져옴 10월 18일 · Obsidian · 작성자 관계 미확인 · 링크만 보관 · 본문 미확보",
+          "긴 한국어 제목도 줄을 넘기며 읽을 수 있도록 보관한 익명 산책과 독서에 관한 아주 긴 기록모든 자료 검색표식 11. 외부에 남긴 익명의 글을 보관합니다. 🌱 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 한국어 문장을 천천히 이어 갑니다. 오래 읽을 …가져옴 10월 18일 · 네이버 블로그 · 작성자 관계 미확인"
+        ]
+      }
+    }
+  ],
+  "visualFailures": [],
+  "minimumTextContrast": 5.15,
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "realRemoteWrites": 0,
+  "preservation": "Each read/browse/retry/scope scenario compares SHA-256 of actual stored originals, immutable versions and records; failed import abort leaves existing bundle unchanged. BOM/CRLF/emoji and older version text are checked exactly. New imports intentionally create a new original.",
+  "limitations": [
+    "Linux Chromium viewport simulation, not actual Apple hardware, native IME, Google OAuth or production Supabase verification.",
+    "All fixtures are generated anonymous data; no private vault, real external content, production account or personal image is read."
+  ],
+  "requestedViewportCapture": {
+    "consoleErrors": [],
+    "pageErrors": [],
+    "external": [],
+    "expectedErrors": 0,
+    "file": "home-mobile.png",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "method": "Requested additional viewport-only capture of the same generated mixed fixture, after the visible thumbnail actual load; no added test flow."
+  },
+  "captureCountIncludingRequestedViewport": 13
+}

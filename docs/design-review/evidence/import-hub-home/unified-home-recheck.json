@@ -1,0 +1,14 @@
+{
+  "checks": [
+    {
+      "name": "a home with originals and no excerpts shows real text and opens the complete original",
+      "pass": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "realRemoteWrites": 0,
+  "capturedAt": "2026-10-18T10:37:47.756Z",
+  "browser": "151.0.7922.173"
+}

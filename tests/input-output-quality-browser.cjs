@@ -1,4 +1,5 @@
 'use strict';
+const { openSearch, settleVisual } = require('./search-navigation.cjs');
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { playwright, makeContext, ready, nav, settle } = require('./unified-home-browser.cjs');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
@@ -22,7 +23,7 @@ async function main() {
   const snap = async (scene, focus) => { for (const width of [1440, 820, 390]) {
     await page.setViewportSize({ width, height: 1000 }); await page.evaluate(() => document.fonts.ready);
     await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))); if (focus) await focus();
-    const metrics = await page.evaluate(inspect); report.visual.push({ scene, width, metrics });
+    await settleVisual(page); const metrics = await page.evaluate(inspect); report.visual.push({ scene, width, metrics });
     assert(!metrics.horizontalOverflow); for (const key of ['smallTargets', 'smallInputs', 'unnamed', 'contrastFailures']) assert.deepEqual(metrics[key], [], scene + ' ' + key);
     await page.screenshot({ path: path.join(out, scene + '-' + width + '.png') });
   }};
@@ -30,7 +31,7 @@ async function main() {
   const selectFiles = async files => { await records(); await click('가져오기'); await click('텍스트 파일'); await page.locator('#lifeBatchPicker summary').click(); await page.locator('#lifeBatchFiles').setInputFiles(files); };
   let retained, original;
   try {
-    await page.goto(base + '/index.html'); await ready(page); await page.locator('#homePosts[aria-busy="false"]').waitFor(); await snap('home');
+    await page.goto(base + '/index.html'); await ready(page); await page.locator('#homeRecent[aria-busy="false"]').waitFor(); await snap('home');
     await check('Partial file failure keeps successful draft; only failed row is reselected and committed', async () => {
       await selectFiles([file('walk.md', raw), file('bad.txt', Buffer.from([0xc3, 0x28]))]);
       await row(0).filter({ hasText: '검토 중 보관됨' }).waitFor(); await row(1).filter({ hasText: '실패' }).waitFor();
@@ -43,7 +44,7 @@ async function main() {
       original = (await read()).bundle; assert.equal(original.sourceVersions[0].contentText, raw); assert.equal(original.sourceVersions[0].originalCreatedAt, '2022-04-03'); assert.equal(original.sourceVersions[0].originalAuthor.relation, 'self');
     });
     await check('Search opens exact imported text; returning preserves query and source remains unchanged', async () => {
-      await page.locator('#lifeFindOpen').click(); await page.locator('#lifeFind[aria-busy="false"]').waitFor(); await page.locator('#lifeFindQuery').fill('달라진 생각'); await snap('search-results'); await page.locator('.life-find-result').click();
+      await openSearch(page); await page.locator('#lifeFind[aria-busy="false"]').waitFor(); await page.locator('#lifeFindQuery').fill('달라진 생각'); await snap('search-results'); await page.locator('.life-find-result').click();
       await page.locator('#lifeSourceText').waitFor(); assert.equal(await page.locator('#lifeSourceText').textContent(), raw); await snap('source-reading'); await page.locator('#lifeSearchReturn').click(); await page.locator('#lifeFind[aria-busy="false"]').waitFor(); assert.equal(await page.locator('#lifeFindQuery').inputValue(), '달라진 생각'); assert.deepEqual((await read()).bundle, original);
     });
     await check('Thought actions are reachable without opening file settings at all widths', async () => {
@@ -60,7 +61,7 @@ async function main() {
       await click('방문자 미리보기'); assert.equal(await page.locator('#wbVisitor .pp-post').count(), 0); await click('편집으로 돌아가기'); await snap('private-feed'); await click('회고로 돌아가기'); assert.equal(await page.locator('#wbReflectionNote').inputValue(), thought);
     });
     await check('Search refresh invalidates cached results while kind filters preserve exact results', async () => {
-      await page.locator('#lifeFindOpen').click(); await page.locator('#lifeFind[aria-busy="false"]').waitFor(); await page.locator('#lifeFindQuery').fill('조용한 산책');
+      await openSearch(page); await page.locator('#lifeFind[aria-busy="false"]').waitFor(); await page.locator('#lifeFindQuery').fill('조용한 산책');
       const matches = await page.locator('.life-find-result').count(); assert(matches > 0); await page.getByRole('button', { name: /^페이지 \d+$/, exact: false }).click(); assert.equal(await page.locator('.life-find-result').count(), matches);
       await page.evaluate(async () => { const s = HaedoLife.Shell.storage, id = await s.getActive(), w = await s.readWorkbench(id); w.page.posts[0].attachments[0].title = '새로 바꾼 제목'; await s.saveWorkbench(id, w, w.revision); });
       await page.locator('#lifeFindReload').waitFor({ state: 'visible' }); await page.locator('#lifeFindReload').click(); await page.locator('#lifeFind[aria-busy="false"]').waitFor(); assert.equal(await page.locator('.life-find-result').count(), 0); await page.locator('#lifeFindQuery').fill('새로 바꾼 제목'); assert.equal(await page.locator('.life-find-result').count(), 1);

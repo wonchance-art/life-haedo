@@ -1,4 +1,5 @@
 'use strict';
+const { openSearch } = require('./search-navigation.cjs');
 const assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path');
 const {playwright,makeContext,ready,nav}=require('./unified-home-browser.cjs');
 const {FakeCloud,accounts,cloud,base}=require('./life-sync-browser.cjs');
@@ -21,14 +22,14 @@ async function main(){
  const check=async(name,action)=>{await action();report.checks.push(name);console.log('PASS '+name);};
  const click=name=>page.getByRole('button',{name,exact:true}).click(),wait=()=>page.locator('#lifeFind[aria-busy=false]').waitFor(),query=text=>page.locator('#lifeFindQuery').fill(text);
  const result=()=>page.locator('[data-focus-key][data-kind=nine]');
- const open=async()=>{await nav(page,'home');await page.locator('#lifeFindOpen').click();await wait();};
+ const open=async()=>{await nav(page,'home');await openSearch(page);await wait();};
  const back=async()=>{await click('검색 결과로 돌아가기');await wait();};
  const snapshot=()=>page.evaluate(async()=>{const s=HaedoLife.Shell.storage,id=await s.getActive();return {nine:await s.readNineBoard(id),bundle:await s.read(id),wb:await s.readWorkbench(id),cl:await s.readCollection(id),drafts:await s.readPageDrafts(id)};});
  const change=action=>other.evaluate(async action=>{const s=HaedoLife.Shell.storage,id=await s.getActive(),v=await s.readNineBoard(id),b=v.boards[1],a=b.areas[1];
   if(action==='reorder')a.items.reverse();if(action==='note')a.note='변경된 영역 설명';if(action==='remove')b.areas=b.areas.filter(x=>x.id!==a.id);
   await s.saveNineBoard(id,v,v.revision);
  },action);
- const snap=async scene=>{for(const width of [1440,820,390]){await page.setViewportSize({width,height:1000});await page.evaluate(()=>document.fonts.ready);const metrics=await page.evaluate(inspect);report.visual.push({scene,width,metrics});assert.equal(metrics.horizontalOverflow,false);for(const key of ['smallTargets','smallInputs','unnamed','contrastFailures'])assert.deepEqual(metrics[key],[],scene+' '+width+' '+key);await page.screenshot({path:path.join(out,scene+'-'+width+'.png')});}};
+ const snap=async scene=>{for(const width of [1440,820,390]){await page.setViewportSize({width,height:1000});await page.evaluate(()=>document.fonts.ready);await page.evaluate(()=>Promise.all(document.getAnimations().filter(animation=>Number.isFinite(animation.effect?.getComputedTiming().endTime)).map(animation=>animation.finished.catch(()=>{}))));const metrics=await page.evaluate(inspect);report.visual.push({scene,width,metrics});assert.equal(metrics.horizontalOverflow,false);for(const key of ['smallTargets','smallInputs','unnamed','contrastFailures'])assert.deepEqual(metrics[key],[],scene+' '+width+' '+key);await page.screenshot({path:path.join(out,scene+'-'+width+'.png')});}};
  let f,before;
  try{
   await page.goto(base+'/index.html');await ready(page);f=await fixture(page);before=await snapshot();await other.goto(base+'/index.html');await ready(other);await open();
@@ -61,7 +62,7 @@ async function main(){
    await page.getByLabel('9칸 구성 JSON 파일',{exact:true}).setInputFiles({name:'candidate.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(candidate))});await page.locator('.nb-import').waitFor();await back();await query('가져오기 파일 후보 기밀');assert.equal(await result().count(),0);
   });
   await check('Late board reads cannot reopen a departed screen; another workspace and account cannot see the query or board',async()=>{
-   await nav(page,'home');await page.evaluate(()=>{window.__nineGet=IDBObjectStore.prototype.get;window.__nineHold=true;window.__nineRelease=[];IDBObjectStore.prototype.get=function(key){const r=__nineGet.call(this,key);if(String(key).startsWith('nine-board:'))r.addEventListener('success',e=>{if(__nineHold){e.stopImmediatePropagation();__nineRelease.push(()=>r.dispatchEvent(new Event('success')));}});return r;};});await page.locator('#lifeFindOpen').click();await page.waitForFunction(()=>__nineRelease.length>0);await nav(page,'tools');await page.evaluate(()=>{__nineHold=false;__nineRelease.forEach(fn=>fn());IDBObjectStore.prototype.get=__nineGet;});await page.waitForTimeout(100);assert.equal(await page.locator('#lifeFind').count(),0);
+   await nav(page,'home');await page.evaluate(()=>{window.__nineGet=IDBObjectStore.prototype.get;window.__nineHold=true;window.__nineRelease=[];IDBObjectStore.prototype.get=function(key){const r=__nineGet.call(this,key);if(String(key).startsWith('nine-board:'))r.addEventListener('success',e=>{if(__nineHold){e.stopImmediatePropagation();__nineRelease.push(()=>r.dispatchEvent(new Event('success')));}});return r;};});await openSearch(page);await page.waitForFunction(()=>__nineRelease.length>0);await nav(page,'tools');await page.evaluate(()=>{__nineHold=false;__nineRelease.forEach(fn=>fn());IDBObjectStore.prototype.get=__nineGet;});await page.waitForTimeout(100);assert.equal(await page.locator('#lifeFind').count(),0);
    const fresh=await page.evaluate(async()=>{const s=HaedoLife.Shell.storage,b=await s.createWorkspace('새 익명 공간');await s.setActive(b.workspaceId);return b.workspaceId;});await page.goto(base+'/index.html?section=records&view=find');await ready(page);await wait();assert.equal(await page.locator('#lifeFindQuery').inputValue(),'');await query('산책');assert.equal(await result().count(),0);assert.notEqual(fresh,f.id);
    const otherContext=await makeContext(browser,new FakeCloud(),'nine-search-b',accounts.b);const p=await otherContext.newPage();await p.goto(base+'/index.html?section=records&view=find');await ready(p);await p.locator('#lifeFind[aria-busy=false]').waitFor();assert.equal(await p.locator('#lifeFindQuery').inputValue(),'');await p.locator('#lifeFindQuery').fill('산책');assert.equal(await p.locator('[data-kind=nine][data-focus-key]').count(),0);await otherContext.close();
   });

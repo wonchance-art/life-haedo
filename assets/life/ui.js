@@ -116,17 +116,17 @@
     let renderGeneration = 0;
     let navigationRender = null, mainRenderPromise = Promise.resolve(), inputGeneration = 0;
     const sectionPositions = new Map();
-    let homeRenderPromise = Promise.resolve();
+    let homeRenderPromise = Promise.resolve(), writingsRenderPromise = Promise.resolve();
     let homeRenderOptions = null, blogPageTask = false, blogMode = null, blogCommitted = null;
     let blogEntryScroll = null;
     let navigationTrigger = null;
     const viewOrigins = new Map();
-    let findRenderPromise = Promise.resolve();
+    let findRenderPromise = Promise.resolve(), findOpenOptions = null;
     let collectionOpenOptions = null;
     let sourceResultsUpdate = null, readerClassificationUpdate = null;
     let sourcesRenderPromise = Promise.resolve();
-    const parentViews = new Set(['find', 'home', 'sources', 'topics', 'tools', 'manage']);
-    const subviewTitles = { find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
+    const parentViews = new Set(['find', 'home', 'writings', 'sources', 'topics', 'tools', 'manage']);
+    const subviewTitles = { find: '통합 검색', writings: '직접 쓴 글', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
       discover: '다시 찾기', sync: '기기 간 동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
     const selectedVersions = new Set();
@@ -213,6 +213,7 @@
       storage, core, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce, onLocalSaved: clearError,
       onBlogReturn: returnFromBlog,
+      getBlogReturnLabel: () => subviewOrigin().mode === 'home' ? '홈으로 돌아가기' : '내 글로 돌아가기',
       onBlogModeChange: context => {
         if (disposed || state.mode !== 'page') return;
         if (!blogPageTask || !['edit', 'read', 'profile'].includes(context.mode)) { global.requestAnimationFrame(syncWritingFocus); return; }
@@ -291,11 +292,11 @@
     const home = global.HaedoLife.HomeUI?.create({
       storage, core, host: main, getBundle: () => state.bundle,
       isDisposed: () => disposed, announce, navigate: (mode, options = {}) => navigate(mode, mode === 'page' && (options.pageCompose || options.pageProfileEdit || options.pageDraftId || options.searchTarget) ? { ...options, blogContext: true } : options),
-      renderReadingResume: parent => renderReadingResume(parent, 'home', 'home'),
-      openSource: (sourceId, versionId) => navigate('source', {
+      renderReadingResume: (parent, mode = 'home') => renderReadingResume(parent, mode, mode),
+      openSource: (sourceId, versionId, options = {}) => navigate('source', {
         sourceId, sourceVersionId: versionId, locator: null,
-        returnContext: { mode: 'home', workspaceId: state.bundle.workspaceId, scrollY: global.scrollY,
-          focusKey: document.activeElement?.dataset.focusKey, homeState: home?.captureState() }
+        returnContext: { mode: state.mode, workspaceId: state.bundle.workspaceId, scrollY: global.scrollY,
+          focusKey: document.activeElement?.dataset.focusKey, homeState: home?.captureState(), homeAnchor: options.homeAnchor }
       })
     });
 
@@ -311,7 +312,7 @@
             !state.bundle?.sourceVersions.some(version => version.id === sourceVersionId && version.sourceId === sourceId)) return;
         state.remoteChanged = false;
         const origin = viewOrigins.get('write');
-        const returnContext = origin?.mode === 'home' && origin.workspaceId === workspaceId ? { ...origin, homeState: { ...origin.homeState, tab: 'posts' }, homeAnchor: { kind: 'source', id: sourceId, committed: true } } : null;
+        const returnContext = ['home', 'writings'].includes(origin?.mode) && origin.workspaceId === workspaceId ? { ...origin, homeState: { ...origin.homeState, tab: 'posts' }, homeAnchor: { kind: 'source', id: sourceId, versionId: sourceVersionId, committed: true } } : null;
         await navigate('source', { sourceId, sourceVersionId, locator: null, ...(returnContext ? { returnContext } : {}) });
         announce('비공개 글을 저장했습니다.');
       }
@@ -996,8 +997,8 @@
       const origin = (parentViews.has(from) || from === 'reflection' && mode === 'page' && options?.pageDraftId) ? { mode: from, workspaceId: state.bundle?.workspaceId, scrollY: global.scrollY,
         focusKey: control?.dataset.focusKey, focusId: control?.id,
         focusName: control?.getAttribute('aria-label') || control?.textContent, focusTag: control?.tagName,
-        ...(from === 'home' ? { homeState: home?.captureState() } : {}) } :
-        from === 'source' && mode === 'write' && state.returnContext?.mode === 'home' ? { ...state.returnContext } : null;
+        ...(['home', 'writings'].includes(from) ? { homeState: home?.captureState(), homeAnchor: options.homeAnchor } : {}) } :
+        from === 'source' && mode === 'write' && ['home', 'writings'].includes(state.returnContext?.mode) ? { ...state.returnContext } : null;
       const returningFromReader = from === 'source' && state.returnContext?.mode === mode;
       if (dirty()) await persistStage();
       await workbench?.flush();
@@ -1015,7 +1016,8 @@
         if (options.blogContext === true) options = { ...options, homeTab: origin?.homeState?.tab || 'posts' };
         if (!options.preserveContext) { blogMode = options.pageProfileEdit ? 'profile' : options.pageCompose || options.pageDraftId ? 'edit' : null; blogCommitted = null; }
       }
-      if (mode === 'home') homeRenderOptions = { homeState: options.homeState, homeAnchor: options.homeAnchor };
+      if (mode === 'home' || mode === 'writings') homeRenderOptions = { homeState: options.homeState, homeAnchor: options.homeAnchor };
+      if (mode === 'find') findOpenOptions = typeof options.query === 'string' ? { query: options.query.slice(0, 500) } : null;
       // A previous excerpt/record save does not describe the draft being opened.
       // Clear only after navigation can succeed; failed flushes keep their feedback.
       if (mode === 'write' && state.mode !== 'write') announce('', { quiet: true });
@@ -1023,7 +1025,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { navigationMotion, sectionPosition, selection, groupId, pagePreview, discovery, writing, reimport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, ...viewOptions } = options || {};
+      const { navigationMotion, sectionPosition, query: findQuery, homeAnchor, homeState, selection, groupId, pagePreview, discovery, writing, reimport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, ...viewOptions } = options || {};
       if (reimport) {
         if (mode !== 'import' || state.bundle.workspaceId !== reimport.workspaceId) return;
         const source = sourceFor(reimport.sourceId);
@@ -1049,7 +1051,7 @@
       // Incoming records are only a review. A slow configuration read must not
       // lock the global navigation; Workbench owns stale-response guards.
       const resetEntryScroll = changedTask && !options.preserveContext && navigationMotion !== 'back' && !sectionPosition &&
-        mode !== 'source' && !options.locator && !options.homeAnchor && !searchTarget?.entryId && !nineTarget &&
+        mode !== 'source' && !options.locator && !(options.homeAnchor && mode !== 'page') && !searchTarget?.entryId && !nineTarget &&
         !collectionItemId && !groupId && !book && !chapterImportOptions && !selection;
       if (resetEntryScroll) global.scrollTo({ top: 0, behavior: 'instant' });
       const entryInput = inputGeneration, entryGeneration = renderGeneration + 1;
@@ -1169,7 +1171,8 @@
     }
 
     function sectionFor(mode) {
-      if (mode === 'home' || mode === 'page' && blogPageTask || mode === 'write' && viewOrigins.get('write')?.mode === 'home' || mode === 'source' && (state.returnContext?.mode === 'home' || state.returnContext?.mode === 'page' && blogPageTask)) return 'home';
+      const blogHome = blogPageTask && viewOrigins.get('page')?.mode !== 'writings';
+      if (mode === 'home' || mode === 'page' && blogHome || mode === 'write' && viewOrigins.get('write')?.mode === 'home' || mode === 'source' && (state.returnContext?.mode === 'home' || state.returnContext?.mode === 'page' && blogHome)) return 'home';
       return ['tools', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'sync', 'transfer', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
     }
 
@@ -1177,12 +1180,13 @@
       const params = new URLSearchParams(global.location.search);
       const section = params.get('section');
       const view = params.get('view');
+      if (params.get('collect') === '1') return 'import';
       if (params.get('compose') === '1') return 'page';
       if (section === 'home' && !view) return 'home';
       if (section === 'tools') return ['discover', 'reflection', 'books'].includes(view) ? view : 'tools';
       if (section === 'manage') return ['transfer', 'sync', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
       if (!section && ['transfer', 'sync', 'workbench-backup', 'public-pages', 'discover', 'reflection', 'books'].includes(view)) return view;
-      if (['topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related', 'collection', 'find'].includes(view)) return view;
+      if (['topics', 'sources', 'writings', 'time', 'import', 'write', 'activities', 'page', 'related', 'collection', 'find'].includes(view)) return view;
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
     }
 
@@ -1191,10 +1195,11 @@
       const url = new URL(global.location.href);
       const section = sectionFor(mode);
       url.searchParams.delete('compose');
+      url.searchParams.delete('collect');
       if (section === 'home' && !/\/life\.html$/.test(url.pathname)) url.searchParams.delete('section');
       else url.searchParams.set('section', section);
       const view = mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
-      if (['topics', 'time', 'import', 'write', 'sync', 'transfer', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
+      if (['topics', 'writings', 'time', 'import', 'write', 'sync', 'transfer', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
       else url.searchParams.delete('view');
       const destination = url.pathname + url.search + url.hash;
       if (destination !== global.location.pathname + global.location.search + global.location.hash)
@@ -1214,7 +1219,7 @@
       const token = ++navigationGeneration, workspace = workspaceGeneration, workspaceId = state.bundle.workspaceId;
       const account = state.syncAccountKey;
       const position = { mode: state.mode, scrollY: global.scrollY,
-        ...(state.mode === 'home' ? { homeState: home?.captureState() } : {}) };
+        ...(['home', 'writings'].includes(state.mode) ? { homeState: home?.captureState() } : {}) };
       if (previousSection === 'records') lastRecordMode = state.mode;
       const next = section === previousSection ? sectionRoot : section === 'home' ? 'home' : section === 'records' ? lastRecordMode : section === 'tools' ? 'tools' : 'manage';
       // Save before changing URL so a failed draft write keeps the current view.
@@ -1251,22 +1256,24 @@
 
     async function returnFromSubview() {
       const origin = subviewOrigin();
-      const anchor = state.mode === 'page' && blogPageTask && origin.mode === 'home' && origin.homeState?.tab !== 'drafts' ? blogCommitted : null;
+      const anchor = state.mode === 'page' && blogPageTask && ['home', 'writings'].includes(origin.mode) && origin.homeState?.tab !== 'drafts' ? blogCommitted || origin.homeAnchor : origin.homeAnchor;
       if (await navigate(origin.mode, { preserveContext: true, homeState: origin.homeState, homeAnchor: anchor, navigationMotion: 'back' }) === false) return;
       const token = navigationGeneration, restoreInput = inputGeneration;
       const restore = () => requestAnimationFrame(() => {
-        if (disposed || token !== navigationGeneration || state.mode !== origin.mode || state.bundle?.workspaceId !== origin.workspaceId || anchor ||
-            origin.mode === 'sources' && restoreInput !== inputGeneration) return;
+        if (disposed || token !== navigationGeneration || state.mode !== origin.mode || state.bundle?.workspaceId !== origin.workspaceId || anchor && !anchor.returning ||
+            ['sources', 'home', 'writings'].includes(origin.mode) && restoreInput !== inputGeneration) return;
         const controls = [...root.querySelectorAll('button,a,summary,input')];
+        if (anchor?.returning && origin.focusKey && !controls.some(control => control.dataset.focusKey === origin.focusKey)) return;
         const target = (origin.focusKey && controls.find(el => el.dataset.focusKey === origin.focusKey)) ||
           (origin.focusId && controls.find(el => el.id === origin.focusId)) || controls.find(el =>
           el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2') || toolbar.querySelector('h1');
         for (let parent = target?.parentElement; parent && parent !== main; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
         target?.focus({ preventScroll: true });
-        if (!anchor) global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
+        global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
       });
       if (origin.mode === 'find') findRenderPromise.then(restore);
       else if (origin.mode === 'home') homeRenderPromise.then(restore);
+      else if (origin.mode === 'writings') writingsRenderPromise.then(restore);
       else if (origin.mode === 'sources') sourcesRenderPromise.then(restore);
       else restore();
     }
@@ -1274,11 +1281,11 @@
     async function returnFromBlog(context = {}) {
       if (disposed || state.mode !== 'page' || !blogPageTask) return;
       const origin = subviewOrigin();
-      if (origin.mode !== 'home' || origin.workspaceId !== state.bundle?.workspaceId) return returnFromSubview();
+      if (!['home', 'writings'].includes(origin.mode) || origin.workspaceId !== state.bundle?.workspaceId) return returnFromSubview();
       if (!context.committed || !context.id || context.kind === 'profile') return returnFromSubview();
       const anchor = { kind: context.kind === 'legacy' ? 'plain' : context.kind, id: context.id, committed: true };
       const homeState = { ...origin.homeState, workspaceId: origin.workspaceId, tab: 'posts' };
-      await navigate('home', { preserveContext: true, homeState, homeAnchor: anchor, navigationMotion: 'back' });
+      await navigate(origin.mode, { preserveContext: true, homeState, homeAnchor: anchor, navigationMotion: 'back' });
     }
 
     function syncWritingFocus() {
@@ -1298,9 +1305,9 @@
       header.replaceChildren();
       toolbar.classList.add('haedo-page-heading');
       toolbar.replaceChildren();
-      toolbar.hidden = state.mode === 'source' && !state.remoteChanged;
+      toolbar.hidden = (state.mode === 'source' || state.mode === 'page' && blogPageTask) && !state.remoteChanged;
       recordSections.replaceChildren();
-      const focused = ['write', 'source', 'page', 'related', 'collection', 'find'].includes(state.mode);
+      const focused = ['write', 'writings', 'source', 'page', 'related', 'collection', 'find'].includes(state.mode);
       recordSections.hidden = section !== 'records' || focused;
       const heading = node('h1', null, 'life-page-title');
       heading.tabIndex = -1;
@@ -1314,9 +1321,9 @@
         const records = button('자료실', guarded(() => navigate('sources')), 'life-title-button');
         records.setAttribute('aria-label', '자료실 목록');
         heading.append(records);
-      } else heading.textContent = section === 'home' ? '내 블로그' : section === 'tools' ? '도구' : '설정';
+      } else heading.textContent = section === 'home' ? '홈' : section === 'tools' ? '도구' : '설정';
       if (subviewTitles[state.mode] && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
-        const labels = { find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '자료실로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '설정으로 돌아가기' };
+        const labels = { find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', writings: '내 글로 돌아가기', sources: '자료실로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '설정으로 돌아가기' };
         const back = iconButton(labels[subviewOrigin().mode] || labels.sources, 'back', guarded(returnFromSubview));
         back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';
         back.dataset.subviewReturn = 'true';
@@ -1365,9 +1372,9 @@
         if (state.mode === 'import' || state.mode === 'batch') add.setAttribute('aria-current', 'page');
         // Home exposes these actions with labels in its shortcut row.
         if (section === 'records') nav.append(add, iconButton('글쓰기', 'edit', guarded(() => navigate('write'))));
-        toolbar.append(nav);
+        if (nav.childElementCount) toolbar.append(nav);
       }
-      if (!['source', 'find'].includes(state.mode)) {
+      if (!['home', 'source', 'find'].includes(state.mode)) {
         const find = iconButton('통합 검색', 'search', guarded(() => navigate('find'))); find.id = 'lifeFindOpen'; toolbar.append(find);
       }
       if (state.remoteChanged && state.mode !== 'find') {
@@ -1515,6 +1522,7 @@
 
     function resetSearchContext() {
       unifiedSearch?.reset();
+      findOpenOptions = homeRenderOptions = null;
       sourceResultsUpdate = readerClassificationUpdate = null;
       if (!disposed) sourceClassification?.reset();
       sourcesRenderPromise = Promise.resolve();
@@ -1709,7 +1717,8 @@
             }
             state.bundle = bundle;
             await navigate('source', { sourceId, sourceVersionId, locator: { start: offset, end: offset },
-              returnContext: { workspaceId, mode, scrollY: global.scrollY, focusKey: open.dataset.focusKey } });
+              returnContext: { workspaceId, mode, scrollY: global.scrollY, focusKey: open.dataset.focusKey,
+                ...(['home', 'writings'].includes(mode) ? { homeState: home?.captureState() } : {}) } });
           }));
         } else showError('저장한 원문 버전을 찾을 수 없습니다. 다른 버전으로 바꾸지 않았습니다.');
         const clear = iconButton('읽기 위치 지우기', 'close', () => {}, 'life-reading-resume-clear');
@@ -1726,7 +1735,7 @@
             return;
           }
           draw(result.state);
-          main.querySelector(mode === 'home' ? '#homeRecentTitle' : '#lifeSearch')?.focus({ preventScroll: true });
+          main.querySelector(['home', 'writings'].includes(mode) ? '#homeRecentTitle,h1,h2' : '#lifeSearch')?.focus({ preventScroll: true });
         }, '읽기 위치를 지우지 못했습니다. 다시 시도해 주세요.'));
         if (focusId) (row.querySelector('#' + focusId) || clear).focus({ preventScroll: true });
       };
@@ -1761,8 +1770,9 @@
       if (await navigate(context.mode, { returnContext: null, homeState: context.homeState, homeAnchor: context.homeAnchor, navigationMotion: 'back', sourcesRevealVersionId: context.mode === 'sources' ? context.sourceVersionId || null : null }) === false) return;
       const navigation = navigationGeneration, restoreInput = inputGeneration;
       const restore = () => requestAnimationFrame(() => {
-        if (disposed || navigation !== navigationGeneration || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode || context.homeAnchor ||
-            context.mode === 'sources' && restoreInput !== inputGeneration) return;
+        if (disposed || navigation !== navigationGeneration || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode || context.homeAnchor && !context.homeAnchor.returning ||
+            ['sources', 'home', 'writings'].includes(context.mode) && restoreInput !== inputGeneration) return;
+        if (context.homeAnchor?.returning && context.focusKey && !Array.from(main.querySelectorAll('[data-focus-key]')).some(el => el.dataset.focusKey === context.focusKey)) return;
         const target = Array.from(main.querySelectorAll('[data-focus-key]')).find(el => el.dataset.focusKey === context.focusKey) ||
           (context.mode === 'sources' && Array.from(main.querySelectorAll('.life-source-open')).find(el => el.dataset.versionId === context.sourceVersionId)) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2');
         const panel = target?.closest('[data-result-panel]');
@@ -1770,22 +1780,23 @@
         while (ancestor && ancestor !== main) { if (ancestor.tagName === 'DETAILS') ancestor.open = true; ancestor = ancestor.parentElement; }
         if (panel?.hidden) Array.from(main.querySelectorAll('[aria-controls]')).find(el => el.getAttribute('aria-controls') === panel.id)?.click();
         target?.focus({ preventScroll: true });
-        if (!context.homeAnchor) global.scrollTo({ top: context.scrollY, behavior: 'instant' });
+        global.scrollTo({ top: context.scrollY, behavior: 'instant' });
       });
       if (context.focusKey === context.mode + ':reading-resume') {
         const pending = readingResumePromise;
-        Promise.all([pending, context.mode === 'sources' ? sourcesRenderPromise : null]).then(() => { if (pending === readingResumePromise) restore(); });
+        Promise.all([pending, context.mode === 'sources' ? sourcesRenderPromise : context.mode === 'home' ? homeRenderPromise : context.mode === 'writings' ? writingsRenderPromise : null]).then(() => { if (pending === readingResumePromise) restore(); });
       } else if (context.mode === 'home') {
         const pending = homeRenderPromise;
         pending.then(() => { if (pending === homeRenderPromise) restore(); });
       }
+      else if (context.mode === 'writings') writingsRenderPromise.then(restore);
       else if (context.mode === 'find') findRenderPromise.then(restore);
       else if (context.mode === 'sources') sourcesRenderPromise.then(restore);
       else restore();
     }
 
     function searchReturnButton() {
-      const labels = { home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
+      const labels = { home: '홈으로 돌아가기', writings: '내 글로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
       const back = iconButton(labels[state.returnContext?.mode] || '검색 결과로 돌아가기', 'back', guarded(returnToResults));
       back.id = 'lifeSearchReturn';
       return back;
@@ -1993,6 +2004,9 @@
       heading.classList.add('life-sr-only');
       main.append(heading);
       renderStages(main);
+      const writings = button('직접 쓴 글·초안·보관함', guarded(() => navigate('writings')));
+      writings.id = 'lifeWritingsOpen';
+      main.append(writings);
       const classificationManager = sourceClassification ? node('div', null, 'life-classification-manager-host') : null;
       const classificationFilters = sourceClassification ? node('div', null, 'life-classification-filters-host') : null;
       if (classificationManager) main.append(classificationManager);
@@ -2953,6 +2967,7 @@
       } else section.append(empty('본문 미확보 · 링크만 보관합니다. 본문을 읽거나 요약했다고 표시하지 않습니다.'));
       const controls = node('div', null, 'life-actions');
       const apply = async excerpts => {
+        const importOrigin = viewOrigins.get('import');
         const tick = state.editTick;
         const snapshot = JSON.parse(JSON.stringify(state.stage));
         const selected = JSON.parse(JSON.stringify(excerpts));
@@ -2994,6 +3009,12 @@
         state.savedTick = state.editTick = 0;
         if (validBatchStage(snapshot)) { state.batchId = snapshot.batchId; await navigate('batch'); }
         else if (currentChapterImport(chapterContext)) { await returnToChapterImport(); return; }
+        else if (importOrigin?.mode === 'home' && importOrigin.workspaceId === snapshot.workspaceId) {
+          const homeAnchor = { kind: 'source', id: retained, versionId: fresh.version.id, committed: true };
+          await navigate('source', { sourceId: retained, sourceVersionId: fresh.version.id,
+            locator: selected.length ? { start: selected[0].start, end: selected[0].end } : null,
+            returnContext: { ...importOrigin, sourceVersionId: fresh.version.id, homeAnchor } });
+        }
         else if (excerpts.length) await navigate('sources');
         else await navigate('source', { sourceId: retained, sourceVersionId: fresh.version.id, locator: null });
         announce((excerpts.length ? '모음에 반영됨' : '자료 보관됨') + ' · 이 브라우저에 저장됨');
@@ -3616,7 +3637,7 @@
       if (!['sources', 'source'].includes(state.mode)) sourceClassification?.leave();
       else if (state.mode === 'source') sourceClassification?.cancelStage();
       compositionPanel?.dispose(); compositionPanel = null;
-      homeRenderPromise = Promise.resolve();
+      homeRenderPromise = writingsRenderPromise = Promise.resolve();
       home?.leave();
       workbench?.leave();
       writer?.close();
@@ -3629,14 +3650,16 @@
       renderHeader();
       main.dataset.mode = state.mode;
       main.replaceChildren();
-      if (state.mode === 'home' && home) {
+      if (['home', 'writings'].includes(state.mode) && home) {
         // Home's configuration read must not lock independent navigation.
         const options = homeRenderOptions || {}; homeRenderOptions = null;
-        homeRenderPromise = home.render(options).catch(failure);
-        mainRenderPromise = homeRenderPromise;
+        const pending = home.render({ ...options, library: state.mode === 'writings' }).catch(failure);
+        if (state.mode === 'writings') writingsRenderPromise = pending;
+        else homeRenderPromise = pending;
+        mainRenderPromise = pending;
         return;
       }
-      if (state.mode === 'find') { findRenderPromise = unifiedSearch.open().catch(failure); mainRenderPromise = findRenderPromise; return; }
+      if (state.mode === 'find') { const options = findOpenOptions || {}; findOpenOptions = null; findRenderPromise = unifiedSearch.open(options).catch(failure); mainRenderPromise = findRenderPromise; return; }
       if (state.mode === 'collection' && collection) { const options = collectionOpenOptions || {}; collectionOpenOptions = null; mainRenderPromise = collection.open(options).catch(failure); return; }
       if (state.mode === 'write' && writer) {
         const options = writingOpenOptions || {};
@@ -3701,6 +3724,12 @@
     }
     if (disposed) return { dispose };
     state.mode = routeMode();
+    if (new URLSearchParams(global.location.search).get('collect') === '1') {
+      viewOrigins.set('import', { mode: 'home', workspaceId: active, scrollY: 0,
+        homeState: { workspaceId: active, library: false, homeQuery: '' } });
+      const url = new URL(global.location.href); url.searchParams.delete('collect');
+      global.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    }
     if (new URLSearchParams(global.location.search).get('compose') === '1') {
       blogPageTask = true; blogMode = 'edit';
       workbenchOpenOptions = { pageCompose: true, blogContext: true, homeTab: 'posts' };

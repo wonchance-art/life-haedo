@@ -16,7 +16,7 @@
   const profileInitials = name => !name || name === '내 블로그' ? '나' : Array.from(name.replace(/\s+/g, '')).slice(0, 2).join('');
 
   function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored, onLocalSaved = () => {},
-    onBlogReturn = () => {}, onBlogModeChange = () => {},
+    onBlogReturn = () => {}, onBlogModeChange = () => {}, getBlogReturnLabel = () => "내 글로 돌아가기",
     onSelectionUsed = () => {}, onSelectionCancel = () => {}, onArrange = () => {}, onWorkbenchNavigate = () => {}, onChapterImport = () => {},
     shareRemoteFactory = () => life.ShareRemote?.createOwner({ auth: global.HaedoAuth }),
     sharePublicUrl = publicId => { const url = new URL('share.html', global.location.href); url.searchParams.set('id', publicId); return url.href; },
@@ -1146,14 +1146,14 @@
       const photoHost = el('section'); taskHost.append(photoHost); photoHost.hidden = blogTask && !photoTask;
       const composerHost = el('section'); taskHost.insertBefore(composerHost, photoHost); composerHost.hidden = photoTask;
       session.postEditorView = { token, hosts: { photo: photoHost, legacy: composerHost }, modes: {}, active: null };
-      session.photoPosts ||= life.PhotoPostUI.create({ storage, workspaceId: session.workspaceId, isCurrent: () => workspaceIs(session), onDirty: () => updateStatus(session), onSaved: onLocalSaved,
+      session.photoPosts ||= life.PhotoPostUI.create({ getReturnLabel: getBlogReturnLabel, storage, workspaceId: session.workspaceId, isCurrent: () => workspaceIs(session), onDirty: () => updateStatus(session), onSaved: onLocalSaved,
         onReturn: async context => { if (!session.blogContext) return false; await onBlogReturn({ ...context, kind: 'photo' }); return true; },
         onCommitted: context => { if (session.blogContext) session.blogCommitted = { ...context, kind: 'photo' }; notifyPostMode(session, 'photo', { ...context, mode: 'read', committed: true }); },
         onModeChange: context => notifyPostMode(session, 'photo', context),
         beforeOpen: async () => { await session.composer?.flush(); } });
       const photoMount = session.photoPosts.mount(photoHost, { standalone: blogTask, postId: session.searchTarget?.photoPostId || null, reset: beginPost || showProfile || !!session.searchTarget && !session.searchTarget.photoPostId,
         listHost: postFeed, onFeed: rows => { photoRows = rows; mergeFeed(); } }); viewCleanups.push(() => session.photoPosts.detach());
-      session.composer ||= life.PageComposer.create({ storage, workspaceId: session.workspaceId,
+      session.composer ||= life.PageComposer.create({ getReturnLabel: getBlogReturnLabel, storage, workspaceId: session.workspaceId,
         onNewPost: () => session.photoPosts.begin(),
         onReturn: context => session.blogContext && onBlogReturn({ ...context, kind: 'legacy' }),
         onCommitted: context => { if (session.blogContext) session.blogCommitted = { ...context, kind: 'legacy' }; notifyPostMode(session, 'legacy', { ...context, mode: 'read', committed: true }); },

@@ -1,0 +1,21 @@
+{
+  "capturedAt": "2026-10-18T10:37:33.243Z",
+  "base": "http://127.0.0.1:4173",
+  "scope": "Local Chromium, actual app/SDK/IDB; synthetic Auth and generated samples. No actual Apple/IME/Google/production verification.",
+  "checks": [
+    {
+      "name": "mixed originals and saved writing share six recent rows; drafts and archive remain accessible",
+      "pass": true
+    }
+  ],
+  "captures": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "realRemoteWrites": 0,
+  "browser": "151.0.7922.173",
+  "visualFailures": [],
+  "passed": 1,
+  "failed": 0
+}

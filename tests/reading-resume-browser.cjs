@@ -15,9 +15,8 @@ const raw = Array.from({ length: 44 }, (_, i) => `${i + 1}번째 문단. 책을 
 const latest = '최신 버전은 다른 질문을 다룬다. 읽던 옛 구절을 최신 버전의 같은 숫자 위치로 바꾸면 안 된다.';
 const frames = page => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 async function openHomeLibrary(page) {
-  const library = page.locator('.home-library');
-  await library.waitFor();
-  if (!await library.evaluate(node => node.open)) await library.locator(':scope > summary').click();
+  await page.locator('.home-hub').waitFor();
+  await page.locator('#homeRecentTitle').waitFor();
 }
 async function home(page) { await nav(page, 'home'); await openHomeLibrary(page); }
 const current = page => page.evaluate(async () => { const s = HaedoLife.Shell.storage; return s.read(await s.getActive()); });

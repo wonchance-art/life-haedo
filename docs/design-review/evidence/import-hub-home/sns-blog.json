@@ -1,0 +1,2251 @@
+{
+  "phase": "after",
+  "createdAt": "2026-10-18T10:35:59.464Z",
+  "scope": "Linux Chromium viewport/touch simulation; anonymous HTTP Auth/share simulator, real local app/SDK/IndexedDB. Synthetic 1800×1200 image. No real Google/remote DB, Apple hardware, native IME, PWA or deployment claim.",
+  "checks": [
+    {
+      "name": "public login, real-photo feed, profile, writing, reading, editing and return through every main area",
+      "pass": true
+    },
+    {
+      "name": "failed writes preserve Korean/photo input; ZIP restores original bytes and account boundaries hold",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "scene": "public",
+      "file": "public-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.59,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        \n        로",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": null,
+      "navigation": []
+    },
+    {
+      "scene": "public",
+      "file": "public-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.59,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        \n        로",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": null,
+      "navigation": []
+    },
+    {
+      "scene": "public",
+      "file": "public-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.59,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        \n        로",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": null,
+      "navigation": []
+    },
+    {
+      "scene": "feed",
+      "file": "feed-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 539,
+        "height": 36,
+        "lineHeight": "36.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 720,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "feed",
+      "file": "feed-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 455,
+        "height": 36,
+        "lineHeight": "36.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 636,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -15.1875,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -25.5625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -20.375,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -20.375,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "feed",
+      "file": "feed-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.183,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 242,
+        "height": 31,
+        "lineHeight": "31.2px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 350,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -14.328125,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -22.96875,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -18.65625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -18.65625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "profile",
+      "file": "profile-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 720,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "profile",
+      "file": "profile-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 636,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -15.1875,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -25.5625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -20.375,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -20.375,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "profile",
+      "file": "profile-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.59,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 350,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -14.328125,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -22.96875,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -18.65625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -18.65625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "reading",
+      "file": "reading-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 720,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "reading",
+      "file": "reading-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 636,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -15.1875,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -25.5625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -20.375,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -20.375,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "reading",
+      "file": "reading-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.59,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 350,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -14.328125,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -22.96875,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -18.65625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -18.65625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "writing",
+      "file": "writing-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 720,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "writing",
+      "file": "writing-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "33.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 636,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -15.1875,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -25.5625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -20.375,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -20.375,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "writing",
+      "file": "writing-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.59,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 1,
+        "height": 1,
+        "lineHeight": "30.4px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 350,
+      "navigation": []
+    },
+    {
+      "scene": "library",
+      "file": "library-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 720,
+        "height": 44,
+        "lineHeight": "31.35px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 1,
+      "contentWidth": 720,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "library",
+      "file": "library-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 636,
+        "height": 44,
+        "lineHeight": "31.35px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 1,
+      "contentWidth": 636,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -15.1875,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -25.5625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -20.375,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -20.375,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "library",
+      "file": "library-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.59,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 350,
+        "height": 44,
+        "lineHeight": "31.35px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 1,
+      "contentWidth": 350,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -14.328125,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -22.96875,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -18.65625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -18.65625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "source",
+      "file": "source-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": null,
+      "reader": {
+        "width": 700,
+        "size": "18px",
+        "lineHeight": "35.1px",
+        "selectedText": ""
+      },
+      "resultCount": 0,
+      "contentWidth": 720,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "source",
+      "file": "source-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": null,
+      "reader": {
+        "width": 636,
+        "size": "18px",
+        "lineHeight": "35.1px",
+        "selectedText": ""
+      },
+      "resultCount": 0,
+      "contentWidth": 636,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -15.1875,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -25.5625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -20.375,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -20.375,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "source",
+      "file": "source-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.59,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": null,
+      "reader": {
+        "width": 350,
+        "size": "17px",
+        "lineHeight": "33.15px",
+        "selectedText": ""
+      },
+      "resultCount": 0,
+      "contentWidth": 350,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -14.328125,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -22.96875,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -18.65625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -18.65625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "settings",
+      "file": "settings-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 0,
+        "height": 0,
+        "lineHeight": "25.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 720,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "settings",
+      "file": "settings-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 0,
+        "height": 0,
+        "lineHeight": "25.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 636,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -15.1875,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -25.5625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -20.375,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -20.375,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "settings",
+      "file": "settings-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.59,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": {
+        "width": 0,
+        "height": 0,
+        "lineHeight": "25.6px",
+        "wordBreak": "keep-all",
+        "overflowWrap": "anywhere"
+      },
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 350,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -14.328125,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -22.96875,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -18.65625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -18.65625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "tools",
+      "file": "tools-1440.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 720,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "label",
+          "width": 192,
+          "height": 52,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 16,
+          "labelGap": 16,
+          "labelTop": -22,
+          "centeredX": 70,
+          "centeredY": 0,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "tools",
+      "file": "tools-820.png",
+      "viewport": {
+        "width": 820,
+        "height": 1000
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.15,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 636,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -15.1875,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -25.5625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -20.375,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "rail",
+          "width": 64,
+          "height": 60,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 22,
+          "labelGap": -20.375,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 11,
+          "labelVisible": true
+        }
+      ]
+    },
+    {
+      "scene": "tools",
+      "file": "tools-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "horizontalOverflow": false,
+      "contrastFailures": [],
+      "minimumTextContrast": 5.59,
+      "smallTargets": [],
+      "spatialTargets": [],
+      "unnamed": [],
+      "smallInputs": [],
+      "focus": {
+        "tag": "body",
+        "id": "",
+        "class": "haedo-shell",
+        "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+        "visible": false,
+        "width": 3,
+        "contrast": 14.585
+      },
+      "title": null,
+      "reader": null,
+      "resultCount": 0,
+      "contentWidth": 350,
+      "navigation": [
+        {
+          "label": "홈",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -14.328125,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "자료실",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -22.96875,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "도구",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -18.65625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        },
+        {
+          "label": "설정",
+          "mode": "bottom",
+          "width": 91.5,
+          "height": 56,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "iconLeft": 35.75,
+          "labelGap": -18.65625,
+          "labelTop": 4,
+          "centeredX": 0,
+          "centeredY": 9.5,
+          "labelVisible": true
+        }
+      ]
+    }
+  ],
+  "qualityFailures": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "browser": "151.0.7922.173",
+  "image": {
+    "width": 1800,
+    "height": 1200,
+    "originalDigestVerified": true,
+    "synthetic": true
+  },
+  "zip": {
+    "bytes": 76124,
+    "sha256": "c1fe112d55825fdad5677ca18bb47edfdd984823248da297523ad0f72bdb8dec",
+    "originalDigestVerified": true
+  }
+}

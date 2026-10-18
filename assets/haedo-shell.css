@@ -101,34 +101,35 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
 .haedo-shell .photo-commandbar > .photo-save{background:var(--haedo-accent);border-radius:12px}
 .haedo-shell .photo-commandbar > .photo-save:hover{background:#104a41}
 .haedo-welcome{
- width:calc(100% - 48px);max-width:900px;margin:24px auto;padding:24px 40px 44px;min-height:calc(100svh - 48px);
- border-radius:0;background:var(--haedo-paper);display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.9fr);gap:32px 36px;align-content:start;
+ width:calc(100% - 48px);max-width:960px;margin:24px auto;padding:16px 40px 36px;min-height:calc(100svh - 48px);
+ border-radius:0;background:var(--haedo-paper);display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:28px 48px;align-content:start;
 }
-.haedo-welcome>.haedo-page-heading{grid-column:1/-1;margin-bottom:18px}
-.haedo-welcome-copy{padding:8px 0;min-width:0}
-.haedo-welcome-copy h2{margin:0;font-size:40px;font-weight:750;line-height:1.3;letter-spacing:-.035em;word-break:keep-all}
-.haedo-welcome-copy p{margin:18px 0 26px;font-size:15px;line-height:1.9;color:var(--haedo-muted);word-break:keep-all}
-.haedo-welcome .life-primary{min-height:48px;padding:10px 22px;gap:14px;text-decoration:none}
-.haedo-welcome-copy .haedo-blog-scope{margin:18px 0 0;font-size:12px;line-height:1.8}
-.haedo-blog-example{margin-top:24px;border-top:1px solid var(--haedo-line)}
-.haedo-blog-example summary{min-height:44px;padding:12px 0;font-size:14px;cursor:pointer}
-.haedo-blog-example>div{padding:8px 0 4px}.haedo-blog-example h3{margin:6px 0 0;font-size:18px}
-.haedo-welcome-copy .haedo-blog-example p{margin:10px 0;font-size:14px}
-.haedo-welcome-post{align-self:start;margin:10px 0 0;padding:24px;border:1px solid var(--haedo-line);border-radius:20px;background:white}
-.haedo-welcome-author{display:flex;align-items:center;gap:12px;margin-bottom:20px}
-.haedo-welcome-avatar{display:flex;align-items:center;justify-content:center;width:40px;height:40px;flex:none;background:var(--haedo-selected);color:var(--haedo-accent);border-radius:50%;font-size:15px;font-weight:700}
-.haedo-welcome-author strong{display:block;font-size:14px}.haedo-welcome-author small{display:block;margin-top:2px;font-size:11px;color:var(--haedo-muted)}
-.haedo-welcome-post h3{font-size:22px;line-height:1.55;letter-spacing:-.03em;margin:0 0 12px}
-.haedo-welcome-post p{font-size:15px;line-height:1.9;margin:0 0 16px}
-.haedo-welcome-quote{padding:14px 16px;margin:18px 0;background:var(--haedo-soft);border-radius:12px;font-size:14px;line-height:1.85}
-.haedo-welcome-post-footer{padding-top:16px;border-top:1px solid var(--haedo-line);color:var(--haedo-muted);font-size:11px}
+.haedo-welcome>.haedo-page-heading{grid-column:1/-1;min-height:56px;margin:0}
+.haedo-welcome .haedo-welcome-copy{padding:4px 0;min-width:0}
+.haedo-welcome .haedo-welcome-copy h2{margin:0;font-size:34px;font-weight:750;line-height:1.4;letter-spacing:-.03em;word-break:keep-all}
+.haedo-welcome .haedo-welcome-copy p{margin:16px 0 20px;font-size:15px;line-height:1.8;color:var(--haedo-muted);word-break:keep-all}
+.haedo-welcome .life-primary{min-height:44px;padding:10px 18px;gap:12px;text-decoration:none;font-size:14px}
+.haedo-welcome .haedo-welcome-copy .haedo-blog-scope{margin:14px 0 0;font-size:13px;line-height:1.75}
+.haedo-welcome .haedo-blog-example{margin-top:20px;border-top:1px solid var(--haedo-line)}
+.haedo-welcome .haedo-blog-example summary{min-height:44px;padding:12px 0;font-size:13px;cursor:pointer}
+.haedo-welcome .haedo-blog-example>div{padding:4px 0 8px}
+.haedo-welcome .haedo-blog-example h3{margin:6px 0 0;font-size:17px}
+.haedo-welcome .haedo-blog-example p{margin:8px 0;font-size:14px}
+.haedo-welcome .haedo-welcome-post{align-self:start;min-width:0;margin:4px 0 0;padding:0;border:0;border-radius:0;background:transparent}
+.haedo-welcome .haedo-welcome-post h3{font-size:20px;font-weight:700;line-height:1.5;letter-spacing:-.025em;margin:0}
+.haedo-welcome .haedo-welcome-post .haedo-example-note{margin:6px 0 4px;color:var(--haedo-muted);font-size:13px;line-height:1.7}
+.haedo-welcome .haedo-welcome-sources{list-style:none;min-width:0;margin:0;padding:0}
+.haedo-welcome .haedo-welcome-sources>li{min-width:0;margin:0;padding:18px 0;border-bottom:1px solid var(--haedo-line)}
+.haedo-welcome .haedo-example-origin{display:block;margin:0 0 5px;color:var(--haedo-muted);font-size:13px;line-height:1.7}
+.haedo-welcome .haedo-welcome-sources strong{display:block;color:var(--haedo-ink);font-size:18px;font-weight:650;line-height:1.55;letter-spacing:-.025em;word-break:keep-all;overflow-wrap:anywhere}
+.haedo-welcome .haedo-welcome-sources p{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;margin:6px 0 0;color:var(--haedo-muted);font-size:14px;line-height:1.75;word-break:keep-all;overflow-wrap:anywhere}
 .haedo-privacy-link{grid-column:1/-1;justify-self:start;display:inline-flex;align-items:center;min-height:44px;margin-top:10px;color:var(--haedo-muted);font-size:12px}
 @media(max-width:1100px) and (min-width:761px){
  :root{--haedo-nav-width:88px}
  .haedo-nav{width:64px;left:12px;align-items:center}.haedo-nav .haedo-nav-link{width:64px;height:60px;flex-basis:60px;flex-direction:column;justify-content:center;gap:4px;padding:8px 4px;font-size:12px}
  .haedo-brand{padding:8px 2px;font-size:20px;gap:0}.haedo-brand-mark{display:none}
- .haedo-welcome{grid-template-columns:1fr;padding:24px 32px;max-width:680px}
- .haedo-welcome-post{max-width:460px}
+ .haedo-welcome{grid-template-columns:1fr;padding:16px 32px 32px;max-width:680px;gap:24px}
+ .haedo-welcome .haedo-welcome-post{max-width:none}
 }
 @media(max-width:760px){
  :root{--haedo-nav-width:0px;--haedo-dock-clearance:calc(84px + env(safe-area-inset-bottom,0px));--haedo-header-height:60px}
@@ -140,9 +141,13 @@ body.haedo-shell:not([data-haedo-section=manage]) #lifeAccountHost{display:none}
  .haedo-nav-text{display:block;font-weight:500}.haedo-nav-link[aria-current=page] .haedo-nav-text{font-weight:750}
  .haedo-nav .haedo-nav-link>.haedo-tooltip{display:none!important}
  .haedo-page-heading{min-height:60px;gap:8px;margin-bottom:18px}.haedo-heading-title,.haedo-heading-actions{gap:2px}
- .haedo-account-host{top:10px;right:20px}.haedo-welcome{width:100%;max-width:none;min-height:calc(100svh - var(--haedo-dock-clearance));margin:0;padding:4px 24px 36px;grid-template-columns:1fr;gap:20px;border-radius:0}
- .haedo-welcome>.haedo-page-heading{margin-bottom:10px}.haedo-welcome-copy{padding:8px 0}.haedo-welcome-copy h2{font-size:30px;line-height:1.45}
- .haedo-welcome-copy p{font-size:15px}.haedo-welcome-post{margin:0;padding:20px}.haedo-welcome-post h3{font-size:21px}
+ .haedo-account-host{top:10px;right:20px}.haedo-welcome{width:100%;max-width:none;min-height:100svh;margin:0;padding:4px 20px 28px;grid-template-columns:1fr;gap:24px;border-radius:0}
+ .haedo-welcome>.haedo-page-heading{margin:0;min-height:56px}
+ .haedo-welcome .haedo-welcome-copy{padding:0}
+ .haedo-welcome .haedo-welcome-copy h2{font-size:28px;line-height:1.4}
+ .haedo-welcome .haedo-welcome-copy p{margin-top:12px;font-size:15px}
+ .haedo-welcome .haedo-welcome-post{margin:0;padding:0}
+ .haedo-welcome .haedo-welcome-sources>li{padding-block:16px}
  .haedo-privacy-link{margin-top:0}
 }
 @media(prefers-reduced-motion:reduce){:root{scroll-behavior:auto}.haedo-icon-button{transition:none}}

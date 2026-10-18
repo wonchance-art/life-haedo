@@ -73,11 +73,22 @@ test('first writing intent survives login only as the exact local home flag', ()
   assert.equal(safeNext('https://evil.invalid/index.html?compose=1'), 'index.html');
 });
 
+test('first collection intent accepts only the exact local home flag and preserves existing import links', () => {
+  assert.equal(safeNext('index.html?collect=1&code=discarded&next=https://evil.invalid#token'), 'index.html?collect=1');
+  assert.equal(safeNext('index.html?collect=other'), 'index.html');
+  assert.equal(safeNext('index.html?collect=1%26access_token%3Dhidden'), 'index.html');
+  assert.equal(safeNext('life.html?collect=1'), 'life.html');
+  assert.equal(safeNext('timeline.html?collect=1'), 'timeline.html');
+  assert.equal(safeNext('https://evil.invalid/index.html?collect=1'), 'index.html');
+  assert.equal(safeNext('index.html?section=records&view=import'), 'index.html?section=records&view=import');
+});
+
 test('unified home return accepts only known sections and material views', () => {
   assert.equal(safeNext(), 'index.html');
   assert.equal(safeNext('index.html?section=home&code=discarded#token'), 'index.html?section=home');
   assert.equal(safeNext('life.html?section=home&access_token=discarded'), 'life.html?section=home');
   assert.equal(safeNext('index.html?section=records&code=discarded'), 'index.html?section=records');
+  assert.equal(safeNext('index.html?section=records&view=writings&code=discarded&next=https://evil.invalid#token'), 'index.html?section=records&view=writings');
   assert.equal(safeNext('https://evil.invalid/index.html?section=records'), 'index.html');
   assert.equal(safeNext('index.html?section=manage&view=sync&code=discarded#token'), 'index.html?section=manage&view=sync');
   assert.equal(safeNext('index.html?section=tools&view=transfer'), 'index.html?section=tools&view=transfer');

@@ -1,0 +1,645 @@
+{
+  "browser": "151.0.7922.173",
+  "checks": [
+    "Partial file failure keeps successful draft; only failed row is reselected and committed",
+    "Search opens exact imported text; returning preserves query and source remains unchanged",
+    "Thought actions are reachable without opening file settings at all widths",
+    "Write, attach, save and preview a private page then return without modifying reflection or sources",
+    "Search refresh invalidates cached results while kind filters preserve exact results",
+    "Stopped retry cannot overwrite a newer retry for the same row"
+  ],
+  "visual": [
+    {
+      "scene": "home",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 71,
+          "height": 30,
+          "lineHeight": "30px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "home",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 71,
+          "height": 30,
+          "lineHeight": "30px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "home",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.59,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 71,
+          "height": 30,
+          "lineHeight": "30px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "import-partial",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 720,
+          "height": 34,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "import-partial",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 636,
+          "height": 34,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "import-partial",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.183,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "body",
+          "id": "",
+          "class": "haedo-shell",
+          "text": "해도홈홈자료실자료실도구도구설정설정\n  \n    \n      \n        \n      계정 메뉴\n      \n        device-a@e",
+          "visible": false,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 350,
+          "height": 30,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "search-results",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 720,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "search-results",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 636,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "search-results",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.59,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "input",
+          "id": "lifeFindQuery",
+          "class": "",
+          "text": "",
+          "visible": true,
+          "width": 3,
+          "contrast": 14.585
+        },
+        "title": {
+          "width": 350,
+          "height": 24,
+          "lineHeight": "24px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "source-reading",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "div",
+          "id": "lifeSourceText",
+          "class": "life-source-text",
+          "text": "보관한 원문",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.83
+        },
+        "title": null,
+        "reader": {
+          "width": 700,
+          "size": "18px",
+          "lineHeight": "35.1px",
+          "selectedText": "달라진 생각"
+        },
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "source-reading",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "div",
+          "id": "lifeSourceText",
+          "class": "life-source-text",
+          "text": "보관한 원문",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.83
+        },
+        "title": null,
+        "reader": {
+          "width": 636,
+          "size": "18px",
+          "lineHeight": "35.1px",
+          "selectedText": "달라진 생각"
+        },
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "source-reading",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.59,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "div",
+          "id": "lifeSourceText",
+          "class": "life-source-text",
+          "text": "보관한 원문",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.83
+        },
+        "title": null,
+        "reader": {
+          "width": 350,
+          "size": "17px",
+          "lineHeight": "33.15px",
+          "selectedText": "달라진 생각"
+        },
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "output-after",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "wbReflectionToPage",
+          "class": "life-button",
+          "text": "내 생각을 새 페이지 초안으로",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.83
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "output-after",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.15,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "wbReflectionToPage",
+          "class": "life-button",
+          "text": "내 생각을 새 페이지 초안으로",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.83
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "output-after",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 5.59,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "wbReflectionToPage",
+          "class": "life-button",
+          "text": "내 생각을 새 페이지 초안으로",
+          "visible": false,
+          "width": 3,
+          "contrast": 15.83
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "private-feed",
+      "width": 1440,
+      "metrics": {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 4.873,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "wbPagePreview",
+          "class": "life-button",
+          "text": "방문자 미리보기",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.59
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "private-feed",
+      "width": 820,
+      "metrics": {
+        "viewport": {
+          "width": 820,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 4.873,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "wbPagePreview",
+          "class": "life-button",
+          "text": "방문자 미리보기",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.59
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "33.6px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    },
+    {
+      "scene": "private-feed",
+      "width": 390,
+      "metrics": {
+        "viewport": {
+          "width": 390,
+          "height": 1000
+        },
+        "horizontalOverflow": false,
+        "contrastFailures": [],
+        "minimumTextContrast": 4.873,
+        "smallTargets": [],
+        "spatialTargets": [],
+        "unnamed": [],
+        "smallInputs": [],
+        "focus": {
+          "tag": "button",
+          "id": "wbPagePreview",
+          "class": "life-button",
+          "text": "방문자 미리보기",
+          "visible": false,
+          "width": 3,
+          "contrast": 5.59
+        },
+        "title": {
+          "width": 1,
+          "height": 1,
+          "lineHeight": "30.4px",
+          "wordBreak": "keep-all",
+          "overflowWrap": "anywhere"
+        },
+        "reader": null,
+        "resultCount": 0
+      }
+    }
+  ],
+  "pageErrors": [],
+  "consoleErrors": [],
+  "external": [],
+  "scope": "UI anonymous file imports, actual IDB; mock Auth. Viewports and touch/IME events are not Apple hardware.",
+  "pass": true
+}

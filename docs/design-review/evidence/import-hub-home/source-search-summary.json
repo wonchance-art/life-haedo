@@ -1,0 +1,19 @@
+{
+  "scope": "Frozen app regression, anonymous mocked Auth and real Chromium/IndexedDB; no production access, Apple-device or deployment evidence. No application/test source changes in this verification.",
+  "sourceClassification": {
+    "passed": 8,
+    "failed": 0,
+    "consoleErrors": 0,
+    "pageErrors": 0,
+    "external": 0,
+    "realRemoteWrites": 0,
+    "originalReport": ".local/source-classification/browser-report.json",
+    "log": ".local/import-hub-home/regression/source-classification.log"
+  },
+  "sourceSearch": {
+    "passed": 7,
+    "failed": 0,
+    "unexpectedConsolePageErrors": 0,
+    "log": ".local/import-hub-home/regression/life-search.log"
+  }
+}

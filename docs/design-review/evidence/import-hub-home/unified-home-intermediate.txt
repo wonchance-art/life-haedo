@@ -1,0 +1,16 @@
+Provenance: recovered from this chat's actual exec session 69149, final chunk c6c416. The suite's fixed recheck-report.json was subsequently overwritten by its one-case final rerun. This is a transcript of that tool output, not the original JSON report.
+
+PASS anonymous common home is usable in all sections without redirect or private IDB
+PASS import draft and reviewed exact excerpt survive tools/manage switching without page reload
+FAIL a home with originals and no excerpts shows real text and opens the complete original
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
++ actual - expected
+
++ 'import'
+- 'sources'
+
+    at /workspace/haedo-blog-platform/tests/unified-home-browser.cjs:201:14
+    at async check (/workspace/haedo-blog-platform/tests/unified-home-browser.cjs:87:11)
+    at async main (/workspace/haedo-blog-platform/tests/unified-home-browser.cjs:194:5)
+PASS tools lead to existing goal/habit editors and account timeline list with the same four-way navigation
+{"passed":3,"failed":1,"consoleErrors":0,"pageErrors":0,"expectedErrors":0,"realRemoteWrites":0}

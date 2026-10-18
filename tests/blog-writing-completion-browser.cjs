@@ -1,4 +1,5 @@
 'use strict';
+const { openSearch, settleVisual } = require('./search-navigation.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -52,7 +53,7 @@ async function main() {
   const capture = async (p, scene, widths = [1440, 390]) => {
     for (const width of widths) {
       await p.setViewportSize({ width, height: 1000 }); await p.evaluate(() => document.fonts.ready);
-      const metrics = await p.evaluate(inspect); report.visual.push({ scene, width, metrics });
+      await settleVisual(p); const metrics = await p.evaluate(inspect); report.visual.push({ scene, width, metrics });
       assert.equal(metrics.horizontalOverflow, false, scene + ' overflow');
       for (const key of ['smallTargets', 'smallInputs', 'unnamed', 'contrastFailures']) assert.deepEqual(metrics[key], [], scene + ' ' + key);
       await p.screenshot({ path: path.join(out, scene + '-' + width + '.png') });
@@ -158,7 +159,7 @@ async function main() {
       await more('보관함으로 옮기기'); await page.locator('.photo-status[role=alert]').waitFor(); assert.equal(await page.locator('.photo-article').evaluate(n => n === __article), true); assert.equal((await read()).index.find(v => v.id === primaryId).archived, false);
       await page.evaluate(() => IDBObjectStore.prototype.put = __put); await more('보관함으로 옮기기'); await page.getByRole('button', { name: '목록으로 복원', exact: true }).waitFor(); assert.equal((await read()).docs.find(v => v.id === primaryId).archived, true);
       await click('사진 글 목록'); await page.locator('.photo-retained > summary').click(); await page.locator('.photo-archived-list [data-photo-post-id="' + primaryId + '"]').waitFor(); assert.equal(await page.locator('.wb-post-feed [data-photo-post-id="' + primaryId + '"]').count(), 0); await capture(page, 'archive');
-      await nav(page, 'home'); await page.locator('#lifeFindOpen').click(); await page.locator('#lifeFind[aria-busy=false]').waitFor(); await page.locator('#lifeFindQuery').fill(primary.title); await page.locator('#lifeFind[aria-busy=false]').waitFor(); assert.equal(await page.locator('[data-focus-key="find:photo-post:' + primaryId + '"]').count(), 0);
+      await nav(page, 'home'); await openSearch(page); await page.locator('#lifeFind[aria-busy=false]').waitFor(); await page.locator('#lifeFindQuery').fill(primary.title); await page.locator('#lifeFind[aria-busy=false]').waitFor(); assert.equal(await page.locator('[data-focus-key="find:photo-post:' + primaryId + '"]').count(), 0);
       await go(); await openPost(page, primaryId); await page.locator('.photo-article').waitFor(); await click('목록으로 복원'); await page.getByRole('button', { name: '글 수정', exact: true }).waitFor();
       const active = (await read()).docs.find(v => v.id === primaryId); assert.equal(active.archived, false); assert.deepEqual(active.attachments, primary.attachments); assert.deepEqual(active.photos.map(p => p.digest), primary.photos.map(p => p.digest));
     });

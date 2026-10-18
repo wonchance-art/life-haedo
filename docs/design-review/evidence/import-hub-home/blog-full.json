@@ -1,0 +1,194 @@
+{
+  "createdAt": "2026-10-18T10:34:54.006Z",
+  "scope": "Linux Chromium viewport simulation; actual local application/SDK/IndexedDB, intercepted anonymous HTTP Auth. No live OAuth/DB, Apple hardware or deployment claim.",
+  "checks": [
+    {
+      "name": "public collection entry retains the explicit private writing flow and exact reopening at three widths",
+      "pass": false,
+      "error": "locator.click: Error: strict mode violation: getByRole('button', { name: '내 글로 돌아가기', exact: true }) resolved to 2 elements:\n    1) <button type=\"button\" aria-label=\"내 글로 돌아가기\" id=\"lifeSubviewReturn\" data-subview-return=\"true\" class=\"life-button life-icon-button\">…</button> aka getByLabel('내 글로 돌아가기')\n    2) <button type=\"button\" class=\"life-button\">내 글로 돌아가기</button> aka locator('#lifeMain').getByRole('button', { name: '내 글로 돌아가기' })\n\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '내 글로 돌아가기', exact: true })\u001b[22m\n\n    at /workspace/haedo-blog-platform/tests/blog-platform-home-browser.cjs:160:74\n    at async check (/workspace/haedo-blog-platform/tests/blog-platform-home-browser.cjs:104:7)\n    at async main (/workspace/haedo-blog-platform/tests/blog-platform-home-browser.cjs:114:5)"
+    },
+    {
+      "name": "failed post and composition reads never claim an empty blog and can be retried",
+      "pass": true
+    },
+    {
+      "name": "new home writing preserves an existing draft and exits preview nine-grid and share states",
+      "pass": true
+    },
+    {
+      "name": "a delayed editor mount cannot start a post after leaving the page",
+      "pass": true
+    },
+    {
+      "name": "late saved-post response cannot replace the selected section",
+      "pass": true
+    },
+    {
+      "name": "late account A post reads cannot reveal content after signout and account B login",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "scene": "public",
+      "file": "public-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 21,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "public",
+      "file": "public-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 21,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "public",
+      "file": "public-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 21,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "first-writing",
+      "file": "first-writing-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 6,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "first-writing",
+      "file": "first-writing-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 6,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "first-writing",
+      "file": "first-writing-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.59,
+      "measuredTexts": 6,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "saved",
+      "file": "saved-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.183,
+      "measuredTexts": 16,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "saved",
+      "file": "saved-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.183,
+      "measuredTexts": 16,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "saved",
+      "file": "saved-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.183,
+      "measuredTexts": 15,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "posts-error",
+      "file": "posts-error-1440.png",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.183,
+      "measuredTexts": 12,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "posts-error",
+      "file": "posts-error-820.png",
+      "width": 820,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.183,
+      "measuredTexts": 12,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    },
+    {
+      "scene": "posts-error",
+      "file": "posts-error-390.png",
+      "width": 390,
+      "horizontalOverflow": false,
+      "overflow": [],
+      "smallTargets": [],
+      "unnamed": [],
+      "minTextContrast": 5.183,
+      "measuredTexts": 11,
+      "contrastFailures": [],
+      "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif"
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "browser": "151.0.7922.173"
+}

@@ -1,0 +1,113 @@
+{
+  "verifiedAt": "2026-10-18T10:43:47.552789+00:00",
+  "scope": "Local current implementation with anonymous HTTP Auth, real IndexedDB and service-worker. No private source data, live Google/DB, Apple hardware or public deployment.",
+  "newHome": {
+    "criteriaPassed": 7,
+    "visualScenes": 12,
+    "additionalViewportCapture": 1,
+    "minimumTextContrast": 5.15,
+    "report": "final-report.json",
+    "method": "Initial run and focused rechecks; not a single final whole-suite run."
+  },
+  "node": {
+    "passed": 544,
+    "failed": 0,
+    "log": "node-tests.log"
+  },
+  "static": {
+    "html": 18,
+    "javascript": 94,
+    "references": 386,
+    "pwa": true,
+    "changedJavaScriptSyntaxChecks": 31
+  },
+  "regressions": [
+    {
+      "name": "classification",
+      "passed": 8
+    },
+    {
+      "name": "original search",
+      "passed": 7
+    },
+    {
+      "name": "reading resume",
+      "passed": 12
+    },
+    {
+      "name": "SNS writing and image preservation",
+      "passed": 2
+    },
+    {
+      "name": "retained writing entry",
+      "passed": 16,
+      "method": "15 initial and 1 targeted recheck"
+    },
+    {
+      "name": "writing journeys",
+      "passed": 8,
+      "method": "5 initial and 3 targeted rechecks"
+    },
+    {
+      "name": "writing refinement",
+      "passed": 10,
+      "method": "8 initial and 2 targeted rechecks"
+    },
+    {
+      "name": "app motion",
+      "passed": 9,
+      "method": "8 initial and 1 targeted recheck"
+    },
+    {
+      "name": "subview navigation",
+      "passed": 11,
+      "method": "10 initial and 1 targeted recheck"
+    },
+    {
+      "name": "public blog and retained writing",
+      "passed": 6,
+      "method": "5 initial and 1 targeted recheck"
+    },
+    {
+      "name": "unified entry and account isolation",
+      "passed": 13,
+      "method": "9 initial and 3 intermediate and 1 final targeted recheck; intermediate output text preserved explicitly"
+    },
+    {
+      "name": "unified search",
+      "passed": 9
+    },
+    {
+      "name": "nine board search",
+      "passed": 7,
+      "method": "Original assertions; wait for finite animations before static contrast inspection"
+    },
+    {
+      "name": "rich photo post preservation",
+      "passed": 13
+    },
+    {
+      "name": "input output quality",
+      "passed": 6
+    },
+    {
+      "name": "writing completion and portable backup",
+      "passed": 10
+    }
+  ],
+  "pwa": {
+    "integrationPassed": 9,
+    "integrationSnapshot": "After home implementation and before final empty-search submit adjustment.",
+    "finalCacheSnapshot": "After final adjustment; source hashes rechecked before commit.",
+    "cachedResponses": 98,
+    "matchedChangedAssets": 13,
+    "allHashesMatchPrepared": true,
+    "report": "pwa-report.json",
+    "cacheReport": "cache-report.json"
+  },
+  "limitations": [
+    "Individual named flows were verified; this does not claim every repository browser suite was rerun.",
+    "Some unrelated consumers were updated to use the visible navigation helper and syntax checked without repeating their entire suites.",
+    "Private imported notes were not installed in a user browser or uploaded."
+  ]
+}

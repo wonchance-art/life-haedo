@@ -1,0 +1,30 @@
+{
+  "capturedAt": "2026-10-18T10:36:52.676Z",
+  "base": "http://127.0.0.1:4173",
+  "scope": "Local Chromium, actual app/SDK/IDB; synthetic Auth and generated samples. No actual Apple/IME/Google/production verification.",
+  "checks": [
+    {
+      "name": "mixed originals and saved writing share six recent rows; drafts and archive remain accessible",
+      "pass": false,
+      "error": "locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.home-post[data-photo-post-id=\"0a0bb485-b894-4bb5-81e8-caf61f5aa6a1\"]') to be visible\u001b[22m\n\n    at /workspace/haedo-blog-platform/tests/import-hub-home-browser.cjs:104:127\n    at async check (/workspace/haedo-blog-platform/tests/import-hub-home-browser.cjs:65:11)\n    at async main (/workspace/haedo-blog-platform/tests/import-hub-home-browser.cjs:95:5)"
+    },
+    {
+      "name": "read failures preserve known originals and retry before declaring an empty home",
+      "pass": true
+    },
+    {
+      "name": "late reads cannot replace navigation, a new workspace, or the next account",
+      "pass": true
+    }
+  ],
+  "captures": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "realRemoteWrites": 0,
+  "browser": "151.0.7922.173",
+  "visualFailures": [],
+  "passed": 2,
+  "failed": 1
+}

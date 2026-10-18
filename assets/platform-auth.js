@@ -5,7 +5,7 @@
   const LOGOUT_KEY = 'caeyeon_life_platform_logged_out';
   const privatePages = new Set(['workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'life.html']);
   const homeSections = new Set(['home', 'records', 'tools', 'manage']);
-  const materialViews = new Set(['collection', 'topics', 'sources', 'time', 'import', 'write', 'transfer', 'sync', 'activities', 'page', 'discover', 'related', 'reflection', 'workbench-backup']);
+  const materialViews = new Set(['collection', 'topics', 'sources', 'time', 'import', 'write', 'writings', 'transfer', 'sync', 'activities', 'page', 'discover', 'related', 'reflection', 'workbench-backup']);
   function safeNext(value) {
     try {
       const url = new URL(value || 'index.html', 'https://haedo.invalid/');
@@ -16,6 +16,7 @@
         if (materialViews.has(url.searchParams.get('view'))) params.set('view', url.searchParams.get('view'));
       }
       if (url.pathname === '/index.html' && url.searchParams.get('compose') === '1') params.set('compose', '1');
+      if (url.pathname === '/index.html' && url.searchParams.get('collect') === '1') params.set('collect', '1');
       if (url.pathname === '/workspace.html' && url.searchParams.get('section') === 'manage') params.set('section', 'manage');
       if (url.pathname === '/timeline.html') {
         if (['records', 'map'].includes(url.searchParams.get('view'))) params.set('view', url.searchParams.get('view'));

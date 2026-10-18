@@ -97,7 +97,7 @@ async function main() {
         await page.goto(base + '/index.html' + suffix); await shellReady(page);
         assert.equal(new URL(page.url()).pathname, '/index.html'); assert.equal(await page.locator('#lifeWelcome').isVisible(), true);
         assert.equal(await page.locator('#lifeApp').isHidden(), true); assert.deepEqual(await page.evaluate(() => __homeDbOpens), []);
-        assert.equal(await page.locator('[data-haedo-navigation] a').count(), 4);
+        assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section]').count(), 4);
         assert.equal(await page.locator('[data-life-login]').isVisible(), true);
       }
     }, null);
@@ -120,7 +120,7 @@ async function main() {
     await check('Google PKCE fixture returns to selected home section with only allowed query state', async ({ page, server, device }) => {
       server.oauthAccounts.set(device, accounts.a);
       await page.goto(base + '/index.html?section=manage&view=transfer&unknown=drop'); await shellReady(page);
-      await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click();
+      await page.locator('[data-life-return-login]').click(); await page.locator('#googleLogin').click();
       await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
       const url = new URL(page.url()); assert.equal(url.searchParams.get('section'), 'manage'); assert.equal(url.searchParams.get('view'), 'transfer');
       assert.equal(url.searchParams.has('unknown'), false); assert.equal(url.searchParams.has('code'), false);
@@ -128,7 +128,7 @@ async function main() {
       assert.equal(await page.evaluate(() => HaedoAuth.safeNext('https://outside.invalid/steal')), 'index.html');
       assert.equal(await page.evaluate(() => HaedoAuth.safeNext('index.html?section=bad&view=bad&doc=secret')), 'index.html');
     }, null);
-    await check('Google PKCE default return opens personal home without inventing a records selection', async ({ page, context, server, device }) => {
+    await check('Google PKCE collection intent opens import and consumes only its allowed home flag', async ({ page, context, server, device }) => {
       server.oauthAccounts.set(device, accounts.a);
       await page.goto(base + '/index.html'); await shellReady(page);
       // The HTML can render before the login handler arrives on a slow link.
@@ -143,15 +143,16 @@ async function main() {
       } finally { release(); await navigation; }
       await page.locator('#googleLogin').click();
       await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
-      await page.locator('#lifeHome').waitFor();
-      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'home');
-      assert.equal(await page.locator('a[data-haedo-section="home"]').getAttribute('aria-current'), 'page');
+      await page.locator('#lifeImportText').waitFor();
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'import');
+      assert.equal(await page.locator('a[data-haedo-section="records"]').getAttribute('aria-current'), 'page');
+      assert.equal(new URL(page.url()).searchParams.has('collect'), false);
       assert.equal(new URL(page.url()).searchParams.has('code'), false);
     }, null);
     await check('import draft and reviewed exact excerpt survive tools/manage switching without page reload', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page); const instance = await page.evaluate(() => __homeInstance);
       const raw = '통합 홈에서 보관할 본문\r\n다시 읽을 문장🌱\r\n끝 문장', quote = '다시 읽을 문장🌱';
-      await button(page, '가져오기'); await page.locator('#lifeImportTitle').fill('전환 중 보존할 익명 초안'); await page.locator('#lifeImportText').fill(raw);
+      await page.locator('[data-home-destination="import"]').click(); await settle(page); await page.locator('#lifeImportTitle').fill('전환 중 보존할 익명 초안'); await page.locator('#lifeImportText').fill(raw);
       await nav(page, 'tools'); await nav(page, 'manage'); await nav(page, 'records'); await button(page, '가져오기');
       assert.equal(await page.locator('#lifeImportTitle').inputValue(), '전환 중 보존할 익명 초안');
       assert.equal(await page.locator('#lifeImportText').inputValue(), raw.replaceAll('\r\n', '\n'));
@@ -193,8 +194,11 @@ async function main() {
     await check('a home with originals and no excerpts shows real text and opens the complete original', async ({ page }) => {
       await page.goto(base + '/index.html'); await ready(page);
       const raw = '아직 발췌하지 않은 원문도 첫 화면에서 다시 읽는다. '.repeat(14);
-      await button(page, '가져오기'); await page.locator('#lifeImportTitle').fill('발췌 전 보관한 익명 자료'); await page.locator('#lifeImportText').fill(raw);
-      await button(page, '원문·출처 확인'); await button(page, '자료만 보관'); await button(page, '자료실로 돌아가기');
+      await page.locator('[data-home-destination="import"]').click(); await settle(page); await page.locator('#lifeImportTitle').fill('발췌 전 보관한 익명 자료'); await page.locator('#lifeImportText').fill(raw);
+      await button(page, '원문·출처 확인'); await button(page, '자료만 보관'); await button(page, '홈으로 돌아가기');
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'home');
+      await page.locator('[data-home-destination="sources"]').click();
+      await page.locator('#lifeSearchResults').waitFor();
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'sources');
       const card = page.locator('#lifeSearchResults .life-source-card'); assert.equal(await card.count(), 1);
       assert((await card.locator('.life-search-context').textContent()).startsWith(raw.slice(0, 100))); // Unified list still shows the stored original, even without saved quotes.
@@ -208,7 +212,7 @@ async function main() {
       for (const target of ['goals', 'habits']) {
         await page.locator('#lifeMain a[href="' + target + '.html"]').click();
         await page.waitForFunction(target => document.body.dataset.page === target && !document.querySelector('[data-private]').hidden, target);
-        assert.equal(await page.locator('[data-haedo-navigation] a').count(), 4);
+        assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section]').count(), 4);
         assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section="tools"]').getAttribute('aria-current'), 'page');
         await page.locator('#addItem').click(); assert.equal(await page.locator('#itemDialog').isVisible(), true);
         await page.keyboard.press('Escape'); await nav(page, 'tools'); await ready(page);
@@ -216,7 +220,7 @@ async function main() {
       await nav(page, 'records'); await button(page, '시간 보기');
       await page.locator('#lifeMain a[href="workspace.html"]').click();
       await page.waitForFunction(() => document.body.dataset.page === 'workspace' && !document.querySelector('[data-private]').hidden);
-      assert.equal(await page.locator('[data-haedo-navigation] a').count(), 4);
+      assert.equal(await page.locator('[data-haedo-navigation] a[data-haedo-section]').count(), 4);
       await page.locator('#newTimeline').click(); assert.equal(await page.locator('#timelineDialog').isVisible(), true); await page.keyboard.press('Escape');
     });
     await check('history keeps a management subview and a legacy life sync link keeps its destination', async ({ page }) => {

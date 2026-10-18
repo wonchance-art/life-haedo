@@ -1,0 +1,48 @@
+{
+  "createdAt": "2026-10-18T10:40:51.885Z",
+  "fixture": "Original tests/nine-board-search-browser.cjs fixture, first board-overview only; same live page before/after natural finite-animation completion.",
+  "sourceBaseline": "8a7c6f1",
+  "css": [
+    {
+      "file": "assets/life/nine-board.css",
+      "unchanged": true,
+      "sha256": "0903c1e7522d71472ff8464c84f8a1144b299126b573b27efc2c678ef1065273"
+    },
+    {
+      "file": "assets/life/ui.css",
+      "unchanged": true,
+      "sha256": "fa91e1a9d2ad267b1263610713819c88b62b27e70921bc8b73ee4b0984edac24"
+    },
+    {
+      "file": "assets/life/workbench.css",
+      "unchanged": true,
+      "sha256": "7775ff214588b0d267d3527a0380ba540ce6acc7eb7eaff2f2eb7d08569718dd"
+    }
+  ],
+  "transientContrastFailures": [],
+  "motionSample": {
+    "mainOpacity": "0.975997",
+    "animations": [
+      {
+        "target": "haedo-nav-indicator",
+        "currentTime": 83.39099999885657,
+        "endTime": 220,
+        "playState": "running"
+      },
+      {
+        "target": "lifeMain",
+        "currentTime": 66.7249999993248,
+        "endTime": 220,
+        "playState": "running"
+      }
+    ]
+  },
+  "settledContrastFailures": [],
+  "settledColors": {
+    "color": "rgb(93, 107, 101)",
+    "inkSoft": "#5d6b65",
+    "mainOpacity": "1"
+  },
+  "pass": true,
+  "testsOrProductChanged": false
+}

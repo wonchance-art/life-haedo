@@ -15,14 +15,14 @@
     let libraryOpen = false, libraryWorkspace = null;
     const mediaUrls = new Set();
     let mediaObserver = null, mediaGeneration = 0;
-    let listState = { workspaceId: null, tab: 'posts', query: '', searchExpanded: false, limit: 20 };
+    let listState = { workspaceId: null, library: false, homeQuery: '', tab: 'posts', query: '', searchExpanded: false, limit: 20 };
     const ROW_LIMIT = 20;
     const TAB_LABELS = { posts: '글', drafts: '초안', archive: '보관함' };
     function captureState() { return { ...listState, libraryOpen }; }
     function adoptState(workspaceId, incoming) {
-      if (listState.workspaceId !== workspaceId) { listState = { workspaceId, tab: 'posts', query: '', searchExpanded: false, limit: ROW_LIMIT }; libraryOpen = false; }
+      if (listState.workspaceId !== workspaceId) { listState = { workspaceId, library: false, homeQuery: '', tab: 'posts', query: '', searchExpanded: false, limit: ROW_LIMIT }; libraryOpen = false; }
       if (incoming?.workspaceId !== workspaceId) return;
-      listState = { workspaceId, tab: Object.hasOwn(TAB_LABELS, incoming.tab) ? incoming.tab : 'posts',
+      listState = { workspaceId, library: incoming.library === true, homeQuery: typeof incoming.homeQuery === 'string' ? incoming.homeQuery.slice(0, 1000) : '', tab: Object.hasOwn(TAB_LABELS, incoming.tab) ? incoming.tab : 'posts',
         query: typeof incoming.query === 'string' ? incoming.query.slice(0, 1000) : '',
         searchExpanded: incoming.searchExpanded === true || (typeof incoming.query === 'string' && !!incoming.query.trim()),
         limit: Number.isSafeInteger(incoming.limit) ? Math.max(ROW_LIMIT, Math.min(incoming.limit, 10000)) : ROW_LIMIT };
@@ -120,7 +120,7 @@
         announce('연결된 원문이 없습니다. 다른 버전으로 바꾸지 않았습니다.');
         return;
       }
-      await openSource(info.source.id, info.version.id);
+      await openSource(info.source.id, info.version.id, { homeAnchor: { kind: 'source', id: info.source.id, versionId: info.version.id, returning: true } });
     }
     function record(context, info, { body = true, date = false, compact = false, focusScope = 'recent' } = {}) {
       const article = el('article', null, 'home-record' + (compact ? ' home-record-compact' : ''));
@@ -180,7 +180,7 @@
       preview.dataset.focusKey = 'home:library:preview';
       nav.append(preview);
       area.append(nav, el('p', '미리보기에는 기록에서 고른 내용과 기존 첨부 글이 표시됩니다.', 'life-meta home-library-preview-note'));
-      renderReadingResume?.(area);
+      renderReadingResume?.(area, 'writings');
       if (bundle.sources.length) area.append(recent(context, bundle));
       return area;
     }
@@ -192,13 +192,13 @@
       });
       return rows;
     }
-    function postCover(context, row, article, open) {
+    function postCover(context, row, article, open, compact = false) {
       if (row.kind !== 'photo' || !row.photos) return;
       const epoch = mediaGeneration;
-      const frame = action(context, '', open, 'home-post-media');
-      frame.setAttribute('aria-label', '사진이 있는 글 열기'); frame.dataset.focusKey = 'home:photo:' + row.id;
+      const frame = action(context, '', open, compact ? 'home-recent-thumbnail' : 'home-post-media');
+      frame.setAttribute('aria-label', '사진이 있는 글 열기: ' + (String(row.title || '').trim() || snippet(row.body) || '사진이 있는 글')); frame.dataset.focusKey = 'home:photo:' + row.id;
       frame.setAttribute('aria-busy', 'true');
-      const image = el('img', null, 'home-post-cover'); image.alt = ''; image.loading = 'lazy'; image.decoding = 'async';
+      const image = el('img', null, compact ? 'home-recent-cover' : 'home-post-cover'); image.alt = ''; image.loading = 'lazy'; image.decoding = 'async';
       const status = el('span', '사진 불러오는 중…', 'life-meta home-photo-loading');
       frame.append(status); article.append(frame);
       const current = () => showing(context) && epoch === mediaGeneration && frame.isConnected;
@@ -476,6 +476,120 @@
       context.area.setAttribute('aria-busy', 'false');
       void enrichDrafts(context);
     }
+    // A read-only union: original versions and the two existing saved post
+    // formats keep their identities, storage and readers.
+    function hubRows(context) {
+      const bundle = getBundle(), rows = [], errors = [];
+      const sources = new Map(bundle.sources.map(source => [source.id, source]));
+      const latest = new Map();
+      bundle.sourceVersions.forEach(version => {
+        if (sources.has(version.sourceId)) latest.set(version.sourceId, version);
+      });
+      latest.forEach(version => {
+        const source = sources.get(version.sourceId);
+        rows.push({ kind: 'source', id: source.id, versionId: version.id, title: source.title,
+          body: version.contentText, updatedAt: version.importedAt, info: { source, version } });
+      });
+      const read = (key, label, use) => {
+        const result = context.results[key];
+        if (result?.status !== 'fulfilled') { errors.push({ key, label }); return; }
+        try { use(result.value); } catch (_) { errors.push({ key, label }); }
+      };
+      read('workbench', '첨부 글', state => {
+        if (state.workspaceId !== context.workspaceId) throw new Error('workspace_mismatch');
+        life.Workbench.validate(state);
+        rows.push(...(state.page.posts || []).filter(post => post.status === 'saved').map(post => ({ ...post, kind: 'plain' })));
+      });
+      read('photo', '이 브라우저의 글', posts => {
+        if (!Array.isArray(posts)) throw new Error('invalid_posts');
+        rows.push(...posts.filter(post => post.status === 'saved' && !post.archived).map(post => ({ ...post, kind: 'photo' })));
+      });
+      const time = row => Number.isFinite(Date.parse(row.updatedAt)) ? Date.parse(row.updatedAt) : 0;
+      rows.sort((a, b) => time(b) - time(a) || (a.kind + ':' + a.id).localeCompare(b.kind + ':' + b.id));
+      return { rows, errors };
+    }
+    function openHubRow(context, row) {
+      if (row.kind === 'source') return openVersion(context, row.versionId);
+      const target = row.kind === 'photo' ? { photoPostId: row.id } : { postId: row.id };
+      return navigate('page', { blogContext: true, pagePreview: false, searchTarget: target,
+        homeAnchor: { kind: row.kind, id: row.id, returning: true } });
+    }
+    function hubRecord(context, row) {
+      const article = el('article', null, 'home-recent-item'); article.dataset.homeKind = row.kind;
+      if (row.kind === 'source') { article.dataset.sourceId = row.id; article.dataset.versionId = row.versionId; }
+      else if (row.kind === 'photo') article.dataset.photoPostId = row.id;
+      else article.dataset.postId = row.id;
+      const title = String(row.title || '').trim() || snippet(row.body) || row.attachments?.[0]?.title || '사진이 있는 글';
+      const content = el('div', null, 'home-recent-content'), heading = el('h3');
+      const open = action(context, title, () => openHubRow(context, row), 'home-recent-open');
+      open.dataset.focusKey = 'home:recent:' + row.kind + ':' + (row.versionId || row.id);
+      heading.append(open); content.append(heading);
+      if (row.body?.trim() && String(row.title || '').trim()) content.append(el('p', snippet(row.body), 'home-text home-recent-excerpt'));
+      if (row.kind === 'plain' && row.attachments?.length) content.append(el('p', row.attachments.map(item => item.title).join(' · '), 'home-recent-attachments life-meta'));
+      const meta = el('p', null, 'life-meta home-recent-meta');
+      const ownSource = row.info && life.Writing?.isOwnSource(row.info.source, getBundle());
+      const time = modifiedDate(row.updatedAt, row.kind === 'source' ? (ownSource ? '저장 ' : '가져옴 ') : '수정 ');
+      if (time) meta.append(time, document.createTextNode(' · '));
+      meta.append(document.createTextNode(row.info ? metadata(row.info) : row.kind === 'photo' ? '직접 쓴 글 · 이 브라우저에 보관' : '직접 쓴 첨부 글 · 비공개'));
+      content.append(meta);
+      postCover(context, row, article, () => openHubRow(context, row), true);
+      article.append(content);
+      return article;
+    }
+    function updateHub(context) {
+      if (!showing(context)) return;
+      clearMedia();
+      const { rows, errors } = hubRows(context), fragment = document.createDocumentFragment();
+      if (errors.length) {
+        const error = el('div', null, 'home-load-error'); error.setAttribute('role', 'status');
+        error.append(el('p', errors.map(item => item.label).join(', ') + '을 불러오지 못했어요. 확인된 자료만 표시합니다.', 'life-meta'),
+          action(context, '다시 불러오기', () => load(context, errors.map(item => item.key)))); fragment.append(error);
+      }
+      rows.slice(0, 6).forEach(row => fragment.append(hubRecord(context, row)));
+      if (!rows.length && !errors.length) {
+        const empty = el('div', null, 'home-hub-empty');
+        empty.append(el('h3', '아직 모아 둔 글이 없어요.'), el('p', '파일, 본문 또는 URL로 글을 가져오세요. 원래 출처와 함께 보관합니다.', 'home-text'));
+        fragment.append(empty);
+      }
+      const focused = document.activeElement, focusKey = context.list.contains(focused) ? focused?.dataset.focusKey : null;
+      context.list.replaceChildren(fragment);
+      if (focusKey) [...context.list.querySelectorAll('[data-focus-key]')].find(item => item.dataset.focusKey === focusKey)?.focus({ preventScroll: true });
+      context.area.setAttribute('aria-busy', 'false');
+    }
+    function hubAnchor(context, requested) {
+      return [...context.list.querySelectorAll('.home-recent-item')].find(node => node.dataset.homeKind === requested.kind &&
+        (requested.kind === 'photo' ? node.dataset.photoPostId : requested.kind === 'plain' ? node.dataset.postId : node.dataset.sourceId) === requested.id &&
+        (requested.kind !== 'source' || !requested.versionId || node.dataset.versionId === requested.versionId));
+    }
+    function restoreHubTarget(context, requested) {
+      if (!requested || !['source', 'photo', 'plain'].includes(requested.kind) || typeof requested.id !== 'string') return;
+      const target = hubAnchor(context, requested);
+      if (target) {
+        if (requested.returning && !requested.committed) return;
+        target.querySelector('.home-recent-open')?.focus({ preventScroll: true });
+        target.scrollIntoView({ block: 'start', behavior: 'instant' }); return;
+      }
+      const { rows, errors } = hubRows(context);
+      let saved = rows.find(row => row.kind === requested.kind && row.id === requested.id &&
+        (row.kind !== 'source' || !requested.versionId || row.versionId === requested.versionId));
+      // A return target can be an older immutable version. Keep that exact
+      // version available without substituting the newly selected latest one.
+      if (!saved && requested.kind === 'source' && requested.versionId) {
+        const info = sourceInfo(requested.versionId);
+        if (info?.source.id === requested.id) saved = { kind: 'source', id: requested.id, versionId: requested.versionId, info };
+      }
+      if (!saved && !requested.committed && !requested.returning) return;
+      const notice = el('div', null, 'home-saved-filter-notice'); notice.setAttribute('role', 'status');
+      const subject = requested.committed ? '저장한 글' : '읽던 글';
+      notice.append(el('p', saved ? (requested.committed ? '저장한 글은 최근 6개 목록 밖에 있습니다.' : '읽던 글은 최근 6개 목록 밖에 있습니다.') :
+        errors.length ? subject + '의 목록을 확인하지 못했어요. 다시 불러와 확인해 주세요.' : requested.kind === 'source' ?
+          '읽던 원문 버전을 찾지 못했어요. 다른 버전으로 바꾸지 않았습니다.' : subject + '을 최근 목록에서 찾지 못했어요. 직접 쓴 글에서 확인해 주세요.', 'life-meta'));
+      if (saved) notice.append(action(context, requested.committed ? '저장한 글 보기' : '읽던 글 보기', () => openHubRow(context, saved)));
+      else if (errors.length) notice.append(action(context, '다시 불러오기', async () => { await load(context, errors.map(item => item.key)); if (showing(context)) { notice.remove(); restoreHubTarget(context, requested); } }));
+      else notice.append(action(context, requested.kind === 'source' ? '자료실에서 확인' : '직접 쓴 글에서 확인', () => requested.kind === 'source' ? navigate('sources') : navigate('writings', { homeAnchor: requested })));
+      context.list.before(notice);
+      if (requested.returning || requested.committed) notice.querySelector('button')?.focus({ preventScroll: true });
+    }
     async function load(context, keys = ['workbench', 'photo', 'plainDrafts', 'sourceDrafts']) {
       const read = { workbench: () => storage.readWorkbench(context.workspaceId), photo: () => storage.listPhotoPosts(context.workspaceId),
         plainDrafts: () => storage.readPageDrafts(context.workspaceId), sourceDrafts: () => storage.listStages(context.workspaceId) };
@@ -483,6 +597,7 @@
       const results = await Promise.allSettled(keys.map(key => Promise.resolve().then(read[key])));
       if (!showing(context)) return;
       keys.forEach((key, index) => { context.results[key] = results[index]; });
+      if (!context.library) { updateHub(context); return; }
       const anchor = libraryAnchor(context);
       const libraryTop = anchor ? context.materials.getBoundingClientRect().top + global.scrollY : null;
       updateList(context); reconcileLibrary(context);
@@ -582,14 +697,68 @@
       });
       return area;
     }
+    async function renderHub(options, bundle) {
+      const surface = el('div', null, 'life-home home-hub'); surface.id = 'lifeHome';
+      const context = { token: ++generation, workspaceId: bundle.workspaceId, surface, library: false,
+        results: {}, error: el('p', null, 'life-error home-error') };
+      visible = true;
+      context.error.hidden = true; context.error.setAttribute('role', 'alert');
+      const form = el('form', null, 'home-hub-search'); form.setAttribute('role', 'search'); form.setAttribute('aria-label', '전체 글 검색');
+      const label = el('label', '전체 글 검색', 'life-sr-only'); label.htmlFor = 'homeGlobalSearch';
+      const input = el('input'); input.id = 'homeGlobalSearch'; input.type = 'search'; input.maxLength = 1000;
+      input.placeholder = '전체 글 검색'; input.autocomplete = 'off'; input.value = listState.homeQuery; input.dataset.focusKey = 'home:global-search';
+      const submit = el('button', null, 'life-button life-icon-button home-hub-search-submit'); submit.type = 'submit';
+      submit.setAttribute('aria-label', '전체 글 검색'); submit.append(life.Icons.create('search'));
+      submit.dataset.focusKey = 'home:global-search-submit';
+      let composing = false, searching = false;
+      input.addEventListener('compositionstart', () => { composing = true; });
+      input.addEventListener('compositionend', () => { composing = false; listState.homeQuery = input.value; });
+      input.addEventListener('input', () => { listState.homeQuery = input.value; });
+      input.addEventListener('keydown', event => { if (event.key === 'Enter' && (composing || event.isComposing || event.keyCode === 229)) event.preventDefault(); });
+      form.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (composing || event.isComposing || searching || !showing(context)) return;
+        listState.homeQuery = input.value;
+        const query = input.value.trim();
+        searching = true; submit.setAttribute('aria-busy', 'true');
+        try { await navigate('find', query ? { query } : {}); }
+        catch (_) { if (showing(context)) { context.error.hidden = false; context.error.textContent = '검색 화면을 열지 못했어요. 다시 시도해 주세요.'; } }
+        finally { searching = false; submit.removeAttribute('aria-busy'); }
+      });
+      form.append(label, input, submit);
+      const actions = el('div', null, 'home-hub-actions');
+      const add = action(context, '가져오기', () => navigate('import'), 'life-primary');
+      add.dataset.homeDestination = 'import'; add.dataset.focusKey = 'home:action:import';
+      add.setAttribute('aria-label', '자료 가져오기'); actions.append(add);
+      const resume = el('div', null, 'home-hub-resume'); resume.id = 'homeReadingResumeHost';
+      surface.append(form, actions, context.error, resume);
+      const recent = section(context, '최근 자료', 'homeRecent');
+      const heading = recent.querySelector('.home-section-heading');
+      const all = action(context, '전체 보기', () => navigate('sources'), 'home-hub-all');
+      all.dataset.homeDestination = 'sources'; all.dataset.focusKey = 'home:action:sources';
+      heading.append(all);
+      context.area = recent; recent.setAttribute('aria-busy', 'true');
+      context.list = el('div', null, 'home-recent-list'); context.list.id = 'homeRecentList';
+      const loading = el('p', '최근 자료를 불러오는 중…', 'life-meta home-loading'); loading.setAttribute('role', 'status'); context.list.append(loading);
+      recent.append(context.list); surface.append(recent);
+      const secondary = el('div', null, 'home-hub-secondary');
+      const write = action(context, '새 글 쓰기', () => navigate('page', { blogContext: true, pageCompose: true }), 'home-hub-write');
+      write.dataset.homeDestination = 'write'; write.dataset.focusKey = 'home:action:write'; secondary.append(write); surface.append(secondary);
+      host.append(surface);
+      renderReadingResume?.(resume, 'home');
+      await load(context, ['workbench', 'photo']);
+      if (showing(context)) restoreHubTarget(context, options.homeAnchor);
+    }
     async function render(options = {}) {
       if (!alive()) return;
       const bundle = getBundle();
       if (!bundle) return;
       adoptState(bundle.workspaceId, options.homeState);
+      listState.library = options.library === true;
       clearMedia();
-      const surface = el('div', null, 'life-home'); surface.id = 'lifeHome';
-      const context = { token: ++generation, workspaceId: bundle.workspaceId, surface, profile: { name: '내 블로그' },
+      if (!listState.library) return renderHub(options, bundle);
+      const surface = el('div', null, 'life-home home-writings'); surface.id = 'lifeHome';
+      const context = { token: ++generation, workspaceId: bundle.workspaceId, surface, library: true, profile: { name: '내 블로그' },
         results: {}, photoDrafts: new Map(), draftRead: 0, error: el('p', null, 'life-error home-error') };
       visible = true;
       context.error.hidden = true; context.error.setAttribute('role', 'alert');
@@ -615,7 +784,7 @@
       if (!showing(context)) return;
       composition.setAttribute('aria-busy', 'false');
       const requested = options.homeAnchor;
-      if (requested && ['photo', 'plain', 'source'].includes(requested.kind) && typeof requested.id === 'string') {
+      if (requested && (!requested.returning || requested.committed) && ['photo', 'plain', 'source'].includes(requested.kind) && typeof requested.id === 'string') {
         if (!focusAnchor(context, requested) && requested.committed) {
           const saved = resultRows(context).rows.find(row => row.kind === requested.kind && row.id === requested.id);
           if (saved && (listState.query.trim() || listState.tab !== saved.tab)) {

@@ -1,0 +1,129 @@
+{
+  "createdAt": "2026-10-18T10:35:23.705Z",
+  "scope": "Generated anonymous Obsidian Markdown only; actual app/SDK/IndexedDB and two tabs, intercepted Auth HTTP. No private notes, screenshots, operating SQL, source fetches, Apple hardware or native IME.",
+  "checks": [
+    {
+      "name": "explicit review/apply, four intersecting filters, exact old reader/back, sanitized export and reload 1440",
+      "pass": true,
+      "evidence": {
+        "generatedContentNotes": 96,
+        "generatedSupportingMetadata": 1,
+        "originalVersions": 98,
+        "explicitSave": true,
+        "intersectingResults": 6,
+        "unclassifiedFilterExcludedSupportingMetadata": true,
+        "exactReturnScrollY": 1,
+        "priorVersionsUnchanged": true,
+        "exportedOnlyNormalizedMetadata": true
+      }
+    },
+    {
+      "name": "explicit review/apply, four intersecting filters, exact old reader/back, sanitized export and reload 390",
+      "pass": true,
+      "evidence": {
+        "generatedContentNotes": 96,
+        "generatedSupportingMetadata": 1,
+        "originalVersions": 98,
+        "explicitSave": true,
+        "intersectingResults": 6,
+        "unclassifiedFilterExcludedSupportingMetadata": true,
+        "exactReturnScrollY": 395,
+        "priorVersionsUnchanged": true,
+        "exportedOnlyNormalizedMetadata": true
+      }
+    },
+    {
+      "name": "wrong commit/path/hash and changed actual bytes never match by title; another workspace has no automatic classification",
+      "pass": true,
+      "evidence": {
+        "rejectedIdentityVariants": [
+          {
+            "mode": "commit",
+            "matched": 0,
+            "mappedVersions": 0,
+            "stale": 0,
+            "unmatched": 97
+          },
+          {
+            "mode": "path",
+            "matched": 0,
+            "mappedVersions": 0,
+            "stale": 0,
+            "unmatched": 97
+          },
+          {
+            "mode": "hash",
+            "matched": 0,
+            "mappedVersions": 0,
+            "stale": 97,
+            "unmatched": 0
+          },
+          {
+            "mode": "actualBytes",
+            "matched": 0,
+            "mappedVersions": 0,
+            "stale": 97,
+            "unmatched": 0
+          }
+        ],
+        "sameTitledDistinctPaths": true,
+        "workspaceAutomaticCarryover": false
+      }
+    },
+    {
+      "name": "failed metadata writes preserve review and originals; explicit clear leaves a tombstone rejecting delayed saves",
+      "pass": true,
+      "evidence": {
+        "abortedWritePreservedInput": true,
+        "clearRequiredSeparateConfirmation": true,
+        "clearRevision": 2,
+        "delayedSaveStatus": "conflict"
+      }
+    },
+    {
+      "name": "two real tabs race one CAS revision and cannot overwrite a later clear",
+      "pass": true,
+      "evidence": {
+        "winningConcurrentWrites": 1,
+        "conflicts": 1,
+        "clearRevision": 2,
+        "staleRev1Rejected": true,
+        "delayedPostSaveRevision3SuppressedAfterPeerRevision4": true
+      }
+    },
+    {
+      "name": "late metadata reads and in-flight hashes cannot repaint newer metadata, navigation or workspace",
+      "pass": true,
+      "evidence": {
+        "staleReadAfterPeerClearBlocked": true,
+        "staleReadNavigationBlocked": true,
+        "staleHashNavigationBlocked": true,
+        "staleWorkspaceReadBlocked": true
+      }
+    },
+    {
+      "name": "signout during actual hashing clears private candidates and the next account cannot read them",
+      "pass": true,
+      "evidence": {
+        "sameContextAccountSwitch": true,
+        "inFlightHashDisposed": true,
+        "previousWorkspaceOwnerDenied": true
+      }
+    },
+    {
+      "name": "anonymous entry never opens account storage or reads a private classification",
+      "pass": true,
+      "evidence": {
+        "privateIdbOpens": 0,
+        "classificationReads": 0
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "expectedErrors": 0,
+  "realRemoteWrites": 0,
+  "browser": "151.0.7922.173",
+  "finishedAt": "2026-10-18T10:36:42.483Z"
+}

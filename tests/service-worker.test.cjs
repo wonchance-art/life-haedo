@@ -83,7 +83,7 @@ test('section and nested view links resolve to the same installed shell offline'
   const h = harness({ fetchResult: new Error('offline') });
   h.entries.set(request('index.html').url, new Response('unified home'));
   h.entries.set(request('workspace.html').url, new Response('timeline management'));
-  for (const query of ['section=records&view=write', 'section=home', 'section=records', 'section=tools', 'section=manage&view=sync', 'view=sources', 'section=records&view=activities', 'section=records&view=page', 'section=tools&view=discover', 'section=tools&view=reflection', 'section=manage&view=workbench-backup', 'section=manage&view=public-pages']) {
+  for (const query of ['collect=1', 'section=records&view=writings', 'section=records&view=write', 'section=home', 'section=records', 'section=tools', 'section=manage&view=sync', 'view=sources', 'section=records&view=activities', 'section=records&view=page', 'section=tools&view=discover', 'section=tools&view=reflection', 'section=manage&view=workbench-backup', 'section=manage&view=public-pages']) {
     assert.equal(await (await h.run('fetch', request('index.html?' + query, 'navigate'))).text(), 'unified home');
   }
   assert.equal(await (await h.run('fetch', request('workspace.html?section=manage', 'navigate'))).text(), 'timeline management');

@@ -8,7 +8,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { FakeCloud, accounts, base, cloud } = require('./life-sync-browser.cjs');
-const { playwright, makeContext, ready, settle, nav, observe } = require('./unified-home-browser.cjs');
+const { playwright, makeContext, settle, observe } = require('./unified-home-browser.cjs');
+const { nav, openWritings, ready } = require('./writings-navigation.cjs');
 const { seed } = require('./blog-user-journeys-browser.cjs');
 const out = path.resolve('.local/app-native/qa');
 const report = { createdAt: new Date().toISOString(), scope: 'Linux Chromium native WAAPI/rAF, actual app and account-scoped IndexedDB; intercepted anonymous Auth. Emulated viewports/touch/keyboard, no Apple hardware, IME, live OAuth/DB, publication or deployment.', checks: [], frames: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, external: [] };
@@ -111,7 +112,7 @@ async function main() {
       await page.locator('.photo-status[role="alert"]').waitFor(); await cleanTrace(page);
       await page.evaluate(() => document.querySelector('[data-haedo-section="tools"]').click()); await page.locator('#lifeError:not([hidden])').waitFor();
       assert.equal((await page.locator('.ql-editor').innerText()).trim(), '저장 실패 뒤에도 그대로 남는 문장');
-      assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="home"]').getAttribute('aria-current'), 'page');
+      assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').getAttribute('aria-current'), 'page');
       assert.equal(await page.locator('.photo-status').getAttribute('data-state'), 'error');
       assert.equal(await page.locator('.photo-status-check').isVisible(), false);
       assert.deepEqual(await page.evaluate(() => __nativeMotion.calls.filter(call => call.method === 'enter' || call.options?.state === 'saved')), []);

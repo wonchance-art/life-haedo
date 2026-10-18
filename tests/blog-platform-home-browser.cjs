@@ -9,7 +9,8 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { ShareCloud } = require('./life-share-browser.cjs');
-const { playwright, ready, shellReady, settle, makeContext, observe, nav } = require('./unified-home-browser.cjs');
+const { playwright, shellReady, settle, makeContext, observe } = require('./unified-home-browser.cjs');
+const { nav, openWritings, ready } = require('./writings-navigation.cjs');
 const { inspectHome } = require('./home-entry-browser.cjs');
 
 const out = process.env.BLOG_OUT_DIR ? path.resolve(process.env.BLOG_OUT_DIR) : path.resolve(__dirname, '../.local/blog-platform');
@@ -110,19 +111,26 @@ async function main() {
     } finally { await context.close(); }
   }
   try {
-    await check('public explanation to first private saved post and exact reopening at three widths', async ({ page, server, device }) => {
+    await check('public collection entry retains the explicit private writing flow and exact reopening at three widths', async ({ page, server, device }) => {
       await page.goto(base + '/index.html'); await shellReady(page);
       assert.equal(await page.locator('#lifeWelcome').isVisible(), true);
-      assert.match(await page.locator('#lifeWelcome').innerText(), /블로그/);
+      assert.match(await page.locator('#lifeWelcome').innerText(), /흩어진 내 글/);
+      assert.equal(await page.locator('[data-life-login="import"]').innerText(), '글 가져오기');
+      assert.equal(await page.locator('.haedo-welcome-sources > li').count(), 3);
       assert.deepEqual(await page.evaluate(() => __homeDbOpens), []);
       assert.equal(await page.evaluate(() => HaedoLife.Shell.storage), null);
       await snapshot(page, 'public', '#lifeWelcome');
       server.oauthAccounts.set(device, accounts.a);
       await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click();
       await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
+      await page.locator('#lifeImportText').waitFor();
+      assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'import');
+      assert.equal(new URL(page.url()).searchParams.has('collect'), false);
+      await openWritings(page);
+      await page.locator('[data-home-destination="write"]:visible, #homeFirstWrite').click();
       await page.locator('#photoTitle').waitFor();
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'page');
-      assert.equal(await page.locator('.ql-editor').evaluate(node => node === document.activeElement), true, 'First-write intent must survive login and focus the body');
+      assert.equal(await page.locator('.ql-editor').evaluate(node => node === document.activeElement), true, 'An explicit new-writing action must focus the established editor body');
       assert.equal(await page.locator('.home-posts-error').count(), 0);
       assert((await page.evaluate(() => __homeDbOpens)).every(item => item.verified));
       await snapshot(page, 'first-writing', '.photo-editor');
@@ -240,7 +248,8 @@ async function main() {
       assert(!(await page.locator('body').innerText()).includes(post.title));
       server.oauthAccounts.set(device, accounts.b); await page.locator('[data-life-login]').click(); await page.locator('#googleLogin').click();
       await page.waitForURL(url => url.pathname.endsWith('/index.html')); await ready(page);
-      await page.locator('#photoTitle').waitFor(); await page.getByRole('button', { name: '닫기', exact: true }).click();
+      await page.locator('#lifeImportText').waitFor();
+      await openWritings(page);
       await page.locator('#homePosts[aria-busy="false"]').waitFor();
       assert.equal((await documents(page)).rows.length, 0);
       assert.equal(await page.locator('#homeFirstWrite').isVisible(), true);

@@ -1,5 +1,5 @@
 /* Versioned app shell. Personal documents remain in localStorage/IndexedDB. */
-const CACHE='haedo-v125';
+const CACHE='haedo-v126';
 const SHELL=['./','./index.html','./login.html','./workspace.html','./timeline.html',
   './assets/life/obsidian-decisions.js','./assets/life/obsidian-package.js',
   './assets/life/source-classification.js','./assets/life/source-classification-ui.js','./assets/life/source-classification.css',
@@ -17,7 +17,7 @@ const SHELL=['./','./index.html','./login.html','./workspace.html','./timeline.h
   './assets/life/legacy.js','./assets/life/icons.js','./assets/life/workbench-ui.js','./assets/life/collection.js','./assets/life/collection-media.js','./assets/life/collection-metadata.js','./assets/life/collection-picker.js','./assets/life/collection-ui.js','./assets/life/collection.css', './assets/life/home.js','./assets/life/ui.js','./assets/life/ui.css','./assets/life/workbench.css','./assets/life/home.css','./assets/life/shell.js'];
 const shellURLs=new Set(SHELL.map(path=>new URL(path,self.registration.scope).href));
 const authParams=new Set(['code','access_token','refresh_token','token','token_hash','id_token','error','error_code','error_description']);
-const shellParams=new Set(['v','section','view','doc','next','view-only','view_only','viewOnly','readonly','read_only','share','public']);
+const shellParams=new Set(['collect','v','section','view','doc','next','view-only','view_only','viewOnly','readonly','read_only','share','public']);
 self.addEventListener('install',event=>{
   // Reject a partial shell so the installed version stays usable.
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL.map(url=>new Request(url,{cache:'reload'}))))

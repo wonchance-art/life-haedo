@@ -9,7 +9,8 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { ShareCloud } = require('./life-share-browser.cjs');
-const { playwright, ready, nav, makeContext, observe } = require('./unified-home-browser.cjs');
+const { playwright, makeContext, observe } = require('./unified-home-browser.cjs');
+const { nav, openWritings, ready } = require('./writings-navigation.cjs');
 const out = path.resolve('.local/home-refinement/qa');
 const report = { scope: 'Linux Chromium viewport simulation; anonymous mocked Auth HTTP, real account-scoped IndexedDB and synthetic photo bytes. No live OAuth, native IME, Apple device or deployment evidence.', checks: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, remoteWrites: [], external: [], captures: [] };
 const homeReady = page => page.locator('#homePosts[aria-busy="false"]').waitFor();
@@ -72,7 +73,7 @@ async function main() {
     finally { await context.close(); }
   }
   try {
-    await check('empty home offers one first write and completes private save/read/home', async page => {
+    await check('empty writing library offers one first write and completes private save/read/library', async page => {
       await openHome(page);
       assert.equal(await page.locator('.home-list-controls').isVisible(), false);
       const layout = await page.locator('#homeFirstWrite').evaluate(button => ({ y: button.getBoundingClientRect().top, bottom: button.getBoundingClientRect().bottom, profileBottom: document.querySelector('.home-profile-bar').getBoundingClientRect().bottom, dockTop: document.querySelector('[data-haedo-navigation]').getBoundingClientRect().top, overflow: document.documentElement.scrollWidth > innerWidth }));
@@ -80,7 +81,7 @@ async function main() {
       await page.locator('#homeFirstWrite').click(); await page.locator('.ql-editor').waitFor(); await page.waitForFunction(() => document.activeElement?.classList.contains('ql-editor'));
       await page.locator('.ql-editor').fill('첫 문장으로 시작한 비공개 글 🌱'); await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor();
       assert.match(await page.locator('.photo-article').innerText(), /첫 문장으로 시작한/);
-      await page.getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await homeReady(page);
+      await page.locator('#lifeMain').getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await homeReady(page);
       assert.equal(await page.locator('#homePosts .home-post').count(), 1); assert.equal(await page.locator('.home-list-controls').isVisible(), true);
       const row = page.locator('#homePosts .home-post'); assert.match(await row.innerText(), /비공개/); assert.match(await row.innerText(), /이 브라우저/);
       await row.locator('.home-post-open').click(); await page.locator('.photo-article').waitFor(); assert.match(await page.locator('.photo-article').innerText(), /첫 문장으로 시작한/);
@@ -109,7 +110,7 @@ async function main() {
       await page.locator('#homeTab-drafts').click(); await page.locator('#homePosts .home-draft').waitFor(); assert.equal(await page.locator('#homePosts .home-draft').count(), 1); assert.match(await page.locator('.home-search-scope').innerText(), /초안/); assert.equal(await page.locator('.home-resume').isVisible(), false);
       await page.locator('#homeTab-archive').click(); const row = page.locator(`[data-photo-post-id="${refs.archived}"]`); await row.waitFor(); assert.match(await page.locator('.home-search-scope').innerText(), /보관/);
       await row.locator('.home-post-open').click(); await page.locator('.photo-article').waitFor(); assert.match(await page.locator('.photo-article').innerText(), /보관함 검색에서만/);
-      await page.getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await homeReady(page);
+      await page.locator('#lifeMain').getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await homeReady(page);
       assert.equal(await input.inputValue(), query); assert.equal(await input.isVisible(), true); assert.equal(await page.locator('#homeTab-archive').getAttribute('aria-selected'), 'true');
       await page.waitForFunction(id => document.activeElement?.closest('[data-photo-post-id]')?.dataset.photoPostId === id, refs.archived);
       assert.equal(await page.locator('#homePosts .home-post').count(), 1);
