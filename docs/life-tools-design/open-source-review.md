@@ -836,3 +836,9 @@ ZIP 담당은 공식 [최신 릴리스 API](https://api.github.com/repos/101arro
 - WordPress Gutenberg: 공식 [latest release API](https://api.github.com/repos/WordPress/gutenberg/releases/latest)에서 v24.2.0(2026-10-14), [저장소](https://api.github.com/repos/WordPress/gutenberg) archived/disabled=false 확인. [LICENSE](https://github.com/WordPress/gutenberg/blob/trunk/LICENSE.md)의 프로젝트 GPL-2.0-or-later와 2021-04-15 이후 기여의 GPL/MPL 이중 라이선스 조건을 구분했다. [공식 Query Loop 소스 문서](https://github.com/WordPress/gutenberg/blob/trunk/packages/block-library/src/query/README.md)의 query/order/orderBy·목록·이동 분리는 참고하되 명시 사본 순서를 동적 날짜/조건 query로 대체하지 않는다. Gutenberg/React/PHP 또는 코드는 도입하지 않는다.
 
 확인일은 2026-10-18 KST다. docs.ghost.org·wordpress.org 문서 사이트 직접 조회는 프록시 403이라 공식 GitHub 문서 소스를 읽었다. 공개 보안 권고 API는 현재 GitHub 도구의 endpoint 미지원으로 확인하지 못했으며 0건/보안 감사 통과라고 기록하지 않는다. 두 프로젝트는 설계 참고일 뿐 새 실행 의존성이 아니고 기존 vendor 업그레이드도 이번 모음과 함께 수행하지 않는다.
+
+## 선택 영역의 공개 9칸 — 2026-10-18 KST
+
+독립 오픈소스 검토 담당이 공식 [Muuri latest release API](https://api.github.com/repos/haltu/muuri/releases/latest), [HEAD 이력](https://api.github.com/repos/haltu/muuri/commits?per_page=1), [0.9.5 LICENSE](https://github.com/haltu/muuri/blob/0.9.5/LICENSE.md)·[README](https://github.com/haltu/muuri/blob/0.9.5/README.md)를 확인했다. 최신 배포는 0.9.5(2021-07-09 UTC), MIT이며 archived/disabled=false다. 저장소 pushed 2024-05-25와 기본 HEAD 219e008의 2022-09-14 문서 변경을 구분하며 최근 기능 릴리스로 표현하지 않는다.
+
+Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와 추가 DOM 구조를 제공한다. 이번 고정 순서의 최대 9개 읽기에는 불필요하므로 코드/의존성을 도입하지 않는다. 기존 CSS Grid·NineBoard의 허용 필드 투영·항목 설명·ShareRemote와 접근 가능한 버튼/상세를 재사용한다. 향후 자유 배치나 실제 대규모 동적 갤러리가 필요해질 때 다시 비교한다. 공개 보안 권고는 현재 도구의 endpoint 미지원 및 공식 웹 API 접근 제한/429로 확인하지 못했다. 권고 0건·보안 감사 통과를 주장하지 않으며 우회/추가 설치를 하지 않았다. [제품·검수 범위](../design-review/nine-public.md)를 따른다.

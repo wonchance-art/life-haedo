@@ -330,6 +330,9 @@ jobs:
       - name: Verify series reader lifecycle, originals and restored contents position
         if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-series-reader-browser.cjs
+      - name: Verify public nine-slot reading, exact focus return and opt-in covers
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/nine-public-reader-browser.cjs
       - name: Verify subview location and safe contextual return
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/subview-navigation-browser.cjs
@@ -361,6 +364,7 @@ jobs:
             .local/blog-journeys/after/
             .local/blog-series/
             .local/blog-series-reader/
+            .local/nine-public-reader/
             .local/sns-blog/after/
             .local/blog-platform/*.json
             .local/blog-platform/*.png
@@ -533,6 +537,12 @@ jobs:
       - name: Verify explicit series publication and anonymous native reading
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: node tests/blog-series-public-browser.cjs
+      - name: Verify isolated nine-slot publication, receipts and independent revocation
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: node tests/nine-public-backend.cjs
+      - name: Verify selected private areas through explicit publication and anonymous reading
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: node tests/nine-public-browser.cjs
       - name: Verify private post manager and exact provenance return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-manager-browser.cjs
@@ -577,6 +587,8 @@ jobs:
             .local/blog-completion/
             .local/blog-series-backend/
             .local/blog-series-public/
+            .local/nine-public-backend/
+            .local/nine-public/
             .local/blog-manager/
             .local/blog-public/
             .local/preservation/

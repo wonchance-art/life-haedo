@@ -3,7 +3,7 @@
   'use strict';
   const life=root.HaedoLife ||= {},M=life.NineBoard;
   const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
-  function create({storage,workspaceId,isCurrent,onDirty=()=>{},getBundle=()=>storage.read(workspaceId),onComposeArea=null,onComposed=()=>{},onOpenReference=()=>{throw new Error('원문 열기를 연결하지 못했습니다. 구절과 출처는 그대로 보관됩니다.');}}){
+  function create({storage,workspaceId,isCurrent,onDirty=()=>{},getBundle=()=>storage.read(workspaceId),onComposeArea=null,onComposed=()=>{},onPublishArea=null,onOpenReference=()=>{throw new Error('원문 열기를 연결하지 못했습니다. 구절과 출처는 그대로 보관됩니다.');}}){
     let state=null,base=[],host=null,status=null,error=null,selected=null,areaId=null,editing=null,preview=false,overview=false;
     let tick=0,stored=0,timer=null,saving=null,failure=null,epoch=0,manual=null,picker=null,candidate=null,busy=false,importUpdate=null;
     let evidencePicker=null,evidencePending=false,incoming=null;
@@ -68,6 +68,14 @@
       try{const blob=await M.png(source,areaId);if(!valid()||token!==epoch||!host?.isConnected)return;download(blob,'haedo-nine-board.png','image/png');}
       catch(cause){if(valid()&&token===epoch&&error?.isConnected){error.textContent=cause.message||'PNG를 만들지 못했습니다. JSON이나 HTML로 보관해 주세요.';error.hidden=false;}}
       finally{busy=false;unlock();message();}
+    }
+    async function publishArea(){
+      guard();await flush();guard();
+      const selectedBoard=board(),selectedArea=area();
+      if(overview||!selectedBoard||!selectedArea)throw new Error('공개 상태를 확인할 영역을 먼저 선택해 주세요.');
+      const token=epoch;busy=true;const unlock=lock();message();
+      try{await onPublishArea({boardId:selectedBoard.id,areaId:selectedArea.id});}
+      finally{busy=false;unlock();if(valid()&&token===epoch)message();}
     }
     function clearCompose(){
       composeSequence++;
@@ -345,8 +353,13 @@
           if(overview)composeAction.append(el('p','새 글에 담을 영역을 먼저 선택해 주세요.','life-help'));
           composeAction.append(compose);display.after(composeAction);renderComposeReceipt();
         }
+        if(typeof onPublishArea==='function'&&b.areas.length){
+          const publishAction=el('div',null,'nb-public-action'),publish=button('선택 영역 공개 검토',publishArea);
+          publish.id='nbPublicReviewOpen';publish.disabled=overview||!area();
+          publishAction.append(publish);display.after(publishAction);
+        }
       }
-      const files=details('파일 보관·가져오기');files.classList.add('nb-files');files.append(el('p','이 브라우저에만 보관되며 공개 사본·구성 동기화·자료 백업에 포함되지 않습니다. 현재 구성 JSON에는 지금 고른 구성 하나만, 전체 백업에는 모든 구성이 담깁니다. HTML은 현재 구성의 제목·선택 이유·출처가 담긴 보기 파일이며, 공개 링크가 아닙니다.','life-help'));
+      const files=details('파일 보관·가져오기');files.classList.add('nb-files');files.append(el('p','원래 구성은 이 브라우저에 보관됩니다. 선택 영역 공개는 별도로 검토하며 구성 동기화·자료 백업과 구분합니다. 현재 구성 JSON에는 지금 고른 구성 하나만, 전체 백업에는 모든 구성이 담깁니다. HTML은 현재 구성의 제목·선택 이유·출처가 담긴 보기 파일이며, 공개 링크가 아닙니다.','life-help'));
       if(M.hasReferences(state.boards))files.append(el('p','직접 담은 근거 구절도 JSON과 HTML에 포함됩니다. JSON은 원문 버전의 식별자를 보존하며, 다른 작업공간으로 옮기면 자동 연결하지 않습니다. 선택하지 않은 원문 본문이나 사진 파일은 복사하지 않습니다.','life-help'));
       const file=el('input');file.type='file';file.accept='.json,application/json';file.setAttribute('aria-label','9칸 구성 JSON 파일');let sequence=0;
       file.addEventListener('change',async()=>{const input=file.files[0],request=++sequence,token=epoch;file.value='';if(!input)return;try{guard();candidate=null;host.querySelector('.nb-import')?.remove();await flush();if(input.size>M.LIMITS.bytes)throw new Error('파일은 2 MiB까지 불러올 수 있습니다.');const value=M.readBackup(JSON.parse(await input.text()));if(!valid()||token!==epoch||request!==sequence||!file.isConnected)return;guard();candidate={boards:value,chosen:new Set()};clear();render();const review=host.querySelector('.nb-import');review.focus({preventScroll:true});review.scrollIntoView({block:'start'});}catch(cause){if(valid()&&token===epoch&&request===sequence&&file.isConnected)report(cause);}});

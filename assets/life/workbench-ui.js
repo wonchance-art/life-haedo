@@ -1153,6 +1153,11 @@
             session.searchTarget = { photoPostId: post.id, photoPostRevision: post.revision };
             session.nineOpen = false; clearError(); redraw();
           },
+          onPublishArea: async ({boardId,areaId}) => {
+            const token=generation;
+            const close=await life.NinePublicSharing.open({storage,workspaceId:session.workspaceId,boardId,areaId,isCurrent:()=>showing(token,session)&&session.nineOpen});
+            if(!showing(token,session)||!session.nineOpen)close();else viewCleanups.push(close);
+          },
           onOpenReference: async ({kind,target,reference,focusKey}) => {
             const token=generation;await flush();if(!showing(token,session))return;
             if(kind==='source')return openSource(target.sourceId,target.sourceVersionId,{focusKey,locator:target.locator});
