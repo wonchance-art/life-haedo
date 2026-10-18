@@ -1062,6 +1062,39 @@
         bodyNode.append(back);
         const nineHost = el('section'); bodyNode.append(nineHost);
         session.nine ||= life.NineBoardUI.create({ storage, workspaceId: session.workspaceId, getBundle,
+          onComposeArea: async request => {
+            const token = generation;
+            const valid = () => showing(token, session) && session.nineOpen && request.isCurrent() && request.workspaceId === session.workspaceId;
+            if (!valid()) throw fault('workspace_changed', '화면이 바뀌었습니다. 초안을 만들지 않았습니다.');
+            const source = await storage.readNineBoard(session.workspaceId);
+            const board = source.boards.find(value => value.id === request.boardId);
+            if (!valid()) throw fault('workspace_changed', '화면이 바뀌었습니다. 다시 검토해 주세요.');
+            if (source.revision !== request.revision || !board) throw fault('nine_board_conflict', '9칸 구성이 바뀌었습니다. 영역을 다시 검토해 주세요.');
+            const content = life.NineBoard.composeContent(board, request.areaId);
+            if (JSON.stringify(content) !== JSON.stringify(request.content)) throw fault('nine_board_conflict', '검토한 영역이 바뀌었습니다. 다시 확인해 주세요.');
+            const doc = life.PhotoPost.create(core.id);
+            const photo = await life.PhotoPost.readPhoto(new File([request.blob], '선택한-9칸.png', { type: 'image/png' }), core.id);
+            if (!valid()) throw fault('workspace_changed', '화면이 바뀌었습니다. 초안을 만들지 않았습니다.');
+            if (photo.width !== 1800 || photo.height !== 2100) throw fault('invalid_photo_post', '9칸 이미지 크기를 확인하지 못했습니다. 다시 검토해 주세요.');
+            doc.title = content.title; doc.photos = [photo];
+            doc.ops = [{ insert: { photo: { id: photo.id, caption: content.areaTitle, alt: content.title + ' · ' + content.areaTitle + ' · 9칸 구성' } } }, { insert: '\n' }, { insert: content.text.endsWith('\n') ? content.text : content.text + '\n' }];
+            life.PhotoPost.validate(doc);
+            const saved = await storage.savePhotoPostFromNineBoard(session.workspaceId, doc, source.revision, request.boardId, request.areaId);
+            onLocalSaved();
+            return { postId: saved.id, revision: saved.revision };
+          },
+          onComposed: async result => {
+            if (!workspaceIs(session) || current !== session || !visible || mode !== 'page' || !session.nineOpen) return;
+            const token = generation, previous = session.nineComposeTarget;
+            const postId = previous?.sourcePostId === result.postId ? previous.postId : result.postId;
+            const post = await storage.readPhotoPost(session.workspaceId, postId);
+            if (!showing(token, session) || !session.nineOpen) return;
+            session.nineComposeTarget = { sourcePostId: result.postId, postId: post.id };
+            session.nineComposeReturn = session.nineComposeTarget;
+            session.ninePostReference = null; session.ninePostReturn = null;
+            session.searchTarget = { photoPostId: post.id, photoPostRevision: post.revision };
+            session.nineOpen = false; clearError(); redraw();
+          },
           onOpenReference: async ({kind,target,reference,focusKey}) => {
             const token=generation;await flush();if(!showing(token,session))return;
             if(kind==='source')return openSource(target.sourceId,target.sourceVersionId,{focusKey,locator:target.locator});
@@ -1161,13 +1194,17 @@
       const composerHost = el('section'); taskHost.insertBefore(composerHost, photoHost); composerHost.hidden = photoTask;
       session.postEditorView = { token, hosts: { photo: photoHost, legacy: composerHost }, modes: {}, active: null };
       session.photoPosts ||= life.PhotoPostUI.create({ storage, workspaceId: session.workspaceId, isCurrent: () => workspaceIs(session), onDirty: () => updateStatus(session), onSaved: onLocalSaved,
-        onReturn: async context => { if (!session.blogContext) return false; await onBlogReturn({ ...context, kind: 'photo' }); return true; },
-        onCommitted: context => { if (session.blogContext) session.blogCommitted = { ...context, kind: 'photo' }; notifyPostMode(session, 'photo', { ...context, mode: 'read', committed: true }); },
+        onReturn: async context => {
+          if (session.nineComposeReturn?.postId === context.id) { session.searchTarget = null; session.nineOpen = true; clearError(); redraw(); return true; }
+          if (!session.blogContext) return false; await onBlogReturn({ ...context, kind: 'photo' }); return true;
+        },
+        onCommitted: context => { if (session.nineComposeTarget?.postId === context.previousId) session.nineComposeTarget.postId = context.id; if (session.blogContext) session.blogCommitted = { ...context, kind: 'photo' }; notifyPostMode(session, 'photo', { ...context, mode: 'read', committed: true }); },
         onModeChange: context => notifyPostMode(session, 'photo', context),
         beforeOpen: async () => { await session.composer?.flush(); } });
+      const nineReadBack = !!(session.ninePostReturn || (session.nineComposeReturn && session.nineComposeReturn.postId === session.searchTarget?.photoPostId));
       const photoMount = session.photoPosts.mount(photoHost, { standalone: blogTask, postId: session.searchTarget?.photoPostId || null, expectedRevision: session.ninePostReference?.postRevision ?? session.searchTarget?.photoPostRevision, reset: beginPost || showProfile || !!session.searchTarget && !session.searchTarget.photoPostId,
-        onReadBack:session.ninePostReturn?async()=>{const token=generation;await session.photoPosts.flush();if(!showing(token,session))return;session.ninePostReference=null;session.nineOpen=true;redraw();}:null,
-        readBackLabel:session.ninePostReturn?'9칸 구성으로 돌아가기':undefined,
+        onReadBack:nineReadBack?async()=>{const token=generation;await session.photoPosts.flush();if(!showing(token,session))return;session.ninePostReference=null;session.searchTarget=null;session.nineOpen=true;redraw();}:null,
+        readBackLabel:nineReadBack?'9칸 구성으로 돌아가기':undefined,
         listHost: postFeed, onFeed: rows => { photoRows = rows; mergeFeed(); } }); viewCleanups.push(() => session.photoPosts.detach());
       session.composer ||= life.PageComposer.create({ storage, workspaceId: session.workspaceId,
         onNewPost: () => session.photoPosts.begin(),
@@ -2821,6 +2858,7 @@
       if (current && current.workspaceId !== bundle.workspaceId) current.chapterImport = null;
       const token = ++generation;
       visible = true; mode = MODES[nextMode] ? nextMode : 'activities'; current = sessionFor(bundle.workspaceId);
+      current.nineComposeReturn = null;
       if (typeof options.pagePreview === 'boolean') preview = options.pagePreview;
       if (mode === 'discover' && typeof options.seedVersionId === 'string') {
         const view = discoveryView(current); view.seedVersionId = options.seedVersionId; view.chooserOpen = false;

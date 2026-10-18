@@ -491,3 +491,7 @@ html:has(.life-workbench[data-reflection-scene]) { scroll-padding-top: 0; }
 .wb-page-compatibility { margin-top:28px; border-top:1px solid var(--line); }
 .wb-page-compatibility > summary { min-height:52px; padding-block:14px; }
 .wb-page-compatibility[open] { padding-bottom:24px; border-bottom:1px solid var(--line); }
+.nb-compose-review { margin-block:20px; padding-block:16px; border-block:1px solid var(--line); overflow-wrap:anywhere; }
+.nb-compose-preview { display:block; width:min(100%,360px); height:auto; margin-block:16px; }
+.nb-compose-text { white-space:pre-wrap; overflow-wrap:anywhere; font-size:16px; line-height:1.8; margin-block:16px; }
+.nb-compose-result { margin-block:16px; }

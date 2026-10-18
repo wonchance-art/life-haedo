@@ -601,14 +601,25 @@
         photoPost().validate(value); return clone(value);
       });
     }
-    async function savePhotoPost(workspaceId, input, baseRevision, evidenceRequest = null) {
+    async function savePhotoPost(workspaceId, input, baseRevision, evidenceRequest = null, nineRequest = null) {
       collectionScope(workspaceId); requireRevision(baseRevision); photoPost().validate(input);
       const value = photoPost().compact(input);
+      const nine = nineRequest === null ? null : clone(nineRequest);
+      if (nine) {
+        onlyFields(nine, ['revision', 'boardId', 'areaId'], 'invalid_photo_post'); requireRevision(nine.revision);
+        if (baseRevision !== 0 || value.status !== 'draft' || value.replaces || value.archived || typeof nine.boardId !== 'string' || typeof nine.areaId !== 'string')
+          throw fault('invalid_photo_post', '9칸 구성은 새 비공개 초안으로만 담을 수 있습니다.');
+      }
       const evidence = evidenceRequest === null ? null : { refs: checkedEvidence(evidenceRequest.refs, workspaceId), baseRevision: evidenceRequest.baseRevision };
       if (evidence) requireRevision(evidence.baseRevision);
       if (value.revision !== baseRevision) throw fault('photo_post_conflict', '사진 글 저장 기준이 바뀌었습니다. 입력을 보존했습니다.');
       const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
         const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        if (nine) {
+          const source = await nineBoardValue(meta, workspaceId);
+          if (source.revision !== nine.revision || !source.boards.find(board => board.id === nine.boardId)?.areas.some(area => area.id === nine.areaId))
+            throw fault('nine_board_conflict', '9칸 구성이 바뀌었습니다. 영역을 다시 검토한 뒤 초안을 만들어 주세요.');
+        }
         if (evidence) {
           checkEvidenceTargets(evidence.refs, bundle);
           const priorEvidence = (await meta.get(`post-evidence:${workspaceId}:${value.id}`))?.value || { revision: 0, refs: [] };
@@ -687,6 +698,9 @@
     }
     function savePhotoPostWithEvidence(workspaceId, input, baseRevision, refs, evidenceBaseRevision) {
       return savePhotoPost(workspaceId, input, baseRevision, { refs, baseRevision: evidenceBaseRevision });
+    }
+    function savePhotoPostFromNineBoard(workspaceId, input, revision, boardId, areaId) {
+      return savePhotoPost(workspaceId, input, 0, null, { revision, boardId, areaId });
     }
     // A private, selected copy has no server binding. Read its dependencies in
     // one transaction; hashing/ZIP work happens later on this owned snapshot.
@@ -2087,7 +2101,7 @@
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
-      readCollection, saveCollection, readNineBoard, saveNineBoard, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       readPreservationCatalog, readPreservationSnapshot, installPreservationCopy,
       commitLocal, saveStage, getStage, listStages, deleteStage, subscribe,

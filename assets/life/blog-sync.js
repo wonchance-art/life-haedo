@@ -45,7 +45,13 @@
           if (enable && !state?.enabled) state = await writeState(c, state, { enabled: true, remoteId: state?.remoteId || post.id,
             remoteWorkspaceId: state?.remoteWorkspaceId || ws, remoteRevision: state?.remoteRevision || 0, localRevision: state?.localRevision || 0,
             publication: state?.publication || null, pending: state?.pending || null, status: 'pending', error: null });
-          if (!state) throw fault('not_enabled'); if (!state.enabled) throw fault('sync_paused'); if (state.conflict) return getState(ws, id);
+          if (!state) throw fault('not_enabled'); if (!state.enabled) throw fault('sync_paused');
+          if (state.conflict) {
+            const row = await remote.read(state.remoteId); guard(c); if (!row) throw fault('remote_missing');
+            await writeState(c, state, { publication: row.publication, status: 'conflict', error: null, conflict: {
+              remoteRevision: row.revision, localRevision: post.revision, remoteTitle: row.data.title, updatedAt: row.updated_at } });
+            return getState(ws, id);
+          }
           if (!state.pending && state.localRevision === post.revision && state.remoteRevision > 0) {
             const row = await remote.read(state.remoteId); guard(c); if (!row) throw fault('remote_missing');
             if (row.revision !== state.remoteRevision) {
@@ -103,6 +109,9 @@
       photoPost.validate(post); return post;
     }
     async function receive(ws, remoteId) {
+      return receiveCopy(ws, remoteId, true);
+    }
+    async function receiveCopy(ws, remoteId, enabled) {
       return serial(ws, 'receive:' + remoteId, async () => {
         const c = context(ws, 'receive:' + remoteId); await verified(c); await storage.read(ws); guard(c);
         const row = await remote.read(remoteId); guard(c); if (!row) throw fault('remote_missing');
@@ -111,8 +120,8 @@
         const original = await blog.hydrate(row.data, blobs); guard(c);
         const post = await storage.savePhotoPost(ws, freshCopy(original), 0); guard(c);
         const installed = context(ws, post.id); let syncError = null;
-        try { await writeState(installed, null, { enabled: true, remoteId, remoteWorkspaceId: row.workspace_id, remoteRevision: row.revision,
-          localRevision: post.revision, remoteManifest: row.data, publication: row.publication, pending: null, conflict: null, status: 'synced', error: null }); }
+        try { await writeState(installed, null, { enabled, remoteId, remoteWorkspaceId: row.workspace_id, remoteRevision: row.revision,
+          localRevision: post.revision, remoteManifest: row.data, publication: row.publication, pending: null, conflict: null, status: enabled ? 'synced' : 'paused', error: null }); }
         catch (error) { guard(c); syncError = cleaner(error).code || 'network_error'; }
         emit(ws, post.id); return { post, localPostId: post.id, newLocalPostId: post.id, remoteId, revision: row.revision, syncError };
       });
@@ -182,15 +191,24 @@
         return result;
       });
     }
-    async function resolve(ws, id, choice) {
+    async function resolve(ws, id, choice, expectedConflict) {
+      const expected = expectedConflict && { remoteRevision: expectedConflict.remoteRevision, localRevision: expectedConflict.localRevision };
       const c = context(ws, id); await verified(c); const state = await readState(c);
       if (!state?.conflict) throw fault('blog_conflict');
+      if (expected && (expected.remoteRevision !== state.conflict.remoteRevision || expected.localRevision !== state.conflict.localRevision)) throw fault('local_changed');
       if (choice === 'remote') { const result = await receive(ws, state.remoteId); guard(c); await pause(ws, id); return result; }
       if (choice !== 'local') throw fault('invalid_request');
       const before = await readPost(c), row = await remote.read(state.remoteId); guard(c);
-      if (!row || row.revision !== state.conflict.remoteRevision || before.revision !== state.conflict.localRevision) throw fault('local_changed');
-      const recovery = await receive(ws, state.remoteId); guard(c); await pause(ws, recovery.localPostId); guard(c);
-      const latest = await readState(c); await writeState(c, latest, { remoteRevision: row.revision, localRevision: 0, pending: null, conflict: null, error: null });
+      if (!row) throw fault('local_changed');
+      if (row.revision !== state.conflict.remoteRevision || before.revision !== state.conflict.localRevision) {
+        await writeState(c, state, { publication: row.publication, status: 'conflict', error: null, conflict: {
+          remoteRevision: row.revision, localRevision: before.revision, remoteTitle: row.data.title, updatedAt: row.updated_at } });
+        throw fault('local_changed');
+      }
+      // A recovery must start paused: cancellation of the original while its
+      // photos download must never leave a newly enabled competing copy.
+      const recovery = await receiveCopy(ws, state.remoteId, false); guard(c);
+      const latest = await readState(c); await writeState(c, latest, { remoteRevision: row.revision, publication: row.publication, localRevision: 0, pending: null, conflict: null, error: null });
       const result = await transfer(ws, id, true); return { ...result, recoveryLocalPostId: recovery.localPostId };
     }
     return Object.freeze({ list, connect: (ws, id) => transfer(ws, id, true), save: (ws, id) => transfer(ws, id, true),

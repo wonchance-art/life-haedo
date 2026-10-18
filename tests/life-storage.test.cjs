@@ -1476,3 +1476,34 @@ test('preservation final source CAS permits unrelated records, posts and boards 
     globalThis.HaedoLife.PreservationReferences = originalReferences;
   }
 });
+
+test('nine-board draft creation checks the reviewed source inside the same post/index transaction', async t => {
+  const { storage: base, control } = syncFixture(); t.after(() => base.close());
+  const N = require('../assets/life/nine-board.js'), P = require('../assets/life/photo-post.js');
+  const a = base.forAccount(accountA), bundle = await initialImport(a), ws = bundle.workspaceId;
+  const board = N.create(Core.id); board.title = '선택한 영역';
+  const source = await a.saveNineBoard(ws, { ...N.empty(ws), boards: [board] }, 0);
+  const make = () => { const d = P.create(Core.id); d.title = '검토한 결과'; d.ops = [{ insert: '선택한 제목과 출처만\n' }]; return d; };
+  const doc = make();
+  control.failCompletion = true;
+  await assert.rejects(a.savePhotoPostFromNineBoard(ws, doc, source.revision, board.id, board.areas[0].id), { code: 'storage_aborted' });
+  control.failCompletion = false;
+  assert.deepEqual(await a.listPhotoPosts(ws), []);
+  await assert.rejects(a.readPhotoPost(ws, doc.id), { code: 'photo_post_missing' });
+  const saved = await a.savePhotoPostFromNineBoard(ws, doc, source.revision, board.id, board.areas[0].id);
+  assert.equal(saved.status, 'draft'); assert.equal(saved.revision, 1);
+  assert.equal((await a.listPhotoPosts(ws)).length, 1);
+  assert.deepEqual(await a.readNineBoard(ws), source); assert.deepEqual(await a.read(ws), bundle);
+  assert.equal(await a.readBlogSyncState(ws, saved.id), null);
+  assert.deepEqual(await a.readPostEvidence(ws, saved.id), { revision: 0, refs: [] });
+  await assert.rejects(a.savePhotoPostFromNineBoard(ws, doc, source.revision, board.id, board.areas[0].id), { code: 'photo_post_conflict' });
+  const changed = structuredClone(source); changed.boards[0].title = '다른 탭에서 바뀐 구성';
+  await a.saveNineBoard(ws, changed, source.revision);
+  await assert.rejects(a.savePhotoPostFromNineBoard(ws, make(), source.revision, board.id, board.areas[0].id), { code: 'nine_board_conflict' });
+  await assert.rejects(a.savePhotoPostFromNineBoard(ws, make(), source.revision + 1, board.id, 'missing_area'), { code: 'nine_board_conflict' });
+  const publicDoc = make(); publicDoc.status = 'saved';
+  await assert.rejects(a.savePhotoPostFromNineBoard(ws, publicDoc, source.revision + 1, board.id, board.areas[0].id), { code: 'invalid_photo_post' });
+  assert.equal((await a.listPhotoPosts(ws)).length, 1);
+  const foreign = base.forAccount(accountB);
+  await assert.rejects(foreign.savePhotoPostFromNineBoard(ws, make(), source.revision + 1, board.id, board.areas[0].id), { code: 'workspace_access_denied' });
+});

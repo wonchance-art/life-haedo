@@ -154,18 +154,26 @@
           if (result.newLocalPostId && openPost) await navigate(() => openPost(result.newLocalPostId));
         }));
         if (value?.status === 'conflict' && blogSync?.resolve) {
+          const reviewed = { localRevision: value.conflict?.localRevision, remoteRevision: value.conflict?.remoteRevision };
           node.append(meta(`이 브라우저 ${value.conflict?.localRevision ?? value.localRevision ?? '?'}판 · 서버 ${value.conflict?.remoteRevision ?? value.remoteRevision ?? '?'}판${value.conflict?.remoteTitle ? ' · ' + value.conflict.remoteTitle : ''}`));
           node.append(button('양쪽 사본을 남기고 내 글로 보관', async () => {
-            const result = await blogSync.resolve(workspaceId, id, 'local');
+            const result = await resolveReviewed(id, 'local', reviewed);
             if (!valid()) return; await load();
             announce(result.status === 'synced' ? '서버의 이전 글도 새 사본으로 남기고 내 글의 서버 보관을 확인했습니다.' : '양쪽 글을 유지했습니다. 서버 처리 상태를 다시 확인해 주세요.');
           }), button('기존 글을 남기고 서버 글로 이어쓰기', async () => {
-            const result = await blogSync.resolve(workspaceId, id, 'remote');
+            const result = await resolveReviewed(id, 'remote', reviewed);
             if (!valid()) return; await load(); announce(result.syncError ? '서버 글을 새 사본으로 받았습니다. 연결 상태는 다시 확인해 주세요.' : '기존 글을 유지하고 서버 글을 새 사본으로 받았습니다.');
             if (result.newLocalPostId && openPost) await navigate(() => openPost(result.newLocalPostId));
           }));
         }
       } catch (e) { if (valid(token) && node.isConnected) node.textContent = errorText(e); }
+    }
+    async function resolveReviewed(id, choice, reviewed) {
+      try { return await blogSync.resolve(workspaceId, id, choice, reviewed); }
+      catch (e) {
+        if (e?.code === 'local_changed' && valid()) await load();
+        throw e;
+      }
     }
     async function syncPost(row, node, method) {
       requireSync(method); await blogSync[method](workspaceId, row.id);

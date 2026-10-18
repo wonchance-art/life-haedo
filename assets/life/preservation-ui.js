@@ -238,6 +238,7 @@
         clearReview();
         const result = await service.read(chosen); if (!valid()) return; showReview(result, 'file'); announce('파일을 검증했습니다. 아직 복원하지 않았습니다. 포함 범위를 확인해 주세요.');
       }); file.value = ''; }); fileLabel.append(file); transport.append(fileLabel);
+      transport.append(node('p', '이 화면의 ‘근거 포함 ZIP 받기’로 받은 파일을 선택하세요. 사진 글 ZIP·Obsidian 패키지는 각각의 복원 메뉴에서 열어 주세요. ZIP은 풀거나 다시 압축하지 말고 원래 파일을 보관해 주세요.', 'life-help'));
       reviewHost = node('div'); reviewHost.id = 'preservationReview'; transport.append(reviewHost); surface.append(transport); host.replaceChildren(surface);
       await run(refresh); return surface;
     }

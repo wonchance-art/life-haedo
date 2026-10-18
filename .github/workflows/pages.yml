@@ -144,6 +144,9 @@ jobs:
       - name: Verify selected nine-slot PNG and exact backup preservation
         if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/nine-board-image-browser.cjs
+      - name: Verify selected nine-slot content becomes a private draft atomically
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/nine-board-compose-browser.cjs
       - name: Verify original attachment parts and local account boundaries
         if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: ORIGINALS_INTEGRATED=1 node tests/original-attachments-browser.cjs
@@ -389,6 +392,7 @@ jobs:
             .local/home-entry/
             .local/preservation/
             .local/nine-board-image/
+            .local/nine-board-compose/
             .local/original-attachments/
             .local/original-attachments-integrated/
             .local/obsidian-update/
