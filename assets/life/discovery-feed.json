@@ -1,0 +1,666 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-18T18:23:24Z",
+  "sources": [
+    {
+      "id": "naver-d2",
+      "name": "NAVER D2",
+      "url": "https://d2.naver.com/home",
+      "feedUrl": "https://d2.naver.com/d2.atom",
+      "language": "ko",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
+        "url": "https://d2.naver.com/home"
+      },
+      "freshnessMaxAgeDays": 7,
+      "lastAttemptAt": "2026-10-18T18:23:24Z",
+      "attemptAt": "2026-10-18T18:23:24Z",
+      "lastSuccessAt": null,
+      "fetchedAt": null,
+      "status": "error",
+      "stale": true,
+      "error": "허용되지 않은 피드 이동 (HTTPS·등록 호스트만 허용)",
+      "robotsStatus": "unavailable",
+      "entryCount": 0,
+      "latestArticleAt": null
+    },
+    {
+      "id": "seoul-culture",
+      "name": "서울시 문화",
+      "url": "https://news.seoul.go.kr/culture",
+      "feedUrl": "https://news.seoul.go.kr/culture/feed",
+      "language": "ko",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/culture"
+      },
+      "freshnessMaxAgeDays": 7,
+      "lastAttemptAt": "2026-10-18T18:23:24Z",
+      "attemptAt": "2026-10-18T18:23:24Z",
+      "lastSuccessAt": "2026-10-18T18:23:24Z",
+      "fetchedAt": "2026-10-18T18:23:24Z",
+      "status": "ok",
+      "stale": false,
+      "error": null,
+      "robotsStatus": "allowed",
+      "robotsCheckedAt": "2026-10-18T18:23:24Z",
+      "entryCount": 10,
+      "latestArticleAt": "2026-10-16T08:11:27Z"
+    },
+    {
+      "id": "woowahan-tech",
+      "name": "우아한형제들 기술블로그",
+      "url": "https://techblog.woowahan.com/",
+      "feedUrl": "https://techblog.woowahan.com/feed/",
+      "language": "ko",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
+        "url": "https://techblog.woowahan.com/"
+      },
+      "freshnessMaxAgeDays": 7,
+      "lastAttemptAt": "2026-10-18T18:23:24Z",
+      "attemptAt": "2026-10-18T18:23:24Z",
+      "lastSuccessAt": "2026-10-18T18:23:24Z",
+      "fetchedAt": "2026-10-18T18:23:24Z",
+      "status": "ok",
+      "stale": false,
+      "error": null,
+      "robotsStatus": "allowed",
+      "robotsCheckedAt": "2026-10-18T18:23:24Z",
+      "entryCount": 10,
+      "latestArticleAt": "2026-10-06T05:00:35Z"
+    }
+  ],
+  "articles": [
+    {
+      "id": "article-seoul-culture-37b90f10cd355ed237d3",
+      "sourceId": "seoul-culture",
+      "url": "https://news.seoul.go.kr/culture/archives/534964",
+      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/534964",
+      "title": "장르가 뭐냐고요? 일단 힙합니다 「전국실용무용챔피언십」",
+      "publishedAt": "2026-10-16T08:11:27Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-16T08:27:50Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "문화본부-문화예술과",
+      "language": "ko",
+      "tags": [
+        "축제·행사 새소식",
+        "새소식",
+        "전국실용무용챔피언십",
+        "브레이킹",
+        "실용무용",
+        "전국무용제",
+        "스트리트댄스"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/culture"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-seoul-culture-4dc4f4e3ddfee21d758b",
+      "sourceId": "seoul-culture",
+      "url": "https://news.seoul.go.kr/culture/archives/534921",
+      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/534921",
+      "title": "서울시「미디어아트 서울」전시 매거진(26.9월호)",
+      "publishedAt": "2026-10-15T01:56:59Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-15T01:58:35Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "디자인정책관-도시경관담당관",
+      "language": "ko",
+      "tags": [
+        "미디어아트 기반조성",
+        "새소식",
+        "키아프특별전",
+        "2026 서울라이트 한강 빛섬축제",
+        "오간수교 미디어파사드",
+        "아뜰리에 노들",
+        "미디어아트 서울 전시플랫폼",
+        "해치마당 미디어월",
+        "미디어아트 서울",
+        "아뜰리에 광화",
+        "서울로미디어캔버스"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/culture"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-seoul-culture-01eaa4910fa45c4cc407",
+      "sourceId": "seoul-culture",
+      "url": "https://news.seoul.go.kr/culture/archives/534914",
+      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/534914",
+      "title": "LH 공공주택건설사업지구(서울대방, 동작구 수방사) 건축물미술작품 제작·설치 공모 공고",
+      "publishedAt": "2026-10-15T01:53:41Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-15T03:02:56Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "디자인정책관-디자인산업담당관",
+      "language": "ko",
+      "tags": [
+        "새소식",
+        "공공미술 소식",
+        "공공주택",
+        "건축물미술작품",
+        "미술작품",
+        "공모",
+        "LH"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/culture"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-seoul-culture-79ad59a5577ebeeb4b3c",
+      "sourceId": "seoul-culture",
+      "url": "https://news.seoul.go.kr/culture/archives/534867",
+      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/534867",
+      "title": "(16일~17일) 10월 숲속에서 만나는 '공연봄날 페스티벌'",
+      "publishedAt": "2026-10-12T11:27:57Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-12T11:37:00Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "문화본부-문화예술과",
+      "language": "ko",
+      "tags": [
+        "축제·행사 새소식",
+        "새소식",
+        "클래식",
+        "사물놀이",
+        "공연봄날",
+        "발레",
+        "서커스",
+        "서울어린이대공원"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/culture"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-seoul-culture-f7494c76d08adabc6310",
+      "sourceId": "seoul-culture",
+      "url": "https://news.seoul.go.kr/culture/archives/534805",
+      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/534805",
+      "title": "2026 '디자인산업 스펙트럼'·'그린칩스 페스티벌' 개최",
+      "publishedAt": "2026-10-12T01:49:18Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-12T08:01:48Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "디자인정책관-디자인산업담당관",
+      "language": "ko",
+      "tags": [
+        "산업디자인 소식",
+        "새소식",
+        "지속가능",
+        "그린칩스",
+        "디자인산업",
+        "전시",
+        "DDP"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/culture"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-seoul-culture-495f55eb5a54e1796fb1",
+      "sourceId": "seoul-culture",
+      "url": "https://news.seoul.go.kr/culture/archives/534795",
+      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/534795",
+      "title": "2026년 서울시 공공도서관 비이용자 조사 참여 안내",
+      "publishedAt": "2026-10-12T00:29:23Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-16T04:26:46Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "서울도서관 - 도서관정책과",
+      "language": "ko",
+      "tags": [
+        "문화예술사업 소개",
+        "새소식",
+        "개선방안",
+        "비이용자",
+        "공공도서관",
+        "조사",
+        "참여"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/culture"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-seoul-culture-868edc397cd28e0c7ee8",
+      "sourceId": "seoul-culture",
+      "url": "https://news.seoul.go.kr/culture/archives/534780",
+      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/534780",
+      "title": "2026 서울달리기 대회(10.11. 일요일) 관련 교통통제 안내",
+      "publishedAt": "2026-10-08T08:37:44Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-08T09:10:27Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "체육진흥과 - 생활체육운영팀",
+      "language": "ko",
+      "tags": [
+        "체육사업 새소식",
+        "새소식",
+        "서울달리기",
+        "청계천로",
+        "2026",
+        "하프",
+        "교통통제"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/culture"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-seoul-culture-019707f57d61ba7ac5ee",
+      "sourceId": "seoul-culture",
+      "url": "https://news.seoul.go.kr/culture/archives/534765",
+      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/534765",
+      "title": "제35회 ‘전국무용제’ 일정 및 관람 안내",
+      "publishedAt": "2026-10-08T02:29:25Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-16T00:25:28Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "문화본부-문화예술과",
+      "language": "ko",
+      "tags": [
+        "새소식",
+        "축제·행사 새소식",
+        "문화",
+        "예매",
+        "본선경연",
+        "무용축제",
+        "전국무용제",
+        "무료"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/culture"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-seoul-culture-6e65e536fdce0c829a78",
+      "sourceId": "seoul-culture",
+      "url": "https://news.seoul.go.kr/culture/archives/534601",
+      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/534601",
+      "title": "2026. 10월 문화달력",
+      "publishedAt": "2026-09-30T23:31:13Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-01T00:13:24Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "문화본부-문화정책과",
+      "language": "ko",
+      "tags": [
+        "문화달력(월별)",
+        "새소식",
+        "뉴스레터",
+        "문화달력",
+        "문화행사"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/culture"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-seoul-culture-449559b17a90acc65447",
+      "sourceId": "seoul-culture",
+      "url": "https://news.seoul.go.kr/culture/archives/534709",
+      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/534709",
+      "title": "2026 서울시 공공미술 작품전시 《평화의 잔상》 개장",
+      "publishedAt": "2026-09-30T13:08:45Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-16T10:53:59Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "디자인정책관-디자인산업담당관",
+      "language": "ko",
+      "tags": [
+        "공공미술 소식",
+        "새소식",
+        "작품전시",
+        "대학생전시",
+        "신진작가전시",
+        "서울창포원",
+        "평화문화진지 일대 공공미술",
+        "전시개장",
+        "공공미술프로젝트",
+        "서울공공미술프로젝트",
+        "평화문화진지",
+        "공공미술작품",
+        "공공미술",
+        "전시"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/culture"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-woowahan-tech-4c867040c423434788dc",
+      "sourceId": "woowahan-tech",
+      "url": "https://techblog.woowahan.com/27821/",
+      "canonicalUrl": "https://techblog.woowahan.com/27821/",
+      "title": "플랫폼 행성에 떨어진 서비스 개발자",
+      "publishedAt": "2026-10-06T05:00:35Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "이재희",
+      "language": "ko",
+      "tags": [
+        "AI",
+        "Culture",
+        "Frontend",
+        "프론트엔드"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
+        "url": "https://techblog.woowahan.com/"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-woowahan-tech-fe68b13e121324bcba8d",
+      "sourceId": "woowahan-tech",
+      "url": "https://techblog.woowahan.com/27678/",
+      "canonicalUrl": "https://techblog.woowahan.com/27678/",
+      "title": "사장님 입점신청 자동승인 주기를 10분에서 10초로",
+      "publishedAt": "2026-09-23T06:40:18Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "전예환",
+      "language": "ko",
+      "tags": [
+        "Backend"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
+        "url": "https://techblog.woowahan.com/"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-woowahan-tech-3cfd97a9c3020c3ae396",
+      "sourceId": "woowahan-tech",
+      "url": "https://techblog.woowahan.com/27782/",
+      "canonicalUrl": "https://techblog.woowahan.com/27782/",
+      "title": "우아한형제들의 기술 콘퍼런스, WOOWACON 2026이 열립니다!",
+      "publishedAt": "2026-09-23T01:00:34Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "테크DevEX팀",
+      "language": "ko",
+      "tags": [
+        "우아콘"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
+        "url": "https://techblog.woowahan.com/"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-woowahan-tech-c6652cd093e157e0b20f",
+      "sourceId": "woowahan-tech",
+      "url": "https://techblog.woowahan.com/27604/",
+      "canonicalUrl": "https://techblog.woowahan.com/27604/",
+      "title": "배달의민족 전자계약서 화면 개편기: AI에게 맡긴 것과 사람이 챙긴 것",
+      "publishedAt": "2026-09-18T06:10:50Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "이형준",
+      "language": "ko",
+      "tags": [
+        "AI",
+        "Frontend"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
+        "url": "https://techblog.woowahan.com/"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-woowahan-tech-ae63f46374316e06c46f",
+      "sourceId": "woowahan-tech",
+      "url": "https://techblog.woowahan.com/27330/",
+      "canonicalUrl": "https://techblog.woowahan.com/27330/",
+      "title": "집 나간 네트워크는 돌아왔는데 React.lazy는 왜 안 돌아올까",
+      "publishedAt": "2026-09-15T04:50:15Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "홍영민",
+      "language": "ko",
+      "tags": [
+        "Frontend"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
+        "url": "https://techblog.woowahan.com/"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-woowahan-tech-35f305b7696b03a5194e",
+      "sourceId": "woowahan-tech",
+      "url": "https://techblog.woowahan.com/27640/",
+      "canonicalUrl": "https://techblog.woowahan.com/27640/",
+      "title": "AI 전환, 우리가 도운 건 돕는 사람이었습니다",
+      "publishedAt": "2026-09-14T07:15:55Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "김사랑",
+      "language": "ko",
+      "tags": [
+        "AI",
+        "Culture",
+        "Education"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
+        "url": "https://techblog.woowahan.com/"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-woowahan-tech-292f4dd9371290944fc0",
+      "sourceId": "woowahan-tech",
+      "url": "https://techblog.woowahan.com/26832/",
+      "canonicalUrl": "https://techblog.woowahan.com/26832/",
+      "title": "한꺼번에 짊어지던 배치를 내려놓고, 하나씩 흘려보내는 워크플로로",
+      "publishedAt": "2026-09-08T04:50:28Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "김현겸",
+      "language": "ko",
+      "tags": [
+        "Backend"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
+        "url": "https://techblog.woowahan.com/"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-woowahan-tech-33c060269b1af5024709",
+      "sourceId": "woowahan-tech",
+      "url": "https://techblog.woowahan.com/26835/",
+      "canonicalUrl": "https://techblog.woowahan.com/26835/",
+      "title": "문서로만 지키던 아키텍처 규칙, 테스트 코드로 강제하기",
+      "publishedAt": "2026-09-07T04:46:49Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "박공손",
+      "language": "ko",
+      "tags": [
+        "-",
+        "Backend",
+        "ArchUnit",
+        "Java"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
+        "url": "https://techblog.woowahan.com/"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-woowahan-tech-e2f31b92a471dc061a4a",
+      "sourceId": "woowahan-tech",
+      "url": "https://techblog.woowahan.com/27381/",
+      "canonicalUrl": "https://techblog.woowahan.com/27381/",
+      "title": "AI가 분석한 리서치 결과, 어떻게 만들고 전달할까요?",
+      "publishedAt": "2026-08-31T07:02:12Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "김한용",
+      "language": "ko",
+      "tags": [
+        "AI",
+        "Frontend",
+        "GenAI"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
+        "url": "https://techblog.woowahan.com/"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    },
+    {
+      "id": "article-woowahan-tech-e02cb48b618b689f774e",
+      "sourceId": "woowahan-tech",
+      "url": "https://techblog.woowahan.com/27268/",
+      "canonicalUrl": "https://techblog.woowahan.com/27268/",
+      "title": "AI에게 만드는 법 대신 실패하는 법을 묻다: 포토그래퍼의 수천 명 동시 접속 게임 만들기",
+      "publishedAt": "2026-08-28T06:46:55Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "장진솔",
+      "language": "ko",
+      "tags": [
+        "AI",
+        "Culture",
+        "Game",
+        "Redis",
+        "SSE",
+        "회고"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
+        "url": "https://techblog.woowahan.com/"
+      },
+      "fetchedAt": "2026-10-18T18:23:24Z"
+    }
+  ]
+}

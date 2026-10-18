@@ -111,6 +111,7 @@
     let lastRecordMode = 'sources';
     let workbenchOpenOptions = null;
     let chapterImport = null;
+    let externalImportContext = null;
     let writingOpenOptions = null;
     let navigationGeneration = 0;
     let renderGeneration = 0;
@@ -128,8 +129,8 @@
     let obsidianUpdateUI = null, originalAttachmentsUI = null;
     const blogViews = new Map();
     const blogSync = global.HaedoLife.BlogSync?.create({ storage, auth });
-    const parentViews = new Set(['interests', 'blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
-    const subviewTitles = { interests: '관심 확인', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
+    const parentViews = new Set(['external-discovery', 'interests', 'blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
+    const subviewTitles = { 'external-discovery': '새 글 찾기', interests: '관심 확인', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
       discover: '다시 찾기', sync: '기기 간 동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
     const selectedVersions = new Set();
@@ -187,6 +188,15 @@
       }
     });
     const editingInput = () => { inputGeneration += 1; global.HaedoMotion?.cancel(main); };
+    const externalDiscoveryUI = global.HaedoLife.DiscoveryUI?.create({ container: main, storage,
+      getBundle: () => state.bundle, isCurrent: () => !disposed && state.mode === 'external-discovery',
+      onOpenInterests: () => navigate('interests'),
+      onImport: (article, context = {}) => {
+        if (disposed || state.mode !== 'external-discovery') return;
+        return navigate('import', { externalImport: { article, workspaceId: state.bundle.workspaceId,
+          focusKey: context.focusKey, scrollY: context.scrollY ?? global.scrollY } });
+      }
+    });
     main.addEventListener('input', editingInput);
     main.addEventListener('compositionstart', editingInput);
     main.addEventListener('pointerdown', editingInput);
@@ -1016,6 +1026,8 @@
         from === 'source' && mode === 'write' && state.returnContext?.mode === 'home' ? { ...state.returnContext } : null;
       const returningFromReader = from === 'source' && state.returnContext?.mode === mode;
       if (dirty()) await persistStage();
+      await externalDiscoveryUI?.flush();
+      if (mode === 'external-discovery' && currentExternalImport() && externalImportContext.committed) await refreshData();
       await preservationUI?.flush();
       await obsidianUpdateUI?.flush();
       await originalAttachmentsUI?.flush();
@@ -1043,7 +1055,19 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { navigationMotion, sectionPosition, selection, groupId, pagePreview, discovery, writing, reimport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, ...viewOptions } = options || {};
+      const { navigationMotion, sectionPosition, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, ...viewOptions } = options || {};
+      if (externalImport) {
+        if (mode !== 'import' || externalImport.workspaceId !== state.bundle.workspaceId) return false;
+        const input = global.HaedoLife.Discovery.toImportInput(externalImport.article);
+        newDraft();
+        Object.assign(state.stage.input, input);
+        state.importMethod = 'link';
+        state.editTick = 1;
+        externalImportContext = { workspaceId: state.bundle.workspaceId, generation: workspaceGeneration,
+          stageId: state.stage.stageId, committed: null,
+          origin: { mode: 'external-discovery', workspaceId: state.bundle.workspaceId,
+            focusKey: externalImport.focusKey, scrollY: externalImport.scrollY || 0 } };
+      }
       if (reimport) {
         if (mode !== 'import' || state.bundle.workspaceId !== reimport.workspaceId) return;
         const source = sourceFor(reimport.sourceId);
@@ -1060,6 +1084,7 @@
         state.editTick = 1;
       }
       if (!['import', 'batch', 'source'].includes(mode) && !chapterImportOptions) chapterImport = null;
+      if (!['import', 'source'].includes(mode)) externalImportContext = null;
       blogOpenOptions = mode === 'blog' ? { evidenceSeed: options?.evidenceSeed } : null;
       collectionOpenOptions = mode === 'collection' ? { itemId: collectionItemId } : null;
       writingOpenOptions = mode === 'write' ? writing || {} : null;
@@ -1163,6 +1188,7 @@
     }
 
     function newDraft() {
+      externalImportContext = null;
       const now = new Date().toISOString();
       state.stage = {
         stageId: core.id(), workspaceId: state.bundle.workspaceId, revision: 0,
@@ -1175,6 +1201,17 @@
       state.prepared = null;
       state.stageSelection = null;
       state.importMethod = 'text';
+    }
+
+    function currentExternalImport(context = externalImportContext) {
+      return !!context && context === externalImportContext && !disposed &&
+        context.workspaceId === state.bundle?.workspaceId && context.generation === workspaceGeneration;
+    }
+
+    async function openExternalImportResult(context = externalImportContext) {
+      if (!currentExternalImport(context) || !context.committed) return false;
+      return navigate('source', { sourceId: context.committed.sourceId, sourceVersionId: context.committed.sourceVersionId,
+        locator: null, returnContext: { ...context.origin, sourceVersionId: context.committed.sourceVersionId } });
     }
 
     async function openStage(stageId) {
@@ -1191,7 +1228,7 @@
 
     function sectionFor(mode) {
       if (mode === 'home' || mode === 'page' && blogPageTask || mode === 'write' && viewOrigins.get('write')?.mode === 'home' || mode === 'source' && (state.returnContext?.mode === 'home' || state.returnContext?.mode === 'page' && blogPageTask)) return 'home';
-      return ['tools', 'interests', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'blog', 'sync', 'transfer', 'preservation', 'obsidian-update', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
+      return ['tools', 'external-discovery', 'interests', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'blog', 'sync', 'transfer', 'preservation', 'obsidian-update', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
     }
 
     function routeMode() {
@@ -1200,9 +1237,9 @@
       const view = params.get('view');
       if (params.get('compose') === '1') return 'page';
       if (section === 'home' && !view) return 'home';
-      if (section === 'tools') return ['interests', 'discover', 'reflection', 'books'].includes(view) ? view : 'tools';
+      if (section === 'tools') return ['external-discovery', 'interests', 'discover', 'reflection', 'books'].includes(view) ? view : 'tools';
       if (section === 'manage') return ['blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
-      if (!section && ['blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'workbench-backup', 'public-pages', 'interests', 'discover', 'reflection', 'books'].includes(view)) return view;
+      if (!section && ['blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'workbench-backup', 'public-pages', 'external-discovery', 'interests', 'discover', 'reflection', 'books'].includes(view)) return view;
       if (['blog', 'topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related', 'collection', 'find'].includes(view)) return view;
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
     }
@@ -1215,7 +1252,7 @@
       if (section === 'home' && !/\/life\.html$/.test(url.pathname)) url.searchParams.delete('section');
       else url.searchParams.set('section', section);
       const view = mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
-      if (['blog', 'topics', 'time', 'import', 'write', 'sync', 'transfer', 'preservation', 'obsidian-update', 'interests', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
+      if (['blog', 'topics', 'time', 'import', 'write', 'sync', 'transfer', 'preservation', 'obsidian-update', 'external-discovery', 'interests', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
       else url.searchParams.delete('view');
       const destination = url.pathname + url.search + url.hash;
       if (destination !== global.location.pathname + global.location.search + global.location.hash)
@@ -1291,6 +1328,7 @@
       });
       if (origin.mode === 'find') findRenderPromise.then(restore);
       else if (origin.mode === 'home') homeRenderPromise.then(restore);
+      else if (origin.mode === 'external-discovery') mainRenderPromise.then(restore);
       else restore();
     }
 
@@ -1339,7 +1377,7 @@
         heading.append(records);
       } else heading.textContent = section === 'home' ? '내 블로그' : section === 'tools' ? '도구' : '설정';
       if (subviewTitles[state.mode] && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
-        const labels = { interests: '관심 확인으로 돌아가기', blog: '글 관리로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '자료실로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '설정으로 돌아가기' };
+        const labels = { 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 확인으로 돌아가기', blog: '글 관리로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '자료실로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '설정으로 돌아가기' };
         const back = iconButton(labels[subviewOrigin().mode] || labels.sources, 'back', guarded(returnFromSubview));
         back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';
         back.dataset.subviewReturn = 'true';
@@ -1445,6 +1483,7 @@
     function renderTools() {
       const list = node('div', null, 'life-destinations');
       list.append(actionRow('관심 확인', '직접 관심을 적고 선택 자료의 근거 확인', 'search', () => navigate('interests')),
+        actionRow('새 글 찾기', '보관한 관심으로 아직 담지 않은 외부 글 찾기', 'search', () => navigate('external-discovery')),
         actionRow('다시 찾기', '검색하고 관련 기록 이어 보기', 'search', () => navigate('discover')),
         actionRow('회고', '고른 자료를 돌아보고 메모', 'book', () => navigate('reflection')),
         actionRow('책 만들기', '주제별로 글을 엮고 장별 원고 쓰기', 'book', () => navigate('books')),
@@ -1649,6 +1688,7 @@
       selectedVersions.clear();
       selectionReturn = null;
       chapterImport = null;
+      externalImportContext = null;
       relatedOrigin = null;
       state.selecting = state.readerArrangeOpen = false;
       state.topic = state.topicsSearch = state.sourcesSearch = state.originFilter = '';
@@ -1904,12 +1944,12 @@
         pending.then(() => { if (pending === homeRenderPromise) restore(); });
       }
       else if (context.mode === 'find') findRenderPromise.then(restore);
-      else if (context.mode === 'interests') mainRenderPromise.then(restore);
+      else if (context.mode === 'interests' || context.mode === 'external-discovery') mainRenderPromise.then(restore);
       else restore();
     }
 
     function searchReturnButton() {
-      const labels = { interests: '관심 확인으로 돌아가기', blog: '글 관리로 돌아가기', home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
+      const labels = { 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 확인으로 돌아가기', blog: '글 관리로 돌아가기', home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
       const back = iconButton(labels[state.returnContext?.mode] || '검색 결과로 돌아가기', 'back', guarded(returnToResults));
       back.id = 'lifeSearchReturn';
       return back;
@@ -2712,6 +2752,19 @@
     }
 
     function renderImport() {
+      if (externalImportContext?.committed && currentExternalImport()) {
+        const context = externalImportContext;
+        main.append(title('자료를 보관했습니다'),
+          node('p', '목록을 다시 불러와 보관한 글을 확인해 주세요. 같은 자료를 다시 보관하지 않습니다.', 'life-help'));
+        const retry = button('보관한 글 열기', guarded(async () => {
+          await refreshData();
+          if (!currentExternalImport(context)) return;
+          await openExternalImportResult(context);
+        }));
+        retry.id = 'lifeDiscoveryStoredRetry';
+        main.append(retry);
+        return;
+      }
       if (!state.stage || state.stage.state !== 'draft') newDraft();
       const input = state.stage.input;
       const linkedSource = input.existingSourceId && sourceFor(input.existingSourceId);
@@ -2942,12 +2995,14 @@
         if (!global.confirm('아직 적용하지 않은 검토 내용을 삭제할까요? 이미 보관한 자료는 그대로 유지됩니다.')) return;
         if (stageTimer) clearTimeout(stageTimer);
         await saveChain.catch(() => {});
+        const fromDiscovery = currentExternalImport() && externalImportContext.stageId === state.stage.stageId;
         await storage.deleteStage(state.stage.stageId);
         state.stage = null;
         state.prepared = null;
         state.editTick = state.savedTick = 0;
         await refreshData();
-        await navigate('sources');
+        if (fromDiscovery) await returnFromSubview();
+        else await navigate('sources');
         announce('미적용 검토만 취소했습니다. 보관한 자료는 그대로 유지됩니다.');
       }));
       cancel.classList.add('life-review-cancel');
@@ -3050,10 +3105,17 @@
         if (fresh.match.kind === 'overlap' && !snapshot.input.forceSeparate && !snapshot.input.existingSourceId) throw new Error('겹치는 자료를 비교해 같은 자료인지 별개 자료인지 먼저 선택해 주세요.');
         const changes = core.buildImportChanges(state.bundle, fresh, selected);
         const chapterContext = chapterImport;
+        const externalContext = currentExternalImport() && externalImportContext.stageId === snapshot.stageId ? externalImportContext : null;
         let confirmed = false;
         try {
           await commit(changes, snapshot, (validBatchStage(snapshot) || currentChapterImport(chapterContext))
             ? { sourceId: fresh.source.id, sourceVersionId: fresh.version.id } : undefined, () => {
+            if (externalContext && currentExternalImport(externalContext)) {
+              confirmed = true;
+              externalContext.committed = { sourceId: fresh.source.id, sourceVersionId: fresh.version.id };
+              state.stage = state.prepared = null;
+              state.savedTick = state.editTick = 0;
+            }
             if (!currentChapterImport(chapterContext) || snapshot.workspaceId !== chapterContext.workspaceId) return;
             confirmed = true;
             if (!chapterContext.versionIds.includes(fresh.version.id)) chapterContext.versionIds.push(fresh.version.id);
@@ -3062,6 +3124,11 @@
             state.savedTick = state.editTick = 0;
           });
         } catch (cause) {
+          if (confirmed && currentExternalImport(externalContext) && externalContext.committed) {
+            render();
+            announce('자료는 보관했습니다. 목록을 다시 불러와 보관한 글을 확인해 주세요.');
+            throw new Error('자료는 보관했지만 목록을 읽지 못했습니다. 보관한 글 열기를 눌러 다시 확인해 주세요.');
+          }
           if (confirmed && currentChapterImport(chapterContext)) {
             render();
             announce('자료는 보관했습니다. 목록을 다시 불러온 뒤 장에 연결할 글을 확인해 주세요.');
@@ -3079,6 +3146,7 @@
         state.savedTick = state.editTick = 0;
         if (validBatchStage(snapshot)) { state.batchId = snapshot.batchId; await navigate('batch'); }
         else if (currentChapterImport(chapterContext)) { await returnToChapterImport(); return; }
+        else if (currentExternalImport(externalContext)) await openExternalImportResult(externalContext);
         else if (excerpts.length) await navigate('sources');
         else await navigate('source', { sourceId: retained, sourceVersionId: fresh.version.id, locator: null });
         announce((excerpts.length ? '모음에 반영됨' : '자료 보관됨') + ' · 이 브라우저에 저장됨');
@@ -3703,6 +3771,7 @@
       obsidianUpdateUI?.dispose(); obsidianUpdateUI = null;
       homeRenderPromise = Promise.resolve();
       interestUI?.leave();
+      externalDiscoveryUI?.leave();
       home?.leave();
       workbench?.leave();
       writer?.close();
@@ -3723,6 +3792,7 @@
         return;
       }
       if (state.mode === 'interests' && interestUI) return mainRenderPromise = interestUI.render().catch(failure);
+      if (state.mode === 'external-discovery' && externalDiscoveryUI) return mainRenderPromise = externalDiscoveryUI.render().catch(failure);
       if (state.mode === 'obsidian-update') return mainRenderPromise = renderObsidianUpdate().catch(failure);
       if (state.mode === 'preservation') return mainRenderPromise = renderPreservation().catch(failure);
       if (state.mode === 'blog') return mainRenderPromise = renderBlogManager().catch(failure);
@@ -3759,7 +3829,7 @@
     }
 
     const beforeUnload = event => {
-      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || collection?.dirty() || blogManager?.dirty() || preservationUI?.dirty() || obsidianUpdateUI?.dirty() || originalAttachmentsUI?.dirty() || interestUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
+      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || collection?.dirty() || blogManager?.dirty() || preservationUI?.dirty() || obsidianUpdateUI?.dirty() || originalAttachmentsUI?.dirty() || interestUI?.dirty() || externalDiscoveryUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
     };
     const visibility = () => {
       if (!document.hidden) return;
@@ -3835,6 +3905,7 @@
     async function persistDrafts() {
       if (disposed) throw new Error('계정이 바뀌어 이전 초안을 보관할 수 없습니다.');
       await interestUI?.flush();
+      await externalDiscoveryUI?.flush();
       await preservationUI?.flush();
       await obsidianUpdateUI?.flush();
       await originalAttachmentsUI?.flush();
@@ -3873,6 +3944,7 @@
       delete document.body.dataset.writingFocus;
       disposed = true;
       interestUI?.dispose();
+      externalDiscoveryUI?.dispose();
       originalAttachmentsUI?.dispose(); originalAttachmentsUI = null;
       compositionPanel?.dispose(); compositionPanel = null;
       if (blogManager && blogManagerWorkspace) blogViews.set(blogManagerWorkspace, blogManager.getView?.());

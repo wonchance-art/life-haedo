@@ -106,6 +106,11 @@
       }
       return value;
     };
+    const discoveryProfile = () => {
+      const value = options.discoveryProfile || root.HaedoLife?.DiscoveryProfile;
+      if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '발견 피드백 모듈을 불러오지 못했습니다.');
+      return value;
+    };
     function notify(event) {
       if (disposed) return;
       const callbacks = event.type === 'error'
@@ -178,6 +183,10 @@
           if (data?.sender !== sender && data?.type === 'interest_profile_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 1) {
             notify({ type: 'interest_profile_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'discovery_profile_changed' && typeof data.workspaceId === 'string' &&
+              Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'discovery_profile_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
         };
       } catch (_) { channel = null; }
@@ -526,23 +535,30 @@
     // Derived private metadata has its own account/workspace CAS. It never enters
     // the bundle, file backups, remote sync payloads or public copies.
     const interestProfileKey = workspaceId => `interestProfile:${accountKey}:${workspaceId}`;
-    function interestProfileScope(workspaceId) {
+    function privateProfileScope(workspaceId, label) {
       scopeGuard();
-      if (!account) throw fault('auth_scope_required', '로그인한 계정에서 관심 정보를 확인해 주세요.');
+      if (!account) throw fault('auth_scope_required', `로그인한 계정에서 ${label} 확인해 주세요.`);
       requireId(workspaceId, '작업공간');
     }
-    function validateInterestProfile(value, workspaceId) {
-      interestProfile().validate(value);
-      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '관심 정보의 작업공간이 다릅니다.');
-      if (new TextEncoder().encode(stablePayload(value)).length >= 256 * 1024) {
-        throw fault('interest_profile_too_large', '관심 정보가 너무 큽니다. 기존 정보는 보존했습니다.');
+    function interestProfileScope(workspaceId) { privateProfileScope(workspaceId, '관심 정보를'); }
+    function validatePrivateProfile(value, workspaceId, model, maxBytes, prefix) {
+      model.validate(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', prefix === 'interest' ? '관심 정보의 작업공간이 다릅니다.' : '발견 피드백의 작업공간이 다릅니다.');
+      if (new TextEncoder().encode(stablePayload(value)).length >= maxBytes) {
+        throw fault(`${prefix}_profile_too_large`, prefix === 'interest' ? '관심 정보가 너무 큽니다. 기존 정보는 보존했습니다.' : '발견 피드백이 너무 큽니다. 기존 정보는 보존했습니다.');
       }
     }
-    async function interestProfileValue(meta, workspaceId) {
-      const row = await meta.get(interestProfileKey(workspaceId));
-      const value = row === undefined ? interestProfile().empty(workspaceId) : row.value;
-      validateInterestProfile(value, workspaceId);
+    function validateInterestProfile(value, workspaceId) {
+      validatePrivateProfile(value, workspaceId, interestProfile(), 256 * 1024, 'interest');
+    }
+    async function privateProfileValue(meta, key, workspaceId, model, validate) {
+      const row = await meta.get(key);
+      const value = row === undefined ? model.empty(workspaceId) : row.value;
+      validate(value, workspaceId);
       return value;
+    }
+    async function interestProfileValue(meta, workspaceId) {
+      return privateProfileValue(meta, interestProfileKey(workspaceId), workspaceId, interestProfile(), validateInterestProfile);
     }
     async function readInterestProfile(workspaceId) {
       interestProfileScope(workspaceId);
@@ -591,6 +607,44 @@
       });
       if (result.status === 'stored') {
         const event = { type: 'interest_profile_changed', workspaceId, revision: result.profile.revision };
+        notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
+      }
+      return result;
+    }
+    // Feedback has no source-write or network path. Undo/reset retain the CAS
+    // revision so an old tab cannot silently reapply the excluded article.
+    const discoveryProfileKey = workspaceId => `discoveryProfile:${accountKey}:${workspaceId}`;
+    function validateDiscoveryProfile(value, workspaceId) {
+      validatePrivateProfile(value, workspaceId, discoveryProfile(), 128 * 1024, 'discovery');
+    }
+    async function discoveryProfileValue(meta, workspaceId) {
+      return privateProfileValue(meta, discoveryProfileKey(workspaceId), workspaceId, discoveryProfile(), validateDiscoveryProfile);
+    }
+    async function readDiscoveryProfile(workspaceId) {
+      privateProfileScope(workspaceId, '발견 피드백을');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await discoveryProfileValue(meta, workspaceId));
+      });
+    }
+    async function saveDiscoveryProfile(workspaceId, input, baseRevision) {
+      privateProfileScope(workspaceId, '발견 피드백을'); requireRevision(baseRevision, 'baseRevision');
+      validateDiscoveryProfile(input, workspaceId);
+      const value = clone(input);
+      if (baseRevision === Number.MAX_SAFE_INTEGER || value.revision !== baseRevision + 1) {
+        throw fault('discovery_profile_conflict', '발견 피드백의 저장 기준을 확인해 주세요.');
+      }
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await discoveryProfileValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) return { status: 'conflict', profile: clone(previous) };
+        await meta.put({ key: discoveryProfileKey(workspaceId), value });
+        return { status: 'stored', profile: clone(value) };
+      });
+      if (result.status === 'stored') {
+        const event = { type: 'discovery_profile_changed', workspaceId, revision: result.profile.revision };
         notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
       }
       return result;
@@ -2171,6 +2225,7 @@
       listWorkspaces, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
       readInterestProfile, saveInterestProfile,
+      readDiscoveryProfile, saveDiscoveryProfile,
       readCollection, saveCollection, readNineBoard, saveNineBoard, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       readPreservationCatalog, readPreservationSnapshot, installPreservationCopy,

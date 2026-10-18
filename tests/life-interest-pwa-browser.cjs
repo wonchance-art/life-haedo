@@ -1,4 +1,4 @@
-/* Actual v126 -> v129 SW lifecycle and real IDB/SDK, anonymous Auth only.
+/* Actual v126 -> current SW lifecycle and real IDB/SDK, anonymous Auth only.
  * Only the old SW script is served from the prior release; app bytes are new.
  * Runs its own local HTTP fixture host; never touches a real account. */
 'use strict';
@@ -24,7 +24,7 @@ async function main() {
   const oldSw = await fs.readFile(previousSw), newSw = await fs.readFile(path.join(project, 'sw.js'));
   const name = bytes => bytes.toString().match(/const CACHE\s*=\s*['"]([^'"]+)/)[1];
   report.oldCache = name(oldSw); report.newCache = name(newSw);
-  assert.equal(report.oldCache, 'haedo-v126'); assert.equal(report.newCache, 'haedo-v129');
+  assert.equal(report.oldCache, 'haedo-v126'); assert.ok(Number(report.newCache.match(/^haedo-v(\d+)$/)?.[1]) > 126);
   report.previousSwSHA256 = digest(oldSw); report.newSwSHA256 = digest(newSw);
   let old = true; report.swServed = [];
   const mime = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json' };
@@ -77,7 +77,7 @@ async function main() {
     await open(); await saved('갱신 전에 보관한 관심\n한글 원문 읽기');
     const before = await stored();
     assert.equal(before.bundle.sourceVersions.length, 1); assert.equal(before.profile.manual.length, 2);
-    await check('v126 -> v129 activation preserves exact Core bundle and manual interest profile', async () => {
+    await check('v126 -> current activation preserves exact Core bundle and manual interest profile', async () => {
       old = false; await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
       await until(page, async ({ previous, current }) => { const keys = await caches.keys(), registration = await navigator.serviceWorker.getRegistration(); return keys.includes(current) && !keys.includes(previous) && registration?.active?.state === 'activated' && navigator.serviceWorker.controller === registration.active; }, { previous: report.oldCache, current: report.newCache });
       await page.reload(); await ready(page); await page.locator('#interestManual').waitFor();

@@ -341,6 +341,12 @@ jobs:
       - name: Verify interest metadata across service worker update and offline recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-interest-pwa-browser.cjs
+      - name: Verify explicit external discovery, exact source return and private feedback
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-external-discovery-browser.cjs
+      - name: Verify discovery catalog freshness, worker update and offline preservation
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-external-discovery-pwa-browser.cjs
       - name: Stop the local server
         if: always()
         run: |
@@ -363,6 +369,8 @@ jobs:
             .local/flow-quality/
             .local/interest-browser/
             .local/interest-pwa/
+            .local/external-discovery-browser/
+            .local/external-discovery-pwa/
             .local/unified-search/
             .local/collection-library/
             .local/collection-metadata/

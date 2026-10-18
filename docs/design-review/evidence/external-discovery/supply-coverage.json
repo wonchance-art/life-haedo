@@ -1,0 +1,58 @@
+{
+  "scope": "Supply availability using public sample interests; no user relevance labels or quality claim.",
+  "catalogGeneratedAt": "2026-10-18T18:23:24Z",
+  "rows": [
+    {
+      "label": "AI",
+      "eligible": 5,
+      "shown": 5,
+      "titles": [
+        "AI 전환, 우리가 도운 건 돕는 사람이었습니다",
+        "플랫폼 행성에 떨어진 서비스 개발자",
+        "배달의민족 전자계약서 화면 개편기: AI에게 맡긴 것과 사람이 챙긴 것",
+        "AI가 분석한 리서치 결과, 어떻게 만들고 전달할까요?",
+        "AI에게 만드는 법 대신 실패하는 법을 묻다: 포토그래퍼의 수천 명 동시 접속 게임 만들기"
+      ]
+    },
+    {
+      "label": "전시",
+      "eligible": 3,
+      "shown": 3,
+      "titles": [
+        "서울시「미디어아트 서울」전시 매거진(26.9월호)",
+        "2026 '디자인산업 스펙트럼'·'그린칩스 페스티벌' 개최",
+        "2026 서울시 공공미술 작품전시 《평화의 잔상》 개장"
+      ]
+    },
+    {
+      "label": "공연",
+      "eligible": 0,
+      "shown": 0,
+      "titles": []
+    },
+    {
+      "label": "독서",
+      "eligible": 0,
+      "shown": 0,
+      "titles": []
+    },
+    {
+      "label": "클라우드",
+      "eligible": 0,
+      "shown": 0,
+      "titles": []
+    },
+    {
+      "label": "기후변화",
+      "eligible": 0,
+      "shown": 0,
+      "titles": []
+    },
+    {
+      "label": "접근성",
+      "eligible": 0,
+      "shown": 0,
+      "titles": []
+    }
+  ]
+}
