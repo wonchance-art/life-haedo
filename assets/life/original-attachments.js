@@ -117,7 +117,7 @@
     async function prepare(blob, opts) {
       guard(); const data = await readPart(blob, opts); guard();
       const ticket = Object.freeze({ id: root.crypto.randomUUID() }); tickets.set(ticket.id, data);
-      return { ticket, part: data.part, partCount: data.partCount, count: data.entries.length, bytes: data.entries.reduce((n, e) => n + e.bytes, 0), entries: data.entries.map(({ offset, crc, ...e }) => ({ ...e })) };
+      return { ticket, part: data.part, partCount: data.partCount, sourceHead: data.sourceHead, count: data.entries.length, bytes: data.entries.reduce((n, e) => n + e.bytes, 0), entries: data.entries.map(({ offset, crc, ...e }) => ({ ...e })) };
     }
     async function install(ticket, { signal } = {}) {
       guard(); const data = tickets.get(ticket?.id); if (!data) fail('먼저 원본 파트의 포함 범위를 확인해 주세요.');

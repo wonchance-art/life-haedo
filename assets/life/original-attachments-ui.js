@@ -20,17 +20,17 @@
     const status = element('p', '', 'life-meta'); status.id = 'originalAttachmentsStatus'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     const error = element('p', '', 'life-error'); error.id = 'originalAttachmentsError'; error.hidden = true; error.setAttribute('role', 'alert');
     const label = element('label', null, 'life-field'); label.append(element('span', '원본 파트 ZIP 열기'));
-    const input = element('input'); input.type = 'file'; input.accept = '.zip,application/zip'; input.id = 'originalAttachmentsFile'; label.append(input);
+    const input = element('input'); input.type = 'file'; input.multiple = true; input.accept = '.zip,application/zip'; input.id = 'originalAttachmentsFile'; label.append(input);
     const cancel = element('button', '확인 취소', 'life-button'); cancel.type = 'button'; cancel.id = 'originalAttachmentsCancel'; cancel.hidden = true;
     const review = element('section'); review.id = 'originalAttachmentsReview';
     const list = element('section'); list.id = 'originalAttachmentsCopies';
     const content = element('section'); content.id = 'originalAttachmentsEntries';
-    dialog.append(header, element('p', '사진·PDF·노트 저장본과 작업본을 이 브라우저에 별도 보관합니다. 기존 자료·서버·공개 범위는 바뀌지 않습니다. 파트는 128 MiB, 개별 파일은 64 MiB 이하입니다. 한 파트씩 확인하고 원본 ZIP은 별도로 보관해 주세요.', 'life-help'), label, cancel, status, error, review, list, content);
+    dialog.append(header, element('p', '사진·PDF·노트 저장본과 작업본을 이 브라우저에 별도 보관합니다. 기존 자료·서버·공개 범위는 바뀌지 않습니다. 여러 파트 ZIP을 함께 선택할 수 있습니다. 파트는 128 MiB, 개별 파일은 64 MiB 이하이며 원본 ZIP은 별도로 보관해 주세요.', 'life-help'), label, cancel, status, error, review, list, content);
     let unsubscribe, active = true, busy = false, controller, candidate, generation = 0, selectedCopy = '', shown = 40;
     const objectURLs = new Set();
     const still = () => active && auth.getAccount()?.projectUrl === account.projectUrl && auth.getAccount()?.userId === account.userId;
     const announce = text => { if (still()) status.textContent = text; };
-    function clearCandidate() { if (candidate) owner.cancel(candidate.ticket); candidate = null; review.replaceChildren(); }
+    function clearCandidate() { for (const part of candidate?.parts || []) owner.cancel(part.ticket); candidate = null; review.replaceChildren(); }
     function controls() { input.disabled = busy; dialog.setAttribute('aria-busy', String(busy)); cancel.hidden = !busy; dialog.querySelectorAll('button').forEach(b => { if (b !== close && b !== cancel) b.disabled = busy; }); }
     function button(text, fn, id) { const b = element('button', text, 'life-button'); b.type = 'button'; if (id) b.id = id; b.addEventListener('click', () => run(fn)); return b; }
     function showError(failure) { if (still()) { error.hidden = false; error.textContent = failure?.message || '파일을 처리하지 못했습니다. 원래 자료는 유지됩니다.'; } }
@@ -47,16 +47,37 @@
       setTimeout(() => { URL.revokeObjectURL(url); objectURLs.delete(url); }, 30000);
       announce('다운로드를 요청했습니다. 기기의 파일 앱에서 저장 여부를 확인해 주세요.');
     }
-    function preview(summary) {
-      clearCandidate(); candidate = summary;
-      review.append(element('h3', `파트 ${summary.part}/${summary.partCount} · ${summary.count}개 · ${size(summary.bytes)}`), element('p', '경로·파일 종류·SHA-256을 확인했습니다. 아직 보관하지 않았습니다. 노트 저장본과 작업본도 기존 원문을 바꾸지 않는 별도 사본입니다.', 'life-help'));
+    function preview() {
+      review.replaceChildren();
+      const { parts, completed, total } = candidate;
+      const count = parts.reduce((n, part) => n + part.count, 0), bytes = parts.reduce((n, part) => n + part.bytes, 0);
+      review.append(element('h3', parts.length === 1 ? `파트 ${parts[0].part}/${parts[0].partCount} · ${count}개 · ${size(bytes)}` : `선택 ${parts.length}/${parts[0].partCount}개 파트 · 원본 ${count}개 · ${size(bytes)}`), element('p', '선택한 모든 파일의 경로·종류·SHA-256을 확인했습니다. 아래 원본을 새 사본으로 보관합니다. 노트 저장본과 작업본도 기존 원문을 바꾸지 않는 별도 사본입니다.', 'life-help'));
+      if (completed) review.append(element('p', `${total}개 파트 중 ${completed}개 보관 완료 · 남은 ${parts.length}개만 다시 시도합니다.`, 'life-help'));
       const examples = element('ul');
-      for (const e of summary.entries.slice(0, 5)) examples.append(element('li', roleLabel(e.role) + ' · ' + e.sourceRelativePath));
-      review.append(examples, button('이 계정에 새 원본 사본 보관', async signal => {
+      for (const part of parts) {
+        const entries = element('ul');
+        for (const e of part.entries.slice(0, 5)) entries.append(element('li', roleLabel(e.role) + ' · ' + e.sourceRelativePath));
+        if (parts.length === 1) { examples.append(element('li', `파트 ${part.part}/${part.partCount} · ${part.count}개`), ...entries.children); }
+        else {
+          const row = element('li'), detail = element('details');
+          detail.append(element('summary', `파트 ${part.part}/${part.partCount} · ${part.count}개`), entries); row.append(detail); examples.append(row);
+        }
+      }
+      review.append(examples, button(parts.length === 1 ? '이 계정에 새 원본 사본 보관' : `선택한 ${parts.length}개 파트 보관`, async signal => {
         const current = candidate; if (!current) return;
-        const saved = await owner.install(current.ticket, { signal });
-        if (!still()) return;
-        clearCandidate(); await refresh(); await showEntries(saved.id); announce('원본 사본을 보관했습니다. 기존 자료와 서버는 그대로입니다. 다음 파트도 한 개씩 추가할 수 있습니다.');
+        let saved;
+        try {
+          while (current.parts.length) {
+            saved = await owner.install(current.parts[0].ticket, { signal });
+            if (!still()) return;
+            current.parts.shift(); current.completed++;
+            announce(`${current.total}개 파트 중 ${current.completed}개 보관 완료`);
+          }
+        } catch (failure) {
+          if (still()) { preview(); await refresh(); announce(`${current.total}개 파트 중 ${current.completed}개 보관했습니다. 완료된 사본은 유지되며 남은 파트만 다시 시도할 수 있습니다.`); }
+          throw failure;
+        }
+        clearCandidate(); await refresh(); await showEntries(saved.id); announce(`선택한 ${current.total}개 파트의 원본 사본을 보관했습니다. 기존 자료와 서버는 그대로입니다.`);
       }, 'originalAttachmentsInstall'), button('보관 취소', async () => { clearCandidate(); announce('보관을 취소했습니다. 원래 파일과 기존 사본은 유지했습니다.'); }));
     }
     async function refresh() {
@@ -116,12 +137,21 @@
     dialog.addEventListener('close', dispose);
     cancel.addEventListener('click', () => controller?.abort());
     input.addEventListener('change', () => {
-      const file = input.files?.[0]; input.value = ''; if (!file) return;
+      const files = Array.from(input.files || []); input.value = ''; if (!files.length) return;
       clearCandidate(); const token = ++generation;
       run(async signal => {
-        const summary = await owner.prepare(file, { signal, onProgress: progress => announce(`원본 ${progress.verified}/${progress.count}개 확인 중`) });
-        if (!still() || token !== generation) { owner.cancel(summary.ticket); return; }
-        preview(summary); announce('원본을 확인했습니다. 포함 범위를 검토한 뒤 새 사본으로 보관해 주세요.');
+        const parts = [];
+        try {
+          if (files.length > 200) throw new Error('한 번에 200개 이하의 파트를 선택해 주세요.');
+          for (const file of files) {
+            const summary = await owner.prepare(file, { signal, onProgress: progress => announce(`파트 ${parts.length + 1}/${files.length} · 원본 ${progress.verified}/${progress.count}개 확인 중`) });
+            parts.push(summary);
+            if (!still() || token !== generation) { for (const part of parts) owner.cancel(part.ticket); return; }
+            if (parts.some(part => part.sourceHead !== summary.sourceHead || part.partCount !== summary.partCount) || parts.slice(0, -1).some(part => part.part === summary.part)) throw new Error('같은 원본 묶음의 파트를 중복 없이 선택해 주세요. 아직 보관하지 않았습니다.');
+          }
+          parts.sort((a, b) => a.part - b.part);
+          candidate = { parts, completed: 0, total: parts.length }; preview(); announce('선택한 모든 원본을 확인했습니다. 포함 범위를 검토한 뒤 새 사본으로 보관해 주세요.');
+        } catch (failure) { for (const part of parts) owner.cancel(part.ticket); throw failure; }
       });
     });
     document.body.append(dialog); dialog.showModal();
