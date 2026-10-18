@@ -563,6 +563,12 @@ jobs:
       - name: Verify explicit preparation continuity across screen sizes and protected input
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_material_continuity_visual" node tests/material-continuity-visual-browser.cjs --prepare-database
+      - name: Verify selected public cover publication, current targets and exact reading return
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: node tests/public-cover-browser.cjs --prepare-database
+      - name: Verify public cover preview, protected input and anonymous reading across screen sizes
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: node tests/public-cover-visual-browser.cjs --prepare-database
       - name: Verify private post manager and exact provenance return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-manager-browser.cjs

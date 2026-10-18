@@ -162,6 +162,9 @@
           if (data?.sender !== sender && data?.type === 'blog_series_changed' && typeof data.workspaceId === 'string' && Number.isSafeInteger(data.revision) && data.revision >= 1) {
             notify({ type: 'blog_series_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
+          if (data?.sender !== sender && data?.type === 'public_cover_changed' && typeof data.workspaceId === 'string' && Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'public_cover_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
           if (data?.sender !== sender && data?.type === 'material_writing_changed' && typeof data.workspaceId === 'string' && Number.isSafeInteger(data.revision) && data.revision >= 1) {
             notify({ type: 'material_writing_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
@@ -588,6 +591,34 @@
       });
       const event = { type: 'nine_board_changed', workspaceId, revision: saved.revision };
       notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Committed data remains authoritative. */ }
+      return saved;
+    }
+    const publicCover = () => root.HaedoLife?.PublicCover || (typeof require === 'function' && require('./public-cover.js'));
+    async function publicCoverValue(meta, workspaceId) {
+      const row = await meta.get(`public-cover:${workspaceId}`), state = row === undefined ? publicCover().empty(workspaceId) : row.value;
+      publicCover().validateState(state);
+      if (state.workspaceId !== workspaceId) throw fault('workspace_mismatch', '표지와 작업공간의 연결을 확인해 주세요.');
+      return state;
+    }
+    async function readPublicCover(workspaceId) {
+      collectionScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await publicCoverValue(meta, workspaceId));
+      });
+    }
+    async function savePublicCover(workspaceId, input, baseRevision) {
+      collectionScope(workspaceId); requireRevision(baseRevision); const value = clone(input); publicCover().validateState(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '다른 작업공간의 표지는 바꾸지 않았습니다.');
+      if (value.revision !== baseRevision) throw fault('public_cover_conflict', '표지의 저장 기준이 바뀌었습니다. 입력은 유지합니다.');
+      const saved = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await publicCoverValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) throw fault('public_cover_conflict', '다른 탭에서 표지가 바뀌었습니다. 내 입력은 새 사본으로 보관해 주세요.');
+        value.revision++; publicCover().validateState(value); await meta.put({ key: `public-cover:${workspaceId}`, value }); return clone(value);
+      });
+      const event = { type: 'public_cover_changed', workspaceId, revision: saved.revision }; notify(event);
+      try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed draft remains authoritative. */ }
       return saved;
     }
     const photoPost = () => root.HaedoLife?.PhotoPost || (typeof require === 'function' && require('./photo-post.js'));
@@ -2723,6 +2754,7 @@
       readReadingPosition, saveReadingPosition, clearReadingPosition,
       readCollection, saveCollection, readNineBoard, saveNineBoard, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, finishMaterialContinuityClaim,
+      readPublicCover, savePublicCover,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       readPreservationCatalog, readPreservationSnapshot, installPreservationCopy,
       commitLocal, saveStage, getStage, listStages, deleteStage, subscribe,

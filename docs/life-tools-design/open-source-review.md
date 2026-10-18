@@ -22,6 +22,21 @@
 자체 구현을 선택한다면 후보가 충족하지 못하는 요구와 직접 유지할 범위를 짧게 적는다.
 큰 기반 모듈을 다 만든 뒤 라이브러리를 찾아보는 순서로 진행하지 않는다. 해당 단계의 소수 후보와 작은 실행 검증으로 결정을 내린다.
 
+## 대표 공개 결과의 한 주소 표지 — 2026-10-19 KST
+
+공식 확인일 2026-10-19 KST. 기존 블로그 시간순 목록·연재 목차·공개 9칸을 재구현하지 않고, 사용자가 고른 대표 결과의 순서/소개와 익명 읽기 왕복을 연결한다. [제품·반대 검토·아직 미실행인 검수](../design-review/public-cover.md)를 따른다. 기존 Share-v1·CAS/영속 영수증·각 공개 독자·네이티브 HTML/CSS를 재사용하고 새 의존성은 도입하지 않는다.
+
+| 후보 | 공식 릴리스·라이선스·유지관리 | 이번 요구와의 대조 |
+| --- | --- | --- |
+| [LinkStack](https://github.com/LinkStackOrg/LinkStack/releases/tag/v4.8.6) | latest API v4.8.6, 2026-02-17T16:53:47Z. [고정 태그 LICENSE](https://raw.githubusercontent.com/LinkStackOrg/LinkStack/v4.8.6/LICENSE)는 AGPL v3 전문. [repo API](https://api.github.com/repos/LinkStackOrg/LinkStack) archived/disabled=false·pushed2026-10-04, 확인 HEAD `8ccdee4`는 2026-10-03 변경 | [README](https://github.com/LinkStackOrg/LinkStack/blob/v4.8.6/README.md)의 한 주소에 여러 링크/명시 편집은 설계 참고. PHP/Laravel·별도 서버/계정·테마·관리 엔진을 현재 정적 앱에 직접 도입할 이유가 없어 코드 복사·설치 없음 |
+| [LinkFree → BioDrop](https://github.com/EddieHubCommunity/BioDrop) | 공식 README가 rename·서비스 종료를 명시. [repo API](https://api.github.com/repos/EddieHubCommunity/BioDrop) archived=true·disabled=false·pushed2024-07-01, latest API v3.4.7(2024-07-01T07:13:30Z). [main LICENSE](https://raw.githubusercontent.com/EddieHubCommunity/BioDrop/main/LICENSE)는 MIT. 최신 태그는 redirect 전용이며 LICENSE 파일은 404라 **그 태그의 LICENSE 확인으로 표현하지 않음** | 한 주소 프로필의 읽기 출발점만 참고. 공식 보관 상태·Next.js/MongoDB와 별도 플랫폼 정책이 현재 요구와 달라 새 엔진 도입 보류. 종료한 호스팅 서비스를 현재 동작하는 대안으로 추천하지 않음 |
+
+공식 출처: [LinkStack latest API](https://api.github.com/repos/LinkStackOrg/LinkStack/releases/latest)·[HEAD](https://api.github.com/repos/LinkStackOrg/LinkStack/commits?per_page=1), [BioDrop latest API](https://api.github.com/repos/EddieHubCommunity/BioDrop/releases/latest)·[main README](https://github.com/EddieHubCommunity/BioDrop/blob/main/README.md)·[최신 태그 README](https://github.com/EddieHubCommunity/BioDrop/blob/v3.4.7/README.md). LinkFree의 원래 repo API는 moved 응답을 반환해 현재 BioDrop 저장소를 확인했다.
+
+보안 권고 API는 GitHub 도구의 endpoint 미지원 400이라 확인하지 못했다. 공식 [LinkStack advisories](https://github.com/LinkStackOrg/LinkStack/security/advisories)·[BioDrop advisories](https://github.com/EddieHubCommunity/BioDrop/security/advisories) 페이지는 게시된 권고 없음으로 표시됐다. LinkStack v4.8.6 릴리스는 중요한 보안/의존성 수정을 명시하므로 페이지의 빈 목록을 과거/현재 취약점 부재로 해석하지 않는다. 전체 의존성 감사나 보안 검증 통과를 주장하지 않으며 이번 작업은 두 엔진의 코드를 실행하지 않는다. 자유 외부 링크·테마·별도 CMS가 실제 필요해질 때 현재 버전/라이선스/정책을 다시 비교한다.
+
+확정 구현은 기존 Share-v1에 고정 종류 라벨과 같은 사이트의 공개 URL 포인터만 보관하고 현재 대상 snapshot을 읽는다. 원본문/사진·개인 메모는 복사하지 않으며 공개/철회와 복귀는 기존 엔진을 연결한다. Supabase 스킬에 따라 현재 공식 [Database functions/RPC](https://supabase.com/docs/guides/database/functions)·[API keys](https://supabase.com/docs/guides/getting-started/api-keys)를 MCP search_docs에서 확인했다. 공개 키와 사용자 소유 권한을 구분하고 secret/service_role은 브라우저에서 사용하지 않는다. changelog.md는 직접 요청이 프록시 CONNECT403으로 막혀 본문 미확인이고 우회하지 않았다. 새 SQL·키 교체·SDK 설치·운영 접근은 수행하지 않는다.
+
 ## 자료 준비 한 개의 명시 기기 이어쓰기 — 2026-10-19 KST
 
 공식 조회일 2026-10-18 UTC(2026-10-19 KST). [준비 기기 전환 계약](../design-review/material-continuity.md)은 선택한 준비·정확 원문 closure와 연결된 완성 글을 명시적으로 보관/받는 기능이다. 문자 단위 자동 합동 편집과 비교하되 기존 Core/SourceReference·idb·CAS/영속 영수증·BlogSync·동봉 Supabase SDK를 우선 재사용한다.
