@@ -162,6 +162,11 @@ async function main() {
       await select(page, first);
       await page.locator('.mw-material[data-material-id="' + second + '"] .mw-material-note').evaluate(note => { window.composingMaterialNote = note; note.focus(); note.dispatchEvent(new CompositionEvent('compositionstart')); note.value = '한글 조합 중에도 유지하는 메모'; note.dispatchEvent(new InputEvent('input', { isComposing: true })); });
       await page.setViewportSize({ width: 390, height: 1000 });
+      // setViewportSize can resolve before the native media-query change event.
+      // Wait for the actual narrow layout, then independently check that the
+      // original composing node and its input survived that layout transition.
+      await page.waitForFunction(id => matchMedia('(max-width: 760px)').matches && sourceUI.getView().activeId === id &&
+        document.querySelectorAll('.mw-material-body').length === 1 && document.querySelectorAll('.mw-material-note').length === 1, second);
       assert.equal(await page.evaluate(() => composingMaterialNote.isConnected && composingMaterialNote === document.querySelector('.mw-material-note')), true);
       assert.equal(await page.locator('.mw-material-note').inputValue(), '한글 조합 중에도 유지하는 메모'); assert(await page.evaluate(() => sourceUI.pending()));
       await page.locator('.mw-material-note').evaluate(note => note.dispatchEvent(new CompositionEvent('compositionend')));
