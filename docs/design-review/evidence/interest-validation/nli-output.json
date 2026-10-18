@@ -1,0 +1,401 @@
+{
+  "modelId": "onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX",
+  "revision": "cdc8277b4682665e2f2e87cd83da7da07b153d75",
+  "runtime": "4.3.1",
+  "device": "wasm",
+  "dtype": "q8",
+  "numThreads": 1,
+  "fixtureSHA256": "ac01222b172847a154dfa209a5f9aadd9b5cca73e5bd300a459995cf2b8c4863",
+  "requests": [
+    {
+      "url": "https://huggingface.co/api/models/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/revision/cdc8277b4682665e2f2e87cd83da7da07b153d75",
+      "method": "GET",
+      "body": false
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1/dist/transformers.min.js",
+      "method": "GET",
+      "body": false
+    },
+    {
+      "url": "https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/resolve/cdc8277b4682665e2f2e87cd83da7da07b153d75/tokenizer_config.json",
+      "method": "GET",
+      "body": false
+    },
+    {
+      "url": "https://huggingface.co/api/resolve-cache/models/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/cdc8277b4682665e2f2e87cd83da7da07b153d75/tokenizer_config.json",
+      "method": "GET",
+      "body": false
+    },
+    {
+      "url": "https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/resolve/cdc8277b4682665e2f2e87cd83da7da07b153d75/tokenizer.json",
+      "method": "GET",
+      "body": false
+    },
+    {
+      "url": "https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/resolve/cdc8277b4682665e2f2e87cd83da7da07b153d75/tokenizer_config.json",
+      "method": "GET",
+      "body": false
+    },
+    {
+      "url": "https://us.aws.cdn.hf.co/xet-bridge-us/6a15432e1d8544507914858c/577599be5f397a880696b69e812ce777bae26c5a784a1ccad6318d4e9fdc2728",
+      "method": "GET",
+      "body": false
+    },
+    {
+      "url": "https://huggingface.co/api/resolve-cache/models/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/cdc8277b4682665e2f2e87cd83da7da07b153d75/tokenizer_config.json",
+      "method": "GET",
+      "body": false
+    },
+    {
+      "url": "https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/resolve/cdc8277b4682665e2f2e87cd83da7da07b153d75/config.json",
+      "method": "GET",
+      "body": false
+    },
+    {
+      "url": "https://huggingface.co/api/resolve-cache/models/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/cdc8277b4682665e2f2e87cd83da7da07b153d75/config.json",
+      "method": "GET",
+      "body": false
+    },
+    {
+      "url": "https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/resolve/cdc8277b4682665e2f2e87cd83da7da07b153d75/config.json",
+      "method": "GET",
+      "body": false
+    },
+    {
+      "url": "https://huggingface.co/api/resolve-cache/models/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/cdc8277b4682665e2f2e87cd83da7da07b153d75/config.json",
+      "method": "GET",
+      "body": false
+    },
+    {
+      "url": "https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/resolve/cdc8277b4682665e2f2e87cd83da7da07b153d75/onnx/model_quantized.onnx",
+      "method": "GET",
+      "body": false
+    },
+    {
+      "url": "https://us.aws.cdn.hf.co/xet-bridge-us/6a15432e1d8544507914858c/5dced7220a3b78392253aebfa65b1c7289651d750e75756867f484677367a035",
+      "method": "GET",
+      "body": false
+    },
+    {
+      "url": "https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/resolve/cdc8277b4682665e2f2e87cd83da7da07b153d75/onnx/model_quantized.onnx",
+      "method": "GET",
+      "body": false
+    },
+    {
+      "url": "https://us.aws.cdn.hf.co/xet-bridge-us/6a15432e1d8544507914858c/5dced7220a3b78392253aebfa65b1c7289651d750e75756867f484677367a035",
+      "method": "GET",
+      "body": false
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/dist/ort-wasm-simd-threaded.asyncify.wasm",
+      "method": "GET",
+      "body": false
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/dist/ort-wasm-simd-threaded.asyncify.mjs",
+      "method": "GET",
+      "body": false
+    }
+  ],
+  "errors": [],
+  "result": {
+    "predictions": [
+      {
+        "id": "n01",
+        "logits": [
+          0.5134946703910828,
+          0.4024904668331146,
+          -1.083586573600769
+        ],
+        "tokenCount": 60,
+        "actualInputTokens": 60,
+        "elapsedMs": 521.6000000000931
+      },
+      {
+        "id": "n02",
+        "logits": [
+          0.3239445984363556,
+          0.04648705944418907,
+          -0.6164644956588745
+        ],
+        "tokenCount": 57,
+        "actualInputTokens": 57,
+        "elapsedMs": 431.9000000001397
+      },
+      {
+        "id": "n03",
+        "logits": [
+          0.5142576098442078,
+          0.12685607373714447,
+          -0.873533308506012
+        ],
+        "tokenCount": 48,
+        "actualInputTokens": 48,
+        "elapsedMs": 344.19999999995343
+      },
+      {
+        "id": "n04",
+        "logits": [
+          0.45459505915641785,
+          0.3256218731403351,
+          -0.9894269108772278
+        ],
+        "tokenCount": 63,
+        "actualInputTokens": 63,
+        "elapsedMs": 508.10000000009313
+      },
+      {
+        "id": "n05",
+        "logits": [
+          -0.6985059380531311,
+          -0.3246164321899414,
+          0.8263208270072937
+        ],
+        "tokenCount": 45,
+        "actualInputTokens": 45,
+        "elapsedMs": 212.5
+      },
+      {
+        "id": "n06",
+        "logits": [
+          -1.4027657508850098,
+          -0.645492434501648,
+          1.9696407318115234
+        ],
+        "tokenCount": 55,
+        "actualInputTokens": 55,
+        "elapsedMs": 230.5
+      },
+      {
+        "id": "n07",
+        "logits": [
+          -1.0888862609863281,
+          -1.1800321340560913,
+          2.134713888168335
+        ],
+        "tokenCount": 43,
+        "actualInputTokens": 43,
+        "elapsedMs": 181.5999999998603
+      },
+      {
+        "id": "n08",
+        "logits": [
+          -0.826039731502533,
+          2.6002519130706787,
+          -1.4294861555099487
+        ],
+        "tokenCount": 57,
+        "actualInputTokens": 57,
+        "elapsedMs": 229.80000000004657
+      },
+      {
+        "id": "n09",
+        "logits": [
+          -0.04837443679571152,
+          0.6383397579193115,
+          -0.7115975618362427
+        ],
+        "tokenCount": 61,
+        "actualInputTokens": 61,
+        "elapsedMs": 255.79999999981374
+      },
+      {
+        "id": "n10",
+        "logits": [
+          0.1090669184923172,
+          0.558821439743042,
+          -0.8269780278205872
+        ],
+        "tokenCount": 72,
+        "actualInputTokens": 72,
+        "elapsedMs": 289.5
+      },
+      {
+        "id": "n11",
+        "logits": [
+          -1.2656618356704712,
+          2.3128912448883057,
+          -0.8261545896530151
+        ],
+        "tokenCount": 55,
+        "actualInputTokens": 55,
+        "elapsedMs": 281.80000000004657
+      },
+      {
+        "id": "n12",
+        "logits": [
+          -2.245352029800415,
+          2.989020347595215,
+          -0.4501553177833557
+        ],
+        "tokenCount": 41,
+        "actualInputTokens": 41,
+        "elapsedMs": 192.5999999998603
+      }
+    ],
+    "preparedMs": 49373.89999999991,
+    "inferenceMs": 3724.600000000093,
+    "heapUsed": 441121690,
+    "id2label": {
+      "0": "entailment",
+      "1": "neutral",
+      "2": "contradiction"
+    },
+    "progress": [
+      {
+        "status": "done",
+        "name": "onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX",
+        "file": "config.json"
+      },
+      {
+        "status": "done",
+        "name": "onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX",
+        "file": "onnx/model_quantized.onnx"
+      }
+    ],
+    "metadataBytes": 338341610,
+    "disposed": true
+  },
+  "predictions": [
+    {
+      "id": "n01",
+      "logits": [
+        0.5134946703910828,
+        0.4024904668331146,
+        -1.083586573600769
+      ],
+      "tokenCount": 60,
+      "actualInputTokens": 60,
+      "elapsedMs": 521.6000000000931
+    },
+    {
+      "id": "n02",
+      "logits": [
+        0.3239445984363556,
+        0.04648705944418907,
+        -0.6164644956588745
+      ],
+      "tokenCount": 57,
+      "actualInputTokens": 57,
+      "elapsedMs": 431.9000000001397
+    },
+    {
+      "id": "n03",
+      "logits": [
+        0.5142576098442078,
+        0.12685607373714447,
+        -0.873533308506012
+      ],
+      "tokenCount": 48,
+      "actualInputTokens": 48,
+      "elapsedMs": 344.19999999995343
+    },
+    {
+      "id": "n04",
+      "logits": [
+        0.45459505915641785,
+        0.3256218731403351,
+        -0.9894269108772278
+      ],
+      "tokenCount": 63,
+      "actualInputTokens": 63,
+      "elapsedMs": 508.10000000009313
+    },
+    {
+      "id": "n05",
+      "logits": [
+        -0.6985059380531311,
+        -0.3246164321899414,
+        0.8263208270072937
+      ],
+      "tokenCount": 45,
+      "actualInputTokens": 45,
+      "elapsedMs": 212.5
+    },
+    {
+      "id": "n06",
+      "logits": [
+        -1.4027657508850098,
+        -0.645492434501648,
+        1.9696407318115234
+      ],
+      "tokenCount": 55,
+      "actualInputTokens": 55,
+      "elapsedMs": 230.5
+    },
+    {
+      "id": "n07",
+      "logits": [
+        -1.0888862609863281,
+        -1.1800321340560913,
+        2.134713888168335
+      ],
+      "tokenCount": 43,
+      "actualInputTokens": 43,
+      "elapsedMs": 181.5999999998603
+    },
+    {
+      "id": "n08",
+      "logits": [
+        -0.826039731502533,
+        2.6002519130706787,
+        -1.4294861555099487
+      ],
+      "tokenCount": 57,
+      "actualInputTokens": 57,
+      "elapsedMs": 229.80000000004657
+    },
+    {
+      "id": "n09",
+      "logits": [
+        -0.04837443679571152,
+        0.6383397579193115,
+        -0.7115975618362427
+      ],
+      "tokenCount": 61,
+      "actualInputTokens": 61,
+      "elapsedMs": 255.79999999981374
+    },
+    {
+      "id": "n10",
+      "logits": [
+        0.1090669184923172,
+        0.558821439743042,
+        -0.8269780278205872
+      ],
+      "tokenCount": 72,
+      "actualInputTokens": 72,
+      "elapsedMs": 289.5
+    },
+    {
+      "id": "n11",
+      "logits": [
+        -1.2656618356704712,
+        2.3128912448883057,
+        -0.8261545896530151
+      ],
+      "tokenCount": 55,
+      "actualInputTokens": 55,
+      "elapsedMs": 281.80000000004657
+    },
+    {
+      "id": "n12",
+      "logits": [
+        -2.245352029800415,
+        2.989020347595215,
+        -0.4501553177833557
+      ],
+      "tokenCount": 41,
+      "actualInputTokens": 41,
+      "elapsedMs": 192.5999999998603
+    }
+  ],
+  "id2label": {
+    "0": "entailment",
+    "1": "neutral",
+    "2": "contradiction"
+  },
+  "mutableRevisionRequests": [],
+  "bodyRequests": []
+}

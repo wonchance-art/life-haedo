@@ -1,0 +1,9 @@
+{
+  "heldoutSHA256": "c7ac6d3c3978ed97acc0530ca63799cbff7a9af16504c18caa3d4324af360791",
+  "baseline": {
+    "sha256": "07a539ab64f2bb0d7661785b475b9fb5ded33853ceb05c1dcca23709d350ce7e"
+  },
+  "candidate": {
+    "sha256": "d52a7236fa046e892f849662c654cc5c57b071b479e1df10aa3e9b21a2335c01"
+  }
+}

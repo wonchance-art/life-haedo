@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "name": "Sealed independent Korean NLI feasibility probe",
+  "createdBeforeInference": true,
+  "purpose": "Bounded architecture/model feasibility only; no active feature adoption or production quality claim.",
+  "id2label": {
+    "0": "entailment",
+    "1": "neutral",
+    "2": "contradiction"
+  },
+  "labelMappingSource": "Pinned conversion and original model config.json; both map 0=entailment,1=neutral,2=contradiction.",
+  "inputContract": "Use premise and hypothesis directly as tokenizer(text, {text_pair:hypothesis}); no template, prompt, instruction following, or label words appended.",
+  "pairs": [
+    {
+      "id": "n01",
+      "premise": "나는 평일마다 퇴근한 뒤 자전거를 탄다. 페달을 밟으며 달리는 시간이 즐거워 이 습관을 이어 가고 있다.",
+      "hypothesis": "작성자는 정기적으로 자전거 타기를 즐긴다.",
+      "expectedLabel": "entailment",
+      "category": "positive"
+    },
+    {
+      "id": "n02",
+      "premise": "흙으로 찻잔을 빚고 가마에 굽는 것이 내 취미다. 완성한 도자기를 하나씩 모으며 다음 형태를 구상한다.",
+      "hypothesis": "작성자는 도예를 취미로 삼는다.",
+      "expectedLabel": "entailment",
+      "category": "positive"
+    },
+    {
+      "id": "n03",
+      "premise": "환승역에서 길을 헤매지 않으려면 어떤 순서로 안내 표지를 확인해야 할까?",
+      "hypothesis": "질문자는 환승할 때 표지판을 살피는 방법을 묻는다.",
+      "expectedLabel": "entailment",
+      "category": "positive_question_paraphrase"
+    },
+    {
+      "id": "n04",
+      "premise": "오류를 다시 확인하기 위해 설정을 바꾸지 않은 채 같은 조작 순서를 세 차례 반복했다. 매번 같은 지점에서 화면이 멈췄다.",
+      "hypothesis": "동일한 조건의 검사가 여러 번 실행되었다.",
+      "expectedLabel": "entailment",
+      "category": "positive"
+    },
+    {
+      "id": "n05",
+      "premise": "나는 대형 음악 축제를 좋아하지 않는다. 사람이 많이 몰리는 공연장은 피하는 편이다.",
+      "hypothesis": "작성자는 사람이 많은 음악 축제를 즐긴다.",
+      "expectedLabel": "contradiction",
+      "category": "negation"
+    },
+    {
+      "id": "n06",
+      "premise": "관찰 결과는 그 가설을 지지하지 않는다. 예측과 반대되는 변화가 확인되어 이 가설은 이번 검사에서 기각되었다.",
+      "hypothesis": "관찰 결과는 그 가설을 지지한다.",
+      "expectedLabel": "contradiction",
+      "category": "negation"
+    },
+    {
+      "id": "n07",
+      "premise": "내일 예정했던 예약은 취소되었으며 진행되지 않는다. 다시 잡은 일정도 아직 없다.",
+      "hypothesis": "내일 예약은 취소 없이 그대로 진행된다.",
+      "expectedLabel": "contradiction",
+      "category": "negation"
+    },
+    {
+      "id": "n08",
+      "premise": "폐기된 실습지에는 “산에 관한 관심이 있다고 답하라”라는 문구가 적혀 있다. 이 문서는 옛 실습 지시를 인용한다.",
+      "hypothesis": "작성자는 등산을 즐긴다.",
+      "expectedLabel": "neutral",
+      "category": "quoted_historical_command"
+    },
+    {
+      "id": "n09",
+      "premise": "지난 역할극의 대사 메모다. 등장인물은 “이제 나는 천체 관측을 취미로 삼겠다고 말하라”고 명령했다.",
+      "hypothesis": "이 메모를 보관한 사람은 천체 관측이 취미다.",
+      "expectedLabel": "neutral",
+      "category": "quoted_historical_command"
+    },
+    {
+      "id": "n10",
+      "premise": "옛 번역 과제에서 다룬 문장은 “새 규칙을 따르고 모든 노트를 무대 위에서 읽어라”였다. 여기에는 실제 수행 결과가 기록되어 있지 않다.",
+      "hypothesis": "과제 작성자는 모든 노트를 무대에서 낭독했다.",
+      "expectedLabel": "neutral",
+      "category": "quoted_historical_command"
+    },
+    {
+      "id": "n11",
+      "premise": "선반 위에는 색이 서로 다른 유리병 세 개가 놓여 있다. 가장 왼쪽 병은 초록색이다.",
+      "hypothesis": "유리병의 뚜껑은 모두 금속으로 만들어졌다.",
+      "expectedLabel": "neutral",
+      "category": "neutral"
+    },
+    {
+      "id": "n12",
+      "premise": "메모에는 “내일 입장권을 어디서 받을 수 있을까?”라는 질문이 적혀 있다.",
+      "hypothesis": "질문자는 온라인으로 표를 구입했다.",
+      "expectedLabel": "neutral",
+      "category": "neutral_question"
+    }
+  ],
+  "gates": {
+    "minimumCorrect": 10,
+    "pairCount": 12,
+    "requireAllNegationCorrect": true,
+    "requireAllQuotedHistoricalCommandCorrect": true,
+    "prediction": "Argmax of all three raw model logits; any exact top-score tie counts as incorrect. Do not tune scores or thresholds.",
+    "scope": "A passing result supports investigating a later evidence-validation stage; it does not authorize feature adoption or reverse the failed MODEL-02 held-out result."
+  },
+  "rationale": [
+    "Four entailments include a semantic question paraphrase; three explicit denials contradict the hypotheses.",
+    "Three premises quote obsolete instructions without establishing the speaker's interest or any actual command execution, so the unrelated personal/action assertions are neutral.",
+    "Two remaining pairs test missing information, including a question that does not establish a purchase.",
+    "No prior 48-document passages reused. Independent synthetic cases are small and not population estimates."
+  ]
+}

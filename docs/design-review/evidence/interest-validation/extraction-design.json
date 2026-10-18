@@ -1,0 +1,52 @@
+{
+  "status": "design_before_implementation",
+  "date": "2026-10-19",
+  "scope": "MODEL-02 local extraction; no external text requests, no new generative model; no hidden corpus access",
+  "alternatives": [
+    {
+      "name": "keep sentence-only cosine and raise threshold",
+      "decision": "reject",
+      "reason": "negation and quoted commands can remain semantically close; higher threshold loses paraphrases without resolving eligibility"
+    },
+    {
+      "name": "topic keyword rules",
+      "decision": "reject",
+      "reason": "cannot recover keyword-free paraphrases and duplicates a separate topic classifier"
+    },
+    {
+      "name": "full local generative entailment model",
+      "decision": "defer",
+      "reason": "new download, slower CPU and unvalidated Korean inference; existing embedding runtime is sufficient for a conservative bounded experiment"
+    },
+    {
+      "name": "conservative eligibility plus contextual embeddings",
+      "decision": "choose",
+      "reason": "separate whether a passage can support an inference from which topic it resembles; keep exact original evidence and explicit limits"
+    }
+  ],
+  "eligibility": "Deterministic structural filters exclude quoted/code/transcript-like instructions, imperative directives, explicit negated interest/activity and historically discontinued interests. Split a Korean contrastive 아니라/아닌/말고 construction and consider its positive remainder, retaining original offsets. These are abstention rules, not a full Korean parser; ordinary external-authored statements remain eligible as saved material.",
+  "embedding": "Topic prototypes use existing fixed topic terms plus existing description. Score exact evidence passage (70%) and eligible neighboring context (30%), with each independently required to meet a conservative floor. No lexical topic matching.",
+  "coverage": "Split long sentences instead of discarding their tail; sample 12 windows/document by original character position including document edges; sample 8 explicit question windows separately. Report exact sampled character coverage and dropped-window counts; no whole-document understanding claim.",
+  "thresholds": {
+    "topicSimilarity": 0.42,
+    "topicMargin": 0.02,
+    "passageFloor": 0.36,
+    "contextWeight": 0.3,
+    "questionSimilarity": 0.72,
+    "questionContextSimilarity": 0.55,
+    "minimumDistinctBodySupport": 2,
+    "windowsPerDocument": 12,
+    "questionsPerDocument": 8,
+    "windowCharacters": 280,
+    "contextCharacters": 840
+  },
+  "resultContract": "Preserve workspaceId/scopeRevision/analysis/limitations. Retain existing document and evidence shape. Add saved_material evidenceScope/evidenceLabel and aggregate diagnostics without raw text.",
+  "preservation": "Keep selected-version SHA checks, raw UTF-16 quote locations, author/coverage caveats, body-hash dedup, late-result invalidation, lifecycle cancel/dispose/retry logic. Runtime injection/default fail closed belongs to separate loader.",
+  "limitations": [
+    "Heuristic eligibility can miss indirect negation or exclude useful quoted source material. It never proves authorship, agreement, current interest or beliefs.",
+    "Bounded sampling can miss local topics in very long documents; diagnostics expose the analyzed fraction.",
+    "Embeddings do not prove that questions are logically identical; require independent bodies and pairwise passage/context agreement.",
+    "Original MODEL01 missing tail remains unavailable; this is a new implementation with recovered-prefix provenance."
+  ],
+  "freeze": "Freeze implementation and thresholds after synthetic focused regressions, before independent hidden heldout is evaluated. Report heldout failures without tuning implementation on them."
+}

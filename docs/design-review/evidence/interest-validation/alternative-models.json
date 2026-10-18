@@ -1,0 +1,169 @@
+{
+  "checkedAtUtc": "2026-10-18T15:36:28.566039+00:00",
+  "scope": "Official public Hugging Face APIs, fixed cards/configs and retained official @huggingface/transformers 4.3.1 npm source. Inherited proxy with normal TLS. No private heldout data accessed, no app source edited, no model binary downloaded.",
+  "candidates": [
+    {
+      "id": "onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX",
+      "revision": "cdc8277b4682665e2f2e87cd83da7da07b153d75",
+      "lastModified": "2026-05-26T06:53:10.000Z",
+      "publisher": "onnx-community official Transformers.js conversion ecosystem; model card links official convert-to-onnx Space",
+      "task": "zero-shot-classification",
+      "upstream": {
+        "id": "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7",
+        "revision": "b5113eb38ab63efdd7f280f8c144ea8b13f978ce"
+      },
+      "license": "mit",
+      "licenseSource": "conversion and upstream model card",
+      "weights": {
+        "path": "onnx/model_quantized.onnx",
+        "bytes": 338341610,
+        "sha256": "f1920d10296efd121a601b2161e8de9fa0c934a6c0331cd1764fd09a06a83041",
+        "sizeSource": "official LFS metadata, binary NOT downloaded or locally hashed"
+      },
+      "tokenizer": {
+        "path": "tokenizer.json",
+        "bytes": 16316225,
+        "class": "DebertaV2Tokenizer",
+        "sha256": "ac9bd80d04d21b4df95917bdf7c750cbea28acc30a4462c76ca2b9c86d371863"
+      },
+      "maxPairTokens": 512,
+      "architecture": [
+        "DebertaV2ForSequenceClassification"
+      ],
+      "modelType": "deberta-v2",
+      "labels": {
+        "0": "entailment",
+        "1": "neutral",
+        "2": "contradiction"
+      },
+      "korean": {
+        "explicitKoreanTraining": true,
+        "evidence": "Upstream lists ko and 105000 Korean translated NLI pairs among 27 fine-tuning languages; 100-language CC100 pretraining",
+        "caveat": "Korean NLI data machine-translated; no native Korean evaluation in source card"
+      },
+      "transformers431": {
+        "architectureSupported": true,
+        "tokenizerSupported": true,
+        "q8WasmSupportedInLibrary": true,
+        "browserDevice": "wasm (CPU execution); cpu device is Node native backend",
+        "sourceEvidence": [
+          "transformers431--package--src--models--registry.js",
+          "transformers431--package--src--models--deberta_v2--tokenization_deberta_v2.js",
+          "transformers431--package--src--utils--dtypes.js",
+          "transformers431--package--src--backends--onnx.js"
+        ],
+        "actualGraphExecutionVerified": false,
+        "caveat": "Library support and model-card usage establish a feasible experiment, not a completed browser compatibility test."
+      },
+      "decision": "one bounded CPU-WASM experiment is justified; keep outside app",
+      "urls": {
+        "api": "https://huggingface.co/api/models/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX?blobs=true",
+        "fixedCard": "https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/blob/cdc8277b4682665e2f2e87cd83da7da07b153d75/README.md",
+        "fixedConfig": "https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/blob/cdc8277b4682665e2f2e87cd83da7da07b153d75/config.json",
+        "upstreamFixedCard": "https://huggingface.co/MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7/blob/b5113eb38ab63efdd7f280f8c144ea8b13f978ce/README.md"
+      }
+    },
+    {
+      "id": "onnx-community/multilingual-MiniLMv2-L6-mnli-xnli-ONNX",
+      "revision": "ca5daf3d11b6c4b3143b1f4602a2edfb64c3ad7e",
+      "lastModified": "2026-03-13T10:51:13.000Z",
+      "publisher": "onnx-community official Transformers.js conversion ecosystem; model card links official convert-to-onnx Space",
+      "task": "zero-shot-classification",
+      "upstream": {
+        "id": "MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli",
+        "revision": "0a71e92a985b6e1ad1828cf67ce9c459639c1dca"
+      },
+      "license": "mit",
+      "licenseSource": "upstream model card; no top-level conversion license metadata",
+      "weights": {
+        "path": "onnx/model_quantized.onnx",
+        "bytes": 107415176,
+        "sha256": "55614f3c7da74184742eaa0006b978744437aa91de9ba4913db42f94d7844a8f",
+        "sizeSource": "official LFS metadata, binary NOT downloaded or locally hashed"
+      },
+      "tokenizer": {
+        "path": "tokenizer.json",
+        "bytes": 17082832,
+        "class": "XLMRobertaTokenizer",
+        "sha256": "d0091a328b3441d754e481db5a390d7f3b8dabc6016869fd13ba350d23ddc4cd"
+      },
+      "maxPairTokens": 512,
+      "architecture": [
+        "XLMRobertaForSequenceClassification"
+      ],
+      "modelType": "xlm-roberta",
+      "labels": {
+        "0": "entailment",
+        "1": "neutral",
+        "2": "contradiction"
+      },
+      "korean": {
+        "explicitKoreanTraining": false,
+        "evidence": "Upstream advertises 100+ language cross-lingual NLI; actual NLI fine-tuning/evaluation is XNLI 15 languages, excludes Korean. Korean performance remains unverified.",
+        "caveat": "Do not relabel XNLI coverage as Korean NLI fine-tuning."
+      },
+      "transformers431": {
+        "architectureSupported": true,
+        "tokenizerSupported": true,
+        "q8WasmSupportedInLibrary": true,
+        "browserDevice": "wasm (CPU execution); cpu device is Node native backend",
+        "sourceEvidence": [
+          "transformers431--package--src--models--registry.js",
+          "transformers431--package--src--models--xlm_roberta--tokenization_xlm_roberta.js",
+          "transformers431--package--src--utils--dtypes.js",
+          "transformers431--package--src--backends--onnx.js"
+        ],
+        "actualGraphExecutionVerified": false,
+        "caveat": "Library support and model-card usage establish a feasible experiment, not a completed browser compatibility test."
+      },
+      "decision": "not selected: smaller but no Korean fine-tuning/evaluation evidence; fallback research only",
+      "urls": {
+        "api": "https://huggingface.co/api/models/onnx-community/multilingual-MiniLMv2-L6-mnli-xnli-ONNX?blobs=true",
+        "fixedCard": "https://huggingface.co/onnx-community/multilingual-MiniLMv2-L6-mnli-xnli-ONNX/blob/ca5daf3d11b6c4b3143b1f4602a2edfb64c3ad7e/README.md",
+        "fixedConfig": "https://huggingface.co/onnx-community/multilingual-MiniLMv2-L6-mnli-xnli-ONNX/blob/ca5daf3d11b6c4b3143b1f4602a2edfb64c3ad7e/config.json",
+        "upstreamFixedCard": "https://huggingface.co/MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli/blob/0a71e92a985b6e1ad1828cf67ce9c459639c1dca/README.md"
+      }
+    }
+  ],
+  "ruledOutOrUnselected": [
+    {
+      "id": "Xenova/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7",
+      "reason": "Same Korean-trained upstream with older conversion and larger q8 file (338679132 bytes); current onnx-community conversion chosen."
+    },
+    {
+      "id": "onnx-community/EttinX-nli-xxs-ONNX",
+      "reason": "Very small q8 17139627 bytes, but official card language en; cannot claim Korean support."
+    },
+    {
+      "id": "onnx-community/EttinX-nli-xs-ONNX",
+      "reason": "Small q8 32433269 bytes, but official card language en; cannot claim Korean support."
+    },
+    {
+      "id": "onnx-community/multilingual-nli-bert-ONNX",
+      "reason": "No license/language/training evidence in conversion card; not selected over explicit Korean-trained candidate."
+    }
+  ],
+  "decision": {
+    "result": "one_bounded_experiment_feasible",
+    "selectedId": "onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX",
+    "reason": "Actual maintained conversion, explicit ko NLI training, MIT and known q8 artifact, supported DebertaV2 architecture/tokenizer in Transformers.js 4.3.1.",
+    "productReadiness": false,
+    "memoryAssessment": "q8 file alone 338341610 bytes (~322.67 MiB); tokenizer 16316225 bytes. At least model-byte residency plus sessions/tensors/tokenizer copies is required, so actual process memory is higher; no Apple memory measurement, cannot declare phone/iPad feasible or impossible from file size alone. Dispose embedding session before loading NLI.",
+    "experiment": {
+      "runtime": "@huggingface/transformers@4.3.1 browser WASM CPU",
+      "revision": "cdc8277b4682665e2f2e87cd83da7da07b153d75",
+      "dtype": "q8",
+      "batchSize": 1,
+      "numThreads": 1,
+      "input": "12-16 newly authored public anonymous Korean premise/hypothesis pairs with direct entailment, explicit negation, uncertainty, attributed/quoted claims and question-vs-assertion distinctions. Separate dev examples; never inspect hidden heldout fixtures.",
+      "output": "All three logits/probabilities via AutoModelForSequenceClassification + AutoTokenizer(text_pair), explicit id2label. Do not use zero-shot binary confidence as proof.",
+      "bounds": "One model download only after experiment chosen; verify bytes+SHA256; record cold load/inference latency, process memory, request log and dispose/reload. Keep each pair below max512 including specials; no candidate-threshold tuning against heldout.",
+      "stop": "Abort on session initialization failure, memory termination, or inability to distinguish simple Korean positive/negative/uncertain statements. No app integration during feasibility probe.",
+      "remaining": "Only if sanity passes, freeze independent criteria and evaluate unchanged hidden suite by a separate evaluator."
+    },
+    "reasoningLimit": "NLI verifies supplied premise/hypothesis pairs. It neither generates question candidates nor repairs missing candidates by itself; 0% question recall cannot be assumed fixed. Author relation and exact evidence provenance remain metadata constraints."
+  },
+  "zeroShotCaveat": "Transformers.js 4.3.1 zero-shot pipeline normalizes entailment against contradiction (multi_label or one label), omitting neutral; otherwise normalizes entailment across labels. Neutral unsupported text may therefore get high relative score. Use all-three-class logits for verifier.",
+  "maintenanceCaveat": "LastModified and official ecosystem ownership are observed facts; no guarantee of continuing maintenance or model quality.",
+  "evidenceDirectory": "/workspace/model-02-validation/alternative-model-evidence"
+}

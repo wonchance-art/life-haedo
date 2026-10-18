@@ -1,0 +1,446 @@
+{
+  "requests": [
+    {
+      "url": "https://huggingface.co/api/models/Xenova/paraphrase-multilingual-MiniLM-L12-v2/revision/2c4055b12046f11709e9df2c122e59ffbdc2f900",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/api/models/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/revision/b8ef00830037f9868450f778081ea683e900fe39",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1/dist/transformers.min.js",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/config.json",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/api/resolve-cache/models/Xenova/paraphrase-multilingual-MiniLM-L12-v2/2c4055b12046f11709e9df2c122e59ffbdc2f900/config.json",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer_config.json",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/api/resolve-cache/models/Xenova/paraphrase-multilingual-MiniLM-L12-v2/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer_config.json",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/onnx/model_quantized.onnx",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer.json",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://us.aws.cdn.hf.co/xet-bridge-us/64623c13d290a75bd98bdc54/1bdde20dc7b6cefb4b4f81ef3d1f8c3090d8db5a452fd1db9fbfdc0dab422105",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://us.aws.cdn.hf.co/xet-bridge-us/64623c13d290a75bd98bdc54/fe584e09808b408472e9556eb0d8db4b797690702ab6f43ad18e59f5b5b2cd10",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer.json",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer_config.json",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/onnx/model_quantized.onnx",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/api/resolve-cache/models/Xenova/paraphrase-multilingual-MiniLM-L12-v2/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer_config.json",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://us.aws.cdn.hf.co/xet-bridge-us/64623c13d290a75bd98bdc54/fe584e09808b408472e9556eb0d8db4b797690702ab6f43ad18e59f5b5b2cd10",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://us.aws.cdn.hf.co/xet-bridge-us/64623c13d290a75bd98bdc54/1bdde20dc7b6cefb4b4f81ef3d1f8c3090d8db5a452fd1db9fbfdc0dab422105",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/dist/ort-wasm-simd-threaded.asyncify.wasm",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/dist/ort-wasm-simd-threaded.asyncify.mjs",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1/dist/transformers.min.js",
+      "method": "GET",
+      "hasBody": false
+    }
+  ],
+  "errors": [],
+  "responses": [
+    {
+      "url": "https://huggingface.co/api/models/Xenova/paraphrase-multilingual-MiniLM-L12-v2/revision/2c4055b12046f11709e9df2c122e59ffbdc2f900",
+      "status": 200
+    },
+    {
+      "url": "https://huggingface.co/api/models/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/revision/b8ef00830037f9868450f778081ea683e900fe39",
+      "status": 200
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1/dist/transformers.min.js",
+      "status": 200
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/config.json",
+      "status": 307
+    },
+    {
+      "url": "https://huggingface.co/api/resolve-cache/models/Xenova/paraphrase-multilingual-MiniLM-L12-v2/2c4055b12046f11709e9df2c122e59ffbdc2f900/config.json",
+      "status": 200
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer_config.json",
+      "status": 307
+    },
+    {
+      "url": "https://huggingface.co/api/resolve-cache/models/Xenova/paraphrase-multilingual-MiniLM-L12-v2/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer_config.json",
+      "status": 206
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/onnx/model_quantized.onnx",
+      "status": 302
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer.json",
+      "status": 302
+    },
+    {
+      "url": "https://us.aws.cdn.hf.co/xet-bridge-us/64623c13d290a75bd98bdc54/fe584e09808b408472e9556eb0d8db4b797690702ab6f43ad18e59f5b5b2cd10",
+      "status": 206
+    },
+    {
+      "url": "https://us.aws.cdn.hf.co/xet-bridge-us/64623c13d290a75bd98bdc54/1bdde20dc7b6cefb4b4f81ef3d1f8c3090d8db5a452fd1db9fbfdc0dab422105",
+      "status": 206
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer_config.json",
+      "status": 307
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer.json",
+      "status": 302
+    },
+    {
+      "url": "https://huggingface.co/api/resolve-cache/models/Xenova/paraphrase-multilingual-MiniLM-L12-v2/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer_config.json",
+      "status": 200
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/onnx/model_quantized.onnx",
+      "status": 302
+    },
+    {
+      "url": "https://us.aws.cdn.hf.co/xet-bridge-us/64623c13d290a75bd98bdc54/1bdde20dc7b6cefb4b4f81ef3d1f8c3090d8db5a452fd1db9fbfdc0dab422105",
+      "status": 200
+    },
+    {
+      "url": "https://us.aws.cdn.hf.co/xet-bridge-us/64623c13d290a75bd98bdc54/fe584e09808b408472e9556eb0d8db4b797690702ab6f43ad18e59f5b5b2cd10",
+      "status": 200
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/dist/ort-wasm-simd-threaded.asyncify.wasm",
+      "status": 200
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/dist/ort-wasm-simd-threaded.asyncify.mjs",
+      "status": 200
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1/dist/transformers.min.js",
+      "status": 200
+    }
+  ],
+  "phases": [
+    {
+      "phase": "verified",
+      "bytes": 118308126
+    },
+    {
+      "phase": "ready",
+      "preparedMs": 15022.600000000093
+    },
+    {
+      "name": "baseline",
+      "phase": "analysis",
+      "completed": 8,
+      "total": 114
+    },
+    {
+      "name": "baseline",
+      "phase": "analysis",
+      "completed": 16,
+      "total": 114
+    },
+    {
+      "name": "baseline",
+      "phase": "analysis",
+      "completed": 24,
+      "total": 114
+    },
+    {
+      "name": "baseline",
+      "phase": "analysis",
+      "completed": 32,
+      "total": 114
+    },
+    {
+      "name": "baseline",
+      "phase": "analysis",
+      "completed": 40,
+      "total": 114
+    },
+    {
+      "name": "baseline",
+      "phase": "analysis",
+      "completed": 48,
+      "total": 114
+    },
+    {
+      "name": "baseline",
+      "phase": "analysis",
+      "completed": 56,
+      "total": 114
+    },
+    {
+      "name": "baseline",
+      "phase": "analysis",
+      "completed": 64,
+      "total": 114
+    },
+    {
+      "name": "baseline",
+      "phase": "analysis",
+      "completed": 72,
+      "total": 114
+    },
+    {
+      "name": "baseline",
+      "phase": "analysis",
+      "completed": 80,
+      "total": 114
+    },
+    {
+      "name": "baseline",
+      "phase": "analysis",
+      "completed": 88,
+      "total": 114
+    },
+    {
+      "name": "baseline",
+      "phase": "analysis",
+      "completed": 96,
+      "total": 114
+    },
+    {
+      "name": "baseline",
+      "phase": "analysis",
+      "completed": 104,
+      "total": 114
+    },
+    {
+      "name": "baseline",
+      "phase": "analysis",
+      "completed": 112,
+      "total": 114
+    },
+    {
+      "name": "baseline",
+      "phase": "analysis",
+      "completed": 114,
+      "total": 114
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 8,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 16,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 24,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 32,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 40,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 48,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 56,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 64,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 72,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 80,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 88,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 96,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 104,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 112,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 120,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 128,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 136,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 144,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 152,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 160,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 168,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 176,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 184,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 192,
+      "total": 196
+    },
+    {
+      "name": "candidate",
+      "phase": "analysis",
+      "completed": 196,
+      "total": 196
+    }
+  ],
+  "idleRemoteRequests": 0,
+  "runtimeChecks": {
+    "aborted": true,
+    "retryDimensions": 384,
+    "retryMs": 18.700000000186265,
+    "disposed": true
+  },
+  "mutableRevisionRequests": [],
+  "bodyRequests": []
+}

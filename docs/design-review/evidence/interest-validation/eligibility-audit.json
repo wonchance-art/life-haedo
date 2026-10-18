@@ -1,0 +1,185 @@
+{
+  "sourceSHA256": "d52a7236fa046e892f849662c654cc5c57b071b479e1df10aa3e9b21a2335c01",
+  "diagnosticMethod": "Read frozen source bytes; expose two private pure text-selection functions by adding exports in memory only. No source file edits, model calls, threshold changes, or changes to scored baseline/candidate outputs.",
+  "questions": [
+    {
+      "documentId": "h031",
+      "goldCluster": "q-budget",
+      "excluded": {
+        "quoted": 0,
+        "directive": 0,
+        "negated": 0,
+        "historical": 0,
+        "short": 0
+      },
+      "eligibleQuestionCount": 1
+    },
+    {
+      "documentId": "h032",
+      "goldCluster": "q-budget",
+      "excluded": {
+        "quoted": 0,
+        "directive": 0,
+        "negated": 1,
+        "historical": 0,
+        "short": 0
+      },
+      "eligibleQuestionCount": 0
+    },
+    {
+      "documentId": "h033",
+      "goldCluster": "q-sleep",
+      "excluded": {
+        "quoted": 0,
+        "directive": 0,
+        "negated": 0,
+        "historical": 0,
+        "short": 0
+      },
+      "eligibleQuestionCount": 1
+    },
+    {
+      "documentId": "h034",
+      "goldCluster": "q-sleep",
+      "excluded": {
+        "quoted": 0,
+        "directive": 0,
+        "negated": 1,
+        "historical": 0,
+        "short": 0
+      },
+      "eligibleQuestionCount": 0
+    },
+    {
+      "documentId": "h035",
+      "goldCluster": "q-listening",
+      "excluded": {
+        "quoted": 0,
+        "directive": 0,
+        "negated": 1,
+        "historical": 0,
+        "short": 0
+      },
+      "eligibleQuestionCount": 0
+    },
+    {
+      "documentId": "h036",
+      "goldCluster": "q-listening",
+      "excluded": {
+        "quoted": 0,
+        "directive": 0,
+        "negated": 1,
+        "historical": 0,
+        "short": 0
+      },
+      "eligibleQuestionCount": 0
+    },
+    {
+      "documentId": "h037",
+      "goldCluster": "q-recall",
+      "excluded": {
+        "quoted": 0,
+        "directive": 0,
+        "negated": 0,
+        "historical": 0,
+        "short": 0
+      },
+      "eligibleQuestionCount": 1
+    },
+    {
+      "documentId": "h038",
+      "goldCluster": "q-recall",
+      "excluded": {
+        "quoted": 0,
+        "directive": 0,
+        "negated": 0,
+        "historical": 0,
+        "short": 0
+      },
+      "eligibleQuestionCount": 1
+    }
+  ],
+  "longDocument": {
+    "documentId": "h045",
+    "eligibleRangeCount": 361,
+    "excluded": {
+      "quoted": 0,
+      "directive": 0,
+      "negated": 1,
+      "historical": 0,
+      "short": 0
+    },
+    "sampledRangeCount": 12,
+    "relevantEligibleRanges": [
+      {
+        "start": 3060,
+        "end": 3099,
+        "quote": "하천 옆 습지의 갈대밭을 남겨 두었더니 새가 둥지를 틀 자리가 늘었다."
+      }
+    ],
+    "sampledRanges": [
+      {
+        "start": 0,
+        "end": 16,
+        "quote": "누라보 키덴토 무사피 소라디."
+      },
+      {
+        "start": 561,
+        "end": 577,
+        "quote": "누라보 키덴토 무사피 소라디."
+      },
+      {
+        "start": 1122,
+        "end": 1138,
+        "quote": "누라보 키덴토 무사피 소라디."
+      },
+      {
+        "start": 1683,
+        "end": 1699,
+        "quote": "누라보 키덴토 무사피 소라디."
+      },
+      {
+        "start": 2244,
+        "end": 2260,
+        "quote": "누라보 키덴토 무사피 소라디."
+      },
+      {
+        "start": 2822,
+        "end": 2838,
+        "quote": "누라보 키덴토 무사피 소라디."
+      },
+      {
+        "start": 3372,
+        "end": 3388,
+        "quote": "바누리 도키마 네사루 피라모."
+      },
+      {
+        "start": 3950,
+        "end": 3966,
+        "quote": "바누리 도키마 네사루 피라모."
+      },
+      {
+        "start": 4511,
+        "end": 4527,
+        "quote": "바누리 도키마 네사루 피라모."
+      },
+      {
+        "start": 5072,
+        "end": 5088,
+        "quote": "바누리 도키마 네사루 피라모."
+      },
+      {
+        "start": 5633,
+        "end": 5649,
+        "quote": "바누리 도키마 네사루 피라모."
+      },
+      {
+        "start": 6194,
+        "end": 6210,
+        "quote": "바누리 도키마 네사루 피라모."
+      }
+    ],
+    "sampledRelevantRangeCount": 0
+  },
+  "sourceBytesUnchanged": true
+}

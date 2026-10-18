@@ -76,6 +76,7 @@ test('first writing intent survives login only as the exact local home flag', ()
 test('unified home return accepts only known sections and material views', () => {
   assert.equal(safeNext(), 'index.html');
   assert.equal(safeNext('index.html?section=home&code=discarded#token'), 'index.html?section=home');
+  assert.equal(safeNext('index.html?section=tools&view=interests&code=discarded#token'), 'index.html?section=tools&view=interests');
   assert.equal(safeNext('life.html?section=home&access_token=discarded'), 'life.html?section=home');
   assert.equal(safeNext('index.html?section=records&code=discarded'), 'index.html?section=records');
   assert.equal(safeNext('https://evil.invalid/index.html?section=records'), 'index.html');

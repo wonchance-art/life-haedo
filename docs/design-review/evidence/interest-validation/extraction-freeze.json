@@ -1,0 +1,32 @@
+{
+  "status": "frozen_before_hidden_evaluation",
+  "frozenAtUTC": "2026-10-18T15:31:40.567957+00:00",
+  "sourceSHA256": "d52a7236fa046e892f849662c654cc5c57b071b479e1df10aa3e9b21a2335c01",
+  "focusedTestsSHA256": "79b3a8fa48049fb9e2eda993ee16dcb960cddece2818ce7c0d7f330b84250fb4",
+  "designSHA256": "d961b0645ef4b291dac7c6c7ecc54a08cf7bb23142dccb9e4bb68db533521e8f",
+  "thresholds": {
+    "topicSimilarity": 0.42,
+    "topicMargin": 0.02,
+    "passageFloor": 0.36,
+    "contextWeight": 0.3,
+    "questionSimilarity": 0.72,
+    "questionContextSimilarity": 0.55,
+    "minimumDistinctBodySupport": 2,
+    "windowsPerDocument": 12,
+    "questionsPerDocument": 8,
+    "windowCharacters": 280,
+    "contextCharacters": 840
+  },
+  "tests": {
+    "focused": {
+      "passed": 11,
+      "failed": 0
+    },
+    "preservationLifecycle": {
+      "passed": 17,
+      "failed": 0
+    }
+  },
+  "hiddenCorpusReadByImplementationAgent": false,
+  "scope": "new contextual extraction implementation; no original-tail restoration claim; mock regressions do not prove Korean model quality"
+}

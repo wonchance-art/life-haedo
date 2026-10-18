@@ -150,3 +150,10 @@ test('public visitor document and anonymous RPC results never enter the app offl
   assert.equal(h.writes.length, 0);
   assert.equal(h.state().fetches, 0);
 });
+
+test('interest review shell includes local worker without pre-caching remote models', async () => {
+  const h = harness(); await h.run('install');
+  const urls = h.state().resources.map(request => request.url);
+  for (const path of ['assets/life/interest-model-loader.js', 'assets/life/interest-model-worker.js', 'assets/life/interest-analysis.js', 'assets/life/interest-profile.js', 'assets/life/interest-policy.js', 'assets/life/interest-ui.js', 'assets/life/interest.css']) assert.ok(urls.some(url => url.endsWith('/' + path)), path);
+  assert.ok(urls.every(url => url.startsWith('https://test.invalid/life-haedo/')));
+});

@@ -1,0 +1,219 @@
+{
+  "createdAt": "2026-10-18T15:37:30.536Z",
+  "scope": "Real Chromium module Worker/WASM, explicit pinned public assets, short synthetic inputs. No original data, heldout rerun, real account, Apple hardware or deployment.",
+  "requests": [
+    {
+      "url": "https://huggingface.co/api/models/Xenova/paraphrase-multilingual-MiniLM-L12-v2/revision/2c4055b12046f11709e9df2c122e59ffbdc2f900",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/api/models/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/revision/b8ef00830037f9868450f778081ea683e900fe39",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1/dist/transformers.min.js",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/config.json",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/api/resolve-cache/models/Xenova/paraphrase-multilingual-MiniLM-L12-v2/2c4055b12046f11709e9df2c122e59ffbdc2f900/config.json",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer_config.json",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/api/resolve-cache/models/Xenova/paraphrase-multilingual-MiniLM-L12-v2/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer_config.json",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/onnx/model_quantized.onnx",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer.json",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://us.aws.cdn.hf.co/xet-bridge-us/64623c13d290a75bd98bdc54/fe584e09808b408472e9556eb0d8db4b797690702ab6f43ad18e59f5b5b2cd10",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://us.aws.cdn.hf.co/xet-bridge-us/64623c13d290a75bd98bdc54/1bdde20dc7b6cefb4b4f81ef3d1f8c3090d8db5a452fd1db9fbfdc0dab422105",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer.json",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer_config.json",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/onnx/model_quantized.onnx",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://us.aws.cdn.hf.co/xet-bridge-us/64623c13d290a75bd98bdc54/1bdde20dc7b6cefb4b4f81ef3d1f8c3090d8db5a452fd1db9fbfdc0dab422105",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://us.aws.cdn.hf.co/xet-bridge-us/64623c13d290a75bd98bdc54/fe584e09808b408472e9556eb0d8db4b797690702ab6f43ad18e59f5b5b2cd10",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/api/resolve-cache/models/Xenova/paraphrase-multilingual-MiniLM-L12-v2/2c4055b12046f11709e9df2c122e59ffbdc2f900/tokenizer_config.json",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/dist/ort-wasm-simd-threaded.asyncify.wasm",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/dist/ort-wasm-simd-threaded.asyncify.mjs",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/api/models/Xenova/paraphrase-multilingual-MiniLM-L12-v2/revision/2c4055b12046f11709e9df2c122e59ffbdc2f900",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://huggingface.co/api/models/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/revision/b8ef00830037f9868450f778081ea683e900fe39",
+      "method": "GET",
+      "hasBody": false
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1/dist/transformers.min.js",
+      "method": "GET",
+      "hasBody": false
+    }
+  ],
+  "errors": [],
+  "phases": [
+    {
+      "phase": "prepared",
+      "prepareMs": 14849.5
+    },
+    {
+      "phase": "active-inference-aborted",
+      "completed": 8,
+      "total": 16,
+      "embedDispatched": true,
+      "terminated": 1
+    }
+  ],
+  "browser": "151.0.7922.173",
+  "idleRemoteRequests": 0,
+  "result": {
+    "prepareMs": 14849.5,
+    "firstBatch": {
+      "completed": 8,
+      "total": 16,
+      "embedDispatched": true
+    },
+    "outcome": {
+      "rejected": true,
+      "name": "AbortError",
+      "code": null
+    },
+    "afterAbort": {
+      "created": 1,
+      "terminated": 1,
+      "dispatched": [
+        {
+          "type": "prepare",
+          "id": 1,
+          "texts": 0
+        },
+        {
+          "type": "embed",
+          "id": 2,
+          "texts": 16
+        }
+      ]
+    },
+    "retryMs": 2750.600000000093,
+    "afterRetry": {
+      "created": 2,
+      "terminated": 1,
+      "dispatched": [
+        {
+          "type": "prepare",
+          "id": 1,
+          "texts": 0
+        },
+        {
+          "type": "embed",
+          "id": 2,
+          "texts": 16
+        },
+        {
+          "type": "prepare",
+          "id": 3,
+          "texts": 0
+        },
+        {
+          "type": "embed",
+          "id": 4,
+          "texts": 1
+        }
+      ]
+    },
+    "retryDimensions": 384,
+    "retryNorm": 0.9999998459603621,
+    "afterDispose": {
+      "created": 2,
+      "terminated": 2,
+      "dispatched": [
+        {
+          "type": "prepare",
+          "id": 1,
+          "texts": 0
+        },
+        {
+          "type": "embed",
+          "id": 2,
+          "texts": 16
+        },
+        {
+          "type": "prepare",
+          "id": 3,
+          "texts": 0
+        },
+        {
+          "type": "embed",
+          "id": 4,
+          "texts": 1
+        }
+      ]
+    }
+  },
+  "mainRequests": [],
+  "bodyRequests": [],
+  "pass": true
+}

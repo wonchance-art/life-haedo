@@ -30,12 +30,12 @@ jobs:
       - run: npm test
   browser_suites:
     runs-on: ubuntu-24.04
-    # Keep every existing suite, but give four independent fixture groups their
+    # Keep every existing suite, but give five independent fixture groups their
     # own server/browser so a long serial job cannot omit the final checks.
     strategy:
       fail-fast: false
       matrix:
-        group: [1, 2, 3, 4]
+        group: [1, 2, 3, 4, 5]
     timeout-minutes: 25
     permissions:
       contents: read
@@ -335,6 +335,12 @@ jobs:
       - name: Verify timeline recovery and retry
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/platform-recovery-browser.cjs
+      - name: Verify explicit interest review and account boundaries
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-interest-browser.cjs
+      - name: Verify interest metadata across service worker update and offline recovery
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-interest-pwa-browser.cjs
       - name: Stop the local server
         if: always()
         run: |
@@ -355,6 +361,8 @@ jobs:
             .local/blog-platform/*.png
             .local/blog-platform/*.log
             .local/flow-quality/
+            .local/interest-browser/
+            .local/interest-pwa/
             .local/unified-search/
             .local/collection-library/
             .local/collection-metadata/

@@ -1,5 +1,16 @@
 # 오픈소스 검토와 재사용 결정
 
+## 관심 확인·로컬 의미 검증 — 2026-10-19 KST
+
+새 저장 프레임워크/백엔드/AI API를 도입하지 않고 기존 Core·Storage·idb와 일반 JS/Worker를 재사용했다. 구조적 보존/CAS/정확 근거 검증은 기존 앱 계약을 확장했으며 외부 모델 라이브러리로 대체하지 않았다. 관련 공식 검토와 실측은 [독립 검증](../design-review/interest-validation.md)에 있다.
+
+- Transformers.js **4.3.1**, 공식 GitHub/npm 배포·Apache-2.0·공개 보안 권고를 확인했다. 정적 브라우저는 공식 독립 `transformers.min.js`를 사용한다. `transformers.web.min.js`의 bare import 문제와 내부 preliminary metadata의 revision 미전달을 재현했고, 단일 모델 Worker와 고정 remotePathTemplate으로 보완했다. 공개 advisory 빈 결과는 전체 보안 증명이 아니다. [공식 릴리스](https://github.com/huggingface/transformers.js/releases/tag/4.3.1).
+- `Xenova/paraphrase-multilingual-MiniLM-L12-v2` revision `2c4055b12046f11709e9df2c122e59ffbdc2f900`: upstream 고정 카드의 Apache-2.0, conversion base_model 연결, q8 공식 크기/SHA와 실제 별도 다운로드 SHA를 대조했다. 변환 recipe/source commit 전체 재현성은 입증하지 않았다. [고정 변환 카드](https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/tree/2c4055b12046f11709e9df2c122e59ffbdc2f900). MODEL-02 추출 품질이 미달해 실제 자동 분석 버튼은 꺼 두었다.
+- 한국어 NLI가 명시된 `onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX` revision `cdc8277b4682665e2f2e87cd83da7da07b153d75`: conversion/upstream MIT, 모델/토크나이저/WASM registry와 q8 338,341,610-byte metadata를 확인했다. 새 12쌍에서 후속 가능성만 통과했고 앱 모델·의존성으로 도입하지 않았다. [고정 공식 변환](https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/tree/cdc8277b4682665e2f2e87cd83da7da07b153d75).
+
+직접 keyword 확장/임계값 상향은 부정·인용의 의미를 해결하지 못해 채택하지 않았다. 문맥 embedding 보완은 독립 48문서 실험에서 기각했다. NLI는 새 독립 전체 출력 평가·입력 포함 범위·CPU/실기 비용을 확인한 뒤 판단할 후속 후보이며, 현재 선택은 수동 관심 보관이다.
+
+
 확인일: 2026-10-03 UTC. 공식 저장소·태그별 LICENSE·릴리스·문서를 읽은 초기 비교다.
 라이브러리 설치나 앱 통합·성능 검증은 아직 하지 않았다. 구현 단계마다 최신 상태를 다시 확인한다.
 최신 R1은 새 기록 입력보다 기존 기록의 가져오기·발췌·검토·통합·원문 추적이다. 아래 저장 후보는 유지하고 import 후보/원천 경로를 추가 조사했다.

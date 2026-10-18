@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "purpose": "one isolated 12-pair CPU WASM NLI feasibility experiment; no automatic adoption",
+  "modelId": "onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX",
+  "revision": "cdc8277b4682665e2f2e87cd83da7da07b153d75",
+  "license": {
+    "spdx": "MIT",
+    "source": "conversion and upstream fixed model cards",
+    "conversionUrl": "https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/blob/cdc8277b4682665e2f2e87cd83da7da07b153d75/README.md",
+    "upstreamId": "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7",
+    "upstreamRevision": "b5113eb38ab63efdd7f280f8c144ea8b13f978ce",
+    "upstreamUrl": "https://huggingface.co/MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7/blob/b5113eb38ab63efdd7f280f8c144ea8b13f978ce/README.md"
+  },
+  "modelType": "deberta-v2",
+  "architecture": "DebertaV2ForSequenceClassification",
+  "tokenizerClass": "DebertaV2Tokenizer",
+  "maxPairTokens": 512,
+  "probeMaxPairTokens": 256,
+  "id2label": {
+    "0": "entailment",
+    "1": "neutral",
+    "2": "contradiction"
+  },
+  "dtype": "q8",
+  "browserDevice": "wasm",
+  "numThreads": 1,
+  "batchSize": 1,
+  "pairCount": 12,
+  "assets": [
+    {
+      "path": "config.json",
+      "url": "https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/resolve/cdc8277b4682665e2f2e87cd83da7da07b153d75/config.json",
+      "bytes": 1016,
+      "sha256": "14877ff8e4699989ef08bed8fa570a803e1caef0cc0a35cb4372856deabba958",
+      "sha256Source": "actual fixed-revision small config response, locally hashed"
+    },
+    {
+      "path": "tokenizer_config.json",
+      "url": "https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/resolve/cdc8277b4682665e2f2e87cd83da7da07b153d75/tokenizer_config.json",
+      "bytes": 1396,
+      "sha256": "fc66a38a04a7e271944043a7d09ca0d6e30be0ed3c31c24b1d8bef842fcc1ea6",
+      "sha256Source": "actual fixed-revision small config response, locally hashed"
+    },
+    {
+      "path": "special_tokens_map.json",
+      "url": "https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/resolve/cdc8277b4682665e2f2e87cd83da7da07b153d75/special_tokens_map.json",
+      "bytes": 971,
+      "sha256": "63cd5b53789b3b5ae2c3d7aa377bcba1557ff0b41dc69ce07b94350ea32291c2",
+      "sha256Source": "actual fixed-revision small config response, locally hashed"
+    },
+    {
+      "path": "tokenizer.json",
+      "url": "https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/resolve/cdc8277b4682665e2f2e87cd83da7da07b153d75/tokenizer.json",
+      "bytes": 16316225,
+      "sha256": "ac9bd80d04d21b4df95917bdf7c750cbea28acc30a4462c76ca2b9c86d371863",
+      "sha256Source": "official LFS metadata, binary not downloaded"
+    },
+    {
+      "path": "onnx/model_quantized.onnx",
+      "url": "https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/resolve/cdc8277b4682665e2f2e87cd83da7da07b153d75/onnx/model_quantized.onnx",
+      "bytes": 338341610,
+      "sha256": "f1920d10296efd121a601b2161e8de9fa0c934a6c0331cd1764fd09a06a83041",
+      "sha256Source": "official LFS metadata, binary not downloaded"
+    }
+  ],
+  "minimumModelAndTokenizerBytes": 354657835,
+  "runtime": {
+    "package": "@huggingface/transformers",
+    "version": "4.3.1",
+    "supportedTypeProof": {
+      "registry": {
+        "file": "alternative-model-evidence/transformers431--package--src--models--registry.js",
+        "line": 216,
+        "entry": "['deberta-v2', 'DebertaV2ForSequenceClassification']"
+      },
+      "tokenizer": {
+        "file": "alternative-model-evidence/transformers431--package--src--models--deberta_v2--tokenization_deberta_v2.js",
+        "class": "DebertaV2Tokenizer extends PreTrainedTokenizer"
+      },
+      "q8": "alternative-model-evidence/transformers431--package--src--utils--dtypes.js q8->_quantized; WASM default q8",
+      "backend": "alternative-model-evidence/transformers431--package--src--backends--onnx.js supportedDevices includes wasm; browser default wasm"
+    },
+    "actualCandidateGraphExecuted": false
+  },
+  "languageEvidence": {
+    "koNliTraining": true,
+    "koPairs": 105000,
+    "trainingData": "machine-translated Korean NLI from multilingual-NLI-26lang-2mil7",
+    "nativeKoreanBenchmarkInCard": false
+  },
+  "adoptionApproved": false,
+  "privateHeldoutInspected": false,
+  "binaryDownloadedByThisReviewer": false
+}
