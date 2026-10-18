@@ -324,6 +324,12 @@ jobs:
       - name: Verify app navigation, interrupted motion and real save feedback
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/app-motion-browser.cjs
+      - name: Verify private series editing, exact snapshots and independent ZIP copies
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/blog-series-browser.cjs
+      - name: Verify series reader lifecycle, originals and restored contents position
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/blog-series-reader-browser.cjs
       - name: Verify subview location and safe contextual return
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/subview-navigation-browser.cjs
@@ -353,6 +359,8 @@ jobs:
             .local/app-native/qa/
             .local/home-refinement/qa/
             .local/blog-journeys/after/
+            .local/blog-series/
+            .local/blog-series-reader/
             .local/sns-blog/after/
             .local/blog-platform/*.json
             .local/blog-platform/*.png
@@ -519,6 +527,12 @@ jobs:
       - name: Verify real SQL and browser publication journeys
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: node tests/blog-completion-browser.cjs --prepare-database
+      - name: Verify series publication receipts, independent wrappers and current revocation
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: node tests/blog-series-backend.cjs
+      - name: Verify explicit series publication and anonymous native reading
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: node tests/blog-series-public-browser.cjs
       - name: Verify private post manager and exact provenance return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-manager-browser.cjs
@@ -561,6 +575,8 @@ jobs:
           path: |
             .local/blog-backend/
             .local/blog-completion/
+            .local/blog-series-backend/
+            .local/blog-series-public/
             .local/blog-manager/
             .local/blog-public/
             .local/preservation/

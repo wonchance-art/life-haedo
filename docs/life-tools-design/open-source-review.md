@@ -827,3 +827,12 @@ ZIP 담당은 공식 [최신 릴리스 API](https://api.github.com/repos/101arro
 - 원본 ZIP: 공식 fflate v0.8.3/MIT와 기존 ZIP 모듈을 비교했다. 원본 파트는 ZIP_STORED만 쓰므로 Blob.slice/CRC/SHA 기반 제한 읽기를 선택해 489 MB 전체 복사를 피한다. 임의 ZIP/ZIP64를 지원하지 않는다. [공식 출처·검증·한도](../design-review/original-attachments.md#구현-선택).
 - 갱신: 공식 jsdiff v9.0.0/BSD-3-Clause·패치 파서 보안 권고와 archived diff-match-patch를 비교했다. 자동 패치가 필요 없으므로 기존 ObsidianPackage/Core/SHA/원자 사본 복원에 작은 경로 비교 어댑터만 더했다. [출처·선택을 바꿀 조건](../design-review/obsidian-update.md#오픈소스-선택과-반대-검토).
 - PNG: 기존 NineBoard 모델과 브라우저 Canvas를 재사용해 별도 그래픽 의존성 없이 한 영역만 출력한다. 전체 편집 데이터는 기존 JSON/HTML이 보존한다. [범위·실패 복구](../design-review/nine-board-image.md).
+
+## 여행 글 연재·모음 — 2026-10-18 KST
+
+새 CMS나 편집기 라이브러리는 도입하지 않는다. 기존 PhotoPost/계정별 저장·파일 패키지/ShareRemote와 공개 목차를 재사용해 ‘선택한 저장 글 사본의 명시 순서’만 연결한다. 책의 장 원고·선택 자료 페이지/원문 묶음과 역할을 분리한다. [범위·반대 검토·검수](../design-review/blog-series.md#구현과-오픈소스-선택).
+
+- Ghost: 공식 [latest release API](https://api.github.com/repos/TryGhost/Ghost/releases/latest)에서 v6.71.0(2026-10-15), [저장소](https://api.github.com/repos/TryGhost/Ghost) archived/disabled=false와 [MIT LICENSE](https://github.com/TryGhost/Ghost/blob/main/LICENSE)를 확인했다. [공식 Collections 문서 소스](https://github.com/TryGhost/docs/blob/main/themes/routing.mdx#collections)는 목록 URL과 글 URL 구조를 분리하지만 한 글이 한 collection에만 속한다. 주소/목록의 구분만 참고하며 우리 독립 다중 모음에 엔진을 직접 도입하지 않는다.
+- WordPress Gutenberg: 공식 [latest release API](https://api.github.com/repos/WordPress/gutenberg/releases/latest)에서 v24.2.0(2026-10-14), [저장소](https://api.github.com/repos/WordPress/gutenberg) archived/disabled=false 확인. [LICENSE](https://github.com/WordPress/gutenberg/blob/trunk/LICENSE.md)의 프로젝트 GPL-2.0-or-later와 2021-04-15 이후 기여의 GPL/MPL 이중 라이선스 조건을 구분했다. [공식 Query Loop 소스 문서](https://github.com/WordPress/gutenberg/blob/trunk/packages/block-library/src/query/README.md)의 query/order/orderBy·목록·이동 분리는 참고하되 명시 사본 순서를 동적 날짜/조건 query로 대체하지 않는다. Gutenberg/React/PHP 또는 코드는 도입하지 않는다.
+
+확인일은 2026-10-18 KST다. docs.ghost.org·wordpress.org 문서 사이트 직접 조회는 프록시 403이라 공식 GitHub 문서 소스를 읽었다. 공개 보안 권고 API는 현재 GitHub 도구의 endpoint 미지원으로 확인하지 못했으며 0건/보안 감사 통과라고 기록하지 않는다. 두 프로젝트는 설계 참고일 뿐 새 실행 의존성이 아니고 기존 vendor 업그레이드도 이번 모음과 함께 수행하지 않는다.

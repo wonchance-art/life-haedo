@@ -159,6 +159,9 @@
           if (data?.sender !== sender && data?.type === 'nine_board_changed' && typeof data.workspaceId === 'string' && Number.isSafeInteger(data.revision) && data.revision >= 1) {
             notify({ type: 'nine_board_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
+          if (data?.sender !== sender && data?.type === 'blog_series_changed' && typeof data.workspaceId === 'string' && Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'blog_series_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
           if (data?.sender !== sender && data?.type === 'photo_posts_changed' && typeof data.workspaceId === 'string') notify({ type: 'photo_posts_changed', workspaceId: data.workspaceId });
           if (data?.sender !== sender && data?.type === 'workbench_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
@@ -701,6 +704,125 @@
     }
     function savePhotoPostFromNineBoard(workspaceId, input, revision, boardId, areaId) {
       return savePhotoPost(workspaceId, input, 0, null, { revision, boardId, areaId });
+    }
+    const blogSeries = () => root.HaedoLife?.BlogSeries || (typeof require === 'function' && require('./blog-series.js'));
+    const seriesPostKey = (workspaceId, seriesId, itemId) => `blog-series-post:${workspaceId}:${seriesId}:${itemId}`;
+    async function blogSeriesValue(meta, workspaceId) {
+      const row = await meta.get(`blog-series:${workspaceId}`), value = row === undefined ? blogSeries().empty(workspaceId) : row.value;
+      blogSeries().validate(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '모음의 작업공간이 다릅니다.');
+      return value;
+    }
+    function seriesChanged(workspaceId, revision) {
+      const event = { type: 'blog_series_changed', workspaceId, revision }; notify(event);
+      try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed library remains authoritative. */ }
+    }
+    async function readBlogSeries(workspaceId) {
+      collectionScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await blogSeriesValue(meta, workspaceId));
+      });
+    }
+    async function seriesSnapshot(meta, workspaceId, series) {
+      const posts = [];
+      for (const item of series.items) {
+        const row = await meta.get(seriesPostKey(workspaceId, series.id, item.id));
+        if (!row) throw fault('blog_series_missing', '모음에 보존한 글 사본을 찾지 못했습니다. 최신 글로 바꾸지 않았습니다.');
+        posts.push(row.value);
+      }
+      const value = { series, posts }; blogSeries().validateSnapshot(value); return value;
+    }
+    async function readBlogSeriesSnapshot(workspaceId, seriesId) {
+      collectionScope(workspaceId); requireId(seriesId, '모음');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const state = await blogSeriesValue(meta, workspaceId), series = state.series.find(value => value.id === seriesId);
+        if (!series) throw fault('blog_series_missing', '선택한 모음을 찾지 못했습니다. 모음 목록을 다시 확인해 주세요.');
+        return clone(await seriesSnapshot(meta, workspaceId, series));
+      });
+    }
+    async function saveBlogSeries(workspaceId, input, baseRevision) {
+      collectionScope(workspaceId); requireRevision(baseRevision); const value = clone(input); blogSeries().validate(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '모음의 작업공간이 다릅니다.');
+      if (value.revision !== baseRevision) throw fault('blog_series_conflict', '모음 저장 기준이 바뀌었습니다. 입력을 보존했습니다.');
+      const saved = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await blogSeriesValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) throw fault('blog_series_conflict', '다른 탭에서 모음이 바뀌었습니다. 내 입력은 유지합니다.');
+        const origins = new Map(), retained = new Set(), writes = [];
+        const origin = item => stablePayload({ postId: item.postId, postRevision: item.postRevision, title: item.title });
+        for (const series of previous.series) for (const item of series.items) {
+          const key = origin(item); if (!origins.has(key)) origins.set(key, { series, item });
+        }
+        for (const series of value.series) {
+          const prior = previous.series.find(row => row.id === series.id);
+          if (prior && prior.createdAt !== series.createdAt) throw fault('blog_series_conflict', '모음의 등록 기준이 바뀌었습니다. 입력은 유지합니다.');
+          const posts = [];
+          for (const item of series.items) {
+            const old = prior?.items.find(row => row.id === item.id); let doc;
+            if (old) {
+              if (origin(old) !== origin(item)) throw fault('blog_series_conflict', '이미 담은 글의 판을 바꾸지 않았습니다. 새 항목으로 다시 선택해 주세요.');
+              const row = await meta.get(seriesPostKey(workspaceId, series.id, item.id));
+              if (!row) throw fault('blog_series_missing', '모음에 보존한 글 사본이 없습니다. 원래 글로 대체하지 않았습니다.');
+              blogSeries().validateSnapshot({ series: { ...series, items: [item] }, posts: [row.value] }); doc = row.value.doc;
+            } else {
+              const current = (await meta.get(`photo-post:${workspaceId}:${item.postId}`))?.value;
+              if (current && current.id === item.postId && current.revision === item.postRevision && current.title === item.title && current.status === 'saved' && !current.archived) {
+                doc = photoPost().compact(current);
+              } else {
+                // A conflict recovery may reuse a previously captured exact
+                // version, even after the original was edited or archived.
+                const source = origins.get(origin(item));
+                if (!source) throw fault('blog_series_post_changed', '선택한 저장 글이 바뀌었거나 보관함에 있습니다. 다시 확인해 선택해 주세요.');
+                const row = await meta.get(seriesPostKey(workspaceId, source.series.id, source.item.id));
+                if (!row) throw fault('blog_series_missing', '복구할 고정 글 사본을 찾지 못했습니다.');
+                blogSeries().validateSnapshot({ series: { ...source.series, items: [source.item] }, posts: [row.value] }); doc = row.value.doc;
+              }
+            }
+            const row = { itemId: item.id, doc }, key = seriesPostKey(workspaceId, series.id, item.id);
+            posts.push(row); retained.add(key); if (!old) writes.push({ key, value: row });
+          }
+          blogSeries().validateSnapshot({ series, posts });
+        }
+        for (const row of writes) await meta.put(row);
+        for (const series of previous.series) for (const item of series.items) {
+          const key = seriesPostKey(workspaceId, series.id, item.id); if (!retained.has(key)) await meta.delete(key);
+        }
+        value.revision = baseRevision + 1; blogSeries().validate(value);
+        await meta.put({ key: `blog-series:${workspaceId}`, value }); return clone(value);
+      });
+      seriesChanged(workspaceId, saved.revision); return saved;
+    }
+    async function installBlogSeriesCopy(workspaceId, input) {
+      collectionScope(workspaceId); const value = clone(input); blogSeries().validateSnapshot(value);
+      const transport = root.HaedoLife?.Blog || (typeof require === 'function' && require('./blog.js'));
+      if (!transport?.pack || !transport?.hydrate) throw fault('dependency_unavailable', '원본 사진 검증기를 불러오지 못했습니다.');
+      for (const { doc } of value.posts) {
+        await transport.hydrate(transport.pack(doc), new Map(doc.photos.map(photo => [photo.id, photo.blob]))); scopeGuard();
+      }
+      const occupied = new Set([workspaceId, value.series.id, ...value.series.items.map(item => item.id)]);
+      for (const { doc } of value.posts) { occupied.add(doc.id); for (const photo of doc.photos) occupied.add(photo.id); }
+      const fresh = () => {
+        const id = core().id ? core().id() : root.crypto.randomUUID();
+        if (occupied.has(id)) throw fault('invalid_blog_series', '새 모음의 식별자가 중복됐습니다.'); occupied.add(id); return id;
+      };
+      value.series.id = fresh();
+      for (let i = 0; i < value.posts.length; i++) {
+        const row = value.posts[i], item = value.series.items[i], photos = new Map(); row.itemId = item.id = fresh();
+        row.doc.id = item.postId = fresh(); row.doc.revision = item.postRevision = 1; row.doc.replaces = null;
+        for (const photo of row.doc.photos) { const id = fresh(); photos.set(photo.id, id); photo.id = id; }
+        row.doc.ops = row.doc.ops.map(op => typeof op.insert === 'string' ? op : { ...op, insert: { photo: { ...op.insert.photo, id: photos.get(op.insert.photo.id) } } });
+      }
+      blogSeries().validateSnapshot(value); scopeGuard();
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const state = clone(await blogSeriesValue(meta, workspaceId)); state.series.push(value.series); state.revision++;
+        blogSeries().validate(state);
+        for (const row of value.posts) await meta.put({ key: seriesPostKey(workspaceId, value.series.id, row.itemId), value: row });
+        await meta.put({ key: `blog-series:${workspaceId}`, value: state }); return { seriesId: value.series.id, revision: state.revision };
+      });
+      seriesChanged(workspaceId, result.revision); return result;
     }
     // A private, selected copy has no server binding. Read its dependencies in
     // one transaction; hashing/ZIP work happens later on this owned snapshot.
@@ -2101,7 +2223,7 @@
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
-      readCollection, saveCollection, readNineBoard, saveNineBoard, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       readPreservationCatalog, readPreservationSnapshot, installPreservationCopy,
       commitLocal, saveStage, getStage, listStages, deleteStage, subscribe,
