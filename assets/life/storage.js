@@ -162,6 +162,9 @@
           if (data?.sender !== sender && data?.type === 'blog_series_changed' && typeof data.workspaceId === 'string' && Number.isSafeInteger(data.revision) && data.revision >= 1) {
             notify({ type: 'blog_series_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
+          if (data?.sender !== sender && data?.type === 'material_writing_changed' && typeof data.workspaceId === 'string' && Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'material_writing_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
           if (data?.sender !== sender && data?.type === 'photo_posts_changed' && typeof data.workspaceId === 'string') notify({ type: 'photo_posts_changed', workspaceId: data.workspaceId });
           if (data?.sender !== sender && data?.type === 'workbench_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
@@ -616,7 +619,13 @@
       const evidence = evidenceRequest === null ? null : { refs: checkedEvidence(evidenceRequest.refs, workspaceId), baseRevision: evidenceRequest.baseRevision };
       if (evidence) requireRevision(evidence.baseRevision);
       if (value.revision !== baseRevision) throw fault('photo_post_conflict', '사진 글 저장 기준이 바뀌었습니다. 입력을 보존했습니다.');
-      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+      const effects = {};
+      const result = await transaction(['bundles', 'meta'], 'readwrite', tx => writePhotoPost(tx, workspaceId, value, baseRevision, evidence, nine, effects));
+      const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
+      if (effects.materialRevision !== undefined) materialWritingChanged(workspaceId, effects.materialRevision);
+      return result;
+    }
+    async function writePhotoPost(tx, workspaceId, value, baseRevision, evidence, nine, effects = {}) {
         const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
         if (nine) {
           const source = await nineBoardValue(meta, workspaceId);
@@ -648,6 +657,8 @@
             await meta.put({ key: `blog-sync:${workspaceId}:${value.id}`, value: binding });
             await meta.delete(`blog-sync:${workspaceId}:${target.id}`);
           }
+          const materialRevision = await moveMaterialWritingOutputs(meta, workspaceId, target.id, value.id);
+          if (materialRevision !== null) effects.materialRevision = materialRevision;
           await meta.delete(targetKey); index = index.filter(item => item.id !== target.id); value.createdAt = target.createdAt; value.replaces = null;
         }
         value.revision = baseRevision + 1; photoPost().validate(value);
@@ -657,9 +668,6 @@
         await meta.put({ key, value }); await meta.put({ key: `photo-posts:${workspaceId}`, value: index });
         if (evidence) await meta.put({ key: `post-evidence:${workspaceId}:${value.id}`, value: { revision: evidence.baseRevision + 1, refs: clone(evidence.refs) } });
         return clone(value);
-      });
-      const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
-      return result;
     }
     function checkedEvidence(refs, workspaceId) {
       if (!Array.isArray(refs) || refs.length > 64) throw fault('invalid_source_reference', '원문 근거는 64개까지 보관할 수 있습니다.');
@@ -704,6 +712,113 @@
     }
     function savePhotoPostFromNineBoard(workspaceId, input, revision, boardId, areaId) {
       return savePhotoPost(workspaceId, input, 0, null, { revision, boardId, areaId });
+    }
+    const materialWriting = () => root.HaedoLife?.MaterialWriting || (typeof require === 'function' && require('./material-writing.js'));
+    const materialOutputKey = (workspaceId, planId) => `material-writing-output:${workspaceId}:${planId}`;
+    async function materialReceipt(meta, workspaceId, planId) {
+      const row = await meta.get(materialOutputKey(workspaceId, planId));
+      if (row === undefined) return null;
+      onlyFields(row.value, ['postId'], 'invalid_material_writing'); requireId(row.value.postId, '완성 글'); return row.value;
+    }
+    async function materialWritingValue(meta, workspaceId) {
+      const row = await meta.get(`material-writing:${workspaceId}`), state = row === undefined ? materialWriting().empty(workspaceId) : row.value;
+      materialWriting().validate(state);
+      if (state.workspaceId !== workspaceId) throw fault('workspace_mismatch', '자료 글쓰기의 작업공간이 다릅니다.');
+      for (const plan of state.plans) {
+        const receipt = await materialReceipt(meta, workspaceId, plan.id);
+        if (stablePayload(receipt) !== stablePayload(plan.output)) throw fault('invalid_material_writing', '준비와 완성 글의 연결을 확인하지 못했습니다. 새 글을 자동 생성하지 않았습니다.');
+      }
+      return state;
+    }
+    function materialWritingChanged(workspaceId, revision) {
+      const event = { type: 'material_writing_changed', workspaceId, revision }; notify(event);
+      try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed plan remains authoritative. */ }
+    }
+    async function readMaterialWriting(workspaceId) {
+      collectionScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await materialWritingValue(meta, workspaceId));
+      });
+    }
+    async function saveMaterialWriting(workspaceId, input, baseRevision) {
+      collectionScope(workspaceId); requireRevision(baseRevision); const state = clone(input); materialWriting().validate(state);
+      if (state.workspaceId !== workspaceId) throw fault('workspace_mismatch', '자료 글쓰기의 작업공간이 다릅니다.');
+      if (state.revision !== baseRevision) throw fault('material_writing_conflict', '준비 저장 기준이 바뀌었습니다. 입력은 유지합니다.');
+      const saved = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await materialWritingValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) throw fault('material_writing_conflict', '다른 탭에서 준비가 바뀌었습니다. 내 입력은 유지합니다.');
+        for (const plan of state.plans) {
+          const prior = previous.plans.find(value => value.id === plan.id), receipt = await materialReceipt(meta, workspaceId, plan.id);
+          if (!prior && (receipt || plan.output !== null) || prior && stablePayload(prior.output) !== stablePayload(plan.output))
+            throw fault('material_writing_conflict', '기존 글 연결을 바꾸거나 지워 새 글을 만들 수 없습니다. 새 준비 사본으로 보관해 주세요.');
+        }
+        state.revision = baseRevision + 1; materialWriting().validate(state);
+        await meta.put({ key: `material-writing:${workspaceId}`, value: state }); return clone(state);
+      });
+      materialWritingChanged(workspaceId, saved.revision); return saved;
+    }
+    async function materialOutput(meta, workspaceId, plan, planRevision) {
+      const post = (await meta.get(`photo-post:${workspaceId}:${plan.output.postId}`))?.value;
+      if (!post || post.id !== plan.output.postId) throw fault('material_writing_output_missing', '연결한 글을 찾지 못했습니다. 준비와 기존 자료는 유지하며 새 글을 자동 생성하지 않습니다.');
+      photoPost().validate(post); return { postId: post.id, revision: post.revision, planRevision, created: false };
+    }
+    async function createMaterialWritingPost(workspaceId, planId, expectedRevision) {
+      collectionScope(workspaceId); requireId(planId, '글 준비'); requireRevision(expectedRevision);
+      const initial = await transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta), state = await materialWritingValue(meta, workspaceId);
+        const plan = state.plans.find(value => value.id === planId);
+        if (!plan) throw fault('material_writing_missing', '선택한 글 준비를 찾지 못했습니다.');
+        if (plan.output) return { result: await materialOutput(meta, workspaceId, plan, state.revision) };
+        if (state.revision !== expectedRevision) throw fault('material_writing_conflict', '준비가 바뀌었습니다. 최신 개요를 다시 검토해 주세요.');
+        return clone({ state, plan, bundle });
+      });
+      if (initial.result) return initial.result;
+      const projected = materialWriting().project(initial.state, planId, () => core().id()), doc = photoPost().compact(projected.doc), refs = checkedEvidence(projected.refs, workspaceId);
+      if (doc.revision !== 0 || doc.status !== 'draft' || doc.replaces !== null || doc.archived) throw fault('invalid_material_writing', '새 비공개 글 초안으로만 이어 쓸 수 있습니다.');
+      const reference = root.HaedoLife?.SourceReference || (typeof require === 'function' && require('./source-reference.js'));
+      // Hash verification yields only before the write transaction. Its exact
+      // source text and plan are rechecked inside that transaction below.
+      for (const ref of refs) { await reference.resolve(initial.bundle, ref); scopeGuard(); }
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta), state = clone(await materialWritingValue(meta, workspaceId));
+        const plan = state.plans.find(value => value.id === planId);
+        if (!plan) throw fault('material_writing_missing', '선택한 글 준비가 바뀌었습니다.');
+        // A lost reply or another tab may already have completed this exact
+        // handoff. Resuming it never creates a second document.
+        if (plan.output) return materialOutput(meta, workspaceId, plan, state.revision);
+        if (state.revision !== expectedRevision || stablePayload(plan) !== stablePayload(initial.plan)) throw fault('material_writing_conflict', '검토한 준비가 바뀌었습니다. 새 글을 만들지 않았습니다.');
+        checkEvidenceTargets(refs, bundle);
+        for (const ref of refs) {
+          const before = initial.bundle.sourceVersions.find(value => value.id === ref.sourceVersionId), current = bundle.sourceVersions.find(value => value.id === ref.sourceVersionId);
+          if (before.contentText !== current.contentText) throw fault('invalid_source_reference', '검토한 정확한 원문이 바뀌었습니다. 최신판으로 바꾸지 않았습니다.');
+        }
+        const post = await writePhotoPost(tx, workspaceId, doc, 0, { refs, baseRevision: 0 }, null);
+        plan.output = { postId: post.id }; state.revision++; materialWriting().validate(state);
+        await meta.put({ key: `material-writing:${workspaceId}`, value: state });
+        await meta.put({ key: materialOutputKey(workspaceId, planId), value: clone(plan.output) });
+        return { postId: post.id, revision: post.revision, planRevision: state.revision, created: true };
+      });
+      if (result.created) {
+        materialWritingChanged(workspaceId, result.planRevision);
+        const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
+      }
+      return result;
+    }
+    async function moveMaterialWritingOutputs(meta, workspaceId, oldPostId, newPostId) {
+      if (!(await meta.get(`material-writing:${workspaceId}`))) return null;
+      const state = clone(await materialWritingValue(meta, workspaceId)); let changedPlans = false;
+      for (const plan of state.plans) if (plan.output?.postId === oldPostId) { plan.output.postId = newPostId; changedPlans = true; }
+      const prefix = `material-writing-output:${workspaceId}:`;
+      const range = root.IDBKeyRange?.bound(prefix, prefix + '\uffff');
+      const keys = (await meta.getAllKeys(range)).filter(key => typeof key === 'string' && key.startsWith(prefix));
+      for (const key of keys) {
+        const receipt = (await meta.get(key)).value; onlyFields(receipt, ['postId'], 'invalid_material_writing'); requireId(receipt.postId, '완성 글');
+        if (receipt.postId === oldPostId) await meta.put({ key, value: { postId: newPostId } });
+      }
+      if (!changedPlans) return null;
+      state.revision++; materialWriting().validate(state); await meta.put({ key: `material-writing:${workspaceId}`, value: state }); return state.revision;
     }
     const blogSeries = () => root.HaedoLife?.BlogSeries || (typeof require === 'function' && require('./blog-series.js'));
     const seriesPostKey = (workspaceId, seriesId, itemId) => `blog-series-post:${workspaceId}:${seriesId}:${itemId}`;
@@ -2223,7 +2338,7 @@
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
-      readCollection, saveCollection, readNineBoard, saveNineBoard, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       readPreservationCatalog, readPreservationSnapshot, installPreservationCopy,
       commitLocal, saveStage, getStage, listStages, deleteStage, subscribe,

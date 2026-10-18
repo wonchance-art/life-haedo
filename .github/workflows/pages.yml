@@ -347,6 +347,12 @@ jobs:
       - name: Verify timeline recovery and retry
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/platform-recovery-browser.cjs
+      - name: Verify exact material comparison, selection and mobile recovery
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/material-writing-sources-browser.cjs
+      - name: Verify material writing across screen sizes and protected input
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/material-writing-visual-browser.cjs
       - name: Stop the local server
         if: always()
         run: |
@@ -365,6 +371,8 @@ jobs:
             .local/blog-series/
             .local/blog-series-reader/
             .local/nine-public-reader/
+            .local/material-writing-sources/
+            .local/material-writing-visual/
             .local/sns-blog/after/
             .local/blog-platform/*.json
             .local/blog-platform/*.png
@@ -543,6 +551,9 @@ jobs:
       - name: Verify selected private areas through explicit publication and anonymous reading
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: node tests/nine-public-browser.cjs
+      - name: Verify materials through finished writing, selective publication and exact file restoration
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_material" node tests/material-writing-browser.cjs --prepare-database
       - name: Verify private post manager and exact provenance return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-manager-browser.cjs
@@ -589,6 +600,7 @@ jobs:
             .local/blog-series-public/
             .local/nine-public-backend/
             .local/nine-public/
+            .local/material-writing/
             .local/blog-manager/
             .local/blog-public/
             .local/preservation/

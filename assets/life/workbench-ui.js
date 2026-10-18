@@ -79,9 +79,10 @@
       const draftConflict = !!session.composer?.hasDraftConflict?.();
       const composerDirty = !!session.composer?.dirty?.();
       const nineDirty = !!session.nine?.dirty();
+      const materialDirty = !!session.materialUI?.dirty() || !!session.materialTool?.dirty();
       statusNode.textContent = !session.state ? '구성을 불러오지 못함' : session.saving ? '이 브라우저에 저장 중…' : session.error ? '저장하지 못함 · 초안 유지' : incoming ? '선택 검토 중 · 아직 추가하지 않음' :
-        hasUnappliedAttachment ? '첨부 입력 미반영' : draftConflict ? '초안 충돌 · 입력 유지' : nineDirty ? '9칸 구성 저장 전 변경 있음' : composerDirty ? '초안 저장 전 변경 있음' : session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : '이 브라우저에 저장됨';
-      statusNode.dataset.state = session.error ? 'error' : nineDirty || draftConflict || composerDirty || hasUnappliedAttachment || session.edit !== session.stored ? 'dirty' : 'saved';
+        hasUnappliedAttachment ? '첨부 입력 미반영' : draftConflict ? '초안 충돌 · 입력 유지' : materialDirty ? '작성 준비 · 처리 전 변경 있음' : nineDirty ? '9칸 구성 저장 전 변경 있음' : composerDirty ? '초안 저장 전 변경 있음' : session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : '이 브라우저에 저장됨';
+      statusNode.dataset.state = session.error ? 'error' : materialDirty || nineDirty || draftConflict || composerDirty || hasUnappliedAttachment || session.edit !== session.stored ? 'dirty' : 'saved';
       if (mode === 'related') surface.querySelector('.wb-storage-line').hidden = !!session.state && !session.saving && !session.error && session.edit === session.stored && session.remoteRevision <= session.baseRevision;
     }
     function clearError() { if (errorNode) { errorNode.hidden = true; errorNode.replaceChildren(); delete errorNode.dataset.code; } }
@@ -259,10 +260,12 @@
       await current?.composer?.flush();
       await current?.nine?.flush();
       await current?.seriesEditor?.flush();
+      await current?.materialUI?.flush();
+      await current?.materialTool?.flush();
       await current?.photoPosts?.flush();
       if (current?.state && current.edit !== current.stored || current?.saving) await flushSession(current);
     }
-    function dirty() { return installing || !!current && (current.edit !== current.stored || !!current.saving || !!current.composer?.dirty() || !!current.nine?.dirty() || !!current.seriesEditor?.dirty() || !!current.photoPosts?.dirty()); }
+    function dirty() { return installing || !!current && (current.edit !== current.stored || !!current.saving || !!current.composer?.dirty() || !!current.nine?.dirty() || !!current.seriesEditor?.dirty() || !!current.materialUI?.dirty() || !!current.materialTool?.dirty() || !!current.photoPosts?.dirty()); }
     function sessionFor(id) {
       if (sessions.has(id)) return sessions.get(id);
       const session = { workspaceId: id, state: null, baseRevision: 0, edit: 0, stored: 0, remoteRevision: 0,
@@ -1049,12 +1052,106 @@
       onBlogModeChange({ mode: 'profile', kind: 'profile' });
       title.input.focus({ preventScroll: true });
     }
+    function renderMaterialWriting(session, token) {
+      const active = () => showing(token, session) && session.materialOpen;
+      const prepareHost = el('section'), output = el('section', null, 'mw-output-tools');
+      const outputHeading = el('h3', '완성 글 활용'), outputActions = el('div', null, 'life-actions');
+      const toolHost = el('section'); toolHost.id = 'mwOutputTool'; toolHost.hidden = true;
+      let manager = null, sync = null, preservation = null, toolSequence = 0;
+      const closeTool = () => { toolSequence++; manager?.dispose(); sync?.dispose(); preservation?.dispose(); manager = sync = preservation = null; toolHost.replaceChildren(); toolHost.hidden = true; prepareHost.hidden = false; outputActions.hidden = false; output.classList.remove('is-open'); outputHeading.textContent = '완성 글 활용'; };
+      const tool = { flush: async () => { await manager?.flush(); preservation?.flush(); }, dirty: () => !!manager?.dirty() || !!preservation?.dirty() };
+      session.materialTool = tool;
+      const openPost = async context => {
+        const targetCurrent = () => active() && session.materialUI?.getView().planId === context.planId;
+        if (!targetCurrent()) return;
+        const originalId = context.postId;
+        let postId = originalId, revision = context.revision;
+        // Reuse an already stored editing draft; preparation never creates an
+        // extra copy of a saved post merely to resume it.
+        if (context.resume !== false) {
+          const saved = await storage.readPhotoPost(session.workspaceId, originalId); if (!targetCurrent()) return;
+          if (Number.isSafeInteger(revision) && saved.revision !== revision) throw fault('photo_post_changed', '글이 바뀌었습니다. 작성 준비에서 다시 이어쓰기를 선택해 주세요.');
+          if (saved.status === 'saved' && !saved.archived) {
+            const rows = await storage.listPhotoPosts(session.workspaceId); if (!targetCurrent()) return;
+            for (const row of rows.filter(value => value.status === 'draft' && !value.archived).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))) {
+              const draft = await storage.readPhotoPost(session.workspaceId, row.id).catch(error => { if (error.code !== 'photo_post_missing') throw error; return null; });
+              if (!targetCurrent()) return;
+              if (draft?.status === 'draft' && !draft.archived && draft.replaces?.id === saved.id && draft.replaces.revision === saved.revision) { postId = draft.id; revision = draft.revision; break; }
+            }
+          }
+        }
+        if (!targetCurrent()) return;
+        session.materialPlanId = context.planId;
+        session.materialReturn = { planId: context.planId, postId, targetPostId: originalId };
+        session.materialOpen = false; session.searchTarget = { photoPostId: postId, photoPostRevision: revision };
+        session.nineOpen = session.seriesOpen = false; preview = false; clearError(); redraw();
+      };
+      const source = async context => {
+        const targetCurrent = () => active() && session.materialUI?.getView().planId === context.planId;
+        if (!targetCurrent()) return;
+        const bundle = await storage.read(session.workspaceId); if (!targetCurrent()) return;
+        const version = bundle.sourceVersions.find(value => value.id === context.sourceVersionId && value.sourceId === context.sourceId);
+        if (!version || !Object.hasOwn(context, 'contentHash') || version.contentHash !== context.contentHash) throw fault('source_missing', '선택한 정확한 원문을 찾지 못했습니다. 다른 버전으로 바꾸지 않았습니다.');
+        if (context.reference) await life.SourceReference.resolve(bundle, context.reference);
+        if (!targetCurrent()) return;
+        session.materialPlanId = context.planId || session.materialUI?.getView().planId;
+        await openSource(context.sourceId, context.sourceVersionId, { locator: context.locator || null, focusKey: context.focusKey });
+      };
+      session.materialUI ||= life.MaterialWritingUI.create({ storage, workspaceId: session.workspaceId,
+        getBundle: () => storage.read(session.workspaceId), isCurrent: () => workspaceIs(session),
+        onDirty: () => updateStatus(session), onOpenSource: context => session.materialCallbacks.source(context),
+        onOpenPost: context => session.materialCallbacks.openPost(context),
+        onClose: async () => { if (!session.materialOpen || !workspaceIs(session)) return; session.materialOpen = false; clearError(); redraw(); surface.querySelector('#wbPageMaterialWriting')?.focus(); } });
+      session.materialCallbacks = { source, openPost };
+      const mount = session.materialUI.mount(prepareHost, { planId: session.materialPlanId || null });
+      mount.catch(error => { if (active()) report(error, session); });
+      output.append(outputHeading, el('p', '준비에서 만든 글을 저장한 뒤 공개 내용을 검토하거나, 그 글과 채택한 정확한 근거를 파일로 보관합니다. 비교 메모와 질문은 이 파일에 들어가지 않습니다.', 'life-help'));
+      async function openOutput(kind) {
+        const planId = session.materialUI.getView().planId;
+        const request = ++toolSequence;
+        const requested = () => active() && request === toolSequence && session.materialUI.getView().planId === planId;
+        await flush(); if (!requested()) return;
+        const state = await storage.readMaterialWriting(session.workspaceId); if (!requested()) return;
+        const plan = state.plans.find(value => value.id === planId);
+        if (!plan?.output) throw fault('material_output_missing', '먼저 미리보기를 확인해 글 초안을 만들어 주세요.');
+        const doc = await storage.readPhotoPost(session.workspaceId, plan.output.postId); if (!requested()) return;
+        if (kind === 'file' && doc.status !== 'saved') throw fault('material_output_draft', '작성기에서 글을 저장한 뒤 근거 파일로 보관해 주세요.');
+        session.materialPlanId = planId; closeTool(); toolHost.hidden = false; prepareHost.hidden = true; outputActions.hidden = true; output.classList.add('is-open'); outputHeading.textContent = doc.title || '제목 없는 글';
+        const mountedSequence = toolSequence;
+        const currentTool = () => active() && mountedSequence === toolSequence && session.materialUI.getView().planId === planId;
+        const close = action('활용 화면 닫기', async () => { await tool.flush(); if (active()) closeTool(); });
+        toolHost.append(close); const content = el('section'); toolHost.append(content);
+        if (kind === 'public') {
+          sync = life.BlogSync.create({ storage, auth: global.HaedoAuth });
+          manager = life.BlogManager.create({ storage, workspaceId: session.workspaceId, auth: global.HaedoAuth, blogSync: sync, isCurrent: currentTool,
+            openPost: (postId, options = {}) => openPost({ postId, revision: options.expectedRevision, planId, resume: false }),
+            onOpenEvidence: (reference, context = {}) => source({ ...reference, reference, planId, focusKey: context.focusKey }) });
+          await manager.mount(content, { postId: doc.id, viewState: { filter: doc.archived ? 'archived' : 'all' } });
+        } else {
+          const service = life.Preservation.create({ storage, workspaceId: session.workspaceId, isCurrent: currentTool });
+          preservation = life.PreservationUI.create({ service, isCurrent: currentTool,
+            onOpen: typeof onRestored === 'function' ? async id => {
+              await flush(); await beforeRestore(); if (!currentTool()) return;
+              const bundle = await storage.read(id); if (!currentTool()) return;
+              await storage.setActive(id); if (!currentTool()) return;
+              await onRestored({ bundle });
+            } : null });
+          await preservation.mount(content, { postIds: [doc.id] });
+        }
+        if (currentTool()) { toolHost.tabIndex = -1; toolHost.focus({ preventScroll: true }); toolHost.scrollIntoView({ block: 'start', behavior: 'instant' }); }
+      }
+      const manage = action('이 글 공개·보관 관리', () => openOutput('public')); manage.id = 'mwManageOutput';
+      const preserve = action('이 글 근거 파일 보관·복원', () => openOutput('file')); preserve.id = 'mwPreserveOutput';
+      outputActions.append(manage, preserve); output.append(outputActions, toolHost); bodyNode.append(prepareHost, output);
+      viewCleanups.push(() => { session.materialUI.detach(); closeTool(); if (session.materialTool === tool) session.materialTool = null; });
+    }
     function renderPage() {
       const session = current, page = session.state.page;
       const token = generation, beginPost = session.pageCompose === true;
       const requestedPost = !!session.pageDraftId || !!session.searchTarget?.postId || !!session.searchTarget?.photoPostId;
       const showProfile = session.pageProfile === true, editProfile = session.pageProfileEdit === true;
       session.pageCompose = session.pageProfile = session.pageProfileEdit = false;
+      if (session.materialOpen) { renderMaterialWriting(session, token); return; }
       if (session.blogContext && (editProfile || session.blogProfile)) { renderBlogProfile(session); return; }
       if (session.seriesOpen) {
         const back = action('내 페이지로 돌아가기', async () => {
@@ -1198,6 +1295,10 @@
         const token = generation; await flush(); if (!showing(token, session)) return;
         rememberPageEditor(); session.seriesOpen = true; session.seriesReading = null; clearError(); redraw();
       }); series.id = 'wbPageSeries'; actions.append(series);
+      const material = action('자료로 글쓰기', async () => {
+        const token = generation; await flush(); if (!showing(token, session)) return;
+        rememberPageEditor(); session.materialOpen = true; session.nineOpen = session.seriesOpen = false; preview = false; clearError(); redraw();
+      }); material.id = 'wbPageMaterialWriting'; actions.append(material);
       if (saveControl) actions.append(saveControl);
       if (preview) {
         const narrow = action('좁은 폭으로 보기', () => {
@@ -1262,16 +1363,27 @@
       session.postEditorView = { token, hosts: { photo: photoHost, legacy: composerHost }, modes: {}, active: null };
       session.photoPosts ||= life.PhotoPostUI.create({ storage, workspaceId: session.workspaceId, isCurrent: () => workspaceIs(session), onDirty: () => updateStatus(session), onSaved: onLocalSaved,
         onReturn: async context => {
+          if (session.materialReturn && context.id) {
+            const token = generation, destination = session.materialReturn;
+            let related = destination.postId === context.id || destination.targetPostId === context.id;
+            if (!related) {
+              const draft = await storage.readPhotoPost(session.workspaceId, context.id).catch(error => { if (error.code !== 'photo_post_missing') throw error; return null; });
+              if (!showing(token, session) || session.materialReturn !== destination) return true;
+              related = !!draft?.replaces && (draft.replaces.id === destination.targetPostId || draft.replaces.id === destination.postId);
+            }
+            if (related) { session.materialPlanId = destination.planId; session.searchTarget = null; session.materialOpen = true; clearError(); redraw(); return true; }
+          }
           if (session.nineComposeReturn?.postId === context.id) { session.searchTarget = null; session.nineOpen = true; clearError(); redraw(); return true; }
           if (!session.blogContext) return false; await onBlogReturn({ ...context, kind: 'photo' }); return true;
         },
-        onCommitted: context => { if (session.nineComposeTarget?.postId === context.previousId) session.nineComposeTarget.postId = context.id; if (session.blogContext) session.blogCommitted = { ...context, kind: 'photo' }; notifyPostMode(session, 'photo', { ...context, mode: 'read', committed: true }); },
+        onCommitted: context => { if (session.materialReturn && [session.materialReturn.postId, session.materialReturn.targetPostId].includes(context.previousId)) { session.materialReturn.postId = context.id; session.materialReturn.targetPostId = context.id; } if (session.nineComposeTarget?.postId === context.previousId) session.nineComposeTarget.postId = context.id; if (session.blogContext) session.blogCommitted = { ...context, kind: 'photo' }; notifyPostMode(session, 'photo', { ...context, mode: 'read', committed: true }); },
         onModeChange: context => notifyPostMode(session, 'photo', context),
         beforeOpen: async () => { await session.composer?.flush(); } });
       const nineReadBack = !!(session.ninePostReturn || (session.nineComposeReturn && session.nineComposeReturn.postId === session.searchTarget?.photoPostId));
+      const materialReadBack = !!session.materialReturn && !!session.searchTarget?.photoPostId && session.materialReturn.postId === session.searchTarget.photoPostId;
       const photoMount = session.photoPosts.mount(photoHost, { standalone: blogTask, postId: session.searchTarget?.photoPostId || null, expectedRevision: session.ninePostReference?.postRevision ?? session.searchTarget?.photoPostRevision, reset: beginPost || showProfile || !!session.searchTarget && !session.searchTarget.photoPostId,
-        onReadBack:nineReadBack?async()=>{const token=generation;await session.photoPosts.flush();if(!showing(token,session))return;session.ninePostReference=null;session.searchTarget=null;session.nineOpen=true;redraw();}:null,
-        readBackLabel:nineReadBack?'9칸 구성으로 돌아가기':undefined,
+        onReadBack:materialReadBack?async()=>{const token=generation;await session.photoPosts.flush();if(!showing(token,session))return;session.materialPlanId=session.materialReturn.planId;session.searchTarget=null;session.materialOpen=true;redraw();}:nineReadBack?async()=>{const token=generation;await session.photoPosts.flush();if(!showing(token,session))return;session.ninePostReference=null;session.searchTarget=null;session.nineOpen=true;redraw();}:null,
+        readBackLabel:materialReadBack?'작성 준비로 돌아가기':nineReadBack?'9칸 구성으로 돌아가기':undefined,
         listHost: postFeed, onFeed: rows => { photoRows = rows; mergeFeed(); } }); viewCleanups.push(() => session.photoPosts.detach());
       session.composer ||= life.PageComposer.create({ storage, workspaceId: session.workspaceId,
         onNewPost: () => session.photoPosts.begin(),
@@ -2907,7 +3019,7 @@
       rememberPageEditor();
       cleanupView();
       bodyNode.replaceChildren();
-      if (saveControl) saveControl.hidden = ['public-pages', 'related', 'workbench-backup'].includes(mode) || !!incoming || mode === 'page' && (!!current.share?.open || !!current.nineOpen);
+      if (saveControl) saveControl.hidden = ['public-pages', 'related', 'workbench-backup'].includes(mode) || !!incoming || mode === 'page' && (!!current.share?.open || !!current.nineOpen || !!current.materialOpen);
       if (mode === 'public-pages') { renderPublicPages(); return; }
       if (incoming && ['activities', 'page', 'reflection'].includes(mode)) { renderIncoming(); updateStatus(current); return; }
       if (mode === 'activities') renderActivities();
@@ -2938,6 +3050,11 @@
         view.contextError = valid ? '' : '기준 기록의 작업공간이나 버전을 확인하지 못했습니다. 현재 공간에서 기록을 다시 골라 주세요.';
       }
       if (mode === 'page') {
+        const targetPost = options.searchTarget?.photoPostId;
+        if (options.pageCompose || options.pageProfile || options.pageProfileEdit || options.pageDraftId || options.searchTarget || options.nineTarget || options.nineReference || options.selection) {
+          current.materialOpen = false;
+          if (!targetPost || !current.materialReturn || ![current.materialReturn.postId, current.materialReturn.targetPostId].includes(targetPost)) current.materialReturn = null;
+        }
         current.blogContext = options.blogContext === true;
         current.blogProfile = options.blogContext === true && options.pageProfileEdit === true;
         current.blogKind = options.pageCompose || options.searchTarget?.photoPostId ? 'photo' : 'legacy';

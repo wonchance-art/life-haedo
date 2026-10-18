@@ -22,6 +22,19 @@
 자체 구현을 선택한다면 후보가 충족하지 못하는 요구와 직접 유지할 범위를 짧게 적는다.
 큰 기반 모듈을 다 만든 뒤 라이브러리를 찾아보는 순서로 진행하지 않는다. 해당 단계의 소수 후보와 작은 실행 검증으로 결정을 내린다.
 
+## 자료 비교·개요에서 기존 글 완성 — 2026-10-19 KST
+
+공식 조회일은 2026-10-18 UTC(2026-10-19 KST). 자료를 나란히 읽고 필요한 구절·자기 문단을 고르는 이번 작업에 diff·드래그 라이브러리가 필요한지 비교했다. 새 의존성을 추가하지 않으며 기존 SourceReference/BlogEvidence·PhotoPost/Quill·idb·근거 파일을 재사용한다.
+
+| 후보 | 확인한 버전·라이선스·상태 | 요구와의 대조·결정 |
+| --- | --- | --- |
+| [jsdiff](https://github.com/kpdecker/jsdiff) | 공식 master package.json 9.0.0, 고정 v9.0.0 LICENSE BSD-3-Clause. archived/disabled=false, 최신 확인 커밋 `4ee9d163506fb6184625e0663a1d313b94650aad`(2026-10-16). releases/latest는 404, tags 조회 제한으로 **최신 발행 릴리스 일자는 미확인** | 서로 다른 자료의 견해를 읽고 정확 구절을 채택하는 요구는 텍스트 버전 diff와 다르다. 비교 화면·정확 참조는 기존 DOM/SourceReference로 구현하며 코드 도입은 보류 |
+| [SortableJS 1.15.7](https://github.com/SortableJS/Sortable/releases/tag/1.15.7) | 공식 최신 릴리스 2026-02-11T22:31:13Z, 태그 LICENSE MIT. archived=false, 확인 HEAD `48b626bbc61afbb0f179730c1dd3cca3dcc8b788`(2026-03-24) | 순서 있는 개요는 네이티브 입력과 위/아래 버튼으로 키보드·터치에서 조작할 수 있다. 현재 요구만으로 drag 계층·추가 수명주기를 도입하지 않음 |
+
+공식 근거: jsdiff [package.json](https://raw.githubusercontent.com/kpdecker/jsdiff/master/package.json), [고정 라이선스](https://github.com/kpdecker/jsdiff/blob/v9.0.0/LICENSE), [커밋](https://api.github.com/repos/kpdecker/jsdiff/commits?per_page=1); SortableJS [고정 라이선스](https://github.com/SortableJS/Sortable/blob/1.15.7/LICENSE), [커밋](https://api.github.com/repos/SortableJS/Sortable/commits?per_page=1).
+
+jsdiff 공식 [GHSA-73rr-hh4g-fpgx / CVE-2026-24001](https://github.com/kpdecker/jsdiff/security/advisories/GHSA-73rr-hh4g-fpgx)(2026-01-14)는 parsePatch/applyPatch의 서비스 거부를 설명하고 수정 버전 8.0.3/5.2.2/4.0.4/3.5.1을 제시하며 다른 diff API는 영향이 없다고 명시한다. 이번 기능은 해당 코드를 도입하지 않는다. [SortableJS 공개 권고](https://github.com/SortableJS/Sortable/security/advisories)는 조회 시 게시된 권고가 없었으며 취약점 부재를 보장하지 않는다. 실제 자료 버전 차이 계산이나 drag가 필요한 사용 사례가 확인되면 해당 버전·권고·라이선스·오프라인/입력 품질을 다시 검토한다. 공식 자료 조사와 이번 앱의 실제 통합·성능 검수를 구분한다.
+
 ## R1 저장 계층: 우선 비교한 후보
 
 버전·날짜는 조회 시 공식 안정 배포 정보다. idb는 GitHub Releases 게시물 대신 태그와 npm 게시 정보를 확인했다.

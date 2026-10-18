@@ -214,7 +214,9 @@
         catch (_) { if (valid()) showError('새 공간 복원은 완료했습니다. 화면 목록을 갱신하지 못했으니 관리에서 작업공간을 다시 확인해 주세요.'); }
       }
     }
-    async function mount(container) {
+    async function mount(container, { postIds: selectedPosts = [] } = {}) {
+      if (!Array.isArray(selectedPosts) || selectedPosts.length > 20 || selectedPosts.some(id => typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(id))) throw new Error('파일에 담을 글의 선택을 확인해 주세요.');
+      for (const id of selectedPosts) postIds.add(id);
       host = container; surface = node('section', null, 'preservation'); surface.id = 'lifePreservation'; state('loading');
       status = node('p', '', 'life-meta'); status.id = 'preservationStatus'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
       error = node('p', '', 'life-error'); error.id = 'preservationError'; error.setAttribute('role', 'alert'); error.hidden = true;
