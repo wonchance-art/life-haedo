@@ -35,15 +35,39 @@ async function instrument(context) {
 async function release(page) { await page.evaluate(() => { window.__hubHold = false; for (const resolve of window.__hubReleases || []) resolve(); window.__hubReleases = []; }); }
 async function captureBatch(page, scene) {
   if (process.env.IMPORT_HUB_NO_CAPTURE) return;
-  for (const size of [{ width: 1440, height: 1000 }, { width: 820, height: 1000 }, { width: 390, height: 844 }]) {
+  const rowReview = !!process.env.IMPORT_HUB_ROW_REVIEW;
+  if (rowReview && scene !== 'mixed') return;
+  const sizes = rowReview ? [{ width: 1440, height: 1000 }, { width: 390, height: 844 }] : [{ width: 1440, height: 1000 }, { width: 820, height: 1000 }, { width: 390, height: 844 }];
+  for (const size of sizes) {
     await page.setViewportSize(size); await page.evaluate(() => document.fonts.ready); await frames(page);
-    await page.waitForFunction(() => [...document.querySelectorAll('.home-recent-cover')].every(image => image.complete));
+    await page.waitForFunction(() => [...document.querySelectorAll('.home-recent-thumbnail')].every(frame => frame.getAttribute('aria-busy') === 'false') && [...document.querySelectorAll('.home-recent-cover')].every(image => image.complete && image.naturalWidth > 0));
     await page.evaluate(() => { document.activeElement?.blur(); for (const a of document.getAnimations()) if (Number.isFinite(a.effect?.getComputedTiming().endTime)) a.finish(); scrollTo({ top: 0, behavior: 'instant' }); });
     await page.mouse.move(size.width - 1, 0); await frames(page);
     const metrics = await page.evaluate(inspect), file = `${scene}-${size.width}.png`;
     const home = await page.evaluate(() => ({ recent: document.querySelectorAll('.home-recent-item').length, visibleResume: !!document.querySelector('#homeReadingResumeOpen'), duplicateIds: [...new Set([...document.querySelectorAll('[id]')].map(n => n.id))].filter(id => document.querySelectorAll('[id="' + id + '"]').length > 1), rowText: [...document.querySelectorAll('.home-recent-item')].map(n => n.textContent) }));
-    await page.screenshot({ path: path.join(out, file), fullPage: true }); report.captures.push({ scene, file, ...metrics, home });
+    await page.screenshot({ path: path.join(out, file), fullPage: !rowReview }); report.captures.push({ scene, file, ...metrics, home });
   }
+}
+async function simplifiedRows(page, fixture) {
+  if (!process.env.IMPORT_HUB_ROW_REVIEW) return;
+  const rows = await page.locator('.home-recent-item').evaluateAll(rows => rows.map(row => {
+    const preview = row.querySelector('.home-recent-excerpt'), css = preview && getComputedStyle(preview);
+    return { title: row.querySelector('.home-recent-open')?.textContent, meta: row.querySelector('.home-recent-meta')?.textContent,
+      preview: preview?.textContent || '', previewHeight: preview?.getBoundingClientRect().height || 0, lineHeight: css ? parseFloat(css.lineHeight) : 0,
+      times: row.querySelectorAll('time').length, attachmentLists: row.querySelectorAll('.home-recent-attachments').length, text: row.textContent };
+  }));
+  assert.equal(rows.length, 6);
+  for (const row of rows) {
+    assert(row.title.trim(), 'Stored title remains usable'); assert(row.meta?.trim(), 'Source label remains visible');
+    assert.equal(row.times, 0); assert.equal(row.attachmentLists, 0);
+    assert(!/작성자|관계|비공개|브라우저|확보 범위|내 기록|가져옴|수정 |저장 |링크만 보관/.test(row.meta), 'Only source and necessary coverage remain: ' + row.meta);
+    if (row.preview) assert(row.previewHeight <= row.lineHeight + 1, 'Preview occupies at most one line');
+    if (fixture.attachmentTitle) assert(!row.text.includes(fixture.attachmentTitle), 'Attachment title is retained in details, not repeated in home rows');
+  }
+  const nullRow = rows.find(row => row.title === fixture.refs[12].title), partialRow = rows.find(row => row.title === fixture.refs[11].title);
+  assert(nullRow); assert.match(nullRow.meta, /본문 미확보/); assert.equal(nullRow.preview, '');
+  assert(partialRow); assert.match(partialRow.meta, /일부 본문/); assert(partialRow.preview.includes('모든 자료 검색표식 11.'));
+  const latest = rows.find(row => row.title === fixture.refs[0].title); assert(latest); assert.match(latest.meta, /Obsidian/); assert(latest.preview.includes('최신 원문'));
 }
 async function exactReturn(page, control, expectedText, versionId) {
   await control.scrollIntoViewIfNeeded(); await control.focus(); await frames(page);
@@ -86,6 +110,7 @@ async function main() {
     });
     await check('thirteen imported originals: recent six, global search, exact reader and link-only', async ({ page }) => {
       await start(page); const f = await seed(page), before = await fingerprint(page); await reload(page); assert.equal(before.sources, 13); assert.equal(before.versions, 14); assert.equal(await page.locator('.home-recent-item').count(), 6);
+      await simplifiedRows(page, f);
       assert.equal(await page.locator('#homeFirstWrite,.home-hub-empty').count(), 0); assert.equal(await page.locator('.home-recent-item[data-version-id="' + f.oldVersionId + '"]').count(), 0); assert.equal(await page.locator('#homeReadingResumeOpen').count(), 0); await captureBatch(page, 'imported-only');
       await exactReturn(page, page.locator('.home-recent-item[data-version-id="' + f.latestVersionId + '"] .home-recent-open'), f.latestText, f.latestVersionId);
       const link = f.refs.find(row => row.linkOnly); await page.locator('.home-recent-item[data-version-id="' + link.versionId + '"] .home-recent-open').click(); await page.locator('#lifeMain[data-mode="source"]').waitFor(); assert.equal(await page.locator('#lifeSourceText').count(), 0); assert.match(await page.locator('#lifeMain').innerText(), /본문.*(없|미확보)|링크만/); await page.locator('#lifeSearchReturn').click(); await hub(page);
@@ -94,12 +119,13 @@ async function main() {
     });
     await check('mixed originals and saved writing share six recent rows; drafts and archive remain accessible', async ({ page }) => {
       await start(page); const f = await seed(page, 'mixed'), before = await fingerprint(page); await reload(page); await captureBatch(page, 'mixed');
+      await simplifiedRows(page, f);
       assert.equal(await page.locator('.home-recent-item').count(), 6); for (const kind of ['source', 'photo', 'plain']) assert(await page.locator('.home-recent-item[data-home-kind="' + kind + '"]').count() > 0);
       for (const id of [f.draftId, f.archivedId]) assert.equal(await page.locator('.home-recent-item[data-photo-post-id="' + id + '"]').count(), 0);
       const photoControl = page.locator('.home-recent-item[data-photo-post-id="' + f.photoId + '"] .home-recent-open'); await photoControl.scrollIntoViewIfNeeded(); await photoControl.focus(); const photoOrigin = await photoControl.evaluate(el => ({ key: el.dataset.focusKey, y: scrollY }));
       await photoControl.click(); await page.locator('.photo-article').waitFor(); assert.match(await page.locator('.photo-article').innerText(), /익명 사진 글/); await page.locator('.photo-read-return button').click(); await hub(page); await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, photoOrigin.key); assert(Math.abs(await page.evaluate(() => scrollY) - photoOrigin.y) <= 2);
       const plainControl = page.locator('.home-recent-item[data-post-id="' + f.plainId + '"] .home-recent-open'); await plainControl.scrollIntoViewIfNeeded(); await plainControl.focus(); const plainOrigin = await plainControl.evaluate(el => ({ key: el.dataset.focusKey, y: scrollY }));
-      await plainControl.click(); await page.locator('.pp-post').first().waitFor(); assert.match(await page.locator('#lifeMain').innerText(), /익명 첨부 글/); await page.locator('.pp-workspace > .pp-toolbar').getByRole('button', { name: '홈으로 돌아가기', exact: true }).click(); await hub(page); await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, plainOrigin.key); assert(Math.abs(await page.evaluate(() => scrollY) - plainOrigin.y) <= 2);
+      await plainControl.click(); await page.locator('.pp-post').first().waitFor(); assert.match(await page.locator('#lifeMain').innerText(), /익명 첨부 글/); if(f.attachmentTitle) assert((await page.locator('#lifeMain').innerText()).includes(f.attachmentTitle)); await page.locator('.pp-workspace > .pp-toolbar').getByRole('button', { name: '홈으로 돌아가기', exact: true }).click(); await hub(page); await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, plainOrigin.key); assert(Math.abs(await page.evaluate(() => scrollY) - plainOrigin.y) <= 2);
       await page.locator('.home-hub-all').click(); await page.locator('#lifeWritingsOpen').click(); await page.locator('#homePosts').waitFor(); assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'writings'); assert.equal(new URL(page.url()).searchParams.get('view'), 'writings');
       await page.locator('#homeTab-drafts').click(); await page.locator('.home-draft').filter({ hasText: '작성 중인 익명 초안' }).waitFor(); await page.locator('#homeTab-archive').click(); await page.locator('.home-post[data-photo-post-id="' + f.archivedId + '"]').waitFor(); assert.deepEqual(await fingerprint(page), before);
     });

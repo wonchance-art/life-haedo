@@ -448,7 +448,8 @@
             "span",
             (p.visibility === "private" ? "비공개" : "공개 후보") +
               " · " +
-              p.createdAt.slice(0, 10),
+              '작성 ' + p.createdAt.slice(0, 10) +
+              (p.updatedAt !== p.createdAt ? ' · 수정 ' + p.updatedAt.slice(0, 10) : ''),
             "life-meta",
           ),
           button("글 수정", () => begin(p.id), "edit"),

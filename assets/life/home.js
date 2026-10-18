@@ -525,12 +525,12 @@
       open.dataset.focusKey = 'home:recent:' + row.kind + ':' + (row.versionId || row.id);
       heading.append(open); content.append(heading);
       if (row.body?.trim() && String(row.title || '').trim()) content.append(el('p', snippet(row.body), 'home-text home-recent-excerpt'));
-      if (row.kind === 'plain' && row.attachments?.length) content.append(el('p', row.attachments.map(item => item.title).join(' · '), 'home-recent-attachments life-meta'));
       const meta = el('p', null, 'life-meta home-recent-meta');
       const ownSource = row.info && life.Writing?.isOwnSource(row.info.source, getBundle());
-      const time = modifiedDate(row.updatedAt, row.kind === 'source' ? (ownSource ? '저장 ' : '가져옴 ') : '수정 ');
-      if (time) meta.append(time, document.createTextNode(' · '));
-      meta.append(document.createTextNode(row.info ? metadata(row.info) : row.kind === 'photo' ? '직접 쓴 글 · 이 브라우저에 보관' : '직접 쓴 첨부 글 · 비공개'));
+      const facts = [row.info && !ownSource ? ORIGINS[row.info.source.origin] || '기타' : '직접 쓴 글'];
+      if (row.info && row.info.version.contentText == null) facts.push('본문 미확보');
+      else if (row.info?.version.coverage.status === 'partial') facts.push('일부 본문');
+      meta.textContent = facts.join(' · ');
       content.append(meta);
       postCover(context, row, article, () => openHubRow(context, row), true);
       article.append(content);
