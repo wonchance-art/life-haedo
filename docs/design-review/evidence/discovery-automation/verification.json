@@ -1,0 +1,484 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUTC": "2026-10-19T03:26:32.105911+00:00",
+  "scope": "Current main integrated with topic controls, visible-screen refresh and fixed-source public collection. Synthetic accounts/content only for browser checks.",
+  "referenceMain": "38b4559ea28047e3623e27af760d6e5684f45e55",
+  "worker": "haedo-v134",
+  "validation": {
+    "unit": {
+      "passed": 996,
+      "failed": 0
+    },
+    "static": {
+      "html": 22,
+      "javascript": 143,
+      "localReferences": 615
+    },
+    "automationBrowser": {
+      "passed": 21,
+      "failed": 0,
+      "checks": [
+        "default automatic refresh is off and does not run after fifteen visible minutes",
+        "explicit topic input and selection survive reload without editing source originals",
+        "turning off every source is preserved as zero sources in both list orders",
+        "forty stale disabled topic IDs do not block selecting a replacement topic after profile reset",
+        "initial catalogue pending automatic on restarts the initial request and shows the recovered list",
+        "initial catalogue pending automatic off stops without automatic restart and offers explicit reload",
+        "saved automatic refresh requests once when fifteen visible minutes become due",
+        "pending automatic response is discarded after off",
+        "pending automatic response is discarded after leave",
+        "pending automatic response is discarded after hidden",
+        "workspace switch while response is pending keeps the new scope default and source data exact",
+        "actual logout and new account do not reuse topics or automatic preferences",
+        "topic CAS conflict preserves the typed input until explicit latest-state recovery",
+        "settings CAS conflict preserves the requested choice and independent concurrent source selection",
+        "another tab off stops refresh during a pending settings save and conflict discard",
+        "another tab clear stops refresh during a pending settings save and conflict discard",
+        "turning automatic refresh off aborts pending work even when its preference save fails",
+        "automatic catalogue redraw preserves composing text caret and keyboard focus",
+        "synthetic Korean controls overflow focus and visual 1440",
+        "synthetic Korean controls overflow focus and visual 820",
+        "synthetic Korean controls overflow focus and visual 390"
+      ],
+      "productsUnchangedDuringRun": true
+    },
+    "externalDiscoveryBrowser": {
+      "passed": 19,
+      "failed": 0
+    },
+    "workerUpgrade": {
+      "from": "haedo-v133",
+      "to": "haedo-v134",
+      "passed": 9,
+      "failed": 0,
+      "scope": "Prior worker only; current app modules."
+    },
+    "preparedSite": {
+      "passed": 10,
+      "failed": 0,
+      "baselines": [
+        {
+          "sha": "88ccfe5e381a37818a46e7abdaabfc48cff58c56",
+          "cache": "haedo-v126"
+        },
+        {
+          "sha": "38b4559ea28047e3623e27af760d6e5684f45e55",
+          "cache": "haedo-v133"
+        }
+      ],
+      "to": "haedo-v134",
+      "scope": "Actual old generated app shells and configuration with exact module hashes."
+    },
+    "mainEntryCompatibility": {
+      "passed": 5,
+      "failed": 0
+    },
+    "collectorFixtures": {
+      "passed": 29,
+      "failed": 0
+    },
+    "browserUnexpectedConsoleErrors": 0,
+    "browserPageErrors": 0,
+    "privateUploads": 0,
+    "modelOrPublisherBrowserRequests": 0,
+    "productionWrites": 0
+  },
+  "realCollectionDryRun": {
+    "transport": "Approved environment proxy via urllib for fixed own-origin seed/worker; production Node HTTPS separately covered by synthetic transport fixtures.",
+    "okSources": 4,
+    "sourceCount": 5,
+    "articleCount": 50,
+    "generatedAt": "2026-10-19T03:21:53Z",
+    "partialFailure": true,
+    "failureSource": "naver-d2",
+    "candidateSHA256": "be0e56a56450b570aee5c24405b8853c22bdfb9a48f9ac7ce9771b58354f248b",
+    "artifactSHA256": "be0e56a56450b570aee5c24405b8853c22bdfb9a48f9ac7ce9771b58354f248b",
+    "trackedCatalogUnchanged": true,
+    "trackedSHA256": "6a6c63e520328e283d01ca8283a6b9c2259295f5c37fc05d2fb49b27ba057684",
+    "remoteDispatchOrDeployment": false
+  },
+  "screens": [
+    {
+      "width": 1440,
+      "file": "controls-1440.png",
+      "audit": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "focus": "discoveryTopicInput",
+        "fontSize": "16px",
+        "controls": [
+          {
+            "name": "discoveryTopicInput",
+            "width": 536.34375,
+            "height": 48.390625
+          },
+          {
+            "name": "discoveryTopicAdd",
+            "width": 85.78125,
+            "height": 44
+          },
+          {
+            "name": "discoveryTopicDiscard",
+            "width": 81.875,
+            "height": 44
+          },
+          {
+            "name": "discoveryInterest-manual-843f8a2a-fd1e-45d4-8840-2a84188f2a7a",
+            "width": 88.328125,
+            "height": 44
+          },
+          {
+            "name": "discoveryOpenInterests",
+            "width": 69.78125,
+            "height": 44
+          },
+          {
+            "name": "SUMMARY",
+            "width": 46.203125,
+            "height": 44
+          },
+          {
+            "name": "discoveryAutoRefresh",
+            "width": 120,
+            "height": 44
+          },
+          {
+            "name": "discoverySource-naver-d2",
+            "width": 120,
+            "height": 44
+          },
+          {
+            "name": "discoverySource-seoul-culture",
+            "width": 120,
+            "height": 44
+          },
+          {
+            "name": "discoveryRecommended",
+            "width": 66.3125,
+            "height": 44
+          },
+          {
+            "name": "discoveryLatest",
+            "width": 66.3125,
+            "height": 44
+          },
+          {
+            "name": "discoveryRefresh",
+            "width": 121.5625,
+            "height": 44
+          },
+          {
+            "name": "SUMMARY",
+            "width": 44.5,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 107.6875,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 66.078125,
+            "height": 44
+          },
+          {
+            "name": "SUMMARY",
+            "width": 44.5,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 107.6875,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 66.078125,
+            "height": 44
+          },
+          {
+            "name": "SUMMARY",
+            "width": 720,
+            "height": 44
+          }
+        ]
+      },
+      "nextFocus": {
+        "id": "discoveryTopicAdd",
+        "visible": true,
+        "outline": "solid"
+      }
+    },
+    {
+      "width": 820,
+      "file": "controls-820.png",
+      "audit": {
+        "viewport": 820,
+        "documentWidth": 820,
+        "focus": "discoveryTopicInput",
+        "fontSize": "16px",
+        "controls": [
+          {
+            "name": "discoveryTopicInput",
+            "width": 452.34375,
+            "height": 48.390625
+          },
+          {
+            "name": "discoveryTopicAdd",
+            "width": 85.78125,
+            "height": 44
+          },
+          {
+            "name": "discoveryTopicDiscard",
+            "width": 81.875,
+            "height": 44
+          },
+          {
+            "name": "discoveryInterest-manual-b5a129db-efbb-475b-9289-56f513f9b54f",
+            "width": 88.328125,
+            "height": 44
+          },
+          {
+            "name": "discoveryOpenInterests",
+            "width": 69.78125,
+            "height": 44
+          },
+          {
+            "name": "SUMMARY",
+            "width": 46.203125,
+            "height": 44
+          },
+          {
+            "name": "discoveryAutoRefresh",
+            "width": 120,
+            "height": 44
+          },
+          {
+            "name": "discoverySource-naver-d2",
+            "width": 120,
+            "height": 44
+          },
+          {
+            "name": "discoverySource-seoul-culture",
+            "width": 120,
+            "height": 44
+          },
+          {
+            "name": "discoveryRecommended",
+            "width": 66.3125,
+            "height": 44
+          },
+          {
+            "name": "discoveryLatest",
+            "width": 66.3125,
+            "height": 44
+          },
+          {
+            "name": "discoveryRefresh",
+            "width": 121.5625,
+            "height": 44
+          },
+          {
+            "name": "SUMMARY",
+            "width": 44.5,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 107.6875,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 66.078125,
+            "height": 44
+          },
+          {
+            "name": "SUMMARY",
+            "width": 44.5,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 107.6875,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 66.078125,
+            "height": 44
+          },
+          {
+            "name": "SUMMARY",
+            "width": 636,
+            "height": 44
+          }
+        ]
+      },
+      "nextFocus": {
+        "id": "discoveryTopicAdd",
+        "visible": true,
+        "outline": "solid"
+      }
+    },
+    {
+      "width": 390,
+      "file": "controls-390.png",
+      "audit": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "focus": "discoveryTopicInput",
+        "fontSize": "16px",
+        "controls": [
+          {
+            "name": "discoveryTopicInput",
+            "width": 256.21875,
+            "height": 48.390625
+          },
+          {
+            "name": "discoveryTopicAdd",
+            "width": 85.78125,
+            "height": 44
+          },
+          {
+            "name": "discoveryTopicDiscard",
+            "width": 81.875,
+            "height": 44
+          },
+          {
+            "name": "discoveryInterest-manual-c3864489-58e5-4be8-8d7f-214bb3adc2d8",
+            "width": 88.328125,
+            "height": 44
+          },
+          {
+            "name": "discoveryOpenInterests",
+            "width": 69.78125,
+            "height": 44
+          },
+          {
+            "name": "SUMMARY",
+            "width": 46.203125,
+            "height": 44
+          },
+          {
+            "name": "discoveryAutoRefresh",
+            "width": 120,
+            "height": 44
+          },
+          {
+            "name": "discoverySource-naver-d2",
+            "width": 120,
+            "height": 44
+          },
+          {
+            "name": "discoverySource-seoul-culture",
+            "width": 120,
+            "height": 44
+          },
+          {
+            "name": "discoveryRecommended",
+            "width": 60.3125,
+            "height": 44
+          },
+          {
+            "name": "discoveryLatest",
+            "width": 60.3125,
+            "height": 44
+          },
+          {
+            "name": "discoveryRefresh",
+            "width": 106.765625,
+            "height": 44
+          },
+          {
+            "name": "SUMMARY",
+            "width": 44.5,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 97.6875,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 64.078125,
+            "height": 44
+          },
+          {
+            "name": "SUMMARY",
+            "width": 44.5,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 97.6875,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "name": "BUTTON",
+            "width": 64.078125,
+            "height": 44
+          },
+          {
+            "name": "SUMMARY",
+            "width": 350,
+            "height": 44
+          }
+        ]
+      },
+      "nextFocus": {
+        "id": "discoveryTopicAdd",
+        "visible": true,
+        "outline": "solid"
+      }
+    }
+  ],
+  "sourceSHA256": {
+    "assets/life/discovery-ui.js": "34d0e834f079c97bd84421659980572b7077c3dd6bbff5086d5ddc2615f3f91b",
+    "assets/life/discovery-settings.js": "f6d8f710d848b15ec4b9fa4f7df2b5e295fcac5a2d1b05aee4737110606708bc",
+    "assets/life/storage.js": "4090ef01d059864d750d61146983df2f8dd8d9325e0dc35415c4e598937afedd",
+    "assets/life/discovery.js": "bf514ade159c5b7a815c07123ad7d1e6905596a87ab1cb7eadc9f04c9c329196",
+    "sw.js": "ad8509dd15a07362cfd101519beb91a8e13d4327040691b667571d65d3514fa2",
+    ".github/workflows/pages.yml": "e6a9b9c04b9b03c2434c2fa60a975860ffb2fd830b0804cb109804941f787154",
+    "scripts/refresh-discovery-artifact.cjs": "3605c0063038f8439b987d036609f5cf031af88c09c50dda27aace2521436c36",
+    "tests/life-discovery-automation-browser.cjs": "44d00ea69fe333d50451f8b245c323d92c8ba34fa9d927af7bd6e4045472aea0"
+  },
+  "limits": [
+    "Actual Google login and Apple hardware unverified.",
+    "Visibility and composition are explicit synthetic browser events.",
+    "User reading intent and usefulness unassessed.",
+    "Schedule activation and production deployment have not been executed."
+  ]
+}

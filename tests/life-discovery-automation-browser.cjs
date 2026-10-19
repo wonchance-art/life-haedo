@@ -108,6 +108,30 @@ async function main() {
       assert.equal(await page.locator('[data-discovery-id]').count(), 0); await page.locator('#discoveryLatest').click(); assert.equal(await page.locator('[data-discovery-id]').count(), 0);
       await page.reload(); await ready(page); await idle(page); await options(page); assert.equal(await page.locator('[data-discovery-source]:checked').count(), 0); assert.equal(await page.locator('[data-discovery-id]').count(), 0); assert.deepEqual(new Set((await snapshot(page)).settings.disabledSourceIds), new Set(ids)); await preserve(page, before);
     });
+    await check('forty stale disabled topic IDs do not block selecting a replacement topic after profile reset', async ({ page }) => {
+      const before = await seed(page);
+      await page.evaluate(async () => {
+        const s = HaedoLife.Shell.storage, w = await s.getActive(), P = HaedoLife.InterestProfile, S = HaedoLife.DiscoverySettings;
+        let p = await s.readInterestProfile(w); const old = Array.from({ length: 40 }, (_, n) => ({ id: 'retired-topic-' + n, label: '이전 합성 주제 ' + n }));
+        let result = await s.saveInterestProfile(w, P.setManual(p, old, { expectedRevision: p.revision }), p.revision); if (result.status !== 'stored') throw Error('Old-topic fixture failed');
+        const settings = await s.readDiscoverySettings(w), next = S.update(settings, { disabledInterestIds: old.map(x => x.id) }, { expectedRevision: settings.revision }); if ((await s.saveDiscoverySettings(w, next, settings.revision)).status !== 'stored') throw Error('Disabled-topic fixture failed');
+        p = result.profile; result = await s.saveInterestProfile(w, P.clear(p, { expectedRevision: p.revision }), p.revision); if (result.status !== 'stored') throw Error('Profile reset fixture failed');
+        p = result.profile; const fresh = Array.from({ length: 40 }, (_, n) => ({ id: 'replacement-topic-' + n, label: '새 합성 주제 ' + n })); if ((await s.saveInterestProfile(w, P.setManual(p, fresh, { expectedRevision: p.revision }), p.revision)).status !== 'stored') throw Error('Replacement-topic fixture failed');
+      });
+      await page.reload(); await ready(page); await idle(page); const unchanged = await snapshot(page); assert.equal(unchanged.settings.disabledInterestIds.length, 40); assert.ok(unchanged.settings.disabledInterestIds.every(id => id.startsWith('retired-'))); assert.equal(unchanged.profile.manual.length, 40);
+      await page.locator('[data-discovery-interest="replacement-topic-0"]').uncheck(); await idle(page); await wait(page, async () => { const s = HaedoLife.Shell.storage, value = await s.readDiscoverySettings(await s.getActive()); return value.disabledInterestIds.length === 1 && value.disabledInterestIds[0] === 'replacement-topic-0'; }, null, 'explicit replacement-topic selection');
+      const after = await preserve(page, before); assert.equal(after.settings.revision, unchanged.settings.revision + 1); assert.equal(after.profile.manual.length, 40); await page.reload(); await ready(page); await idle(page); assert.equal(await page.locator('[data-discovery-interest="replacement-topic-0"]').isChecked(), false);
+    });
+    for (const enabled of [true, false]) await check('initial catalogue pending automatic ' + (enabled ? 'on restarts the initial request and shows the recovered list' : 'off stops without automatic restart and offers explicit reload'), async ({ page, control }) => {
+      const before = await seed(page); if (!enabled) await auto(page, true);
+      control.hold = true; control.value = fixture('initial-late'); const firstCount = control.count, initial = control.next(); await page.reload({ waitUntil: 'domcontentloaded' }); await initial;
+      await wait(page, () => !!globalThis.HaedoLife?.Shell?.storage && !!document.querySelector('#discoveryAutoRefresh') && !document.querySelector('#discoveryAutoRefresh').disabled, null, 'initial pending editor');
+      await options(page); control.value = fixture('initial-recovered'); const restarted = enabled ? control.next() : null; await page.locator('#discoveryAutoRefresh').setChecked(enabled);
+      await wait(page, async enabled => { const s = HaedoLife.Shell.storage; return (await s.readDiscoverySettings(await s.getActive())).autoRefresh === enabled; }, enabled, 'initial-pending automatic preference');
+      if (enabled) { await restarted; assert.equal(control.count, firstCount + 2); control.release(); await idle(page); assert.ok(await page.locator('[data-discovery-id^="initial-recovered-"]').count() > 0); assert.equal(await page.locator('[data-discovery-id^="initial-late-"]').count(), 0); }
+      else { await idle(page); const stoppedCount = control.count; assert.equal(stoppedCount, firstCount + 1); control.release(); await page.waitForTimeout(120); await clock(page); await advance(page, 16 * MINUTE); assert.equal(control.count, stoppedCount); assert.equal(await page.locator('[data-discovery-id]').count(), 0); assert.match(await page.locator('#discoveryStatus').textContent(), /목록 다시 불러오기/); await page.locator('#discoveryRefresh').click(); await idle(page); assert.equal(control.count, stoppedCount + 1); assert.ok(await page.locator('[data-discovery-id^="initial-recovered-"]').count() > 0); }
+      await preserve(page, before);
+    });
     await check('saved automatic refresh requests once when fifteen visible minutes become due', async ({ page, control }) => {
       const before = await seed(page); await clock(page); await auto(page, true); const count = control.count; await advance(page, 14 * MINUTE + 59000); assert.equal(control.count, count); const arrived = control.next(); await advance(page, 2000); await arrived; await idle(page); assert.equal(control.count, count + 1); await preserve(page, before); assert.equal((await snapshot(page)).profile.manual.length, before.profile.manual.length);
     });
