@@ -111,6 +111,11 @@
       if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '발견 피드백 모듈을 불러오지 못했습니다.');
       return value;
     };
+    const discoverySettings = () => {
+      const value = options.discoverySettings || root.HaedoLife?.DiscoverySettings;
+      if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '새 글 찾기 설정 모듈을 불러오지 못했습니다.');
+      return value;
+    };
     function notify(event) {
       if (disposed) return;
       const callbacks = event.type === 'error'
@@ -187,6 +192,10 @@
           if (data?.sender !== sender && data?.type === 'discovery_profile_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 1) {
             notify({ type: 'discovery_profile_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'discovery_settings_changed' && typeof data.workspaceId === 'string' &&
+              Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'discovery_settings_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
         };
       } catch (_) { channel = null; }
@@ -645,6 +654,48 @@
       });
       if (result.status === 'stored') {
         const event = { type: 'discovery_profile_changed', workspaceId, revision: result.profile.revision };
+        notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
+      }
+      return result;
+    }
+    // Controls are separate from interests and feedback. A reset keeps its
+    // revision/tombstone, preventing a delayed old tab from enabling automation.
+    const discoverySettingsKey = workspaceId => `discoverySettings:${accountKey}:${workspaceId}`;
+    function validateDiscoverySettings(value, workspaceId) {
+      discoverySettings().validate(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '새 글 찾기 설정의 작업공간이 다릅니다.');
+      if (new TextEncoder().encode(stablePayload(value)).length >= 32 * 1024) {
+        throw fault('discovery_settings_too_large', '새 글 찾기 설정이 너무 큽니다. 기존 설정은 보존했습니다.');
+      }
+    }
+    async function discoverySettingsValue(meta, workspaceId) {
+      return privateProfileValue(meta, discoverySettingsKey(workspaceId), workspaceId, discoverySettings(), validateDiscoverySettings);
+    }
+    async function readDiscoverySettings(workspaceId) {
+      privateProfileScope(workspaceId, '새 글 찾기 설정을');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await discoverySettingsValue(meta, workspaceId));
+      });
+    }
+    async function saveDiscoverySettings(workspaceId, input, baseRevision) {
+      privateProfileScope(workspaceId, '새 글 찾기 설정을'); requireRevision(baseRevision, 'baseRevision');
+      validateDiscoverySettings(input, workspaceId);
+      const value = clone(input);
+      if (baseRevision === Number.MAX_SAFE_INTEGER || value.revision !== baseRevision + 1) {
+        throw fault('discovery_settings_conflict', '새 글 찾기 설정의 저장 기준을 확인해 주세요.');
+      }
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await discoverySettingsValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) return { status: 'conflict', settings: clone(previous) };
+        await meta.put({ key: discoverySettingsKey(workspaceId), value });
+        return { status: 'stored', settings: clone(value) };
+      });
+      if (result.status === 'stored') {
+        const event = { type: 'discovery_settings_changed', workspaceId, revision: result.settings.revision };
         notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
       }
       return result;
@@ -2226,6 +2277,7 @@
       readReadingPosition, saveReadingPosition, clearReadingPosition,
       readInterestProfile, saveInterestProfile,
       readDiscoveryProfile, saveDiscoveryProfile,
+      readDiscoverySettings, saveDiscoverySettings,
       readCollection, saveCollection, readNineBoard, saveNineBoard, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       readPreservationCatalog, readPreservationSnapshot, installPreservationCopy,

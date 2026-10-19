@@ -1,5 +1,12 @@
 # 오픈소스 검토와 재사용 결정
 
+## 주제·옵션과 자동 갱신 — 2026-10-19 KST
+
+기존 Discovery/InterestProfile, 계정·공간별 Storage/idb CAS, Python 표준 라이브러리 수집기와 GitHub Pages Actions를 재사용한다. 브라우저의 네이티브 타이머·Page Visibility·AbortController로 15분 화면 갱신을 제어하므로 새 scheduler 라이브러리·백그라운드 작업 서버를 넣지 않는다. 앱이 닫힌 동안의 공개 수집은 기존 CI의 `schedule`로 분리한다. 기존 pinned Actions 버전·라이선스 고지를 유지하며 패키지·전이 의존성을 추가하지 않는다. 범용 작업 큐·크론 서버·클라이언트 RSS parser 도입은 이 정적 사이트의 고정 공개 메타데이터 수집에 필요한 범위보다 크다.
+
+공식 [GitHub schedule 문서](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule), [Page Visibility](https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API), [AbortController](https://developer.mozilla.org/en-US/docs/Web/API/AbortController)의 실행·취소 모델을 설계 참고로 삼는다. 정시 실행 보장이나 브라우저가 닫힌 동안의 타이머 실행을 가정하지 않는다. 기존 feedparser/idb 비교·권리·제한 파서 검토는 아래 이력을 재사용한다. [계약·구현·검수](../design-review/discovery-automation.md).
+
+
 ## 공급 보완·비교 준비 — 2026-10-19 KST
 
 앞선 feedparser 6.0.14/BSD-2-Clause와 Python 표준 XML 보안·idb 비교를 재사용한다. 고정 피드 2개를 추가하되 새 parser/검색/모델 패키지는 도입하지 않는다. collector와 브라우저의 query 정체성·미래 날짜 해석을 맞추고 새 RSS도 같은 제한 파서·robots·권리·원자 저장 계약을 통과시켰다. Node 비교 CLI는 기존 Discovery.rank/validateFeed/canonicalUrl을 그대로 재사용하며 공개 고정 표본의 두 순서를 읽기 전용으로 투영한다. 별도 추천 엔진·개인자료 전송·사용자 판단 자동 생성·기존 검토 덮어쓰기는 추가하지 않는다. 새 인덱스/라이브러리 도입은 실제 크기·오타/의미 검색 요구가 기존 계약보다 나을 때 다시 비교한다. [선택·공식 권리 근거·미채택 대안·검수](../design-review/discovery-expansion.md).
