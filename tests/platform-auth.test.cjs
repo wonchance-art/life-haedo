@@ -118,6 +118,30 @@ test('public home bfcache keeps cached personal DOM hidden until its shell remou
   assert.equal(state.navigations.length, 0); auth.dispose();
 });
 
+test('a workspace captures before conceal and owns one verified resume without generic reveal', async () => {
+  const { auth, state, env, pageHandlers } = setup();
+  await auth.verify();
+  const epoch = auth.epoch;
+  const calls = state.calls.filter(name => name === 'getUser').length;
+  let resumed = 0, suspension;
+  env.document.dispatchEvent = event => {
+    state.events.push(event);
+    if (event.type === 'haedo:page-suspend') suspension = { hidden: state.privateElement.hidden, epoch: auth.epoch };
+    if (event.type === 'haedo:page-resume') { resumed++; event.preventDefault(); }
+    return !event.defaultPrevented;
+  };
+  pageHandlers.get('pagehide')();
+  assert.deepEqual(suspension, { hidden: false, epoch });
+  assert.equal(state.privateElement.hidden, true);
+  assert.equal(auth.epoch, epoch + 1);
+  await pageHandlers.get('pageshow')({ persisted: true });
+  assert.equal(resumed, 1);
+  assert.equal(state.calls.filter(name => name === 'getUser').length, calls);
+  assert.equal(state.privateElement.hidden, true);
+  assert.equal(state.navigations.length, 0);
+  auth.dispose();
+});
+
 test('leaving the public home cancels a pending verification before it can expose an account', async () => {
   const { auth, state, pageHandlers } = setup({ pathname: '/', publicHome: true });
   const waiting = deferred(); state.userPromise = waiting.promise;
