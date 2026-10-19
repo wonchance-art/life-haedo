@@ -1,0 +1,101 @@
+{
+  "checkedAt": "2026-10-19T13:15:45.625709+00:00",
+  "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+  "pythonDefaultQueueSize": 5,
+  "osSomaxconn": "4096",
+  "osTcpMaxSynBacklog": "2048",
+  "conditions": "Same app, actual sourceRouting, FakeCloud, Chromium153, default load navigation/ready/visible assertions, 25000ms timeout and12-round cap; only server listen backlog differs. Both use the same timing instrumentation.",
+  "runs": [
+    {
+      "backlog": 5,
+      "driverExit": 0,
+      "pass": false,
+      "passedRounds": 5,
+      "failedRound": 6,
+      "roundMilliseconds": [
+        1625,
+        1676,
+        1692,
+        3032,
+        1291
+      ],
+      "maxObservedAcceptQueue": 6,
+      "maxSynSent": 73,
+      "globalTcpExtDelta": {
+        "ListenOverflows": 672,
+        "ListenDrops": 672,
+        "SyncookiesSent": 136,
+        "TCPReqQFullDoCookies": 136,
+        "TCPReqQFullDrop": 0
+      },
+      "routeErrors": 0,
+      "routeCancellations": 3,
+      "serverHTTPStarts": 805,
+      "serverHTTPEnds": 805
+    },
+    {
+      "backlog": 128,
+      "driverExit": 0,
+      "pass": true,
+      "passedRounds": 12,
+      "failedRound": null,
+      "roundMilliseconds": [
+        544,
+        357,
+        381,
+        385,
+        377,
+        382,
+        435,
+        382,
+        406,
+        348,
+        370,
+        365
+      ],
+      "maxObservedAcceptQueue": 79,
+      "maxSynSent": 1,
+      "globalTcpExtDelta": {
+        "ListenOverflows": 0,
+        "ListenDrops": 0,
+        "SyncookiesSent": 0,
+        "TCPReqQFullDoCookies": 0,
+        "TCPReqQFullDrop": 0
+      },
+      "routeErrors": 0,
+      "routeCancellations": 0,
+      "serverHTTPStarts": 1620,
+      "serverHTTPEnds": 1620
+    }
+  ],
+  "sourceHashesBefore": {
+    "scripts/dev-server.py": "4ed35ec393e9308222e220e19eac7832a6c894a84e300348acab3834c5947b86",
+    "tests/integrated-release-browser.cjs": "374e4ba39df17e709f59242599a218a367fda88529448335467f56dde946f549",
+    "tests/unified-home-browser.cjs": "1fbafcba0bc2c965f0f1ccd02e3eaf8b190718ecb92c6f8547d88762f0002f81",
+    "index.html": "0dc27b552e8755c314a4e95cfc7bf6d7c9b6844ab6b52721c5763fac81a13fe2",
+    "assets/life/core.js": "6ad03c873ea3411dc7f8a432e7637502d1ce59271253db04e229429f99308ff4",
+    "assets/life/ui.js": "bf7c539b610ea2643ef607c5c460dfca2f6d53dd9194219846fddb43c7a4ede0",
+    "assets/life/shell.js": "44414476702db4c8e0ef8515b6e6deb5ff549b8a26c64fb4501bac1b199b29ce",
+    "assets/platform-auth.js": "37a97153a39b61df30dfb74784d3740382a648f635a1f1ce7668cf39356f534c"
+  },
+  "sourceHashesAfter": {
+    "scripts/dev-server.py": "4ed35ec393e9308222e220e19eac7832a6c894a84e300348acab3834c5947b86",
+    "tests/integrated-release-browser.cjs": "374e4ba39df17e709f59242599a218a367fda88529448335467f56dde946f549",
+    "tests/unified-home-browser.cjs": "1fbafcba0bc2c965f0f1ccd02e3eaf8b190718ecb92c6f8547d88762f0002f81",
+    "index.html": "0dc27b552e8755c314a4e95cfc7bf6d7c9b6844ab6b52721c5763fac81a13fe2",
+    "assets/life/core.js": "6ad03c873ea3411dc7f8a432e7637502d1ce59271253db04e229429f99308ff4",
+    "assets/life/ui.js": "bf7c539b610ea2643ef607c5c460dfca2f6d53dd9194219846fddb43c7a4ede0",
+    "assets/life/shell.js": "44414476702db4c8e0ef8515b6e6deb5ff549b8a26c64fb4501bac1b199b29ce",
+    "assets/platform-auth.js": "37a97153a39b61df30dfb74784d3740382a648f635a1f1ce7668cf39356f534c"
+  },
+  "trackedFilesUnchanged": true,
+  "limits": "Loopback transport probe only; not full SQL journey, production Pages, device or user evaluation. TcpExt counters are host-global and corroborative; per-port queue/socket samples and server/request timing are separate evidence.",
+  "artifacts": {
+    "backlog-5.json": "16819b346b05d43b95e12cd65fe3e31faf9517a07a7b0a12b8c5c04269b4bb97",
+    "backlog-128.json": "df9a1ce050bdb3b73eae37b3141b6730d3e777ccf2cfe6a4d0b9a50396642f52",
+    "backlog-5-server.json": "a4187bc335e25248356ecb19c59210c71a21abcdf135ae78d0f67c4950500f06",
+    "backlog-128-server.json": "1788e90874ada46d970921cd68c7af5621b285fc02732e525497c256c6b142aa",
+    "strict-navigation.cjs": "64b4763a1a3696433d3c8a7718b1192fb9e1467935a9d0f5149956478f7d235b",
+    "compare-backlogs.py": "8d64d0d82214d378bf923707efbdec48e2d9ff6e1b39515f48eff029a8a0fb0f"
+  }
+}
