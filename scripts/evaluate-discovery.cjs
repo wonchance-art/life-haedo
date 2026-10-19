@@ -38,7 +38,7 @@ function counts(values) {
 }
 // Feed bytes are mandatory: the SHA identifies the actual supplied file, not a
 // reserialized approximation. The only interests are the fixed public samples.
-function evaluate(feedBytes, options = {}) {
+function prepareFeed(feedBytes, options = {}) {
   check(Buffer.isBuffer(feedBytes) || typeof feedBytes === 'string', 'discovery_evaluation_invalid', '공개 JSON 파일의 UTF-8 바이트가 필요합니다.');
   const bytes = Buffer.isBuffer(feedBytes) ? Buffer.from(feedBytes) : Buffer.from(feedBytes, 'utf8');
   check(bytes.length <= Discovery.LIMITS.feedBytes, 'discovery_evaluation_invalid', '공개 목록이 지원 용량을 넘었습니다.');
@@ -47,9 +47,13 @@ function evaluate(feedBytes, options = {}) {
   catch (_) { throw Object.assign(new Error('공개 목록이 올바른 UTF-8 JSON이 아닙니다.'), { code: 'discovery_evaluation_invalid' }); }
   const evaluatedAt = options.now === undefined ? new Date().toISOString() : typeof options.now === 'function' ? options.now() : options.now;
   check(typeof evaluatedAt === 'string' && Number.isFinite(Date.parse(evaluatedAt)), 'discovery_evaluation_invalid', '평가 시각을 확인해 주세요.');
-  const before = JSON.stringify(input), feed = Discovery.validateFeed(input, { now: evaluatedAt });
+  const feed = Discovery.validateFeed(input, { now: evaluatedAt });
   // An invalid row must not quietly disappear from this comparison's corpus.
   check(feed.validation.invalid.length === 0, 'discovery_evaluation_invalid', '검증에서 제외된 글이 있습니다. 공개 목록을 수정한 뒤 새 비교를 준비해 주세요.');
+  return { bytes, input, feed, evaluatedAt };
+}
+function evaluate(feedBytes, options = {}) {
+  const { bytes, input, feed, evaluatedAt } = prepareFeed(feedBytes, options), before = JSON.stringify(input);
   const feedSHA256 = sha256(bytes), policy = { limit: 5, knownUrls: [], feedback: [], now: evaluatedAt };
   const baseline = Discovery.rank(input, { ...policy, profile: { manual: [] }, mode: 'latest' });
   const comparisons = SAMPLES.map((interest, index) => {
@@ -157,7 +161,7 @@ function parseArgs(argv) {
   }
   return options;
 }
-module.exports = Object.freeze({ SAMPLES, DEFAULT_FEED, DEFAULT_OUT, evaluate, renderMarkdown, writeEvaluation, parseArgs });
+module.exports = Object.freeze({ SAMPLES, DEFAULT_FEED, DEFAULT_OUT, evaluate, renderMarkdown, writeEvaluation, parseArgs, prepareFeed, itemSnapshot, markdownText, sha256 });
 if (require.main === module) {
   if (process.argv.length === 3 && process.argv[2] === '--help') console.log('node scripts/evaluate-discovery.cjs [--feed FILE] [--out NEW_DIRECTORY]\n공개 카탈로그만 읽어 비교 자료를 준비합니다. 기존 출력은 덮어쓰지 않으며 사용자 효용을 자동 판정하지 않습니다.');
   else Promise.resolve().then(() => parseArgs(process.argv.slice(2))).then(options => writeEvaluation(options.feed, options.out))

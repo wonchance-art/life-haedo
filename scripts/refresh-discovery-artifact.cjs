@@ -24,6 +24,10 @@ const LEGACY_BOOTSTRAP_WORKERS = Object.freeze({
   134: 'cb4fd4ed6112856883eab180fc3d390eae7693e835d2407b77fac3ce67ba9967',
 });
 const REQUEST_TIMEOUT_MS = 20000;
+// Exact reviewed registry shipped before the two research feeds were added.
+// This is accepted only as a prior seed; collected/installable artifacts must
+// contain the complete current registry. Arbitrary subsets remain invalid.
+const PREVIOUS_SOURCE_IDS = Object.freeze(['naver-d2', 'seoul-culture', 'woowahan-tech', 'readersnews-books', 'seoul-environment'].sort());
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
@@ -67,12 +71,13 @@ function atomic(file, bytes) {
 }
 const writeJSON = (file, value) => atomic(file, Buffer.from(JSON.stringify(value, null, 2) + '\n'));
 
-function validateCatalog(bytes, now = Date.now()) {
+function validateCatalog(bytes, now = Date.now(), previousSeed = false) {
   assert(Buffer.isBuffer(bytes) && bytes.length <= MAX_BYTES, 'Public catalog exceeds the size limit.');
   const raw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   const checked = Discovery.validateFeed(raw, { now }); // Never inject an external allowlist.
   const sourceIds = Object.keys(Discovery.ALLOWED_SOURCES).sort();
-  assert(same(raw.sources.map(source => source.id).sort(), sourceIds), 'The approved source set changed.');
+  const suppliedIds = raw.sources.map(source => source.id).sort();
+  assert(same(suppliedIds, sourceIds) || previousSeed && same(suppliedIds, PREVIOUS_SOURCE_IDS), 'The approved source set changed.');
   assert(Date.parse(raw.generatedAt) <= now, 'Public catalog generation time is in the future.');
   assert(checked.validation.invalid.length === 0 && checked.articles.length === raw.articles.length && raw.articles.length > 0,
     'Public catalog contains rejected or missing articles.');
@@ -181,7 +186,7 @@ function checkCollection(seed, next, report, exitCode) {
   assert(Date.parse(next.generatedAt) >= Date.parse(seed.generatedAt), 'Collection clock moved behind the previous publication.');
   for (const source of next.sources.filter(source => source.status === 'error')) {
     const old = seed.sources.find(item => item.id === source.id);
-    assert(old && source.lastSuccessAt === old.lastSuccessAt && source.stale === true, 'Failed source lost its last success receipt.');
+    assert(source.lastSuccessAt === (old?.lastSuccessAt ?? null) && source.stale === true, 'Failed source lost its last success receipt.');
     const before = seed.articles.filter(article => article.sourceId === source.id);
     const after = next.articles.filter(article => article.sourceId === source.id);
     assert(before.length === after.length, 'Failed source lost last-good articles.');
@@ -208,7 +213,7 @@ async function collect(options = {}) {
       outcome.bootstrapProof = verifyPreCatalogWorker(await (options.fetchBootstrapWorker || fetchPublishedWorker)());
     }
     const bytes = response.status === 404 ? tracked : response.bytes;
-    const seed = validateCatalog(bytes, clock());
+    const seed = validateCatalog(bytes, clock(), true);
     outcome.seedKind = response.status === 404 ? 'verified-pre-catalog-404-bootstrap' : 'previous-publication';
     outcome.seedSHA256 = sha(bytes); outcome.seedGeneratedAt = seed.generatedAt;
     atomic(f.seed, bytes); atomic(f.candidate, bytes);

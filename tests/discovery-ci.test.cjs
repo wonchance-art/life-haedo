@@ -82,6 +82,47 @@ test('404 with independently verified pre-catalog worker permits tracked bootstr
   assert.equal(result.bootstrapProof.cacheVersion, 129);
 });
 
+function previousRegistry() {
+  const previous = seed(), added = new Set(['arxiv-cs-cl', 'mit-linguistics']);
+  previous.sources = previous.sources.filter(source => !added.has(source.id));
+  previous.articles = previous.articles.filter(article => !added.has(article.sourceId));
+  return previous;
+}
+
+test('exact prior five-source publication can seed an additive registry upgrade but cannot be installed as current', async t => {
+  const previous = previousRegistry();
+  assert.doesNotThrow(() => CI.validateCatalog(bytes(previous), stamp(), true));
+  assert.throws(() => CI.validateCatalog(bytes(previous), stamp()), /source set/);
+  const missing = structuredClone(previous); missing.sources.pop(); missing.articles.pop();
+  assert.throws(() => CI.validateCatalog(bytes(missing), stamp(), true), /source set/);
+  const w = workspace(t), result = await CI.collect({ root: w.root, clock: stamp,
+    fetchSeed: async () => ({ status: 200, bytes: bytes(previous) }),
+    runUpdater: ({ candidate, report }) => {
+      fs.writeFileSync(candidate, bytes(seed()));
+      return fakeUpdater()({ candidate, report });
+    } });
+  assert.equal(result.sourceCount, 7); assert.equal(result.collectorExitCode, 0);
+  assert.deepEqual(fs.readFileSync(w.f.seed), bytes(previous));
+});
+
+test('first failure of an added source retains null history and no fabricated articles', async t => {
+  const previous = previousRegistry(), w = workspace(t), id = 'arxiv-cs-cl';
+  const result = await CI.collect({ root: w.root, clock: stamp,
+    fetchSeed: async () => ({ status: 200, bytes: bytes(previous) }),
+    runUpdater: ({ candidate, report }) => {
+      const current = seed(), added = current.sources.find(source => source.id === id);
+      added.lastSuccessAt = null; added.fetchedAt = null;
+      current.articles = current.articles.filter(article => article.sourceId !== id);
+      fs.writeFileSync(candidate, bytes(current));
+      return fakeUpdater({ failures: [id] })({ candidate, report });
+    } });
+  const next = JSON.parse(fs.readFileSync(w.f.candidate));
+  assert.equal(result.partialFailure, true);
+  assert.equal(next.sources.find(source => source.id === id).lastSuccessAt, null);
+  assert.equal(next.articles.filter(article => article.sourceId === id).length, 0);
+  assert.deepEqual(next.articles.filter(article => !['arxiv-cs-cl', 'mit-linguistics'].includes(article.sourceId)).map(article => article.id), previous.articles.map(article => article.id));
+});
+
 for (const failure of ['v130', 'v132', 'missing-version', 'worker404', 'backported-catalog']) {
   test(`catalog 404 with ${failure} is fatal instead of resetting last-good to Git`, async t => {
     const w = workspace(t); let called = false;

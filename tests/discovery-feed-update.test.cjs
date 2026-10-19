@@ -6,8 +6,8 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const script = path.resolve(__dirname, '../scripts/update-discovery-feed.py');
-const ids = ['naver-d2', 'seoul-culture', 'woowahan-tech', 'readersnews-books', 'seoul-environment'];
-const hosts = ['d2.naver.com', 'news.seoul.go.kr', 'techblog.woowahan.com', 'www.readersnews.com', 'news.seoul.go.kr'];
+const ids = ['naver-d2', 'seoul-culture', 'woowahan-tech', 'readersnews-books', 'seoul-environment', 'arxiv-cs-cl', 'mit-linguistics'];
+const hosts = ['d2.naver.com', 'news.seoul.go.kr', 'techblog.woowahan.com', 'www.readersnews.com', 'news.seoul.go.kr', 'arxiv.org', 'news.mit.edu'];
 const first = '2026-10-18T12:00:00Z';
 const next = '2026-10-19T12:00:00Z';
 
@@ -225,4 +225,122 @@ except m.FeedError:results['rights']='rejected'
 print(json.dumps(results))
 `);
   assert.deepEqual(actual, { missing: 'not_provided', unavailable: 'rejected', denied: 'rejected', rights: 'rejected' });
+});
+
+test('approved English sources are additive metadata feeds with explicit preprint/date limits', () => {
+  const sources = python(`print(json.dumps(m.SOURCES))`);
+  assert.deepEqual(sources.map(s => s.id), ids);
+  assert.deepEqual(sources.slice(0, 5).map(s => s.allowedHosts), hosts.slice(0, 5).map(h => [h]));
+  const arxiv = sources.find(s => s.id === 'arxiv-cs-cl'), mit = sources.find(s => s.id === 'mit-linguistics');
+  assert.deepEqual(arxiv.allowedHosts, ['arxiv.org', 'rss.arxiv.org']);
+  assert.equal(arxiv.feedUrl, 'https://rss.arxiv.org/rss/cs.CL');
+  assert.equal(arxiv.requestIntervalSeconds, 3); assert.match(arxiv.name, /영문.*사전공개/); assert.match(arxiv.rights.label, /RSS 공지일/);
+  assert.equal(mit.feedUrl, 'https://news.mit.edu/topic/mitlinguistics-rss.xml');
+  assert.deepEqual(mit.allowedHosts, ['news.mit.edu']); assert.match(mit.rights.label, /MIT News/);
+  assert.ok([arxiv, mit].every(s => s.language === 'en' && s.rights.mode === 'metadata_only'));
+  assert.ok(sources.filter(s => s.id !== arxiv.id).every(s => !s.requestIntervalSeconds));
+});
+
+test('arXiv pacing covers initial requests, safe redirects and failures without pacing other sources', () => {
+  const result = python(`
+from unittest.mock import patch
+source=next(s for s in m.SOURCES if s['id']=='arxiv-cs-cl')
+other=next(s for s in m.SOURCES if s['id']=='mit-linguistics')
+clock=[0.0];waits=[];starts=[];handlerKinds=[];responses=[];failures=[]
+def sleep(seconds):waits.append(seconds);clock[0]+=seconds
+gate=m.RequestPacer(3,clock=lambda:clock[0],sleeper=sleep)
+class Response:
+ status=200;headers={}
+ def __init__(self,url):self.url=url
+ def __enter__(self):return self
+ def __exit__(self,*args):responses.append('closed')
+ def read(self,limit):return b'public metadata'
+def attempt(req):
+ starts.append([req.full_url,clock[0]])
+ if req.full_url.endswith('/fail'):
+  import io
+  fp=io.BytesIO(b'unavailable');failures.append(fp)
+  raise m.urllib.error.HTTPError(req.full_url,503,'unavailable',{},fp)
+ return Response(req.full_url)
+def build(*handlers):
+ paced=next((h for h in handlers if isinstance(h,m.PacedHTTPSHandler)),None)
+ redirect=next(h for h in handlers if isinstance(h,m.RestrictedRedirect))
+ handlerKinds.append(paced is not None)
+ class Opener:
+  def open(self,req,timeout):
+   response=paced.https_open(req) if paced else attempt(req)
+   if req.full_url.endswith('/redirect'):
+    # urllib closes its redirect response before starting the next HTTPS open.
+    response.__exit__()
+    req=redirect.redirect_request(req,None,302,'',{},'https://arxiv.org/final')
+    return paced.https_open(req)
+   return response
+ return Opener()
+with patch.object(m.urllib.request,'build_opener',side_effect=build),patch.object(m.urllib.request.HTTPSHandler,'https_open',side_effect=attempt):
+ m.fetch_public('https://rss.arxiv.org/robots.txt',source,100,pacer=gate)
+ clock[0]+=0.5
+ m.fetch_public('https://rss.arxiv.org/redirect',source,100,pacer=gate)
+ try:m.fetch_public('https://rss.arxiv.org/fail',source,100,pacer=gate)
+ except OSError:pass
+ m.fetch_public('https://rss.arxiv.org/retry',source,100,pacer=gate)
+ m.fetch_public('https://news.mit.edu/feed',other,100)
+print(json.dumps({'starts':starts,'waits':waits,'handlers':handlerKinds,'otherPacer':m.source_pacer(other),'sharedPacer':m.source_pacer(source) is m.source_pacer(source),'errorClosed':all(fp.closed for fp in failures)}))
+`);
+  assert.deepEqual(result.starts.map(x => x[1]), [0, 3, 6, 9, 12, 12]);
+  assert.deepEqual(result.waits, [2.5, 3, 3, 3]);
+  assert.deepEqual(result.handlers, [true, true, true, true, false]);
+  assert.equal(result.otherPacer, null); assert.equal(result.sharedPacer, true); assert.equal(result.errorClosed, true);
+});
+
+test('one arXiv connection remains exclusive until response close, including concurrently started fetch calls', () => {
+  const result = python(`
+from unittest.mock import patch
+import threading,concurrent.futures
+source=next(s for s in m.SOURCES if s['id']=='arxiv-cs-cl')
+gate=m.RequestPacer(0,clock=lambda:0,sleeper=lambda seconds:None)
+entered=threading.Event();release=threading.Event();attempted=threading.Event();secondOpened=threading.Event()
+order=[];active=[0];maximum=[0]
+class Response:
+ status=200;headers={}
+ def __init__(self,url):self.url=url
+ def __enter__(self):return self
+ def read(self,limit):
+  if self.url.endswith('/one'):entered.set();assert release.wait(2)
+  return b'metadata'
+ def __exit__(self,*args):active[0]-=1;order.append('close:'+self.url.rsplit('/',1)[1])
+def attempt(req):
+ active[0]+=1;maximum[0]=max(maximum[0],active[0]);order.append('open:'+req.full_url.rsplit('/',1)[1])
+ if req.full_url.endswith('/two'):secondOpened.set()
+ return Response(req.full_url)
+def build(*handlers):
+ handler=next(h for h in handlers if isinstance(h,m.PacedHTTPSHandler))
+ class Opener:
+  def open(self,req,timeout):return handler.https_open(req)
+ return Opener()
+def second():
+ attempted.set();return m.fetch_public('https://rss.arxiv.org/two',source,100,pacer=gate)
+with patch.object(m.urllib.request,'build_opener',side_effect=build),patch.object(m.urllib.request.HTTPSHandler,'https_open',side_effect=attempt):
+ with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+  first=executor.submit(m.fetch_public,'https://rss.arxiv.org/one',source,100,pacer=gate)
+  assert entered.wait(2)
+  later=executor.submit(second);assert attempted.wait(2)
+  blocked=not secondOpened.wait(0.03)
+  release.set();first.result();later.result()
+print(json.dumps({'blocked':blocked,'maximumConnections':maximum[0],'order':order}))
+`);
+  assert.deepEqual(result, { blocked: true, maximumConnections: 1, order: ['open:one', 'close:one', 'open:two', 'close:two'] });
+});
+
+test('new feed empty/error preserves its prior metadata while legacy source identities stay unchanged', t => {
+  const w = workspace(t); assert.equal(update(w).status, 0);
+  const before = JSON.parse(fs.readFileSync(w.output));
+  fs.writeFileSync(path.join(w.dir, 'arxiv-cs-cl.xml'), '<rss><channel/></rss>');
+  assert.equal(update(w, next).status, 2);
+  const after = JSON.parse(fs.readFileSync(w.output));
+  const a = after.sources.find(s => s.id === 'arxiv-cs-cl');
+  assert.equal(a.status, 'error'); assert.equal(a.stale, true); assert.equal(a.lastSuccessAt, first); assert.equal(a.lastAttemptAt, next);
+  assert.deepEqual(after.articles.filter(a => a.sourceId === 'arxiv-cs-cl'), before.articles.filter(a => a.sourceId === 'arxiv-cs-cl'));
+  const identity = c => c.articles.filter(a => ids.slice(0, 5).includes(a.sourceId)).map(a => [a.id, a.sourceId, a.url, a.canonicalUrl]);
+  assert.deepEqual(identity(after), identity(before));
+  assert.equal(after.sources.find(s => s.id === 'mit-linguistics').status, 'ok');
 });

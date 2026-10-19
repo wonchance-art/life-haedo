@@ -15,6 +15,9 @@ import os
 import re
 import sys
 import tempfile
+import threading
+import time
+from contextlib import nullcontext
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -56,6 +59,14 @@ SOURCES = (
      'feedUrl': 'https://news.seoul.go.kr/env/feed', 'allowedHosts': ['news.seoul.go.kr'],
      'language': 'ko', 'timezone': '+09:00', 'rights': {'mode': 'metadata_only',
      'label': '원문별 이용 조건 확인 · 제목과 링크 정보만 제공', 'url': 'https://news.seoul.go.kr/env'}},
+    {'id': 'arxiv-cs-cl', 'name': 'arXiv cs.CL · 영문 사전공개 논문', 'url': 'https://arxiv.org/',
+     'feedUrl': 'https://rss.arxiv.org/rss/cs.CL', 'allowedHosts': ['arxiv.org', 'rss.arxiv.org'],
+     'language': 'en', 'requestIntervalSeconds': 3, 'rights': {'mode': 'metadata_only',
+     'label': '메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공', 'url': 'https://info.arxiv.org/help/api/tou.html'}},
+    {'id': 'mit-linguistics', 'name': 'MIT News · 언어학 · 영문', 'url': 'https://news.mit.edu/topic/linguistics',
+     'feedUrl': 'https://news.mit.edu/topic/mitlinguistics-rss.xml', 'allowedHosts': ['news.mit.edu'],
+     'language': 'en', 'rights': {'mode': 'metadata_only',
+     'label': 'MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공', 'url': 'https://news.mit.edu/terms-of-use'}},
 )
 
 
@@ -166,6 +177,62 @@ def approved_url(value, hosts, *, canonical=False):
         raise FeedError('올바르지 않은 URL') from cause
 
 
+class RequestPacer:
+    """One source's complete connection plus minimum request-start spacing.
+
+    The HTTPS handler calls wait for every actual attempt, including redirects.
+    Clock/sleeper injection is only for deterministic offline policy tests.
+    """
+    def __init__(self, interval, *, clock=time.monotonic, sleeper=time.sleep):
+        self.interval = interval
+        self.clock = clock
+        self.sleeper = sleeper
+        self.lock = threading.RLock()
+        self.last_started = None
+
+    def __enter__(self):
+        self.lock.acquire()
+        return self
+
+    def __exit__(self, *args):
+        self.lock.release()
+
+    def wait(self):
+        with self.lock:
+            if self.last_started is not None:
+                remaining = self.interval - (self.clock() - self.last_started)
+                while remaining > 0:
+                    self.sleeper(remaining)
+                    remaining = self.interval - (self.clock() - self.last_started)
+            self.last_started = self.clock()
+
+
+_PACERS = {}
+_PACERS_LOCK = threading.Lock()
+
+
+def source_pacer(source):
+    interval = source.get('requestIntervalSeconds', 0)
+    if not interval:
+        return None
+    with _PACERS_LOCK:
+        if source['id'] not in _PACERS:
+            _PACERS[source['id']] = RequestPacer(interval)
+        return _PACERS[source['id']]
+
+
+class PacedHTTPSHandler(urllib.request.HTTPSHandler):
+    def __init__(self, pacer):
+        super().__init__()
+        self.pacer = pacer
+
+    def https_open(self, request):
+        # HTTPRedirectHandler closes the previous response before opening the
+        # next HTTPS attempt, so pacing never holds two redirect connections.
+        self.pacer.wait()
+        return super().https_open(request)
+
+
 class RestrictedRedirect(urllib.request.HTTPRedirectHandler):
     max_redirections = 3
     max_repeats = 2
@@ -182,23 +249,37 @@ class RestrictedRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def fetch_public(url, source, limit, timeout=20):
+def fetch_public(url, source, limit, timeout=20, *, pacer=None):
     url = approved_url(url, source['allowedHosts'])
-    opener = urllib.request.build_opener(RestrictedRedirect(source['allowedHosts']))
+    pacer = pacer if pacer is not None else source_pacer(source)
+    handlers = [RestrictedRedirect(source['allowedHosts'])]
+    if pacer is not None:
+        handlers.append(PacedHTTPSHandler(pacer))
+    opener = urllib.request.build_opener(*handlers)
     request = urllib.request.Request(url, headers={
         'User-Agent': USER_AGENT, 'Accept': 'application/atom+xml, application/rss+xml, application/xml, text/plain, text/html;q=0.5, */*;q=0.1',
         'Accept-Encoding': 'identity',
     }, method='GET')
-    with opener.open(request, timeout=timeout) as response:
-        approved_url(response.url, source['allowedHosts'])
-        if response.headers.get('Content-Encoding', 'identity').lower() not in ('identity', ''):
-            raise FeedError('지원하지 않는 압축 피드')
-        body = response.read(limit + 1)
-        if len(body) > limit:
-            raise FeedError('피드 크기 제한 초과')
-        return body, {'url': url, 'finalUrl': response.url, 'status': response.status,
-                      'contentType': response.headers.get('Content-Type', ''), 'bytes': len(body),
-                      'sha256': hashlib.sha256(body).hexdigest()}
+    # Hold only this source's gate through read/close and all redirects. Other
+    # registered sources keep their existing independent parallel execution.
+    with pacer if pacer is not None else nullcontext():
+        try:
+            response = opener.open(request, timeout=timeout)
+        except urllib.error.HTTPError as cause:
+            # Error responses also own a connection; close before releasing the
+            # source gate so a retry cannot overlap a still-open HTTP failure.
+            cause.close()
+            raise
+        with response:
+            approved_url(response.url, source['allowedHosts'])
+            if response.headers.get('Content-Encoding', 'identity').lower() not in ('identity', ''):
+                raise FeedError('지원하지 않는 압축 피드')
+            body = response.read(limit + 1)
+            if len(body) > limit:
+                raise FeedError('피드 크기 제한 초과')
+            return body, {'url': url, 'finalUrl': response.url, 'status': response.status,
+                          'contentType': response.headers.get('Content-Type', ''), 'bytes': len(body),
+                          'sha256': hashlib.sha256(body).hexdigest()}
 
 
 def fixture_fetch(directory):

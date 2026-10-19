@@ -1,5 +1,10 @@
 # 오픈소스 검토와 재사용 결정
 
+## 공식 공급·로컬 평가 후속 재사용 — 2026-10-19 KST
+
+고정 Python 표준 urllib/robotparser/XML 제한 수집기·기존 feedparser 비교를 재사용해 arXiv/MIT 공식 RSS2 두 개만 추가했다. 새 parser·의존성·모델·서비스는 넣지 않았다. arXiv 공식 API/RSS 약관의3초/단일연결을 작은 monotonic/sleep/RLock gate로 제한하고 실제 HTTPS redirect/실패/응답 닫힘까지 보존한다. 다른 출처 동작은 유지하며 더 큰 작업 큐/수집 프레임워크를 도입하지 않는다. 로컬 평가 CLI는 기존 rank/actions/평가 유틸을 조합하고 Node fs의새폴더·권한·배타생성과 strict UTF8/형식검증을 쓴다. 운영/개인데이터·UI 설문·자동 효용평가를 늘리지 않는다. 라이브러리 자체 도입이 필요한 새 형식/확장성 요구가 생기면 앞선 후보를 재비교한다. [공식 조건·보류·검수·교체 조건](../design-review/discovery-field-validation.md).
+
+
 ## 좋아요·담기 구현 재사용 — 2026-10-19 KST
 
 아래 종합 조사와 기존 고정 idb를 재사용해 첫 반응→목록→개인 추천 흐름을 구현했다. 별도 추천 패키지·서버·모델·전이 의존성을 추가하지 않았다. 기존 Discovery 후보 검증/정렬, Storage/idb CAS·scope/dispose, native DOM·File/Blob·fatal TextDecoder를 재사용한다. 직접 유지하는 범위는 독립 반응 schema·사본 검증과 공개 제목/태그의 두 단어 중첩 규칙이다. 범용 추천 서비스를 도입하는 운영/개인 전송 비용보다 현재 50개 링크 후보와 로컬 제어에 맞지만, 규칙값의 최적성이나 의미 이해/유용성은 입증하지 않았다. 실패 근거와 시간 분리 평가가 생기면 아래 후보를 재비교한다. [구현·검수·교체 조건](../design-review/discovery-reactions.md).

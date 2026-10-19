@@ -11,7 +11,9 @@
     'seoul-culture': Object.freeze(['news.seoul.go.kr']),
     'woowahan-tech': Object.freeze(['techblog.woowahan.com']),
     'readersnews-books': Object.freeze(['www.readersnews.com']),
-    'seoul-environment': Object.freeze(['news.seoul.go.kr'])
+    'seoul-environment': Object.freeze(['news.seoul.go.kr']),
+    'arxiv-cs-cl': Object.freeze(['arxiv.org', 'rss.arxiv.org']),
+    'mit-linguistics': Object.freeze(['news.mit.edu'])
   });
   // Small, public and inspectable equivalences. No broader topic inference.
   const ALIASES = Object.freeze([
