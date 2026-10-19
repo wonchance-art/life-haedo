@@ -25,7 +25,12 @@
     const review = element('section'); review.id = 'originalAttachmentsReview';
     const list = element('section'); list.id = 'originalAttachmentsCopies';
     const content = element('section'); content.id = 'originalAttachmentsEntries';
-    dialog.append(header, element('p', '사진·PDF·노트 저장본과 작업본을 이 브라우저에 별도 보관합니다. 기존 자료·서버·공개 범위는 바뀌지 않습니다. 여러 파트 ZIP을 함께 선택할 수 있습니다. 파트는 128 MiB, 개별 파일은 64 MiB 이하이며 원본 ZIP은 별도로 보관해 주세요.', 'life-help'), label, cancel, status, error, review, list, content);
+    const help = element('details', null, 'life-details');
+    help.append(element('summary', '지원 파일·보관 안내'),
+      element('p', '원본 보관용으로 준비된 파트 ZIP을 선택하세요. 여러 파트를 함께 선택할 수 있으며 파트는 128 MiB, 개별 파일은 64 MiB 이하입니다. ZIP은 풀거나 다시 압축하지 말고 원래 파일을 별도로 보관해 주세요.', 'life-help'),
+      element('p', 'JPEG·PNG·HEIC·PDF와 노트 저장본·작업본을 원본 그대로 보관합니다. HEIC·PDF는 내려받아 해당 앱에서 열어 주세요. 여기서 보관한 파일이 글에 삽입되지는 않습니다.', 'life-help'),
+      element('p', '파일 확인에 실패하면 원래 파트 ZIP을 다시 선택해 주세요. 보관 중 일부 파트만 실패했다면 완료된 사본은 유지되며 남은 파트만 다시 시도할 수 있습니다.', 'life-help'));
+    dialog.append(header, element('p', '원본 파일을 이 브라우저에 별도 보관합니다. 기존 자료·서버·공개 범위는 바뀌지 않습니다.', 'life-help'), label, help, cancel, status, error, review, list, content);
     let unsubscribe, active = true, busy = false, controller, candidate, generation = 0, selectedCopy = '', shown = 40;
     const objectURLs = new Set();
     const still = () => active && auth.getAccount()?.projectUrl === account.projectUrl && auth.getAccount()?.userId === account.userId;

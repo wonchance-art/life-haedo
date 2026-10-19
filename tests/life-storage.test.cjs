@@ -1476,3 +1476,120 @@ test('preservation final source CAS permits unrelated records, posts and boards 
     globalThis.HaedoLife.PreservationReferences = originalReferences;
   }
 });
+
+test('nine-board draft creation checks the reviewed source inside the same post/index transaction', async t => {
+  const { storage: base, control } = syncFixture(); t.after(() => base.close());
+  const N = require('../assets/life/nine-board.js'), P = require('../assets/life/photo-post.js');
+  const a = base.forAccount(accountA), bundle = await initialImport(a), ws = bundle.workspaceId;
+  const board = N.create(Core.id); board.title = '선택한 영역';
+  const source = await a.saveNineBoard(ws, { ...N.empty(ws), boards: [board] }, 0);
+  const make = () => { const d = P.create(Core.id); d.title = '검토한 결과'; d.ops = [{ insert: '선택한 제목과 출처만\n' }]; return d; };
+  const doc = make();
+  control.failCompletion = true;
+  await assert.rejects(a.savePhotoPostFromNineBoard(ws, doc, source.revision, board.id, board.areas[0].id), { code: 'storage_aborted' });
+  control.failCompletion = false;
+  assert.deepEqual(await a.listPhotoPosts(ws), []);
+  await assert.rejects(a.readPhotoPost(ws, doc.id), { code: 'photo_post_missing' });
+  const saved = await a.savePhotoPostFromNineBoard(ws, doc, source.revision, board.id, board.areas[0].id);
+  assert.equal(saved.status, 'draft'); assert.equal(saved.revision, 1);
+  assert.equal((await a.listPhotoPosts(ws)).length, 1);
+  assert.deepEqual(await a.readNineBoard(ws), source); assert.deepEqual(await a.read(ws), bundle);
+  assert.equal(await a.readBlogSyncState(ws, saved.id), null);
+  assert.deepEqual(await a.readPostEvidence(ws, saved.id), { revision: 0, refs: [] });
+  await assert.rejects(a.savePhotoPostFromNineBoard(ws, doc, source.revision, board.id, board.areas[0].id), { code: 'photo_post_conflict' });
+  const changed = structuredClone(source); changed.boards[0].title = '다른 탭에서 바뀐 구성';
+  await a.saveNineBoard(ws, changed, source.revision);
+  await assert.rejects(a.savePhotoPostFromNineBoard(ws, make(), source.revision, board.id, board.areas[0].id), { code: 'nine_board_conflict' });
+  await assert.rejects(a.savePhotoPostFromNineBoard(ws, make(), source.revision + 1, board.id, 'missing_area'), { code: 'nine_board_conflict' });
+  const publicDoc = make(); publicDoc.status = 'saved';
+  await assert.rejects(a.savePhotoPostFromNineBoard(ws, publicDoc, source.revision + 1, board.id, board.areas[0].id), { code: 'invalid_photo_post' });
+  assert.equal((await a.listPhotoPosts(ws)).length, 1);
+  const foreign = base.forAccount(accountB);
+  await assert.rejects(foreign.savePhotoPostFromNineBoard(ws, make(), source.revision + 1, board.id, board.areas[0].id), { code: 'workspace_access_denied' });
+});
+
+test('blog series freezes exact selected posts across original replacement and reuses only owned snapshots for a new recovery', async t => {
+  const { storage: base } = syncFixture(); t.after(() => base.close());
+  const P = require('../assets/life/photo-post.js'), M = require('../assets/life/blog-series.js');
+  const a = base.forAccount(accountA), bundle = await initialImport(a), ws = bundle.workspaceId;
+  const make = title => { const d = P.create(Core.id); d.status = 'saved'; d.title = title; d.ops = [{ insert: title + '\r\n원래 출처 https://example.org/source\n' }]; return d; };
+  const first = await a.savePhotoPost(ws, make('첫 글'), 0), second = await a.savePhotoPost(ws, make('둘째 글'), 0);
+  const series = M.create(Core.id); series.title = '고정 목차'; series.items = [M.item(second, Core.id), M.item(first, Core.id)];
+  let state = await a.saveBlogSeries(ws, { ...M.empty(ws), series: [series] }, 0);
+  const expected = { series, posts: [{ itemId: series.items[0].id, doc: second }, { itemId: series.items[1].id, doc: first }] };
+  assert.deepEqual(await a.readBlogSeriesSnapshot(ws, series.id), expected);
+  const edited = { ...structuredClone(first), id: Core.id(), revision: 0, title: '새 ID로 고친 글', replaces: { id: first.id, revision: first.revision } };
+  await a.savePhotoPost(ws, edited, 0); await assert.rejects(a.readPhotoPost(ws, first.id), { code: 'photo_post_missing' });
+  const currentSecond = await a.readPhotoPost(ws, second.id); currentSecond.archived = true; await a.savePhotoPost(ws, currentSecond, currentSecond.revision);
+  assert.deepEqual(await a.readBlogSeriesSnapshot(ws, series.id), expected);
+  const recovery = { ...structuredClone(series), id: Core.id(), items: series.items.map(item => ({ ...item, id: Core.id() })) };
+  state.series.push(recovery); state = await a.saveBlogSeries(ws, state, state.revision);
+  assert.deepEqual((await a.readBlogSeriesSnapshot(ws, recovery.id)).posts.map(row => row.doc), [second, first]);
+  assert.equal((await a.listPhotoPosts(ws)).length, 2); assert.deepEqual(await a.read(ws), bundle);
+  const tampered = structuredClone(state); tampered.series[0].items[0].title = '원본과 다른 제목';
+  await assert.rejects(a.saveBlogSeries(ws, tampered, state.revision), { code: 'blog_series_conflict' });
+  await assert.rejects(a.saveBlogSeries(ws, state, state.revision - 1), { code: 'blog_series_conflict' });
+  const foreign = base.forAccount(accountB);
+  await assert.rejects(foreign.readBlogSeries(ws), { code: 'workspace_access_denied' });
+  await assert.rejects(foreign.readBlogSeriesSnapshot(ws, series.id), { code: 'workspace_access_denied' });
+});
+
+test('blog series capture and removal commit atomically and stale or private posts never become snapshots', async t => {
+  const { storage: base, control, rows } = syncFixture(); t.after(() => base.close());
+  const P = require('../assets/life/photo-post.js'), M = require('../assets/life/blog-series.js');
+  const a = base.forAccount(accountA), ws = (await initialImport(a)).workspaceId;
+  const d = P.create(Core.id); d.status = 'saved'; d.title = '보존 원문'; d.ops = [{ insert: '그대로 남을 본문\n' }];
+  const doc = await a.savePhotoPost(ws, d, 0), series = M.create(Core.id); series.items = [M.item(doc, Core.id)];
+  const input = { ...M.empty(ws), series: [series] }, before = structuredClone(rows);
+  control.beforeWrite = ({ value }) => { if (value?.key === `blog-series:${ws}`) throw new DOMException('quota', 'QuotaExceededError'); };
+  await assert.rejects(a.saveBlogSeries(ws, input, 0), { code: 'storage_quota' }); control.beforeWrite = null;
+  assert.deepEqual(rows, before); assert.deepEqual(await a.readBlogSeries(ws), M.empty(ws));
+  const saved = await a.saveBlogSeries(ws, input, 0), snapshot = await a.readBlogSeriesSnapshot(ws, series.id);
+  control.failCompletion = true;
+  await assert.rejects(a.saveBlogSeries(ws, { ...saved, series: [] }, saved.revision), { code: 'storage_aborted' });
+  assert.deepEqual(await a.readBlogSeries(ws), saved); assert.deepEqual(await a.readBlogSeriesSnapshot(ws, series.id), snapshot);
+  const stale = M.create(Core.id); stale.items = [{ ...M.item(doc, Core.id), postRevision: doc.revision + 1 }];
+  await assert.rejects(a.saveBlogSeries(ws, { ...saved, series: [series, stale] }, saved.revision), { code: 'blog_series_post_changed' });
+  const draft = P.create(Core.id); draft.title = '전송하지 않은 초안'; draft.ops = [{ insert: '비공개 초안\n' }];
+  const privateDoc = await a.savePhotoPost(ws, draft, 0), privateSeries = M.create(Core.id);
+  privateSeries.items = [{ id: Core.id(), postId: privateDoc.id, postRevision: privateDoc.revision, title: privateDoc.title }];
+  await assert.rejects(a.saveBlogSeries(ws, { ...saved, series: [series, privateSeries] }, saved.revision), { code: 'blog_series_post_changed' });
+  assert.deepEqual(await a.readBlogSeries(ws), saved);
+});
+
+test('blog series file installation remaps all IDs and original bytes atomically without adding ordinary posts or server bindings', async t => {
+  const { storage: base, control, rows } = syncFixture(); t.after(() => base.close());
+  const P = require('../assets/life/photo-post.js'), M = require('../assets/life/blog-series.js');
+  const a = base.forAccount(accountA), bundle = await initialImport(a), ws = bundle.workspaceId;
+  const doc = P.create(Core.id); doc.status = 'saved'; doc.revision = 8; doc.title = '복원할 정확한 글';
+  const blob = new Blob([new Uint8Array([137,80,78,71,13,10,26,10,0])], { type: 'image/png' });
+  const photo = { id: Core.id(), name: '원본.png', type: blob.type, width: 1, height: 1, size: blob.size, digest: await P.digest(blob), blob };
+  doc.photos = [photo]; doc.ops = [{ insert: '원본 바이트\n' }, { insert: { photo: { id: photo.id, caption: '그대로 설명', alt: '그대로 대체텍스트' } } }, { insert: '\n' }];
+  const series = M.create(Core.id); series.items = [M.item(doc, Core.id)]; const payload = { series, posts: [{ itemId: series.items[0].id, doc }] }, original = structuredClone(payload);
+  const before = structuredClone(rows);
+  control.beforeWrite = ({ value }) => { if (value?.key === `blog-series:${ws}`) throw new DOMException('quota', 'QuotaExceededError'); };
+  await assert.rejects(a.installBlogSeriesCopy(ws, payload), { code: 'storage_quota' }); control.beforeWrite = null; assert.deepEqual(rows, before);
+  const result = await a.installBlogSeriesCopy(ws, payload), restored = await a.readBlogSeriesSnapshot(ws, result.seriesId);
+  assert.notEqual(restored.series.id, series.id); assert.notEqual(restored.series.items[0].id, series.items[0].id);
+  const copy = restored.posts[0].doc; assert.notEqual(copy.id, doc.id); assert.notEqual(copy.photos[0].id, photo.id); assert.equal(copy.revision, 1);
+  assert.equal(copy.ops[1].insert.photo.id, copy.photos[0].id); assert.equal(await P.digest(copy.photos[0].blob), photo.digest);
+  assert.equal(copy.ops[1].insert.photo.caption, '그대로 설명'); assert.equal(copy.ops[1].insert.photo.alt, '그대로 대체텍스트');
+  assert.deepEqual(await a.listPhotoPosts(ws), []); assert.equal(await a.readBlogSyncState(ws, copy.id), null); assert.deepEqual(await a.read(ws), bundle); assert.deepEqual(payload, original);
+  const damaged = structuredClone(payload); damaged.posts[0].doc.photos[0].blob = new Blob(['corrupted'], { type: 'image/png' });
+  const installed = structuredClone(rows); await assert.rejects(a.installBlogSeriesCopy(ws, damaged)); assert.deepEqual(rows, installed);
+});
+
+test('blog series installation cannot write after an account switch during asynchronous original verification', async t => {
+  const { storage: base, rows } = syncFixture(); t.after(() => base.close());
+  const P = require('../assets/life/photo-post.js'), M = require('../assets/life/blog-series.js'), B = require('../assets/life/blog.js');
+  const a = base.forAccount(accountA), ws = (await initialImport(a)).workspaceId;
+  const doc = P.create(Core.id); doc.status = 'saved'; doc.revision = 1; doc.title = '지연 검증'; doc.ops = [{ insert: '유지할 글\n' }];
+  const series = M.create(Core.id); series.items = [M.item(doc, Core.id)];
+  let release, enter; const held = new Promise(resolve => { release = resolve; }), entered = new Promise(resolve => { enter = resolve; });
+  const previous = globalThis.HaedoLife.Blog;
+  globalThis.HaedoLife.Blog = { ...B, async hydrate(...args) { enter(); await held; return B.hydrate(...args); } };
+  try {
+    const before = structuredClone(rows), pending = a.installBlogSeriesCopy(ws, { series, posts: [{ itemId: series.items[0].id, doc }] });
+    await entered; base.forAccount(accountB); release(); await assert.rejects(pending, { code: 'storage_scope_closed' }); assert.deepEqual(rows, before);
+  } finally { release(); globalThis.HaedoLife.Blog = previous; }
+});

@@ -7,7 +7,7 @@
 })(globalThis, function (root) {
   "use strict";
   const model = () => root.HaedoLife?.Blog || require("./blog.js");
-  function render(snapshot, { document = root.document, photoUrl = () => null, allowOriginal = true } = {}) {
+  function render(snapshot, { document = root.document, photoUrl = () => null, allowOriginal = true, privateView = false } = {}) {
     model().validateSnapshot(snapshot);
     const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
     const article = node("article", undefined, "blog-document");
@@ -31,9 +31,9 @@
         if (line.childNodes.length) finish(); list = null; kind = null;
         const photo = photos.get(op.insert.photo.id), figure = node("figure", undefined, "blog-photo"), frame = node("div", undefined, "blog-photo-frame");
         frame.tabIndex = 0; frame.setAttribute("aria-label", "사진 보기");
-        const image = node("img"), fallback = node("p", "사진을 열지 못했습니다. 잠시 후 공개 상태를 다시 확인해 주세요.", "blog-photo-error");
+        const image = node("img"), fallback = node("p", privateView ? "사진을 열지 못했습니다. 모음을 다시 열어 확인해 주세요." : "사진을 열지 못했습니다. 잠시 후 공개 상태를 다시 확인해 주세요.", "blog-photo-error");
         fallback.hidden = true;
-        image.alt = op.insert.photo.alt || op.insert.photo.caption || "공개한 사진";
+        image.alt = op.insert.photo.alt || op.insert.photo.caption || (privateView ? "모음의 사진" : "공개한 사진");
         image.width = photo.width; image.height = photo.height; image.loading = "lazy"; image.decoding = "async"; image.referrerPolicy = "no-referrer"; image.crossOrigin = "anonymous";
         let url = photoUrl(photo);
         try { const parsed = new URL(url); if (!["https:", "blob:"].includes(parsed.protocol)) url = null; } catch (_) { url = null; }

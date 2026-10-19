@@ -100,6 +100,7 @@ class LocalSQLBlogCloud extends ShareCloud {
         this.blogRequests.push({ rpc, device, owner, body: copy(body) });
         const response = this.rpc(owner, rpc, body);
         if (this.failure === 'save-ack' && rpc === 'life_blog_save') { this.failure = null; this.expectedFailures++; return route.abort('failed'); }
+        if (this.failure === 'publish-ack' && rpc === 'life_blog_publish') { this.failure = null; this.expectedFailures++; return route.abort('failed'); }
         return send(response);
       }
       assert(owner, 'Storage originals require the synthetic authenticated owner');
@@ -147,7 +148,7 @@ async function main() {
     migrationSha256 = digest(Buffer.from(migration));
   }
   await server.initialize();
-  const report = { checks: [], visual: [], consoleErrors: [], pageErrors: [], external: [], expectedErrors: 0, migrationSha256,
+  const report = { checks: [], visual: [], consoleErrors: [], pageErrors: [], external: [], expectedErrors: 0, migrationSha256, syncScriptHashes: {}, syncScriptLoads: [],
     scope: 'Real local application/SDK/IndexedDB → intercepted synthetic HTTP → actual PostgreSQL RPCs/RLS in an independent network:none database. Auth and Storage binary/Edge delivery are simulated. No production, Google OAuth, Apple hardware or deployment claim.' };
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });
   const contexts = [], pages = [];
@@ -159,6 +160,7 @@ async function main() {
       const write = Storage.prototype.setItem; Storage.prototype.setItem = function (...args) { __completionWrites.push(args[0]); return write.apply(this, args); };
     });
     await context.route('**/*', route => { const origin = new URL(route.request().url()).origin; if ([new URL(base).origin, cloud].includes(origin)) return route.fallback(); report.external.push(origin); return route.abort(); });
+    await context.route(base + '/assets/life/blog-sync.js', async route => { const response = await route.fetch(), bytes = await response.body(); report.syncScriptHashes[name] = digest(bytes); report.syncScriptLoads.push({ device: name, hash: digest(bytes) }); return route.fulfill({ response, body: bytes }); });
     const page = await context.newPage(); pages.push(page); page.setDefaultTimeout(25000);
     page.on('pageerror', error => report.pageErrors.push(error.message));
     page.on('console', event => { if (event.type() !== 'error') return;
@@ -203,6 +205,48 @@ async function main() {
   };
   const publishedURL = async p => { await click(p, '공개 게시·갱신'); const link = p.getByRole('link', { name: '공개한 글 열기', exact: true }); await link.waitFor(); return link.getAttribute('href'); };
   const publicState = async (p, state) => p.waitForFunction(state => document.querySelector('#blogStatus')?.dataset.state === state, state);
+  const syncState = (p, id) => p.evaluate(async id => { const s = HaedoLife.Shell.storage; return s.readBlogSyncState(await s.getActive(), id); }, id);
+  const fingerprint = (p, id) => p.evaluate(async id => {
+    const s = HaedoLife.Shell.storage, doc = await s.readPhotoPost(await s.getActive(), id);
+    return { ...doc, photos: await Promise.all(doc.photos.map(async ({ blob, ...metadata }) => ({ ...metadata, actualHash: await HaedoLife.PhotoPost.digest(blob) }))) };
+  }, id);
+  const serverPanel = async (p, id) => {
+    const panel = row(p, id).locator('.blog-manager-server'); await panel.waitFor();
+    if (!await panel.evaluate(node => node.open)) await panel.locator(':scope > summary').click();
+    return panel;
+  };
+  const synchronize = async (p, id) => {
+    await manager(p); const panel = await serverPanel(p, id);
+    await panel.getByRole('button', { name: '서버와 변경 확인', exact: true }).click();
+    await p.waitForFunction(() => !document.querySelector('.blog-manager[aria-busy="true"]'));
+    return syncState(p, id);
+  };
+  const editPhotoPost = async (p, doc, title, prefix) => {
+    await manager(p); await row(p, doc.id).getByRole('button', { name: doc.title, exact: true }).click(); await p.locator('.photo-article').waitFor();
+    await click(p, '글 수정'); await p.locator('#photoTitle').fill(title);
+    await p.evaluate(prefix => Quill.find(document.querySelector('.ql-container')).insertText(0, prefix, 'user'), prefix);
+    await click(p, '글 저장'); await p.locator('.photo-article').waitFor();
+    const next = (await data(p)).docs.find(value => value.status === 'saved' && value.title === title);
+    assert(next); assert.notEqual(next.id, doc.id); assert.deepEqual(next.photos.map(photo => photo.digest), doc.photos.map(photo => photo.digest));
+    return next;
+  };
+  const chooseConflict = async (p, id, name) => {
+    const panel = await serverPanel(p, id);
+    await panel.getByRole('button', { name, exact: true }).click();
+    await p.waitForFunction(() => !document.querySelector('.blog-manager[aria-busy="true"]'));
+  };
+  const newSavedCopy = async (p, previous, expectedTitle) => {
+    const added = (await data(p)).docs.filter(doc => doc.status === 'saved' && !previous.docs.some(before => before.id === doc.id));
+    assert.equal(added.length, 1); assert.equal(added[0].title, expectedTitle); return added[0];
+  };
+  const assertPhotoCopy = async (p, doc, source) => {
+    const actual = await fingerprint(p, doc.id);
+    assert.deepEqual(actual.photos.map(photo => [photo.digest, photo.actualHash, photo.width, photo.height, photo.size]), source.photos.map(photo => [photo.digest, photo.digest, photo.width, photo.height, photo.size]));
+    assert(actual.photos.every(photo => !source.photos.some(old => old.id === photo.id)));
+    const remap = new Map(source.photos.map((photo, index) => [photo.id, actual.photos[index].id]));
+    assert.deepEqual(actual.ops, source.ops.map(op => typeof op.insert === 'string' ? op : { ...op, insert: { photo: { ...op.insert.photo, id: remap.get(op.insert.photo.id) } } }));
+    return actual;
+  };
   const capture = async (p, scene, selector) => {
     const inspect = require('./home-entry-browser.cjs').inspectHome;
     for (const width of [1440, 820, 390]) { await p.setViewportSize({ width, height: 1000 }); await p.evaluate(() => document.fonts.ready); const metrics = await p.evaluate(inspect, selector);
@@ -330,6 +374,162 @@ async function main() {
       assert.equal(await visitor.page.evaluate(async url => (await fetch(url, { credentials: 'omit', cache: 'no-store' })).status, receivedSrc), 404);
       assert.equal(server.rpc(null, 'life_blog_public_media', { p_token: receivedToken, p_photo_id: receivedPublic.photos[0].id }, 'service_role'), null);
       assert.deepEqual(await preserved(second.page), before); assert.deepEqual(await preserved(page), original);
+
+      // Close the device loop through the real editor, HTTP SDK and SQL CAS.
+      // A received copy is independent; neither conflict choice may discard
+      // the other device's complete original or change its public snapshot.
+      const remotePostId = photoPost.doc.id, originalA = await fingerprint(page, remotePostId);
+      const readRemote = () => server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: remotePostId });
+      const initialRemoteRevision = readRemote().revision;
+      const initialPublicationRevision = readRemote().publication.revision;
+      report.continuity = [];
+      const phase = name => { const remote = readRemote(); report.continuity.push({ name, remoteRevision: remote.revision, publicationRevision: remote.publication?.revision || 0 }); console.log('CONTINUITY ' + name); };
+
+      const editedB = await editPhotoPost(second.page, received, 'B에서 다듬은 여행 글 ' + suffix, 'B에서 이어 쓴 첫 수정\n');
+      assert.equal((await synchronize(second.page, editedB.id)).remoteRevision, initialRemoteRevision + 1);
+      assert.equal(readRemote().data.title, editedB.title);
+      await review(second.page, editedB.id, [editedB.photos[1].id]);
+      const continuityURL = await publishedURL(second.page), continuityToken = new URL(continuityURL).searchParams.get('post');
+      assert.notEqual(continuityURL, receivedURL, 'A withdrawn token must stay revoked when a later device publishes');
+      assert.equal(readRemote().publication.revision, initialPublicationRevision + 1);
+      const bPublication = server.rpc(null, 'life_blog_public_read', { p_token: continuityToken });
+      assert.equal(bPublication.snapshot.photos.length, 1); assert.equal(bPublication.snapshot.photos[0].digest, editedB.photos[1].digest);
+      assert.deepEqual(await fingerprint(page, remotePostId), originalA);
+
+      const aFirstConflict = await synchronize(page, remotePostId);
+      assert.equal(aFirstConflict.status, 'conflict'); assert.equal(aFirstConflict.conflict.remoteRevision, initialRemoteRevision + 1);
+      assert.deepEqual(await fingerprint(page, remotePostId), originalA);
+      const aBeforeReceive = await data(page);
+      await chooseConflict(page, remotePostId, '기존 글을 남기고 서버 글로 이어쓰기');
+      const returnedA = await newSavedCopy(page, aBeforeReceive, editedB.title);
+      await assertPhotoCopy(page, returnedA, editedB); assert.equal((await syncState(page, remotePostId)).enabled, false);
+      assert.deepEqual(await fingerprint(page, remotePostId), originalA);
+      assert.deepEqual(server.rpc(null, 'life_blog_public_read', { p_token: continuityToken }), bPublication);
+      phase('B edit returns to A as a fresh copy; the original A and selected public snapshot survive');
+
+      const editedA = await editPhotoPost(page, returnedA, 'A에서 이어 쓴 여행 글 ' + suffix, 'A에서 이어 쓴 두 번째 수정\n');
+      const exactEditedA = await fingerprint(page, editedA.id);
+      server.failure = 'save-ack'; await synchronize(page, editedA.id);
+      const savePending = await syncState(page, editedA.id); assert(savePending.pending);
+      assert.equal(readRemote().revision, initialRemoteRevision + 2); assert.equal(readRemote().data.title, editedA.title);
+      const uploadsAfterSave = server.assetRequests.filter(request => request.method === 'POST').length;
+      assert.equal((await synchronize(page, editedA.id)).pending, null);
+      const sameSave = server.blogRequests.filter(request => request.rpc === 'life_blog_save' && request.device === owner.name && request.body.p_operation_id === savePending.pending.operationId);
+      assert.equal(sameSave.length, 2); assert.deepEqual(sameSave[0].body, sameSave[1].body);
+      assert.equal(readRemote().revision, initialRemoteRevision + 2);
+      assert.equal(server.assetRequests.filter(request => request.method === 'POST').length, uploadsAfterSave);
+      assert.deepEqual(await fingerprint(page, editedA.id), exactEditedA);
+      await review(page, editedA.id, [editedA.photos[0].id]); assert.equal(await publishedURL(page), continuityURL);
+      const aPublication = server.rpc(null, 'life_blog_public_read', { p_token: continuityToken });
+      assert.equal(aPublication.revision, initialPublicationRevision + 2); assert.equal(aPublication.snapshot.photos[0].digest, editedA.photos[0].digest);
+      phase('A edit replays the same lost save receipt and explicitly updates the same active public URL');
+
+      const competingB = await editPhotoPost(second.page, editedB, 'B의 별도 충돌 입력 ' + suffix, 'B가 별도로 남긴 충돌 입력\n');
+      const exactCompetingB = await fingerprint(second.page, competingB.id);
+      const firstBConflict = await synchronize(second.page, competingB.id);
+      assert.equal(firstBConflict.status, 'conflict'); assert.equal(firstBConflict.conflict.remoteRevision, initialRemoteRevision + 2);
+      assert.deepEqual(await fingerprint(second.page, competingB.id), exactCompetingB);
+      assert.deepEqual(server.rpc(null, 'life_blog_public_read', { p_token: continuityToken }), aPublication);
+
+      const latestA = await editPhotoPost(page, editedA, 'A가 비교 중 다시 다듬은 글 ' + suffix, 'A가 비교 중 새로 남긴 문장\n');
+      assert.equal((await synchronize(page, latestA.id)).remoteRevision, initialRemoteRevision + 3);
+      const exactLatestA = await fingerprint(page, latestA.id);
+      const writes = () => ({ saves: server.blogRequests.filter(request => request.rpc === 'life_blog_save').length,
+        prepares: server.blogRequests.filter(request => request.rpc === 'life_blog_prepare_asset').length,
+        publications: server.blogRequests.filter(request => request.rpc === 'life_blog_publish').length,
+        uploads: server.assetRequests.filter(request => request.method === 'POST').length });
+      const beforeRecheckWrites = writes(), oldComparison = row(second.page, competingB.id).locator('[data-sync-post]');
+      assert.match(await oldComparison.innerText(), new RegExp('서버 ' + (initialRemoteRevision + 2) + '판'));
+      // A real second tab shares B's IndexedDB. It explicitly refreshes the
+      // persisted comparison while B's first tab retains its rendered choice.
+      const otherB = await second.context.newPage(); otherB.setDefaultTimeout(25000);
+      otherB.on('pageerror', error => report.pageErrors.push(error.message));
+      otherB.on('console', event => { if (event.type() === 'error') report.consoleErrors.push(event.text()); });
+      try {
+        await otherB.goto(base + '/index.html'); await ready(otherB); await settle(otherB);
+        const refreshedConflict = await synchronize(otherB, competingB.id);
+        assert.equal(refreshedConflict.status, 'conflict'); assert.equal(refreshedConflict.conflict.remoteRevision, initialRemoteRevision + 3, 'Explicit recheck must refresh an already conflicted comparison');
+        assert.deepEqual(writes(), beforeRecheckWrites, 'Refreshing a conflict must not upload, save or publish');
+        assert.match(await oldComparison.innerText(), new RegExp('서버 ' + (initialRemoteRevision + 2) + '판'), 'The first tab must still hold its old rendered comparison');
+        const beforeStaleChoice = await data(second.page);
+        await chooseConflict(second.page, competingB.id, '양쪽 사본을 남기고 내 글로 보관');
+        await second.page.locator('.blog-manager-list[data-state="ready"]').waitFor();
+        await serverPanel(second.page, competingB.id);
+        assert.deepEqual(await data(second.page), beforeStaleChoice, 'A stale visible choice must create no recovery copy or local replacement');
+        assert.deepEqual(writes(), beforeRecheckWrites, 'A stale visible choice must have no remote write side effects');
+        const latestComparison = await row(second.page, competingB.id).locator('[data-sync-post]').innerText();
+        assert.match(latestComparison, new RegExp('서버 ' + (initialRemoteRevision + 3) + '판'));
+        assert(latestComparison.includes(latestA.title), 'Rejected stale choice must show the latest remote comparison');
+        assert.deepEqual(server.rpc(null, 'life_blog_public_read', { p_token: continuityToken }), aPublication);
+        report.staleVisibleChoice = { refusedWithoutWrites: true, refreshedRemoteRevision: initialRemoteRevision + 3 };
+      } finally { await otherB.close(); }
+      assert.deepEqual(await fingerprint(second.page, competingB.id), exactCompetingB);
+      const bBeforeLocalChoice = await data(second.page);
+      await chooseConflict(second.page, competingB.id, '양쪽 사본을 남기고 내 글로 보관');
+      const recoveryB = await newSavedCopy(second.page, bBeforeLocalChoice, latestA.title);
+      await assertPhotoCopy(second.page, recoveryB, latestA);
+      assert.equal((await syncState(second.page, recoveryB.id)).enabled, false);
+      const resolvedB = await syncState(second.page, competingB.id);
+      assert.equal(resolvedB.conflict, null); assert.equal(resolvedB.remoteRevision, initialRemoteRevision + 4);
+      assert.deepEqual(resolvedB.publication, readRemote().publication, 'A local conflict choice must carry the observed public revision without publishing');
+      assert.equal(readRemote().data.title, competingB.title);
+      assert.deepEqual(await fingerprint(second.page, competingB.id), exactCompetingB);
+      assert.deepEqual(await fingerprint(page, latestA.id), exactLatestA);
+      assert.deepEqual(server.rpc(null, 'life_blog_public_read', { p_token: continuityToken }), aPublication);
+      await capture(second.page, 'continuity-conflict-copies', '#lifeBlogManager'); await second.page.setViewportSize({ width: 1440, height: 1000 });
+      phase('An explicitly refreshed conflict retains both exact originals and carries the public revision without changing publication');
+
+      assert.equal((await synchronize(page, latestA.id)).status, 'conflict');
+      const aBeforeFinalReceive = await data(page);
+      await chooseConflict(page, latestA.id, '기존 글을 남기고 서버 글로 이어쓰기');
+      const finalA = await newSavedCopy(page, aBeforeFinalReceive, competingB.title);
+      await assertPhotoCopy(page, finalA, competingB); assert.equal((await syncState(page, latestA.id)).enabled, false);
+      assert.deepEqual(await fingerprint(page, latestA.id), exactLatestA); assert.deepEqual(await fingerprint(page, remotePostId), originalA);
+      await manager(page); await review(page, finalA.id, [finalA.photos[0].id]); assert.equal(await publishedURL(page), continuityURL);
+      phase('The chosen B result returns to A under new IDs while A keeps its competing original');
+
+      await click(page, '공개 검토 닫기'); await review(page, finalA.id, [finalA.photos[0].id]);
+      const beforePublicRace = readRemote(), publicationCalls = server.blogRequests.filter(request => request.rpc === 'life_blog_publish').length;
+      // A real second SQL actor advances only publication CAS; private CAS and
+      // every byte remain unchanged while A still holds its reviewed preview.
+      const otherPublication = server.rpc(accounts.a.id, 'life_blog_publish', { p_post_id: remotePostId, p_expected_revision: beforePublicRace.revision,
+        p_operation_id: require('node:crypto').randomUUID(), p_photo_ids: [beforePublicRace.data.photos[1].id], p_author: { name: '다른 기기의 명시 공개', intro: '두 번째 사진만 직접 선택했습니다.' }, p_expected_publication_revision: beforePublicRace.publication.revision });
+      assert.equal(otherPublication.status, 'stored');
+      const publicRaceWinner = server.rpc(null, 'life_blog_public_read', { p_token: continuityToken });
+      assert.equal(publicRaceWinner.snapshot.photos.length, 1); assert.equal(publicRaceWinner.snapshot.photos[0].digest, finalA.photos[1].digest);
+      await click(page, '공개 게시·갱신');
+      assert.equal(server.blogRequests.filter(request => request.rpc === 'life_blog_publish').length, publicationCalls, 'A stale public preview must be rejected before another publication RPC');
+      assert.equal(readRemote().revision, beforePublicRace.revision);
+      assert.deepEqual(server.rpc(null, 'life_blog_public_read', { p_token: continuityToken }), publicRaceWinner);
+      assert.equal((await syncState(page, finalA.id)).publication.revision, otherPublication.revision);
+      await click(page, '공개 검토 닫기'); await review(page, finalA.id, [finalA.photos[0].id]);
+      server.failure = 'publish-ack'; await click(page, '공개 게시·갱신');
+      const publishPending = await syncState(page, finalA.id); assert(publishPending.publishPending);
+      const committedPublic = server.rpc(null, 'life_blog_public_read', { p_token: continuityToken });
+      const privateRevisionBeforeReplay = readRemote().revision, uploadsBeforeReplay = server.assetRequests.filter(request => request.method === 'POST').length;
+      assert.equal(await publishedURL(page), continuityURL);
+      const repeatedPublish = server.blogRequests.filter(request => request.rpc === 'life_blog_publish' && request.body.p_operation_id === publishPending.publishPending.operationId);
+      assert.equal(repeatedPublish.length, 2); assert.deepEqual(repeatedPublish[0].body, repeatedPublish[1].body);
+      assert.equal((await syncState(page, finalA.id)).publishPending, null);
+      assert.deepEqual(server.rpc(null, 'life_blog_public_read', { p_token: continuityToken }), committedPublic);
+      assert.equal(readRemote().revision, privateRevisionBeforeReplay); assert.equal(server.assetRequests.filter(request => request.method === 'POST').length, uploadsBeforeReplay);
+      assert.equal(committedPublic.snapshot.photos.length, 1); assert.equal(committedPublic.snapshot.photos[0].digest, finalA.photos[0].digest);
+      assert(!JSON.stringify(committedPublic.snapshot).includes(finalA.photos[1].digest));
+      assert(!JSON.stringify(committedPublic.snapshot).includes('A가 비교 중 새로 남긴 문장'));
+      await visitor.page.goto(continuityURL); await publicState(visitor.page, 'published');
+      const finalImage = visitor.page.locator('#blogContent img'); await finalImage.scrollIntoViewIfNeeded(); await finalImage.evaluate(node => node.decode());
+      assert.equal(await finalImage.count(), 1); assert.deepEqual(await finalImage.evaluate(node => [node.naturalWidth, node.naturalHeight]), [4032, 3024]);
+      const finalSrc = await finalImage.getAttribute('src');
+      assert.equal(await visitor.page.evaluate(async url => { const blob = await (await fetch(url, { credentials: 'omit', cache: 'no-store' })).blob(); return [...new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()))].map(n => n.toString(16).padStart(2, '0')).join(''); }, finalSrc), finalA.photos[0].digest);
+      await capture(visitor.page, 'continuity-final-public', '#blogContent');
+      await click(page, '공개 철회'); await visitor.page.locator('#blogRefresh').click(); await publicState(visitor.page, 'missing');
+      assert.equal(await visitor.page.locator('#blogContent').innerText(), '');
+      assert.equal(await visitor.page.evaluate(async url => (await fetch(url, { credentials: 'omit', cache: 'no-store' })).status, finalSrc), 404);
+      assert.equal(server.rpc(null, 'life_blog_public_read', { p_token: continuityToken }), null);
+      assert.deepEqual(await fingerprint(page, remotePostId), originalA); assert.deepEqual(await fingerprint(page, latestA.id), exactLatestA);
+      assert.deepEqual(await fingerprint(second.page, competingB.id), exactCompetingB);
+      assert.deepEqual(await preserved(second.page), before); assert.deepEqual(await preserved(page), original);
+      phase('Independent public CAS and a lost publication receipt preserve exact selection until explicit refresh, replay and withdrawal');
     });
     assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.external, []);
     report.pass = true;

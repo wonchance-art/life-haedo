@@ -1,4 +1,4 @@
-/* Actual v131 -> current SW, cached public catalog and private local feedback.
+/* Actual v133 -> current SW, cached public catalog and private local feedback.
  * Prior SW script only is old; app modules are current. Real SDK/IDB/SW with
  * anonymous Auth HTTP. No real account, source-site fetch or model download. */
 'use strict';
@@ -9,7 +9,7 @@ const feedPath = '/assets/life/discovery-feed.json', feedCache = 'haedo-discover
 const assets = ['discovery.js', 'discovery-profile.js', 'discovery-settings.js', 'discovery-ui.js', 'discovery.css'].map(file => 'assets/life/' + file);
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const report = { createdAt: new Date().toISOString(), checks: [], consoleErrors: [], pageErrors: [], expectedTransportErrors: [], modelRequests: [], unexpectedExternal: [], catalogRequests: [], blockedProbes: [],
-  scope: 'Real Chromium SDK/IndexedDB/Service Worker. Only v131 sw.js is prior code; all app modules are current. Real prepared public catalog served by an anonymous local fixture; synthetic title/build-time update for freshness tests. Mocked Auth response during cached-shell reload is separate from strict offline Auth refusal. No production, Apple device, upstream collection or model validation.' };
+  scope: 'Real Chromium SDK/IndexedDB/Service Worker. Only v133 sw.js is prior code; all app modules are current. Real prepared public catalog served by an anonymous local fixture; synthetic title/build-time update for freshness tests. Mocked Auth response during cached-shell reload is separate from strict offline Auth refusal. No production, Apple device, upstream collection or model validation.' };
 async function wait(page, fn, arg) {
   const end = Date.now() + 45000;
   while (Date.now() < end) { if (await page.evaluate(fn, arg)) return; await new Promise(resolve => setTimeout(resolve, 80)); }
@@ -17,11 +17,11 @@ async function wait(page, fn, arg) {
 }
 async function main() {
   await fs.mkdir(output, { recursive: true });
-  const oldSw = await fs.readFile(path.join(__dirname, 'fixtures/external-discovery/sw-v131.js'));
+  const oldSw = await fs.readFile(path.join(__dirname, 'fixtures/external-discovery/sw-pre-catalog-v133.js'));
   const newSw = await fs.readFile(path.join(project, 'sw.js'));
   const cacheName = data => data.toString().match(/const CACHE\s*=\s*['"]([^'"]+)/)[1];
   report.oldCache = cacheName(oldSw); report.newCache = cacheName(newSw);
-  assert.equal(report.oldCache, 'haedo-v131'); assert.ok(Number(report.newCache.match(/^haedo-v(\d+)$/)?.[1]) > 131);
+  assert.equal(report.oldCache, 'haedo-v133'); assert.ok(Number(report.newCache.match(/^haedo-v(\d+)$/)?.[1]) > 133);
   report.oldSwSHA256 = sha(oldSw); report.newSwSHA256 = sha(newSw);
   let old = true, failCatalog = false, strictOffline = false, transportProbe = false, probing = false;
   const originalFeed = JSON.parse(await fs.readFile(path.join(project, feedPath.slice(1)), 'utf8'));
@@ -71,7 +71,7 @@ async function main() {
   const check = async (name, action) => { await action(); report.checks.push(name); console.log('PASS ' + name); };
   try {
     await open('interests');
-    await check('actual v131 installs without fetching catalog, original sites or model assets', async () => {
+    await check('actual v133 installs without fetching catalog, original sites or model assets', async () => {
       await wait(page, async name => (await caches.keys()).includes(name) && !!navigator.serviceWorker.controller && (await navigator.serviceWorker.getRegistration())?.active?.state === 'activated', report.oldCache);
       assert.equal(report.catalogRequests.length, 0); assert.deepEqual(report.modelRequests, []); assert.deepEqual(report.unexpectedExternal, []);
     });
@@ -88,7 +88,7 @@ async function main() {
       if ((await s.saveDiscoverySettings(id, changedSettings, settings.revision)).status !== 'stored') throw Error('Anonymous settings fixture failed');
     });
     const before = await state();
-    await check('v131 -> current worker preserves exact originals, workbench, manual interests, feedback and settings', async () => {
+    await check('v133 -> current worker preserves exact originals, workbench, manual interests, feedback and settings', async () => {
       old = false; await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
       await wait(page, async ({ oldCache, newCache }) => { const keys = await caches.keys(), r = await navigator.serviceWorker.getRegistration(); return !keys.includes(oldCache) && keys.includes(newCache) && r?.active?.state === 'activated' && navigator.serviceWorker.controller === r.active; }, { oldCache: report.oldCache, newCache: report.newCache });
       await page.reload(); await ready(page); assert.deepEqual(await state(), before);

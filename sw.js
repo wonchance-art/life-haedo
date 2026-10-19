@@ -1,19 +1,38 @@
 /* Versioned app shell. Personal documents remain in localStorage/IndexedDB. */
-const CACHE='haedo-v132';
-const SHELL=['./assets/life/discovery.js','./assets/life/discovery-profile.js','./assets/life/discovery-settings.js','./assets/life/discovery-ui.js','./assets/life/discovery.css','./assets/life/interest-model-loader.js','./assets/life/interest-model-worker.js','./assets/life/interest-analysis.js','./assets/life/interest-profile.js','./assets/life/interest-policy.js','./assets/life/interest-ui.js','./assets/life/interest.css','./assets/life/obsidian-update.js','./assets/life/obsidian-update-ui.js','./assets/life/original-attachments.js','./assets/life/original-attachments-ui.js','./assets/life/original-attachments.css','./assets/life/preservation-references.js','./assets/life/preservation-package.js','./assets/life/preservation.js','./assets/life/preservation-ui.js','./assets/life/preservation.css','./assets/life/source-reference.js','./assets/life/blog.js','./assets/life/blog-evidence.js','./assets/life/blog-remote.js','./assets/life/blog-sync.js','./assets/life/blog-public-ui.js','./assets/life/blog-manager.js','./assets/life/blog-public.js','./assets/life/blog-public.css','./assets/life/blog-manager.css','./','./index.html','./login.html','./workspace.html','./timeline.html',
-  './assets/life/obsidian-decisions.js','./assets/life/obsidian-package.js',
-  './goals.html','./habits.html','./privacy.html','./manifest.webmanifest','./icon.svg','./icon-maskable.svg',
-  './vendor/daisyui.css','./vendor/daisyui-themes.css','./assets/app.css',
-  './assets/haedo-type.css','./vendor/pretendard/PretendardVariable.woff2',
-  './assets/haedo-motion.js','./assets/haedo-motion.css',
-  './assets/data.js','./assets/sync.js','./assets/app.js','./assets/workspace.js',
-  './assets/platform-config.js','./assets/platform.css','./assets/platform-auth.js',
-  './assets/haedo-navigation.js','./assets/haedo-shell.css','./assets/timeline-shell.css',
-  './assets/platform-data.js','./assets/platform-store.js','./assets/platform-ui.js','./assets/platform-life-remote.js','./assets/timeline-entry.js',
-  './life.html','./vendor/idb/idb.js','./vendor/supabase/supabase.js','./assets/life/unified-search.js','./assets/life/unified-search-ui.js','./assets/life/core.js','./assets/life/writing.js','./assets/life/writing-ui.js','./assets/life/nine-board.js','./assets/life/nine-board-ui.js','./assets/life/nine-board.css','./assets/life/page-posts.js','./assets/life/page-posts-view.js','./assets/life/page-media.js','./assets/life/page-composer.js','./assets/life/photo-post.js','./assets/life/photo-post-attachments.js','./assets/life/photo-post-ui.js','./assets/life/photo-post.css','./vendor/quill/quill.js','./vendor/quill/quill.snow.css','./vendor/fflate/fflate.js','./assets/life/page-posts.css','./assets/life/workbench.js','./assets/life/reflection.js','./assets/life/reflection-lenses.js','./assets/life/reflection-lenses-ui.js','./assets/life/books.js','./assets/life/book-history.js','./assets/life/book-print.js','./assets/life/rediscovery.js','./assets/life/share.js','./assets/life/share-remote.js','./assets/life/share-view.js','./assets/life/share-view.css','./assets/life/storage.js',
-  './assets/life/remote.js','./assets/life/sync.js',
-  './assets/life/composition-remote.js','./assets/life/composition-sync.js','./assets/life/composition-ui.js','./assets/life/writing-remote.js','./assets/life/writing-sync.js','./assets/life/writing-sync-ui.js','./assets/life/reading-position.js',
-  './assets/life/legacy.js','./assets/life/icons.js','./assets/life/workbench-ui.js','./assets/life/collection.js','./assets/life/collection-media.js','./assets/life/collection-metadata.js','./assets/life/collection-picker.js','./assets/life/collection-ui.js','./assets/life/collection.css', './assets/life/home.js','./assets/life/ui.js','./assets/life/ui.css','./assets/life/workbench.css','./assets/life/home.css','./assets/life/shell.js'];
+const CACHE='haedo-v134';
+const SHELL=[
+  './assets/life/discovery.js','./assets/life/discovery-profile.js','./assets/life/discovery-settings.js','./assets/life/discovery-ui.js','./assets/life/discovery.css',
+  './assets/life/interest-model-loader.js','./assets/life/interest-model-worker.js','./assets/life/interest-analysis.js','./assets/life/interest-profile.js','./assets/life/interest-policy.js',
+  './assets/life/interest-ui.js','./assets/life/interest.css','./assets/life/obsidian-update.js','./assets/life/obsidian-update-ui.js','./assets/life/original-attachments.js',
+  './assets/life/original-attachments-ui.js','./assets/life/original-attachments.css','./assets/life/preservation-references.js','./assets/life/preservation-package.js','./assets/life/preservation.js',
+  './assets/life/preservation-ui.js','./assets/life/preservation.css','./assets/life/source-reference.js','./assets/life/blog.js','./assets/life/blog-evidence.js',
+  './assets/life/blog-remote.js','./assets/life/blog-sync.js','./assets/life/blog-public-ui.js','./assets/life/blog-manager.js','./assets/life/blog-public.js',
+  './assets/life/blog-public.css','./assets/life/blog-manager.css','./','./index.html','./login.html',
+  './workspace.html','./timeline.html','./assets/life/obsidian-decisions.js','./assets/life/obsidian-package.js','./goals.html',
+  './habits.html','./privacy.html','./manifest.webmanifest','./icon.svg','./icon-maskable.svg',
+  './vendor/daisyui.css','./vendor/daisyui-themes.css','./assets/app.css','./assets/haedo-type.css','./vendor/pretendard/PretendardVariable.woff2',
+  './assets/haedo-motion.js','./assets/haedo-motion.css','./assets/data.js','./assets/sync.js','./assets/app.js',
+  './assets/workspace.js','./assets/platform-config.js','./assets/platform.css','./assets/platform-auth.js','./assets/haedo-navigation.js',
+  './assets/haedo-shell.css','./assets/timeline-shell.css','./assets/platform-data.js','./assets/platform-store.js','./assets/platform-ui.js',
+  './assets/platform-life-remote.js','./assets/timeline-entry.js','./life.html','./vendor/idb/idb.js','./vendor/supabase/supabase.js',
+  './assets/life/unified-search.js','./assets/life/unified-search-ui.js','./assets/life/core.js','./assets/life/writing.js','./assets/life/writing-ui.js',
+  './assets/life/nine-board.js','./assets/life/nine-board-ui.js','./assets/life/nine-board.css','./assets/life/page-posts.js','./assets/life/page-posts-view.js',
+  './assets/life/page-media.js','./assets/life/page-composer.js','./assets/life/photo-post.js','./assets/life/photo-post-attachments.js','./assets/life/photo-post-ui.js',
+  './assets/life/photo-post.css','./vendor/quill/quill.js','./vendor/quill/quill.snow.css','./vendor/fflate/fflate.js','./assets/life/page-posts.css',
+  './assets/life/workbench.js','./assets/life/reflection.js','./assets/life/reflection-lenses.js','./assets/life/reflection-lenses-ui.js','./assets/life/books.js',
+  './assets/life/book-history.js','./assets/life/book-print.js','./assets/life/rediscovery.js','./assets/life/share.js','./assets/life/share-remote.js',
+  './assets/life/share-view.js','./assets/life/share-view.css','./assets/life/storage.js','./assets/life/remote.js','./assets/life/sync.js',
+  './assets/life/composition-remote.js','./assets/life/composition-sync.js','./assets/life/composition-ui.js','./assets/life/writing-remote.js','./assets/life/writing-sync.js',
+  './assets/life/writing-sync-ui.js','./assets/life/reading-position.js','./assets/life/legacy.js','./assets/life/icons.js','./assets/life/workbench-ui.js',
+  './assets/life/collection.js','./assets/life/collection-media.js','./assets/life/collection-metadata.js','./assets/life/collection-picker.js','./assets/life/collection-ui.js',
+  './assets/life/collection.css','./assets/life/home.js','./assets/life/ui.js','./assets/life/ui.css','./assets/life/workbench.css',
+  './assets/life/home.css','./assets/life/shell.js','./assets/life/public-cover.js','./assets/life/public-cover-reader.js','./assets/life/public-cover-view.js',
+  './assets/life/public-cover-remote.js','./assets/life/public-cover-ui.js','./assets/life/public-cover-return.js','./assets/life/public-cover.css','./assets/life/material-continuity.js',
+  './assets/life/material-continuity-remote.js','./assets/life/material-continuity-sync.js','./assets/life/material-continuity-ui.js','./assets/life/material-writing.js','./assets/life/material-writing-sources.js',
+  './assets/life/material-writing-ui.js','./assets/life/material-writing.css','./assets/life/nine-public.js','./assets/life/nine-public-view.js','./assets/life/nine-public-remote.js',
+  './assets/life/nine-public-sharing.js','./assets/life/nine-public.css','./assets/life/blog-series-public.js','./assets/life/blog-series.js','./assets/life/blog-series-package.js',
+  './assets/life/blog-series-remote.js','./assets/life/blog-series-reader.js','./assets/life/blog-series-ui.js','./assets/life/blog-series-sharing.js','./assets/life/blog-series.css'
+];
 const shellURLs=new Set(SHELL.map(path=>new URL(path,self.registration.scope).href));
 // Public catalog changes independently of the installed application release.
 // Loads are manual or explicitly enabled visible-screen refreshes, never shell install.

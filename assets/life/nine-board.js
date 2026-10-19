@@ -60,6 +60,13 @@
     return {title:board.title||'9칸 구성',areaTitle:area.title||'이름 없는 영역',
       items:Array.from({length:9},(_,index)=>area.items[index]?clone(area.items[index].attachment):null)};
   }
+  function composeContent(board,areaId){
+    const content=imageContent(board,areaId),types=(root.HaedoLife?.Collection||require('./collection.js')).TYPES;
+    const rows=content.items.map((item,index)=>item?
+      [String(index+1)+'. '+item.title,[item.creator,types[item.type]].filter(Boolean).join(' · '),'출처: '+(item.url||'출처 주소 없음')].join('\n'):
+      String(index+1)+'. 빈 칸');
+    return {...content,text:[content.title,content.areaTitle,...rows].join('\n\n')};
+  }
   function imageLines(context,value,width,limit){
     const parts=typeof Intl.Segmenter==='function'?[...new Intl.Segmenter('ko',{granularity:'grapheme'}).segment(value)].map(part=>part.segment):Array.from(value);
     const lines=[];let line='';
@@ -105,5 +112,5 @@
     draw('이미지는 보기용입니다. 전체 내용은 JSON/HTML, 사본 복원은 JSON을 이용하세요.',72,2028,1656,{size:23,lineHeight:32,limit:1,color:'#66666f'});
     return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(Object.assign(new Error('PNG를 만들지 못했습니다. 원래 구성은 그대로입니다.'),{code:'nine_board_image_failed'})),'image/png'));
   }
-  return Object.freeze({LIMITS,validate,boards,empty,create,snapshot,evidenceSnapshot,reference,hasReferences,backup,readBackup,copies,changed,reviewBoards,html,imageContent,png});
+  return Object.freeze({LIMITS,validate,boards,empty,create,snapshot,evidenceSnapshot,reference,hasReferences,backup,readBackup,copies,changed,reviewBoards,html,imageContent,composeContent,png});
 });

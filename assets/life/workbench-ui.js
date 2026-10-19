@@ -18,7 +18,7 @@
   function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored, onLocalSaved = () => {},
     onBlogReturn = () => {}, onBlogModeChange = () => {},
     onSelectionUsed = () => {}, onSelectionCancel = () => {}, onArrange = () => {}, onWorkbenchNavigate = () => {}, onChapterImport = () => {},
-    shareRemoteFactory = () => life.ShareRemote?.createOwner({ auth: global.HaedoAuth }),
+    onBundleUpdated = () => {}, shareRemoteFactory = () => life.ShareRemote?.createOwner({ auth: global.HaedoAuth }),
     sharePublicUrl = publicId => { const url = new URL('share.html', global.location.href); url.searchParams.set('id', publicId); return url.href; },
     beforeRestore = async () => {}, isDisposed = () => false }) {
     const model = life.Workbench;
@@ -79,9 +79,10 @@
       const draftConflict = !!session.composer?.hasDraftConflict?.();
       const composerDirty = !!session.composer?.dirty?.();
       const nineDirty = !!session.nine?.dirty();
+      const materialDirty = !!session.materialUI?.dirty() || !!session.materialTool?.dirty();
       statusNode.textContent = !session.state ? '구성을 불러오지 못함' : session.saving ? '이 브라우저에 저장 중…' : session.error ? '저장하지 못함 · 초안 유지' : incoming ? '선택 검토 중 · 아직 추가하지 않음' :
-        hasUnappliedAttachment ? '첨부 입력 미반영' : draftConflict ? '초안 충돌 · 입력 유지' : nineDirty ? '9칸 구성 저장 전 변경 있음' : composerDirty ? '초안 저장 전 변경 있음' : session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : '이 브라우저에 저장됨';
-      statusNode.dataset.state = session.error ? 'error' : nineDirty || draftConflict || composerDirty || hasUnappliedAttachment || session.edit !== session.stored ? 'dirty' : 'saved';
+        hasUnappliedAttachment ? '첨부 입력 미반영' : draftConflict ? '초안 충돌 · 입력 유지' : materialDirty ? '작성 준비 · 처리 전 변경 있음' : nineDirty ? '9칸 구성 저장 전 변경 있음' : composerDirty ? '초안 저장 전 변경 있음' : session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : '이 브라우저에 저장됨';
+      statusNode.dataset.state = session.error ? 'error' : materialDirty || nineDirty || draftConflict || composerDirty || hasUnappliedAttachment || session.edit !== session.stored ? 'dirty' : 'saved';
       if (mode === 'related') surface.querySelector('.wb-storage-line').hidden = !!session.state && !session.saving && !session.error && session.edit === session.stored && session.remoteRevision <= session.baseRevision;
     }
     function clearError() { if (errorNode) { errorNode.hidden = true; errorNode.replaceChildren(); delete errorNode.dataset.code; } }
@@ -258,10 +259,13 @@
       if (installing) throw fault('restore_in_progress', '새 사본을 저장하는 중입니다. 완료 후 이동해 주세요.');
       await current?.composer?.flush();
       await current?.nine?.flush();
+      await current?.seriesEditor?.flush();
+      await current?.materialUI?.flush();
+      await current?.materialTool?.flush();
       await current?.photoPosts?.flush();
       if (current?.state && current.edit !== current.stored || current?.saving) await flushSession(current);
     }
-    function dirty() { return installing || !!current && (current.edit !== current.stored || !!current.saving || !!current.composer?.dirty() || !!current.nine?.dirty() || !!current.photoPosts?.dirty()); }
+    function dirty() { return installing || !!current && (current.edit !== current.stored || !!current.saving || !!current.composer?.dirty() || !!current.nine?.dirty() || !!current.seriesEditor?.dirty() || !!current.materialUI?.dirty() || !!current.materialTool?.dirty() || !!current.photoPosts?.dirty()); }
     function sessionFor(id) {
       if (sessions.has(id)) return sessions.get(id);
       const session = { workspaceId: id, state: null, baseRevision: 0, edit: 0, stored: 0, remoteRevision: 0,
@@ -286,6 +290,7 @@
               }
               await session.composer?.flush();
               await session.nine?.flush();
+              await session.seriesEditor?.flush();
               await session.photoPosts?.flush();
               if (!incoming) { session.state = null; await render(mode); return; }
               const token = generation;
@@ -1047,13 +1052,188 @@
       onBlogModeChange({ mode: 'profile', kind: 'profile' });
       title.input.focus({ preventScroll: true });
     }
+    function renderMaterialWriting(session, token) {
+      const active = () => showing(token, session) && session.materialOpen;
+      session.materialContinuity ||= life.MaterialContinuitySync.create({ storage, auth: global.HaedoAuth });
+      const prepareHost = el('section'), output = el('section', null, 'mw-output-tools');
+      const continuityHost = el('section', null, 'mw-continuity');
+      let continuityUI = null;
+      const outputHeading = el('h3', '완성 글 활용'), outputActions = el('div', null, 'life-actions');
+      const toolHost = el('section'); toolHost.id = 'mwOutputTool'; toolHost.hidden = true;
+      let manager = null, sync = null, preservation = null, toolSequence = 0;
+      const closeTool = () => { toolSequence++; manager?.dispose(); sync?.dispose(); preservation?.dispose(); manager = sync = preservation = null; toolHost.replaceChildren(); toolHost.hidden = true; prepareHost.hidden = false; continuityHost.hidden = false; outputActions.hidden = false; output.classList.remove('is-open'); outputHeading.textContent = '완성 글 활용'; };
+      const tool = { flush: async () => { await manager?.flush(); preservation?.flush(); await continuityUI?.flush(); }, dirty: () => !!manager?.dirty() || !!preservation?.dirty() || !!continuityUI?.dirty() };
+      session.materialTool = tool;
+      const openPost = async context => {
+        const targetCurrent = () => active() && session.materialUI?.getView().planId === context.planId;
+        if (!targetCurrent()) return;
+        const originalId = context.postId;
+        let postId = originalId, revision = context.revision;
+        // Reuse an already stored editing draft; preparation never creates an
+        // extra copy of a saved post merely to resume it.
+        if (context.resume !== false) {
+          const saved = await storage.readPhotoPost(session.workspaceId, originalId); if (!targetCurrent()) return;
+          if (Number.isSafeInteger(revision) && saved.revision !== revision) throw fault('photo_post_changed', '글이 바뀌었습니다. 작성 준비에서 다시 이어쓰기를 선택해 주세요.');
+          if (saved.status === 'saved' && !saved.archived) {
+            const rows = await storage.listPhotoPosts(session.workspaceId); if (!targetCurrent()) return;
+            for (const row of rows.filter(value => value.status === 'draft' && !value.archived).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))) {
+              const draft = await storage.readPhotoPost(session.workspaceId, row.id).catch(error => { if (error.code !== 'photo_post_missing') throw error; return null; });
+              if (!targetCurrent()) return;
+              if (draft?.status === 'draft' && !draft.archived && draft.replaces?.id === saved.id && draft.replaces.revision === saved.revision) { postId = draft.id; revision = draft.revision; break; }
+            }
+          }
+        }
+        if (!targetCurrent()) return;
+        session.materialPlanId = context.planId;
+        session.materialReturn = { planId: context.planId, postId, targetPostId: originalId };
+        session.materialOpen = false; session.searchTarget = { photoPostId: postId, photoPostRevision: revision };
+        session.nineOpen = session.seriesOpen = false; preview = false; clearError(); redraw();
+      };
+      const source = async context => {
+        const targetCurrent = () => active() && session.materialUI?.getView().planId === context.planId;
+        if (!targetCurrent()) return;
+        const bundle = await storage.read(session.workspaceId); if (!targetCurrent()) return;
+        const version = bundle.sourceVersions.find(value => value.id === context.sourceVersionId && value.sourceId === context.sourceId);
+        if (!version || !Object.hasOwn(context, 'contentHash') || version.contentHash !== context.contentHash) throw fault('source_missing', '선택한 정확한 원문을 찾지 못했습니다. 다른 버전으로 바꾸지 않았습니다.');
+        if (context.reference) await life.SourceReference.resolve(bundle, context.reference);
+        if (!targetCurrent()) return;
+        session.materialPlanId = context.planId || session.materialUI?.getView().planId;
+        await openSource(context.sourceId, context.sourceVersionId, { locator: context.locator || null, focusKey: context.focusKey });
+      };
+      session.materialUI ||= life.MaterialWritingUI.create({ storage, workspaceId: session.workspaceId,
+        getBundle: () => storage.read(session.workspaceId), isCurrent: () => workspaceIs(session),
+        onDirty: () => updateStatus(session), onOpenSource: context => session.materialCallbacks.source(context),
+        onOpenPost: context => session.materialCallbacks.openPost(context),
+        onCreatePost: context => session.materialContinuity.handoff(session.workspaceId, context.planId, context.expectedRevision),
+        onPlanChange: () => { if (active()) continuityUI?.refresh().catch(error => { if (active()) report(error, session); }); },
+        onClose: async () => { if (!session.materialOpen || !workspaceIs(session)) return; session.materialOpen = false; clearError(); redraw(); surface.querySelector('#wbPageMaterialWriting')?.focus(); } });
+      session.materialCallbacks = { source, openPost };
+      const mount = session.materialUI.mount(prepareHost, { planId: session.materialPlanId || null });
+      mount.catch(error => { if (active()) report(error, session); });
+      continuityUI = life.MaterialContinuityUI.create({ host: continuityHost, manager: session.materialContinuity, workspaceId: session.workspaceId,
+        getPlanId: () => session.materialUI.getView().planId, beforeAction: () => session.materialUI.flush(),
+        onDirty: () => updateStatus(session), isCurrent: active,
+        onReceived: async result => {
+          if (!active()) return;
+          const selectedBefore = session.materialUI.getView().planId;
+          const stillReceiving = () => active() && session.materialUI.getView().planId === selectedBefore;
+          if (result.workspaceId === session.workspaceId) {
+            const bundle = await storage.read(result.workspaceId); if (!stillReceiving()) return;
+            await onBundleUpdated(bundle); if (!stillReceiving()) return;
+            session.materialPlanId = result.planId;
+            await session.materialUI.reload({ planId: result.planId }); return;
+          }
+          const next = sessionFor(result.workspaceId); next.materialOpen = true; next.materialPlanId = result.planId;
+          await beforeRestore(); if (!stillReceiving()) return;
+          const bundle = await storage.read(result.workspaceId); if (!stillReceiving()) return;
+          await storage.setActive(result.workspaceId); if (!stillReceiving()) return;
+          await onRestored?.({ bundle });
+        } });
+      mount.then(() => { if (active()) return continuityUI.refresh(); }).catch(error => { if (active()) report(error, session); });
+      output.append(outputHeading, el('p', '준비에서 만든 글을 저장한 뒤 공개 내용을 검토하거나, 그 글과 채택한 정확한 근거를 파일로 보관합니다. 비교 메모와 질문은 이 파일에 들어가지 않습니다.', 'life-help'));
+      async function openOutput(kind) {
+        const planId = session.materialUI.getView().planId;
+        const request = ++toolSequence;
+        const requested = () => active() && request === toolSequence && session.materialUI.getView().planId === planId;
+        await flush(); if (!requested()) return;
+        const state = await storage.readMaterialWriting(session.workspaceId); if (!requested()) return;
+        const plan = state.plans.find(value => value.id === planId);
+        if (!plan?.output) throw fault('material_output_missing', '먼저 미리보기를 확인해 글 초안을 만들어 주세요.');
+        const doc = await storage.readPhotoPost(session.workspaceId, plan.output.postId); if (!requested()) return;
+        if (kind === 'file' && doc.status !== 'saved') throw fault('material_output_draft', '작성기에서 글을 저장한 뒤 근거 파일로 보관해 주세요.');
+        session.materialPlanId = planId; closeTool(); toolHost.hidden = false; prepareHost.hidden = true; continuityHost.hidden = true; outputActions.hidden = true; output.classList.add('is-open'); outputHeading.textContent = doc.title || '제목 없는 글';
+        const mountedSequence = toolSequence;
+        const currentTool = () => active() && mountedSequence === toolSequence && session.materialUI.getView().planId === planId;
+        const close = action('활용 화면 닫기', async () => { await tool.flush(); if (active()) closeTool(); });
+        toolHost.append(close); const content = el('section'); toolHost.append(content);
+        if (kind === 'public') {
+          sync = life.BlogSync.create({ storage, auth: global.HaedoAuth });
+          manager = life.BlogManager.create({ storage, workspaceId: session.workspaceId, auth: global.HaedoAuth, blogSync: sync, isCurrent: currentTool,
+            openPost: (postId, options = {}) => openPost({ postId, revision: options.expectedRevision, planId, resume: false }),
+            onOpenEvidence: (reference, context = {}) => source({ ...reference, reference, planId, focusKey: context.focusKey }) });
+          await manager.mount(content, { postId: doc.id, viewState: { filter: doc.archived ? 'archived' : 'all' } });
+        } else {
+          const service = life.Preservation.create({ storage, workspaceId: session.workspaceId, isCurrent: currentTool });
+          preservation = life.PreservationUI.create({ service, isCurrent: currentTool,
+            onOpen: typeof onRestored === 'function' ? async id => {
+              await flush(); await beforeRestore(); if (!currentTool()) return;
+              const bundle = await storage.read(id); if (!currentTool()) return;
+              await storage.setActive(id); if (!currentTool()) return;
+              await onRestored({ bundle });
+            } : null });
+          await preservation.mount(content, { postIds: [doc.id] });
+        }
+        if (currentTool()) { toolHost.tabIndex = -1; toolHost.focus({ preventScroll: true }); toolHost.scrollIntoView({ block: 'start', behavior: 'instant' }); }
+      }
+      const manage = action('이 글 공개·보관 관리', () => openOutput('public')); manage.id = 'mwManageOutput';
+      const preserve = action('이 글 근거 파일 보관·복원', () => openOutput('file')); preserve.id = 'mwPreserveOutput';
+      outputActions.append(manage, preserve); output.append(outputActions, toolHost); bodyNode.append(prepareHost, continuityHost, output);
+      viewCleanups.push(() => { continuityUI.dispose(); session.materialUI.detach(); closeTool(); if (session.materialTool === tool) session.materialTool = null; });
+    }
     function renderPage() {
       const session = current, page = session.state.page;
       const token = generation, beginPost = session.pageCompose === true;
       const requestedPost = !!session.pageDraftId || !!session.searchTarget?.postId || !!session.searchTarget?.photoPostId;
       const showProfile = session.pageProfile === true, editProfile = session.pageProfileEdit === true;
       session.pageCompose = session.pageProfile = session.pageProfileEdit = false;
+      if (session.materialOpen) { renderMaterialWriting(session, token); return; }
       if (session.blogContext && (editProfile || session.blogProfile)) { renderBlogProfile(session); return; }
+      if (session.seriesOpen) {
+        const back = action('내 페이지로 돌아가기', async () => {
+          const token = generation; await session.seriesEditor?.flush();
+          if (!showing(token, session)) return;
+          session.seriesOpen = false; session.seriesReading = null; clearError(); redraw();
+          bodyNode.querySelector('#wbPageSeries')?.focus({ preventScroll: true });
+        }); bodyNode.append(back);
+        const seriesHost = el('section'); bodyNode.append(seriesHost);
+        const currentSeries = () => workspaceIs(session);
+        if (session.seriesReading) {
+          const edit = () => { if (!currentSeries()) return; session.seriesReading = null; clearError(); redraw(); };
+          session.seriesReader ||= life.BlogSeriesReader.create({ storage, workspaceId: session.workspaceId, isCurrent: currentSeries,
+            renderPhoto: doc => {
+              const used = new Set(doc.ops.filter(op => typeof op.insert !== 'string').map(op => op.insert.photo.id));
+              const originals = doc.photos.filter(photo => used.has(photo.id));
+              const snapshot = life.Blog.publicSnapshot(doc, { photoIds: originals.map(photo => photo.id) });
+              const imageUrls = snapshot.photos.map((photo, index) => [photo.id, URL.createObjectURL(originals[index].blob)]);
+              try { return { node: life.BlogPublicUI.render(snapshot, { photoUrl: photo => new Map(imageUrls).get(photo.id), privateView: true }), dispose: () => imageUrls.forEach(([, url]) => URL.revokeObjectURL(url)) }; }
+              catch (error) { imageUrls.forEach(([, url]) => URL.revokeObjectURL(url)); throw error; }
+            }, onExit: edit, onEdit: edit });
+          session.seriesMount = session.seriesReader.mount(seriesHost, { seriesId: session.seriesReading });
+          viewCleanups.push(() => session.seriesReader.detach());
+        } else {
+          session.seriesEditor ||= life.BlogSeriesUI.create({ storage, workspaceId: session.workspaceId, isCurrent: currentSeries,
+            onDirty: () => updateStatus(session),
+            onRead: async seriesId => { if (!currentSeries()) return; session.seriesSelected = seriesId; session.seriesReading = seriesId; clearError(); redraw(); },
+            onExport: async seriesId => {
+              const token = generation, snapshot = await storage.readBlogSeriesSnapshot(session.workspaceId, seriesId);
+              const file = await life.BlogSeriesPackage.pack(snapshot);
+              if (!showing(token, session)) return;
+              const url = URL.createObjectURL(file), link = document.createElement('a');
+              link.href = url; link.download = '연재-모음.zip'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+            },
+            onInspectImport: async file => {
+              const token = generation, candidate = await life.BlogSeriesPackage.read(file);
+              if (!showing(token, session)) throw fault('workspace_changed', '화면이 바뀌었습니다. 다시 확인해 주세요.');
+              session.seriesImport ||= new WeakMap();
+              session.seriesImport.set(file, { candidate, token });
+              return { title: candidate.series.title, posts: candidate.posts.length, photos: candidate.posts.reduce((count, entry) => count + entry.doc.photos.length, 0) };
+            },
+            onImport: async file => {
+              const saved = session.seriesImport?.get(file);
+              if (!saved || !showing(saved.token, session)) throw fault('workspace_changed', '파일 후보가 바뀌었습니다. 다시 검토해 주세요.');
+              const result = await storage.installBlogSeriesCopy(session.workspaceId, saved.candidate);
+              session.seriesImport?.delete(file); onLocalSaved(); return result;
+            },
+            onPublish: async seriesId => {
+              const token = generation;
+              const close = await life.BlogSeriesSharing.open({ storage, workspaceId: session.workspaceId, seriesId, isCurrent: () => showing(token, session) });
+              if (!showing(token, session)) close(); else viewCleanups.push(close);
+            } });
+          session.seriesMount = session.seriesEditor.mount(seriesHost, { seriesId: session.seriesSelected });
+          viewCleanups.push(() => { session.seriesImport = null; session.seriesEditor.detach(); });
+        }
+        session.seriesMount.catch(error => { if (showing(token, session)) report(error, session); }); return;
+      }
       if (session.nineOpen) {
         const back = action('내 페이지로 돌아가기', async () => {
           const token = generation; await session.nine.flush(); if (!showing(token, session)) return;
@@ -1062,6 +1242,44 @@
         bodyNode.append(back);
         const nineHost = el('section'); bodyNode.append(nineHost);
         session.nine ||= life.NineBoardUI.create({ storage, workspaceId: session.workspaceId, getBundle,
+          onComposeArea: async request => {
+            const token = generation;
+            const valid = () => showing(token, session) && session.nineOpen && request.isCurrent() && request.workspaceId === session.workspaceId;
+            if (!valid()) throw fault('workspace_changed', '화면이 바뀌었습니다. 초안을 만들지 않았습니다.');
+            const source = await storage.readNineBoard(session.workspaceId);
+            const board = source.boards.find(value => value.id === request.boardId);
+            if (!valid()) throw fault('workspace_changed', '화면이 바뀌었습니다. 다시 검토해 주세요.');
+            if (source.revision !== request.revision || !board) throw fault('nine_board_conflict', '9칸 구성이 바뀌었습니다. 영역을 다시 검토해 주세요.');
+            const content = life.NineBoard.composeContent(board, request.areaId);
+            if (JSON.stringify(content) !== JSON.stringify(request.content)) throw fault('nine_board_conflict', '검토한 영역이 바뀌었습니다. 다시 확인해 주세요.');
+            const doc = life.PhotoPost.create(core.id);
+            const photo = await life.PhotoPost.readPhoto(new File([request.blob], '선택한-9칸.png', { type: 'image/png' }), core.id);
+            if (!valid()) throw fault('workspace_changed', '화면이 바뀌었습니다. 초안을 만들지 않았습니다.');
+            if (photo.width !== 1800 || photo.height !== 2100) throw fault('invalid_photo_post', '9칸 이미지 크기를 확인하지 못했습니다. 다시 검토해 주세요.');
+            doc.title = content.title; doc.photos = [photo];
+            doc.ops = [{ insert: { photo: { id: photo.id, caption: content.areaTitle, alt: content.title + ' · ' + content.areaTitle + ' · 9칸 구성' } } }, { insert: '\n' }, { insert: content.text.endsWith('\n') ? content.text : content.text + '\n' }];
+            life.PhotoPost.validate(doc);
+            const saved = await storage.savePhotoPostFromNineBoard(session.workspaceId, doc, source.revision, request.boardId, request.areaId);
+            onLocalSaved();
+            return { postId: saved.id, revision: saved.revision };
+          },
+          onComposed: async result => {
+            if (!workspaceIs(session) || current !== session || !visible || mode !== 'page' || !session.nineOpen) return;
+            const token = generation, previous = session.nineComposeTarget;
+            const postId = previous?.sourcePostId === result.postId ? previous.postId : result.postId;
+            const post = await storage.readPhotoPost(session.workspaceId, postId);
+            if (!showing(token, session) || !session.nineOpen) return;
+            session.nineComposeTarget = { sourcePostId: result.postId, postId: post.id };
+            session.nineComposeReturn = session.nineComposeTarget;
+            session.ninePostReference = null; session.ninePostReturn = null;
+            session.searchTarget = { photoPostId: post.id, photoPostRevision: post.revision };
+            session.nineOpen = false; clearError(); redraw();
+          },
+          onPublishArea: async ({boardId,areaId}) => {
+            const token=generation;
+            const close=await life.NinePublicSharing.open({storage,workspaceId:session.workspaceId,boardId,areaId,isCurrent:()=>showing(token,session)&&session.nineOpen});
+            if(!showing(token,session)||!session.nineOpen)close();else viewCleanups.push(close);
+          },
           onOpenReference: async ({kind,target,reference,focusKey}) => {
             const token=generation;await flush();if(!showing(token,session))return;
             if(kind==='source')return openSource(target.sourceId,target.sourceVersionId,{focusKey,locator:target.locator});
@@ -1098,6 +1316,14 @@
         const token = generation; await flush(); if (!showing(token, session)) return;
         rememberPageEditor(); session.nineOpen = true; redraw(); bodyNode.querySelector('.nb-workspace')?.scrollIntoView({ block: 'start' });
       }); nine.id = 'wbPageNine'; actions.append(nine);
+      const series = action('연재·모음', async () => {
+        const token = generation; await flush(); if (!showing(token, session)) return;
+        rememberPageEditor(); session.seriesOpen = true; session.seriesReading = null; clearError(); redraw();
+      }); series.id = 'wbPageSeries'; actions.append(series);
+      const material = action('자료로 글쓰기', async () => {
+        const token = generation; await flush(); if (!showing(token, session)) return;
+        rememberPageEditor(); session.materialOpen = true; session.nineOpen = session.seriesOpen = false; preview = false; clearError(); redraw();
+      }); material.id = 'wbPageMaterialWriting'; actions.append(material);
       if (saveControl) actions.append(saveControl);
       if (preview) {
         const narrow = action('좁은 폭으로 보기', () => {
@@ -1161,13 +1387,28 @@
       const composerHost = el('section'); taskHost.insertBefore(composerHost, photoHost); composerHost.hidden = photoTask;
       session.postEditorView = { token, hosts: { photo: photoHost, legacy: composerHost }, modes: {}, active: null };
       session.photoPosts ||= life.PhotoPostUI.create({ storage, workspaceId: session.workspaceId, isCurrent: () => workspaceIs(session), onDirty: () => updateStatus(session), onSaved: onLocalSaved,
-        onReturn: async context => { if (!session.blogContext) return false; await onBlogReturn({ ...context, kind: 'photo' }); return true; },
-        onCommitted: context => { if (session.blogContext) session.blogCommitted = { ...context, kind: 'photo' }; notifyPostMode(session, 'photo', { ...context, mode: 'read', committed: true }); },
+        onReturn: async context => {
+          if (session.materialReturn && context.id) {
+            const token = generation, destination = session.materialReturn;
+            let related = destination.postId === context.id || destination.targetPostId === context.id;
+            if (!related) {
+              const draft = await storage.readPhotoPost(session.workspaceId, context.id).catch(error => { if (error.code !== 'photo_post_missing') throw error; return null; });
+              if (!showing(token, session) || session.materialReturn !== destination) return true;
+              related = !!draft?.replaces && (draft.replaces.id === destination.targetPostId || draft.replaces.id === destination.postId);
+            }
+            if (related) { session.materialPlanId = destination.planId; session.searchTarget = null; session.materialOpen = true; clearError(); redraw(); return true; }
+          }
+          if (session.nineComposeReturn?.postId === context.id) { session.searchTarget = null; session.nineOpen = true; clearError(); redraw(); return true; }
+          if (!session.blogContext) return false; await onBlogReturn({ ...context, kind: 'photo' }); return true;
+        },
+        onCommitted: context => { if (session.materialReturn && [session.materialReturn.postId, session.materialReturn.targetPostId].includes(context.previousId)) { session.materialReturn.postId = context.id; session.materialReturn.targetPostId = context.id; } if (session.nineComposeTarget?.postId === context.previousId) session.nineComposeTarget.postId = context.id; if (session.blogContext) session.blogCommitted = { ...context, kind: 'photo' }; notifyPostMode(session, 'photo', { ...context, mode: 'read', committed: true }); },
         onModeChange: context => notifyPostMode(session, 'photo', context),
         beforeOpen: async () => { await session.composer?.flush(); } });
+      const nineReadBack = !!(session.ninePostReturn || (session.nineComposeReturn && session.nineComposeReturn.postId === session.searchTarget?.photoPostId));
+      const materialReadBack = !!session.materialReturn && !!session.searchTarget?.photoPostId && session.materialReturn.postId === session.searchTarget.photoPostId;
       const photoMount = session.photoPosts.mount(photoHost, { standalone: blogTask, postId: session.searchTarget?.photoPostId || null, expectedRevision: session.ninePostReference?.postRevision ?? session.searchTarget?.photoPostRevision, reset: beginPost || showProfile || !!session.searchTarget && !session.searchTarget.photoPostId,
-        onReadBack:session.ninePostReturn?async()=>{const token=generation;await session.photoPosts.flush();if(!showing(token,session))return;session.ninePostReference=null;session.nineOpen=true;redraw();}:null,
-        readBackLabel:session.ninePostReturn?'9칸 구성으로 돌아가기':undefined,
+        onReadBack:materialReadBack?async()=>{const token=generation;await session.photoPosts.flush();if(!showing(token,session))return;session.materialPlanId=session.materialReturn.planId;session.searchTarget=null;session.materialOpen=true;redraw();}:nineReadBack?async()=>{const token=generation;await session.photoPosts.flush();if(!showing(token,session))return;session.ninePostReference=null;session.searchTarget=null;session.nineOpen=true;redraw();}:null,
+        readBackLabel:materialReadBack?'작성 준비로 돌아가기':nineReadBack?'9칸 구성으로 돌아가기':undefined,
         listHost: postFeed, onFeed: rows => { photoRows = rows; mergeFeed(); } }); viewCleanups.push(() => session.photoPosts.detach());
       session.composer ||= life.PageComposer.create({ storage, workspaceId: session.workspaceId,
         onNewPost: () => session.photoPosts.begin(),
@@ -2803,7 +3044,7 @@
       rememberPageEditor();
       cleanupView();
       bodyNode.replaceChildren();
-      if (saveControl) saveControl.hidden = ['public-pages', 'related', 'workbench-backup'].includes(mode) || !!incoming || mode === 'page' && (!!current.share?.open || !!current.nineOpen);
+      if (saveControl) saveControl.hidden = ['public-pages', 'related', 'workbench-backup'].includes(mode) || !!incoming || mode === 'page' && (!!current.share?.open || !!current.nineOpen || !!current.materialOpen);
       if (mode === 'public-pages') { renderPublicPages(); return; }
       if (incoming && ['activities', 'page', 'reflection'].includes(mode)) { renderIncoming(); updateStatus(current); return; }
       if (mode === 'activities') renderActivities();
@@ -2821,6 +3062,8 @@
       if (current && current.workspaceId !== bundle.workspaceId) current.chapterImport = null;
       const token = ++generation;
       visible = true; mode = MODES[nextMode] ? nextMode : 'activities'; current = sessionFor(bundle.workspaceId);
+      current.nineComposeReturn = null;
+      current.seriesOpen = false;
       if (typeof options.pagePreview === 'boolean') preview = options.pagePreview;
       if (mode === 'discover' && typeof options.seedVersionId === 'string') {
         const view = discoveryView(current); view.seedVersionId = options.seedVersionId; view.chooserOpen = false;
@@ -2832,6 +3075,11 @@
         view.contextError = valid ? '' : '기준 기록의 작업공간이나 버전을 확인하지 못했습니다. 현재 공간에서 기록을 다시 골라 주세요.';
       }
       if (mode === 'page') {
+        const targetPost = options.searchTarget?.photoPostId;
+        if (options.pageCompose || options.pageProfile || options.pageProfileEdit || options.pageDraftId || options.searchTarget || options.nineTarget || options.nineReference || options.selection) {
+          current.materialOpen = false;
+          if (!targetPost || !current.materialReturn || ![current.materialReturn.postId, current.materialReturn.targetPostId].includes(targetPost)) current.materialReturn = null;
+        }
         current.blogContext = options.blogContext === true;
         current.blogProfile = options.blogContext === true && options.pageProfileEdit === true;
         current.blogKind = options.pageCompose || options.searchTarget?.photoPostId ? 'photo' : 'legacy';
@@ -2932,6 +3180,7 @@
           }
         }
         redraw();
+        if(mode==='page'&&session.seriesOpen&&session.seriesMount){await session.seriesMount;if(!showing(token,session))return;}
         if(mode==='page'&&session.nineOpen&&session.nineMount){await session.nineMount;if(!showing(token,session))return;}
         if (mode === 'page' && options.searchTarget?.entryId) {
           const entry = [...bodyNode.querySelectorAll('[data-entry-id]')].find(el => el.dataset.entryId === options.searchTarget.entryId);
@@ -2956,7 +3205,7 @@
     function dispose() {
       disposed = true; leave();
       shareRemote?.dispose();
-      sessions.forEach(session => { clearTimeout(session.timer); session.composer?.dispose(); session.photoPosts?.dispose(); session.unsubscribe?.(); });
+      sessions.forEach(session => { clearTimeout(session.timer); session.composer?.dispose(); session.photoPosts?.dispose(); session.materialUI?.dispose(); session.materialContinuity?.dispose(); session.seriesEditor?.dispose(); session.seriesReader?.dispose(); session.unsubscribe?.(); });
       urls.forEach(url => URL.revokeObjectURL(url)); urls.clear();
     }
     return Object.freeze({ render, flush, dirty, leave, dispose });
