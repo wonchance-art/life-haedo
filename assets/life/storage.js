@@ -121,6 +121,11 @@
       if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '좋아요·담기 모듈을 불러오지 못했습니다.');
       return value;
     };
+    const discoveryLanguageSettings = () => {
+      const value = options.discoveryLanguageSettings || root.HaedoLife?.DiscoveryLanguageSettings;
+      if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '언어 옵션 모듈을 불러오지 못했습니다.');
+      return value;
+    };
     function notify(event) {
       if (disposed) return;
       const callbacks = event.type === 'error'
@@ -214,6 +219,10 @@
           if (data?.sender !== sender && data?.type === 'discovery_actions_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 1) {
             notify({ type: 'discovery_actions_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'discovery_language_settings_changed' && typeof data.workspaceId === 'string' &&
+              Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'discovery_language_settings_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
         };
       } catch (_) { channel = null; }
@@ -715,6 +724,46 @@
       if (result.status === 'stored') {
         const event = { type: 'discovery_settings_changed', workspaceId, revision: result.settings.revision };
         notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
+      }
+      return result;
+    }
+    const discoveryLanguageSettingsKey = workspaceId => `discoveryLanguageSettings:${accountKey}:${workspaceId}`;
+    function validateDiscoveryLanguageSettings(value, workspaceId) {
+      discoveryLanguageSettings().validate(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '언어 옵션의 작업공간이 다릅니다.');
+      if (new TextEncoder().encode(stablePayload(value)).length >= 16 * 1024) {
+        throw fault('discovery_language_settings_too_large', '언어 옵션이 너무 큽니다. 기존 설정은 보존했습니다.');
+      }
+    }
+    async function discoveryLanguageSettingsValue(meta, workspaceId) {
+      return privateProfileValue(meta, discoveryLanguageSettingsKey(workspaceId), workspaceId, discoveryLanguageSettings(), validateDiscoveryLanguageSettings);
+    }
+    async function readDiscoveryLanguageSettings(workspaceId) {
+      privateProfileScope(workspaceId, '언어 옵션을');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await discoveryLanguageSettingsValue(meta, workspaceId));
+      });
+    }
+    async function saveDiscoveryLanguageSettings(workspaceId, input, baseRevision) {
+      privateProfileScope(workspaceId, '언어 옵션을'); requireRevision(baseRevision, 'baseRevision');
+      validateDiscoveryLanguageSettings(input, workspaceId);
+      const value = clone(input);
+      if (baseRevision === Number.MAX_SAFE_INTEGER || value.revision !== baseRevision + 1) {
+        throw fault('discovery_language_settings_conflict', '언어 옵션의 저장 기준을 확인해 주세요.');
+      }
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await discoveryLanguageSettingsValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) return { status: 'conflict', settings: clone(previous) };
+        await meta.put({ key: discoveryLanguageSettingsKey(workspaceId), value });
+        return { status: 'stored', settings: clone(value) };
+      });
+      if (result.status === 'stored') {
+        const event = { type: 'discovery_language_settings_changed', workspaceId, revision: result.settings.revision };
+        notify({ ...event, local: true }); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
       }
       return result;
     }
@@ -2994,6 +3043,7 @@
       readInterestProfile, saveInterestProfile,
       readDiscoveryProfile, saveDiscoveryProfile,
       readDiscoverySettings, saveDiscoverySettings,
+      readDiscoveryLanguageSettings, saveDiscoveryLanguageSettings,
       readDiscoveryActions, saveDiscoveryActions,
       readCollection, saveCollection, readNineBoard, saveNineBoard, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, finishMaterialContinuityClaim,

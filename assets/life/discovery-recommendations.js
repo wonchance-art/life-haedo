@@ -47,15 +47,20 @@
   }
   function signalsFor(actions, options, now, equivalences) {
     if (actions != null) actionsApi().validate(actions);
+    // Validate even empty selections/actions, and use the core's exact same
+    // publisher-language rule for past prototypes and new candidate articles.
+    discovery().languageAllowed(undefined, options.contentLanguages);
     const sourceIds = options.sourceIds;
     check(sourceIds === undefined || Array.isArray(sourceIds) && sourceIds.every(id => Object.hasOwn(discovery().ALLOWED_SOURCES, id)));
     const active = sourceIds === undefined ? null : new Set(sourceIds), signals = [], likedUrls = new Set();
     const excluded = { notLiked: 0, excluded: 0, future: 0, sourceOff: 0, insufficientTerms: 0 };
+    if (options.contentLanguages != null) excluded.languageOff = 0;
     for (const entry of actions?.entries || []) {
       if (!entry.liked) { excluded.notLiked++; continue; }
       if (Date.parse(entry.likedAt) > now || Date.parse(entry.snapshot.fetchedAt) > now) { excluded.future++; continue; }
       if (active && !active.has(entry.snapshot.sourceId)) { excluded.sourceOff++; continue; }
       likedUrls.add(entry.canonicalUrl);
+      if (!discovery().languageAllowed(entry.snapshot.language, options.contentLanguages)) { excluded.languageOff++; continue; }
       if (entry.excludedFromRecommendations) { excluded.excluded++; continue; }
       const tokens = features(entry.snapshot, equivalences);
       if (tokens.size < MIN_SHARED_TERMS) { excluded.insufficientTerms++; continue; }
@@ -82,7 +87,7 @@
     if (options.actions != null) for (const workspaceId of [options.profile?.workspaceId, options.feedback?.workspaceId]) {
       check(workspaceId === undefined || workspaceId === options.actions.workspaceId);
     }
-    const { signals, likedUrls, inspection } = signalsFor(options.actions, { sourceIds: prepared.feed.sources.map(source => source.id) }, now, equivalences);
+    const { signals, likedUrls, inspection } = signalsFor(options.actions, { sourceIds: prepared.feed.sources.map(source => source.id), contentLanguages: prepared.contentLanguages }, now, equivalences);
     if (!inspection.enabled || !signals.length) return baseline;
     // Inverted index reuses the one validated <=500-article pool; no repeated
     // catalog validation, per-like catalog copies, network or persistent cache.

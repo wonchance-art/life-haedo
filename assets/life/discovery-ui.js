@@ -7,11 +7,12 @@
     let active = false, disposed = false, generation = 0, workspaceId = null, surface = null;
     let current = null, client = null, unsubscribe = null, aborter = null, pendingWrite = null;
     const downloadUrls = new Set();
-    let settingsWrite = null, topicWrite = null, actionWrite = null, timer = null, fetchEpoch = 0, suspended = false;
+    let settingsWrite = null, topicWrite = null, actionWrite = null, languageWrite = null, timer = null, fetchEpoch = 0, suspended = false;
     const actionsModel = () => root.HaedoLife.DiscoveryActions;
     const recommendations = () => root.HaedoLife.DiscoveryRecommendations;
     const INTERVAL = 15 * 60 * 1000;
     const settingsModel = () => root.HaedoLife.DiscoverySettings;
+    const languageModel = () => root.HaedoLife.DiscoveryLanguageSettings;
     const scope = () => !disposed && active && isCurrent() && getBundle()?.workspaceId === workspaceId;
     const valid = token => scope() && token === generation;
     const model = () => root.HaedoLife.DiscoveryProfile;
@@ -48,7 +49,7 @@
       const memory = current?.memory, token = generation;
       if (!memory) return;
       root.requestAnimationFrame(() => {
-        if (!valid(token) || !surface?.isConnected || root.document.activeElement === current.topicInput) return;
+        if (!valid(token) || !surface?.isConnected || (root.document.activeElement === current.topicInput || current.languageDetails?.contains(root.document.activeElement))) return;
         const all = [...surface.querySelectorAll('[data-focus-key]')];
         const articles = [...surface.querySelectorAll('[data-discovery-url]')];
         const target = all.find(el => !el.disabled && el.dataset.focusKey === memory.focusKey && (!el.closest('[data-discovery-url]') || !memory.articleUrl || el.closest('[data-discovery-url]').dataset.discoveryUrl === memory.articleUrl)) ||
@@ -63,18 +64,18 @@
       return (getBundle()?.sources || []).map(source => source.url).filter(value => typeof value === 'string');
     }
     function rankOptions() {
-      return { profile: settingsModel().effectiveProfile(current.profile, desiredSettings()), knownUrls: knownUrls(), feedback: current.feedback, limit: 5 };
+      return { profile: settingsModel().effectiveProfile(current.profile, desiredSettings()), knownUrls: knownUrls(), feedback: current.feedback, contentLanguages: desiredLanguages()?.contentLanguages ?? null, limit: 5 };
     }
     function rank() {
-      if (!current?.catalog?.feed || !current.profile || !current.feedback || !current.settings) return null;
+      if (!current?.catalog?.feed || !current.profile || !current.feedback || !current.settings || !current.languageSettings) return null;
       const feed = settingsModel().filterFeed(current.catalog.feed, desiredSettings()), options = rankOptions();
       if (current.mode !== 'personal' || current.personalBlocked || !current.actions?.personalizationEnabled) return client.rank(feed, { ...options, mode: current.mode === 'personal' ? current.baselineMode : current.mode });
       if (!current.personalResult) return client.rank(feed, { ...options, mode: current.baselineMode });
-      const allowed = new Set(feed.articles.map(article => article.canonicalUrl));
+      const allowed = new Set(feed.articles.filter(article => engine().languageAllowed(article.language, options.contentLanguages)).map(article => article.canonicalUrl));
       const excluded = new Set([...knownUrls().map(value => engine().canonicalUrl(value)), ...current.feedback.feedback.map(entry => entry.canonicalUrl)]);
       return { ...current.personalResult, items: current.personalResult.items.filter(item => allowed.has(item.article.canonicalUrl) && !excluded.has(item.article.canonicalUrl)) };
     }
-    function busy() { return current.loading || !!pendingWrite || !!settingsWrite || !!topicWrite || !!actionWrite; }
+    function busy() { return current.loading || !!pendingWrite || !!settingsWrite || !!topicWrite || !!actionWrite || !!languageWrite; }
     function dropPersonal(preserveRows = false) {
       if (preserveRows && current.personalResult) {
         const { personalization, ...metadata } = current.personalResult.metadata;
@@ -84,10 +85,10 @@
     }
     function blockPersonal() { current.personalBlocked = true; current.personalStopLatched = true; current.mode = current.baselineMode; dropPersonal(); }
     function applyPersonal() {
-      if (!scope() || !current.catalog?.feed || current.personalBlocked || !current.actions?.personalizationEnabled) return;
+      if (!scope() || !current.catalog?.feed || languageWrite || languageDirty() || current.languageConflict || current.personalBlocked || !current.actions?.personalizationEnabled) return;
       capture(); current.collection = 'discover'; current.collectionUrls = null;
       current.personalResult = recommendations().rank(settingsModel().filterFeed(current.catalog.feed, desiredSettings()), { ...rankOptions(), actions: current.actions, mode: 'personal', baselineMode: current.baselineMode });
-      current.personalInspection = recommendations().inspectSignals(current.actions, { sourceIds: settingsModel().filterFeed(current.catalog.feed, desiredSettings()).sources.map(source => source.id) });
+      current.personalInspection = recommendations().inspectSignals(current.actions, { sourceIds: settingsModel().filterFeed(current.catalog.feed, desiredSettings()).sources.map(source => source.id), contentLanguages: desiredLanguages()?.contentLanguages ?? null });
       current.mode = 'personal'; current.personalPending = false; draw(); restore();
     }
     function entryFor(article) { return current.actions?.entries.find(entry => entry.canonicalUrl === article.canonicalUrl); }
@@ -255,6 +256,117 @@
       const matches = entry => current.collection === 'cancelled' ? !entry.liked && !entry.bookmarked : entry[current.collection];
       current.collectionUrls ||= current.actions.entries.filter(matches).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(entry => entry.canonicalUrl);
       return current.collectionUrls.map(key => current.actions.entries.find(entry => entry.canonicalUrl === key)).filter(Boolean).map(entry => ({ article: clone(entry.snapshot), reasons: [] }));
+    }
+    function languageDirty() { return !!current && Object.keys(current.languagePatch).length > 0; }
+    function desiredLanguages() {
+      if (!current?.languageSettings) return null;
+      return { ...current.languageSettings, ...current.languagePatch };
+    }
+    function stopTranslation() {
+      if (!current) return;
+      current.translationBlocked = true;
+      surface?.querySelectorAll('[data-discovery-translate]').forEach(link => link.remove());
+    }
+    function invalidateLanguageResults() { dropPersonal(); current.mode = current.baselineMode; }
+    function confirmedTranslationTarget() {
+      if (!current?.languageSettings || current.translationBlocked || Object.hasOwn(current.languagePatch, 'translationTarget')) return 'original';
+      return current.languageSettings.translationTarget;
+    }
+    async function readLanguages() {
+      const token = generation, read = ++current.languageReadEpoch;
+      const settings = await storage.readDiscoveryLanguageSettings(workspaceId);
+      if (!valid(token) || read !== current.languageReadEpoch) return false;
+      if (settings.revision < current.remoteLanguageRevision || settings.revision < (current.languageSettings?.revision || 0)) {
+        current.languageConflict = true; current.languageError = '더 최신의 언어 설정이 있습니다. 최신 언어 설정 확인을 다시 눌러 주세요.'; return false;
+      }
+      current.languageSettings = settings; current.languageVerifiedEpoch = read; return true;
+    }
+    async function reloadLanguages() {
+      const token = generation; stopTranslation(); invalidateLanguageResults();
+      try {
+        if (!await readLanguages() || !valid(token) || current.languageVerifiedEpoch !== current.languageReadEpoch || current.languageSettings.revision < current.remoteLanguageRevision) return;
+        current.languageConflict = false; current.languageError = '';
+        current.translationBlocked = Object.hasOwn(current.languagePatch, 'translationTarget');
+      } catch (_) { if (valid(token)) { current.languageConflict = true; current.languageError = '언어 설정을 확인하지 못했습니다. 번역 열기는 중지했습니다. 최신 언어 설정 확인을 다시 눌러 주세요.'; } }
+      finally { if (valid(token)) draw(); }
+    }
+    async function persistLanguages() {
+      if (!scope() || !current.languageSettings || !languageDirty() || languageWrite || current.languageConflict) return;
+      const token = generation, patch = clone(current.languagePatch);
+      const candidate = languageModel().update(current.languageSettings, patch, { expectedRevision: current.languageSettings.revision });
+      current.languageError = ''; languageWrite = storage.saveDiscoveryLanguageSettings(workspaceId, candidate, current.languageSettings.revision); draw();
+      try {
+        const result = await languageWrite; if (!valid(token)) return;
+        if (result.status !== 'stored' || result.settings.revision < current.remoteLanguageRevision || result.settings.revision < current.languageSettings.revision) {
+          stopTranslation(); invalidateLanguageResults(); current.languageConflict = true;
+          current.languageError = '다른 탭에서 언어 설정이 바뀌었습니다. 이번 선택은 남겼습니다. 최신 언어 설정 확인 후 다시 저장해 주세요.';
+          await readLanguages().catch(() => false); return;
+        }
+        current.languageSettings = result.settings;
+        for (const key of Object.keys(patch)) if (JSON.stringify(current.languagePatch[key]) === JSON.stringify(patch[key])) delete current.languagePatch[key];
+        current.translationBlocked = Object.hasOwn(current.languagePatch, 'translationTarget');
+        message('언어 설정을 이 브라우저에 저장했습니다.');
+      } catch (_) { if (valid(token)) current.languageError = '언어 설정을 저장하지 못했습니다. 선택은 남아 있습니다. 다시 저장하거나 선택을 취소해 주세요.'; }
+      finally {
+        languageWrite = null;
+        if (valid(token)) { draw(); if (!current.languageError && !current.languageConflict && languageDirty()) persistLanguages().catch(error => report(error)); }
+      }
+    }
+    function changeLanguage(key, value) {
+      if (!scope() || !current.languageSettings) return;
+      if (key === 'translationTarget') stopTranslation();
+      else invalidateLanguageResults();
+      current.languagePatch[key] = clone(value); current.languageError = ''; draw(); persistLanguages().catch(error => report(error));
+    }
+    async function discardLanguages() {
+      if (languageWrite) return;
+      const token = generation;
+      current.languagePatch = {}; stopTranslation(); invalidateLanguageResults();
+      await reloadLanguages(); if (valid(token) && !current.languageConflict) message('이번 언어 선택을 취소하고 저장된 설정을 확인했습니다.');
+      if (valid(token)) draw();
+    }
+    function languageControls() {
+      let details = current.languageDetails;
+      if (!details) {
+        details = node('details', null, 'discovery-language-options'); details.id = 'discoveryLanguageOptions'; details.open = current.languageOpen;
+        details.append(node('summary', '언어 옵션')); current.languageBody = node('div'); details.append(current.languageBody);
+        details.addEventListener('toggle', () => { if (current && scope()) current.languageOpen = details.open; }); current.languageDetails = details;
+      }
+      const focused = root.document.activeElement, focusId = details.contains(focused) ? focused.id : null, desired = desiredLanguages(), body = node('div', null, 'discovery-language-body');
+      const languages = node('fieldset', null, 'discovery-content-languages'); languages.id = 'discoveryContentLanguages'; languages.hidden = current.collection !== 'discover'; languages.append(node('legend', '콘텐츠 언어'));
+      for (const [code, label] of [['all', '전체 언어'], ...languageModel().CONTENT_LANGUAGE_CODES.map(code => [code, languageModel().CONTENT_LANGUAGE_LABELS[code]])]) {
+        const checked = code === 'all' ? desired?.contentLanguages == null : desired?.contentLanguages?.includes(code) || false;
+        const control = checkbox(label, 'discoveryLanguage-' + code, checked, enabled => {
+          if (code === 'all') changeLanguage('contentLanguages', enabled ? null : []);
+          else { const values = new Set(desiredLanguages().contentLanguages || []); enabled ? values.add(code) : values.delete(code); changeLanguage('contentLanguages', [...values]); }
+        }, 'discoveryContentLanguage', code); control.querySelector('input').disabled = !current.languageSettings; languages.append(control);
+      }
+      body.append(languages);
+      const label = node('label', '번역해서 열 언어', 'discovery-translation-label'); label.htmlFor = 'discoveryTranslationLanguage';
+      const target = node('select'); target.id = 'discoveryTranslationLanguage'; target.disabled = !current.languageSettings;
+      for (const code of languageModel().TRANSLATION_TARGET_CODES) { const option = node('option', languageModel().TRANSLATION_TARGET_LABELS[code]); option.value = code; target.append(option); }
+      target.value = desired?.translationTarget || 'original'; target.addEventListener('change', () => changeLanguage('translationTarget', target.value)); body.append(label, target);
+      body.append(node('p', '번역 링크를 누르면 공개 원문 주소가 Google 번역으로 전달됩니다. 번역문은 보관하지 않으며 외부 서비스에서 열리지 않을 수 있습니다.', 'life-meta'));
+      if (languageWrite) body.append(node('p', '언어 설정을 저장하고 있습니다. 번역 언어 변경은 저장 후 적용합니다.', 'life-meta'));
+      if (current.languageError) { const error = node('p', current.languageError, 'life-error'); error.id = 'discoveryLanguageError'; error.setAttribute('role', 'alert'); body.append(error); }
+      if (current.languageConflict || current.languageError || languageDirty()) {
+        const retry = button(current.languageConflict || !current.languageSettings ? '최신 언어 설정 확인' : '언어 설정 다시 저장', current.languageConflict || !current.languageSettings ? 'discoveryLanguageReload' : 'discoveryLanguageRetry', current.languageConflict || !current.languageSettings ? reloadLanguages : persistLanguages); retry.disabled = !!languageWrite; body.append(retry);
+        if (languageDirty()) { const discard = button('언어 선택 취소', 'discoveryLanguageDiscard', discardLanguages, 'discovery-quiet'); discard.disabled = !!languageWrite; body.append(discard); }
+      }
+      current.languageBody.replaceChildren(body);
+      if (focusId) details.querySelectorAll('[id]').forEach(control => { if (control.id === focusId && !control.disabled) control.focus({ preventScroll: true }); });
+      return details;
+    }
+    function translationLink(article) {
+      const target = confirmedTranslationTarget(), address = languageModel().buildTranslationURL(article, target);
+      if (!address) return null;
+      const revision = current.languageSettings.revision, link = node('a', languageModel().TRANSLATION_TARGET_LABELS[target] + '로 번역해 열기 · Google 번역', 'life-button discovery-quiet discovery-translation-link');
+      link.href = address; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.referrerPolicy = 'no-referrer'; link.dataset.discoveryTranslate = ''; link.dataset.focusKey = 'translate:' + article.canonicalUrl;
+      link.setAttribute('aria-label', link.textContent + ' · 새 탭');
+      link.addEventListener('click', event => {
+        if (!scope() || suspended || root.document.getElementById('lifeApp')?.hidden !== false || current.languageSettings?.revision !== revision || confirmedTranslationTarget() !== target || languageModel().buildTranslationURL(article, target) !== address) { event.preventDefault(); return; }
+        capture(article.id, link.dataset.focusKey);
+      }); return link;
     }
     async function persistIntent() {
       if (!scope() || !current.pending || pendingWrite || current.conflict) return;
@@ -478,8 +590,8 @@
       for (const example of ['AI', '전시', '신간']) examples.append(button(example, null, () => { if (current.topicText.trim() || topicWrite) return; current.topicText = example; input.value = example; return saveTopic(); }, 'discovery-quiet'));
       const choiceHost = node('div'), topicRecovery = node('div'), options = node('details', null, 'discovery-options'); options.id = 'discoveryOptions'; options.open = current.optionsOpen;
       options.append(node('summary', '옵션')); const optionsBody = node('div'); options.append(optionsBody); options.addEventListener('toggle', () => { if (scope()) current.optionsOpen = options.open; });
-      editor.append(label, form, help, examples, topicRecovery, choiceHost, options); const body = node('div'); surface.append(editor, body); container.replaceChildren(surface);
-      Object.assign(current, { editor, examples, topicInput: input, topicAdd: add, topicDiscard: discard, choiceHost, topicRecovery, options, optionsBody, body });
+      editor.append(label, form, help, examples, topicRecovery, choiceHost, options); const reactionHost = node('div'), languageHost = node('div'), body = node('div'); surface.append(editor, reactionHost, languageHost, body); container.replaceChildren(surface);
+      Object.assign(current, { editor, examples, topicInput: input, topicAdd: add, topicDiscard: discard, choiceHost, topicRecovery, options, optionsBody, reactionHost, languageHost, body });
     }
     function openOriginal(event, article) {
       if (!scope()) { event.preventDefault(); return; }
@@ -552,13 +664,14 @@
       const read = button('읽음', null, () => feedback(article, 'already_read'), 'discovery-quiet'); read.dataset.discoveryFeedback = 'already_read'; read.dataset.focusKey = 'feedback:' + article.id + ':already_read';
       const irrelevant = button('관련 없음', null, () => feedback(article, 'not_relevant'), 'discovery-quiet'); irrelevant.dataset.discoveryFeedback = 'not_relevant'; irrelevant.dataset.focusKey = 'feedback:' + article.id + ':not_relevant';
       read.disabled = irrelevant.disabled = !!current.pending || busy(); review.disabled = !!current.pending || !!pendingWrite;
-      actions.append(review, read, irrelevant); row.append(reactionControls(article), actions); return row;
+      actions.append(review, read, irrelevant); const translated = translationLink(article); if (translated) actions.append(translated); row.append(reactionControls(article), actions); return row;
     }
     function draw() {
       if (!scope()) return;
       ensureSurface(); current.editor.hidden = current.collection !== 'discover'; if (!current.editor.hidden) drawEditor(); surface.setAttribute('aria-busy', String(busy()));
       const body = node('div'), labels = (current.profile?.manual || []).filter(item => !desiredSettings()?.disabledInterestIds.includes(item.id)).map(item => item.label);
-      body.append(actionsHeader());
+      current.reactionHost.replaceChildren(actionsHeader());
+      const languages = languageControls(); if (languages.parentNode !== current.languageHost) current.languageHost.replaceChildren(languages);
       let controls = current.sortControls;
       if (!controls) {
         controls = node('div', null, 'discovery-controls');
@@ -575,7 +688,7 @@
       controls.querySelector('#discoveryRefresh').disabled = current.loading; body.append(controls);
       const status = node('p', current.loading ? '공개 글 목록을 불러오고 있습니다.' : current.status, 'discovery-status'); status.id = 'discoveryStatus'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite'); status.hidden = !status.textContent; body.append(status);
       const error = node('p', current.error, 'life-error'); error.id = 'discoveryError'; error.setAttribute('role', 'alert'); error.hidden = !current.error; body.append(error);
-      if (current.error && !current.loading && (!current.profile || !current.feedback || !current.settings || !current.actions)) body.append(button('다시 확인', 'discoveryRetry', render));
+      if (current.error && !current.loading && (!current.languageSettings || !current.profile || !current.feedback || !current.settings || !current.actions)) body.append(button('다시 확인', 'discoveryRetry', render));
       if (current.pending) {
         const recovery = node('div', null, 'discovery-recovery');
         recovery.append(node('p', '남겨 둔 선택 · ' + (current.pending.action === 'undo' ? '제외 되돌리기' : current.pending.kind === 'already_read' ? '읽음' : '관련 없음') + ' · ' + (current.pending.article.title || current.pending.article.canonicalUrl), 'life-meta'));
@@ -589,7 +702,7 @@
         const settled = !!current.personalResult && !current.personalPending;
         const brief = current.personalResult?.metadata?.personalization?.applied ? '보관한 좋아요의 표현으로 찾은 글입니다.' : '추천 근거가 부족해 ' + (current.baselineMode === 'latest' ? '최신순' : '관심순') + '을 보여 줍니다.';
         body.append(node('p', settled ? brief : explanation, 'discovery-limitation'));
-        const apply = button('새 추천 보기', 'discoveryApplyRecommendations', applyPersonal); apply.disabled = current.personalBlocked || !current.catalog?.feed || !!actionWrite || !!current.actionIntent; apply.hidden = settled; body.append(apply);
+        const apply = button('새 추천 보기', 'discoveryApplyRecommendations', applyPersonal); apply.disabled = current.personalBlocked || !current.catalog?.feed || !!actionWrite || !!current.actionIntent || !!languageWrite || languageDirty() || current.languageConflict; apply.hidden = settled; body.append(apply);
         if (current.personalPending) body.append(node('p', '반응이나 공개 목록이 바뀌었습니다. 새 추천 보기를 누르면 순서를 적용합니다.', 'discovery-notice'));
       }
       if (feed) {
@@ -606,7 +719,7 @@
       } else if (result) {
         const items = result.items;
         const summary = current.mode === 'personal' ? '개인 추천 목록 · ' + items.length + '개' : current.mode === 'related' ? items.length ? '관심과 표현이 맞는 글 ' + items.length + '개' + (items.length < 3 ? ' · 관련 글이 적어 더 채우지 않았습니다.' : '') : labels.length ? '선택한 주제와 표현이 맞는 새 글을 찾지 못했습니다.' : '위에서 주제를 추가·선택하거나 최신순으로 공개 글을 둘러보세요.' : '같은 출처와 제외 조건 · 발행·수정일이 최신인 글 ' + items.length + '개';
-        list.append(node('p', !desiredSettings()?.disabledSourceIds || feed.sources.some(source => !desiredSettings().disabledSourceIds.includes(source.id)) ? summary : '선택한 출처가 없습니다. 옵션에서 목록에 표시할 출처를 켜 주세요.', 'discovery-count'));
+        list.append(node('p', desiredLanguages()?.contentLanguages?.length === 0 ? '선택한 콘텐츠 언어가 없습니다. 언어 옵션에서 표시할 언어를 켜 주세요.' : !desiredSettings()?.disabledSourceIds || feed.sources.some(source => !desiredSettings().disabledSourceIds.includes(source.id)) ? summary : '선택한 출처가 없습니다. 옵션에서 목록에 표시할 출처를 켜 주세요.', 'discovery-count'));
         if (current.mode === 'related' && items.length) list.append(node('p', result.metadata?.limitation || '공개 글에 실제로 나타난 표현으로 찾았습니다. 같은 표현이라도 문맥은 다를 수 있습니다.', 'discovery-limitation'));
         if (!items.length && labels.length && current.mode === 'related') {
           list.append(node('p', '구체적인 주제를 추가하거나 출처 선택을 확인해 주세요. 최신 글도 둘러볼 수 있습니다.', 'discovery-limitation'));
@@ -635,20 +748,21 @@
       active = true; const next = getBundle()?.workspaceId;
       if (next !== workspaceId) { current = null; client?.dispose(); client = null; }
       workspaceId = next; const token = generation;
-      if (!current) current = { profile: null, feedback: null, catalog: null, mode: 'related', status: '', error: '', pending: null, conflict: false, lastFeedback: null, memory: null, sourcesOpen: false, excludedOpen: false, loading: true, actions: null, actionIntent: null, actionConflict: false, actionError: '', remoteActionRevision: 0, personalOffIntent: false, personalBlocked: true, personalStopLatched: false, personalResult: null, personalPending: false, baselineMode: 'related', collection: 'discover', collectionUrls: null, lastReaction: null, confirmForget: null, confirmReset: false, copyPreview: null, copyEnvelope: null, copyReading: false, copyGeneration: 0, copyError: '', portableOpen: false, settings: null, settingChanges: { interests: {}, sources: {} }, settingsConflict: false, settingsError: '', autoBlocked: true, nextDue: null, topicText: '', topicError: '', topicConflict: false, composing: false, optionsOpen: false };
-      const retainedPersonal = { result: current.personalResult, mode: current.mode, blocked: current.personalBlocked, pending: current.personalPending, actions: current.actions?.revision, settings: current.settings?.revision, profile: current.profile?.revision, feedback: current.feedback?.revision };
-      current.personalResult = null; current.personalBlocked = true; if (current.mode === 'personal') current.mode = current.baselineMode;
-      client ||= engine().create(); draw();
-      try {
-        const [profile, feedbackProfile, settings, actions] = await Promise.all([storage.readInterestProfile(workspaceId), storage.readDiscoveryProfile(workspaceId), storage.readDiscoverySettings(workspaceId), storage.readDiscoveryActions(workspaceId)]);
-        if (!valid(token)) return;
-        const sameInputs = retainedPersonal.actions === actions.revision && retainedPersonal.settings === settings.revision && retainedPersonal.profile === profile.revision && retainedPersonal.feedback === feedbackProfile.revision;
-        current.actions = actions; current.personalBlocked = current.personalStopLatched || !actions.personalizationEnabled; current.profile = profile; current.feedback = feedbackProfile; current.settings = settings; current.autoBlocked = !desiredSettings().autoRefresh; current.loading = false;
-        if (sameInputs && retainedPersonal.mode === 'personal' && !retainedPersonal.blocked && !current.personalBlocked) { current.personalResult = retainedPersonal.result; current.mode = retainedPersonal.mode; current.personalPending = retainedPersonal.pending; }
-        else if (!sameInputs) dropPersonal();
+      if (!current) current = { profile: null, feedback: null, catalog: null, mode: 'related', status: '', error: '', pending: null, conflict: false, lastFeedback: null, memory: null, sourcesOpen: false, excludedOpen: false, loading: true, languageSettings: null, languagePatch: {}, languageConflict: false, languageError: '', translationBlocked: true, remoteLanguageRevision: 0, languageReadEpoch: 0, languageOpen: false, actions: null, actionIntent: null, actionConflict: false, actionError: '', remoteActionRevision: 0, personalOffIntent: false, personalBlocked: true, personalStopLatched: false, personalResult: null, personalPending: false, baselineMode: 'related', collection: 'discover', collectionUrls: null, lastReaction: null, confirmForget: null, confirmReset: false, copyPreview: null, copyEnvelope: null, copyReading: false, copyGeneration: 0, copyError: '', portableOpen: false, settings: null, settingChanges: { interests: {}, sources: {} }, settingsConflict: false, settingsError: '', autoBlocked: true, nextDue: null, topicText: '', topicError: '', topicConflict: false, composing: false, optionsOpen: false };
+      const retainedPersonal = { result: current.personalResult, mode: current.mode, blocked: current.personalBlocked, pending: current.personalPending, actions: current.actions?.revision, settings: current.settings?.revision, profile: current.profile?.revision, feedback: current.feedback?.revision, language: current.languageSettings?.revision };
+      stopTranslation(); current.languageReadEpoch++; current.personalResult = null; current.personalBlocked = true; if (current.mode === 'personal') current.mode = current.baselineMode;
+      current.initialReading = true; client ||= engine().create(); draw();
         unsubscribe = storage.subscribe(workspaceId, event => {
           if (!scope()) return;
-          if (event.type === 'discovery_actions_changed' && event.revision > current.actions.revision) {
+          if (event.type === 'discovery_language_settings_changed' && event.revision > (current.languageSettings?.revision || 0)) {
+            if (languageWrite && event.local) return;
+            if (!event.local) current.remoteLanguageRevision = Math.max(current.remoteLanguageRevision, event.revision);
+            current.languageReadEpoch++; stopTranslation(); invalidateLanguageResults();
+            if (current.initialReading) return;
+            if (languageWrite || languageDirty()) { current.languageConflict = true; current.languageError = '다른 탭에서 언어 설정이 바뀌었습니다. 최신 언어 설정을 확인해 주세요.'; draw(); }
+            else { draw(); reloadLanguages().catch(error => report(error)); }
+          }
+          if (event.type === 'discovery_actions_changed' && current.actions && event.revision > current.actions.revision) {
             if (actionWrite && event.local) return;
             if (!event.local) current.remoteActionRevision = Math.max(current.remoteActionRevision, event.revision);
             current.personalBlocked = true; current.mode = current.baselineMode; dropPersonal();
@@ -656,39 +770,51 @@
             if (current.actionIntent) { current.actionConflict = true; current.actionError = '다른 탭에서 반응이 바뀌었습니다. 최신 반응을 확인해 주세요.'; draw(); }
             else { draw(); reloadActions().catch(error => report(error)); }
           }
-          if (event.type === 'discovery_profile_changed' && event.revision > current.feedback.revision && !pendingWrite) {
+          if (event.type === 'discovery_profile_changed' && current.feedback && event.revision > current.feedback.revision && !pendingWrite) {
             capture();
             current.conflict = !!current.pending; current.error = '다른 탭에서 읽음·제외 선택이 바뀌었습니다. 최신 제외 목록을 확인해 주세요.'; draw();
             if (!current.pending) reloadFeedback().catch(error => report(error));
           }
-          if (event.type === 'discovery_settings_changed' && event.revision > current.settings.revision) {
+          if (event.type === 'discovery_settings_changed' && current.settings && event.revision > current.settings.revision) {
             dropPersonal(true); surface?.querySelectorAll('.discovery-personal-evidence').forEach(el => el.remove());
             current.autoBlocked = true; stopTimer(); cancelFetch();
             if (settingsWrite) return;
             if (settingsDirty()) { current.settingsConflict = true; current.settingsError = '다른 탭에서 옵션이 바뀌었습니다. 최신 옵션을 확인해 주세요.'; draw(); }
             else reloadSettings().catch(error => report(error));
           }
-          if (event.type === 'interest_profile_changed' && event.revision > current.profile.revision && !topicWrite) {
+          if (event.type === 'interest_profile_changed' && current.profile && event.revision > current.profile.revision && !topicWrite) {
             capture();
             storage.readInterestProfile(workspaceId).then(profile => { if (valid(token)) { current.profile = profile; dropPersonal(true); message('다른 화면에서 보관한 관심을 반영했습니다.'); draw(); restore(); } }).catch(error => report(error));
           }
         });
+      try {
+        const [profile, feedbackProfile, settings, actions, language] = await Promise.all([storage.readInterestProfile(workspaceId), storage.readDiscoveryProfile(workspaceId), storage.readDiscoverySettings(workspaceId), storage.readDiscoveryActions(workspaceId), readLanguages().catch(() => false)]);
+        if (!valid(token)) return;
+        const languageReady = language && current.languageVerifiedEpoch === current.languageReadEpoch && current.languageSettings?.revision >= current.remoteLanguageRevision || await readLanguages().catch(() => false); if (!valid(token)) return; current.initialReading = false;
+        if (!languageReady) { current.languageSettings = null; current.languageConflict = true; current.languageError = '최신 언어 설정을 확인하지 못했습니다. 최신 언어 설정 확인을 눌러 주세요.'; }
+        else { current.languageConflict = false; current.languageError = ''; }
+        const sameInputs = languageReady && retainedPersonal.actions === actions.revision && retainedPersonal.settings === settings.revision && retainedPersonal.profile === profile.revision && retainedPersonal.feedback === feedbackProfile.revision && retainedPersonal.language === current.languageSettings?.revision;
+        current.translationBlocked = !languageReady || Object.hasOwn(current.languagePatch, 'translationTarget');
+        current.actions = actions; current.personalBlocked = current.personalStopLatched || !actions.personalizationEnabled; current.profile = profile; current.feedback = feedbackProfile; current.settings = settings; current.autoBlocked = !desiredSettings().autoRefresh; current.loading = false;
+        if (sameInputs && retainedPersonal.mode === 'personal' && !retainedPersonal.blocked && !current.personalBlocked) { current.personalResult = retainedPersonal.result; current.mode = retainedPersonal.mode; current.personalPending = retainedPersonal.pending; }
+        else if (!sameInputs) dropPersonal();
         draw();
         if (!current.catalog) await loadCatalog(); else { restore(); scheduleAuto(); }
       } catch (error) {
-        if (valid(token)) { current.loading = false; report(error, '보관한 관심이나 제외 목록을 읽지 못했습니다. 화면을 다시 열어 주세요. 기존 자료는 유지했습니다.'); }
+        if (valid(token)) { current.initialReading = false; current.loading = false; current.languageConflict = true; current.languageError = '언어 설정을 확인하지 못했습니다. 최신 언어 설정 확인을 눌러 주세요.'; report(error, '보관한 관심이나 제외 목록을 읽지 못했습니다. 화면을 다시 열어 주세요. 기존 자료는 유지했습니다.'); }
       }
     }
-    function dirty() { return !!current?.actionIntent || !!actionWrite || !!current?.personalOffIntent || !!current?.copyPreview || !!current?.copyReading || !!current?.pending || !!pendingWrite || !!topicWrite || !!settingsWrite || !!current?.topicText.trim() || settingsDirty(); }
+    function dirty() { return languageDirty() || !!languageWrite || !!current?.actionIntent || !!actionWrite || !!current?.personalOffIntent || !!current?.copyPreview || !!current?.copyReading || !!current?.pending || !!pendingWrite || !!topicWrite || !!settingsWrite || !!current?.topicText.trim() || settingsDirty(); }
     async function flush() {
-      await Promise.all([pendingWrite, topicWrite, settingsWrite, actionWrite].filter(Boolean).map(promise => promise.catch(() => {})));
+      await Promise.all([pendingWrite, topicWrite, settingsWrite, actionWrite, languageWrite].filter(Boolean).map(promise => promise.catch(() => {})));
+      if (languageDirty()) throw Object.assign(new Error('언어 설정이 아직 저장되지 않았습니다. 다시 저장하거나 선택을 취소해 주세요.'), { code: 'discovery_unsaved' });
       if (current?.actionIntent || current?.personalOffIntent || current?.copyPreview || current?.copyReading) throw Object.assign(new Error('반응 선택이나 사본 확인이 아직 끝나지 않았습니다. 다시 저장하거나 선택을 취소해 주세요.'), { code: 'discovery_unsaved' });
       if (current?.topicText.trim() || settingsDirty()) throw Object.assign(new Error('입력한 주제나 옵션 선택이 아직 저장되지 않았습니다. 다시 저장하거나 취소해 주세요.'), { code: 'discovery_unsaved' });
       if (current?.pending) throw Object.assign(new Error('읽음·제외 선택이 아직 보관되지 않았습니다. 선택 다시 보관 또는 선택 취소를 눌러 주세요.'), { code: 'discovery_unsaved' });
     }
     function leave() {
       if (active && surface?.isConnected && scope()) capture();
-      generation++; active = false; stopTimer(); cancelFetch(); unsubscribe?.(); unsubscribe = null;
+      generation++; active = false; if (current) { current.languageReadEpoch++; stopTranslation(); } stopTimer(); cancelFetch(); unsubscribe?.(); unsubscribe = null;
       if (current) current.loading = false;
     }
     root.document.addEventListener('haedo:page-suspend', pageSuspend); root.document.addEventListener('haedo:page-ready', pageReady); root.document.addEventListener('visibilitychange', lifecycle); root.addEventListener('online', lifecycle); root.addEventListener('offline', lifecycle);

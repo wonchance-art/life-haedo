@@ -1,0 +1,849 @@
+{
+  "createdAt": "2026-10-19T06:29:23.194Z",
+  "scope": "Real local UI/Core/bundled SDK/account-scoped IndexedDB; synthetic mixed-language catalog and anonymous mocked Auth. Exact Google/publisher navigation intercepted with synthetic HTML after explicit click. Composition/viewport/stale-node and delayed save/read scenarios are simulated. No production, actual Google HTML translation, original-page reading, Apple device or usefulness claim.",
+  "checks": [
+    {
+      "name": "missing separate language prefs default to all and original without writing old settings",
+      "pass": true
+    },
+    {
+      "name": "all ko en regional unknown and none apply before top K in all three modes",
+      "pass": true
+    },
+    {
+      "name": "changing language drops private prototype evidence and reentry cannot reuse it",
+      "pass": true
+    },
+    {
+      "name": "empty content selection never hides liked bookmarked or cancelled snapshots",
+      "pass": true
+    },
+    {
+      "name": "targets open exact canonical public URL only after click and preserve original anchors and state",
+      "pass": true
+    },
+    {
+      "name": "reload and workspace keep language preferences isolated",
+      "pass": true
+    },
+    {
+      "name": "two tabs CAS preserves exact content intent and the other translation target",
+      "pass": true
+    },
+    {
+      "name": "a delayed committed translation result cannot reactivate after newer clear",
+      "pass": true
+    },
+    {
+      "name": "failed off and target change remove old anchors before saving and reject stale clicks",
+      "pass": true
+    },
+    {
+      "name": "remote off blocks old translation during authoritative read and late catalog response",
+      "pass": true
+    },
+    {
+      "name": "reentry remote off invalidates initial proof when language snapshot held",
+      "pass": true
+    },
+    {
+      "name": "reentry remote off invalidates initial proof when language completed while another read is held",
+      "pass": true
+    },
+    {
+      "name": "account invalidation cancels pending language save and old translation action",
+      "pass": true
+    },
+    {
+      "name": "remote language redraw preserves composing input and two responsive layouts",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "width": 390,
+      "file": "discovery-languages-390.png",
+      "audit": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "fontSize": 16,
+        "focus": "discoveryTranslationLanguage",
+        "outline": "solid",
+        "controls": [
+          {
+            "id": "SUMMARY",
+            "width": 73.921875,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-all",
+            "width": 88.328125,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-ko",
+            "width": 70.484375,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-en",
+            "width": 56.65625,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-ja",
+            "width": 70.484375,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-zh",
+            "width": 70.484375,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-es",
+            "width": 84.3125,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-fr",
+            "width": 84.3125,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-de",
+            "width": 70.484375,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-und",
+            "width": 102.15625,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-mul",
+            "width": 88.328125,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-other",
+            "width": 88.328125,
+            "height": 44
+          },
+          {
+            "id": "discoveryTranslationLanguage",
+            "width": 340,
+            "height": 44
+          },
+          {
+            "id": "A",
+            "width": 201.296875,
+            "height": 44
+          },
+          {
+            "id": "A",
+            "width": 201.296875,
+            "height": 44
+          },
+          {
+            "id": "A",
+            "width": 201.296875,
+            "height": 44
+          }
+        ]
+      }
+    },
+    {
+      "width": 1440,
+      "file": "discovery-languages-1440.png",
+      "audit": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "fontSize": 16,
+        "focus": "discoveryTranslationLanguage",
+        "outline": "solid",
+        "controls": [
+          {
+            "id": "SUMMARY",
+            "width": 73.921875,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-all",
+            "width": 88.328125,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-ko",
+            "width": 70.484375,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-en",
+            "width": 56.65625,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-ja",
+            "width": 70.484375,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-zh",
+            "width": 70.484375,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-es",
+            "width": 84.3125,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-fr",
+            "width": 84.3125,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-de",
+            "width": 70.484375,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-und",
+            "width": 102.15625,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-mul",
+            "width": 88.328125,
+            "height": 44
+          },
+          {
+            "id": "discoveryLanguage-other",
+            "width": 88.328125,
+            "height": 44
+          },
+          {
+            "id": "discoveryTranslationLanguage",
+            "width": 340,
+            "height": 44
+          },
+          {
+            "id": "A",
+            "width": 203.296875,
+            "height": 44
+          },
+          {
+            "id": "A",
+            "width": 203.296875,
+            "height": 44
+          },
+          {
+            "id": "A",
+            "width": 203.296875,
+            "height": 44
+          }
+        ]
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "externalRequests": [],
+  "privacyViolations": [],
+  "modelRequests": [],
+  "remoteWrites": [],
+  "catalogRequests": [
+    {
+      "check": "missing separate language prefs default to all and original without writing old settings",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "all ko en regional unknown and none apply before top K in all three modes",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "changing language drops private prototype evidence and reentry cannot reuse it",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "changing language drops private prototype evidence and reentry cannot reuse it",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "empty content selection never hides liked bookmarked or cancelled snapshots",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "targets open exact canonical public URL only after click and preserve original anchors and state",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "reload and workspace keep language preferences isolated",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "reload and workspace keep language preferences isolated",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "reload and workspace keep language preferences isolated",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "reload and workspace keep language preferences isolated",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "reload and workspace keep language preferences isolated",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "two tabs CAS preserves exact content intent and the other translation target",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "two tabs CAS preserves exact content intent and the other translation target",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "a delayed committed translation result cannot reactivate after newer clear",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "a delayed committed translation result cannot reactivate after newer clear",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "failed off and target change remove old anchors before saving and reject stale clicks",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "remote off blocks old translation during authoritative read and late catalog response",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "remote off blocks old translation during authoritative read and late catalog response",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "remote off blocks old translation during authoritative read and late catalog response",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "reentry remote off invalidates initial proof when language snapshot held",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "reentry remote off invalidates initial proof when language snapshot held",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "reentry remote off invalidates initial proof when language completed while another read is held",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "reentry remote off invalidates initial proof when language completed while another read is held",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "account invalidation cancels pending language save and old translation action",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "account invalidation cancels pending language save and old translation action",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "remote language redraw preserves composing input and two responsive layouts",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    },
+    {
+      "check": "remote language redraw preserves composing input and two responsive layouts",
+      "method": "GET",
+      "query": false,
+      "body": false,
+      "authorization": false,
+      "cookie": false,
+      "referrer": null
+    }
+  ],
+  "translationRequests": [
+    {
+      "check": "targets open exact canonical public URL only after click and preserve original anchors and state",
+      "url": "https://translate.google.com/translate?sl=auto&tl=ko&u=https%3A%2F%2Fd2.naver.com%2Fqa-language%2Fko0%3Fref%3Dpublic",
+      "method": "GET",
+      "referrer": null,
+      "body": false
+    },
+    {
+      "check": "targets open exact canonical public URL only after click and preserve original anchors and state",
+      "url": "https://translate.google.com/translate?sl=auto&tl=en&u=https%3A%2F%2Fd2.naver.com%2Fqa-language%2Fko0%3Fref%3Dpublic",
+      "method": "GET",
+      "referrer": null,
+      "body": false
+    },
+    {
+      "check": "targets open exact canonical public URL only after click and preserve original anchors and state",
+      "url": "https://translate.google.com/translate?sl=auto&tl=ja&u=https%3A%2F%2Fd2.naver.com%2Fqa-language%2Fko0%3Fref%3Dpublic",
+      "method": "GET",
+      "referrer": null,
+      "body": false
+    },
+    {
+      "check": "targets open exact canonical public URL only after click and preserve original anchors and state",
+      "url": "https://translate.google.com/translate?sl=auto&tl=zh-CN&u=https%3A%2F%2Fd2.naver.com%2Fqa-language%2Fko0%3Fref%3Dpublic",
+      "method": "GET",
+      "referrer": null,
+      "body": false
+    },
+    {
+      "check": "targets open exact canonical public URL only after click and preserve original anchors and state",
+      "url": "https://translate.google.com/translate?sl=auto&tl=zh-TW&u=https%3A%2F%2Fd2.naver.com%2Fqa-language%2Fko0%3Fref%3Dpublic",
+      "method": "GET",
+      "referrer": null,
+      "body": false
+    },
+    {
+      "check": "targets open exact canonical public URL only after click and preserve original anchors and state",
+      "url": "https://translate.google.com/translate?sl=auto&tl=es&u=https%3A%2F%2Fd2.naver.com%2Fqa-language%2Fko0%3Fref%3Dpublic",
+      "method": "GET",
+      "referrer": null,
+      "body": false
+    },
+    {
+      "check": "targets open exact canonical public URL only after click and preserve original anchors and state",
+      "url": "https://translate.google.com/translate?sl=auto&tl=fr&u=https%3A%2F%2Fd2.naver.com%2Fqa-language%2Fko0%3Fref%3Dpublic",
+      "method": "GET",
+      "referrer": null,
+      "body": false
+    },
+    {
+      "check": "targets open exact canonical public URL only after click and preserve original anchors and state",
+      "url": "https://translate.google.com/translate?sl=auto&tl=de&u=https%3A%2F%2Fd2.naver.com%2Fqa-language%2Fko0%3Fref%3Dpublic",
+      "method": "GET",
+      "referrer": null,
+      "body": false
+    }
+  ],
+  "originalRequests": [
+    {
+      "check": "targets open exact canonical public URL only after click and preserve original anchors and state",
+      "url": "https://d2.naver.com/qa-language/ko0?ref=public&utm_source=qa",
+      "method": "GET",
+      "referrer": null,
+      "body": false
+    }
+  ],
+  "sourceHashesBefore": {
+    "assets/life/discovery.js": "2eaddf8deb9e0978805f6e6795c885c8c9364be5a06b97b2f7ad0aa75ba4f2bd",
+    "assets/life/discovery-recommendations.js": "8ee4677639e106ca16928aa23a81b3989df9dbc30ee88498d93d74d73661c02e",
+    "assets/life/discovery-language-settings.js": "70843708e5cb27b27f91f953398ee7fd51df64b6424c7cc01d72c98518f4b6d5",
+    "assets/life/discovery-ui.js": "939e394c398af375ef8eee1f86d2882558535cadd6f33aa95a378316719693a5",
+    "assets/life/discovery.css": "9342aca05dde21fde980ddfcb41ea2f0c0ca4ebbb26aed582d612e2fa2c45dbc",
+    "assets/life/ui.css": "07b483ed8790cc043b926e9181a84326e38597008cee35ca7901b0ab77e33674",
+    "assets/life/storage.js": "fea2d3b0fb42f9b6b60136989c01bf990398117b360c4ad44e4e7daa3190e557",
+    "assets/life/discovery-actions.js": "cbae40cdaf96f221f2d160f126b6a5b31174fbb748117f4544b374aa3e1497d9",
+    "assets/life/core.js": "6ad03c873ea3411dc7f8a432e7637502d1ce59271253db04e229429f99308ff4",
+    "assets/platform-auth.js": "37a97153a39b61df30dfb74784d3740382a648f635a1f1ce7668cf39356f534c",
+    "assets/life/shell.js": "44414476702db4c8e0ef8515b6e6deb5ff549b8a26c64fb4501bac1b199b29ce",
+    "assets/life/discovery-feed.json": "446e471f2d262b5ca8f39c64244b96b9c799aeecc4eb5c011bd7d608a2b8bf4e",
+    "tests/life-discovery-languages-browser.cjs": "0f9ba0f32b38c5cb9c9f6e769c569f74513c00327b282a5b887da30d1781b3f4"
+  },
+  "browser": "153.0.8010.12",
+  "filterMatrix": {
+    "modes": 3,
+    "regionalTags": true,
+    "malformedAsUnd": true,
+    "none": true,
+    "beforeTopK": true
+  },
+  "focusTransitions": [
+    {
+      "target": "ko",
+      "before": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      },
+      "after": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      }
+    },
+    {
+      "target": "en",
+      "before": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      },
+      "after": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      }
+    },
+    {
+      "target": "ja",
+      "before": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      },
+      "after": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      }
+    },
+    {
+      "target": "zh-CN",
+      "before": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      },
+      "after": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      }
+    },
+    {
+      "target": "zh-TW",
+      "before": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      },
+      "after": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      }
+    },
+    {
+      "target": "es",
+      "before": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      },
+      "after": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      }
+    },
+    {
+      "target": "fr",
+      "before": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      },
+      "after": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      }
+    },
+    {
+      "target": "de",
+      "before": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      },
+      "after": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      }
+    },
+    {
+      "target": "original",
+      "before": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      },
+      "after": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      }
+    },
+    {
+      "target": "ja",
+      "before": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      },
+      "after": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      }
+    },
+    {
+      "target": "ko",
+      "before": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      },
+      "after": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      }
+    },
+    {
+      "target": "ko",
+      "before": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      },
+      "after": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      }
+    },
+    {
+      "target": "ko",
+      "before": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      },
+      "after": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      }
+    },
+    {
+      "target": "ko",
+      "before": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      },
+      "after": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      }
+    },
+    {
+      "target": "ko",
+      "before": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      },
+      "after": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      }
+    },
+    {
+      "target": "ko",
+      "before": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      },
+      "after": {
+        "active": "discoveryTranslationLanguage",
+        "documentFocused": true,
+        "visibility": "visible",
+        "detailsOpen": true
+      }
+    }
+  ],
+  "sourceHashesAfter": {
+    "assets/life/discovery.js": "2eaddf8deb9e0978805f6e6795c885c8c9364be5a06b97b2f7ad0aa75ba4f2bd",
+    "assets/life/discovery-recommendations.js": "8ee4677639e106ca16928aa23a81b3989df9dbc30ee88498d93d74d73661c02e",
+    "assets/life/discovery-language-settings.js": "70843708e5cb27b27f91f953398ee7fd51df64b6424c7cc01d72c98518f4b6d5",
+    "assets/life/discovery-ui.js": "939e394c398af375ef8eee1f86d2882558535cadd6f33aa95a378316719693a5",
+    "assets/life/discovery.css": "9342aca05dde21fde980ddfcb41ea2f0c0ca4ebbb26aed582d612e2fa2c45dbc",
+    "assets/life/ui.css": "07b483ed8790cc043b926e9181a84326e38597008cee35ca7901b0ab77e33674",
+    "assets/life/storage.js": "fea2d3b0fb42f9b6b60136989c01bf990398117b360c4ad44e4e7daa3190e557",
+    "assets/life/discovery-actions.js": "cbae40cdaf96f221f2d160f126b6a5b31174fbb748117f4544b374aa3e1497d9",
+    "assets/life/core.js": "6ad03c873ea3411dc7f8a432e7637502d1ce59271253db04e229429f99308ff4",
+    "assets/platform-auth.js": "37a97153a39b61df30dfb74784d3740382a648f635a1f1ce7668cf39356f534c",
+    "assets/life/shell.js": "44414476702db4c8e0ef8515b6e6deb5ff549b8a26c64fb4501bac1b199b29ce",
+    "assets/life/discovery-feed.json": "446e471f2d262b5ca8f39c64244b96b9c799aeecc4eb5c011bd7d608a2b8bf4e",
+    "tests/life-discovery-languages-browser.cjs": "0f9ba0f32b38c5cb9c9f6e769c569f74513c00327b282a5b887da30d1781b3f4"
+  },
+  "productsUnchangedDuringRun": true
+}

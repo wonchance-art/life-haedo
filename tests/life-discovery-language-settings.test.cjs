@@ -1,0 +1,47 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const Settings = require('../assets/life/discovery-language-settings.js');
+const OldSettings = require('../assets/life/discovery-settings.js');
+const opts = expectedRevision => ({ expectedRevision, now: '2026-10-19T05:00:00.000Z' });
+const invalid = fn => assert.throws(fn, { code: 'discovery_language_settings_invalid' });
+test('browser/CommonJS publish the same bounded registries and default to all/original', () => {
+  const sandbox = { structuredClone, TextEncoder }; vm.runInNewContext(fs.readFileSync(require.resolve('../assets/life/discovery-language-settings.js'), 'utf8'), sandbox);
+  assert.deepEqual(Object.keys(sandbox.HaedoLife.DiscoveryLanguageSettings), Object.keys(Settings));
+  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.HaedoLife.DiscoveryLanguageSettings.empty('workspace'))), Settings.empty('workspace'));
+  assert.equal(Settings.validate(Settings.empty('workspace')), true);
+  assert.equal(Settings.empty('workspace').contentLanguages, null); assert.equal(Settings.empty('workspace').translationTarget, 'original');
+  assert.deepEqual(Settings.CONTENT_LANGUAGE_CODES, ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'und', 'mul', 'other']);
+  assert.deepEqual(Settings.TRANSLATION_TARGET_CODES, ['original', 'ko', 'en', 'ja', 'zh-CN', 'zh-TW', 'es', 'fr', 'de']);
+  assert.ok(Object.isFrozen(Settings.CONTENT_LANGUAGE_LABELS) && Object.isFrozen(Settings.TRANSLATION_TARGET_CODES));
+});
+test('independent explicit choices retain none vs all, clone arrays and leave the original settings schema untouched', () => {
+  const original = Settings.empty('workspace'), patch = { contentLanguages: ['ko', 'en'], translationTarget: 'zh-TW' };
+  const changed = Settings.update(original, patch, opts(0)); patch.contentLanguages.push('ja');
+  assert.deepEqual(original, Settings.empty('workspace')); assert.deepEqual(changed.contentLanguages, ['ko', 'en']);
+  const none = Settings.update(changed, { contentLanguages: [] }, opts(1));
+  assert.deepEqual(none.contentLanguages, []); assert.equal(none.translationTarget, 'zh-TW');
+  const all = Settings.update(none, { contentLanguages: null, translationTarget: 'original' }, opts(2));
+  assert.equal(all.contentLanguages, null); assert.equal(all.translationTarget, 'original');
+  assert.deepEqual(Object.keys(OldSettings.empty('workspace')), ['schemaVersion', 'workspaceId', 'revision', 'deleted', 'updatedAt', 'autoRefresh', 'disabledInterestIds', 'disabledSourceIds']);
+  assert.throws(() => OldSettings.validate({ ...OldSettings.empty('workspace'), contentLanguages: null }), { code: 'discovery_settings_invalid' });
+});
+test('exact schema rejects unknown/private data, sparse/duplicate/unknown codes and unsafe default/timestamps', () => {
+  const base = Settings.empty('workspace'), updated = Settings.update(base, {}, opts(0));
+  for (const value of [null, {}, { ...base, deleted: true }, { ...base, contentLanguages: [] }, { ...base, translationTarget: 'ko' }, { ...base, updatedAt: opts(0).now }, { ...updated, summary: 'private' }, { ...updated, contentLanguages: ['EN'] }, { ...updated, contentLanguages: ['ko', 'ko'] }, { ...updated, contentLanguages: Array(1) }, { ...updated, contentLanguages: ['xx'] }, { ...updated, contentLanguages: 'all' }, { ...updated, translationTarget: 'zh' }, { ...updated, translationTarget: 'https://evil.invalid' }, { ...updated, updatedAt: '2026-02-30T05:00:00Z' }]) invalid(() => Settings.validate(value));
+  const missing = structuredClone(updated); delete missing.contentLanguages; invalid(() => Settings.validate(missing));
+  invalid(() => Settings.update(base, { autoRefresh: true }, opts(0)));
+  invalid(() => Settings.update(base, { contentLanguages: undefined }, opts(0)));
+  invalid(() => Settings.update(base, {}, { ...opts(0), destinationUrl: 'https://evil.invalid/' }));
+});
+test('clear keeps a CAS tombstone and resets only language options; stale re-enable is refused', () => {
+  const changed = Settings.update(Settings.empty('workspace'), { contentLanguages: ['en'], translationTarget: 'ko' }, opts(0));
+  const cleared = Settings.clear(changed, opts(1));
+  assert.deepEqual(cleared, { ...Settings.empty('workspace'), deleted: true, revision: 2, updatedAt: opts(0).now });
+  assert.throws(() => Settings.update(cleared, { translationTarget: 'ko' }, opts(1)), { code: 'discovery_language_settings_conflict' });
+  const explicit = Settings.update(cleared, { contentLanguages: ['und', 'mul', 'other'], translationTarget: 'en' }, opts(2));
+  assert.equal(explicit.deleted, false); assert.equal(explicit.revision, 3);
+  assert.throws(() => Settings.update({ ...changed, revision: Number.MAX_SAFE_INTEGER }, {}, opts(Number.MAX_SAFE_INTEGER)), { code: 'discovery_language_settings_conflict' });
+});

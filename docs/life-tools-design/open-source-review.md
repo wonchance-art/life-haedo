@@ -1,5 +1,10 @@
 # 오픈소스 검토와 재사용 결정
 
+## 추천 언어·원문 번역 열기 재사용 — 2026-10-19 KST
+
+기존 Discovery URL/출처 검증·후보 풀·개인 추천, idb/CAS와 native DOM을 재사용했다. `Intl.getCanonicalLocales`, `URL`/`URLSearchParams`, checkbox/select/anchor로 고정 언어 비교와 명시 외부 열기를 구현하며 새 i18n parser·번역 SDK/모델·서버·전이 의존성을 넣지 않는다. 기존 idb의 라이선스·고정 버전/공개 공지 검토는 앞선 보존·설정 구현을 재사용한다. 번역 링크는 오픈소스 번역 엔진이나 공식 번역 API 도입이 아니다. 공식 Google 웹사이트 번역 안내와 빈 UI의 8개 대상 코드를 확인했으나 URL 바로가기의 안정 API 보장은 없어 원문 링크와 실패 대안을 유지한다. 본문 번역 보관이나 실제 실패가 새 근거로 생기면 정식 API·권리·전송 범위·비용을 재비교한다. [계약·공식 출처·검수](../design-review/discovery-languages.md).
+
+
 ## 공식 공급·로컬 평가 후속 재사용 — 2026-10-19 KST
 
 고정 Python 표준 urllib/robotparser/XML 제한 수집기·기존 feedparser 비교를 재사용해 arXiv/MIT 공식 RSS2 두 개만 추가했다. 새 parser·의존성·모델·서비스는 넣지 않았다. arXiv 공식 API/RSS 약관의3초/단일연결을 작은 monotonic/sleep/RLock gate로 제한하고 실제 HTTPS redirect/실패/응답 닫힘까지 보존한다. 다른 출처 동작은 유지하며 더 큰 작업 큐/수집 프레임워크를 도입하지 않는다. 로컬 평가 CLI는 기존 rank/actions/평가 유틸을 조합하고 Node fs의새폴더·권한·배타생성과 strict UTF8/형식검증을 쓴다. 운영/개인데이터·UI 설문·자동 효용평가를 늘리지 않는다. 라이브러리 자체 도입이 필요한 새 형식/확장성 요구가 생기면 앞선 후보를 재비교한다. [공식 조건·보류·검수·교체 조건](../design-review/discovery-field-validation.md).

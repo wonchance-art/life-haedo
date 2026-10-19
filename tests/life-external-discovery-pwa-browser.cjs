@@ -1,4 +1,4 @@
-/* Actual v136 -> current SW, cached public catalog and private local reactions.
+/* Actual v137 -> current SW, cached public catalog and private local reactions.
  * Prior SW script only is old; app modules are current. Real SDK/IDB/SW with
  * anonymous Auth HTTP. No real account, source-site fetch or model download. */
 'use strict';
@@ -6,10 +6,10 @@ const assert = require('node:assert/strict'), fs = require('node:fs/promises'), 
 const { createHash } = require('node:crypto');
 const project = path.resolve(__dirname, '..'), output = path.resolve(process.env.EXTERNAL_DISCOVERY_PWA_OUTPUT || path.join(project, '.local/external-discovery-pwa'));
 const feedPath = '/assets/life/discovery-feed.json', feedCache = 'haedo-discovery-feed-v1';
-const assets = ['discovery.js', 'discovery-profile.js', 'discovery-settings.js', 'discovery-actions.js', 'discovery-recommendations.js', 'discovery-ui.js', 'discovery.css'].map(file => 'assets/life/' + file);
+const assets = ['discovery.js', 'discovery-profile.js', 'discovery-settings.js', 'discovery-language-settings.js', 'discovery-actions.js', 'discovery-recommendations.js', 'discovery-ui.js', 'discovery.css'].map(file => 'assets/life/' + file);
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const report = { createdAt: new Date().toISOString(), checks: [], consoleErrors: [], pageErrors: [], expectedTransportErrors: [], modelRequests: [], unexpectedExternal: [], catalogRequests: [], blockedProbes: [],
-  scope: 'Real Chromium SDK/IndexedDB/Service Worker. Only v136 sw.js is prior code; all app modules and approved-source policy are current. Reactions are seeded through the current real scoped storage API before the worker update; this isolates worker/cache migration rather than reconstructing the entire previous app. Real prepared public catalog served by an anonymous local fixture; synthetic title/build-time update for freshness tests. Mocked Auth response during cached-shell reload is separate from strict offline Auth refusal. No production, Apple device, upstream collection or model validation.' };
+  scope: 'Real Chromium SDK/IndexedDB/Service Worker. Only v137 sw.js is prior code; all app modules and approved-source policy are current. Reactions are seeded through the current real scoped storage API before the worker update; this isolates worker/cache migration rather than reconstructing the entire previous app. Real prepared public catalog served by an anonymous local fixture; synthetic title/build-time update for freshness tests. Mocked Auth response during cached-shell reload is separate from strict offline Auth refusal. No production, Apple device, upstream collection or model validation.' };
 async function wait(page, fn, arg) {
   const end = Date.now() + 45000;
   while (Date.now() < end) { if (await page.evaluate(fn, arg)) return; await new Promise(resolve => setTimeout(resolve, 80)); }
@@ -17,13 +17,13 @@ async function wait(page, fn, arg) {
 }
 async function main() {
   await fs.mkdir(output, { recursive: true });
-  const oldSw = await fs.readFile(path.join(__dirname, 'fixtures/external-discovery/sw-discovery-v136.js'));
+  const oldSw = await fs.readFile(path.join(__dirname, 'fixtures/external-discovery/sw-discovery-v137.js'));
   const newSw = await fs.readFile(path.join(project, 'sw.js'));
   const cacheName = data => data.toString().match(/const CACHE\s*=\s*['"]([^'"]+)/)[1];
   report.oldCache = cacheName(oldSw); report.newCache = cacheName(newSw);
-  assert.equal(report.oldCache, 'haedo-v136'); assert.ok(Number(report.newCache.match(/^haedo-v(\d+)$/)?.[1]) > 136);
+  assert.equal(report.oldCache, 'haedo-v137'); assert.ok(Number(report.newCache.match(/^haedo-v(\d+)$/)?.[1]) > 137);
   report.oldSwSHA256 = sha(oldSw); report.newSwSHA256 = sha(newSw);
-  assert.equal(report.oldSwSHA256, '97615e20154a241deab090ff6145a4863f89a6f32248fa214feeaf840eb05b35', 'Prior worker must be the exact 556ee1d v136 source');
+  assert.equal(report.oldSwSHA256, 'eb07c915023603e5d470b2cd115d2acee483d903214a56305486cf1513c62e0a', 'Prior worker must be the exact 80000c1 v137 source');
   let old = true, failCatalog = false, strictOffline = false, transportProbe = false, probing = false;
   const originalFeed = JSON.parse(await fs.readFile(path.join(project, feedPath.slice(1)), 'utf8'));
   let feed = structuredClone(originalFeed);
@@ -64,7 +64,7 @@ async function main() {
   page.on('console', message => { if (message.type() === 'error') (strictOffline || transportProbe || probing || failCatalog ? report.expectedTransportErrors : report.consoleErrors).push(message.text()); });
   const open = async view => { await page.goto(base + '/index.html?section=tools&view=' + view); await ready(page); await page.locator(view === 'interests' ? '#interestManual' : '#discoveryReview').waitFor(); };
   const idle = () => wait(page, () => document.querySelector('#discoveryRefresh') && !document.querySelector('#discoveryRefresh').disabled);
-  const state = () => page.evaluate(async () => { const s = HaedoLife.Shell.storage, workspace = await s.getActive(); return { bundle: await s.read(workspace), workbench: await s.readWorkbench(workspace), manual: await s.readInterestProfile(workspace), discovery: await s.readDiscoveryProfile(workspace), settings: await s.readDiscoverySettings(workspace), actions: await s.readDiscoveryActions(workspace) }; });
+  const state = () => page.evaluate(async () => { const s = HaedoLife.Shell.storage, workspace = await s.getActive(); return { bundle: await s.read(workspace), workbench: await s.readWorkbench(workspace), manual: await s.readInterestProfile(workspace), discovery: await s.readDiscoveryProfile(workspace), settings: await s.readDiscoverySettings(workspace), languageSettings: await s.readDiscoveryLanguageSettings(workspace), actions: await s.readDiscoveryActions(workspace) }; });
   const catalog = () => page.evaluate(async () => {
     const response = await fetch('assets/life/discovery-feed.json', { method: 'GET', cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer' });
     return { ok: response.ok, cache: response.headers.get('X-Haedo-Discovery-Cache'), browserFetchedAt: response.headers.get('X-Haedo-Discovery-Fetched-At'), feed: await response.json() };
@@ -72,7 +72,7 @@ async function main() {
   const check = async (name, action) => { await action(); report.checks.push(name); console.log('PASS ' + name); };
   try {
     await open('interests');
-    await check('actual v136 installs without fetching catalog, original sites or model assets', async () => {
+    await check('actual v137 installs without fetching catalog, original sites or model assets', async () => {
       await wait(page, async name => (await caches.keys()).includes(name) && !!navigator.serviceWorker.controller && (await navigator.serviceWorker.getRegistration())?.active?.state === 'activated', report.oldCache);
       assert.equal(report.catalogRequests.length, 0); assert.deepEqual(report.modelRequests, []); assert.deepEqual(report.unexpectedExternal, []);
     });
@@ -87,6 +87,8 @@ async function main() {
       if ((await s.saveDiscoveryProfile(id, feedback, profile.revision)).status !== 'stored') throw Error('Anonymous feedback fixture failed');
       const settings = await s.readDiscoverySettings(id), changedSettings = HaedoLife.DiscoverySettings.update(settings, { disabledSourceIds: ['naver-d2'] }, { expectedRevision: settings.revision });
       if ((await s.saveDiscoverySettings(id, changedSettings, settings.revision)).status !== 'stored') throw Error('Anonymous settings fixture failed');
+      const language = await s.readDiscoveryLanguageSettings(id), changedLanguage = HaedoLife.DiscoveryLanguageSettings.update(language, { contentLanguages: ['ko', 'en'], translationTarget: 'ko' }, { expectedRevision: language.revision });
+      if ((await s.saveDiscoveryLanguageSettings(id, changedLanguage, language.revision)).status !== 'stored') throw Error('Anonymous language settings fixture failed');
       const actionsModel = HaedoLife.DiscoveryActions;
       const normalized = HaedoLife.Discovery.validateFeed(publicFeed), unique = [...new Map(normalized.articles.map(article => [article.canonicalUrl, article])).values()];
       if (unique.length < 2) throw Error('Two distinct allowlisted public articles are required for active and cancelled reaction fixtures');
@@ -109,7 +111,7 @@ async function main() {
     assert.ok(before.actions.entries.some(entry => entry.liked && entry.bookmarked));
     assert.ok(before.actions.entries.some(entry => !entry.liked && !entry.bookmarked && entry.likedAt === null && entry.bookmarkedAt === null));
     report.privateActionsFixture = { revision: before.actions.revision, entries: before.actions.entries.length, activeBoth: 1, cancelled: 1, personalizationEnabled: true, sha256: sha(Buffer.from(JSON.stringify(before.actions))) };
-    await check('v136 -> current worker preserves exact originals, workbench, manual interests, feedback, settings and private reactions', async () => {
+    await check('v137 -> current worker preserves exact originals, workbench, manual interests, feedback, old settings, separate language preferences and private reactions', async () => {
       old = false; await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
       await wait(page, async ({ oldCache, newCache }) => { const keys = await caches.keys(), r = await navigator.serviceWorker.getRegistration(); return !keys.includes(oldCache) && keys.includes(newCache) && r?.active?.state === 'activated' && navigator.serviceWorker.controller === r.active; }, { oldCache: report.oldCache, newCache: report.newCache });
       await page.reload(); await ready(page); assert.deepEqual(await state(), before);
@@ -168,7 +170,7 @@ async function main() {
       await wait(page, () => document.querySelector('#lifeApp')?.hidden && /인터넷 연결|로그인/.test(document.body.innerText));
       assert.equal(await page.locator('#discoveryReview').count(), 0);
       fake.offline.delete(device); await context.setOffline(false); strictOffline = false;
-      await open('external-discovery'); await idle(); const after = await state(); assert.deepEqual(after.bundle, before.bundle); assert.deepEqual(after.manual, before.manual); assert.deepEqual(after.discovery.feedback, before.discovery.feedback); assert.deepEqual(after.settings, before.settings); assert.deepEqual(after.actions, before.actions);
+      await open('external-discovery'); await idle(); const after = await state(); assert.deepEqual(after.bundle, before.bundle); assert.deepEqual(after.manual, before.manual); assert.deepEqual(after.discovery.feedback, before.discovery.feedback); assert.deepEqual(after.settings, before.settings); assert.deepEqual(after.languageSettings, before.languageSettings); assert.deepEqual(after.actions, before.actions);
     });
     await check('catalog query, authorization and body probes fail before reaching the static host', async () => {
       const count = report.catalogRequests.length; probing = true;

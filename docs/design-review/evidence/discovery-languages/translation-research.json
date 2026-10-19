@@ -1,0 +1,126 @@
+{
+  "checkedAt": "2026-10-19T06:18:00Z",
+  "status": "research complete; common helper contract pending root",
+  "scope": "Official public fixed HTTPS GET and official-document reading only. No app edits, translation of an article, private data, account session, API key, paid API or browser/device execution.",
+  "decision": {
+    "feature": "선택 언어로 원문 번역해 열기",
+    "mechanism": "Native explicit new-tab link to Google Translate website translation, with the approved public original URL and selected target language.",
+    "notImplementedHere": true,
+    "notAutomaticTitleTranslation": true,
+    "notAppServerOrTranslationAPI": true,
+    "translationSuccessVerified": false
+  },
+  "officialSources": [
+    {
+      "id": "desktop-help",
+      "url": "https://support.google.com/translate/answer/2534559?hl=ko&co=GENIE.Platform%3DDesktop",
+      "title": "문서 및 웹사이트 번역하기 - 컴퓨터 - Google Translate 고객센터",
+      "publicationOrUpdateDate": null,
+      "dateNote": "No editorial date identified; checked on 2026-10-19.",
+      "status": 200,
+      "supportedClaims": [
+        "공식 브라우저 경로는 Google 번역의 웹사이트 탭에 URL을 넣고 이동하는 방식이다.",
+        "원문 언어의 자동 감지를 권장하며 번역 화면에서 원본/번역과 언어를 바꿀 수 있다.",
+        "일부 지역에서는 웹사이트 번역 기능을 지원하지 않는다고 명시한다."
+      ],
+      "unsupportedClaims": [
+        "이 도움말을 /translate 쿼리 파라미터의 안정 API 명세로 부를 수 없다.",
+        "도움말의 문서 업로드·Cloud API·웹사이트 위젯은 이번 외부 링크 기능과 별개다."
+      ]
+    },
+    {
+      "id": "ios-help",
+      "url": "https://support.google.com/translate/answer/2534559?hl=ko&co=GENIE.Platform%3DiOS",
+      "title": "문서 및 웹사이트 번역하기 - iPhone/iPad - Google Translate 고객센터",
+      "publicationOrUpdateDate": null,
+      "status": 200,
+      "supportedClaims": [
+        "일부 기기에서 웹사이트 번역이 가능하며 모바일 브라우저/Chrome iOS 경로를 안내한다.",
+        "지역 제한을 안내한다. 문서 업로드의 큰 화면 조건을 일반 웹사이트 번역의 iPad 전용 조건으로 잘못 옮기지 않는다."
+      ]
+    },
+    {
+      "id": "consumer-ui",
+      "url": "https://translate.google.com/?hl=en&sl=auto&tl=ko&op=websites",
+      "title": "Google Translate",
+      "publicationOrUpdateDate": null,
+      "status": 200,
+      "method": "Standard HTTPS GET without cookies, authorization or an original URL parameter",
+      "observed": "The official blank consumer UI HTML contained the eight code-label pairs listed below.",
+      "limitations": "HTML retrieval/code-label presence is not a successful website translation, live browser selection, login-free guarantee or Apple-device proof. The web-reading tool could not open this URL; a standard TLS-verified HTTPS GET returned 200."
+    },
+    {
+      "id": "cloud-language-reference",
+      "url": "https://cloud.google.com/translate/docs/languages",
+      "finalURL": "https://docs.cloud.google.com/translate/docs/languages",
+      "title": "Language support | Cloud Translation",
+      "lastUpdatedUTC": "2026-10-13",
+      "status": 200,
+      "supportedClaims": [
+        "공식 NMT 언어 표에 ko/en/ja/zh-CN/zh-TW/es/fr/de가 기재되어 있다.",
+        "간체와 번체 중국어를 구분하는 코드 근거를 교차 확인했다."
+      ],
+      "limitations": "Cloud Translation is a separate API product. Its language/model table alone does not prove consumer website translation availability, URL parameters, prices or every language/site/region combination. No Cloud API was called."
+    }
+  ],
+  "linkPattern": {
+    "proposedTemplate": "https://translate.google.com/translate?sl=auto&tl=<approved-target-code>&u=<encoded-approved-public-HTTPS-original>",
+    "classification": "External consumer website-translation link convention, not a documented stable API contract",
+    "officialHelpDocumentsWebsiteURLFlow": true,
+    "officialHelpDocumentsExactTranslatePathAndParameters": false,
+    "stableAPIContractFound": false,
+    "parameterMeaning": {
+      "sl": "auto requests original-language detection; it is not an allowed target language.",
+      "tl": "An explicitly selected target code from the bounded validated UI allowlist.",
+      "u": "The one existing approved public HTTPS original URL, encoded as a single query value."
+    },
+    "constructWith": "URL plus URLSearchParams; never concatenate an unescaped original URL or accept a caller-selected translation host/path.",
+    "requestedTranslationURLDuringResearch": false,
+    "articleURLSubmittedDuringResearch": false,
+    "communityEvidenceNotUsedAsFormalSpecification": "Search surfaced public support-community examples of sl/tl and /translate?u, including failures. Community answers are not an official supported API guarantee and were not used to certify the pattern.",
+    "fallback": "Keep the existing original link available. If Google rejects a URL/region/site or changes the link shape, let the user open the original or use the official website-translation screen; do not display an app success state or fabricate a translated title/body."
+  },
+  "targetLanguages": [
+    { "code": "ko", "label": "한국어", "consumerUICodeLabelObserved": true, "cloudNMTListed": true, "websiteTranslationSuccessTested": false },
+    { "code": "en", "label": "영어", "consumerUICodeLabelObserved": true, "cloudNMTListed": true, "websiteTranslationSuccessTested": false },
+    { "code": "ja", "label": "일본어", "consumerUICodeLabelObserved": true, "cloudNMTListed": true, "websiteTranslationSuccessTested": false },
+    { "code": "zh-CN", "label": "중국어 간체", "consumerUICodeLabelObserved": true, "cloudNMTListed": true, "websiteTranslationSuccessTested": false },
+    { "code": "zh-TW", "label": "중국어 번체", "consumerUICodeLabelObserved": true, "cloudNMTListed": true, "websiteTranslationSuccessTested": false },
+    { "code": "es", "label": "스페인어", "consumerUICodeLabelObserved": true, "cloudNMTListed": true, "websiteTranslationSuccessTested": false },
+    { "code": "fr", "label": "프랑스어", "consumerUICodeLabelObserved": true, "cloudNMTListed": true, "websiteTranslationSuccessTested": false },
+    { "code": "de", "label": "독일어", "consumerUICodeLabelObserved": true, "cloudNMTListed": true, "websiteTranslationSuccessTested": false }
+  ],
+  "languageScope": "These eight confirmed options are a bounded initial choice set, not all Google languages. Do not extrapolate Cloud-only codes or accept arbitrary tl values. Additional targets need the same public official/UI compatibility check.",
+  "privacyAndInteractionContract": {
+    "trigger": "Only an explicit native user click/keyboard activation of the translation link.",
+    "appSuppliedPayload": ["approved public original URL", "selected target code", "fixed source-language auto-detect parameter"],
+    "notSuppliedByApp": ["manual interests", "reaction/list metadata", "account/workspace IDs", "private original text", "saved excerpts or notes", "drafts", "title/summary text", "auth tokens", "local files"],
+    "notAppFetched": "The app does not fetch or store the translated page, original body, external proxy result or translated title.",
+    "noBackgroundRequest": "No app fetch, prefetch, preload, preconnect, iframe, hidden translation request or translation call when choosing the language or rendering the list.",
+    "externalProcessingDisclosure": "클릭하면 공개 원문 URL과 선택 언어가 Google 번역으로 전달됩니다. Google이 해당 원문을 가져와 번역할 수 있습니다. 개인 자료·관심·반응은 보내지 않습니다.",
+    "browserMetadataCaveat": "Public-URL-only describes the app payload. Normal external navigation also exposes ordinary network/browser information and may use the user's Google cookies/session; noreferrer does not make Google navigation anonymous.",
+    "newTabAttributes": { "target": "_blank", "rel": "noopener noreferrer", "referrerPolicy": "no-referrer" },
+    "validation": "Use the current public-feed/snapshot sourceId plus approved HTTPS host policy and canonical URL. Reject unsupported target codes, invalid/unapproved URLs, credentials, non-HTTPS schemes and private-library arbitrary input. Do not turn an arbitrary pasted URL into a public approved original.",
+    "retainedBehaviour": "Translation navigation does not mark read/like/bookmark, import material, change original URL/version/rights, alter recommendation scoring, or claim full-text acquisition. The original link and exact same-list return remain available."
+  },
+  "limitations": [
+    "The exact consumer deep-link query is not certified as a stable API by the checked primary help page.",
+    "The official help explicitly limits availability by region and device; successful anonymous HTML retrieval does not guarantee every translation is login-free or avoids consent/captcha.",
+    "Publisher access controls, JavaScript pages, paywalls, CAPTCHA, network failures and external service changes may prevent translation. No bypass is proposed.",
+    "Machine translation can mistranslate research claims or terminology. It is not the publisher's verified original, and availability does not establish translation quality.",
+    "No real Google login, Apple browser/native tab return, popup/consent behaviour, actual translation, reading usefulness or OS-file workflow was verified."
+  ],
+  "evidence": {
+    "officialGETMetadata": ".local/discovery-languages/translation-official-get.json",
+    "consumerUIGetMetadata": ".local/discovery-languages/translate-ui-get.json",
+    "rawBodiesSaved": false,
+    "firstUIGet": "Stopped at the initial2MiB read bound; the later fixed blank UI GET succeeded under an explicit8MiB bound. No article URL was sent in either request.",
+    "publicationDates": "Help/UI pages had no identified editorial date. CheckedAt is distinct from the Cloud page's displayed2026-10-13 update date.",
+    "mutations": 0,
+    "productEdits": 0,
+    "paidAPIRequests": 0,
+    "personalDataRequests": 0,
+    "publisherArticleRequests": 0
+  },
+  "nextContract": "Root owns the common pure helper and entry/SW/prepare integration. Recommended helper returns a URL or null from validated public article+target code only, performs no fetch/storage, and is activated only through the existing explicit new-tab navigation flow. This report does not implement that helper."
+}

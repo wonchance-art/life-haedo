@@ -1,0 +1,40 @@
+{
+  "checkedAt": "2026-10-19T06:22:36.008310+00:00",
+  "scope": "Independent translation URL helper only; neutral public URL strings are never navigated. Browser/Google translation and device behaviour are not tested.",
+  "command": "node --test tests/life-discovery-translation.test.cjs",
+  "node": "v24.19.0",
+  "tests": 8,
+  "pass": 8,
+  "fail": 0,
+  "sourceSHA256": {
+    "tests/life-discovery-translation.test.cjs": "c76c33238eda5788588257ff133c38cca49d02fddc6766d30f6e722c0981992a",
+    "assets/life/discovery-language-settings.js": "70843708e5cb27b27f91f953398ee7fd51df64b6424c7cc01d72c98518f4b6d5",
+    "assets/life/discovery.js": "2eaddf8deb9e0978805f6e6795c885c8c9364be5a06b97b2f7ad0aa75ba4f2bd",
+    ".local/discovery-languages/translation-unit.log": "f96a1cbf26f6f1864c1512bade41950ffc04facdb7dc367342dabc9c69e50891"
+  },
+  "coverage": [
+    "bounded target whitelist and fixed Google endpoint",
+    "seven reviewed source-host pairs, including arXiv and MIT",
+    "malformed/coercible source identity and unapproved source-host pairing",
+    "unsafe scheme/credentials/deceptive host/port/control rejection",
+    "exact supplied canonical identity",
+    "one outer encoding preserving meaningful raw query and percent escapes",
+    "frozen original metadata unchanged and title/body/private fields not read",
+    "UMD import/construction with throwing IO, storage, DOM, navigation and timer traps"
+  ],
+  "initialFinding": {
+    "tests": 8,
+    "pass": 7,
+    "fail": 1,
+    "case": "sourceId array or object can coerce to an existing registry key",
+    "ownerFix": "Adapter added string ASCII ID validation before Object.hasOwn registry access.",
+    "regressionPreserved": true,
+    "productEditedByReviewer": false
+  },
+  "outstanding": [
+    "Real user explicit native click and popup/return behaviour are delegated to browser QA.",
+    "Translation success, login/region/site access, Apple device and usefulness remain unverified."
+  ],
+  "networkRequests": 0,
+  "productEditsByReviewer": 0
+}

@@ -26,10 +26,33 @@
     ['접근성', 'accessibility']
   ].map(row => Object.freeze(row)));
   const LIMITS = Object.freeze({ articles: 500, sources: 20, manual: 40, matches: 5, feedBytes: 4 * 1024 * 1024 });
+  const CONTENT_LANGUAGE_CODES = Object.freeze(['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'und', 'mul', 'other']);
   const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
   const validId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
   const fail = code => Object.assign(new Error({ discovery_feed_invalid: '공개 목록의 형식과 출처를 확인하지 못했습니다.', discovery_unavailable: '공개 목록을 불러오지 못했습니다.', discovery_profile_invalid: '저장한 관심과 추천 조정을 다시 확인해 주세요.' }[code] || '공개 목록을 확인해 주세요.'), { code });
   const check = (condition, code = 'discovery_feed_invalid') => { if (!condition) throw fail(code); };
+  // Compare publisher-provided tags without changing the stored metadata or
+  // inferring an article's language from its title or publisher's language.
+  function languageKey(value) {
+    if (typeof value !== 'string' || !value.trim()) return 'und';
+    const raw = value.trim();
+    if (raw.toLowerCase() === 'unknown') return 'und';
+    if (raw.toLowerCase() === 'mixed') return 'mul';
+    try {
+      const primary = Intl.getCanonicalLocales(raw)[0].split('-')[0].toLowerCase();
+      return CONTENT_LANGUAGE_CODES.includes(primary) ? primary : 'other';
+    } catch (_) { return 'und'; }
+  }
+  function languageSelection(value) {
+    if (value === undefined || value === null) return null;
+    check(Array.isArray(value) && value.length <= CONTENT_LANGUAGE_CODES.length &&
+      Array.from(value).every(code => CONTENT_LANGUAGE_CODES.includes(code)) && new Set(value).size === value.length, 'discovery_profile_invalid');
+    return [...value];
+  }
+  function languageAllowed(value, contentLanguages) {
+    const selection = languageSelection(contentLanguages);
+    return selection === null || selection.includes(languageKey(value));
+  }
   function text(value, maximum, allowEmpty = false) {
     if (typeof value !== 'string' || value.length > maximum || (!allowEmpty && !value.trim()) || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) return false;
     for (let i = 0; i < value.length; i++) {
@@ -180,12 +203,17 @@
   // Shared validated full pool. Consumers must preserve these hard exclusions.
   function candidatePool(input, options = {}) {
     const feed = validateFeed(input, options), interests = manual(options.profile), feedback = feedbackUrls(options.feedback);
+    const contentLanguages = languageSelection(options.contentLanguages);
     check(options.knownUrls === undefined || Array.isArray(options.knownUrls), 'discovery_profile_invalid');
     const known = new Set((options.knownUrls || []).map(canonicalUrl).filter(Boolean));
     const mode = options.mode || 'related'; check(['related', 'latest'].includes(mode));
     const limit = options.limit === undefined ? 5 : options.limit; check(Number.isInteger(limit) && limit >= 1 && limit <= LIMITS.matches);
     const seen = new Set(), excluded = { known: 0, feedback: 0, duplicate: 0, invalid: (feed.validation?.invalid || []).length }, pool = [];
+    if (contentLanguages !== null) excluded.language = 0;
     for (const article of feed.articles) {
+      // Apply before URL deduplication and top-K, so a disallowed language row
+      // cannot hide an allowed alternative for the same canonical original.
+      if (contentLanguages !== null && !contentLanguages.includes(languageKey(article.language))) { excluded.language++; continue; }
       if (seen.has(article.canonicalUrl)) { excluded.duplicate++; continue; } seen.add(article.canonicalUrl);
       if (known.has(article.canonicalUrl)) { excluded.known++; continue; }
       if (feedback.has(article.canonicalUrl)) { excluded.feedback++; continue; }
@@ -193,7 +221,7 @@
       pool.push({ article, reasons, strength, interests: new Set(reasons.map(reason => reason.interestId)).size });
     }
     const coverage = { linkOnly: 0, summary: 0, fullText: 0 }; for (const article of feed.articles) coverage[{ link_only: 'linkOnly', summary: 'summary', full_text: 'fullText' }[article.coverage]]++;
-    return { feed, pool, excluded, coverage, mode, limit };
+    return { feed, pool, excluded, coverage, mode, limit, contentLanguages };
   }
   function rankPool(prepared) {
     const { feed, pool, excluded, coverage, mode, limit } = prepared;
@@ -241,5 +269,5 @@
     function dispose() { disposed = true; cancel(); prior = null; priorFetchedAt = null; }
     return { load, rank, cancel, dispose };
   }
-  return Object.freeze({ ALLOWED_SOURCES, ALIASES, LIMITS, canonicalUrl, validateFeed, candidatePool, rankPool, rank, toImportInput, create });
+  return Object.freeze({ ALLOWED_SOURCES, ALIASES, LIMITS, CONTENT_LANGUAGE_CODES, languageKey, languageAllowed, canonicalUrl, validateFeed, candidatePool, rankPool, rank, toImportInput, create });
 });
