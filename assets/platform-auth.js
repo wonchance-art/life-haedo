@@ -212,12 +212,25 @@
         if (url.href !== location.href) env.history?.replaceState(null, '', url.pathname + url.search + url.hash);
       } catch (_) {}
     }
-    const pagehide = () => { if (hasPrivateSurface()) { cancel(); hidePrivate(); } };
+    const pagehide = () => {
+      if (!hasPrivateSurface()) return;
+      // Let a live workspace capture its caret/scroll before hiding changes
+      // layout and focus. The notification never cancels navigation or conceal.
+      if (env.Event && document?.dispatchEvent) document.dispatchEvent(new env.Event('haedo:page-suspend'));
+      cancel(); hidePrivate();
+    };
     const storageChange = value => {
       if (value.key === LOGOUT_KEY && value.newValue === '1') invalidate();
     };
     const pageshow = async value => {
       if (!value.persisted || !hasPrivateSurface()) return;
+      // A workspace owns its unsaved editor and verifies the resumed account
+      // before revealing it. Let that owner handle one verification, rather than
+      // racing a second generic check against a retained editing session.
+      if (env.Event && document?.dispatchEvent) {
+        const resume = new env.Event('haedo:page-resume', { cancelable: true });
+        if (document.dispatchEvent(resume) === false) return;
+      }
       const previous = user?.id, expected = epoch;
       try {
         const current = await verify();

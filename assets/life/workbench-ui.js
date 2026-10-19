@@ -265,6 +265,16 @@
       await current?.photoPosts?.flush();
       if (current?.state && current.edit !== current.stored || current?.saving) await flushSession(current);
     }
+    async function checkpoint() {
+      if (installing) throw fault('restore_in_progress', '새 사본을 저장하는 중입니다. 완료 후 이동해 주세요.');
+      const view = current?.postEditorView;
+      if (view && showing(view.token, current) && view.modes.photo === 'edit' &&
+          (current.blogContext ? current.blogKind === 'photo' : view.active === 'photo')) {
+        await current.photoPosts.checkpoint();
+        return;
+      }
+      await flush();
+    }
     function dirty() { return installing || !!current && (current.edit !== current.stored || !!current.saving || !!current.composer?.dirty() || !!current.nine?.dirty() || !!current.seriesEditor?.dirty() || !!current.materialUI?.dirty() || !!current.materialTool?.dirty() || !!current.photoPosts?.dirty()); }
     function sessionFor(id) {
       if (sessions.has(id)) return sessions.get(id);
@@ -3208,7 +3218,7 @@
       sessions.forEach(session => { clearTimeout(session.timer); session.composer?.dispose(); session.photoPosts?.dispose(); session.materialUI?.dispose(); session.materialContinuity?.dispose(); session.seriesEditor?.dispose(); session.seriesReader?.dispose(); session.unsubscribe?.(); });
       urls.forEach(url => URL.revokeObjectURL(url)); urls.clear();
     }
-    return Object.freeze({ render, flush, dirty, leave, dispose });
+    return Object.freeze({ render, flush, checkpoint, dirty, leave, dispose });
   }
   life.WorkbenchUI = Object.freeze({ create });
 })(globalThis);

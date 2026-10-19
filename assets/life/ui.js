@@ -3763,7 +3763,7 @@
     const visibility = () => {
       if (!document.hidden) return;
       if (dirty()) persistStage().catch(failure);
-      if (workbench?.dirty()) workbench.flush().catch(failure);
+      if (workbench?.dirty()) workbench.checkpoint().catch(failure);
       if (publicCoverUI?.dirty()) publicCoverUI.flush().catch(failure);
       if (writer?.isDirty()) writer.flush().catch(failure);
       flushReadingPosition();
@@ -3823,7 +3823,12 @@
     }
     unbindNavigation = global.HaedoNavigation?.bind(section => guarded(() => navigateSection(section))());
     global.addEventListener('popstate', popstate);
-    return { dispose, flushDraft };
+    return { dispose, flushDraft, checkpoint };
+
+    async function checkpoint() {
+      if (disposed) return;
+      await workbench?.checkpoint();
+    }
 
     async function flushDraft() {
       if (disposed) throw new Error('계정이 바뀌어 이전 초안을 보관할 수 없습니다.');

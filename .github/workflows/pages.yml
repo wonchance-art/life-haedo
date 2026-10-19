@@ -356,6 +356,12 @@ jobs:
       - name: Verify exact login return and preserved legacy editing across screen sizes
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/integrated-release-entry-browser.cjs
+      - name: Verify retained travel writing, original photos and verified account resume
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/travel-writing-resume-browser.cjs
+      - name: Verify genuine cached history return and native navigation confirmation
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/travel-writing-history-browser.cjs
       - name: Stop the local server
         if: always()
         run: |
@@ -369,6 +375,8 @@ jobs:
           name: browser-checks-${{ matrix.group }}-${{ github.run_attempt }}
           path: |
             .local/integrated-release-entry/
+            .local/travel-writing-resume/
+            .local/travel-writing-history/
             .local/app-native/qa/
             .local/home-refinement/qa/
             .local/blog-journeys/after/
@@ -594,7 +602,7 @@ jobs:
       - name: Verify generated configuration and complete installed shell hashes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         env:
-          PREVIOUS_RELEASE: "88ccfe5e381a37818a46e7abdaabfc48cff58c56"
+          PREVIOUS_RELEASE: "38b4559ea28047e3623e27af760d6e5684f45e55"
         run: node scripts/verify-prepared-site.mjs
       - name: Verify the actual previous service worker updates without losing originals
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
