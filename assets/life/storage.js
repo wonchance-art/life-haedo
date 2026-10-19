@@ -116,6 +116,11 @@
       if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '새 글 찾기 설정 모듈을 불러오지 못했습니다.');
       return value;
     };
+    const discoveryActions = () => {
+      const value = options.discoveryActions || root.HaedoLife?.DiscoveryActions;
+      if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '좋아요·담기 모듈을 불러오지 못했습니다.');
+      return value;
+    };
     function notify(event) {
       if (disposed) return;
       const callbacks = event.type === 'error'
@@ -205,6 +210,10 @@
           if (data?.sender !== sender && data?.type === 'discovery_settings_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 1) {
             notify({ type: 'discovery_settings_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'discovery_actions_changed' && typeof data.workspaceId === 'string' &&
+              Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'discovery_actions_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
         };
       } catch (_) { channel = null; }
@@ -706,6 +715,48 @@
       if (result.status === 'stored') {
         const event = { type: 'discovery_settings_changed', workspaceId, revision: result.settings.revision };
         notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
+      }
+      return result;
+    }
+    const discoveryActionsKey = workspaceId => `discoveryActions:${accountKey}:${workspaceId}`;
+    function validateDiscoveryActions(value, workspaceId) {
+      discoveryActions().validate(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '좋아요·담기의 작업공간이 다릅니다.');
+      if (new TextEncoder().encode(stablePayload(value)).length >= 1024 * 1024) {
+        throw fault('discovery_actions_too_large', '좋아요·담기 자료가 너무 큽니다. 기존 선택은 보존했습니다.');
+      }
+    }
+    async function discoveryActionsValue(meta, workspaceId) {
+      return privateProfileValue(meta, discoveryActionsKey(workspaceId), workspaceId, discoveryActions(), validateDiscoveryActions);
+    }
+    async function readDiscoveryActions(workspaceId) {
+      privateProfileScope(workspaceId, '좋아요·담기를');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await discoveryActionsValue(meta, workspaceId));
+      });
+    }
+    async function saveDiscoveryActions(workspaceId, input, baseRevision) {
+      privateProfileScope(workspaceId, '좋아요·담기를'); requireRevision(baseRevision, 'baseRevision');
+      validateDiscoveryActions(input, workspaceId);
+      const value = clone(input);
+      if (baseRevision === Number.MAX_SAFE_INTEGER || value.revision !== baseRevision + 1) {
+        throw fault('discovery_actions_conflict', '좋아요·담기의 저장 기준을 확인해 주세요.');
+      }
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await discoveryActionsValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) return { status: 'conflict', profile: clone(previous) };
+        await meta.put({ key: discoveryActionsKey(workspaceId), value });
+        return { status: 'stored', profile: clone(value) };
+      });
+      if (result.status === 'stored') {
+        const event = { type: 'discovery_actions_changed', workspaceId, revision: result.profile.revision };
+        // Only this storage facade observes its own committed action write.
+        // Other facades/tabs receive the minimal event and must revalidate.
+        notify({ ...event, local: true }); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
       }
       return result;
     }
@@ -2943,6 +2994,7 @@
       readInterestProfile, saveInterestProfile,
       readDiscoveryProfile, saveDiscoveryProfile,
       readDiscoverySettings, saveDiscoverySettings,
+      readDiscoveryActions, saveDiscoveryActions,
       readCollection, saveCollection, readNineBoard, saveNineBoard, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, finishMaterialContinuityClaim,
       readPublicCover, savePublicCover,

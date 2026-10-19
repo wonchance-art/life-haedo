@@ -1,5 +1,9 @@
 # 오픈소스 검토와 재사용 결정
 
+## 좋아요·담기 구현 재사용 — 2026-10-19 KST
+
+아래 종합 조사와 기존 고정 idb를 재사용해 첫 반응→목록→개인 추천 흐름을 구현했다. 별도 추천 패키지·서버·모델·전이 의존성을 추가하지 않았다. 기존 Discovery 후보 검증/정렬, Storage/idb CAS·scope/dispose, native DOM·File/Blob·fatal TextDecoder를 재사용한다. 직접 유지하는 범위는 독립 반응 schema·사본 검증과 공개 제목/태그의 두 단어 중첩 규칙이다. 범용 추천 서비스를 도입하는 운영/개인 전송 비용보다 현재 50개 링크 후보와 로컬 제어에 맞지만, 규칙값의 최적성이나 의미 이해/유용성은 입증하지 않았다. 실패 근거와 시간 분리 평가가 생기면 아래 후보를 재비교한다. [구현·검수·교체 조건](../design-review/discovery-reactions.md).
+
 ## 좋아요·담기와 개인 추천 연구 — 2026-10-19 KST
 
 사용자가 요청한 SNS 사례·오픈소스·피드백 기반 추천을 [종합 조사·설계](../design-review/recommendation-feedback-research.md)로 정리했다. 공식 SNS 5개 사례, 추천 도구6개와 SNS 공개 저장소3개의 release/HEAD·라이선스·archive·공개 advisory를 실제 대조했다. [확인 시각·버전·제품 불변 해시](../design-review/evidence/recommendation-research/verification.json)를 남겼다. 설치·모델 학습·제품 변경·개인 데이터 전송·배포는 수행하지 않았다.

@@ -372,6 +372,9 @@ jobs:
       - name: Verify explicit discovery automation and local setting preservation
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-automation-browser.cjs
+      - name: Verify private reactions, saved lists, portable copies and explicit personal recommendations
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-discovery-reactions-browser.cjs
 
       - name: Verify retained travel writing, original photos and verified account resume
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
@@ -412,6 +415,7 @@ jobs:
             .local/external-discovery-browser/
             .local/external-discovery-pwa/
             .local/discovery-automation-browser/
+            .local/discovery-reactions-browser/
             .local/unified-search/
             .local/collection-library/
             .local/collection-metadata/

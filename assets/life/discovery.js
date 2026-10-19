@@ -175,7 +175,8 @@
     }
     return result;
   }
-  function rank(input, options = {}) {
+  // Shared validated full pool. Consumers must preserve these hard exclusions.
+  function candidatePool(input, options = {}) {
     const feed = validateFeed(input, options), interests = manual(options.profile), feedback = feedbackUrls(options.feedback);
     check(options.knownUrls === undefined || Array.isArray(options.knownUrls), 'discovery_profile_invalid');
     const known = new Set((options.knownUrls || []).map(canonicalUrl).filter(Boolean));
@@ -189,15 +190,20 @@
       const reasons = reasonsFor(article, interests), strength = reasons.reduce((maximum, reason) => Math.max(maximum, reason.weight), 0);
       pool.push({ article, reasons, strength, interests: new Set(reasons.map(reason => reason.interestId)).size });
     }
+    const coverage = { linkOnly: 0, summary: 0, fullText: 0 }; for (const article of feed.articles) coverage[{ link_only: 'linkOnly', summary: 'summary', full_text: 'fullText' }[article.coverage]]++;
+    return { feed, pool, excluded, coverage, mode, limit };
+  }
+  function rankPool(prepared) {
+    const { feed, pool, excluded, coverage, mode, limit } = prepared;
     const date = row => row.article.sortDate ? Date.parse(row.article.sortDate) : -Infinity;
     const compareLatest = (a, b) => date(b) - date(a) || a.article.canonicalUrl.localeCompare(b.article.canonicalUrl);
-    const candidates = mode === 'related' ? pool.filter(row => row.reasons.length).sort((a, b) => b.strength - a.strength || b.interests - a.interests || compareLatest(a, b)) : pool.sort(compareLatest);
+    const candidates = mode === 'related' ? pool.filter(row => row.reasons.length).sort((a, b) => b.strength - a.strength || b.interests - a.interests || compareLatest(a, b)) : [...pool].sort(compareLatest);
     const items = candidates.slice(0, limit).map(({ article, reasons }) => ({ article, reasons: reasons.map(({ weight, ...reason }) => reason) }));
-    const coverage = { linkOnly: 0, summary: 0, fullText: 0 }; for (const article of feed.articles) coverage[{ link_only: 'linkOnly', summary: 'summary', full_text: 'fullText' }[article.coverage]]++;
     return { items, eligibleCount: candidates.length, poolCount: pool.length, metadata: { generatedAt: feed.generatedAt,
       stale: feed.stale, sources: feed.sources, coverage, excluded, mode,
       limitation: '명시적으로 일치한 표현을 찾은 결과입니다. 같은 단어라도 문맥은 다를 수 있습니다.' } };
   }
+  function rank(input, options = {}) { return rankPool(candidatePool(input, options)); }
   function toImportInput(article) {
     check(plain(article) && text(article.title, 500) && publicUrl(article.url) && (article.author === null || article.author === undefined || text(article.author, 200)));
     return { origin: 'other', title: article.title, url: article.url, text: '', format: 'text/plain', author: article.author || '',
@@ -233,5 +239,5 @@
     function dispose() { disposed = true; cancel(); prior = null; priorFetchedAt = null; }
     return { load, rank, cancel, dispose };
   }
-  return Object.freeze({ ALLOWED_SOURCES, ALIASES, LIMITS, canonicalUrl, validateFeed, rank, toImportInput, create });
+  return Object.freeze({ ALLOWED_SOURCES, ALIASES, LIMITS, canonicalUrl, validateFeed, candidatePool, rankPool, rank, toImportInput, create });
 });

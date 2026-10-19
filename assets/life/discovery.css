@@ -61,7 +61,7 @@
 .discovery-topic-editor > .life-meta { margin-top: 7px; font-size: 13px; line-height: 1.75; }
 .discovery-topic-choices,.discovery-source-choices { min-width: 0; margin: 18px 0 0; padding: 0; border: 0; display: flex; flex-wrap: wrap; gap: 0 22px; }
 .discovery-topic-choices legend,.discovery-source-choices legend { width: 100%; margin-bottom: 5px; font-size: 13px; color: var(--ink-soft, #5d6b65); }
-.discovery-check { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; max-width: 100%; font-size: 16px; line-height: 1.65; cursor: pointer; }
+.discovery-check { min-width: 44px; display: inline-flex; align-items: center; gap: 9px; min-height: 44px; max-width: 100%; font-size: 16px; line-height: 1.65; cursor: pointer; }
 .discovery-check span { min-width: 0; overflow-wrap: anywhere; }
 .discovery-check input { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--color-primary, #145b50); }
 .discovery-options { margin-top: 12px; }
@@ -80,3 +80,30 @@
 .discovery-topic-examples { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin-top: 4px; }
 .discovery-topic-examples > span { margin-right: 4px; font-size: 13px; }
 .discovery-topic-examples[hidden] { display: none; }
+.discovery-reaction-header { margin-bottom: 18px; }
+.discovery-collection-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 12px; }
+.discovery-collection-tabs .life-button { font-size: 13px; padding-inline: 10px; }
+.discovery-reaction-header > .life-meta { max-width: 65ch; font-size: 13px; line-height: 1.75; }
+.discovery-modes { flex-wrap: wrap; }
+.discovery-reactions { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 10px; margin-top: 16px; }
+.discovery-reaction { border-color: var(--button-line, #d5d5db); background: transparent; color: var(--color-primary, #145b50); font-size: 14px; }
+.discovery-reaction[aria-pressed=true] { border-color: var(--color-primary, #145b50); background: var(--selected, #eaf1ed); font-weight: 650; }
+.discovery-reactions .discovery-quiet { font-size: 12px; }
+.discovery-reactions > .life-meta { flex-basis: 100%; }
+.discovery-personal-evidence { margin-top: 12px; }
+.discovery-personal-evidence > summary { display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; font-size: 13px; color: var(--color-primary, #145b50); }
+.discovery-personal-evidence p { font-size: 13px; line-height: 1.8; margin-bottom: 7px; }
+.discovery-portable { margin-top: 24px; border-bottom: 1px solid var(--line, #e3e9e6); padding-bottom: 12px; }
+.discovery-portable > summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; font-size: 14px; }
+.discovery-portable .life-meta { font-size: 13px; line-height: 1.8; margin-block: 10px; }
+.discovery-portable input[type=file] { display: block; width: 100%; min-width: 0; min-height: 44px; font: inherit; font-size: 16px; }
+.discovery-file-label { display: flex; align-items: center; min-height: 44px; color: var(--color-primary, #145b50); font-size: 14px; }
+.discovery-copy-preview { margin-block: 16px; }
+@media (max-width: 600px) {
+  .discovery-controls { align-items: flex-start; flex-wrap: wrap; }
+  .discovery-controls > .discovery-quiet { max-width: none; }
+  .discovery-reaction-header { margin-bottom: 12px; }
+  .discovery-collection-tabs { gap: 2px; }
+}
+
+.discovery-topic-editor[hidden],.discovery-controls[hidden],#discoveryApplyRecommendations[hidden] { display: none; }

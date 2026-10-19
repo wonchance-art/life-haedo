@@ -6,7 +6,10 @@
   function create({ container, storage, getBundle, isCurrent, onImport, onOpenInterests, onOpenOriginal }) {
     let active = false, disposed = false, generation = 0, workspaceId = null, surface = null;
     let current = null, client = null, unsubscribe = null, aborter = null, pendingWrite = null;
-    let settingsWrite = null, topicWrite = null, timer = null, fetchEpoch = 0, suspended = false;
+    const downloadUrls = new Set();
+    let settingsWrite = null, topicWrite = null, actionWrite = null, timer = null, fetchEpoch = 0, suspended = false;
+    const actionsModel = () => root.HaedoLife.DiscoveryActions;
+    const recommendations = () => root.HaedoLife.DiscoveryRecommendations;
     const INTERVAL = 15 * 60 * 1000;
     const settingsModel = () => root.HaedoLife.DiscoverySettings;
     const scope = () => !disposed && active && isCurrent() && getBundle()?.workspaceId === workspaceId;
@@ -36,7 +39,7 @@
       const focused = root.document.activeElement;
       const id = articleId || focused?.closest?.('[data-discovery-id]')?.dataset.discoveryId || current.memory?.articleId || null;
       const article = current.catalog?.feed?.articles.find(value => value.id === id);
-      current.memory = { articleId: id, articleUrl: article?.canonicalUrl || focused?.closest?.('[data-discovery-url]')?.dataset.discoveryUrl || current.memory?.articleUrl || null,
+      current.memory = { articleId: id, articleUrl: focused?.closest?.('[data-discovery-url]')?.dataset.discoveryUrl || article?.canonicalUrl || current.memory?.articleUrl || null,
         articleIndex: Math.max(0, [...(surface?.querySelectorAll('[data-discovery-id]') || [])].findIndex(el => el.dataset.discoveryId === id)),
         focusKey: focusKey || (surface?.contains(focused) ? focused.dataset.focusKey : null) || current.memory?.focusKey || null,
         scrollY: root.scrollY || 0 };
@@ -59,12 +62,200 @@
     function knownUrls() {
       return (getBundle()?.sources || []).map(source => source.url).filter(value => typeof value === 'string');
     }
+    function rankOptions() {
+      return { profile: settingsModel().effectiveProfile(current.profile, desiredSettings()), knownUrls: knownUrls(), feedback: current.feedback, limit: 5 };
+    }
     function rank() {
       if (!current?.catalog?.feed || !current.profile || !current.feedback || !current.settings) return null;
-      const settings = desiredSettings();
-      return client.rank(settingsModel().filterFeed(current.catalog.feed, settings), { profile: settingsModel().effectiveProfile(current.profile, settings), knownUrls: knownUrls(), feedback: current.feedback, mode: current.mode, limit: 5 });
+      const feed = settingsModel().filterFeed(current.catalog.feed, desiredSettings()), options = rankOptions();
+      if (current.mode !== 'personal' || current.personalBlocked || !current.actions?.personalizationEnabled) return client.rank(feed, { ...options, mode: current.mode === 'personal' ? current.baselineMode : current.mode });
+      if (!current.personalResult) return client.rank(feed, { ...options, mode: current.baselineMode });
+      const allowed = new Set(feed.articles.map(article => article.canonicalUrl));
+      const excluded = new Set([...knownUrls().map(value => engine().canonicalUrl(value)), ...current.feedback.feedback.map(entry => entry.canonicalUrl)]);
+      return { ...current.personalResult, items: current.personalResult.items.filter(item => allowed.has(item.article.canonicalUrl) && !excluded.has(item.article.canonicalUrl)) };
     }
-    function busy() { return current.loading || !!pendingWrite || !!settingsWrite || !!topicWrite; }
+    function busy() { return current.loading || !!pendingWrite || !!settingsWrite || !!topicWrite || !!actionWrite; }
+    function dropPersonal(preserveRows = false) {
+      if (preserveRows && current.personalResult) {
+        const { personalization, ...metadata } = current.personalResult.metadata;
+        current.personalResult = { ...current.personalResult, metadata, items: current.personalResult.items.map(item => { const { personal, ...plain } = item; return plain; }) };
+      } else current.personalResult = null;
+      current.personalPending = true;
+    }
+    function blockPersonal() { current.personalBlocked = true; current.personalStopLatched = true; current.mode = current.baselineMode; dropPersonal(); }
+    function applyPersonal() {
+      if (!scope() || !current.catalog?.feed || current.personalBlocked || !current.actions?.personalizationEnabled) return;
+      capture(); current.collection = 'discover'; current.collectionUrls = null;
+      current.personalResult = recommendations().rank(settingsModel().filterFeed(current.catalog.feed, desiredSettings()), { ...rankOptions(), actions: current.actions, mode: 'personal', baselineMode: current.baselineMode });
+      current.personalInspection = recommendations().inspectSignals(current.actions, { sourceIds: settingsModel().filterFeed(current.catalog.feed, desiredSettings()).sources.map(source => source.id) });
+      current.mode = 'personal'; current.personalPending = false; draw(); restore();
+    }
+    function entryFor(article) { return current.actions?.entries.find(entry => entry.canonicalUrl === article.canonicalUrl); }
+    function captured(article) {
+      const source = current.catalog?.feed?.sources.find(value => value.id === article.sourceId);
+      return actionsModel().capture(article, source || { id: article.sourceId, name: article.sourceName });
+    }
+    async function persistAction() {
+      if (!scope() || !current.actionIntent || actionWrite || current.actionConflict) return;
+      const token = generation, intent = current.actionIntent, options = { expectedRevision: current.actions.revision };
+      let candidate;
+      try {
+        if (intent.type === 'reaction') candidate = actionsModel().setReaction(current.actions, intent.snapshot, intent.kind, intent.value, options);
+        else if (intent.type === 'personal') candidate = actionsModel().setPersonalization(current.actions, intent.value, options);
+        else if (intent.type === 'exclude') candidate = actionsModel().setExcluded(current.actions, intent.canonicalUrl, intent.value, options);
+        else if (intent.type === 'forget') candidate = actionsModel().forget(current.actions, intent.canonicalUrl, options);
+        else if (intent.type === 'clear') candidate = actionsModel().clear(current.actions, options);
+        else candidate = actionsModel().mergeCopy(current.actions, intent.copy, options);
+        current.actionError = ''; actionWrite = storage.saveDiscoveryActions(workspaceId, candidate, current.actions.revision); draw();
+        const result = await actionWrite;
+        if (!valid(token)) return;
+        if (result.status !== 'stored') { current.actionConflict = true; blockPersonal(); current.actionError = '다른 탭에서 반응이 바뀌었습니다. 이번 선택은 남겼습니다. 최신 반응 확인 후 다시 저장해 주세요.'; return; }
+        if (result.profile.revision < current.remoteActionRevision) {
+          blockPersonal(); current.actionConflict = true;
+          current.actionError = '저장 뒤 다른 탭에서 반응이 다시 바뀌었습니다. 이번 의도는 남겼습니다. 최신 반응 확인 후 다시 저장하거나 취소해 주세요.';
+          try { const latest = await storage.readDiscoveryActions(workspaceId); if (valid(token)) current.actions = latest; }
+          catch (_) { if (valid(token)) current.actionError = '저장 뒤 바뀐 반응을 확인하지 못했습니다. 개인 추천은 중지했고 이번 의도는 남겼습니다. 최신 반응 확인을 눌러 주세요.'; }
+          return;
+        }
+        current.actions = result.profile; current.actionIntent = null; current.actionConflict = false;
+        if (intent.type === 'personal' && intent.value && !current.personalOffIntent) { current.personalStopLatched = false; current.personalBlocked = false; applyPersonal(); }
+        if (intent.type === 'reaction') {
+          current.lastReaction = { snapshot: intent.snapshot, kind: intent.kind, value: !intent.value };
+          current.personalPending = true;
+          message(intent.value ? (intent.kind === 'liked' ? '좋아요한 글에 추가했습니다.' : '담은 글에 추가했습니다. 원문은 보관하지 않았습니다.') : '선택을 취소했습니다. 되돌리거나 취소한 글에서 다시 선택할 수 있습니다.');
+        } else if (intent.type === 'merge') { blockPersonal(); current.collectionUrls = null; current.copyPreview = null; current.copyEnvelope = null; message('사본의 새 항목을 추가했습니다. 기존 선택은 유지했고 추천 반영은 껐습니다.'); }
+        else if (intent.type === 'clear') { blockPersonal(); downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); current.copyGeneration++; current.copyReading = false; current.copyPreview = null; current.copyEnvelope = null; current.lastReaction = null; current.collectionUrls = null; message('반응과 목록을 초기화했습니다. 자료실 원문은 유지했습니다.'); }
+        else if (intent.type === 'forget') { current.lastReaction = null; current.collectionUrls = current.collectionUrls?.filter(value => value !== intent.canonicalUrl) || null; message('이 글의 반응과 목록 정보를 완전히 지웠습니다. 자료실 원문은 유지했습니다.'); }
+        else if (intent.type === 'exclude') message(intent.value ? '이 반응을 추천에서 제외했습니다.' : '이 좋아요를 다음 추천의 근거로 사용할 수 있습니다.');
+        else if (!intent.value) message('개인 추천을 껐습니다. 좋아요·담은 목록은 유지했습니다.');
+      } catch (error) { if (valid(token)) current.actionError = /too_large/.test(error?.code || '') ? '목록 보관 한도를 넘었습니다. 기존 선택과 이번 의도는 유지했습니다. 사본을 받거나 목록을 정리한 뒤 다시 시도해 주세요.' : '반응을 저장하지 못했습니다. 이번 선택은 남아 있습니다. 다시 저장하거나 선택을 취소해 주세요.'; }
+      finally {
+        actionWrite = null;
+        if (valid(token)) {
+          draw(); restore();
+          if (!current.actionIntent && current.personalOffIntent) { current.personalOffIntent = false; current.actionIntent = { type: 'personal', value: false }; persistAction().catch(error => report(error)); }
+        }
+      }
+    }
+    function react(article, kind, value) {
+      if (!scope() || !current.actions || actionWrite || current.actionIntent) return;
+      capture(article.id, 'reaction:' + kind + ':' + article.canonicalUrl);
+      if (kind === 'liked' && !value) dropPersonal(true);
+      current.actionIntent = { type: 'reaction', snapshot: captured(article), kind, value };
+      persistAction().catch(error => report(error));
+    }
+    function personalize(value) {
+      if (!scope() || !current.actions) return;
+      if (!value) { blockPersonal(); if (current.actionIntent || actionWrite) { current.personalOffIntent = true; draw(); return; } }
+      else if (current.actionIntent || actionWrite) return;
+      current.actionIntent = { type: 'personal', value }; persistAction().catch(error => report(error));
+    }
+    async function reloadActions() {
+      const token = generation, actions = await storage.readDiscoveryActions(workspaceId);
+      if (!valid(token)) return;
+      current.actions = actions; current.actionConflict = false;
+      current.personalBlocked = current.personalStopLatched || !actions.personalizationEnabled;
+      current.actionError = current.actionIntent ? '최신 반응을 확인했습니다. 남겨 둔 선택을 다시 저장하거나 취소해 주세요.' : '';
+      draw(); restore();
+    }
+    async function discardAction() {
+      if (actionWrite) return;
+      const conflict = current.actionConflict; current.actionIntent = null; current.actionError = '';
+      if (conflict) await reloadActions();
+      if (current.personalOffIntent) { current.personalOffIntent = false; current.actionIntent = { type: 'personal', value: false }; await persistAction(); }
+      else { message('이번 선택을 취소했습니다. 개인 추천 중지는 유지합니다.'); draw(); restore(); }
+    }
+    function selectCollection(collection) {
+      capture(); current.collection = collection; current.collectionUrls = null; current.memory = null; current.confirmForget = null; draw();
+    }
+    function startAction(intent) {
+      if (!scope() || !current.actions || actionWrite || current.actionIntent) return;
+      capture(); current.confirmForget = null; current.confirmReset = false;
+      if (intent.type === 'clear' || intent.type === 'merge') blockPersonal();
+      if (intent.type === 'exclude' || intent.type === 'forget') dropPersonal(true);
+      current.actionIntent = intent; persistAction().catch(error => report(error));
+    }
+    async function exportActions() {
+      const token = generation; if (actionWrite) await actionWrite.catch(() => {}); if (!valid(token)) return;
+      const copy = actionsModel().exportCopy(current.actions), blob = new Blob([JSON.stringify(copy)], { type: 'application/json;charset=utf-8' });
+      const address = URL.createObjectURL(blob), link = node('a'); downloadUrls.add(address); link.href = address; link.download = 'haedo-discovery-actions.json'; link.click(); root.setTimeout(() => { URL.revokeObjectURL(address); downloadUrls.delete(address); }, 1000);
+      message('사본 다운로드를 요청했습니다. 실제 파일 저장 위치를 확인해 주세요. 계정 연결·원문 본문·추천 설정은 포함하지 않습니다.'); draw();
+    }
+    async function previewActions(file) {
+      if (!scope() || !file || actionWrite || current.actionIntent) return;
+      const token = generation, copyToken = ++current.copyGeneration;
+      current.copyReading = true; current.copyError = ''; current.copyPreview = null; current.copyEnvelope = null; draw();
+      try {
+        if (file.size > actionsModel().MAX_BYTES) throw new Error('too_large');
+        const bytes = await file.arrayBuffer(); if (!valid(token) || copyToken !== current.copyGeneration) return;
+        const envelope = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+        const preview = actionsModel().previewCopy(envelope);
+        if (!valid(token) || copyToken !== current.copyGeneration) return;
+        current.copyEnvelope = envelope; current.copyPreview = preview;
+      } catch (_) { if (valid(token) && copyToken === current.copyGeneration) current.copyError = '사본을 확인하지 못했습니다. 해도의 좋아요·담기 JSON 사본과 파일 크기를 확인해 주세요. 기존 선택은 유지했습니다.'; }
+      finally { if (valid(token) && copyToken === current.copyGeneration) { current.copyReading = false; draw(); } }
+    }
+    function portableControls() {
+      const details = node('details', null, 'discovery-portable'); details.id = 'discoveryPortable'; details.open = current.portableOpen;
+      details.addEventListener('toggle', () => { if (current) current.portableOpen = details.open; }); details.append(node('summary', '목록 사본과 초기화'));
+      const controls = node('div', null, 'discovery-actions');
+      const download = button('좋아요·담기 사본 받기', 'discoveryActionsExport', exportActions); download.disabled = !current.actions || !!actionWrite; controls.append(download);
+      const label = node('label', '사본에서 추가', 'discovery-file-label'), file = node('input'); file.id = 'discoveryActionsFile'; file.type = 'file'; file.accept = '.json,application/json'; file.disabled = !current.actions || !!actionWrite || !!current.actionIntent; file.addEventListener('change', () => previewActions(file.files?.[0]).catch(error => report(error))); label.htmlFor = file.id; controls.append(label, file); details.append(controls);
+      details.append(node('p', '이 브라우저의 목록 사본입니다. 기존 선택과 취소한 항목을 유지한 채 새 항목만 추가합니다. 가져온 좋아요는 추천에서 제외하며 개인 추천도 끕니다. 원문 본문·계정 연결은 포함하지 않습니다.', 'life-meta'));
+      if (current.copyReading) details.append(node('p', '파일을 확인하고 있습니다.', 'life-meta'));
+      if (current.copyError) { const error = node('p', current.copyError, 'life-error'); error.id = 'discoveryCopyError'; error.setAttribute('role', 'alert'); details.append(error); }
+      if (current.copyPreview) {
+        const existing = new Set(current.actions.entries.map(entry => entry.canonicalUrl)), entries = current.copyPreview.entries, kept = entries.filter(entry => existing.has(entry.canonicalUrl)).length;
+        const preview = node('div', null, 'discovery-copy-preview'); preview.id = 'discoveryCopyPreview';
+        preview.append(node('p', '사본 ' + entries.length + '개 · 새로 추가 ' + (entries.length - kept) + '개 · 기존 선택 유지 ' + kept + '개', 'life-meta'));
+        const apply = button('기존 선택 유지하며 추가', 'discoveryCopyApply', () => startAction({ type: 'merge', copy: current.copyEnvelope })); apply.disabled = !!actionWrite || !!current.actionIntent; preview.append(apply); details.append(preview);
+      }
+      if (current.copyPreview || current.copyReading || current.copyError) details.append(button('파일 선택 취소', 'discoveryCopyDiscard', () => { current.copyGeneration++; current.copyReading = false; current.copyPreview = null; current.copyEnvelope = null; current.copyError = ''; draw(); }, 'discovery-quiet'));
+      const reset = button('반응·목록 초기화', 'discoveryActionsReset', () => { current.confirmReset = true; draw(); }, 'discovery-quiet'); reset.disabled = !current.actions || !!actionWrite || !!current.actionIntent; details.append(reset);
+      if (current.confirmReset) { details.append(node('p', '좋아요·담기·취소한 글과 개인 추천 설정을 지웁니다. 자료실 원문은 유지합니다.', 'life-meta'), button('반응·목록 초기화 확인', 'discoveryActionsResetConfirm', () => startAction({ type: 'clear' })), button('초기화 취소', 'discoveryActionsResetCancel', () => { current.confirmReset = false; draw(); }, 'discovery-quiet')); }
+      return details;
+    }
+    function reactionControls(article) {
+      const controls = node('div', null, 'discovery-reactions'), entry = entryFor(article);
+      for (const [kind, title] of [['liked', '좋아요'], ['bookmarked', '담기']]) {
+        const pressed = !!entry?.[kind], control = button(pressed ? title + ' 취소' : current.collection === 'cancelled' ? title + ' 복구' : title, null, () => react(article, kind, !pressed), 'discovery-reaction');
+        control.dataset.discoveryReaction = kind; control.dataset.focusKey = 'reaction:' + kind + ':' + article.canonicalUrl; control.setAttribute('aria-pressed', String(pressed)); control.disabled = !current.actions || !!actionWrite || !!current.actionIntent; controls.append(control);
+      }
+      if (entry) {
+        const exclusion = button(entry.excludedFromRecommendations ? '추천 근거로 허용' : '추천에 사용하지 않기', null, () => startAction({ type: 'exclude', canonicalUrl: entry.canonicalUrl, value: !entry.excludedFromRecommendations }), 'discovery-quiet'); exclusion.dataset.discoveryExcludePersonal = ''; exclusion.disabled = !!actionWrite || !!current.actionIntent; controls.append(exclusion);
+        if (current.collection !== 'discover') {
+          const forget = button('목록 정보 완전히 지우기', null, () => { current.confirmForget = entry.canonicalUrl; draw(); }, 'discovery-quiet'); forget.dataset.discoveryForget = ''; forget.disabled = !!actionWrite || !!current.actionIntent; controls.append(forget);
+          if (current.confirmForget === entry.canonicalUrl) controls.append(node('p', '좋아요·담기와 복구 정보를 모두 지웁니다. 자료실 원문은 유지합니다.', 'life-meta'), button('이 글의 반응 완전히 지우기', 'discoveryForgetConfirm', () => startAction({ type: 'forget', canonicalUrl: entry.canonicalUrl })), button('지우기 취소', 'discoveryForgetCancel', () => { current.confirmForget = null; draw(); }, 'discovery-quiet'));
+        }
+      }
+      return controls;
+    }
+    function actionsHeader() {
+      const section = node('section', null, 'discovery-reaction-header'), tabs = node('div', null, 'discovery-collection-tabs'); tabs.setAttribute('role', 'group'); tabs.setAttribute('aria-label', '글 목록');
+      for (const [collection, title, id] of [['discover', '새 글', 'discoveryDiscover'], ['liked', '좋아요한 글', 'discoveryLiked'], ['bookmarked', '담은 글', 'discoveryBookmarked'], ['cancelled', '취소한 글', 'discoveryCancelled']]) {
+        const count = collection === 'discover' ? '' : ' ' + (current.actions?.entries.filter(entry => collection === 'cancelled' ? !entry.liked && !entry.bookmarked : entry[collection]).length || 0);
+        const control = button(title + count, id, () => selectCollection(collection), 'discovery-mode'); control.setAttribute('aria-pressed', String(current.collection === collection)); tabs.append(control);
+      }
+      section.append(tabs);
+      const pendingOn = current.actionIntent?.type === 'personal' && current.actionIntent.value && !current.personalOffIntent;
+      const personal = checkbox('좋아요를 개인 추천에 반영', 'discoveryPersonalize', !!pendingOn || (!!current.actions?.personalizationEnabled && !current.personalBlocked), personalize);
+      personal.querySelector('input').disabled = !current.actions || (!current.actions.personalizationEnabled && !pendingOn && (!!actionWrite || !!current.actionIntent)); section.append(personal);
+      section.append(node('p', '담기는 다시 볼 목록이며 추천에 반영하지 않습니다.', 'life-meta'));
+      if (current.personalOffIntent) section.append(node('p', '개인 추천은 즉시 중지했습니다. 남겨 둔 선택을 해결한 뒤 끄기 설정을 저장합니다.', 'life-meta'));
+      if (current.actionError) { const error = node('p', current.actionError, 'life-error'); error.id = 'discoveryActionsError'; error.setAttribute('role', 'alert'); section.append(error); }
+      if (current.actionIntent) {
+        const recovery = node('div', null, 'discovery-recovery'); recovery.append(node('p', '남겨 둔 선택 · ' + ({ reaction: current.actionIntent.kind === 'liked' ? '좋아요' : '담기', personal: '개인 추천 ' + (current.actionIntent.value ? '켜기' : '끄기'), exclude: '추천 근거 변경', forget: '완전히 지우기', clear: '초기화', merge: '사본 추가' }[current.actionIntent.type]), 'life-meta'));
+        const retry = button(current.actionConflict ? '최신 반응 확인' : '선택 다시 저장', current.actionConflict ? 'discoveryActionsReload' : 'discoveryActionsRetry', current.actionConflict ? reloadActions : persistAction); retry.disabled = !!actionWrite; recovery.append(retry);
+        const discard = button('이번 선택 취소', 'discoveryActionsDiscard', discardAction, 'discovery-quiet'); discard.disabled = !!actionWrite; recovery.append(discard); section.append(recovery);
+      } else if (current.lastReaction) section.append(button('방금 반응 되돌리기', 'discoveryReactionUndo', () => react(current.lastReaction.snapshot, current.lastReaction.kind, current.lastReaction.value), 'discovery-quiet'));
+      return section;
+    }
+    function collectionResult() {
+      if (!current.actions) return [];
+      const matches = entry => current.collection === 'cancelled' ? !entry.liked && !entry.bookmarked : entry[current.collection];
+      current.collectionUrls ||= current.actions.entries.filter(matches).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(entry => entry.canonicalUrl);
+      return current.collectionUrls.map(key => current.actions.entries.find(entry => entry.canonicalUrl === key)).filter(Boolean).map(entry => ({ article: clone(entry.snapshot), reasons: [] }));
+    }
     async function persistIntent() {
       if (!scope() || !current.pending || pendingWrite || current.conflict) return;
       const token = generation, intent = current.pending;
@@ -167,7 +358,7 @@
       try {
         const result = await client.load({ signal: aborter.signal });
         if (!valid(token) || epoch !== fetchEpoch || (automatic && !canAuto())) return;
-        if (result.feed || !current.catalog) current.catalog = result;
+        if (result.feed || !current.catalog) { current.catalog = result; if (current.personalResult) current.personalPending = true; }
         if (result.error || result.status === 'error') current.error = current.catalog?.feed ? '목록을 다시 받지 못해 이전 목록을 보여 줍니다.' : '공개 글 목록을 불러오지 못했습니다. 목록 다시 불러오기를 눌러 주세요.';
         else if (automatic) message('공개 목록을 자동으로 다시 확인했습니다.');
       } catch (error) {
@@ -204,12 +395,13 @@
     function changeSetting(group, id, enabled) {
       if (!scope() || !current.settings) return;
       if (group === 'autoRefresh') { current.settingChanges.autoRefresh = enabled; current.autoBlocked = !enabled; if (!enabled) { stopTimer(); cancelFetch(); if (!current.catalog?.feed) current.status = '목록을 아직 받지 못했습니다. 목록 다시 불러오기를 눌러 주세요.'; } }
-      else current.settingChanges[group][id] = enabled;
+      else { current.settingChanges[group][id] = enabled; dropPersonal(true); }
       current.settingsError = ''; draw(); persistSettings().catch(error => report(error));
     }
     async function reloadSettings() {
       const token = generation, result = await storage.readDiscoverySettings(workspaceId);
       if (!valid(token)) return;
+      if (current.settings && current.settings.revision !== result.revision) dropPersonal(true);
       current.settings = result; current.settingsConflict = false; current.settingsError = '';
       current.autoBlocked = !desiredSettings().autoRefresh; if (current.autoBlocked) { stopTimer(); cancelFetch(); } draw(); scheduleAuto();
     }
@@ -224,7 +416,7 @@
       try {
         const result = await topicWrite; if (!valid(token)) return;
         if (result.status !== 'stored') { current.topicConflict = true; current.topicError = '다른 탭에서 주제가 바뀌었습니다. 최신 주제를 확인한 뒤 입력을 다시 저장해 주세요.'; return; }
-        current.profile = result.profile;
+        current.profile = result.profile; dropPersonal(true);
         if (current.topicText === submitted) { current.topicText = ''; current.topicInput.value = ''; }
         current.topicError = ''; current.status = '주제를 이 브라우저에 저장했습니다.';
       } catch (_) { if (valid(token)) current.topicError = '주제를 저장하지 못했습니다. 입력은 남아 있습니다. 다시 저장하거나 입력을 지워 주세요.'; }
@@ -321,9 +513,9 @@
     function articleRow(item, sources) {
       const { article } = item, row = node('article', null, 'discovery-article'); row.dataset.discoveryId = article.id; row.dataset.discoveryUrl = article.canonicalUrl;
       const source = sources.find(value => value.id === article.sourceId);
-      const meta = node('p', null, 'discovery-meta'); meta.append(node('span', source?.name || '출처 미확인'));
+      const meta = node('p', null, 'discovery-meta'); meta.append(node('span', source?.name || article.sourceName || '출처 미확인'));
       const published = date(article.publishedAt);
-      if (published && article.dateStatus === 'valid') { const time = node('time', published); time.dateTime = article.publishedAt; meta.append(time); }
+      if (published && (article.dateStatus === 'valid' || current.collection !== 'discover')) { const time = node('time', published); time.dateTime = article.publishedAt; meta.append(time); }
       else meta.append(node('span', '발행일 미확인'));
       if (article.dateBasis === 'updated' && date(article.updatedAt)) meta.append(node('span', '수정 ' + date(article.updatedAt)));
       row.append(meta);
@@ -334,7 +526,7 @@
       original.addEventListener('click', event => openOriginal(event, article)); heading.append(original); row.append(heading);
       if (article.summary) row.append(node('p', article.summary, 'discovery-summary'));
       const reasons = item.reasons || [];
-      if (current.mode === 'related' && reasons.length) {
+      if ((current.mode === 'related' || current.mode === 'personal' && !item.personal && current.baselineMode === 'related') && reasons.length) {
         const reason = reasons[0], field = { title: '제목', summary: '공개 요약', bodyText: '허용된 본문', tags: '출처 태그' }[reason.field] || '공개 글';
         row.append(node('p', '보관한 관심 ‘' + reason.interestLabel + '’ · ' + field + '에 ‘' + reason.quote + '’', 'discovery-reason'));
         const evidence = node('details', null, 'discovery-evidence'); evidence.append(node('summary', '찾은 근거'));
@@ -343,6 +535,15 @@
           evidence.append(node('p', where + ' · 관심 ‘' + ref.interestLabel + '’' + (ref.via === 'alias' ? '의 같은 표현' : ''), 'life-meta'), node('blockquote', ref.quote));
         }); if (reasons.length > 5) evidence.append(node('p', '일치한 표현 ' + reasons.length + '개 중 5개를 표시합니다.', 'life-meta')); row.append(evidence);
       }
+      if (item.personal && !current.personalBlocked) {
+        const why = node('details', null, 'discovery-personal-evidence'); why.append(node('summary', '왜 이 글인가'));
+        for (const evidence of item.personal.evidence || []) why.append(node('p', '좋아요한 글 ‘' + evidence.title + '’의 ' + (evidence.field === 'tags' ? '보관한 태그' : '보관한 제목') + '와 이 글의 ' + (evidence.candidateField === 'tags' ? '공개 태그' : '제목') + '의 대응 표현 · ‘' + evidence.quote + '’ / ‘' + evidence.candidateQuote + '’', 'life-meta'));
+        why.append(node('p', '보관한 제목·태그와 공개 후보의 표현 유사도입니다. 본문 이해·동의·품질 확률을 뜻하지 않습니다.', 'life-meta')); row.append(why);
+      }
+      if (current.collection !== 'discover' && !current.catalog?.feed?.articles.some(value => value.canonicalUrl === article.canonicalUrl)) row.append(node('p', '현재 공개 목록에 없음 · 마지막으로 담은 제목·출처입니다. 원문 접근 여부는 자동 확인하지 않습니다.', 'discovery-notice'));
+      if (current.collection !== 'discover') row.append(node('p', '보관한 제목·출처 정보 · 원문 본문은 보관하지 않았습니다.', 'discovery-coverage'));
+      const savedEntry = entryFor(article);
+      if (current.collection === 'liked' && savedEntry && !savedEntry.liked || current.collection === 'bookmarked' && savedEntry && !savedEntry.bookmarked) row.append(node('p', '이 목록의 선택을 취소했습니다. 아래 반응 버튼으로 다시 선택할 수 있습니다.', 'discovery-notice'));
       const coverage = article.coverage === 'full_text' ? '허용된 본문 확보' : article.coverage === 'summary' ? '공개 요약만 확보 · 원문 전체 미확보' : '링크와 제목만 확보 · 본문 미확보';
       row.append(node('p', coverage, 'discovery-coverage'));
       const actions = node('div', null, 'discovery-actions');
@@ -351,22 +552,30 @@
       const read = button('읽음', null, () => feedback(article, 'already_read'), 'discovery-quiet'); read.dataset.discoveryFeedback = 'already_read'; read.dataset.focusKey = 'feedback:' + article.id + ':already_read';
       const irrelevant = button('관련 없음', null, () => feedback(article, 'not_relevant'), 'discovery-quiet'); irrelevant.dataset.discoveryFeedback = 'not_relevant'; irrelevant.dataset.focusKey = 'feedback:' + article.id + ':not_relevant';
       read.disabled = irrelevant.disabled = !!current.pending || busy(); review.disabled = !!current.pending || !!pendingWrite;
-      actions.append(review, read, irrelevant); row.append(actions); return row;
+      actions.append(review, read, irrelevant); row.append(reactionControls(article), actions); return row;
     }
     function draw() {
       if (!scope()) return;
-      ensureSurface(); drawEditor(); surface.setAttribute('aria-busy', String(busy()));
+      ensureSurface(); current.editor.hidden = current.collection !== 'discover'; if (!current.editor.hidden) drawEditor(); surface.setAttribute('aria-busy', String(busy()));
       const body = node('div'), labels = (current.profile?.manual || []).filter(item => !desiredSettings()?.disabledInterestIds.includes(item.id)).map(item => item.label);
-      const controls = node('div', null, 'discovery-controls'), modes = node('div', null, 'discovery-modes'); modes.setAttribute('role', 'group'); modes.setAttribute('aria-label', '글 정렬');
-      for (const [mode, label, id] of [['related', '관심순', 'discoveryRecommended'], ['latest', '최신순', 'discoveryLatest']]) {
-        const action = button(label, id, () => { capture(); current.mode = mode; current.memory = null; draw(); surface.querySelector('#' + id)?.focus(); }, 'discovery-mode');
-        action.setAttribute('aria-pressed', String(current.mode === mode)); modes.append(action);
+      body.append(actionsHeader());
+      let controls = current.sortControls;
+      if (!controls) {
+        controls = node('div', null, 'discovery-controls');
+        const modes = node('div', null, 'discovery-modes'); modes.setAttribute('role', 'group'); modes.setAttribute('aria-label', '글 정렬');
+        for (const [mode, label, id] of [['related', '관심순', 'discoveryRecommended'], ['latest', '최신순', 'discoveryLatest'], ['personal', '개인 추천', 'discoveryPersonalized']]) {
+          const action = button(label, id, () => { capture(); current.collection = 'discover'; current.collectionUrls = null; if (mode === 'personal') { if (current.actions?.personalizationEnabled && !current.personalBlocked) applyPersonal(); else personalize(true); } else { current.mode = mode; current.baselineMode = mode; current.memory = null; draw(); } surface.querySelector('#' + id)?.focus(); }, 'discovery-mode');
+          action.dataset.discoveryMode = mode; modes.append(action);
+        }
+        const refresh = button('목록 다시 불러오기', 'discoveryRefresh', () => { capture(null, 'refresh'); return loadCatalog(); }, 'discovery-quiet'); refresh.dataset.focusKey = 'refresh';
+        controls.append(modes, refresh); current.sortControls = controls;
       }
-      const refresh = button('목록 다시 불러오기', 'discoveryRefresh', () => { capture(null, 'refresh'); return loadCatalog(); }, 'discovery-quiet'); refresh.disabled = current.loading; refresh.dataset.focusKey = 'refresh';
-      controls.append(modes, refresh); body.append(controls);
+      controls.hidden = current.collection !== 'discover';
+      controls.querySelectorAll('[data-discovery-mode]').forEach(control => control.setAttribute('aria-pressed', String(current.mode === control.dataset.discoveryMode)));
+      controls.querySelector('#discoveryRefresh').disabled = current.loading; body.append(controls);
       const status = node('p', current.loading ? '공개 글 목록을 불러오고 있습니다.' : current.status, 'discovery-status'); status.id = 'discoveryStatus'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite'); status.hidden = !status.textContent; body.append(status);
       const error = node('p', current.error, 'life-error'); error.id = 'discoveryError'; error.setAttribute('role', 'alert'); error.hidden = !current.error; body.append(error);
-      if (current.error && !current.loading && (!current.profile || !current.feedback || !current.settings)) body.append(button('다시 확인', 'discoveryRetry', render));
+      if (current.error && !current.loading && (!current.profile || !current.feedback || !current.settings || !current.actions)) body.append(button('다시 확인', 'discoveryRetry', render));
       if (current.pending) {
         const recovery = node('div', null, 'discovery-recovery');
         recovery.append(node('p', '남겨 둔 선택 · ' + (current.pending.action === 'undo' ? '제외 되돌리기' : current.pending.kind === 'already_read' ? '읽음' : '관련 없음') + ' · ' + (current.pending.article.title || current.pending.article.canonicalUrl), 'life-meta'));
@@ -375,6 +584,14 @@
         const discard = button('선택 취소', 'discoveryFeedbackDiscard', () => { current.pending = null; current.conflict = false; message('이번 선택을 취소했습니다. 보관된 제외 목록은 유지했습니다.'); draw(); restore(); }); discard.disabled = !!pendingWrite; recovery.append(discard); body.append(recovery);
       } else if (current.lastFeedback) body.append(button('방금 제외 되돌리기', 'discoveryUndo', () => undo(current.lastFeedback), 'discovery-quiet'));
       const feed = current.catalog?.feed, result = rank();
+      if (current.collection === 'discover' && current.mode === 'personal') {
+        const explanation = current.personalBlocked ? '개인 추천은 꺼져 있습니다.' : current.personalResult?.metadata?.personalization?.applied ? '좋아요한 글에 보관한 제목·태그와 겹치는 표현으로 찾았습니다.' : current.personalPending && current.personalResult ? '지금 목록 순서를 유지하고 이전 개인 추천 점수·근거를 제거했습니다. 새 추천 보기로 다시 계산할 수 있습니다.' : (current.personalInspection?.signalCount ? '좋아요 근거와 표현이 겹치는 후보가 없어 ' : '개인 추천에 사용할 좋아요 근거가 부족해 ') + (current.baselineMode === 'latest' ? '최신순' : '관심순') + '을 보여 줍니다.';
+        const settled = !!current.personalResult && !current.personalPending;
+        const brief = current.personalResult?.metadata?.personalization?.applied ? '보관한 좋아요의 표현으로 찾은 글입니다.' : '추천 근거가 부족해 ' + (current.baselineMode === 'latest' ? '최신순' : '관심순') + '을 보여 줍니다.';
+        body.append(node('p', settled ? brief : explanation, 'discovery-limitation'));
+        const apply = button('새 추천 보기', 'discoveryApplyRecommendations', applyPersonal); apply.disabled = current.personalBlocked || !current.catalog?.feed || !!actionWrite || !!current.actionIntent; apply.hidden = settled; body.append(apply);
+        if (current.personalPending) body.append(node('p', '반응이나 공개 목록이 바뀌었습니다. 새 추천 보기를 누르면 순서를 적용합니다.', 'discovery-notice'));
+      }
       if (feed) {
         const stale = current.catalog.stale || result?.metadata?.stale;
         if (stale) body.append(node('p', '최신 상태를 확인하지 못한 출처가 있습니다. 출처와 목록 상태에서 수집 시각을 확인해 주세요.', 'discovery-notice'));
@@ -382,14 +599,18 @@
         if (failed.length) body.append(node('p', failed.map(source => source.name + (source.status === 'error' ? ' 수집 실패' : ' 수집 자료 없음')).join(' · '), 'discovery-notice'));
       }
       const list = node('div', null, 'discovery-list'); list.id = 'discoveryList';
-      if (result) {
+      if (current.collection !== 'discover') {
+        const items = collectionResult(); list.append(node('p', ({ liked: '좋아요한 글', bookmarked: '담은 글', cancelled: '취소한 글' }[current.collection]) + ' · 현재 목록 ' + items.length + '개', 'discovery-count'));
+        if (!items.length) list.append(node('p', current.collection === 'cancelled' ? '두 반응을 모두 취소한 글이 여기에 남습니다. 원하는 반응을 다시 선택할 수 있습니다.' : '새 글에서 ' + (current.collection === 'liked' ? '좋아요' : '담기') + '를 누르면 이 목록에서 다시 볼 수 있습니다.', 'discovery-limitation'));
+        items.forEach(item => list.append(articleRow(item, [])));
+      } else if (result) {
         const items = result.items;
-        const summary = current.mode === 'related' ? items.length ? '관심과 표현이 맞는 글 ' + items.length + '개' + (items.length < 3 ? ' · 관련 글이 적어 더 채우지 않았습니다.' : '') : labels.length ? '선택한 주제와 표현이 맞는 새 글을 찾지 못했습니다.' : '위에서 주제를 추가·선택하거나 최신순으로 공개 글을 둘러보세요.' : '같은 출처와 제외 조건 · 발행·수정일이 최신인 글 ' + items.length + '개';
+        const summary = current.mode === 'personal' ? '개인 추천 목록 · ' + items.length + '개' : current.mode === 'related' ? items.length ? '관심과 표현이 맞는 글 ' + items.length + '개' + (items.length < 3 ? ' · 관련 글이 적어 더 채우지 않았습니다.' : '') : labels.length ? '선택한 주제와 표현이 맞는 새 글을 찾지 못했습니다.' : '위에서 주제를 추가·선택하거나 최신순으로 공개 글을 둘러보세요.' : '같은 출처와 제외 조건 · 발행·수정일이 최신인 글 ' + items.length + '개';
         list.append(node('p', !desiredSettings()?.disabledSourceIds || feed.sources.some(source => !desiredSettings().disabledSourceIds.includes(source.id)) ? summary : '선택한 출처가 없습니다. 옵션에서 목록에 표시할 출처를 켜 주세요.', 'discovery-count'));
         if (current.mode === 'related' && items.length) list.append(node('p', result.metadata?.limitation || '공개 글에 실제로 나타난 표현으로 찾았습니다. 같은 표현이라도 문맥은 다를 수 있습니다.', 'discovery-limitation'));
         if (!items.length && labels.length && current.mode === 'related') {
           list.append(node('p', '구체적인 주제를 추가하거나 출처 선택을 확인해 주세요. 최신 글도 둘러볼 수 있습니다.', 'discovery-limitation'));
-          list.append(button('최신 글 보기', null, () => { current.mode = 'latest'; draw(); }, 'discovery-quiet'));
+          list.append(button('최신 글 보기', null, () => { current.mode = 'latest'; current.baselineMode = 'latest'; draw(); }, 'discovery-quiet'));
         }
         items.forEach(item => list.append(articleRow(item, feed.sources || [])));
       }
@@ -405,7 +626,8 @@
         }); body.append(excluded);
       }
       if (feed) body.append(sourceDetails(feed, result));
-      body.append(node('p', '주제·옵션과 읽음·제외 선택은 이 브라우저에만 보관합니다. 원문을 열기 전에는 해당 사이트에 접속하지 않습니다.', 'discovery-privacy'));
+      body.append(portableControls());
+      body.append(node('p', '주제·옵션과 좋아요·담기·읽음·제외 선택은 이 브라우저에만 보관합니다. 원문을 열기 전에는 해당 사이트에 접속하지 않습니다.', 'discovery-privacy'));
       current.body.replaceChildren(...body.childNodes);
     }
     async function render() {
@@ -413,20 +635,34 @@
       active = true; const next = getBundle()?.workspaceId;
       if (next !== workspaceId) { current = null; client?.dispose(); client = null; }
       workspaceId = next; const token = generation;
-      if (!current) current = { profile: null, feedback: null, catalog: null, mode: 'related', status: '', error: '', pending: null, conflict: false, lastFeedback: null, memory: null, sourcesOpen: false, excludedOpen: false, loading: true, settings: null, settingChanges: { interests: {}, sources: {} }, settingsConflict: false, settingsError: '', autoBlocked: true, nextDue: null, topicText: '', topicError: '', topicConflict: false, composing: false, optionsOpen: false };
+      if (!current) current = { profile: null, feedback: null, catalog: null, mode: 'related', status: '', error: '', pending: null, conflict: false, lastFeedback: null, memory: null, sourcesOpen: false, excludedOpen: false, loading: true, actions: null, actionIntent: null, actionConflict: false, actionError: '', remoteActionRevision: 0, personalOffIntent: false, personalBlocked: true, personalStopLatched: false, personalResult: null, personalPending: false, baselineMode: 'related', collection: 'discover', collectionUrls: null, lastReaction: null, confirmForget: null, confirmReset: false, copyPreview: null, copyEnvelope: null, copyReading: false, copyGeneration: 0, copyError: '', portableOpen: false, settings: null, settingChanges: { interests: {}, sources: {} }, settingsConflict: false, settingsError: '', autoBlocked: true, nextDue: null, topicText: '', topicError: '', topicConflict: false, composing: false, optionsOpen: false };
+      const retainedPersonal = { result: current.personalResult, mode: current.mode, blocked: current.personalBlocked, pending: current.personalPending, actions: current.actions?.revision, settings: current.settings?.revision, profile: current.profile?.revision, feedback: current.feedback?.revision };
+      current.personalResult = null; current.personalBlocked = true; if (current.mode === 'personal') current.mode = current.baselineMode;
       client ||= engine().create(); draw();
       try {
-        const [profile, feedbackProfile, settings] = await Promise.all([storage.readInterestProfile(workspaceId), storage.readDiscoveryProfile(workspaceId), storage.readDiscoverySettings(workspaceId)]);
+        const [profile, feedbackProfile, settings, actions] = await Promise.all([storage.readInterestProfile(workspaceId), storage.readDiscoveryProfile(workspaceId), storage.readDiscoverySettings(workspaceId), storage.readDiscoveryActions(workspaceId)]);
         if (!valid(token)) return;
-        current.profile = profile; current.feedback = feedbackProfile; current.settings = settings; current.autoBlocked = !desiredSettings().autoRefresh; current.loading = false;
+        const sameInputs = retainedPersonal.actions === actions.revision && retainedPersonal.settings === settings.revision && retainedPersonal.profile === profile.revision && retainedPersonal.feedback === feedbackProfile.revision;
+        current.actions = actions; current.personalBlocked = current.personalStopLatched || !actions.personalizationEnabled; current.profile = profile; current.feedback = feedbackProfile; current.settings = settings; current.autoBlocked = !desiredSettings().autoRefresh; current.loading = false;
+        if (sameInputs && retainedPersonal.mode === 'personal' && !retainedPersonal.blocked && !current.personalBlocked) { current.personalResult = retainedPersonal.result; current.mode = retainedPersonal.mode; current.personalPending = retainedPersonal.pending; }
+        else if (!sameInputs) dropPersonal();
         unsubscribe = storage.subscribe(workspaceId, event => {
           if (!scope()) return;
+          if (event.type === 'discovery_actions_changed' && event.revision > current.actions.revision) {
+            if (actionWrite && event.local) return;
+            if (!event.local) current.remoteActionRevision = Math.max(current.remoteActionRevision, event.revision);
+            current.personalBlocked = true; current.mode = current.baselineMode; dropPersonal();
+            if (actionWrite) { draw(); return; }
+            if (current.actionIntent) { current.actionConflict = true; current.actionError = '다른 탭에서 반응이 바뀌었습니다. 최신 반응을 확인해 주세요.'; draw(); }
+            else { draw(); reloadActions().catch(error => report(error)); }
+          }
           if (event.type === 'discovery_profile_changed' && event.revision > current.feedback.revision && !pendingWrite) {
             capture();
             current.conflict = !!current.pending; current.error = '다른 탭에서 읽음·제외 선택이 바뀌었습니다. 최신 제외 목록을 확인해 주세요.'; draw();
             if (!current.pending) reloadFeedback().catch(error => report(error));
           }
           if (event.type === 'discovery_settings_changed' && event.revision > current.settings.revision) {
+            dropPersonal(true); surface?.querySelectorAll('.discovery-personal-evidence').forEach(el => el.remove());
             current.autoBlocked = true; stopTimer(); cancelFetch();
             if (settingsWrite) return;
             if (settingsDirty()) { current.settingsConflict = true; current.settingsError = '다른 탭에서 옵션이 바뀌었습니다. 최신 옵션을 확인해 주세요.'; draw(); }
@@ -434,7 +670,7 @@
           }
           if (event.type === 'interest_profile_changed' && event.revision > current.profile.revision && !topicWrite) {
             capture();
-            storage.readInterestProfile(workspaceId).then(profile => { if (valid(token)) { current.profile = profile; message('다른 화면에서 보관한 관심을 반영했습니다.'); draw(); restore(); } }).catch(error => report(error));
+            storage.readInterestProfile(workspaceId).then(profile => { if (valid(token)) { current.profile = profile; dropPersonal(true); message('다른 화면에서 보관한 관심을 반영했습니다.'); draw(); restore(); } }).catch(error => report(error));
           }
         });
         draw();
@@ -443,9 +679,10 @@
         if (valid(token)) { current.loading = false; report(error, '보관한 관심이나 제외 목록을 읽지 못했습니다. 화면을 다시 열어 주세요. 기존 자료는 유지했습니다.'); }
       }
     }
-    function dirty() { return !!current?.pending || !!pendingWrite || !!topicWrite || !!settingsWrite || !!current?.topicText.trim() || settingsDirty(); }
+    function dirty() { return !!current?.actionIntent || !!actionWrite || !!current?.personalOffIntent || !!current?.copyPreview || !!current?.copyReading || !!current?.pending || !!pendingWrite || !!topicWrite || !!settingsWrite || !!current?.topicText.trim() || settingsDirty(); }
     async function flush() {
-      await Promise.all([pendingWrite, topicWrite, settingsWrite].filter(Boolean).map(promise => promise.catch(() => {})));
+      await Promise.all([pendingWrite, topicWrite, settingsWrite, actionWrite].filter(Boolean).map(promise => promise.catch(() => {})));
+      if (current?.actionIntent || current?.personalOffIntent || current?.copyPreview || current?.copyReading) throw Object.assign(new Error('반응 선택이나 사본 확인이 아직 끝나지 않았습니다. 다시 저장하거나 선택을 취소해 주세요.'), { code: 'discovery_unsaved' });
       if (current?.topicText.trim() || settingsDirty()) throw Object.assign(new Error('입력한 주제나 옵션 선택이 아직 저장되지 않았습니다. 다시 저장하거나 취소해 주세요.'), { code: 'discovery_unsaved' });
       if (current?.pending) throw Object.assign(new Error('읽음·제외 선택이 아직 보관되지 않았습니다. 선택 다시 보관 또는 선택 취소를 눌러 주세요.'), { code: 'discovery_unsaved' });
     }
@@ -455,7 +692,7 @@
       if (current) current.loading = false;
     }
     root.document.addEventListener('haedo:page-suspend', pageSuspend); root.document.addEventListener('haedo:page-ready', pageReady); root.document.addEventListener('visibilitychange', lifecycle); root.addEventListener('online', lifecycle); root.addEventListener('offline', lifecycle);
-    function dispose() { leave(); disposed = true; root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
+    function dispose() { leave(); disposed = true; downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
     return Object.freeze({ render, refresh: render, leave, dispose, flush, dirty });
   }
   root.HaedoLife ||= {}; root.HaedoLife.DiscoveryUI = Object.freeze({ create });
