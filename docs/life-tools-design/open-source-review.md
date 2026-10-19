@@ -1,5 +1,20 @@
 # 오픈소스 검토와 재사용 결정
 
+## 좋아요·담기와 개인 추천 연구 — 2026-10-19 KST
+
+사용자가 요청한 SNS 사례·오픈소스·피드백 기반 추천을 [종합 조사·설계](../design-review/recommendation-feedback-research.md)로 정리했다. 공식 SNS 5개 사례, 추천 도구6개와 SNS 공개 저장소3개의 release/HEAD·라이선스·archive·공개 advisory를 실제 대조했다. [확인 시각·버전·제품 불변 해시](../design-review/evidence/recommendation-research/verification.json)를 남겼다. 설치·모델 학습·제품 변경·개인 데이터 전송·배포는 수행하지 않았다.
+
+현 단계는 기존 Discovery의 공개 후보 검증·canonical URL·근거와 계정/공간별 idb/CAS·실패 복구를 재사용한다. 좋아요와 담기는 독립된 로컬 반응이며 담기를 자동 긍정 레이블로 합치지 않는다. 작은 전체 후보의 설명 가능한 내용 기반 점수와 기존 관심순/최신순 비교에는 새 추천 서버·분산 학습·벡터 DB를 즉시 도입하지 않는다. 단순 랭커는 유지 비용이 작고 근거·끄기·철회 반영을 추적할 수 있지만, 의미 이해/품질 향상은 새 독립 평가로 확인해야 한다.
+
+- [Recommenders](https://github.com/recommenders-team/recommenders): 현재 가장 먼저 참고할 분할·기준선·평가 자료. 패키지 전체 설치 결정은 아니다.
+- [implicit](https://github.com/benfred/implicit): 공유 상호작용이 생겼을 때 오프라인 ALS/BPR 등의 비교 후보. 현재 개인 기록에 협업 효과를 가정하지 않는다.
+- [Gorse](https://github.com/gorse-io/gorse): 별도 추천 서비스를 실제 선택할 때 우선 검토. 정적 JS 라이브러리가 아니며 데이터/인증/운영 수명주기가 추가된다.
+- [RecBole](https://github.com/RUCAIBox/RecBole): 연구 비교에 유용하나 MIT LICENSE와 README의 academic-purpose 문구 범위를 먼저 확인한다.
+- [TFRS](https://github.com/tensorflow/recommenders), [TorchRec](https://github.com/meta-pytorch/torchrec): 각각 feature 학습과 대형 분산 embedding을 위한 도구. 학습 자료·개선 가설 또는 규모 병목이 생기기 전 직접 도입 보류.
+
+SNS 공개 코드는 직접 채택이 아니라 구조 참고다. X의 이전 AGPL-3.0 저장소와 2026 Apache-2.0 저장소, MIT Bluesky starter를 구분했다. 공개 신호 가중치를 임의의 좋아요 횟수 점수로 옮기지 않는다. 코드·데이터·모델 라이선스는 별도이며 공개 advisory 0건을 설치물의 안전성 증명으로 해석하지 않는다. 버전·고정 commit·라이선스 링크와 선택을 바꿀 조건은 종합 조사 표를 따른다.
+
+
 ## 주제·옵션과 자동 갱신 — 2026-10-19 KST
 
 기존 Discovery/InterestProfile, 계정·공간별 Storage/idb CAS, Python 표준 라이브러리 수집기와 GitHub Pages Actions를 재사용한다. 브라우저의 네이티브 타이머·Page Visibility·AbortController로 15분 화면 갱신을 제어하므로 새 scheduler 라이브러리·백그라운드 작업 서버를 넣지 않는다. 앱이 닫힌 동안의 공개 수집은 기존 CI의 `schedule`로 분리한다. 기존 pinned Actions 버전·라이선스 고지를 유지하며 패키지·전이 의존성을 추가하지 않는다. 범용 작업 큐·크론 서버·클라이언트 RSS parser 도입은 이 정적 사이트의 고정 공개 메타데이터 수집에 필요한 범위보다 크다.

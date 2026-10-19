@@ -1,0 +1,267 @@
+{
+  "schemaVersion": 1,
+  "checkedAtKST": "2026-10-19T13:26:39.098845+09:00",
+  "scope": "Research and proposal only. No package install, model training, product change, private data read or deployment.",
+  "productBaseline": {
+    "checkedAtKST": "2026-10-19T13:22:54.444764+09:00",
+    "sourceHead": "3f9e12ccbbebbcd0861a2fd1f3ef57805cf08fcb",
+    "sources": 5,
+    "articles": 50,
+    "coverage": [
+      "link_only"
+    ],
+    "sourceSHA256": {
+      "assets/life/discovery.js": "bf514ade159c5b7a815c07123ad7d1e6905596a87ab1cb7eadc9f04c9c329196",
+      "assets/life/discovery-profile.js": "3d7424eeb3db46fcf9f933544a7a2ba925e5a01de0615051b79f877dbc62d7d5",
+      "assets/life/discovery-ui.js": "b34f1928186b48c59fe3a52ed32fdb65804fa7f71560a589f17ae3ef5ea35a8e",
+      "assets/life/storage.js": "4090ef01d059864d750d61146983df2f8dd8d9325e0dc35415c4e598937afedd",
+      "assets/life/discovery-feed.json": "6a6c63e520328e283d01ca8283a6b9c2259295f5c37fc05d2fb49b27ba057684",
+      "assets/life/interest-policy.js": "30714a08141a84b6afdc8916d95be032d5fc8c09398d3ded7d712c3b8c33a352",
+      "sw.js": "18939d9e88b52d0f6aa7b0174d69806ed53baabc8f514b1b6db49ef319d40738"
+    },
+    "scope": "Public code and public metadata only; no private accounts, personal articles or user feedback read."
+  },
+  "recommendationLibraries": [
+    {
+      "repository": "gorse-io/gorse",
+      "url": "https://github.com/gorse-io/gorse",
+      "archived": false,
+      "head": {
+        "sha": "d3186be36756ce9bd87b1d53c79b7074512dc9c7",
+        "url": "https://github.com/gorse-io/gorse/commit/d3186be36756ce9bd87b1d53c79b7074512dc9c7",
+        "authorDate": "2026-10-18T14:23:09Z",
+        "committerDate": "2026-10-18T14:23:09Z",
+        "subject": "feat: retry transient ranker failures (#1404)"
+      },
+      "release": {
+        "tag_name": "v0.5.11",
+        "name": "v0.5.11",
+        "html_url": "https://github.com/gorse-io/gorse/releases/tag/v0.5.11",
+        "published_at": "2026-07-14T22:19:06Z",
+        "created_at": "2026-07-14T22:15:58Z",
+        "target_commitish": "release-0.5",
+        "prerelease": false,
+        "draft": false
+      },
+      "releaseDateKST": "2026-07-15",
+      "license": "Apache-2.0",
+      "licenseURL": "https://github.com/gorse-io/gorse/blob/d3186be36756ce9bd87b1d53c79b7074512dc9c7/LICENSE",
+      "advisoryAPI": "https://api.github.com/repos/gorse-io/gorse/security-advisories?per_page=100",
+      "publicAdvisoriesObserved": 0
+    },
+    {
+      "repository": "benfred/implicit",
+      "url": "https://github.com/benfred/implicit",
+      "archived": false,
+      "head": {
+        "sha": "8a95dbe24ca675a6edd86aafb3b4cd5ae7287edf",
+        "url": "https://github.com/benfred/implicit/commit/8a95dbe24ca675a6edd86aafb3b4cd5ae7287edf",
+        "authorDate": "2026-05-08T18:23:12Z",
+        "committerDate": "2026-05-08T18:23:12Z",
+        "subject": "Bump version: 0.7.2 → 0.7.3"
+      },
+      "release": {
+        "tag_name": "v0.7.3",
+        "name": "",
+        "html_url": "https://github.com/benfred/implicit/releases/tag/v0.7.3",
+        "published_at": "2026-05-08T18:36:48Z",
+        "created_at": "2026-05-08T18:23:14Z",
+        "target_commitish": "main",
+        "prerelease": false,
+        "draft": false
+      },
+      "releaseDateKST": "2026-05-09",
+      "license": "MIT",
+      "licenseURL": "https://github.com/benfred/implicit/blob/8a95dbe24ca675a6edd86aafb3b4cd5ae7287edf/LICENSE",
+      "advisoryAPI": "https://api.github.com/repos/benfred/implicit/security-advisories?per_page=100",
+      "publicAdvisoriesObserved": 0
+    },
+    {
+      "repository": "RUCAIBox/RecBole",
+      "url": "https://github.com/RUCAIBox/RecBole",
+      "archived": false,
+      "head": {
+        "sha": "7b02be5ec80a88310f2d04a27a82adfcbb5dc211",
+        "url": "https://github.com/RUCAIBox/RecBole/commit/7b02be5ec80a88310f2d04a27a82adfcbb5dc211",
+        "authorDate": "2025-02-24T07:16:40Z",
+        "committerDate": "2025-02-24T07:16:40Z",
+        "subject": "Merge pull request #2148 from TayTroye/updateReadMe"
+      },
+      "release": {
+        "tag_name": "v1.2.1",
+        "name": "RecBole v1.2.1",
+        "html_url": "https://github.com/RUCAIBox/RecBole/releases/tag/v1.2.1",
+        "published_at": "2025-02-23T15:44:33Z",
+        "created_at": "2025-02-23T13:56:48Z",
+        "target_commitish": "master",
+        "prerelease": false,
+        "draft": false
+      },
+      "releaseDateKST": "2025-02-24",
+      "license": "MIT",
+      "licenseURL": "https://github.com/RUCAIBox/RecBole/blob/7b02be5ec80a88310f2d04a27a82adfcbb5dc211/LICENSE",
+      "advisoryAPI": "https://api.github.com/repos/RUCAIBox/RecBole/security-advisories?per_page=100",
+      "publicAdvisoriesObserved": 0
+    },
+    {
+      "repository": "recommenders-team/recommenders",
+      "url": "https://github.com/recommenders-team/recommenders",
+      "archived": false,
+      "head": {
+        "sha": "aa8332189cd495be6ffaa7e1c8054f1c180b5ef3",
+        "url": "https://github.com/recommenders-team/recommenders/commit/aa8332189cd495be6ffaa7e1c8054f1c180b5ef3",
+        "authorDate": "2026-09-28T13:53:19Z",
+        "committerDate": "2026-09-28T13:53:19Z",
+        "subject": "Merge pull request #2370 from recommenders-team/staging"
+      },
+      "release": {
+        "tag_name": "1.2.1",
+        "name": "Recommenders 1.2.1",
+        "html_url": "https://github.com/recommenders-team/recommenders/releases/tag/1.2.1",
+        "published_at": "2024-12-24T07:39:57Z",
+        "created_at": "2024-12-23T13:44:41Z",
+        "target_commitish": "5c862afa751f53559b5ad98b92e098760f530ad8",
+        "prerelease": false,
+        "draft": false
+      },
+      "releaseDateKST": "2024-12-24",
+      "license": "MIT",
+      "licenseURL": "https://github.com/recommenders-team/recommenders/blob/aa8332189cd495be6ffaa7e1c8054f1c180b5ef3/LICENSE",
+      "advisoryAPI": "https://api.github.com/repos/recommenders-team/recommenders/security-advisories?per_page=100",
+      "publicAdvisoriesObserved": 0
+    },
+    {
+      "repository": "tensorflow/recommenders",
+      "url": "https://github.com/tensorflow/recommenders",
+      "archived": false,
+      "head": {
+        "sha": "a8a90aee3f0b470cda96d47e26de99eedb7fc730",
+        "url": "https://github.com/tensorflow/recommenders/commit/a8a90aee3f0b470cda96d47e26de99eedb7fc730",
+        "authorDate": "2026-10-06T08:48:50Z",
+        "committerDate": "2026-10-06T08:49:26Z",
+        "subject": "Replace `# pytype: disable` suppressions with `# pyrefly: ignore`"
+      },
+      "release": {
+        "tag_name": "v0.7.7",
+        "name": "v0.7.7",
+        "html_url": "https://github.com/tensorflow/recommenders/releases/tag/v0.7.7",
+        "published_at": "2026-01-23T01:29:41Z",
+        "created_at": "2026-01-22T04:04:30Z",
+        "target_commitish": "main",
+        "prerelease": false,
+        "draft": false
+      },
+      "releaseDateKST": "2026-01-23",
+      "license": "Apache-2.0",
+      "licenseURL": "https://github.com/tensorflow/recommenders/blob/a8a90aee3f0b470cda96d47e26de99eedb7fc730/LICENSE",
+      "advisoryAPI": "https://api.github.com/repos/tensorflow/recommenders/security-advisories?per_page=100",
+      "publicAdvisoriesObserved": 0
+    },
+    {
+      "repository": "meta-pytorch/torchrec",
+      "url": "https://github.com/meta-pytorch/torchrec",
+      "archived": false,
+      "head": {
+        "sha": "07aeb26716d9ed6a459f2034ebbd152fd11f4150",
+        "url": "https://github.com/meta-pytorch/torchrec/commit/07aeb26716d9ed6a459f2034ebbd152fd11f4150",
+        "authorDate": "2026-10-17T23:37:27Z",
+        "committerDate": "2026-10-17T23:37:27Z",
+        "subject": "Count real columns, not padded width, in metric windows and variable-step strides (#4901)"
+      },
+      "release": {
+        "tag_name": "v1.9.2-rc3",
+        "name": "v1.9.2",
+        "html_url": "https://github.com/meta-pytorch/torchrec/releases/tag/v1.9.2-rc3",
+        "published_at": "2026-09-30T23:47:24Z",
+        "created_at": "2026-10-13T20:17:43Z",
+        "target_commitish": "main",
+        "prerelease": false,
+        "draft": false
+      },
+      "releaseDateKST": "2026-10-01",
+      "license": "BSD-3-Clause",
+      "licenseURL": "https://github.com/meta-pytorch/torchrec/blob/07aeb26716d9ed6a459f2034ebbd152fd11f4150/LICENSE",
+      "advisoryAPI": "https://api.github.com/repos/meta-pytorch/torchrec/security-advisories?per_page=100",
+      "publicAdvisoriesObserved": 0
+    }
+  ],
+  "socialRepositories": [
+    {
+      "repo": "xai-org/x-algorithm",
+      "archived": false,
+      "license": {
+        "key": "apache-2.0",
+        "name": "Apache License 2.0",
+        "spdx_id": "Apache-2.0",
+        "url": "https://api.github.com/licenses/apache-2.0",
+        "node_id": "MDc6TGljZW5zZTI="
+      },
+      "pushed_at": "2026-10-17T00:44:31Z",
+      "default_branch": "main",
+      "latest_commit": {
+        "sha": "862a1235ca4d743cc48211309ebbbcc1a5a540a3",
+        "date": "2026-10-17T00:44:30Z"
+      },
+      "release": {
+        "tag_name": null,
+        "published_at": null,
+        "status": 404,
+        "html_url": null
+      },
+      "public_advisories": []
+    },
+    {
+      "repo": "twitter/the-algorithm",
+      "archived": false,
+      "license": {
+        "key": "agpl-3.0",
+        "name": "GNU Affero General Public License v3.0",
+        "spdx_id": "AGPL-3.0",
+        "url": "https://api.github.com/licenses/agpl-3.0",
+        "node_id": "MDc6TGljZW5zZTE="
+      },
+      "pushed_at": "2025-09-08T18:40:54Z",
+      "default_branch": "main",
+      "latest_commit": {
+        "sha": "c54bec0d4e029fe34926ef3258a86ccacc0d0182",
+        "date": "2025-09-03T20:46:53Z"
+      },
+      "release": {
+        "tag_name": null,
+        "published_at": null,
+        "status": 404,
+        "html_url": null
+      },
+      "public_advisories": []
+    },
+    {
+      "repo": "bluesky-social/feed-generator",
+      "archived": false,
+      "license": {
+        "key": "mit",
+        "name": "MIT License",
+        "spdx_id": "MIT",
+        "url": "https://api.github.com/licenses/mit",
+        "node_id": "MDc6TGljZW5zZTEz"
+      },
+      "pushed_at": "2026-09-25T16:29:32Z",
+      "default_branch": "main",
+      "latest_commit": {
+        "sha": "70e172e16c659167707a7ef65eef7e37fdb606ff",
+        "date": "2026-09-25T16:29:31Z"
+      },
+      "release": {
+        "tag_name": null,
+        "published_at": null,
+        "status": 404,
+        "html_url": null
+      },
+      "public_advisories": []
+    }
+  ],
+  "limitations": [
+    "Repository metadata is a point-in-time observation, not a full dependency security audit.",
+    "No real recommendation precision, latency, Apple hardware, user usefulness or production operation measured.",
+    "Synthetic evaluation counterexamples check methodology only."
+  ]
+}
