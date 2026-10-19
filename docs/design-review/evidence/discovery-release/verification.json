@@ -1,0 +1,1689 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-19T14:22:32.856459+00:00",
+  "release": {
+    "site": "https://wonchance-art.github.io/life-haedo/",
+    "previousHead": "58e5cd55f73fb440c997266e160d8859f18bfd6c",
+    "previousCache": "haedo-v134",
+    "productHead": "c82ab50dbd2d65e8af261124daa5a6472a677a6c",
+    "serverFixHead": "c073edafa8fcd36dfef50a16a117549af194f465",
+    "mainHead": "0c4270be62fd0dfadbd781fb042356c142e43e8b",
+    "cache": "haedo-v138",
+    "featurePR": 103,
+    "serverFixPR": 109,
+    "seriesReadinessPR": 110,
+    "seriesReadinessHead": "fba67116127d47f97aba02d6669cefc4f861ff68",
+    "seriesReadinessPRCI": {
+      "pass": true,
+      "runId": 39262836992,
+      "headSHA": "fba67116127d47f97aba02d6669cefc4f861ff68",
+      "event": "pull_request",
+      "attempt": 1,
+      "url": "https://github.com/wonchance-art/life-haedo/actions/runs/39262836992",
+      "requiredSuccess": 8,
+      "build": "skipped",
+      "deploy": "skipped",
+      "updatedAt": "2026-10-19T14:04:50Z"
+    },
+    "originalProductPRCI": 39211803404,
+    "serverFixPRCI": {
+      "pass": true,
+      "runId": 39258861890,
+      "headSHA": "c073edafa8fcd36dfef50a16a117549af194f465",
+      "event": "pull_request",
+      "attempt": 1,
+      "url": "https://github.com/wonchance-art/life-haedo/actions/runs/39258861890",
+      "requiredSuccess": 8,
+      "build": "skipped",
+      "deploy": "skipped",
+      "updatedAt": "2026-10-19T13:29:26Z"
+    },
+    "mainRun": {
+      "id": 39265349518,
+      "head_sha": "0c4270be62fd0dfadbd781fb042356c142e43e8b",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "run_attempt": 1,
+      "html_url": "https://github.com/wonchance-art/life-haedo/actions/runs/39265349518",
+      "created_at": "2026-10-19T14:02:21Z",
+      "updated_at": "2026-10-19T14:15:19Z"
+    },
+    "jobs": [
+      {
+        "name": "check",
+        "conclusion": "success",
+        "url": "https://github.com/wonchance-art/life-haedo/actions/runs/39265349518/job/118103372449"
+      },
+      {
+        "name": "browser_suites (2)",
+        "conclusion": "success",
+        "url": "https://github.com/wonchance-art/life-haedo/actions/runs/39265349518/job/118103372721"
+      },
+      {
+        "name": "browser_suites (5)",
+        "conclusion": "success",
+        "url": "https://github.com/wonchance-art/life-haedo/actions/runs/39265349518/job/118103372782"
+      },
+      {
+        "name": "browser_suites (4)",
+        "conclusion": "success",
+        "url": "https://github.com/wonchance-art/life-haedo/actions/runs/39265349518/job/118103372788"
+      },
+      {
+        "name": "browser_suites (3)",
+        "conclusion": "success",
+        "url": "https://github.com/wonchance-art/life-haedo/actions/runs/39265349518/job/118103372998"
+      },
+      {
+        "name": "browser_suites (1)",
+        "conclusion": "success",
+        "url": "https://github.com/wonchance-art/life-haedo/actions/runs/39265349518/job/118103373165"
+      },
+      {
+        "name": "blog",
+        "conclusion": "success",
+        "url": "https://github.com/wonchance-art/life-haedo/actions/runs/39265349518/job/118103373234"
+      },
+      {
+        "name": "browser",
+        "conclusion": "success",
+        "url": "https://github.com/wonchance-art/life-haedo/actions/runs/39265349518/job/118109333165"
+      },
+      {
+        "name": "build",
+        "conclusion": "success",
+        "url": "https://github.com/wonchance-art/life-haedo/actions/runs/39265349518/job/118109383764"
+      },
+      {
+        "name": "deploy",
+        "conclusion": "success",
+        "url": "https://github.com/wonchance-art/life-haedo/actions/runs/39265349518/job/118109591942"
+      }
+    ],
+    "deployments": [
+      {
+        "id": 7176153566,
+        "sha": "0c4270be62fd0dfadbd781fb042356c142e43e8b",
+        "environment": "github-pages",
+        "successAt": "2026-10-19T14:15:18Z"
+      }
+    ]
+  },
+  "collection": {
+    "receipt": {
+      "schemaVersion": 1,
+      "status": "installed",
+      "publishedCatalogURL": "https://wonchance-art.github.io/life-haedo/assets/life/discovery-feed.json",
+      "trackedSHA256": "446e471f2d262b5ca8f39c64244b96b9c799aeecc4eb5c011bd7d608a2b8bf4e",
+      "coreSHA256": "2eaddf8deb9e0978805f6e6795c885c8c9364be5a06b97b2f7ad0aa75ba4f2bd",
+      "seedHTTPStatus": 404,
+      "bootstrapProof": {
+        "url": "https://wonchance-art.github.io/life-haedo/sw.js",
+        "cacheVersion": 134,
+        "sha256": "cb4fd4ed6112856883eab180fc3d390eae7693e835d2407b77fac3ce67ba9967",
+        "rule": "approved-exact-pre-catalog-deployment"
+      },
+      "seedKind": "verified-pre-catalog-404-bootstrap",
+      "seedSHA256": "446e471f2d262b5ca8f39c64244b96b9c799aeecc4eb5c011bd7d608a2b8bf4e",
+      "seedGeneratedAt": "2026-10-19T05:50:54Z",
+      "collectorExitCode": 2,
+      "candidateSHA256": "1034adb7f01f325550dd453b8129f90179b95bc33773c25badf2032faae43b48",
+      "generatedAt": "2026-10-19T14:14:11Z",
+      "okSources": 5,
+      "sourceCount": 7,
+      "articleCount": 90,
+      "partialFailure": true,
+      "sources": [
+        {
+          "id": "naver-d2",
+          "status": "error",
+          "lastSuccessAt": null,
+          "lastAttemptAt": "2026-10-19T14:14:11Z",
+          "stale": true,
+          "error": "허용되지 않은 피드 이동 (HTTPS·등록 호스트만 허용)"
+        },
+        {
+          "id": "seoul-culture",
+          "status": "ok",
+          "lastSuccessAt": "2026-10-19T14:14:11Z",
+          "lastAttemptAt": "2026-10-19T14:14:11Z",
+          "stale": false,
+          "error": null
+        },
+        {
+          "id": "woowahan-tech",
+          "status": "error",
+          "lastSuccessAt": "2026-10-19T05:50:54Z",
+          "lastAttemptAt": "2026-10-19T14:14:11Z",
+          "stale": true,
+          "error": "피드 응답 오류 (HTTP 403)"
+        },
+        {
+          "id": "readersnews-books",
+          "status": "ok",
+          "lastSuccessAt": "2026-10-19T14:14:11Z",
+          "lastAttemptAt": "2026-10-19T14:14:11Z",
+          "stale": false,
+          "error": null
+        },
+        {
+          "id": "seoul-environment",
+          "status": "ok",
+          "lastSuccessAt": "2026-10-19T14:14:11Z",
+          "lastAttemptAt": "2026-10-19T14:14:11Z",
+          "stale": false,
+          "error": null
+        },
+        {
+          "id": "arxiv-cs-cl",
+          "status": "ok",
+          "lastSuccessAt": "2026-10-19T14:14:11Z",
+          "lastAttemptAt": "2026-10-19T14:14:11Z",
+          "stale": false,
+          "error": null
+        },
+        {
+          "id": "mit-linguistics",
+          "status": "ok",
+          "lastSuccessAt": "2026-10-19T14:14:11Z",
+          "lastAttemptAt": "2026-10-19T14:14:11Z",
+          "stale": false,
+          "error": null
+        }
+      ],
+      "artifactSHA256": "1034adb7f01f325550dd453b8129f90179b95bc33773c25badf2032faae43b48"
+    },
+    "actualFeed": {
+      "sha256": "1034adb7f01f325550dd453b8129f90179b95bc33773c25badf2032faae43b48",
+      "generatedAt": "2026-10-19T14:14:11Z",
+      "articles": 90,
+      "sources": 7,
+      "languageCounts": {
+        "ko": 50,
+        "en": 40
+      },
+      "scope": "Public link metadata only; no article bodies, copied summaries, images or personal topics."
+    },
+    "artifactPreservation": {
+      "checkedAt": "2026-10-19T14:18:16.685748+00:00",
+      "artifacts": [
+        {
+          "id": 12193547518,
+          "name": "public-feed-39265349518-1",
+          "sha256": "88f4638d6a449fd4a7f0c4f37e501bd4ea8aff8989842ba11b65482f2409bc7c",
+          "bytes": 2406,
+          "expiresAt": "2026-10-26T14:14:16Z"
+        },
+        {
+          "id": 12193672306,
+          "name": "github-pages",
+          "sha256": "4c4b7814d4df8ec80a02214cbd43834aded3478b58d7771e2e6595de9d3af816",
+          "bytes": 3058658,
+          "expiresAt": "2026-10-20T14:14:18Z"
+        }
+      ],
+      "retainedLocally": true,
+      "publicReceiptArchive": "public-feed.zip",
+      "pagesArchive": "pages-artifact.zip",
+      "releasedTarSHA256": "f72f22c9e54f8cfa1a22034d2467c508abca7208e00d5391521675cc5e4bd484",
+      "lastGoodFeedFile": "last-good-public-feed.json",
+      "feedSHA256": "1034adb7f01f325550dd453b8129f90179b95bc33773c25badf2032faae43b48",
+      "workerSHA256": "3f372c169dfad29072f02e0252019cde08c153de296ac1f70be621e2351f1c35",
+      "publicMirrorFilesCompared": 160,
+      "allMirrorFilesMatchArtifact": true,
+      "scope": "Only public metadata/site artifact. Build public config remains in ignored local archives; no private database or user file backup."
+    },
+    "retainedFailedSource": {
+      "sourceId": "woowahan-tech",
+      "articles": 10,
+      "allRetainedArticlesByteFieldsUnchanged": true,
+      "lastSuccessBefore": "2026-10-19T05:50:54Z",
+      "lastSuccessAfter": "2026-10-19T05:50:54Z",
+      "lastAttemptAt": "2026-10-19T14:14:11Z",
+      "stale": true,
+      "error": "피드 응답 오류 (HTTP 403)",
+      "d2Articles": 0,
+      "languageCounts": {
+        "ko": 50,
+        "en": 40
+      },
+      "scope": "Fresh public deployment vs exact tracked bootstrap seed; metadata preservation, not new successful woowahan fetch."
+    }
+  },
+  "deployedBytes": {
+    "manifestSHA256": "61356fc40ceebcf4f3fbc46f1126cecd6f736f2294f246743c3d3befe1ed22df",
+    "fileCount": 160,
+    "files": [
+      {
+        "path": "",
+        "bytes": 11711,
+        "sha256": "0dc27b552e8755c314a4e95cfc7bf6d7c9b6844ab6b52721c5763fac81a13fe2",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/app.css",
+        "bytes": 42011,
+        "sha256": "091203eadbe2fa8202d84137d848b59e2e1a9bb06d6f3685d6a234638bef715d",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/app.js",
+        "bytes": 197330,
+        "sha256": "a01975a9f039653886ee7d598682cd6bb4e8100491e1b0fc5b4cdb72effb893f",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/data.js",
+        "bytes": 5233,
+        "sha256": "04c38b381c9e9126508576999f3fcf95195b3a5ae417723486917f6768612af2",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/haedo-motion.css",
+        "bytes": 3285,
+        "sha256": "c223dba3f4ff6faa3abc9dad7326d83c3118498780d47c0977db6a05a9f8006f",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/haedo-motion.js",
+        "bytes": 2944,
+        "sha256": "a0f99e6b765196cbde8b65d689773056f1e979c6d556e1e8632dda8517a9db37",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/haedo-navigation.js",
+        "bytes": 9526,
+        "sha256": "830eed76ea6b6e4cc0f8b977a9a22e474ebaeb775b34e70e0f4be50223f8e858",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/haedo-shell.css",
+        "bytes": 12978,
+        "sha256": "c530f9b52ccef987c3390bff2c27d3ebfe8c0830c9e45152a49b67a8150884ce",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/haedo-type.css",
+        "bytes": 404,
+        "sha256": "3b659fc183b590223111ae38dff5d814846f543d9dcb25b0764909919759e208",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/blog-evidence.js",
+        "bytes": 8110,
+        "sha256": "3c0e97b393adc6e3cfa0ffc3941811aa2ea274adf38d3541b14fed7059d0f060",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/blog-manager.css",
+        "bytes": 3085,
+        "sha256": "7842e8ad76e7b93f8b3d050275025f026f84af634a7481e39203dc775ac1f8b1",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/blog-manager.js",
+        "bytes": 31283,
+        "sha256": "5941218189b6d0e7c5000af11269c2ea34c7cc5d73cf2d792bf3bc1b94665892",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/blog-public-ui.js",
+        "bytes": 12679,
+        "sha256": "a75a8d8d90cc79d2c7d4d4a8d7e0ff0d4ef19049cebc130f24f1921805f098c6",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/blog-public.css",
+        "bytes": 3835,
+        "sha256": "1bf73feb306715cbe020843665e8e109a24778865d9a16f1b4a99fb2590df9f3",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/blog-public.js",
+        "bytes": 8029,
+        "sha256": "24de41fe9f2d6483beb5ffda6a30f79737fff972d850da287b319fc9339cb32c",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/blog-remote.js",
+        "bytes": 12258,
+        "sha256": "390506db59662ff6a02c140b40874540ac8a312bbfc13b0ab8991a52b6a6a4e3",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/blog-series-package.js",
+        "bytes": 11766,
+        "sha256": "0730454ede24afc5935686b08508f7a5872aa6d82645ac989fb91e7ac08323f6",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/blog-series-public.js",
+        "bytes": 11095,
+        "sha256": "b20b0a65c95da95239ece39cc55741ced0f66835cacefb97d29ac4c1818b538f",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/blog-series-reader.js",
+        "bytes": 11365,
+        "sha256": "cfc77d509118add9bd1596c28f30e8c8de15ea5d6b17c29f38f5272ab396dc86",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/blog-series-remote.js",
+        "bytes": 6987,
+        "sha256": "3ce44aa3ea023e8857bf89713639a09dc50f2ba36a360fe3bdb8394129a42577",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/blog-series-sharing.js",
+        "bytes": 8959,
+        "sha256": "1c26e35788a298aedbd2223cf93054ab23180845c041b5d7c825fddb207eab39",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/blog-series-ui.js",
+        "bytes": 24809,
+        "sha256": "446d8dd319bcfacf6babb3adde48652aa9daa8f654a01d13fcc58266bdb7e8e7",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/blog-series.css",
+        "bytes": 4198,
+        "sha256": "25bb845c276539ac507f84337bd4b4b7198ea411d1e7bcaab088ab7065d16156",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/blog-series.js",
+        "bytes": 6589,
+        "sha256": "65152e4cb42d01e06e6810665db314f87740c489a33c241936ebc26eef116c52",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/blog-sync.js",
+        "bytes": 19007,
+        "sha256": "835f5c6ce5ab7473b8f7a9f9c37270b5f3da2ae00015373062f11ef9e5abe4d4",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/blog.js",
+        "bytes": 7554,
+        "sha256": "cac504551324354614afdb7ed7e5c4a0c2c58e89d9ff78f68dfb113052d8c3be",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/book-history.js",
+        "bytes": 4830,
+        "sha256": "e13caa6f462680c2a03b5b3771604fcdb99bb3913a6c5f53a7fe44cd75800bf7",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/book-print.js",
+        "bytes": 23145,
+        "sha256": "e745392b18d1675e8349959a37cdd19c089db14db055fe0e4fee7234d8a675b0",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/books.js",
+        "bytes": 13247,
+        "sha256": "8591c86c47a61aef2eb84e2a182ceb056d2bc4313c48ad9d8575563a9d75e2e0",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/collection-media.js",
+        "bytes": 4760,
+        "sha256": "ce8ce19daa6433d3a075e81bf1732c03d5cabc57dddd9ee7ffcee0d9874f5da8",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/collection-metadata.js",
+        "bytes": 17715,
+        "sha256": "b434251643a32b1af799fe3629d018c7618c81cb0594983f528e56a91e3a238f",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/collection-picker.js",
+        "bytes": 19563,
+        "sha256": "6c0ab622c007ac4da8af41c54610136cbec20742e6a0a62b8811dcbb4c1347fe",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/collection-ui.js",
+        "bytes": 37698,
+        "sha256": "b7a34d51f6f38efcd61d15a8a826559ee0778fdcd32d6ecb686dc8bbc4061387",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/collection.css",
+        "bytes": 13939,
+        "sha256": "14ac8e3a6010eea3e17891d2638b32cadb6f78779eea795ddcd78e5151ecee24",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/collection.js",
+        "bytes": 8797,
+        "sha256": "9823822b7980ce4b2ea689548da74a6709f0e1ddbe755c046f0b3a73722ea056",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/composition-remote.js",
+        "bytes": 6064,
+        "sha256": "7fd5bcde36e83a3489edac53aee9be95c33e8c1e979e278ceec1e409879aec03",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/composition-sync.js",
+        "bytes": 13392,
+        "sha256": "2d6609a98a61b4f7e60f71b76358d50f5af890b60cd8bfb8b369e28735e7c53b",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/composition-ui.js",
+        "bytes": 14760,
+        "sha256": "17ff0aa4a938f4db8878e880bebb4634bb858abdf6f9d292abb395a33d32583c",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/core.js",
+        "bytes": 39168,
+        "sha256": "6ad03c873ea3411dc7f8a432e7637502d1ce59271253db04e229429f99308ff4",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/discovery-actions.js",
+        "bytes": 11240,
+        "sha256": "cbae40cdaf96f221f2d160f126b6a5b31174fbb748117f4544b374aa3e1497d9",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/discovery-feed.json",
+        "bytes": 103522,
+        "sha256": "1034adb7f01f325550dd453b8129f90179b95bc33773c25badf2032faae43b48"
+      },
+      {
+        "path": "assets/life/discovery-language-settings.js",
+        "bytes": 5930,
+        "sha256": "70843708e5cb27b27f91f953398ee7fd51df64b6424c7cc01d72c98518f4b6d5",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/discovery-profile.js",
+        "bytes": 5440,
+        "sha256": "3d7424eeb3db46fcf9f933544a7a2ba925e5a01de0615051b79f877dbc62d7d5",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/discovery-recommendations.js",
+        "bytes": 9963,
+        "sha256": "8ee4677639e106ca16928aa23a81b3989df9dbc30ee88498d93d74d73661c02e",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/discovery-settings.js",
+        "bytes": 5006,
+        "sha256": "f6d8f710d848b15ec4b9fa4f7df2b5e295fcac5a2d1b05aee4737110606708bc",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/discovery-ui.js",
+        "bytes": 89019,
+        "sha256": "939e394c398af375ef8eee1f86d2882558535cadd6f33aa95a378316719693a5",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/discovery.css",
+        "bytes": 11062,
+        "sha256": "9342aca05dde21fde980ddfcb41ea2f0c0ca4ebbb26aed582d612e2fa2c45dbc",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/discovery.js",
+        "bytes": 21847,
+        "sha256": "2eaddf8deb9e0978805f6e6795c885c8c9364be5a06b97b2f7ad0aa75ba4f2bd",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/home.css",
+        "bytes": 17507,
+        "sha256": "0fde92d1cebed4c5d37569754ce00a6dfdbfdd8d635085fa423fbbeec6626b2c",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/home.js",
+        "bytes": 45738,
+        "sha256": "4b2992df333df3f7971c07342b0ec082bc906ecabfe63a97c669300c33be374e",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/icons.js",
+        "bytes": 4133,
+        "sha256": "cdb597b7103d0423ef9a2178daaef5d6825ba2dc3624c2feb3868e58a6c55b36",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/interest-analysis.js",
+        "bytes": 27034,
+        "sha256": "d52a7236fa046e892f849662c654cc5c57b071b479e1df10aa3e9b21a2335c01",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/interest-model-loader.js",
+        "bytes": 8744,
+        "sha256": "982f7eb6fb99e2dc4bedce3aba6de349cad2ad6caa2269747cad00e42a61e63c",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/interest-model-worker.js",
+        "bytes": 6361,
+        "sha256": "79a29363a4a71754405f3822b805bb9f2b9d3fe7f59cc453c9a9dff607fd0504",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/interest-policy.js",
+        "bytes": 404,
+        "sha256": "30714a08141a84b6afdc8916d95be032d5fc8c09398d3ded7d712c3b8c33a352",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/interest-profile.js",
+        "bytes": 14231,
+        "sha256": "22bec3d5f138a5176386ee6da5528efc77374ba928d09f2d6025a9f89ebb4c54",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/interest-ui.js",
+        "bytes": 21285,
+        "sha256": "17bf97d985f78bbcc5165d7dcfb99894389daa0eb7ed4968581f06fbe27ebb8a",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/interest.css",
+        "bytes": 1481,
+        "sha256": "e807e63d69596f21bba55728b0b1d2cf1256c850a68118b424151a7ab522b7a2",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/legacy.js",
+        "bytes": 1955,
+        "sha256": "d3607c3c230217af96ede51f38798dd06ba04d9b4995683523e3631146aab53f",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/material-continuity-remote.js",
+        "bytes": 9082,
+        "sha256": "4cbc6d043a4bf37917b16613fe10dc8dc4dfb03486d72d560d32ad759f4d9355",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/material-continuity-sync.js",
+        "bytes": 21782,
+        "sha256": "091146d473fd4aad05eb89d9884b4388c12e393a3a224d80b17faaa10b5cb197",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/material-continuity-ui.js",
+        "bytes": 23582,
+        "sha256": "569b29ccaed6848e21c3ea906dddd6efd84e5ea93ca13ddb3bb4d6c5948ce1f4",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/material-continuity.js",
+        "bytes": 10916,
+        "sha256": "eb320aef5613b06fa4d1ffe30fee6149a4c0c03f859d0012e8e9e36aed9f398a",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/material-writing-sources.js",
+        "bytes": 20680,
+        "sha256": "2e263a60e0030dc1e3b70c915f3ebbce67ad2b0f0dd7343a92aa71417918191c",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/material-writing-ui.js",
+        "bytes": 28861,
+        "sha256": "1318b593b4a54d85bcd24e621681735ae951dfaa4e69e461b38d469a7fa56cb7",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/material-writing.css",
+        "bytes": 5452,
+        "sha256": "cde4dcf17182c6206aa74123b499157cfa698d6e573b0a0d9b58cd434ed52cb5",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/material-writing.js",
+        "bytes": 9889,
+        "sha256": "503e46836854a6adb6de386c73d4fcf668b63975153da8d668a4b0432db4ab3a",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/nine-board-ui.js",
+        "bytes": 42576,
+        "sha256": "8bd2ec416567a30c2c6206ebd0d384cd7e65c95a7d66194bb42a0a1877e44351",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/nine-board.css",
+        "bytes": 4035,
+        "sha256": "b7cd0dfaff51cec4c2d9cb0042d9f0f39fa7eb16540a983347c4e1e855ed50bf",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/nine-board.js",
+        "bytes": 12795,
+        "sha256": "10bca313b825865db368d7fc813155d5e6d2e0770acb062ee82d25ef48c68df3",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/nine-public-remote.js",
+        "bytes": 7864,
+        "sha256": "4811586c956f9167975fe18f3fefc17c5723ad440772514db7e5b3d035c0bbda",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/nine-public-sharing.js",
+        "bytes": 12979,
+        "sha256": "acbc332bb67af058a60036ba0f76092af8da952ddfdb65548bfaca457aad252a",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/nine-public-view.js",
+        "bytes": 12845,
+        "sha256": "9b6ba080bac5de34932f00f2c656a3cb34f07359487f925c2a1b5d4681fbbfb7",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/nine-public.css",
+        "bytes": 4361,
+        "sha256": "f33fc5f59a546012b33787e902cf5e99fc9a5a83958ace6661bc350eed2388c4",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/nine-public.js",
+        "bytes": 3439,
+        "sha256": "f6c40af470ae871cc4d7ed31ce3dfd769e145485989368cf55407bddeec24f6a",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/obsidian-decisions.js",
+        "bytes": 15065,
+        "sha256": "6bb40024a88fb9a2f542d93937cf9b52a1df87e17a12b7b6963266772d39006c",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/obsidian-package.js",
+        "bytes": 4463,
+        "sha256": "1def7b1e393fcdbf8c917eb132c17047e83806acc32f4582dff7c255632e6d5a",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/obsidian-update-ui.js",
+        "bytes": 11336,
+        "sha256": "080ef8b2876418caaa87698858a5494086f31f34ae79e616832a9843652953b5",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/obsidian-update.js",
+        "bytes": 13466,
+        "sha256": "c4be22c32ea12de94755bb57d65c2653eb7651b2f0b42c3a2f2b5327d16a8fd3",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/original-attachments-ui.js",
+        "bytes": 14637,
+        "sha256": "ec65bd2d10ac97b71ae945a656f15679f3cc2d247039d3d3216cf6abc226d353",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/original-attachments.css",
+        "bytes": 1912,
+        "sha256": "03535d5b1e100c1ad11097837366668517c99df2fbf4bbdb686b3f96c416543a",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/original-attachments.js",
+        "bytes": 15752,
+        "sha256": "c0b1eeb685719d5d99d36fc6c284cce20c7ef685feaae73e825dbe152d60abf0",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/page-composer.js",
+        "bytes": 39218,
+        "sha256": "36fc73ad185b5e153758a342de5146e3c04314d20adbf88aed78783acbb8bbf5",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/page-media.js",
+        "bytes": 8171,
+        "sha256": "01c5271d2ec5e42b471d9ef41a14ded94449c765156b3d0d9a81e5366c5c977f",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/page-posts-view.js",
+        "bytes": 5904,
+        "sha256": "1ef5673352aa51ae58bea4ca0d02d8c39c2fda363092e195ac0ef802c7ba0233",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/page-posts.css",
+        "bytes": 12163,
+        "sha256": "5c7751482fc631656f14568c4d647dea1f9ff096cb76d0044737cb6b36f5fde7",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/page-posts.js",
+        "bytes": 9843,
+        "sha256": "87ff4a24fd9802908410b98e9cdee3ea704145b5f55b4dcb62a4b175342d1e47",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/photo-post-attachments.js",
+        "bytes": 8987,
+        "sha256": "93aa9e69372cb202d31bea3a3f61cfb15dd8b071c4194070ec30434f39b11280",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/photo-post-ui.js",
+        "bytes": 67106,
+        "sha256": "6aa6e81782c386bc3973972b2fb6b26ef87a9d48a1f48bd66f2dc5955ac13917",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/photo-post.css",
+        "bytes": 18221,
+        "sha256": "8e4c889d733427d36503ec9921cda6868f535198bba033c69a3f7529ca8829ba",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/photo-post.js",
+        "bytes": 14979,
+        "sha256": "62888bfc7a0568419dc10107d8c412805bf6a0874d357e04df6b87a80372c048",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/preservation-package.js",
+        "bytes": 11158,
+        "sha256": "fe328e7e462fde5d61110c949f5980ac6447b6815e198a1d01d1c7b17dc0ac9c",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/preservation-references.js",
+        "bytes": 10745,
+        "sha256": "376a3d0c80fa339fb6fd7204ba813178cc64ee2cb5cf61bed3cf5bd8c0c84708",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/preservation-ui.js",
+        "bytes": 20399,
+        "sha256": "3c6c90cd16e18911ad1fc104166d6012f4cc16b08c8f57a8cd3e8d588c0c473e",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/preservation.css",
+        "bytes": 2967,
+        "sha256": "67a23409bb0679f23afdca96a3e22ed74cbadcc2f884402bd86eae20dbda1b13",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/preservation.js",
+        "bytes": 11209,
+        "sha256": "df754f4e54b6f0f2d0d457dabef68ea759fdf6259c1768b9184e98cfe91fc203",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/public-cover-reader.js",
+        "bytes": 5487,
+        "sha256": "253cd9b2ed6f4bc646f33db07ec8b3beadb6346f85cdf8bd0e59f795e5f58b69",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/public-cover-remote.js",
+        "bytes": 15594,
+        "sha256": "f08e9aefa2cf027e8293789adffab2dbda86af8a3fc79c97b4c49987e05fc59f",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/public-cover-return.js",
+        "bytes": 6494,
+        "sha256": "6ee17002dfdc5c9cad38098efbfb3f8e897d45d85036bae107cb3f6484352b93",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/public-cover-ui.js",
+        "bytes": 26155,
+        "sha256": "1be03703ac7a71eafeef3e7f16097cf6fde0c6af6d29de0ef792a484fe203c40",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/public-cover-view.js",
+        "bytes": 9023,
+        "sha256": "14cea9566fd84a78059930c749043a2cec8f6c731cbab9dcb483e14fba9e8aec",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/public-cover.css",
+        "bytes": 5793,
+        "sha256": "59bfe4578499f66ace6c1322276c8053350c5d30ce307e2103f8b368ce0bb4c1",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/public-cover.js",
+        "bytes": 7579,
+        "sha256": "9a66d74d936cde88eaa85b3886923b46f0f551e9ca9acfd0d51ba4a6b85fdafc",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/reading-position.js",
+        "bytes": 9165,
+        "sha256": "944acfd286632a1cbf5801c13a5ee37ba936f9725ac6432f9709016579d48ebd",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/rediscovery.js",
+        "bytes": 12132,
+        "sha256": "f714124e7a6143a5969b12691d5a05bd48fbbf14e494566deb77a6dfd2a710d2",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/reflection-lenses-ui.js",
+        "bytes": 8959,
+        "sha256": "ff9d78e5150a7349acdfa7360cca285abc8ac7a465c4cd4fd5a8141b3b3155d0",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/reflection-lenses.js",
+        "bytes": 4732,
+        "sha256": "6cf25ab3c89c6d7ea3df6331c411723f990b615d02a282a737e134910626155f",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/reflection.js",
+        "bytes": 6957,
+        "sha256": "4ad3400edde9d50927bb85df307aa52de0025bb5ddb04f0610c75403a6178353",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/remote.js",
+        "bytes": 16629,
+        "sha256": "abf9f977845aea550f9e0cb95f7b9cf8200469e1b0819a77a728f88e89146a13",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/share-remote.js",
+        "bytes": 18110,
+        "sha256": "1541c9d39ca0d9d04fd9cdfa1153d5741cb0f69fd764008d9db2fa401cd72076",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/share-view.css",
+        "bytes": 5966,
+        "sha256": "59593654eef5d9dfdde3fa2bbda26493e5d0b0cb911c12235440c22d0dbb0b36",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/share-view.js",
+        "bytes": 7458,
+        "sha256": "df8291f3faf87f50d1368b5c24be269e5e2ee11305350bb22f6a06d9b966e071",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/share.js",
+        "bytes": 10354,
+        "sha256": "c2912f21ec84ad884711a4d2b537bea546a14d2c6e6fe3ea1126e0ab5c6c1b1b",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/shell.js",
+        "bytes": 15390,
+        "sha256": "44414476702db4c8e0ef8515b6e6deb5ff549b8a26c64fb4501bac1b199b29ce",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/source-reference.js",
+        "bytes": 7459,
+        "sha256": "bbb3c98edf4cb8ab76ab888ce261b20e2ea9960c93a90775a7ed57bc554aa950",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/storage.js",
+        "bytes": 235326,
+        "sha256": "fea2d3b0fb42f9b6b60136989c01bf990398117b360c4ad44e4e7daa3190e557",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/sync.js",
+        "bytes": 27441,
+        "sha256": "50648949a8141c2c951f514bb4625b930e3857eac155d7b75925644844576ebd",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/ui.css",
+        "bytes": 42624,
+        "sha256": "07b483ed8790cc043b926e9181a84326e38597008cee35ca7901b0ab77e33674",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/ui.js",
+        "bytes": 255021,
+        "sha256": "bf7c539b610ea2643ef607c5c460dfca2f6d53dd9194219846fddb43c7a4ede0",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/unified-search-ui.js",
+        "bytes": 9361,
+        "sha256": "d53bf58d35286105e982c9d441a5bca81366ff4ec020036ea0e44dde39a149a7",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/unified-search.js",
+        "bytes": 7835,
+        "sha256": "18892a9e1485dd21ced55bed366b38e42786f9edc56e8154fa1a4682529f8108",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/workbench-ui.js",
+        "bytes": 258236,
+        "sha256": "a87434e632b84c80b97c94144a00ee14d9c5dd3292a7638c48584742cc744fdb",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/workbench.css",
+        "bytes": 40387,
+        "sha256": "36b3de24f4b3e627369f9b13cba4a8693f1865c608bf9d8c1cf1f09a96779206",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/workbench.js",
+        "bytes": 15613,
+        "sha256": "c38e7ed8d62ffdd3397749853bd37fe9e941f8c11b508948e6cabd1fdcbade17",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/writing-remote.js",
+        "bytes": 8247,
+        "sha256": "16fe61c3730f1549da58cd247a4d49db6c8308331c8031d42ad39a51d6bf8db2",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/writing-sync-ui.js",
+        "bytes": 12527,
+        "sha256": "c7b18d5e10342406404bf9f00ee24874b164498fb4c50a00fef2753230086056",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/writing-sync.js",
+        "bytes": 8841,
+        "sha256": "2316527b91c5bf3c867794a8e3c27be2cc01f5d6ff44a920e2ca7117822685ed",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/writing-ui.js",
+        "bytes": 29589,
+        "sha256": "8daaf970cae7d02f35a9eb0e17ed2e02978af9614ecc7bc782c60707d4d67a2c",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/life/writing.js",
+        "bytes": 11003,
+        "sha256": "0d9fd8a7765a8cba1133f53a9f6cd43fd29e9d96c2a2bb67f1ed324cfdb4b4e7",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/platform-auth.js",
+        "bytes": 17652,
+        "sha256": "37a97153a39b61df30dfb74784d3740382a648f635a1f1ce7668cf39356f534c",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/platform-config.js",
+        "bytes": 142,
+        "sha256": "6c7b1f9b0db494c9f2c7f3b506eb13c5c30d56d7bde70e43a8a32221938c5976"
+      },
+      {
+        "path": "assets/platform-data.js",
+        "bytes": 6856,
+        "sha256": "bbf707e6684d0bba7f964ec946b7201cb703e7c31d9b0431989b38a65c494f63",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/platform-life-remote.js",
+        "bytes": 7223,
+        "sha256": "56f50e328b4a564e66d7b83c522c7b4ea5934d313d27642c04323e6f478bdb34",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/platform-store.js",
+        "bytes": 11081,
+        "sha256": "453f7c3ab3b2452e9d9168ae960d08efa4c59553aa0b1b3cfb5c27ce8aeab22c",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/platform-ui.js",
+        "bytes": 27959,
+        "sha256": "d59b2521c6b1bed16928f504408fa89e807901aefa6cac0bdf4a5eefe158b1a4",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/platform.css",
+        "bytes": 13503,
+        "sha256": "bac9d9b6c72e7c4d0b6edad051ed493ffd4b763078df9daf0f2573dc9ab619dd",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/sync.js",
+        "bytes": 2489,
+        "sha256": "92b367b712c352ea375fd02b40d8a88700692a7292af8b8c6454d0dc300ed047",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/timeline-entry.js",
+        "bytes": 2716,
+        "sha256": "dcdb7c2edca1b172dc2b735dd0b01c2b0acb02bf9c125ed103ef8b8ba1ecf721",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/timeline-shell.css",
+        "bytes": 20583,
+        "sha256": "fa148bbe0e8b44bcfae7927c9d56ba3251ab0ddb4dbcb5bb39a4eee88f55bf01",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "assets/workspace.js",
+        "bytes": 11939,
+        "sha256": "e6b2d1d13ab0278b8521cfb1b70cd55c088713a4742b19d2931f06af615188c3",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "goals.html",
+        "bytes": 7745,
+        "sha256": "325b085551622946521caa91a905748dd85b9e429998b5050a69764b996822d8",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "habits.html",
+        "bytes": 7644,
+        "sha256": "0aa1f5488e7be0f16f0e4e9a68fd3e0c684af3e26fe7dee0312d9dd8c28df7f5",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "icon-maskable.svg",
+        "bytes": 591,
+        "sha256": "4e9cea26b183c7caeae273b91842051dda1ce83421d48472c73d107c98310205",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "icon.svg",
+        "bytes": 600,
+        "sha256": "2c55caa4e2279b9276113432ee763d033ab381497ecc3554348e22b3199006a2",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "index.html",
+        "bytes": 11711,
+        "sha256": "0dc27b552e8755c314a4e95cfc7bf6d7c9b6844ab6b52721c5763fac81a13fe2",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "life.html",
+        "bytes": 8896,
+        "sha256": "9a9b5b77d169c356c62c249f94f83514ec4528f87eb092e3268f67aa96deb1ed",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "login.html",
+        "bytes": 2984,
+        "sha256": "ae24445dc6e34c3e4a89b627cdfc9ca5b46b9749013e2688aa04d2b5abed7f12",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "manifest.webmanifest",
+        "bytes": 566,
+        "sha256": "1e9812b96881ab8cf560cd053a75c1e9d040aef928ce5a54aa9411f740900d8e",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "privacy.html",
+        "bytes": 5296,
+        "sha256": "8d9ed304be683d4cfa3208ebc8c4679dbf464dce6fd2c3a0095b9ca2eb9064f1",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "sw.js",
+        "bytes": 9412,
+        "sha256": "3f372c169dfad29072f02e0252019cde08c153de296ac1f70be621e2351f1c35",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "timeline.html",
+        "bytes": 24344,
+        "sha256": "cc1ab4bc9f86d1fefa34072b2a8e6c583b344f12ed889a3b1f6fcab92bcb11d0",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "vendor/daisyui-themes.css",
+        "bytes": 38347,
+        "sha256": "ebfc2b7f91d6cbc239ccadf73c076bfc44fad3752cc151192cfaa7384ffe9cbf",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "vendor/daisyui.css",
+        "bytes": 1123103,
+        "sha256": "1904f2730af6388c948fea24e9cfba96282e6dbbe41bb55c97fcf05c22c43b88",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "vendor/fflate/fflate.js",
+        "bytes": 33044,
+        "sha256": "462ef8041fc970e3615a20a9dd2b2e3047a073b2da729ef4f02b634bba8b7b83",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "vendor/idb/idb.js",
+        "bytes": 3713,
+        "sha256": "ff4b3763d5b8e7981f606cb3d46df37ac5b7fc1d4b4eca34da129b47219edd59",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "vendor/pretendard/PretendardVariable.woff2",
+        "bytes": 2057688,
+        "sha256": "9599f12fd42fc0bce1cd50b47a0c022e108d7aa64dd0d1bb0ed44f3282d900b4",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "vendor/quill/quill.js",
+        "bytes": 209274,
+        "sha256": "f6157c72ac9b3f51cdead426335688a027b12405d9d6a4daadd38a676b2d7ff2",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "vendor/quill/quill.snow.css",
+        "bytes": 24606,
+        "sha256": "1c7948cd13aa92fac6390319bc1e5e461823da171519d3a768db56164f871636",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "vendor/supabase/supabase.js",
+        "bytes": 217945,
+        "sha256": "59d39487c3589843b410322d8a3d562ce022aba1e5ccb16898ef3fb2a0da2ecd",
+        "matchesDeploymentCommit": true
+      },
+      {
+        "path": "workspace.html",
+        "bytes": 10350,
+        "sha256": "466da4115dd30009d0aef8f85c94296141deb7fd975b3ada5c56a716411957e4",
+        "matchesDeploymentCommit": true
+      }
+    ],
+    "exceptions": [
+      "Build-generated public platform config is downloaded and hashed, then replaced with synthetic config on localhost only.",
+      "Public feed is generated during this exact build and matched to collection/artifact receipts."
+    ]
+  },
+  "mirrorVerification": {
+    "scope": "Downloaded deployed bytes on isolated localhost mirror; synthetic Auth and real bundled SDK/scoped IDB. Actual published metadata only. Google popup fulfilled locally, not actual translation. Exact production prior v134 worker plus current shell (old-worker-only) -> deployed v138. No production login/write, publisher read, Apple device or usefulness proof.",
+    "browser": "153.0.8010.12",
+    "node": "v24.19.0",
+    "checks": [
+      {
+        "name": "old production worker v134 installs on current deployed shell without automatic catalog/model requests",
+        "pass": true
+      },
+      {
+        "name": "old-worker-only v134 -> actual deployed v138 activates, removes prior cache and preserves exact scoped data",
+        "pass": true
+      },
+      {
+        "name": "installed deployed SHELL hashes match received bytes; public feed/model weights remain outside SHELL",
+        "pass": true
+      },
+      {
+        "name": "received actual public catalog loads with collection metadata distinct from browser receipt",
+        "pass": true
+      },
+      {
+        "name": "actual catalog all/ko/en/none filters preserve explicit language semantics and empty state",
+        "pass": true
+      },
+      {
+        "name": "explicit like/bookmark independently persist actual deployed metadata in both saved lists",
+        "pass": true
+      },
+      {
+        "name": "translation target href is exact, explicit popup is local-only, off invalidates old anchors and original link remains intact",
+        "pass": true
+      },
+      {
+        "name": "three discovery modes share empty language filter; originals/other metadata remain exact",
+        "pass": true
+      },
+      {
+        "name": "390 saved list and 1440 language options retain readable layout and native focus",
+        "pass": true
+      },
+      {
+        "name": "deployed feed failure returns explicit stale snapshot; offline cached shell reload preserves local data",
+        "pass": true
+      }
+    ],
+    "worker": {
+      "old": "haedo-v134",
+      "new": "haedo-v138",
+      "oldWorkerSHA256": "cb4fd4ed6112856883eab180fc3d390eae7693e835d2407b77fac3ce67ba9967",
+      "newWorkerSHA256": "3f372c169dfad29072f02e0252019cde08c153de296ac1f70be621e2351f1c35",
+      "mode": "old-worker-only: deployed current shell in both phases; not prior entire application or real user database"
+    },
+    "installedShellFiles": 158,
+    "syntheticLocalConfig": {
+      "path": "assets/platform-config.js",
+      "downloadedSHA256": "6c7b1f9b0db494c9f2c7f3b506eb13c5c30d56d7bde70e43a8a32221938c5976",
+      "syntheticSHA256": "7e549dc89e811ba9b33b73c7aadee35a13e4a429e7b81cf4f519363e3e1b42cf"
+    },
+    "visual": [
+      {
+        "width": 1440,
+        "file": "release-1440.png",
+        "audit": {
+          "width": 1440,
+          "documentWidth": 1440,
+          "focus": "discoveryTranslationLanguage",
+          "detailsOpen": true
+        }
+      },
+      {
+        "width": 390,
+        "file": "release-390.png",
+        "audit": {
+          "width": 390,
+          "documentWidth": 390,
+          "focus": "discoveryTranslationLanguage",
+          "detailsOpen": true
+        }
+      }
+    ],
+    "catalogRequestCount": 4,
+    "stale": {
+      "cache": "stale",
+      "browserFetchedAt": "2026-10-19T14:19:43.985Z"
+    },
+    "pageErrors": 0,
+    "unexpectedRequests": 0,
+    "privateLeaks": 0,
+    "modelRequests": 0,
+    "realExternalHTTP": 0,
+    "fakeCloudWrites": 0,
+    "expectedProbeConsoleErrors": 0,
+    "pass": true,
+    "preservationSamples": {
+      "nonemptyBeforeWorkerTransition": [
+        "bundle original with exact Unicode/newlines",
+        "manual interest neutral synthetic label",
+        "feedback",
+        "language preferences"
+      ],
+      "defaultBeforeWorkerTransition": [
+        "existing settings",
+        "actions empty/default off",
+        "workbench"
+      ],
+      "postTransitionReactionProof": "One actual public metadata item explicitly liked and bookmarked via UI; both lists remain under empty content-language filter, reload exact snapshot. Nonempty reactions across v134->138 were not seeded in this release smoke; existing candidate PWA9 is separate evidence."
+    },
+    "limits": [
+      "Local mirror of actual published bytes, not browser execution/authentication against production origin.",
+      "Prior production worker exact v134 with current deployed shell in both phases: old-worker-only, not full old application/user-database upgrade.",
+      "Latest mode all/ko/en/none checked; all three discovery modes checked for empty-language selection only. Full language14 prior CI is separate.",
+      "Published feed has ko50/en40; region-tag/unknown fixtures were not substituted into this actual-feed smoke.",
+      "Google KO URL popup fulfilled with local synthetic HTML; EN href and original/off invalidation checked. No actual Google translation or publisher HTML fetched.",
+      "No real OAuth/account/DB write, Apple device, original reading or recommendation usefulness proof.",
+      "Collector first-attempt stdout was not retained; copied partial bytes/scanner and reconstructed local diagnostic kept, with count correction160files+8dirs.",
+      "First smoke overall failed due to our async-predicate wait pattern. It is preserved and its initial2 labels are not completion evidence. Final fresh context uses await evaluate polling with unchanged20s cap."
+    ],
+    "visualTiming": "390 open-language-options DOM audit was captured before closing the options for the saved-list PNG. Desktop PNG shows open options and focus.",
+    "rawReportSHA256": "f2dc26bb78b99815605c3780b27f93487f5076b8cac278a12854e5c5c00e592f",
+    "runtimeSummarySHA256": "5da61bfc5fa64ab4122856e462b73eba264a19c6f98bfbbaa1e2f2b06b20c623",
+    "toolRecovery": {
+      "collector": {
+        "cause": "Quoted data SVG nested url() misread as relative assets; corrected local scanner only.",
+        "falseReferences": [
+          "vendor/%23a",
+          "assets/%23n"
+        ],
+        "preservedSnapshotFiles": 160,
+        "preservedDirectories": 8,
+        "firstStdoutRetained": false,
+        "originalDiagnosticSHA256": "2efe570fdf1ee5ebd72f78e9f8ebf44d662a6e750840e0e3f65549bec7ca8954",
+        "countCorrection": {
+          "originalDiagnosticUnchanged": true,
+          "filesBeforeFailure": 160,
+          "directories": 8,
+          "explanation": "Original filesBeforeFailure was rglob entry count, including directories. Final remote manifest has 160 actual files."
+        }
+      },
+      "waitPredicate": {
+        "observedMiniReproduction": {
+          "expression": "page.waitForFunction(async()=>false,null,{timeout:300})",
+          "returned": false,
+          "elapsedMs": 36
+        },
+        "cause": "Our local async guard advanced on a false result before cache install completion.",
+        "fix": "Await evaluate predicate polling, unchanged20000ms cap, fresh browser context.",
+        "initialOverallPass": false,
+        "initialTwoLabelsAreCompletionProof": false,
+        "failedReportSHA256": "2a0ff70c29c44233d223f643134028c68c7c94115773c301fa2f72b9aec82f0e"
+      }
+    }
+  },
+  "preservation": {
+    "previousHead": "58e5cd55f73fb440c997266e160d8859f18bfd6c",
+    "candidateHead": "c82ab50dbd2d65e8af261124daa5a6472a677a6c",
+    "candidateCache": "haedo-v138",
+    "previousCache": "haedo-v134",
+    "previousWorkerSHA256": "cb4fd4ed6112856883eab180fc3d390eae7693e835d2407b77fac3ce67ba9967",
+    "exactCandidateCI": 39211803404,
+    "ciSuccess": 8,
+    "destructiveDataMigration": false,
+    "unchangedOriginalModels": [
+      {
+        "path": "assets/life/core.js",
+        "unchanged": true,
+        "sha256": "6ad03c873ea3411dc7f8a432e7637502d1ce59271253db04e229429f99308ff4"
+      },
+      {
+        "path": "assets/life/sync.js",
+        "unchanged": true,
+        "sha256": "50648949a8141c2c951f514bb4625b930e3857eac155d7b75925644844576ebd"
+      },
+      {
+        "path": "assets/life/workbench.js",
+        "unchanged": true,
+        "sha256": "c38e7ed8d62ffdd3397749853bd37fe9e941f8c11b508948e6cabd1fdcbade17"
+      },
+      {
+        "path": "assets/life/writing.js",
+        "unchanged": true,
+        "sha256": "0d9fd8a7765a8cba1133f53a9f6cd43fd29e9d96c2a2bb67f1ed324cfdb4b4e7"
+      },
+      {
+        "path": "assets/life/preservation.js",
+        "unchanged": true,
+        "sha256": "df754f4e54b6f0f2d0d457dabef68ea759fdf6259c1768b9184e98cfe91fc203"
+      },
+      {
+        "path": "assets/life/preservation-package.js",
+        "unchanged": true,
+        "sha256": "fe328e7e462fde5d61110c949f5980ac6447b6815e198a1d01d1c7b17dc0ac9c"
+      }
+    ],
+    "recoveryArchiveSHA256": "49980a197ed20cb5788fe58707d70d81dbae5b567864bd8b8fa23b60c127df40",
+    "recoveryRule": "Preserve IndexedDB, private local metadata, originals and preferences; restore reviewed compatible code with a newer cache revision if recovery becomes necessary. Do not clear storage or silently mark old code feature-equivalent."
+  },
+  "localServerFix": {
+    "serverSHA256": "8dda01971f44a2a7c2e216d433fbb997b791336004d1a7270fbd24da6ea7210c",
+    "pass": true,
+    "passes": [
+      {
+        "round": 1,
+        "ms": 532
+      },
+      {
+        "round": 2,
+        "ms": 378
+      },
+      {
+        "round": 3,
+        "ms": 380
+      },
+      {
+        "round": 4,
+        "ms": 347
+      },
+      {
+        "round": 5,
+        "ms": 373
+      },
+      {
+        "round": 6,
+        "ms": 331
+      },
+      {
+        "round": 7,
+        "ms": 385
+      },
+      {
+        "round": 8,
+        "ms": 370
+      },
+      {
+        "round": 9,
+        "ms": 402
+      },
+      {
+        "round": 10,
+        "ms": 383
+      },
+      {
+        "round": 11,
+        "ms": 351
+      },
+      {
+        "round": 12,
+        "ms": 321
+      }
+    ],
+    "routeErrors": 0,
+    "pendingAtClose": 0,
+    "consoleErrors": 0,
+    "pageErrors": 0,
+    "scope": "Navigation transport only, synthetic local Auth. No SQL/blog journey or deployment proof."
+  },
+  "seriesReadiness": {
+    "checkedAt": "2026-10-19T13:45:48.208560+00:00",
+    "baseCommit": "14a9cb1c4b6ee1f86fbccca8ca6f474e18b299ac",
+    "scope": "Existing old-account completed-series-read check only, real local UI/SDK/IndexedDB and synthetic Auth. Both variants inject identical 250ms B createWorkspace delay; all original assertions and existing timeouts retained. Product files unchanged. No real accounts, production DB or remote mutation.",
+    "original": {
+      "pass": false,
+      "failure": "requireId(null) in state → listPhotoPosts before B workspace exists",
+      "events": [
+        {
+          "phase": "B-create-delay-start",
+          "at": 588.0999999940395,
+          "active": null,
+          "hidden": true
+        },
+        {
+          "phase": "B-ID-wait-complete",
+          "at": 589.5,
+          "active": null,
+          "hidden": true
+        }
+      ]
+    },
+    "fixed": {
+      "pass": true,
+      "checks": [
+        "An old-account completed series read cannot render private contents after the verified account changes"
+      ],
+      "events": [
+        {
+          "phase": "B-create-delay-start",
+          "at": 500.20000000298023,
+          "active": null,
+          "hidden": true
+        },
+        {
+          "phase": "B-ID-wait-complete",
+          "at": 502.5,
+          "active": null,
+          "hidden": true
+        },
+        {
+          "phase": "B-create-complete",
+          "at": 752.7999999970198,
+          "workspaceId": "bb0f2de5-203c-4405-9fe9-b56ceccfb411"
+        }
+      ]
+    },
+    "change": "Exactly await ready(f.page) after existing B and A verified-user + scoped-storage ID waits. ready waits the private shell reveal; Shell.ready alone is only the initial promise.",
+    "sourceExplanation": {
+      "storageExposure": "shell.js build sets scopedStorage before awaiting UI.mount; UI.mount asynchronously getActive/createWorkspace/setActive.",
+      "ownedReveal": "After UI.mount, shell checks abort signal, generation and authenticated account key before reveal; #lifeApp.hidden becomes false only in reveal.",
+      "storageOwnership": "getActive returns null for absent per-account meta row and otherwise checkedBundle validates ownership.",
+      "safety": "Old A completed read remains held until B complete snapshot; exact B-after-read/A-return snapshots, private-text exclusion, and zero remote writes all remain asserted."
+    },
+    "products": {
+      "assets/life/storage.js": {
+        "main14a9cb1SHA256": "fea2d3b0fb42f9b6b60136989c01bf990398117b360c4ad44e4e7daa3190e557",
+        "diskSHA256": "fea2d3b0fb42f9b6b60136989c01bf990398117b360c4ad44e4e7daa3190e557",
+        "equal": true
+      },
+      "assets/life/ui.js": {
+        "main14a9cb1SHA256": "bf7c539b610ea2643ef607c5c460dfca2f6d53dd9194219846fddb43c7a4ede0",
+        "diskSHA256": "bf7c539b610ea2643ef607c5c460dfca2f6d53dd9194219846fddb43c7a4ede0",
+        "equal": true
+      },
+      "assets/life/shell.js": {
+        "main14a9cb1SHA256": "44414476702db4c8e0ef8515b6e6deb5ff549b8a26c64fb4501bac1b199b29ce",
+        "diskSHA256": "44414476702db4c8e0ef8515b6e6deb5ff549b8a26c64fb4501bac1b199b29ce",
+        "equal": true
+      },
+      "assets/platform-auth.js": {
+        "main14a9cb1SHA256": "37a97153a39b61df30dfb74784d3740382a648f635a1f1ce7668cf39356f534c",
+        "diskSHA256": "37a97153a39b61df30dfb74784d3740382a648f635a1f1ce7668cf39356f534c",
+        "equal": true
+      },
+      "assets/life/core.js": {
+        "main14a9cb1SHA256": "6ad03c873ea3411dc7f8a432e7637502d1ce59271253db04e229429f99308ff4",
+        "diskSHA256": "6ad03c873ea3411dc7f8a432e7637502d1ce59271253db04e229429f99308ff4",
+        "equal": true
+      },
+      "index.html": {
+        "main14a9cb1SHA256": "0dc27b552e8755c314a4e95cfc7bf6d7c9b6844ab6b52721c5763fac81a13fe2",
+        "diskSHA256": "0dc27b552e8755c314a4e95cfc7bf6d7c9b6844ab6b52721c5763fac81a13fe2",
+        "equal": true
+      },
+      "sw.js": {
+        "main14a9cb1SHA256": "3f372c169dfad29072f02e0252019cde08c153de296ac1f70be621e2351f1c35",
+        "diskSHA256": "3f372c169dfad29072f02e0252019cde08c153de296ac1f70be621e2351f1c35",
+        "equal": true
+      },
+      "scripts/dev-server.py": {
+        "main14a9cb1SHA256": "8dda01971f44a2a7c2e216d433fbb997b791336004d1a7270fbd24da6ea7210c",
+        "diskSHA256": "8dda01971f44a2a7c2e216d433fbb997b791336004d1a7270fbd24da6ea7210c",
+        "equal": true
+      }
+    },
+    "evidence": {
+      "run.cjs": "0d0f1a8738d36158533b429921209ecab0f20d961db87914329fcae84969d9d6",
+      "original/report.json": "fb6414f467ba1f1e3aa222cf17c0cc5075ce77f11fe22936bb35c334149fb077",
+      "original.log": "8dac21f434412a473770ca988f85aacdaec51ebb82230266d1df823496fbd3de",
+      "fixed/report.json": "87e30c887a3e7861f500046248319b41b601a2d16ccde1080819f14bdfe4de01",
+      "fixed.log": "b02886f79fa4e40feaf0baebddd1fde89a0dea9a2b830793fa2853338260bc9b"
+    },
+    "limitations": [
+      "One deterministic delayed initialization run per variant; full six normal series checks were separately run and passed by root.",
+      "Not evidence of real OAuth, production SQL/RLS, Apple hardware, deployment or recommendation usefulness."
+    ],
+    "setupNotes": [
+      "Initial diagnostic source-string quoting failed at compile before browser launch; preserved setup-compile-error.log, excluded from comparison."
+    ]
+  },
+  "scheduledCollection": {
+    "workflowState": "active",
+    "cronUTC": "15 6 * * *",
+    "nextExpectedKST": "2026-10-20T15:15:00+09:00",
+    "actualScheduleRun": null,
+    "note": "This verified run is event=push. First schedule event and its collected/deployed hashes remain unverified; GitHub scheduling can be delayed or skipped."
+  },
+  "limits": {
+    "realOAuth": null,
+    "productionDatabaseWrite": false,
+    "appleHardware": null,
+    "actualGoogleTranslation": null,
+    "originalArticleReading": null,
+    "userUsefulnessRatings": null,
+    "restrictedLanguageFieldCLI": "Current field CLI is all-language only; not equivalent to a restricted-language UI comparison.",
+    "oldWorkerUpgrade": "Old-worker-only v134 with current downloaded shell -> v138, distinct from an entire prior app/device upgrade and the existing separate whole-app CI proof.",
+    "rollbackReupgradeTest": null
+  },
+  "visualReview": {
+    "root": {
+      "root": true,
+      "blockers": [],
+      "scope": "Root directly viewed the two fresh deployed-byte localhost screenshots. Neutral synthetic topic only. Desktop native language controls/focus readable; mobile saved article/reactions/source-staleness remain visible, no horizontal overflow. No real device claim.",
+      "images": [
+        {
+          "file": "release-1440.png",
+          "sha256": "269cdf1fec9632d15f103b12b6c8d1b2ff1278a86f27e1f5dee8f20d4bfe9ee2"
+        },
+        {
+          "file": "release-390.png",
+          "sha256": "5f75ac1202793ded2acc92f9c10534f38b2e73b6d9ed22398b3abb2c33cccf0a"
+        }
+      ]
+    },
+    "independent": {
+      "reviewedAtUTC": "2026-10-19T14:21:29.724762+00:00",
+      "verdict": "pass_with_scope_limits",
+      "blockingFindings": [],
+      "deploymentSHA": "0c4270be62fd0dfadbd781fb042356c142e43e8b",
+      "deploymentRun": "39265349518",
+      "serviceWorker": 138,
+      "scope": "Independent direct visual review of exactly two supplied new PNGs from isolated localhost mirror of downloaded deployed bytes; no capture, browser run, product, test or remote change.",
+      "images": [
+        {
+          "path": ".local/discovery-release/smoke/release-1440.png",
+          "sha256": "269cdf1fec9632d15f103b12b6c8d1b2ff1278a86f27e1f5dee8f20d4bfe9ee2",
+          "directlyViewed": true
+        },
+        {
+          "path": ".local/discovery-release/smoke/release-390.png",
+          "sha256": "5f75ac1202793ded2acc92f9c10534f38b2e73b6d9ed22398b3abb2c33cccf0a",
+          "directlyViewed": true
+        }
+      ],
+      "observations": [
+        {
+          "scene": "1440 latest + language options",
+          "finding": "콘텐츠 언어 checkbox와 독립 번역 select가 읽기 쉽게 구분되고 줄바꿈/정렬이 자연스럽다. 한국어 target select에 녹색 초점선이 명확하다. 공개 URL의 Google 전달·외부 번역 실패 가능성 안내가 보이며 자동 번역 성공을 주장하지 않는다. 최신순 선택과 개인 추천 꺼짐 상태가 구분된다. 보이는 영역에서 가로 넘침·겹침은 없다."
+        },
+        {
+          "scene": "390 saved liked + collapsed options",
+          "finding": "주제 폼과 정렬이 숨겨져 저장 목록에 집중한다. 언어 옵션은 접힌 채 접근 가능하고, 좋아요/담기 취소는 각각 독립 버튼이다. 첫 제목과 출처/발행일이 하단 고정 탐색 위에 온전히 보인다. 제목/본문 미보관·링크와 제목만 확보 안내가 명시되어 원문 보관으로 오해할 표현은 없다. 하단 일부 조작은 화면 아래로 이어지나 첫 글 제목·반응을 가리지 않으며 스크롤 내용으로 보인다."
+        },
+        {
+          "scene": "source freshness",
+          "finding": "최신 상태를 확인하지 못한 출처가 있다는 안내와 NAVER D2·우아한형제들 수집 실패를 분명히 표시한다. 보관 목록의 서울시 문화 글 발행일을 현재 전체 공급 성공 시각으로 주장하지 않는다. 총괄이 전달한 D2 기사0·우아한 이전10개 유지와 모순되는 최신성 문구는 보이지 않는다."
+        }
+      ],
+      "evidenceCaveats": [
+        "1440 PNG에서는 native select 초점선이 보인다. 390 PNG는 언어 옵션이 접혀 있고 표시된 초점선이 없으므로 그 이미지로 언어 select 초점 상태를 판정하지 않는다.",
+        "smoke/report.json visual[1].audit는 detailsOpen:true/focus:discoveryTranslationLanguage이지만 실제390 PNG는 옵션이 접혀 있다. 해당 audit가 최종 캡처 상태를 설명한다고 재사용하지 않는다. 시각 판정은 PNG를 기준으로 하며 release blocker는 아니다.",
+        "이미지의 버튼 분리·가독성은 확인했지만 pixel hitbox/실제 touch/가로 스크롤 가능성의 수치는 새로 측정하지 않았다. report의 documentWidth=viewport와 기존44px 검사는 별도 실행 근거다.",
+        "목록 아래의 원문/번역 링크 전체와 세부 출처 수집 시각은 이 두 viewport에 모두 보이지 않는다. 링크 동작·피드 시각·업데이트 보존은 총괄/runtime smoke10/10 근거이며 이번 독립 시각 검사의 직접 관찰로 부풀리지 않는다."
+      ],
+      "unverified": [
+        "Actual Mac/iPad/iPhone and native Korean IME/touch",
+        "Real Google login and actual Google-translated publisher page",
+        "Actual original-page reading and usefulness",
+        "Production-account private data; none used"
+      ],
+      "followup": "No UI edit requested. Keep device/real translation/reading checks separate from deployment and this visual pass."
+    },
+    "agreement": {
+      "root": true,
+      "independent": true,
+      "blockingFindings": [],
+      "images": [
+        {
+          "file": "release-1440.png",
+          "sha256": "269cdf1fec9632d15f103b12b6c8d1b2ff1278a86f27e1f5dee8f20d4bfe9ee2"
+        },
+        {
+          "file": "release-390.png",
+          "sha256": "5f75ac1202793ded2acc92f9c10534f38b2e73b6d9ed22398b3abb2c33cccf0a"
+        }
+      ],
+      "independentReviewSHA256": "4969c1da96467c368c039ce1899b396b996d368d4ad0310039f5dbc87c27ae8d",
+      "mobileAuditTiming": "Open-language-options DOM audit precedes closing them for the saved-list PNG; not one identical captured state."
+    }
+  }
+}
