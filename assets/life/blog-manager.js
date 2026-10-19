@@ -8,7 +8,7 @@
   const errorText = e => e?.code === 'schema_missing' ? '서버 글 보관 기능이 아직 준비되지 않았습니다. 글은 이 브라우저에 그대로 있습니다.' : e?.message || '처리하지 못했습니다. 입력을 유지했으니 다시 시도해 주세요.';
   function create({ storage, workspaceId, auth, photoPosts, openPost, openLegacy, onOpenEvidence, blogSync, isCurrent = () => true }) {
     let host, surface, list, status, query, filter, detail, evidenceHost, evidence, rows = [], busy = null, disposed = false, epoch = 0, preview = null;
-    let subscriptions = [], urls = [], shown = 40, navigating = false;
+    let subscriptions = [], urls = [], shown = 40, navigating = false, focusedPostId = null;
     const valid = token => !disposed && isCurrent() && (token == null || token === epoch) && !!host?.isConnected;
     const announce = message => { if (valid()) status.textContent = message; };
     async function navigate(fn) { navigating = true; try { return await fn(); } finally { navigating = false; } }
@@ -64,7 +64,7 @@
     function renderRows() {
       if (!valid()) return;
       const term = query.value.trim().toLocaleLowerCase(), selected = filter.value;
-      const matching = rows.filter(row => (selected === 'all' ? row.status !== 'archived' : row.status === selected) &&
+      const matching = rows.filter(row => (!focusedPostId || row.kind === 'photo' && row.id === focusedPostId) && (selected === 'all' ? row.status !== 'archived' : row.status === selected) &&
         (!term || [row.title, row.body, ...(Array.isArray(row.attachments) ? row.attachments.map(a => a.title) : [])].filter(Boolean).join('\n').toLocaleLowerCase().includes(term)));
       list.replaceChildren(); const pendingEvidence = [];
       const count = meta(`${matching.length}개`); count.classList.add('blog-manager-count'); list.append(count);
@@ -154,18 +154,26 @@
           if (result.newLocalPostId && openPost) await navigate(() => openPost(result.newLocalPostId));
         }));
         if (value?.status === 'conflict' && blogSync?.resolve) {
+          const reviewed = { localRevision: value.conflict?.localRevision, remoteRevision: value.conflict?.remoteRevision };
           node.append(meta(`이 브라우저 ${value.conflict?.localRevision ?? value.localRevision ?? '?'}판 · 서버 ${value.conflict?.remoteRevision ?? value.remoteRevision ?? '?'}판${value.conflict?.remoteTitle ? ' · ' + value.conflict.remoteTitle : ''}`));
           node.append(button('양쪽 사본을 남기고 내 글로 보관', async () => {
-            const result = await blogSync.resolve(workspaceId, id, 'local');
+            const result = await resolveReviewed(id, 'local', reviewed);
             if (!valid()) return; await load();
             announce(result.status === 'synced' ? '서버의 이전 글도 새 사본으로 남기고 내 글의 서버 보관을 확인했습니다.' : '양쪽 글을 유지했습니다. 서버 처리 상태를 다시 확인해 주세요.');
           }), button('기존 글을 남기고 서버 글로 이어쓰기', async () => {
-            const result = await blogSync.resolve(workspaceId, id, 'remote');
+            const result = await resolveReviewed(id, 'remote', reviewed);
             if (!valid()) return; await load(); announce(result.syncError ? '서버 글을 새 사본으로 받았습니다. 연결 상태는 다시 확인해 주세요.' : '기존 글을 유지하고 서버 글을 새 사본으로 받았습니다.');
             if (result.newLocalPostId && openPost) await navigate(() => openPost(result.newLocalPostId));
           }));
         }
       } catch (e) { if (valid(token) && node.isConnected) node.textContent = errorText(e); }
+    }
+    async function resolveReviewed(id, choice, reviewed) {
+      try { return await blogSync.resolve(workspaceId, id, choice, reviewed); }
+      catch (e) {
+        if (e?.code === 'local_changed' && valid()) await load();
+        throw e;
+      }
     }
     async function syncPost(row, node, method) {
       requireSync(method); await blogSync[method](workspaceId, row.id);
@@ -295,10 +303,12 @@
       if (evidence?.dirty?.()) { if (evidence.flush) await evidence.flush(); else throw new Error('선택한 인용과 내 생각을 적용하거나 취소해 주세요.'); }
       return true;
     }
-    async function mount(target, { evidenceSeed = null, viewState = null } = {}) {
+    async function mount(target, { evidenceSeed = null, viewState = null, postId = null } = {}) {
       if (disposed) throw new Error('종료한 글 관리 화면입니다.');
       if (host) { await flush(); clearPreview(); evidence?.dispose(); evidence = null; subscriptions.forEach(unsubscribe => unsubscribe?.()); subscriptions = []; }
-      host = target; epoch++; surface = el('section', null, 'blog-manager'); surface.setAttribute('aria-label', '전체 글 관리');
+      focusedPostId = typeof postId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(postId) ? postId : null;
+      if (postId !== null && !focusedPostId) throw new Error('관리할 글의 식별자를 확인해 주세요.');
+      host = target; epoch++; surface = el('section', null, 'blog-manager'); surface.setAttribute('aria-label', focusedPostId ? '선택한 글 관리' : '전체 글 관리');
       const header = el('div', null, 'blog-manager-toolbar');
       query = el('input'); query.id = 'blogManagerSearch'; query.type = 'search'; query.placeholder = '내 글 검색'; query.setAttribute('aria-label', '내 글 검색');
       filter = el('select'); filter.id = 'blogManagerFilter'; filter.setAttribute('aria-label', '글 상태');

@@ -1,0 +1,101 @@
+/* A public reading entrance shared with the owner's explicit preview. */
+(function (root, factory) {
+  const api = factory(root); (root.HaedoLife ||= {}).PublicCoverView = api;
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  if (root.document?.getElementById('coverContent')) api.start();
+})(globalThis, function (root) {
+  'use strict';
+  const dependency = (name, file) => root.HaedoLife?.[name] || require('./' + file);
+  const fail = () => { throw Object.assign(new Error('invalid_cover_data'), { code: 'invalid_cover_data' }); };
+  const kinds = Object.freeze({ post: '글', series: '연재', nine: '9칸 형식' });
+  function render(value, { preview = false, baseURL, coverId = value?.publicId, document = root.document } = {}) {
+    const helper = dependency('PublicCoverReader', 'public-cover-reader.js'), publicToken = dependency('BlogPublic', 'blog-public.js').token;
+    if (!value || value.status !== 'published' || typeof value.title !== 'string' || !(value.intro === null || typeof value.intro === 'string') ||
+      !Array.isArray(value.items) || value.items.length < 1 || value.items.length > 20) fail();
+    if (!preview) {
+      try { coverId = publicToken(coverId); if (publicToken(value.publicId) !== coverId || !Number.isSafeInteger(value.revision) || value.revision < 1) fail(); } catch (_) { fail(); }
+    }
+    const node = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined && text !== null) n.textContent = text; if (cls) n.className = cls; return n; };
+    const article = node('article', null, 'pc-document');
+    article.append(node('h1', value.title, 'pc-title'));
+    if (value.intro) article.append(node('p', value.intro, 'pc-intro'));
+    const list = node('ol', null, 'pc-list'), seen = new Set();
+    for (const item of value.items) {
+      let canonical, id;
+      try { canonical = helper.targetURL(item.kind, item.publicId, baseURL); id = helper.key(item.kind, item.publicId); } catch (_) { fail(); }
+      if (seen.has(id) || item.key !== id || !['published', 'missing', 'error'].includes(item.status)) fail(); seen.add(id);
+      const row = node('li', null, 'pc-entry'); row.id = id; row.dataset.kind = item.kind; row.dataset.publicId = item.publicId; row.dataset.state = item.status;
+      if (item.status === 'published') {
+        if (typeof item.title !== 'string' || typeof item.intro !== 'string' || typeof item.excerpt !== 'string' || item.url !== canonical) fail();
+        const heading = node('h2', null, 'pc-entry-title'), link = node('a', item.title || '제목 없는 글', 'pc-entry-link'), target = new URL(canonical);
+        if (!preview) { target.searchParams.set('fromCover', coverId); target.searchParams.set('coverItem', item.kind + '-' + publicToken(item.publicId)); }
+        link.href = target.href; link.referrerPolicy = 'no-referrer';
+        if (preview) { link.target = '_blank'; link.rel = 'noopener noreferrer'; }
+        heading.append(link); row.append(heading, node('p', kinds[item.kind], 'pc-kind'));
+        if (item.intro) row.append(node('p', item.intro, 'pc-entry-intro'));
+        if (item.excerpt) row.append(node('p', item.excerpt, 'pc-excerpt'));
+      } else {
+        row.append(node('p', item.status === 'missing' ? '공개가 종료된 항목입니다.' : '공개 상태를 확인하지 못한 항목입니다.', 'pc-entry-state'), node('p', kinds[item.kind], 'pc-kind'));
+        if (item.status === 'error') row.append(node('p', '공개 상태 다시 확인으로 재시도할 수 있습니다.', 'pc-entry-help'));
+      }
+      list.append(row);
+    }
+    article.append(list); return article;
+  }
+  function start({ document = root.document, window = root, readerFactory = options => dependency('PublicCoverReader', 'public-cover-reader.js').create(options), intervalMs = 30000 } = {}) {
+    const content = document.getElementById('coverContent'), status = document.getElementById('coverStatus'), refresh = document.getElementById('coverRefresh');
+    if (!content || !status || !refresh) throw new Error('공개 표지 화면을 준비하지 못했습니다.');
+    const address = new URL(window.location.href), ids = address.searchParams.getAll('cover'); let publicId = null;
+    try { if (ids.length === 1) publicId = dependency('BlogPublic', 'blog-public.js').token(ids[0]); } catch (_) { /* Invalid links never open a reader. */ }
+    let epoch = 0, timer = null, reader = null, serialized = null, disposed = false, restored = false;
+    const message = (text, state) => { status.textContent = text; status.dataset.state = state; };
+    function cancel() { epoch++; if (timer !== null) window.clearTimeout(timer); timer = null; reader?.dispose(); reader = null; }
+    function clear() { content.replaceChildren(); content.removeAttribute('aria-busy'); serialized = null; document.title = '공개 표지 · 해도'; }
+    function pause(text, state) { cancel(); clear(); refresh.disabled = false; message(text, state); }
+    function restoreEntry() {
+      if (restored || !address.hash) return; restored = true;
+      // Only a row generated by this freshly verified wrapper can receive focus.
+      const row = [...content.querySelectorAll('.pc-entry')].find(entry => '#' + entry.id === address.hash);
+      if (!row) return;
+      const target = row.querySelector('.pc-entry-link') || row; if (target === row) row.tabIndex = -1;
+      target.focus({ preventScroll: true }); row.scrollIntoView({ block: 'center' });
+    }
+    async function load() {
+      if (disposed) return; cancel(); const captured = epoch;
+      if (document.hidden) { clear(); refresh.disabled = false; message('돌아오면 공개 상태를 다시 확인합니다.', 'paused'); return; }
+      if (window.navigator.onLine === false) { clear(); refresh.disabled = false; message('인터넷 연결 후 공개 상태를 다시 확인해 주세요.', 'error'); return; }
+      if (!publicId) { clear(); message('표지 주소를 확인해 주세요.', 'missing'); refresh.hidden = true; return; }
+      refresh.disabled = true; content.setAttribute('aria-busy', 'true');
+      if (!content.childElementCount) message('공개한 표지를 확인하고 있습니다…', 'loading');
+      try {
+        reader = readerFactory({ config: window.HAEDO_CONFIG, baseURL: window.location.href });
+        const value = await reader.read(publicId);
+        if (disposed || captured !== epoch || document.hidden) return;
+        if (value.status !== 'published') { clear(); message('공개된 표지가 없습니다. 주소가 바뀌었거나 공개가 종료됐을 수 있습니다.', 'missing'); return; }
+        // Revision-only changes do not replace a visitor's selected text or row.
+        const next = JSON.stringify({ title: value.title, intro: value.intro, items: value.items });
+        if (next !== serialized || !content.childElementCount) {
+          content.replaceChildren(render(value, { document, baseURL: window.location.href, coverId: publicId })); serialized = next;
+        }
+        document.title = value.title + ' · 해도';
+        const errors = value.items.filter(item => item.status === 'error').length;
+        message(errors ? '일부 항목의 공개 상태를 확인하지 못했습니다. 다시 확인해 주세요.' : '', 'published'); restoreEntry();
+        timer = window.setTimeout(load, intervalMs);
+      } catch (cause) {
+        if (disposed || captured !== epoch || document.hidden) return;
+        clear(); message(['config_missing', 'invalid_config'].includes(cause?.code) ? '공개 연결을 준비하지 못했습니다. 잠시 후 다시 확인해 주세요.' : '공개 상태를 확인하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.', 'error');
+      } finally { if (!disposed && captured === epoch) { content.removeAttribute('aria-busy'); refresh.disabled = false; } }
+    }
+    const visibility = () => { if (document.hidden) pause('돌아오면 공개 상태를 다시 확인합니다.', 'paused'); else load(); };
+    const hide = () => pause('공개 상태를 다시 확인합니다.', 'paused'), show = event => { if (event.persisted) load(); };
+    const offline = () => pause('인터넷 연결 후 공개 상태를 다시 확인해 주세요.', 'error');
+    refresh.addEventListener('click', load); document.addEventListener('visibilitychange', visibility);
+    window.addEventListener('pagehide', hide); window.addEventListener('pageshow', show); window.addEventListener('offline', offline); window.addEventListener('online', load);
+    load();
+    return Object.freeze({ load, dispose() {
+      if (disposed) return; disposed = true; cancel(); clear(); refresh.removeEventListener('click', load); document.removeEventListener('visibilitychange', visibility);
+      window.removeEventListener('pagehide', hide); window.removeEventListener('pageshow', show); window.removeEventListener('offline', offline); window.removeEventListener('online', load);
+    } });
+  }
+  return Object.freeze({ render, start });
+});

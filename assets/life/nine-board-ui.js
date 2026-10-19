@@ -3,10 +3,11 @@
   'use strict';
   const life=root.HaedoLife ||= {},M=life.NineBoard;
   const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
-  function create({storage,workspaceId,isCurrent,onDirty=()=>{},getBundle=()=>storage.read(workspaceId),onOpenReference=()=>{throw new Error('원문 열기를 연결하지 못했습니다. 구절과 출처는 그대로 보관됩니다.');}}){
+  function create({storage,workspaceId,isCurrent,onDirty=()=>{},getBundle=()=>storage.read(workspaceId),onComposeArea=null,onComposed=()=>{},onPublishArea=null,onOpenReference=()=>{throw new Error('원문 열기를 연결하지 못했습니다. 구절과 출처는 그대로 보관됩니다.');}}){
     let state=null,base=[],host=null,status=null,error=null,selected=null,areaId=null,editing=null,preview=false,overview=false;
     let tick=0,stored=0,timer=null,saving=null,failure=null,epoch=0,manual=null,picker=null,candidate=null,busy=false,importUpdate=null;
     let evidencePicker=null,evidencePending=false,incoming=null;
+    let composeReview=null,composeReceipt=null,composeSequence=0;
     const composing=new Set(),pendingFields=new Set(),urls=new Set(),fresh=()=>life.Core.id(),valid=()=>isCurrent(),board=()=>state?.boards.find(b=>b.id===selected),area=()=>board()?.areas.find(a=>a.id===areaId);
     const fault=(code,message)=>Object.assign(new Error(message),{code});
     function dirty(){return evidencePending||!!manual||pendingFields.size>0||composing.size>0||!!saving||busy||tick!==stored;}
@@ -18,7 +19,7 @@
     function report(cause){failure=cause;if(error?.isConnected&&valid()){error.textContent=cause.message||'저장하지 못했습니다. 입력은 유지됩니다. 파일을 보관하거나 다시 시도해 주세요.';error.hidden=false;const recovery=host.querySelector('.nb-recovery');if(recovery){recovery.hidden=false;recovery.children[1].hidden=cause.code!=='nine_board_conflict';}}message();}
     function clear(){failure=null;if(error){error.textContent='';error.hidden=true;}const recovery=host?.querySelector('.nb-recovery');if(recovery)recovery.hidden=true;message();}
     function guard(){if(!valid())throw new Error('작업공간이 바뀌었습니다.');if(evidencePending)throw fault('nine_input_pending','원문 선택을 마치거나 취소해 주세요.');if(composing.size)throw fault('nine_input_in_progress','입력을 마친 뒤 다시 시도해 주세요.');if(pendingFields.size)throw fault('nine_input_pending','입력은 남아 있습니다. 문자와 전체 용량을 확인해 내용을 줄인 뒤 다시 시도해 주세요.');if(manual)throw fault('nine_input_pending','대상을 담거나 입력 취소를 누른 뒤 다시 시도해 주세요.');if(busy)throw fault('nine_busy','저장을 마친 뒤 다시 시도해 주세요.');}
-    function mark(){tick++;clearTimeout(timer);message();if(failure?.code!=='nine_board_conflict')timer=setTimeout(()=>{if(!composing.size&&!manual&&!pendingFields.size&&!busy)flush().catch(report);},450);}
+    function mark(){clearCompose();tick++;clearTimeout(timer);message();if(failure?.code!=='nine_board_conflict')timer=setTimeout(()=>{if(!composing.size&&!manual&&!pendingFields.size&&!busy)flush().catch(report);},450);}
     async function flush(){
       guard();clearTimeout(timer);timer=null;
       if(!state){if(!dirty())return;throw new Error('9칸 구성을 먼저 불러와 주세요.');}
@@ -50,7 +51,7 @@
         catch(cause){change(accepted);pendingFields.add(input);report(cause);}
         message();
       }
-      input.addEventListener('compositionstart',()=>composing.add(input));
+      input.addEventListener('compositionstart',()=>{clearCompose();composing.add(input);});
       input.addEventListener('compositionend',()=>{composing.delete(input);apply();message();});
       input.addEventListener('input',apply);return {wrapper,input};
     }
@@ -67,6 +68,107 @@
       try{const blob=await M.png(source,areaId);if(!valid()||token!==epoch||!host?.isConnected)return;download(blob,'haedo-nine-board.png','image/png');}
       catch(cause){if(valid()&&token===epoch&&error?.isConnected){error.textContent=cause.message||'PNG를 만들지 못했습니다. JSON이나 HTML로 보관해 주세요.';error.hidden=false;}}
       finally{busy=false;unlock();message();}
+    }
+    async function publishArea(){
+      guard();await flush();guard();
+      const selectedBoard=board(),selectedArea=area();
+      if(overview||!selectedBoard||!selectedArea)throw new Error('공개 상태를 확인할 영역을 먼저 선택해 주세요.');
+      const token=epoch;busy=true;const unlock=lock();message();
+      try{await onPublishArea({boardId:selectedBoard.id,areaId:selectedArea.id});}
+      finally{busy=false;unlock();if(valid()&&token===epoch)message();}
+    }
+    function clearCompose(){
+      composeSequence++;
+      if(composeReview?.url){URL.revokeObjectURL(composeReview.url);urls.delete(composeReview.url);}
+      composeReview=null;host?.querySelector('#nbComposeReview')?.remove();
+    }
+    function composeError(cause,reload=false){
+      if(valid()&&error?.isConnected){
+        error.textContent=cause.message||'새 초안을 만들지 못했습니다. 원래 구성은 그대로입니다. 다시 시도해 주세요.';error.hidden=false;
+        if(reload||['nine_board_compose_stale','nine_board_conflict'].includes(cause.code)){
+          const retry=button('9칸 다시 불러오기',reloadCompose);retry.id='nbComposeReload';error.append(' ',retry);
+        }
+      }
+    }
+    async function reloadCompose(){
+      guard();await flush();guard();clearCompose();
+      const target=host,token=epoch;busy=true;const unlock=lock();message();
+      try{
+        const latest=await storage.readNineBoard(workspaceId);
+        if(!valid()||token!==epoch||host!==target||!target?.isConnected)return;
+        M.validate(latest);
+        // Replace only after a successful read: a failed retry keeps the same inputs.
+        state=structuredClone(latest);base=structuredClone(latest.boards);stored=tick;
+        if(!board())selected=state.boards[0]?.id;
+        if(!board()?.areas.some(value=>value.id===areaId))areaId=board()?.areas[0]?.id;
+        editing=null;clear();render();host.querySelector('#nbComposeReviewOpen')?.focus({preventScroll:true});
+      }catch(cause){if(valid()&&token===epoch&&host===target)composeError(cause,true);}
+      finally{busy=false;unlock();message();}
+    }
+    function currentCompose(request){
+      return valid()&&request===composeReview&&request.epoch===epoch&&request.sequence===composeSequence&&request.host===host&&!!host?.isConnected&&
+        request.boardId===selected&&request.tick===tick&&!overview&&request.areaId===areaId;
+    }
+    async function verifyCompose(request){
+      const changed=()=>fault('nine_board_compose_stale','9칸 구성이나 선택 영역이 바뀌었습니다. 내용을 다시 검토한 뒤 새 초안을 만들어 주세요.');
+      if(!currentCompose(request))throw changed();
+      const latest=await storage.readNineBoard(workspaceId);
+      if(!currentCompose(request)||latest.revision!==request.revision)throw changed();
+      const source=latest.boards.find(value=>value.id===request.boardId);
+      if(!source||JSON.stringify(M.composeContent(source,request.areaId))!==JSON.stringify(request.content))throw changed();
+    }
+    function renderComposeReceipt(){
+      host?.querySelector('.nb-compose-result')?.remove();
+      const target=host?.querySelector('.nb-compose-action');if(!target||!composeReceipt)return;
+      const result=el('section',null,'nb-compose-result');result.setAttribute('role','status');
+      result.append(el('p','새 비공개 초안에 보관했습니다. 서버로 전송하거나 공개하지 않았습니다.','life-help'));
+      const open=button('보관된 초안 열기',openComposed);open.id='nbComposeOpen';result.append(open);target.after(result);
+    }
+    async function openComposed(){
+      guard();await flush();guard();const result=composeReceipt,token=epoch;
+      if(!result||!valid()||!host?.isConnected)return;
+      try{await onComposed({...result});}
+      catch(cause){if(valid()&&token===epoch)composeError(new Error('초안은 보관했지만 열지 못했습니다. 보관된 초안 열기로 다시 시도해 주세요. '+(cause.message||'')));}
+    }
+    function renderComposeReview(request){
+      if(!currentCompose(request))return;
+      host.querySelector('#nbComposeReview')?.remove();
+      const review=el('section',null,'nb-compose-review');review.id='nbComposeReview';review.dataset.state='ready';review.tabIndex=-1;review.setAttribute('aria-label','새 글에 담을 내용');
+      const img=el('img',null,'nb-compose-preview');img.src=request.url;img.width=1800;img.height=2100;img.alt=request.content.title+' · '+request.content.areaTitle+' · 선택한 아홉 칸';
+      review.append(el('h3','새 글에 담을 내용'),el('p',request.content.title+' · '+request.content.areaTitle,'life-meta'),img,
+        el('p','고른 영역의 PNG와 아래 전체 제목·만든 사람·종류·출처만 새 비공개 초안에 담습니다. 구성 소개·영역 설명·선택 이유·인용 구절·다른 영역은 포함하지 않습니다. 원래 9칸은 바뀌지 않습니다.','life-help'),
+        el('h4','본문에 담을 전체 내용'),el('div',request.content.text,'nb-text nb-compose-text'));
+      const create=button('새 비공개 글 초안 만들기',createComposed);create.id='nbComposeCreate';
+      const cancel=button('검토 취소',()=>{guard();clearCompose();host.querySelector('#nbComposeReviewOpen')?.focus();});cancel.id='nbComposeCancel';
+      review.append(create,cancel);host.querySelector('.nb-compose-action').after(review);review.focus({preventScroll:true});review.scrollIntoView({block:'start'});
+    }
+    async function prepareCompose(id){
+      await flush();guard();clearCompose();clear();
+      const source=structuredClone(board()),request={workspaceId,boardId:source.id,areaId:id,revision:state.revision,content:M.composeContent(source,id),host,epoch,sequence:composeSequence,tick,blob:null,url:null};
+      composeReview=request;busy=true;const unlock=lock();message();
+      try{
+        request.blob=await M.png(source,id);
+        await verifyCompose(request);
+        request.url=URL.createObjectURL(request.blob);urls.add(request.url);renderComposeReview(request);
+      }catch(cause){if(currentCompose(request)){clearCompose();composeError(cause);}}
+      finally{busy=false;unlock();message();}
+    }
+    async function createComposed(){
+      guard();await flush();guard();const request=composeReview;if(!request)return;
+      busy=true;const unlock=lock();message();host.querySelector('#nbComposeReview')?.setAttribute('data-state','saving');let result=null;
+      try{
+        await verifyCompose(request);
+        result=await onComposeArea({workspaceId,boardId:request.boardId,areaId:request.areaId,revision:request.revision,content:structuredClone(request.content),blob:request.blob,isCurrent:()=>currentCompose(request)});
+        if(!currentCompose(request))return;
+        // A completed save is consumed before opening; opening retries never save twice.
+        clearCompose();
+        if(!result||typeof result.postId!=='string'||!result.postId||!Number.isSafeInteger(result.revision)||result.revision<1){result=null;throw new Error('초안 처리 결과를 확인하지 못했습니다. 글 관리에서 보관된 초안을 확인해 주세요.');}
+        composeReceipt={postId:result.postId,revision:result.revision};renderComposeReceipt();
+      }catch(cause){
+        result=null;
+        if(valid()&&request.epoch===epoch){if(cause.code==='nine_board_compose_stale'||cause.code==='nine_board_conflict')clearCompose();composeError(cause);}
+      }finally{busy=false;unlock();host?.querySelector('#nbComposeReview')?.setAttribute('data-state','ready');message();}
+      if(result&&valid()&&request.epoch===epoch)await openComposed();
     }
     async function recover(){
       guard();clearTimeout(timer);if(saving)await saving.catch(()=>{});const token=epoch,changes=M.changed(base,state.boards),active=selected,activeArea=board()?.areas.findIndex(a=>a.id===areaId);
@@ -136,6 +238,7 @@
       }),button('선택 취소',cancel),sourceHost);
     }
     function renderEditor(){
+      clearCompose();
       if(!editorHost)return;editorHost.replaceChildren();const a=area();if(!a)return;
       if(!manual&&editing==null)return;
       const current=manual?null:a.items[editing],seed=manual?.seed||current?.attachment;if(!seed)return;
@@ -200,6 +303,7 @@
     }
     function render(){
       if(!host?.isConnected||!valid()||!state)return;
+      clearCompose();
       importUpdate=null;host.replaceChildren();host.className='nb-workspace';
       const toolbar=el('div',null,'life-actions nb-toolbar'),selector=el('select');selector.id='nbSelect';selector.setAttribute('aria-label','9칸 구성 선택');
       for(const b of state.boards){const o=el('option',b.title||'제목 없는 구성');o.value=b.id;selector.append(o);}selector.value=selected||'';selector.hidden=!state.boards.length;
@@ -244,8 +348,18 @@
             renderTiles(display,a,{edit:!preview});editorHost=el('div');display.append(editorHost);if(!preview){const evidence=button('원문·저장 글 담기',()=>pickEvidence(a));evidence.disabled=a.items.length>=9;display.append(evidence);renderEditor();}
           }
         }
+        if(typeof onComposeArea==='function'&&b.areas.length){
+          const composeAction=el('div',null,'nb-compose-action'),compose=button('선택 영역으로 글쓰기 검토',()=>prepareCompose(areaId));compose.id='nbComposeReviewOpen';compose.disabled=overview;
+          if(overview)composeAction.append(el('p','새 글에 담을 영역을 먼저 선택해 주세요.','life-help'));
+          composeAction.append(compose);display.after(composeAction);renderComposeReceipt();
+        }
+        if(typeof onPublishArea==='function'&&b.areas.length){
+          const publishAction=el('div',null,'nb-public-action'),publish=button('선택 영역 공개 검토',publishArea);
+          publish.id='nbPublicReviewOpen';publish.disabled=overview||!area();
+          publishAction.append(publish);display.after(publishAction);
+        }
       }
-      const files=details('파일 보관·가져오기');files.classList.add('nb-files');files.append(el('p','이 브라우저에만 보관되며 공개 사본·구성 동기화·자료 백업에 포함되지 않습니다. 현재 구성 JSON에는 지금 고른 구성 하나만, 전체 백업에는 모든 구성이 담깁니다. HTML은 현재 구성의 제목·선택 이유·출처가 담긴 보기 파일이며, 공개 링크가 아닙니다.','life-help'));
+      const files=details('파일 보관·가져오기');files.classList.add('nb-files');files.append(el('p','원래 구성은 이 브라우저에 보관됩니다. 선택 영역 공개는 별도로 검토하며 구성 동기화·자료 백업과 구분합니다. 현재 구성 JSON에는 지금 고른 구성 하나만, 전체 백업에는 모든 구성이 담깁니다. HTML은 현재 구성의 제목·선택 이유·출처가 담긴 보기 파일이며, 공개 링크가 아닙니다.','life-help'));
       if(M.hasReferences(state.boards))files.append(el('p','직접 담은 근거 구절도 JSON과 HTML에 포함됩니다. JSON은 원문 버전의 식별자를 보존하며, 다른 작업공간으로 옮기면 자동 연결하지 않습니다. 선택하지 않은 원문 본문이나 사진 파일은 복사하지 않습니다.','life-help'));
       const file=el('input');file.type='file';file.accept='.json,application/json';file.setAttribute('aria-label','9칸 구성 JSON 파일');let sequence=0;
       file.addEventListener('change',async()=>{const input=file.files[0],request=++sequence,token=epoch;file.value='';if(!input)return;try{guard();candidate=null;host.querySelector('.nb-import')?.remove();await flush();if(input.size>M.LIMITS.bytes)throw new Error('파일은 2 MiB까지 불러올 수 있습니다.');const value=M.readBackup(JSON.parse(await input.text()));if(!valid()||token!==epoch||request!==sequence||!file.isConnected)return;guard();candidate={boards:value,chosen:new Set()};clear();render();const review=host.querySelector('.nb-import');review.focus({preventScroll:true});review.scrollIntoView({block:'start'});}catch(cause){if(valid()&&token===epoch&&request===sequence&&file.isConnected)report(cause);}});
@@ -256,7 +370,8 @@
         const imageExport=el('div',null,'nb-image-export'),label=el('label','이미지로 받을 영역'),areas=el('select');areas.id='nbImageArea';label.htmlFor=areas.id;
         for(const [index,a] of b.areas.entries()){const option=el('option',a.title||'영역 '+(index+1));option.value=a.id;areas.append(option);}areas.value=area()?.id||b.areas[0].id;
         const help=el('p','PNG는 고른 영역의 3×3 제목·만든 사람·종류·출처만 담습니다. 사진·선택 이유·인용 근거는 자동 포함하지 않습니다. 긴 글은 …로 줄이며 이미지로 사본을 복원할 수 없습니다. 전체 내용은 JSON/HTML을 함께 보관하세요.','life-help');
-        imageExport.append(label,areas,button('선택 영역 PNG 받기',()=>image(areas.value)),help);files.append(imageExport);
+        imageExport.append(label,areas,button('선택 영역 PNG 받기',()=>image(areas.value)),help);
+        files.append(imageExport);
       }
       if(failure)report(failure);else message();
     }
@@ -271,7 +386,9 @@
           focus?.focus({preventScroll:true});focus?.scrollIntoView({block:'nearest'});}
       }catch(cause){if(!valid()||token!==epoch)return;const alert=el('p',cause.message||'불러오지 못했습니다.','life-error');alert.setAttribute('role','alert');host.replaceChildren(alert,button('다시 불러오기',()=>mount(target,searchTarget)));}
     }
-    function detach(){epoch++;clearTimeout(timer);picker?.();picker=null;evidencePicker?.dispose();evidencePicker=null;evidencePending=false;incoming=null;importUpdate=null;host=null;status=null;error=null;editorHost=null;for(const u of urls)URL.revokeObjectURL(u);urls.clear();}
+    // Completed receipts belong to this storage/workspace instance, not a mounted view.
+    // Keep one across editor/open failures; pending previews are always discarded.
+    function detach(){epoch++;clearCompose();clearTimeout(timer);picker?.();picker=null;evidencePicker?.dispose();evidencePicker=null;evidencePending=false;incoming=null;importUpdate=null;host=null;status=null;error=null;editorHost=null;for(const u of urls)URL.revokeObjectURL(u);urls.clear();}
     return {mount,flush,dirty,detach,hasBlockedInput:()=>evidencePending||!!manual||pendingFields.size>0||composing.size>0||busy};
   }
   life.NineBoardUI={create};

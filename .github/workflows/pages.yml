@@ -144,6 +144,9 @@ jobs:
       - name: Verify selected nine-slot PNG and exact backup preservation
         if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/nine-board-image-browser.cjs
+      - name: Verify selected nine-slot content becomes a private draft atomically
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/nine-board-compose-browser.cjs
       - name: Verify original attachment parts and local account boundaries
         if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
         run: ORIGINALS_INTEGRATED=1 node tests/original-attachments-browser.cjs
@@ -321,6 +324,15 @@ jobs:
       - name: Verify app navigation, interrupted motion and real save feedback
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/app-motion-browser.cjs
+      - name: Verify private series editing, exact snapshots and independent ZIP copies
+        if: ${{ matrix.group == 2 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/blog-series-browser.cjs
+      - name: Verify series reader lifecycle, originals and restored contents position
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/blog-series-reader-browser.cjs
+      - name: Verify public nine-slot reading, exact focus return and opt-in covers
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/nine-public-reader-browser.cjs
       - name: Verify subview location and safe contextual return
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/subview-navigation-browser.cjs
@@ -335,6 +347,15 @@ jobs:
       - name: Verify timeline recovery and retry
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/platform-recovery-browser.cjs
+      - name: Verify exact material comparison, selection and mobile recovery
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/material-writing-sources-browser.cjs
+      - name: Verify material writing across screen sizes and protected input
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/material-writing-visual-browser.cjs
+      - name: Verify exact login return and preserved legacy editing across screen sizes
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/integrated-release-entry-browser.cjs
       - name: Stop the local server
         if: always()
         run: |
@@ -347,9 +368,15 @@ jobs:
         with:
           name: browser-checks-${{ matrix.group }}-${{ github.run_attempt }}
           path: |
+            .local/integrated-release-entry/
             .local/app-native/qa/
             .local/home-refinement/qa/
             .local/blog-journeys/after/
+            .local/blog-series/
+            .local/blog-series-reader/
+            .local/nine-public-reader/
+            .local/material-writing-sources/
+            .local/material-writing-visual/
             .local/sns-blog/after/
             .local/blog-platform/*.json
             .local/blog-platform/*.png
@@ -389,6 +416,7 @@ jobs:
             .local/home-entry/
             .local/preservation/
             .local/nine-board-image/
+            .local/nine-board-compose/
             .local/original-attachments/
             .local/original-attachments-integrated/
             .local/obsidian-update/
@@ -515,6 +543,42 @@ jobs:
       - name: Verify real SQL and browser publication journeys
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: node tests/blog-completion-browser.cjs --prepare-database
+      - name: Verify additive installation rollback and preservation of existing records
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: node tests/integrated-release-installation.cjs
+      - name: Verify series publication receipts, independent wrappers and current revocation
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: node tests/blog-series-backend.cjs
+      - name: Verify explicit series publication and anonymous native reading
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: node tests/blog-series-public-browser.cjs
+      - name: Verify isolated nine-slot publication, receipts and independent revocation
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: node tests/nine-public-backend.cjs
+      - name: Verify selected private areas through explicit publication and anonymous reading
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: node tests/nine-public-browser.cjs
+      - name: Verify materials through finished writing, selective publication and exact file restoration
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_material" node tests/material-writing-browser.cjs --prepare-database
+      - name: Verify preparation continuity, shared output claims and exact finished post restoration
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_material_continuity" node tests/material-continuity-browser.cjs --prepare-database
+      - name: Verify preparation ownership, durable receipts and concurrent claims in PostgreSQL
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_material_contract" node tests/material-continuity-backend.cjs --prepare-database
+      - name: Verify explicit preparation continuity across screen sizes and protected input
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_material_continuity_visual" node tests/material-continuity-visual-browser.cjs --prepare-database
+      - name: Verify selected public cover publication, current targets and exact reading return
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: node tests/public-cover-browser.cjs --prepare-database
+      - name: Verify public cover preview, protected input and anonymous reading across screen sizes
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: node tests/public-cover-visual-browser.cjs --prepare-database
+      - name: Verify one complete preparation, original-photo writing, publication and preservation journey
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_integrated" node tests/integrated-release-browser.cjs --prepare-database
       - name: Verify private post manager and exact provenance return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-manager-browser.cjs
@@ -530,7 +594,7 @@ jobs:
       - name: Verify generated configuration and complete installed shell hashes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         env:
-          PREVIOUS_RELEASE: "9479866"
+          PREVIOUS_RELEASE: "88ccfe5e381a37818a46e7abdaabfc48cff58c56"
         run: node scripts/verify-prepared-site.mjs
       - name: Verify the actual previous service worker updates without losing originals
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
@@ -555,8 +619,17 @@ jobs:
         with:
           name: blog-checks-${{ github.run_attempt }}
           path: |
+            .local/integrated-release-installation/
+            .local/integrated-release/
             .local/blog-backend/
             .local/blog-completion/
+            .local/blog-series-backend/
+            .local/blog-series-public/
+            .local/nine-public-backend/
+            .local/nine-public/
+            .local/material-writing/
+            .local/material-continuity/
+            .local/material-continuity-visual/
             .local/blog-manager/
             .local/blog-public/
             .local/preservation/

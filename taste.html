@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="직접 고른 아홉 칸의 제목과 출처를 살펴보는 해도 페이지">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' https://covers.openlibrary.org; connect-src https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <title>9칸 · 해도</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/life/ui.css">
+  <link rel="stylesheet" href="assets/life/nine-public.css">
+  <link rel="stylesheet" href="assets/life/public-cover.css">
+</head>
+<body class="nine-public-page">
+  <a class="life-skip" href="#ninePublicContent">본문으로 이동</a>
+  <main class="np-page">
+    <header class="np-header">
+      <a class="np-brand" href="index.html" aria-label="해도 홈">해도</a>
+      <button id="ninePublicRefresh" class="life-button" type="button">공개 상태 다시 확인</button>
+    </header>
+    <p id="ninePublicStatus" class="np-status" role="status" aria-live="polite">공개한 9칸을 확인하고 있습니다…</p>
+    <div id="ninePublicContent" tabindex="-1"></div>
+    <p id="ninePublicUpdated" class="np-updated" hidden></p>
+    <noscript><p>공개한 9칸을 확인하려면 JavaScript를 허용해 주세요.</p></noscript>
+  </main>
+  <script src="assets/platform-config.js"></script>
+  <script src="assets/life/collection.js"></script>
+  <script src="assets/life/page-posts.js"></script>
+  <script src="assets/life/share.js"></script>
+  <script src="assets/life/share-remote.js"></script>
+  <script src="assets/life/collection-media.js"></script>
+  <script src="assets/life/nine-public.js"></script>
+  <script src="assets/life/nine-public-view.js"></script>
+  <script src="assets/life/public-cover.js"></script>
+  <script src="assets/life/public-cover-return.js"></script>
+</body>
+</html>

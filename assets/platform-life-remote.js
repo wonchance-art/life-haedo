@@ -17,7 +17,8 @@
   function clientFactory(auth, options = {}) {
     const composition = options.scope === 'composition';
     const writing = options.scope === 'writing';
-    if (options.scope !== undefined && !composition && !writing) throw fault('invalid_request');
+    const material = options.scope === 'material';
+    if (options.scope !== undefined && !composition && !writing && !material) throw fault('invalid_request');
     if (!auth?.ready || !auth.client || typeof auth.verify !== "function")
       throw fault("auth_required");
     return (url, key) => {
@@ -124,12 +125,12 @@
         auth: borrowedAuth,
         from(table) {
           alive();
-          if (composition || writing || table !== "life_workspaces") throw fault("invalid_request");
+          if (composition || writing || material || table !== "life_workspaces") throw fault("invalid_request");
           return query(auth.client.from(table));
         },
         rpc(name, args) {
           alive();
-          const allowed = writing ? ['life_writing_draft_get', 'life_writing_draft_put', 'life_writing_draft_list'] :
+          const allowed = material ? ['life_material_get', 'life_material_list', 'life_material_put'] : writing ? ['life_writing_draft_get', 'life_writing_draft_put', 'life_writing_draft_list'] :
             composition ? ['life_composition_get', 'life_composition_put'] : ['life_sync_put'];
           if (!allowed.includes(name)) throw fault("invalid_request");
           return query(auth.client.rpc(name, args));

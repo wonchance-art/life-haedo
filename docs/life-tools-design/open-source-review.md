@@ -22,6 +22,47 @@
 자체 구현을 선택한다면 후보가 충족하지 못하는 요구와 직접 유지할 범위를 짧게 적는다.
 큰 기반 모듈을 다 만든 뒤 라이브러리를 찾아보는 순서로 진행하지 않는다. 해당 단계의 소수 후보와 작은 실행 검증으로 결정을 내린다.
 
+## 대표 공개 결과의 한 주소 표지 — 2026-10-19 KST
+
+공식 확인일 2026-10-19 KST. 기존 블로그 시간순 목록·연재 목차·공개 9칸을 재구현하지 않고, 사용자가 고른 대표 결과의 순서/소개와 익명 읽기 왕복을 연결한다. [제품·반대 검토·아직 미실행인 검수](../design-review/public-cover.md)를 따른다. 기존 Share-v1·CAS/영속 영수증·각 공개 독자·네이티브 HTML/CSS를 재사용하고 새 의존성은 도입하지 않는다.
+
+| 후보 | 공식 릴리스·라이선스·유지관리 | 이번 요구와의 대조 |
+| --- | --- | --- |
+| [LinkStack](https://github.com/LinkStackOrg/LinkStack/releases/tag/v4.8.6) | latest API v4.8.6, 2026-02-17T16:53:47Z. [고정 태그 LICENSE](https://raw.githubusercontent.com/LinkStackOrg/LinkStack/v4.8.6/LICENSE)는 AGPL v3 전문. [repo API](https://api.github.com/repos/LinkStackOrg/LinkStack) archived/disabled=false·pushed2026-10-04, 확인 HEAD `8ccdee4`는 2026-10-03 변경 | [README](https://github.com/LinkStackOrg/LinkStack/blob/v4.8.6/README.md)의 한 주소에 여러 링크/명시 편집은 설계 참고. PHP/Laravel·별도 서버/계정·테마·관리 엔진을 현재 정적 앱에 직접 도입할 이유가 없어 코드 복사·설치 없음 |
+| [LinkFree → BioDrop](https://github.com/EddieHubCommunity/BioDrop) | 공식 README가 rename·서비스 종료를 명시. [repo API](https://api.github.com/repos/EddieHubCommunity/BioDrop) archived=true·disabled=false·pushed2024-07-01, latest API v3.4.7(2024-07-01T07:13:30Z). [main LICENSE](https://raw.githubusercontent.com/EddieHubCommunity/BioDrop/main/LICENSE)는 MIT. 최신 태그는 redirect 전용이며 LICENSE 파일은 404라 **그 태그의 LICENSE 확인으로 표현하지 않음** | 한 주소 프로필의 읽기 출발점만 참고. 공식 보관 상태·Next.js/MongoDB와 별도 플랫폼 정책이 현재 요구와 달라 새 엔진 도입 보류. 종료한 호스팅 서비스를 현재 동작하는 대안으로 추천하지 않음 |
+
+공식 출처: [LinkStack latest API](https://api.github.com/repos/LinkStackOrg/LinkStack/releases/latest)·[HEAD](https://api.github.com/repos/LinkStackOrg/LinkStack/commits?per_page=1), [BioDrop latest API](https://api.github.com/repos/EddieHubCommunity/BioDrop/releases/latest)·[main README](https://github.com/EddieHubCommunity/BioDrop/blob/main/README.md)·[최신 태그 README](https://github.com/EddieHubCommunity/BioDrop/blob/v3.4.7/README.md). LinkFree의 원래 repo API는 moved 응답을 반환해 현재 BioDrop 저장소를 확인했다.
+
+보안 권고 API는 GitHub 도구의 endpoint 미지원 400이라 확인하지 못했다. 공식 [LinkStack advisories](https://github.com/LinkStackOrg/LinkStack/security/advisories)·[BioDrop advisories](https://github.com/EddieHubCommunity/BioDrop/security/advisories) 페이지는 게시된 권고 없음으로 표시됐다. LinkStack v4.8.6 릴리스는 중요한 보안/의존성 수정을 명시하므로 페이지의 빈 목록을 과거/현재 취약점 부재로 해석하지 않는다. 전체 의존성 감사나 보안 검증 통과를 주장하지 않으며 이번 작업은 두 엔진의 코드를 실행하지 않는다. 자유 외부 링크·테마·별도 CMS가 실제 필요해질 때 현재 버전/라이선스/정책을 다시 비교한다.
+
+확정 구현은 기존 Share-v1에 고정 종류 라벨과 같은 사이트의 공개 URL 포인터만 보관하고 현재 대상 snapshot을 읽는다. 원본문/사진·개인 메모는 복사하지 않으며 공개/철회와 복귀는 기존 엔진을 연결한다. Supabase 스킬에 따라 현재 공식 [Database functions/RPC](https://supabase.com/docs/guides/database/functions)·[API keys](https://supabase.com/docs/guides/getting-started/api-keys)를 MCP search_docs에서 확인했다. 공개 키와 사용자 소유 권한을 구분하고 secret/service_role은 브라우저에서 사용하지 않는다. changelog.md는 직접 요청이 프록시 CONNECT403으로 막혀 본문 미확인이고 우회하지 않았다. 새 SQL·키 교체·SDK 설치·운영 접근은 수행하지 않는다.
+
+## 자료 준비 한 개의 명시 기기 이어쓰기 — 2026-10-19 KST
+
+공식 조회일 2026-10-18 UTC(2026-10-19 KST). [준비 기기 전환 계약](../design-review/material-continuity.md)은 선택한 준비·정확 원문 closure와 연결된 완성 글을 명시적으로 보관/받는 기능이다. 문자 단위 자동 합동 편집과 비교하되 기존 Core/SourceReference·idb·CAS/영속 영수증·BlogSync·동봉 Supabase SDK를 우선 재사용한다.
+
+| 후보 | 공식 릴리스·라이선스·유지보수 | 이번 요구와의 차이·선택 |
+| --- | --- | --- |
+| [Automerge](https://github.com/automerge/automerge/releases/tag/js/automerge-3.5.0) | 최신 확인 `js/automerge-3.5.0`, 2026-09-16T14:25:23Z. [해당 태그 LICENSE](https://raw.githubusercontent.com/automerge/automerge/js/automerge-3.5.0/LICENSE) MIT, repo archived/disabled=false·pushed 2026-10-17 | 공식 README의 CRDT/오프라인 자동 병합은 새 자료 모델·전송/영속화 계층이 필요하다. 정확 원문 버전·글 claim·의미 충돌 보존은 별도 앱 검증이므로 직접 도입 보류 |
+| [Yjs](https://github.com/yjs/yjs/releases/tag/v13.6.33) | 최신 확인 `v13.6.33`, 2026-09-23T16:37:33Z. [해당 태그 LICENSE](https://raw.githubusercontent.com/yjs/yjs/v13.6.33/LICENSE) MIT, repo archived/disabled=false·pushed 2026-10-18 | 편집기 통합/공동 편집·오프라인 CRDT와 provider 구성이 목표다. 이번 명시 한 개 CAS 이어쓰기에는 편집기·형식·전송 계층을 더 바꿀 이유가 없어 직접 도입 보류 |
+
+추가 공식 근거: [Automerge README](https://github.com/automerge/automerge), [Yjs README](https://github.com/yjs/yjs), 각 저장소의 [Automerge 공개 권고](https://github.com/automerge/automerge/security/advisories)·[Yjs 공개 권고](https://github.com/yjs/yjs/security/advisories). 권고 API는 커넥터 미지원으로 조회하지 못했고 공식 페이지의 ‘게시된 권고 없음’을 확인했다. 이는 취약점 부재나 전이 의존성 감사 완료가 아니다. 실제 공동 편집·문자 단위 자동 병합이 필요해지면 당시 버전·provider·라이선스·입력/오프라인 요구를 다시 대조한다.
+
+Supabase의 현재 공식 [upsert 문서](https://supabase.com/docs/reference/javascript/upsert)는 `onConflict` 열에 따른 insert/update를 설명하며 앱의 revision CAS·영수증·충돌 양쪽 보존을 대신하지 않는다. 공식 [Storage ownership](https://supabase.com/docs/guides/storage/security/ownership)은 `owner_id` 자체가 접근제어가 아니고 RLS가 필요함을 명시한다. 따라서 기존 `auth.verify`·계정 소유 RPC·CAS/응답 유실 복구를 재사용한다. 새로 설치하거나 SDK 버전을 갱신한 것은 아니다. `changelog.md`는 웹 도구의 markdown 형식 미지원과 직접 요청 403으로 현재 변경 내역 확인이 제한되었고, 확인한 공식 search_docs API 문서와 한계를 분리한다. 이번 조사에서 운영 DB/Storage·개인 계정은 읽거나 변경하지 않았다.
+
+## 자료 비교·개요에서 기존 글 완성 — 2026-10-19 KST
+
+공식 조회일은 2026-10-18 UTC(2026-10-19 KST). 자료를 나란히 읽고 필요한 구절·자기 문단을 고르는 이번 작업에 diff·드래그 라이브러리가 필요한지 비교했다. 새 의존성을 추가하지 않으며 기존 SourceReference/BlogEvidence·PhotoPost/Quill·idb·근거 파일을 재사용한다.
+
+| 후보 | 확인한 버전·라이선스·상태 | 요구와의 대조·결정 |
+| --- | --- | --- |
+| [jsdiff](https://github.com/kpdecker/jsdiff) | 공식 master package.json 9.0.0, 고정 v9.0.0 LICENSE BSD-3-Clause. archived/disabled=false, 최신 확인 커밋 `4ee9d163506fb6184625e0663a1d313b94650aad`(2026-10-16). releases/latest는 404, tags 조회 제한으로 **최신 발행 릴리스 일자는 미확인** | 서로 다른 자료의 견해를 읽고 정확 구절을 채택하는 요구는 텍스트 버전 diff와 다르다. 비교 화면·정확 참조는 기존 DOM/SourceReference로 구현하며 코드 도입은 보류 |
+| [SortableJS 1.15.7](https://github.com/SortableJS/Sortable/releases/tag/1.15.7) | 공식 최신 릴리스 2026-02-11T22:31:13Z, 태그 LICENSE MIT. archived=false, 확인 HEAD `48b626bbc61afbb0f179730c1dd3cca3dcc8b788`(2026-03-24) | 순서 있는 개요는 네이티브 입력과 위/아래 버튼으로 키보드·터치에서 조작할 수 있다. 현재 요구만으로 drag 계층·추가 수명주기를 도입하지 않음 |
+
+공식 근거: jsdiff [package.json](https://raw.githubusercontent.com/kpdecker/jsdiff/master/package.json), [고정 라이선스](https://github.com/kpdecker/jsdiff/blob/v9.0.0/LICENSE), [커밋](https://api.github.com/repos/kpdecker/jsdiff/commits?per_page=1); SortableJS [고정 라이선스](https://github.com/SortableJS/Sortable/blob/1.15.7/LICENSE), [커밋](https://api.github.com/repos/SortableJS/Sortable/commits?per_page=1).
+
+jsdiff 공식 [GHSA-73rr-hh4g-fpgx / CVE-2026-24001](https://github.com/kpdecker/jsdiff/security/advisories/GHSA-73rr-hh4g-fpgx)(2026-01-14)는 parsePatch/applyPatch의 서비스 거부를 설명하고 수정 버전 8.0.3/5.2.2/4.0.4/3.5.1을 제시하며 다른 diff API는 영향이 없다고 명시한다. 이번 기능은 해당 코드를 도입하지 않는다. [SortableJS 공개 권고](https://github.com/SortableJS/Sortable/security/advisories)는 조회 시 게시된 권고가 없었으며 취약점 부재를 보장하지 않는다. 실제 자료 버전 차이 계산이나 drag가 필요한 사용 사례가 확인되면 해당 버전·권고·라이선스·오프라인/입력 품질을 다시 검토한다. 공식 자료 조사와 이번 앱의 실제 통합·성능 검수를 구분한다.
+
 ## R1 저장 계층: 우선 비교한 후보
 
 버전·날짜는 조회 시 공식 안정 배포 정보다. idb는 GitHub Releases 게시물 대신 태그와 npm 게시 정보를 확인했다.
@@ -827,3 +868,18 @@ ZIP 담당은 공식 [최신 릴리스 API](https://api.github.com/repos/101arro
 - 원본 ZIP: 공식 fflate v0.8.3/MIT와 기존 ZIP 모듈을 비교했다. 원본 파트는 ZIP_STORED만 쓰므로 Blob.slice/CRC/SHA 기반 제한 읽기를 선택해 489 MB 전체 복사를 피한다. 임의 ZIP/ZIP64를 지원하지 않는다. [공식 출처·검증·한도](../design-review/original-attachments.md#구현-선택).
 - 갱신: 공식 jsdiff v9.0.0/BSD-3-Clause·패치 파서 보안 권고와 archived diff-match-patch를 비교했다. 자동 패치가 필요 없으므로 기존 ObsidianPackage/Core/SHA/원자 사본 복원에 작은 경로 비교 어댑터만 더했다. [출처·선택을 바꿀 조건](../design-review/obsidian-update.md#오픈소스-선택과-반대-검토).
 - PNG: 기존 NineBoard 모델과 브라우저 Canvas를 재사용해 별도 그래픽 의존성 없이 한 영역만 출력한다. 전체 편집 데이터는 기존 JSON/HTML이 보존한다. [범위·실패 복구](../design-review/nine-board-image.md).
+
+## 여행 글 연재·모음 — 2026-10-18 KST
+
+새 CMS나 편집기 라이브러리는 도입하지 않는다. 기존 PhotoPost/계정별 저장·파일 패키지/ShareRemote와 공개 목차를 재사용해 ‘선택한 저장 글 사본의 명시 순서’만 연결한다. 책의 장 원고·선택 자료 페이지/원문 묶음과 역할을 분리한다. [범위·반대 검토·검수](../design-review/blog-series.md#구현과-오픈소스-선택).
+
+- Ghost: 공식 [latest release API](https://api.github.com/repos/TryGhost/Ghost/releases/latest)에서 v6.71.0(2026-10-15), [저장소](https://api.github.com/repos/TryGhost/Ghost) archived/disabled=false와 [MIT LICENSE](https://github.com/TryGhost/Ghost/blob/main/LICENSE)를 확인했다. [공식 Collections 문서 소스](https://github.com/TryGhost/docs/blob/main/themes/routing.mdx#collections)는 목록 URL과 글 URL 구조를 분리하지만 한 글이 한 collection에만 속한다. 주소/목록의 구분만 참고하며 우리 독립 다중 모음에 엔진을 직접 도입하지 않는다.
+- WordPress Gutenberg: 공식 [latest release API](https://api.github.com/repos/WordPress/gutenberg/releases/latest)에서 v24.2.0(2026-10-14), [저장소](https://api.github.com/repos/WordPress/gutenberg) archived/disabled=false 확인. [LICENSE](https://github.com/WordPress/gutenberg/blob/trunk/LICENSE.md)의 프로젝트 GPL-2.0-or-later와 2021-04-15 이후 기여의 GPL/MPL 이중 라이선스 조건을 구분했다. [공식 Query Loop 소스 문서](https://github.com/WordPress/gutenberg/blob/trunk/packages/block-library/src/query/README.md)의 query/order/orderBy·목록·이동 분리는 참고하되 명시 사본 순서를 동적 날짜/조건 query로 대체하지 않는다. Gutenberg/React/PHP 또는 코드는 도입하지 않는다.
+
+확인일은 2026-10-18 KST다. docs.ghost.org·wordpress.org 문서 사이트 직접 조회는 프록시 403이라 공식 GitHub 문서 소스를 읽었다. 공개 보안 권고 API는 현재 GitHub 도구의 endpoint 미지원으로 확인하지 못했으며 0건/보안 감사 통과라고 기록하지 않는다. 두 프로젝트는 설계 참고일 뿐 새 실행 의존성이 아니고 기존 vendor 업그레이드도 이번 모음과 함께 수행하지 않는다.
+
+## 선택 영역의 공개 9칸 — 2026-10-18 KST
+
+독립 오픈소스 검토 담당이 공식 [Muuri latest release API](https://api.github.com/repos/haltu/muuri/releases/latest), [HEAD 이력](https://api.github.com/repos/haltu/muuri/commits?per_page=1), [0.9.5 LICENSE](https://github.com/haltu/muuri/blob/0.9.5/LICENSE.md)·[README](https://github.com/haltu/muuri/blob/0.9.5/README.md)를 확인했다. 최신 배포는 0.9.5(2021-07-09 UTC), MIT이며 archived/disabled=false다. 저장소 pushed 2024-05-25와 기본 HEAD 219e008의 2022-09-14 문서 변경을 구분하며 최근 기능 릴리스로 표현하지 않는다.
+
+Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와 추가 DOM 구조를 제공한다. 이번 고정 순서의 최대 9개 읽기에는 불필요하므로 코드/의존성을 도입하지 않는다. 기존 CSS Grid·NineBoard의 허용 필드 투영·항목 설명·ShareRemote와 접근 가능한 버튼/상세를 재사용한다. 향후 자유 배치나 실제 대규모 동적 갤러리가 필요해질 때 다시 비교한다. 공개 보안 권고는 현재 도구의 endpoint 미지원 및 공식 웹 API 접근 제한/429로 확인하지 못했다. 권고 0건·보안 감사 통과를 주장하지 않으며 우회/추가 설치를 하지 않았다. [제품·검수 범위](../design-review/nine-public.md)를 따른다.
