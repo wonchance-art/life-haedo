@@ -21,7 +21,8 @@
     "tests/life-discovery-actions-storage.test.cjs": "99d8783d405b96ee5f40b7ac59104996196f08b0ca4f7e52c41ecf9ee460c177",
     "tests/life-discovery-recommendations.test.cjs": "9330618432d8044e4b670ee268c6e4bc842a0751c480a5296f77c2893b61b6b0",
     "tests/life-external-discovery-pwa-browser.cjs": "3da8c6c327e8936ae31e5435cb10a590547291a64f7aa99775a078e4e91be71e",
-    "tests/prepare-site.test.cjs": "fb89ee7a914739876c543187a6213b8a97a0f803f5e1658c0b532cc01beb3350"
+    "tests/prepare-site.test.cjs": "fb89ee7a914739876c543187a6213b8a97a0f803f5e1658c0b532cc01beb3350",
+    "tests/travel-writing-history-browser.cjs": "2a0304542b41bccf543371ae3736989d0282a49f0d0341a2ce3e2dd411f2b70c"
   },
   "protectedSourceSHA256": {
     "assets/life/core.js": "6ad03c873ea3411dc7f8a432e7637502d1ce59271253db04e229429f99308ff4",
@@ -590,5 +591,85 @@
     "pass": 10,
     "fail": 0,
     "scope": "Entire generated v135 previous and v134 main apps upgraded to current v136; mock Auth, no live Google or Apple proof. Local dirty source hashes are fixed above, not the pre-commit head field."
+  },
+  "historyMeasurementCorrection": {
+    "initialCIRun": 39202220799,
+    "initialHead": "296e5a22fb7d78895f53d3a8956298be274518db",
+    "failure": "Setup scroll 100px was compared with restored actual departure 103px. Reproduced with CI Chromium 153.0.8010.12; actual pagehide and restored scroll were both 103px.",
+    "fix": "Compare the existing observer sample from the actual trusted beforeunload, before native dialog blur/scroll, matching Shell pre-dialog retention. Require exactly one trusted visible focused finite nonzero sample; retain <2px tolerance, same-document/trusted-persisted/focus/selection/photo/account assertions. Record setup separately. Product runtime unchanged.",
+    "localChecks": [
+      {
+        "browser": "151.0.7922.173",
+        "pass": true,
+        "scroll": {
+          "setup": [
+            0,
+            100
+          ],
+          "before": [
+            0,
+            120
+          ],
+          "after": [
+            0,
+            120
+          ]
+        },
+        "resumeUserReads": 1,
+        "preserved": {
+          "sameDocument": true,
+          "sameEditor": true,
+          "sameCaption": true,
+          "sameStorage": true,
+          "samePost": true,
+          "sameOwner": true,
+          "captionSelection": [
+            2,
+            8,
+            "forward"
+          ],
+          "fullBody": true,
+          "captionCheckpointed": true,
+          "photoBytesAndDimensions": true,
+          "scrollPosition": true
+        }
+      },
+      {
+        "browser": "153.0.8010.12",
+        "pass": true,
+        "scroll": {
+          "setup": [
+            0,
+            103
+          ],
+          "before": [
+            0,
+            103
+          ],
+          "after": [
+            0,
+            103
+          ]
+        },
+        "resumeUserReads": 1,
+        "preserved": {
+          "sameDocument": true,
+          "sameEditor": true,
+          "sameCaption": true,
+          "sameStorage": true,
+          "samePost": true,
+          "sameOwner": true,
+          "captionSelection": [
+            2,
+            8,
+            "forward"
+          ],
+          "fullBody": true,
+          "captionCheckpointed": true,
+          "photoBytesAndDimensions": true,
+          "scrollPosition": true
+        }
+      }
+    ]
   }
 }

@@ -57,6 +57,8 @@ Snapshot은 allowlist 출처·HTTPS URL·권리/범위를 확인한 제목·태�
 
 합성 화면: [모바일 좋아요 목록](evidence/discovery-reactions/discovery-reactions-390-liked-list.png), [추천 이유](evidence/discovery-reactions/discovery-reactions-1440-personal-evidence.png), [사본 추가 미리보기](evidence/discovery-reactions/discovery-reactions-820-copy-preview.png).
 
+첫 원격 CI `296e5a2`에서 기존 native history 검사의 위치 기준 오류가 발견됐다. Chromium153에서 사전 snapshot은100px, 실제 pagehide 이탈과 복귀는 모두103px이었다. 앱의 보존 실패와 구분해, 앱이 보관하는 실제 native beforeunload의 확인창 직전 위치를 복귀 비교 기준으로 삼고 2px 미만 허용 오차·비영점 위치·동일 문서/입력/선택/사진 검사를 유지했다. Chromium151·153에서 각각 통과했으며 제품 런타임은 바꾸지 않았다. 초기 실패도 검수 JSON에 남긴다.
+
 원격 전체 CI는 [draft PR103의 정확한 현재 HEAD 검사](https://github.com/wonchance-art/life-haedo/pull/103/checks)를 따른다. PR의 과거 `3f9e12c` 검사 이력을 이번 구현의 결과로 쓰지 않는다. main 병합·배포는 수행하지 않는다.
 
 실제 Apple 기기·실제 Google 로그인·원문 실독 후 사용자 유용성·운영 배포/정기 수집의 확인은 로컬 기능 검사와 구분한다. 최신 [로드맵](../life-tools-design/roadmap.md)에 후속 공급·실기·직접 평가와 서버 선택 조건을 유지한다.
