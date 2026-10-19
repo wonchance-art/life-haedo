@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "recordedAtUTC": "2026-10-19T03:26:32.105911+00:00",
+  "recordedAtUTC": "2026-10-19T03:49:43.029332+00:00",
   "scope": "Current main integrated with topic controls, visible-screen refresh and fixed-source public collection. Synthetic accounts/content only for browser checks.",
-  "referenceMain": "38b4559ea28047e3623e27af760d6e5684f45e55",
-  "worker": "haedo-v134",
+  "referenceMain": "58e5cd55f73fb440c997266e160d8859f18bfd6c",
+  "worker": "haedo-v135",
   "validation": {
     "unit": {
-      "passed": 996,
+      "passed": 998,
       "failed": 0
     },
     "static": {
@@ -15,7 +15,7 @@
       "localReferences": 615
     },
     "automationBrowser": {
-      "passed": 21,
+      "passed": 23,
       "failed": 0,
       "checks": [
         "default automatic refresh is off and does not run after fifteen visible minutes",
@@ -28,6 +28,8 @@
         "pending automatic response is discarded after off",
         "pending automatic response is discarded after leave",
         "pending automatic response is discarded after hidden",
+        "manual pending refresh resumes consistent controls and retained inputs after history without visibility events",
+        "persisted history lifecycle stops old work and resumes saved automatic refresh only after fresh Auth",
         "workspace switch while response is pending keeps the new scope default and source data exact",
         "actual logout and new account do not reuse topics or automatic preferences",
         "topic CAS conflict preserves the typed input until explicit latest-state recovery",
@@ -47,8 +49,8 @@
       "failed": 0
     },
     "workerUpgrade": {
-      "from": "haedo-v133",
-      "to": "haedo-v134",
+      "from": "haedo-v134",
+      "to": "haedo-v135",
       "passed": 9,
       "failed": 0,
       "scope": "Prior worker only; current app modules."
@@ -58,15 +60,15 @@
       "failed": 0,
       "baselines": [
         {
-          "sha": "88ccfe5e381a37818a46e7abdaabfc48cff58c56",
-          "cache": "haedo-v126"
-        },
-        {
           "sha": "38b4559ea28047e3623e27af760d6e5684f45e55",
           "cache": "haedo-v133"
+        },
+        {
+          "sha": "58e5cd55f73fb440c997266e160d8859f18bfd6c",
+          "cache": "haedo-v134"
         }
       ],
-      "to": "haedo-v134",
+      "to": "haedo-v135",
       "scope": "Actual old generated app shells and configuration with exact module hashes."
     },
     "mainEntryCompatibility": {
@@ -74,14 +76,22 @@
       "failed": 0
     },
     "collectorFixtures": {
-      "passed": 29,
+      "passed": 30,
       "failed": 0
     },
     "browserUnexpectedConsoleErrors": 0,
     "browserPageErrors": 0,
     "privateUploads": 0,
     "modelOrPublisherBrowserRequests": 0,
-    "productionWrites": 0
+    "productionWrites": 0,
+    "travelWritingResume": {
+      "passed": 8,
+      "failed": 0
+    },
+    "nativeTravelHistory": {
+      "pass": true,
+      "scope": "Actual Chromium cached back/forward history. Separate from synthetic discovery persisted lifecycle."
+    }
   },
   "realCollectionDryRun": {
     "transport": "Approved environment proxy via urllib for fixed own-origin seed/worker; production Node HTTPS separately covered by synthetic transport fixtures.",
@@ -95,7 +105,8 @@
     "artifactSHA256": "be0e56a56450b570aee5c24405b8853c22bdfb9a48f9ac7ce9771b58354f248b",
     "trackedCatalogUnchanged": true,
     "trackedSHA256": "6a6c63e520328e283d01ca8283a6b9c2259295f5c37fc05d2fb49b27ba057684",
-    "remoteDispatchOrDeployment": false
+    "remoteDispatchOrDeployment": false,
+    "observedBootstrapWorker": "haedo-v133"
   },
   "screens": [
     {
@@ -123,7 +134,7 @@
             "height": 44
           },
           {
-            "name": "discoveryInterest-manual-843f8a2a-fd1e-45d4-8840-2a84188f2a7a",
+            "name": "discoveryInterest-manual-466fc5e5-7470-4db9-b0cd-66914d1387bc",
             "width": 88.328125,
             "height": 44
           },
@@ -245,7 +256,7 @@
             "height": 44
           },
           {
-            "name": "discoveryInterest-manual-b5a129db-efbb-475b-9289-56f513f9b54f",
+            "name": "discoveryInterest-manual-d7dc4de0-0f41-425d-8160-5d9e23725d58",
             "width": 88.328125,
             "height": 44
           },
@@ -367,7 +378,7 @@
             "height": 44
           },
           {
-            "name": "discoveryInterest-manual-c3864489-58e5-4be8-8d7f-214bb3adc2d8",
+            "name": "discoveryInterest-manual-fd654cd0-6779-4e7d-b50f-a6b79efece56",
             "width": 88.328125,
             "height": 44
           },
@@ -466,19 +477,34 @@
     }
   ],
   "sourceSHA256": {
-    "assets/life/discovery-ui.js": "34d0e834f079c97bd84421659980572b7077c3dd6bbff5086d5ddc2615f3f91b",
+    "assets/life/discovery-ui.js": "b34f1928186b48c59fe3a52ed32fdb65804fa7f71560a589f17ae3ef5ea35a8e",
     "assets/life/discovery-settings.js": "f6d8f710d848b15ec4b9fa4f7df2b5e295fcac5a2d1b05aee4737110606708bc",
     "assets/life/storage.js": "4090ef01d059864d750d61146983df2f8dd8d9325e0dc35415c4e598937afedd",
     "assets/life/discovery.js": "bf514ade159c5b7a815c07123ad7d1e6905596a87ab1cb7eadc9f04c9c329196",
-    "sw.js": "ad8509dd15a07362cfd101519beb91a8e13d4327040691b667571d65d3514fa2",
-    ".github/workflows/pages.yml": "e6a9b9c04b9b03c2434c2fa60a975860ffb2fd830b0804cb109804941f787154",
-    "scripts/refresh-discovery-artifact.cjs": "3605c0063038f8439b987d036609f5cf031af88c09c50dda27aace2521436c36",
-    "tests/life-discovery-automation-browser.cjs": "44d00ea69fe333d50451f8b245c323d92c8ba34fa9d927af7bd6e4045472aea0"
+    "sw.js": "18939d9e88b52d0f6aa7b0174d69806ed53baabc8f514b1b6db49ef319d40738",
+    ".github/workflows/pages.yml": "b90db16863bf9fa4743d3d5ef19fb242d96549c985e80cc401c74762940accb3",
+    "scripts/refresh-discovery-artifact.cjs": "91c893782f6e2ca40997b76f8d88e5ce7763f4700954cf97f99f84318ee4f044",
+    "tests/life-discovery-automation-browser.cjs": "7a7a9ac515a5a3b6b44de70efa89913b79cf3815dbab00ca3ba190e1b4222765",
+    "assets/life/shell.js": "44414476702db4c8e0ef8515b6e6deb5ff549b8a26c64fb4501bac1b199b29ce",
+    "assets/life/ui.js": "bf7c539b610ea2643ef607c5c460dfca2f6d53dd9194219846fddb43c7a4ede0",
+    "assets/platform-auth.js": "37a97153a39b61df30dfb74784d3740382a648f635a1f1ce7668cf39356f534c"
   },
   "limits": [
     "Actual Google login and Apple hardware unverified.",
-    "Visibility and composition are explicit synthetic browser events.",
+    "Visibility, composition and discovery persisted lifecycle are explicit synthetic browser events; actual native cached history was separately verified for travel writing.",
     "User reading intent and usefulness unassessed.",
     "Schedule activation and production deployment have not been executed."
+  ],
+  "approvedPreCatalogWorkers": [
+    {
+      "main": "38b4559ea28047e3623e27af760d6e5684f45e55",
+      "cache": "haedo-v133",
+      "sha256": "645102f365bb8135683fb7e611baf571e780e765c46dd50d570c34ede1a16da9"
+    },
+    {
+      "main": "58e5cd55f73fb440c997266e160d8859f18bfd6c",
+      "cache": "haedo-v134",
+      "sha256": "cb4fd4ed6112856883eab180fc3d390eae7693e835d2407b77fac3ce67ba9967"
+    }
   ]
 }

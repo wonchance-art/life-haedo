@@ -135,16 +135,28 @@
       const wait = Math.max(0, (current.nextDue || Date.now() + INTERVAL) - Date.now());
       timer = root.setTimeout(() => { timer = null; if (canAuto()) loadCatalog(true).catch(error => report(error)); }, wait);
     }
+    function syncTransientControls() {
+      if (!scope() || !surface?.isConnected) return;
+      surface.setAttribute('aria-busy', String(busy()));
+      const refresh = surface.querySelector('#discoveryRefresh');
+      if (refresh) refresh.disabled = current.loading;
+      const status = surface.querySelector('#discoveryStatus');
+      if (status) { status.textContent = current.loading ? '공개 글 목록을 불러오고 있습니다.' : current.status; status.hidden = !status.textContent; }
+      surface.querySelectorAll('[data-discovery-feedback], [data-discovery-undo], #discoveryUndo').forEach(control => { control.disabled = !!current.pending || busy(); });
+    }
     function lifecycle() {
       if (!scope()) return;
-      if (!canAuto()) { stopTimer(); cancelFetch(); draw(); }
-      else scheduleAuto();
+      if (!canAuto()) {
+        stopTimer(); cancelFetch();
+        if (!suspended && root.document.getElementById('lifeApp')?.hidden === false) syncTransientControls();
+      } else scheduleAuto();
     }
     function pageSuspend() { suspended = true; stopTimer(); cancelFetch(); }
     function pageReady() {
       // The shell emits this only after revalidating the account and revealing it.
       suspended = false;
       if (!scope() || root.document.getElementById('lifeApp')?.hidden !== false) return;
+      syncTransientControls();
       if (!current.catalog?.feed && canAuto()) loadCatalog(true).catch(error => report(error));
       else scheduleAuto();
     }

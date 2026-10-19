@@ -67,7 +67,7 @@ async function saveHooks(context) {
 }
 async function main() {
   await fs.mkdir(output, { recursive: true });
-  const products = ['discovery-ui.js', 'discovery-settings.js', 'discovery.js', 'storage.js', 'discovery.css'];
+  const products = ['discovery-ui.js', 'discovery-settings.js', 'discovery.js', 'storage.js', 'discovery.css', 'shell.js', 'ui.js', '../platform-auth.js'];
   report.productHashesBefore = Object.fromEntries(await Promise.all(products.map(async name => [name, sha(await fs.readFile(path.resolve(__dirname, '../assets/life', name)))])));
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] }); report.browser = browser.version();
   async function check(name, action, width = 820) {
@@ -145,6 +145,42 @@ async function main() {
       if (stop === 'leave') { assert.equal(await page.locator('#discoveryReview').count(), 0); }
       else { await preserve(page, before); if (stop === 'hidden') { control.value = fixture('resumed'); await visibility(page, false); await idle(page); assert.ok(control.count <= count + 1); } }
     });
+    await check('manual pending refresh resumes consistent controls and retained inputs after history without visibility events', async ({ page, context, control }) => {
+      await context.addInitScript(() => { const original = fetch; window.fetch = function(input, init) { if (new URL(typeof input === 'string' ? input : input.url, location.href).pathname === '/assets/life/discovery-feed.json') window.__manualLifecycleSignal = init?.signal; return original.apply(this, arguments); }; });
+      const before = await seed(page); assert.equal(before.settings.autoRefresh, false); control.hold = true; control.value = fixture('manual-history-late'); const pending = control.next(); await page.locator('#discoveryRefresh').click(); await pending;
+      await page.evaluate(() => { window.__manualLifecycleNodes = { checkbox: document.querySelector('#discoveryAutoRefresh'), input: document.querySelector('#discoveryTopicInput'), surface: document.querySelector('#discoveryReview') }; });
+      const held = await page.evaluate(() => ({ refreshDisabled: document.querySelector('#discoveryRefresh').disabled, busy: document.querySelector('#discoveryReview').getAttribute('aria-busy'), hidden: document.hidden })); assert.equal(held.refreshDisabled, true); assert.equal(held.busy, 'true');
+      // Deliberately omit visibilitychange: retained shell/Auth lifecycle must
+      // reconcile cancelled work even when no visibility event is delivered.
+      await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }))); assert.equal(await page.locator('#lifeApp').isHidden(), true); control.release();
+      await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))); await ready(page); await page.waitForTimeout(100);
+      const actual = await page.evaluate(() => ({ requestSignalAborted: window.__manualLifecycleSignal?.aborted, refreshDisabled: document.querySelector('#discoveryRefresh').disabled, busy: document.querySelector('#discoveryReview').getAttribute('aria-busy'), checkboxSame: __manualLifecycleNodes.checkbox === document.querySelector('#discoveryAutoRefresh'), inputSame: __manualLifecycleNodes.input === document.querySelector('#discoveryTopicInput'), surfaceSame: __manualLifecycleNodes.surface === document.querySelector('#discoveryReview'), automaticChecked: document.querySelector('#discoveryAutoRefresh').checked, appVisible: !document.querySelector('#lifeApp').hidden }));
+      assert.deepEqual(actual, { requestSignalAborted: true, refreshDisabled: false, busy: 'false', checkboxSame: true, inputSame: true, surfaceSame: true, automaticChecked: false, appVisible: true }); assert.equal(await page.locator('[data-discovery-id^="manual-history-late-"]').count(), 0);
+      const stopped = control.count; control.value = fixture('manual-history-recovered'); await page.locator('#discoveryRefresh').click(); await idle(page); assert.equal(control.count, stopped + 1); assert.ok(await page.locator('[data-discovery-id^="manual-history-recovered-"]').count() > 0); assert.equal(await page.locator('[data-discovery-id^="manual-history-late-"]').count(), 0);
+      const after = await preserve(page, before); assert.deepEqual(after.profile, before.profile); assert.equal(after.settings.autoRefresh, false);
+      report.manualHistoryLifecycle = { simulatedPersistedPagehidePageshow: true, actualBFCache: false, visibilityEventsDispatched: 0, cancelledControls: actual, explicitRecoveryCatalogGETs: 1, lateOldResponseIgnored: true };
+    });
+    await check('persisted history lifecycle stops old work and resumes saved automatic refresh only after fresh Auth', async ({ page, context, control }) => {
+      const before = await seed(page); await clock(page); await auto(page, true);
+      const critical = ['assets/platform-auth.js', 'assets/life/shell.js', 'assets/life/ui.js', 'assets/life/discovery-ui.js'];
+      const servedHashes = await page.evaluate(async files => Object.fromEntries(await Promise.all(files.map(async file => { const response = await fetch(file, { credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store' }); if (!response.ok) throw Error('Critical runtime response failed'); const bytes = await crypto.subtle.digest('SHA-256', await response.arrayBuffer()); return [file, Array.from(new Uint8Array(bytes), v => v.toString(16).padStart(2, '0')).join('')]; }))), critical);
+      for (const file of critical) assert.equal(servedHashes[file], sha(await fs.readFile(path.resolve(__dirname, '..', file))), 'Served runtime must equal this checkout: ' + file);
+      await page.evaluate(() => { window.__discoveryRetainedSurface = document.querySelector('#discoveryReview'); window.__discoveryRetainedStorage = HaedoLife.Shell.storage; });
+      control.hold = true; control.value = fixture('history-late'); const pending = control.next(); await advance(page, 15 * MINUTE + 100); await pending;
+      await visibility(page, true); await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })));
+      assert.equal(await page.locator('#lifeApp').isHidden(), true); control.release(); control.value = fixture('history-resumed'); await page.waitForTimeout(100); assert.equal(await page.locator('[data-discovery-id^="history-late-"]').count(), 0);
+      const stopped = control.count; await advance(page, 16 * MINUTE); assert.equal(control.count, stopped);
+      let authEntered, releaseAuth; const arrived = new Promise(resolve => { authEntered = resolve; }), gate = new Promise(resolve => { releaseAuth = resolve; }); let authCalls = 0;
+      await context.route(cloud + '/auth/v1/user', async route => { if (route.request().method() === 'OPTIONS') return route.fallback(); authCalls++; authEntered(); await gate; return route.fallback(); });
+      try {
+        await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))); await arrived;
+        await visibility(page, false); await advance(page, 100); assert.equal(await page.locator('#lifeApp').isHidden(), true); assert.equal(control.count, stopped, 'No old timer or catalogue fetch may resume while fresh Auth is pending'); assert.equal(await page.locator('[data-discovery-id^="history-late-"]').count(), 0);
+      } finally { releaseAuth(); }
+      await ready(page); await advance(page, 100); await idle(page); assert.equal(authCalls, 1); assert.equal(control.count, stopped + 1, 'One refresh resumes after verified history return');
+      const retained = await page.evaluate(() => ({ surface: __discoveryRetainedSurface === document.querySelector('#discoveryReview'), storage: __discoveryRetainedStorage === HaedoLife.Shell.storage })); assert.deepEqual(retained, { surface: true, storage: true }); assert.equal((await snapshot(page)).settings.autoRefresh, true); assert.ok(await page.locator('[data-discovery-id^="history-resumed-"]').count() > 0);
+      await advance(page, 15 * MINUTE + 100); await idle(page); assert.equal(control.count, stopped + 2, 'Only one periodic refresh remains after resume'); await preserve(page, before);
+      report.historyLifecycle = { servedHashes, simulatedPersistedPagehidePageshow: true, actualBFCache: false, freshAuthCalls: authCalls, pendingAuthCatalogGETs: 0, resumedCatalogGETs: 1, followingPeriodCatalogGETs: 1, retained, savedAutomaticPreference: true };
+    });
     await check('workspace switch while response is pending keeps the new scope default and source data exact', async ({ page, control }) => {
       const before = await seed(page); const other = await page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(), next = await s.createWorkspace('자동 갱신 합성 두 번째 공간'); await s.setActive(w); return next.workspaceId; });
       await page.reload(); await ready(page); await idle(page);
@@ -155,7 +191,12 @@ async function main() {
     });
     await check('actual logout and new account do not reuse topics or automatic preferences', async ({ page, server, device, control }) => {
       await seed(page); await clock(page); await auto(page, true); control.hold = true; control.value = fixture('late-account'); const arrived = control.next(); await advance(page, 15 * MINUTE + 100); await arrived; const old = (await snapshot(page)).bundle.workspaceId;
-      await nav(page, 'manage'); await openAccount(page); const instance = await page.evaluate(() => __homeInstance); await page.locator('#lifeLogout').click(); await wait(page, id => !!window.__homeInstance && window.__homeInstance !== id && !!globalThis.HaedoLife?.Shell, instance, 'logout navigation'); await page.evaluate(() => HaedoLife.Shell.ready); control.release(); control.value = fixture('new-account'); assert.equal(await page.evaluate(() => HaedoAuth.user), null);
+      await nav(page, 'manage'); await openAccount(page); const instance = await page.evaluate(() => __homeInstance);
+      // Register the native navigation wait before logout: SDK revocation can
+      // finish after the old private DOM is hidden and destroy that context.
+      await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.locator('#lifeLogout').click()]);
+      await page.waitForFunction(previous => !!window.__homeInstance && window.__homeInstance !== previous && !!globalThis.HaedoLife?.Shell, instance);
+      await page.evaluate(() => HaedoLife.Shell.ready); control.release(); control.value = fixture('new-account'); assert.equal(await page.evaluate(() => HaedoAuth.user), null);
       server.oauthAccounts.set(device, accounts.b); await page.goto(base + '/login.html?next=' + encodeURIComponent('index.html?section=tools&view=external-discovery')); await page.locator('#googleLogin').click(); await page.waitForURL(u => u.pathname.endsWith('/index.html')); await ready(page); await idle(page); const next = await snapshot(page); assert.deepEqual(next.profile.manual, []); assert.equal(next.settings.autoRefresh, false); assert.deepEqual(next.settings.disabledSourceIds, []);
       assert.equal(await page.evaluate(async id => { try { await HaedoLife.Shell.storage.readDiscoverySettings(id); return false; } catch (_) { return true; } }, old), true);
     });
