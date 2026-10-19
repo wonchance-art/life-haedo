@@ -88,7 +88,7 @@ test('unified home return accepts only known sections and material views', () =>
   assert.equal(safeNext('workspace.html?section=tools'), 'workspace.html');
   assert.equal(safeNext('life.html?section=manage&view=transfer&token=hidden'), 'life.html?section=manage&view=transfer');
   for (const page of ['index.html', 'life.html']) {
-    for (const query of ['section=records&view=write', 'section=records&view=activities', 'section=records&view=page', 'section=tools&view=discover', 'section=tools&view=reflection', 'section=manage&view=workbench-backup', 'section=manage&view=preservation', 'section=manage&view=obsidian-update', 'section=manage&view=blog']) {
+    for (const query of ['section=records&view=write', 'section=records&view=activities', 'section=records&view=page', 'section=tools&view=discover', 'section=tools&view=reflection', 'section=manage&view=workbench-backup', 'section=manage&view=preservation', 'section=manage&view=obsidian-update', 'section=manage&view=blog', 'section=manage&view=public-cover']) {
       assert.equal(safeNext(page + '?' + query + '&code=discarded&next=https://evil.invalid#access_token=hidden'), page + '?' + query);
     }
   }

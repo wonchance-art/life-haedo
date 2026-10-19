@@ -6,7 +6,7 @@ const { LocalSQLBlogCloud } = require('./blog-completion-browser.cjs');
 const Core = require('../assets/life/core.js'), Writing = require('../assets/life/material-writing.js'), Model = require('../assets/life/material-continuity.js');
 const Ref = require('../assets/life/source-reference.js'), Photo = require('../assets/life/photo-post.js');
 const Remote = require('../assets/life/material-continuity-remote.js'), Platform = require('../assets/platform-life-remote.js');
-const migration = 'supabase/migrations/20261018161658_life_material_continuity.sql';
+const migration = 'supabase/migrations/20261019005829_life_material_continuity.sql';
 const out = path.resolve(__dirname, '../.local/material-continuity');
 const q = value => value === null ? 'null' : "'" + String(value).replaceAll("'", "''") + "'";
 const json = value => q(JSON.stringify(value)) + '::jsonb';

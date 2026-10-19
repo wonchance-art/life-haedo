@@ -1,5 +1,7 @@
 # 자료 준비를 다른 기기에서 이어 같은 글 완성하기
 
+> 후속 통합 출시에서 운영 설치를 완료했습니다. 실제 이력 `20261019005829`에 맞춰 migration 파일 이름과 검수 경로만 정합화했으며, 개발 당시 `20261018161658`의 SQL 바이트는 그대로입니다(SHA-256 `70308323a8d711fd5ef69fe5f763ba7cc7bd75e43db2cbba5e6edc98570c5a07`). 아래 미설치·미배포 표기는 #105 당시 범위이고 최신 운영/배포 근거는 [통합 출시 기록](integrated-release-20261019.md)을 따릅니다.
+
 2026-10-19 KST. 자료 선택·비교·개요에서 PhotoPost 완성으로 이어지는 기존 작업 위의 후속 목표다. 아래는 총괄이 확정한 구현 계약과 확인한 범위별 결과다. **로컬 구현과 범위별 검수를 마쳤으며, 같은 최종 후보 전체의 원격 CI 결과는 [통합 PR](https://github.com/wonchance-art/life-haedo/pull/105)의 HEAD/검사 기록을 따른다.** 소스 파일이나 SQL 파일의 존재를 설치·동작 성공으로 표시하지 않는다. 병합·배포·운영 개인 자료 전송은 이번 범위에 포함하지 않는다.
 
 ## 목표·기존 기능·새 공백
@@ -95,7 +97,7 @@ saved output은 기존 BlogSync로 보관한 **정확 원격 글 revision**에 �
 
 원격/SQL 담당의 `.local/material-continuity/backend-report.json`·`backend-final.log`는 수송 단위 3개와 실제 격리 PostgreSQL 8개 흐름 통과를 기록한다. 소유자별 비공개 테이블/RLS·직접 테이블 권한 0·고정 search path, 두 실제 DB 연결의 claim CAS, 실제 글 행 잠금과 종료 경합, UTF-16/잘못된 NULL 거절, 원문 후보 3,000개 중 선택 closure·목록 20개 keyset, 같은 migration 재적용 뒤 기존 head/영수증의 SHA 보존을 포함한다. 이를 운영 설치나 실제 Google 인증 통과로 표시하지 않는다.
 
-CLI로 생성한 신규 [준비 이어쓰기 migration](../../supabase/migrations/20261018161658_life_material_continuity.sql)은 기존 [글 원본 migration](../../supabase/migrations/20261017144744_life_blog_originals.sql)을 선행 조건으로 한다. 두 migration을 설치한 **격리 DB**와 합성 Auth/원본 Storage·Edge HTTP 경계에서 검사했으며 새 준비 migration의 운영 설치는 하지 않았다. 운영 환경에서 사용 가능한 상태인지와 로컬 파일/검수의 존재를 구분한다. 관리형 설치·배포를 실제 수행한 경우에만 별도 설치/출시 기록을 추가한다.
+CLI로 생성한 신규 [준비 이어쓰기 migration](../../supabase/migrations/20261019005829_life_material_continuity.sql)은 기존 [글 원본 migration](../../supabase/migrations/20261017144744_life_blog_originals.sql)을 선행 조건으로 한다. 두 migration을 설치한 **격리 DB**와 합성 Auth/원본 Storage·Edge HTTP 경계에서 검사했으며 새 준비 migration의 운영 설치는 하지 않았다. 운영 환경에서 사용 가능한 상태인지와 로컬 파일/검수의 존재를 구분한다. 관리형 설치·배포를 실제 수행한 경우에만 별도 설치/출시 기록을 추가한다.
 
 ## 다음 큰 제품 목표 후보 — 글·연재·취향을 한 주소에서 읽기
 

@@ -11,7 +11,7 @@ const { seedContinuity, connect, call, uiReceive } = require('./material-continu
 const { inspect } = require('../scripts/check-site-design.cjs');
 const newSourceOnly = process.argv.includes('--new-source-only');
 const output = path.resolve(__dirname, '../.local/material-continuity-visual' + (newSourceOnly ? '-new-source' : ''));
-const migration = 'supabase/migrations/20261018161658_life_material_continuity.sql';
+const migration = 'supabase/migrations/20261019005829_life_material_continuity.sql';
 
 async function main() {
   assert(['127.0.0.1', 'localhost', '[::1]'].includes(new URL(base).hostname));

@@ -12,7 +12,7 @@ const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { seedMaterials, seedPlan, enter, saved, snapshot } = require('./material-writing-browser.cjs');
 const ZIP = require('../vendor/fflate/fflate.js');
 const output = path.resolve(__dirname, '../.local/material-continuity');
-const migration = 'supabase/migrations/20261018161658_life_material_continuity.sql';
+const migration = 'supabase/migrations/20261019005829_life_material_continuity.sql';
 async function seedContinuity(page, title = '기기 사이에서 이어 완성할 여행글') {
   const source = await seedMaterials(page), planId = await seedPlan(page, source, title);
   await page.evaluate(async ({ source, planId }) => {

@@ -353,6 +353,9 @@ jobs:
       - name: Verify material writing across screen sizes and protected input
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/material-writing-visual-browser.cjs
+      - name: Verify exact login return and preserved legacy editing across screen sizes
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/integrated-release-entry-browser.cjs
       - name: Stop the local server
         if: always()
         run: |
@@ -365,6 +368,7 @@ jobs:
         with:
           name: browser-checks-${{ matrix.group }}-${{ github.run_attempt }}
           path: |
+            .local/integrated-release-entry/
             .local/app-native/qa/
             .local/home-refinement/qa/
             .local/blog-journeys/after/
@@ -539,6 +543,9 @@ jobs:
       - name: Verify real SQL and browser publication journeys
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: node tests/blog-completion-browser.cjs --prepare-database
+      - name: Verify additive installation rollback and preservation of existing records
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: node tests/integrated-release-installation.cjs
       - name: Verify series publication receipts, independent wrappers and current revocation
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: node tests/blog-series-backend.cjs
@@ -569,6 +576,9 @@ jobs:
       - name: Verify public cover preview, protected input and anonymous reading across screen sizes
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: node tests/public-cover-visual-browser.cjs --prepare-database
+      - name: Verify one complete preparation, original-photo writing, publication and preservation journey
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: BLOG_POSTGRES_DATABASE="${BLOG_POSTGRES_DATABASE}_integrated" node tests/integrated-release-browser.cjs --prepare-database
       - name: Verify private post manager and exact provenance return
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-manager-browser.cjs
@@ -584,7 +594,7 @@ jobs:
       - name: Verify generated configuration and complete installed shell hashes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         env:
-          PREVIOUS_RELEASE: "9479866"
+          PREVIOUS_RELEASE: "88ccfe5e381a37818a46e7abdaabfc48cff58c56"
         run: node scripts/verify-prepared-site.mjs
       - name: Verify the actual previous service worker updates without losing originals
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
@@ -609,6 +619,8 @@ jobs:
         with:
           name: blog-checks-${{ github.run_attempt }}
           path: |
+            .local/integrated-release-installation/
+            .local/integrated-release/
             .local/blog-backend/
             .local/blog-completion/
             .local/blog-series-backend/
