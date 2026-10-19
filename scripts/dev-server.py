@@ -11,13 +11,19 @@ class QuietHandler(SimpleHTTPRequestHandler):
         pass
 
 
+class QuietServer(ThreadingHTTPServer):
+    # Browser verification can fetch about 100 local scripts concurrently.
+    # Python's default backlog of five can drop those loopback connections.
+    request_queue_size = 128
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port', type=int, default=4173)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
     handler = partial(QuietHandler, directory=str(root))
-    with ThreadingHTTPServer(('127.0.0.1', args.port), handler) as server:
+    with QuietServer(('127.0.0.1', args.port), handler) as server:
         print(f'Haedo development server on 127.0.0.1:{args.port}; Ctrl+C to stop.', flush=True)
         try:
             server.serve_forever()

@@ -1,0 +1,39 @@
+{
+  "runId": 39256747829,
+  "attempt": 1,
+  "headSHA": "37f7858a081f73b4efab2e937b5f828fecc77751",
+  "failedJob": {
+    "id": 118073831766,
+    "name": "blog",
+    "stage": "Only one original photo is explicitly published; this same result joins series and nine without copying private preparation into public wrappers",
+    "step": "nine navigation",
+    "error": "page.goto: Timeout 25000ms exceeded."
+  },
+  "successfulJobs": 7,
+  "build": "skipped",
+  "deploy": "skipped",
+  "failureArtifact": {
+    "id": 12188044271,
+    "name": "blog-checks-1",
+    "sha256": "0115ee65bf3675b9465b25dc302b52eb443cadf95da254bd5aec7e150f943b66"
+  },
+  "transport": {
+    "routeErrors": 0,
+    "pendingAtClose": 10,
+    "consoleErrors": 0,
+    "pageErrors": 0,
+    "externalRequests": 0
+  },
+  "localReproduction": {
+    "scope": "Navigation transport only, synthetic local Auth. No SQL/blog journey or deployment proof.",
+    "successfulNavigations": 6,
+    "failedNavigation": 7,
+    "error": "page.goto: Timeout 25000ms exceeded.",
+    "pendingAtClose": 3,
+    "timeoutMs": 25000,
+    "routeErrors": 0
+  },
+  "rootCause": "Pending local sourceRouting route.fetch responses; transport cause under investigation, not established as product failure.",
+  "productChanges": false,
+  "realAccountAccess": false
+}
