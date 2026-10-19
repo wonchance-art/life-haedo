@@ -73,6 +73,10 @@
 
 운영 적용 후 `.local/integrated-release/production-installation.json`은 migration 총 11개, material 설치 조건 12/12·기존 blog 조건 11/11, 기존 함수 46개/ACL 해시 `148b8279fb2d8960023c0f254fd0a872`와 기존 관계 11개의 집계가 그대로임을 확인했다. 신규 준비 head·receipt는 모두 0이며 개인 본문 읽기/개인 글·사진 쓰기는 0이다. 익명 material private RPC는 401, 기존 공개 blog/page RPC는 각각 200·빈 결과였고 Edge를 재배포하지 않았다. 설치 직후 보안 advisor 종류/건수도 기존 INFO 12·익명 실행 WARN 1·인증 실행 WARN 10·비밀번호 보호 WARN 1과 같았다. 이는 기존 경고가 해결됐다는 의미가 아니며 설치 전의 ‘material 미설치’ 관찰과 구분한다.
 
+### 기존 공개 철회 검수의 요청 순서
+
+첫 통합 CI #197에서 기존 `material-writing-browser.cjs`의 방문자 철회 대기(206행)가 20초 후 실패했다. 동일 코드의 원래 8개 흐름은 로컬에서 통과했으므로 재실행 성공만으로 해결로 표시하지 않았다. 실제 SDK/격리 SQL의 철회 요청을 commit 전에 지연한 반례에서, 클릭 완료 직후 방문자 재조회는 아직 공개 중인 행을 읽고 서버 철회 완료 뒤에도 다음 재조회 전까지 공개 화면을 유지함을 확인했다. 검수에 게시자의 정확 완료 안내와 SQL 익명 조회 `null` 확인을 선행하도록 보강했다. 방문자 `missing`·본문 제거·SQL `null`·원본 사진 404 단언과 기존 시간 제한·제품 코드는 그대로다. 수정 후 원래 8개 전체/10개 화면과 원본·근거·파일·실패 복구를 통과했고 console/page/external 0이다(`.local/integrated-release-ci197/final-summary.json`). 최종 원격 성공은 후속 통합 PR HEAD의 전체 검사로 확인한다.
+
 ## 이번 실행의 증거
 
 | 항목 | 현재 상태 | 확정할 근거 |

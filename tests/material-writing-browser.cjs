@@ -203,7 +203,10 @@ async function main() {
       assert.equal(await visitor.page.evaluate(() => __homeDbOpens.length), 0); assert.equal(await visitor.page.locator('#blogContent img').count(), 1);
       await visitor.page.locator('#blogContent img').evaluate(node => node.decode()); assert.deepEqual(await visitor.page.locator('#blogContent img').evaluate(node => [node.naturalWidth, node.naturalHeight]), [4032, 3024]);
       const image = await visitor.page.locator('#blogContent img').getAttribute('src'); const response = await visitor.page.evaluate(async url => { const response = await fetch(url); return { status: response.status, bytes: Array.from(new Uint8Array(await response.arrayBuffer())) }; }, image); assert.equal(response.status, 200); assert.equal(digest(Buffer.from(response.bytes)), finished.doc.photos[0].digest); await capture(visitor.page, 'anonymous-selected');
-      await page.getByRole('button', { name: '공개 철회', exact: true }).click(); await visitor.page.locator('#blogRefresh').click(); await visitor.page.waitForFunction(() => document.querySelector('#blogStatus')?.dataset.state === 'missing'); assert.equal(await visitor.page.locator('#blogContent').innerText(), ''); assert.equal(server.rpc(null, 'life_blog_public_read', { p_token: token }), null);
+      await page.getByRole('button', { name: '공개 철회', exact: true }).click();
+      await page.getByText('공개 철회를 확인했습니다. 이 브라우저의 원래 글은 유지했습니다.', { exact: true }).waitFor();
+      assert.equal(server.rpc(null, 'life_blog_public_read', { p_token: token }), null);
+      await visitor.page.locator('#blogRefresh').click(); await visitor.page.waitForFunction(() => document.querySelector('#blogStatus')?.dataset.state === 'missing'); assert.equal(await visitor.page.locator('#blogContent').innerText(), ''); assert.equal(server.rpc(null, 'life_blog_public_read', { p_token: token }), null);
       // Route interception serves the same actual SQL-authorized media request.
       assert.equal(await visitor.page.evaluate(async url => (await fetch(url)).status, image), 404); await visitor.context.close();
     });
