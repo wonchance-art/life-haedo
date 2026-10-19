@@ -1,0 +1,30 @@
+{
+  "runId": 39260729215,
+  "attempt": 1,
+  "headSHA": "14a9cb1c4b6ee1f86fbccca8ca6f474e18b299ac",
+  "failedJob": {
+    "id": 118087359124,
+    "name": "browser_suites (2)",
+    "step": "Verify private series editing, exact snapshots and independent ZIP copies",
+    "failure": "page.evaluate: Error: 작업공간 식별자가 필요합니다.",
+    "location": "tests/blog-series-browser.cjs:289 state after account B scope assigned, before workspace mount complete"
+  },
+  "requiredSuccess": 6,
+  "requiredFailure": 2,
+  "build": "skipped",
+  "deploy": "skipped",
+  "failureArtifact": {
+    "id": 12190493114,
+    "name": "browser-checks-2-1",
+    "sha256": "2d487d9e3a2d0453ccfa1e9b8e9692014c01024c04eda5b2f323dd297099ee7b"
+  },
+  "productChanges": false,
+  "localPatchedSuite": {
+    "pass": true,
+    "checks": 6,
+    "consoleErrors": 0,
+    "pageErrors": 0,
+    "external": 0,
+    "remoteWrites": 0
+  }
+}

@@ -286,6 +286,7 @@ async function main() {
       await f.page.locator('#wbPageSeries').click(); await f.page.waitForFunction(() => __seriesReadHeld === true);
       await f.page.evaluate(async value => { await HaedoAuth.client.auth.setSession({ access_token: value.access_token, refresh_token: value.refresh_token }); await HaedoAuth.verify(); }, session(accounts.b));
       await f.page.waitForFunction(id => HaedoAuth.user?.id === id && HaedoLife.Shell.storage?.account?.userId === id, accounts.b.id);
+      await ready(f.page);
       const accountB = await state(f.page);
       const completed = await f.page.evaluate(() => __seriesReadFinished || 0);
       await f.page.evaluate(() => { __seriesHoldRead = false; __seriesReleaseRead(); });
@@ -294,6 +295,7 @@ async function main() {
       assert(!(await f.page.locator('body').innerText()).includes('제주에서 천천히 걸은 사흘'));
       await f.page.evaluate(async value => { await HaedoAuth.client.auth.setSession({ access_token: value.access_token, refresh_token: value.refresh_token }); await HaedoAuth.verify(); }, session(accounts.a));
       await f.page.waitForFunction(id => HaedoAuth.user?.id === id && HaedoLife.Shell.storage?.account?.userId === id, accounts.a.id);
+      await ready(f.page);
       assert.deepEqual(await state(f.page), before); assert.equal(f.server.writes().length, 0);
     });
     await check('Navigation waits for the actual owned import hydration and then preserves the committed series in its original workspace', async () => {
