@@ -337,15 +337,17 @@
       if (!composing)
         timer = setTimeout(() => persist().catch(showStatus), 500);
     }
-    async function persist() {
+    async function persist(modelOnly = false) {
       clearTimeout(timer);
       if (saving) {
         await saving;
-        return persist();
+        return persist(modelOnly);
       }
-      if (mode === "edit" && selected?.isConnected) changePhoto();
+      if (!modelOnly && mode === "edit" && selected?.isConnected) changePhoto();
       if (!doc || mode !== "edit" || dirtyTick === storedTick) return;
-      guard(true);
+      if (modelOnly) {
+        if (!valid()) throw new Error("작업공간이 바뀌었습니다.");
+      } else guard(true);
       M.validate(doc);
       const tick = dirtyTick,
         payload = structuredClone(doc),
@@ -366,7 +368,15 @@
           onDirty();
         });
       await saving;
-      if (dirtyTick !== storedTick) return persist();
+      if (dirtyTick !== storedTick) return persist(modelOnly);
+    }
+    function checkpoint() {
+      // Keep the accepted model durable without committing an IME field or a
+      // file whose signature, dimensions and original bytes are still pending.
+      return persist(true).catch((cause) => {
+        if (valid()) showStatus(cause);
+        throw cause;
+      });
     }
     async function flush() {
       attachmentUI?.flush();
@@ -1330,7 +1340,7 @@
           e.stopPropagation();
           if (!composing) run(changePhoto);
         });
-        input.addEventListener("blur", () => editor.history.cutoff());
+        input.addEventListener("blur", () => editor?.history.cutoff());
       }
       for (const event of ["keydown", "paste", "drop"])
         inspector.addEventListener(event, (e) => {
@@ -1768,8 +1778,9 @@
       mount,
       begin,
       flush,
+      checkpoint,
       dirty: () =>
-        busy || dirtyTick !== storedTick || !!attachmentUI?.pending(),
+        busy || composing || dirtyTick !== storedTick || !!attachmentUI?.pending(),
       detach,
       dispose() {
         disposed = true;

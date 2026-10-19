@@ -6,7 +6,7 @@
   function create({ container, storage, getBundle, isCurrent, onImport, onOpenInterests, onOpenOriginal }) {
     let active = false, disposed = false, generation = 0, workspaceId = null, surface = null;
     let current = null, client = null, unsubscribe = null, aborter = null, pendingWrite = null;
-    let settingsWrite = null, topicWrite = null, timer = null, fetchEpoch = 0;
+    let settingsWrite = null, topicWrite = null, timer = null, fetchEpoch = 0, suspended = false;
     const INTERVAL = 15 * 60 * 1000;
     const settingsModel = () => root.HaedoLife.DiscoverySettings;
     const scope = () => !disposed && active && isCurrent() && getBundle()?.workspaceId === workspaceId;
@@ -128,7 +128,7 @@
       fetchEpoch++; aborter?.abort(); aborter = null; client?.cancel();
       if (current) current.loading = false;
     }
-    function canAuto() { return scope() && !current.settingsConflict && current.settings?.autoRefresh && desiredSettings()?.autoRefresh && !current.autoBlocked && root.document.visibilityState !== 'hidden' && root.navigator.onLine !== false; }
+    function canAuto() { return !suspended && root.document.getElementById('lifeApp')?.hidden === false && scope() && !current.settingsConflict && current.settings?.autoRefresh && desiredSettings()?.autoRefresh && !current.autoBlocked && root.document.visibilityState !== 'hidden' && root.navigator.onLine !== false; }
     function stopTimer() { if (timer !== null) root.clearTimeout(timer); timer = null; }
     function scheduleAuto() {
       stopTimer(); if (!canAuto() || current.loading) return;
@@ -138,6 +138,14 @@
     function lifecycle() {
       if (!scope()) return;
       if (!canAuto()) { stopTimer(); cancelFetch(); draw(); }
+      else scheduleAuto();
+    }
+    function pageSuspend() { suspended = true; stopTimer(); cancelFetch(); }
+    function pageReady() {
+      // The shell emits this only after revalidating the account and revealing it.
+      suspended = false;
+      if (!scope() || root.document.getElementById('lifeApp')?.hidden !== false) return;
+      if (!current.catalog?.feed && canAuto()) loadCatalog(true).catch(error => report(error));
       else scheduleAuto();
     }
     async function loadCatalog(automatic = false) {
@@ -434,8 +442,8 @@
       generation++; active = false; stopTimer(); cancelFetch(); unsubscribe?.(); unsubscribe = null;
       if (current) current.loading = false;
     }
-    root.document.addEventListener('visibilitychange', lifecycle); root.addEventListener('online', lifecycle); root.addEventListener('offline', lifecycle);
-    function dispose() { leave(); disposed = true; root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
+    root.document.addEventListener('haedo:page-suspend', pageSuspend); root.document.addEventListener('haedo:page-ready', pageReady); root.document.addEventListener('visibilitychange', lifecycle); root.addEventListener('online', lifecycle); root.addEventListener('offline', lifecycle);
+    function dispose() { leave(); disposed = true; root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
     return Object.freeze({ render, refresh: render, leave, dispose, flush, dirty });
   }
   root.HaedoLife ||= {}; root.HaedoLife.DiscoveryUI = Object.freeze({ create });

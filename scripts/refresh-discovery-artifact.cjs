@@ -15,9 +15,14 @@ const PUBLISHED_URL = 'https://wonchance-art.github.io/life-haedo/assets/life/di
 const PUBLISHED_SW_URL = 'https://wonchance-art.github.io/life-haedo/sw.js';
 const MAX_BYTES = 2 * 1024 * 1024;
 const MAX_SW_BYTES = 256 * 1024;
-// Reviewed live legacy deployment: version numbers advanced on another branch
-// before this catalog existed. Any changed worker, including v134+, is denied.
+// Reviewed default-branch legacy workers: version numbers advanced on another
+// branch before this catalog existed. Only these exact bytes authorize bootstrap.
 const LEGACY_BOOTSTRAP_SHA256 = '645102f365bb8135683fb7e611baf571e780e765c46dd50d570c34ede1a16da9';
+const LEGACY_BOOTSTRAP_WORKERS = Object.freeze({
+  133: LEGACY_BOOTSTRAP_SHA256,
+  // origin/main 58e5cd55f73fb440c997266e160d8859f18bfd6c; CACHE-only bump.
+  134: 'cb4fd4ed6112856883eab180fc3d390eae7693e835d2407b77fac3ce67ba9967',
+});
 const REQUEST_TIMEOUT_MS = 20000;
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
@@ -152,7 +157,7 @@ function verifyPreCatalogWorker(response) {
   const versions = [...text.matchAll(/^\s*const\s+CACHE\s*=\s*(['"])haedo-v(\d+)\1\s*;/gm)];
   const version = versions.length === 1 ? Number(versions[0][2]) : NaN;
   const leading = text.match(/^(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\r\n]*(?:\r?\n|$))*const\s+CACHE\s*=\s*(['"])haedo-v(\d+)\1\s*;/);
-  const digest = sha(response.bytes), legacy = version === 133 && digest === LEGACY_BOOTSTRAP_SHA256;
+  const digest = sha(response.bytes), legacy = digest === LEGACY_BOOTSTRAP_WORKERS[version];
   assert(leading && Number(leading[2]) === version && Number.isSafeInteger(version) && version > 0 && (version < 130 || legacy) &&
     !/discovery-feed\.json|haedo-discovery-feed/.test(text),
   'Catalog 404 after catalog introduction or without a verified old version must stop deployment.');
@@ -251,5 +256,5 @@ if (require.main === module) {
   })().catch(error => { console.error(error.message); process.exitCode = 1; });
 }
 
-module.exports = { PUBLISHED_URL, PUBLISHED_SW_URL, MAX_BYTES, MAX_SW_BYTES, LEGACY_BOOTSTRAP_SHA256, assertWorkflowContext, validateCatalog,
+module.exports = { PUBLISHED_URL, PUBLISHED_SW_URL, MAX_BYTES, MAX_SW_BYTES, LEGACY_BOOTSTRAP_SHA256, LEGACY_BOOTSTRAP_WORKERS, assertWorkflowContext, validateCatalog,
   fetchPublished, fetchPublishedWorker, verifyPreCatalogWorker, checkCollection, collect, install, files };

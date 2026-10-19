@@ -94,14 +94,25 @@ for (const failure of ['v130', 'v132', 'missing-version', 'worker404', 'backport
   });
 }
 
-test('the single reviewed live legacy worker is allowed by exact SHA, not version alone', () => {
+test('the reviewed v133 legacy worker remains allowed by exact SHA, not version alone', () => {
   const legacy = fs.readFileSync(path.resolve(__dirname, 'fixtures/external-discovery/sw-pre-catalog-v133.js'));
   const proof = CI.verifyPreCatalogWorker({ status: 200, bytes: legacy });
   assert.equal(proof.cacheVersion, 133); assert.equal(proof.sha256, CI.LEGACY_BOOTSTRAP_SHA256);
   assert.equal(proof.rule, 'approved-exact-pre-catalog-deployment');
   assert.throws(() => CI.verifyPreCatalogWorker({ status: 200, bytes: Buffer.concat([legacy, Buffer.from('\n')]) }));
-  assert.throws(() => CI.verifyPreCatalogWorker({ status: 200, bytes: Buffer.from(legacy.toString().replace('haedo-v133', 'haedo-v134')) }));
+  assert.throws(() => CI.verifyPreCatalogWorker({ status: 200, bytes: Buffer.from(legacy.toString().replace('haedo-v133', 'haedo-v135')) }));
   assert.throws(() => CI.verifyPreCatalogWorker({ status: 200, bytes: Buffer.from("/*\nconst CACHE='haedo-v129';\n*/") }));
+});
+
+test('reviewed main58e5cd5 v134 is allowed exactly while changed v134 and unknown v135 are denied', () => {
+  const legacy = fs.readFileSync(path.resolve(__dirname, 'fixtures/external-discovery/sw-pre-catalog-v134.js'));
+  const proof = CI.verifyPreCatalogWorker({ status: 200, bytes: legacy });
+  assert.equal(proof.cacheVersion, 134);
+  assert.equal(proof.sha256, 'cb4fd4ed6112856883eab180fc3d390eae7693e835d2407b77fac3ce67ba9967');
+  assert.equal(proof.sha256, CI.LEGACY_BOOTSTRAP_WORKERS[134]);
+  assert.equal(proof.rule, 'approved-exact-pre-catalog-deployment');
+  assert.throws(() => CI.verifyPreCatalogWorker({ status: 200, bytes: Buffer.concat([legacy, Buffer.from('\n')]) }));
+  assert.throws(() => CI.verifyPreCatalogWorker({ status: 200, bytes: Buffer.from(legacy.toString().replace('haedo-v134', 'haedo-v135')) }));
 });
 
 for (const failure of ['503', 'bad-json', 'invalid-utf8', 'future', 'unknown-host', 'missing-source', 'invalid-row', 'content']) {
