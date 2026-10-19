@@ -1,0 +1,147 @@
+{
+  "createdAt": "2026-10-18T15:33:45.337Z",
+  "scope": "Real app/SDK/IDB with anonymous Auth; synthetic vectors and policy only in designated cases. No actual model, Apple hardware, live account or deployment validation.",
+  "checks": [
+    {
+      "name": "actual policy tools entry, manual save reload and reset preserve source/workbench",
+      "syntheticVectors": false,
+      "pass": true
+    },
+    {
+      "name": "failed IDB manual save preserves typing and explicit retry succeeds",
+      "syntheticVectors": false,
+      "pass": true
+    },
+    {
+      "name": "two tabs CAS conflict, latest reload and tombstone reject late save",
+      "syntheticVectors": false,
+      "pass": true
+    },
+    {
+      "name": "workspace and account scopes isolate manual interests",
+      "syntheticVectors": false,
+      "pass": false,
+      "error": "locator.waitFor: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#interestManual') to be visible\u001b[22m\n\n    at /workspace/haedo-discovery/tests/life-interest-browser.cjs:104:331\n    at async check (/workspace/haedo-discovery/tests/life-interest-browser.cjs:69:11)\n    at async main (/workspace/haedo-discovery/tests/life-interest-browser.cjs:98:5)"
+    },
+    {
+      "name": "synthetic adapter exact raw evidence, reader return, manual typing and explicit confirmation",
+      "syntheticVectors": true,
+      "pass": false,
+      "error": "locator.waitFor: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#lifeSourceText') to be visible\u001b[22m\n\n    at check.mock (/workspace/haedo-discovery/tests/life-interest-browser.cjs:114:66)\n    at async check (/workspace/haedo-discovery/tests/life-interest-browser.cjs:69:11)\n    at async main (/workspace/haedo-discovery/tests/life-interest-browser.cjs:107:5)"
+    },
+    {
+      "name": "synthetic inference failure and genuine empty adapter result retain manual interests",
+      "syntheticVectors": true,
+      "pass": true
+    },
+    {
+      "name": "synthetic late inference cancelled by navigation never saves analysis",
+      "syntheticVectors": true,
+      "pass": true
+    },
+    {
+      "name": "visual actual policy manual selection 390",
+      "syntheticVectors": false,
+      "pass": true
+    },
+    {
+      "name": "visual actual policy manual selection 820",
+      "syntheticVectors": false,
+      "pass": true
+    },
+    {
+      "name": "visual actual policy manual selection 1440",
+      "syntheticVectors": false,
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "width": 390,
+      "file": "interest-manual-390.png",
+      "audit": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "fieldFontSize": "16px",
+        "buttons": [
+          {
+            "id": "interestSaveManual",
+            "width": 85.6875,
+            "height": 44
+          },
+          {
+            "id": "interestRevertManual",
+            "width": 109.984375,
+            "height": 44
+          },
+          {
+            "id": "interestAnalyze",
+            "width": 350,
+            "height": 44
+          }
+        ]
+      },
+      "actualPolicy": true
+    },
+    {
+      "width": 820,
+      "file": "interest-manual-820.png",
+      "audit": {
+        "viewport": 820,
+        "documentWidth": 820,
+        "fieldFontSize": "16px",
+        "buttons": [
+          {
+            "id": "interestSaveManual",
+            "width": 85.6875,
+            "height": 44
+          },
+          {
+            "id": "interestRevertManual",
+            "width": 109.984375,
+            "height": 44
+          },
+          {
+            "id": "interestAnalyze",
+            "width": 113.765625,
+            "height": 44
+          }
+        ]
+      },
+      "actualPolicy": true
+    },
+    {
+      "width": 1440,
+      "file": "interest-manual-1440.png",
+      "audit": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "fieldFontSize": "16px",
+        "buttons": [
+          {
+            "id": "interestSaveManual",
+            "width": 85.6875,
+            "height": 44
+          },
+          {
+            "id": "interestRevertManual",
+            "width": 109.984375,
+            "height": 44
+          },
+          {
+            "id": "interestAnalyze",
+            "width": 113.765625,
+            "height": 44
+          }
+        ]
+      },
+      "actualPolicy": true
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "modelRequests": [],
+  "realRemoteWrites": 0
+}

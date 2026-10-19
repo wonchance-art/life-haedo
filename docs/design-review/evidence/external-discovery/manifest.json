@@ -1,0 +1,51 @@
+{
+  "createdAt": "2026-10-18T18:27:13.377495+00:00",
+  "scope": "Public metadata and anonymous synthetic fixtures only; production, live OAuth, publisher-page reading, Apple hardware and user usefulness are not validated.",
+  "tests": {
+    "node": {
+      "pass": 729,
+      "fail": 0,
+      "skip": 0
+    },
+    "static": {
+      "html": 19,
+      "javascript": 118,
+      "localReferences": 477
+    },
+    "externalBrowser": 17,
+    "externalPwa": 9,
+    "interestPwa": 6,
+    "existingBrowserRegression": 21
+  },
+  "reportNotes": {
+    "visual.json": "1440/390 captures retained here; 820/latest/empty captures remain in local artifacts.",
+    "browser.json": "Synthetic three-width screenshots remain in local artifacts.",
+    "interest-pwa.json": "Earlier current-worker run; interest module/SW hashes remain current, final discovery modules verified by pwa.json.",
+    "regression-summary.json": "Original report/log paths name local artifacts, not published files."
+  },
+  "productSHA256": {
+    "assets/life/discovery.js": "448ad3ddb440dac3019d22ff663bbca2d90dbfe5b5a5539599153fd5dc28f497",
+    "assets/life/discovery-profile.js": "3d7424eeb3db46fcf9f933544a7a2ba925e5a01de0615051b79f877dbc62d7d5",
+    "assets/life/discovery-ui.js": "f002f061016175cd35c4adc0a7ba5bc103cec043057793e1681c34eb39e13efe",
+    "assets/life/discovery.css": "90dd0c14a622bea454dd16bb6e2b5a5e2d8d3eaed85294b6e7b9bc8cf6423905",
+    "assets/life/discovery-feed.json": "f9f2cdc92da036361ac145badc33c2666a9bf34ce0c0bb208efa35afe3d6ccf2",
+    "assets/life/ui.js": "b9ecfb5a852b13a44ac565daccf1fdcc74676e6b5fddec547aeea7e11edf60e5",
+    "assets/life/storage.js": "ec4849d9d0ddd37ea573e5c4441158b836f1c8005b3d631cdfab049fe0d06c82",
+    "sw.js": "ceee25a2669398a40787766c4692db1fdb91363831e5dbf0b0c44d3c45dddf2b",
+    "scripts/update-discovery-feed.py": "051d6719f4a6bed57a195bb915ccb3fd44ca2a9a3785ae4ec901c384a3b9f40c",
+    "scripts/prepare-site.mjs": "1502323128e5a3558cbb9364bafedd6e4f0a664c29c8decc5580b1711d39c496",
+    "tests/life-external-discovery-browser.cjs": "d84e21988fcd36e0865c998b2fc30877be6821bea58ec27426d386adb98135ab",
+    "tests/life-external-discovery-pwa-browser.cjs": "711471f541078947158b31d0f0dc366c364fc3c5b29481e7147bce9ea4370a59"
+  },
+  "evidenceSHA256": {
+    "actual-1440.png": "79b9488b972023a34382d23ea31f80084290f62990a1ba5f68add6013ecff62f",
+    "actual-390.png": "7b6ade0c474244b7083e90bc25ad9dca299be6d380b238a8ebc7fcd8bff40684",
+    "browser.json": "73295362bd436e86ec84a33ad9e947545c67cfd2c4d3288509f90ce6591c8178",
+    "interest-pwa.json": "4b32da5ef622fa24ce960e61f5db96dada526a26b0152c5951f27ca9e32983c6",
+    "pwa.json": "40b73729c4690645428aab908a02dda1ee2e163a8c5e91c54f74a4440dbb1513",
+    "regression-summary.json": "d93d73311d4bcf01ecb6bbfef1c1cc00ab8df8e20554d67648ce7b2345613d04",
+    "source-update.json": "cef4bf3c478091ec1532b69daaaaaada09529fc2766abf972a608893abe6d378",
+    "supply-coverage.json": "77cc9de0079aea2fd566c45cb5c43fb8133fd198d195e4aca08b09c9e838d691",
+    "visual.json": "c3022747fad1e656db6e47d09d2e40ea07b73110691efdbbd1673f3daf22635e"
+  }
+}

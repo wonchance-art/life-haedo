@@ -1,0 +1,44 @@
+{
+  "initialCI": {
+    "run": 39210375040,
+    "head": "4f35588e0ac7740afd2515b4189b27f1b18d8a2b",
+    "languageGroup": "success",
+    "otherFailures": [
+      "material-writing-visual-browser comparison DOM assertion before native media-query change",
+      "integrated-release-browser source route rejection during context close masked the primary journey error; partial initial HTML suggests a navigation wait, but the original error was not retained"
+    ]
+  },
+  "viewport": {
+    "browser": "153.0.8010.12",
+    "trials": 16,
+    "observedTransitions": [
+      {
+        "trial": 13,
+        "before": {
+          "t": 1523.2000000029802,
+          "width": 820,
+          "matches": false,
+          "count": 1
+        },
+        "settled": {
+          "t": 1534,
+          "width": 820,
+          "count": 2
+        }
+      }
+    ],
+    "fix": "Wait at most 5 seconds for the expected two comparison bodies after returning to 820px; keep the exact assertion. No fixed sleep or product change.",
+    "validation": "Existing visual suite 6/6 passed with console/page/external errors 0."
+  },
+  "productChangesAfterLanguageFreeze": false,
+  "finalCI": "Verify exact final PR head; see PR checks and final task report.",
+  "routeTeardown": {
+    "validation": "Chromium153 real localhost fault injection: 5/5 passed with strict unhandled rejection checks. Original error/stage/step saved before cleanup; expected close cancellation drained; actual live socket failure still rejects and remains latched.",
+    "wholeSQLJourney": "Not rerun locally; exact final CI is required.",
+    "productSQLTimeoutOfflineRoutingPolicyChanged": false
+  },
+  "testHashes": {
+    "tests/integrated-release-browser.cjs": "374e4ba39df17e709f59242599a218a367fda88529448335467f56dde946f549",
+    "tests/material-writing-visual-browser.cjs": "78c3be2633444a0810700c4be609c215f8ac38b9a1e87f227e8cdebed441420e"
+  }
+}

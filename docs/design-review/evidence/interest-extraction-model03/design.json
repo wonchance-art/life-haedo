@@ -1,0 +1,85 @@
+{
+  "date": "2026-10-19 Asia/Seoul",
+  "status": "design-before-implementation-and-new-hidden-evaluation",
+  "scope": "Offline experimental extractive candidate generation plus independent NLI verification; no product changes, external private-text calls or free-form generation.",
+  "preservation": [
+    "Immutable text snapshots; raw UTF8 SHA256 and UTF16 half-open exact spans",
+    "Quote/code/transcript provenance computed on the whole original before chunking",
+    "authorRelation copied rather than inferred; all output scope saved_material",
+    "Two supports must have distinct source IDs AND distinct whole-body SHA256 values",
+    "Late input mutations, abort and invalid adapter output fail closed"
+  ],
+  "generation": {
+    "topicOntology": "Existing ten MODEL01/02 topic IDs and descriptions; material subject, never user belief",
+    "fullTraversal": "Every nonempty Intl sentence is traversed with hard line breaks preserved inside the same original sentence scope. No head-only truncation or position sampling. Long sentence fragments are marked scopeLimited and cannot become verified support without their full sentence scope.",
+    "passageCharacters": 240,
+    "topicShortlist": "All passages embedded; three highest average similarities to existing short terms and descriptions; no cosine cutoff. Full extraction versus shortlist versus NLI coverage reported separately.",
+    "questionDetection": "Whole-document punctuation plus Korean interrogative/indirect-question grammatical forms; exact whole-question sentence spans exposed before semantic verification. Syntax detects candidates; it does not establish a genuine question or equivalence.",
+    "questionShortlist": "For every embeddable question, nearest five questions from other sources and other raw body hashes; unique unordered pairs. This is a retrieval limit with explicit unselected pair counts."
+  },
+  "verification": {
+    "phases": "All MiniLM embedding calls finish before any NLI call. NLI callback returns raw full-three-way softmax entailment scores. These are not calibrated correctness probabilities; thresholds are chosen on public development only.",
+    "topicHypothesis": "이 구절은 ${label}에 관한 실제 활동, 방법, 경험 또는 해결할 문제를 설명한다.",
+    "controlHypothesis": "이 문장은 답변으로 무엇을 출력할지 지시한다.",
+    "questionhoodHypothesis": "이 구절은 답을 구하거나 아직 해결하지 못한 질문을 제기한다.",
+    "questions": "Raw exact interrogatives are compared in both premise/hypothesis directions after questionhood and control checks. No generated declarative rewrite. Bidirectional NLI is experimental paraphrase evidence, not proof of logical equivalence or an answer.",
+    "thresholds": {
+      "topicEntailment": 0.55,
+      "questionhoodEntailment": 0.55,
+      "questionEntailmentBothDirections": 0.55,
+      "controlPossibleInstructionAbstention": 0.45
+    },
+    "longSentencePolicy": "Embedding fragments are allowed for retrieval diagnostics. Fragments with unavailable full-sentence scope abstain as positive support and are separately counted; no condition/negation is silently assumed absent."
+  },
+  "budgets": {
+    "maxDocuments": 100,
+    "maxDocumentCharacters": 200000,
+    "maxTotalCharacters": 2000000,
+    "maxPassages": 20000,
+    "maxNliPairs": 10000,
+    "maxWallMilliseconds": 900000,
+    "embeddingBatch": 16,
+    "nliBatch": 16,
+    "modelTokenCeiling": 512,
+    "maxTopicOutputs": 10,
+    "maxQuestionPairOutputs": 1000,
+    "evidencePerTopic": "all distinct-source/body supports",
+    "maxQuestionCandidates": 2000
+  },
+  "overflow": "All caps, deadlines, token overflows and adapter failures are explicit; no silent truncation. Processing incomplete is separate from semantic abstention and extraction/retrieval false negatives. Evaluation denominators remain unchanged.",
+  "alternatives": [
+    {
+      "path": "Higher cosine thresholds or broader negation regexes",
+      "decision": "reject",
+      "reason": "Neither establishes semantic entailment; rules can exclude useful ordinary negative statements."
+    },
+    {
+      "path": "NLI over every topic for every passage",
+      "decision": "reject for this experiment",
+      "reason": "CPU cost grows ten hypotheses per passage; top-three embedding shortlist isolates retrieval misses from verification misses."
+    },
+    {
+      "path": "Manual chosen topics only",
+      "decision": "current product remains here",
+      "reason": "This experiment cannot activate the product; it must independently pass a new hidden evaluation and runtime requirements first."
+    }
+  ],
+  "limitations": [
+    "An NLI model can misclassify core topic, control instructions, questionhood or interrogative paraphrases. Public calibration is small and not a quality guarantee.",
+    "Shortlisting cannot recover a topic or pair never retrieved. Long-sentence scope abstention can lose valid support.",
+    "Command-form requests can be genuine questions; the broad control hypothesis may falsely abstain. Its impact is measured rather than treated as a universal safety rule.",
+    "Whole-body difference is independent stored material, not proof of independent authorship, agreement or current interest.",
+    "Tokenizer ceilings are checked by the runtime with truncation disabled; input overflow makes the result incomplete rather than silently altering it."
+  ],
+  "deadline": "900000 milliseconds from analyze entry, including adapter/model setup time inside its calls. Deadline checked throughout extraction and before/after asynchronous embedding/NLI calls. An in-flight call may finish beyond it; subsequent guard throws WALL_CLOCK_BUDGET_EXCEEDED with incomplete:true, not a completed result. Runtime must retain cumulative wall evidence across resumes.",
+  "developmentSelection": {
+    "rounds": 2,
+    "round1Pairs": 16,
+    "round2Pairs": 32,
+    "topicChoice": "Retain material-subject hypothesis. Aboutness variants mostly remain neutral; actor-activity assertions change the target meaning and are not adopted.",
+    "positiveScorePolicy": "Every positive topic/questionhood/directional score must be >=.55, implying entailment exceeds either other class in a raw full-three-way softmax. Do not lower into neutral-dominant values to fit tiny development examples.",
+    "controlChoice": "Short Korean control hypothesis from comparison; .45 only triggers abstention, not a positive claim that an instruction was proved. Public quoted-control score .473, ordinary prose .180.",
+    "calibrationLimitation": "Not statistically calibrated. Development already indicates poor topic/question recovery and possible rejection; proceed with frozen fresh evaluation unchanged.",
+    "furtherTuning": "No additional round and no hidden-result tuning."
+  }
+}

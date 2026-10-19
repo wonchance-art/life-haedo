@@ -1,0 +1,474 @@
+{
+  "checkedAt": "2026-10-19T05:47:33.623410Z",
+  "scope": "Fixed official public URLs; rights/robots/response metadata only. No personal topics, private files or full policy/article bodies.",
+  "proxyPreserved": true,
+  "tlsVerificationEnabled": true,
+  "candidates": [
+    {
+      "id": "language-log",
+      "name": "Language Log",
+      "institution": "University of Pennsylvania Linguistic Data Consortium hosting; multi-author linguistics blog",
+      "language": "en",
+      "home": "https://languagelog.ldc.upenn.edu/nll/",
+      "feed": "https://languagelog.ldc.upenn.edu/nll/?feed=rss2",
+      "policyCandidates": [
+        "https://languagelog.ldc.upenn.edu/nll/?page_id=2"
+      ],
+      "hosts": [
+        "languagelog.ldc.upenn.edu"
+      ],
+      "robotsStatus": "allowed",
+      "assessment": {
+        "status": "hold_rights_clarity",
+        "technicalCompatibility": "Current restricted collector accepted 13/13 RSS2 entries, no policy change needed. Official home advertises this exact feed.",
+        "rights": "No explicit syndication/reuse license found on the inspected official home and page_id=2. Robots allow is not a reuse grant; university hosting is not institutional endorsement or peer review.",
+        "limitations": [
+          "English multi-author commentary; not all posts report peer-reviewed research",
+          "No practical language-learning advice coverage guarantee",
+          "Original full text/media never copied"
+        ],
+        "adoptionCondition": "Official metadata/title-link syndication conditions need clearer evidence or explicit permission; no registration now."
+      },
+      "robotsResponse": {
+        "url": "https://languagelog.ldc.upenn.edu/robots.txt",
+        "finalUrl": "https://languagelog.ldc.upenn.edu/robots.txt",
+        "status": 200,
+        "contentType": "text/plain",
+        "bytes": 34,
+        "sha256": "311ac9575dfb473e13bd1f19b7518b7b8a67e855f2785fd7154006cae7a065e4",
+        "checkedAt": "2026-10-19T05:47:06.664942Z"
+      },
+      "responses": [
+        {
+          "url": "https://languagelog.ldc.upenn.edu/nll/",
+          "finalUrl": "https://languagelog.ldc.upenn.edu/nll/",
+          "status": 200,
+          "contentType": "text/html; charset=UTF-8",
+          "bytes": 124698,
+          "sha256": "79fe4f7556319c0a4d8a3820dbb35250ddf2ace6f459391763f11b19b581dd1d",
+          "checkedAt": "2026-10-19T05:47:07.374996Z",
+          "robotsAllowed": true,
+          "requested": true
+        },
+        {
+          "url": "https://languagelog.ldc.upenn.edu/nll/?page_id=2",
+          "finalUrl": "https://languagelog.ldc.upenn.edu/nll/?page_id=2",
+          "status": 200,
+          "contentType": "text/html; charset=UTF-8",
+          "bytes": 94664,
+          "sha256": "83f19366316a367c093e8a23d42bf24336600e2424eb577b2fdb690f800de257",
+          "checkedAt": "2026-10-19T05:47:07.977014Z",
+          "robotsAllowed": true,
+          "requested": true
+        },
+        {
+          "url": "https://languagelog.ldc.upenn.edu/nll/?feed=rss2",
+          "finalUrl": "https://languagelog.ldc.upenn.edu/nll/?feed=rss2",
+          "status": 200,
+          "contentType": "application/rss+xml; charset=UTF-8",
+          "bytes": 63580,
+          "sha256": "a6ac0a0ac0bf0de62896c6253b2a8607ade5f72171c5dada923f943b8a741e48",
+          "checkedAt": "2026-10-19T05:47:08.506838Z",
+          "robotsAllowed": true,
+          "requested": true,
+          "parser": {
+            "status": "accepted",
+            "feedEntries": 13,
+            "acceptedEntries": 13,
+            "rejectedEntries": 0,
+            "retained": 13,
+            "latestPublishedAt": "2026-10-17T14:48:26Z",
+            "sampleTitles": [
+              "Singularities: von Neumann, Good, Vinge, …",
+              "Skit hits back at AI job interviews",
+              "LingDuels?"
+            ],
+            "sampleUrls": [
+              "https://languagelog.ldc.upenn.edu/nll/?p=74439&utm_source=rss&utm_medium=rss&utm_campaign=singularities-von-neumann-good-vinge",
+              "https://languagelog.ldc.upenn.edu/nll/?p=74427&utm_source=rss&utm_medium=rss&utm_campaign=skit-hits-back-at-ai-job-interviews",
+              "https://languagelog.ldc.upenn.edu/nll/?p=74422&utm_source=rss&utm_medium=rss&utm_campaign=lingduels"
+            ],
+            "publishedDateStatuses": [
+              "valid"
+            ],
+            "allCoverageLinkOnly": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "british-council-learning",
+      "name": "British Council LearnEnglish",
+      "institution": "British Council",
+      "language": "en",
+      "home": "https://learnenglish.britishcouncil.org/",
+      "feed": "https://learnenglish.britishcouncil.org/rss.xml",
+      "policyCandidates": [
+        "https://learnenglish.britishcouncil.org/terms-use"
+      ],
+      "hosts": [
+        "learnenglish.britishcouncil.org"
+      ],
+      "robotsStatus": "allowed",
+      "assessment": {
+        "status": "hold_feed_missing_and_terms_restrictive",
+        "technicalCompatibility": "Fixed official /rss.xml returned404; do not guess more endpoints, crawl sitemap or replace with scraping.",
+        "rights": "Official home linked https://www.britishcouncil.org/terms; that200 policy permits personal/noncommercial use under conditions, but bars republishing on another site without prior approval and restricts contextless direct links. Metadata-only is not a universal exemption.",
+        "limitations": [
+          "Practical English-learning institution, but no reviewed working RSS here",
+          "Initial /terms-use was403; official linked /terms fetched normally after its own robots check; no bypass"
+        ],
+        "adoptionCondition": "Require official working feed plus a compatible syndication/metadata grant. No registration now."
+      },
+      "robotsResponse": {
+        "url": "https://learnenglish.britishcouncil.org/robots.txt",
+        "finalUrl": "https://learnenglish.britishcouncil.org/robots.txt",
+        "status": 200,
+        "contentType": "text/plain; charset=UTF-8",
+        "bytes": 1715,
+        "sha256": "b7d2467abd85186a3b3575dc79a77305fa4b816e3d0dcf184eb6c350b42c1a43",
+        "checkedAt": "2026-10-19T05:47:13.023214Z"
+      },
+      "responses": [
+        {
+          "url": "https://learnenglish.britishcouncil.org/",
+          "finalUrl": "https://learnenglish.britishcouncil.org/",
+          "status": 200,
+          "contentType": "text/html; charset=UTF-8",
+          "bytes": 126111,
+          "sha256": "902078542bff32270dedc6f1b9aaca600a07ed52d32a87b1dc9b7adbe1291cc2",
+          "checkedAt": "2026-10-19T05:47:18.212274Z",
+          "robotsAllowed": true,
+          "requested": true
+        },
+        {
+          "url": "https://learnenglish.britishcouncil.org/terms-use",
+          "errorType": "HTTPError",
+          "robotsAllowed": true,
+          "requested": true
+        },
+        {
+          "url": "https://learnenglish.britishcouncil.org/rss.xml",
+          "errorType": "HTTPError",
+          "robotsAllowed": true,
+          "requested": true
+        },
+        {
+          "url": "https://www.britishcouncil.org/terms",
+          "finalUrl": "https://www.britishcouncil.org/terms",
+          "status": 200,
+          "contentType": "text/html; charset=utf-8",
+          "bytes": 74463,
+          "sha256": "6d0be7d2e69f275eb5d352bf55a9e5943e0d3a8cbac6c2d4a32488c0137fb310",
+          "checkedAt": "2026-10-19T05:48:07.685276Z",
+          "robotsAllowed": true,
+          "requested": true,
+          "robotsResponse": {
+            "url": "https://www.britishcouncil.org/robots.txt",
+            "finalUrl": "https://www.britishcouncil.org/robots.txt",
+            "status": 200,
+            "contentType": "text/plain;charset=UTF-8",
+            "bytes": 6280,
+            "sha256": "8e87b37ef6a2111f5a5ee7920811a9c9c6ab4459c5ebb9cae45dba36d8f44391",
+            "checkedAt": "2026-10-19T05:48:06.005355Z"
+          }
+        }
+      ]
+    },
+    {
+      "id": "mit-linguistics",
+      "name": "MIT News — Linguistics",
+      "institution": "Massachusetts Institute of Technology",
+      "language": "en",
+      "home": "https://news.mit.edu/topic/linguistics",
+      "feed": "https://news.mit.edu/rss/topic/linguistics",
+      "policyCandidates": [
+        "https://news.mit.edu/terms-use"
+      ],
+      "hosts": [
+        "news.mit.edu"
+      ],
+      "robotsStatus": "allowed",
+      "assessment": {
+        "status": "candidate_conditional_metadata_only",
+        "technicalCompatibility": "Official topic page advertises https://news.mit.edu/topic/mitlinguistics-rss.xml. HTTPS200, robots allowed, UTF8 RSS2 current parser accepts50/50, cap20, rejected0. Alias /rss/topic/linguistics also200 but use the advertised address.",
+        "rights": "Official https://news.mit.edu/terms-of-use explicitly offers RSS for syndication. Republishing stories requires headline/subheadline/byline/MIT News citation linked to original and bottom permission credit. Images have separate CC BY-NC-ND conditions. Recommend only title/link/public author/date/official tags, MIT News source attribution, no story text/summary/subheadline/images. Do not claim blanket CC license for all text.",
+        "latestPublishedAt": "2026-09-29T04:00:00Z",
+        "limitations": [
+          "English institutional news, including faculty/journal/admin posts, not a journal feed",
+          "Linguistics category includes broader adjacent fields; not language-learning advice",
+          "Current newest item roughly20days old; corpus freshness differs from collection freshness",
+          "Source attribution/terms interpretation must be reflected in final registration review"
+        ],
+        "adoptionCondition": "Root approves bounded metadata-only title/link usage with visible MIT News attribution and unchanged policy; no registration performed by this research task."
+      },
+      "robotsResponse": {
+        "url": "https://news.mit.edu/robots.txt",
+        "finalUrl": "https://news.mit.edu/robots.txt",
+        "status": 200,
+        "contentType": "text/plain; charset=utf-8",
+        "bytes": 1811,
+        "sha256": "ce0ba5ae1d627202514289bda9b49e44735b33adba03ce41872ad091ec2cf90d",
+        "checkedAt": "2026-10-19T05:47:06.338568Z"
+      },
+      "responses": [
+        {
+          "url": "https://news.mit.edu/topic/linguistics",
+          "finalUrl": "https://news.mit.edu/topic/linguistics",
+          "status": 200,
+          "contentType": "text/html; charset=utf-8",
+          "bytes": 93119,
+          "sha256": "553d967abefd044d84ef28cbc5872fe1000455639946090e0b4c3a00e31dd701",
+          "checkedAt": "2026-10-19T05:47:06.585962Z",
+          "robotsAllowed": true,
+          "requested": true
+        },
+        {
+          "url": "https://news.mit.edu/terms-use",
+          "errorType": "HTTPError",
+          "robotsAllowed": true,
+          "requested": true
+        },
+        {
+          "url": "https://news.mit.edu/rss/topic/linguistics",
+          "finalUrl": "https://news.mit.edu/rss/topic/linguistics",
+          "status": 200,
+          "contentType": "application/rss+xml; charset=utf-8",
+          "bytes": 460895,
+          "sha256": "9ae43808c2fb129a776a8ab4839e00cefb88bc39b0d0591258e7075b8ff4ad3e",
+          "checkedAt": "2026-10-19T05:47:07.190949Z",
+          "robotsAllowed": true,
+          "requested": true,
+          "parser": {
+            "status": "accepted",
+            "feedEntries": 50,
+            "acceptedEntries": 50,
+            "rejectedEntries": 0,
+            "retained": 20,
+            "latestPublishedAt": "2026-09-29T04:00:00Z",
+            "sampleTitles": [
+              "The effects of an “algorithmic monoculture” depend on the details",
+              "School of Humanities, Arts, and Social Sciences welcomes six new faculty for 2026",
+              "Three MIT Press journals lead their fields with Clarivate No. 1 rankings"
+            ],
+            "sampleUrls": [
+              "https://news.mit.edu/2026/algorithmic-monoculture-effects-depend-on-details-0929",
+              "https://news.mit.edu/2026/school-humanities-arts-and-social-sciences-welcomes-six-new-faculty-0717",
+              "https://news.mit.edu/2026/three-mit-press-journals-earn-clarivate-no-1-rankings-0713"
+            ],
+            "publishedDateStatuses": [
+              "valid"
+            ],
+            "allCoverageLinkOnly": true
+          }
+        },
+        {
+          "url": "https://news.mit.edu/terms-of-use",
+          "finalUrl": "https://news.mit.edu/terms-of-use",
+          "status": 200,
+          "contentType": "text/html; charset=utf-8",
+          "bytes": 64014,
+          "sha256": "c43a6b20cf2b29448f1e0af7c4975271735c75ceffe4a78604eeb9871d6b5f44",
+          "checkedAt": "2026-10-19T05:47:59.779214Z",
+          "robotsAllowed": true,
+          "requested": true,
+          "robotsResponse": {
+            "url": "https://news.mit.edu/robots.txt",
+            "finalUrl": "https://news.mit.edu/robots.txt",
+            "status": 200,
+            "contentType": "text/plain; charset=utf-8",
+            "bytes": 1811,
+            "sha256": "ce0ba5ae1d627202514289bda9b49e44735b33adba03ce41872ad091ec2cf90d",
+            "checkedAt": "2026-10-19T05:47:59.568884Z"
+          }
+        },
+        {
+          "url": "https://news.mit.edu/topic/mitlinguistics-rss.xml",
+          "finalUrl": "https://news.mit.edu/topic/mitlinguistics-rss.xml",
+          "status": 200,
+          "contentType": "application/rss+xml; charset=utf-8",
+          "bytes": 460909,
+          "sha256": "f55c91356e48d6e9252e2e0a8b3d802ab1677c205cf6b35bae8d30b4892de8fe",
+          "checkedAt": "2026-10-19T05:48:00.318100Z",
+          "robotsAllowed": true,
+          "requested": true,
+          "parser": {
+            "status": "accepted",
+            "feedEntries": 50,
+            "acceptedEntries": 50,
+            "rejectedEntries": 0,
+            "retained": 20,
+            "latestPublishedAt": "2026-09-29T04:00:00Z",
+            "sampleTitles": [
+              "The effects of an “algorithmic monoculture” depend on the details",
+              "School of Humanities, Arts, and Social Sciences welcomes six new faculty for 2026",
+              "Three MIT Press journals lead their fields with Clarivate No. 1 rankings"
+            ],
+            "sampleUrls": [
+              "https://news.mit.edu/2026/algorithmic-monoculture-effects-depend-on-details-0929",
+              "https://news.mit.edu/2026/school-humanities-arts-and-social-sciences-welcomes-six-new-faculty-0717",
+              "https://news.mit.edu/2026/three-mit-press-journals-earn-clarivate-no-1-rankings-0713"
+            ],
+            "allCoverageLinkOnly": true
+          },
+          "robotsResponse": {
+            "url": "https://news.mit.edu/robots.txt",
+            "finalUrl": "https://news.mit.edu/robots.txt",
+            "status": 200,
+            "contentType": "text/plain; charset=utf-8",
+            "bytes": 1811,
+            "sha256": "ce0ba5ae1d627202514289bda9b49e44735b33adba03ce41872ad091ec2cf90d",
+            "checkedAt": "2026-10-19T05:47:59.568884Z"
+          }
+        }
+      ]
+    },
+    {
+      "id": "arxiv-cs-cl",
+      "name": "arXiv Computation and Language (cs.CL)",
+      "institution": "arXiv/Cornell research preprint service",
+      "language": "en",
+      "home": "https://arxiv.org/",
+      "feed": "https://rss.arxiv.org/rss/cs.CL",
+      "policyCandidates": [
+        "https://info.arxiv.org/help/rss.html",
+        "https://info.arxiv.org/help/api/tou.html",
+        "https://info.arxiv.org/help/license/index.html"
+      ],
+      "hosts": [
+        "rss.arxiv.org",
+        "arxiv.org"
+      ],
+      "robotsStatus": "not_provided_404",
+      "assessment": {
+        "status": "candidate_metadata_only",
+        "technicalCompatibility": "Official RSS instructions describe category URLs. HTTPS200 RSS,470458bytes,226/226 accepted, rejected0, current cap20. info.arxiv.org and rss.arxiv.org robots404 treated not_provided under unchanged collector policy, not affirmative robots permission.",
+        "rights": "Official API terms explicitly include RSS and grant descriptive metadata under CC0 1.0; license page states all metadata CC0. Terms permit retrieving/storing/transforming/sharing descriptive metadata and discovery tools. E-prints remain individually copyrighted; copy no abstract/body/PDF/images.",
+        "latestPublishedAt": "2026-10-19T04:00:00Z",
+        "ratePolicy": "For legacy APIs including RSS, at most1request per3seconds and a single connection across controlled machines. One fixed RSS request here; policy pages are documentation, not extra RSS/legacy API calls. Any later multi-arXiv feed registration must enforce shared pacing.",
+        "allowedHostsProposal": [
+          "rss.arxiv.org",
+          "arxiv.org"
+        ],
+        "limitations": [
+          "English computational linguistics/NLP preprints, not general language science or practical language-learning advice",
+          "Not peer-review certification; author assertions not independently fact-checked here",
+          "226currentfeed entries exceed20retained cap; no exhaustive literature coverage claim",
+          "Daily feed may be empty on non-announcement days; existing empty-feed fail/last-good-stale behavior should remain",
+          "No automatic expansion to other cs categories or alternate export host"
+        ],
+        "adoptionCondition": "Root approves fixed cs.CL metadata source and exact host allowlist; preserve20entry cap and failure/last-good behavior, disclose preprint/English scope.",
+        "dateBasisLimitation": "Official RSS pubDate can be announcement/replacement announcement date, not first submission/publication or peer-review date. Existing article date schema/sorting stays unchanged; source label discloses RSS announcement date."
+      },
+      "responses": [
+        {
+          "url": "https://info.arxiv.org/help/rss.html",
+          "finalUrl": "https://info.arxiv.org/help/rss.html",
+          "status": 200,
+          "contentType": "text/html",
+          "bytes": 88665,
+          "sha256": "edc73107fc55074031eb2681b6b6e313483beee64b28d2e5a6ec3230550a9177",
+          "checkedAt": "2026-10-19T05:48:06.933487Z",
+          "robotsAllowed": true,
+          "requested": true,
+          "robotsResponse": {
+            "url": "https://info.arxiv.org/robots.txt",
+            "errorType": "HTTPError"
+          }
+        },
+        {
+          "url": "https://info.arxiv.org/help/api/tou.html",
+          "finalUrl": "https://info.arxiv.org/help/api/tou.html",
+          "status": 200,
+          "contentType": "text/html",
+          "bytes": 85062,
+          "sha256": "badbec1e87aa317038c3a519a3fad3c4a855ebe019f0e681772d72f6a14f4e49",
+          "checkedAt": "2026-10-19T05:48:10.977122Z",
+          "robotsAllowed": true,
+          "requested": true,
+          "robotsResponse": {
+            "url": "https://info.arxiv.org/robots.txt",
+            "errorType": "HTTPError"
+          }
+        },
+        {
+          "url": "https://info.arxiv.org/help/license/index.html",
+          "finalUrl": "https://info.arxiv.org/help/license/index.html",
+          "status": 200,
+          "contentType": "text/html",
+          "bytes": 101170,
+          "sha256": "75ef3cef1c13bad8b20c52aee64d2608eac6c20638b71ec8ab2b6f22c84f233d",
+          "checkedAt": "2026-10-19T05:48:11.197449Z",
+          "robotsAllowed": true,
+          "requested": true,
+          "robotsResponse": {
+            "url": "https://info.arxiv.org/robots.txt",
+            "errorType": "HTTPError"
+          }
+        },
+        {
+          "url": "https://rss.arxiv.org/rss/cs.CL",
+          "finalUrl": "https://rss.arxiv.org/rss/cs.CL",
+          "status": 200,
+          "contentType": "application/rss+xml",
+          "bytes": 470458,
+          "sha256": "d818bc7b74c99cdd90323b6cf19a00f2fa8b5c4c967c8061b5fcde7952c4dcf0",
+          "checkedAt": "2026-10-19T05:48:11.813318Z",
+          "robotsAllowed": true,
+          "requested": true,
+          "parser": {
+            "status": "accepted",
+            "feedEntries": 226,
+            "acceptedEntries": 226,
+            "rejectedEntries": 0,
+            "retained": 20,
+            "latestPublishedAt": "2026-10-19T04:00:00Z",
+            "sampleTitles": [
+              "Behavioral Couplings: From Formation to Behavioral Emergence in Language Models",
+              "AI-Driven Reproducibility and Analytical Robustness in Scientific Discovery",
+              "DiscoveryRSI: Recursively Learning to Discover Valuable Hypotheses"
+            ],
+            "sampleUrls": [
+              "https://arxiv.org/abs/2610.23847",
+              "https://arxiv.org/abs/2610.23845",
+              "https://arxiv.org/abs/2610.23839"
+            ],
+            "allCoverageLinkOnly": true
+          },
+          "robotsResponse": {
+            "url": "https://rss.arxiv.org/robots.txt",
+            "errorType": "HTTPError"
+          }
+        },
+        {
+          "url": "https://info.arxiv.org/help/api/tou.html",
+          "finalUrl": "https://info.arxiv.org/help/api/tou.html",
+          "status": 200,
+          "contentType": "text/html",
+          "bytes": 85062,
+          "sha256": "badbec1e87aa317038c3a519a3fad3c4a855ebe019f0e681772d72f6a14f4e49",
+          "checkedAt": "2026-10-19T05:48:21.429988Z"
+        },
+        {
+          "url": "https://info.arxiv.org/help/license/index.html",
+          "finalUrl": "https://info.arxiv.org/help/license/index.html",
+          "status": 200,
+          "contentType": "text/html",
+          "bytes": 101170,
+          "sha256": "75ef3cef1c13bad8b20c52aee64d2608eac6c20638b71ec8ab2b6f22c84f233d",
+          "checkedAt": "2026-10-19T05:48:21.542349Z"
+        },
+        {
+          "url": "https://info.arxiv.org/help/rss.html",
+          "finalUrl": "https://info.arxiv.org/help/rss.html",
+          "status": 200,
+          "contentType": "text/html",
+          "bytes": 88665,
+          "sha256": "edc73107fc55074031eb2681b6b6e313483beee64b28d2e5a6ec3230550a9177",
+          "checkedAt": "2026-10-19T05:48:21.650310Z"
+        }
+      ]
+    }
+  ],
+  "completedAt": "2026-10-19T05:49:02.359896Z"
+}

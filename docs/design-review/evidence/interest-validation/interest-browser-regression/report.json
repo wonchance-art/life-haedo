@@ -1,0 +1,28 @@
+{
+  "createdAt": "2026-10-18T15:42:03.141Z",
+  "scope": "Real app/SDK/IDB with anonymous Auth; synthetic vectors and policy only in designated cases. No actual model, Apple hardware, live account or deployment validation.",
+  "checks": [
+    {
+      "name": "regression untouched second tab latest reload cannot revert newer manual text",
+      "syntheticVectors": false,
+      "pass": true
+    },
+    {
+      "name": "regression untouched confirmation choices adopt other tab saved choices on reentry",
+      "syntheticVectors": true,
+      "pass": true
+    },
+    {
+      "name": "regression real checkbox edits block logout workspace and external exits until confirm or revert",
+      "syntheticVectors": true,
+      "pass": true
+    }
+  ],
+  "visual": [],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": 0,
+  "external": [],
+  "modelRequests": [],
+  "realRemoteWrites": 0
+}

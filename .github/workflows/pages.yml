@@ -4,10 +4,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    # UTC 06:15 / Asia-Seoul 15:15. GitHub may delay or skip scheduled runs.
+    - cron: '15 6 * * *'
 permissions:
   contents: read
-  pages: write
-  id-token: write
 concurrency:
   # PR verification must not queue behind unrelated reviews or live deployments.
   # Main/manual deployments retain their shared, non-cancelling group.
@@ -30,12 +31,12 @@ jobs:
       - run: npm test
   browser_suites:
     runs-on: ubuntu-24.04
-    # Keep every existing suite, but give four independent fixture groups their
+    # Keep every existing suite, but give five independent fixture groups their
     # own server/browser so a long serial job cannot omit the final checks.
     strategy:
       fail-fast: false
       matrix:
-        group: [1, 2, 3, 4]
+        group: [1, 2, 3, 4, 5]
     timeout-minutes: 25
     permissions:
       contents: read
@@ -356,6 +357,28 @@ jobs:
       - name: Verify exact login return and preserved legacy editing across screen sizes
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/integrated-release-entry-browser.cjs
+      - name: Verify explicit interest review and account boundaries
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-interest-browser.cjs
+      - name: Verify interest metadata across service worker update and offline recovery
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-interest-pwa-browser.cjs
+      - name: Verify explicit external discovery, exact source return and private feedback
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-external-discovery-browser.cjs
+      - name: Verify discovery catalog freshness, worker update and offline preservation
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-external-discovery-pwa-browser.cjs
+      - name: Verify discovery language selection, translated links and private preference recovery
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-discovery-languages-browser.cjs
+      - name: Verify explicit discovery automation and local setting preservation
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-discovery-automation-browser.cjs
+      - name: Verify private reactions, saved lists, portable copies and explicit personal recommendations
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-discovery-reactions-browser.cjs
+
       - name: Verify retained travel writing, original photos and verified account resume
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/travel-writing-resume-browser.cjs
@@ -390,6 +413,13 @@ jobs:
             .local/blog-platform/*.png
             .local/blog-platform/*.log
             .local/flow-quality/
+            .local/interest-browser/
+            .local/interest-pwa/
+            .local/external-discovery-browser/
+            .local/external-discovery-pwa/
+            .local/discovery-automation-browser/
+            .local/discovery-reactions-browser/
+            .local/discovery-languages-browser/
             .local/unified-search/
             .local/collection-library/
             .local/collection-metadata/
@@ -649,9 +679,12 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
   build:
-    if: github.event_name != 'pull_request'
+    if: ${{ github.event_name != 'pull_request' && github.repository == 'wonchance-art/life-haedo' && github.ref == 'refs/heads/main' }}
     needs: [check, browser, blog]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -660,11 +693,26 @@ jobs:
         with:
           node-version: "22"
           package-manager-cache: false
+      - name: Refresh reviewed public feed from the previous publication
+        run: node scripts/refresh-discovery-artifact.cjs collect
       - name: Prepare public shell
         env:
           HAEDO_SUPABASE_URL: ${{ secrets.HAEDO_SUPABASE_URL }}
           HAEDO_SUPABASE_KEY: ${{ secrets.HAEDO_SUPABASE_KEY }}
         run: node scripts/prepare-site.mjs .local/site
+      - name: Install and verify the collected public catalog
+        run: node scripts/refresh-discovery-artifact.cjs install
+      - name: Retain public collection receipts without publishing them in the site
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: public-feed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .local/discovery-ci/outcome.json
+            .local/discovery-ci/collector-report.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -675,6 +723,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
+    permissions:
+      pages: write
+      id-token: write
     steps:
       - name: Deploy
         id: deployment

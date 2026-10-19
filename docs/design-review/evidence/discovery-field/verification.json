@@ -1,0 +1,276 @@
+{
+  "feedSHA256": "446e471f2d262b5ca8f39c64244b96b9c799aeecc4eb5c011bd7d608a2b8bf4e",
+  "coreSHA256": "a380e00b5dd8c46fc323b306731e1b8060145ed1dd582eb8316164f04c2ec427",
+  "generatedAt": "2026-10-19T05:50:54Z",
+  "articleCount": 90,
+  "sourceCount": 7,
+  "invalid": 0,
+  "coverage": [
+    "link_only"
+  ],
+  "previousCount": 50,
+  "newSources": [
+    {
+      "id": "arxiv-cs-cl",
+      "count": 20,
+      "lastSuccessAt": "2026-10-19T05:50:54Z",
+      "status": "ok"
+    },
+    {
+      "id": "mit-linguistics",
+      "count": 20,
+      "lastSuccessAt": "2026-10-19T05:50:54Z",
+      "status": "ok"
+    }
+  ],
+  "runtimeSourceSHA256": {
+    "assets/life/discovery.js": "a380e00b5dd8c46fc323b306731e1b8060145ed1dd582eb8316164f04c2ec427",
+    "assets/life/discovery-feed.json": "446e471f2d262b5ca8f39c64244b96b9c799aeecc4eb5c011bd7d608a2b8bf4e",
+    "assets/life/discovery-ui.js": "6e83c829651c6eb32e383dfe50b765f366350db129502761441af7ae5738a26b",
+    "assets/life/discovery-actions.js": "cbae40cdaf96f221f2d160f126b6a5b31174fbb748117f4544b374aa3e1497d9",
+    "assets/life/discovery-settings.js": "f6d8f710d848b15ec4b9fa4f7df2b5e295fcac5a2d1b05aee4737110606708bc",
+    "assets/life/discovery-recommendations.js": "9234a7347fad1b4f4623a09e1ea64f25e7705648f356a6f822f3e5dd942fc1c3",
+    "assets/life/storage.js": "d63fbdb8bc4bc9f4f3dd0df99caaf00096ff8c2e5921bdbd0fa3f08fd866ebde",
+    "sw.js": "eb07c915023603e5d470b2cd115d2acee483d903214a56305486cf1513c62e0a"
+  },
+  "previousIdentityMatches": 44,
+  "previousFeedWindowDepartures": 6,
+  "departureSourceCounts": {
+    "seoul-environment": 1,
+    "readersnews-books": 4,
+    "seoul-culture": 1
+  },
+  "previousPresentIdentityChanged": 0,
+  "feedWindowExplanation": "Latest per-source window refreshed; absent feed rows are not deleted from private saved snapshots.",
+  "scope": "Automatic QA only. Official live collection is distinct from mocked publisher popups, synthetic Auth/reactions and actual device/user usefulness checks.",
+  "unit": {
+    "tests": 1048,
+    "pass": 1048,
+    "fail": 0,
+    "skipped": 0
+  },
+  "static": {
+    "html": 22,
+    "javascript": 145,
+    "resources": 621,
+    "pass": true
+  },
+  "legacyEvaluationParity": {
+    "baseHead": "556ee1d0cbc6a65f3af63d2a5ddbae382373b1dd",
+    "now": "2026-10-19T06:00:00.000Z",
+    "feedSHA256": "446e471f2d262b5ca8f39c64244b96b9c799aeecc4eb5c011bd7d608a2b8bf4e",
+    "publicSamples": 9,
+    "reportReviewMarkdownExact": true,
+    "combinedSHA256": "8ed387aa398ce6023657849d0e241e2683b2045cc810835abeb230b29f10d3d3"
+  },
+  "privateEvaluation": {
+    "actualFeedTopic": null,
+    "actualFeedReactions": "none",
+    "actualFeedReviewRows": 2,
+    "actualUserSelection": null,
+    "actualUserReactionsConfirmed": null,
+    "userUtilityConclusion": null,
+    "allJudgmentsNull": true,
+    "simulationDocumentCount": 6,
+    "simulationReactionsAreSynthetic": true,
+    "networkRequests": 0
+  },
+  "remoteCI": "See draft PR103 exact current HEAD checks; baseline556ee1d CI is historical.",
+  "limitations": [
+    "English feeds do not automatically translate Korean topics.",
+    "arXiv preprints and RSS announcement dates do not imply peer review or first publication.",
+    "No production release, scheduled execution, real Google login, Apple hardware or user reading usefulness evaluation."
+  ],
+  "sourceSHA256": {
+    "assets/life/discovery.js": "a380e00b5dd8c46fc323b306731e1b8060145ed1dd582eb8316164f04c2ec427",
+    "assets/life/discovery-feed.json": "446e471f2d262b5ca8f39c64244b96b9c799aeecc4eb5c011bd7d608a2b8bf4e",
+    "scripts/update-discovery-feed.py": "3cdbbadf7de753b15259bc36588a36f07755936edf0ebb43acbcce63621159d2",
+    "scripts/refresh-discovery-artifact.cjs": "f37f46bd984d76d624852f4b3a6fa920e987912c72596b977b50b8220f256507",
+    "scripts/evaluate-discovery.cjs": "ce8608e0ec69af90f0f416b8d317aa0a807f0a5315187c0fdb61280566be222c",
+    "scripts/evaluate-discovery-field.cjs": "4ba2915afd8bcd4928b90c652abfae1c739778d5ab81ca0d79054c46037fd725",
+    "tests/discovery-field-evaluation.test.cjs": "cb4c512e0da8186e16b58f6e31bec4bd86ee0e31899dae77471c8fcc2a75fa96",
+    "tests/discovery-ci.test.cjs": "3c5b79e9dfee6c1209033005d35bbc107c81ae3bfc4d5d9e08d3e9703b6b3df8",
+    "tests/discovery-feed-update.test.cjs": "b76d12c9ffe3a87d2bd28ab80fd16d3aee61314ba19c991ef7a68c121ffe4c11",
+    "tests/life-external-discovery-browser.cjs": "1fa33d8abc8e4ebccd2b558b6e41637e8bb932bc97068c3a2a0c2eead2ed3086",
+    "tests/life-external-discovery-pwa-browser.cjs": "3cafc119649e03a9af099accb52aa33999c0952fee4d9a2e10123a88b48d3c77",
+    "tests/fixtures/external-discovery/sw-discovery-v136.js": "97615e20154a241deab090ff6145a4863f89a6f32248fa214feeaf840eb05b35",
+    "sw.js": "eb07c915023603e5d470b2cd115d2acee483d903214a56305486cf1513c62e0a",
+    ".github/workflows/pages.yml": "c4a4bb0c96c88cd721c92a9df29f45e2adb974e403b5d88420fcabea64c17d92",
+    "tests/life-discovery-reactions-browser.cjs": "013e55c91cdae393932bdbda26ac459d3c475e37813eba2bf9e8631fd4445c8b",
+    "tests/life-discovery-automation-browser.cjs": "7a7a9ac515a5a3b6b44de70efa89913b79cf3815dbab00ca3ba190e1b4222765"
+  },
+  "preservationBaselineReceiptSHA256": "4694df6dc01143152a760e83e703486dc982dacd75ccf98e7bda3584d3c67392",
+  "runtime": {
+    "scope": "Three existing browser suites run once sequentially using pinned CI Chromium153/Playwright1.63. Real local UI/Core/SDK/scoped IndexedDB; frozen actual public catalog for four source journeys. New publishers intercepted after exact explicit URL click. Synthetic edge catalog/anonymous Auth/clock/delay hooks identified in per-suite reports. No actual publisher reading, Apple device, production account/DB, recommendation usefulness or deployment claim.",
+    "suites": {
+      "discovery": {
+        "report": ".local/discovery-field/runtime/discovery/report.json",
+        "reportSHA256": "339a8928ac21df8de52b5b33052cd8291cba1659b3f0f2ddeb1fb37cd3ee15b9",
+        "checks": 19,
+        "passed": 19,
+        "browser": "153.0.8010.12",
+        "productsUnchangedDuringRun": true,
+        "counters": {
+          "consoleErrors": 0,
+          "pageErrors": 0,
+          "privacyViolations": 0,
+          "external": 0,
+          "modelRequests": 0
+        },
+        "scope": "Real local app/Core/SDK/IndexedDB and checked-in public catalogue; synthetic edge HTTP and publisher popup interception identified per check. No live OAuth/account/publisher, model inference, Apple hardware or user usefulness validation."
+      },
+      "reactions": {
+        "report": ".local/discovery-field/runtime/reactions/report.json",
+        "reportSHA256": "a4319143904733351d44d13b11d9cd1267bcaab1fddedc0e0df2de69861f31d3",
+        "checks": 24,
+        "passed": 24,
+        "browser": "153.0.8010.12",
+        "productsUnchangedDuringRun": true,
+        "counters": {
+          "consoleErrors": 0,
+          "pageErrors": 0,
+          "privacyViolations": 0,
+          "externalRequests": 0,
+          "modelRequests": 0,
+          "remoteWrites": 0
+        },
+        "scope": "Real local UI/Core/bundled SDK/account-scoped IndexedDB; anonymous mocked Auth and synthetic Korean metadata only. Publisher popups are intercepted and only allowed after an explicit test click. Composition events and viewport sizes are simulated. No real account/DB, publisher fetch, model inference, Apple hardware, actual OS file-save proof or user usefulness evaluation."
+      },
+      "automation": {
+        "report": ".local/discovery-field/runtime/automation/report.json",
+        "reportSHA256": "61eb62786cd8321a6da90987f14fbf5edcbe151d365f19723093ada346be971d",
+        "checks": 23,
+        "passed": 23,
+        "browser": "153.0.8010.12",
+        "productsUnchangedDuringRun": true,
+        "counters": {
+          "consoleErrors": 0,
+          "pageErrors": 0,
+          "privacyViolations": 0,
+          "externalRequests": 0,
+          "modelRequests": 0,
+          "sourceRequests": 0
+        },
+        "scope": "Real local UI/Core/SDK/IndexedDB; synthetic metadata-only public catalogue and anonymous mocked Auth only. Playwright browser clock tests visible 15-minute refresh. Synthetic visibility events are identified explicitly. No live collection/deployment, account, publisher request, model inference, Apple hardware or user usefulness validation."
+      }
+    },
+    "newSourceJourneys": [
+      {
+        "sourceId": "arxiv-cs-cl",
+        "syntheticFeed": false,
+        "publisherResponse": "intercepted synthetic HTML after explicit click",
+        "pass": true,
+        "sourceStatus": "ok",
+        "sourceStale": false,
+        "suppliedArticles": 20,
+        "relatedVisibleIds": [
+          "article-readersnews-books-03c96e851d4236e88b58"
+        ],
+        "selection": "Explicit source-only UI setting and latest order; availability test, not recommendation usefulness",
+        "articleId": "article-arxiv-cs-cl-6fa2817e71d17a9f0e99",
+        "url": "https://arxiv.org/abs/2610.23678",
+        "canonicalUrl": "https://arxiv.org/abs/2610.23678",
+        "explicitOriginalPopup": true,
+        "popupDoesNotReactOrSave": true,
+        "independentLikeAndBookmark": true,
+        "linkOnlySourceStored": true,
+        "returnAndKnownUrlExclusion": true,
+        "bothSavedListsReopenAfterReload": true,
+        "priorOriginalsAndFeedbackPreserved": true
+      },
+      {
+        "sourceId": "mit-linguistics",
+        "syntheticFeed": false,
+        "publisherResponse": "intercepted synthetic HTML after explicit click",
+        "pass": true,
+        "sourceStatus": "ok",
+        "sourceStale": false,
+        "suppliedArticles": 20,
+        "relatedVisibleIds": [
+          "article-readersnews-books-03c96e851d4236e88b58"
+        ],
+        "selection": "Explicit source-only UI setting and latest order; availability test, not recommendation usefulness",
+        "articleId": "article-mit-linguistics-d08507c6dd8f3ff175b5",
+        "url": "https://news.mit.edu/2026/algorithmic-monoculture-effects-depend-on-details-0929",
+        "canonicalUrl": "https://news.mit.edu/2026/algorithmic-monoculture-effects-depend-on-details-0929",
+        "explicitOriginalPopup": true,
+        "popupDoesNotReactOrSave": true,
+        "independentLikeAndBookmark": true,
+        "linkOnlySourceStored": true,
+        "returnAndKnownUrlExclusion": true,
+        "bothSavedListsReopenAfterReload": true,
+        "priorOriginalsAndFeedbackPreserved": true
+      }
+    ],
+    "allActualSourceJourneyCount": 4,
+    "actualSourceJourneyPassed": 4,
+    "testSources": {
+      "tests/life-external-discovery-browser.cjs": "1fa33d8abc8e4ebccd2b558b6e41637e8bb932bc97068c3a2a0c2eead2ed3086",
+      "tests/life-discovery-reactions-browser.cjs": "013e55c91cdae393932bdbda26ac459d3c475e37813eba2bf9e8631fd4445c8b",
+      "tests/life-discovery-automation-browser.cjs": "7a7a9ac515a5a3b6b44de70efa89913b79cf3815dbab00ca3ba190e1b4222765"
+    },
+    "limitations": [
+      "Korean public synthetic topic matching did not place either new English source in the initial related list; availability/journey used explicit source-only/latest UI. This is not evidence of related or personalized ranking improvement.",
+      "Actual Mac/iPad/iPhone, real Google sign-in, original-page reading, OS Files save, and human usefulness remain unverified.",
+      "Installed PWA/prepare/unit/static and final CI are root-owned separate checks. No main merge, deployment or workflow dispatch performed."
+    ],
+    "rootVisualReview": "Root directly inspected final 390px arXiv candidate and 1440px MIT saved-list images; existing UI and controls retained."
+  },
+  "screenshots": {
+    "actual-arxiv-candidate-390.png": "c8e76da1d1b0fb1ee440ea525c712a128b966f79916802e717f21107baf26d0b",
+    "actual-mit-saved-1440.png": "0593c0a50f725b0727fb0a05c5b583893aad7a5a7e470d7dd5fe92f83ed32feb"
+  },
+  "pwa": {
+    "scope": "Real Chromium SDK/IndexedDB/Service Worker. Only v136 sw.js is prior code; all app modules and approved-source policy are current. Reactions are seeded through the current real scoped storage API before the worker update; this isolates worker/cache migration rather than reconstructing the entire previous app. Real prepared public catalog served by an anonymous local fixture; synthetic title/build-time update for freshness tests. Mocked Auth response during cached-shell reload is separate from strict offline Auth refusal. No production, Apple device, upstream collection or model validation.",
+    "checks": [
+      "actual v136 installs without fetching catalog, original sites or model assets",
+      "v136 -> current worker preserves exact originals, workbench, manual interests, feedback, settings and private reactions",
+      "new local modules match installed hashes; public feed and model weights stay outside app SHELL",
+      "explicit catalog load uses one fixed public URL and separates browser receipt from collection time",
+      "a newer published catalog is fetched without worker update and failed refresh returns explicitly stale data",
+      "verified offline session saves private feedback and cached-shell reload preserves it",
+      "excluded feedback can be restored after reload without mutating source data or manual interests",
+      "catalog with no previous cache fails visibly; strict offline Auth still blocks private boot and recovery preserves data",
+      "catalog query, authorization and body probes fail before reaching the static host"
+    ],
+    "oldCache": "haedo-v136",
+    "newCache": "haedo-v137",
+    "oldSwSHA256": "97615e20154a241deab090ff6145a4863f89a6f32248fa214feeaf840eb05b35",
+    "newSwSHA256": "eb07c915023603e5d470b2cd115d2acee483d903214a56305486cf1513c62e0a",
+    "shellAssets": 157,
+    "consoleErrors": [],
+    "pageErrors": [],
+    "modelRequests": [],
+    "unexpectedExternal": [],
+    "privateActionsFixture": {
+      "revision": 5,
+      "entries": 2,
+      "activeBoth": 1,
+      "cancelled": 1,
+      "personalizationEnabled": true,
+      "sha256": "55b1fcd926dcf22ab9e9e7369d4cc4a4b2d0b65b6396e71541bc65a1ba8d9840"
+    },
+    "realRemoteWrites": 0,
+    "pass": true
+  },
+  "wholePreparedAppUpdate": {
+    "baselines": [
+      {
+        "revision": "556ee1d0cbc6a65f3af63d2a5ddbae382373b1dd",
+        "cache": "haedo-v136",
+        "kind": "previous",
+        "ref": "556ee1d0cbc6a65f3af63d2a5ddbae382373b1dd"
+      },
+      {
+        "revision": "58e5cd55f73fb440c997266e160d8859f18bfd6c",
+        "cache": "haedo-v134",
+        "kind": "main"
+      }
+    ],
+    "currentCache": "haedo-v137",
+    "pass": 10,
+    "fail": 0,
+    "scope": "Whole v136 previous app and main v134 app to current v137; synthetic Auth and local public server, no live Apple/Google proof."
+  },
+  "independentPreservationReview": "No unresolved blocker; existing schemas/URLs/private outputs remain protected. See code and current source hashes."
+}

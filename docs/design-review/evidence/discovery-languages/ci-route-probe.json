@@ -1,0 +1,51 @@
+{
+  "scope": "Anonymous localhost HTTP/Chromium fault injection only; no SQL, SDK login, product changes or external requests. Full SQL journey remains for CI.",
+  "checks": [
+    "Successful source interception preserves exact fetched bytes and SHA256",
+    "Primary error, stage and step are on disk before context.close",
+    "Actual pending route.fetch cancellation drains without replacing the primary failure",
+    "Unexpected HTTP connection failure during live execution rejects the step and remains latched",
+    "No unhandled rejection under Node --unhandled-rejections=strict"
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/life/discovery.js?mode=ok"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/life/discovery.js?mode=hold"
+    },
+    {
+      "method": "GET",
+      "path": "/"
+    },
+    {
+      "method": "GET",
+      "path": "/assets/life/discovery.js?mode=fail"
+    }
+  ],
+  "unhandled": [],
+  "sqlRuns": 0,
+  "browser": "153.0.8010.12",
+  "node": "v24.19.0",
+  "closeCancellation": [
+    {
+      "device": "pending-close",
+      "path": "/assets/life/discovery.js",
+      "message": "route.fetch: Request context disposed.\nCall log:\n\u001b[2m  - → GET http://127.0.0.1:40209/assets/life/discovery.js?mode=hold\u001b[22m\n\u001b[2m    - user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36\u001b[22m\n\u001b[2m    - accept: */*\u001b[22m\n\u001b[2m    - accept-encoding: gzip,deflate,br\u001b[22m\n\u001b[2m    - referer: http://127.0.0.1:40209/\u001b[22m\n\u001b[2m    - sec-ch-ua: \"Chromium\";v=\"153\", \"Not_A Brand\";v=\"8\"\u001b[22m\n\u001b[2m    - sec-ch-ua-mobile: ?0\u001b[22m\n\u001b[2m    - sec-ch-ua-platform: \"Linux\"\u001b[22m\n"
+    }
+  ],
+  "liveRouteError": {
+    "device": "live-network-failure",
+    "path": "/assets/life/discovery.js",
+    "message": "route.fetch: socket hang up\nCall log:\n\u001b[2m  - → GET http://127.0.0.1:40209/assets/life/discovery.js?mode=fail\u001b[22m\n\u001b[2m    - user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36\u001b[22m\n\u001b[2m    - accept: */*\u001b[22m\n\u001b[2m    - accept-encoding: gzip,deflate,br\u001b[22m\n\u001b[2m    - referer: http://127.0.0.1:40209/\u001b[22m\n\u001b[2m    - sec-ch-ua: \"Chromium\";v=\"153\", \"Not_A Brand\";v=\"8\"\u001b[22m\n\u001b[2m    - sec-ch-ua-mobile: ?0\u001b[22m\n\u001b[2m    - sec-ch-ua-platform: \"Linux\"\u001b[22m\n",
+    "stack": "route.fetch: socket hang up\nCall log:\n\u001b[2m  - → GET http://127.0.0.1:40209/assets/life/discovery.js?mode=fail\u001b[22m\n\u001b[2m    - user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36\u001b[22m\n\u001b[2m    - accept: */*\u001b[22m\n\u001b[2m    - accept-encoding: gzip,deflate,br\u001b[22m\n\u001b[2m    - referer: http://127.0.0.1:40209/\u001b[22m\n\u001b[2m    - sec-ch-ua: \"Chromium\";v=\"153\", \"Not_A Brand\";v=\"8\"\u001b[22m\n\u001b[2m    - sec-ch-ua-mobile: ?0\u001b[22m\n\u001b[2m    - sec-ch-ua-platform: \"Linux\"\u001b[22m\n\n    at /workspace/haedo-discovery/tests/integrated-release-browser.cjs:30:57\n    at /workspace/haedo-discovery/tests/integrated-release-browser.cjs:33:8"
+  },
+  "helperFileSHA256": "374e4ba39df17e709f59242599a218a367fda88529448335467f56dde946f549",
+  "pass": true
+}

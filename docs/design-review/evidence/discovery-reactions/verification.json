@@ -1,0 +1,675 @@
+{
+  "checkedAt": "2026-10-19T04:55:46.293Z",
+  "scope": "Real local UI/Core/bundled SDK/account-scoped IndexedDB; anonymous mocked Auth and synthetic Korean metadata only. Publisher popups are intercepted and only allowed after an explicit test click. Composition events and viewport sizes are simulated. No real account/DB, publisher fetch, model inference, Apple hardware, actual OS file-save proof or user usefulness evaluation.",
+  "baselineHead": "90f28087d5130e8a78c3dadd98527ffae1077a62",
+  "policy": "public-title-tags-v1",
+  "cache": "haedo-v136",
+  "sourceSHA256": {
+    "assets/life/discovery-actions.js": "cbae40cdaf96f221f2d160f126b6a5b31174fbb748117f4544b374aa3e1497d9",
+    "assets/life/discovery-recommendations.js": "9234a7347fad1b4f4623a09e1ea64f25e7705648f356a6f822f3e5dd942fc1c3",
+    "assets/life/discovery-ui.js": "6e83c829651c6eb32e383dfe50b765f366350db129502761441af7ae5738a26b",
+    "assets/life/discovery.css": "8801194f76cb3925fb427ab4480fc9459bc0f0ced28aedbfa63af2f7fdab66ff",
+    "assets/life/discovery.js": "129003ee003df020fe2c2fbf9071b071d835c602398d62dd16f0c849d7f9e2cc",
+    "assets/life/storage.js": "d63fbdb8bc4bc9f4f3dd0df99caaf00096ff8c2e5921bdbd0fa3f08fd866ebde",
+    "index.html": "d32ed4198d0c43c14b50daa4e19a1e5335c2001066c6f842a923459fbf53b247",
+    "life.html": "408ccdd213cf8f63f0d363302e6ebff526da92493aed33b62de72a832708e4d7",
+    "sw.js": "97615e20154a241deab090ff6145a4863f89a6f32248fa214feeaf840eb05b35",
+    "scripts/prepare-site.mjs": "b833238fdcbe2204bc5b8ee2cabe6e6aaf4e104822e440cbec152ad345b5f881",
+    ".github/workflows/pages.yml": "c4a4bb0c96c88cd721c92a9df29f45e2adb974e403b5d88420fcabea64c17d92",
+    "tests/life-discovery-reactions-browser.cjs": "013e55c91cdae393932bdbda26ac459d3c475e37813eba2bf9e8631fd4445c8b",
+    "tests/life-discovery-actions.test.cjs": "3bd490f757d42035c9377c9eb000c75f6bb1d8ae6ad4ccc3008403d13d0b90d5",
+    "tests/life-discovery-actions-storage.test.cjs": "99d8783d405b96ee5f40b7ac59104996196f08b0ca4f7e52c41ecf9ee460c177",
+    "tests/life-discovery-recommendations.test.cjs": "9330618432d8044e4b670ee268c6e4bc842a0751c480a5296f77c2893b61b6b0",
+    "tests/life-external-discovery-pwa-browser.cjs": "3da8c6c327e8936ae31e5435cb10a590547291a64f7aa99775a078e4e91be71e",
+    "tests/prepare-site.test.cjs": "fb89ee7a914739876c543187a6213b8a97a0f803f5e1658c0b532cc01beb3350",
+    "tests/travel-writing-history-browser.cjs": "2a0304542b41bccf543371ae3736989d0282a49f0d0341a2ce3e2dd411f2b70c"
+  },
+  "protectedSourceSHA256": {
+    "assets/life/core.js": "6ad03c873ea3411dc7f8a432e7637502d1ce59271253db04e229429f99308ff4",
+    "assets/life/interest-profile.js": "22bec3d5f138a5176386ee6da5528efc77374ba928d09f2d6025a9f89ebb4c54",
+    "assets/life/discovery-profile.js": "3d7424eeb3db46fcf9f933544a7a2ba925e5a01de0615051b79f877dbc62d7d5",
+    "assets/life/discovery-settings.js": "f6d8f710d848b15ec4b9fa4f7df2b5e295fcac5a2d1b05aee4737110606708bc",
+    "assets/life/interest-policy.js": "30714a08141a84b6afdc8916d95be032d5fc8c09398d3ded7d712c3b8c33a352",
+    "assets/life/discovery-feed.json": "6a6c63e520328e283d01ca8283a6b9c2259295f5c37fc05d2fb49b27ba057684",
+    "assets/life/shell.js": "44414476702db4c8e0ef8515b6e6deb5ff549b8a26c64fb4501bac1b199b29ce",
+    "assets/life/ui.js": "bf7c539b610ea2643ef607c5c460dfca2f6d53dd9194219846fddb43c7a4ede0"
+  },
+  "protectedSourcesUnchanged": true,
+  "reactionsBrowser": {
+    "checks": [
+      {
+        "name": "liked and bookmarked are independent explicit states without current-list reorder or source writes",
+        "pass": true
+      },
+      {
+        "name": "separate lists reopen retained public snapshots after feed removal and source disable",
+        "pass": true
+      },
+      {
+        "name": "unlike leaves bookmark and cancelled entries can be explicitly restored",
+        "pass": true
+      },
+      {
+        "name": "forget and confirmed reset are distinct from one-kind cancellation and preserve originals",
+        "pass": true
+      },
+      {
+        "name": "personal ordering is explicit and inspectable while latest and off reproduce their exact baseline",
+        "pass": true
+      },
+      {
+        "name": "bookmark-only and insufficient evidence retain the remembered baseline without personal claims",
+        "pass": true
+      },
+      {
+        "name": "unlike or per-item recommendation exclusion removes derived evidence immediately",
+        "pass": true
+      },
+      {
+        "name": "real CAS conflict keeps the exact reaction target and the other tab independent bookmark",
+        "pass": true
+      },
+      {
+        "name": "another tab off blocks stale personal results during pending action save and discard",
+        "pass": true
+      },
+      {
+        "name": "another tab clear blocks stale personal results during pending action save and discard",
+        "pass": true
+      },
+      {
+        "name": "a delayed already committed result cannot revive personal state after another tab off",
+        "pass": true
+      },
+      {
+        "name": "a delayed already committed result cannot revive personal state after another tab clear",
+        "pass": true
+      },
+      {
+        "name": "reentry rereads an unlike made in another tab before reusing personal evidence",
+        "pass": true
+      },
+      {
+        "name": "disabling a liked prototype source in another tab withdraws cross-source personal evidence",
+        "pass": true
+      },
+      {
+        "name": "failed off save blocks runtime personalization until explicit recovery without deleting lists",
+        "pass": true
+      },
+      {
+        "name": "dedicated copy download excludes private identifiers and preview adds only new safe entries",
+        "pass": true
+      },
+      {
+        "name": "invalid UTF8 shape and oversized copy show errors without changing saved reactions",
+        "pass": true
+      },
+      {
+        "name": "full reaction capacity refuses a new entry without silent eviction or source mutation",
+        "pass": true
+      },
+      {
+        "name": "near byte limit valid 500-entry copy exports compactly and can preview itself without mutation",
+        "pass": true
+      },
+      {
+        "name": "account change during pending local reaction cannot install previous account state",
+        "pass": true
+      },
+      {
+        "name": "reaction and catalogue redraws preserve composing topic node caret and focus",
+        "pass": true
+      },
+      {
+        "name": "Korean reaction lists personal evidence and copy preview visual focus 1440",
+        "pass": true
+      },
+      {
+        "name": "Korean reaction lists personal evidence and copy preview visual focus 820",
+        "pass": true
+      },
+      {
+        "name": "Korean reaction lists personal evidence and copy preview visual focus 390",
+        "pass": true
+      }
+    ],
+    "browser": "151.0.7922.173",
+    "productsUnchangedDuringRun": true,
+    "consoleErrors": [],
+    "pageErrors": [],
+    "privacyViolations": [],
+    "externalRequests": [],
+    "modelRequests": [],
+    "remoteWrites": [],
+    "portable": {
+      "downloadRequested": true,
+      "osFileSaved": false,
+      "activeExportCount": 1,
+      "addedCount": 1,
+      "existingIncludingCancelledKept": 2,
+      "privateFieldsExcluded": true
+    },
+    "validLimitCopy": {
+      "entries": 500,
+      "profileBytes": 1046243,
+      "fileBytes": 1046166,
+      "previewed": true,
+      "apply": false
+    }
+  },
+  "baselineRankParity": {
+    "scope": "Exact pre-change rank vs refactored rank over unchanged public catalogue. No private preferences or recommendation usefulness evaluation.",
+    "cases": [
+      {
+        "label": "AI",
+        "mode": "related",
+        "filtered": false,
+        "pass": true
+      },
+      {
+        "label": "AI",
+        "mode": "related",
+        "filtered": true,
+        "pass": true
+      },
+      {
+        "label": "AI",
+        "mode": "latest",
+        "filtered": false,
+        "pass": true
+      },
+      {
+        "label": "AI",
+        "mode": "latest",
+        "filtered": true,
+        "pass": true
+      },
+      {
+        "label": "신간",
+        "mode": "related",
+        "filtered": false,
+        "pass": true
+      },
+      {
+        "label": "신간",
+        "mode": "related",
+        "filtered": true,
+        "pass": true
+      },
+      {
+        "label": "신간",
+        "mode": "latest",
+        "filtered": false,
+        "pass": true
+      },
+      {
+        "label": "신간",
+        "mode": "latest",
+        "filtered": true,
+        "pass": true
+      },
+      {
+        "label": "공연",
+        "mode": "related",
+        "filtered": false,
+        "pass": true
+      },
+      {
+        "label": "공연",
+        "mode": "related",
+        "filtered": true,
+        "pass": true
+      },
+      {
+        "label": "공연",
+        "mode": "latest",
+        "filtered": false,
+        "pass": true
+      },
+      {
+        "label": "공연",
+        "mode": "latest",
+        "filtered": true,
+        "pass": true
+      },
+      {
+        "label": "전시",
+        "mode": "related",
+        "filtered": false,
+        "pass": true
+      },
+      {
+        "label": "전시",
+        "mode": "related",
+        "filtered": true,
+        "pass": true
+      },
+      {
+        "label": "전시",
+        "mode": "latest",
+        "filtered": false,
+        "pass": true
+      },
+      {
+        "label": "전시",
+        "mode": "latest",
+        "filtered": true,
+        "pass": true
+      },
+      {
+        "label": "없음",
+        "mode": "related",
+        "filtered": false,
+        "pass": true
+      },
+      {
+        "label": "없음",
+        "mode": "related",
+        "filtered": true,
+        "pass": true
+      },
+      {
+        "label": "없음",
+        "mode": "latest",
+        "filtered": false,
+        "pass": true
+      },
+      {
+        "label": "없음",
+        "mode": "latest",
+        "filtered": true,
+        "pass": true
+      }
+    ]
+  },
+  "visual": {
+    "widths": [
+      390,
+      820,
+      1440
+    ],
+    "states": [
+      "liked-list",
+      "personal-evidence",
+      "copy-preview"
+    ],
+    "checkedStates": 9,
+    "horizontalOverflow": false,
+    "minimumControlsPx": 44,
+    "inputPx": 16,
+    "keyboardFocusVisible": true,
+    "imeSimulated": true,
+    "reviewedBy": [
+      "UI owner",
+      "independent runtime reviewer",
+      "root (390 liked, 1440 personal)"
+    ],
+    "screenshots": {
+      "discovery-reactions-390-liked-list.png": "72326a2a5ae75af94345d21174d62a67dc8c3bbd02a04800f5fca7e81650bdb1",
+      "discovery-reactions-1440-personal-evidence.png": "878e4c0e3eedff688cef4f80f08bbdadb21a1d89fbfd68c26dd94551892c9cc1",
+      "discovery-reactions-820-copy-preview.png": "d4de12b2c62de363c727336ae1726ae4e6f66642600cd0e3253655564a160fe0"
+    }
+  },
+  "unit": {
+    "tests": 1032,
+    "pass": 1032,
+    "fail": 0,
+    "skipped": 0
+  },
+  "static": {
+    "html": 22,
+    "javascript": 145,
+    "resources": 621,
+    "pass": true
+  },
+  "remoteCI": "See draft PR103 exact current HEAD checks; local results do not imply CI or deployment.",
+  "limitations": [
+    "No real Apple hardware, Google account login or native IME proof.",
+    "Download request is not actual OS save proof.",
+    "No production deployment or scheduled collector execution proof.",
+    "No user usefulness evaluation or semantic understanding claim.",
+    "All current 50 candidates are link_only; word overlap can match homonyms."
+  ],
+  "existingDiscovery": {
+    "scope": "Real local app/Core/SDK/IndexedDB and checked-in public catalogue; synthetic edge HTTP and publisher popup interception identified per check. No live OAuth/account/publisher, model inference, Apple hardware or user usefulness validation.",
+    "checks": [
+      {
+        "name": "checked-in public catalogue smoke uses explicitly saved interests without automatic source writes",
+        "syntheticFeed": false,
+        "pass": true
+      },
+      {
+        "name": "checked-in expanded source readersnews-books explicit link import, original return, duplicate exclusion and prior feedback preservation",
+        "syntheticFeed": false,
+        "pass": true
+      },
+      {
+        "name": "checked-in expanded source seoul-environment explicit link import, original return, duplicate exclusion and prior feedback preservation",
+        "syntheticFeed": false,
+        "pass": true
+      },
+      {
+        "name": "synthetic related versus same-source latest, noreferrer popup return and exact list focus",
+        "syntheticFeed": true,
+        "pass": true
+      },
+      {
+        "name": "synthetic catalogue link_only stays honest while explicit link import excludes saved URL",
+        "syntheticFeed": true,
+        "pass": true
+      },
+      {
+        "name": "synthetic catalogue summary stays honest while explicit link import excludes saved URL",
+        "syntheticFeed": true,
+        "pass": true
+      },
+      {
+        "name": "synthetic catalogue full_text stays honest while explicit link import excludes saved URL",
+        "syntheticFeed": true,
+        "pass": true
+      },
+      {
+        "name": "synthetic explicit feedback and undo preserve all originals across reload",
+        "syntheticFeed": true,
+        "pass": true
+      },
+      {
+        "name": "synthetic committed import survives refresh failure and opens receipt without duplicate commit",
+        "syntheticFeed": true,
+        "pass": true
+      },
+      {
+        "name": "synthetic recycled provider ID cannot redirect undo to a different canonical URL",
+        "syntheticFeed": true,
+        "pass": true
+      },
+      {
+        "name": "synthetic failed feedback retains intent and explicit retry without changing sources",
+        "syntheticFeed": true,
+        "pass": true
+      },
+      {
+        "name": "synthetic two-tab feedback CAS keeps intent until latest reload and explicit retry",
+        "syntheticFeed": true,
+        "pass": true
+      },
+      {
+        "name": "synthetic empty catalogue, no relevant matches and failed refresh with stale recovery stay distinct",
+        "syntheticFeed": true,
+        "pass": true
+      },
+      {
+        "name": "synthetic delayed feed response cannot restore prior workspace interests or list",
+        "syntheticFeed": true,
+        "pass": true
+      },
+      {
+        "name": "synthetic late feed response after actual logout cannot reveal prior account feedback",
+        "syntheticFeed": true,
+        "pass": true
+      },
+      {
+        "name": "synthetic unsaved feedback failure blocks leaving review until explicit discard",
+        "syntheticFeed": true,
+        "pass": true
+      },
+      {
+        "name": "synthetic discovery visual long Korean titles and controls 390",
+        "syntheticFeed": true,
+        "pass": true
+      },
+      {
+        "name": "synthetic discovery visual long Korean titles and controls 820",
+        "syntheticFeed": true,
+        "pass": true
+      },
+      {
+        "name": "synthetic discovery visual long Korean titles and controls 1440",
+        "syntheticFeed": true,
+        "pass": true
+      }
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "external": [],
+    "modelRequests": [],
+    "privacyViolations": [],
+    "realRemoteWrites": 0
+  },
+  "existingAutomation": {
+    "scope": "Real local UI/Core/SDK/IndexedDB; synthetic metadata-only public catalogue and anonymous mocked Auth only. Playwright browser clock tests visible 15-minute refresh. Synthetic visibility events are identified explicitly. No live collection/deployment, account, publisher request, model inference, Apple hardware or user usefulness validation.",
+    "checks": [
+      {
+        "name": "default automatic refresh is off and does not run after fifteen visible minutes",
+        "pass": true
+      },
+      {
+        "name": "explicit topic input and selection survive reload without editing source originals",
+        "pass": true
+      },
+      {
+        "name": "turning off every source is preserved as zero sources in both list orders",
+        "pass": true
+      },
+      {
+        "name": "forty stale disabled topic IDs do not block selecting a replacement topic after profile reset",
+        "pass": true
+      },
+      {
+        "name": "initial catalogue pending automatic on restarts the initial request and shows the recovered list",
+        "pass": true
+      },
+      {
+        "name": "initial catalogue pending automatic off stops without automatic restart and offers explicit reload",
+        "pass": true
+      },
+      {
+        "name": "saved automatic refresh requests once when fifteen visible minutes become due",
+        "pass": true
+      },
+      {
+        "name": "pending automatic response is discarded after off",
+        "pass": true
+      },
+      {
+        "name": "pending automatic response is discarded after leave",
+        "pass": true
+      },
+      {
+        "name": "pending automatic response is discarded after hidden",
+        "pass": true
+      },
+      {
+        "name": "manual pending refresh resumes consistent controls and retained inputs after history without visibility events",
+        "pass": true
+      },
+      {
+        "name": "persisted history lifecycle stops old work and resumes saved automatic refresh only after fresh Auth",
+        "pass": true
+      },
+      {
+        "name": "workspace switch while response is pending keeps the new scope default and source data exact",
+        "pass": true
+      },
+      {
+        "name": "actual logout and new account do not reuse topics or automatic preferences",
+        "pass": true
+      },
+      {
+        "name": "topic CAS conflict preserves the typed input until explicit latest-state recovery",
+        "pass": true
+      },
+      {
+        "name": "settings CAS conflict preserves the requested choice and independent concurrent source selection",
+        "pass": true
+      },
+      {
+        "name": "another tab off stops refresh during a pending settings save and conflict discard",
+        "pass": true
+      },
+      {
+        "name": "another tab clear stops refresh during a pending settings save and conflict discard",
+        "pass": true
+      },
+      {
+        "name": "turning automatic refresh off aborts pending work even when its preference save fails",
+        "pass": true
+      },
+      {
+        "name": "automatic catalogue redraw preserves composing text caret and keyboard focus",
+        "pass": true
+      },
+      {
+        "name": "synthetic Korean controls overflow focus and visual 1440",
+        "pass": true
+      },
+      {
+        "name": "synthetic Korean controls overflow focus and visual 820",
+        "pass": true
+      },
+      {
+        "name": "synthetic Korean controls overflow focus and visual 390",
+        "pass": true
+      }
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "privacyViolations": [],
+    "externalRequests": [],
+    "modelRequests": []
+  },
+  "pwa": {
+    "checks": [
+      "actual v135 installs without fetching catalog, original sites or model assets",
+      "v135 -> current worker preserves exact originals, workbench, manual interests, feedback, settings and private reactions",
+      "new local modules match installed hashes; public feed and model weights stay outside app SHELL",
+      "explicit catalog load uses one fixed public URL and separates browser receipt from collection time",
+      "a newer published catalog is fetched without worker update and failed refresh returns explicitly stale data",
+      "verified offline session saves private feedback and cached-shell reload preserves it",
+      "excluded feedback can be restored after reload without mutating source data or manual interests",
+      "catalog with no previous cache fails visibly; strict offline Auth still blocks private boot and recovery preserves data",
+      "catalog query, authorization and body probes fail before reaching the static host"
+    ],
+    "consoleErrors": [],
+    "pageErrors": [],
+    "modelRequests": [],
+    "unexpectedExternal": [],
+    "scope": "Real Chromium SDK/IndexedDB/Service Worker. Only v135 sw.js is prior code; all app modules are current. Reactions are seeded through the current real scoped storage API before the worker update; this does not claim v135 shipped reaction controls. Real prepared public catalog served by an anonymous local fixture; synthetic title/build-time update for freshness tests. Mocked Auth response during cached-shell reload is separate from strict offline Auth refusal. No production, Apple device, upstream collection or model validation.",
+    "oldCache": "haedo-v135",
+    "newCache": "haedo-v136",
+    "oldSwSHA256": "18939d9e88b52d0f6aa7b0174d69806ed53baabc8f514b1b6db49ef319d40738",
+    "newSwSHA256": "97615e20154a241deab090ff6145a4863f89a6f32248fa214feeaf840eb05b35",
+    "privateActionsFixture": {
+      "revision": 5,
+      "entries": 2,
+      "activeBoth": 1,
+      "cancelled": 1,
+      "personalizationEnabled": true,
+      "sha256": "f11baf5ea449c9579596b8a2a14f363136a81469d1fdd1d58e4c6b1561391138"
+    },
+    "shellAssets": 157,
+    "realRemoteWrites": 0,
+    "pass": true
+  },
+  "preparedPreviousApps": {
+    "baselines": [
+      {
+        "revision": "3f9e12ccbbebbcd0861a2fd1f3ef57805cf08fcb",
+        "cache": "haedo-v135",
+        "kind": "previous",
+        "ref": "3f9e12ccbbebbcd0861a2fd1f3ef57805cf08fcb"
+      },
+      {
+        "revision": "58e5cd55f73fb440c997266e160d8859f18bfd6c",
+        "cache": "haedo-v134",
+        "kind": "main"
+      }
+    ],
+    "currentCache": "haedo-v136",
+    "checks": 10,
+    "pass": 10,
+    "fail": 0,
+    "scope": "Entire generated v135 previous and v134 main apps upgraded to current v136; mock Auth, no live Google or Apple proof. Local dirty source hashes are fixed above, not the pre-commit head field."
+  },
+  "historyMeasurementCorrection": {
+    "initialCIRun": 39202220799,
+    "initialHead": "296e5a22fb7d78895f53d3a8956298be274518db",
+    "failure": "Setup scroll 100px was compared with restored actual departure 103px. Reproduced with CI Chromium 153.0.8010.12; actual pagehide and restored scroll were both 103px.",
+    "fix": "Compare the existing observer sample from the actual trusted beforeunload, before native dialog blur/scroll, matching Shell pre-dialog retention. Require exactly one trusted visible focused finite nonzero sample; retain <2px tolerance, same-document/trusted-persisted/focus/selection/photo/account assertions. Record setup separately. Product runtime unchanged.",
+    "localChecks": [
+      {
+        "browser": "151.0.7922.173",
+        "pass": true,
+        "scroll": {
+          "setup": [
+            0,
+            100
+          ],
+          "before": [
+            0,
+            120
+          ],
+          "after": [
+            0,
+            120
+          ]
+        },
+        "resumeUserReads": 1,
+        "preserved": {
+          "sameDocument": true,
+          "sameEditor": true,
+          "sameCaption": true,
+          "sameStorage": true,
+          "samePost": true,
+          "sameOwner": true,
+          "captionSelection": [
+            2,
+            8,
+            "forward"
+          ],
+          "fullBody": true,
+          "captionCheckpointed": true,
+          "photoBytesAndDimensions": true,
+          "scrollPosition": true
+        }
+      },
+      {
+        "browser": "153.0.8010.12",
+        "pass": true,
+        "scroll": {
+          "setup": [
+            0,
+            103
+          ],
+          "before": [
+            0,
+            103
+          ],
+          "after": [
+            0,
+            103
+          ]
+        },
+        "resumeUserReads": 1,
+        "preserved": {
+          "sameDocument": true,
+          "sameEditor": true,
+          "sameCaption": true,
+          "sameStorage": true,
+          "samePost": true,
+          "sameOwner": true,
+          "captionSelection": [
+            2,
+            8,
+            "forward"
+          ],
+          "fullBody": true,
+          "captionCheckpointed": true,
+          "photoBytesAndDimensions": true,
+          "scrollPosition": true
+        }
+      }
+    ]
+  }
+}

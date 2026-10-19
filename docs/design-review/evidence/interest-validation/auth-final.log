@@ -1,0 +1,30 @@
+✔ private routes include life and remove unknown query values and external redirects (2.731577ms)
+✔ first writing intent survives login only as the exact local home flag (0.467947ms)
+✔ unified home return accepts only known sections and material views (0.952731ms)
+✔ public home guest verification does not redirect and Google returns to the requested section (2.025876ms)
+✔ public home bfcache keeps cached personal DOM hidden until its shell remounts (1.045102ms)
+✔ leaving the public home cancels a pending verification before it can expose an account (7.919695ms)
+✔ public home account change hides old data without forcing navigation or accepting its late result (1.085715ms)
+✔ verified shared account uses Google PKCE and never enables a password flow (0.669141ms)
+✔ unverified token cannot open a protected offline cold load (0.445698ms)
+✔ temporary network loss keeps an already verified account while bfcache keeps the page hidden (0.590098ms)
+✔ account switch rejects an old verification even if the same account returns later (1.332776ms)
+✔ disposed Auth cannot republish a late verified account (0.917538ms)
+✔ online logout retains normal SDK server revocation then persists the local block (1.609592ms)
+✔ another tab logout blocks private UI immediately before its SDK broadcast arrives (0.432562ms)
+✔ a late old logout cannot delete or broadcast over another tab fresh login (0.951776ms)
+✔ a late bfcache verification cannot hide a newly verified account screen (0.753519ms)
+✔ expired offline logout cleans through supported SDK storage and prevents reload resurrection (0.895408ms)
+✔ request blocks foreign origins before attaching credentials (0.477099ms)
+✔ refresh cannot retry an old body with a new account token (31.86743ms)
+✔ old fetch results are rejected across A to B to A and its AbortSignal is cancelled (1.061389ms)
+✔ callback credentials and errors are scrubbed on success or SDK initialization failure (1.525332ms)
+✔ actual bundled SDK online logout uses shared session and offline failure cannot restore it (18.126636ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 147.845439

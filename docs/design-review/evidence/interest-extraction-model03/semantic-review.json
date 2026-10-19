@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 3,
+  "decision": "reject_current_frozen_candidate",
+  "reason": "The frozen candidate emits no positive topic or repeated-question evidence; retrieval and exact question extraction succeeded broadly, but topic and questionhood NLI thresholds accepted none.",
+  "pointMetricInterpretation": {
+    "topicOutputEvidence": 0,
+    "questionOutputEvidence": 0,
+    "observedFalsePositiveEvidence": 0,
+    "preregisteredEmptyHeadPrecision": 0,
+    "empiricalPrecisionAndWilsonInterval": "not estimable: zero positive predictions",
+    "positiveSourceIntegrity": "not established for final outputs: there are no final references to test; frozen scorer records0 by empty-denominator convention, not observed quote corruption",
+    "metadataIntegrity": "All171 passage registry +19 question candidate source/hash/UTF16/author references independently match original input.",
+    "topicRecall": 0,
+    "repeatedQuestionClusterRecall": 0,
+    "questionSourceDetection": {
+      "correct": 18,
+      "gold": 18
+    },
+    "sentenceQuestionSourceDetection": {
+      "correct": 9,
+      "gold": 9
+    }
+  },
+  "funnel": {
+    "topic": {
+      "goldDistinctBodyTopicPairs": 51,
+      "goldShortlisted": 50,
+      "goldNliMeasured": 50,
+      "goldNliAccepted": 0,
+      "finalDistinctBodyEvidence": 0,
+      "maxMeasuredGoldTopicEntailment": 0.24669572475437268,
+      "maxAnyTopicEntailment": 0.2866890229301918,
+      "topicEntailmentThreshold": 0.55
+    },
+    "questions": {
+      "goldSourceCount": 18,
+      "goldSourcesDetected": 18,
+      "goldSourcesQuestionhoodAccepted": 0,
+      "rawQuestionCandidates": 19,
+      "allRawQuestionhoodAccepted": 0,
+      "goldClusters": 6,
+      "goldTruePairsShortlisted": 6,
+      "goldTruePairsBothQuestionhoodAccepted": 0,
+      "goldTruePairsBothDirectionsMeasured": 0,
+      "goldTruePairsBothDirectionsAccepted": 0,
+      "finalGoldClusters": 0,
+      "maxAnyQuestionhoodEntailment": 0.31255579382616816,
+      "questionhoodThreshold": 0.55
+    },
+    "zeroOutputInterpretation": {
+      "observedFalsePositiveEvidence": 0,
+      "verifiedPositiveOutputEvidence": 0,
+      "precisionConvention": "Each empty output head gets 0 by preregistration because gold positives exist; empirical false-positive rate and source accuracy of nonexistent positive outputs cannot be estimated.",
+      "unmeasuredPairStage": "If questionhood excludes all pairs, zero repeated-question recall does not demonstrate that bidirectional NLI scored true pairs incorrectly; that stage never ran."
+    }
+  },
+  "dentalShortlistMiss": {
+    "documentId": "b012",
+    "goldTopicId": "health-life",
+    "description": "Actual dental hygiene/floss care subject. Neither of its two passages retrieved health-life in the top three. This is the one gold body-topic retrieval miss."
+  },
+  "longDocuments": [
+    {
+      "documentId": "b057",
+      "position": "beginning",
+      "untruncatedBodyTokens": 3098,
+      "validEvidenceCount": 0,
+      "bodyLongConfirmed": true
+    },
+    {
+      "documentId": "b058",
+      "position": "middle",
+      "untruncatedBodyTokens": 3095,
+      "validEvidenceCount": 0,
+      "bodyLongConfirmed": true
+    },
+    {
+      "documentId": "b059",
+      "position": "end",
+      "untruncatedBodyTokens": 3099,
+      "validEvidenceCount": 0,
+      "bodyLongConfirmed": true
+    }
+  ],
+  "longInterpretation": "All three relevant beginning/middle/end bodies exceed512tokens and contain at least one correct-topic passage that reached NLI. None became positive output. Fragmented filler sentences were explicitly scope-abstained, so full-body NLI coverage was not claimed.",
+  "coverage": {
+    "totalNonWhitespaceUTF16Characters": 12348,
+    "actualNonWhitespaceCoveredByStage": {
+      "extracted": 12348,
+      "embedding": 12348,
+      "nliPremise": 2938,
+      "nliAnyInput": 2938
+    },
+    "wholeDocumentEmbeddingComplete": 60,
+    "wholeDocumentNliAnyInputComplete": 57,
+    "diagnosticReferenceCount": 190,
+    "diagnosticReferenceIntegrityCorrect": 190,
+    "warning": "Extraction/embedding/source scan is not semantic validation. Partial NLI source coverage of the three long bodies is explicitly represented."
+  },
+  "runtime": {
+    "pass": true,
+    "actualInferenceAndCandidateMs": 168846,
+    "models": [
+      {
+        "kind": "embedding",
+        "preparedMs": 17761,
+        "inferenceMs": 6138.100000000559,
+        "disposed": true
+      },
+      {
+        "kind": "nli",
+        "preparedMs": 40173.200000000186,
+        "inferenceMs": 101497.39999999478,
+        "disposed": true
+      }
+    ],
+    "counts": {
+      "embeddingRequested": 210,
+      "embeddingCacheHits": 60,
+      "embeddingInferred": 144,
+      "nliRequested": 506,
+      "nliCacheHits": 27,
+      "nliInferred": 479
+    },
+    "maximumActualModelInputTokens": 182,
+    "truncatedInputs": 0,
+    "errors": 0,
+    "externalBodyRequests": 0,
+    "mutableRevisionRequests": 0,
+    "networkViolations": 0,
+    "sampledPeakSummedRSSBytes": 683806720,
+    "memoryMethod": "250ms samples of /proc browser process tree VmRSS; sum includes shared pages more than once, misses sub-interval peaks, excludes runner Node. Per-process VmHWM is lifetime, not a simultaneous unique-memory measurement.",
+    "scope": "Actual headless Linux Chromium WASM/q8 one-thread CPU run, not Apple-device or product usefulness evidence."
+  },
+  "normalization": {
+    "audit": "runtime-normalization-audit.json",
+    "originalRuntimeAndOriginalScoringPreserved": true,
+    "allOtherRuntimeFieldsDeepEqual": true,
+    "transform": "Move rows[] to embedding[documentId] objects; preserve every row verbatim and preserve elapsedMs/any other wrapper metadata in place.",
+    "gateDifferences": {
+      "allThreeWholeBodiesConfirmedOver512Tokens": {
+        "original": false,
+        "normalized": true
+      }
+    },
+    "pointMetricObjectsIdentical": true,
+    "qualityDecisionUnchanged": true,
+    "reproduce": "python /workspace/model-03-validation/evaluate-normalized-wrapper.py"
+  },
+  "allSixFrozenArtifactsMatch": true,
+  "criticalUnknownSelfPromotionsObserved": 0,
+  "criticalAttributionLimit": "No positive outputs; source metadata propagation was tested, but personal-belief correctness of future positive outputs was not established.",
+  "independentSemanticReview": {
+    "outputClaimsToAudit": 0,
+    "exactQuestionDetectionConfirmedAgainstGold": true,
+    "questionSemantics": "The six paired source problems have matching conditions/goals/actions. Six same-topic singleton problems differ. The quoted historical question is not a current source question.",
+    "modelFailureLocation": "All recorded topic entailment probabilities were below.55; every recorded questionhood entailment probability was below.55. No true question pair was scored bidirectionally after this filter.",
+    "ultimateCauseNotIdentified": "The trace identifies the gating stage, but does not isolate model weights versus generic hypothesis phrasing versus calibration as the ultimate cause."
+  },
+  "nextCompletionCriteria": [
+    "Keep automatic product analysis disabled; report this candidate rejection alongside prior48/NLI12 results without overwriting them.",
+    "Choose a revised verification representation using public development evidence and fixed actual-task hypotheses; do not lower thresholds against this held-out to claim adoption.",
+    "Freeze a revised full pipeline and run genuinely fresh blind material with the same topic/question/forbidden/source/coverage gates before product activation.",
+    "After semantic acceptance, separately verify full user correction/evidence-return flow and actual-device memory/latency."
+  ]
+}

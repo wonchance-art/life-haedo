@@ -1,0 +1,93 @@
+{
+  "generatedAt": "2026-10-18T18:41:59Z",
+  "feedSHA256": "6a6c63e520328e283d01ca8283a6b9c2259295f5c37fc05d2fb49b27ba057684",
+  "coreSHA256": "bf514ade159c5b7a815c07123ad7d1e6905596a87ab1cb7eadc9f04c9c329196",
+  "articles": 50,
+  "invalid": 0,
+  "preservedOldIds": 20,
+  "oldArticles": 20,
+  "sources": [
+    {
+      "id": "naver-d2",
+      "status": "error",
+      "lastSuccessAt": null,
+      "stale": true,
+      "count": 0
+    },
+    {
+      "id": "seoul-culture",
+      "status": "ok",
+      "lastSuccessAt": "2026-10-18T18:41:59Z",
+      "stale": false,
+      "count": 10
+    },
+    {
+      "id": "woowahan-tech",
+      "status": "ok",
+      "lastSuccessAt": "2026-10-18T18:41:59Z",
+      "stale": false,
+      "count": 10
+    },
+    {
+      "id": "readersnews-books",
+      "status": "ok",
+      "lastSuccessAt": "2026-10-18T18:41:59Z",
+      "stale": false,
+      "count": 20
+    },
+    {
+      "id": "seoul-environment",
+      "status": "ok",
+      "lastSuccessAt": "2026-10-18T18:41:59Z",
+      "stale": false,
+      "count": 10
+    }
+  ],
+  "counts": [
+    {
+      "label": "AI",
+      "total": 7,
+      "shown": 5
+    },
+    {
+      "label": "전시",
+      "total": 3,
+      "shown": 3
+    },
+    {
+      "label": "공연",
+      "total": 1,
+      "shown": 1
+    },
+    {
+      "label": "독서",
+      "total": 0,
+      "shown": 0
+    },
+    {
+      "label": "클라우드",
+      "total": 0,
+      "shown": 0
+    },
+    {
+      "label": "기후변화",
+      "total": 0,
+      "shown": 0
+    },
+    {
+      "label": "접근성",
+      "total": 0,
+      "shown": 0
+    },
+    {
+      "label": "책",
+      "total": 1,
+      "shown": 1
+    },
+    {
+      "label": "신간",
+      "total": 7,
+      "shown": 5
+    }
+  ]
+}

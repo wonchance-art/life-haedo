@@ -1,0 +1,610 @@
+{
+  "createdAt": "2026-10-18T18:24:26.487Z",
+  "scope": "Real local app/Core/SDK/IndexedDB and checked-in public catalogue; synthetic edge HTTP and publisher popup interception identified per check. No live OAuth/account/publisher, model inference, Apple hardware or user usefulness validation.",
+  "checks": [
+    {
+      "name": "checked-in public catalogue smoke uses explicitly saved interests without automatic source writes",
+      "syntheticFeed": false,
+      "pass": true
+    },
+    {
+      "name": "synthetic related versus same-source latest, noreferrer popup return and exact list focus",
+      "syntheticFeed": true,
+      "pass": true
+    },
+    {
+      "name": "synthetic catalogue link_only stays honest while explicit link import excludes saved URL",
+      "syntheticFeed": true,
+      "pass": true
+    },
+    {
+      "name": "synthetic catalogue summary stays honest while explicit link import excludes saved URL",
+      "syntheticFeed": true,
+      "pass": true
+    },
+    {
+      "name": "synthetic catalogue full_text stays honest while explicit link import excludes saved URL",
+      "syntheticFeed": true,
+      "pass": true
+    },
+    {
+      "name": "synthetic explicit feedback and undo preserve all originals across reload",
+      "syntheticFeed": true,
+      "pass": true
+    },
+    {
+      "name": "synthetic committed import survives refresh failure and opens receipt without duplicate commit",
+      "syntheticFeed": true,
+      "pass": true
+    },
+    {
+      "name": "synthetic recycled provider ID cannot redirect undo to a different canonical URL",
+      "syntheticFeed": true,
+      "pass": true
+    },
+    {
+      "name": "synthetic failed feedback retains intent and explicit retry without changing sources",
+      "syntheticFeed": true,
+      "pass": true
+    },
+    {
+      "name": "synthetic two-tab feedback CAS keeps intent until latest reload and explicit retry",
+      "syntheticFeed": true,
+      "pass": true
+    },
+    {
+      "name": "synthetic empty catalogue, no relevant matches and failed refresh with stale recovery stay distinct",
+      "syntheticFeed": true,
+      "pass": true
+    },
+    {
+      "name": "synthetic delayed feed response cannot restore prior workspace interests or list",
+      "syntheticFeed": true,
+      "pass": true
+    },
+    {
+      "name": "synthetic late feed response after actual logout cannot reveal prior account feedback",
+      "syntheticFeed": true,
+      "pass": true
+    },
+    {
+      "name": "synthetic unsaved feedback failure blocks leaving review until explicit discard",
+      "syntheticFeed": true,
+      "pass": true
+    },
+    {
+      "name": "synthetic discovery visual long Korean titles and controls 390",
+      "syntheticFeed": true,
+      "pass": true
+    },
+    {
+      "name": "synthetic discovery visual long Korean titles and controls 820",
+      "syntheticFeed": true,
+      "pass": true
+    },
+    {
+      "name": "synthetic discovery visual long Korean titles and controls 1440",
+      "syntheticFeed": true,
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "width": 390,
+      "syntheticFeed": true,
+      "file": "discovery-390.png",
+      "audit": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "controls": [
+          {
+            "label": "관심 확인",
+            "width": 69.78125,
+            "height": 44
+          },
+          {
+            "label": "관심순",
+            "width": 60.3125,
+            "height": 44
+          },
+          {
+            "label": "최신순",
+            "width": 60.3125,
+            "height": 44
+          },
+          {
+            "label": "목록 다시 불러오기",
+            "width": 106.765625,
+            "height": 44
+          },
+          {
+            "label": "독서 경험을 글로 남기는 연습 · 새 탭에서 원문 읽기",
+            "width": 350,
+            "height": 44
+          },
+          {
+            "label": "보관 검토",
+            "width": 72.078125,
+            "height": 44
+          },
+          {
+            "label": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "label": "관련 없음",
+            "width": 64.078125,
+            "height": 44
+          },
+          {
+            "label": "독서와 글쓰기의 표현을 비교한 글 · 새 탭에서 원문 읽기",
+            "width": 350,
+            "height": 44
+          },
+          {
+            "label": "보관 검토",
+            "width": 72.078125,
+            "height": 44
+          },
+          {
+            "label": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "label": "관련 없음",
+            "width": 64.078125,
+            "height": 44
+          },
+          {
+            "label": "독서 기록에서 문장을 고르는 방법 · 새 탭에서 원문 읽기",
+            "width": 350,
+            "height": 44
+          },
+          {
+            "label": "링크 보관 검토",
+            "width": 97.6875,
+            "height": 44
+          },
+          {
+            "label": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "label": "관련 없음",
+            "width": 64.078125,
+            "height": 44
+          }
+        ]
+      }
+    },
+    {
+      "width": 820,
+      "syntheticFeed": true,
+      "file": "discovery-820.png",
+      "audit": {
+        "viewport": 820,
+        "documentWidth": 820,
+        "controls": [
+          {
+            "label": "관심 확인",
+            "width": 69.78125,
+            "height": 44
+          },
+          {
+            "label": "관심순",
+            "width": 66.3125,
+            "height": 44
+          },
+          {
+            "label": "최신순",
+            "width": 66.3125,
+            "height": 44
+          },
+          {
+            "label": "목록 다시 불러오기",
+            "width": 121.5625,
+            "height": 44
+          },
+          {
+            "label": "독서 경험을 글로 남기는 연습 · 새 탭에서 원문 읽기",
+            "width": 636,
+            "height": 44
+          },
+          {
+            "label": "보관 검토",
+            "width": 82.078125,
+            "height": 44
+          },
+          {
+            "label": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "label": "관련 없음",
+            "width": 66.078125,
+            "height": 44
+          },
+          {
+            "label": "독서와 글쓰기의 표현을 비교한 글 · 새 탭에서 원문 읽기",
+            "width": 636,
+            "height": 44
+          },
+          {
+            "label": "보관 검토",
+            "width": 82.078125,
+            "height": 44
+          },
+          {
+            "label": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "label": "관련 없음",
+            "width": 66.078125,
+            "height": 44
+          },
+          {
+            "label": "독서 기록에서 문장을 고르는 방법 · 새 탭에서 원문 읽기",
+            "width": 636,
+            "height": 44
+          },
+          {
+            "label": "링크 보관 검토",
+            "width": 107.6875,
+            "height": 44
+          },
+          {
+            "label": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "label": "관련 없음",
+            "width": 66.078125,
+            "height": 44
+          }
+        ]
+      }
+    },
+    {
+      "width": 1440,
+      "syntheticFeed": true,
+      "file": "discovery-1440.png",
+      "audit": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "controls": [
+          {
+            "label": "관심 확인",
+            "width": 69.78125,
+            "height": 44
+          },
+          {
+            "label": "관심순",
+            "width": 66.3125,
+            "height": 44
+          },
+          {
+            "label": "최신순",
+            "width": 66.3125,
+            "height": 44
+          },
+          {
+            "label": "목록 다시 불러오기",
+            "width": 121.5625,
+            "height": 44
+          },
+          {
+            "label": "독서 경험을 글로 남기는 연습 · 새 탭에서 원문 읽기",
+            "width": 720,
+            "height": 44
+          },
+          {
+            "label": "보관 검토",
+            "width": 82.078125,
+            "height": 44
+          },
+          {
+            "label": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "label": "관련 없음",
+            "width": 66.078125,
+            "height": 44
+          },
+          {
+            "label": "독서와 글쓰기의 표현을 비교한 글 · 새 탭에서 원문 읽기",
+            "width": 720,
+            "height": 44
+          },
+          {
+            "label": "보관 검토",
+            "width": 82.078125,
+            "height": 44
+          },
+          {
+            "label": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "label": "관련 없음",
+            "width": 66.078125,
+            "height": 44
+          },
+          {
+            "label": "독서 기록에서 문장을 고르는 방법 · 새 탭에서 원문 읽기",
+            "width": 720,
+            "height": 44
+          },
+          {
+            "label": "링크 보관 검토",
+            "width": 107.6875,
+            "height": 44
+          },
+          {
+            "label": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "label": "관련 없음",
+            "width": 66.078125,
+            "height": 44
+          }
+        ]
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedErrors": [
+    {
+      "check": "synthetic empty catalogue, no relevant matches and failed refresh with stale recovery stay distinct",
+      "message": "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+    },
+    {
+      "check": "synthetic empty catalogue, no relevant matches and failed refresh with stale recovery stay distinct",
+      "message": "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+    }
+  ],
+  "external": [],
+  "modelRequests": [],
+  "privacyViolations": [],
+  "catalogueRequests": [
+    {
+      "check": "checked-in public catalogue smoke uses explicitly saved interests without automatic source writes",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "checked-in public catalogue smoke uses explicitly saved interests without automatic source writes",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic related versus same-source latest, noreferrer popup return and exact list focus",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic catalogue link_only stays honest while explicit link import excludes saved URL",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic catalogue summary stays honest while explicit link import excludes saved URL",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic catalogue full_text stays honest while explicit link import excludes saved URL",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic explicit feedback and undo preserve all originals across reload",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic explicit feedback and undo preserve all originals across reload",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic committed import survives refresh failure and opens receipt without duplicate commit",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic recycled provider ID cannot redirect undo to a different canonical URL",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic recycled provider ID cannot redirect undo to a different canonical URL",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic failed feedback retains intent and explicit retry without changing sources",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic two-tab feedback CAS keeps intent until latest reload and explicit retry",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic two-tab feedback CAS keeps intent until latest reload and explicit retry",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic empty catalogue, no relevant matches and failed refresh with stale recovery stay distinct",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic empty catalogue, no relevant matches and failed refresh with stale recovery stay distinct",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic empty catalogue, no relevant matches and failed refresh with stale recovery stay distinct",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic empty catalogue, no relevant matches and failed refresh with stale recovery stay distinct",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic empty catalogue, no relevant matches and failed refresh with stale recovery stay distinct",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic empty catalogue, no relevant matches and failed refresh with stale recovery stay distinct",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic empty catalogue, no relevant matches and failed refresh with stale recovery stay distinct",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic delayed feed response cannot restore prior workspace interests or list",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic delayed feed response cannot restore prior workspace interests or list",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic delayed feed response cannot restore prior workspace interests or list",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic late feed response after actual logout cannot reveal prior account feedback",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic late feed response after actual logout cannot reveal prior account feedback",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic late feed response after actual logout cannot reveal prior account feedback",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic unsaved feedback failure blocks leaving review until explicit discard",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic discovery visual long Korean titles and controls 390",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic discovery visual long Korean titles and controls 820",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    },
+    {
+      "check": "synthetic discovery visual long Korean titles and controls 1440",
+      "method": "GET",
+      "search": "",
+      "hasBody": false,
+      "referrer": null
+    }
+  ],
+  "popupRequests": [
+    {
+      "check": "synthetic related versus same-source latest, noreferrer popup return and exact list focus",
+      "destination": "https://d2.naver.com/synthetic-qa-read/related-full",
+      "referrer": null,
+      "hasBody": false
+    }
+  ],
+  "realRemoteWrites": 0,
+  "browser": "151.0.7922.173"
+}

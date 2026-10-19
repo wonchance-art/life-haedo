@@ -1,0 +1,162 @@
+{
+  "generatedAt": "2026-10-19T05:50:54Z",
+  "sourceCount": 7,
+  "okSources": 6,
+  "articleCount": 90,
+  "coverageCounts": {
+    "link_only": 90,
+    "summary": 0,
+    "full_text": 0
+  },
+  "sources": [
+    {
+      "sourceId": "naver-d2",
+      "attemptAt": "2026-10-19T05:50:54Z",
+      "requests": [],
+      "status": "error",
+      "error": "허용되지 않은 피드 이동 (HTTPS·등록 호스트만 허용)",
+      "failureStage": "robots",
+      "failureType": "FeedError",
+      "retainedArticles": 0
+    },
+    {
+      "sourceId": "seoul-culture",
+      "attemptAt": "2026-10-19T05:50:54Z",
+      "requests": [
+        {
+          "url": "https://news.seoul.go.kr/culture/feed",
+          "finalUrl": "https://news.seoul.go.kr/culture/feed",
+          "status": 200,
+          "contentType": "text/xml; charset=UTF-8",
+          "bytes": 112939,
+          "sha256": "ec2d2735028386e1807ff3658dc0a47f77f17dc3c3adec217a756aaf9b3020ce"
+        }
+      ],
+      "robots": {
+        "status": "allowed",
+        "url": "https://news.seoul.go.kr/robots.txt",
+        "responseSHA256": "244896d25a9336ff70763944c46f7d5e7e62d41c5865009f4992cd7dd4db9de7"
+      },
+      "feedEntries": 10,
+      "acceptedEntries": 10,
+      "rejectedEntries": 0,
+      "status": "ok"
+    },
+    {
+      "sourceId": "woowahan-tech",
+      "attemptAt": "2026-10-19T05:50:54Z",
+      "requests": [
+        {
+          "url": "https://techblog.woowahan.com/feed/",
+          "finalUrl": "https://techblog.woowahan.com/feed/",
+          "status": 200,
+          "contentType": "application/rss+xml; charset=UTF-8",
+          "bytes": 308561,
+          "sha256": "d61f06ac0818e7d5122a5f955d27f6abefb5dfa1e91ce7d43e9b77ee71b208df"
+        }
+      ],
+      "robots": {
+        "status": "allowed",
+        "url": "https://techblog.woowahan.com/robots.txt",
+        "responseSHA256": "6462da5276a299e85ed803ed894253e5bdfe891d1b6ca59cc73d91bbe66d1a60"
+      },
+      "feedEntries": 10,
+      "acceptedEntries": 10,
+      "rejectedEntries": 0,
+      "status": "ok"
+    },
+    {
+      "sourceId": "readersnews-books",
+      "attemptAt": "2026-10-19T05:50:54Z",
+      "requests": [
+        {
+          "url": "https://www.readersnews.com/rss/allArticle.xml",
+          "finalUrl": "https://www.readersnews.com/rss/allArticle.xml",
+          "status": 200,
+          "contentType": "application/xml",
+          "bytes": 51758,
+          "sha256": "6899a54e0d191b50129d10b4fce340621221699c4c6a26adcb8ec5a8c1d58ce3"
+        }
+      ],
+      "robots": {
+        "status": "allowed",
+        "url": "https://www.readersnews.com/robots.txt",
+        "responseSHA256": "dc18725781af38d23f66fc1522cbdfb4ac7bff0c15bb7b73b18202d1e3b16ec5"
+      },
+      "feedEntries": 50,
+      "acceptedEntries": 50,
+      "rejectedEntries": 0,
+      "status": "ok"
+    },
+    {
+      "sourceId": "seoul-environment",
+      "attemptAt": "2026-10-19T05:50:54Z",
+      "requests": [
+        {
+          "url": "https://news.seoul.go.kr/env/feed",
+          "finalUrl": "https://news.seoul.go.kr/env/feed",
+          "status": 200,
+          "contentType": "text/xml; charset=UTF-8",
+          "bytes": 27724,
+          "sha256": "3ad66211473bd87ebcb5e970bd65ca30213ecfce7449ea9dd0d3ea271fb8dcab"
+        }
+      ],
+      "robots": {
+        "status": "allowed",
+        "url": "https://news.seoul.go.kr/robots.txt",
+        "responseSHA256": "244896d25a9336ff70763944c46f7d5e7e62d41c5865009f4992cd7dd4db9de7"
+      },
+      "feedEntries": 10,
+      "acceptedEntries": 10,
+      "rejectedEntries": 0,
+      "status": "ok"
+    },
+    {
+      "sourceId": "arxiv-cs-cl",
+      "attemptAt": "2026-10-19T05:50:54Z",
+      "requests": [
+        {
+          "url": "https://rss.arxiv.org/rss/cs.CL",
+          "finalUrl": "https://rss.arxiv.org/rss/cs.CL",
+          "status": 200,
+          "contentType": "application/rss+xml",
+          "bytes": 470458,
+          "sha256": "d818bc7b74c99cdd90323b6cf19a00f2fa8b5c4c967c8061b5fcde7952c4dcf0"
+        }
+      ],
+      "robots": {
+        "status": "not_provided",
+        "url": "https://rss.arxiv.org/robots.txt",
+        "httpStatus": 404
+      },
+      "feedEntries": 226,
+      "acceptedEntries": 226,
+      "rejectedEntries": 0,
+      "status": "ok"
+    },
+    {
+      "sourceId": "mit-linguistics",
+      "attemptAt": "2026-10-19T05:50:54Z",
+      "requests": [
+        {
+          "url": "https://news.mit.edu/topic/mitlinguistics-rss.xml",
+          "finalUrl": "https://news.mit.edu/topic/mitlinguistics-rss.xml",
+          "status": 200,
+          "contentType": "application/rss+xml; charset=utf-8",
+          "bytes": 460909,
+          "sha256": "f55c91356e48d6e9252e2e0a8b3d802ab1677c205cf6b35bae8d30b4892de8fe"
+        }
+      ],
+      "robots": {
+        "status": "allowed",
+        "url": "https://news.mit.edu/robots.txt",
+        "responseSHA256": "ce0ba5ae1d627202514289bda9b49e44735b33adba03ce41872ad091ec2cf90d"
+      },
+      "feedEntries": 50,
+      "acceptedEntries": 50,
+      "rejectedEntries": 0,
+      "status": "ok"
+    }
+  ],
+  "scope": "Official public feeds only. No user interests, private documents, article-page scraping or remote summarization."
+}

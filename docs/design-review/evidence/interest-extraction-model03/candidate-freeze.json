@@ -1,0 +1,35 @@
+{
+  "status": "candidate-frozen-before-new-heldout",
+  "frozenAtUTC": "2026-10-18T16:28:13.313129+00:00",
+  "implementationAgentReadHiddenInputsOrAnswers": false,
+  "developmentRounds": 2,
+  "developmentPairs": [
+    16,
+    32
+  ],
+  "focusedTests": {
+    "passed": 10,
+    "failed": 0
+  },
+  "thresholds": {
+    "topicEntailment": 0.55,
+    "controlPossibleInstructionAbstention": 0.45,
+    "questionhoodEntailment": 0.55,
+    "questionBothDirectionsEntailment": 0.55
+  },
+  "sha256": {
+    "candidate.mjs": "a9424f1996df1844b4baec8ae8beaa3d160577fd553ec724603529fffc7d3075",
+    "candidate.test.mjs": "19bf0f237bc39add0183d51954f1ddffe6c4ce00cd2f61f9898fe30df9f06f75",
+    "design.json": "044564b2ca8870d5c35e1ce8b9010de29f16dfeec666507f199a02d078252593",
+    "dev-report.md": "88f82c4a00f3c8df9cf2d18720ad37acc76d17b1164b050aaefab9b9f9401c87",
+    "public-calibration.json": "7f94b88059f030e664f2ac648cb1f30508732f78eb2b41e6432af98a8f40ff99",
+    "public-calibration-labels.json": "dede2e1e67bcf78ee73a2ade0a01e87b797e0d44e9e94f0a90b338b58f679752",
+    "public-calibration-output.json": "79ada95e3e34d11d16252addddda924e1b0c3313df8955c5785b24c0b86e8e1f",
+    "public-calibration-runtime.json": "dd2185277343b27cab01a04a88ab93ad946c9992f63eca3af2d8f1c150d67c39",
+    "public-template-comparison.json": "9d54c7c69f4d2c5b4c34bea66e499fae53741b5347cea74dc39a8b436e32d88b",
+    "public-template-comparison-output.json": "8632b6fd214c01469bfc6a7d29e899521c7c53a17a9db6af5901fce5ba3df001",
+    "public-template-comparison-runtime.json": "34508e1919cb0dfb20ca5ae61fbf639461c6368cebeb1791f2542b0bbf042e4b"
+  },
+  "productPolicy": "unchanged; analysis disabled",
+  "postFreezePolicy": "No template, threshold, budget or source tuning using new heldout results."
+}

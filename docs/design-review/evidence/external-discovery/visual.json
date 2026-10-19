@@ -1,0 +1,448 @@
+{
+  "scope": "Actual full app and public catalog with anonymous intercepted Auth; Linux Chromium viewport simulation, no real Apple hardware or production deployment.",
+  "captures": [
+    {
+      "width": 1440,
+      "file": "actual-1440.png",
+      "metrics": {
+        "viewport": 1440,
+        "scroll": 1440,
+        "count": 5,
+        "controls": [
+          {
+            "text": "관심 확인",
+            "width": 69.78125,
+            "height": 44
+          },
+          {
+            "text": "관심순",
+            "width": 66.3125,
+            "height": 44
+          },
+          {
+            "text": "최신순",
+            "width": 66.3125,
+            "height": 44
+          },
+          {
+            "text": "목록 다시 불러오기",
+            "width": 121.5625,
+            "height": 44
+          },
+          {
+            "text": "AI 전환, 우리가 도운 건 돕는 사람이었습니다",
+            "width": 720,
+            "height": 44
+          },
+          {
+            "text": "링크 보관 검토",
+            "width": 107.6875,
+            "height": 44
+          },
+          {
+            "text": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "text": "관련 없음",
+            "width": 66.078125,
+            "height": 44
+          },
+          {
+            "text": "플랫폼 행성에 떨어진 서비스 개발자",
+            "width": 720,
+            "height": 44
+          },
+          {
+            "text": "링크 보관 검토",
+            "width": 107.6875,
+            "height": 44
+          },
+          {
+            "text": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "text": "관련 없음",
+            "width": 66.078125,
+            "height": 44
+          },
+          {
+            "text": "배달의민족 전자계약서 화면 개편기: AI에게 맡긴 것과 사람이 챙긴 것",
+            "width": 720,
+            "height": 44
+          },
+          {
+            "text": "링크 보관 검토",
+            "width": 107.6875,
+            "height": 44
+          },
+          {
+            "text": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "text": "관련 없음",
+            "width": 66.078125,
+            "height": 44
+          },
+          {
+            "text": "AI가 분석한 리서치 결과, 어떻게 만들고 전달할까요?",
+            "width": 720,
+            "height": 44
+          },
+          {
+            "text": "링크 보관 검토",
+            "width": 107.6875,
+            "height": 44
+          },
+          {
+            "text": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "text": "관련 없음",
+            "width": 66.078125,
+            "height": 44
+          },
+          {
+            "text": "AI에게 만드는 법 대신 실패하는 법을 묻다: 포토그래퍼의 수천 명 동시 접속 게임 만들기",
+            "width": 720,
+            "height": 75
+          },
+          {
+            "text": "링크 보관 검토",
+            "width": 107.6875,
+            "height": 44
+          },
+          {
+            "text": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "text": "관련 없음",
+            "width": 66.078125,
+            "height": 44
+          }
+        ],
+        "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "body": "rgb(24, 37, 34)"
+      }
+    },
+    {
+      "width": 820,
+      "file": "actual-820.png",
+      "metrics": {
+        "viewport": 820,
+        "scroll": 820,
+        "count": 5,
+        "controls": [
+          {
+            "text": "관심 확인",
+            "width": 69.78125,
+            "height": 44
+          },
+          {
+            "text": "관심순",
+            "width": 66.3125,
+            "height": 44
+          },
+          {
+            "text": "최신순",
+            "width": 66.3125,
+            "height": 44
+          },
+          {
+            "text": "목록 다시 불러오기",
+            "width": 121.5625,
+            "height": 44
+          },
+          {
+            "text": "AI 전환, 우리가 도운 건 돕는 사람이었습니다",
+            "width": 636,
+            "height": 44
+          },
+          {
+            "text": "링크 보관 검토",
+            "width": 107.6875,
+            "height": 44
+          },
+          {
+            "text": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "text": "관련 없음",
+            "width": 66.078125,
+            "height": 44
+          },
+          {
+            "text": "플랫폼 행성에 떨어진 서비스 개발자",
+            "width": 636,
+            "height": 44
+          },
+          {
+            "text": "링크 보관 검토",
+            "width": 107.6875,
+            "height": 44
+          },
+          {
+            "text": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "text": "관련 없음",
+            "width": 66.078125,
+            "height": 44
+          },
+          {
+            "text": "배달의민족 전자계약서 화면 개편기: AI에게 맡긴 것과 사람이 챙긴 것",
+            "width": 636,
+            "height": 75
+          },
+          {
+            "text": "링크 보관 검토",
+            "width": 107.6875,
+            "height": 44
+          },
+          {
+            "text": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "text": "관련 없음",
+            "width": 66.078125,
+            "height": 44
+          },
+          {
+            "text": "AI가 분석한 리서치 결과, 어떻게 만들고 전달할까요?",
+            "width": 636,
+            "height": 44
+          },
+          {
+            "text": "링크 보관 검토",
+            "width": 107.6875,
+            "height": 44
+          },
+          {
+            "text": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "text": "관련 없음",
+            "width": 66.078125,
+            "height": 44
+          },
+          {
+            "text": "AI에게 만드는 법 대신 실패하는 법을 묻다: 포토그래퍼의 수천 명 동시 접속 게임 만들기",
+            "width": 636,
+            "height": 75
+          },
+          {
+            "text": "링크 보관 검토",
+            "width": 107.6875,
+            "height": 44
+          },
+          {
+            "text": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "text": "관련 없음",
+            "width": 66.078125,
+            "height": 44
+          }
+        ],
+        "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "body": "rgb(24, 37, 34)"
+      }
+    },
+    {
+      "width": 390,
+      "file": "actual-390.png",
+      "metrics": {
+        "viewport": 390,
+        "scroll": 390,
+        "count": 5,
+        "controls": [
+          {
+            "text": "관심 확인",
+            "width": 69.78125,
+            "height": 44
+          },
+          {
+            "text": "관심순",
+            "width": 60.3125,
+            "height": 44
+          },
+          {
+            "text": "최신순",
+            "width": 60.3125,
+            "height": 44
+          },
+          {
+            "text": "목록 다시 불러오기",
+            "width": 106.765625,
+            "height": 44
+          },
+          {
+            "text": "AI 전환, 우리가 도운 건 돕는 사람이었습니다",
+            "width": 350,
+            "height": 68.1875
+          },
+          {
+            "text": "링크 보관 검토",
+            "width": 97.6875,
+            "height": 44
+          },
+          {
+            "text": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "text": "관련 없음",
+            "width": 64.078125,
+            "height": 44
+          },
+          {
+            "text": "플랫폼 행성에 떨어진 서비스 개발자",
+            "width": 350,
+            "height": 44
+          },
+          {
+            "text": "링크 보관 검토",
+            "width": 97.6875,
+            "height": 44
+          },
+          {
+            "text": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "text": "관련 없음",
+            "width": 64.078125,
+            "height": 44
+          },
+          {
+            "text": "배달의민족 전자계약서 화면 개편기: AI에게 맡긴 것과 사람이 챙긴 것",
+            "width": 350,
+            "height": 68.1875
+          },
+          {
+            "text": "링크 보관 검토",
+            "width": 97.6875,
+            "height": 44
+          },
+          {
+            "text": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "text": "관련 없음",
+            "width": 64.078125,
+            "height": 44
+          },
+          {
+            "text": "AI가 분석한 리서치 결과, 어떻게 만들고 전달할까요?",
+            "width": 350,
+            "height": 68.1875
+          },
+          {
+            "text": "링크 보관 검토",
+            "width": 97.6875,
+            "height": 44
+          },
+          {
+            "text": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "text": "관련 없음",
+            "width": 64.078125,
+            "height": 44
+          },
+          {
+            "text": "AI에게 만드는 법 대신 실패하는 법을 묻다: 포토그래퍼의 수천 명 동시 접속 게임 만들기",
+            "width": 350,
+            "height": 102.28125
+          },
+          {
+            "text": "링크 보관 검토",
+            "width": 97.6875,
+            "height": 44
+          },
+          {
+            "text": "읽음",
+            "width": 44,
+            "height": 44
+          },
+          {
+            "text": "관련 없음",
+            "width": 64.078125,
+            "height": 44
+          }
+        ],
+        "font": "\"Pretendard Variable\", \"Apple SD Gothic Neo\", \"Noto Sans CJK KR\", \"Malgun Gothic\", sans-serif",
+        "body": "rgb(24, 37, 34)"
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "external": [],
+  "visualReview": "UI owner directly inspected actual full-app 1440/820/390 captures in a bounded first pass and one final confirmation after wording/focus repairs. Actual public article titles, source/publication date, exact search expressions, link-only coverage and link-review action lead the flat single-column feed. Latest and no-interest mobile states were also inspected.",
+  "finalCatalog": {
+    "generatedAt": "2026-10-18T18:23:24Z",
+    "articles": 20,
+    "sources": [
+      {
+        "id": "naver-d2",
+        "status": "error",
+        "stale": true
+      },
+      {
+        "id": "seoul-culture",
+        "status": "ok",
+        "stale": false
+      },
+      {
+        "id": "woowahan-tech",
+        "status": "ok",
+        "stale": false
+      }
+    ],
+    "sha256": "f9f2cdc92da036361ac145badc33c2666a9bf34ce0c0bb208efa35afe3d6ccf2"
+  },
+  "results": {
+    "horizontalOverflow": false,
+    "allMeasuredButtonsAndAnchorsAtLeast44px": true,
+    "consoleErrorCount": 0,
+    "pageErrorCount": 0,
+    "externalRequestCount": 0
+  },
+  "contrast": {
+    "bodyOnWhite": 15.83,
+    "secondaryOnWhite": 5.59,
+    "tealOnWhite": 7.95
+  },
+  "limitations": [
+    "Linux Chromium viewport simulations are not Mac/iPad/iPhone hardware validation.",
+    "The checked-in catalog contains 20 link-only public articles; NAVER D2 has zero articles and an explicit failed/stale provider status due to blocked HTTP robots redirect.",
+    "Article usefulness and real provider login/production deployment were not evaluated.",
+    "Functional browser flows are independently owned by integration_review."
+  ]
+}

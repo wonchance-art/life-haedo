@@ -1,0 +1,30 @@
+MODEL-02 finite runtime + PWA verification
+Checked 2026-10-19 Asia/Seoul. Chromium 151.0.7922.173 headless Linux. Public model assets and anonymous synthetic fixtures only.
+
+PWA lifecycle: PASS, 6 checks
+Runner: /workspace/haedo-discovery/tests/life-interest-pwa-browser.cjs
+Evidence: interest-pwa-browser.json
+- An actual HTTP fixture host served the original v126 sw.js and switched its response to the clone's v129 sw.js. All other app files were the new clone from the beginning. This validates old-SW-only update, not a full old-app release migration.
+- Old v126 SHA256 cac57a88b4c8cab19c0856137b5c11e884d0d7cbec37497e72aa421671b8a77c; new v129 SHA256 3081da4bca878b00c076349073b02895ffb1be956275055d89d48c5767f187b1.
+- Actual installation, activation, controller change and old cache deletion were awaited with async page.evaluate polling. Playwright waitForFunction does not retry a Promise resolving false; the runner deliberately avoids that async-predicate trap.
+- Anonymous Core bundle with Korean, BOM, emoji, CRLF and combining-mark text and a two-item manual InterestProfile were unchanged byte-for-byte as JSON after update/reload.
+- All seven added local files were present in haedo-v129 and matched SHA256 of current files: loader, worker, analysis, profile, policy, UI, CSS.
+- Installed shell entries: 122. No model weights, WASM binaries or remote model/CDN URLs in shell cache. No model requests on ordinary open, selection/manual save, update or offline reload.
+- Browser offline mode: an already verified session saved manual interests to real IndexedDB; original Core bundle stayed unchanged. Offline navigation response came from the actual Service Worker, seven local modules remained fetchable, and the saved interests reappeared after reload.
+- Auth HTTP during the preceding cached-shell reload was fulfilled by the anonymous fixture. It is not evidence that production Auth works offline. A separate strict-offline phase also failed mocked Auth transport; existing account verification correctly blocked private boot. Connectivity recovery reopened the exact saved profile and bundle.
+- navigator.onLine read true after Chromium's SW reload despite offline mode. A non-shell no-store fetch failed with ERR_INTERNET_DISCONNECTED, proving transport was denied; the runner relies on this actual request failure rather than that flag.
+- Unexpected console/page errors: 0/0; expected offline transport errors: 2. External unexpected requests and model requests: 0/0. Real remote writes: 0.
+
+Active worker cancellation: PASS
+Runner: /workspace/model-02-validation/run-active-worker-cancel.cjs
+Evidence: active-worker-cancel.json
+- This complements prior heldout inference. It does not repeat that dataset/evaluation.
+- Explicit preparation used fixed public provenance and official Transformers.js 4.3.1 CPU WASM q8 assets: 14.85s.
+- A real Worker received embed(texts) for 16 short synthetic strings. After its first eight embeddings completed, the progress observer aborted the pending call. The promise rejected AbortError and the native Worker terminate counter increased to one while more work remained.
+- The same retained adapter retried one synthetic string by creating a second Worker and preparing it: 2.75s. Result: 384 dimensions, norm 0.999999846.
+- Final dispose terminated the second Worker. Creates/terminations: 2/2.
+- Remote requests on loader import/create: 0. Mutable main paths: 0. Requests with body or non-GET method: 0. Unexpected browser errors: 0.
+- TLS verification stayed enabled, inherited HTTPS proxy remained configured, and proxy bypass was limited to localhost/127.0.0.1. Reports omit signed URL queries.
+
+Limits
+No Apple-device execution, production Auth/offline account access, deployment, real user data, or model quality improvement is established by these checks. Automatic analysis remains governed by the unchanged application quality gate. Original life-haedo, prior MODEL-01, and frozen MODEL-02 analysis sources were not edited.

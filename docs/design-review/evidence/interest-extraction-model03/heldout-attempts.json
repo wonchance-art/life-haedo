@@ -1,0 +1,29 @@
+[
+  {
+    "fingerprint": "a237d4dfc56153660ed4c02d9b654326464f4365334258e0a7af7d3d1ec1dbe8",
+    "startedAt": "2026-10-18T16:29:09.064Z",
+    "status": "completed",
+    "finishedAt": "2026-10-18T16:31:58.270Z",
+    "wallMs": 169206,
+    "phases": [
+      {
+        "kind": "embedding",
+        "preparedMs": 17761,
+        "inferenceMs": 6138.100000000559
+      },
+      {
+        "kind": "nli",
+        "preparedMs": 40173.200000000186,
+        "inferenceMs": 101497.39999999478
+      }
+    ],
+    "counts": {
+      "embeddingRequested": 210,
+      "embeddingCacheHits": 60,
+      "embeddingInferred": 144,
+      "nliRequested": 506,
+      "nliCacheHits": 27,
+      "nliInferred": 479
+    }
+  }
+]

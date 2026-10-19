@@ -1,0 +1,194 @@
+{
+  "startedAtUTC": "2026-10-18T18:25:25.135331+00:00",
+  "scope": "Three incumbent CI browser suites, one run each. Existing home/core/import preservation only; new discovery journeys are independently owned and are not run here. Synthetic intercepted auth/actual app SDK+IndexedDB; no real OAuth/production/hardware claims.",
+  "baseURL": "http://127.0.0.1:4194",
+  "sourceHashesBefore": {
+    "index.html": "bafb405ae657f6ab1fdd6d0176c0efdbd8a4f746cb2e9faaf834a931e0fea676",
+    "life.html": "294fab061647c563f30479c245acda01f2ec9f5fc0a6595bed06c1f773ec83c7",
+    "assets/life/ui.js": "b9ecfb5a852b13a44ac565daccf1fdcc74676e6b5fddec547aeea7e11edf60e5",
+    "assets/life/home.js": "4b2992df333df3f7971c07342b0ec082bc906ecabfe63a97c669300c33be374e",
+    "assets/life/core.js": "6ad03c873ea3411dc7f8a432e7637502d1ce59271253db04e229429f99308ff4",
+    "assets/life/storage.js": "ec4849d9d0ddd37ea573e5c4441158b836f1c8005b3d631cdfab049fe0d06c82",
+    "assets/life/discovery.js": "448ad3ddb440dac3019d22ff663bbca2d90dbfe5b5a5539599153fd5dc28f497",
+    "assets/life/discovery-ui.js": "f002f061016175cd35c4adc0a7ba5bc103cec043057793e1681c34eb39e13efe",
+    "assets/life/discovery-profile.js": "3d7424eeb3db46fcf9f933544a7a2ba925e5a01de0615051b79f877dbc62d7d5"
+  },
+  "suites": [
+    {
+      "name": "unified-home",
+      "command": [
+        "node",
+        "tests/unified-home-browser.cjs"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 25.626,
+      "reportPath": "/workspace/haedo-discovery/.local/external-discovery-regression/unified-home/browser-report.json",
+      "passed": 13,
+      "failed": 0,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "unexpectedExternal": 0,
+      "expectedErrors": 1,
+      "browser": "151.0.7922.173",
+      "checks": [
+        {
+          "name": "anonymous common home is usable in all sections without redirect or private IDB",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "public readonly home does not mount even an authenticated account",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "server verification completes before any account storage opens",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "Google PKCE fixture returns to selected home section with only allowed query state",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "Google PKCE default return opens personal home without inventing a records selection",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "import draft and reviewed exact excerpt survive tools/manage switching without page reload",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "reader quote/search context and backup scope remain exact through common navigation",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "a home with originals and no excerpts shows real text and opens the complete original",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "tools lead to existing goal/habit editors and account timeline list with the same four-way navigation",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "history keeps a management subview and a legacy life sync link keeps its destination",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "account change cannot reveal previous home content and returning account recovers its own data",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "a late verification response after signout cannot remount the previous private home",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "failed server verification shows recoverable error without opening private storage",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "core-experience",
+      "command": [
+        "node",
+        "tests/core-experience-browser.cjs"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 16.624,
+      "reportPath": "/workspace/haedo-discovery/.local/external-discovery-regression/core-experience/browser-report.json",
+      "passed": 5,
+      "failed": 0,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "unexpectedExternal": 0,
+      "expectedErrors": 0,
+      "browser": "151.0.7922.173",
+      "checks": [
+        {
+          "name": "UI import to related reading, exact pair group, page editing and reload",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "related return preserves older reader version, selection, scroll and previous search",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "after related and page 1440",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "after related and page 820",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "after related and page 390",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "import-flow-quality",
+      "command": [
+        "node",
+        "tests/import-flow-quality-browser.cjs"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 8.66,
+      "reportPath": "/workspace/haedo-discovery/.local/external-discovery-regression/import-flow-quality/browser-report.json",
+      "passed": 3,
+      "failed": 0,
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "unexpectedExternal": 0,
+      "expectedErrors": 0,
+      "browser": "151.0.7922.173",
+      "checks": [
+        {
+          "name": "filtered import → exact excerpt → saved original access 1440",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "filtered import → exact excerpt → saved original access 820",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "filtered import → exact excerpt → saved original access 390",
+          "pass": true,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "sourceHashesAfter": {
+    "index.html": "bafb405ae657f6ab1fdd6d0176c0efdbd8a4f746cb2e9faaf834a931e0fea676",
+    "life.html": "294fab061647c563f30479c245acda01f2ec9f5fc0a6595bed06c1f773ec83c7",
+    "assets/life/ui.js": "b9ecfb5a852b13a44ac565daccf1fdcc74676e6b5fddec547aeea7e11edf60e5",
+    "assets/life/home.js": "4b2992df333df3f7971c07342b0ec082bc906ecabfe63a97c669300c33be374e",
+    "assets/life/core.js": "6ad03c873ea3411dc7f8a432e7637502d1ce59271253db04e229429f99308ff4",
+    "assets/life/storage.js": "ec4849d9d0ddd37ea573e5c4441158b836f1c8005b3d631cdfab049fe0d06c82",
+    "assets/life/discovery.js": "448ad3ddb440dac3019d22ff663bbca2d90dbfe5b5a5539599153fd5dc28f497",
+    "assets/life/discovery-ui.js": "f002f061016175cd35c4adc0a7ba5bc103cec043057793e1681c34eb39e13efe",
+    "assets/life/discovery-profile.js": "3d7424eeb3db46fcf9f933544a7a2ba925e5a01de0615051b79f877dbc62d7d5"
+  },
+  "sourceFilesUnchangedDuringRun": true,
+  "finishedAtUTC": "2026-10-18T18:26:16.163345+00:00",
+  "serverStopped": true
+}

@@ -1,0 +1,152 @@
+{
+  "createdAt": "2026-10-19T06:29:11.813Z",
+  "checks": [
+    "actual v137 installs without fetching catalog, original sites or model assets",
+    "v137 -> current worker preserves exact originals, workbench, manual interests, feedback, old settings, separate language preferences and private reactions",
+    "new local modules match installed hashes; public feed and model weights stay outside app SHELL",
+    "explicit catalog load uses one fixed public URL and separates browser receipt from collection time",
+    "a newer published catalog is fetched without worker update and failed refresh returns explicitly stale data",
+    "verified offline session saves private feedback and cached-shell reload preserves it",
+    "excluded feedback can be restored after reload without mutating source data or manual interests",
+    "catalog with no previous cache fails visibly; strict offline Auth still blocks private boot and recovery preserves data",
+    "catalog query, authorization and body probes fail before reaching the static host"
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "expectedTransportErrors": [
+    "Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+    "Failed to load resource: net::ERR_FAILED",
+    "Failed to load resource: net::ERR_INTERNET_DISCONNECTED",
+    "Failed to load resource: net::ERR_FAILED",
+    "Failed to load resource: net::ERR_FAILED",
+    "Failed to load resource: net::ERR_FAILED"
+  ],
+  "modelRequests": [],
+  "unexpectedExternal": [],
+  "catalogRequests": [
+    {
+      "method": "GET",
+      "queryCount": 0,
+      "hasCookie": false,
+      "hasAuthorization": false,
+      "hasBody": false,
+      "referer": null
+    },
+    {
+      "method": "GET",
+      "queryCount": 0,
+      "hasCookie": false,
+      "hasAuthorization": false,
+      "hasBody": false,
+      "referer": null
+    },
+    {
+      "method": "GET",
+      "queryCount": 0,
+      "hasCookie": false,
+      "hasAuthorization": false,
+      "hasBody": false,
+      "referer": null
+    },
+    {
+      "method": "GET",
+      "queryCount": 0,
+      "hasCookie": false,
+      "hasAuthorization": false,
+      "hasBody": false,
+      "referer": null
+    },
+    {
+      "method": "GET",
+      "queryCount": 0,
+      "hasCookie": false,
+      "hasAuthorization": false,
+      "hasBody": false,
+      "referer": null
+    },
+    {
+      "method": "GET",
+      "queryCount": 0,
+      "hasCookie": false,
+      "hasAuthorization": false,
+      "hasBody": false,
+      "referer": null
+    },
+    {
+      "method": "GET",
+      "queryCount": 0,
+      "hasCookie": false,
+      "hasAuthorization": false,
+      "hasBody": false,
+      "referer": null
+    }
+  ],
+  "blockedProbes": [
+    {
+      "rejected": true
+    },
+    {
+      "rejected": true
+    },
+    {
+      "rejected": true
+    }
+  ],
+  "scope": "Real Chromium SDK/IndexedDB/Service Worker. Only v137 sw.js is prior code; all app modules and approved-source policy are current. Reactions are seeded through the current real scoped storage API before the worker update; this isolates worker/cache migration rather than reconstructing the entire previous app. Real prepared public catalog served by an anonymous local fixture; synthetic title/build-time update for freshness tests. Mocked Auth response during cached-shell reload is separate from strict offline Auth refusal. No production, Apple device, upstream collection or model validation.",
+  "oldCache": "haedo-v137",
+  "newCache": "haedo-v138",
+  "oldSwSHA256": "eb07c915023603e5d470b2cd115d2acee483d903214a56305486cf1513c62e0a",
+  "newSwSHA256": "3f372c169dfad29072f02e0252019cde08c153de296ac1f70be621e2351f1c35",
+  "browser": "153.0.8010.12",
+  "privateActionsFixture": {
+    "revision": 5,
+    "entries": 2,
+    "activeBoth": 1,
+    "cancelled": 1,
+    "personalizationEnabled": true,
+    "sha256": "62302043f615baf8047a62dfc3e6934b2b9bea1c3a15daf9942f237c4da32bea"
+  },
+  "installed": [
+    {
+      "file": "assets/life/discovery.js",
+      "sha256": "2eaddf8deb9e0978805f6e6795c885c8c9364be5a06b97b2f7ad0aa75ba4f2bd"
+    },
+    {
+      "file": "assets/life/discovery-profile.js",
+      "sha256": "3d7424eeb3db46fcf9f933544a7a2ba925e5a01de0615051b79f877dbc62d7d5"
+    },
+    {
+      "file": "assets/life/discovery-settings.js",
+      "sha256": "f6d8f710d848b15ec4b9fa4f7df2b5e295fcac5a2d1b05aee4737110606708bc"
+    },
+    {
+      "file": "assets/life/discovery-language-settings.js",
+      "sha256": "70843708e5cb27b27f91f953398ee7fd51df64b6424c7cc01d72c98518f4b6d5"
+    },
+    {
+      "file": "assets/life/discovery-actions.js",
+      "sha256": "cbae40cdaf96f221f2d160f126b6a5b31174fbb748117f4544b374aa3e1497d9"
+    },
+    {
+      "file": "assets/life/discovery-recommendations.js",
+      "sha256": "8ee4677639e106ca16928aa23a81b3989df9dbc30ee88498d93d74d73661c02e"
+    },
+    {
+      "file": "assets/life/discovery-ui.js",
+      "sha256": "939e394c398af375ef8eee1f86d2882558535cadd6f33aa95a378316719693a5"
+    },
+    {
+      "file": "assets/life/discovery.css",
+      "sha256": "9342aca05dde21fde980ddfcb41ea2f0c0ca4ebbb26aed582d612e2fa2c45dbc"
+    }
+  ],
+  "shellAssets": 158,
+  "catalogFreshness": {
+    "firstGeneratedAt": "2026-10-19T05:50:54Z",
+    "updatedGeneratedAt": "2026-10-19T06:29:18.845Z",
+    "browserFetchedAt": "2026-10-19T06:29:17.990Z",
+    "fallbackPreservedBrowserFetchedAt": "2026-10-19T06:29:17.990Z"
+  },
+  "realRemoteWrites": 0,
+  "pass": true
+}

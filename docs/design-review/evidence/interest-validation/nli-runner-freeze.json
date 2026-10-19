@@ -1,0 +1,8 @@
+{
+  "fixtureSHA256": "ac01222b172847a154dfa209a5f9aadd9b5cca73e5bd300a459995cf2b8c4863",
+  "runnerSHA256": "023b633f2b3db046331123d7100ccb03353f552f8765700e6aa48f53c8007554",
+  "modelId": "onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX",
+  "revision": "cdc8277b4682665e2f2e87cd83da7da07b153d75",
+  "labelRule": "raw3logits_argmax_no_threshold_tuning",
+  "maxLength": 256
+}

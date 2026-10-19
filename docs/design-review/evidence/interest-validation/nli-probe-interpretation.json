@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "decision": "limited_followup_feasible",
+  "correctCount": 12,
+  "totalCount": 12,
+  "fixtureSHA256": "ac01222b172847a154dfa209a5f9aadd9b5cca73e5bd300a459995cf2b8c4863",
+  "fixtureMatchesSealedValue": true,
+  "preregistrationMatchesSealedValue": true,
+  "evaluatorMatchesRunValue": true,
+  "independentExpectedLabelReview": {
+    "entailment": {
+      "pairIds": [
+        "n01",
+        "n02",
+        "n03",
+        "n04"
+      ],
+      "confirmed": true,
+      "reason": "Explicit enjoyment/hobby, direct question paraphrase, and repeated unchanged-condition procedure substantively entail the respective hypotheses."
+    },
+    "contradiction": {
+      "pairIds": [
+        "n05",
+        "n06",
+        "n07"
+      ],
+      "confirmed": true,
+      "reason": "Explicit dispreference, rejected hypothesis, and canceled reservation contradict the affirmative hypotheses."
+    },
+    "neutral": {
+      "pairIds": [
+        "n08",
+        "n09",
+        "n10",
+        "n11",
+        "n12"
+      ],
+      "confirmed": true,
+      "reason": "An obsolete quoted instruction does not establish personal preference, memo owner hobby, or action completion; descriptions/question content omit lid material and purchase facts."
+    }
+  },
+  "truncation": {
+    "fixedMaxLength": 256,
+    "untruncatedTokenCountMin": 41,
+    "untruncatedTokenCountMax": 72,
+    "allActualInputTokenCountsMatchUntruncated": true,
+    "truncatedPairCount": 0,
+    "limit": "Only short pairs were exercised; no long-context NLI assessment or omitted middle-content recovery was tested."
+  },
+  "runtime": {
+    "modelId": "onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX",
+    "revision": "cdc8277b4682665e2f2e87cd83da7da07b153d75",
+    "runtime": "4.3.1",
+    "device": "wasm",
+    "dtype": "q8",
+    "numThreads": 1,
+    "preparedMs": 49373.89999999991,
+    "totalInferenceMs": 3724.600000000093,
+    "perPairElapsedMsMin": 181.5999999998603,
+    "perPairElapsedMsMax": 521.6000000000931,
+    "modelMetadataBytes": 338341610,
+    "jsHeapUsedBytes": 441121690,
+    "disposed": true,
+    "errors": [],
+    "externalBodyRequests": [],
+    "mutableRevisionRequests": [],
+    "limit": "Single-browser WASM/q8/one-thread measurements. JS heap is not total RAM or peak resident memory. No mobile-device responsiveness or end-to-end product performance claim."
+  },
+  "argmaxMargins": [
+    {
+      "id": "n01",
+      "topMinusSecondRawLogit": 0.11100420355796814
+    },
+    {
+      "id": "n02",
+      "topMinusSecondRawLogit": 0.2774575389921665
+    },
+    {
+      "id": "n03",
+      "topMinusSecondRawLogit": 0.3874015361070633
+    },
+    {
+      "id": "n04",
+      "topMinusSecondRawLogit": 0.12897318601608276
+    },
+    {
+      "id": "n05",
+      "topMinusSecondRawLogit": 1.150937259197235
+    },
+    {
+      "id": "n06",
+      "topMinusSecondRawLogit": 2.6151331663131714
+    },
+    {
+      "id": "n07",
+      "topMinusSecondRawLogit": 3.223600149154663
+    },
+    {
+      "id": "n08",
+      "topMinusSecondRawLogit": 3.4262916445732117
+    },
+    {
+      "id": "n09",
+      "topMinusSecondRawLogit": 0.686714194715023
+    },
+    {
+      "id": "n10",
+      "topMinusSecondRawLogit": 0.4497545212507248
+    },
+    {
+      "id": "n11",
+      "topMinusSecondRawLogit": 3.139045834541321
+    },
+    {
+      "id": "n12",
+      "topMinusSecondRawLogit": 3.4391756653785706
+    }
+  ],
+  "confidenceLimit": "Correct argmax does not mean calibrated certainty. The smallest top-versus-second raw-logit margin is reported descriptively, without adding or tuning any acceptance cutoff.",
+  "featureScope": {
+    "interestPipelineAdopted": false,
+    "previous48DocumentDecisionChanged": false,
+    "usefulNextHypothesis": "Investigate NLI as a separate proposed-evidence entailment check after candidate generation, with genuinely new held-out evidence and fixed hypotheses.",
+    "unverified": [
+      "How hypotheses are chosen or generated across arbitrary topics",
+      "Topic discovery and repeated-question clustering",
+      "Recall after filtering candidate evidence",
+      "Source/SHA/offset and author-belief attribution in an integrated pipeline",
+      "Long-document passage coverage",
+      "Production privacy, memory, latency, and device usability of an integrated NLI feature"
+    ]
+  },
+  "noRetuning": "Fixture, labels, argmax rule, frozen evaluator and the prior 48-document artifacts were not altered after this result.",
+  "runnerAudit": {
+    "runnerSHA256": "023b633f2b3db046331123d7100ccb03353f552f8765700e6aa48f53c8007554",
+    "matchesRecordedRunnerFreeze": true,
+    "fixtureSHA256MatchesFreeze": true,
+    "frozenMaxLength": 256,
+    "runtimeInputProjectionOnlyIdPremiseHypothesis": true,
+    "directTextPairConfirmed": true,
+    "noExpectedLabelTokenInRunner": true
+  }
+}

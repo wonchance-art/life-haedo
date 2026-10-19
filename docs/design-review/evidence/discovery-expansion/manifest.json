@@ -1,0 +1,88 @@
+{
+  "createdAt": "2026-10-18T18:45:13.607117+00:00",
+  "scope": "Actual official public RSS metadata plus anonymous Auth/synthetic browser failure fixtures; no user utility, real publisher-page reading, real OAuth/Apple hardware or production deployment validation.",
+  "tests": {
+    "node": {
+      "pass": 747,
+      "fail": 0,
+      "skip": 0
+    },
+    "static": {
+      "html": 19,
+      "javascript": 118,
+      "localReferences": 477
+    },
+    "externalBrowser": 19,
+    "pwa": 9,
+    "prepareSite": 2,
+    "collectorIncludedInNode": 16,
+    "retrievalIncludedInNode": 19,
+    "comparisonIncludedInNode": 9
+  },
+  "archivedOriginals": {
+    "evaluation.json": {
+      "bytes": 78498,
+      "sha256": "e50a9b3b2b6b9a5b5e071ac472fb88ee6e7b944470589f7f2caee88a3932eebb"
+    },
+    "review-template.json": {
+      "bytes": 25534,
+      "sha256": "bb5c78d393a7860677225a35ef13acab9b5d4af0b7ac8510dd3cb83c41c58812"
+    },
+    "baseline-diagnosis.json": {
+      "bytes": 42517,
+      "sha256": "2f6722495b7223d1a68018835600cc32f8dee9c9d99b657bbce41f5df892d1f4"
+    },
+    "research-reading.json": {
+      "bytes": 29046,
+      "sha256": "deee5e8a9ea817fbb66cfe6aca80aa30b37f15f7c0d69167066100f3569a20eb"
+    },
+    "research-topics.json": {
+      "bytes": 19206,
+      "sha256": "05970c520b7cdc2a301f26d215811062585de7719bf045451e62d95ffefe51fc"
+    },
+    "research-environment.json": {
+      "bytes": 5481,
+      "sha256": "7d8d0c6902b1752f3f6d2ff37fb12f52d020630735c861d8c623b6501b44abb3"
+    }
+  },
+  "comparison": {
+    "samples": 9,
+    "judgmentRows": 59,
+    "judgmentsAllNull": true,
+    "userUtilityEvaluated": false
+  },
+  "oldCommitCI": {
+    "head": "26093f3d1d667e0587095ed6817eeac035403541",
+    "url": "https://github.com/wonchance-art/life-haedo/actions/runs/39154264870",
+    "conclusion": "success"
+  },
+  "note": "Current commit CI is recorded on PR103; this committed evidence does not claim future CI status. All ZIP entries match original local bytes; no raw RSS/article body/private data/model weights included.",
+  "productSHA256": {
+    "assets/life/discovery.js": "bf514ade159c5b7a815c07123ad7d1e6905596a87ab1cb7eadc9f04c9c329196",
+    "assets/life/discovery-ui.js": "f002f061016175cd35c4adc0a7ba5bc103cec043057793e1681c34eb39e13efe",
+    "assets/life/discovery-profile.js": "3d7424eeb3db46fcf9f933544a7a2ba925e5a01de0615051b79f877dbc62d7d5",
+    "assets/life/discovery-feed.json": "6a6c63e520328e283d01ca8283a6b9c2259295f5c37fc05d2fb49b27ba057684",
+    "sw.js": "ff3dbfeddc0e6c182f371b49e053edbc51b4b343d8b28194c61481472c25df18",
+    "scripts/update-discovery-feed.py": "7cc3cf726277ae8655c01caba94d3f5c90fc41d16f37e8fb1a68672552095760",
+    "scripts/evaluate-discovery.cjs": "f3b3e866b54a2843bc5ccefbba28e2e06511fb1ba5b946abfe0d3ee997be7adb",
+    "tests/discovery-feed-update.test.cjs": "4e2f58d4fd90d3d3b49875cf6c219c033589cf6263c3b5c2f46cd19ae6347b7b",
+    "tests/discovery-evaluation.test.cjs": "7cac649ac2b64540d0c8e7683497d252eaf6e8293c311cb4f7e846fd82f5826f",
+    "tests/life-discovery.test.cjs": "27d73e4e497f144711bcfcf4a438d10b62696ef5eed8492159c1116760c25427",
+    "tests/life-external-discovery-browser.cjs": "ae78f21e79d6c9d7ae3a8b29f73cd208f490db07636f3945d5180ea3563fe3fb",
+    "tests/life-external-discovery-pwa-browser.cjs": "8fe71eba3df5eeb8ae9778de8c893d55cba4b3939f36b00a88c190311af77ae9",
+    "tests/fixtures/external-discovery/sw-v130.js": "ceee25a2669398a40787766c4692db1fdb91363831e5dbf0b0c44d3c45dddf2b"
+  },
+  "evidenceSHA256": {
+    "actual-books-1440.png": "c5520b1141958af6d617ae8187486f2c3ff28d9466fe87555c01fb15390af685",
+    "actual-books-390.png": "56de6f9002196a2047dcd1d25b0ad5c875e0e6c478caecfc97ac37ef36f17bcc",
+    "browser.json": "acaac5e6b055383b65e0af4a64ce51299c0d2faff5c03027c270f2383acff6ec",
+    "ci-regression.json": "a550e6e1a6366d52e554f3016d1d435b1a27a7b4768677fad6743047de116433",
+    "comparison.md": "50eb01f6e1e649342bb7581187a916da748ab126fbe0081da2429da0066e149a",
+    "evaluation-bundle.zip": "0defb3ab31bf5393fefa4dabbae6fa27cbf80c205ff6bfa0a46b2a2fd3cfed31",
+    "frozen.json": "21a0fe3759b7baee28f126a24b3241f7b59e752d1a07761b552eee400b4bf236",
+    "pwa.json": "2de3809feaf84321de32bdff2c815c8073e8da1a5e28d2661f3aceee6373552b",
+    "runtime-review.json": "054dbb70bf960c7cac573523374e21022c77721b5a6617b0f8d2317bddbbad6b",
+    "source-update.json": "3bdb050fcaa083169024602e41927375fee17cdbc9422755aa96dade1058bccb"
+  },
+  "ciRegression": "ci-regression.json"
+}

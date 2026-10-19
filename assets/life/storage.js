@@ -99,6 +99,33 @@
       if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '컬렉션 모듈을 불러오지 못했습니다.');
       return value;
     };
+    const interestProfile = () => {
+      const value = options.interestProfile || root.HaedoLife?.InterestProfile;
+      if (!value?.validate || !value?.empty || !value?.revalidate) {
+        throw fault('dependency_unavailable', '관심 정보 모듈을 불러오지 못했습니다.');
+      }
+      return value;
+    };
+    const discoveryProfile = () => {
+      const value = options.discoveryProfile || root.HaedoLife?.DiscoveryProfile;
+      if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '발견 피드백 모듈을 불러오지 못했습니다.');
+      return value;
+    };
+    const discoverySettings = () => {
+      const value = options.discoverySettings || root.HaedoLife?.DiscoverySettings;
+      if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '새 글 찾기 설정 모듈을 불러오지 못했습니다.');
+      return value;
+    };
+    const discoveryActions = () => {
+      const value = options.discoveryActions || root.HaedoLife?.DiscoveryActions;
+      if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '좋아요·담기 모듈을 불러오지 못했습니다.');
+      return value;
+    };
+    const discoveryLanguageSettings = () => {
+      const value = options.discoveryLanguageSettings || root.HaedoLife?.DiscoveryLanguageSettings;
+      if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '언어 옵션 모듈을 불러오지 못했습니다.');
+      return value;
+    };
     function notify(event) {
       if (disposed) return;
       const callbacks = event.type === 'error'
@@ -176,6 +203,26 @@
           if (data?.sender !== sender && data?.type === 'reading_position_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 1) {
             notify({ type: 'reading_position_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'interest_profile_changed' && typeof data.workspaceId === 'string' &&
+              Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'interest_profile_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'discovery_profile_changed' && typeof data.workspaceId === 'string' &&
+              Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'discovery_profile_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'discovery_settings_changed' && typeof data.workspaceId === 'string' &&
+              Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'discovery_settings_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'discovery_actions_changed' && typeof data.workspaceId === 'string' &&
+              Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'discovery_actions_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'discovery_language_settings_changed' && typeof data.workspaceId === 'string' &&
+              Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'discovery_language_settings_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
         };
       } catch (_) { channel = null; }
@@ -521,6 +568,247 @@
       return writeReadingPosition(workspaceId, readingPositionInput(input), baseRevision);
     }
     async function clearReadingPosition(workspaceId, baseRevision) { return writeReadingPosition(workspaceId, null, baseRevision); }
+    // Derived private metadata has its own account/workspace CAS. It never enters
+    // the bundle, file backups, remote sync payloads or public copies.
+    const interestProfileKey = workspaceId => `interestProfile:${accountKey}:${workspaceId}`;
+    function privateProfileScope(workspaceId, label) {
+      scopeGuard();
+      if (!account) throw fault('auth_scope_required', `로그인한 계정에서 ${label} 확인해 주세요.`);
+      requireId(workspaceId, '작업공간');
+    }
+    function interestProfileScope(workspaceId) { privateProfileScope(workspaceId, '관심 정보를'); }
+    function validatePrivateProfile(value, workspaceId, model, maxBytes, prefix) {
+      model.validate(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', prefix === 'interest' ? '관심 정보의 작업공간이 다릅니다.' : '발견 피드백의 작업공간이 다릅니다.');
+      if (new TextEncoder().encode(stablePayload(value)).length >= maxBytes) {
+        throw fault(`${prefix}_profile_too_large`, prefix === 'interest' ? '관심 정보가 너무 큽니다. 기존 정보는 보존했습니다.' : '발견 피드백이 너무 큽니다. 기존 정보는 보존했습니다.');
+      }
+    }
+    function validateInterestProfile(value, workspaceId) {
+      validatePrivateProfile(value, workspaceId, interestProfile(), 256 * 1024, 'interest');
+    }
+    async function privateProfileValue(meta, key, workspaceId, model, validate) {
+      const row = await meta.get(key);
+      const value = row === undefined ? model.empty(workspaceId) : row.value;
+      validate(value, workspaceId);
+      return value;
+    }
+    async function interestProfileValue(meta, workspaceId) {
+      return privateProfileValue(meta, interestProfileKey(workspaceId), workspaceId, interestProfile(), validateInterestProfile);
+    }
+    async function readInterestProfile(workspaceId) {
+      interestProfileScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await interestProfileValue(meta, workspaceId));
+      });
+    }
+    function interestEvidenceSnapshot(bundle, profile) {
+      return stablePayload((profile.analysis?.selection.references || []).map(ref => {
+        const source = bundle.sources.find(item => item.id === ref.sourceId);
+        const version = bundle.sourceVersions.find(item => item.id === ref.sourceVersionId && item.sourceId === ref.sourceId);
+        if (!source || !version) throw fault('interest_profile_stale', '선택한 원문이나 근거가 바뀌었습니다. 분석 범위를 다시 확인해 주세요.');
+        return { source, version };
+      }));
+    }
+    async function saveInterestProfile(workspaceId, input, baseRevision) {
+      interestProfileScope(workspaceId); requireRevision(baseRevision, 'baseRevision');
+      validateInterestProfile(input, workspaceId);
+      const value = clone(input);
+      if (baseRevision === Number.MAX_SAFE_INTEGER || value.revision !== baseRevision + 1) {
+        throw fault('interest_profile_conflict', '관심 정보의 저장 기준을 확인해 주세요.');
+      }
+      const prepared = await transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await interestProfileValue(meta, workspaceId);
+        return previous.revision !== baseRevision ? { conflict: clone(previous) } : { bundle: clone(bundle) };
+      });
+      if (prepared.conflict) return { status: 'conflict', profile: prepared.conflict };
+      const evidenceSnapshot = interestEvidenceSnapshot(prepared.bundle, value);
+      // Web Crypto yields outside IndexedDB. The readwrite transaction below
+      // compares the exact selected raw bodies, hashes and source metadata again.
+      await interestProfile().revalidate(prepared.bundle, value);
+      scopeGuard();
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await interestProfileValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) return { status: 'conflict', profile: clone(previous) };
+        if (interestEvidenceSnapshot(bundle, value) !== evidenceSnapshot) {
+          throw fault('interest_profile_stale', '선택한 원문이나 근거가 바뀌었습니다. 분석 범위를 다시 확인해 주세요.');
+        }
+        validateInterestProfile(value, workspaceId);
+        await meta.put({ key: interestProfileKey(workspaceId), value });
+        return { status: 'stored', profile: clone(value) };
+      });
+      if (result.status === 'stored') {
+        const event = { type: 'interest_profile_changed', workspaceId, revision: result.profile.revision };
+        notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
+      }
+      return result;
+    }
+    // Feedback has no source-write or network path. Undo/reset retain the CAS
+    // revision so an old tab cannot silently reapply the excluded article.
+    const discoveryProfileKey = workspaceId => `discoveryProfile:${accountKey}:${workspaceId}`;
+    function validateDiscoveryProfile(value, workspaceId) {
+      validatePrivateProfile(value, workspaceId, discoveryProfile(), 128 * 1024, 'discovery');
+    }
+    async function discoveryProfileValue(meta, workspaceId) {
+      return privateProfileValue(meta, discoveryProfileKey(workspaceId), workspaceId, discoveryProfile(), validateDiscoveryProfile);
+    }
+    async function readDiscoveryProfile(workspaceId) {
+      privateProfileScope(workspaceId, '발견 피드백을');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await discoveryProfileValue(meta, workspaceId));
+      });
+    }
+    async function saveDiscoveryProfile(workspaceId, input, baseRevision) {
+      privateProfileScope(workspaceId, '발견 피드백을'); requireRevision(baseRevision, 'baseRevision');
+      validateDiscoveryProfile(input, workspaceId);
+      const value = clone(input);
+      if (baseRevision === Number.MAX_SAFE_INTEGER || value.revision !== baseRevision + 1) {
+        throw fault('discovery_profile_conflict', '발견 피드백의 저장 기준을 확인해 주세요.');
+      }
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await discoveryProfileValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) return { status: 'conflict', profile: clone(previous) };
+        await meta.put({ key: discoveryProfileKey(workspaceId), value });
+        return { status: 'stored', profile: clone(value) };
+      });
+      if (result.status === 'stored') {
+        const event = { type: 'discovery_profile_changed', workspaceId, revision: result.profile.revision };
+        notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
+      }
+      return result;
+    }
+    // Controls are separate from interests and feedback. A reset keeps its
+    // revision/tombstone, preventing a delayed old tab from enabling automation.
+    const discoverySettingsKey = workspaceId => `discoverySettings:${accountKey}:${workspaceId}`;
+    function validateDiscoverySettings(value, workspaceId) {
+      discoverySettings().validate(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '새 글 찾기 설정의 작업공간이 다릅니다.');
+      if (new TextEncoder().encode(stablePayload(value)).length >= 32 * 1024) {
+        throw fault('discovery_settings_too_large', '새 글 찾기 설정이 너무 큽니다. 기존 설정은 보존했습니다.');
+      }
+    }
+    async function discoverySettingsValue(meta, workspaceId) {
+      return privateProfileValue(meta, discoverySettingsKey(workspaceId), workspaceId, discoverySettings(), validateDiscoverySettings);
+    }
+    async function readDiscoverySettings(workspaceId) {
+      privateProfileScope(workspaceId, '새 글 찾기 설정을');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await discoverySettingsValue(meta, workspaceId));
+      });
+    }
+    async function saveDiscoverySettings(workspaceId, input, baseRevision) {
+      privateProfileScope(workspaceId, '새 글 찾기 설정을'); requireRevision(baseRevision, 'baseRevision');
+      validateDiscoverySettings(input, workspaceId);
+      const value = clone(input);
+      if (baseRevision === Number.MAX_SAFE_INTEGER || value.revision !== baseRevision + 1) {
+        throw fault('discovery_settings_conflict', '새 글 찾기 설정의 저장 기준을 확인해 주세요.');
+      }
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await discoverySettingsValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) return { status: 'conflict', settings: clone(previous) };
+        await meta.put({ key: discoverySettingsKey(workspaceId), value });
+        return { status: 'stored', settings: clone(value) };
+      });
+      if (result.status === 'stored') {
+        const event = { type: 'discovery_settings_changed', workspaceId, revision: result.settings.revision };
+        notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
+      }
+      return result;
+    }
+    const discoveryLanguageSettingsKey = workspaceId => `discoveryLanguageSettings:${accountKey}:${workspaceId}`;
+    function validateDiscoveryLanguageSettings(value, workspaceId) {
+      discoveryLanguageSettings().validate(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '언어 옵션의 작업공간이 다릅니다.');
+      if (new TextEncoder().encode(stablePayload(value)).length >= 16 * 1024) {
+        throw fault('discovery_language_settings_too_large', '언어 옵션이 너무 큽니다. 기존 설정은 보존했습니다.');
+      }
+    }
+    async function discoveryLanguageSettingsValue(meta, workspaceId) {
+      return privateProfileValue(meta, discoveryLanguageSettingsKey(workspaceId), workspaceId, discoveryLanguageSettings(), validateDiscoveryLanguageSettings);
+    }
+    async function readDiscoveryLanguageSettings(workspaceId) {
+      privateProfileScope(workspaceId, '언어 옵션을');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await discoveryLanguageSettingsValue(meta, workspaceId));
+      });
+    }
+    async function saveDiscoveryLanguageSettings(workspaceId, input, baseRevision) {
+      privateProfileScope(workspaceId, '언어 옵션을'); requireRevision(baseRevision, 'baseRevision');
+      validateDiscoveryLanguageSettings(input, workspaceId);
+      const value = clone(input);
+      if (baseRevision === Number.MAX_SAFE_INTEGER || value.revision !== baseRevision + 1) {
+        throw fault('discovery_language_settings_conflict', '언어 옵션의 저장 기준을 확인해 주세요.');
+      }
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await discoveryLanguageSettingsValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) return { status: 'conflict', settings: clone(previous) };
+        await meta.put({ key: discoveryLanguageSettingsKey(workspaceId), value });
+        return { status: 'stored', settings: clone(value) };
+      });
+      if (result.status === 'stored') {
+        const event = { type: 'discovery_language_settings_changed', workspaceId, revision: result.settings.revision };
+        notify({ ...event, local: true }); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
+      }
+      return result;
+    }
+    const discoveryActionsKey = workspaceId => `discoveryActions:${accountKey}:${workspaceId}`;
+    function validateDiscoveryActions(value, workspaceId) {
+      discoveryActions().validate(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '좋아요·담기의 작업공간이 다릅니다.');
+      if (new TextEncoder().encode(stablePayload(value)).length >= 1024 * 1024) {
+        throw fault('discovery_actions_too_large', '좋아요·담기 자료가 너무 큽니다. 기존 선택은 보존했습니다.');
+      }
+    }
+    async function discoveryActionsValue(meta, workspaceId) {
+      return privateProfileValue(meta, discoveryActionsKey(workspaceId), workspaceId, discoveryActions(), validateDiscoveryActions);
+    }
+    async function readDiscoveryActions(workspaceId) {
+      privateProfileScope(workspaceId, '좋아요·담기를');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await discoveryActionsValue(meta, workspaceId));
+      });
+    }
+    async function saveDiscoveryActions(workspaceId, input, baseRevision) {
+      privateProfileScope(workspaceId, '좋아요·담기를'); requireRevision(baseRevision, 'baseRevision');
+      validateDiscoveryActions(input, workspaceId);
+      const value = clone(input);
+      if (baseRevision === Number.MAX_SAFE_INTEGER || value.revision !== baseRevision + 1) {
+        throw fault('discovery_actions_conflict', '좋아요·담기의 저장 기준을 확인해 주세요.');
+      }
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await discoveryActionsValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) return { status: 'conflict', profile: clone(previous) };
+        await meta.put({ key: discoveryActionsKey(workspaceId), value });
+        return { status: 'stored', profile: clone(value) };
+      });
+      if (result.status === 'stored') {
+        const event = { type: 'discovery_actions_changed', workspaceId, revision: result.profile.revision };
+        // Only this storage facade observes its own committed action write.
+        // Other facades/tabs receive the minimal event and must revalidate.
+        notify({ ...event, local: true }); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
+      }
+      return result;
+    }
     // Independent local metadata: does not alter source/workbench revisions or sync payloads.
     function collectionScope(workspaceId) {
       scopeGuard();
@@ -2752,6 +3040,11 @@
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
+      readInterestProfile, saveInterestProfile,
+      readDiscoveryProfile, saveDiscoveryProfile,
+      readDiscoverySettings, saveDiscoverySettings,
+      readDiscoveryLanguageSettings, saveDiscoveryLanguageSettings,
+      readDiscoveryActions, saveDiscoveryActions,
       readCollection, saveCollection, readNineBoard, saveNineBoard, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, finishMaterialContinuityClaim,
       readPublicCover, savePublicCover,

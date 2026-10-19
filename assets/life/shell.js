@@ -61,6 +61,8 @@
     if (accountPanel) accountPanel.hidden = false;
     root.document.documentElement.classList.remove('auth-pending');
     root.document.getElementById('lifeStartup').hidden = true;
+    // Resume retained consumers only after their owner has been verified and revealed.
+    root.document.dispatchEvent(new root.Event('haedo:page-ready'));
     if (point?.owner === activeKey) root.requestAnimationFrame(() => {
       if (suspended || retained || mounted !== instance || point.owner !== activeKey) return;
       const container = root.document.getElementById('lifeApp');

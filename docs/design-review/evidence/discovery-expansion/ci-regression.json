@@ -1,0 +1,42 @@
+{
+  "failedCI": {
+    "runId": 39155636667,
+    "jobId": 117758174365,
+    "url": "https://github.com/wonchance-art/life-haedo/actions/runs/39155636667/job/117758174365",
+    "externalE2E": "18/19",
+    "pwa": "9/9",
+    "check": "success",
+    "failingScenario": "late feed after logout / new account login",
+    "error": "page.goto net::ERR_ABORTED",
+    "runnerChromium": "153",
+    "localChromium": "151"
+  },
+  "reproduction": {
+    "scope": "Anonymous Auth HTTP request gates; actual app unchanged; deliberately reproduce old test goto against pending automatic redirect",
+    "navigations": [
+      "http://127.0.0.1:4173/index.html?section=manage",
+      "http://127.0.0.1:4173/index.html"
+    ],
+    "oldTestConditionWhileLogoutPending": {
+      "hidden": true,
+      "storage": false,
+      "user": null
+    },
+    "oldManualGoto": {
+      "resolved": false,
+      "error": "page.goto: net::ERR_ABORTED while pending automatic index.html replacement"
+    },
+    "actualAutomaticDestination": "http://127.0.0.1:4173/index.html",
+    "reproduced": true
+  },
+  "fix": "Wait for a different existing __homeInstance document, visible public home and index.html before navigating to the next account login. Preserve all privacy/account assertions; no product edits, sleep, ignored errors or timeout increases.",
+  "localAfterFix": {
+    "focusedPass": 1,
+    "fullPass": 19,
+    "fullFail": 0,
+    "consoleErrors": 0,
+    "pageErrors": 0,
+    "privacyViolations": 0
+  },
+  "remoteAfterFix": "Pending at evidence creation; see current PR103 checks."
+}

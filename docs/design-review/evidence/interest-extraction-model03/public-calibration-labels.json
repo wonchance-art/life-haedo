@@ -1,0 +1,20 @@
+{
+  "labels": {
+    "topic-reading-positive": true,
+    "topic-reading-denial": false,
+    "topic-tech-positive": true,
+    "topic-tech-negative": false,
+    "topic-health-positive": true,
+    "topic-health-negative": false,
+    "control-quoted": true,
+    "control-prose": false,
+    "question-direct": true,
+    "question-indirect": true,
+    "question-statement": false,
+    "question-quoted-command": false,
+    "question-same-forward": true,
+    "question-same-backward": true,
+    "question-different-forward": false,
+    "question-different-backward": false
+  }
+}

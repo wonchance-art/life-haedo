@@ -61,6 +61,9 @@ async function main() {
       const state = await readPreparation(page), plan = state.plans.find(item => item.id === planId);
       await page.locator('.mw-compare-select').selectOption(plan.materials[1].id);
       await capture('preparation-compare');
+      // setViewportSize returns before the native media-query change listener
+      // necessarily reconnects the second original after the 390px capture.
+      await page.waitForFunction(() => document.querySelectorAll('.mw-material-body').length === 2, null, { timeout: 5000 });
       assert.equal(await page.locator('.mw-material-body').count(), 2, '820px comparison is available');
     });
     await check('Synthetic Korean composition preserves its input node and blocks preview until composition ends', async () => {

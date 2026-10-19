@@ -1,0 +1,507 @@
+{
+  "result": {
+    "workspaceId": "heldout-workspace",
+    "scopeRevision": 1,
+    "analysis": {
+      "createdAt": "2026-10-18T15:33:32.010Z",
+      "model": "Xenova/paraphrase-multilingual-MiniLM-L12-v2",
+      "modelRevision": "2c4055b12046f11709e9df2c122e59ffbdc2f900",
+      "adapter": "local-embeddings-context-v2",
+      "evidenceScope": "saved_material",
+      "inputFingerprint": "3cce978906ea502c2e056fa41e04b2f1f7ec735201aecc7974ba3a3087c9f4ba",
+      "documents": [
+        {
+          "sourceId": "s-h001",
+          "sourceVersionId": "v-h001",
+          "sha256": "8cdad8cc6423a388dfa393e4f148da93e22f835682d976e70f17772eeb6e47a4"
+        },
+        {
+          "sourceId": "s-h002",
+          "sourceVersionId": "v-h002",
+          "sha256": "4b593acb2f8d719ceba4a84d313e4dba8171a067f0844fa76e0680b0b87703dc"
+        },
+        {
+          "sourceId": "s-h003",
+          "sourceVersionId": "v-h003",
+          "sha256": "2c4e5689b3a950251805c760724bc38c65b090df3bb4e75f75c52b256db4ba10"
+        },
+        {
+          "sourceId": "s-h004",
+          "sourceVersionId": "v-h004",
+          "sha256": "f15acac30da49505b7bda7ac8b9bbd113270e29da0be1eb62475acc09fdb3a9a"
+        },
+        {
+          "sourceId": "s-h005",
+          "sourceVersionId": "v-h005",
+          "sha256": "829dc657b32d568347eccf2e6efa001084ddae55fce6af369d54ad59c8c45826"
+        },
+        {
+          "sourceId": "s-h006",
+          "sourceVersionId": "v-h006",
+          "sha256": "2aeb070545119a589e6fca50485773bc0f7c6d68ff43439365ac327b009790fd"
+        },
+        {
+          "sourceId": "s-h007",
+          "sourceVersionId": "v-h007",
+          "sha256": "a86bc6ed4871914ede62c8bda648a9c38dd8bccaa9075367dfd1c79807cbe4f5"
+        },
+        {
+          "sourceId": "s-h008",
+          "sourceVersionId": "v-h008",
+          "sha256": "609b5de34f76de38ffdea77f0a6090ccf908b9afb18d0b85441f3ee80d4fe7c7"
+        },
+        {
+          "sourceId": "s-h009",
+          "sourceVersionId": "v-h009",
+          "sha256": "9d24e52e8091e5e0b87ac3d40a87e644d6e95d54b71ba92c267ba9b82c264096"
+        },
+        {
+          "sourceId": "s-h010",
+          "sourceVersionId": "v-h010",
+          "sha256": "1fb4d3f6e02e0f927c82718b588f4c36ea8bdbbf147773fba54a9cb2aba6e2fc"
+        },
+        {
+          "sourceId": "s-h011",
+          "sourceVersionId": "v-h011",
+          "sha256": "58f30d105f24b49dd291ebb9e18598290f99eb3e4c1e2ea30a56bd9b9e985869"
+        },
+        {
+          "sourceId": "s-h012",
+          "sourceVersionId": "v-h012",
+          "sha256": "a6f20dd20892ca50c0b6d3e2e2e4d4e877c16a5b6aded25e50dd0f73dd4aa636"
+        },
+        {
+          "sourceId": "s-h013",
+          "sourceVersionId": "v-h013",
+          "sha256": "d802e925d0cb28b236e986e72f552ded963d136730e5294cec41b5acb7c3a8fc"
+        },
+        {
+          "sourceId": "s-h014",
+          "sourceVersionId": "v-h014",
+          "sha256": "3955ac750ab53d2310c8e2a18e1f360cbef8e8825eb906a42bb62da529b22fe9"
+        },
+        {
+          "sourceId": "s-h015",
+          "sourceVersionId": "v-h015",
+          "sha256": "02649604c9c65118fbf7ef1a7c6913c58af6acc5f2c10d73178b7cfb845616c6"
+        },
+        {
+          "sourceId": "s-h016",
+          "sourceVersionId": "v-h016",
+          "sha256": "dd4ea2f7ff9d337a1c014afdcf64ac47a9bf9a2eaceeda13e1ce2d92f821ec10"
+        },
+        {
+          "sourceId": "s-h017",
+          "sourceVersionId": "v-h017",
+          "sha256": "603222e15e1939914ee96c51a2f9128193ccdcf20ec83dd1e7fedecb5eb33856"
+        },
+        {
+          "sourceId": "s-h018",
+          "sourceVersionId": "v-h018",
+          "sha256": "09de6e27bf7e1d24dcf8ff46440e77c32ea0006696e3e4c5f6bf755af01c5e42"
+        },
+        {
+          "sourceId": "s-h019",
+          "sourceVersionId": "v-h019",
+          "sha256": "6c6897138822faeeba8e96c3af7f384f4ab6360fd88f4d3f83738ff728ab99b5"
+        },
+        {
+          "sourceId": "s-h020",
+          "sourceVersionId": "v-h020",
+          "sha256": "cf8d97e26a437147912fb9fd2daf8da70ede76eac3ce5d9fca0d7f9de29ae1a3"
+        },
+        {
+          "sourceId": "s-h021",
+          "sourceVersionId": "v-h021",
+          "sha256": "ab5d064132c75b9deb916e0b773e7af5a584b5c944085b3b9357cbfb6cffe9ce"
+        },
+        {
+          "sourceId": "s-h022",
+          "sourceVersionId": "v-h022",
+          "sha256": "769c3ae374505eda2be66de4f42e618d0fc14fcf8c8b9026268549b1b8d2a932"
+        },
+        {
+          "sourceId": "s-h023",
+          "sourceVersionId": "v-h023",
+          "sha256": "626fb16b3739fc9fdd85e4ec74301aef0ca4efc6fb01f06cc6d8089147186847"
+        },
+        {
+          "sourceId": "s-h024",
+          "sourceVersionId": "v-h024",
+          "sha256": "632b62d5b27f6143dab9c65adc3165c8f224e5ecd4468a4ca015e3ac28f441a0"
+        },
+        {
+          "sourceId": "s-h025",
+          "sourceVersionId": "v-h025",
+          "sha256": "c9c35573c80201c508ce33b25c5d138a20c2237d9a206ad01c404aa6edbbaa8f"
+        },
+        {
+          "sourceId": "s-h026",
+          "sourceVersionId": "v-h026",
+          "sha256": "cf517d68886483fa38a2f1924cb8aa4158a503a5efc131c1bb96ddbca5a8a660"
+        },
+        {
+          "sourceId": "s-h027",
+          "sourceVersionId": "v-h027",
+          "sha256": "e4885882423adde66edc96201fc80bc07dc7009889844a8a939cb11423162a40"
+        },
+        {
+          "sourceId": "s-h028",
+          "sourceVersionId": "v-h028",
+          "sha256": "3e120d86f76a5328746c3b706e3aa4393eea8026044bfded0139112417f403df"
+        },
+        {
+          "sourceId": "s-h029",
+          "sourceVersionId": "v-h029",
+          "sha256": "2c374d2a7be66b8a6e3e753c44e49d4a482d115ea19c033fe0fdd05d76e9bde2"
+        },
+        {
+          "sourceId": "s-h030",
+          "sourceVersionId": "v-h030",
+          "sha256": "9763428a67e55778422192dd1e0cfa888fb6be1d14e419c101efa54415acf405"
+        },
+        {
+          "sourceId": "s-h031",
+          "sourceVersionId": "v-h031",
+          "sha256": "79e7c7356155d547e605469572fe7c4c574da87f6aa3aa720261377b38ab3a58"
+        },
+        {
+          "sourceId": "s-h032",
+          "sourceVersionId": "v-h032",
+          "sha256": "093800d923ea4578a26ac077e761fee9e46fe3051773b4baba1277826b2b323e"
+        },
+        {
+          "sourceId": "s-h033",
+          "sourceVersionId": "v-h033",
+          "sha256": "fb9737a4d9188480c5ce1fc13fbe6c38884786270cfea5b217f1d7e692b6a909"
+        },
+        {
+          "sourceId": "s-h034",
+          "sourceVersionId": "v-h034",
+          "sha256": "e496635a5830b4baf9be9a56db3a39047f51a31393cab6f141efaa02f574fe6c"
+        },
+        {
+          "sourceId": "s-h035",
+          "sourceVersionId": "v-h035",
+          "sha256": "0c585b1307b3e3238f7b25bc9ca7e7483f3742c9b4946d9d70284ed58d61738c"
+        },
+        {
+          "sourceId": "s-h036",
+          "sourceVersionId": "v-h036",
+          "sha256": "55b7037dd9d78aae6652fa7e86790204ba1c940a7e9ab7dc5f92c3ce39196841"
+        },
+        {
+          "sourceId": "s-h037",
+          "sourceVersionId": "v-h037",
+          "sha256": "434edb8d6a5c356520acbda45af0140d9c9c4eac8e2076127fc1a02db37e4eca"
+        },
+        {
+          "sourceId": "s-h038",
+          "sourceVersionId": "v-h038",
+          "sha256": "2028be4530cc60f0fe70782f4ab396bc6edf5aa46dee1598308a2ea16998c96e"
+        },
+        {
+          "sourceId": "s-h039",
+          "sourceVersionId": "v-h039",
+          "sha256": "732d7e05cc201e86824118912662ca0fad0ebbba7e5bfdbed283b70265b74132"
+        },
+        {
+          "sourceId": "s-h040",
+          "sourceVersionId": "v-h040",
+          "sha256": "2f7a1bce2272f96f59648c6eb643ee262eb3d1dbd62e29629ebfcea10f7da7a1"
+        },
+        {
+          "sourceId": "s-h041",
+          "sourceVersionId": "v-h041",
+          "sha256": "d845c3495c606e7a50b18843de13ae2775c49bbcd7acef79fb68bc837e59bcb9"
+        },
+        {
+          "sourceId": "s-h042",
+          "sourceVersionId": "v-h042",
+          "sha256": "9a573354f9c911454df52f3d72dfad38d9be1b94d5946bb9f0acd027da5ec59d"
+        },
+        {
+          "sourceId": "s-h043",
+          "sourceVersionId": "v-h043",
+          "sha256": "b146d01c31e836b9ea645272c74a7f5555c9567818e16d1add677f0d78d1c3fb"
+        },
+        {
+          "sourceId": "s-h044",
+          "sourceVersionId": "v-h044",
+          "sha256": "334b41ba47c7f72426bbb9843953ca0a528c8eabbe5ddb608284022b90e79724"
+        },
+        {
+          "sourceId": "s-h045",
+          "sourceVersionId": "v-h045",
+          "sha256": "bbf1d925b378d5a0ef45a91f8d58e1afe6ad5e2b99d0eb5050f88613152482ad"
+        },
+        {
+          "sourceId": "s-h047",
+          "sourceVersionId": "v-h047",
+          "sha256": "e36904debf6c2ebc24d64dbfa6911431e7585b30107037f43fe4fef600bcbaff"
+        },
+        {
+          "sourceId": "s-h048",
+          "sourceVersionId": "v-h048",
+          "sha256": "4900814d3a49cccb55f9d4affab077f2be1e5279ea0f1b3208fc1fa8c87554d2"
+        }
+      ],
+      "interests": [
+        {
+          "id": "topic-economy-consumption",
+          "label": "경제와 소비",
+          "terms": [
+            "경제",
+            "소비",
+            "돈"
+          ],
+          "kind": "topic",
+          "evidenceScope": "saved_material",
+          "evidenceLabel": "보관 자료의 주제",
+          "evidence": [
+            {
+              "sourceId": "s-h025",
+              "sourceVersionId": "v-h025",
+              "sha256": "c9c35573c80201c508ce33b25c5d138a20c2237d9a206ad01c404aa6edbbaa8f",
+              "start": 0,
+              "end": 30,
+              "quote": "경제가 불안하다는 뉴스보다 내 소비 내역부터 확인했다."
+            },
+            {
+              "sourceId": "s-h031",
+              "sourceVersionId": "v-h031",
+              "sha256": "79e7c7356155d547e605469572fe7c4c574da87f6aa3aa720261377b38ab3a58",
+              "start": 0,
+              "end": 40,
+              "quote": "매달 들어온 금액 안에서 어떻게 지출을 줄이고 비상금을 남길 수 있을까?"
+            },
+            {
+              "sourceId": "s-h026",
+              "sourceVersionId": "v-h026",
+              "sha256": "cf517d68886483fa38a2f1924cb8aa4158a503a5efc131c1bb96ddbca5a8a660",
+              "start": 0,
+              "end": 28,
+              "quote": "이번 달 들어온 금액에서 월세와 식비를 먼저 뺐다."
+            }
+          ],
+          "support": 3
+        },
+        {
+          "id": "topic-travel-city",
+          "label": "도시와 여행",
+          "terms": [
+            "여행",
+            "도시",
+            "공간"
+          ],
+          "kind": "topic",
+          "evidenceScope": "saved_material",
+          "evidenceLabel": "보관 자료의 주제",
+          "evidence": [
+            {
+              "sourceId": "s-h013",
+              "sourceVersionId": "v-h013",
+              "sha256": "d802e925d0cb28b236e986e72f552ded963d136730e5294cec41b5acb7c3a8fc",
+              "start": 0,
+              "end": 28,
+              "quote": "여행 마지막 날에는 도시의 작은 광장을 둘러보았다."
+            },
+            {
+              "sourceId": "s-h014",
+              "sourceVersionId": "v-h014",
+              "sha256": "3955ac750ab53d2310c8e2a18e1f360cbef8e8825eb906a42bb62da529b22fe9",
+              "start": 0,
+              "end": 26,
+              "quote": "낯선 동네에서 지도를 접고 골목을 따라 걸었다."
+            },
+            {
+              "sourceId": "s-h015",
+              "sourceVersionId": "v-h015",
+              "sha256": "02649604c9c65118fbf7ef1a7c6913c58af6acc5f2c10d73178b7cfb845616c6",
+              "start": 0,
+              "end": 25,
+              "quote": "역에서 나와 벤치가 놓인 넓은 마당을 찾았다."
+            }
+          ],
+          "support": 3
+        },
+        {
+          "id": "topic-reading-writing",
+          "label": "독서와 글쓰기",
+          "terms": [
+            "독서",
+            "책",
+            "글쓰기"
+          ],
+          "kind": "topic",
+          "evidenceScope": "saved_material",
+          "evidenceLabel": "보관 자료의 주제",
+          "evidence": [
+            {
+              "sourceId": "s-h001",
+              "sourceVersionId": "v-h001",
+              "sha256": "8cdad8cc6423a388dfa393e4f148da93e22f835682d976e70f17772eeb6e47a4",
+              "start": 29,
+              "end": 58,
+              "quote": "인상적인 대목을 발췌한 뒤 글쓰기로 해석을 덧붙였다."
+            },
+            {
+              "sourceId": "s-h003",
+              "sourceVersionId": "v-h003",
+              "sha256": "2c4e5689b3a950251805c760724bc38c65b090df3bb4e75f75c52b256db4ba10",
+              "start": 0,
+              "end": 26,
+              "quote": "초고를 소리 내어 읽으니 문단 사이가 끊어졌다."
+            }
+          ],
+          "support": 2
+        },
+        {
+          "id": "topic-technology-science",
+          "label": "기술과 과학",
+          "terms": [
+            "기술",
+            "과학",
+            "연구"
+          ],
+          "kind": "topic",
+          "evidenceScope": "saved_material",
+          "evidenceLabel": "보관 자료의 주제",
+          "evidence": [
+            {
+              "sourceId": "s-h004",
+              "sourceVersionId": "v-h004",
+              "sha256": "f15acac30da49505b7bda7ac8b9bbd113270e29da0be1eb62475acc09fdb3a9a",
+              "start": 37,
+              "end": 66,
+              "quote": "새 기술의 측정 오차를 공개하는 편이 낫다고 보았다."
+            },
+            {
+              "sourceId": "s-h044",
+              "sourceVersionId": "v-h044",
+              "sha256": "334b41ba47c7f72426bbb9843953ca0a528c8eabbe5ddb608284022b90e79724",
+              "start": 0,
+              "end": 22,
+              "quote": "다음은 과거 도구 사용 안내의 인용이다."
+            }
+          ],
+          "support": 2
+        }
+      ]
+    },
+    "limitations": [
+      "sampled_selected_documents_only",
+      "proposed_interests_not_beliefs",
+      "model_quality_not_a_probability",
+      "saved_material_does_not_prove_authorship_or_agreement",
+      "identical_bodies_counted_once",
+      "explicit_question_passages_only",
+      "conservative_evidence_eligibility",
+      "window_budget_excludes_passages"
+    ],
+    "diagnostics": {
+      "documents": 47,
+      "selectedCharacters": 9086,
+      "sampledCharacters": 2346,
+      "sampledFraction": 0.2581994276909531,
+      "eligibleWindows": 431,
+      "topicWindows": 82,
+      "questionWindows": 6,
+      "excluded": {
+        "quoted": 6,
+        "directive": 0,
+        "negated": 17,
+        "historical": 0,
+        "short": 1
+      }
+    }
+  },
+  "bundleUnchanged": true,
+  "elapsedMs": 6554.299999999814,
+  "model": "Xenova/paraphrase-multilingual-MiniLM-L12-v2",
+  "runtime": {
+    "modelId": "Xenova/paraphrase-multilingual-MiniLM-L12-v2",
+    "modelRevision": "2c4055b12046f11709e9df2c122e59ffbdc2f900",
+    "upstream": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "upstreamRevision": "b8ef00830037f9868450f778081ea683e900fe39",
+    "bytes": 118308126,
+    "sha256": "66fc00f5f29afcaff34092e1bdd20008ca3918265a82fb9695a551e510cc4ebc",
+    "license": "apache-2.0",
+    "runtimeVersion": "4.3.1",
+    "device": "wasm",
+    "dtype": "q8",
+    "dimensions": 384,
+    "modelMaxTokens": 512
+  },
+  "config": {
+    "documents": 50,
+    "totalCharacters": 1000000,
+    "documentCharacters": 100000,
+    "windowsPerDocument": 12,
+    "windowCharacters": 280,
+    "contextCharacters": 840,
+    "questionsPerDocument": 8,
+    "candidates": 8,
+    "evidencePerCandidate": 5,
+    "embeddingBatch": 8,
+    "topicSimilarity": 0.42,
+    "topicMargin": 0.02,
+    "passageFloor": 0.36,
+    "contextWeight": 0.3,
+    "questionSimilarity": 0.72,
+    "questionContextSimilarity": 0.55
+  },
+  "prepareMs": 15022.600000000093,
+  "heapUsed": 104061376,
+  "sourceSHA256": "d52a7236fa046e892f849662c654cc5c57b071b479e1df10aa3e9b21a2335c01",
+  "tokenCounts": {
+    "h001": 33,
+    "h002": 38,
+    "h003": 40,
+    "h004": 36,
+    "h005": 38,
+    "h006": 39,
+    "h007": 31,
+    "h008": 36,
+    "h009": 37,
+    "h010": 36,
+    "h011": 42,
+    "h012": 40,
+    "h013": 32,
+    "h014": 41,
+    "h015": 43,
+    "h016": 30,
+    "h017": 35,
+    "h018": 38,
+    "h019": 38,
+    "h020": 44,
+    "h021": 42,
+    "h022": 32,
+    "h023": 40,
+    "h024": 34,
+    "h025": 27,
+    "h026": 43,
+    "h027": 38,
+    "h028": 32,
+    "h029": 45,
+    "h030": 37,
+    "h031": 24,
+    "h032": 29,
+    "h033": 25,
+    "h034": 28,
+    "h035": 24,
+    "h036": 25,
+    "h037": 23,
+    "h038": 26,
+    "h039": 42,
+    "h040": 53,
+    "h041": 39,
+    "h042": 48,
+    "h043": 46,
+    "h044": 56,
+    "h045": 4557,
+    "h046": 33,
+    "h047": 33,
+    "h048": 39
+  }
+}

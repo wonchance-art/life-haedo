@@ -1,5 +1,62 @@
 # 오픈소스 검토와 재사용 결정
 
+## 추천 언어·원문 번역 열기 재사용 — 2026-10-19 KST
+
+기존 Discovery URL/출처 검증·후보 풀·개인 추천, idb/CAS와 native DOM을 재사용했다. `Intl.getCanonicalLocales`, `URL`/`URLSearchParams`, checkbox/select/anchor로 고정 언어 비교와 명시 외부 열기를 구현하며 새 i18n parser·번역 SDK/모델·서버·전이 의존성을 넣지 않는다. 기존 idb의 라이선스·고정 버전/공개 공지 검토는 앞선 보존·설정 구현을 재사용한다. 번역 링크는 오픈소스 번역 엔진이나 공식 번역 API 도입이 아니다. 공식 Google 웹사이트 번역 안내와 빈 UI의 8개 대상 코드를 확인했으나 URL 바로가기의 안정 API 보장은 없어 원문 링크와 실패 대안을 유지한다. 본문 번역 보관이나 실제 실패가 새 근거로 생기면 정식 API·권리·전송 범위·비용을 재비교한다. [계약·공식 출처·검수](../design-review/discovery-languages.md).
+
+
+## 공식 공급·로컬 평가 후속 재사용 — 2026-10-19 KST
+
+고정 Python 표준 urllib/robotparser/XML 제한 수집기·기존 feedparser 비교를 재사용해 arXiv/MIT 공식 RSS2 두 개만 추가했다. 새 parser·의존성·모델·서비스는 넣지 않았다. arXiv 공식 API/RSS 약관의3초/단일연결을 작은 monotonic/sleep/RLock gate로 제한하고 실제 HTTPS redirect/실패/응답 닫힘까지 보존한다. 다른 출처 동작은 유지하며 더 큰 작업 큐/수집 프레임워크를 도입하지 않는다. 로컬 평가 CLI는 기존 rank/actions/평가 유틸을 조합하고 Node fs의새폴더·권한·배타생성과 strict UTF8/형식검증을 쓴다. 운영/개인데이터·UI 설문·자동 효용평가를 늘리지 않는다. 라이브러리 자체 도입이 필요한 새 형식/확장성 요구가 생기면 앞선 후보를 재비교한다. [공식 조건·보류·검수·교체 조건](../design-review/discovery-field-validation.md).
+
+
+## 좋아요·담기 구현 재사용 — 2026-10-19 KST
+
+아래 종합 조사와 기존 고정 idb를 재사용해 첫 반응→목록→개인 추천 흐름을 구현했다. 별도 추천 패키지·서버·모델·전이 의존성을 추가하지 않았다. 기존 Discovery 후보 검증/정렬, Storage/idb CAS·scope/dispose, native DOM·File/Blob·fatal TextDecoder를 재사용한다. 직접 유지하는 범위는 독립 반응 schema·사본 검증과 공개 제목/태그의 두 단어 중첩 규칙이다. 범용 추천 서비스를 도입하는 운영/개인 전송 비용보다 현재 50개 링크 후보와 로컬 제어에 맞지만, 규칙값의 최적성이나 의미 이해/유용성은 입증하지 않았다. 실패 근거와 시간 분리 평가가 생기면 아래 후보를 재비교한다. [구현·검수·교체 조건](../design-review/discovery-reactions.md).
+
+## 좋아요·담기와 개인 추천 연구 — 2026-10-19 KST
+
+사용자가 요청한 SNS 사례·오픈소스·피드백 기반 추천을 [종합 조사·설계](../design-review/recommendation-feedback-research.md)로 정리했다. 공식 SNS 5개 사례, 추천 도구6개와 SNS 공개 저장소3개의 release/HEAD·라이선스·archive·공개 advisory를 실제 대조했다. [확인 시각·버전·제품 불변 해시](../design-review/evidence/recommendation-research/verification.json)를 남겼다. 설치·모델 학습·제품 변경·개인 데이터 전송·배포는 수행하지 않았다.
+
+현 단계는 기존 Discovery의 공개 후보 검증·canonical URL·근거와 계정/공간별 idb/CAS·실패 복구를 재사용한다. 좋아요와 담기는 독립된 로컬 반응이며 담기를 자동 긍정 레이블로 합치지 않는다. 작은 전체 후보의 설명 가능한 내용 기반 점수와 기존 관심순/최신순 비교에는 새 추천 서버·분산 학습·벡터 DB를 즉시 도입하지 않는다. 단순 랭커는 유지 비용이 작고 근거·끄기·철회 반영을 추적할 수 있지만, 의미 이해/품질 향상은 새 독립 평가로 확인해야 한다.
+
+- [Recommenders](https://github.com/recommenders-team/recommenders): 현재 가장 먼저 참고할 분할·기준선·평가 자료. 패키지 전체 설치 결정은 아니다.
+- [implicit](https://github.com/benfred/implicit): 공유 상호작용이 생겼을 때 오프라인 ALS/BPR 등의 비교 후보. 현재 개인 기록에 협업 효과를 가정하지 않는다.
+- [Gorse](https://github.com/gorse-io/gorse): 별도 추천 서비스를 실제 선택할 때 우선 검토. 정적 JS 라이브러리가 아니며 데이터/인증/운영 수명주기가 추가된다.
+- [RecBole](https://github.com/RUCAIBox/RecBole): 연구 비교에 유용하나 MIT LICENSE와 README의 academic-purpose 문구 범위를 먼저 확인한다.
+- [TFRS](https://github.com/tensorflow/recommenders), [TorchRec](https://github.com/meta-pytorch/torchrec): 각각 feature 학습과 대형 분산 embedding을 위한 도구. 학습 자료·개선 가설 또는 규모 병목이 생기기 전 직접 도입 보류.
+
+SNS 공개 코드는 직접 채택이 아니라 구조 참고다. X의 이전 AGPL-3.0 저장소와 2026 Apache-2.0 저장소, MIT Bluesky starter를 구분했다. 공개 신호 가중치를 임의의 좋아요 횟수 점수로 옮기지 않는다. 코드·데이터·모델 라이선스는 별도이며 공개 advisory 0건을 설치물의 안전성 증명으로 해석하지 않는다. 버전·고정 commit·라이선스 링크와 선택을 바꿀 조건은 종합 조사 표를 따른다.
+
+
+## 주제·옵션과 자동 갱신 — 2026-10-19 KST
+
+기존 Discovery/InterestProfile, 계정·공간별 Storage/idb CAS, Python 표준 라이브러리 수집기와 GitHub Pages Actions를 재사용한다. 브라우저의 네이티브 타이머·Page Visibility·AbortController로 15분 화면 갱신을 제어하므로 새 scheduler 라이브러리·백그라운드 작업 서버를 넣지 않는다. 앱이 닫힌 동안의 공개 수집은 기존 CI의 `schedule`로 분리한다. 기존 pinned Actions 버전·라이선스 고지를 유지하며 패키지·전이 의존성을 추가하지 않는다. 범용 작업 큐·크론 서버·클라이언트 RSS parser 도입은 이 정적 사이트의 고정 공개 메타데이터 수집에 필요한 범위보다 크다.
+
+공식 [GitHub schedule 문서](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule), [Page Visibility](https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API), [AbortController](https://developer.mozilla.org/en-US/docs/Web/API/AbortController)의 실행·취소 모델을 설계 참고로 삼는다. 정시 실행 보장이나 브라우저가 닫힌 동안의 타이머 실행을 가정하지 않는다. 기존 feedparser/idb 비교·권리·제한 파서 검토는 아래 이력을 재사용한다. [계약·구현·검수](../design-review/discovery-automation.md).
+
+
+## 공급 보완·비교 준비 — 2026-10-19 KST
+
+앞선 feedparser 6.0.14/BSD-2-Clause와 Python 표준 XML 보안·idb 비교를 재사용한다. 고정 피드 2개를 추가하되 새 parser/검색/모델 패키지는 도입하지 않는다. collector와 브라우저의 query 정체성·미래 날짜 해석을 맞추고 새 RSS도 같은 제한 파서·robots·권리·원자 저장 계약을 통과시켰다. Node 비교 CLI는 기존 Discovery.rank/validateFeed/canonicalUrl을 그대로 재사용하며 공개 고정 표본의 두 순서를 읽기 전용으로 투영한다. 별도 추천 엔진·개인자료 전송·사용자 판단 자동 생성·기존 검토 덮어쓰기는 추가하지 않는다. 새 인덱스/라이브러리 도입은 실제 크기·오타/의미 검색 요구가 기존 계약보다 나을 때 다시 비교한다. [선택·공식 권리 근거·미채택 대안·검수](../design-review/discovery-expansion.md).
+
+## 외부 글 공급·일치 표현 검색 — 2026-10-19 KST
+
+공급은 고정된 공식 RSS2/Atom의 제목·URL·공식 날짜·작성자·분류만 다룬다. 공식 PyPI의 **feedparser 6.0.14 / BSD-2-Clause / 2026-07-30**과 공식 저장소·공개 보안 공지를 확인했다. 공개 공지 0개는 취약점 부재 보증이 아니다. 다양한 피드 복구·본문 처리가 필요하지 않아 Python 표준 urllib/robotparser/ElementTree/HTMLParser로 제한된 어댑터를 유지한다. Python 3.12.14 / Expat 2.8.3에서 DTD/entity·미검토 인코딩 거절, 크기·항목·시간·HTTPS/호스트 제한, 실패 시 이전 성공 보존을 검수했다. 임의 출처·복잡한 형식이 필요해지면 범용 파서를 직접 확장하기보다 feedparser 재사용을 재비교한다. [공식 링크·권리·실제 실행·실패 증거](../design-review/discovery-sources.md).
+
+브라우저는 기존 Core 가져오기·Storage/idb·관심 메타 CAS·native anchor를 재사용한다. Fuse/MiniSearch 등 일반 검색 엔진은 앞선 정확 검색 비교를 참고했으나, 20개 공개 메타데이터에서 최대 40개 수동 관심의 정확 UTF-16 일치 근거·작은 공개 동의어·한국어 조사 경계를 유지하는 이번 요구에 새 인덱스나 fuzzy 의존성을 넣지 않았다. 자체 유지 범위는 제한된 문자열 일치, URL 정체성, 공급 유효성·캐시 수명과 비공개 피드백 투영이다. 의미/문맥 판정 엔진으로 부르지 않는다. 실제 공급량·지연이나 사용자 오타 검색 요구가 확인되면 기존 검색 라이브러리를 다시 비교한다. 모델 채택 기각은 유지하며 새 모델/서버/자동 수집 타이머를 추가하지 않는다. [구현·검수·한계](../design-review/external-discovery.md).
+
+## 관심 확인·로컬 의미 검증 — 2026-10-19 KST
+
+새 저장 프레임워크/백엔드/AI API를 도입하지 않고 기존 Core·Storage·idb와 일반 JS/Worker를 재사용했다. 구조적 보존/CAS/정확 근거 검증은 기존 앱 계약을 확장했으며 외부 모델 라이브러리로 대체하지 않았다. 관련 공식 검토와 실측은 [독립 검증](../design-review/interest-validation.md)에 있다.
+
+- Transformers.js **4.3.1**, 공식 GitHub/npm 배포·Apache-2.0·공개 보안 권고를 확인했다. 정적 브라우저는 공식 독립 `transformers.min.js`를 사용한다. `transformers.web.min.js`의 bare import 문제와 내부 preliminary metadata의 revision 미전달을 재현했고, 단일 모델 Worker와 고정 remotePathTemplate으로 보완했다. 공개 advisory 빈 결과는 전체 보안 증명이 아니다. [공식 릴리스](https://github.com/huggingface/transformers.js/releases/tag/4.3.1).
+- `Xenova/paraphrase-multilingual-MiniLM-L12-v2` revision `2c4055b12046f11709e9df2c122e59ffbdc2f900`: upstream 고정 카드의 Apache-2.0, conversion base_model 연결, q8 공식 크기/SHA와 실제 별도 다운로드 SHA를 대조했다. 변환 recipe/source commit 전체 재현성은 입증하지 않았다. [고정 변환 카드](https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/tree/2c4055b12046f11709e9df2c122e59ffbdc2f900). MODEL-02 추출 품질이 미달해 실제 자동 분석 버튼은 꺼 두었다.
+- 한국어 NLI가 명시된 `onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX` revision `cdc8277b4682665e2f2e87cd83da7da07b153d75`: conversion/upstream MIT, 모델/토크나이저/WASM registry와 q8 338,341,610-byte metadata를 확인했다. 새 12쌍에서 후속 가능성만 통과했고 앱 모델·의존성으로 도입하지 않았다. [고정 공식 변환](https://huggingface.co/onnx-community/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7-ONNX/tree/cdc8277b4682665e2f2e87cd83da7da07b153d75).
+
+직접 keyword 확장/임계값 상향은 부정·인용의 의미를 해결하지 못해 채택하지 않았다. 문맥 embedding 보완은 독립 48문서 실험에서 기각했다. 이어서 후보 생성·NLI를 분리한 [MODEL-03 새 60문서 검증](../design-review/interest-extraction-model03.md)을 실제 CPU로 실행했다. 질문 구간 검출은 18/18이었으나 최종 주제·질문은 0개로 현재 파이프라인도 기각했다. 준비 포함 약 169초, 관측 브라우저 합산 RSS 최대 약 652MiB이며 Apple 실기 성능은 미검증이다. 작은 NLI 12쌍의 성공을 전체 추출 채택으로 바꾸지 않는다. 현재 선택은 수동 관심 보관이며 외부 글 발견 구현을 추가 모델 연구로 막지 않는다.
+
+
 확인일: 2026-10-03 UTC. 공식 저장소·태그별 LICENSE·릴리스·문서를 읽은 초기 비교다.
 라이브러리 설치나 앱 통합·성능 검증은 아직 하지 않았다. 구현 단계마다 최신 상태를 다시 확인한다.
 최신 R1은 새 기록 입력보다 기존 기록의 가져오기·발췌·검토·통합·원문 추적이다. 아래 저장 후보는 유지하고 import 후보/원천 경로를 추가 조사했다.

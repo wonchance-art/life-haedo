@@ -1,0 +1,134 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const Discovery = require('../assets/life/discovery.js');
+const Core = require('../assets/life/core.js');
+const NOW = '2026-10-19T00:00:00.000Z';
+const rights = mode => ({ label: '합성 공개 권리 표기', url: 'https://d2.naver.com/', mode });
+function article(id, title, extra = {}) {
+  return { id, sourceId: 'naver-d2', url: `https://d2.naver.com/helloworld/${id}`, title, publishedAt: '2026-10-18T00:00:00.000Z',
+    author: '공개 작성자', language: 'ko', summary: '', coverage: 'link_only', rights: rights('metadata_only'), fetchedAt: NOW, tags: [], ...extra };
+}
+function feed(articles) {
+  return { schemaVersion: 1, generatedAt: NOW, sources: [{ id: 'naver-d2', name: 'NAVER D2', url: 'https://d2.naver.com/', feedUrl: 'https://d2.naver.com/d2.atom',
+    language: 'ko', rights: rights('metadata_only'), status: 'ok', lastSuccessAt: NOW, lastAttemptAt: NOW, error: null, stale: false }], articles };
+}
+const profile = label => ({ manual: [{ id: 'manual-1', label }] });
+const rank = (catalog, label = '인공지능', extra = {}) => Discovery.rank(catalog, { profile: profile(label), now: NOW, ...extra });
+const response = (catalog, headers) => new Response(JSON.stringify(catalog), { headers: { 'content-type': 'application/json', ...headers } });
+const deferred = () => { let resolve; const promise = new Promise(yes => { resolve = yes; }); return { resolve, promise }; };
+test('canonical identity removes only tracking and fragments while preserving raw meaningful query spelling and order', () => {
+  assert.equal(Discovery.canonicalUrl('https://D2.NAVER.COM:443/a?newsId=17&q=one%20two&x=~&x=2&utm_source=r&ref=book#section'), 'https://d2.naver.com/a?newsId=17&q=one%20two&x=~&x=2&ref=book');
+  assert.notEqual(Discovery.canonicalUrl('https://d2.naver.com/a?id=1'), Discovery.canonicalUrl('https://d2.naver.com/a?id=2'));
+  for (const url of ['javascript:alert(1)', 'http://d2.naver.com/a', 'https://u:p@d2.naver.com/a', 'https://d2.naver.com:8443/a']) assert.equal(Discovery.canonicalUrl(url), null);
+});
+test('only approved exact HTTPS hosts are accepted; malformed entries are explained and never ranked', () => {
+  const catalog = feed([article('good', '인공지능 연구'), article('evil', '인공지능 연구', { url: 'https://d2.naver.com.evil.example/a' })]);
+  const validated = Discovery.validateFeed(catalog, { now: NOW }); assert.equal(validated.articles.length, 1); assert.equal(validated.validation.invalid.length, 1);
+  const result = rank(validated); assert.equal(result.items.length, 1); assert.equal(result.metadata.excluded.invalid, 1);
+  catalog.sources[0].url = 'https://unapproved.example/'; assert.throws(() => Discovery.validateFeed(catalog), { code: 'discovery_feed_invalid' });
+});
+test('manual labels alone drive retrieval; inferred interests and positive words extracted from negated labels are not used', () => {
+  const catalog = feed([article('ai', '인공지능을 활용하는 방법')]);
+  assert.equal(Discovery.rank(catalog, { profile: { manual: [], analysis: { interests: [{ label: '인공지능' }] } }, now: NOW }).items.length, 0);
+  assert.equal(rank(catalog, '인공지능에는 관심이 없다').items.length, 0);
+  assert.equal(rank(catalog, '기술과 과학').items.length, 0);
+});
+test('reviewed book and environment sources accept their exact HTTPS hosts while rejecting lookalikes', () => {
+  for (const [sourceId, host] of [['readersnews-books', 'www.readersnews.com'], ['seoul-environment', 'news.seoul.go.kr']]) {
+    const catalog = feed([article('new-public', '신간 소개')]);
+    Object.assign(catalog.sources[0], { id: sourceId, name: '검토한 공개 출처', url: `https://${host}/`, feedUrl: `https://${host}/feed` });
+    Object.assign(catalog.articles[0], { sourceId, url: `https://${host}/article?id=1` });
+    assert.equal(rank(catalog, '신간').items.length, 1);
+    catalog.articles[0].url = `https://${host}.evil.example/article?id=1`;
+    assert.equal(rank(catalog, '신간').items.length, 0);
+  }
+});
+test('Korean particles are boundaries while unrelated word substrings and English substrings are rejected', () => {
+  const catalog = feed([article('actor', '배우와 배경을 살펴본다'), article('pear', '배를 기르는 방법'), article('rail', 'RAIL PAID details'), article('ai', 'AI tools')]);
+  const korean = rank(catalog, '배'); assert.deepEqual(korean.items.map(row => row.article.id), ['pear']); assert.equal(korean.items[0].reasons[0].quote, '배');
+  const english = rank(catalog, '인공지능'); assert.deepEqual(english.items.map(row => row.article.id), ['ai']); assert.equal(english.items[0].reasons[0].via, 'alias');
+});
+test('ambiguous broad translations are not silently added to a manual topic', () => {
+  const result = rank(feed([article('city', 'Reading city railway guide')]), '독서'); assert.equal(result.items.length, 0);
+  assert(Discovery.ALIASES.some(group => group.includes('artificial intelligence')));
+});
+test('Latin interest terms accept complete Korean particles without admitting arbitrary continuations', () => {
+  const catalog = feed([
+    article('ai-subject', '😀 AI가 분석한 결과'), article('ai-object', 'AI에게 실패를 묻다'),
+    article('ai-chain', 'AI에서도 확인한 표현'), article('wrong-word', 'RAIL PAID details'),
+    article('wrong-tail', 'AI가나다 이야기'), article('performance-brand', '공연봄날 운영 안내')
+  ]);
+  const result = rank(catalog, 'AI');
+  assert.deepEqual(result.items.map(row => row.article.id).sort(), ['ai-chain', 'ai-object', 'ai-subject']);
+  for (const row of result.items) for (const reason of row.reasons) {
+    assert.equal(reason.field, 'title'); assert.equal(reason.quote, 'AI');
+    assert.equal(row.article.title.slice(reason.start, reason.end), reason.quote);
+  }
+  assert.equal(rank(catalog, '공연').items.length, 0);
+});
+test('every reason reproduces the exact public field span including emoji and CRLF offsets', () => {
+  const catalog = feed([article('offsets', '😀 인공지능의 연구\r\n이야기', { tags: ['인공지능'] })]); const result = rank(catalog);
+  for (const reason of result.items[0].reasons) { const item = result.items[0].article; const raw = reason.field === 'tags' ? item.tags[reason.tagIndex] : item[reason.field]; assert.equal(raw.slice(reason.start, reason.end), reason.quote); assert.equal(reason.interestLabel, '인공지능'); }
+});
+test('actual matching fields and coverage are used without fabricating missing summary or body', () => {
+  const catalog = feed([
+    article('none', '다른 주제의 글'),
+    article('summary', '공개 자료', { summary: '인공지능 사례를 비교합니다.', coverage: 'summary', rights: rights('summary_allowed') }),
+    article('body', '공개 본문', { bodyText: '인공지능의 실제 사례를 설명합니다.', coverage: 'full_text', rights: rights('full_text_allowed') }),
+    article('fake', '다른 제목', { bodyText: '인공지능', coverage: 'link_only' })
+  ]);
+  const result = rank(catalog); assert.deepEqual(result.items.map(row => row.article.id), ['summary', 'body']);
+  assert.equal(result.items[0].reasons[0].field, 'summary'); assert.equal(result.items[1].reasons[0].field, 'bodyText'); assert.equal(result.metadata.coverage.linkOnly, 1);
+});
+test('rights and coverage mismatches do not turn metadata into fetched body evidence', () => {
+  const result = rank(feed([article('body', '인공지능', { coverage: 'full_text', bodyText: '실제 본문', rights: rights('metadata_only') }), article('sum', '인공지능', { coverage: 'summary', summary: '요약', rights: rights('metadata_only') })]));
+  assert.equal(result.items.length, 0); assert.equal(result.metadata.excluded.invalid, 2);
+});
+test('related results stop when fewer than five actually match and latest uses the same filtered whole public pool', () => {
+  const catalog = feed([article('older', '인공지능 실험', { publishedAt: '2026-10-10T00:00:00.000Z' }), article('newest', '음악 공연', { publishedAt: '2026-10-18T00:00:00.000Z' }), article('middle', '인공지능 도구', { publishedAt: '2026-10-16T00:00:00.000Z' })]);
+  const related = rank(catalog); const latest = rank(catalog, '인공지능', { mode: 'latest' }); assert.equal(related.items.length, 2); assert.equal(related.poolCount, latest.poolCount); assert.equal(latest.items[0].article.id, 'newest');
+  assert.equal(rank(catalog, '천문 관측').items.length, 0);
+});
+test('existing URLs, equivalent tracking URLs, feedback identities and duplicate canonical URLs are excluded', () => {
+  const catalog = feed([article('known', '인공지능'), article('hide', '인공지능'), article('copy', '인공지능', { url: 'https://d2.naver.com/helloworld/hide?utm_source=r#x' }), article('remain', '인공지능')]);
+  const feedback = { feedback: [{ articleId: 'old-id', canonicalUrl: 'https://d2.naver.com/helloworld/hide', kind: 'not_relevant' }] };
+  const result = rank(catalog, '인공지능', { knownUrls: ['https://d2.naver.com/helloworld/known?fbclid=x#y'], feedback });
+  assert.deepEqual(result.items.map(row => row.article.id), ['remain']); assert.deepEqual(result.metadata.excluded, { known: 1, feedback: 1, duplicate: 1, invalid: 0 });
+  assert.equal(rank(catalog, '인공지능', { feedback: { feedback: [] } }).items.length, 3);
+});
+test('same explicit word in different contexts remains a disclosed lexical limitation, not an inferred belief or similarity percentage', () => {
+  const result = rank(feed([article('boat', '배를 타고 떠나는 여행'), article('pear', '배를 수확하는 계절')]), '배'); assert.equal(result.items.length, 2);
+  assert(result.metadata.limitation.includes('같은 단어라도 문맥은 다를 수')); assert(result.items.every(item => item.reasons.every(reason => !('similarity' in reason) && !('belief' in reason))));
+});
+test('invalid and future publication dates are never fabricated as fresh dates; official updated dates remain labeled separately', () => {
+  const catalog = feed([article('invalid', '인공지능', { publishedAt: '2026-02-30T00:00:00Z' }), article('future', '인공지능', { publishedAt: '2099-01-01T00:00:00Z' }), article('updated', '인공지능', { publishedAt: null, updatedAt: '2026-10-18T23:00:00Z', dateBasis: 'updated' })]);
+  const result = rank(catalog, '인공지능', { mode: 'latest' }); assert.equal(result.items[0].article.id, 'updated'); assert.equal(result.items[0].article.publishedAt, null); assert.equal(result.items[0].article.dateBasis, 'updated');
+  const invalid = result.items.find(row => row.article.id === 'invalid').article; assert.equal(invalid.publishedAt, null); assert.equal(invalid.dateStatus, 'invalid');
+});
+test('source refresh failure retains last-good public material with explicit stale/source failure metadata', () => {
+  const catalog = feed([article('old', '인공지능')]); Object.assign(catalog.sources[0], { status: 'error', stale: true, error: '공개 공급 갱신 실패', lastSuccessAt: '2026-10-10T00:00:00Z' });
+  const result = rank(catalog); assert.equal(result.items.length, 1); assert(result.metadata.stale); assert.equal(result.metadata.sources[0].status, 'error');
+});
+test('import input is a link-only review even when public body is available', async () => {
+  const input = Discovery.toImportInput(article('body', '인공지능 연구', { bodyText: '공개 본문', coverage: 'full_text', rights: rights('full_text_allowed') }));
+  assert.equal(input.text, ''); assert.equal(input.authorRelation, 'other'); assert.equal(input.coverage.status, 'link_only');
+  const bundle = Core.createWorkspace(); const prepared = await Core.prepareImport(input, bundle); assert.equal(prepared.version.contentText, null); assert.equal(prepared.version.coverage.status, 'link_only');
+});
+test('client requests nothing until explicit load and fetches only fixed public same-origin GET with no credentials, body or query', async () => {
+  const requests = []; const client = Discovery.create({ now: () => NOW, fetch: async (url, options) => { requests.push({ url, options }); return response(feed([article('a', '인공지능')])); } });
+  assert.equal(requests.length, 0); const result = await client.load(); assert.equal(result.status, 'ready'); assert.equal(requests.length, 1);
+  const request = requests[0]; assert.equal(new URL(request.url).pathname, '/assets/life/discovery-feed.json'); assert.equal(new URL(request.url).search, ''); assert.equal(request.options.credentials, 'omit'); assert.equal(request.options.referrerPolicy, 'no-referrer'); assert(!('body' in request.options)); assert(!('headers' in request.options));
+  client.dispose(); assert.throws(() => Discovery.create({ feedUrl: 'https://private.example/feed.json' }), { code: 'discovery_feed_invalid' });
+});
+test('SW cache fallback and client fallback are explicitly stale while browser fetch and catalog times remain distinct', async () => {
+  let attempt = 0; const fetchedAt = '2026-10-18T12:34:00.000Z';
+  const client = Discovery.create({ now: () => NOW, fetch: async () => { if (attempt++) throw new Error('offline'); return response(feed([article('a', '인공지능')]), { 'X-Haedo-Discovery-Cache': 'stale', 'X-Haedo-Discovery-Fetched-At': fetchedAt }); } });
+  const first = await client.load(); assert(first.stale); assert.equal(first.browserFetchedAt, fetchedAt); assert.equal(first.feed.generatedAt, NOW);
+  const second = await client.load(); assert(second.stale); assert.equal(second.status, 'ready'); assert(second.error); assert.equal(second.feed.articles.length, 1); client.dispose();
+});
+test('empty initial error, cancellation and late superseded loads cannot replace the latest public snapshot', async () => {
+  const failed = Discovery.create({ fetch: async () => { throw new Error('offline'); } }); const failure = await failed.load(); assert.equal(failure.status, 'error'); assert.equal(failure.feed, null); failed.dispose();
+  const old = deferred(); let calls = 0; const client = Discovery.create({ now: () => NOW, fetch: async () => calls++ ? response(feed([article('new', '인공지능')])) : old.promise });
+  const prior = client.load().catch(cause => cause); const latest = await client.load(); old.resolve(response(feed([article('old', '인공지능')]))); assert.equal((await prior).name, 'AbortError'); assert.equal(latest.feed.articles[0].id, 'new'); client.dispose();
+});

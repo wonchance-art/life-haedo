@@ -1,0 +1,356 @@
+{
+  "checkedAt": "2026-10-19T05:47:16.224243+00:00",
+  "scope": "Anonymous bounded same-origin HTTPS public GET only; no browser account/DB, cookies, authorization, mutation or deployment. HTTP headers timestamps do not prove scheduled collection.",
+  "candidate": "556ee1d0cbc6a65f3af63d2a5ddbae382373b1dd",
+  "main": "58e5cd55f73fb440c997266e160d8859f18bfd6c",
+  "requests": [
+    {
+      "path": "sw.js",
+      "url": "https://wonchance-art.github.io/life-haedo/sw.js",
+      "finalURL": "https://wonchance-art.github.io/life-haedo/sw.js",
+      "method": "GET",
+      "startedAt": "2026-10-19T05:47:12.178716+00:00",
+      "finishedAt": "2026-10-19T05:47:12.591515+00:00",
+      "status": 200,
+      "bytes": 6574,
+      "sha256": "cb4fd4ed6112856883eab180fc3d390eae7693e835d2407b77fac3ce67ba9967",
+      "headers": {
+        "Date": "Mon, 19 Oct 2026 05:47:12 GMT",
+        "Last-Modified": "Mon, 19 Oct 2026 03:45:13 GMT",
+        "ETag": "\"6ad59249-19ae\"",
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Content-Length": "6574",
+        "Age": "0",
+        "Cache-Control": "max-age=600"
+      },
+      "comparison": {
+        "candidateCommit": "556ee1d0cbc6a65f3af63d2a5ddbae382373b1dd",
+        "candidateSHA256": "97615e20154a241deab090ff6145a4863f89a6f32248fa214feeaf840eb05b35",
+        "mainCommit": "58e5cd55f73fb440c997266e160d8859f18bfd6c",
+        "mainSHA256": "cb4fd4ed6112856883eab180fc3d390eae7693e835d2407b77fac3ce67ba9967",
+        "matchesCandidate": false,
+        "matchesMain": true
+      },
+      "cache": "haedo-v134",
+      "containsDiscoveryCatalogCode": false,
+      "containsReactionModules": false
+    },
+    {
+      "path": "assets/life/discovery-feed.json",
+      "url": "https://wonchance-art.github.io/life-haedo/assets/life/discovery-feed.json",
+      "finalURL": "https://wonchance-art.github.io/life-haedo/assets/life/discovery-feed.json",
+      "method": "GET",
+      "startedAt": "2026-10-19T05:47:12.179444+00:00",
+      "finishedAt": "2026-10-19T05:47:12.478291+00:00",
+      "status": 404,
+      "bytes": 9379,
+      "sha256": "b620507312c5e97566a3c6cfaf99144fefc18a0da7d941401dfa0f5f58fb0368",
+      "headers": {
+        "Date": "Mon, 19 Oct 2026 05:47:12 GMT",
+        "Last-Modified": null,
+        "ETag": "\"6abcf5c5-24a3\"",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "9379",
+        "Age": "0",
+        "Cache-Control": null
+      },
+      "comparison": {
+        "candidateCommit": "556ee1d0cbc6a65f3af63d2a5ddbae382373b1dd",
+        "candidateSHA256": "6a6c63e520328e283d01ca8283a6b9c2259295f5c37fc05d2fb49b27ba057684",
+        "mainCommit": "58e5cd55f73fb440c997266e160d8859f18bfd6c",
+        "mainSHA256": null,
+        "matchesCandidate": false,
+        "matchesMain": false
+      }
+    },
+    {
+      "path": "index.html",
+      "url": "https://wonchance-art.github.io/life-haedo/index.html",
+      "finalURL": "https://wonchance-art.github.io/life-haedo/index.html",
+      "method": "GET",
+      "startedAt": "2026-10-19T05:47:12.179912+00:00",
+      "finishedAt": "2026-10-19T05:47:16.218048+00:00",
+      "status": 200,
+      "bytes": 10885,
+      "sha256": "cd13a4c57d8f4cd71de587651cd85fb952f4cfdc1b39ac035f24afd4c9c866ec",
+      "headers": {
+        "Date": "Mon, 19 Oct 2026 05:47:16 GMT",
+        "Last-Modified": "Mon, 19 Oct 2026 03:45:13 GMT",
+        "ETag": "\"6ad59249-2a85\"",
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Length": "10885",
+        "Age": "0",
+        "Cache-Control": "max-age=600"
+      },
+      "comparison": {
+        "candidateCommit": "556ee1d0cbc6a65f3af63d2a5ddbae382373b1dd",
+        "candidateSHA256": "d32ed4198d0c43c14b50daa4e19a1e5335c2001066c6f842a923459fbf53b247",
+        "mainCommit": "58e5cd55f73fb440c997266e160d8859f18bfd6c",
+        "mainSHA256": "cd13a4c57d8f4cd71de587651cd85fb952f4cfdc1b39ac035f24afd4c9c866ec",
+        "matchesCandidate": false,
+        "matchesMain": true
+      },
+      "title": "해도 · 내 블로그",
+      "discoveryScriptReferences": [
+        "assets/life/rediscovery.js"
+      ]
+    },
+    {
+      "path": "assets/life/shell.js",
+      "url": "https://wonchance-art.github.io/life-haedo/assets/life/shell.js",
+      "finalURL": "https://wonchance-art.github.io/life-haedo/assets/life/shell.js",
+      "method": "GET",
+      "startedAt": "2026-10-19T05:47:12.180422+00:00",
+      "finishedAt": "2026-10-19T05:47:12.523075+00:00",
+      "status": 200,
+      "bytes": 15233,
+      "sha256": "62203137a51b7d228be10dcdf379b564b994cf803e780d2b9466e8ced2eac29f",
+      "headers": {
+        "Date": "Mon, 19 Oct 2026 05:47:12 GMT",
+        "Last-Modified": "Mon, 19 Oct 2026 03:45:13 GMT",
+        "ETag": "\"6ad59249-3b81\"",
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Content-Length": "15233",
+        "Age": "0",
+        "Cache-Control": "max-age=600"
+      },
+      "comparison": {
+        "candidateCommit": "556ee1d0cbc6a65f3af63d2a5ddbae382373b1dd",
+        "candidateSHA256": "44414476702db4c8e0ef8515b6e6deb5ff549b8a26c64fb4501bac1b199b29ce",
+        "mainCommit": "58e5cd55f73fb440c997266e160d8859f18bfd6c",
+        "mainSHA256": "62203137a51b7d228be10dcdf379b564b994cf803e780d2b9466e8ced2eac29f",
+        "matchesCandidate": false,
+        "matchesMain": true
+      }
+    }
+  ],
+  "privateRequests": 0,
+  "mutations": 0,
+  "finalizedAt": "2026-10-19T05:48:37.346172+00:00",
+  "decision": {
+    "automaticQA": "completed read-only operations and exact-HEAD CI comparison",
+    "liveRelease": "not deployed",
+    "scheduledCollection": "not operating in the current default-branch workflow",
+    "releaseAuthorization": "User requested automatic QA only; merge/deploy/workflow_dispatch remain outside this work.",
+    "deviceEvaluation": "not performed"
+  },
+  "repository": {
+    "localHead": "556ee1d0cbc6a65f3af63d2a5ddbae382373b1dd",
+    "remoteRefs": {
+      "refs/heads/codex/discovery-interest-validation": "556ee1d0cbc6a65f3af63d2a5ddbae382373b1dd",
+      "refs/heads/main": "58e5cd55f73fb440c997266e160d8859f18bfd6c"
+    },
+    "pullRequest": {
+      "url": "https://github.com/wonchance-art/life-haedo/pull/103",
+      "number": 103,
+      "state": "open",
+      "draft": true,
+      "mergeable": true,
+      "merged": false,
+      "headSHA": "556ee1d0cbc6a65f3af63d2a5ddbae382373b1dd",
+      "baseSHA": "58e5cd55f73fb440c997266e160d8859f18bfd6c",
+      "updatedAt": "2026-10-19T05:34:44Z"
+    }
+  },
+  "sameHeadCI": {
+    "requestedCommit": "556ee1d0cbc6a65f3af63d2a5ddbae382373b1dd",
+    "wrapperScope": "pull-request-triggered runs for exact commit, first page; jobs latest attempt first page only",
+    "runs": [
+      {
+        "id": 39203422549,
+        "name": "Deploy platform",
+        "status": "completed",
+        "conclusion": "success",
+        "run_number": 205,
+        "jobs_url": "https://api.github.com/repos/wonchance-art/life-haedo/actions/runs/39203422549/jobs",
+        "logs_url": "https://api.github.com/repos/wonchance-art/life-haedo/actions/runs/39203422549/logs",
+        "workflow_id": 372992738
+      }
+    ],
+    "jobs": [
+      {
+        "id": 117904333642,
+        "name": "blog",
+        "status": "completed",
+        "conclusion": "success",
+        "runId": 39203422549
+      },
+      {
+        "id": 117904335101,
+        "name": "browser_suites (4)",
+        "status": "completed",
+        "conclusion": "success",
+        "runId": 39203422549
+      },
+      {
+        "id": 117904335258,
+        "name": "browser_suites (3)",
+        "status": "completed",
+        "conclusion": "success",
+        "runId": 39203422549
+      },
+      {
+        "id": 117904335630,
+        "name": "browser",
+        "status": "completed",
+        "conclusion": "success",
+        "runId": 39203422549
+      },
+      {
+        "id": 117904359545,
+        "name": "browser_suites (5)",
+        "status": "completed",
+        "conclusion": "success",
+        "runId": 39203422549
+      },
+      {
+        "id": 117904364570,
+        "name": "browser_suites (2)",
+        "status": "completed",
+        "conclusion": "success",
+        "runId": 39203422549
+      },
+      {
+        "id": 117904373957,
+        "name": "check",
+        "status": "completed",
+        "conclusion": "success",
+        "runId": 39203422549
+      },
+      {
+        "id": 117904377857,
+        "name": "browser_suites (1)",
+        "status": "completed",
+        "conclusion": "success",
+        "runId": 39203422549
+      },
+      {
+        "id": 117906549510,
+        "name": "build",
+        "status": "completed",
+        "conclusion": "skipped",
+        "runId": 39203422549
+      },
+      {
+        "id": 117906550168,
+        "name": "deploy",
+        "status": "completed",
+        "conclusion": "skipped",
+        "runId": 39203422549
+      }
+    ],
+    "success": 8,
+    "skipped": [
+      "build",
+      "deploy"
+    ],
+    "failed": 0,
+    "firstFailureRetainedInPRBody": true,
+    "initialFailureCauseNotDeclaredFixed": true
+  },
+  "deploymentReceipt": {
+    "source": "bounded unauthenticated public GitHub REST: newest2 Pages deployments/newest1status each",
+    "id": 7165209611,
+    "sha": "58e5cd55f73fb440c997266e160d8859f18bfd6c",
+    "createdAtUTC": "2026-10-19T03:45:05Z",
+    "successAtUTC": "2026-10-19T03:45:20Z",
+    "successAtKST": "2026-10-19T12:45:20+09:00",
+    "runURL": "https://github.com/wonchance-art/life-haedo/actions/runs/39195216038",
+    "runConclusion": "success",
+    "liveSampleHashesMatchThatCommit": true
+  },
+  "schedule": {
+    "candidateWorkflowSHA256": "c4a4bb0c96c88cd721c92a9df29f45e2adb974e403b5d88420fcabea64c17d92",
+    "mainWorkflowSHA256": "a6e53b3ab8fda15f2c0c3a0e174f01f67da19d53cb7625b7e18f89c82e629634",
+    "mainHasSchedule": false,
+    "candidateHasSchedule": true,
+    "candidateCronUTC": "15 6 * * *",
+    "candidateTimeUTC": "06:15",
+    "candidateTimeKST": "15:15",
+    "candidateBuildDefaultBranchOnly": true,
+    "doc": "docs/design-review/discovery-automation.md",
+    "documentationMatchesCandidate": true,
+    "candidateScheduleCurrentlyDeployed": false,
+    "successfulScheduledCollectionReceiptVerified": false,
+    "receiptLimitation": "The bounded query covered default-branch push runs and Pages deployment statuses, not all schedule history. No successful scheduled collection receipt is claimed. Current main has no schedule trigger and live catalog is 404.",
+    "notEquivalentTo": "The app visible-screen 15-minute poll is independent of public daily source collection; PR success does not execute either in production.",
+    "futureDelayCaveat": "GitHub scheduled runs may be delayed or skipped; configured cron is not an execution guarantee."
+  },
+  "initialPublicationCompatibility": {
+    "feed404": true,
+    "liveWorkerExactReviewedLegacySHA": true,
+    "approvedCacheVersion": 134,
+    "sha256": "cb4fd4ed6112856883eab180fc3d390eae7693e835d2407b77fac3ce67ba9967",
+    "candidateHelper": "scripts/refresh-discovery-artifact.cjs",
+    "helperSHA256": "91c893782f6e2ca40997b76f8d88e5ce7763f4700954cf97f99f84318ee4f044",
+    "scope": "Static compatibility with the strict exact-legacy-SHA bootstrap rule only; collector/build/deploy was not executed."
+  },
+  "minimumFutureReleaseProcedure": [
+    {
+      "step": 1,
+      "action": "On an explicitly authorized release, freeze candidate/base/live SW+public-file hashes and retain the previous complete generated Pages artifact and first catalog receipt. Re-check exact release HEAD CI if source or base changed.",
+      "currently": "Candidate556ee1d required8 jobs passed; PR remains draft/open, mergeable."
+    },
+    {
+      "step": 2,
+      "action": "Use the already configured default-branch Pages flow: checked merge or approved default-ref release -> collect public metadata -> validate source/rights/last-good continuity -> prepare -> install catalog with SHA equality -> publish artifact. Do not bypass a failed collection or build.",
+      "currently": "Not run; PR build/deploy are skipped. Current exact v134+feed404 satisfies only the reviewed initial-bootstrap predicate."
+    },
+    {
+      "step": 3,
+      "action": "After a successful Pages deployment receipt, compare live SW/index/runtime module and public feed SHA with that exact artifact, then inspect the first scheduled collection receipt separately. Keep device and actual usefulness checks marked incomplete.",
+      "currently": "Current live sample matches main58e5cd5/v134; candidate136 and prepared catalog are not live."
+    }
+  ],
+  "minimumFutureRecoveryProcedure": [
+    {
+      "condition": "Collection/validation/install fails before publication",
+      "action": "Keep serving the previous Pages artifact and last-good public catalog; retain failure receipt. Do not overwrite tracked feed or deploy a partial/empty candidate."
+    },
+    {
+      "condition": "After publication, an app or collection regression requires recovery",
+      "action": "Preserve the published artifact/catalog receipt and local private data. Recover from a verified compatible complete artifact using a new SW cache version, then confirm installed hashes. Do not clear user IndexedDB/localStorage or describe a one-file worker swap as a tested whole-app rollback. A production rollback artifact and this operation are not executed or validated here."
+    },
+    {
+      "condition": "Public scheduled collection must stop",
+      "action": "Under separately authorized repository change, stop the schedule trigger while preserving PR/CI verification. Turning off one browser automatic-refresh option does not stop the public workflow."
+    }
+  ],
+  "actualRemainingConditions": [
+    {
+      "kind": "scope boundary",
+      "detail": "Automatic QA only is authorized now. Draft promotion, merge, deployment, manual workflow and production writes are not performed."
+    },
+    {
+      "kind": "production evidence",
+      "detail": "The main workflow has no discovery schedule and no public feed is served. A successful candidate production build/deploy and actual scheduled collection receipt remain unverified."
+    },
+    {
+      "kind": "environment and usefulness",
+      "detail": "No real Apple/Google/native IME/OS file-save or real reading/usefulness evidence. Public GET/CI cannot establish these."
+    },
+    {
+      "kind": "CI history limitation",
+      "detail": "Current latest-attempt jobs pass. Prior same-HEAD blog route.fetch cleanup failure is retained in the PR history; its transient root cause is not claimed fixed by a passing rerun."
+    }
+  ],
+  "supportingEvidence": [
+    {
+      "path": ".local/discovery-field/github-summary.json",
+      "sha256": "e8f589128b3b270c08acf92bac65913f5492d51e000632ab5e93f33289b996d2"
+    },
+    {
+      "path": ".local/discovery-field/public-github-recent.json",
+      "sha256": "763da1655d2de4c0a5bc0d2b16d377225b58603f4bc44f726614ad83a940dc2e"
+    }
+  ],
+  "checksNotRunAgain": [
+    "unit suites",
+    "browser/PWA suites",
+    "source collector",
+    "prepare/build",
+    "workflow_dispatch",
+    "merge/deploy",
+    "real user sessions or private DB access"
+  ]
+}

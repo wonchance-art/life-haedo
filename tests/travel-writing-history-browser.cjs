@@ -57,18 +57,18 @@ function installHistoryObserver() {
   window.__travelDocument = crypto.randomUUID();
   window.__travelEvents = [];
   window.__travelFocus = [];
-  const sample = label => {
+  const sample = (label, event) => {
     const active = document.activeElement;
-    __travelFocus.push({ label, captionActive: !!window.__travelCaption && active === __travelCaption,
+    __travelFocus.push({ label, trusted: event?.isTrusted ?? null, captionActive: !!window.__travelCaption && active === __travelCaption,
       activeTag: active?.tagName || null, start: active?.selectionStart ?? null,
       end: active?.selectionEnd ?? null, direction: active?.selectionDirection ?? null,
       scrollX, scrollY, privateHidden: document.querySelector('#lifeApp')?.hidden ?? null });
   };
   window.__travelSample = sample;
-  addEventListener('beforeunload', () => sample('beforeunload'), { capture: true });
+  addEventListener('beforeunload', event => sample('beforeunload', event), { capture: true });
   for (const type of ['pagehide', 'pageshow']) addEventListener(type, event => {
     __travelEvents.push({ type, persisted: event.persisted, trusted: event.isTrusted, documentId: __travelDocument });
-    sample(type);
+    sample(type, event);
   }, { capture: true });
 }
 
@@ -205,9 +205,19 @@ async function main() {
     assert.deepEqual(after.selection, before.selection);
     assert.equal(after.body, before.body);
     assert.deepEqual(after.photos, before.photos);
-    for (let axis = 0; axis < 2; axis++) assert.ok(Math.abs(after.scroll[axis] - before.scroll[axis]) < 2,
+    // Compare the real pre-dialog reading position. Setup can still settle
+    // before navigation, and the native dialog may blur/scroll before pagehide.
+    // Shell intentionally retains the focused position from beforeunload.
+    const departures = await page.evaluate(() => __travelFocus.filter(sample => sample.label === 'beforeunload'));
+    assert.equal(departures.length, 1, 'One native confirmation must have one actual pre-dialog position');
+    const [departure] = departures;
+    assert.ok(departure.trusted && !departure.privateHidden && departure.captionActive &&
+      Number.isFinite(departure.scrollX) && Number.isFinite(departure.scrollY) && departure.scrollY > 0,
+      'Actual departure must retain a visible nonzero reading position');
+    const departureScroll = [departure.scrollX, departure.scrollY];
+    for (let axis = 0; axis < 2; axis++) assert.ok(Math.abs(after.scroll[axis] - departureScroll[axis]) < 2,
       'Native return must preserve scroll position on axis ' + axis);
-    report.scroll = { before: before.scroll, after: after.scroll };
+    report.scroll = { setup: before.scroll, before: departureScroll, after: after.scroll };
     report.resumeUserReads = report.authUserReads - initialAuthReads;
     assert.equal(report.resumeUserReads, 1, 'One fresh server user verification on native resume');
     assert.deepEqual(report.dialogs, [{ type: 'beforeunload', accepted: true }], 'The native confirmation dialog is required');
