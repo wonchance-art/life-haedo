@@ -1,0 +1,37 @@
+// Regenerate: dot -Tsvg docs/diagrams/product-structure-20261020.dot -o docs/diagrams/rendered/product-structure-20261020.svg
+// PNG: dot -Tpng -Gdpi=144 docs/diagrams/product-structure-20261020.dot -o docs/diagrams/rendered/product-structure-20261020.png
+digraph Haedo {
+  graph [rankdir=TB, bgcolor="white", pad="0.30", nodesep="0.48", ranksep="0.70", splines=polyline,
+    fontname="Noto Sans CJK KR", fontsize=17, fontcolor="#30313a", labelloc=t,
+    label="해도 구조 · 2026.10.20\n홈 → 뉴스 → 자료실 → 도구 → 설정\n "];
+  node [shape=box, style=filled, fillcolor="#f4f4f6", color="#8c909a", penwidth=1,
+    fontname="Noto Sans CJK KR", fontsize=15, fontcolor="#292d35", margin="0.22,0.17"];
+  edge [color="#737985", penwidth=1, arrowsize=0.65, fontname="Noto Sans CJK KR", fontsize=11, fontcolor="#4a505c"];
+
+  R [label="흩어진 기록 가져오기\n메모·Obsidian·블로그·Instagram\n선택한 본문·파일·링크"];
+  N [label="뉴스 · 새로운 글 찾기\n주제·출처·언어 선택\n새 글 후보 자동 수집·갱신"];
+  C [label="취향 컬렉션\n음악·책·영화·작품·도구·인물·장소"];
+  L [label="자료실 · 개인 기록 보관\n읽기·검색·발췌·메모·연결"];
+  Q [label="원문·번역 열기 / 좋아요·담기\n선택 추천: 좋아요 기반 규칙\n개인 추천은 기본 꺼짐"];
+  A [label="직접 글쓰기\n생각·경험·사진"];
+  P [label="홈 · 내 글 작성·첨부·저장\n초안·재열기·선택한 기록 활용", fillcolor="#ede9fe", color="#7661af", fontcolor="#25213b"];
+  U [label="내 관심 확인·직접 회고\n관심 교정·관련 기록 다시 찾기"];
+  B [label="개인 결과물\n기존 원고·책·PDF\n책 기능의 추가 확장은 보류"];
+  S [label="남에게 보여주는 페이지\n선택한 글·연재·9칸\n공개 사본 게시·갱신·철회"];
+  X [label="후속 · 자동 자기 이해\nAI 분석·근거 보고서", style="filled,dashed", fillcolor="#faf9fc", color="#aaa4b7"];
+
+  { rank=same; R; N; C; }
+  { rank=same; L; Q; A; }
+  { rank=same; U; P; }
+  { rank=same; X; B; S; }
+  R -> L;
+  N -> Q;
+  Q -> L [label="고른 링크만 보관", constraint=false];
+  C -> P [label="필요할 때 선택"];
+  A -> P;
+  L -> P [label="원하는 기록 선택"];
+  L -> U;
+  P -> B [label="개인 활용"];
+  P -> S [label="내가 고르고 게시"];
+  U -> X [style=dashed, label="선택한 자료만 · 미구현"];
+}

@@ -1,0 +1,10 @@
+{
+  "artifact": "product-structure-20261020",
+  "renderer": "Graphviz + Noto Sans CJK KR",
+  "scope": "문서 구조도: 앱 기능·실제 기기·추천 유용성 검수가 아님",
+  "nodes": 11,
+  "edges": 10,
+  "nodeTextOverflow": [],
+  "externalResources": 0,
+  "hasKorean": true
+}

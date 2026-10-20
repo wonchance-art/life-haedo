@@ -6,6 +6,8 @@
 
 **현재 전체 로드맵:** [PNG](../diagrams/rendered/product-roadmap-20261020.png) · [확대 SVG](../diagrams/rendered/product-roadmap-20261020.svg) · [PDF](../diagrams/rendered/product-roadmap-20261020.pdf). 남은 우선순위는 첫 정기 운영·실제 기기 완주, 동일 언어 직접 읽기 평가·추천 개선이다. 이유·선행·완료 기준은 아래 뉴스 실행의 다음 큰 작업 묶음을 따른다.
 
+**단순 구조도 — 사용자 요청 반영:** [이미지](../diagrams/rendered/product-structure-20261020.png) · [확대 SVG](../diagrams/rendered/product-structure-20261020.svg) · [편집 원본](../diagrams/product-structure-20261020.dot). 10월12일 상자·화살표 형식을 따라 뉴스→읽기·반응→선택 링크 보관과 자료실→홈 글쓰기→개인 활용/선택 공개를 연결했다. 수동 관심·회고와 후속 AI 분석, 기존 책 기능과 추가 확장 보류를 구분한다. 기능 구조를 설명하는 자료이며 실제 기기·번역 품질·추천 유용성의 검증 완료를 뜻하지 않는다. 다음 큰 작업과 완료 조건은 위와 동일하다.
+
 ## 누락 글의 실제 본문 찾기 — 현재 실행 (2026-10-20 UTC)
 
 기존 홈·글 관리·초안·보관함에서 보이지 않는 글을 조사한다. 조사 착수 기준은 main `0c4270be` / SW v138이다. 아래 발견·언어 작업의 draft·미배포 설명은 당시 기록이며 이 기준에 이미 병합된 상태를 되돌리지 않는다.
