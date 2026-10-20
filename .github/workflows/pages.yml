@@ -453,6 +453,7 @@ jobs:
             .local/two-cycle/
             .local/core-experience/
             .local/unified-home/
+            .local/news-navigation/
             .local/timeline-recovery/after/
             .local/home-entry/
             .local/preservation/
