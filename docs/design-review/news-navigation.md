@@ -22,8 +22,10 @@
 
 ## 출시와 로드맵
 
-PR112의 최종 필수 CI는8개 성공했지만 첫 main 검사39361306314는 새 history 검사에서 실패해 배포가 생략됐다. 원본 보고서 보관 누락과 원인 확정 한계·400ms 비교·수정은 [화면 전환 완료 경계](news-history-readiness.md)에 기록했다. 운영 SW138과 후보139를 구분한다.
+PR112의 최종 필수 CI는8개 성공했지만 첫 main 검사39361306314는 새 history 검사에서 실패해 배포가 생략됐다. 원본 보고서 보관 누락과 원인 확정 한계·400ms 비교·수정은 [화면 전환 완료 경계](news-history-readiness.md)에 기록했다. 첫 중단 당시 운영 SW138과 후보139를 구분했으며 최종 출시는 아래 기록을 따른다.
 
-현재 문서 작성 기준은 SW139 검수 후보이며 운영 반영 완료는 해당 PR의 최종 CI·main 배포·실제 공개 파일 영수증으로 확인한다. 이전 SW138 출시 증거는 [운영 출시 검수](discovery-release.md)를 따른다. 제품 변경과 분리된 그 문서 PR111의 증거도 이번 브랜치에 포함한다.
+제품 [PR112](https://github.com/wonchance-art/life-haedo/pull/112) head22b24ad의 필수8개 성공과 첫 main900c7bd의 중단을 구분한다. 검사 준비 완료와 보고서 보관의 [PR114](https://github.com/wonchance-art/life-haedo/pull/114)는 제품 파일을 바꾸지 않았다. 최종 main `828498189c084cdd02cba468cb3faab31ffeb83c`의 [push39362798458](https://github.com/wonchance-art/life-haedo/actions/runs/39362798458)는 필수8개·build/deploy 총10개가 성공했다. SW139와 탐색/Auth/아이콘/UI/발견UI/index 실제 공개7파일이 main blob SHA와 같고 뉴스 주소는200이다. 공개 파일 대조와 앞선 localhost 합성 Auth 연결 검사를 구분하며 실제 운영 계정 로그인·DB 쓰기는 없다. 정확한 공개 feed SHA/기사 수는 검수 JSON release를 따른다. 첫 실제 schedule·실기·번역·실독 평가는 미확인이다.
 
-사용자의 전체 로드맵 시각화 요청에는 [PNG](../diagrams/rendered/product-roadmap-20261020.png)·[SVG](../diagrams/rendered/product-roadmap-20261020.svg)·[PDF](../diagrams/rendered/product-roadmap-20261020.pdf)를 제공했다. 이는 10월20일 뉴스 배포 전 시점의 상태도이며 출시 뒤 날짜를 소급 변경하지 않는다. 최신 진행과 후속 완료 조건은 [로드맵](../life-tools-design/roadmap.md)을 따른다.
+이전 SW138 출시 증거는 [운영 출시 검수](discovery-release.md)를 따른다. 문서 PR111도 제품 병합에 포함돼 닫혔다. 별도 글 목록 복구 [PR113](https://github.com/wonchance-art/life-haedo/pull/113)은 별도 작업으로 병합됐으며 해당 main 배포는 대기/진행 중으로 구분한다.
+
+사용자의 전체 로드맵 시각화 요청에는 [PNG](../diagrams/rendered/product-roadmap-20261020.png)·[SVG](../diagrams/rendered/product-roadmap-20261020.svg)·[PDF](../diagrams/rendered/product-roadmap-20261020.pdf)를 제공했다. 10월20일 최초 전달 시점의 배포 전 상태를 실제 영수증 확인 후 SW139 완료로 갱신했다. 최신 진행과 후속 완료 조건은 [로드맵](../life-tools-design/roadmap.md)을 따른다.

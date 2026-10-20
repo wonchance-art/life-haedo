@@ -1,16 +1,16 @@
 {
   "dateKST": "2026-10-20",
-  "scope": "Current consolidated product roadmap, historical plans superseded by latest release evidence; news candidate not deployed",
+  "scope": "Current consolidated product roadmap, historical plans superseded by latest release evidence; news released and public file hashes verified",
   "source": "docs/life-tools-design/roadmap.md",
-  "releasedCache": "haedo-v138",
-  "newsCandidateCache": "haedo-v139",
+  "releasedCache": "haedo-v139",
+  "newsReleasedCache": "haedo-v139",
   "size": [
     1600,
     1868
   ],
   "files": {
-    "svg": "57a0918a5aeb658569ddf0ab98615802e0445e1df2795ff1fd15b8d873058496",
-    "png": "cde38d320410b39a81f92434c1315b02dd3060cf8131e6d04271c41b67ac14b5",
-    "pdf": "3db61c25cb1c0c91f3bfeb0f3d0cf82fa72dfcd8e4ccb80329528e9f7b9d330b"
+    "svg": "cb3337d8663dd548bf362a2f048631068337e550291a8ff4cfe2eda3a0e01879",
+    "png": "13a948345e27f04ad75d905627bbe981993e8559af58ff0348ca194939aab280",
+    "pdf": "a6934f3b8cc2fa2a30c5fb3d1d696081f537bf5c1dcb4f5bbb3d822e4e2f3d93"
   }
 }
