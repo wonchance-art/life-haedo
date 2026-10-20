@@ -32,7 +32,7 @@ function session(account) {
   return {access_token:token(account),refresh_token:`test-refresh-${account.id}`,token_type:'bearer',expires_in:3600,expires_at:Math.floor(Date.now()/1000)+3600,user:user(account)};
 }
 
-class FakeCloud {
+class WorkspaceCloud {
   constructor() {
     this.rows = new Map(); this.receipts = new Map(); this.requests = [];
     this.accountMaterials = [];
@@ -127,6 +127,8 @@ class FakeCloud {
     throw new Error(`Unexpected anonymous HTTP request: ${method} ${url.pathname}`);
   }
 }
+
+const FakeCloud = require('./helpers/blog-cloud.cjs').withBlogCloud(WorkspaceCloud, accounts);
 
 async function platformContext(context,server,device,seed=accounts.a) {
   await server.attach(context,device);

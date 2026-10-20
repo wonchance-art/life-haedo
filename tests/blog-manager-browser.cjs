@@ -71,7 +71,7 @@ async function main() {
       assert.equal(await page.locator('.blog-post').count(), 6);
       const draftRow = page.locator('.blog-post[data-post-id="draft-photo"]');
       assert.equal(await draftRow.locator('.blog-manager-server').count(), 0);
-      assert.equal(await draftRow.getByText('초안은 이 브라우저에 보관합니다. 글을 저장한 뒤 한 편씩 서버에 보관할 수 있습니다.', { exact: true }).count(), 1);
+      assert.equal(await draftRow.getByText('초안은 이 브라우저에 보관합니다. 기본 글쓰기에서 글을 저장하면 본문과 사진 원본을 내 계정 서버에도 비공개로 보관합니다.', { exact: true }).count(), 1);
       assert.equal(await page.locator('.blog-post[data-post-id="saved-photo"] .blog-manager-server').count(), 1);
       assert.equal(await page.getByRole('button', { name: '보관해 둔 여행', exact: true }).count(), 0);
       assert.equal(await page.getByText('가져오기 검토 제외', { exact: true }).count(), 0);

@@ -89,6 +89,8 @@
     storage,
     workspaceId,
     isCurrent,
+    blogSync = null,
+    onManageServer = null,
     onDirty = () => {},
     onSaved = () => {},
     onCommitted = () => {},
@@ -123,6 +125,8 @@
       standalone = false;
     let status, statusText, inspector, captionInput, altInput, recoveryActions;
     let dismissControls = null;
+    let serverStatus = null, serverActions = null, serverValue = null, serverBusy = false, serverSequence = 0;
+    let unsubscribeServer = null;
     const urls = new Set(),
       photoUrls = new Map();
     let closeViewer = null;
@@ -583,6 +587,7 @@
       } finally {
         setBusy(false);
       }
+      await saveServer();
     }
     async function archive(value) {
       await flush();
@@ -666,8 +671,77 @@
       } finally {
         setBusy(false);
       }
+      if (nextStatus === "saved") await saveServer();
     }
     const duplicate = () => saveIndependent("draft");
+    function serverCurrent(token, id, revision, sequence) {
+      return current(token) && mode === "read" && doc?.status === "saved" && doc.id === id &&
+        doc.revision === revision && sequence === serverSequence;
+    }
+    function showServerStatus() {
+      if (!serverStatus || !serverActions || mode !== "read" || doc?.status !== "saved") return;
+      const state = serverValue?.id === doc.id && serverValue.revision === doc.revision ? serverValue.status : "checking";
+      const labels = {
+        checking: "이 브라우저에 저장됨 · 서버 보관 상태 확인 중…",
+        saving: "이 브라우저에 저장됨 · 비공개 서버에 보관 중…",
+        synced: "이 브라우저와 내 계정 서버에 비공개로 보관했습니다.",
+        not_enabled: "이 브라우저에 저장됨 · 서버에는 아직 보관하지 않았습니다.",
+        pending: "이 브라우저에 저장됨 · 서버 보관이 아직 끝나지 않았습니다.",
+        paused: "이 브라우저에 저장됨 · 이 글의 서버 연결은 중지되어 있습니다.",
+        conflict: "이 브라우저에 저장됨 · 서버에도 변경이 있습니다. 글 관리에서 양쪽 내용을 확인해 주세요.",
+        error: "이 브라우저에 저장됨 · 서버 보관을 확인하지 못했습니다. 다시 시도할 수 있습니다.",
+      };
+      serverStatus.textContent = labels[state] || labels.error;
+      serverStatus.dataset.state = state;
+      serverStatus.dataset.postId = doc.id;
+      serverActions.replaceChildren();
+      if (["not_enabled", "pending", "error"].includes(state)) {
+        const retry = button("서버 보관 다시 시도", saveServer);
+        retry.id = "photoServerRetry";
+        serverActions.append(retry);
+      } else if (state === "conflict" && onManageServer) {
+        serverActions.append(button("글 관리에서 서버 내용 확인", async () => {
+          const token = epoch, id = doc.id;
+          await flush();
+          if (current(token) && doc?.id === id) await onManageServer(id);
+        }));
+      }
+      serverActions.hidden = !serverActions.children.length;
+    }
+    async function readServerState() {
+      if (mode !== "read" || doc?.status !== "saved" || serverBusy) return;
+      const token = epoch, id = doc.id, revision = doc.revision, sequence = ++serverSequence;
+      serverValue = { id, revision, status: "checking" }; showServerStatus();
+      try {
+        if (!blogSync?.getState) throw new Error("server_unavailable");
+        const state = await blogSync.getState(workspaceId, id);
+        if (!serverCurrent(token, id, revision, sequence)) return;
+        serverValue = { id, revision, status: state.status };
+      } catch (_) {
+        if (!serverCurrent(token, id, revision, sequence)) return;
+        serverValue = { id, revision, status: "error" };
+      }
+      showServerStatus();
+    }
+    async function saveServer() {
+      if (serverBusy || mode !== "read" || doc?.status !== "saved" || !valid() || !host?.isConnected) return;
+      const token = epoch, id = doc.id, revision = doc.revision, sequence = ++serverSequence;
+      serverBusy = true; serverValue = { id, revision, status: "saving" }; showServerStatus(); onDirty();
+      try {
+        if (!blogSync?.saveDefault) throw new Error("server_unavailable");
+        const state = await blogSync.saveDefault(workspaceId, id, { expectedLocalRevision: revision });
+        if (!serverCurrent(token, id, revision, sequence)) return;
+        serverValue = { id, revision, status: state.status };
+      } catch (_) {
+        if (!serverCurrent(token, id, revision, sequence)) return;
+        serverValue = { id, revision, status: "error" };
+      } finally {
+        if (sequence === serverSequence) {
+          serverBusy = false;
+          if (serverCurrent(token, id, revision, sequence)) { showServerStatus(); onDirty(); }
+        }
+      }
+    }
     function viewer(p, caption, origin) {
       closeViewer?.();
       const documentId = doc.id,
@@ -1122,13 +1196,14 @@
       if (doc.replaces) menu.append(button("새 글로 저장", () => finish(true)));
       const commandState = el("div", null, "photo-command-state"),
         save = button("글 저장", () => finish());
-      commandState.append(el("span", "비공개 · 이 브라우저", "photo-command-scope"), status);
+      commandState.append(el("span", "비공개 · 저장 시 서버 보관", "photo-command-scope"), status);
       if (doc.replaces)
         commandState.prepend(el("span", "기존 글 수정 중", "photo-editing-label"));
       save.classList.add("photo-save");
-      save.title = "이 브라우저에 비공개로 저장";
+      save.title = "이 브라우저에 저장한 뒤 내 계정 서버에 비공개로 보관";
       commands.append(iconControl(button("닫기", list), "close", "닫기"), commandState, save, more);
       sticky.append(commands);
+      sticky.append(el("p", "글 저장 시 전체 본문과 사진 원본·내장 정보를 내 계정 서버에 비공개로 보관합니다. 초안은 이 브라우저에 보관하며 공개는 따로 선택합니다.", "life-help photo-server-scope"));
       recoveryActions = el("div", null, "photo-recovery-actions");
       recoveryActions.hidden = true;
       recoveryActions.append(
@@ -1440,6 +1515,8 @@
       if (!host || !valid()) return;
       cleanup();
       const token = ++epoch;
+      serverSequence++; serverBusy = false;
+      serverStatus = serverActions = null;
       host.replaceChildren();
       host.dataset.mode = mode;
       onModeChange({ mode, id: doc?.id || null });
@@ -1677,6 +1754,16 @@
           menu.append(button("보관함으로 옮기기", () => archive(true)));
         actions.append(more);
         host.append(actions);
+        if (doc.status === "saved") {
+          serverStatus = el("p", "", "life-help photo-server-status");
+          serverStatus.id = "photoServerStatus";
+          serverStatus.setAttribute("role", "status");
+          serverStatus.setAttribute("aria-live", "polite");
+          serverActions = el("div", null, "life-actions photo-server-actions");
+          host.append(serverStatus, serverActions);
+          showServerStatus();
+          readServerState();
+        }
         const article = el("article", null, "photo-article"),
           heading = el("h2", doc.title || (doc.photos.length ? "사진 " + doc.photos.length + "장" : "내 글"), "photo-read-heading");
         if (!doc.title.trim()) heading.classList.add("life-sr-only");
@@ -1712,6 +1799,10 @@
       readBackText = readBackLabel;
       host.className = "photo-posts";
       unsubscribe?.();
+      unsubscribeServer?.();
+      unsubscribeServer = blogSync?.subscribe?.(event => {
+        if (event.workspaceId === workspaceId && event.localPostId === doc?.id && !serverBusy && current(epoch)) readServerState();
+      });
       unsubscribe = storage.subscribe(workspaceId, (event) => {
         if (
           event.type === "photo_posts_changed" &&
@@ -1756,6 +1847,8 @@
     }
     function detach() {
       epoch++;
+      serverSequence++; serverBusy = false; serverValue = null; serverStatus = serverActions = null;
+      unsubscribeServer?.(); unsubscribeServer = null;
       clearTimeout(timer);
       cleanup();
       host = null;
