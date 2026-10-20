@@ -4,6 +4,7 @@
   if (root.HaedoNavigation) return;
   const sections = [
     { id: 'home', label: '홈', glyph: 'home', href: 'index.html' },
+    { id: 'news', label: '뉴스', glyph: 'news', href: 'index.html?section=news' },
     { id: 'records', label: '자료실', glyph: 'quote', href: 'index.html?section=records' },
     { id: 'tools', label: '도구', glyph: 'workspace', href: 'index.html?section=tools' },
     { id: 'manage', label: '설정', glyph: 'settings', href: 'index.html?section=manage' }
@@ -159,7 +160,8 @@
   const page = root.document.body.dataset.page;
   let initialSection = root.document.body.dataset.haedoSection;
   if (page === 'home' || page === 'life') {
-    if (sections.some(section => section.id === fromQuery)) initialSection = fromQuery;
+    if (query.get('view') === 'external-discovery' && (!fromQuery || fromQuery === 'tools' || fromQuery === 'news')) initialSection = 'news';
+    else if (sections.some(section => section.id === fromQuery)) initialSection = fromQuery;
     else if (['discover', 'reflection', 'books'].includes(query.get('view'))) initialSection = 'tools';
     else if (['blog', 'transfer', 'sync', 'workbench-backup', 'public-pages', 'preservation'].includes(query.get('view'))) initialSection = 'manage';
     else if (['collection', 'topics', 'sources', 'time', 'import', 'write', 'activities', 'page'].includes(query.get('view'))) initialSection = 'records';

@@ -19,7 +19,7 @@ Python3.12의 `ThreadingHTTPServer` 기본 연결 대기열은5다. 실제 sourc
 
 변경은 `scripts/dev-server.py`의 `ThreadingHTTPServer` 하위 클래스에 `request_queue_size=128`을 지정하고 기존 생성자에 적용하는 것이다. loopback 바인딩·포트·요청 로그 비공개·HTTP handler는 유지한다. 대기열은 동시 실행 스레드의 상한이 아니며, 서버를 외부 서비스로 전환하지 않는다. 실제 수정한 서버로 총괄이 별도12회 검사도 수행해 모두321–532ms에 성공했고 route/console/page 오류와 종료 대기는0이었다.
 
-앱 HTML/JS/CSS/vendor·서비스 워커·SQL·개인 자료 형식과 제품 검사 assertion은 바꾸지 않는다. 제품 및 준비 사이트 파일의 바이트는 기존 검증 후보와 같다. 수집기·외부 제공처·실제 OAuth·운영 DB·Google 번역을 이 진단에 사용하지 않았다.
+앱 HTML/JS/CSS/vendor·서비스 워커·SQL·개인 자료 형식과 제품 검사 assertion은 바꾸지 않는다. 제품 및 준비 사이트 입력 파일의 바이트는 기존 검증 후보와 같다. 수집기·외부 제공처·실제 OAuth·운영 DB·Google 번역을 이 진단에 사용하지 않았다.
 
 ## 출시 확인 조건
 

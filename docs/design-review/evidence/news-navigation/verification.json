@@ -1,0 +1,238 @@
+{
+  "scope": "Local Chromium153 actual application/bundled SDK/scoped IDB with synthetic Auth only. Checked-in public feed metadata; no publisher/Google/production Auth/DB requests, Apple device or usefulness proof.",
+  "status": "local_verified_release_pending",
+  "candidateCache": "haedo-v139",
+  "newsChecks": [
+    {
+      "name": "home to news opens canonical root and five existing latest articles without manual topics",
+      "pass": true
+    },
+    {
+      "name": "news like and bookmark are independent, exact retained lists on same route",
+      "pass": true
+    },
+    {
+      "name": "news language preferences filter latest, leave saved lists available and persist translation target locally",
+      "pass": true
+    },
+    {
+      "name": "home roundtrip history legacy aliases and direct reload preserve selected language and reactions",
+      "pass": true
+    },
+    {
+      "name": "unsaved topic refuses home navigation without URL or input loss",
+      "pass": true
+    },
+    {
+      "name": "three responsive news reading viewports retain five navigation targets without overflow",
+      "pass": true
+    }
+  ],
+  "visual": [
+    {
+      "width": 390,
+      "file": "news-390.png",
+      "audit": {
+        "width": 390,
+        "documentWidth": 390,
+        "scrollY": 819,
+        "newsActive": "page",
+        "nav": {
+          "top": 778,
+          "bottom": 844
+        },
+        "firstTitle": {
+          "top": 152.75,
+          "bottom": 220.9375
+        },
+        "links": [
+          {
+            "id": "home",
+            "width": 73.1875,
+            "height": 56,
+            "visible": true
+          },
+          {
+            "id": "news",
+            "width": 73.203125,
+            "height": 56,
+            "visible": true
+          },
+          {
+            "id": "records",
+            "width": 73.203125,
+            "height": 56,
+            "visible": true
+          },
+          {
+            "id": "tools",
+            "width": 73.203125,
+            "height": 56,
+            "visible": true
+          },
+          {
+            "id": "manage",
+            "width": 73.203125,
+            "height": 56,
+            "visible": true
+          }
+        ]
+      }
+    },
+    {
+      "width": 820,
+      "file": "news-820.png",
+      "audit": {
+        "width": 820,
+        "documentWidth": 820,
+        "scrollY": 746,
+        "newsActive": "page",
+        "nav": {
+          "top": 24,
+          "bottom": 444
+        },
+        "firstTitle": {
+          "top": 157.75,
+          "bottom": 232.75
+        },
+        "links": [
+          {
+            "id": "home",
+            "width": 64,
+            "height": 60,
+            "visible": true
+          },
+          {
+            "id": "news",
+            "width": 64,
+            "height": 60,
+            "visible": true
+          },
+          {
+            "id": "records",
+            "width": 64,
+            "height": 60,
+            "visible": true
+          },
+          {
+            "id": "tools",
+            "width": 64,
+            "height": 60,
+            "visible": true
+          },
+          {
+            "id": "manage",
+            "width": 64,
+            "height": 60,
+            "visible": true
+          }
+        ]
+      }
+    },
+    {
+      "width": 1440,
+      "file": "news-1440.png",
+      "audit": {
+        "width": 1440,
+        "documentWidth": 1440,
+        "scrollY": 746,
+        "newsActive": "page",
+        "nav": {
+          "top": 24,
+          "bottom": 404
+        },
+        "firstTitle": {
+          "top": 157.75,
+          "bottom": 201.75
+        },
+        "links": [
+          {
+            "id": "home",
+            "width": 192,
+            "height": 52,
+            "visible": true
+          },
+          {
+            "id": "news",
+            "width": 192,
+            "height": 52,
+            "visible": true
+          },
+          {
+            "id": "records",
+            "width": 192,
+            "height": 52,
+            "visible": true
+          },
+          {
+            "id": "tools",
+            "width": 192,
+            "height": 52,
+            "visible": true
+          },
+          {
+            "id": "manage",
+            "width": 192,
+            "height": 52,
+            "visible": true
+          }
+        ]
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "unexpectedExternal": [],
+  "modelRequests": [],
+  "mockDBWrites": 0,
+  "productHashes": {
+    "assets/haedo-navigation.js": "e8d93bfd09a40e4ef512a5f94997f1745cf0b87f6fecd8d51b13c9062c033765",
+    "assets/life/discovery-ui.js": "b0e07ec42444add75aa2b6fb4dc85815266d8141c098342b06f7c6a148c4bd57",
+    "assets/life/ui.js": "5a8b775595778d26f5f9c08d6c0304c5f1d7959909bc249b08ad90a50799324a",
+    "assets/life/icons.js": "c2f8315a3bafd4a851b58a7bfaa45459a782f2282444432162ae476b0d9607ce",
+    "assets/platform-auth.js": "d2261fc4f3eca079212dcc7cd162eea8ad85f2cadc6f24830ab77f84e0684603",
+    "assets/life/discovery.js": "2eaddf8deb9e0978805f6e6795c885c8c9364be5a06b97b2f7ad0aa75ba4f2bd",
+    "assets/life/storage.js": "fea2d3b0fb42f9b6b60136989c01bf990398117b360c4ad44e4e7daa3190e557",
+    "assets/life/discovery-language-settings.js": "70843708e5cb27b27f91f953398ee7fd51df64b6424c7cc01d72c98518f4b6d5",
+    "assets/life/discovery-feed.json": "446e471f2d262b5ca8f39c64244b96b9c799aeecc4eb5c011bd7d608a2b8bf4e",
+    "assets/haedo-shell.css": "c530f9b52ccef987c3390bff2c27d3ebfe8c0830c9e45152a49b67a8150884ce",
+    "assets/life/discovery.css": "9342aca05dde21fde980ddfcb41ea2f0c0ca4ebbb26aed582d612e2fa2c45dbc"
+  },
+  "productsUnchangedDuringRun": true,
+  "regression": {
+    "units": 1078,
+    "unifiedHome": 13,
+    "externalDiscovery": 19,
+    "automation": 23,
+    "reactions": 24,
+    "languages": 14,
+    "pwa": {
+      "checks": 9,
+      "pass": true,
+      "oldCache": "haedo-v138",
+      "newCache": "haedo-v139",
+      "scope": "Real Chromium SDK/IndexedDB/Service Worker. Only v138 sw.js is prior code; all app modules and approved-source policy are current. Reactions are seeded through the current real scoped storage API before the worker update; this isolates worker/cache migration rather than reconstructing the entire previous app. Real prepared public catalog served by an anonymous local fixture; synthetic title/build-time update for freshness tests. Mocked Auth response during cached-shell reload is separate from strict offline Auth refusal. No production, Apple device, upstream collection or model validation."
+    }
+  },
+  "initialFailures": {
+    "externalDiscovery": "Initial 13/19 with old default-related expectations. Related tests now explicitly choose related through UI; canonical URL expectation updated. Final 19/19. Original log .local/news-external.log retained.",
+    "reactions": "Initial related seed-row assumptions failed after latest became default. Seed/reload tests explicitly select related without relaxing existing assertions; final 24/24.",
+    "promotedRunner": "First promoted-runner invocation found local development server stopped (ERR_CONNECTION_REFUSED, 0 checks); report retained. Restarted server, separate final report."
+  },
+  "limitations": [
+    "No production Auth/DB writes",
+    "No live publisher or Google translation result",
+    "No Apple hardware or user reading usefulness evaluation",
+    "Viewport images are scrolled article reading positions, not initial folds",
+    "PWA old worker only; app modules current in both phases"
+  ],
+  "visualReview": {
+    "root": "390/1440 images inspected directly",
+    "independent": "390/820/1440 plus roadmap inspected directly; no blocker"
+  },
+  "imageSHA256": {
+    "news-390.png": "995925cb274687f2363d10ee13975afcdd627e2f46079709b0486c44217c01d1",
+    "news-820.png": "5126e4a7c8f547cab87acfa12e8eda03942b51c074a87b688fba50f69c2eb0a2",
+    "news-1440.png": "e59f31b69ac20d47658935c07f022fef5e52b535992b474e9f2eb8628bf5679d"
+  }
+}

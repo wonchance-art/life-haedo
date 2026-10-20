@@ -94,6 +94,9 @@ jobs:
       - name: Verify unified entry and account boundaries
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/unified-home-browser.cjs
+      - name: Verify news navigation, saved lists and language preferences
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-news-browser.cjs
       - name: Verify the core experience across screen sizes
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/core-experience-browser.cjs
