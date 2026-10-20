@@ -217,7 +217,10 @@
     suspended = true; suspension += 1; starting = null;
     if (!mounted) { hide(); return; }
     const point = rememberPosition();
-    if (point.element || !resumePoint) resumePoint = point;
+    // A native leave dialog can change scroll while keeping the same focused
+    // field. Prefer its earlier, still-owned position over that later layout.
+    const container = root.document.getElementById('lifeApp');
+    if (!(resumePoint?.owner === activeKey && resumePoint.element?.isConnected && container.contains(resumePoint.element))) resumePoint = point;
     retained = true;
     conceal();
     // Closing the scope aborts IndexedDB commits. Keep this owner alive while
