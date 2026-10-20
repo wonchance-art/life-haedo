@@ -1,5 +1,11 @@
 # 해도 통합 흐름 · v8
 
+2026-10-20 **Input → Automated Process → Output workflow**: [PNG](rendered/product-workflow-20261020.png) · [SVG](rendered/product-workflow-20261020.svg) · [PDF](rendered/product-workflow-20261020.pdf) · [분류표·이전 workflow 참조](product-workflow-20261020.md) · [Graphviz 원본](product-workflow-20261020.dot). 3열로 입력/처리/결과를 나누고 자동 처리와 명시 선택, 현재 기능과 후속 AI를 구분한다. 이전 상세 workflow와 두 순환 원본도 함께 연결했다.
+
+2026-10-20 최신 **단순 제품 구조도**: [PNG](rendered/product-structure-20261020.png) · [SVG](rendered/product-structure-20261020.svg) · [Graphviz 원본](product-structure-20261020.dot). 이전 상자·화살표 형식에 뉴스·반응·언어 옵션과 현재 글쓰기/보관/선택 공개를 반영했다. 점선 상자는 미구현 AI 분석이며 직접 회고·기존 책 기능과 구분한다. Graphviz와 시스템 Noto CJK 글꼴로 렌더하며 앱 의존성은 추가하지 않는다. 생성 명령은 원본 상단에 있다. 아래 도식과 상태 설명은 각 작성일의 이력이다.
+
+[PDF](rendered/product-structure-20261020.pdf) · [도식 검사](rendered/product-structure-20261020.report.json): 11개 상자·10개 연결, 한글 표시, 상자 밖 본문 0개·외부 리소스 0개를 확인했고 독립 검토에서 현재/후속 구분과 글자·간선의 잘림을 확인했다. 문서 그림 검수이며 앱이나 실제 기기 검수 결과는 아니다.
+
 2026-10-12 현재 작업 우선순위는 [프로필·취향·기록 흐름](product-roadmap-20261012.mmd)과 [갱신한 로드맵](../life-tools-design/roadmap.md#현재-실행-로드맵--2026-10-12)을 따른다. 아래 v8은 전체 통합/공개 경계의 참고 도식이며 책 확장 우선순위는 최신 요청에 따라 보류다.
 
 2026-10-07 최신 전체 흐름은 [v8 Mermaid](activity_hub_v8.mmd)·[SVG](rendered/activity_hub_v8.svg)다. 실선은 구현된 흐름, 보라색 영역은 현재 병렬 품질 작업, 점선은 후속 후보와 작업 관계다. 구현과 운영 적용은 별개이며 구성·선택 초안의 운영 마무리는 Local이 담당한다. 우선순위·착수 조건·모델/effort는 [현재 로드맵](../life-tools-design/roadmap.md#현재-실행-로드맵--2026-10-07)을 따른다.

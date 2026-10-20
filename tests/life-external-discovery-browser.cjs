@@ -24,6 +24,7 @@ async function idle(page) { await page.waitForFunction(() => document.querySelec
 // These existing recommendation checks select related order explicitly; the
 // news entry's default latest order is covered by its dedicated entry journey.
 async function related(page) { await page.locator('#discoveryRecommended').click(); await idle(page); assert.equal(await page.locator('#discoveryRecommended').getAttribute('aria-pressed'), 'true'); }
+async function topics(page) { const details = page.locator('#discoveryTopics'); if (!await details.evaluate(el => el.open)) await details.locator(':scope > summary').click(); }
 async function open(page, file = 'index.html') { await page.goto(base + '/' + file + '?section=tools&view=external-discovery'); await ready(page); await page.locator('#discoveryReview').waitFor(); await idle(page); await related(page); }
 async function state(page) { return page.evaluate(async () => { const s = HaedoLife.Shell.storage, id = await s.getActive(); return { bundle: await s.read(id), workbench: await s.readWorkbench(id), interest: await s.readInterestProfile(id), feedback: await s.readDiscoveryProfile(id) }; }); }
 async function interests(page, text = privateInterest) {
@@ -169,6 +170,7 @@ async function main() {
         if (hosts) {
           // Explicit UI source choice/latest checks availability independently of
           // Korean/English lexical match quality. No runtime/feed rank override.
+          await topics(page);
           await page.locator('#discoveryOptions > summary').click();
           const sourceIds = await page.locator('[data-discovery-source]').evaluateAll(nodes => nodes.map(node => node.dataset.discoverySource));
           assert(sourceIds.includes(sourceId));
