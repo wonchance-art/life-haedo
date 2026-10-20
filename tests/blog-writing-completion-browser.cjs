@@ -6,6 +6,7 @@ const { createHash } = require('node:crypto');
 const { playwright, makeContext, ready, nav } = require('./unified-home-browser.cjs');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { openPost } = require('./photo-post-entry.cjs');
+const { openCompatibility } = require('./page-composer-entry.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
 const out = path.resolve('.local/blog-writing-completion');
 const report = { checks: [], visual: [], errors: [], consoleErrors: [], external: [], scope: 'Anonymous Auth, synthetic originals and real IndexedDB. Exported HTML reopened over local HTTP in a fresh context. Playwright Chromium viewport checks; no production or mobile Apple-device proof.' };
@@ -41,7 +42,7 @@ async function main() {
   };
   const go = async (p = page) => {
     await p.goto(base + '/index.html?section=records&view=page', { waitUntil: 'domcontentloaded' }); await ready(p);
-    const compatibility = p.locator('.wb-page-compatibility'); if (await compatibility.count() && !await compatibility.evaluate(n => n.open)) await compatibility.locator(':scope > summary').click();
+    await openCompatibility(p);
     await p.getByRole('button', { name: '글쓰기', exact: true }).waitFor();
   };
   const stored = p => (p || page).waitForFunction(() => document.querySelector('.photo-status')?.textContent === '초안 보관됨');
