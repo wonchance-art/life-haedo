@@ -1,6 +1,6 @@
 {
   "scope": "Local Chromium153 actual application/bundled SDK/scoped IDB with synthetic Auth only. Checked-in public feed metadata; no publisher/Google/production Auth/DB requests, Apple device or usefulness proof.",
-  "status": "local_verified_release_pending",
+  "status": "released_verified",
   "candidateCache": "haedo-v139",
   "newsChecks": [
     {
@@ -234,5 +234,124 @@
     "news-390.png": "995925cb274687f2363d10ee13975afcdd627e2f46079709b0486c44217c01d1",
     "news-820.png": "5126e4a7c8f547cab87acfa12e8eda03942b51c074a87b688fba50f69c2eb0a2",
     "news-1440.png": "e59f31b69ac20d47658935c07f022fef5e52b535992b474e9f2eb8628bf5679d"
+  },
+  "release": {
+    "sha": "828498189c084cdd02cba468cb3faab31ffeb83c",
+    "featurePR": 112,
+    "testReadinessPR": 114,
+    "featurePRCI": 39360133649,
+    "firstMainFailed": 39361306314,
+    "mainCI": 39362798458,
+    "mainJobs": [
+      {
+        "name": "check",
+        "conclusion": "success"
+      },
+      {
+        "name": "browser_suites (5)",
+        "conclusion": "success"
+      },
+      {
+        "name": "browser_suites (3)",
+        "conclusion": "success"
+      },
+      {
+        "name": "browser_suites (2)",
+        "conclusion": "success"
+      },
+      {
+        "name": "blog",
+        "conclusion": "success"
+      },
+      {
+        "name": "browser_suites (1)",
+        "conclusion": "success"
+      },
+      {
+        "name": "browser_suites (4)",
+        "conclusion": "success"
+      },
+      {
+        "name": "browser",
+        "conclusion": "success"
+      },
+      {
+        "name": "build",
+        "conclusion": "success"
+      },
+      {
+        "name": "deploy",
+        "conclusion": "success"
+      }
+    ],
+    "publicVerification": {
+      "commit": "828498189c084cdd02cba468cb3faab31ffeb83c",
+      "base": "https://wonchance-art.github.io/life-haedo/",
+      "files": [
+        {
+          "path": "sw.js",
+          "status": 200,
+          "sha256": "3e3c093169eef99a2d20d4cc0f3b8204a1b61d1c6cd848e895df201fc13ed198",
+          "expected": "3e3c093169eef99a2d20d4cc0f3b8204a1b61d1c6cd848e895df201fc13ed198",
+          "match": true
+        },
+        {
+          "path": "assets/haedo-navigation.js",
+          "status": 200,
+          "sha256": "e8d93bfd09a40e4ef512a5f94997f1745cf0b87f6fecd8d51b13c9062c033765",
+          "expected": "e8d93bfd09a40e4ef512a5f94997f1745cf0b87f6fecd8d51b13c9062c033765",
+          "match": true
+        },
+        {
+          "path": "assets/platform-auth.js",
+          "status": 200,
+          "sha256": "d2261fc4f3eca079212dcc7cd162eea8ad85f2cadc6f24830ab77f84e0684603",
+          "expected": "d2261fc4f3eca079212dcc7cd162eea8ad85f2cadc6f24830ab77f84e0684603",
+          "match": true
+        },
+        {
+          "path": "assets/life/icons.js",
+          "status": 200,
+          "sha256": "c2f8315a3bafd4a851b58a7bfaa45459a782f2282444432162ae476b0d9607ce",
+          "expected": "c2f8315a3bafd4a851b58a7bfaa45459a782f2282444432162ae476b0d9607ce",
+          "match": true
+        },
+        {
+          "path": "assets/life/ui.js",
+          "status": 200,
+          "sha256": "5a8b775595778d26f5f9c08d6c0304c5f1d7959909bc249b08ad90a50799324a",
+          "expected": "5a8b775595778d26f5f9c08d6c0304c5f1d7959909bc249b08ad90a50799324a",
+          "match": true
+        },
+        {
+          "path": "assets/life/discovery-ui.js",
+          "status": 200,
+          "sha256": "b0e07ec42444add75aa2b6fb4dc85815266d8141c098342b06f7c6a148c4bd57",
+          "expected": "b0e07ec42444add75aa2b6fb4dc85815266d8141c098342b06f7c6a148c4bd57",
+          "match": true
+        },
+        {
+          "path": "index.html",
+          "status": 200,
+          "sha256": "0dc27b552e8755c314a4e95cfc7bf6d7c9b6844ab6b52721c5763fac81a13fe2",
+          "expected": "0dc27b552e8755c314a4e95cfc7bf6d7c9b6844ab6b52721c5763fac81a13fe2",
+          "match": true
+        }
+      ],
+      "checks": [],
+      "pass": true,
+      "newsEntry": {
+        "status": 200,
+        "hasApp": true,
+        "sha256": "0dc27b552e8755c314a4e95cfc7bf6d7c9b6844ab6b52721c5763fac81a13fe2"
+      },
+      "feed": {
+        "status": 200,
+        "sha256": "cb38f60f57749776c82abf4c795984bd244dc5e60a26a2e6908a7f9fb41d753c",
+        "articles": 90,
+        "sources": 7,
+        "generatedAt": "2026-10-20T03:21:22Z"
+      }
+    }
   }
 }

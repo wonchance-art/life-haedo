@@ -82,6 +82,8 @@
 
 ## 자료 모아보기
 
+**뉴스 바로 사용:** [뉴스 열기](https://wonchance-art.github.io/life-haedo/index.html?section=news) → Google 로그인 → 글 제목으로 원문 열기. 첫 화면은 최신 글이며, `주제·출처`에서 주제를 추가한 뒤 `관심순으로 보기`로 찾는다. 영문 글은 `Linguistics`처럼 원문에 쓰인 표현으로도 찾을 수 있다. `언어 옵션`에서 콘텐츠 언어와 번역할 언어를 따로 선택하고, 좋아요·담기는 각각의 목록에서 다시 연다. 개인 추천은 직접 켰을 때만 좋아요를 활용한다. [동작·검수](docs/design-review/news-ready.md) · [같은 언어로 읽기 비교](docs/design-review/discovery-field-languages.md).
+
 기존 메모·글을 가져와 필요한 구절과 출처를 주제로 모으는 개인 도구다. [통합 홈](index.html)의 기록에서 연다. 기존 [life.html](life.html) 주소도 유지한다.
 
 [직접 글쓰기](docs/design-review/direct-writing.md): 홈·기록의 연필 아이콘에서 제목과 본문을 쓰고 기록으로 저장한다. 초안은 이 브라우저에서 이어 쓰며, 저장한 글은 검색·발췌·묶음·내 페이지 선택에 사용할 수 있다. 수정은 새 본문 버전을 만들고 기존 발췌를 보존한다. 초안은 TXT로, 저장한 글은 기존 자료 백업으로 옮긴다.

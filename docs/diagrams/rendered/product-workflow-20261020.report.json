@@ -1,0 +1,12 @@
+{
+  "artifact": "product-workflow-20261020",
+  "renderer": "Graphviz + Noto Sans CJK KR",
+  "scope": "문서 workflow의 배치·텍스트 검사. 앱 기능·실기·추천 유용성 검사 아님",
+  "headerNodes": 3,
+  "contentNodes": 12,
+  "visibleEdges": 8,
+  "rowsAligned": true,
+  "nodeTextOverflow": [],
+  "externalResources": 0,
+  "hasKorean": true
+}

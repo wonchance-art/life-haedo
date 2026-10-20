@@ -1,5 +1,7 @@
 # 뉴스 왕복 검사의 화면 전환 완료 경계
 
+후속 PR114의 검사 보완 뒤 최종 main `828498189c084cdd02cba468cb3faab31ffeb83c` / [push39362798458](https://github.com/wonchance-art/life-haedo/actions/runs/39362798458) 총10개와 실제 공개 파일 확인이 성공했다. 아래는 첫 배포 중단 당시의 원본 이력과 검수 한계다.
+
 2026-10-20 KST. 제품 PR112의 head22b24ad는 필수8개를 통과했다. 같은 tree인 main900c7bd의 [push39361306314](https://github.com/wonchance-art/life-haedo/actions/runs/39361306314)는 새 뉴스 검사의 네 번째 history 왕복에서 약20초 뒤 실패해 build/deploy를 생략했다. 나머지 기본6개 job은 성공했고 browser 집계도 실패했다. 운영은 SW138을 유지하며 이 실패를 배포 성공으로 바꾸지 않는다.
 
 ## 원본 증거와 한계

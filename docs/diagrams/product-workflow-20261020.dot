@@ -1,0 +1,43 @@
+// dot -Tsvg docs/diagrams/product-workflow-20261020.dot -o docs/diagrams/rendered/product-workflow-20261020.svg
+// dot -Tpng -Gdpi=120 docs/diagrams/product-workflow-20261020.dot -o docs/diagrams/rendered/product-workflow-20261020.png
+// dot -Tpdf docs/diagrams/product-workflow-20261020.dot -o docs/diagrams/rendered/product-workflow-20261020.pdf
+digraph HaedoWorkflow {
+  graph [rankdir=LR, bgcolor="white", pad="0.30", nodesep="0.30", ranksep="0.55", splines=line,
+    fontname="Noto Sans CJK KR", fontsize=12, fontcolor="#45414e", labelloc=b,
+    label="\n사용자가 결정: 가져올 범위 · 글쓰기·회고 · 보관·동기화 · 번역 열기 · 공개 게시·갱신·철회\n실선: 현재 처리 경로 / 점선: 후속 설계     |     결과에서 생긴 새 경험·질문·반응 → 다시 Input\n2026.10.20 · 기존 workflow와 두 순환 구조를 현재 기능 기준으로 재분류"];
+  node [shape=box, style=filled, fillcolor="#f4f4f6", color="#91939d", penwidth=1,
+    width=4.1, height=1.05, margin="0.15,0.12", fontname="Noto Sans CJK KR", fontsize=14, fontcolor="#2d2b35"];
+  edge [color="#777482", penwidth=1, arrowsize=0.65];
+
+  H1 [shape=plaintext, style="", label="INPUT\n입력", fontsize=19, height=0.65];
+  H2 [shape=plaintext, style="", label="AUTOMATED PROCESS\n자동 처리 · 선택한 범위에서", fontsize=19, height=0.65];
+  H3 [shape=plaintext, style="", label="OUTPUT\n결과", fontsize=19, height=0.65];
+
+  I1 [label="외부 글 · 뉴스\n허용된 공개 RSS\n주제·출처·콘텐츠 언어 설정"];
+  P1 [label="고정 공개 RSS 수집·갱신\n제목·링크 검증 · 중복 제거\n개인 주제·언어는 브라우저 필터", fillcolor="#ede9fe", color="#8874b2"];
+  O1 [label="뉴스 후보 목록\n최신순·관심순 / 언어별 후보\n원문 또는 선택한 언어로 번역 열기"];
+
+  I2 [label="내 기록 · 직접 쓴 글 · 취향\n선택한 본문·파일·링크·사진\n메모·Obsidian·블로그·Instagram"];
+  P2 [label="선택 후 저장·조회 처리\n입력 검증 · 원문·출처·버전 보존\n검색 · 선택한 사본·파일 생성", fillcolor="#ede9fe", color="#8874b2"];
+  O2 [label="개인 자료 · 내 글 · 결과물\n자료실·컬렉션·기존 책·파일\n고른 사본만 게시·갱신·철회"];
+
+  I3 [label="피드백 · 옵션\n좋아요·담기·제외·수동 관심\n개인 추천 켜기·끄기"];
+  P3 [label="필터·정렬 · 조건부 추천\n켜면 좋아요 기반 규칙 적용\n추천의 호감 신호: 좋아요만", fillcolor="#ede9fe", color="#8874b2"];
+  O3 [label="다시 여는 목록 · 선택 추천\n좋아요·담기 목록 / 추천 근거\n개인 추천은 기본 꺼짐"];
+
+  I4 [label="후속 · 선택한 근거와 질문\n분석할 자료·기간·범위", style="filled,dashed", fillcolor="#faf9fc", color="#aaa4b7"];
+  P4 [label="후속 · 자동 관심 추출·자기 이해\nAI 분석·보고서 자동 생성\n현재 비활성·미구현", style="filled,dashed", fillcolor="#faf9fc", color="#aaa4b7"];
+  O4 [label="후속 · 근거 보고서·고도화 추천\n새 평가와 사용자 제어를 검증한 뒤 결정", style="filled,dashed", fillcolor="#faf9fc", color="#aaa4b7"];
+
+  {rank=same; H1; I1; I2; I3; I4;}
+  {rank=same; H2; P1; P2; P3; P4;}
+  {rank=same; H3; O1; O2; O3; O4;}
+  H1 -> H2 -> H3 [style=invis, weight=100];
+  H1 -> I1 -> I2 -> I3 -> I4 [style=invis, constraint=false, weight=100];
+  H2 -> P1 -> P2 -> P3 -> P4 [style=invis, constraint=false, weight=100];
+  H3 -> O1 -> O2 -> O3 -> O4 [style=invis, constraint=false, weight=100];
+  I1 -> P1 -> O1;
+  I2 -> P2 -> O2;
+  I3 -> P3 -> O3;
+  I4 -> P4 -> O4 [style=dashed];
+}

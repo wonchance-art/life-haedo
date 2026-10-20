@@ -1,0 +1,161 @@
+{
+  "scope": "문서용 최종 로컬 검수 기록. 최종 CI/운영 배포는 PR115 검사와 별도 공개 파일 영수증을 따름.",
+  "candidateCache": "haedo-v142",
+  "unit": 1082,
+  "static": {
+    "html": 22,
+    "javascript": 146,
+    "localReferences": 624
+  },
+  "checks": {
+    "news": 8,
+    "actualPublicFeedFocused": 7,
+    "externalDiscovery": 19,
+    "reactions": 24,
+    "languages": 14,
+    "pwa": 9,
+    "automation": 23
+  },
+  "field": {
+    "createdAt": "2026-10-20T04:13:32.750Z",
+    "scope": "Actual public bytes; no topic or reactions supplied, no user evaluation.",
+    "rows": [
+      {
+        "condition": "all",
+        "contentLanguages": null,
+        "feedSHA": "cb38f60f57749776c82abf4c795984bd244dc5e60a26a2e6908a7f9fb41d753c",
+        "counts": {
+          "latest": {
+            "pool": 90,
+            "eligible": 90,
+            "shown": 2
+          },
+          "related": {
+            "pool": 90,
+            "eligible": 0,
+            "shown": 0
+          },
+          "personal": {
+            "pool": 90,
+            "eligible": 0,
+            "shown": 0
+          },
+          "signals_removed": {
+            "pool": 90,
+            "eligible": 0,
+            "shown": 0
+          }
+        },
+        "personalStatus": "disabled",
+        "ablationExact": true,
+        "userUtility": null,
+        "networkRequests": 0
+      },
+      {
+        "condition": "en",
+        "contentLanguages": [
+          "en"
+        ],
+        "feedSHA": "cb38f60f57749776c82abf4c795984bd244dc5e60a26a2e6908a7f9fb41d753c",
+        "counts": {
+          "latest": {
+            "pool": 40,
+            "eligible": 40,
+            "shown": 2
+          },
+          "related": {
+            "pool": 40,
+            "eligible": 0,
+            "shown": 0
+          },
+          "personal": {
+            "pool": 40,
+            "eligible": 0,
+            "shown": 0
+          },
+          "signals_removed": {
+            "pool": 40,
+            "eligible": 0,
+            "shown": 0
+          }
+        },
+        "personalStatus": "disabled",
+        "ablationExact": true,
+        "userUtility": null,
+        "networkRequests": 0
+      },
+      {
+        "condition": "none",
+        "contentLanguages": [],
+        "feedSHA": "cb38f60f57749776c82abf4c795984bd244dc5e60a26a2e6908a7f9fb41d753c",
+        "counts": {
+          "latest": {
+            "pool": 0,
+            "eligible": 0,
+            "shown": 0
+          },
+          "related": {
+            "pool": 0,
+            "eligible": 0,
+            "shown": 0
+          },
+          "personal": {
+            "pool": 0,
+            "eligible": 0,
+            "shown": 0
+          },
+          "signals_removed": {
+            "pool": 0,
+            "eligible": 0,
+            "shown": 0
+          }
+        },
+        "personalStatus": "disabled",
+        "ablationExact": true,
+        "userUtility": null,
+        "networkRequests": 0
+      }
+    ]
+  },
+  "firstFold": [
+    {
+      "width": 390,
+      "scrollY": 0,
+      "topicsOpen": false,
+      "title": {
+        "top": 591.78125,
+        "bottom": 659.96875,
+        "width": 350,
+        "height": 68.1875
+      },
+      "titleHit": true
+    },
+    {
+      "width": 1440,
+      "scrollY": 0,
+      "topicsOpen": false,
+      "title": {
+        "top": 588.03125,
+        "bottom": 632.03125,
+        "width": 720,
+        "height": 44
+      },
+      "titleHit": true
+    }
+  ],
+  "files": {
+    "assets/life/discovery-ui.js": "fa1ffb5fba77be2bfa28b81eeb9f46a67dce8c7b1a6d28207aab6d369c6f287f",
+    "assets/life/discovery.css": "1f16b6baaeb93eb1445c146a15dca13a7602b57e88deece6a8974b6eb56a1a36",
+    "scripts/evaluate-discovery-field.cjs": "70c1cef948366d62e578c178e66483283b3e5ec273c64f748668694bb970a8f1",
+    "sw.js": "62eed24916e34cd5285cc50d41f6a9b08c7a623003c133d2ad0a3352b7eb55d3"
+  },
+  "remaining": [
+    "first actual schedule at or after 2026-10-20T06:15:00Z",
+    "actual Apple device and Google translation outcomes",
+    "private user reading/utility judgments remain null"
+  ],
+  "priorFailures": [
+    "기존 자동 갱신 검사 두 곳은 재로드 뒤 접힌 주제를 열지 않아 실패했다. 원본을 유지하고 실제 summary 클릭만 보완해 전체23개를 통과했다.",
+    "실제 feed 검수 어댑터 두 번은 기존 단계의 주제 축적과 첫 주제 뒤 숨는 예시를 잘못 가정했다. 원본을 보존하고 중복 단계만 제외한 핵심7개를 통과했다."
+  ]
+}

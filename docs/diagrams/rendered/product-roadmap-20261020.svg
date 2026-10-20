@@ -2,7 +2,7 @@
 <text x="64" y="90.9" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="46" font-weight="700">해도 전체 로드맵</text>
 <text x="66" y="132.4" fill="#52655d" font-family="Noto Sans CJK KR, sans-serif" font-size="23" font-weight="400">2026.10.20 · 한국 시간 기준 · 기능 구현과 실제 사용 검증을 구분</text>
 <rect x="64" y="158" width="1472" height="74" rx="14" fill="#ffffff" stroke="#d2ded7"/>
-<text x="88" y="205.8" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="25" font-weight="700">출시 확인: SW138  |  지금 작업: 홈 다음 뉴스 메뉴 · 구현/로컬 검수 완료, 배포 전</text>
+<text x="88" y="205.8" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="25" font-weight="700">출시 확인: SW139  |  홈 다음 뉴스 · 수집 글 · 언어 옵션 · 좋아요/담기 반영 완료</text>
 <text x="64" y="296.2" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="28" font-weight="700">제품의 중심은 두 가지 순환</text>
 <rect x="64" y="320" width="232" height="76" rx="14" fill="#145b50" stroke="none"/>
 <text x="82" y="363.3" fill="#ffffff" font-family="Noto Sans CJK KR, sans-serif" font-size="22" font-weight="700">선택해서 모으기</text>
@@ -40,11 +40,11 @@
 <text x="86" y="873.9" fill="#52655d" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">SNS 계정의 상시 자동 연결은 후속</text>
 <rect x="816" y="674" width="720" height="210" rx="14" fill="#ffffff" stroke="#d2ded7"/>
 <text x="838" y="721.0" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="27" font-weight="700">02  내 글과 홈</text>
-<text x="838" y="758.0" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="20" font-weight="700">완료</text>
+<text x="838" y="758.0" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="20" font-weight="700">완료 / 후속 배포 대기</text>
 <text x="838" y="791.1" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 홈 피드·글쓰기·사진·설명·첨부</text>
 <text x="838" y="818.1" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 초안·보관함·저장·재열기·충돌 복구</text>
 <text x="838" y="845.1" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 앱 전환·한글 입력 보존 보완</text>
-<text x="838" y="873.9" fill="#52655d" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">실제 Mac·iPad·iPhone 완주는 남음</text>
+<text x="838" y="873.9" fill="#52655d" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">글 목록 복구: PR113 병합 · 배포 대기</text>
 <rect x="64" y="904" width="720" height="210" rx="14" fill="#ffffff" stroke="#d2ded7"/>
 <text x="86" y="951.0" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="27" font-weight="700">03  생각을 결과물로</text>
 <text x="86" y="988.0" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="20" font-weight="700">완료 / 확장 보류</text>
@@ -61,11 +61,11 @@
 <text x="838" y="1103.8" fill="#52655d" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">실제 Photos·Files·기기 왕복은 남음</text>
 <rect x="64" y="1134" width="720" height="210" rx="14" fill="#ffffff" stroke="#d2ded7"/>
 <text x="86" y="1181.0" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="27" font-weight="700">05  뉴스와 개인 추천</text>
-<text x="86" y="1218.0" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="20" font-weight="700">출시 + 메뉴 작업</text>
+<text x="86" y="1218.0" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="20" font-weight="700">완료</text>
 <text x="86" y="1251.2" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 7출처·90개 링크 메타데이터 공급</text>
 <text x="86" y="1278.2" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 주제·출처·언어 / 번역 열기 옵션</text>
 <text x="86" y="1305.2" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 좋아요·담기·독립 목록·로컬 추천</text>
-<text x="86" y="1333.8" fill="#52655d" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">홈 다음 뉴스: SW139 후보, 배포 전</text>
+<text x="86" y="1333.8" fill="#52655d" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">최신순 진입 · 기존 옵션과 저장 상태 유지</text>
 <rect x="816" y="1134" width="720" height="210" rx="14" fill="#ffffff" stroke="#d2ded7"/>
 <text x="838" y="1181.0" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="27" font-weight="700">06  평가와 시스템 개선</text>
 <text x="838" y="1218.0" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="20" font-weight="700">준비 / 검증 남음</text>
@@ -73,10 +73,10 @@
 <text x="838" y="1278.2" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 추천 근거·제외·취소·끄기·복구</text>
 <text x="838" y="1305.2" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 평가 양식·비교 CLI·자동 회귀 검수</text>
 <text x="838" y="1333.8" fill="#52655d" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">직접 읽기 효용·제한 언어 CLI는 남음</text>
-<text x="64" y="1423.3" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="29" font-weight="700">다음 실행 순서와 완료 기준</text>
+<text x="64" y="1423.3" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="29" font-weight="700">현재와 다음 실행 순서</text>
 <rect x="64" y="1446" width="480" height="112" rx="14" fill="#ffffff" stroke="#d2ded7"/>
-<text x="82" y="1488.6" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="24" font-weight="700">P0  뉴스 메뉴 출시</text>
-<text x="82" y="1528.8" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">검수·CI → 배포 → 실제 뉴스 링크 확인</text>
+<text x="82" y="1488.6" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="24" font-weight="700">완료  뉴스 메뉴 출시</text>
+<text x="82" y="1528.8" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">필수 CI · 배포 · 공개 파일 대조 완료</text>
 <rect x="560" y="1446" width="480" height="112" rx="14" fill="#ffffff" stroke="#d2ded7"/>
 <text x="578" y="1488.6" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="24" font-weight="700">P1  자동 운영 + 실기 완주</text>
 <text x="578" y="1528.8" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">첫 정기 수집 확인 → 글·저장·복귀 검증</text>
