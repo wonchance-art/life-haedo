@@ -119,7 +119,7 @@ async function main() {
       await page.evaluate(() => { testData.docs.get('saved-photo').revision++; });
       await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click();
       assert.equal(await page.evaluate(() => testData.publishCalls.length), 1);
-      assert.match(await page.locator('.blog-manager [role="status"]').textContent(), /글이 바뀌었습니다/);
+      assert.match(await page.locator('.blog-manager > [role="status"]').textContent(), /글이 바뀌었습니다/);
       await page.evaluate(() => { testData.docs.get('saved-photo').revision--; });
       await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click();
       await page.getByRole('link', { name: '공개한 글 열기' }).waitFor();
@@ -143,7 +143,7 @@ async function main() {
       await row.locator('summary').click();
       await page.evaluate(() => { testData.syncFail = true; });
       await row.getByRole('button', { name: '이 글 서버에 보관', exact: true }).click();
-      assert.match(await page.locator('.blog-manager [role="status"]').textContent(), /아직 준비되지/);
+      assert.match(await page.locator('.blog-manager > [role="status"]').textContent(), /아직 준비되지/);
       assert.equal(await page.evaluate(() => testData.state.status), 'not_enabled');
       await page.evaluate(() => { testData.syncFail = false; });
       await row.getByRole('button', { name: '이 글 서버에 보관', exact: true }).click();
@@ -173,7 +173,7 @@ async function main() {
       await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click();
       await page.getByRole('link', { name: '공개한 글 열기' }).waitFor();
       assert.equal(await page.evaluate(() => testData.publishCalls.length), 1);
-      assert.match(await page.locator('.blog-manager [role="status"]').textContent(), /공개 게시와 주소는 확인했습니다.*후속 상태 조회/);
+      assert.match(await page.locator('.blog-manager > [role="status"]').textContent(), /공개 게시와 주소는 확인했습니다.*후속 상태 조회/);
     });
     if (!process.env.BLOG_MANAGER_TEST_MATCH || /idb/i.test(process.env.BLOG_MANAGER_TEST_MATCH)) {
     const actual = await makeContext(browser, new FakeCloud(), 'manager-actual-idb', accounts.a);
