@@ -31,7 +31,7 @@
     async function getState(ws, id) {
       const c = context(ws, id); guard(c); const state = await readState(c), post = await readPost(c);
       return { ...(state || {}), workspaceId: ws, localPostId: id, enabled: !!state?.enabled,
-        status: !state ? 'not_enabled' : !state.enabled ? 'paused' : state.conflict ? 'conflict' : state.error ? 'error' : state.pending || state.localRevision !== post.revision ? 'pending' : 'synced' };
+        status: !state ? 'not_enabled' : !state.enabled ? state.enableOnSave === true ? 'pending' : 'paused' : state.conflict ? 'conflict' : state.error ? 'error' : state.pending || state.localRevision !== post.revision ? 'pending' : 'synced' };
     }
     async function rememberError(c, error) {
       try { guard(c); const current = await readState(c); if (current?.enabled) await writeState(c, current, { status: 'error', error: cleaner(error).code || 'network_error' }); } catch (_) { /* Keep durable pending state if metadata cannot be updated. */ }
@@ -50,12 +50,12 @@
             guard(c);
             const local = await readPost(c), previous = await readState(c);
             if (local.status !== 'saved') throw fault('invalid_request');
-            if (previous && (!previous.enabled || previous.conflict)) return getState(ws, id);
+            if (previous && (!previous.enabled && previous.enableOnSave !== true || previous.conflict)) return getState(ws, id);
             if (expectedLocalRevision !== undefined && local.revision !== expectedLocalRevision) throw fault('local_changed');
             if (expectedManifest && canonical(blog.pack(photoPost.compact(local))) !== canonical(expectedManifest)) throw fault('local_changed');
-            if (!previous) await writeState(c, null, { enabled: true, remoteId: local.id,
-              remoteWorkspaceId: ws, remoteRevision: 0, localRevision: 0,
-              publication: null, pending: null, status: 'pending', error: null });
+            if (!previous || previous.enableOnSave === true) await writeState(c, previous, { enabled: true, enableOnSave: false, remoteId: previous?.remoteId || local.id,
+              remoteWorkspaceId: previous?.remoteWorkspaceId || ws, remoteRevision: previous?.remoteRevision || 0, localRevision: previous?.localRevision || 0,
+              publication: previous?.publication || null, pending: previous?.pending || null, status: 'pending', error: null });
             defaultIntent = true;
           }
           await verified(c); let post = await readPost(c), state = await readState(c);
@@ -170,7 +170,7 @@
     async function pause(ws, id) {
       const k = key(ws, id); generations.set(k, (generations.get(k) || 0) + 1);
       const c = context(ws, id); await verified(c); const state = await readState(c);
-      if (state) await writeState(c, state, { enabled: false, status: 'paused', error: null }); return getState(ws, id);
+      if (state) await writeState(c, state, { enabled: false, enableOnSave: false, status: 'paused', error: null }); return getState(ws, id);
     }
     async function finishPublication(c, state) {
       let result;

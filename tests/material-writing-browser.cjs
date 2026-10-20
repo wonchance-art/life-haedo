@@ -199,7 +199,8 @@ async function main() {
       await page.getByRole('checkbox', { name: '글 전체와 모든 사진 원본의 비공개 서버 보관 동의', exact: true }).check(); await page.getByRole('checkbox', { name: '선택한 사진 원본과 포함된 메타데이터 공개 동의', exact: true }).check(); await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
       await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click(); const link = page.getByRole('link', { name: '공개한 글 열기', exact: true }); await link.waitFor(); const url = await link.getAttribute('href'), token = new URL(url, base).searchParams.get('post');
       const publicDoc = server.rpc(null, 'life_blog_public_read', { p_token: token }); assert.equal(publicDoc.snapshot.photos.length, 1);
-      const privateDoc = server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: finished.doc.id }); assert.equal(privateDoc.data.photos.length, 2);
+      assert(finished.sync.remoteId, 'The saved replacement must retain its established server identity');
+      const privateDoc = server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: finished.sync.remoteId }); assert.equal(privateDoc.data.photos.length, 2);
       assert.notEqual(publicDoc.snapshot.photos[0].id, finished.doc.photos[0].id); assert(!JSON.stringify(publicDoc.snapshot).includes(finished.doc.photos[1].digest));
       const wire = JSON.stringify(server.blogRequests); for (const text of ['PRIVATE_NOTE_SENTINEL', 'PRIVATE_QUESTION_SENTINEL', 'PRIVATE_FULL_BODY_NOT_PUBLIC', 'LATEST_MUST_NOT_REPLACE_OLD', 'SECOND_UNQUOTED_BODY', f.link.sourceId]) assert(!wire.includes(text), text);
       const visitor = await device('material-visitor', null); await visitor.page.goto(url); await visitor.page.waitForFunction(() => document.querySelector('#blogStatus')?.dataset.state === 'published'); assert.match(await visitor.page.locator('#blogContent').innerText(), /완성 편집기에서 덧붙인 마지막 문단/);

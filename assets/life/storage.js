@@ -1271,7 +1271,9 @@
     async function seedMaterialBlog(meta, workspaceId, postId, state) {
       const key = `blog-sync:${workspaceId}:${postId}`, prior = (await meta.get(key))?.value;
       if (prior && prior.remoteId !== state.output.postId) throw fault('material_continuity_conflict', '기존 글의 다른 서버 연결을 바꾸지 않았습니다.');
-      if (!prior) await meta.put({ key, value: materialBlogState(state.output.postId, state.head.data.bundle.workspaceId, 0, null, 0, null, false) });
+      // This reserved identity has not been paused by the user. Keep drafts
+      // local, but allow the first explicit finished save to start storage.
+      if (!prior) await meta.put({ key, value: { ...materialBlogState(state.output.postId, state.head.data.bundle.workspaceId, 0, null, 0, null, false), enableOnSave: true } });
     }
     async function materialWritingPost(workspaceId, planId, expectedRevision, connected) {
       collectionScope(workspaceId); requireId(planId, '글 준비'); requireRevision(expectedRevision);

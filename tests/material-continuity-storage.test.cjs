@@ -108,7 +108,7 @@ test('connected handoff requires acknowledged locally owned claim and its retry 
   await assert.rejects(f.a.createMaterialWritingPost(f.ws, f.plan.id, f.state.revision), { code: 'material_claim_required' });
   const result = await f.a.finishMaterialContinuityClaim(f.ws, f.plan.id, f.state.revision);
   assert.equal(result.postId, output.postId); assert.equal(result.created, true); assert.deepEqual((await f.a.readPostEvidence(f.ws, result.postId)).refs, [f.reference]);
-  const binding = await f.a.readBlogSyncState(f.ws, result.postId); assert.equal(binding.remoteId, output.postId); assert.equal(binding.remoteRevision, 0); assert.equal(binding.enabled, false);
+  const binding = await f.a.readBlogSyncState(f.ws, result.postId); assert.equal(binding.remoteId, output.postId); assert.equal(binding.remoteRevision, 0); assert.equal(binding.enabled, false); assert.equal(binding.enableOnSave, true);
   assert.equal((await f.a.finishMaterialContinuityClaim(f.ws, f.plan.id, f.state.revision)).created, false); assert.equal((await f.a.listPhotoPosts(f.ws)).length, 1);
   const receiver = await f.b.installMaterialContinuity({ ...row, id: Core.id() });
   await assert.rejects(f.b.finishMaterialContinuityClaim(receiver.workspaceId, receiver.planId, receiver.planRevision), { code: 'material_output_elsewhere' });

@@ -4,6 +4,36 @@ const Remote = require('../assets/life/blog-remote.js'), Sync = require('../asse
 const UID = Core.id(), WS = Core.id(), OTHER = Core.id(), PROJECT = 'https://blog-test.supabase.co';
 const copy = value => structuredClone(value), fault = code => Object.assign(Error(code), { code });
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { resolve, promise }; };
+test('a reserved preparation identity starts only on explicit saved transfer and keeps its canonical server identity', async () => {
+  const f = await fixture(), remoteId = Core.id();
+  try {
+    f.states.set(f.d.id, { revision: 1, enabled: false, enableOnSave: true, remoteId, remoteWorkspaceId: OTHER,
+      remoteRevision: 0, localRevision: 0, remoteManifest: null, pending: null, conflict: null, publication: null, status: 'paused', error: null });
+    assert.equal((await f.manager.getState(WS, f.d.id)).status, 'pending');
+    f.posts.get(f.d.id).status = 'draft';
+    await assert.rejects(f.manager.saveDefault(WS, f.d.id, { expectedLocalRevision: 1 }), { code: 'invalid_request' });
+    assert.equal(f.stats.saves.length, 0); assert.equal(f.stats.uploads, 0); assert.equal(f.states.get(f.d.id).enabled, false);
+    f.posts.get(f.d.id).status = 'saved';
+    const stored = await f.manager.saveDefault(WS, f.d.id, { expectedLocalRevision: 1 });
+    assert.equal(stored.status, 'synced'); assert.equal(stored.enableOnSave, false);
+    assert.equal(stored.remoteId, remoteId); assert.equal(f.stats.saves[0].postId, remoteId);
+    assert.equal(f.stats.saves[0].workspaceId, OTHER); assert.equal(f.stats.saves[0].data.id, remoteId);
+    assert.equal(f.stats.uploads, 2); assert.equal(f.stats.publishes.length, 0);
+  } finally { f.manager.dispose(); }
+});
+test('an explicit pause clears the initial preparation reservation and default save never resumes it', async () => {
+  const f = await fixture();
+  try {
+    f.states.set(f.d.id, { revision: 1, enabled: false, enableOnSave: true, remoteId: f.d.id, remoteWorkspaceId: WS,
+      remoteRevision: 0, localRevision: 0, pending: null, conflict: null, publication: null, status: 'paused', error: null });
+    await f.manager.pause(WS, f.d.id);
+    const before = copy(f.states.get(f.d.id));
+    assert.equal(before.enableOnSave, false);
+    const result = await f.manager.saveDefault(WS, f.d.id, { expectedLocalRevision: 1 });
+    assert.equal(result.status, 'paused'); assert.deepEqual(f.states.get(f.d.id), before);
+    assert.equal(f.stats.saves.length, 0); assert.equal(f.stats.uploads, 0);
+  } finally { f.manager.dispose(); }
+});
 async function fixture(count = 2, shared = null) {
   const d = Photo.create(Core.id); d.status = 'saved'; d.revision = 1; d.title = '여행 기록'; d.ops = [{ insert: '출발한 날 🌿\n' }];
   for (let n = 0; n < count; n++) {
