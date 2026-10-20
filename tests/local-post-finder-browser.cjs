@@ -217,11 +217,12 @@ async function main() {
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const position = await page.evaluate(() => {
         const heading = document.querySelector('#blogLocalPreview h3'), bounds = heading.getBoundingClientRect();
-        const header = document.querySelector('.life-header').getBoundingClientRect();
+        const header = document.querySelector('.life-toolbar.haedo-page-heading').getBoundingClientRect();
         return { top: bounds.top, bottom: bounds.bottom, headerBottom: header.bottom,
           height: innerHeight, focused: document.activeElement === heading };
       });
       assert.equal(position.focused, true);
+      assert.ok(position.headerBottom > 0, 'Measure the actual visible sticky heading bar');
       assert.ok(position.top >= Math.max(0, position.headerBottom) - 1, 'Preview heading must clear the sticky header');
       assert.ok(position.top < position.height && position.bottom > 0 && position.bottom <= position.height,
         'First result preview heading must be visible before another click can scroll it into view');
