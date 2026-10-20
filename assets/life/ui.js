@@ -127,6 +127,9 @@
     let blogManager = null, blogOpenOptions = null, blogManagerWorkspace = null;
     let preservationUI = null, publicCoverUI = null;
     let obsidianUpdateUI = null, originalAttachmentsUI = null;
+    let accountMaterials = null, accountMaterialsFailure = null, accountMaterialsSequence = 0;
+    const accountMaterialsNotice = '계정 자료를 확인하지 못했습니다. 이 브라우저의 자료는 그대로 사용할 수 있습니다.';
+    const accountMaterialsPartialNotice = '일부 계정 자료는 확인했습니다. 나머지는 다시 확인해 주세요. 이 브라우저의 자료는 그대로 유지됩니다.';
     const blogViews = new Map();
     const blogSync = global.HaedoLife.BlogSync?.create({ storage, auth });
     const parentViews = new Set(['external-discovery', 'interests', 'blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
@@ -576,6 +579,38 @@
       })();
       dataRefreshPromise = pending;
       return pending;
+    }
+
+    async function registerAccountMaterials(workspaceId) {
+      const sequence = ++accountMaterialsSequence, workspace = workspaceGeneration;
+      const current = () => !disposed && !signal?.aborted && sequence === accountMaterialsSequence &&
+        workspace === workspaceGeneration && state.bundle?.workspaceId === workspaceId;
+      if (!current()) return false;
+      try {
+        accountMaterials ||= global.HaedoLife.AccountMaterials?.create({ storage, auth, core });
+        if (!accountMaterials) return false;
+        const result = await accountMaterials.register(workspaceId, { signal });
+        if (!current()) return false;
+        if (result?.status === 'stored') {
+          const bundle = await storage.read(workspaceId), active = await storage.getActive();
+          if (!current() || active !== workspaceId) return false;
+          state.bundle = bundle;
+        }
+        accountMaterialsFailure = null;
+        return true;
+      } catch (cause) {
+        if (current()) {
+          const partial = cause?.code === 'account_material_partial';
+          accountMaterialsFailure = { workspaceId, partial };
+          if (partial) {
+            try {
+              const bundle = await storage.read(workspaceId), active = await storage.getActive();
+              if (current() && active === workspaceId) state.bundle = bundle;
+            } catch (_) { /* Retain the last readable local bundle. */ }
+          }
+        }
+        return false;
+      }
     }
 
     function batchKey(workspaceId, batchId) { return workspaceId + '|' + batchId; }
@@ -2178,6 +2213,25 @@
       const heading = title('기록');
       heading.classList.add('life-sr-only');
       main.append(heading);
+      if (accountMaterialsFailure?.workspaceId === state.bundle.workspaceId) {
+        const notice = node('div', null, 'life-help');
+        notice.id = 'lifeAccountMaterialsNotice';
+        notice.setAttribute('role', 'status');
+        const workspaceId = state.bundle.workspaceId, workspace = workspaceGeneration;
+        const retry = button('계정 자료 다시 확인', guarded(async () => {
+          await persistDrafts();
+          if (disposed || signal?.aborted || workspace !== workspaceGeneration || state.bundle?.workspaceId !== workspaceId) return;
+          const confirmed = await registerAccountMaterials(workspaceId);
+          if (disposed || signal?.aborted || workspace !== workspaceGeneration || state.bundle?.workspaceId !== workspaceId) return;
+          if (confirmed || accountMaterialsFailure?.workspaceId === workspaceId && accountMaterialsFailure.partial) await refreshData();
+          if (disposed || signal?.aborted || workspace !== workspaceGeneration || state.bundle?.workspaceId !== workspaceId || state.mode !== 'sources') return;
+          render();
+          announce(confirmed ? '계정 자료를 확인했습니다.' : accountMaterialsFailure?.partial ? accountMaterialsPartialNotice : accountMaterialsNotice);
+        }));
+        retry.id = 'lifeAccountMaterialsRetry';
+        notice.append(node('p', accountMaterialsFailure.partial ? accountMaterialsPartialNotice : accountMaterialsNotice), retry);
+        main.append(notice);
+      }
       renderStages(main);
       const list = node('div', null, 'life-card-grid'); list.id = 'lifeSearchResults';
       const importResult = node('div', null, 'life-actions');
@@ -3896,11 +3950,14 @@
     }
     if (active) {
       state.bundle = await storage.read(active);
+      await registerAccountMaterials(active);
+      if (disposed || signal?.aborted) return { dispose };
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
       await refreshData();
       connectSubscription();
       render();
       announce('이 브라우저에 보관한 자료를 열었습니다.', { quiet: true });
+      if (accountMaterialsFailure?.workspaceId === active) announce(accountMaterialsFailure.partial ? accountMaterialsPartialNotice : accountMaterialsNotice);
       if (sync) await refreshSync();
     } else {
       header.append(node('h1', '자료 모아보기'));
@@ -3975,6 +4032,8 @@
       if (disposed) return;
       delete document.body.dataset.writingFocus;
       disposed = true;
+      accountMaterialsSequence += 1;
+      accountMaterials?.dispose(); accountMaterials = null;
       interestUI?.dispose();
       externalDiscoveryUI?.dispose();
       originalAttachmentsUI?.dispose(); originalAttachmentsUI = null;

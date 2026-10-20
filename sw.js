@@ -1,5 +1,5 @@
 /* Versioned app shell. Personal documents remain in localStorage/IndexedDB. */
-const CACHE='haedo-v142';
+const CACHE='haedo-v143';
 const SHELL=[
   './assets/life/discovery.js','./assets/life/discovery-profile.js','./assets/life/discovery-settings.js','./assets/life/discovery-language-settings.js','./assets/life/discovery-actions.js','./assets/life/discovery-recommendations.js','./assets/life/discovery-ui.js','./assets/life/discovery.css',
   './assets/life/interest-model-loader.js','./assets/life/interest-model-worker.js','./assets/life/interest-analysis.js','./assets/life/interest-profile.js','./assets/life/interest-policy.js',
@@ -21,7 +21,7 @@ const SHELL=[
   './assets/life/photo-post.css','./vendor/quill/quill.js','./vendor/quill/quill.snow.css','./vendor/fflate/fflate.js','./assets/life/page-posts.css',
   './assets/life/workbench.js','./assets/life/reflection.js','./assets/life/reflection-lenses.js','./assets/life/reflection-lenses-ui.js','./assets/life/books.js',
   './assets/life/book-history.js','./assets/life/book-print.js','./assets/life/rediscovery.js','./assets/life/share.js','./assets/life/share-remote.js',
-  './assets/life/share-view.js','./assets/life/share-view.css','./assets/life/storage.js','./assets/life/remote.js','./assets/life/sync.js',
+  './assets/life/share-view.js','./assets/life/share-view.css','./assets/life/storage.js','./assets/life/account-materials.js','./assets/life/remote.js','./assets/life/sync.js',
   './assets/life/composition-remote.js','./assets/life/composition-sync.js','./assets/life/composition-ui.js','./assets/life/writing-remote.js','./assets/life/writing-sync.js',
   './assets/life/writing-sync-ui.js','./assets/life/reading-position.js','./assets/life/legacy.js','./assets/life/icons.js','./assets/life/workbench-ui.js',
   './assets/life/collection.js','./assets/life/collection-media.js','./assets/life/collection-metadata.js','./assets/life/collection-picker.js','./assets/life/collection-ui.js',

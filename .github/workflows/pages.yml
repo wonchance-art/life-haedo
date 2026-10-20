@@ -366,6 +366,9 @@ jobs:
       - name: Verify interest metadata across service worker update and offline recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-interest-pwa-browser.cjs
+      - name: Verify registered account materials in the existing library without workspace copies
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/account-materials-browser.cjs
       - name: Verify explicit external discovery, exact source return and private feedback
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-external-discovery-browser.cjs
@@ -413,6 +416,7 @@ jobs:
             .local/travel-writing-history/
             .local/travel-writing-history-drift/
             .local/local-post-finder/
+            .local/account-materials/
             .local/app-native/qa/
             .local/home-refinement/qa/
             .local/blog-journeys/after/
@@ -646,7 +650,7 @@ jobs:
       - name: Verify generated configuration and complete installed shell hashes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         env:
-          PREVIOUS_RELEASE: "828498189c084cdd02cba468cb3faab31ffeb83c"
+          PREVIOUS_RELEASE: "9440f12e008a5e9285be69cf06655967a9defeed"
         run: node scripts/verify-prepared-site.mjs
       - name: Verify the actual previous service worker updates without losing originals
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
