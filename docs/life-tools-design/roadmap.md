@@ -8,6 +8,8 @@
 
 **단순 구조도 — 사용자 요청 반영:** [이미지](../diagrams/rendered/product-structure-20261020.png) · [확대 SVG](../diagrams/rendered/product-structure-20261020.svg) · [편집 원본](../diagrams/product-structure-20261020.dot). 10월12일 상자·화살표 형식을 따라 뉴스→읽기·반응→선택 링크 보관과 자료실→홈 글쓰기→개인 활용/선택 공개를 연결했다. 수동 관심·회고와 후속 AI 분석, 기존 책 기능과 추가 확장 보류를 구분한다. 기능 구조를 설명하는 자료이며 실제 기기·번역 품질·추천 유용성의 검증 완료를 뜻하지 않는다. 다음 큰 작업과 완료 조건은 위와 동일하다.
 
+**Input → Automated Process → Output 재분류:** [workflow 이미지](../diagrams/rendered/product-workflow-20261020.png) · [확대 SVG](../diagrams/rendered/product-workflow-20261020.svg) · [분류표·이전 workflow](../diagrams/product-workflow-20261020.md). 공개 RSS/선택 기록/피드백을 입력으로, 수집·검증·보존·필터·조건부 규칙 추천을 처리로, 뉴스/개인 결과물/반응 목록을 출력으로 정리했다. 사용자의 글쓰기·회고·보관·번역 열기·공개 결정을 자동 실행으로 표시하지 않는다. 자동 관심 추출·AI 보고서는 점선 후속이다. 이전 platform workflow v3와 두 순환 원본은 보존한다. 문서 재분류로 앱 동작·운영 상태·다음 큰 작업의 선행 조건과 완료 기준은 바뀌지 않는다.
+
 ## 누락 글의 실제 본문 찾기 — 현재 실행 (2026-10-20 UTC)
 
 기존 홈·글 관리·초안·보관함에서 보이지 않는 글을 조사한다. 조사 착수 기준은 main `0c4270be` / SW v138이다. 아래 발견·언어 작업의 draft·미배포 설명은 당시 기록이며 이 기준에 이미 병합된 상태를 되돌리지 않는다.
