@@ -21,6 +21,7 @@ async function wait(page, fn, arg, label = 'state') {
   throw new Error('Discovery automation did not settle: ' + label);
 }
 const idle = page => wait(page, () => document.querySelector('#discoveryReview')?.getAttribute('aria-busy') === 'false', null, 'idle');
+async function topics(page) { const details = page.locator('#discoveryTopics'); if (!await details.evaluate(el => el.open)) await details.locator(':scope > summary').click(); }
 async function open(page) { await page.goto(entry); await ready(page); await page.locator('#discoveryReview').waitFor(); await idle(page); }
 async function snapshot(page) { return page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(); return { bundle: await s.read(w), workbench: await s.readWorkbench(w), profile: await s.readInterestProfile(w), feedback: await s.readDiscoveryProfile(w), settings: await s.readDiscoverySettings(w) }; }); }
 async function preserve(page, before) { const after = await snapshot(page); for (const key of ['bundle', 'workbench', 'feedback']) assert.deepEqual(after[key], before[key], key + ' remains exact'); return after; }
@@ -49,7 +50,7 @@ async function feedRoute(context) {
   control.release = () => { control.hold = false; control.gates.splice(0).forEach(resolve => resolve()); };
   return control;
 }
-async function options(page) { const d = page.locator('#discoveryOptions'); if (!await d.getAttribute('open').then(x => x !== null)) await d.locator('summary').click(); }
+async function options(page) { await topics(page); const d = page.locator('#discoveryOptions'); if (!await d.getAttribute('open').then(x => x !== null)) await d.locator('summary').click(); }
 async function auto(page, checked) { await options(page); await page.locator('#discoveryAutoRefresh').setChecked(checked); await wait(page, async value => { const s = HaedoLife.Shell.storage; return (await s.readDiscoverySettings(await s.getActive())).autoRefresh === value; }, checked, 'stored automatic option'); await idle(page); }
 async function clock(page) { await page.clock.install({ time: new Date() }); }
 async function advance(page, ms) { await page.clock.fastForward(ms); await page.waitForTimeout(80); }
@@ -95,12 +96,12 @@ async function main() {
       const count = control.count; await clock(page); await advance(page, 16 * MINUTE); assert.equal(control.count, count); await preserve(page, before);
     });
     await check('explicit topic input and selection survive reload without editing source originals', async ({ page }) => {
-      const before = await seed(page); await page.locator('#discoveryTopicInput').fill(PRIVATE_TERM); await page.locator('#discoveryTopicAdd').click(); await idle(page);
+      const before = await seed(page); await topics(page); await page.locator('#discoveryTopicInput').fill(PRIVATE_TERM); await page.locator('#discoveryTopicAdd').click(); await idle(page);
       await wait(page, async term => { const s = HaedoLife.Shell.storage; return (await s.readInterestProfile(await s.getActive())).manual.some(x => x.label === term); }, PRIVATE_TERM);
       let current = await snapshot(page); const item = current.profile.manual.find(x => x.label === PRIVATE_TERM), selector = '[data-discovery-interest="' + item.id + '"]';
       await page.locator(selector).uncheck(); await idle(page); await wait(page, async id => { const s = HaedoLife.Shell.storage; return (await s.readDiscoverySettings(await s.getActive())).disabledInterestIds.includes(id); }, item.id);
       await page.reload(); await ready(page); await idle(page); assert.equal(await page.locator(selector).isChecked(), false); assert.equal((await snapshot(page)).profile.manual.find(x => x.id === item.id).label, PRIVATE_TERM); await preserve(page, before);
-      await page.locator(selector).check(); await idle(page); assert.ok(!(await snapshot(page)).settings.disabledInterestIds.includes(item.id));
+      await topics(page); await page.locator(selector).check(); await idle(page); assert.ok(!(await snapshot(page)).settings.disabledInterestIds.includes(item.id));
     });
     await check('turning off every source is preserved as zero sources in both list orders', async ({ page }) => {
       const before = await seed(page); await page.locator('#discoveryRecommended').click(); await idle(page); assert.equal(await page.locator('#discoveryRecommended').getAttribute('aria-pressed'), 'true'); await options(page); const ids = await page.locator('[data-discovery-source]').evaluateAll(nodes => nodes.map(x => x.dataset.discoverySource)); assert.ok(ids.length >= 2);
@@ -119,7 +120,7 @@ async function main() {
         p = result.profile; const fresh = Array.from({ length: 40 }, (_, n) => ({ id: 'replacement-topic-' + n, label: '새 합성 주제 ' + n })); if ((await s.saveInterestProfile(w, P.setManual(p, fresh, { expectedRevision: p.revision }), p.revision)).status !== 'stored') throw Error('Replacement-topic fixture failed');
       });
       await page.reload(); await ready(page); await idle(page); const unchanged = await snapshot(page); assert.equal(unchanged.settings.disabledInterestIds.length, 40); assert.ok(unchanged.settings.disabledInterestIds.every(id => id.startsWith('retired-'))); assert.equal(unchanged.profile.manual.length, 40);
-      await page.locator('[data-discovery-interest="replacement-topic-0"]').uncheck(); await idle(page); await wait(page, async () => { const s = HaedoLife.Shell.storage, value = await s.readDiscoverySettings(await s.getActive()); return value.disabledInterestIds.length === 1 && value.disabledInterestIds[0] === 'replacement-topic-0'; }, null, 'explicit replacement-topic selection');
+      await topics(page); await page.locator('[data-discovery-interest="replacement-topic-0"]').uncheck(); await idle(page); await wait(page, async () => { const s = HaedoLife.Shell.storage, value = await s.readDiscoverySettings(await s.getActive()); return value.disabledInterestIds.length === 1 && value.disabledInterestIds[0] === 'replacement-topic-0'; }, null, 'explicit replacement-topic selection');
       const after = await preserve(page, before); assert.equal(after.settings.revision, unchanged.settings.revision + 1); assert.equal(after.profile.manual.length, 40); await page.reload(); await ready(page); await idle(page); assert.equal(await page.locator('[data-discovery-interest="replacement-topic-0"]').isChecked(), false);
     });
     for (const enabled of [true, false]) await check('initial catalogue pending automatic ' + (enabled ? 'on restarts the initial request and shows the recovered list' : 'off stops without automatic restart and offers explicit reload'), async ({ page, control }) => {
@@ -201,7 +202,7 @@ async function main() {
       assert.equal(await page.evaluate(async id => { try { await HaedoLife.Shell.storage.readDiscoverySettings(id); return false; } catch (_) { return true; } }, old), true);
     });
     await check('topic CAS conflict preserves the typed input until explicit latest-state recovery', async ({ page, context }) => {
-      const before = await seed(page); const second = await context.newPage(); await open(second); await page.locator('#discoveryTopicInput').fill(PRIVATE_TERM); await page.evaluate(() => { window.__holdTopic = true; }); await page.locator('#discoveryTopicAdd').click(); await wait(page, () => window.__enteredTopic);
+      const before = await seed(page); const second = await context.newPage(); await open(second); await topics(page); await page.locator('#discoveryTopicInput').fill(PRIVATE_TERM); await page.evaluate(() => { window.__holdTopic = true; }); await page.locator('#discoveryTopicAdd').click(); await wait(page, () => window.__enteredTopic);
       await second.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(), p = await s.readInterestProfile(w), next = HaedoLife.InterestProfile.setManual(p, [...p.manual, { id: 'concurrent-topic', label: '다른 탭 합성 관심' }], { expectedRevision: p.revision }); if ((await s.saveInterestProfile(w, next, p.revision)).status !== 'stored') throw Error('Concurrent topic fixture failed'); });
       await page.evaluate(() => __releaseTopic()); await page.locator('#discoveryTopicReload').waitFor(); assert.equal(await page.locator('#discoveryTopicInput').inputValue(), PRIVATE_TERM); await page.locator('#discoveryTopicReload').click(); await page.locator('#discoveryTopicRetry').waitFor(); assert.equal(await page.locator('#discoveryTopicInput').inputValue(), PRIVATE_TERM); await page.locator('#discoveryTopicRetry').click(); await idle(page); const after = await preserve(page, before); assert.ok(after.profile.manual.some(x => x.label === PRIVATE_TERM)); assert.ok(after.profile.manual.some(x => x.id === 'concurrent-topic')); await second.close();
     });
@@ -227,15 +228,15 @@ async function main() {
       await page.evaluate(() => { IDBObjectStore.prototype.put = __originalAutomationPut; }); await page.locator('#discoverySettingsRetry').click(); await idle(page); assert.equal((await snapshot(page)).settings.autoRefresh, false); await preserve(page, before);
     });
     await check('automatic catalogue redraw preserves composing text caret and keyboard focus', async ({ page, control }) => {
-      const before = await seed(page); await clock(page); await auto(page, true); await page.locator('#discoveryTopicInput').focus();
+      const before = await seed(page); await clock(page); await auto(page, true); await topics(page); await page.locator('#discoveryTopicInput').focus();
       await page.locator('#discoveryTopicInput').evaluate((input, term) => { window.__composingInput = input; input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })); input.value = term; input.setSelectionRange(3, 7); input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertCompositionText', data: term, isComposing: true })); }, PRIVATE_TERM);
       const count = control.count; await advance(page, 15 * MINUTE + 100); await idle(page); assert.equal(control.count, count + 1);
       const actual = await page.locator('#discoveryTopicInput').evaluate(input => ({ same: input === window.__composingInput, value: input.value, start: input.selectionStart, end: input.selectionEnd, focused: document.activeElement === input })); assert.deepEqual(actual, { same: true, value: PRIVATE_TERM, start: 3, end: 7, focused: true });
       await page.locator('#discoveryTopicInput').dispatchEvent('compositionend', { data: PRIVATE_TERM }); await page.locator('#discoveryTopicDiscard').click(); await idle(page); await preserve(page, before); assert.deepEqual((await snapshot(page)).profile, before.profile);
     });
     for (const width of [1440, 820, 390]) await check('synthetic Korean controls overflow focus and visual ' + width, async ({ page }) => {
-      await seed(page); await options(page); await page.locator('#discoveryTopicInput').fill('아주 긴 한국어 관심 표현을 직접 적고 명시적으로 선택하는 합성 검수 문장');
-      await page.locator('#discoveryTopicInput').focus(); const audit = await page.evaluate(() => ({ viewport: innerWidth, documentWidth: document.documentElement.scrollWidth, focus: document.activeElement?.id, fontSize: getComputedStyle(document.querySelector('#discoveryTopicInput')).fontSize, controls: [...document.querySelectorAll('#discoveryReview button, #discoveryReview input, #discoveryReview summary')].filter(el => el.checkVisibility()).map(el => { const target = el.matches('input[type="checkbox"]') ? el.closest('label') || el : el; const r = target.getBoundingClientRect(); return { name: el.id || el.dataset.discoveryInterest || el.dataset.discoverySource || el.tagName, width: r.width, height: r.height }; }) }));
+      await seed(page); await options(page); await topics(page); await page.locator('#discoveryTopicInput').fill('아주 긴 한국어 관심 표현을 직접 적고 명시적으로 선택하는 합성 검수 문장');
+      await topics(page); await page.locator('#discoveryTopicInput').focus(); const audit = await page.evaluate(() => ({ viewport: innerWidth, documentWidth: document.documentElement.scrollWidth, focus: document.activeElement?.id, fontSize: getComputedStyle(document.querySelector('#discoveryTopicInput')).fontSize, controls: [...document.querySelectorAll('#discoveryReview button, #discoveryReview input, #discoveryReview summary')].filter(el => el.checkVisibility()).map(el => { const target = el.matches('input[type="checkbox"]') ? el.closest('label') || el : el; const r = target.getBoundingClientRect(); return { name: el.id || el.dataset.discoveryInterest || el.dataset.discoverySource || el.tagName, width: r.width, height: r.height }; }) }));
       assert.ok(audit.documentWidth <= width, 'No horizontal overflow'); assert.equal(audit.focus, 'discoveryTopicInput'); assert.ok(parseFloat(audit.fontSize) >= 16); for (const item of audit.controls) { assert.ok(item.width >= 44 && item.height >= 44, item.name + ' has a 44px hit area'); }
       await page.keyboard.press('Tab'); const next = await page.evaluate(() => ({ id: document.activeElement?.id, visible: document.activeElement?.checkVisibility(), outline: getComputedStyle(document.activeElement).outlineStyle })); assert.equal(next.visible, true); assert.ok(next.id); const file = 'discovery-automation-' + width + '.png'; await page.screenshot({ path: path.join(output, file), fullPage: true }); report.visual.push({ width, file, audit, nextFocus: next });
     }, width);

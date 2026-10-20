@@ -10,6 +10,7 @@ const { promisify } = require('node:util');
 const Discovery = require('../assets/life/discovery.js');
 const Actions = require('../assets/life/discovery-actions.js');
 const Recommendations = require('../assets/life/discovery-recommendations.js');
+const LanguageSettings = require('../assets/life/discovery-language-settings.js');
 const Field = require('../scripts/evaluate-discovery-field.cjs');
 const exec = promisify(execFile);
 const NOW = '2026-10-19T04:00:00.000Z', PAST = '2026-10-17T00:00:00.000Z', FUTURE = '2026-10-20T00:00:00.000Z';
@@ -148,7 +149,8 @@ test('new private artifacts preserve all inputs and existing human answers; no n
   const output = path.join(directory, 'new-run'), options = { ...files, actionsKind: 'simulation', out: output, now: NOW };
   const result = await Field.writeEvaluation(options); assert.equal(result.status, 'prepared'); assert.equal(result.userUtilityEvaluated, false);
   assert.deepEqual((await fs.readdir(output)).sort(), ['evaluation.json', 'evaluation.md', 'review-template.json']);
-  const report = JSON.parse(await fs.readFile(path.join(output, 'evaluation.json'))); assert.equal(Object.keys(report.sourceSHA256).length, 5);
+  const report = JSON.parse(await fs.readFile(path.join(output, 'evaluation.json'))); assert.equal(Object.keys(report.sourceSHA256).length, Field.SOURCE_FILES.length);
+  assert(Field.SOURCE_FILES.includes('assets/life/discovery-language-settings.js'));
   assert(!JSON.stringify(result).includes(report.topic.sha256)); assert(!JSON.stringify(result).includes(report.reactions.sha256));
   assert(!JSON.stringify(result).includes(files.actions)); assert(!JSON.stringify(result).includes(output));
   const reviewPath = path.join(output, 'review-template.json'), review = JSON.parse(await fs.readFile(reviewPath));
@@ -182,4 +184,99 @@ test('CLI requires fixed time/new output and labels simulation; stdout/stderr ne
   for (const args of [[], ['--out', 'x'], ['--now', NOW], ['--now', NOW, '--out', 'x', '--actions', 'file'],
     ['--now', NOW, '--out', 'x', '--actions-kind', 'simulation'], ['--now', NOW, '--out', 'x', '--feed', 'a', '--feed', 'b'],
     ['--now', NOW, '--out', 'x', '--private-bundle', marker]]) assert.throws(() => Field.parseArgs(args), { code: 'field_usage' });
+});
+function languageFixture() {
+  return { schemaVersion: 1, generatedAt: PAST, sources: [source()], articles: [
+    ['ko', 'ko-KR'], ['en', 'en-US'], ['ja', 'ja-JP'], ['zh', 'zh-Hant'],
+    ['unknown', 'unknown'], ['mixed', 'mixed'], ['other', 'pt-BR']
+  ].map(([id, language]) => article(id, '😀 AI 언어 실험', { language })) };
+}
+function bilingualCopy() {
+  return { format: Actions.FORMAT, schemaVersion: 1, exportedAt: PAST, entries: [
+    copyFor(article('past-ko-like', '인공지능 언어 연구', { language: 'ko-KR' })).entries[0],
+    copyFor(article('past-en-like', 'AI 언어 연구', { language: 'en-US' })).entries[0]
+  ] };
+}
+test('UI language selections reach all four actual ranking arms, prototype inspection and recorded reading conditions', () => {
+  const catalog = languageFixture(), envelope = bilingualCopy(), original = JSON.stringify({ catalog, envelope });
+  const cases = [[null, 7], [['ko'], 1], [['en'], 1], [['ko', 'en'], 2], [[], 0], [['und'], 1], [['mul'], 1], [['other'], 1]];
+  for (const [contentLanguages, count] of cases) {
+    const { report, reviewTemplate, markdown } = prepare(catalog, envelope, { contentLanguages });
+    const workspaceId = 'local-field-evaluation', actions = { ...Actions.empty(workspaceId), revision: 1,
+      updatedAt: envelope.exportedAt, personalizationEnabled: true, entries: envelope.entries };
+    const common = { now: NOW, limit: 2, contentLanguages, knownUrls: report.conditions.knownUrls, feedback: [],
+      profile: { workspaceId, manual: [{ id: 'explicit-evaluation-topic', label: 'AI' }] } };
+    const removed = { ...structuredClone(actions), entries: actions.entries.map(row => ({ ...structuredClone(row), liked: false, likedAt: null })) };
+    for (const mode of Field.MODES) {
+      const expected = mode === 'latest' || mode === 'related' ? Discovery.rank(catalog, { ...common, mode }) :
+        Recommendations.rank(catalog, { ...common, mode: 'personal', baselineMode: 'related', actions: mode === 'personal' ? actions : removed });
+      assert.equal(report.modes[mode].poolCount, count);
+      assert.deepEqual(report.modes[mode].items.map(row => row.canonicalUrl), expected.items.map(row => row.article.canonicalUrl));
+      assert.deepEqual(report.modes[mode].metadata, expected.metadata);
+      assert(report.modes[mode].items.every(row => Discovery.languageAllowed(row.language, contentLanguages)));
+      for (const row of report.modes[mode].items) for (const evidence of row.personal?.evidence || []) {
+        const prior = envelope.entries.find(entry => entry.canonicalUrl === evidence.canonicalUrl);
+        assert(Discovery.languageAllowed(prior.snapshot.language, contentLanguages));
+      }
+    }
+    assert.deepEqual(report.reactions.inspection, Recommendations.inspectSignals(actions, { now: NOW, sourceIds: ['naver-d2'], contentLanguages }));
+    assert.deepEqual(report.conditions.contentLanguages, contentLanguages); assert.deepEqual(reviewTemplate.contentLanguages, contentLanguages);
+    assert.deepEqual(report.modes.signals_removed, report.modes.related);
+    assert.equal(report.signalsRemovedExactRelated, true); assert.match(markdown, /원문 언어 조건/);
+    assert.equal(reviewTemplate.actualUserSelection, null); assert.equal(reviewTemplate.actualUserReactionsConfirmed, null);
+    assert.equal(report.userUtilityConclusion, null); assert.equal(report.conditions.networkRequests, 0);
+    for (const row of reviewTemplate.reviews) assert.equal(row.usefulAfterReading, null);
+  }
+  assert.equal(JSON.stringify({ catalog, envelope }), original);
+});
+test('unspecified/null all is exact, none remains an empty shared pool and out-of-language likes cannot masquerade as no-overlap', () => {
+  const catalog = languageFixture(), envelope = bilingualCopy();
+  assert.deepEqual(prepare(catalog, envelope), prepare(catalog, envelope, { contentLanguages: null }));
+  const selection = ['ko'], { report } = prepare(catalog, copyFor(article('english-like', 'AI 언어 연구', { language: 'en-US' })), { contentLanguages: selection });
+  assert.equal(report.personal.status, 'insufficient_signal'); assert.equal(report.personal.exactRelatedFallback, true);
+  assert.equal(report.reactions.inspection.signalCount, 0); assert.equal(report.reactions.inspection.excluded.languageOff, 1);
+  assert.deepEqual(report.modes.personal, report.modes.related);
+  selection.push('en'); assert.deepEqual(report.conditions.contentLanguages, ['ko'], 'report cannot share a caller-mutated selection');
+  const none = prepare(catalog, envelope, { contentLanguages: [] });
+  for (const mode of Field.MODES) { assert.deepEqual(none.report.modes[mode].items, []); assert.equal(none.report.modes[mode].poolCount, 0); }
+  assert.equal(none.report.reactions.inspection.signalCount, 0); assert.equal(none.report.reactions.inspection.excluded.languageOff, 2);
+  assert.deepEqual(none.reviewTemplate.reviews, []); assert.match(none.markdown, /선택 없음/);
+  assert.equal(none.reviewTemplate.preferredList, null); assert.equal(none.report.userUtilityConclusion, null);
+});
+test('restricted comparison preserves source failure/stale and original language metadata without publisher fallback', () => {
+  const catalog = languageFixture(); Object.assign(catalog.sources[0], { language: 'en', status: 'error', stale: true, error: '합성 수집 실패' });
+  const original = structuredClone(catalog), { report } = prepare(catalog, bilingualCopy(), { contentLanguages: ['en'] });
+  assert.equal(report.feed.stale, true); assert.equal(report.feed.articleCount, 7);
+  for (const mode of Field.MODES) {
+    assert.deepEqual(report.modes[mode].items.map(row => row.articleId), ['en']);
+    assert.equal(report.modes[mode].items[0].language, 'en-US');
+    assert.equal(report.modes[mode].metadata.sources[0].status, 'error'); assert.equal(report.modes[mode].metadata.sources[0].stale, true);
+    assert.equal(report.modes[mode].metadata.excluded.language, 6);
+  }
+  assert.deepEqual(catalog, original);
+  for (const selection of ['en', {}, ['en', 'en'], ['en-US'], ['xx'], Array(1), ['ko', null]]) {
+    assert.throws(() => prepare(catalog, bilingualCopy(), { contentLanguages: selection }), { code: 'field_input' });
+  }
+  assert.deepEqual(LanguageSettings.CONTENT_LANGUAGE_CODES, Discovery.CONTENT_LANGUAGE_CODES);
+});
+test('CLI parses strict explicit language codes and writes the same condition without leaking inputs or changing prior answers', async t => {
+  const directory = await temporary(t), file = path.join(directory, 'feed.json'), original = encode(languageFixture()); await fs.writeFile(file, original);
+  const script = path.resolve(__dirname, '../scripts/evaluate-discovery-field.cjs');
+  for (const [at, [argument, selection]] of [['all', null], ['none', []], ['ko', ['ko']], ['en', ['en']], ['ko,en', ['ko', 'en']]].entries()) {
+    const output = path.join(directory, 'language-run-' + at), run = await exec(process.execPath,
+      [script, '--feed', file, '--now', NOW, '--content-languages', argument, '--out', output]);
+    const report = JSON.parse(await fs.readFile(path.join(output, 'evaluation.json'))), review = JSON.parse(await fs.readFile(path.join(output, 'review-template.json')));
+    assert.deepEqual(report.conditions.contentLanguages, selection); assert.deepEqual(review.contentLanguages, selection);
+    assert.equal(report.topic.value, null); assert.equal(review.actualUserSelection, null); assert.equal(report.reactions.provenance, 'none');
+    assert.equal(report.personal.status, 'disabled'); assert.equal(report.signalsRemovedExactRelated, true);
+    assert.equal(run.stderr, ''); assert(!run.stdout.includes(file)); assert(!run.stdout.includes(output));
+    assert.deepEqual(Object.keys(JSON.parse(run.stdout)).sort(), ['feedSHA256', 'files', 'sourceSHA256', 'status', 'userUtilityEvaluated']);
+  }
+  assert.deepEqual(await fs.readFile(file), original);
+  for (const argument of ['all,ko', 'none,en', 'ko,ko', 'KO', 'en-US', 'ko, en', 'en,,ko', 'null', 'SYNTHETIC_PRIVATE_MARKER']) {
+    assert.throws(() => Field.parseArgs(['--now', NOW, '--out', 'unused', '--content-languages', argument]), { code: 'field_usage' });
+  }
+  await assert.rejects(exec(process.execPath, [script, '--feed', file, '--now', NOW, '--out', path.join(directory, 'invalid'),
+    '--content-languages', 'SYNTHETIC_PRIVATE_MARKER']), error => error.code === 1 && !error.stderr.includes('SYNTHETIC_PRIVATE_MARKER') && !error.stderr.includes(directory));
+  await assert.rejects(fs.stat(path.join(directory, 'invalid')), { code: 'ENOENT' });
 });

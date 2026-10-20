@@ -8,15 +8,16 @@ const Evaluation = require('./evaluate-discovery.cjs');
 const Discovery = require('../assets/life/discovery.js');
 const Recommendations = require('../assets/life/discovery-recommendations.js');
 const Actions = require('../assets/life/discovery-actions.js');
+const LanguageSettings = require('../assets/life/discovery-language-settings.js');
 const ROOT = path.resolve(__dirname, '..');
 const PRIVATE_ROOT = path.join(ROOT, '.local/discovery-field');
 const WORKSPACE = 'local-field-evaluation';
 const MODES = Object.freeze(['latest', 'related', 'personal', 'signals_removed']);
 const LABELS = Object.freeze({ A: 'latest', B: 'related', C: 'personal' });
 const SOURCE_FILES = Object.freeze(['scripts/evaluate-discovery.cjs', 'scripts/evaluate-discovery-field.cjs',
-  'assets/life/discovery.js', 'assets/life/discovery-actions.js', 'assets/life/discovery-recommendations.js']);
+  'assets/life/discovery.js', 'assets/life/discovery-actions.js', 'assets/life/discovery-recommendations.js', 'assets/life/discovery-language-settings.js']);
 const MESSAGES = Object.freeze({
-  field_usage: '사용법: node scripts/evaluate-discovery-field.cjs --now ISO --out .local/discovery-field/NEW_RUN [--feed FILE] [--topic-file FILE] [--actions FILE --actions-kind simulation|user_supplied]',
+  field_usage: '사용법: node scripts/evaluate-discovery-field.cjs --now ISO --out .local/discovery-field/NEW_RUN [--feed FILE] [--content-languages all|none|ko,en] [--topic-file FILE] [--actions FILE --actions-kind simulation|user_supplied]',
   field_input: '입력 파일의 크기·UTF-8·형식·공개 출처를 확인하지 못했습니다. 입력은 변경하지 않았습니다.',
   field_output: '출력은 .local/discovery-field 안의 새 하위 폴더만 사용할 수 있습니다. 심볼릭 링크와 기존 경로는 허용하지 않습니다.',
   field_existing: '출력 경로가 이미 있습니다. 기존 검토를 보존하려면 새 하위 폴더를 선택해 주세요.',
@@ -55,13 +56,14 @@ function exactSpan(raw, start, end, quote) {
   check(typeof raw === 'string' && Number.isSafeInteger(start) && Number.isSafeInteger(end) && start >= 0 && end > start &&
     end <= raw.length && raw.slice(start, end) === quote, 'field_evidence');
 }
-function snapshot(item, position, actions, now, sourceIds) {
+function snapshot(item, position, actions, now, sourceIds, contentLanguages) {
   const result = { ...Evaluation.itemSnapshot(item, position), tags: [...item.article.tags] };
   if (!item.personal) return result;
   for (const evidence of item.personal.evidence) {
     const original = actions.entries.find(row => row.canonicalUrl === evidence.canonicalUrl);
     check(original?.liked && !original.excludedFromRecommendations && Date.parse(original.likedAt) <= now &&
       Date.parse(original.snapshot.fetchedAt) <= now && sourceIds.has(original.snapshot.sourceId) && evidence.title === original.snapshot.title &&
+      Discovery.languageAllowed(original.snapshot.language, contentLanguages) && Discovery.languageAllowed(item.article.language, contentLanguages) &&
       ['title', 'tags'].includes(evidence.field) && ['title', 'tags'].includes(evidence.candidateField), 'field_evidence');
     const raw = evidence.field === 'tags' ? original.snapshot.tags[evidence.tagIndex] : original.snapshot.title;
     const candidate = evidence.candidateField === 'tags' ? item.article.tags[evidence.candidateTagIndex] : item.article.title;
@@ -81,6 +83,11 @@ function prepare(feedBytes, options = {}) {
     check(typeof options.now === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(options.now) &&
       Number.isFinite(Date.parse(options.now)) && new Date(options.now).toISOString().slice(0, 19) === options.now.slice(0, 19));
     const { bytes, input, feed, evaluatedAt } = Evaluation.prepareFeed(feedBytes, { now: options.now });
+    // Reuse the UI's strict settings model in isolated memory, never its stored
+    // preferences. Missing/null is all; an explicit empty array stays empty.
+    const contentLanguages = LanguageSettings.update(LanguageSettings.empty(WORKSPACE), {
+      contentLanguages: options.contentLanguages === undefined ? null : options.contentLanguages
+    }, { expectedRevision: 0, now: new Date(evaluatedAt).toISOString() }).contentLanguages;
     const topic = topicInput(options.topicBytes), reaction = reactionInput(options.actionsBytes, options.actionsKind);
     const actions = reaction.actions, now = Date.parse(evaluatedAt), original = JSON.stringify({ input, actions });
     const sourceIds = new Set(feed.sources.map(source => source.id));
@@ -89,7 +96,7 @@ function prepare(feedBytes, options = {}) {
     const knownUrls = [...new Set(actions.entries.filter(row => row.liked && Date.parse(row.likedAt) <= now &&
       Date.parse(row.snapshot.fetchedAt) <= now).map(row => row.canonicalUrl))].sort();
     const profile = { workspaceId: WORKSPACE, manual: topic.value === null ? [] : [{ id: 'explicit-evaluation-topic', label: topic.value }] };
-    const common = { profile, feedback: [], knownUrls, now: evaluatedAt, limit: 2 };
+    const common = { profile, feedback: [], knownUrls, now: evaluatedAt, limit: 2, contentLanguages };
     const removed = { ...clone(actions), entries: actions.entries.map(row => ({ ...clone(row), liked: false, likedAt: null })) };
     Actions.validate(removed);
     const raw = {
@@ -103,12 +110,13 @@ function prepare(feedBytes, options = {}) {
       JSON.stringify(raw[mode].metadata.excluded) === JSON.stringify(raw.related.metadata.excluded)), 'field_evidence');
     const modes = {};
     for (const mode of MODES) {
-      const value = raw[mode], items = value.items.map((item, index) => snapshot(item, index + 1, actions, now, sourceIds));
-      check(new Set(items.map(item => item.canonicalUrl)).size === items.length && items.every(item => !knownUrls.includes(item.canonicalUrl)), 'field_evidence');
+      const value = raw[mode], items = value.items.map((item, index) => snapshot(item, index + 1, actions, now, sourceIds, contentLanguages));
+      check(new Set(items.map(item => item.canonicalUrl)).size === items.length && items.every(item =>
+        !knownUrls.includes(item.canonicalUrl) && Discovery.languageAllowed(item.language, contentLanguages)), 'field_evidence');
       modes[mode] = { items, eligibleCount: value.eligibleCount, poolCount: value.poolCount, metadata: clone(value.metadata),
         rankOutputSHA256: Evaluation.sha256(JSON.stringify(value)), sourceCounts: countSources(items), distinctSources: new Set(items.map(item => item.sourceId)).size };
     }
-    const inspection = Recommendations.inspectSignals(actions, { now: evaluatedAt, sourceIds: [...sourceIds] });
+    const inspection = Recommendations.inspectSignals(actions, { now: evaluatedAt, sourceIds: [...sourceIds], contentLanguages });
     const applied = raw.personal.metadata.personalization?.applied === true;
     const personalStatus = applied ? 'applied' : !inspection.enabled ? 'disabled' : !inspection.signalCount ? 'insufficient_signal' : 'no_overlap';
     const union = new Map(), lists = [];
@@ -118,7 +126,7 @@ function prepare(feedBytes, options = {}) {
     }
     check(JSON.stringify({ input, actions }) === original, 'field_evidence');
     const reviewTemplate = { schemaVersion: 1, status: 'not_reviewed', feedSHA256: Evaluation.sha256(bytes), evaluatedAt,
-      comparisonTopic: topic.value, topicInput: topic.input, actualUserSelection: null, reactionProvenance: reaction.provenance,
+      comparisonTopic: topic.value, topicInput: topic.input, contentLanguages: clone(contentLanguages), actualUserSelection: null, reactionProvenance: reaction.provenance,
       actualUserReactionsConfirmed: null, personalCondition: '비교용 메모리에서만 적용하며 앱 설정은 바꾸지 않음',
       userUtilityConclusion: null, preferredList: null, preferenceReason: null, lists,
       instructions: ['제목만 보고 읽기 의향을 먼저 적고, 실제로 읽은 글만 읽은 범위와 도움을 판정한다.',
@@ -137,7 +145,7 @@ function prepare(feedBytes, options = {}) {
         futurePublicationCount: feed.articles.filter(item => item.dateStatus === 'future').length },
       topic, reactions: { provenance: reaction.provenance, sha256: reaction.sha256, actualUserReactionsConfirmed: null, explicitEvaluationEnabled: options.actionsBytes != null,
         productOptInChanged: false, inspection },
-      conditions: { now: evaluatedAt, limit: 2, knownUrls, feedback: [], baselineMode: 'related', modeLabels: clone(LABELS),
+      conditions: { now: evaluatedAt, limit: 2, knownUrls, feedback: [], contentLanguages: clone(contentLanguages), baselineMode: 'related', modeLabels: clone(LABELS),
         pastLikeExclusionsFrozenAcrossArms: true, ablation: 'liked=false/likedAt=null; bookmarks/exclusions/candidate exclusions unchanged',
         sourceSettings: 'supplied feed sources only', implicitPrivateReads: 0, explicitReactionInputProvided: options.actionsBytes != null,
         networkRequests: 0, automaticLinkOpens: 0, actualUserSelection: null, userUtilityEvaluated: false,
@@ -150,6 +158,7 @@ function prepare(feedBytes, options = {}) {
       userUtilityConclusion: null,
       limitations: ['합성 반응은 시뮬레이션이다. 파일 제공·목록 준비·어휘 겹침은 실제 사용자 취향·읽음·만족의 증거가 아니다.',
         '개인추천은 명시적 과거 좋아요의 공개 제목·태그만 쓴다. 담기·읽음·클릭을 긍정 취향으로 사용하지 않는다.',
+        '원문 언어는 앱과 같은 제공 표기 필터다. 후보와 좋아요 근거에 같은 선택을 적용하며 실제 본문 언어를 탐지하거나 번역하지 않는다.',
         '개인추천의 적용·일치·출처 수·목록 차이는 기술통계이며 의미 정확도·실독 후 효용·개선율이 아니다.',
         '같은 단어도 뜻이 다를 수 있다. 단어가 두 개 겹치는 동음이의어도 구별하지 못한다.',
         '원문 링크는 자동으로 열지 않았다. 수집 상태·날짜 불명·본문 미확보·후보 부족은 그대로 남긴다.',
@@ -160,9 +169,12 @@ function prepare(feedBytes, options = {}) {
 }
 function renderMarkdown(report, review) {
   const escape = Evaluation.markdownText;
+  const languages = review.contentLanguages === null ? '전체 언어' : review.contentLanguages.length === 0 ? '선택 없음 — 후보 없음' :
+    review.contentLanguages.map(code => LanguageSettings.CONTENT_LANGUAGE_LABELS[code]).join(', ');
   const lines = ['# 직접 읽기 비교 준비 — 로컬 전용', '', '사용자 선택·실제 반응·원문 독서·효용은 아직 판정하지 않았다. 이 파일을 공개 문서나 Pages 산출물에 포함하지 않는다.', '',
     '- 비교 입력 주제: ' + (review.comparisonTopic === null ? '미선택' : escape(review.comparisonTopic)),
     '- 주제 입력은 비교 조건이며 실제 사용자 선택 확인은 null이다.', '- 반응 출처: ' + escape(review.reactionProvenance) + ' · 앱 설정 변경 없음',
+    '- 원문 언어 조건: ' + escape(languages) + ' · 네 비교 조건과 좋아요 근거에 동일 적용',
     '- 고정 시각: ' + escape(report.evaluatedAt), '- 공개 목록 SHA-256: `' + report.feed.sha256 + '`',
     '- 상세 모드·신호 제거·정확 근거는 별도 `evaluation.json`에 기록했다.', ''];
   for (const list of review.lists) {
@@ -224,7 +236,7 @@ async function writeEvaluation(options) {
       options.topicFile === undefined ? null : readBounded(options.topicFile, 4096),
       options.actions === undefined ? null : readBounded(options.actions, Actions.MAX_BYTES)
     ]);
-    const prepared = prepare(feedBytes, { now: options.now, topicBytes, actionsBytes, actionsKind: options.actionsKind });
+    const prepared = prepare(feedBytes, { now: options.now, topicBytes, actionsBytes, actionsKind: options.actionsKind, contentLanguages: options.contentLanguages });
     prepared.report.sourceSHA256 = await sourceHashes();
     await safeAncestors(path.dirname(output));
     try { await fs.mkdir(output, { mode: 0o700 }); } catch (error) { throw fail(error.code === 'EEXIST' ? 'field_existing' : 'field_output'); }
@@ -236,11 +248,17 @@ async function writeEvaluation(options) {
   } catch (error) { throw fail(Object.hasOwn(MESSAGES, error.code) ? error.code : 'field_failed'); }
 }
 function parseArgs(argv) {
-  const options = {}, seen = new Set(), keys = { '--feed': 'feed', '--out': 'out', '--now': 'now', '--topic-file': 'topicFile', '--actions': 'actions', '--actions-kind': 'actionsKind' };
+  const options = {}, seen = new Set(), keys = { '--feed': 'feed', '--out': 'out', '--now': 'now', '--topic-file': 'topicFile', '--actions': 'actions', '--actions-kind': 'actionsKind', '--content-languages': 'contentLanguages' };
   for (let at = 0; at < argv.length; at += 2) {
     const key = argv[at], value = argv[at + 1];
     check(Object.hasOwn(keys, key) && !seen.has(key) && typeof value === 'string' && value && !value.startsWith('--'), 'field_usage');
     seen.add(key); options[keys[key]] = value;
+  }
+  if (seen.has('--content-languages')) {
+    const value = options.contentLanguages;
+    options.contentLanguages = value === 'all' ? null : value === 'none' ? [] : value.split(',');
+    check(options.contentLanguages === null || options.contentLanguages.length <= LanguageSettings.CONTENT_LANGUAGE_CODES.length &&
+      options.contentLanguages.every(code => LanguageSettings.CONTENT_LANGUAGE_CODES.includes(code)) && new Set(options.contentLanguages).size === options.contentLanguages.length, 'field_usage');
   }
   check(seen.has('--now') && seen.has('--out') && seen.has('--actions') === seen.has('--actions-kind') &&
     (options.actionsKind === undefined || ['simulation', 'user_supplied'].includes(options.actionsKind)), 'field_usage');
