@@ -85,7 +85,7 @@ async function snap(page, scene) {
       if (metrics.horizontalOverflow) report.qualityFailures.push({ scene, width: size.width, check: 'horizontalOverflow' });
       for (const key of ['smallTargets', 'smallInputs', 'unnamed', 'contrastFailures']) if (metrics[key].length) report.qualityFailures.push({ scene, width: size.width, check: key, details: metrics[key] });
       if (scene !== 'public') {
-        const aligned = metrics.navigation.map(item => item.label).join(',') === '홈,자료실,도구,설정' && metrics.navigation.every(item => item.width >= 44 && item.height >= 44 && item.iconWidth === 20 && item.iconHeight === 20 &&
+        const aligned = metrics.navigation.map(item => item.label).join(',') === '홈,뉴스,자료실,도구,설정' && metrics.navigation.every(item => item.width >= 44 && item.height >= 44 && item.iconWidth === 20 && item.iconHeight === 20 &&
           (['rail', 'bottom'].includes(item.mode) ? item.centeredX < 1 && item.labelVisible && item.labelTop >= 3 && item.labelTop <= 5 : item.iconLeft === 16 && item.centeredY < 1 && item.labelVisible && item.labelGap === 16));
         if (scene === 'writing' && size.width <= 760) {
           const focusedWriting = await page.evaluate(() => document.body.dataset.writingFocus === 'true');

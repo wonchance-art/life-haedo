@@ -1124,7 +1124,7 @@
         if (!changedTask || state.error || input !== inputGeneration) return;
         const kind = navigationMotion || (fromSection !== sectionFor(mode) ? 'tab' :
           mode === 'write' || mode === 'import' || mode === 'page' && (options.pageCompose || options.pageProfileEdit || options.pageDraftId) ? 'compose' : 'push');
-        const sections = ['home', 'records', 'tools', 'manage'];
+        const sections = ['home', 'news', 'records', 'tools', 'manage'];
         const direction = kind === 'tab' && sections.indexOf(sectionFor(mode)) < sections.indexOf(fromSection) ? -1 : 1;
         const enter = () => {
           if (rendered() && !state.error && input === inputGeneration) global.HaedoMotion?.enter(main, { kind, direction });
@@ -1232,8 +1232,9 @@
     }
 
     function sectionFor(mode) {
+      if (mode === 'external-discovery') return 'news';
       if (mode === 'home' || mode === 'page' && blogPageTask || mode === 'write' && viewOrigins.get('write')?.mode === 'home' || mode === 'source' && (state.returnContext?.mode === 'home' || state.returnContext?.mode === 'page' && blogPageTask)) return 'home';
-      return ['tools', 'external-discovery', 'interests', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'blog', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
+      return ['tools', 'interests', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'blog', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
     }
 
     function routeMode() {
@@ -1241,6 +1242,7 @@
       const section = params.get('section');
       const view = params.get('view');
       if (params.get('compose') === '1') return 'page';
+      if (section === 'news') return 'external-discovery';
       if (section === 'home' && !view) return 'home';
       if (section === 'tools') return ['external-discovery', 'interests', 'discover', 'reflection', 'books'].includes(view) ? view : 'tools';
       if (section === 'manage') return ['blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
@@ -1257,7 +1259,8 @@
       if (section === 'home' && !/\/life\.html$/.test(url.pathname)) url.searchParams.delete('section');
       else url.searchParams.set('section', section);
       const view = mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
-      if (['blog', 'topics', 'time', 'import', 'write', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'external-discovery', 'interests', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
+      if (mode === 'external-discovery') url.searchParams.delete('view');
+      else if (['blog', 'topics', 'time', 'import', 'write', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'interests', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
       else url.searchParams.delete('view');
       const destination = url.pathname + url.search + url.hash;
       if (destination !== global.location.pathname + global.location.search + global.location.hash)
@@ -1271,7 +1274,7 @@
         return;
       }
       const previousSection = sectionFor(state.mode);
-      const sectionRoot = section === 'records' ? 'sources' : section;
+      const sectionRoot = section === 'news' ? 'external-discovery' : section === 'records' ? 'sources' : section;
       if (section === previousSection && state.mode === sectionRoot) return;
       if (section === previousSection && state.mode === 'source' && ['sources', 'topics'].includes(state.returnContext?.mode)) return returnToResults();
       const token = ++navigationGeneration, workspace = workspaceGeneration, workspaceId = state.bundle.workspaceId;
@@ -1279,9 +1282,10 @@
       const position = { mode: state.mode, scrollY: global.scrollY,
         ...(state.mode === 'home' ? { homeState: home?.captureState() } : {}) };
       if (previousSection === 'records') lastRecordMode = state.mode;
-      const next = section === previousSection ? sectionRoot : section === 'home' ? 'home' : section === 'records' ? lastRecordMode : section === 'tools' ? 'tools' : 'manage';
+      const next = section === previousSection ? sectionRoot : section === 'news' ? 'external-discovery' : section === 'home' ? 'home' : section === 'records' ? lastRecordMode : section === 'tools' ? 'tools' : 'manage';
       // Save before changing URL so a failed draft write keeps the current view.
       if (dirty()) await persistStage();
+      await externalDiscoveryUI?.flush();
       await preservationUI?.flush();
       await obsidianUpdateUI?.flush();
       await originalAttachmentsUI?.flush();
@@ -1314,7 +1318,7 @@
       const origin = viewOrigins.get(state.mode);
       if (origin?.workspaceId === state.bundle?.workspaceId) return origin;
       const section = sectionFor(state.mode);
-      return { mode: section === 'records' ? 'sources' : section, workspaceId: state.bundle?.workspaceId, scrollY: 0 };
+      return { mode: section === 'news' ? 'external-discovery' : section === 'records' ? 'sources' : section, workspaceId: state.bundle?.workspaceId, scrollY: 0 };
     }
 
     async function returnFromSubview() {
@@ -1373,6 +1377,7 @@
       heading.tabIndex = -1;
       const headingGroup = node('div', null, 'haedo-heading-title');
       if (state.mode === 'page' && blogPageTask) heading.textContent = blogMode === 'profile' ? '프로필 편집' : blogMode === 'edit' ? '글쓰기' : '글 읽기';
+      else if (state.mode === 'external-discovery') heading.textContent = '뉴스';
       else if (subviewTitles[state.mode]) heading.textContent = subviewTitles[state.mode];
       else if (state.mode === 'books') heading.textContent = '내 책';
       else if (state.mode === 'reflection') heading.textContent = '회고';
@@ -1382,7 +1387,7 @@
         records.setAttribute('aria-label', '자료실 목록');
         heading.append(records);
       } else heading.textContent = section === 'home' ? '내 블로그' : section === 'tools' ? '도구' : '설정';
-      if (subviewTitles[state.mode] && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
+      if (subviewTitles[state.mode] && state.mode !== 'external-discovery' && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
         const labels = { 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 확인으로 돌아가기', blog: '글 관리로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '자료실로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '설정으로 돌아가기' };
         const back = iconButton(labels[subviewOrigin().mode] || labels.sources, 'back', guarded(returnFromSubview));
         back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';

@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1770" viewBox="0 0 1600 1770" role="img" aria-labelledby="title desc"><title id="title">해도 전체 로드맵 2026년 10월 20일</title><desc id="desc">두 순환과 여섯 제품 영역, 현재 뉴스 메뉴 작업, 다음 우선순위와 보류 조건을 표시합니다. 구현 및 배포와 실제 사용 검증을 구분합니다.</desc><rect width="1600" height="1770" fill="#f4f6f5"/>
+<text x="64" y="90.9" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="46" font-weight="700">해도 전체 로드맵</text>
+<text x="66" y="132.4" fill="#52655d" font-family="Noto Sans CJK KR, sans-serif" font-size="23" font-weight="400">2026.10.20 · 한국 시간 기준 · 기능 구현과 실제 사용 검증을 구분</text>
+<rect x="64" y="158" width="1472" height="74" rx="14" fill="#ffffff" stroke="#d2ded7"/>
+<text x="88" y="205.8" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="25" font-weight="700">출시 확인: SW138  |  지금 작업: 홈 다음 뉴스 메뉴 · 구현/로컬 검수 완료, 배포 전</text>
+<text x="64" y="296.2" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="28" font-weight="700">제품의 중심은 두 가지 순환</text>
+<rect x="64" y="320" width="232" height="76" rx="14" fill="#145b50" stroke="none"/>
+<text x="82" y="363.3" fill="#ffffff" font-family="Noto Sans CJK KR, sans-serif" font-size="22" font-weight="700">선택해서 모으기</text>
+<path d="M298 358 L310 358" stroke="#145b50" stroke-width="2" fill="none"/>
+<path d="M310 358 l-9 -5 v10 Z" fill="#145b50"/>
+<rect x="312" y="320" width="232" height="76" rx="14" fill="#145b50" stroke="none"/>
+<text x="330" y="363.3" fill="#ffffff" font-family="Noto Sans CJK KR, sans-serif" font-size="22" font-weight="700">개인 보관·읽기</text>
+<path d="M546 358 L558 358" stroke="#145b50" stroke-width="2" fill="none"/>
+<path d="M558 358 l-9 -5 v10 Z" fill="#145b50"/>
+<rect x="560" y="320" width="232" height="76" rx="14" fill="#145b50" stroke="none"/>
+<text x="578" y="363.3" fill="#ffffff" font-family="Noto Sans CJK KR, sans-serif" font-size="22" font-weight="700">연결·생각 정리</text>
+<path d="M794 358 L806 358" stroke="#145b50" stroke-width="2" fill="none"/>
+<path d="M806 358 l-9 -5 v10 Z" fill="#145b50"/>
+<rect x="808" y="320" width="232" height="76" rx="14" fill="#145b50" stroke="none"/>
+<text x="826" y="363.3" fill="#ffffff" font-family="Noto Sans CJK KR, sans-serif" font-size="22" font-weight="700">글·결과물 완성</text>
+<path d="M1042 358 L1054 358" stroke="#145b50" stroke-width="2" fill="none"/>
+<path d="M1054 358 l-9 -5 v10 Z" fill="#145b50"/>
+<rect x="1056" y="320" width="232" height="76" rx="14" fill="#145b50" stroke="none"/>
+<text x="1074" y="363.3" fill="#ffffff" font-family="Noto Sans CJK KR, sans-serif" font-size="22" font-weight="700">선택 공개·활용</text>
+<path d="M1290 358 L1302 358" stroke="#145b50" stroke-width="2" fill="none"/>
+<path d="M1302 358 l-9 -5 v10 Z" fill="#145b50"/>
+<rect x="1304" y="320" width="232" height="76" rx="14" fill="#145b50" stroke="none"/>
+<text x="1322" y="363.3" fill="#ffffff" font-family="Noto Sans CJK KR, sans-serif" font-size="22" font-weight="700">새 경험·질문</text>
+<text x="80" y="442.4" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="23" font-weight="700">순환 A   자료 → 해석 → 결과물 → 경험 → 다음 자료</text>
+<rect x="64" y="462" width="1472" height="78" rx="14" fill="#eaf1ed" stroke="none"/>
+<text x="86" y="511.8" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="25" font-weight="700">순환 B   실제 사용 → 불편·유용성 평가 → 작은 비교 → 구현·검수 → 다시 사용</text>
+<text x="64" y="607.4" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="29" font-weight="700">전체 기능 지도</text>
+<text x="64" y="646.1" fill="#52655d" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">완료 = 구현·출시 근거 있음     진행 = 현재 코드 검수 중     남음 = 실제 사용·운영 확인 필요</text>
+<rect x="64" y="674" width="720" height="210" rx="14" fill="#ffffff" stroke="#d2ded7"/>
+<text x="86" y="721.0" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="27" font-weight="700">01  자료를 모으고 찾기</text>
+<text x="86" y="758.0" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="20" font-weight="700">완료</text>
+<text x="86" y="791.1" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 선택 본문·TXT/MD·SNS 링크 가져오기</text>
+<text x="86" y="818.1" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• Obsidian ZIP·연결 선택·변경 비교</text>
+<text x="86" y="845.1" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 원문·버전·출처 / 통합 검색·발췌</text>
+<text x="86" y="873.9" fill="#52655d" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">SNS 계정의 상시 자동 연결은 후속</text>
+<rect x="816" y="674" width="720" height="210" rx="14" fill="#ffffff" stroke="#d2ded7"/>
+<text x="838" y="721.0" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="27" font-weight="700">02  내 글과 홈</text>
+<text x="838" y="758.0" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="20" font-weight="700">완료</text>
+<text x="838" y="791.1" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 홈 피드·글쓰기·사진·설명·첨부</text>
+<text x="838" y="818.1" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 초안·보관함·저장·재열기·충돌 복구</text>
+<text x="838" y="845.1" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 앱 전환·한글 입력 보존 보완</text>
+<text x="838" y="873.9" fill="#52655d" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">실제 Mac·iPad·iPhone 완주는 남음</text>
+<rect x="64" y="904" width="720" height="210" rx="14" fill="#ffffff" stroke="#d2ded7"/>
+<text x="86" y="951.0" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="27" font-weight="700">03  생각을 결과물로</text>
+<text x="86" y="988.0" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="20" font-weight="700">완료 / 확장 보류</text>
+<text x="86" y="1021.1" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 묶음·컬렉션·회고·자료로 글쓰기</text>
+<text x="86" y="1048.2" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 연재·9칸·선택 자료 페이지</text>
+<text x="86" y="1075.2" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 책·장·원고·PDF의 기존 기능 유지</text>
+<text x="86" y="1103.8" fill="#52655d" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">책의 신규 확장은 보류</text>
+<rect x="816" y="904" width="720" height="210" rx="14" fill="#ffffff" stroke="#d2ded7"/>
+<text x="838" y="951.0" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="27" font-weight="700">04  선택 공개와 보존</text>
+<text x="838" y="988.0" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="20" font-weight="700">완료</text>
+<text x="838" y="1021.1" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 글·사진·연재·9칸·공개 표지</text>
+<text x="838" y="1048.2" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 게시·갱신·철회 / 익명 읽기</text>
+<text x="838" y="1075.2" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 선택 서버 보관·기기 이동·전용 파일</text>
+<text x="838" y="1103.8" fill="#52655d" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">실제 Photos·Files·기기 왕복은 남음</text>
+<rect x="64" y="1134" width="720" height="210" rx="14" fill="#ffffff" stroke="#d2ded7"/>
+<text x="86" y="1181.0" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="27" font-weight="700">05  뉴스와 개인 추천</text>
+<text x="86" y="1218.0" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="20" font-weight="700">출시 + 메뉴 작업</text>
+<text x="86" y="1251.2" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 7출처·90개 링크 메타데이터 공급</text>
+<text x="86" y="1278.2" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 주제·출처·언어 / 번역 열기 옵션</text>
+<text x="86" y="1305.2" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 좋아요·담기·독립 목록·로컬 추천</text>
+<text x="86" y="1333.8" fill="#52655d" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">홈 다음 뉴스: SW139 후보, 배포 전</text>
+<rect x="816" y="1134" width="720" height="210" rx="14" fill="#ffffff" stroke="#d2ded7"/>
+<text x="838" y="1181.0" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="27" font-weight="700">06  평가와 시스템 개선</text>
+<text x="838" y="1218.0" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="20" font-weight="700">준비 / 검증 남음</text>
+<text x="838" y="1251.2" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 동일 공급의 최신·관심·개인순 비교</text>
+<text x="838" y="1278.2" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 추천 근거·제외·취소·끄기·복구</text>
+<text x="838" y="1305.2" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="21" font-weight="400">• 평가 양식·비교 CLI·자동 회귀 검수</text>
+<text x="838" y="1333.8" fill="#52655d" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">직접 읽기 효용·제한 언어 CLI는 남음</text>
+<text x="64" y="1423.3" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="29" font-weight="700">다음 실행 순서와 완료 기준</text>
+<rect x="64" y="1446" width="480" height="112" rx="14" fill="#ffffff" stroke="#d2ded7"/>
+<text x="82" y="1488.6" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="24" font-weight="700">P0  뉴스 메뉴 출시</text>
+<text x="82" y="1528.8" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">검수·CI → 배포 → 실제 뉴스 링크 확인</text>
+<rect x="560" y="1446" width="480" height="112" rx="14" fill="#ffffff" stroke="#d2ded7"/>
+<text x="578" y="1488.6" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="24" font-weight="700">P1  자동 운영 + 실기 완주</text>
+<text x="578" y="1528.8" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">첫 정기 수집 확인 → 글·저장·복귀 검증</text>
+<rect x="1056" y="1446" width="480" height="112" rx="14" fill="#ffffff" stroke="#d2ded7"/>
+<text x="1074" y="1488.6" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="24" font-weight="700">P1  읽기 평가 + 추천 개선</text>
+<text x="1074" y="1528.8" fill="#182522" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">언어 조건 통일 → 사용자 평가 → 전후 비교</text>
+<rect x="64" y="1596" width="1472" height="108" rx="14" fill="#eaf1ed" stroke="none"/>
+<text x="86" y="1639.5" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="23" font-weight="700">계속 지키는 경계</text>
+<text x="86" y="1677.5" fill="#145b50" font-family="Noto Sans CJK KR, sans-serif" font-size="23" font-weight="400">개인 보관 우선 · 명시 선택 전송/공개 · 자동 관심 분석 OFF · 미독/무응답 평가값은 null</text>
+<text x="64" y="1744.8" fill="#52655d" font-family="Noto Sans CJK KR, sans-serif" font-size="19" font-weight="400">확인 필요: 첫 정기 수집(10/20 15:15 KST 예정) · 실제 Google 번역/Apple 기기 · 사용자 효용</text>
+</svg>

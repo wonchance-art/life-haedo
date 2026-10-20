@@ -25,11 +25,12 @@ async function nav(page, section) {
 }
 async function button(page, name) { await page.getByRole('button', { name, exact: true }).click(); await settle(page); }
 async function assertCommonNavigation(page) {
-  // The brand is another home link, separate from the four section controls.
+  // The brand is another home link, separate from the five section controls.
   assert.deepEqual(await page.locator('[data-haedo-navigation] a[data-haedo-section]').evaluateAll(links => links.map(link => ({
     section: link.dataset.haedoSection, href: link.getAttribute('href'), label: link.getAttribute('aria-label')
   }))), [
     { section: 'home', href: 'index.html', label: '홈' },
+    { section: 'news', href: 'index.html?section=news', label: '뉴스' },
     { section: 'records', href: 'index.html?section=records', label: '자료실' },
     { section: 'tools', href: 'index.html?section=tools', label: '도구' },
     { section: 'manage', href: 'index.html?section=manage', label: '설정' }
@@ -107,7 +108,7 @@ async function main() {
   }
   try {
     await check('anonymous common home is usable in all sections without redirect or private IDB', async ({ page }) => {
-      for (const suffix of ['', '?section=tools', '?section=manage']) {
+      for (const suffix of ['', '?section=news', '?section=tools', '?section=manage']) {
         await page.goto(base + '/index.html' + suffix); await shellReady(page);
         assert.equal(new URL(page.url()).pathname, '/index.html'); assert.equal(await page.locator('#lifeWelcome').isVisible(), true);
         assert.equal(await page.locator('#lifeApp').isHidden(), true); assert.deepEqual(await page.evaluate(() => __homeDbOpens), []);
@@ -225,7 +226,7 @@ async function main() {
       await recent.getByRole('button', { name: '발췌 전 보관한 익명 자료', exact: true }).click(); await settle(page);
       assert.equal(await page.locator('#lifeSourceText').textContent(), raw);
     });
-    await check('tools lead to existing goal/habit editors and account timeline list with the same four-way navigation', async ({ page }) => {
+    await check('tools lead to existing goal/habit editors and account timeline list with the same five-way navigation', async ({ page }) => {
       await page.goto(base + '/index.html?section=tools'); await ready(page);
       for (const target of ['goals', 'habits']) {
         await page.locator('#lifeMain a[href="' + target + '.html"]').click();
