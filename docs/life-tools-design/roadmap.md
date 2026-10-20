@@ -2,9 +2,9 @@
 
 ## 전체 현황 요약 — 2026-10-20 KST
 
-**직전 운영 확인:** main `45b47ae` / SW141는 [push39367353868](https://github.com/wonchance-art/life-haedo/actions/runs/39367353868) 총10개 성공과 실제 공개11파일의 바이트 일치를 확인했다. 뉴스·누락 글 찾기·native 위치 복귀 보완을 보존한다. **이번 사용성 후보:** SW142 / [PR115](https://github.com/wonchance-art/life-haedo/pull/115)는 뉴스 첫 화면 기사 노출·주제/언어 안내와 동일 언어 비교를 통합하며 정확한 최종 검사는 PR 검사와 [검수 문서](../design-review/news-ready.md)를 따른다. 정기 실행의 실제 schedule·Apple 실기·개인 글 발견·직접 읽기 효용은 각각 별도 미확인이다. 아래 이전 SHA/SW와 대기 설명은 당시 이력이다.
+**최신 운영 출시:** main `9440f12` / SW142는 [push39370029653](https://github.com/wonchance-art/life-haedo/actions/runs/39370029653)의 총10개 성공과 실제 공개12파일 일치를 확인했다. 공개 공급은7출처/90개이며 수집 시각은 `2026-10-20T04:43:52Z`다. 뉴스 첫 화면 기사 노출·주제/언어 안내·동일 언어 비교와 이전 글 찾기/native 복귀 보완을 통합했다. 첫 실제 schedule·Apple 실기·개인 글 발견·직접 읽기 효용은 각각 별도 미확인이다. 아래 이전 SHA/SW와 후보·대기 설명은 당시 이력이다.
 
-**현재 전체 로드맵:** [PNG](../diagrams/rendered/product-roadmap-20261020.png) · [확대 SVG](../diagrams/rendered/product-roadmap-20261020.svg) · [PDF](../diagrams/rendered/product-roadmap-20261020.pdf). 남은 우선순위는 첫 정기 운영·실제 기기 완주, 동일 언어 직접 읽기 평가·추천 개선이다. 이유·선행·완료 기준은 아래 뉴스 실행의 다음 큰 작업 묶음을 따른다.
+**현재 전체 흐름:** [Input → Automated Process → Output 이미지](../diagrams/rendered/product-workflow-20261020.png) · [확대 SVG](../diagrams/rendered/product-workflow-20261020.svg) · [분류표](../diagrams/product-workflow-20261020.md). [단순 제품 구조도](../diagrams/rendered/product-structure-20261020.png)와 [이전 상세 현황](../diagrams/rendered/product-roadmap-20261020.png)도 보존한다. 남은 우선순위·선행·완료 기준은 아래 현재 실행의 다음 큰 작업 묶음을 따른다.
 
 **단순 구조도 — 사용자 요청 반영:** [이미지](../diagrams/rendered/product-structure-20261020.png) · [확대 SVG](../diagrams/rendered/product-structure-20261020.svg) · [편집 원본](../diagrams/product-structure-20261020.dot). 10월12일 상자·화살표 형식을 따라 뉴스→읽기·반응→선택 링크 보관과 자료실→홈 글쓰기→개인 활용/선택 공개를 연결했다. 수동 관심·회고와 후속 AI 분석, 기존 책 기능과 추가 확장 보류를 구분한다. 기능 구조를 설명하는 자료이며 실제 기기·번역 품질·추천 유용성의 검증 완료를 뜻하지 않는다. 다음 큰 작업과 완료 조건은 위와 동일하다.
 

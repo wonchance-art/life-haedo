@@ -1,5 +1,5 @@
 {
-  "scope": "문서용 최종 로컬 검수 기록. 최종 CI/운영 배포는 PR115 검사와 별도 공개 파일 영수증을 따름.",
+  "scope": "최종 로컬 검수와 운영 main push/배포/공개 파일 대조. 실제 사용자·기기·독서 평가는 아님.",
   "candidateCache": "haedo-v142",
   "unit": 1082,
   "static": {
@@ -157,5 +157,86 @@
   "priorFailures": [
     "기존 자동 갱신 검사 두 곳은 재로드 뒤 접힌 주제를 열지 않아 실패했다. 원본을 유지하고 실제 summary 클릭만 보완해 전체23개를 통과했다.",
     "실제 feed 검수 어댑터 두 번은 기존 단계의 주제 축적과 첫 주제 뒤 숨는 예시를 잘못 가정했다. 원본을 보존하고 중복 단계만 제외한 핵심7개를 통과했다."
-  ]
+  ],
+  "release": {
+    "mainSHA": "9440f12e008a5e9285be69cf06655967a9defeed",
+    "run": 39370029653,
+    "runURL": "https://github.com/wonchance-art/life-haedo/actions/runs/39370029653",
+    "jobsSuccess": 10,
+    "deployment": {
+      "id": 7191748552,
+      "sha": "9440f12e008a5e9285be69cf06655967a9defeed",
+      "environment": "github-pages",
+      "createdAt": "2026-10-20T04:44:03Z",
+      "state": "success",
+      "matchesExpectedMain": true
+    },
+    "worker": {
+      "cache": "haedo-v142",
+      "sha256": "62eed24916e34cd5285cc50d41f6a9b08c7a623003c133d2ad0a3352b7eb55d3"
+    },
+    "matchingFiles": 12,
+    "collection": {
+      "mainSHA": "9440f12e008a5e9285be69cf06655967a9defeed",
+      "run": 39370029653,
+      "job": 118458907658,
+      "status": "installed",
+      "candidateSHA256": "9b0d28b1de155cf59406a2676ae0bb3ab5f7c679a7456bc5cfa63a914c717f24",
+      "artifactSHA256": "9b0d28b1de155cf59406a2676ae0bb3ab5f7c679a7456bc5cfa63a914c717f24",
+      "publishedSHA256": "9b0d28b1de155cf59406a2676ae0bb3ab5f7c679a7456bc5cfa63a914c717f24",
+      "matchesPublished": true
+    },
+    "feed": {
+      "sha256": "9b0d28b1de155cf59406a2676ae0bb3ab5f7c679a7456bc5cfa63a914c717f24",
+      "generatedAt": "2026-10-20T04:43:52Z",
+      "articles": 90,
+      "sources": 7
+    },
+    "anonymousPublicBootstrap": {
+      "pass": true,
+      "status": 200,
+      "browser": "153.0.8010.12",
+      "scope": "Fresh anonymous Chromium profile on real public news URL; GET/HEAD static origin only, all other origins blocked. No account, credentials, production Auth/API/DB writes, original/Google requests, private fixture or real-device/usefulness claim.",
+      "page": {
+        "url": "https://wonchance-art.github.io/life-haedo/index.html?section=news",
+        "title": "해도 · 내 블로그",
+        "newsMenu": [
+          {
+            "id": "home",
+            "label": "홈",
+            "current": null
+          },
+          {
+            "id": "news",
+            "label": "뉴스",
+            "current": "page"
+          },
+          {
+            "id": "records",
+            "label": "자료실",
+            "current": null
+          },
+          {
+            "id": "tools",
+            "label": "도구",
+            "current": null
+          },
+          {
+            "id": "manage",
+            "label": "설정",
+            "current": null
+          }
+        ],
+        "publicWelcomeVisible": true,
+        "privateAppHidden": true,
+        "authenticated": false,
+        "width": 390,
+        "documentWidth": 390
+      },
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "blockedRequests": 0,
+      "failedRequests": 0
+    }
+  }
 }

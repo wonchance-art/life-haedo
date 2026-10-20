@@ -2,6 +2,8 @@
 
 2026-10-20. 사용자 요청에 따라 기존 workflow와 두 순환을 입력·자동 처리·결과로 다시 분류한다. 화면 메뉴 구성이 아니라 자료와 처리의 흐름이다.
 
+뉴스의 첫 화면 기사 노출과 주제·출처 펼치기, 동일 언어 비교를 출시했다. [바로 사용·검수](../design-review/news-ready.md)를 따른다. 도식의 입력→조건부 처리→결과 관계와 점선 후속 AI는 동일하다.
+
 ![현재 workflow](rendered/product-workflow-20261020.png)
 
 | Input | Automated Process | Output |
