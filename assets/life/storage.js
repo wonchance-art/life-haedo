@@ -910,6 +910,169 @@
       return saved;
     }
     const photoPost = () => root.HaedoLife?.PhotoPost || (typeof require === 'function' && require('./photo-post.js'));
+    const localPostKinds = ['photo', 'plain', 'page-draft', 'source', 'writing-draft'];
+    function localPostScope() {
+      scopeGuard();
+      if (!account) throw fault('auth_scope_required', '확인된 로그인 계정에서 이 기기의 글을 찾아 주세요.');
+    }
+    const localPostTitle = body => body.split(/\r?\n/).find(line => line.trim())?.slice(0, 200) || '';
+    async function scanLocalPosts(input = {}) {
+      localPostScope();
+      const settings = clone(input); onlyFields(settings, ['includeUnowned'], 'invalid_request');
+      if (settings.includeUnowned !== undefined && typeof settings.includeUnowned !== 'boolean') throw fault('invalid_request', '이전 자료의 포함 여부를 확인해 주세요.');
+      return transaction(['bundles', 'meta', 'staging'], 'readonly', async tx => {
+        const bundles = tx.objectStore('bundles'), meta = tx.objectStore('meta'), stages = tx.objectStore('staging');
+        const result = { workspaces: [], posts: [], issues: [], complete: true };
+        function issue(workspaceId, kind, cause) {
+          result.complete = false;
+          result.issues.push({ ...(workspaceId === undefined ? {} : { workspaceId }), kind, code: typeof cause === 'string' ? cause : errorInfo(cause).code });
+        }
+        // Inspect ownership before reading a bundle or any of its post blobs.
+        for (const workspaceId of await bundles.getAllKeys()) {
+          scopeGuard();
+          let owner;
+          try { owner = await workspaceOwner(meta, workspaceId); }
+          catch (_) { issue(undefined, 'workspace', 'workspace_ownership_unknown'); continue; }
+          if (owner ? !sameAccount(owner, account) : !settings.includeUnowned) continue;
+          const unowned = !owner;
+          let bundle;
+          try { bundle = await preservationBundle(tx, workspaceId, unowned); }
+          catch (cause) {
+            if (['workspace_access_denied', 'invalid_account_binding', 'invalid_sync_metadata'].includes(cause?.code)) issue(undefined, 'workspace', 'workspace_ownership_unknown');
+            else issue(workspaceId, 'workspace', cause);
+            continue;
+          }
+          const workspace = { workspaceId, title: bundle.title, unowned };
+          result.workspaces.push(workspace);
+          const add = (kind, row) => result.posts.push({ workspaceId, workspaceTitle: bundle.title, unowned, kind, ...row });
+          const summaryRow = await meta.get(`photo-posts:${workspaceId}`), summaries = new Map();
+          if (summaryRow !== undefined) {
+            if (!Array.isArray(summaryRow.value)) issue(workspaceId, 'photo', 'invalid_photo_post_index');
+            else for (const summary of summaryRow.value) {
+              if (!plain(summary) || typeof summary.id !== 'string' || summaries.has(summary.id)) issue(workspaceId, 'photo', 'invalid_photo_post_index');
+              else summaries.set(summary.id, summary);
+            }
+          }
+          const prefix = `photo-post:${workspaceId}:`, found = new Set();
+          let cursor = await meta.openCursor(root.IDBKeyRange.bound(prefix, prefix + '\uffff'));
+          while (cursor) {
+            const doc = cursor.value?.value;
+            try {
+              photoPost().validate(doc);
+              if (cursor.key !== prefix + doc.id) throw fault('invalid_photo_post', '글과 저장 식별자가 다릅니다.');
+              found.add(doc.id);
+              const summary = summaries.get(doc.id), expected = photoSummary(doc);
+              let indexState = summary ? 'mismatch' : 'missing';
+              if (summary) {
+                try { if (stablePayload(summary) === stablePayload(expected)) indexState = 'listed'; }
+                catch (_) { issue(workspaceId, 'photo', 'invalid_photo_post_index'); }
+              }
+              add('photo', { id: doc.id, revision: doc.revision, title: doc.title, status: doc.status,
+                archived: doc.archived === true, indexState, updatedAt: doc.updatedAt });
+            } catch (cause) { issue(workspaceId, 'photo', cause); }
+            cursor = await cursor.continue();
+          }
+          for (const id of summaries.keys()) if (!found.has(id)) issue(workspaceId, 'photo', 'photo_post_missing_or_invalid');
+          const workbenchRow = await meta.get(`workbench:${workspaceId}`);
+          if (workbenchRow !== undefined) {
+            const state = workbenchRow.value;
+            try { workbench().validate(state); if (state.workspaceId !== workspaceId) throw fault('workspace_mismatch', '다른 공간의 구성입니다.'); }
+            catch (cause) { issue(workspaceId, 'plain', cause); }
+            if (plain(state) && state.workspaceId === workspaceId && Number.isSafeInteger(state.revision) && state.revision >= 0 && Array.isArray(state.page?.posts)) {
+              const seen = new Set();
+              for (const post of state.page.posts) {
+                try {
+                  pagePosts().validate([post]);
+                  if (seen.has(post.id)) throw fault('invalid_page_post', '중복된 글 식별자입니다.');
+                  seen.add(post.id);
+                  add('plain', { id: post.id, revision: state.revision, title: localPostTitle(post.body), status: post.status,
+                    archived: false, indexState: 'listed', updatedAt: post.updatedAt });
+                } catch (cause) { issue(workspaceId, 'plain', cause); }
+              }
+            }
+          }
+          const draftsRow = await meta.get(`page-drafts:${workspaceId}`);
+          if (draftsRow !== undefined) {
+            const value = draftsRow.value;
+            try { validatePageDrafts(value); } catch (cause) { issue(workspaceId, 'page-draft', cause); }
+            if (plain(value) && Number.isSafeInteger(value.revision) && value.revision >= 0 && Array.isArray(value.posts)) {
+              const seen = new Set();
+              for (const post of value.posts) {
+                try {
+                  pagePosts().validate([post]);
+                  if (post.status !== 'draft' || seen.has(post.id)) throw fault('invalid_page_post', '초안 식별자와 상태를 확인하지 못했습니다.');
+                  seen.add(post.id);
+                  add('page-draft', { id: post.id, revision: value.revision, title: localPostTitle(post.body), status: 'draft',
+                    archived: false, indexState: 'listed', updatedAt: post.updatedAt });
+                } catch (cause) { issue(workspaceId, 'page-draft', cause); }
+              }
+            }
+          }
+          for (const source of bundle.sources) {
+            if (writing().isOwnSource(source, bundle)) {
+              const version = writing().latestVersion(bundle, source.id);
+              add('source', { id: source.id, revision: source.revision, title: source.title, status: 'saved', archived: false,
+                indexState: 'listed', updatedAt: source.updatedAt, versionId: version.id });
+            } else if (typeof source.sourceKey === 'string' && source.sourceKey.startsWith(writing().SOURCE_KEY_PREFIX)) issue(workspaceId, 'source', 'invalid_own_writing');
+          }
+          for (const stage of await stages.index('workspaceId').getAll(workspaceId)) {
+            if (stage?.kind !== 'writing') continue;
+            try {
+              writing().validateDraft(stage);
+              if (stage.workspaceId !== workspaceId) throw fault('workspace_mismatch', '다른 공간의 초안입니다.');
+              add('writing-draft', { id: stage.stageId, revision: stage.revision, title: stage.title, status: stage.state,
+                archived: false, indexState: 'listed', updatedAt: stage.updatedAt });
+            } catch (cause) { issue(workspaceId, 'writing-draft', cause); }
+          }
+        }
+        return result;
+      });
+    }
+    async function readLocalPostCandidate(input) {
+      localPostScope(); const ref = clone(input);
+      onlyFields(ref, ['workspaceId', 'kind', 'id', 'revision', 'unowned', 'versionId'], 'invalid_request');
+      requireId(ref.workspaceId, '작업공간'); requireId(ref.id, '글');
+      if (!localPostKinds.includes(ref.kind) || typeof ref.unowned !== 'boolean') throw fault('invalid_request', '찾은 글의 종류와 계정 범위를 확인해 주세요.');
+      if (ref.revision !== undefined) requireRevision(ref.revision);
+      if (ref.versionId !== undefined) requireId(ref.versionId, '원문 버전');
+      return transaction(['bundles', 'meta', 'staging'], 'readonly', async tx => {
+        const bundle = await preservationBundle(tx, ref.workspaceId, ref.unowned), meta = tx.objectStore('meta');
+        const changed = () => fault('local_post_changed', '찾은 뒤 글이 바뀌었습니다. 다시 찾아 최신 내용을 확인해 주세요.');
+        const missing = () => fault('local_post_missing', '찾은 글을 확인하지 못했습니다. 원본을 바꾸지 않았습니다.');
+        const check = revision => { if (ref.revision !== undefined && ref.revision !== revision) throw changed(); };
+        if (ref.versionId !== undefined && ref.kind !== 'source') throw fault('invalid_request', '이 글 종류에는 원문 버전을 지정할 수 없습니다.');
+        if (ref.kind === 'photo') {
+          const doc = (await meta.get(`photo-post:${ref.workspaceId}:${ref.id}`))?.value;
+          if (!doc) throw missing(); photoPost().validate(doc); check(doc.revision);
+          if (doc.id !== ref.id) throw missing();
+          return { kind: ref.kind, title: doc.title, doc: clone(doc) };
+        }
+        if (ref.kind === 'plain' || ref.kind === 'page-draft') {
+          const row = await meta.get(`${ref.kind === 'plain' ? 'workbench' : 'page-drafts'}:${ref.workspaceId}`), state = row?.value;
+          if (!state) throw missing();
+          // A valid candidate can still be read when an unrelated entry in the
+          // same wrapper is damaged. Never repair or rewrite that wrapper here.
+          if (!plain(state) || !Number.isSafeInteger(state.revision) || state.revision < 0) throw missing();
+          if (ref.kind === 'plain' ? state.workspaceId !== ref.workspaceId || !Array.isArray(state.page?.posts) : !Array.isArray(state.posts)) throw missing();
+          check(state.revision);
+          const posts = ref.kind === 'plain' ? state.page.posts : state.posts, matches = posts.filter(post => post?.id === ref.id);
+          if (matches.length !== 1) throw missing(); const doc = matches[0]; pagePosts().validate([doc]);
+          if (ref.kind === 'page-draft' && doc.status !== 'draft') throw missing();
+          return { kind: ref.kind, title: localPostTitle(doc.body), body: doc.body, doc: clone(doc) };
+        }
+        if (ref.kind === 'source') {
+          const source = bundle.sources.find(row => row.id === ref.id);
+          if (!source || !writing().isOwnSource(source, bundle)) throw missing(); check(source.revision);
+          const version = ref.versionId === undefined ? writing().latestVersion(bundle, source.id) : bundle.sourceVersions.find(row => row.id === ref.versionId && row.sourceId === source.id);
+          if (!version) throw changed();
+          return { kind: ref.kind, title: source.title, body: version.contentText, doc: clone({ source, version }) };
+        }
+        const stage = await tx.objectStore('staging').get(ref.id);
+        if (!stage || stage.workspaceId !== ref.workspaceId || stage.kind !== 'writing') throw missing();
+        writing().validateDraft(stage); check(stage.revision);
+        return { kind: ref.kind, title: stage.title, body: stage.text, doc: clone(stage) };
+      });
+    }
     async function listPhotoPosts(workspaceId) {
       collectionScope(workspaceId);
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
@@ -3046,6 +3209,7 @@
       readDiscoveryLanguageSettings, saveDiscoveryLanguageSettings,
       readDiscoveryActions, saveDiscoveryActions,
       readCollection, saveCollection, readNineBoard, saveNineBoard, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
+      scanLocalPosts, readLocalPostCandidate,
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, finishMaterialContinuityClaim,
       readPublicCover, savePublicCover,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,

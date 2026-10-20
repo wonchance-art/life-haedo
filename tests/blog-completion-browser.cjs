@@ -296,7 +296,7 @@ async function main() {
       await manager(page); const panel = row(page, photoPost.doc.id).locator('.blog-manager-server'); await panel.locator('summary').click();
       server.failure = 'upload'; await panel.getByRole('button', { name: '이 글 서버에 보관', exact: true }).click(); await page.waitForFunction(() => !document.querySelector('.blog-manager[aria-busy="true"]'));
       assert.equal(server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: photoPost.doc.id }), null);
-      assert.match(await page.locator('.blog-manager [role="status"]').innerText(), /서버|연결|실패/);
+      assert.match(await page.locator('.blog-manager > [role="status"]').innerText(), /서버|연결|실패/);
       server.failure = 'save-ack'; await panel.getByRole('button', { name: '이 글 서버에 보관', exact: true }).click(); await page.waitForFunction(() => !document.querySelector('.blog-manager[aria-busy="true"]'));
       const committed = server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: photoPost.doc.id }); assert.equal(committed.revision, 1);
       const pending = await page.evaluate(({ workspaceId, id }) => HaedoLife.Shell.storage.readBlogSyncState(workspaceId, id), { workspaceId: photoPost.workspaceId, id: photoPost.doc.id }); assert(pending.pending);

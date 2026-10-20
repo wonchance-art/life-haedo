@@ -9,6 +9,9 @@
   function create({ storage, workspaceId, auth, photoPosts, openPost, openLegacy, onOpenEvidence, blogSync, isCurrent = () => true }) {
     let host, surface, list, status, query, filter, detail, evidenceHost, evidence, rows = [], busy = null, disposed = false, epoch = 0, preview = null;
     let subscriptions = [], urls = [], shown = 40, navigating = false, focusedPostId = null;
+    let localFind = null, localStatus = null, localResults = null, localPreview = null, localSearch = null, localUnowned = null;
+    let localGeneration = 0, localRows = [], localShown = 40, localSelected = null, localScan = null;
+    const localUrls = new Set(), localDownloads = new Map();
     const valid = token => !disposed && isCurrent() && (token == null || token === epoch) && !!host?.isConnected;
     const announce = message => { if (valid()) status.textContent = message; };
     async function navigate(fn) { navigating = true; try { return await fn(); } finally { navigating = false; } }
@@ -277,6 +280,152 @@
       if (!entries.length) area.append(meta('서버에 보관한 글이 없습니다.'));
       surface.querySelector('.blog-manager-remote')?.remove(); surface.append(area);
     }
+    function clearLocalPreview() {
+      localSelected = null;
+      localPreview?.querySelectorAll('img').forEach(image => image.removeAttribute('src'));
+      localPreview?.replaceChildren();
+      if (localPreview) { localPreview.hidden = true; localPreview.dataset.state = 'idle'; }
+      localUrls.forEach(url => URL.revokeObjectURL(url)); localUrls.clear();
+    }
+    function clearLocalFind(releaseDownloads = false) {
+      localGeneration++; clearLocalPreview(); localRows = []; localScan = null; localShown = 40;
+      localResults?.replaceChildren();
+      if (releaseDownloads) {
+        localDownloads.forEach((timer, url) => { clearTimeout(timer); URL.revokeObjectURL(url); }); localDownloads.clear();
+      }
+    }
+    const localValid = token => valid() && localFind?.isConnected && localFind.open && token === localGeneration;
+    function localMessage(text, state = 'ready') {
+      if (!localStatus) return;
+      localStatus.textContent = text; localStatus.dataset.state = state;
+      localStatus.setAttribute('role', state === 'error' ? 'alert' : 'status');
+    }
+    const localRef = row => ({ workspaceId: row.workspaceId, kind: row.kind, id: row.id, revision: row.revision,
+      unowned: row.unowned, ...(row.versionId === undefined ? {} : { versionId: row.versionId }) });
+    function localDescription(row) {
+      const state = row.archived ? '보관한 글' : row.status === 'applied' ? '글에 반영된 초안' : stateLabels[row.status] || '상태 확인 필요';
+      return [row.workspaceTitle || '이름 없는 공간', kindLabels[row.kind] || '글', state,
+        row.unowned ? '로그인 전 자료' : '현재 계정 자료', row.indexState === 'missing' ? '목록 미등록' : row.indexState === 'mismatch' ? '목록 정보와 본문이 다름' : ''].filter(Boolean).join(' · ');
+    }
+    function renderLocalRows() {
+      if (!valid() || !localResults) return;
+      const term = localSearch.value.trim().toLocaleLowerCase('ko-KR');
+      const matching = localRows.filter(row => !term || String(row.title || '').toLocaleLowerCase('ko-KR').includes(term));
+      localResults.replaceChildren(meta(`${matching.length}개 글 확인`));
+      matching.slice(0, localShown).forEach(row => {
+        const article = el('article', null, 'blog-post'); article.dataset.localPostId = row.id; article.dataset.localKind = row.kind; article.dataset.workspaceId = row.workspaceId;
+        article.dataset.indexState = row.indexState; article.dataset.status = row.archived ? 'archived' : row.status;
+        article.append(el('h3', row.title?.trim() || '제목 없는 글'), meta(localDescription(row)),
+          button('내용 확인', () => inspectLocal(row)));
+        localResults.append(article);
+      });
+      if (matching.length > localShown) { const more = button('찾은 글 40개 더 보기', () => { localShown += 40; renderLocalRows(); }); more.id = 'blogLocalMore'; localResults.append(more); }
+      if (!matching.length) localResults.append(meta(term ? '제목이 일치하는 글이 없습니다. 검색어를 지워 확인해 주세요.' : localScan?.complete === true ?
+        '확인한 범위에서 글을 찾지 못했습니다. 다른 주소나 이미 삭제된 자료는 확인할 수 없습니다.' : '일부 자료를 확인하지 못했습니다. 아래 확인 상태를 참고해 주세요.'));
+      if (localScan && (!localScan.complete || localScan.issues?.length)) {
+        const issues = el('details', null, 'blog-local-issues'); issues.append(el('summary', '확인하지 못한 항목'));
+        const workspaces = new Map((localScan.workspaces || []).map(row => [row.workspaceId, row.title]));
+        const list = el('ul');
+        for (const issue of localScan.issues || []) {
+          const label = issue.code === 'photo_index_missing' ? '목록 미등록 글' : issue.code === 'photo_index_mismatch' ? '목록과 본문 불일치' : '읽기 또는 형식 확인 실패';
+          list.append(el('li', [workspaces.get(issue.workspaceId) || '공간 확인 필요', kindLabels[issue.kind] || '자료', label].join(' · ')));
+        }
+        if (!list.childNodes.length) list.append(el('li', '확인하지 못한 자료가 있습니다. 글 찾기를 다시 실행해 주세요.'));
+        issues.append(list); localResults.append(issues);
+      }
+    }
+    async function scanLocal() {
+      clearLocalFind(); const token = localGeneration, includeUnowned = localUnowned.checked;
+      localMessage('이 브라우저의 글을 확인하고 있습니다.', 'loading');
+      try {
+        if (typeof storage.scanLocalPosts !== 'function') throw new Error('이 브라우저의 글 찾기를 준비하지 못했습니다. 다시 열어 주세요.');
+        const result = await storage.scanLocalPosts({ includeUnowned });
+        if (!localValid(token) || localUnowned.checked !== includeUnowned) return;
+        if (!Array.isArray(result?.posts) || !Array.isArray(result?.workspaces) || !Array.isArray(result?.issues)) throw new Error('글 찾기 결과를 확인하지 못했습니다. 다시 실행해 주세요.');
+        localScan = result; localRows = result.posts;
+        renderLocalRows();
+        localMessage(!result.complete || result.issues.length ? '일부 자료를 확인하지 못했습니다. 확인된 글을 표시합니다.' : `${result.workspaces.length}개 공간에서 ${result.posts.length}개 글을 확인했습니다. 원래 자료는 변경하지 않았습니다.`, !result.complete || result.issues.length ? 'partial' : 'ready');
+      } catch (cause) { if (localValid(token)) localMessage(cause?.message || '글을 확인하지 못했습니다. 원래 자료는 변경하지 않았습니다. 다시 실행해 주세요.', 'error'); }
+    }
+    async function inspectLocal(row) {
+      clearLocalPreview(); const token = ++localGeneration, ref = localRef(row);
+      localMessage('선택한 글의 내용을 확인하고 있습니다.', 'loading');
+      try {
+        if (typeof storage.readLocalPostCandidate !== 'function') throw new Error('선택한 글 읽기를 준비하지 못했습니다. 다시 열어 주세요.');
+        const value = await storage.readLocalPostCandidate(ref);
+        if (!localValid(token)) return;
+        if (value?.kind !== row.kind) throw new Error('선택한 글의 종류가 달라졌습니다. 글 찾기를 다시 실행해 주세요.');
+        if (row.kind === 'photo') {
+          if (!life.Blog?.hydrate || !life.PhotoPost?.backup || !life.BlogPublicUI?.render) throw new Error('사진 글 읽기를 준비하지 못했습니다. 다시 열어 주세요.');
+          value.doc = await life.Blog.hydrate(life.Blog.pack(value.doc), value.doc.photos);
+          if (!localValid(token)) return;
+        } else if (typeof value.body !== 'string') throw new Error('글 본문을 확인하지 못했습니다. 원래 자료는 변경하지 않았습니다.');
+        localSelected = { row, ref, value, token };
+        const heading = el('h3', value.title?.trim() || '제목 없는 글'); heading.tabIndex = -1;
+        localPreview.append(heading, meta(localDescription(row)), meta('읽기 전용 사본입니다. 원래 글과 목록은 변경하지 않았습니다.'));
+        if (row.kind === 'photo') {
+          const display = life.PhotoPost.upgrade(value.doc), used = new Set(display.ops.filter(op => typeof op.insert !== 'string').map(op => op.insert.photo.id));
+          const originals = display.photos.filter(photo => used.has(photo.id)); display.status = 'saved'; display.archived = false;
+          if (!display.title.trim() && !life.PhotoPost.plainText(display).trim() && !originals.length && !display.attachments.length) localPreview.append(meta('본문이 비어 있는 초안입니다.'));
+          else {
+            const snapshot = life.Blog.publicSnapshot(display, { photoIds: originals.map(photo => photo.id) });
+            const photoUrls = new Map(snapshot.photos.map((photo, index) => { const url = URL.createObjectURL(originals[index].blob); localUrls.add(url); return [photo.id, url]; }));
+            localPreview.append(life.BlogPublicUI.render(snapshot, { photoUrl: photo => photoUrls.get(photo.id), privateView: true, allowOriginal: true }));
+          }
+          const unused = value.doc.photos.length - originals.length;
+          localPreview.append(meta(unused ? `본문에 사용된 사진만 ZIP에 포함합니다. 본문에 없는 사진 ${unused}장은 제외됩니다.` : '이 글의 본문과 본문에 사용된 사진 원본을 ZIP으로 저장합니다.'));
+        } else {
+          localPreview.append(el('div', value.body || '본문이 비어 있습니다.', 'blog-manager-excerpt'));
+          for (const item of value.doc?.attachments || []) localPreview.append(meta([item.title, item.creator, item.url].filter(Boolean).join(' · ')));
+        }
+        localPreview.append(button(row.kind === 'photo' ? '글·사진 ZIP 저장' : '본문 사본 저장', exportLocal), button('내용 닫기', () => { ++localGeneration; clearLocalPreview(); localMessage('내용 확인을 닫았습니다. 원래 자료는 변경하지 않았습니다.'); }));
+        localPreview.hidden = false; localPreview.dataset.state = 'ready';
+        localMessage('선택한 글을 읽기 전용으로 확인했습니다. 필요한 경우 이 사본을 파일로 저장할 수 있습니다.'); heading.focus({ preventScroll: true }); heading.scrollIntoView({ block: 'start', behavior: 'instant' });
+      } catch (cause) { if (localValid(token)) { clearLocalPreview(); localMessage(cause?.message || '글을 읽지 못했습니다. 글 찾기를 다시 실행해 주세요.', 'error'); } }
+    }
+    async function exportLocal() {
+      const selected = localSelected;
+      if (!selected || !localValid(selected.token)) return;
+      try {
+        // Recheck the selected revision/owner before a file is prepared. Never
+        // repair its index or install the read-only document into an editor.
+        const value = await storage.readLocalPostCandidate(selected.ref);
+        if (!localValid(selected.token) || localSelected !== selected) return;
+        let blob;
+        if (selected.row.kind === 'photo') {
+          const doc = await life.Blog.hydrate(life.Blog.pack(value.doc), value.doc.photos);
+          if (!localValid(selected.token) || localSelected !== selected) return;
+          blob = await life.PhotoPost.backup(doc);
+        } else { if (typeof value.body !== 'string') throw new Error('글 본문을 확인하지 못했습니다.'); blob = new Blob([value.body], { type: 'text/plain;charset=utf-8' }); }
+        if (!localValid(selected.token) || localSelected !== selected) return;
+        const url = URL.createObjectURL(blob), link = el('a');
+        link.href = url; link.download = selected.row.kind === 'photo' ? 'haedo-found-photo-post.zip' : 'haedo-found-post.txt'; link.click();
+        const timer = setTimeout(() => { URL.revokeObjectURL(url); localDownloads.delete(url); }, 30000); localDownloads.set(url, timer);
+        localMessage('사본 파일 저장을 요청했습니다. 다운로드한 파일을 확인해 주세요. 원래 자료는 변경하지 않았습니다.');
+      } catch (cause) { if (localValid(selected.token) && localSelected === selected) localMessage(cause?.message || '파일을 준비하지 못했습니다. 원래 자료는 변경하지 않았습니다.', 'error'); }
+    }
+    function mountLocalFind() {
+      localFind = el('details', null, 'blog-manager-local'); localFind.id = 'blogLocalFind'; localFind.append(el('summary', '이 브라우저에서 글 찾기'));
+      localFind.append(meta('현재 로그인한 계정의 이 브라우저 모든 공간에서 글·초안·보관한 글과 목록에 등록되지 않은 글을 확인합니다. 서버나 다른 주소는 확인하지 않습니다.'));
+      const label = el('label', null, 'blog-manager-check'); localUnowned = el('input'); localUnowned.type = 'checkbox'; localUnowned.id = 'blogLocalIncludeUnowned';
+      label.append(localUnowned, document.createTextNode('로그인 전 자료도 확인')); localFind.append(label);
+      localFind.append(meta('선택하면 계정과 연결되지 않은 이 브라우저 자료도 함께 확인합니다. 다른 계정의 자료는 확인하지 않습니다.'));
+      const scan = button('글 찾기', scanLocal); scan.id = 'blogLocalScan'; localFind.append(scan);
+      const search = el('label', null, 'life-field'); search.append(el('span', '찾은 글 제목 검색')); localSearch = el('input'); localSearch.type = 'search'; localSearch.maxLength = 1000; localSearch.id = 'blogLocalSearch'; search.append(localSearch); localFind.append(search);
+      localStatus = meta('아직 확인하지 않았습니다. 글 찾기를 눌러 주세요.'); localStatus.id = 'blogLocalStatus'; localStatus.dataset.state = 'idle'; localStatus.setAttribute('role', 'status'); localStatus.setAttribute('aria-live', 'polite');
+      localResults = el('div', null, 'blog-local-results'); localResults.id = 'blogLocalResults';
+      localPreview = el('section', null, 'blog-local-preview blog-manager-public-preview'); localPreview.id = 'blogLocalPreview'; localPreview.hidden = true; localPreview.dataset.state = 'idle'; localPreview.setAttribute('aria-label', '찾은 글 내용 확인');
+      localFind.append(localStatus, localResults, localPreview);
+      const section = localFind, ownerEpoch = epoch;
+      const currentSection = () => valid(ownerEpoch) && localFind === section;
+      // Native toggle events are queued. Clear before a user closes the details
+      // so a rapid close/reopen cannot keep an old body or adopt its late read.
+      section.querySelector(':scope > summary').addEventListener('click', () => { if (currentSection() && section.open) { clearLocalFind(); localMessage('아직 확인하지 않았습니다. 글 찾기를 눌러 주세요.', 'idle'); } });
+      localSearch.addEventListener('input', () => { if (!currentSection()) return; localShown = 40; ++localGeneration; clearLocalPreview(); if (localScan) renderLocalRows(); });
+      localUnowned.addEventListener('change', () => { if (!currentSection()) return; clearLocalFind(); localMessage('확인 범위가 바뀌었습니다. 글 찾기를 다시 눌러 주세요.', 'idle'); });
+      section.addEventListener('toggle', () => { if (currentSection() && !section.open) { clearLocalFind(); localMessage('아직 확인하지 않았습니다. 글 찾기를 눌러 주세요.', 'idle'); } });
+      return localFind;
+    }
     async function chooseEvidence(seed = {}) {
       if (!life.BlogEvidence?.create || !storage.savePhotoPostWithEvidence) throw new Error('근거를 연결할 준비가 되지 않았습니다. 원문과 글은 그대로 있습니다.');
       if (evidence?.dirty?.()) await evidence.flush();
@@ -305,7 +454,7 @@
     }
     async function mount(target, { evidenceSeed = null, viewState = null, postId = null } = {}) {
       if (disposed) throw new Error('종료한 글 관리 화면입니다.');
-      if (host) { await flush(); clearPreview(); evidence?.dispose(); evidence = null; subscriptions.forEach(unsubscribe => unsubscribe?.()); subscriptions = []; }
+      if (host) { await flush(); clearPreview(); clearLocalFind(true); evidence?.dispose(); evidence = null; subscriptions.forEach(unsubscribe => unsubscribe?.()); subscriptions = []; }
       focusedPostId = typeof postId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(postId) ? postId : null;
       if (postId !== null && !focusedPostId) throw new Error('관리할 글의 식별자를 확인해 주세요.');
       host = target; epoch++; surface = el('section', null, 'blog-manager'); surface.setAttribute('aria-label', focusedPostId ? '선택한 글 관리' : '전체 글 관리');
@@ -320,12 +469,12 @@
       header.append(query, filter, button('글 목록 다시 불러오기', load));
       status = meta('글을 불러오는 중입니다.'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
       detail = el('div'); evidenceHost = el('div'); list = el('div', null, 'blog-manager-list'); list.setAttribute('aria-label', '내 글 목록');
-      surface.append(header, status, button('서버에 보관한 글 확인', listRemote), button('자료 인용으로 새 글 쓰기', () => chooseEvidence()), detail, evidenceHost, list); host.replaceChildren(surface);
+      surface.append(header, status, button('서버에 보관한 글 확인', listRemote), button('자료 인용으로 새 글 쓰기', () => chooseEvidence()), mountLocalFind(), detail, evidenceHost, list); host.replaceChildren(surface);
       if (storage.subscribe) subscriptions.push(storage.subscribe(workspaceId, event => { if (valid() && event.workspaceId === workspaceId && ['photo_posts_changed', 'workbench_changed'].includes(event.type)) announce('저장한 글이 바뀌었습니다. 글 목록을 다시 불러와 확인해 주세요.'); }));
       await load();
       if (evidenceSeed && valid()) await chooseEvidence(evidenceSeed);
     }
-    return { mount, flush, getView, dirty: () => !!busy || !!evidence?.dirty?.(), dispose() { disposed = true; epoch++; clearPreview(); evidence?.dispose(); subscriptions.forEach(unsubscribe => unsubscribe?.()); subscriptions = []; rows = []; surface?.replaceChildren(); host = null; } };
+    return { mount, flush, getView, dirty: () => !!busy || !!evidence?.dirty?.(), dispose() { disposed = true; epoch++; clearPreview(); clearLocalFind(true); evidence?.dispose(); subscriptions.forEach(unsubscribe => unsubscribe?.()); subscriptions = []; rows = []; surface?.replaceChildren(); host = null; } };
   }
   life.BlogManager = Object.freeze({ create });
 })(globalThis);

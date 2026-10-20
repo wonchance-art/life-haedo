@@ -388,6 +388,9 @@ jobs:
       - name: Verify genuine cached history return and native navigation confirmation
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/travel-writing-history-browser.cjs
+      - name: Verify readonly local post finding and original preservation
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/local-post-finder-browser.cjs
       - name: Stop the local server
         if: always()
         run: |
@@ -403,6 +406,7 @@ jobs:
             .local/integrated-release-entry/
             .local/travel-writing-resume/
             .local/travel-writing-history/
+            .local/local-post-finder/
             .local/app-native/qa/
             .local/home-refinement/qa/
             .local/blog-journeys/after/
@@ -636,7 +640,7 @@ jobs:
       - name: Verify generated configuration and complete installed shell hashes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         env:
-          PREVIOUS_RELEASE: "38b4559ea28047e3623e27af760d6e5684f45e55"
+          PREVIOUS_RELEASE: "900c7bdcaef4129c51bed1112732f9baa4c48502"
         run: node scripts/verify-prepared-site.mjs
       - name: Verify the actual previous service worker updates without losing originals
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
