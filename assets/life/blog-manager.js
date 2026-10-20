@@ -380,7 +380,7 @@
         }
         localPreview.append(button(row.kind === 'photo' ? '글·사진 ZIP 저장' : '본문 사본 저장', exportLocal), button('내용 닫기', () => { ++localGeneration; clearLocalPreview(); localMessage('내용 확인을 닫았습니다. 원래 자료는 변경하지 않았습니다.'); }));
         localPreview.hidden = false; localPreview.dataset.state = 'ready';
-        localMessage('선택한 글을 읽기 전용으로 확인했습니다. 필요한 경우 이 사본을 파일로 저장할 수 있습니다.'); heading.focus({ preventScroll: true });
+        localMessage('선택한 글을 읽기 전용으로 확인했습니다. 필요한 경우 이 사본을 파일로 저장할 수 있습니다.'); heading.focus({ preventScroll: true }); heading.scrollIntoView({ block: 'start', behavior: 'instant' });
       } catch (cause) { if (localValid(token)) { clearLocalPreview(); localMessage(cause?.message || '글을 읽지 못했습니다. 글 찾기를 다시 실행해 주세요.', 'error'); } }
     }
     async function exportLocal() {

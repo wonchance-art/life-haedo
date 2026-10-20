@@ -209,6 +209,26 @@ async function main() {
         try { await HaedoLife.Shell.storage.readLocalPostCandidate(input); return null; } catch (error) { return error.code; }
       }, { workspaceId: seeded.foreignWorkspaceId, id: seeded.foreignPostId, kind: 'photo', revision: 1, unowned: false });
       assert.equal(denied, 'workspace_access_denied', 'A forged candidate reference must not cross account ownership');
+      // Inspect the first result on mobile before any download/second click can
+      // auto-scroll and conceal an off-screen, merely programmatically focused preview.
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.locator('#blogLocalResults article').first().getByRole('button', { name: '내용 확인', exact: true }).click();
+      await page.locator('#blogLocalPreview[data-state="ready"]').waitFor();
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const position = await page.evaluate(() => {
+        const heading = document.querySelector('#blogLocalPreview h3'), bounds = heading.getBoundingClientRect();
+        const header = document.querySelector('.life-header').getBoundingClientRect();
+        return { top: bounds.top, bottom: bounds.bottom, headerBottom: header.bottom,
+          height: innerHeight, focused: document.activeElement === heading };
+      });
+      assert.equal(position.focused, true);
+      assert.ok(position.top >= Math.max(0, position.headerBottom) - 1, 'Preview heading must clear the sticky header');
+      assert.ok(position.top < position.height && position.bottom > 0 && position.bottom <= position.height,
+        'First result preview heading must be visible before another click can scroll it into view');
+      report.mobilePreview = position;
+      await page.screenshot({ path: path.join(out, 'preview-mobile-390.png'), timeout: 20000 });
+      report.visual.push({ scene: 'preview', width: 390 });
+      await page.setViewportSize({ width: 1440, height: 1000 });
       await row(page, seeded.missingId).getByRole('button', { name: '내용 확인', exact: true }).click();
       const preview = page.locator('#blogLocalPreview'); await preview.waitFor();
       assert.ok((await preview.innerText()).includes(seeded.title));
