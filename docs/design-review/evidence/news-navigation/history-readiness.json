@@ -1,0 +1,306 @@
+{
+  "mainSHA": "900c7bdcaef4129c51bed1112732f9baa4c48502",
+  "failedRun": 39361306314,
+  "job": 118427887053,
+  "mainJobs": [
+    {
+      "name": "blog",
+      "conclusion": "success"
+    },
+    {
+      "name": "browser_suites (1)",
+      "conclusion": "failure"
+    },
+    {
+      "name": "browser_suites (3)",
+      "conclusion": "success"
+    },
+    {
+      "name": "browser_suites (2)",
+      "conclusion": "success"
+    },
+    {
+      "name": "check",
+      "conclusion": "success"
+    },
+    {
+      "name": "browser_suites (5)",
+      "conclusion": "success"
+    },
+    {
+      "name": "browser_suites (4)",
+      "conclusion": "success"
+    },
+    {
+      "name": "browser",
+      "conclusion": "failure"
+    },
+    {
+      "name": "deploy",
+      "conclusion": "skipped"
+    },
+    {
+      "name": "build",
+      "conclusion": "skipped"
+    }
+  ],
+  "failureObserved": "3 completed news checks, then fourth history check ended after about20s; original substage unknown",
+  "originalNewsReportRetained": false,
+  "artifact": {
+    "id": 12237738232,
+    "sha256": "5d087387b12b18cc5b3474df0ce313d124b1d4f51f69a0981761631a404f6929",
+    "members": 204,
+    "newsMembers": []
+  },
+  "jobLogSHA256": "27f4473351a1158814bcf16bd3bc8600ea7175feb562e6dd568c15e0fe634afc",
+  "naturalReproduction": {
+    "runs": 12,
+    "passed": 12,
+    "checksEach": 6,
+    "failures": 0,
+    "limit": "No natural reproduction; this does not establish the exact CI cause"
+  },
+  "controlledDelayMs": 400,
+  "controlled": {
+    "original": {
+      "pass": false,
+      "checks": 3,
+      "substage": "04.08 review removal after forward",
+      "error": "News condition did not settle: home roundtrip history legacy aliases and direct reload preserve selected language and reactions",
+      "productsUnchanged": true,
+      "events": [
+        {
+          "at": 1792465640856,
+          "kind": "pageshow",
+          "url": "http://127.0.0.1:4173/index.html",
+          "length": 2,
+          "review": false,
+          "trusted": true,
+          "persisted": false
+        },
+        {
+          "at": 1792465640988,
+          "kind": "pushState",
+          "url": "http://127.0.0.1:4173/index.html?section=news",
+          "length": 3,
+          "mode": "home",
+          "review": false,
+          "outerBusy": "true",
+          "destination": "/index.html?section=news"
+        },
+        {
+          "at": 1792465642202,
+          "kind": "pushState",
+          "url": "http://127.0.0.1:4173/index.html",
+          "length": 4,
+          "mode": "external-discovery",
+          "review": true,
+          "outerBusy": "true",
+          "busy": "false",
+          "destination": "/index.html"
+        },
+        {
+          "at": 1792465642236,
+          "kind": "popstate",
+          "url": "http://127.0.0.1:4173/index.html?section=news",
+          "length": 4,
+          "mode": "home",
+          "review": false,
+          "outerBusy": null,
+          "trusted": true
+        },
+        {
+          "at": 1792465642253,
+          "kind": "controlledReadStarted",
+          "url": "http://127.0.0.1:4173/index.html?section=news",
+          "outerBusy": "true",
+          "reviewBusy": "false"
+        },
+        {
+          "at": 1792465642260,
+          "kind": "popstate",
+          "url": "http://127.0.0.1:4173/index.html",
+          "length": 4,
+          "mode": "external-discovery",
+          "review": true,
+          "outerBusy": "true",
+          "busy": "false",
+          "trusted": true
+        },
+        {
+          "at": 1792465642653,
+          "kind": "controlledReadReleased",
+          "url": "http://127.0.0.1:4173/index.html",
+          "outerBusy": "true"
+        }
+      ],
+      "reportSHA256": "5d4e304cabd09d8e48f472a230d332167ea09f97ce22bbceeb133563c38bc705"
+    },
+    "fixed": {
+      "pass": true,
+      "checks": 6,
+      "substage": "04.19 idle after liked",
+      "error": null,
+      "productsUnchanged": true,
+      "events": [
+        {
+          "at": 1792465664282,
+          "kind": "pageshow",
+          "url": "http://127.0.0.1:4173/index.html",
+          "length": 2,
+          "review": false,
+          "trusted": true,
+          "persisted": false
+        },
+        {
+          "at": 1792465664444,
+          "kind": "pushState",
+          "url": "http://127.0.0.1:4173/index.html?section=news",
+          "length": 3,
+          "mode": "home",
+          "review": false,
+          "outerBusy": "true",
+          "destination": "/index.html?section=news"
+        },
+        {
+          "at": 1792465665667,
+          "kind": "pushState",
+          "url": "http://127.0.0.1:4173/index.html",
+          "length": 4,
+          "mode": "external-discovery",
+          "review": true,
+          "outerBusy": "true",
+          "busy": "false",
+          "destination": "/index.html"
+        },
+        {
+          "at": 1792465665691,
+          "kind": "popstate",
+          "url": "http://127.0.0.1:4173/index.html?section=news",
+          "length": 4,
+          "mode": "home",
+          "review": false,
+          "outerBusy": null,
+          "trusted": true
+        },
+        {
+          "at": 1792465665708,
+          "kind": "controlledReadStarted",
+          "url": "http://127.0.0.1:4173/index.html?section=news",
+          "outerBusy": "true",
+          "reviewBusy": "false"
+        },
+        {
+          "at": 1792465666108,
+          "kind": "controlledReadReleased",
+          "url": "http://127.0.0.1:4173/index.html?section=news",
+          "outerBusy": "true"
+        },
+        {
+          "at": 1792465666130,
+          "kind": "popstate",
+          "url": "http://127.0.0.1:4173/index.html",
+          "length": 4,
+          "mode": "external-discovery",
+          "review": true,
+          "outerBusy": null,
+          "busy": "false",
+          "trusted": true
+        },
+        {
+          "at": 1792465666183,
+          "kind": "pushState",
+          "url": "http://127.0.0.1:4173/index.html?section=news",
+          "length": 5,
+          "mode": "home",
+          "review": false,
+          "outerBusy": "true",
+          "destination": "/index.html?section=news"
+        },
+        {
+          "at": 1792465666538,
+          "kind": "pageshow",
+          "url": "http://127.0.0.1:4173/index.html?section=tools&view=external-discovery",
+          "length": 6,
+          "review": false,
+          "trusted": true,
+          "persisted": false
+        },
+        {
+          "at": 1792465666572,
+          "kind": "replaceState",
+          "url": "http://127.0.0.1:4173/index.html?section=news",
+          "length": 6,
+          "review": false,
+          "outerBusy": null,
+          "destination": "/index.html?section=news"
+        },
+        {
+          "at": 1792465667067,
+          "kind": "pageshow",
+          "url": "http://127.0.0.1:4173/life.html?view=external-discovery",
+          "length": 7,
+          "review": false,
+          "trusted": true,
+          "persisted": false
+        },
+        {
+          "at": 1792465667116,
+          "kind": "replaceState",
+          "url": "http://127.0.0.1:4173/life.html?section=news",
+          "length": 7,
+          "review": false,
+          "outerBusy": null,
+          "destination": "/life.html?section=news"
+        },
+        {
+          "at": 1792465667509,
+          "kind": "pageshow",
+          "url": "http://127.0.0.1:4173/index.html?section=news",
+          "length": 8,
+          "review": false,
+          "trusted": true,
+          "persisted": false
+        },
+        {
+          "at": 1792465667911,
+          "kind": "pageshow",
+          "url": "http://127.0.0.1:4173/index.html?section=news",
+          "length": 8,
+          "review": false,
+          "trusted": true,
+          "persisted": false
+        },
+        {
+          "at": 1792465668269,
+          "kind": "pushState",
+          "url": "http://127.0.0.1:4173/index.html",
+          "length": 9,
+          "mode": "external-discovery",
+          "review": true,
+          "outerBusy": "true",
+          "busy": "false",
+          "destination": "/index.html"
+        },
+        {
+          "at": 1792465668334,
+          "kind": "pushState",
+          "url": "http://127.0.0.1:4173/index.html?section=news",
+          "length": 10,
+          "mode": "home",
+          "review": false,
+          "outerBusy": "true",
+          "destination": "/index.html?section=news"
+        }
+      ],
+      "reportSHA256": "147194108fd4670ff2f568e886e6afa4821b1b2bc0385b8666260d53c80984b7"
+    }
+  },
+  "limitations": [
+    "Original CI error callsite and screenshot unavailable because the new report directory was omitted from artifact upload",
+    "Controlled reproduction proves the readiness gap, not the missing original CI substage",
+    "The fix waits for completed shell navigation and retains20s bounds and assertions",
+    "Busy-time rapid consecutive native history policy is unchanged",
+    "No product/public asset/storage/model change"
+  ]
+}

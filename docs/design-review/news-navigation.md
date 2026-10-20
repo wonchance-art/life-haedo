@@ -22,6 +22,8 @@
 
 ## 출시와 로드맵
 
+PR112의 최종 필수 CI는8개 성공했지만 첫 main 검사39361306314는 새 history 검사에서 실패해 배포가 생략됐다. 원본 보고서 보관 누락과 원인 확정 한계·400ms 비교·수정은 [화면 전환 완료 경계](news-history-readiness.md)에 기록했다. 운영 SW138과 후보139를 구분한다.
+
 현재 문서 작성 기준은 SW139 검수 후보이며 운영 반영 완료는 해당 PR의 최종 CI·main 배포·실제 공개 파일 영수증으로 확인한다. 이전 SW138 출시 증거는 [운영 출시 검수](discovery-release.md)를 따른다. 제품 변경과 분리된 그 문서 PR111의 증거도 이번 브랜치에 포함한다.
 
 사용자의 전체 로드맵 시각화 요청에는 [PNG](../diagrams/rendered/product-roadmap-20261020.png)·[SVG](../diagrams/rendered/product-roadmap-20261020.svg)·[PDF](../diagrams/rendered/product-roadmap-20261020.pdf)를 제공했다. 이는 10월20일 뉴스 배포 전 시점의 상태도이며 출시 뒤 날짜를 소급 변경하지 않는다. 최신 진행과 후속 완료 조건은 [로드맵](../life-tools-design/roadmap.md)을 따른다.
