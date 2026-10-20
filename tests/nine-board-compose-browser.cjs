@@ -313,10 +313,12 @@ async function main() {
       assert.deepEqual((await read(f.page)).docs.find(value => value.id === doc.id), edited);
       await f.page.getByRole('button', { name: '글 저장', exact: true }).click();
       await f.page.locator('.photo-read-heading').waitFor();
+      await f.page.locator('#photoServerStatus[data-state="synced"]').waitFor();
       await f.page.locator('.photo-posts').getByRole('button', { name: '글 수정', exact: true }).click();
       await f.page.locator('#photoTitle').fill('다시 다듬은 영역 여행 글');
       await f.page.getByRole('button', { name: '글 저장', exact: true }).click();
       await f.page.locator('.photo-read-heading').filter({ hasText: '다시 다듬은 영역 여행 글' }).waitFor();
+      await f.page.locator('#photoServerStatus[data-state="synced"]').waitFor();
       const replaced = await read(f.page), currentDoc = replaced.docs.find(value => value.title === '다시 다듬은 영역 여행 글');
       assert(currentDoc && currentDoc.id !== doc.id); assert.equal(currentDoc.status, 'saved');
       assert.deepEqual(currentDoc.ops, edited.ops); assert.deepEqual(currentDoc.photos, edited.photos);
@@ -335,7 +337,32 @@ async function main() {
       const saved = await read(f.page); unchanged(saved, before); assert.equal(saved.docs.length, before.docs.length + 1);
       assert.deepEqual(saved.docs.find(value => value.id === currentDoc.id), currentDoc);
       assert.equal(saved.docs.filter(value => value.status === 'draft').length, before.docs.filter(value => value.status === 'draft').length);
-      assert.deepEqual(f.remoteWrites, []); assert.equal(f.server.writes().length, 0);
+      const stored = await f.page.evaluate(async id => {
+        const storage = HaedoLife.Shell.storage, workspaceId = await storage.getActive();
+        const state = await storage.readBlogSyncState(workspaceId, id);
+        const manifest = HaedoLife.Blog.pack(HaedoLife.PhotoPost.compact(await storage.readPhotoPost(workspaceId, id)));
+        manifest.id = state.remoteId; manifest.replaces = null;
+        return { state, manifest };
+      }, currentDoc.id);
+      assert.equal(stored.state.enabled, true); assert.equal(stored.state.status, 'synced');
+      assert.equal(stored.state.localRevision, currentDoc.revision); assert.equal(stored.state.pending, null);
+      assert.equal(stored.state.remoteId, doc.id, 'Replacing a saved local ID must retain the original private server identity');
+      const remote = f.server.posts.get(accounts.a.id + ':' + stored.state.remoteId);
+      assert(remote); assert.equal(f.server.posts.size, 1); assert.equal(remote.owner, accounts.a.id);
+      assert.equal(remote.workspace_id, f.seed.workspaceId); assert.equal(remote.revision, 2);
+      assert.deepEqual(remote.data, stored.manifest); assert.equal(remote.publication, null);
+      assert.equal(f.server.saves().length, 2); assert.equal(new Set(f.server.saves().map(call => call.body.p_operation_id)).size, 2);
+      for (const photo of remote.data.photos) {
+        const original = f.server.originals.get(remote.assets[photo.id].path);
+        assert(original); assert.equal(sha(original.bytes), photo.digest); assert.equal(original.bytes.length, photo.size);
+        assert.equal(original.type, photo.type); assert.equal(original.bytes.readUInt32BE(16), photo.width); assert.equal(original.bytes.readUInt32BE(20), photo.height);
+      }
+      assert.equal(f.server.assetCalls.filter(call => call.method === 'POST').length, 1, 'The unchanged original must not be uploaded twice');
+      for (const marker of [...forbidden, f.seed.ref.sourceId, f.seed.ref.sourceVersionId]) assert(!JSON.stringify(remote.data).includes(marker), 'Private or unselected material reached the private post');
+      assert(f.remoteWrites.length > 0);
+      assert(f.remoteWrites.every(url => /^\/rest\/v1\/rpc\/life_blog_(?:save|prepare_asset)$/.test(url) || url.startsWith('/storage/v1/object/haedo-blog-originals/')));
+      assert(f.server.blogCalls.every(call => !/publish/.test(call.rpc)), 'Saving must never publish or withdraw');
+      assert.equal(f.server.writes().length, 0, 'Saving a post must not upload the source workspace');
     });
     assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.external, []); report.pass = true;
   } catch (error) {

@@ -175,7 +175,10 @@ async function main() {
   const preserved = p => p.evaluate(async () => { const s = HaedoLife.Shell.storage, id = await s.getActive(); return { bundle: await s.read(id), workbench: await s.readWorkbench(id), nine: await s.readNineBoard(id), collection: await s.readCollection(id) }; });
   const manager = async p => { await nav(p, 'manage'); await p.getByRole('button', { name: '글 관리', exact: true }).click(); await p.locator('.blog-manager-list[data-state="ready"]').waitFor(); };
   const row = (p, id) => p.locator('.blog-post[data-post-id="' + id + '"]');
-  const savedPost = async (p, title, images = []) => {
+  const serverState = async (p, id, state = 'synced') => {
+    await p.locator('#photoServerStatus[data-post-id="' + id + '"][data-state="' + state + '"]').waitFor();
+  };
+  const savedPost = async (p, title, images = [], { beforeSave, expectedServerState = 'synced' } = {}) => {
     await nav(p, 'home'); await p.locator('[data-home-destination="write"]:visible').click(); await p.locator('#photoTitle').fill(title);
     await p.locator('.ql-editor').fill('기억한 풍경을 내 말로 남깁니다. 🌱\n이 글만 직접 골라 공개합니다.');
     if (images.length) {
@@ -189,8 +192,10 @@ async function main() {
         await p.getByRole('textbox', { name: '사진 대체 텍스트', exact: true }).fill('합성 원본 풍경 ' + i);
       }
     }
+    if (beforeSave) await beforeSave();
     await click(p, '글 저장'); await p.locator('.photo-article').waitFor();
     const stored = await data(p), doc = stored.docs.find(value => value.title === title && value.status === 'saved'); assert(doc);
+    await serverState(p, doc.id, expectedServerState);
     return { doc, workspaceId: stored.workspaceId };
   };
   const review = async (p, id, selected = []) => {
@@ -221,13 +226,15 @@ async function main() {
     await p.waitForFunction(() => !document.querySelector('.blog-manager[aria-busy="true"]'));
     return syncState(p, id);
   };
-  const editPhotoPost = async (p, doc, title, prefix) => {
+  const editPhotoPost = async (p, doc, title, prefix, { beforeSave, expectedServerState = 'synced' } = {}) => {
     await manager(p); await row(p, doc.id).getByRole('button', { name: doc.title, exact: true }).click(); await p.locator('.photo-article').waitFor();
     await click(p, '글 수정'); await p.locator('#photoTitle').fill(title);
     await p.evaluate(prefix => Quill.find(document.querySelector('.ql-container')).insertText(0, prefix, 'user'), prefix);
+    if (beforeSave) await beforeSave();
     await click(p, '글 저장'); await p.locator('.photo-article').waitFor();
     const next = (await data(p)).docs.find(value => value.status === 'saved' && value.title === title);
     assert(next); assert.notEqual(next.id, doc.id); assert.deepEqual(next.photos.map(photo => photo.digest), doc.photos.map(photo => photo.digest));
+    await serverState(p, next.id, expectedServerState);
     return next;
   };
   const chooseConflict = async (p, id, name) => {
@@ -260,7 +267,12 @@ async function main() {
     await page.evaluate(async () => { const s = HaedoLife.Shell.storage, c = HaedoLife.Core, b = await s.read(await s.getActive()), p = await c.prepareImport({ origin: 'obsidian', title: '기존 원문', text: '\ufeff기존 원문은 바뀌지 않는다.\r\n정확한 위치 🌱', authorRelation: 'other' }, b); const result = await s.commitLocal({ operationId: c.id(), workspaceId: b.workspaceId, baseRevision: b.revision, changes: c.buildImportChanges(b, p, []) }); if (result.status !== 'stored') throw Error('Anonymous source seed failed'); });
     original = await preserved(page); const suffix = String(Date.now());
     await check('Default new text post stays private until explicit review; real SQL publication and anonymous blog/detail preserve all existing data', async () => {
-      first = await savedPost(page, '새 작성기의 첫 공개 글 ' + suffix); assert.equal(first.doc.photos.length, 0); assert.equal(server.blogRequests.filter(r => r.rpc === 'life_blog_save').length, 0);
+      first = await savedPost(page, '새 작성기의 첫 공개 글 ' + suffix); assert.equal(first.doc.photos.length, 0);
+      const privateSaves = server.blogRequests.filter(r => r.rpc === 'life_blog_save');
+      assert.equal(privateSaves.length, 1); assert.equal(privateSaves[0].body.p_post_id, first.doc.id);
+      assert.equal(privateSaves[0].body.p_workspace_id, first.workspaceId); assert.equal(privateSaves[0].body.p_expected_revision, 0);
+      const firstPrivate = server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: first.doc.id });
+      assert.equal(firstPrivate.revision, 1); assert.deepEqual(firstPrivate.data.ops, first.doc.ops); assert.equal(firstPrivate.publication, null);
       await manager(page); await review(page, first.doc.id); assert.equal(server.blogRequests.filter(r => r.rpc === 'life_blog_publish').length, 0);
       firstURL = await publishedURL(page); firstToken = new URL(firstURL).searchParams.get('post'); assert.notEqual(firstToken, first.doc.id);
       await visitor.page.goto(firstURL); await publicState(visitor.page, 'published'); assert.match(await visitor.page.locator('#blogContent').innerText(), /이 글만 직접 골라 공개/);
@@ -275,6 +287,7 @@ async function main() {
       await click(page, '공개 검토 닫기'); await row(page, first.doc.id).getByRole('button', { name: first.doc.title, exact: true }).click(); await page.locator('.photo-article').waitFor();
       await click(page, '글 수정'); await page.locator('.ql-editor').fill('명시 갱신 뒤에만 보일 새 본문 🌿\n'); await click(page, '글 저장'); await page.locator('.photo-article').waitFor();
       const changed = (await data(page)).docs.find(doc => doc.title === first.doc.title && doc.status === 'saved'); assert(changed); assert.notEqual(changed.id, first.doc.id);
+      await serverState(page, changed.id);
       await visitor.page.locator('#blogRefresh').click(); await publicState(visitor.page, 'published'); assert(!(await visitor.page.locator('#blogContent').innerText()).includes('명시 갱신 뒤에만'));
       const before = server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: first.doc.id });
       await manager(page); await review(page, changed.id); assert.equal(await publishedURL(page), firstURL);
@@ -290,13 +303,16 @@ async function main() {
         const c = canvas.getContext('2d'); c.fillStyle = index ? '#f2decb' : '#cadfe1'; c.fillRect(0, 0, width, height); c.fillStyle = '#243b49'; c.font = '70px sans-serif'; c.fillText('익명 원본 사진 ' + index, 90, 200);
         return { width, height, type, data: canvas.toDataURL(type, .95).split(',')[1] };
       }));
-      photoPost = await savedPost(page, '선택한 원본 사진 글 ' + suffix, images.map((image, i) => ({ name: 'anonymous-original-' + i + (i ? '.jpg' : '.png'), mimeType: image.type, buffer: Buffer.from(image.data, 'base64') })));
+      photoPost = await savedPost(page, '선택한 원본 사진 글 ' + suffix, images.map((image, i) => ({ name: 'anonymous-original-' + i + (i ? '.jpg' : '.png'), mimeType: image.type, buffer: Buffer.from(image.data, 'base64') })), {
+        beforeSave: () => { server.failure = 'upload'; }, expectedServerState: 'error'
+      });
       assert.deepEqual(photoPost.doc.photos.map(photo => photo.digest), images.map(image => digest(Buffer.from(image.data, 'base64'))));
       const photoManifest = photoPost.doc.photos.map(({ blob, ...metadata }) => metadata);
-      await manager(page); const panel = row(page, photoPost.doc.id).locator('.blog-manager-server'); await panel.locator('summary').click();
-      server.failure = 'upload'; await panel.getByRole('button', { name: '이 글 서버에 보관', exact: true }).click(); await page.waitForFunction(() => !document.querySelector('.blog-manager[aria-busy="true"]'));
+      assert.equal(server.failure, null, 'The explicit save must reach and consume the original-upload failure');
       assert.equal(server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: photoPost.doc.id }), null);
-      assert.match(await page.locator('.blog-manager > [role="status"]').innerText(), /서버|연결|실패/);
+      await manager(page); const panel = row(page, photoPost.doc.id).locator('.blog-manager-server'); await panel.locator('summary').click();
+      await panel.locator('[data-sync-post="' + photoPost.doc.id + '"]').filter({ hasText: '서버 보관을 확인하지 못했습니다.' }).waitFor();
+      assert.match(await panel.locator('[data-sync-post="' + photoPost.doc.id + '"]').innerText(), /서버 보관을 확인하지 못했습니다/);
       server.failure = 'save-ack'; await panel.getByRole('button', { name: '이 글 서버에 보관', exact: true }).click(); await page.waitForFunction(() => !document.querySelector('.blog-manager[aria-busy="true"]'));
       const committed = server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: photoPost.doc.id }); assert.equal(committed.revision, 1);
       const pending = await page.evaluate(({ workspaceId, id }) => HaedoLife.Shell.storage.readBlogSyncState(workspaceId, id), { workspaceId: photoPost.workspaceId, id: photoPost.doc.id }); assert(pending.pending);
@@ -407,9 +423,11 @@ async function main() {
       assert.deepEqual(server.rpc(null, 'life_blog_public_read', { p_token: continuityToken }), bPublication);
       phase('B edit returns to A as a fresh copy; the original A and selected public snapshot survive');
 
-      const editedA = await editPhotoPost(page, returnedA, 'A에서 이어 쓴 여행 글 ' + suffix, 'A에서 이어 쓴 두 번째 수정\n');
+      const editedA = await editPhotoPost(page, returnedA, 'A에서 이어 쓴 여행 글 ' + suffix, 'A에서 이어 쓴 두 번째 수정\n', {
+        beforeSave: () => { server.failure = 'save-ack'; }, expectedServerState: 'error'
+      });
       const exactEditedA = await fingerprint(page, editedA.id);
-      server.failure = 'save-ack'; await synchronize(page, editedA.id);
+      assert.equal(server.failure, null, 'The explicit edit save must commit SQL and lose its acknowledgement');
       const savePending = await syncState(page, editedA.id); assert(savePending.pending);
       assert.equal(readRemote().revision, initialRemoteRevision + 2); assert.equal(readRemote().data.title, editedA.title);
       const uploadsAfterSave = server.assetRequests.filter(request => request.method === 'POST').length;
@@ -424,7 +442,7 @@ async function main() {
       assert.equal(aPublication.revision, initialPublicationRevision + 2); assert.equal(aPublication.snapshot.photos[0].digest, editedA.photos[0].digest);
       phase('A edit replays the same lost save receipt and explicitly updates the same active public URL');
 
-      const competingB = await editPhotoPost(second.page, editedB, 'B의 별도 충돌 입력 ' + suffix, 'B가 별도로 남긴 충돌 입력\n');
+      const competingB = await editPhotoPost(second.page, editedB, 'B의 별도 충돌 입력 ' + suffix, 'B가 별도로 남긴 충돌 입력\n', { expectedServerState: 'conflict' });
       const exactCompetingB = await fingerprint(second.page, competingB.id);
       const firstBConflict = await synchronize(second.page, competingB.id);
       assert.equal(firstBConflict.status, 'conflict'); assert.equal(firstBConflict.conflict.remoteRevision, initialRemoteRevision + 2);

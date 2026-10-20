@@ -239,7 +239,8 @@
       }) });
     const workbenchModes = ['activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'public-pages'];
     const workbench = global.HaedoLife.WorkbenchUI?.create({
-      storage, core, host: main, getBundle: () => state.bundle,
+      storage, core, host: main, getBundle: () => state.bundle, blogSync,
+      onManagePost: postId => navigate('blog', { blogPostId: postId }),
       isDisposed: () => disposed, announce, onLocalSaved: clearError,
       onBundleUpdated: bundle => {
         if (disposed || state.bundle?.workspaceId !== bundle.workspaceId || bundle.revision < state.bundle.revision) return;
@@ -1125,7 +1126,7 @@
       }
       if (!['import', 'batch', 'source'].includes(mode) && !chapterImportOptions) chapterImport = null;
       if (!['import', 'source'].includes(mode)) externalImportContext = null;
-      blogOpenOptions = mode === 'blog' ? { evidenceSeed: options?.evidenceSeed } : null;
+      blogOpenOptions = mode === 'blog' ? { evidenceSeed: options?.evidenceSeed, postId: options?.blogPostId } : null;
       collectionOpenOptions = mode === 'collection' ? { itemId: collectionItemId } : null;
       writingOpenOptions = mode === 'write' ? writing || {} : null;
       Object.assign(state, viewOptions, { mode });

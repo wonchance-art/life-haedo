@@ -94,7 +94,7 @@
             await storage.savePhotoPost(workspaceId, doc, doc.revision);
             if (!valid()) return; clearPreview(); await load();
           }));
-          if (row.status === 'draft') actions.append(meta('초안은 이 브라우저에 보관합니다. 글을 저장한 뒤 한 편씩 서버에 보관할 수 있습니다.'));
+          if (row.status === 'draft') actions.append(meta('초안은 이 브라우저에 보관합니다. 기본 글쓰기에서 글을 저장하면 본문과 사진 원본을 내 계정 서버에도 비공개로 보관합니다.'));
           else {
             const server = el('details', null, 'blog-manager-server'); server.append(el('summary', '서버 보관·다른 기기'));
             const syncMessage = meta('이 글의 전체 본문과 모든 사진 원본·파일 안의 메타데이터를 내 계정 서버에 비공개로 보관합니다. 다른 글은 전송하지 않습니다. 인용 본문과 출처 URL은 함께 옮기지만 정확한 원문 연결 정보는 이 브라우저에 별도로 보관하며 원문 자료 백업과도 구분합니다.'); server.append(syncMessage);

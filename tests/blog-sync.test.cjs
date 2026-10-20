@@ -71,6 +71,128 @@ test('selected saved post uploads exact originals before one CAS document commit
   await f.manager.sync(WS, f.d.id); assert.equal(f.stats.saves.length, 1); assert.equal(f.stats.uploads, 2); f.manager.dispose();
 });
 
+test('default private storage accepts saved text and original photos without publishing or editing the local document', async () => {
+  for (const count of [0, 2]) {
+    const f = await fixture(count), before = copy(f.d);
+    const result = await f.manager.saveDefault(WS, f.d.id, { expectedLocalRevision: f.d.revision });
+    assert.equal(result.status, 'synced'); assert.equal(f.stats.uploads, count); assert.equal(f.stats.saves.length, 1);
+    assert.deepEqual(f.rows.get(f.d.id).data, Blog.pack(Photo.compact(before))); assert.deepEqual(f.posts.get(f.d.id), before);
+    assert.equal(f.rows.get(f.d.id).publication, null); assert.equal(f.stats.publishes.length, 0);
+    await f.manager.saveDefault(WS, f.d.id, { expectedLocalRevision: f.d.revision });
+    assert.equal(f.stats.saves.length, 1); assert.equal(f.stats.uploads, count); f.manager.dispose();
+  }
+});
+
+test('default storage rejects drafts and preserves an explicit pause or conflict without remote access or metadata writes', async () => {
+  const draft = await fixture(); draft.posts.get(draft.d.id).status = 'draft';
+  await assert.rejects(draft.manager.saveDefault(WS, draft.d.id, { expectedLocalRevision: 1 }), { code: 'invalid_request' });
+  assert.equal(draft.states.size, 0); assert.equal(draft.stats.prepares, 0); assert.equal(draft.stats.saves.length, 0); draft.manager.dispose();
+  for (const action of ['pause', 'conflict']) {
+    const f = await fixture(0); await f.manager.connect(WS, f.d.id);
+    if (action === 'pause') await f.manager.pause(WS, f.d.id);
+    else {
+      const row = f.rows.get(f.d.id); row.revision++; row.data.title = '다른 기기의 글';
+      f.posts.get(f.d.id).title = '이 기기의 글'; f.posts.get(f.d.id).revision++;
+      assert.equal((await f.manager.sync(WS, f.d.id)).status, 'conflict');
+    }
+    const state = copy(f.states), posts = copy(f.posts), rows = copy(f.rows), saves = f.stats.saves.length;
+    f.auth.verify = async () => { throw Error('paused/conflicted default storage must not verify or transfer'); };
+    f.remote.read = async () => { throw Error('paused/conflicted default storage must not read the remote document'); };
+    const result = await f.manager.saveDefault(WS, f.d.id, { expectedLocalRevision: 1 });
+    assert.equal(result.status, action === 'pause' ? 'paused' : 'conflict');
+    assert.deepEqual(f.states, state); assert.deepEqual(f.posts, posts); assert.deepEqual(f.rows, rows);
+    assert.equal(f.stats.saves.length, saves); assert.equal(f.stats.publishes.length, 0); f.manager.dispose();
+  }
+});
+
+test('offline verification leaves a durable default intent visible after reopen and retry stores the same saved originals', async () => {
+  const f = await fixture(), before = copy(f.d), verify = f.auth.verify;
+  f.auth.verify = async () => { throw fault('network_error'); };
+  await assert.rejects(f.manager.saveDefault(WS, f.d.id, { expectedLocalRevision: 1 }), { code: 'network_error' });
+  assert.equal(f.stats.prepares, 0); assert.equal(f.stats.saves.length, 0); assert.equal(f.rows.size, 0);
+  const persisted = f.states.get(f.d.id); assert.equal(persisted.enabled, true); assert.equal(persisted.error, 'network_error');
+  assert.equal(persisted.pending, null); assert.deepEqual(f.posts.get(f.d.id), before); f.manager.dispose();
+  const reopened = Sync.create({ storage: f.storage, auth: f.auth, blog: Blog, photoPost: Photo, remote: f.remote, makeId: Core.id });
+  assert.equal((await reopened.getState(WS, f.d.id)).status, 'error');
+  f.auth.verify = verify; assert.equal((await reopened.saveDefault(WS, f.d.id, { expectedLocalRevision: 1 })).status, 'synced');
+  assert.equal(f.stats.uploads, 2); assert.equal(f.rows.size, 1); assert.equal(f.stats.publishes.length, 0); reopened.dispose();
+});
+
+test('a saved post changed while default verification awaits cannot upload the newer revision', async () => {
+  const f = await fixture(), held = deferred(), started = deferred();
+  f.auth.verify = async () => { started.resolve(); await held.promise; return f.auth.user; };
+  const pending = f.manager.saveDefault(WS, f.d.id, { expectedLocalRevision: 1 }); await started.promise;
+  const changed = f.posts.get(f.d.id); changed.title = '저장 확인 뒤 바뀐 글'; changed.revision++;
+  held.resolve(); await assert.rejects(pending, { code: 'local_changed' });
+  assert.equal(f.stats.prepares, 0); assert.equal(f.stats.saves.length, 0); assert.equal(f.stats.publishes.length, 0);
+  assert.equal(f.posts.get(f.d.id).title, changed.title); assert.equal((await f.manager.getState(WS, f.d.id)).status, 'error'); f.manager.dispose();
+});
+
+test('default partial upload and lost acknowledgement replay their durable operations across reopen without duplicating originals', async () => {
+  for (const failure of ['photo', 'ack']) {
+    const f = await fixture(); if (failure === 'photo') f.stats.failPhoto = f.d.photos[1].id; else f.stats.loseSave = true;
+    await assert.rejects(f.manager.saveDefault(WS, f.d.id, { expectedLocalRevision: 1 }), { code: 'network_error' });
+    const pending = copy(f.states.get(f.d.id).pending), before = copy(f.posts); assert(pending.operationId);
+    f.manager.dispose(); f.stats.failPhoto = null;
+    const reopened = Sync.create({ storage: f.storage, auth: f.auth, blog: Blog, photoPost: Photo, remote: f.remote, makeId: Core.id });
+    assert.equal((await reopened.saveDefault(WS, f.d.id, { expectedLocalRevision: 1 })).status, 'synced');
+    assert.equal(f.rows.size, 1); assert.equal(f.rows.get(f.d.id).revision, 1); assert.equal(f.stats.uploads, 2);
+    assert.equal(f.stats.saves.at(-1).operationId, pending.operationId); assert.deepEqual(f.stats.saves.at(-1).data, pending.manifest);
+    if (failure === 'ack') assert.deepEqual(f.stats.saves[0], f.stats.saves[1]);
+    assert.deepEqual(f.posts, before); assert.equal(f.stats.publishes.length, 0); reopened.dispose();
+  }
+});
+
+test('default storage acknowledges an older retained operation before storing the newly accepted saved replacement', async () => {
+  const f = await fixture(); f.stats.loseSave = true;
+  await assert.rejects(f.manager.saveDefault(WS, f.d.id, { expectedLocalRevision: 1 }), { code: 'network_error' });
+  const pending = copy(f.states.get(f.d.id).pending), edited = savedEdit(f, f.d.id, '새로 명시 저장한 글');
+  const result = await f.manager.saveDefault(WS, edited.id, { expectedLocalRevision: edited.revision });
+  assert.equal(result.status, 'synced'); assert.equal(result.localRevision, edited.revision);
+  assert.equal(f.stats.saves.length, 3); assert.deepEqual(f.stats.saves[0], f.stats.saves[1]);
+  assert.equal(f.stats.saves[1].operationId, pending.operationId); assert.notEqual(f.stats.saves[2].operationId, pending.operationId);
+  assert.equal(f.rows.get(f.d.id).revision, 2); assert.equal(f.rows.get(f.d.id).data.title, edited.title);
+  assert.deepEqual(f.posts.get(edited.id), edited); assert.equal(f.stats.uploads, 2); assert.equal(f.stats.publishes.length, 0); f.manager.dispose();
+});
+
+test('default storage has a bounded accepted revision and never drains a later edit made during upload', async () => {
+  const f = await fixture(), held = deferred(), started = deferred(), upload = f.remote.uploadAsset;
+  f.remote.uploadAsset = async (...args) => { started.resolve(); await held.promise; return upload(...args); };
+  const saving = f.manager.saveDefault(WS, f.d.id, { expectedLocalRevision: 1 }); await started.promise;
+  const local = f.posts.get(f.d.id); local.title = '첫 저장 이후의 새 입력'; local.revision++;
+  held.resolve(); const result = await saving;
+  assert.equal(result.status, 'pending'); assert.equal(result.localRevision, 1); assert.equal(f.stats.saves.length, 1);
+  assert.equal(f.rows.get(f.d.id).data.title, f.d.title); assert.equal(f.posts.get(f.d.id).title, local.title);
+  assert.equal(f.stats.publishes.length, 0); f.manager.dispose();
+});
+
+test('pause or account replacement during a default original transfer prevents a late document commit', async () => {
+  for (const action of ['pause', 'account']) {
+    const f = await fixture(), held = deferred(), started = deferred(), upload = f.remote.uploadAsset, before = copy(f.posts);
+    f.remote.uploadAsset = async (...args) => { started.resolve(); await held.promise; return upload(...args); };
+    const pending = f.manager.saveDefault(WS, f.d.id, { expectedLocalRevision: 1 }); await started.promise;
+    if (action === 'pause') await f.manager.pause(WS, f.d.id); else { f.auth.epoch++; f.auth.user = { id: OTHER }; }
+    held.resolve(); await assert.rejects(pending, { code: 'request_cancelled' });
+    assert.equal(f.stats.saves.length, 0); assert.equal(f.stats.publishes.length, 0); assert.deepEqual(f.posts, before);
+    if (action === 'pause') {
+      const state = copy(f.states);
+      assert.equal((await f.manager.saveDefault(WS, f.d.id, { expectedLocalRevision: 1 })).status, 'paused'); assert.deepEqual(f.states, state);
+    }
+    f.manager.dispose();
+  }
+});
+
+test('a default save queued before pause keeps its original generation and cannot re-enable the paused transfer', async () => {
+  const f = await fixture(), held = deferred(), started = deferred(), upload = f.remote.uploadAsset;
+  f.remote.uploadAsset = async (...args) => { started.resolve(); await held.promise; return upload(...args); };
+  const first = f.manager.saveDefault(WS, f.d.id, { expectedLocalRevision: 1 }); await started.promise;
+  const queued = f.manager.saveDefault(WS, f.d.id, { expectedLocalRevision: 1 });
+  const rejected = Promise.all([assert.rejects(first, { code: 'request_cancelled' }), assert.rejects(queued, { code: 'request_cancelled' })]);
+  await f.manager.pause(WS, f.d.id); const paused = copy(f.states.get(f.d.id));
+  held.resolve(); await rejected;
+  assert.deepEqual(f.states.get(f.d.id), paused); assert.equal(f.stats.saves.length, 0); assert.equal(f.stats.publishes.length, 0); f.manager.dispose();
+});
+
 test('an explicit reviewed manifest rejects another tab edit during authentication before uploading any original', async () => {
   const f = await fixture(), expectedManifest = Blog.pack(Photo.compact(f.d)), held = deferred(), started = deferred();
   f.auth.verify = async () => { started.resolve(); await held.promise; return { id: UID }; };

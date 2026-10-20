@@ -166,6 +166,9 @@ jobs:
       - name: Verify original photo editor, exact bytes and recovery
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/photo-post-browser.cjs
+      - name: Verify default private server saves and local failure recovery
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/blog-default-server-browser.cjs
       - name: Verify blog attachments, archive, original gallery and portable HTML
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-writing-completion-browser.cjs
@@ -455,6 +458,7 @@ jobs:
             .local/nine-board-recovery/
             .local/nine-board-search/
             .local/photo-post/
+            .local/blog-default-server/
             .local/blog-writing-completion/
             .local/obsidian-vault/
             .local/obsidian-review/
@@ -650,7 +654,7 @@ jobs:
       - name: Verify generated configuration and complete installed shell hashes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         env:
-          PREVIOUS_RELEASE: "9440f12e008a5e9285be69cf06655967a9defeed"
+          PREVIOUS_RELEASE: "3e3915af6db89d62fdef7c03293da519dda51d13"
         run: node scripts/verify-prepared-site.mjs
       - name: Verify the actual previous service worker updates without losing originals
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}

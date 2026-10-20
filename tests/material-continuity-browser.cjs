@@ -143,12 +143,23 @@ async function main() {
     await check('B finishes two original photos; upload failure and a lost saved-descriptor reply preserve independent preparation/post revisions and exact retries', async () => {
       await b.page.locator('#photoTitle').fill('B에서 완성한 정확한 근거의 여행글'); await b.page.evaluate(() => { const q = Quill.find(document.querySelector('.ql-container')); q.insertText(q.getLength() - 1, '\nB에서 덧붙인 나의 마지막 문단🌱\n', 'user'); q.setSelection(q.getLength() - 1, 0, 'silent'); });
       const photos = await b.page.evaluate(async () => { const result = []; for (const [width, height] of [[4032,3024],[1200,1800]]) { const c = document.createElement('canvas'); c.width = width; c.height = height; const g = c.getContext('2d'); g.fillStyle = '#d8e4dc'; g.fillRect(0,0,width,height); g.fillStyle = '#183b30'; g.fillRect(20,20,140,200); const blob = await new Promise(r => c.toBlob(r,'image/png')); result.push(Array.from(new Uint8Array(await blob.arrayBuffer()))); } return result; });
-      await b.page.locator('#photoFiles').setInputFiles(photos.map((bytes,i) => ({ name: '합성 여행 원본 ' + i + '.png', mimeType: 'image/png', buffer: Buffer.from(bytes) }))); await b.page.locator('.photo-block').nth(1).waitFor(); await b.page.getByRole('button', { name:'글 저장', exact:true }).click(); await b.page.locator('.photo-article').waitFor(); await b.page.getByRole('button', { name:'작성 준비로 돌아가기', exact:true }).click(); await panel(b.page);
+      await b.page.locator('#photoFiles').setInputFiles(photos.map((bytes,i) => ({ name: '합성 여행 원본 ' + i + '.png', mimeType: 'image/png', buffer: Buffer.from(bytes) }))); await b.page.locator('.photo-block').nth(1).waitFor();
+      const descriptorBeforeSave = structuredClone(row(remoteId));
+      server.failure = 'upload';
+      await b.page.getByRole('button', { name:'글 저장', exact:true }).click(); await b.page.locator('.photo-article').waitFor();
+      await b.page.locator('#photoServerStatus[data-state="error"]').waitFor();
+      assert.equal(server.failure, null, 'Default server storage must encounter the injected original upload failure');
+      assert.deepEqual(row(remoteId), descriptorBeforeSave, 'A failed default post upload must not advance the preparation descriptor');
+      const local = (await snapshot(b.page)).posts[0]; assert.equal(local.doc.status,'saved'); assert.equal(local.doc.photos.length,2);
+      assert.equal(local.sync.enabled,true); assert(local.sync.pending); assert.equal(local.sync.pending.localRevision,local.doc.revision);
+      assert.equal(server.rpc(accounts.a.id,'life_blog_read',{p_post_id:local.sync.remoteId}),null);
+      for(const p of local.doc.photos)assert.equal(p.actualHash,p.digest);
+      await b.page.getByRole('button', { name:'작성 준비로 돌아가기', exact:true }).click(); await panel(b.page);
       const reviewOutput = async () => { await b.page.locator('#mcOutputReview').click(); await b.page.locator('#mcOutputConsent').waitFor(); assert.equal(await b.page.locator('#mcOutputConsent').isChecked(),false); await b.page.locator('#mcOutputConsent').check(); };
-      await reviewOutput(); server.failure = 'upload'; await b.page.locator('#mcShareOutput').click(); await b.page.locator('.mc-error:not([hidden])').waitFor(); assert.equal(row(remoteId).data.output.state,'writing');
-      const local = (await snapshot(b.page)).posts[0]; assert.equal(local.doc.photos.length,2); for(const p of local.doc.photos)assert.equal(p.actualHash,p.digest);
       await reviewOutput(); server.materialFailure = entry => entry.rpc === 'life_material_put' && entry.device === b.name && entry.body.p_data.output?.state === 'saved'; await b.page.locator('#mcShareOutput').click(); await b.page.locator('.mc-error:not([hidden])').waitFor();
       savedOutput = row(remoteId); assert.equal(savedOutput.data.output.state,'saved'); assert.equal(savedOutput.data.output.revision,1); assert.equal(savedOutput.data.output.postId,writing.data.output.postId); assert.equal(savedOutput.data.output.refs.length,2); assert.equal(server.rpc(accounts.a.id,'life_blog_read',{p_post_id:savedOutput.data.output.postId}).data.photos.length,2);
+      const postRetries = server.blogRequests.filter(entry => entry.rpc === 'life_blog_save' && entry.device === b.name && entry.body.p_post_id === local.sync.remoteId);
+      assert.equal(postRetries.length,1); assert.equal(postRetries[0].body.p_operation_id,local.sync.pending.operationId,'The explicit output checkpoint must resume the durable default-save operation');
       const uploads = server.assetRequests.filter(r=>r.method==='POST').length; await call(b.page,'sync',[bLocal.workspaceId,bLocal.planId]); const replay = server.materialRequests.filter(r=>r.rpc==='life_material_put'&&r.device===b.name&&r.body.p_data.output?.state==='saved'); assert.equal(replay.length,2); assert.deepEqual(replay[0].body,replay[1].body); assert.equal(row(remoteId).revision,savedOutput.revision); assert.equal(server.assetRequests.filter(r=>r.method==='POST').length,uploads);
     });
     await check('A receives the same logical completed post with exact evidence/originals, selectively publishes one photo, withdraws it, and restores the adopted-evidence file', async () => {
