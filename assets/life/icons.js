@@ -1,5 +1,5 @@
 /* Shared UI SVGs. Lucide 1.51.0 geometry: vendor/lucide/ (ISC + Feather MIT).
- * quote: Haedo's approved A. settings/download/cloud/home/user/workspace/timeline/target/check/map:
+ * quote: Haedo's approved A. settings/download/cloud/home/news/user/workspace/timeline/target/check/map:
  * refresh/edit and the above are locally authored conventional UI geometry; no added library or remote asset.
  */
 (function (root) {
@@ -28,6 +28,7 @@
     download: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
     cloud: '<path d="M7 19a5 5 0 0 1-.8-9.9 6.5 6.5 0 0 1 12.6 1.6A4.2 4.2 0 0 1 18 19Z"/>',
     home: '<path d="m3 10 9-7 9 7M5 9v10a2 2 0 0 0 2 2h3v-7h4v7h3a2 2 0 0 0 2-2V9"/>',
+    news: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 16h8M8 12h2m4 0h2"/>',
     user: '<circle cx="12" cy="7.5" r="4"/><path d="M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2"/>',
     timeline: '<path d="M4 20h16M5 15l5-6 5 3 4-7"/><circle cx="10" cy="9" r="2"/><circle cx="15" cy="12" r="2"/>',
     map: '<path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Zm6-2v16m6-14v16"/>',

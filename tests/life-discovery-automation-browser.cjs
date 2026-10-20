@@ -103,7 +103,7 @@ async function main() {
       await page.locator(selector).check(); await idle(page); assert.ok(!(await snapshot(page)).settings.disabledInterestIds.includes(item.id));
     });
     await check('turning off every source is preserved as zero sources in both list orders', async ({ page }) => {
-      const before = await seed(page); await options(page); const ids = await page.locator('[data-discovery-source]').evaluateAll(nodes => nodes.map(x => x.dataset.discoverySource)); assert.ok(ids.length >= 2);
+      const before = await seed(page); await page.locator('#discoveryRecommended').click(); await idle(page); assert.equal(await page.locator('#discoveryRecommended').getAttribute('aria-pressed'), 'true'); await options(page); const ids = await page.locator('[data-discovery-source]').evaluateAll(nodes => nodes.map(x => x.dataset.discoverySource)); assert.ok(ids.length >= 2);
       for (const id of ids) { await options(page); await page.locator('[data-discovery-source="' + id + '"]').uncheck(); await idle(page); }
       assert.equal(await page.locator('[data-discovery-id]').count(), 0); await page.locator('#discoveryLatest').click(); assert.equal(await page.locator('[data-discovery-id]').count(), 0);
       await page.reload(); await ready(page); await idle(page); await options(page); assert.equal(await page.locator('[data-discovery-source]:checked').count(), 0); assert.equal(await page.locator('[data-discovery-id]').count(), 0); assert.deepEqual(new Set((await snapshot(page)).settings.disabledSourceIds), new Set(ids)); await preserve(page, before);

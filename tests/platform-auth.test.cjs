@@ -76,6 +76,11 @@ test('first writing intent survives login only as the exact local home flag', ()
 test('unified home return accepts only known sections and material views', () => {
   assert.equal(safeNext(), 'index.html');
   assert.equal(safeNext('index.html?section=home&code=discarded#token'), 'index.html?section=home');
+  assert.equal(safeNext('index.html?section=news&code=discarded&access_token=hidden&next=https://evil.invalid#refresh_token=hidden'), 'index.html?section=news');
+  assert.equal(safeNext('life.html?section=news&view=external-discovery&access_token=discarded#token'), 'life.html?section=news&view=external-discovery');
+  assert.equal(safeNext('index.html?view=external-discovery&code=discarded#token'), 'index.html?view=external-discovery');
+  assert.equal(safeNext('https://evil.invalid/index.html?section=news'), 'index.html');
+  assert.equal(safeNext('index.html?section=news%26access_token%3Dhidden'), 'index.html');
   assert.equal(safeNext('index.html?section=tools&view=interests&code=discarded#token'), 'index.html?section=tools&view=interests');
   assert.equal(safeNext('index.html?section=tools&view=external-discovery&code=discarded#token'), 'index.html?section=tools&view=external-discovery');
   assert.equal(safeNext('life.html?section=tools&view=external-discovery&access_token=discarded'), 'life.html?section=tools&view=external-discovery');

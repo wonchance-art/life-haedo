@@ -94,6 +94,9 @@ jobs:
       - name: Verify unified entry and account boundaries
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/unified-home-browser.cjs
+      - name: Verify news navigation, saved lists and language preferences
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-news-browser.cjs
       - name: Verify the core experience across screen sizes
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/core-experience-browser.cjs
@@ -636,7 +639,7 @@ jobs:
       - name: Verify generated configuration and complete installed shell hashes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         env:
-          PREVIOUS_RELEASE: "0c4270be62fd0dfadbd781fb042356c142e43e8b"
+          PREVIOUS_RELEASE: "900c7bdcaef4129c51bed1112732f9baa4c48502"
         run: node scripts/verify-prepared-site.mjs
       - name: Verify the actual previous service worker updates without losing originals
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
