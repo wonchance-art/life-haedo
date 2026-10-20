@@ -2111,12 +2111,61 @@
         await tx.objectStore('meta').put({ key: activeKey, value: workspaceId });
       });
     }
+    const accountMaterialKey = (workspaceId, id) => `account-material:${workspaceId}:${id}`;
+    function accountMaterialDescriptor(input) {
+      onlyFields(input, ['id', 'revision', 'sourceWorkspaceId', 'sourceRevision', 'fingerprint'], 'invalid_account_material_registration');
+      const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+      if (!uuid.test(input.id) || !uuid.test(input.sourceWorkspaceId) || !Number.isSafeInteger(input.revision) || input.revision < 1 ||
+          !Number.isSafeInteger(input.sourceRevision) || input.sourceRevision < 1 || !/^[a-f0-9]{64}$/.test(input.fingerprint)) {
+        throw fault('invalid_account_material_registration', '자료 등록의 정확한 기준을 확인해 주세요.');
+      }
+      return clone(input);
+    }
+    async function accountMaterialValue(meta, workspaceId, id, bundle) {
+      const row = await meta.get(accountMaterialKey(workspaceId, id));
+      if (row === undefined) return null;
+      const value = row.value;
+      onlyFields(value, ['owner', 'descriptor', 'result'], 'invalid_account_material_registration');
+      onlyFields(value.owner, ['projectUrl', 'userId'], 'invalid_account_material_registration');
+      if (!sameAccount(accountValue(value.owner), account)) throw fault('workspace_access_denied', '현재 계정의 자료 등록이 아닙니다.');
+      const descriptor = accountMaterialDescriptor(value.descriptor);
+      if (descriptor.id !== id) throw fault('invalid_account_material_registration', '자료 등록의 식별자가 다릅니다.');
+      onlyFields(value.result, ['status', 'revision', 'operationId'], 'invalid_account_material_registration');
+      requireRevision(value.result.revision); requireId(value.result.operationId, '등록 작업');
+      if (value.result.status !== 'stored' || value.result.revision > bundle.revision) throw fault('invalid_account_material_registration', '자료 등록의 보관 결과를 확인하지 못했습니다.');
+      return value;
+    }
+    async function readAccountMaterialRegistration(workspaceId, id) {
+      scopeGuard();
+      if (!account) throw fault('auth_scope_required', '확인된 계정에서 자료 등록을 확인해 주세요.');
+      requireId(workspaceId, '작업공간');
+      if (typeof id !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id)) throw fault('invalid_account_material_registration', '자료 등록의 식별자를 확인해 주세요.');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await accountMaterialValue(meta, workspaceId, id, bundle));
+      });
+    }
+    function checkAccountMaterialAppend(bundle, changes) {
+      onlyFields(changes, ['put'], 'invalid_account_material_registration');
+      if (changes.put === undefined) return;
+      onlyFields(changes.put, ['sources', 'sourceVersions', 'links'], 'invalid_account_material_registration');
+      for (const [name, items] of Object.entries(changes.put)) {
+        if (!Array.isArray(items)) throw fault('invalid_account_material_registration', '추가할 자료 목록을 확인해 주세요.');
+        const previous = new Map(bundle[name].map(item => [item.id, item]));
+        for (const item of items) if (previous.has(item?.id) && stablePayload(previous.get(item.id)) !== stablePayload(item)) {
+          throw fault('account_material_registration_changed', '기존 자료와 같은 식별자의 내용이 달라 등록하지 않았습니다.');
+        }
+      }
+    }
     async function commitLocal(request) {
       let operationId = request?.operationId;
       try {
         const input = clone(request);
         if (!plain(input)) throw fault('invalid_request', '저장할 작업을 확인하세요.');
         const { workspaceId, baseRevision, changes, stageId, stageRevision, stageResult } = input;
+        const registration = input.accountMaterialRegistration === undefined ? null : accountMaterialDescriptor(input.accountMaterialRegistration);
+        if (registration && !account) throw fault('auth_scope_required', '확인된 계정에 자료를 등록해 주세요.');
+        if (registration && stageId !== undefined) throw fault('invalid_account_material_registration', '자료 등록과 글 인계는 별도로 보관해 주세요.');
         operationId = input.operationId;
         requireId(operationId, '작업');
         requireId(workspaceId, '작업공간');
@@ -2130,7 +2179,8 @@
         }
         // Omitting this extension preserves the byte-for-byte payload of earlier receipts.
         const payload = stablePayload({ workspaceId, baseRevision, changes, stageId, stageRevision,
-          ...(stageResult !== undefined ? { stageResult } : {}) });
+          ...(stageResult !== undefined ? { stageResult } : {}),
+          ...(registration ? { accountMaterialRegistration: registration } : {}) });
         let wrote = false, updatedSync = null, updatedWriting = null, appliedWriting = null;
         const result = await transaction(['bundles', 'operations', 'staging', 'meta'], 'readwrite', async tx => {
           await assertOwner(tx.objectStore('meta'), workspaceId);
@@ -2139,10 +2189,26 @@
           const receipt = await operations.get(key);
           if (receipt) {
             if (receipt.payload !== payload) throw fault('operation_mismatch', '이미 저장한 작업 식별자에 다른 변경 내용이 들어왔습니다.');
-            return clone(receipt.result);
+            if (!registration) return clone(receipt.result);
           }
           const bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, tx.objectStore('meta'));
+          if (registration) {
+            const previous = await accountMaterialValue(tx.objectStore('meta'), workspaceId, registration.id, bundle);
+            if (previous) {
+              if (stablePayload(previous.descriptor) !== stablePayload(registration)) throw fault('account_material_registration_changed', '이미 등록한 자료의 기준이 달라 자동으로 바꾸지 않았습니다.');
+              if (receipt) {
+                if (stablePayload(previous.result) !== stablePayload(receipt.result)) throw fault('invalid_account_material_registration', '자료 등록의 작업 결과가 일치하지 않습니다.');
+                return clone(receipt.result);
+              }
+              return { status: 'already_registered', revision: bundle.revision, operationId };
+            }
+            if (receipt) throw fault('invalid_account_material_registration', '자료 등록의 영수증을 확인하지 못했습니다.');
+            if ((await tx.objectStore('meta').get(activeKey))?.value !== workspaceId) throw fault('account_material_target_changed', '자료를 등록할 현재 공간이 바뀌었습니다. 기존 자료는 유지했습니다.');
+            const sync = await readSyncState(tx.objectStore('meta'), workspaceId, bundle);
+            if (sync?.outbox || sync?.conflict) throw fault('account_material_sync_busy', '기존 자료의 동기화 작업을 먼저 확인해 주세요. 등록은 보류했습니다.');
+          }
           if (bundle.revision !== baseRevision) return { status: 'conflict', currentRevision: bundle.revision, operationId };
+          if (registration) checkAccountMaterialAppend(bundle, changes);
           let stage;
           if (stageId !== undefined) {
             stage = await tx.objectStore('staging').get(stageId);
@@ -2156,7 +2222,15 @@
           if (updated.workspaceId !== workspaceId || updated.revision !== bundle.revision + 1) {
             throw fault('invalid_revision', '저장할 작업공간 버전을 확인할 수 없습니다.');
           }
+          if (registration && (await readSyncState(tx.objectStore('meta'), workspaceId, bundle))?.enabled &&
+              new TextEncoder().encode(JSON.stringify(updated)).length > SYNC_MAX_BYTES) throw fault('snapshot_too_large', '등록한 자료가 동기화 크기 제한을 넘습니다. 기존 자료는 유지했습니다.');
           if (stageResult !== undefined) validateStageResult(stageResult, updated);
+          if (registration && COLLECTIONS.every(name => stablePayload(updated[name]) === stablePayload(bundle[name]))) {
+            const stored = { status: 'stored', revision: bundle.revision, operationId };
+            await tx.objectStore('meta').add({ key: accountMaterialKey(workspaceId, registration.id), value: { owner: clone(account), descriptor: registration, result: stored } });
+            await operations.add({ workspaceId, operationId, payload, result: stored });
+            return stored;
+          }
           const stored = { status: 'stored', revision: updated.revision, operationId };
           const sync = await readSyncState(tx.objectStore('meta'), workspaceId, bundle);
           await tx.objectStore('bundles').put(updated);
@@ -2181,6 +2255,7 @@
             updatedSync = await writeSyncState(tx.objectStore('meta'), sync);
           }
           await operations.add({ workspaceId, operationId, payload, result: stored });
+          if (registration) await tx.objectStore('meta').add({ key: accountMaterialKey(workspaceId, registration.id), value: { owner: clone(account), descriptor: registration, result: stored } });
           wrote = true;
           return stored;
         });
@@ -3214,7 +3289,7 @@
       readPublicCover, savePublicCover,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       readPreservationCatalog, readPreservationSnapshot, installPreservationCopy,
-      commitLocal, saveStage, getStage, listStages, deleteStage, subscribe,
+      commitLocal, readAccountMaterialRegistration, saveStage, getStage, listStages, deleteStage, subscribe,
       getSyncState, bindSync, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,
       setSyncConflict, setSyncError, resolveSync,
       getCompositionState, bindCompositionSync, pauseCompositionSync, prepareCompositionUpload, ackCompositionSync,

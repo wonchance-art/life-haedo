@@ -35,6 +35,7 @@ function session(account) {
 class FakeCloud {
   constructor() {
     this.rows = new Map(); this.receipts = new Map(); this.requests = [];
+    this.accountMaterials = [];
     this.offline = new Set(); this.loseResponses = new Set(); this.schemaMissing = false;
     this.expectedFailures = 0; this.heldRead = null;
     this.oauthAccounts = new Map(); this.codes = new Map();
@@ -79,6 +80,12 @@ class FakeCloud {
     if (url.pathname === '/auth/v1/logout') {this.requests.push({kind:'logout',device,owner:account?.id});return send(null,204);}
     if (!account) return send({code:'PGRST301',message:'No test account'},401);
     if (this.schemaMissing) { this.expectedFailures++; return send({code:'PGRST205',message:'Anonymous test schema is unavailable'},404); }
+    if (url.pathname === '/rest/v1/life_account_materials' && method === 'GET') {
+      const owner = url.searchParams.get('owner_id')?.replace(/^eq\./, '');
+      this.requests.push({ kind: 'account-materials-list', owner: account.id, device });
+      const rows = this.accountMaterials.filter(row => row.owner_id === account.id && (!owner || owner === account.id) && row.enabled !== false);
+      return send(copy(rows).slice(0, Number(url.searchParams.get('limit') || rows.length)));
+    }
     if (url.pathname === '/rest/v1/life_workspaces') {
       const id = url.searchParams.get('id')?.replace(/^eq\./,'');
       this.requests.push({kind:id ? 'read' : 'list',owner:account.id,id,device});
