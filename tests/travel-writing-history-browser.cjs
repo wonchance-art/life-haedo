@@ -10,7 +10,9 @@ const http = require('node:http');
 const { createHash } = require('node:crypto');
 
 const root = path.resolve(__dirname, '..');
-const output = path.join(root, '.local/travel-writing-history');
+const controlledDrift = process.env.NATIVE_SCROLL_DRIFT === undefined ? 0 : Number(process.env.NATIVE_SCROLL_DRIFT);
+assert.ok(controlledDrift === 0 || controlledDrift === 20, 'NATIVE_SCROLL_DRIFT supports only 0 or 20 pixels');
+const output = path.resolve(process.env.TRAVEL_HISTORY_OUTPUT || path.join(root, controlledDrift ? '.local/travel-writing-history-drift' : '.local/travel-writing-history'));
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const critical = ['/assets/platform-auth.js', '/assets/life/shell.js', '/assets/life/ui.js',
   '/assets/life/photo-post-ui.js', '/assets/life/workbench-ui.js'];
@@ -53,13 +55,14 @@ async function publicServer(report) {
   return server;
 }
 
-function installHistoryObserver() {
+function installHistoryObserver({ drift = 0 } = {}) {
   window.__travelDocument = crypto.randomUUID();
   window.__travelEvents = [];
   window.__travelFocus = [];
+  window.__travelDrift = [];
   const sample = (label, event) => {
     const active = document.activeElement;
-    __travelFocus.push({ label, trusted: event?.isTrusted ?? null, captionActive: !!window.__travelCaption && active === __travelCaption,
+    __travelFocus.push({ label, at: performance.now(), trusted: event?.isTrusted ?? null, captionActive: !!window.__travelCaption && active === __travelCaption,
       activeTag: active?.tagName || null, start: active?.selectionStart ?? null,
       end: active?.selectionEnd ?? null, direction: active?.selectionDirection ?? null,
       scrollX, scrollY, privateHidden: document.querySelector('#lifeApp')?.hidden ?? null });
@@ -67,7 +70,20 @@ function installHistoryObserver() {
   window.__travelSample = sample;
   addEventListener('beforeunload', event => sample('beforeunload', event), { capture: true });
   for (const type of ['pagehide', 'pageshow']) addEventListener(type, event => {
-    __travelEvents.push({ type, persisted: event.persisted, trusted: event.isTrusted, documentId: __travelDocument });
+    if (type === 'pagehide' && event.persisted && event.isTrusted && drift) {
+      // Controlled fault injection on a genuine native lifecycle event. This
+      // does not dispatch events or turn a simulated event into BFCache proof.
+      sample('pagehide-before-controlled-drift', event);
+      const caption = window.__travelCaption, focusBefore = document.activeElement === caption;
+      caption?.focus({ preventScroll: true });
+      const focusAfter = document.activeElement === caption;
+      sample('pagehide-after-controlled-focus', event);
+      const before = [scrollX, scrollY], top = Math.min(scrollY + drift, Math.max(0, document.documentElement.scrollHeight - innerHeight));
+      scrollTo({ left: scrollX, top, behavior: 'instant' });
+      __travelDrift.push({ at: performance.now(), trusted: event.isTrusted, persisted: event.persisted,
+        requested: drift, focusBefore, focusAfter, captionConnected: !!caption?.isConnected, before, after: [scrollX, scrollY] });
+    }
+    __travelEvents.push({ type, at: performance.now(), persisted: event.persisted, trusted: event.isTrusted, documentId: __travelDocument });
     sample(type, event);
   }, { capture: true });
 }
@@ -95,7 +111,10 @@ async function main() {
   await fs.mkdir(output, { recursive: true });
   const report = { scope: 'Real Linux Chromium BFCache and beforeunload dialog; synthetic Auth HTTP, actual SDK/IDB. Not Apple hardware or native IME.',
     pass: false, consoleErrors: [], pageErrors: [], external: [], dialogs: [], notRestored: [],
-    sourceHashes: {}, authUserReads: 0, cleanup: {} };
+    sourceHashes: {}, authUserReads: 0, cleanup: {}, dialogTimeline: [],
+    observationClocks: { focus: 'performance.now() in the retained document', dialog: 'Date.now() epoch milliseconds' },
+    controlledDrift: { requested: controlledDrift, syntheticLifecycleEvents: 0,
+      scope: controlledDrift ? 'Controlled caption focus and scroll fault injection on trusted persisted pagehide; not naturally occurring drift evidence.' : 'Natural browser/dialog scrolling; no controlled drift.' } };
   let server, browser, context, page, cdp;
   let failure;
   try {
@@ -113,7 +132,7 @@ async function main() {
     report.browser = browser.version();
     const fake = new FakeCloud();
     context = await makeContext(browser, fake, 'travel-native-history', accounts.a, { viewport: { width: 1440, height: 1000 } });
-    await context.addInitScript(installHistoryObserver);
+    await context.addInitScript(installHistoryObserver, { drift: controlledDrift });
     await context.route(cloud + '/auth/v1/user', route => {
       if (route.request().method() !== 'OPTIONS') report.authUserReads++;
       return route.fallback();
@@ -128,11 +147,15 @@ async function main() {
     page.on('pageerror', error => report.pageErrors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') report.consoleErrors.push(message.text()); });
     page.on('dialog', async dialog => {
+      report.dialogTimeline.push({ event: 'dialog', type: dialog.type(), at: Date.now() });
       report.dialogs.push({ type: dialog.type(), accepted: true });
       await dialog.accept();
+      report.dialogTimeline.push({ event: 'accepted', type: dialog.type(), at: Date.now() });
     });
     cdp = await context.newCDPSession(page);
     await cdp.send('Page.enable');
+    cdp.on('Page.javascriptDialogOpening', event => report.dialogTimeline.push({ event: 'native-open', type: event.type, at: Date.now() }));
+    cdp.on('Page.javascriptDialogClosed', event => report.dialogTimeline.push({ event: 'native-closed', accepted: event.result, at: Date.now() }));
     cdp.on('Page.backForwardCacheNotUsed', event => {
       report.notRestored.push((event.notRestoredExplanations || []).map(item => ({ type: item.type, reason: item.reason })));
     });
@@ -173,16 +196,32 @@ async function main() {
     await caption.evaluate(node => {
       node.setSelectionRange(2, 8, 'forward'); window.__travelCaption = node;
       window.__travelEditor = document.querySelector('.ql-editor'); window.__travelStorage = HaedoLife.Shell.storage;
+      node.addEventListener('input', () => { window.__travelFinalInputAt = performance.now(); }, { once: true });
       scrollTo({ left: 0, top: Math.min(100, document.documentElement.scrollHeight - innerHeight), behavior: 'instant' });
     });
-    // Do not wait for caption autosave: the accepted model is dirty when the real
-    // confirmation dialog opens, and the model-only lifecycle checkpoint must save it.
+    // Finish expensive IDB/Blob checks before the final real input. Protocol and
+    // hashing latency must not accidentally let its 500ms autosave finish first.
     const before = await snapshot(page);
     assert.deepEqual(before.photos.map(({ digest, width, height }) => ({ digest, width, height })), report.originalPhotos);
     assert.deepEqual(before.selection, [2, 8, 'forward']);
     assert.ok(before.scroll[1] > 0, 'Native return must preserve a nonzero reading position');
     assert.match(before.body, /끝에서 계속 쓸 한글 여행 문단🌊/);
-    await page.evaluate(() => __travelSample('before-native-navigation'));
+    await caption.fill('외출 뒤에도 유지할 사진 설명🌱 마지막 실제 입력');
+    const finalInput = await caption.evaluate(node => {
+      node.focus(); node.setSelectionRange(2, 8, 'forward');
+      scrollTo({ left: 0, top: Math.min(100, document.documentElement.scrollHeight - innerHeight), behavior: 'instant' });
+      __travelSample('before-native-navigation');
+      return { caption: node.value, captionActive: document.activeElement === node,
+        selection: [node.selectionStart, node.selectionEnd, node.selectionDirection], scroll: [scrollX, scrollY],
+        inputAt: window.__travelFinalInputAt, preparedAt: performance.now(), timeOrigin: performance.timeOrigin };
+    });
+    Object.assign(before, { caption: finalInput.caption, captionActive: finalInput.captionActive,
+      selection: finalInput.selection, scroll: finalInput.scroll });
+    assert.deepEqual(before.selection, [2, 8, 'forward']);
+    assert.ok(before.captionActive && before.scroll[1] > 0);
+    report.scroll = { setup: before.scroll };
+    report.documentTimeOrigin = finalInput.timeOrigin;
+    report.finalInput = { at: finalInput.inputAt, preparedAt: finalInput.preparedAt };
     const initialAuthReads = report.authUserReads;
     await page.goto(base + '/native-neutral');
     await page.goBack({ waitUntil: 'commit' });
@@ -197,6 +236,18 @@ async function main() {
     await page.waitForFunction(() => document.activeElement === window.__travelCaption &&
       __travelCaption.selectionStart === 2 && __travelCaption.selectionEnd === 8);
     const after = await snapshot(page);
+    // Save observations before any preservation assertion. A failure must keep
+    // setup, actual pre-dialog departure and post-dialog pagehide positions;
+    // they are different browser moments, not interchangeable expectations.
+    report.focusSamples = await page.evaluate(() => __travelFocus);
+    report.controlledDrift.samples = await page.evaluate(() => __travelDrift);
+    const departures = report.focusSamples.filter(sample => sample.label === 'beforeunload');
+    const pagehides = report.focusSamples.filter(sample => sample.label === 'pagehide');
+    report.scroll = { setup: before.scroll,
+      before: departures[0] ? [departures[0].scrollX, departures[0].scrollY] : null,
+      departure: departures[0] ? [departures[0].scrollX, departures[0].scrollY] : null,
+      pagehide: pagehides.length ? [pagehides[pagehides.length - 1].scrollX, pagehides[pagehides.length - 1].scrollY] : null,
+      after: after.scroll };
     assert.equal(after.documentId, before.documentId);
     assert.equal(after.postId, before.postId);
     assert.equal(after.owner, accounts.a.id);
@@ -208,20 +259,24 @@ async function main() {
     // Compare the real pre-dialog reading position. Setup can still settle
     // before navigation, and the native dialog may blur/scroll before pagehide.
     // Shell intentionally retains the focused position from beforeunload.
-    const departures = await page.evaluate(() => __travelFocus.filter(sample => sample.label === 'beforeunload'));
     assert.equal(departures.length, 1, 'One native confirmation must have one actual pre-dialog position');
     const [departure] = departures;
     assert.ok(departure.trusted && !departure.privateHidden && departure.captionActive &&
       Number.isFinite(departure.scrollX) && Number.isFinite(departure.scrollY) && departure.scrollY > 0,
       'Actual departure must retain a visible nonzero reading position');
     const departureScroll = [departure.scrollX, departure.scrollY];
+    if (controlledDrift) {
+      assert.equal(report.controlledDrift.samples.length, 1, 'One genuine pagehide must receive controlled drift');
+      const drift = report.controlledDrift.samples[0];
+      assert.ok(drift.trusted && drift.persisted);
+      assert.ok(drift.captionConnected && drift.focusAfter, 'Controlled fixture must establish real caption focus without property/event fabrication');
+      assert.equal(drift.after[1] - drift.before[1], controlledDrift, 'Controlled fixture must apply the full requested drift');
+    }
     for (let axis = 0; axis < 2; axis++) assert.ok(Math.abs(after.scroll[axis] - departureScroll[axis]) < 2,
       'Native return must preserve scroll position on axis ' + axis);
-    report.scroll = { setup: before.scroll, before: departureScroll, after: after.scroll };
     report.resumeUserReads = report.authUserReads - initialAuthReads;
     assert.equal(report.resumeUserReads, 1, 'One fresh server user verification on native resume');
     assert.deepEqual(report.dialogs, [{ type: 'beforeunload', accepted: true }], 'The native confirmation dialog is required');
-    report.focusSamples = await page.evaluate(() => __travelFocus);
     report.preserved = { sameDocument: true, sameEditor: true, sameCaption: true, sameStorage: true,
       samePost: true, sameOwner: true, captionSelection: after.selection, fullBody: true, captionCheckpointed: true,
       photoBytesAndDimensions: true, scrollPosition: true };
@@ -239,7 +294,7 @@ async function main() {
         focus: window.__travelFocus, captionConnected: !!window.__travelCaption?.isConnected,
         captionActive: !!window.__travelCaption && document.activeElement === __travelCaption,
         selection: window.__travelCaption ? [__travelCaption.selectionStart, __travelCaption.selectionEnd, __travelCaption.selectionDirection] : null,
-        privateHidden: document.querySelector('#lifeApp')?.hidden ?? null })).catch(() => ({ unavailable: true }));
+        privateHidden: document.querySelector('#lifeApp')?.hidden ?? null, scroll: [scrollX, scrollY] })).catch(() => ({ unavailable: true }));
       await page.screenshot({ path: path.join(output, 'failure.png'), fullPage: true }).catch(() => {});
     }
   } finally {
@@ -257,7 +312,7 @@ async function main() {
   }
   console.log(JSON.stringify({ pass: report.pass, browser: report.browser, resumeUserReads: report.resumeUserReads,
     consoleErrors: report.consoleErrors.length, pageErrors: report.pageErrors.length, external: report.external.length,
-    cleanup: report.cleanup, report: '.local/travel-writing-history/report.json' }));
+    cleanup: report.cleanup, report: path.relative(root, path.join(output, 'report.json')) }));
   if (failure) throw failure;
 }
 

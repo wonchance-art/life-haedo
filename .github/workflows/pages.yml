@@ -388,6 +388,11 @@ jobs:
       - name: Verify genuine cached history return and native navigation confirmation
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/travel-writing-history-browser.cjs
+      - name: Verify pre-dialog position survives controlled focus and drift during native pagehide
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        env:
+          NATIVE_SCROLL_DRIFT: "20"
+        run: node tests/travel-writing-history-browser.cjs
       - name: Verify readonly local post finding and original preservation
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/local-post-finder-browser.cjs
@@ -406,6 +411,7 @@ jobs:
             .local/integrated-release-entry/
             .local/travel-writing-resume/
             .local/travel-writing-history/
+            .local/travel-writing-history-drift/
             .local/local-post-finder/
             .local/app-native/qa/
             .local/home-refinement/qa/
@@ -640,7 +646,7 @@ jobs:
       - name: Verify generated configuration and complete installed shell hashes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         env:
-          PREVIOUS_RELEASE: "900c7bdcaef4129c51bed1112732f9baa4c48502"
+          PREVIOUS_RELEASE: "828498189c084cdd02cba468cb3faab31ffeb83c"
         run: node scripts/verify-prepared-site.mjs
       - name: Verify the actual previous service worker updates without losing originals
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
