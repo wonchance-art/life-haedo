@@ -78,8 +78,11 @@ async function seedCapture(page) {
   const photoFiles = await originals(page);
   return { ...baseline, old, original, photoFiles };
 }
-async function enter(page) {
-  try { await page.goto(base + '/index.html?section=tools&view=naver-blog'); }
+// Private entry is ready when its scripts/DOM and verified Shell are usable.
+// Whole-document load also waits on unrelated resources; the runner separately
+// verifies actual selected images, SHA, errors and viewport output.
+async function loadDocument(page, url) {
+  try { await page.goto(url, { waitUntil: 'domcontentloaded' }); }
   catch (error) {
     error.message += '\nCapture entry state: ' + JSON.stringify(await page.evaluate(() => ({ state: document.readyState,
       appHidden: document.querySelector('#lifeApp')?.hidden, naver: !!document.querySelector('#lifeNaverBlog'),
@@ -87,7 +90,14 @@ async function enter(page) {
       '\nPending request paths: ' + JSON.stringify([...(page.__capturePending?.values() || [])].slice(0, 20));
     throw error;
   }
-  await ready(page); await settle(page);
+}
+function trackRequests(page) {
+  page.__capturePending = new Map();
+  page.on('request', request => page.__capturePending.set(request, { method: request.method(), path: new URL(request.url()).pathname }));
+  page.on('requestfinished', request => page.__capturePending.delete(request)); page.on('requestfailed', request => page.__capturePending.delete(request));
+}
+async function enter(page) {
+  await loadDocument(page, base + '/index.html?section=tools&view=naver-blog'); await ready(page); await settle(page);
   await page.locator('#lifeNaverBlog').waitFor();
 }
 async function sourceBundle(page, workspaceId) {
@@ -257,7 +267,7 @@ async function main() {
     return result;
   }
   const sourceHashes = await hashes();
-  const report = { scope: 'Actual application, bundled SDK, IndexedDB, PNG decoder and portable ZIP. Synthetic verified owner API and private Storage HTTP only; no actual Naver fetch, deployed SQL/RLS, cron, physical second device or Apple proof.',
+  const report = { navigationReadiness: 'DOMContentLoaded plus verified Shell/settle, explicit visible DOM and decoded-original pixel/SHA assertions; unchanged 20000ms bounds. Whole load-event failure remains unclassified; no font/network errors are suppressed.', scope: 'Actual application, bundled SDK, IndexedDB, PNG decoder and portable ZIP. Synthetic verified owner API and private Storage HTTP only; no actual Naver fetch, deployed SQL/RLS, cron, physical second device or Apple proof.',
     checks: [], visual: [], consoleErrors: [], expectedConsoleErrors: [], pageErrors: [], externalRequests: [], sourceHashes, testHash: hash(await fs.readFile(__filename)) };
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });
   report.browser = browser.version(); const contexts = [], server = new CaptureCloud(); let page;
@@ -267,11 +277,23 @@ async function main() {
     await context.addInitScript(() => {
       window.__captureActiveReads = 0;
       const life = window.HaedoLife ||= {};
+      Object.defineProperty(life, 'PhotoPost', { configurable: true, set(api) {
+        Object.defineProperty(life, 'PhotoPost', { configurable: true, writable: true, value: Object.freeze({ ...api, async readPhoto(...args) {
+          const trace = window.__captureApplyTrace, phase = trace && { start: performance.now(), bytes: args[0]?.size };
+          if (trace) trace.photos.push(phase);
+          try { return await api.readPhoto(...args); } catch (error) { if (phase) phase.error = error.code || error.name; throw error; }
+          finally { if (phase) phase.end = performance.now(); }
+        } }) });
+      } });
       Object.defineProperty(life, 'NaverCaptureSync', { configurable: true, set(api) {
         Object.defineProperty(life, 'NaverCaptureSync', { configurable: true, writable: true, value: { ...api, create(options) {
           const actual = api.create(options), wrapped = { ...actual };
           for (const method of ['readCapture', 'receiveCapture']) wrapped[method] = async (...args) => {
-            window.__captureActiveReads++; try { return await actual[method](...args); } finally { window.__captureActiveReads--; }
+            window.__captureActiveReads++;
+            const trace = method === 'receiveCapture' && window.__captureApplyTrace, phase = trace && { start: performance.now() };
+            if (trace) trace.receives.push(phase);
+            try { return await actual[method](...args); } catch (error) { if (phase) phase.error = error.code || error.name; throw error; }
+            finally { if (phase) phase.end = performance.now(); window.__captureActiveReads--; }
           };
           return Object.freeze(wrapped);
         } } });
@@ -282,15 +304,13 @@ async function main() {
       if ([new URL(base).origin, cloud].includes(origin)) return route.fallback();
       report.externalRequests.push(origin); return route.abort();
     });
-    const p = await context.newPage(); p.setDefaultTimeout(20000); p.__capturePending = new Map();
-    p.on('request', request => p.__capturePending.set(request, { method: request.method(), path: new URL(request.url()).pathname }));
-    p.on('requestfinished', request => p.__capturePending.delete(request)); p.on('requestfailed', request => p.__capturePending.delete(request));
+    const p = await context.newPage(); p.setDefaultTimeout(20000); trackRequests(p);
     p.on('pageerror', error => report.pageErrors.push({ device: name, message: error.message }));
     p.on('console', message => { if (message.type() === 'error') {
       const expected = /Failed to load resource.*(?:503|403)/.test(message.text()) && server.expectedHttpErrors;
       (expected ? report.expectedConsoleErrors : report.consoleErrors).push({ device: name, message: message.text() });
     } });
-    await p.goto(base + '/index.html'); await ready(p); await settle(p); return p;
+    await loadDocument(p, base + '/index.html'); await ready(p); await settle(p); return p;
   }
   async function check(name, action) {
     console.log('START ' + name);
@@ -307,6 +327,12 @@ async function main() {
     }
     catch (error) {
       report.checks.push({ name, pass: false, error: error.stack });
+      report.failureBeforeScreenshot = await page?.evaluate(() => {
+        const status = document.querySelector('#naverCaptureStatus'), rect = status?.getBoundingClientRect(), css = status && getComputedStyle(status);
+        return { now: performance.now(), trace: window.__captureApplyTrace, state: status?.dataset.state,
+          rect: rect && { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, hidden: status?.hidden,
+          display: css?.display, visibility: css?.visibility, opacity: css?.opacity, busy: document.querySelector('#naverCaptureReview')?.getAttribute('aria-busy') };
+      }).catch(() => null);
       await page?.screenshot({ path: path.join(output, 'failure.png'), fullPage: true }).catch(() => {});
       report.failureSurface = await page?.evaluate(() => ({ pathname: location.pathname, search: location.search,
         status: document.querySelector('#naverBlogStatus')?.dataset.state,
@@ -369,13 +395,21 @@ async function main() {
       await capture(page, report, 'truthful-capture-review');
       const before = await databaseSnapshot(page);
       await page.evaluate(() => {
+        window.__captureApplyTrace = { start: performance.now(), aborts: [], photos: [], receives: [], statuses: [] };
+        const surface = document.querySelector('#naverCaptureReview');
+        window.__captureApplyObserver = new MutationObserver(() => { const trace = window.__captureApplyTrace; if (trace) trace.statuses.push({ at: performance.now(), state: document.querySelector('#naverCaptureStatus')?.dataset.state, busy: surface.getAttribute('aria-busy') }); });
+        window.__captureApplyObserver.observe(surface, { attributes: true, childList: true, characterData: true, subtree: true });
         window.__captureAdd = IDBObjectStore.prototype.add;
         IDBObjectStore.prototype.add = function (...args) { const result = window.__captureAdd.apply(this, args);
-          if (String(args[0]?.key || args[1] || '').startsWith('naver-capture:')) this.transaction.abort(); return result; };
+          if (String(args[0]?.key || args[1] || '').startsWith('naver-capture:')) { window.__captureApplyTrace.aborts.push(performance.now()); this.transaction.abort(); } return result; };
       });
       await page.locator('#naverCaptureApply').click(); await page.locator('#naverCaptureStatus[data-state=error]').waitFor();
+      const abortTrace = await page.evaluate(() => structuredClone(window.__captureApplyTrace));
+      assert.equal(abortTrace.aborts.length, 1, 'The intended final sidecar transaction must actually abort once');
+      assert.equal(abortTrace.receives.length, 1); assert.ok(abortTrace.receives[0].end - abortTrace.receives[0].start < 20000);
+      report.atomicAbortTrace = abortTrace;
       assert.deepEqual(await databaseSnapshot(page), before, 'The final capture-sidecar abort must roll back every source and operation');
-      await page.evaluate(() => { IDBObjectStore.prototype.add = window.__captureAdd; });
+      await page.evaluate(() => { IDBObjectStore.prototype.add = window.__captureAdd; window.__captureApplyObserver.disconnect(); window.__captureApplyTrace = null; });
       await page.locator('#naverCaptureApply').click(); await page.locator('#naverCaptureStatus[data-state=stored]').waitFor(); await captureIdle(page);
       const bundle = await sourceBundle(page); const source = bundle.sources.find(value => value.id === seeded.original.sourceId);
       const version = bundle.sourceVersions.filter(value => value.sourceId === source.id).at(-1);
@@ -447,12 +481,12 @@ async function main() {
 
 
       assert.match(await page.locator('.photo-article').innerText(), /직접 쓴 생각/); await capture(page, report, 'selected-photo-saved-post');
-      const reopened = await page.context().newPage(); reopened.setDefaultTimeout(20000);
+      const reopened = await page.context().newPage(); reopened.setDefaultTimeout(20000); trackRequests(reopened);
       reopened.on('pageerror', error => report.pageErrors.push({ device: 'capture-a-reopen', message: error.message }));
       reopened.on('console', message => { if (message.type() === 'error') report.consoleErrors.push({ device: 'capture-a-reopen', message: message.text() }); });
       const saveCount = server.saves().length;
       try {
-        await reopened.goto(base + '/index.html'); await ready(reopened); await settle(reopened);
+        await loadDocument(reopened, base + '/index.html'); await ready(reopened); await settle(reopened);
         await reopened.locator('#homePostList [data-photo-post-id=\"' + postId + '\"] .home-post-read').click();
         await reopened.locator('.photo-article').waitFor();
         assert.match(await reopened.locator('.photo-article').innerText(), /직접 쓴 생각/);

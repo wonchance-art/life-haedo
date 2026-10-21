@@ -1136,7 +1136,6 @@
           originalCreatedAt: version.originalCreatedAt, format: version.format
         });
         if (source.sourceKey) state.stage.input.fileName = source.sourceKey;
-        if (reimport.input) Object.assign(state.stage.input, reimport.input, { origin: source.origin, url: source.url || '', existingSourceId: source.id });
         if (naverImportOrigin) externalImportContext = { workspaceId, generation: workspaceGeneration, stageId: state.stage.stageId, committed: null, origin: naverImportOrigin };
         // A new capture has its own scope; do not inherit full_text or omissions.
         state.editTick = 1;
@@ -1597,7 +1596,7 @@
         onImport: async target => {
           await refreshData();
           if (disposed || workspaceToken !== workspaceGeneration || state.mode !== 'naver-blog') return;
-          if (target.sourceId) return navigate('import', { reimport: { workspaceId, sourceId: target.sourceId, sourceVersionId: target.sourceVersionId, input: target.input } });
+          if (target.sourceId) return navigate('import', { reimport: { workspaceId, sourceId: target.sourceId, sourceVersionId: target.sourceVersionId } });
           return navigate('import');
         },
         onReturn: () => navigate('sources'),

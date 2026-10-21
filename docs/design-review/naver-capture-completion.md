@@ -45,7 +45,7 @@ haedo.naver.capture.v1은 해도 전용 무압축 ZIP이다. 선택 원문 한 �
 
 추출기 CLI 전체 대신 기존 Auth/RPC·Core 불변 원문·Storage CAS·PhotoPost·fflate를 재사용했다. 새 범위는 목록/재개, 제한 추출 어댑터, 불변 수집 판과 원문 사진 sidecar다. 작성기·공개·뉴스·기존 백업을 다시 만들지 않는다. [공식 후보와 고정 소스](naver-extraction-open-source.md), [실제 재사용 결정](../life-tools-design/open-source-review.md)을 구분한다.
 
-독립 코드 검토는 새 capture B를 보는 중 기존 version A의 사진을 쓰는 공백과 link_only 원문의 조기 반환으로 사진 영역이 빠지는 공백을 발견했다. 사진 작업은 정확 수집 hash가 설치된 버전에만 연결하고, 본문이 없어도 사진 영역을 표시하도록 보완한다. 최종 통합 확인은 PR 검사 기록으로 확정한다.
+독립 코드 검토는 새 capture B를 보는 중 기존 version A의 사진을 쓰는 공백과 link_only 원문의 조기 반환으로 사진 영역이 빠지는 공백을 발견했다. 사진 작업은 정확 수집 hash가 설치된 버전에만 연결하고, 본문이 없어도 사진 영역을 표시하도록 보완한다. 기존 RSS의 수동 보완 초안에 피드 일부 본문이 자동으로 들어가는 회귀도 기존 빈 입력 계약으로 되돌렸다. 최종 통합 확인은 PR 검사 기록으로 확정한다.
 
 ## 검수와 실제 가동의 남은 조건
 
