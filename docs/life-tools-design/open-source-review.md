@@ -947,4 +947,4 @@ Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와
 
 공식 MCP 문서로 [Auth getUser](https://supabase.com/docs/reference/javascript/auth-getuser)의 서버 확인에 따른 사용자 정당성 검증과 기존 Auth/RLS 경계의 재사용을 확인했다. [changelog.md](https://supabase.com/changelog.md)는 직접 조회가 URLError로 실패해 본문을 확인하지 못했으며 우회하지 않았다. 이번에 SDK·키·스키마를 바꾸지 않는다.
 
-요구는 선택한 서버 판을 검증해 같은 로컬 사본으로 재개하는 것이다. 기존 BlogSync의 CAS·영속 작업 영수증, idb의 원자 트랜잭션과 계정 가드를 확장한다. 새 CRDT·동기화 엔진·SDK를 추가하면 기존 사본·충돌 보존과 성공 기준을 중복 관리해야 하므로 도입하지 않는다. [제품 계약·검수 상태](../design-review/account-blog-continuity.md)를 따르며 최종 통합 통과·배포·실제 Apple 체험은 별도 증거로 확정한다.
+요구는 선택한 서버 판을 검증해 같은 로컬 사본으로 재개하는 것이다. 기존 BlogSync의 CAS·영속 작업 영수증, idb의 원자 트랜잭션과 계정 가드를 확장했다. 글 관리의 서버 새 판 읽기 비교도 기존 원문 조회와 metadata CAS를 사용해 업로드 없이 수행한다. 새 CRDT·동기화 엔진·SDK를 추가하면 기존 사본·충돌 보존과 성공 기준을 중복 관리해야 하므로 도입하지 않는다. [제품 계약·최종 로컬 검수 범위](../design-review/account-blog-continuity.md)의 여정6개·단위1142개를 확인했으며 최종 통합 CI·출시·실제 Apple 체험은 별도 증거로 확정한다.

@@ -147,9 +147,12 @@
     async function showSyncState(id, node) {
       const token = epoch;
       try {
-        requireSync('getState'); const value = await blogSync.getState(workspaceId, id);
+        requireSync('getState');
+        const value = focusedPostId === id && typeof blogSync.inspectRemote === 'function'
+          ? await blogSync.inspectRemote(workspaceId, id, { isCurrent: () => valid(token) && node.isConnected })
+          : await blogSync.getState(workspaceId, id);
         if (!valid(token) || !node.isConnected) return;
-        const labels = { not_enabled: '이 브라우저에 보관', pending: '서버 보관 대기', synced: '서버 보관 확인', paused: '서버 연결 중지', conflict: '양쪽 변경이 있어 선택이 필요합니다. 이 글은 유지했습니다.', error: '서버 보관을 확인하지 못했습니다.' };
+        const labels = { not_enabled: '이 브라우저에 보관', pending: '서버 보관 대기', synced: '서버 보관 확인', paused: '서버 연결 중지', conflict: '서버와 이 브라우저의 내용이 달라 선택이 필요합니다. 이 글은 유지했습니다.', error: '서버 보관을 확인하지 못했습니다.' };
         node.replaceChildren(document.createTextNode((labels[value?.status] || '서버 보관 상태를 확인해 주세요.') + (value?.publication?.active ? ' · 공개 게시 중' : '')));
         if (value?.error) node.append(document.createTextNode(' ' + errorText(typeof value.error === 'string' ? life.BlogRemote?.clean?.({ code: value.error }) || { code: value.error } : value.error)));
         if (value?.status === 'conflict' && value.remoteId) node.append(button('서버 글을 새 사본으로 받기', async () => {

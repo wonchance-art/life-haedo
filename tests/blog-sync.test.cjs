@@ -666,3 +666,69 @@ test('first open rechecks a held server head and caller currentness before any l
     } finally { a.manager.dispose(); b.manager.dispose(); }
   }
 });
+
+test('focused inspection discovers and refreshes remote changes without sending the local post, originals or publication', async () => {
+  const f = await fixture();
+  try {
+    await f.manager.connect(WS, f.d.id);
+    const before = copy(f.posts), saves = f.stats.saves.length, uploads = f.stats.uploads;
+    const row = f.rows.get(f.d.id); row.revision++; row.data.title = '다른 기기에서 갱신';
+    row.publication = { token: Core.id(), blogToken: WS, revision: 2, active: true };
+    assert.equal((await f.manager.getState(WS, f.d.id)).status, 'synced', 'Local-only state cannot discover another device update');
+    const inspected = await f.manager.inspectRemote(WS, f.d.id);
+    assert.equal(inspected.status, 'conflict'); assert.equal(inspected.conflict.remoteRevision, 2); assert.equal(inspected.conflict.localRevision, f.d.revision);
+    assert.equal(inspected.conflict.remoteTitle, row.data.title); assert.deepEqual(inspected.publication, row.publication);
+    row.revision++; row.data.title = '비교 중 다시 갱신';
+    const refreshed = await f.manager.inspectRemote(WS, f.d.id); assert.equal(refreshed.conflict.remoteRevision, 3); assert.equal(refreshed.conflict.remoteTitle, row.data.title);
+    assert.deepEqual(f.posts, before); assert.equal(f.stats.saves.length, saves); assert.equal(f.stats.uploads, uploads); assert.equal(f.stats.publishes.length, 0);
+  } finally { f.manager.dispose(); }
+});
+
+test('focused inspection verifies an equal head without metadata writes and rejects same-revision manifest mutation', async () => {
+  const f = await fixture();
+  try {
+    await f.manager.connect(WS, f.d.id); const before = copy(f.states), saves = f.stats.saves.length, uploads = f.stats.uploads;
+    assert.equal((await f.manager.inspectRemote(WS, f.d.id)).status, 'synced'); assert.deepEqual(f.states, before);
+    f.rows.get(f.d.id).data.title = '같은 판의 변조';
+    await assert.rejects(f.manager.inspectRemote(WS, f.d.id), { code: 'invalid_remote_data' });
+    assert.deepEqual(f.states, before); assert.equal(f.stats.saves.length, saves); assert.equal(f.stats.uploads, uploads); assert.equal(f.stats.publishes.length, 0);
+    f.rows.get(f.d.id).data.title = f.d.title; f.states.get(f.d.id).remoteManifest = null;
+    const legacy = copy(f.states); assert.equal((await f.manager.inspectRemote(WS, f.d.id)).status, 'synced'); assert.deepEqual(f.states, legacy);
+  } finally { f.manager.dispose(); }
+});
+
+test('focused inspection preserves pause and every unacknowledged operation without reading or resubmitting the remote head', async () => {
+  for (const phase of ['paused', 'pending', 'publishPending', 'unpublishPending']) {
+    const f = await fixture();
+    try {
+      await f.manager.connect(WS, f.d.id);
+      if (phase === 'paused') await f.manager.pause(WS, f.d.id);
+      else f.states.get(f.d.id)[phase] = { operationId: Core.id(), frozen: 'same operation stays pending' };
+      const before = copy(f.states), saves = f.stats.saves.length, uploads = f.stats.uploads;
+      f.remote.read = async () => { throw Error('Paused or unacknowledged operations must not be inspected'); };
+      const result = await f.manager.inspectRemote(WS, f.d.id);
+      assert.equal(result.enabled, phase !== 'paused'); assert.deepEqual(f.states, before);
+      assert.equal(f.stats.saves.length, saves); assert.equal(f.stats.uploads, uploads); assert.equal(f.stats.publishes.length, 0);
+    } finally { f.manager.dispose(); }
+  }
+});
+
+test('focused inspection discards a delayed head after pause, account replacement, local edit or competing metadata update', async () => {
+  for (const change of ['pause', 'account', 'post', 'state', 'navigation']) {
+    const f = await fixture(), entered = deferred(), release = deferred();
+    let current = true;
+    try {
+      await f.manager.connect(WS, f.d.id); f.rows.get(f.d.id).revision++;
+      const read = f.remote.read; f.remote.read = async id => { const row = await read(id); entered.resolve(); await release.promise; return row; };
+      const inspecting = f.manager.inspectRemote(WS, f.d.id, { isCurrent: () => current }); await entered.promise;
+      if (change === 'pause') await f.manager.pause(WS, f.d.id);
+      if (change === 'account') { f.auth.epoch++; f.auth.user = { id: OTHER }; }
+      if (change === 'post') { f.posts.get(f.d.id).revision++; f.posts.get(f.d.id).title = '확인 중 로컬 편집'; }
+      if (change === 'state') { const state = f.states.get(f.d.id); state.revision++; state.error = 'other tab update'; }
+      if (change === 'navigation') current = false;
+      const before = copy(f.states), local = copy(f.posts), saves = f.stats.saves.length, uploads = f.stats.uploads;
+      release.resolve(); await assert.rejects(inspecting, { code: ['pause', 'account', 'navigation'].includes(change) ? 'request_cancelled' : 'local_changed' });
+      assert.deepEqual(f.states, before); assert.deepEqual(f.posts, local); assert.equal(f.stats.saves.length, saves); assert.equal(f.stats.uploads, uploads); assert.equal(f.stats.publishes.length, 0);
+    } finally { release.resolve(); f.manager.dispose(); }
+  }
+});

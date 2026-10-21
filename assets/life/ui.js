@@ -1389,7 +1389,7 @@
       });
       if (origin.mode === 'find') findRenderPromise.then(restore);
       else if (origin.mode === 'home') homeRenderPromise.then(restore);
-      else if (origin.mode === 'external-discovery' || origin.mode === 'account-blog') mainRenderPromise.then(restore);
+      else if (origin.mode === 'external-discovery' || origin.mode === 'account-blog' || origin.mode === 'blog') mainRenderPromise.then(restore);
       else restore();
     }
 
@@ -3931,7 +3931,10 @@
         mainRenderPromise = renderAccountBlog().catch(failure);
         return;
       }
-      if (state.mode === 'blog') return mainRenderPromise = renderBlogManager().catch(failure);
+      if (state.mode === 'blog') {
+        mainRenderPromise = renderBlogManager().catch(failure);
+        return;
+      }
       if (state.mode === 'find') { findRenderPromise = unifiedSearch.open().catch(failure); mainRenderPromise = findRenderPromise; return; }
       if (state.mode === 'collection' && collection) { const options = collectionOpenOptions || {}; collectionOpenOptions = null; mainRenderPromise = collection.open(options).catch(failure); return; }
       if (state.mode === 'write' && writer) {

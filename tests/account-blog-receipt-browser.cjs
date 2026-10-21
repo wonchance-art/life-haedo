@@ -27,7 +27,7 @@ class ReceiptCloud extends FakeCloud {
 async function main() {
   assert(['127.0.0.1', 'localhost', '[::1]'].includes(new URL(base).hostname));
   await fs.mkdir(output, { recursive: true });
-  const report = { checks: [], pageErrors: [], consoleErrors: [], external: [],
+  const report = { checks: [], visual: [], pageErrors: [], consoleErrors: [], external: [],
     scope: 'Actual bundled SDK, image decoding and account-scoped IndexedDB. Synthetic Auth/CAS/original Storage HTTP only; no live account, hosted SQL/RLS, native IME or Apple hardware.' };
   report.sources = await Promise.all(['assets/platform-auth.js','assets/life/ui.js','assets/life/storage.js','assets/life/blog-sync.js','assets/life/account-blog-ui.js','assets/life/photo-post-ui.js'].map(async file => {
     const response = await fetch(base + '/' + file); assert(response.ok); const served = Buffer.from(await response.arrayBuffer()), disk = await fs.readFile(file);
@@ -123,6 +123,11 @@ async function main() {
       const tab = await device(f.server, f.name, accounts.a, f.context);
       const [,b] = await Promise.all([row.locator('button[data-action="receive"]').click(),open(f,tab.page)]);
       await row.locator('button[data-action="retry-open"]').waitFor();
+      const error=f.page.locator('#receiptAccountHost #accountBlogError');await error.waitFor();assert.match(await error.innerText(),/글은 이 브라우저에 보관했습니다/);
+      await f.page.setViewportSize({width:390,height:844});
+      await f.page.locator('#receiptAccountHost').screenshot({path:path.join(output,'receive-open-failed-390.png')});
+      report.visual.push({scene:'received-post-display-failure',width:390,file:'receive-open-failed-390.png'});
+      await f.page.setViewportSize({width:1440,height:1000});
       const a=await f.page.evaluate(()=>__receiptUIResults[0]);assert(a);
       assert.equal(a.localPostId,b.localPostId);assert.equal([a,b].filter(v=>v.received).length,1);
       const current = await audit(f.page,f.seed.workspaceId); assert.equal(current.docs.length,baseline.docs.length+1); assert.equal(current.copies.filter(c => c.remoteId === f.original.id).length,1);

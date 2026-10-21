@@ -2043,17 +2043,26 @@
         return clone((await meta.get(`blog-sync:${workspaceId}:${postId}`))?.value || null);
       });
     }
-    async function writeBlogSyncState(workspaceId, postId, input, baseRevision = 0) {
+    async function writeBlogSyncState(workspaceId, postId, input, baseRevision = 0, options = {}) {
       collectionScope(workspaceId); requireId(postId, '글'); requireRevision(baseRevision);
+      if (options.isCurrent !== undefined && typeof options.isCurrent !== 'function') throw fault('invalid_request', '글을 확인할 화면을 확인해 주세요.');
+      if (options.expectedLocalRevision !== undefined) requireRevision(options.expectedLocalRevision);
+      const assertCurrent = () => { scopeGuard(); if (options.isCurrent && options.isCurrent() === false) throw fault('request_cancelled', '화면이 바뀌어 글 확인을 중단했습니다.'); };
+      assertCurrent();
       let serialized;
       try { serialized = JSON.stringify(input); } catch (_) { throw fault('invalid_blog_state', '글 연결 정보를 확인해 주세요.'); }
       if (!plain(input) || typeof serialized !== 'string' || new TextEncoder().encode(serialized).length > 8388608) throw fault('invalid_blog_state', '글 연결 정보는 8 MiB까지 보관할 수 있습니다.');
       const value = { ...JSON.parse(serialized), revision: baseRevision + 1 };
       return transaction(['bundles', 'meta'], 'readwrite', async tx => {
-        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta); assertCurrent();
+        if (options.expectedLocalRevision !== undefined) {
+          const post = (await meta.get(`photo-post:${workspaceId}:${postId}`))?.value; assertCurrent();
+          if (!post || post.id !== postId || post.revision !== options.expectedLocalRevision) throw fault('local_changed', '확인하는 동안 글이 바뀌었습니다. 현재 글을 다시 확인해 주세요.');
+        }
         const key = `blog-sync:${workspaceId}:${postId}`, prior = (await meta.get(key))?.value;
+        assertCurrent();
         if ((prior?.revision || 0) !== baseRevision) throw fault('blog_state_conflict', '다른 탭에서 글의 연결 상태가 바뀌었습니다. 원문은 유지합니다.');
-        await meta.put({ key, value }); return clone(value);
+        await meta.put({ key, value }); assertCurrent(); return clone(value);
       });
     }
     // Page composer drafts stay local, outside composition sync and public copies.

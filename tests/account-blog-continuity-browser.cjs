@@ -11,7 +11,7 @@ const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const output = path.resolve(__dirname, '../.local/account-blog-continuity');
 const migration = 'supabase/migrations/20261017144744_life_blog_originals.sql';
 const runtime = ['assets/life/account-blog-ui.js', 'assets/life/blog-sync.js', 'assets/life/storage.js',
-  'assets/life/photo-post-ui.js', 'assets/life/ui.js', 'assets/life/home.js', 'assets/platform-auth.js', 'assets/life/home.css', 'sw.js'];
+  'assets/life/photo-post-ui.js', 'assets/life/blog-manager.js', 'assets/life/ui.js', 'assets/life/home.js', 'assets/platform-auth.js', 'assets/life/home.css', 'sw.js'];
 
 // Await the IDB read itself: an async waitForFunction predicate is a truthy
 // Promise on the pinned Playwright version, even while its result is false.
@@ -130,7 +130,7 @@ async function main() {
   const writes = () => ({ saves: server.blogRequests.filter(r => r.rpc === 'life_blog_save').length,
     uploads: server.assetRequests.filter(r => r.method === 'POST').length,
     public: server.blogRequests.filter(r => /life_blog_(?:publish|unpublish)$/.test(r.rpc)).length });
-  let a, b, first, received, changedB, draftA, conflictA, returnedA, draftB, originalA, originalB, remoteId, originalBytes;
+  let a, b, first, received, changedB, draftA, conflictA, returnedA, draftB, originalA, originalB, remoteId, originalBytes, publicToken;
   try {
     a = await device('account-device-a'); b = await device('account-device-b'); active = a.page;
     originalA = await preserved(a.page); originalB = await preserved(b.page);
@@ -266,6 +266,7 @@ async function main() {
       await a.page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
       await managerClick(a.page, a.page.getByRole('button', { name: '공개 게시·갱신', exact: true }));
       const link = a.page.getByRole('link', { name: '공개한 글 열기', exact: true }); await link.waitFor(); const url = await link.getAttribute('href'), token = new URL(url).searchParams.get('post');
+      publicToken = token;
       const exposed = server.rpc(null, 'life_blog_public_read', { p_token: token });
       assert.equal(exposed.snapshot.photos.length, 1); assert.equal(exposed.snapshot.photos[0].digest, originalBytes.map(digest)[0]);
       for (const hidden of [draftA.title, draftB.title, 'PRIVATE_A_UNFINISHED_BODY', 'PRIVATE_B_UNFINISHED_BODY', returnedA.photos[1].digest]) assert(!JSON.stringify(exposed).includes(hidden));
@@ -289,6 +290,45 @@ async function main() {
       assert.deepEqual(await preserved(a.page), originalA); assert.deepEqual(await preserved(b.page), originalB);
       report.originals = originalBytes.map((bytes, i) => ({ sha256: digest(bytes), width: first.photos[i].width, height: first.photos[i].height, bytes: bytes.length }));
       report.privateRevisions = server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: remoteId }).revision;
+    });
+    await check('An unchanged device compares the newer server revision on management entry without uploads, and only an explicit choice receives it', async () => {
+      active = b.page;
+      const before = writes(), localBefore = await state(b.page), head = server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: remoteId });
+      assert.equal(localBefore.ws, originalB.bundle.workspaceId);
+      assert.deepEqual(content(localBefore.docs.find(d => d.id === changedB.id)), content(changedB));
+      assert.deepEqual(content(localBefore.docs.find(d => d.id === draftB.id)), content(draftB));
+      assert(head.revision > changedB.sync.remoteRevision);
+      assert.equal(server.rpc(null, 'life_blog_public_read', { p_token: publicToken }), null);
+      await catalog(b.page);
+      assert.equal(await b.page.locator('#accountBlogSearch').inputValue(), '두 기기', 'The prior catalog search must remain intact after the title changes');
+      await b.page.locator('#accountBlogSearch').fill('');
+      const row = serverRow(b.page, remoteId); assert.equal(await row.getAttribute('data-state'), 'remote_updated');
+      await row.locator('button[data-action="manage"][data-local-post-id="' + changedB.id + '"]').click();
+      await managerReady(b.page);
+      const target = managerRow(b.page, changedB.id), panel = target.locator('.blog-manager-server');
+      if (!await panel.evaluate(n => n.open)) await panel.locator(':scope > summary').click();
+      const choose = panel.getByRole('button', { name: '기존 글을 남기고 서버 글로 이어쓰기', exact: true }); await choose.waitFor();
+      const observed = await state(b.page), comparison = observed.docs.find(d => d.id === changedB.id);
+      assert.equal(comparison.sync.status, 'conflict'); assert.equal(comparison.sync.conflict.remoteRevision, head.revision);
+      assert.deepEqual(content(comparison), content(changedB));
+      assert.deepEqual(content(observed.docs.find(d => d.id === draftB.id)), content(draftB));
+      assert.equal(observed.docs.length, localBefore.docs.length, 'Inspecting must install no body or recovery copy');
+      assert.deepEqual(writes(), before, 'Opening focused management must only inspect the server');
+      assert.deepEqual(server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: remoteId }), head);
+      assert.equal(server.rpc(null, 'life_blog_public_read', { p_token: publicToken }), null);
+      await capture(b.page, 'unchanged-device-explicit-comparison');
+      await choose.click(); await b.page.locator('.photo-article').waitFor();
+      const after = await state(b.page), next = after.docs.find(d => !localBefore.docs.some(old => old.id === d.id) && d.sync?.remoteId === remoteId);
+      assert(next); assertCopy(next, returnedA); assert.equal(after.ws, localBefore.ws);
+      assert.equal(after.docs.length, localBefore.docs.length + 1);
+      assert.equal(next.sync.remoteRevision, head.revision); assert.equal(next.sync.enabled, true);
+      const old = after.docs.find(d => d.id === changedB.id); assert.deepEqual(content(old), content(changedB)); assert.equal(old.sync.enabled, false);
+      assert.deepEqual(content(after.docs.find(d => d.id === draftB.id)), content(draftB));
+      assert.deepEqual(writes(), before); assert.deepEqual(server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: remoteId }), head);
+      assert.equal(server.rpc(null, 'life_blog_public_read', { p_token: publicToken }), null);
+      assert.deepEqual(await preserved(b.page), originalB); assert.deepEqual(await preserved(a.page), originalA);
+      report.unchangedDevice = { inspectedRemoteRevision: head.revision, readOnlyUntilExplicitChoice: true,
+        preservedSavedCopyAndUnfinishedDraft: true, stayedInWorkspace: true, publicationUnchanged: true };
     });
     await Promise.all(responseTasks);
     for (const row of report.servedHashes) assert.equal(row.sha256, report.sourceHashes[row.file], 'Mixed served runtime: ' + row.file);

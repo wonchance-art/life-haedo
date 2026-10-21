@@ -126,3 +126,19 @@ test('catalog reads only the selected owned workspace and a dangling receipt nev
   await assert.rejects(f.a.installReceivedBlogPost(f.ws, { ...f.doc, id: Core.id() }, f.state), { code: 'photo_post_missing' });
   assert.deepEqual(f.rows, before); assert.equal((await f.a.listPhotoPosts(f.ws)).length, 1);
 });
+
+test('inspection metadata checks the current local post inside its transaction and aborts when its focused caller leaves after put', async t => {
+  const f = await fixture(t), installed = await f.a.installReceivedBlogPost(f.ws, f.doc, f.state), id = installed.post.id;
+  const state = await f.a.readBlogSyncState(f.ws, id), next = { ...state, status: 'conflict', conflict: { remoteRevision: 5, localRevision: installed.post.revision } };
+  const before = copy(f.rows);
+  await assert.rejects(f.a.writeBlogSyncState(f.ws, id, next, state.revision, { expectedLocalRevision: installed.post.revision + 1 }), { code: 'local_changed' });
+  assert.deepEqual(f.rows, before);
+  let current = true;
+  f.control.afterWrite = write => { if (write.id === `blog-sync:${f.ws}:${id}`) current = false; };
+  await assert.rejects(f.a.writeBlogSyncState(f.ws, id, next, state.revision, { expectedLocalRevision: installed.post.revision, isCurrent: () => current }), { code: 'request_cancelled' });
+  assert.deepEqual(f.rows, before);
+  f.control.afterWrite = null; current = true;
+  const confirmed = await f.a.writeBlogSyncState(f.ws, id, next, state.revision, { expectedLocalRevision: installed.post.revision, isCurrent: () => current });
+  assert.equal(confirmed.conflict.remoteRevision, 5); assert.equal(confirmed.revision, state.revision + 1);
+  assert.deepEqual(await f.a.readPhotoPost(f.ws, id), installed.post);
+});

@@ -24,14 +24,41 @@
       next.finally(() => { if (queues.get(k) === next) queues.delete(k); }).catch(() => {}); return next;
     }
     async function readState(c) { const state = await storage.readBlogSyncState(c.ws, c.id); guard(c); return state; }
-    async function writeState(c, state, changes) {
-      guard(c); const result = await storage.writeBlogSyncState(c.ws, c.id, { ...state, ...changes }, state?.revision || 0); guard(c); emit(c.ws, c.id); return result;
+    async function writeState(c, state, changes, options) {
+      guard(c); const result = await storage.writeBlogSyncState(c.ws, c.id, { ...state, ...changes }, state?.revision || 0, options); guard(c); emit(c.ws, c.id); return result;
     }
     async function readPost(c) { const post = await storage.readPhotoPost(c.ws, c.id); guard(c); photoPost.validate(post); return post; }
     async function getState(ws, id) {
       const c = context(ws, id); guard(c); const state = await readState(c), post = await readPost(c);
       return { ...(state || {}), workspaceId: ws, localPostId: id, enabled: !!state?.enabled,
         status: !state ? 'not_enabled' : !state.enabled ? state.enableOnSave === true ? 'pending' : 'paused' : state.conflict ? 'conflict' : state.error ? 'error' : state.pending || state.localRevision !== post.revision ? 'pending' : 'synced' };
+    }
+    async function inspectRemote(ws, id, { isCurrent } = {}) {
+      const c = context(ws, id);
+      if (isCurrent !== undefined && typeof isCurrent !== 'function') throw fault('invalid_request');
+      const check = () => { guard(c); if (isCurrent && !isCurrent()) throw fault('request_cancelled'); };
+      const result = async () => { const value = await getState(ws, id); check(); return value; };
+      return serial(ws, id, async () => {
+        check(); await verified(c); check();
+        const post = await readPost(c); check();
+        const state = await readState(c); check();
+        // A read must not mistake our own unacknowledged operation for another
+        // device's edit, nor reactivate a paused connection.
+        if (!state?.enabled || state.pending && !state.conflict || state.publishPending || state.unpublishPending) return result();
+        const row = await remote.read(state.remoteId); check(); if (!row) throw fault('remote_missing');
+        const latestPost = await readPost(c); check();
+        const latestState = await readState(c); check();
+        if (latestPost.revision !== post.revision || canonical(latestState) !== canonical(state)) throw fault('local_changed');
+        if (row.revision === state.remoteRevision) {
+          if (state.remoteManifest && canonical(row.data) !== canonical(state.remoteManifest)) throw fault('invalid_remote_data');
+        } else {
+          await writeState(c, latestState, { status: 'conflict', error: null, publication: row.publication,
+            conflict: { remoteRevision: row.revision, localRevision: latestPost.revision, remoteTitle: row.data.title, updatedAt: row.updated_at } },
+          { isCurrent: check, expectedLocalRevision: latestPost.revision });
+          check();
+        }
+        return result();
+      });
     }
     async function rememberError(c, error) {
       try { guard(c); const current = await readState(c); if (current?.enabled) await writeState(c, current, { status: 'error', error: cleaner(error).code || 'network_error' }); } catch (_) { /* Keep durable pending state if metadata cannot be updated. */ }
@@ -346,7 +373,7 @@
     }
     return Object.freeze({ list, catalog, openRemote, connect: (ws, id, options) => transfer(ws, id, true, options), save: (ws, id, options) => transfer(ws, id, true, options),
       saveDefault,
-      sync: (ws, id) => transfer(ws, id, false), receive, pause, publish, unpublish, resolve, getState,
+      sync: (ws, id) => transfer(ws, id, false), receive, pause, publish, unpublish, resolve, getState, inspectRemote,
       subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
       dispose() { if (disposed) return; disposed = true; listeners.clear(); remote.dispose?.(); } });
   }
