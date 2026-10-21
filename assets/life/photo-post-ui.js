@@ -106,6 +106,8 @@
       storedTick = 0,
       saving = null,
       timer = null,
+      maxTimer = null,
+      checkpointing = null,
       epoch = 0,
       busy = false,
       composing = false,
@@ -172,15 +174,17 @@
         const message =
           e?.message ||
           e ||
-          (dirtyTick !== storedTick
-            ? "초안 보관 중…"
+          (composing
+            ? "한글 입력 중…"
+            : dirtyTick !== storedTick
+            ? "브라우저에 자동 임시저장 중…"
             : mode === "read" && committed
               ? "비공개 글을 저장했어요"
               : doc?.revision
-                ? "초안 보관됨"
+                ? "브라우저에 자동 임시저장됨"
                 : "사진 없이도 바로 쓸 수 있어요");
         const state = e instanceof Error ? "error" : e ? "notice" :
-          dirtyTick !== storedTick ? "pending" :
+          composing || dirtyTick !== storedTick ? "pending" :
           mode === "read" && committed ? "success" : doc?.revision ? "draft" : "idle";
         const changed = status.dataset.state !== state || statusText.textContent !== message;
         if (statusText.textContent !== message) statusText.textContent = message;
@@ -282,7 +286,6 @@
     }
     function setBusy(value) {
       busy = value;
-      if (value) clearTimeout(timer);
       if (value && !feedControls.length) {
         feedControls = [...(feedHost?.querySelectorAll("button") || [])].map(
           (n) => [n, n.disabled],
@@ -318,12 +321,9 @@
         !value &&
         valid() &&
         mode === "edit" &&
-        dirtyTick !== storedTick &&
-        !composing &&
-        !saving
+        dirtyTick !== storedTick
       ) {
-        clearTimeout(timer);
-        timer = setTimeout(() => persist().catch(showStatus), 500);
+        scheduleAutosave();
       }
     }
     function guard(acceptedOnly = false) {
@@ -333,19 +333,37 @@
       if (!acceptedOnly && attachmentUI?.composing())
         throw new Error("첨부의 한글 입력을 마친 뒤 다시 시도해 주세요.");
     }
+    function cancelAutosave() {
+      clearTimeout(timer); clearTimeout(maxTimer);
+      timer = maxTimer = null;
+    }
+    function scheduleAutosave() {
+      clearTimeout(timer); timer = null;
+      if (!doc || mode !== "edit" || !current(epoch) || dirtyTick === storedTick || saving) return;
+      const target = doc, token = epoch;
+      const store = () => {
+        if (!current(token) || doc !== target || mode !== "edit") return;
+        cancelAutosave();
+        // Existing lifecycle handlers share this same checkpoint promise.
+        checkpoint().catch(() => {});
+      };
+      timer = setTimeout(store, 300);
+      // Continuous input resets only the idle timer, never this deadline.
+      if (maxTimer === null) maxTimer = setTimeout(store, 2000);
+    }
     function mark() {
       dirtyTick++;
       doc.updatedAt = new Date().toISOString();
       showStatus();
-      clearTimeout(timer);
-      if (!composing)
-        timer = setTimeout(() => persist().catch(showStatus), 500);
+      scheduleAutosave();
     }
-    async function persist(modelOnly = false) {
-      clearTimeout(timer);
+    async function persist(modelOnly = false, target = doc) {
+      if (doc !== target) return;
+      cancelAutosave();
       if (saving) {
         await saving;
-        return persist(modelOnly);
+        if (!valid() || doc !== target) return;
+        return persist(modelOnly, target);
       }
       if (!modelOnly && mode === "edit" && selected?.isConnected) changePhoto();
       if (!doc || mode !== "edit" || dirtyTick === storedTick) return;
@@ -359,28 +377,33 @@
       saving = storage
         .savePhotoPost(workspaceId, payload, doc.revision)
         .then((saved) => {
-          if (!valid()) return;
-          doc.revision = saved.revision;
+          if (!valid() || doc !== target) return;
+          target.revision = saved.revision;
           storedTick = tick;
-          if (current(token)) {
-            showStatus();
-            onSaved();
-          }
+          if (current(epoch)) showStatus();
+          if (current(token)) onSaved();
         })
         .finally(() => {
           saving = null;
-          onDirty();
+          if (valid() && doc === target) onDirty();
         });
       await saving;
-      if (dirtyTick !== storedTick) return persist(modelOnly);
+      if (valid() && doc === target && dirtyTick !== storedTick) return persist(modelOnly || busy || composing, target);
     }
     function checkpoint() {
       // Keep the accepted model durable without committing an IME field or a
       // file whose signature, dimensions and original bytes are still pending.
-      return persist(true).catch((cause) => {
-        if (valid()) showStatus(cause);
+      const target = doc;
+      if (checkpointing?.doc === target) return checkpointing.promise;
+      const entry = { doc: target, promise: null };
+      entry.promise = persist(true, target).catch((cause) => {
+        if (current(epoch) && doc === target) showStatus(cause);
         throw cause;
+      }).finally(() => {
+        if (checkpointing === entry) checkpointing = null;
       });
+      checkpointing = entry;
+      return entry.promise;
     }
     async function flush() {
       attachmentUI?.flush();
@@ -393,6 +416,7 @@
         return;
       guard();
       await persist();
+      guard();
     }
     function download(blob, name) {
       const u = url(blob),
@@ -634,7 +658,7 @@
     }
     async function saveIndependent(nextStatus = "draft") {
       guard();
-      clearTimeout(timer);
+      cancelAutosave();
       const token = epoch;
       if (saving) await saving.catch(() => {});
       if (!current(token)) return;
@@ -1161,6 +1185,8 @@
       selected?.scrollIntoView({ block: "nearest" });
     }
     function renderEditor() {
+      const renderedDoc = doc, renderedEpoch = epoch;
+      const acceptsInput = () => current(renderedEpoch) && doc === renderedDoc && mode === "edit";
       const form = el("section", null, "photo-editor"),
         title = el("input");
       title.id = "photoTitle";
@@ -1169,14 +1195,17 @@
       title.maxLength = 500;
       title.setAttribute("aria-label", "글 제목");
       title.addEventListener("input", () => {
+        if (!acceptsInput()) return;
         doc.title = title.value;
         mark();
       });
       title.addEventListener("compositionstart", () => {
+        if (!acceptsInput()) return;
         composing = true;
-        clearTimeout(timer);
+        showStatus();
       });
       title.addEventListener("compositionend", () => {
+        if (!acceptsInput()) return;
         composing = false;
         doc.title = title.value;
         mark();
@@ -1203,7 +1232,7 @@
       save.title = "이 브라우저에 저장한 뒤 내 계정 서버에 비공개로 보관";
       commands.append(iconControl(button("닫기", list), "close", "닫기"), commandState, save, more);
       sticky.append(commands);
-      sticky.append(el("p", "글 저장 시 전체 본문과 사진 원본·내장 정보를 내 계정 서버에 비공개로 보관합니다. 초안은 이 브라우저에 보관하며 공개는 따로 선택합니다.", "life-help photo-server-scope"));
+      sticky.append(el("p", "초안은 이 브라우저에 자동 임시저장합니다. 글 저장 시 전체 본문과 사진 원본·내장 정보를 내 계정 서버에 비공개로 보관하며 공개는 따로 선택합니다.", "life-help photo-server-scope"));
       recoveryActions = el("div", null, "photo-recovery-actions");
       recoveryActions.hidden = true;
       recoveryActions.append(
@@ -1328,14 +1357,17 @@
       editor.root.setAttribute("aria-multiline", "true");
       editor.root.setAttribute("spellcheck", "true");
       editor.on("text-change", () => {
+        if (!acceptsInput()) return;
         doc.ops = editor.getContents().ops;
         mark();
       });
       editor.root.addEventListener("compositionstart", () => {
+        if (!acceptsInput()) return;
         composing = true;
-        clearTimeout(timer);
+        showStatus();
       });
       editor.root.addEventListener("compositionend", () => {
+        if (!acceptsInput()) return;
         composing = false;
         mark();
       });
@@ -1403,16 +1435,20 @@
       for (const input of [captionInput, altInput]) {
         input.addEventListener("compositionstart", (e) => {
           e.stopPropagation();
+          if (!acceptsInput()) return;
           composing = true;
-          clearTimeout(timer);
+          showStatus();
         });
         input.addEventListener("compositionend", (e) => {
           e.stopPropagation();
+          if (!acceptsInput()) return;
           composing = false;
+          showStatus(error);
           run(changePhoto);
         });
         input.addEventListener("input", (e) => {
           e.stopPropagation();
+          if (!acceptsInput()) return;
           if (!composing) run(changePhoto);
         });
         input.addEventListener("blur", () => editor?.history.cutoff());
@@ -1513,6 +1549,7 @@
     }
     function render() {
       if (!host || !valid()) return;
+      cancelAutosave();
       cleanup();
       const token = ++epoch;
       serverSequence++; serverBusy = false;
@@ -1785,6 +1822,7 @@
       }
       dismissControls = bindDisclosureControls(host);
       showStatus(error);
+      scheduleAutosave();
     }
     async function mount(
       target,
@@ -1849,7 +1887,7 @@
       epoch++;
       serverSequence++; serverBusy = false; serverValue = null; serverStatus = serverActions = null;
       unsubscribeServer?.(); unsubscribeServer = null;
-      clearTimeout(timer);
+      cancelAutosave();
       cleanup();
       host = null;
       status = null;

@@ -20,7 +20,7 @@ async function entered(gate) {
 
 async function main() {
   await fs.mkdir(out, { recursive: true });
-  const report = { checks: [], visual: [], pageErrors: [], consoleErrors: [], expectedAuthErrors: [], external: [], writes: [],
+  const report = { checks: [], visual: [], departures: [], pageErrors: [], consoleErrors: [], expectedAuthErrors: [], external: [], writes: [],
     scope: 'One anonymous account-scoped SDK/IndexedDB writing journey. Synthetic persisted lifecycle and composition events in Linux Chromium; no Apple hardware, native file picker/IME, live OAuth, publication, browser eviction or crash-survival claim.' };
   report.sourceHashes = await Promise.all(['assets/platform-auth.js','assets/life/shell.js','assets/life/ui.js','assets/life/workbench-ui.js','assets/life/photo-post-ui.js'].map(async file => {
     const response = await fetch(base+'/'+file);assert(response.ok);const served=Buffer.from(await response.arrayBuffer()),disk=await fs.readFile(path.resolve(__dirname,'..',file));
@@ -62,10 +62,21 @@ async function main() {
     (expected ? report.expectedAuthErrors : report.consoleErrors).push(event.text());
   });
   const check = async (name, run) => { await run(); report.checks.push({ name, pass: true }); console.log('PASS ' + name); };
-  const saved = () => page.waitForFunction(() => document.querySelector('.photo-status')?.textContent === '초안 보관됨');
+  const saved = () => page.waitForFunction(() => document.querySelector('.photo-status')?.textContent === '브라우저에 자동 임시저장됨');
   const read = () => page.evaluate(async () => { const s = HaedoLife.Shell.storage, ws = await s.getActive(); return { ws, docs: await Promise.all((await s.listPhotoPosts(ws)).map(row => s.readPhotoPost(ws, row.id))) }; });
   const doc = async () => (await read()).docs.find(value => value.id === postId);
-  const hide = () => page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })));
+  const hide = async () => {
+    const departure = await page.evaluate(() => {
+      const retained = window.__travelDOM;
+      const position = { retained: retained ? { x: retained.scrollX, y: retained.scrollY } : null, pagehide: { x: scrollX, y: scrollY } };
+      // Focus scrolling may settle between retain() and this browser task.
+      // Measure the departure the app actually receives, then dispatch atomically.
+      if (retained) { retained.scrollX = position.pagehide.x; retained.scrollY = position.pagehide.y; }
+      window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+      return position;
+    });
+    report.departures.push(departure);
+  };
   const show = () => page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
   const retain = () => page.evaluate(() => {
     const input = document.querySelector('[aria-label="사진 설명"]');
