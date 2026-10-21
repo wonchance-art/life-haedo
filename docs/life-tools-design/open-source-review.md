@@ -13,6 +13,13 @@
 
 서버 CAS의 native PostgreSQL 거절 성공과 hosted HTTP 완료는 별도 검수했다. 실제 REST의 `40001` 충돌 요청이 두 차례30초 동안 응답하지 않아, Supabase 공식 [PostgREST custom error 재시도 안내](https://supabase.com/docs/guides/troubleshooting/high-cpu-and-infinite-transaction-retries-when-using-custom-error-codes-in-rpc-functions-77326b)에 따라 추가 migration으로 두 CAS 예외만 `PT409`로 바꿨다. 같은 요청의 즉시 HTTP409와 기존 owner/revision/권한 보존을 각각 확인했다. SDK 교체·새 재시도 라이브러리로 덮지 않고 기존 고정 SDK와 명시 재시도·오류 코드의 의미를 유지한다. 실제 설치·합성 계정 정리·비활성 상태는 위 제품 기록을 따른다.
 
+## SNS·뉴스 피드 UI 재사용 — 2026-10-21 KST
+
+[Google News 공식 맞춤설정](https://support.google.com/googlenews/answer/9010862?hl=en)의 더보기와 부정 피드백 범위, [Mastodon 공식 Network](https://docs.joinmastodon.org/user/network/)의 빠른 행동·Favourite/Bookmark 분리, [FreshRSS 공식 Configuration](https://freshrss.github.io/FreshRSS/en/users/05_Configuration.html)의 제목·출처 유지와 읽기 밀도를 확인했다. 최신 확인 릴리스는 [Mastodon4.7.3](https://github.com/mastodon/mastodon/releases/tag/v4.7.3)(2026-10-01)와 [FreshRSS1.30.2](https://github.com/FreshRSS/FreshRSS/releases/tag/1.30.2)(2026-10-19), 두 코드베이스의 라이선스는AGPLv3다. 서비스·라이브러리로 직접 도입하지 않고 공개 안내의 상호작용 패턴만 참고한다. 서버·테마·코드·자산·의존성을 복사하지 않으므로 설치 대상의 새 취약성·전이 의존성은 추가되지 않는다. 이번 조사 자체로 전체 보안성을 보증하지 않는다.
+
+기존 native details/summary·버튼·동봉 SVG·DiscoveryUI·로컬 CAS를 재사용했다. 정적 앱과 계정/자료/추천 경계를 유지하면서 뉴스의 구조만 교체하는 데 더 작은 유지 비용이 든다. 추가 heart/more는 통상 도형을 자체 작성했고, 기존 공유 아이콘의 출처·라이선스를 유지한다. 자동 읽음·유사 글 감소 학습·외부 SNS 반응/알림·외부 이미지 자동 요청은 도입하지 않는다. Feedly의 시도한 공식 도움말은404여서 선택 근거에서 제외했다. [전체 설계·검수](../design-review/news-social-redesign.md).
+
+
 ## 뉴스 품질과 직접 읽기 비교 — 2026-10-21 KST
 
 기존 Discovery/Recommendations·Actions의 링크 메타데이터 검증과 Storage/idb CAS를 재사용한다. 새 평가는 별도 로컬 메타 행과 네이티브 폼·URL·Web Crypto로 같은 조건의 소수 목록을 고정한다. 기관 태그를 한 표현으로 세는 규칙 보완에 추천 서버·학습 프레임워크를 추가하지 않는다. Gorse·LensKit·implicit 등은 앞선 비교대로 실제 학습 근거·운영 요구가 있을 때 재검토한다.

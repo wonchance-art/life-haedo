@@ -4,6 +4,15 @@
 process.env.BASE_URL||='http://127.0.0.1:4173';
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
 const repo=path.resolve(__dirname,'..'),out=path.resolve(process.env.NEWS_BROWSER_OUTPUT||path.join(repo,'.local/news-navigation')),{FakeCloud,accounts,cloud,base}=require(path.join(repo,'tests/life-sync-browser.cjs')),{playwright,makeContext,ready,nav,settle}=require(path.join(repo,'tests/unified-home-browser.cjs'));
+// Open actual native disclosures, outermost first, before using a moved control.
+async function revealControl(control) {
+  const depth = await control.locator('xpath=ancestor::details').count();
+  for (let index = depth; index > 0; index--) {
+    const details = control.locator('xpath=ancestor::details[' + index + ']');
+    if (!await details.evaluate(element => element.open)) await details.locator(':scope > summary').click();
+  }
+  return control;
+}
 const report={createdAt:new Date().toISOString(),scope:'Local Chromium actual application/bundled SDK/scoped IDB with synthetic Auth only. Checked-in public feed metadata; no publisher/Google/production Auth/DB requests, Apple device or usefulness proof.',checks:[],visual:[],consoleErrors:[],pageErrors:[],external:[],privateLeaks:[],modelRequests:[],catalogRequests:[]};
 const privateText='뉴스검수익명비공개입력표식',hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const productFiles=['assets/haedo-navigation.js','assets/life/discovery-ui.js','assets/life/ui.js','assets/life/ui.css','assets/life/icons.js','assets/platform-auth.js','assets/life/discovery.js','assets/life/storage.js','assets/life/discovery-language-settings.js','assets/life/workbench-ui.js','assets/life/material-writing-ui.js','assets/life/material-writing-sources.js','assets/life/material-writing.js','assets/life/photo-post-ui.js','assets/life/discovery-feed.json','assets/haedo-shell.css','assets/life/discovery.css'];
@@ -68,7 +77,7 @@ async function newsWritingJourney({ page, context, fake, state, rows, idle, wait
   assert(url && order.length > 0); assert.equal(initial.actions.personalizationEnabled, false); assert.equal(initial.settings.autoRefresh, false);
   const savedReaction = initial.actions.entries.find(entry => entry.canonicalUrl === url);
   assert(savedReaction?.liked && savedReaction.bookmarked);
-  await card.locator('[data-discovery-feedback="already_read"]').click(); await idle();
+  await (await revealControl(card.locator('[data-discovery-feedback="already_read"]'))).click(); await idle();
   const excluded = page.locator('.discovery-excluded'); if (!await excluded.evaluate(details => details.open)) await excluded.locator(':scope > summary').click();
   const entry = page.locator('.discovery-excluded-row[data-discovery-url="' + url.replace(/"/g, '\\"') + '"]'); await entry.waitFor();
   // All publisher/translator navigation is intercepted only for this explicit click.
@@ -87,7 +96,7 @@ async function newsWritingJourney({ page, context, fake, state, rows, idle, wait
   }
   const selected = await state();
   assert.deepEqual(selected.bundle, initial.bundle); assert.deepEqual(selected.actions, initial.actions);
-  await entry.locator('[data-discovery-import]').click(); await page.locator('#lifeImportTitle').waitFor();
+  await (await revealControl(entry.locator('[data-discovery-import]'))).click(); await page.locator('#lifeImportTitle').waitFor();
   assert.equal(await page.locator('#lifeImportUrl').inputValue(), url); assert.equal(await page.locator('#lifeImportText').inputValue(), '');
   assert.deepEqual((await state()).bundle, selected.bundle);
   await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await page.locator('.life-review').waitFor();

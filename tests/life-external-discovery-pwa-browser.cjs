@@ -8,6 +8,15 @@ const project = path.resolve(__dirname, '..'), output = path.resolve(process.env
 const feedPath = '/assets/life/discovery-feed.json', feedCache = 'haedo-discovery-feed-v1';
 const assets = ['discovery.js', 'discovery-profile.js', 'discovery-settings.js', 'discovery-language-settings.js', 'discovery-actions.js', 'discovery-recommendations.js', 'discovery-ui.js', 'discovery.css'].map(file => 'assets/life/' + file);
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
+// Open actual native disclosures, outermost first, before using a moved control.
+async function revealControl(control) {
+  const depth = await control.locator('xpath=ancestor::details').count();
+  for (let index = depth; index > 0; index--) {
+    const details = control.locator('xpath=ancestor::details[' + index + ']');
+    if (!await details.evaluate(element => element.open)) await details.locator(':scope > summary').click();
+  }
+  return control;
+}
 const report = { createdAt: new Date().toISOString(), checks: [], consoleErrors: [], pageErrors: [], expectedTransportErrors: [], modelRequests: [], unexpectedExternal: [], catalogRequests: [], blockedProbes: [],
   scope: 'Real Chromium SDK/IndexedDB/Service Worker. Only v138 sw.js is prior code; all app modules and approved-source policy are current. Reactions are seeded through the current real scoped storage API before the worker update; this isolates worker/cache migration rather than reconstructing the entire previous app. Real prepared public catalog served by an anonymous local fixture; synthetic title/build-time update for freshness tests. Mocked Auth response during cached-shell reload is separate from strict offline Auth refusal. No production, Apple device, upstream collection or model validation.' };
 async function wait(page, fn, arg) {
@@ -140,7 +149,7 @@ async function main() {
       failCatalog = true;
       await page.locator('#discoveryRefresh').click(); await idle(); const stale = await catalog();
       assert.equal(stale.cache, 'stale'); assert.equal(stale.browserFetchedAt, fresh.browserFetchedAt); assert.equal(stale.feed.generatedAt, fresh.feed.generatedAt);
-      assert.match(await page.locator('#discoveryReview').innerText(), /최신 상태를 확인하지 못한 출처/);
+      assert.match(await page.locator('#discoveryReview').innerText(), /일부 출처 갱신 지연 · 이전에 수집한 글이 포함될 수 있습니다\./);
       report.catalogFreshness = { firstGeneratedAt: first.feed.generatedAt, updatedGeneratedAt: fresh.feed.generatedAt, browserFetchedAt: fresh.browserFetchedAt, fallbackPreservedBrowserFetchedAt: stale.browserFetchedAt };
       failCatalog = false;
     });
@@ -148,11 +157,11 @@ async function main() {
     await check('verified offline session saves private feedback and cached-shell reload preserves it', async () => {
       await context.setOffline(true); await page.locator('#discoveryRefresh').click(); await idle();
       const article = page.locator('article[data-discovery-id]').first();
-      await article.locator('button[data-discovery-feedback="already_read"]').click();
+      await (await revealControl(article.locator('button[data-discovery-feedback="already_read"]'))).click();
       await wait(page, async length => { const s = HaedoLife.Shell.storage; return (await s.readDiscoveryProfile(await s.getActive())).feedback.length === length; }, before.discovery.feedback.length + 1);
       changed = await state(); assert.deepEqual(changed.bundle, before.bundle); assert.deepEqual(changed.manual, before.manual); assert.deepEqual(changed.workbench, before.workbench); assert.deepEqual(changed.actions, before.actions);
       const response = await page.reload(); assert.equal(response.fromServiceWorker(), true); await ready(page); await page.locator('#discoveryReview').waitFor(); await idle();
-      assert.deepEqual(await state(), changed); assert.match(await page.locator('#discoveryReview').innerText(), /최신 상태를 확인하지 못한 출처/);
+      assert.deepEqual(await state(), changed); assert.match(await page.locator('#discoveryReview').innerText(), /일부 출처 갱신 지연 · 이전에 수집한 글이 포함될 수 있습니다\./);
       transportProbe = true; assert.equal(await page.evaluate(async () => { try { await fetch('non-shell-offline-probe', { cache: 'no-store' }); return false; } catch (_) { return true; } }), true); await page.waitForTimeout(50); transportProbe = false;
     });
     await check('excluded feedback can be restored after reload without mutating source data or manual interests', async () => {

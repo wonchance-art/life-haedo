@@ -402,6 +402,9 @@ jobs:
       - name: Verify frozen reading comparisons, explicit judgments and local recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-reading-browser.cjs
+      - name: Verify social news feed hierarchy, neutral reaction history and contextual actions
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/news-social-browser.cjs
       - name: Verify explicit discovery automation and local setting preservation
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-automation-browser.cjs
@@ -463,6 +466,7 @@ jobs:
             .local/discovery-reactions-browser/
             .local/discovery-languages-browser/
             .local/discovery-reading-browser/
+            .local/news-social-redesign-20261021/qa/
             .local/unified-search/
             .local/collection-library/
             .local/collection-metadata/

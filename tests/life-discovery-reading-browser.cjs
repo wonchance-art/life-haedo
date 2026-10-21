@@ -16,6 +16,15 @@ const entry = base + '/index.html?section=news', feedPath = '/assets/life/discov
 const PRIVATE_TEXT = '\ufeff읽기비교_비공개합성원문😀\r\nCafe\u0301 원문보존', PRIVATE_TOPIC = '읽기비교익명비공개주제표식';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const productFiles = ['index.html', 'assets/life/discovery-reading.js', 'assets/life/discovery-reading-ui.js', 'assets/life/discovery-ui.js', 'assets/life/discovery.css', 'assets/life/discovery.js', 'assets/life/discovery-recommendations.js', 'assets/life/discovery-actions.js', 'assets/life/discovery-settings.js', 'assets/life/discovery-language-settings.js', 'assets/life/discovery-profile.js', 'assets/life/storage.js', 'assets/life/ui.js', 'assets/life/shell.js', 'assets/platform-auth.js'];
+// Open actual native disclosures, outermost first, before using a moved control.
+async function revealControl(control) {
+  const depth = await control.locator('xpath=ancestor::details').count();
+  for (let index = depth; index > 0; index--) {
+    const details = control.locator('xpath=ancestor::details[' + index + ']');
+    if (!await details.evaluate(element => element.open)) await details.locator(':scope > summary').click();
+  }
+  return control;
+}
 const report = { createdAt: new Date().toISOString(), scope: 'Actual public feed metadata, anonymous mocked Auth/FakeCloud, actual bundled SDK and scoped IndexedDB/CAS. All reading answers, preferences and failures are synthetic test inputs; none are actual user opinions or quality scores. Publisher/Google popups are intercepted after explicit click; service workers blocked. No real account/DB, model, Apple device or usefulness evidence.', checks: [], visual: [], consoleErrors: [], pageErrors: [], externalRequests: [], privateLeaks: [], modelRequests: [], catalogRequests: [], localWrites: [], popupRequests: [] };
 const hashes = async () => Object.fromEntries(await Promise.all(productFiles.map(async file => [file, sha(await fs.readFile(path.join(repo, file)))])));
 async function wait(page, predicate, argument, label = 'state') {
@@ -25,7 +34,7 @@ async function wait(page, predicate, argument, label = 'state') {
 }
 const idle = page => wait(page, () => document.querySelector('#discoveryReview')?.getAttribute('aria-busy') === 'false', null, 'news idle');
 async function open(page) { await page.goto(entry); await ready(page); await idle(page); }
-async function reveal(page) { const details = page.locator('#discoveryReadingComparison'); if (!await details.evaluate(element => element.open)) await page.locator('#discoveryReadingSummary').click(); }
+async function reveal(page) { await revealControl(page.locator('#discoveryReadingSummary')); const details = page.locator('#discoveryReadingComparison'); if (!await details.evaluate(element => element.open)) await page.locator('#discoveryReadingSummary').click(); }
 async function state(page) {
   return page.evaluate(async () => {
     const storage = HaedoLife.Shell.storage, workspace = await storage.getActive();
@@ -184,7 +193,7 @@ async function main() {
         const original = await llt.locator('[data-discovery-open]').getAttribute('href');
         await popup(page, context, original, '[data-discovery-open]', 'original', llt);
         await popup(page, context, original, '[data-discovery-translate]', 'translation', llt);
-        const priorReview = await state(page); await llt.locator('[data-discovery-import]').click(); await page.locator('#lifeImportTitle').waitFor();
+        const priorReview = await state(page); await (await revealControl(llt.locator('[data-discovery-import]'))).click(); await page.locator('#lifeImportTitle').waitFor();
         assert.equal(await page.locator('#lifeImportTitle').inputValue(), sourceRow.title); assert.equal(await page.locator('#lifeImportText').inputValue(), ''); assert.equal(await page.locator('#lifeImportDate').inputValue(), ''); assert.equal(await page.locator('#lifeImportAuthor').inputValue(), '');
         await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await page.locator('.life-review').waitFor();
         assert.deepEqual((await state(page)).bundle, priorReview.bundle, 'Review does not automatically import the LLT article');
