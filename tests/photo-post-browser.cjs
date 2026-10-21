@@ -8,7 +8,7 @@ async function main(){
  const page=await context.newPage(),other=await context.newPage();page.setDefaultTimeout(15000);page.setDefaultNavigationTimeout(30000);for(const p of [page,other]){p.on('pageerror',e=>report.errors.push(e.message));p.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});}
  const click=async name=>{if(['초안 다시 저장','새 글로 저장','내 입력을 새 초안으로 보관'].includes(name)||name==='사진 포함 백업'&&await page.locator('.photo-editor').count()){const more=page.locator('.photo-more');if(!await more.evaluate(n=>n.open))await more.locator(':scope > summary').click();}if(['사진 빼기','사진 앞으로','사진 뒤로'].includes(name)){const settings=page.locator('.photo-settings');if(!await settings.evaluate(n=>n.open))await settings.locator('summary').click();}await (name==='글 수정'?page.locator('.photo-posts'):page).getByRole('button',{name,exact:true}).click();},go=async p=>{await p.goto(base+'/index.html?section=records&view=page',{waitUntil:'domcontentloaded'});await ready(p);const compatibility=p.locator('.wb-page-compatibility');if(await compatibility.count()&&!await compatibility.evaluate(n=>n.open))await compatibility.locator(':scope > summary').click();await p.getByRole('button',{name:'글쓰기',exact:true}).waitFor();};
  const check=async(name,fn)=>{await fn();report.checks.push(name);console.log('PASS '+name);};
- const saved=()=>page.waitForFunction(()=>document.querySelector('.photo-status')?.textContent==='초안 보관됨');
+ const saved=()=>page.waitForFunction(()=>document.querySelector('.photo-status')?.textContent==='브라우저에 자동 임시저장됨');
  const read=()=>page.evaluate(async()=>{const s=HaedoLife.Shell.storage,w=await s.getActive(),index=await s.listPhotoPosts(w);return {id:w,index,docs:await Promise.all(index.map(v=>s.readPhotoPost(w,v.id)))};});
  const originals=()=>page.evaluate(async()=>{const s=HaedoLife.Shell.storage,w=await s.getActive();return {bundle:await s.read(w),wb:await s.readWorkbench(w),drafts:await s.readPageDrafts(w),collection:await s.readCollection(w),nine:await s.readNineBoard(w)};});
  const snap=async(scene)=>{for(const width of [1440,820,390]){await page.setViewportSize({width,height:1000});await page.evaluate(()=>document.fonts.ready);const metrics=await page.evaluate(inspect);report.visual.push({scene,width,metrics});assert.equal(metrics.horizontalOverflow,false,scene);for(const key of ['smallTargets','smallInputs','unnamed','contrastFailures'])assert.deepEqual(metrics[key],[],scene+' '+width+' '+key);await page.screenshot({path:path.join(out,scene+'-'+width+'.png')});}};
@@ -92,7 +92,7 @@ async function main(){
    const fingerprint=()=>page.evaluate(async()=>{const s=HaedoLife.Shell.storage,w=await s.getActive(),rows=await s.listPhotoPosts(w),d=await s.readPhotoPost(w,rows.find(v=>v.title==='내 탭에 남긴 초안 입력').id);return Promise.all(d.photos.map(async p=>({id:p.id,digest:p.digest,actual:Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await p.blob.arrayBuffer())),v=>v.toString(16).padStart(2,'0')).join(''),width:p.width,height:p.height,size:p.size})));});
    await go(other);await require('./photo-post-entry.cjs').openPost(other,draft.id);
    await other.locator('#photoTitle').fill('다른 탭의 초안 입력');
-   await other.waitForFunction(()=>document.querySelector('.photo-status')?.textContent==='초안 보관됨');
+   await other.waitForFunction(()=>document.querySelector('.photo-status')?.textContent==='브라우저에 자동 임시저장됨');
    await page.locator('#photoTitle').fill('내 탭에 남긴 초안 입력');
    await page.locator('.photo-status[role=alert]').waitFor();
    const before=await read();

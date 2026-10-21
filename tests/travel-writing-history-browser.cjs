@@ -182,13 +182,13 @@ async function main() {
     await page.locator('#photoFiles').setInputFiles(images.map((bytes, index) => ({
       name: 'native-travel-' + index + '.png', mimeType: 'image/png', buffer: Buffer.from(bytes) })));
     await page.locator('.photo-block').nth(1).waitFor();
-    await page.waitForFunction(() => document.querySelector('.photo-status')?.textContent === '초안 보관됨');
+    await page.waitForFunction(() => document.querySelector('.photo-status')?.textContent === '브라우저에 자동 임시저장됨');
     await page.evaluate(() => {
       const editor = Quill.find(document.querySelector('.ql-container'));
       editor.setSelection(editor.getLength() - 1, 0, 'silent');
       editor.insertText(editor.getLength() - 1, '끝에서 계속 쓸 한글 여행 문단🌊\n', 'user');
     });
-    await page.waitForFunction(() => document.querySelector('.photo-status')?.textContent === '초안 보관됨');
+    await page.waitForFunction(() => document.querySelector('.photo-status')?.textContent === '브라우저에 자동 임시저장됨');
     await page.locator('.photo-block img').first().click();
     const caption = page.getByRole('textbox', { name: '사진 설명', exact: true });
     await caption.fill('외출 뒤에도 유지할 사진 설명🌱');

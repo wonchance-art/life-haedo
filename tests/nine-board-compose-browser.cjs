@@ -303,7 +303,7 @@ async function main() {
       const doc = await verifyDraft(f, before); assert.deepEqual(await read(f.page), committed);
       await f.page.locator('.ql-editor').focus(); await f.page.keyboard.press('Control+End');
       await f.page.keyboard.press('Enter'); await f.page.keyboard.insertText('직접 덧붙인 여행 생각과 한글 입력');
-      await f.page.locator('.photo-status').filter({ hasText: '초안 보관됨' }).waitFor();
+      await f.page.locator('.photo-status').filter({ hasText: '브라우저에 자동 임시저장됨' }).waitFor();
       const edited = (await read(f.page)).docs.find(value => value.id === doc.id);
       assert(edited.revision > 1);
       assert(edited.ops.some(op => typeof op.insert === 'string' && op.insert.includes('직접 덧붙인 여행 생각과 한글 입력')));

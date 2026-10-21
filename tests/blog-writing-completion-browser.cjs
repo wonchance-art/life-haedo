@@ -45,7 +45,7 @@ async function main() {
     await openCompatibility(p);
     await p.getByRole('button', { name: '글쓰기', exact: true }).waitFor();
   };
-  const stored = p => (p || page).waitForFunction(() => document.querySelector('.photo-status')?.textContent === '초안 보관됨');
+  const stored = p => (p || page).waitForFunction(() => document.querySelector('.photo-status')?.textContent === '브라우저에 자동 임시저장됨');
   const read = () => page.evaluate(async () => {
     const s = HaedoLife.Shell.storage, w = await s.getActive(), index = await s.listPhotoPosts(w);
     return { w, index, docs: await Promise.all(index.map(v => s.readPhotoPost(w, v.id))) };
