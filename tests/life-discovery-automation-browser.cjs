@@ -21,7 +21,19 @@ async function wait(page, fn, arg, label = 'state') {
   throw new Error('Discovery automation did not settle: ' + label);
 }
 const idle = page => wait(page, () => document.querySelector('#discoveryReview')?.getAttribute('aria-busy') === 'false', null, 'idle');
-async function topics(page) { const details = page.locator('#discoveryTopics'); if (!await details.evaluate(el => el.open)) await details.locator(':scope > summary').click(); }
+async function settings(page) {
+  const panel = page.locator('#discoveryNewsSettingsPanel');
+  if (!await panel.isVisible()) await page.locator('#discoveryNewsSettings').click();
+  await panel.waitFor({ state: 'visible' });
+}
+async function news(page) {
+  const panel = page.locator('#discoveryNewsSettingsPanel');
+  if (await panel.isVisible()) await page.locator('#discoveryNewsSettingsBack').click();
+  await panel.waitFor({ state: 'hidden' });
+}
+async function topics(page) { await settings(page); const details = page.locator('#discoveryTopics'); if (!await details.evaluate(el => el.open)) await details.locator(':scope > summary').click(); }
+async function sort(page, mode) { await news(page); await page.locator('#discoverySort').selectOption(mode); await idle(page); }
+async function refresh(page) { await settings(page); await page.locator('#discoveryRefresh').click(); }
 async function open(page) { await page.goto(entry); await ready(page); await page.locator('#discoveryReview').waitFor(); await idle(page); }
 async function snapshot(page) { return page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(); return { bundle: await s.read(w), workbench: await s.readWorkbench(w), profile: await s.readInterestProfile(w), feedback: await s.readDiscoveryProfile(w), settings: await s.readDiscoverySettings(w) }; }); }
 async function preserve(page, before) { const after = await snapshot(page); for (const key of ['bundle', 'workbench', 'feedback']) assert.deepEqual(after[key], before[key], key + ' remains exact'); return after; }
@@ -104,9 +116,9 @@ async function main() {
       await topics(page); await page.locator(selector).check(); await idle(page); assert.ok(!(await snapshot(page)).settings.disabledInterestIds.includes(item.id));
     });
     await check('turning off every source is preserved as zero sources in both list orders', async ({ page }) => {
-      const before = await seed(page); await page.locator('#discoveryRecommended').click(); await idle(page); assert.equal(await page.locator('#discoveryRecommended').getAttribute('aria-pressed'), 'true'); await options(page); const ids = await page.locator('[data-discovery-source]').evaluateAll(nodes => nodes.map(x => x.dataset.discoverySource)); assert.ok(ids.length >= 2);
+      const before = await seed(page); await sort(page, 'related'); assert.equal(await page.locator('#discoveryRecommended').getAttribute('aria-pressed'), 'true'); await options(page); const ids = await page.locator('[data-discovery-source]').evaluateAll(nodes => nodes.map(x => x.dataset.discoverySource)); assert.ok(ids.length >= 2);
       for (const id of ids) { await options(page); await page.locator('[data-discovery-source="' + id + '"]').uncheck(); await idle(page); }
-      assert.equal(await page.locator('[data-discovery-id]').count(), 0); await page.locator('#discoveryLatest').click(); assert.equal(await page.locator('[data-discovery-id]').count(), 0);
+      assert.equal(await page.locator('[data-discovery-id]').count(), 0); await sort(page, 'latest'); assert.equal(await page.locator('[data-discovery-id]').count(), 0);
       await page.reload(); await ready(page); await idle(page); await options(page); assert.equal(await page.locator('[data-discovery-source]:checked').count(), 0); assert.equal(await page.locator('[data-discovery-id]').count(), 0); assert.deepEqual(new Set((await snapshot(page)).settings.disabledSourceIds), new Set(ids)); await preserve(page, before);
     });
     await check('forty stale disabled topic IDs do not block selecting a replacement topic after profile reset', async ({ page }) => {
@@ -130,7 +142,7 @@ async function main() {
       await options(page); control.value = fixture('initial-recovered'); const restarted = enabled ? control.next() : null; await page.locator('#discoveryAutoRefresh').setChecked(enabled);
       await wait(page, async enabled => { const s = HaedoLife.Shell.storage; return (await s.readDiscoverySettings(await s.getActive())).autoRefresh === enabled; }, enabled, 'initial-pending automatic preference');
       if (enabled) { await restarted; assert.equal(control.count, firstCount + 2); control.release(); await idle(page); assert.ok(await page.locator('[data-discovery-id^="initial-recovered-"]').count() > 0); assert.equal(await page.locator('[data-discovery-id^="initial-late-"]').count(), 0); }
-      else { await idle(page); const stoppedCount = control.count; assert.equal(stoppedCount, firstCount + 1); control.release(); await page.waitForTimeout(120); await clock(page); await advance(page, 16 * MINUTE); assert.equal(control.count, stoppedCount); assert.equal(await page.locator('[data-discovery-id]').count(), 0); assert.match(await page.locator('#discoveryStatus').textContent(), /목록 다시 불러오기/); await page.locator('#discoveryRefresh').click(); await idle(page); assert.equal(control.count, stoppedCount + 1); assert.ok(await page.locator('[data-discovery-id^="initial-recovered-"]').count() > 0); }
+      else { await idle(page); const stoppedCount = control.count; assert.equal(stoppedCount, firstCount + 1); control.release(); await page.waitForTimeout(120); await clock(page); await advance(page, 16 * MINUTE); assert.equal(control.count, stoppedCount); assert.equal(await page.locator('[data-discovery-id]').count(), 0); assert.match(await page.locator('#discoveryStatus').textContent(), /목록 다시 불러오기/); await refresh(page); await idle(page); assert.equal(control.count, stoppedCount + 1); assert.ok(await page.locator('[data-discovery-id^="initial-recovered-"]').count() > 0); }
       await preserve(page, before);
     });
     await check('saved automatic refresh requests once when fifteen visible minutes become due', async ({ page, control }) => {
@@ -148,7 +160,7 @@ async function main() {
     });
     await check('manual pending refresh resumes consistent controls and retained inputs after history without visibility events', async ({ page, context, control }) => {
       await context.addInitScript(() => { const original = fetch; window.fetch = function(input, init) { if (new URL(typeof input === 'string' ? input : input.url, location.href).pathname === '/assets/life/discovery-feed.json') window.__manualLifecycleSignal = init?.signal; return original.apply(this, arguments); }; });
-      const before = await seed(page); assert.equal(before.settings.autoRefresh, false); control.hold = true; control.value = fixture('manual-history-late'); const pending = control.next(); await page.locator('#discoveryRefresh').click(); await pending;
+      const before = await seed(page); assert.equal(before.settings.autoRefresh, false); control.hold = true; control.value = fixture('manual-history-late'); const pending = control.next(); await refresh(page); await pending;
       await page.evaluate(() => { window.__manualLifecycleNodes = { checkbox: document.querySelector('#discoveryAutoRefresh'), input: document.querySelector('#discoveryTopicInput'), surface: document.querySelector('#discoveryReview') }; });
       const held = await page.evaluate(() => ({ refreshDisabled: document.querySelector('#discoveryRefresh').disabled, busy: document.querySelector('#discoveryReview').getAttribute('aria-busy'), hidden: document.hidden })); assert.equal(held.refreshDisabled, true); assert.equal(held.busy, 'true');
       // Deliberately omit visibilitychange: retained shell/Auth lifecycle must
@@ -157,7 +169,7 @@ async function main() {
       await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))); await ready(page); await page.waitForTimeout(100);
       const actual = await page.evaluate(() => ({ requestSignalAborted: window.__manualLifecycleSignal?.aborted, refreshDisabled: document.querySelector('#discoveryRefresh').disabled, busy: document.querySelector('#discoveryReview').getAttribute('aria-busy'), checkboxSame: __manualLifecycleNodes.checkbox === document.querySelector('#discoveryAutoRefresh'), inputSame: __manualLifecycleNodes.input === document.querySelector('#discoveryTopicInput'), surfaceSame: __manualLifecycleNodes.surface === document.querySelector('#discoveryReview'), automaticChecked: document.querySelector('#discoveryAutoRefresh').checked, appVisible: !document.querySelector('#lifeApp').hidden }));
       assert.deepEqual(actual, { requestSignalAborted: true, refreshDisabled: false, busy: 'false', checkboxSame: true, inputSame: true, surfaceSame: true, automaticChecked: false, appVisible: true }); assert.equal(await page.locator('[data-discovery-id^="manual-history-late-"]').count(), 0);
-      const stopped = control.count; control.value = fixture('manual-history-recovered'); await page.locator('#discoveryRefresh').click(); await idle(page); assert.equal(control.count, stopped + 1); assert.ok(await page.locator('[data-discovery-id^="manual-history-recovered-"]').count() > 0); assert.equal(await page.locator('[data-discovery-id^="manual-history-late-"]').count(), 0);
+      const stopped = control.count; control.value = fixture('manual-history-recovered'); await refresh(page); await idle(page); assert.equal(control.count, stopped + 1); assert.ok(await page.locator('[data-discovery-id^="manual-history-recovered-"]').count() > 0); assert.equal(await page.locator('[data-discovery-id^="manual-history-late-"]').count(), 0);
       const after = await preserve(page, before); assert.deepEqual(after.profile, before.profile); assert.equal(after.settings.autoRefresh, false);
       report.manualHistoryLifecycle = { simulatedPersistedPagehidePageshow: true, actualBFCache: false, visibilityEventsDispatched: 0, cancelledControls: actual, explicitRecoveryCatalogGETs: 1, lateOldResponseIgnored: true };
     });

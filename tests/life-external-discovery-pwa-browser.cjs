@@ -8,12 +8,26 @@ const project = path.resolve(__dirname, '..'), output = path.resolve(process.env
 const feedPath = '/assets/life/discovery-feed.json', feedCache = 'haedo-discovery-feed-v1';
 const assets = ['discovery.js', 'discovery-profile.js', 'discovery-settings.js', 'discovery-language-settings.js', 'discovery-actions.js', 'discovery-recommendations.js', 'discovery-ui.js', 'discovery.css'].map(file => 'assets/life/' + file);
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
+// Follow the actual settings/back buttons before opening native disclosures.
+async function newsView(control) {
+  const page = control.page(), panel = page.locator('#discoveryNewsSettingsPanel');
+  if (!await panel.count()) return;
+  const settingsTarget = await control.evaluate(element => !!element.closest('#discoveryNewsSettingsPanel'));
+  if (settingsTarget && !await panel.isVisible()) await page.locator('#discoveryNewsSettings').click();
+  else if (!settingsTarget && await panel.isVisible()) await page.locator('#discoveryNewsSettingsBack').click();
+}
+async function selectNewsMode(page, value) {
+  await newsView(page.locator('#discoveryDiscover'));
+  if (await page.locator('#discoverySort').isHidden()) await page.locator('#discoveryDiscover').click();
+  await page.locator('#discoverySort').selectOption(value);
+}
 // Open actual native disclosures, outermost first, before using a moved control.
 async function revealControl(control) {
+  await newsView(control);
   const depth = await control.locator('xpath=ancestor::details').count();
   for (let index = depth; index > 0; index--) {
     const details = control.locator('xpath=ancestor::details[' + index + ']');
-    if (!await details.evaluate(element => element.open)) await details.locator(':scope > summary').click();
+    if (!await control.isVisible() && !await details.evaluate(element => element.open)) await details.locator(':scope > summary').click();
   }
   return control;
 }
@@ -135,38 +149,38 @@ async function main() {
     let first, fresh;
     await check('explicit catalog load uses one fixed public URL and separates browser receipt from collection time', async () => {
       await context.addCookies([{ name: 'anonymous-private-canary', value: 'synthetic', url: base }]);
-      await open('external-discovery'); await idle(); await page.locator('#discoveryLatest').click();
+      await open('external-discovery'); await idle(); await selectNewsMode(page, 'latest');
       await page.locator('article[data-discovery-id]').first().waitFor();
       first = await catalog(); assert.equal(first.cache, 'network'); assert.equal(first.feed.generatedAt, feed.generatedAt); assert.ok(Number.isFinite(Date.parse(first.browserFetchedAt)));
-      await page.locator('.discovery-sources summary').click();
+      await (await revealControl(page.locator('.discovery-sources summary'))).click();
       assert.match(await page.locator('.discovery-sources').innerText(), /출처 사이트의 새 글 수집을 실행하지 않습니다/);
       assert.deepEqual(report.unexpectedExternal, []);
     });
     await check('a newer published catalog is fetched without worker update and failed refresh returns explicitly stale data', async () => {
       feed = structuredClone(originalFeed); feed.generatedAt = new Date(Date.now() + 1000).toISOString(); feed.articles[0].title = 'PWA 갱신 확인 · ' + feed.articles[0].title;
-      await page.locator('#discoveryRefresh').click(); await idle(); fresh = await catalog();
+      await (await revealControl(page.locator('#discoveryRefresh'))).click(); await idle(); fresh = await catalog();
       assert.equal(fresh.cache, 'network'); assert.equal(fresh.feed.generatedAt, feed.generatedAt); assert.equal(fresh.feed.articles[0].title, feed.articles[0].title);
       failCatalog = true;
-      await page.locator('#discoveryRefresh').click(); await idle(); const stale = await catalog();
+      await (await revealControl(page.locator('#discoveryRefresh'))).click(); await idle(); const stale = await catalog();
       assert.equal(stale.cache, 'stale'); assert.equal(stale.browserFetchedAt, fresh.browserFetchedAt); assert.equal(stale.feed.generatedAt, fresh.feed.generatedAt);
-      assert.match(await page.locator('#discoveryReview').innerText(), /일부 출처 갱신 지연 · 이전에 수집한 글이 포함될 수 있습니다\./);
+      await revealControl(page.locator('.discovery-feed-notice')); assert.match(await page.locator('.discovery-feed-notice').innerText(), /일부 출처 갱신 지연/);
       report.catalogFreshness = { firstGeneratedAt: first.feed.generatedAt, updatedGeneratedAt: fresh.feed.generatedAt, browserFetchedAt: fresh.browserFetchedAt, fallbackPreservedBrowserFetchedAt: stale.browserFetchedAt };
       failCatalog = false;
     });
     let changed;
     await check('verified offline session saves private feedback and cached-shell reload preserves it', async () => {
-      await context.setOffline(true); await page.locator('#discoveryRefresh').click(); await idle();
+      await context.setOffline(true); await (await revealControl(page.locator('#discoveryRefresh'))).click(); await idle();
       const article = page.locator('article[data-discovery-id]').first();
       await (await revealControl(article.locator('button[data-discovery-feedback="already_read"]'))).click();
       await wait(page, async length => { const s = HaedoLife.Shell.storage; return (await s.readDiscoveryProfile(await s.getActive())).feedback.length === length; }, before.discovery.feedback.length + 1);
       changed = await state(); assert.deepEqual(changed.bundle, before.bundle); assert.deepEqual(changed.manual, before.manual); assert.deepEqual(changed.workbench, before.workbench); assert.deepEqual(changed.actions, before.actions);
       const response = await page.reload(); assert.equal(response.fromServiceWorker(), true); await ready(page); await page.locator('#discoveryReview').waitFor(); await idle();
-      assert.deepEqual(await state(), changed); assert.match(await page.locator('#discoveryReview').innerText(), /일부 출처 갱신 지연 · 이전에 수집한 글이 포함될 수 있습니다\./);
+      assert.deepEqual(await state(), changed); await revealControl(page.locator('.discovery-feed-notice')); assert.match(await page.locator('.discovery-feed-notice').innerText(), /일부 출처 갱신 지연/);
       transportProbe = true; assert.equal(await page.evaluate(async () => { try { await fetch('non-shell-offline-probe', { cache: 'no-store' }); return false; } catch (_) { return true; } }), true); await page.waitForTimeout(50); transportProbe = false;
     });
     await check('excluded feedback can be restored after reload without mutating source data or manual interests', async () => {
       const added = changed.discovery.feedback.find(row => !before.discovery.feedback.some(old => old.canonicalUrl === row.canonicalUrl));
-      await page.locator('.discovery-excluded summary').click();
+      await (await revealControl(page.locator('.discovery-excluded summary'))).click();
       await page.locator('[data-discovery-undo="' + added.articleId + '"]').click();
       await wait(page, async length => { const s = HaedoLife.Shell.storage; return (await s.readDiscoveryProfile(await s.getActive())).feedback.length === length; }, before.discovery.feedback.length);
       const after = await state(); assert.deepEqual(after.discovery.feedback, before.discovery.feedback); assert.ok(after.discovery.revision > changed.discovery.revision);

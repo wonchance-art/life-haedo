@@ -31,13 +31,32 @@ function fixture() {
 }
 const row = (page, id) => page.locator('#discoveryList [data-discovery-id="' + id + '"]');
 async function idle(page) { await page.waitForFunction(() => document.querySelector('#discoveryReview')?.getAttribute('aria-busy') === 'false'); }
-async function disclose(details) { if (!await details.evaluate(element => element.open)) await details.locator(':scope > summary').click(); }
-async function reveal(control) {
+// Follow the actual settings/back buttons before opening native disclosures.
+async function newsView(control) {
+  const page = control.page(), panel = page.locator('#discoveryNewsSettingsPanel');
+  if (!await panel.count()) return;
+  const settingsTarget = await control.evaluate(element => !!element.closest('#discoveryNewsSettingsPanel'));
+  if (settingsTarget && !await panel.isVisible()) await page.locator('#discoveryNewsSettings').click();
+  else if (!settingsTarget && await panel.isVisible()) await page.locator('#discoveryNewsSettingsBack').click();
+}
+async function selectNewsMode(page, value) {
+  if (value === 'personal' && await page.locator('#discoverySort option[value="personal"]').isDisabled()) {
+    const optIn = await revealControl(page.locator('#discoveryPersonalize'));
+    await optIn.check();
+    await page.waitForFunction(() => document.querySelector('#discoveryReview')?.getAttribute('aria-busy') === 'false');
+  }
+  await newsView(page.locator('#discoveryDiscover'));
+  if (await page.locator('#discoverySort').isHidden()) await page.locator('#discoveryDiscover').click();
+  await page.locator('#discoverySort').selectOption(value);
+}
+async function disclose(details) { await newsView(details); if (!await details.evaluate(element => element.open)) await details.locator(':scope > summary').click(); }
+async function revealControl(control) {
+  await newsView(control);
   const count = await control.locator('xpath=ancestor::details').count();
-  for (let index = count; index > 0; index--) await disclose(control.locator('xpath=ancestor::details[' + index + ']'));
+  for (let index = count; index > 0; index--) if (!await control.isVisible()) await disclose(control.locator('xpath=ancestor::details[' + index + ']'));
   return control;
 }
-async function click(page, selector) { await (await reveal(page.locator(selector))).click(); await idle(page); }
+async function click(page, selector) { const mode = { '#discoveryLatest': 'latest', '#discoveryRecommended': 'related', '#discoveryPersonalized': 'personal' }[selector]; if (mode) await selectNewsMode(page, mode); else await (await revealControl(page.locator(selector))).click(); await idle(page); }
 async function state(page) {
   return page.evaluate(async () => {
     const storage = HaedoLife.Shell.storage, workspaceId = await storage.getActive();
@@ -48,7 +67,7 @@ async function state(page) {
 }
 async function reaction(page, id, kind, target) {
   const control = row(page, id).locator('[data-discovery-reaction="' + kind + '"]');
-  assert.equal(await control.isVisible(), true); if ((await control.getAttribute('aria-pressed') === 'true') !== target) await control.click();
+  await newsView(control); assert.equal(await control.isVisible(), true); if ((await control.getAttribute('aria-pressed') === 'true') !== target) await control.click();
   await idle(page); await page.waitForFunction(async ({ address, kind, target }) => {
     const s = HaedoLife.Shell.storage, profile = await s.readDiscoveryActions(await s.getActive()); return profile.entries.some(entry => entry.canonicalUrl === address && entry[kind] === target);
   }, { address: url(id), kind, target });
@@ -89,30 +108,34 @@ async function main() {
   }
   try {
     await page.goto(entry); await ready(page); await idle(page); const original = await state(page);
-    await check('three primary lists keep neutral reaction-removal history and personalization inside explicit preferences', async () => {
+    await check('icon-only primary lists keep neutral history and personalization in the separate settings view', async () => {
       assert.equal(await page.locator('.discovery-collection-tabs #discoveryCancelled').count(), 0);
       assert.deepEqual(await page.locator('.discovery-collection-tabs button').evaluateAll(nodes => nodes.map(node => node.id)), ['discoveryDiscover', 'discoveryLiked', 'discoveryBookmarked']);
-      for (const id of ['discoveryDiscover', 'discoveryLiked', 'discoveryBookmarked']) assert.equal(await page.locator('#' + id).isVisible(), true);
+      for (const id of ['discoveryDiscover', 'discoveryLiked', 'discoveryBookmarked']) { const control = page.locator('#' + id); assert.equal(await control.isVisible(), true); assert.equal((await control.innerText()).trim(), ''); assert(await control.getAttribute('aria-label')); assert(await control.getAttribute('title')); }
+      assert.equal(await page.locator('#discoveryNewsSettingsPanel').isVisible(), false); assert.equal(await page.locator('#discoverySort').inputValue(), 'latest'); assert.equal(await page.locator('#discoverySort option[value="personal"]').isDisabled(), true);
       assert.equal(await page.locator('#discoveryNewsPreferences').evaluate(details => details.open), false);
       assert.equal(await page.locator('#discoveryCancelled').isVisible(), false); assert.equal(await page.locator('#discoveryPersonalize').isVisible(), false);
       await disclose(page.locator('#discoveryNewsPreferences'));
+      assert.equal(await page.locator('.discovery-feed-body').isVisible(), false);
+      assert.equal(await page.locator('#discoveryNewsSettingsBack').isVisible(), true);
       assert.match(await page.locator('#discoveryCancelled').innerText(), /반응 해제 기록/);
       assert.match(await page.locator('#discoveryNewsPreferences').innerText(), /부정 평가가 아니|관련 없음과는 다/);
       assert.equal(await page.locator('#discoveryPersonalize').isChecked(), false);
-      await page.locator('#discoveryNewsPreferences > summary').click(); assert.deepEqual(await state(page), original);
+      await (await revealControl(page.locator('#discoveryNewsPreferences > summary'))).click(); await newsView(page.locator('#discoveryList')); assert.equal(await page.locator('#discoveryNewsSettingsPanel').isVisible(), false); assert.deepEqual(await state(page), original);
     });
     await check('native keyboard article options and information open explicitly and Escape restores their summary focus', async () => {
       const article = row(page, 'first'), more = article.locator('details.discovery-more'), summary = more.locator(':scope > summary');
       assert.equal(await more.evaluate(element => element.open), false); assert.equal(await article.locator('[data-discovery-import]').isVisible(), false);
       assert.equal(await article.locator('[data-discovery-feedback="not_relevant"]').isVisible(), false);
-      for (const kind of ['liked', 'bookmarked']) assert.equal(await article.locator('[data-discovery-reaction="' + kind + '"]').isVisible(), true);
+      for (const kind of ['liked', 'bookmarked']) { const control = article.locator('[data-discovery-reaction="' + kind + '"]'); assert.equal(await control.isVisible(), true); assert.equal((await control.innerText()).trim(), ''); assert(await control.getAttribute('aria-label')); assert(await control.getAttribute('title')); }
       await summary.focus(); await page.keyboard.press('Enter'); assert.equal(await more.evaluate(element => element.open), true);
       await article.locator('[data-discovery-feedback="already_read"]').focus(); await page.keyboard.press('Escape');
       assert.equal(await more.evaluate(element => element.open), false); assert.equal(await summary.evaluate(element => document.activeElement === element), true);
+      await summary.focus(); await page.keyboard.press('Enter');
       const info = article.locator('details.discovery-article-info'), infoSummary = info.locator(':scope > summary');
       assert.equal(await info.evaluate(element => element.open), false); assert.equal(await info.locator('.discovery-coverage').isVisible(), false);
       await infoSummary.focus(); await page.keyboard.press('Enter'); assert.match(await info.innerText(), /본문 미확보/); await page.keyboard.press('Escape');
-      assert.equal(await info.evaluate(element => element.open), false); assert.equal(await infoSummary.evaluate(element => document.activeElement === element), true);
+      assert.equal(await info.evaluate(element => element.open), false); assert.equal(await infoSummary.evaluate(element => document.activeElement === element), true); await summary.focus(); await page.keyboard.press('Escape');
       assert.deepEqual(await state(page), original);
     });
     await check('unlike and unbookmark produce a neutral retained record and independent restoration never creates negative feedback', async () => {
@@ -132,31 +155,32 @@ async function main() {
     });
     await check('explicit unrelated feedback hides a feed article and undo remains distinct from reaction-removal history', async () => {
       await click(page, '#discoveryDiscover'); await click(page, '#discoveryLatest');
-      await (await reveal(row(page, 'negative').locator('[data-discovery-feedback="not_relevant"]'))).click(); await idle(page);
+      await (await revealControl(row(page, 'negative').locator('[data-discovery-feedback="not_relevant"]'))).click(); await idle(page);
       const after = await state(page); assert(after.feedback.feedback.some(entry => entry.canonicalUrl === url('negative') && entry.kind === 'not_relevant'));
       assert.equal(after.actions.entries.some(entry => entry.canonicalUrl === url('negative')), false); assert.equal(await row(page, 'negative').count(), 0);
       await click(page, '#discoveryCancelled'); assert.equal(await row(page, 'negative').count(), 0);
-      await click(page, '#discoveryDiscover'); await (await reveal(page.locator('[data-discovery-undo="negative"]'))).click(); await idle(page);
+      await click(page, '#discoveryDiscover'); await (await revealControl(page.locator('[data-discovery-undo="negative"]'))).click(); await idle(page);
       assert.deepEqual((await state(page)).feedback.feedback, []); assert.equal(await row(page, 'negative').count(), 1);
       assert.equal((await state(page)).actions.entries.some(entry => entry.canonicalUrl === url('negative')), false);
     });
     await check('topic IME redraw and failed local save preserve the same input and retry through the actual form', async () => {
       await disclose(page.locator('#discoveryTopics')); const input = page.locator('#discoveryTopicInput');
       await input.focus(); await input.evaluate((element, value) => { window.__socialTopicInput = element; element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })); element.value = value; element.setSelectionRange(2, 6); element.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true, inputType: 'insertCompositionText', data: value })); }, PRIVATE);
-      await page.locator('#discoveryRefresh').click(); await idle(page);
+      await (await revealControl(page.locator('#discoveryRefresh'))).click(); await idle(page);
       assert.deepEqual(await input.evaluate(element => ({ same: element === __socialTopicInput, value: element.value, start: element.selectionStart, end: element.selectionEnd })), { same: true, value: PRIVATE, start: 2, end: 6 });
       await input.dispatchEvent('compositionend', { data: PRIVATE }); await page.evaluate(() => { window.__newsSocialFailTopic = true; }); const before = await state(page);
-      await page.locator('#discoveryTopicAdd').click(); await page.locator('#discoveryTopicRetry').waitFor(); await idle(page);
+      await (await revealControl(page.locator('#discoveryTopicAdd'))).click(); await page.locator('#discoveryTopicRetry').waitFor(); await idle(page);
       assert.equal(await input.inputValue(), PRIVATE); assert.equal(await input.evaluate(element => element === __socialTopicInput), true); assert.deepEqual((await state(page)).interest, before.interest);
-      await page.locator('#discoveryTopicRetry').click(); await idle(page); await page.waitForFunction(async term => { const s = HaedoLife.Shell.storage; return (await s.readInterestProfile(await s.getActive())).manual.some(item => item.label === term); }, PRIVATE);
+      await (await revealControl(page.locator('#discoveryTopicRetry'))).click(); await idle(page); await page.waitForFunction(async term => { const s = HaedoLife.Shell.storage; return (await s.readInterestProfile(await s.getActive())).manual.some(item => item.label === term); }, PRIVATE);
       assert.equal(await input.inputValue(), '');
       const topics = page.locator('#discoveryTopics'); if (await topics.evaluate(element => element.open)) await topics.locator(':scope > summary').click();
     });
     await check('three viewport feed hierarchy keeps real headlines ahead of secondary information without overflow or undersized controls', async () => {
       await click(page, '#discoveryDiscover'); await click(page, '#discoveryLatest');
-      await disclose(page.locator('#discoveryLanguageOptions')); await page.locator('#discoveryTranslationLanguage').selectOption('ko'); await idle(page);
+      await disclose(page.locator('#discoveryLanguageOptions')); await (await revealControl(page.locator('#discoveryTranslationLanguage'))).selectOption('ko'); await idle(page);
       await page.waitForFunction(async () => { const s = HaedoLife.Shell.storage; return (await s.readDiscoveryLanguageSettings(await s.getActive())).translationTarget === 'ko'; });
       for (const selector of ['#discoveryTopics', '#discoveryLanguageOptions', '#discoveryNewsPreferences']) { const details = page.locator(selector); if (await details.evaluate(element => element.open)) await details.locator(':scope > summary').click(); }
+      await newsView(page.locator('#discoveryList'));
       for (const width of [390, 820, 1440]) {
         await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 }); await page.evaluate(async () => { await document.fonts.ready; scrollTo(0, 0); });
         const article = row(page, 'first'); assert.equal(await article.locator('[data-discovery-translate]').isVisible(), true);
@@ -183,13 +207,13 @@ async function main() {
         const closedHitTests = await assertReactionHitTests(false);
         let translationOffHitTests = null;
         if (width === 390) {
-          await disclose(page.locator('#discoveryLanguageOptions')); await page.locator('#discoveryTranslationLanguage').selectOption('original'); await idle(page);
+          await disclose(page.locator('#discoveryLanguageOptions')); await (await revealControl(page.locator('#discoveryTranslationLanguage'))).selectOption('original'); await idle(page);
           await page.waitForFunction(async () => { const s = HaedoLife.Shell.storage; return (await s.readDiscoveryLanguageSettings(await s.getActive())).translationTarget === 'original'; });
           assert.equal(await article.locator('[data-discovery-translate]').count(), 0);
           translationOffHitTests = await assertReactionHitTests(false);
-          await page.locator('#discoveryTranslationLanguage').selectOption('ko'); await idle(page);
+          await (await revealControl(page.locator('#discoveryTranslationLanguage'))).selectOption('ko'); await idle(page);
           await page.waitForFunction(async () => { const s = HaedoLife.Shell.storage; return (await s.readDiscoveryLanguageSettings(await s.getActive())).translationTarget === 'ko'; });
-          await page.locator('#discoveryLanguageOptions > summary').click();
+          await (await revealControl(page.locator('#discoveryLanguageOptions > summary'))).click(); await newsView(article);
         }
         await page.evaluate(() => scrollTo(0, 0));
         const audit = await page.evaluate(() => {
