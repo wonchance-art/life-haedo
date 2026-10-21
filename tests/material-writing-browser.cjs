@@ -173,7 +173,7 @@ async function main() {
       const original = (await snapshot(page)).posts.find(p => p.doc.status === 'saved'); assert(original); assert.equal(original.doc.photos.length, 2);
       await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('#photoTitle').fill('자료로 완성하고 다시 다듬은 여행글');
       await page.evaluate(() => Quill.find(document.querySelector('.ql-container')).insertText(0, '준비와 왕복해도 유지할 미완성 수정 문단🌱\n', 'user'));
-      await page.waitForFunction(() => document.querySelector('.photo-status-text')?.textContent === '초안 보관됨');
+      await page.waitForFunction(() => document.querySelector('.photo-status-text')?.textContent === '브라우저에 자동 임시저장됨');
       const pending = await snapshot(page), editing = pending.posts.find(p => p.doc.status === 'draft' && p.doc.replaces?.id === original.doc.id); assert(editing); assert.notEqual(editing.doc.id, original.doc.id);
       await page.locator('.photo-editor').getByRole('button', { name: '닫기', exact: true }).click(); await page.locator('#mwContinue').waitFor(); await page.locator('#mwContinue').click(); await page.locator('#photoTitle').waitFor();
       assert.equal(await page.locator('#photoTitle').inputValue(), editing.doc.title); assert.match(await page.locator('.ql-editor').innerText(), /준비와 왕복해도 유지할 미완성 수정 문단/);

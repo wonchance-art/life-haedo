@@ -57,7 +57,7 @@ async function listFromPhoto(page) {
 }
 async function snap(page, scene) {
   const firstCapture = report.visual.length, firstFailure = report.qualityFailures.length;
-  if (scene === 'writing') await page.waitForFunction(expected => document.querySelector('.photo-status')?.textContent === expected, phase === 'after' ? '초안 보관됨' : '초안이 이 브라우저에 저장됨');
+  if (scene === 'writing') await page.waitForFunction(expected => document.querySelector('.photo-status')?.textContent === expected, phase === 'after' ? '브라우저에 자동 임시저장됨' : '초안이 이 브라우저에 저장됨');
   for (const size of sizes) {
     await page.setViewportSize(size); await page.evaluate(() => document.fonts.ready);
     await page.waitForFunction(() => [...document.querySelectorAll('.home-post-cover,.photo-read-image,.photo-entry-cover[src],.photo-block img')]
@@ -213,7 +213,7 @@ async function main() {
       assert.equal((await docs(page)).docs.find(doc => doc.id === sample.postIds[0]).title, '빛이 길게 머무는 오후');
       await page.evaluate(() => { IDBObjectStore.prototype.put = __snsPut; });
       const more = page.locator('.photo-more'); if (!await more.evaluate(node => node.open)) await more.locator(':scope > summary').click();
-      await page.getByRole('button', { name: '초안 다시 저장', exact: true }).click(); await page.waitForFunction(() => document.querySelector('.photo-status')?.textContent === '초안 보관됨');
+      await page.getByRole('button', { name: '초안 다시 저장', exact: true }).click(); await page.waitForFunction(() => document.querySelector('.photo-status')?.textContent === '브라우저에 자동 임시저장됨');
       await page.getByRole('button', { name: '닫기', exact: true }).click(); await compatibility(page); const files = page.locator('.photo-files'); if (!await files.evaluate(node => node.open)) await files.locator(':scope > summary').click();
       await page.getByLabel('사진 글 ZIP 백업', { exact: true }).setInputFiles({ name: 'anonymous-photo.zip', mimeType: 'application/zip', buffer: zip });
       await page.getByRole('button', { name: '새 초안으로 복원', exact: true }).click(); await page.locator('#photoTitle').waitFor();
