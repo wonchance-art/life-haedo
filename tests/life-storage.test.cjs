@@ -323,6 +323,29 @@ async function naverStorageFixture() {
     changes: Core.buildImportChanges(before, prepared), attachment: data.attachment };
   return { ...fixture, account, scoped: storage, before, data, request };
 }
+test('link-only Markdown source with stored photos commits and installs as a separate portable workspace', async t => {
+  const F = require('./fixtures/naver-media.cjs'), restore = F.installDecoder(); t.after(restore);
+  const Media = require('../assets/life/naver-media.js'), Capture = require('../assets/life/naver-capture.js');
+  const f = await naverStorageFixture(); t.after(() => f.storage.close());
+  const attachment = structuredClone(f.request.attachment), payload = attachment.capture.payload;
+  Object.assign(payload, { format: 'text/markdown', body: null, bodyHash: null, coverage: 'link_only' });
+  attachment.capture.capture_hash = await Capture.fingerprint(payload);
+  const prepared = await Core.prepareImport(Capture.toImportInput(payload, { existingSourceId: attachment.sourceId,
+    existingSourceUrl: f.before.sources[0].url }), f.before);
+  attachment.sourceVersionId = prepared.version.id;
+  assert.equal((await f.scoped.commitNaverCapture({ ...f.request, attachment,
+    changes: Core.buildImportChanges(f.before, prepared) })).status, 'stored');
+  const bundle = await f.scoped.read(f.before.workspaceId), saved = await f.scoped.readNaverCapture(bundle.workspaceId, attachment.sourceVersionId);
+  assert.deepEqual(bundle.sourceVersions[0], f.before.sourceVersions[0]); assert.deepEqual(bundle.records, f.before.records);
+  const copied = await Media.copy(await Media.read(await Media.pack({ bundle, attachment: saved })));
+  const installed = await f.scoped.installNaverCaptureCopy(copied), read = await f.scoped.readNaverCapture(installed.bundle.workspaceId, copied.attachment.sourceVersionId);
+  assert.notEqual(installed.bundle.workspaceId, bundle.workspaceId);
+  assert.equal(installed.bundle.sourceVersions[0].format, 'text/plain');
+  assert.equal(installed.bundle.sourceVersions[0].contentText, null); assert.equal(installed.bundle.sourceVersions[0].contentHash, null);
+  assert.equal(read.capture.payload.format, 'text/markdown'); assert.equal(read.capture.capture_hash, saved.capture.capture_hash);
+  assert.equal(read.capture.payload.photos[0].sha256, F.hash(F.bytes));
+  assert.deepEqual(new Uint8Array(await read.photos[0].blob.arrayBuffer()), F.bytes);
+});
 test('Naver source version, original photos and exact receipt commit atomically without changing old quotes', async t => {
   const F = require('./fixtures/naver-media.cjs'), restore = F.installDecoder(); t.after(restore);
   const f = await naverStorageFixture(); t.after(() => f.storage.close());

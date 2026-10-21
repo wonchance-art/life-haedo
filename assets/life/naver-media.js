@@ -22,9 +22,12 @@
     api('Core').validateWorkspace(bundle);
     const source = bundle.sources.find(value => value.id === attachment.sourceId), version = bundle.sourceVersions.find(value => value.id === attachment.sourceVersionId);
     const payload = attachment.capture.payload, identity = source && api('NaverBlog').postIdentity(source.url);
+    // Core stores every bodyless source as plain text, independently of the
+    // extractor's immutable format declaration. Text-bearing formats stay exact.
+    const expectedFormat = payload.body === null ? 'text/plain' : payload.format;
     if (!source || source.origin !== 'naver_blog' || !identity || identity.blogId !== payload.blogId || identity.logNo !== payload.logNo ||
         !version || version.sourceId !== source.id || version.contentText !== payload.body || version.contentHash !== payload.bodyHash ||
-        version.format !== payload.format || version.coverage.status !== payload.coverage) fail('사진을 연결할 정확한 원문 버전이 일치하지 않습니다.');
+        version.format !== expectedFormat || version.coverage.status !== payload.coverage) fail('사진을 연결할 정확한 원문 버전이 일치하지 않습니다.');
     return true;
   }
   async function validate(input, { ownerId } = {}) {

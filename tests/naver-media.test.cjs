@@ -8,6 +8,30 @@ async function complete() {
   const data = await F.fixture();
   return { ...data, bundle: Core.applyChanges(data.bundle, data.changes) };
 }
+test('link-only Markdown capture follows Core plain-text target without changing its declaration or stored photos', async t => {
+  const restore = F.installDecoder(); t.after(restore);
+  const data = await F.fixture(), payload = data.attachment.capture.payload;
+  Object.assign(payload, { format: 'text/markdown', body: null, bodyHash: null, coverage: 'link_only' });
+  data.attachment.capture.capture_hash = await Capture.fingerprint(payload);
+  const prepared = await Core.prepareImport(Capture.toImportInput(payload), data.bundle);
+  const attachment = { ...data.attachment, sourceId: prepared.source.id, sourceVersionId: prepared.version.id };
+  const bundle = Core.applyChanges(data.bundle, Core.buildImportChanges(data.bundle, prepared));
+  assert.equal(prepared.version.format, 'text/plain');
+  assert.equal(Media.checkTarget(bundle, attachment), true);
+  const opened = await Media.read(await Media.pack({ bundle, attachment })), restored = await Media.copy(opened);
+  for (const value of [opened, restored]) {
+    assert.equal(value.bundle.sourceVersions[0].format, 'text/plain');
+    assert.equal(value.bundle.sourceVersions[0].contentText, null); assert.equal(value.bundle.sourceVersions[0].contentHash, null);
+    assert.equal(value.attachment.capture.payload.format, 'text/markdown');
+    assert.equal(value.attachment.capture.payload.body, null); assert.equal(value.attachment.capture.payload.bodyHash, null);
+    assert.equal(value.attachment.capture.capture_hash, attachment.capture.capture_hash);
+    assert.equal(value.attachment.capture.payload.photos[0].sha256, F.hash(F.bytes));
+    assert.deepEqual(new Uint8Array(await value.attachment.photos[0].blob.arrayBuffer()), F.bytes);
+  }
+  const withBody = await complete(), mismatched = copy(withBody.bundle);
+  mismatched.sourceVersions[0].format = 'text/markdown';
+  assert.throws(() => Media.checkTarget(mismatched, withBody.attachment), { code: 'invalid_naver_media' });
+});
 test('media validates exact received bytes/dimensions and binds only the declared source version', async t => {
   const restore = F.installDecoder(); t.after(restore);
   const data = await complete(), before = copy(data);

@@ -25,7 +25,7 @@
 
 수집 fingerprint는 재귀 키 정렬 JSON에서 extractedAt과 사진 storagePath만 제외한다. 본문·사진 명세·실패·HTML hash·추출기 버전을 포함하므로 동일 결과 재조회는 중복되지 않지만 HTML/추출기 변경으로 새 판이 생긴 사실을 곧 네이버 작성자의 수정으로 단정하지 않는다.
 
-현재 worker 출력은 text/plain의 partial 또는 link_only다. 모델이 full_text를 표현할 수 있다는 이유로 전체 본문 확보로 승격하지 않는다. 날짜·작성자가 확인되지 않으면 null/빈값, 작성자 관계는 unknown을 유지한다. 서버 raw HTML을 클라이언트에 반환하지 않는다.
+현재 worker 출력은 text/plain의 partial 또는 link_only다. 모델이 full_text를 표현할 수 있다는 이유로 전체 본문 확보로 승격하지 않는다. 날짜·작성자가 확인되지 않으면 null/빈값, 작성자 관계는 unknown을 유지한다. 서버 raw HTML을 클라이언트에 반환하지 않는다. 본문이 없는 판의 Core 버전은 기존 `text/plain` 규칙을 따르며, 수집 명세가 선언한 형식은 불변 sidecar에 그대로 남긴다. 이 둘을 혼동해 사진이 있는 link_only 사본의 받기·ZIP 복원을 거절하지 않는다.
 
 사진은 JPEG/PNG/WebP이며 모델 상한은 20장·장당 64 MiB·합계 256 MiB다. worker는 장당 16 MiB로 더 보수적이며 상한/실패를 누락으로 남긴다. URL·바이트·SHA·형식·픽셀·설명·실패를 기록하고 실패한 사진의 파일 메타는 null이다. 모든 사진은 originalStatus:unverified이며 업로드 당시 원본과 같다고 주장하지 않는다.
 

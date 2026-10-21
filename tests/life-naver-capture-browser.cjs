@@ -603,6 +603,13 @@ async function main() {
     await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2));
   }
 }
-if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
+if (require.main === module) main().catch(error => {
+  console.error(error);
+  if (process.env.GITHUB_ACTIONS === 'true') {
+    const message = String(error.message || error).slice(0, 4000).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+    console.error('::error title=Naver capture verification::' + message);
+  }
+  process.exitCode = 1;
+});
 
 module.exports = { CaptureCloud, capturedRow, seedPagination, storedMedia, blogId, postUrl, fullText, selectedQuote, previousText, previousQuote, originals, seedCapture, gate, arrived, enter, capture };
