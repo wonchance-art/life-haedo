@@ -82,7 +82,7 @@ test('past like promotes a different public article with exact inspectable title
   const inputBefore = JSON.stringify({ actions, catalog }), result = rank(catalog, actions);
   assert.deepEqual(result.items.map(row => row.article.id), ['new']);
   assert.equal(result.metadata.personalization.applied, true); assert.equal(result.metadata.personalization.signalCount, 1);
-  const item = result.items[0]; assert.equal(item.personal.policy, 'public-title-tag-expressions-v2'); assert.equal(item.personal.score, 3);
+  const item = result.items[0]; assert.equal(item.personal.policy, 'public-title-tag-expressions-v3'); assert.equal(item.personal.score, 3);
   for (const evidence of item.personal.evidence) {
     const original = evidence.field === 'tags' ? liked.tags[evidence.tagIndex] : liked.title;
     const candidate = evidence.candidateField === 'tags' ? item.article.tags[evidence.candidateTagIndex] : item.article.title;
@@ -239,4 +239,27 @@ test('repeated tags and equivalent labels are not independent expressions while 
   const off = Actions.setPersonalization(actions, false, { expectedRevision: actions.revision, now: NOW });
   assert.deepEqual(rank(catalog, off), baseline(catalog));
   assert.deepEqual(rank(catalog, enabled(liked, 'bookmarked')), baseline(catalog));
+});
+test('v3 Korean language aliases preserve snapshots and still require two distinct expressions', () => {
+  assert.equal(Recommendations.POLICY, 'public-title-tag-expressions-v3');
+  for (const [joined, spaced, english] of [['언어학습', '언어 학습', 'Language learning'], ['언어교육', '언어 교육', 'Language education']]) {
+    const liked = article('liked', '😀 ' + joined + ' research'), actions = enabled(liked);
+    const catalog = feed([
+      article('both', 'research update', { tags: [spaced] }),
+      article('only-one', 'Guide', { tags: [spaced, joined] }),
+      article('english-phrase', 'research update', { tags: [english] })
+    ]), before = JSON.stringify({ catalog, actions });
+    const result = rank(catalog, actions);
+    assert.deepEqual(result.items.map(row => row.article.id), ['both']);
+    assert.equal(result.items[0].personal.score, 2);
+    assert.equal(result.items[0].personal.evidence.length, 2);
+    const evidence = result.items[0].personal.evidence.find(row => row.quote === joined);
+    assert.equal(evidence.term, spaced); assert.equal(evidence.start, 3);
+    assert.equal(evidence.candidateQuote, spaced); assert.equal(evidence.candidateField, 'tags');
+    assert.equal(liked.title.slice(evidence.start, evidence.end), joined);
+    assert.equal(catalog.articles[0].tags[evidence.candidateTagIndex].slice(evidence.candidateStart, evidence.candidateEnd), spaced);
+    const repeated = enabled(article('repeat', 'Guide', { tags: [spaced, joined] }));
+    assert.equal(Recommendations.inspectSignals(repeated, { now: NOW }).signalCount, 0);
+    assert.equal(JSON.stringify({ catalog, actions }), before, 'normalization never rewrites historical reaction metadata');
+  }
 });

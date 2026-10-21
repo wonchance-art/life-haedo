@@ -25,7 +25,9 @@
     ['글쓰기', '글 쓰기'],
     ['개인정보', '개인 정보', 'personal information'],
     ['접근성', 'accessibility'],
-    ['언어학', 'linguistics']
+    ['언어학', 'linguistics'],
+    ['언어 학습', '언어학습', 'language learning'],
+    ['언어 교육', '언어교육', 'language education']
   ].map(row => Object.freeze(row)));
   const LIMITS = Object.freeze({ articles: 500, sources: 20, manual: 40, matches: 5, feedBytes: 4 * 1024 * 1024 });
   const CONTENT_LANGUAGE_CODES = Object.freeze(['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'und', 'mul', 'other']);

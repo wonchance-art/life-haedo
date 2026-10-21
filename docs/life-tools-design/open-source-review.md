@@ -1,5 +1,11 @@
 # 오픈소스 검토와 재사용 결정
 
+## 언어 주제 연결·당시 비교 근거 — 2026-10-21 KST
+
+기존 Discovery의 공개 동의어·Recommendations의 로컬 규칙·Reading 불변 스냅샷/Storage CAS와 native details·문자 노드를 재사용한다. 직역 두 묶음과 저장된 근거 표시를 위해 범용 추천 서버·검색/번역 SDK·파서를 추가하지 않는다. 같은 날 아래에서 확인한 feedparser/idb 및 SNS 패턴 검토를 재사용하며, 이번 작은 보완을 새 라이브러리 보안 감사로 표시하지 않는다. [범위·보존·교체 조건](../design-review/news-usefulness.md).
+
+기존8개 공개 출처를 한 번 점검했다. [OpenLearn 언어 페이지](https://www.open.edu/openlearn/languages)는 공식 RSS 선언과 재이용 권리 확인이 충족되지 않아 보류했고, [The Conversation robots](https://theconversation.com/robots.txt)의 명시 AI 접근 제한을 확인한 뒤 후속 피드/권리 요청을 중단했다. 추측 피드·호스트/UA 우회·HTML 본문 수집으로 공급을 늘리지 않는다. LLT 정상 회복과 Woowa의 로컬 단일200은 이번 제품 변경 성과나 운영 안정성 증거로 합산하지 않는다.
+
 ## 네이버 본문·사진 추출의 실제 재사용 — 2026-10-21 UTC
 
 RSS 비교와 별도로 [추출 후보의 고정 소스·라이선스·유지관리](../design-review/naver-extraction-open-source.md)를 대조한 뒤 **sansoohan/naver-blog-to-markdown v1.5.1, commit 0bc8cc10200879c52f99585b429bb0fcec4fe5bc의 에디터별 본문 root 선택자 일부를 실제 재사용했다.** 원저작자의 MIT 전문·저작권·고정 버전과 재사용 파일을 [THIRD_PARTY_NOTICES](../../supabase/functions/haedo-naver-blog/THIRD_PARTY_NOTICES.txt)에 보존했다. CLI 전체, 브라우저/파일시스템/네트워크 처리, Markdown/HTML 변환 전체를 그대로 도입한 것은 아니다. molpass의 목록 완전성·구형/접힘 처리 등은 설계 참고로 구분한다. GPL 후보와 라이선스 불명 후보의 코드는 복사하지 않는다.

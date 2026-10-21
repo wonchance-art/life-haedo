@@ -92,19 +92,55 @@
       const actions = node('div', null, 'life-actions'); actions.append(save, discard); const state = node('p', '', 'life-meta'); state.setAttribute('role', 'status'); form.append(actions, state); row.append(form);
       articlesHost.append(row); rows.set(url, { row, controls, save, discard, state, links, original, translated, article });
     }
+    function frozenEvidence(session, conditions) {
+      const fieldLabels = { title: '제목', tags: '태그', summary: '공개 요약', bodyText: '허용된 본문' };
+      conditions.append(node('h4', '당시 선정 근거'));
+      const articles = node('ol', null, 'discovery-evidence');
+      for (const entry of session.articles.slice(0, 6)) {
+        const item = node('li'); item.dataset.readingEvidenceUrl = entry.snapshot.canonicalUrl;
+        item.append(node('p', entry.snapshot.title, 'life-meta'));
+        const memberships = Object.entries(session.lists).filter(([, list]) => list?.includes(entry.snapshot.canonicalUrl)).map(([mode, list]) => modeLabels[mode] + ' ' + (list.indexOf(entry.snapshot.canonicalUrl) + 1));
+        item.append(node('p', memberships.join(' · '), 'life-meta'));
+        const personal = entry.personal?.evidence || [], manual = entry.reasons.slice(0, 5 - Math.min(personal.length, 3));
+        for (const ref of manual) {
+          item.append(node('p', '관심 표현 일치 · 관심 ‘' + ref.interestLabel + '’ · ' + fieldLabels[ref.field] + ' · ' +
+            (ref.via === 'alias' ? '연결 표현 ‘' + ref.matchedTerm + '’' : '직접 일치'), 'life-meta'));
+          const quote = node('blockquote', ref.quote); quote.dataset.readingEvidenceKind = 'manual'; item.append(quote);
+        }
+        for (const ref of personal.slice(0, 5 - manual.length)) {
+          item.append(node('p', '비교 당시 좋아요한 글 ‘' + entry.personal.sourceSnapshot.title + '’ · 보관한 ' + fieldLabels[ref.field] +
+            '와 이 글의 ' + fieldLabels[ref.candidateField], 'life-meta'));
+          const pair = node('blockquote'), original = node('span', ref.quote), candidate = node('span', ref.candidateQuote);
+          pair.dataset.readingEvidenceKind = 'personal'; original.dataset.readingQuote = 'original'; candidate.dataset.readingQuote = 'candidate';
+          pair.append(original, doc.createTextNode(' / '), candidate); item.append(pair);
+        }
+        if (!manual.length && !personal.length) {
+          item.append(node('p', '기록된 표현 근거 없음', 'life-meta'));
+        }
+        if (entry.reasons.length + personal.length > 5) item.append(node('p', '기록된 표현 근거 중 5개까지 표시합니다.', 'life-meta'));
+        articles.append(item);
+      }
+      conditions.append(articles);
+    }
     function renderSession(session) {
       const focused = doc.activeElement;
       if (displayed?.id === session?.id && displayed?.rankInputSHA256 === session?.rankInputSHA256) return;
       displayed = session ? clone(session) : null; rows.clear(); articlesHost.replaceChildren(); conditionHost.replaceChildren(); listsHost.replaceChildren(); preferenceHost.replaceChildren(); deleteHost.replaceChildren(); clearConfirm = false;
       if (!session) return;
-      const conditions = node('details', null, 'discovery-reading-conditions'); conditions.id = 'discoveryReadingConditions'; conditions.append(node('summary', '비교 조건'));
+      const conditions = node('details', null, 'discovery-reading-conditions'); conditions.id = 'discoveryReadingConditions'; conditions.append(node('summary', '비교 조건·근거'));
       const c = session.conditions;
       conditions.append(node('p', '비교 시작 · ' + date(session.createdAt) + ' / 공개 목록 수집 기준 · ' + date(session.generatedAt), 'life-meta'));
       conditions.append(node('p', '주제 · ' + (c.manual.map(value => value.label).join(' · ') || '선택 없음'), 'life-meta'));
       conditions.append(node('p', '콘텐츠 언어 · ' + (c.contentLanguages === null ? '전체' : c.contentLanguages.length ? c.contentLanguages.map(code => language().CONTENT_LANGUAGE_LABELS[code] || code).join(' · ') : '선택 없음'), 'life-meta'));
       conditions.append(node('p', '출처 · ' + (session.sources.filter(source => c.sourceIds.includes(source.id)).map(source => source.name).join(' · ') || '선택 없음'), 'life-meta'));
+      conditions.append(node('p', '비교 입력 · 보관 URL ' + c.knownUrlCount + '개 · 읽음/제외 ' + c.feedbackCount + '개 · 개인 추천 기준 ' + modeLabels[c.baselineMode], 'life-meta'));
+      const personalStatus = { disabled: '개인 추천은 꺼져 있어 이 비교에 포함하지 않았습니다.', insufficient_signal: '개인 추천에 사용할 좋아요 근거가 없어 ' + modeLabels[c.baselineMode] + ' 기준 목록을 사용했습니다.',
+        no_overlap: '좋아요 근거와 후보의 대응 표현이 반영 기준을 충족하지 않아 ' + modeLabels[c.baselineMode] + ' 기준 목록을 사용했습니다.', applied: '비교 당시의 좋아요 제목·태그와 후보의 대응 표현을 반영했습니다.' };
+      conditions.append(node('p', personalStatus[session.personal.status], 'life-meta'));
+      if (session.personal.policy) conditions.append(node('p', '개인 추천 표현 정책 · ' + session.personal.policy, 'life-meta'));
       conditions.append(node('p', '시작 당시의 보관·읽음/제외 조건을 유지합니다. 새 공개 목록이나 설정으로 비교하려면 현재 비교를 삭제한 뒤 시작해 주세요.', 'life-meta'));
       if (session.stale || session.sources.some(source => source.status !== 'ok' || source.stale)) conditions.append(node('p', '일부 출처의 최신 수집을 확인하지 못한 목록입니다.', 'discovery-notice'));
+      frozenEvidence(session, conditions);
       conditionHost.append(conditions);
       const orders = node('details', null, 'discovery-reading-orders'); orders.append(node('summary', '목록 순서 보기'));
       for (const [mode, list] of Object.entries(session.lists)) {
@@ -115,7 +151,6 @@
         orders.append(group);
       }
       listsHost.append(orders, node('p', '각 목록 상위 2개를 비교하며 겹치는 글은 한 번만 기록합니다. 읽지 않은 글과 무응답은 도움 없음으로 계산하지 않습니다.', 'life-meta'));
-      if (session.personal.status !== 'applied') listsHost.append(node('p', session.personal.status === 'disabled' ? '개인 추천은 꺼져 있어 이 비교에 포함하지 않았습니다.' : '개인 추천 근거가 부족하거나 표현이 겹치지 않아 기준 목록을 사용했습니다.', 'life-meta'));
       if (!session.articles.length) listsHost.append(node('p', '현재 조건에 비교할 글이 없습니다. 주제·출처·언어를 확인한 뒤 새 비교를 시작할 수 있습니다.', 'discovery-notice'));
       session.articles.forEach(makeRow);
       preferenceHost.append(node('h3', '다시 보고 싶은 목록'));
