@@ -104,7 +104,7 @@
   "sourceBrowserReportSHA256": "2c17b336ed61296195a70ac175439a401dd6d99a1e186197ec4614fab240ea94",
   "evidenceLimitations": [
     "The focused browser run executes two setup checks and one continuous journey. Full checked-in news tests are verified by the final PR CI.",
-    "Only the prior worker is SW144; the PWA test uses current app modules and mocked Auth.",
+    "Only the prior worker is SW145; the PWA test uses current app modules and mocked Auth.",
     "No actual Google translation/publisher reading, Apple hardware, user usefulness evaluation or production private post write was performed.",
     "Earlier failed fixture assumptions and the identified CTA overlap are retained in ignored local evidence; final evidence uses the corrected UI and viewport captures."
   ],
