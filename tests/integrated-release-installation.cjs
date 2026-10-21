@@ -10,6 +10,7 @@ const Series = require('../assets/life/blog-series-public.js'), Nine = require('
 const root = path.resolve(__dirname, '..'), output = path.join(root, '.local/integrated-release-installation');
 const migration = 'supabase/migrations/20261019005829_life_material_continuity.sql';
 const accountMaterialMigration = 'supabase/migrations/20261020042517_account_material_registrations.sql';
+const naverMigrations = ['supabase/migrations/20261021093111_life_naver_subscriptions.sql', 'supabase/migrations/20261021094614_naver_conflict_http409.sql'];
 const image = 'postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
 const container = 'haedo-blog-postgres-' + Date.now() + process.pid, database = 'haedo_blog_qa_integrated_install', runId = randomUUID();
 const env = { ...process.env }; for (const key of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH']) delete env[key];
@@ -41,9 +42,12 @@ async function main() {
   const check = async (name, run) => { await run(); report.checks.push(name); console.log('PASS ' + name); };
   try {
     const files = (await fs.readdir(path.join(root, 'supabase/migrations'))).filter(name => name.endsWith('.sql')).sort();
-    const baseline = files.filter(name => ![migration, accountMaterialMigration].includes('supabase/migrations/' + name));
+    const baseline = command('git', ['-C', root, 'ls-tree', '-r', '--name-only', '88ccfe5', '--', 'supabase/migrations'])
+      .trim().split('\n').filter(name => name.endsWith('.sql')).map(name => path.basename(name)).sort();
     assert.equal(baseline.length, 10);
-    assert.equal(files.length, baseline.length + 2, 'Both additive migrations must be checked explicitly.');
+    assert.deepEqual(files.map(name => 'supabase/migrations/' + name),
+      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations].sort(),
+      'Exactly the ten legacy and four reviewed additive migrations are required; missing or unknown files are rejected.');
     for (const file of baseline) {
       const relative = 'supabase/migrations/' + file, current = await fs.readFile(path.join(root, relative), 'utf8');
       assert.equal(hash(current), hash(command('git', ['-C', root, 'show', '88ccfe5:' + relative])), 'Previously installed migration changed: ' + file);
@@ -139,6 +143,67 @@ async function main() {
       catalog.policies = catalog.policies.filter(row => row.tablename !== 'life_account_materials');
       assert.deepEqual(catalog, intactCatalog);
       report.accountMaterialMigrationSha256 = hash(registrationDDL);
+    });
+    await check('Naver base and HTTP409 fix install atomically, preserve every existing row and catalog, and retain inbox receipts and the disabled gate on reinstallation', async () => {
+      const [baseDDL, fixDDL] = await Promise.all(naverMigrations.map(file => fs.readFile(path.join(root, file), 'utf8')));
+      const allNamespaces = "array['public','auth','storage','haedo_blog_private','haedo_material_private','haedo_naver_private']";
+      const allCatalog = catalogQuery.replaceAll(namespaces, allNamespaces).replace(" and p.proname not like 'life_material_%'", '');
+      psql(`create function installation_probe.all_data_snapshot() returns jsonb language plpgsql as $$
+ declare r record; data jsonb; result jsonb:='{}';begin
+ for r in select n.nspname,c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname=any(${allNamespaces}) and c.relkind='r' order by n.nspname,c.relname loop
+ execute format('select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),''[]''::jsonb) from %I.%I t',r.nspname,r.relname) into data;
+ result:=result||jsonb_build_object(r.nspname||'.'||r.relname,data);end loop;return result;end $$;`);
+      const dataSnapshot = () => sql('select installation_probe.all_data_snapshot();');
+      const intactData = dataSnapshot(), intactCatalog = sql(allCatalog);
+      const naverTable = (schema, name) => schema === 'haedo_naver_private' || schema === 'public' && name.startsWith('life_naver_');
+      const legacyData = data => Object.fromEntries(Object.entries(data).filter(([key]) => !naverTable(...key.split('.'))));
+      const legacyCatalog = catalog => ({
+        schemas: catalog.schemas.filter(row => row[0] !== 'haedo_naver_private'),
+        functions: catalog.functions.filter(row => !naverTable(row[0], row[1])),
+        relations: catalog.relations.filter(row => !naverTable(row[0], row[1])),
+        policies: catalog.policies.filter(row => !naverTable(row.schemaname, row.tablename))
+      });
+      const failed = ddl => ddl.replace(/commit;\s*$/i, 'select 1/0;\ncommit;');
+      assert.match(baseDDL, /begin;/); assert.match(baseDDL, /commit;\s*$/i);
+      assert.match(fixDDL, /begin;/); assert.match(fixDDL, /commit;\s*$/i);
+      assert.throws(() => psql(failed(baseDDL)), /division by zero/);
+      assert.equal(sql("select to_jsonb(to_regnamespace('haedo_naver_private') is null and to_regclass('public.life_naver_subscriptions') is null and to_regclass('public.life_naver_items') is null and not exists(select 1 from pg_proc where pronamespace='public'::regnamespace and proname like 'life_naver_%'));"), true);
+      assert.deepEqual(dataSnapshot(), intactData); assert.deepEqual(sql(allCatalog), intactCatalog);
+      psql(baseDDL);
+      const metadata = sql(await fs.readFile(path.join(root, 'supabase/tests/naver-installation.sql'), 'utf8'));
+      assert.equal(Object.keys(metadata).length, 11); assert(Object.values(metadata).every(value => value === true));
+      assert.deepEqual(legacyData(dataSnapshot()), intactData); assert.deepEqual(legacyCatalog(sql(allCatalog)), intactCatalog);
+      const saveDefinition = () => sql("select jsonb_build_object('body',p.prosrc,'acl',p.proacl,'path',p.proconfig,'definer',p.prosecdef) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='haedo_naver_private' and p.proname='save';");
+      const baseSave = saveDefinition(), baseData = dataSnapshot(), baseCatalog = sql(allCatalog);
+      assert.equal((baseSave.body.match(/errcode='40001'/g) || []).length, 2);
+      assert.throws(() => psql(failed(fixDDL)), /division by zero/);
+      assert.deepEqual(saveDefinition(), baseSave); assert.deepEqual(dataSnapshot(), baseData); assert.deepEqual(sql(allCatalog), baseCatalog);
+      psql(fixDDL);
+      assert.deepEqual(saveDefinition(), { ...baseSave, body: baseSave.body.replaceAll("errcode='40001'", "errcode='PT409'") });
+      assert.deepEqual(legacyData(dataSnapshot()), intactData); assert.deepEqual(legacyCatalog(sql(allCatalog)), intactCatalog);
+      // Seed only this new synthetic inbox; actual original-photo metadata,
+      // Auth, publications, all older receipts and material heads stay intact.
+      const subscription = rpc('life_naver_save', [q(bundle.workspaceId) + '::uuid', q('installation_probe'), '0', 'false']);
+      psql('update haedo_naver_private.runtime set ready=true where singleton;');
+      const lease = rpc('life_naver_claim', ['1', q(subscription.id) + '::uuid', q(owner) + '::uuid'], 'service_role');
+      assert.equal(lease.length, 1);
+      const body = '새 수집 원문\r\n🌿', items = [{ log_no: '987', title: 'Synthetic inbox item', url: 'https://blog.naver.com/installation_probe/987',
+        content_text: body, content_hash: hash(body), published_at: null, coverage: 'partial' }];
+      const finishArgs = [q(subscription.id) + '::uuid', q(lease[0].lease_token) + '::uuid', String(lease[0].revision), json(items)];
+      assert.deepEqual(rpc('life_naver_finish', finishArgs, 'service_role'), { status: 'stored', inserted: 1 });
+      psql('update haedo_naver_private.runtime set ready=false where singleton;');
+      const installedData = dataSnapshot(), installedCatalog = sql(allCatalog), installedSave = saveDefinition();
+      assert.equal(installedData['public.life_naver_items'].length, 1); assert.equal(installedData['haedo_naver_private.receipts'].length, 1);
+      assert.throws(() => psql(failed(fixDDL)), /division by zero/);
+      assert.deepEqual(dataSnapshot(), installedData); assert.deepEqual(saveDefinition(), installedSave); assert.deepEqual(sql(allCatalog), installedCatalog);
+      psql(baseDDL); psql(fixDDL);
+      assert.deepEqual(dataSnapshot(), installedData); assert.deepEqual(sql(allCatalog), installedCatalog); assert.deepEqual(saveDefinition(), installedSave);
+      assert.deepEqual(rpc('life_naver_finish', finishArgs, 'service_role'), { status: 'stored', inserted: 1 });
+      assert.deepEqual(dataSnapshot(), installedData); assert.deepEqual(legacyData(installedData), intactData);
+      assert.deepEqual(legacyCatalog(sql(allCatalog)), intactCatalog);
+      assert.deepEqual(sql(await fs.readFile(path.join(root, 'supabase/tests/naver-installation.sql'), 'utf8')), metadata);
+      report.naverMigrations = naverMigrations.map((file, index) => ({ file, sha256: hash(index ? fixDDL : baseDDL) }));
+      report.naverInstallation = metadata; report.naverInstalledDataSha256 = hash(JSON.stringify(installedData));
     });
     report.pass = true; report.baselineMigrations = baseline; report.baselineDataSha256 = baselineDigest;
     report.rollback = 'Failed transaction rolls back all additive DDL. After successful use retain data/receipts and compatible output-receipt storage; disable new UI and public/private entrypoint execution, then reapply the migration to restore. Full 88cc frontend rollback is safe only before new preparation usage. No destructive down migration.';
