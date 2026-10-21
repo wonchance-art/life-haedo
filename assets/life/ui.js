@@ -125,7 +125,7 @@
     const viewOrigins = new Map();
     let findRenderPromise = Promise.resolve();
     let collectionOpenOptions = null;
-    let blogManager = null, blogOpenOptions = null, blogManagerWorkspace = null, blogManagerFocused = false;
+    let blogManager = null, blogOpenOptions = null, blogManagerWorkspace = null, blogManagerPostId = null;
     let accountBlogUI = null, accountBlogWorkspace = null;
     const accountBlogViews = new Map();
     let preservationUI = null, publicCoverUI = null;
@@ -1558,7 +1558,7 @@
     }
 
     async function openManagedSource(workspaceId, target, context = {}, reference = null) {
-      const workspaceToken = workspaceGeneration, navigationToken = navigationGeneration;
+      const workspaceToken = workspaceGeneration, navigationToken = navigationGeneration, postId = blogManagerPostId;
       const fetched = await storage.read(workspaceId);
       const current = () => !disposed && workspaceToken === workspaceGeneration && navigationToken === navigationGeneration &&
         state.mode === 'blog' && state.bundle?.workspaceId === workspaceId;
@@ -1567,7 +1567,7 @@
       if (!state.bundle.sourceVersions.some(version => version.id === target.sourceVersionId && version.sourceId === target.sourceId)) throw new Error('이 원문 버전을 찾을 수 없습니다. 다른 버전으로 바꾸지 않았습니다.');
       if (reference) await global.HaedoLife.SourceReference.resolve(state.bundle, reference);
       if (!current()) return;
-      return navigate('source', { ...target, returnContext: { mode: 'blog', workspaceId, scrollY: global.scrollY, focusKey: context.focusKey } });
+      return navigate('source', { ...target, returnContext: { mode: 'blog', workspaceId, scrollY: global.scrollY, focusKey: context.focusKey, blogPostId: postId } });
     }
 
     async function renderAccountBlog() {
@@ -1598,7 +1598,7 @@
           row.kind === 'page-draft' ? navigate('page', { blogContext: true, pageDraftId: row.id, originFocusKey: context.focusKey }) : navigate('page', { blogContext: true, searchTarget: { postId: row.id }, pagePreview: false, originFocusKey: context.focusKey })
       });
       blogManager = instance; blogManagerWorkspace = workspaceId; const options = { viewState: blogViews.get(workspaceId), ...(blogOpenOptions || {}) }; blogOpenOptions = null;
-      blogManagerFocused = !!options.postId;
+      blogManagerPostId = options.postId || null;
       await instance.mount(host, options);
     }
 
@@ -2017,7 +2017,7 @@
     async function returnToResults() {
       const context = state.returnContext;
       if (!context || context.workspaceId !== state.bundle.workspaceId) return navigate('sources', { returnContext: null, navigationMotion: 'back' });
-      if (await navigate(context.mode, { returnContext: null, homeState: context.homeState, homeAnchor: context.homeAnchor, navigationMotion: 'back', sourcesRevealVersionId: context.mode === 'sources' ? context.sourceVersionId || null : null }) === false) return;
+      if (await navigate(context.mode, { returnContext: null, homeState: context.homeState, homeAnchor: context.homeAnchor, navigationMotion: 'back', sourcesRevealVersionId: context.mode === 'sources' ? context.sourceVersionId || null : null, blogPostId: context.mode === 'blog' ? context.blogPostId : null }) === false) return;
       const navigation = navigationGeneration;
       const restore = () => requestAnimationFrame(() => {
         if (disposed || navigation !== navigationGeneration || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode || context.homeAnchor) return;
@@ -2038,7 +2038,7 @@
         pending.then(() => { if (pending === homeRenderPromise) restore(); });
       }
       else if (context.mode === 'find') findRenderPromise.then(restore);
-      else if (context.mode === 'interests' || context.mode === 'external-discovery') mainRenderPromise.then(restore);
+      else if (context.mode === 'interests' || context.mode === 'external-discovery' || context.mode === 'blog') mainRenderPromise.then(restore);
       else restore();
     }
 
@@ -3894,8 +3894,8 @@
       compositionPanel?.dispose(); compositionPanel = null;
       if (accountBlogUI && accountBlogWorkspace) accountBlogViews.set(accountBlogWorkspace, accountBlogUI.getView?.());
       accountBlogUI?.dispose(); accountBlogUI = null; accountBlogWorkspace = null;
-      if (blogManager && blogManagerWorkspace && !blogManagerFocused) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
-      blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null; blogManagerFocused = false;
+      if (blogManager && blogManagerWorkspace && !blogManagerPostId) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
+      blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null; blogManagerPostId = null;
       preservationUI?.dispose(); preservationUI = null;
       publicCoverUI?.dispose(); publicCoverUI = null;
       obsidianUpdateUI?.dispose(); obsidianUpdateUI = null;
@@ -4101,8 +4101,8 @@
       compositionPanel?.dispose(); compositionPanel = null;
       if (accountBlogUI && accountBlogWorkspace) accountBlogViews.set(accountBlogWorkspace, accountBlogUI.getView?.());
       accountBlogUI?.dispose(); accountBlogUI = null; accountBlogWorkspace = null;
-      if (blogManager && blogManagerWorkspace && !blogManagerFocused) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
-      blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null; blogManagerFocused = false;
+      if (blogManager && blogManagerWorkspace && !blogManagerPostId) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
+      blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null; blogManagerPostId = null;
       preservationUI?.dispose(); preservationUI = null;
       publicCoverUI?.dispose(); publicCoverUI = null;
       obsidianUpdateUI?.dispose(); obsidianUpdateUI = null;

@@ -5,7 +5,7 @@
 'use strict';
 process.env.BASE_URL ||= 'http://127.0.0.1:4196';
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
-const { playwright, makeContext, ready } = require('./unified-home-browser.cjs');
+const { playwright, makeContext, ready, nav } = require('./unified-home-browser.cjs');
 const { FakeCloud, accounts } = require('./life-sync-browser.cjs');
 const base = process.env.BASE_URL, out = path.resolve(__dirname, '../.local/blog-manager');
 const report = { scope: 'Linux Chromium, synthetic local documents and injected transport/failures. Actual shared models and public renderer. No live OAuth, DB, publication or Apple device claim.', node: process.version, checks: [], visual: [], consoleErrors: [], pageErrors: [] };
@@ -219,7 +219,10 @@ async function main() {
     finally { await actual.close(); }
     }
     if (!process.env.BLOG_MANAGER_TEST_MATCH || /provenance/i.test(process.env.BLOG_MANAGER_TEST_MATCH)) {
-      const context = await makeContext(browser, new FakeCloud(), 'manager-provenance-idb', accounts.a);
+      // FakeCloud already composes the shared private-blog RPC fixture. Keep
+      // the actual SDK and account-scoped IDB for the focused return as well.
+      const server = new FakeCloud();
+      const context = await makeContext(browser, server, 'manager-provenance-idb', accounts.a);
       await context.route(base + '/assets/life/storage.js', async route => {
         const response = await route.fetch(), source = await response.text();
         const hook = `;(()=>{const original=HaedoLife.Storage;HaedoLife.Storage=Object.freeze({...original,forAccount(...args){const actual=original.forAccount(...args);return Object.freeze({...actual,async listPhotoPosts(...values){const rows=await actual.listPhotoPosts(...values);if(window.__managerHoldReturn){window.__managerReturnWaiting=true;window.__managerReturnPromise ||= new Promise(resolve=>{window.__managerReleaseReturn=()=>{window.__managerHoldReturn=false;resolve();};});await window.__managerReturnPromise;}return rows;}});}});})();`;
@@ -286,7 +289,72 @@ async function main() {
         assert.equal(await page.locator(`.blog-post[data-post-id="${fixture.postId}"] .blog-manager-evidence details`).evaluate(n => n.open), true);
         assert.equal(await page.evaluate(async () => { const s = HaedoLife.Shell.storage; return JSON.stringify(await s.read(await s.getActive())); }), before);
         assert.equal((await page.evaluate(async id => { const s = HaedoLife.Shell.storage; return s.readPostEvidence(await s.getActive(), id); }, fixture.postId)).refs[0].sourceVersionId, fixture.versionId);
-        report.checks.push({ name: 'exact provenance roundtrip uses the original CRLF/UTF-16 version and restores search/filter/more-than-40 focused manager rows without copying private notes or changing source data', pass: true });
+        // The whole manager still has a draft-only filter. A selected saved
+        // post must retain its focused destination when returning from its
+        // old exact source, rather than falling back to that whole-list view.
+        const saved = await page.evaluate(async ({ ws, postId }) => {
+          const s = HaedoLife.Shell.storage, post = await s.readPhotoPost(ws, postId); post.status = 'saved';
+          const saved = await s.savePhotoPost(ws, post, post.revision), sync = HaedoLife.BlogSync.create({ storage: s, auth: HaedoAuth });
+          try { await sync.connect(ws, postId); }
+          finally { sync.dispose(); }
+          return { post: JSON.stringify(await s.readPhotoPost(ws, saved.id)), refs: JSON.stringify(await s.readPostEvidence(ws, saved.id)) };
+        }, fixture);
+        const remote = server.posts.get(accounts.a.id + ':' + fixture.postId); assert(remote); assert.equal(remote.revision, 1);
+        remote.revision++; remote.updated_at = new Date().toISOString();
+        remote.data = { ...remote.data, ops: [{ insert: '서버에 새로 보관한 합성 문단\n' }, ...remote.data.ops] };
+        require('../assets/life/blog.js').validateManifest(remote.data);
+        const writeCounts = () => ({ saves: server.saves().length,
+          uploads: server.assetCalls.filter(call => call.method === 'POST').length,
+          publications: server.blogCalls.filter(call => /life_blog_(?:publish|unpublish)$/.test(call.rpc)).length });
+        const writesBefore = writeCounts(), headBefore = structuredClone(remote);
+        await nav(page, 'home'); await page.getByRole('button', { name: '서버에 보관한 글', exact: true }).click();
+        await page.locator('#accountBlogStatus[data-state="ready"]').waitFor();
+        const catalogRow = page.locator('#accountBlogList .ab-post[data-remote-id="' + fixture.postId + '"]');
+        assert.equal(await catalogRow.getAttribute('data-state'), 'remote_updated');
+        await catalogRow.locator('button[data-action="manage"][data-local-post-id="' + fixture.postId + '"]').click();
+        await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
+        assert.equal(await page.locator('.blog-post').count(), 1);
+        assert.equal(await page.locator('#blogManagerSearch').isHidden(), true);
+        assert.equal(await page.locator('#blogManagerFilter').isHidden(), true);
+        const focusedRow = page.locator('.blog-post[data-post-id="' + fixture.postId + '"]'), focusedEvidence = focusedRow.locator('.blog-manager-evidence');
+        await focusedEvidence.locator('summary').waitFor(); await focusedEvidence.locator('summary').click();
+        const focusedOpen = focusedEvidence.getByRole('button', { name: '되돌아갈 원문', exact: true }); await focusedOpen.waitFor();
+        const focusedKey = await focusedOpen.getAttribute('data-focus-key'); await focusedOpen.click();
+        await page.locator('#lifeSourceText').waitFor();
+        assert.equal(await page.locator('#lifeVersion').inputValue(), fixture.versionId);
+        assert.notEqual(fixture.versionId, fixture.latestVersionId);
+        assert.equal(await page.locator('#lifeSourceText').textContent(), fixture.raw);
+        await page.waitForFunction(({ locator, quote }) => {
+          const text = document.querySelector('#lifeSourceText')?.firstChild, selection = getSelection(); if (!text || selection?.rangeCount !== 1) return false;
+          const range = selection.getRangeAt(0); return range.startContainer === text && range.endContainer === text && range.startOffset === locator.start && range.endOffset === locator.end && text.data.slice(range.startOffset, range.endOffset) === quote;
+        }, fixture);
+        await page.evaluate(() => { window.__managerHoldReturn = true; window.__managerReturnWaiting = false; window.__managerReturnPromise = null; window.__managerReleaseReturn = null; });
+        await page.locator('#lifeSearchReturn').click(); await page.locator('#lifeBlogManager').waitFor();
+        await page.waitForFunction(() => window.__managerReturnWaiting === true);
+        assert.equal(await page.locator('.blog-post').count(), 0);
+        await page.evaluate(() => window.__managerReleaseReturn());
+        await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
+        await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, focusedKey);
+        assert.equal(await page.locator('.blog-post').count(), 1);
+        assert.equal(await focusedRow.count(), 1);
+        assert.equal(await page.locator('#blogManagerSearch').isHidden(), true);
+        assert.equal(await page.locator('#blogManagerFilter').isHidden(), true);
+        assert.equal(await focusedRow.locator('.blog-manager-evidence details').evaluate(n => n.open), true);
+        const afterFocused = await page.evaluate(async ({ ws, postId }) => {
+          const s = HaedoLife.Shell.storage; return { post: JSON.stringify(await s.readPhotoPost(ws, postId)), refs: JSON.stringify(await s.readPostEvidence(ws, postId)), bundle: JSON.stringify(await s.read(ws)) };
+        }, fixture);
+        assert.equal(afterFocused.post, saved.post); assert.equal(afterFocused.refs, saved.refs); assert.equal(afterFocused.bundle, before);
+        assert.deepEqual(writeCounts(), writesBefore); assert.deepEqual(server.posts.get(accounts.a.id + ':' + fixture.postId), headBefore);
+        await nav(page, 'manage'); await page.getByRole('button', { name: '글 관리', exact: true }).click();
+        await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
+        assert.equal(await page.locator('#blogManagerSearch').inputValue(), '원문 연결필터');
+        assert.equal(await page.locator('#blogManagerFilter').inputValue(), 'draft');
+        assert.equal(await page.locator('.blog-post').count(), 44);
+        assert.equal(await page.locator('.blog-post[data-post-id="' + fixture.postId + '"]').count(), 0);
+        assert.deepEqual(writeCounts(), writesBefore); assert.deepEqual(server.posts.get(accounts.a.id + ':' + fixture.postId), headBefore);
+        report.focusedProvenance = { pass: true, exactSourceAndFocus: true, delayedList: true, focusedRows: 1,
+          preservedWholeManagerRows: 44, bodyAndEvidenceUnchanged: true, extraRemoteWrites: 0 };
+        report.checks.push({ name: 'exact provenance returns to the 45-row whole manager and one-post focused manager, preserving CRLF/UTF-16 selection, focus, source data and the separate 44-draft filter without remote writes', pass: true });
       } catch (error) { report.checks.push({ name: 'exact provenance roundtrip', pass: false, error: error.message }); throw error; }
       finally { await context.close(); }
     }
