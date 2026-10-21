@@ -384,6 +384,9 @@ jobs:
       - name: Verify discovery language selection, translated links and private preference recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-languages-browser.cjs
+      - name: Verify frozen reading comparisons, explicit judgments and local recovery
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-discovery-reading-browser.cjs
       - name: Verify explicit discovery automation and local setting preservation
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-automation-browser.cjs
@@ -443,6 +446,7 @@ jobs:
             .local/discovery-automation-browser/
             .local/discovery-reactions-browser/
             .local/discovery-languages-browser/
+            .local/discovery-reading-browser/
             .local/unified-search/
             .local/collection-library/
             .local/collection-metadata/

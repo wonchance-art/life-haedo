@@ -13,7 +13,8 @@
     'readersnews-books': Object.freeze(['www.readersnews.com']),
     'seoul-environment': Object.freeze(['news.seoul.go.kr']),
     'arxiv-cs-cl': Object.freeze(['arxiv.org', 'rss.arxiv.org']),
-    'mit-linguistics': Object.freeze(['news.mit.edu'])
+    'mit-linguistics': Object.freeze(['news.mit.edu']),
+    'llt-journal': Object.freeze(['www.lltjournal.org'])
   });
   // Small, public and inspectable equivalences. No broader topic inference.
   const ALIASES = Object.freeze([
@@ -23,7 +24,8 @@
     ['독서', '책 읽기'],
     ['글쓰기', '글 쓰기'],
     ['개인정보', '개인 정보', 'personal information'],
-    ['접근성', 'accessibility']
+    ['접근성', 'accessibility'],
+    ['언어학', 'linguistics']
   ].map(row => Object.freeze(row)));
   const LIMITS = Object.freeze({ articles: 500, sources: 20, manual: 40, matches: 5, feedBytes: 4 * 1024 * 1024 });
   const CONTENT_LANGUAGE_CODES = Object.freeze(['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'und', 'mul', 'other']);
@@ -157,8 +159,13 @@
     return [...new Set([label.trim(), ...(group || [])])].map(value => ({ value, via: fold(value) === normalized ? 'exact' : 'alias' }));
   }
   const word = value => !!value && /[\p{L}\p{N}_]/u.test(value);
+  const pointAt = (value, index) => index < value.length ? String.fromCodePoint(value.codePointAt(index)) : '';
+  function pointBefore(value, index) {
+    const low = value.charCodeAt(index - 1), high = value.charCodeAt(index - 2);
+    return value.slice(low >= 0xdc00 && low <= 0xdfff && high >= 0xd800 && high <= 0xdbff ? index - 2 : Math.max(0, index - 1), index);
+  }
   function endBoundary(value, end, term) {
-    if (!word(term[term.length - 1]) || !word(value[end])) return true;
+    if (!word(pointBefore(term, term.length)) || !word(pointAt(value, end))) return true;
     // Korean particles also attach to Latin terms (AI가, AI에게). The suffix
     // must finish at a real boundary; arbitrary continuations remain excluded.
     return /^(?:(?:으로|에서|에게|부터|까지|보다|처럼|와|과|은|는|이|가|을|를|의|에|로|도|만)){1,3}(?=$|[^\p{L}\p{N}_])/u.test(value.slice(end));
@@ -168,7 +175,7 @@
     while (start <= haystack.length - needle.length) {
       const found = haystack.indexOf(needle, start); if (found < 0) break;
       const end = found + needle.length;
-      if ((!word(term[0]) || !word(value[found - 1])) && endBoundary(value, end, term)) result.push({ start: found, end, quote: value.slice(found, end) });
+      if ((!word(pointAt(term, 0)) || !word(pointBefore(value, found))) && endBoundary(value, end, term)) result.push({ start: found, end, quote: value.slice(found, end) });
       start = found + Math.max(needle.length, 1);
     }
     return result;

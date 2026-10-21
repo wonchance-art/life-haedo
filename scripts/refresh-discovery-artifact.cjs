@@ -28,6 +28,9 @@ const REQUEST_TIMEOUT_MS = 20000;
 // This is accepted only as a prior seed; collected/installable artifacts must
 // contain the complete current registry. Arbitrary subsets remain invalid.
 const PREVIOUS_SOURCE_IDS = Object.freeze(['naver-d2', 'seoul-culture', 'woowahan-tech', 'readersnews-books', 'seoul-environment'].sort());
+// Exact seven-source publication before LLT; keep the earlier five-source
+// upgrade path as well. Neither registry can be installed as a current artifact.
+const PREVIOUS_RESEARCH_SOURCE_IDS = Object.freeze([...PREVIOUS_SOURCE_IDS, 'arxiv-cs-cl', 'mit-linguistics'].sort());
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
@@ -77,7 +80,8 @@ function validateCatalog(bytes, now = Date.now(), previousSeed = false) {
   const checked = Discovery.validateFeed(raw, { now }); // Never inject an external allowlist.
   const sourceIds = Object.keys(Discovery.ALLOWED_SOURCES).sort();
   const suppliedIds = raw.sources.map(source => source.id).sort();
-  assert(same(suppliedIds, sourceIds) || previousSeed && same(suppliedIds, PREVIOUS_SOURCE_IDS), 'The approved source set changed.');
+  assert(same(suppliedIds, sourceIds) || previousSeed &&
+    [PREVIOUS_SOURCE_IDS, PREVIOUS_RESEARCH_SOURCE_IDS].some(ids => same(suppliedIds, ids)), 'The approved source set changed.');
   assert(Date.parse(raw.generatedAt) <= now, 'Public catalog generation time is in the future.');
   assert(checked.validation.invalid.length === 0 && checked.articles.length === raw.articles.length && raw.articles.length > 0,
     'Public catalog contains rejected or missing articles.');
