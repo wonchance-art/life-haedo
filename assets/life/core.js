@@ -250,8 +250,9 @@
     return canonical({ format: version.format, contentText: version.contentText, contentHash: version.contentHash,
       coverage: version.coverage, originalAuthor: version.originalAuthor, originalCreatedAt: version.originalCreatedAt });
   }
-  async function prepareImport(input, bundle) {
+  async function prepareImport(input, bundle, { forceNewVersion = false } = {}) {
     validateWorkspace(bundle);
+    assert(typeof forceNewVersion === 'boolean' && (!forceNewVersion || typeof input?.existingSourceId === 'string'), 'invalid_metadata', '새 원문 판에는 보완할 기존 자료가 필요합니다.');
     fields(input, ['origin', 'title', 'text', 'url', 'fileName', 'format', 'author', 'authorRelation', 'originalCreatedAt', 'coverage', 'omissions', 'existingSourceId', 'forceSeparate'], '가져오기 입력');
     input = importSnapshot(input);
     const origin = input.origin || 'other';
@@ -289,7 +290,7 @@
       assert(existing.origin === origin && (inputUrl === undefined || existing.url === inputUrl) && (!source.sourceKey || !existing.sourceKey || source.sourceKey === existing.sourceKey), 'source_identity_mismatch', '원천 주소·종류가 달라졌습니다. 별개 자료로 보관해 주세요.');
       const old = bundle.sourceVersions.filter(item => item.sourceId === existing.id).find(item => versionIdentity(item) === versionIdentity(version));
       const sourceChanged = existing.title !== title || !!source.sourceKey && source.sourceKey !== existing.sourceKey;
-      if (old && !sourceChanged) return { source: clone(existing), version: clone(old), match: { kind: 'exact_duplicate', sourceId: existing.id, sourceVersionId: old.id } };
+      if (old && !sourceChanged && !forceNewVersion) return { source: clone(existing), version: clone(old), match: { kind: 'exact_duplicate', sourceId: existing.id, sourceVersionId: old.id } };
       const adopted = clone(existing);
       adopted.title = title; adopted.revision += 1; adopted.updatedAt = time;
       if (!adopted.sourceKey && source.sourceKey) adopted.sourceKey = source.sourceKey;

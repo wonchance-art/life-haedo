@@ -307,6 +307,120 @@ function syncFixture() {
   const storage = createStorage({ idb: adapter.idb, core: Core, channelFactory: null });
   return { ...adapter, storage };
 }
+async function naverStorageFixture() {
+  const F = require('./fixtures/naver-media.cjs'), Capture = require('../assets/life/naver-capture.js');
+  const fixture = syncFixture(), account = { projectUrl: 'https://synthetic.example.invalid', userId: F.OWNER };
+  const storage = fixture.storage.forAccount(account), original = await storage.createWorkspace('기존 자료');
+  const old = await Core.prepareImport({ origin: 'naver_blog', title: '옛 일부 원문',
+    url: 'http://m.blog.naver.com/fixture_blog/123456789012?from=manual', text: '첫 원문\r\n🌱 옛 구절', coverage: 'partial' }, original);
+  const receipt = await storage.commitLocal({ workspaceId: original.workspaceId, baseRevision: original.revision,
+    operationId: Core.id(), changes: Core.buildImportChanges(original, old, [{ start: 0, end: 3, note: '보존할 개인 메모' }]) });
+  assert.equal(receipt.status, 'stored');
+  const before = await storage.read(original.workspaceId), data = await F.fixture(before);
+  const prepared = await Core.prepareImport(Capture.toImportInput(data.payload, { existingSourceId: old.source.id, existingSourceUrl: old.source.url }), before);
+  data.attachment.sourceId = prepared.source.id; data.attachment.sourceVersionId = prepared.version.id;
+  const request = { workspaceId: before.workspaceId, baseRevision: before.revision, operationId: Core.id(),
+    changes: Core.buildImportChanges(before, prepared), attachment: data.attachment };
+  return { ...fixture, account, scoped: storage, before, data, request };
+}
+test('link-only Markdown source with stored photos commits and installs as a separate portable workspace', async t => {
+  const F = require('./fixtures/naver-media.cjs'), restore = F.installDecoder(); t.after(restore);
+  const Media = require('../assets/life/naver-media.js'), Capture = require('../assets/life/naver-capture.js');
+  const f = await naverStorageFixture(); t.after(() => f.storage.close());
+  const attachment = structuredClone(f.request.attachment), payload = attachment.capture.payload;
+  Object.assign(payload, { format: 'text/markdown', body: null, bodyHash: null, coverage: 'link_only' });
+  attachment.capture.capture_hash = await Capture.fingerprint(payload);
+  const prepared = await Core.prepareImport(Capture.toImportInput(payload, { existingSourceId: attachment.sourceId,
+    existingSourceUrl: f.before.sources[0].url }), f.before);
+  attachment.sourceVersionId = prepared.version.id;
+  assert.equal((await f.scoped.commitNaverCapture({ ...f.request, attachment,
+    changes: Core.buildImportChanges(f.before, prepared) })).status, 'stored');
+  const bundle = await f.scoped.read(f.before.workspaceId), saved = await f.scoped.readNaverCapture(bundle.workspaceId, attachment.sourceVersionId);
+  assert.deepEqual(bundle.sourceVersions[0], f.before.sourceVersions[0]); assert.deepEqual(bundle.records, f.before.records);
+  const copied = await Media.copy(await Media.read(await Media.pack({ bundle, attachment: saved })));
+  const installed = await f.scoped.installNaverCaptureCopy(copied), read = await f.scoped.readNaverCapture(installed.bundle.workspaceId, copied.attachment.sourceVersionId);
+  assert.notEqual(installed.bundle.workspaceId, bundle.workspaceId);
+  assert.equal(installed.bundle.sourceVersions[0].format, 'text/plain');
+  assert.equal(installed.bundle.sourceVersions[0].contentText, null); assert.equal(installed.bundle.sourceVersions[0].contentHash, null);
+  assert.equal(read.capture.payload.format, 'text/markdown'); assert.equal(read.capture.capture_hash, saved.capture.capture_hash);
+  assert.equal(read.capture.payload.photos[0].sha256, F.hash(F.bytes));
+  assert.deepEqual(new Uint8Array(await read.photos[0].blob.arrayBuffer()), F.bytes);
+});
+test('Naver source version, original photos and exact receipt commit atomically without changing old quotes', async t => {
+  const F = require('./fixtures/naver-media.cjs'), restore = F.installDecoder(); t.after(restore);
+  const f = await naverStorageFixture(); t.after(() => f.storage.close());
+  const result = await f.scoped.commitNaverCapture(f.request);
+  assert.equal(result.status, 'stored');
+  assert.deepEqual(await f.scoped.commitNaverCapture(f.request), result);
+  const after = await f.scoped.read(f.before.workspaceId);
+  assert.equal(after.sources.length, 1); assert.equal(after.sourceVersions.length, 2);
+  assert.deepEqual(after.sourceVersions[0], f.before.sourceVersions[0]); assert.deepEqual(after.records, f.before.records);
+  const media = await f.scoped.readNaverCapture(after.workspaceId, f.request.attachment.sourceVersionId);
+  assert.equal(media.capture.capture_hash, f.data.attachment.capture.capture_hash);
+  assert.equal(media.localOnly, false);
+  assert.deepEqual(new Uint8Array(await media.photos[0].blob.arrayBuffer()), F.bytes);
+  const conflict = await f.scoped.commitNaverCapture({ ...f.request, operationId: Core.id() });
+  assert.equal(conflict.status, 'conflict');
+  const mismatched = structuredClone(f.request); mismatched.changes.put.sources[0].title = '다른 요청';
+  assert.equal((await f.scoped.commitNaverCapture(mismatched)).error.code, 'operation_mismatch');
+  const other = f.storage.forAccount({ ...f.account, userId: '99999999-9999-4999-8999-999999999999' });
+  await assert.rejects(other.readNaverCapture(after.workspaceId, media.sourceVersionId), { code: 'workspace_access_denied' });
+});
+test('Naver commit completion abort, write failure and late navigation leave no version, sidecar or receipt', async t => {
+  const F = require('./fixtures/naver-media.cjs'), restore = F.installDecoder(); t.after(restore);
+  for (const kind of ['completion', 'bundle', 'late']) {
+    const f = await naverStorageFixture(); t.after(() => f.storage.close()); let current = true;
+    if (kind === 'completion') f.control.failCompletion = true;
+    if (kind === 'bundle') f.control.failWrite = { name: 'bundles', method: 'put' };
+    if (kind === 'late') f.control.afterWrite = ({ name, value }) => { if (name === 'meta' && value.key?.startsWith('naver-capture:')) current = false; };
+    const result = await f.scoped.commitNaverCapture(f.request, { isCurrent: () => current });
+    assert.equal(result.status, 'rejected'); f.control.afterWrite = null;
+    assert.deepEqual(await f.scoped.read(f.before.workspaceId), f.before);
+    assert.equal(await f.scoped.readNaverCapture(f.before.workspaceId, f.request.attachment.sourceVersionId), null);
+    assert.equal(f.rows.get('operations').has(JSON.stringify([f.before.workspaceId, f.request.operationId])), false);
+    assert.equal((await f.scoped.commitNaverCapture(f.request)).status, 'stored');
+  }
+});
+test('Naver portable installation is a new private workspace and rolls owner/active/media back on abort', async t => {
+  const F = require('./fixtures/naver-media.cjs'), restore = F.installDecoder(); t.after(restore);
+  const Media = require('../assets/life/naver-media.js'), f = await naverStorageFixture(); t.after(() => f.storage.close());
+  assert.equal((await f.scoped.commitNaverCapture(f.request)).status, 'stored');
+  const bundle = await f.scoped.read(f.before.workspaceId), attachment = await f.scoped.readNaverCapture(bundle.workspaceId, f.request.attachment.sourceVersionId);
+  const archive = await Media.pack({ bundle, attachment }), source = await Media.read(archive), next = await Media.copy(source);
+  const previousActive = await f.scoped.getActive(), previousList = await f.scoped.listWorkspaces();
+  f.control.failCompletion = true;
+  await assert.rejects(f.scoped.installNaverCaptureCopy(next), { code: 'storage_aborted' });
+  assert.equal(await f.scoped.getActive(), previousActive); assert.deepEqual(await f.scoped.listWorkspaces(), previousList);
+  assert.equal(f.rows.get('meta').has(JSON.stringify('owner:' + next.bundle.workspaceId)), false);
+  const restored = await f.scoped.installNaverCaptureCopy(next);
+  assert.equal(restored.attachment.localOnly, true); assert.equal(await f.scoped.getActive(), next.bundle.workspaceId);
+  const read = await f.scoped.readNaverCapture(next.bundle.workspaceId, next.attachment.sourceVersionId);
+  assert.equal(read.capture.payload.photos[0].storagePath, null); assert.deepEqual(restored.bundle.records, []);
+  await assert.rejects(f.scoped.installNaverCaptureCopy(next), { code: 'workspace_exists' });
+  assert.equal((await f.scoped.commitNaverCapture({ ...f.request, attachment: read })).status, 'rejected');
+});
+test('a changed Naver photo declaration cannot replace one source version; explicit new version preserves both captures', async t => {
+  const F = require('./fixtures/naver-media.cjs'), restore = F.installDecoder(); t.after(restore);
+  const Capture = require('../assets/life/naver-capture.js'), f = await naverStorageFixture(); t.after(() => f.storage.close());
+  assert.equal((await f.scoped.commitNaverCapture(f.request)).status, 'stored');
+  const before = await f.scoped.read(f.before.workspaceId), prior = await f.scoped.readNaverCapture(before.workspaceId, f.request.attachment.sourceVersionId);
+  const changed = structuredClone(prior); changed.capture.id = Core.id(); changed.capture.payload.photos[0].caption = '명시적으로 바뀐 사진 설명';
+  changed.capture.capture_hash = await Capture.fingerprint(changed.capture.payload);
+  const input = Capture.toImportInput(changed.capture.payload, { existingSourceId: changed.sourceId, existingSourceUrl: before.sources[0].url });
+  const duplicate = await Core.prepareImport(input, before);
+  assert.equal(duplicate.version.id, prior.sourceVersionId);
+  const denied = await f.scoped.commitNaverCapture({ workspaceId: before.workspaceId, baseRevision: before.revision,
+    operationId: Core.id(), changes: Core.buildImportChanges(before, duplicate), attachment: changed });
+  assert.equal(denied.error.code, 'immutable_naver_capture');
+  assert.deepEqual(await f.scoped.read(before.workspaceId), before);
+  assert.deepEqual(await f.scoped.readNaverCapture(before.workspaceId, prior.sourceVersionId), prior);
+  const fresh = await Core.prepareImport(input, before, { forceNewVersion: true });
+  changed.sourceVersionId = fresh.version.id;
+  assert.equal((await f.scoped.commitNaverCapture({ workspaceId: before.workspaceId, baseRevision: before.revision,
+    operationId: Core.id(), changes: Core.buildImportChanges(before, fresh), attachment: changed })).status, 'stored');
+  assert.deepEqual(await f.scoped.readNaverCapture(before.workspaceId, prior.sourceVersionId), prior);
+  assert.equal((await f.scoped.readNaverCapture(before.workspaceId, fresh.version.id)).capture.capture_hash, changed.capture.capture_hash);
+});
 test('workspace pair installation is atomic across second-write failure, duplicate IDs and account replacement', async t => {
   const { storage: base, control } = syncFixture(); t.after(() => base.close());
   let a = base.forAccount(accountA); const previous = await a.createWorkspace('기존 자료');

@@ -28,15 +28,21 @@ jobs:
           node-version: "22"
           package-manager-cache: false
       - run: npm run check
+      - name: Install pinned HTML extraction test dependencies
+        run: npm ci --prefix tests/fixtures/naver-extractor --ignore-scripts --no-audit --no-fund
       - run: npm test
       - name: Verify isolated Naver inbox ownership, leases and retry receipts
         run: node supabase/tests/check-naver-backend.mjs
+      - name: Verify private Naver capture versions, inventory baselines and asset ownership
+        run: node supabase/tests/check-naver-captures.mjs
       - name: Retain anonymous Naver database checks
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: naver-backend-${{ github.run_attempt }}
-          path: .local/naver-backend/
+          path: |
+            .local/naver-backend/
+            .local/naver-capture-backend/
           if-no-files-found: ignore
   browser_suites:
     runs-on: ubuntu-24.04
@@ -390,6 +396,9 @@ jobs:
       - name: Verify private Naver connection, original preservation and late-response cancellation
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/naver-blog-browser.cjs
+      - name: Verify captured Naver photos, exact source revisions and independent device recovery
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-naver-capture-browser.cjs
       - name: Verify explicit external discovery, exact source return and private feedback
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-external-discovery-browser.cjs
@@ -445,6 +454,7 @@ jobs:
             .local/local-post-finder/
             .local/account-materials/
             .local/naver-blog/
+            .local/naver-capture/
             .local/app-native/qa/
             .local/home-refinement/qa/
             .local/blog-journeys/after/
@@ -688,7 +698,7 @@ jobs:
       - name: Verify generated configuration and complete installed shell hashes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         env:
-          PREVIOUS_RELEASE: 57fbf428d46134e7fff8de559e128d2c79fb7f4b
+          PREVIOUS_RELEASE: d6009ea250bd88dfbb71d53901f6f8f53bbf381a
         run: node scripts/verify-prepared-site.mjs
       - name: Verify the actual previous service worker updates without losing originals
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}

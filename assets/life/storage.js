@@ -2310,7 +2310,59 @@
         }
       }
     }
-    async function commitLocal(request, { isCurrent = () => true } = {}) {
+    const naverMedia = () => {
+      const value = options.naverMedia || root.HaedoLife?.NaverMedia || (typeof require === 'function' && require('./naver-media.js'));
+      if (!value?.validate || !value?.checkTarget) throw fault('dependency_unavailable', '원문 사진 검증기를 불러오지 못했습니다.');
+      return value;
+    };
+    const naverCaptureKey = (workspaceId, versionId) => `naver-capture:${workspaceId}:${versionId}`;
+    async function commitNaverCapture(request, options = {}) {
+      const operationId = request?.operationId;
+      try {
+        const input = clone(request); collectionScope(input.workspaceId);
+        onlyFields(input, ['workspaceId', 'baseRevision', 'operationId', 'changes', 'attachment'], 'invalid_naver_media');
+        const attachment = await naverMedia().validate(input.attachment, { ownerId: account.userId }); scopeGuard();
+        if (attachment.localOnly) throw fault('invalid_naver_media', '파일 사본을 서버 수집 결과로 저장하지 않았습니다.');
+        delete input.attachment;
+        return commitLocalVerified(input, options, attachment);
+      } catch (error) { return { status: 'rejected', error: errorInfo(error), operationId }; }
+    }
+    async function readNaverCapture(workspaceId, sourceVersionId) {
+      collectionScope(workspaceId); requireId(sourceVersionId, '원문 버전');
+      const snapshot = await transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const attachment = (await meta.get(naverCaptureKey(workspaceId, sourceVersionId)))?.value;
+        return { bundle: clone(bundle), attachment: attachment === undefined ? null : clone(attachment) };
+      });
+      if (snapshot.attachment === null) return null;
+      const attachment = await naverMedia().validate(snapshot.attachment); scopeGuard();
+      if (attachment.sourceVersionId !== sourceVersionId) throw fault('invalid_naver_media', '원문 사진의 버전이 일치하지 않습니다.');
+      naverMedia().checkTarget(snapshot.bundle, attachment);
+      return attachment;
+    }
+    async function installNaverCaptureCopy(input, { isCurrent = () => true } = {}) {
+      scopeGuard();
+      if (!account) throw fault('auth_scope_required', '확인된 계정에 원문 사본을 받아 주세요.');
+      const value = await naverMedia().validateSnapshot(clone(input)); scopeGuard();
+      const { bundle, attachment } = value;
+      if (!attachment.localOnly || bundle.revision !== 0 || bundle.sources.some(source => source.revision !== 1) ||
+          bundle.sourceVersions.some(version => version.revision !== 1)) throw fault('invalid_naver_media', '새 독립 사본으로 복원해 주세요.');
+      const installed = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const bundles = tx.objectStore('bundles'), meta = tx.objectStore('meta');
+        if (!isCurrent()) throw fault('request_cancelled', '화면이 바뀌어 원문 복원을 중지했습니다.');
+        if (await bundles.get(bundle.workspaceId) || (await meta.getAllKeys()).some(key => typeof key === 'string' && key.split(':').includes(bundle.workspaceId))) {
+          throw fault('workspace_exists', '같은 작업공간이 이미 있습니다. 새 사본으로 복원해 주세요.');
+        }
+        await bundles.add(bundle); await saveOwner(meta, bundle.workspaceId);
+        await meta.add({ key: naverCaptureKey(bundle.workspaceId, attachment.sourceVersionId), value: attachment });
+        await meta.put({ key: activeKey, value: bundle.workspaceId });
+        if (!isCurrent()) throw fault('request_cancelled', '화면이 바뀌어 원문 복원을 중지했습니다.');
+        return clone(value);
+      });
+      changed(bundle.workspaceId, bundle.revision); return installed;
+    }
+    async function commitLocal(request, options) { return commitLocalVerified(request, options); }
+    async function commitLocalVerified(request, { isCurrent = () => true } = {}, naverAttachment = null) {
       let operationId = request?.operationId;
       try {
         const input = clone(request);
@@ -2333,7 +2385,9 @@
         // Omitting this extension preserves the byte-for-byte payload of earlier receipts.
         const payload = stablePayload({ workspaceId, baseRevision, changes, stageId, stageRevision,
           ...(stageResult !== undefined ? { stageResult } : {}),
-          ...(registration ? { accountMaterialRegistration: registration } : {}) });
+          ...(registration ? { accountMaterialRegistration: registration } : {}),
+          ...(naverAttachment ? { naverAttachment: { sourceId: naverAttachment.sourceId, sourceVersionId: naverAttachment.sourceVersionId,
+            capture: naverAttachment.capture, localOnly: false } } : {}) });
         let wrote = false, updatedSync = null, updatedWriting = null, appliedWriting = null;
         const result = await transaction(['bundles', 'operations', 'staging', 'meta'], 'readwrite', async tx => {
           await assertOwner(tx.objectStore('meta'), workspaceId);
@@ -2376,6 +2430,14 @@
           core().validateWorkspace(updated);
           if (updated.workspaceId !== workspaceId || updated.revision !== bundle.revision + 1) {
             throw fault('invalid_revision', '저장할 작업공간 버전을 확인할 수 없습니다.');
+          }
+          if (naverAttachment) {
+            naverMedia().checkTarget(updated, naverAttachment);
+            const meta = tx.objectStore('meta'), key = naverCaptureKey(workspaceId, naverAttachment.sourceVersionId), previous = await meta.get(key);
+            if (previous && stablePayload({ ...previous.value, photos: undefined }) !== stablePayload({ ...naverAttachment, photos: undefined })) {
+              throw fault('immutable_naver_capture', '보관한 원문 사진 선언은 덮어쓸 수 없습니다. 새 원문 버전으로 보관해 주세요.');
+            }
+            if (!previous) await meta.add({ key, value: naverAttachment });
           }
           if (registration && (await readSyncState(tx.objectStore('meta'), workspaceId, bundle))?.enabled &&
               new TextEncoder().encode(JSON.stringify(updated)).length > SYNC_MAX_BYTES) throw fault('snapshot_too_large', '등록한 자료가 동기화 크기 제한을 넘습니다. 기존 자료는 유지했습니다.');
@@ -3447,7 +3509,7 @@
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, finishMaterialContinuityClaim,
       readPublicCover, savePublicCover,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
-      readPreservationCatalog, readPreservationSnapshot, installPreservationCopy,
+      readPreservationCatalog, readPreservationSnapshot, installPreservationCopy, commitNaverCapture, readNaverCapture, installNaverCaptureCopy,
       commitLocal, readAccountMaterialRegistration, saveStage, getStage, listStages, deleteStage, subscribe,
       getSyncState, bindSync, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,
       setSyncConflict, setSyncError, resolveSync,

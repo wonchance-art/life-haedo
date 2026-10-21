@@ -77,6 +77,20 @@ class NaverCloud extends FakeCloud {
   }
   async handle(route, device) {
     const request = route.request(), url = new URL(request.url());
+    const advanced = ['life_naver_account_list', 'life_naver_inventory_list', 'life_naver_capture_list'];
+    const advancedName = url.pathname.split('/').at(-1);
+    if (advanced.includes(advancedName)) {
+      const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST,OPTIONS', 'content-type': 'application/json', 'cache-control': 'no-store' };
+      if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers, body: '' });
+      assert.equal(request.method(), 'POST'); const owner = this.owner(request), body = request.postDataJSON();
+      assert.ok(Object.values(accounts).some(account => account.id === owner));
+      this.naverCalls.push({ rpc: advancedName, owner, device, body: copy(body) });
+      const rows = [...this.subscriptions.entries()].filter(([key]) => key.startsWith(owner + ':')).map(([, row]) => copy(row));
+      if (advancedName !== 'life_naver_account_list') assert.ok(rows.some(row => row.id === body.p_subscription_id), 'Advanced reads remain owner scoped');
+      const data = advancedName === 'life_naver_account_list' ? { subscriptions: rows.map(row => ({ ...row, inventory: null })), ready: this.collectionReady, hasMore: false, nextCursor: null } :
+        advancedName === 'life_naver_inventory_list' ? { inventory: null, items: [], hasMore: false, nextCursor: null } : { captures: [], jobs: [], hasMore: false, nextCursor: null };
+      return route.fulfill({ status: 200, headers, body: JSON.stringify(data) });
+    }
     if (!['/rest/v1/rpc/life_naver_list', '/rest/v1/rpc/life_naver_save', '/functions/v1/haedo-naver-blog'].includes(url.pathname)) return super.handle(route, device);
     const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST,OPTIONS', 'content-type': 'application/json', 'cache-control': 'no-store' };
     const send = async (body, status = 200) => {
