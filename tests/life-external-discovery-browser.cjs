@@ -17,6 +17,15 @@ const feedPath = '/assets/life/discovery-feed.json';
 const entry = base + '/index.html?section=tools&view=external-discovery';
 const privateText = '익명검사용비공개본문_외부전송금지';
 const privateInterest = '독서';
+// Open actual native disclosures, outermost first, before using a moved control.
+async function revealControl(control) {
+  const depth = await control.locator('xpath=ancestor::details').count();
+  for (let index = depth; index > 0; index--) {
+    const details = control.locator('xpath=ancestor::details[' + index + ']');
+    if (!await details.evaluate(element => element.open)) await details.locator(':scope > summary').click();
+  }
+  return control;
+}
 const report = { createdAt: new Date().toISOString(), scope: 'Real local app/Core/SDK/IndexedDB and checked-in public catalogue; synthetic edge HTTP and publisher popup interception identified per check. No live OAuth/account/publisher, model inference, Apple hardware or user usefulness validation.', checks: [], publicSourceJourneys: [], visual: [], consoleErrors: [], pageErrors: [], expectedErrors: [], external: [], modelRequests: [], privacyViolations: [], catalogueRequests: [], popupRequests: [], realRemoteWrites: 0 };
 const escapeId = id => String(id).replace(/"/g, '\\"');
 const card = (page, id) => page.locator('[data-discovery-id="' + escapeId(id) + '"]');
@@ -137,7 +146,7 @@ async function main() {
       await page.locator('#discoveryLatest').click(); await idle(page); assert.equal(await page.locator('#discoveryLatest').getAttribute('aria-pressed'), 'true');
       assert.deepEqual((await state(page)).bundle, before.bundle); assert.deepEqual((await state(page)).workbench, before.workbench); assert.deepEqual((await state(page)).feedback, before.feedback);
       await page.locator('#discoveryRecommended').click(); await idle(page); const first = page.locator('[data-discovery-id]').first(), articleId = await first.getAttribute('data-discovery-id'), articleUrl = await first.locator('[data-discovery-open]').getAttribute('href');
-      await first.locator('[data-discovery-import]').click(); await page.locator('#lifeImportTitle').waitFor(); assert.equal(await page.locator('#lifeImportUrl').inputValue(), articleUrl); assert.deepEqual((await state(page)).bundle, before.bundle);
+      await (await revealControl(first.locator('[data-discovery-import]'))).click(); await page.locator('#lifeImportTitle').waitFor(); assert.equal(await page.locator('#lifeImportUrl').inputValue(), articleUrl); assert.deepEqual((await state(page)).bundle, before.bundle);
       await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await page.locator('.life-review').waitFor(); await page.getByRole('button', { name: '자료만 보관', exact: true }).click(); await page.locator('.life-reader').waitFor();
       const imported = await state(page); assert.equal(imported.bundle.sources.length, before.bundle.sources.length + 1); const source = imported.bundle.sources.find(x => x.url === articleUrl); assert(source); assert.equal(imported.bundle.sourceVersions.find(x => x.sourceId === source.id).contentText, null);
       await page.getByRole('button', { name: '새 글 찾기로 돌아가기', exact: true }).click(); await page.locator('#discoveryReview').waitFor(); await idle(page); assert.equal(await card(page, articleId).count(), 0);
@@ -153,7 +162,7 @@ async function main() {
       await seed(page, '전시'); await open(page);
       const oldArticle = publicFeed.articles.find(article => article.sourceId === 'seoul-culture' && Discovery.rank(publicFeed, { profile: { manual: [{ id: 'qa', label: '전시' }] }, mode: 'related' }).items.some(item => item.article.id === article.id));
       assert(oldArticle, 'Existing culture article remains supplied');
-      await card(page, oldArticle.id).locator('[data-discovery-feedback="not_relevant"]').click(); await idle(page);
+      await (await revealControl(card(page, oldArticle.id).locator('[data-discovery-feedback="not_relevant"]'))).click(); await idle(page);
       const feedbackBefore = (await state(page)).feedback; assert(feedbackBefore.feedback.some(row => row.canonicalUrl === Discovery.canonicalUrl(oldArticle.url)));
       const actions = () => page.evaluate(async () => { const s = HaedoLife.Shell.storage; return s.readDiscoveryActions(await s.getActive()); });
       for (const target of [group.legacy, group.field]) {
@@ -216,7 +225,7 @@ async function main() {
         assert.equal(saved.snapshot.sourceId, sourceId); assert.equal(saved.snapshot.sourceName, supplied.name); assert.equal(saved.snapshot.title, article.title); assert.equal(saved.snapshot.url, article.url); assert.equal(saved.snapshot.coverage, 'link_only'); assert.equal(saved.snapshot.rights.mode, 'metadata_only');
         for (const key of ['bodyText', 'contentText', 'summary', 'memo']) assert.equal(Object.hasOwn(saved.snapshot, key), false);
         assert.deepEqual(await state(page), before); journey.independentLikeAndBookmark = true;
-        await card(page, article.id).locator('[data-discovery-import]').click(); await page.locator('#lifeImportTitle').waitFor(); assert.equal(await page.locator('#lifeImportTitle').inputValue(), article.title); assert.equal(await page.locator('#lifeImportUrl').inputValue(), article.url); assert.equal(await page.locator('#lifeImportText').inputValue(), ''); assert.deepEqual(await state(page), before);
+        await (await revealControl(card(page, article.id).locator('[data-discovery-import]'))).click(); await page.locator('#lifeImportTitle').waitFor(); assert.equal(await page.locator('#lifeImportTitle').inputValue(), article.title); assert.equal(await page.locator('#lifeImportUrl').inputValue(), article.url); assert.equal(await page.locator('#lifeImportText').inputValue(), ''); assert.deepEqual(await state(page), before);
         await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await page.locator('.life-review').waitFor(); assert.match(await page.locator('.life-review').textContent(), /본문 미확보|링크/); assert.deepEqual(await state(page), before);
         await page.getByRole('button', { name: '자료만 보관', exact: true }).click(); await page.locator('.life-reader').waitFor();
         const after = await state(page), stored = after.bundle.sources.find(row => row.url === article.url); assert(stored); assert.equal(after.bundle.sources.length, before.bundle.sources.length + 1);
@@ -254,7 +263,7 @@ async function main() {
     });
     for (const [id, coverage] of [['related-link', 'link_only'], ['related-summary', 'summary'], ['related-full', 'full_text']]) await check('synthetic catalogue ' + coverage + ' stays honest while explicit link import excludes saved URL', async ({ page, context }) => {
       const feed = fixture(); await feedRoute(context, feed); await seed(page); await open(page); const before = await state(page), article = feed.articles.find(x => x.id === id);
-      await card(page, id).locator('[data-discovery-import]').click(); await page.locator('#lifeImportTitle').waitFor(); assert.equal(await page.locator('#lifeImportTitle').inputValue(), article.title); assert.equal(await page.locator('#lifeImportUrl').inputValue(), article.url); assert.equal(await page.locator('#lifeImportText').inputValue(), ''); assert.deepEqual((await state(page)).bundle, before.bundle); await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await page.locator('.life-review').waitFor();
+      await (await revealControl(card(page, id).locator('[data-discovery-import]'))).click(); await page.locator('#lifeImportTitle').waitFor(); assert.equal(await page.locator('#lifeImportTitle').inputValue(), article.title); assert.equal(await page.locator('#lifeImportUrl').inputValue(), article.url); assert.equal(await page.locator('#lifeImportText').inputValue(), ''); assert.deepEqual((await state(page)).bundle, before.bundle); await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await page.locator('.life-review').waitFor();
       const reviewText = await page.locator('.life-review').textContent(); assert.match(reviewText, /본문 미확보|링크/);
       await page.getByRole('button', { name: '자료만 보관', exact: true }).click(); await page.locator('#lifeSourceText,.life-reader').first().waitFor();
       const after = await state(page); assert.equal(after.bundle.sources.length, before.bundle.sources.length + 1);
@@ -266,15 +275,15 @@ async function main() {
     });
     await check('synthetic explicit feedback and undo preserve all originals across reload', async ({ page, context }) => {
       await feedRoute(context); await seed(page); await open(page); const before = await state(page);
-      await card(page, 'related-link').locator('[data-discovery-feedback="not_relevant"]').click(); await idle(page); assert.equal(await card(page, 'related-link').count(), 0);
+      await (await revealControl(card(page, 'related-link').locator('[data-discovery-feedback="not_relevant"]'))).click(); await idle(page); assert.equal(await card(page, 'related-link').count(), 0);
       let next = await state(page); assert.equal(next.feedback.feedback.length, 1); assert.equal(next.feedback.feedback[0].kind, 'not_relevant'); assert.deepEqual(next.bundle, before.bundle);
       await page.locator('#discoveryUndo').click(); await idle(page); assert.equal(await card(page, 'related-link').count(), 1); assert.equal((await state(page)).feedback.feedback.length, 0);
-      await card(page, 'related-summary').locator('[data-discovery-feedback="already_read"]').click(); await idle(page); await page.reload(); await ready(page); await page.locator('#discoveryReview').waitFor(); await idle(page);
+      await (await revealControl(card(page, 'related-summary').locator('[data-discovery-feedback="already_read"]'))).click(); await idle(page); await page.reload(); await ready(page); await page.locator('#discoveryReview').waitFor(); await idle(page);
       next = await state(page); assert.equal(await card(page, 'related-summary').count(), 0); assert.deepEqual(next.bundle, before.bundle); assert.deepEqual(next.workbench, before.workbench); assert.deepEqual(next.interest, before.interest);
     });
     await check('synthetic committed import survives refresh failure and opens receipt without duplicate commit', async ({ page, context }) => {
       await controllableFeedbackSave(context); await feedRoute(context); await seed(page); await open(page); const before = await state(page);
-      await card(page, 'related-link').locator('[data-discovery-import]').click(); await page.locator('#lifeImportTitle').waitFor(); await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await page.locator('.life-review').waitFor();
+      await (await revealControl(card(page, 'related-link').locator('[data-discovery-import]'))).click(); await page.locator('#lifeImportTitle').waitFor(); await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await page.locator('.life-review').waitFor();
       await page.evaluate(() => { window.__discoveryCommitCalls = 0; window.__discoveryFailPostCommitRead = true; });
       await page.getByRole('button', { name: '자료만 보관', exact: true }).click(); await page.locator('#lifeDiscoveryStoredRetry').waitFor();
       assert.equal(await page.getByRole('button', { name: '자료만 보관', exact: true }).count(), 0); assert.equal((await state(page)).bundle.sources.length, before.bundle.sources.length + 1); assert.equal(await page.evaluate(() => window.__discoveryCommitCalls), 1);
@@ -283,7 +292,7 @@ async function main() {
     });
     await check('synthetic recycled provider ID cannot redirect undo to a different canonical URL', async ({ page, context }) => {
       const feed = await feedRoute(context); await seed(page); await open(page);
-      await card(page, 'related-link').locator('[data-discovery-feedback="not_relevant"]').click(); await idle(page);
+      await (await revealControl(card(page, 'related-link').locator('[data-discovery-feedback="not_relevant"]'))).click(); await idle(page);
       feed.value = fixture(); const changed = feed.value.articles.find(x => x.id === 'related-link'); changed.url += '?edition=new'; changed.title = '독서 · 같은 공급 ID지만 다른 주소인 새 글';
       await page.locator('#discoveryRefresh').click(); await idle(page); assert.equal(await card(page, 'related-link').count(), 1);
       const undo = page.locator('[data-discovery-undo="related-link"]'); await undo.evaluate(el => { el.closest('details').open = true; }); await undo.click(); await idle(page);
@@ -291,13 +300,13 @@ async function main() {
     });
     await check('synthetic failed feedback retains intent and explicit retry without changing sources', async ({ page, context }) => {
       await feedRoute(context); await seed(page); await open(page); const before = await state(page); await abortFeedback(page, true);
-      await card(page, 'related-link').locator('[data-discovery-feedback="not_relevant"]').click(); await page.locator('#discoveryError').waitFor({ state: 'visible' }); assert.deepEqual((await state(page)).feedback, before.feedback);
+      await (await revealControl(card(page, 'related-link').locator('[data-discovery-feedback="not_relevant"]'))).click(); await page.locator('#discoveryError').waitFor({ state: 'visible' }); assert.deepEqual((await state(page)).feedback, before.feedback);
       await abortFeedback(page, false); await page.locator('#discoveryFeedbackRetry').click(); await idle(page); assert.equal((await state(page)).feedback.feedback.length, 1); assert.deepEqual((await state(page)).bundle, before.bundle);
     });
     await check('synthetic two-tab feedback CAS keeps intent until latest reload and explicit retry', async ({ page, context, observe }) => {
       await controllableFeedbackSave(context); await feedRoute(context); await seed(page); await open(page); const second = await context.newPage(); observe(second, 'feedback CAS second tab'); await open(second);
-      await second.evaluate(() => { window.__discoveryHoldSave = true; }); await card(second, 'related-summary').locator('[data-discovery-feedback="already_read"]').click(); await second.waitForFunction(() => window.__discoverySaveEntered);
-      await card(page, 'related-link').locator('[data-discovery-feedback="not_relevant"]').click(); await idle(page); await second.evaluate(() => window.__discoveryReleaseSave()); await second.locator('#discoveryError').waitFor({ state: 'visible' });
+      await second.evaluate(() => { window.__discoveryHoldSave = true; }); await (await revealControl(card(second, 'related-summary').locator('[data-discovery-feedback="already_read"]'))).click(); await second.waitForFunction(() => window.__discoverySaveEntered);
+      await (await revealControl(card(page, 'related-link').locator('[data-discovery-feedback="not_relevant"]'))).click(); await idle(page); await second.evaluate(() => window.__discoveryReleaseSave()); await second.locator('#discoveryError').waitFor({ state: 'visible' });
       assert.equal((await state(second)).feedback.feedback.length, 1); await second.locator('#discoveryFeedbackReload').click(); await idle(second); await second.locator('#discoveryFeedbackRetry').click(); await idle(second);
       const saved = (await state(second)).feedback; assert.equal(saved.feedback.length, 2); assert.deepEqual(new Set(saved.feedback.map(x => x.kind)), new Set(['not_relevant', 'already_read'])); await second.close();
     });
@@ -322,7 +331,7 @@ async function main() {
     });
     await check('synthetic late feed response after actual logout cannot reveal prior account feedback', async ({ page, context, server, device }) => {
       const feed = await feedRoute(context), data = await seed(page); await open(page);
-      await card(page, 'related-link').locator('[data-discovery-feedback="already_read"]').click(); await idle(page);
+      await (await revealControl(card(page, 'related-link').locator('[data-discovery-feedback="already_read"]'))).click(); await idle(page);
       const previousDocument = await page.evaluate(() => __homeInstance);
       const arrived = feed.nextRequest(); feed.hold = true; await page.locator('#discoveryRefresh').click(); await arrived;
       try { await nav(page, 'manage'); await openAccount(page); await page.locator('#lifeLogout').click(); await page.waitForFunction(() => globalThis.HaedoLife?.Shell && document.querySelector('#lifeApp')?.hidden && !globalThis.HaedoLife.Shell.storage); }
@@ -342,7 +351,7 @@ async function main() {
     await check('synthetic unsaved feedback failure blocks leaving review until explicit discard', async ({ page, context }) => {
       await feedRoute(context); const data = await seed(page);
       const otherId = await page.evaluate(async id => { const s = HaedoLife.Shell.storage, other = await s.createWorkspace('실패 입력 보존 검사 공간'); await s.setActive(id); return other.workspaceId; }, data.workspaceId);
-      await open(page); const before = await state(page); await abortFeedback(page, true); await card(page, 'related-link').locator('[data-discovery-feedback="not_relevant"]').click(); await page.locator('#discoveryError').waitFor({ state: 'visible' }); await idle(page); await page.locator('#discoveryFeedbackRetry').waitFor(); await abortFeedback(page, false);
+      await open(page); const before = await state(page); await abortFeedback(page, true); await (await revealControl(card(page, 'related-link').locator('[data-discovery-feedback="not_relevant"]'))).click(); await page.locator('#discoveryError').waitFor({ state: 'visible' }); await idle(page); await page.locator('#discoveryFeedbackRetry').waitFor(); await abortFeedback(page, false);
       await page.locator('[data-haedo-navigation] [data-haedo-section="manage"]').click(); await page.locator('#lifeError').waitFor({ state: 'visible' }); assert.equal(await page.locator('#discoveryReview').isVisible(), true); assert.equal((await state(page)).bundle.workspaceId, data.workspaceId); assert.equal(await page.evaluate(() => HaedoAuth.user.id), accounts.a.id);
       await page.locator('#discoveryFeedbackDiscard').click(); await idle(page); assert.deepEqual((await state(page)).feedback, before.feedback);
       await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(otherId); await page.waitForFunction(id => HaedoLife.Shell.storage.getActive().then(value => value === id), otherId);
