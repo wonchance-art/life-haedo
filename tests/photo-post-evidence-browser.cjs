@@ -48,6 +48,18 @@ async function main() {
     await row.click({ noWaitAfter: true });
     if (status === 'saved') { await page.locator('.photo-article').waitFor(); await page.locator('.photo-posts').getByRole('button', { name: '글 수정', exact: true }).click(); }
     await page.locator('#photoTitle').waitFor();
+    if (status === 'saved') {
+      // Opening a saved post creates an editing draft. Establish the durable
+      // baseline before counting the separate copy, rather than racing autosave.
+      await page.locator('.photo-status[data-state="draft"]').waitFor();
+      const drafts = await page.evaluate(async () => {
+        const s = HaedoLife.Shell.storage, w = await s.getActive(), rows = await s.listPhotoPosts(w);
+        return Promise.all(rows.filter(row => row.status === 'draft').map(row => s.readPhotoPost(w, row.id)));
+      });
+      assert.equal(drafts.length, 1);
+      assert(drafts[0].revision > 0);
+      assert.deepEqual(drafts[0].replaces, { id: seed.id, revision: seed.original.revision });
+    }
     return { context, page, seed, server };
   }
   const read = p => p.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(), rows = await s.listPhotoPosts(w); return { bundle: await s.read(w), workbench: await s.readWorkbench(w), nine: await s.readNineBoard(w), collection: await s.readCollection(w), docs: await Promise.all(rows.map(async row => { const doc = await s.readPhotoPost(w, row.id), evidence = await s.readPostEvidence(w, row.id); return { ...doc, photos: await Promise.all(doc.photos.map(async photo => ({ ...photo, blob: undefined, actual: Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await photo.blob.arrayBuffer())), n => n.toString(16).padStart(2, '0')).join('') }))), evidence }; })) }; });
