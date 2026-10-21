@@ -1,5 +1,18 @@
 # 오픈소스 검토와 재사용 결정
 
+## 개인 네이버 블로그 연결·수집 — 2026-10-21 UTC
+
+기존 Core의 원문·불변 버전, Storage의 계정/CAS/원자 설치와 Supabase의 단일 Auth·RPC를 재사용한다. 개인 구독을 공용 뉴스 피드로 합치지 않고 서버의 비공개 연결·보관함과 작은 네이버 글 정체성 어댑터로 분리한다. 별도 CMS·범용 크롤러·클라이언트 계정 쿠키를 도입하지 않는다. [제품·보존·가동 조건](../design-review/naver-blog-connection.md).
+
+- **rss-parser 3.13.0:** 담당자가 공식 [npm 메타데이터](https://registry.npmjs.org/rss-parser)에서 2023-04-11 배포를 확인하고, 현재 비보관 저장소의 2026-08-25 활동과 릴리스 gitHead `74bdfd293c82bbd604831c63acae0394ccd90306`의 [MIT LICENSE](https://raw.githubusercontent.com/bobby-brennan/rss-parser/74bdfd293c82bbd604831c63acae0394ccd90306/LICENSE)를 직접 대조했다. `parseURL`의 기본 redirect와 xml2js/entities 의존성만으로 고정 호스트·응답 한도·네이버 접근 조건이 충족되지는 않는다. [해당 버전의 GitHub 공개 advisory 조회](https://api.github.com/advisories?ecosystem=npm&affects=rss-parser%403.13.0&per_page=50)는 직접 권고 0개였으나 전이 의존성 감사나 전체 안전성 보증은 아니다.
+- **fast-xml-parser 5.11.2:** 공식 [릴리스](https://github.com/NaturalIntelligence/fast-xml-parser/releases/tag/v5.11.2)(2026-09-29)와 고정 태그의 [MIT LICENSE](https://raw.githubusercontent.com/NaturalIntelligence/fast-xml-parser/v5.11.2/LICENSE)를 확인했다. [해당 버전 advisory 조회](https://api.github.com/advisories?ecosystem=npm&affects=fast-xml-parser%405.11.2&per_page=50)에는 직접 권고가 없었지만, 과거 권고12개와 최근 DOCTYPE 반복 제한 우회 [GHSA-8r6m-32jq-jx6q](https://github.com/advisories/GHSA-8r6m-32jq-jx6q)(5.10.1 미만)를 구분한다. XML 라이브러리 도입만으로 외부 입력의 크기·DTD/entity·호스트·리다이렉트 보호를 대체할 수 없다.
+
+이번 선택은 새 의존성 도입 없이 기존 수집기의 경계 설계를 참고하는 제한 RSS2·HTML 평문 투영이다. DTD/entity를 허용하거나 임의 XML·복잡한 웹 본문을 처리하는 범용 parser로 확장하지 않는다. 제한 문법 밖의 입력은 오류/미확보로 남기고 이전 성공 자료를 보존한다. 실제 피드가 현재 범위를 벗어나면 정규 parser와 고정 버전·전이 의존성·자원 제한을 다시 비교한다. Supabase 공식 [Schedule Edge Functions](https://supabase.com/docs/guides/functions/schedule-functions)의 pg_cron·pg_net·Vault 방식은 서버 일정의 설계 참고이며 설치·가동 증거가 아니다.
+
+현재 실제 네이버 접근은 403으로 차단돼 피드·robots·현행 접근 조건을 확인하지 못했다. `HAEDO_NAVER_INGESTION_ENABLED=false`를 기본 유지하며 연결 저장과 수집 실행을 분리한다. 라이브 접근을 우회하지 않았고 합성 fixture 검수를 실제 글·정기 수집 성공으로 표시하지 않는다.
+
+서버 CAS의 native PostgreSQL 거절 성공과 hosted HTTP 완료는 별도 검수했다. 실제 REST의 `40001` 충돌 요청이 두 차례30초 동안 응답하지 않아, Supabase 공식 [PostgREST custom error 재시도 안내](https://supabase.com/docs/guides/troubleshooting/high-cpu-and-infinite-transaction-retries-when-using-custom-error-codes-in-rpc-functions-77326b)에 따라 추가 migration으로 두 CAS 예외만 `PT409`로 바꿨다. 같은 요청의 즉시 HTTP409와 기존 owner/revision/권한 보존을 각각 확인했다. SDK 교체·새 재시도 라이브러리로 덮지 않고 기존 고정 SDK와 명시 재시도·오류 코드의 의미를 유지한다. 실제 설치·합성 계정 정리·비활성 상태는 위 제품 기록을 따른다.
+
 ## SNS·뉴스 피드 UI 재사용 — 2026-10-21 KST
 
 [Google News 공식 맞춤설정](https://support.google.com/googlenews/answer/9010862?hl=en)의 더보기와 부정 피드백 범위, [Mastodon 공식 Network](https://docs.joinmastodon.org/user/network/)의 빠른 행동·Favourite/Bookmark 분리, [FreshRSS 공식 Configuration](https://freshrss.github.io/FreshRSS/en/users/05_Configuration.html)의 제목·출처 유지와 읽기 밀도를 확인했다. 최신 확인 릴리스는 [Mastodon4.7.3](https://github.com/mastodon/mastodon/releases/tag/v4.7.3)(2026-10-01)와 [FreshRSS1.30.2](https://github.com/FreshRSS/FreshRSS/releases/tag/1.30.2)(2026-10-19), 두 코드베이스의 라이선스는AGPLv3다. 서비스·라이브러리로 직접 도입하지 않고 공개 안내의 상호작용 패턴만 참고한다. 서버·테마·코드·자산·의존성을 복사하지 않으므로 설치 대상의 새 취약성·전이 의존성은 추가되지 않는다. 이번 조사 자체로 전체 보안성을 보증하지 않는다.

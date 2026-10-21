@@ -196,3 +196,6 @@ Node 없이 화면만 실행하려면 `python3 scripts/dev-server.py`. 이 서�
 `review-tool.html`에서는 같은 폴더의 변환 파일 6개를 선택해 원문/후보를 비교하고, 참조별 선택 저장·재열기 → 변경 미리보기 → 새 사본 ZIP을 사용할 수 있습니다. 기존 패키지에는 `node scripts/create-obsidian-review-tool.mjs --output /private/review-tool.html`로 도구만 추가하세요. CLI의 `node scripts/apply-obsidian-decisions.mjs --input PATH --decisions FILE --preview`는 검증·집계만, `--output NEW_PRIVATE_PATH`는 별도 새 패키지를 만듭니다. 실제 연결은 명시 선택만 반영하며 원문과 기존 작업공간을 유지합니다. [사용 순서·보존·검수](docs/design-review/obsidian-decisions.md).
 
 변환기는 `vault-package.zip`도 만듭니다. 관리 → 내보내기·사본 복원의 **Obsidian 패키지에서 복원**에서 이 ZIP 또는 검토 도구의 새 사본 ZIP을 그대로 선택하세요. 노트와 선택한 보조 파일 공간을 한 번에 새 사본으로 복원하며 저장 실패 시 둘 다 반영하지 않습니다. 검토 도구도 ZIP 직접 열기를 지원합니다. [ZIP 검토·동시 복원·기존 공간 보존](docs/design-review/obsidian-package.md). [서버 받기·정확 위치·검색 복귀 품질 검수](docs/design-review/obsidian-hardening.md). 로컬 브라우저 검사는 `BASE_URL=http://127.0.0.1:4173`을 명시하면 `npm run dev`와 주소를 맞출 수 있습니다.
+
+
+네이버 블로그 연결은 로그인 뒤 **도구 → 네이버 블로그 연결** 또는 **가져오기 → 네이버 블로그 아이디로 연결**에서 연다. 아이디와 전체 주소를 모두 받으며 연결 보관·수집 가동·현재 공간에 받기를 구분한다. 실행 주소는 `index.html?section=tools&view=naver-blog`다. 실제 네이버 접속/예약 실행 준비 전에는 자동 수집이 비활성이다. [범위·설치·검수](docs/design-review/naver-blog-connection.md).

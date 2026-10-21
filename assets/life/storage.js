@@ -2310,7 +2310,7 @@
         }
       }
     }
-    async function commitLocal(request) {
+    async function commitLocal(request, { isCurrent = () => true } = {}) {
       let operationId = request?.operationId;
       try {
         const input = clone(request);
@@ -2337,6 +2337,7 @@
         let wrote = false, updatedSync = null, updatedWriting = null, appliedWriting = null;
         const result = await transaction(['bundles', 'operations', 'staging', 'meta'], 'readwrite', async tx => {
           await assertOwner(tx.objectStore('meta'), workspaceId);
+          if (!isCurrent()) throw fault('request_cancelled', '화면이나 작업공간이 바뀌어 저장을 중지했습니다.');
           const operations = tx.objectStore('operations');
           const key = [workspaceId, operationId];
           const receipt = await operations.get(key);
@@ -2370,6 +2371,7 @@
             }
             validateStage(stage);
           }
+          if (!isCurrent()) throw fault('request_cancelled', '화면이나 작업공간이 바뀌어 저장을 중지했습니다.');
           const updated = core().applyChanges(bundle, changes);
           core().validateWorkspace(updated);
           if (updated.workspaceId !== workspaceId || updated.revision !== bundle.revision + 1) {
@@ -2386,6 +2388,7 @@
           }
           const stored = { status: 'stored', revision: updated.revision, operationId };
           const sync = await readSyncState(tx.objectStore('meta'), workspaceId, bundle);
+          if (!isCurrent()) throw fault('request_cancelled', '화면이나 작업공간이 바뀌어 저장을 중지했습니다.');
           await tx.objectStore('bundles').put(updated);
           if (stage) {
             const applied = { ...stage, state: 'applied', revision: stage.revision + 1,
@@ -2409,6 +2412,7 @@
           }
           await operations.add({ workspaceId, operationId, payload, result: stored });
           if (registration) await tx.objectStore('meta').add({ key: accountMaterialKey(workspaceId, registration.id), value: { owner: clone(account), descriptor: registration, result: stored } });
+          if (!isCurrent()) throw fault('request_cancelled', '화면이나 작업공간이 바뀌어 저장을 중지했습니다.');
           wrote = true;
           return stored;
         });

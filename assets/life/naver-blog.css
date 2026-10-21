@@ -1,0 +1,17 @@
+.naver-blog { min-width: 0; max-width: 720px; margin-inline: auto; }
+.naver-blog > .life-help { margin-block: 0 20px; }
+.nv-form { padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+.nv-form .life-field { margin-top: 0; }
+.nv-preview { overflow-wrap: anywhere; min-height: 24px; margin-block: 8px 16px; }
+.nv-auto { display: flex; align-items: center; gap: 12px; min-height: 44px; margin-block: 12px; font-size: 16px; line-height: 1.65; }
+.nv-auto input { width: 24px; height: 24px; flex: none; accent-color: var(--color-primary); }
+.naver-blog .life-actions { flex-wrap: wrap; }
+.nv-subscription,.nv-item { min-width: 0; padding-block: 24px; border-bottom: 1px solid var(--line); }
+.nv-subscription h3,.nv-item h3 { margin: 0 0 8px; font-size: 20px; line-height: 1.55; overflow-wrap: anywhere; }
+.nv-subscription p,.nv-item p { margin-block: 8px; }
+.nv-subscription .life-actions,.nv-item .life-actions { margin-top: 14px; }
+.naver-blog > h2 { margin: 32px 0 12px; font-size: 20px; }
+.naver-blog #naverBlogStatus { margin-block: 20px 12px; overflow-wrap: anywhere; }
+.nv-warning { color: var(--error, #a3243d); font-size: 14px; line-height: 1.7; }
+.naver-blog #naverBlogMore { margin-top: 20px; }
+@media (max-width: 480px) { .nv-item h3,.nv-subscription h3 { font-size: 19px; } }
