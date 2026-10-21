@@ -129,14 +129,15 @@
     let accountBlogUI = null, accountBlogWorkspace = null;
     const accountBlogViews = new Map();
     let preservationUI = null, publicCoverUI = null, naverBlogUI = null, naverBlogService = null, naverBlogWorkspace = null;
+    let naverCaptureUI = null, naverCaptureService = null, naverPhotoView = null, naverCaptureTarget = null;
     let obsidianUpdateUI = null, originalAttachmentsUI = null;
     let accountMaterials = null, accountMaterialsFailure = null, accountMaterialsSequence = 0;
     const accountMaterialsNotice = '계정 자료를 확인하지 못했습니다. 이 브라우저의 자료는 그대로 사용할 수 있습니다.';
     const accountMaterialsPartialNotice = '일부 계정 자료는 확인했습니다. 나머지는 다시 확인해 주세요. 이 브라우저의 자료는 그대로 유지됩니다.';
     const blogViews = new Map(), naverBlogViews = new Map();
     const blogSync = global.HaedoLife.BlogSync?.create({ storage, auth });
-    const parentViews = new Set(['naver-blog', 'external-discovery', 'interests', 'blog', 'account-blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
-    const subviewTitles = { 'naver-blog': '네이버 블로그 연결', 'account-blog': '서버에 보관한 글', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 확인', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
+    const parentViews = new Set(['naver-capture', 'naver-blog', 'external-discovery', 'interests', 'blog', 'account-blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
+    const subviewTitles = { 'naver-capture': '네이버 본문·사진 검토', 'naver-blog': '네이버 블로그 연결', 'account-blog': '서버에 보관한 글', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 확인', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
       discover: '다시 찾기', sync: '기기 간 동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
     const selectedVersions = new Set();
@@ -1057,6 +1058,7 @@
       const current = () => !disposed && token === navigationGeneration && workspace === workspaceGeneration &&
         workspaceId === state.bundle?.workspaceId && account === state.syncAccountKey;
       const from = state.mode;
+      const naverImportOrigin = from === 'naver-blog' ? { mode: 'naver-blog', workspaceId, scrollY: global.scrollY } : state.returnContext?.mode === 'naver-blog' ? { ...state.returnContext } : null;
       const fromSection = sectionFor(from);
       const changedTask = mode !== from || mode === 'source' && (options.sourceId !== undefined && options.sourceId !== state.sourceId ||
         options.sourceVersionId !== undefined && options.sourceVersionId !== state.sourceVersionId) ||
@@ -1083,6 +1085,7 @@
       await publicCoverUI?.flush();
       await accountBlogUI?.flush();
       await naverBlogUI?.flush();
+      await naverCaptureUI?.flush();
       await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
@@ -1133,6 +1136,8 @@
           originalCreatedAt: version.originalCreatedAt, format: version.format
         });
         if (source.sourceKey) state.stage.input.fileName = source.sourceKey;
+        if (reimport.input) Object.assign(state.stage.input, reimport.input, { origin: source.origin, url: source.url || '', existingSourceId: source.id });
+        if (naverImportOrigin) externalImportContext = { workspaceId, generation: workspaceGeneration, stageId: state.stage.stageId, committed: null, origin: naverImportOrigin };
         // A new capture has its own scope; do not inherit full_text or omissions.
         state.editTick = 1;
       }
@@ -1282,7 +1287,7 @@
     function sectionFor(mode) {
       if (mode === 'external-discovery') return 'news';
       if (mode === 'home' || mode === 'account-blog' || mode === 'page' && blogPageTask || mode === 'write' && viewOrigins.get('write')?.mode === 'home' || mode === 'source' && (state.returnContext?.mode === 'home' || state.returnContext?.mode === 'page' && blogPageTask)) return 'home';
-      return ['tools', 'naver-blog', 'interests', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'blog', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
+      return ['tools', 'naver-capture', 'naver-blog', 'interests', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'blog', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
     }
 
     function routeMode() {
@@ -1306,7 +1311,7 @@
       url.searchParams.delete('compose');
       if (section === 'home' && !/\/life\.html$/.test(url.pathname)) url.searchParams.delete('section');
       else url.searchParams.set('section', section);
-      const view = mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
+      const view = mode === 'naver-capture' ? 'naver-blog' : mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
       if (mode === 'external-discovery') url.searchParams.delete('view');
       else if (['naver-blog', 'account-blog', 'blog', 'topics', 'time', 'import', 'write', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'interests', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
       else url.searchParams.delete('view');
@@ -1340,6 +1345,7 @@
       await publicCoverUI?.flush();
       await accountBlogUI?.flush();
       await naverBlogUI?.flush();
+      await naverCaptureUI?.flush();
       await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
@@ -1391,7 +1397,7 @@
       });
       if (origin.mode === 'find') findRenderPromise.then(restore);
       else if (origin.mode === 'home') homeRenderPromise.then(restore);
-      else if (origin.mode === 'naver-blog' || origin.mode === 'external-discovery' || origin.mode === 'account-blog' || origin.mode === 'blog') mainRenderPromise.then(restore);
+      else if (origin.mode === 'naver-capture' || origin.mode === 'naver-blog' || origin.mode === 'external-discovery' || origin.mode === 'account-blog' || origin.mode === 'blog') mainRenderPromise.then(restore);
       else restore();
     }
 
@@ -1442,7 +1448,7 @@
         heading.append(records);
       } else heading.textContent = section === 'home' ? '내 블로그' : section === 'tools' ? '도구' : '설정';
       if (subviewTitles[state.mode] && state.mode !== 'external-discovery' && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
-        const labels = { 'account-blog': '서버 글 목록으로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 확인으로 돌아가기', blog: '글 관리로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '자료실로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '설정으로 돌아가기' };
+        const labels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '서버 글 목록으로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 확인으로 돌아가기', blog: '글 관리로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '자료실로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '설정으로 돌아가기' };
         const back = iconButton(labels[subviewOrigin().mode] || labels.sources, 'back', guarded(returnFromSubview));
         back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';
         back.dataset.subviewReturn = 'true';
@@ -1505,6 +1511,7 @@
       await publicCoverUI?.flush();
           await accountBlogUI?.flush();
       await naverBlogUI?.flush();
+      await naverCaptureUI?.flush();
       await blogManager?.flush();
           await workbench?.flush();
           await writer?.flush();
@@ -1576,7 +1583,10 @@
 
     async function renderNaverBlog() {
       const workspaceId = state.bundle.workspaceId, workspaceToken = workspaceGeneration;
-      naverBlogService = global.HaedoLife.NaverBlogSync.create({ storage, auth, core, isCurrent: id => !disposed && state.mode === 'naver-blog' && state.bundle?.workspaceId === id });
+      const isCurrent = id => !disposed && state.mode === 'naver-blog' && state.bundle?.workspaceId === id && workspaceToken === workspaceGeneration;
+      const legacy = global.HaedoLife.NaverBlogSync.create({ storage, auth, core, isCurrent });
+      const captures = global.HaedoLife.NaverCaptureSync.create({ storage, auth, core, isCurrent });
+      naverBlogService = { ...legacy, ...captures, dispose() { legacy.dispose(); captures.dispose(); } };
       const instance = global.HaedoLife.NaverBlogUI.create({ container: main, service: naverBlogService, workspaceId, viewState: naverBlogViews.get(workspaceId),
         isCurrent: () => !disposed && workspaceToken === workspaceGeneration && state.mode === 'naver-blog' && state.bundle?.workspaceId === workspaceId,
         onOpenSource: async target => {
@@ -1587,13 +1597,88 @@
         onImport: async target => {
           await refreshData();
           if (disposed || workspaceToken !== workspaceGeneration || state.mode !== 'naver-blog') return;
-          if (target.sourceId) return navigate('import', { reimport: { workspaceId, sourceId: target.sourceId, sourceVersionId: target.sourceVersionId } });
+          if (target.sourceId) return navigate('import', { reimport: { workspaceId, sourceId: target.sourceId, sourceVersionId: target.sourceVersionId, input: target.input } });
           return navigate('import');
         },
-        onReturn: () => navigate('sources')
+        onReturn: () => navigate('sources'),
+        onReview: target => {
+          naverCaptureTarget = { ...target, origin: { mode: 'naver-blog', workspaceId, focusKey: target.focusKey, scrollY: global.scrollY } };
+          return navigate('naver-capture', { originFocusKey: target.focusKey });
+        },
+        onImportFile: importNaverFile
       });
       naverBlogUI = instance; naverBlogWorkspace = workspaceId;
       await instance.render();
+    }
+
+    function naverOrigin() {
+      if (state.returnContext?.mode === 'naver-blog') return { ...state.returnContext };
+      return { ...(naverCaptureTarget?.origin || viewOrigins.get('naver-capture') || { mode: 'naver-blog', workspaceId: state.bundle.workspaceId, scrollY: 0 }) };
+    }
+    async function renderNaverCapture() {
+      if (!naverCaptureTarget?.captureId) { main.append(node('p', '수집 사본을 선택해 주세요.'), button('네이버 글 목록으로 돌아가기', guarded(() => navigate('naver-blog')))); return; }
+      const workspaceId = state.bundle.workspaceId, workspaceToken = workspaceGeneration;
+      const isCurrent = id => !disposed && state.mode === 'naver-capture' && state.bundle?.workspaceId === id && workspaceToken === workspaceGeneration;
+      const service = global.HaedoLife.NaverCaptureSync.create({ storage, auth, core, isCurrent }); naverCaptureService = service;
+      const target = { ...naverCaptureTarget };
+      const instance = global.HaedoLife.NaverCaptureUI.create({ container: main, service, workspaceId, captureId: target.captureId,
+        isCurrent: () => isCurrent(workspaceId),
+        onApply: async value => {
+          const result = await service.receiveCapture(workspaceId, target.captureId, {
+            existingSourceId: value.existingSourceId || null, expectedSourceVersionId: value.expectedSourceVersionId || null });
+          if (isCurrent(workspaceId)) await refreshData(); return result;
+        },
+        onOpenSource: value => navigate('source', { sourceId: value.sourceId, sourceVersionId: value.sourceVersionId, locator: null, returnContext: naverOrigin() }),
+        onWritePhotos: async value => { const read = await service.readCapture(workspaceId, target.captureId); return writeNaverPhotos({ ...value, expectedCaptureHash: read.capture.capture_hash }); },
+        onDownload: async value => { const read = await service.readCapture(workspaceId, target.captureId); return downloadNaverFile({ ...value, expectedCaptureHash: read.capture.capture_hash }); }, onReturn: () => returnFromSubview()
+      });
+      naverCaptureUI = instance; await instance.render();
+    }
+    async function downloadNaverFile({ sourceId, sourceVersionId, expectedCaptureHash }) {
+      const workspaceId = state.bundle.workspaceId, token = navigationGeneration, account = state.syncAccountKey;
+      const current = () => !disposed && state.bundle?.workspaceId === workspaceId && token === navigationGeneration && account === state.syncAccountKey;
+      const bundle = await storage.read(workspaceId), attachment = await storage.readNaverCapture(workspaceId, sourceVersionId);
+      if (!current()) return;
+      if (!attachment || attachment.sourceId !== sourceId || expectedCaptureHash && attachment.capture.capture_hash !== expectedCaptureHash) throw new Error('사진을 포함한 정확한 원문 판을 먼저 자료에 반영해 주세요.');
+      const file = await global.HaedoLife.NaverMedia.pack({ bundle, attachment }); if (!current()) return;
+      const name = (bundle.sources.find(value => value.id === sourceId)?.title || '네이버 원문').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 100);
+      download(file, name + '.haedo-naver.zip', 'application/zip');
+    }
+    async function importNaverFile(file) {
+      const workspaceId = state.bundle.workspaceId, token = navigationGeneration, account = state.syncAccountKey;
+      const current = () => !disposed && state.bundle?.workspaceId === workspaceId && token === navigationGeneration && account === state.syncAccountKey;
+      await persistDrafts(); if (!current()) return;
+      const snapshot = await global.HaedoLife.NaverMedia.read(file); if (!current()) return;
+      const copy = await global.HaedoLife.NaverMedia.copy(snapshot); if (!current()) return;
+      const installed = await storage.installNaverCaptureCopy(copy, { isCurrent: current }); if (!current()) return;
+      invalidateBatchContext(); state.bundle = installed.bundle; state.stage = state.prepared = null;
+      state.sourceId = state.sourceVersionId = null; state.sourceDrafts.clear(); state.readerPositions.clear(); state.remoteChanged = false; resetSearchContext();
+      await refreshData(); if (disposed) return; connectSubscription();
+      const source = state.bundle.sources[0], version = state.bundle.sourceVersions[0];
+      await navigate('source', { sourceId: source.id, sourceVersionId: version.id, locator: null, returnContext: { mode: 'naver-blog', workspaceId: state.bundle.workspaceId } });
+      announce('원문과 사진 파일을 새 독립 공간에 복원했습니다. 서버에 자동 전송하지 않았습니다.');
+    }
+    async function writeNaverPhotos({ sourceId, sourceVersionId, indexes, expectedCaptureHash }) {
+      const workspaceId = state.bundle.workspaceId, token = navigationGeneration, account = state.syncAccountKey;
+      const current = () => !disposed && state.bundle?.workspaceId === workspaceId && token === navigationGeneration && account === state.syncAccountKey;
+      if (!Array.isArray(indexes) || !indexes.length || indexes.length > 20 || new Set(indexes).size !== indexes.length) throw new Error('글에 넣을 사진을 선택해 주세요.');
+      const [bundle, attachment] = await Promise.all([storage.read(workspaceId), storage.readNaverCapture(workspaceId, sourceVersionId)]);
+      if (!current()) return;
+      if (!attachment || attachment.sourceId !== sourceId || expectedCaptureHash && attachment.capture.capture_hash !== expectedCaptureHash) throw new Error('선택한 수집 판을 먼저 자료에 반영해 주세요.');
+      const M = global.HaedoLife.PhotoPost, doc = M.create(core.id), ops = [];
+      for (const index of indexes) {
+        const entry = attachment.photos.find(value => value.index === index), description = attachment.capture.payload.photos.find(value => value.index === index);
+        if (!entry || description?.status !== 'stored') throw new Error('파일로 보관한 사진을 선택해 주세요.');
+        const photo = await M.readPhoto(entry.blob, core.id); if (!current()) return;
+        doc.photos.push(photo); ops.push({ insert: { photo: { id: photo.id, alt: description.alt, caption: description.caption } } }, { insert: '\n' });
+      }
+      const source = bundle.sources.find(value => value.id === sourceId);
+      if (source?.url) ops.push({ insert: '사진 출처: ' + source.url + '\n' });
+      doc.ops = ops; M.validate(doc); if (!current()) return;
+      await storage.savePhotoPost(workspaceId, doc, 0); if (!current()) return;
+      viewOrigins.set('page', naverOrigin());
+      await navigate('page', { blogContext: true, preserveContext: true, searchTarget: { photoPostId: doc.id }, pagePreview: false });
+      announce('선택한 사진과 원문 주소로 비공개 초안을 만들었습니다.');
     }
 
     async function renderAccountBlog() {
@@ -2064,12 +2149,12 @@
         pending.then(() => { if (pending === homeRenderPromise) restore(); });
       }
       else if (context.mode === 'find') findRenderPromise.then(restore);
-      else if (context.mode === 'naver-blog' || context.mode === 'interests' || context.mode === 'external-discovery' || context.mode === 'blog') mainRenderPromise.then(restore);
+      else if (context.mode === 'naver-capture' || context.mode === 'naver-blog' || context.mode === 'interests' || context.mode === 'external-discovery' || context.mode === 'blog') mainRenderPromise.then(restore);
       else restore();
     }
 
     function searchReturnButton() {
-      const labels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 확인으로 돌아가기', blog: '글 관리로 돌아가기', home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
+      const labels = { 'naver-capture': '본문·사진 검토로 돌아가기', 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 확인으로 돌아가기', blog: '글 관리로 돌아가기', home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
       const back = iconButton(labels[state.returnContext?.mode] || '검색 결과로 돌아가기', 'back', guarded(returnToResults));
       back.id = 'lifeSearchReturn';
       return back;
@@ -2679,8 +2764,26 @@
       if (!state.locator && (suppressResume || !state.readerPositions.has(version.id))) {
         global.scrollTo({ top: 0, behavior: 'instant' });
       }
+      let naverMediaHost = null;
+      if (source.origin === 'naver_blog' && storage.readNaverCapture) {
+        const mediaHost = node('section', null, 'nv-source-media'); mediaHost.id = 'lifeNaverSourceMedia'; naverMediaHost = mediaHost;
+        const workspaceId = state.bundle.workspaceId, generation = renderGeneration, account = state.syncAccountKey;
+        const current = () => !disposed && generation === renderGeneration && account === state.syncAccountKey && state.mode === 'source' &&
+          state.bundle?.workspaceId === workspaceId && state.sourceId === source.id && state.sourceVersionId === version.id;
+        const mediaTask = storage.readNaverCapture(workspaceId, version.id).then(attachment => {
+          if (!current() || !attachment) return;
+          mediaHost.append(node('p', attachment.localOnly ? '파일에서 복원한 원문·사진 사본 · 서버 보관 여부 미확인' : '검증한 수집 사진 사본 · 업로드 당시 원본 여부 미확인', 'life-help'));
+          naverPhotoView = global.HaedoLife.NaverCaptureUI.photos({ payload: attachment.capture.payload, photos: attachment.photos,
+            onWritePhotos: value => writeNaverPhotos({ sourceId: source.id, sourceVersionId: version.id, indexes: Array.isArray(value) ? value : value.indexes }),
+            onDownload: () => downloadNaverFile({ sourceId: source.id, sourceVersionId: version.id }) });
+          if (!current()) { naverPhotoView.dispose(); naverPhotoView = null; return; }
+          mediaHost.append(naverPhotoView.node); mediaHost.dataset.state = 'ready';
+        }).catch(() => { if (current()) { mediaHost.append(node('p', '사진 사본을 확인하지 못했습니다. 원문은 유지됩니다.', 'life-error')); mediaHost.dataset.state = 'error'; } });
+        mainRenderPromise = mediaTask;
+      }
       if (version.contentText === null || version.contentText === undefined) {
         article.append(empty('본문 미확보 · 링크만 보관했습니다. 원래 출처를 열거나 본문을 제공해 새 버전으로 보관할 수 있습니다.'));
+        if (naverMediaHost) article.append(naverMediaHost);
         state.locator = null;
         return;
       }
@@ -2695,6 +2798,7 @@
       const originalText = document.createTextNode(version.contentText);
       reader.append(originalText);
       article.append(reader);
+      if (naverMediaHost) article.append(naverMediaHost);
       const relatedEnd = button('함께 읽을 기록', openRelated('lifeReaderRelatedEnd'), 'life-reader-related life-reader-related-end');
       relatedEnd.id = 'lifeReaderRelatedEnd';
       article.append(relatedEnd);
@@ -3924,6 +4028,9 @@
       if (naverBlogUI && naverBlogWorkspace) naverBlogViews.set(naverBlogWorkspace, naverBlogUI.getView?.());
       naverBlogUI?.destroy(); naverBlogUI = null; naverBlogWorkspace = null;
       naverBlogService?.dispose(); naverBlogService = null;
+      naverCaptureUI?.destroy(); naverCaptureUI = null;
+      naverCaptureService?.dispose(); naverCaptureService = null;
+      naverPhotoView?.dispose(); naverPhotoView = null;
       if (blogManager && blogManagerWorkspace && !blogManagerPostId) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
       blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null; blogManagerPostId = null;
       preservationUI?.dispose(); preservationUI = null;
@@ -3951,6 +4058,7 @@
         mainRenderPromise = homeRenderPromise;
         return;
       }
+      if (state.mode === 'naver-capture') { mainRenderPromise = renderNaverCapture().catch(failure); return; }
       if (state.mode === 'naver-blog') { mainRenderPromise = renderNaverBlog().catch(failure); return; }
       if (state.mode === 'interests' && interestUI) return mainRenderPromise = interestUI.render().catch(failure);
       if (state.mode === 'external-discovery' && externalDiscoveryUI) return mainRenderPromise = externalDiscoveryUI.render().catch(failure);
@@ -4091,6 +4199,7 @@
       await publicCoverUI?.flush();
       await accountBlogUI?.flush();
       await naverBlogUI?.flush();
+      await naverCaptureUI?.flush();
       await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
@@ -4136,6 +4245,9 @@
       if (naverBlogUI && naverBlogWorkspace) naverBlogViews.set(naverBlogWorkspace, naverBlogUI.getView?.());
       naverBlogUI?.destroy(); naverBlogUI = null; naverBlogWorkspace = null;
       naverBlogService?.dispose(); naverBlogService = null;
+      naverCaptureUI?.destroy(); naverCaptureUI = null;
+      naverCaptureService?.dispose(); naverCaptureService = null;
+      naverPhotoView?.dispose(); naverPhotoView = null;
       if (blogManager && blogManagerWorkspace && !blogManagerPostId) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
       blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null; blogManagerPostId = null;
       preservationUI?.dispose(); preservationUI = null;
@@ -4144,7 +4256,10 @@
       compositionSync?.dispose();
       writingSync?.dispose();
       blogSync?.dispose();
-      naverBlogService?.dispose(); naverBlogService = null; naverBlogViews.clear();
+      naverBlogService?.dispose(); naverBlogService = null;
+      naverCaptureUI?.destroy(); naverCaptureUI = null;
+      naverCaptureService?.dispose(); naverCaptureService = null;
+      naverPhotoView?.dispose(); naverPhotoView = null; naverBlogViews.clear(); naverCaptureTarget = null;
       home?.dispose();
       workbench?.dispose();
       writer?.dispose();

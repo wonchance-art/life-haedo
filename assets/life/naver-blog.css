@@ -15,3 +15,23 @@
 .nv-warning { color: var(--error, #a3243d); font-size: 14px; line-height: 1.7; }
 .naver-blog #naverBlogMore { margin-top: 20px; }
 @media (max-width: 480px) { .nv-item h3,.nv-subscription h3 { font-size: 19px; } }
+.nv-capture-intake { margin-block: 32px; border-block: 1px solid var(--line); padding-block: 24px; }
+.nv-capture-intake h2 { margin: 0 0 12px; font-size: 20px; line-height: 1.55; }
+.nv-capture-intake h3,.nv-capture-row h3 { margin: 0 0 8px; font-size: 18px; line-height: 1.6; overflow-wrap: anywhere; }
+.nv-connection,.nv-public-item,.nv-capture-row,.nv-job { min-width: 0; padding-block: 18px; border-bottom: 1px solid var(--line); }
+.nv-connection > .life-button { margin: 6px 8px 0 0; }
+.nv-connection p,.nv-public-item p,.nv-capture-row p,.nv-job p { margin-block: 8px; }
+.nv-post-choice,.nv-photo-choice { display: flex; align-items: center; gap: 12px; min-height: 44px; padding-block: 8px; font-size: 16px; line-height: 1.65; }
+.nv-post-choice input,.nv-photo-choice input { flex: none; width: 24px; height: 24px; accent-color: var(--color-primary); }
+.nv-post-choice span { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.nv-capture-intake > .life-actions { margin-block: 16px; }
+.naver-capture { min-width: 0; max-width: 720px; margin-inline: auto; }
+.naver-capture > h2 { margin: 0 0 16px; font-size: 26px; line-height: 1.5; overflow-wrap: anywhere; }
+.nv-capture-body { max-width: 70ch; margin-block: 24px; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 18px; line-height: 1.85; }
+.nv-capture-omissions { margin-block: 16px; padding-inline-start: 22px; color: var(--ink-soft); font-size: 14px; line-height: 1.75; overflow-wrap: anywhere; }
+.nv-capture-photo { min-width: 0; margin: 24px 0 32px; }
+.nv-capture-photo img { display: block; width: 100%; height: auto; border-radius: 12px; }
+.nv-capture-photo figcaption { margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.7; }
+.nv-capture-photo p { overflow-wrap: anywhere; }
+.naver-capture > .life-actions,.nv-capture-photos > .life-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 20px; }
+@media (max-width: 480px) { .naver-capture > h2 { font-size: 23px; } .nv-capture-body { font-size: 17px; } }

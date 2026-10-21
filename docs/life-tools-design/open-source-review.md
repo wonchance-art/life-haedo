@@ -1,12 +1,16 @@
 # 오픈소스 검토와 재사용 결정
 
-## 네이버 본문·사진 추출 오픈소스 — 2026-10-21 UTC
+## 네이버 본문·사진 추출의 실제 재사용 — 2026-10-21 UTC
 
-RSS 파서 비교와 별도로 네이버 전용 추출기·백업기의 README, 고정 커밋의 핵심 코드, 라이선스, 릴리스와 유지보수 상태를 확인했다. **본문 추출은 기존 MIT 구현의 에디터별 추출부를 재사용하는 실험을 우선한다.** 1차 후보는 `sansoohan/naver-blog-to-markdown` v1.5.1이며, `molpass/naver-blog-archiver`의 목록 완전성·누락 보고·더보기 본문 처리를 함께 비교한다. 백업 CLI 전체나 로그인 세션을 해도에 넣는 결정은 아니다.
+RSS 비교와 별도로 [추출 후보의 고정 소스·라이선스·유지관리](../design-review/naver-extraction-open-source.md)를 대조한 뒤 **sansoohan/naver-blog-to-markdown v1.5.1, commit 0bc8cc10200879c52f99585b429bb0fcec4fe5bc의 에디터별 본문 root 선택자 일부를 실제 재사용했다.** 원저작자의 MIT 전문·저작권·고정 버전과 재사용 파일을 [THIRD_PARTY_NOTICES](../../supabase/functions/haedo-naver-blog/THIRD_PARTY_NOTICES.txt)에 보존했다. CLI 전체, 브라우저/파일시스템/네트워크 처리, Markdown/HTML 변환 전체를 그대로 도입한 것은 아니다. molpass의 목록 완전성·구형/접힘 처리 등은 설계 참고로 구분한다. GPL 후보와 라이선스 불명 후보의 코드는 복사하지 않는다.
 
-사진 다운로드와 업로드 당시 원본 파일 확보는 다르다. URL 변형·`w2000` 요청·쿼리 제거만으로 원본 해상도·바이트 확보를 주장하지 않는다. 현재 RSS 보관함은 `partial/link_only` 전용이므로 추출기만 바꾸어 기존 본문을 덮거나 `full_text`로 승격할 수 없다. 기존 새 불변 버전 추가·본문 보완 경로를 재사용해야 한다.
+DOM 파싱은 **Cheerio 1.2.0의 slim entry**를 Edge에서만 고정 사용한다. [공식 패키지](https://www.npmjs.com/package/cheerio/v/1.2.0)와 [MIT LICENSE](https://github.com/cheeriojs/cheerio/blob/v1.2.0/LICENSE)를 대조했고 npm exact, [function Deno lock](../../supabase/functions/haedo-naver-blog/deno.lock)과 [Node fixture lock](../../tests/fixtures/naver-extractor/package-lock.json)을 유지한다. Cheerio 고정 패키지의 고지를 보존하며 브라우저 앱에 새 DOM parser를 싣지 않는다. 확인한 직접 공개 advisory가 없다는 결과는 전이 의존성 전체 감사나 안전성 보장이 아니다.
 
-[후보별 고정 소스·라이선스·재사용 범위·실험 완료 기준](../design-review/naver-extraction-open-source.md). 이번 변경은 조사 문서만이며 패키지 설치·추출 실행·실제 네이버 요청·운영 설정 변경은 없다. 실제 페이지 호환성과 네이버 도메인 접근·서버 예약 설정의 미완료 상태는 유지한다. 아래의 RSS 구현 결정은 당시 연결 기능의 범위이며 전체 본문 추출기의 비교를 대신하지 않는다.
+본문·목록은 load를 주입하는 순수 어댑터, 네트워크는 고정 호스트/HTTPS·robots·리디렉션 거절·응답/시간 한도를 갖춘 별도 경계로 분리했다. 기존 제한 RSS와 단순 문자열 처리만으로 복잡한 HTML 본문을 대신 읽지 않으며, 반대로 파서 라이브러리 도입을 수집 권한·네트워크 안전의 보장으로 쓰지 않는다. 기존 Core·Auth/RPC·Storage/idb·PhotoPost·fflate를 재사용하고 서버·작성기·백업 전체를 새로 만들지 않는다.
+
+현재 worker는 text/plain의 partial/link_only만 만들며 raw HTML은 SHA만 명세에 남긴다. 헤더로 확인한 사진 형식·픽셀과 전체 디코딩을 구분하고 기존 PhotoPost의 실파일 SHA/바이트/픽셀 검증 뒤에만 표시·저장·복원한다. URL 변형·쿼리 제거·높은 해상도 요청만으로 최초 업로드 원본을 확보했다고 주장하지 않는다. originalStatus는 unverified로 유지한다.
+
+고정 fixture의 추출/네트워크/배치 검수와 Deno 2.9.6 locked check·주입 fetcher 합성 실행은 수행했다. 이는 Supabase 실 Edge 번들러·라이브 HTTP·현재 네이버 페이지 호환성·정기 수집 성공의 증거가 아니다. 현재 spec363 네이버 차단과 runtime/DB 비활성·Cron 미가동은 유지한다. [전체 구현·보존·가동 완료 조건](../design-review/naver-capture-completion.md), 최종 통합/CI/운영 결과는 해당 PR 기록을 따른다. 아래 RSS 도입 결정은 당시 연결 기능의 범위로 보존한다.
 
 ## 개인 네이버 블로그 연결·수집 — 2026-10-21 UTC
 
