@@ -13,6 +13,8 @@
     const INTERVAL = 15 * 60 * 1000;
     const settingsModel = () => root.HaedoLife.DiscoverySettings;
     const languageModel = () => root.HaedoLife.DiscoveryLanguageSettings;
+    const readingHost = node('div', null, 'discovery-reading-host');
+    let readingUI = null;
     const scope = () => !disposed && active && isCurrent() && getBundle()?.workspaceId === workspaceId;
     const valid = token => scope() && token === generation;
     const model = () => root.HaedoLife.DiscoveryProfile;
@@ -65,6 +67,23 @@
     }
     function rankOptions() {
       return { profile: settingsModel().effectiveProfile(current.profile, desiredSettings()), knownUrls: knownUrls(), feedback: current.feedback, contentLanguages: desiredLanguages()?.contentLanguages ?? null, limit: 5 };
+    }
+    function readingInput() {
+      if (!scope() || suspended || !current?.catalog?.feed || !current.profile || !current.feedback || !current.settings || !current.actions || !current.languageSettings ||
+          busy() || inputDirty() || current.conflict || current.topicConflict || current.settingsConflict || current.actionConflict || current.languageConflict) {
+        throw Object.assign(new Error('주제·언어·옵션과 남겨 둔 선택을 먼저 저장하거나 취소한 뒤 비교를 시작해 주세요.'), { code: 'discovery_unsaved' });
+      }
+      const effective = settingsModel().effectiveProfile(current.profile, current.settings);
+      const feed = settingsModel().filterFeed(current.catalog.feed, current.settings);
+      const candidates = new Set(feed.articles.map(article => article.canonicalUrl));
+      // Only URLs in this frozen candidate catalog can affect exclusion. A
+      // large personal library must not make the bounded comparison unavailable.
+      const known = [...new Set(knownUrls().map(value => engine().canonicalUrl(value)).filter(value => candidates.has(value)))];
+      return clone({ feed,
+        profile: { workspaceId, revision: current.profile.revision, manual: effective.manual.map(({ id, label }) => ({ id, label })) },
+        feedback: current.feedback, knownUrls: known, contentLanguages: current.languageSettings.contentLanguages,
+        actions: current.actions, translationTarget: confirmedTranslationTarget(), baselineMode: current.baselineMode,
+        personalAllowed: current.actions.personalizationEnabled && !current.personalBlocked });
     }
     function rank() {
       if (!current?.catalog?.feed || !current.profile || !current.feedback || !current.settings || !current.languageSettings) return null;
@@ -603,7 +622,7 @@
       const add = button('주제 추가', 'discoveryTopicAdd', saveTopic), discard = button('입력 지우기', 'discoveryTopicDiscard', () => { current.topicText = ''; input.value = ''; current.topicError = ''; current.topicConflict = false; draw(); focusTopicControl(); }, 'discovery-quiet');
       form.append(input, add, discard); const help = node('p', '현재 제목·태그에 있는 표현을 원문 언어로 적어 주세요. 검색어는 자동 번역하지 않습니다. 번역 언어는 원문 열기에만 적용됩니다.', 'life-meta'); help.id = 'discoveryTopicHelp';
       const examples = node('div', null, 'discovery-topic-examples'); examples.append(node('span', '예시 주제', 'life-meta'));
-      for (const example of ['AI', '전시', '신간', 'Linguistics']) examples.append(button(example, null, () => { if (current.topicText.trim() || topicWrite) return; current.topicText = example; input.value = example; return saveTopic(); }, 'discovery-quiet'));
+      for (const example of ['AI', '전시', '신간', '언어학', 'Linguistics', 'Language learning']) examples.append(button(example, null, () => { if (current.topicText.trim() || topicWrite) return; current.topicText = example; input.value = example; return saveTopic(); }, 'discovery-quiet'));
       const choiceHost = node('div'), topicRecovery = node('div'), options = node('details', null, 'discovery-options'); options.id = 'discoveryOptions'; options.open = current.optionsOpen;
       options.append(node('summary', '옵션')); const optionsBody = node('div'); options.append(optionsBody); options.addEventListener('toggle', () => { if (scope()) current.optionsOpen = options.open; });
       const topicBody = node('div', null, 'discovery-topic-body'); topicBody.append(label, form, help, examples, topicRecovery, choiceHost, options); editor.append(topicBody); const reactionHost = node('div'), languageHost = node('div'), body = node('div'); surface.append(editor, reactionHost, languageHost, body); container.replaceChildren(surface);
@@ -679,7 +698,7 @@
       if (item.personal && !current.personalBlocked) {
         const why = node('details', null, 'discovery-personal-evidence'); why.append(node('summary', '왜 이 글인가'));
         for (const evidence of item.personal.evidence || []) why.append(node('p', '좋아요한 글 ‘' + evidence.title + '’의 ' + (evidence.field === 'tags' ? '보관한 태그' : '보관한 제목') + '와 이 글의 ' + (evidence.candidateField === 'tags' ? '공개 태그' : '제목') + '의 대응 표현 · ‘' + evidence.quote + '’ / ‘' + evidence.candidateQuote + '’', 'life-meta'));
-        why.append(node('p', '보관한 제목·태그와 공개 후보의 표현 유사도입니다. 본문 이해·동의·품질 확률을 뜻하지 않습니다.', 'life-meta')); row.append(why);
+        why.append(node('p', '보관한 제목·태그와 공개 후보의 표현 유사도입니다. 태그 한 개는 한 표현으로 세며 서로 다른 표현 2개 이상이 겹쳐야 반영합니다. 본문 이해·동의·품질 확률을 뜻하지 않습니다.', 'life-meta')); row.append(why);
       }
       if (current.collection !== 'discover' && !current.catalog?.feed?.articles.some(value => value.canonicalUrl === article.canonicalUrl)) row.append(node('p', '현재 공개 목록에 없음 · 마지막으로 담은 제목·출처입니다. 원문 접근 여부는 자동 확인하지 않습니다.', 'discovery-notice'));
       if (current.collection !== 'discover') row.append(node('p', '보관한 제목·출처 정보 · 원문 본문은 보관하지 않았습니다.', 'discovery-coverage'));
@@ -755,7 +774,7 @@
         list.append(node('p', desiredLanguages()?.contentLanguages?.length === 0 ? '선택한 콘텐츠 언어가 없습니다. 언어 옵션에서 표시할 언어를 켜 주세요.' : !desiredSettings()?.disabledSourceIds || feed.sources.some(source => !desiredSettings().disabledSourceIds.includes(source.id)) ? summary : '선택한 출처가 없습니다. 옵션에서 목록에 표시할 출처를 켜 주세요.', 'discovery-count'));
         if (current.mode === 'related' && items.length) list.append(node('p', result.metadata?.limitation || '공개 글에 실제로 나타난 표현으로 찾았습니다. 같은 표현이라도 문맥은 다를 수 있습니다.', 'discovery-limitation'));
         if (!items.length && labels.length && current.mode === 'related') {
-          list.append(node('p', '현재 제목·태그의 표현으로 찾습니다. 검색어는 자동 번역하지 않으므로 원문 언어의 주제(예: Linguistics)를 직접 입력해 보세요. 번역 언어는 원문 열기 설정입니다.', 'discovery-limitation'));
+          list.append(node('p', '현재 제목·태그의 표현으로 찾습니다. 긴 설명보다 주제를 하나씩 입력해 보세요(예: 언어학, Linguistics). 검색어는 자동 번역하지 않으며 번역 언어는 원문 열기 설정입니다.', 'discovery-limitation'));
           list.append(button('최신 글 보기', null, () => { current.mode = 'latest'; current.baselineMode = 'latest'; draw(); }, 'discovery-quiet'));
         }
         items.forEach(item => list.append(articleRow(item, feed.sources || [])));
@@ -782,8 +801,10 @@
       }
       if (feed) body.append(sourceDetails(feed, result));
       body.append(portableControls());
+      body.append(readingHost);
       body.append(node('p', '주제·옵션과 좋아요·담기·읽음·제외 선택은 이 브라우저에만 보관합니다. 원문을 열기 전에는 해당 사이트에 접속하지 않습니다.', 'discovery-privacy'));
       current.body.replaceChildren(...body.childNodes);
+      readingUI?.refreshLinks();
     }
     async function render() {
       leave(); if (disposed) return;
@@ -841,26 +862,34 @@
         if (sameInputs && retainedPersonal.mode === 'personal' && !retainedPersonal.blocked && !current.personalBlocked) { current.personalResult = retainedPersonal.result; current.mode = retainedPersonal.mode; current.personalPending = retainedPersonal.pending; }
         else if (!sameInputs) dropPersonal();
         draw();
+        if (root.HaedoLife.DiscoveryReadingUI) {
+          readingUI ||= root.HaedoLife.DiscoveryReadingUI.create({ container: readingHost, storage, getInput: readingInput, isCurrent: scope });
+          await readingUI.render(workspaceId);
+          if (!valid(token)) return;
+        }
         if (!current.catalog) await loadCatalog(); else { restore(); scheduleAuto(); }
       } catch (error) {
         if (valid(token)) { current.initialReading = false; current.loading = false; current.languageConflict = true; current.languageError = '언어 설정을 확인하지 못했습니다. 최신 언어 설정 확인을 눌러 주세요.'; report(error, '보관한 관심이나 제외 목록을 읽지 못했습니다. 화면을 다시 열어 주세요. 기존 자료는 유지했습니다.'); }
       }
     }
-    function dirty() { return languageDirty() || !!languageWrite || !!current?.actionIntent || !!actionWrite || !!current?.personalOffIntent || !!current?.copyPreview || !!current?.copyReading || !!current?.pending || !!pendingWrite || !!topicWrite || !!settingsWrite || !!current?.topicText.trim() || settingsDirty(); }
+    function inputDirty() { return languageDirty() || !!languageWrite || !!current?.actionIntent || !!actionWrite || !!current?.personalOffIntent || !!current?.copyPreview || !!current?.copyReading || !!current?.pending || !!pendingWrite || !!topicWrite || !!settingsWrite || !!current?.topicText.trim() || settingsDirty(); }
+    function dirty() { return inputDirty() || !!readingUI?.dirty(); }
     async function flush() {
       await Promise.all([pendingWrite, topicWrite, settingsWrite, actionWrite, languageWrite].filter(Boolean).map(promise => promise.catch(() => {})));
       if (languageDirty()) throw Object.assign(new Error('언어 설정이 아직 저장되지 않았습니다. 다시 저장하거나 선택을 취소해 주세요.'), { code: 'discovery_unsaved' });
       if (current?.actionIntent || current?.personalOffIntent || current?.copyPreview || current?.copyReading) throw Object.assign(new Error('반응 선택이나 사본 확인이 아직 끝나지 않았습니다. 다시 저장하거나 선택을 취소해 주세요.'), { code: 'discovery_unsaved' });
       if (current?.topicText.trim() || settingsDirty()) throw Object.assign(new Error('입력한 주제나 옵션 선택이 아직 저장되지 않았습니다. 다시 저장하거나 취소해 주세요.'), { code: 'discovery_unsaved' });
       if (current?.pending) throw Object.assign(new Error('읽음·제외 선택이 아직 보관되지 않았습니다. 선택 다시 보관 또는 선택 취소를 눌러 주세요.'), { code: 'discovery_unsaved' });
+      await readingUI?.flush();
     }
     function leave() {
+      readingUI?.leave();
       if (active && surface?.isConnected && scope()) { current.topicsOpen = current.editor.open; capture(); }
       generation++; active = false; if (current) { current.languageReadEpoch++; stopTranslation(); } stopTimer(); cancelFetch(); unsubscribe?.(); unsubscribe = null;
       if (current) current.loading = false;
     }
     root.document.addEventListener('haedo:page-suspend', pageSuspend); root.document.addEventListener('haedo:page-ready', pageReady); root.document.addEventListener('visibilitychange', lifecycle); root.addEventListener('online', lifecycle); root.addEventListener('offline', lifecycle);
-    function dispose() { leave(); disposed = true; downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
+    function dispose() { leave(); readingUI?.dispose(); readingUI = null; disposed = true; downloadUrls.forEach(address => URL.revokeObjectURL(address)); downloadUrls.clear(); root.document.removeEventListener('haedo:page-suspend', pageSuspend); root.document.removeEventListener('haedo:page-ready', pageReady); root.document.removeEventListener('visibilitychange', lifecycle); root.removeEventListener('online', lifecycle); root.removeEventListener('offline', lifecycle); client?.dispose(); client = null; current = null; workspaceId = null; }
     return Object.freeze({ render, refresh: render, leave, dispose, flush, dirty });
   }
   root.HaedoLife ||= {}; root.HaedoLife.DiscoveryUI = Object.freeze({ create });

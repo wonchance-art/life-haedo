@@ -6,8 +6,9 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const script = path.resolve(__dirname, '../scripts/update-discovery-feed.py');
-const ids = ['naver-d2', 'seoul-culture', 'woowahan-tech', 'readersnews-books', 'seoul-environment', 'arxiv-cs-cl', 'mit-linguistics'];
-const hosts = ['d2.naver.com', 'news.seoul.go.kr', 'techblog.woowahan.com', 'www.readersnews.com', 'news.seoul.go.kr', 'arxiv.org', 'news.mit.edu'];
+const ids = ['naver-d2', 'seoul-culture', 'woowahan-tech', 'readersnews-books', 'seoul-environment', 'arxiv-cs-cl', 'mit-linguistics', 'llt-journal'];
+const hosts = ['d2.naver.com', 'news.seoul.go.kr', 'techblog.woowahan.com', 'www.readersnews.com', 'news.seoul.go.kr', 'arxiv.org', 'news.mit.edu', 'www.lltjournal.org'];
+const lltFixture = fs.readFileSync(path.join(__dirname, 'fixtures/external-discovery/llt-journal.xml'), 'utf8');
 const first = '2026-10-18T12:00:00Z';
 const next = '2026-10-19T12:00:00Z';
 
@@ -16,6 +17,10 @@ function workspace(t) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   for (let i = 0; i < ids.length; i++) {
     fs.writeFileSync(path.join(dir, `${ids[i]}.robots.txt`), 'User-agent: *\nAllow: /\n');
+    if (ids[i] === 'llt-journal') {
+      fs.writeFileSync(path.join(dir, `${ids[i]}.xml`), lltFixture);
+      continue;
+    }
     const link = `https://${hosts[i]}/article?newsId=42&amp;utm_source=feed#detail`;
     const xml = i === 0
       ? `<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>기술 기록</title><link href="${link}"/><updated>2026-10-08T06:44:57Z</updated><category term="공식 분류"/><content>PRIVATE_BODY_SENTINEL</content></entry></feed>`
@@ -64,9 +69,11 @@ test('official metadata contract distinguishes publication, update, fetch and ri
     assert.equal(a.rights.mode, 'metadata_only');
     assert.equal(a.summary, '');
     assert.equal(Object.hasOwn(a, 'bodyText'), false);
-    assert.deepEqual(a.tags, ['공식 분류']);
+    assert.deepEqual(a.tags, a.sourceId === 'llt-journal' ? [] : ['공식 분류']);
     assert.match(a.url, /utm_source=feed#detail$/);
-    assert.equal(a.canonicalUrl, `https://${hosts[ids.indexOf(a.sourceId)]}/article?newsId=42`);
+    assert.equal(a.canonicalUrl, a.sourceId === 'llt-journal'
+      ? 'https://www.lltjournal.org/item/synthetic/?newsId=42'
+      : `https://${hosts[ids.indexOf(a.sourceId)]}/article?newsId=42`);
     assert.equal(a.fetchedAt, first);
   }
   assert.doesNotMatch(JSON.stringify(c), /PRIVATE_BODY_SENTINEL|BAD_SCRIPT/);
@@ -239,6 +246,41 @@ test('approved English sources are additive metadata feeds with explicit preprin
   assert.deepEqual(mit.allowedHosts, ['news.mit.edu']); assert.match(mit.rights.label, /MIT News/);
   assert.ok([arxiv, mit].every(s => s.language === 'en' && s.rights.mode === 'metadata_only'));
   assert.ok(sources.filter(s => s.id !== arxiv.id).every(s => !s.requestIntervalSeconds));
+});
+
+test('LLT has one official HTTPS host and preserves absent publisher fields without inferring tags or dates', t => {
+  const w = workspace(t); assert.equal(update(w).status, 0);
+  const catalog = JSON.parse(fs.readFileSync(w.output));
+  const source = catalog.sources.find(row => row.id === 'llt-journal');
+  const article = catalog.articles.find(row => row.sourceId === source.id);
+  const config = python(`print(json.dumps(next(s for s in m.SOURCES if s['id']=='llt-journal')))`);
+  assert.equal(config.name, 'Language Learning & Technology');
+  assert.equal(config.feedUrl, 'https://www.lltjournal.org/feedlet/');
+  assert.deepEqual(config.allowedHosts, ['www.lltjournal.org']);
+  assert.equal(source.rights.url, 'https://www.lltjournal.org/about/');
+  assert.equal(source.rights.mode, 'metadata_only');
+  assert.match(source.rights.label, /2020년 이후 원문 CC BY-NC-ND 4\.0/);
+  assert.match(source.rights.label, /출처표시·비상업·원형유지/);
+  assert.equal(source.latestArticleAt, null);
+  assert.equal(article.publishedAt, null); assert.equal(article.dateStatus, 'unknown');
+  assert.equal(article.updatedAt, null); assert.equal(article.updatedDateStatus, 'unknown');
+  assert.equal(article.dateBasis, 'unknown'); assert.equal(article.author, null);
+  assert.deepEqual(article.tags, []); assert.equal(article.language, 'en');
+  assert.equal(article.fetchedAt, first); assert.equal(article.coverage, 'link_only');
+  assert.equal(article.summary, ''); assert.doesNotMatch(JSON.stringify(article), /PRIVATE_BODY_SENTINEL/);
+});
+
+test('LLT feed failure retains exact undated metadata and leaves the first seven source identities intact', t => {
+  const w = workspace(t); assert.equal(update(w).status, 0);
+  const before = JSON.parse(fs.readFileSync(w.output));
+  fs.unlinkSync(path.join(w.dir, 'llt-journal.xml'));
+  assert.equal(update(w, next).status, 2);
+  const after = JSON.parse(fs.readFileSync(w.output)), source = after.sources.find(row => row.id === 'llt-journal');
+  assert.equal(source.status, 'error'); assert.equal(source.stale, true);
+  assert.equal(source.lastSuccessAt, first); assert.equal(source.lastAttemptAt, next);
+  assert.deepEqual(after.articles.filter(row => row.sourceId === source.id), before.articles.filter(row => row.sourceId === source.id));
+  const legacy = catalog => catalog.articles.filter(row => row.sourceId !== source.id).map(row => [row.id, row.sourceId, row.url, row.canonicalUrl]);
+  assert.deepEqual(legacy(after), legacy(before));
 });
 
 test('arXiv pacing covers initial requests, safe redirects and failures without pacing other sources', () => {

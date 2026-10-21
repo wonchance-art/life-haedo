@@ -1,5 +1,13 @@
 # 오픈소스 검토와 재사용 결정
 
+## 뉴스 품질과 직접 읽기 비교 — 2026-10-21 KST
+
+기존 Discovery/Recommendations·Actions의 링크 메타데이터 검증과 Storage/idb CAS를 재사용한다. 새 평가는 별도 로컬 메타 행과 네이티브 폼·URL·Web Crypto로 같은 조건의 소수 목록을 고정한다. 기관 태그를 한 표현으로 세는 규칙 보완에 추천 서버·학습 프레임워크를 추가하지 않는다. Gorse·LensKit·implicit 등은 앞선 비교대로 실제 학습 근거·운영 요구가 있을 때 재검토한다.
+
+공식 [feedparser 6.0.14](https://github.com/kurtmckee/feedparser/releases/tag/v6.0.14)(2026-07-30, BSD-2-Clause)와 [idb 8.0.4](https://github.com/jakearchibald/idb/compare/v8.0.3...v8.0.4)(2026-10-06, ISC)를 재확인했다. feedparser는 도입하지 않고 제한 Python 표준 파서를 유지한다. 기존 idb8.0.3은 이번에 갱신하지 않는다. 새 patch의 NaN primitive 읽기 수정과 현재 strict JSON 평가 요구를 구분했으며 저장 라이브러리 교체·마이그레이션을 추가하지 않는다. PyPI의 해당 feedparser 버전 vulnerabilities 빈 결과를 전체 안전성 보증으로 해석하지 않는다. GitHub advisory 조회는 연결 도구의 승인 리소스 범위 제한으로 별도 최신 확인을 완료하지 못했다. 관련 권고나 실제 결함이 확인되면 별도 검증한 변경으로 처리한다.
+
+Language Learning & Technology의 [공식 홈](https://www.lltjournal.org/)이 선언한 [RSS](https://www.lltjournal.org/feedlet/)·[공개 이용 조건](https://www.lltjournal.org/about/)을 확인하고 제목·링크만 받는다. 날짜·저자·태그를 만들지 않는다. Cambridge ELT는 공식 약관의 수집·저장 제한 때문에 채택하지 않았다. 새 RSS는 기존 제한 파서에서 처리되므로 parser/큐/백엔드 의존성을 추가하지 않았다. [전체 사용·보존·선택 근거](../design-review/discovery-quality.md).
+
 ## 추천 언어·원문 번역 열기 재사용 — 2026-10-19 KST
 
 기존 Discovery URL/출처 검증·후보 풀·개인 추천, idb/CAS와 native DOM을 재사용했다. `Intl.getCanonicalLocales`, `URL`/`URLSearchParams`, checkbox/select/anchor로 고정 언어 비교와 명시 외부 열기를 구현하며 새 i18n parser·번역 SDK/모델·서버·전이 의존성을 넣지 않는다. 기존 idb의 라이선스·고정 버전/공개 공지 검토는 앞선 보존·설정 구현을 재사용한다. 번역 링크는 오픈소스 번역 엔진이나 공식 번역 API 도입이 아니다. 공식 Google 웹사이트 번역 안내와 빈 UI의 8개 대상 코드를 확인했으나 URL 바로가기의 안정 API 보장은 없어 원문 링크와 실패 대안을 유지한다. 본문 번역 보관이나 실제 실패가 새 근거로 생기면 정식 API·권리·전송 범위·비용을 재비교한다. [계약·공식 출처·검수](../design-review/discovery-languages.md).

@@ -126,6 +126,13 @@
       if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '언어 옵션 모듈을 불러오지 못했습니다.');
       return value;
     };
+    const discoveryReading = () => {
+      const value = options.discoveryReading || root.HaedoLife?.DiscoveryReading;
+      if (!value?.validate || !value?.empty || !Number.isSafeInteger(value.MAX_BYTES) || value.MAX_BYTES < 1) {
+        throw fault('dependency_unavailable', '읽기 평가 모듈을 불러오지 못했습니다.');
+      }
+      return value;
+    };
     function notify(event) {
       if (disposed) return;
       const callbacks = event.type === 'error'
@@ -223,6 +230,10 @@
           if (data?.sender !== sender && data?.type === 'discovery_language_settings_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 1) {
             notify({ type: 'discovery_language_settings_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'discovery_reading_changed' && typeof data.workspaceId === 'string' &&
+              Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'discovery_reading_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
         };
       } catch (_) { channel = null; }
@@ -806,6 +817,44 @@
         // Only this storage facade observes its own committed action write.
         // Other facades/tabs receive the minimal event and must revalidate.
         notify({ ...event, local: true }); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
+      }
+      return result;
+    }
+    const discoveryReadingKey = workspaceId => `discoveryReading:${accountKey}:${workspaceId}`;
+    function validateDiscoveryReading(value, workspaceId) {
+      const model = discoveryReading();
+      validatePrivateProfile(value, workspaceId, model, model.MAX_BYTES, 'discovery_reading');
+    }
+    async function discoveryReadingValue(meta, workspaceId) {
+      return privateProfileValue(meta, discoveryReadingKey(workspaceId), workspaceId, discoveryReading(), validateDiscoveryReading);
+    }
+    async function readDiscoveryReading(workspaceId) {
+      privateProfileScope(workspaceId, '읽기 평가를');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await discoveryReadingValue(meta, workspaceId));
+      });
+    }
+    async function saveDiscoveryReading(workspaceId, input, baseRevision) {
+      privateProfileScope(workspaceId, '읽기 평가를'); requireRevision(baseRevision, 'baseRevision');
+      validateDiscoveryReading(input, workspaceId);
+      const value = clone(input);
+      if (baseRevision === Number.MAX_SAFE_INTEGER || value.revision !== baseRevision + 1) {
+        throw fault('discovery_reading_conflict', '읽기 평가의 저장 기준을 확인해 주세요.');
+      }
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await discoveryReadingValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) return { status: 'conflict', profile: clone(previous) };
+        await meta.put({ key: discoveryReadingKey(workspaceId), value });
+        return { status: 'stored', profile: clone(value) };
+      });
+      if (result.status === 'stored') {
+        const event = { type: 'discovery_reading_changed', workspaceId, revision: result.profile.revision };
+        notify({ ...event, local: true });
+        try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
       }
       return result;
     }
@@ -3285,6 +3334,7 @@
       readDiscoverySettings, saveDiscoverySettings,
       readDiscoveryLanguageSettings, saveDiscoveryLanguageSettings,
       readDiscoveryActions, saveDiscoveryActions,
+      readDiscoveryReading, saveDiscoveryReading,
       readCollection, saveCollection, readNineBoard, saveNineBoard, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
       scanLocalPosts, readLocalPostCandidate,
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, finishMaterialContinuityClaim,
