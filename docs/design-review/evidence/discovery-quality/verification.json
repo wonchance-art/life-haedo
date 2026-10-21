@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "baselineHead": "df0c12632c1745582cc7dd594babaf26e43fef60",
-  "serviceWorker": 147,
+  "serviceWorker": 148,
   "scope": "Frozen local reading comparisons with synthetic Auth/FakeCloud, actual bundled SDK and IndexedDB. No actual user judgment, production account/private writes, real publisher/translation reading or Apple-device validation.",
   "localChecks": {
     "unitPassed": 1153,
@@ -18,7 +18,7 @@
     "readingBrowserAreasPassed": 5,
     "readingBrowserExecution": "One first-flow check + three further checks + one focused scope recheck. The final full5 suite is required by PR CI; not claimed as one full local run.",
     "pwaPassed": 9,
-    "pwaScope": "Exact prior SW146 worker with current modules -> SW147; not a whole historical app migration. Explicit synthetic reading session/rev2/helpful response retained byte-for-byte through update/offline/Auth recovery."
+    "pwaScope": "Exact prior SW146 worker with current modules -> SW148; not a whole historical app migration. Explicit synthetic reading session/rev2/helpful response retained byte-for-byte through update/offline/Auth recovery."
   },
   "rawPublicFeed": {
     "sha256": "6b1170a1001ac6ad06e940b2cacff56d4fb59aaa11c2d7c9c01caef702af13c6",
@@ -30,8 +30,8 @@
   },
   "evidenceSHA256": {
     "readingBrowser": "e37c570a0e3b494eb7404d5418512fa0f08d132166f48a5477b137ddb73aa96a",
-    "pwa": "9c950e45047268a9b0629ddae9b3bdf855eb2e42ef80f7dd8de0670229eb23cb",
-    "pwaReport": "84597af4fabbbc1edae797552524dcb7ca9325f1d92404872f1e3c8f1313de77",
+    "pwa": "0d7f07e8c4c63e7e22d43cd03795f663b9d4013ae2907a693cafb7b43a74dfbf",
+    "pwaReport": "3b893819e982b298925713aa5d5e528420cd7885520173f0485dd656e1ac34bc",
     "news": "044c3213259b1864c3f6890b27001d6b4a8236f259946b4cc7e2d01ef07c37dc",
     "reactions": "012f470e6df8c3f66796529c37f73250fc37ab0f8b3f17f6e84f7887900be083",
     "supply": "990383376725f3f2ef8b89ee4345329b05c7c7e26f5372fc6839808ac77e5dbe",
@@ -47,7 +47,7 @@
     "assets/life/storage.js": "cc0465634bd9933a2a301d0689d12b628f47a5ed99648393fc85de5ddd12c5de",
     "index.html": "9198d606e5ff6d1992fec62e584e98a357d2aa427a8383ca3178681a9b10664a",
     "life.html": "202ddd41f8f651e9239226e7fd87d74e2f0911d888fb25a17758dc285208795f",
-    "sw.js": "9a1d6a864e4abc7d7a2c9a354f97708d8ad55b0d40e337659e2c5be3a4f4671e",
+    "sw.js": "72c107abd92325d7e97660a8e9562e04ae46296524c813fa9dcb40caef63a488",
     "scripts/prepare-site.mjs": "4292691ba4da9291f8a70d314feda68af1b9e37bda8985e121c8bb0443b8dc92",
     "scripts/update-discovery-feed.py": "b904e419357a328b728fdf75e99044825d55dd14d907c50bb054ef710ad0b0e8",
     "scripts/refresh-discovery-artifact.cjs": "d7ed7d206c7b870dc5071ccda04e024e865972f0c4d77274aea7da9bf2b191f4"
@@ -80,5 +80,7 @@
   ],
   "releaseEvidence": "Exact final PR/main CI, digest-verified Pages artifact, public byte comparisons and final deployed-byte UI verification are recorded in the integrated pull request.",
   "policy": "public-title-tag-expressions-v2",
-  "adoptionLimit": "Candidate counts and lexical-rule fixes do not establish actual recommendation utility. No inferred judgment or new training/AI pipeline."
+  "adoptionLimit": "Candidate counts and lexical-rule fixes do not establish actual recommendation utility. No inferred judgment or new training/AI pipeline.",
+  "previousVerification": "verification-sw147.json",
+  "concurrentWork": "PR123 is an independent unmerged continuity change using cache147. This release uses148 and does not depend on that change; roadmap avoids proposing its work again."
 }
