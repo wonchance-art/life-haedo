@@ -688,7 +688,7 @@ jobs:
       - name: Verify generated configuration and complete installed shell hashes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         env:
-          PREVIOUS_RELEASE: "b5ddbfa9acf310b8977a75a1e221663d471799cd"
+          PREVIOUS_RELEASE: 57fbf428d46134e7fff8de559e128d2c79fb7f4b
         run: node scripts/verify-prepared-site.mjs
       - name: Verify the actual previous service worker updates without losing originals
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
