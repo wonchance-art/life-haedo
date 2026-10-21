@@ -11,7 +11,7 @@ const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { ShareCloud } = require('./life-share-browser.cjs');
 const { playwright, ready, nav, makeContext, observe } = require('./unified-home-browser.cjs');
 const out = path.resolve('.local/home-refinement/qa');
-const report = { scope: 'Linux Chromium viewport simulation; anonymous mocked Auth HTTP, real account-scoped IndexedDB and synthetic photo bytes. No live OAuth, native IME, Apple device or deployment evidence.', checks: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, remoteWrites: [], external: [], captures: [] };
+const report = { scope: 'Linux Chromium viewport simulation; anonymous mocked Auth HTTP, real account-scoped IndexedDB and synthetic photo bytes. No live OAuth, native IME, Apple device or deployment evidence.', checks: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, remoteWrites: [], privateSaves: [], external: [], captures: [] };
 const homeReady = page => page.locator('#homePosts[aria-busy="false"]').waitFor();
 async function openHome(page) { await page.goto(base + '/index.html'); await ready(page); await homeReady(page); }
 async function home(page) { await nav(page, 'home'); await homeReady(page); }
@@ -65,9 +65,17 @@ async function main() {
     if (process.env.REFINEMENT_TEST_MATCH && !new RegExp(process.env.REFINEMENT_TEST_MATCH).test(name)) return;
     const server = new ShareCloud(), device = 'refinement-' + report.checks.length;
     const context = await makeContext(browser, server, device, accounts.a, { viewport: { width: 320, height: 568 }, hasTouch: true, ...contextOptions }); await instrument(context);
-    await context.route('**/*', route => { const request = route.request(), url = new URL(request.url()); if (url.origin === cloud && !['GET', 'HEAD', 'OPTIONS'].includes(request.method()) && !url.pathname.startsWith('/auth/')) report.remoteWrites.push({ method: request.method(), path: url.pathname }); if ([new URL(base).origin, cloud].includes(url.origin)) return route.fallback(); report.external.push(url.origin); return route.abort('blockedbyclient'); });
+    await context.route('**/*', route => { const request = route.request(), url = new URL(request.url()); if (url.origin === cloud && !['GET', 'HEAD', 'OPTIONS'].includes(request.method()) && !url.pathname.startsWith('/auth/')) {
+      if (url.pathname === '/rest/v1/rpc/life_blog_save' && request.method() === 'POST') report.privateSaves.push({ name, postId: request.postDataJSON().p_post_id });
+      else report.remoteWrites.push({ method: request.method(), path: url.pathname });
+    } if ([new URL(base).origin, cloud].includes(url.origin)) return route.fallback(); report.external.push(url.origin); return route.abort('blockedbyclient'); });
     const page = await context.newPage(); page.setDefaultTimeout(15000); observe(page, report, name);
-    try { await run(page); assert.equal(server.writes().length, 0); assert.equal(server.publicationWrites().length, 0); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
+    try { await run(page); assert.equal(server.writes().length, 0); assert.equal(server.publicationWrites().length, 0);
+      const expected = name === 'empty home offers one first write and completes private save/read/home' ? 1 : 0;
+      assert.equal(server.saves().length, expected, 'Only the explicit saved-post journey may store a private server copy');
+      assert.equal(report.privateSaves.filter(call => call.name === name).length, expected);
+      for (const row of server.posts.values()) { assert.equal(row.owner, accounts.a.id); assert.equal(row.publication, null); assert.equal(row.data.status, 'saved'); }
+      report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
     catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); await page.screenshot({ path: path.join(out, `failure-${report.checks.length}.png`), fullPage: true }).catch(() => {}); }
     finally { await context.close(); }
   }
@@ -79,6 +87,7 @@ async function main() {
       assert(layout.y >= layout.profileBottom); assert(layout.bottom <= layout.dockTop); assert.equal(layout.overflow, false);
       await page.locator('#homeFirstWrite').click(); await page.locator('.ql-editor').waitFor(); await page.waitForFunction(() => document.activeElement?.classList.contains('ql-editor'));
       await page.locator('.ql-editor').fill('첫 문장으로 시작한 비공개 글 🌱'); await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor();
+      await page.locator('#photoServerStatus[data-state="synced"]').waitFor();
       assert.match(await page.locator('.photo-article').innerText(), /첫 문장으로 시작한/);
       await page.getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await homeReady(page);
       assert.equal(await page.locator('#homePosts .home-post').count(), 1); assert.equal(await page.locator('.home-list-controls').isVisible(), true);

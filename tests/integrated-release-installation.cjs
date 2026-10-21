@@ -9,6 +9,7 @@ const Continuity = require('../assets/life/material-continuity.js'), Ref = requi
 const Series = require('../assets/life/blog-series-public.js'), Nine = require('../assets/life/nine-board.js'), NinePublic = require('../assets/life/nine-public.js'), Cover = require('../assets/life/public-cover.js');
 const root = path.resolve(__dirname, '..'), output = path.join(root, '.local/integrated-release-installation');
 const migration = 'supabase/migrations/20261019005829_life_material_continuity.sql';
+const accountMaterialMigration = 'supabase/migrations/20261020042517_account_material_registrations.sql';
 const image = 'postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
 const container = 'haedo-blog-postgres-' + Date.now() + process.pid, database = 'haedo_blog_qa_integrated_install', runId = randomUUID();
 const env = { ...process.env }; for (const key of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH']) delete env[key];
@@ -40,8 +41,9 @@ async function main() {
   const check = async (name, run) => { await run(); report.checks.push(name); console.log('PASS ' + name); };
   try {
     const files = (await fs.readdir(path.join(root, 'supabase/migrations'))).filter(name => name.endsWith('.sql')).sort();
-    const baseline = files.filter(name => 'supabase/migrations/' + name !== migration);
+    const baseline = files.filter(name => ![migration, accountMaterialMigration].includes('supabase/migrations/' + name));
     assert.equal(baseline.length, 10);
+    assert.equal(files.length, baseline.length + 2, 'Both additive migrations must be checked explicitly.');
     for (const file of baseline) {
       const relative = 'supabase/migrations/' + file, current = await fs.readFile(path.join(root, relative), 'utf8');
       assert.equal(hash(current), hash(command('git', ['-C', root, 'show', '88ccfe5:' + relative])), 'Previously installed migration changed: ' + file);
@@ -117,6 +119,26 @@ async function main() {
       const snapshots = [nine, series, Cover.project(cover, 'https://example.test/app/cover.html')];
       for (const snapshot of snapshots) assert.equal(sql('select to_jsonb(public.life_public_page_valid(' + json(snapshot) + '));'), true);
       assert.deepEqual(sql('select installation_probe.data_snapshot();'), beforeData); assert.deepEqual(sql(catalogQuery), beforeCatalog);
+    });
+    await check('Account material registration installation, rollback, owner-only reads and reinstallation preserve all existing data and privileges', async () => {
+      const registrationDDL = await fs.readFile(path.join(root, accountMaterialMigration), 'utf8');
+      const intactData = sql('select installation_probe.data_snapshot();');
+      const intactCatalog = sql(catalogQuery);
+      assert.throws(() => psql(registrationDDL.replace(/commit;\s*$/i, 'select 1/0;\ncommit;')), /division by zero/);
+      assert.deepEqual(sql('select installation_probe.data_snapshot();'), intactData);
+      assert.deepEqual(sql(catalogQuery), intactCatalog);
+      psql(registrationDDL);
+      psql(await fs.readFile(path.join(root, 'supabase/tests/account-materials-installation.sql'), 'utf8'));
+      psql(registrationDDL);
+      const after = sql('select installation_probe.data_snapshot();');
+      assert.deepEqual(after['public.life_account_materials'], []);
+      delete after['public.life_account_materials'];
+      assert.deepEqual(after, intactData);
+      const catalog = sql(catalogQuery);
+      catalog.relations = catalog.relations.filter(row => !row[1].startsWith('life_account_materials'));
+      catalog.policies = catalog.policies.filter(row => row.tablename !== 'life_account_materials');
+      assert.deepEqual(catalog, intactCatalog);
+      report.accountMaterialMigrationSha256 = hash(registrationDDL);
     });
     report.pass = true; report.baselineMigrations = baseline; report.baselineDataSha256 = baselineDigest;
     report.rollback = 'Failed transaction rolls back all additive DDL. After successful use retain data/receipts and compatible output-receipt storage; disable new UI and public/private entrypoint execution, then reapply the migration to restore. Full 88cc frontend rollback is safe only before new preparation usage. No destructive down migration.';

@@ -168,6 +168,8 @@ async function main() {
       });
       await page.locator('#photoFiles').setInputFiles(images.map(p => ({ name: p.name, mimeType: 'image/png', buffer: Buffer.from(p.bytes) }))); await page.locator('.photo-block').nth(1).waitFor();
       await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor();
+      const savedTarget = (await readPreparation(page)).plans.find(p => p.id === planId).output.postId;
+      await page.locator('#photoServerStatus[data-post-id="' + savedTarget + '"][data-state="synced"]').waitFor();
       const original = (await snapshot(page)).posts.find(p => p.doc.status === 'saved'); assert(original); assert.equal(original.doc.photos.length, 2);
       await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('#photoTitle').fill('자료로 완성하고 다시 다듬은 여행글');
       await page.evaluate(() => Quill.find(document.querySelector('.ql-container')).insertText(0, '준비와 왕복해도 유지할 미완성 수정 문단🌱\n', 'user'));
@@ -177,6 +179,7 @@ async function main() {
       assert.equal(await page.locator('#photoTitle').inputValue(), editing.doc.title); assert.match(await page.locator('.ql-editor').innerText(), /준비와 왕복해도 유지할 미완성 수정 문단/);
       assert.deepEqual((await snapshot(page)).posts, pending.posts, 'Resuming must keep the exact existing editing draft and saved original without creating or rewriting a document');
       await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor();
+      await page.locator('#photoServerStatus[data-post-id="' + editing.doc.id + '"][data-state="synced"]').waitFor();
       const after = await snapshot(page); finished = after.posts.find(p => p.doc.status === 'saved'); assert.equal(finished.doc.id, editing.doc.id); assert.notEqual(finished.doc.id, original.doc.id); assert.equal(after.posts.length, 1); assert.equal(finished.evidence.refs.length, 2);
       assert.equal(after.preparation.plans.find(p => p.id === planId).output.postId, finished.doc.id);
       for (const p of finished.doc.photos) { assert.equal(p.actualHash, p.digest); assert.equal(p.actualWidth, p.width); assert.equal(p.actualHeight, p.height); }
@@ -196,7 +199,8 @@ async function main() {
       await page.getByRole('checkbox', { name: '글 전체와 모든 사진 원본의 비공개 서버 보관 동의', exact: true }).check(); await page.getByRole('checkbox', { name: '선택한 사진 원본과 포함된 메타데이터 공개 동의', exact: true }).check(); await page.getByRole('checkbox', { name: '이 내용을 공개합니다', exact: true }).check();
       await page.getByRole('button', { name: '공개 게시·갱신', exact: true }).click(); const link = page.getByRole('link', { name: '공개한 글 열기', exact: true }); await link.waitFor(); const url = await link.getAttribute('href'), token = new URL(url, base).searchParams.get('post');
       const publicDoc = server.rpc(null, 'life_blog_public_read', { p_token: token }); assert.equal(publicDoc.snapshot.photos.length, 1);
-      const privateDoc = server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: finished.doc.id }); assert.equal(privateDoc.data.photos.length, 2);
+      assert(finished.sync.remoteId, 'The saved replacement must retain its established server identity');
+      const privateDoc = server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: finished.sync.remoteId }); assert.equal(privateDoc.data.photos.length, 2);
       assert.notEqual(publicDoc.snapshot.photos[0].id, finished.doc.photos[0].id); assert(!JSON.stringify(publicDoc.snapshot).includes(finished.doc.photos[1].digest));
       const wire = JSON.stringify(server.blogRequests); for (const text of ['PRIVATE_NOTE_SENTINEL', 'PRIVATE_QUESTION_SENTINEL', 'PRIVATE_FULL_BODY_NOT_PUBLIC', 'LATEST_MUST_NOT_REPLACE_OLD', 'SECOND_UNQUOTED_BODY', f.link.sourceId]) assert(!wire.includes(text), text);
       const visitor = await device('material-visitor', null); await visitor.page.goto(url); await visitor.page.waitForFunction(() => document.querySelector('#blogStatus')?.dataset.state === 'published'); assert.match(await visitor.page.locator('#blogContent').innerText(), /완성 편집기에서 덧붙인 마지막 문단/);

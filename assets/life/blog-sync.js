@@ -31,18 +31,39 @@
     async function getState(ws, id) {
       const c = context(ws, id); guard(c); const state = await readState(c), post = await readPost(c);
       return { ...(state || {}), workspaceId: ws, localPostId: id, enabled: !!state?.enabled,
-        status: !state ? 'not_enabled' : !state.enabled ? 'paused' : state.conflict ? 'conflict' : state.error ? 'error' : state.pending || state.localRevision !== post.revision ? 'pending' : 'synced' };
+        status: !state ? 'not_enabled' : !state.enabled ? state.enableOnSave === true ? 'pending' : 'paused' : state.conflict ? 'conflict' : state.error ? 'error' : state.pending || state.localRevision !== post.revision ? 'pending' : 'synced' };
     }
     async function rememberError(c, error) {
       try { guard(c); const current = await readState(c); if (current?.enabled) await writeState(c, current, { status: 'error', error: cleaner(error).code || 'network_error' }); } catch (_) { /* Keep durable pending state if metadata cannot be updated. */ }
     }
-    async function transfer(ws, id, enable, options = {}) {
+    async function transfer(ws, id, enable, options = {}, defaultSave = false, acceptedContext = null) {
       const expectedManifest = options.expectedManifest ? structuredClone(options.expectedManifest) : null;
+      const expectedLocalRevision = options.expectedLocalRevision;
       return serial(ws, id, async () => {
-        const c = context(ws, id);
+        const c = acceptedContext || context(ws, id);
+        let defaultIntent = false;
         try {
+          if (defaultSave) {
+            // Record the explicit saved-post intent locally even when remote
+            // account verification is offline. No original leaves this scope
+            // until the existing verified transfer below succeeds.
+            guard(c);
+            const local = await readPost(c), previous = await readState(c);
+            if (local.status !== 'saved') throw fault('invalid_request');
+            if (previous && (!previous.enabled && previous.enableOnSave !== true || previous.conflict)) return getState(ws, id);
+            if (expectedLocalRevision !== undefined && local.revision !== expectedLocalRevision) throw fault('local_changed');
+            if (expectedManifest && canonical(blog.pack(photoPost.compact(local))) !== canonical(expectedManifest)) throw fault('local_changed');
+            if (!previous || previous.enableOnSave === true) await writeState(c, previous, { enabled: true, enableOnSave: false, remoteId: previous?.remoteId || local.id,
+              remoteWorkspaceId: previous?.remoteWorkspaceId || ws, remoteRevision: previous?.remoteRevision || 0, localRevision: previous?.localRevision || 0,
+              publication: previous?.publication || null, pending: previous?.pending || null, status: 'pending', error: null });
+            defaultIntent = true;
+          }
           await verified(c); let post = await readPost(c), state = await readState(c);
           if (post.status !== 'saved') throw fault('invalid_request');
+          // Explicit local saves may start private storage, but cannot undo a
+          // user's pause or resolve a conflict on their behalf.
+          if (defaultSave && state && (!state.enabled || state.conflict)) return getState(ws, id);
+          if (defaultSave && expectedLocalRevision !== undefined && post.revision !== expectedLocalRevision) throw fault('local_changed');
           // An explicit preparation review authorizes this frozen manifest and
           // its original blobs, even if another tab edits the document later.
           if (expectedManifest && canonical(blog.pack(photoPost.compact(post))) !== canonical(expectedManifest)) throw fault('local_changed');
@@ -103,8 +124,20 @@
               localRevision: post.revision, remoteTitle: other?.data?.title || '', updatedAt: other?.updated_at || null } });
           } else throw fault('remote_missing');
           return getState(ws, id);
-        } catch (error) { await rememberError(c, error); throw cleaner(error); }
+        } catch (error) { if (!defaultSave || defaultIntent) await rememberError(c, error); throw cleaner(error); }
       });
+    }
+    async function saveDefault(ws, id, options = {}) {
+      const choices = structuredClone(options), c = context(ws, id);
+      const result = await transfer(ws, id, true, choices, true, c); guard(c);
+      // A retained request belongs to an earlier explicit save. Acknowledge it
+      // unchanged, then allow one further transfer of this accepted revision.
+      // Keep the second call outside serial(): awaiting the same queue inside
+      // itself would deadlock. A pause between steps must never be re-enabled.
+      if (result.status !== 'pending' || result.pending || choices.expectedLocalRevision === undefined || result.localRevision === choices.expectedLocalRevision) return result;
+      const post = await readPost(c);
+      if (post.status !== 'saved' || post.revision !== choices.expectedLocalRevision) throw fault('local_changed');
+      return transfer(ws, id, false, choices, true, c);
     }
     async function list(ws) {
       const c = context(ws, '*'); await verified(c); await storage.read(ws); guard(c);
@@ -137,7 +170,7 @@
     async function pause(ws, id) {
       const k = key(ws, id); generations.set(k, (generations.get(k) || 0) + 1);
       const c = context(ws, id); await verified(c); const state = await readState(c);
-      if (state) await writeState(c, state, { enabled: false, status: 'paused', error: null }); return getState(ws, id);
+      if (state) await writeState(c, state, { enabled: false, enableOnSave: false, status: 'paused', error: null }); return getState(ws, id);
     }
     async function finishPublication(c, state) {
       let result;
@@ -220,6 +253,7 @@
       const result = await transfer(ws, id, true); return { ...result, recoveryLocalPostId: recovery.localPostId };
     }
     return Object.freeze({ list, connect: (ws, id, options) => transfer(ws, id, true, options), save: (ws, id, options) => transfer(ws, id, true, options),
+      saveDefault,
       sync: (ws, id) => transfer(ws, id, false), receive, pause, publish, unpublish, resolve, getState,
       subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
       dispose() { if (disposed) return; disposed = true; listeners.clear(); remote.dispose?.(); } });
