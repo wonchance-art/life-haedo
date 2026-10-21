@@ -67,7 +67,8 @@
     function renderRows() {
       if (!valid()) return;
       const term = query.value.trim().toLocaleLowerCase(), selected = filter.value;
-      const matching = rows.filter(row => (!focusedPostId || row.kind === 'photo' && row.id === focusedPostId) && (selected === 'all' ? row.status !== 'archived' : row.status === selected) &&
+      const matching = rows.filter(row => focusedPostId ? row.kind === 'photo' && row.id === focusedPostId :
+        (selected === 'all' ? row.status !== 'archived' : row.status === selected) &&
         (!term || [row.title, row.body, ...(Array.isArray(row.attachments) ? row.attachments.map(a => a.title) : [])].filter(Boolean).join('\n').toLocaleLowerCase().includes(term)));
       list.replaceChildren(); const pendingEvidence = [];
       const count = meta(`${matching.length}개`); count.classList.add('blog-manager-count'); list.append(count);
@@ -146,9 +147,12 @@
     async function showSyncState(id, node) {
       const token = epoch;
       try {
-        requireSync('getState'); const value = await blogSync.getState(workspaceId, id);
+        requireSync('getState');
+        const value = focusedPostId === id && typeof blogSync.inspectRemote === 'function'
+          ? await blogSync.inspectRemote(workspaceId, id, { isCurrent: () => valid(token) && node.isConnected })
+          : await blogSync.getState(workspaceId, id);
         if (!valid(token) || !node.isConnected) return;
-        const labels = { not_enabled: '이 브라우저에 보관', pending: '서버 보관 대기', synced: '서버 보관 확인', paused: '서버 연결 중지', conflict: '양쪽 변경이 있어 선택이 필요합니다. 이 글은 유지했습니다.', error: '서버 보관을 확인하지 못했습니다.' };
+        const labels = { not_enabled: '이 브라우저에 보관', pending: '서버 보관 대기', synced: '서버 보관 확인', paused: '서버 연결 중지', conflict: '서버와 이 브라우저의 내용이 달라 선택이 필요합니다. 이 글은 유지했습니다.', error: '서버 보관을 확인하지 못했습니다.' };
         node.replaceChildren(document.createTextNode((labels[value?.status] || '서버 보관 상태를 확인해 주세요.') + (value?.publication?.active ? ' · 공개 게시 중' : '')));
         if (value?.error) node.append(document.createTextNode(' ' + errorText(typeof value.error === 'string' ? life.BlogRemote?.clean?.({ code: value.error }) || { code: value.error } : value.error)));
         if (value?.status === 'conflict' && value.remoteId) node.append(button('서버 글을 새 사본으로 받기', async () => {
@@ -464,6 +468,7 @@
       [['all', '전체 글·초안'], ['saved', '저장한 글'], ['draft', '초안'], ['archived', '보관한 글']].forEach(([value, label]) => { const option = el('option', label); option.value = value; filter.append(option); });
       query.value = typeof viewState?.query === 'string' ? viewState.query : '';
       filter.value = ['all', 'saved', 'draft', 'archived'].includes(viewState?.filter) ? viewState.filter : 'all';
+      query.hidden = filter.hidden = !!focusedPostId;
       shown = Number.isSafeInteger(viewState?.shown) && viewState.shown >= 40 && viewState.shown <= 1000000 ? viewState.shown : 40;
       const search = () => { shown = 40; renderRows(); }; query.addEventListener('input', search); filter.addEventListener('change', search);
       header.append(query, filter, button('글 목록 다시 불러오기', load));

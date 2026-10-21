@@ -172,6 +172,9 @@ jobs:
       - name: Verify frequent local draft autosave and interrupted writing recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-autosave-browser.cjs
+      - name: Verify atomic account post receipt and repeated original recovery
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/account-blog-receipt-browser.cjs
       - name: Verify blog attachments, archive, original gallery and portable HTML
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/blog-writing-completion-browser.cjs
@@ -467,6 +470,7 @@ jobs:
             .local/photo-post/
             .local/blog-default-server/
             .local/blog-autosave/
+            .local/account-blog-receipt/
             .local/blog-writing-completion/
             .local/obsidian-vault/
             .local/obsidian-review/
@@ -611,6 +615,11 @@ jobs:
       - name: Verify real SQL and browser publication journeys
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: node tests/blog-completion-browser.cjs --prepare-database
+      - name: Verify account post discovery and complete writing across devices
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        env:
+          BLOG_POSTGRES_DATABASE: haedo_blog_qa_account_continuity_ci
+        run: node tests/account-blog-continuity-browser.cjs --prepare-database
       - name: Verify additive installation rollback and preservation of existing records
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
         run: node tests/integrated-release-installation.cjs
@@ -662,7 +671,7 @@ jobs:
       - name: Verify generated configuration and complete installed shell hashes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         env:
-          PREVIOUS_RELEASE: "abd847f216498f06ef702284798b74ca27b883b0"
+          PREVIOUS_RELEASE: "b5ddbfa9acf310b8977a75a1e221663d471799cd"
         run: node scripts/verify-prepared-site.mjs
       - name: Verify the actual previous service worker updates without losing originals
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
@@ -691,6 +700,7 @@ jobs:
             .local/integrated-release/
             .local/blog-backend/
             .local/blog-completion/
+            .local/account-blog-continuity/
             .local/blog-series-backend/
             .local/blog-series-public/
             .local/nine-public-backend/

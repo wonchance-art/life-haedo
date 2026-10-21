@@ -48,7 +48,19 @@ async function fixture(count = 2, shared = null) {
     async readPhotoPost(ws, id) { if (!posts.has(id)) throw fault('photo_post_missing'); return copy(posts.get(id)); },
     async savePhotoPost(ws, value, base) { if (stats.failInstall) throw fault('storage_quota'); if (posts.has(value.id) || base !== 0) throw fault('photo_post_conflict'); const next = { ...copy(value), revision: 1 }; posts.set(next.id, next); return copy(next); },
     async readBlogSyncState(ws, id) { return copy(states.get(id) || null); },
-    async writeBlogSyncState(ws, id, input, base) { if ((states.get(id)?.revision || 0) !== base) throw fault('blog_sync_conflict'); const next = { ...copy(input), revision: base + 1 }; states.set(id, next); return copy(next); }
+    async writeBlogSyncState(ws, id, input, base) { if ((states.get(id)?.revision || 0) !== base) throw fault('blog_sync_conflict'); const next = { ...copy(input), revision: base + 1 }; states.set(id, next); return copy(next); },
+    async listBlogCopies() { return [...states].map(([id, state]) => { const post = posts.get(id); return {
+      localPostId: id, remoteId: state.remoteId, revision: post?.revision || 0, remoteRevision: state.remoteRevision,
+      status: !post ? 'error' : state.conflict ? 'conflict' : state.error ? 'error' : !state.enabled ? 'paused' : state.pending || state.localRevision !== post.revision ? 'local_pending' : 'received', archived: post?.archived === true
+    }; }); },
+    async installReceivedBlogPost(ws, post, state) {
+      const existing = [...states].filter(([,value]) => value.remoteId === state.remoteId);
+      if (existing.length > 1) throw fault('blog_copy_selection_required');
+      if (existing.length) return { post: copy(posts.get(existing[0][0])), received: false };
+      if (stats.failInstall) throw fault('storage_quota');
+      const saved = { ...copy(post), revision: 1 }; posts.set(saved.id, saved); states.set(saved.id, { ...copy(state), revision: 1, localRevision: 1 });
+      return { post: copy(saved), received: true };
+    }
   };
   const remote = {
     async list() { return [...rows.values()].map(row => ({ id: row.id, title: row.data.title, workspace_id: row.workspace_id, revision: row.revision })); },
@@ -525,4 +537,198 @@ test('A-B-A lost save and publication receipts replay exact operations without d
     const final = await a.manager.getState(WS, editedA.id); assert.deepEqual(final.publication, newer.publication); assert.equal(final.publishPending, null);
     assert.deepEqual(a.posts.get(editedA.id), editedA); assert.deepEqual(b.posts.get(editedB.id), editedB);
   } finally { a.manager.dispose(); b.manager.dispose(); }
+});
+
+test('account catalog detects an originating binding, clean remote updates, local pending and pause without uploads or publications', async () => {
+  const f = await fixture();
+  try {
+    await f.manager.connect(WS, f.d.id);
+    const writes = f.stats.saves.length, uploads = f.stats.uploads;
+    let rows = await f.manager.catalog(WS);
+    assert.equal(rows[0].status, 'received'); assert.equal(rows[0].copies[0].localPostId, f.d.id);
+    f.rows.get(f.d.id).revision++;
+    rows = await f.manager.catalog(WS); assert.equal(rows[0].status, 'remote_updated');
+    f.posts.get(f.d.id).revision++;
+    assert.equal((await f.manager.catalog(WS))[0].status, 'conflict');
+    await f.manager.pause(WS, f.d.id); assert.equal((await f.manager.catalog(WS))[0].status, 'paused');
+    assert.equal(f.stats.saves.length, writes); assert.equal(f.stats.uploads, uploads); assert.equal(f.stats.publishes.length, 0);
+  } finally { f.manager.dispose(); }
+});
+
+test('openRemote reopens the exact originating or paused archived local document without reading the remote body', async () => {
+  const f = await fixture();
+  try {
+    await f.manager.connect(WS, f.d.id); await f.manager.pause(WS, f.d.id);
+    f.posts.get(f.d.id).archived = true; const before = copy(f.posts), states = copy(f.states);
+    f.remote.read = async () => { throw Error('Existing copy must not download a remote body'); };
+    const result = await f.manager.openRemote(WS, f.d.id, { expectedRemoteRevision: 99 });
+    assert.equal(result.received, false); assert.equal(result.localPostId, f.d.id); assert.equal(result.workspaceId, WS); assert.equal(result.post.archived, true);
+    assert.deepEqual(f.posts, before); assert.deepEqual(f.states, states);
+  } finally { f.manager.dispose(); }
+});
+
+test('first open validates the reviewed server revision and originals; repeating and two services reopen the same installed copy', async () => {
+  const a = await fixture(), b = await fixture(0, a);
+  const second = Sync.create({ storage: b.storage, auth: b.auth, remote: b.remote, blog: Blog, photoPost: Photo, makeId: Core.id });
+  try {
+    await a.manager.connect(WS, a.d.id); assert.equal((await b.manager.catalog(WS))[0].status, 'server_only');
+    await assert.rejects(b.manager.openRemote(WS, a.d.id, { expectedRemoteRevision: 2 }), { code: 'local_changed' }); assert.equal(b.posts.size, 0);
+    const path = Object.values(a.rows.get(a.d.id).assets)[0].path, original = a.assets.get(path);
+    a.assets.set(path, new Blob(['bad'], { type: 'image/png' }));
+    await assert.rejects(b.manager.openRemote(WS, a.d.id, { expectedRemoteRevision: 1 })); assert.equal(b.posts.size, 0); assert.equal(b.states.size, 0);
+    a.assets.set(path, original);
+    const [one, two] = await Promise.all([b.manager.openRemote(WS, a.d.id, { expectedRemoteRevision: 1 }), second.openRemote(WS, a.d.id, { expectedRemoteRevision: 1 })]);
+    assert.equal(one.localPostId, two.localPostId); assert.equal(Number(one.received) + Number(two.received), 1); assert.equal(b.posts.size, 1);
+    assert.notEqual(one.post.id, a.d.id); assert.notEqual(one.post.photos[0].id, a.d.photos[0].id);
+    assert.equal(await Photo.digest(one.post.photos[0].blob), a.d.photos[0].digest);
+    assert.equal((await b.manager.openRemote(WS, a.d.id, { expectedRemoteRevision: 1 })).localPostId, one.localPostId);
+    assert.equal(a.stats.saves.length, 1); assert.equal(a.stats.publishes.length, 0);
+  } finally { a.manager.dispose(); b.manager.dispose(); second.dispose(); }
+});
+
+test('multiple explicit copies require a local choice; catalog and open never merge or replace them', async () => {
+  const a = await fixture(), b = await fixture(0, a);
+  try {
+    await a.manager.connect(WS, a.d.id);
+    const first = await b.manager.receive(WS, a.d.id), second = await b.manager.receive(WS, a.d.id), before = copy(b.posts), states = copy(b.states);
+    await assert.rejects(b.manager.openRemote(WS, a.d.id, { expectedRemoteRevision: 1 }), error => error.code === 'blog_copy_selection_required' && error.choices.length === 2);
+    await assert.rejects(b.manager.openRemote(WS, a.d.id, { localPostId: Core.id() }), { code: 'local_changed' });
+    const opened = await b.manager.openRemote(WS, a.d.id, { localPostId: second.localPostId });
+    assert.equal(opened.localPostId, second.localPostId); assert.notEqual(opened.localPostId, first.localPostId); assert.equal(opened.received, false);
+    assert.equal((await b.manager.catalog(WS))[0].copies.length, 2); assert.deepEqual(b.posts, before); assert.deepEqual(b.states, states);
+  } finally { a.manager.dispose(); b.manager.dispose(); }
+});
+
+test('account change during original download and an installation failure leave a first open retryable with no local copy', async () => {
+  for (const mode of ['account', 'storage']) {
+    const a = await fixture(), b = await fixture(0, a);
+    try {
+      await a.manager.connect(WS, a.d.id);
+      if (mode === 'account') { const original = b.remote.downloadAsset; b.remote.downloadAsset = async asset => { const blob = await original(asset); b.auth.epoch++; b.auth.user = { id: OTHER }; return blob; }; }
+      else b.stats.failInstall = true;
+      await assert.rejects(b.manager.openRemote(WS, a.d.id, { expectedRemoteRevision: 1 }));
+      assert.equal(b.posts.size, 0); assert.equal(b.states.size, 0); assert.equal(a.stats.saves.length, 1); assert.equal(a.stats.publishes.length, 0);
+      if (mode === 'storage') { b.stats.failInstall = false; assert.equal((await b.manager.openRemote(WS, a.d.id, { expectedRemoteRevision: 1 })).received, true); }
+    } finally { a.manager.dispose(); b.manager.dispose(); }
+  }
+});
+
+async function conflictPair() {
+  const a = await fixture(), b = await fixture(0, a), remoteId = a.d.id;
+  await a.manager.connect(WS, remoteId); const received = await b.manager.receive(WS, remoteId);
+  const editedB = savedEdit(b, received.localPostId, '서버에서 검토한 판'); await b.manager.save(WS, editedB.id);
+  const editedA = savedEdit(a, remoteId, '로컬에서 지킬 판'); await a.manager.save(WS, editedA.id);
+  return { a, b, remoteId, editedA, editedB, reviewed: copy(a.states.get(editedA.id).conflict) };
+}
+
+test('reviewed remote conflict choice rejects a changed local document or a newer server head before installing a copy', async () => {
+  for (const change of ['local', 'remote']) {
+    const f = await conflictPair();
+    try {
+      if (change === 'local') { f.a.posts.get(f.editedA.id).revision++; f.a.posts.get(f.editedA.id).title = '검토 뒤 수정된 입력'; }
+      else { const next = savedEdit(f.b, f.editedB.id, '검토 뒤 갱신된 서버'); await f.b.manager.save(WS, next.id); }
+      const before = copy(f.a.posts), saves = f.a.stats.saves.length;
+      await assert.rejects(f.a.manager.resolve(WS, f.editedA.id, 'remote', f.reviewed), { code: 'local_changed' });
+      assert.deepEqual(f.a.posts, before); assert.equal(f.a.stats.saves.length, saves); assert.equal(f.a.stats.publishes.length, 0);
+    } finally { f.a.manager.dispose(); f.b.manager.dispose(); }
+  }
+});
+
+test('pause during a remote conflict choice cannot leave a newly enabled competing copy', async () => {
+  const f = await conflictPair(), entered = deferred(), release = deferred();
+  try {
+    const original = f.a.remote.downloadAsset; let first = true;
+    f.a.remote.downloadAsset = async asset => { if (first) { first = false; entered.resolve(); await release.promise; } return original(asset); };
+    const choosing = f.a.manager.resolve(WS, f.editedA.id, 'remote', f.reviewed); await entered.promise;
+    await f.a.manager.pause(WS, f.editedA.id); release.resolve(); await assert.rejects(choosing, { code: 'request_cancelled' });
+    for (const state of f.a.states.values()) assert.equal(state.enabled, false);
+    assert.deepEqual(f.a.posts.get(f.editedA.id), f.editedA); assert.equal(f.a.stats.publishes.length, 0);
+  } finally { release.resolve(); f.a.manager.dispose(); f.b.manager.dispose(); }
+});
+
+test('first open rechecks a held server head and caller currentness before any local installation', async () => {
+  for (const change of ['head', 'payload', 'workspace', 'navigation']) {
+    const a = await fixture(), b = await fixture(0, a); let current = true;
+    try {
+      await a.manager.connect(WS, a.d.id); const original = b.remote.downloadAsset; let first = true;
+      b.remote.downloadAsset = async asset => {
+        const blob = await original(asset);
+        if (first) { first = false; const head = a.rows.get(a.d.id);
+          if (change === 'head') head.revision++;
+          if (change === 'payload') head.data.title = '같은 판의 변조';
+          if (change === 'workspace') head.workspace_id = OTHER;
+          if (change === 'navigation') current = false;
+        }
+        return blob;
+      };
+      await assert.rejects(b.manager.openRemote(WS, a.d.id, { expectedRemoteRevision: 1, isCurrent: () => current }), { code: change === 'navigation' ? 'request_cancelled' : change === 'head' ? 'local_changed' : 'invalid_remote_data' });
+      assert.equal(b.posts.size, 0); assert.equal(b.states.size, 0); assert.equal(a.stats.saves.length, 1); assert.equal(a.stats.publishes.length, 0);
+    } finally { a.manager.dispose(); b.manager.dispose(); }
+  }
+});
+
+test('focused inspection discovers and refreshes remote changes without sending the local post, originals or publication', async () => {
+  const f = await fixture();
+  try {
+    await f.manager.connect(WS, f.d.id);
+    const before = copy(f.posts), saves = f.stats.saves.length, uploads = f.stats.uploads;
+    const row = f.rows.get(f.d.id); row.revision++; row.data.title = '다른 기기에서 갱신';
+    row.publication = { token: Core.id(), blogToken: WS, revision: 2, active: true };
+    assert.equal((await f.manager.getState(WS, f.d.id)).status, 'synced', 'Local-only state cannot discover another device update');
+    const inspected = await f.manager.inspectRemote(WS, f.d.id);
+    assert.equal(inspected.status, 'conflict'); assert.equal(inspected.conflict.remoteRevision, 2); assert.equal(inspected.conflict.localRevision, f.d.revision);
+    assert.equal(inspected.conflict.remoteTitle, row.data.title); assert.deepEqual(inspected.publication, row.publication);
+    row.revision++; row.data.title = '비교 중 다시 갱신';
+    const refreshed = await f.manager.inspectRemote(WS, f.d.id); assert.equal(refreshed.conflict.remoteRevision, 3); assert.equal(refreshed.conflict.remoteTitle, row.data.title);
+    assert.deepEqual(f.posts, before); assert.equal(f.stats.saves.length, saves); assert.equal(f.stats.uploads, uploads); assert.equal(f.stats.publishes.length, 0);
+  } finally { f.manager.dispose(); }
+});
+
+test('focused inspection verifies an equal head without metadata writes and rejects same-revision manifest mutation', async () => {
+  const f = await fixture();
+  try {
+    await f.manager.connect(WS, f.d.id); const before = copy(f.states), saves = f.stats.saves.length, uploads = f.stats.uploads;
+    assert.equal((await f.manager.inspectRemote(WS, f.d.id)).status, 'synced'); assert.deepEqual(f.states, before);
+    f.rows.get(f.d.id).data.title = '같은 판의 변조';
+    await assert.rejects(f.manager.inspectRemote(WS, f.d.id), { code: 'invalid_remote_data' });
+    assert.deepEqual(f.states, before); assert.equal(f.stats.saves.length, saves); assert.equal(f.stats.uploads, uploads); assert.equal(f.stats.publishes.length, 0);
+    f.rows.get(f.d.id).data.title = f.d.title; f.states.get(f.d.id).remoteManifest = null;
+    const legacy = copy(f.states); assert.equal((await f.manager.inspectRemote(WS, f.d.id)).status, 'synced'); assert.deepEqual(f.states, legacy);
+  } finally { f.manager.dispose(); }
+});
+
+test('focused inspection preserves pause and every unacknowledged operation without reading or resubmitting the remote head', async () => {
+  for (const phase of ['paused', 'pending', 'publishPending', 'unpublishPending']) {
+    const f = await fixture();
+    try {
+      await f.manager.connect(WS, f.d.id);
+      if (phase === 'paused') await f.manager.pause(WS, f.d.id);
+      else f.states.get(f.d.id)[phase] = { operationId: Core.id(), frozen: 'same operation stays pending' };
+      const before = copy(f.states), saves = f.stats.saves.length, uploads = f.stats.uploads;
+      f.remote.read = async () => { throw Error('Paused or unacknowledged operations must not be inspected'); };
+      const result = await f.manager.inspectRemote(WS, f.d.id);
+      assert.equal(result.enabled, phase !== 'paused'); assert.deepEqual(f.states, before);
+      assert.equal(f.stats.saves.length, saves); assert.equal(f.stats.uploads, uploads); assert.equal(f.stats.publishes.length, 0);
+    } finally { f.manager.dispose(); }
+  }
+});
+
+test('focused inspection discards a delayed head after pause, account replacement, local edit or competing metadata update', async () => {
+  for (const change of ['pause', 'account', 'post', 'state', 'navigation']) {
+    const f = await fixture(), entered = deferred(), release = deferred();
+    let current = true;
+    try {
+      await f.manager.connect(WS, f.d.id); f.rows.get(f.d.id).revision++;
+      const read = f.remote.read; f.remote.read = async id => { const row = await read(id); entered.resolve(); await release.promise; return row; };
+      const inspecting = f.manager.inspectRemote(WS, f.d.id, { isCurrent: () => current }); await entered.promise;
+      if (change === 'pause') await f.manager.pause(WS, f.d.id);
+      if (change === 'account') { f.auth.epoch++; f.auth.user = { id: OTHER }; }
+      if (change === 'post') { f.posts.get(f.d.id).revision++; f.posts.get(f.d.id).title = '확인 중 로컬 편집'; }
+      if (change === 'state') { const state = f.states.get(f.d.id); state.revision++; state.error = 'other tab update'; }
+      if (change === 'navigation') current = false;
+      const before = copy(f.states), local = copy(f.posts), saves = f.stats.saves.length, uploads = f.stats.uploads;
+      release.resolve(); await assert.rejects(inspecting, { code: ['pause', 'account', 'navigation'].includes(change) ? 'request_cancelled' : 'local_changed' });
+      assert.deepEqual(f.states, before); assert.deepEqual(f.posts, local); assert.equal(f.stats.saves.length, saves); assert.equal(f.stats.uploads, uploads); assert.equal(f.stats.publishes.length, 0);
+    } finally { release.resolve(); f.manager.dispose(); }
+  }
 });

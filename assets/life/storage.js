@@ -1188,6 +1188,17 @@
             await meta.put({ key: `blog-sync:${workspaceId}:${value.id}`, value: binding });
             await meta.delete(`blog-sync:${workspaceId}:${target.id}`);
           }
+          if (priorBlog?.remoteId) {
+            const receiptKey = `blog-received:${workspaceId}:${priorBlog.remoteId}`, receipt = (await meta.get(receiptKey))?.value;
+            if (receipt) {
+              checkBlogReceipt(receipt, priorBlog.remoteId);
+              if (receipt.localPostId === target.id) {
+                const nextBinding = (await meta.get(`blog-sync:${workspaceId}:${value.id}`))?.value;
+                if (nextBinding?.remoteId !== priorBlog.remoteId) throw fault('invalid_blog_state', '받은 글의 연결이 바뀌었습니다. 원래 글을 유지했습니다.');
+                await meta.put({ key: receiptKey, value: { ...receipt, localPostId: value.id } });
+              }
+            }
+          }
           const materialRevision = await moveMaterialWritingOutputs(meta, workspaceId, target.id, value.id);
           if (materialRevision !== null) effects.materialRevision = materialRevision;
           await meta.delete(targetKey); index = index.filter(item => item.id !== target.id); value.createdAt = target.createdAt; value.replaces = null;
@@ -1992,6 +2003,88 @@
       changed(bundle.workspaceId, bundle.revision);
       return installed;
     }
+    function blogAccountScope(workspaceId) {
+      collectionScope(workspaceId);
+      if (!account) throw fault('auth_scope_required', '확인된 계정으로 서버 글을 열어 주세요.');
+    }
+    function checkBlogReceipt(value, remoteId) {
+      if (!plain(value) || !sameAccount(value.owner, account) || value.remoteId !== remoteId || typeof value.localPostId !== 'string' || !value.localPostId)
+        throw fault('invalid_blog_state', '받은 글의 연결을 확인하지 못했습니다. 기존 글을 유지합니다.');
+    }
+    async function blogCopies(meta, workspaceId, remoteId = null) {
+      const prefix = `blog-sync:${workspaceId}:`, result = [];
+      // Inspect keys first: no other workspace's private documents are read.
+      for (const key of await meta.getAllKeys()) {
+        if (typeof key !== 'string' || !key.startsWith(prefix)) continue;
+        const state = (await meta.get(key))?.value;
+        if (remoteId !== null && state?.remoteId !== remoteId) continue;
+        if (!plain(state) || typeof state.remoteId !== 'string' || !state.remoteId ||
+            typeof state.enabled !== 'boolean' || !Number.isSafeInteger(state.revision) || state.revision < 1 ||
+            !Number.isSafeInteger(state.remoteRevision) || state.remoteRevision < 0 || !Number.isSafeInteger(state.localRevision) || state.localRevision < 0)
+          throw fault('invalid_blog_state', '글의 연결 정보를 확인하지 못했습니다. 기존 글을 유지합니다.');
+        const localPostId = key.slice(prefix.length), post = (await meta.get(`photo-post:${workspaceId}:${localPostId}`))?.value;
+        if (post) { photoPost().validate(post); if (post.id !== localPostId) throw fault('invalid_blog_state', '글의 연결과 본문이 다릅니다.'); }
+        const status = !post || post.status !== 'saved' ? 'error' : state.conflict ? 'conflict' : state.error ? 'error' :
+          !state.enabled ? state.enableOnSave === true ? 'local_pending' : 'paused' :
+          state.pending || state.localRevision !== post.revision ? 'local_pending' : 'received';
+        result.push({ localPostId, remoteId: state.remoteId, revision: post?.revision || 0, remoteRevision: state.remoteRevision,
+          status, archived: post?.archived === true });
+      }
+      return result;
+    }
+    async function listBlogCopies(workspaceId) {
+      blogAccountScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await blogCopies(meta, workspaceId));
+      });
+    }
+    async function installReceivedBlogPost(workspaceId, input, inputState, options = {}) {
+      blogAccountScope(workspaceId); photoPost().validate(input);
+      if (options.isCurrent !== undefined && typeof options.isCurrent !== 'function') throw fault('invalid_request', '글을 받을 화면을 확인해 주세요.');
+      const assertCurrent = () => { scopeGuard(); if (options.isCurrent && options.isCurrent() === false) throw fault('request_cancelled', '화면이 바뀌어 글 받기를 중단했습니다.'); };
+      assertCurrent();
+      const post = photoPost().compact(input), state = clone(inputState);
+      onlyFields(state, ['enabled', 'remoteId', 'remoteWorkspaceId', 'remoteRevision', 'localRevision', 'remoteManifest', 'publication', 'pending', 'conflict', 'status', 'error'], 'invalid_blog_state');
+      if (post.revision !== 0 || post.status !== 'saved' || post.replaces || !plain(state) || state.enabled !== true ||
+          typeof state.remoteId !== 'string' || !state.remoteId || typeof state.remoteWorkspaceId !== 'string' ||
+          !Number.isSafeInteger(state.remoteRevision) || state.remoteRevision < 1 || state.pending || state.conflict || state.error ||
+          state.remoteManifest?.id !== state.remoteId)
+        throw fault('invalid_blog_state', '받을 글의 연결과 버전을 확인해 주세요.');
+      const blog = root.HaedoLife?.Blog || (typeof require === 'function' && require('./blog.js'));
+      blog.validateManifest(state.remoteManifest);
+      if (new TextEncoder().encode(JSON.stringify(state)).length > 8388608) throw fault('invalid_blog_state', '글 연결 정보는 8 MiB까지 보관할 수 있습니다.');
+      const normalized = blog.pack(post), photoIds = new Map();
+      if (normalized.photos.length !== state.remoteManifest.photos.length) throw fault('invalid_blog_state', '받은 사진과 서버 원본이 다릅니다.');
+      normalized.id = state.remoteId; normalized.revision = state.remoteManifest.revision;
+      normalized.photos.forEach((photo, index) => { photoIds.set(photo.id, state.remoteManifest.photos[index].id); photo.id = state.remoteManifest.photos[index].id; });
+      normalized.ops = normalized.ops.map(op => typeof op.insert === 'string' ? op : { ...op, insert: { photo: { ...op.insert.photo, id: photoIds.get(op.insert.photo.id) } } });
+      if (stablePayload(normalized) !== stablePayload(state.remoteManifest)) throw fault('invalid_blog_state', '받은 글과 서버 원본이 다릅니다.');
+      const effects = {};
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta); assertCurrent();
+        const copies = await blogCopies(meta, workspaceId, state.remoteId); assertCurrent();
+        if (copies.length > 1) throw fault('blog_copy_selection_required', '받은 글이 여러 개입니다. 열 글을 선택해 주세요.');
+        if (copies.length) {
+          const existing = (await meta.get(`photo-post:${workspaceId}:${copies[0].localPostId}`))?.value;
+          assertCurrent();
+          if (!existing || existing.status !== 'saved') throw fault('photo_post_missing', '연결된 글을 확인하지 못했습니다. 기존 자료를 유지합니다.');
+          return { post: clone(existing), received: false };
+        }
+        const receiptKey = `blog-received:${workspaceId}:${state.remoteId}`, receipt = (await meta.get(receiptKey))?.value; assertCurrent();
+        if (receipt) { checkBlogReceipt(receipt, state.remoteId); throw fault('photo_post_missing', '전에 받은 글의 연결을 확인하지 못했습니다. 새 사본을 자동 생성하지 않았습니다.'); }
+        const saved = await writePhotoPost(tx, workspaceId, post, 0, null, null, effects); assertCurrent();
+        await meta.put({ key: `blog-sync:${workspaceId}:${saved.id}`, value: { ...state, revision: 1, localRevision: saved.revision } });
+        assertCurrent();
+        await meta.put({ key: receiptKey, value: { owner: clone(account), remoteId: state.remoteId, localPostId: saved.id } });
+        assertCurrent();
+        return { post: saved, received: true };
+      });
+      if (result.received) {
+        const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
+      }
+      return result;
+    }
     async function readBlogSyncState(workspaceId, postId) {
       collectionScope(workspaceId); requireId(postId, '글');
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
@@ -1999,17 +2092,26 @@
         return clone((await meta.get(`blog-sync:${workspaceId}:${postId}`))?.value || null);
       });
     }
-    async function writeBlogSyncState(workspaceId, postId, input, baseRevision = 0) {
+    async function writeBlogSyncState(workspaceId, postId, input, baseRevision = 0, options = {}) {
       collectionScope(workspaceId); requireId(postId, '글'); requireRevision(baseRevision);
+      if (options.isCurrent !== undefined && typeof options.isCurrent !== 'function') throw fault('invalid_request', '글을 확인할 화면을 확인해 주세요.');
+      if (options.expectedLocalRevision !== undefined) requireRevision(options.expectedLocalRevision);
+      const assertCurrent = () => { scopeGuard(); if (options.isCurrent && options.isCurrent() === false) throw fault('request_cancelled', '화면이 바뀌어 글 확인을 중단했습니다.'); };
+      assertCurrent();
       let serialized;
       try { serialized = JSON.stringify(input); } catch (_) { throw fault('invalid_blog_state', '글 연결 정보를 확인해 주세요.'); }
       if (!plain(input) || typeof serialized !== 'string' || new TextEncoder().encode(serialized).length > 8388608) throw fault('invalid_blog_state', '글 연결 정보는 8 MiB까지 보관할 수 있습니다.');
       const value = { ...JSON.parse(serialized), revision: baseRevision + 1 };
       return transaction(['bundles', 'meta'], 'readwrite', async tx => {
-        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta); assertCurrent();
+        if (options.expectedLocalRevision !== undefined) {
+          const post = (await meta.get(`photo-post:${workspaceId}:${postId}`))?.value; assertCurrent();
+          if (!post || post.id !== postId || post.revision !== options.expectedLocalRevision) throw fault('local_changed', '확인하는 동안 글이 바뀌었습니다. 현재 글을 다시 확인해 주세요.');
+        }
         const key = `blog-sync:${workspaceId}:${postId}`, prior = (await meta.get(key))?.value;
+        assertCurrent();
         if ((prior?.revision || 0) !== baseRevision) throw fault('blog_state_conflict', '다른 탭에서 글의 연결 상태가 바뀌었습니다. 원문은 유지합니다.');
-        await meta.put({ key, value }); return clone(value);
+        await meta.put({ key, value }); assertCurrent(); return clone(value);
       });
     }
     // Page composer drafts stay local, outside composition sync and public copies.
@@ -3335,7 +3437,8 @@
       readDiscoveryLanguageSettings, saveDiscoveryLanguageSettings,
       readDiscoveryActions, saveDiscoveryActions,
       readDiscoveryReading, saveDiscoveryReading,
-      readCollection, saveCollection, readNineBoard, saveNineBoard, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
+
       scanLocalPosts, readLocalPostCandidate,
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, finishMaterialContinuityClaim,
       readPublicCover, savePublicCover,

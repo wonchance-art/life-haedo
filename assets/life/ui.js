@@ -125,7 +125,9 @@
     const viewOrigins = new Map();
     let findRenderPromise = Promise.resolve();
     let collectionOpenOptions = null;
-    let blogManager = null, blogOpenOptions = null, blogManagerWorkspace = null;
+    let blogManager = null, blogOpenOptions = null, blogManagerWorkspace = null, blogManagerPostId = null;
+    let accountBlogUI = null, accountBlogWorkspace = null;
+    const accountBlogViews = new Map();
     let preservationUI = null, publicCoverUI = null;
     let obsidianUpdateUI = null, originalAttachmentsUI = null;
     let accountMaterials = null, accountMaterialsFailure = null, accountMaterialsSequence = 0;
@@ -133,8 +135,8 @@
     const accountMaterialsPartialNotice = '일부 계정 자료는 확인했습니다. 나머지는 다시 확인해 주세요. 이 브라우저의 자료는 그대로 유지됩니다.';
     const blogViews = new Map();
     const blogSync = global.HaedoLife.BlogSync?.create({ storage, auth });
-    const parentViews = new Set(['external-discovery', 'interests', 'blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
-    const subviewTitles = { 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 확인', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
+    const parentViews = new Set(['external-discovery', 'interests', 'blog', 'account-blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
+    const subviewTitles = { 'account-blog': '서버에 보관한 글', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 확인', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
       discover: '다시 찾기', sync: '기기 간 동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
     const selectedVersions = new Set();
@@ -1065,7 +1067,7 @@
       const trigger = requestedTrigger || (from === 'reflection' && mode === 'page' && options?.pageDraftId ? main.querySelector('#wbReflectionToPage') : null) || navigationTrigger || focused || Array.from(main.querySelectorAll('[data-home-destination]')).find(el => el.dataset.homeDestination === mode) || document.activeElement;
       const control = trigger?.matches?.('button,a,summary,input') ? trigger : null;
       const origin = (parentViews.has(from) || from === 'reflection' && mode === 'page' && options?.pageDraftId) ? { mode: from, workspaceId: state.bundle?.workspaceId, scrollY: global.scrollY,
-        focusKey: control?.dataset.focusKey, focusId: control?.id,
+        focusKey: typeof options.originFocusKey === 'string' ? options.originFocusKey : control?.dataset.focusKey, focusId: control?.id,
         focusName: control?.getAttribute('aria-label') || control?.textContent, focusTag: control?.tagName,
         ...(from === 'home' ? { homeState: home?.captureState() } : {}) } :
         from === 'source' && mode === 'write' && state.returnContext?.mode === 'home' ? { ...state.returnContext } :
@@ -1079,6 +1081,7 @@
       await obsidianUpdateUI?.flush();
       await originalAttachmentsUI?.flush();
       await publicCoverUI?.flush();
+      await accountBlogUI?.flush();
       await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
@@ -1277,7 +1280,7 @@
 
     function sectionFor(mode) {
       if (mode === 'external-discovery') return 'news';
-      if (mode === 'home' || mode === 'page' && blogPageTask || mode === 'write' && viewOrigins.get('write')?.mode === 'home' || mode === 'source' && (state.returnContext?.mode === 'home' || state.returnContext?.mode === 'page' && blogPageTask)) return 'home';
+      if (mode === 'home' || mode === 'account-blog' || mode === 'page' && blogPageTask || mode === 'write' && viewOrigins.get('write')?.mode === 'home' || mode === 'source' && (state.returnContext?.mode === 'home' || state.returnContext?.mode === 'page' && blogPageTask)) return 'home';
       return ['tools', 'interests', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'blog', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
     }
 
@@ -1290,8 +1293,8 @@
       if (section === 'home' && !view) return 'home';
       if (section === 'tools') return ['external-discovery', 'interests', 'discover', 'reflection', 'books'].includes(view) ? view : 'tools';
       if (section === 'manage') return ['blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
-      if (!section && ['blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages', 'external-discovery', 'interests', 'discover', 'reflection', 'books'].includes(view)) return view;
-      if (['blog', 'topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related', 'collection', 'find'].includes(view)) return view;
+      if (!section && ['account-blog', 'blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages', 'external-discovery', 'interests', 'discover', 'reflection', 'books'].includes(view)) return view;
+      if (['account-blog', 'blog', 'topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related', 'collection', 'find'].includes(view)) return view;
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
     }
 
@@ -1304,7 +1307,7 @@
       else url.searchParams.set('section', section);
       const view = mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
       if (mode === 'external-discovery') url.searchParams.delete('view');
-      else if (['blog', 'topics', 'time', 'import', 'write', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'interests', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
+      else if (['account-blog', 'blog', 'topics', 'time', 'import', 'write', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'interests', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
       else url.searchParams.delete('view');
       const destination = url.pathname + url.search + url.hash;
       if (destination !== global.location.pathname + global.location.search + global.location.hash)
@@ -1334,6 +1337,7 @@
       await obsidianUpdateUI?.flush();
       await originalAttachmentsUI?.flush();
       await publicCoverUI?.flush();
+      await accountBlogUI?.flush();
       await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
@@ -1373,7 +1377,10 @@
       const restore = () => requestAnimationFrame(() => {
         if (disposed || token !== navigationGeneration || state.mode !== origin.mode || state.bundle?.workspaceId !== origin.workspaceId || anchor) return;
         const controls = [...root.querySelectorAll('button,a,summary,input')];
+        const remoteId = origin.mode === 'account-blog' && /^account-blog:(?:open|receive|received|manage):([^:]+)(?::[^:]+)?$/.exec(origin.focusKey || '')?.[1];
+        const receivedActions = remoteId ? controls.filter(el => el.dataset.remoteId === remoteId && el.dataset.action === 'open') : [];
         const target = (origin.focusKey && controls.find(el => el.dataset.focusKey === origin.focusKey)) ||
+          (receivedActions.length === 1 ? receivedActions[0] : null) ||
           (origin.focusId && controls.find(el => el.id === origin.focusId)) || controls.find(el =>
           el.tagName === origin.focusTag && (el.getAttribute('aria-label') || el.textContent) === origin.focusName) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2') || toolbar.querySelector('h1');
         for (let parent = target?.parentElement; parent && parent !== main; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
@@ -1382,7 +1389,7 @@
       });
       if (origin.mode === 'find') findRenderPromise.then(restore);
       else if (origin.mode === 'home') homeRenderPromise.then(restore);
-      else if (origin.mode === 'external-discovery') mainRenderPromise.then(restore);
+      else if (origin.mode === 'external-discovery' || origin.mode === 'account-blog' || origin.mode === 'blog') mainRenderPromise.then(restore);
       else restore();
     }
 
@@ -1433,7 +1440,7 @@
         heading.append(records);
       } else heading.textContent = section === 'home' ? '내 블로그' : section === 'tools' ? '도구' : '설정';
       if (subviewTitles[state.mode] && state.mode !== 'external-discovery' && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
-        const labels = { 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 확인으로 돌아가기', blog: '글 관리로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '자료실로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '설정으로 돌아가기' };
+        const labels = { 'account-blog': '서버 글 목록으로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 확인으로 돌아가기', blog: '글 관리로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '자료실로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '설정으로 돌아가기' };
         const back = iconButton(labels[subviewOrigin().mode] || labels.sources, 'back', guarded(returnFromSubview));
         back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';
         back.dataset.subviewReturn = 'true';
@@ -1494,7 +1501,8 @@
       await obsidianUpdateUI?.flush();
       await originalAttachmentsUI?.flush();
       await publicCoverUI?.flush();
-          await blogManager?.flush();
+          await accountBlogUI?.flush();
+      await blogManager?.flush();
           await workbench?.flush();
           await writer?.flush();
           collection?.flush();
@@ -1550,7 +1558,7 @@
     }
 
     async function openManagedSource(workspaceId, target, context = {}, reference = null) {
-      const workspaceToken = workspaceGeneration, navigationToken = navigationGeneration;
+      const workspaceToken = workspaceGeneration, navigationToken = navigationGeneration, postId = blogManagerPostId;
       const fetched = await storage.read(workspaceId);
       const current = () => !disposed && workspaceToken === workspaceGeneration && navigationToken === navigationGeneration &&
         state.mode === 'blog' && state.bundle?.workspaceId === workspaceId;
@@ -1559,7 +1567,23 @@
       if (!state.bundle.sourceVersions.some(version => version.id === target.sourceVersionId && version.sourceId === target.sourceId)) throw new Error('이 원문 버전을 찾을 수 없습니다. 다른 버전으로 바꾸지 않았습니다.');
       if (reference) await global.HaedoLife.SourceReference.resolve(state.bundle, reference);
       if (!current()) return;
-      return navigate('source', { ...target, returnContext: { mode: 'blog', workspaceId, scrollY: global.scrollY, focusKey: context.focusKey } });
+      return navigate('source', { ...target, returnContext: { mode: 'blog', workspaceId, scrollY: global.scrollY, focusKey: context.focusKey, blogPostId: postId } });
+    }
+
+    async function renderAccountBlog() {
+      const workspaceId = state.bundle.workspaceId, workspaceToken = workspaceGeneration;
+      const host = node('section'); host.id = 'lifeAccountBlogHost'; main.append(host);
+      const instance = global.HaedoLife.AccountBlogUI.create({ storage, workspaceId, blogSync,
+        viewState: accountBlogViews.get(workspaceId),
+        isCurrent: () => !disposed && workspaceToken === workspaceGeneration &&
+          state.mode === 'account-blog' && state.bundle?.workspaceId === workspaceId,
+        onOpenPost: (postId, options = {}) => navigate('page', { blogContext: true,
+          searchTarget: { photoPostId: postId, photoPostRevision: options.expectedRevision },
+          pagePreview: false, originFocusKey: options.focusKey }),
+        onManagePost: (postId, options = {}) => navigate('blog', { blogPostId: postId, originFocusKey: options.focusKey })
+      });
+      accountBlogUI = instance; accountBlogWorkspace = workspaceId;
+      await instance.mount(host);
     }
 
     async function renderBlogManager() {
@@ -1574,6 +1598,7 @@
           row.kind === 'page-draft' ? navigate('page', { blogContext: true, pageDraftId: row.id, originFocusKey: context.focusKey }) : navigate('page', { blogContext: true, searchTarget: { postId: row.id }, pagePreview: false, originFocusKey: context.focusKey })
       });
       blogManager = instance; blogManagerWorkspace = workspaceId; const options = { viewState: blogViews.get(workspaceId), ...(blogOpenOptions || {}) }; blogOpenOptions = null;
+      blogManagerPostId = options.postId || null;
       await instance.mount(host, options);
     }
 
@@ -1992,7 +2017,7 @@
     async function returnToResults() {
       const context = state.returnContext;
       if (!context || context.workspaceId !== state.bundle.workspaceId) return navigate('sources', { returnContext: null, navigationMotion: 'back' });
-      if (await navigate(context.mode, { returnContext: null, homeState: context.homeState, homeAnchor: context.homeAnchor, navigationMotion: 'back', sourcesRevealVersionId: context.mode === 'sources' ? context.sourceVersionId || null : null }) === false) return;
+      if (await navigate(context.mode, { returnContext: null, homeState: context.homeState, homeAnchor: context.homeAnchor, navigationMotion: 'back', sourcesRevealVersionId: context.mode === 'sources' ? context.sourceVersionId || null : null, blogPostId: context.mode === 'blog' ? context.blogPostId : null }) === false) return;
       const navigation = navigationGeneration;
       const restore = () => requestAnimationFrame(() => {
         if (disposed || navigation !== navigationGeneration || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode || context.homeAnchor) return;
@@ -2013,7 +2038,7 @@
         pending.then(() => { if (pending === homeRenderPromise) restore(); });
       }
       else if (context.mode === 'find') findRenderPromise.then(restore);
-      else if (context.mode === 'interests' || context.mode === 'external-discovery') mainRenderPromise.then(restore);
+      else if (context.mode === 'interests' || context.mode === 'external-discovery' || context.mode === 'blog') mainRenderPromise.then(restore);
       else restore();
     }
 
@@ -3867,8 +3892,10 @@
       global.HaedoMotion?.cancel(main);
       mainRenderPromise = Promise.resolve();
       compositionPanel?.dispose(); compositionPanel = null;
-      if (blogManager && blogManagerWorkspace) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
-      blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null;
+      if (accountBlogUI && accountBlogWorkspace) accountBlogViews.set(accountBlogWorkspace, accountBlogUI.getView?.());
+      accountBlogUI?.dispose(); accountBlogUI = null; accountBlogWorkspace = null;
+      if (blogManager && blogManagerWorkspace && !blogManagerPostId) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
+      blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null; blogManagerPostId = null;
       preservationUI?.dispose(); preservationUI = null;
       publicCoverUI?.dispose(); publicCoverUI = null;
       obsidianUpdateUI?.dispose(); obsidianUpdateUI = null;
@@ -3899,7 +3926,15 @@
       if (state.mode === 'public-cover') return mainRenderPromise = renderPublicCover().catch(failure);
       if (state.mode === 'obsidian-update') return mainRenderPromise = renderObsidianUpdate().catch(failure);
       if (state.mode === 'preservation') return mainRenderPromise = renderPreservation().catch(failure);
-      if (state.mode === 'blog') return mainRenderPromise = renderBlogManager().catch(failure);
+      if (state.mode === 'account-blog') {
+        // Reading a remote list must leave the global navigation available.
+        mainRenderPromise = renderAccountBlog().catch(failure);
+        return;
+      }
+      if (state.mode === 'blog') {
+        mainRenderPromise = renderBlogManager().catch(failure);
+        return;
+      }
       if (state.mode === 'find') { findRenderPromise = unifiedSearch.open().catch(failure); mainRenderPromise = findRenderPromise; return; }
       if (state.mode === 'collection' && collection) { const options = collectionOpenOptions || {}; collectionOpenOptions = null; mainRenderPromise = collection.open(options).catch(failure); return; }
       if (state.mode === 'write' && writer) {
@@ -3933,7 +3968,7 @@
     }
 
     const beforeUnload = event => {
-      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || collection?.dirty() || blogManager?.dirty() || preservationUI?.dirty() || obsidianUpdateUI?.dirty() || originalAttachmentsUI?.dirty() || publicCoverUI?.dirty() || interestUI?.dirty() || externalDiscoveryUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
+      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || collection?.dirty() || accountBlogUI?.dirty() || blogManager?.dirty() || preservationUI?.dirty() || obsidianUpdateUI?.dirty() || originalAttachmentsUI?.dirty() || publicCoverUI?.dirty() || interestUI?.dirty() || externalDiscoveryUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
     };
     const visibility = () => {
       if (!document.hidden) return;
@@ -4023,6 +4058,7 @@
       await obsidianUpdateUI?.flush();
       await originalAttachmentsUI?.flush();
       await publicCoverUI?.flush();
+      await accountBlogUI?.flush();
       await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
@@ -4063,8 +4099,10 @@
       externalDiscoveryUI?.dispose();
       originalAttachmentsUI?.dispose(); originalAttachmentsUI = null;
       compositionPanel?.dispose(); compositionPanel = null;
-      if (blogManager && blogManagerWorkspace) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
-      blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null;
+      if (accountBlogUI && accountBlogWorkspace) accountBlogViews.set(accountBlogWorkspace, accountBlogUI.getView?.());
+      accountBlogUI?.dispose(); accountBlogUI = null; accountBlogWorkspace = null;
+      if (blogManager && blogManagerWorkspace && !blogManagerPostId) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
+      blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null; blogManagerPostId = null;
       preservationUI?.dispose(); preservationUI = null;
       publicCoverUI?.dispose(); publicCoverUI = null;
       obsidianUpdateUI?.dispose(); obsidianUpdateUI = null;
