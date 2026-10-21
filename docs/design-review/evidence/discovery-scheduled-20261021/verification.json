@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-21T04:47:49.430936+00:00",
+  "scope": "Public schedule/build/artifact/GET receipts plus isolated mock-Auth browser QA. No actual user evaluation or database access.",
+  "scheduledRun": {
+    "id": 39415380050,
+    "head_sha": "2194de8726e60ba483ff3f7350c25ec088054a33",
+    "head_branch": "main",
+    "event": "schedule",
+    "status": "completed",
+    "conclusion": "success",
+    "created_at": "2026-10-20T11:30:03Z",
+    "updated_at": "2026-10-20T11:43:04Z",
+    "run_started_at": "2026-10-20T11:30:03Z",
+    "run_attempt": 1,
+    "html_url": "https://github.com/wonchance-art/life-haedo/actions/runs/39415380050",
+    "workflow_id": 372992738
+  },
+  "scheduleTiming": {
+    "cronUTC": "15 6 * * *",
+    "intendedUTC": "2026-10-20T06:15:00+00:00",
+    "intendedKST": "2026-10-20T15:15:00+09:00",
+    "createdUTC": "2026-10-20T11:30:03Z",
+    "createdKST": "2026-10-20T20:30:03+09:00",
+    "delaySeconds": 18903,
+    "displayDelay": "5 hours15 minutes (created timestamp adds3 seconds)",
+    "interpretation": "One observed late scheduled run. Timing cause not established. No cron change. created_at is workflow registration/start observation, not exact collection time."
+  },
+  "jobCounts": {
+    "total": 10,
+    "success": 10
+  },
+  "currentMain": {
+    "sha": "2194de8726e60ba483ff3f7350c25ec088054a33",
+    "committedAt": "2026-10-20T09:29:08Z",
+    "url": "https://github.com/wonchance-art/life-haedo/commit/2194de8726e60ba483ff3f7350c25ec088054a33"
+  },
+  "serviceWorker": 144,
+  "feed": {
+    "sha256": "fab73e10cc118376b76889ae3de9aac0ee6c2e7e7311efff2d48c74a10c4737f",
+    "generatedAt": "2026-10-20T11:42:39Z",
+    "articles": 90,
+    "sources": 7,
+    "okSources": 5,
+    "partialFailure": true,
+    "coverage": "link_only"
+  },
+  "artifactHashChain": {
+    "logCandidate": "fab73e10cc118376b76889ae3de9aac0ee6c2e7e7311efff2d48c74a10c4737f",
+    "logInstalled": "fab73e10cc118376b76889ae3de9aac0ee6c2e7e7311efff2d48c74a10c4737f",
+    "artifactReceiptCandidate": "fab73e10cc118376b76889ae3de9aac0ee6c2e7e7311efff2d48c74a10c4737f",
+    "artifactReceiptInstalled": "fab73e10cc118376b76889ae3de9aac0ee6c2e7e7311efff2d48c74a10c4737f",
+    "pagesInstalledFeed": "fab73e10cc118376b76889ae3de9aac0ee6c2e7e7311efff2d48c74a10c4737f",
+    "publicFeed": "fab73e10cc118376b76889ae3de9aac0ee6c2e7e7311efff2d48c74a10c4737f"
+  },
+  "artifactVerificationPass": true,
+  "publicCodeChecks": [
+    {
+      "url": "https://wonchance-art.github.io/life-haedo/index.html?section=news",
+      "sha256": "455fc919dd26d86931e30d7165cfd297b24f3ed180dfcc75b93935618db7ca28",
+      "matchesCurrentMain": true
+    },
+    {
+      "url": "https://wonchance-art.github.io/life-haedo/sw.js",
+      "sha256": "41991bfb97bca5e9cf1d2e71b13f6b3e2d1d3b5f2df13dba639ae09325111962",
+      "matchesCurrentMain": true
+    },
+    {
+      "url": "https://wonchance-art.github.io/life-haedo/assets/haedo-navigation.js",
+      "sha256": "e8d93bfd09a40e4ef512a5f94997f1745cf0b87f6fecd8d51b13c9062c033765",
+      "matchesCurrentMain": true
+    },
+    {
+      "url": "https://wonchance-art.github.io/life-haedo/assets/life/ui.js",
+      "sha256": "9ae08a8c8a8f3a0bf211ab73ae0b2a0281ddfc669da0527f8c95d0684586d98d",
+      "matchesCurrentMain": true
+    },
+    {
+      "url": "https://wonchance-art.github.io/life-haedo/assets/life/discovery-ui.js",
+      "sha256": "fa1ffb5fba77be2bfa28b81eeb9f46a67dce8c7b1a6d28207aab6d369c6f287f",
+      "matchesCurrentMain": true
+    },
+    {
+      "url": "https://wonchance-art.github.io/life-haedo/assets/life/discovery.css",
+      "sha256": "1f16b6baaeb93eb1445c146a15dca13a7602b57e88deece6a8974b6eb56a1a36",
+      "matchesCurrentMain": true
+    },
+    {
+      "url": "https://wonchance-art.github.io/life-haedo/assets/life/discovery.js",
+      "sha256": "2eaddf8deb9e0978805f6e6795c885c8c9364be5a06b97b2f7ad0aa75ba4f2bd",
+      "matchesCurrentMain": true
+    },
+    {
+      "url": "https://wonchance-art.github.io/life-haedo/assets/life/storage.js",
+      "sha256": "f83e9e14b55bcb7b4916e4bd3976324ab02115ae355d0bc1dd0c60995666b2a5",
+      "matchesCurrentMain": true
+    },
+    {
+      "url": "https://wonchance-art.github.io/life-haedo/assets/life/shell.js",
+      "sha256": "69f1f2c10fc3eb70a3af7af1f39a4f30a9b8d250981682fc1e8331837471087d",
+      "matchesCurrentMain": true
+    }
+  ],
+  "browser": {
+    "pass": true,
+    "passed": 8,
+    "total": 8,
+    "runtime": {
+      "browser": "153.0.8010.12",
+      "node": "v24.19.0"
+    },
+    "checks": [
+      {
+        "name": "home to news opens canonical root and five existing latest articles without manual topics",
+        "pass": true
+      },
+      {
+        "name": "news like and bookmark are independent, exact retained lists on same route",
+        "pass": true
+      },
+      {
+        "name": "fresh news first title is visible before scrolling at 390 and 1440 with native topic controls closed",
+        "pass": true
+      },
+      {
+        "name": "explicit stored language topic and English content selection use only actual supplied metadata",
+        "pass": true
+      },
+      {
+        "name": "explicit original and translated public-URL clicks preserve exact list order focus and local sources",
+        "pass": true
+      },
+      {
+        "name": "personal recommendation and automatic refresh off retain exact reactions across reload and downloadable metadata-only copy",
+        "pass": true
+      },
+      {
+        "name": "explicit public link review stores only its metadata and restores the news root without losing prior sources or reactions",
+        "pass": true
+      },
+      {
+        "name": "isolated synthetic account B starts with empty topics reactions and original language preferences",
+        "pass": true
+      }
+    ],
+    "privacy": {
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "external": 0,
+      "privateLeaks": 0,
+      "modelRequests": 0
+    },
+    "mockWorkspaceDBWrites": 0,
+    "reportSHA256": "4083aeb928f973c90077c064bd3a4656c6c81d05f6bb666bd4fe07bb267fb64f",
+    "summarySHA256": "55983cbd550a2218659c419d997f7299778c43c40dd8d4aad8dcfefb3d188e6b",
+    "firstFold": [
+      {
+        "width": 390,
+        "height": 844,
+        "scrollY": 0,
+        "title": {
+          "top": 591.78125,
+          "bottom": 659.96875
+        },
+        "topicsOpen": false
+      },
+      {
+        "width": 1440,
+        "height": 1000,
+        "scrollY": 0,
+        "title": {
+          "top": 588.03125,
+          "bottom": 632.03125
+        },
+        "topicsOpen": false
+      }
+    ]
+  },
+  "localChecks": {
+    "unitPassed": 1116,
+    "unitFailed": 0,
+    "staticHTML": 22,
+    "staticJS": 147,
+    "localReferences": 627,
+    "focusedEvaluationPassed": 27
+  },
+  "limitations": [
+    "One successful scheduled run does not establish reliability or punctuality.",
+    "Two source failures retained; 90 articles are not all newly fetched.",
+    "No actual Google login, translation result, original article reading, Apple hardware, private server write, or recommendation utility evaluation.",
+    "Explicit CLI conditions are local supplied inputs, not automatic extraction or proof of actual user conditions."
+  ]
+}

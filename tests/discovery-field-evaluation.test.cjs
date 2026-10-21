@@ -11,6 +11,8 @@ const Discovery = require('../assets/life/discovery.js');
 const Actions = require('../assets/life/discovery-actions.js');
 const Recommendations = require('../assets/life/discovery-recommendations.js');
 const LanguageSettings = require('../assets/life/discovery-language-settings.js');
+const Settings = require('../assets/life/discovery-settings.js');
+const Profile = require('../assets/life/discovery-profile.js');
 const Field = require('../scripts/evaluate-discovery-field.cjs');
 const exec = promisify(execFile);
 const NOW = '2026-10-19T04:00:00.000Z', PAST = '2026-10-17T00:00:00.000Z', FUTURE = '2026-10-20T00:00:00.000Z';
@@ -278,5 +280,103 @@ test('CLI parses strict explicit language codes and writes the same condition wi
   }
   await assert.rejects(exec(process.execPath, [script, '--feed', file, '--now', NOW, '--out', path.join(directory, 'invalid'),
     '--content-languages', 'SYNTHETIC_PRIVATE_MARKER']), error => error.code === 1 && !error.stderr.includes('SYNTHETIC_PRIVATE_MARKER') && !error.stderr.includes(directory));
+  await assert.rejects(fs.stat(path.join(directory, 'invalid')), { code: 'ENOENT' });
+});
+function conditions(extra = {}) { return { schemaVersion: 1, disabledSourceIds: [], knownUrls: [], feedback: [], ...extra }; }
+function feedbackRow(item, kind = 'already_read') {
+  return { articleId: item.id, canonicalUrl: Discovery.canonicalUrl(item.url), kind, updatedAt: PAST };
+}
+test('explicit source/known/read/hide conditions match actual UI projections and all four raw rank outputs', () => {
+  const catalog = fixture(), envelope = copyFor(catalog.articles[0]), explicit = conditions({ disabledSourceIds: ['woowahan-tech'],
+    knownUrls: [Discovery.canonicalUrl(catalog.articles[1].url)], feedback: [feedbackRow(catalog.articles[2]), feedbackRow(catalog.articles[4], 'not_relevant')] });
+  const original = JSON.stringify({ catalog, envelope, explicit }), conditionsBytes = encode(explicit);
+  const { report, reviewTemplate, markdown } = prepare(catalog, envelope, { conditionsBytes });
+  const workspaceId = 'local-field-evaluation', settings = Settings.update(Settings.empty(workspaceId), { disabledSourceIds: explicit.disabledSourceIds }, { expectedRevision: 0, now: NOW });
+  const input = Settings.filterFeed(catalog, settings), feedback = { ...Profile.empty(workspaceId), revision: 1, updatedAt: NOW, feedback: explicit.feedback };
+  Profile.validate(feedback);
+  const actions = { ...Actions.empty(workspaceId), revision: 1, updatedAt: envelope.exportedAt, personalizationEnabled: true, entries: envelope.entries };
+  const removed = { ...structuredClone(actions), entries: actions.entries.map(row => ({ ...structuredClone(row), liked: false, likedAt: null })) };
+  const common = { now: NOW, limit: 2, contentLanguages: null, knownUrls: report.conditions.knownUrls, feedback,
+    profile: { workspaceId, manual: [{ id: 'explicit-evaluation-topic', label: 'AI' }] } };
+  const hash = require('../scripts/evaluate-discovery.cjs').sha256;
+  for (const mode of Field.MODES) {
+    const expected = ['latest', 'related'].includes(mode) ? Discovery.rank(input, { ...common, mode }) :
+      Recommendations.rank(input, { ...common, actions: mode === 'personal' ? actions : removed, mode: 'personal', baselineMode: 'related' });
+    assert.equal(report.modes[mode].rankOutputSHA256, hash(JSON.stringify(expected)));
+    assert.deepEqual(report.modes[mode].metadata, expected.metadata);
+    assert.equal(report.modes[mode].poolCount, 1);
+    assert.deepEqual(expected.metadata.excluded, { known: 2, feedback: 2, duplicate: 0, invalid: 0 });
+    assert(report.modes[mode].items.every(item => item.articleId === 'latest-b'));
+  }
+  assert.deepEqual(report.conditions.feedback, explicit.feedback);
+  assert.equal(report.conditions.knownUrls.length, 2);
+  assert.deepEqual(reviewTemplate.explicitConditions, report.conditions.explicit);
+  assert.deepEqual(report.conditions.explicit.activeSourceIds, ['naver-d2']);
+  assert.equal(report.conditions.explicit.actualUserConditionsConfirmed, null);
+  assert.equal(report.feed.articleCount, 6, 'original supplied feed metadata is retained separately');
+  assert.equal(report.userUtilityConclusion, null); assert.equal(reviewTemplate.actualUserSelection, null);
+  assert.match(markdown, /明示|명시 조건 파일/); assert.deepEqual(report.modes.signals_removed, report.modes.related);
+  assert.equal(JSON.stringify({ catalog, envelope, explicit }), original);
+});
+test('source-off and language-off prototypes are excluded from inspection/evidence while original like-known remains frozen', () => {
+  const catalog = fixture(), envelope = copyFor(catalog.articles[0]);
+  const explicit = conditions({ disabledSourceIds: ['naver-d2', 'seoul-culture'] });
+  for (const contentLanguages of [null, ['ko'], []]) {
+    const { report } = prepare(catalog, envelope, { contentLanguages, conditionsBytes: encode(explicit) });
+    assert.equal(report.personal.status, 'insufficient_signal'); assert.equal(report.personal.exactRelatedFallback, true);
+    assert.equal(report.reactions.inspection.signalCount, 0); assert.equal(report.reactions.inspection.excluded.sourceOff, 1);
+    assert.deepEqual(report.conditions.knownUrls, [Discovery.canonicalUrl(catalog.articles[0].url)]);
+    assert.deepEqual(report.modes.signals_removed, report.modes.related);
+    for (const mode of Field.MODES) assert.equal(report.modes[mode].poolCount, contentLanguages?.length === 0 ? 0 : 1);
+  }
+  const allOff = conditions({ disabledSourceIds: catalog.sources.map(row => row.id) });
+  const { report } = prepare(catalog, envelope, { conditionsBytes: encode(allOff) });
+  for (const mode of Field.MODES) { assert.equal(report.modes[mode].poolCount, 0); assert.deepEqual(report.modes[mode].items, []); }
+  const languageOff = prepare(catalog, copyFor(article('english-like', 'AI 언어 연구', { language: 'en-US' })), {
+    conditionsBytes: encode(conditions()), contentLanguages: ['ko'] }).report;
+  assert.equal(languageOff.reactions.inspection.excluded.languageOff, 1); assert.equal(languageOff.personal.status, 'insufficient_signal');
+});
+test('condition schema rejects unknown fields/types/unsafe URLs/duplicates/future feedback and unset retains exact output', () => {
+  const catalog = fixture(), envelope = copyFor(catalog.articles[0]), base = prepare(catalog, envelope);
+  assert.deepEqual(base, prepare(catalog, envelope, { conditionsBytes: null }));
+  const empty = prepare(catalog, envelope, { conditionsBytes: encode(conditions()) });
+  assert.deepEqual(empty.report.modes, base.report.modes); assert.deepEqual(empty.report.reactions, base.report.reactions);
+  const good = Discovery.canonicalUrl(catalog.articles[1].url), row = feedbackRow(catalog.articles[2]);
+  const badURLs = ['http://d2.naver.com/a', 'https://d2.naver.com.evil.test/a', 'https://localhost/a', 'https://127.0.0.1/a',
+    'https://user:pass@d2.naver.com/a', 'https://d2.naver.com:444/a', good + '#fragment', good + '&utm_source=tracker', null];
+  const cases = [null, [], {}, { ...conditions(), schemaVersion: '1' }, { ...conditions(), revision: 1 },
+    { schemaVersion: 1, disabledSourceIds: [], knownUrls: [] },
+    conditions({ disabledSourceIds: ['naver-d2', 'naver-d2'] }), conditions({ disabledSourceIds: ['unknown-source'] }),
+    conditions({ disabledSourceIds: ['__proto__'] }), conditions({ disabledSourceIds: [1] }),
+    conditions({ knownUrls: [good, good] }), conditions({ knownUrls: Array(501).fill(good) }),
+    conditions({ feedback: [row, row] }), conditions({ feedback: [{ ...row, articleId: 1 }] }),
+    conditions({ feedback: [{ ...row, kind: 'liked' }] }), conditions({ feedback: [{ ...row, memo: 'PRIVATE_MARKER' }] }),
+    conditions({ feedback: [{ ...row, updatedAt: FUTURE }] }), conditions({ feedback: [{ ...row, updatedAt: '2026-02-30T00:00:00Z' }] }),
+    conditions({ feedback: [{ ...row, updatedAt: '2026-10-17T00:00:00.000000Z' }] }),
+    conditions({ feedback: Array(501).fill(row) }), conditions({ feedback: 'PRIVATE_MARKER' }),
+    ...badURLs.flatMap(url => [conditions({ knownUrls: [url] }), conditions({ feedback: [{ ...row, canonicalUrl: url }] })])];
+  for (const value of cases) assert.throws(() => prepare(catalog, envelope, { conditionsBytes: encode(value) }), error => error.code === 'field_input' && !error.message.includes('PRIVATE_MARKER'));
+  assert.throws(() => prepare(catalog, envelope, { conditionsBytes: Buffer.alloc(256 * 1024 + 1, 32) }), { code: 'field_input' });
+});
+test('explicit conditions CLI keeps private input/hash/path out of stdout/errors and preserves answers and supplied bytes', async t => {
+  const directory = await temporary(t), marker = 'CONDITIONS_PRIVATE_MARKER';
+  const catalog = fixture(), file = path.join(directory, 'feed.json'), conditionsFile = path.join(directory, marker + '.json');
+  const feedBytes = encode(catalog), conditionBytes = encode(conditions({ knownUrls: [Discovery.canonicalUrl(catalog.articles[4].url)] }));
+  await fs.writeFile(file, feedBytes); await fs.writeFile(conditionsFile, conditionBytes);
+  const out = path.join(directory, 'new'), script = path.resolve(__dirname, '../scripts/evaluate-discovery-field.cjs');
+  const args = [script, '--feed', file, '--now', NOW, '--content-languages', 'ko', '--conditions-file', conditionsFile, '--out', out];
+  const run = await exec(process.execPath, args), report = JSON.parse(await fs.readFile(path.join(out, 'evaluation.json')));
+  assert.equal(report.conditions.explicit.input, 'explicit_file'); assert.equal(report.conditions.explicit.actualUserConditionsConfirmed, null);
+  assert(!run.stdout.includes(report.conditions.explicit.sha256)); assert(!run.stdout.includes(marker)); assert(!run.stdout.includes(directory));
+  assert(!run.stdout.includes(catalog.articles[4].url)); assert.equal(run.stderr, '');
+  const reviewPath = path.join(out, 'review-template.json'), review = JSON.parse(await fs.readFile(reviewPath));
+  assert(review.reviews.every(row => row.usefulAfterReading === null)); review.preferredList = 'synthetic-human-answer';
+  const answer = encode(review); await fs.writeFile(reviewPath, answer);
+  await assert.rejects(exec(process.execPath, args), error => error.code === 1 && !error.stderr.includes(marker));
+  assert.deepEqual(await fs.readFile(reviewPath), answer); assert.deepEqual(await fs.readFile(file), feedBytes); assert.deepEqual(await fs.readFile(conditionsFile), conditionBytes);
+  for (const bytes of [Buffer.from('{"' + marker + '":'), Buffer.from([0xff]), encode(conditions({ knownUrls: ['https://' + marker + '.invalid/a'] }))]) {
+    await fs.writeFile(conditionsFile, bytes);
+    await assert.rejects(exec(process.execPath, [...args.slice(0, -1), path.join(directory, 'invalid')]), error => error.code === 1 && !error.stderr.includes(marker) && !error.stderr.includes(directory));
+  }
   await assert.rejects(fs.stat(path.join(directory, 'invalid')), { code: 'ENOENT' });
 });
