@@ -11,16 +11,17 @@ const root = path.resolve(__dirname, '..'), output = path.join(root, '.local/int
 const migration = 'supabase/migrations/20261019005829_life_material_continuity.sql';
 const accountMaterialMigration = 'supabase/migrations/20261020042517_account_material_registrations.sql';
 const naverMigrations = ['supabase/migrations/20261021093111_life_naver_subscriptions.sql', 'supabase/migrations/20261021094614_naver_conflict_http409.sql'];
+const captureMigration = 'supabase/migrations/20261021113658_life_naver_captures.sql';
 const image = 'postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
 const container = 'haedo-blog-postgres-' + Date.now() + process.pid, database = 'haedo_blog_qa_integrated_install', runId = randomUUID();
 const env = { ...process.env }; for (const key of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH']) delete env[key];
 const q = value => "'" + String(value).replaceAll("'", "''") + "'", json = value => q(JSON.stringify(value)) + '::jsonb';
 const hash = value => createHash('sha256').update(value).digest('hex');
-function command(name, args, input) {
-  const result = spawnSync(name, args, { env, input, encoding: 'utf8', timeout: 30000, maxBuffer: 16 * 1024 * 1024 });
+function command(name, args, input, timeout = 30000) {
+  const result = spawnSync(name, args, { env, input, encoding: 'utf8', timeout, maxBuffer: 16 * 1024 * 1024 });
   if (result.status !== 0) throw new Error(result.stderr || result.error?.message || name + ' failed'); return result.stdout;
 }
-const docker = (args, input) => command('docker', ['--host=unix:///var/run/docker.sock', ...args], input);
+const docker = (args, input, timeout) => command('docker', ['--host=unix:///var/run/docker.sock', ...args], input, timeout);
 const psql = source => docker(['exec', '-i', container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', database], source);
 const sql = source => JSON.parse(psql(source).trim().split('\n').filter(Boolean).at(-1));
 const owner = randomUUID();
@@ -46,8 +47,8 @@ async function main() {
       .trim().split('\n').filter(name => name.endsWith('.sql')).map(name => path.basename(name)).sort();
     assert.equal(baseline.length, 10);
     assert.deepEqual(files.map(name => 'supabase/migrations/' + name),
-      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations].sort(),
-      'Exactly the ten legacy and four reviewed additive migrations are required; missing or unknown files are rejected.');
+      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration].sort(),
+      'Exactly the ten legacy and five reviewed additive migrations are required; missing or unknown files are rejected.');
     for (const file of baseline) {
       const relative = 'supabase/migrations/' + file, current = await fs.readFile(path.join(root, relative), 'utf8');
       assert.equal(hash(current), hash(command('git', ['-C', root, 'show', '88ccfe5:' + relative])), 'Previously installed migration changed: ' + file);
@@ -57,7 +58,9 @@ async function main() {
     // Record the attempted resource before launch: a timed-out Docker client
     // can still leave its container running. Cleanup checks the unique label.
     owned = true;
-    docker(['run', '--detach', '--name', container, '--label', 'com.haedo.fixture=integrated-release-installation', '--label', 'com.haedo.fixture-run=' + runId, '--network', 'none', '--tmpfs', '/var/lib/postgresql/data', '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', image]);
+    // Managed Docker uses vfs: materializing this pinned image can exceed 30s.
+    // Only resource creation gets this budget; SQL and all assertions keep 30s.
+    docker(['run', '--detach', '--name', container, '--label', 'com.haedo.fixture=integrated-release-installation', '--label', 'com.haedo.fixture-run=' + runId, '--network', 'none', '--tmpfs', '/var/lib/postgresql/data', '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', image], undefined, 120000);
     let ready = false;
     for (let attempt = 0; attempt < 40; attempt++) {
       try { docker(['exec', container, 'pg_isready', '--host=127.0.0.1', '-U', 'postgres', '--quiet']); ready = true; break; }
@@ -204,6 +207,47 @@ async function main() {
       assert.deepEqual(sql(await fs.readFile(path.join(root, 'supabase/tests/naver-installation.sql'), 'utf8')), metadata);
       report.naverMigrations = naverMigrations.map((file, index) => ({ file, sha256: hash(index ? fixDDL : baseDDL) }));
       report.naverInstallation = metadata; report.naverInstalledDataSha256 = hash(JSON.stringify(installedData));
+    });
+    await check('Naver capture installation rolls back atomically and preserves all older data, catalogs and privileges through installation and reinstall', async () => {
+      const captureDDL = await fs.readFile(path.join(root, captureMigration), 'utf8');
+      const allNamespaces = "array['public','auth','storage','haedo_blog_private','haedo_material_private','haedo_naver_private']";
+      const allCatalog = catalogQuery.replaceAll(namespaces, allNamespaces).replace(" and p.proname not like 'life_material_%'", '');
+      const dataSnapshot = () => sql('select installation_probe.all_data_snapshot();');
+      const intactData = dataSnapshot(), intactCatalog = sql(allCatalog);
+      const oldKeys = {
+        schemas: row => row[0], functions: row => JSON.stringify(row.slice(0, 3)),
+        relations: row => JSON.stringify(row.slice(0, 2)), policies: row => JSON.stringify([row.schemaname, row.tablename, row.policyname])
+      };
+      const keepExistingCatalog = catalog => Object.fromEntries(Object.entries(oldKeys).map(([kind, key]) => {
+        const before = new Set(intactCatalog[kind].map(key));
+        return [kind, catalog[kind].filter(row => before.has(key(row)))];
+      }));
+      const keepExistingData = data => Object.fromEntries(Object.keys(intactData).map(key => {
+        assert(Object.hasOwn(data, key), 'An existing table disappeared: ' + key);
+        return [key, key === 'storage.buckets' ? data[key].filter(row => row.id !== 'haedo-naver-originals') : data[key]];
+      }));
+      assert.equal(sql("select to_jsonb(to_regclass('public.life_naver_captures') is null);"), true);
+      assert.throws(() => psql(captureDDL.replace(/commit;\s*$/i, 'select 1/0;\ncommit;')), /division by zero/);
+      assert.deepEqual(dataSnapshot(), intactData); assert.deepEqual(sql(allCatalog), intactCatalog);
+      assert.equal(sql("select to_jsonb(to_regclass('public.life_naver_captures') is null and not exists(select 1 from storage.buckets where id='haedo-naver-originals'));"), true);
+      psql(captureDDL);
+      assert.deepEqual(keepExistingData(dataSnapshot()), intactData);
+      assert.deepEqual(keepExistingCatalog(sql(allCatalog)), intactCatalog);
+      const metadata = sql(await fs.readFile(path.join(root, 'supabase/tests/naver-capture-installation.sql'), 'utf8'));
+      assert.equal(Object.keys(metadata).length, 12); assert(Object.values(metadata).every(value => value === true));
+      const installedData = dataSnapshot(), installedCatalog = sql(allCatalog);
+      assert.deepEqual(installedData['public.life_naver_captures'], []);
+      assert.equal(installedData['storage.buckets'].filter(row => row.id === 'haedo-naver-originals').length, 1);
+      assert.throws(() => psql(captureDDL.replace(/commit;\s*$/i, 'select 1/0;\ncommit;')), /division by zero/);
+      assert.deepEqual(dataSnapshot(), installedData); assert.deepEqual(sql(allCatalog), installedCatalog);
+      psql(captureDDL);
+      assert.deepEqual(dataSnapshot(), installedData); assert.deepEqual(sql(allCatalog), installedCatalog);
+      assert.deepEqual(keepExistingData(dataSnapshot()), intactData);
+      assert.deepEqual(keepExistingCatalog(sql(allCatalog)), intactCatalog);
+      report.captureMigration = { file: captureMigration, sha256: hash(captureDDL) };
+      report.captureInstallation = metadata;
+      report.captureInstalledDataSha256 = hash(JSON.stringify(installedData));
+      report.captureDataReinstallEvidence = 'supabase/tests/check-naver-captures.mjs separately checks retained immutable captures, photo metadata, checkpoints and receipts; no actual object-byte claim.';
     });
     report.pass = true; report.baselineMigrations = baseline; report.baselineDataSha256 = baselineDigest;
     report.rollback = 'Failed transaction rolls back all additive DDL. After successful use retain data/receipts and compatible output-receipt storage; disable new UI and public/private entrypoint execution, then reapply the migration to restore. Full 88cc frontend rollback is safe only before new preparation usage. No destructive down migration.';

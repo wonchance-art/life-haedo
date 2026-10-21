@@ -1,4 +1,5 @@
 import { collect, failure, feedURL, readBounded } from './collector.mjs';
+import { createHarvestWorker } from './harvest-worker.mjs';
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const HEADERS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -14,8 +15,10 @@ export function secretEqual(left, right) {
 }
 const safeCode = error => ['invalid_blog', 'invalid_feed', 'feed_too_large', 'blocked', 'network_error',
   'invalid_response', 'incomplete_response'].includes(error?.code) ? error.code : 'network_error';
-export function createHandler({ fetcher = fetch, environment = name => globalThis.Deno?.env.get(name) } = {}) {
+/** @param {{fetcher?: typeof fetch, environment?: (name: string) => string | undefined, load?: any, captureModel?: any}} [options] */
+export function createHandler({ fetcher = fetch, environment = name => globalThis.Deno?.env.get(name), load, captureModel } = {}) {
   return async request => {
+    const deadline = Date.now() + 80000;
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: HEADERS });
     if (request.method !== 'POST') return response({ error: 'invalid_request' }, 405);
     try {
@@ -29,11 +32,15 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
       let input;
       try { input = JSON.parse(await readBounded(request, 4096)); } catch (_) { throw failure('invalid_request'); }
       check(object(input));
-      const cron = input.action === 'cron'; let owner = null;
+      const harvest = ['inventory','capture','run'].includes(input.action);
+      const cron = input.action === 'cron' || input.action === 'run' && secretEqual(token, key); let owner = null;
       if (cron) {
         check(Object.keys(input).length === 1 && secretEqual(token, key), 'unauthorized');
       } else {
-        check(Object.keys(input).length === 1 && UUID.test(input.subscriptionId || ''));
+        check(harvest ? input.action === 'capture' ? Object.keys(input).every(k => ['action','subscriptionId','jobId'].includes(k)) &&
+          UUID.test(input.jobId || '') && (input.subscriptionId === undefined || UUID.test(input.subscriptionId)) :
+          Object.keys(input).length === 2 && UUID.test(input.subscriptionId || '') :
+          Object.keys(input).length === 1 && UUID.test(input.subscriptionId || ''));
         // getUser: validate the JWT with Auth itself, never trust decoded claims.
         const publicKey = environment('SUPABASE_ANON_KEY') || environment('SUPABASE_PUBLISHABLE_KEY');
         check(typeof publicKey === 'string' && publicKey.length > 0, 'setup_required');
@@ -45,14 +52,20 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
       }
       if (environment('HAEDO_NAVER_INGESTION_ENABLED') !== 'true') return response({ error: 'setup_required' });
       const rpc = async (name, args) => {
+        check(deadline > Date.now() + 100, 'server_error');
         const result = await fetcher(origin + '/rest/v1/rpc/' + name, { method: 'POST', redirect: 'error',
-          signal: AbortSignal.any([request.signal, AbortSignal.timeout(10000)]),
+          signal: AbortSignal.any([request.signal, AbortSignal.timeout(Math.min(10000, deadline - Date.now()))]),
           headers: { apikey: key, Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
         if (!result.ok) { await result.body?.cancel(); throw failure('server_error'); }
         return JSON.parse(await readBounded(result, 4 * 1024 * 1024));
       };
       const ready = await rpc('life_naver_ready', {}); check(typeof ready === 'boolean', 'server_error');
       if (!ready) return response({ error: 'setup_required' });
+      if (harvest) {
+        if (typeof load !== 'function' || !captureModel) return response({ error: 'setup_required' });
+        const worker = createHarvestWorker({ rpc, fetcher, load, model: captureModel, origin, key, signal: request.signal, deadline });
+        return response(await worker.execute({ action: input.action, owner, subscriptionId: input.subscriptionId || null, jobId: input.jobId || null }));
+      }
       const claims = await rpc('life_naver_claim', { p_limit: cron ? 2 : 1,
         p_subscription_id: cron ? null : input.subscriptionId, p_owner_id: owner });
       check(Array.isArray(claims) && claims.length <= (cron ? 2 : 1), 'server_error');
