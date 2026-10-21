@@ -16,12 +16,31 @@ const entry = base + '/index.html?section=news', feedPath = '/assets/life/discov
 const PRIVATE_TEXT = '\ufeff읽기비교_비공개합성원문😀\r\nCafe\u0301 원문보존', PRIVATE_TOPIC = '읽기비교익명비공개주제표식';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const productFiles = ['index.html', 'assets/life/discovery-reading.js', 'assets/life/discovery-reading-ui.js', 'assets/life/discovery-ui.js', 'assets/life/discovery.css', 'assets/life/discovery.js', 'assets/life/discovery-recommendations.js', 'assets/life/discovery-actions.js', 'assets/life/discovery-settings.js', 'assets/life/discovery-language-settings.js', 'assets/life/discovery-profile.js', 'assets/life/storage.js', 'assets/life/ui.js', 'assets/life/shell.js', 'assets/platform-auth.js'];
+// Follow the actual settings/back buttons before opening native disclosures.
+async function newsView(control) {
+  const page = control.page(), panel = page.locator('#discoveryNewsSettingsPanel');
+  if (!await panel.count()) return;
+  const settingsTarget = await control.evaluate(element => !!element.closest('#discoveryNewsSettingsPanel'));
+  if (settingsTarget && !await panel.isVisible()) await page.locator('#discoveryNewsSettings').click();
+  else if (!settingsTarget && await panel.isVisible()) await page.locator('#discoveryNewsSettingsBack').click();
+}
+async function selectNewsMode(page, value) {
+  if (value === 'personal' && await page.locator('#discoverySort option[value="personal"]').isDisabled()) {
+    const optIn = await revealControl(page.locator('#discoveryPersonalize'));
+    await optIn.check();
+    await page.waitForFunction(() => document.querySelector('#discoveryReview')?.getAttribute('aria-busy') === 'false');
+  }
+  await newsView(page.locator('#discoveryDiscover'));
+  if (await page.locator('#discoverySort').isHidden()) await page.locator('#discoveryDiscover').click();
+  await page.locator('#discoverySort').selectOption(value);
+}
 // Open actual native disclosures, outermost first, before using a moved control.
 async function revealControl(control) {
+  await newsView(control);
   const depth = await control.locator('xpath=ancestor::details').count();
   for (let index = depth; index > 0; index--) {
     const details = control.locator('xpath=ancestor::details[' + index + ']');
-    if (!await details.evaluate(element => element.open)) await details.locator(':scope > summary').click();
+    if (!await control.isVisible() && !await details.evaluate(element => element.open)) await details.locator(':scope > summary').click();
   }
   return control;
 }
@@ -34,7 +53,7 @@ async function wait(page, predicate, argument, label = 'state') {
 }
 const idle = page => wait(page, () => document.querySelector('#discoveryReview')?.getAttribute('aria-busy') === 'false', null, 'news idle');
 async function open(page) { await page.goto(entry); await ready(page); await idle(page); }
-async function reveal(page) { await revealControl(page.locator('#discoveryReadingSummary')); const details = page.locator('#discoveryReadingComparison'); if (!await details.evaluate(element => element.open)) await page.locator('#discoveryReadingSummary').click(); }
+async function reveal(page) { await revealControl(page.locator('#discoveryReadingSummary')); const details = page.locator('#discoveryReadingComparison'); if (!await details.evaluate(element => element.open)) await (await revealControl(page.locator('#discoveryReadingSummary'))).click(); }
 async function state(page) {
   return page.evaluate(async () => {
     const storage = HaedoLife.Shell.storage, workspace = await storage.getActive();
@@ -60,7 +79,7 @@ async function seed(page) {
 }
 async function start(page) {
   await reveal(page); const before = await state(page); assert.equal(before.reading.session, null);
-  await page.locator('#discoveryReadingStart').click(); await saved(page, before.reading.revision);
+  await (await revealControl(page.locator('#discoveryReadingStart'))).click(); await saved(page, before.reading.revision);
   await page.locator('article[data-reading-url]').first().waitFor();
   const after = await state(page); assert(after.reading.session); return after;
 }
@@ -132,8 +151,8 @@ async function main() {
       await capture(page, 'first-fold');
       await reveal(page); assert.deepEqual((await state(page)).reading, fresh.reading, 'Opening disclosure never starts or saves a comparison');
       await seed(page);
-      const language = page.locator('#discoveryLanguageOptions'); if (!await language.evaluate(element => element.open)) await language.locator(':scope > summary').click();
-      await page.locator('#discoveryTranslationLanguage').selectOption('ko'); await idle(page);
+      const language = page.locator('#discoveryLanguageOptions'); await newsView(language); if (!await language.evaluate(element => element.open)) await language.locator(':scope > summary').click();
+      await (await revealControl(page.locator('#discoveryTranslationLanguage'))).selectOption('ko'); await idle(page);
       const before = await state(page), started = await start(page), initial = structuredClone(started.reading);
       await preserved(page, before); assert.equal(initial.session.preference, null); assert.equal(initial.session.lists.personal, null);
       assert.match(initial.session.rankInputSHA256, /^[a-f0-9]{64}$/);
@@ -158,35 +177,35 @@ async function main() {
       assert.deepEqual(reviewFor(stored, url), { canonicalUrl: url, intent: 'yes', reading: 'not_read', helpful: null, reason: null });
       await answer(page, url, { reading: 'partial', helpful: 'yes', reason: 'other' }); await saveAnswer(page, url);
       const preferenceRevision = (await state(page)).reading.revision;
-      await page.locator('#discoveryReadingPreference').selectOption('tie'); await page.locator('#discoveryReadingPreferenceSave').click(); await saved(page, preferenceRevision);
+      await (await revealControl(page.locator('#discoveryReadingPreference'))).selectOption('tie'); await (await revealControl(page.locator('#discoveryReadingPreferenceSave'))).click(); await saved(page, preferenceRevision);
       stored = (await state(page)).reading; assert.equal(stored.session.preference, 'tie'); assert.deepEqual(frozen(stored), frozen(initial));
       await capture(page, 'answered', 'article[data-reading-url]');
       await page.reload(); await ready(page); await idle(page); await reveal(page);
       assert.deepEqual((await state(page)).reading, stored); assert.equal(await card(page, url).locator('[data-reading-field="helpful"]').inputValue(), 'yes');
       // Deliberate synthetic current-feed change; frozen comparison retains the actual starting metadata.
       const changed = structuredClone(actualFeed); changed.generatedAt = new Date().toISOString(); changed.articles[0].title = '합성 현재 피드 갱신: ' + changed.articles[0].title; control.body = Buffer.from(JSON.stringify(changed));
-      await page.locator('#discoveryRefresh').click(); await idle(page);
+      await (await revealControl(page.locator('#discoveryRefresh'))).click(); await idle(page);
       assert.deepEqual((await state(page)).reading, stored);
-      const languageOptions = page.locator('#discoveryLanguageOptions'); if (!await languageOptions.evaluate(element => element.open)) await languageOptions.locator(':scope > summary').click();
+      const languageOptions = page.locator('#discoveryLanguageOptions'); await newsView(languageOptions); if (!await languageOptions.evaluate(element => element.open)) await languageOptions.locator(':scope > summary').click();
       await page.locator('[data-discovery-content-language="en"]').check(); await idle(page);
-      const topics = page.locator('#discoveryTopics'); if (!await topics.evaluate(element => element.open)) await page.locator('#discoveryTopicsSummary').click();
-      const settings = page.locator('#discoveryOptions'); if (!await settings.evaluate(element => element.open)) await settings.locator(':scope > summary').click();
+      const topics = page.locator('#discoveryTopics'); await newsView(topics); if (!await topics.evaluate(element => element.open)) await (await revealControl(page.locator('#discoveryTopicsSummary'))).click();
+      const settings = page.locator('#discoveryOptions'); await newsView(settings); if (!await settings.evaluate(element => element.open)) await settings.locator(':scope > summary').click();
       await page.locator('[data-discovery-source=' + JSON.stringify(initial.session.articles[0].snapshot.sourceId) + ']').uncheck(); await idle(page);
       if (!await languageOptions.evaluate(element => element.open)) await languageOptions.locator(':scope > summary').click();
-      await page.locator('#discoveryTranslationLanguage').selectOption('original'); await idle(page);
+      await (await revealControl(page.locator('#discoveryTranslationLanguage'))).selectOption('original'); await idle(page);
       const previousTranslation = card(page, url).locator('[data-reading-translate]'); assert(!await previousTranslation.isVisible(), 'Current explicit translation off withdraws the old comparison translation action');
       assert.equal(await card(page, url).locator('[data-reading-open]').isVisible(), true, 'Frozen original URL remains available independently of current source filtering');
       const afterChange = await preserved(page, before, ['settings', 'language']); assert.deepEqual(afterChange.reading, stored, 'Changed live feed/settings never rewrite the saved comparison or answers');
       // The actual LLT rows have no publication date; keep unknown dates honest through opening and review.
       if (actualFeed.sources.some(source => source.id === 'llt-journal')) {
         for (const source of actualFeed.sources) {
-          const options = page.locator('#discoveryOptions'); if (!await options.evaluate(element => element.open)) await options.locator(':scope > summary').click();
+          const options = page.locator('#discoveryOptions'); await newsView(options); if (!await options.evaluate(element => element.open)) await options.locator(':scope > summary').click();
           const toggle = page.locator('[data-discovery-source=' + JSON.stringify(source.id) + ']');
           if (await toggle.isChecked() !== (source.id === 'llt-journal')) { await toggle.setChecked(source.id === 'llt-journal'); await idle(page); }
         }
         if (!await languageOptions.evaluate(element => element.open)) await languageOptions.locator(':scope > summary').click();
-        await page.locator('#discoveryTranslationLanguage').selectOption('ko'); await idle(page);
-        await page.locator('#discoveryLatest').click(); await idle(page);
+        await (await revealControl(page.locator('#discoveryTranslationLanguage'))).selectOption('ko'); await idle(page);
+        await selectNewsMode(page, 'latest'); await idle(page);
         const llt = page.locator('#discoveryList [data-discovery-id]').first(), id = await llt.getAttribute('data-discovery-id');
         const sourceRow = actualFeed.articles.find(row => row.id === id); assert.equal(sourceRow.sourceId, 'llt-journal'); assert.equal(sourceRow.publishedAt, null); assert.equal(sourceRow.author, null); assert.deepEqual(sourceRow.tags, []); assert.equal(sourceRow.summary, ''); assert.equal(sourceRow.coverage, 'link_only');
         assert((await llt.innerText()).includes(sourceRow.title)); assert((await llt.innerText()).includes('발행일 미확인')); assert.equal(await llt.locator('time').count(), 0);
@@ -211,9 +230,9 @@ async function main() {
       await answer(peer, urls[1], { intent: 'no', reading: 'not_read' }); await saveAnswer(peer, urls[1]);
       const competing = (await state(peer)).reading; await page.evaluate(() => __readingRelease());
       await page.locator('#discoveryReadingReload').waitFor(); assert.equal(await card(page, urls[0]).locator('[data-reading-field="helpful"]').inputValue(), 'no');
-      await page.locator('#discoveryReadingReload').click();
+      await (await revealControl(page.locator('#discoveryReadingReload'))).click();
       assert.equal(await card(page, urls[0]).locator('[data-reading-field="reason"]').inputValue(), 'too_technical');
-      const retryRevision = (await state(page)).reading.revision; await page.locator('#discoveryReadingRetry').click(); await saved(page, retryRevision);
+      const retryRevision = (await state(page)).reading.revision; await (await revealControl(page.locator('#discoveryReadingRetry'))).click(); await saved(page, retryRevision);
       const merged = (await preserved(page, before)).reading; assert.equal(merged.session.id, first.reading.session.id); assert.deepEqual(frozen(merged), frozen(first.reading));
       assert.deepEqual(reviewFor(merged, urls[1]), reviewFor(competing, urls[1])); assert.equal(reviewFor(merged, urls[0]).helpful, 'no');
       report.sameSessionCAS = { realIndexedDB: true, sessionId: merged.session.id, peerReviewPreserved: true, explicitReloadAndRetry: true }; await peer.close();
@@ -226,7 +245,7 @@ async function main() {
       assert.deepEqual((await state(page)).reading, first.reading); assert.equal(await card(page, url).locator('[data-reading-field="reason"]').inputValue(), 'off_topic');
       const location = page.url(); await page.locator('[data-haedo-navigation] [data-haedo-section="home"]').first().click(); await page.locator('#lifeError').waitFor({ state: 'visible' });
       assert.equal(page.url(), location); assert.equal(await card(page, url).locator('[data-reading-field="helpful"]').inputValue(), 'no');
-      const revision = (await state(page)).reading.revision; await page.locator('#discoveryReadingRetry').click(); await saved(page, revision);
+      const revision = (await state(page)).reading.revision; await (await revealControl(page.locator('#discoveryReadingRetry'))).click(); await saved(page, revision);
       const after = await preserved(page, before); assert.equal(reviewFor(after.reading, url).reason, 'off_topic');
       report.saveFailure = { injectedBeforeRealTransaction: true, persistedProfileUnchangedOnFailure: true, exactDraftRetained: true, navigationProtected: true, explicitRetryStored: true };
     });
@@ -240,9 +259,9 @@ async function main() {
       const deleted = (await state(peer)).reading; assert.equal(deleted.session, null); assert(deleted.revision > first.reading.revision);
       await page.evaluate(() => __readingRelease()); await page.locator('#discoveryReadingReload').waitFor();
       assert.equal(await card(page, url).locator('[data-reading-field="helpful"]').inputValue(), 'yes');
-      await page.locator('#discoveryReadingReload').click(); assert.deepEqual((await state(page)).reading, deleted);
+      await (await revealControl(page.locator('#discoveryReadingReload'))).click(); assert.deepEqual((await state(page)).reading, deleted);
       const retry = page.locator('#discoveryReadingRetry'); assert(!await retry.isVisible() || await retry.isDisabled(), 'Deleted session cannot be retried into existence');
-      await page.locator('#discoveryReadingDiscard').click(); assert.deepEqual((await preserved(page, before)).reading, deleted);
+      await (await revealControl(page.locator('#discoveryReadingDiscard'))).click(); assert.deepEqual((await preserved(page, before)).reading, deleted);
       await page.reload(); await ready(page); await idle(page); await reveal(page); assert.equal(await page.locator('article[data-reading-url]').count(), 0); assert.deepEqual((await state(page)).reading, deleted); assert.equal(await page.locator('#discoveryReadingStart').isEnabled(), true, 'A new comparison requires a new explicit start');
       report.tombstone = { oldSessionId: first.reading.session.id, revision: deleted.revision, lateSaveConflict: true, noResurrection: true }; await peer.close();
     });

@@ -1,5 +1,5 @@
 /* Versioned app shell. Personal documents remain in localStorage/IndexedDB. */
-const CACHE='haedo-v151';
+const CACHE='haedo-v152';
 const SHELL=[
   './assets/life/naver-blog.js','./assets/life/naver-blog-sync.js','./assets/life/naver-blog-ui.js','./assets/life/naver-blog.css',
   './assets/life/discovery-reading.js','./assets/life/discovery-reading-ui.js',
