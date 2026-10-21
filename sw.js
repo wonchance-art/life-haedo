@@ -1,6 +1,7 @@
 /* Versioned app shell. Personal documents remain in localStorage/IndexedDB. */
-const CACHE='haedo-v149';
+const CACHE='haedo-v150';
 const SHELL=[
+  './assets/life/naver-blog.js','./assets/life/naver-blog-sync.js','./assets/life/naver-blog-ui.js','./assets/life/naver-blog.css',
   './assets/life/discovery-reading.js','./assets/life/discovery-reading-ui.js',
   './assets/life/discovery.js','./assets/life/discovery-profile.js','./assets/life/discovery-settings.js','./assets/life/discovery-language-settings.js','./assets/life/discovery-actions.js','./assets/life/discovery-recommendations.js','./assets/life/discovery-ui.js','./assets/life/discovery.css',
   './assets/life/interest-model-loader.js','./assets/life/interest-model-worker.js','./assets/life/interest-analysis.js','./assets/life/interest-profile.js','./assets/life/interest-policy.js',

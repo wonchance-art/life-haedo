@@ -29,6 +29,15 @@ jobs:
           package-manager-cache: false
       - run: npm run check
       - run: npm test
+      - name: Verify isolated Naver inbox ownership, leases and retry receipts
+        run: node supabase/tests/check-naver-backend.mjs
+      - name: Retain anonymous Naver database checks
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: naver-backend-${{ github.run_attempt }}
+          path: .local/naver-backend/
+          if-no-files-found: ignore
   browser_suites:
     runs-on: ubuntu-24.04
     # Keep every existing suite, but give five independent fixture groups their
@@ -378,6 +387,9 @@ jobs:
       - name: Verify registered account materials in the existing library without workspace copies
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/account-materials-browser.cjs
+      - name: Verify private Naver connection, original preservation and late-response cancellation
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/naver-blog-browser.cjs
       - name: Verify explicit external discovery, exact source return and private feedback
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-external-discovery-browser.cjs
@@ -429,6 +441,7 @@ jobs:
             .local/travel-writing-history-drift/
             .local/local-post-finder/
             .local/account-materials/
+            .local/naver-blog/
             .local/app-native/qa/
             .local/home-refinement/qa/
             .local/blog-journeys/after/
