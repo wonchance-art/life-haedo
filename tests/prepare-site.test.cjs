@@ -18,7 +18,7 @@ test('repeat public build removes stale private canary and old SDK while preserv
     await assert.rejects(fs.access(path.join(target,'vendor/supabase.js')));
     await fs.access(path.join(target,'vendor/supabase/supabase.js'));await fs.access(path.join(target,'life.html'));
     await fs.access(path.join(target,'assets/life/icons.js'));await fs.access(path.join(target,'vendor/lucide/LICENSE'));
-    for(const asset of ['discovery.js','discovery-profile.js','discovery-settings.js','discovery-language-settings.js','discovery-actions.js','discovery-recommendations.js','discovery-ui.js','discovery.css','discovery-feed.json']){
+    for(const asset of ['discovery.js','discovery-profile.js','discovery-settings.js','discovery-language-settings.js','discovery-actions.js','discovery-recommendations.js','discovery-reading.js','discovery-reading-ui.js','discovery-ui.js','discovery.css','discovery-feed.json']){
       const relative=path.join('assets/life',asset);
       assert.deepEqual(await fs.readFile(path.join(target,relative)),await fs.readFile(path.join(root,relative)),`${relative}: published bytes match source`);
     }

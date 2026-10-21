@@ -82,8 +82,8 @@ test('404 with independently verified pre-catalog worker permits tracked bootstr
   assert.equal(result.bootstrapProof.cacheVersion, 129);
 });
 
-function previousRegistry() {
-  const previous = seed(), added = new Set(['arxiv-cs-cl', 'mit-linguistics']);
+function previousRegistry(count = 5) {
+  const previous = seed(), added = new Set(count === 5 ? ['arxiv-cs-cl', 'mit-linguistics', 'llt-journal'] : ['llt-journal']);
   previous.sources = previous.sources.filter(source => !added.has(source.id));
   previous.articles = previous.articles.filter(article => !added.has(article.sourceId));
   return previous;
@@ -101,8 +101,29 @@ test('exact prior five-source publication can seed an additive registry upgrade 
       fs.writeFileSync(candidate, bytes(seed()));
       return fakeUpdater()({ candidate, report });
     } });
-  assert.equal(result.sourceCount, 7); assert.equal(result.collectorExitCode, 0);
+  assert.equal(result.sourceCount, Object.keys(Core.ALLOWED_SOURCES).length); assert.equal(result.collectorExitCode, 0);
   assert.deepEqual(fs.readFileSync(w.f.seed), bytes(previous));
+});
+
+test('exact prior seven-source publication seeds LLT upgrade, while current artifacts require all eight sources', async t => {
+  assert.equal(Object.keys(Core.ALLOWED_SOURCES).length, 8);
+  const previous = previousRegistry(7);
+  assert.equal(previous.sources.length, 7);
+  assert.doesNotThrow(() => CI.validateCatalog(bytes(previous), stamp(), true));
+  assert.throws(() => CI.validateCatalog(bytes(previous), stamp()), /source set/);
+  const arbitrarySix = structuredClone(previous); arbitrarySix.sources.shift(); arbitrarySix.articles.shift();
+  assert.throws(() => CI.validateCatalog(bytes(arbitrarySix), stamp(), true), /source set/);
+  const wrongSeven = seed(); wrongSeven.sources.shift(); wrongSeven.articles.shift();
+  assert.throws(() => CI.validateCatalog(bytes(wrongSeven), stamp(), true), /source set/);
+  const w = workspace(t), result = await CI.collect({ root: w.root, clock: stamp,
+    fetchSeed: async () => ({ status: 200, bytes: bytes(previous) }),
+    runUpdater: ({ candidate, report }) => {
+      fs.writeFileSync(candidate, bytes(seed()));
+      return fakeUpdater()({ candidate, report });
+    } });
+  assert.equal(result.sourceCount, 8); assert.equal(result.collectorExitCode, 0);
+  assert.deepEqual(fs.readFileSync(w.f.seed), bytes(previous));
+  assert.equal(JSON.parse(fs.readFileSync(w.f.candidate)).sources.length, 8);
 });
 
 test('first failure of an added source retains null history and no fabricated articles', async t => {
@@ -120,7 +141,7 @@ test('first failure of an added source retains null history and no fabricated ar
   assert.equal(result.partialFailure, true);
   assert.equal(next.sources.find(source => source.id === id).lastSuccessAt, null);
   assert.equal(next.articles.filter(article => article.sourceId === id).length, 0);
-  assert.deepEqual(next.articles.filter(article => !['arxiv-cs-cl', 'mit-linguistics'].includes(article.sourceId)).map(article => article.id), previous.articles.map(article => article.id));
+  assert.deepEqual(next.articles.filter(article => !['arxiv-cs-cl', 'mit-linguistics', 'llt-journal'].includes(article.sourceId)).map(article => article.id), previous.articles.map(article => article.id));
 });
 
 for (const failure of ['v130', 'v132', 'missing-version', 'worker404', 'backported-catalog']) {

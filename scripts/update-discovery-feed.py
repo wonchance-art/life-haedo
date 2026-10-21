@@ -67,6 +67,11 @@ SOURCES = (
      'feedUrl': 'https://news.mit.edu/topic/mitlinguistics-rss.xml', 'allowedHosts': ['news.mit.edu'],
      'language': 'en', 'rights': {'mode': 'metadata_only',
      'label': 'MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공', 'url': 'https://news.mit.edu/terms-of-use'}},
+    {'id': 'llt-journal', 'name': 'Language Learning & Technology', 'url': 'https://www.lltjournal.org/',
+     'feedUrl': 'https://www.lltjournal.org/feedlet/', 'allowedHosts': ['www.lltjournal.org'],
+     'language': 'en', 'rights': {'mode': 'metadata_only',
+     'label': '공식 RSS · 언어교육 동료심사 연구 · 제목·링크만 보관 · 2020년 이후 원문 CC BY-NC-ND 4.0(출처표시·비상업·원형유지)',
+     'url': 'https://www.lltjournal.org/about/'}},
 )
 
 

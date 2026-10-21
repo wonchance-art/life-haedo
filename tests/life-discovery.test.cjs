@@ -67,6 +67,23 @@ test('Latin interest terms accept complete Korean particles without admitting ar
   }
   assert.equal(rank(catalog, '공연').items.length, 0);
 });
+test('word boundaries use complete Unicode code points while evidence stays in exact UTF16 offsets', () => {
+  const catalog = feed([article('prefix', '𐐀AI'), article('suffix', 'AI𐐀'), article('valid', '😀 AI가 분석한 표현')]);
+  const result = rank(catalog, 'AI'); assert.deepEqual(result.items.map(row => row.article.id), ['valid']);
+  const reason = result.items[0].reasons[0]; assert.equal(reason.start, 3); assert.equal(reason.end, 5); assert.equal(reason.quote, 'AI');
+  const astral = rank(feed([article('inside', '𐐀𐐁'), article('astral-valid', '😀 𐐀의 자료')]), '𐐀');
+  assert.deepEqual(astral.items.map(row => row.article.id), ['astral-valid']);
+  const span = astral.items[0].reasons[0]; assert.equal(span.start, 3); assert.equal(span.end, 5);
+  assert.equal(astral.items[0].article.title.slice(span.start, span.end), span.quote);
+});
+test('only the reviewed linguistics label crosses Korean/English and longer interests retain their literal scope', () => {
+  const catalog = feed([article('english', 'A research update', { language: 'en', tags: ['Linguistics'] }), article('korean', '언어학의 공개 연구')]);
+  const korean = rank(catalog, '언어학'), english = rank(catalog, 'linguistics');
+  assert.deepEqual(korean.items.map(row => row.article.id), ['korean', 'english']);
+  assert.deepEqual(english.items.map(row => row.article.id), ['korean', 'english']);
+  assert.equal(korean.items.find(row => row.article.id === 'english').reasons[0].via, 'alias');
+  for (const label of ['언어', '언어 관련 연구 및 조언', '언어 학습', '언어학에는 관심이 없다']) assert.equal(rank(catalog, label).items.length, 0);
+});
 test('every reason reproduces the exact public field span including emoji and CRLF offsets', () => {
   const catalog = feed([article('offsets', '😀 인공지능의 연구\r\n이야기', { tags: ['인공지능'] })]); const result = rank(catalog);
   for (const reason of result.items[0].reasons) { const item = result.items[0].article; const raw = reason.field === 'tags' ? item.tags[reason.tagIndex] : item[reason.field]; assert.equal(raw.slice(reason.start, reason.end), reason.quote); assert.equal(reason.interestLabel, '인공지능'); }

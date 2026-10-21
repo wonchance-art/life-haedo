@@ -387,6 +387,9 @@ jobs:
       - name: Verify discovery language selection, translated links and private preference recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-languages-browser.cjs
+      - name: Verify frozen reading comparisons, explicit judgments and local recovery
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-discovery-reading-browser.cjs
       - name: Verify explicit discovery automation and local setting preservation
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-automation-browser.cjs
@@ -446,6 +449,7 @@ jobs:
             .local/discovery-automation-browser/
             .local/discovery-reactions-browser/
             .local/discovery-languages-browser/
+            .local/discovery-reading-browser/
             .local/unified-search/
             .local/collection-library/
             .local/collection-metadata/
@@ -667,7 +671,7 @@ jobs:
       - name: Verify generated configuration and complete installed shell hashes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         env:
-          PREVIOUS_RELEASE: "df0c12632c1745582cc7dd594babaf26e43fef60"
+          PREVIOUS_RELEASE: "b5ddbfa9acf310b8977a75a1e221663d471799cd"
         run: node scripts/verify-prepared-site.mjs
       - name: Verify the actual previous service worker updates without losing originals
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}

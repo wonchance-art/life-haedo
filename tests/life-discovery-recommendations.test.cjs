@@ -82,7 +82,7 @@ test('past like promotes a different public article with exact inspectable title
   const inputBefore = JSON.stringify({ actions, catalog }), result = rank(catalog, actions);
   assert.deepEqual(result.items.map(row => row.article.id), ['new']);
   assert.equal(result.metadata.personalization.applied, true); assert.equal(result.metadata.personalization.signalCount, 1);
-  const item = result.items[0]; assert.equal(item.personal.policy, 'public-title-tags-v1'); assert.equal(item.personal.score, 3);
+  const item = result.items[0]; assert.equal(item.personal.policy, 'public-title-tag-expressions-v2'); assert.equal(item.personal.score, 3);
   for (const evidence of item.personal.evidence) {
     const original = evidence.field === 'tags' ? liked.tags[evidence.tagIndex] : liked.title;
     const candidate = evidence.candidateField === 'tags' ? item.article.tags[evidence.candidateTagIndex] : item.article.title;
@@ -174,7 +174,7 @@ test('two shared homonyms remain an explicit lexical false-positive limitation, 
   // Programming language versus a natural language: lexical heuristics cannot
   // distinguish this pair. Keep the failure visible; do not claim NLU quality.
   assert.deepEqual(result.items.map(row => row.article.id), ['javanese-language']);
-  assert.match(result.metadata.limitation, /겹친 단어/);
+  assert.match(result.metadata.limitation, /겹친 제목 단어/);
   assert(!('probability' in result.items[0].personal));
   assert(!('semanticSimilarity' in result.items[0].personal));
 });
@@ -195,4 +195,48 @@ test('personalization scans the whole bounded pool rather than only five baselin
   const result = rank(catalog, actions, { baselineMode: 'latest' });
   assert.equal(result.poolCount, 500); assert.deepEqual(result.items.map(row => row.article.id), ['last-500']);
   assert.equal(Recommendations.MIN_SHARED_TERMS, 2);
+});
+test('one shared institutional tag is one expression, never enough independent evidence for personalization', () => {
+  const tag = 'School of Humanities Arts and Social Sciences';
+  const liked = article('research', 'Language research', { tags: [tag] }), catalog = feed([article('concert', 'Piano concert', { tags: [tag] })]);
+  const actions = enabled(liked), before = JSON.stringify({ catalog, actions });
+  assert.equal(Recommendations.inspectSignals(actions, { now: NOW }).signalCount, 1);
+  assert.deepEqual(rank(catalog, actions), baseline(catalog));
+  const onlyTag = enabled(article('only-tag', 'Guide', { tags: [tag] }));
+  assert.equal(Recommendations.inspectSignals(onlyTag, { now: NOW }).signalCount, 0);
+  assert.equal(Recommendations.inspectSignals(onlyTag, { now: NOW }).excluded.insufficientTerms, 1);
+  assert.deepEqual(rank(catalog, onlyTag), baseline(catalog));
+  const stopTags = enabled(article('stop-tags', 'Guide', { tags: ['and the', 'for with'] }));
+  assert.equal(Recommendations.inspectSignals(stopTags, { now: NOW }).signalCount, 0);
+  assert.equal(JSON.stringify({ catalog, actions }), before);
+});
+test('two separate whole-tag expressions can match with full exact tag spans and no internal-word expansion', () => {
+  const liked = article('liked', 'Guide', { tags: ['  Language learning  ', 'Phonetics'] }), actions = enabled(liked);
+  const catalog = feed([article('both', 'A practice update', { tags: ['Language learning', 'Phonetics'] }),
+    article('one', 'A separate update', { tags: ['Language learning'] }),
+    article('words-only', 'Language learning phonetics practice')]);
+  const result = rank(catalog, actions); assert.deepEqual(result.items.map(row => row.article.id), ['both']);
+  assert.equal(result.items[0].personal.score, 4); assert.equal(result.items[0].personal.evidence.length, 2);
+  for (const evidence of result.items[0].personal.evidence) {
+    assert.equal(evidence.field, 'tags'); assert.equal(evidence.candidateField, 'tags');
+    assert.equal(liked.tags[evidence.tagIndex].slice(evidence.start, evidence.end), evidence.quote);
+    assert.equal(catalog.articles[0].tags[evidence.candidateTagIndex].slice(evidence.candidateStart, evidence.candidateEnd), evidence.candidateQuote);
+  }
+  assert.equal(result.items[0].personal.evidence.find(row => row.quote === 'Language learning').start, 2);
+});
+test('repeated tags and equivalent labels are not independent expressions while separate title words retain exact evidence', () => {
+  const repeated = enabled(article('repeat', 'Guide', { tags: ['언어학', 'Linguistics', 'linguistics'] }));
+  assert.equal(Recommendations.inspectSignals(repeated, { now: NOW }).signalCount, 0);
+  const liked = article('liked', '😀 언어학 phonetics', { tags: ['언어학'] }), actions = enabled(liked);
+  const catalog = feed([article('new', '😀 Linguistics phonetics update')]);
+  const result = rank(catalog, actions); assert.deepEqual(result.items.map(row => row.article.id), ['new']);
+  assert.equal(result.items[0].personal.evidence.length, 2);
+  for (const evidence of result.items[0].personal.evidence) {
+    const raw = evidence.field === 'tags' ? liked.tags[evidence.tagIndex] : liked.title;
+    assert.equal(raw.slice(evidence.start, evidence.end), evidence.quote);
+    assert.equal(catalog.articles[0].title.slice(evidence.candidateStart, evidence.candidateEnd), evidence.candidateQuote);
+  }
+  const off = Actions.setPersonalization(actions, false, { expectedRevision: actions.revision, now: NOW });
+  assert.deepEqual(rank(catalog, off), baseline(catalog));
+  assert.deepEqual(rank(catalog, enabled(liked, 'bookmarked')), baseline(catalog));
 });

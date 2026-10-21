@@ -10,10 +10,12 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (discovery, actionsApi) {
   'use strict';
-  const POLICY = 'public-title-tags-v1';
+  const POLICY = 'public-title-tag-expressions-v2';
   const MIN_SHARED_TERMS = 2;
   // Deliberately conservative: no stemming, Korean particle removal, inferred
-  // topics or arbitrary substring matching. Two-letter abbreviations are kept.
+  // topics or arbitrary substring matching. Title words and whole official tags
+  // are expressions; a multiword tag never supplies several independent terms.
+  // Two-letter abbreviations are kept.
   // Only existing reviewed, single-token Discovery aliases are equivalent.
   const STOP_WORDS = new Set(('대한 통한 위한 방법 이야기 소식 소개 안내 새로운 우리 함께 무엇 어떻게 오늘 이번 뉴스 기자 기사 발표 해당 대해 관련 ' +
     '있는 하는 한다 있다 그리고 또는 하지만 것을 것이 이유 ' +
@@ -34,15 +36,22 @@
   }
   function features(snapshot, equivalences) {
     const result = new Map();
-    const fields = [['title', snapshot.title], ...snapshot.tags.map((tag, tagIndex) => ['tags', tag, tagIndex])];
-    for (const [field, value, tagIndex] of fields) for (const match of value.matchAll(/[\p{L}\p{N}_]+/gu)) {
-      const raw = fold(match[0]), length = [...raw].length;
-      if (length < 2 || length > 64 || !/\p{L}/u.test(raw) || STOP_WORDS.has(raw)) continue;
+    function add(field, quote, start, tagIndex) {
+      const raw = fold(quote), length = [...raw].length;
+      if (length < 2 || length > (field === 'tags' ? 200 : 64) || !/\p{L}/u.test(raw) || STOP_WORDS.has(raw)) return;
+      // Keep the old stop-word/abbreviation gate without turning the words
+      // inside a tag into separately matchable or countable features.
+      if (field === 'tags' && ![...raw.matchAll(/[\p{L}\p{N}_]+/gu)].some(match => {
+        const size = [...match[0]].length;
+        return size >= 2 && size <= 64 && /\p{L}/u.test(match[0]) && !STOP_WORDS.has(match[0]);
+      })) return;
       const term = equivalences.get(raw) || raw;
-      const feature = { field, ...(tagIndex === undefined ? {} : { tagIndex }), start: match.index, end: match.index + match[0].length, quote: match[0], term };
+      const feature = { field, ...(tagIndex === undefined ? {} : { tagIndex }), start, end: start + quote.length, quote, term };
       // Repetition never increases the score. Prefer official tag provenance.
       if (!result.has(term) || result.get(term).field === 'title' && field === 'tags') result.set(term, feature);
     }
+    for (const match of snapshot.title.matchAll(/[\p{L}\p{N}_]+/gu)) add('title', match[0], match.index);
+    snapshot.tags.forEach((tag, tagIndex) => { const quote = tag.trim(); add('tags', quote, tag.indexOf(quote), tagIndex); });
     return result;
   }
   function signalsFor(actions, options, now, equivalences) {
@@ -119,7 +128,7 @@
     ranked.sort((a, b) => b.score - a.score || b.strength - a.strength || b.interests - a.interests || date(b) - date(a) || a.article.canonicalUrl.localeCompare(b.article.canonicalUrl));
     // Bounded source variety: promote an unused source only within one lexical
     // point of the best remaining row. Every selected row already has >=2
-    // shared terms with one past like. Never pad with unrelated catalog items.
+    // shared expressions with one past like. Never pad with unrelated catalog items.
     const remaining = [...ranked], selected = [], usedSources = new Set();
     while (remaining.length && selected.length < prepared.limit) {
       let at = remaining.findIndex(row => !usedSources.has(row.article.sourceId) && row.score >= remaining[0].score - 1);
@@ -134,7 +143,7 @@
       })) } }));
     return { ...baseline, items, eligibleCount: ranked.length, metadata: { ...baseline.metadata, mode: 'personal',
       personalization: { enabled: true, applied: true, reason: 'applied', policy: POLICY, signalCount: signals.length },
-      limitation: '과거 좋아요의 공개 제목·태그와 겹친 단어를 기준으로 고른 결과입니다. 점수는 규칙값이며 같은 단어라도 문맥은 다를 수 있습니다.' } };
+      limitation: '과거 좋아요와 겹친 제목 단어·태그 전체 표현 중 서로 다른 2개 이상을 기준으로 고른 결과입니다. 태그 한 개는 한 표현입니다. 점수는 규칙값이며 같은 단어라도 문맥은 다를 수 있습니다.' } };
   }
   return Object.freeze({ POLICY, MIN_SHARED_TERMS, inspectSignals, rank });
 });
