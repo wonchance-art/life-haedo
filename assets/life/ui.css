@@ -167,6 +167,7 @@ html.auth-pending [data-private] { display: none !important; }
 .life-reader-meta { color: var(--ink-soft); font-size: 12px; line-height: 1.8; margin-bottom: 8px; overflow-wrap: anywhere; }
 .life-reader-meta + .life-reader-meta { margin-bottom: 32px; }
 .life-reader-related { display: inline-flex; min-height: 44px; margin: -12px 0 24px; padding: 10px 14px; color: var(--color-primary); background: var(--soft); border-color: transparent; font-size: 14px; }
+.life-reader-writing-actions { margin-bottom: 24px; }
 .life-version-field { max-width: 400px; margin: 0 0 28px; }
 .life-source-details { margin: 0 0 28px; padding: 18px 0; border-bottom: 1px solid var(--line); scroll-margin-top: 76px; }
 .life-source-details p { margin-bottom: 8px; }
