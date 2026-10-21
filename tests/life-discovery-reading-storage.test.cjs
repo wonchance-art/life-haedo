@@ -10,6 +10,8 @@ const Settings = require('../assets/life/discovery-settings.js');
 const Languages = require('../assets/life/discovery-language-settings.js');
 const Actions = require('../assets/life/discovery-actions.js');
 const Reading = require('../assets/life/discovery-reading.js');
+// Actual d6009ea v2 output, shared with the model compatibility test; no rerank.
+const historicalV2 = require('./fixtures/discovery-reading-v2.json');
 
 // Transactional fault injection; independent browser tests use real IndexedDB.
 function memoryAdapter() {
@@ -83,8 +85,10 @@ function fixture() {
   const adapter = memoryAdapter();
   return { ...adapter, storage: createStorage({ ...dependencies, idb: adapter.idb, channelFactory: null }) };
 }
-async function imported(storage) {
-  const bundle = await storage.createWorkspace('합성 읽기 평가 검증');
+async function imported(storage, workspaceId) {
+  const bundle = workspaceId
+    ? await storage.installWorkspace(Core.createWorkspace({ workspaceId, title: '합성 읽기 평가 검증' }))
+    : await storage.createWorkspace('합성 읽기 평가 검증');
   const prepared = await Core.prepareImport({ origin: 'other', title: '보존할 원문', text: '\ufeff가😀나\r\nCafe\u0301  저장할 원문입니다.', url: article.canonicalUrl, authorRelation: 'unknown' }, bundle);
   await storage.commitLocal({ workspaceId: bundle.workspaceId, operationId: Core.id(), baseRevision: bundle.revision, changes: Core.buildImportChanges(bundle, prepared) });
   return storage.read(bundle.workspaceId);
@@ -102,9 +106,9 @@ async function comparison(workspaceId) {
     { ...opts(0), sessionId: 'synthetic-session' });
 }
 
-test('reading comparison is private metadata; rereads and clear preserve source, existing states, backups and sync', async t => {
+test('historical v2 reading row reopens, updates and clears while preserving source, existing states, backups and sync', async t => {
   const { storage: base, rows, control } = fixture(); t.after(() => base.close());
-  const store = base.forAccount(accountA), bundle = await imported(store), w = bundle.workspaceId;
+  const store = base.forAccount(accountA), bundle = await imported(store, historicalV2.workspaceId), w = bundle.workspaceId;
   const interest = Interest.setManual(Interest.empty(w), [{ id: 'manual-map', label: '지도' }], opts(0));
   const feedback = Feedback.setFeedback(Feedback.empty(w), article, 'already_read', opts(0));
   const settings = Settings.update(Settings.empty(w), { autoRefresh: true }, opts(0));
@@ -115,21 +119,25 @@ test('reading comparison is private metadata; rereads and clear preserve source,
   const metaBefore = structuredClone(rows.get('meta')), readsBefore = control.transactions.length;
   assert.deepEqual(await store.readDiscoveryReading(w), Reading.empty(w)); await store.readDiscoveryReading(w);
   assert.deepEqual(rows.get('meta'), metaBefore); assert.ok(control.transactions.slice(readsBefore).every(tx => tx.mode === 'readonly'));
-  const candidate = await comparison(w), saved = await store.saveDiscoveryReading(w, candidate, 0);
-  assert.equal(saved.status, 'stored'); assert.deepEqual(saved.profile, candidate);
-  saved.profile.session = null; assert.deepEqual(await store.readDiscoveryReading(w), candidate);
+  // A previous app version already committed this exact v2 metadata row.
+  const candidate = structuredClone(historicalV2);
+  rows.get('meta').set(JSON.stringify(rowKey(w)), { key: rowKey(w), value: structuredClone(candidate) });
+  const saved = await store.readDiscoveryReading(w); assert.deepEqual(saved, candidate);
+  assert.equal(saved.session.personal.policy, 'public-title-tag-expressions-v2');
+  saved.session = null; assert.deepEqual(await store.readDiscoveryReading(w), candidate);
   const answered = Reading.setReview(candidate, candidate.session.reviews[0].canonicalUrl,
-    { intent: 'yes', reading: 'partial', helpful: 'yes' }, opts(1));
-  assert.equal((await store.saveDiscoveryReading(w, answered, 1)).status, 'stored');
+    { intent: 'yes', reading: 'partial', helpful: 'yes', reason: null }, opts(candidate.revision));
+  assert.equal((await store.saveDiscoveryReading(w, answered, candidate.revision)).status, 'stored');
   assert.deepEqual(await store.readDiscoveryReading(w), answered);
-  assert.equal(JSON.stringify(Actions.exportCopy(actions, { now: NOW })).includes('synthetic-session'), false);
-  assert.equal(JSON.stringify(Core.makeBackup(await store.read(w))).includes('synthetic-session'), false);
+  assert.deepEqual({ ...answered.session, reviews: candidate.session.reviews }, candidate.session);
+  assert.equal(JSON.stringify(Actions.exportCopy(actions, { now: NOW })).includes(candidate.session.id), false);
+  assert.equal(JSON.stringify(Core.makeBackup(await store.read(w))).includes(candidate.session.id), false);
   const binding = { ...accountA, remoteId: w }; await store.bindSync(w, binding);
   const upload = await store.prepareSyncUpload(w, binding); assert.deepEqual(upload.data, bundle);
-  assert.equal(JSON.stringify(upload).includes('synthetic-session'), false);
-  const cleared = Reading.clear(answered, opts(2));
-  assert.equal((await store.saveDiscoveryReading(w, cleared, 2)).status, 'stored');
-  assert.deepEqual(await store.saveDiscoveryReading(w, candidate, 0), { status: 'conflict', profile: cleared });
+  assert.equal(JSON.stringify(upload).includes(candidate.session.id), false);
+  const cleared = Reading.clear(answered, opts(answered.revision));
+  assert.equal((await store.saveDiscoveryReading(w, cleared, answered.revision)).status, 'stored');
+  assert.deepEqual(await store.saveDiscoveryReading(w, candidate, candidate.revision - 1), { status: 'conflict', profile: cleared });
   assert.equal(cleared.deleted, true); assert.equal(cleared.session, null);
   assert.deepEqual(rows.get('meta').get(JSON.stringify(rowKey(w))).value, cleared);
   assert.deepEqual(await store.read(w), bundle);

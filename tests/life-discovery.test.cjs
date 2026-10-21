@@ -88,6 +88,32 @@ test('every reason reproduces the exact public field span including emoji and CR
   const catalog = feed([article('offsets', '😀 인공지능의 연구\r\n이야기', { tags: ['인공지능'] })]); const result = rank(catalog);
   for (const reason of result.items[0].reasons) { const item = result.items[0].article; const raw = reason.field === 'tags' ? item.tags[reason.tagIndex] : item[reason.field]; assert.equal(raw.slice(reason.start, reason.end), reason.quote); assert.equal(reason.interestLabel, '인공지능'); }
 });
+test('reviewed language learning and education expressions stay separate with exact original spans', () => {
+  const catalog = feed([
+    article('learn-english', '😀 Language learning\r\nresearch'),
+    article('learn-korean', '언어학습을 기록한다'),
+    article('education-english', '공개 자료', { tags: ['LANGUAGE EDUCATION'] }),
+    article('education-korean', '언어 교육의 연구'),
+    article('not-a-phrase', 'Languages learning and language learners')
+  ]), before = JSON.stringify(catalog);
+  for (const [labels, ids] of [
+    [['언어 학습', '언어학습', 'language learning'], ['learn-english', 'learn-korean']],
+    [['언어 교육', '언어교육', 'language education'], ['education-english', 'education-korean']]
+  ]) for (const label of labels) {
+    const result = rank(catalog, label);
+    assert.deepEqual(result.items.map(row => row.article.id).sort(), ids);
+    for (const row of result.items) for (const reason of row.reasons) {
+      const original = reason.field === 'tags' ? row.article.tags[reason.tagIndex] : row.article[reason.field];
+      assert.equal(original.slice(reason.start, reason.end), reason.quote);
+      assert.equal(reason.interestLabel, label);
+    }
+  }
+  const english = rank(catalog, '언어학습').items.find(row => row.article.id === 'learn-english');
+  assert.deepEqual(english.reasons.map(({ start, end, quote, via }) => ({ start, end, quote, via })),
+    [{ start: 3, end: 20, quote: 'Language learning', via: 'alias' }]);
+  for (const label of ['언어 관련 연구 및 조언', '언어 학습에는 관심이 없다', 'second language acquisition']) assert.equal(rank(catalog, label).eligibleCount, 0);
+  assert.equal(JSON.stringify(catalog), before, 'aliases never rewrite the publisher title or tags');
+});
 test('actual matching fields and coverage are used without fabricating missing summary or body', () => {
   const catalog = feed([
     article('none', '다른 주제의 글'),

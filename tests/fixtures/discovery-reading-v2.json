@@ -1,0 +1,218 @@
+{
+ "schemaVersion": 1,
+ "workspaceId": "synthetic-reading-v2-history",
+ "revision": 2,
+ "deleted": false,
+ "updatedAt": "2026-10-19T05:00:00.000Z",
+ "session": {
+  "id": "synthetic-v2-comparison",
+  "createdAt": "2026-10-19T05:00:00.000Z",
+  "rankInputSHA256": "e39ca7fc770222e603fe1c8d1324956de78b3b693718a14ebb316708a47e851a",
+  "generatedAt": "2026-10-19T00:00:00.000Z",
+  "stale": false,
+  "conditions": {
+   "contentLanguages": null,
+   "translationTarget": "original",
+   "manual": [],
+   "sourceIds": [
+    "naver-d2"
+   ],
+   "knownUrlCount": 0,
+   "feedbackCount": 0,
+   "profileRevision": null,
+   "feedbackRevision": null,
+   "actionsRevision": 2,
+   "personalAllowed": true,
+   "personalOptIn": true,
+   "baselineMode": "related"
+  },
+  "sources": [
+   {
+    "id": "naver-d2",
+    "name": "합성 출처",
+    "url": "https://d2.naver.com/",
+    "feedUrl": "https://d2.naver.com/synthetic-feed",
+    "language": "ko",
+    "rights": {
+     "label": "합성 공개 메타데이터",
+     "url": null,
+     "mode": "metadata_only"
+    },
+    "status": "ok",
+    "lastSuccessAt": "2026-10-19T00:00:00.000Z",
+    "lastAttemptAt": "2026-10-19T00:00:00.000Z",
+    "error": null,
+    "freshnessMaxAgeDays": 7,
+    "stale": false
+   }
+  ],
+  "lists": {
+   "latest": [
+    "https://d2.naver.com/synthetic-v2-reading/old-candidate",
+    "https://d2.naver.com/synthetic-v2-reading/old-liked"
+   ],
+   "related": [],
+   "personal": [
+    "https://d2.naver.com/synthetic-v2-reading/old-candidate"
+   ]
+  },
+  "counts": {
+   "latest": {
+    "eligibleCount": 2,
+    "poolCount": 2,
+    "excluded": {
+     "known": 0,
+     "feedback": 0,
+     "duplicate": 0,
+     "invalid": 0
+    }
+   },
+   "related": {
+    "eligibleCount": 0,
+    "poolCount": 2,
+    "excluded": {
+     "known": 0,
+     "feedback": 0,
+     "duplicate": 0,
+     "invalid": 0
+    }
+   },
+   "personal": {
+    "eligibleCount": 1,
+    "poolCount": 2,
+    "excluded": {
+     "known": 0,
+     "feedback": 0,
+     "duplicate": 0,
+     "invalid": 0
+    }
+   }
+  },
+  "personal": {
+   "status": "applied",
+   "applied": true,
+   "policy": "public-title-tag-expressions-v2",
+   "signalCount": 1
+  },
+  "articles": [
+   {
+    "snapshot": {
+     "id": "old-candidate",
+     "sourceId": "naver-d2",
+     "sourceName": "합성 출처",
+     "url": "https://d2.naver.com/synthetic-v2-reading/old-candidate",
+     "canonicalUrl": "https://d2.naver.com/synthetic-v2-reading/old-candidate",
+     "title": "AI 지도 도구",
+     "author": null,
+     "language": "ko",
+     "tags": [],
+     "publishedAt": "2026-10-19T00:00:00.000Z",
+     "updatedAt": null,
+     "fetchedAt": "2026-10-19T00:00:00.000Z",
+     "coverage": "link_only",
+     "rights": {
+      "label": "합성 공개 메타데이터",
+      "url": null,
+      "mode": "metadata_only"
+     }
+    },
+    "reasons": [],
+    "personal": {
+     "policy": "public-title-tag-expressions-v2",
+     "score": 2,
+     "evidence": [
+      {
+       "canonicalUrl": "https://d2.naver.com/synthetic-v2-reading/old-liked",
+       "title": "AI 지도 기록",
+       "sourceName": "합성 출처",
+       "field": "title",
+       "start": 0,
+       "end": 2,
+       "quote": "AI",
+       "term": "인공지능",
+       "candidateField": "title",
+       "candidateStart": 0,
+       "candidateEnd": 2,
+       "candidateQuote": "AI"
+      },
+      {
+       "canonicalUrl": "https://d2.naver.com/synthetic-v2-reading/old-liked",
+       "title": "AI 지도 기록",
+       "sourceName": "합성 출처",
+       "field": "title",
+       "start": 3,
+       "end": 5,
+       "quote": "지도",
+       "term": "지도",
+       "candidateField": "title",
+       "candidateStart": 3,
+       "candidateEnd": 5,
+       "candidateQuote": "지도"
+      }
+     ],
+     "sourceSnapshot": {
+      "id": "old-liked",
+      "sourceId": "naver-d2",
+      "sourceName": "합성 출처",
+      "url": "https://d2.naver.com/synthetic-v2-reading/old-liked",
+      "canonicalUrl": "https://d2.naver.com/synthetic-v2-reading/old-liked",
+      "title": "AI 지도 기록",
+      "author": null,
+      "language": "ko",
+      "tags": [],
+      "publishedAt": "2026-10-19T00:00:00.000Z",
+      "updatedAt": null,
+      "fetchedAt": "2026-10-19T00:00:00.000Z",
+      "coverage": "link_only",
+      "rights": {
+       "label": "합성 공개 메타데이터",
+       "url": null,
+       "mode": "metadata_only"
+      }
+     }
+    }
+   },
+   {
+    "snapshot": {
+     "id": "old-liked",
+     "sourceId": "naver-d2",
+     "sourceName": "합성 출처",
+     "url": "https://d2.naver.com/synthetic-v2-reading/old-liked",
+     "canonicalUrl": "https://d2.naver.com/synthetic-v2-reading/old-liked",
+     "title": "AI 지도 기록",
+     "author": null,
+     "language": "ko",
+     "tags": [],
+     "publishedAt": "2026-10-19T00:00:00.000Z",
+     "updatedAt": null,
+     "fetchedAt": "2026-10-19T00:00:00.000Z",
+     "coverage": "link_only",
+     "rights": {
+      "label": "합성 공개 메타데이터",
+      "url": null,
+      "mode": "metadata_only"
+     }
+    },
+    "reasons": [],
+    "personal": null
+   }
+  ],
+  "reviews": [
+   {
+    "canonicalUrl": "https://d2.naver.com/synthetic-v2-reading/old-candidate",
+    "intent": "no",
+    "reading": "full",
+    "helpful": "no",
+    "reason": "already_known"
+   },
+   {
+    "canonicalUrl": "https://d2.naver.com/synthetic-v2-reading/old-liked",
+    "intent": null,
+    "reading": null,
+    "helpful": null,
+    "reason": null
+   }
+  ],
+  "preference": null
+ }
+}

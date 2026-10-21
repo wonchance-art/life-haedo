@@ -698,7 +698,7 @@
       const add = button('주제 추가', 'discoveryTopicAdd', saveTopic), discard = button('입력 지우기', 'discoveryTopicDiscard', () => { current.topicText = ''; input.value = ''; current.topicError = ''; current.topicConflict = false; draw(); focusTopicControl(); }, 'discovery-quiet');
       form.append(input, add, discard); const help = node('p', '현재 제목·태그에 있는 표현을 원문 언어로 적어 주세요. 검색어는 자동 번역하지 않습니다. 번역 언어는 원문 열기에만 적용됩니다.', 'life-meta'); help.id = 'discoveryTopicHelp';
       const examples = node('div', null, 'discovery-topic-examples'); examples.append(node('span', '예시 주제', 'life-meta'));
-      for (const example of ['AI', '전시', '신간', '언어학', 'Linguistics', 'Language learning']) examples.append(button(example, null, () => { if (current.topicText.trim() || topicWrite) return; current.topicText = example; input.value = example; return saveTopic(); }, 'discovery-quiet'));
+      for (const example of ['AI', '전시', '신간', '언어학', '언어 학습', '언어 교육']) examples.append(button(example, null, () => { if (current.topicText.trim() || topicWrite) return; current.topicText = example; input.value = example; return saveTopic(); }, 'discovery-quiet'));
       const choiceHost = node('div'), topicRecovery = node('div'), options = node('details', null, 'discovery-options'); options.id = 'discoveryOptions'; options.open = current.optionsOpen;
       options.append(node('summary', '옵션')); const optionsBody = node('div'); options.append(optionsBody); options.addEventListener('toggle', () => { if (scope()) current.optionsOpen = options.open; });
       const topicBody = node('div', null, 'discovery-topic-body'); topicBody.append(label, form, help, examples, topicRecovery, choiceHost, options); editor.append(topicBody);

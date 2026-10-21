@@ -13,7 +13,7 @@
   const PREFERENCES = Object.freeze(['latest', 'related', 'personal', 'tie', 'undecided']);
   // Persisted evidence is interpreted by its own known policy, not whatever
   // policy a later live ranker happens to export.
-  const KNOWN_PERSONAL_POLICIES = Object.freeze(['public-title-tag-expressions-v2']);
+  const KNOWN_PERSONAL_POLICIES = Object.freeze(['public-title-tag-expressions-v2', 'public-title-tag-expressions-v3']);
   const names = { Discovery: 'discovery', DiscoveryActions: 'discovery-actions', DiscoveryRecommendations: 'discovery-recommendations',
     DiscoveryProfile: 'discovery-profile', DiscoveryLanguageSettings: 'discovery-language-settings', InterestProfile: 'interest-profile' };
   const dep = name => root.HaedoLife?.[name] || (typeof require === 'function' && require('./' + names[name] + '.js'));

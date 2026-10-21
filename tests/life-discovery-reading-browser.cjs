@@ -14,6 +14,7 @@ const output = path.resolve(process.env.DISCOVERY_READING_OUTPUT || path.join(re
 const feedFile = path.resolve(process.env.DISCOVERY_READING_FEED || path.join(repo, 'assets/life/discovery-feed.json'));
 const entry = base + '/index.html?section=news', feedPath = '/assets/life/discovery-feed.json';
 const PRIVATE_TEXT = '\ufeff읽기비교_비공개합성원문😀\r\nCafe\u0301 원문보존', PRIVATE_TOPIC = '읽기비교익명비공개주제표식';
+const PUBLIC_MARKUP = '<svg onload="window.__readingMarkupExecuted=true">';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const productFiles = ['index.html', 'assets/life/discovery-reading.js', 'assets/life/discovery-reading-ui.js', 'assets/life/discovery-ui.js', 'assets/life/discovery.css', 'assets/life/discovery.js', 'assets/life/discovery-recommendations.js', 'assets/life/discovery-actions.js', 'assets/life/discovery-settings.js', 'assets/life/discovery-language-settings.js', 'assets/life/discovery-profile.js', 'assets/life/storage.js', 'assets/life/ui.js', 'assets/life/shell.js', 'assets/platform-auth.js'];
 // Follow the actual settings/back buttons before opening native disclosures.
@@ -68,6 +69,31 @@ async function preserved(page, before, except = []) {
 const card = (page, url) => page.locator('article[data-reading-url]').filter({ has: page.locator('[data-reading-save=' + JSON.stringify(url) + ']') });
 const reviewFor = (profile, url) => profile.session.reviews.find(row => row.canonicalUrl === url);
 function frozen(profile) { const copy = structuredClone(profile.session); delete copy.reviews; delete copy.preference; delete copy.updatedAt; return copy; }
+async function inspectFrozenEvidence(page, session) {
+  const conditions = page.locator('#discoveryReadingConditions'), summary = conditions.locator(':scope > summary');
+  await revealControl(summary); await summary.focus();
+  if (!await conditions.evaluate(element => element.open)) await page.keyboard.press('Enter');
+  assert.equal(await summary.evaluate(element => document.activeElement === element), true, 'Native conditions summary keeps keyboard focus');
+  assert.match(await summary.innerText(), /비교 조건·근거/);
+  const entries = conditions.locator('[data-reading-evidence-url]'); assert.equal(await entries.count(), session.articles.length); assert(await entries.count() <= 6);
+  for (const entry of session.articles) {
+    const row = conditions.locator('[data-reading-evidence-url=' + JSON.stringify(entry.snapshot.canonicalUrl) + ']');
+    assert((await row.innerText()).includes(entry.snapshot.title));
+    for (const [mode, list] of Object.entries(session.lists)) if (list?.includes(entry.snapshot.canonicalUrl)) {
+      assert((await row.innerText()).includes({ latest: '최신순', related: '관심순', personal: '개인 추천' }[mode] + ' ' + (list.indexOf(entry.snapshot.canonicalUrl) + 1)));
+    }
+    assert(await row.locator('blockquote').count() <= 5);
+    const manual = await row.locator('[data-reading-evidence-kind="manual"]').allTextContents();
+    if (entry.reasons.length) assert(manual.length > 0);
+    for (const quote of manual) assert(entry.reasons.some(ref => ref.quote === quote), 'Manual quote is exact frozen evidence');
+    const pairs = await row.locator('[data-reading-evidence-kind="personal"]').evaluateAll(nodes => nodes.map(node => ({ original: node.querySelector('[data-reading-quote="original"]').textContent, candidate: node.querySelector('[data-reading-quote="candidate"]').textContent })));
+    if (entry.personal?.evidence.length) { assert(pairs.length > 0); assert((await row.innerText()).includes(entry.personal.sourceSnapshot.title)); }
+    for (const pair of pairs) assert(entry.personal.evidence.some(ref => ref.quote === pair.original && ref.candidateQuote === pair.candidate), 'Personal pair is exact frozen source/candidate metadata');
+  }
+  assert.equal(await conditions.locator('script,img,svg,iframe').count(), 0, 'Public strings never become markup');
+  assert.equal(await page.evaluate(() => !!window.__readingMarkupExecuted), false);
+  return conditions.innerText();
+}
 async function saved(page, previousRevision) { await wait(page, async revision => { const s = HaedoLife.Shell.storage; return (await s.readDiscoveryReading(await s.getActive())).revision > revision; }, previousRevision, 'explicit reading save'); }
 async function seed(page) {
   await page.goto(base + '/index.html?section=tools&view=interests'); await ready(page);
@@ -107,7 +133,7 @@ async function popup(page, context, url, selector, kind, holder = card(page, url
 }
 async function capture(page, scene, selector) {
   const original = page.viewportSize(), position = await page.evaluate(() => ({ x: scrollX, y: scrollY }));
-  try { for (const width of [390, 1440]) {
+  try { for (const width of [390, 820, 1440]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 }); await page.evaluate(() => document.fonts.ready);
     if (selector) await page.locator(selector).first().scrollIntoViewIfNeeded(); else await page.evaluate(() => scrollTo(0, 0));
     const audit = await page.evaluate(() => ({ width: innerWidth, height: innerHeight, scrollY, documentWidth: document.documentElement.scrollWidth, comparisonOpen: document.querySelector('#discoveryReadingComparison')?.open, firstTitle: (() => { const rect = document.querySelector('#discoveryList .discovery-title a')?.getBoundingClientRect(); return rect && { top: rect.top, bottom: rect.bottom }; })(), navTop: document.querySelector('[data-haedo-navigation]')?.getBoundingClientRect().top, controls: [...document.querySelectorAll('#discoveryReadingComparison button,#discoveryReadingComparison select,#discoveryReadingComparison summary')].filter(element => element.checkVisibility()).map(element => { const r = element.getBoundingClientRect(); return { id: element.id || element.dataset.readingField || element.textContent, width: r.width, height: r.height }; }) }));
@@ -161,6 +187,8 @@ async function main() {
       const urls = initial.session.articles.map(row => row.snapshot.canonicalUrl);
       assert.equal(new Set(urls).size, urls.length); assert.equal(await page.locator('article[data-reading-url]').count(), urls.length);
       assert(initial.session.reviews.every(row => ['intent', 'reading', 'helpful', 'reason'].every(key => row[key] === null)));
+      const initialEvidence = await inspectFrozenEvidence(page, initial.session);
+      assert.deepEqual((await state(page)).reading, initial, 'Viewing frozen evidence does not write judgments');
       const personalChoice = page.locator('#discoveryReadingPreference option[value="personal"]');
       assert(await personalChoice.count() === 0 || await personalChoice.evaluate(option => option.disabled && option.matches(':disabled')), 'Unavailable personal arm cannot be chosen');
       const url = urls[0], first = card(page, url);
@@ -170,6 +198,9 @@ async function main() {
       assert.equal(await first.locator('[data-reading-field="helpful"]').isDisabled(), true);
       assert.equal(await first.locator('[data-reading-field="reason"]').isDisabled(), true);
       await answer(page, url, { intent: 'yes', reading: 'not_read' });
+      const draftControl = first.locator('[data-reading-field="intent"]'); await draftControl.evaluate(element => { window.__frozenEvidenceDraftControl = element; });
+      await inspectFrozenEvidence(page, initial.session);
+      assert.equal(await draftControl.evaluate(element => element === __frozenEvidenceDraftControl), true); assert.equal(await draftControl.inputValue(), 'yes');
       assert.equal(await first.locator('[data-reading-field="helpful"]').isDisabled(), true);
       assert.equal(await first.locator('[data-reading-field="helpful"]').inputValue(), '');
       assert.deepEqual((await state(page)).reading, initial, 'Edits remain drafts until explicit save');
@@ -182,10 +213,12 @@ async function main() {
       await capture(page, 'answered', 'article[data-reading-url]');
       await page.reload(); await ready(page); await idle(page); await reveal(page);
       assert.deepEqual((await state(page)).reading, stored); assert.equal(await card(page, url).locator('[data-reading-field="helpful"]').inputValue(), 'yes');
+      assert.equal(await inspectFrozenEvidence(page, stored.session), initialEvidence, 'Reload retains the original explanation');
       // Deliberate synthetic current-feed change; frozen comparison retains the actual starting metadata.
       const changed = structuredClone(actualFeed); changed.generatedAt = new Date().toISOString(); changed.articles[0].title = '합성 현재 피드 갱신: ' + changed.articles[0].title; control.body = Buffer.from(JSON.stringify(changed));
       await (await revealControl(page.locator('#discoveryRefresh'))).click(); await idle(page);
       assert.deepEqual((await state(page)).reading, stored);
+      assert.equal(await inspectFrozenEvidence(page, stored.session), initialEvidence, 'Changed current feed never rewrites frozen quotes');
       const languageOptions = page.locator('#discoveryLanguageOptions'); await newsView(languageOptions); if (!await languageOptions.evaluate(element => element.open)) await languageOptions.locator(':scope > summary').click();
       await page.locator('[data-discovery-content-language="en"]').check(); await idle(page);
       const topics = page.locator('#discoveryTopics'); await newsView(topics); if (!await topics.evaluate(element => element.open)) await (await revealControl(page.locator('#discoveryTopicsSummary'))).click();
@@ -208,6 +241,7 @@ async function main() {
         await selectNewsMode(page, 'latest'); await idle(page);
         const llt = page.locator('#discoveryList [data-discovery-id]').first(), id = await llt.getAttribute('data-discovery-id');
         const sourceRow = actualFeed.articles.find(row => row.id === id); assert.equal(sourceRow.sourceId, 'llt-journal'); assert.equal(sourceRow.publishedAt, null); assert.equal(sourceRow.author, null); assert.deepEqual(sourceRow.tags, []); assert.equal(sourceRow.summary, ''); assert.equal(sourceRow.coverage, 'link_only');
+        await (await revealControl(llt.locator('.discovery-article-info > summary'))).click();
         assert((await llt.innerText()).includes(sourceRow.title)); assert((await llt.innerText()).includes('발행일 미확인')); assert.equal(await llt.locator('time').count(), 0);
         const original = await llt.locator('[data-discovery-open]').getAttribute('href');
         await popup(page, context, original, '[data-discovery-open]', 'original', llt);
@@ -222,8 +256,26 @@ async function main() {
       }
       report.snapshot = { sessionId: stored.session.id, rankInputSHA256: stored.session.rankInputSHA256, uniqueArticles: urls.length, readingAndPreferenceExplicitlySaved: true, currentFeedAndSettingsChangedSynthetically: true, frozenAfterChange: true, actualUserJudgments: false };
     });
-    await check('two real tabs preserve independent reviews and reapply a draft only to the same comparison after CAS', async ({ page, context }) => {
-      const before = await seed(page), first = await start(page), urls = first.reading.session.articles.map(row => row.snapshot.canonicalUrl); assert(urls.length >= 2);
+    await check('two real tabs preserve independent reviews and reapply a draft only to the same comparison after CAS', async ({ page, context, control }) => {
+      const timestamp = new Date(Date.now() - 86400000).toISOString(), source = { ...actualFeed.sources.find(value => value.id === 'naver-d2'), status: 'ok', stale: false, error: null, lastSuccessAt: timestamp, lastAttemptAt: timestamp };
+      const feed = { schemaVersion: 1, generatedAt: timestamp, sources: [source], articles: ['first', 'second'].map((id, index) => ({ id: 'reading-evidence-' + id, sourceId: source.id, url: 'https://d2.naver.com/reading-evidence/' + id,
+        title: 'Linguistics Language learning ' + (index ? 'second' : '<b>public</b>'), tags: [PUBLIC_MARKUP], language: 'en', author: null, publishedAt: timestamp, fetchedAt: timestamp, summary: '', coverage: 'link_only', rights: source.rights })) };
+      control.body = Buffer.from(JSON.stringify(feed)); await seed(page);
+      await (await revealControl(page.locator('#discoveryTopicInput'))).fill('Language'); await (await revealControl(page.locator('#discoveryTopicAdd'))).click(); await idle(page);
+      await page.evaluate(async ({ feed, timestamp }) => {
+        const storage = HaedoLife.Shell.storage, workspaceId = await storage.getActive(), A = HaedoLife.DiscoveryActions, current = await storage.readDiscoveryActions(workspaceId);
+        const snapshot = A.capture({ ...feed.articles[0], id: 'reading-evidence-prototype', url: 'https://d2.naver.com/reading-evidence/prototype', title: 'Language learning' }, feed.sources[0]);
+        const next = A.setReaction(current, snapshot, 'liked', true, { expectedRevision: current.revision, now: timestamp });
+        if ((await storage.saveDiscoveryActions(workspaceId, next, current.revision)).status !== 'stored') throw Error('Synthetic metadata-like setup failed');
+      }, { feed, timestamp });
+      await page.reload(); await ready(page); await idle(page);
+      await (await revealControl(page.locator('#discoveryPersonalize'))).check(); await idle(page);
+      const before = await state(page), first = await start(page), urls = first.reading.session.articles.map(row => row.snapshot.canonicalUrl); assert(urls.length >= 2);
+      assert.equal(first.reading.session.personal.applied, true);
+      const evidence = await inspectFrozenEvidence(page, first.reading.session);
+      assert(evidence.includes(PUBLIC_MARKUP)); assert.match(evidence, /직접 일치/); assert.match(evidence, /연결 표현/); assert(evidence.includes(first.reading.session.personal.policy));
+      await capture(page, 'frozen-evidence', '#discoveryReadingConditions');
+      report.frozenEvidence = { syntheticPublicMetadataAndLike: true, explicitOptIn: true, exactManualAndPersonalQuotes: true, markupRemainsText: true, articles: first.reading.session.articles.length };
       const peer = await context.newPage(); await open(peer); await reveal(peer);
       await answer(page, urls[0], { intent: 'yes', reading: 'partial', helpful: 'no', reason: 'too_technical' });
       await page.evaluate(() => { window.__readingHold = true; }); await card(page, urls[0]).locator('[data-reading-save]').click(); await wait(page, () => window.__readingEntered);

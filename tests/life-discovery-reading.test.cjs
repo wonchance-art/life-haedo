@@ -2,6 +2,12 @@
 const test = require('node:test'), assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm'), path = require('node:path');
 const R = require('../assets/life/discovery-reading.js'), D = require('../assets/life/discovery.js'), A = require('../assets/life/discovery-actions.js');
 const Recommendations = require('../assets/life/discovery-recommendations.js'), Feedback = require('../assets/life/discovery-profile.js');
+// Generated once with the actual d6009ea v2 implementations, before this change;
+// never regenerate it from the current ranker or relabel a v3 result as v2.
+// Historical code SHA256: Reading e1fbe641904508310b7b0a640261ff8bc774dcc4e7e1183efa9f3e42515d0eee;
+// Recommendations 2624277812c8a162b0ac698e8f3175013cb5955c270d57d9bdf50f0ab3d18f41;
+// Discovery 84be7a9a935d8101a4c3f4584d6cc4f07be8b466d928ec11b6fc65fd8a314cae.
+const historicalV2 = require('./fixtures/discovery-reading-v2.json');
 const NOW = '2026-10-21T04:00:00.000Z', PAST = '2026-10-20T00:00:00.000Z', LATER = '2026-10-21T05:00:00.000Z', WS = 'synthetic-reading';
 const rights = { label: '합성 공개 메타데이터만', mode: 'metadata_only', url: null };
 const clone = value => structuredClone(value);
@@ -220,18 +226,28 @@ test('UMD import has no module-load I/O and profile bound is a hard failure rath
   assert(new TextEncoder().encode(JSON.stringify(bytes)).length > R.MAX_BYTES);
   assert.throws(() => R.validate(bytes), { code: 'discovery_reading_too_large' });
 });
-test('frozen known v2 evidence and fallback remain valid after the live ranker policy changes; unknown stored policies fail', async t => {
+test('historical v2 judgments and current v3 evidence/fallback remain editable without reranking; unknown stored policies fail', async t => {
   const applied = await create(), fallbackInput = fixture();
   fallbackInput.actions = A.setPersonalization(A.empty(WS), true, options(0, PAST));
   const fallback = await create(fallbackInput), prior = global.HaedoLife.DiscoveryRecommendations;
-  global.HaedoLife.DiscoveryRecommendations = { ...prior, POLICY: 'synthetic-future-v3' };
+  assert.equal(applied.session.personal.policy, 'public-title-tag-expressions-v3');
+  assert.equal(fallback.session.personal.policy, 'public-title-tag-expressions-v3');
+  assert.equal(historicalV2.session.personal.policy, 'public-title-tag-expressions-v2');
+  assert.equal(historicalV2.session.reviews.find(row => row.helpful === 'no').reading, 'full');
+  global.HaedoLife.DiscoveryRecommendations = { ...prior, POLICY: 'synthetic-future-v4',
+    rank() { assert.fail('Editing a frozen comparison must not rerank'); },
+    inspectSignals() { assert.fail('Editing a frozen comparison must not inspect live likes'); } };
   t.after(() => { global.HaedoLife.DiscoveryRecommendations = prior; });
-  for (const profile of [applied, fallback]) {
-    assert.equal(profile.session.personal.policy, 'public-title-tag-expressions-v2'); assert(R.validate(profile));
-    const changed = R.setPreference(profile, 'undecided', options(profile.revision));
-    assert.equal(changed.session.personal.policy, profile.session.personal.policy);
-    assert.equal(changed.session.rankInputSHA256, profile.session.rankInputSHA256);
-    const bad = clone(profile); bad.session.personal.policy = 'synthetic-future-v3';
+  for (const profile of [historicalV2, applied, fallback]) {
+    const before = clone(profile); assert(R.validate(profile));
+    const answered = R.setReview(profile, profile.session.reviews[0].canonicalUrl,
+      { intent: 'yes', reading: 'partial', helpful: 'yes', reason: null }, options(profile.revision));
+    const changed = R.setPreference(answered, 'undecided', options(answered.revision));
+    assert.deepEqual({ ...changed.session, reviews: before.session.reviews, preference: before.session.preference }, before.session);
+    assert.equal(changed.revision, before.revision + 2); assert.deepEqual(profile, before);
+    const deleted = R.clear(changed, options(changed.revision));
+    assert.equal(deleted.deleted, true); assert.equal(deleted.session, null); assert.equal(deleted.revision, before.revision + 3);
+    const bad = clone(profile); bad.session.personal.policy = 'synthetic-future-v4';
     for (const item of bad.session.articles) if (item.personal) item.personal.policy = bad.session.personal.policy;
     assert.throws(() => R.validate(bad), { code: 'discovery_reading_invalid' });
   }

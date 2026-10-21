@@ -1,5 +1,11 @@
 # 오픈소스 검토와 재사용 결정
 
+## 언어 주제 연결·당시 비교 근거 — 2026-10-21 KST
+
+기존 Discovery의 공개 동의어·Recommendations의 로컬 규칙·Reading 불변 스냅샷/Storage CAS와 native details·문자 노드를 재사용한다. 직역 두 묶음과 저장된 근거 표시를 위해 범용 추천 서버·검색/번역 SDK·파서를 추가하지 않는다. 같은 날 아래에서 확인한 feedparser/idb 및 SNS 패턴 검토를 재사용하며, 이번 작은 보완을 새 라이브러리 보안 감사로 표시하지 않는다. [범위·보존·교체 조건](../design-review/news-usefulness.md).
+
+기존8개 공개 출처를 한 번 점검했다. [OpenLearn 언어 페이지](https://www.open.edu/openlearn/languages)는 공식 RSS 선언과 재이용 권리 확인이 충족되지 않아 보류했고, [The Conversation robots](https://theconversation.com/robots.txt)의 명시 AI 접근 제한을 확인한 뒤 후속 피드/권리 요청을 중단했다. 추측 피드·호스트/UA 우회·HTML 본문 수집으로 공급을 늘리지 않는다. LLT 정상 회복과 Woowa의 로컬 단일200은 이번 제품 변경 성과나 운영 안정성 증거로 합산하지 않는다.
+
 ## 개인 네이버 블로그 연결·수집 — 2026-10-21 UTC
 
 기존 Core의 원문·불변 버전, Storage의 계정/CAS/원자 설치와 Supabase의 단일 Auth·RPC를 재사용한다. 개인 구독을 공용 뉴스 피드로 합치지 않고 서버의 비공개 연결·보관함과 작은 네이버 글 정체성 어댑터로 분리한다. 별도 CMS·범용 크롤러·클라이언트 계정 쿠키를 도입하지 않는다. [제품·보존·가동 조건](../design-review/naver-blog-connection.md).
