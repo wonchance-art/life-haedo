@@ -158,3 +158,92 @@
   .discovery-reading-title { font-size: 20px; }
   .discovery-reading .life-actions { gap: 6px; }
 }
+
+/* News: a reading feed with three destinations and contextual article actions. */
+.discovery-news { --news-muted: #5d6b65; --news-line: #e3e9e6; max-width: 720px; margin-inline: auto; color: var(--ink, #182522); }
+.discovery-news ::selection { color: #182522; background: #dcece4; }
+.discovery-news input,.discovery-news select { caret-color: #145b50; }
+.discovery-news [hidden] { display: none !important; }
+.discovery-news :is(button,a,summary,input,select):focus-visible { outline: 2px solid #267a69; outline-offset: 3px; }
+.discovery-news .discovery-reaction-header { margin: 0; }
+.discovery-news .discovery-collection-tabs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 0; margin: 0; border-bottom: 1px solid var(--news-line); }
+.discovery-news .discovery-collection-tabs .life-button { position: relative; min-width: 0; min-height: 54px; padding: 12px 8px; border: 0; border-radius: 0; background: transparent; color: var(--news-muted); font-size: 16px; line-height: 1.5; font-weight: 550; }
+.discovery-news .discovery-collection-tabs .life-button[aria-pressed=true] { border-radius: 0; color: #145b50; background: transparent; font-weight: 750; }
+.discovery-news .discovery-collection-tabs .life-button[aria-pressed=true]::after { position: absolute; inset-inline: 24%; bottom: -1px; height: 3px; border-radius: 3px 3px 0 0; background: #145b50; content: ''; }
+.discovery-news .discovery-collection-tabs .life-button:hover { background: #f4f7f5; }
+.discovery-news .discovery-settings-bar { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 0 24px; padding-block: 4px; border-bottom: 1px solid var(--news-line); }
+.discovery-news .discovery-settings-bar > .discovery-language-host { display: contents; }
+.discovery-news .discovery-settings-bar > details { min-width: 0; margin: 0; padding: 0; }
+.discovery-news .discovery-settings-bar > details[open] { flex-basis: 100%; }
+.discovery-news .discovery-settings-bar > details > summary { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0; color: var(--news-muted); font-size: 13px; font-weight: 550; cursor: pointer; list-style: none; }
+.discovery-news .discovery-settings-bar > details > summary::-webkit-details-marker { display: none; }
+.discovery-news .discovery-settings-bar > details > summary::before { content: none; }
+.discovery-news .discovery-settings-bar > details > summary::after { width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); content: ''; }
+.discovery-news .discovery-settings-bar > details[open] > summary { color: #145b50; }
+.discovery-news .discovery-settings-bar > details[open] > summary::after { transform: translateY(2px) rotate(225deg); }
+.discovery-news .discovery-settings-bar .discovery-language-options { min-width: 0; margin: 0; padding: 0; }
+.discovery-news .discovery-settings-bar .discovery-language-options[open] { flex-basis: 100%; }
+.discovery-news .discovery-settings-bar .discovery-language-options > summary { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0; color: var(--news-muted); font-size: 13px; font-weight: 550; cursor: pointer; list-style: none; }
+.discovery-news .discovery-settings-bar .discovery-language-options > summary::-webkit-details-marker { display: none; }
+.discovery-news .discovery-settings-bar .discovery-language-options > summary::before { content: none; }
+.discovery-news .discovery-settings-bar .discovery-language-options > summary::after { width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); content: ''; }
+.discovery-news .discovery-settings-bar .discovery-language-options[open] > summary { color: #145b50; }
+.discovery-news .discovery-settings-bar .discovery-language-options[open] > summary::after { transform: translateY(2px) rotate(225deg); }
+.discovery-news .discovery-topic-body,.discovery-news .discovery-language-body,.discovery-news .discovery-news-preferences-body { padding-block: 12px 20px; }
+.discovery-news .discovery-news-preferences .life-meta { max-width: 65ch; margin-block: 8px 12px; color: var(--news-muted); font-size: 13px; line-height: 1.8; }
+.discovery-news .discovery-news-preferences :is(.life-actions,.discovery-recovery) { flex-wrap: wrap; }
+.discovery-news .discovery-controls { align-items: center; gap: 8px; padding-block: 8px; border-bottom: 1px solid var(--news-line); }
+.discovery-news .discovery-modes { flex-wrap: nowrap; gap: 0; min-width: 0; }
+.discovery-news .discovery-mode { min-height: 44px; padding: 10px 12px; border: 0; border-radius: 8px; color: var(--news-muted); background: transparent; font-size: 13px; line-height: 1.5; }
+.discovery-news .discovery-mode[aria-pressed=true] { color: #145b50; background: #eaf1ed; font-weight: 700; }
+.discovery-news .discovery-controls > .discovery-quiet { flex: none; min-height: 44px; max-width: none; padding-inline: 10px; font-size: 13px; }
+.discovery-news .discovery-count { margin-block: 14px 0; color: var(--news-muted); font-size: 12px; line-height: 1.75; font-weight: 450; }
+.discovery-news .discovery-status,.discovery-news .discovery-notice { margin-block: 10px; font-size: 13px; }
+.discovery-news .discovery-article { padding-block: 26px 18px; border-bottom: 1px solid var(--news-line); }
+.discovery-news .discovery-meta { align-items: center; gap: 4px 10px; margin: 0 0 12px; font-size: 12px; line-height: 1.6; }
+.discovery-news .discovery-source-mark { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 30px; width: 30px; height: 30px; border-radius: 9px; color: #145b50; background: #eaf1ed; font-size: 13px; line-height: 1; font-weight: 750; }
+.discovery-news .discovery-source-name { min-width: 0; max-width: 65%; color: #34493f; font-size: 13px; font-weight: 650; overflow-wrap: anywhere; }
+.discovery-news .discovery-meta time { color: var(--news-muted); font-variant-numeric: tabular-nums; }
+.discovery-news .discovery-title { margin: 0; font-size: 27px; font-weight: 750; line-height: 1.43; letter-spacing: -.03em; text-wrap: pretty; }
+.discovery-news .discovery-title a { min-height: 44px; color: #182522; text-decoration-thickness: 1px; text-underline-offset: 5px; }
+.discovery-news .discovery-title a > svg { display: inline-block; width: 18px; height: 18px; margin-left: 7px; vertical-align: .02em; color: #5d6b65; }
+.discovery-news .discovery-summary { max-width: 70ch; margin: 12px 0 0; font-size: 16px; line-height: 1.8; }
+.discovery-news .discovery-reactions { align-items: center; gap: 4px; margin-top: 14px; }
+.discovery-news .discovery-reaction { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 44px; min-height: 44px; padding: 9px 12px; border: 0; border-radius: 8px; color: var(--news-muted); background: transparent; font-size: 14px; line-height: 1.5; font-weight: 500; }
+.discovery-news .discovery-reaction svg { flex: none; width: 20px; height: 20px; }
+.discovery-news .discovery-reaction[aria-pressed=true] { color: #145b50; background: #eaf1ed; font-weight: 650; }
+.discovery-news .discovery-reaction:hover { color: #145b50; background: #f4f7f5; }
+.discovery-news .discovery-reaction:disabled { color: var(--news-muted); opacity: .65; }
+.discovery-news .discovery-translation-link { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; max-width: 100%; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: #145b50; font-size: 13px; line-height: 1.6; white-space: normal; }
+.discovery-news .discovery-translation-link:hover { background: #f4f7f5; }
+.discovery-news .discovery-more { grid-column: 1 / -1; grid-row: 1; align-self: start; min-width: 0; margin: 0; }
+.discovery-news .discovery-more > summary { display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; padding: 8px 10px; border-radius: 8px; color: var(--news-muted); font-size: 13px; line-height: 1.6; cursor: pointer; list-style: none; }
+.discovery-news .discovery-more > summary::-webkit-details-marker { display: none; }
+.discovery-news .discovery-more > summary:hover,.discovery-news .discovery-more[open] > summary { color: #145b50; background: #f4f7f5; }
+.discovery-news .discovery-more-body { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-block: 8px; }
+.discovery-news .discovery-more > summary { width: fit-content; margin-left: auto; }
+.discovery-news .discovery-more-body .life-button { min-height: 44px; margin: 0; padding: 9px 12px; border: 0; border-radius: 8px; background: #f4f7f5; color: #145b50; font-size: 13px; line-height: 1.6; }
+.discovery-news .discovery-more-body .life-button:hover { background: #eaf1ed; }
+.discovery-news .discovery-more-body > .life-meta { flex-basis: 100%; margin-block: 4px; font-size: 12px; line-height: 1.8; }
+.discovery-news .discovery-article-info { margin-top: 2px; }
+.discovery-news .discovery-article-info > summary { display: flex; align-items: center; gap: 6px; min-height: 44px; width: fit-content; color: var(--news-muted); font-size: 12px; line-height: 1.75; cursor: pointer; }
+.discovery-news .discovery-article-info :is(.discovery-coverage,.discovery-reason,.discovery-personal-evidence,.discovery-evidence) { margin-top: 8px; }
+.discovery-news .discovery-article-info .discovery-coverage { margin-bottom: 8px; }
+.discovery-news .discovery-sources,.discovery-news .discovery-excluded,.discovery-news .discovery-portable { margin-top: 16px; }
+.discovery-news .discovery-privacy { margin-block: 20px 12px; }
+.discovery-news .discovery-news-footer { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: start; gap: 4px; margin-top: 14px; color: var(--news-muted); font-size: 12px; line-height: 1.8; }
+.discovery-news .discovery-news-footer .discovery-reactions { grid-column: 1; grid-row: 1; align-self: start; justify-self: start; position: relative; z-index: 1; margin: 0; }
+.discovery-news .discovery-news-footer > .discovery-translation-link { grid-column: 1 / -1; grid-row: 2; justify-self: start; }
+.discovery-news .discovery-news-footer > :first-child { margin-top: 0; }
+@media (max-width: 600px) {
+  .discovery-news .discovery-settings-bar { gap: 0 19px; }
+  .discovery-news .discovery-controls { flex-wrap: nowrap; gap: 4px; }
+  .discovery-news .discovery-mode { padding-inline: 9px; font-size: 12px; }
+  .discovery-news .discovery-controls > .discovery-quiet { padding-inline: 5px; font-size: 12px; }
+  .discovery-news .discovery-article { padding-block: 22px 16px; }
+  .discovery-news .discovery-title { font-size: 24px; line-height: 1.48; letter-spacing: -.025em; }
+  .discovery-news .discovery-source-name { max-width: 60%; }
+  .discovery-news .discovery-meta { gap: 4px 8px; }
+  .discovery-news .discovery-reaction { padding-inline: 9px; }
+  .discovery-news .discovery-more > summary { padding-inline: 8px; }
+}

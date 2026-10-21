@@ -10,6 +10,8 @@
 
 [뉴스](https://wonchance-art.github.io/life-haedo/index.html?section=news)에서 최신 외부 글을 바로 찾습니다. `주제·출처`에서 표현·출처를, `언어 옵션`에서 콘텐츠 언어를 고르고, 원문 또는 선택한 언어의 번역 링크를 엽니다. 공개 RSS의 제목·링크 메타데이터만 자동 수집하며 본문은 복사하지 않습니다. 좋아요·담기는 독립 목록이고 개인 추천은 기본 꺼짐입니다. 링크를 명시 보관한 뒤 **이 자료로 글쓰기**로 정확한 자료가 연결된 작성 준비를 열고, 내 문단·출처를 골라 글 저장·재열기와 뉴스 복귀까지 이어갑니다. [뉴스에서 글 완성까지](docs/design-review/news-to-writing.md). [첫 예약 수집·현재 검수](docs/design-review/discovery-scheduled-operation.md), [동일 조건 읽기 비교](docs/design-review/discovery-field-languages.md), [현재 로드맵](docs/life-tools-design/roadmap.md)을 따릅니다.
 
+뉴스는 **피드 / 좋아요 / 담기**로 둘러봅니다. 기사 제목은 원문, **글 옵션**은 자료 보관·읽음·관련 없음, **기사 정보**는 확보 범위와 추천 근거를 엽니다. **추천·기록 → 반응 해제 기록**은 좋아요와 담기를 모두 해제한 글이며 dislike가 아닙니다. 같은 위치의 **읽기 비교**에서 직접 판단을 저장·재열기할 수 있습니다. [새 뉴스 UI·반응 의미](docs/design-review/news-social-redesign.md).
+
 내 생각과 일상을 글로 쓰고, 기록과 취향을 모으는 개인 블로그.
 메인은 실제 프로필·짧은 글쓰기·사진과 본문이 이어지는 SNS형 피드를 보여주고, 기존 메모·연표·목표·습관은 자료실과 도구에서 이어 쓴다. 빌드 없이 정적 호스팅에서 실행한다.
 
