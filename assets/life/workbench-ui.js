@@ -1063,6 +1063,7 @@
       title.input.focus({ preventScroll: true });
     }
     function renderMaterialWriting(session, token) {
+      onBlogModeChange({ mode: 'material' });
       const active = () => showing(token, session) && session.materialOpen;
       session.materialContinuity ||= life.MaterialContinuitySync.create({ storage, auth: global.HaedoAuth });
       const prepareHost = el('section'), output = el('section', null, 'mw-output-tools');
@@ -1115,10 +1116,10 @@
         onDirty: () => updateStatus(session), onOpenSource: context => session.materialCallbacks.source(context),
         onOpenPost: context => session.materialCallbacks.openPost(context),
         onCreatePost: context => session.materialContinuity.handoff(session.workspaceId, context.planId, context.expectedRevision),
-        onPlanChange: () => { if (active()) continuityUI?.refresh().catch(error => { if (active()) report(error, session); }); },
-        onClose: async () => { if (!session.materialOpen || !workspaceIs(session)) return; session.materialOpen = false; clearError(); redraw(); surface.querySelector('#wbPageMaterialWriting')?.focus(); } });
+        onPlanChange: ({ planId }) => { if (active()) { session.materialPlanId = planId; if (session.materialSeed?.requestId === planId) session.materialSeed = null; continuityUI?.refresh().catch(error => { if (active()) report(error, session); }); } },
+        onClose: async () => { if (!session.materialOpen || !workspaceIs(session)) return; session.materialOpen = false; session.materialSeed = null; clearError(); redraw(); surface.querySelector('#wbPageMaterialWriting')?.focus(); } });
       session.materialCallbacks = { source, openPost };
-      const mount = session.materialUI.mount(prepareHost, { planId: session.materialPlanId || null });
+      const mount = session.materialUI.mount(prepareHost, { planId: session.materialPlanId || null, seed: session.materialSeed || null });
       mount.catch(error => { if (active()) report(error, session); });
       continuityUI = life.MaterialContinuityUI.create({ host: continuityHost, manager: session.materialContinuity, workspaceId: session.workspaceId,
         getPlanId: () => session.materialUI.getView().planId, beforeAction: () => session.materialUI.flush(),
@@ -3068,6 +3069,13 @@
     async function render(nextMode, options = {}) {
       if (!alive()) return;
       const bundle = getBundle(); if (!bundle) return;
+      const hasSeed = Object.hasOwn(options, 'materialWritingSeed'), seed = hasSeed ? copy(options.materialWritingSeed) : null;
+      if (hasSeed) {
+        if (nextMode !== 'page' || !seed || seed.workspaceId !== bundle.workspaceId) throw fault('workspace_changed', '선택한 자료의 작업공간이 다릅니다. 다른 준비를 열지 않았습니다.');
+        const previous = generation;
+        if (current && workspaceIs(current)) await flush();
+        if (!alive() || generation !== previous || getBundle()?.workspaceId !== bundle.workspaceId) return;
+      }
       cleanupView();
       if (current && current.workspaceId !== bundle.workspaceId) current.chapterImport = null;
       const token = ++generation;
@@ -3088,6 +3096,7 @@
         const targetPost = options.searchTarget?.photoPostId;
         if (options.pageCompose || options.pageProfile || options.pageProfileEdit || options.pageDraftId || options.searchTarget || options.nineTarget || options.nineReference || options.selection) {
           current.materialOpen = false;
+          current.materialSeed = null;
           if (!targetPost || !current.materialReturn || ![current.materialReturn.postId, current.materialReturn.targetPostId].includes(targetPost)) current.materialReturn = null;
         }
         current.blogContext = options.blogContext === true;
@@ -3114,6 +3123,11 @@
         }
         if (!current.pageCompose && (options.searchTarget || options.nineTarget||options.nineReference)) {
           current.nineOpen = !!options.nineTarget||!!options.nineReference; preview = false; if (current.share) current.share.open = false;
+        }
+        if (hasSeed) {
+          current.materialSeed = seed; current.materialPlanId = null; current.materialOpen = true; current.materialReturn = null;
+          current.pageCompose = current.pageProfile = current.pageProfileEdit = false; current.pageDraftId = current.searchTarget = current.nineTarget = current.nineReference = null;
+          current.nineOpen = false; preview = false; if (current.share) current.share.open = false;
         }
       }
       if (mode === 'page' && !current.pageCompose && typeof options.pageDraftId === 'string') { current.pageDraftId = options.pageDraftId; preview = false; }

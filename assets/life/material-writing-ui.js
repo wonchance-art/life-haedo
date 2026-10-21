@@ -143,7 +143,7 @@
     }
     function renderOutput() {
       output.replaceChildren(); const owner = plan(); if (!owner?.output) return;
-      output.append(el('p', '이미 글 초안으로 보관했습니다. 준비의 변경은 그 글을 덮지 않습니다. 같은 글을 이어 쓰거나 새 준비 사본으로 시작할 수 있습니다.', 'life-help'),
+      output.append(el('p', '이 준비에서 만든 글이 있습니다. 준비의 변경은 그 글을 덮지 않습니다. 같은 글을 열거나 새 준비 사본으로 시작할 수 있습니다.', 'life-help'),
         button('이어서 쓰기', () => openPost(false), { id: 'mwContinue', primary: true }));
     }
     async function openPost(createNew) {
@@ -230,6 +230,22 @@
           stamp(owner); mark();
         },
         onQuote: (materialId, reference) => appendBlock({ id: fresh(), kind: 'quote', materialId, reference: clone(reference) }, { fromSource: true }),
+        onLink: async materialId => {
+          guardLocal(); if (conflict()) throw failure;
+          const material = owner.materials.find(value => value.id === materialId);
+          if (!material) throw new Error('선택한 자료가 바뀌었습니다. 출처를 다시 확인해 주세요.');
+          const snapshot = clone(material), bundle = await getBundle();
+          if (!active()) return;
+          guardLocal(); if (conflict()) throw failure;
+          const live = owner.materials.find(value => value.id === materialId);
+          if (!live || live.sourceId !== snapshot.sourceId || live.sourceVersionId !== snapshot.sourceVersionId || live.contentHash !== snapshot.contentHash) throw new Error('선택한 자료가 바뀌었습니다. 다른 출처를 넣지 않았습니다.');
+          const resolved = M.resolveMaterial(bundle, snapshot);
+          if (bundle.workspaceId !== workspaceId || resolved.status !== 'available') throw new Error('선택한 정확한 자료 버전을 찾지 못했습니다. 다른 버전으로 바꾸지 않았습니다.');
+          const address = life.Discovery?.canonicalUrl(resolved.source.url);
+          const hostname = address && new URL(address).hostname.toLowerCase().replace(/\.$/, '');
+          if (!hostname || !/^[a-z0-9.-]+$/.test(hostname) || !hostname.includes('.') || /^[\d.]+$/.test(hostname) || /(?:^|\.)(?:localhost|local|internal|invalid|test)$/.test(hostname)) throw new Error('공개 HTTPS 출처 주소를 확인하지 못했습니다. 링크를 넣지 않았습니다.');
+          appendBlock({ id: fresh(), kind: 'paragraph', text: resolved.source.title + '\n' + address }, { fromSource: true });
+        },
         onOpenSource: async context => {
           if (!active()) return; if (typeof onOpenSource !== 'function') throw new Error('원문 열기를 연결하지 못했습니다. 준비와 구절은 유지했습니다.');
           await navigate(onOpenSource, { ...context, planId: owner.id });
@@ -283,17 +299,39 @@
       if (input && surface.contains(input)) { input.focus({ preventScroll: true }); if (typeof view.start === 'number' && input.setSelectionRange) input.setSelectionRange(view.start, view.end, view.direction); }
       root.scrollTo?.({ top: view.y, behavior: 'instant' });
     }
-    async function mount(target, { planId = null } = {}) {
-      if (disposed) throw new Error('종료한 작성 준비 화면입니다.'); if (host && dirty()) await flush();
+    async function acceptSeed(seed, token) {
+      const keys = ['requestId', 'workspaceId', 'sourceId', 'sourceVersionId', 'contentHash'];
+      if (!seed || Object.getPrototypeOf(seed) !== Object.prototype || Object.keys(seed).length !== keys.length || !keys.every(key => Object.hasOwn(seed, key)) ||
+          ['requestId', 'workspaceId', 'sourceId', 'sourceVersionId'].some(key => typeof seed[key] !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(seed[key])) ||
+          seed.workspaceId !== workspaceId || seed.contentHash !== null && (typeof seed.contentHash !== 'string' || !/^[a-f0-9]{64}$/.test(seed.contentHash))) throw new Error('선택한 자료의 작업공간과 정확한 버전을 확인해 주세요.');
+      const bundle = await getBundle(); if (!mounted(token)) return false;
+      const material = M.material(bundle, seed.sourceId, seed.sourceVersionId, fresh);
+      if (bundle.workspaceId !== workspaceId || material.contentHash !== seed.contentHash) throw new Error('선택한 원문 버전이 바뀌었습니다. 다른 자료나 준비를 열지 않았습니다.');
+      const prior = state.plans.find(value => value.id === seed.requestId);
+      if (prior) {
+        if (!prior.materials.some(value => value.sourceId === material.sourceId && value.sourceVersionId === material.sourceVersionId && value.contentHash === material.contentHash)) throw new Error('이 요청의 작성 준비와 선택 자료가 다릅니다. 새 준비를 자동으로 만들지 않았습니다.');
+      } else {
+        const value = M.create(() => seed.requestId), candidate = clone(state); value.materials.push(material); candidate.plans.push(value); M.validate(candidate);
+        const task = Promise.resolve().then(() => storage.saveMaterialWriting(workspaceId, candidate, candidate.revision)); saving = task;
+        try { const saved = await task; if (!mounted(token)) return false; M.validate(saved); state = clone(saved); stored = tick; }
+        finally { if (saving === task) saving = null; }
+      }
+      selected = seed.requestId; sourceView = view = null; clear(); return true;
+    }
+    async function mount(target, { planId = null, seed = null } = {}) {
+      seed = seed == null ? null : clone(seed);
+      if (disposed) throw new Error('종료한 작성 준비 화면입니다.'); if (state && dirty()) await flush();
       host = target; const token = ++epoch; surface = el('section', null, 'mw-workspace'); surface.setAttribute('aria-label', '자료로 글쓰기'); host.replaceChildren(surface); surface.append(el('p', '작성 준비를 불러오는 중…', 'life-help'));
       try {
         if (!state || !dirty()) { const next = await storage.readMaterialWriting(workspaceId); if (!mounted(token)) return; M.validate(next); state = clone(next); stored = tick; }
-        if (!mounted(token)) return; if (planId && planId !== selected) { selected = planId; sourceView = null; view = null; } if (!plan()) selected = state.plans[0]?.id || null;
+        if (!mounted(token)) return;
+        if (seed) { if (!await acceptSeed(seed, token)) return; }
+        else { if (planId && planId !== selected) { selected = planId; sourceView = null; view = null; } if (!plan()) selected = state.plans[0]?.id || null; }
         await render(); if (mounted(token)) restoreView();
       } catch (cause) {
         if (!mounted(token)) return;
         if (state && plan() && surface.querySelector('#mwTitle')) { sourceLoading = false; report(cause); return; }
-        const alert = el('p', cause.message || '작성 준비를 불러오지 못했습니다.', 'life-error'); alert.setAttribute('role', 'alert'); surface.replaceChildren(alert, button('작성 준비 다시 불러오기', () => mount(target, { planId })));
+        const alert = el('p', cause.message || '작성 준비를 불러오지 못했습니다.', 'life-error'); alert.setAttribute('role', 'alert'); surface.replaceChildren(alert, button('작성 준비 다시 불러오기', () => mount(target, { planId, seed })));
       }
     }
     async function reload({ planId = null } = {}) {

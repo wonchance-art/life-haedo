@@ -6,9 +6,154 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
 const repo=path.resolve(__dirname,'..'),out=path.resolve(process.env.NEWS_BROWSER_OUTPUT||path.join(repo,'.local/news-navigation')),{FakeCloud,accounts,cloud,base}=require(path.join(repo,'tests/life-sync-browser.cjs')),{playwright,makeContext,ready,nav,settle}=require(path.join(repo,'tests/unified-home-browser.cjs'));
 const report={createdAt:new Date().toISOString(),scope:'Local Chromium actual application/bundled SDK/scoped IDB with synthetic Auth only. Checked-in public feed metadata; no publisher/Google/production Auth/DB requests, Apple device or usefulness proof.',checks:[],visual:[],consoleErrors:[],pageErrors:[],external:[],privateLeaks:[],modelRequests:[],catalogRequests:[]};
 const privateText='뉴스검수익명비공개입력표식',hash=b=>crypto.createHash('sha256').update(b).digest('hex');
-const productFiles=['assets/haedo-navigation.js','assets/life/discovery-ui.js','assets/life/ui.js','assets/life/icons.js','assets/platform-auth.js','assets/life/discovery.js','assets/life/storage.js','assets/life/discovery-language-settings.js','assets/life/discovery-feed.json','assets/haedo-shell.css','assets/life/discovery.css'];
+const productFiles=['assets/haedo-navigation.js','assets/life/discovery-ui.js','assets/life/ui.js','assets/life/ui.css','assets/life/icons.js','assets/platform-auth.js','assets/life/discovery.js','assets/life/storage.js','assets/life/discovery-language-settings.js','assets/life/workbench-ui.js','assets/life/material-writing-ui.js','assets/life/material-writing-sources.js','assets/life/material-writing.js','assets/life/discovery-feed.json','assets/haedo-shell.css','assets/life/discovery.css'];
 const hashes=async()=>Object.fromEntries(await Promise.all(productFiles.map(async file=>[file,hash(await fs.readFile(path.join(repo,file)))])));
 let browser,context,page;
+async function newsWritingJourney({ page, context, fake, state, rows, idle, wait, assertNews }) {
+  const privateDraft = privateText + '_writing-preparation';
+  const authored = '익명 작성 검수: 제목과 출처를 확인하고 내가 쓸 문단을 직접 적습니다.';
+  const postTitle = '뉴스 자료에서 이어 쓴 익명 검수 글';
+  const materialState = () => page.evaluate(async () => {
+    const storage = HaedoLife.Shell.storage, workspace = await storage.getActive(), posts = [];
+    for (const row of await storage.listPhotoPosts(workspace)) posts.push(await storage.readPhotoPost(workspace, row.id));
+    return { preparation: await storage.readMaterialWriting(workspace), posts };
+  });
+  const prepared = () => page.locator('.mw-status[data-state="saved"]').waitFor();
+  const captureScene = async scene => {
+    const originalViewport = page.viewportSize(), originalScroll = await page.evaluate(() => ({ x: scrollX, y: scrollY }));
+    try {
+      for (const width of [390, 1440]) {
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+        await page.evaluate(() => document.fonts.ready);
+        if (scene === 'stored-reader') await page.locator('#lifeSourceMaterialWriting').scrollIntoViewIfNeeded();
+        if (scene === 'prepared-paragraphs') {
+          const paragraph = page.locator('.mw-block[data-kind="paragraph"] textarea').first();
+          await paragraph.scrollIntoViewIfNeeded();
+          await paragraph.evaluate(element => scrollTo({ top: scrollY + element.getBoundingClientRect().top - 110, behavior: 'instant' }));
+        }
+        if (scene === 'saved-post') {
+          const status = page.locator('#photoServerStatus'); await status.scrollIntoViewIfNeeded();
+          await status.evaluate(element => scrollTo({ top: scrollY + element.getBoundingClientRect().top - 100, behavior: 'instant' }));
+        }
+        const audit = await page.evaluate(scene => {
+          const rect = selector => { const element = document.querySelector(selector), box = element?.getBoundingClientRect(); return box && { top: box.top, bottom: box.bottom, left: box.left, right: box.right, width: box.width, height: box.height }; };
+          const result = { width: innerWidth, height: innerHeight, scrollY, documentWidth: document.documentElement.scrollWidth, mode: document.querySelector('#lifeMain')?.dataset.mode, heading: document.querySelector('.life-page-title')?.textContent };
+          if (scene === 'stored-reader') Object.assign(result, { writing: rect('#lifeSourceMaterialWriting'), related: rect('#lifeReaderRelated') });
+          if (scene === 'prepared-paragraphs') result.paragraphs = [...document.querySelectorAll('.mw-block[data-kind="paragraph"] textarea')].map(element => ({ top: element.getBoundingClientRect().top, bottom: element.getBoundingClientRect().bottom, text: element.value }));
+          if (scene === 'saved-post') Object.assign(result, { server: rect('#photoServerStatus'), article: rect('.photo-article'), serverState: document.querySelector('#photoServerStatus')?.dataset.state });
+          return result;
+        }, scene);
+        assert(audit.documentWidth <= width, scene + ' horizontal overflow');
+        if (scene === 'stored-reader') {
+          for (const control of [audit.writing, audit.related]) assert(control && control.width >= 44 && control.height >= 44, 'Reader control minimum 44px');
+          assert(audit.related.top >= audit.writing.bottom, 'Reader writing and related controls do not overlap');
+        }
+        const file = 'news-writing-' + scene + '-' + width + '.png';
+        await page.screenshot({ path: path.join(out, file), fullPage: false });
+        report.visual.push({ scene, width, file, audit, continuousWritingScene: true });
+      }
+    } finally {
+      await page.setViewportSize(originalViewport);
+      await page.evaluate(position => scrollTo({ left: position.x, top: position.y, behavior: 'instant' }), originalScroll);
+      (report.captureRestorations ||= []).push({ scene, before: originalViewport, after: page.viewportSize() });
+    }
+  };
+
+  const privateSavesBefore = fake.saves().length;
+  assert.equal(privateSavesBefore, 0, 'News and reaction preparation must not save a private post');
+  await page.locator('#discoveryBookmarked').click(); await idle();
+  const initial = await state(), initialWriting = await materialState(), order = await rows();
+  const card = page.locator('#discoveryList [data-discovery-url]').first(), url = await card.getAttribute('data-discovery-url');
+  const articleTitle = (await card.locator('.discovery-title').innerText()).trim();
+  assert(url && order.length > 0); assert.equal(initial.actions.personalizationEnabled, false); assert.equal(initial.settings.autoRefresh, false);
+  const savedReaction = initial.actions.entries.find(entry => entry.canonicalUrl === url);
+  assert(savedReaction?.liked && savedReaction.bookmarked);
+  await card.locator('[data-discovery-feedback="already_read"]').click(); await idle();
+  const excluded = page.locator('.discovery-excluded'); if (!await excluded.evaluate(details => details.open)) await excluded.locator(':scope > summary').click();
+  const entry = page.locator('.discovery-excluded-row[data-discovery-url="' + url.replace(/"/g, '\\"') + '"]'); await entry.waitFor();
+  // All publisher/translator navigation is intercepted only for this explicit click.
+  if (!await page.locator('#discoveryLanguageOptions').evaluate(details => details.open)) await page.locator('#discoveryLanguageOptions > summary').click();
+  await page.locator('#discoveryTranslationLanguage').selectOption('ko'); await idle();
+  const popupEvidence = [];
+  for (const [selector, kind] of [['[data-discovery-open]', 'original'], ['[data-discovery-translate]', 'translation']]) {
+    const link = entry.locator(selector), destination = await link.getAttribute('href'); assert(destination);
+    assert.equal(await link.getAttribute('target'), '_blank'); assert.match(await link.getAttribute('rel'), /noreferrer/);
+    if (kind === 'translation') { const translated = new URL(destination); assert.equal(translated.origin, 'https://translate.google.com'); assert.equal(translated.searchParams.get('u'), url); assert.equal(translated.searchParams.get('tl'), 'ko'); }
+    let requests = 0;
+    const mock = route => { requests++; const request = route.request(); assert.equal(request.method(), 'GET'); assert.equal(request.postData(), null); assert.equal(request.headers().referer, undefined); return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>명시 클릭 합성 응답</title><p>No actual publisher or Google translation was fetched.</p>' }); };
+    await context.route(destination, mock);
+    try { await link.focus(); const opened = page.waitForEvent('popup'); await link.click(); const popup = await opened; await popup.waitForLoadState('domcontentloaded'); assert.deepEqual(await popup.evaluate(() => ({ referrer: document.referrer, noOpener: window.opener === null })), { referrer: '', noOpener: true }); await popup.close(); await page.bringToFront(); assert.equal(await link.evaluate(element => document.activeElement === element), true); assert.equal(requests, 1); popupEvidence.push({ kind, url: destination, syntheticResponse: true, explicitClicks: requests }); }
+    finally { await context.unroute(destination, mock); }
+  }
+  const selected = await state();
+  assert.deepEqual(selected.bundle, initial.bundle); assert.deepEqual(selected.actions, initial.actions);
+  await entry.locator('[data-discovery-import]').click(); await page.locator('#lifeImportTitle').waitFor();
+  assert.equal(await page.locator('#lifeImportUrl').inputValue(), url); assert.equal(await page.locator('#lifeImportText').inputValue(), '');
+  assert.deepEqual((await state()).bundle, selected.bundle);
+  await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await page.locator('.life-review').waitFor();
+  assert.deepEqual((await state()).bundle, selected.bundle);
+  await page.getByRole('button', { name: '자료만 보관', exact: true }).click(); await page.locator('.life-reader').waitFor();
+  const imported = await state(), source = imported.bundle.sources.find(item => item.url === url);
+  assert(source); assert.equal(imported.bundle.sources.length, selected.bundle.sources.length + 1);
+  const version = imported.bundle.sourceVersions.find(item => item.sourceId === source.id);
+  assert.equal(version.contentText, null); assert.equal(version.coverage.status, 'link_only');
+  for (const prior of selected.bundle.sources) assert.deepEqual(imported.bundle.sources.find(item => item.id === prior.id), prior);
+  for (const prior of selected.bundle.sourceVersions) assert.deepEqual(imported.bundle.sourceVersions.find(item => item.id === prior.id), prior);
+  for (const key of ['manual', 'feedback', 'settings', 'language', 'actions']) assert.deepEqual(imported[key], selected[key]);
+  await captureScene('stored-reader');
+  await page.locator('#lifeSourceMaterialWriting').click(); await page.locator('#mwTitle').waitFor(); await prepared();
+  let writing = await materialState(); assert.equal(writing.preparation.plans.length, initialWriting.preparation.plans.length + 1);
+  const planId = await page.locator('#mwPlanSelect').inputValue(), plan = writing.preparation.plans.find(item => item.id === planId);
+  assert(plan); assert.equal(plan.materials.length, 1); assert.equal(plan.blocks.length, 0); assert.equal(plan.output, null);
+  assert.equal(plan.materials[0].sourceId, source.id); assert.equal(plan.materials[0].sourceVersionId, version.id); assert.equal(plan.materials[0].contentHash, version.contentHash);
+  assert.equal(writing.posts.length, initialWriting.posts.length); assert.equal(fake.saves().length, privateSavesBefore);
+  const material = page.locator('.mw-material[data-material-id="' + plan.materials[0].id + '"]');
+  await material.locator('.mw-material-link-only').waitFor(); assert.equal(await material.locator('.mw-material-body').count(), 0);
+  await page.locator('#mwTitle').fill(postTitle); await page.locator('#mwQuestion').fill(privateDraft);
+  await material.locator('.mw-material-note').fill(privateDraft + '_note'); await prepared();
+  await material.locator('.mw-material-link').click(); await prepared();
+  writing = await materialState(); const linked = writing.preparation.plans.find(item => item.id === planId);
+  assert.equal(linked.blocks.length, 1); assert.equal(linked.blocks[0].kind, 'paragraph');
+  assert(linked.blocks[0].text.includes(articleTitle)); assert(linked.blocks[0].text.includes(url));
+  await page.locator('#mwAddParagraph').click(); await page.locator('#mwBlocks [data-kind="paragraph"] textarea').last().fill(authored); await prepared();
+  assert.equal(fake.saves().length, privateSavesBefore, 'Authored preparation stays local');
+  await captureScene('prepared-paragraphs');
+  await page.locator('#mwPreview').click(); await page.locator('#mwPreviewContent').waitFor();
+  const preview = await page.locator('#mwPreviewContent').innerText(); assert(preview.includes(authored)); assert(preview.includes(url)); assert(!preview.includes(privateDraft));
+  const deniedState = await materialState(); await page.locator('#mwCreate').click(); await page.locator('.mw-error:not([hidden])').waitFor(); assert.match(await page.locator('.mw-error').innerText(), /동의/); assert.deepEqual(await materialState(), deniedState); assert.equal(await page.locator('#mwQuestion').inputValue(), privateDraft); assert.equal(fake.saves().length, privateSavesBefore);
+  await page.locator('#mwPreview').click(); await page.locator('#mwPreviewContent').waitFor(); assert((await page.locator('#mwPreviewContent').innerText()).includes(authored)); assert((await page.locator('#mwPreviewContent').innerText()).includes(url));
+  await page.locator('#mwConsent').check(); await page.locator('#mwCreate').click(); await page.locator('#photoTitle').waitFor();
+  assert.equal(await page.locator('#photoTitle').inputValue(), postTitle);
+  assert((await page.locator('.ql-editor').innerText()).includes(authored)); assert((await page.locator('.ql-editor').innerText()).includes(url));
+  assert(!(await page.locator('.ql-editor').innerText()).includes(privateDraft)); assert.equal(fake.saves().length, privateSavesBefore, 'Handoff is a local draft, not a server save');
+  const handedOff = await materialState(), draft = handedOff.posts.find(item => item.title === postTitle);
+  assert(draft); assert.equal(draft.status, 'draft'); assert.equal(handedOff.posts.length, initialWriting.posts.length + 1);
+  await page.getByRole('button', { name: '글 저장', exact: true }).click(); await page.locator('.photo-article').waitFor();
+  await page.locator('#photoServerStatus[data-state="synced"]').waitFor();
+  await captureScene('saved-post');
+  const postId = await page.locator('#photoServerStatus').getAttribute('data-post-id'); writing = await materialState();
+  const saved = writing.posts.find(item => item.id === postId); assert(saved); assert.equal(saved.status, 'saved'); assert.equal(saved.title, postTitle);
+  assert.equal(writing.posts.length, initialWriting.posts.length + 1); assert.equal(fake.saves().length, privateSavesBefore + 1);
+  assert.equal(writing.preparation.plans.find(item => item.id === planId).output.postId, postId);
+  assert.equal(JSON.stringify(fake.saves().at(-1).body).includes(privateText), false, 'Private question and note never become post/server payload');
+  assert.equal(fake.blogCalls.filter(call => /publish|unpublish/.test(call.rpc)).length, 0);
+  assert.deepEqual((await state()).bundle, imported.bundle);
+  await page.getByRole('button', { name: '작성 준비로 돌아가기', exact: true }).click(); await page.locator('#mwContinue').waitFor();
+  await page.locator('#mwContinue').click(); await page.locator('.photo-article').waitFor();
+  assert.equal(await page.locator('#photoServerStatus').getAttribute('data-post-id'), postId); assert.equal(fake.saves().length, privateSavesBefore + 1);
+  assert.equal((await materialState()).posts.length, initialWriting.posts.length + 1);
+  await page.getByRole('button', { name: '작성 준비로 돌아가기', exact: true }).click(); await page.locator('#mwContinue').waitFor();
+  await page.locator('#lifeSubviewReturn').click(); await assertNews(); assert.deepEqual(await rows(), order);
+  await wait(url => document.activeElement?.closest('.discovery-excluded-row')?.dataset.discoveryUrl === url, url);
+  const returned = await state(); assert.deepEqual(returned.bundle, imported.bundle);
+  for (const key of ['manual', 'feedback', 'settings', 'language', 'actions']) assert.deepEqual(returned[key], imported[key]);
+  for (const width of [390, 1440]) { await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 }); await page.evaluate(() => scrollTo(0, 0)); const audit = await page.evaluate(() => ({ width: innerWidth, documentWidth: document.documentElement.scrollWidth, section: document.querySelector('[data-haedo-navigation] [aria-current="page"]')?.dataset.haedoSection })); assert(audit.documentWidth <= width); assert.equal(audit.section, 'news'); const file = 'news-writing-return-' + width + '.png'; await page.screenshot({ path: path.join(out, file), fullPage: false }); report.visual.push({ width, file, audit, continuousWritingReturn: true }); }
+  await page.reload(); await ready(page); await assertNews(); await page.locator('#discoveryBookmarked').click(); await idle(); assert.deepEqual(await rows(), order);
+  const reloaded = await materialState(); assert.equal(reloaded.posts.length, initialWriting.posts.length + 1); assert.deepEqual(reloaded.posts.find(item => item.id === postId), saved); assert.equal(reloaded.preparation.plans.find(item => item.id === planId).output.postId, postId);
+  assert.deepEqual((await state()).bundle, imported.bundle); assert.equal(fake.saves().length, privateSavesBefore + 1);
+  report.newsWriting = { url, sourceId: source.id, sourceVersionId: version.id, contentHash: version.contentHash, coverage: 'link_only', bodyRetrieved: false, planId, postId, totalNewPlans: 1, totalNewPosts: 1, consentFailurePreservesPreparation: true, draftPrivateSaves: 0, explicitPrivateSaves: 1, syntheticPrivateTransport: true, publications: 0, excludedEntryReadImportAndFocus: true, sourceAndProfilesPreserved: true, newsRootReturned: true, exactPostReopened: true, reloadPreserved: true, popupEvidence };
+}
+
 async function main(){
  await fs.mkdir(out,{recursive:true});report.runnerSHA256=hash(await fs.readFile(__filename));report.hashesBefore=await hashes();const fake=new FakeCloud();browser=await playwright().chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',args:['--no-sandbox']});report.browser=browser.version();report.node=process.version;
  context=await makeContext(browser,fake,'news-navigation-anonymous',accounts.a,{viewport:{width:1440,height:1000}});
@@ -35,6 +180,6 @@ async function main(){
  await check('topic disclosure preserves composing node through redraw and remembers explicit open/closed state on reentry',async()=>{await page.locator('#discoveryDiscover').click();await idle();await topics();const input=page.locator('#discoveryTopicInput');await input.focus();await input.evaluate((el,text)=>{window.__newsTopicInput=el;el.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));el.value=text;el.setSelectionRange(2,7);el.dispatchEvent(new InputEvent('input',{bubbles:true,isComposing:true,inputType:'insertCompositionText',data:text}));},privateText);await page.locator('#discoveryRefresh').evaluate(el=>el.click());await idle();assert.deepEqual(await input.evaluate(el=>({same:el===__newsTopicInput,value:el.value,start:el.selectionStart,end:el.selectionEnd,focused:document.activeElement===el})),{same:true,value:privateText,start:2,end:7,focused:true});await input.dispatchEvent('compositionend',{data:privateText});await topics(false);assert.equal(await page.evaluate(()=>document.activeElement?.id),'discoveryTopicsSummary');assert.equal(await input.inputValue(),privateText);await topics();assert.equal(await input.evaluate(el=>el===__newsTopicInput),true);await page.locator('#discoveryTopicDiscard').click();await idle();await nav(page,'home');await news();assert.equal(await page.locator('#discoveryTopics').evaluate(el=>el.open),true);await topics(false);await nav(page,'home');await news();assert.equal(await page.locator('#discoveryTopics').evaluate(el=>el.open),false);});
  await check('unsaved topic refuses home navigation without URL or input loss',async()=>{await page.locator('#discoveryDiscover').click();await idle();const at=page.url();await topics();await page.locator('#discoveryTopicInput').fill(privateText);await topics(false);await page.locator('[data-haedo-navigation] [data-haedo-section="home"]').click();await page.locator('#lifeError').waitFor({state:'visible'});assert.equal(page.url(),at);await assertNews();assert.equal(await page.locator('#discoveryTopicInput').inputValue(),privateText);assert.equal((await state()).manual.manual.length,0);await topics();await page.locator('#discoveryTopicDiscard').click();await idle();await nav(page,'home');assert.equal(await page.locator('#discoveryReview').count(),0);await news();await assertNews();});
  await check('three responsive news reading viewports retain five navigation targets without overflow',async()=>{await page.locator('#discoveryDiscover').click();await idle();await language(null);await topics(false);await page.locator('#discoveryLatest').click();await idle();await page.locator('#discoveryLanguageOptions').evaluate(d=>d.open=false);for(const width of [390,820,1440]){await page.setViewportSize({width,height:width===390?844:1000});await page.evaluate(()=>document.fonts.ready);if(width===390){await options();await page.locator('#discoveryTranslationLanguage').focus();assert.equal(await page.evaluate(()=>document.activeElement?.id),'discoveryTranslationLanguage');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.locator('#discoveryLanguageOptions > summary').click();}await page.locator('#discoveryList [data-discovery-url]').first().evaluate(n=>scrollTo({top:scrollY+n.getBoundingClientRect().top-96,behavior:'instant'}));const audit=await page.evaluate(()=>{const nav=document.querySelector('[data-haedo-navigation]'),n=nav.getBoundingClientRect(),title=document.querySelector('#discoveryList .discovery-title').getBoundingClientRect();return{width:innerWidth,documentWidth:document.documentElement.scrollWidth,scrollY,newsActive:nav.querySelector('[data-haedo-section="news"]')?.getAttribute('aria-current'),nav:{top:n.top,bottom:n.bottom},firstTitle:{top:title.top,bottom:title.bottom},links:[...nav.querySelectorAll('a[data-haedo-section]')].map(x=>{const r=x.getBoundingClientRect();return{id:x.dataset.haedoSection,width:r.width,height:r.height,visible:r.width>0&&r.height>0};})};});assert(audit.documentWidth<=width);assert.equal(audit.newsActive,'page');assert.equal(audit.links.length,5);assert(audit.links.every(l=>l.visible&&l.width>=44&&l.height>=44));assert(audit.firstTitle.top>=60&&audit.firstTitle.bottom<(width===390?audit.nav.top:1000));const file='news-'+width+'.png';await page.screenshot({path:path.join(out,file),fullPage:false});report.visual.push({width,file,audit});}});
- const after=await state();for(const key of ['workspace','bundle','manual','feedback','settings'])assert.deepEqual(after[key],before[key],key+' preserved');assert.deepEqual(after.actions.entries.find(e=>e.canonicalUrl===savedURL),storedEntry);await check('saving a literal original-language topic preserves latest until explicit related selection',async()=>{await page.locator('#discoveryDiscover').click();await idle();await page.locator('#discoveryLatest').click();await idle();const latest=await rows(),prior=await state();await topics();assert.match(await page.locator('#discoveryTopicHelp').innerText(),/검색어는 자동 번역하지 않습니다/);assert.match(await page.locator('#discoveryTopicHelp').innerText(),/번역 언어는 원문 열기에만/);assert.equal((await state()).manual.manual.length,prior.manual.manual.length);await page.locator('#discoveryTopicInput').fill('Linguistics');await page.locator('#discoveryTopicAdd').click();await idle();const stored=await state();assert(stored.manual.manual.some(item=>item.label==='Linguistics'));assert.equal(await page.locator('#discoveryLatest').getAttribute('aria-pressed'),'true');assert.deepEqual(await rows(),latest);await page.locator('#discoveryTopicRelated').click();await idle();assert.equal(await page.locator('#discoveryRecommended').getAttribute('aria-pressed'),'true');assert.equal(await page.evaluate(()=>document.activeElement?.id),'discoveryRecommended');assert.deepEqual((await state()).language,stored.language);assert.deepEqual((await state()).actions,stored.actions);});assert.equal(fake.writes().length,0);report.mockDBWrites=fake.writes().length;for(const key of ['consoleErrors','pageErrors','external','privateLeaks','modelRequests'])assert.deepEqual(report[key],[],key);assert(report.catalogRequests.every(x=>x.method==='GET'&&!x.query&&!x.body&&!x.authorization));report.pass=true;
+ const after=await state();for(const key of ['workspace','bundle','manual','feedback','settings'])assert.deepEqual(after[key],before[key],key+' preserved');assert.deepEqual(after.actions.entries.find(e=>e.canonicalUrl===savedURL),storedEntry);await check('saving a literal original-language topic preserves latest until explicit related selection',async()=>{await page.locator('#discoveryDiscover').click();await idle();await page.locator('#discoveryLatest').click();await idle();const latest=await rows(),prior=await state();await topics();assert.match(await page.locator('#discoveryTopicHelp').innerText(),/검색어는 자동 번역하지 않습니다/);assert.match(await page.locator('#discoveryTopicHelp').innerText(),/번역 언어는 원문 열기에만/);assert.equal((await state()).manual.manual.length,prior.manual.manual.length);await page.locator('#discoveryTopicInput').fill('Linguistics');await page.locator('#discoveryTopicAdd').click();await idle();const stored=await state();assert(stored.manual.manual.some(item=>item.label==='Linguistics'));assert.equal(await page.locator('#discoveryLatest').getAttribute('aria-pressed'),'true');assert.deepEqual(await rows(),latest);await page.locator('#discoveryTopicRelated').click();await idle();assert.equal(await page.locator('#discoveryRecommended').getAttribute('aria-pressed'),'true');assert.equal(await page.evaluate(()=>document.activeElement?.id),'discoveryRecommended');assert.deepEqual((await state()).language,stored.language);assert.deepEqual((await state()).actions,stored.actions);});assert.equal(fake.writes().length,0);report.mockDBWrites=fake.writes().length;for(const key of ['consoleErrors','pageErrors','external','privateLeaks','modelRequests'])assert.deepEqual(report[key],[],key);assert(report.catalogRequests.every(x=>x.method==='GET'&&!x.query&&!x.body&&!x.authorization));await check('news reading and explicit link storage continue into exact material writing, one private saved post and the same news root',()=>newsWritingJourney({page,context,fake,state,rows,idle,wait,assertNews}));for(const key of ['consoleErrors','pageErrors','external','privateLeaks','modelRequests'])assert.deepEqual(report[key],[],key);assert(report.catalogRequests.every(x=>x.method==='GET'&&!x.query&&!x.body&&!x.authorization));assert.equal(fake.writes().length,0);report.pass=true;
 }
 main().catch(async error=>{report.pass=false;report.error={message:error.message,stack:error.stack};console.error(report.stage+'\n'+error.stack);if(page&&!page.isClosed()){try{report.failureState=await page.evaluate(()=>({path:location.pathname,section:new URLSearchParams(location.search).get('section'),mode:document.querySelector('#lifeMain')?.dataset.mode,outerBusy:document.querySelector('.life-app')?.getAttribute('aria-busy'),newsBusy:document.querySelector('#discoveryReview')?.getAttribute('aria-busy'),current:document.querySelector('[data-haedo-navigation] [aria-current=page]')?.dataset.haedoSection}));console.error(JSON.stringify(report.failureState));await fs.writeFile(path.join(out,'failure.html'),await page.content());await page.screenshot({path:path.join(out,'failure.png'),fullPage:false});}catch(capture){report.captureError=capture.message;}}process.exitCode=1;}).finally(async()=>{report.hashesAfter=await hashes();report.productsUnchangedDuringRun=JSON.stringify(report.hashesBefore)===JSON.stringify(report.hashesAfter);if(!report.productsUnchangedDuringRun){report.pass=false;process.exitCode=1;}await fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2)+'\n');if(context)await context.close();if(browser)await browser.close();console.log(JSON.stringify({pass:report.pass,checks:report.checks.length,report:path.join(out,'report.json')}));});
