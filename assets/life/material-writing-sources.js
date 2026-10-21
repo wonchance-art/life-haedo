@@ -1,10 +1,11 @@
-/* Private exact-version material selection. Only an explicitly selected quote leaves this view. */
+/* Private exact-version material selection. Only explicit quote/link actions
+ * leave this view; material notes and unselected bodies stay separate. */
 (function (root, factory) {
   const api = factory(root); (root.HaedoLife ||= {}).MaterialWritingSources = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
-  function create({ host, getBundle, getPlan, isCurrent = () => true, onAdd, onRemove, onNote, onQuote, onOpenSource, onPendingChange = () => {}, view = null }) {
+  function create({ host, getBundle, getPlan, isCurrent = () => true, onAdd, onRemove, onNote, onQuote, onLink, onOpenSource, onPendingChange = () => {}, view = null }) {
     const doc = host.ownerDocument, win = doc.defaultView;
     const model = () => root.HaedoLife.MaterialWriting;
     const refs = () => root.HaedoLife.SourceReference;
@@ -86,6 +87,19 @@
         const versions = bundle.sourceVersions.filter(value => value.sourceId === source.id);
         section.append(el('p', '버전 ' + (versions.findIndex(value => value.id === version.id) + 1) + '/' + versions.length + (version.coverage?.status === 'partial' ? ' · 일부 본문' : ''), 'life-meta'));
         const hasBody = typeof version.contentText === 'string' && version.contentText.length > 0;
+        if (typeof onLink === 'function' && root.HaedoLife.Discovery?.canonicalUrl(source.url)) {
+          const link = button('출처 링크를 글에 담기', () => {
+            navigationGuard();
+            return task(async valid => {
+              const fresh = await getBundle(); if (!valid()) return;
+              if (!sameMaterial(material(card.item.id), card.item)) throw Error('선택한 자료가 바뀌었습니다. 현재 자료를 다시 확인해 주세요.');
+              const exact = model().resolveMaterial(fresh, card.item);
+              if (exact.status !== 'available' || !root.HaedoLife.Discovery?.canonicalUrl(exact.source?.url)) throw Error('선택한 원문 버전과 출처 링크를 확인하지 못했습니다. 기존 글은 유지했습니다.');
+              await onLink(card.item.id);
+            });
+          });
+          link.classList.add('mw-material-link'); link.dataset.focusKey = 'material-link:' + planId + ':' + item.id; section.append(link);
+        }
         if (hasBody) {
           const body = el('textarea'); body.className = 'mw-material-body'; body.readOnly = true; body.rows = 12; body.value = normalized(version.contentText);
           card.body = body; section.append(field('원문 읽기 · 인용할 구절 선택', body));

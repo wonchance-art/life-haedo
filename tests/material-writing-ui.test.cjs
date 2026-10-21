@@ -31,7 +31,7 @@ async function fixture(t, options = {}) {
   let bundle = C.createWorkspace(); const imported = await C.prepareImport({ origin: 'other', title: '자료의 제목', text: '정확한 인용 구절\r\n자동으로 넣지 않을 본문', url: 'https://example.org/source' }, bundle); bundle = C.applyChanges(bundle, C.buildImportChanges(bundle, imported));
   const ref = await R.build({ bundle, sourceId: imported.source.id, versionId: imported.version.id, locator: { start: 0, end: '정확한 인용 구절'.length } });
   const plan = M.create(C.id); plan.blocks.push({ id: C.id(), kind: 'paragraph', text: '글에 쓸 내 문단' });
-  let db = { ...M.empty(bundle.workspaceId), plans: [plan] }, beforeSave = null, beforeCreate = null, failRead = false, scope = true, sourceOptions = null, sourcePending = false, sourceView = { activeId: null, compareId: null };
+  let db = { ...M.empty(bundle.workspaceId), plans: [plan] }, beforeSave = null, beforeCreate = null, beforeSources = null, failRead = false, scope = true, sourceOptions = null, sourcePending = false, sourceView = { activeId: null, compareId: null };
   const docs = new Map(), saves = [], handoffs = [], opens = []; let creates = 0, failOpen = false;
   const clone = value => structuredClone(value), storage = {
     read: async () => clone(bundle), readMaterialWriting: async () => { if (failRead) throw Error('준비 목록 조회 실패'); return clone(db); },
@@ -44,10 +44,10 @@ async function fixture(t, options = {}) {
       return { postId: doc.id, revision: doc.revision, planRevision: db.revision, created: true };
     }, readPhotoPost: async (ws, id) => clone(docs.get(id)),
   };
-  global.HaedoLife = { Core: C, MaterialWriting: M, PhotoPost: P, MaterialWritingSources: { create(value) { sourceOptions = value; return { mount: async () => {}, refresh: async () => {}, pending: () => sourcePending, getView: () => sourceView, dispose() {} }; } } };
+  global.HaedoLife = { Core: C, MaterialWriting: M, PhotoPost: P, Discovery: require('../assets/life/discovery.js'), MaterialWritingSources: { create(value) { sourceOptions = value; return { mount: async () => { await beforeSources?.(); }, refresh: async () => {}, pending: () => sourcePending, getView: () => sourceView, dispose() {} }; } } };
   vm.runInThisContext(fs.readFileSync(path.join(__dirname, '../assets/life/material-writing-ui.js'), 'utf8'));
   const host = document.createElement('main'); document.body.append(host);
-  const ui = global.HaedoLife.MaterialWritingUI.create({ storage, workspaceId: bundle.workspaceId, getBundle: storage.read, isCurrent: () => scope,
+  const ui = global.HaedoLife.MaterialWritingUI.create({ storage, workspaceId: bundle.workspaceId, getBundle: () => storage.read(), isCurrent: () => scope,
     onOpenPost: async context => { await ui.flush(); if (failOpen) throw Error('작성기 열기 실패'); opens.push(context); }, onOpenSource: async context => { await ui.flush(); opens.push(context); }, ...options });
   await ui.mount(host); t.after(() => { ui.dispose(); global.document = old.document; global.HaedoLife = old.life; global.scrollTo = old.scrollTo; });
   const get = selector => { const node = host.querySelector(selector); assert.ok(node, selector); return node; };
@@ -56,6 +56,7 @@ async function fixture(t, options = {}) {
   const preview = async () => { await click('#mwPreview'); get('#mwConsent').checked = true; };
   return { ui, get, click, input, preview, host, document, storage, M, C, P, ref, imported, bundle, docs, opens, saves, handoffs,
     db: () => clone(db), setDb: value => { db = clone(value); }, sources: () => sourceOptions, setPending: value => { sourcePending = value; sourceOptions.onPendingChange(value); },
+    setBundle: value => { bundle = clone(value); }, setBeforeSources: value => { beforeSources = value; },
     setBeforeSave: value => { beforeSave = value; }, setBeforeCreate: value => { beforeCreate = value; }, setFailRead: value => { failRead = value; }, setFailOpen: value => { failOpen = value; }, setScope: value => { scope = value; }, creates: () => creates };
 }
 
@@ -167,4 +168,67 @@ test('connected creation delegates the frozen preparation revision and keeps for
   const calls = [], f = await fixture(t, { onCreatePost: async value => { calls.push(value); throw Object.assign(Error('다른 기기에서 글을 작성 중입니다'), { code: 'material_output_elsewhere' }); } });
   await f.preview(); await f.click('#mwCreate'); assert.equal(f.creates(), 0); assert.equal(f.handoffs.length, 0); assert.deepEqual(calls, [{ workspaceId: f.bundle.workspaceId, planId: f.ui.getView().planId, expectedRevision: f.db().revision }]);
   assert.match(f.get('.mw-error').textContent, /다른 기기/); assert.equal(f.host.querySelector('#mwConsent'), null); assert.equal(f.db().plans[0].output, null);
+});
+
+async function linkSeed(f) {
+  const prepared = await f.C.prepareImport({ origin: 'other', title: '명시적으로 보관한 링크', text: '', url: 'https://example.org/article?entry=1&utm_source=feed#part', coverage: { status: 'link_only', omissions: ['본문 미확보'] } }, f.bundle);
+  const bundle = f.C.applyChanges(f.bundle, f.C.buildImportChanges(f.bundle, prepared)); f.setBundle(bundle);
+  return { requestId: f.C.id(), workspaceId: bundle.workspaceId, sourceId: prepared.source.id, sourceVersionId: prepared.version.id, contentHash: prepared.version.contentHash };
+}
+test('an explicit exact link seed creates one empty preparation and same-request reentry reuses it without copying source content', async t => {
+  const f = await fixture(t), seed = await linkSeed(f), before = f.db();
+  assert.equal(seed.contentHash, null); await f.ui.mount(f.host, { seed });
+  const saved = f.db(), created = saved.plans.find(value => value.id === seed.requestId);
+  assert.equal(saved.plans.length, 2); assert.deepEqual(saved.plans[0], before.plans[0]);
+  assert.equal(created.title, ''); assert.equal(created.question, ''); assert.deepEqual(created.blocks, []); assert.equal(created.output, null);
+  assert.equal(created.materials.length, 1); assert.equal(created.materials[0].sourceVersionId, seed.sourceVersionId); assert.equal(created.materials[0].contentHash, null);
+  f.ui.detach(); await f.ui.mount(f.host, { seed }); assert.deepEqual(f.db(), saved); assert.equal(f.ui.getView().planId, seed.requestId);
+  await f.click('#mwNew'); const chosen = f.ui.getView().planId; await f.ui.flush(); f.ui.detach(); await f.ui.mount(f.host);
+  assert.equal(f.ui.getView().planId, chosen); assert.notEqual(chosen, seed.requestId);
+});
+test('a failed seed CAS retries the same request and a later source-view failure never creates another preparation', async t => {
+  const f = await fixture(t), seed = await linkSeed(f), before = f.db();
+  f.setBeforeSave(() => { throw Object.assign(Error('합성 저장 실패'), { code: 'material_writing_conflict' }); });
+  await f.ui.mount(f.host, { seed }); assert.deepEqual(f.db(), before); assert.equal(f.host.querySelector('#mwTitle'), null); assert.match(f.host.textContent, /합성 저장 실패/);
+  f.setBeforeSave(null); f.setBeforeSources(() => { throw Error('자료 표시 조회 실패'); });
+  await f.ui.mount(f.host, { seed }); assert.equal(f.db().plans.length, 2); assert.equal(f.ui.getView().planId, seed.requestId); assert.match(f.get('.mw-error').textContent, /자료 표시 조회 실패/);
+  const saved = f.db(); f.setBeforeSources(null); await f.ui.mount(f.host, { seed }); assert.deepEqual(f.db(), saved);
+});
+test('missing, changed, cross-workspace and request-collision seeds refuse fallback to another preparation', async t => {
+  const f = await fixture(t), seed = await linkSeed(f), before = f.db();
+  for (const bad of [{ ...seed, sourceVersionId: f.C.id() }, { ...seed, contentHash: 'a'.repeat(64) }, { ...seed, workspaceId: f.C.id() }, { ...seed, requestId: before.plans[0].id }]) {
+    await f.ui.mount(f.host, { seed: bad }); assert.deepEqual(f.db(), before); assert.equal(f.host.querySelector('#mwTitle'), null);
+    assert.match(f.host.textContent, /버전|작업공간|선택 자료/);
+  }
+});
+test('new seed entry protects composing or failed unsaved fields and ignores a late response after scope loss', async t => {
+  const f = await fixture(t), seed = await linkSeed(f), title = f.get('#mwTitle');
+  await title.emit('compositionstart'); title.value = '입력 중인 제목';
+  await assert.rejects(f.ui.mount(f.host, { seed }), { code: 'material_input_in_progress' }); assert.equal(f.get('#mwTitle'), title);
+  await title.emit('compositionend'); f.setBeforeSave(() => { throw Error('기존 입력 저장 실패'); });
+  await assert.rejects(f.ui.mount(f.host, { seed }), /기존 입력 저장 실패/); assert.equal(f.get('#mwTitle'), title); assert.equal(title.value, '입력 중인 제목');
+  f.setBeforeSave(null); await f.ui.flush(); const before = f.db(), wait = deferred(), read = f.storage.read;
+  f.storage.read = async () => { await wait.promise; return read(); };
+  const opening = f.ui.mount(f.host, { seed }); await settle(); f.setScope(false); wait.resolve(); await opening;
+  assert.deepEqual(f.db(), before); assert.equal(f.host.querySelector('#mwTitle'), null);
+});
+test('explicit source-link adoption adds only verified public title and canonical URL as a normal preview paragraph', async t => {
+  const f = await fixture(t), seed = await linkSeed(f); await f.ui.mount(f.host, { seed });
+  const material = f.db().plans.find(value => value.id === seed.requestId).materials[0];
+  await f.sources().onNote(material.id, 'PRIVATE_NOTE_NEVER_AUTOCOPY'); await f.sources().onLink(material.id); await f.ui.flush();
+  const plan = f.db().plans.find(value => value.id === seed.requestId);
+  assert.equal(plan.blocks.length, 1); assert.equal(plan.blocks[0].kind, 'paragraph');
+  assert.equal(plan.blocks[0].text, '명시적으로 보관한 링크\nhttps://example.org/article?entry=1');
+  const projected = f.M.project(f.db(), seed.requestId, f.C.id); assert.deepEqual(projected.refs, []); assert(!f.P.plainText(projected.doc).includes('PRIVATE_NOTE_NEVER_AUTOCOPY'));
+  await f.click('#mwPreview'); assert.match(f.get('#mwPreviewContent').textContent, /https:\/\/example.org\/article\?entry=1/);
+  const current = await f.storage.read(); current.sourceVersions.find(value => value.id === seed.sourceVersionId).contentHash = 'b'.repeat(64); f.setBundle(current);
+  await assert.rejects(f.sources().onLink(material.id)); assert.equal(f.db().plans.find(value => value.id === seed.requestId).blocks.length, 1);
+});
+test('link adoption refuses nonpublic addresses without adding a paragraph', async t => {
+  const f = await fixture(t), material = f.M.material(f.bundle, f.imported.source.id, f.imported.version.id, f.C.id); await f.sources().onAdd(material); await f.ui.flush();
+  for (const url of ['http://example.org/a', 'https://localhost/a', 'https://127.0.0.1/a', 'https://10.0.0.1/a', 'https://[::1]/a', 'https://printer.local/a', 'https://user:password@example.org/a']) {
+    const bundle = structuredClone(f.bundle); bundle.sources.find(value => value.id === material.sourceId).url = url; f.setBundle(bundle);
+    await assert.rejects(f.sources().onLink(material.id));
+  }
+  assert.equal(f.db().plans[0].blocks.length, 1);
 });

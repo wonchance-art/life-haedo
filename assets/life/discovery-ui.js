@@ -357,14 +357,14 @@
       if (focusId) details.querySelectorAll('[id]').forEach(control => { if (control.id === focusId && !control.disabled) control.focus({ preventScroll: true }); });
       return details;
     }
-    function translationLink(article) {
+    function translationLink(article, { focusKey = 'translate:' + article.canonicalUrl, currentFeedOnly = false } = {}) {
       const target = confirmedTranslationTarget(), address = languageModel().buildTranslationURL(article, target);
       if (!address) return null;
       const revision = current.languageSettings.revision, link = node('a', languageModel().TRANSLATION_TARGET_LABELS[target] + '로 번역해 열기 · Google 번역', 'life-button discovery-quiet discovery-translation-link');
-      link.href = address; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.referrerPolicy = 'no-referrer'; link.dataset.discoveryTranslate = ''; link.dataset.focusKey = 'translate:' + article.canonicalUrl;
+      link.href = address; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.referrerPolicy = 'no-referrer'; link.dataset.discoveryTranslate = ''; link.dataset.focusKey = focusKey;
       link.setAttribute('aria-label', link.textContent + ' · 새 탭');
       link.addEventListener('click', event => {
-        if (!scope() || suspended || root.document.getElementById('lifeApp')?.hidden !== false || current.languageSettings?.revision !== revision || confirmedTranslationTarget() !== target || languageModel().buildTranslationURL(article, target) !== address) { event.preventDefault(); return; }
+        if (!scope() || currentFeedOnly && !currentFeedArticle(article) || suspended || root.document.getElementById('lifeApp')?.hidden !== false || current.languageSettings?.revision !== revision || confirmedTranslationTarget() !== target || languageModel().buildTranslationURL(article, target) !== address) { event.preventDefault(); return; }
         capture(article.id, link.dataset.focusKey);
       }); return link;
     }
@@ -609,18 +609,35 @@
       const topicBody = node('div', null, 'discovery-topic-body'); topicBody.append(label, form, help, examples, topicRecovery, choiceHost, options); editor.append(topicBody); const reactionHost = node('div'), languageHost = node('div'), body = node('div'); surface.append(editor, reactionHost, languageHost, body); container.replaceChildren(surface);
       Object.assign(current, { editor, topicsSummary, examples, topicInput: input, topicAdd: add, topicDiscard: discard, choiceHost, topicRecovery, options, optionsBody, reactionHost, languageHost, body });
     }
-    function openOriginal(event, article) {
-      if (!scope()) { event.preventDefault(); return; }
-      capture(article.id, 'open:' + article.id);
+    function currentFeedArticle(article) {
+      return current?.catalog?.feed?.articles.find(value => value.id === article.id && value.sourceId === article.sourceId && value.canonicalUrl === article.canonicalUrl) || null;
+    }
+    function originalLink(article, { text = article.title, focusKey = 'open:' + article.id, currentFeedOnly = false } = {}) {
+      const link = node('a', text); link.href = url(article.url) || url(article.canonicalUrl) || '#'; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.referrerPolicy = 'no-referrer';
+      link.setAttribute('aria-label', article.title + ' · 새 탭에서 원문 읽기');
+      link.dataset.discoveryOpen = ''; link.dataset.focusKey = focusKey;
+      link.addEventListener('click', event => openOriginal(event, article, focusKey, currentFeedOnly)); return link;
+    }
+    function openOriginal(event, article, focusKey = 'open:' + article.id, currentFeedOnly = false) {
+      if (!scope() || currentFeedOnly && !currentFeedArticle(article)) { event.preventDefault(); return; }
+      capture(article.id, focusKey);
       if (onOpenOriginal) {
         event.preventDefault();
         try { Promise.resolve(onOpenOriginal(article)).catch(error => report(error)); } catch (error) { report(error); }
       }
     }
-    async function navigate(action, article, focusKey) {
+    async function navigate(action, article, focusKey, currentFeedOnly = false) {
+      if (!scope()) return; const token = generation;
       capture(article?.id, focusKey);
       await flush();
-      if (scope()) await action?.(article, current.memory ? { focusKey: current.memory.focusKey, scrollY: current.memory.scrollY } : undefined);
+      if (!valid(token)) return;
+      const selected = currentFeedOnly ? currentFeedArticle(article) : article;
+      if (currentFeedOnly && !selected) throw Error('현재 공개 목록에서 이 글을 확인하지 못했습니다. 제외 선택은 유지했습니다.');
+      await action?.(selected, current.memory ? { focusKey: current.memory.focusKey, scrollY: current.memory.scrollY } : undefined);
+    }
+    function importButton(article, { focusKey = 'import:' + article.id, currentFeedOnly = false } = {}) {
+      const review = button(article.coverage === 'link_only' ? '링크 보관 검토' : '보관 검토', null, () => navigate(onImport, article, focusKey, currentFeedOnly), 'discovery-review-button');
+      review.dataset.discoveryImport = ''; review.dataset.focusKey = focusKey; review.disabled = !!current.pending || !!pendingWrite; return review;
     }
     function sourceDetails(feed, result) {
       const details = node('details', null, 'discovery-sources'); details.open = current.sourcesOpen;
@@ -647,11 +664,7 @@
       else meta.append(node('span', '발행일 미확인'));
       if (article.dateBasis === 'updated' && date(article.updatedAt)) meta.append(node('span', '수정 ' + date(article.updatedAt)));
       row.append(meta);
-      const heading = node('h2', null, 'discovery-title'), original = node('a', article.title);
-      original.href = url(article.url) || url(article.canonicalUrl) || '#'; original.target = '_blank'; original.rel = 'noopener noreferrer'; original.referrerPolicy = 'no-referrer';
-      original.setAttribute('aria-label', article.title + ' · 새 탭에서 원문 읽기');
-      original.dataset.discoveryOpen = ''; original.dataset.focusKey = 'open:' + article.id;
-      original.addEventListener('click', event => openOriginal(event, article)); heading.append(original); row.append(heading);
+      const heading = node('h2', null, 'discovery-title'); heading.append(originalLink(article)); row.append(heading);
       if (article.summary) row.append(node('p', article.summary, 'discovery-summary'));
       const reasons = item.reasons || [];
       if ((current.mode === 'related' || current.mode === 'personal' && !item.personal && current.baselineMode === 'related') && reasons.length) {
@@ -675,11 +688,10 @@
       const coverage = article.coverage === 'full_text' ? '허용된 본문 확보' : article.coverage === 'summary' ? '공개 요약만 확보 · 원문 전체 미확보' : '링크와 제목만 확보 · 본문 미확보';
       row.append(node('p', coverage, 'discovery-coverage'));
       const actions = node('div', null, 'discovery-actions');
-      const review = button(article.coverage === 'link_only' ? '링크 보관 검토' : '보관 검토', null, () => navigate(onImport, article, 'import:' + article.id), 'discovery-review-button');
-      review.dataset.discoveryImport = ''; review.dataset.focusKey = 'import:' + article.id;
+      const review = importButton(article);
       const read = button('읽음', null, () => feedback(article, 'already_read'), 'discovery-quiet'); read.dataset.discoveryFeedback = 'already_read'; read.dataset.focusKey = 'feedback:' + article.id + ':already_read';
       const irrelevant = button('관련 없음', null, () => feedback(article, 'not_relevant'), 'discovery-quiet'); irrelevant.dataset.discoveryFeedback = 'not_relevant'; irrelevant.dataset.focusKey = 'feedback:' + article.id + ':not_relevant';
-      read.disabled = irrelevant.disabled = !!current.pending || busy(); review.disabled = !!current.pending || !!pendingWrite;
+      read.disabled = irrelevant.disabled = !!current.pending || busy();
       actions.append(review, read, irrelevant); const translated = translationLink(article); if (translated) actions.append(translated); row.append(reactionControls(article), actions); return row;
     }
     function draw() {
@@ -754,8 +766,17 @@
         excluded.addEventListener('toggle', () => { if (current) current.excludedOpen = excluded.open; });
         excluded.append(node('summary', '제외한 글 ' + current.feedback.feedback.length + '개'));
         current.feedback.feedback.forEach(entry => {
-          const article = feed?.articles?.find(item => item.canonicalUrl === entry.canonicalUrl) || { id: entry.articleId, canonicalUrl: entry.canonicalUrl, title: entry.canonicalUrl };
-          const row = node('div', null, 'discovery-excluded-row'); row.append(node('p', article.title), node('small', entry.kind === 'already_read' ? '읽음' : '관련 없음', 'life-meta'));
+          const available = feed?.articles?.find(item => item.canonicalUrl === entry.canonicalUrl);
+          const article = available || { id: entry.articleId, canonicalUrl: entry.canonicalUrl, title: entry.canonicalUrl };
+          const row = node('div', null, 'discovery-excluded-row'); row.dataset.discoveryUrl = entry.canonicalUrl;
+          row.append(node('p', article.title), node('small', entry.kind === 'already_read' ? '읽음' : '관련 없음', 'life-meta'));
+          if (available) {
+            const actions = node('div', null, 'discovery-actions');
+            actions.append(originalLink(article, { text: '원문 읽기', focusKey: 'excluded-open:' + article.id, currentFeedOnly: true }),
+              importButton(article, { focusKey: 'excluded-import:' + article.id, currentFeedOnly: true }));
+            const translated = translationLink(article, { focusKey: 'excluded-translate:' + article.canonicalUrl, currentFeedOnly: true });
+            if (translated) actions.append(translated); row.append(actions);
+          }
           const restoreButton = button('제외 되돌리기', null, () => undo(article), 'discovery-quiet'); restoreButton.dataset.discoveryUndo = entry.articleId; restoreButton.disabled = !!current.pending || busy(); row.append(restoreButton); excluded.append(row);
         }); body.append(excluded);
       }

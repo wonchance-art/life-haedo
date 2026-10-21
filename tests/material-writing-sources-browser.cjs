@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { playwright } = require('./unified-home-browser.cjs');
 const base = process.env.BASE_URL || 'http://127.0.0.1:4214';
-const out = path.resolve(__dirname, '../.local/material-writing-sources');
+const out = path.resolve(process.env.MATERIAL_SOURCES_OUTPUT || path.join(__dirname, '../.local/material-writing-sources'));
 const report = { checks: [], visual: [], consoleErrors: [], pageErrors: [], external: [], scope: 'Actual source selector/readonly comparison, real Core/SourceReference/MaterialWriting models and synthetic callbacks. No production data, real Auth, storage or publication claim.' };
 async function main() {
   await fs.mkdir(out, { recursive: true });
@@ -16,7 +16,7 @@ async function main() {
     const page = await context.newPage(); page.setDefaultTimeout(12000);
     page.on('pageerror', error => report.pageErrors.push(error.message)); page.on('console', message => { if (message.type() === 'error') report.consoleErrors.push(message.text()); });
     await page.goto(base + '/index.html'); await page.waitForFunction(() => !!globalThis.HaedoLife?.Core);
-    for (const [name, file] of [['PhotoPost', 'photo-post.js'], ['SourceReference', 'source-reference.js'], ['BlogEvidence', 'blog-evidence.js'], ['MaterialWriting', 'material-writing.js'], ['MaterialWritingSources', 'material-writing-sources.js']]) {
+    for (const [name, file] of [['Discovery', 'discovery.js'], ['PhotoPost', 'photo-post.js'], ['SourceReference', 'source-reference.js'], ['BlogEvidence', 'blog-evidence.js'], ['MaterialWriting', 'material-writing.js'], ['MaterialWritingSources', 'material-writing-sources.js']]) {
       if (!await page.evaluate(name => !!HaedoLife[name], name)) await page.addScriptTag({ url: base + '/assets/life/' + file });
     }
     // Isolate the component while keeping all real site styles and typography.
@@ -33,7 +33,7 @@ async function main() {
       C.validateWorkspace(bundle);
       const state = M.empty(bundle.workspaceId), plan = M.create(C.id); state.plans.push(plan);
       const host = document.createElement('main'); host.id = 'materialSourceTestHost'; host.className = 'mw-workspace'; document.body.append(host);
-      const f = window.materialSourceTest = { bundle, original: structuredClone(bundle), state, plan, raw, old, latest, second, link, quotes: [], opens: [], notes: [], pending: [], valid: true, failQuote: false, failNote: false, reads: 0 };
+      const f = window.materialSourceTest = { bundle, original: structuredClone(bundle), state, plan, raw, old, latest, second, link, quotes: [], links: [], opens: [], notes: [], pending: [], valid: true, failQuote: false, failNote: false, reads: 0 };
       const add = item => { const before = [...plan.materials]; plan.materials.push(item); try { M.validate(state); } catch (e) { plan.materials = before; throw e; } };
       const options = { host, getPlan: () => f.plan, isCurrent: () => f.valid, getBundle: async () => {
         f.reads++; const value = structuredClone(f.bundle);
@@ -42,6 +42,7 @@ async function main() {
       }, onAdd: add, onRemove: id => { if (plan.blocks.some(b => b.materialId === id)) throw Error('채택한 인용을 먼저 처리해 주세요.'); plan.materials = plan.materials.filter(m => m.id !== id); },
       onNote: (id, text) => { if (f.failNote) throw Error('합성 메모 저장 거절'); const item = plan.materials.find(m => m.id === id), prior = item.note; item.note = text; try { M.validate(state); } catch (e) { item.note = prior; throw e; } f.notes.push(text); },
       onQuote: (id, ref) => { if (f.failQuote) throw Error('합성 인용 채택 실패'); f.quotes.push({ id, ref }); plan.blocks.push({ id: C.id(), kind: 'quote', materialId: id, reference: ref }); M.validate(state); },
+      onLink: (...args) => { f.links.push(args); },
       onOpenSource: value => { f.opens.push(value); }, onPendingChange: value => f.pending.push(value) };
       f.options = options; window.sourceUI = HaedoLife.MaterialWritingSources.create(options); await sourceUI.mount();
     });
@@ -172,6 +173,41 @@ async function main() {
       await page.locator('.mw-material-note').evaluate(note => note.dispatchEvent(new CompositionEvent('compositionend')));
       await page.locator('.mw-material-tab[data-material-id="' + first + '"]').click(); await page.locator('.mw-quote-cancel').click();
       assert.equal(await page.evaluate(() => sourceUI.pending()), false); assert.equal(await page.evaluate(id => materialSourceTest.plan.materials.find(m => m.id === id).note, second), '한글 조합 중에도 유지하는 메모');
+    });
+    page = await fixture();
+    await check('Link-only source adoption is explicit, passes only its exact material ID and rejects a late material/scope change', async () => {
+      const id = await add(page, 'link'), card = page.locator('.mw-material[data-material-id="' + id + '"]');
+      assert.equal(await card.locator('.mw-material-link').innerText(), '출처 링크를 글에 담기');
+      assert.equal(await card.locator('.mw-material-body').count(), 0); assert.equal(await card.locator('.mw-quote-apply').count(), 0);
+      await card.locator('.mw-material-note').fill('글로 보내지 않을 자료 메모');
+      assert.deepEqual(await page.evaluate(() => materialSourceTest.links), []);
+      await card.locator('.mw-material-link').click(); await page.waitForFunction(() => !sourceUI.pending());
+      assert.deepEqual(await page.evaluate(() => materialSourceTest.links), [[id]]);
+      assert.deepEqual(await page.evaluate(() => materialSourceTest.quotes), []); assert.deepEqual(await page.evaluate(() => materialSourceTest.plan.blocks), []);
+      assert(await page.evaluate(() => JSON.stringify(materialSourceTest.bundle) === JSON.stringify(materialSourceTest.original)));
+      await page.evaluate(() => { materialSourceTest.holdRead = true; materialSourceTest.held = false; });
+      await card.locator('.mw-material-link').click(); await page.waitForFunction(() => materialSourceTest.held);
+      await page.evaluate(id => { const item = materialSourceTest.plan.materials.find(row => row.id === id); item.contentHash = '0'.repeat(64); materialSourceTest.releaseRead(); }, id);
+      await page.waitForFunction(() => !sourceUI.pending() && document.querySelector('.mw-sources-error')?.textContent.includes('자료가 바뀌'));
+      assert.deepEqual(await page.evaluate(() => materialSourceTest.links), [[id]]);
+      assert.equal(await card.locator('.mw-material-note').inputValue(), '글로 보내지 않을 자료 메모');
+      await page.evaluate(id => { materialSourceTest.plan.materials.find(row => row.id === id).contentHash = null; materialSourceTest.holdRead = true; materialSourceTest.held = false; }, id);
+      await card.locator('.mw-material-link').click(); await page.waitForFunction(() => materialSourceTest.held);
+      await page.evaluate(() => { materialSourceTest.valid = false; materialSourceTest.releaseRead(); });
+      await page.waitForFunction(() => !sourceUI.pending()); assert.deepEqual(await page.evaluate(() => materialSourceTest.links), [[id]]);
+    });
+    page = await fixture();
+    await check('Unsafe source URLs never expose link adoption and a deleted exact version is rejected at click time', async () => {
+      await page.evaluate(() => { materialSourceTest.bundle.sources.find(row => row.id === materialSourceTest.link.source.id).url = 'http://example.org/link'; });
+      const id = await add(page, 'link'); assert.equal(await page.locator('.mw-material[data-material-id="' + id + '"] .mw-material-link').count(), 0);
+      const old = await add(page, 'old'), card = page.locator('.mw-material[data-material-id="' + old + '"]');
+      await page.locator('.mw-material-tab[data-material-id="' + old + '"]').click();
+      await card.locator('.mw-material-note').fill('원문 삭제 뒤에도 유지할 메모');
+      await page.evaluate(() => { const f = materialSourceTest; f.bundle.sourceVersions = f.bundle.sourceVersions.filter(row => row.id !== f.old.version.id); });
+      await card.locator('.mw-material-link').click(); await page.waitForFunction(() => !sourceUI.pending() && document.querySelector('.mw-sources-error')?.textContent.includes('원문 버전과 출처 링크'));
+      assert.deepEqual(await page.evaluate(() => materialSourceTest.links), []); assert.deepEqual(await page.evaluate(() => materialSourceTest.quotes), []);
+      assert.equal(await card.locator('.mw-material-note').inputValue(), '원문 삭제 뒤에도 유지할 메모');
+      await page.evaluate(() => sourceUI.refresh()); assert.equal(await card.locator('.mw-material-link').count(), 0);
     });
     assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.external, []); report.pass = true;
   } catch (error) { try { if (page && !page.isClosed()) { await page.screenshot({ path: path.join(out, 'failure.png') }); report.failure = await page.evaluate(() => ({ error: document.querySelector('.mw-sources-error')?.textContent, quoteCount: window.materialSourceTest?.quotes.length, pending: window.sourceUI?.pending() })); } } catch (_) {} throw error; }

@@ -118,7 +118,8 @@
     let navigationRender = null, mainRenderPromise = Promise.resolve(), inputGeneration = 0;
     const sectionPositions = new Map();
     let homeRenderPromise = Promise.resolve();
-    let homeRenderOptions = null, blogPageTask = false, blogMode = null, blogCommitted = null;
+    let homeRenderOptions = null, blogPageTask = false, blogMode = null, blogCommitted = null, materialWritingTask = false;
+    const sourceWritingRequests = new Map();
     let blogEntryScroll = null;
     let navigationTrigger = null;
     const viewOrigins = new Map();
@@ -249,6 +250,10 @@
       onBlogReturn: returnFromBlog,
       onBlogModeChange: context => {
         if (disposed || state.mode !== 'page') return;
+        if (materialWritingTask) {
+          blogMode = ['edit', 'read'].includes(context.mode) ? context.mode : null;
+          renderHeader(); global.requestAnimationFrame(syncWritingFocus); return;
+        }
         if (!blogPageTask || !['edit', 'read', 'profile'].includes(context.mode)) { global.requestAnimationFrame(syncWritingFocus); return; }
         const previousMode = blogMode;
         blogMode = context.mode;
@@ -1063,7 +1068,9 @@
         focusKey: control?.dataset.focusKey, focusId: control?.id,
         focusName: control?.getAttribute('aria-label') || control?.textContent, focusTag: control?.tagName,
         ...(from === 'home' ? { homeState: home?.captureState() } : {}) } :
-        from === 'source' && mode === 'write' && state.returnContext?.mode === 'home' ? { ...state.returnContext } : null;
+        from === 'source' && mode === 'write' && state.returnContext?.mode === 'home' ? { ...state.returnContext } :
+        from === 'source' && mode === 'page' && options.materialWritingSeed && state.returnContext?.workspaceId === state.bundle?.workspaceId
+          ? (state.returnContext.mode === 'page' ? viewOrigins.get('page') : { ...state.returnContext }) : null;
       const returningFromReader = from === 'source' && state.returnContext?.mode === mode;
       if (dirty()) await persistStage();
       await externalDiscoveryUI?.flush();
@@ -1084,6 +1091,7 @@
         else viewOrigins.delete(mode);
       }
       if (mode === 'page') {
+        materialWritingTask = !!options.materialWritingSeed || (options.preserveContext === true || returningFromReader) && materialWritingTask;
         blogPageTask = options.blogContext === true || options.preserveContext === true && blogPageTask;
         if (options.blogContext === true) options = { ...options, homeTab: origin?.homeState?.tab || 'posts' };
         if (!options.preserveContext) { blogMode = options.pageProfileEdit ? 'profile' : options.pageCompose || options.pageDraftId ? 'edit' : null; blogCommitted = null; }
@@ -1412,7 +1420,8 @@
       const heading = node('h1', null, 'life-page-title');
       heading.tabIndex = -1;
       const headingGroup = node('div', null, 'haedo-heading-title');
-      if (state.mode === 'page' && blogPageTask) heading.textContent = blogMode === 'profile' ? '프로필 편집' : blogMode === 'edit' ? '글쓰기' : '글 읽기';
+      if (state.mode === 'page' && materialWritingTask) heading.textContent = blogMode === 'edit' ? '글쓰기' : blogMode === 'read' ? '글 읽기' : '자료로 글쓰기';
+      else if (state.mode === 'page' && blogPageTask) heading.textContent = blogMode === 'profile' ? '프로필 편집' : blogMode === 'edit' ? '글쓰기' : '글 읽기';
       else if (state.mode === 'external-discovery') heading.textContent = '뉴스';
       else if (subviewTitles[state.mode]) heading.textContent = subviewTitles[state.mode];
       else if (state.mode === 'books') heading.textContent = '내 책';
@@ -1744,6 +1753,7 @@
     function resetSearchContext() {
       unifiedSearch?.reset();
       viewOrigins.clear();
+      sourceWritingRequests.clear(); materialWritingTask = false;
       selectedVersions.clear();
       selectionReturn = null;
       chapterImport = null;
@@ -2556,6 +2566,20 @@
       article.append(tools, arrangePanel, heading,
         node('p', sourceOrigin(source) + ' · 원문 작성 ' + (version.originalCreatedAt || '미상'), 'life-reader-meta'),
         node('p', (COVERAGE[version.coverage.status] || COVERAGE.unknown) + ' · 버전 ' + versionIndex + '/' + versions.length + (versionIndex === versions.length ? '' : ' · 이전 버전'), 'life-reader-meta'));
+      const sourceWriting = button('이 자료로 글쓰기', guarded(async () => {
+        const workspaceId = state.bundle.workspaceId, workspaceToken = workspaceGeneration, token = navigationGeneration, account = state.syncAccountKey;
+        const fresh = await storage.read(workspaceId);
+        if (disposed || workspaceToken !== workspaceGeneration || token !== navigationGeneration || state.mode !== 'source' ||
+            account !== state.syncAccountKey || state.bundle?.workspaceId !== workspaceId || state.sourceId !== source.id || state.sourceVersionId !== version.id) return;
+        const material = global.HaedoLife.MaterialWriting.material(fresh, source.id, version.id, core.id);
+        if (material.contentHash !== version.contentHash) throw new Error('선택한 원문 버전이 바뀌었습니다. 다른 자료로 글쓰기를 시작하지 않았습니다.');
+        const key = JSON.stringify([workspaceId, source.id, version.id, version.contentHash]);
+        if (!sourceWritingRequests.has(key)) sourceWritingRequests.set(key, core.id());
+        return navigate('page', { materialWritingSeed: { requestId: sourceWritingRequests.get(key), workspaceId,
+          sourceId: source.id, sourceVersionId: version.id, contentHash: version.contentHash } });
+      }));
+      sourceWriting.id = 'lifeSourceMaterialWriting';
+      const writingActions = node('div', null, 'life-actions life-reader-writing-actions'); writingActions.append(sourceWriting); article.append(writingActions);
       if (versions.length > 1) {
         const choices = selectField('원문 버전', 'lifeVersion', versions.map((v, index) => [v.id, '버전 ' + (index + 1) + ' · ' + dateLabel(v.importedAt) + ' 보관']), version.id);
         choices.label.classList.add('life-version-field');

@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "scope": "One continuous news-to-writing journey with exact public feed bytes, synthetic Auth/bundled SDK/IndexedDB and mocked private post transport; no actual user or production data writes.",
+  "baselineHead": "07c0df0",
+  "serviceWorker": 146,
+  "publicFeedSHA256": "fab73e10cc118376b76889ae3de9aac0ee6c2e7e7311efff2d48c74a10c4737f",
+  "localChecks": {
+    "unitPassed": 1122,
+    "unitFailed": 0,
+    "staticHTML": 22,
+    "staticJS": 147,
+    "localReferences": 627,
+    "materialUIFocusedPassed": 21,
+    "sourceBrowserPassed": 10
+  },
+  "continuousBrowser": {
+    "pass": true,
+    "checks": [
+      {
+        "name": "home to news opens canonical root and five existing latest articles without manual topics",
+        "pass": true
+      },
+      {
+        "name": "news like and bookmark are independent, exact retained lists on same route",
+        "pass": true
+      },
+      {
+        "name": "news reading and explicit link storage continue into exact material writing, one private saved post and the same news root",
+        "pass": true
+      }
+    ],
+    "browser": "153.0.8010.12",
+    "node": "v24.19.0",
+    "reportSHA256": "111434baa30d4c0dab82ace805c2c7aeb0e333b3f220c1687ff0fac8ec87a50a",
+    "runnerSHA256": "f3d471b45c14b0b3f7671dd26764ea294a9da30f3dc89b444cb5ed517d875065",
+    "productHashesBeforeAfterEqual": true,
+    "productHashes": {
+      "assets/haedo-navigation.js": "e8d93bfd09a40e4ef512a5f94997f1745cf0b87f6fecd8d51b13c9062c033765",
+      "assets/life/discovery-ui.js": "068ff0b43bd1d5096d17391bb1bbb0083b7840dc6e42c4bcafcbe5301423aaee",
+      "assets/life/ui.js": "c0573ed49fe48d5d2ef541701aa4dbbd71aa9323486c7071107a3667f1fd77bf",
+      "assets/life/ui.css": "8cb967ccdfce89f4176ded09fae54174db8b308aa7bc475cc2848edcbd1fc503",
+      "assets/life/icons.js": "c2f8315a3bafd4a851b58a7bfaa45459a782f2282444432162ae476b0d9607ce",
+      "assets/platform-auth.js": "d2261fc4f3eca079212dcc7cd162eea8ad85f2cadc6f24830ab77f84e0684603",
+      "assets/life/discovery.js": "2eaddf8deb9e0978805f6e6795c885c8c9364be5a06b97b2f7ad0aa75ba4f2bd",
+      "assets/life/storage.js": "f83e9e14b55bcb7b4916e4bd3976324ab02115ae355d0bc1dd0c60995666b2a5",
+      "assets/life/discovery-language-settings.js": "70843708e5cb27b27f91f953398ee7fd51df64b6424c7cc01d72c98518f4b6d5",
+      "assets/life/workbench-ui.js": "9a909783c1a8da255b2ccd66d5a21d38e32007cb6baff9c9f83766bd099a09a1",
+      "assets/life/material-writing-ui.js": "e3c38b1055b87808e3458ba840f695be8ceb2d6e8305931ca369320ad946b694",
+      "assets/life/material-writing-sources.js": "1b29c72fae088adba6c476afa10885fb24f024c18609a68777637ae3b8d38cae",
+      "assets/life/material-writing.js": "503e46836854a6adb6de386c73d4fcf668b63975153da8d668a4b0432db4ab3a",
+      "assets/life/photo-post-ui.js": "e0a854b797b0ce881be3e7a21d196ed413218c490c5b38bb2777bfb862f5a82c",
+      "assets/life/discovery-feed.json": "446e471f2d262b5ca8f39c64244b96b9c799aeecc4eb5c011bd7d608a2b8bf4e",
+      "assets/haedo-shell.css": "c530f9b52ccef987c3390bff2c27d3ebfe8c0830c9e45152a49b67a8150884ce",
+      "assets/life/discovery.css": "1f16b6baaeb93eb1445c146a15dca13a7602b57e88deece6a8974b6eb56a1a36"
+    },
+    "privacyCounts": {
+      "consoleErrors": 0,
+      "pageErrors": 0,
+      "external": 0,
+      "privateLeaks": 0,
+      "modelRequests": 0
+    },
+    "workspaceRemoteWrites": 0,
+    "journeyFacts": {
+      "draftPrivateSaves": 0,
+      "explicitPrivateSaves": 1,
+      "syntheticPrivateTransport": true,
+      "publications": 0,
+      "excludedEntryReadImportAndFocus": true,
+      "sourceAndProfilesPreserved": true,
+      "newsRootReturned": true,
+      "exactPostReopened": true,
+      "reloadPreserved": true
+    },
+    "newPreparationCount": 1,
+    "newPostCount": 1,
+    "sourceBodyRetainedAsNull": true,
+    "unauthorizedHandoffBlocked": true,
+    "capturedStates": [
+      "stored-reader",
+      "prepared-paragraphs",
+      "saved-post"
+    ],
+    "widths": [
+      390,
+      1440
+    ],
+    "readerCTAHeightsAtLeast44": true,
+    "readerCTAGapPx": 15,
+    "fullPageCaptures": false
+  },
+  "pwa": {
+    "status": "passed",
+    "checks": 9,
+    "browser": "153.0.8010.12",
+    "oldCache": "haedo-v145",
+    "newCache": "haedo-v146",
+    "oldWorkerSHA256": "3539cd4f71ba7a7d778b458a1ce24b6e38b86f8284adad427e0e3254a5cfde0a",
+    "newWorkerSHA256": "89acfe209a53179a97c7558f5e593d6795f387c63a87beba48abbb7a04fb44d9",
+    "reportSHA256": "43b46149e5bb6c4a7bc51ae35a4d9173e012aae33973a33723238e060532f0e6",
+    "productUnchangedDuringRun": true,
+    "scope": "Exact git07c0df0 main SW145 worker only -> frozen integrated SW146 modules. Current uncommitted merge tree, not reconstructed historical app. Strict synthetic offline Auth denial/recovery, not real account switch/Auth/DB or Apple-device test. Existing9 assertions/timeouts unchanged; extra installed-cache hashes include ui.js/ui.css/PhotoPostUI. Nonempty Core synthetic original and existing Workbench/manual/feedback/preferences/language/reactions compare exactly. Historical144->145 evidence preserved."
+  },
+  "sourceBrowserReportSHA256": "2c17b336ed61296195a70ac175439a401dd6d99a1e186197ec4614fab240ea94",
+  "evidenceLimitations": [
+    "The focused browser run executes two setup checks and one continuous journey. Full checked-in news tests are verified by the final PR CI.",
+    "Only the prior worker is SW145; the PWA test uses current app modules and mocked Auth.",
+    "No actual Google translation/publisher reading, Apple hardware, user usefulness evaluation or production private post write was performed.",
+    "Earlier failed fixture assumptions and the identified CTA overlap are retained in ignored local evidence; final evidence uses the corrected UI and viewport captures."
+  ],
+  "releaseEvidence": "Final exact PR/main CI and deployment receipts are linked from the integrated pull request.",
+  "previousVerification": "verification-sw145.json",
+  "integratedMainPreserved": "PR121 local-only autosave implementation, tests and workflow retained unchanged; source conflicts limited to roadmap and resolved by preserving both sections."
+}
