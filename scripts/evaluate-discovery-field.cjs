@@ -9,15 +9,19 @@ const Discovery = require('../assets/life/discovery.js');
 const Recommendations = require('../assets/life/discovery-recommendations.js');
 const Actions = require('../assets/life/discovery-actions.js');
 const LanguageSettings = require('../assets/life/discovery-language-settings.js');
+const Settings = require('../assets/life/discovery-settings.js');
+const Profile = require('../assets/life/discovery-profile.js');
 const ROOT = path.resolve(__dirname, '..');
 const PRIVATE_ROOT = path.join(ROOT, '.local/discovery-field');
 const WORKSPACE = 'local-field-evaluation';
 const MODES = Object.freeze(['latest', 'related', 'personal', 'signals_removed']);
 const LABELS = Object.freeze({ A: 'latest', B: 'related', C: 'personal' });
+const MAX_CONDITIONS_BYTES = 256 * 1024;
 const SOURCE_FILES = Object.freeze(['scripts/evaluate-discovery.cjs', 'scripts/evaluate-discovery-field.cjs',
-  'assets/life/discovery.js', 'assets/life/discovery-actions.js', 'assets/life/discovery-recommendations.js', 'assets/life/discovery-language-settings.js']);
+  'assets/life/discovery.js', 'assets/life/discovery-actions.js', 'assets/life/discovery-recommendations.js', 'assets/life/discovery-language-settings.js',
+  'assets/life/discovery-settings.js', 'assets/life/discovery-profile.js']);
 const MESSAGES = Object.freeze({
-  field_usage: '사용법: node scripts/evaluate-discovery-field.cjs --now ISO --out .local/discovery-field/NEW_RUN [--feed FILE] [--content-languages all|none|ko,en] [--topic-file FILE] [--actions FILE --actions-kind simulation|user_supplied]',
+  field_usage: '사용법: node scripts/evaluate-discovery-field.cjs --now ISO --out .local/discovery-field/NEW_RUN [--feed FILE] [--content-languages all|none|ko,en] [--conditions-file FILE] [--topic-file FILE] [--actions FILE --actions-kind simulation|user_supplied]',
   field_input: '입력 파일의 크기·UTF-8·형식·공개 출처를 확인하지 못했습니다. 입력은 변경하지 않았습니다.',
   field_output: '출력은 .local/discovery-field 안의 새 하위 폴더만 사용할 수 있습니다. 심볼릭 링크와 기존 경로는 허용하지 않습니다.',
   field_existing: '출력 경로가 이미 있습니다. 기존 검토를 보존하려면 새 하위 폴더를 선택해 주세요.',
@@ -51,6 +55,35 @@ function reactionInput(bytes, kind) {
     personalizationEnabled: true, entries: clone(preview.entries) };
   Actions.validate(actions);
   return { actions, provenance: kind, sha256: Evaluation.sha256(bytes) };
+}
+function conditionInput(bytes, now) {
+  if (bytes == null) return null;
+  const value = json(bytes, MAX_CONDITIONS_BYTES);
+  const exact = (row, keys) => check(row && Object.getPrototypeOf(row) === Object.prototype &&
+    Object.keys(row).length === keys.length && keys.every(key => Object.hasOwn(row, key)));
+  exact(value, ['schemaVersion', 'disabledSourceIds', 'knownUrls', 'feedback']);
+  check(value.schemaVersion === 1 && Array.isArray(value.disabledSourceIds) && value.disabledSourceIds.every(id =>
+    typeof id === 'string' && Object.hasOwn(Discovery.ALLOWED_SOURCES, id)));
+  const settings = Settings.update(Settings.empty(WORKSPACE), { disabledSourceIds: value.disabledSourceIds },
+    { expectedRevision: 0, now: new Date(now).toISOString() });
+  const hosts = new Set(Object.values(Discovery.ALLOWED_SOURCES).flat());
+  const safeURL = url => {
+    const canonical = Discovery.canonicalUrl(url);
+    check(typeof url === 'string' && canonical === url && hosts.has(new URL(canonical).hostname));
+  };
+  check(Array.isArray(value.knownUrls) && value.knownUrls.length <= Discovery.LIMITS.articles);
+  for (const url of value.knownUrls) safeURL(url);
+  check(new Set(value.knownUrls).size === value.knownUrls.length);
+  check(Array.isArray(value.feedback) && value.feedback.length <= Profile.MAX_FEEDBACK);
+  for (const row of value.feedback) {
+    exact(row, ['articleId', 'canonicalUrl', 'kind', 'updatedAt']); safeURL(row.canonicalUrl);
+    check(typeof row.updatedAt === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(row.updatedAt) &&
+      Number.isFinite(Date.parse(row.updatedAt)) && new Date(row.updatedAt).toISOString().replace('.000Z', 'Z') === row.updatedAt.replace('.000Z', 'Z') &&
+      Date.parse(row.updatedAt) <= Date.parse(now));
+  }
+  const feedback = { ...Profile.empty(WORKSPACE), revision: 1, updatedAt: new Date(now).toISOString(), feedback: clone(value.feedback) };
+  Profile.validate(feedback);
+  return { settings, feedback, knownUrls: clone(value.knownUrls), sha256: Evaluation.sha256(bytes) };
 }
 function exactSpan(raw, start, end, quote) {
   check(typeof raw === 'string' && Number.isSafeInteger(start) && Number.isSafeInteger(end) && start >= 0 && end > start &&
@@ -89,21 +122,23 @@ function prepare(feedBytes, options = {}) {
       contentLanguages: options.contentLanguages === undefined ? null : options.contentLanguages
     }, { expectedRevision: 0, now: new Date(evaluatedAt).toISOString() }).contentLanguages;
     const topic = topicInput(options.topicBytes), reaction = reactionInput(options.actionsBytes, options.actionsKind);
+    const suppliedConditions = conditionInput(options.conditionsBytes, evaluatedAt);
+    const rankingInput = suppliedConditions ? Settings.filterFeed(input, suppliedConditions.settings) : input;
     const actions = reaction.actions, now = Date.parse(evaluatedAt), original = JSON.stringify({ input, actions });
-    const sourceIds = new Set(feed.sources.map(source => source.id));
+    const sourceIds = new Set(rankingInput.sources.map(source => source.id));
     // Freeze the ORIGINAL past-like exclusion across every arm, including the
     // ablation, so cancelling the signals does not change candidate eligibility.
-    const knownUrls = [...new Set(actions.entries.filter(row => row.liked && Date.parse(row.likedAt) <= now &&
-      Date.parse(row.snapshot.fetchedAt) <= now).map(row => row.canonicalUrl))].sort();
+    const knownUrls = [...new Set([...(suppliedConditions?.knownUrls || []), ...actions.entries.filter(row => row.liked && Date.parse(row.likedAt) <= now &&
+      Date.parse(row.snapshot.fetchedAt) <= now).map(row => row.canonicalUrl)])].sort();
     const profile = { workspaceId: WORKSPACE, manual: topic.value === null ? [] : [{ id: 'explicit-evaluation-topic', label: topic.value }] };
-    const common = { profile, feedback: [], knownUrls, now: evaluatedAt, limit: 2, contentLanguages };
+    const common = { profile, feedback: suppliedConditions?.feedback || [], knownUrls, now: evaluatedAt, limit: 2, contentLanguages };
     const removed = { ...clone(actions), entries: actions.entries.map(row => ({ ...clone(row), liked: false, likedAt: null })) };
     Actions.validate(removed);
     const raw = {
-      latest: Discovery.rank(input, { ...common, mode: 'latest' }),
-      related: Discovery.rank(input, { ...common, mode: 'related' }),
-      personal: Recommendations.rank(input, { ...common, actions, mode: 'personal', baselineMode: 'related' }),
-      signals_removed: Recommendations.rank(input, { ...common, actions: removed, mode: 'personal', baselineMode: 'related' })
+      latest: Discovery.rank(rankingInput, { ...common, mode: 'latest' }),
+      related: Discovery.rank(rankingInput, { ...common, mode: 'related' }),
+      personal: Recommendations.rank(rankingInput, { ...common, actions, mode: 'personal', baselineMode: 'related' }),
+      signals_removed: Recommendations.rank(rankingInput, { ...common, actions: removed, mode: 'personal', baselineMode: 'related' })
     };
     check(JSON.stringify(raw.signals_removed) === JSON.stringify(raw.related), 'field_evidence');
     check(MODES.every(mode => raw[mode].poolCount === raw.related.poolCount &&
@@ -116,6 +151,8 @@ function prepare(feedBytes, options = {}) {
       modes[mode] = { items, eligibleCount: value.eligibleCount, poolCount: value.poolCount, metadata: clone(value.metadata),
         rankOutputSHA256: Evaluation.sha256(JSON.stringify(value)), sourceCounts: countSources(items), distinctSources: new Set(items.map(item => item.sourceId)).size };
     }
+    const excludedFeedback = new Set(suppliedConditions?.feedback.feedback.map(row => row.canonicalUrl) || []);
+    check(MODES.every(mode => modes[mode].items.every(row => sourceIds.has(row.sourceId) && !excludedFeedback.has(row.canonicalUrl))), 'field_evidence');
     const inspection = Recommendations.inspectSignals(actions, { now: evaluatedAt, sourceIds: [...sourceIds], contentLanguages });
     const applied = raw.personal.metadata.personalization?.applied === true;
     const personalStatus = applied ? 'applied' : !inspection.enabled ? 'disabled' : !inspection.signalCount ? 'insufficient_signal' : 'no_overlap';
@@ -145,7 +182,7 @@ function prepare(feedBytes, options = {}) {
         futurePublicationCount: feed.articles.filter(item => item.dateStatus === 'future').length },
       topic, reactions: { provenance: reaction.provenance, sha256: reaction.sha256, actualUserReactionsConfirmed: null, explicitEvaluationEnabled: options.actionsBytes != null,
         productOptInChanged: false, inspection },
-      conditions: { now: evaluatedAt, limit: 2, knownUrls, feedback: [], contentLanguages: clone(contentLanguages), baselineMode: 'related', modeLabels: clone(LABELS),
+      conditions: { now: evaluatedAt, limit: 2, knownUrls, feedback: clone(suppliedConditions?.feedback.feedback || []), contentLanguages: clone(contentLanguages), baselineMode: 'related', modeLabels: clone(LABELS),
         pastLikeExclusionsFrozenAcrossArms: true, ablation: 'liked=false/likedAt=null; bookmarks/exclusions/candidate exclusions unchanged',
         sourceSettings: 'supplied feed sources only', implicitPrivateReads: 0, explicitReactionInputProvided: options.actionsBytes != null,
         networkRequests: 0, automaticLinkOpens: 0, actualUserSelection: null, userUtilityEvaluated: false,
@@ -164,6 +201,14 @@ function prepare(feedBytes, options = {}) {
         '원문 링크는 자동으로 열지 않았다. 수집 상태·날짜 불명·본문 미확보·후보 부족은 그대로 남긴다.',
         '반응 사본을 평가용 메모리에만 재구성했다. 앱 import/동기화/공개/개인추천 opt-in은 바꾸지 않는다.',
         '같은 feed/시각/known 조건이어도 모드의 본래 후보 선택 규칙은 다르다. 고정 A/B/C 노출은 무작위 맹검이나 인과 실험이 아니다.'] };
+    if (suppliedConditions) {
+      const explicit = { input: 'explicit_file', sha256: suppliedConditions.sha256,
+        disabledSourceIds: clone(suppliedConditions.settings.disabledSourceIds), activeSourceIds: [...sourceIds],
+        suppliedKnownUrls: clone(suppliedConditions.knownUrls), feedback: clone(suppliedConditions.feedback.feedback),
+        actualUserConditionsConfirmed: null };
+      report.conditions.sourceSettings = 'explicit disabledSourceIds projected with DiscoverySettings.filterFeed';
+      report.conditions.explicit = clone(explicit); reviewTemplate.explicitConditions = clone(explicit);
+    }
     return { report, reviewTemplate, markdown: renderMarkdown(report, reviewTemplate) };
   } catch (error) { throw fail(error.code === 'field_evidence' ? 'field_evidence' : 'field_input'); }
 }
@@ -177,6 +222,9 @@ function renderMarkdown(report, review) {
     '- 원문 언어 조건: ' + escape(languages) + ' · 네 비교 조건과 좋아요 근거에 동일 적용',
     '- 고정 시각: ' + escape(report.evaluatedAt), '- 공개 목록 SHA-256: `' + report.feed.sha256 + '`',
     '- 상세 모드·신호 제거·정확 근거는 별도 `evaluation.json`에 기록했다.', ''];
+  if (review.explicitConditions) lines.push('- 명시 조건 파일 적용 · 비활성 출처 ' + review.explicitConditions.disabledSourceIds.length +
+    '개 · 제공 보관 URL ' + review.explicitConditions.suppliedKnownUrls.length + '개 · 읽음/관련 없음 ' + review.explicitConditions.feedback.length +
+    '개. 실제 화면 조건 일치 확인은 null이며 자동으로 읽지 않았다.', '');
   for (const list of review.lists) {
     lines.push('## 목록 ' + list.label, '');
     if (!list.reviewIds.length) lines.push('후보 없음. 관련 없는 글로 채우지 않았다.', '');
@@ -231,12 +279,13 @@ async function writeEvaluation(options) {
   try {
     output = outputPath(options.out);
     try { await fs.lstat(output); throw fail('field_existing'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-    const [feedBytes, topicBytes, actionsBytes] = await Promise.all([
+    const [feedBytes, topicBytes, actionsBytes, conditionsBytes] = await Promise.all([
       readBounded(options.feed || Evaluation.DEFAULT_FEED, Discovery.LIMITS.feedBytes),
       options.topicFile === undefined ? null : readBounded(options.topicFile, 4096),
-      options.actions === undefined ? null : readBounded(options.actions, Actions.MAX_BYTES)
+      options.actions === undefined ? null : readBounded(options.actions, Actions.MAX_BYTES),
+      options.conditionsFile === undefined ? null : readBounded(options.conditionsFile, MAX_CONDITIONS_BYTES)
     ]);
-    const prepared = prepare(feedBytes, { now: options.now, topicBytes, actionsBytes, actionsKind: options.actionsKind, contentLanguages: options.contentLanguages });
+    const prepared = prepare(feedBytes, { now: options.now, topicBytes, actionsBytes, actionsKind: options.actionsKind, contentLanguages: options.contentLanguages, conditionsBytes });
     prepared.report.sourceSHA256 = await sourceHashes();
     await safeAncestors(path.dirname(output));
     try { await fs.mkdir(output, { mode: 0o700 }); } catch (error) { throw fail(error.code === 'EEXIST' ? 'field_existing' : 'field_output'); }
@@ -248,7 +297,7 @@ async function writeEvaluation(options) {
   } catch (error) { throw fail(Object.hasOwn(MESSAGES, error.code) ? error.code : 'field_failed'); }
 }
 function parseArgs(argv) {
-  const options = {}, seen = new Set(), keys = { '--feed': 'feed', '--out': 'out', '--now': 'now', '--topic-file': 'topicFile', '--actions': 'actions', '--actions-kind': 'actionsKind', '--content-languages': 'contentLanguages' };
+  const options = {}, seen = new Set(), keys = { '--feed': 'feed', '--out': 'out', '--now': 'now', '--topic-file': 'topicFile', '--actions': 'actions', '--actions-kind': 'actionsKind', '--content-languages': 'contentLanguages', '--conditions-file': 'conditionsFile' };
   for (let at = 0; at < argv.length; at += 2) {
     const key = argv[at], value = argv[at + 1];
     check(Object.hasOwn(keys, key) && !seen.has(key) && typeof value === 'string' && value && !value.startsWith('--'), 'field_usage');

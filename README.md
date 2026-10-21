@@ -2,7 +2,7 @@
 
 [이 브라우저에서 글 찾기](docs/design-review/local-post-finder.md): **설정 → 글 관리**에서 목록과 별도로 저장된 글 본문을 읽기 전용으로 확인합니다. 현재 계정의 모든 공간과 명시 선택한 로그인 전 자료를 조사하고, 고른 글만 미리보기·파일 보관합니다. 실제 누락 글의 발견·복구는 사용자 브라우저의 조사 결과로 확인해야 합니다.
 
-도구 → `관심 확인`에서 관심을 직접 보관한 뒤 `새 글 찾기`에서 관련 외부 글을 최대 5개 찾는다. 실제 공급은 서울시 문화·환경, 우아한 기술블로그·독서신문의 한국어 글 50개이며, 제목·공식 분류의 일치 표현을 설명한다. 원문 새 탭 → 같은 목록 복귀 → 가져오기 검토 → 명시적 링크 보관과 읽음·관련 없음·되돌리기를 연결했다. 본문은 자동 수집하지 않으며 자동 관심 분석은 품질 기각으로 비활성이다. [공급 보완·동일 카탈로그 비교](docs/design-review/discovery-expansion.md), [발견 흐름·검수](docs/design-review/external-discovery.md), [출처·권리·갱신](docs/design-review/discovery-sources.md), [MODEL-03 판정](docs/design-review/interest-extraction-model03.md), [현재 로드맵](docs/life-tools-design/roadmap.md)을 따른다. 이 브랜치 구현과 공개 배포는 별도다.
+[뉴스](https://wonchance-art.github.io/life-haedo/index.html?section=news)에서 최신 외부 글을 바로 찾습니다. `주제·출처`에서 표현·출처를, `언어 옵션`에서 콘텐츠 언어를 고르고, 원문 또는 선택한 언어의 번역 링크를 엽니다. 공개 RSS의 제목·링크 메타데이터만 자동 수집하며 본문은 복사하지 않습니다. 좋아요·담기는 독립 목록이고 개인 추천은 기본 꺼짐입니다. [첫 예약 수집·현재 검수](docs/design-review/discovery-scheduled-operation.md), [동일 조건 읽기 비교](docs/design-review/discovery-field-languages.md), [현재 로드맵](docs/life-tools-design/roadmap.md)을 따릅니다.
 
 내 생각과 일상을 글로 쓰고, 기록과 취향을 모으는 개인 블로그.
 메인은 실제 프로필·짧은 글쓰기·사진과 본문이 이어지는 SNS형 피드를 보여주고, 기존 메모·연표·목표·습관은 자료실과 도구에서 이어 쓴다. 빌드 없이 정적 호스팅에서 실행한다.

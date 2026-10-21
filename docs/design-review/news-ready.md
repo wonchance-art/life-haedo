@@ -28,11 +28,11 @@ UI 변경 전에는 실제 feed+모의 Auth·실제 로컬 IndexedDB로10흐름�
 
 ## 최종 영수증
 
-후보는 **SW142 / [PR115](https://github.com/wonchance-art/life-haedo/pull/115)**다. [로컬 검수 JSON](evidence/news-ready/verification.json)에 코드 해시·검사 범위·실제 feed 언어 조건·남은 조건을 기록했다. 단위1082, 정적22HTML/146JS/624참조, 뉴스8·발견19·자동갱신23·반응24·언어14·PWA9, 실제 공개 feed 핵심7개를 확인했다. 첫 화면390/1440은 스크롤0·기사 제목 실제 hit·44px 조작을 검수하고 독립 시각/보존 검토를 마쳤다. PWA9는 기존 v138 worker→v142이며 양쪽 앱 모듈은 현재 코드인 old-worker-only 검사다.
+출시 확인: **main `9440f12` / SW142 / [PR115](https://github.com/wonchance-art/life-haedo/pull/115)**. [로컬 검수 JSON](evidence/news-ready/verification.json)에 코드 해시·검사 범위·실제 feed 언어 조건·남은 조건을 기록했다. 단위1082, 정적22HTML/146JS/624참조, 뉴스8·발견19·자동갱신23·반응24·언어14·PWA9, 실제 공개 feed 핵심7개를 확인했다. 첫 화면390/1440은 스크롤0·기사 제목 실제 hit·44px 조작을 검수하고 독립 시각/보존 검토를 마쳤다. PWA9는 기존 v138 worker→v142이며 양쪽 앱 모듈은 현재 코드인 old-worker-only 검사다.
 
 기존 자동 갱신 검사 두 곳은 재로드 뒤 접힌 주제를 열지 않아 실패했다. 원본을 유지하고 실제 summary 클릭만 보완해 전체23개를 통과했다. 실제 feed 검수 어댑터의 중복 주제/숨은 예시 가정 오류 두 번도 보존하고 별도 핵심7개 결과와 구분한다. 제품 단언·제한 시간을 완화하지 않았다.
 
-직전 main45b47ae/SW141은 CI10개와 운영11파일 일치가 확인된 기준이다. 이번 후보의 최종 HEAD CI와 main push/build/deploy는 [PR 검사](https://github.com/wonchance-art/life-haedo/pull/115/checks)를 따르며, PR 통과·main 병합·실제 공개 적용을 구분한다. 공개 적용은 새 SW와 실제 파일 바이트 및 공개 feed를 별도로 대조한다.
+main `9440f12` / SW142는 [push39370029653](https://github.com/wonchance-art/life-haedo/actions/runs/39370029653)의 총10개 성공과 실제 공개12파일 일치를 확인했다. 공개 공급은7출처/90개이며 수집 시각은 `2026-10-20T04:43:52Z`다. 수집 후보·설치본·실제 공개 JSON의 SHA256 `9b0d28b1de155cf59406a2676ae0bb3ab5f7c679a7456bc5cfa63a914c717f24`도 일치한다. PR의 최종 HEAD 필수8개 성공과 실제 main push/build/deploy를 구분한다. 첫 정기 schedule·실제 Apple 기기/Google 번역·직접 읽기 효용을 이번 자동 검수·push 성공으로 대체하지 않는다.
 
 ![스크롤0의 모바일 뉴스](evidence/news-ready/news-first-fold-390.png)
 
