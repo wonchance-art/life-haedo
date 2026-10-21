@@ -143,6 +143,75 @@
       const c = context(ws, '*'); await verified(c); await storage.read(ws); guard(c);
       const rows = await remote.list(null); guard(c); return rows;
     }
+    const catalogPriority = ['conflict', 'error', 'paused', 'local_pending', 'remote_updated', 'received'];
+    async function catalog(ws) {
+      const c = context(ws, 'catalog'); await verified(c); await storage.read(ws); guard(c);
+      const rows = await remote.list(null); guard(c);
+      const links = await storage.listBlogCopies(ws); guard(c);
+      return rows.map(row => {
+        const copies = links.filter(copy => copy.remoteId === row.id).map(copy => {
+          let status = copy.status;
+          if (status === 'received' && copy.remoteRevision !== row.revision) status = 'remote_updated';
+          else if (status === 'local_pending' && copy.remoteRevision > 0 && copy.remoteRevision !== row.revision) status = 'conflict';
+          return { localPostId: copy.localPostId, revision: copy.revision, remoteRevision: copy.remoteRevision, status, archived: copy.archived };
+        });
+        return { id: row.id, title: row.title, revision: row.revision, updated_at: row.updated_at,
+          publication: structuredClone(row.publication ?? null), copies,
+          status: copies.length ? catalogPriority.find(status => copies.some(copy => copy.status === status)) : 'server_only' };
+      });
+    }
+    function chooseCopy(copies, localPostId) {
+      if (localPostId !== undefined) {
+        const chosen = copies.find(copy => copy.localPostId === localPostId);
+        if (!chosen) throw fault('local_changed');
+        return chosen;
+      }
+      if (copies.length > 1) throw Object.assign(new Error('이 기기에 받은 글이 여러 개입니다. 열 글을 선택해 주세요.'), {
+        code: 'blog_copy_selection_required', choices: structuredClone(copies)
+      });
+      return copies[0] || null;
+    }
+    async function openRemote(ws, remoteId, options = {}) {
+      const { isCurrent, ...input } = options, choices = structuredClone(input), c = context(ws, 'open:' + remoteId);
+      const guardOpen = () => { guard(c); if (isCurrent && !isCurrent()) throw fault('request_cancelled'); };
+      if (isCurrent !== undefined && typeof isCurrent !== 'function') throw fault('invalid_request');
+      return serial(ws, 'open:' + remoteId, async () => {
+        guardOpen(); await verified(c); guardOpen(); await storage.read(ws); guardOpen();
+        const links = await storage.listBlogCopies(ws); guardOpen();
+        const selected = chooseCopy(links.filter(copy => copy.remoteId === remoteId), choices.localPostId);
+        if (selected) {
+          const post = await storage.readPhotoPost(ws, selected.localPostId); guardOpen(); photoPost.validate(post);
+          if (post.status !== 'saved') throw fault('local_changed');
+          return { post, localPostId: post.id, remoteId, revision: selected.remoteRevision, received: false, workspaceId: ws };
+        }
+        if (!Number.isSafeInteger(choices.expectedRemoteRevision) || choices.expectedRemoteRevision < 1) throw fault('invalid_request');
+        const row = await remote.read(remoteId); guardOpen(); if (!row) throw fault('remote_missing');
+        if (row.revision !== choices.expectedRemoteRevision) throw fault('local_changed');
+        const blobs = new Map();
+        for (const photo of row.data.photos) { blobs.set(photo.id, await remote.downloadAsset(row.assets[photo.id])); guardOpen(); }
+        const original = await blog.hydrate(row.data, blobs); guardOpen();
+        const head = await remote.read(remoteId); guardOpen();
+        if (!head || head.revision !== row.revision) throw fault('local_changed');
+        if (head.workspace_id !== row.workspace_id || canonical(head.data) !== canonical(row.data)) throw fault('invalid_remote_data');
+        let installed;
+        try {
+          installed = await storage.installReceivedBlogPost(ws, freshCopy(original), { enabled: true, remoteId,
+            remoteWorkspaceId: row.workspace_id, remoteRevision: row.revision, localRevision: 0,
+            remoteManifest: row.data, publication: head.publication, pending: null, conflict: null, status: 'synced', error: null }, { isCurrent: guardOpen });
+        } catch (error) {
+          guardOpen();
+          if (error.code === 'blog_copy_selection_required') {
+            const current = await storage.listBlogCopies(ws); guardOpen();
+            chooseCopy(current.filter(copy => copy.remoteId === remoteId));
+          }
+          throw error;
+        }
+        guardOpen(); emit(ws, installed.post.id);
+        const state = await storage.readBlogSyncState(ws, installed.post.id); guardOpen();
+        return { post: installed.post, localPostId: installed.post.id, remoteId, revision: state.remoteRevision,
+          received: installed.received, workspaceId: ws };
+      });
+    }
     function freshCopy(input) {
       const post = structuredClone(input), ids = new Map(); post.id = makeId(); post.revision = 0; post.replaces = null; post.status = 'saved';
       for (const photo of post.photos) { const next = makeId(); ids.set(photo.id, next); photo.id = next; }
@@ -152,14 +221,18 @@
     async function receive(ws, remoteId) {
       return receiveCopy(ws, remoteId, true);
     }
-    async function receiveCopy(ws, remoteId, enabled) {
+    async function receiveCopy(ws, remoteId, enabled, options = {}) {
       return serial(ws, 'receive:' + remoteId, async () => {
-        const c = context(ws, 'receive:' + remoteId); await verified(c); await storage.read(ws); guard(c);
-        const row = await remote.read(remoteId); guard(c); if (!row) throw fault('remote_missing');
+        const c = context(ws, 'receive:' + remoteId);
+        const check = () => { guard(c); options.guardSource?.(); };
+        check(); await verified(c); check(); await storage.read(ws); check();
+        const row = options.row || await remote.read(remoteId); check(); if (!row) throw fault('remote_missing');
+        if (options.expectedRemoteRevision !== undefined && row.revision !== options.expectedRemoteRevision) throw fault('local_changed');
         const blobs = new Map();
-        for (const photo of row.data.photos) { const blob = await remote.downloadAsset(row.assets[photo.id]); guard(c); blobs.set(photo.id, blob); }
-        const original = await blog.hydrate(row.data, blobs); guard(c);
-        const post = await storage.savePhotoPost(ws, freshCopy(original), 0); guard(c);
+        for (const photo of row.data.photos) { const blob = await remote.downloadAsset(row.assets[photo.id]); check(); blobs.set(photo.id, blob); }
+        const original = await blog.hydrate(row.data, blobs); check();
+        await options.checkSource?.(); check();
+        const post = await storage.savePhotoPost(ws, freshCopy(original), 0); check();
         const installed = context(ws, post.id); let syncError = null;
         try { await writeState(installed, null, { enabled, remoteId, remoteWorkspaceId: row.workspace_id, remoteRevision: row.revision,
           localRevision: post.revision, remoteManifest: row.data, publication: row.publication, pending: null, conflict: null, status: enabled ? 'synced' : 'paused', error: null }); }
@@ -237,8 +310,7 @@
       const c = context(ws, id); await verified(c); const state = await readState(c);
       if (!state?.conflict) throw fault('blog_conflict');
       if (expected && (expected.remoteRevision !== state.conflict.remoteRevision || expected.localRevision !== state.conflict.localRevision)) throw fault('local_changed');
-      if (choice === 'remote') { const result = await receive(ws, state.remoteId); guard(c); await pause(ws, id); return result; }
-      if (choice !== 'local') throw fault('invalid_request');
+      if (choice !== 'local' && choice !== 'remote') throw fault('invalid_request');
       const before = await readPost(c), row = await remote.read(state.remoteId); guard(c);
       if (!row) throw fault('local_changed');
       if (row.revision !== state.conflict.remoteRevision || before.revision !== state.conflict.localRevision) {
@@ -246,13 +318,33 @@
           remoteRevision: row.revision, localRevision: before.revision, remoteTitle: row.data.title, updatedAt: row.updated_at } });
         throw fault('local_changed');
       }
+      const checkSource = async () => {
+        const post = await readPost(c), current = await readState(c);
+        if (post.revision !== before.revision || !current?.conflict ||
+            current.conflict.localRevision !== state.conflict.localRevision || current.conflict.remoteRevision !== state.conflict.remoteRevision)
+          throw fault('local_changed');
+      };
+      const receiveOptions = { row, expectedRemoteRevision: state.conflict.remoteRevision, guardSource: () => guard(c), checkSource };
+      if (choice === 'remote') {
+        // Until the original choice is still current, a received recovery is
+        // paused and cannot become a competing uploader after cancellation.
+        const result = await receiveCopy(ws, state.remoteId, false, receiveOptions); guard(c); await checkSource();
+        await pause(ws, id);
+        const completed = { ...c, generation: c.generation + 1 }; guard(completed);
+        const post = await readPost(completed); if (post.revision !== before.revision) throw fault('local_changed');
+        if (!result.syncError) {
+          const installed = context(ws, result.localPostId), receivedState = await readState(installed); guard(completed);
+          await writeState(installed, receivedState, { enabled: true, status: 'synced' }); guard(completed);
+        }
+        return result;
+      }
       // A recovery must start paused: cancellation of the original while its
       // photos download must never leave a newly enabled competing copy.
-      const recovery = await receiveCopy(ws, state.remoteId, false); guard(c);
+      const recovery = await receiveCopy(ws, state.remoteId, false, receiveOptions); guard(c); await checkSource();
       const latest = await readState(c); await writeState(c, latest, { remoteRevision: row.revision, publication: row.publication, localRevision: 0, pending: null, conflict: null, error: null });
       const result = await transfer(ws, id, true); return { ...result, recoveryLocalPostId: recovery.localPostId };
     }
-    return Object.freeze({ list, connect: (ws, id, options) => transfer(ws, id, true, options), save: (ws, id, options) => transfer(ws, id, true, options),
+    return Object.freeze({ list, catalog, openRemote, connect: (ws, id, options) => transfer(ws, id, true, options), save: (ws, id, options) => transfer(ws, id, true, options),
       saveDefault,
       sync: (ws, id) => transfer(ws, id, false), receive, pause, publish, unpublish, resolve, getState,
       subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },

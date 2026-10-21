@@ -67,7 +67,8 @@
     function renderRows() {
       if (!valid()) return;
       const term = query.value.trim().toLocaleLowerCase(), selected = filter.value;
-      const matching = rows.filter(row => (!focusedPostId || row.kind === 'photo' && row.id === focusedPostId) && (selected === 'all' ? row.status !== 'archived' : row.status === selected) &&
+      const matching = rows.filter(row => focusedPostId ? row.kind === 'photo' && row.id === focusedPostId :
+        (selected === 'all' ? row.status !== 'archived' : row.status === selected) &&
         (!term || [row.title, row.body, ...(Array.isArray(row.attachments) ? row.attachments.map(a => a.title) : [])].filter(Boolean).join('\n').toLocaleLowerCase().includes(term)));
       list.replaceChildren(); const pendingEvidence = [];
       const count = meta(`${matching.length}개`); count.classList.add('blog-manager-count'); list.append(count);
@@ -464,6 +465,7 @@
       [['all', '전체 글·초안'], ['saved', '저장한 글'], ['draft', '초안'], ['archived', '보관한 글']].forEach(([value, label]) => { const option = el('option', label); option.value = value; filter.append(option); });
       query.value = typeof viewState?.query === 'string' ? viewState.query : '';
       filter.value = ['all', 'saved', 'draft', 'archived'].includes(viewState?.filter) ? viewState.filter : 'all';
+      query.hidden = filter.hidden = !!focusedPostId;
       shown = Number.isSafeInteger(viewState?.shown) && viewState.shown >= 40 && viewState.shown <= 1000000 ? viewState.shown : 40;
       const search = () => { shown = 40; renderRows(); }; query.addEventListener('input', search); filter.addEventListener('change', search);
       header.append(query, filter, button('글 목록 다시 불러오기', load));

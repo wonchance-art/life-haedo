@@ -940,3 +940,11 @@ ZIP 담당은 공식 [최신 릴리스 API](https://api.github.com/repos/101arro
 독립 오픈소스 검토 담당이 공식 [Muuri latest release API](https://api.github.com/repos/haltu/muuri/releases/latest), [HEAD 이력](https://api.github.com/repos/haltu/muuri/commits?per_page=1), [0.9.5 LICENSE](https://github.com/haltu/muuri/blob/0.9.5/LICENSE.md)·[README](https://github.com/haltu/muuri/blob/0.9.5/README.md)를 확인했다. 최신 배포는 0.9.5(2021-07-09 UTC), MIT이며 archived/disabled=false다. 저장소 pushed 2024-05-25와 기본 HEAD 219e008의 2022-09-14 문서 변경을 구분하며 최근 기능 릴리스로 표현하지 않는다.
 
 Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와 추가 DOM 구조를 제공한다. 이번 고정 순서의 최대 9개 읽기에는 불필요하므로 코드/의존성을 도입하지 않는다. 기존 CSS Grid·NineBoard의 허용 필드 투영·항목 설명·ShareRemote와 접근 가능한 버튼/상세를 재사용한다. 향후 자유 배치나 실제 대규모 동적 갤러리가 필요해질 때 다시 비교한다. 공개 보안 권고는 현재 도구의 endpoint 미지원 및 공식 웹 API 접근 제한/429로 확인하지 못했다. 권고 0건·보안 감사 통과를 주장하지 않으며 우회/추가 설치를 하지 않았다. [제품·검수 범위](../design-review/nine-public.md)를 따른다.
+
+## 홈의 서버 글 발견·정확 재개 — 2026-10-21
+
+공식 [Supabase JS 최신 릴리스](https://api.github.com/repos/supabase/supabase-js/releases/latest)는 v2.118.0·2026-10-15이며, 동봉한 2.117.2(MIT)를 유지한다. [idb npm latest](https://registry.npmjs.org/idb/latest)는 8.0.4/ISC이며 기존 8.0.3/ISC를 유지한다. 두 저장소의 공개 [SDK 보안 권고](https://api.github.com/repos/supabase/supabase-js/security-advisories)·[idb 보안 권고](https://api.github.com/repos/jakearchibald/idb/security-advisories) 응답은 각각 0개였다. 비공개 권고나 전체 취약점 감사의 결론으로 확대하지 않는다.
+
+공식 MCP 문서로 [Auth getUser](https://supabase.com/docs/reference/javascript/auth-getuser)의 서버 확인에 따른 사용자 정당성 검증과 기존 Auth/RLS 경계의 재사용을 확인했다. [changelog.md](https://supabase.com/changelog.md)는 직접 조회가 URLError로 실패해 본문을 확인하지 못했으며 우회하지 않았다. 이번에 SDK·키·스키마를 바꾸지 않는다.
+
+요구는 선택한 서버 판을 검증해 같은 로컬 사본으로 재개하는 것이다. 기존 BlogSync의 CAS·영속 작업 영수증, idb의 원자 트랜잭션과 계정 가드를 확장한다. 새 CRDT·동기화 엔진·SDK를 추가하면 기존 사본·충돌 보존과 성공 기준을 중복 관리해야 하므로 도입하지 않는다. [제품 계약·검수 상태](../design-review/account-blog-continuity.md)를 따르며 최종 통합 통과·배포·실제 Apple 체험은 별도 증거로 확정한다.

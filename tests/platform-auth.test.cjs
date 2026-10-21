@@ -64,6 +64,13 @@ test('private routes include life and remove unknown query values and external r
   assert.equal(validConfig({ ...config, key: 'sb_secret_hidden' }, 'localhost'), false);
 });
 
+test('account post discovery survives login without keeping private query values', () => {
+  assert.equal(safeNext('index.html?view=account-blog&code=discarded&post=private#token'), 'index.html?view=account-blog');
+  assert.equal(safeNext('life.html?section=home&view=account-blog&access_token=discarded'), 'life.html?section=home&view=account-blog');
+  assert.equal(safeNext('https://evil.invalid/index.html?view=account-blog'), 'index.html');
+  assert.equal(safeNext('index.html?view=account-blog-unknown'), 'index.html');
+});
+
 test('first writing intent survives login only as the exact local home flag', () => {
   assert.equal(safeNext('index.html?compose=1&code=discarded&next=https://evil.invalid#token'), 'index.html?compose=1');
   assert.equal(safeNext('index.html?compose=other'), 'index.html');
