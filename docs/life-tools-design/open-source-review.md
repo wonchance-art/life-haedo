@@ -1,5 +1,18 @@
 # 오픈소스 검토와 재사용 결정
 
+## 자료 Markdown 읽기·정확 원문·수정/휴지통 — 2026-10-22 KST 설계
+
+직접 도입의 우선 가설은 **markdown-it15.0.3 + DOMPurify3.4.17의 공식 로컬 고정 UMD**다. 일반 Markdown parser를 자체 정규식으로 만들지 않고 Core·원문/발췌·Storage CAS·Writing/가져오기·기존 사본/동기화를 재사용한다. 직접 유지하는 범위는 읽기 정책·block/raw 위치 adapter·엄격한 source-edit/예약 link와 기존 입출력 연결이다. [통합 설계·교체 조건·현재 미구현 경계](../design-review/material-markdown-edit-delete.md).
+
+- **markdown-it15.0.3:** npm latest와 [공식 태그 commit a8c00d474ec9b304fad9b71c16d6fa8b4909279e](https://github.com/markdown-it/markdown-it/tree/a8c00d474ec9b304fad9b71c16d6fa8b4909279e), 고정 MIT LICENSE/package를 대조했다. [Token.map의 원문 줄 범위](https://github.com/markdown-it/markdown-it/blob/a8c00d474ec9b304fad9b71c16d6fa8b4909279e/src/token.ts)와 [메모리 개행 정규화](https://github.com/markdown-it/markdown-it/blob/a8c00d474ec9b304fad9b71c16d6fa8b4909279e/src/rules_core/normalize.ts)가 이어 읽기의 원문 줄 시작 mapping에 적합하다. 공식 package는 browser export `dist/browser/markdown-it.umd.min.js`를 제공한다. runtime 의존성6개가 있으므로 실제 동봉 때 배포물·전이 라이선스/권고·digest를 함께 고정한다.
+- **DOMPurify3.4.17:** [공식 안정 릴리스](https://github.com/cure53/DOMPurify/releases/tag/3.4.17)(2026-10-12), 고정 package의 `MPL-2.0 OR Apache-2.0`와 Apache LICENSE를 확인했다. [정제 후 변형의 위험](https://github.com/cure53/DOMPurify/blob/3.4.17/README.md)을 따르고, 정제만으로 외부 이미지 요청이 막힌다고 취급하지 않는다. 출력 allowlist와 이미지/media 비요청 대체가 별도 필수다.
+- **Marked18.1.1:** [공식 안정 릴리스](https://github.com/markedjs/marked/releases/tag/v18.1.1)(2026-10-12), 고정 package/MIT 전체 LICENSE·runtime 의존성0·UMD와 README의 DOMPurify 권장을 확인했다. 다만 [Lexer의 reference 정의 소비/토큰 생략](https://github.com/markedjs/marked/blob/v18.1.1/src/Lexer.ts#L217-L232) 때문에 token.raw 단순 누적은 원문 전체 위치를 보장하지 않는다. 가벼운 배포보다 기존 이어 읽기 보존을 우선해 이번 1순위로 고르지 않는다.
+- **mdast-util-from-markdown2.1.0:** [공식 릴리스](https://github.com/syntax-tree/mdast-util-from-markdown/releases/tag/2.1.0)(2026-10-03)/MIT/ESM only·micromark 의존성을 확인했다. [unist offset은 UTF-16](https://github.com/syntax-tree/unist#point)이지만 서식 DOM의 글자 가공과 raw 문자열 대응이 자동 해결되는 것은 아니다. 직접 정밀 서식 발췌가 필요해질 때 비교한다.
+
+정확 버전의 공개 advisory 조회는 [markdown-it](https://api.github.com/advisories?ecosystem=npm&affects=markdown-it%4015.0.3&per_page=100)·[DOMPurify](https://api.github.com/advisories?ecosystem=npm&affects=dompurify%403.4.17&per_page=100)·[Marked](https://api.github.com/advisories?ecosystem=npm&affects=marked%4018.1.1&per_page=100)·[mdast](https://api.github.com/advisories?ecosystem=npm&affects=mdast-util-from-markdown%402.1.0&per_page=100) 모두0건이었다. 이는 전이 의존성 전체 감사·실행 성능·안전성 보장이 아니다. markdown-it의10/20 공개 DoS 권고는15.0.3, Marked18.0.0~18.0.1 recursion/OOM은18.0.2에서 수정된 범위를 대조했다. DOMPurify의 최근 IN_PLACE 권고도 과거 버전 범위다.
+
+조회 한계: markdown-it releases/latest는404여서 npm latest·공식 태그로 대조했다. 다른3개 npm latest 요청의 timeout은 GitHub 공식 안정 릴리스·고정 package와 구분한다. 첫 오래된 markdown-it lib/*.mjs 경로의404는 해당 태그 tree의 src/*.ts로 확인해 해결했다. 이번에는 라이브러리 설치·동봉·성능 실험·앱 실행·운영 변경을 하지 않았다. 실제 구현 시 최신 상태 재확인과 익명 block/raw 왕복·병적 입력·전이 의존성 검수를 거친 뒤 채택을 확정한다.
+
 ## 언어 주제 연결·당시 비교 근거 — 2026-10-21 KST
 
 기존 Discovery의 공개 동의어·Recommendations의 로컬 규칙·Reading 불변 스냅샷/Storage CAS와 native details·문자 노드를 재사용한다. 직역 두 묶음과 저장된 근거 표시를 위해 범용 추천 서버·검색/번역 SDK·파서를 추가하지 않는다. 같은 날 아래에서 확인한 feedparser/idb 및 SNS 패턴 검토를 재사용하며, 이번 작은 보완을 새 라이브러리 보안 감사로 표시하지 않는다. [범위·보존·교체 조건](../design-review/news-usefulness.md).
