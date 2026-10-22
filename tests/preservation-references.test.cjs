@@ -31,6 +31,24 @@ async function fixture() {
   const selection = { postIds: [doc.id], boardIds: [board.id] };
   return { snapshot, selection, ref, secondRef, postRef, old, latest, second, unrelated, doc, dependency, other, board, body };
 }
+test('selected edited evidence keeps its marker through fresh-copy restoration without leaking the base or unrelated markers', async () => {
+  const f = await fixture(), bundle = f.snapshot.bundle, time = bundle.updatedAt;
+  const marker = { id: C.id(), kind: 'source_edited_copy', entityRefs: [{ entityType: 'sourceVersion', entityId: f.latest.version.id }], revision: 1, createdAt: time, updatedAt: time };
+  bundle.links.push(marker, { ...structuredClone(marker), id: C.id(), kind: 'source_edit_base', entityRefs: [
+    { entityType: 'sourceVersion', entityId: f.old.version.id }, { entityType: 'sourceVersion', entityId: f.latest.version.id }] },
+    { ...structuredClone(marker), id: C.id(), entityRefs: [{ entityType: 'sourceVersion', entityId: f.unrelated.version.id }] });
+  const ref = await R.build({ bundle, sourceId: f.old.source.id, versionId: f.latest.version.id, locator: { start: 0, end: 10 } });
+  f.snapshot.posts[0].evidence.refs = [ref]; f.board.areas[0].items[0] = N.evidenceSnapshot({ kind: 'source', value: ref });
+  const selected = await A.select(f.snapshot, f.selection);
+  assert.deepEqual(selected.bundle.links, [marker]); assert(!selected.bundle.sourceVersions.some(v => v.id === f.old.version.id));
+  assert(!JSON.stringify(selected).includes(f.body)); assert(!JSON.stringify(selected).includes('source_edit_base'));
+  const restored = await A.copy(selected), editedVersion = restored.bundle.sourceVersions.find(v => v.contentText === f.latest.version.contentText);
+  assert(editedVersion); assert.equal(C.isEditedCopy(restored.bundle, editedVersion.id), true);
+  assert.notEqual(restored.bundle.links[0].id, marker.id); assert.equal(restored.bundle.links[0].entityRefs[0].entityId, editedVersion.id);
+  await R.resolve(restored.bundle, restored.posts[0].evidence.refs[0]);
+  const polluted = structuredClone(selected); polluted.bundle.links.push({ id: C.id(), kind: 'private_link', entityRefs: [{ entityType: 'sourceVersion', entityId: f.latest.version.id }] });
+  await assert.rejects(A.validate(polluted), /필요하지 않은/);
+});
 test('selection follows exact board → post → evidence dependencies and excludes unrelated versions, notes and workspace metadata', async () => {
   const f = await fixture(), before = structuredClone(f.snapshot), value = await A.select(f.snapshot, f.selection);
   assert.deepEqual(f.snapshot, before);

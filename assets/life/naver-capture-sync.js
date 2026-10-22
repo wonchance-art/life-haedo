@@ -13,7 +13,8 @@
     naver_invalid_data: '받은 원문이나 사진을 확인하지 못했습니다. 기존 자료는 유지됩니다.',
     naver_network_error: '요청을 마치지 못했습니다. 기존 자료를 유지하며 다시 확인할 수 있습니다.',
     naver_conflict: '자료나 연결이 바뀌었습니다. 현재 내용을 다시 확인해 주세요.',
-    naver_ambiguous: '같은 글의 자료가 여러 개 있습니다. 보완할 자료를 먼저 확인해 주세요.'
+    naver_ambiguous: '같은 글의 자료가 여러 개 있습니다. 보완할 자료를 먼저 확인해 주세요.',
+    naver_source_trashed: '휴지통에 있는 자료입니다. 복원한 뒤 본문·사진을 받아 주세요.'
   };
   const fault = code => Object.assign(new Error(messages[code] || messages.naver_network_error), { code });
   function need(ok, code = 'naver_invalid_data') { if (!ok) throw fault(code); }
@@ -74,7 +75,7 @@
       const candidates = bundle.sources.filter(s => s.origin === 'naver_blog' && identity.postIdentity(s.url)?.key === key);
       if (candidates.length > 1) return { status: 'ambiguous', sourceId: null, sourceVersionId: null };
       const s = candidates[0], v = s && bundle.sourceVersions.filter(value => value.sourceId === s.id).at(-1);
-      return { status: !s ? 'new' : v?.coverage.status === 'full_text' ? 'imported' : 'needs_content', sourceId: s?.id || null, sourceVersionId: v?.id || null };
+      return { status: !s ? 'new' : !core.isSourceActive(bundle, s.id) ? 'trashed' : v?.coverage.status === 'full_text' ? 'imported' : 'needs_content', sourceId: s?.id || null, sourceVersionId: v?.id || null };
     }
     async function receivedProjection(c, row, bundle) {
       const projection = { ...project(row, bundle), received: false };
@@ -162,6 +163,7 @@
       for (let attempt = 0; attempt < 3; attempt++) {
         const bundle = await step(c, () => storage.read(ws)), found = project(snapshot.capture, bundle);
         need(found.status !== 'ambiguous', 'naver_ambiguous');
+        need(found.status !== 'trashed', 'naver_source_trashed');
         if (found.sourceId) for (const version of bundle.sourceVersions.filter(v => v.sourceId === found.sourceId)) {
           const old = await step(c, () => storage.readNaverCapture(ws, version.id));
           if (old?.capture.capture_hash === snapshot.capture.capture_hash) return { sourceId: found.sourceId, sourceVersionId: version.id, alreadyReceived: true, received: true };

@@ -52,11 +52,13 @@ test("life transport borrows the platform client and verifies the account on the
   s.client.auth.dispose();
 });
 
-test("material continuity scope permits only its three private RPCs and retains account cancellation", async () => {
+test("material continuity scope permits its private RPCs and read-only marker capability without broadening other scopes", async () => {
   const s = setup(), client = bridge.clientFactory(s.auth, { scope: 'material' })(config.url, config.key);
   assert.throws(() => client.from('life_workspaces'), { code: 'invalid_request' });
   for (const name of ['life_sync_put', 'life_composition_put', 'life_writing_draft_put']) assert.throws(() => client.rpc(name, {}), { code: 'invalid_request' });
-  for (const name of ['life_material_get', 'life_material_list', 'life_material_put']) await client.rpc(name, {});
+  for (const name of ['life_material_get', 'life_material_list', 'life_material_put', 'life_material_capabilities']) await client.rpc(name, {});
+  const ordinary = bridge.clientFactory(s.auth)(config.url, config.key);
+  assert.throws(() => ordinary.rpc('life_material_capabilities', {}), { code: 'invalid_request' });
   const builder = client.rpc('life_material_get', {}); s.change({ id: 'B' });
   await assert.rejects(Promise.resolve(builder), { code: 'request_cancelled' });
   client.auth.dispose(); s.client.auth.dispose();

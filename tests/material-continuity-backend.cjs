@@ -7,6 +7,7 @@ const Core = require('../assets/life/core.js'), Writing = require('../assets/lif
 const Ref = require('../assets/life/source-reference.js'), Photo = require('../assets/life/photo-post.js');
 const Remote = require('../assets/life/material-continuity-remote.js'), Platform = require('../assets/platform-life-remote.js');
 const migration = 'supabase/migrations/20261019005829_life_material_continuity.sql';
+const markerMigration = 'supabase/migrations/20261022031304_life_material_edited_copy_markers.sql';
 const out = path.resolve(__dirname, '../.local/material-continuity');
 const q = value => value === null ? 'null' : "'" + String(value).replaceAll("'", "''") + "'";
 const json = value => q(JSON.stringify(value)) + '::jsonb';
@@ -22,7 +23,7 @@ async function main() {
   const owner = randomUUID(), foreign = randomUUID(); let user = owner, heldRPC = null; const calls = [];
   function rpc(name, args, role = 'authenticated', uid = user) {
     const types = { p_id: 'uuid', p_operation_id: 'uuid', p_expected_revision: 'bigint', p_data: 'jsonb', p_after_updated_at: 'timestamptz', p_after_id: 'uuid' };
-    assert(['life_material_get', 'life_material_put', 'life_material_list'].includes(name));
+    assert(['life_material_get', 'life_material_put', 'life_material_list', 'life_material_capabilities'].includes(name));
     const fields = Object.entries(args).map(([key, value]) => { assert(types[key]); return key + '=>' + (types[key] === 'jsonb' ? json(value) : q(value) + '::' + types[key]); });
     return server.sql('select public.' + name + '(' + fields.join(',') + ');', { owner: uid, role });
   }
@@ -67,7 +68,8 @@ async function main() {
     const material = Writing.material(bundle, first.source.id, first.version.id, randomUUID); material.note = '명시 전송한 비공개 메모'; plan.materials.push(material, Writing.material(bundle, link.source.id, link.version.id, randomUUID));
     const reference = await Ref.build({ bundle, sourceId: first.source.id, versionId: first.version.id, locator: { start: raw.indexOf('정확한'), end: raw.indexOf('다음') + 2 } });
     plan.blocks.push({ id: randomUUID(), kind: 'quote', materialId: material.id, reference }, { id: randomUUID(), kind: 'paragraph', text: '직접 쓴 글의 문단' });
-    const data = await Model.verify(Model.snapshot(bundle, plan)), id = randomUUID(), operationId = randomUUID(); let headRevision = 1;
+    const data = await Model.verify(Model.snapshot(bundle, plan)), id = randomUUID(), operationId = randomUUID(); let headRevision = 1, editedHead = null;
+    const storedDigest = () => server.sql("select to_jsonb(encode(sha256(convert_to(coalesce((select jsonb_agg(to_jsonb(h) order by owner_id,id) from haedo_material_private.heads h),'[]'::jsonb)::text||coalesce((select jsonb_agg(to_jsonb(r) order by owner_id,id,operation_id) from haedo_material_private.receipts r),'[]'::jsonb)::text,'UTF8')),'hex'));");
     await check('Private owner RPC/RLS, fixed paths and repeatable installation expose no tables or foreign metadata', async () => {
       const installed = server.sql("select jsonb_build_object('rls',(select count(*)=2 and bool_and(relrowsecurity) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='haedo_material_private' and relkind='r'),'wrappers',(select count(*)=3 and bool_and(not prosecdef and proconfig=array['search_path=pg_catalog']) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and proname in('life_material_get','life_material_list','life_material_put')),'table_denied',not has_table_privilege('authenticated','haedo_material_private.heads','select') and not has_table_privilege('anon','haedo_material_private.receipts','select'));");
       assert(Object.values(installed).every(Boolean));
@@ -81,6 +83,17 @@ async function main() {
       assert.deepEqual(await remote.write({ remoteId: id, operationId, expectedRevision: 0, data }), { status: 'stored', revision: 1 });
       const read = await remote.read(id); assert.deepEqual(read.data, data); assert.equal(read.data.plan.blocks[0].reference.quote, reference.quote);
       user = foreign; auth.user = { id: foreign }; auth.epoch++; assert.equal(await remote.read(id), null); assert.deepEqual(await remote.list(), { items: [], next: null }); user = owner; auth.user = { id: owner }; auth.epoch++;
+    });
+    await check('Additive edited-copy migration preserves populated legacy heads, receipts, RLS and existing signatures', async () => {
+      const before = storedDigest();
+      const permissions = () => server.sql("select jsonb_build_object('tables',(select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='haedo_material_private' and c.relkind='r'),'rls',(select bool_and(c.relrowsecurity) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='haedo_material_private' and c.relkind='r'),'wrappers',(select jsonb_agg(jsonb_build_object('name',p.proname,'args',pg_get_function_identity_arguments(p.oid),'owner',p.proowner,'definer',p.prosecdef,'config',p.proconfig) order by p.proname) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in('life_material_get','life_material_put','life_material_list')),'table_denied',not has_table_privilege('authenticated','haedo_material_private.heads','select') and not has_table_privilege('anon','haedo_material_private.receipts','select'));");
+      const prior = permissions(), sql = await fs.readFile(path.resolve(__dirname, '..', markerMigration), 'utf8');
+      psql(sql); psql(sql); assert.equal(storedDigest(), before); assert.deepEqual(permissions(), prior);
+      assert.deepEqual(rpc('life_material_capabilities', {}), { source_edited_copy: 1 });
+      assert.throws(() => rpc('life_material_capabilities', {}, 'anon', null), e => e.code === '42501');
+      assert.throws(() => rpc('life_material_capabilities', {}, 'authenticated', null), e => e.code === '42501');
+      assert.equal(server.sql("select to_jsonb(has_function_privilege('anon','public.life_material_capabilities()','execute'));"), false);
+      assert.deepEqual((await remote.read(id)).data, data); report.markerMigrationPreservedPopulatedLegacyRows = true;
     });
     await check('Exact durable retries survive lost replies, reject payload reuse and require reading the current head', async () => {
       assert.deepEqual(await remote.write({ remoteId: id, operationId, expectedRevision: 0, data: Object.fromEntries(Object.entries(data).reverse()) }), { status: 'stored', revision: 1 });
@@ -144,6 +157,32 @@ async function main() {
       assert.equal(cursor, null); assert.equal(seen.size, ids.length + 3); assert(ids.every(id => seen.has(id)));
       assert.throws(() => rpc('life_material_list', { p_after_updated_at: '2026-10-19T00:00:00Z', p_after_id: null }), e => e.code === '22023');
     });
+    await check('Exact edited markers survive CAS receipts and remove/re-add while history edges, private fields and marker loss are rejected', async () => {
+      const marked = copy(data), selectedVersion = marked.bundle.sourceVersions.find(v => v.id === first.version.id), time = selectedVersion.importedAt;
+      const marker = { id: randomUUID(), kind: 'source_edited_copy', entityRefs: [{ entityType: 'sourceVersion', entityId: selectedVersion.id }], revision: 1, createdAt: time, updatedAt: time };
+      marked.bundle.links = [marker]; await Model.verify(marked);
+      const editedId = randomUUID(), operation = randomUUID();
+      assert.deepEqual(await remote.write({ remoteId: editedId, operationId: operation, expectedRevision: 0, data: marked }), { status: 'stored', revision: 1 });
+      assert.deepEqual((await remote.read(editedId)).data.bundle.links, [marker]);
+      assert.deepEqual(await remote.write({ remoteId: editedId, operationId: operation, expectedRevision: 0, data: marked }), { status: 'stored', revision: 1 });
+      const put = (key, revision, payload) => rpc('life_material_put', { p_id: key, p_operation_id: randomUUID(), p_expected_revision: revision, p_data: payload });
+      const lost = copy(marked); lost.bundle.links = []; assert.throws(() => put(editedId, 1, lost), e => /life_material_immutable_source_version/.test(e.message));
+      const changed = copy(marked); changed.bundle.links[0].createdAt = changed.bundle.links[0].updatedAt = '2026-10-20T01:00:00.000Z';
+      assert.throws(() => put(editedId, 1, changed), e => /life_material_immutable_source_version/.test(e.message));
+      for (const mutate of [v => { v.bundle.links[0].kind = 'source_edit_base'; }, v => { v.bundle.links[0].note = 'UNSELECTED_PRIVATE_NOTE'; },
+        v => { v.bundle.links[0].entityRefs[0].entityId = latest.version.id; }, v => { v.bundle.links.push({ ...copy(marker), id: randomUUID() }); },
+        v => { v.bundle.links[0].entityRefs[0].revision = 1; }]) {
+        const invalid = copy(marked); mutate(invalid); assert.throws(() => put(randomUUID(), 0, invalid), e => e.code === '22023');
+      }
+      const empty = copy(marked); empty.bundle.sources = []; empty.bundle.sourceVersions = []; empty.bundle.links = []; empty.plan.materials = []; empty.plan.blocks = [];
+      assert.equal(put(editedId, 1, empty).revision, 2);
+      assert.throws(() => put(editedId, 2, lost), e => /life_material_immutable_source_version/.test(e.message));
+      assert.equal(put(editedId, 2, marked).revision, 3);
+      const namespace = server.sql('select to_jsonb(version_hashes ? ' + q('edited_copy:' + selectedVersion.id) + ') from haedo_material_private.heads where owner_id=' + q(owner) + '::uuid and id=' + q(editedId) + '::uuid;');
+      assert.equal(namespace, true); report.editedMarkerHashNamespacePersisted = true;
+      const bareId = randomUUID(); put(bareId, 0, data); assert.throws(() => put(bareId, 1, marked), e => /life_material_immutable_source_version/.test(e.message));
+      editedHead = { id: editedId, data: marked, revision: 3 };
+    });
     await check('Account disposal cancels held responses, and deleted heads cannot be recreated using historical remote IDs', async () => {
       let release; heldRPC = new Promise(resolve => { release = resolve; }); const pending = remote.read(id); await new Promise(resolve => setImmediate(resolve));
       user = foreign; auth.user = { id: foreign }; auth.epoch++; release(); await assert.rejects(pending, { code: 'request_cancelled' }); user = owner; auth.user = { id: owner }; auth.epoch++;
@@ -151,8 +190,21 @@ async function main() {
       await assert.rejects(remote.write({ remoteId: id, operationId: randomUUID(), expectedRevision: 0, data }), { code: 'remote_missing' });
       await assert.rejects(remote.write({ remoteId: id, operationId, expectedRevision: 0, data }), { code: 'remote_missing' });
       assert.equal(await remote.read(id), null);
-      const digest = () => server.sql("select to_jsonb(encode(sha256(convert_to(coalesce((select jsonb_agg(to_jsonb(h) order by owner_id,id) from haedo_material_private.heads h),'[]'::jsonb)::text||coalesce((select jsonb_agg(to_jsonb(r) order by owner_id,id,operation_id) from haedo_material_private.receipts r),'[]'::jsonb)::text,'UTF8')),'hex'));");
-      const prior = digest(); psql(await fs.readFile(path.resolve(__dirname, '..', migration), 'utf8')); assert.equal(digest(), prior); report.populatedReinstallPreserved = true;
+      const prior = storedDigest(), baselineSQL = await fs.readFile(path.resolve(__dirname, '..', migration), 'utf8');
+      const validStart = baselineSQL.indexOf('create or replace function haedo_material_private.valid(j'), getStart = baselineSQL.indexOf('create or replace function haedo_material_private.get(');
+      const putStart = baselineSQL.indexOf('create or replace function haedo_material_private.put('), wrappersStart = baselineSQL.indexOf('create or replace function public.life_material_get(');
+      assert(validStart > 0 && getStart > validStart && putStart > getStart && wrappersStart > putStart);
+      psql('begin;\n' + baselineSQL.slice(validStart, getStart) + baselineSQL.slice(putStart, wrappersStart) + 'drop function public.life_material_capabilities();\ncommit;');
+      assert.equal(storedDigest(), prior); assert.equal(server.sql("select to_jsonb(to_regprocedure('public.life_material_capabilities()') is null);"), true);
+      const beforePut = calls.filter(call => call.name === 'life_material_put').length, oldServer = Remote.create({ auth, model: Model, clientFactory: Platform.clientFactory });
+      await assert.rejects(oldServer.write({ remoteId: randomUUID(), operationId: randomUUID(), expectedRevision: 0, data: editedHead.data }), { code: 'schema_missing' });
+      assert.equal(calls.filter(call => call.name === 'life_material_put').length, beforePut); oldServer.dispose();
+      report.populatedRollbackPreserved = true;
+      psql(await fs.readFile(path.resolve(__dirname, '..', markerMigration), 'utf8'));
+      assert.equal(storedDigest(), prior); assert.deepEqual((await remote.read(editedHead.id)).data, editedHead.data);
+      const lostMarker = copy(editedHead.data); lostMarker.bundle.links = [];
+      await assert.rejects(remote.write({ remoteId: editedHead.id, operationId: randomUUID(), expectedRevision: editedHead.revision, data: lostMarker }), { code: 'immutable_source_version' });
+      report.populatedReinstallPreserved = true;
     });
     report.pass = true;
   } finally {

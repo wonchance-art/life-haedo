@@ -117,6 +117,7 @@
     if (typeof idFn !== 'function') fail('새 자료의 식별자를 만들 수 없습니다.');
     const source = bundle.sources.find(row => row.id === sourceId), version = bundle.sourceVersions.find(row => row.id === versionId && row.sourceId === sourceId);
     if (!source || !version) fail('선택한 정확한 원문 버전을 찾지 못했습니다. 최신 버전으로 바꾸지 않았습니다.');
+    if (!dependency('Core').isSourceActive(bundle, sourceId)) fail('휴지통에 있는 자료입니다. 복원한 뒤 새 자료로 선택해 주세요.');
     const result = { id: id(idFn()), sourceId, sourceVersionId: versionId, contentHash: version.contentHash, note: '' };
     materialShape(result); return result;
   }

@@ -8,6 +8,18 @@ async function complete() {
   const data = await F.fixture();
   return { ...data, bundle: Core.applyChanges(data.bundle, data.changes) };
 }
+test('dedicated capture ZIP retains only its selected edited marker and remaps it without changing photo bytes', async t => {
+  const restore = F.installDecoder(); t.after(restore);
+  const data = await complete(), version = data.bundle.sourceVersions[0], time = version.importedAt;
+  const marker = { id: Core.id(), kind: 'source_edited_copy', entityRefs: [{ entityType: 'sourceVersion', entityId: version.id }], revision: 1, createdAt: time, updatedAt: time };
+  data.bundle.links.push(marker, { id: Core.id(), kind: 'private_link', entityRefs: [{ entityType: 'sourceVersion', entityId: version.id }], note: 'PRIVATE_NOTE_NOT_IN_CAPTURE' });
+  const opened = await Media.read(await Media.pack({ bundle: data.bundle, attachment: data.attachment })), restored = await Media.copy(opened);
+  assert.deepEqual(opened.bundle.links, [marker]); assert.equal(Core.isEditedCopy(restored.bundle, restored.attachment.sourceVersionId), true);
+  assert.notEqual(restored.bundle.links[0].id, marker.id); assert.equal(restored.bundle.links[0].entityRefs[0].entityId, restored.attachment.sourceVersionId);
+  assert.deepEqual(new Uint8Array(await restored.attachment.photos[0].blob.arrayBuffer()), F.bytes);
+  const polluted = copy(opened); polluted.bundle.links.push({ id: Core.id(), kind: 'private_link', entityRefs: [{ entityType: 'sourceVersion', entityId: opened.attachment.sourceVersionId }] });
+  await assert.rejects(Media.validateSnapshot(polluted), /표식/);
+});
 test('link-only Markdown capture follows Core plain-text target without changing its declaration or stored photos', async t => {
   const restore = F.installDecoder(); t.after(restore);
   const data = await F.fixture(), payload = data.attachment.capture.payload;

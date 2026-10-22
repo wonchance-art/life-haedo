@@ -410,13 +410,24 @@
       return { id: row.id, title: row.data.title, revision: row.revision, data: row.data,
         ...(typeof row.updated_at === 'string' ? { updated_at: row.updated_at } : {}) };
     }
-    function immutableVersions(local, incoming) {
+    function immutableVersions(local, incoming, { partial = false } = {}) {
       const previous = new Map((local.sourceVersions || []).map(version => [version.id, version]));
       for (const version of incoming.sourceVersions || []) {
         const original = previous.get(version.id);
         if (original && stablePayload(original) !== stablePayload(version)) {
           throw fault('immutable_source_version', '서버의 원문 버전이 같은 식별자로 변경되었습니다. 로컬 원문은 보존했습니다.');
         }
+      }
+      if (partial && typeof core().editedCopyMarkers === 'function') {
+        const markers = new Map((incoming.links || []).map(link => [link.id, link]));
+        const knownVersionIds = (incoming.sourceVersions || []).map(version => version.id).filter(id => previous.has(id));
+        for (const marker of core().editedCopyMarkers(local, knownVersionIds)) {
+          if (!markers.has(marker.id) || stablePayload(markers.get(marker.id)) !== stablePayload(marker)) {
+            throw fault('immutable_source_marker', '수정한 사본의 표시가 받은 자료에서 빠지거나 바뀌었습니다. 기존 자료는 보존했습니다.');
+          }
+        }
+      } else if (!partial && typeof core().assertSourceLinkPreservation === 'function') {
+        core().assertSourceLinkPreservation(local, incoming);
       }
     }
     function validateSyncState(state, workspaceId) {
@@ -1138,9 +1149,11 @@
         photoPost().validate(value); return clone(value);
       });
     }
-    async function savePhotoPost(workspaceId, input, baseRevision, evidenceRequest = null, nineRequest = null) {
+    async function savePhotoPost(workspaceId, input, baseRevision, evidenceRequest = null, nineRequest = null, naver = null) {
       collectionScope(workspaceId); requireRevision(baseRevision); photoPost().validate(input);
       const value = photoPost().compact(input);
+      if (naver && (baseRevision !== 0 || value.status !== 'draft' || value.replaces || value.archived))
+        throw fault('invalid_photo_post', '원문 사진은 새 비공개 초안으로만 담을 수 있습니다.');
       const nine = nineRequest === null ? null : clone(nineRequest);
       if (nine) {
         onlyFields(nine, ['revision', 'boardId', 'areaId'], 'invalid_photo_post'); requireRevision(nine.revision);
@@ -1151,13 +1164,24 @@
       if (evidence) requireRevision(evidence.baseRevision);
       if (value.revision !== baseRevision) throw fault('photo_post_conflict', '사진 글 저장 기준이 바뀌었습니다. 입력을 보존했습니다.');
       const effects = {};
-      const result = await transaction(['bundles', 'meta'], 'readwrite', tx => writePhotoPost(tx, workspaceId, value, baseRevision, evidence, nine, effects));
+      const result = await transaction(['bundles', 'meta'], 'readwrite', tx => writePhotoPost(tx, workspaceId, value, baseRevision, evidence, nine, effects, [], naver));
       const event = { type: 'photo_posts_changed', workspaceId }; notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) {}
       if (effects.materialRevision !== undefined) materialWritingChanged(workspaceId, effects.materialRevision);
       return result;
     }
-    async function writePhotoPost(tx, workspaceId, value, baseRevision, evidence, nine, effects = {}) {
+    async function writePhotoPost(tx, workspaceId, value, baseRevision, evidence, nine, effects = {}, retainedEvidence = [], naver = null) {
         const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        if (naver) {
+          naver.assertCurrent();
+          const { sourceId, sourceVersionId, captureHash } = naver.request;
+          if (!bundle.sourceVersions.some(version => version.id === sourceVersionId && version.sourceId === sourceId))
+            throw fault('invalid_naver_media', '선택한 원문 사진의 정확한 버전을 확인하지 못했습니다.');
+          if (!core().isSourceActive(bundle, sourceId)) throw fault('source_trashed', '휴지통의 사진으로 새 글을 만들지 않았습니다. 복원한 뒤 다시 선택해 주세요.');
+          const attachment = (await meta.get(naverCaptureKey(workspaceId, sourceVersionId)))?.value;
+          if (!attachment || attachment.sourceId !== sourceId || attachment.sourceVersionId !== sourceVersionId || attachment.capture?.capture_hash !== captureHash)
+            throw fault('invalid_naver_media', '선택한 원문 사진의 수집 정보가 바뀌었습니다. 다시 선택해 주세요.');
+          naverMedia().checkTarget(bundle, attachment); naver.assertCurrent();
+        }
         if (nine) {
           const source = await nineBoardValue(meta, workspaceId);
           if (source.revision !== nine.revision || !source.boards.find(board => board.id === nine.boardId)?.areas.some(area => area.id === nine.areaId))
@@ -1167,6 +1191,12 @@
           checkEvidenceTargets(evidence.refs, bundle);
           const priorEvidence = (await meta.get(`post-evidence:${workspaceId}:${value.id}`))?.value || { revision: 0, refs: [] };
           if (priorEvidence.revision !== evidence.baseRevision) throw fault('post_evidence_conflict', '다른 탭에서 글의 원문 근거가 바뀌었습니다. 입력은 유지합니다.');
+          let inherited = [];
+          if (value.replaces) {
+            const target = (await meta.get(`photo-post:${workspaceId}:${value.replaces.id}`))?.value;
+            if (target?.status === 'saved' && target.revision === value.replaces.revision) inherited = (await meta.get(`post-evidence:${workspaceId}:${target.id}`))?.value?.refs || [];
+          }
+          assertNewEvidenceActive(bundle, evidence.refs, [...priorEvidence.refs, ...inherited, ...retainedEvidence]);
         }
         const key = `photo-post:${workspaceId}:${value.id}`, previous = (await meta.get(key))?.value;
         if ((previous?.revision || 0) !== baseRevision || !previous && baseRevision !== 0) throw fault('photo_post_conflict', '다른 탭에서 사진 글을 수정했습니다. 입력은 남아 있습니다. 백업하거나 새 사본으로 보관해 주세요.');
@@ -1209,6 +1239,7 @@
         if (index.length > 200) throw fault('photo_post_limit', '사진 글과 초안은 합계 200개까지 보관할 수 있습니다.');
         await meta.put({ key, value }); await meta.put({ key: `photo-posts:${workspaceId}`, value: index });
         if (evidence) await meta.put({ key: `post-evidence:${workspaceId}:${value.id}`, value: { revision: evidence.baseRevision + 1, refs: clone(evidence.refs) } });
+        if (naver) naver.assertCurrent();
         return clone(value);
     }
     function checkedEvidence(refs, workspaceId) {
@@ -1229,6 +1260,13 @@
         }
       }
     }
+    function assertNewEvidenceActive(bundle, refs, previous = []) {
+      if (typeof core().isSourceActive !== 'function') return;
+      const retained = new Set(previous.map(ref => stablePayload(ref)));
+      for (const ref of refs) if (!retained.has(stablePayload(ref)) && !core().isSourceActive(bundle, ref.sourceId)) {
+        throw fault('source_trashed', '휴지통의 자료를 새 근거로 추가하지 않았습니다. 입력과 기존 인용은 유지됩니다. 복원한 뒤 다시 선택해 주세요.');
+      }
+    }
     async function readPostEvidence(workspaceId, postId) {
       collectionScope(workspaceId); requireId(postId, '글');
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
@@ -1246,6 +1284,7 @@
         checkEvidenceTargets(refs, bundle);
         const key = `post-evidence:${workspaceId}:${postId}`, previous = (await meta.get(key))?.value || { revision: 0 };
         if (previous.revision !== baseRevision) throw fault('post_evidence_conflict', '다른 탭에서 원문 근거가 바뀌었습니다.');
+        assertNewEvidenceActive(bundle, refs, previous.refs || []);
         const value = { revision: baseRevision + 1, refs }; await meta.put({ key, value }); return clone(value);
       });
     }
@@ -1254,6 +1293,18 @@
     }
     function savePhotoPostFromNineBoard(workspaceId, input, revision, boardId, areaId) {
       return savePhotoPost(workspaceId, input, 0, null, { revision, boardId, areaId });
+    }
+    async function savePhotoPostFromNaverCapture(workspaceId, input, captureRequest, requestOptions = {}) {
+      onlyFields(captureRequest, ['sourceId', 'sourceVersionId', 'captureHash'], 'invalid_naver_media');
+      const request = clone(captureRequest);
+      requireId(request.sourceId, '원문'); requireId(request.sourceVersionId, '원문 버전');
+      if (typeof request.captureHash !== 'string' || !/^[a-f0-9]{64}$/.test(request.captureHash)) throw fault('invalid_naver_media', '원문 사진의 수집 해시를 확인해 주세요.');
+      onlyFields(requestOptions, ['isCurrent'], 'invalid_request');
+      const isCurrent = requestOptions.isCurrent;
+      if (isCurrent !== undefined && typeof isCurrent !== 'function') throw fault('invalid_request', '사진 글을 만들 화면을 확인해 주세요.');
+      const assertCurrent = () => { scopeGuard(); if (isCurrent && isCurrent() === false) throw fault('request_cancelled', '화면이 바뀌어 사진 글 만들기를 중단했습니다.'); };
+      assertCurrent();
+      return savePhotoPost(workspaceId, input, 0, null, null, { request, assertCurrent });
     }
     const materialWriting = () => root.HaedoLife?.MaterialWriting || (typeof require === 'function' && require('./material-writing.js'));
     const materialOutputKey = (workspaceId, planId) => `material-writing-output:${workspaceId}:${planId}`;
@@ -1288,13 +1339,24 @@
       if (state.workspaceId !== workspaceId) throw fault('workspace_mismatch', '자료 글쓰기의 작업공간이 다릅니다.');
       if (state.revision !== baseRevision) throw fault('material_writing_conflict', '준비 저장 기준이 바뀌었습니다. 입력은 유지합니다.');
       const saved = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
-        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
         const previous = await materialWritingValue(meta, workspaceId);
         if (previous.revision !== baseRevision) throw fault('material_writing_conflict', '다른 탭에서 준비가 바뀌었습니다. 내 입력은 유지합니다.');
         for (const plan of state.plans) {
           const prior = previous.plans.find(value => value.id === plan.id), receipt = await materialReceipt(meta, workspaceId, plan.id);
           if (!prior && (receipt || plan.output !== null) || prior && stablePayload(prior.output) !== stablePayload(plan.output))
             throw fault('material_writing_conflict', '기존 글 연결을 바꾸거나 지워 새 글을 만들 수 없습니다. 새 준비 사본으로 보관해 주세요.');
+          for (const material of plan.materials) {
+            const original = prior?.materials.find(item => item.id === material.id);
+            if ((!original || original.sourceId !== material.sourceId || original.sourceVersionId !== material.sourceVersionId || original.contentHash !== material.contentHash) &&
+                typeof core().isSourceActive === 'function' && !core().isSourceActive(bundle, material.sourceId)) {
+              throw fault('source_trashed', '휴지통의 자료를 새 준비에 추가하지 않았습니다. 입력과 기존 자료는 유지됩니다.');
+            }
+          }
+          for (const block of plan.blocks) if (block.kind === 'quote') {
+            const original = prior?.blocks.find(item => item.id === block.id && item.kind === 'quote' && item.materialId === block.materialId);
+            assertNewEvidenceActive(bundle, [block.reference], original ? [original.reference] : []);
+          }
         }
         state.revision = baseRevision + 1; materialWriting().validate(state);
         await meta.put({ key: `material-writing:${workspaceId}`, value: state }); return clone(state);
@@ -1375,7 +1437,7 @@
           const before = initial.bundle.sourceVersions.find(value => value.id === ref.sourceVersionId), current = bundle.sourceVersions.find(value => value.id === ref.sourceVersionId);
           if (before.contentText !== current.contentText) throw fault('invalid_source_reference', '검토한 정확한 원문이 바뀌었습니다. 최신판으로 바꾸지 않았습니다.');
         }
-        const post = await writePhotoPost(tx, workspaceId, doc, 0, { refs, baseRevision: 0 }, null);
+        const post = await writePhotoPost(tx, workspaceId, doc, 0, { refs, baseRevision: 0 }, null, {}, refs);
         plan.output = { postId: post.id }; state.revision++; materialWriting().validate(state);
         await meta.put({ key: `material-writing:${workspaceId}`, value: state });
         await meta.put({ key: materialOutputKey(workspaceId, planId), value: clone(plan.output) });
@@ -1421,14 +1483,15 @@
     }
     function materialMapping(mapping, workspaceId) {
       if (mapping === null) return;
-      onlyFields(mapping, ['workspaceId', 'sourceIds', 'versionIds', 'planIds', 'materialIds', 'blockIds'], 'invalid_material_continuity');
+      onlyFields(mapping, ['workspaceId', 'sourceIds', 'versionIds', 'planIds', 'materialIds', 'blockIds', 'linkIds'], 'invalid_material_continuity');
       onlyFields(mapping.workspaceId, ['from', 'to'], 'invalid_material_continuity');
       requireId(mapping.workspaceId.from, '원래 작업공간');
       if (mapping.workspaceId.to !== workspaceId) throw fault('workspace_mismatch', '준비 사본의 작업공간 연결이 다릅니다.');
       const used = new Set([workspaceId]);
-      for (const name of ['sourceIds', 'versionIds', 'planIds', 'materialIds', 'blockIds']) {
-        if (!plain(mapping[name])) throw fault('invalid_material_continuity', '준비 식별자 연결을 확인해 주세요.');
-        for (const [from, to] of Object.entries(mapping[name])) {
+      for (const name of ['sourceIds', 'versionIds', 'planIds', 'materialIds', 'blockIds', 'linkIds']) {
+        const entries = name === 'linkIds' && mapping[name] === undefined ? {} : mapping[name];
+        if (!plain(entries)) throw fault('invalid_material_continuity', '준비 식별자 연결을 확인해 주세요.');
+        for (const [from, to] of Object.entries(entries)) {
           requireId(from, '원래 항목'); requireId(to, '사본 항목');
           if (used.has(to)) throw fault('invalid_material_continuity', '준비 식별자 연결이 중복됐습니다.'); used.add(to);
         }
@@ -1524,7 +1587,7 @@
     function materialSnapshotData(bundle, plan, state, override) {
       const model = materialContinuity(), data = model.snapshot(bundle, plan, mapMaterialOutput(override === undefined ? state?.output || null : override, state?.mapping));
       if (!state?.mapping) return data;
-      const inverse = new Map(); for (const name of ['sourceIds', 'versionIds', 'planIds', 'materialIds', 'blockIds']) for (const [from, to] of Object.entries(state.mapping[name])) inverse.set(to, from);
+      const inverse = new Map(); for (const name of ['sourceIds', 'versionIds', 'planIds', 'materialIds', 'blockIds', 'linkIds']) for (const [from, to] of Object.entries(state.mapping[name] || {})) inverse.set(to, from);
       return model.remap(data, state.mapping.workspaceId.from, id => inverse.get(id) || id).data;
     }
     async function materialSnapshot(tx, workspaceId, planId, override) {
@@ -1569,7 +1632,7 @@
     }
     function materialCanonicalPayload(data) {
       const value = clone(data);
-      for (const name of ['sources', 'sourceVersions']) value.bundle[name].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+      for (const name of ['sources', 'sourceVersions', 'links']) value.bundle[name].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
       return stablePayload(value);
     }
     function freshMaterialState(remoteId, row, mapping) {
@@ -1578,9 +1641,9 @@
     }
     function materialRemapped(data, workspaceId, previous, keepIds = false) {
       const all = new Map();
-      if (previous) for (const name of ['sourceIds', 'versionIds', 'planIds', 'materialIds', 'blockIds']) for (const [from, to] of Object.entries(previous[name])) all.set(from, to);
+      if (previous) for (const name of ['sourceIds', 'versionIds', 'planIds', 'materialIds', 'blockIds', 'linkIds']) for (const [from, to] of Object.entries(previous[name] || {})) all.set(from, to);
       const mapped = materialContinuity().remap(data, workspaceId, id => all.get(id) || (keepIds ? id : core().id()));
-      if (previous) for (const name of ['sourceIds', 'versionIds', 'planIds', 'materialIds', 'blockIds']) mapped.mapping[name] = { ...previous[name], ...mapped.mapping[name] };
+      if (previous) for (const name of ['sourceIds', 'versionIds', 'planIds', 'materialIds', 'blockIds', 'linkIds']) mapped.mapping[name] = { ...previous[name], ...mapped.mapping[name] };
       return mapped;
     }
     function materialLocalPost(input) {
@@ -1609,7 +1672,7 @@
       }
       if (oldPost && !preserveLocal && (!oldBinding || oldBinding.localRevision !== oldPost.revision || oldBinding.pending || oldBinding.conflict)) throw fault('local_changed', '이 기기의 글을 수정 중입니다. 양쪽 글을 보존할 방법을 먼저 선택해 주세요.');
       if (!original) throw fault('material_output_pending', '완성 글의 정확한 원본을 먼저 받아 주세요.');
-      const doc = materialLocalPost(original), saved = await writePhotoPost(tx, workspaceId, doc, 0, { refs: mapped.data.output.refs, baseRevision: 0 }, null);
+      const doc = materialLocalPost(original), saved = await writePhotoPost(tx, workspaceId, doc, 0, { refs: mapped.data.output.refs, baseRevision: 0 }, null, {}, mapped.data.output.refs);
       const blog = root.HaedoLife?.Blog || require('./blog.js');
       const state = materialBlogState(output.postId, blogRow?.workspace_id || remoteWorkspaceId, output.revision, blog.pack(original), saved.revision);
       state.publication = clone(blogRow?.publication || null);
@@ -1619,12 +1682,12 @@
     async function materialNewWorkspace(tx, data, post, boundRow = null, blogRow = null, privateRecovery = false) {
       const bundle = core().createWorkspace({ title: data.plan.title || '받은 글 준비' }), workspaceId = bundle.workspaceId;
       const mapped = materialRemapped(data, workspaceId, null), plan = mapped.data.plan;
-      bundle.sources = mapped.data.bundle.sources; bundle.sourceVersions = mapped.data.bundle.sourceVersions; core().validateWorkspace(bundle);
+      bundle.sources = mapped.data.bundle.sources; bundle.sourceVersions = mapped.data.bundle.sourceVersions; bundle.links = mapped.data.bundle.links; core().validateWorkspace(bundle);
       const bundles = tx.objectStore('bundles'), meta = tx.objectStore('meta');
       if (await bundles.get(workspaceId)) throw fault('workspace_exists', '새 준비 공간이 이미 있습니다. 다시 시도해 주세요.');
       await bundles.add(bundle); await saveOwner(meta, workspaceId);
       if (privateRecovery && post) {
-        const saved = await writePhotoPost(tx, workspaceId, materialLocalPost(post), 0, { refs: mapped.data.output.refs, baseRevision: 0 }, null);
+        const saved = await writePhotoPost(tx, workspaceId, materialLocalPost(post), 0, { refs: mapped.data.output.refs, baseRevision: 0 }, null, {}, mapped.data.output.refs);
         plan.output = { postId: saved.id };
       } else plan.output = await installMaterialPost(tx, workspaceId, mapped, post, data.bundle.workspaceId, null, false, blogRow);
       const wrapper = { ...materialWriting().empty(workspaceId), revision: 1, plans: [plan] }; materialWriting().validate(wrapper);
@@ -1711,10 +1774,10 @@
             await meta.delete(materialOutputKey(target.workspaceId, target.planId)); await meta.put({ key: `material-writing:${target.workspaceId}`, value: wrapper });
           }
           const mapped = materialRemapped(row.data, target.workspaceId, state.mapping, state.mapping === null); let appended = false;
-          immutableVersions(bundle, mapped.data.bundle);
+          immutableVersions(bundle, mapped.data.bundle, { partial: true });
           // The chosen local plan and source metadata stay authoritative, while
           // the winning output's exact evidence dependencies become available.
-          for (const name of ['sources', 'sourceVersions']) for (const item of mapped.data.bundle[name]) if (!bundle[name].some(value => value.id === item.id)) { bundle[name].push(item); appended = true; }
+          for (const name of ['sources', 'sourceVersions', 'links']) for (const item of mapped.data.bundle[name]) if (!bundle[name].some(value => value.id === item.id)) { bundle[name].push(item); appended = true; }
           if (appended) { bundle.revision++; bundle.updatedAt = new Date().toISOString(); core().validateWorkspace(bundle); await tx.objectStore('bundles').put(bundle); }
           state.revision++; state.remoteRevision = row.revision; state.head = clone(row); state.output = clone(row.data.output); state.pending = null; state.conflict = null; state.error = null;
           state.mapping = mapped.mapping;
@@ -1727,8 +1790,8 @@
         }
         const mapped = materialRemapped(row.data, target.workspaceId, state.mapping, state.mapping === null), bundle = clone(await checkedBundle(tx.objectStore('bundles'), target.workspaceId, meta));
         if (mapped.data.plan.id !== target.planId) throw fault('invalid_material_continuity', '서버 준비의 고정 식별자가 바뀌었습니다.');
-        immutableVersions(bundle, mapped.data.bundle);
-        for (const name of ['sources', 'sourceVersions']) for (const item of mapped.data.bundle[name]) {
+        immutableVersions(bundle, mapped.data.bundle, { partial: true });
+        for (const name of ['sources', 'sourceVersions', 'links']) for (const item of mapped.data.bundle[name]) {
           const at = bundle[name].findIndex(existing => existing.id === item.id); if (at < 0) bundle[name].push(item); else bundle[name][at] = item;
         }
         bundle.revision++; bundle.updatedAt = new Date().toISOString(); core().validateWorkspace(bundle); await tx.objectStore('bundles').put(bundle);
@@ -1948,6 +2011,7 @@
       return stablePayload({ workspaceId: snapshot.bundle.workspaceId,
         sources: snapshot.bundle.sources.filter(row => sourceIds.has(row.id)),
         sourceVersions: snapshot.bundle.sourceVersions.filter(row => versionIds.has(row.id)),
+        ...(typeof core().editedCopyMarkers === 'function' ? { editedCopyMarkers: core().editedCopyMarkers(snapshot.bundle, [...versionIds]) } : {}),
         posts: snapshot.posts.map(({ doc, evidence }) => ({ doc: { ...doc, photos: doc.photos.map(({ blob, ...metadata }) => metadata) }, evidence })),
         boards: snapshot.nineBoard.boards });
     }
@@ -2362,6 +2426,33 @@
       changed(bundle.workspaceId, bundle.revision); return installed;
     }
     async function commitLocal(request, options) { return commitLocalVerified(request, options); }
+    function assertWritableSourceChanges(bundle, changes) {
+      if (typeof core().isSourceActive !== 'function') return;
+      const versions = new Map((bundle.sourceVersions || []).map(version => [version.id, version]));
+      for (const version of changes.put?.sourceVersions || []) {
+        const exists = bundle.sources?.some(source => source.id === version.sourceId);
+        if (exists && !versions.has(version.id) && !core().isSourceActive(bundle, version.sourceId)) {
+          throw fault('source_in_trash', '휴지통의 자료에는 새 원문을 저장하지 않았습니다. 입력을 보존하고 자료를 복원한 뒤 다시 저장해 주세요.');
+        }
+      }
+      for (const source of changes.put?.sources || []) {
+        const previous = bundle.sources?.find(value => value.id === source.id);
+        if (previous && stablePayload(previous) !== stablePayload(source) && !core().isSourceActive(bundle, source.id)) {
+          throw fault('source_in_trash', '휴지통의 자료는 수정하지 않았습니다. 입력을 보존하고 자료를 먼저 복원해 주세요.');
+        }
+      }
+    }
+    async function preparedStageHashes(changes, stageId) {
+      const hashes = new Map();
+      if (stageId === undefined || !Array.isArray(changes.put?.sourceVersions)) return hashes;
+      const crypto = root.crypto?.subtle ? root.crypto : typeof require === 'function' ? require('node:crypto').webcrypto : null;
+      if (!crypto?.subtle) throw fault('crypto_unavailable', '원문 해시를 확인할 수 없어 저장하지 않았습니다. 입력은 보존했습니다.');
+      for (const version of changes.put.sourceVersions) if (typeof version?.contentText === 'string') {
+        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(version.contentText));
+        hashes.set(version.id, Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join(''));
+      }
+      return hashes;
+    }
     async function commitLocalVerified(request, { isCurrent = () => true } = {}, naverAttachment = null) {
       let operationId = request?.operationId;
       try {
@@ -2388,6 +2479,9 @@
           ...(registration ? { accountMaterialRegistration: registration } : {}),
           ...(naverAttachment ? { naverAttachment: { sourceId: naverAttachment.sourceId, sourceVersionId: naverAttachment.sourceVersionId,
             capture: naverAttachment.capture, localOnly: false } } : {}) });
+        // Hash outside IDB: the cloned request is fixed, and the exact stage/base is
+        // checked again in the transaction after this asynchronous work completes.
+        const hashes = await preparedStageHashes(changes, stageId);
         let wrote = false, updatedSync = null, updatedWriting = null, appliedWriting = null;
         const result = await transaction(['bundles', 'operations', 'staging', 'meta'], 'readwrite', async tx => {
           await assertOwner(tx.objectStore('meta'), workspaceId);
@@ -2424,8 +2518,16 @@
               return { status: 'conflict', currentRevision: bundle.revision, operationId, error: { code: 'stage_conflict', message: '가져오기 검토 내용이 바뀌었습니다. 다시 확인하세요.' } };
             }
             validateStage(stage);
+            if (stage.kind === 'source-edit') {
+              if (stageResult === undefined) throw fault('invalid_stage_result', '수정한 자료의 정확한 저장 결과가 필요합니다.');
+              sourceEdit().checkPrepared(bundle, stage, changes, stageResult);
+              for (const version of changes.put?.sourceVersions || []) if (typeof version.contentText === 'string' && hashes.get(version.id) !== version.contentHash) {
+                throw fault('hash_mismatch', '수정한 본문과 원문 해시가 일치하지 않아 저장하지 않았습니다. 입력은 보존했습니다.');
+              }
+            }
           }
           if (!isCurrent()) throw fault('request_cancelled', '화면이나 작업공간이 바뀌어 저장을 중지했습니다.');
+          assertWritableSourceChanges(bundle, changes);
           const updated = core().applyChanges(bundle, changes);
           core().validateWorkspace(updated);
           if (updated.workspaceId !== workspaceId || updated.revision !== bundle.revision + 1) {
@@ -2455,6 +2557,7 @@
           if (stage) {
             const applied = { ...stage, state: 'applied', revision: stage.revision + 1,
               updatedAt: new Date().toISOString(), ...(stageResult !== undefined ? { appliedResult: clone(stageResult) } : {}) };
+            if (stage.kind === 'source-edit') validateStage(applied);
             if (stage.kind === 'writing') {
               const writingSync = await readWritingState(tx.objectStore('meta'), workspaceId, stage.stageId, stage);
               if (writingSync) {
@@ -3327,8 +3430,14 @@
         throw fault('invalid_stage_result', '보관 결과가 이 작업공간의 원문과 일치하지 않습니다. 입력은 유지됩니다.');
       }
     }
+    const sourceEdit = () => {
+      const value = options.sourceEdit || root.HaedoLife?.SourceEdit || (typeof require === 'function' && require('./source-edit.js'));
+      if (!value?.validate || !value?.checkPrepared) throw fault('dependency_unavailable', '자료 수정 모듈을 불러오지 못했습니다.');
+      return value;
+    };
     function validateStage(stage) {
       if (!plain(stage)) throw fault('invalid_stage', '가져오기 초안을 확인하세요.');
+      if (stage.kind === 'source-edit') sourceEdit().validate(stage);
       if (stage.kind === 'writing') {
         const writing = options.writing || root.HaedoLife?.Writing ||
           (typeof require === 'function' ? require('./writing.js') : null);
@@ -3357,7 +3466,7 @@
         if (previous ? previous.workspaceId !== stage.workspaceId || previous.revision !== stage.revision || previous.state !== 'draft' : stage.revision !== 0) {
           throw fault('stage_conflict', '다른 탭에서 가져오기 초안을 바꿨습니다. 이전 입력을 보존하고 다시 확인하세요.');
         }
-        if (previous && (previous.kind === 'writing') !== (stage.kind === 'writing')) {
+        if (previous && previous.kind !== stage.kind) {
           throw fault('stage_conflict', '기존 초안의 종류를 바꿀 수 없습니다. 입력은 보존했습니다.');
         }
         const now = new Date().toISOString();
@@ -3454,6 +3563,23 @@
             result.baseChanged = true;
           }
         }
+        if (stage.kind === 'source-edit') {
+          const sourceRow = source.bundle.sources.find(item => item.id === stage.baseSourceId);
+          const baseVersion = source.bundle.sourceVersions.find(item => item.id === stage.baseSourceVersionId && item.sourceId === stage.baseSourceId);
+          const head = source.bundle.sourceVersions.findLast(item => item.sourceId === stage.baseSourceId);
+          if (!sourceRow || !baseVersion || !head || stage.restoreVersionId !== null && !versionIds.has(stage.restoreVersionId)) {
+            throw fault('invalid_stage', '수정 초안의 원문을 확인할 수 없습니다. 이전 자료와 입력은 보존했습니다.');
+          }
+          result.baseSourceId = sourceIds.get(stage.baseSourceId);
+          result.baseSourceVersionId = versionIds.get(stage.baseSourceVersionId);
+          result.baseSourceRevision = copy.sources.find(item => item.id === result.baseSourceId).revision;
+          result.restoreVersionId = stage.restoreVersionId === null ? null : versionIds.get(stage.restoreVersionId);
+          result.lifecycleRevision = core().sourceState(copy, result.baseSourceId).revision;
+          if (stage.baseChanged || sourceRow.revision !== stage.baseSourceRevision || head.id !== stage.baseSourceVersionId ||
+              baseVersion.contentHash !== stage.baseHash || core().sourceState(source.bundle, stage.baseSourceId).revision !== stage.lifecycleRevision) {
+            result.baseChanged = true;
+          }
+        }
         if (stage.appliedResult !== undefined) {
           validateStageResult(stage.appliedResult, source.bundle);
           result.appliedResult = { sourceId: sourceIds.get(stage.appliedResult.sourceId), sourceVersionId: versionIds.get(stage.appliedResult.sourceVersionId) };
@@ -3503,7 +3629,7 @@
       readDiscoveryLanguageSettings, saveDiscoveryLanguageSettings,
       readDiscoveryActions, saveDiscoveryActions,
       readDiscoveryReading, saveDiscoveryReading,
-      readCollection, saveCollection, readNineBoard, saveNineBoard, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
 
       scanLocalPosts, readLocalPostCandidate,
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, finishMaterialContinuityClaim,

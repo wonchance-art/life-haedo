@@ -10,16 +10,18 @@ class LocalSQLMaterialCloud extends LocalSQLBlogCloud {
   async prepare(migration) {
     assert.match(migration, /^supabase\/migrations\/\d{14}_life_material_[a-z_]+\.sql$/);
     this.docker(['exec', '-i', this.container, 'createdb', '-U', 'postgres', this.database]);
-    const files = await Promise.all(['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql', migration].map(name => fs.readFile(path.resolve(__dirname, '..', name), 'utf8')));
+    const files = await Promise.all(['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql', migration,
+      'supabase/migrations/20261022031304_life_material_edited_copy_markers.sql'].map(name => fs.readFile(path.resolve(__dirname, '..', name), 'utf8')));
     this.docker(['exec', '-i', this.container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', this.database], files.join('\n'));
     this.installedMigrationSha256=digest(Buffer.from(files[2]));
+    this.installedMarkerMigrationSha256=digest(Buffer.from(files[3]));
   }
   async initialize() {
     await super.initialize();
     const rows = this.sql(`select coalesce(jsonb_agg(jsonb_build_object('name',p.proname,'args',
       (select coalesce(jsonb_agg(jsonb_build_object('name',p.proargnames[i],'type',format_type(p.proargtypes[i-1],null)) order by i),'[]') from generate_subscripts(p.proargnames,1) i))),'[]')
-      from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('life_material_get','life_material_list','life_material_put');`);
-    assert.equal(rows.length, 3, 'Install the actual material migration before integration verification');
+      from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('life_material_get','life_material_list','life_material_put','life_material_capabilities');`);
+    assert.equal(rows.length, 4, 'Install the actual material and edited-marker migrations before integration verification');
     for (const row of rows) { assert(!this.functions.has(row.name)); this.functions.set(row.name, row.args); }
   }
   typed(value, type) {
@@ -34,7 +36,7 @@ class LocalSQLMaterialCloud extends LocalSQLBlogCloud {
   }
   rpc(owner, name, input, role = owner ? 'authenticated' : 'anon') {
     if (name.startsWith('life_blog_')) return super.rpc(owner, name, input, role);
-    assert(['life_material_get', 'life_material_list', 'life_material_put'].includes(name));
+    assert(['life_material_get', 'life_material_list', 'life_material_put', 'life_material_capabilities'].includes(name));
     const signature = this.functions.get(name); assert(signature); const names = new Map(signature.map(arg => [arg.name, arg.type]));
     const args = Object.entries(input).map(([key, value]) => { assert.match(key, /^p_[a-z0-9_]+$/); assert(names.has(key), 'Client/SQL argument mismatch: ' + name + '.' + key); return key + ' => ' + this.typed(value, names.get(key)); });
     return this.sql('select to_jsonb(public.' + name + '(' + args.join(',') + '));', { owner, role });

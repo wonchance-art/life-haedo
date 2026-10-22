@@ -111,7 +111,9 @@
         parts: entry.parts.filter(part => part.enabled).map(part => {
           const version = versionMap.get(part.versionId), source = version && sourceMap.get(version.sourceId);
           if (!version || !source) fail('missing_reference', '표시할 항목에 연결된 원문이 없습니다. 내 페이지에서 확인해 주세요.');
-          const meta = { title: source.title, origin: source.origin, url: safeURL(source.url || null),
+          const title = core.isEditedCopy(bundle, version.id) ? '해도에서 수정한 사본 · ' + source.title : source.title;
+          if (title.length > LIMITS.title) fail('invalid_snapshot', '수정한 사본 표시를 포함한 공개 제목은 500자까지입니다. 자료 제목을 줄인 뒤 다시 시도해 주세요.');
+          const meta = { title, origin: source.origin, url: safeURL(source.url || null),
             author: { label: version.originalAuthor.label, relation: version.originalAuthor.relation },
             originalCreatedAt: version.originalCreatedAt,
             coverage: { status: version.coverage.status, omissions: version.coverage.omissions.slice() } };

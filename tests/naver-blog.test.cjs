@@ -153,3 +153,18 @@ test('thousands of unrelated source rows do not affect selected exact identity o
   assert.equal(row.status, 'imported'); assert.equal(row.sourceVersionId, version.id);
   assert.deepEqual(bundle, before);
 });
+
+test('trashed Naver identity remains the same and becomes eligible only after explicit restore', async () => {
+  const imported = await add(Core.createWorkspace(), Naver.toImportInput(item()));
+  const original = copy(imported.bundle), sourceId = original.sources[0].id;
+  const trashed = Core.applyChanges(original, Core.buildSourceStateChanges(original, sourceId, 'trash'));
+  const before = copy(trashed), row = Naver.project([item()], trashed)[0];
+  assert.equal(row.status, 'trashed');
+  assert.equal(row.sourceId, sourceId);
+  assert.equal(row.sourceVersionId, original.sourceVersions[0].id);
+  assert.deepEqual(trashed, before);
+  const restored = Core.applyChanges(trashed, Core.buildSourceStateChanges(trashed, sourceId, 'active'));
+  assert.equal(Naver.project([item()], restored)[0].status, 'needs_content');
+  assert.deepEqual(restored.sources, original.sources);
+  assert.deepEqual(restored.sourceVersions, original.sourceVersions);
+});

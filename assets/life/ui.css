@@ -474,3 +474,29 @@ div.life-source-text { font-size:18px;line-height:1.95;letter-spacing:-.01em; }
 @media (max-width: 760px) {
   body.haedo-shell[data-haedo-section=manage] .life-toolbar.haedo-page-heading { padding-right: 70px; }
 }
+
+
+/* Material editing and lifecycle actions remain outside the reading body. */
+.life-source-content,.life-source-edit,.life-source-edit-preview { min-width:0; }
+.life-source-edit { max-width:680px; margin-inline:auto; }
+.life-source-edit-actions { position:sticky; top:0; z-index:10; display:flex; align-items:center; gap:8px; padding:12px 0; margin-bottom:16px; border-bottom:1px solid var(--line); background:var(--paper); }
+.life-source-edit-actions > [role=status] { flex:1; min-width:0; margin:0; font-size:14px; }
+.life-source-edit-actions > .life-primary { flex:none; }
+.life-source-edit-controls { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+.life-source-edit-controls > label { flex:1; max-width:12rem; min-width:0; margin:0; }
+.life-source-edit-controls select { width:100%; min-height:44px; font-size:16px; }
+.life-source-edit-controls > button { margin-left:auto; }
+.life-source-edit .life-writing-field { display:block; margin:0; }
+.life-source-edit .life-writing-title { font-size:30px; line-height:1.5; letter-spacing:-.035em; border-bottom:0; }
+.life-source-edit .life-writing-body { min-height:45dvh; max-height:none; overflow:hidden; resize:none; }
+.life-source-edit-preview > .life-heading { margin-block:20px 28px; font-size:30px; line-height:1.5; }
+.life-source-edit-error { margin-block:12px 20px; color:var(--danger,var(--ink)); }
+.life-source-edit-error p { margin-bottom:8px; }
+.life-source-trash-confirm { padding-block:16px; margin-top:16px; border-top:1px solid var(--line); }
+.life-source-trash-confirm > button + button { margin-left:8px; }
+#lifeSourceTrashList > article { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:16px; }
+#lifeSourceTrashList .life-source-open { min-width:0; overflow-wrap:anywhere; }
+@media(max-width:760px) {
+ .life-source-edit .life-writing-title,.life-source-edit-preview > .life-heading { font-size:26px; }
+ .life-source-edit .life-writing-body { font-size:17px; }
+}

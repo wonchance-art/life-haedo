@@ -1,0 +1,178 @@
+{
+  "name": "markdown-it",
+  "version": "15.0.3",
+  "source": "Official npm registry tarball; no code rebuilt",
+  "archiveURL": "https://registry.npmjs.org/markdown-it/-/markdown-it-15.0.3.tgz",
+  "originalRuntimePath": "package/dist/browser/markdown-it.umd.min.js",
+  "confirmedAt": "2026-10-22T03:16:12.959134+00:00",
+  "currentOfficialPointers": {
+    "markdownItTag": {
+      "url": "https://api.github.com/repos/markdown-it/markdown-it/git/ref/tags/15.0.3",
+      "version": "refs/tags/15.0.3",
+      "commit": "a8c00d474ec9b304fad9b71c16d6fa8b4909279e",
+      "publishedAt": null
+    },
+    "markdownItRegistry": {
+      "url": "https://registry.npmjs.org/markdown-it/latest",
+      "version": "15.0.3",
+      "commit": "a8c00d474ec9b304fad9b71c16d6fa8b4909279e",
+      "publishedAt": null
+    },
+    "DOMPurifyRelease": {
+      "url": "https://api.github.com/repos/cure53/DOMPurify/releases/latest",
+      "version": "3.4.17",
+      "commit": null,
+      "publishedAt": "2026-10-12T12:37:20Z"
+    }
+  },
+  "packages": [
+    {
+      "name": "argparse",
+      "version": "3.0.3",
+      "license": "PSF-2.0",
+      "archiveSHA256": "7c398a6be5639c834c63e9f33e310ec592adbe9dc0d88dce4df3fca50a117051",
+      "archiveIntegrity": "sha512-Sn98ftV3KfsO8xfLPHG6oT8y+b0yvbrLgZjgPDXsharNY15tTAjqIsIju4S32nl6/iEUNNE4v+yL2Zhm8ooP3w==",
+      "licenseFiles": [
+        "package/LICENSE"
+      ],
+      "runtimeFiles": [],
+      "advisoryURL": "https://api.github.com/advisories?ecosystem=npm&affects=argparse%403.0.3&per_page=100",
+      "advisoryCount": 0,
+      "advisories": []
+    },
+    {
+      "name": "entities",
+      "version": "8.1.0",
+      "license": "BSD-2-Clause",
+      "archiveSHA256": "e9a27d66db0d0a6f2d76454219d94f5729ae2a29f08ab06c92e5f6eaa37cbe68",
+      "archiveIntegrity": "sha512-kxL7msIffSuh9aaFAMD7rxAIuTRMAHMeBtgHW2yUdWw732ZNh4MehkF2gdjvtdmikkaIP9bFDDJOPlsvm7avrA==",
+      "licenseFiles": [
+        "package/LICENSE"
+      ],
+      "runtimeFiles": [],
+      "advisoryURL": "https://api.github.com/advisories?ecosystem=npm&affects=entities%408.1.0&per_page=100",
+      "advisoryCount": 0,
+      "advisories": []
+    },
+    {
+      "name": "linkify-it",
+      "version": "6.1.0",
+      "license": "MIT",
+      "archiveSHA256": "780a9e8232ea7e4c9f04348e2e2a567485c34abed805a15cfff8fff2029076b8",
+      "archiveIntegrity": "sha512-wJ/TwpSDTLepCrQoYWYIExIKg5Zchex2Nn5yk2mFnB+6PtdkHtyLx742md9csRjjOnGkKIS/RrbY7l8D6gT9Vw==",
+      "licenseFiles": [
+        "package/LICENSE"
+      ],
+      "runtimeFiles": [],
+      "advisoryURL": "https://api.github.com/advisories?ecosystem=npm&affects=linkify-it%406.1.0&per_page=100",
+      "advisoryCount": 0,
+      "advisories": []
+    },
+    {
+      "name": "markdown-it",
+      "version": "15.0.3",
+      "license": "MIT",
+      "archiveSHA256": "98a7453983ab0e268c17dbd5260bf7190ba46b4cca912327fc1c1a2578e4b56d",
+      "archiveIntegrity": "sha512-+Az7Ojz3iRGu8KYMvJ6xVhvrxP3eE+vEtJX75Ow88XBpcQNV/0lGX5ZynIIBftREo4DC2jsveAMDaeltmm8QvQ==",
+      "licenseFiles": [
+        "package/LICENSE"
+      ],
+      "runtimeFiles": [
+        "vendor/markdown-it/markdown-it.umd.min.js"
+      ],
+      "advisoryURL": "https://api.github.com/advisories?ecosystem=npm&affects=markdown-it%4015.0.3&per_page=100",
+      "advisoryCount": 0,
+      "advisories": []
+    },
+    {
+      "name": "mdurl",
+      "version": "2.1.0",
+      "license": "MIT",
+      "archiveSHA256": "23fc27c3d70e776c3aa40ec019c2be21ef43ed33b73f8476ada8715c5aabd11d",
+      "archiveIntegrity": "sha512-1+HBaOx0zi/dQWht8rNv9MYf9qqpqL/kxI0hXImU6Y547zM6Sni8BQibt7ifgMcYtQg41ao3Ivd6cnSM86inpg==",
+      "licenseFiles": [
+        "package/LICENSE"
+      ],
+      "runtimeFiles": [],
+      "advisoryURL": "https://api.github.com/advisories?ecosystem=npm&affects=mdurl%402.1.0&per_page=100",
+      "advisoryCount": 0,
+      "advisories": []
+    },
+    {
+      "name": "punycode.js",
+      "version": "2.3.1",
+      "license": "MIT",
+      "archiveSHA256": "8768d89aa6359164220014ba575e1464e3ddff11bedff1cc268e39a21f7324a8",
+      "archiveIntegrity": "sha512-uxFIHU0YlHYhDQtV4R9J6a52SLx28BCjT+4ieh7IGbgwVJWO+km431c4yRlREUAsAmt/uMjQUyQHNEPf0M39CA==",
+      "licenseFiles": [
+        "package/LICENSE-MIT.txt"
+      ],
+      "runtimeFiles": [],
+      "advisoryURL": "https://api.github.com/advisories?ecosystem=npm&affects=punycode.js%402.3.1&per_page=100",
+      "advisoryCount": 0,
+      "advisories": []
+    },
+    {
+      "name": "uc.micro",
+      "version": "3.0.0",
+      "license": "MIT",
+      "archiveSHA256": "23a2704905d2f7a773f89c97be1102a4a2eb3a69b58c0e8c326a649c75552981",
+      "archiveIntegrity": "sha512-U3PppEkleoTnIfi8BozMx3yju3qc/L6SwqWo2Sw+54PX+PX0q9I+r1Um5HCmqD7n9VDX5/v3vQH/AjA6deDdtw==",
+      "licenseFiles": [
+        "package/LICENSE.txt"
+      ],
+      "runtimeFiles": [],
+      "advisoryURL": "https://api.github.com/advisories?ecosystem=npm&affects=uc.micro%403.0.0&per_page=100",
+      "advisoryCount": 0,
+      "advisories": []
+    }
+  ],
+  "scope": "Exact official browser bundle bytes and licenses preserved. Markdown-it dependency versions checked against pinned upstream package-lock; argparse is package CLI-only and its notice is conservatively retained. Exact-version GitHub advisory queries have no returned records; this is not a full security guarantee.",
+  "files": [
+    {
+      "path": "LICENSE",
+      "bytes": 1073,
+      "sha256": "792c48c5a849a15fdf9e37e8bcf9e6d1dd13b32b46c642a748a0a46a9919d473"
+    },
+    {
+      "path": "README.md",
+      "bytes": 504,
+      "sha256": "8f37153c12f10bb8fdb38e739b675afed05e8100aa724ad57b560a8e5df3959a"
+    },
+    {
+      "path": "licenses/argparse-LICENSE",
+      "bytes": 2427,
+      "sha256": "ab745c5061d1dea43a3885e5b4b6befc7e983954954775c5736debeefcdfd89b"
+    },
+    {
+      "path": "licenses/entities-LICENSE",
+      "bytes": 1260,
+      "sha256": "cb992345949ccd6e8394b2cd6c465f7b897c864f845937dbf64e8997f389e164"
+    },
+    {
+      "path": "licenses/linkify-it-LICENSE",
+      "bytes": 1058,
+      "sha256": "95e3f7f0e81e9b4940cdfaa1956aaff5e4dfd2fb1565041e7c78eb9a606f23e3"
+    },
+    {
+      "path": "licenses/mdurl-LICENSE",
+      "bytes": 2303,
+      "sha256": "6b6a356c4337e2446841f30f3cdf7e7023af8c5260b5e347c0f987b9f6aa2644"
+    },
+    {
+      "path": "licenses/punycode.js-LICENSE-MIT.txt",
+      "bytes": 1077,
+      "sha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a"
+    },
+    {
+      "path": "licenses/uc.micro-LICENSE.txt",
+      "bytes": 1077,
+      "sha256": "483acb265f182907d1caf6cff9c16c96f31325ed23792832cc5d8b12d5f88c8a"
+    },
+    {
+      "path": "markdown-it.umd.min.js",
+      "bytes": 100786,
+      "sha256": "391f2aa638e75e6c7859d0a5c5650ef0956722a45998f17e05b83bc655778e1e"
+    }
+  ]
+}

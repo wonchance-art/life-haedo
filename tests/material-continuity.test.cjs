@@ -121,3 +121,29 @@ test('existing plan limits and 16MiB UTF8 envelope reject excess without truncat
   assert.throws(() => V.snapshot(bundle, plan), /16 MiB/); assert.equal(bundle.sourceVersions.length, 16); assert.equal(plan.materials.length, 16);
   const p = V.snapshot(f.bundle, f.plan, f.output); p.output.refs = Array.from({ length: 65 }, () => structuredClone(f.savedRef)); assert.throws(() => V.validate(p), /근거/);
 });
+test('edited selected versions carry only immutable markers, omit their base body, and remap marker identities', async () => {
+  const f = await fixture(), mark = versionId => ({ id: C.id(), kind: 'source_edited_copy',
+    entityRefs: [{ entityType: 'sourceVersion', entityId: versionId }], revision: 1, createdAt: now, updatedAt: now });
+  const edited = mark(f.newer.version.id), unrelated = mark(f.unused.version.id);
+  f.bundle.links.push(edited, unrelated, { ...mark(f.newer.version.id), kind: 'source_edit_base',
+    entityRefs: [{ entityType: 'sourceVersion', entityId: f.first.version.id }, { entityType: 'sourceVersion', entityId: f.newer.version.id }] });
+  const plan = M.create(C.id, now); plan.materials = [M.material(f.bundle, f.first.source.id, f.newer.version.id, C.id)];
+  const payload = await V.verify(V.snapshot(f.bundle, plan));
+  assert.deepEqual(payload.bundle.links, [edited]);
+  assert.deepEqual(payload.bundle.sourceVersions.map(v => v.id), [f.newer.version.id]);
+  assert(!JSON.stringify(payload).includes(f.first.version.contentText));
+  assert(!JSON.stringify(payload).includes('source_edit_base')); assert(!JSON.stringify(payload).includes(unrelated.id));
+  const mapped = V.remap(payload, C.id());
+  assert.notEqual(mapped.data.bundle.links[0].id, edited.id);
+  assert.equal(mapped.mapping.linkIds[edited.id], mapped.data.bundle.links[0].id);
+  assert.equal(mapped.data.bundle.links[0].entityRefs[0].entityId, mapped.mapping.versionIds[f.newer.version.id]);
+  assert.equal(C.isEditedCopy(mapped.data.bundle, mapped.data.bundle.sourceVersions[0].id), true);
+  const inverse = new Map(); for (const key of ['sourceIds', 'versionIds', 'linkIds', 'planIds', 'materialIds', 'blockIds']) for (const [a, b] of Object.entries(mapped.mapping[key])) inverse.set(b, a);
+  assert.deepEqual(V.remap(mapped.data, payload.bundle.workspaceId, old => inverse.get(old)).data, payload);
+  const polluted = structuredClone(payload); polluted.bundle.links.push({ id: C.id(), kind: 'private_link', entityRefs: [{ entityType: 'sourceVersion', entityId: f.newer.version.id }] });
+  assert.throws(() => V.validate(polluted), /표식/);
+  const two = structuredClone(payload), extra = structuredClone(f.unquoted.version), source = structuredClone(f.unquoted.source);
+  two.bundle.sources.push(source); two.bundle.sourceVersions.push(extra); two.plan.materials.push(M.material(f.bundle, source.id, extra.id, C.id));
+  two.bundle.links.push(mark(extra.id)); const expected = await V.fingerprint(two); two.bundle.links.reverse();
+  assert.equal(await V.fingerprint(two), expected);
+});

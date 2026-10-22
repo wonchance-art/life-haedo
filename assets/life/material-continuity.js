@@ -66,7 +66,9 @@
     dependency('Core').validateWorkspace(bundle);
     dependency('MaterialWriting').validate({ ...dependency('MaterialWriting').empty(bundle.workspaceId), plans: [plan] });
     if (plan.output !== null) fail('이 기기의 글 연결은 준비 전송에 넣을 수 없습니다.');
-    if (['records', 'links', 'resumeHints', 'tombstones'].some(key => bundle[key].length)) fail('선택한 준비와 관계없는 기록은 전송하지 않습니다.');
+    if (['records', 'resumeHints', 'tombstones'].some(key => bundle[key].length)) fail('선택한 준비와 관계없는 기록은 전송하지 않습니다.');
+    const markers = dependency('Core').editedCopyMarkers(bundle, bundle.sourceVersions.map(version => version.id));
+    if (bundle.links.length !== markers.length) fail('선택한 수정 사본 표식만 원문과 함께 전송할 수 있습니다.');
     const closure = needed(plan, output);
     if (bundle.sources.length !== closure.sources.size || bundle.sourceVersions.length !== closure.versions.size || bundle.sources.some(source => !closure.sources.has(source.id))) fail('선택한 준비에 필요한 정확한 원문만 포함해 주세요.');
     for (const version of bundle.sourceVersions) {
@@ -86,7 +88,7 @@
     const sourceVersions = bundle.sourceVersions.filter(version => closure.versions.has(version.id));
     const dates = [plan.createdAt, plan.updatedAt, ...sources.flatMap(source => [source.createdAt, source.updatedAt]), ...sourceVersions.map(version => version.importedAt)].sort();
     const selected = { ...bundle, title: '자료 글쓰기 준비의 원문', revision: 0, createdAt: dates[0], updatedAt: dates.at(-1),
-      sources, sourceVersions, records: [], links: [], resumeHints: [], tombstones: [] };
+      sources, sourceVersions, records: [], links: dependency('Core').editedCopyMarkers(bundle, [...closure.versions.keys()]), resumeHints: [], tombstones: [] };
     return validate(clone({ format: FORMAT, bundle: selected, plan: selectedPlan, output: selectedOutput }));
   }
   async function hash(text) {
@@ -109,14 +111,14 @@
   async function fingerprint(payload) {
     const owned = await verify(payload);
     // Source collections are sets; outline/material ordering remains meaningful.
-    for (const key of ['sources', 'sourceVersions']) owned.bundle[key].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    for (const key of ['sources', 'sourceVersions', 'links']) owned.bundle[key].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
     return hash(JSON.stringify(canonical(owned)));
   }
   function remap(payload, workspaceId, idFn = dependency('Core').id) {
     validate(payload); identifier(workspaceId);
     if (typeof idFn !== 'function') fail('받을 준비의 식별자를 만들 수 없습니다.');
     const data = clone(payload), mapping = { workspaceId: { from: data.bundle.workspaceId, to: workspaceId },
-      sourceIds: Object.create(null), versionIds: Object.create(null), planIds: Object.create(null), materialIds: Object.create(null), blockIds: Object.create(null) };
+      sourceIds: Object.create(null), versionIds: Object.create(null), linkIds: Object.create(null), planIds: Object.create(null), materialIds: Object.create(null), blockIds: Object.create(null) };
     const used = new Set([workspaceId]);
     function next(oldId, map) {
       const value = identifier(idFn(oldId)); if (used.has(value)) fail('받을 준비의 새 식별자가 중복되었습니다.');
@@ -125,6 +127,10 @@
     data.bundle.workspaceId = workspaceId;
     for (const source of data.bundle.sources) source.id = next(source.id, mapping.sourceIds);
     for (const version of data.bundle.sourceVersions) { version.id = next(version.id, mapping.versionIds); version.sourceId = mapping.sourceIds[version.sourceId]; }
+    for (const marker of data.bundle.links) {
+      marker.id = next(marker.id, mapping.linkIds);
+      marker.entityRefs = marker.entityRefs.map(ref => ({ entityType: 'sourceVersion', entityId: mapping.versionIds[ref.entityId] }));
+    }
     data.plan.id = next(data.plan.id, mapping.planIds);
     for (const material of data.plan.materials) { material.id = next(material.id, mapping.materialIds); material.sourceId = mapping.sourceIds[material.sourceId]; material.sourceVersionId = mapping.versionIds[material.sourceVersionId]; }
     const reference = ref => dependency('SourceReference').remap(ref, { workspaceId, sourceIds: mapping.sourceIds, versionIds: mapping.versionIds });

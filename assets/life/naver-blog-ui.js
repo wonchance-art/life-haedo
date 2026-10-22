@@ -5,7 +5,7 @@
   (root.HaedoLife ||= {}).NaverBlogUI = api;
 })(globalThis, function (root) {
   'use strict';
-  const labels = { imported: '이미 보관한 글', needs_content: '본문 보완 필요', new: '아직 보관하지 않은 글', ambiguous: '기존 자료 확인 필요' };
+  const labels = { imported: '이미 보관한 글', needs_content: '본문 보완 필요', new: '아직 보관하지 않은 글', ambiguous: '기존 자료 확인 필요', trashed: '휴지통에 있는 자료' };
   function create({ container, service, workspaceId, onReview, onOpenSource, onWritePhotos, onDownload, onImportFile, onImport, onReturn, isCurrent = () => true, viewState = {} }) {
     viewState ||= {};
     const doc = container.ownerDocument;

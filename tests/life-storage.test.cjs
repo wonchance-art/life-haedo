@@ -366,6 +366,39 @@ test('Naver source version, original photos and exact receipt commit atomically 
   const other = f.storage.forAccount({ ...f.account, userId: '99999999-9999-4999-8999-999999999999' });
   await assert.rejects(other.readNaverCapture(after.workspaceId, media.sourceVersionId), { code: 'workspace_access_denied' });
 });
+test('Naver photo draft checks trash and exact capture inside its write transaction, preserves blobs and rolls back late navigation', async t => {
+  const F = require('./fixtures/naver-media.cjs'), Photo = require('../assets/life/photo-post.js'), restore = F.installDecoder(); t.after(restore);
+  const f = await naverStorageFixture(); t.after(() => f.storage.close());
+  assert.equal((await f.scoped.commitNaverCapture(f.request)).status, 'stored');
+  const ws = f.before.workspaceId, attachment = await f.scoped.readNaverCapture(ws, f.request.attachment.sourceVersionId);
+  const capture = { sourceId: attachment.sourceId, sourceVersionId: attachment.sourceVersionId, captureHash: attachment.capture.capture_hash };
+  const draft = Photo.create(Core.id), photo = await Photo.readPhoto(attachment.photos[0].blob, Core.id);
+  draft.photos.push(photo); draft.ops = [{ insert: { photo: { id: photo.id, alt: '원래 사진', caption: '보존' } } }, { insert: '\n' }];
+  const original = structuredClone(f.rows);
+  await assert.rejects(f.scoped.savePhotoPostFromNaverCapture(ws, draft, { ...capture, captureHash: '0'.repeat(64) }), { code: 'invalid_naver_media' });
+  await assert.rejects(f.scoped.savePhotoPostFromNaverCapture(ws, draft, { ...capture, sourceVersionId: f.before.sourceVersions[0].id }), { code: 'invalid_naver_media' });
+  assert.deepEqual(f.rows, original);
+  let current = true;
+  f.control.afterWrite = ({ name, value }) => { if (name === 'meta' && value.key === `photo-post:${ws}:${draft.id}`) current = false; };
+  await assert.rejects(f.scoped.savePhotoPostFromNaverCapture(ws, draft, capture, { isCurrent: () => current }), { code: 'request_cancelled' });
+  f.control.afterWrite = null; assert.deepEqual(f.rows, original);
+  // Photo decoding and capture selection finished before a second tab moved the source to trash.
+  const otherStorage = createStorage({ idb: f.idb, core: Core, channelFactory: null }); t.after(() => otherStorage.close());
+  const other = otherStorage.forAccount(f.account), before = await other.read(ws);
+  assert.equal((await other.commitLocal({ workspaceId: ws, baseRevision: before.revision, operationId: Core.id(),
+    changes: Core.buildSourceStateChanges(before, capture.sourceId, 'trash') })).status, 'stored');
+  const trashed = structuredClone(f.rows);
+  await assert.rejects(f.scoped.savePhotoPostFromNaverCapture(ws, draft, capture), { code: 'source_trashed' });
+  assert.deepEqual(f.rows, trashed);
+  assert.deepEqual(await f.scoped.readNaverCapture(ws, capture.sourceVersionId), attachment);
+  const bundle = await other.read(ws);
+  assert.equal((await other.commitLocal({ workspaceId: ws, baseRevision: bundle.revision, operationId: Core.id(),
+    changes: Core.buildSourceStateChanges(bundle, capture.sourceId, 'active') })).status, 'stored');
+  const saved = await f.scoped.savePhotoPostFromNaverCapture(ws, draft, capture);
+  assert.equal(saved.revision, 1); assert.equal(saved.status, 'draft');
+  const reopened = await f.scoped.readPhotoPost(ws, saved.id);
+  assert.deepEqual(reopened.ops, draft.ops); assert.deepEqual(new Uint8Array(await reopened.photos[0].blob.arrayBuffer()), F.bytes);
+});
 test('Naver commit completion abort, write failure and late navigation leave no version, sidecar or receipt', async t => {
   const F = require('./fixtures/naver-media.cjs'), restore = F.installDecoder(); t.after(restore);
   for (const kind of ['completion', 'bundle', 'late']) {
@@ -1706,4 +1739,143 @@ test('blog series installation cannot write after an account switch during async
     const before = structuredClone(rows), pending = a.installBlogSeriesCopy(ws, { series, posts: [{ itemId: series.items[0].id, doc }] });
     await entered; base.forAccount(accountB); release(); await assert.rejects(pending, { code: 'storage_scope_closed' }); assert.deepEqual(rows, before);
   } finally { release(); globalThis.HaedoLife.Blog = previous; }
+});
+
+async function sourceEditStorageFixture(t) {
+  const f = syncFixture(); t.after(() => f.storage.close());
+  const bundle = await initialImport(f.storage), model = require('../assets/life/source-edit.js');
+  const stage = await f.storage.saveStage(model.edit(model.begin(bundle, bundle.sources[0].id), {
+    title: '수정한 익명 사본', text: '# 수정한 사본\r\n**구절**과 🌿', format: 'text/markdown'
+  }));
+  const prepared = await model.prepare(bundle, stage), request = { workspaceId: bundle.workspaceId, baseRevision: bundle.revision,
+    operationId: Core.id(), stageId: stage.stageId, stageRevision: stage.revision,
+    changes: prepared.changes, stageResult: prepared.stageResult };
+  return { ...f, bundle, stage, prepared, request, model };
+}
+test('source edit commits its exact copy, immutable history, stage and receipt atomically; failed receipt and identical replay preserve the original', async t => {
+  const f = await sourceEditStorageFixture(t), before = structuredClone(f.rows), notices = [];
+  f.storage.subscribe(f.bundle.workspaceId, event => notices.push(event));
+  f.control.failWrite = { name: 'operations', method: 'add' };
+  const failed = await f.storage.commitLocal(f.request); assert.equal(failed.status, 'rejected'); assert.equal(failed.error.code, 'storage_quota');
+  assert.deepEqual(f.rows, before); assert.deepEqual(notices, []); assert.equal((await f.storage.getStage(f.stage.stageId)).state, 'draft');
+  const stored = await f.storage.commitLocal(f.request); assert.equal(stored.status, 'stored');
+  const bundle = await f.storage.read(f.bundle.workspaceId), applied = await f.storage.getStage(f.stage.stageId);
+  assert.deepEqual(bundle.sourceVersions[0], f.bundle.sourceVersions[0]); assert.deepEqual(bundle.records, f.bundle.records);
+  assert.equal(bundle.sourceVersions.at(-1).contentText, f.stage.input.text); assert(Core.isEditedCopy(bundle, f.prepared.version.id));
+  assert.equal(bundle.links.filter(link => link.kind === 'source_edit_base').length, 1);
+  assert.equal(applied.state, 'applied'); assert.deepEqual(applied.appliedResult, f.prepared.stageResult);
+  const committed = structuredClone(f.rows); assert.deepEqual(await f.storage.commitLocal(f.request), stored); assert.deepEqual(f.rows, committed);
+  const duplicate = await f.storage.commitLocal({ ...f.request, changes: { put: {} } }); assert.equal(duplicate.error.code, 'operation_mismatch');
+  await f.storage.deleteStage(f.stage.stageId); assert.deepEqual(await f.storage.commitLocal(f.request), stored);
+  const unchanged = await f.storage.saveStage(f.model.begin(bundle, bundle.sources[0].id)), prepared = await f.model.prepare(bundle, unchanged);
+  assert.equal(prepared.unchanged, true);
+  const unchangedResult = await f.storage.commitLocal({ workspaceId: bundle.workspaceId, baseRevision: bundle.revision, operationId: Core.id(),
+    stageId: unchanged.stageId, stageRevision: unchanged.revision, changes: prepared.changes, stageResult: prepared.stageResult });
+  assert.equal(unchangedResult.status, 'stored'); assert.equal((await f.storage.read(bundle.workspaceId)).sourceVersions.length, 2);
+});
+test('source edit stage kind and exact prepared body/hash/result cannot be replaced or forged', async t => {
+  const f = await sourceEditStorageFixture(t), before = structuredClone(f.rows);
+  await assert.rejects(f.storage.saveStage({ ...f.stage, unexpected: true }), { code: 'invalid_source_edit' });
+  await assert.rejects(f.storage.saveStage({ ...draft(f.bundle, f.stage.stageId), revision: f.stage.revision }), { code: 'stage_conflict' });
+  const legacy = await f.storage.saveStage(draft(f.bundle, Core.id()));
+  await assert.rejects(f.storage.saveStage({ ...f.stage, stageId: legacy.stageId, revision: legacy.revision }), { code: 'stage_conflict' });
+  const unchanged = structuredClone(f.rows);
+  for (const mutate of [request => { request.changes.put.sourceVersions[0].contentText += ' 숨은 변경'; },
+    request => { request.changes.put.sourceVersions[0].contentHash = '0'.repeat(64); },
+    request => { request.stageResult.sourceVersionId = f.bundle.sourceVersions[0].id; }, request => { delete request.stageResult; }]) {
+    const request = structuredClone(f.request); request.operationId = Core.id(); mutate(request);
+    const result = await f.storage.commitLocal(request); assert.equal(result.status, 'rejected'); assert.deepEqual(f.rows, unchanged);
+  }
+  assert.equal((await f.storage.getStage(f.stage.stageId)).input.text, f.stage.input.text);
+  assert.deepEqual(before.get('bundles'), f.rows.get('bundles'));
+});
+test('trash wins over prepared source edits and late original imports without erasing their draft, quotes or versions', async t => {
+  const f = await sourceEditStorageFixture(t), sourceId = f.bundle.sources[0].id;
+  const changes = Core.buildSourceStateChanges(f.bundle, sourceId, 'trash', { expectedRevision: 0, expectedSourceRevision: f.bundle.sources[0].revision, expectedStatus: 'active' });
+  assert.equal((await f.storage.commitLocal({ workspaceId: f.bundle.workspaceId, baseRevision: f.bundle.revision, operationId: Core.id(), changes })).status, 'stored');
+  const trashed = await f.storage.read(f.bundle.workspaceId), before = structuredClone(f.rows);
+  assert.equal((await f.storage.commitLocal(f.request)).status, 'conflict');
+  const rebased = await f.storage.commitLocal({ ...f.request, operationId: Core.id(), baseRevision: trashed.revision });
+  assert.equal(rebased.status, 'rejected'); assert.equal(rebased.error.code, 'source_trashed');
+  const importResult = await f.storage.commitLocal({ workspaceId: trashed.workspaceId, baseRevision: trashed.revision, operationId: Core.id(), changes: f.prepared.changes });
+  assert.equal(importResult.status, 'rejected'); assert.equal(importResult.error.code, 'source_in_trash'); assert.deepEqual(f.rows, before);
+  assert.deepEqual(trashed.sourceVersions, f.bundle.sourceVersions); assert.deepEqual(trashed.records, f.bundle.records);
+  const draftAgain = await f.storage.saveStage(f.model.edit(f.stage, { text: '휴지통에서도 보존할 입력' })); assert.equal(draftAgain.state, 'draft');
+  const restoredChanges = Core.buildSourceStateChanges(trashed, sourceId, 'active', { expectedRevision: 1, expectedStatus: 'trash' });
+  assert.equal((await f.storage.commitLocal({ workspaceId: trashed.workspaceId, baseRevision: trashed.revision, operationId: Core.id(), changes: restoredChanges })).status, 'stored');
+  const restored = await f.storage.read(trashed.workspaceId), oldStage = await f.storage.commitLocal({ ...f.request, operationId: Core.id(), baseRevision: restored.revision, stageRevision: draftAgain.revision });
+  assert.equal(oldStage.status, 'rejected'); assert.equal(oldStage.error.code, 'source_edit_conflict');
+  assert.equal(Core.sourceState(restored, sourceId).revision, 2); assert.equal(restored.sources[0].id, sourceId);
+});
+test('whole snapshot sync cannot lose known edited-copy/base history or reset a source lifecycle after a clean upload', async t => {
+  const f = await sourceEditStorageFixture(t); assert.equal((await f.storage.commitLocal(f.request)).status, 'stored');
+  let bundle = await f.storage.read(f.bundle.workspaceId);
+  assert.equal((await f.storage.commitLocal({ workspaceId: bundle.workspaceId, baseRevision: bundle.revision, operationId: Core.id(),
+    changes: Core.buildSourceStateChanges(bundle, bundle.sources[0].id, 'trash') })).status, 'stored');
+  bundle = await f.storage.read(bundle.workspaceId); const binding = await uploaded(f.storage, bundle), before = structuredClone(f.rows);
+  for (const kind of ['source_edited_copy', 'source_edit_base', 'source_trash']) {
+    const incoming = structuredClone(bundle);
+    incoming.links = incoming.links.filter(link => kind === 'source_edited_copy' ? !['source_edited_copy', 'source_edit_base'].includes(link.kind) : link.kind !== kind);
+    Core.validateWorkspace(incoming);
+    await assert.rejects(f.storage.applySyncRemote(bundle.workspaceId, binding, serverRow(incoming, 2)), { code: 'source_history_missing' });
+    assert.deepEqual(f.rows, before);
+  }
+});
+test('new account copies remap source-edit bases and preserve an already stale edit instead of making it current', async t => {
+  const f = await sourceEditStorageFixture(t), sourceId = f.bundle.sources[0].id;
+  assert.equal((await f.storage.commitLocal({ workspaceId: f.bundle.workspaceId, baseRevision: f.bundle.revision, operationId: Core.id(),
+    changes: Core.buildSourceStateChanges(f.bundle, sourceId, 'trash') })).status, 'stored');
+  const trashed = await f.storage.read(f.bundle.workspaceId);
+  assert.equal((await f.storage.commitLocal({ workspaceId: trashed.workspaceId, baseRevision: trashed.revision, operationId: Core.id(),
+    changes: Core.buildSourceStateChanges(trashed, sourceId, 'active') })).status, 'stored');
+  const account = f.storage.forAccount(accountA), result = await account.importUnownedWorkspace(f.bundle.workspaceId);
+  const stages = await account.listStages(result.workspaceId), bundle = await account.read(result.workspaceId), stage = stages.find(value => value.kind === 'source-edit');
+  assert(stage.baseChanged); assert.notEqual(stage.stageId, f.stage.stageId); assert.notEqual(stage.baseSourceId, sourceId);
+  assert.equal(stage.baseSourceId, bundle.sources[0].id); assert.equal(stage.baseSourceVersionId, bundle.sourceVersions[0].id);
+  assert.equal(stage.lifecycleRevision, 1); assert.equal(stage.input.text, f.stage.input.text);
+  assert.throws(() => f.model.validateCurrent(bundle, stage), { code: 'source_edit_conflict' });
+});
+test('preservation final selection CAS notices an edited-copy marker disappearing while exact text and post evidence stay unchanged', async t => {
+  const f = await preservationFixture(t), Edit = require('../assets/life/source-edit.js'), Refs = require('../assets/life/source-reference.js'), Preserve = require('../assets/life/preservation-references.js');
+  const version = f.bundle.sourceVersions.find(row => row.id === f.ref.sourceVersionId), stage = Edit.edit(Edit.begin(f.bundle, f.ref.sourceId), { text: version.contentText + '\n새 수정 문장' });
+  const prepared = await Edit.prepare(f.bundle, stage);
+  assert.equal((await f.a.commitLocal({ workspaceId: f.ws, baseRevision: f.bundle.revision, operationId: Core.id(), changes: prepared.changes })).status, 'stored');
+  const bundle = await f.a.read(f.ws), reference = await Refs.build({ bundle, sourceId: f.ref.sourceId, versionId: prepared.version.id, locator: f.ref.locator });
+  const evidence = await f.a.readPostEvidence(f.ws, f.selected.id); await f.a.savePostEvidence(f.ws, f.selected.id, { refs: [reference] }, evidence.revision);
+  const selection = { postIds: [f.selected.id], boardIds: [] }, expected = await Preserve.select(await f.a.readPreservationSnapshot(f.ws, selection), selection), candidate = await Preserve.copy(expected);
+  assert.equal(expected.bundle.links.length, 1);
+  const original = globalThis.HaedoLife.PreservationReferences; let enter, release;
+  const entered = new Promise(resolve => { enter = resolve; }), held = new Promise(resolve => { release = resolve; });
+  globalThis.HaedoLife.PreservationReferences = { ...Preserve, async validate(input) {
+    const result = await Preserve.validate(input); if (input.bundle.workspaceId === candidate.bundle.workspaceId) { enter(); await held; } return result;
+  } };
+  try {
+    const pending = f.a.installPreservationCopy(candidate, { source: { workspaceId: f.ws, unowned: false, expected } });
+    await entered;
+    const corrupted = f.rows.get('bundles').get(JSON.stringify(f.ws));
+    corrupted.links = corrupted.links.filter(link => !['source_edited_copy', 'source_edit_base'].includes(link.kind)); Core.validateWorkspace(corrupted);
+    const before = structuredClone(f.rows); release();
+    await assert.rejects(pending, { code: 'preservation_source_changed' }); assert.deepEqual(f.rows, before);
+  } finally { release(); globalThis.HaedoLife.PreservationReferences = original; }
+});
+test('trash committed after quote selection blocks new sidecars atomically while existing citations, editing replacements and explicit file restoration survive', async t => {
+  const f = await preservationFixture(t), Photo = require('../assets/life/photo-post.js'), Refs = require('../assets/life/source-reference.js'), Preserve = require('../assets/life/preservation-references.js');
+  const selectedBeforeTrash = await Refs.build({ bundle: f.bundle, sourceId: f.ref.sourceId, versionId: f.ref.sourceVersionId, locator: { start: 0, end: 2 } });
+  assert.equal((await f.a.commitLocal({ workspaceId: f.ws, baseRevision: f.bundle.revision, operationId: Core.id(),
+    changes: Core.buildSourceStateChanges(f.bundle, f.ref.sourceId, 'trash') })).status, 'stored');
+  const original = structuredClone(f.rows);
+  await assert.rejects(f.a.savePostEvidence(f.ws, f.draft.id, { refs: [selectedBeforeTrash] }, 0), { code: 'source_trashed' });
+  const fresh = Photo.create(Core.id); fresh.ops = [{ insert: '인용 선택 중 다른 탭에서 삭제됨\n' }];
+  await assert.rejects(f.a.savePhotoPostWithEvidence(f.ws, fresh, 0, [selectedBeforeTrash], 0), { code: 'source_trashed' });
+  assert.deepEqual(f.rows, original);
+  const retained = await f.a.savePostEvidence(f.ws, f.selected.id, { refs: [f.ref] }, 1); assert.equal(retained.revision, 2);
+  const replacement = Photo.create(Core.id); replacement.ops = structuredClone(f.selected.ops); replacement.replaces = { id: f.selected.id, revision: f.selected.revision };
+  const draft = await f.a.savePhotoPostWithEvidence(f.ws, replacement, 0, [f.ref], 0);
+  assert.deepEqual((await f.a.readPostEvidence(f.ws, draft.id)).refs, [f.ref]);
+  const saved = await f.a.savePhotoPostWithEvidence(f.ws, { ...draft, status: 'saved' }, draft.revision, [f.ref], 1);
+  assert.deepEqual((await f.a.readPostEvidence(f.ws, saved.id)).refs, [f.ref]);
+  const selection = { postIds: [saved.id], boardIds: [] }, selected = await Preserve.select(await f.a.readPreservationSnapshot(f.ws, selection), selection);
+  const copy = await Preserve.copy(selected), installed = await f.a.installPreservationCopy(copy);
+  const ref = installed.posts[0].evidence.refs[0]; await Refs.resolve(installed.bundle, ref);
+  assert.equal(ref.quote, f.ref.quote); assert.equal(installed.posts[0].doc.ops[0].insert, saved.ops[0].insert);
 });

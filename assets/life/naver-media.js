@@ -65,14 +65,15 @@
     checkTarget(input.bundle, input.attachment);
     const source = input.bundle.sources.find(value => value.id === input.attachment.sourceId), version = input.bundle.sourceVersions.find(value => value.id === input.attachment.sourceVersionId);
     return { bundle: { ...clone(input.bundle), title: source.title, revision: 0, createdAt: source.createdAt, updatedAt: version.importedAt,
-      sources: [clone(source)], sourceVersions: [clone(version)], records: [], links: [], resumeHints: [], tombstones: [] }, attachment: input.attachment };
+      sources: [clone(source)], sourceVersions: [clone(version)], records: [], links: api('Core').editedCopyMarkers(input.bundle, [version.id]), resumeHints: [], tombstones: [] }, attachment: input.attachment };
   }
   async function validateSnapshot(input) {
     fields(input, ['bundle', 'attachment']);
     const owned = clone(input), attachment = await validate(owned.attachment);
     checkTarget(owned.bundle, attachment);
     if (owned.bundle.sources.length !== 1 || owned.bundle.sourceVersions.length !== 1 ||
-        ['records', 'links', 'resumeHints', 'tombstones'].some(key => owned.bundle[key].length)) fail('선택한 원문 버전과 사진만 담긴 파일을 선택해 주세요.');
+        ['records', 'resumeHints', 'tombstones'].some(key => owned.bundle[key].length) ||
+        owned.bundle.links.length !== api('Core').editedCopyMarkers(owned.bundle, owned.bundle.sourceVersions.map(version => version.id)).length) fail('선택한 원문 버전·수정 사본 표식과 사진만 담긴 파일을 선택해 주세요.');
     const portableSize = encode({ bundle: owned.bundle, attachment: { ...attachment, photos: [] } }).length;
     if (portableSize > LIMITS.json || portableSize + attachment.photos.reduce((sum, photo) => sum + photo.blob.size, 0) > LIMITS.bytes) fail('원문 사진 파일의 보관 한도를 넘었습니다.');
     return { bundle: owned.bundle, attachment };

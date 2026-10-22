@@ -218,6 +218,51 @@ test('an edit after reviewed snapshot hashing but before the final transaction c
     const preserved = copy(f.rows); gate.resolve(); await assert.rejects(applying, { code: 'material_continuity_changed' }); assert.deepEqual(f.rows, preserved);
   } finally { globalThis.HaedoLife.MaterialContinuity = module; gate.resolve(); }
 });
+
+async function editedMaterialFixture() {
+  const f = await fixture(), Edit = require('../assets/life/source-edit.js'), original = f.bundle.sourceVersions[0];
+  const stage = Edit.edit(Edit.begin(f.bundle, original.sourceId), { text: original.contentText + '\n내가 수정한 사본 끝' });
+  const prepared = await Edit.prepare(f.bundle, stage);
+  assert.equal((await f.a.commitLocal({ workspaceId: f.ws, baseRevision: f.bundle.revision, operationId: Core.id(), changes: prepared.changes })).status, 'stored');
+  f.bundle = await f.a.read(f.ws);
+  const plan = copy(f.plan), material = plan.materials[0], quote = plan.blocks.find(block => block.kind === 'quote');
+  material.sourceVersionId = prepared.version.id; material.contentHash = prepared.version.contentHash;
+  const reference = await R.build({ bundle: f.bundle, sourceId: material.sourceId, versionId: material.sourceVersionId, locator: quote.reference.locator });
+  quote.reference = reference;
+  const wrapper = await f.a.readMaterialWriting(f.ws); wrapper.plans[0] = plan;
+  f.state = await f.a.saveMaterialWriting(f.ws, wrapper, wrapper.revision); f.plan = plan; f.reference = reference;
+  return { ...f, prepared };
+}
+test('edited-source markers are atomically remapped, installed and canonically fingerprinted without transferring base history or trash state', async t => {
+  const f = await editedMaterialFixture(); t.after(f.close);
+  assert.equal((await f.a.commitLocal({ workspaceId: f.ws, baseRevision: f.bundle.revision, operationId: Core.id(),
+    changes: Core.buildSourceStateChanges(f.bundle, f.bundle.sources[0].id, 'trash') })).status, 'stored');
+  f.bundle = await f.a.read(f.ws);
+  const row = rowFor(f), marker = row.data.bundle.links[0];
+  assert.equal(row.data.bundle.links.length, 1); assert.equal(marker.kind, 'source_edited_copy');
+  const raw = copy(f.rows); f.control.fail = ({ id }) => typeof id === 'string' && id.startsWith('material-continuity-install:');
+  await assert.rejects(f.a.installMaterialContinuity(row), { code: 'storage_quota' }); assert.deepEqual(f.rows, raw);
+  const result = await f.a.installMaterialContinuity(row), installed = await f.a.read(result.workspaceId);
+  assert.equal(installed.links.length, 1); assert.notEqual(installed.links[0].id, marker.id);
+  assert(Core.isEditedCopy(installed, installed.sourceVersions[0].id)); assert(Core.isSourceActive(installed, installed.sources[0].id));
+  assert.equal(installed.links.some(link => link.kind === 'source_edit_base'), false);
+  const state = await f.a.readMaterialContinuityState(result.workspaceId, result.planId);
+  assert.equal(state.mapping.linkIds[marker.id], installed.links[0].id);
+  const snapshot = await f.a.readMaterialContinuitySnapshot(result.workspaceId, result.planId);
+  assert.deepEqual(snapshot.data, row.data); assert.equal(snapshot.fingerprint, await C.fingerprint(row.data));
+  const repeat = await f.a.installMaterialContinuity(row, { target: { workspaceId: result.workspaceId, planId: result.planId }, expectedFingerprint: snapshot.fingerprint });
+  assert.equal(repeat.existing, true); assert.equal(repeat.bundle.links.length, 1);
+});
+test('a partial receive cannot strip a marker from an edited version already known to the receiving workspace', async t => {
+  const f = await editedMaterialFixture(); t.after(f.close); const row = rowFor(f), result = await f.a.installMaterialContinuity(row);
+  const target = { workspaceId: result.workspaceId, planId: result.planId }, baseline = await f.a.readMaterialContinuitySnapshot(target.workspaceId, target.planId);
+  const stripped = copy(row); stripped.revision++; stripped.data.bundle.links = [];
+  await C.verify(stripped.data);
+  const before = copy(f.rows);
+  await assert.rejects(f.a.installMaterialContinuity(stripped, { target, expectedFingerprint: baseline.fingerprint }), { code: 'immutable_source_marker' });
+  assert.deepEqual(f.rows, before);
+  assert(Core.isEditedCopy(await f.a.read(target.workspaceId), result.bundle.sourceVersions[0].id));
+});
 test('local conflict choice retains its outline while appending exact dependencies required by the already-saved winning output', async t => {
   const f = await fixture(); t.after(f.close); const { row } = await connect(f); const serverBundle = copy(f.bundle);
   const imported = await Core.prepareImport({ origin: 'obsidian', title: '완성 글에서 추가 인용한 자료', text: '새 원문의 정확한 구절' }, serverBundle);

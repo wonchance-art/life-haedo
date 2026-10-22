@@ -15,11 +15,11 @@ function events(target = {}) {
     emit(type, event = {}) { for (const listener of listeners.get(type) || []) listener({ type, ...event }); }
   });
 }
-async function fixture({ delaySave = false } = {}) {
+async function fixture({ delaySave = false, formatted = false } = {}) {
   let selected = 100;
   const document = events({ visibilityState: 'visible' });
   const text = { nodeType: 3, data: '가'.repeat(400) };
-  const reader = events({ ownerDocument: document, isConnected: true, firstChild: text });
+  const reader = events({ ownerDocument: document, isConnected: true, firstChild: formatted ? { nodeType: 1 } : text });
   const writes = [];
   const subscribers = new Set();
   let releaseSave = null;
@@ -42,7 +42,8 @@ async function fixture({ delaySave = false } = {}) {
       startOffset: selected, endOffset: selected + 1, collapsed: false }) }) });
   vm.runInNewContext(source, root);
   const controller = root.HaedoLife.ReadingPosition.create({ storage, debounceMs: 10000 });
-  const watch = controller.watchReader({ workspaceId: 'workspace', sourceId: 'source', sourceVersionId: 'version', reader, isReading: () => true });
+  const positionAdapter = formatted ? { raw: text.data, visibleOffset: () => selected } : null;
+  const watch = controller.watchReader({ workspaceId: 'workspace', sourceId: 'source', sourceVersionId: 'version', reader, positionAdapter, isReading: () => true });
   await Promise.resolve(); await Promise.resolve();
   return { writes, controller, watch, release() { releaseSave(); },
     snapshot() { return structuredClone(saved); },
@@ -50,7 +51,12 @@ async function fixture({ delaySave = false } = {}) {
       saved = { revision: saved.revision + 1, status: 'empty', position: null };
       for (const listener of subscribers) listener({ type: 'reading_position_changed', workspaceId: 'workspace', revision: saved.revision });
     },
-    choose(offset) { selected = offset; reader.emit('pointerup', { isTrusted: true }); } };
+    choose(offset) { selected = offset; reader.emit('pointerup', { isTrusted: true }); },
+    async scroll(offset, trusted = true) {
+      selected = offset;
+      if (trusted) root.emit('wheel', { isTrusted: true });
+      root.scrollY++; root.emit('scroll'); await new Promise(resolve => setTimeout(resolve, 5));
+    } };
 }
 test('returning to the persisted point cancels an older debounced reading candidate', async () => {
   const f = await fixture();
@@ -110,5 +116,23 @@ test('leaving drains already captured reading input without sampling detached DO
     await saving;
     assert.equal(f.snapshot().position.offset, 300);
     assert.equal(f.writes.length, 2);
+  } finally { f.controller.dispose(); }
+});
+
+test('formatted copying never creates a raw locator; only a trusted reading scroll samples the block adapter', async () => {
+  const f = await fixture({ formatted: true });
+  try {
+    f.choose(200); await f.watch.flush(); assert.deepEqual(f.writes, []);
+    await f.scroll(200, false); await f.watch.flush(); assert.deepEqual(f.writes, []);
+    await f.scroll(200); await f.watch.flush(); assert.equal(f.snapshot().position.offset, 200);
+    await f.scroll(null); await f.watch.flush(); assert.equal(f.writes.length, 1, 'unmapped visible blocks keep the earlier point');
+  } finally { f.controller.dispose(); }
+});
+
+test('formatted pending reading is cancelled by a newer clear and is not resurrected on close', async () => {
+  const f = await fixture({ formatted: true });
+  try {
+    await f.scroll(200); f.externalClear(); await f.watch.flush(); f.watch.close();
+    assert.equal(f.snapshot().position, null); assert.deepEqual(f.writes, []);
   } finally { f.controller.dispose(); }
 });

@@ -92,6 +92,25 @@ test('two independent tabs create at most one result and stale plan writes lose 
   const state = await f.a.readMaterialWriting(f.ws), results = await Promise.all([f.a.createMaterialWritingPost(f.ws, f.plan.id, state.revision), f.b.createMaterialWritingPost(f.ws, f.plan.id, state.revision)]);
   assert.equal(results.filter(value => value.created).length, 1); assert.equal(results[0].postId, results[1].postId); assert.equal((await f.a.listPhotoPosts(f.ws)).length, 1);
 });
+test('trash committed between material selection and plan save rejects only new material or quote uses and preserves the existing preparation through finished handoff', async t => {
+  const f = await fixture(); t.after(f.close);
+  const selectedBeforeTrash = M.material(f.bundle, f.reference.sourceId, f.reference.sourceVersionId, Core.id), newPlan = M.create(Core.id);
+  newPlan.materials = [selectedBeforeTrash]; newPlan.blocks = [{ id: Core.id(), kind: 'paragraph', text: '삭제와 경합한 새 준비' }];
+  const candidate = copy(f.state); candidate.plans.push(newPlan);
+  const moreQuote = copy(f.state); moreQuote.plans[0].blocks.push({ id: Core.id(), kind: 'quote', materialId: f.plan.materials[0].id, reference: copy(f.reference) });
+  assert.equal((await f.b.commitLocal({ workspaceId: f.ws, baseRevision: f.bundle.revision, operationId: Core.id(),
+    changes: Core.buildSourceStateChanges(f.bundle, f.reference.sourceId, 'trash') })).status, 'stored');
+  const before = copy(f.rows);
+  await assert.rejects(f.a.saveMaterialWriting(f.ws, candidate, candidate.revision), { code: 'source_trashed' });
+  await assert.rejects(f.a.saveMaterialWriting(f.ws, moreQuote, moreQuote.revision), { code: 'source_trashed' }); assert.deepEqual(f.rows, before);
+  assert.equal(candidate.plans[1].blocks[0].text, '삭제와 경합한 새 준비');
+  const retained = copy(f.state); retained.plans[0].question += ' · 내 생각 수정'; retained.plans[0].materials[0].note += ' · 메모 유지';
+  const stored = await f.a.saveMaterialWriting(f.ws, retained, retained.revision);
+  assert.equal(stored.plans[0].question, retained.plans[0].question); assert.deepEqual(stored.plans[0].blocks[1].reference, f.reference);
+  const post = await f.a.createMaterialWritingPost(f.ws, f.plan.id, stored.revision);
+  assert.deepEqual((await f.a.readPostEvidence(f.ws, post.postId)).refs, [f.reference]);
+  assert.equal((await f.a.readPhotoPost(f.ws, post.postId)).status, 'draft');
+});
 test('each failed handoff write and transaction completion leave plan, index, evidence and receipt wholly unchanged', async () => {
   for (const point of ['post', 'index', 'evidence', 'plan', 'receipt', 'completion']) {
     const f = await fixture();

@@ -45,6 +45,7 @@
       if (!query) { results.append(el('p', '제목으로 보관한 원문을 찾으세요.', 'life-help')); return; }
       let count = 0, found = 0;
       for (const source of bundle.sources) {
+        if (!root.HaedoLife.Core.isSourceActive(bundle, source.id)) continue;
         if (!(source.title || '').toLocaleLowerCase('ko-KR').includes(query)) continue;
         found++; if (count++ >= 20) continue;
         const title = source.title || '제목 없는 원문', clue = sourceHint(source);
@@ -79,22 +80,25 @@
     function makeCard(item, resolved) {
       const section = el('section', null, 'mw-material'); section.dataset.materialId = item.id;
       const source = resolved.source, version = resolved.version;
+      const active = source && root.HaedoLife.Core.isSourceActive(bundle, source.id);
       const heading = el('h3', source?.title || '연결된 원문 없음', 'mw-material-title'); section.append(heading);
       const clue = sourceHint(source); if (clue) section.append(el('p', '출처: ' + clue, 'mw-source-hint'));
       const card = { node: section, item: { ...item }, range: null, lastLocator: null, selectionSettled: false, composing: false, invalidNote: false, body: null, note: null };
       if (resolved.status !== 'available') section.append(el('p', resolved.status === 'mismatch' ? '선택한 원문 버전의 내용이 다릅니다. 다른 버전으로 바꾸지 않았습니다.' : '선택한 원문 버전이 없습니다. 다른 버전으로 바꾸지 않았습니다.', 'mw-material-unavailable life-help'));
       else {
         const versions = bundle.sourceVersions.filter(value => value.sourceId === source.id);
+        if (!active) section.append(el('p', '휴지통에 있는 자료 · 기존 근거는 유지됩니다.', 'life-help'));
+        if (root.HaedoLife.Core.isEditedCopy(bundle, version.id)) section.append(el('p', '해도에서 수정한 사본', 'life-meta'));
         section.append(el('p', '버전 ' + (versions.findIndex(value => value.id === version.id) + 1) + '/' + versions.length + (version.coverage?.status === 'partial' ? ' · 일부 본문' : ''), 'life-meta'));
         const hasBody = typeof version.contentText === 'string' && version.contentText.length > 0;
-        if (typeof onLink === 'function' && root.HaedoLife.Discovery?.canonicalUrl(source.url)) {
+        if (active && typeof onLink === 'function' && root.HaedoLife.Discovery?.canonicalUrl(source.url)) {
           const link = button('출처 링크를 글에 담기', () => {
             navigationGuard();
             return task(async valid => {
               const fresh = await getBundle(); if (!valid()) return;
               if (!sameMaterial(material(card.item.id), card.item)) throw Error('선택한 자료가 바뀌었습니다. 현재 자료를 다시 확인해 주세요.');
               const exact = model().resolveMaterial(fresh, card.item);
-              if (exact.status !== 'available' || !root.HaedoLife.Discovery?.canonicalUrl(exact.source?.url)) throw Error('선택한 원문 버전과 출처 링크를 확인하지 못했습니다. 기존 글은 유지했습니다.');
+              if (exact.status !== 'available' || !root.HaedoLife.Core.isSourceActive(fresh, item.sourceId) || !root.HaedoLife.Discovery?.canonicalUrl(exact.source?.url)) throw Error('선택한 원문 버전과 출처 링크를 확인하지 못했습니다. 기존 글은 유지했습니다.');
               await onLink(card.item.id);
             });
           });
@@ -107,6 +111,7 @@
           const apply = button('선택 구절을 개요에 담기', () => task(async valid => {
             if (!card.range) throw Error('먼저 인용할 구절을 선택해 주세요.');
             const range = { ...card.range }, original = { ...item }, fresh = await getBundle();
+            if (!root.HaedoLife.Core.isSourceActive(fresh, item.sourceId)) throw Error('휴지통에 있는 자료입니다. 선택은 유지됩니다. 복원한 뒤 새 구절을 담아 주세요.');
             if (!valid() || !sameMaterial(material(item.id), original)) return;
             const ref = await refs().build({ bundle: fresh, sourceId: item.sourceId, versionId: item.sourceVersionId, locator: range });
             if (!valid() || !sameMaterial(material(item.id), original)) return;
@@ -189,12 +194,13 @@
       for (const item of ordered) {
         const resolved = model().resolveMaterial(bundle, item);
         let card = cards.get(item.id);
-        if (card && card.status !== resolved.status) {
+        const state = resolved.status + ':' + (resolved.source && root.HaedoLife.Core.isSourceActive(bundle, resolved.source.id) ? 'active' : 'trash') + ':' + (resolved.version && root.HaedoLife.Core.isEditedCopy(bundle, resolved.version.id) ? 'edited' : 'original');
+        if (card && card.status !== state) {
           if (card.range || card.invalidNote || card.composing) {
             if (!card.node.querySelector('.mw-material-unavailable')) card.node.prepend(el('p', '원문 연결이 바뀌었습니다. 현재 선택과 메모 입력은 유지됩니다.', 'mw-material-unavailable life-help'));
           } else { card.node.remove(); cards.delete(item.id); card = null; }
         }
-        if (!card) { card = makeCard(item, resolved); card.status = resolved.status; cards.set(item.id, card); }
+        if (!card) { card = makeCard(item, resolved); card.status = state; cards.set(item.id, card); }
         if (doc.activeElement !== card.note && !card.composing && !card.invalidNote && card.note.value !== item.note) card.note.value = item.note;
         if (card.node.parentElement !== compare) compare.append(card.node);
       }
