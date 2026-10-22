@@ -200,7 +200,7 @@
     }
     function latestOwnPosts(bundle) {
       const rows = [];
-      bundle.sources.filter(source => life.Writing?.isOwnSource(source, bundle)).forEach(source => {
+      bundle.sources.filter(source => core.isSourceActive(bundle, source.id) && life.Writing?.isOwnSource(source, bundle)).forEach(source => {
         const version = life.Writing.latestVersion(bundle, source.id);
         if (version) rows.push({ id: source.id, kind: 'source', title: source.title, body: version.contentText, updatedAt: version.importedAt, versionId: version.id });
       });
@@ -537,7 +537,7 @@
     }
     function recent(context, bundle) {
       const area = section(context, '최근 담은 기록', 'homeRecent', () => navigate('sources'));
-      const sourceIds = new Set(bundle.sources.map(source => source.id)), latest = new Map();
+      const sourceIds = new Set(bundle.sources.filter(source => core.isSourceActive(bundle, source.id)).map(source => source.id)), latest = new Map();
       bundle.sourceVersions.forEach((version, order) => {
         if (!sourceIds.has(version.sourceId)) return;
         const prior = latest.get(version.sourceId);

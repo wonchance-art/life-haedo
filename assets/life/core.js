@@ -14,6 +14,9 @@
   const RELATIONS = ['self', 'other', 'unknown'];
   const COLLECTIONS = ['sources', 'sourceVersions', 'records', 'links', 'resumeHints', 'tombstones'];
   const ENTITY_COLLECTION = { source: 'sources', sourceVersion: 'sourceVersions', record: 'records', link: 'links', resumeHint: 'resumeHints' };
+  const SOURCE_STATE_KINDS = ['source_trash', 'source_active'];
+  const SOURCE_IMMUTABLE_KINDS = ['source_edited_copy', 'source_edit_base'];
+  const SOURCE_LINK_KINDS = SOURCE_STATE_KINDS.concat(SOURCE_IMMUTABLE_KINDS);
   const now = () => new Date().toISOString();
 
   function fail(code, message) {
@@ -140,6 +143,95 @@
     assert(Number.isSafeInteger(value.start) && Number.isSafeInteger(value.end) && value.start >= 0 && value.end > value.start && value.end <= text.length && boundary(text, value.start) && boundary(text, value.end), 'invalid_locator', '발췌 위치가 원문 범위와 맞지 않습니다. 원문에서 다시 선택해 주세요.');
     if (quote !== undefined) assert(text.slice(value.start, value.end) === quote, 'quote_mismatch', '발췌 내용이 해당 원문 구간과 일치하지 않습니다.');
   }
+  function exactFields(value, keys, label) {
+    fields(value, keys, label);
+    assert(Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key)), 'invalid_source_link', label + '의 필수 항목을 확인해 주세요.');
+  }
+  function validateSourceLinks(bundle, maps) {
+    const states = new Set(), markers = new Set(), bases = new Set();
+    for (const link of bundle.links) {
+      if (!SOURCE_LINK_KINDS.includes(link.kind)) continue;
+      exactFields(link, ['id', 'kind', 'entityRefs', 'revision', 'createdAt', 'updatedAt'], '자료 상태·수정 이력');
+      revision(link.revision, 1); timestamp(link.createdAt); timestamp(link.updatedAt);
+      assert(Date.parse(link.updatedAt) >= Date.parse(link.createdAt), 'invalid_source_link', '자료 이력의 시각을 확인해 주세요.');
+      const state = SOURCE_STATE_KINDS.includes(link.kind), count = link.kind === 'source_edit_base' ? 2 : 1;
+      assert(link.entityRefs.length === count, 'invalid_source_link', '자료 이력의 정확한 대상을 확인해 주세요.');
+      for (const ref of link.entityRefs) {
+        exactFields(ref, ['entityType', 'entityId'], '자료 이력 대상');
+        assert(ref.entityType === (state ? 'source' : 'sourceVersion'), 'invalid_source_link', '자료 이력의 대상 종류를 확인해 주세요.');
+      }
+      const target = link.entityRefs[count - 1].entityId;
+      if (state) {
+        assert(!states.has(target), 'duplicate_source_state', '같은 자료의 휴지통 상태가 중복되었습니다.'); states.add(target);
+      } else {
+        assert(link.revision === 1 && link.createdAt === link.updatedAt, 'immutable_source_link', '수정한 사본의 이력은 변경할 수 없습니다.');
+        if (link.kind === 'source_edited_copy') {
+          assert(!markers.has(target), 'duplicate_edited_copy', '같은 원문 판의 수정 표식이 중복되었습니다.'); markers.add(target);
+        } else {
+          const before = maps.sourceVersions.get(link.entityRefs[0].entityId), after = maps.sourceVersions.get(target);
+          assert(before && after && before.id !== after.id && before.sourceId === after.sourceId &&
+            bundle.sourceVersions.indexOf(before) < bundle.sourceVersions.indexOf(after), 'invalid_source_edit_base', '수정 기준 판과 새 판을 확인해 주세요.');
+          assert(!bases.has(target), 'duplicate_source_edit_base', '같은 새 판의 수정 기준이 중복되었습니다.'); bases.add(target);
+        }
+      }
+    }
+    for (const versionId of bases) assert(markers.has(versionId), 'missing_edited_copy', '수정 기준이 있는 새 판에는 수정한 사본 표식이 필요합니다.');
+  }
+  function sourceState(bundle, sourceId) {
+    assert(bundle.sources.some(source => source.id === sourceId), 'missing_reference', '자료를 찾을 수 없습니다.');
+    const link = (bundle.links || []).find(value => SOURCE_STATE_KINDS.includes(value.kind) && value.entityRefs?.[0]?.entityId === sourceId);
+    return { status: link?.kind === 'source_trash' ? 'trash' : 'active', revision: link?.revision || 0, link: link ? clone(link) : null };
+  }
+  function isSourceActive(bundle, sourceId) {
+    return !!bundle?.sources?.some(source => source.id === sourceId) && !(bundle.links || []).some(link => link.kind === 'source_trash' && link.entityRefs?.[0]?.entityId === sourceId);
+  }
+  function isVersionActive(bundle, versionId) {
+    const version = bundle?.sourceVersions?.find(value => value.id === versionId);
+    return !!version && isSourceActive(bundle, version.sourceId);
+  }
+  function isEditedCopy(bundle, versionId) {
+    return !!bundle?.links?.some(link => link.kind === 'source_edited_copy' && link.entityRefs?.[0]?.entityId === versionId);
+  }
+  function editedCopyMarkers(bundle, versionIds) {
+    validateWorkspace(bundle);
+    assert(Array.isArray(versionIds), 'invalid_reference', '선택한 원문 판 목록을 확인해 주세요.');
+    const selected = new Set(versionIds);
+    for (const versionId of selected) identifier(versionId);
+    return clone(bundle.links.filter(link => link.kind === 'source_edited_copy' && selected.has(link.entityRefs[0].entityId)));
+  }
+  function buildSourceStateChanges(bundle, sourceId, status, options = {}) {
+    validateWorkspace(bundle); fields(options, ['expectedRevision', 'expectedSourceRevision', 'expectedStatus'], '자료 상태 저장 기준');
+    assert(status === 'active' || status === 'trash', 'invalid_source_state', '자료의 휴지통 상태를 확인해 주세요.');
+    const previous = sourceState(bundle, sourceId);
+    if (options.expectedSourceRevision !== undefined) {
+      revision(options.expectedSourceRevision, 1);
+      assert(bundle.sources.find(source => source.id === sourceId).revision === options.expectedSourceRevision, 'source_state_conflict', '확인하는 동안 자료가 바뀌었습니다. 현재 자료를 다시 확인해 주세요.');
+    }
+    if (options.expectedStatus !== undefined) assert(options.expectedStatus === previous.status, 'source_state_conflict', '확인하는 동안 자료의 휴지통 상태가 바뀌었습니다.');
+    if (options.expectedRevision !== undefined) {
+      revision(options.expectedRevision, 0);
+      assert(previous.revision === options.expectedRevision, 'source_state_conflict', '다른 곳에서 자료의 휴지통 상태가 바뀌었습니다.');
+    }
+    if (previous.status === status) return { put: { links: [] } };
+    const time = now(), link = previous.link ? { ...previous.link, kind: status === 'trash' ? 'source_trash' : 'source_active', revision: previous.revision + 1, updatedAt: time } :
+      { id: id(), kind: 'source_trash', entityRefs: [{ entityType: 'source', entityId: sourceId }], revision: 1, createdAt: time, updatedAt: time };
+    return { put: { links: [link] } };
+  }
+  function checkSourceLinkPreservation(previous, incoming) {
+    for (const link of previous.links) {
+      if (!SOURCE_LINK_KINDS.includes(link.kind)) continue;
+      const next = incoming.links.find(value => value.id === link.id);
+      assert(next, 'source_history_missing', '기존 자료의 휴지통·수정 이력을 제거할 수 없습니다.');
+      if (SOURCE_IMMUTABLE_KINDS.includes(link.kind)) assert(canonical(next) === canonical(link), 'immutable_source_link', '보관한 수정 이력을 변경할 수 없습니다.');
+      else assert(SOURCE_STATE_KINDS.includes(next.kind) && canonical(next.entityRefs) === canonical(link.entityRefs) && next.createdAt === link.createdAt &&
+        (canonical(next) === canonical(link) || next.revision > link.revision && Date.parse(next.updatedAt) >= Date.parse(link.updatedAt)), 'source_state_conflict', '자료의 휴지통 상태가 이전 값으로 바뀌었습니다.');
+    }
+    return true;
+  }
+  function assertSourceLinkPreservation(previous, incoming) {
+    validateWorkspace(previous); validateWorkspace(incoming);
+    return checkSourceLinkPreservation(previous, incoming);
+  }
   function validateWorkspace(bundle) {
     fields(bundle, ['schemaVersion', 'workspaceId', 'title', 'revision', 'createdAt', 'updatedAt'].concat(COLLECTIONS), '작업공간');
     assert(bundle.schemaVersion === 1, 'unsupported_schema', '지원하지 않는 작업공간 버전입니다.');
@@ -221,6 +313,7 @@
       if (link.createdAt !== undefined) timestamp(link.createdAt);
       if (link.updatedAt !== undefined) timestamp(link.updatedAt);
     }
+    validateSourceLinks(bundle, maps);
     for (const hint of bundle.resumeHints) {
       fields(hint, ['id', 'sourceId', 'sourceVersionId', 'recordId', 'locator', 'note', 'revision', 'createdAt', 'updatedAt'], '재개 정보');
       assert(hint.sourceId !== undefined || hint.sourceVersionId !== undefined || hint.recordId !== undefined, 'missing_reference', '재개할 자료 참조가 필요합니다.');
@@ -287,6 +380,7 @@
     if (input.existingSourceId) {
       const existing = bundle.sources.find(item => item.id === input.existingSourceId);
       assert(existing, 'missing_reference', '선택한 기존 원천을 찾을 수 없습니다.');
+      assert(isSourceActive(bundle, existing.id), 'source_trashed', '휴지통의 자료는 복원한 뒤 새 판으로 보관해 주세요.');
       assert(existing.origin === origin && (inputUrl === undefined || existing.url === inputUrl) && (!source.sourceKey || !existing.sourceKey || source.sourceKey === existing.sourceKey), 'source_identity_mismatch', '원천 주소·종류가 달라졌습니다. 별개 자료로 보관해 주세요.');
       const old = bundle.sourceVersions.filter(item => item.sourceId === existing.id).find(item => versionIdentity(item) === versionIdentity(version));
       const sourceChanged = existing.title !== title || !!source.sourceKey && source.sourceKey !== existing.sourceKey;
@@ -349,6 +443,15 @@
     fields(put, ['sources', 'sourceVersions', 'records', 'links', 'resumeHints'], '저장 항목');
     fields(remove, ['records'], '삭제 항목');
     const result = clone(bundle), time = now();
+    const trashed = new Set(bundle.sources.filter(source => !isSourceActive(bundle, source.id)).map(source => source.id));
+    const deadVersion = versionId => {
+      const version = bundle.sourceVersions.find(item => item.id === versionId);
+      return !!version && trashed.has(version.sourceId);
+    };
+    const deadReference = value => (value.sourceRefs || []).some(ref => trashed.has(ref.sourceId)) ||
+      (value.entityRefs || []).some(ref => ref.entityType === 'source' && trashed.has(ref.entityId) ||
+        ref.entityType === 'sourceVersion' && deadVersion(ref.entityId) || ref.entityType === 'record' &&
+        bundle.records.find(record => record.id === ref.entityId)?.sourceRefs.some(sourceRef => trashed.has(sourceRef.sourceId)));
     for (const name of Object.keys(put)) {
       assert(Array.isArray(put[name]), 'invalid_collection', '저장 항목 목록을 확인해 주세요.');
       const submitted = new Set();
@@ -356,6 +459,25 @@
         assert(object(value), 'invalid_structure', '저장할 자료 형식을 확인해 주세요.'); identifier(value.id);
         assert(!submitted.has(value.id), 'duplicate_id', '한 저장 요청에 같은 항목이 두 번 있습니다.'); submitted.add(value.id);
         const index = result[name].findIndex(item => item.id === value.id);
+        const previous = index >= 0 ? result[name][index] : null;
+        if (name === 'sources' && previous && trashed.has(value.id)) assert(canonical(previous) === canonical(value), 'source_trashed', '휴지통의 자료는 복원한 뒤 수정해 주세요.');
+        if (name === 'sourceVersions' && !previous) assert(!trashed.has(value.sourceId), 'source_trashed', '휴지통의 자료에 새 원문 판을 추가하지 않았습니다. 먼저 복원해 주세요.');
+        if (name === 'records' && (!previous || canonical(previous.sourceRefs) !== canonical(value.sourceRefs))) {
+          assert(!(value.sourceRefs || []).some(ref => trashed.has(ref.sourceId)), 'source_trashed', '휴지통의 자료로 새 발췌를 만들지 않았습니다.');
+        }
+        if (name === 'links') {
+          if (previous && (SOURCE_LINK_KINDS.includes(previous.kind) || SOURCE_LINK_KINDS.includes(value.kind))) {
+            if (SOURCE_IMMUTABLE_KINDS.includes(previous.kind)) assert(canonical(previous) === canonical(value), 'immutable_source_link', '보관한 수정 이력은 변경할 수 없습니다.');
+            else assert(SOURCE_STATE_KINDS.includes(previous.kind) && SOURCE_STATE_KINDS.includes(value.kind) &&
+              (canonical(previous) === canonical(value) || previous.kind !== value.kind && value.revision === previous.revision + 1 &&
+                canonical(value.entityRefs) === canonical(previous.entityRefs) && value.createdAt === previous.createdAt && Date.parse(value.updatedAt) >= Date.parse(previous.updatedAt)),
+              'source_state_conflict', '자료 상태의 저장 기준을 확인해 주세요.');
+          }
+          if (!SOURCE_STATE_KINDS.includes(value.kind) && (!previous || canonical(previous) !== canonical(value))) {
+            assert(!deadReference(value), 'source_trashed', '휴지통의 자료를 새 활용에 연결하지 않았습니다.');
+          }
+        }
+        if (name === 'resumeHints' && !previous) assert(!trashed.has(value.sourceId) && !deadVersion(value.sourceVersionId), 'source_trashed', '휴지통의 자료에 새 읽기 연결을 추가하지 않았습니다.');
         if (index >= 0 && name === 'sourceVersions') assert(canonical(result[name][index]) === canonical(value), 'immutable_source_version', '보관한 원문 버전은 수정할 수 없습니다. 새 버전을 추가해 주세요.');
         if (index >= 0 && canonical(result[name][index]) !== canonical(value)) {
           if (result[name][index].revision !== undefined) assert(value.revision === result[name][index].revision + 1, 'invalid_revision', '수정 항목의 버전을 확인해 주세요.');
@@ -381,6 +503,7 @@
     assert(result.records.every(item => !dead.has(item.id)), 'deleted_record', '삭제한 발췌를 같은 식별자로 되살릴 수 없습니다. 새 발췌로 보관해 주세요.');
     result.revision += 1; result.updatedAt = time;
     validateWorkspace(result);
+    checkSourceLinkPreservation(bundle, result);
     return result;
   }
   function manifest(bundle) {
@@ -467,6 +590,7 @@
     }
     const results = [];
     for (const source of bundle.sources) {
+      if (!isSourceActive(bundle, source.id)) continue;
       const versions = bySource.get(source.id) || [];
       const titleMatches = pattern && pattern.test(source.title);
       for (let index = versions.length - 1; index >= 0; index--) {
@@ -492,23 +616,30 @@
     }
     return results;
   }
-  function toMarkdown(bundle) {
+  function toMarkdown(bundle, options = {}) {
+    fields(options, ['includeTrash'], '읽기 파일 범위');
+    assert(options.includeTrash === undefined || typeof options.includeTrash === 'boolean', 'invalid_export_options', '휴지통 포함 여부를 확인해 주세요.');
     validateWorkspace(bundle);
     const output = ['# 생활 도구 읽기 내보내기\n', '이 파일은 읽기용입니다. 복원은 JSON 백업을 사용하세요. 미적용 검토 초안은 포함하지 않습니다.\n', fenced(bundle.title)];
     const versions = new Map(bundle.sourceVersions.map(item => [item.id, item]));
     const sources = new Map(bundle.sources.map(item => [item.id, item]));
     output.push('## 원천과 원문\n');
     for (const source of bundle.sources) {
+      if (!options.includeTrash && !isSourceActive(bundle, source.id)) continue;
       output.push('### 원천\n', fenced('제목: ' + source.title + '\n원천: ' + source.origin + '\n원천 ID: ' + source.id + '\nURL: ' + (source.url || '미제공') + '\n경로: ' + (source.sourceKey || '미제공')));
+      if (!isSourceActive(bundle, source.id)) output.push('휴지통의 자료입니다.\n');
       for (const version of bundle.sourceVersions.filter(item => item.sourceId === source.id)) {
         output.push('#### 보관한 원문 버전\n', fenced('버전 ID: ' + version.id + '\n형식: ' + version.format + '\n확보 범위: ' + version.coverage.status + '\n누락: ' + (version.coverage.omissions.join(', ') || '확인한 누락 없음') + '\n작성자: ' + (version.originalAuthor.label || '미확인') + ' (' + version.originalAuthor.relation + ')\n원문 작성일: ' + (version.originalCreatedAt || '미확인') + '\n가져온 시각: ' + version.importedAt + '\nSHA-256: ' + (version.contentHash || '본문 미확보')));
+        if (isEditedCopy(bundle, version.id)) output.push('해도에서 수정한 사본입니다. 원래 출처의 최신 원문과 같음을 뜻하지 않습니다.\n');
         output.push(version.contentText === null ? '본문 미확보: URL과 제공된 메타데이터만 보관했습니다.\n' : fenced(version.contentText));
       }
     }
     output.push('## 발췌와 주제 모음\n');
     for (const record of bundle.records) {
+      if (!options.includeTrash && !record.sourceRefs.some(ref => isSourceActive(bundle, ref.sourceId))) continue;
       output.push('### 발췌\n', fenced('주제: ' + (record.topic || '미분류') + '\n발췌 ID: ' + record.id + '\n기원: 사용자 선택'), fenced(record.text));
       for (const ref of record.sourceRefs) {
+        if (!options.includeTrash && !isSourceActive(bundle, ref.sourceId)) continue;
         const source = sources.get(ref.sourceId), version = versions.get(ref.sourceVersionId);
         output.push(fenced('출처: ' + source.title + '\n원천 ID: ' + source.id + '\n버전 ID: ' + version.id + '\nURL: ' + (source.url || '미제공') + '\n원문 위치: UTF-16 [' + ref.locator.start + ', ' + ref.locator.end + ')\n확보 범위: ' + version.coverage.status));
       }
@@ -517,5 +648,6 @@
     return output.join('\n');
   }
 
-  return Object.freeze({ MAX_IMPORT_BYTES, createWorkspace, id, validateWorkspace, prepareImport, buildImportChanges, applyChanges, makeBackup, restoreBackup, searchSources, matchesSearchText, findSearchText, toMarkdown });
+  return Object.freeze({ MAX_IMPORT_BYTES, createWorkspace, id, validateWorkspace, prepareImport, buildImportChanges, applyChanges, makeBackup, restoreBackup, searchSources, matchesSearchText, findSearchText, toMarkdown,
+    sourceState, isSourceActive, isVersionActive, isEditedCopy, editedCopyMarkers, buildSourceStateChanges, assertSourceLinkPreservation });
 });

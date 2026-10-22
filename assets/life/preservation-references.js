@@ -80,7 +80,7 @@
     const bundle = { ...value.bundle, title, revision: 0,
       sources: value.bundle.sources.filter(source => sources.has(source.id)),
       sourceVersions: value.bundle.sourceVersions.filter(version => versions.has(version.id)),
-      records: [], links: [], resumeHints: [], tombstones: [] };
+      records: [], links: C().editedCopyMarkers(value.bundle, [...versions]), resumeHints: [], tombstones: [] };
     if (selectedDates) {
       // Unrelated workspace edits must not enter the selected file or invalidate its review fingerprint.
       const dates = [...bundle.sources.flatMap(source => [source.createdAt, source.updatedAt]),
@@ -117,6 +117,7 @@
     const occupied = new Set([owned.bundle.workspaceId]);
     for (const source of owned.bundle.sources) occupied.add(source.id);
     for (const version of owned.bundle.sourceVersions) occupied.add(version.id);
+    for (const marker of owned.bundle.links) occupied.add(marker.id);
     for (const row of owned.posts) { occupied.add(row.doc.id); for (const photo of row.doc.photos) occupied.add(photo.id); }
     for (const board of owned.nineBoard.boards) { occupied.add(board.id); for (const area of board.areas) occupied.add(area.id); }
     const nextId = () => { const id = identifier(fresh()); if (occupied.has(id)) fail('새 사본의 식별자가 중복되었습니다.'); occupied.add(id); return id; };
@@ -124,6 +125,8 @@
     const bundle = C().createWorkspace({ workspaceId, title: settings.title === undefined ? '복원한 글·근거' : settings.title });
     bundle.sources = owned.bundle.sources.map(source => ({ ...source, id: (sourceIds[source.id] = nextId()), revision: 1 }));
     bundle.sourceVersions = owned.bundle.sourceVersions.map(version => ({ ...version, id: (versionIds[version.id] = nextId()), sourceId: sourceIds[version.sourceId], revision: 1 }));
+    bundle.links = owned.bundle.links.map(marker => ({ ...marker, id: nextId(), revision: 1,
+      entityRefs: marker.entityRefs.map(ref => ({ entityType: 'sourceVersion', entityId: versionIds[ref.entityId] })) }));
     const remap = ref => R().remap(ref, { workspaceId, sourceIds, versionIds });
     const posts = owned.posts.map(row => {
       const doc = clone(row.doc), oldId = doc.id, photos = new Map();

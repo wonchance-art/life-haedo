@@ -43,7 +43,7 @@
     clientFactory = root.HaedoLife?.PlatformRemote?.clientFactory } = {}) {
     if (!auth?.ready || !model?.verify || !clientFactory) throw fault('auth_required');
     const client = clientFactory(auth, { scope: 'material' })(auth.config.url, auth.config.key);
-    let disposed = false;
+    let disposed = false, markerSupport = null;
     const context = () => { if (disposed) throw fault('request_cancelled'); if (!auth.user?.id) throw fault('auth_required'); return { userId: auth.user.id, epoch: auth.epoch }; };
     function alive(value) { if (disposed || value && (!value.userId || auth.user?.id !== value.userId || auth.epoch !== value.epoch)) throw fault('request_cancelled'); }
     async function rpc(name, args, captured) {
@@ -71,6 +71,11 @@
       const captured = context(), owned = structuredClone(request);
       if (!fields(owned, ['remoteId', 'operationId', 'expectedRevision', 'data']) || !id(owned.remoteId) || !id(owned.operationId) || !revision(owned.expectedRevision) || owned.expectedRevision === MAX_REVISION) throw fault('invalid_request');
       const data = await verified(owned.data); alive(captured);
+      if (data.bundle.links.length && (!markerSupport || markerSupport.userId !== captured.userId || markerSupport.epoch !== captured.epoch)) {
+        const support = await rpc('life_material_capabilities', {}, captured);
+        if (!fields(support, ['source_edited_copy']) || support.source_edited_copy !== 1) throw fault('schema_missing');
+        alive(captured); markerSupport = { ...captured };
+      }
       const result = await rpc('life_material_put', { p_id: owned.remoteId, p_operation_id: owned.operationId, p_expected_revision: owned.expectedRevision, p_data: data }, captured);
       if (!fields(result, ['status', 'revision']) || !['stored', 'conflict'].includes(result.status) || !revision(result.revision, 1) || result.status === 'stored' && result.revision !== owned.expectedRevision + 1) throw fault('invalid_remote_data');
       return { status: result.status, revision: result.revision };

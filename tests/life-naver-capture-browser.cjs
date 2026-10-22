@@ -443,7 +443,14 @@ async function main() {
       assert.equal((await storedMedia(page, seeded.workspaceId, firstVersion)).capture.capture_hash, firstCapture.capture_hash);
       await assertOriginalGraph(page, initialGraph, seeded.workspaceId, [received.sourceId]);
       await page.locator('#naverCaptureOpen').click(); await page.locator('#lifeSourceText').waitFor();
+      assert.equal(await page.locator('#lifeSourceText').getAttribute('data-reading-mode'), 'formatted');
+      assert.equal(await page.locator('#lifeSourceText h1').textContent(), '보완한 합성 기록');
+      assert.equal(await page.locator('#lifeSourceText h2').textContent(), '이어지는 생각');
+      await page.locator('#lifeSourceInfoToggle').click();
+      await page.getByRole('button', { name: '원문 텍스트 보기', exact: true }).click();
+      await page.waitForFunction(() => document.querySelector('#lifeSourceText')?.dataset.readingMode === 'raw');
       assert.equal(await page.locator('#lifeSourceText').textContent(), fullText);
+      await page.getByRole('button', { name: '출처 정보 닫기', exact: true }).click();
       await page.locator('.nv-capture-photo img').first().waitFor();
       const download = page.waitForEvent('download'); await page.getByRole('button', { name: '글·사진 ZIP 저장', exact: true }).click();
       archive = await fs.readFile(await (await download).path());

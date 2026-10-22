@@ -207,7 +207,7 @@
       const coverage = info.version.contentText == null ? '본문 미확보' : info.version.coverage.status === 'partial' ? '일부 본문' :
         info.version.coverage.status === 'unknown' ? '확보 범위 미확인' : '제공한 본문';
       const relation = { self: '내 기록', other: '다른 사람의 기록', unknown: '작성자 관계 미확인' }[info.version.originalAuthor.relation];
-      return (life.Writing?.isOwnSource(info.source, getBundle()) ? '내 글' : ORIGINS[info.source.origin] || '기타') + ' · ' + relation + ' · ' + coverage + (info.total > 1 ? ' · ' + info.number + '/' + info.total + ' 버전' : '');
+      return (life.Writing?.isOwnSource(info.source, getBundle()) ? '내 글' : ORIGINS[info.source.origin] || '기타') + ' · ' + relation + ' · ' + coverage + (info.total > 1 ? ' · ' + info.number + '/' + info.total + ' 버전' : '') + (!core.isSourceActive(getBundle(), info.source.id) ? ' · 휴지통' : '') + (core.isEditedCopy(getBundle(), info.version.id) ? ' · 해도에서 수정한 사본' : '');
     }
     function mark(session, autosave = true) {
       session.edit += 1;
@@ -376,12 +376,13 @@
         const bundle = getBundle(), needle = query.trim().toLocaleLowerCase('ko-KR');
         const versions = bundle.sourceVersions.slice().reverse().filter(version => {
           const info = sourceInfo(version.id, bundle);
-          return info && filter(version) && (!needle || (info.source.title + '\n' + (version.contentText || '')).toLocaleLowerCase('ko-KR').includes(needle));
+          return info && core.isSourceActive(bundle, version.sourceId) && filter(version) && (!needle || (info.source.title + '\n' + (version.contentText || '')).toLocaleLowerCase('ko-KR').includes(needle));
         });
         list.replaceChildren();
         versions.slice(0, shown).forEach(version => {
           const info = sourceInfo(version.id, bundle);
           const row = toggle(info.source.title + ' · ' + sourceMeta(info), selected().includes(version.id), value => {
+            if (value && !core.isVersionActive(getBundle(), version.id)) throw fault('source_trashed', '휴지통에 있는 자료입니다. 복원한 뒤 선택해 주세요.');
             if (value && !single && selected().length >= max) throw fault('limit_reached', '선택할 수 있는 원문은 ' + max + '개까지입니다.');
             change(version.id, value);
             if (single) fill();
@@ -1812,7 +1813,7 @@
       const selectedList = el('div', null, 'wb-reflection-reading'); selectedList.id = 'wbReflectionReading';
       view.openSources ||= [];
       const more = action('기록 더 보기', () => { view.shown += 40; fill(); }); more.id = 'wbReflectionMore';
-      const included = () => new Set(reader.chronology(getBundle(), getBundle().sourceVersions.map(item => item.id), view).flatMap(group => group.versionIds));
+      const included = () => new Set(reader.chronology(getBundle(), getBundle().sourceVersions.filter(item => core.isSourceActive(getBundle(), item.sourceId)).map(item => item.id), view).flatMap(group => group.versionIds));
       const refillPicker = () => {
         const allowed = included();
         pickerHost.replaceChildren(picker('회고할 원문 선택', () => reflection.versionIds, (id, checked) => {

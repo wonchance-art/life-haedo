@@ -41,7 +41,7 @@
       for (const session of sessions) if (session.workspaceId === workspaceId) session.suppress();
       return storage.clearReadingPosition(workspaceId, baseRevision);
     }
-    function watchReader({ workspaceId, sourceId, sourceVersionId, reader, isReading, onError = () => {}, onSaved = () => {} }) {
+    function watchReader({ workspaceId, sourceId, sourceVersionId, reader, positionAdapter = null, isReading, onError = () => {}, onSaved = () => {} }) {
       guard();
       let closed = false, state = null, pending = null, timer = null, inflight = null;
       let sequence = 0, intentUntil = 0, previousY = root.scrollY, frame = null;
@@ -93,8 +93,9 @@
       function queue(offset) {
         if (!available() || !state || !Number.isInteger(offset)) return;
         const text = reader.firstChild;
-        if (!text || text.nodeType !== 3) return;
-        const point = safeOffset(text.data, offset);
+        const raw = positionAdapter ? positionAdapter.raw : text?.nodeType === 3 ? text.data : null;
+        if (typeof raw !== 'string') return;
+        const point = safeOffset(raw, offset);
         if (!inflight && state.position?.sourceId === sourceId && state.position.sourceVersionId === sourceVersionId && state.position.offset === point) {
           pending = null; root.clearTimeout(timer); timer = null;
           return;
@@ -115,9 +116,17 @@
         const moved = root.scrollY !== previousY; previousY = root.scrollY;
         if (!moved || !available() || root.performance.now() > intentUntil) return;
         if (frame !== null) root.cancelAnimationFrame(frame);
-        frame = root.requestAnimationFrame(() => { frame = null; if (available()) queue(visibleOffset(reader)); });
+        frame = root.requestAnimationFrame(() => {
+          frame = null;
+          if (!available()) return;
+          try { queue(positionAdapter ? positionAdapter.visibleOffset() : visibleOffset(reader)); }
+          catch (error) { report(error); }
+        });
       }
       function selected(event) {
+        // Formatted DOM selection is ordinary copying, never a raw quote locator.
+        // Its reading position is a parser-mapped block sampled after real scroll.
+        if (positionAdapter) return;
         if (!event.isTrusted || !available() || event.isComposing) return;
         if (event.type === 'keyup' && !event.shiftKey) return;
         const selection = root.getSelection();

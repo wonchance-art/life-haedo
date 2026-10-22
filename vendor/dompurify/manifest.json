@@ -1,0 +1,76 @@
+{
+  "name": "dompurify",
+  "version": "3.4.17",
+  "source": "Official npm registry tarball; no code rebuilt",
+  "archiveURL": "https://registry.npmjs.org/dompurify/-/dompurify-3.4.17.tgz",
+  "originalRuntimePath": "package/dist/purify.min.js",
+  "confirmedAt": "2026-10-22T03:16:12.959728+00:00",
+  "currentOfficialPointers": {
+    "markdownItTag": {
+      "url": "https://api.github.com/repos/markdown-it/markdown-it/git/ref/tags/15.0.3",
+      "version": "refs/tags/15.0.3",
+      "commit": "a8c00d474ec9b304fad9b71c16d6fa8b4909279e",
+      "publishedAt": null
+    },
+    "markdownItRegistry": {
+      "url": "https://registry.npmjs.org/markdown-it/latest",
+      "version": "15.0.3",
+      "commit": "a8c00d474ec9b304fad9b71c16d6fa8b4909279e",
+      "publishedAt": null
+    },
+    "DOMPurifyRelease": {
+      "url": "https://api.github.com/repos/cure53/DOMPurify/releases/latest",
+      "version": "3.4.17",
+      "commit": null,
+      "publishedAt": "2026-10-12T12:37:20Z"
+    }
+  },
+  "packages": [
+    {
+      "name": "dompurify",
+      "version": "3.4.17",
+      "license": "(MPL-2.0 OR Apache-2.0)",
+      "archiveSHA256": "056cbdae276897208b88c21d1d779adfa09ad7be488a2f510a28e900d3bbffe7",
+      "archiveIntegrity": "sha512-B/pSlYVHQ58kqISD/yDjuJ1yfzI34m1gF4lAod2bwSRhiN4K5Cl3H8Af7hqB2PmTL911tdEudnnXn5FnhRoz0w==",
+      "licenseFiles": [
+        "package/LICENSE",
+        "package/src/license_header",
+        "package/LICENSE-MPL"
+      ],
+      "runtimeFiles": [
+        "vendor/dompurify/purify.min.js"
+      ],
+      "advisoryURL": "https://api.github.com/advisories?ecosystem=npm&affects=dompurify%403.4.17&per_page=100",
+      "advisoryCount": 0,
+      "advisories": []
+    }
+  ],
+  "scope": "Exact official browser bundle bytes and licenses preserved. Markdown-it dependency versions checked against pinned upstream package-lock; argparse is package CLI-only and its notice is conservatively retained. Exact-version GitHub advisory queries have no returned records; this is not a full security guarantee.",
+  "files": [
+    {
+      "path": "LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "LICENSE-MPL",
+      "bytes": 16726,
+      "sha256": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85"
+    },
+    {
+      "path": "README.md",
+      "bytes": 349,
+      "sha256": "546a7af788e0beac7bccd73e2749f8c9256e2ea5993c48beff2f825d53e77925"
+    },
+    {
+      "path": "license_header",
+      "bytes": 192,
+      "sha256": "5803fa925ae1703b9c752921c95a321570e6cabf06fcf2de895ddaf1687cebef"
+    },
+    {
+      "path": "purify.min.js",
+      "bytes": 29828,
+      "sha256": "cd37898f9782adf54820c413191b5691803f0f137c799d6edcfd38523b4c2c31"
+    }
+  ]
+}

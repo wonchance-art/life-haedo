@@ -51,7 +51,7 @@
         const found = field([['발췌', record.text], ['내 메모', record.note], ['주제', record.topic]]);
         if (!found) continue;
         for (const ref of record.sourceRefs) {
-          if (hits.has(ref.sourceVersionId) || !sources.has(ref.sourceId)) continue;
+          if (hits.has(ref.sourceVersionId) || !sources.has(ref.sourceId) || !core.isSourceActive(bundle, ref.sourceId)) continue;
           const versions = versionsBySource.get(ref.sourceId) || [];
           const index = versionPositions.get(ref.sourceVersionId);
           if (index === undefined || versions[index]?.id !== ref.sourceVersionId) continue;

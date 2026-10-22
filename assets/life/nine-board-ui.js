@@ -177,7 +177,7 @@
       try{
         const latest=await storage.readNineBoard(workspaceId);if(!valid()||token!==epoch)return;
         const added=M.copies(changes,fresh),next={...latest,format:M.hasReferences(latest.boards.concat(added))?'life-nine-board-v2':latest.format,boards:latest.boards.concat(added)};M.validate(next);
-        const saved=added.length?await storage.saveNineBoard(workspaceId,next,latest.revision):latest;
+        const saved=added.length?await storage.saveNineBoardCopy(workspaceId,next,latest.revision):latest;
         if(!valid()||token!==epoch)return;
         const index=changes.findIndex(b=>b.id===active);state=saved;base=structuredClone(saved.boards);stored=tick;selected=added[index]?.id||saved.boards.find(b=>b.id===active)?.id||saved.boards[0]?.id;
         areaId=board()?.areas[activeArea]?.id||board()?.areas[0]?.id;editing=null;clear();render();
@@ -296,7 +296,7 @@
         guard();await flush();if(candidate!==incoming)return;
         const chosen=incoming.boards.filter(b=>incoming.chosen.has(b.id));if(!chosen.length)throw new Error('복구할 구성을 선택해 주세요.');
         const token=epoch,added=M.copies(chosen,fresh),next={...state,format:M.hasReferences(state.boards.concat(added))?'life-nine-board-v2':state.format,boards:state.boards.concat(added)};M.validate(next);busy=true;const unlock=lock();message();
-        try{const saved=await storage.saveNineBoard(workspaceId,next,next.revision);if(!valid()||token!==epoch)return;state=saved;base=structuredClone(saved.boards);stored=tick;selected=added[0]?.id||selected;areaId=board()?.areas[0]?.id;candidate=null;clear();render();}
+        try{const saved=await storage.saveNineBoardCopy(workspaceId,next,next.revision);if(!valid()||token!==epoch)return;state=saved;base=structuredClone(saved.boards);stored=tick;selected=added[0]?.id||selected;areaId=board()?.areas[0]?.id;candidate=null;clear();render();}
         finally{busy=false;unlock();message();}
       });
       review.append(apply,button('파일 취소',()=>{guard();candidate=null;render();const file=host.querySelector('input[type=file]');file.closest('details').open=true;file.focus();}));target.append(review);importUpdate=update;update();

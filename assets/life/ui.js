@@ -112,14 +112,14 @@
     let workbenchOpenOptions = null;
     let chapterImport = null;
     let externalImportContext = null;
-    let writingOpenOptions = null;
+    let writingOpenOptions = null, sourceEditOpenOptions = null, sourceEditOrigin = null;
     let navigationGeneration = 0;
     let renderGeneration = 0;
     let navigationRender = null, mainRenderPromise = Promise.resolve(), inputGeneration = 0;
     const sectionPositions = new Map();
     let homeRenderPromise = Promise.resolve();
     let homeRenderOptions = null, blogPageTask = false, blogMode = null, blogCommitted = null, materialWritingTask = false;
-    const sourceWritingRequests = new Map();
+    const sourceWritingRequests = new Map(), sourceStateRequests = new Map();
     let blogEntryScroll = null;
     let navigationTrigger = null;
     const viewOrigins = new Map();
@@ -137,7 +137,7 @@
     const blogViews = new Map(), naverBlogViews = new Map();
     const blogSync = global.HaedoLife.BlogSync?.create({ storage, auth });
     const parentViews = new Set(['naver-capture', 'naver-blog', 'external-discovery', 'interests', 'blog', 'account-blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
-    const subviewTitles = { 'naver-capture': '네이버 본문·사진 검토', 'naver-blog': '네이버 블로그 연결', 'account-blog': '서버에 보관한 글', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 확인', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
+    const subviewTitles = { 'source-trash': '자료 휴지통', 'source-edit': '자료 수정', 'naver-capture': '네이버 본문·사진 검토', 'naver-blog': '네이버 블로그 연결', 'account-blog': '서버에 보관한 글', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 확인', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
       discover: '다시 찾기', sync: '기기 간 동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
     const selectedVersions = new Set();
@@ -149,8 +149,8 @@
       bundle: null, workspaces: [], mode: 'sources', topic: '', topicsSearch: '', sourcesSearch: '', originFilter: '', returnContext: null, suppressReaderResume: false, sourceId: null,
       sourceVersionId: null, locator: null, stage: null, prepared: null, importMethod: 'text', topicUnassigned: false, topicFilterSearch: '',
       busy: false, editTick: 0, savedTick: 0, stageFailed: false, status: '', error: '',
-      pendingOperation: null, stageSelection: null, sourceSelection: null, stages: [], allStages: [], batches: new Map(), batchId: null,
-      remoteChanged: false, readerPositions: new Map(), sourceDrafts: new Map(),
+      pendingOperation: null, stageSelection: null, sourceSelection: null, stages: [], allStages: [], sourceEditStages: [], batches: new Map(), batchId: null,
+      remoteChanged: false, readerPositions: new Map(), sourceDrafts: new Map(), readerModes: new Map(),
       syncAccount: null, syncState: null, syncReadError: null, syncAccountKey: null, syncWorkspaceId: null,
       syncLoading: false, managementOpen: false, sourcesFiltersOpen: false, topicsFiltersOpen: false,
       selecting: false, readerArrangeOpen: false,
@@ -306,8 +306,8 @@
         state.bundle = bundle;
         state.stage = state.prepared = state.sourceId = state.sourceVersionId = null;
         state.sourceDrafts.clear();
-        state.readerPositions.clear();
-        state.stages = state.allStages = [];
+        state.readerPositions.clear(); state.readerModes.clear();
+        state.stages = state.allStages = []; state.sourceEditStages = [];
         state.restoreReturn = { previousId, copyId: bundle.workspaceId };
         state.remoteChanged = false;
         resetSearchContext();
@@ -358,6 +358,38 @@
         announce('비공개 글을 저장했습니다.');
       }
     });
+
+
+    const sourceEditor = global.HaedoLife.SourceEditUI?.create({
+      host: main, storage, core, getBundle: () => state.bundle, getAccountKey: () => state.syncAccountKey,
+      isDisposed: () => disposed, announce,
+      onClose: closeSourceEditor,
+      onSaved: async ({ sourceId, sourceVersionId }) => {
+        const workspaceId = state.bundle?.workspaceId, token = navigationGeneration;
+        await refreshData();
+        if (disposed || state.mode !== 'source-edit' || token !== navigationGeneration || state.bundle?.workspaceId !== workspaceId) return;
+        const origin = sourceEditOrigin?.workspaceId === workspaceId ? sourceEditOrigin : null;
+        await navigate('source', { sourceId, sourceVersionId, locator: null, returnContext: origin?.returnContext || null });
+      }
+    });
+    async function closeSourceEditor(fallback = {}) {
+      const origin = sourceEditOrigin?.workspaceId === state.bundle?.workspaceId ? sourceEditOrigin : null;
+      const sourceId = origin?.sourceId || fallback.sourceId || sourceEditOpenOptions?.sourceId;
+      if (!sourceId) return navigate('sources');
+      const result = await navigate('source', { sourceId, sourceVersionId: origin?.sourceVersionId || fallback.sourceVersionId || null,
+        locator: origin?.locator || null, returnContext: origin?.returnContext || null, preserveContext: true, navigationMotion: 'back' });
+      if (result === false || !origin || state.mode !== 'source') return;
+      requestAnimationFrame(() => { if (state.mode === 'source' && state.sourceId === sourceId) { if (origin.detailsOpen) main.querySelector('#lifeSourceInfoToggle')?.click(); global.scrollTo({ top: origin.scrollY, behavior: 'instant' }); main.querySelector('#lifeSourceInfoToggle')?.focus({ preventScroll: true }); } });
+    }
+    async function beginSourceEdit(source, version, { restore = false, stageId } = {}) {
+      const origin = { workspaceId: state.bundle.workspaceId, sourceId: source.id, sourceVersionId: version.id,
+        locator: state.sourceSelection && { ...state.sourceSelection }, scrollY: global.scrollY, returnContext: state.returnContext, detailsOpen: !main.querySelector('#lifeSourceDetails')?.hidden };
+      const workspace = workspaceGeneration;
+      await persistDrafts();
+      if (disposed || workspace !== workspaceGeneration || state.bundle?.workspaceId !== origin.workspaceId) return;
+      sourceEditOrigin = origin;
+      return navigate('source-edit', { sourceEdit: stageId ? { stageId } : { sourceId: source.id, versionId: version.id, restore } });
+    }
 
     // Native focus scrolling does not account for the fixed phone navigation
     // or the focus outline outside a control's rectangle.
@@ -500,6 +532,8 @@
     }
 
     function sourceFor(sourceId) { return state.bundle.sources.find(s => s.id === sourceId); }
+    function activeSource(sourceId) { return core.isSourceActive(state.bundle, sourceId); }
+    function activeRecord(record) { return !record.sourceRefs.length || record.sourceRefs.some(ref => activeSource(ref.sourceId)); }
 
     function dirty() { return !!state.stage && state.editTick !== state.savedTick; }
 
@@ -580,7 +614,8 @@
         if (bundle.revision < state.bundle.revision) return false;
         state.bundle = bundle;
         state.workspaces = workspaces;
-        const imports = stages.filter(stage => stage.kind !== 'writing');
+        const imports = stages.filter(stage => stage.kind !== 'writing' && stage.kind !== 'source-edit');
+        state.sourceEditStages = stages.filter(stage => stage.kind === 'source-edit' && stage.state === 'draft');
         state.allStages = imports;
         state.stages = imports.filter(stage => stage.state === 'draft');
         mergeBatches(imports);
@@ -701,7 +736,7 @@
         if (!/\.(txt|md)$/i.test(file.name)) throw new Error('UTF-8 .txt 또는 .md 파일만 지원합니다. 폴더·ZIP·사진은 가져오지 않습니다.');
         if (file.size > MAX_TEXT_BYTES) throw new Error('이 파일이 1 MiB를 넘습니다. 필요한 내용을 나누어 다시 선택해 주세요.');
         let text;
-        try { text = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer()); }
+        try { text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await file.arrayBuffer()); }
         catch (_) { throw new Error('UTF-8로 읽을 수 없습니다. 원래 파일은 변경하지 않았습니다.'); }
         if (!contextAlive() || token !== batchGeneration || batch.stopped || item.readToken !== token) return;
         const stage = batchStage(file, batch, item.index, text, origin);
@@ -1037,7 +1072,10 @@
       }
       request.operationId = state.pendingOperation.operationId;
       announce('이 브라우저에 저장 중');
-      const result = await storage.commitLocal(request);
+      const workspace = workspaceGeneration, account = state.syncAccountKey;
+      const isCurrent = () => !disposed && workspace === workspaceGeneration && account === state.syncAccountKey && request.workspaceId === state.bundle?.workspaceId;
+      const result = await storage.commitLocal(request, { isCurrent });
+      if (!isCurrent()) throw new Error('계정 또는 작업공간이 바뀌어 이전 저장의 화면 반영을 멈췄습니다.');
       if (result.status === 'conflict') {
         state.remoteChanged = true;
         renderHeader();
@@ -1089,6 +1127,7 @@
       await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
+      await sourceEditor?.flush();
       collection?.flush();
       await flushReadingPosition();
       if (!current()) return false;
@@ -1111,7 +1150,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { navigationMotion, sectionPosition, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, ...viewOptions } = options || {};
+      const { navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, ...viewOptions } = options || {};
       if (externalImport) {
         if (mode !== 'import' || externalImport.workspaceId !== state.bundle.workspaceId) return false;
         const input = global.HaedoLife.Discovery.toImportInput(externalImport.article);
@@ -1145,6 +1184,7 @@
       blogOpenOptions = mode === 'blog' ? { evidenceSeed: options?.evidenceSeed, postId: options?.blogPostId } : null;
       collectionOpenOptions = mode === 'collection' ? { itemId: collectionItemId } : null;
       writingOpenOptions = mode === 'write' ? writing || {} : null;
+      if (mode === 'source-edit' && options.sourceEdit) sourceEditOpenOptions = options.sourceEdit;
       Object.assign(state, viewOptions, { mode });
       workbenchOpenOptions = workbenchModes.includes(mode) ? options : null;
       if (sectionFor(mode) === 'records') lastRecordMode = mode;
@@ -1286,7 +1326,7 @@
     function sectionFor(mode) {
       if (mode === 'external-discovery') return 'news';
       if (mode === 'home' || mode === 'account-blog' || mode === 'page' && blogPageTask || mode === 'write' && viewOrigins.get('write')?.mode === 'home' || mode === 'source' && (state.returnContext?.mode === 'home' || state.returnContext?.mode === 'page' && blogPageTask)) return 'home';
-      return ['tools', 'naver-capture', 'naver-blog', 'interests', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'blog', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
+      return ['tools', 'naver-capture', 'naver-blog', 'interests', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'source-trash', 'blog', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
     }
 
     function routeMode() {
@@ -1297,7 +1337,7 @@
       if (section === 'news') return 'external-discovery';
       if (section === 'home' && !view) return 'home';
       if (section === 'tools') return ['naver-blog', 'external-discovery', 'interests', 'discover', 'reflection', 'books'].includes(view) ? view : 'tools';
-      if (section === 'manage') return ['blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
+      if (section === 'manage') return ['source-trash', 'blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
       if (!section && ['naver-blog', 'account-blog', 'blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages', 'external-discovery', 'interests', 'discover', 'reflection', 'books'].includes(view)) return view;
       if (['account-blog', 'blog', 'topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related', 'collection', 'find'].includes(view)) return view;
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
@@ -1348,6 +1388,7 @@
       await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
+      await sourceEditor?.flush();
       collection?.flush();
       if (disposed || token !== navigationGeneration || workspace !== workspaceGeneration ||
           workspaceId !== state.bundle?.workspaceId || account !== state.syncAccountKey) return;
@@ -1377,6 +1418,7 @@
     }
 
     async function returnFromSubview() {
+      if (state.mode === 'source-edit') return closeSourceEditor();
       const origin = subviewOrigin();
       const anchor = state.mode === 'page' && blogPageTask && origin.mode === 'home' && origin.homeState?.tab !== 'drafts' ? blogCommitted : null;
       if (await navigate(origin.mode, { preserveContext: true, homeState: origin.homeState, homeAnchor: anchor, navigationMotion: 'back' }) === false) return;
@@ -1412,7 +1454,7 @@
 
     function syncWritingFocus() {
       if (disposed) return;
-      const editing = state.mode === 'write' || state.mode === 'page' && (blogPageTask && blogMode === 'edit' ||
+      const editing = state.mode === 'write' || state.mode === 'source-edit' || state.mode === 'page' && (blogPageTask && blogMode === 'edit' ||
         [...main.querySelectorAll('.photo-editor,.pp-composer')].some(element => element.getClientRects().length > 0));
       if (editing) document.body.dataset.writingFocus = 'true';
       else delete document.body.dataset.writingFocus;
@@ -1427,9 +1469,9 @@
       header.replaceChildren();
       toolbar.classList.add('haedo-page-heading');
       toolbar.replaceChildren();
-      toolbar.hidden = state.mode === 'source' && !state.remoteChanged;
+      toolbar.hidden = ['source', 'source-edit'].includes(state.mode) && !state.remoteChanged;
       recordSections.replaceChildren();
-      const focused = ['blog', 'write', 'source', 'page', 'related', 'collection', 'find'].includes(state.mode);
+      const focused = ['blog', 'write', 'source-edit', 'source', 'page', 'related', 'collection', 'find'].includes(state.mode);
       recordSections.hidden = section !== 'records' || focused;
       const heading = node('h1', null, 'life-page-title');
       heading.tabIndex = -1;
@@ -1514,6 +1556,7 @@
       await blogManager?.flush();
           await workbench?.flush();
           await writer?.flush();
+      await sourceEditor?.flush();
           collection?.flush();
           await refreshData();
           state.remoteChanged = false;
@@ -1651,18 +1694,21 @@
       const copy = await global.HaedoLife.NaverMedia.copy(snapshot); if (!current()) return;
       const installed = await storage.installNaverCaptureCopy(copy, { isCurrent: current }); if (!current()) return;
       invalidateBatchContext(); state.bundle = installed.bundle; state.stage = state.prepared = null;
-      state.sourceId = state.sourceVersionId = null; state.sourceDrafts.clear(); state.readerPositions.clear(); state.remoteChanged = false; resetSearchContext();
+      state.sourceId = state.sourceVersionId = null; state.sourceDrafts.clear(); state.readerPositions.clear(); state.readerModes.clear(); state.remoteChanged = false; resetSearchContext();
       await refreshData(); if (disposed) return; connectSubscription();
       const source = state.bundle.sources[0], version = state.bundle.sourceVersions[0];
       await navigate('source', { sourceId: source.id, sourceVersionId: version.id, locator: null, returnContext: { mode: 'naver-blog', workspaceId: state.bundle.workspaceId } });
       announce('원문과 사진 파일을 새 독립 공간에 복원했습니다. 서버에 자동 전송하지 않았습니다.');
     }
     async function writeNaverPhotos({ sourceId, sourceVersionId, indexes, expectedCaptureHash }) {
-      const workspaceId = state.bundle.workspaceId, token = navigationGeneration, account = state.syncAccountKey;
-      const current = () => !disposed && state.bundle?.workspaceId === workspaceId && token === navigationGeneration && account === state.syncAccountKey;
+      const workspaceId = state.bundle.workspaceId, workspace = workspaceGeneration, token = navigationGeneration, account = state.syncAccountKey;
+      const current = () => !disposed && workspace === workspaceGeneration && state.bundle?.workspaceId === workspaceId && token === navigationGeneration && account === state.syncAccountKey;
       if (!Array.isArray(indexes) || !indexes.length || indexes.length > 20 || new Set(indexes).size !== indexes.length) throw new Error('글에 넣을 사진을 선택해 주세요.');
       const [bundle, attachment] = await Promise.all([storage.read(workspaceId), storage.readNaverCapture(workspaceId, sourceVersionId)]);
       if (!current()) return;
+      const source = bundle.sources.find(value => value.id === sourceId), version = bundle.sourceVersions.find(value => value.id === sourceVersionId && value.sourceId === sourceId);
+      if (!source || !version) throw new Error('선택한 정확한 원문 판을 찾을 수 없습니다.');
+      if (!core.isVersionActive(bundle, sourceVersionId)) throw new Error('휴지통의 자료는 복원한 뒤 새 글에 활용해 주세요.');
       if (!attachment || attachment.sourceId !== sourceId || expectedCaptureHash && attachment.capture.capture_hash !== expectedCaptureHash) throw new Error('선택한 수집 판을 먼저 자료에 반영해 주세요.');
       const M = global.HaedoLife.PhotoPost, doc = M.create(core.id), ops = [];
       for (const index of indexes) {
@@ -1671,10 +1717,10 @@
         const photo = await M.readPhoto(entry.blob, core.id); if (!current()) return;
         doc.photos.push(photo); ops.push({ insert: { photo: { id: photo.id, alt: description.alt, caption: description.caption } } }, { insert: '\n' });
       }
-      const source = bundle.sources.find(value => value.id === sourceId);
       if (source?.url) ops.push({ insert: '사진 출처: ' + source.url + '\n' });
       doc.ops = ops; M.validate(doc); if (!current()) return;
-      await storage.savePhotoPost(workspaceId, doc, 0); if (!current()) return;
+      await storage.savePhotoPostFromNaverCapture(workspaceId, doc, { sourceId, sourceVersionId, captureHash: attachment.capture.capture_hash }, { isCurrent: current });
+      if (!current()) return;
       viewOrigins.set('page', naverOrigin());
       await navigate('page', { blogContext: true, preserveContext: true, searchTarget: { photoPostId: doc.id }, pagePreview: false });
       announce('선택한 사진과 원문 주소로 비공개 초안을 만들었습니다.');
@@ -1733,9 +1779,10 @@
           invalidateBatchContext();
           state.bundle = bundle; state.stage = null; state.prepared = null;
           state.sourceId = state.sourceVersionId = null; state.sourceDrafts.clear();
-          state.readerPositions.clear(); state.remoteChanged = false; resetSearchContext();
+          state.readerPositions.clear(); state.readerModes.clear(); state.remoteChanged = false; resetSearchContext();
           state.workspaces = workspaces;
-          const imports = stages.filter(stage => stage.kind !== 'writing');
+          const imports = stages.filter(stage => stage.kind !== 'writing' && stage.kind !== 'source-edit');
+        state.sourceEditStages = stages.filter(stage => stage.kind === 'source-edit' && stage.state === 'draft');
           state.allStages = imports; state.stages = imports.filter(stage => stage.state === 'draft'); mergeBatches(imports);
           connectSubscription();
           state.mode = 'blog'; render();
@@ -1756,7 +1803,7 @@
       if (disposed) return;
       invalidateBatchContext(); state.bundle = bundle;
       state.stage = state.prepared = null; state.sourceId = state.sourceVersionId = null;
-      state.sourceDrafts.clear(); state.readerPositions.clear(); state.remoteChanged = false; resetSearchContext();
+      state.sourceDrafts.clear(); state.readerPositions.clear(); state.readerModes.clear(); state.remoteChanged = false; resetSearchContext();
       await refreshData(); if (disposed) return;
       connectSubscription();
       return navigate('source', { sourceId: version.sourceId, sourceVersionId: version.id, returnContext: { mode: 'manage', workspaceId: bundle.workspaceId } });
@@ -1815,7 +1862,7 @@
         state.sourceId = null;
         state.sourceVersionId = null;
         state.sourceDrafts.clear();
-        state.readerPositions.clear();
+        state.readerPositions.clear(); state.readerModes.clear();
         state.remoteChanged = false;
         state.mode = 'sources';
         resetSearchContext();
@@ -1825,6 +1872,8 @@
         announce('선택한 작업공간을 열었습니다. 다른 작업공간은 그대로 보관됩니다.');
       }));
       management.append(workspace.label);
+      const trash = button('자료 휴지통', guarded(() => navigate('source-trash'))); trash.id = 'lifeSourceTrashOpen';
+      management.append(trash);
       if ([...state.batches.values()].some(batch => batch.workspaceId === state.bundle.workspaceId)) management.append(button('선택 파일 목록', guarded(() => navigate('batch'))));
       main.append(manage, management);
       if (sync) {
@@ -1865,10 +1914,10 @@
     }
 
     function renderStages(parent) {
-      if (!state.stages.length) return;
+      if (!state.stages.length && !state.sourceEditStages.length) return;
       const details = node('details', null, 'life-details');
       details.id = 'lifeImportDrafts';
-      details.append(node('summary', '검토 중 ' + state.stages.length + '개 · 이어서 확인'));
+      details.append(node('summary', '검토 중 ' + (state.stages.length + state.sourceEditStages.length) + '개 · 이어서 확인'));
       const listedBatches = new Set();
       state.stages.forEach(stage => {
         if (validBatchStage(stage)) {
@@ -1882,13 +1931,23 @@
         row.append(button(stage.input.title || stage.input.fileName || '제목 없는 검토 항목', guarded(() => openStage(stage.stageId))), node('span', originName(stage.input.origin), 'life-meta'));
         details.append(row);
       });
+      state.sourceEditStages.forEach(stage => {
+        const row = node('div', null, 'life-row');
+        const open = button(stage.input.title || '제목 없는 수정 초안', guarded(() => {
+          sourceEditOrigin = { workspaceId: state.bundle.workspaceId, sourceId: stage.baseSourceId,
+            sourceVersionId: stage.baseSourceVersionId, scrollY: 0, returnContext: { mode: 'sources', workspaceId: state.bundle.workspaceId } };
+          return navigate('source-edit', { sourceEdit: { stageId: stage.stageId } });
+        }));
+        open.dataset.sourceEditStageId = stage.stageId;
+        row.append(open, node('span', '자료 수정', 'life-meta')); details.append(row);
+      });
       parent.append(details);
     }
 
     function resetSearchContext() {
       unifiedSearch?.reset();
       viewOrigins.clear();
-      sourceWritingRequests.clear(); materialWritingTask = false;
+      sourceWritingRequests.clear(); sourceStateRequests.clear(); materialWritingTask = false;
       selectedVersions.clear();
       selectionReturn = null;
       chapterImport = null;
@@ -1910,7 +1969,7 @@
     async function arrangeRecords(mode, versionIds, returnFocusId) {
       if (!versionIds.length) return;
       const workspaceId = state.bundle.workspaceId;
-      if (versionIds.some(id => !state.bundle.sourceVersions.some(version => version.id === id))) {
+      if (versionIds.some(id => !core.isVersionActive(state.bundle, id))) {
         throw new Error('선택한 원문 버전을 찾을 수 없습니다. 선택 목록을 확인해 주세요.');
       }
       selectionReturn = { workspaceId, versionIds: [...versionIds], mode: state.mode, sourceId: state.sourceId,
@@ -2034,7 +2093,7 @@
       const draw = view => {
         const focusId = row.contains(document.activeElement) ? document.activeElement.id : null;
         row.replaceChildren();
-        row.hidden = view.status === 'empty';
+        row.hidden = view.status === 'empty' || !!view.position && !activeSource(view.position.sourceId);
         if (row.hidden) return;
         const copy = node('div', null, 'life-reading-resume-copy');
         const source = state.bundle.sources.find(item => item.id === view.position?.sourceId);
@@ -2071,7 +2130,7 @@
             if (!showing() || token !== navigationGeneration) return;
             const bundle = state.bundle.revision > fetched.revision ? state.bundle : fetched;
             const version = bundle.sourceVersions.find(item => item.id === sourceVersionId && item.sourceId === sourceId);
-            if (!bundle.sources.some(item => item.id === sourceId) || !version || typeof version.contentText !== 'string' ||
+            if (!core.isSourceActive(bundle, sourceId) || !bundle.sources.some(item => item.id === sourceId) || !version || typeof version.contentText !== 'string' ||
                 !Number.isInteger(offset) || offset < 0 || offset > version.contentText.length) {
               showError('저장한 원문 버전을 찾을 수 없습니다. 다른 버전으로 바꾸지 않았습니다.');
               return;
@@ -2271,7 +2330,7 @@
       filters.id = 'lifeSearchFilters';
       filters.hidden = !state.topicsFiltersOpen;
       filters.setAttribute('aria-label', '주제 필터');
-      const topicNames = Array.from(new Set(state.bundle.records.map(record => record.topic || ''))).filter(Boolean).sort((a, b) => a.localeCompare(b, 'ko'));
+      const topicNames = Array.from(new Set(state.bundle.records.filter(activeRecord).map(record => record.topic || ''))).filter(Boolean).sort((a, b) => a.localeCompare(b, 'ko'));
       const topicSearch = field('주제 이름 찾기', 'search', 'lifeTopicSearch', state.topicFilterSearch);
       topicSearch.input.placeholder = '주제 이름 찾기';
       topicSearch.input.maxLength = 500;
@@ -2292,7 +2351,7 @@
       const update = () => {
         const activeTopic = topics.contains(document.activeElement) ? { kind: document.activeElement.dataset.topicKind, name: document.activeElement.dataset.topicName } : null;
         topics.replaceChildren();
-        const searched = state.bundle.records.filter(record => matchingText([record.text, record.topic, record.note, ...record.sourceRefs.map(ref => sourceLabel(sourceFor(ref.sourceId) || {}))].join(' '), state.topicsSearch));
+        const searched = state.bundle.records.filter(activeRecord).filter(record => matchingText([record.text, record.topic, record.note, ...record.sourceRefs.map(ref => sourceLabel(sourceFor(ref.sourceId) || {}))].join(' '), state.topicsSearch));
         const counts = new Map();
         searched.forEach(record => counts.set(record.topic || '', (counts.get(record.topic || '') || 0) + 1));
         const makeFilter = (label, kind, name, total, selected) => {
@@ -2320,8 +2379,8 @@
         count.textContent = '발췌 ' + records.length + '개' + (state.topicUnassigned ? ' · 주제 없음' : state.topic ? ' · ' + state.topic : '');
         results.replaceChildren();
         records.forEach(record => results.append(excerptCard(record)));
-        if (!records.length && !state.bundle.records.length && state.bundle.sources.length && !state.topic && !state.topicUnassigned) {
-          const sources = state.bundle.sources.slice().reverse().map(source => ({ source, version: state.bundle.sourceVersions.filter(version => version.sourceId === source.id).at(-1) }))
+        if (!records.length && !state.bundle.records.some(activeRecord) && state.bundle.sources.some(source => activeSource(source.id)) && !state.topic && !state.topicUnassigned) {
+          const sources = state.bundle.sources.filter(source => activeSource(source.id)).slice().reverse().map(source => ({ source, version: state.bundle.sourceVersions.filter(version => version.sourceId === source.id).at(-1) }))
             .filter(({ source, version }) => version && matchingText(sourceLabel(source) + ' ' + (version.contentText || ''), state.topicsSearch));
           count.textContent = '자료 ' + sources.length + '개';
           for (const { source, version } of sources) results.append(sourceFeedCard(source, version));
@@ -2353,6 +2412,47 @@
       bar.append(filter);
       main.append(filters, count, results);
       update();
+    }
+
+    async function changeSourceState(sourceId, next, expectedRevision, snapshot = {}) {
+      const workspaceId = state.bundle.workspaceId, workspace = workspaceGeneration, account = state.syncAccountKey;
+      const isCurrent = () => !disposed && workspace === workspaceGeneration && account === state.syncAccountKey && state.bundle?.workspaceId === workspaceId;
+      await persistDrafts();
+      if (!isCurrent()) return false;
+      const key = JSON.stringify([account, workspaceId, sourceId, next, expectedRevision, snapshot]);
+      if (!sourceStateRequests.has(key)) sourceStateRequests.set(key, { workspaceId, baseRevision: state.bundle.revision,
+        operationId: core.id(), changes: core.buildSourceStateChanges(state.bundle, sourceId, next, { expectedRevision, ...snapshot }) });
+      const result = await storage.commitLocal(sourceStateRequests.get(key), { isCurrent });
+      if (!isCurrent()) return false;
+      if (result.status !== 'stored') {
+        if (result.status === 'conflict') { sourceStateRequests.delete(key); state.remoteChanged = true; renderHeader(); }
+        throw Object.assign(new Error(result.error?.message || '자료 상태를 저장하지 못했습니다. 다시 시도해 주세요.'), { code: result.error?.code });
+      }
+      sourceStateRequests.delete(key); await refreshData(); state.remoteChanged = false;
+      if (isCurrent() && next === 'trash') for (const version of state.bundle.sourceVersions) {
+        if (version.sourceId === sourceId) selectedVersions.delete(version.id);
+      }
+      return isCurrent();
+    }
+
+    function renderSourceTrash() {
+      const list = node('div', null, 'life-card-grid'); list.id = 'lifeSourceTrashList';
+      const sources = state.bundle.sources.filter(source => !activeSource(source.id));
+      for (const source of sources) {
+        const lifecycle = core.sourceState(state.bundle, source.id), version = state.bundle.sourceVersions.filter(value => value.sourceId === source.id).at(-1);
+        const row = node('article', null, 'life-card life-source-card'); row.dataset.sourceId = source.id;
+        const read = button(sourceLabel(source), guarded(() => openResult('source-trash', 'trash:' + source.id, { sourceId: source.id, sourceVersionId: version.id })), 'life-source-open');
+        read.dataset.sourceTrashRead = source.id;
+        const restore = button('복원', guarded(async () => {
+          if (!await changeSourceState(source.id, 'active', lifecycle.revision, { expectedSourceRevision: source.revision, expectedStatus: 'trash' })) return;
+          await navigate('source', { sourceId: source.id, sourceVersionId: version.id, locator: null,
+            returnContext: { mode: 'source-trash', workspaceId: state.bundle.workspaceId, scrollY: global.scrollY } });
+          announce('자료를 복원했습니다.');
+        })); restore.dataset.sourceRestore = source.id;
+        row.append(read, restore); list.append(row);
+      }
+      if (!sources.length) list.append(empty('휴지통이 비어 있습니다.'));
+      main.append(list);
     }
 
     function renderSources() {
@@ -2445,16 +2545,16 @@
         const start = append ? list.children.length : 0;
         if (!append) list.replaceChildren();
         const searchOptions = { ignoreKoreanSpacing: state.ignoreKoreanSpacing };
-        const hits = core.searchSources(state.bundle, query, searchOptions);
+        const hits = core.searchSources(state.bundle, query, searchOptions).filter(hit => activeSource(hit.sourceId));
         const byVersion = new Map(hits.map(hit => [hit.sourceVersionId, hit]));
-        const matchingRecords = query ? state.bundle.records.filter(record => {
+        const matchingRecords = query ? state.bundle.records.filter(activeRecord).filter(record => {
           const text = [record.text, record.topic, record.note].join('\n');
           return state.ignoreKoreanSpacing ? core.matchesSearchText(text, query, searchOptions) : matchingText(text, query);
-        }) : state.bundle.records;
+        }) : state.bundle.records.filter(activeRecord);
         // A note can match without the source text matching. Keep its exact version
         // and do not invent a source-text location for a user's own words.
         if (query) matchingRecords.forEach(record => record.sourceRefs.forEach(ref => {
-          if (byVersion.has(ref.sourceVersionId)) return;
+          if (!activeSource(ref.sourceId) || byVersion.has(ref.sourceVersionId)) return;
           const versions = state.bundle.sourceVersions.filter(version => version.sourceId === ref.sourceId);
           const index = versions.findIndex(version => version.id === ref.sourceVersionId);
           if (index < 0 || !sourceFor(ref.sourceId)) return;
@@ -2485,7 +2585,7 @@
         visibleMatches.slice(start).forEach(hit => {
           const source = sourceFor(hit.sourceId);
           const version = state.bundle.sourceVersions.find(v => v.id === hit.sourceVersionId);
-          const records = (query ? matchingRecords : state.bundle.records).filter(record => record.sourceRefs.some(ref =>
+          const records = (query ? matchingRecords : state.bundle.records.filter(activeRecord)).filter(record => record.sourceRefs.some(ref =>
             query ? ref.sourceVersionId === version.id : ref.sourceId === source.id));
           const card = node('article', null, 'life-card life-source-card');
           Object.assign(card.dataset, { sourceId: source.id, versionId: version.id, matchedBy: hit.matchedBy });
@@ -2658,6 +2758,8 @@
       const version = state.sourceVersionId ? versions.find(v => v.id === state.sourceVersionId) : versions.slice(-1)[0];
       if (!source || !version) { main.append(title('요청한 원문 버전을 찾을 수 없습니다.'), node('p', '다른 버전으로 자동 전환하지 않았습니다. 최신 내용 확인 후 다시 찾아 주세요.', 'life-help'), state.returnContext ? searchReturnButton() : button('자료실로 돌아가기', guarded(() => navigate('sources')))); state.locator = null; return; }
       state.sourceVersionId = version.id;
+      const lifecycle = core.sourceState(state.bundle, source.id), sourceActive = lifecycle.status === 'active';
+      let changeReaderMode = null, currentReaderOffset = () => null, optionOffset = null;
       const batch = currentBatch();
       if (batch && batch.items.some(item => item.result?.sourceVersionId === version.id)) {
         const back = button('파일 목록으로 돌아가기', guarded(() => navigate('batch'))); back.id = 'lifeBatchReturn'; main.append(back);
@@ -2666,6 +2768,7 @@
       const tools = node('div', null, 'life-reader-tools');
       const back = state.returnContext ? searchReturnButton() : iconButton('자료실로 돌아가기', 'back', guarded(() => navigate('sources')));
       const info = iconButton('출처 정보', 'info', () => {});
+      info.setAttribute('aria-description', '자료 옵션 · 보기, 수정, 휴지통');
       info.id = 'lifeSourceInfoToggle';
       const arrange = iconButton('이 원문 담기', 'link', () => {});
       arrange.id = 'lifeReaderArrange';
@@ -2676,6 +2779,7 @@
       arrangePanel.append(node('p', '현재 원문 버전을 담습니다.', 'life-meta'), arrangeActions(() => [version.id]));
       disclosure(arrange, arrangePanel, { onChange: open => { state.readerArrangeOpen = open; flushReadingPosition(); readerWatch?.suppress(); } });
       tools.append(back, arrange, info);
+      arrange.disabled = !sourceActive;
       const useQuote = button('선택 구절로 글 쓰기', guarded(() => {
         const locator = state.sourceSelection && { ...state.sourceSelection };
         if (!locator || locator.start >= locator.end) throw new Error('먼저 본문에서 인용할 구절을 선택해 주세요.');
@@ -2692,7 +2796,7 @@
       useQuote.id = 'lifeSourceToBlog'; useNine.id = 'lifeSourceToNine';
       useQuote.disabled = useNine.disabled = true;
       arrangePanel.append(useQuote, useNine);
-      if (isOwnWriting(source) && version.id === versions[versions.length - 1].id) {
+      if (sourceActive && isOwnWriting(source) && version.id === versions[versions.length - 1].id) {
         tools.append(iconButton('내 글 수정', 'edit', guarded(() => navigate('write', { writing: { sourceId: source.id, sourceVersionId: version.id } }))));
       }
       const heading = node('h1', sourceLabel(source), 'life-heading life-reader-heading');
@@ -2700,7 +2804,7 @@
       const versionIndex = versions.findIndex(item => item.id === version.id) + 1;
       article.append(tools, arrangePanel, heading,
         node('p', sourceOrigin(source) + ' · 원문 작성 ' + (version.originalCreatedAt || '미상'), 'life-reader-meta'),
-        node('p', (COVERAGE[version.coverage.status] || COVERAGE.unknown) + ' · 버전 ' + versionIndex + '/' + versions.length + (versionIndex === versions.length ? '' : ' · 이전 버전'), 'life-reader-meta'));
+        node('p', (COVERAGE[version.coverage.status] || COVERAGE.unknown) + ' · 버전 ' + versionIndex + '/' + versions.length + (versionIndex === versions.length ? '' : ' · 이전 버전') + (core.isEditedCopy(state.bundle, version.id) ? ' · 해도에서 수정한 사본' : ''), 'life-reader-meta'));
       const sourceWriting = button('이 자료로 글쓰기', guarded(async () => {
         const workspaceId = state.bundle.workspaceId, workspaceToken = workspaceGeneration, token = navigationGeneration, account = state.syncAccountKey;
         const fresh = await storage.read(workspaceId);
@@ -2713,7 +2817,7 @@
         return navigate('page', { materialWritingSeed: { requestId: sourceWritingRequests.get(key), workspaceId,
           sourceId: source.id, sourceVersionId: version.id, contentHash: version.contentHash } });
       }));
-      sourceWriting.id = 'lifeSourceMaterialWriting';
+      sourceWriting.id = 'lifeSourceMaterialWriting'; sourceWriting.disabled = !sourceActive;
       const writingActions = node('div', null, 'life-actions life-reader-writing-actions'); writingActions.append(sourceWriting); article.append(writingActions);
       if (versions.length > 1) {
         const choices = selectField('원문 버전', 'lifeVersion', versions.map((v, index) => [v.id, '버전 ' + (index + 1) + ' · ' + dateLabel(v.importedAt) + ' 보관']), version.id);
@@ -2725,6 +2829,7 @@
       details.id = 'lifeSourceDetails';
       details.hidden = true;
       details.setAttribute('aria-label', '출처와 포함 범위');
+      info.addEventListener('click', () => { if (details.hidden) optionOffset = currentReaderOffset(); }, { capture: true });
       const setDetails = disclosure(info, details, { onChange: () => { flushReadingPosition(); readerWatch?.suppress(); } });
       const detailsHeading = node('div', null, 'life-panel-heading');
       detailsHeading.append(node('h3', '출처와 포함 범위'), iconButton('출처 정보 닫기', 'close', () => setDetails(false)));
@@ -2738,7 +2843,37 @@
           await navigate('import', { reimport: { workspaceId, sourceId: source.id, sourceVersionId: version.id } });
         }));
         reimport.id = 'lifeSourceReimport';
+        reimport.disabled = !sourceActive;
         details.append(reimport);
+      }
+      if (version.format === 'text/markdown' && typeof version.contentText === 'string') {
+        const format = button('원문 텍스트 보기', () => { changeReaderMode?.(); }); format.id = 'lifeSourceFormatToggle';
+        details.append(format);
+      }
+      if (sourceActive && !isOwnWriting(source)) {
+        const edit = button(versionIndex === versions.length ? '내 사본 수정' : '이 버전으로 복원', guarded(() => beginSourceEdit(source, version, { restore: versionIndex !== versions.length })));
+        edit.id = versionIndex === versions.length ? 'lifeSourceEdit' : 'lifeSourceRestoreVersion'; details.append(edit);
+      }
+      if (sourceActive) {
+        const confirmPanel = node('section', null, 'life-source-trash-confirm'); confirmPanel.id = 'lifeSourceTrashConfirmation'; confirmPanel.hidden = true;
+        confirmPanel.setAttribute('aria-label', '자료 휴지통 이동 확인');
+        const trash = button('휴지통으로 이동', () => { confirmPanel.hidden = false; confirmPanel.querySelector('#lifeSourceTrashConfirm').focus({ preventScroll: true }); }); trash.id = 'lifeSourceTrash';
+        const confirm = button('휴지통으로 이동', guarded(async () => {
+          if (!await changeSourceState(source.id, 'trash', lifecycle.revision, { expectedSourceRevision: source.revision, expectedStatus: 'active' })) return;
+          if (state.returnContext?.mode === 'source-trash') await navigate('source-trash');
+          else await returnToResults();
+          announce('자료를 휴지통으로 이동했습니다.');
+        })); confirm.id = 'lifeSourceTrashConfirm';
+        const cancel = button('취소', () => { confirmPanel.hidden = true; trash.focus({ preventScroll: true }); }); cancel.id = 'lifeSourceTrashCancel';
+        confirmPanel.append(node('p', '자료를 휴지통으로 이동할까요? 원문과 기존 인용은 보존합니다.', 'life-help'), confirm, cancel);
+        details.append(trash, confirmPanel);
+      } else {
+        const restore = button('자료 복원', guarded(async () => {
+          if (!await changeSourceState(source.id, 'active', lifecycle.revision, { expectedSourceRevision: source.revision, expectedStatus: 'trash' })) return;
+          render(); announce('자료를 복원했습니다.');
+        })); restore.id = 'lifeSourceRestore';
+        details.append(restore);
+        article.append(node('p', '휴지통의 자료입니다.', 'life-meta life-source-trash-status'));
       }
       article.append(details);
       const connections = obsidianConnections(version.id);
@@ -2787,16 +2922,26 @@
         return;
       }
 
-      // Keep a single unchanged Text node: DOM offsets are the original UTF-16
-      // positions, including CRLF, surrogate pairs and repeated sentences.
-      const reader = node('div', null, 'life-source-text');
-      reader.id = 'lifeSourceText';
-      reader.tabIndex = 0;
-      reader.setAttribute('role', 'document');
-      reader.setAttribute('aria-label', '보관한 원문');
-      const originalText = document.createTextNode(version.contentText);
-      reader.append(originalText);
-      article.append(reader);
+      // Raw quoting still uses one unchanged Text node; formatted DOM never
+      // pretends its display offsets are original UTF-16 source positions.
+      const rawReader = node('div', null, 'life-source-text');
+      const originalText = document.createTextNode(version.contentText); rawReader.append(originalText);
+      const markdown = version.format === 'text/markdown' && global.HaedoLife.SourceMarkdown ? global.HaedoLife.SourceMarkdown.render(document, version.contentText) : null;
+      const entryLocator = state.locator || (!suppressResume && state.readerPositions.get(version.id));
+      const exactRange = !!entryLocator && entryLocator.start !== entryLocator.end;
+      const mappedEntry = !entryLocator || markdown?.blocks.some(block => entryLocator.start >= block.start && entryLocator.start < block.end);
+      let formattedView = !!markdown?.formatted && !exactRange && mappedEntry && state.readerModes.get(version.id) !== 'raw';
+      let reader = formattedView ? markdown.element : rawReader;
+      const readerHost = node('div', null, 'life-source-content'); readerHost.id = 'lifeSourceContent';
+      function installReader() {
+        reader.id = 'lifeSourceText'; reader.tabIndex = 0; reader.dataset.readingMode = formattedView ? 'formatted' : 'raw';
+        reader.setAttribute('role', 'document'); reader.setAttribute('aria-label', formattedView ? '서식으로 보는 원문' : '보관한 원문');
+        readerHost.replaceChildren(reader);
+        const toggle = details.querySelector('#lifeSourceFormatToggle');
+        if (toggle) { toggle.textContent = formattedView ? '원문 텍스트 보기' : '서식 보기'; toggle.disabled = !markdown?.formatted; }
+      }
+      installReader(); article.append(readerHost);
+      if (markdown && !markdown.formatted) details.append(node('p', '서식을 표시하지 못해 원문 텍스트로 열었습니다.', 'life-help'));
       if (naverMediaHost) article.append(naverMediaHost);
       const relatedEnd = button('함께 읽을 기록', openRelated('lifeReaderRelatedEnd'), 'life-reader-related life-reader-related-end');
       relatedEnd.id = 'lifeReaderRelatedEnd';
@@ -2816,6 +2961,7 @@
       const note = field('연결 이유 또는 메모 (선택)', 'textarea', 'lifeSourceNote', sourceDraft.note);
       const saveExcerpt = button('선택 구절 모음에 추가', guarded(async () => {
         const range = state.sourceSelection;
+        if (!sourceActive || !core.isSourceActive(state.bundle, source.id)) throw new Error('자료를 복원한 뒤 새 구절을 저장해 주세요.');
         if (!range || range.start === range.end) throw new Error('먼저 원문에서 발췌할 구절을 선택해 주세요.');
         const prepared = { source, version, match: { kind: 'exact_duplicate', sourceId: source.id, sourceVersionId: version.id } };
         const changes = core.buildImportChanges(state.bundle, prepared, [{ start: range.start, end: range.end, topic: topic.input.value, note: note.input.value }]);
@@ -2831,20 +2977,22 @@
       let readerInteracted = false;
       let selectionOrigin = 'dom';
       const savePosition = () => {
-        state.readerPositions.set(version.id, { ...(state.sourceSelection || { start: 0, end: 0 }), scrollY: panel.hidden ? global.scrollY : readingScrollY });
+        const previous = state.readerPositions.get(version.id), offset = formattedView ? markdown.adapter?.visibleOffset() ?? previous?.start ?? 0 : null;
+        state.readerPositions.set(version.id, { ...(formattedView ? { start: offset, end: offset } : state.sourceSelection || { start: 0, end: 0 }),
+          mode: formattedView ? 'formatted' : 'raw', scrollY: panel.hidden ? global.scrollY : readingScrollY });
       };
       const remember = (start, end) => {
         state.sourceSelection = { start, end };
         if (state.sourceDrafts.has(version.id)) state.sourceDrafts.get(version.id).range = { start, end };
         picked.textContent = start < end ? version.contentText.slice(start, end) : instruction;
         quote.dataset.hasSelection = String(start < end);
-        saveExcerpt.disabled = start >= end;
-        useQuote.disabled = useNine.disabled = start >= end;
+        saveExcerpt.disabled = !sourceActive || formattedView || start >= end;
+        useQuote.disabled = useNine.disabled = !sourceActive || formattedView || start >= end;
         savePosition();
       };
       const capture = event => {
         if (['pointerup', 'keyup'].includes(event?.type)) readerInteracted = true;
-        if (!reader.isConnected || document.activeElement?.matches('input,textarea')) return;
+        if (formattedView || !sourceActive || !reader.isConnected || document.activeElement?.matches('input,textarea')) return;
         // A textarea selection leaves the document's earlier Range intact.
         // Keep the keyboard choice when opening/closing tools; only a fresh
         // interaction with the readable body makes that Range authoritative.
@@ -2873,9 +3021,10 @@
         remember(start, end);
         return range;
       };
-      reader.addEventListener('pointerdown', () => { selectionOrigin = 'dom'; readerInteracted = true; });
-      reader.addEventListener('pointerup', capture);
-      reader.addEventListener('keyup', capture);
+      for (const body of [rawReader, ...(markdown?.formatted ? [markdown.element] : [])]) {
+        body.addEventListener('pointerdown', () => { selectionOrigin = 'dom'; readerInteracted = true; });
+        body.addEventListener('pointerup', capture); body.addEventListener('keyup', capture);
+      }
       document.addEventListener('selectionchange', capture);
       global.addEventListener('scroll', savePosition, { passive: true });
       readerCleanup = () => {
@@ -2885,6 +3034,8 @@
         document.removeEventListener('selectionchange', capture);
         global.removeEventListener('scroll', savePosition);
       };
+      quote.disabled = !sourceActive;
+      quote.addEventListener('click', () => { if (formattedView) changeReaderMode?.('raw', false); }, { capture: true });
       const setPanel = disclosure(quote, panel, { onChange: open => {
         flushReadingPosition();
         readerWatch?.suppress();
@@ -2943,23 +3094,56 @@
       positionStatus.hidden = true;
       positionStatus.setAttribute('role', 'status');
       tools.after(positionStatus);
-      readerWatch = readingPosition?.watchReader({ workspaceId: state.bundle.workspaceId, sourceId: source.id, sourceVersionId: version.id,
-        reader, isReading: () => !disposed && reader.isConnected && state.mode === 'source' && panel.hidden && details.hidden && arrangePanel.hidden,
-        onSaved: () => { if (reader.isConnected && !disposed) positionStatus.hidden = true; },
-        onError: () => {
-          if (!reader.isConnected || disposed) return;
-          positionStatus.textContent = '읽기 위치를 보관하지 못했습니다. 원문과 발췌는 그대로 사용할 수 있습니다.';
-          positionStatus.hidden = false;
-        } });
+      function watchReading() {
+        readerWatch = readingPosition?.watchReader({ workspaceId: state.bundle.workspaceId, sourceId: source.id, sourceVersionId: version.id,
+          reader, ...(formattedView ? { positionAdapter: markdown.adapter } : {}),
+          isReading: () => !disposed && sourceActive && reader.isConnected && state.mode === 'source' && panel.hidden && details.hidden && arrangePanel.hidden,
+          onSaved: () => { if (reader.isConnected && !disposed) positionStatus.hidden = true; },
+          onError: () => {
+            if (!reader.isConnected || disposed) return;
+            positionStatus.textContent = '읽기 위치를 보관하지 못했습니다. 원문과 발췌는 그대로 사용할 수 있습니다.';
+            positionStatus.hidden = false;
+          } });
+      }
+      function rawVisibleOffset() {
+        const box = rawReader.getBoundingClientRect(), target = Math.max(box.top, Math.min(global.innerHeight / 3, box.bottom - 1));
+        const range = document.createRange(); let low = 0, high = version.contentText.length;
+        while (low < high) {
+          const mid = Math.floor((low + high) / 2);
+          const point = mid > 0 && /[\uD800-\uDBFF]/.test(version.contentText[mid - 1]) && /[\uDC00-\uDFFF]/.test(version.contentText[mid]) ? mid - 1 : mid;
+          range.setStart(originalText, point); range.setEnd(originalText, Math.min(version.contentText.length, point + (version.contentText.codePointAt(point) > 0xFFFF ? 2 : 1)));
+          if (range.getBoundingClientRect().bottom < target) low = mid + 1; else high = mid;
+        }
+        return low;
+      }
+      currentReaderOffset = () => formattedView ? markdown.adapter.visibleOffset() : state.sourceSelection?.start ?? rawVisibleOffset();
+      changeReaderMode = (requested, focus = true) => {
+        const next = requested || (formattedView ? 'raw' : 'formatted');
+        if ((next === 'formatted') === formattedView || next === 'formatted' && !markdown?.formatted) return;
+        const offset = !details.hidden && optionOffset !== null ? optionOffset : currentReaderOffset() ?? 0;
+        if (next === 'formatted' && !markdown.blocks.some(block => offset >= block.start && offset < block.end)) { announce('선택한 위치는 원문 텍스트로 표시합니다.'); return; }
+        optionOffset = offset;
+        readerWatch?.suppress(); readerWatch?.close(); readerWatch = null;
+        formattedView = next === 'formatted'; state.readerModes.set(version.id, next);
+        reader = formattedView ? markdown.element : rawReader; installReader();
+        state.sourceSelection = null; picked.textContent = instruction; saveExcerpt.disabled = useQuote.disabled = useNine.disabled = true;
+        quote.dataset.hasSelection = 'false';
+        if (formattedView) { global.getSelection()?.removeAllRanges(); markdown.adapter.scrollToOffset(offset); }
+        else { const range = restoreSelection({ start: offset, end: offset }); const rect = range.getBoundingClientRect(); global.scrollTo({ top: Math.max(0, global.scrollY + rect.top - global.innerHeight / 3), behavior: 'instant' }); }
+        watchReading(); readerWatch?.suppress(); if (focus) reader.focus({ preventScroll: true });
+      };
+      watchReading();
       const locator = state.locator || (!suppressResume && state.readerPositions.get(version.id));
       if (locator) requestAnimationFrame(() => {
         // A fresh user choice takes priority over a navigation restore queued before it.
         if (!reader.isConnected || readerInteracted) return;
-        const range = restoreSelection(locator);
-        if (locator.scrollY !== undefined) global.scrollTo({ top: locator.scrollY, behavior: 'instant' });
-        else {
-          const rect = range.getBoundingClientRect();
-          global.scrollTo({ top: Math.max(0, global.scrollY + rect.top - global.innerHeight / 3), behavior: 'instant' });
+        if (formattedView) {
+          readerWatch?.suppress(); markdown.adapter.scrollToOffset(locator.start);
+          if (locator.scrollY !== undefined && locator.mode === 'formatted') global.scrollTo({ top: locator.scrollY, behavior: 'instant' });
+        } else {
+          const range = restoreSelection(locator);
+          if (locator.scrollY !== undefined && (!locator.mode || locator.mode === 'raw')) global.scrollTo({ top: locator.scrollY, behavior: 'instant' });
+          else { const rect = range.getBoundingClientRect(); global.scrollTo({ top: Math.max(0, global.scrollY + rect.top - global.innerHeight / 3), behavior: 'instant' }); }
         }
         readingScrollY = global.scrollY;
       });
@@ -3097,7 +3281,7 @@
         if (!/\.(txt|md)$/i.test(selected.name)) throw new Error('UTF-8 .txt 또는 .md 파일을 선택해 주세요.');
         if (selected.size > MAX_TEXT_BYTES) throw new Error('파일이 1 MiB를 넘습니다. 필요한 부분을 선택해 나누어 제공해 주세요.');
         let text;
-        try { text = new TextDecoder('utf-8', { fatal: true }).decode(await selected.arrayBuffer()); }
+        try { text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await selected.arrayBuffer()); }
         catch (_) { throw new Error('UTF-8로 읽을 수 없는 파일입니다. 원래 파일은 변경하지 않았습니다.'); }
         if (input.fileName !== selected.name) {
           delete input.existingSourceId;
@@ -3507,7 +3691,7 @@
         state.bundle = previous;
         state.stage = state.prepared = null;
         state.sourceDrafts.clear();
-        state.stages = [];
+        state.stages = []; state.sourceEditStages = [];
         state.allStages = [];
         state.restoreReturn = null;
         state.mode = 'sources';
@@ -3530,7 +3714,7 @@
       state.bundle = active;
       state.restoreReturn = { previousId, copyId: active.workspaceId, copies: installed.map(copy => ({ workspaceId: copy.workspaceId, title: copy.title })) };
       state.stage = state.prepared = state.sourceId = state.sourceVersionId = null;
-      state.sourceDrafts.clear(); state.readerPositions.clear(); state.stages = []; state.allStages = [];
+      state.sourceDrafts.clear(); state.readerPositions.clear(); state.readerModes.clear(); state.stages = []; state.sourceEditStages = []; state.allStages = [];
       for (const copy of installed) if (!state.workspaces.some(row => row.workspaceId === copy.workspaceId)) state.workspaces.push({ workspaceId: copy.workspaceId, title: copy.title });
       resetSearchContext(); state.mode = 'sources'; connectSubscription(); render();
       global.scrollTo({ top: 0, behavior: 'instant' });
@@ -3594,11 +3778,14 @@
       main.append(scope, actionRow('묶음·내 페이지도 함께 백업', '구성까지 복원하려면 자료·구성 JSON을 받으세요.', 'download', () => navigate('workbench-backup')));
       const actions = node('section', null, 'life-destinations life-settings-section');
       const stamp = new Date().toISOString().slice(0, 10);
+      const includeTrash = field('Markdown에 휴지통 자료 포함', 'checkbox', 'lifeMarkdownIncludeTrash', '');
+      includeTrash.input.checked = false;
+      actions.append(includeTrash.label);
       actions.append(actionRow('JSON 백업', '새 작업공간 사본으로 복원할 수 있는 파일', 'download', async () => {
         const backup = await core.makeBackup(state.bundle);
         download(JSON.stringify(backup, null, 2), 'life-tools-' + stamp + '.json', 'application/json');
       }), actionRow('Markdown 내보내기', '다른 앱에서 읽고 활용할 문서', 'book', async () => {
-        download(await core.toMarkdown(state.bundle), 'life-tools-' + stamp + '.md', 'text/markdown;charset=utf-8');
+        download(await core.toMarkdown(state.bundle, { includeTrash: includeTrash.input.checked }), 'life-tools-' + stamp + '.md', 'text/markdown;charset=utf-8');
       }));
       main.append(actions);
       const restore = field('JSON 백업을 새 작업공간 사본으로 복원', 'file', 'lifeRestoreFile', '');
@@ -3664,7 +3851,7 @@
         state.stage = null;
         state.prepared = null;
         state.sourceDrafts.clear();
-        state.readerPositions.clear();
+        state.readerPositions.clear(); state.readerModes.clear();
         resetSearchContext();
         state.mode = 'sources';
         await refreshData();
@@ -3897,7 +4084,7 @@
           if (disposed) return;
           state.bundle = downloaded;
           state.stage = state.prepared = state.sourceId = state.sourceVersionId = null;
-          state.sourceDrafts.clear(); state.readerPositions.clear(); state.stages = []; state.allStages = [];
+          state.sourceDrafts.clear(); state.readerPositions.clear(); state.readerModes.clear(); state.stages = []; state.sourceEditStages = []; state.allStages = [];
           state.remoteChanged = false; state.restoreReturn = null;
           if (!state.workspaces.some(item => item.workspaceId === downloaded.workspaceId)) state.workspaces.push({ workspaceId: downloaded.workspaceId, title: downloaded.title });
           resetSearchContext();
@@ -4041,6 +4228,7 @@
       home?.leave();
       workbench?.leave();
       writer?.close();
+      sourceEditor?.close();
       collection?.leave();
       unifiedSearch?.leave();
       if (readerCleanup) { readerCleanup(); readerCleanup = null; }
@@ -4075,6 +4263,7 @@
       }
       if (state.mode === 'find') { findRenderPromise = unifiedSearch.open().catch(failure); mainRenderPromise = findRenderPromise; return; }
       if (state.mode === 'collection' && collection) { const options = collectionOpenOptions || {}; collectionOpenOptions = null; mainRenderPromise = collection.open(options).catch(failure); return; }
+      if (state.mode === 'source-edit' && sourceEditor) return mainRenderPromise = sourceEditor.open(sourceEditOpenOptions || {}).catch(failure);
       if (state.mode === 'write' && writer) {
         const options = writingOpenOptions || {};
         writingOpenOptions = null;
@@ -4094,6 +4283,7 @@
       else if (state.mode === 'batch') renderBatch();
       else if (state.mode === 'import') renderImport();
       else if (state.mode === 'source') renderSource();
+      else if (state.mode === 'source-trash') renderSourceTrash();
       else if (state.mode === 'sources') renderSources();
       else if (state.mode === 'transfer') renderTransfer();
       else if (state.mode === 'time') renderTime();
@@ -4106,7 +4296,7 @@
     }
 
     const beforeUnload = event => {
-      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || collection?.dirty() || accountBlogUI?.dirty() || blogManager?.dirty() || preservationUI?.dirty() || obsidianUpdateUI?.dirty() || originalAttachmentsUI?.dirty() || publicCoverUI?.dirty() || interestUI?.dirty() || externalDiscoveryUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
+      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || sourceEditor?.isDirty() || collection?.dirty() || accountBlogUI?.dirty() || blogManager?.dirty() || preservationUI?.dirty() || obsidianUpdateUI?.dirty() || originalAttachmentsUI?.dirty() || publicCoverUI?.dirty() || interestUI?.dirty() || externalDiscoveryUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
     };
     const visibility = () => {
       if (!document.hidden) return;
@@ -4114,9 +4304,10 @@
       if (workbench?.dirty()) workbench.checkpoint().catch(failure);
       if (publicCoverUI?.dirty()) publicCoverUI.flush().catch(failure);
       if (writer?.isDirty()) writer.flush().catch(failure);
+      if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure);
       flushReadingPosition();
     };
-    const pagehideReading = () => { flushReadingPosition(); };
+    const pagehideReading = () => { flushReadingPosition(); if (sourceEditor?.isDirty()) sourceEditor.flush().catch(failure); };
     global.addEventListener('beforeunload', beforeUnload);
     document.addEventListener('visibilitychange', visibility);
     global.addEventListener('pagehide', pagehideReading);
@@ -4202,6 +4393,7 @@
       await blogManager?.flush();
       await workbench?.flush();
       await writer?.flush();
+      await sourceEditor?.flush();
       collection?.flush();
       await flushReadingPosition();
       if (disposed) throw new Error('계정이 바뀌어 이전 초안을 보관할 수 없습니다.');
@@ -4262,6 +4454,7 @@
       home?.dispose();
       workbench?.dispose();
       writer?.dispose();
+      sourceEditor?.dispose();
       collection?.dispose();
       unifiedSearch?.dispose();
       unbindNavigation?.();
@@ -4282,7 +4475,7 @@
       root.replaceChildren();
       root.remove();
       state.sourceDrafts.clear();
-      state.readerPositions.clear();
+      state.readerPositions.clear(); state.readerModes.clear();
       resetSearchContext();
       state.bundle = state.stage = state.prepared = state.conflictView = state.remoteRows = null;
       state.restoreReturn = null;

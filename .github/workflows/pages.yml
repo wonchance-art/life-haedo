@@ -408,6 +408,9 @@ jobs:
       - name: Verify discovery language selection, translated links and private preference recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-languages-browser.cjs
+      - name: Verify formatted materials, exact editing, trash recovery and preserved references
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/material-library-browser.cjs
       - name: Verify frozen reading comparisons, explicit judgments and local recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-reading-browser.cjs
@@ -530,6 +533,7 @@ jobs:
             .local/reading-writing-quality/
             .local/book-design-reset-app/caret/
             .local/reading-resume/
+            .local/material-library/
             .local/product-flow-quality/
             .local/search-quality/
             .local/expression-design/

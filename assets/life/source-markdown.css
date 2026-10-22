@@ -1,0 +1,21 @@
+/* The same single reading column; wide tables and code scroll within themselves. */
+.source-markdown { min-width: 0; max-width: 100%; font-size: 18px; line-height: 1.95; word-break: keep-all; overflow-wrap: anywhere; margin-bottom: 48px; }
+.source-markdown > :first-child { margin-top: 0; }
+.source-markdown > :last-child { margin-bottom: 0; }
+.source-markdown p, .source-markdown ul, .source-markdown ol, .source-markdown blockquote { margin-block: 0 1em; }
+.source-markdown h1, .source-markdown h2, .source-markdown h3, .source-markdown h4, .source-markdown h5, .source-markdown h6 { line-height: 1.4; margin-block: 1.4em .6em; overflow-wrap: anywhere; }
+.source-markdown h1 { font-size: 1.6em; }
+.source-markdown h2 { font-size: 1.4em; }
+.source-markdown h3 { font-size: 1.2em; }
+.source-markdown h4, .source-markdown h5, .source-markdown h6 { font-size: 1em; }
+.source-markdown ul, .source-markdown ol { padding-inline-start: 1.5em; }
+.source-markdown li > p { margin-bottom: .4em; }
+.source-markdown blockquote { border-inline-start: 2px solid currentColor; padding-inline-start: 1em; margin-inline: 0; }
+.source-markdown pre { max-width: 100%; overflow-x: auto; white-space: pre; padding: 1em; background: var(--soft, #f5f6f6); font-size: .9em; overflow-wrap: normal; }
+.source-markdown code { font-family: ui-monospace, monospace; white-space: break-spaces; }
+.source-markdown pre code { white-space: pre; }
+.source-markdown table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin-bottom: 1em; }
+.source-markdown th, .source-markdown td { padding: .45em .7em; border: 1px solid var(--line, #d7dfdc); text-align: start; }
+.source-markdown [data-source-block] { scroll-margin-block-start: 5rem; }
+.source-markdown:focus-visible { outline: 2px solid var(--color-primary, #17695c); outline-offset: 4px; }
+@media (max-width: 700px) { .source-markdown { font-size: 17px; } }

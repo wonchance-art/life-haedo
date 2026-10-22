@@ -1,9 +1,9 @@
 /* Local, explicit evidence only. Reads fixed versions; no semantic inference or external calls. */
 (function (root, factory) {
   'use strict';
-  const api = factory(); root.HaedoLife ||= {}; root.HaedoLife.Rediscovery = api;
+  const api = factory(typeof module === 'object' && module.exports ? require('./core.js') : root.HaedoLife.Core); root.HaedoLife ||= {}; root.HaedoLife.Rediscovery = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
-})(globalThis, function () {
+})(globalThis, function (core) {
   'use strict';
   const LIMITS = Object.freeze({ bodyCharacters: 16000, results: 3, reasons: 4, minimumTerms: 2,
     termCharacters: 48, snippetCharacters: 180 });
@@ -101,7 +101,7 @@
         if (pair.seedSourceId === seed.sourceId) excluded.add(pair.candidateSourceId);
       }
     }
-    const candidates = [...latest.values()].filter(version => version.sourceId !== seed.sourceId && !excluded.has(version.sourceId));
+    const candidates = [...latest.values()].filter(version => version.sourceId !== seed.sourceId && core.isSourceActive(bundle, version.sourceId) && !excluded.has(version.sourceId));
     if (!candidates.length) return [];
     const needed = new Set([seed.id, ...candidates.map(version => version.id)]);
     const dead = new Set();

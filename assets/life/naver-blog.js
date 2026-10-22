@@ -112,7 +112,7 @@
       const version = source ? latest.get(source.id) : null;
       const complete = version?.coverage.status === 'full_text' && typeof version.contentText === 'string';
       return { ...item, key: identity.key,
-        status: candidates.length > 1 ? 'ambiguous' : source ? complete ? 'imported' : 'needs_content' : 'new',
+        status: candidates.length > 1 ? 'ambiguous' : source ? !core().isSourceActive(bundle, source.id) ? 'trashed' : complete ? 'imported' : 'needs_content' : 'new',
         sourceId: source?.id || null, sourceVersionId: version?.id || null, sourceUrl: source?.url || null,
         candidateSourceIds: candidates.map(candidate => candidate.id) };
     });

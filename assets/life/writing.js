@@ -104,6 +104,7 @@
       identifier(options.sourceId);
       const source = bundle.sources.find(item => item.id === options.sourceId);
       assert(isOwnSource(source, bundle), 'not_own_writing', '해도에서 직접 쓴 글만 수정할 수 있습니다.');
+      assert(core().isSourceActive(bundle, source.id), 'source_trashed', '휴지통에 있는 자료입니다. 복원한 뒤 수정해 주세요.');
       const version = latestVersion(bundle, source.id);
       Object.assign(draft, { sourceId: source.id, baseSourceRevision: source.revision,
         baseSourceVersionId: version.id, title: source.title, text: version.contentText });
@@ -134,6 +135,7 @@
     if (draft.sourceId !== null) {
       source = snapshot.sources.find(item => item.id === draft.sourceId);
       assert(isOwnSource(source, snapshot), 'not_own_writing', '해도에서 직접 쓴 글만 수정할 수 있습니다.');
+      assert(core().isSourceActive(snapshot, source.id), 'source_trashed', '휴지통에 있는 자료입니다. 입력은 유지됩니다. 복원한 뒤 다시 저장해 주세요.');
       head = latestVersion(snapshot, source.id);
       assert(!draft.baseChanged && source.revision === draft.baseSourceRevision && head.id === draft.baseSourceVersionId,
         'writing_conflict', '다른 곳에서 이 글을 수정했습니다. 입력을 보존하고 새 글로 보관하거나 최신 글을 확인해 주세요.');

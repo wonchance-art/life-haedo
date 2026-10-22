@@ -6,6 +6,7 @@
   'use strict';
   const reference = () => root.HaedoLife?.SourceReference || require('./source-reference.js');
   const model = () => root.HaedoLife?.PhotoPost || require('./photo-post.js');
+  const core = () => root.HaedoLife?.Core || require('./core.js');
   const normalized = text => text.replace(/\r\n?/g, '\n');
   function rawOffset(text, offset) {
     let index = 0, shown = 0;
@@ -38,12 +39,13 @@
       const field = (name, input) => { const label = el('label', null, 'life-field'); label.append(el('span', name), input); section.append(label); return input; };
       section.append(el('h2', heading, 'life-heading'));
       section.append(el('p', includeThought ? '직접 선택한 구절만 인용합니다. 아래에는 내 생각을 따로 적습니다.' : '직접 선택한 구절과 출처만 담습니다. 선택 이유는 다음 화면에서 적습니다.', 'life-help'));
-      if (!bundle.sources.length) section.append(el('p', '기록에 원문을 보관한 뒤 인용할 수 있습니다.', 'life-empty'));
+      const activeSources = bundle.sources.filter(item => core().isSourceActive(bundle, item.id));
+      if (!activeSources.length) section.append(el('p', '기록에 원문을 보관한 뒤 인용할 수 있습니다.', 'life-empty'));
       const source = field('원문', el('select')), version = field('원문 버전', el('select'));
       source.id = 'blogEvidenceSource'; version.id = 'blogEvidenceVersion';
       const blank = el('option', '원문을 선택하세요'); blank.value = ''; source.append(blank);
-      source.disabled = !bundle.sources.length;
-      for (const item of bundle.sources) { const option = el('option', item.title || '제목 없는 원문'); option.value = item.id; source.append(option); }
+      source.disabled = !activeSources.length;
+      for (const item of activeSources) { const option = el('option', item.title || '제목 없는 원문'); option.value = item.id; source.append(option); }
       const body = field('인용할 구절 선택', el('textarea')); body.id = 'blogEvidenceText'; body.readOnly = true; body.rows = 8;
       const quote = el('blockquote', '', 'life-quote'); quote.id = 'blogEvidenceQuote'; section.append(quote);
       const thought = field('내 생각', el('textarea')); thought.id = 'blogEvidenceThought'; thought.rows = 4; thought.maxLength = 50000;
@@ -80,6 +82,7 @@
         let applied = false;
         try {
           const fresh = await getBundle(); if (!valid(token)) return;
+          if (!core().isSourceActive(fresh, source.value)) throw new Error('휴지통에 있는 자료입니다. 선택한 구절은 유지됩니다. 복원한 뒤 인용해 주세요.');
           const ref = await reference().build({ bundle, sourceId: source.value, versionId: version.value, locator });
           await reference().resolve(fresh, ref); if (!valid(token)) return;
           await onApply(includeThought ? draft(ref, thought.value) : { reference: ref }); applied = true; pending = false; if (!valid(token)) return;

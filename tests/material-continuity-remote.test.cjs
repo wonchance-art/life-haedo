@@ -6,7 +6,7 @@ function fixture(model = M) {
   const calls = [], auth = { ready: true, user: { id: randomUUID() }, epoch: 0, config: { url: 'https://example.invalid', key: 'sb_publishable_synthetic' } };
   const f = { auth, calls, result: null, disposed: false, verifyAuth: null };
   const client = { auth: { async getUser() { if (f.verifyAuth) await f.verifyAuth(); return { data: { user: auth.user }, error: null }; }, dispose() { f.disposed = true; } },
-    async rpc(name, args) { calls.push({ name, args: structuredClone(args) }); return { data: f.result, error: f.error || null }; } };
+    async rpc(name, args) { calls.push({ name, args: structuredClone(args) }); return f.respond ? f.respond(name, args) : { data: f.result, error: f.error || null }; } };
   f.remote = R.create({ auth, model, clientFactory: (_auth, options) => { assert.equal(options.scope, 'material'); return () => client; } });
   const bundle = C.createWorkspace(), plan = W.create(randomUUID); f.data = M.snapshot(bundle, plan);
   return f;
@@ -40,4 +40,26 @@ test('malformed source rows fail closed and server details are reduced to public
   await assert.rejects(f.remote.read(remoteId), error => error.code === 'output_changed' && !error.message.includes('synthetic-sensitive-detail'));
   const generic = R.clean({ message: 'synthetic-sensitive-secret', detail: 'private body' }); assert.equal(generic.code, 'network_error'); assert(!generic.message.includes('synthetic-sensitive-secret'));
   f.remote.dispose();
+});
+test('edited-marker writes require an explicit supported server before dispatch; legacy writes keep their original path', async () => {
+  const f = fixture(); let bundle = C.createWorkspace();
+  const source = await C.prepareImport({ origin: 'other', title: '수정한 사본', text: '# 보관한 본문' }, bundle);
+  bundle = C.applyChanges(bundle, C.buildImportChanges(bundle, source)); const time = source.version.importedAt;
+  bundle.links.push({ id: C.id(), kind: 'source_edited_copy', entityRefs: [{ entityType: 'sourceVersion', entityId: source.version.id }], revision: 1, createdAt: time, updatedAt: time });
+  const plan = W.create(randomUUID); plan.materials.push(W.material(bundle, source.source.id, source.version.id, randomUUID));
+  const data = M.snapshot(bundle, plan), request = () => ({ remoteId: randomUUID(), operationId: randomUUID(), expectedRevision: 0, data });
+  f.respond = name => name === 'life_material_capabilities' ? { error: { code: 'PGRST202' } } : { data: { status: 'stored', revision: 1 } };
+  await assert.rejects(f.remote.write(request()), { code: 'schema_missing' }); assert.deepEqual(f.calls.map(v => v.name), ['life_material_capabilities']);
+  f.calls.length = 0; f.respond = () => ({ data: { source_edited_copy: 0 } });
+  await assert.rejects(f.remote.write(request()), { code: 'schema_missing' }); assert.deepEqual(f.calls.map(v => v.name), ['life_material_capabilities']);
+  f.calls.length = 0; f.respond = name => ({ data: name === 'life_material_capabilities' ? { source_edited_copy: 1 } : { status: 'stored', revision: 1 } });
+  await f.remote.write(request()); await f.remote.write(request());
+  assert.deepEqual(f.calls.map(v => v.name), ['life_material_capabilities', 'life_material_put', 'life_material_put']);
+  f.auth.epoch++; await f.remote.write(request()); assert.equal(f.calls.filter(v => v.name === 'life_material_capabilities').length, 2);
+  f.remote.dispose();
+  const changing = fixture(); let release, entered;
+  const gate = new Promise(resolve => { release = resolve; }), started = new Promise(resolve => { entered = resolve; });
+  changing.respond = async name => { assert.equal(name, 'life_material_capabilities'); entered(); await gate; return { data: { source_edited_copy: 1 } }; };
+  const pending = changing.remote.write(request()); await started; changing.auth.epoch++; release();
+  await assert.rejects(pending, { code: 'request_cancelled' }); assert.deepEqual(changing.calls.map(v => v.name), ['life_material_capabilities']); changing.remote.dispose();
 });

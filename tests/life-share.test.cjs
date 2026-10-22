@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const core = require('../assets/life/core.js');
 const workbench = require('../assets/life/workbench.js');
 const share = require('../assets/life/share.js');
+const sourceEdit = require('../assets/life/source-edit.js');
 const copy = value => JSON.parse(JSON.stringify(value));
 
 async function fixture() {
@@ -117,6 +118,43 @@ test('publication limits reject excess data instead of silently changing the sel
   assert.throws(() => share.makeDraft(bundle, state, { bodyVersionIds: ['not-visible'] }), { code: 'invalid_snapshot' });
   for (const invalid of [null, undefined, false, 0, '']) for (const key of ['bodyVersionIds', 'excerpts'])
     assert.throws(() => share.makeDraft(bundle, state, { [key]: invalid }), { code: 'invalid_snapshot' });
+});
+
+test('new public drafts label edited copies in existing title fields while original versions and published snapshots remain unchanged', async () => {
+  const f = await fixture(), originalSnapshot = share.makeDraft(f.bundle, f.state, { bodyVersionIds: [f.versionId] }).snapshot;
+  const originalWire = JSON.stringify(originalSnapshot), originalBundle = JSON.stringify(f.bundle), body = '# 내가 보완한 사본\n직접 수정한 문장 🌱';
+  const stage = sourceEdit.edit(sourceEdit.begin(f.bundle, f.bundle.sources[0].id), { text: body, format: 'text/markdown' });
+  const prepared = await sourceEdit.prepare(f.bundle, stage), edited = core.applyChanges(f.bundle, prepared.changes);
+  const versionId = prepared.stageResult.sourceVersionId, marker = edited.links.find(link => link.kind === 'source_edited_copy');
+  const state = copy(f.state); state.page.entries.push({ ...copy(state.page.entries[0]), id: core.id(), parts: [{ versionId, enabled: true }] });
+  const prefix = '해도에서 수정한 사본 · ', title = prefix + f.bundle.sources[0].title;
+  const choices = [{}, { bodyVersionIds: [versionId] }, { excerpts: [{ versionId, start: body.indexOf('직접'), end: body.length }] }];
+  for (const choice of choices) {
+    const result = share.makeDraft(edited, state, choice), old = result.snapshot.entries[0].parts[0], part = result.snapshot.entries[1].parts[0];
+    assert.equal(old.title, f.bundle.sources[0].title); assert.equal(part.title, title);
+    assert.equal(result.reviewRows.find(row => row.versionId === versionId).title, title);
+    assert.deepEqual(part.author, originalSnapshot.entries[0].parts[0].author);
+    assert.equal(part.url, originalSnapshot.entries[0].parts[0].url);
+    assert.equal(part.textKind, choice.bodyVersionIds ? 'body' : choice.excerpts ? 'excerpt' : 'none');
+    assert.equal(part.text, choice.bodyVersionIds ? body : choice.excerpts ? body.slice(body.indexOf('직접')) : null);
+    const wire = JSON.stringify(result.snapshot);
+    for (const secret of [edited.workspaceId, versionId, marker.id, 'source_edited_copy', 'source_edit_base']) assert(!wire.includes(secret));
+    assert.equal(share.validate(result.snapshot), true);
+  }
+  assert.deepEqual(share.makeDraft(edited, f.state, { bodyVersionIds: [f.versionId] }).snapshot, originalSnapshot);
+  assert.equal(JSON.stringify(originalSnapshot), originalWire); assert.equal(JSON.stringify(f.bundle), originalBundle);
+  assert.equal(edited.sources[0].title, f.bundle.sources[0].title);
+});
+
+test('edited-copy public titles accept the exact limit and reject overflow without truncating source titles', async () => {
+  const f = await fixture(), prefix = '해도에서 수정한 사본 · ';
+  const stage = sourceEdit.edit(sourceEdit.begin(f.bundle, f.bundle.sources[0].id), { title: '가'.repeat(500 - prefix.length), text: '수정한 본문' });
+  const prepared = await sourceEdit.prepare(f.bundle, stage), edited = core.applyChanges(f.bundle, prepared.changes), state = copy(f.state);
+  state.page.entries[0].parts = [{ versionId: prepared.stageResult.sourceVersionId, enabled: true }];
+  assert.equal(share.makeDraft(edited, state).snapshot.entries[0].parts[0].title.length, 500);
+  edited.sources[0].title += '나'; const before = JSON.stringify(edited);
+  assert.throws(() => share.makeDraft(edited, state), error => error.code === 'invalid_snapshot' && /수정한 사본.*500자/.test(error.message));
+  assert.equal(JSON.stringify(edited), before);
 });
 
 module.exports = { fixture };

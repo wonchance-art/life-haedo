@@ -117,8 +117,8 @@
       surface.append(manual);
       const selection = node('details'); selection.id = 'interestSelection'; selection.open = current.selectionOpen;
       selection.addEventListener('toggle', () => { current.selectionOpen = selection.open; }); selection.append(node('summary', '분석할 자료 선택'));
-      const sources = new Map(getBundle().sources.map(source => [source.id, source])); const latest = new Map();
-      getBundle().sourceVersions.forEach(version => latest.set(version.sourceId, version));
+      const sources = new Map(getBundle().sources.filter(source => root.HaedoLife.Core.isSourceActive(getBundle(), source.id)).map(source => [source.id, source])); const latest = new Map();
+      getBundle().sourceVersions.forEach(version => { if (sources.has(version.sourceId)) latest.set(version.sourceId, version); });
       const rows = [...latest.values()].filter(v => typeof v.contentText === 'string' && v.contentText.trim());
       const availableIds = new Set(rows.map(v => v.id));
       for (const id of current.selected) if (!availableIds.has(id)) current.selected.delete(id);

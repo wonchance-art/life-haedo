@@ -84,7 +84,8 @@
           if (!valid(token)) return;
           if (result?.sourceId) { data.projection = { ...projection, ...result, received: result.received === true }; paint(); }
           status.textContent = '자료에 반영했습니다. 보관한 자료를 열어 확인할 수 있습니다.'; status.dataset.state = 'stored';
-        }), 'naverCaptureApply'); apply.dataset.unavailable = String(projection.status === 'ambiguous'); actions.append(apply);
+        }), 'naverCaptureApply'); apply.dataset.unavailable = String(['ambiguous', 'trashed'].includes(projection.status)); actions.append(apply);
+        if (projection.status === 'trashed') actions.append(el('p', '휴지통에 있는 자료입니다. 보관한 자료에서 복원한 뒤 보완해 주세요.', 'life-help'));
         if (projection.status === 'ambiguous') actions.append(el('p', '기존 자료가 여러 개와 겹칩니다. 자동으로 합치지 않았습니다. 목록에서 기존 자료를 먼저 확인해 주세요.', 'life-help'));
       }
       if (onOpenSource && projection.sourceId) { actions.append(button('보관한 자료 열기', () => navigate(() => onOpenSource({ sourceId: projection.sourceId, sourceVersionId: projection.sourceVersionId })), 'naverCaptureOpen')); if (!received) actions.append(el('p', '보관한 자료 열기는 기존 본문을 엽니다. 현재 검토 중인 수집 사본은 아직 그 버전에 반영되지 않았습니다.', 'life-help')); }
@@ -97,8 +98,8 @@
         status.textContent = '현재 자료 상태를 다시 확인했습니다. 수집 사본과 선택한 사진은 그대로 있습니다.'; status.dataset.state = 'ready';
       }), 'naverCaptureReload'));
       if (onWritePhotos) {
-        const write = button('선택 사진으로 글쓰기', async () => { if (!received) return; await navigate(() => onWritePhotos({ sourceId: projection.sourceId, sourceVersionId: projection.sourceVersionId, indexes: imageView.getSelectedIndexes() })); }, 'naverCaptureWritePhotos');
-        const update = () => { write.dataset.unavailable = String(!received || !imageView.getSelectedIndexes().length); lock(); };
+        const write = button('선택 사진으로 글쓰기', async () => { if (!received || projection.status === 'trashed') return; await navigate(() => onWritePhotos({ sourceId: projection.sourceId, sourceVersionId: projection.sourceVersionId, indexes: imageView.getSelectedIndexes() })); }, 'naverCaptureWritePhotos');
+        const update = () => { write.dataset.unavailable = String(!received || projection.status === 'trashed' || !imageView.getSelectedIndexes().length); lock(); };
         imageView.node.addEventListener('change', update); update(); actions.append(write);
       }
       if (onDownload) { const download = button('글·사진 ZIP 저장', async () => { if (!received) return; await task(async token => { await onDownload({ sourceId: projection.sourceId, sourceVersionId: projection.sourceVersionId }); if (valid(token)) { status.textContent = 'ZIP 파일 저장을 요청했습니다.'; status.dataset.state = 'downloaded'; } }); }, 'naverCaptureDownload'); download.dataset.unavailable = String(!received); actions.append(download); }
