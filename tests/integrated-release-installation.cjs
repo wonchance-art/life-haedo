@@ -6,12 +6,14 @@ const { spawnSync } = require('node:child_process'), { randomUUID, createHash } 
 const Core = require('../assets/life/core.js'), Workbench = require('../assets/life/workbench.js'), Writing = require('../assets/life/writing.js');
 const Photo = require('../assets/life/photo-post.js'), Blog = require('../assets/life/blog.js'), Material = require('../assets/life/material-writing.js');
 const Continuity = require('../assets/life/material-continuity.js'), Ref = require('../assets/life/source-reference.js');
+const SourceEdit = require('../assets/life/source-edit.js');
 const Series = require('../assets/life/blog-series-public.js'), Nine = require('../assets/life/nine-board.js'), NinePublic = require('../assets/life/nine-public.js'), Cover = require('../assets/life/public-cover.js');
 const root = path.resolve(__dirname, '..'), output = path.join(root, '.local/integrated-release-installation');
 const migration = 'supabase/migrations/20261019005829_life_material_continuity.sql';
 const accountMaterialMigration = 'supabase/migrations/20261020042517_account_material_registrations.sql';
 const naverMigrations = ['supabase/migrations/20261021093111_life_naver_subscriptions.sql', 'supabase/migrations/20261021094614_naver_conflict_http409.sql'];
 const captureMigration = 'supabase/migrations/20261021113658_life_naver_captures.sql';
+const editedCopyMigration = 'supabase/migrations/20261022031304_life_material_edited_copy_markers.sql';
 const image = 'postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
 const container = 'haedo-blog-postgres-' + Date.now() + process.pid, database = 'haedo_blog_qa_integrated_install', runId = randomUUID();
 const env = { ...process.env }; for (const key of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH']) delete env[key];
@@ -47,8 +49,8 @@ async function main() {
       .trim().split('\n').filter(name => name.endsWith('.sql')).map(name => path.basename(name)).sort();
     assert.equal(baseline.length, 10);
     assert.deepEqual(files.map(name => 'supabase/migrations/' + name),
-      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration].sort(),
-      'Exactly the ten legacy and five reviewed additive migrations are required; missing or unknown files are rejected.');
+      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration].sort(),
+      'Exactly the ten legacy and six reviewed additive migrations are required; missing or unknown files are rejected.');
     for (const file of baseline) {
       const relative = 'supabase/migrations/' + file, current = await fs.readFile(path.join(root, relative), 'utf8');
       assert.equal(hash(current), hash(command('git', ['-C', root, 'show', '88ccfe5:' + relative])), 'Previously installed migration changed: ' + file);
@@ -248,6 +250,65 @@ async function main() {
       report.captureInstallation = metadata;
       report.captureInstalledDataSha256 = hash(JSON.stringify(installedData));
       report.captureDataReinstallEvidence = 'supabase/tests/check-naver-captures.mjs separately checks retained immutable captures, photo metadata, checkpoints and receipts; no actual object-byte claim.';
+    });
+    await check('Edited-copy migration rolls back atomically, preserves the full populated installation and permissions, and retains immutable markers through reinstall', async () => {
+      const markerDDL = await fs.readFile(path.join(root, editedCopyMigration), 'utf8');
+      assert.equal(hash(markerDDL), 'dee903b0c70841228077bcffa7977c76d353822920dd295e0488c40fbd5f36ac', 'Only the independently reviewed marker migration is accepted.');
+      assert.match(markerDDL, /begin;/); assert.match(markerDDL, /commit;\s*$/i);
+      const allNamespaces = "array['public','auth','storage','haedo_blog_private','haedo_material_private','haedo_naver_private']";
+      const allCatalog = catalogQuery.replaceAll(namespaces, allNamespaces).replace(" and p.proname not like 'life_material_%'", '');
+      const dataSnapshot = () => sql('select installation_probe.all_data_snapshot();');
+      const functionMetadata = () => sql("select jsonb_agg(jsonb_build_array(n.nspname,p.proname,pg_get_function_identity_arguments(p.oid),pg_get_userbyid(p.proowner),p.prosecdef,p.proconfig,p.proacl,p.provolatile) order by n.nspname,p.proname,p.oid) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname=any(" + allNamespaces + ");");
+      const intactData = dataSnapshot(), intactCatalog = sql(allCatalog), intactFunctions = functionMetadata();
+      const capability = row => row[0] === 'public' && row[1] === 'life_material_capabilities';
+      assert(!intactCatalog.functions.some(capability));
+      const failed = markerDDL.replace(/commit;\s*$/i, 'select 1/0;\ncommit;');
+      assert.throws(() => psql(failed), /division by zero/);
+      assert.deepEqual(dataSnapshot(), intactData); assert.deepEqual(sql(allCatalog), intactCatalog); assert.deepEqual(functionMetadata(), intactFunctions);
+      psql(markerDDL);
+      assert.deepEqual(dataSnapshot(), intactData);
+      assert.deepEqual(functionMetadata().filter(row => !capability(row)), intactFunctions, 'Existing function signatures, owners, security modes, paths, grants and volatility stay unchanged.');
+      const installedCatalog = sql(allCatalog), changedFunctions = new Set(['valid', 'put']);
+      const oldFunctions = new Map(intactCatalog.functions.map(row => [JSON.stringify(row.slice(0, 3)), row]));
+      const preservedCatalog = { ...installedCatalog, functions: installedCatalog.functions.filter(row => !capability(row)).map(row => {
+        if (row[0] !== 'haedo_material_private' || !changedFunctions.has(row[1])) return row;
+        const old = oldFunctions.get(JSON.stringify(row.slice(0, 3))); assert(old);
+        assert.notEqual(row[3], old[3], 'The reviewed validator/put definition must actually install.');
+        return row.map((value, index) => index === 3 ? old[3] : value);
+      }) };
+      assert.deepEqual(preservedCatalog, intactCatalog, 'Only the two reviewed function bodies and new capability function may differ.');
+      assert.deepEqual(rpc('life_material_capabilities', []), { source_edited_copy: 1 });
+      assert.throws(() => rpc('life_material_capabilities', [], 'anon'), /permission denied/);
+      assert.throws(() => psql("begin;set local role authenticated;select set_config('request.jwt.claims','{}',true);select public.life_material_capabilities();commit;"), /life_material_auth_required/);
+      const gates = sql("select jsonb_build_object('rls',(select count(*)=2 and bool_and(relrowsecurity) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='haedo_material_private' and c.relkind='r'),'privateTables',not has_table_privilege('authenticated','haedo_material_private.heads','select') and not has_table_privilege('anon','haedo_material_private.receipts','select'),'rpc',(select count(*)=4 and bool_and(not prosecdef and proconfig=array['search_path=pg_catalog'] and has_function_privilege('authenticated',p.oid,'execute') and not has_function_privilege('anon',p.oid,'execute')) from pg_proc p where pronamespace='public'::regnamespace and proname like 'life_material_%')); ");
+      assert(Object.values(gates).every(Boolean));
+      assert.deepEqual(rpc('life_material_put', args), { status: 'stored', revision: 1 });
+      assert.deepEqual(dataSnapshot(), intactData, 'A pre-migration durable receipt remains an exact no-op retry.');
+      const stage = SourceEdit.edit(SourceEdit.begin(bundle, source.source.id), { text: '# 수정 사본\n원래 자료와 구별할 문장 🌿', format: 'text/markdown' });
+      const prepared = await SourceEdit.prepare(bundle, stage), edited = Core.applyChanges(bundle, prepared.changes);
+      const editedPlan = Material.create(Core.id); editedPlan.title = '수정판을 고른 준비';
+      editedPlan.materials = [Material.material(edited, source.source.id, prepared.stageResult.sourceVersionId, Core.id)];
+      const marked = await Continuity.verify(Continuity.snapshot(edited, editedPlan));
+      assert.equal(marked.bundle.links.length, 1); assert.equal(marked.bundle.links[0].kind, 'source_edited_copy');
+      assert(!marked.bundle.sourceVersions.some(version => version.id === source.version.id), 'Unselected original body stays out of the partial payload.');
+      const markedId = randomUUID(), markedArgs = [q(markedId) + '::uuid', q(randomUUID()) + '::uuid', '0', json(marked)];
+      assert.deepEqual(rpc('life_material_put', markedArgs), { status: 'stored', revision: 1 });
+      const populatedData = dataSnapshot();
+      assert.throws(() => psql(failed), /division by zero/);
+      assert.deepEqual(dataSnapshot(), populatedData); assert.deepEqual(sql(allCatalog), installedCatalog);
+      psql(markerDDL); psql(markerDDL);
+      assert.deepEqual(dataSnapshot(), populatedData); assert.deepEqual(sql(allCatalog), installedCatalog);
+      assert.deepEqual(rpc('life_material_put', markedArgs), { status: 'stored', revision: 1 });
+      const stripped = JSON.parse(JSON.stringify(marked)); stripped.bundle.links = [];
+      assert.throws(() => rpc('life_material_put', [q(markedId) + '::uuid', q(randomUUID()) + '::uuid', '1', json(stripped)]), /life_material_immutable_source_version/);
+      assert.deepEqual(dataSnapshot(), populatedData);
+      for (const [table, rows] of Object.entries(intactData)) {
+        const priorRows = ['haedo_material_private.heads', 'haedo_material_private.receipts'].includes(table)
+          ? populatedData[table].filter(row => row.id !== markedId) : populatedData[table];
+        assert.deepEqual(priorRows, rows, 'Older stored rows changed in ' + table);
+      }
+      report.editedCopyMigration = { file: editedCopyMigration, sha256: hash(markerDDL), preservedPopulatedRows: true, preservedExistingPermissions: true, failedTransactionAtomic: true, populatedReinstallPreserved: true, immutableMarkerLossRejected: true };
+      report.editedCopyInstalledDataSha256 = hash(JSON.stringify(populatedData));
     });
     report.pass = true; report.baselineMigrations = baseline; report.baselineDataSha256 = baselineDigest;
     report.rollback = 'Failed transaction rolls back all additive DDL. After successful use retain data/receipts and compatible output-receipt storage; disable new UI and public/private entrypoint execution, then reapply the migration to restore. Full 88cc frontend rollback is safe only before new preparation usage. No destructive down migration.';

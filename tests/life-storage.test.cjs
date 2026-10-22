@@ -1858,6 +1858,40 @@ test('preservation final selection CAS notices an edited-copy marker disappearin
     await assert.rejects(pending, { code: 'preservation_source_changed' }); assert.deepEqual(f.rows, before);
   } finally { release(); globalThis.HaedoLife.PreservationReferences = original; }
 });
+test('workbench and nine-board writes reject new uses selected before trash while retaining old references and explicit new board copies', async t => {
+  const f = await preservationFixture(t), N = require('../assets/life/nine-board.js');
+  const original = await f.a.readWorkbench(f.ws), v = f.ref.sourceVersionId;
+  original.groups = [{ id: Core.id(), title: '기존 묶음', versionIds: [v, 'legacy-missing-version'] }];
+  original.page.entries = [{ id: Core.id(), title: '기존 페이지 항목', parts: [{ versionId: v, enabled: true }], note: '', pinned: false, enabled: true, showBody: true, showNote: true }];
+  const saved = await f.a.saveWorkbench(f.ws, original, 0);
+  assert.equal((await f.a.commitLocal({ workspaceId: f.ws, baseRevision: f.bundle.revision, operationId: Core.id(),
+    changes: Core.buildSourceStateChanges(f.bundle, f.ref.sourceId, 'trash') })).status, 'stored');
+  const snapshot = structuredClone(f.rows);
+  for (const mutate of [
+    state => state.groups.push({ id: Core.id(), title: '늦은 새 묶음', versionIds: [v] }),
+    state => state.page.entries.push({ ...structuredClone(state.page.entries[0]), id: Core.id() }),
+    state => state.reflection.versionIds.push(v)
+  ]) {
+    const input = structuredClone(saved); mutate(input);
+    await assert.rejects(f.a.saveWorkbench(f.ws, input, saved.revision), { code: 'source_trashed' });
+    assert.deepEqual(f.rows, snapshot);
+  }
+  const existing = structuredClone(saved); existing.groups[0].title = '휴지통과 누락 연결을 보존한 제목 수정'; existing.page.entries[0].note = '기존 연결 메모';
+  const edited = await f.a.saveWorkbench(f.ws, existing, saved.revision);
+  assert.deepEqual(edited.groups[0].versionIds, [v, 'legacy-missing-version']);
+  const repeated = structuredClone(f.nine); repeated.boards[0].areas[0].items.push(structuredClone(repeated.boards[0].areas[0].items[1]));
+  const beforeNine = structuredClone(f.rows);
+  await assert.rejects(f.a.saveNineBoard(f.ws, repeated, f.nine.revision), { code: 'source_trashed' });
+  const copies = N.copies(N.readBackup(N.backup(f.nine.boards)), Core.id), restored = { ...f.nine, boards: f.nine.boards.concat(copies) };
+  await assert.rejects(f.a.saveNineBoard(f.ws, restored, f.nine.revision), { code: 'source_trashed' });
+  const bypass = structuredClone(restored); bypass.boards[0].areas[0].items[1].reference.value.title = '기존 근거 변조';
+  await assert.rejects(f.a.saveNineBoardCopy(f.ws, bypass, f.nine.revision), { code: 'invalid_nine_board' });
+  assert.deepEqual(f.rows, beforeNine);
+  const retained = structuredClone(f.nine); retained.boards[0].areas[0].items[1].reason = '기존 정확 근거의 메모';
+  const savedNine = await f.a.saveNineBoard(f.ws, retained, f.nine.revision);
+  const copied = await f.a.saveNineBoardCopy(f.ws, { ...savedNine, boards: savedNine.boards.concat(copies) }, savedNine.revision);
+  assert.deepEqual(copied.boards[0], savedNine.boards[0]); assert.deepEqual(copied.boards[1].areas[0].items, copies[0].areas[0].items);
+});
 test('trash committed after quote selection blocks new sidecars atomically while existing citations, editing replacements and explicit file restoration survive', async t => {
   const f = await preservationFixture(t), Photo = require('../assets/life/photo-post.js'), Refs = require('../assets/life/source-reference.js'), Preserve = require('../assets/life/preservation-references.js');
   const selectedBeforeTrash = await Refs.build({ bundle: f.bundle, sourceId: f.ref.sourceId, versionId: f.ref.sourceVersionId, locator: { start: 0, end: 2 } });

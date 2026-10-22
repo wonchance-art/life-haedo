@@ -83,7 +83,12 @@ async function main(){
    },{expected,path:f.receipt.entries[1].sourceRelativePath});
    await open();await page.locator('.original-attachments-copy').first().getByRole('button').first().click();const entry=page.locator('[data-role="git-note-version"]');
    await entry.getByRole('button',{name:'같은 원문 버전 찾기',exact:true}).click();await entry.getByRole('button',{name:'해도 원문 열기',exact:true}).click();await page.locator('#lifeSourceText').waitFor({timeout:5000});
-   assert.equal(await page.locator('#lifeOriginalAttachments').count(),0);assert.equal(await page.locator('#lifeSourceText').textContent(),expected);
+   assert.equal(await page.locator('#lifeOriginalAttachments').count(),0);
+   // Markdown opens with formatting; use the actual raw-view control before
+   // checking the unchanged stored source bytes and exact older version.
+   await page.locator('#lifeSourceInfoToggle').click();await page.locator('#lifeSourceFormatToggle').click();
+   assert.equal(await page.locator('#lifeSourceText').getAttribute('data-reading-mode'),'raw');
+   assert.equal(await page.locator('#lifeSourceText').textContent(),expected);
    assert.equal(await page.locator('#lifeVersion').inputValue(),seeded.versionId);assert.notEqual(seeded.versionId,seeded.latestId);
    assert.equal(await page.evaluate(()=>HaedoLife.Shell.storage.getActive()),seeded.workspaceId);assert.equal(await page.evaluate(id=>HaedoLife.Shell.storage.read(id).then(JSON.stringify),seeded.workspaceId),seeded.before);
    await page.locator('#lifeSearchReturn').click();await page.locator('#lifeOriginalAttachmentsOpen').waitFor();

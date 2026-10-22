@@ -64,6 +64,12 @@ function inspectHome(selector = '.life-home') {
   const visible = el => el.checkVisibility({ checkVisibilityCSS: true }) && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0 && !el.closest('[hidden],.life-sr-only,.life-skip,.sr-only');
   const describe = el => ({ tag: el.tagName.toLowerCase(), id: el.id, name: (el.getAttribute('aria-label') || el.labels?.[0]?.textContent || el.textContent || '').trim().slice(0, 80) });
   const controls = [...root.querySelectorAll('button,a[href],input,textarea,select,summary'), ...document.querySelectorAll('[data-haedo-navigation] a')].filter(visible);
+  const targetRect = el => {
+    const input = el.getBoundingClientRect();
+    if (!el.matches('input[type=checkbox],input[type=radio]')) return input;
+    const label = [...(el.labels || [])].filter(visible).map(node => node.getBoundingClientRect()).find(rect => rect.width >= input.width && rect.height >= input.height);
+    return label || input;
+  };
   const overflow = [...root.querySelectorAll('*')].filter(visible).filter(el => { const r = el.getBoundingClientRect(); return r.left < -1 || r.right > innerWidth + 1; }).map(describe);
   const rgba = value => { const m = value.match(/^rgba?\(([^)]+)\)$/); if (!m) return null; const a = m[1].split(/[, /]+/).map(Number); return [a[0], a[1], a[2], a[3] ?? 1]; };
   const over = (a, b) => a.slice(0, 3).map((v, i) => v * a[3] + b[i] * (1 - a[3])).concat(1);
@@ -78,7 +84,7 @@ function inspectHome(selector = '.life-home') {
     const large = parseFloat(css.fontSize) >= 24 || (parseFloat(css.fontSize) >= 18.66 && parseInt(css.fontWeight) >= 700);
     texts.push({ ...describe(el), ratio: +( (ls[0] + .05) / (ls[1] + .05) ).toFixed(3), required: large ? 3 : 4.5 });
   }
-  return { width: innerWidth, horizontalOverflow: document.documentElement.scrollWidth > innerWidth + 1, overflow, smallTargets: controls.map(el => { const r = el.getBoundingClientRect(); return { ...describe(el), width: r.width, height: r.height }; }).filter(r => r.width < 43.9 || r.height < 43.9), unnamed: controls.filter(el => !describe(el).name).map(describe), minTextContrast: Math.min(...texts.map(t => t.ratio)), measuredTexts: texts.length, contrastFailures: texts.filter(t => t.ratio < t.required), font: getComputedStyle(root).fontFamily };
+  return { width: innerWidth, horizontalOverflow: document.documentElement.scrollWidth > innerWidth + 1, overflow, smallTargets: controls.map(el => { const r = targetRect(el); return { ...describe(el), width: r.width, height: r.height }; }).filter(r => r.width < 43.9 || r.height < 43.9), unnamed: controls.filter(el => !describe(el).name).map(describe), minTextContrast: Math.min(...texts.map(t => t.ratio)), measuredTexts: texts.length, contrastFailures: texts.filter(t => t.ratio < t.required), font: getComputedStyle(root).fontFamily };
 }
 async function snapshot(page, scene, size, selector = '.life-home') {
   await page.evaluate(() => document.fonts.ready); await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' }));

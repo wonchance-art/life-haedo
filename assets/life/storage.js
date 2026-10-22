@@ -925,15 +925,31 @@
         return clone(await nineBoardValue(meta, workspaceId));
       });
     }
-    async function saveNineBoard(workspaceId, input, baseRevision) {
+    function saveNineBoard(workspaceId, input, baseRevision) { return saveNineBoardVerified(workspaceId, input, baseRevision, false); }
+    function saveNineBoardCopy(workspaceId, input, baseRevision) { return saveNineBoardVerified(workspaceId, input, baseRevision, true); }
+    async function saveNineBoardVerified(workspaceId, input, baseRevision, copy) {
       collectionScope(workspaceId); requireRevision(baseRevision, 'baseRevision'); nineBoard().validate(input);
       const value = clone(input);
       if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '9칸 구성의 작업공간이 다릅니다.');
       if (value.revision !== baseRevision) throw fault('nine_board_conflict', '9칸 구성의 저장 기준이 바뀌었습니다.');
       const saved = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
-        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
         const previous = await nineBoardValue(meta, workspaceId);
         if (previous.revision !== baseRevision) throw fault('nine_board_conflict', '다른 탭에서 9칸 구성이 바뀌었습니다. 내 변경을 새 사본으로 보관해 주세요.');
+        if (copy) {
+          if (value.boards.length <= previous.boards.length || stablePayload(value.boards.slice(0, previous.boards.length)) !== stablePayload(previous.boards))
+            throw fault('invalid_nine_board', '복원은 기존 구성을 유지한 새 사본으로만 저장해 주세요.');
+        } else {
+          for (const board of value.boards) for (const area of board.areas) {
+            const oldArea = previous.boards.find(item => item.id === board.id)?.areas.find(item => item.id === area.id);
+            const retained = (oldArea?.items || []).filter(item => item.reference?.kind === 'source').map(item => stablePayload(item.reference.value));
+            for (const item of area.items) if (item.reference?.kind === 'source') {
+              const at = retained.indexOf(stablePayload(item.reference.value));
+              if (at >= 0) retained.splice(at, 1);
+              else assertNewEvidenceActive(bundle, [item.reference.value]);
+            }
+          }
+        }
         value.revision++; nineBoard().validate(value);
         await meta.put({ key: `nine-board:${workspaceId}`, value }); return clone(value);
       });
@@ -2251,9 +2267,10 @@
       if (state.revision !== baseRevision) throw fault('workbench_conflict', '구성의 저장 기준이 달라졌습니다. 입력을 보존하고 최신 구성을 확인해 주세요.');
       const saved = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
         const meta = tx.objectStore('meta');
-        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
         const previous = await workbenchValue(meta, workspaceId);
         if (previous.revision !== baseRevision) throw fault('workbench_conflict', '다른 탭에서 구성을 바꿨습니다. 입력을 보존하고 최신 구성을 확인해 주세요.');
+        assertNewWorkbenchVersionsActive(bundle, state, previous);
         const composition = await readCompositionState(meta, workspaceId, previous);
         state.revision = baseRevision + 1;
         workbench().validate(state);
@@ -2266,6 +2283,36 @@
       });
       workbenchChanged(saved);
       return saved;
+    }
+    function assertNewWorkbenchVersionsActive(bundle, state, previous) {
+      if (typeof core().isVersionActive !== 'function') return;
+      const references = value => {
+        const result = new Map(), add = (path, ids) => result.set(stablePayload(path), new Set(ids));
+        for (const group of value.groups) add(['group', group.id], group.versionIds);
+        for (const entry of value.page.entries) add(['page', entry.id], entry.parts.map(part => part.versionId));
+        add(['reflection'], value.reflection.versionIds);
+        for (const book of value.books || []) {
+          const chapters = (items, edition) => {
+            for (const chapter of items) {
+              const path = ['book', book.id, edition, chapter.id]; add(path, chapter.versionIds);
+              for (const insight of chapter.insights || []) {
+                add([...path, insight.id, 'support'], insight.supportVersionIds);
+                add([...path, insight.id, 'counter'], insight.counterVersionIds);
+              }
+            }
+          };
+          chapters(book.chapters, null);
+          for (const edition of book.editions || []) chapters(edition.chapters, edition.id);
+        }
+        return result;
+      };
+      const retained = references(previous), known = new Set(bundle.sourceVersions.map(version => version.id));
+      for (const [path, ids] of references(state)) for (const id of ids) {
+        // Missing references remain representable in legacy compositions; known
+        // trash cannot become a new use in another container or evidence field.
+        if (!retained.get(path)?.has(id) && known.has(id) && !core().isVersionActive(bundle, id))
+          throw fault('source_trashed', '휴지통의 자료를 새 구성에 추가하지 않았습니다. 입력과 기존 연결은 유지됩니다. 복원한 뒤 다시 선택해 주세요.');
+      }
     }
     async function installWorkbenchCopy(input) {
       if (!plain(input) || Object.keys(input).some(key => !['bundle', 'workbench'].includes(key))) {
@@ -3629,7 +3676,7 @@
       readDiscoveryLanguageSettings, saveDiscoveryLanguageSettings,
       readDiscoveryActions, saveDiscoveryActions,
       readDiscoveryReading, saveDiscoveryReading,
-      readCollection, saveCollection, readNineBoard, saveNineBoard, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
+      readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
 
       scanLocalPosts, readLocalPostCandidate,
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, finishMaterialContinuityClaim,
