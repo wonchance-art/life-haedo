@@ -36,6 +36,13 @@ function workspace(t) {
 function fakeUpdater({ failures = [], exitCode, mutate } = {}) {
   return ({ candidate, report }) => {
     const next = JSON.parse(fs.readFileSync(candidate)); next.generatedAt = NOW;
+    // Model the real updater's additive registry transition: new failed sources
+    // have neither a previous success nor invented last-good articles.
+    const current = seed();
+    for (const source of current.sources.filter(row => !next.sources.some(old => old.id === row.id))) {
+      next.sources.push({ ...source, lastSuccessAt: null, fetchedAt: null });
+      if (!failures.includes(source.id)) next.articles.push(...current.articles.filter(article => article.sourceId === source.id));
+    }
     for (const source of next.sources) {
       source.lastAttemptAt = NOW;
       if (failures.includes(source.id)) { source.status = 'error'; source.error = '합성 수집 실패'; source.stale = true; }
@@ -83,9 +90,14 @@ test('404 with independently verified pre-catalog worker permits tracked bootstr
 });
 
 function previousRegistry(count = 5) {
-  const previous = seed(), added = new Set(count === 5 ? ['arxiv-cs-cl', 'mit-linguistics', 'llt-journal'] : ['llt-journal']);
-  previous.sources = previous.sources.filter(source => !added.has(source.id));
-  previous.articles = previous.articles.filter(article => !added.has(article.sourceId));
+  const five = ['naver-d2', 'seoul-culture', 'woowahan-tech', 'readersnews-books', 'seoul-environment'];
+  const seven = [...five, 'arxiv-cs-cl', 'mit-linguistics'];
+  const registries = { 5: five, 7: seven, 8: [...seven, 'llt-journal'] };
+  assert.ok(Object.hasOwn(registries, count));
+  const previous = seed(), kept = new Set(registries[count]);
+  previous.sources = previous.sources.filter(source => kept.has(source.id));
+  previous.articles = previous.articles.filter(article => kept.has(article.sourceId));
+  assert.equal(previous.sources.length, count);
   return previous;
 }
 
@@ -97,51 +109,119 @@ test('exact prior five-source publication can seed an additive registry upgrade 
   assert.throws(() => CI.validateCatalog(bytes(missing), stamp(), true), /source set/);
   const w = workspace(t), result = await CI.collect({ root: w.root, clock: stamp,
     fetchSeed: async () => ({ status: 200, bytes: bytes(previous) }),
-    runUpdater: ({ candidate, report }) => {
-      fs.writeFileSync(candidate, bytes(seed()));
-      return fakeUpdater()({ candidate, report });
-    } });
+    runUpdater: fakeUpdater() });
   assert.equal(result.sourceCount, Object.keys(Core.ALLOWED_SOURCES).length); assert.equal(result.collectorExitCode, 0);
   assert.deepEqual(fs.readFileSync(w.f.seed), bytes(previous));
 });
 
-test('exact prior seven-source publication seeds LLT upgrade, while current artifacts require all eight sources', async t => {
-  assert.equal(Object.keys(Core.ALLOWED_SOURCES).length, 8);
+test('exact prior seven-source publication remains a seed-only upgrade while current artifacts require all nine sources', async t => {
+  assert.equal(Object.keys(Core.ALLOWED_SOURCES).length, 9);
   const previous = previousRegistry(7);
   assert.equal(previous.sources.length, 7);
   assert.doesNotThrow(() => CI.validateCatalog(bytes(previous), stamp(), true));
   assert.throws(() => CI.validateCatalog(bytes(previous), stamp()), /source set/);
   const arbitrarySix = structuredClone(previous); arbitrarySix.sources.shift(); arbitrarySix.articles.shift();
   assert.throws(() => CI.validateCatalog(bytes(arbitrarySix), stamp(), true), /source set/);
-  const wrongSeven = seed(); wrongSeven.sources.shift(); wrongSeven.articles.shift();
+  const wrongSeven = previousRegistry(7), current = seed();
+  wrongSeven.sources[0] = current.sources.find(source => source.id === 'frontiers-psychology');
+  wrongSeven.articles[0] = current.articles.find(article => article.sourceId === 'frontiers-psychology');
   assert.throws(() => CI.validateCatalog(bytes(wrongSeven), stamp(), true), /source set/);
   const w = workspace(t), result = await CI.collect({ root: w.root, clock: stamp,
     fetchSeed: async () => ({ status: 200, bytes: bytes(previous) }),
-    runUpdater: ({ candidate, report }) => {
-      fs.writeFileSync(candidate, bytes(seed()));
-      return fakeUpdater()({ candidate, report });
-    } });
-  assert.equal(result.sourceCount, 8); assert.equal(result.collectorExitCode, 0);
+    runUpdater: fakeUpdater() });
+  assert.equal(result.sourceCount, 9); assert.equal(result.collectorExitCode, 0);
   assert.deepEqual(fs.readFileSync(w.f.seed), bytes(previous));
-  assert.equal(JSON.parse(fs.readFileSync(w.f.candidate)).sources.length, 8);
+  assert.equal(JSON.parse(fs.readFileSync(w.f.candidate)).sources.length, 9);
 });
 
 test('first failure of an added source retains null history and no fabricated articles', async t => {
   const previous = previousRegistry(), w = workspace(t), id = 'arxiv-cs-cl';
   const result = await CI.collect({ root: w.root, clock: stamp,
     fetchSeed: async () => ({ status: 200, bytes: bytes(previous) }),
-    runUpdater: ({ candidate, report }) => {
-      const current = seed(), added = current.sources.find(source => source.id === id);
-      added.lastSuccessAt = null; added.fetchedAt = null;
-      current.articles = current.articles.filter(article => article.sourceId !== id);
-      fs.writeFileSync(candidate, bytes(current));
-      return fakeUpdater({ failures: [id] })({ candidate, report });
-    } });
+    runUpdater: fakeUpdater({ failures: [id] }) });
   const next = JSON.parse(fs.readFileSync(w.f.candidate));
   assert.equal(result.partialFailure, true);
   assert.equal(next.sources.find(source => source.id === id).lastSuccessAt, null);
   assert.equal(next.articles.filter(article => article.sourceId === id).length, 0);
-  assert.deepEqual(next.articles.filter(article => !['arxiv-cs-cl', 'mit-linguistics', 'llt-journal'].includes(article.sourceId)).map(article => article.id), previous.articles.map(article => article.id));
+  assert.deepEqual(next.articles.filter(article => !['arxiv-cs-cl', 'mit-linguistics', 'llt-journal', 'frontiers-psychology'].includes(article.sourceId)).map(article => article.id), previous.articles.map(article => article.id));
+});
+
+test('exact prior eight-source LLT publication seeds Frontiers upgrade but arbitrary eight-source sets do not', async t => {
+  const previous = previousRegistry(8);
+  assert.equal(previous.sources.length, 8);
+  assert.ok(previous.sources.some(source => source.id === 'llt-journal'));
+  assert.ok(!previous.sources.some(source => source.id === 'frontiers-psychology'));
+  assert.doesNotThrow(() => CI.validateCatalog(bytes(previous), stamp(), true));
+  assert.throws(() => CI.validateCatalog(bytes(previous), stamp()), /source set/);
+  const wrongEight = seed(); wrongEight.sources.shift(); wrongEight.articles.shift();
+  assert.equal(wrongEight.sources.length, 8);
+  assert.throws(() => CI.validateCatalog(bytes(wrongEight), stamp(), true), /source set/);
+  const arbitrary = structuredClone(previous); arbitrary.sources.splice(0, 2); arbitrary.articles.splice(0, 2);
+  assert.throws(() => CI.validateCatalog(bytes(arbitrary), stamp(), true), /source set/);
+  const w = workspace(t), tracked = fs.readFileSync(w.f.tracked);
+  const result = await CI.collect({ root: w.root, clock: stamp,
+    fetchSeed: async () => ({ status: 200, bytes: bytes(previous) }), runUpdater: fakeUpdater() });
+  const next = JSON.parse(fs.readFileSync(w.f.candidate));
+  assert.equal(result.sourceCount, 9); assert.equal(result.collectorExitCode, 0);
+  assert.deepEqual(fs.readFileSync(w.f.seed), bytes(previous));
+  assert.equal(next.sources.find(source => source.id === 'frontiers-psychology').lastSuccessAt, NOW);
+  assert.equal(next.articles.filter(article => article.sourceId === 'frontiers-psychology').length, 1);
+  assert.deepEqual(next.articles.filter(article => article.sourceId !== 'frontiers-psychology').map(article => article.id), previous.articles.map(article => article.id));
+  assert.deepEqual(fs.readFileSync(w.f.tracked), tracked);
+});
+
+test('Frontiers first failure during eight-to-nine upgrade retains null success and zero articles', async t => {
+  const previous = previousRegistry(8), w = workspace(t), id = 'frontiers-psychology';
+  const result = await CI.collect({ root: w.root, clock: stamp,
+    fetchSeed: async () => ({ status: 200, bytes: bytes(previous) }), runUpdater: fakeUpdater({ failures: [id] }) });
+  const next = JSON.parse(fs.readFileSync(w.f.candidate)), added = next.sources.find(source => source.id === id);
+  assert.equal(result.sourceCount, 9); assert.equal(result.okSources, 8);
+  assert.equal(result.partialFailure, true); assert.equal(result.collectorExitCode, 2);
+  assert.equal(added.status, 'error'); assert.equal(added.stale, true);
+  assert.equal(added.lastSuccessAt, null); assert.equal(added.fetchedAt, null); assert.equal(added.lastAttemptAt, NOW);
+  assert.equal(next.articles.filter(article => article.sourceId === id).length, 0);
+  assert.deepEqual(next.articles.map(article => article.id), previous.articles.map(article => article.id));
+});
+
+for (const history of ['last-good', 'previously-never-succeeded']) {
+  test(`nine-to-nine Frontiers failure preserves ${history} history exactly`, async t => {
+    const previous = seed(), id = 'frontiers-psychology', w = workspace(t);
+    if (history === 'previously-never-succeeded') {
+      Object.assign(previous.sources.find(source => source.id === id), {
+        lastSuccessAt: null, fetchedAt: null, status: 'error', stale: true, error: 'Earlier first failure',
+      });
+      previous.articles = previous.articles.filter(article => article.sourceId !== id);
+    } else previous.articles.find(article => article.sourceId === id).title = '직전 게시에서 확보한 심리학 연구';
+    const before = previous.articles.filter(article => article.sourceId === id);
+    const result = await CI.collect({ root: w.root, clock: stamp,
+      fetchSeed: async () => ({ status: 200, bytes: bytes(previous) }), runUpdater: fakeUpdater({ failures: [id] }) });
+    const next = JSON.parse(fs.readFileSync(w.f.candidate));
+    assert.equal(result.sourceCount, 9); assert.equal(result.collectorExitCode, 2);
+    assert.equal(next.sources.find(source => source.id === id).lastSuccessAt, history === 'last-good' ? BEFORE : null);
+    assert.deepEqual(next.articles.filter(article => article.sourceId === id), before);
+    assert.deepEqual(fs.readFileSync(w.f.seed), bytes(previous));
+  });
+}
+
+test('an unupgraded eight-source collection cannot be collected or installed even with a matching candidate digest', async t => {
+  const previous = previousRegistry(8), w = workspace(t), tracked = fs.readFileSync(w.f.tracked);
+  await assert.rejects(CI.collect({ root: w.root, clock: stamp,
+    fetchSeed: async () => ({ status: 200, bytes: bytes(previous) }),
+    runUpdater: ({ candidate, report }) => {
+      fs.writeFileSync(candidate, bytes(previous));
+      fs.writeFileSync(report, bytes({ okSources: 8, sourceCount: 8, articleCount: previous.articles.length }));
+      return 0;
+    } }), /source set/);
+  assert.deepEqual(fs.readFileSync(w.f.tracked), tracked);
+  assert.throws(() => CI.install({ root: w.root, clock: stamp }), /No successful collection/);
+  const other = workspace(t);
+  await CI.collect({ root: other.root, clock: stamp,
+    fetchSeed: async () => ({ status: 200, bytes: bytes(previous) }), runUpdater: fakeUpdater() });
+  fs.writeFileSync(other.f.candidate, bytes(previous));
+  const receipt = JSON.parse(fs.readFileSync(other.f.outcome));
+  receipt.candidateSHA256 = crypto.createHash('sha256').update(bytes(previous)).digest('hex');
+  fs.writeFileSync(other.f.outcome, bytes(receipt));
+  assert.throws(() => CI.install({ root: other.root, clock: stamp }), /source set/);
 });
 
 for (const failure of ['v130', 'v132', 'missing-version', 'worker404', 'backported-catalog']) {

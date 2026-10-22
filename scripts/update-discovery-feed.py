@@ -72,6 +72,12 @@ SOURCES = (
      'language': 'en', 'rights': {'mode': 'metadata_only',
      'label': '공식 RSS · 언어교육 동료심사 연구 · 제목·링크만 보관 · 2020년 이후 원문 CC BY-NC-ND 4.0(출처표시·비상업·원형유지)',
      'url': 'https://www.lltjournal.org/about/'}},
+    {'id': 'frontiers-psychology', 'name': 'Frontiers in Psychology · 영문 심리학 연구',
+     'url': 'https://www.frontiersin.org/journals/psychology',
+     'feedUrl': 'https://www.frontiersin.org/journals/psychology/rss', 'allowedHosts': ['www.frontiersin.org'],
+     'language': 'en', 'rights': {'mode': 'metadata_only',
+     'label': '공식 RSS · 원문 CC-BY(출처표시·변경명시) · 제목·링크·첫 작성자·발행일만 · 초록·본문·이미지 미제공',
+     'url': 'https://www.frontiersin.org/journals/psychology/about#copyright-statement'}},
 )
 
 
@@ -405,10 +411,18 @@ def parse_feed(body, source, now, limit=20):
             else:
                 link = child_text(entry, 'link').strip()
                 published_raw = child_text(entry, 'pubDate') or child_text(entry, f'{{{DC}}}date')
+                if source['id'] == 'frontiers-psychology':
+                    # This reviewed RSS uses lowercase pubdate; do not broaden
+                    # the accepted date fields of any other registered feed.
+                    published_raw = published_raw or child_text(entry, 'pubdate')
                 updated_raw = child_text(entry, 'upDate')
                 author = author_name(child_text(entry, f'{{{DC}}}creator') or child_text(entry, 'author'))
                 tags = [plain(child_text(item, '.') if len(item) else item.text, 80) for item in entry.findall('category')]
                 tags += [plain(item.text, 80) for item in entry.findall('tags')]
+            if source['id'] == 'frontiers-psychology':
+                # Its categories identify article types, not subject matter.
+                # They must not become topic/recommendation evidence.
+                tags = []
             url = approved_url(link, source['allowedHosts'])
             canonical = approved_url(url, source['allowedHosts'], canonical=True)
             published, date_status = parse_date(published_raw, source, now)
@@ -452,6 +466,8 @@ def previous_articles(previous, source):
                          'summary':'','coverage':'link_only','rights':copy.deepcopy(source['rights'])})
             safe['author'] = author_name(safe.get('author'))
             safe['language'] = source['language']
+            if source['id'] == 'frontiers-psychology':
+                safe['tags'] = []
             kept.append(safe)
         except (FeedError, KeyError, TypeError):
             continue

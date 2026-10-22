@@ -10,7 +10,7 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (discovery, actionsApi) {
   'use strict';
-  const POLICY = 'public-title-tag-expressions-v3';
+  const POLICY = 'public-title-tag-expressions-v4';
   const MIN_SHARED_TERMS = 2;
   // Deliberately conservative: no stemming, Korean particle removal, inferred
   // topics or arbitrary substring matching. Title words and whole official tags

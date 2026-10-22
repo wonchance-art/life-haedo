@@ -13,7 +13,7 @@
   const PREFERENCES = Object.freeze(['latest', 'related', 'personal', 'tie', 'undecided']);
   // Persisted evidence is interpreted by its own known policy, not whatever
   // policy a later live ranker happens to export.
-  const KNOWN_PERSONAL_POLICIES = Object.freeze(['public-title-tag-expressions-v2', 'public-title-tag-expressions-v3']);
+  const KNOWN_PERSONAL_POLICIES = Object.freeze(['public-title-tag-expressions-v2', 'public-title-tag-expressions-v3', 'public-title-tag-expressions-v4']);
   const names = { Discovery: 'discovery', DiscoveryActions: 'discovery-actions', DiscoveryRecommendations: 'discovery-recommendations',
     DiscoveryProfile: 'discovery-profile', DiscoveryLanguageSettings: 'discovery-language-settings', InterestProfile: 'interest-profile' };
   const dep = name => root.HaedoLife?.[name] || (typeof require === 'function' && require('./' + names[name] + '.js'));
@@ -72,7 +72,8 @@
   function reason(value, article, interests) {
     fields(value, ['interestId', 'interestLabel', 'field', 'start', 'end', 'quote', 'matchedTerm', 'via'], ['tagIndex']);
     check(interests.some(item => item.id === value.interestId && item.label === value.interestLabel));
-    check(['title', 'tags', 'summary', 'bodyText'].includes(value.field) && ['exact', 'alias'].includes(value.via));
+    check(['title', 'tags', 'summary', 'bodyText'].includes(value.field) && ['exact', 'alias', 'related'].includes(value.via));
+    if (value.via === 'related') check(value.field === 'title');
     text(value.matchedTerm, 200); text(value.quote, 200);
     check(value.field === 'tags' ? integer(value.tagIndex) && value.tagIndex < article.tags.length : !Object.hasOwn(value, 'tagIndex'));
     span(value.field === 'tags' ? article.tags[value.tagIndex] : value.field === 'title' ? article.title : null, value);

@@ -8,6 +8,12 @@ const Recommendations = require('../assets/life/discovery-recommendations.js'), 
 // Recommendations 2624277812c8a162b0ac698e8f3175013cb5955c270d57d9bdf50f0ab3d18f41;
 // Discovery 84be7a9a935d8101a4c3f4584d6cc4f07be8b466d928ec11b6fc65fd8a314cae.
 const historicalV2 = require('./fixtures/discovery-reading-v2.json');
+// Actual a0eac63 v3 modules generated this fixture before the v4 change.
+// Reading 2bab4e9114951b163924d4d33c78a750451da19acdb6639068746c0b21c7eee5;
+// Recommendations c68f79579671feff9f1c9d846a1b0b35534861f15fe2a7a6c08982b2a0c9396d;
+// Discovery 20fb41539239ac47ede0d76f7cd028699d13203bdac2ef5f6b4321c41d5f6ff3.
+// Keep the original bytes; do not relabel current output as historical v3.
+const historicalV3 = require('./fixtures/discovery-reading-v3.json');
 const NOW = '2026-10-21T04:00:00.000Z', PAST = '2026-10-20T00:00:00.000Z', LATER = '2026-10-21T05:00:00.000Z', WS = 'synthetic-reading';
 const rights = { label: '합성 공개 메타데이터만', mode: 'metadata_only', url: null };
 const clone = value => structuredClone(value);
@@ -226,19 +232,23 @@ test('UMD import has no module-load I/O and profile bound is a hard failure rath
   assert(new TextEncoder().encode(JSON.stringify(bytes)).length > R.MAX_BYTES);
   assert.throws(() => R.validate(bytes), { code: 'discovery_reading_too_large' });
 });
-test('historical v2 judgments and current v3 evidence/fallback remain editable without reranking; unknown stored policies fail', async t => {
+test('historical v2/v3 judgments and current v4 evidence/fallback remain editable without reranking; unknown stored policies fail', async t => {
   const applied = await create(), fallbackInput = fixture();
   fallbackInput.actions = A.setPersonalization(A.empty(WS), true, options(0, PAST));
   const fallback = await create(fallbackInput), prior = global.HaedoLife.DiscoveryRecommendations;
-  assert.equal(applied.session.personal.policy, 'public-title-tag-expressions-v3');
-  assert.equal(fallback.session.personal.policy, 'public-title-tag-expressions-v3');
+  assert.equal(applied.session.personal.policy, 'public-title-tag-expressions-v4');
+  assert.equal(fallback.session.personal.policy, 'public-title-tag-expressions-v4');
   assert.equal(historicalV2.session.personal.policy, 'public-title-tag-expressions-v2');
+  assert.equal(historicalV3.session.personal.policy, 'public-title-tag-expressions-v3');
+  assert.equal(require('node:crypto').createHash('sha256').update(fs.readFileSync(path.join(__dirname, 'fixtures/discovery-reading-v3.json'))).digest('hex'),
+    '356402734efb25d79acf9fbf217a90bd7baed7ca601ff52dced71ad3711df3da');
+  assert.equal(historicalV3.session.reviews.find(row => row.helpful === 'no').reading, 'full');
   assert.equal(historicalV2.session.reviews.find(row => row.helpful === 'no').reading, 'full');
-  global.HaedoLife.DiscoveryRecommendations = { ...prior, POLICY: 'synthetic-future-v4',
+  global.HaedoLife.DiscoveryRecommendations = { ...prior, POLICY: 'synthetic-future-v5',
     rank() { assert.fail('Editing a frozen comparison must not rerank'); },
     inspectSignals() { assert.fail('Editing a frozen comparison must not inspect live likes'); } };
   t.after(() => { global.HaedoLife.DiscoveryRecommendations = prior; });
-  for (const profile of [historicalV2, applied, fallback]) {
+  for (const profile of [historicalV2, historicalV3, applied, fallback]) {
     const before = clone(profile); assert(R.validate(profile));
     const answered = R.setReview(profile, profile.session.reviews[0].canonicalUrl,
       { intent: 'yes', reading: 'partial', helpful: 'yes', reason: null }, options(profile.revision));
@@ -247,8 +257,41 @@ test('historical v2 judgments and current v3 evidence/fallback remain editable w
     assert.equal(changed.revision, before.revision + 2); assert.deepEqual(profile, before);
     const deleted = R.clear(changed, options(changed.revision));
     assert.equal(deleted.deleted, true); assert.equal(deleted.session, null); assert.equal(deleted.revision, before.revision + 3);
-    const bad = clone(profile); bad.session.personal.policy = 'synthetic-future-v4';
+    const bad = clone(profile); bad.session.personal.policy = 'synthetic-future-v5';
     for (const item of bad.session.articles) if (item.personal) item.personal.policy = bad.session.personal.policy;
     assert.throws(() => R.validate(bad), { code: 'discovery_reading_invalid' });
   }
+});
+
+test('v4 manual related-title evidence freezes exact spans, survives JSON/review changes and deletion, and rejects tag promotion', async t => {
+  const input = fixture();
+  input.profile.manual = [{ id: 'manual-attention', label: '집중력' }];
+  input.feed.articles = [article('related-title', '😀 Sustained attention improves in this study'),
+    article('related-tag-only', 'An unrelated study', { tags: ['sustained attention'] })];
+  input.actions = A.setPersonalization(A.empty(WS), true, options(0, PAST));
+  const saved = await create(input);
+  assert.equal(saved.session.personal.policy, 'public-title-tag-expressions-v4');
+  assert.deepEqual(saved.session.lists.related, [D.canonicalUrl(input.feed.articles[0].url)]);
+  const item = saved.session.articles.find(row => row.snapshot.id === 'related-title');
+  const evidence = item.reasons.find(row => row.via === 'related');
+  assert(evidence); assert.equal(evidence.field, 'title'); assert.equal(evidence.interestLabel, '집중력');
+  assert.equal(item.snapshot.title.slice(evidence.start, evidence.end), evidence.quote);
+  assert.equal(evidence.quote, 'Sustained attention');
+  const wire = JSON.stringify(saved), restored = JSON.parse(wire); assert(R.validate(restored));
+  const prior = global.HaedoLife.DiscoveryRecommendations, priorDiscovery = global.HaedoLife.Discovery;
+  global.HaedoLife.DiscoveryRecommendations = { ...prior, rank() { assert.fail('Saved related evidence must not rerank'); },
+    inspectSignals() { assert.fail('Saved related evidence must not inspect live likes'); } };
+  global.HaedoLife.Discovery = { ...priorDiscovery, rank() { assert.fail('Saved related evidence must not rerank'); } };
+  t.after(() => { global.HaedoLife.DiscoveryRecommendations = prior; global.HaedoLife.Discovery = priorDiscovery; });
+  const answered = R.setReview(restored, item.snapshot.canonicalUrl,
+    { intent: 'yes', reading: 'partial', helpful: 'no', reason: 'off_topic' }, options(restored.revision));
+  assert.deepEqual({ ...answered.session, reviews: restored.session.reviews }, restored.session);
+  assert.equal(JSON.stringify(saved), wire);
+  assert(R.validate(JSON.parse(JSON.stringify(answered))));
+  const tagEvidence = clone(restored), forged = tagEvidence.session.articles.find(row => row.snapshot.id === item.snapshot.id);
+  forged.snapshot.tags = [evidence.quote];
+  const tag = forged.reasons.find(row => row.via === 'related'); tag.field = 'tags'; tag.tagIndex = 0; tag.start = 0; tag.end = evidence.quote.length;
+  assert.throws(() => R.validate(tagEvidence), { code: 'discovery_reading_invalid' });
+  const cleared = R.clear(answered, options(answered.revision));
+  assert.equal(cleared.deleted, true); assert.equal(cleared.session, null); assert.equal(cleared.revision, answered.revision + 1);
 });

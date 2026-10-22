@@ -127,3 +127,37 @@ test('explicit baseline modes still ignore action input under language selection
     assert.deepEqual(Recommendations.rank(catalog, { ...options, actions: { invalidPrivateState: true } }), Discovery.rank(catalog, options));
   }
 });
+test('five simultaneous languages filter candidates and personal evidence together while translation and regional metadata remain independent', () => {
+  const Settings = require('../assets/life/discovery-language-settings.js');
+  const languages = ['ko-KR', 'en-GB', 'ja-JP', 'zh-Hant-TW', 'fr-CA', 'es-MX', 'de-CH', 'unknown', 'mixed', 'pt-BR'];
+  const items = languages.map((language, index) => article('candidate-' + index, language, { title: '😀 cobalt lattice records' }));
+  const catalog = feed(items), selection = ['ko', 'en', 'ja', 'zh', 'fr'], literalProfile = { manual: [{ id: 'literal-interest', label: 'cobalt' }] };
+  let actions = Actions.empty('synthetic-language-workspace');
+  const allowedPrototypes = new Set(), prototypeByLanguage = new Map();
+  for (const [index, language] of languages.entries()) {
+    const snapshot = Actions.capture(article('prior-' + index, language, { title: '😀 cobalt lattice records' }), source);
+    prototypeByLanguage.set(language, snapshot.canonicalUrl);
+    actions = Actions.setReaction(actions, snapshot, 'liked', true, { expectedRevision: actions.revision, now: PAST });
+    if (index < 5) allowedPrototypes.add(snapshot.canonicalUrl);
+  }
+  actions = Actions.setPersonalization(actions, true, { expectedRevision: actions.revision, now: PAST });
+  const before = structuredClone({ catalog, actions, selection }), inspection = Recommendations.inspectSignals(actions, { now: NOW, contentLanguages: selection });
+  assert.equal(inspection.signalCount, 5); assert.equal(inspection.excluded.languageOff, 5);
+  for (const mode of ['latest', 'related', 'personal']) {
+    const result = rank(catalog, mode, { contentLanguages: selection, actions, profile: literalProfile });
+    assert.deepEqual(result.items.map(item => item.article.id).sort(), items.slice(0, 5).map(item => item.id).sort());
+    assert.equal(result.poolCount, 5); assert.equal(result.metadata.excluded.language, 5);
+    if (mode === 'personal') {
+      assert.equal(result.metadata.personalization.applied, true);
+      for (const item of result.items) for (const evidence of item.personal.evidence) assert(allowedPrototypes.has(evidence.canonicalUrl));
+    }
+    for (const translationTarget of Settings.TRANSLATION_TARGET_CODES)
+      assert.deepEqual(rank(catalog, mode, { contentLanguages: selection, translationTarget, actions, profile: literalProfile }), result);
+  }
+  const french = rank(catalog, 'personal', { contentLanguages: ['fr'], actions, profile: literalProfile });
+  assert.deepEqual(french.items.map(item => item.article.id), ['candidate-4']);
+  assert(french.items[0].personal.evidence.every(evidence => evidence.canonicalUrl === prototypeByLanguage.get('fr-CA')));
+  assert.equal(Recommendations.inspectSignals(actions, { now: NOW, contentLanguages: ['fr'] }).signalCount, 1);
+  assert.deepEqual({ catalog, actions, selection }, before);
+  assert.deepEqual(catalog.articles.map(item => item.language), languages);
+});

@@ -12,6 +12,7 @@ const Actions = require('../assets/life/discovery-actions.js');
 const Reading = require('../assets/life/discovery-reading.js');
 // Actual d6009ea v2 output, shared with the model compatibility test; no rerank.
 const historicalV2 = require('./fixtures/discovery-reading-v2.json');
+const historicalV3 = require('./fixtures/discovery-reading-v3.json');
 
 // Transactional fault injection; independent browser tests use real IndexedDB.
 function memoryAdapter() {
@@ -93,22 +94,23 @@ async function imported(storage, workspaceId) {
   await storage.commitLocal({ workspaceId: bundle.workspaceId, operationId: Core.id(), baseRevision: bundle.revision, changes: Core.buildImportChanges(bundle, prepared) });
   return storage.read(bundle.workspaceId);
 }
-async function comparison(workspaceId) {
+async function comparison(workspaceId, { title = '공개 지도 연구', topic = '지도', personal = false } = {}) {
   const rights = { label: '합성 공개 메타데이터만', url: null, mode: 'metadata_only' };
   const host = Discovery.ALLOWED_SOURCES['naver-d2'][0];
   const feed = { schemaVersion: 1, generatedAt: NOW,
     sources: [{ id: 'naver-d2', name: '합성 출처', url: `https://${host}/`, feedUrl: `https://${host}/feed`, language: 'ko', rights,
       status: 'ok', stale: false, lastSuccessAt: NOW, lastAttemptAt: NOW, error: null }],
-    articles: [{ id: 'synthetic-reading', sourceId: 'naver-d2', title: '공개 지도 연구', url: `https://${host}/reading-test`, author: null,
+    articles: [{ id: 'synthetic-reading', sourceId: 'naver-d2', title, url: `https://${host}/reading-test`, author: null,
       language: 'ko', tags: ['지도'], publishedAt: NOW, fetchedAt: NOW, summary: '', coverage: 'link_only', rights }] };
-  return Reading.createComparison(Reading.empty(workspaceId), { feed, profile: { workspaceId, manual: [{ id: 'manual-map', label: '지도' }] },
-    feedback: [], knownUrls: [], contentLanguages: null, actions: null, translationTarget: 'original', personalAllowed: false },
+  return Reading.createComparison(Reading.empty(workspaceId), { feed, profile: { workspaceId, manual: [{ id: 'manual-map', label: topic }] },
+    feedback: [], knownUrls: [], contentLanguages: null, actions: personal ? Actions.setPersonalization(Actions.empty(workspaceId), true, opts(0)) : null,
+    translationTarget: 'original', personalAllowed: personal },
     { ...opts(0), sessionId: 'synthetic-session' });
 }
 
-test('historical v2 reading row reopens, updates and clears while preserving source, existing states, backups and sync', async t => {
+for (const [version, historical] of [['v2', historicalV2], ['v3', historicalV3]]) test('historical ' + version + ' reading row reopens, updates and clears while preserving source, existing states, backups and sync', async t => {
   const { storage: base, rows, control } = fixture(); t.after(() => base.close());
-  const store = base.forAccount(accountA), bundle = await imported(store, historicalV2.workspaceId), w = bundle.workspaceId;
+  const store = base.forAccount(accountA), bundle = await imported(store, historical.workspaceId), w = bundle.workspaceId;
   const interest = Interest.setManual(Interest.empty(w), [{ id: 'manual-map', label: '지도' }], opts(0));
   const feedback = Feedback.setFeedback(Feedback.empty(w), article, 'already_read', opts(0));
   const settings = Settings.update(Settings.empty(w), { autoRefresh: true }, opts(0));
@@ -119,14 +121,14 @@ test('historical v2 reading row reopens, updates and clears while preserving sou
   const metaBefore = structuredClone(rows.get('meta')), readsBefore = control.transactions.length;
   assert.deepEqual(await store.readDiscoveryReading(w), Reading.empty(w)); await store.readDiscoveryReading(w);
   assert.deepEqual(rows.get('meta'), metaBefore); assert.ok(control.transactions.slice(readsBefore).every(tx => tx.mode === 'readonly'));
-  // A previous app version already committed this exact v2 metadata row.
-  const candidate = structuredClone(historicalV2);
+  // A previous app version already committed this exact historical metadata row.
+  const candidate = structuredClone(historical), historyOptions = expectedRevision => ({ expectedRevision, now: candidate.updatedAt });
   rows.get('meta').set(JSON.stringify(rowKey(w)), { key: rowKey(w), value: structuredClone(candidate) });
   const saved = await store.readDiscoveryReading(w); assert.deepEqual(saved, candidate);
-  assert.equal(saved.session.personal.policy, 'public-title-tag-expressions-v2');
+  assert.equal(saved.session.personal.policy, 'public-title-tag-expressions-' + version);
   saved.session = null; assert.deepEqual(await store.readDiscoveryReading(w), candidate);
   const answered = Reading.setReview(candidate, candidate.session.reviews[0].canonicalUrl,
-    { intent: 'yes', reading: 'partial', helpful: 'yes', reason: null }, opts(candidate.revision));
+    { intent: 'yes', reading: 'partial', helpful: 'yes', reason: null }, historyOptions(candidate.revision));
   assert.equal((await store.saveDiscoveryReading(w, answered, candidate.revision)).status, 'stored');
   assert.deepEqual(await store.readDiscoveryReading(w), answered);
   assert.deepEqual({ ...answered.session, reviews: candidate.session.reviews }, candidate.session);
@@ -135,7 +137,7 @@ test('historical v2 reading row reopens, updates and clears while preserving sou
   const binding = { ...accountA, remoteId: w }; await store.bindSync(w, binding);
   const upload = await store.prepareSyncUpload(w, binding); assert.deepEqual(upload.data, bundle);
   assert.equal(JSON.stringify(upload).includes(candidate.session.id), false);
-  const cleared = Reading.clear(answered, opts(answered.revision));
+  const cleared = Reading.clear(answered, historyOptions(answered.revision));
   assert.equal((await store.saveDiscoveryReading(w, cleared, answered.revision)).status, 'stored');
   assert.deepEqual(await store.saveDiscoveryReading(w, candidate, candidate.revision - 1), { status: 'conflict', profile: cleared });
   assert.equal(cleared.deleted, true); assert.equal(cleared.session, null);
@@ -145,6 +147,30 @@ test('historical v2 reading row reopens, updates and clears while preserving sou
   assert.deepEqual(await store.readDiscoverySettings(w), settings); assert.deepEqual(await store.readDiscoveryLanguageSettings(w), languages);
   assert.deepEqual(await store.readDiscoveryActions(w), actions);
   for (const [key, row] of metaBefore) assert.deepEqual(rows.get('meta').get(key), row);
+});
+
+test('v4 related-title comparison stores, reopens, edits and clears without changing source data or adding backup/sync fields', async t => {
+  const { storage: base } = fixture(); t.after(() => base.close());
+  const store = base.forAccount(accountA), bundle = await imported(store), w = bundle.workspaceId;
+  const candidate = await comparison(w, { title: '😀 Sustained attention study', topic: '집중력', personal: true });
+  assert.equal(candidate.session.personal.policy, 'public-title-tag-expressions-v4');
+  const row = candidate.session.articles[0];
+  assert(row.reasons.some(reason => reason.via === 'related' && reason.field === 'title'));
+  assert.equal((await store.saveDiscoveryReading(w, candidate, 0)).status, 'stored');
+  assert.deepEqual(await store.readDiscoveryReading(w), candidate);
+  const answered = Reading.setReview(candidate, row.snapshot.canonicalUrl,
+    { intent: 'yes', reading: 'partial', helpful: 'no', reason: 'off_topic' }, opts(candidate.revision));
+  assert.equal((await store.saveDiscoveryReading(w, answered, candidate.revision)).status, 'stored');
+  assert.deepEqual(await store.readDiscoveryReading(w), answered);
+  assert.deepEqual({ ...answered.session, reviews: candidate.session.reviews }, candidate.session);
+  assert.deepEqual(await store.read(w), bundle);
+  assert(!JSON.stringify(Core.makeBackup(bundle)).includes(candidate.session.id));
+  const binding = { ...accountA, remoteId: w }; await store.bindSync(w, binding);
+  assert.deepEqual((await store.prepareSyncUpload(w, binding)).data, bundle);
+  const cleared = Reading.clear(answered, opts(answered.revision));
+  assert.equal((await store.saveDiscoveryReading(w, cleared, answered.revision)).status, 'stored');
+  assert.deepEqual(await store.readDiscoveryReading(w), cleared);
+  assert.deepEqual(await store.saveDiscoveryReading(w, answered, candidate.revision), { status: 'conflict', profile: cleared });
 });
 
 test('workspace, user, project and closed scope isolate reading states and reject foreign writes', async t => {

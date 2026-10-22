@@ -34,8 +34,8 @@ test('manual labels alone drive retrieval; inferred interests and positive words
   assert.equal(rank(catalog, '인공지능에는 관심이 없다').items.length, 0);
   assert.equal(rank(catalog, '기술과 과학').items.length, 0);
 });
-test('reviewed book and environment sources accept their exact HTTPS hosts while rejecting lookalikes', () => {
-  for (const [sourceId, host] of [['readersnews-books', 'www.readersnews.com'], ['seoul-environment', 'news.seoul.go.kr']]) {
+test('reviewed book, environment and psychology sources accept their exact HTTPS hosts while rejecting lookalikes', () => {
+  for (const [sourceId, host] of [['readersnews-books', 'www.readersnews.com'], ['seoul-environment', 'news.seoul.go.kr'], ['frontiers-psychology', 'www.frontiersin.org']]) {
     const catalog = feed([article('new-public', '신간 소개')]);
     Object.assign(catalog.sources[0], { id: sourceId, name: '검토한 공개 출처', url: `https://${host}/`, feedUrl: `https://${host}/feed` });
     Object.assign(catalog.articles[0], { sourceId, url: `https://${host}/article?id=1` });
@@ -113,6 +113,78 @@ test('reviewed language learning and education expressions stay separate with ex
     [{ start: 3, end: 20, quote: 'Language learning', via: 'alias' }]);
   for (const label of ['언어 관련 연구 및 조언', '언어 학습에는 관심이 없다', 'second language acquisition']) assert.equal(rank(catalog, label).eligibleCount, 0);
   assert.equal(JSON.stringify(catalog), before, 'aliases never rewrite the publisher title or tags');
+});
+test('reviewed foreign-language, book-reading and grit aliases preserve narrow phrases and exact UTF16 evidence', () => {
+  const catalog = feed([
+    article('foreign', '😀 Foreign language learning\r\nresearch'), article('book', 'Book reading study'), article('grit', '😀 GRIT의 연구'),
+    article('generic', 'Reading instruments, concentration chemistry and attention models'), article('substring', 'gritty grits book readings'),
+    article('second', 'Second language learning study')
+  ]), before = JSON.stringify(catalog);
+  for (const [labels, expected] of [
+    [['외국어 학습', '외국어학습', 'foreign language learning'], 'foreign'],
+    [['독서', '책 읽기', 'book reading'], 'book'], [['그릿', 'grit'], 'grit']
+  ]) for (const label of labels) {
+    const result = rank(catalog, label), row = result.items.find(item => item.article.id === expected);
+    assert(row, label); assert(!result.items.some(item => ['generic', 'substring'].includes(item.article.id)));
+    for (const reason of row.reasons) { assert.equal(row.article.title.slice(reason.start, reason.end), reason.quote); assert.equal(reason.interestLabel, label); }
+  }
+  const span = rank(catalog, '외국어학습').items.find(item => item.article.id === 'foreign').reasons[0];
+  assert.deepEqual({ start: span.start, end: span.end, quote: span.quote, via: span.via }, { start: 3, end: 28, quote: 'Foreign language learning', via: 'alias' });
+  assert.equal(rank(catalog, 'foreign language learning').items.some(item => item.article.id === 'second'), false, 'English equivalent never inherits Korean directional terms');
+  for (const label of ['집중력', '외국어 학습에는 관심이 없다', '독서와 집중력', '그릿은 원하지 않는다']) assert.equal(rank(catalog, label).eligibleCount, 0);
+  assert.equal(JSON.stringify(catalog), before);
+});
+test('directional related phrases apply only to exact manual labels and actual title spans', () => {
+  const catalog = feed([
+    article('efl', '😀 The impact on EFL/ESL learning'), article('reading', '😀 L2 reading comprehension\r\nresearch'),
+    article('esl', 'ESL learning study'), article('second', 'Second language learning study'),
+    article('attention', '😀 Sustained attention improves in this study'), article('wandering', 'When readers’ minds wander'),
+    article('mind-wandering', 'Research on mind wandering'),
+    article('tag-only', 'Another study', { tags: ['sustained attention', 'reading comprehension', 'EFL/ESL learning'] }),
+    article('summary-only', 'Another study', { summary: 'sustained attention', coverage: 'summary', rights: rights('summary_allowed') }),
+    article('body-only', 'Another study', { bodyText: 'sustained attention', coverage: 'full_text', rights: rights('full_text_allowed') }),
+    article('generic', 'EFL ESL L2 reading attention concentration persistence'), article('longer', 'minds wanderers and sustained attentional study')
+  ]), before = JSON.stringify(catalog);
+  for (const [label, expected] of [['외국어 학습', ['efl', 'esl', 'second']], ['외국어학습', ['efl', 'esl', 'second']], ['독서', ['reading']], ['책 읽기', ['reading']], ['집중력', ['attention', 'mind-wandering', 'wandering']]]) {
+    const result = rank(catalog, label); assert.deepEqual(result.items.map(row => row.article.id).sort(), expected);
+    for (const row of result.items) for (const reason of row.reasons) {
+      assert.equal(reason.field, 'title'); assert.equal(reason.via, 'related'); assert.equal(reason.interestLabel, label);
+      assert.equal(row.article.title.slice(reason.start, reason.end), reason.quote);
+    }
+  }
+  const attention = rank(catalog, '집중력').items.find(row => row.article.id === 'attention').reasons[0];
+  assert.equal(attention.start, 3); assert.equal(attention.end, 22); assert.equal(attention.quote, 'Sustained attention');
+  assert.equal(rank(feed([article('reverse', '집중력 독서 외국어 학습')]), 'sustained attention').eligibleCount, 0);
+  assert.equal(rank(feed([article('reverse', '독서')]), 'reading comprehension').eligibleCount, 0);
+  assert.equal(rank(feed([article('reverse', '외국어 학습')]), 'ESL learning').eligibleCount, 0);
+  assert.equal(rank(catalog, 'book reading').eligibleCount, 0, 'alias expansion does not chain into related phrases');
+  assert.equal(JSON.stringify(catalog), before);
+});
+test('related title evidence does not duplicate overlapping phrases or displace stronger exact and alias evidence', () => {
+  const catalog = feed([
+    article('overlap', '😀 EFL/ESL learning'), article('alias', 'Foreign language learning'),
+    article('tag', 'Another title', { tags: ['외국어 학습'] }), article('exact', '외국어 학습의 연구')
+  ]);
+  const result = rank(catalog, '외국어 학습');
+  assert.deepEqual(result.items.map(row => row.article.id), ['alias', 'exact', 'tag', 'overlap']);
+  const overlap = result.items.find(row => row.article.id === 'overlap');
+  assert.deepEqual(overlap.reasons.map(({ quote, via }) => ({ quote, via })), [{ quote: 'EFL/ESL learning', via: 'related' }]);
+  const alias = result.items.find(row => row.article.id === 'alias'); assert.equal(alias.reasons.length, 1); assert.equal(alias.reasons[0].via, 'alias');
+  const pool = Discovery.candidatePool(catalog, { profile: profile('외국어 학습'), now: NOW });
+  const related = pool.pool.find(row => row.article.id === 'overlap'); assert.equal(related.strength, 4); assert.equal(related.interests, 1);
+  assert(pool.pool.filter(row => row.article.id !== 'overlap').every(row => row.strength > related.strength));
+  assert(Discovery.RELATED_TERMS['외국어 학습'].includes('EFL/ESL learning'));
+  assert(!Discovery.ALIASES.flat().includes('EFL/ESL learning'), 'directional terms never enter the personal alias feature table');
+});
+test('two distinct publisher-title fixtures are reachable without broadening a topic into generic words', () => {
+  const catalog = feed([
+    article('meta-analysis', 'The cognitive-affective impact of generative AI on EFL/ESL learning: A meta-analysis'),
+    article('l2-reading', 'When readers’ minds wander: How cognitive and affective variables shape mobile-assisted L2 reading comprehension')
+  ]), before = JSON.stringify(catalog);
+  const result = Discovery.rank(catalog, { now: NOW, profile: { manual: ['외국어 학습', '독서', '집중력', 'Grit'].map((label, i) => ({ id: 'explicit-' + i, label })) } });
+  assert.equal(new Set(result.items.map(row => row.article.canonicalUrl)).size, 2); assert.equal(result.eligibleCount, 2);
+  assert(result.items.every(row => row.reasons.every(reason => reason.via === 'related' && reason.field === 'title')));
+  assert.equal(JSON.stringify(catalog), before);
 });
 test('actual matching fields and coverage are used without fabricating missing summary or body', () => {
   const catalog = feed([

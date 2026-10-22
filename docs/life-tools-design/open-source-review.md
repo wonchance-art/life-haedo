@@ -1,5 +1,13 @@
 # 오픈소스 검토와 재사용 결정
 
+## 다중 콘텐츠 언어·관련 표현·심리학 RSS — 2026-10-22
+
+기존 네이티브 checkbox·Discovery 언어 필터·언어 설정 CAS·Reading 불변 비교·Python 표준 XML 수집기를 재사용한다. 별도 다중 선택 라이브러리·번역 SDK·다국어 사전 API·추천 서버는 추가하지 않는다. 이미 여러 언어 선택을 지원하므로 화면의 선택 요약과 실제 공급 구분을 보완하는 편이 저장 형식·기기 데이터·오프라인 보존 비용이 작다. 새 패키지 도입이 없어 기존 vendor 버전·라이선스는 변경하지 않았다.
+
+동등한 별칭과 방향성 관련 표현은 별도 작은 공개 목록으로 둔다. 관련 표현을 개인 좋아요 특징으로 승격하거나 일반 reading/attention/persistence로 넓히지 않는다. 기존 정확 제목 위치와 이유를 설명할 수 있는 범위가 이번의 선택 근거다. 다국어 의미 검색 엔진의 적합성·효용을 이 변경으로 입증하지 않는다.
+
+공급은 [Frontiers 공식 RSS](https://www.frontiersin.org/journals/psychology/rss)와 [공식 CC-BY 조건](https://www.frontiersin.org/journals/psychology/about#copyright-statement)을 확인해 제목·링크·첫 작성자·날짜만 채택한다. 원연구와 연구 보도, 논문 유형과 주제 태그를 구분한다. PsyPost는 공식 약관 임베드까지 추적했지만 정책 본문을 확보하지 못해 제외, APS는 확인한 공식 홈페이지에서 RSS 선언을 찾지 못해 제외했다. 접근·robots·권리·메타데이터 호환성의 실제 확인 범위와 사용 한계는 [통합 설계](../design-review/discovery-multilingual.md)를 따른다.
+
 ## 자료 Markdown 읽기·정확 원문·수정/휴지통 — 2026-10-22 구현
 
 직접 도입은 **markdown-it15.0.3 + DOMPurify3.4.17의 공식 로컬 고정 UMD**로 확정했다. 일반 Markdown parser를 자체 정규식으로 만들지 않고 Core·원문/발췌·Storage CAS·Writing/가져오기·기존 사본/동기화를 재사용한다. 직접 유지하는 범위는 읽기 정책·block/raw 위치 adapter·엄격한 source-edit/예약 link와 기존 입출력 연결이다. [통합 설계·구현·검수 경계](../design-review/material-markdown-edit-delete.md).

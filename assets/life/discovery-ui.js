@@ -427,7 +427,13 @@
         details.addEventListener('toggle', () => { if (current && scope()) current.languageOpen = details.open; }); current.languageDetails = details;
       }
       const focused = root.document.activeElement, focusId = details.contains(focused) ? focused.id : null, desired = desiredLanguages(), body = node('div', null, 'discovery-language-body');
-      const languages = node('fieldset', null, 'discovery-content-languages'); languages.id = 'discoveryContentLanguages'; languages.append(node('legend', '콘텐츠 언어'));
+      const selectedLabels = languageModel().CONTENT_LANGUAGE_CODES.filter(code => desired?.contentLanguages?.includes(code)).map(code => languageModel().CONTENT_LANGUAGE_LABELS[code]);
+      const languageState = !desired ? '확인 필요' : desired.contentLanguages === null ? '전체 언어' : selectedLabels.length ? null : '선택 없음';
+      const selectionSummary = languageState || selectedLabels.slice(0, 3).join('·') + (selectedLabels.length > 3 ? ' 외 ' + (selectedLabels.length - 3) + '개' : '');
+      const summary = details.querySelector('summary'); summary.id = 'discoveryLanguageSummary';
+      summary.textContent = '언어 옵션 · 콘텐츠: ' + selectionSummary;
+      summary.setAttribute('aria-label', '언어 옵션 · 콘텐츠 언어: ' + (languageState || selectedLabels.join('·')));
+      const languages = node('fieldset', null, 'discovery-content-languages'); languages.id = 'discoveryContentLanguages'; languages.append(node('legend', '콘텐츠 언어 (여러 개 선택)'));
       for (const [code, label] of [['all', '전체 언어'], ...languageModel().CONTENT_LANGUAGE_CODES.map(code => [code, languageModel().CONTENT_LANGUAGE_LABELS[code]])]) {
         const checked = code === 'all' ? desired?.contentLanguages == null : desired?.contentLanguages?.includes(code) || false;
         const control = checkbox(label, 'discoveryLanguage-' + code, checked, enabled => {
@@ -779,11 +785,11 @@
       const reasons = item.reasons || [];
       if ((current.mode === 'related' || current.mode === 'personal' && !item.personal && current.baselineMode === 'related') && reasons.length) {
         const reason = reasons[0], field = { title: '제목', summary: '공개 요약', bodyText: '허용된 본문', tags: '출처 태그' }[reason.field] || '공개 글';
-        information.append(node('p', '보관한 관심 ‘' + reason.interestLabel + '’ · ' + field + '에 ‘' + reason.quote + '’', 'discovery-reason'));
+        information.append(node('p', '보관한 관심 ‘' + reason.interestLabel + '’ · ' + field + '에 ‘' + reason.quote + '’' + (reason.via === 'related' ? ' · 관련 표현' : ''), 'discovery-reason'));
         const evidence = node('details', null, 'discovery-evidence'); evidence.append(node('summary', '찾은 근거'));
         reasons.slice(0, 5).forEach(ref => {
           const where = { title: '제목', summary: '공개 요약', bodyText: '허용된 본문', tags: '출처 태그' }[ref.field] || '공개 글';
-          evidence.append(node('p', where + ' · 관심 ‘' + ref.interestLabel + '’' + (ref.via === 'alias' ? '의 같은 표현' : ''), 'life-meta'), node('blockquote', ref.quote));
+          evidence.append(node('p', where + ' · 관심 ‘' + ref.interestLabel + '’' + (ref.via === 'related' ? '의 관련 표현' : ref.via === 'alias' ? '의 같은 표현' : ''), 'life-meta'), node('blockquote', ref.quote));
         }); if (reasons.length > 5) evidence.append(node('p', '일치한 표현 ' + reasons.length + '개 중 5개를 표시합니다.', 'life-meta')); information.append(evidence);
       }
       if (item.personal && !current.personalBlocked) {
@@ -869,7 +875,11 @@
       } else if (result) {
         const items = result.items;
         if (!items.length) {
-          list.append(node('p', desiredLanguages()?.contentLanguages?.length === 0 ? '표시할 언어를 선택해 주세요.' : feed.sources.every(source => desiredSettings()?.disabledSourceIds?.includes(source.id)) ? '출처를 선택해 주세요.' : current.mode === 'related' ? '주제와 맞는 글이 없습니다.' : '표시할 글이 없습니다.', 'discovery-count'));
+          const contentLanguages = desiredLanguages()?.contentLanguages, availableFeed = settingsModel().filterFeed(feed, desiredSettings());
+          const languageUnavailable = Array.isArray(contentLanguages) && contentLanguages.length > 0 && !current.loading && !current.error &&
+            current.catalog.status === 'ready' && !current.catalog.error && availableFeed.articles.length > 0 &&
+            !availableFeed.articles.some(article => engine().languageAllowed(article.language, contentLanguages));
+          list.append(node('p', contentLanguages?.length === 0 ? '표시할 언어를 선택해 주세요.' : feed.sources.every(source => desiredSettings()?.disabledSourceIds?.includes(source.id)) ? '출처를 선택해 주세요.' : languageUnavailable ? '선택한 언어의 글이 현재 목록에 없습니다.' : current.mode === 'related' ? '주제와 맞는 글이 없습니다.' : '표시할 글이 없습니다.', 'discovery-count'));
           list.append(button('뉴스 설정', null, () => showSettings(true), 'discovery-quiet'));
           if (current.mode !== 'latest') list.append(button('최신 글 보기', null, () => setMode('latest'), 'discovery-quiet'));
         }
