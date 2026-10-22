@@ -65,6 +65,72 @@ async function storageGate(context){await context.route(base+'/assets/life/stora
 async function main(){await fs.mkdir(output,{recursive:true});const files=['assets/life/discovery.js','assets/life/discovery-recommendations.js','assets/life/discovery-language-settings.js','assets/life/discovery-ui.js','assets/life/discovery.css','assets/life/ui.css','assets/life/storage.js','assets/life/discovery-actions.js','assets/life/core.js','assets/platform-auth.js','assets/life/shell.js','assets/life/discovery-feed.json','tests/life-discovery-languages-browser.cjs'];const hashes=async()=>Object.fromEntries(await Promise.all(files.map(async p=>[p,sha(await fs.readFile(path.resolve(__dirname,'..',p)))])));report.sourceHashesBefore=await hashes();const browser=await playwright().chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});report.browser=browser.version();
 async function check(name,run){if(process.env.DISCOVERY_LANGUAGES_MATCH&&!new RegExp(process.env.DISCOVERY_LANGUAGES_MATCH).test(name))return;const server=new FakeCloud(),context=await makeContext(browser,server,'languages-'+report.checks.length,accounts.a,{viewport:{width:820,height:1000},reducedMotion:'reduce'}),feed={value:fixture(),hold:false,gates:[],arrivals:[],count:0};await context.route(base+feedPath,async route=>{feed.count++;const body=JSON.stringify(feed.value);feed.arrivals.splice(0).forEach(r=>r());if(feed.hold)await new Promise(r=>feed.gates.push(r));try{await route.fulfill({contentType:'application/json',body});}catch(e){if(!/handled|closed|abort|cancel/i.test(e.message))throw e;}});feed.next=()=>new Promise(r=>feed.arrivals.push(r));feed.release=()=>{feed.hold=false;feed.gates.splice(0).forEach(r=>r());};await storageGate(context);await context.addInitScript(()=>{window.__languagePuts=0;const put=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(...a){if(this.name==='meta'&&a[0]?.key?.startsWith('discoveryLanguageSettings:'))__languagePuts++;return put.apply(this,a);};});let expected=null;const arm=(url,kind)=>{expected={url,kind};};context.on('request',r=>{const u=new URL(r.url()),body=r.postData()||'';if([PRIVATE_TERM,PRIVATE_BODY].some(t=>u.href.includes(encodeURIComponent(t))||u.href.includes(t)||body.includes(t)||body.includes(JSON.stringify(t).slice(1,-1))))report.privacyViolations.push({check:name,destination:u.origin+u.pathname});if(/huggingface|xethub|transformers|onnxruntime|\.onnx(?:$|\?)|\.wasm(?:$|\?)/i.test(u.href))report.modelRequests.push({check:name,destination:u.origin+u.pathname});if(u.origin===cloud&&u.pathname.startsWith('/rest/')&&!['GET','OPTIONS'].includes(r.method()))report.remoteWrites.push({check:name,path:u.pathname});if(u.origin===new URL(base).origin&&u.pathname===feedPath){const h=r.headers(),row={check:name,method:r.method(),query:!!u.search,body:!!r.postData(),authorization:!!h.authorization,cookie:!!h.cookie,referrer:h.referer||null};report.catalogRequests.push(row);if(row.method!=='GET'||row.query||row.body||row.authorization||row.cookie||row.referrer)report.privacyViolations.push({check:name,reason:'Public catalog boundary'});}});await context.route('**/*',route=>{const r=route.request(),u=new URL(r.url());if([new URL(base).origin,cloud].includes(u.origin))return route.fallback();if(expected&&r.isNavigationRequest()&&r.url()===expected.url){const item={check:name,url:r.url(),method:r.method(),referrer:r.headers().referer||null,body:!!r.postData()},kind=expected.kind;expected=null;(kind==='translation'?report.translationRequests:report.originalRequests).push(item);if(item.method!=='GET'||item.referrer||item.body)report.privacyViolations.push({check:name,reason:'Popup boundary'});return route.fulfill({contentType:'text/html',body:'<!doctype html><meta charset="utf-8"><title>합성 번역/원문 새 탭 응답</title><p>실제 번역 성공을 뜻하지 않는 합성 응답</p>'});}report.externalRequests.push({check:name,destination:u.origin+u.pathname});return route.abort('blockedbyclient');});context.on('page',p=>{p.on('pageerror',e=>report.pageErrors.push({check:name,message:e.message}));p.on('console',e=>{if(e.type()==='error')report.consoleErrors.push({check:name,message:e.text()});});});const page=await context.newPage();page.setDefaultTimeout(15000);console.log('RUN '+name);try{await run({page,context,feed,arm});assert.equal(server.writes().length,0);report.checks.push({name,pass:true});console.log('PASS '+name);}catch(e){report.checks.push({name,pass:false,error:e.stack});console.error('FAIL '+name+'\n'+e.stack);await page.screenshot({path:path.join(output,'failure-'+report.checks.length+'.png'),fullPage:true}).catch(()=>{});}finally{feed.release();await context.close();}}
 try{
+await check('five content languages persist independently of translation and remain readable at three widths', async ({page, feed}) => {
+  const before = await seed(page, feed.value, {signals:'none'}), selected = ['ko','en','ja','zh','fr'];
+  await choose(page, selected); await target(page, 'ja');
+  await page.reload(); await ready(page); await idle(page); await options(page);
+  for (const code of selected) assert.equal(await page.locator('#discoveryLanguage-' + code).isChecked(), true);
+  assert.equal(await page.locator('#discoveryLanguage-all').isChecked(), false);
+  const summary = page.locator('#discoveryLanguageSummary');
+  for (const label of ['한국어','영어','일본어','중국어','프랑스어']) assert.ok((await summary.getAttribute('aria-label')).includes(label));
+  assert.match(await summary.textContent(), /외 2개/);
+  assert.equal(await page.locator('#discoveryTranslationLanguage').inputValue(), 'ja');
+  assert.deepEqual((await state(page)).language.contentLanguages.slice().sort(), selected.slice().sort());
+  await preserve(page, before);
+  for (const width of [390, 820, 1440]) {
+    await page.setViewportSize({width,height:960}); await options(page);
+    await summary.focus();
+    await summary.evaluate(el => scrollTo({top:scrollY+el.getBoundingClientRect().top-82,behavior:'instant'}));
+    const audit = await page.evaluate(() => ({width:innerWidth, documentWidth:document.documentElement.scrollWidth,
+      focus:document.activeElement?.id, controls:[...document.querySelectorAll('#discoveryContentLanguages input')].map(el => {
+        const r=el.closest('label').getBoundingClientRect(); return {width:r.width,height:r.height};
+      })}));
+    assert.ok(audit.documentWidth <= width); assert.equal(audit.focus, 'discoveryLanguageSummary');
+    assert.ok(audit.controls.every(r => r.width>=44 && r.height>=44));
+    const file='five-languages-'+width+'.png'; await page.screenshot({path:path.join(output,file),fullPage:false});
+    report.visual.push({width,file,audit});
+  }
+  await choose(page, ['ja','zh','fr']); await mode(page, 'latest');
+  assert.deepEqual(await ids(page), ['japanese','chinese','french']);
+  await target(page, 'original');
+  assert.deepEqual((await state(page)).language.contentLanguages.slice().sort(), ['fr','ja','zh']);
+  await preserve(page, before);
+});
+await check('missing selected-language supply differs from an empty selection and a topic miss', async ({page, feed}) => {
+  feed.value.articles = feed.value.articles.filter(a => ['ko','en'].includes(a.language)).map(a => ({...a,title:'다른 분야 자료 '+a.id,tags:[]}));
+  const before = await seed(page, feed.value, {signals:'none'});
+  await choose(page, ['ja','zh','fr']); await mode(page,'related');
+  assert.deepEqual(await ids(page), []);
+  assert.match(await page.locator('#discoveryList').textContent(), /선택한 언어의 글이 현재 목록에 없습니다/);
+  assert.deepEqual((await state(page)).language.contentLanguages.slice().sort(), ['fr','ja','zh']);
+  await choose(page, []);
+  assert.match(await page.locator('#discoveryList').textContent(), /표시할 언어를 선택/);
+  await choose(page, ['ko']);
+  assert.match(await page.locator('#discoveryList').textContent(), /주제와 맞는 글이 없습니다/);
+  await choose(page, null); await mode(page,'latest'); assert.ok((await ids(page)).length>0);
+  await preserve(page,before);
+});
+await check('a directional title match keeps its original topic and frozen reading evidence', async ({page, feed}) => {
+  const sample = feed.value.articles.find(a => a.id==='en0');
+  sample.title='When readers’ minds wander: Mobile-assisted L2 reading comprehension'; sample.tags=[];
+  await seed(page,feed.value,{signals:'none'});
+  await page.goto(base+'/index.html?section=tools&view=interests'); await ready(page);
+  await page.locator('#interestManual').fill('집중력'); await page.locator('#interestSaveManual').click();
+  await wait(page,async()=>{const s=HaedoLife.Shell.storage;return(await s.readInterestProfile(await s.getActive())).manual.some(x=>x.label==='집중력');});
+  await open(page); await mode(page,'related');
+  assert.deepEqual(await ids(page), ['en0']);
+  assert.match(await article(page,'en0').locator('.discovery-reason').textContent(), /집중력.*minds wander.*관련 표현/);
+  const start = await revealControl(page.locator('#discoveryReadingStart')); await start.click();
+  await wait(page,async()=>{const s=HaedoLife.Shell.storage;return!!(await s.readDiscoveryReading(await s.getActive())).session;});
+  const conditions = await revealControl(page.locator('#discoveryReadingConditions'));
+  if (!await conditions.evaluate(el=>el.open)) await conditions.locator(':scope > summary').click();
+  assert.match(await conditions.textContent(), /관련 표현.*minds wander/);
+  await page.reload(); await ready(page); await idle(page);
+  const reopened = await revealControl(page.locator('#discoveryReadingConditions'));
+  if (!await reopened.evaluate(el=>el.open)) await reopened.locator(':scope > summary').click();
+  assert.match(await reopened.textContent(), /관련 표현.*minds wander/);
+  assert.equal((await state(page)).actions.personalizationEnabled, false);
+});
 await check('missing separate language prefs default to all and original without writing old settings',async({page,feed})=>{const before=await seed(page,feed.value,{signals:'none'});assert.equal(before.language.contentLanguages,null);assert.equal(before.language.translationTarget,'original');assert.equal(before.language.revision,0);assert.equal(await page.evaluate(()=>__languagePuts),0);await options(page);assert.equal(await page.locator('[data-discovery-content-language="all"]').isChecked(),true);assert.equal(await page.locator('#discoveryTranslationLanguage').inputValue(),'original');assert.equal(await page.locator('[data-discovery-translate]').count(),0);assert.equal(report.translationRequests.length,0);await preserve(page,before);});
 await check('all ko en regional unknown and none apply before top K in all three modes',async({page,feed})=>{await seed(page,feed.value);await mode(page,'personal');const before=await state(page);for(const name of ['latest','related','personal']){await choose(page,null);await mode(page,name);for(const [selection,expected]of[[['ko'],['ko0','ko1','ko2','ko3','ko4']],[['en'],['en0','en1','en2']],[['und'],['unknown','malformed']],[[],[]]]){await choose(page,selection);await mode(page,name);assert.deepEqual((await ids(page)).sort(),expected.slice().sort(),name+' '+JSON.stringify(selection));}await choose(page,null);await mode(page,name);assert.equal((await ids(page)).length,5);}await preserve(page,before);report.filterMatrix={modes:3,regionalTags:true,malformedAsUnd:true,none:true,beforeTopK:true};});
 await check('changing language drops private prototype evidence and reentry cannot reuse it',async({page,context,feed})=>{await seed(page,feed.value,{signals:'ko'});await mode(page,'personal');assert.ok(await page.locator('.discovery-personal-evidence').count()>0);const before=await state(page);await choose(page,['en']);await mode(page,'personal');assert.equal(await page.locator('.discovery-personal-evidence').count(),0);assert.deepEqual((await ids(page)).sort(),['en0','en1','en2']);await choose(page,['ko']);await mode(page,'personal');assert.ok(await page.locator('.discovery-personal-evidence').count()>0);const second=await context.newPage();await open(second);await nav(page,'home');await update(second,{contentLanguages:['en']});await nav(page,'tools');await page.getByRole('button',{name:'새 글 찾기',exact:true}).click();await idle(page);assert.equal(await page.locator('.discovery-personal-evidence').count(),0);await preserve(page,before);await second.close();});

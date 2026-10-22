@@ -1,5 +1,5 @@
 /* Versioned app shell. Personal documents remain in localStorage/IndexedDB. */
-const CACHE='haedo-v155';
+const CACHE='haedo-v156';
 const SHELL=[
   './assets/life/source-edit.js','./assets/life/source-edit-ui.js','./assets/life/source-markdown.js','./assets/life/source-markdown.css',
   './vendor/markdown-it/markdown-it.umd.min.js','./vendor/dompurify/purify.min.js',

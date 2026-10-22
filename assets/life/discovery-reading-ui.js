@@ -104,7 +104,7 @@
         const personal = entry.personal?.evidence || [], manual = entry.reasons.slice(0, 5 - Math.min(personal.length, 3));
         for (const ref of manual) {
           item.append(node('p', '관심 표현 일치 · 관심 ‘' + ref.interestLabel + '’ · ' + fieldLabels[ref.field] + ' · ' +
-            (ref.via === 'alias' ? '연결 표현 ‘' + ref.matchedTerm + '’' : '직접 일치'), 'life-meta'));
+            (ref.via === 'related' ? '관련 표현 ‘' + ref.matchedTerm + '’' : ref.via === 'alias' ? '연결 표현 ‘' + ref.matchedTerm + '’' : '직접 일치'), 'life-meta'));
           const quote = node('blockquote', ref.quote); quote.dataset.readingEvidenceKind = 'manual'; item.append(quote);
         }
         for (const ref of personal.slice(0, 5 - manual.length)) {

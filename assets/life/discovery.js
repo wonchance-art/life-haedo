@@ -14,21 +14,33 @@
     'seoul-environment': Object.freeze(['news.seoul.go.kr']),
     'arxiv-cs-cl': Object.freeze(['arxiv.org', 'rss.arxiv.org']),
     'mit-linguistics': Object.freeze(['news.mit.edu']),
-    'llt-journal': Object.freeze(['www.lltjournal.org'])
+    'llt-journal': Object.freeze(['www.lltjournal.org']),
+    'frontiers-psychology': Object.freeze(['www.frontiersin.org'])
   });
   // Small, public and inspectable equivalences. No broader topic inference.
   const ALIASES = Object.freeze([
     ['인공지능', '인공 지능', 'artificial intelligence', 'AI'],
     ['기계학습', '기계 학습', 'machine learning'],
     ['기후 변화', '기후변화', 'climate change'],
-    ['독서', '책 읽기'],
+    ['독서', '책 읽기', 'book reading'],
     ['글쓰기', '글 쓰기'],
     ['개인정보', '개인 정보', 'personal information'],
     ['접근성', 'accessibility'],
     ['언어학', 'linguistics'],
     ['언어 학습', '언어학습', 'language learning'],
-    ['언어 교육', '언어교육', 'language education']
+    ['언어 교육', '언어교육', 'language education'],
+    ['외국어 학습', '외국어학습', 'foreign language learning'],
+    ['그릿', 'grit']
   ].map(row => Object.freeze(row)));
+  // Directional discovery aids, not equivalences or personalization features.
+  // Only the explicitly supplied label can reach these phrases, in titles.
+  const RELATED_TERMS = Object.freeze(Object.fromEntries([
+    ['외국어 학습', ['EFL/ESL learning', 'ESL learning', 'foreign language learning', 'second language learning']],
+    ['외국어학습', ['EFL/ESL learning', 'ESL learning', 'foreign language learning', 'second language learning']],
+    ['독서', ['reading comprehension']],
+    ['책 읽기', ['reading comprehension']],
+    ['집중력', ['sustained attention', 'mind wandering', 'minds wander']]
+  ].map(([label, values]) => [label, Object.freeze(values)])));
   const LIMITS = Object.freeze({ articles: 500, sources: 20, manual: 40, matches: 5, feedBytes: 4 * 1024 * 1024 });
   const CONTENT_LANGUAGE_CODES = Object.freeze(['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'und', 'mul', 'other']);
   const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
@@ -158,7 +170,11 @@
   const fold = value => value.replace(/[A-Z]/g, character => character.toLowerCase());
   function terms(label) {
     const normalized = fold(label.trim()); const group = ALIASES.find(row => row.some(value => fold(value) === normalized));
-    return [...new Set([label.trim(), ...(group || [])])].map(value => ({ value, via: fold(value) === normalized ? 'exact' : 'alias' }));
+    const equivalent = [...new Set([label.trim(), ...(group || [])])].map(value => ({ value, via: fold(value) === normalized ? 'exact' : 'alias' }));
+    const known = new Set(equivalent.map(term => fold(term.value)));
+    const related = Object.hasOwn(RELATED_TERMS, label.trim()) ? RELATED_TERMS[label.trim()] : [];
+    return [...equivalent, ...related.filter(value => !known.has(fold(value)))
+      .map(value => ({ value, via: 'related' })).sort((a, b) => b.value.length - a.value.length)];
   }
   const word = value => !!value && /[\p{L}\p{N}_]/u.test(value);
   const pointAt = (value, index) => index < value.length ? String.fromCodePoint(value.codePointAt(index)) : '';
@@ -200,11 +216,18 @@
     const result = [], fields = [['title', article.title, 8], ...article.tags.map((value, tagIndex) => ['tags', value, 6, tagIndex]),
       ...(article.coverage !== 'link_only' ? [['summary', article.summary, 3]] : []), ...(article.coverage === 'full_text' ? [['bodyText', article.bodyText, 1]] : [])];
     for (const interest of interests) {
-      const seen = new Set();
-      for (const [field, value, weight, tagIndex] of fields) for (const term of interest.terms) for (const span of spans(value, term.value)) {
-        const key = `${field}:${tagIndex ?? ''}:${span.start}:${span.end}`; if (seen.has(key)) continue; seen.add(key);
-        result.push({ interestId: interest.id, interestLabel: interest.label, field, ...(tagIndex === undefined ? {} : { tagIndex }), ...span,
-          matchedTerm: term.value, via: term.via, weight });
+      const seen = new Set(), titleSpans = [];
+      for (const [field, value, weight, tagIndex] of fields) for (const term of interest.terms) {
+        if (term.via === 'related' && field !== 'title') continue;
+        for (const span of spans(value, term.value)) {
+          // Exact/alias terms run first; overlapping related phrases explain a
+          // single title occurrence once, preferring the longer related phrase.
+          if (term.via === 'related' && titleSpans.some(previous => span.start < previous.end && previous.start < span.end)) continue;
+          const key = `${field}:${tagIndex ?? ''}:${span.start}:${span.end}`; if (seen.has(key)) continue; seen.add(key);
+          if (field === 'title') titleSpans.push(span);
+          result.push({ interestId: interest.id, interestLabel: interest.label, field, ...(tagIndex === undefined ? {} : { tagIndex }), ...span,
+            matchedTerm: term.value, via: term.via, weight: term.via === 'related' ? 4 : weight });
+        }
       }
     }
     return result;
@@ -278,5 +301,5 @@
     function dispose() { disposed = true; cancel(); prior = null; priorFetchedAt = null; }
     return { load, rank, cancel, dispose };
   }
-  return Object.freeze({ ALLOWED_SOURCES, ALIASES, LIMITS, CONTENT_LANGUAGE_CODES, languageKey, languageAllowed, canonicalUrl, validateFeed, candidatePool, rankPool, rank, toImportInput, create });
+  return Object.freeze({ ALLOWED_SOURCES, ALIASES, RELATED_TERMS, LIMITS, CONTENT_LANGUAGE_CODES, languageKey, languageAllowed, canonicalUrl, validateFeed, candidatePool, rankPool, rank, toImportInput, create });
 });

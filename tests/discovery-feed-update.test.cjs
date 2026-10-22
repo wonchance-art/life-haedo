@@ -6,8 +6,8 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const script = path.resolve(__dirname, '../scripts/update-discovery-feed.py');
-const ids = ['naver-d2', 'seoul-culture', 'woowahan-tech', 'readersnews-books', 'seoul-environment', 'arxiv-cs-cl', 'mit-linguistics', 'llt-journal'];
-const hosts = ['d2.naver.com', 'news.seoul.go.kr', 'techblog.woowahan.com', 'www.readersnews.com', 'news.seoul.go.kr', 'arxiv.org', 'news.mit.edu', 'www.lltjournal.org'];
+const ids = ['naver-d2', 'seoul-culture', 'woowahan-tech', 'readersnews-books', 'seoul-environment', 'arxiv-cs-cl', 'mit-linguistics', 'llt-journal', 'frontiers-psychology'];
+const hosts = ['d2.naver.com', 'news.seoul.go.kr', 'techblog.woowahan.com', 'www.readersnews.com', 'news.seoul.go.kr', 'arxiv.org', 'news.mit.edu', 'www.lltjournal.org', 'www.frontiersin.org'];
 const lltFixture = fs.readFileSync(path.join(__dirname, 'fixtures/external-discovery/llt-journal.xml'), 'utf8');
 const first = '2026-10-18T12:00:00Z';
 const next = '2026-10-19T12:00:00Z';
@@ -22,7 +22,9 @@ function workspace(t) {
       continue;
     }
     const link = `https://${hosts[i]}/article?newsId=42&amp;utm_source=feed#detail`;
-    const xml = i === 0
+    const xml = ids[i] === 'frontiers-psychology'
+      ? `<rss version="2.0"><channel><item><title>Learning in a synthetic study</title><link>${link}</link><pubdate>2026-10-17T00:00:00Z</pubdate><author>First Author</author><author>SECOND_AUTHOR_SENTINEL</author><category>Original Research</category><description>PRIVATE_BODY_SENTINEL</description></item></channel></rss>`
+      : i === 0
       ? `<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>기술 기록</title><link href="${link}"/><updated>2026-10-08T06:44:57Z</updated><category term="공식 분류"/><content>PRIVATE_BODY_SENTINEL</content></entry></feed>`
       : `<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/"><channel><item><title>문화와 기술</title><link>${link}</link><pubDate>${i === 1 ? '2026-10-16 17:11:27' : 'Tue, 06 Oct 2026 05:00:35 +0000'}</pubDate><dc:creator>공식 작성자</dc:creator><category>공식 분류</category><description><![CDATA[<script>BAD_SCRIPT</script>PRIVATE_BODY_SENTINEL]]></description></item></channel></rss>`;
     fs.writeFileSync(path.join(dir, `${ids[i]}.xml`), xml);
@@ -69,7 +71,7 @@ test('official metadata contract distinguishes publication, update, fetch and ri
     assert.equal(a.rights.mode, 'metadata_only');
     assert.equal(a.summary, '');
     assert.equal(Object.hasOwn(a, 'bodyText'), false);
-    assert.deepEqual(a.tags, a.sourceId === 'llt-journal' ? [] : ['공식 분류']);
+    assert.deepEqual(a.tags, ['llt-journal', 'frontiers-psychology'].includes(a.sourceId) ? [] : ['공식 분류']);
     assert.match(a.url, /utm_source=feed#detail$/);
     assert.equal(a.canonicalUrl, a.sourceId === 'llt-journal'
       ? 'https://www.lltjournal.org/item/synthetic/?newsId=42'
@@ -281,6 +283,98 @@ test('LLT feed failure retains exact undated metadata and leaves the first seven
   assert.deepEqual(after.articles.filter(row => row.sourceId === source.id), before.articles.filter(row => row.sourceId === source.id));
   const legacy = catalog => catalog.articles.filter(row => row.sourceId !== source.id).map(row => [row.id, row.sourceId, row.url, row.canonicalUrl]);
   assert.deepEqual(legacy(after), legacy(before));
+});
+
+test('Frontiers adds reviewed link metadata with its official date and first author but no article-type topic tags', t => {
+  const w = workspace(t);
+  assert.equal(update(w).status, 0);
+  const catalog = JSON.parse(fs.readFileSync(w.output));
+  const source = catalog.sources.find(row => row.id === 'frontiers-psychology');
+  const article = catalog.articles.find(row => row.sourceId === source.id);
+  const config = python(`print(json.dumps(next(s for s in m.SOURCES if s['id']=='frontiers-psychology')))`);
+  assert.equal(config.name, 'Frontiers in Psychology · 영문 심리학 연구');
+  assert.equal(config.url, 'https://www.frontiersin.org/journals/psychology');
+  assert.equal(config.feedUrl, 'https://www.frontiersin.org/journals/psychology/rss');
+  assert.deepEqual(config.allowedHosts, ['www.frontiersin.org']);
+  assert.equal(source.rights.url, 'https://www.frontiersin.org/journals/psychology/about#copyright-statement');
+  assert.equal(source.rights.mode, 'metadata_only');
+  assert.match(source.rights.label, /CC-BY\(출처표시·변경명시\)/);
+  assert.match(source.rights.label, /첫 작성자/);
+  assert.doesNotMatch(source.rights.label, /4\.0/);
+  assert.equal(article.language, 'en');
+  assert.equal(article.publishedAt, '2026-10-17T00:00:00Z');
+  assert.equal(article.dateStatus, 'valid');
+  assert.equal(article.dateBasis, 'published');
+  assert.equal(article.author, 'First Author');
+  assert.deepEqual(article.tags, []);
+  assert.equal(article.coverage, 'link_only');
+  assert.equal(article.summary, '');
+  assert.doesNotMatch(JSON.stringify(catalog), /PRIVATE_BODY_SENTINEL|SECOND_AUTHOR_SENTINEL/);
+});
+
+test('Frontiers lowercase dates are source-specific and retain missing, invalid, future and standard-date precedence', () => {
+  const actual = python(`
+now=m.datetime(2026,10,18,12,tzinfo=m.timezone.utc)
+frontiers=next(s for s in m.SOURCES if s['id']=='frontiers-psychology')
+mit=next(s for s in m.SOURCES if s['id']=='mit-linguistics')
+def parse(source, dates):
+ xml=('<rss><channel><item><title>Study</title><link>https://'+source['allowedHosts'][0]+'/study</link>'+dates+'<category>Original Research</category></item></channel></rss>').encode()
+ return m.parse_feed(xml,source,now)[0][0]
+results={key:parse(frontiers,dates) for key,dates in {
+ 'missing':'',
+ 'invalid':'<pubdate>not-a-date</pubdate>',
+ 'future':'<pubdate>2026-10-19T00:00:00Z</pubdate>',
+ 'standard':'<pubDate>2026-10-16T00:00:00Z</pubDate><pubdate>2026-10-17T00:00:00Z</pubdate>',
+ 'dc':'<dc:date xmlns:dc="http://purl.org/dc/elements/1.1/">2026-10-15T00:00:00Z</dc:date><pubdate>2026-10-17T00:00:00Z</pubdate>'
+}.items()}
+results['legacy']=parse(mit,'<pubdate>2026-10-17T00:00:00Z</pubdate>')
+print(json.dumps(results))
+`);
+  assert.equal(actual.missing.publishedAt, null);
+  assert.equal(actual.missing.dateStatus, 'unknown');
+  assert.equal(actual.invalid.publishedAt, null);
+  assert.equal(actual.invalid.dateStatus, 'invalid');
+  assert.equal(actual.future.publishedAt, '2026-10-19T00:00:00Z');
+  assert.equal(actual.future.dateStatus, 'future');
+  assert.equal(actual.future.dateBasis, 'unknown');
+  assert.equal(actual.standard.publishedAt, '2026-10-16T00:00:00Z');
+  assert.equal(actual.dc.publishedAt, '2026-10-15T00:00:00Z');
+  assert.equal(actual.legacy.publishedAt, null);
+  assert.equal(actual.legacy.dateStatus, 'unknown');
+  assert.deepEqual(actual.legacy.tags, ['Original Research']);
+});
+
+test('Frontiers keeps the existing twenty-item cap and never promotes article-type categories into tags', () => {
+  const actual = python(`
+source=next(s for s in m.SOURCES if s['id']=='frontiers-psychology')
+now=m.datetime(2026,10,18,12,tzinfo=m.timezone.utc)
+items=['<item><title>Study '+str(i)+'</title><link>https://www.frontiersin.org/articles/study-'+str(i)+'</link><pubdate>2026-10-17T00:00:00Z</pubdate><category>Review</category><tags>General Psychology</tags></item>' for i in range(25)]
+articles,stats=m.parse_feed(('<rss><channel>'+''.join(items)+'</channel></rss>').encode(),source,now)
+print(json.dumps({'count':len(articles),'accepted':stats['acceptedEntries'],'tags':[a['tags'] for a in articles]}))
+`);
+  assert.equal(actual.count, 20);
+  assert.equal(actual.accepted, 25);
+  assert.ok(actual.tags.every(tags => tags.length === 0));
+});
+
+test('Frontiers failure preserves exact last-success metadata and removes stale article-type topic tags', t => {
+  const w = workspace(t);
+  assert.equal(update(w).status, 0);
+  const before = JSON.parse(fs.readFileSync(w.output));
+  const old = before.articles.find(row => row.sourceId === 'frontiers-psychology');
+  const expected = structuredClone(old);
+  old.tags = ['Original Research'];
+  fs.writeFileSync(w.output, JSON.stringify(before));
+  fs.unlinkSync(path.join(w.dir, 'frontiers-psychology.xml'));
+  assert.equal(update(w, next).status, 2);
+  const after = JSON.parse(fs.readFileSync(w.output));
+  const source = after.sources.find(row => row.id === old.sourceId);
+  assert.equal(source.status, 'error');
+  assert.equal(source.stale, true);
+  assert.equal(source.lastSuccessAt, first);
+  assert.equal(source.lastAttemptAt, next);
+  assert.deepEqual(after.articles.find(row => row.sourceId === old.sourceId), expected);
+  assert.deepEqual(after.articles.filter(row => row.sourceId !== old.sourceId), before.articles.filter(row => row.sourceId !== old.sourceId).map(row => ({ ...row, fetchedAt: next })));
 });
 
 test('arXiv pacing covers initial requests, safe redirects and failures without pacing other sources', () => {

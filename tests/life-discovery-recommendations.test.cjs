@@ -82,7 +82,7 @@ test('past like promotes a different public article with exact inspectable title
   const inputBefore = JSON.stringify({ actions, catalog }), result = rank(catalog, actions);
   assert.deepEqual(result.items.map(row => row.article.id), ['new']);
   assert.equal(result.metadata.personalization.applied, true); assert.equal(result.metadata.personalization.signalCount, 1);
-  const item = result.items[0]; assert.equal(item.personal.policy, 'public-title-tag-expressions-v3'); assert.equal(item.personal.score, 3);
+  const item = result.items[0]; assert.equal(item.personal.policy, 'public-title-tag-expressions-v4'); assert.equal(item.personal.score, 3);
   for (const evidence of item.personal.evidence) {
     const original = evidence.field === 'tags' ? liked.tags[evidence.tagIndex] : liked.title;
     const candidate = evidence.candidateField === 'tags' ? item.article.tags[evidence.candidateTagIndex] : item.article.title;
@@ -240,8 +240,8 @@ test('repeated tags and equivalent labels are not independent expressions while 
   assert.deepEqual(rank(catalog, off), baseline(catalog));
   assert.deepEqual(rank(catalog, enabled(liked, 'bookmarked')), baseline(catalog));
 });
-test('v3 Korean language aliases preserve snapshots and still require two distinct expressions', () => {
-  assert.equal(Recommendations.POLICY, 'public-title-tag-expressions-v3');
+test('v4 retains Korean language aliases, immutable snapshots and the two distinct expression minimum', () => {
+  assert.equal(Recommendations.POLICY, 'public-title-tag-expressions-v4');
   for (const [joined, spaced, english] of [['언어학습', '언어 학습', 'Language learning'], ['언어교육', '언어 교육', 'Language education']]) {
     const liked = article('liked', '😀 ' + joined + ' research'), actions = enabled(liked);
     const catalog = feed([

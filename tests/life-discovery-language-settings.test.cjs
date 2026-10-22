@@ -45,3 +45,17 @@ test('clear keeps a CAS tombstone and resets only language options; stale re-ena
   assert.equal(explicit.deleted, false); assert.equal(explicit.revision, 3);
   assert.throws(() => Settings.update({ ...changed, revision: Number.MAX_SAFE_INTEGER }, {}, opts(Number.MAX_SAFE_INTEGER)), { code: 'discovery_language_settings_conflict' });
 });
+test('five selected content languages survive serialized settings and translation-only changes, with all seven remaining selectable', () => {
+  const selection = ['ko', 'en', 'ja', 'zh', 'fr'], patch = { contentLanguages: selection, translationTarget: 'en' };
+  const selected = Settings.update(Settings.empty('multilingual-workspace'), patch, opts(0));
+  const serialized = JSON.parse(JSON.stringify(selected)); Settings.validate(serialized);
+  assert.deepEqual(serialized.contentLanguages, ['ko', 'en', 'ja', 'zh', 'fr']);
+  const translated = Settings.update(serialized, { translationTarget: 'zh-TW' }, opts(1));
+  assert.deepEqual(translated.contentLanguages, selection); assert.equal(translated.translationTarget, 'zh-TW');
+  const original = Settings.update(translated, { translationTarget: 'original' }, opts(2));
+  assert.deepEqual(original.contentLanguages, selection); assert.equal(original.translationTarget, 'original');
+  const seven = Settings.update(original, { contentLanguages: ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de'] }, opts(3));
+  assert.deepEqual(seven.contentLanguages, ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de']);
+  assert.equal(seven.translationTarget, 'original');
+  assert.deepEqual(selected, serialized); assert.deepEqual(patch, { contentLanguages: selection, translationTarget: 'en' });
+});
