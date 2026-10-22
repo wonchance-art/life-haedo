@@ -1888,7 +1888,16 @@ test('workbench and nine-board writes reject new uses selected before trash whil
   await assert.rejects(f.a.saveNineBoardCopy(f.ws, bypass, f.nine.revision), { code: 'invalid_nine_board' });
   assert.deepEqual(f.rows, beforeNine);
   const retained = structuredClone(f.nine); retained.boards[0].areas[0].items[1].reason = '기존 정확 근거의 메모';
+  const missing = N.evidenceSnapshot({ kind: 'source', value: { ...f.ref, sourceId: 'legacy-missing-source', sourceVersionId: 'legacy-missing-version' } });
+  retained.boards[0].areas[0].items.push(missing);
+  const foreign = N.evidenceSnapshot({ kind: 'source', value: { ...f.ref, workspaceId: Core.id() } });
+  retained.boards[0].areas[0].items.push(foreign);
+  const missingVersion = N.evidenceSnapshot({ kind: 'source', value: { ...f.ref, sourceVersionId: 'legacy-missing-version' } });
+  retained.boards[0].areas[0].items.push(missingVersion);
   const savedNine = await f.a.saveNineBoard(f.ws, retained, f.nine.revision);
+  assert.deepEqual(savedNine.boards[0].areas[0].items[2], missing, 'A missing source reference remains representable and is not classified as trash');
+  assert.deepEqual(savedNine.boards[0].areas[0].items[3], foreign, 'An unavailable foreign-workspace reference is not classified using a coincident local source ID');
+  assert.deepEqual(savedNine.boards[0].areas[0].items[4], missingVersion, 'A missing exact version is not classified using another version of a local source');
   const copied = await f.a.saveNineBoardCopy(f.ws, { ...savedNine, boards: savedNine.boards.concat(copies) }, savedNine.revision);
   assert.deepEqual(copied.boards[0], savedNine.boards[0]); assert.deepEqual(copied.boards[1].areas[0].items, copies[0].areas[0].items);
 });

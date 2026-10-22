@@ -946,7 +946,7 @@
             for (const item of area.items) if (item.reference?.kind === 'source') {
               const at = retained.indexOf(stablePayload(item.reference.value));
               if (at >= 0) retained.splice(at, 1);
-              else assertNewEvidenceActive(bundle, [item.reference.value]);
+              else if (item.reference.value.workspaceId === workspaceId && bundle.sourceVersions.some(version => version.id === item.reference.value.sourceVersionId && version.sourceId === item.reference.value.sourceId)) assertNewEvidenceActive(bundle, [item.reference.value]);
             }
           }
         }
