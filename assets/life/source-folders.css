@@ -1,0 +1,29 @@
+/* Compact native folder controls; the material list stays the main surface. */
+.source-folders { min-width: 0; margin-block: 0 20px; }
+.sf-filter-row { display: flex; align-items: center; gap: 12px; }
+.sf-filter-label { display: block; min-width: 0; max-width: 100%; flex: 1; }
+.source-folders :is(input, select), .sf-assignment-panel select { width: 100%; max-width: 100%; min-width: 0; min-height: 44px; border: 1px solid var(--field-line, #86968d); border-radius: var(--control-radius, 12px); padding: 8px 12px; background: var(--paper, #fff); color: var(--ink, #182522); font: inherit; font-size: 16px; }
+.source-folders .sf-filter-label select { border-color: transparent; padding-inline-start: 0; font-size: 16px; }
+.sf-manage > summary { min-height: 44px; padding-block: 10px; color: var(--ink-soft, #5d6b65); font-size: 14px; cursor: pointer; }
+.sf-editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-block: 8px 16px; }
+.sf-editor > :first-child, .sf-editor > :nth-child(n+4) { grid-column: 1 / -1; }
+.sf-editor .life-field { min-width: 0; margin: 0; }
+.sf-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.sf-button { min-height: 44px; min-width: 44px; }
+.sf-error { margin-block: 8px; font-size: 14px; overflow-wrap: anywhere; }
+.sf-status { margin-block: 8px 0; }
+.sf-delete-confirm { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; min-width: 0; }
+.sf-delete-confirm > p { flex-basis: 100%; overflow-wrap: anywhere; }
+.source-folder-assignment { min-width: 0; }
+.source-folder-assignment[open] { width: 100%; flex-basis: 100%; }
+.life-feed-footer:has(> .source-folder-assignment[open]) { flex-wrap: wrap; }
+.sf-assignment-toggle { display: inline-flex; align-items: center; justify-content: center; width: 44px; min-height: 44px; padding: 10px; border-radius: var(--control-radius, 12px); color: var(--ink-soft, #5d6b65); cursor: pointer; list-style: none; }
+.sf-assignment-toggle::-webkit-details-marker { display: none; }
+.sf-assignment-toggle::marker { content: ''; }
+.sf-assignment-toggle .life-glyph { width: 20px; height: 20px; }
+.sf-assignment-panel { clear: both; min-width: 0; max-width: 100%; margin-block: 8px 12px; padding-block: 12px; border-block: 1px solid var(--line, #e3e9e6); }
+.sf-assignment-panel .life-field { min-width: 0; margin: 0 0 12px; }
+.sf-assignment-panel > p { margin-block: 8px; font-size: 13px; overflow-wrap: anywhere; }
+.source-folders :is(summary, input, select, button):focus-visible, .source-folder-assignment :is(summary, select, button):focus-visible { outline: 3px solid var(--color-primary, #145b50); outline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) { .sf-assignment-toggle:hover { background: var(--soft, #eaf1ed); color: var(--ink, #182522); } }
+@media (max-width: 540px) { .sf-editor { grid-template-columns: minmax(0, 1fr); } .sf-editor > * { grid-column: 1; } .sf-assignment-panel .sf-actions { align-items: stretch; } }

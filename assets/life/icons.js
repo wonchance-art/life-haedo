@@ -20,6 +20,7 @@
     edit: '<path d="m14 5 5 5M4 20l5-1 11-11a3.5 3.5 0 0 0-5-5L4 14v6Z"/>',
     refresh: '<path d="M20 9a8 8 0 0 0-13.7-3.7L3 9m0-6v6h6M4 15a8 8 0 0 0 13.7 3.7L21 15m0 6v-6h-6"/>',
     plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+    folder: '<path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/>',
     back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
     arrow: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
     info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',

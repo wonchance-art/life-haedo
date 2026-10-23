@@ -1,5 +1,18 @@
 # 오픈소스 검토와 재사용 결정
 
+## 자료실 가상 폴더와 기존 CAS 재사용 — 2026-10-23
+
+작은 계층형 분류·선택 이동·필터·백업에는 기존 Core 자료 목록·정확 판·Storage CAS/원자 설치·Workbench 백업 패턴과 네이티브 선택/목록을 재사용한다. 새 트리 프레임워크나 jQuery를 추가하지 않는다. Workbench의 `groups:{id,title,versionIds}`는 정확 판 묶음이며, 별도 Collection은 미디어 메타데이터라 폴더 상태로 이름만 바꾸지 않는다. 분류는 source ID의 별도 로컬 관계이고 기존 원문·원래 파일 경로를 유지한다. [제품·실패 복구·백업 계약](../design-review/material-folders.md).
+
+| 공식 후보 | 최신 확인 버전·라이선스·유지관리 | 이번 판단 |
+| --- | --- | --- |
+| jsTree3.3.17 | [공식 릴리스](https://github.com/vakata/jstree/releases/tag/3.3.17),2024-09-03. npm latest와 gitHead `6256df013ebd98aea138402d8ac96db3efe0c0da`의 [MIT 전문](https://github.com/vakata/jstree/blob/6256df013ebd98aea138402d8ac96db3efe0c0da/LICENSE-MIT)·[README](https://github.com/vakata/jstree/blob/6256df013ebd98aea138402d8ac96db3efe0c0da/README.md)를 확인했다. 저장소는 비보관이지만 확인한 마지막 코드 push도2024-09-03이라 최근 활발한 유지관리라고 표시하지 않는다. | jQuery `^3.5.0`과 이벤트/트리 테마·드래그/지연 로드 등을 들여오는 비용보다 현재의 작은 분류 UI가 작다. 직접 도입·코드/자산 복사 없이 기능 대안으로 비교했다. |
+| Fancytree2.38.5 | [공식 릴리스](https://github.com/mar10/fancytree/releases/tag/v2.38.5),2025-04-05. npm latest·gitHead `781e74f26ae02644ebf0b82fd22c05c0aad70cb4`의 [MIT 전문](https://github.com/mar10/fancytree/blob/781e74f26ae02644ebf0b82fd22c05c0aad70cb4/LICENSE.txt)·[README](https://github.com/mar10/fancytree/blob/781e74f26ae02644ebf0b82fd22c05c0aad70cb4/README.md)를 대조했다. 저장소는 비보관·2026-10-01 push이며 공식 README는 기능 완성·버그 수정 유지와 큰 신규 기능 미예정을 명시한다. | jQuery peer와 범용 tree/grid·키보드/인라인 편집·드래그/지연 로드 도입을 이번 필수 조건으로 만들지 않는다. 읽기/정확 원문/백업의 기존 저장 경계를 그대로 연결하는 데 네이티브 조작이 적합하다. |
+
+정확 버전의 직접 공개 advisory는 [jsTree3.3.17](https://api.github.com/advisories?ecosystem=npm&affects=jstree%403.3.17&per_page=100)·[Fancytree2.38.5](https://api.github.com/advisories?ecosystem=npm&affects=jquery.fancytree%402.38.5&per_page=100) 모두0건이었다. 이는2026-10-23 직접 조회 결과이며 jQuery/전이 의존성 전체 감사나 안전성 보장은 아니다. 후보2개만 비교했으며 새 npm/vendor/런타임 의존성을 추가하지 않는다.
+
+직접 유지할 범위는 제한된 깊이·순환/동일 형제 이름·분류 참조 검사, source ID별 한 기본 폴더와 하위 포함 필터, 기존 저장/복원에 연결하는 작은 어댑터다. 원격 파일시스템·드래그 트리·외부 링크 해석 엔진을 자체 개발하는 선택이 아니다. 대규모 가상화·트리 키보드 동작·지연 로드가 실제로 필요한 때 공식 프레임워크와 다시 비교하며 이번 검사만으로 그 성능/상호작용까지 입증하지 않는다. 실제 기존 기능 통합은 전체 단위1,367개·신규 분류4흐름·기존 자료3/Obsidian4/공통 백업3흐름과 SW158→159 PWA9개로 검수했다. 최초 로컬 ship 이후 CI가 확인한 네이티브 선택기14px를16px로 교정하고, 새4흐름/3폭에서 입력·선택기16px 이상 실측과 기존 조작 검사를 유지했다. Book의 기존 실패/지연 주입을 새 설치 경로에 연결한 것은 검사 보완이며 새 라이브러리 도입은 없다. PhotoPost는 제품 변경 없이 실제 진입 준비 대기를 보완해 기존14개 단언·15초/30초 제한을 유지한 최종14/14를 통과했다. 최초 CI 실패는 원형 로컬에서 재현되지 않아 정확 원인을 확정하지 않는다. 교정 소스·새3폭·최종 회귀 증거의 독립 판단은 검토한 로컬 범위에서 ship이며 교정 CI·공개 배포는 [PR134](https://github.com/wonchance-art/life-haedo/pull/134)의 확정 기록과 구분한다. 이 결과는 두 후보 라이브러리를 설치/실행하거나 실제 개인 보관함·기기의 분류 효용을 확인한 결과가 아니다.
+
 ## Obsidian YAML 속성과 원문 위치 — 2026-10-23
 
 YAML의 따옴표·목록·줄바꿈·오류를 작은 정규식 파서로 다시 만들지 않는다. Markdown-it/DOMPurify·정확 원문/위치 어댑터를 유지하면서 일반 YAML 해석만 공식 로컬 파서에 맡긴다. 머리말의 시작/끝과 속성의 안전한 표시·원문 앵커는 제품의 제한 어댑터로 둔다. [공식 문법·지원표·보존](../design-review/obsidian-markdown.md).

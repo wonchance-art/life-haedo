@@ -8,7 +8,7 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 const {FakeCloud,accounts,cloud,base}=require('./life-sync-browser.cjs');
 const {playwright,ready,settle,makeContext,observe}=require('./unified-home-browser.cjs');
-const out=path.resolve(__dirname,'../.local/workbench');
+const out=process.env.WORKBENCH_OUTPUT?path.resolve(process.env.WORKBENCH_OUTPUT):path.resolve(__dirname,'../.local/workbench');
 const sections={activities:'records',page:'records',discover:'tools',reflection:'tools','workbench-backup':'manage'};
 const report={createdAt:new Date().toISOString(),scope:'Real local app/SDK/IDB with anonymous HTTP interception; no live SQL/SNS or Apple-device verification',checks:[],visual:[],consoleErrors:[],pageErrors:[],expectedErrors:0,external:[],realRemoteWrites:0};
 const longTitle='전시를 보고 돌아오는 길에서 다시 만난 오래된 질문과 사진 속 빛의 방향을 따라 천천히 이어 읽는 기록 — 긴 제목과 여러 원문이 함께 있어도 선택 도구와 본문이 겹치지 않는 익명 사례';
@@ -104,7 +104,7 @@ async function installReadGate(context) {
   // It lets the otherwise fast local read expose its loading/error UI deterministically.
   await context.route(`${base}/assets/life/storage.js`,async route=>{
     const response=await route.fetch(),source=await response.text();
-    const hook=`\n;(()=>{const original=HaedoLife.Storage;HaedoLife.Storage=Object.freeze({...original,forAccount(...args){const actual=original.forAccount(...args);return Object.freeze({...actual,async readWorkbench(...readArgs){if(window.__wbHoldRead){window.__wbReadEntered=true;await new Promise(resolve=>{window.__wbReleaseRead=()=>{window.__wbHoldRead=false;resolve();};});}const result=await actual.readWorkbench(...readArgs);window.__wbReadFinished=true;return result;},async installWorkbenchCopy(...installArgs){if(window.__wbHoldInstall){window.__wbInstallEntered=true;await new Promise(resolve=>{window.__wbReleaseInstall=()=>{window.__wbHoldInstall=false;resolve();};});}return actual.installWorkbenchCopy(...installArgs);}});}});})();`;
+    const hook=`\n;(()=>{const original=HaedoLife.Storage;HaedoLife.Storage=Object.freeze({...original,forAccount(...args){const actual=original.forAccount(...args);return Object.freeze({...actual,async readWorkbench(...readArgs){if(window.__wbHoldRead){window.__wbReadEntered=true;await new Promise(resolve=>{window.__wbReleaseRead=()=>{window.__wbHoldRead=false;resolve();};});}const result=await actual.readWorkbench(...readArgs);window.__wbReadFinished=true;return result;},async installWorkbenchCopy(...installArgs){if(window.__wbHoldInstall){window.__wbInstallEntered=true;await new Promise(resolve=>{window.__wbReleaseInstall=()=>{window.__wbHoldInstall=false;resolve();};});}return actual.installWorkbenchCopy(...installArgs);},async installLibraryCopy(...installArgs){if(window.__wbHoldInstall){window.__wbInstallEntered=true;await new Promise(resolve=>{window.__wbReleaseInstall=()=>{window.__wbHoldInstall=false;resolve();};});}return actual.installLibraryCopy(...installArgs);}});}});})();`;
     await route.fulfill({response,body:source+hook});
   });
 }
@@ -116,8 +116,16 @@ async function main() {
     if(process.env.WORKBENCH_TEST_MATCH&&!new RegExp(process.env.WORKBENCH_TEST_MATCH).test(name))return;
     const server=new FakeCloud(),context=await makeContext(browser,server,`workbench-${report.checks.length}`,accounts.a,{viewport,hasTouch}),page=await context.newPage();page.setDefaultTimeout(10000);observe(page,report,name);
     await context.route('**/*',route=>{const u=new URL(route.request().url());if([new URL(base).origin,cloud].includes(u.origin))return route.fallback();report.external.push({origin:u.origin,path:u.pathname});return route.abort('blockedbyclient');});
+    const accountLookups=[];
+    context.on('request',request=>{const u=new URL(request.url());if(u.origin===cloud&&u.pathname==='/rest/v1/life_account_materials')accountLookups.push({method:request.method(),ownerFilterMatches:u.searchParams.get('owner_id')==='eq.'+accounts.a.id,hasBody:!!request.postData()});});
     if(readGate)await installReadGate(context);
-    try{await run({page,context,server});assert.equal(server.requests.length,0,'composition flow requested simulated remote workspace data');report.checks.push({name,pass:true});console.log('PASS '+name);}
+    try{await run({page,context,server});
+      // Current authenticated bootstrap may read its own registration list;
+      // it must not automatically fetch workspace data or write remotely.
+      assert.ok(accountLookups.every(row=>row.method==='GET'&&row.ownerFilterMatches&&!row.hasBody),'account material lookup crossed the seeded read scope');
+      assert.ok(server.requests.filter(row=>row.kind==='account-materials-list').every(row=>row.owner===accounts.a.id),'account material lookup changed owner');
+      assert.equal(server.requests.filter(row=>row.kind!=='account-materials-list').length,0,'composition flow requested simulated remote workspace data');
+      (report.allowedAccountMaterialLookups||=[]).push({name,count:accountLookups.length,ownerScopedGETOnly:true});report.checks.push({name,pass:true});console.log('PASS '+name);}
     catch(error){report.checks.push({name,pass:false,error:error.stack});console.error('FAIL '+name+'\n'+error.stack);await page.screenshot({path:path.join(out,`failure-${report.checks.length}.png`),fullPage:true}).catch(()=>{});}
     finally{await context.close();}
   }
