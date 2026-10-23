@@ -421,6 +421,9 @@ jobs:
       - name: Verify Obsidian properties, exact Markdown reading and preserved editing
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/obsidian-markdown-browser.cjs
+      - name: Verify material folders, exact reading return and atomic library backup
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/source-folders-browser.cjs
       - name: Verify frozen reading comparisons, explicit judgments and local recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-reading-browser.cjs
@@ -546,6 +549,7 @@ jobs:
             .local/reading-resume/
             .local/material-library/
             .local/obsidian-markdown/
+            .local/source-folders/
             .local/product-flow-quality/
             .local/search-quality/
             .local/expression-design/

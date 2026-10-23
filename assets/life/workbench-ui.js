@@ -2928,7 +2928,7 @@
     function downloadDraft(session) {
       if (!workspaceIs(session)) throw fault('workspace_changed', '원래 작업공간에서 초안 사본을 받아 주세요.');
       download(model.makeBackup(getBundle(), session.state), 'haedo-workbench-draft.json');
-      announceSafe('초안 JSON 다운로드를 요청했습니다. 파일 보관을 확인해 주세요.', session);
+      announceSafe('구성 초안 JSON 다운로드를 요청했습니다. 자료 폴더는 자료·구성 백업에 포함됩니다.', session);
     }
     async function compareSaved(session) {
       const token = generation;
@@ -2973,7 +2973,7 @@
     }
     function renderBackup() {
       const session = current;
-      bodyNode.append(notice('현재 작업공간의 원문·발췌·메모·출처와 묶음·내 페이지·회고·책을 함께 담습니다.'));
+      bodyNode.append(notice('현재 작업공간의 원문·발췌·메모·출처와 묶음·내 페이지·회고·책·자료 폴더를 함께 담습니다.'));
       const scope = el('details', null, 'life-details'); scope.id = 'wbBackupScope';
       scope.append(el('summary', '포함하지 않는 자료'), notice('글쓰기·가져오기 초안, 사진 글·원본(별도 ZIP), 읽기 위치와 미확보 본문, 연표·목표·습관, 이미 게시한 사본은 포함하지 않습니다. 파일에는 개인 자료가 포함되니 보관 위치를 확인하세요.'));
       bodyNode.append(scope);
@@ -2981,9 +2981,14 @@
         const token = generation;
         await flush();
         if (!showing(token, session)) return;
-        const snapshot = await storage.readWorkbenchSnapshot(session.workspaceId);
+        const snapshot = await (storage.readLibraryBackupSnapshot
+          ? storage.readLibraryBackupSnapshot(session.workspaceId) : storage.readWorkbenchSnapshot(session.workspaceId));
         if (!showing(token, session)) return;
-        download(model.makeBackup(snapshot.bundle, snapshot.workbench), 'haedo-workbench-backup.json');
+        const folders = snapshot.sourceFolders, nonempty = folders && (folders.folders.length || folders.assignments.length);
+        if (nonempty && !life.SourceFolders?.makeBackup) throw fault('dependency_unavailable', '폴더를 포함한 백업 모듈을 불러오지 못했습니다. 다시 시도해 주세요.');
+        const backup = nonempty ? life.SourceFolders.makeBackup(snapshot.bundle, snapshot.workbench, folders)
+          : model.makeBackup(snapshot.bundle, snapshot.workbench);
+        download(backup, 'haedo-workbench-backup.json');
         announceSafe('통합 JSON 다운로드를 요청했습니다. 파일 보관을 확인해 주세요.', session);
       }, 'life-primary');
       downloadButton.id = 'wbBackupDownload'; bodyNode.append(downloadButton);
@@ -2997,6 +3002,10 @@
         const candidate = restoreCandidate;
         previewHost.append(el('h3', '복원 전 확인'), el('p', restoreName, 'life-meta'), el('p', candidate.bundle.title, 'wb-source-title'));
         previewHost.append(notice('자료 ' + candidate.bundle.sources.length + '개 · 원문 버전 ' + candidate.bundle.sourceVersions.length + '개 · 묶음 ' + candidate.workbench.groups.length + '개 · 페이지 항목 ' + candidate.workbench.page.entries.length + '개'));
+        if (candidate.sourceFolders?.folders.length) {
+          const folderSummary = notice('자료 폴더 ' + candidate.sourceFolders.folders.length + '개');
+          folderSummary.id = 'wbRestoreFolderSummary'; previewHost.append(folderSummary);
+        }
         const books = candidate.workbench.books || [];
         const chapters = books.flatMap(book => book.chapters);
         const activeChapters = books.filter(book => !book.archived).flatMap(book => book.chapters.filter(chapter => !chapter.archived));
@@ -3013,7 +3022,10 @@
           const controls = [...surface.querySelectorAll('button,input,textarea,select')].map(control => [control, control.disabled]);
           controls.forEach(([control]) => { control.disabled = true; });
           let result;
-          try { result = await storage.installWorkbenchCopy(candidate); }
+          try {
+            if (candidate.sourceFolders && !storage.installLibraryCopy) throw fault('dependency_unavailable', '폴더와 자료를 함께 복원할 저장소를 불러오지 못했습니다.');
+            result = candidate.sourceFolders ? await storage.installLibraryCopy(candidate) : await storage.installWorkbenchCopy(candidate);
+          }
           finally {
             installing = false;
             controls.forEach(([control, disabled]) => { if (control.isConnected) control.disabled = disabled; });
@@ -3041,7 +3053,7 @@
           let text;
           try { text = new TextDecoder('utf-8', { fatal: true }).decode(await selected.arrayBuffer()); }
           catch (_) { throw fault('invalid_encoding', 'UTF-8 JSON 파일을 읽지 못했습니다. 파일을 확인하고 다시 선택해 주세요.'); }
-          const candidate = await model.restoreBackup(text);
+          const candidate = await (life.SourceFolders?.restoreBackup ? life.SourceFolders.restoreBackup(text) : model.restoreBackup(text));
           if (sequence !== restoreSequence || !showing(token, session)) return;
           restoreCandidate = candidate; restoreName = selected.name; fill();
         } catch (error) {

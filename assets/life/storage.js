@@ -94,6 +94,11 @@
       if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '활동·페이지 구성 모듈을 불러오지 못했습니다.');
       return value;
     };
+    const sourceFolders = () => {
+      const value = options.sourceFolders || root.HaedoLife?.SourceFolders;
+      if (!value?.validate || !value?.validateReferences || !value?.empty) throw fault('dependency_unavailable', '자료 폴더 모듈을 불러오지 못했습니다.');
+      return value;
+    };
     const collection = () => {
       const value = options.collection || root.HaedoLife?.Collection;
       if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '컬렉션 모듈을 불러오지 못했습니다.');
@@ -167,6 +172,11 @@
       notify(event);
       try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Persistent state is authoritative. */ }
     }
+    function sourceFoldersChanged(state) {
+      const event = { type: 'source_folders_changed', workspaceId: state.workspaceId, revision: state.revision };
+      notify(event);
+      try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed profile remains authoritative. */ }
+    }
     function readingPositionChanged(workspaceId, revision) {
       const event = { type: 'reading_position_changed', workspaceId, revision };
       notify(event);
@@ -211,6 +221,10 @@
           if (data?.sender !== sender && data?.type === 'workbench_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
             notify({ type: 'workbench_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'source_folders_changed' && typeof data.workspaceId === 'string' &&
+              Number.isSafeInteger(data.revision) && data.revision >= 0) {
+            notify({ type: 'source_folders_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
           if (data?.sender !== sender && data?.type === 'reading_position_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 1) {
@@ -623,6 +637,66 @@
       const value = row === undefined ? model.empty(workspaceId) : row.value;
       validate(value, workspaceId);
       return value;
+    }
+    const sourceFoldersKey = workspaceId => `source-folders:${accountKey}:${workspaceId}`;
+    function validateSourceFolders(value, workspaceId) {
+      sourceFolders().validate(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '자료 폴더의 작업공간이 다릅니다.');
+    }
+    async function sourceFoldersValue(meta, workspaceId) {
+      return privateProfileValue(meta, sourceFoldersKey(workspaceId), workspaceId, sourceFolders(), validateSourceFolders);
+    }
+    async function readSourceFoldersSnapshot(workspaceId) {
+      privateProfileScope(workspaceId, '자료 폴더를');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return { bundle: clone(bundle), sourceFolders: clone(await sourceFoldersValue(meta, workspaceId)) };
+      });
+    }
+    async function readSourceFolders(workspaceId) { return (await readSourceFoldersSnapshot(workspaceId)).sourceFolders; }
+    async function saveSourceFolders(workspaceId, input, baseRevision) {
+      privateProfileScope(workspaceId, '자료 폴더를'); requireRevision(baseRevision, 'baseRevision');
+      const state = clone(input); validateSourceFolders(state, workspaceId);
+      if (state.revision !== baseRevision || baseRevision === Number.MAX_SAFE_INTEGER) throw fault('source_folders_conflict', '자료 폴더의 저장 기준이 바뀌었습니다. 입력을 보존했습니다.');
+      const saved = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await sourceFoldersValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) throw fault('source_folders_conflict', '다른 탭에서 자료 폴더를 바꿨습니다. 입력을 보존하고 최신 상태를 확인해 주세요.');
+        const retained = new Map(previous.assignments.map(item => [item.sourceId, item.folderId]));
+        for (const item of state.assignments) if (retained.get(item.sourceId) !== item.folderId) {
+          if (!bundle.sources.some(source => source.id === item.sourceId)) throw fault('source_folders_missing_reference', '분류할 자료를 찾지 못했습니다. 기존 폴더와 입력을 보존했습니다.');
+          if (!core().isSourceActive(bundle, item.sourceId)) throw fault('source_trashed', '휴지통의 자료는 복원한 뒤 폴더에 넣어 주세요.');
+        }
+        state.revision = baseRevision + 1; validateSourceFolders(state, workspaceId);
+        await meta.put({ key: sourceFoldersKey(workspaceId), value: state }); return clone(state);
+      });
+      sourceFoldersChanged(saved); return saved;
+    }
+    async function readLibraryBackupSnapshot(workspaceId) {
+      privateProfileScope(workspaceId, '자료와 폴더를');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return { bundle: clone(bundle), workbench: clone(await workbenchValue(meta, workspaceId)),
+          sourceFolders: clone(await sourceFoldersValue(meta, workspaceId)) };
+      });
+    }
+    async function installLibraryCopy(input) {
+      if (!plain(input) || Object.keys(input).some(key => !['bundle', 'workbench', 'sourceFolders'].includes(key))) throw fault('source_folders_invalid', '복원할 자료와 폴더를 확인해 주세요.');
+      const candidate = clone(input), { bundle, workbench: state, sourceFolders: folders } = candidate;
+      privateProfileScope(bundle?.workspaceId, '자료와 폴더를');
+      core().validateWorkspace(bundle); workbench().validate(state); validateSourceFolders(folders, bundle.workspaceId);
+      if (state.workspaceId !== bundle.workspaceId) throw fault('workspace_mismatch', '자료와 구성의 작업공간이 다릅니다.');
+      sourceFolders().validateReferences(bundle, folders);
+      const installed = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const bundles = tx.objectStore('bundles'), meta = tx.objectStore('meta');
+        if (await bundles.get(bundle.workspaceId) || await workspaceOwner(meta, bundle.workspaceId) ||
+            await meta.get(`workbench:${bundle.workspaceId}`) || await meta.get(sourceFoldersKey(bundle.workspaceId))) throw fault('workspace_exists', '같은 작업공간이 이미 있습니다. 새 사본으로 복원하세요.');
+        await bundles.add(bundle); await saveOwner(meta, bundle.workspaceId);
+        await meta.put({ key: `workbench:${bundle.workspaceId}`, value: state });
+        await meta.put({ key: sourceFoldersKey(bundle.workspaceId), value: folders });
+        await meta.put({ key: activeKey, value: bundle.workspaceId }); return clone(candidate);
+      });
+      changed(bundle.workspaceId, bundle.revision); workbenchChanged(state); sourceFoldersChanged(folders); return installed;
     }
     // Annual plans are private local metadata. Birth dates and plan text never
     // enter original bundles, ordinary backups, sync payloads or broadcasts.
@@ -3722,6 +3796,7 @@
       listWorkspaces, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
       readAnnualPlan, saveAnnualPlan,
+      readSourceFolders, readSourceFoldersSnapshot, saveSourceFolders, readLibraryBackupSnapshot, installLibraryCopy,
       readInterestProfile, saveInterestProfile,
       readDiscoveryProfile, saveDiscoveryProfile,
       readDiscoverySettings, saveDiscoverySettings,
