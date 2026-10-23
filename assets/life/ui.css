@@ -500,3 +500,12 @@ div.life-source-text { font-size:18px;line-height:1.95;letter-spacing:-.01em; }
  .life-source-edit .life-writing-title,.life-source-edit-preview > .life-heading { font-size:26px; }
  .life-source-edit .life-writing-body { font-size:17px; }
 }
+
+/* One account-storage receipt; recovery controls appear only when needed. */
+.life-account-storage { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; min-width:0; margin-block:8px 16px; }
+.life-account-storage[hidden] { display:none; }
+.life-account-storage > span { min-width:0; overflow-wrap:anywhere; }
+.life-account-storage .life-button { margin:0; }
+.life-library-metadata { min-width:0; }
+.life-library-metadata .life-note { white-space:pre-wrap; overflow-wrap:anywhere; }
+.life-library-metadata h5,.life-library-metadata h6 { margin-block:20px 8px; }

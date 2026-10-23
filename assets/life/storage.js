@@ -73,7 +73,7 @@
     const account = options.account === undefined ? null : accountValue(options.account);
     const accountKey = account ? JSON.stringify([account.projectUrl, account.userId]) : null;
     const activeKey = account ? `activeWorkspace:${accountKey}` : 'activeWorkspace';
-    const listeners = new Map();
+    const listeners = new Map(), allListeners = new Set();
     const transactions = new Set();
     const sender = root.crypto?.randomUUID?.() || `tab-${Date.now()}-${Math.random()}`;
     let connection = null, opening = null, failure = null, pendingOpen = null;
@@ -148,7 +148,7 @@
       const callbacks = event.type === 'error'
         ? [...listeners.values()].flatMap(group => [...group])
         : [...(listeners.get(event.workspaceId) || [])];
-      for (const listener of callbacks) {
+      for (const listener of new Set([...callbacks, ...allListeners])) {
         try { listener(clone(event)); } catch (_) { /* A view listener cannot undo a committed write. */ }
       }
     }
@@ -166,6 +166,11 @@
       const event = { type: 'composition_sync_changed', workspaceId: state.workspaceId, status: state.status, enabled: state.enabled };
       notify(event);
       try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Persistent state is authoritative. */ }
+    }
+    function libraryMetaChanged(state) {
+      const event = { type: 'library_meta_sync_changed', workspaceId: state.workspaceId, status: state.status, enabled: state.enabled };
+      notify(event);
+      try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Durable state is authoritative. */ }
     }
     function workbenchChanged(state) {
       const event = { type: 'workbench_changed', workspaceId: state.workspaceId, revision: state.revision };
@@ -191,8 +196,8 @@
           if (data?.sender !== sender && data?.type === 'sync_changed' && typeof data.workspaceId === 'string') {
             notify({ type: 'sync_changed', workspaceId: data.workspaceId });
           }
-          if (data?.sender !== sender && data?.type === 'composition_sync_changed' && typeof data.workspaceId === 'string') {
-            notify({ type: 'composition_sync_changed', workspaceId: data.workspaceId });
+          if (data?.sender !== sender && ['composition_sync_changed', 'library_meta_sync_changed'].includes(data?.type) && typeof data.workspaceId === 'string') {
+            notify({ type: data.type, workspaceId: data.workspaceId });
           }
           if (data?.sender !== sender && ['writing_draft_changed', 'writing_sync_changed'].includes(data?.type) &&
               typeof data.workspaceId === 'string' && typeof data.stageId === 'string') {
@@ -323,9 +328,9 @@
       channel = null;
       opening = null;
       failure = null;
-      if (disposed) listeners.clear();
+      if (disposed) { listeners.clear(); allListeners.clear(); }
     }
-    function dispose() { disposed = true; close(); listeners.clear(); }
+    function dispose() { disposed = true; close(); listeners.clear(); allListeners.clear(); }
     function clearAccount() { childScope?.dispose(); childScope = null; }
     function forAccount(authenticatedAccount) {
       scopeGuard();
@@ -530,6 +535,27 @@
           if (account && !sameAccount(await workspaceOwner(tx.objectStore('meta'), bundle.workspaceId), account)) continue;
           core().validateWorkspace(bundle);
           result.push({ workspaceId: bundle.workspaceId, title: bundle.title, revision: bundle.revision });
+        }
+        return result;
+      });
+    }
+    async function listAccountLibraries() {
+      scopeGuard();
+      if (!account) throw fault('auth_scope_required', '확인된 계정에서 자료 목록을 열어 주세요.');
+      return transaction(['bundles', 'meta', 'recovery'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), bundles = await tx.objectStore('bundles').getAll();
+        const recoveryIds = new Set((await tx.objectStore('recovery').getAll()).map(item => item.copyWorkspaceId));
+        const result = [];
+        for (const bundle of bundles) {
+          if (!sameAccount(await workspaceOwner(meta, bundle.workspaceId), account)) continue;
+          core().validateWorkspace(bundle);
+          const role = await meta.get(`libraryRole:${bundle.workspaceId}`);
+          if (role && (!plain(role.value) || Object.keys(role.value).some(key => key !== 'kind') || role.value.kind !== 'recovery')) {
+            throw fault('invalid_library_role', '자료 보관 역할을 확인할 수 없습니다. 기존 자료는 보존했습니다.');
+          }
+          const excluded = recoveryIds.has(bundle.workspaceId) || role?.value.kind === 'recovery';
+          result.push({ workspaceId: bundle.workspaceId, title: bundle.title, revision: bundle.revision,
+            eligible: !excluded, exclusion: excluded ? 'recovery' : null });
         }
         return result;
       });
@@ -1827,6 +1853,7 @@
       const bundles = tx.objectStore('bundles'), meta = tx.objectStore('meta');
       if (await bundles.get(workspaceId)) throw fault('workspace_exists', '새 준비 공간이 이미 있습니다. 다시 시도해 주세요.');
       await bundles.add(bundle); await saveOwner(meta, workspaceId);
+      if (privateRecovery) await meta.put({ key: `libraryRole:${workspaceId}`, value: { kind: 'recovery' } });
       if (privateRecovery && post) {
         const saved = await writePhotoPost(tx, workspaceId, materialLocalPost(post), 0, { refs: mapped.data.output.refs, baseRevision: 0 }, null, {}, mapped.data.output.refs);
         plan.output = { postId: saved.id };
@@ -2783,6 +2810,27 @@
       });
       syncChanged(state); return state;
     }
+    async function adoptSyncRemote(workspaceId, input, inputRow, { pristine = false } = {}) {
+      const binding = bindingValue(input, workspaceId), row = remoteRow(inputRow, workspaceId);
+      if (typeof pristine !== 'boolean') throw fault('invalid_request', '서버 자료의 초기 상태를 확인해 주세요.');
+      const state = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await readSyncState(meta, workspaceId, bundle);
+        if (previous) {
+          const sync = authorizedSync(previous, binding, false);
+          // Resuming is never permission to discard an immutable pending operation or conflict.
+          sync.enabled = true; sync.error = null; sync.status = syncStatus(sync, bundle);
+          return writeSyncState(meta, sync);
+        }
+        const exact = stablePayload({ ...row.data, revision: bundle.revision }) === stablePayload(bundle);
+        const sync = { workspaceId, binding, enabled: true, remoteRevision: exact || pristine ? row.revision : 0,
+          syncedLocalRevision: exact ? bundle.revision : -1, outbox: null,
+          conflict: !exact && !pristine ? { missing: false, row, remoteRevision: row.revision, localRevision: bundle.revision } : null,
+          status: exact ? 'synced' : pristine ? 'pending' : 'conflict', error: null };
+        return writeSyncState(meta, sync);
+      });
+      syncChanged(state); return state;
+    }
     async function pauseSync(workspaceId, input) {
       const binding = bindingValue(input, workspaceId);
       const state = await transaction(['meta'], 'readwrite', async tx => {
@@ -2856,7 +2904,8 @@
       if (event) { changed(workspaceId, result.revision); syncChanged(event); }
       return result;
     }
-    async function installSyncRemote(inputRow, input) {
+    async function installSyncRemote(inputRow, input, { activate = true } = {}) {
+      if (typeof activate !== 'boolean') throw fault('invalid_request', '자료 화면 선택을 확인해 주세요.');
       const row = remoteRow(inputRow), binding = bindingValue(input, row.id);
       if (account && !sameAccount(account, binding)) throw fault('account_mismatch', '현재 로그인 계정과 받은 자료의 계정이 다릅니다.');
       const bundle = { ...clone(row.data), revision: 0 };
@@ -2870,7 +2919,7 @@
         await tx.objectStore('bundles').add(bundle);
         await saveOwner(tx.objectStore('meta'), bundle.workspaceId);
         await writeSyncState(tx.objectStore('meta'), state);
-        await tx.objectStore('meta').put({ key: activeKey, value: bundle.workspaceId });
+        if (activate) await tx.objectStore('meta').put({ key: activeKey, value: bundle.workspaceId });
       });
       changed(bundle.workspaceId, bundle.revision); syncChanged(state);
       return clone(bundle);
@@ -2974,6 +3023,7 @@
         sync.status = request.choice === 'remote' ? 'synced' : 'pending';
         await tx.objectStore('bundles').add(request.copy);
         await saveOwner(tx.objectStore('meta'), request.copy.workspaceId);
+        await tx.objectStore('meta').put({ key: `libraryRole:${request.copy.workspaceId}`, value: { kind: 'recovery' } });
         await tx.objectStore('recovery').add({ id: core().id ? core().id() : root.crypto.randomUUID(), workspaceId,
           copyWorkspaceId: request.copy.workspaceId, choice: request.choice, localRevision: bundle.revision,
           remoteRevision: row.revision, createdAt: new Date().toISOString() });
@@ -3212,6 +3262,43 @@
       });
       if (updated) workbenchChanged(updated); if (event) compositionChanged(event); return result;
     }
+    function initialReceiveOptions(input) {
+      const settings = clone(input);
+      onlyFields(settings, ['outboxOperationId'], 'invalid_request');
+      if (Object.hasOwn(settings, 'outboxOperationId')) requireId(settings.outboxOperationId, '첫 전송 작업');
+      return settings;
+    }
+    function canAdoptInitial(sync, state, row, source, settings, empty, payload) {
+      if (sync.remoteRevision !== 0 || sync.conflict || state.revision !== 0 || payload(state) !== payload(empty)) return false;
+      if (!Object.hasOwn(settings, 'outboxOperationId')) return !sync.outbox;
+      const box = sync.outbox;
+      // Two devices may have raced to store the same canonical empty first head.
+      // Only that exact still-pending operation can converge without user choice.
+      return !!box && box.expectedRevision === 0 && box.operationId === settings.outboxOperationId &&
+        box.localRevision === 0 && box.data.revision === 0 && row.revision === 1 &&
+        box.sourceRevision === row.source_revision && source.remoteRevision === row.source_revision &&
+        payload(box.data) === payload(empty) && payload(row.data) === payload(empty);
+    }
+    async function adoptCompositionRemote(workspaceId, input, inputRow, options = {}) {
+      const binding = bindingValue(input, workspaceId), row = compositionRow(inputRow, workspaceId);
+      const settings = initialReceiveOptions(options);
+      let event, updated;
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const source = await compositionSource(meta, workspaceId, binding, bundle);
+        const state = await workbenchValue(meta, workspaceId);
+        const sync = authorizedComposition(await readCompositionState(meta, workspaceId, state), binding);
+        await checkCompositionRow(meta, sync, source, row);
+        const payload = value => stablePayload({ ...value, revision: 0 });
+        if (!canAdoptInitial(sync, state, row, source, settings, workbench().empty(workspaceId), payload)) return { status: 'conflict', revision: state.revision };
+        updated = { ...clone(row.data), revision: 1 }; workbench().validate(updated);
+        await meta.put({ key: `workbench:${workspaceId}`, value: updated }); await saveCompositionHead(meta, row);
+        sync.remoteRevision = row.revision; sync.sourceRevision = row.source_revision; sync.syncedLocalRevision = updated.revision;
+        sync.outbox = null; sync.error = null; sync.status = 'synced'; event = await writeCompositionState(meta, sync);
+        return { status: 'stored', revision: updated.revision };
+      });
+      if (updated) workbenchChanged(updated); if (event) compositionChanged(event); return result;
+    }
     async function setCompositionConflict(workspaceId, input, inputRow) {
       const binding = bindingValue(input, workspaceId), row = inputRow === null ? null : compositionRow(inputRow, workspaceId);
       const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
@@ -3304,6 +3391,381 @@
         const entry = await meta.get(`compositionRecovery:${workspaceId}:${id}`);
         if (!entry) throw fault('recovery_not_found', '구성 복구 사본을 찾을 수 없습니다.');
         return clone(compositionRecovery(entry.value, workspaceId, id));
+      });
+    }
+    // Only the declared saved library domains form this projection. Child counters
+    // are local infrastructure and remain monotonic across remote installations.
+    function libraryMeta() {
+      const value = options.libraryMeta || root.HaedoLife?.LibraryMeta || (typeof require === 'function' ? require('./library-meta.js') : null);
+      if (!value?.validate || !value?.validateReferences || !value?.empty) throw fault('dependency_unavailable', '자료 분류 모듈을 불러오지 못했습니다.');
+      return value;
+    }
+    function libraryMetaRevision(children) {
+      const revision = children.reduce((sum, value) => sum + value.revision, 0);
+      if (!Number.isSafeInteger(revision) || revision < 0) throw fault('invalid_library_meta_metadata', '자료 분류의 저장 기준을 확인해 주세요.');
+      return revision;
+    }
+    async function libraryMetaValue(meta, workspaceId) {
+      const sourceFolders = await sourceFoldersValue(meta, workspaceId), collection = await collectionValue(meta, workspaceId), nineBoard = await nineBoardValue(meta, workspaceId);
+      const state = { format: 'life-library-meta-v1', workspaceId, revision: libraryMetaRevision([sourceFolders, collection, nineBoard]), sourceFolders, collection, nineBoard };
+      libraryMeta().validate(state); return state;
+    }
+    function libraryMetaContent(state) {
+      return stablePayload({ ...state, revision: 0, sourceFolders: { ...state.sourceFolders, revision: 0 },
+        collection: { ...state.collection, revision: 0 }, nineBoard: { ...state.nineBoard, revision: 0 } });
+    }
+    async function readLibraryMetaSnapshot(workspaceId) {
+      privateProfileScope(workspaceId, '자료 분류를');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return { bundle: clone(bundle), metadata: clone(await libraryMetaValue(meta, workspaceId)) };
+      });
+    }
+    async function installLibraryMetaChildren(meta, previous, incoming) {
+      const state = clone(incoming), workspaceId = previous.workspaceId;
+      for (const field of ['sourceFolders', 'collection', 'nineBoard']) {
+        if (previous[field].revision === Number.MAX_SAFE_INTEGER) throw fault('invalid_library_meta_metadata', '자료 분류의 저장 한도를 확인해 주세요.');
+        state[field].revision = previous[field].revision + 1;
+      }
+      state.revision = libraryMetaRevision([state.sourceFolders, state.collection, state.nineBoard]);
+      libraryMeta().validate(state);
+      await meta.put({ key: sourceFoldersKey(workspaceId), value: state.sourceFolders });
+      await meta.put({ key: `collection:${workspaceId}`, value: state.collection });
+      await meta.put({ key: `nine-board:${workspaceId}`, value: state.nineBoard });
+      return state;
+    }
+    function libraryMetaChildrenChanged(state) {
+      sourceFoldersChanged(state.sourceFolders);
+      for (const [type, child] of [['collection_changed', state.collection], ['nine_board_changed', state.nineBoard]]) {
+        const event = { type, workspaceId: state.workspaceId, revision: child.revision };
+        notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Committed data is authoritative. */ }
+      }
+    }
+    function libraryMetaRow(input, workspaceId) {
+      if (!plain(input) || !Number.isSafeInteger(input.revision) || input.revision < 1 ||
+          !Number.isSafeInteger(input.source_revision) || input.source_revision < 1) {
+        throw fault('invalid_remote_snapshot', '서버 구성의 저장 버전을 확인할 수 없습니다.');
+      }
+      const row = clone(input);
+      libraryMeta().validate(row.data);
+      if (row.workspace_id !== workspaceId || row.data.workspaceId !== workspaceId) {
+        throw fault('invalid_remote_snapshot', '서버 구성의 작업공간과 내용이 일치하지 않습니다.');
+      }
+      return { workspace_id: workspaceId, revision: row.revision, source_revision: row.source_revision, data: row.data,
+        ...(typeof row.updated_at === 'string' ? { updated_at: row.updated_at } : {}) };
+    }
+    function libraryMetaStatus(sync, state) {
+      return sync.conflict ? 'conflict' : sync.outbox || state.revision !== sync.syncedLocalRevision ? 'pending' : 'synced';
+    }
+    function validateLibraryMetaState(sync, workspaceId) {
+      try {
+        onlyFields(sync, ['format', 'workspaceId', 'binding', 'enabled', 'remoteRevision', 'sourceRevision',
+          'syncedLocalRevision', 'outbox', 'conflict', 'status', 'error', 'lastRecoveryId']);
+        if (sync.format !== 'life-library-meta-sync-v1' || sync.workspaceId !== workspaceId || typeof sync.enabled !== 'boolean' ||
+            !['pending', 'synced', 'conflict', 'error'].includes(sync.status) ||
+            !Number.isSafeInteger(sync.syncedLocalRevision) || sync.syncedLocalRevision < -1) throw new Error('metadata');
+        if (stablePayload(bindingValue(sync.binding, workspaceId)) !== stablePayload(sync.binding)) throw new Error('binding');
+        requireRevision(sync.remoteRevision); requireRevision(sync.sourceRevision);
+        if ((sync.remoteRevision === 0) !== (sync.sourceRevision === 0) ||
+            (sync.lastRecoveryId !== null && (typeof sync.lastRecoveryId !== 'string' || !sync.lastRecoveryId))) throw new Error('metadata');
+        if (sync.outbox !== null) {
+          const box = sync.outbox;
+          onlyFields(box, ['operationId', 'expectedRevision', 'sourceRevision', 'localRevision', 'data']);
+          requireId(box.operationId, '전송 작업'); requireRevision(box.expectedRevision); requireRevision(box.localRevision);
+          requireRevision(box.sourceRevision); libraryMeta().validate(box.data);
+          if (box.data.workspaceId !== workspaceId || box.data.revision !== box.localRevision ||
+              box.expectedRevision !== sync.remoteRevision || box.sourceRevision < Math.max(1, sync.sourceRevision)) throw new Error('outbox');
+        }
+        if (sync.conflict !== null) {
+          const conflict = sync.conflict;
+          onlyFields(conflict, ['missing', 'row', 'remoteRevision', 'localRevision']);
+          requireRevision(conflict.remoteRevision); requireRevision(conflict.localRevision);
+          if (typeof conflict.missing !== 'boolean' || conflict.remoteRevision < sync.remoteRevision) throw new Error('conflict');
+          if (conflict.missing) { if (conflict.row !== null) throw new Error('missing'); }
+          else {
+            const row = libraryMetaRow(conflict.row, workspaceId);
+            if (row.revision !== conflict.remoteRevision || row.source_revision < sync.sourceRevision) throw new Error('conflict');
+          }
+        }
+        if (sync.error !== null) {
+          onlyFields(sync.error, ['code', 'message']);
+          if (typeof sync.error.code !== 'string' || !/^[a-z0-9_]{1,80}$/.test(sync.error.code) ||
+              typeof sync.error.message !== 'string' || sync.error.message.length > 1000) throw new Error('error');
+        }
+        if ((sync.status === 'conflict') !== (sync.conflict !== null) ||
+            (sync.status === 'synced' && (sync.outbox || sync.error || sync.syncedLocalRevision < 0)) ||
+            (sync.status === 'error' && !sync.error) || (sync.status === 'pending' && sync.error) ||
+            (sync.remoteRevision === 0 && sync.syncedLocalRevision !== -1) ||
+            (sync.outbox && sync.outbox.localRevision <= sync.syncedLocalRevision)) throw new Error('consistency');
+      } catch (_) { throw fault('invalid_library_meta_metadata', '구성 동기화 정보를 확인할 수 없습니다. 기존 내용은 보존했습니다.'); }
+      return sync;
+    }
+    async function readLibraryMetaState(meta, workspaceId, state) {
+      if (account) await assertOwner(meta, workspaceId);
+      const row = await meta.get(`libraryMetaSync:${workspaceId}`);
+      if (row === undefined) return null;
+      const sync = validateLibraryMetaState(row.value, workspaceId);
+      if (account && !sameAccount(account, sync.binding)) throw fault('account_mismatch', '현재 계정과 구성 연결 정보가 다릅니다.');
+      if (state && (sync.syncedLocalRevision > state.revision || sync.outbox?.localRevision > state.revision ||
+          sync.conflict?.localRevision > state.revision)) {
+        throw fault('invalid_library_meta_metadata', '구성 동기화 기준이 로컬 저장보다 앞서 있습니다. 기존 내용은 보존했습니다.');
+      }
+      const head = await meta.get(`libraryMetaHead:${workspaceId}`);
+      if (sync.remoteRevision > 0) {
+        if (!head) throw fault('invalid_library_meta_metadata', '구성의 서버 비교 기준을 찾을 수 없습니다. 기존 내용은 보존했습니다.');
+        const value = libraryMetaRow(head.value, workspaceId);
+        if (value.revision !== sync.remoteRevision || value.source_revision !== sync.sourceRevision ||
+            (state && state.revision === sync.syncedLocalRevision && libraryMetaContent(value.data) !== libraryMetaContent(state))) {
+          throw fault('invalid_library_meta_metadata', '구성의 서버 비교 기준이 일치하지 않습니다. 기존 내용은 보존했습니다.');
+        }
+      } else if (head) throw fault('invalid_library_meta_metadata', '연결되지 않은 구성에 서버 비교 기준이 있습니다.');
+      if (state && !sync.conflict && !sync.error) sync.status = libraryMetaStatus(sync, state);
+      return sync;
+    }
+    async function writeLibraryMetaState(meta, sync) {
+      if (account && !sameAccount(account, sync.binding)) throw fault('account_mismatch', '현재 로그인 계정과 구성 동기화 계정이 다릅니다.');
+      validateLibraryMetaState(sync, sync.workspaceId);
+      await meta.put({ key: `libraryMetaSync:${sync.workspaceId}`, value: sync });
+      return clone(sync);
+    }
+    function authorizedLibraryMeta(sync, binding, enabled = true) {
+      if (account && !sameAccount(account, binding)) throw fault('account_mismatch', '현재 로그인 계정과 구성 동기화 계정이 다릅니다.');
+      if (!sync) throw fault('composition_not_configured', '이 작업공간의 구성 동기화를 먼저 연결하세요.');
+      if (stablePayload(sync.binding) !== stablePayload(binding)) throw fault('account_mismatch', '다른 계정에 연결된 구성입니다.');
+      if (enabled && !sync.enabled) throw fault('composition_paused', '구성 동기화가 중지되어 있습니다.');
+      return sync;
+    }
+    async function checkLibraryMetaRow(meta, sync, source, row) {
+      if (row.revision < revisionFloor(sync) || row.source_revision < Math.max(sync.sourceRevision, sync.conflict?.row?.source_revision || 0)) {
+        throw fault('stale_sync_result', '더 최신 구성 또는 원문 기준을 이미 확인했습니다. 다시 동기화하세요.');
+      }
+      if (row.source_revision > source.remoteRevision) {
+        throw fault('composition_source_pending', '이 구성에서 참조하는 원문을 먼저 받아 주세요. 기존 내용은 보존했습니다.');
+      }
+      const known = row.revision === sync.remoteRevision ? (await meta.get(`libraryMetaHead:${sync.workspaceId}`))?.value :
+        row.revision === sync.conflict?.remoteRevision ? sync.conflict.row : null;
+      if (known && (row.source_revision !== known.source_revision || stablePayload(row.data) !== stablePayload(known.data))) {
+        throw fault('remote_revision_mismatch', '같은 서버 버전의 구성 내용이 달라졌습니다. 기존 내용은 보존했습니다.');
+      }
+    }
+    async function saveLibraryMetaHead(meta, row) {
+      await meta.put({ key: `libraryMetaHead:${row.workspace_id}`, value: clone(row) });
+    }
+    async function getLibraryMetaState(workspaceId) {
+      requireId(workspaceId, '작업공간');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const state = await libraryMetaValue(meta, workspaceId);
+        return clone(await readLibraryMetaState(meta, workspaceId, state));
+      });
+    }
+    async function bindLibraryMetaSync(workspaceId, input) {
+      const binding = bindingValue(input, workspaceId);
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        await compositionSource(meta, workspaceId, binding, bundle);
+        const state = await libraryMetaValue(meta, workspaceId), previous = await readLibraryMetaState(meta, workspaceId, state);
+        const sync = previous ? authorizedLibraryMeta(previous, binding, false) : {
+          format: 'life-library-meta-sync-v1', workspaceId, binding, enabled: true, remoteRevision: 0, sourceRevision: 0,
+          syncedLocalRevision: -1, outbox: null, conflict: null, status: 'pending', error: null, lastRecoveryId: null
+        };
+        sync.enabled = true; sync.error = null; sync.status = libraryMetaStatus(sync, state);
+        return writeLibraryMetaState(meta, sync);
+      });
+      libraryMetaChanged(result); return result;
+    }
+    async function pauseLibraryMetaSync(workspaceId, input) {
+      const binding = bindingValue(input, workspaceId);
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const state = await libraryMetaValue(meta, workspaceId);
+        const sync = authorizedLibraryMeta(await readLibraryMetaState(meta, workspaceId, state), binding, false);
+        sync.enabled = false; return writeLibraryMetaState(meta, sync);
+      });
+      libraryMetaChanged(result); return result;
+    }
+    async function prepareLibraryMetaUpload(workspaceId, input) {
+      const binding = bindingValue(input, workspaceId);
+      let event;
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const source = await compositionSource(meta, workspaceId, binding, bundle);
+        const state = await libraryMetaValue(meta, workspaceId);
+        const sync = authorizedLibraryMeta(await readLibraryMetaState(meta, workspaceId, state), binding);
+        if (sync.conflict) throw fault('composition_conflict', '다른 기기의 구성을 먼저 비교해 주세요.');
+        if (sync.outbox) {
+          if (sync.outbox.sourceRevision > source.remoteRevision) throw fault('composition_source_pending', '전송 대기 구성에서 참조한 원문을 먼저 받아 주세요.');
+          return clone(sync.outbox);
+        }
+        if (state.revision === sync.syncedLocalRevision) return null;
+        libraryMeta().validateReferences(bundle, state);
+        if (source.remoteRevision < sync.sourceRevision) throw fault('stale_sync_result', '구성이 참조한 원문 기준보다 이전 자료입니다.');
+        sync.outbox = { operationId: core().id(), expectedRevision: sync.remoteRevision, sourceRevision: source.remoteRevision,
+          localRevision: state.revision, data: clone(state) };
+        sync.error = null; sync.status = 'pending'; event = await writeLibraryMetaState(meta, sync);
+        return clone(sync.outbox);
+      });
+      if (event) libraryMetaChanged(event); return result;
+    }
+    async function ackLibraryMetaSync(workspaceId, input, operationId, remoteRevision) {
+      const binding = bindingValue(input, workspaceId);
+      requireId(operationId, '전송 작업'); requireRevision(remoteRevision);
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const source = await compositionSource(meta, workspaceId, binding, bundle);
+        const state = await libraryMetaValue(meta, workspaceId);
+        const sync = authorizedLibraryMeta(await readLibraryMetaState(meta, workspaceId, state), binding);
+        const box = sync.outbox;
+        if (!box || box.operationId !== operationId || sync.conflict || remoteRevision !== box.expectedRevision + 1 ||
+            remoteRevision < revisionFloor(sync) || box.sourceRevision > source.remoteRevision) {
+          throw fault('stale_sync_result', '현재 구성 전송 작업과 다른 응답입니다. 다시 동기화하세요.');
+        }
+        await saveLibraryMetaHead(meta, { workspace_id: workspaceId, revision: remoteRevision, source_revision: box.sourceRevision, data: box.data });
+        sync.remoteRevision = remoteRevision; sync.sourceRevision = box.sourceRevision; sync.syncedLocalRevision = box.localRevision;
+        sync.outbox = null; sync.error = null; sync.status = libraryMetaStatus(sync, state);
+        return writeLibraryMetaState(meta, sync);
+      });
+      libraryMetaChanged(result); return result;
+    }
+    async function applyLibraryMetaRemote(workspaceId, input, inputRow) {
+      const binding = bindingValue(input, workspaceId), row = libraryMetaRow(inputRow, workspaceId);
+      let event, updated;
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const source = await compositionSource(meta, workspaceId, binding, bundle);
+        const state = await libraryMetaValue(meta, workspaceId);
+        const sync = authorizedLibraryMeta(await readLibraryMetaState(meta, workspaceId, state), binding);
+        await checkLibraryMetaRow(meta, sync, source, row);
+        libraryMeta().validateReferences(bundle, row.data);
+        if (sync.outbox || sync.conflict || state.revision !== sync.syncedLocalRevision) {
+          // An acknowledged unchanged remote head does not conflict with a newer local edit.
+          if (row.revision === sync.remoteRevision && !sync.conflict) return { status: 'stored', revision: state.revision };
+          sync.conflict = { missing: false, row, remoteRevision: row.revision, localRevision: state.revision };
+          sync.status = 'conflict'; sync.error = null; event = await writeLibraryMetaState(meta, sync);
+          return { status: 'conflict', revision: state.revision };
+        }
+        if (row.revision === sync.remoteRevision) return { status: 'stored', revision: state.revision };
+        updated = await installLibraryMetaChildren(meta, state, row.data);
+        await saveLibraryMetaHead(meta, row);
+        sync.remoteRevision = row.revision; sync.sourceRevision = row.source_revision; sync.syncedLocalRevision = updated.revision;
+        sync.error = null; sync.status = 'synced'; event = await writeLibraryMetaState(meta, sync);
+        return { status: 'stored', revision: updated.revision };
+      });
+      if (updated) libraryMetaChildrenChanged(updated); if (event) libraryMetaChanged(event); return result;
+    }
+    async function adoptLibraryMetaRemote(workspaceId, input, inputRow, options = {}) {
+      const binding = bindingValue(input, workspaceId), row = libraryMetaRow(inputRow, workspaceId);
+      const settings = initialReceiveOptions(options);
+      let event, updated;
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const source = await compositionSource(meta, workspaceId, binding, bundle);
+        const state = await libraryMetaValue(meta, workspaceId);
+        const sync = authorizedLibraryMeta(await readLibraryMetaState(meta, workspaceId, state), binding);
+        await checkLibraryMetaRow(meta, sync, source, row); libraryMeta().validateReferences(bundle, row.data);
+        if (!canAdoptInitial(sync, state, row, source, settings, libraryMeta().empty(workspaceId), libraryMetaContent)) return { status: 'conflict', revision: state.revision };
+        updated = await installLibraryMetaChildren(meta, state, row.data); await saveLibraryMetaHead(meta, row);
+        sync.remoteRevision = row.revision; sync.sourceRevision = row.source_revision; sync.syncedLocalRevision = updated.revision;
+        sync.outbox = null; sync.error = null; sync.status = 'synced'; event = await writeLibraryMetaState(meta, sync);
+        return { status: 'stored', revision: updated.revision };
+      });
+      if (updated) libraryMetaChildrenChanged(updated); if (event) libraryMetaChanged(event); return result;
+    }
+    async function setLibraryMetaConflict(workspaceId, input, inputRow) {
+      const binding = bindingValue(input, workspaceId), row = inputRow === null ? null : libraryMetaRow(inputRow, workspaceId);
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const source = await compositionSource(meta, workspaceId, binding, bundle);
+        const state = await libraryMetaValue(meta, workspaceId);
+        const sync = authorizedLibraryMeta(await readLibraryMetaState(meta, workspaceId, state), binding);
+        if (row) { await checkLibraryMetaRow(meta, sync, source, row); libraryMeta().validateReferences(bundle, row.data); }
+        sync.conflict = { missing: row === null, row, remoteRevision: row?.revision ?? revisionFloor(sync), localRevision: state.revision };
+        sync.error = null; sync.status = 'conflict'; return writeLibraryMetaState(meta, sync);
+      });
+      libraryMetaChanged(result); return result;
+    }
+    async function setLibraryMetaError(workspaceId, input, inputError) {
+      const binding = bindingValue(input, workspaceId), error = clone(inputError);
+      if (error !== null) {
+        onlyFields(error, ['code', 'message'], 'invalid_request');
+        if (typeof error.code !== 'string' || !/^[a-z0-9_]{1,80}$/.test(error.code) ||
+            typeof error.message !== 'string' || error.message.length > 1000) throw fault('invalid_request', '정제된 구성 오류 정보가 필요합니다.');
+      }
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        await compositionSource(meta, workspaceId, binding, bundle, false);
+        const state = await libraryMetaValue(meta, workspaceId);
+        const sync = authorizedLibraryMeta(await readLibraryMetaState(meta, workspaceId, state), binding);
+        sync.error = error; sync.status = error === null ? libraryMetaStatus(sync, state) : sync.conflict ? 'conflict' : 'error';
+        return writeLibraryMetaState(meta, sync);
+      });
+      libraryMetaChanged(result); return result;
+    }
+    async function resolveLibraryMetaSync(workspaceId, input, resolution) {
+      const binding = bindingValue(input, workspaceId), request = clone(resolution);
+      onlyFields(request, ['choice', 'expectedLocalRevision', 'remoteRow'], 'invalid_request');
+      if (!['local', 'remote'].includes(request.choice)) throw fault('invalid_request', '남길 구성을 선택하세요.');
+      requireRevision(request.expectedLocalRevision);
+      const row = request.remoteRow === null ? null : libraryMetaRow(request.remoteRow, workspaceId);
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const source = await compositionSource(meta, workspaceId, binding, bundle);
+        const state = await libraryMetaValue(meta, workspaceId);
+        const sync = authorizedLibraryMeta(await readLibraryMetaState(meta, workspaceId, state), binding);
+        if (sync.conflict?.missing) throw fault('remote_missing', '삭제된 서버 구성을 자동 재생성하지 않습니다. 백업을 보관하거나 연결을 중지하세요.');
+        if (!sync.conflict || !row || request.expectedLocalRevision !== state.revision ||
+            sync.conflict.localRevision !== state.revision || row.revision !== sync.conflict.remoteRevision ||
+            row.source_revision !== sync.conflict.row.source_revision || stablePayload(row.data) !== stablePayload(sync.conflict.row.data)) {
+          throw fault('composition_conflict_changed', '비교한 구성이 바뀌었습니다. 최신 양쪽 내용을 다시 확인하세요.');
+        }
+        await checkLibraryMetaRow(meta, sync, source, row);
+        const recoveryId = core().id(), discarded = request.choice === 'remote' ? state : row.data;
+        // Keep the nonchosen metadata and exact Core snapshot together without
+        // publishing the recovery or changing any source/version identities.
+        await meta.add({ key: `libraryMetaRecovery:${workspaceId}:${recoveryId}`, value: {
+          id: recoveryId, workspaceId, createdAt: new Date().toISOString(), bundle: clone(bundle), metadata: clone(discarded)
+        } });
+        libraryMeta().validateReferences(bundle, row.data);
+        const updated = request.choice === 'remote' ? await installLibraryMetaChildren(meta, state, row.data) : state;
+        await saveLibraryMetaHead(meta, row);
+        sync.remoteRevision = row.revision; sync.sourceRevision = row.source_revision; sync.outbox = null; sync.conflict = null; sync.error = null;
+        sync.syncedLocalRevision = request.choice === 'remote' ? updated.revision : -1;
+        sync.status = request.choice === 'remote' ? 'synced' : 'pending'; sync.lastRecoveryId = recoveryId;
+        return { metadata: clone(updated), sync: await writeLibraryMetaState(meta, sync), recoveryId };
+      });
+      if (request.choice === 'remote') libraryMetaChildrenChanged(result.metadata);
+      libraryMetaChanged(result.sync); return result;
+    }
+    function libraryMetaRecovery(value, workspaceId, id) {
+      onlyFields(value, ['id', 'workspaceId', 'createdAt', 'bundle', 'metadata'], 'invalid_recovery_copy');
+      if (value.id !== id || value.workspaceId !== workspaceId || typeof value.createdAt !== 'string' ||
+          !Number.isFinite(Date.parse(value.createdAt)) || value.bundle?.workspaceId !== workspaceId || value.metadata?.workspaceId !== workspaceId) {
+        throw fault('invalid_recovery_copy', '구성 복구 사본의 식별자를 확인할 수 없습니다.');
+      }
+      core().validateWorkspace(value.bundle); libraryMeta().validate(value.metadata); return value;
+    }
+    async function listLibraryMetaRecoveries(workspaceId) {
+      requireId(workspaceId, '작업공간');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const prefix = `libraryMetaRecovery:${workspaceId}:`;
+        const range = root.IDBKeyRange?.bound(prefix, prefix + '\uffff');
+        const entries = (await meta.getAll(range)).filter(entry => entry.key.startsWith(prefix));
+        return entries.map(entry => {
+          const value = libraryMetaRecovery(entry.value, workspaceId, entry.key.slice(prefix.length));
+          return { id: value.id, createdAt: value.createdAt, title: value.bundle.title };
+        }).sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+      });
+    }
+    async function readLibraryMetaRecovery(workspaceId, id) {
+      requireId(workspaceId, '작업공간'); requireId(id, '복구 사본');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const entry = await meta.get(`libraryMetaRecovery:${workspaceId}:${id}`);
+        if (!entry) throw fault('recovery_not_found', '구성 복구 사본을 찾을 수 없습니다.');
+        return clone(libraryMetaRecovery(entry.value, workspaceId, id));
       });
     }
     // A selected writing draft has its own CAS/receipt stream. Imports and unselected
@@ -3780,6 +4242,12 @@
       changed(copy.workspaceId, copy.revision);
       return clone(copy);
     }
+    function subscribeAll(listener) {
+      scopeGuard();
+      if (!account) throw fault('auth_scope_required', '확인된 계정의 자료 알림만 받을 수 있습니다.');
+      if (typeof listener !== 'function') throw fault('invalid_request', '저장 알림 함수를 확인하세요.');
+      allListeners.add(listener); return () => allListeners.delete(listener);
+    }
     function subscribe(workspaceId, listener) {
       scopeGuard();
       requireId(workspaceId, '작업공간');
@@ -3793,7 +4261,7 @@
       };
     }
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
-      listWorkspaces, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
+      listWorkspaces, listAccountLibraries, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
       readAnnualPlan, saveAnnualPlan,
       readSourceFolders, readSourceFoldersSnapshot, saveSourceFolders, readLibraryBackupSnapshot, installLibraryCopy,
@@ -3810,12 +4278,15 @@
       readPublicCover, savePublicCover,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       readPreservationCatalog, readPreservationSnapshot, installPreservationCopy, commitNaverCapture, readNaverCapture, installNaverCaptureCopy,
-      commitLocal, readAccountMaterialRegistration, saveStage, getStage, listStages, deleteStage, subscribe,
-      getSyncState, bindSync, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,
+      commitLocal, readAccountMaterialRegistration, saveStage, getStage, listStages, deleteStage, subscribe, subscribeAll,
+      getSyncState, bindSync, adoptSyncRemote, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,
       setSyncConflict, setSyncError, resolveSync,
       getCompositionState, bindCompositionSync, pauseCompositionSync, prepareCompositionUpload, ackCompositionSync,
-      applyCompositionRemote, setCompositionConflict, setCompositionError, resolveCompositionSync,
+      applyCompositionRemote, adoptCompositionRemote, setCompositionConflict, setCompositionError, resolveCompositionSync,
       listCompositionRecoveries, readCompositionRecovery,
+      readLibraryMetaSnapshot, getLibraryMetaState, bindLibraryMetaSync, pauseLibraryMetaSync, prepareLibraryMetaUpload, ackLibraryMetaSync,
+      applyLibraryMetaRemote, adoptLibraryMetaRemote, setLibraryMetaConflict, setLibraryMetaError, resolveLibraryMetaSync,
+      listLibraryMetaRecoveries, readLibraryMetaRecovery,
       getWritingSyncState, readWritingSnapshot, listWritingSyncStates, bindWritingSync, pauseWritingSync, prepareWritingUpload, ackWritingSync,
       applyWritingRemote, installWritingRemote, setWritingConflict, setWritingError, resolveWritingSync,
       listUnownedWorkspaces, importUnownedWorkspace };

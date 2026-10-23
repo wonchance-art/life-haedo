@@ -81,9 +81,12 @@
     }
     function unavailableCount() {
       if (!slot.snapshot) return 0;
-      if (slot.unavailableSnapshot === slot.snapshot) return slot.unavailableCount;
-      const available = new Set(slot.snapshot.bundle.sources.map(source => source.id));
+      const current = getBundle(), captured = slot.snapshot.bundle;
+      const bundle = current?.workspaceId === captured.workspaceId && current.revision >= captured.revision ? current : captured;
+      if (slot.unavailableSnapshot === slot.snapshot && slot.unavailableBundle === bundle) return slot.unavailableCount;
+      const available = new Set(bundle.sources.map(source => source.id));
       slot.unavailableSnapshot = slot.snapshot;
+      slot.unavailableBundle = bundle;
       slot.unavailableCount = slot.snapshot.sourceFolders.assignments.filter(item => !available.has(item.sourceId)).length;
       return slot.unavailableCount;
     }
@@ -204,7 +207,7 @@
         for (const mount of mounts) if (mount.owner === owner && mount.filterValue === target.id) { mount.filterValue = 'unfiled'; mount.onFilter('unfiled'); updateMount(mount, true); }
       }, token, owner), nodeButton('취소', 'lifeFolderDeleteCancel', () => { owner.confirm = null; updateMounts(); }, token, owner));
       const unavailable = el('p', '', 'life-meta'); unavailable.id = 'lifeFolderUnavailable'; unavailable.hidden = true;
-      form.append(editLabel, nameLabel, parentLabel, actions, children, confirm); details.append(form, unavailable, el('p', '이 브라우저의 자료 폴더입니다. 원본 경로·본문·묶음은 바꾸지 않습니다.', 'life-meta'));
+      form.append(editLabel, nameLabel, parentLabel, actions, children, confirm); details.append(form, unavailable);
       const mount = { owner, token, host, element, filter: select, filterValue: filter, onFilter, edit, name, parent, save, remove, children, confirm, unavailable, status, error, reload, initialized: false, released: false };
       mounts.add(mount); host.append(element); updateMount(mount, true);
       const fieldLive = target => live(token, owner, target) && element.contains(target);

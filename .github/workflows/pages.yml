@@ -35,6 +35,10 @@ jobs:
         run: node supabase/tests/check-naver-backend.mjs
       - name: Verify private Naver capture versions, inventory baselines and asset ownership
         run: node supabase/tests/check-naver-captures.mjs
+      - name: Install pinned account library SQL test dependencies
+        run: npm ci --prefix tests/sql-ci --ignore-scripts --no-audit --no-fund
+      - name: Verify account library ownership, default races and immutable original manifests
+        run: node tests/run-account-library-postgres.cjs
       - name: Retain anonymous Naver database checks
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -43,6 +47,7 @@ jobs:
           path: |
             .local/naver-backend/
             .local/naver-capture-backend/
+            .local/account-library-sql/
           if-no-files-found: ignore
   browser_suites:
     runs-on: ubuntu-24.04
@@ -424,6 +429,9 @@ jobs:
       - name: Verify material folders, exact reading return and atomic library backup
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/source-folders-browser.cjs
+      - name: Verify automatic account materials across devices, metadata recovery and private originals
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/account-library-browser.cjs
       - name: Verify frozen reading comparisons, explicit judgments and local recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-reading-browser.cjs
@@ -469,6 +477,7 @@ jobs:
             .local/travel-writing-history-drift/
             .local/local-post-finder/
             .local/account-materials/
+            .local/account-library/
             .local/naver-blog/
             .local/naver-capture/
             .local/app-native/qa/

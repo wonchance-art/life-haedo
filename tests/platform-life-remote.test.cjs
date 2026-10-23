@@ -71,6 +71,27 @@ test("separate projects, keys and password login cannot override the platform ac
   assert.equal(s.auth.user.id, "A");
   s.client.auth.dispose();
 });
+test('account library and original archive scopes authorize only their own private RPCs', async () => {
+  const s = setup();
+  const scopes = {
+    library: ['life_library_capabilities', 'life_library_open', 'life_library_catalog', 'life_library_meta_get', 'life_library_meta_put'],
+    originals: ['life_library_capabilities', 'life_library_originals_list', 'life_library_original_get', 'life_library_original_put']
+  };
+  for (const [scope, allowed] of Object.entries(scopes)) {
+    const client = bridge.clientFactory(s.auth, { scope })(config.url, config.key);
+    assert.throws(() => client.from('life_workspaces'), { code: 'invalid_request' });
+    for (const name of allowed) await client.rpc(name, {});
+    for (const name of ['life_sync_put', 'life_composition_put', 'life_material_put', 'life_public_page_put', ...scopes[scope === 'library' ? 'originals' : 'library']]) {
+      if (!allowed.includes(name)) assert.throws(() => client.rpc(name, {}), { code: 'invalid_request' });
+    }
+    const pending = client.rpc(allowed.at(-1), {}); s.change({ id: 'B' });
+    await assert.rejects(Promise.resolve(pending), { code: 'request_cancelled' });
+    client.auth.dispose(); s.change({ id: 'A' });
+  }
+  assert.throws(() => s.client.rpc('life_library_capabilities', {}), { code: 'invalid_request' });
+  assert.equal(s.disposed, 0, 'Borrowing a private scope must not dispose the shared Auth client');
+  s.client.auth.dispose();
+});
 test("unverified and signed-out users cannot send a query", async () => {
   assert.throws(() => bridge.clientFactory({ ready: false }), { code: "auth_required" });
   const s = setup(); s.change(null);

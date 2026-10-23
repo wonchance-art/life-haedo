@@ -51,8 +51,9 @@
   function sameBinding(left, right) {
     return !!left && !!right && left.projectUrl === right.projectUrl && left.userId === right.userId && left.remoteId === right.remoteId;
   }
-  function create({ storage, core, remoteFactory } = {}) {
+  function create({ storage, core, remoteFactory, automatic: automaticEnabled = true } = {}) {
     if (!storage || !core) throw fault('dependency_unavailable');
+    if (typeof automaticEnabled !== 'boolean') throw fault('dependency_unavailable');
     const support = root.HaedoLife?.Remote;
     const factory = remoteFactory || support?.create;
     const loadConfig = remoteFactory?.loadConfig || support?.loadConfig;
@@ -128,7 +129,7 @@
       timers.clear();
     }
     function schedule(workspaceId, delay = 300) {
-      if (disposed || !account) return;
+      if (disposed || !account || !automaticEnabled) return;
       if (timers.has(workspaceId)) root.clearTimeout(timers.get(workspaceId));
       const timer = root.setTimeout(() => {
         timers.delete(workspaceId);
@@ -140,7 +141,7 @@
       if (watches.has(workspaceId) || !storage.subscribe) return;
       const unsubscribe = storage.subscribe(workspaceId, event => {
         if (disposed) return;
-        if (event.type === 'changed') { emit('state', workspaceId); schedule(workspaceId); }
+        if (event.type === 'changed') { emit('state', workspaceId); if (automaticEnabled) schedule(workspaceId); }
         else if (event.type === 'sync_changed') emit('state', workspaceId);
         else if (event.type === 'error') emit('error', workspaceId, safeError(event.error));
       });
@@ -162,7 +163,7 @@
       }
     }
     function automatic() {
-      if (disposed) return;
+      if (disposed || !automaticEnabled) return;
       if (pendingReconnect && !account) {
         if (reconnecting) return;
         const settings = clone(pendingReconnect);
@@ -176,11 +177,22 @@
     }
     function visible() { if (!root.document || root.document.visibilityState === 'visible') automatic(); }
     function startLifecycle() {
-      if (lifecycle) return;
+      if (lifecycle || !automaticEnabled) return;
       lifecycle = true;
       root.addEventListener?.('online', automatic);
       root.document?.addEventListener?.('visibilitychange', visible);
       interval = root.setInterval(visible, 60000); interval?.unref?.();
+    }
+    function setAutomatic(enabled) {
+      live(); if (typeof enabled !== 'boolean') throw fault('dependency_unavailable');
+      automaticEnabled = enabled;
+      if (enabled) { startLifecycle(); automatic(); }
+      else {
+        clearScheduled();
+        if (interval !== null) root.clearInterval(interval); interval = null;
+        root.removeEventListener?.('online', automatic);
+        root.document?.removeEventListener?.('visibilitychange', visible); lifecycle = false;
+      }
     }
     function clearWatches() {
       clearScheduled();
@@ -329,7 +341,14 @@
       const rows = await context.adapter.list(); guard(context); await verified(context);
       return clone(rows);
     }
-    async function download(remoteId) {
+    function downloadOptions(options) {
+      if (!options || typeof options !== 'object' || Array.isArray(options) ||
+          Reflect.ownKeys(options).some(key => key !== 'activate') ||
+          options.activate !== undefined && typeof options.activate !== 'boolean') throw fault('remote_invalid');
+      return options.activate === undefined ? true : options.activate;
+    }
+    async function download(remoteId, options = {}) {
+      const activate = downloadOptions(options);
       const context = scope(remoteId);
       return serial(context, async () => {
         await verified(context);
@@ -350,9 +369,32 @@
           const applied = await storage.applySyncRemote(remoteId, expected, row); guard(context);
           if (applied.status !== 'stored') { await storage.setSyncConflict(remoteId, expected, row); throw fault('workspace_conflict'); }
           result = await storage.read(remoteId);
-        } else result = await storage.installSyncRemote(row, expected);
+        } else result = await storage.installSyncRemote(row, expected, { activate });
         guard(context); watch(remoteId); emit('state', remoteId);
         return clone(result);
+      });
+    }
+    async function adoptExisting(workspaceId, options = {}) {
+      if (!options || typeof options !== 'object' || Array.isArray(options) ||
+          Reflect.ownKeys(options).some(key => !['pristine', 'pristineRevision'].includes(key))) throw fault('remote_invalid');
+      const { pristine = false, pristineRevision = null } = options;
+      if (typeof pristine !== 'boolean' || pristine && (!Number.isSafeInteger(pristineRevision) || pristineRevision < 1) ||
+          pristineRevision !== null && (!Number.isSafeInteger(pristineRevision) || pristineRevision < 1)) throw fault('remote_invalid');
+      const context = scope(workspaceId);
+      return serial(context, async () => {
+        await verified(context);
+        const previous = await storage.getSyncState(workspaceId); guard(context);
+        const expected = binding(context, workspaceId);
+        if (previous) {
+          if (!sameBinding(previous.binding, expected)) throw fault('account_mismatch');
+          if (!previous.enabled) { await storage.bindSync(workspaceId, expected); guard(context); }
+        } else {
+          const row = await readRemote(context, workspaceId); await verified(context);
+          if (!row) throw fault('remote_missing');
+          if (typeof storage.adoptSyncRemote !== 'function') throw fault('dependency_unavailable');
+          await storage.adoptSyncRemote(workspaceId, expected, row, { pristine: pristine && row.revision === pristineRevision }); guard(context);
+        }
+        watch(workspaceId); emit('state', workspaceId); return getState(workspaceId);
       });
     }
     async function observeConflict(context, expected, row) {
@@ -377,7 +419,7 @@
       }
       throw fault('remote_invalid');
     }
-    async function runSync(context) {
+    async function runSync(context, { headIfClean = false } = {}) {
       try {
         await verified(context);
         for (let pass = 0; pass < 8; pass++) {
@@ -389,6 +431,18 @@
           if (state.remoteRevision === 0 && state.syncedLocalRevision === -1) {
             const outbox = await storage.prepareSyncUpload(context.workspaceId, expected); guard(context);
             if (outbox) { if (await upload(context, expected, outbox)) continue; return getState(context.workspaceId); }
+          }
+          if (headIfClean && context.adapter.head && state.remoteRevision > 0 && !state.error) {
+            const local = await storage.read(context.workspaceId); guard(context);
+            if (local.revision === state.syncedLocalRevision) {
+              const head = await context.adapter.head(expected.remoteId); guard(context); await verified(context);
+              if (head === null) return observeConflict(context, expected, null);
+              if (head?.id !== expected.remoteId || !Number.isSafeInteger(head.revision) || head.revision < 1) throw fault('remote_invalid');
+              if (head.revision < state.remoteRevision) throw fault('remote_revision_regressed');
+              // Only dependency/poll callers opt into trusting the unchanged CAS
+              // revision. Explicit sync retains the full equal-revision body check.
+              if (head.revision === state.remoteRevision) return getState(context.workspaceId);
+            }
           }
           const row = await readRemote(context, expected.remoteId);
           await verified(context);
@@ -411,7 +465,7 @@
           const outbox = await storage.prepareSyncUpload(context.workspaceId, expected); guard(context);
           if (outbox) { if (await upload(context, expected, outbox)) continue; return getState(context.workspaceId); }
         }
-        schedule(context.workspaceId, 0);
+        if (automaticEnabled) schedule(context.workspaceId, 0);
         return getState(context.workspaceId);
       } catch (error) {
         if (!current(context) || ['stale_session', 'stale_sync_result', 'sync_paused'].includes(error?.code)) return { status: 'cancelled' };
@@ -421,10 +475,15 @@
         throw clean;
       }
     }
-    function syncNow(workspaceId) {
+    function syncNow(workspaceId, options = {}) {
       let context;
-      try { context = scope(workspaceId); } catch (error) { return Promise.reject(safeError(error)); }
-      return serial(context, () => runSync(context));
+      let headIfClean;
+      try {
+        if (!options || typeof options !== 'object' || Array.isArray(options) || Reflect.ownKeys(options).some(key => key !== 'headIfClean') ||
+            options.headIfClean !== undefined && typeof options.headIfClean !== 'boolean') throw fault('remote_invalid');
+        headIfClean = options.headIfClean === true; context = scope(workspaceId);
+      } catch (error) { return Promise.reject(safeError(error)); }
+      return serial(context, () => runSync(context, { headIfClean }));
     }
     async function resolve(workspaceId, choice, expectedVersions = {}) {
       if (!['local', 'remote'].includes(choice)) throw fault('stale_conflict');
@@ -472,7 +531,7 @@
       root.document?.removeEventListener?.('visibilitychange', visible);
       listeners.clear(); locks.clear();
     }
-    return Object.freeze({ start, connect, signOut, getAccount, getConfig, getState, subscribe, enable, pause, listRemote, download, syncNow, resolve, dispose });
+    return Object.freeze({ start, connect, signOut, getAccount, getConfig, getState, subscribe, enable, pause, listRemote, download, adoptExisting, setAutomatic, syncNow, resolve, dispose });
   }
   return Object.freeze({ create });
 });

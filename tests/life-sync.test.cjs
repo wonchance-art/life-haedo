@@ -19,7 +19,7 @@ const code = expected => value => { assert.equal(value.code, expected); return t
 function fixture(t, options = {}) {
   const state = { saved: options.saved ? copy(CONFIG) : null, session: account('a'), offline: false,
     calls: 0, adapters: [], meta: null, local: Core.createWorkspace(), row: null, copies: [], errors: [], writes: 0,
-    localCalls: [], sent: [], logoutCalls: 0, applied: [] };
+    localCalls: [], sent: [], logoutCalls: 0, applied: [], readCalls: 0, headCalls: 0 };
   const events = new Map(), visibility = new Map();
   const storage = {
     ...(options.owner ? { account: copy(options.owner) } : {}),
@@ -78,7 +78,7 @@ function fixture(t, options = {}) {
         state.session = null;
       },
       onAuthChange(listener) { adapter.listener = listener; return () => { adapter.listener = null; }; },
-      async read() { const row = copy(state.row); if (state.readGate) await state.readGate.promise; return row; },
+      async read() { state.readCalls++; const row = copy(state.row); if (state.readGate) await state.readGate.promise; return row; },
       async write(request) {
         state.writes++; state.sent.push(copy(request));
         if (!options.successfulWrites) throw error('unexpected_write');
@@ -87,6 +87,10 @@ function fixture(t, options = {}) {
         return { status: 'stored', revision: state.row.revision };
       },
       dispose() { adapter.disposed = true; }
+    };
+    if (options.head) adapter.head = async () => {
+      state.headCalls++; assert.equal(!!state.meta.outbox, false);
+      return state.row && { id: state.row.id, revision: state.row.revision, title: state.row.title, updated_at: state.row.updated_at };
     };
     assert.equal(settings.url, CONFIG.url); state.adapters.push(adapter); return adapter;
   };
@@ -98,7 +102,7 @@ function fixture(t, options = {}) {
     document: { visibilityState: 'visible', addEventListener: (type, callback) => visibility.set(type, callback), removeEventListener: type => visibility.delete(type) } };
   vm.runInNewContext(source, context);
   const core = options.core || Core;
-  const manager = context.module.exports.create({ storage, core, remoteFactory: factory });
+  const manager = context.module.exports.create({ storage, core, remoteFactory: factory, automatic: options.automatic ?? true });
   t.after(() => manager.dispose());
   const login = id => manager.connect({ ...CONFIG, email: `${id}@example.invalid`, password: 'fixture-only' });
   function bind() {
@@ -316,4 +320,74 @@ test('pending local metadata read cannot reveal an old owner conflict snapshot a
   const loggedOut = await f.manager.getState(f.state.local.workspaceId);
   assert.equal(loggedOut.conflict, null); assert.equal(loggedOut.binding, null);
   assert.equal(f.state.localCalls.length, accesses);
+});
+
+test('receive-first automatic:false verifies the account without background reads and can restore legacy scheduling', async t => {
+  const f = fixture(t, { shared: true, automatic: false }); f.bind();
+  f.state.meta.remoteRevision = 1; f.state.meta.syncedLocalRevision = 0;
+  f.state.row = { id: f.state.local.workspaceId, revision: 1, data: copy(f.state.local) };
+  await f.manager.start(); await tick();
+  assert.equal(f.state.periodic, undefined); assert.equal(f.state.readCalls, 0); assert.equal(f.state.writes, 0);
+  await f.manager.syncNow(f.state.local.workspaceId); assert.equal(f.state.readCalls, 1);
+  f.manager.setAutomatic(true); await until(() => f.state.readCalls > 1); assert.equal(typeof f.state.periodic, 'function');
+  f.manager.setAutomatic(false);
+});
+
+test('background download captures activate:false before a delayed remote read and preserves legacy activate:true', async t => {
+  const f = fixture(t, { shared: true, automatic: false }); await f.manager.start();
+  f.state.row = { id: f.state.local.workspaceId, revision: 1, data: copy(f.state.local) };
+  const installed = []; f.storage.installSyncRemote = async (row, binding, options) => { installed.push(copy(options)); return copy(row.data); };
+  f.state.readGate = deferred(); const options = { activate: false }, pending = f.manager.download(f.state.local.workspaceId, options); options.activate = true;
+  f.state.readGate.resolve(); await pending; assert.deepEqual(installed[0], { activate: false });
+  f.state.readGate = null; await f.manager.download(f.state.local.workspaceId); assert.deepEqual(installed[1], { activate: true });
+});
+
+test('adoption rechecks the real remote revision before authorizing pristine migration and does not write', async t => {
+  const f = fixture(t, { shared: true, automatic: false }); await f.manager.start();
+  f.state.row = { id: f.state.local.workspaceId, revision: 3, data: copy(f.state.local) };
+  const observed = []; f.storage.adoptSyncRemote = async (_, binding, row, options) => {
+    observed.push(copy(options)); f.bind(); f.state.meta.remoteRevision = row.revision; f.state.meta.syncedLocalRevision = 0;
+  };
+  await f.manager.adoptExisting(f.state.local.workspaceId, { pristine: true, pristineRevision: 2 }); assert.deepEqual(observed[0], { pristine: false });
+  f.state.meta = null; await f.manager.adoptExisting(f.state.local.workspaceId, { pristine: true, pristineRevision: 3 }); assert.deepEqual(observed[1], { pristine: true });
+  assert.equal(f.state.writes, 0);
+  f.state.meta.enabled = false; f.state.meta.outbox = { operationId: Core.id(), expectedRevision: 3, localRevision: 1, data: copy(f.state.local) };
+  const outbox = copy(f.state.meta.outbox); f.storage.bindSync = async () => { f.state.meta.enabled = true; };
+  const reads = f.state.readCalls; await f.manager.adoptExisting(f.state.local.workspaceId);
+  assert.deepEqual(f.state.meta.outbox, outbox); assert.equal(f.state.readCalls, reads);
+});
+
+test('optional clean head check avoids source bodies, while explicit and dirty synchronization retain full validation', async t => {
+  const f = fixture(t, { shared: true, automatic: false, head: true }); await f.manager.start(); f.bind();
+  f.state.meta.remoteRevision = 2; f.state.meta.syncedLocalRevision = 0; f.state.meta.status = 'synced';
+  f.state.row = { id: f.state.local.workspaceId, revision: 2, data: copy(f.state.local) };
+  await f.manager.syncNow(f.state.local.workspaceId, { headIfClean: true }); assert.equal(f.state.headCalls, 1); assert.equal(f.state.readCalls, 0);
+  await f.manager.syncNow(f.state.local.workspaceId); assert.equal(f.state.readCalls, 1);
+  f.state.local.revision++; await f.manager.syncNow(f.state.local.workspaceId, { headIfClean: true });
+  assert.equal(f.state.headCalls, 1); assert.ok(f.state.readCalls > 1);
+});
+
+test('clean metadata head missing/regression is not success and absent head support uses the legacy full read', async t => {
+  for (const missing of [true, false]) {
+    const f = fixture(t, { shared: true, automatic: false, head: true }); await f.manager.start(); f.bind();
+    f.state.meta.remoteRevision = 2; f.state.meta.syncedLocalRevision = 0; f.state.meta.status = 'synced';
+    f.state.row = missing ? null : { id: f.state.local.workspaceId, revision: 1, data: copy(f.state.local) };
+    if (missing) { const result = await f.manager.syncNow(f.state.local.workspaceId, { headIfClean: true }); assert.equal(result.conflict.missing, true); }
+    else await assert.rejects(f.manager.syncNow(f.state.local.workspaceId, { headIfClean: true }), code('remote_revision_regressed'));
+    assert.equal(f.state.readCalls, 0);
+  }
+  const legacy = fixture(t, { shared: true, automatic: false }); await legacy.manager.start(); legacy.bind();
+  legacy.state.meta.remoteRevision = 1; legacy.state.meta.syncedLocalRevision = 0;
+  legacy.state.row = { id: legacy.state.local.workspaceId, revision: 1, data: copy(legacy.state.local) };
+  await legacy.manager.syncNow(legacy.state.local.workspaceId, { headIfClean: true }); assert.equal(legacy.state.readCalls, 1);
+});
+
+test('optional head optimization still replays the exact durable request before probing a clean head', async t => {
+  const f = fixture(t, { shared: true, automatic: false, head: true, successfulWrites: true }); await f.manager.start(); f.bind();
+  f.state.meta.remoteRevision = 1;
+  f.state.meta.outbox = { operationId: Core.id(), expectedRevision: 1, localRevision: 0, data: copy(f.state.local) };
+  const original = copy(f.state.meta.outbox);
+  await f.manager.syncNow(f.state.local.workspaceId, { headIfClean: true });
+  assert.equal(f.state.sent[0].operationId, original.operationId); assert.deepEqual(f.state.sent[0].data, original.data);
+  assert.equal(f.state.headCalls, 1); assert.equal(f.state.readCalls, 0); assert.equal(f.state.meta.outbox, null);
 });

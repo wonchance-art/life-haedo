@@ -215,6 +215,18 @@
         return { ...meta, data };
       } catch (error) { assertAlive(expected); throw cleanError(error); }
     }
+    async function head(workspaceId) {
+      identifier(workspaceId); assertAlive(); const expected = epoch;
+      try {
+        await authorized(); assertAlive(expected);
+        const result = await client.from('life_workspaces').select('id,title,revision,updated_at').eq('id', workspaceId).maybeSingle();
+        assertAlive(expected); if (result.error) throw result.error;
+        if (result.data === null) return null;
+        const value = metadata(cloneSized(result.data));
+        if (value.id !== workspaceId) throw fault('invalid_remote_data', '서버 작업공간 식별자가 일치하지 않습니다.');
+        return value;
+      } catch (error) { assertAlive(expected); throw cleanError(error); }
+    }
     async function write(request) {
       const workspaceId = request?.workspaceId, operationId = request?.operationId, expectedRevision = request?.expectedRevision;
       identifier(workspaceId); identifier(operationId); revision(expectedRevision);
@@ -242,7 +254,7 @@
       const cleanup = typeof client.auth.dispose === 'function' ? client.auth.dispose() : client.auth.stopAutoRefresh();
       Promise.resolve(cleanup).catch(() => {});
     }
-    return Object.freeze({ getAccount, signIn, signOut, onAuthChange, list, read, write, dispose });
+    return Object.freeze({ getAccount, signIn, signOut, onAuthChange, list, read, head, write, dispose });
   }
   return Object.freeze({ create, loadConfig, saveConfig, MAX_BYTES, CONFIG_KEY, SESSION_PREFIX });
 });

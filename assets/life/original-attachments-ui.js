@@ -1,4 +1,4 @@
-/* Account-private originals review. No embedded HTML/PDF/HEIC execution or automatic remote transfer. */
+/* Account-private originals review. No embedded HTML/PDF/HEIC execution. */
 (function (root) {
   'use strict';
   const life = (root.HaedoLife ||= {});
@@ -10,7 +10,8 @@
     if (!auth?.getAccount || !life.OriginalAttachments) throw new Error('계정과 원본 보관 모듈을 확인해 주세요.');
     await auth.requireUser?.();
     const account = auth.getAccount();
-    const owner = life.OriginalAttachments.create({ auth, account, ...(options.serviceOptions || {}) });
+    const shared = options.service || life.Shell?.originals;
+    const owner = shared || life.OriginalAttachments.create({ auth, account, ...(options.serviceOptions || {}) });
     const storage = options.storage || life.Shell?.storage;
     const dialog = element('dialog', null, 'original-attachments'); dialog.id = 'lifeOriginalAttachments';
     dialog.setAttribute('aria-labelledby', 'originalAttachmentsTitle');
@@ -30,20 +31,29 @@
       element('p', '원본 보관용으로 준비된 파트 ZIP을 선택하세요. 여러 파트를 함께 선택할 수 있으며 파트는 128 MiB, 개별 파일은 64 MiB 이하입니다. ZIP은 풀거나 다시 압축하지 말고 원래 파일을 별도로 보관해 주세요.', 'life-help'),
       element('p', 'JPEG·PNG·HEIC·PDF와 노트 저장본·작업본을 원본 그대로 보관합니다. HEIC·PDF는 내려받아 해당 앱에서 열어 주세요. 여기서 보관한 파일이 글에 삽입되지는 않습니다.', 'life-help'),
       element('p', '파일 확인에 실패하면 원래 파트 ZIP을 다시 선택해 주세요. 보관 중 일부 파트만 실패했다면 완료된 사본은 유지되며 남은 파트만 다시 시도할 수 있습니다.', 'life-help'));
-    dialog.append(header, element('p', '원본 파일을 이 브라우저에 별도 보관합니다. 기존 자료·서버·공개 범위는 바뀌지 않습니다.', 'life-help'), label, help, cancel, status, error, review, list, content);
-    let unsubscribe, active = true, busy = false, controller, candidate, generation = 0, selectedCopy = '', shown = 40;
+    const retry = element('button', '다시 시도', 'life-button'); retry.type = 'button'; retry.id = 'originalAttachmentsRetry'; retry.hidden = true;
+    dialog.append(header, label, help, cancel, status, error, retry, review, list, content);
+    let unsubscribe, unsubscribeState, active = true, busy = false, actionError = false, controller, candidate, generation = 0, selectedCopy = '', shown = 40, catalogRevision = -1;
     const objectURLs = new Set();
     const still = () => active && auth.getAccount()?.projectUrl === account.projectUrl && auth.getAccount()?.userId === account.userId;
     const announce = text => { if (still()) status.textContent = text; };
     function clearCandidate() { for (const part of candidate?.parts || []) owner.cancel(part.ticket); candidate = null; review.replaceChildren(); }
     function controls() { input.disabled = busy; dialog.setAttribute('aria-busy', String(busy)); cancel.hidden = !busy; dialog.querySelectorAll('button').forEach(b => { if (b !== close && b !== cancel) b.disabled = busy; }); }
     function button(text, fn, id) { const b = element('button', text, 'life-button'); b.type = 'button'; if (id) b.id = id; b.addEventListener('click', () => run(fn)); return b; }
-    function showError(failure) { if (still()) { error.hidden = false; error.textContent = failure?.message || '파일을 처리하지 못했습니다. 원래 자료는 유지됩니다.'; } }
-    async function run(fn) {
-      if (!still() || busy) return; busy = true; error.hidden = true; controller = new AbortController(); controls();
+    function showError(failure, action = true) { if (still()) { if (action) actionError = true; error.hidden = false; error.textContent = failure?.message || '파일을 처리하지 못했습니다. 원래 자료는 유지됩니다.'; } }
+    function syncStatus() {
+      if (!still() || busy) return;
+      const value = owner.getState?.(); if (!value) return;
+      retry.hidden = !value.error;
+      if (value.error) { if (!actionError) showError(value.error, false); announce('기존 원본과 전송 대기를 유지합니다.'); }
+      else if (value.mode === 'account') { if (!actionError) error.hidden = true; announce(value.pending ? `계정 보관 대기 ${value.pending}개` : '계정에 보관했습니다.'); }
+      else if (value.mode === 'legacy') announce('계정 원본 연동을 사용할 수 없습니다. 기존 원본은 유지합니다.');
+    }
+    async function run(fn, { passive = false } = {}) {
+      if (!still() || busy) return; busy = true; if (!passive) { actionError = false; error.hidden = true; } controller = new AbortController(); controls();
       try { await fn(controller.signal); }
       catch (e) { showError(e); }
-      finally { busy = false; controller = null; if (still()) controls(); }
+      finally { busy = false; controller = null; if (still()) { controls(); syncStatus(); } }
     }
     function download(blob, name) {
       if (!still()) return;
@@ -82,17 +92,19 @@
           if (still()) { preview(); await refresh(); announce(`${current.total}개 파트 중 ${current.completed}개 보관했습니다. 완료된 사본은 유지되며 남은 파트만 다시 시도할 수 있습니다.`); }
           throw failure;
         }
-        clearCandidate(); await refresh(); await showEntries(saved.id); announce(`선택한 ${current.total}개 파트의 원본 사본을 보관했습니다. 기존 자료와 서버는 그대로입니다.`);
+        clearCandidate(); await refresh(); await showEntries(saved.id); announce(`선택한 ${current.total}개 파트의 원본 사본을 보관했습니다.`);
       }, 'originalAttachmentsInstall'), button('보관 취소', async () => { clearCandidate(); announce('보관을 취소했습니다. 원래 파일과 기존 사본은 유지했습니다.'); }));
     }
-    async function refresh() {
-      const copies = await owner.list(); if (!still()) return;
+    async function refresh({ cached = false } = {}) {
+      const copies = await owner.list({ cached }); if (!still()) return;
+      catalogRevision = owner.getState?.().catalogRevision ?? catalogRevision;
       list.replaceChildren(element('h3', '이 계정의 원본 사본'));
       if (!copies.length) { list.append(element('p', '아직 보관한 원본 사본이 없습니다. 파트 파일을 열어 포함 범위를 확인해 주세요.', 'life-help')); return; }
       for (const copy of copies) {
         const row = element('div', null, 'original-attachments-copy');
         row.append(button(`파트 ${copy.part}/${copy.partCount} · ${copy.count}개 · ${size(copy.bytes)}`, () => showEntries(copy.id)));
         row.append(button('파트 원본 ZIP 받기', async () => { const result = await owner.archive(copy.id); if (still()) download(result.blob, result.name); }));
+        if (owner.getState?.().mode === 'account' && copy.storage === 'pending') row.append(element('span', '보관 대기', 'life-meta'));
         list.append(row);
       }
     }
@@ -132,11 +144,16 @@
     }
     function dispose() {
       if (!active) return;
-      active = false; generation++; controller?.abort(); clearCandidate(); owner.dispose(); unsubscribe?.();
+      active = false; generation++; controller?.abort(); clearCandidate(); if (!shared) owner.dispose(); unsubscribe?.(); unsubscribeState?.();
       for (const url of objectURLs) URL.revokeObjectURL(url); objectURLs.clear();
       if (dialog.open) dialog.close(); dialog.remove();
     }
     unsubscribe = auth.onAccountChange?.(() => { if (!still()) dispose(); });
+    unsubscribeState = owner.subscribe?.(value => {
+      syncStatus();
+      if (!busy && still() && value.catalogRevision !== catalogRevision) run(() => refresh({ cached: true }), { passive: true });
+    });
+    retry.addEventListener('click', () => run(async () => { await owner.retry(); await refresh(); }));
     close.addEventListener('click', dispose);
     dialog.addEventListener('cancel', event => { if (busy) { event.preventDefault(); controller?.abort(); } else dispose(); });
     dialog.addEventListener('close', dispose);
@@ -160,6 +177,7 @@
       });
     });
     document.body.append(dialog); dialog.showModal();
+    if (!shared) owner.start?.();
     await run(refresh);
     return Object.freeze({ dispose, dirty: () => active && busy, flush() { if (active && busy) throw new Error('파일 확인을 마치거나 취소한 뒤 이동해 주세요.'); }, refresh: () => run(refresh) });
   }
