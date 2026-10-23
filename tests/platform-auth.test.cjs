@@ -84,6 +84,8 @@ test('unified home return accepts only known sections and material views', () =>
   assert.equal(safeNext(), 'index.html');
   assert.equal(safeNext('index.html?section=home&code=discarded#token'), 'index.html?section=home');
   assert.equal(safeNext('index.html?section=news&code=discarded&access_token=hidden&next=https://evil.invalid#refresh_token=hidden'), 'index.html?section=news');
+  assert.equal(safeNext('index.html?section=tools&view=annual-plan&code=discarded#token'), 'index.html?section=tools&view=annual-plan');
+  assert.equal(safeNext('life.html?section=tools&view=annual-plan&access_token=discarded'), 'life.html?section=tools&view=annual-plan');
   assert.equal(safeNext('life.html?section=news&view=external-discovery&access_token=discarded#token'), 'life.html?section=news&view=external-discovery');
   assert.equal(safeNext('index.html?view=external-discovery&code=discarded#token'), 'index.html?view=external-discovery');
   assert.equal(safeNext('https://evil.invalid/index.html?section=news'), 'index.html');

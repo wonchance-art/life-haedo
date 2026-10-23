@@ -26,7 +26,7 @@ const request = (path, mode = 'cors') => ({ url: 'https://test.invalid/life-haed
 test('complete offline shell includes every runtime module', async () => {
   const h = harness(); await h.run('install');
   assert.equal(h.state().skipped, true);
-  for (const name of ['assets/app.js', 'assets/data.js', 'assets/sync.js', 'assets/workspace.js', 'assets/app.css',
+  for (const name of ['assets/life/annual-plan.js', 'assets/life/annual-plan-ui.js', 'assets/life/annual-plan.css', 'assets/app.js', 'assets/data.js', 'assets/sync.js', 'assets/workspace.js', 'assets/app.css',
     'index.html', 'login.html', 'workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'privacy.html',
     'assets/platform-config.js', 'assets/platform-auth.js', 'assets/platform-store.js', 'assets/platform-data.js',
     'assets/platform-ui.js', 'assets/platform.css', 'assets/platform-life-remote.js', 'assets/timeline-entry.js',

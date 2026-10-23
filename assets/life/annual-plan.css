@@ -1,0 +1,77 @@
+/* A fixed monthly rhythm, with management outside the plan. */
+body.haedo-shell .life-app:has(.annual-plan) { max-width: none; padding-left: 24px; padding-right: 24px; }
+body.haedo-shell .life-main:has(> .annual-plan) { max-width: none; }
+.annual-plan { --ap-ink: #242424; --ap-muted: #626262; --ap-line: #dedede; color: var(--ap-ink); min-width: 0; }
+.annual-plan ::selection { background: #dedede; color: #151515; }
+.annual-plan :is(button, input, select, textarea, summary):focus-visible { outline: 2px solid #343434; outline-offset: 3px; }
+.annual-plan :is(input, textarea) { caret-color: var(--ap-ink); }
+.annual-plan :is(button, input, select, textarea) { font-family: inherit; }
+.annual-plan button { color: inherit; }
+.ap-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.ap-button, .ap-add-month, .ap-icon { min-height: 44px; min-width: 44px; border: 0; background: transparent; cursor: pointer; }
+.ap-button { padding: 8px 2px; text-decoration: underline; text-underline-offset: 5px; font-size: 14px; }
+.ap-button:hover, .ap-add-month:hover { color: #000; text-decoration-thickness: 2px; }
+.ap-button:disabled, .ap-add-month:disabled { opacity: .5; cursor: not-allowed; }
+.ap-meta, .ap-scroll-hint { color: var(--ap-muted); font-size: 13px; line-height: 1.7; }
+.ap-scroll-hint { margin-top: 8px; }
+.ap-grid { width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-color: #a6a6a6 #f3f3f3; scrollbar-width: thin; }
+.ap-table { width: 100%; min-width: 1460px; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-variant-numeric: tabular-nums; font-size: 14px; }
+.ap-year-column { width: 92px; }
+.ap-annual-column { width: 240px; }
+.ap-month-column { width: 94px; }
+.ap-table th { color: var(--ap-muted); font-size: 12px; font-weight: 500; text-align: left; }
+.ap-table :is(th, td) { vertical-align: top; padding: 12px 8px; background: #fff; border-bottom: 1px solid var(--ap-line); }
+.ap-table thead th { padding-top: 8px; padding-bottom: 8px; white-space: nowrap; }
+.ap-table .ap-quarter-row th { padding-bottom: 2px; border-bottom: 0; }
+.ap-table .ap-quarter-start { border-left: 1px solid var(--ap-line); }
+.ap-table thead th:first-child, .ap-table .ap-year { position: sticky; left: 0; z-index: 2; }
+.ap-table .ap-year { padding-left: 0; box-shadow: 1px 0 0 var(--ap-line); }
+.ap-year-number { display: block; color: var(--ap-ink); font-size: 18px; font-weight: 600; line-height: 1.6; }
+.ap-age { display: block; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.ap-period { display: block; min-height: 22px; color: var(--ap-muted); font-size: 11px; line-height: 1.6; white-space: nowrap; }
+.ap-table textarea { display: block; width: 100%; max-width: 100%; min-height: 64px; max-height: 240px; padding: 2px 0; margin: 0; border: 0; border-radius: 0; background: transparent; color: var(--ap-ink); font-size: 14px; line-height: 1.7; resize: vertical; overflow-wrap: anywhere; }
+.ap-table textarea::placeholder { color: var(--ap-muted); }
+.ap-table textarea:disabled { opacity: 1; }
+.ap-annual-cell textarea { font-size: 16px; }
+.ap-entry + .ap-entry { margin-top: 8px; border-top: 1px solid var(--ap-line); padding-top: 8px; }
+.ap-icon { display: inline-flex; align-items: center; justify-content: center; padding: 10px; color: var(--ap-muted); }
+.ap-icon svg { width: 16px; height: 16px; }
+.ap-icon:hover { color: #000; }
+.ap-entry .ap-icon { float: right; margin-top: -3px; }
+.ap-entry::after { content: ''; display: block; clear: both; }
+.ap-add-month { display: block; width: 100%; padding: 8px 0; text-align: left; color: var(--ap-muted) !important; font-size: 12px; }
+.ap-settings { margin-top: 28px; border-top: 1px solid var(--ap-line); }
+.ap-settings > summary, .ap-latest > summary { min-height: 44px; padding: 10px 0; cursor: pointer; color: var(--ap-muted); font-size: 14px; }
+.ap-options { display: flex; flex-wrap: wrap; align-items: end; gap: 16px 24px; margin: 12px 0 20px; }
+.ap-options label { display: flex; flex-direction: column; gap: 6px; color: var(--ap-muted); font-size: 13px; }
+.ap-options :is(input:not([type=checkbox]), select) { min-height: 44px; padding: 6px 2px; border: 0; border-bottom: 1px solid #858585; border-radius: 0; background: #fff; color: var(--ap-ink); font-size: 16px; }
+.ap-options .ap-check { flex-direction: row; align-items: center; min-height: 44px; gap: 8px; }
+.ap-check input { width: 20px; height: 20px; margin: 0; accent-color: #303030; }
+.ap-file-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-top: 20px; }
+.ap-file-label { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-height: 44px; font-size: 14px; }
+.ap-file-label input { max-width: 100%; min-height: 44px; font-size: 14px; }
+.ap-file-label input::file-selector-button { min-height: 44px; padding: 8px 12px; margin-right: 8px; border: 1px solid #858585; background: #fff; color: #242424; font: inherit; cursor: pointer; }
+.ap-error { color: var(--color-error, #a3243d); font-size: 14px; }
+.ap-recovery:has(> .ap-error:not([hidden])), .ap-confirm { margin: 12px 0 20px; }
+.ap-recovery > .ap-button, .ap-confirm > .ap-button, .ap-settings > .ap-button { margin-right: 20px; }
+.ap-confirm { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; font-size: 14px; }
+.ap-confirm > .ap-button { margin-right: 0; }
+.ap-copy-text { max-height: 260px; overflow: auto; margin: 12px 0; padding: 12px 0; border-top: 1px solid var(--ap-line); border-bottom: 1px solid var(--ap-line); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ap-ink); font: inherit; font-size: 14px; }
+.ap-import-preview { margin-top: 20px; }
+@media (min-width: 1100px) {
+  .ap-table .ap-annual-cell { position: sticky; left: 92px; z-index: 1; box-shadow: 1px 0 0 var(--ap-line); }
+}
+@media (min-width: 1101px) {
+  body.haedo-shell:has(.annual-plan) > .haedo-nav { left: 16px; }
+}
+@media (max-width: 760px) {
+  body.haedo-shell .life-app:has(.annual-plan) { padding-left: 20px; padding-right: 20px; }
+  .ap-toolbar { margin-bottom: 12px; }
+  .ap-table { min-width: 1460px; }
+  .ap-table textarea { font-size: 16px; }
+  .ap-options { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .ap-options :is(input:not([type=checkbox]), select) { width: 100%; }
+  .ap-options label { min-width: 0; }
+  .ap-file-controls { display: block; }
+  .ap-file-label { margin-top: 12px; }
+}

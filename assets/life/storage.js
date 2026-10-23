@@ -116,6 +116,11 @@
       if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '새 글 찾기 설정 모듈을 불러오지 못했습니다.');
       return value;
     };
+    const annualPlan = () => {
+      const value = options.annualPlan || root.HaedoLife?.AnnualPlan;
+      if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '연간 계획 모듈을 불러오지 못했습니다.');
+      return value;
+    };
     const discoveryActions = () => {
       const value = options.discoveryActions || root.HaedoLife?.DiscoveryActions;
       if (!value?.validate || !value?.empty) throw fault('dependency_unavailable', '좋아요·담기 모듈을 불러오지 못했습니다.');
@@ -210,6 +215,10 @@
           if (data?.sender !== sender && data?.type === 'reading_position_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 1) {
             notify({ type: 'reading_position_changed', workspaceId: data.workspaceId, revision: data.revision });
+          }
+          if (data?.sender !== sender && data?.type === 'annual_plan_changed' && typeof data.workspaceId === 'string' &&
+              Number.isSafeInteger(data.revision) && data.revision >= 1) {
+            notify({ type: 'annual_plan_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
           if (data?.sender !== sender && data?.type === 'interest_profile_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 1) {
@@ -614,6 +623,48 @@
       const value = row === undefined ? model.empty(workspaceId) : row.value;
       validate(value, workspaceId);
       return value;
+    }
+    // Annual plans are private local metadata. Birth dates and plan text never
+    // enter original bundles, ordinary backups, sync payloads or broadcasts.
+    const annualPlanKey = workspaceId => `annualPlan:${accountKey}:${workspaceId}`;
+    function validateAnnualPlan(value, workspaceId) {
+      annualPlan().validate(value);
+      if (value.workspaceId !== workspaceId) throw fault('workspace_mismatch', '연간 계획의 작업공간이 다릅니다.');
+      if (new TextEncoder().encode(stablePayload(value)).length > 2 * 1024 * 1024) {
+        throw fault('annual_plan_too_large', '연간 계획이 너무 큽니다. 입력을 보존하고 전용 백업을 내려받으세요.');
+      }
+    }
+    async function annualPlanValue(meta, workspaceId) {
+      return privateProfileValue(meta, annualPlanKey(workspaceId), workspaceId, annualPlan(), validateAnnualPlan);
+    }
+    async function readAnnualPlan(workspaceId) {
+      privateProfileScope(workspaceId, '연간 계획을');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        return clone(await annualPlanValue(meta, workspaceId));
+      });
+    }
+    async function saveAnnualPlan(workspaceId, input, baseRevision) {
+      privateProfileScope(workspaceId, '연간 계획을'); requireRevision(baseRevision, 'baseRevision');
+      validateAnnualPlan(input, workspaceId);
+      const value = clone(input);
+      if (baseRevision === Number.MAX_SAFE_INTEGER || value.revision !== baseRevision + 1) {
+        throw fault('annual_plan_conflict', '연간 계획의 저장 기준을 확인해 주세요.');
+      }
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta');
+        await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const previous = await annualPlanValue(meta, workspaceId);
+        if (previous.revision !== baseRevision) return { status: 'conflict', profile: clone(previous) };
+        await meta.put({ key: annualPlanKey(workspaceId), value });
+        return { status: 'stored', profile: clone(value) };
+      });
+      if (result.status === 'stored') {
+        const event = { type: 'annual_plan_changed', workspaceId, revision: result.profile.revision };
+        notify({ ...event, local: true }); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed row remains authoritative. */ }
+      }
+      return result;
     }
     async function interestProfileValue(meta, workspaceId) {
       return privateProfileValue(meta, interestProfileKey(workspaceId), workspaceId, interestProfile(), validateInterestProfile);
@@ -3670,6 +3721,7 @@
     const api = { open, close, dispose, account, isAccountScoped: account !== null,
       listWorkspaces, read, createWorkspace, installWorkspace, installWorkspaces, getActive, setActive,
       readReadingPosition, saveReadingPosition, clearReadingPosition,
+      readAnnualPlan, saveAnnualPlan,
       readInterestProfile, saveInterestProfile,
       readDiscoveryProfile, saveDiscoveryProfile,
       readDiscoverySettings, saveDiscoverySettings,
