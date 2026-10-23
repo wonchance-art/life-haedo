@@ -90,11 +90,13 @@
     return display;
   }
 
-  async function mount(container, { storage, core, legacy, sync, compositionSync, writingSync, auth, signal }) {
+  async function mount(container, { storage, core, legacy, sync, compositionSync, libraryMetaSync, accountLibrary, bootstrap, writingSync, auth, signal }) {
     if (signal?.aborted) throw new Error('화면 연결이 취소되었습니다.');
     let disposed = false;
     let unsubscribe = null;
     let unsubscribeSync = null;
+    let unsubscribeLibrary = null, libraryState = null, libraryRefresh = 0;
+    const managedLibrary = !!accountLibrary && !bootstrap?.legacy;
     let syncRefreshSequence = 0;
     let stageTimer = null;
     let saveChain = Promise.resolve();
@@ -139,12 +141,12 @@
     const blogSync = global.HaedoLife.BlogSync?.create({ storage, auth });
     const parentViews = new Set(['naver-capture', 'naver-blog', 'external-discovery', 'interests', 'blog', 'account-blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
     const subviewTitles = { 'annual-plan': '연간 계획', 'source-trash': '자료 휴지통', 'source-edit': '자료 수정', 'naver-capture': '네이버 본문·사진 검토', 'naver-blog': '네이버 블로그 연결', 'account-blog': '서버에 보관한 글', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 확인', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
-      discover: '다시 찾기', sync: '기기 간 동기화', transfer: '자료 백업·복원',
+      discover: '다시 찾기', sync: managedLibrary ? '계정 보관' : '기기 간 동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
     const selectedVersions = new Set();
     let selectionReturn = null;
     let relatedOrigin = null;
-    let compositionPanel = null;
+    let compositionPanel = null, metadataCleanup = null;
     const downloadUrls = new Set();
     const state = {
       bundle: null, workspaces: [], mode: 'sources', topic: '', topicsSearch: '', sourcesSearch: '', originFilter: '', folderFilter: 'all', returnContext: null, suppressReaderResume: false, sourceId: null,
@@ -176,7 +178,12 @@
     main.id = 'lifeMain';
     const skip = node('a', '본문으로 이동', 'life-skip');
     skip.href = '#lifeMain';
-    root.append(skip, header, toolbar, recordSections, status, error, main);
+    const libraryStatus = node('section', null, 'life-account-storage'); libraryStatus.id = 'lifeAccountStorage'; libraryStatus.hidden = !managedLibrary;
+    const libraryStatusText = node('span', '', 'life-meta'); libraryStatusText.id = 'lifeAccountStorageStatus'; libraryStatusText.setAttribute('role', 'status'); libraryStatusText.setAttribute('aria-live', 'polite');
+    const libraryRetry = button('다시 시도', guarded(async () => { await accountLibrary.retry(state.bundle?.workspaceId); await refreshLibrary(); })); libraryRetry.id = 'lifeAccountStorageRetry'; libraryRetry.hidden = true;
+    const libraryReview = button('변경 확인', guarded(() => navigate('sync'))); libraryReview.id = 'lifeAccountStorageReview'; libraryReview.hidden = true;
+    libraryStatus.append(libraryStatusText, libraryRetry, libraryReview);
+    root.append(skip, header, toolbar, recordSections, libraryStatus, status, error, main);
     container.replaceChildren(root);
     const interestUI = global.HaedoLife.InterestUI?.create({ container: main, storage,
       getBundle: () => state.bundle, isCurrent: () => !disposed && state.mode === 'interests',
@@ -246,7 +253,7 @@
       }) });
     const workbenchModes = ['activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'public-pages'];
     const workbench = global.HaedoLife.WorkbenchUI?.create({
-      storage, core, host: main, getBundle: () => state.bundle, blogSync,
+      storage, core, host: main, getBundle: () => state.bundle, blogSync, managed: managedLibrary,
       onManagePost: postId => navigate('blog', { blogPostId: postId }),
       isDisposed: () => disposed, announce, onLocalSaved: clearError,
       onBundleUpdated: bundle => {
@@ -432,7 +439,7 @@
       if (cause && cause.code === 'stage_conflict' && state.stage) {
         error.append(button('새 검토 사본으로 보관', guarded(rescueStage)));
       }
-      if (cause && cause.code === 'schema_missing') {
+      if (cause && cause.code === 'schema_missing' && !managedLibrary) {
         const link = node('a', '동기화 설정 도움말', 'life-external');
         link.href = '#lifeSyncHelp';
         link.addEventListener('click', guarded(async () => { await navigate('sync'); main.querySelector('#lifeSyncHelp').open = true; }));
@@ -943,7 +950,46 @@
       return account ? account.projectUrl + '|' + account.userId : null;
     }
 
+    function libraryPresentation() {
+      const key = libraryState?.status || 'checking';
+      const labels = { checking: '계정 자료 확인 중…', pending: '연결되면 보관합니다', syncing: '계정에 보관 중…',
+        synced: '계정에 보관됨', conflict: '양쪽 변경 확인 필요', error: '계정 보관 확인 필요' };
+      const unsupported = libraryState?.reason === 'unsupported' || bootstrap?.reason === 'unsupported';
+      return { key, label: libraryState?.mode === 'unavailable' && unsupported ? '계정 보관을 사용할 수 없습니다' : labels[key] || labels.error,
+        hint: libraryState?.error?.message || (key === 'conflict' ? '자료와 구성을 비교한 뒤 보관할 변경을 선택해 주세요.' : '') };
+    }
+
+    function updateLibraryStatus() {
+      if (!managedLibrary || disposed) return;
+      const presentation = libraryPresentation();
+      libraryStatus.dataset.state = presentation.key;
+      libraryStatusText.textContent = presentation.label;
+      libraryRetry.hidden = !['error', 'pending'].includes(presentation.key);
+      libraryReview.hidden = presentation.key !== 'conflict';
+      const materialView = ['sources', 'topics', 'sync', 'manage', 'activities', 'collection', 'page', 'reflection', 'books'].includes(state.mode);
+      libraryStatus.hidden = state.mode === 'manage' || !materialView && !['error', 'conflict'].includes(presentation.key);
+      const managementStatus = main.querySelector('#lifeManagementSyncStatus');
+      if (managementStatus) managementStatus.textContent = presentation.label;
+      const syncStatus = main.querySelector('#lifeSyncStatus');
+      if (syncStatus) syncStatus.textContent = presentation.label;
+    }
+
+    async function refreshLibrary() {
+      if (!managedLibrary || disposed) return;
+      const sequence = ++libraryRefresh, workspaceId = state.bundle?.workspaceId;
+      try {
+        const next = await accountLibrary.getState(workspaceId);
+        if (disposed || sequence !== libraryRefresh || workspaceId !== state.bundle?.workspaceId) return;
+        libraryState = next;
+      } catch (cause) {
+        if (disposed || sequence !== libraryRefresh || workspaceId !== state.bundle?.workspaceId) return;
+        libraryState = { mode: 'unavailable', status: 'error', error: { code: cause.code, message: cause.message } };
+      }
+      updateLibraryStatus();
+    }
+
     function syncPresentation() {
+      if (managedLibrary) return libraryPresentation();
       if (!sync) return { key: 'unavailable', label: '기기 간 자동 동기화 미연결', hint: '자료는 이 브라우저에 보관합니다. JSON 백업으로 사본을 옮길 수 있습니다.' };
       if (state.syncWorkspaceId !== state.bundle?.workspaceId) return { key: 'loading', label: '동기화 상태 확인 중', hint: '현재 작업공간의 연결 상태를 확인합니다.' };
       if (state.syncReadError) return { key: 'read_error', label: '동기화 상태 확인 실패 · 자료는 이 브라우저에 보관', hint: '기존 연결은 유지합니다. 상태를 다시 확인해 주세요.' };
@@ -1005,12 +1051,13 @@
 
     function updateSyncPanels() {
       if (disposed) return;
+      updateLibraryStatus();
       const scope = main.querySelector('.life-scope');
       if (scope) updateScope(scope);
       const managementStatus = main.querySelector('#lifeManagementSyncStatus');
       if (managementStatus) {
         const presentation = syncPresentation();
-        managementStatus.textContent = '원문·발췌 · ' + presentation.label;
+        managementStatus.textContent = (managedLibrary ? '' : '원문·발췌 · ') + presentation.label;
         managementStatus.dataset.syncState = presentation.key;
       }
       if (state.mode === 'sync') {
@@ -1027,6 +1074,7 @@
     }
 
     function updateScope(scope) {
+      if (managedLibrary) { scope.hidden = true; return; }
       scope.textContent = '이 브라우저의 개인 작업공간 · ' + syncSummary();
       const item = state.syncState;
       const matching = state.syncAccount && item?.binding && item.binding.userId === state.syncAccount.userId && item.binding.projectUrl === state.syncAccount.projectUrl;
@@ -1053,6 +1101,16 @@
         state.remoteChanged = true;
         announce('보관한 자료가 변경되었습니다. 현재 입력을 유지합니다. 최신 내용 확인을 눌러 주세요.');
         renderHeader();
+        if (managedLibrary && state.mode === 'sources' && !dirty() && !sourceEditor?.isDirty() &&
+            !main.querySelector('#lifeFolderManage[open],.source-folder-assignment[open]') &&
+            !main.contains(document.activeElement)) {
+          const workspaceId = state.bundle.workspaceId, workspace = workspaceGeneration, input = inputGeneration;
+          refreshData().then(() => {
+            if (disposed || workspace !== workspaceGeneration || workspaceId !== state.bundle?.workspaceId ||
+                state.mode !== 'sources' || input !== inputGeneration || state.busy || dirty()) return;
+            state.remoteChanged = false; render();
+          }).catch(failure);
+        }
       });
       if (sync) {
         state.syncState = null;
@@ -1060,6 +1118,10 @@
         state.syncLoading = true;
         state.conflictView = null;
         refreshSync().catch(failure);
+      }
+      if (managedLibrary) {
+        libraryState = { mode: libraryState?.mode || bootstrap?.mode, status: 'checking' }; updateLibraryStatus();
+        refreshLibrary().catch(failure);
       }
     }
 
@@ -1074,7 +1136,8 @@
         state.pendingOperation = { signature, operationId: core.id() };
       }
       request.operationId = state.pendingOperation.operationId;
-      announce('이 브라우저에 저장 중');
+      announce(managedLibrary ? '자료 반영 중…' : '이 브라우저에 저장 중');
+      if (managedLibrary) { libraryState = { ...libraryState, status: 'pending' }; updateLibraryStatus(); }
       const workspace = workspaceGeneration, account = state.syncAccountKey;
       const isCurrent = () => !disposed && workspace === workspaceGeneration && account === state.syncAccountKey && request.workspaceId === state.bundle?.workspaceId;
       const result = await storage.commitLocal(request, { isCurrent });
@@ -1467,6 +1530,7 @@
 
     function renderHeader() {
       if (disposed) return;
+      updateLibraryStatus();
       const section = sectionFor(state.mode);
       syncWritingFocus();
       global.HaedoNavigation?.activate(section);
@@ -1704,7 +1768,7 @@
       await refreshData(); if (disposed) return; connectSubscription();
       const source = state.bundle.sources[0], version = state.bundle.sourceVersions[0];
       await navigate('source', { sourceId: source.id, sourceVersionId: version.id, locator: null, returnContext: { mode: 'naver-blog', workspaceId: state.bundle.workspaceId } });
-      announce('원문과 사진 파일을 새 독립 공간에 복원했습니다. 서버에 자동 전송하지 않았습니다.');
+      announce(managedLibrary ? '원문과 사진 파일을 새 사본에 복원했습니다.' : '원문과 사진 파일을 새 독립 공간에 복원했습니다. 서버에 자동 전송하지 않았습니다.');
     }
     async function writeNaverPhotos({ sourceId, sourceVersionId, indexes, expectedCaptureHash }) {
       const workspaceId = state.bundle.workspaceId, workspace = workspaceGeneration, token = navigationGeneration, account = state.syncAccountKey;
@@ -1840,7 +1904,7 @@
     }
 
     function renderManagement() {
-      const manage = actionRow('자료 관리', '이 브라우저 · 자료 ' + state.bundle.sources.length + '개 · 발췌 ' + state.bundle.records.length + '개', 'book', () => {}, state.bundle.title || '내 자료');
+      const manage = actionRow('자료 관리', (managedLibrary ? '자료 ' : '이 브라우저 · 자료 ') + state.bundle.sources.length + '개 · 발췌 ' + state.bundle.records.length + '개', 'book', () => {}, state.bundle.title || '내 자료');
       manage.id = 'lifeCurrentWorkspace';
       manage.setAttribute('aria-label', '자료 관리');
       manage.setAttribute('aria-description', '현재 작업공간. 눌러 다른 작업공간을 선택합니다.');
@@ -1883,21 +1947,22 @@
       if ([...state.batches.values()].some(batch => batch.workspaceId === state.bundle.workspaceId)) management.append(button('선택 파일 목록', guarded(() => navigate('batch'))));
       main.append(manage, management);
       if (sync) {
-        const connection = actionRow('기기 간 동기화', '', 'cloud', async () => {
+        const connection = actionRow(managedLibrary ? '계정 보관' : '기기 간 동기화', '', 'cloud', async () => {
           await navigate('sync'); await refreshSync();
         });
         const status = connection.querySelector('.life-meta');
         status.id = 'lifeManagementSyncStatus';
         status.setAttribute('role', 'status');
         const presentation = syncPresentation();
-        status.textContent = '원문·발췌 · ' + presentation.label;
+        status.textContent = (managedLibrary ? '' : '원문·발췌 · ') + presentation.label;
         status.dataset.syncState = presentation.key;
-        main.append(connection, node('p', '묶음·내 페이지와 글쓰기 초안은 각각 연결합니다.', 'life-help life-management-note'));
+        main.append(connection);
+        if (!managedLibrary) main.append(node('p', '묶음·내 페이지와 글쓰기 초안은 각각 연결합니다.', 'life-help life-management-note'));
         refreshSync().catch(failure);
       }
       const updates = actionRow('Obsidian 갱신', '이전·새 사본 비교 · 선택 변경을 새 작업공간에 보존', 'refresh', () => navigate('obsidian-update'));
       updates.id = 'lifeObsidianUpdateOpen'; main.append(updates);
-      const originals = actionRow('원본 첨부 보관', '분할 파일의 PDF·사진·노트 원본을 이 계정의 브라우저에 보관', 'download', async () => {
+      const originals = actionRow('원본 첨부 보관', managedLibrary ? 'PDF·사진·노트 원본' : '분할 파일의 PDF·사진·노트 원본을 이 계정의 브라우저에 보관', 'download', async () => {
         originalAttachmentsUI?.dispose();
         originalAttachmentsUI = await global.LifeOriginalAttachmentsUI.open({ auth, storage, onOpenSource: match => openOriginalSource(match).catch(failure) });
       });
@@ -2307,7 +2372,7 @@
         await commit({ put: {}, remove: { records: [record.id] } });
         render();
         main.querySelector('#lifeSearch')?.focus({ preventScroll: true });
-        announce('발췌를 제거했습니다. 원문 사본은 이 브라우저에 보관됩니다.');
+        announce(managedLibrary ? '발췌를 제거했습니다. 원문은 유지됩니다.' : '발췌를 제거했습니다. 원문 사본은 이 브라우저에 보관됩니다.');
       })));
       footer.append(actions);
       card.append(footer, sources, manage);
@@ -3038,7 +3103,7 @@
         await commit(changes);
         state.sourceDrafts.delete(version.id);
         render();
-        announce('모음에 반영됨 · 이 브라우저에 저장됨');
+      announce(managedLibrary ? '모음에 반영됨' : '모음에 반영됨 · 이 브라우저에 저장됨');
       }), 'life-primary');
       saveExcerpt.id = 'lifeSourceExcerptSave';
       saveExcerpt.disabled = true;
@@ -3659,7 +3724,7 @@
         else if (currentExternalImport(externalContext)) await openExternalImportResult(externalContext);
         else if (excerpts.length) await navigate('sources');
         else await navigate('source', { sourceId: retained, sourceVersionId: fresh.version.id, locator: null });
-        announce((excerpts.length ? '모음에 반영됨' : '자료 보관됨') + ' · 이 브라우저에 저장됨');
+        announce((excerpts.length ? '모음에 반영됨' : '자료 반영됨') + (managedLibrary ? '' : ' · 이 브라우저에 저장됨'));
       };
       const storeOnly = button('자료만 보관', guarded(() => apply([])));
       if (!state.stage.excerpts.length) storeOnly.classList.add('life-primary');
@@ -3739,7 +3804,7 @@
       panel.append(top);
       const info = books ? node('details', null, 'life-details') : panel;
       if (books) { info.append(node('summary', '복원 정보')); panel.append(info); }
-      info.append(node('p', '이전 작업공간은 그대로 남아 있습니다. 이 사본의 자동 동기화는 연결하지 않았습니다.', 'life-help'));
+      info.append(node('p', managedLibrary ? '이전 자료는 그대로 남아 있습니다.' : '이전 작업공간은 그대로 남아 있습니다. 이 사본의 자동 동기화는 연결하지 않았습니다.', 'life-help'));
       for (const copy of receipt.copies || []) {
         if (copy.workspaceId === state.bundle.workspaceId) continue;
         info.append(button('함께 복원한 공간 열기: ' + copy.title, guarded(async () => {
@@ -3787,7 +3852,7 @@
       for (const copy of installed) if (!state.workspaces.some(row => row.workspaceId === copy.workspaceId)) state.workspaces.push({ workspaceId: copy.workspaceId, title: copy.title });
       resetSearchContext(); state.mode = 'sources'; connectSubscription(); render();
       global.scrollTo({ top: 0, behavior: 'instant' });
-      announce('새 작업공간 사본을 열었습니다. 이전 작업공간은 그대로 유지됩니다. 자동 동기화는 연결하지 않았습니다.', { quiet: true });
+      announce(managedLibrary ? '새 사본을 열었습니다. 이전 자료는 그대로 유지됩니다.' : '새 작업공간 사본을 열었습니다. 이전 작업공간은 그대로 유지됩니다. 자동 동기화는 연결하지 않았습니다.', { quiet: true });
       main.querySelector('#lifeRestoreResult h3')?.focus({ preventScroll: true });
       // Already committed: a later refresh error must never offer another installation.
       try { await refreshData(); render(); }
@@ -3884,7 +3949,7 @@
         candidate.sourceVersions.forEach(version => { counts[version.coverage.status] += 1; });
         const coverage = Object.entries(counts).filter(([, count]) => count).map(([kind, count]) => COVERAGE[kind] + ' ' + count + '개');
         if (coverage.length) preview.append(node('p', '원문 버전 기준 · ' + coverage.join(' / '), 'life-help'));
-        preview.append(backupContents(candidate), node('p', '현재 작업공간을 덮어쓰지 않습니다. 새 사본을 만들고 자동 동기화는 연결하지 않습니다.', 'life-help'));
+        preview.append(backupContents(candidate), node('p', managedLibrary ? '현재 자료를 유지하고 새 사본을 만듭니다.' : '현재 작업공간을 덮어쓰지 않습니다. 새 사본을 만들고 자동 동기화는 연결하지 않습니다.', 'life-help'));
         const actions = node('div', null, 'life-actions');
         actions.append(button('새 사본으로 복원', guarded(async () => {
           const selected = candidate;
@@ -3933,7 +3998,7 @@
         const old = node('details', null, 'life-details');
         old.id = 'lifeUnownedImport';
         old.append(node('summary', '이 브라우저의 기존 자료 가져오기'));
-        old.append(node('p', 'Google 계정에 연결하지 않고 이 브라우저에 보관했던 자료만 확인합니다. 원문·발췌·보관된 검토초안을 현재 계정의 새 사본으로 가져오며, 원본을 그대로 남깁니다. 자동 동기화는 연결하지 않습니다.', 'life-help'));
+        old.append(node('p', 'Google 계정에 연결하지 않고 이 브라우저에 보관했던 자료만 확인합니다. 원문·발췌·보관된 검토초안을 현재 계정의 새 사본으로 가져오며, 원본을 그대로 남깁니다.' + (managedLibrary ? '' : ' 자동 동기화는 연결하지 않습니다.'), 'life-help'));
         const list = node('div', null, 'life-restore-preview');
         old.append(button('기존 자료 목록 확인', guarded(async () => {
           const rows = await storage.listUnownedWorkspaces();
@@ -3957,7 +4022,7 @@
             await refreshData();
             connectSubscription();
             render();
-            announce('현재 계정의 새 사본을 열었습니다. 원본과 검토초안은 보존했으며 자동 동기화는 연결하지 않았습니다.');
+            announce(managedLibrary ? '현재 계정의 새 사본을 열었습니다. 원본과 검토초안은 보존했습니다.' : '현재 계정의 새 사본을 열었습니다. 원본과 검토초안은 보존했으며 자동 동기화는 연결하지 않았습니다.');
           }), 'life-primary');
           adopt.disabled = true;
           ownership.input.addEventListener('change', () => { adopt.disabled = !ownership.input.checked; });
@@ -4007,6 +4072,20 @@
 
     function fillSyncState(panel) {
       if (disposed) return;
+      if (managedLibrary) {
+        panel.hidden = false;
+        panel.replaceChildren(node('h3', '자료'));
+        if (state.syncReadError) panel.append(node('p', '자료의 보관 상태를 확인하지 못했습니다.', 'life-error'));
+        else if (state.syncState?.conflict) panel.append(button('양쪽 자료 비교', guarded(async () => {
+          await persistDrafts(); await refreshData(); await refreshSync();
+          if (disposed || state.mode !== 'sync' || !state.syncState?.conflict) return;
+          state.conflictView = { workspaceId: state.bundle.workspaceId, local: structuredClone(state.bundle),
+            remote: structuredClone(state.syncState.conflict), accountKey: state.syncAccountKey };
+          renderConflict();
+        }), 'life-primary'));
+        else panel.hidden = true;
+        return;
+      }
       const active = panel.contains(document.activeElement) ? document.activeElement : null;
       const focus = active && { tag: active.tagName, name: active.getAttribute('aria-label') || active.textContent };
       const detailsOpen = panel.querySelector('#lifeSyncDetails')?.open || false;
@@ -4171,8 +4250,114 @@
       restoreFocus();
     }
 
+    function renderLibraryMetadata() {
+      if (!libraryMetaSync) return;
+      const workspaceId = state.bundle.workspaceId, workspace = workspaceGeneration;
+      const host = node('section', null, 'life-library-metadata'); host.id = 'lifeLibraryMetadata'; main.append(host);
+      let active = true, sequence = 0, working = false, view = null, current = null, copies = [], message = '';
+      const live = () => active && !disposed && state.mode === 'sync' && workspace === workspaceGeneration && state.bundle?.workspaceId === workspaceId && host.isConnected;
+      const control = (label, id, action) => {
+        const result = button(label, async () => {
+          if (!live() || working) return;
+          working = true; host.setAttribute('aria-busy', 'true'); host.querySelectorAll('button').forEach(value => { value.disabled = true; });
+          try { await persistDrafts(); if (!live()) return; await action(); }
+          catch (cause) { if (live()) { message = cause.message || '분류 변경을 처리하지 못했습니다. 기존 내용은 유지했습니다.'; view = null; } }
+          finally { working = false; if (live()) { await refresh(); host.querySelector('#' + id)?.focus({ preventScroll: true }); } }
+        }); result.id = id; return result;
+      };
+      function side(label, metadata, bundle) {
+        const section = node('section', null, 'composition-side'); section.append(node('h4', label));
+        const detail = node('details', null, 'life-details'); detail.open = true;
+        detail.append(node('summary', '폴더·컬렉션·9칸 내용'));
+        const folders = global.HaedoLife.SourceFolders.list(metadata.sourceFolders);
+        const sourceNames = new Map(bundle.sources.map(source => [source.id, source.title]));
+        const folderNames = new Map(folders.map(value => [value.id, value.label]));
+        detail.append(node('h5', '폴더'));
+        folders.forEach(value => detail.append(node('p', value.label, 'life-note')));
+        metadata.sourceFolders.assignments.forEach(value => {
+          detail.append(node('p', (sourceNames.get(value.sourceId) || '확인되지 않은 자료') + ' → ' + folderNames.get(value.folderId), 'life-meta'));
+        });
+        detail.append(node('h5', '컬렉션'));
+        metadata.collection.items.forEach(value => {
+          detail.append(node('h6', value.title), node('p', [value.creator, value.url, ...(value.tags || [])].filter(Boolean).join(' · '), 'life-meta'));
+          if (value.archived) detail.append(node('p', '보관함', 'life-meta'));
+          if (value.note) detail.append(node('p', value.note, 'life-note'));
+          Object.values(value.details || {}).filter(Boolean).forEach(text => detail.append(node('p', text, 'life-note')));
+        });
+        detail.append(node('h5', '9칸'));
+        metadata.nineBoard.boards.forEach(board => {
+          detail.append(node('h6', board.title), node('p', board.intro, 'life-note'));
+          board.areas.forEach(area => {
+            detail.append(node('h6', area.title), node('p', area.note, 'life-note'));
+            area.items.forEach(item => {
+              detail.append(node('p', [item.attachment.title, item.attachment.creator, item.attachment.url].filter(Boolean).join(' · '), 'life-note'), node('p', item.reason, 'life-note'));
+              if (item.reference) {
+                const reference = node('details', null, 'life-details');
+                reference.append(node('summary', '연결한 정확한 근거'), node('pre', JSON.stringify(item.reference.value, null, 2), 'life-conflict-content'));
+                detail.append(reference);
+              }
+            });
+          });
+        });
+        section.append(detail); return section;
+      }
+      function draw() {
+        if (!live()) return;
+        const focusId = host.contains(document.activeElement) ? document.activeElement.id : '';
+        host.replaceChildren(); host.setAttribute('aria-busy', 'false');
+        host.hidden = !current?.conflict && !current?.error && !copies.length && !message;
+        if (host.hidden) return;
+        host.append(node('h3', '폴더·컬렉션·9칸'));
+        if (message || current?.error) host.append(node('p', message || current.error.message, 'life-error'));
+        if (current?.conflict?.missing) host.append(node('p', '서버의 분류를 찾을 수 없습니다. 기존 내용과 복구 사본은 유지했습니다.', 'life-help'));
+        else if (current?.conflict) host.append(control('양쪽 분류 비교', 'lifeLibraryMetaCompare', async () => { view = await libraryMetaSync.compare(workspaceId); }));
+        else if (current?.error) host.append(control('다시 시도', 'lifeLibraryMetaRetry', async () => { await accountLibrary.retry(workspaceId); message = ''; }));
+        if (view?.remote && current?.conflict) {
+          const comparison = node('section', null, 'composition-comparison'); comparison.id = 'lifeLibraryMetaComparison';
+          comparison.append(side('이 기기', view.local, view.bundle), side('계정 보관본', view.remote.data, view.bundle));
+          comparison.append(node('p', '선택하지 않은 분류도 정확한 원문과 함께 복구 사본으로 남깁니다.', 'life-help'));
+          for (const [choice, label, id] of [['local', '이 기기 분류 유지', 'lifeLibraryMetaUseLocal'], ['remote', '계정 보관본 사용', 'lifeLibraryMetaUseRemote']]) {
+            comparison.append(control(label, id, async () => {
+              const reviewed = view;
+              const result = await libraryMetaSync.resolve(workspaceId, choice, reviewed);
+              if (!live()) return;
+              view = null; message = result.syncError?.message || '선택하지 않은 분류를 복구 사본으로 보관했습니다.';
+              await refreshLibrary();
+            }));
+          }
+          host.append(comparison);
+        }
+        if (copies.length) {
+          const recovery = node('details', null, 'life-details'); recovery.id = 'lifeLibraryMetaRecoveries';
+          recovery.append(node('summary', '분류 복구 사본 ' + copies.length + '개'));
+          copies.forEach(copy => {
+            recovery.append(node('p', copy.title || dateLabel(copy.createdAt), 'life-note'), control('복구 자료 내려받기', 'lifeLibraryMetaRecovery-' + copy.id, async () => {
+              const saved = await storage.readLibraryMetaRecovery(workspaceId, copy.id);
+              if (!live()) return;
+              const payload = { format: 'life-library-meta-recovery-v1', exportedAt: new Date().toISOString(), bundle: saved.bundle, metadata: saved.metadata };
+              const url = URL.createObjectURL(new Blob([JSON.stringify(payload)], { type: 'application/json;charset=utf-8' })); downloadUrls.add(url);
+              const link = node('a'); link.href = url; link.download = 'haedo-library-recovery-' + copy.id + '.json'; host.append(link); link.click(); link.remove();
+            }));
+          }); host.append(recovery);
+        }
+        if (focusId) host.querySelector('#' + focusId)?.focus({ preventScroll: true });
+      }
+      async function refresh() {
+        if (!live() || working) return;
+        const token = ++sequence;
+        try {
+          const [next, recoveries] = await Promise.all([libraryMetaSync.getState(workspaceId), storage.listLibraryMetaRecoveries(workspaceId)]);
+          if (!live() || working || token !== sequence) return;
+          current = next; copies = recoveries; draw();
+        } catch (cause) { if (live() && token === sequence) { message = cause.message; draw(); } }
+      }
+      const stop = libraryMetaSync.subscribe(event => { if (!event.workspaceId || event.workspaceId === workspaceId) refresh(); });
+      metadataCleanup = () => { active = false; sequence++; stop(); };
+      refresh();
+    }
+
     function renderSync() {
-      main.append(title('기기 간 동기화'), node('p', 'Mac·iPad·iPhone에서 같은 계정의 자료를 이어 봅니다. 로그인만으로 로컬 자료를 올리지 않습니다.', 'life-help'));
+      if (!managedLibrary) main.append(title('기기 간 동기화'), node('p', 'Mac·iPad·iPhone에서 같은 계정의 자료를 이어 봅니다. 로그인만으로 로컬 자료를 올리지 않습니다.', 'life-help'));
       const panel = node('section', null, 'life-sync-state-panel');
       panel.id = 'lifeSyncState';
       main.append(panel);
@@ -4186,8 +4371,15 @@
         const compositionHost = node('section'); main.append(compositionHost);
         const workspaceId = state.bundle.workspaceId;
         compositionPanel = global.HaedoLife.CompositionUI.create({ host: compositionHost, manager: compositionSync,
-          storage, workspaceId, beforeAction: persistDrafts,
+          storage, workspaceId, beforeAction: persistDrafts, managed: managedLibrary,
+          onRetry: managedLibrary ? () => accountLibrary.retry(workspaceId) : null,
           isCurrent: () => !disposed && state.mode === 'sync' && state.bundle?.workspaceId === workspaceId });
+      }
+      if (managedLibrary) {
+        renderLibraryMetadata();
+        const problem = libraryPresentation();
+        if (problem.hint) main.append(node('p', problem.hint, 'life-help'));
+        return;
       }
       const remoteSection = node('section', null, 'life-remote-section');
       remoteSection.append(node('h3', '서버 작업공간 받기'), node('p', '같은 계정으로 다른 기기에서 올린 작업공간을 선택해 받습니다.', 'life-help'));
@@ -4228,7 +4420,7 @@
       parent.hidden = !view || view.workspaceId !== state.bundle.workspaceId || view.accountKey !== state.syncAccountKey;
       if (parent.hidden) return;
       parent.append(node('h3', '양쪽 변경 비교'));
-      if (view.remote.missing || !view.remote.row) { parent.append(empty('서버의 작업공간을 찾을 수 없습니다. 자동으로 다시 생성하지 않습니다. 로컬 백업 또는 연결 중지를 선택해 주세요.')); return; }
+      if (view.remote.missing || !view.remote.row) { parent.append(empty(managedLibrary ? '계정의 자료실을 찾을 수 없습니다. 보관한 자료는 유지됩니다. 백업을 내려받아 복구해 주세요.' : '서버의 작업공간을 찾을 수 없습니다. 자동으로 다시 생성하지 않습니다. 로컬 백업 또는 연결 중지를 선택해 주세요.')); return; }
       const row = view.remote.row;
       parent.append(node('p', '선택하지 않은 쪽도 이 브라우저의 별도 작업공간 사본으로 보관합니다.', 'life-help'));
       const comparison = node('details', null, 'life-details');
@@ -4273,6 +4465,7 @@
     }
 
     function render() {
+      metadataCleanup?.(); metadataCleanup = null;
       sourceFoldersMount?.dispose(); sourceFoldersMount = null; sourceFoldersUpdate = null;
       if (disposed) return;
       const generation = ++renderGeneration, navigation = navigationGeneration;
@@ -4393,8 +4586,11 @@
     if (disposed) return { dispose };
     state.workspaces = await storage.listWorkspaces();
     if (disposed) return { dispose };
-    let active = await storage.getActive();
+    let active = bootstrap?.workspaceId || await storage.getActive();
+    if (managedLibrary && !active && state.workspaces.length) active = state.workspaces[0].workspaceId;
+    if (managedLibrary && active && await storage.getActive() !== active) await storage.setActive(active);
     if (!active && !state.workspaces.length) {
+      if (managedLibrary) throw new Error('계정 자료를 확인하지 못했습니다. 연결 후 다시 시도해 주세요.');
       invalidateBatchContext();
       const first = await storage.createWorkspace('내 자료');
       active = first.workspaceId;
@@ -4411,15 +4607,22 @@
     }
     if (active) {
       state.bundle = await storage.read(active);
-      await registerAccountMaterials(active);
+      if (!managedLibrary) await registerAccountMaterials(active);
       if (disposed || signal?.aborted) return { dispose };
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
       await refreshData();
       connectSubscription();
       render();
-      announce('이 브라우저에 보관한 자료를 열었습니다.', { quiet: true });
+      announce(managedLibrary ? '자료를 열었습니다.' : '이 브라우저에 보관한 자료를 열었습니다.', { quiet: true });
       if (accountMaterialsFailure?.workspaceId === active) announce(accountMaterialsFailure.partial ? accountMaterialsPartialNotice : accountMaterialsNotice);
       if (sync) await refreshSync();
+      if (managedLibrary) {
+        unsubscribeLibrary = accountLibrary.subscribe(event => {
+          if (disposed || event.workspaceId && event.workspaceId !== state.bundle?.workspaceId) return;
+          refreshLibrary().catch(failure);
+        });
+        await refreshLibrary();
+      }
     } else {
       header.append(node('h1', '자료 모아보기'));
       main.append(title('보관한 작업공간 선택'));
@@ -4499,6 +4702,7 @@
       if (disposed) return;
       delete document.body.dataset.writingFocus;
       disposed = true;
+      libraryRefresh++; unsubscribeLibrary?.(); metadataCleanup?.(); metadataCleanup = null;
       sourceFoldersMount?.dispose(); sourceFoldersMount = null; sourceFoldersUpdate = null;
       sourceFoldersUI?.dispose(); sourceFoldersUI = null; sourceFoldersWorkspace = null;
       accountMaterialsSequence += 1;

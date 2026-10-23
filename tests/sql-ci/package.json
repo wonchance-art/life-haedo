@@ -1,0 +1,7 @@
+{
+  "name": "life-haedo-sql-ci",
+  "private": true,
+  "description": "Pinned test-only PostgreSQL client for disposable local SQL checks",
+  "engines": { "node": ">=22" },
+  "devDependencies": { "pg": "8.23.1" }
+}

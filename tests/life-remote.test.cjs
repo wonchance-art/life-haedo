@@ -254,3 +254,15 @@ test('official bundled SDK removes valid local session even when logout server i
   assert.equal(records.has(storageKey), false); assert.equal(events.at(-1), null);
   assert.equal(await adapter.getAccount(), null); adapter.dispose();
 });
+
+test('head uses verified metadata-only SELECT, distinguishes missing and rejects mismatched or late account results', async () => {
+  const f = fixture(), data = await bundle();
+  f.state.row = row(data); const head = await f.adapter.head(data.workspaceId);
+  assert.equal(f.state.columns, 'id,title,revision,updated_at'); assert.equal(Object.hasOwn(head, 'data'), false);
+  assert.equal(head.id, data.workspaceId); assert.ok(f.state.calls.includes('getUser'));
+  f.state.row = null; assert.equal(await f.adapter.head(data.workspaceId), null);
+  f.state.row = row(data); f.state.row.id = OP; await assert.rejects(f.adapter.head(data.workspaceId), code('invalid_remote_data'));
+  const waiting = deferred(); f.state.readPromise = waiting.promise; f.state.eq = null;
+  const pending = f.adapter.head(data.workspaceId); while (!f.state.eq) await tick();
+  f.adapter.dispose(); waiting.resolve({ data: row(data), error: null }); await assert.rejects(pending);
+});

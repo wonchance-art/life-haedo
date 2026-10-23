@@ -3,6 +3,7 @@
  * BASE_URL=http://127.0.0.1:4233 PW_MODULE_PATH=<installed playwright> node tests/local-post-finder-browser.cjs
  */
 'use strict';
+const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -148,14 +149,15 @@ async function main() {
   assert.equal(new URL(base).hostname, '127.0.0.1', 'Use the explicitly owned loopback test server');
   await fs.mkdir(out, { recursive: true });
   const report = { scope: 'Synthetic SDK/Auth and actual isolated IndexedDB; read-only local discovery, no recovery writes, production or Apple claims.',
-    checks: [], visual: [], consoleErrors: [], pageErrors: [], external: [], remoteWrites: 0 };
+    checks: [], visual: [], consoleErrors: [], pageErrors: [], external: [], libraryCapabilityReads: [], remoteWrites: 0 };
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });
   report.browser = browser.version(); let active;
   async function fixture(options) {
     const fake = new FakeCloud(), context = await makeContext(browser, fake, 'local-finder-' + report.checks.length, accounts.a, { viewport: { width: 1440, height: 1000 } }); active = context;
     context.on('request', request => {
       const url = new URL(request.url());
-      if (url.origin === cloud && url.pathname.startsWith('/rest/v1/') && !['GET', 'HEAD', 'OPTIONS'].includes(request.method()) &&
+      if (isLegacyLibraryCapabilityRead(request, { cloud, server: fake })) report.libraryCapabilityReads.push({ owner: fake.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
+      else if (url.origin === cloud && url.pathname.startsWith('/rest/v1/') && !['GET', 'HEAD', 'OPTIONS'].includes(request.method()) &&
           url.pathname !== '/rest/v1/rpc/life_blog_list') report.remoteWrites++;
     });
     // Instrument only the asynchronous test boundary. Original storage APIs and

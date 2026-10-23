@@ -13,6 +13,11 @@ const migration = 'supabase/migrations/20261019005829_life_material_continuity.s
 const accountMaterialMigration = 'supabase/migrations/20261020042517_account_material_registrations.sql';
 const naverMigrations = ['supabase/migrations/20261021093111_life_naver_subscriptions.sql', 'supabase/migrations/20261021094614_naver_conflict_http409.sql'];
 const captureMigration = 'supabase/migrations/20261021113658_life_naver_captures.sql';
+const libraryMigrations = [
+  ['supabase/migrations/20261023160149_account_library_default_and_metadata.sql', 'ba92fef7abe1df7ed0c3bbc38752304ed68499aae343699d6c8153058fed2c32'],
+  ['supabase/migrations/20261023162653_account_library_storage_upload_preflight.sql', '24cffb8daf3c7da385937bfb0e121c38fd2a7e922eb5a4de3d59c9fbb01da365'],
+  ['supabase/migrations/20261023163156_account_library_original_owner_variable.sql', '61b9de9c85f02668256c7f9d4f066d0031503666183a3a15beb6e13f5abc3ec5']
+];
 const editedCopyMigration = 'supabase/migrations/20261022031304_life_material_edited_copy_markers.sql';
 const image = 'postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
 const container = 'haedo-blog-postgres-' + Date.now() + process.pid, database = 'haedo_blog_qa_integrated_install', runId = randomUUID();
@@ -49,8 +54,8 @@ async function main() {
       .trim().split('\n').filter(name => name.endsWith('.sql')).map(name => path.basename(name)).sort();
     assert.equal(baseline.length, 10);
     assert.deepEqual(files.map(name => 'supabase/migrations/' + name),
-      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration].sort(),
-      'Exactly the ten legacy and six reviewed additive migrations are required; missing or unknown files are rejected.');
+      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file)].sort(),
+      'Exactly the ten legacy and nine reviewed additive migrations are required; missing or unknown files are rejected.');
     for (const file of baseline) {
       const relative = 'supabase/migrations/' + file, current = await fs.readFile(path.join(root, relative), 'utf8');
       assert.equal(hash(current), hash(command('git', ['-C', root, 'show', '88ccfe5:' + relative])), 'Previously installed migration changed: ' + file);
@@ -72,7 +77,7 @@ async function main() {
     const host = JSON.parse(docker(['inspect', container, '--format', '{{json .HostConfig}}']));
     assert.equal(host.NetworkMode, 'none'); assert.equal(Object.keys(host.PortBindings || {}).length, 0);
     docker(['exec', container, 'createdb', '-U', 'postgres', database]);
-    psql(await fs.readFile(path.join(root, 'supabase/tests/blog-bootstrap.sql'), 'utf8') + '\ncreate table auth.users(id uuid primary key);');
+    psql(await fs.readFile(path.join(root, 'supabase/tests/blog-bootstrap.sql'), 'utf8') + '\ncreate table auth.users(id uuid primary key);alter table storage.objects add column owner uuid;');
     for (const file of baseline) psql(await fs.readFile(path.join(root, 'supabase/migrations', file), 'utf8'));
     psql(`insert into auth.users values(${q(owner)}::uuid);create table public.charts(id text primary key,data jsonb);insert into public.charts values('synthetic-legacy','{"sentinel":"unchanged"}');
  create schema installation_probe;
@@ -309,6 +314,71 @@ async function main() {
       }
       report.editedCopyMigration = { file: editedCopyMigration, sha256: hash(markerDDL), preservedPopulatedRows: true, preservedExistingPermissions: true, failedTransactionAtomic: true, populatedReinstallPreserved: true, immutableMarkerLossRejected: true };
       report.editedCopyInstalledDataSha256 = hash(JSON.stringify(populatedData));
+    });
+    await check('Account-library migrations preserve every populated legacy row and privilege through failed installation and complete reinstallation', async () => {
+      const allNamespaces = "array['public','auth','storage','haedo_blog_private','haedo_material_private','haedo_naver_private']";
+      const allCatalog = catalogQuery.replaceAll(namespaces, allNamespaces).replace(" and p.proname not like 'life_material_%'", '');
+      const dataSnapshot = () => sql('select installation_probe.all_data_snapshot();');
+      const intactData = dataSnapshot(), intactCatalog = sql(allCatalog);
+      const identity = (kind, row) => JSON.stringify(kind === 'functions' ? row.slice(0, 3) : kind === 'schemas' ? row.slice(0, 1) : kind === 'policies' ? [row.schemaname, row.tablename, row.policyname] : row.slice(0, 2));
+      function assertLegacyCatalog() {
+        const installed = sql(allCatalog);
+        for (const [kind, rows] of Object.entries(intactCatalog)) {
+          const current = new Map(installed[kind].map(row => [identity(kind, row), row]));
+          for (const row of rows) assert.deepEqual(current.get(identity(kind, row)), row, 'Existing schema/function/security path/grant/relation/policy changed: ' + identity(kind, row));
+        }
+      }
+      function assertLegacyData() {
+        const installed = dataSnapshot();
+        for (const [table, rows] of Object.entries(intactData)) {
+          const current = table === 'storage.buckets' ? installed[table].filter(row => row.id !== 'life-library-originals') :
+            table === 'storage.objects' ? installed[table].filter(row => row.bucket_id !== 'life-library-originals') : installed[table];
+          assert.deepEqual(current, rows, 'Existing private/public originals, photos, drafts, sources, receipts or settings changed: ' + table);
+        }
+      }
+      const ddls = [];
+      for (const [file, expectedHash] of libraryMigrations) {
+        const ddl = await fs.readFile(path.join(root, file), 'utf8'); assert.equal(hash(ddl), expectedHash, 'Only exact independently reviewed account-library migrations are accepted.');
+        assert.match(ddl, /begin;/); assert.match(ddl, /commit;\s*$/i); ddls.push(ddl);
+        const beforeData = dataSnapshot(), beforeCatalog = sql(allCatalog);
+        assert.throws(() => psql(ddl.replace(/commit;\s*$/i, 'select 1/0;\ncommit;')), /division by zero/);
+        assert.deepEqual(dataSnapshot(), beforeData); assert.deepEqual(sql(allCatalog), beforeCatalog);
+        psql(ddl); assertLegacyData(); assertLegacyCatalog();
+        const installedData = dataSnapshot(), installedCatalog = sql(allCatalog);
+        psql(ddl); assert.deepEqual(dataSnapshot(), installedData); assert.deepEqual(sql(allCatalog), installedCatalog);
+      }
+      psql(await fs.readFile(path.join(root, 'supabase/tests/account-library-installation.sql'), 'utf8'));
+      assert.deepEqual(rpc('life_library_capabilities', []), { version: 1, metadataVersion: 1, originalsVersion: 1 });
+      const opened = rpc('life_library_open', [q(bundle.workspaceId) + '::uuid']);
+      assert.equal(opened.workspace_id, bundle.workspaceId); assert.equal(opened.default_revision, 1); assert.equal(opened.pristine, false);
+      const Folders = require('../assets/life/source-folders.js'), LibraryMeta = require('../assets/life/library-meta.js');
+      const metadata = LibraryMeta.empty(bundle.workspaceId);
+      metadata.sourceFolders = Folders.createFolder(metadata.sourceFolders, { name: 'Synthetic library folder', parentId: null });
+      metadata.sourceFolders = Folders.assignSources(metadata.sourceFolders, [source.source.id], metadata.sourceFolders.folders[0].id);
+      const metaOp = randomUUID(), metaArgs = [q(bundle.workspaceId) + '::uuid', '0', q(metaOp) + '::uuid', '1', json(metadata)];
+      assert.deepEqual(rpc('life_library_meta_put', metaArgs), { status: 'stored', revision: 1 });
+      const originalId = randomUUID(), originalOp = randomUUID(), archiveHash = 'a'.repeat(64), chunkHash = 'b'.repeat(64), objectPath = owner + '/' + archiveHash + '/0000-' + chunkHash;
+      // Synthetic object metadata only; actual Storage HTTP and byte hashing are separate gates.
+      psql('insert into storage.objects(bucket_id,name,owner,owner_id,metadata) values(\'life-library-originals\',' + q(objectPath) + ',' + q(owner) + '::uuid,' + q(owner) + ',\'{"size":100}\');');
+      const manifest = { format: 'life-library-original-v1', id: originalId, sourceHead: 'c'.repeat(40), part: 1, partCount: 1, archiveBytes: 100, archiveHash,
+        entries: [{ sourceRelativePath: 'synthetic.pdf', snapshotPath: 'snapshot/attachments/synthetic.pdf', role: 'git-excluded-attachment', bytes: 3, sha256: 'd'.repeat(64), mime: 'application/pdf', sourceGitCommit: null, offset: 40, crc: 123 }],
+        chunks: [{ index: 0, path: objectPath, bytes: 100, sha256: chunkHash }] };
+      const originalArgs = [q(originalId) + '::uuid', q(originalOp) + '::uuid', json(manifest)];
+      assert.deepEqual(rpc('life_library_original_put', originalArgs), { status: 'stored', revision: 1 });
+      assertLegacyData(); assertLegacyCatalog();
+      const populatedData = dataSnapshot(), installedCatalog = sql(allCatalog);
+      for (const ddl of ddls) {
+        assert.throws(() => psql(ddl.replace(/commit;\s*$/i, 'select 1/0;\ncommit;')), /division by zero/);
+        assert.deepEqual(dataSnapshot(), populatedData); assert.deepEqual(sql(allCatalog), installedCatalog);
+      }
+      for (let pass = 0; pass < 2; pass++) for (const ddl of ddls) psql(ddl);
+      assert.deepEqual(dataSnapshot(), populatedData); assert.deepEqual(sql(allCatalog), installedCatalog);
+      assert.deepEqual(rpc('life_library_meta_put', metaArgs), { status: 'stored', revision: 1 });
+      assert.deepEqual(rpc('life_library_original_put', originalArgs), { status: 'stored', revision: 1 });
+      assert.deepEqual(dataSnapshot(), populatedData); assertLegacyData(); assertLegacyCatalog();
+      psql(await fs.readFile(path.join(root, 'supabase/tests/account-library-installation.sql'), 'utf8'));
+      report.accountLibraryMigrations = libraryMigrations.map(([file, sha256]) => ({ file, sha256 }));
+      report.accountLibraryPreservation = { eachFailureAtomic: true, eachInstallPreservesLegacy: true, populatedChainReinstallPreservesAllRowsAndReceipts: true, exactOldFunctionsAndPrivilegesPreserved: true, readonlyAudit: true, syntheticStorageOwnerColumnIncluded: true, actualStorageHTTP: false };
     });
     report.pass = true; report.baselineMigrations = baseline; report.baselineDataSha256 = baselineDigest;
     report.rollback = 'Failed transaction rolls back all additive DDL. After successful use retain data/receipts and compatible output-receipt storage; disable new UI and public/private entrypoint execution, then reapply the migration to restore. Full 88cc frontend rollback is safe only before new preparation usage. No destructive down migration.';

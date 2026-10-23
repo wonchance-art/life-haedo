@@ -1,13 +1,14 @@
 'use strict';
+const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
 const assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),{createHash}=require('node:crypto'),Z=require('../vendor/fflate/fflate.js');
 const {playwright,ready,makeContext}=require('./unified-home-browser.cjs');
 const {FakeCloud,accounts,base,cloud}=require('./life-sync-browser.cjs');
-const out=path.resolve('.local/nine-board-image'),report={checks:[],screenshots:[],errors:[],consoleErrors:[],external:[],scope:'Anonymous mocked Auth, real Mac Chrome canvas and IndexedDB; viewport simulations, no Apple touch hardware or live account.'};
+const out=path.resolve('.local/nine-board-image'),report={libraryCapabilityReads:[],checks:[],screenshots:[],errors:[],consoleErrors:[],external:[],scope:'Anonymous mocked Auth, real Mac Chrome canvas and IndexedDB; viewport simulations, no Apple touch hardware or live account.'};
 async function main(){
  await fs.mkdir(out,{recursive:true});const browser=await playwright().chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});report.browser=browser.version();
  const server=new FakeCloud(),publicWrites=[];
  const context=await makeContext(browser,server,'nine-board-image',accounts.a,{viewport:{width:1440,height:1000}});
- context.on('request',request=>{const u=new URL(request.url());if(!['GET','HEAD','OPTIONS'].includes(request.method())&&(/\/functions\/v1\//.test(u.pathname)||/\/rest\/v1\//.test(u.pathname)))publicWrites.push(u.pathname);});
+ context.on('request',request=>{const u=new URL(request.url());if(isLegacyLibraryCapabilityRead(request,{cloud,server}))report.libraryCapabilityReads.push({owner:server.libraryOwner(request),method:request.method(),path:u.pathname,parameterCount:0});else if(!['GET','HEAD','OPTIONS'].includes(request.method())&&(/\/functions\/v1\//.test(u.pathname)||/\/rest\/v1\//.test(u.pathname)))publicWrites.push(u.pathname);});
  await context.route('**/*',route=>{const u=new URL(route.request().url());if([new URL(base).origin,cloud].includes(u.origin))return route.fallback();report.external.push(u.origin);return route.abort();});
  const page=await context.newPage();page.on('pageerror',e=>report.errors.push(e.message));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
  const go=async()=>{await page.goto(base+'/index.html?section=records&view=page');await ready(page);await page.getByRole('button',{name:'9칸 구성',exact:true}).click();await page.locator('.nb-status').waitFor();};

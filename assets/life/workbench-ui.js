@@ -16,7 +16,7 @@
   const profileInitials = name => !name || name === '내 블로그' ? '나' : Array.from(name.replace(/\s+/g, '')).slice(0, 2).join('');
 
   function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored, onLocalSaved = () => {},
-    onBlogReturn = () => {}, onBlogModeChange = () => {}, blogSync = null, onManagePost = null,
+    onBlogReturn = () => {}, onBlogModeChange = () => {}, blogSync = null, onManagePost = null, managed = false,
     onSelectionUsed = () => {}, onSelectionCancel = () => {}, onArrange = () => {}, onWorkbenchNavigate = () => {}, onChapterImport = () => {},
     onBundleUpdated = () => {}, shareRemoteFactory = () => life.ShareRemote?.createOwner({ auth: global.HaedoAuth }),
     sharePublicUrl = publicId => { const url = new URL('share.html', global.location.href); url.searchParams.set('id', publicId); return url.href; },
@@ -80,10 +80,12 @@
       const composerDirty = !!session.composer?.dirty?.();
       const nineDirty = !!session.nine?.dirty();
       const materialDirty = !!session.materialUI?.dirty() || !!session.materialTool?.dirty();
-      statusNode.textContent = !session.state ? '구성을 불러오지 못함' : session.saving ? '이 브라우저에 저장 중…' : session.error ? '저장하지 못함 · 초안 유지' : incoming ? '선택 검토 중 · 아직 추가하지 않음' :
-        hasUnappliedAttachment ? '첨부 입력 미반영' : draftConflict ? '초안 충돌 · 입력 유지' : materialDirty ? '작성 준비 · 처리 전 변경 있음' : nineDirty ? '9칸 구성 저장 전 변경 있음' : composerDirty ? '초안 저장 전 변경 있음' : session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : '이 브라우저에 저장됨';
+      statusNode.textContent = !session.state ? '구성을 불러오지 못함' : session.saving ? (managed ? '변경 반영 중…' : '이 브라우저에 저장 중…') : session.error ? '저장하지 못함 · 초안 유지' : incoming ? '선택 검토 중 · 아직 추가하지 않음' :
+        hasUnappliedAttachment ? '첨부 입력 미반영' : draftConflict ? '초안 충돌 · 입력 유지' : materialDirty ? '작성 준비 · 처리 전 변경 있음' : nineDirty ? '9칸 구성 저장 전 변경 있음' : composerDirty ? '초안 저장 전 변경 있음' : session.edit !== session.stored ? '저장 전 변경 있음' : session.remoteRevision > session.baseRevision ? '새로 받은 구성이 있습니다.' : managed ? '변경 반영됨' : '이 브라우저에 저장됨';
+      statusNode.hidden = managed && !!session.state && !session.saving && !session.error && !incoming && !hasUnappliedAttachment && !draftConflict && !materialDirty && !nineDirty && !composerDirty && session.edit === session.stored && session.remoteRevision <= session.baseRevision;
       statusNode.dataset.state = session.error ? 'error' : materialDirty || nineDirty || draftConflict || composerDirty || hasUnappliedAttachment || session.edit !== session.stored ? 'dirty' : 'saved';
-      if (mode === 'related') surface.querySelector('.wb-storage-line').hidden = !!session.state && !session.saving && !session.error && session.edit === session.stored && session.remoteRevision <= session.baseRevision;
+      if (managed && !session.blogContext && !['public-pages', 'workbench-backup'].includes(mode)) surface.querySelector('.wb-storage-line').hidden = statusNode.hidden;
+      else if (mode === 'related') surface.querySelector('.wb-storage-line').hidden = !!session.state && !session.saving && !session.error && session.edit === session.stored && session.remoteRevision <= session.baseRevision;
     }
     function clearError() { if (errorNode) { errorNode.hidden = true; errorNode.replaceChildren(); delete errorNode.dataset.code; } }
     function report(error, session = current) {
@@ -3013,7 +3015,7 @@
           '권 · 보관한 장 ' + chapters.filter(chapter => chapter.archived).length + '개 · 개정본 ' + books.reduce((sum, book) => sum + (book.editions || []).length, 0) + '개');
         bookSummary.id = 'wbRestoreBookSummary'; previewHost.append(bookSummary);
         previewHost.append(notice('활성 장은 보관한 책의 장을 제외합니다. 보관한 장은 장별 보관 설정 기준이며, 개정본 안의 장은 중복 집계하지 않습니다.'));
-        previewHost.append(notice('새 작업공간으로 복원합니다. 기존 공간은 유지되고 새 사본은 자동 동기화되지 않습니다.'));
+        previewHost.append(notice(managed ? '새 자료 사본으로 복원합니다. 기존 자료는 유지합니다.' : '새 작업공간으로 복원합니다. 기존 공간은 유지되고 새 사본은 자동 동기화되지 않습니다.'));
         const install = action('새 사본으로 복원', async () => {
           if (installing) return;
           await beforeRestore(); await flush();
@@ -3164,10 +3166,11 @@
       if (['page', 'related', 'workbench-backup'].includes(mode)) { heading.classList.add('wb-heading-quiet'); title.classList.add('life-sr-only'); }
       saveControl = (mode === 'page' ? discoveryIcon : icon)('지금 저장', 'check', () => flush()); saveControl.hidden = ['public-pages', 'related', 'workbench-backup'].includes(mode) || !!incoming;
       heading.append(title, saveControl);
-      statusNode = el('p', '이 브라우저의 구성을 불러오는 중…', 'life-meta wb-save-status'); statusNode.id = 'wbStatus';
+      statusNode = el('p', managed ? '구성을 불러오는 중…' : '이 브라우저의 구성을 불러오는 중…', 'life-meta wb-save-status'); statusNode.id = 'wbStatus';
       statusNode.setAttribute('role', 'status'); statusNode.setAttribute('aria-live', 'polite');
       const scope = details('저장 범위');
       scope.classList.add('wb-scope');
+      scope.hidden = managed;
       scope.append(notice('구성은 먼저 이 브라우저에 저장됩니다. 관리의 기기 간 동기화에서 묶음·내 페이지 이어쓰기를 별도로 시작하면 같은 계정의 서버에 보관합니다. 글쓰기·가져오기 초안은 포함하지 않습니다. 자료·구성 JSON 백업으로 새 사본을 복원할 수도 있습니다. 공개 사본은 따로 게시·갱신·철회하며, 표시를 끄거나 원문을 수정해도 이미 게시한 사본은 바뀌지 않습니다.'));
       errorNode = el('div', null, 'life-error wb-error'); errorNode.id = 'wbError'; errorNode.setAttribute('role', 'alert'); errorNode.hidden = true;
       bodyNode = el('div', null, 'wb-content'); bodyNode.append(notice('불러오는 중…'));

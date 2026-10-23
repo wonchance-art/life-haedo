@@ -4,12 +4,12 @@
   const life = root.HaedoLife ||= {};
   const labels = { not_enabled: '이 브라우저에만 보관 중', pending: '구성 전송 대기', synced: '서버 구성과 연결됨', conflict: '양쪽 구성 비교 필요', error: '구성 이어쓰기 확인 필요', paused: '구성 이어쓰기 중지됨' };
   function node(tag, text, cls) { const el = document.createElement(tag); if (text != null) el.textContent = text; if (cls) el.className = cls; return el; }
-  function create({ host, manager, storage, workspaceId, beforeAction = async () => {}, isCurrent = () => true }) {
+    function create({ host, manager, storage, workspaceId, beforeAction = async () => {}, isCurrent = () => true, managed = false, onRetry = null }) {
     let disposed = false, sequence = 0, actionSequence = 0, busy = false, view = null, error = '', message = '', state = null, recoveries = [];
     const urls = new Set();
     host.id = 'lifeCompositionSync'; host.classList.add('life-composition-sync');
     const alive = () => !disposed && isCurrent() && host.isConnected;
-    const title = node('h3', '묶음·내 페이지 이어쓰기');
+    const title = node('h3', managed ? '묶음·페이지·책' : '묶음·내 페이지 이어쓰기');
     const status = node('p', '구성 연결을 확인하는 중…', 'life-help'); status.id = 'compositionStatus'; status.setAttribute('role', 'status');
     const errorNode = node('p', '', 'life-error'); errorNode.id = 'compositionError'; errorNode.setAttribute('role', 'alert'); errorNode.hidden = true;
     const body = node('div', null, 'composition-content');
@@ -107,21 +107,25 @@
       const focusId = body.contains(document.activeElement) ? document.activeElement.id : '';
       const openKeys = new Set([...body.querySelectorAll('details[open][data-section]')].map(el => el.dataset.section));
       const scrollPositions = new Map([...body.querySelectorAll('details[data-section]')].map(el => [el.dataset.section, el.scrollTop]));
-      host.setAttribute('aria-busy', 'false'); status.textContent = labels[state?.status] || '구성 연결 확인 필요'; status.dataset.state = state?.status || 'error';
+      host.setAttribute('aria-busy', 'false');
+      host.hidden = managed && !state?.conflict && !state?.error && !recoveries.length && !error && !message;
+      status.textContent = managed ? state?.conflict ? '양쪽 구성 확인 필요' : state?.error || error ? '구성 보관 확인 필요' : '구성 복구' : labels[state?.status] || '구성 연결 확인 필요'; status.dataset.state = state?.status || 'error';
       errorNode.textContent = error || state?.error?.message || ''; errorNode.hidden = !errorNode.textContent;
       body.replaceChildren();
       if (!state) { body.append(button('다시 확인', 'compositionRetry', refresh)); return; }
-      if (!state.enabled) {
+      if (managed && !state.enabled) {
+        if (error || state.error) body.append(button('다시 시도', 'compositionRetry', async () => { await (onRetry ? onRetry() : manager.syncNow(workspaceId)); }));
+      } else if (!state.enabled) {
         body.append(node('p', '묶음·내 페이지·회고·책·관련 기록 제외를 같은 계정의 서버에 보관합니다. 글쓰기 초안과 공개 사본은 포함하지 않습니다.', 'life-help'));
         body.append(node('p', '원문 동기화를 먼저 연결하세요. 서버에 구성이 있으면 양쪽 내용을 확인한 뒤 선택합니다.', 'life-help'));
         body.append(button(state.status === 'paused' ? '구성 이어쓰기 재개' : '구성 이어쓰기 시작', 'compositionEnable', async () => { await manager.enable(workspaceId); view = null; }, 'life-primary'));
       } else {
         const actions = node('div', null, 'life-actions');
-        actions.append(button('지금 이어쓰기', 'compositionSyncNow', async () => { await manager.syncNow(workspaceId); view = null; }));
+        if (!managed || state.error) actions.append(button(managed ? '다시 시도' : '지금 이어쓰기', 'compositionSyncNow', async () => { await (managed && onRetry ? onRetry() : manager.syncNow(workspaceId)); view = null; }));
         if (state.conflict && !state.conflict.missing) actions.append(button('양쪽 구성 비교', 'compositionCompare', async () => { view = await manager.compare(workspaceId); }, 'life-primary'));
-        actions.append(button('구성 연결 중지', 'compositionPause', pause, '', true)); body.append(actions);
-        if (state.conflict?.missing) body.append(node('p', '서버 구성을 찾을 수 없습니다. 자동으로 다시 만들지 않았습니다. 이 브라우저의 구성은 자료·구성 백업으로 보관할 수 있습니다.', 'life-help'));
-        else if (!state.conflict) body.append(node('p', '원문과 구성을 각각 확인합니다. 공개한 사본은 바뀌지 않습니다.', 'life-help'));
+        if (!managed) actions.append(button('구성 연결 중지', 'compositionPause', pause, '', true)); body.append(actions);
+        if (state.conflict?.missing) body.append(node('p', managed ? '서버 구성을 찾을 수 없습니다. 현재 구성은 복구 파일로 보관할 수 있습니다.' : '서버 구성을 찾을 수 없습니다. 자동으로 다시 만들지 않았습니다. 이 브라우저의 구성은 자료·구성 백업으로 보관할 수 있습니다.', 'life-help'));
+        else if (!state.conflict && !managed) body.append(node('p', '원문과 구성을 각각 확인합니다. 공개한 사본은 바뀌지 않습니다.', 'life-help'));
       }
       if (message) body.append(node('p', message, 'life-help'));
       if (view?.remote && state.enabled) {

@@ -23,7 +23,7 @@ function addArchivedEdition(book) {
 
 // Controller interleavings only. Real IndexedDB transactions/recovery and SQL CAS
 // are verified by composition-storage-browser.cjs and the local SQL suite.
-function fixture(t) {
+function fixture(t, options = {}) {
   const binding = { ...OWNER, remoteId: WORKSPACE };
   const local = Workbench.empty(WORKSPACE); local.revision = 1; local.reflection.note = '이 기기의 독서 메모';
   const state = {
@@ -91,7 +91,8 @@ function fixture(t) {
     clearTimeout(id) { timers.delete(id); }, setInterval() { return 1; }, clearInterval() {}
   };
   vm.runInNewContext(source, context);
-  const manager = context.module.exports.create({ storage, sourceSync, remote, auth });
+  const manager = context.module.exports.create({ storage, sourceSync, remote, auth,
+    initialReceive: options.initialReceive ? (...args) => options.initialReceive(state, ...args) : null });
   t.after(() => manager.dispose());
   return { manager, state, timers, timerScheduled, changeAccount(value) { state.account = copy(value); state.epoch++; } };
 }
@@ -204,5 +205,69 @@ test('late remote responses after A changes to B or returns to A cannot mutate l
     assert.deepEqual(f.state.mutations, []);
     assert.deepEqual(f.state.sent, []);
     f.manager.dispose();
+  }
+});
+
+test('optional initial receive follows source readiness and only accepts the atomic pristine adoption result', async t => {
+  const f = fixture(t, { initialReceive(state, id, binding, row) {
+    state.calls.push('initial'); assert.equal(id, WORKSPACE); assert.equal(binding.remoteId, WORKSPACE);
+    state.local = { ...copy(row.data), revision: 1 }; state.meta.remoteRevision = row.revision;
+    state.meta.syncedLocalRevision = 1; state.meta.status = 'synced'; return { status: 'stored' };
+  } });
+  f.state.local = Workbench.empty(WORKSPACE); f.state.meta.remoteRevision = 0; f.state.meta.syncedLocalRevision = -1;
+  const received = await f.manager.syncNow(WORKSPACE);
+  assert.equal(received.status, 'synced'); assert.equal(f.state.calls.filter(x => x === 'initial').length, 1);
+  assert.ok(f.state.calls.indexOf('sources') < f.state.calls.indexOf('initial')); assert.equal(f.state.sent.length, 0);
+  const refused = fixture(t, { initialReceive() { return { status: 'conflict' }; } });
+  refused.state.meta.remoteRevision = 0; refused.state.meta.syncedLocalRevision = -1;
+  const before = copy(refused.state.local); assert.equal((await refused.manager.syncNow(WORKSPACE)).status, 'conflict'); assert.deepEqual(refused.state.local, before);
+});
+
+test('an old account cannot continue after a stalled initial-adoption callback returns', async t => {
+  const entered = deferred(), reply = deferred();
+  const f = fixture(t, { initialReceive() { entered.resolve(); return reply.promise; } });
+  f.state.meta.remoteRevision = 0; f.state.meta.syncedLocalRevision = -1;
+  const pending = f.manager.syncNow(WORKSPACE), rejected = assert.rejects(pending, cancelled);
+  await entered.promise; const reads = f.state.reads; f.changeAccount({ ...OWNER, userId: '22222222-2222-4222-8222-222222222222' });
+  reply.resolve({ status: 'stored' }); await rejected; assert.equal(f.state.reads, reads); assert.equal(f.state.sent.length, 0);
+});
+
+test('concurrent identical first writes converge only after the domain atomically accepts the exact initial outbox', async t => {
+  const op = 'initial_operation'; let observed;
+  const f = fixture(t, { initialReceive(state, id, binding, row, options) {
+    observed = copy(options); assert.equal(id, WORKSPACE); assert.equal(binding.remoteId, WORKSPACE);
+    assert.equal(state.meta.outbox.operationId, options.outboxOperationId);
+    assert.ok(state.calls.filter(x => x === 'sources').length >= 2, 'Remote source revision must be checked before adoption');
+    state.meta.remoteRevision = row.revision; state.meta.syncedLocalRevision = state.local.revision;
+    state.meta.outbox = null; state.meta.status = 'synced'; return { status: 'stored' };
+  } });
+  f.state.local = Workbench.empty(WORKSPACE); f.state.meta.remoteRevision = 0; f.state.meta.syncedLocalRevision = -1;
+  f.state.meta.outbox = { operationId: op, expectedRevision: 0, sourceRevision: 1, localRevision: 0, data: copy(f.state.local) };
+  f.state.row.data = copy(f.state.local); f.state.writeOverride = () => ({ status: 'conflict', revision: 1 });
+  const result = await f.manager.syncNow(WORKSPACE);
+  assert.equal(result.status, 'synced'); assert.deepEqual(observed, { outboxOperationId: op });
+  assert.equal(f.state.meta.conflict, null); assert.equal(f.state.meta.outbox, null); assert.equal(f.state.sent.length, 1);
+});
+
+test('refused initial-write adoption retains the durable request and the later local edit as a normal conflict', async t => {
+  let calls = 0; const f = fixture(t, { initialReceive() { calls++; return { status: 'conflict' }; } });
+  const empty = Workbench.empty(WORKSPACE); f.state.local = { ...copy(empty), revision: 1 };
+  f.state.local.reflection.note = '첫 전송 후 새로 수정한 내용';
+  f.state.meta.remoteRevision = 0; f.state.meta.syncedLocalRevision = -1;
+  f.state.meta.outbox = { operationId: 'pending_initial', expectedRevision: 0, sourceRevision: 1, localRevision: 0, data: empty };
+  f.state.row.data = copy(empty); f.state.writeOverride = () => ({ status: 'conflict', revision: 1 });
+  const before = { local: copy(f.state.local), outbox: copy(f.state.meta.outbox) };
+  assert.equal((await f.manager.syncNow(WORKSPACE)).status, 'conflict'); assert.equal(calls, 1);
+  assert.deepEqual(f.state.local, before.local); assert.deepEqual(f.state.meta.outbox, before.outbox); assert.ok(!f.state.mutations.includes('ack'));
+});
+
+test('noninitial CAS conflicts and missing first-write replies never invoke initial adoption', async t => {
+  for (const missing of [false, true]) {
+    let calls = 0; const f = fixture(t, { initialReceive() { calls++; return { status: 'stored' }; } });
+    f.state.meta.remoteRevision = missing ? 0 : 1; f.state.meta.syncedLocalRevision = missing ? -1 : 0;
+    f.state.meta.outbox = { operationId: 'pending', expectedRevision: missing ? 0 : 1, sourceRevision: 1, localRevision: 1, data: copy(f.state.local) };
+    f.state.writeOverride = () => missing ? { status: 'missing' } : { status: 'conflict', revision: 1 };
+    const pending = copy(f.state.meta.outbox); assert.equal((await f.manager.syncNow(WORKSPACE)).status, 'conflict');
+    assert.equal(calls, 0); assert.deepEqual(f.state.meta.outbox, pending); assert.equal(f.state.meta.conflict.missing, missing);
   }
 });

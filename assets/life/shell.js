@@ -4,7 +4,7 @@
   const life = root.HaedoLife = root.HaedoLife || {};
   const auth = root.HaedoAuth;
   const publicHome = root.document.body?.dataset.lifeHome === 'true';
-  let mounted, sync, compositionSync, writingSync, scopedStorage, controller, showing, generation = 0, activeKey = null, starting, leaving = false, suspended = false;
+  let mounted, sync, compositionSync, libraryMetaSync, accountLibrary, writingSync, scopedStorage, controller, showing, generation = 0, activeKey = null, starting, leaving = false, suspended = false;
   let retained = false, resumePoint = null, suspension = 0;
   function loginPath(compose = false) {
     const next = auth?.safeNext(compose && publicHome ? 'index.html?compose=1' : (publicHome ? 'index.html' : 'life.html') + root.location.search) || (publicHome ? 'index.html' : 'life.html');
@@ -83,6 +83,8 @@
     controller?.abort(); controller = null;
     showing = null;
     mounted?.dispose?.(); mounted = null;
+    accountLibrary?.dispose?.(); accountLibrary = null;
+    libraryMetaSync?.dispose?.(); libraryMetaSync = null;
     compositionSync?.dispose?.(); compositionSync = null;
     writingSync?.dispose?.(); writingSync = null;
     sync?.dispose?.(); sync = null;
@@ -136,17 +138,34 @@
       const storage = life.Storage.forAccount(account);
       scopedStorage = storage;
       const legacy = life.Legacy.forAccount(account);
-      sync = life.Sync.create({ storage, core: life.Core, remoteFactory: life.PlatformRemote.create });
-      compositionSync = life.CompositionSync.create({ storage, sourceSync: sync, auth });
+      const automatic = !!life.AccountLibrary?.create;
+      sync = life.Sync.create({ storage, core: life.Core, remoteFactory: life.PlatformRemote.create, automatic: !automatic });
+      compositionSync = life.CompositionSync.create({ storage, sourceSync: sync, auth,
+        initialReceive: automatic ? (workspaceId, binding, row, options) => accountLibrary?.getMode() === 'account'
+          ? storage.adoptCompositionRemote(workspaceId, binding, row, options) : { status: 'conflict' } : null });
+      libraryMetaSync = life.LibraryMetaSync?.create({ storage, sourceSync: sync, auth });
       writingSync = life.WritingSync.create({ storage, sourceSync: sync, auth });
-      const instance = await life.UI.mount(container, { storage, core: life.Core, legacy, sync, compositionSync, writingSync, auth, signal });
+      let bootstrap = null;
+      if (automatic) {
+        accountLibrary = life.AccountLibrary.create({ storage, core: life.Core, sync, compositionSync, libraryMetaSync, auth });
+        notice('계정 자료를 확인하고 있습니다.');
+        bootstrap = await accountLibrary.bootstrap();
+        if (signal.aborted || token !== generation || key !== auth.getAccount()?.projectUrl + '|' + auth.getAccount()?.userId) return null;
+        if (!bootstrap?.cached && !bootstrap?.workspaceId && !bootstrap?.legacy) {
+          // Keep the retry frame alive. Never create an independent empty library
+          // while the account's canonical workspace is still unknown.
+          throw new Error(bootstrap?.error?.message || '계정 자료를 열지 못했습니다. 연결을 확인하고 다시 시도해 주세요.');
+        }
+      }
+      const instance = await life.UI.mount(container, { storage, core: life.Core, legacy, sync, compositionSync, libraryMetaSync, accountLibrary, bootstrap, writingSync, auth, signal });
       if (signal.aborted || token !== generation || key !== auth.getAccount()?.projectUrl + '|' + auth.getAccount()?.userId) { instance?.dispose(); return null; }
       mounted = instance;
       reveal(account);
-      sync.start().catch(() => {
+      if (bootstrap?.legacy) sync.setAutomatic?.(true);
+      if (!automatic || bootstrap?.legacy) sync.start().catch(() => {
         if (token === generation && !signal.aborted) notice('자료는 이 브라우저에 보관돼 있습니다. 기기 간 동기화에서 서버 연결 상태를 확인해 주세요.');
       });
-      compositionSync.start();
+      if (!automatic || bootstrap?.legacy) compositionSync.start();
       writingSync.start();
       if ('serviceWorker' in root.navigator) root.navigator.serviceWorker.register('./sw.js').catch(() => {});
       return mounted;
@@ -278,7 +297,7 @@
       root.document.getElementById('lifeLogout')?.focus({ preventScroll: true });
     } finally { leaving = false; }
   });
-  life.Shell = { isReadOnly, start, get sync() { return sync; }, get compositionSync() { return compositionSync; }, get writingSync() { return writingSync; }, get storage() { return scopedStorage; } };
+  life.Shell = { isReadOnly, start, get sync() { return sync; }, get compositionSync() { return compositionSync; }, get libraryMetaSync() { return libraryMetaSync; }, get accountLibrary() { return accountLibrary; }, get originals() { return accountLibrary?.originals || null; }, get writingSync() { return writingSync; }, get storage() { return scopedStorage; } };
   if (publicHome && 'serviceWorker' in root.navigator) root.navigator.serviceWorker.register('./sw.js').catch(() => {});
   life.Shell.ready = start();
 })(globalThis);

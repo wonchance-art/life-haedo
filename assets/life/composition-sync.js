@@ -23,7 +23,8 @@
   const fault = code => Object.assign(new Error(messages[code] || messages.network_error), { code });
   function create({ storage, sourceSync, auth = root.HaedoAuth,
     remote = root.HaedoLife?.CompositionRemote?.create({ auth }), errorCleaner = null,
-    resolutionChoices = ['local', 'remote'], sendResolution = choice => choice === 'local', polling = true } = {}) {
+    resolutionChoices = ['local', 'remote'], sendResolution = choice => choice === 'local', polling = true,
+    initialReceive = null } = {}) {
     if (!storage?.account || !sourceSync || !auth || !remote) throw fault('account_mismatch');
     const owner = storage.account, watches = new Map(), timers = new Map(), locks = new Map(), generations = new Map(), listeners = new Set();
     let disposed = false, started = false, interval = null, refreshing = false, unlistenSources = null;
@@ -57,7 +58,7 @@
       guard(ctx);
       const initial = await sourceSync.getState(ctx.workspaceId); guard(ctx);
       if (!initial.enabled || !sameAccount(initial.binding)) throw fault('composition_source_pending');
-      await sourceSync.syncNow(ctx.workspaceId); guard(ctx);
+      await sourceSync.syncNow(ctx.workspaceId, { headIfClean: true }); guard(ctx);
       const current = await sourceSync.getState(ctx.workspaceId); guard(ctx);
       if (!current.enabled || current.status !== 'synced' || !sameAccount(current.binding) || current.remoteRevision < minimum) throw fault('composition_source_pending');
       return current;
@@ -76,12 +77,22 @@
     }
     async function send(ctx, outbox) {
       guard(ctx);
-      const reply = await remote.write({ workspaceId: ctx.workspaceId, ...clone(outbox) }); guard(ctx);
+      const request = { workspaceId: ctx.workspaceId, ...clone(outbox) }, operationId = request.operationId;
+      const expectedRevision = request.expectedRevision;
+      const reply = await remote.write(request); guard(ctx);
       if (reply.status === 'stored') {
-        await storage.ackCompositionSync(ctx.workspaceId, binding(ctx.workspaceId), outbox.operationId, reply.revision); guard(ctx);
+        await storage.ackCompositionSync(ctx.workspaceId, binding(ctx.workspaceId), operationId, reply.revision); guard(ctx);
         emit(ctx.workspaceId); return true;
       }
       const row = reply.status === 'missing' ? null : await remote.read(ctx.workspaceId); guard(ctx);
+      if (reply.status === 'conflict' && expectedRevision === 0 && row && initialReceive) {
+        await sources(ctx, row.source_revision);
+        // Concurrent first writers may have sent the same pristine empty model.
+        // Only the domain's atomic check may clear that exact initial outbox;
+        // any later edit or differing payload keeps the ordinary conflict path.
+        const received = await initialReceive(ctx.workspaceId, binding(ctx.workspaceId), clone(row), { outboxOperationId: operationId }); guard(ctx);
+        if (received?.status === 'stored') { emit(ctx.workspaceId); return true; }
+      }
       await conflict(ctx, row); return false;
     }
     async function run(ctx) {
@@ -96,7 +107,13 @@
           if (!row && state.remoteRevision > 0) return conflict(ctx, null);
           if (row) {
             await sources(ctx, row.source_revision);
-            if (!state.remoteRevision) return conflict(ctx, row);
+            if (!state.remoteRevision) {
+              if (initialReceive) {
+                const received = await initialReceive(ctx.workspaceId, binding(ctx.workspaceId), clone(row)); guard(ctx);
+                if (received?.status === 'stored') continue;
+              }
+              return conflict(ctx, row);
+            }
             const applied = await storage.applyCompositionRemote(ctx.workspaceId, binding(ctx.workspaceId), row); guard(ctx);
             if (applied.status === 'conflict') return conflict(ctx, row);
           }
@@ -162,18 +179,19 @@
       });
     }
     async function resolve(workspaceId, choice, expected) {
+      const reviewedLocalRevision = expected?.expectedLocalRevision, reviewedRemoteRevision = expected?.expectedRemoteRevision;
       const ctx = context(workspaceId);
       return serial(ctx, async () => {
         const state = await checkedState(ctx);
         if (!resolutionChoices.includes(choice) || !state.conflict || state.conflict.missing ||
-            state.conflict.remoteRevision !== expected?.expectedRemoteRevision) throw fault('composition_conflict_changed');
+            state.conflict.remoteRevision !== reviewedRemoteRevision) throw fault('composition_conflict_changed');
         await sources(ctx);
         const row = await remote.read(workspaceId); guard(ctx);
         if (!row) { await conflict(ctx, null); throw fault('remote_missing'); }
-        if (row.revision !== expected.expectedRemoteRevision) { await conflict(ctx, row); throw fault('composition_conflict_changed'); }
+        if (row.revision !== reviewedRemoteRevision) { await conflict(ctx, row); throw fault('composition_conflict_changed'); }
         await sources(ctx, row.source_revision);
         const result = await storage.resolveCompositionSync(workspaceId, binding(workspaceId), {
-          choice, expectedLocalRevision: expected.expectedLocalRevision, remoteRow: row }); guard(ctx);
+          choice, expectedLocalRevision: reviewedLocalRevision, remoteRow: row }); guard(ctx);
         emit(workspaceId);
         if (sendResolution(choice, result)) {
           try { await run(ctx); } catch (error) { result.syncError = { code: error.code, message: error.message }; }
