@@ -3,7 +3,7 @@
 .sf-filter-row { display: flex; align-items: center; gap: 12px; }
 .sf-filter-label { display: block; min-width: 0; max-width: 100%; flex: 1; }
 .source-folders :is(input, select), .sf-assignment-panel select { width: 100%; max-width: 100%; min-width: 0; min-height: 44px; border: 1px solid var(--field-line, #86968d); border-radius: var(--control-radius, 12px); padding: 8px 12px; background: var(--paper, #fff); color: var(--ink, #182522); font: inherit; font-size: 16px; }
-.source-folders .sf-filter-label select { border-color: transparent; padding-inline-start: 0; font-size: 14px; }
+.source-folders .sf-filter-label select { border-color: transparent; padding-inline-start: 0; font-size: 16px; }
 .sf-manage > summary { min-height: 44px; padding-block: 10px; color: var(--ink-soft, #5d6b65); font-size: 14px; cursor: pointer; }
 .sf-editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-block: 8px 16px; }
 .sf-editor > :first-child, .sf-editor > :nth-child(n+4) { grid-column: 1 / -1; }

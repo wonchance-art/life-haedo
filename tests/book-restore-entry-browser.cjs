@@ -15,7 +15,7 @@ const { current, save, download } = require('./book-projects-browser.cjs');
 const { chapterFrom, openLibrary } = require('./book-completion-browser.cjs');
 const { expand } = require('./book-insights-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
-const out = path.resolve('.local/book-restore-entry/after');
+const out = path.resolve(process.env.BOOK_RESTORE_OUTPUT || '.local/book-restore-entry/after');
 const fixturePath = path.resolve('docs/design-review/evidence/book-edition/reader-book-backup.json');
 const clone = value => JSON.parse(JSON.stringify(value));
 function annotation(error) { if (process.env.GITHUB_ACTIONS) console.error('::error title=Book restore entry::' + String(error.stack || error).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')); }
@@ -29,16 +29,18 @@ async function instrument(context) {
         const actual=original.forAccount(...args);
         const fail=(kind)=>{window.__restoreFaults.push(kind);throw Object.assign(new Error('익명 복원 검사: '+kind),{code:'restore_probe'});};
         const gate=async(kind)=>{window.__restoreGateEntered=kind;await new Promise(resolve=>window.__restoreGateRelease=resolve);window.__restoreGateFinished=kind;};
-        return Object.freeze({...actual,
-          async installWorkbenchCopy(...args){
+        const installer=(method)=>async(...args)=>{
             window.__restoreCopies ||= [];window.__restoreFaults ||= [];
             if(window.__restoreBeforeFailure){window.__restoreBeforeFailure=false;fail('install');}
-            const result=await actual.installWorkbenchCopy(...args);
+            const result=await actual[method](...args);
             window.__restoreCopies.push(result.bundle.workspaceId);
             if(window.__restoreAfterFailure){window.__restoreFailNext=window.__restoreAfterFailure;window.__restoreAfterFailure=null;}
             if(window.__restoreHold==='install'){window.__restoreHold=null;await gate('install');}
             return result;
-          },
+        };
+        return Object.freeze({...actual,
+          installWorkbenchCopy:installer('installWorkbenchCopy'),
+          ...(actual.installLibraryCopy?{installLibraryCopy:installer('installLibraryCopy')} : {}),
           async readWorkbench(...args){
             if(window.__restoreCopies?.includes(args[0])&&window.__restoreFailNext==='workbench'){window.__restoreFailNext=null;fail('workbench');}
             const held=window.__restoreCopies?.includes(args[0])&&window.__restoreHold==='workbench';
