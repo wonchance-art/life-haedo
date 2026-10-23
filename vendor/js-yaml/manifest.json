@@ -1,0 +1,59 @@
+{
+  "name": "js-yaml",
+  "version": "5.5.0",
+  "license": "MIT",
+  "gitHead": "cb62b2dbbaa0b3e7379d83a5d69d8d52d21b6efb",
+  "source": "Unmodified official npm registry browser UMD",
+  "archiveURL": "https://registry.npmjs.org/js-yaml/-/js-yaml-5.5.0.tgz",
+  "archiveIntegrity": "sha512-paNr4LFIFPjeeSmwNYdrb8FafLLG/Cr2Af3GjbsHJ5CxIjH4r0c2emlmRdAtpPAieP1gRVzk6buBbVP5gBMGAg==",
+  "archiveSHA256": "23cb2e121ad69acd15fc786b7a9265a81eeeaa9f684ee73e717d6ecdbd8b0c90",
+  "originalRuntimePath": "package/dist/browser/js-yaml.umd.min.js",
+  "confirmedAt": "2026-10-23T12:38:37.521407+00:00",
+  "dependencies": {
+    "argparse": {
+      "version": "3.0.3",
+      "scope": "CLI-only; existing complete PSF notice retained; not executed by browser bundle"
+    }
+  },
+  "files": [
+    {
+      "path": "LICENSE",
+      "bytes": 1084,
+      "sha256": "a07bc24468b9654ce76a547d47a2db282d07733b715db4c73a98bd63961f9550"
+    },
+    {
+      "path": "README.md",
+      "bytes": 349,
+      "sha256": "a6d27d8ed81efe74eca50ced5051099ee1b1b083ce9d136a24bcea4c81459acd"
+    },
+    {
+      "path": "argparse-LICENSE",
+      "bytes": 2427,
+      "sha256": "ab745c5061d1dea43a3885e5b4b6befc7e983954954775c5736debeefcdfd89b"
+    },
+    {
+      "path": "js-yaml.umd.min.js",
+      "bytes": 62553,
+      "sha256": "02970a652376ad653ff069c606ee7440b0514f52ed94a98426cb52426c8e5a02"
+    }
+  ],
+  "directAdvisories": {
+    "jsYaml": {
+      "url": "https://api.github.com/advisories?ecosystem=npm&affects=js-yaml%405.5.0&per_page=100",
+      "count": 0,
+      "responseSHA256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "scope": "Exact-version direct public advisory query only; not an overall security guarantee"
+    },
+    "argparse": {
+      "url": "https://api.github.com/advisories?ecosystem=npm&affects=argparse%403.0.3&per_page=100",
+      "count": 0,
+      "responseSHA256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "scope": "Exact-version direct public advisory query only; not an overall security guarantee"
+    }
+  },
+  "browserBundleDependencyCheck": {
+    "sourceMap": "package/dist/browser/js-yaml.umd.min.js.map",
+    "sourceCount": 42,
+    "argparseBundled": false
+  }
+}

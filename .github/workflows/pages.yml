@@ -71,6 +71,10 @@ jobs:
         run: npm ci --prefix tests/browser-ci --ignore-scripts
       - name: Install Chromium and Korean fonts
         run: |
+          # Prefer the official archive over the runner's repeatedly stalled Azure mirror.
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+          fi
           node tests/browser-ci/node_modules/playwright/cli.js install --with-deps chromium
           sudo apt-get install -y fonts-noto-cjk poppler-utils
       - name: Select the pinned browser
@@ -414,6 +418,9 @@ jobs:
       - name: Verify formatted materials, exact editing, trash recovery and preserved references
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/material-library-browser.cjs
+      - name: Verify Obsidian properties, exact Markdown reading and preserved editing
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/obsidian-markdown-browser.cjs
       - name: Verify frozen reading comparisons, explicit judgments and local recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-reading-browser.cjs
@@ -538,6 +545,7 @@ jobs:
             .local/book-design-reset-app/caret/
             .local/reading-resume/
             .local/material-library/
+            .local/obsidian-markdown/
             .local/product-flow-quality/
             .local/search-quality/
             .local/expression-design/
@@ -600,6 +608,10 @@ jobs:
         run: npm ci --prefix tests/browser-ci --ignore-scripts
       - name: Install Chromium and Korean fonts
         run: |
+          # Prefer the official archive over the runner's repeatedly stalled Azure mirror.
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+          fi
           node tests/browser-ci/node_modules/playwright/cli.js install --with-deps chromium
           sudo apt-get install -y fonts-noto-cjk poppler-utils
       - name: Select the pinned browser

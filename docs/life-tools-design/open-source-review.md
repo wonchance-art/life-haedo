@@ -1,5 +1,19 @@
 # 오픈소스 검토와 재사용 결정
 
+## Obsidian YAML 속성과 원문 위치 — 2026-10-23
+
+YAML의 따옴표·목록·줄바꿈·오류를 작은 정규식 파서로 다시 만들지 않는다. Markdown-it/DOMPurify·정확 원문/위치 어댑터를 유지하면서 일반 YAML 해석만 공식 로컬 파서에 맡긴다. 머리말의 시작/끝과 속성의 안전한 표시·원문 앵커는 제품의 제한 어댑터로 둔다. [공식 문법·지원표·보존](../design-review/obsidian-markdown.md).
+
+| 후보 | 확인한 공식 배포/라이선스·유지관리 | 적합성 판단 |
+| --- | --- | --- |
+| js-yaml5.5.0 | [공식 npm latest](https://registry.npmjs.org/js-yaml/latest), gitHead `cb62b2dbbaa0b3e7379d83a5d69d8d52d21b6efb`; [CHANGELOG](https://github.com/nodeca/js-yaml/blob/cb62b2dbbaa0b3e7379d83a5d69d8d52d21b6efb/CHANGELOG.md)의2026-10-16과 [MIT 원문](https://github.com/nodeca/js-yaml/blob/cb62b2dbbaa0b3e7379d83a5d69d8d52d21b6efb/LICENSE)을 확인했다. 비보관 저장소의10/15 push, 공식 npm tarball SRI와 `dist/browser/js-yaml.umd.min.js`62,553바이트·공식 browser export를 대조했다. | 기존 빌드 없는 UMD 앱에 직접 도입한다. 최신5의 실제 타입 선언에 `load`·`JSON_SCHEMA`·`maxAliases`·`maxDepth`·중복 키 거절을 확인했으며4.x API를 추정해 쓰지 않는다. 브라우저 UMD에는 외부 require가 없고 npm의 argparse는 CLI 의존성과 구분한다. |
+| yaml2.9.1 | [공식 릴리스](https://github.com/eemeli/yaml/releases/tag/v2.9.1),2026-09-11; npm latest·gitHead `1440ecd3d1bff41e4ac399f8f6839e810328bd16`, [ISC 원문](https://github.com/eemeli/yaml/blob/1440ecd3d1bff41e4ac399f8f6839e810328bd16/LICENSE)·비보관 저장소의9/23 push를 확인했다. browser export는 `browser/index.js` ESM이다. | 파서/문서 API 대안으로 비교했으나 현재 배포물은 여러 파일의 브라우저 ESM이며 공식 단일 UMD로 동봉하는 경로가 없어 이번 우선안으로 고르지 않는다. 직접 번들 체계를 추가해 문제 범위를 늘리지 않는다. |
+| markdown-it-front-matter0.2.4 | [공식 npm latest](https://registry.npmjs.org/markdown-it-front-matter/latest), gitHead `a7f5e178f2f8f907e89cc0881d799243a0e98809`; MIT·[공식 코드](https://github.com/ParkSB/markdown-it-front-matter/blob/a7f5e178f2f8f907e89cc0881d799243a0e98809/index.js)·비보관 저장소의 마지막 push2024-06-16을 확인했다. | 첫 경계를 소비해 콜백에 문자열을 넘기는 플러그인이지 YAML 값 검증기가 아니다. 기존 정확 줄/블록 위치와 실패 원문 표시를 자동 보장하지 않으므로 직접 도입하지 않는다. |
+
+각 정확 버전의 직접 공개 advisory는 [js-yaml5.5.0](https://api.github.com/advisories?ecosystem=npm&affects=js-yaml%405.5.0&per_page=100)·[yaml2.9.1](https://api.github.com/advisories?ecosystem=npm&affects=yaml%402.9.1&per_page=100)·[front-matter0.2.4](https://api.github.com/advisories?ecosystem=npm&affects=markdown-it-front-matter%400.2.4&per_page=100) 모두0건이었다. 이는2026-10-23 직접 조회이며 전이 의존성 감사·실행 안전성 보장이 아니다. 브라우저 UMD 밖의 CLI-only argparse3.0.3도 [정확 버전 직접 advisory](https://api.github.com/advisories?ecosystem=npm&affects=argparse%403.0.3&per_page=100)를 별도 조회했으며 직접 권고0건이었다. js-yaml GitHub `releases/latest`404는 npm 최신 버전·정확 gitHead·고정 CHANGELOG/LICENSE/실제 배포물 확인으로 보완했다.
+
+공식 js-yaml UMD의 별도 익명 로컬 실험에서 제한 schema의 제목/날짜 문자열·목록과 `[[연결]]` 문자열은 해석했고, alias0·중복 키·JS 사용자 정의 태그·깊이 초과는 각각 거절했다. 이 별도 실험은 앱 전체 검수와 구분한다. 실제 통합은 공식 UMD62553바이트/SHA `02970a652376ad653ff069c606ee7440b0514f52ed94a98426cb52426c8e5a02`와 MIT·CLI-only argparse PSF 고지·manifest를 고정했고 소스맵의42개 소스에서 argparse가 브라우저에 동봉되지 않음을 확인했다. 최종 전체 단위1,344개·브라우저4흐름/15반례·기존 자료3흐름·SW157→158 PWA9개로 표시·위치·편집/백업·기존 데이터 보존을 검수했다. 독립 검토는 최종 소스와 동일 정상 투영/3폭 기하가 확인된 기존 캡처3장을 재사용한 범위의 ship이다. 최종 파서는 공식 `realMapTag`를 schema에 더해 비문자열 키를 먼저 문자열로 바꾸지 않은 상태에서 거절하고, 최상위 문자열 키·스칼라/스칼라 목록만 표시한다. parser에서 허용한 일반 YAML을 모두 화면 기능이나 실행 권한으로 승격하지 않는다. Obsidian 공식 [Properties](https://help.obsidian.md/properties)는 속성 안 Markdown과 중첩 속성 UI가 지원되지 않음을 명시하고 내부 링크의 따옴표와 고유 키를 요구한다.
+
 ## 연간 계획의 날짜표와 로컬 저장 — 2026-10-23
 
 연도/나이를 붙인 연간 문장과12개 월 구간의 직접 편집이 목적이다. 기존 공통 탐색·네이티브 입력·계정/작업공간별 IndexedDB CAS를 재사용하고, 새 라이브러리 없이 엄격한 시간대 없는 달력 날짜 모델과 전용 계획 UI를 구현한다. 서버·이벤트 캘린더·날짜 전체 표준 구현을 자체 개발하는 선택이 아니다. [사용 장면·날짜 보존·교체 조건](../design-review/annual-plan.md).

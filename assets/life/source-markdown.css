@@ -18,4 +18,19 @@
 .source-markdown th, .source-markdown td { padding: .45em .7em; border: 1px solid var(--line, #d7dfdc); text-align: start; }
 .source-markdown [data-source-block] { scroll-margin-block-start: 5rem; }
 .source-markdown:focus-visible { outline: 2px solid var(--color-primary, #17695c); outline-offset: 4px; }
+/* Imported properties stay secondary to the original reading column. */
+.source-markdown details.source-properties { max-width: 100%; margin-block: 0 1.5em; border-block: 1px solid var(--line, #d7dfdc); font-size: 14px; line-height: 1.7; }
+.source-markdown details.source-properties > summary { min-height: 44px; padding-block: 10px; color: var(--ink-soft, #5d6b65); line-height: 1.7; cursor: pointer; overflow-wrap: anywhere; }
+.source-markdown details.source-properties > summary:focus-visible { outline: 2px solid var(--color-primary, #17695c); outline-offset: 3px; }
+.source-markdown details.source-properties > dl { display: grid; grid-template-columns: minmax(0, 7em) minmax(0, 1fr); gap: 8px 16px; min-width: 0; max-width: 100%; margin: 0; padding-block: 4px 16px; }
+.source-markdown .source-properties :is(dt, dd) { min-width: 0; margin: 0; overflow-wrap: anywhere; word-break: normal; }
+.source-markdown .source-properties dt { color: var(--ink-soft, #5d6b65); font-weight: 500; }
+.source-markdown .source-properties dd { white-space: pre-wrap; }
+.source-markdown .source-properties dd :is(ul, ol) { margin-block: 0; padding-inline-start: 1.2em; }
+.source-markdown .source-properties dd li + li { margin-block-start: 4px; }
+.source-markdown .source-properties dd > :last-child { margin-block-end: 0; }
+.source-markdown pre.source-properties-raw { margin-block: 0 1.5em; padding: 12px 0; border-block: 1px solid var(--line, #d7dfdc); border-radius: 0; background: transparent; font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
+.source-markdown pre.source-properties-raw code { white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 700px) { .source-markdown { font-size: 17px; } }
+@media (max-width: 420px) { .source-markdown details.source-properties > dl { grid-template-columns: minmax(0, 6em) minmax(0, 1fr); column-gap: 12px; } }
+@media (forced-colors: active) { .source-markdown details.source-properties > summary:focus-visible { outline-color: Highlight; } }
