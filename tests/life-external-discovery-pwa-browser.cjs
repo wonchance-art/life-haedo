@@ -1,4 +1,4 @@
-/* Actual v156 -> v157 SW, cached public catalog and private local reactions.
+/* Actual v157 -> v158 SW, cached public catalog and private local reactions.
  * Prior SW script only is old; app modules are current. Real SDK/IDB/SW with
  * anonymous Auth HTTP. No real account, source-site fetch or model download. */
 'use strict';
@@ -6,7 +6,7 @@ const assert = require('node:assert/strict'), fs = require('node:fs/promises'), 
 const { createHash } = require('node:crypto');
 const project = path.resolve(__dirname, '..'), output = path.resolve(process.env.EXTERNAL_DISCOVERY_PWA_OUTPUT || path.join(project, '.local/external-discovery-pwa'));
 const feedPath = '/assets/life/discovery-feed.json', feedCache = 'haedo-discovery-feed-v1';
-const assets = ['annual-plan.js', 'annual-plan-ui.js', 'annual-plan.css', 'discovery.js', 'discovery-profile.js', 'discovery-settings.js', 'discovery-language-settings.js', 'discovery-actions.js', 'discovery-recommendations.js', 'discovery-reading.js', 'discovery-reading-ui.js', 'discovery-ui.js', 'discovery.css'].map(file => 'assets/life/' + file);
+const assets = ['annual-plan.js', 'annual-plan-ui.js', 'annual-plan.css', 'source-markdown.js', 'source-markdown.css', 'discovery.js', 'discovery-profile.js', 'discovery-settings.js', 'discovery-language-settings.js', 'discovery-actions.js', 'discovery-recommendations.js', 'discovery-reading.js', 'discovery-reading-ui.js', 'discovery-ui.js', 'discovery.css'].map(file => 'assets/life/' + file).concat('vendor/js-yaml/js-yaml.umd.min.js');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 // Follow the actual settings/back buttons before opening native disclosures.
 async function newsView(control) {
@@ -32,7 +32,7 @@ async function revealControl(control) {
   return control;
 }
 const report = { createdAt: new Date().toISOString(), checks: [], consoleErrors: [], pageErrors: [], expectedTransportErrors: [], modelRequests: [], unexpectedExternal: [], catalogRequests: [], blockedProbes: [],
-  scope: 'Real Chromium SDK/IndexedDB/Service Worker. Only v156 sw.js is prior code; all app modules and approved-source policy are current. Annual plans, reactions and five-language settings are seeded through the current real scoped storage API before the worker update; an actual a0eac63 v3 historical reading row is seeded unchanged into synthetic local metadata under its original workspace ID. This isolates worker/cache migration rather than reconstructing the entire previous app. Real prepared public catalog served by an anonymous local fixture; synthetic title/build-time update for freshness tests. Mocked Auth response during cached-shell reload is separate from strict offline Auth refusal. No production, Apple device, upstream collection or model validation.' };
+  scope: 'Real Chromium SDK/IndexedDB/Service Worker. Only v157 sw.js is prior code; all app modules and approved-source policy are current. Annual plans, reactions and five-language settings are seeded through the current real scoped storage API before the worker update; an actual a0eac63 v3 historical reading row is seeded unchanged into synthetic local metadata under its original workspace ID. This isolates worker/cache migration rather than reconstructing the entire previous app. Real prepared public catalog served by an anonymous local fixture; synthetic title/build-time update for freshness tests. Mocked Auth response during cached-shell reload is separate from strict offline Auth refusal. No production, Apple device, upstream collection or model validation.' };
 async function wait(page, fn, arg) {
   const end = Date.now() + 45000;
   while (Date.now() < end) { if (await page.evaluate(fn, arg)) return; await new Promise(resolve => setTimeout(resolve, 80)); }
@@ -40,16 +40,16 @@ async function wait(page, fn, arg) {
 }
 async function main() {
   await fs.mkdir(output, { recursive: true });
-  const oldSw = await fs.readFile(path.join(__dirname, 'fixtures/external-discovery/sw-discovery-v156.js'));
+  const oldSw = await fs.readFile(path.join(__dirname, 'fixtures/external-discovery/sw-discovery-v157.js'));
   const newSw = await fs.readFile(path.join(project, 'sw.js'));
   const historicalBytes = await fs.readFile(path.join(__dirname, 'fixtures/discovery-reading-v3.json'));
   assert.equal(sha(historicalBytes), '356402734efb25d79acf9fbf217a90bd7baed7ca601ff52dced71ad3711df3da', 'Historical v3 reading fixture must retain its original bytes');
   const historicalReading = JSON.parse(historicalBytes);
   const cacheName = data => data.toString().match(/const CACHE\s*=\s*['"]([^'"]+)/)[1];
   report.oldCache = cacheName(oldSw); report.newCache = cacheName(newSw);
-  assert.equal(report.oldCache, 'haedo-v156'); assert.equal(report.newCache, 'haedo-v157');
+  assert.equal(report.oldCache, 'haedo-v157'); assert.equal(report.newCache, 'haedo-v158');
   report.oldSwSHA256 = sha(oldSw); report.newSwSHA256 = sha(newSw);
-  assert.equal(report.oldSwSHA256, 'ff2ddde48c207c23e3edd41c9fe03669ab62e6a42b8fc7bc5395b1e40a929ed1', 'Prior worker must be the exact 5106736 v156 source');
+  assert.equal(report.oldSwSHA256, '37d38a1d8156d8ead995f60f0f9617baceb599d4b5562d4de0dc1c5b10a414f8', 'Prior worker must be the exact 2012ab4 v157 source');
   let old = true, failCatalog = false, strictOffline = false, transportProbe = false, probing = false;
   const originalFeed = JSON.parse(await fs.readFile(path.join(project, feedPath.slice(1)), 'utf8'));
   let feed = structuredClone(originalFeed);
@@ -98,7 +98,7 @@ async function main() {
   const check = async (name, action) => { await action(); report.checks.push(name); console.log('PASS ' + name); };
   try {
     await open('interests');
-    await check('actual v156 installs without fetching catalog, original sites or model assets', async () => {
+    await check('actual v157 installs without fetching catalog, original sites or model assets', async () => {
       await wait(page, async name => (await caches.keys()).includes(name) && !!navigator.serviceWorker.controller && (await navigator.serviceWorker.getRegistration())?.active?.state === 'activated', report.oldCache);
       assert.equal(report.catalogRequests.length, 0); assert.deepEqual(report.modelRequests, []); assert.deepEqual(report.unexpectedExternal, []);
     });
@@ -120,7 +120,7 @@ async function main() {
     await open('interests');
     await page.evaluate(async publicFeed => {
       const s = HaedoLife.Shell.storage, core = HaedoLife.Core, id = await s.getActive(); const bundle = await s.read(id);
-      const prepared = await core.prepareImport({ origin: 'other', title: '발견 갱신 보존용 합성 원문', text: '\ufeff한글 😀 원문\r\nCafe\u0301 · 원본 줄바꿈과 작성자 정보를 유지합니다.', authorRelation: 'self', forceSeparate: true }, bundle);
+      const prepared = await core.prepareImport({ origin: 'other', title: '발견 갱신 보존용 합성 원문', format: 'text/markdown', text: '\ufeff---\r\ntitle: 익명 학습 계획\r\ndate: 2026-01-02\r\ntags: [learning, reading]\r\nrelated: [\"[[참고 기록]]\"]\r\n---\r\n\r\n# 한글 😀 원문\r\nCafe\u0301 · 원본 줄바꿈과 작성자 정보를 유지합니다.', authorRelation: 'self', forceSeparate: true }, bundle);
       const result = await s.commitLocal({ workspaceId: id, baseRevision: bundle.revision, operationId: core.id(), changes: core.buildImportChanges(bundle, prepared, []) });
       if (result.status !== 'stored') throw Error('Anonymous source fixture failed');
       const manual = await s.readInterestProfile(id), next = HaedoLife.InterestProfile.setManual(manual, [{ id: 'manual-pwa', label: '개발과 문화' }], { expectedRevision: manual.revision });
@@ -158,7 +158,7 @@ async function main() {
     assert.ok(before.actions.entries.some(entry => entry.liked && entry.bookmarked));
     assert.ok(before.actions.entries.some(entry => !entry.liked && !entry.bookmarked && entry.likedAt === null && entry.bookmarkedAt === null));
     report.privateActionsFixture = { revision: before.actions.revision, entries: before.actions.entries.length, activeBoth: 1, cancelled: 1, personalizationEnabled: true, sha256: sha(Buffer.from(JSON.stringify(before.actions))) };
-    await check('v156 -> v157 worker preserves exact originals, workbench, manual interests, feedback, old settings, five language preferences, private reactions, annual plans and historical v3 reading', async () => {
+    await check('v157 -> v158 worker preserves exact originals, workbench, manual interests, feedback, old settings, five language preferences, private reactions, annual plans and historical v3 reading', async () => {
       old = false; await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
       await wait(page, async ({ oldCache, newCache }) => { const keys = await caches.keys(), r = await navigator.serviceWorker.getRegistration(); return !keys.includes(oldCache) && keys.includes(newCache) && r?.active?.state === 'activated' && navigator.serviceWorker.controller === r.active; }, { oldCache: report.oldCache, newCache: report.newCache });
       await page.reload(); await ready(page); assert.deepEqual(await state(), before);

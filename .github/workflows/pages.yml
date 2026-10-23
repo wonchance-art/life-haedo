@@ -414,6 +414,9 @@ jobs:
       - name: Verify formatted materials, exact editing, trash recovery and preserved references
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/material-library-browser.cjs
+      - name: Verify Obsidian properties, exact Markdown reading and preserved editing
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/obsidian-markdown-browser.cjs
       - name: Verify frozen reading comparisons, explicit judgments and local recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-reading-browser.cjs
@@ -538,6 +541,7 @@ jobs:
             .local/book-design-reset-app/caret/
             .local/reading-resume/
             .local/material-library/
+            .local/obsidian-markdown/
             .local/product-flow-quality/
             .local/search-quality/
             .local/expression-design/
