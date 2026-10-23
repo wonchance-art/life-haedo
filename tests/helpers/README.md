@@ -20,6 +20,14 @@ capability probes. `libraryAssetCalls` records original chunk HTTP calls. The ne
 suite inspects all of them and blocks external origins and noncontract writes.
 No real account, vault, provider, production endpoint or live database is used.
 
+Legacy browser request audits use `isLegacyLibraryCapabilityRead` to record the
+empty authenticated capability POST separately in `libraryCapabilityReads`.
+It accepts only the exact configured origin/path with no query, POST, an empty
+JSON object, a known synthetic authenticated owner, and all three versions zero.
+Capability one, unknown/anonymous owners, arguments and every other RPC retain
+the original write audit. Existing zero-write assertions and private-body checks
+remain in place; capability probes are observed reads rather than hidden traffic.
+
 The only static replacement is the existing anonymous platform configuration.
 Capability one is never enabled globally. Core raw bytes, IDs and references use
 the actual models; saved profile fixture edits use the actual storage API and are

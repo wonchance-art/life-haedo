@@ -3,6 +3,7 @@
 const test = require('node:test'), assert = require('node:assert/strict'), { createHash } = require('node:crypto');
 const { FakeCloud, accounts, session, cloud } = require('./life-sync-browser.cjs');
 const Core = require('../assets/life/core.js'), Meta = require('../assets/life/library-meta.js');
+const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 async function request(server, rpc, body = {}, owner = accounts.a, options = {}) {
   let response; const bytes = options.bytes, method = options.method || 'POST', url = cloud + (options.path || '/rest/v1/rpc/' + rpc);
@@ -13,6 +14,15 @@ async function request(server, rpc, body = {}, owner = accounts.a, options = {})
 test('older backend is explicit capability zero; probes are recorded without changing legacy workspace ledgers', async () => {
   const server = new FakeCloud(), capability = await request(server, 'life_library_capabilities'); assert.equal(capability.status, 200); assert.deepEqual(capability.json, { version: 0, metadataVersion: 0, originalsVersion: 0 }); assert.equal(server.libraryRequests.length, 1); assert.equal(server.requests.length, 0); assert.equal(server.writes().length, 0);
   assert.equal((await request(server, 'life_library_open')).status, 404); assert.equal(server.rows.size, 0);
+});
+test('legacy read classifier admits only the exact empty authenticated cap0 probe and preserves every mutation/privacy boundary', () => {
+  const server = new FakeCloud(), url = cloud + '/rest/v1/rpc/life_library_capabilities', request = (patch = {}) => ({ url: () => patch.url || url, method: () => patch.method || 'POST', postData: () => Object.hasOwn(patch, 'body') ? patch.body : '{}', headers: () => ({ authorization: 'Bearer ' + session(accounts.a).access_token, ...patch.headers }) });
+  const classify = patch => isLegacyLibraryCapabilityRead(request(patch), { cloud, server });
+  assert.equal(classify(), true); assert.equal(classify({ body: ' \n{}\t' }), true);
+  const unknownOwner = session({ id: Core.id(), email: 'unknown-owner@example.invalid' }).access_token;
+  for (const patch of [{ url: 'https://other.example.invalid/rest/v1/rpc/life_library_capabilities' }, { url: url + '?private=1' }, { url: url + '#private' }, { url: cloud + '/rest/v1/rpc/life_library_meta_put' }, { url: cloud + '/rest/v1/rpc/life_sync_put' }, { url: url + '/' }, { method: 'GET' }, { method: 'DELETE' }, { body: null }, { body: '' }, { body: '[]' }, { body: 'null' }, { body: '"private"' }, { body: '{"private":"must stay audited"}' }, { body: '{"p_workspace_id":"private"}' }, { body: '{' }, { headers: { authorization: session(accounts.a).access_token } }, { headers: { authorization: 'Basic ' + session(accounts.a).access_token } }, { headers: { authorization: '' } }, { headers: { authorization: 'Bearer anonymous' } }, { headers: { authorization: 'Bearer ' + unknownOwner } }]) assert.equal(classify(patch), false, JSON.stringify(patch));
+  for (const capabilities of [{ version: 1, metadataVersion: 1, originalsVersion: 1 }, { version: 0, metadataVersion: 1, originalsVersion: 0 }, { version: 0, metadataVersion: 0, originalsVersion: 0, extra: 0 }, null]) { server.libraryCapabilities = capabilities; assert.equal(classify(), false); }
+  assert.equal(isLegacyLibraryCapabilityRead(request(), { cloud, server: {} }), false); assert.equal(server.requests.length, 0); assert.equal(server.libraryRequests.length, 0, 'Pure classification must not send, conceal or change fixture traffic');
 });
 test('same-account first opens agree, catalogs are owner scoped and deleted defaults are never recreated', async () => {
   const server = new FakeCloud().enableAccountLibrary(), preferred = Core.id();

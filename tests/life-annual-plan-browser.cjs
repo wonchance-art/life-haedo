@@ -2,6 +2,7 @@
  * Auth/remote HTTP is anonymous FakeCloud; birthdate and all plans are synthetic.
  * No real account, server write, external calendar, Apple device or OS file-save claim. */
 'use strict';
+const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -14,7 +15,7 @@ const entry = base + '/index.html?section=tools&view=annual-plan';
 const PRIVATE = '합성개인계획_외부전송금지';
 const RAW = '\ufeff연간 계획과 분리된 합성 원문 😀\r\nCafe\u0301와 정확한 줄바꿈';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
-const report = { createdAt: new Date().toISOString(), scope: 'Local actual UI/Core/bundled SDK/scoped IndexedDB with anonymous FakeCloud Auth. Birthdate, annual/monthly plans, composition events, account sessions and save/read delays are synthetic. No production user/DB, publisher/AI/calendar requests, actual Apple hardware or OS file-save proof.', checks: [], visual: [], consoleErrors: [], pageErrors: [], externalRequests: [], privacyViolations: [], remoteWrites: [], closedContexts: 0 };
+const report = { createdAt: new Date().toISOString(), scope: 'Local actual UI/Core/bundled SDK/scoped IndexedDB with anonymous FakeCloud Auth. Birthdate, annual/monthly plans, composition events, account sessions and save/read delays are synthetic. No production user/DB, publisher/AI/calendar requests, actual Apple hardware or OS file-save proof.', checks: [], visual: [], consoleErrors: [], pageErrors: [], externalRequests: [], privacyViolations: [], libraryCapabilityReads: [], remoteWrites: [], closedContexts: 0 };
 async function wait(page, predicate, argument, label = 'annual plan state') {
   await page.waitForFunction(predicate, argument, { timeout: 20000 });
 }
@@ -91,7 +92,8 @@ async function main() {
     context.on('request', request => {
       const u = new URL(request.url()), body = request.postData() || '';
       if ([PRIVATE, RAW, '2000-02-29'].some(text => u.href.includes(text) || u.href.includes(encodeURIComponent(text)) || body.includes(text) || body.includes(JSON.stringify(text).slice(1, -1)))) report.privacyViolations.push({ check: name, destination: u.origin + u.pathname });
-      if (u.origin === cloud && !['GET', 'OPTIONS'].includes(request.method()) && !u.pathname.startsWith('/auth/')) report.remoteWrites.push({ check: name, method: request.method(), path: u.pathname });
+      if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ check: name, owner: server.libraryOwner(request), method: request.method(), path: u.pathname, parameterCount: 0 });
+      else if (u.origin === cloud && !['GET', 'OPTIONS'].includes(request.method()) && !u.pathname.startsWith('/auth/')) report.remoteWrites.push({ check: name, method: request.method(), path: u.pathname });
     });
     await context.route('**/*', route => {
       const u = new URL(route.request().url());

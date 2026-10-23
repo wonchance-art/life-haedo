@@ -141,7 +141,8 @@
       const automatic = !!life.AccountLibrary?.create;
       sync = life.Sync.create({ storage, core: life.Core, remoteFactory: life.PlatformRemote.create, automatic: !automatic });
       compositionSync = life.CompositionSync.create({ storage, sourceSync: sync, auth,
-        initialReceive: automatic ? (workspaceId, binding, row, options) => storage.adoptCompositionRemote(workspaceId, binding, row, options) : null });
+        initialReceive: automatic ? (workspaceId, binding, row, options) => accountLibrary?.getMode() === 'account'
+          ? storage.adoptCompositionRemote(workspaceId, binding, row, options) : { status: 'conflict' } : null });
       libraryMetaSync = life.LibraryMetaSync?.create({ storage, sourceSync: sync, auth });
       writingSync = life.WritingSync.create({ storage, sourceSync: sync, auth });
       let bootstrap = null;

@@ -11,6 +11,21 @@ const sha = value => createHash('sha256').update(value).digest('hex');
 const canonical = value => JSON.stringify(value, function (key, item) { return item && !Array.isArray(item) && typeof item === 'object' ? Object.fromEntries(Object.keys(item).sort().map(name => [name, item[name]])) : item; });
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i, HASH = /^[a-f0-9]{64}$/;
 const RPCS = new Set(['life_library_capabilities', 'life_library_open', 'life_library_catalog', 'life_library_meta_get', 'life_library_meta_put', 'life_library_originals_list', 'life_library_original_get', 'life_library_original_put']);
+// A POST is not inherently a mutation. Only the exact empty authenticated
+// capability read against this explicitly older backend is classified here;
+// every other request retains the caller's original strict write/privacy audit.
+function isLegacyLibraryCapabilityRead(request, { cloud, server } = {}) {
+  try {
+    const caps = server?.libraryCapabilities;
+    if (!caps || Object.keys(caps).length !== 3 || ['version', 'metadataVersion', 'originalsVersion'].some(key => caps[key] !== 0)) return false;
+    const url = new URL(request.url());
+    if (url.origin !== cloud || url.pathname !== '/rest/v1/rpc/life_library_capabilities' || url.search || url.hash || url.username || url.password || request.method() !== 'POST') return false;
+    const authorization = request.headers().authorization;
+    if (typeof authorization !== 'string' || !/^Bearer \S+$/i.test(authorization) || !server.libraryOwner(request)) return false;
+    const raw = request.postData(); if (typeof raw !== 'string') return false;
+    const body = JSON.parse(raw); return body !== null && !Array.isArray(body) && typeof body === 'object' && Object.keys(body).length === 0;
+  } catch (_) { return false; }
+}
 function withLibraryCloud(BaseCloud, accounts) {
   return class LibraryCloud extends BaseCloud {
     constructor(...args) {
@@ -124,4 +139,4 @@ function withLibraryCloud(BaseCloud, accounts) {
     }
   };
 }
-module.exports = { withLibraryCloud };
+module.exports = { withLibraryCloud, isLegacyLibraryCapabilityRead };

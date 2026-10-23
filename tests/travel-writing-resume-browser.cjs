@@ -3,6 +3,7 @@
  * Lifecycle/composition events are simulated in Linux Chromium, not Apple OS,
  * native IME, browser eviction, crash recovery or live Google verification. */
 'use strict';
+const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4231';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -20,7 +21,7 @@ async function entered(gate) {
 
 async function main() {
   await fs.mkdir(out, { recursive: true });
-  const report = { checks: [], visual: [], departures: [], pageErrors: [], consoleErrors: [], expectedAuthErrors: [], external: [], writes: [],
+  const report = { checks: [], visual: [], departures: [], pageErrors: [], consoleErrors: [], expectedAuthErrors: [], external: [], libraryCapabilityReads: [], writes: [],
     scope: 'One anonymous account-scoped SDK/IndexedDB writing journey. Synthetic persisted lifecycle and composition events in Linux Chromium; no Apple hardware, native file picker/IME, live OAuth, publication, browser eviction or crash-survival claim.' };
   report.sourceHashes = await Promise.all(['assets/platform-auth.js','assets/life/shell.js','assets/life/ui.js','assets/life/workbench-ui.js','assets/life/photo-post-ui.js'].map(async file => {
     const response = await fetch(base+'/'+file);assert(response.ok);const served=Buffer.from(await response.arrayBuffer()),disk=await fs.readFile(path.resolve(__dirname,'..',file));
@@ -52,7 +53,8 @@ async function main() {
   });
   context.on('request', request => {
     const url = new URL(request.url());
-    if (url.origin === cloud && request.method() !== 'GET' && request.method() !== 'OPTIONS' && url.pathname.startsWith('/rest/')) report.writes.push(url.pathname);
+    if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ owner: server.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
+    else if (url.origin === cloud && request.method() !== 'GET' && request.method() !== 'OPTIONS' && url.pathname.startsWith('/rest/')) report.writes.push(url.pathname);
   });
   const page = await context.newPage(); page.setDefaultTimeout(15000); page.setDefaultNavigationTimeout(15000);
   page.on('pageerror', error => report.pageErrors.push(error.stack || error.message));

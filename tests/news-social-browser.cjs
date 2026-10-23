@@ -2,6 +2,7 @@
  * SDK and scoped IndexedDB; mocked Auth and synthetic Korean public metadata.
  * No production/publisher requests, actual reading, Apple or usefulness claim. */
 'use strict';
+const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -13,7 +14,7 @@ const repo = path.resolve(__dirname, '..');
 const output = path.resolve(process.env.NEWS_SOCIAL_OUTPUT || path.join(repo, '.local/news-social-redesign-20261021/qa'));
 const entry = base + '/index.html?section=news', feedPath = '/assets/life/discovery-feed.json';
 const PRIVATE = '뉴스UI검수_비공개합성입력_외부전송금지';
-const report = { createdAt: new Date().toISOString(), scope: 'Focused local news hierarchy/reaction UI with actual bundled SDK and account-scoped IndexedDB. Auth and public feed metadata are synthetic fixtures; IME and viewport changes are simulated. No production Auth/DB, live publisher/Google response, Apple device, reading or usefulness claim.', checks: [], visual: [], consoleErrors: [], pageErrors: [], externalRequests: [], privacyViolations: [], modelRequests: [], remoteWrites: [], catalogRequests: [] };
+const report = { createdAt: new Date().toISOString(), scope: 'Focused local news hierarchy/reaction UI with actual bundled SDK and account-scoped IndexedDB. Auth and public feed metadata are synthetic fixtures; IME and viewport changes are simulated. No production Auth/DB, live publisher/Google response, Apple device, reading or usefulness claim.', checks: [], visual: [], consoleErrors: [], pageErrors: [], externalRequests: [], privacyViolations: [], modelRequests: [], libraryCapabilityReads: [], remoteWrites: [], catalogRequests: [] };
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const products = ['assets/life/discovery-ui.js', 'assets/life/discovery.css', 'assets/life/discovery.js', 'assets/life/discovery-actions.js', 'assets/life/discovery-recommendations.js', 'assets/life/discovery-reading.js', 'assets/life/discovery-reading-ui.js', 'assets/life/storage.js', 'assets/life/ui.js', 'assets/life/shell.js', 'assets/haedo-shell.css'];
 const hashes = async () => Object.fromEntries(await Promise.all(products.map(async file => [file, sha(await fs.readFile(path.join(repo, file)))])));
@@ -88,7 +89,8 @@ async function main() {
     const address = new URL(request.url()), body = request.postData() || '', headers = request.headers();
     if ([PRIVATE, encodeURIComponent(PRIVATE), JSON.stringify(PRIVATE).slice(1, -1)].some(value => address.href.includes(value) || body.includes(value))) report.privacyViolations.push({ destination: address.origin + address.pathname });
     if (/huggingface|xethub|transformers|onnxruntime|\.onnx(?:$|\?)|\.wasm(?:$|\?)/i.test(address.href)) report.modelRequests.push(address.origin + address.pathname);
-    if (address.origin === cloud && address.pathname.startsWith('/rest/') && !['GET', 'OPTIONS'].includes(request.method())) report.remoteWrites.push(address.pathname);
+    if (isLegacyLibraryCapabilityRead(request, { cloud, server: fake })) report.libraryCapabilityReads.push({ owner: fake.libraryOwner(request), method: request.method(), path: address.pathname, parameterCount: 0 });
+    else if (address.origin === cloud && address.pathname.startsWith('/rest/') && !['GET', 'OPTIONS'].includes(request.method())) report.remoteWrites.push(address.pathname);
     if (address.origin === new URL(base).origin && address.pathname === feedPath) {
       const boundary = { method: request.method(), query: !!address.search, body: !!request.postData(), auth: !!headers.authorization, cookie: !!headers.cookie, referrer: !!headers.referer };
       report.catalogRequests.push(boundary); if (boundary.method !== 'GET' || Object.entries(boundary).some(([key, value]) => key !== 'method' && value)) report.privacyViolations.push({ reason: 'Fixed public catalog boundary' });

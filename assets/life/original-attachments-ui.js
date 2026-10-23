@@ -47,7 +47,7 @@
       retry.hidden = !value.error;
       if (value.error) { if (!actionError) showError(value.error, false); announce('기존 원본과 전송 대기를 유지합니다.'); }
       else if (value.mode === 'account') { if (!actionError) error.hidden = true; announce(value.pending ? `계정 보관 대기 ${value.pending}개` : '계정에 보관했습니다.'); }
-      else if (value.mode === 'legacy') announce('계정 원본 연동을 사용할 수 없습니다. 기존 원본은 유지합니다.');
+      else if (value.mode === 'legacy' && !status.textContent) announce('계정 원본 연동을 사용할 수 없습니다. 기존 원본은 유지합니다.');
     }
     async function run(fn, { passive = false } = {}) {
       if (!still() || busy) return; busy = true; if (!passive) { actionError = false; error.hidden = true; } controller = new AbortController(); controls();
