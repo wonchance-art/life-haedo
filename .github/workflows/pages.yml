@@ -399,6 +399,9 @@ jobs:
       - name: Verify captured Naver photos, exact source revisions and independent device recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-naver-capture-browser.cjs
+      - name: Verify annual planning, dated month preservation and private local recovery
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-annual-plan-browser.cjs
       - name: Verify explicit external discovery, exact source return and private feedback
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-external-discovery-browser.cjs
@@ -478,6 +481,7 @@ jobs:
             .local/discovery-automation-browser/
             .local/discovery-reactions-browser/
             .local/discovery-languages-browser/
+            .local/annual-plan-browser/
             .local/discovery-reading-browser/
             .local/news-social-redesign-20261021/qa/
             .local/unified-search/

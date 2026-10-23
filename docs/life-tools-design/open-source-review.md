@@ -1,5 +1,19 @@
 # 오픈소스 검토와 재사용 결정
 
+## 연간 계획의 날짜표와 로컬 저장 — 2026-10-23
+
+연도/나이를 붙인 연간 문장과12개 월 구간의 직접 편집이 목적이다. 기존 공통 탐색·네이티브 입력·계정/작업공간별 IndexedDB CAS를 재사용하고, 새 라이브러리 없이 엄격한 시간대 없는 달력 날짜 모델과 전용 계획 UI를 구현한다. 서버·이벤트 캘린더·날짜 전체 표준 구현을 자체 개발하는 선택이 아니다. [사용 장면·날짜 보존·교체 조건](../design-review/annual-plan.md).
+
+| 후보와 확인 버전 | 공식 근거와 유지관리 | 이번 판단 |
+| --- | --- | --- |
+| date-fns4.4.0 · MIT | [공식 릴리스](https://github.com/date-fns/date-fns/releases/tag/v4.4.0),2026-05-29. npm latest와 일치하며 비보관 저장소의2026-10-22 push를 확인했다. 고정 commit `cd53d2538cfa318404eff7ade6449b49bf34562e`의 [MIT 원문](https://github.com/date-fns/date-fns/blob/cd53d2538cfa318404eff7ade6449b49bf34562e/pkgs/core/LICENSE.md)과 [addMonths](https://github.com/date-fns/date-fns/blob/cd53d2538cfa318404eff7ade6449b49bf34562e/pkgs/core/src/addMonths/index.ts)를 대조했다. | 월말 처리의 대안으로 참고했다. 현재 요구는 시간대 없는 연도·월·일과12개의 제한 구간뿐이어서 새 Date 기반 API·배포물을 추가하지 않는다. 기존 날짜를 보존하는 표시 투영 규칙은 별도 제품 정책으로 검수한다. |
+| FullCalendar core7.1.3 · MIT | [공식 릴리스](https://github.com/fullcalendar/fullcalendar/releases/tag/v7.1.3),2026-10-16. npm latest·비보관 저장소의 같은 날 push·고정 [MIT 원문](https://github.com/fullcalendar/fullcalendar/blob/v7.1.3/LICENSE.md)과 [공식 문서](https://fullcalendar.io/docs)를 확인했다. [Premium 조건](https://fullcalendar.io/license)은 표준 MIT와 구분한다. | 날짜별 이벤트·드래그 캘린더는 여러 연도의 행과 같은 위치의 월별 텍스트를 비교하는 이번 구조와 다르다. 컴포넌트·코드·Premium 기능을 도입하지 않는다. 일/주 일정과 상호 이동이 실제로 필요해지면 다시 비교한다. |
+| @js-temporal/polyfill0.5.1 · ISC | [공식 npm 메타데이터](https://registry.npmjs.org/@js-temporal/polyfill/latest)의 버전·gitHead `f3c07e503632ddf7ff918066f2eb30a9dcfa06ff`와 [ISC 원문](https://github.com/js-temporal/temporal-polyfill/blob/f3c07e503632ddf7ff918066f2eb30a9dcfa06ff/LICENSE), [고정 README](https://github.com/js-temporal/temporal-polyfill/blob/f3c07e503632ddf7ff918066f2eb30a9dcfa06ff/README.md)를 대조했다. 저장소는 비보관,2026-09-22 push를 확인했다. | PlainDate처럼 날짜와 시간대를 분리하는 설계를 참고했다. 전체 polyfill과 JSBI 의존성·별도 동봉/업데이트 비용보다 현재의 제한 날짜 검증이 작다. 사용자 지역·시간대·반복 규칙·여러 달력이 요구되면 직접 구현 범위를 늘리기 전에 재검토한다. |
+
+각 정확 버전의 직접 공개 advisory 조회는 [date-fns](https://api.github.com/advisories?ecosystem=npm&affects=date-fns%404.4.0&per_page=100)·[FullCalendar core](https://api.github.com/advisories?ecosystem=npm&affects=%40fullcalendar%2Fcore%407.1.3&per_page=100)·[Temporal polyfill](https://api.github.com/advisories?ecosystem=npm&affects=%40js-temporal%2Fpolyfill%400.5.1&per_page=100) 모두0건이었다. 이는2026-10-23 조회 결과이며 전이 의존성 감사나 안전성 보장이 아니다. 직접 설치하지 않으므로 새 vendor·lockfile·런타임 의존성은 추가하지 않는다. date-fns의 [보안 정책](https://github.com/date-fns/date-fns/blob/main/SECURITY.md)은 최신 릴리스에 보안 수정을 적용한다고 명시한다. 확인한 FullCalendar·Temporal 루트 `SECURITY.md` 경로의404만으로 보안 정책 전체가 없다고 단정하지 않는다.
+
+조회 한계: Temporal의 GitHub `releases/latest`는404여서 npm latest의 정확 gitHead·고정 README/CHANGELOG/LICENSE로 확인했다. date-fns의 과거 루트 `LICENSE.md`·`src/addMonths/index.ts` 경로는404였으며 해당 태그의 재귀 tree에서 관측한 `pkgs/core` 경로로 해결했다. 후보의 소스나 자산은 제품에 복사하지 않았다. 제한 날짜 모델의 유지 비용은 윤년·월말·기준 전환·순수 날짜/UTC 비혼용 테스트이며, 범용 시간대/일정 엔진의 유지 비용으로 넓히지 않는다. 자체 모델·기존 CAS를 포함한 최종 전체 단위1,328개, 실제 SDK/IDB의 연간 계획 브라우저10개와 SW156→157 PWA9개를 통과했다. 이 결과는 위 후보 라이브러리를 실행하거나 실제 사용자 계획·외부 일정·Apple 기기를 검증한 결과가 아니다.
+
 ## 다중 콘텐츠 언어·관련 표현·심리학 RSS — 2026-10-22
 
 기존 네이티브 checkbox·Discovery 언어 필터·언어 설정 CAS·Reading 불변 비교·Python 표준 XML 수집기를 재사용한다. 별도 다중 선택 라이브러리·번역 SDK·다국어 사전 API·추천 서버는 추가하지 않는다. 이미 여러 언어 선택을 지원하므로 화면의 선택 요약과 실제 공급 구분을 보완하는 편이 저장 형식·기기 데이터·오프라인 보존 비용이 작다. 새 패키지 도입이 없어 기존 vendor 버전·라이선스는 변경하지 않았다.

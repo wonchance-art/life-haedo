@@ -137,7 +137,7 @@
     const blogViews = new Map(), naverBlogViews = new Map();
     const blogSync = global.HaedoLife.BlogSync?.create({ storage, auth });
     const parentViews = new Set(['naver-capture', 'naver-blog', 'external-discovery', 'interests', 'blog', 'account-blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
-    const subviewTitles = { 'source-trash': '자료 휴지통', 'source-edit': '자료 수정', 'naver-capture': '네이버 본문·사진 검토', 'naver-blog': '네이버 블로그 연결', 'account-blog': '서버에 보관한 글', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 확인', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
+    const subviewTitles = { 'annual-plan': '연간 계획', 'source-trash': '자료 휴지통', 'source-edit': '자료 수정', 'naver-capture': '네이버 본문·사진 검토', 'naver-blog': '네이버 블로그 연결', 'account-blog': '서버에 보관한 글', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 확인', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
       discover: '다시 찾기', sync: '기기 간 동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
     const selectedVersions = new Set();
@@ -195,6 +195,8 @@
       }
     });
     const editingInput = () => { inputGeneration += 1; global.HaedoMotion?.cancel(main); };
+    const annualPlanUI = global.HaedoLife.AnnualPlanUI?.create({ container: main, storage,
+      getBundle: () => state.bundle, isCurrent: () => !disposed && state.mode === 'annual-plan' });
     const externalDiscoveryUI = global.HaedoLife.DiscoveryUI?.create({ container: main, storage,
       getBundle: () => state.bundle, isCurrent: () => !disposed && state.mode === 'external-discovery',
       onOpenInterests: () => navigate('interests'),
@@ -1115,6 +1117,7 @@
           ? (state.returnContext.mode === 'page' ? viewOrigins.get('page') : { ...state.returnContext }) : null;
       const returningFromReader = from === 'source' && state.returnContext?.mode === mode;
       if (dirty()) await persistStage();
+      await annualPlanUI?.flush();
       await externalDiscoveryUI?.flush();
       if (mode === 'external-discovery' && currentExternalImport() && externalImportContext.committed) await refreshData();
       await preservationUI?.flush();
@@ -1326,7 +1329,7 @@
     function sectionFor(mode) {
       if (mode === 'external-discovery') return 'news';
       if (mode === 'home' || mode === 'account-blog' || mode === 'page' && blogPageTask || mode === 'write' && viewOrigins.get('write')?.mode === 'home' || mode === 'source' && (state.returnContext?.mode === 'home' || state.returnContext?.mode === 'page' && blogPageTask)) return 'home';
-      return ['tools', 'naver-capture', 'naver-blog', 'interests', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'source-trash', 'blog', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
+      return ['tools', 'annual-plan', 'naver-capture', 'naver-blog', 'interests', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'source-trash', 'blog', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
     }
 
     function routeMode() {
@@ -1336,9 +1339,9 @@
       if (params.get('compose') === '1') return 'page';
       if (section === 'news') return 'external-discovery';
       if (section === 'home' && !view) return 'home';
-      if (section === 'tools') return ['naver-blog', 'external-discovery', 'interests', 'discover', 'reflection', 'books'].includes(view) ? view : 'tools';
+      if (section === 'tools') return ['annual-plan', 'naver-blog', 'external-discovery', 'interests', 'discover', 'reflection', 'books'].includes(view) ? view : 'tools';
       if (section === 'manage') return ['source-trash', 'blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
-      if (!section && ['naver-blog', 'account-blog', 'blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages', 'external-discovery', 'interests', 'discover', 'reflection', 'books'].includes(view)) return view;
+      if (!section && ['annual-plan', 'naver-blog', 'account-blog', 'blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages', 'external-discovery', 'interests', 'discover', 'reflection', 'books'].includes(view)) return view;
       if (['account-blog', 'blog', 'topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related', 'collection', 'find'].includes(view)) return view;
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
     }
@@ -1352,7 +1355,7 @@
       else url.searchParams.set('section', section);
       const view = mode === 'naver-capture' ? 'naver-blog' : mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
       if (mode === 'external-discovery') url.searchParams.delete('view');
-      else if (['naver-blog', 'account-blog', 'blog', 'topics', 'time', 'import', 'write', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'interests', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
+      else if (['annual-plan', 'naver-blog', 'account-blog', 'blog', 'topics', 'time', 'import', 'write', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'interests', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
       else url.searchParams.delete('view');
       const destination = url.pathname + url.search + url.hash;
       if (destination !== global.location.pathname + global.location.search + global.location.hash)
@@ -1377,6 +1380,7 @@
       const next = section === previousSection ? sectionRoot : section === 'news' ? 'external-discovery' : section === 'home' ? 'home' : section === 'records' ? lastRecordMode : section === 'tools' ? 'tools' : 'manage';
       // Save before changing URL so a failed draft write keeps the current view.
       if (dirty()) await persistStage();
+      await annualPlanUI?.flush();
       await externalDiscoveryUI?.flush();
       await preservationUI?.flush();
       await obsidianUpdateUI?.flush();
@@ -1599,7 +1603,8 @@
 
     function renderTools() {
       const list = node('div', null, 'life-destinations');
-      list.append(actionRow('네이버 블로그 연결', '아이디로 연결하고 가져온 글과 새 글 확인', 'link', () => navigate('naver-blog')),
+      list.append(actionRow('연간 계획', '연도·나이와 월별 계획', 'timeline', () => navigate('annual-plan')),
+        actionRow('네이버 블로그 연결', '아이디로 연결하고 가져온 글과 새 글 확인', 'link', () => navigate('naver-blog')),
         actionRow('관심 확인', '직접 관심을 적고 선택 자료의 근거 확인', 'search', () => navigate('interests')),
         actionRow('새 글 찾기', '보관한 관심으로 아직 담지 않은 외부 글 찾기', 'search', () => navigate('external-discovery')),
         actionRow('다시 찾기', '검색하고 관련 기록 이어 보기', 'search', () => navigate('discover')),
@@ -4224,6 +4229,7 @@
       obsidianUpdateUI?.dispose(); obsidianUpdateUI = null;
       homeRenderPromise = Promise.resolve();
       interestUI?.leave();
+      annualPlanUI?.leave();
       externalDiscoveryUI?.leave();
       home?.leave();
       workbench?.leave();
@@ -4248,6 +4254,7 @@
       if (state.mode === 'naver-capture') { mainRenderPromise = renderNaverCapture().catch(failure); return; }
       if (state.mode === 'naver-blog') { mainRenderPromise = renderNaverBlog().catch(failure); return; }
       if (state.mode === 'interests' && interestUI) return mainRenderPromise = interestUI.render().catch(failure);
+      if (state.mode === 'annual-plan' && annualPlanUI) return mainRenderPromise = annualPlanUI.render().catch(failure);
       if (state.mode === 'external-discovery' && externalDiscoveryUI) return mainRenderPromise = externalDiscoveryUI.render().catch(failure);
       if (state.mode === 'public-cover') return mainRenderPromise = renderPublicCover().catch(failure);
       if (state.mode === 'obsidian-update') return mainRenderPromise = renderObsidianUpdate().catch(failure);
@@ -4296,7 +4303,7 @@
     }
 
     const beforeUnload = event => {
-      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || sourceEditor?.isDirty() || collection?.dirty() || accountBlogUI?.dirty() || blogManager?.dirty() || preservationUI?.dirty() || obsidianUpdateUI?.dirty() || originalAttachmentsUI?.dirty() || publicCoverUI?.dirty() || interestUI?.dirty() || externalDiscoveryUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
+      if (dirty() || state.sourceDrafts.size || workbench?.dirty() || writer?.isDirty() || sourceEditor?.isDirty() || collection?.dirty() || accountBlogUI?.dirty() || blogManager?.dirty() || preservationUI?.dirty() || obsidianUpdateUI?.dirty() || originalAttachmentsUI?.dirty() || publicCoverUI?.dirty() || interestUI?.dirty() || externalDiscoveryUI?.dirty() || annualPlanUI?.dirty()) { event.preventDefault(); event.returnValue = ''; }
     };
     const visibility = () => {
       if (!document.hidden) return;
@@ -4369,6 +4376,7 @@
 
     async function checkpoint() {
       if (disposed) return;
+      await annualPlanUI?.flush();
       await workbench?.checkpoint();
     }
 
@@ -4382,6 +4390,7 @@
     async function persistDrafts() {
       if (disposed) throw new Error('계정이 바뀌어 이전 초안을 보관할 수 없습니다.');
       await interestUI?.flush();
+      await annualPlanUI?.flush();
       await externalDiscoveryUI?.flush();
       await preservationUI?.flush();
       await obsidianUpdateUI?.flush();
@@ -4428,6 +4437,7 @@
       accountMaterialsSequence += 1;
       accountMaterials?.dispose(); accountMaterials = null;
       interestUI?.dispose();
+      annualPlanUI?.dispose();
       externalDiscoveryUI?.dispose();
       originalAttachmentsUI?.dispose(); originalAttachmentsUI = null;
       compositionPanel?.dispose(); compositionPanel = null;
