@@ -1,4 +1,5 @@
 'use strict';
+const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 const assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path');
 const {fixture,sha}=require('./fixtures/original-attachments.cjs');
 const {playwright,makeContext,ready}=require('./unified-home-browser.cjs');
@@ -14,7 +15,7 @@ async function main(){
  const page=await context.newPage();page.setDefaultTimeout(30000);page.on('pageerror',e=>report.errors.push(e.message));page.on('console',m=>{if(m.type()==='error')report.consoleErrors.push(m.text());});
  const check=async(name,fn)=>{try{await fn();report.checks.push(name);console.log('PASS '+name);}catch(error){await fs.writeFile(path.join(out,'failure.txt'),await page.locator('body').innerText());await page.screenshot({path:path.join(out,'failure.png')});throw error;}};
  const inject=async()=>{if(integrated){assert.equal(await page.evaluate(()=>!!HaedoLife.OriginalAttachments&&!!HaedoLife.OriginalAttachmentsUI&&!!document.querySelector('link[href*="original-attachments.css"]')),true,'production scripts/CSS must already be connected');return;}if(!await page.evaluate(()=>!!HaedoLife.OriginalAttachments))await page.addScriptTag({url:base+'/assets/life/original-attachments.js'});if(!await page.evaluate(()=>!!HaedoLife.OriginalAttachmentsUI))await page.addScriptTag({url:base+'/assets/life/original-attachments-ui.js'});await page.addStyleTag({url:base+'/assets/life/original-attachments.css'});};
- const open=async()=>{if(integrated){await page.locator('[data-haedo-navigation] [data-haedo-section="manage"]').click();await page.locator('#lifeOriginalAttachmentsOpen').click();await page.locator('#lifeOriginalAttachments').waitFor();}else await page.evaluate(async()=>{window.__originalsDialog=await LifeOriginalAttachmentsUI.open();});await page.locator('#lifeOriginalAttachments[aria-busy="false"] #originalAttachmentsFile:enabled').waitFor();};
+ const open=async()=>{if(integrated){await openRecordsMenu(page);await page.locator('#lifeOriginalAttachmentsOpen').click();await page.locator('#lifeOriginalAttachments').waitFor();}else await page.evaluate(async()=>{window.__originalsDialog=await LifeOriginalAttachmentsUI.open();});await page.locator('#lifeOriginalAttachments[aria-busy="false"] #originalAttachmentsFile:enabled').waitFor();};
  const upload=async(buffer=f.zip)=>{await page.locator('#originalAttachmentsFile').setInputFiles({name:'anonymous-part.zip',mimeType:'application/zip',buffer});await page.locator('#originalAttachmentsInstall').waitFor();};
  const workspace=()=>page.evaluate(async()=>{const s=HaedoLife.Shell.storage;return JSON.stringify({rows:await s.listWorkspaces(),active:await s.getActive()});});
  let baseline,batchBaseline,id;
@@ -74,7 +75,7 @@ async function main(){
   await check('exact source path and hash match only the requested note version',async()=>{
    const result=await page.evaluate(async({id,hash})=>{const owner=HaedoLife.OriginalAttachments.create();try{const rows=await owner.entries(id),entry=rows.find(e=>e.role==='git-note-version');const storage={listWorkspaces:async()=>[{workspaceId:'anonymous-space'}],read:async()=>({workspaceId:'anonymous-space',sources:[{id:'source',sourceKey:'notes/익명.md',title:'익명 원문'}],sourceVersions:[{id:'exact',sourceId:'source',contentHash:hash},{id:'wrong',sourceId:'source',contentHash:'0'.repeat(64)}]})};return(await owner.matchSource(entry,storage)).map(m=>m.versionId);}finally{owner.dispose();}},{id,hash:f.receipt.entries[1].sha256});assert.deepEqual(result,['exact']);
   });
-  if(integrated)await check('management entry opens the exact older source version across workspaces and returns to management',async()=>{
+  if(integrated)await check('materials menu opens the exact older version across workspaces and preserves same-workspace search on return',async()=>{
    const expected=f.files[f.receipt.entries[1].snapshotPath].toString('utf8');
    const seeded=await page.evaluate(async({expected,path})=>{const s=HaedoLife.Shell.storage,c=HaedoLife.Core,old=await s.getActive();let bundle=c.createWorkspace({title:'익명 정확 버전 통합 검증'});
     const first=await c.prepareImport({origin:'obsidian',title:'익명 정확 원문',fileName:path,text:expected},bundle);bundle=c.applyChanges(bundle,c.buildImportChanges(bundle,first));
@@ -92,6 +93,15 @@ async function main(){
    assert.equal(await page.locator('#lifeVersion').inputValue(),seeded.versionId);assert.notEqual(seeded.versionId,seeded.latestId);
    assert.equal(await page.evaluate(()=>HaedoLife.Shell.storage.getActive()),seeded.workspaceId);assert.equal(await page.evaluate(id=>HaedoLife.Shell.storage.read(id).then(JSON.stringify),seeded.workspaceId),seeded.before);
    await page.locator('#lifeSearchReturn').click();await page.locator('#lifeOriginalAttachmentsOpen').waitFor();
+   await page.locator('#lifeRecordsMenu > summary').click();await page.locator('#lifeSearch').fill('익명 정확');
+   const resultIds=await page.locator('#lifeSearchResults .life-source-open').evaluateAll(nodes=>nodes.map(node=>node.dataset.versionId));assert.equal(resultIds.length,1);
+   await open();await page.locator('.original-attachments-copy').first().getByRole('button').first().click();
+   await entry.getByRole('button',{name:'같은 원문 버전 찾기',exact:true}).click();await entry.getByRole('button',{name:'해도 원문 열기',exact:true}).click();await page.locator('#lifeSourceText').waitFor({timeout:5000});
+   assert.equal(await page.locator('#lifeVersion').inputValue(),seeded.versionId);assert.notEqual(seeded.versionId,seeded.latestId);
+   await page.locator('#lifeSearchReturn').click();await page.locator('#lifeOriginalAttachmentsOpen').waitFor();
+   assert.equal(await page.locator('#lifeSearch').inputValue(),'익명 정확');assert.deepEqual(await page.locator('#lifeSearchResults .life-source-open').evaluateAll(nodes=>nodes.map(node=>node.dataset.versionId)),resultIds);
+   await page.waitForFunction(()=>document.activeElement?.id==='lifeOriginalAttachmentsOpen');assert.equal(await page.locator('#lifeRecordsMenu').evaluate(node=>node.open),true);
+   assert.equal(await page.evaluate(()=>HaedoLife.Shell.storage.getActive()),seeded.workspaceId);assert.equal(await page.evaluate(id=>HaedoLife.Shell.storage.read(id).then(JSON.stringify),seeded.workspaceId),seeded.before);
   });
   await check('multiple parts validate together; duplicate, mixed and broken selections store nothing',async()=>{
    batchBaseline=await workspace();await open();

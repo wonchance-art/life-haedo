@@ -373,6 +373,9 @@ jobs:
       - name: Verify subview location and safe contextual return
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/subview-navigation-browser.cjs
+      - name: Verify integrated feature menus and planning continuity
+        if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/feature-flow-browser.cjs
       - name: Verify management storage scope and backup recovery
         if: ${{ matrix.group == 4 && !cancelled() && steps.server.outcome == 'success' }}
         run: |
@@ -547,6 +550,7 @@ jobs:
             .local/obsidian-update/
             .local/photo-post-evidence/
             .local/subview-navigation/
+            .local/feature-flow/
             .local/management-clarity/
             .local/life-management/
             .local/quality-audit/after/

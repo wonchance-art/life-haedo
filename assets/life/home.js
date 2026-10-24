@@ -163,15 +163,11 @@
       manage.setAttribute('aria-label', '프로필 편집'); manage.title = '프로필 편집';
       manage.append(life.Icons.create('edit'), el('span', '프로필 편집', 'home-profile-edit-label'));
       manage.dataset.homeDestination = 'page'; manage.dataset.focusKey = 'home:action:page';
-      const manager = action(context, '', () => navigate('blog'), 'home-blog-action');
-      manager.setAttribute('aria-label', '글 관리'); manager.title = '글 관리';
-      manager.append(life.Icons.create('filter'), el('span', '글 관리', 'home-profile-edit-label'));
-      manager.dataset.homeDestination = 'blog'; manager.dataset.focusKey = 'home:action:blog';
       const server = action(context, '', () => navigate('account-blog'), 'home-blog-action');
       server.id = 'homeAccountBlog'; server.setAttribute('aria-label', '서버에 보관한 글'); server.title = '서버에 보관한 글';
       server.append(life.Icons.create('cloud'), el('span', '서버에 보관한 글', 'home-profile-edit-label'));
       server.dataset.homeDestination = 'account-blog'; server.dataset.focusKey = 'home:action:account-blog';
-      header.append(copy, manage, manager, server); return header;
+      header.append(copy, manage, server); return header;
     }
     function library(context, bundle) {
       const area = el('details', null, 'home-library');

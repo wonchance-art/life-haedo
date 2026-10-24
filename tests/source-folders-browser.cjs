@@ -2,6 +2,7 @@
  * account/workspace-scoped IDB. Anonymous synthetic records/FakeCloud Auth only.
  * BASE_URL=http://127.0.0.1:4173 node tests/source-folders-browser.cjs */
 'use strict';
+const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
@@ -141,7 +142,7 @@ async function main() {
       await page.reload(); await ready(page); await page.locator('#lifeFolderFilter:enabled').waitFor(); await chooseFolder(page, f.child.id); await expectSources(page, [f.a.source.id]); await folderEditor(page, f.child.id); assert.equal(await page.locator('#lifeFolderName').inputValue(), renamedChild);
       await captureThree(page); const beforeTrash = await snapshot(page); await readCard(page, f.a.source.id); await sourceOptions(page); await click(page, '#lifeSourceTrash'); await click(page, '#lifeSourceTrashConfirm');
       await page.locator('#lifeFolderFilter:enabled').waitFor(); await chooseFolder(page, f.child.id); await expectSources(page, []); assert.deepEqual((await snapshot(page)).sourceFolders, beforeTrash.sourceFolders, 'Trash must preserve membership');
-      await openManagement(page); await click(page, '#lifeSourceTrashOpen'); await click(page, '[data-source-restore="' + f.a.source.id + '"]'); await nav(page, 'records'); await page.locator('#lifeFolderFilter:enabled').waitFor(); await chooseFolder(page, f.child.id); await expectSources(page, [f.a.source.id]);
+      await openRecordsMenu(page); await click(page, '#lifeSourceTrashOpen'); await click(page, '[data-source-restore="' + f.a.source.id + '"]'); await nav(page, 'records'); await page.locator('#lifeFolderFilter:enabled').waitFor(); await chooseFolder(page, f.child.id); await expectSources(page, [f.a.source.id]);
       const final = await snapshot(page); assert.deepEqual(final.sourceFolders, beforeTrash.sourceFolders); assert.deepEqual(final.bundle.sourceVersions, beforeTrash.bundle.sourceVersions); assert.deepEqual(final.bundle.records, beforeTrash.bundle.records); for (const key of ['workbench', 'interest', 'annual', 'collection', 'discoverySettings']) assert.deepEqual(final[key], f.before[key]);
       report.observations.push({ nestedParentIncludesDescendants: true, singleSourceMembershipForBothVersions: true, sourceEditKeepsSourceId: true, searchOriginFolderFocusAndPositionReturned: true, leafDeleteOnlyUnfilesDirectSource: true, trashRestoreKeepsMembership: true, rawHashQuoteAndGroupPreserved: true });
     });

@@ -1,4 +1,4 @@
-/* Actual v159 -> v160 SW, cached public catalog and private local reactions.
+/* Actual v160 -> v161 SW, cached public catalog and private local reactions.
  * Prior SW script only is old; app modules are current. Real SDK/IDB/SW with
  * anonymous Auth HTTP. No real account, source-site fetch or model download. */
 'use strict';
@@ -32,7 +32,7 @@ async function revealControl(control) {
   return control;
 }
 const report = { createdAt: new Date().toISOString(), checks: [], consoleErrors: [], pageErrors: [], expectedTransportErrors: [], modelRequests: [], unexpectedExternal: [], catalogRequests: [], blockedProbes: [],
-  scope: 'Real Chromium SDK/IndexedDB/Service Worker. Only v159 sw.js is prior code; all app modules and approved-source policy are current. Virtual folders, annual plans, reactions and five-language settings are seeded through the current real scoped storage API before the worker update; an actual a0eac63 v3 historical reading row is seeded unchanged into synthetic local metadata under its original workspace ID. This isolates worker/cache migration rather than reconstructing the entire previous app. Real prepared public catalog served by an anonymous local fixture; synthetic title/build-time update for freshness tests. Mocked Auth response during cached-shell reload is separate from strict offline Auth refusal. No production, Apple device, upstream collection or model validation.' };
+  scope: 'Real Chromium SDK/IndexedDB/Service Worker. Only v160 sw.js is prior code; all app modules and approved-source policy are current. Virtual folders, annual plans, reactions and five-language settings are seeded through the current real scoped storage API before the worker update; an actual a0eac63 v3 historical reading row is seeded unchanged into synthetic local metadata under its original workspace ID. This isolates worker/cache migration rather than reconstructing the entire previous app. Real prepared public catalog served by an anonymous local fixture; synthetic title/build-time update for freshness tests. Mocked Auth response during cached-shell reload is separate from strict offline Auth refusal. No production, Apple device, upstream collection or model validation.' };
 async function wait(page, fn, arg) {
   const end = Date.now() + 45000;
   while (Date.now() < end) { if (await page.evaluate(fn, arg)) return; await new Promise(resolve => setTimeout(resolve, 80)); }
@@ -40,16 +40,16 @@ async function wait(page, fn, arg) {
 }
 async function main() {
   await fs.mkdir(output, { recursive: true });
-  const oldSw = await fs.readFile(path.join(__dirname, 'fixtures/external-discovery/sw-discovery-v159.js'));
+  const oldSw = await fs.readFile(path.join(__dirname, 'fixtures/external-discovery/sw-discovery-v160.js'));
   const newSw = await fs.readFile(path.join(project, 'sw.js'));
   const historicalBytes = await fs.readFile(path.join(__dirname, 'fixtures/discovery-reading-v3.json'));
   assert.equal(sha(historicalBytes), '356402734efb25d79acf9fbf217a90bd7baed7ca601ff52dced71ad3711df3da', 'Historical v3 reading fixture must retain its original bytes');
   const historicalReading = JSON.parse(historicalBytes);
   const cacheName = data => data.toString().match(/const CACHE\s*=\s*['"]([^'"]+)/)[1];
   report.oldCache = cacheName(oldSw); report.newCache = cacheName(newSw);
-  assert.equal(report.oldCache, 'haedo-v159'); assert.equal(report.newCache, 'haedo-v160');
+  assert.equal(report.oldCache, 'haedo-v160'); assert.equal(report.newCache, 'haedo-v161');
   report.oldSwSHA256 = sha(oldSw); report.newSwSHA256 = sha(newSw);
-  assert.equal(report.oldSwSHA256, 'cd94df37407db67482e01bf809fec3c1822c9350a7bc915864c17c521225b95f', 'Prior worker must be the exact 69798bae v159 source');
+  assert.equal(report.oldSwSHA256, 'f692bf9189445ae27a7791c3332abdcd03a40e694321a8699accb13349e31dcc', 'Prior worker must be the exact ef075e47 v160 source');
   let old = true, failCatalog = false, strictOffline = false, transportProbe = false, probing = false;
   const originalFeed = JSON.parse(await fs.readFile(path.join(project, feedPath.slice(1)), 'utf8'));
   let feed = structuredClone(originalFeed);
@@ -98,7 +98,7 @@ async function main() {
   const check = async (name, action) => { await action(); report.checks.push(name); console.log('PASS ' + name); };
   try {
     await open('interests');
-    await check('actual v159 installs without fetching catalog, original sites or model assets', async () => {
+    await check('actual v160 installs without fetching catalog, original sites or model assets', async () => {
       await wait(page, async name => (await caches.keys()).includes(name) && !!navigator.serviceWorker.controller && (await navigator.serviceWorker.getRegistration())?.active?.state === 'activated', report.oldCache);
       assert.equal(report.catalogRequests.length, 0); assert.deepEqual(report.modelRequests, []); assert.deepEqual(report.unexpectedExternal, []);
     });
@@ -166,7 +166,7 @@ async function main() {
     assert.ok(before.actions.entries.some(entry => entry.liked && entry.bookmarked));
     assert.ok(before.actions.entries.some(entry => !entry.liked && !entry.bookmarked && entry.likedAt === null && entry.bookmarkedAt === null));
     report.privateActionsFixture = { revision: before.actions.revision, entries: before.actions.entries.length, activeBoth: 1, cancelled: 1, personalizationEnabled: true, sha256: sha(Buffer.from(JSON.stringify(before.actions))) };
-    await check('v159 -> v160 worker preserves exact originals, workbench, manual interests, feedback, old settings, five language preferences, private reactions, virtual folders, annual plans and historical v3 reading', async () => {
+    await check('v160 -> v161 worker preserves exact originals, workbench, manual interests, feedback, old settings, five language preferences, private reactions, virtual folders, annual plans and historical v3 reading', async () => {
       old = false; await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
       await wait(page, async ({ oldCache, newCache }) => { const keys = await caches.keys(), r = await navigator.serviceWorker.getRegistration(); return !keys.includes(oldCache) && keys.includes(newCache) && r?.active?.state === 'activated' && navigator.serviceWorker.controller === r.active; }, { oldCache: report.oldCache, newCache: report.newCache });
       await page.reload(); await ready(page); assert.deepEqual(await state(), before);

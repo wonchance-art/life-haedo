@@ -1,5 +1,6 @@
 /* Anonymous Auth simulator + actual Chrome and account-scoped IndexedDB. No production requests. */
 'use strict';
+const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { playwright, makeContext, ready } = require('./unified-home-browser.cjs');
 const { FakeCloud, base } = require('./life-sync-browser.cjs');
@@ -75,7 +76,7 @@ async function integrated() {
       const server = new FakeCloud(), context = await makeContext(browser, server, 'obsidian-integrated-' + width, undefined, { viewport: { width, height: 1000 } });
       const page = await context.newPage(); page.setDefaultTimeout(15000);
       page.on('pageerror', e => report.pageErrors.push(e.message)); page.on('console', e => { if (e.type() === 'error') report.consoleErrors.push(e.text()); });
-      await page.goto(base + '/index.html?section=manage'); await ready(page);
+      await page.goto(base + '/index.html?section=records'); await ready(page); await openRecordsMenu(page);
       const oldIds = await page.evaluate(async () => (await HaedoLife.Shell.storage.listWorkspaces()).map(w => w.workspaceId));
       const oldActive = await page.evaluate(() => HaedoLife.Shell.storage.getActive());
       await page.locator('#lifeObsidianUpdateOpen').click(); await page.locator('#obsidianUpdateBefore').waitFor();
@@ -125,10 +126,10 @@ async function integrated() {
       assert.equal(await page.evaluate(() => document.activeElement?.id), 'lifeFindOpen');
       await page.screenshot({ path: '.local/obsidian-update/' + width + '-integrated-long-title.png' });
       await page.locator('#lifeFindOpen').click(); await page.locator('#lifeFindQuery').waitFor();
-      await page.locator('[data-haedo-navigation] [data-haedo-section=manage]').click();
+      await openRecordsMenu(page);
       await page.locator('#lifeObsidianUpdateOpen').waitFor();
       report.remoteWrites += server.requests.filter(r => r.kind === 'write').length;
-      report.sizes.push({ width, managementRoute: true, activeWorkspacePreserved: true, oldPreserved: oldIds.length, restored: ids.length - oldIds.length, reloadPreserved: true, longTitleAccountFocus: true, longTitleSearchClick: true, returnedToManagement: true });
+      report.sizes.push({ width, recordsMenuRoute: true, activeWorkspacePreserved: true, oldPreserved: oldIds.length, restored: ids.length - oldIds.length, reloadPreserved: true, longTitleAccountFocus: true, longTitleSearchClick: true, returnedToRecordsMenu: true });
       await context.close();
     }
     assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.consoleErrors, []);

@@ -1,4 +1,5 @@
 'use strict';
+const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const { playwright, makeContext, ready, nav } = require('./unified-home-browser.cjs');
@@ -13,7 +14,7 @@ async function main() {
   page.on('console', m => { if (m.type() === 'error') report.consoleErrors.push(m.text()); });
   const click = name => page.getByRole('button', { name, exact: true }).click();
   const open = async () => {
-    await nav(page, 'tools'); await click('회고');
+    await openRecordsMenu(page); await click('회고');
     await page.locator('#wbReflectionUse').click();
   };
   const drafts = () => page.evaluate(async () => { const s = HaedoLife.Shell.storage; return s.readPageDrafts(await s.getActive()); });

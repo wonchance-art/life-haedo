@@ -2,6 +2,7 @@
  * edits, exact evidence and reader output. No production services or fixture IDB writes.
  * BASE_URL, PW_MODULE_PATH/PLAYWRIGHT_MODULE, CHROMIUM_PATH; BOOK_COMPLETION_MATCH. */
 'use strict';
+const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4184';
 if (!process.env.PW_MODULE_PATH && process.env.PLAYWRIGHT_MODULE) process.env.PW_MODULE_PATH = process.env.PLAYWRIGHT_MODULE;
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
@@ -95,7 +96,7 @@ async function main() {
       await home(page); assert.equal(await page.locator('#homeBooks article[data-book-id]').count(), 3); assert.equal(await page.locator(`#homeBooks [data-book-id="${fourth.id}"]`).count(), 0); const first = page.locator(`#homeBooks [data-book-id="${book.id}"]`); await first.locator('summary').click(); assert.equal(await first.locator('button[data-chapter-id]').count(), 3); assert.equal(await first.locator(`[data-chapter-id="${book.chapters[3].id}"]`).count(), 0); assert.equal(await page.locator(`#homeBooks [data-book-id="${empty.id}"] details`).count(), 0); await capture(page, report, 'home-active-books', 390);
       await page.getByRole('button', { name: '내 책 모두 보기', exact: true }).click(); await page.locator('#wbBookList').waitFor(); assert.equal(await page.locator('#wbBookList [data-book-id]').count(), 4); await openBook(page, book.id); await details(page, '책 설정'); page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: '책 보관', exact: true }).click(); await page.waitForFunction(({ workspace, id }) => HaedoLife.Shell.storage.readWorkbench(workspace).then(state => state.books.find(book => book.id === id).archived === true), { workspace: restored.bundle.workspaceId, id: book.id }); await home(page); assert.equal(await page.locator('#homeBooks article[data-book-id]').count(), 3); assert.equal(await page.locator(`#homeBooks [data-book-id="${book.id}"]`).count(), 0); assert.equal(await page.locator(`#homeBooks [data-book-id="${fourth.id}"]`).count(), 1);
       await account(page, accounts.b); await home(page); assert.equal(await page.locator('#homeBooks article[data-book-id]').count(), 0);
-      await nav(page, 'tools'); await page.getByRole('button', { name: '책 만들기', exact: true }).click(); await page.locator('#wbBookCreateTitle').waitFor();
+      await openRecordsMenu(page); await page.getByRole('button', { name: '책 만들기', exact: true }).click(); await page.locator('#wbBookCreateTitle').waitFor();
       assert.equal(await page.locator('#wbBookList [data-book-id]').count(), 0); assert.equal(await page.getByRole('button', { name: '빈 책 만들기', exact: true }).count(), 1);
       await account(page, accounts.a); await home(page); assert.equal(await page.locator('#homeBooks article[data-book-id]').count(), 3); assert.deepEqual((await current(page)).bundle, restored.bundle);
     });

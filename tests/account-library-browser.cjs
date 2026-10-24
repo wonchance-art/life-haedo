@@ -2,6 +2,7 @@
  * HTTP. Every device starts signed out. No enable/download/syncNow shortcuts.
  * BASE_URL=http://127.0.0.1:4173 node tests/account-library-browser.cjs */
 'use strict';
+const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -126,7 +127,7 @@ async function captureThree(page) {
   }
   exactGraph(await snapshot(page), before); await page.setViewportSize({ width: 820, height: 1000 });
 }
-async function openOriginals(page) { await openManagement(page); await click(page, '#lifeOriginalAttachmentsOpen'); await page.locator('#lifeOriginalAttachments').waitFor(); }
+async function openOriginals(page) { await openRecordsMenu(page); await click(page, '#lifeOriginalAttachmentsOpen'); await page.locator('#lifeOriginalAttachments').waitFor(); }
 async function download(page, control) { const waiting = page.waitForEvent('download'); await control.click(); const file = await waiting, chunks = []; for await (const chunk of await file.createReadStream()) chunks.push(chunk); return Buffer.concat(chunks); }
 
 async function main() {

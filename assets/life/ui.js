@@ -141,7 +141,7 @@
     const blogSync = global.HaedoLife.BlogSync?.create({ storage, auth });
     const parentViews = new Set(['naver-capture', 'naver-blog', 'external-discovery', 'interests', 'blog', 'account-blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
     const subviewTitles = { 'annual-plan': '연간 계획', 'source-trash': '자료 휴지통', 'source-edit': '자료 수정', 'naver-capture': '네이버 본문·사진 검토', 'naver-blog': '네이버 블로그 연결', 'account-blog': '서버에 보관한 글', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 확인', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
-      discover: '다시 찾기', sync: managedLibrary ? '계정 보관' : '기기 간 동기화', transfer: '자료 백업·복원',
+      discover: '다시 찾기', reflection: '회고', books: '내 책', sync: managedLibrary ? '계정 보관' : '기기 간 동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
     const selectedVersions = new Set();
     let selectionReturn = null;
@@ -172,6 +172,8 @@
     error.hidden = true;
     const header = node('div', null, 'life-header');
     const toolbar = node('div', null, 'life-toolbar');
+    const planningNavigation = node('div', null, 'life-planning-navigation');
+    planningNavigation.hidden = true;
     const recordSections = node('nav', null, 'life-record-actions');
     recordSections.setAttribute('aria-label', '기록 정리');
     const main = node('main', null, 'life-main');
@@ -183,7 +185,7 @@
     const libraryRetry = button('다시 시도', guarded(async () => { await accountLibrary.retry(state.bundle?.workspaceId); await refreshLibrary(); })); libraryRetry.id = 'lifeAccountStorageRetry'; libraryRetry.hidden = true;
     const libraryReview = button('변경 확인', guarded(() => navigate('sync'))); libraryReview.id = 'lifeAccountStorageReview'; libraryReview.hidden = true;
     libraryStatus.append(libraryStatusText, libraryRetry, libraryReview);
-    root.append(skip, header, toolbar, recordSections, libraryStatus, status, error, main);
+    root.append(skip, header, toolbar, planningNavigation, recordSections, libraryStatus, status, error, main);
     container.replaceChildren(root);
     const interestUI = global.HaedoLife.InterestUI?.create({ container: main, storage,
       getBundle: () => state.bundle, isCurrent: () => !disposed && state.mode === 'interests',
@@ -1391,9 +1393,8 @@
     }
 
     function sectionFor(mode) {
-      if (mode === 'external-discovery') return 'news';
       if (mode === 'home' || mode === 'account-blog' || mode === 'page' && blogPageTask || mode === 'write' && viewOrigins.get('write')?.mode === 'home' || mode === 'source' && (state.returnContext?.mode === 'home' || state.returnContext?.mode === 'page' && blogPageTask)) return 'home';
-      return ['tools', 'annual-plan', 'naver-capture', 'naver-blog', 'interests', 'discover', 'reflection', 'books'].includes(mode) ? 'tools' : ['manage', 'source-trash', 'blog', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages'].includes(mode) ? 'manage' : 'records';
+      return global.HaedoNavigation?.getSectionForView(mode) || (['tools', 'manage'].includes(mode) ? mode : 'records');
     }
 
     function routeMode() {
@@ -1401,12 +1402,13 @@
       const section = params.get('section');
       const view = params.get('view');
       if (params.get('compose') === '1') return 'page';
+      // A known destination survives an old section URL and is normalized on render.
+      if (['annual-plan', 'source-trash', 'naver-blog', 'account-blog', 'blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages', 'external-discovery', 'interests', 'discover', 'reflection', 'books', 'topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'collection', 'find'].includes(view)) return view;
       if (section === 'news') return 'external-discovery';
       if (section === 'home' && !view) return 'home';
-      if (section === 'tools') return ['annual-plan', 'naver-blog', 'external-discovery', 'interests', 'discover', 'reflection', 'books'].includes(view) ? view : 'tools';
-      if (section === 'manage') return ['source-trash', 'blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages'].includes(view) ? view : 'manage';
-      if (!section && ['annual-plan', 'naver-blog', 'account-blog', 'blog', 'transfer', 'sync', 'preservation', 'obsidian-update', 'public-cover', 'workbench-backup', 'public-pages', 'external-discovery', 'interests', 'discover', 'reflection', 'books'].includes(view)) return view;
-      if (['account-blog', 'blog', 'topics', 'sources', 'time', 'import', 'write', 'activities', 'page', 'related', 'collection', 'find'].includes(view)) return view;
+      if (section === 'tools') return 'tools';
+      if (section === 'manage') return 'manage';
+      if (view === 'related') return view;
       return section === 'records' || /\/life\.html$/.test(global.location.pathname) ? 'sources' : 'home';
     }
 
@@ -1419,7 +1421,7 @@
       else url.searchParams.set('section', section);
       const view = mode === 'naver-capture' ? 'naver-blog' : mode === 'source' ? 'sources' : mode === 'batch' ? 'import' : mode;
       if (mode === 'external-discovery') url.searchParams.delete('view');
-      else if (['annual-plan', 'naver-blog', 'account-blog', 'blog', 'topics', 'time', 'import', 'write', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'interests', 'collection', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
+      else if (['annual-plan', 'source-trash', 'naver-blog', 'account-blog', 'blog', 'topics', 'time', 'import', 'write', 'sync', 'transfer', 'preservation', 'obsidian-update', 'public-cover', 'interests', 'collection', 'find', ...workbenchModes].includes(view)) url.searchParams.set('view', view);
       else url.searchParams.delete('view');
       const destination = url.pathname + url.search + url.hash;
       if (destination !== global.location.pathname + global.location.search + global.location.hash)
@@ -1537,7 +1539,27 @@
       status.hidden = state.mode === 'find';
       header.replaceChildren();
       toolbar.classList.add('haedo-page-heading');
+      const openMenuId = toolbar.querySelector('.life-feature-menu[open]')?.id;
+      const activeMenu = document.activeElement?.closest('.life-feature-menu');
+      const menuFocus = activeMenu && toolbar.contains(activeMenu) && main.dataset.mode === state.mode ?
+        { id: activeMenu.id, key: document.activeElement.dataset.focusKey, summary: document.activeElement.tagName === 'SUMMARY' } : null;
       toolbar.replaceChildren();
+      planningNavigation.replaceChildren();
+      planningNavigation.hidden = state.mode !== 'annual-plan';
+      if (!planningNavigation.hidden) {
+        const workspace = workspaceGeneration, workspaceId = state.bundle?.workspaceId, account = state.syncAccountKey;
+        planningNavigation.append(global.HaedoNavigation.createPlanningNavigation({ current: 'annual-plan',
+          beforeNavigate: async () => {
+            let canLeave = false;
+            const navigation = navigationGeneration;
+            await guarded(async () => {
+              await persistDrafts();
+              canLeave = !disposed && workspace === workspaceGeneration && navigation === navigationGeneration &&
+                workspaceId === state.bundle?.workspaceId && account === state.syncAccountKey && state.mode === 'annual-plan';
+            })();
+            return canLeave;
+          }, onError: failure }));
+      }
       toolbar.hidden = ['source', 'source-edit'].includes(state.mode) && !state.remoteChanged;
       recordSections.replaceChildren();
       const focused = ['blog', 'write', 'source-edit', 'source', 'page', 'related', 'collection', 'find'].includes(state.mode);
@@ -1612,6 +1634,11 @@
       if (!['source', 'find'].includes(state.mode)) {
         const find = iconButton('통합 검색', 'search', guarded(() => navigate('find'))); find.id = 'lifeFindOpen'; toolbar.append(find);
       }
+      if (state.mode === 'sources' || state.mode === 'home') {
+        const menu = featureMenu(state.mode === 'home');
+        menu.open = menu.id === openMenuId;
+        toolbar.append(menu);
+      }
       if (state.remoteChanged && state.mode !== 'find') {
         const refresh = button('최신 내용 확인', guarded(async () => {
           if (dirty()) await persistStage();
@@ -1634,6 +1661,14 @@
           announce('최신 내용을 불러왔습니다. 보관 중인 입력은 유지됩니다. 다시 검토해 주세요.');
         }), 'life-refresh');
         toolbar.append(refresh);
+      }
+      // Background account updates may rebuild the header while its menu is in use.
+      // Restore only the exact control in the same screen; navigation owns its own focus.
+      if (menuFocus) {
+        const menu = [...toolbar.querySelectorAll('.life-feature-menu')].find(item => item.id === menuFocus.id);
+        const control = menuFocus.summary ? menu?.querySelector('summary') :
+          [...(menu?.querySelectorAll('[data-focus-key]') || [])].find(item => item.dataset.focusKey === menuFocus.key);
+        control?.focus({ preventScroll: true });
       }
     }
 
@@ -1669,16 +1704,64 @@
     function renderTools() {
       const list = node('div', null, 'life-destinations');
       list.append(actionRow('연간 계획', '연도·나이와 월별 계획', 'timeline', () => navigate('annual-plan')),
-        actionRow('네이버 블로그 연결', '아이디로 연결하고 가져온 글과 새 글 확인', 'link', () => navigate('naver-blog')),
-        actionRow('관심 확인', '직접 관심을 적고 선택 자료의 근거 확인', 'search', () => navigate('interests')),
-        actionRow('새 글 찾기', '보관한 관심으로 아직 담지 않은 외부 글 찾기', 'search', () => navigate('external-discovery')),
-        actionRow('다시 찾기', '검색하고 관련 기록 이어 보기', 'search', () => navigate('discover')),
-        actionRow('회고', '고른 자료를 돌아보고 메모', 'book', () => navigate('reflection')),
-        actionRow('책 만들기', '주제별로 글을 엮고 장별 원고 쓰기', 'book', () => navigate('books')),
         destinationRow('목표', '진행 중인 일과 다음 계획', 'goals.html', 'target'),
         destinationRow('습관', '반복할 일과 오늘의 체크', 'habits.html', 'check'));
       main.append(list);
     }
+
+    function featureMenu(blog) {
+      const menu = node('details', null, 'life-feature-menu');
+      menu.id = blog ? 'lifeBlogMenu' : 'lifeRecordsMenu';
+      const summary = node('summary', null, 'life-icon-button');
+      const label = blog ? '블로그 메뉴' : '자료 메뉴';
+      summary.setAttribute('aria-label', label);
+      summary.append(global.HaedoLife.Icons.create('more'));
+      const tooltip = node('span', label, 'life-tooltip'); tooltip.setAttribute('aria-hidden', 'true'); summary.append(tooltip);
+      const panel = node('div', null, 'life-feature-menu-panel');
+      const group = (name, items) => {
+        const section = node('section'); section.setAttribute('aria-label', name);
+        section.append(node('h2', name));
+        for (const [name, glyph, mode, id] of items) {
+          const control = actionRow(name, '', glyph, () => navigate(mode));
+          control.dataset.focusKey = (blog ? 'home:menu:' : 'records:menu:') + mode;
+          if (id) control.id = id;
+          if (mode === 'blog') { control.dataset.homeDestination = 'blog'; control.dataset.focusKey = 'home:action:blog'; }
+          section.append(control);
+        }
+        panel.append(section);
+        return section;
+      };
+      if (blog) group('글·공개', [
+        ['글 관리', 'edit', 'blog'], ['공개 표지', 'link', 'public-cover'], ['공개 페이지 관리', 'link', 'public-pages']
+      ]);
+      else {
+        group('활용', [['다시 찾기', 'search', 'discover'], ['회고', 'book', 'reflection'], ['책 만들기', 'book', 'books']]);
+        const management = group('가져오기·관리', [
+          ['네이버 블로그 연결', 'link', 'naver-blog'], ['Obsidian 갱신', 'refresh', 'obsidian-update', 'lifeObsidianUpdateOpen']
+        ]);
+        const originals = actionRow('원본 첨부 보관', '', 'download', async () => {
+          const origin = { mode: 'sources', workspaceId: state.bundle.workspaceId, scrollY: global.scrollY, focusKey: 'records:menu:originals' };
+          originalAttachmentsUI?.dispose();
+          originalAttachmentsUI = await global.LifeOriginalAttachmentsUI.open({ auth, storage,
+            onOpenSource: match => openOriginalSource(match, origin).catch(failure) });
+        });
+        originals.id = 'lifeOriginalAttachmentsOpen'; originals.dataset.focusKey = 'records:menu:originals';
+        const trash = actionRow('자료 휴지통', '', 'trash', () => navigate('source-trash'));
+        trash.id = 'lifeSourceTrashOpen'; trash.dataset.focusKey = 'records:menu:source-trash';
+        management.append(originals, trash);
+      }
+      menu.append(summary, panel);
+      menu.addEventListener('keydown', event => {
+        if (event.key !== 'Escape' || !menu.open) return;
+        event.preventDefault(); event.stopPropagation(); menu.open = false; summary.focus({ preventScroll: true });
+      });
+      return menu;
+    }
+
+    function closeFeatureMenusOutside(event) {
+      root.querySelectorAll('.life-feature-menu[open]').forEach(menu => { if (!menu.contains(event.target)) menu.open = false; });
+    }
+    document.addEventListener('pointerdown', closeFeatureMenusOutside);
 
     async function openManagedSource(workspaceId, target, context = {}, reference = null) {
       const workspaceToken = workspaceGeneration, navigationToken = navigationGeneration, postId = blogManagerPostId;
@@ -1862,21 +1945,32 @@
       preservationUI = instance; await instance.mount(host);
     }
 
-    async function openOriginalSource(match) {
+    async function openOriginalSource(match, origin) {
       if (disposed) return;
+      const workspace = workspaceGeneration, navigation = navigationGeneration;
+      const current = () => !disposed && workspace === workspaceGeneration && navigation === navigationGeneration;
       await persistDrafts();
+      if (!current()) return;
       const bundle = await storage.read(match.workspaceId);
-      if (disposed) return;
+      if (!current()) return;
       const version = bundle.sourceVersions.find(row => row.id === match.versionId);
       if (!version) throw new Error('정확한 원문 버전을 찾지 못했습니다. 원본 파일은 보관됩니다.');
-      await storage.setActive(bundle.workspaceId);
-      if (disposed) return;
-      invalidateBatchContext(); state.bundle = bundle;
-      state.stage = state.prepared = null; state.sourceId = state.sourceVersionId = null;
-      state.sourceDrafts.clear(); state.readerPositions.clear(); state.readerModes.clear(); state.remoteChanged = false; resetSearchContext();
-      await refreshData(); if (disposed) return;
+      const sameWorkspace = bundle.workspaceId === state.bundle.workspaceId;
+      if (!sameWorkspace) {
+        await storage.setActive(bundle.workspaceId);
+        if (!current()) return;
+        invalidateBatchContext();
+        state.stage = state.prepared = null; state.sourceId = state.sourceVersionId = null;
+        state.sourceDrafts.clear(); state.readerPositions.clear(); state.readerModes.clear(); resetSearchContext();
+      }
+      state.bundle = bundle; state.remoteChanged = false;
+      const installedWorkspace = workspaceGeneration;
+      await refreshData();
+      if (disposed || installedWorkspace !== workspaceGeneration || navigation !== navigationGeneration || state.bundle?.workspaceId !== bundle.workspaceId) return;
       connectSubscription();
-      return navigate('source', { sourceId: version.sourceId, sourceVersionId: version.id, returnContext: { mode: 'manage', workspaceId: bundle.workspaceId } });
+      return navigate('source', { sourceId: version.sourceId, sourceVersionId: version.id,
+        returnContext: { mode: 'sources', workspaceId: bundle.workspaceId, focusKey: 'records:menu:originals',
+          folderFilter: sameWorkspace ? state.folderFilter : 'all', scrollY: origin?.workspaceId === bundle.workspaceId ? origin.scrollY : 0 } });
     }
 
     async function renderObsidianUpdate() {
@@ -1942,8 +2036,6 @@
         announce('선택한 작업공간을 열었습니다. 다른 작업공간은 그대로 보관됩니다.');
       }));
       management.append(workspace.label);
-      const trash = button('자료 휴지통', guarded(() => navigate('source-trash'))); trash.id = 'lifeSourceTrashOpen';
-      management.append(trash);
       if ([...state.batches.values()].some(batch => batch.workspaceId === state.bundle.workspaceId)) management.append(button('선택 파일 목록', guarded(() => navigate('batch'))));
       main.append(manage, management);
       if (sync) {
@@ -1960,15 +2052,6 @@
         if (!managedLibrary) main.append(node('p', '묶음·내 페이지와 글쓰기 초안은 각각 연결합니다.', 'life-help life-management-note'));
         refreshSync().catch(failure);
       }
-      const updates = actionRow('Obsidian 갱신', '이전·새 사본 비교 · 선택 변경을 새 작업공간에 보존', 'refresh', () => navigate('obsidian-update'));
-      updates.id = 'lifeObsidianUpdateOpen'; main.append(updates);
-      const originals = actionRow('원본 첨부 보관', managedLibrary ? 'PDF·사진·노트 원본' : '분할 파일의 PDF·사진·노트 원본을 이 계정의 브라우저에 보관', 'download', async () => {
-        originalAttachmentsUI?.dispose();
-        originalAttachmentsUI = await global.LifeOriginalAttachmentsUI.open({ auth, storage, onOpenSource: match => openOriginalSource(match).catch(failure) });
-      });
-      originals.id = 'lifeOriginalAttachmentsOpen'; main.append(originals);
-      const preservation = actionRow('보관 범위·근거 파일', '자료별 보관 위치 확인 · 선택 글·9칸과 정확한 원문 근거 옮기기', 'download', () => navigate('preservation'));
-      preservation.id = 'lifePreservationOpen'; main.append(preservation);
       const backups = node('section', null, 'life-management-backups');
       backups.setAttribute('aria-labelledby', 'lifeBackupChoices');
       const heading = node('h2', '파일로 보관'); heading.id = 'lifeBackupChoices';
@@ -1978,10 +2061,15 @@
       destinations.append(actionRow('내보내기·사본 복원', '자료만 JSON·Markdown으로 · 구성 제외', 'book', () => navigate('transfer')));
       destinations.append(destinationRow('연표·목표·습관 백업·복원', '위 두 파일에 포함되지 않는 별도 자료', 'workspace.html?section=manage#backupAll', 'timeline'));
       destinations.append(actionRow('컬렉션 백업·복구', '컬렉션 정보·비공개 메모를 별도 파일로 보관', 'bookmark', async () => { await navigate('collection'); collection?.showBackup(); }));
+      const preservation = actionRow('보관 범위·근거 파일', '선택한 글·9칸과 정확한 원문 근거', 'download', () => navigate('preservation'));
+      preservation.id = 'lifePreservationOpen'; destinations.append(preservation);
+      destinations.append(actionRow('연간 계획 파일', '연간·월별 계획의 전용 백업·복원', 'timeline', async () => {
+        if (await navigate('annual-plan') === false) return;
+        const panel = main.querySelector('#apSettings');
+        if (panel) { panel.open = true; panel.querySelector('summary')?.focus(); panel.scrollIntoView({ block: 'nearest' }); }
+      }));
       backups.append(destinations);
-      main.append(actionRow('글 관리', '저장한 글·초안·사진 원본·선택 공개', 'edit', () => navigate('blog')));
-      main.append(actionRow('공개 표지', '이미 공개한 글·연재·9칸을 한 주소에서 안내', 'link', () => navigate('public-cover')));
-      main.append(backups, actionRow('공개 페이지 관리', '게시한 사본 확인·철회 · 백업과 별도', 'link', () => navigate('public-pages')));
+      main.append(backups);
     }
 
     function renderStages(parent) {
@@ -2266,11 +2354,11 @@
       const navigation = navigationGeneration;
       const restore = () => requestAnimationFrame(() => {
         if (disposed || navigation !== navigationGeneration || state.bundle?.workspaceId !== context.workspaceId || state.mode !== context.mode || context.homeAnchor) return;
-        const target = Array.from(main.querySelectorAll('[data-focus-key]')).find(el => el.dataset.focusKey === context.focusKey) ||
+        const target = Array.from(root.querySelectorAll('[data-focus-key]')).find(el => el.dataset.focusKey === context.focusKey) ||
           (context.mode === 'sources' && Array.from(main.querySelectorAll('.life-source-open')).find(el => el.dataset.versionId === context.sourceVersionId)) || main.querySelector('#lifeFindQuery,#lifeSearch,h1,h2');
         const panel = target?.closest('[data-result-panel]');
         let ancestor = target?.parentElement;
-        while (ancestor && ancestor !== main) { if (ancestor.tagName === 'DETAILS') ancestor.open = true; ancestor = ancestor.parentElement; }
+        while (ancestor && ancestor !== root) { if (ancestor.tagName === 'DETAILS') ancestor.open = true; ancestor = ancestor.parentElement; }
         if (panel?.hidden) Array.from(main.querySelectorAll('[aria-controls]')).find(el => el.getAttribute('aria-controls') === panel.id)?.click();
         target?.focus({ preventScroll: true });
         if (!context.homeAnchor) global.scrollTo({ top: context.scrollY, behavior: 'instant' });
@@ -4740,6 +4828,7 @@
       unifiedSearch?.dispose();
       unbindNavigation?.();
       global.removeEventListener('popstate', popstate);
+      document.removeEventListener('pointerdown', closeFeatureMenusOutside);
       root.removeEventListener('focusin', keepFocusVisible);
       main.removeEventListener('input', editingInput);
       main.removeEventListener('compositionstart', editingInput);

@@ -10,6 +10,8 @@ const {FakeCloud,accounts,cloud,base}=require('./life-sync-browser.cjs');
 const {playwright,ready,settle,makeContext,observe}=require('./unified-home-browser.cjs');
 const out=process.env.WORKBENCH_OUTPUT?path.resolve(process.env.WORKBENCH_OUTPUT):path.resolve(__dirname,'../.local/workbench');
 const sections={activities:'records',page:'records',discover:'tools',reflection:'tools','workbench-backup':'manage'};
+// Legacy links remain a compatibility check; active sections follow the new IA.
+const activeSections={...sections,discover:'records',reflection:'records'};
 const report={createdAt:new Date().toISOString(),scope:'Real local app/SDK/IDB with anonymous HTTP interception; no live SQL/SNS or Apple-device verification',checks:[],visual:[],consoleErrors:[],pageErrors:[],expectedErrors:0,external:[],realRemoteWrites:0};
 const longTitle='전시를 보고 돌아오는 길에서 다시 만난 오래된 질문과 사진 속 빛의 방향을 따라 천천히 이어 읽는 기록 — 긴 제목과 여러 원문이 함께 있어도 선택 도구와 본문이 겹치지 않는 익명 사례';
 const oldBody='작품 사이의 빈자리에 오래 머물렀다.\r\n보존할 구절🌱: 산책과 공간을 다시 읽는다.\r\n이것은 처음 받은 본문이다.';
@@ -131,7 +133,7 @@ async function main() {
   }
   try {
     await check('all five real sections open with empty local compositions',async({page})=>{
-      for(const view of Object.keys(sections)){await go(page,view);await storedState(page,view);assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="'+sections[view]+'"]').getAttribute('aria-current'),'page');assert.equal(await page.locator('#wbError').isHidden(),true);}
+      for(const view of Object.keys(sections)){await go(page,view);await storedState(page,view);assert.equal(await page.locator('[data-haedo-navigation] [data-haedo-section="'+activeSections[view]+'"]').getAttribute('aria-current'),'page');assert.equal(await page.locator('#wbError').isHidden(),true);}
       const value=await current(page);assert.equal(value.bundle.sources.length,0);assert.deepEqual(value.workbench.groups,[]);assert.deepEqual(value.workbench.page.entries,[]);
     });
     await check('create activity, select fixed sources, copy and edit page, preview and reload preserve data',async({page})=>{

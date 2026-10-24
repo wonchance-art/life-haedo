@@ -2,6 +2,7 @@
  * Anonymous intercepted Auth only. No production account, DB or publisher access.
  * BASE_URL=http://127.0.0.1:4173 node tests/material-library-browser.cjs */
 'use strict';
+const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -74,7 +75,7 @@ async function trash(page, confirm = true) {
   await click(page, confirm ? '#lifeSourceTrashConfirm' : '#lifeSourceTrashCancel');
 }
 async function openTrash(page) {
-  await openManagement(page); await click(page, '#lifeSourceTrashOpen');
+  await openRecordsMenu(page); await click(page, '#lifeSourceTrashOpen');
   await page.locator('#lifeSourceTrashList').waitFor();
 }
 async function backup(page) {

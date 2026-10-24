@@ -1,5 +1,6 @@
 /* Actual app/SDK/IndexedDB with synthetic HTTP Auth. No production writes or Apple hardware. */
 'use strict';
+const { openRecordsMenu, openBlogMenu } = require('./helpers/feature-menus.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4184';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -96,7 +97,7 @@ async function main() {
       await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, homeDraftFocusKey);
 
       // Keep the separate manager-origin return contract as well as home resume.
-      await nav(page, 'manage');
+      await openBlogMenu(page);
       await page.getByRole('button', { name: '글 관리', exact: true }).click(); await mode(page, 'blog');
       await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
       const draftButton = page.getByRole('button', { name: '산책 뒤 남긴 생각', exact: true });
@@ -108,7 +109,7 @@ async function main() {
       assert.equal((await page.locator('.ql-editor').innerText()).trim(), '홈으로 돌아갔다가 다시 이어 쓸 한글 초안.');
       await back(page, 'blog');
       await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, draftFocusKey);
-      await back(page, 'manage'); await home(page);
+      await back(page, 'home'); await home(page);
       await page.locator('[data-home-destination="import"]').click(); await mode(page, 'import');
       assert.equal(await page.locator('#lifeImportText').inputValue(), '원문을 자동 확정하지 않습니다.');
       assert.equal((await current(page)).bundle.sources.length, 0);
@@ -178,8 +179,8 @@ async function main() {
       await page.waitForFunction(() => document.activeElement?.textContent === '선택 자료 페이지');
       await page.getByRole('button', { name: '가져오기', exact: true }).click(); await mode(page, 'import');
       await nav(page, 'records'); await mode(page, 'sources'); assert.equal(await page.locator('#lifeSearch').inputValue(), '산책');
-      await nav(page, 'tools'); await page.getByRole('button', { name: '다시 찾기', exact: true }).click(); await mode(page, 'discover');
-      assert.equal(await heading(page).textContent(), '다시 찾기'); await back(page, 'tools');
+      await openRecordsMenu(page); await page.getByRole('button', { name: '다시 찾기', exact: true }).click(); await mode(page, 'discover');
+      assert.equal(await heading(page).textContent(), '다시 찾기'); await back(page, 'sources');
       await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '다시 찾기');
       await page.getByRole('button', { name: '다시 찾기', exact: true }).click(); await mode(page, 'discover'); await nav(page, 'tools'); await mode(page, 'tools');
       await nav(page, 'manage');
@@ -243,7 +244,7 @@ async function main() {
       assert.equal((await current(page)).workbench.page.intro, '돌아가기 실패에도 보존할 소개');
     });
     await check('direct deep links have stable parent fallback and no persistent origin data', async ({ page }) => {
-      for (const [view, title, parent] of [['import','가져오기','sources'], ['write','글쓰기','sources'], ['time','연표','sources'], ['activities','묶음','sources'], ['page','선택 자료 페이지','sources'], ['discover','다시 찾기','tools'], ['transfer','자료 백업·복원','manage'], ['sync','기기 간 동기화','manage'], ['workbench-backup','자료·구성 백업','manage'], ['public-pages','공개 페이지 관리','manage']]) {
+      for (const [view, title, parent] of [['import','가져오기','sources'], ['write','글쓰기','sources'], ['time','연표','sources'], ['activities','묶음','sources'], ['page','선택 자료 페이지','sources'], ['discover','다시 찾기','sources'], ['transfer','자료 백업·복원','manage'], ['sync','기기 간 동기화','manage'], ['workbench-backup','자료·구성 백업','manage'], ['public-pages','공개 페이지 관리','home']]) {
         await page.goto(base + '/index.html?view=' + view); await ready(page); await mode(page, view);
         const before = await current(page); assert.equal(await heading(page).textContent(), title); await back(page, parent); assert.deepEqual(await current(page), before);
       }

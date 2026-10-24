@@ -3,6 +3,7 @@
  * BASE_URL=http://127.0.0.1:4196 node tests/blog-manager-browser.cjs
  */
 'use strict';
+const { openBlogMenu } = require('./helpers/feature-menus.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4196';
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { playwright, makeContext, ready, nav } = require('./unified-home-browser.cjs');
@@ -345,7 +346,7 @@ async function main() {
         }, fixture);
         assert.equal(afterFocused.post, saved.post); assert.equal(afterFocused.refs, saved.refs); assert.equal(afterFocused.bundle, before);
         assert.deepEqual(writeCounts(), writesBefore); assert.deepEqual(server.posts.get(accounts.a.id + ':' + fixture.postId), headBefore);
-        await nav(page, 'manage'); await page.getByRole('button', { name: '글 관리', exact: true }).click();
+        await openBlogMenu(page); await page.getByRole('button', { name: '글 관리', exact: true }).click();
         await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
         assert.equal(await page.locator('#blogManagerSearch').inputValue(), '원문 연결필터');
         assert.equal(await page.locator('#blogManagerFilter').inputValue(), 'draft');

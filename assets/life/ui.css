@@ -314,6 +314,22 @@ body.haedo-shell[data-haedo-section=manage] .life-toolbar.haedo-page-heading { p
 .life-management-backups .life-destination:not(:first-child) > .life-glyph:first-child { background: transparent; color: var(--ink-soft); }
 .life-management-backups .life-destination:not(:first-child) strong { font-size: 16px; }
 .life-management-backups .life-destination:not(:first-child) { min-height: 76px; padding-block: 16px; }
+
+/* Infrequent actions stay with the content they operate on. */
+.life-feature-menu { position: relative; flex: 0 0 auto; }
+.life-feature-menu > summary { list-style: none; cursor: pointer; }
+.life-feature-menu > summary::-webkit-details-marker { display: none; }
+.life-feature-menu[open] > summary { background: var(--soft); }
+.life-feature-menu-panel { position: absolute; z-index: 45; inset-inline-end: 0; top: calc(100% + 6px); width: min(300px, calc(100vw - 32px)); max-height: min(34rem, calc(100dvh - 12rem)); overflow: auto; overscroll-behavior: contain; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+.life-feature-menu-panel section + section { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
+.life-feature-menu-panel h2 { margin: 8px 12px 4px; font-size: 12px; font-weight: 600; line-height: 1.6; color: var(--ink-soft); }
+.life-feature-menu-panel .life-destination { min-height: 44px; padding: 8px 12px; gap: 12px; border: 0; border-radius: 8px; }
+.life-feature-menu-panel .life-destination:hover { background: var(--soft); }
+.life-feature-menu-panel .life-destination > .life-glyph:first-child { padding: 0; border-radius: 0; background: transparent; color: var(--ink-soft); }
+.life-feature-menu-panel .life-destination-copy strong { font-size: 15px; font-weight: 500; line-height: 1.6; }
+.life-feature-menu-panel .life-meta:empty, .life-feature-menu-panel .life-destination > .life-glyph:last-child { display: none; }
+.life-planning-navigation { max-width: 720px; margin: 0 auto; }
+.life-planning-navigation .haedo-planning-nav { margin-top: 0; }
 #lifeManagementSyncStatus { overflow-wrap: anywhere; }
 .haedo-account-host .life-account { margin: 0; }
 .haedo-account-panel #lifeAccountLabel { margin: 0; }

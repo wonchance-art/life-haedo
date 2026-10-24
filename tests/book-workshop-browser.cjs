@@ -3,6 +3,7 @@
  * No source/workbench seeding; storage reads only, except isolated IDB fault injection.
  * BASE_URL, PW_MODULE_PATH (or PLAYWRIGHT_MODULE), CHROMIUM_PATH; BOOK_WORKSHOP_MATCH filters. */
 'use strict';
+const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4184';
 if (!process.env.PW_MODULE_PATH && process.env.PLAYWRIGHT_MODULE) process.env.PW_MODULE_PATH = process.env.PLAYWRIGHT_MODULE;
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
@@ -42,7 +43,7 @@ async function records(page) {
   if (await page.getByRole('button', { name: '자료실', exact: true }).isVisible()) await button(page, '자료실');
   await page.locator('#lifeSearch').waitFor();
 }
-async function tools(page, name) { await nav(page, 'tools'); if (await page.getByRole('button', { name: '도구로 돌아가기', exact: true }).isVisible()) await button(page, '도구로 돌아가기'); await button(page, name); }
+async function tools(page, name) { await openRecordsMenu(page); await button(page, name); }
 async function importUI(page) {
   await page.goto(base + '/index.html?section=records'); await ready(page); await settle(page); assert.equal((await current(page)).bundle.sources.length, 0);
   const refs = {};
@@ -77,7 +78,7 @@ async function arrangeReflection(page, refs, keys = samples.map(sample => sample
   if (failApply) {
     await page.locator('#wbError').waitFor({ state: 'visible' }); assert.deepEqual((await current(page)).workbench, before.workbench);
     const pending = JSON.parse((await download(page, '#wbError button:has-text("초안 JSON 받기")')).text); assert.deepEqual(new Set(pending.workbench.reflection.versionIds), new Set(selected));
-    await page.getByRole('button', { name: '도구로 돌아가기', exact: true }).click(); await settle(page); assert.equal(await page.locator('#wbReflectionNote').isVisible(), true, 'Unsaved incoming selection blocks departure');
+    await page.getByRole('button', { name: '자료실로 돌아가기', exact: true }).click(); await settle(page); assert.equal(await page.locator('#wbReflectionNote').isVisible(), true, 'Unsaved incoming selection blocks departure');
     await abortWorkbenchWrites(page, false); await page.locator('#wbError').getByRole('button', { name: '다시 저장', exact: true }).click(); await page.waitForFunction(() => document.querySelector('#wbStatus')?.dataset.state === 'saved');
     await records(page); assert.equal(await page.locator('#lifeSelectionBar').isVisible(), false, 'Durable retry consumes the source selection'); assert.equal(await page.locator('.life-source-select').count(), 0); await tools(page, '회고');
   }
