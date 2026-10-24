@@ -96,6 +96,8 @@
     let unsubscribe = null;
     let unsubscribeSync = null;
     let unsubscribeLibrary = null, libraryState = null, libraryRefresh = 0;
+    let workspaceListRefresh = 0, workspaceListApplied = 0;
+    const deferredWorkspaceChoices = new WeakSet();
     const managedLibrary = !!accountLibrary && !bootstrap?.legacy;
     let syncRefreshSequence = 0;
     let stageTimer = null;
@@ -614,18 +616,20 @@
       return saveChain;
     }
 
-    function refreshData() {
+    function refreshData({ canApply } = {}) {
       if (disposed || !state.bundle) return Promise.resolve(false);
       const workspaceId = state.bundle.workspaceId, token = workspaceGeneration, sequence = ++dataRefreshSequence;
       const pending = (async () => {
         const bundle = await storage.read(workspaceId);
+        const listSequence = ++workspaceListRefresh;
         const workspaces = await storage.listWorkspaces();
         const stages = await storage.listStages(workspaceId);
         if (!batchContext(workspaceId) || token !== workspaceGeneration) return false;
         if (sequence !== dataRefreshSequence) return dataRefreshPromise;
         if (bundle.revision < state.bundle.revision) return false;
+        if (canApply && canApply() !== true) return false;
         state.bundle = bundle;
-        state.workspaces = workspaces;
+        applyWorkspaceList(workspaces, listSequence);
         const imports = stages.filter(stage => stage.kind !== 'writing' && stage.kind !== 'source-edit');
         state.sourceEditStages = stages.filter(stage => stage.kind === 'source-edit' && stage.state === 'draft');
         state.allStages = imports;
@@ -635,6 +639,13 @@
       })();
       dataRefreshPromise = pending;
       return pending;
+    }
+
+    function applyWorkspaceList(workspaces, sequence) {
+      if (sequence <= workspaceListApplied) return false;
+      workspaceListApplied = sequence;
+      state.workspaces = workspaces;
+      return true;
     }
 
     async function registerAccountMaterials(workspaceId) {
@@ -990,6 +1001,31 @@
       updateLibraryStatus();
     }
 
+    async function refreshWorkspaceList() {
+      const sequence = ++workspaceListRefresh;
+      const workspaces = await storage.listWorkspaces();
+      if (disposed || !applyWorkspaceList(workspaces, sequence)) return;
+      const choice = main.querySelector('#lifeWorkspace');
+      if (!choice) return;
+      const update = () => {
+        if (disposed || !choice.isConnected) return;
+        const selected = choice.value;
+        const options = new Map([...choice.options].map(option => [option.value, option]));
+        for (const workspace of state.workspaces) {
+          let option = options.get(workspace.workspaceId);
+          if (!option) { option = node('option'); option.value = workspace.workspaceId; choice.append(option); }
+          option.textContent = workspace.title;
+        }
+        choice.value = selected;
+      };
+      if (document.activeElement === choice) {
+        if (!deferredWorkspaceChoices.has(choice)) {
+          deferredWorkspaceChoices.add(choice);
+          choice.addEventListener('blur', () => { deferredWorkspaceChoices.delete(choice); update(); }, { once: true });
+        }
+      } else update();
+    }
+
     function syncPresentation() {
       if (managedLibrary) return libraryPresentation();
       if (!sync) return { key: 'unavailable', label: '기기 간 자동 동기화 미연결', hint: '자료는 이 브라우저에 보관합니다. JSON 백업으로 사본을 옮길 수 있습니다.' };
@@ -1107,9 +1143,12 @@
             !main.querySelector('#lifeFolderManage[open],.source-folder-assignment[open]') &&
             !main.contains(document.activeElement)) {
           const workspaceId = state.bundle.workspaceId, workspace = workspaceGeneration, input = inputGeneration;
-          refreshData().then(() => {
-            if (disposed || workspace !== workspaceGeneration || workspaceId !== state.bundle?.workspaceId ||
-                state.mode !== 'sources' || input !== inputGeneration || state.busy || dirty()) return;
+          const canApply = () => !disposed && workspace === workspaceGeneration && workspaceId === state.bundle?.workspaceId &&
+            state.mode === 'sources' && input === inputGeneration && !state.busy && !dirty() && !sourceEditor?.isDirty() &&
+            !container.hidden && !main.querySelector('#lifeFolderManage[open],.source-folder-assignment[open]') &&
+            !main.contains(document.activeElement);
+          refreshData({ canApply }).then(applied => {
+            if (applied !== true || !canApply()) return;
             state.remoteChanged = false; render();
           }).catch(failure);
         }
@@ -1919,12 +1958,14 @@
       const service = global.HaedoLife.Preservation.create({ storage, workspaceId, isCurrent });
       const instance = global.HaedoLife.PreservationUI.create({ service, isCurrent,
         async onRestored() {
+          const listSequence = ++workspaceListRefresh;
           const workspaces = await storage.listWorkspaces();
-          if (isCurrent()) state.workspaces = workspaces;
+          if (isCurrent()) applyWorkspaceList(workspaces, listSequence);
         },
         async onOpen(id) {
           if (!isCurrent()) return;
           await persistDrafts();
+          const listSequence = ++workspaceListRefresh;
           const [bundle, workspaces, stages] = await Promise.all([storage.read(id), storage.listWorkspaces(), storage.listStages(id)]);
           if (!isCurrent()) return;
           await storage.setActive(id);
@@ -1933,7 +1974,7 @@
           state.bundle = bundle; state.stage = null; state.prepared = null;
           state.sourceId = state.sourceVersionId = null; state.sourceDrafts.clear();
           state.readerPositions.clear(); state.readerModes.clear(); state.remoteChanged = false; resetSearchContext();
-          state.workspaces = workspaces;
+          applyWorkspaceList(workspaces, listSequence);
           const imports = stages.filter(stage => stage.kind !== 'writing' && stage.kind !== 'source-edit');
         state.sourceEditStages = stages.filter(stage => stage.kind === 'source-edit' && stage.state === 'draft');
           state.allStages = imports; state.stages = imports.filter(stage => stage.state === 'draft'); mergeBatches(imports);
@@ -1981,7 +2022,8 @@
         async onRestored() {
           if (!isCurrent()) return;
           await storage.setActive(workspaceId);
-          const rows = await storage.listWorkspaces(); if (isCurrent()) state.workspaces = rows;
+          const listSequence = ++workspaceListRefresh;
+          const rows = await storage.listWorkspaces(); if (isCurrent()) applyWorkspaceList(rows, listSequence);
         }
       });
       obsidianUpdateUI = instance; await instance.mount(host);
@@ -2759,7 +2801,7 @@
           byVersion.set(ref.sourceVersionId, hit);
           hits.push(hit);
         }));
-        const folderState = folders?.getSnapshot()?.sourceFolders;
+        const folderState = state.folderFilter === 'all' ? null : folders?.getFolderState();
         const knownFolder = state.folderFilter === 'all' || state.folderFilter === 'unfiled' || folderState?.folders.some(value => value.id === state.folderFilter);
         const matchesFolder = state.folderFilter === 'all' ? () => true : folderState && knownFolder
           ? global.HaedoLife.SourceFolders.compileMatcher(folderState, state.folderFilter) : () => false;
@@ -2787,7 +2829,7 @@
         visibleMatches.slice(start).forEach(hit => {
           const source = sourceFor(hit.sourceId);
           const version = state.bundle.sourceVersions.find(v => v.id === hit.sourceVersionId);
-          const records = (query ? matchingRecords : state.bundle.records.filter(activeRecord)).filter(record => record.sourceRefs.some(ref =>
+          const records = matchingRecords.filter(record => record.sourceRefs.some(ref =>
             query ? ref.sourceVersionId === version.id : ref.sourceId === source.id));
           const card = node('article', null, 'life-card life-source-card');
           Object.assign(card.dataset, { sourceId: source.id, versionId: version.id, matchedBy: hit.matchedBy });
@@ -4706,6 +4748,7 @@
       if (sync) await refreshSync();
       if (managedLibrary) {
         unsubscribeLibrary = accountLibrary.subscribe(event => {
+          if (!disposed && event.type === 'catalog' && !event.workspaceId) refreshWorkspaceList().catch(failure);
           if (disposed || event.workspaceId && event.workspaceId !== state.bundle?.workspaceId) return;
           refreshLibrary().catch(failure);
         });

@@ -63,7 +63,7 @@
     const sdkFactory = options.clientFactory || env.supabase?.createClient;
     const ready = validConfig(input, location.hostname) && typeof sdkFactory === 'function';
     const config = ready ? Object.freeze({ url: new URL(input.url).origin, key: input.key }) : null;
-    let user = null, session = null, epoch = 0, observedId, closed = false, locallyBlocked = false, signingOut = false, logoutPromise = null;
+    let user = null, session = null, epoch = 0, observedId, closed = false, locallyBlocked = false, signingOut = false, logoutPromise = null, pendingUser = null;
     const listeners = new Set(), controllers = new Set();
     let backingStorage;
     try { backingStorage = options.storage || env.localStorage; } catch (_) {}
@@ -97,7 +97,7 @@
       document?.querySelectorAll?.('dialog[open]').forEach(dialog => { dialog.close(); });
       if (privatePages.has(location.pathname?.split('/').pop())) document?.documentElement?.classList.add('auth-pending');
     }
-    function cancel() { epoch++; for (const controller of controllers) controller.abort(); controllers.clear(); }
+    function cancel() { epoch++; pendingUser = null; for (const controller of controllers) controller.abort(); controllers.clear(); }
     function invalidate() { cancel(); user = session = null; hidePrivate(); notify(); event('haedo:signed-out'); }
     function alive(expected, uid) {
       if (closed || expected !== epoch || (uid && user?.id !== uid)) throw fault('request_cancelled');
@@ -115,6 +115,18 @@
       } else if (next && user?.id === id) session = next;
       observedId = id;
     }).data.subscription;
+    function verifiedUser(current, expected) {
+      const uid = current.user.id, token = current.access_token;
+      if (typeof token !== 'string' || !token) return client.auth.getUser();
+      if (pendingUser?.epoch === expected && pendingUser.uid === uid && pendingUser.token === token) return pendingUser.promise;
+      // Share only an outstanding server check for this exact session. A later
+      // verification still contacts Auth; no completed approval is cached.
+      const pending = { epoch: expected, uid, token, promise: null };
+      pending.promise = Promise.resolve().then(() => { alive(expected); return client.auth.getUser(); })
+        .finally(() => { if (pendingUser === pending) pendingUser = null; });
+      pendingUser = pending;
+      return pending.promise;
+    }
     async function verify() {
       if (!client || blocked()) return null;
       const expected = epoch;
@@ -124,7 +136,7 @@
         if (!current.data.session) { if (user) invalidate(); return null; }
         const uid = current.data.session.user.id;
         if (observedId === undefined) observedId = uid;
-        const verified = await client.auth.getUser(); alive(expected);
+        const verified = await verifiedUser(current.data.session, expected); alive(expected);
         const latest = await client.auth.getSession(); alive(expected);
         if (latest.data?.session && latest.data.session.user.id !== uid) { invalidate(); throw fault('request_cancelled'); }
         if (verified.error) throw verified.error;

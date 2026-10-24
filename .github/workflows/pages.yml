@@ -435,6 +435,13 @@ jobs:
       - name: Verify automatic account materials across devices, metadata recovery and private originals
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/account-library-browser.cjs
+      - name: Verify first usable account materials and background preservation
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        env:
+          STARTUP_REGRESSION_ONLY: "1"
+          STARTUP_EXPECT_PROGRESSIVE: "1"
+          STARTUP_HTTP_LATENCY: "0"
+        run: node tests/startup-performance-browser.cjs
       - name: Verify frozen reading comparisons, explicit judgments and local recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-reading-browser.cjs
@@ -481,6 +488,7 @@ jobs:
             .local/local-post-finder/
             .local/account-materials/
             .local/account-library/
+            .local/startup-performance-browser/
             .local/naver-blog/
             .local/naver-capture/
             .local/app-native/qa/

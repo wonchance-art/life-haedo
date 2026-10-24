@@ -205,6 +205,63 @@ test('verified shared account uses Google PKCE and never enables a password flow
   assert.equal(typeof auth.getClient().auth.signInWithPassword, 'undefined'); auth.dispose();
 });
 
+test('concurrent exact-session verification shares one server request but later verification is fresh', async () => {
+  const { auth, state } = setup(); const waiting = deferred(); state.userPromise = waiting.promise;
+  const pending = Array.from({ length: 5 }, () => auth.verify());
+  await tick(); assert.equal(state.calls.filter(name => name === 'getUser').length, 1);
+  assert.equal(auth.user, null); assert.equal(auth.getAccount(), null);
+  waiting.resolve({ data: { user: A }, error: null });
+  for (const user of await Promise.all(pending)) assert.equal(user.id, A.id);
+  // Every caller still checks its current session before and after the shared GET.
+  assert.equal(state.calls.filter(name => name === 'getSession').length, 11);
+  state.userPromise = null; await auth.verify();
+  assert.equal(state.calls.filter(name => name === 'getUser').length, 2); auth.dispose();
+});
+
+test('failed shared server verification is removed and an explicit retry contacts Auth again', async () => {
+  const { auth, state } = setup(); const waiting = deferred(); state.userPromise = waiting.promise;
+  const pending = Array.from({ length: 3 }, () => auth.verify());
+  const outcomes = Promise.allSettled(pending);
+  await tick(); assert.equal(state.calls.filter(name => name === 'getUser').length, 1);
+  waiting.resolve({ data: { user: null }, error: { name: 'AuthRetryableFetchError' } });
+  for (const result of await outcomes) { assert.equal(result.status, 'rejected'); assert.equal(result.reason.code, 'network_error'); }
+  assert.equal(auth.getAccount(), null);
+  state.userPromise = null; assert.equal((await auth.verify()).id, A.id);
+  assert.equal(state.calls.filter(name => name === 'getUser').length, 2); auth.dispose();
+});
+
+test('a rotated token has its own pending check and an older completion cannot clear it', async () => {
+  const { auth, state, sdkListeners } = setup();
+  const oldRead = deferred(), newRead = deferred(); state.userPromise = oldRead.promise;
+  const beforeRotation = auth.verify(); await tick();
+  const nextSession = { user: A, access_token: 'synthetic-rotated' };
+  state.records.set(SESSION_KEY, JSON.stringify(nextSession));
+  for (const listener of sdkListeners) listener('TOKEN_REFRESHED', nextSession);
+  state.userPromise = newRead.promise;
+  const afterRotation = auth.verify(); await tick();
+  assert.equal(state.calls.filter(name => name === 'getUser').length, 2);
+  oldRead.resolve({ data: { user: A }, error: null }); assert.equal((await beforeRotation).id, A.id);
+  const sameRotatedSession = auth.verify(); await tick();
+  assert.equal(state.calls.filter(name => name === 'getUser').length, 2);
+  newRead.resolve({ data: { user: A }, error: null });
+  assert.equal((await afterRotation).id, A.id); assert.equal((await sameRotatedSession).id, A.id);
+  assert.equal(auth.session.access_token, 'synthetic-rotated');
+  state.userPromise = null; await auth.verify();
+  assert.equal(state.calls.filter(name => name === 'getUser').length, 3); auth.dispose();
+});
+
+test('an account change cancels every waiter without sharing the old account response', async () => {
+  const { auth, state } = setup(); const waiting = deferred(); state.userPromise = waiting.promise;
+  const oldCalls = Promise.allSettled([auth.verify(), auth.verify(), auth.verify()]); await tick();
+  assert.equal(state.calls.filter(name => name === 'getUser').length, 1);
+  state.change(B); assert.equal(auth.getAccount(), null); assert.equal(state.privateElement.hidden, true);
+  state.userPromise = null; assert.equal((await auth.verify()).id, B.id);
+  waiting.resolve({ data: { user: A }, error: null });
+  for (const result of await oldCalls) { assert.equal(result.status, 'rejected'); assert.equal(result.reason.code, 'request_cancelled'); }
+  assert.equal(auth.getAccount().userId, B.id);
+  assert.equal(state.calls.filter(name => name === 'getUser').length, 2); auth.dispose();
+});
+
 test('unverified token cannot open a protected offline cold load', async () => {
   const { auth, state } = setup({ verifyError: { name: 'AuthRetryableFetchError', message: 'raw private error' } });
   await assert.rejects(auth.requireUser(), errorCode('network_error'));
@@ -325,6 +382,29 @@ function sdk() {
   vm.runInNewContext(fs.readFileSync(require.resolve('../vendor/supabase/supabase.js'), 'utf8'), context);
   return context.supabase;
 }
+
+test('actual bundled SDK shares one overlapping user HTTP request and refreshes the next verification', async () => {
+  const { env, auth: fake } = setup(); fake.dispose();
+  const exp = Math.floor(Date.now() / 1000) + 3600;
+  const token = 'fixture.' + Buffer.from(JSON.stringify({ sub: A.id, exp })).toString('base64url') + '.fixture';
+  const records = new Map([[SESSION_KEY, JSON.stringify({ user: A, access_token: token, refresh_token: 'synthetic-refresh', expires_at: exp, expires_in: 3600, token_type: 'bearer' })]]);
+  env.localStorage = { getItem: key => records.get(key) || null, setItem: (key, value) => records.set(key, value), removeItem: key => records.delete(key) };
+  const entered = deferred(), release = deferred(), paths = [];
+  const factory = (url, key, options) => sdk().createClient(url, key, { ...options, global: { fetch: async (input, init) => {
+    const path = new URL(input).pathname; paths.push(path);
+    assert.equal(path, '/auth/v1/user'); assert.equal(new Headers(init.headers).get('Authorization'), 'Bearer ' + token);
+    entered.resolve(); await release.promise;
+    return new Response(JSON.stringify(A), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  } } });
+  const auth = createAuth(env, { config, clientFactory: factory });
+  try {
+    const pending = [auth.verify(), auth.verify(), auth.verify()];
+    await entered.promise; await tick(); assert.equal(paths.length, 1); assert.equal(auth.user, null);
+    release.resolve(); for (const user of await Promise.all(pending)) assert.equal(user.id, A.id);
+    assert.equal(paths.length, 1);
+    assert.equal((await auth.verify()).id, A.id); assert.equal(paths.length, 2);
+  } finally { release.resolve(); auth.dispose(); }
+});
 
 test('actual bundled SDK online logout uses shared session and offline failure cannot restore it', async () => {
   const { env, auth: fake } = setup(); fake.dispose();
