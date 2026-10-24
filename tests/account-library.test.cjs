@@ -241,7 +241,14 @@ test('a pending first catalog is retried after a local event instead of cleared 
     for (const callback of h.callbacks) callback({ type: 'changed', workspaceId: first });
     firstRelease.resolve(); await pending;
     assert.equal((await manager.getState()).status, 'error'); assert(!h.spaces.has(second));
-    await retryEntered.promise; assert.equal(calls, 2); assert(!h.spaces.has(second));
+    let retryDeadline;
+    try {
+      // The production debounce is unref'ed; keep this harness wait alive and bounded.
+      await Promise.race([retryEntered.promise, new Promise((_, reject) => {
+        retryDeadline = setTimeout(() => reject(new Error('Scheduled authoritative catalog retry did not begin within 2 seconds')), 2000);
+      })]);
+    } finally { clearTimeout(retryDeadline); }
+    assert.equal(calls, 2); assert(!h.spaces.has(second));
     assert.notEqual((await manager.getState()).status, 'synced');
     retryRelease.resolve(); await manager.reconcile({ refreshCatalog: false });
     assert(h.spaces.has(second)); assert.equal((await manager.getState()).status, 'synced');
