@@ -289,9 +289,10 @@
     }
     function refresh() { const owner = ensureScope(); return owner ? load(owner, epoch) : Promise.reject(uiFault('자료실을 먼저 열어 주세요.')); }
     function getSnapshot() { const owner = ensureScope(); return owner?.snapshot ? copy(owner.snapshot) : null; }
+    function getFolderState() { const owner = ensureScope(); return owner?.snapshot ? copy(owner.snapshot.sourceFolders) : null; }
     function dispose() { if (disposed) return; disposed = true; epoch++; unsubscribe?.(); unsubscribe = null; for (const mount of [...mounts]) releaseMount(mount); slots.clear(); slot = null; workspaceId = null; }
     ensureScope();
-    return Object.freeze({ mountList, assignmentControl, refresh, getSnapshot, dispose, get ready() { const owner = ensureScope(); return owner?.pending || Promise.resolve(owner?.snapshot ? copy(owner.snapshot) : null); } });
+    return Object.freeze({ mountList, assignmentControl, refresh, getSnapshot, getFolderState, dispose, get ready() { const owner = ensureScope(); return owner?.pending || Promise.resolve(owner?.snapshot ? copy(owner.snapshot) : null); } });
   }
   (root.HaedoLife ||= {}).SourceFoldersUI = Object.freeze({ create });
 })(globalThis);

@@ -6,6 +6,16 @@
   const publicHome = root.document.body?.dataset.lifeHome === 'true';
   let mounted, sync, compositionSync, libraryMetaSync, accountLibrary, writingSync, scopedStorage, controller, showing, generation = 0, activeKey = null, starting, leaving = false, suspended = false;
   let retained = false, resumePoint = null, suspension = 0;
+  let workerScheduled = false;
+  function scheduleWorker() {
+    if (workerScheduled || !('serviceWorker' in root.navigator)) return;
+    workerScheduled = true;
+    // Installing the complete offline shell must not compete with the first
+    // account check and visible screen. Reuse one registration per page load.
+    root.requestAnimationFrame(() => root.setTimeout(() => {
+      root.navigator.serviceWorker.register('./sw.js').catch(() => { workerScheduled = false; });
+    }, 0));
+  }
   function loginPath(compose = false) {
     const next = auth?.safeNext(compose && publicHome ? 'index.html?compose=1' : (publicHome ? 'index.html' : 'life.html') + root.location.search) || (publicHome ? 'index.html' : 'life.html');
     return 'login.html?next=' + encodeURIComponent(next);
@@ -149,7 +159,7 @@
       if (automatic) {
         accountLibrary = life.AccountLibrary.create({ storage, core: life.Core, sync, compositionSync, libraryMetaSync, auth });
         notice('계정 자료를 확인하고 있습니다.');
-        bootstrap = await accountLibrary.bootstrap();
+        bootstrap = await accountLibrary.bootstrap({ foreground: true });
         if (signal.aborted || token !== generation || key !== auth.getAccount()?.projectUrl + '|' + auth.getAccount()?.userId) return null;
         if (!bootstrap?.cached && !bootstrap?.workspaceId && !bootstrap?.legacy) {
           // Keep the retry frame alive. Never create an independent empty library
@@ -161,13 +171,20 @@
       if (signal.aborted || token !== generation || key !== auth.getAccount()?.projectUrl + '|' + auth.getAccount()?.userId) { instance?.dispose(); return null; }
       mounted = instance;
       reveal(account);
+      if (bootstrap?.background) {
+        const library = accountLibrary;
+        root.requestAnimationFrame(() => {
+          if (signal.aborted || token !== generation || mounted !== instance || accountLibrary !== library) return;
+          library.reconcile().catch(() => {});
+        });
+      }
       if (bootstrap?.legacy) sync.setAutomatic?.(true);
       if (!automatic || bootstrap?.legacy) sync.start().catch(() => {
         if (token === generation && !signal.aborted) notice('자료는 이 브라우저에 보관돼 있습니다. 기기 간 동기화에서 서버 연결 상태를 확인해 주세요.');
       });
       if (!automatic || bootstrap?.legacy) compositionSync.start();
       writingSync.start();
-      if ('serviceWorker' in root.navigator) root.navigator.serviceWorker.register('./sw.js').catch(() => {});
+      scheduleWorker();
       return mounted;
     } catch (error) {
       if (signal.aborted || token !== generation) return null;
@@ -298,6 +315,6 @@
     } finally { leaving = false; }
   });
   life.Shell = { isReadOnly, start, get sync() { return sync; }, get compositionSync() { return compositionSync; }, get libraryMetaSync() { return libraryMetaSync; }, get accountLibrary() { return accountLibrary; }, get originals() { return accountLibrary?.originals || null; }, get writingSync() { return writingSync; }, get storage() { return scopedStorage; } };
-  if (publicHome && 'serviceWorker' in root.navigator) root.navigator.serviceWorker.register('./sw.js').catch(() => {});
   life.Shell.ready = start();
+  if (publicHome) life.Shell.ready.finally(scheduleWorker).catch(() => {});
 })(globalThis);

@@ -32,7 +32,8 @@
     const listeners = new Set(), domainErrors = new Map(), stops = [];
     let disposed = false, mode = 'unavailable', reason = null, legacy = false, started = false, sourceStarted = false, ready = false;
     let booting = false, working = false, operation = null, timer = null, interval = null, globalError = null, followup = false;
-    let defaultRow = null, catalog = new Map(), originals = null, originalsStop = null;
+    let defaultRow = null, catalog = new Map(), originals = null, originalsStop = null, originalsStarted = false;
+    let deferredBackground = false, catalogPending = false, accountCachePresented = false;
     const same = value => value?.projectUrl === owner.projectUrl && value?.userId === owner.userId;
     function guard() {
       if (disposed || auth.epoch !== authEpoch || !same(auth.getAccount?.()) || auth.user?.id !== owner.userId) throw fault('request_cancelled');
@@ -72,10 +73,10 @@
       }
       throw fault('catalog_too_large');
     }
-    async function sources(workspaceId, local, pristine) {
+    async function sources(workspaceId, local, pristine, knownRemote = false) {
       let state = await step(() => sync.getState(workspaceId));
       if (!state.binding) {
-        if (catalog.has(workspaceId)) {
+        if (knownRemote || catalog.has(workspaceId)) {
           await step(() => sync.adoptExisting(workspaceId, {
             pristine: !!pristine, pristineRevision: pristine ? defaultRow.default_revision : null
           }));
@@ -100,6 +101,63 @@
       if (state.conflict || state.status === 'conflict') return state;
       return step(() => manager.syncNow(workspaceId));
     }
+    async function synchronizeRow(row, knownRemote = false) {
+      const id = row.workspaceId;
+      try {
+        const source = await sources(id, row, defaultRow?.pristine && defaultRow.workspace_id === id, knownRemote);
+        if (source.status === 'synced') {
+          // Each domain still receives only after its exact source state is ready.
+          const results = await Promise.allSettled([domain(compositionSync, id), domain(libraryMetaSync, id)]);
+          const rejected = results.find(value => value.status === 'rejected');
+          if (rejected) throw rejected.reason;
+        }
+        domainErrors.delete(id);
+      } catch (error) {
+        guard(); domainErrors.set(id, clean(error));
+      }
+      emit('state', id);
+    }
+    async function accountCache() {
+      if (!storage.getSyncState || !storage.getLibraryMetaState) return null;
+      const rows = await eligible(), workspaceId = await step(() => storage.getActive());
+      if (!rows.some(row => row.workspaceId === workspaceId)) return null;
+      const states = await step(() => Promise.all([
+        storage.getSyncState(workspaceId), storage.getLibraryMetaState(workspaceId)
+      ]));
+      const acknowledged = state => same(state?.binding) && state.binding.remoteId === workspaceId &&
+        Number.isSafeInteger(state.remoteRevision) && state.remoteRevision > 0;
+      // Metadata acknowledgement proves this was an account-library copy. It is
+      // not proof of current capability, existence or freshness on the server.
+      if (!states.every(acknowledged)) return null;
+      if (await step(() => storage.getActive()) !== workspaceId) return null;
+      return workspaceId;
+    }
+    async function foregroundWorkspace() {
+      let rows = await eligible();
+      const active = await step(() => storage.getActive());
+      const workspaceId = rows.some(row => row.workspaceId === active) ? active : defaultRow.workspace_id;
+      if (!rows.some(row => row.workspaceId === workspaceId)) {
+        const all = await step(() => storage.listWorkspaces());
+        // Never adopt or overwrite a recovery space just because its ID matches.
+        if (all.some(row => row.workspaceId === workspaceId)) throw fault('remote_missing');
+        await step(() => sync.download(workspaceId, { activate: false }));
+        rows = await eligible();
+      }
+      const row = rows.find(value => value.workspaceId === workspaceId);
+      if (!row) throw fault('remote_missing');
+      await synchronizeRow(row, workspaceId === defaultRow.workspace_id);
+      const latest = await step(() => storage.getActive()), available = await eligible();
+      if (latest && latest !== workspaceId && available.some(value => value.workspaceId === latest)) {
+        // Another tab changed the selected space during preparation. Preserve
+        // its selection and use the full receive barrier for this uncommon path.
+        await receiveAndSend(true);
+        const selected = await step(() => storage.getActive());
+        if (!(await eligible()).some(value => value.workspaceId === selected)) throw fault('remote_missing');
+        return { workspaceId: selected, background: false };
+      }
+      if (latest !== workspaceId) await step(() => storage.setActive(workspaceId));
+      return { workspaceId, background: true };
+    }
     async function receiveAndSend(refreshCatalog) {
       if (refreshCatalog) await readCatalog();
       let localRows = await eligible();
@@ -111,23 +169,7 @@
         localIds.add(row.id); emit('catalog', row.id);
       }
       localRows = await eligible();
-      for (const row of localRows) {
-        const id = row.workspaceId;
-        try {
-          const source = await sources(id, row, defaultRow?.pristine && defaultRow.workspace_id === id);
-          if (source.status === 'synced') {
-            // These are separate CAS domains. Each receive verifies its exact
-            // source references; global atomic-generation semantics are not implied.
-            const results = await Promise.allSettled([domain(compositionSync, id), domain(libraryMetaSync, id)]);
-            const rejected = results.find(value => value.status === 'rejected');
-            if (rejected) throw rejected.reason;
-          }
-          domainErrors.delete(id);
-        } catch (error) {
-          guard(); domainErrors.set(id, clean(error));
-        }
-        emit('state', id);
-      }
+      for (const row of localRows) await synchronizeRow(row);
       // A failed/incomplete catalog never removes local spaces or changes the
       // current workspace. Background downloads never set the active pointer.
       emit('catalog');
@@ -135,6 +177,7 @@
     }
     function schedule() {
       if (disposed || mode !== 'account') return;
+      if (deferredBackground) { followup = true; return; }
       if (working) { followup = true; return; }
       root.clearTimeout(timer);
       timer = root.setTimeout(() => { timer = null; reconcile({ refreshCatalog: false }).catch(() => {}); }, 350);
@@ -154,27 +197,58 @@
     }
     function visible() { if (root.document?.visibilityState !== 'hidden') lifecycle(); }
     function lifecycle() {
-      if (disposed || root.document?.visibilityState === 'hidden') return;
+      if (disposed || deferredBackground || root.document?.visibilityState === 'hidden') return;
       (mode === 'account' && ready ? reconcile() : bootstrap()).catch(() => {});
       originals?.retry?.().catch?.(() => {});
     }
-    function startOriginals() {
-      if (originals || disposed) return;
+    function prepareOriginals() {
+      if (disposed) return null;
+      if (originals) return originals;
       const factory = originalsFactory || root.HaedoLife?.OriginalAttachments?.create;
-      if (typeof factory !== 'function') { globalError = clean(fault('schema_missing')); return; }
+      if (typeof factory !== 'function') { globalError = clean(fault('schema_missing')); return null; }
+      let candidate;
       try {
-        originals = factory({ auth });
-        originalsStop = originals.subscribe?.(() => emit());
-        originals.start?.();
-      } catch (error) { originals = null; globalError = clean(error); }
+        candidate = factory({ auth });
+        originalsStop = candidate.subscribe?.(() => emit());
+        originals = candidate;
+        return originals;
+      } catch (error) {
+        try { candidate?.dispose?.(); } catch (_) { /* Close a partially prepared account service. */ }
+        globalError = clean(error); return null;
+      }
     }
-    async function bootstrap() {
+    function startOriginals() {
+      if (disposed || originalsStarted) return;
+      const service = prepareOriginals();
+      if (!service) return;
+      try { service.start?.(); originalsStarted = true; }
+      catch (error) { globalError = clean(error); }
+    }
+    async function bootstrap(options = {}) {
+      if (!options || typeof options !== 'object' || Array.isArray(options) ||
+          Object.keys(options).some(key => key !== 'foreground') ||
+          options.foreground !== undefined && typeof options.foreground !== 'boolean') throw fault('invalid_remote_data');
+      const foreground = options.foreground === true;
       return serial(async () => {
-        guard(); booting = true; working = true; globalError = null; emit();
+        guard(); deferredBackground = foreground; booting = true; working = true; globalError = null; emit();
+        let verifiedAccount = false;
         try {
-          await verify(); await step(() => storage.open());
+          await verify(); verifiedAccount = true; await step(() => storage.open());
+          if (foreground) {
+            const workspaceId = await accountCache();
+            if (workspaceId) {
+              mode = 'account'; reason = null; legacy = false; ready = false;
+              catalogPending = true; accountCachePresented = true;
+              prepareOriginals(); activateLifecycle();
+              return { mode, workspaceId, cached: true, background: true };
+            }
+          }
           const capabilities = await step(() => remote.capabilities());
           if (capabilities.version === 0) {
+            // A previously acknowledged account copy must not silently become a
+            // local-only library after its foreground screen has been shown.
+            if (accountCachePresented) throw fault('schema_missing');
+            deferredBackground = false;
             mode = 'unavailable'; reason = 'unsupported'; legacy = true;
             sync.setAutomatic?.(true);
             if (!sourceStarted) { await step(() => sync.start()); sourceStarted = true; }
@@ -184,25 +258,42 @@
           }
           if (capabilities.version !== 1 || capabilities.metadataVersion !== 1 || capabilities.originalsVersion !== 1) throw fault('schema_missing');
           mode = 'account'; reason = null; legacy = false; sync.setAutomatic?.(false);
+          // Make the shared service available to an early explicit dialog. Its
+          // constructor does not open storage or start remote reconciliation.
+          if (foreground) prepareOriginals();
           if (!sourceStarted) { await step(() => sync.start()); sourceStarted = true; }
           if (!same(sync.getAccount())) throw fault('auth_required');
           const local = await eligible(), active = await step(() => storage.getActive());
           const preferred = local.some(row => row.workspaceId === active) ? active : local[0]?.workspaceId || null;
           defaultRow = await step(() => remote.open(preferred));
           if (defaultRow.status === 'missing') throw fault('remote_missing');
+          if (foreground) {
+            catalogPending = true;
+            const selected = await foregroundWorkspace();
+            ready = true; activateLifecycle();
+            if (!selected.background) { catalogPending = false; deferredBackground = false; startOriginals(); }
+            return { mode, ...selected, cached: true };
+          }
           await receiveAndSend(true);
           let workspaceId = await step(() => storage.getActive());
           const rows = await eligible();
-          if (!workspaceId || !rows.some(row => row.workspaceId === workspaceId)) {
+          if (accountCachePresented) {
+            // The displayed user may have explicitly opened an owned recovery
+            // copy while this background bootstrap ran. Do not change their
+            // pointer or make that copy eligible for automatic replication.
+            if (!workspaceId) throw fault('remote_missing');
+          } else if (!workspaceId || !rows.some(row => row.workspaceId === workspaceId)) {
             if (!rows.some(row => row.workspaceId === defaultRow.workspace_id)) throw fault('remote_missing');
             workspaceId = defaultRow.workspace_id;
             await step(() => storage.setActive(workspaceId));
           }
-          activateLifecycle(); startOriginals(); ready = true;
+          catalogPending = false; activateLifecycle(); startOriginals(); ready = true;
           return { mode, workspaceId, cached: true };
         } catch (error) {
           guard(); globalError = clean(error); reason = error?.code === 'schema_missing' ? 'unsupported' : 'offline';
+          deferredBackground = false;
           if (mode !== 'account') mode = 'unavailable';
+          if (foreground && !verifiedAccount) return { mode, reason, legacy: false, cached: false, error: copy(globalError) };
           const workspaceId = await step(() => storage.getActive()).catch(() => null);
           activateLifecycle();
           return { mode, reason, legacy: false, cached: !!workspaceId,
@@ -211,11 +302,14 @@
       });
     }
     async function reconcile({ refreshCatalog = true } = {}) {
+      deferredBackground = false;
       if (mode !== 'account' || !ready) return bootstrap();
       return serial(async () => {
         guard(); working = true; emit();
         try {
-          await verify(); await receiveAndSend(refreshCatalog); globalError = null; reason = null; startOriginals();
+          const needsCatalog = refreshCatalog || catalogPending;
+          if (needsCatalog) catalogPending = true;
+          await verify(); await receiveAndSend(needsCatalog); catalogPending = false; globalError = null; reason = null; startOriginals();
         } catch (error) { guard(); globalError = clean(error); emit('error'); }
         finally { working = false; emit(); }
         return getState();
@@ -230,11 +324,11 @@
         ['sources', 'composition', 'metadata'].forEach((key, index) => { domains[key] = values[index].status === 'fulfilled' ? values[index].value : { status: 'error', error: clean(values[index].reason) }; });
       }
       const states = [domains.sources, domains.composition, domains.metadata].filter(Boolean);
-      let status = booting ? 'checking' : working ? 'syncing' : 'synced';
+      let status = booting ? 'checking' : working || catalogPending ? 'syncing' : 'synced';
       let error = globalError || domainErrors.get(id) || states.find(state => state.error)?.error || null;
       if (!booting && states.some(state => state.conflict || state.status === 'conflict')) status = 'conflict';
       else if (!booting && (error || states.some(state => state.status === 'error'))) status = 'error';
-      else if (!booting && !working && (mode !== 'account' || !states.length || states.some(state => state.status !== 'synced'))) status = 'pending';
+      else if (!booting && !working && !catalogPending && (mode !== 'account' || !states.length || states.some(state => state.status !== 'synced'))) status = 'pending';
       const fileState = domains.originals;
       if (!booting && fileState?.status === 'error' && status !== 'conflict') { status = 'error'; error ||= fileState.error || clean(null); }
       else if (!booting && !working && status === 'synced' && mode === 'account' && (!fileState || fileState.status !== 'saved')) status = 'pending';
