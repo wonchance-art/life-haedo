@@ -3,6 +3,7 @@
  * BASE_URL=<local dev server> PW_MODULE_PATH=<installed Playwright> node this-file
  */
 'use strict';
+const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -281,7 +282,7 @@ async function main() {
         await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(other);
         await until(page, async expected => (await HaedoLife.Shell.storage.getActive()) === expected, 'exact new workspace activation', other);
         await page.locator('#lifeSearch').waitFor(); await settle(page);
-        await nav(page, 'tools'); await page.getByRole('button', { name: '네이버 블로그 연결', exact: true }).click(); await idle(page, 'ready'); hold.release();
+        await openRecordsMenu(page); await page.getByRole('button', { name: '네이버 블로그 연결', exact: true }).click(); await idle(page, 'ready'); hold.release();
         assert.ok(await page.evaluate(() => __naverObservedLists > 0)); await page.waitForFunction(() => __naverActiveLists === 0);
         assert.equal(await page.locator('.nv-subscription').count(), 0); assert.equal(await page.locator('.nv-item').count(), 0);
         assert.deepEqual(await page.evaluate(ws => HaedoLife.Shell.storage.read(ws), seeded.workspaceId), intact);

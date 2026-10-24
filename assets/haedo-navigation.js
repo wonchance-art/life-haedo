@@ -1,4 +1,4 @@
-/* Shared navigation. Existing local Haedo icons; no routing or account storage. */
+/* Shared destinations and navigation. Existing local icons; no account storage. */
 (function (root) {
   'use strict';
   if (root.HaedoNavigation) return;
@@ -9,6 +9,50 @@
     { id: 'tools', label: '도구', glyph: 'workspace', href: 'index.html?section=tools' },
     { id: 'manage', label: '설정', glyph: 'settings', href: 'index.html?section=manage' }
   ];
+  const viewSections = Object.freeze({
+    home: 'home', blog: 'home', 'account-blog': 'home', 'public-cover': 'home', 'public-pages': 'home',
+    'external-discovery': 'news', interests: 'news',
+    sources: 'records', topics: 'records', source: 'records', 'source-edit': 'records',
+    collection: 'records', import: 'records', batch: 'records', write: 'records', time: 'records',
+    activities: 'records', page: 'records', related: 'records', find: 'records',
+    'naver-blog': 'records', 'naver-capture': 'records', 'obsidian-update': 'records',
+    'source-trash': 'records', discover: 'records', reflection: 'records', books: 'records',
+    tools: 'tools', 'annual-plan': 'tools',
+    manage: 'manage', sync: 'manage', transfer: 'manage', 'workbench-backup': 'manage', preservation: 'manage'
+  });
+  function getSectionForView(view) {
+    return Object.hasOwn(viewSections, view) ? viewSections[view] : null;
+  }
+  const planningDestinations = [
+    { id: 'annual-plan', label: '연간 계획', href: 'index.html?section=tools&view=annual-plan' },
+    { id: 'goals', label: '목표', href: 'goals.html' },
+    { id: 'habits', label: '습관', href: 'habits.html' }
+  ];
+  function createPlanningNavigation({ current, beforeNavigate, onError } = {}) {
+    if (beforeNavigate && typeof onError !== 'function') throw new TypeError('A navigation error handler is required.');
+    const nav = root.document.createElement('nav');
+    nav.className = 'haedo-planning-nav'; nav.setAttribute('aria-label', '계획과 실천');
+    let pending = false;
+    for (const item of planningDestinations) {
+      const link = root.document.createElement('a');
+      link.href = item.href; link.textContent = item.label; link.dataset.planningDestination = item.id;
+      if (current === item.id) link.setAttribute('aria-current', 'page');
+      link.addEventListener('click', async event => {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        if (current === item.id) { event.preventDefault(); return; }
+        if (!beforeNavigate) return;
+        event.preventDefault();
+        if (pending) return;
+        pending = true; nav.setAttribute('aria-busy', 'true');
+        try {
+          if (await beforeNavigate({ id: item.id, href: item.href }) !== false && nav.isConnected) root.location.assign(item.href);
+        } catch (error) { onError(error); }
+        finally { pending = false; nav.removeAttribute('aria-busy'); }
+      });
+      nav.append(link);
+    }
+    return nav;
+  }
   const handlers = new Set();
   const indicators = [];
   const preference = root.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -138,6 +182,9 @@
   root.document.querySelectorAll('[data-haedo-icon]').forEach(node => {
     node.replaceChildren(root.HaedoLife.Icons.create(node.dataset.haedoIcon));
   });
+  root.document.querySelectorAll('[data-haedo-planning-navigation]').forEach(host => {
+    host.replaceChildren(createPlanningNavigation({ current: host.dataset.haedoPlanningNavigation }));
+  });
   root.document.querySelectorAll('.haedo-icon-button').forEach(control => {
     if (!control.querySelector('.haedo-tooltip') && control.getAttribute('aria-label')) tooltip(control, control.getAttribute('aria-label'));
     const reset = () => { delete control.dataset.tooltipDismissed; };
@@ -160,12 +207,10 @@
   const page = root.document.body.dataset.page;
   let initialSection = root.document.body.dataset.haedoSection;
   if (page === 'home' || page === 'life') {
-    if (query.get('view') === 'external-discovery' && (!fromQuery || fromQuery === 'tools' || fromQuery === 'news')) initialSection = 'news';
+    if (page === 'home' && query.get('compose') === '1') initialSection = 'home';
+    else if (getSectionForView(query.get('view'))) initialSection = getSectionForView(query.get('view'));
     else if (sections.some(section => section.id === fromQuery)) initialSection = fromQuery;
-    else if (['discover', 'reflection', 'books'].includes(query.get('view'))) initialSection = 'tools';
-    else if (['blog', 'transfer', 'sync', 'workbench-backup', 'public-pages', 'preservation'].includes(query.get('view'))) initialSection = 'manage';
-    else if (['collection', 'topics', 'sources', 'time', 'import', 'write', 'activities', 'page'].includes(query.get('view'))) initialSection = 'records';
   }
   activate(initialSection);
-  root.HaedoNavigation = Object.freeze({ activate, bind });
+  root.HaedoNavigation = Object.freeze({ activate, bind, getSectionForView, createPlanningNavigation });
 })(globalThis);

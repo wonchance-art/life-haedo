@@ -1,4 +1,5 @@
 'use strict';
+const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 const assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path');
 const {playwright,makeContext,ready,nav}=require('./unified-home-browser.cjs');
 const {accounts,cloud,base}=require('./life-sync-browser.cjs');
@@ -48,7 +49,7 @@ async function main(){await fs.mkdir(out,{recursive:true});const browser=await p
   await nav(page,'manage');await click('자료·구성 백업');await page.locator('#wbBackupDownload').waitFor();const download=page.waitForEvent('download');await page.locator('#wbBackupDownload').click();const bytes=await fs.readFile(await(await download).path());await page.locator('#wbRestoreFile').setInputFiles({name:'anonymous-cycle-backup.json',mimeType:'application/json',buffer:bytes});await page.locator('#wbRestoreInstall').click();await page.locator('#lifeRestoreResult').waitFor();const value=await current(page);assert.notEqual(value.bundle.workspaceId,original.workspaceId);assert.equal(value.workbench.reflection.note,thought);assert.equal(value.workbench.page.posts[0].body,thought);assert.deepEqual(value.bundle.sourceVersions.map(v=>v.contentText),original.sourceVersions.map(v=>v.contentText));assert.deepEqual(await page.evaluate(id=>HaedoLife.Shell.storage.read(id),original.workspaceId),original);
  });
  await check('Return to the same evidence and record a new question without changing the saved output',async()=>{
-  await nav(page,'tools');await click('회고');await page.locator('#wbReflectionNote').waitFor();await page.locator('#wbReflectionNote').fill(thought+'\n\n다녀온 뒤: 같은 길에서도 지난번과 다른 소리가 들렸다. 다음에는 무엇을 기록할까?');await click('지금 저장');assert.equal((await current(page)).workbench.page.posts[0].body,thought);await page.reload();await ready(page);await page.locator('#wbReflectionNote').waitFor();assert.match(await page.locator('#wbReflectionNote').inputValue(),/다녀온 뒤/);await snap('return-question');
+  await openRecordsMenu(page);await click('회고');await page.locator('#wbReflectionNote').waitFor();await page.locator('#wbReflectionNote').fill(thought+'\n\n다녀온 뒤: 같은 길에서도 지난번과 다른 소리가 들렸다. 다음에는 무엇을 기록할까?');await click('지금 저장');assert.equal((await current(page)).workbench.page.posts[0].body,thought);await page.reload();await ready(page);await page.locator('#wbReflectionNote').waitFor();assert.match(await page.locator('#wbReflectionNote').inputValue(),/다녀온 뒤/);await snap('return-question');
  });
  assert.deepEqual(report.pageErrors,[]);assert.deepEqual(report.consoleErrors,[]);assert.deepEqual(report.external,[]);report.mockPublicationWrites=server.publicationWrites().length;report.pass=true;
  }finally{await browser.close();await fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));}

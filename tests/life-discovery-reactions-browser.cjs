@@ -113,7 +113,7 @@ async function main() {
     await check('reentry rereads an unlike made in another tab before reusing personal evidence', async ({ page,context,feed }) => {
       const before=await seed(page);await reaction(page,'seed','liked',true);await personalize(page,true);assert.ok(await page.locator('.discovery-personal-evidence').count()>0);
       const captured=await captureFixture(page,feed.value,'seed'), second=await context.newPage();await open(second);await nav(page,'home');
-      await mutate(second,'reaction',{snapshot:captured,kind:'liked',target:false});await nav(page,'tools');await page.getByRole('button',{name:'새 글 찾기',exact:true}).click();await idle(page);
+      await mutate(second,'reaction',{snapshot:captured,kind:'liked',target:false});await nav(page, 'news');await idle(page);
       assert.equal(await page.locator('.discovery-personal-evidence').count(),0);assert.equal((await state(page)).actions.personalizationEnabled,true);assert.equal((await state(page)).actions.entries[0].liked,false);
       await click(page,'#discoveryPersonalized');assert.equal(await page.locator('.discovery-personal-evidence').count(),0);await preserve(page,before);await second.close();
     });

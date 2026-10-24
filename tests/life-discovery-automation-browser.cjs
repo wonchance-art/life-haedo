@@ -199,7 +199,7 @@ async function main() {
       await page.reload(); await ready(page); await idle(page);
       await clock(page); await auto(page, true); control.hold = true; control.value = fixture('late-scope'); const arrived = control.next(); await advance(page, 15 * MINUTE + 100); await arrived;
       await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(other); await wait(page, async id => (await HaedoLife.Shell.storage.getActive()) === id, other); control.release(); control.value = fixture('new-scope');
-      await nav(page, 'tools'); await page.getByRole('button', { name: '새 글 찾기', exact: true }).click(); await idle(page); const next = await snapshot(page); assert.equal(next.bundle.workspaceId, other); assert.deepEqual(next.profile.manual, []); assert.equal(next.settings.autoRefresh, false); assert.equal(await page.locator('[data-discovery-id^="late-"]').count(), 0);
+      await nav(page, 'news'); await idle(page); const next = await snapshot(page); assert.equal(next.bundle.workspaceId, other); assert.deepEqual(next.profile.manual, []); assert.equal(next.settings.autoRefresh, false); assert.equal(await page.locator('[data-discovery-id^="late-"]').count(), 0);
       assert.deepEqual(await page.evaluate(id => HaedoLife.Shell.storage.read(id), before.bundle.workspaceId), before.bundle);
     });
     await check('actual logout and new account do not reuse topics or automatic preferences', async ({ page, server, device, control }) => {

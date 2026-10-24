@@ -1,4 +1,5 @@
 'use strict';
+const { openBlogMenu } = require('./helpers/feature-menus.cjs');
 // Actual owner UI/SDK/IndexedDB -> isolated PostgreSQL RPC -> anonymous reader.
 process.env.BASE_URL ||= 'http://127.0.0.1:4213';
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
@@ -322,7 +323,7 @@ async function main() {
       }, fixture);
       const deleted = await original(); for (const key of Object.keys(prior).filter(key => key !== 'nine')) assert.deepEqual(deleted[key], prior[key]);
       assert(!deleted.nine.boards.find(b => b.id === fixture.boardId).areas.some(a => a.id === fixture.emptyAreaId));
-      await page.locator('[data-haedo-navigation] [data-haedo-section="manage"]').click();
+      await openBlogMenu(page);
       await page.getByText('공개 페이지 관리', { exact: true }).click(); await page.locator('#wbPublicPages').waitFor();
       const row = page.locator('.wb-public-page[data-workspace-id="' + fixture.emptyAreaId + '"]'); await row.waitFor();
       assert.equal(await row.locator('h3').innerText(), '영역 삭제 뒤 관리할 공개 9칸');

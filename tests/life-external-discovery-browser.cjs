@@ -107,7 +107,7 @@ async function controllableFeedbackSave(context) {
   });
 }
 async function returnToDiscovery(page) {
-  await nav(page, 'tools'); await page.getByRole('button', { name: '새 글 찾기', exact: true }).click(); await page.locator('#discoveryReview').waitFor(); await idle(page);
+  await nav(page, 'news'); await page.locator('#discoveryReview').waitFor(); await idle(page);
   await related(page);
 }
 async function main() {
@@ -159,7 +159,7 @@ async function main() {
   }
   try {
     await check('checked-in public catalogue smoke uses explicitly saved interests without automatic source writes', async ({ page }) => {
-      await seed(page, '전시'); await page.reload(); await ready(page); const before = await state(page); await nav(page, 'tools'); await page.getByRole('button', { name: '새 글 찾기', exact: true }).click(); await page.locator('#discoveryReview').waitFor(); await idle(page); await related(page);
+      await seed(page, '전시'); await page.reload(); await ready(page); const before = await state(page); await nav(page, 'news'); await page.locator('#discoveryReview').waitFor(); await idle(page); await related(page);
       const count = await page.locator('[data-discovery-id]').count(); assert(count > 0 && count <= 5); assert.equal(new URL(page.url()).searchParams.get('section'), 'news'); assert.equal(new URL(page.url()).searchParams.get('view'), null);
       if (count < 3) assert.match(await page.locator('#discoveryReview').textContent(), /관련|없|부족|적|관심/);
       await selectNewsMode(page, 'latest'); await idle(page); assert.equal(await page.locator('#discoveryLatest').getAttribute('aria-pressed'), 'true');

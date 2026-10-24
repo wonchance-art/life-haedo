@@ -3,6 +3,7 @@
  * BASE_URL=http://127.0.0.1:4233 PW_MODULE_PATH=<installed playwright> node tests/local-post-finder-browser.cjs
  */
 'use strict';
+const { openBlogMenu } = require('./helpers/feature-menus.cjs');
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -127,7 +128,7 @@ async function seed(page, { corrupt = false } = {}) {
 }
 
 async function manager(page) {
-  await nav(page, 'manage'); await page.getByRole('button', { name: '글 관리', exact: true }).click();
+  await openBlogMenu(page); await page.getByRole('button', { name: '글 관리', exact: true }).click();
   await page.locator('.blog-manager-list[data-state="ready"],.blog-manager-list[data-state="partial"]').waitFor();
 }
 async function finder(page) {

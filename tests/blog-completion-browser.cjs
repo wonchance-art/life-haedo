@@ -2,6 +2,7 @@
  * PostgreSQL RPCs. Only Auth and Storage HTTP/binary delivery are simulated.
  * No production configuration, account, database or remote write is permitted. */
 'use strict';
+const { openBlogMenu } = require('./helpers/feature-menus.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4196';
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { spawnSync } = require('node:child_process'), { createHash } = require('node:crypto');
@@ -173,7 +174,7 @@ async function main() {
   const click = async (p, name) => { await p.getByRole('button', { name, exact: true }).click(); await settle(p); await p.waitForFunction(() => !document.querySelector('.blog-manager[aria-busy="true"]')); };
   const data = p => p.evaluate(async () => { const s = HaedoLife.Shell.storage, workspaceId = await s.getActive(), rows = await s.listPhotoPosts(workspaceId); return { workspaceId, rows, docs: await Promise.all(rows.map(row => s.readPhotoPost(workspaceId, row.id))) }; });
   const preserved = p => p.evaluate(async () => { const s = HaedoLife.Shell.storage, id = await s.getActive(); return { bundle: await s.read(id), workbench: await s.readWorkbench(id), nine: await s.readNineBoard(id), collection: await s.readCollection(id) }; });
-  const manager = async p => { await nav(p, 'manage'); await p.getByRole('button', { name: '글 관리', exact: true }).click(); await p.locator('.blog-manager-list[data-state="ready"]').waitFor(); };
+  const manager = async p => { await openBlogMenu(p); await p.getByRole('button', { name: '글 관리', exact: true }).click(); await p.locator('.blog-manager-list[data-state="ready"]').waitFor(); };
   const row = (p, id) => p.locator('.blog-post[data-post-id="' + id + '"]');
   const serverState = async (p, id, state = 'synced') => {
     await p.locator('#photoServerStatus[data-post-id="' + id + '"][data-state="' + state + '"]').waitFor();

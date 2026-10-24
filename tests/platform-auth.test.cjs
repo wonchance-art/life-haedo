@@ -80,6 +80,19 @@ test('first writing intent survives login only as the exact local home flag', ()
   assert.equal(safeNext('https://evil.invalid/index.html?compose=1'), 'index.html');
 });
 
+test('relocated library and publishing destinations survive login with legacy links and no private query data', () => {
+  for (const page of ['index.html', 'life.html']) {
+    for (const query of ['section=records&view=books', 'section=tools&view=books', 'section=records&view=source-trash',
+      'section=manage&view=source-trash', 'section=home&view=public-pages', 'section=manage&view=public-pages', 'section=records&view=find']) {
+      assert.equal(safeNext(page + '?' + query + '&code=discarded&sourceId=private&next=https://evil.invalid#token'), page + '?' + query);
+    }
+  }
+  for (const value of ['books-extra', 'public-pages%26access_token%3Dhidden', 'source-trash%2F..', '__proto__']) {
+    assert.equal(safeNext('index.html?section=records&view=' + value), 'index.html?section=records');
+  }
+  assert.equal(safeNext('//evil.invalid/index.html?section=home&view=public-pages'), 'index.html');
+});
+
 test('unified home return accepts only known sections and material views', () => {
   assert.equal(safeNext(), 'index.html');
   assert.equal(safeNext('index.html?section=home&code=discarded#token'), 'index.html?section=home');

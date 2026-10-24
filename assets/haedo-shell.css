@@ -84,6 +84,11 @@ body.haedo-shell::before{display:none}
 .haedo-shell:has(#lifeMain[data-mode=home]) .life-toolbar.haedo-page-heading{min-height:56px;margin-bottom:0}
 .haedo-shell:has(#lifeMain[data-mode=home]) .life-toolbar h1{font-size:15px;font-weight:600;letter-spacing:-.01em;color:var(--haedo-muted)}
 .haedo-page-heading h1::after{display:none}
+.haedo-planning-nav{display:flex;align-items:center;gap:4px;margin:0 0 20px;border-bottom:1px solid var(--haedo-line)}
+.haedo-planning-nav>a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:44px;padding:10px 16px;color:var(--haedo-muted);text-decoration:none;font-size:14px;line-height:1.5;font-weight:600;border-bottom:2px solid transparent}
+.haedo-planning-nav>a:hover{color:var(--haedo-ink);background:var(--haedo-soft)}
+.haedo-planning-nav>a[aria-current=page]{color:var(--haedo-accent);border-bottom-color:currentColor;font-weight:750}
+.haedo-planning-nav>a:focus-visible{outline:2px solid var(--haedo-focus);outline-offset:-2px}
 .haedo-heading-title>.haedo-icon-button{margin-left:-12px}
 .haedo-account{position:relative}.haedo-account>summary{list-style:none}.haedo-account>summary::-webkit-details-marker{display:none}
 .haedo-account[open]>summary{color:var(--haedo-ink)}

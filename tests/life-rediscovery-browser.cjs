@@ -2,6 +2,7 @@
  * Auth HTTP only. BASE_URL=http://127.0.0.1:4184 node tests/life-rediscovery-browser.cjs
  * No production DB/SNS or Apple hardware/IME claims. */
 'use strict';
+const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4184';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -99,7 +100,7 @@ async function main() {
   }
   try {
     await check('past-version seed shows three explained latest-source candidates and keeps storage unchanged', async ({ page, server }) => {
-      const f = await fixture(page), before = await current(page); await page.reload(); await ready(page); await nav(page, 'tools'); await page.getByRole('button', { name: '다시 찾기', exact: true }).click(); await pick(page, f.refs.seed);
+      const f = await fixture(page), before = await current(page); await page.reload(); await ready(page); await openRecordsMenu(page); await page.getByRole('button', { name: '다시 찾기', exact: true }).click(); await pick(page, f.refs.seed);
       assert.deepEqual(new Set(await candidates(page).evaluateAll(rows => rows.map(row => row.dataset.versionId))), new Set(['topic', 'group', 'term'].map(key => f.refs[key].versionId)));
       for (const key of ['topic', 'group', 'term']) {
         const card = page.locator('.wb-discovery-result[data-version-id="' + f.refs[key].versionId + '"]'); assert((await card.locator('.wb-discovery-reasons').textContent()).trim().length > 0);
@@ -175,8 +176,8 @@ async function main() {
     for (const size of [{ width: 1440, height: 1000 }, { width: 820, height: 1000 }, { width: 390, height: 844 }]) await check('visual related empty loading and read error ' + size.width, async ({ page }) => {
       await discover(page); await capture(page, 'empty', size); const f = await fixture(page, true); await discover(page); await pick(page, f.refs.seed); await capture(page, 'related', size, true);
       await page.locator('#wbDiscoveryClear').click(); await pick(page, f.refs.link, '천문대 방문'); assert.equal(await candidates(page).count(), 0); await capture(page, 'no-related', size);
-      await page.goto(base + '/index.html?section=tools'); await ready(page); await page.evaluate(() => { window.__rediscoveryHoldRead = true; window.__rediscoveryReadEntered = false; }); await page.getByRole('button', { name: '다시 찾기', exact: true }).click(); await page.waitForFunction(() => __rediscoveryReadEntered); await capture(page, 'loading', size); await page.evaluate(() => __rediscoveryReleaseRead()); await page.locator('#wbDiscoverQuery').waitFor();
-      await page.goto(base + '/index.html?section=tools'); await ready(page); await page.evaluate(() => { window.__rediscoveryReadFailure = true; }); await page.getByRole('button', { name: '다시 찾기', exact: true }).click(); await page.locator('#wbError').waitFor({ state: 'visible' }); await capture(page, 'read-error', size);
+      await page.goto(base + '/index.html?section=tools'); await ready(page); await openRecordsMenu(page); await page.evaluate(() => { window.__rediscoveryHoldRead = true; window.__rediscoveryReadEntered = false; }); await page.getByRole('button', { name: '다시 찾기', exact: true }).click(); await page.waitForFunction(() => __rediscoveryReadEntered); await capture(page, 'loading', size); await page.evaluate(() => __rediscoveryReleaseRead()); await page.locator('#wbDiscoverQuery').waitFor();
+      await page.goto(base + '/index.html?section=tools'); await ready(page); await openRecordsMenu(page); await page.evaluate(() => { window.__rediscoveryReadFailure = true; }); await page.getByRole('button', { name: '다시 찾기', exact: true }).click(); await page.locator('#wbError').waitFor({ state: 'visible' }); await capture(page, 'read-error', size);
     }, { viewport: size, hasTouch: size.width <= 820 });
   } finally {
     await browser.close(); const json = JSON.stringify(report, null, 2) + '\n';
