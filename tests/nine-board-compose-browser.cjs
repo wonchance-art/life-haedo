@@ -109,6 +109,23 @@ async function main() {
     return { bundle: await s.read(w), nine: await s.readNineBoard(w), workbench: await s.readWorkbench(w),
       collection: await s.readCollection(w), drafts: await s.readPageDrafts(w), stages: await s.listStages(w), docs, photoKeys };
   });
+  async function accountReady(page, id) {
+    // Auth and the scoped storage object are available before a new account's
+    // workspace is mounted. Snapshot only its revealed, initialized workspace.
+    // Await each async storage read on Node; a Promise is not a ready predicate.
+    const deadline = Date.now() + 20000;
+    while (Date.now() < deadline) {
+      if (await page.evaluate(async id => {
+        const shell = HaedoLife.Shell, storage = shell.storage;
+        if (HaedoAuth.user?.id !== id || shell.sync?.getAccount()?.userId !== id ||
+            storage?.account?.userId !== id || document.querySelector('#lifeApp')?.hidden !== false) return false;
+        const workspaceId = await storage.getActive();
+        return !!workspaceId && shell.storage === storage && HaedoAuth.user?.id === id && shell.sync?.getAccount()?.userId === id;
+      }, id)) return;
+      await new Promise(resolve => setTimeout(resolve, 40));
+    }
+    throw Error('Verified account workspace did not finish mounting');
+  }
   async function review(f) {
     await f.page.locator('#nbComposeReviewOpen').click();
     await f.page.locator('#nbComposeReview[data-state=ready]').waitFor();
@@ -266,12 +283,12 @@ async function main() {
         HTMLCanvasElement.prototype.toBlob = function (callback, ...args) { return __toBlob.call(this, blob => { __composeBlobHeld = true; window.__composeBlobRelease = () => callback(blob); }, ...args); }; });
       await f.page.locator('#nbComposeReviewOpen').click(); await f.page.waitForFunction(() => window.__composeBlobHeld === true);
       await f.page.evaluate(async value => { await HaedoAuth.client.auth.setSession({ access_token: value.access_token, refresh_token: value.refresh_token }); await HaedoAuth.verify(); }, session(accounts.b));
-      await f.page.waitForFunction(id => HaedoAuth.user?.id === id && HaedoLife.Shell.sync?.getAccount()?.userId === id && !!HaedoLife.Shell.storage, accounts.b.id);
+      await accountReady(f.page, accounts.b.id);
       const accountB = await read(f.page); await f.page.evaluate(async () => { __composeBlobRelease(); await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); HTMLCanvasElement.prototype.toBlob = __toBlob; });
       assert.deepEqual(await read(f.page), accountB); assert.equal(await f.page.locator('#nbComposeReview').count(), 0);
       assert(!(await f.page.locator('body').innerText()).includes(f.seed.longTitle));
       await f.page.evaluate(async value => { await HaedoAuth.client.auth.setSession({ access_token: value.access_token, refresh_token: value.refresh_token }); await HaedoAuth.verify(); }, session(accounts.a));
-      await f.page.waitForFunction(id => HaedoAuth.user?.id === id && HaedoLife.Shell.sync?.getAccount()?.userId === id && !!HaedoLife.Shell.storage, accounts.a.id);
+      await accountReady(f.page, accounts.a.id);
       assert.deepEqual(await read(f.page), before); assert.deepEqual(f.remoteWrites, []); assert.equal(f.server.writes().length, 0);
     });
     await check('A committed draft survives its first read failing and reopens from its receipt without saving a second draft', async () => {
