@@ -1,0 +1,133 @@
+{
+  "browser": "151.0.7922.173",
+  "checks": [
+    "3 lenses × 3 widths: no horizontal overflow, 44px named controls, text contrast",
+    "keyboard tabs: ArrowRight and End",
+    "exact source highlight and Escape focus return",
+    "empty-note refusal, draft survives navigation, safe text rendering, JSON/Markdown exact evidence",
+    "exclude removes candidate, restore retains interpretation",
+    "scope refusal and draft retention",
+    "mismatched quote blocks action and retry restores examples",
+    "loading resolves without claiming AI execution",
+    "touch-emulated tab selection; not an Apple device test",
+    "no external requests, console/page errors, app storage changes or service worker"
+  ],
+  "visual": [
+    {
+      "width": 1440,
+      "lens": "interests",
+      "overflow": false,
+      "small": [],
+      "headings": [
+        "더 모으기보다, 다시 펼칠 시간을",
+        "읽기와 달리기에 겹치는, 계속하고 싶은 마음"
+      ],
+      "minTextContrast": 6.05
+    },
+    {
+      "width": 1440,
+      "lens": "questions",
+      "overflow": false,
+      "small": [],
+      "headings": [
+        "잘하는 일과 좋아하는 일, 꼭 골라야 할까",
+        "좋아함에도 설명이 필요할까"
+      ],
+      "minTextContrast": 6.05
+    },
+    {
+      "width": 1440,
+      "lens": "changes",
+      "overflow": false,
+      "small": [],
+      "headings": [
+        "인정받고 싶다는 마음에, 내 기준을 더하다",
+        "정답을 고르기에서, 해 보며 고르기로"
+      ],
+      "minTextContrast": 6.05
+    },
+    {
+      "width": 820,
+      "lens": "interests",
+      "overflow": false,
+      "small": [],
+      "headings": [
+        "더 모으기보다, 다시 펼칠 시간을",
+        "읽기와 달리기에 겹치는, 계속하고 싶은 마음"
+      ],
+      "minTextContrast": 6.05
+    },
+    {
+      "width": 820,
+      "lens": "questions",
+      "overflow": false,
+      "small": [],
+      "headings": [
+        "잘하는 일과 좋아하는 일, 꼭 골라야 할까",
+        "좋아함에도 설명이 필요할까"
+      ],
+      "minTextContrast": 6.05
+    },
+    {
+      "width": 820,
+      "lens": "changes",
+      "overflow": false,
+      "small": [],
+      "headings": [
+        "인정받고 싶다는 마음에, 내 기준을 더하다",
+        "정답을 고르기에서, 해 보며 고르기로"
+      ],
+      "minTextContrast": 6.05
+    },
+    {
+      "width": 390,
+      "lens": "interests",
+      "overflow": false,
+      "small": [],
+      "headings": [
+        "더 모으기보다, 다시 펼칠 시간을",
+        "읽기와 달리기에 겹치는, 계속하고 싶은 마음"
+      ],
+      "minTextContrast": 6.05
+    },
+    {
+      "width": 390,
+      "lens": "questions",
+      "overflow": false,
+      "small": [],
+      "headings": [
+        "잘하는 일과 좋아하는 일, 꼭 골라야 할까",
+        "좋아함에도 설명이 필요할까"
+      ],
+      "minTextContrast": 6.05
+    },
+    {
+      "width": 390,
+      "lens": "changes",
+      "overflow": false,
+      "small": [],
+      "headings": [
+        "인정받고 싶다는 마음에, 내 기준을 더하다",
+        "정답을 고르기에서, 해 보며 고르기로"
+      ],
+      "minTextContrast": 6.05
+    }
+  ],
+  "errors": [],
+  "requestOrigins": [
+    "http://127.0.0.1:4188"
+  ],
+  "storage": {
+    "keys": [
+      "haedo-preservation-sentinel"
+    ],
+    "sentinel": "unchanged",
+    "dbs": [],
+    "registrations": 0
+  },
+  "limitations": [
+    "Synthetic examples only; no AI semantic evaluation",
+    "Chromium viewport/touch simulation, not Apple devices or native IME",
+    "Session-only prototype, not production integration"
+  ]
+}
