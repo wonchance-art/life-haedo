@@ -1,8 +1,12 @@
-# 해도 통합 흐름 · v8
+# 해도 워크플로와 구조도
+
+2026-10-26 **현재 기능의 입력 → 처리 → 결과**: [PNG](rendered/product-workflow-20261026.png) · [SVG](rendered/product-workflow-20261026.svg) · [PDF](rendered/product-workflow-20261026.pdf) · [Graphviz 원본](product-workflow-20261026.dot). 뉴스·자료·글·계획·보관의 다섯 흐름과 기능별 저장 범위를 구분한다.
+
+2026-10-26 **목적별 메뉴 배치 설계안**: [PNG](rendered/product-placement-20261026.png) · [SVG](rendered/product-placement-20261026.svg) · [PDF](rendered/product-placement-20261026.pdf) · [Graphviz 원본](product-placement-20261026.dot). 홈·뉴스·자료실·계획(현 도구)·설정으로 목적을 정리한 **운영 화면 미적용 설계**다. [기능별 목적·동선·보존 조건·후속 작업](../design-review/purpose-workflow.md)에서 실제 구현과 제안 변경을 구분한다. 아래 도식은 작성 당시의 이력으로 보존한다.
 
 2026-10-20 **Input → Automated Process → Output workflow**: [PNG](rendered/product-workflow-20261020.png) · [SVG](rendered/product-workflow-20261020.svg) · [PDF](rendered/product-workflow-20261020.pdf) · [분류표·이전 workflow 참조](product-workflow-20261020.md) · [Graphviz 원본](product-workflow-20261020.dot). 3열로 입력/처리/결과를 나누고 자동 처리와 명시 선택, 현재 기능과 후속 AI를 구분한다. 이전 상세 workflow와 두 순환 원본도 함께 연결했다.
 
-2026-10-20 최신 **단순 제품 구조도**: [PNG](rendered/product-structure-20261020.png) · [SVG](rendered/product-structure-20261020.svg) · [Graphviz 원본](product-structure-20261020.dot). 이전 상자·화살표 형식에 뉴스·반응·언어 옵션과 현재 글쓰기/보관/선택 공개를 반영했다. 점선 상자는 미구현 AI 분석이며 직접 회고·기존 책 기능과 구분한다. Graphviz와 시스템 Noto CJK 글꼴로 렌더하며 앱 의존성은 추가하지 않는다. 생성 명령은 원본 상단에 있다. 아래 도식과 상태 설명은 각 작성일의 이력이다.
+2026-10-20 당시 **단순 제품 구조도**: [PNG](rendered/product-structure-20261020.png) · [SVG](rendered/product-structure-20261020.svg) · [Graphviz 원본](product-structure-20261020.dot). 이전 상자·화살표 형식에 뉴스·반응·언어 옵션과 당시 글쓰기/보관/선택 공개를 반영했다. 점선 상자는 미구현 AI 분석이며 직접 회고·기존 책 기능과 구분한다. Graphviz와 시스템 Noto CJK 글꼴로 렌더하며 앱 의존성은 추가하지 않는다. 생성 명령은 원본 상단에 있다. 아래 도식과 상태 설명은 각 작성일의 이력이다.
 
 [PDF](rendered/product-structure-20261020.pdf) · [도식 검사](rendered/product-structure-20261020.report.json): 11개 상자·10개 연결, 한글 표시, 상자 밖 본문 0개·외부 리소스 0개를 확인했고 독립 검토에서 현재/후속 구분과 글자·간선의 잘림을 확인했다. 문서 그림 검수이며 앱이나 실제 기기 검수 결과는 아니다.
 
