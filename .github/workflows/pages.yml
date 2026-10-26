@@ -417,6 +417,12 @@ jobs:
       - name: Verify private Naver connection, original preservation and late-response cancellation
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/naver-blog-browser.cjs
+      - name: Verify explicit Obsidian source linking and exact return
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/obsidian-link-integration-browser.cjs
+      - name: Verify Naver source photo availability and exact return
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/naver-source-photo-status-browser.cjs
       - name: Verify captured Naver photos, exact source revisions and independent device recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-naver-capture-browser.cjs
@@ -428,6 +434,12 @@ jobs:
         run: node tests/life-external-discovery-browser.cjs
       - name: Verify discovery catalog freshness, worker update and offline preservation
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-external-discovery-pwa-browser.cjs
+      - name: Verify public v162 worker upgrade and exact saved data
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        env:
+          EXTERNAL_DISCOVERY_PWA_PREVIOUS_VERSION: "162"
+          EXTERNAL_DISCOVERY_PWA_OUTPUT: .local/external-discovery-pwa-v162
         run: node tests/life-external-discovery-pwa-browser.cjs
       - name: Verify discovery language selection, translated links and private preference recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
@@ -503,6 +515,7 @@ jobs:
             .local/startup-performance-browser/
             .local/naver-blog/
             .local/naver-capture/
+            .local/naver-photo-status/
             .local/app-native/qa/
             .local/home-refinement/qa/
             .local/blog-journeys/after/
@@ -520,6 +533,7 @@ jobs:
             .local/interest-pwa/
             .local/external-discovery-browser/
             .local/external-discovery-pwa/
+            .local/external-discovery-pwa-v162/
             .local/discovery-automation-browser/
             .local/discovery-reactions-browser/
             .local/discovery-languages-browser/
@@ -551,6 +565,7 @@ jobs:
             .local/obsidian-vault/
             .local/obsidian-review/
             .local/obsidian-decisions/
+            .local/obsidian-link-integration/
             .local/obsidian-package/
             .local/obsidian-receive/
             .local/obsidian-reading-scale/
@@ -755,7 +770,7 @@ jobs:
       - name: Verify generated configuration and complete installed shell hashes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         env:
-          PREVIOUS_RELEASE: d6009ea250bd88dfbb71d53901f6f8f53bbf381a
+          PREVIOUS_RELEASE: 6126123c12af12daeca6b9679ce1201095c89367
         run: node scripts/verify-prepared-site.mjs
       - name: Verify the actual previous service worker updates without losing originals
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}

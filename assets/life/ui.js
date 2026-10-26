@@ -149,6 +149,8 @@
     const selectedVersions = new Set();
     let selectionReturn = null;
     let relatedOrigin = null;
+    let naverMediaOrigin = null;
+    const obsidianReaderOrigins = [];
     let compositionPanel = null, metadataCleanup = null;
     const downloadUrls = new Set();
     const state = {
@@ -708,7 +710,7 @@
 
     function batchKey(workspaceId, batchId) { return workspaceId + '|' + batchId; }
 
-    function invalidateBatchContext() { workspaceGeneration += 1; sectionPositions.clear(); blogEntryScroll = null; pendingPostReturn = preservationOpenOptions = null; global.HaedoMotion?.cancel(main); stopBatchReading(); resetSearchContext(); }
+    function invalidateBatchContext() { workspaceGeneration += 1; obsidianReaderOrigins.length = 0; naverMediaOrigin = null; sectionPositions.clear(); blogEntryScroll = null; pendingPostReturn = preservationOpenOptions = null; global.HaedoMotion?.cancel(main); stopBatchReading(); resetSearchContext(); }
 
     function validBatchStage(stage) {
       return typeof stage.batchId === 'string' && /^[a-f0-9-]{36}$/i.test(stage.batchId) &&
@@ -1279,6 +1281,13 @@
         if (options.restoreViewOrigin?.workspaceId === workspaceId) viewOrigins.set(mode, options.restoreViewOrigin);
         else viewOrigins.delete(mode);
       }
+      if (mode !== 'source' || obsidianReaderOrigins.length && obsidianReaderOrigins.at(-1).navigation !== token) obsidianReaderOrigins.length = 0;
+      if (naverMediaOrigin && naverMediaOrigin.workspaceId === workspaceId && naverMediaOrigin.account === account && naverMediaOrigin.workspace === workspace) {
+        if (from === 'naver-blog' && mode === 'naver-capture' && naverMediaOrigin.navigation === token - 1) naverMediaOrigin.inCapture = true;
+        else if (mode === 'naver-blog' && naverMediaOrigin.inCapture && (from === 'naver-capture' || from === 'source' && state.returnContext?.mode === 'naver-blog')) {
+          naverMediaOrigin.navigation = token; naverMediaOrigin.inCapture = false;
+        } else if (from === 'naver-blog' && mode !== 'naver-blog' || naverMediaOrigin.inCapture && !['naver-capture', 'source', 'naver-blog'].includes(mode)) naverMediaOrigin = null;
+      }
       if (subviewTitles[mode] && mode !== from && !options?.preserveContext && !returningFromReader) {
         const inherited = sectionFor(mode) === sectionFor(from) ? viewOrigins.get(from) : null;
         if (origin || inherited) viewOrigins.set(mode, origin || inherited);
@@ -1574,6 +1583,7 @@
 
     async function returnFromSubview() {
       if (state.mode === 'source-edit') return closeSourceEditor();
+      if (state.mode === 'naver-blog' && currentNaverMediaOrigin()) return returnFromNaverMedia();
       const origin = subviewOrigin();
       const anchor = state.mode === 'page' && blogPageTask && origin.mode === 'home' && origin.homeState?.tab !== 'drafts' ? blogCommitted : null;
       if (await navigate(origin.mode, { preserveContext: true, homeState: origin.homeState, homeAnchor: anchor, navigationMotion: 'back',
@@ -1669,7 +1679,7 @@
       if (subviewTitles[state.mode] && state.mode !== 'external-discovery' && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
         const labels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '서버 글 목록으로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '자료실로 돌아가기', topics: '검색 결과로 돌아가기', tools: '계획으로 돌아가기', manage: '설정으로 돌아가기', collection: '컬렉션으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', books: '책으로 돌아가기', time: '연표로 돌아가기', import: '가져오기로 돌아가기', write: '자료 작성으로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기' };
         const origin = subviewOrigin();
-        const back = iconButton(origin.postTarget ? '읽던 글로 돌아가기' : labels[origin.mode] || labels.sources, 'back', guarded(returnFromSubview));
+        const back = iconButton(state.mode === 'naver-blog' && currentNaverMediaOrigin() ? '읽던 원문으로 돌아가기' : origin.postTarget ? '읽던 글로 돌아가기' : labels[origin.mode] || labels.sources, 'back', guarded(returnFromSubview));
         back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';
         back.dataset.subviewReturn = 'true';
         headingGroup.append(back);
@@ -1860,6 +1870,37 @@
       return navigate('source', { ...target, returnContext: { mode: 'blog', workspaceId, scrollY: global.scrollY, focusKey: context.focusKey, blogPostId: postId } });
     }
 
+    function currentNaverMediaOrigin() {
+      const origin = naverMediaOrigin;
+      return origin && !disposed && state.mode === 'naver-blog' && origin.workspaceId === state.bundle?.workspaceId &&
+        origin.account === state.syncAccountKey && origin.workspace === workspaceGeneration && origin.navigation === navigationGeneration ? origin : null;
+    }
+    async function openNaverMediaReview(source, version) {
+      const origin = { workspaceId: state.bundle.workspaceId, workspace: workspaceGeneration, account: state.syncAccountKey,
+        sourceId: source.id, sourceVersionId: version.id, locator: state.sourceSelection && { ...state.sourceSelection },
+        returnContext: state.returnContext, scrollY: global.scrollY, navigation: navigationGeneration + 1, inCapture: false };
+      naverMediaOrigin = origin;
+      try { if (await navigate('naver-blog') === false && naverMediaOrigin === origin) naverMediaOrigin = null; }
+      catch (error) { if (naverMediaOrigin === origin) naverMediaOrigin = null; throw error; }
+    }
+    async function returnFromNaverMedia() {
+      const origin = currentNaverMediaOrigin(); if (!origin) return navigate('sources');
+      naverMediaOrigin = null;
+      try {
+        if (await navigate('source', { sourceId: origin.sourceId, sourceVersionId: origin.sourceVersionId,
+          locator: origin.locator, returnContext: origin.returnContext, preserveContext: true, navigationMotion: 'back' }) === false) {
+          origin.navigation = navigationGeneration; naverMediaOrigin = origin; return;
+        }
+      } catch (error) { origin.navigation = navigationGeneration; naverMediaOrigin = origin; throw error; }
+      const token = navigationGeneration, pending = mainRenderPromise;
+      await pending;
+      requestAnimationFrame(() => {
+        if (disposed || token !== navigationGeneration || origin.workspace !== workspaceGeneration || origin.account !== state.syncAccountKey ||
+            state.bundle?.workspaceId !== origin.workspaceId || state.mode !== 'source' || state.sourceId !== origin.sourceId || state.sourceVersionId !== origin.sourceVersionId) return;
+        (main.querySelector('#lifeNaverMediaReview') || main.querySelector('.life-reader-heading') || main.querySelector('h1,h2'))?.focus({ preventScroll: true });
+        global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
+      });
+    }
     async function renderNaverBlog() {
       const workspaceId = state.bundle.workspaceId, workspaceToken = workspaceGeneration;
       const isCurrent = id => !disposed && state.mode === 'naver-blog' && state.bundle?.workspaceId === id && workspaceToken === workspaceGeneration;
@@ -1879,7 +1920,7 @@
           if (target.sourceId) return navigate('import', { reimport: { workspaceId, sourceId: target.sourceId, sourceVersionId: target.sourceVersionId } });
           return navigate('import');
         },
-        onReturn: () => navigate('sources'),
+        onReturn: () => currentNaverMediaOrigin() ? returnFromNaverMedia() : navigate('sources'),
         onReview: target => {
           naverCaptureTarget = { ...target, origin: { mode: 'naver-blog', workspaceId, focusKey: target.focusKey, scrollY: global.scrollY } };
           return navigate('naver-capture', { originFocusKey: target.focusKey });
@@ -1888,6 +1929,7 @@
       });
       naverBlogUI = instance; naverBlogWorkspace = workspaceId;
       await instance.render();
+      if (currentNaverMediaOrigin()) { const back = main.querySelector('#naverBlogReturn'); if (back) back.textContent = '읽던 원문으로 돌아가기'; }
     }
 
     function naverOrigin() {
@@ -3058,6 +3100,46 @@
       return details;
     }
 
+    async function openObsidianReference(ref, focusKey) {
+      if (obsidianReaderOrigins.length && !obsidianReaderOrigin(sourceFor(state.sourceId), { id: state.sourceVersionId })) obsidianReaderOrigins.length = 0;
+      const origin = { workspaceId: state.bundle.workspaceId, account: state.syncAccountKey, workspace: workspaceGeneration,
+        sourceId: state.sourceId, sourceVersionId: state.sourceVersionId, locator: state.sourceSelection && { ...state.sourceSelection },
+        returnContext: state.returnContext, scrollY: global.scrollY, focusKey,
+        targetSourceId: ref.sourceId, targetVersionId: ref.sourceVersionId, navigation: navigationGeneration + 1 };
+      obsidianReaderOrigins.push(origin);
+      try {
+        if (await navigate('source', { sourceId: ref.sourceId, sourceVersionId: ref.sourceVersionId,
+          locator: ref.locator || null, returnContext: origin.returnContext, preserveContext: true }) === false) obsidianReaderOrigins.pop();
+      } catch (error) { obsidianReaderOrigins.pop(); throw error; }
+    }
+    function obsidianReaderOrigin(source, version) {
+      const origin = obsidianReaderOrigins.at(-1);
+      return origin && origin.workspaceId === state.bundle.workspaceId && origin.account === state.syncAccountKey &&
+        origin.workspace === workspaceGeneration && origin.navigation === navigationGeneration && origin.targetSourceId === source?.id && origin.targetVersionId === version?.id ? origin : null;
+    }
+    async function returnFromObsidianReference(origin) {
+      if (obsidianReaderOrigins.at(-1) !== origin) return;
+      obsidianReaderOrigins.pop();
+      const previous = obsidianReaderOrigins.at(-1), oldNavigation = previous?.navigation;
+      if (previous) previous.navigation = navigationGeneration + 1;
+      try {
+        const ok = await navigate('source', { sourceId: origin.sourceId, sourceVersionId: origin.sourceVersionId,
+          locator: origin.locator, returnContext: origin.returnContext, preserveContext: true, navigationMotion: 'back' });
+        if (ok === false) { if (previous) previous.navigation = oldNavigation; obsidianReaderOrigins.push(origin); return; }
+      } catch (error) { if (previous) previous.navigation = oldNavigation; obsidianReaderOrigins.push(origin); throw error; }
+      const token = navigationGeneration;
+      requestAnimationFrame(() => {
+        if (disposed || token !== navigationGeneration || origin.workspace !== workspaceGeneration || origin.account !== state.syncAccountKey ||
+            state.bundle?.workspaceId !== origin.workspaceId || state.mode !== 'source' || state.sourceId !== origin.sourceId || state.sourceVersionId !== origin.sourceVersionId) return;
+        const panel = main.querySelector('#lifeObsidianCandidates,.life-obsidian-links');
+        const all = main.querySelectorAll('#lifeObsidianCandidates,.life-obsidian-links');
+        for (const item of all) item.revealObsidianFocus?.(origin.focusKey);
+        const target = Array.from(main.querySelectorAll('[data-obsidian-focus]')).find(el => el.dataset.obsidianFocus === origin.focusKey);
+        (target || panel?.querySelector('summary') || main.querySelector('.life-reader-heading'))?.focus({ preventScroll: true });
+        global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
+      });
+    }
+
     function obsidianConnections(versionId) {
       const matches = [];
       const seen = new Set();
@@ -3073,7 +3155,7 @@
         if (seen.has(key)) continue;
         const source = sources.get(target.sourceId), version = versions.get(target.sourceVersionId);
         if (!source || !version || version.sourceId !== source.id) continue;
-        seen.add(key); matches.push({ target, source, version, outgoing });
+        seen.add(key); matches.push({ target, source, version, outgoing, focusKey: 'obsidian-link:' + link.id + ':' + (outgoing ? 'out' : 'in') });
       }
       if (!matches.length) return null;
       const details = node('details', null, 'life-details life-obsidian-links');
@@ -3084,9 +3166,8 @@
         for (const item of matches.slice(count, count + SEARCH_PAGE_SIZE)) {
           const row = node('div', null, 'life-backup-source');
           const locationText = item.target.locator && typeof item.version.contentText === 'string' ? item.version.contentText.slice(item.target.locator.start, item.target.locator.end).slice(0, 100) : '';
-          const open = button(sourceLabel(item.source), guarded(() => navigate('source', {
-            sourceId: item.target.sourceId, sourceVersionId: item.target.sourceVersionId, locator: item.target.locator, returnContext: state.returnContext
-          })));
+          const open = button(sourceLabel(item.source), guarded(() => openObsidianReference(item.target, item.focusKey)));
+          open.dataset.obsidianFocus = item.focusKey;
           open.dataset.linkedVersion = item.target.sourceVersionId;
           if (item.target.locator) {
             open.dataset.linkedStart = item.target.locator.start;
@@ -3103,7 +3184,51 @@
       };
       let loaded = false;
       details.addEventListener('toggle', () => { if (details.open && !loaded) { loaded = true; append(); } });
+      details.revealObsidianFocus = key => {
+        const index = matches.findIndex(item => item.focusKey === key);
+        if (index < 0) return;
+        details.open = true;
+        if (!loaded) { loaded = true; append(); }
+        while (count <= index) append();
+      };
       return details;
+    }
+
+    function obsidianCandidates(source, version, article) {
+      const model = global.HaedoLife.ObsidianLinkCandidates, UI = global.HaedoLife.ObsidianLinkCandidatesUI, service = global.HaedoLife.ObsidianLinkCommit;
+      if (source.origin !== 'obsidian' || !source.sourceKey || typeof version.contentText !== 'string' || !model || !UI || !service) return null;
+      const workspaceId = state.bundle.workspaceId, workspace = workspaceGeneration, navigation = navigationGeneration, account = state.syncAccountKey, generation = renderGeneration;
+      const current = id => !disposed && workspace === workspaceGeneration && navigation === navigationGeneration && generation === renderGeneration &&
+        account === state.syncAccountKey && id === workspaceId && state.bundle?.workspaceId === workspaceId && state.mode === 'source' && state.sourceId === source.id && state.sourceVersionId === version.id;
+      const sourceById = new Map(state.bundle.sources.filter(value => value.origin === 'obsidian' && value.sourceKey && core.isSourceActive(state.bundle, value.id)).map(value => [value.id, value]));
+      const notes = state.bundle.sourceVersions.filter(value => sourceById.has(value.sourceId)).map(value => {
+        const item = sourceById.get(value.sourceId);
+        return { path: item.sourceKey, origin: item.origin, sourceId: item.id, sourceVersionId: value.id, text: value.contentText, contentHash: value.contentHash, title: item.title, url: item.url || '', importedAt: value.importedAt };
+      });
+      const saver = service.create({ storage, core, candidates: model, isCurrent: current }), host = node('section'); host.id = 'lifeObsidianCandidates';
+      const focusKey = ({ occurrence, candidate, locator }) => 'obsidian-candidate:' + occurrence.start + ':' + candidate.sourceVersionId + ':' + (locator?.start ?? 'document') + ':open';
+      const ui = UI.create({ text: version.contentText, fromPath: source.sourceKey, notes, attachments: null,
+        fromSourceId: source.id, fromSourceVersionId: version.id, existingLinks: state.bundle.links,
+        isCurrent: () => current(workspaceId),
+        onOpenNote: value => openObsidianReference({ sourceId: value.candidate.sourceId, sourceVersionId: value.candidate.sourceVersionId, locator: value.locator }, focusKey(value)),
+        onConnectNote: async ({ occurrence, candidate, locator }) => {
+          if (!current(workspaceId)) throw new Error('화면이 바뀌어 연결하지 않았습니다.');
+          const targetVersion = notes.find(value => value.sourceVersionId === candidate.sourceVersionId && value.sourceId === candidate.sourceId);
+          if (!targetVersion) throw new Error('대상 원문을 다시 확인해 주세요.');
+          const result = await saver.save({ workspaceId, from: { sourceId: source.id, sourceVersionId: version.id, contentHash: version.contentHash,
+            token: occurrence.token, locator: { start: occurrence.start, end: occurrence.end } },
+          to: { sourceId: candidate.sourceId, sourceVersionId: candidate.sourceVersionId, contentHash: targetVersion.contentHash, locator }, target: occurrence.target });
+          if (!current(workspaceId)) throw new Error('화면이 바뀌어 결과를 표시하지 않았습니다.');
+          if (result.status === 'conflict') throw new Error('연결이나 자료가 달라졌습니다. 최신 자료를 확인하고 다시 선택해 주세요.');
+          await refreshData(); if (!current(workspaceId)) return;
+          state.remoteChanged = false; renderHeader();
+          const existing = article.querySelector('.life-obsidian-links'), updated = obsidianConnections(version.id);
+          if (updated) { if (existing) existing.replaceWith(updated); else article.insertBefore(updated, host); }
+          announce(result.status === 'unchanged' ? '이미 같은 원문 판과 위치로 연결되어 있습니다.' : '선택한 원문 판과 위치를 연결했습니다.');
+        }
+      });
+      ui.mount(host); host.revealObsidianFocus = key => ui.revealFocus?.(key);
+      return host;
     }
 
     function renderSource() {
@@ -3123,6 +3248,7 @@
       }
       const article = node('article', null, 'life-reader');
       const tools = node('div', null, 'life-reader-tools');
+      const linkedOrigin = obsidianReaderOrigin(source, version);
       const back = state.returnContext ? searchReturnButton() : iconButton('자료실로 돌아가기', 'back', guarded(() => navigate('sources')));
       const info = iconButton('출처 정보', 'info', () => {});
       info.setAttribute('aria-description', '자료 옵션 · 보기, 수정, 휴지통');
@@ -3162,6 +3288,10 @@
       article.append(tools, arrangePanel, heading,
         node('p', sourceOrigin(source) + ' · 원문 작성 ' + (version.originalCreatedAt || '미상'), 'life-reader-meta'),
         node('p', (COVERAGE[version.coverage.status] || COVERAGE.unknown) + ' · 버전 ' + versionIndex + '/' + versions.length + (versionIndex === versions.length ? '' : ' · 이전 버전') + (core.isEditedCopy(state.bundle, version.id) ? ' · 해도에서 수정한 사본' : ''), 'life-reader-meta'));
+      if (linkedOrigin) {
+        const previous = button('이전 원문으로 돌아가기', guarded(() => returnFromObsidianReference(linkedOrigin)));
+        previous.id = 'lifeObsidianPreviousSource'; article.append(previous);
+      }
       const sourceWriting = button('이 자료로 글쓰기', guarded(async () => {
         const workspaceId = state.bundle.workspaceId, workspaceToken = workspaceGeneration, token = navigationGeneration, account = state.syncAccountKey;
         const fresh = await storage.read(workspaceId);
@@ -3237,6 +3367,8 @@
       article.append(details);
       const connections = obsidianConnections(version.id);
       if (connections) article.append(connections);
+      const candidates = obsidianCandidates(source, version, article);
+      if (candidates) article.append(candidates);
       const openRelated = focusId => guarded(async () => {
         const origin = { workspaceId: state.bundle.workspaceId, sourceId: source.id, sourceVersionId: version.id,
           locator: state.sourceSelection ? { ...state.sourceSelection } : null,
@@ -3264,7 +3396,20 @@
         const current = () => !disposed && generation === renderGeneration && account === state.syncAccountKey && state.mode === 'source' &&
           state.bundle?.workspaceId === workspaceId && state.sourceId === source.id && state.sourceVersionId === version.id;
         const mediaTask = storage.readNaverCapture(workspaceId, version.id).then(attachment => {
-          if (!current() || !attachment) return;
+          if (!current()) return;
+          if (!attachment) {
+            mediaHost.dataset.state = 'unverified';
+            // The following reader action has a negative top margin; leave room
+            // for this explicit navigation control instead of overlapping it.
+            mediaHost.style.marginBottom = '24px';
+            mediaHost.append(node('p', '이 원문 버전의 사진 사본을 이 브라우저에서 확인하지 못했습니다. 원래 글의 사진 유무와 서버 보관 여부는 알 수 없습니다.', 'life-help'));
+            mediaHost.append(node('p', '네이버 수집 사본이나 전용 ZIP을 확인할 수 있습니다. 수집 사본을 자료에 반영하면 새 원문 버전이 만들어질 수 있습니다.', 'life-help'));
+            if (storage.isAccountScoped) {
+              const review = button('네이버 수집 사본 확인', guarded(() => openNaverMediaReview(source, version)));
+              review.id = 'lifeNaverMediaReview'; mediaHost.append(review);
+            }
+            return;
+          }
           mediaHost.append(node('p', attachment.localOnly ? '파일에서 복원한 원문·사진 사본 · 서버 보관 여부 미확인' : '검증한 수집 사진 사본 · 업로드 당시 원본 여부 미확인', 'life-help'));
           naverPhotoView = global.HaedoLife.NaverCaptureUI.photos({ payload: attachment.capture.payload, photos: attachment.photos,
             onWritePhotos: value => writeNaverPhotos({ sourceId: source.id, sourceVersionId: version.id, indexes: Array.isArray(value) ? value : value.indexes }),
@@ -4133,7 +4278,8 @@
     function renderTransfer() {
       main.append(title('내보내기·사본 복원'), node('p', '현재 작업공간의 원문·발췌·메모·출처만 담습니다.', 'life-help'));
       const scope = node('details', null, 'life-details'); scope.id = 'lifeTransferScope';
-      scope.append(node('summary', '포함하지 않는 자료'), node('p', '자료 폴더·묶음·내 페이지·회고·책, 글쓰기·가져오기 초안, 읽기 위치, 사진과 미확보 본문, 연표·목표·습관, 이미 게시한 사본은 포함하지 않습니다. 파일에는 개인 자료가 포함되니 보관 위치를 확인하세요.', 'life-help'));
+      scope.append(node('summary', '포함하지 않는 자료'), node('p', '자료 폴더·묶음·내 페이지·회고·책, 글쓰기·가져오기 초안, 읽기 위치, 사진과 미확보 본문, 연표·목표·습관, 이미 게시한 사본은 포함하지 않습니다. 파일에는 개인 자료가 포함되니 보관 위치를 확인하세요.', 'life-help'),
+        node('p', '네이버 원문 사진 사본도 이 JSON에는 들어가지 않습니다. 사진 사본이 있는 원문에서는 글·사진 ZIP을 따로 보관할 수 있습니다.', 'life-help'));
       main.append(scope, actionRow('폴더·묶음·내 페이지도 함께 백업', '분류와 구성까지 복원하려면 자료·구성 JSON을 받으세요.', 'download', () => navigate('workbench-backup')));
       const actions = node('section', null, 'life-destinations life-settings-section');
       const stamp = new Date().toISOString().slice(0, 10);

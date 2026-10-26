@@ -297,7 +297,7 @@
   async function readPhoto(file, makeId) {
     if (
       !file ||
-      !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+      !["", "image/jpeg", "image/png", "image/webp"].includes(file.type) ||
       !file.size ||
       file.size > LIMITS.file
     )
@@ -306,20 +306,15 @@
       );
     const signature = new Uint8Array(await file.slice(0, 12).arrayBuffer()),
       s = String.fromCharCode(...signature);
-    if (
-      !(
-        (file.type === "image/jpeg" &&
-          signature[0] === 255 &&
-          signature[1] === 216 &&
-          signature[2] === 255) ||
-        (file.type === "image/png" && s.startsWith("\x89PNG\r\n\x1a\n")) ||
-        (file.type === "image/webp" &&
-          s.startsWith("RIFF") &&
-          s.slice(8) === "WEBP")
-      )
-    )
+    const detectedType = signature[0] === 255 && signature[1] === 216 && signature[2] === 255
+      ? "image/jpeg" : s.startsWith("\x89PNG\r\n\x1a\n") ? "image/png"
+        : s.startsWith("RIFF") && s.slice(8) === "WEBP" ? "image/webp" : null;
+    if (!detectedType || (file.type && file.type !== detectedType))
       throw fault("사진 내용과 파일 형식이 일치하지 않습니다.");
-    const url = URL.createObjectURL(file);
+    // An empty MIME label is supplied by some file providers. The signature
+    // determines only the label; Image below must still decode the bytes.
+    const original = file.slice(0, file.size, detectedType);
+    const url = URL.createObjectURL(original);
     let width, height;
     try {
       [width, height] = await new Promise((resolve, reject) => {
@@ -344,12 +339,12 @@
     const p = {
       id: makeId(),
       name: file.name || "사진",
-      type: file.type,
+      type: detectedType,
       width,
       height,
       size: file.size,
       digest: await digest(file),
-      blob: file.slice(0, file.size, file.type),
+      blob: original,
     };
     photo(p);
     return p;

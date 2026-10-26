@@ -14,7 +14,7 @@ const { openBlogMenu } = require('./helpers/feature-menus.cjs');
 const Z = require('../vendor/fflate/fflate.js');
 const output = path.resolve(process.env.PURPOSE_WRITING_OUTPUT || '.local/purpose-writing');
 const digest = value => createHash('sha256').update(value).digest('hex');
-const sources = ['home.js', 'photo-post-ui.js', 'blog-manager.js', 'account-blog-ui.js', 'workbench-ui.js', 'ui.js', 'preservation-ui.js', 'preservation.js'];
+const sources = ['home.js', 'photo-post.js', 'photo-post-ui.js', 'blog-manager.js', 'account-blog-ui.js', 'workbench-ui.js', 'ui.js', 'preservation-ui.js', 'preservation.js'];
 async function hashes() { return Object.fromEntries(await Promise.all(sources.map(async name => [name, digest(await fs.readFile(path.join(__dirname, '../assets/life', name)))]))); }
 async function poll(read, accept, label, timeout = 15000) {
   const start = Date.now(); let value;

@@ -12,6 +12,11 @@
   const count = value => Number.isSafeInteger(value) && value >= 0 ? value.toLocaleString('ko-KR') : '미확인';
   const size = value => Number.isSafeInteger(value) && value >= 0 ? (value < 1024 * 1024 ? `${Math.ceil(value / 1024).toLocaleString('ko-KR')} KiB` : `${(value / (1024 * 1024)).toFixed(1)} MiB`) : '크기 미확인';
   const amount = value => Array.isArray(value) ? value.length : value;
+  function naverPhotosNotice(id) {
+    const notice = node('p', '자료 JSON과 이 근거 ZIP에는 네이버 원문의 사진 사본이 포함되지 않습니다. 사진을 보관한 자료는 원문을 열어 ‘글·사진 ZIP 저장’으로 따로 보관해 주세요. 사진 사본을 확인하지 못했다면 자료실 → 자료 메뉴 → 가져오기·관리 → 네이버 블로그 연결에서 수집 사본을 확인해 주세요. 전용 파일은 같은 화면의 ‘원문·사진 사본 ZIP 불러오기’에서 복원합니다.', 'life-help');
+    notice.id = id;
+    return notice;
+  }
 
   function create({ service, isCurrent = () => true, onRestored = null, onOpen = null } = {}) {
     if (!service) throw new Error('자료 보관 서비스를 확인해 주세요.');
@@ -184,6 +189,7 @@
       sources.forEach(source => list.append(node('li', `${source.title || '제목 없는 원문'} · 정확 버전 ${count(amount(source.versions))}개 전체 본문`)));
       box.append(list);
       box.append(node('p', '선택한 글의 사진 원본과 파일 안 메타데이터, 근거에 필요한 원문의 정확 버전 전체 본문이 함께 들어갑니다. 파일은 비공개로 보관해 주세요.', 'life-help'));
+      box.append(naverPhotosNotice('preservationReviewNaverPhotos'));
       box.append(node('p', '기존 자료 전체 백업이 아닙니다. 계정·서버 연결·공개 상태는 옮기지 않으며 자동 전송하거나 공개하지 않습니다.', 'life-help'));
       return box;
     }
@@ -260,6 +266,7 @@
       surface.insertBefore(jump, status);
       inventoryHost = node('div', null, 'preservation-inventory'); inventoryHost.id = 'preservationInventory'; surface.append(inventoryHost);
       const transport = node('section', null, 'preservation-transport'); transport.id = 'preservationTransport'; transport.tabIndex = -1; transport.append(node('h2', '선택한 자료와 근거 옮기기'), node('p', '저장한 글이나 9칸 구성을 고르면 필요한 근거 원문도 파일에 함께 담습니다. 사진 원본과 원문 전체 본문이 포함될 수 있으므로 포함 범위를 먼저 확인해 주세요.', 'life-help'));
+      transport.append(naverPhotosNotice('preservationNaverPhotos'));
       selectionHost = node('div'); selectionHost.id = 'preservationSelection'; transport.append(selectionHost);
       const fileLabel = node('label', null, 'life-field'); fileLabel.append(node('span', '근거 포함 ZIP 열기'));
       const file = node('input'); file.type = 'file'; file.accept = '.zip,application/zip'; file.id = 'preservationFile';
