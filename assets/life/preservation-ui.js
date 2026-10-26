@@ -23,6 +23,7 @@
     let host, surface, status, error, inventoryHost, selectionHost, reviewHost, workspaceSelect;
     let disposed = false, busy = false, generation = 0, catalog = null, inventory = null, review = null;
     let scope = '', shown = 40;
+    let expectedPostRevisions = {};
     const postIds = new Set(), boardIds = new Set();
     const valid = () => !disposed && isCurrent();
     const announce = message => { if (valid() && status) status.textContent = message; };
@@ -104,6 +105,20 @@
       const label = surface.querySelector('#preservationSelectionCount');
       if (label) label.textContent = `글 ${postIds.size}개 · 9칸 구성 ${boardIds.size}개 선택`;
     }
+    function exactSelection(ids = [...postIds]) {
+      return scope ? [] : ids.filter(id => Object.hasOwn(expectedPostRevisions, id));
+    }
+    function verifyExpectedPosts(value, ids) {
+      for (const id of ids) {
+        const row = value?.posts?.find(post => post.id === id);
+        if (!row || row.revision !== expectedPostRevisions[id]) throw Object.assign(new Error('읽던 글이 바뀌었습니다. 원래 글로 돌아가 내용을 확인한 뒤 근거 파일을 다시 열어 주세요.'), { code: 'preservation_post_changed' });
+      }
+    }
+    async function verifyFreshExpectedPosts(ids) {
+      if (!ids.length) return;
+      const value = await service.catalog();
+      if (valid()) verifyExpectedPosts(value, ids);
+    }
     function renderSelections() {
       selectionHost.replaceChildren();
       if (!catalog) { selectionHost.append(node('p', '글과 9칸 목록을 확인하지 못했습니다. 다시 확인해 주세요.', 'life-help')); return; }
@@ -146,6 +161,7 @@
     async function loadCatalog() {
       const result = await service.catalog(scope ? { unownedWorkspaceId: scope } : {});
       if (!valid()) return;
+      verifyExpectedPosts(result, exactSelection());
       catalog = result;
       const posts = new Set((catalog.posts || []).map(item => item.id)), boards = new Set((catalog.boards || []).map(item => item.id));
       for (const id of postIds) if (!posts.has(id)) postIds.delete(id);
@@ -160,7 +176,7 @@
       else renderInventory(true);
       if (results[1].status === 'rejected') renderSelections();
       const partial = results.some(result => result.status === 'rejected') || inventory?.rows?.some(row => row.status === 'error') || catalog?.unownedError;
-      if (partial) showError('일부 현황이나 목록을 확인하지 못했습니다. 확인한 자료와 선택은 유지했습니다. 보관 현황을 다시 확인해 주세요.');
+      if (partial) showError(results[1].status === 'rejected' && results[1].reason?.code === 'preservation_post_changed' ? results[1].reason.message : '일부 현황이나 목록을 확인하지 못했습니다. 확인한 자료와 선택은 유지했습니다. 보관 현황을 다시 확인해 주세요.');
       announce(partial ? '일부 범위만 확인했습니다. 확인하지 못한 종류는 다시 확인해 주세요.' : '보관 범위와 선택 목록을 확인했습니다. 서버의 현재 상태는 조회하지 않았습니다.');
     }
     function renderSummary(value) {
@@ -194,12 +210,21 @@
       // A fresh review must never expose the previous candidate as ready while
       // its source snapshot and exact dependencies are still being checked.
       clearReview();
+      const exactPostIds = exactSelection();
+      await verifyFreshExpectedPosts(exactPostIds);
+      if (!valid()) return;
       const result = await service.prepare({ postIds: [...postIds], boardIds: [...boardIds], ...(scope ? { unownedWorkspaceId: scope } : {}) });
-      if (!valid()) return; showReview(result, 'export'); announce('포함할 자료를 확인했습니다. 내용을 검토한 뒤 ZIP을 받아 주세요.');
+      if (!valid()) return;
+      await verifyFreshExpectedPosts(exactPostIds);
+      if (!valid()) return; showReview({ ...result, exactPostIds }, 'export'); announce('포함할 자료를 확인했습니다. 내용을 검토한 뒤 ZIP을 받아 주세요.');
     }
     async function download() {
       const candidate = review; if (!candidate || candidate.kind !== 'export') throw new Error('선택한 자료의 포함 범위를 먼저 확인해 주세요.');
+      await verifyFreshExpectedPosts(candidate.exactPostIds || []);
+      if (!valid() || review !== candidate) return;
       const blob = await service.export(candidate.ticket); if (!valid() || review !== candidate) return;
+      await verifyFreshExpectedPosts(candidate.exactPostIds || []);
+      if (!valid() || review !== candidate) return;
       const url = URL.createObjectURL(blob), link = node('a'); link.href = url; link.download = 'haedo-evidence.zip';
       document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
       announce('ZIP 다운로드를 요청했습니다. 기기의 파일 앱에서 저장 여부를 확인해 주세요.');
@@ -220,8 +245,10 @@
         catch (_) { if (valid()) showError('새 공간 복원은 완료했습니다. 화면 목록을 갱신하지 못했으니 관리에서 작업공간을 다시 확인해 주세요.'); }
       }
     }
-    async function mount(container, { postIds: selectedPosts = [] } = {}) {
+    async function mount(container, { postIds: selectedPosts = [], expectedPostRevisions: expected = {} } = {}) {
       if (!Array.isArray(selectedPosts) || selectedPosts.length > 20 || selectedPosts.some(id => typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(id))) throw new Error('파일에 담을 글의 선택을 확인해 주세요.');
+      if (!expected || typeof expected !== 'object' || Array.isArray(expected) || Object.entries(expected).some(([id, revision]) => !selectedPosts.includes(id) || !Number.isSafeInteger(revision) || revision < 1)) throw new Error('파일에 담을 글의 정확한 판을 확인해 주세요.');
+      expectedPostRevisions = { ...expected };
       for (const id of selectedPosts) postIds.add(id);
       host = container; surface = node('section', null, 'preservation'); surface.id = 'lifePreservation'; state('loading');
       status = node('p', '', 'life-meta'); status.id = 'preservationStatus'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');

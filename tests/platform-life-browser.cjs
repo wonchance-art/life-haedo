@@ -9,6 +9,7 @@ const assert=require('node:assert/strict');
 const http=require('node:http');
 const fs=require('node:fs/promises');
 const path=require('node:path');
+const {openRecordsMenu}=require('./helpers/feature-menus.cjs');
 const site=process.env.SITE_DIR;
 if(!site)throw new Error('Set SITE_DIR to the prepared anonymous static site.');
 const oldSites=(process.env.OLD_SITE_DIR||'').split(path.delimiter).filter(Boolean);
@@ -221,7 +222,7 @@ async function main(){
         await importText(page,'오프라인 보존','오프라인에서도 저장할 익명 내용');
         assert.ok((await stored(page)).sources.some(s=>s.title==='오프라인 보존'));
         if (await page.locator('.life-reader-tools').isVisible()) await page.locator('.life-reader-tools').getByRole('button').first().click();
-        await click(page,'컬렉션'); await page.locator('#clGrid').waitFor();
+        await openRecordsMenu(page); await click(page,'컬렉션'); await page.locator('#clGrid').waitFor();
         await click(page,'컬렉션 항목 추가'); await click(page,'직접 입력'); await page.locator('#clTitle').fill('오프라인 컬렉션');
         await page.locator('#clNote').fill('온라인 재확인 뒤에도 남을 비공개 메모'); await click(page,'저장');
         await page.getByRole('button',{name:'항목 수정',exact:true}).waitFor();

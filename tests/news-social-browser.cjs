@@ -120,9 +120,11 @@ async function main() {
       await disclose(page.locator('#discoveryNewsPreferences'));
       assert.equal(await page.locator('.discovery-feed-body').isVisible(), false);
       assert.equal(await page.locator('#discoveryNewsSettingsBack').isVisible(), true);
-      assert.match(await page.locator('#discoveryCancelled').innerText(), /반응 해제 기록/);
-      assert.match(await page.locator('#discoveryNewsPreferences').innerText(), /부정 평가가 아니|관련 없음과는 다/);
       assert.equal(await page.locator('#discoveryPersonalize').isChecked(), false);
+      await disclose(page.locator('#discoveryRecords'));
+      assert.match(await page.locator('#discoveryCancelled').innerText(), /반응 해제 기록/);
+      assert.match(await page.locator('#discoveryRecords').innerText(), /부정 평가가 아니|관련 없음과는 다/);
+      await page.locator('#discoveryRecords > summary').click();
       await (await revealControl(page.locator('#discoveryNewsPreferences > summary'))).click(); await newsView(page.locator('#discoveryList')); assert.equal(await page.locator('#discoveryNewsSettingsPanel').isVisible(), false); assert.deepEqual(await state(page), original);
     });
     await check('native keyboard article options and information open explicitly and Escape restores their summary focus', async () => {
@@ -233,7 +235,7 @@ async function main() {
         const file = 'news-social-' + width + '.png'; await page.screenshot({ path: path.join(output, file), fullPage: false }); report.visual.push({ width, file, audit });
       }
       const after = await state(page); for (const key of ['bundle', 'workbench', 'settings', 'reading']) assert.deepEqual(after[key], original[key]);
-      await nav(page, 'home'); await nav(page, 'news'); await idle(page); assert.equal(await page.locator('#discoveryLatest').getAttribute('aria-pressed'), 'true');
+      await nav(page, 'home'); await nav(page, 'news'); await idle(page); assert.equal(await page.locator('#discoverySort').inputValue(), 'latest');
     });
     assert.equal(fake.writes().length, 0); for (const key of ['consoleErrors', 'pageErrors', 'externalRequests', 'privacyViolations', 'modelRequests', 'remoteWrites']) assert.deepEqual(report[key], [], key);
     report.pass = true;

@@ -16,7 +16,7 @@
   const profileInitials = name => !name || name === '내 블로그' ? '나' : Array.from(name.replace(/\s+/g, '')).slice(0, 2).join('');
 
   function create({ storage, core, host, getBundle, openSource, announce = () => {}, onRestored, onLocalSaved = () => {},
-    onBlogReturn = () => {}, onBlogModeChange = () => {}, blogSync = null, onManagePost = null, managed = false,
+    onBlogReturn = () => {}, onBlogModeChange = () => {}, blogSync = null, onManagePost = null, onPreservePost = null, onOpenAccountBlog = null, managed = false,
     onSelectionUsed = () => {}, onSelectionCancel = () => {}, onArrange = () => {}, onWorkbenchNavigate = () => {}, onChapterImport = () => {},
     onBundleUpdated = () => {}, shareRemoteFactory = () => life.ShareRemote?.createOwner({ auth: global.HaedoAuth }),
     sharePublicUrl = publicId => { const url = new URL('share.html', global.location.href); url.searchParams.set('id', publicId); return url.href; },
@@ -1163,6 +1163,7 @@
         if (kind === 'public') {
           sync = life.BlogSync.create({ storage, auth: global.HaedoAuth });
           manager = life.BlogManager.create({ storage, workspaceId: session.workspaceId, auth: global.HaedoAuth, blogSync: sync, isCurrent: currentTool,
+            onOpenAccountBlog,
             openPost: (postId, options = {}) => openPost({ postId, revision: options.expectedRevision, planId, resume: false }),
             onOpenEvidence: (reference, context = {}) => source({ ...reference, reference, planId, focusKey: context.focusKey }) });
           await manager.mount(content, { postId: doc.id, viewState: { filter: doc.archived ? 'archived' : 'all' } });
@@ -1400,7 +1401,7 @@
       const photoHost = el('section'); taskHost.append(photoHost); photoHost.hidden = blogTask && !photoTask;
       const composerHost = el('section'); taskHost.insertBefore(composerHost, photoHost); composerHost.hidden = photoTask;
       session.postEditorView = { token, hosts: { photo: photoHost, legacy: composerHost }, modes: {}, active: null };
-      session.photoPosts ||= life.PhotoPostUI.create({ storage, workspaceId: session.workspaceId, isCurrent: () => workspaceIs(session), blogSync, onManageServer: onManagePost, onDirty: () => updateStatus(session), onSaved: onLocalSaved,
+      session.photoPosts ||= life.PhotoPostUI.create({ storage, workspaceId: session.workspaceId, isCurrent: () => workspaceIs(session), blogSync, onManageServer: onManagePost, onPreservePost, onDirty: () => updateStatus(session), onSaved: onLocalSaved,
         onReturn: async context => {
           if (session.materialReturn && context.id) {
             const token = generation, destination = session.materialReturn;

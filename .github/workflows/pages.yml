@@ -115,6 +115,15 @@ jobs:
                   raise SystemExit('The local app shell did not become ready.')
               time.sleep(0.2)
           PY
+      - name: Verify purpose-based workflow, exact return and three-width content layout
+        if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/purpose-workflow-browser.cjs
+      - name: Verify exact post management, evidence files and account resume
+        if: ${{ matrix.group == 3 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/purpose-writing-browser.cjs
+      - name: Verify grouped news settings, explicit save and server acknowledgement
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/purpose-news-browser.cjs
       - name: Verify unified entry and account boundaries
         if: ${{ matrix.group == 1 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/unified-home-browser.cjs
@@ -426,6 +435,12 @@ jobs:
       - name: Verify discovery catalog freshness, worker update and offline preservation
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-external-discovery-pwa-browser.cjs
+      - name: Verify public v162 worker upgrade and exact saved data
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        env:
+          EXTERNAL_DISCOVERY_PWA_PREVIOUS_VERSION: "162"
+          EXTERNAL_DISCOVERY_PWA_OUTPUT: .local/external-discovery-pwa-v162
+        run: node tests/life-external-discovery-pwa-browser.cjs
       - name: Verify discovery language selection, translated links and private preference recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-languages-browser.cjs
@@ -487,6 +502,9 @@ jobs:
         with:
           name: browser-checks-${{ matrix.group }}-${{ github.run_attempt }}
           path: |
+            .local/purpose-workflow-browser/
+            .local/purpose-writing/
+            .local/purpose-news/
             .local/integrated-release-entry/
             .local/travel-writing-resume/
             .local/travel-writing-history/
@@ -515,6 +533,7 @@ jobs:
             .local/interest-pwa/
             .local/external-discovery-browser/
             .local/external-discovery-pwa/
+            .local/external-discovery-pwa-v162/
             .local/discovery-automation-browser/
             .local/discovery-reactions-browser/
             .local/discovery-languages-browser/
@@ -751,7 +770,7 @@ jobs:
       - name: Verify generated configuration and complete installed shell hashes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         env:
-          PREVIOUS_RELEASE: c9c21ef21cda138f1a81bacc808199dedf49b3a3
+          PREVIOUS_RELEASE: 6126123c12af12daeca6b9679ce1201095c89367
         run: node scripts/verify-prepared-site.mjs
       - name: Verify the actual previous service worker updates without losing originals
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}

@@ -93,15 +93,15 @@ async function main() {
       assert.match(await page.locator('.photo-article').innerText(), /첫 문장으로 시작한/);
       await page.getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await homeReady(page);
       assert.equal(await page.locator('#homePosts .home-post').count(), 1); assert.equal(await page.locator('.home-list-controls').isVisible(), true);
-      const row = page.locator('#homePosts .home-post'); assert.match(await row.innerText(), /비공개/); assert.match(await row.innerText(), /이 브라우저/);
+      const row = page.locator('#homePosts .home-post'); assert.match(await row.innerText(), /비공개 원본/); assert.doesNotMatch(await row.innerText(), /이 브라우저에 보관/);
       await row.locator('.home-post-open').click(); await page.locator('.photo-article').waitFor(); assert.match(await page.locator('.photo-article').innerText(), /첫 문장으로 시작한/);
     });
     await check('populated home uses keyboard-operable composer and respects profile intro visibility', async page => {
       await populate(page); assert.equal(await page.locator('#homePosts .home-post').count(), 8);
       assert.equal(await page.locator('#homePosts .home-post-author').count(), 0); assert.equal(await page.locator('.home-blog-description').isVisible(), false);
       for (const node of await page.locator('#homePosts .home-post-meta').all()) assert.match(await node.innerText(), /비공개/);
-      assert.match(await page.locator('#homePosts [data-home-kind="photo"] .home-post-meta').first().innerText(), /이 브라우저/);
-      const prompt = page.locator('.home-compose-prompt'); assert.equal(await prompt.evaluate(node => node.tagName), 'BUTTON'); await prompt.focus(); await page.keyboard.press('Enter');
+      assert.equal(await page.locator('#homePosts [data-home-kind="photo"] .home-post-meta').first().innerText().then(text => text.includes('비공개 원본') && !text.includes('이 브라우저')), true);
+      const prompt = page.locator('.home-blog-write'); assert.equal(await prompt.count(), 1); assert.equal(await page.locator('.home-compose-prompt').count(), 0); assert.equal(await prompt.evaluate(node => node.tagName), 'BUTTON'); await prompt.focus(); await page.keyboard.press('Enter');
       await page.locator('.ql-editor').waitFor(); await page.waitForFunction(() => document.activeElement?.classList.contains('ql-editor'));
       await page.getByRole('button', { name: '닫기', exact: true }).click(); await homeReady(page);
       await page.getByRole('button', { name: '프로필 편집', exact: true }).click(); await page.locator('#wbPageTitle').waitFor();

@@ -2,10 +2,12 @@
  * BASE_URL=http://127.0.0.1:4184 node tests/home-entry-browser.cjs
  * Isolated anonymous Auth fixtures only; no production DB/SNS or Apple hardware. */
 'use strict';
+const { awaitCondition } = require('./helpers/await-condition.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4184';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 const { FakeCloud, accounts, cloud, base, openAccount } = require('./life-sync-browser.cjs');
 const { playwright, ready, settle, makeContext, observe, nav } = require('./unified-home-browser.cjs');
 const { fixture, current, seedComposition, oldBody, newBody } = require('./life-workbench-browser.cjs');
@@ -37,7 +39,14 @@ async function openLibrary(page) {
   if (await library.count() && !await library.evaluate(node => node.open)) await library.locator(':scope > summary').click();
 }
 async function preview(page) { await openLibrary(page); await page.locator('[data-home-destination="preview"]').click(); await page.locator('#wbVisitor').waitFor(); }
-async function recordWrite(page) { await openLibrary(page); await page.locator('[data-home-destination="sources"]').click(); await settle(page); await page.getByRole('button', { name: '글쓰기', exact: true }).click(); await settle(page); }
+async function recordWrite(page) { await openLibrary(page); await page.locator('[data-home-destination="sources"]').click(); await settle(page); await openRecordsMenu(page); await page.getByRole('button', { name: '자료 작성', exact: true }).click(); await settle(page); }
+async function recordActions(page) {
+  const selection = await page.locator('#lifeSelectionToggle').getAttribute('aria-label');
+  const menu = await openRecordsMenu(page);
+  const destinations = await menu.locator('section[aria-label="모아 보기"] button').allTextContents();
+  await menu.locator(':scope > summary').click();
+  return [selection, ...destinations];
+}
 async function home(page) {
   if (!await page.locator('[data-haedo-navigation] a[data-haedo-section="home"]').isVisible()) {
     if (await page.locator('.photo-editor').isVisible()) await page.getByRole('button', { name: '닫기', exact: true }).click();
@@ -126,7 +135,7 @@ async function main() {
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'sources');
       assert.equal(await page.locator('a[data-haedo-section="records"]').getAttribute('aria-current'), 'page');
       assert.equal(await page.locator('.life-record-sections').count(), 0);
-      assert.deepEqual(await page.locator('.life-record-actions button').allTextContents(), ['기록 선택', '컬렉션', '묶음', '선택 자료 페이지']);
+      assert.deepEqual(await recordActions(page), ['기록 선택', '컬렉션', '묶음', '선택 자료 페이지']);
       assert.equal(await page.locator('#lifeSelectionToggle').getAttribute('aria-label'), '기록 선택');
       for (const view of ['topics', 'sources', 'activities', 'page', 'time', 'import']) {
         await page.goto(`${base}/life.html?view=${view}`); await ready(page);
@@ -188,7 +197,7 @@ async function main() {
       if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'sources') await nav(page, 'records');
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'sources');
       assert.equal(await page.locator('.life-record-sections').count(), 0);
-      assert.deepEqual(await page.locator('.life-record-actions button').allTextContents(), ['기록 선택', '컬렉션', '묶음', '선택 자료 페이지']);
+      assert.deepEqual(await recordActions(page), ['기록 선택', '컬렉션', '묶음', '선택 자료 페이지']);
       assert.equal(await page.locator('#lifeSelectionToggle').getAttribute('aria-label'), '기록 선택');
       await page.locator('#lifeSearch').fill('원문 버전과 위치를 보존할 익명 발췌');
       const notes = page.locator('.life-record-notes .life-excerpt-card'); assert.equal(await notes.count(), 1);
@@ -243,9 +252,9 @@ async function main() {
       await page.goto(base + '/index.html?section=records'); await ready(page);
       await page.evaluate(() => { window.__homeHoldRead = true; window.__homeReadEntered = false; });
       await nav(page, 'home'); await openLibrary(page); await page.waitForFunction(() => __homeReadEntered);
-      await nav(page, 'manage'); await page.getByRole('button', { name: '자료 관리', exact: true }).click();
+      await nav(page, 'manage'); await page.getByRole('button', { name: '현재 자료공간', exact: true }).click();
       await page.locator('#lifeWorkspace').selectOption(other); await settle(page);
-      await page.waitForFunction(id => HaedoLife.Shell.storage.getActive().then(active => active === id), other);
+      await awaitCondition(page, id => HaedoLife.Shell.storage.getActive().then(active => active === id), other, { timeout: 10000, label: 'selected workspace becomes active' });
       const completed = await page.evaluate(() => window.__homeReadFinished || 0);
       await page.evaluate(() => __homeReleaseRead()); await page.waitForFunction(n => __homeReadFinished > n, completed);
       await home(page); assert.equal(await page.locator('#homeRecent > .home-record').count(), 0);

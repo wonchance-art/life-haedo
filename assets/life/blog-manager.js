@@ -6,9 +6,9 @@
   const stateLabels = { saved: '저장한 글', draft: '초안', archived: '보관한 글' };
   const kindLabels = { photo: '블로그 글', plain: '첨부 글', source: '기록 글', 'page-draft': '첨부 글 초안', 'writing-draft': '기록 글 초안' };
   const errorText = e => e?.code === 'schema_missing' ? '서버 글 보관 기능이 아직 준비되지 않았습니다. 글은 이 브라우저에 그대로 있습니다.' : e?.message || '처리하지 못했습니다. 입력을 유지했으니 다시 시도해 주세요.';
-  function create({ storage, workspaceId, auth, photoPosts, openPost, openLegacy, onOpenEvidence, blogSync, isCurrent = () => true }) {
+  function create({ storage, workspaceId, auth, photoPosts, openPost, openLegacy, onOpenEvidence, onOpenAccountBlog = null, blogSync, isCurrent = () => true }) {
     let host, surface, list, status, query, filter, detail, evidenceHost, evidence, rows = [], busy = null, disposed = false, epoch = 0, preview = null;
-    let subscriptions = [], urls = [], shown = 40, navigating = false, focusedPostId = null;
+    let subscriptions = [], urls = [], shown = 40, navigating = false, focusedPostId = null, expectedInitialRevision = null, copyHost = null;
     let localFind = null, localStatus = null, localResults = null, localPreview = null, localSearch = null, localUnowned = null;
     let localGeneration = 0, localRows = [], localShown = 40, localSelected = null, localScan = null;
     const localUrls = new Set(), localDownloads = new Map();
@@ -59,10 +59,20 @@
       // A failed source retains the last successfully shown rows instead of appearing empty.
       const kinds = ['source', 'plain', 'photo', 'page-draft', 'writing-draft'];
       rows = kinds.flatMap(kind => byKind.get(kind) || rows.filter(row => row.kind === kind));
+      if (expectedInitialRevision !== null) {
+        // A failed fresh photo read must not validate a newly requested exact
+        // destination against rows retained from an earlier manager mount.
+        const selected = byKind.get('photo')?.find(row => row.id === focusedPostId);
+        if (!selected || selected.revision !== expectedInitialRevision || !['saved', 'archived'].includes(selected.status)) {
+          list.dataset.state = 'error';
+          throw new Error('선택한 글이 바뀌었습니다. 읽던 글로 돌아가 현재 내용을 확인한 뒤 다시 열어 주세요.');
+        }
+        expectedInitialRevision = null;
+      }
       rows.sort((a, b) => (Date.parse(b.updatedAt) || 0) - (Date.parse(a.updatedAt) || 0) || (a.kind + a.id).localeCompare(b.kind + b.id));
       list.dataset.state = failed.length ? 'partial' : 'ready'; await renderRows();
       if (!valid(token)) return;
-      announce(failed.length ? `${failed.join(' · ')} 목록을 읽지 못했습니다. 이미 표시한 글과 검색은 유지했습니다. 다시 불러와 주세요.` : `${rows.length}개 글과 초안을 확인했습니다. 공개는 글마다 따로 선택합니다.`);
+      announce(failed.length ? `${failed.join(' · ')} 목록을 읽지 못했습니다. 이미 표시한 글과 검색은 유지했습니다. 다시 불러와 주세요.` : focusedPostId ? '선택한 글의 공개·보관 상태를 확인했습니다.' : `${rows.length}개 글과 초안을 확인했습니다. 공개는 글마다 따로 선택합니다.`);
     }
     function renderRows() {
       if (!valid()) return;
@@ -282,7 +292,7 @@
         })); area.append(line);
       }
       if (!entries.length) area.append(meta('서버에 보관한 글이 없습니다.'));
-      surface.querySelector('.blog-manager-remote')?.remove(); surface.append(area);
+      copyHost?.querySelector('.blog-manager-remote')?.remove(); copyHost?.append(area);
     }
     function clearLocalPreview() {
       localSelected = null;
@@ -456,11 +466,13 @@
       if (evidence?.dirty?.()) { if (evidence.flush) await evidence.flush(); else throw new Error('선택한 인용과 내 생각을 적용하거나 취소해 주세요.'); }
       return true;
     }
-    async function mount(target, { evidenceSeed = null, viewState = null, postId = null } = {}) {
+    async function mount(target, { evidenceSeed = null, viewState = null, postId = null, expectedRevision = null } = {}) {
       if (disposed) throw new Error('종료한 글 관리 화면입니다.');
       if (host) { await flush(); clearPreview(); clearLocalFind(true); evidence?.dispose(); evidence = null; subscriptions.forEach(unsubscribe => unsubscribe?.()); subscriptions = []; }
       focusedPostId = typeof postId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(postId) ? postId : null;
       if (postId !== null && !focusedPostId) throw new Error('관리할 글의 식별자를 확인해 주세요.');
+      if (expectedRevision !== null && (!focusedPostId || !Number.isSafeInteger(expectedRevision) || expectedRevision < 1)) throw new Error('관리할 글의 정확한 판을 확인해 주세요.');
+      expectedInitialRevision = expectedRevision;
       host = target; epoch++; surface = el('section', null, 'blog-manager'); surface.setAttribute('aria-label', focusedPostId ? '선택한 글 관리' : '전체 글 관리');
       const header = el('div', null, 'blog-manager-toolbar');
       query = el('input'); query.id = 'blogManagerSearch'; query.type = 'search'; query.placeholder = '내 글 검색'; query.setAttribute('aria-label', '내 글 검색');
@@ -474,7 +486,20 @@
       header.append(query, filter, button('글 목록 다시 불러오기', load));
       status = meta('글을 불러오는 중입니다.'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
       detail = el('div'); evidenceHost = el('div'); list = el('div', null, 'blog-manager-list'); list.setAttribute('aria-label', '내 글 목록');
-      surface.append(header, status, button('서버에 보관한 글 확인', listRemote), button('자료 인용으로 새 글 쓰기', () => chooseEvidence()), mountLocalFind(), detail, evidenceHost, list); host.replaceChildren(surface);
+      surface.append(header, status);
+      if (!focusedPostId && typeof onOpenAccountBlog === 'function') {
+        const account = button('서버에 보관한 글 확인', () => navigate(() => onOpenAccountBlog({ originFocusKey: 'blog:account-list' })));
+        account.dataset.focusKey = 'blog:account-list'; account.id = 'blogAccountList'; surface.append(account);
+      }
+      copyHost = null;
+      if (!focusedPostId) {
+        surface.append(button('자료 인용으로 새 글 쓰기', () => chooseEvidence()), mountLocalFind());
+        copyHost = el('details', null, 'blog-manager-copy-tools life-details');
+        copyHost.append(el('summary', '별도 사본 만들기'), meta('서버의 글을 새 사본으로 받습니다. 기존 글은 유지됩니다.'), button('서버 글에서 새 사본 선택', listRemote));
+      }
+      surface.append(detail, evidenceHost, list);
+      if (copyHost) surface.append(copyHost);
+      host.replaceChildren(surface);
       if (storage.subscribe) subscriptions.push(storage.subscribe(workspaceId, event => { if (valid() && event.workspaceId === workspaceId && ['photo_posts_changed', 'workbench_changed'].includes(event.type)) announce('저장한 글이 바뀌었습니다. 글 목록을 다시 불러와 확인해 주세요.'); }));
       await load();
       if (evidenceSeed && valid()) await chooseEvidence(evidenceSeed);

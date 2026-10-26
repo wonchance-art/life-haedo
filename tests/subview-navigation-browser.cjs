@@ -98,7 +98,7 @@ async function main() {
 
       // Keep the separate manager-origin return contract as well as home resume.
       await openBlogMenu(page);
-      await page.getByRole('button', { name: '글 관리', exact: true }).click(); await mode(page, 'blog');
+      await page.getByRole('button', { name: '글 공개·보관', exact: true }).click(); await mode(page, 'blog');
       await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
       const draftButton = page.getByRole('button', { name: '산책 뒤 남긴 생각', exact: true });
       const draftFocusKey = await draftButton.getAttribute('data-focus-key');
@@ -116,13 +116,14 @@ async function main() {
 
       // The record writer remains a separate preserved entry, reached through records.
       await nav(page, 'records'); await mode(page, 'sources');
-      await page.getByRole('button', { name: '글쓰기', exact: true }).click(); await mode(page, 'write');
+      await openRecordsMenu(page);
+      await page.getByRole('button', { name: '자료 작성', exact: true }).click(); await mode(page, 'write');
       assert.equal(await page.locator('#lifeWritingClose').count(), 1);
       await page.locator('#lifeWritingTitle').fill('기록 작성기의 이전 초안');
       await page.locator('#lifeWritingBody').fill('기존 평문 작성기의 입력도 복귀 뒤 이어집니다.');
       await back(page, 'sources');
-      await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '글쓰기');
-      await page.getByRole('button', { name: '글쓰기', exact: true }).click(); await mode(page, 'write');
+      await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '자료 작성');
+      await page.getByRole('button', { name: '자료 작성', exact: true }).click(); await mode(page, 'write');
       assert.equal(await page.locator('#lifeWritingBody').inputValue(), '기존 평문 작성기의 입력도 복귀 뒤 이어집니다.');
       assert.equal((await current(page)).bundle.sources.length, 0);
     }, width);
@@ -172,6 +173,7 @@ async function main() {
       const before = await current(page);
       await page.locator('#lifeSearch').fill('산책');
       const resultIds = await page.locator('#lifeSearchResults .life-source-open').evaluateAll(nodes => nodes.map(node => node.dataset.versionId));
+      await openRecordsMenu(page);
       await page.getByRole('button', { name: '선택 자료 페이지', exact: true }).click(); await mode(page, 'page');
       assert.equal(await heading(page).textContent(), '선택 자료 페이지'); await back(page, 'sources');
       assert.equal(await page.locator('#lifeSearch').inputValue(), '산책');
@@ -244,7 +246,7 @@ async function main() {
       assert.equal((await current(page)).workbench.page.intro, '돌아가기 실패에도 보존할 소개');
     });
     await check('direct deep links have stable parent fallback and no persistent origin data', async ({ page }) => {
-      for (const [view, title, parent] of [['import','가져오기','sources'], ['write','글쓰기','sources'], ['time','연표','sources'], ['activities','묶음','sources'], ['page','선택 자료 페이지','sources'], ['discover','다시 찾기','sources'], ['transfer','자료 백업·복원','manage'], ['sync','기기 간 동기화','manage'], ['workbench-backup','자료·구성 백업','manage'], ['public-pages','공개 페이지 관리','home']]) {
+      for (const [view, title, parent] of [['import','가져오기','sources'], ['write','자료 작성','sources'], ['time','연표','sources'], ['activities','묶음','sources'], ['page','선택 자료 페이지','sources'], ['discover','다시 찾기','sources'], ['transfer','자료 백업·복원','manage'], ['sync','기기 간 동기화','manage'], ['workbench-backup','자료·구성 백업','manage'], ['public-pages','공개 페이지 관리','home']]) {
         await page.goto(base + '/index.html?view=' + view); await ready(page); await mode(page, view);
         const before = await current(page); assert.equal(await heading(page).textContent(), title); await back(page, parent); assert.deepEqual(await current(page), before);
       }

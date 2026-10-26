@@ -554,9 +554,9 @@
     document.title = "연표·목표·습관 관리 · 해도";
     const back = document.querySelector("[data-section-back]");
     back.href = "index.html?section=manage";
-    back.setAttribute("aria-label", "관리로 돌아가기");
+    back.setAttribute("aria-label", "설정으로 돌아가기");
     const tip = back.querySelector(".haedo-tooltip");
-    if (tip) tip.textContent = "관리로 돌아가기";
+    if (tip) tip.textContent = "설정으로 돌아가기";
     const backups = byId("timelineBackups");
     backups.open = true;
     document.querySelector(".space-documents").before(backups);

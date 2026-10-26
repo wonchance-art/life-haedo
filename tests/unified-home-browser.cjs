@@ -5,6 +5,7 @@
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
+const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 const { FakeCloud, platformContext, accounts, cloud, base, openManagement, openAccount } = require('./life-sync-browser.cjs');
 function playwright() {
   for (const name of [process.env.PW_MODULE_PATH, 'playwright', 'playwright-core', '/opt/codex/cua_node/lib/node_modules/playwright'].filter(Boolean)) {
@@ -32,7 +33,7 @@ async function assertCommonNavigation(page) {
     { section: 'home', href: 'index.html', label: '홈' },
     { section: 'news', href: 'index.html?section=news', label: '뉴스' },
     { section: 'records', href: 'index.html?section=records', label: '자료실' },
-    { section: 'tools', href: 'index.html?section=tools', label: '도구' },
+    { section: 'tools', href: 'index.html?section=tools', label: '계획' },
     { section: 'manage', href: 'index.html?section=manage', label: '설정' }
   ]);
   const brand = page.locator('[data-haedo-navigation] .haedo-brand');
@@ -236,7 +237,7 @@ async function main() {
         await page.locator('#addItem').click(); assert.equal(await page.locator('#itemDialog').isVisible(), true);
         await page.keyboard.press('Escape'); await nav(page, 'tools'); await ready(page);
       }
-      await nav(page, 'records'); await button(page, '시간 보기');
+      await openRecordsMenu(page); await button(page, '연표');
       await page.locator('#lifeMain a[href="workspace.html"]').click();
       await page.waitForFunction(() => document.body.dataset.page === 'workspace' && !document.querySelector('[data-private]').hidden);
       await assertCommonNavigation(page);

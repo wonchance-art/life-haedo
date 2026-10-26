@@ -346,7 +346,7 @@ async function main() {
         }, fixture);
         assert.equal(afterFocused.post, saved.post); assert.equal(afterFocused.refs, saved.refs); assert.equal(afterFocused.bundle, before);
         assert.deepEqual(writeCounts(), writesBefore); assert.deepEqual(server.posts.get(accounts.a.id + ':' + fixture.postId), headBefore);
-        await openBlogMenu(page); await page.getByRole('button', { name: '글 관리', exact: true }).click();
+        await openBlogMenu(page); await page.getByRole('button', { name: '글 공개·보관', exact: true }).click();
         await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
         assert.equal(await page.locator('#blogManagerSearch').inputValue(), '원문 연결필터');
         assert.equal(await page.locator('#blogManagerFilter').inputValue(), 'draft');

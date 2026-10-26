@@ -174,7 +174,7 @@ async function main() {
   const click = async (p, name) => { await p.getByRole('button', { name, exact: true }).click(); await settle(p); await p.waitForFunction(() => !document.querySelector('.blog-manager[aria-busy="true"]')); };
   const data = p => p.evaluate(async () => { const s = HaedoLife.Shell.storage, workspaceId = await s.getActive(), rows = await s.listPhotoPosts(workspaceId); return { workspaceId, rows, docs: await Promise.all(rows.map(row => s.readPhotoPost(workspaceId, row.id))) }; });
   const preserved = p => p.evaluate(async () => { const s = HaedoLife.Shell.storage, id = await s.getActive(); return { bundle: await s.read(id), workbench: await s.readWorkbench(id), nine: await s.readNineBoard(id), collection: await s.readCollection(id) }; });
-  const manager = async p => { await openBlogMenu(p); await p.getByRole('button', { name: '글 관리', exact: true }).click(); await p.locator('.blog-manager-list[data-state="ready"]').waitFor(); };
+  const manager = async p => { await openBlogMenu(p); await p.getByRole('button', { name: '글 공개·보관', exact: true }).click(); await p.locator('.blog-manager-list[data-state="ready"]').waitFor(); };
   const row = (p, id) => p.locator('.blog-post[data-post-id="' + id + '"]');
   const serverState = async (p, id, state = 'synced') => {
     await p.locator('#photoServerStatus[data-post-id="' + id + '"][data-state="' + state + '"]').waitFor();
@@ -350,7 +350,7 @@ async function main() {
     });
     await check('A second authenticated browser receives verified original bytes under fresh local IDs; ZIP reuse and foreign-account restrictions preserve both workspaces', async () => {
       const second = await device('completion-second-owner'); await second.page.goto(base + '/index.html'); await ready(second.page); await settle(second.page); const before = await preserved(second.page);
-      await manager(second.page); await click(second.page, '서버에 보관한 글 확인');
+      await manager(second.page); await second.page.locator('.blog-manager-copy-tools > summary').click(); await click(second.page, '서버 글에서 새 사본 선택');
       const remote = second.page.locator('.blog-manager-remote > div').filter({ hasText: photoPost.doc.title }); await remote.getByRole('button', { name: '이 글을 새 사본으로 받기', exact: true }).click(); await second.page.locator('.photo-article').waitFor();
       const received = (await data(second.page)).docs.find(doc => doc.title === photoPost.doc.title && doc.status === 'saved'); assert(received); assert.notEqual(received.id, photoPost.doc.id);
       assert.deepEqual(received.photos.map(photo => photo.digest), photoPost.doc.photos.map(photo => photo.digest));
@@ -359,7 +359,7 @@ async function main() {
       assert.notEqual(backup.originalId, backup.restoredId); assert.equal(backup.status, 'draft'); assert.deepEqual(backup.hashes, photoPost.doc.photos.map(photo => photo.digest)); assert.match(backup.text, /기억한 풍경/);
       assert.deepEqual(backup.captions, [0, 1].map(i => ({ caption: '직접 남긴 사진 설명 ' + i, alt: '합성 원본 풍경 ' + i })));
       assert.deepEqual(await preserved(second.page), before); assert.deepEqual(await preserved(page), original);
-      const foreign = await device('completion-foreign', accounts.b); await foreign.page.goto(base + '/index.html'); await ready(foreign.page); await manager(foreign.page); await click(foreign.page, '서버에 보관한 글 확인');
+      const foreign = await device('completion-foreign', accounts.b); await foreign.page.goto(base + '/index.html'); await ready(foreign.page); await manager(foreign.page); await foreign.page.locator('.blog-manager-copy-tools > summary').click(); await click(foreign.page, '서버 글에서 새 사본 선택');
       assert.equal(await foreign.page.locator('.blog-manager-remote > div').count(), 0); assert.equal(server.rpc(accounts.b.id, 'life_blog_read', { p_post_id: photoPost.doc.id }), null);
       assert.throws(() => server.rpc(null, 'life_blog_read', { p_post_id: photoPost.doc.id }), error => error.code === '42501');
       const firstAsset = server.rpc(accounts.a.id, 'life_blog_read', { p_post_id: photoPost.doc.id }).assets[photoPost.doc.photos[0].id];

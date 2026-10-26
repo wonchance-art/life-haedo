@@ -4,6 +4,7 @@ const assert = require('node:assert/strict'), fs = require('node:fs/promises'), 
 const { playwright, ready, makeContext } = require('./unified-home-browser.cjs');
 const { FakeCloud, accounts, base, cloud } = require('./life-sync-browser.cjs');
 const { inspect } = require('./life-workbench-browser.cjs');
+const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 const out = path.resolve(process.env.COLLECTION_LIBRARY_OUTPUT || '.local/collection-library');
 const report = { checks: [], visual: [], errors: [], external: [], environment: 'Linux Chromium, real IndexedDB, anonymous intercepted Auth; no Apple hardware or production service access' };
 const read = page => page.evaluate(async () => { const s = HaedoLife.Shell.storage; return s.readCollection(await s.getActive()); });
@@ -109,7 +110,7 @@ async function main() {
       await page.evaluate(async()=>{const s=HaedoLife.Shell.storage,c=HaedoLife.Collection,value=await s.readCollection(await s.getActive());const first=value.items[0];for(let i=0;i<100;i++)value.items.push({...c.clone(first),id:HaedoLife.Core.id(),title:'많은 자료 '+i});await s.saveCollection(value.workspaceId,value,value.revision);});await go(page);assert.equal(await page.locator('.cl-card').count(),40);await click(page,'40개 더 보기');assert.equal(await page.locator('.cl-card').count(),80);
     });
     await check('Pending reads cannot block navigation or paint into another section; failed reads allow retry', async () => {
-      await click(page,'자료실로 돌아가기'); await page.evaluate(()=>{window.__clHoldRead=true;});
+      await click(page,'자료실로 돌아가기'); await openRecordsMenu(page); await page.evaluate(()=>{window.__clHoldRead=true;});
       await click(page,'컬렉션'); await page.waitForFunction(()=>window.__clReadEntered);
       await page.getByText('컬렉션을 불러오는 중…',{exact:true}).waitFor();
       for(const width of [1440,820,390]) { await page.setViewportSize({width,height:900}); await page.screenshot({path:path.join(out,`loading-${width}.png`)}); }
@@ -117,7 +118,7 @@ async function main() {
       await page.evaluate(()=>window.__clReleaseRead()); assert.equal(await page.locator('.life-collection').count(),0);
       await page.locator('[data-haedo-section=records]').click(); await page.waitForFunction(()=>document.querySelector('.life-main')?.dataset.mode==='collection');
       await page.locator('#clGrid').waitFor(); await click(page,'자료실로 돌아가기');
-      await page.evaluate(()=>{window.__clReadFailure=true;}); await click(page,'컬렉션'); await page.getByRole('button',{name:'컬렉션 다시 불러오기',exact:true}).waitFor();
+      await openRecordsMenu(page); await page.evaluate(()=>{window.__clReadFailure=true;}); await click(page,'컬렉션'); await page.getByRole('button',{name:'컬렉션 다시 불러오기',exact:true}).waitFor();
       for(const width of [1440,820,390]) await snap(page,'read-error',width);
       await page.evaluate(()=>{window.__clReadFailure=false;}); await click(page,'컬렉션 다시 불러오기'); await page.locator('#clGrid').waitFor();
     });

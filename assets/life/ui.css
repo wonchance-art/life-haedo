@@ -314,6 +314,9 @@ body.haedo-shell[data-haedo-section=manage] .life-toolbar.haedo-page-heading { p
 .life-management-backups .life-destination:not(:first-child) > .life-glyph:first-child { background: transparent; color: var(--ink-soft); }
 .life-management-backups .life-destination:not(:first-child) strong { font-size: 16px; }
 .life-management-backups .life-destination:not(:first-child) { min-height: 76px; padding-block: 16px; }
+.life-backup-group { margin-top: 20px; }
+.life-backup-group + .life-backup-group { margin-top: 28px; }
+.life-backup-group > h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; line-height: 1.6; color: var(--ink-soft); }
 
 /* Infrequent actions stay with the content they operate on. */
 .life-feature-menu { position: relative; flex: 0 0 auto; }
@@ -325,6 +328,8 @@ body.haedo-shell[data-haedo-section=manage] .life-toolbar.haedo-page-heading { p
 .life-feature-menu-panel h2 { margin: 8px 12px 4px; font-size: 12px; font-weight: 600; line-height: 1.6; color: var(--ink-soft); }
 .life-feature-menu-panel .life-destination { min-height: 44px; padding: 8px 12px; gap: 12px; border: 0; border-radius: 8px; }
 .life-feature-menu-panel .life-destination:hover { background: var(--soft); }
+.life-feature-menu-panel .life-destination[aria-current="page"] { background: var(--soft); }
+.life-feature-menu-panel .life-destination[aria-current="page"] .life-destination-copy strong { font-weight: 600; }
 .life-feature-menu-panel .life-destination > .life-glyph:first-child { padding: 0; border-radius: 0; background: transparent; color: var(--ink-soft); }
 .life-feature-menu-panel .life-destination-copy strong { font-size: 15px; font-weight: 500; line-height: 1.6; }
 .life-feature-menu-panel .life-meta:empty, .life-feature-menu-panel .life-destination > .life-glyph:last-child { display: none; }

@@ -130,6 +130,7 @@
     let findRenderPromise = Promise.resolve();
     let collectionOpenOptions = null;
     let blogManager = null, blogOpenOptions = null, blogManagerWorkspace = null, blogManagerPostId = null;
+    let preservationOpenOptions = null, pendingPostReturn = null;
     let accountBlogUI = null, accountBlogWorkspace = null;
     const accountBlogViews = new Map();
     let preservationUI = null, publicCoverUI = null, naverBlogUI = null, naverBlogService = null, naverBlogWorkspace = null;
@@ -142,7 +143,7 @@
     const blogViews = new Map(), naverBlogViews = new Map();
     const blogSync = global.HaedoLife.BlogSync?.create({ storage, auth });
     const parentViews = new Set(['naver-capture', 'naver-blog', 'external-discovery', 'interests', 'blog', 'account-blog', 'find', 'home', 'sources', 'topics', 'tools', 'manage']);
-    const subviewTitles = { 'annual-plan': '연간 계획', 'source-trash': '자료 휴지통', 'source-edit': '자료 수정', 'naver-capture': '네이버 본문·사진 검토', 'naver-blog': '네이버 블로그 연결', 'account-blog': '서버에 보관한 글', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 확인', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 관리', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '글쓰기', time: '연표', activities: '묶음', page: '선택 자료 페이지',
+    const subviewTitles = { 'annual-plan': '연간 계획', 'source-trash': '자료 휴지통', 'source-edit': '자료 수정', 'naver-capture': '네이버 본문·사진 검토', 'naver-blog': '네이버 블로그 연결', 'account-blog': '서버에 보관한 글', 'public-cover': '공개 표지', 'external-discovery': '새 글 찾기', interests: '관심 주제 편집', 'obsidian-update': 'Obsidian 갱신', preservation: '보관 범위·근거 파일', blog: '글 공개·보관', find: '통합 검색', collection: '컬렉션', import: '가져오기', write: '자료 작성', time: '연표', activities: '묶음', page: '선택 자료 페이지',
       discover: '다시 찾기', reflection: '회고', books: '내 책', sync: managedLibrary ? '계정 보관' : '기기 간 동기화', transfer: '자료 백업·복원',
       'workbench-backup': '자료·구성 백업', 'public-pages': '공개 페이지 관리' };
     const selectedVersions = new Set();
@@ -178,8 +179,6 @@
     const toolbar = node('div', null, 'life-toolbar');
     const planningNavigation = node('div', null, 'life-planning-navigation');
     planningNavigation.hidden = true;
-    const recordSections = node('nav', null, 'life-record-actions');
-    recordSections.setAttribute('aria-label', '기록 정리');
     const main = node('main', null, 'life-main');
     main.id = 'lifeMain';
     const skip = node('a', '본문으로 이동', 'life-skip');
@@ -189,7 +188,7 @@
     const libraryRetry = button('다시 시도', guarded(async () => { await accountLibrary.retry(state.bundle?.workspaceId); await refreshLibrary(); })); libraryRetry.id = 'lifeAccountStorageRetry'; libraryRetry.hidden = true;
     const libraryReview = button('변경 확인', guarded(() => navigate('sync'))); libraryReview.id = 'lifeAccountStorageReview'; libraryReview.hidden = true;
     libraryStatus.append(libraryStatusText, libraryRetry, libraryReview);
-    root.append(skip, header, toolbar, planningNavigation, recordSections, libraryStatus, status, error, main);
+    root.append(skip, header, toolbar, planningNavigation, libraryStatus, status, error, main);
     container.replaceChildren(root);
     const interestUI = global.HaedoLife.InterestUI?.create({ container: main, storage,
       getBundle: () => state.bundle, isCurrent: () => !disposed && state.mode === 'interests',
@@ -260,7 +259,9 @@
     const workbenchModes = ['activities', 'page', 'discover', 'related', 'reflection', 'books', 'workbench-backup', 'public-pages'];
     const workbench = global.HaedoLife.WorkbenchUI?.create({
       storage, core, host: main, getBundle: () => state.bundle, blogSync, managed: managedLibrary,
-      onManagePost: postId => navigate('blog', { blogPostId: postId }),
+      onManagePost: (postId, options) => openPostAction('blog', postId, options),
+      onPreservePost: (postId, options) => openPostAction('preservation', postId, options),
+      onOpenAccountBlog: options => navigate('account-blog', { originFocusKey: options?.originFocusKey }),
       isDisposed: () => disposed, announce, onLocalSaved: clearError,
       onBundleUpdated: bundle => {
         if (disposed || state.bundle?.workspaceId !== bundle.workspaceId || bundle.revision < state.bundle.revision) return;
@@ -269,6 +270,7 @@
       onBlogReturn: returnFromBlog,
       onBlogModeChange: context => {
         if (disposed || state.mode !== 'page') return;
+        restorePostReturn(context);
         if (materialWritingTask) {
           blogMode = ['edit', 'read'].includes(context.mode) ? context.mode : null;
           renderHeader(); global.requestAnimationFrame(syncWritingFocus); return;
@@ -445,6 +447,25 @@
       if (cause && cause.code === 'stage_conflict' && state.stage) {
         error.append(button('새 검토 사본으로 보관', guarded(rescueStage)));
       }
+      const postOrigin = viewOrigins.get(state.mode);
+      if (cause?.code === 'post_context_changed' && ['blog', 'preservation'].includes(state.mode) &&
+          postOrigin?.workspaceId === state.bundle?.workspaceId && postOrigin.postTarget?.id === cause.postId) {
+        const mode = state.mode, workspaceId = state.bundle.workspaceId, workspace = workspaceGeneration,
+          navigation = navigationGeneration, account = state.syncAccountKey;
+        const current = () => !disposed && state.mode === mode && viewOrigins.get(mode) === postOrigin &&
+          state.bundle?.workspaceId === workspaceId && workspaceGeneration === workspace && navigationGeneration === navigation && state.syncAccountKey === account;
+        const openCurrent = button('현재 글 확인', guarded(async () => {
+          if (!current()) return;
+          const post = await storage.readPhotoPost(workspaceId, postOrigin.postTarget.id);
+          if (!current()) return;
+          if (post.id !== postOrigin.postTarget.id || post.status !== 'saved') throw new Error('같은 저장 글을 찾을 수 없습니다. 홈에서 현재 글을 확인해 주세요.');
+          const origin = { ...postOrigin, postTarget: { id: post.id, revision: post.revision } };
+          return navigate('page', { preserveContext: true, restoreViewOrigin: origin.parentOrigin, restorePostOrigin: origin,
+            exactPost: origin.postTarget, blogContext: origin.blogPageTask,
+            searchTarget: { photoPostId: post.id, photoPostRevision: post.revision }, navigationMotion: 'back' });
+        }));
+        openCurrent.id = 'lifeOpenCurrentPost'; error.append(openCurrent);
+      }
       if (cause && cause.code === 'schema_missing' && !managedLibrary) {
         const link = node('a', '동기화 설정 도움말', 'life-external');
         link.href = '#lifeSyncHelp';
@@ -458,6 +479,11 @@
       state.error = '';
       error.textContent = '';
       error.hidden = true;
+    }
+
+    function postContextChanged(postId) {
+      const cause = new Error('글이 바뀌어 이동을 멈췄습니다. 현재 글을 직접 확인해 주세요.');
+      cause.code = 'post_context_changed'; cause.postId = postId; return cause;
     }
 
     function guarded(action) {
@@ -684,7 +710,7 @@
 
     function batchKey(workspaceId, batchId) { return workspaceId + '|' + batchId; }
 
-    function invalidateBatchContext() { workspaceGeneration += 1; obsidianReaderOrigins.length = 0; naverMediaOrigin = null; sectionPositions.clear(); blogEntryScroll = null; global.HaedoMotion?.cancel(main); stopBatchReading(); resetSearchContext(); }
+    function invalidateBatchContext() { workspaceGeneration += 1; obsidianReaderOrigins.length = 0; naverMediaOrigin = null; sectionPositions.clear(); blogEntryScroll = null; pendingPostReturn = preservationOpenOptions = null; global.HaedoMotion?.cancel(main); stopBatchReading(); resetSearchContext(); }
 
     function validBatchStage(stage) {
       return typeof stage.batchId === 'string' && /^[a-f0-9-]{36}$/i.test(stage.batchId) &&
@@ -1215,9 +1241,10 @@
       const requestedTrigger = options?.originFocusKey && Array.from(main.querySelectorAll('[data-focus-key]')).find(el => el.dataset.focusKey === options.originFocusKey);
       const trigger = requestedTrigger || (from === 'reflection' && mode === 'page' && options?.pageDraftId ? main.querySelector('#wbReflectionToPage') : null) || navigationTrigger || focused || Array.from(main.querySelectorAll('[data-home-destination]')).find(el => el.dataset.homeDestination === mode) || document.activeElement;
       const control = trigger?.matches?.('button,a,summary,input') ? trigger : null;
-      const origin = (parentViews.has(from) || from === 'reflection' && mode === 'page' && options?.pageDraftId) ? { mode: from, workspaceId: state.bundle?.workspaceId, scrollY: global.scrollY,
+      const origin = options.viewOrigin?.workspaceId === workspaceId ? options.viewOrigin : (parentViews.has(from) || options.featureNavigation === true || from === 'reflection' && mode === 'page' && options?.pageDraftId) ? { mode: from, workspaceId: state.bundle?.workspaceId, scrollY: global.scrollY,
         focusKey: typeof options.originFocusKey === 'string' ? options.originFocusKey : control?.dataset.focusKey, focusId: control?.id,
         focusName: control?.getAttribute('aria-label') || control?.textContent, focusTag: control?.tagName,
+        ...(options.featureNavigation === true ? { featureNavigation: true, parentOrigin: viewOrigins.get(from) || null } : {}),
         ...(from === 'home' ? { homeState: home?.captureState() } : {}) } :
         from === 'source' && mode === 'write' && state.returnContext?.mode === 'home' ? { ...state.returnContext } :
         from === 'source' && mode === 'page' && options.materialWritingSeed && state.returnContext?.workspaceId === state.bundle?.workspaceId
@@ -1241,6 +1268,19 @@
       collection?.flush();
       await flushReadingPosition();
       if (!current()) return false;
+      if (options.exactPost) {
+        const post = await storage.readPhotoPost(workspaceId, options.exactPost.id);
+        if (!current()) return false;
+        if (post.id !== options.exactPost.id || post.status !== 'saved' || post.revision !== options.exactPost.revision) {
+          throw postContextChanged(options.exactPost.id);
+        }
+      }
+      pendingPostReturn = mode === 'page' && options.restorePostOrigin ? { origin: options.restorePostOrigin,
+        navigation: token, workspace, workspaceId, account, input: inputGeneration } : null;
+      if (Object.hasOwn(options, 'restoreViewOrigin')) {
+        if (options.restoreViewOrigin?.workspaceId === workspaceId) viewOrigins.set(mode, options.restoreViewOrigin);
+        else viewOrigins.delete(mode);
+      }
       if (mode !== 'source' || obsidianReaderOrigins.length && obsidianReaderOrigins.at(-1).navigation !== token) obsidianReaderOrigins.length = 0;
       if (naverMediaOrigin && naverMediaOrigin.workspaceId === workspaceId && naverMediaOrigin.account === account && naverMediaOrigin.workspace === workspace) {
         if (from === 'naver-blog' && mode === 'naver-capture' && naverMediaOrigin.navigation === token - 1) naverMediaOrigin.inCapture = true;
@@ -1256,6 +1296,10 @@
       if (mode === 'page') {
         materialWritingTask = !!options.materialWritingSeed || (options.preserveContext === true || returningFromReader) && materialWritingTask;
         blogPageTask = options.blogContext === true || options.preserveContext === true && blogPageTask;
+        if (options.restorePostOrigin) {
+          materialWritingTask = options.restorePostOrigin.materialWritingTask;
+          blogPageTask = options.restorePostOrigin.blogPageTask;
+        }
         if (options.blogContext === true) options = { ...options, homeTab: origin?.homeState?.tab || 'posts' };
         if (!options.preserveContext) { blogMode = options.pageProfileEdit ? 'profile' : options.pageCompose || options.pageDraftId ? 'edit' : null; blogCommitted = null; }
       }
@@ -1267,7 +1311,7 @@
           (mode !== 'source' || (options?.sourceId && !Object.hasOwn(options, 'returnContext')))) state.returnContext = null;
       state.managementOpen = false;
       if (mode === 'source' && !options?.readerArrangeOpen) state.readerArrangeOpen = false;
-      const { navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, ...viewOptions } = options || {};
+      const { navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, ...viewOptions } = options || {};
       if (externalImport) {
         if (mode !== 'import' || externalImport.workspaceId !== state.bundle.workspaceId) return false;
         const input = global.HaedoLife.Discovery.toImportInput(externalImport.article);
@@ -1298,7 +1342,9 @@
       }
       if (!['import', 'batch', 'source'].includes(mode) && !chapterImportOptions) chapterImport = null;
       if (!['import', 'source'].includes(mode)) externalImportContext = null;
-      blogOpenOptions = mode === 'blog' ? { evidenceSeed: options?.evidenceSeed, postId: options?.blogPostId } : null;
+      blogOpenOptions = mode === 'blog' ? { evidenceSeed: options?.evidenceSeed, postId: options?.blogPostId,
+        expectedRevision: options.exactPost?.revision ?? null } : null;
+      preservationOpenOptions = mode === 'preservation' && options.exactPost ? { postIds: [options.exactPost.id], exactPost: options.exactPost } : null;
       collectionOpenOptions = mode === 'collection' ? { itemId: collectionItemId } : null;
       writingOpenOptions = mode === 'write' ? writing || {} : null;
       if (mode === 'source-edit' && options.sourceEdit) sourceEditOpenOptions = options.sourceEdit;
@@ -1540,7 +1586,11 @@
       if (state.mode === 'naver-blog' && currentNaverMediaOrigin()) return returnFromNaverMedia();
       const origin = subviewOrigin();
       const anchor = state.mode === 'page' && blogPageTask && origin.mode === 'home' && origin.homeState?.tab !== 'drafts' ? blogCommitted : null;
-      if (await navigate(origin.mode, { preserveContext: true, homeState: origin.homeState, homeAnchor: anchor, navigationMotion: 'back' }) === false) return;
+      if (await navigate(origin.mode, { preserveContext: true, homeState: origin.homeState, homeAnchor: anchor, navigationMotion: 'back',
+        ...(origin.featureNavigation ? { restoreViewOrigin: origin.parentOrigin } : {}),
+        ...(origin.postTarget ? { restoreViewOrigin: origin.parentOrigin, restorePostOrigin: origin, exactPost: origin.postTarget,
+          blogContext: origin.blogPageTask, searchTarget: { photoPostId: origin.postTarget.id, photoPostRevision: origin.postTarget.revision } } : {}) }) === false) return;
+      if (origin.postTarget) return;
       const token = navigationGeneration;
       const restore = () => requestAnimationFrame(() => {
         if (disposed || token !== navigationGeneration || state.mode !== origin.mode || state.bundle?.workspaceId !== origin.workspaceId || anchor) return;
@@ -1588,7 +1638,7 @@
       status.hidden = state.mode === 'find';
       header.replaceChildren();
       toolbar.classList.add('haedo-page-heading');
-      const openMenuId = toolbar.querySelector('.life-feature-menu[open]')?.id;
+      const openMenuId = main.dataset.mode === state.mode ? toolbar.querySelector('.life-feature-menu[open]')?.id : null;
       const activeMenu = document.activeElement?.closest('.life-feature-menu');
       const menuFocus = activeMenu && toolbar.contains(activeMenu) && main.dataset.mode === state.mode ?
         { id: activeMenu.id, key: document.activeElement.dataset.focusKey, summary: document.activeElement.tagName === 'SUMMARY' } : null;
@@ -1610,9 +1660,7 @@
           }, onError: failure }));
       }
       toolbar.hidden = ['source', 'source-edit'].includes(state.mode) && !state.remoteChanged;
-      recordSections.replaceChildren();
       const focused = ['blog', 'write', 'source-edit', 'source', 'page', 'related', 'collection', 'find'].includes(state.mode);
-      recordSections.hidden = section !== 'records' || focused;
       const heading = node('h1', null, 'life-page-title');
       heading.tabIndex = -1;
       const headingGroup = node('div', null, 'haedo-heading-title');
@@ -1627,16 +1675,17 @@
         const records = button('자료실', guarded(() => navigate('sources')), 'life-title-button');
         records.setAttribute('aria-label', '자료실 목록');
         heading.append(records);
-      } else heading.textContent = section === 'home' ? '내 블로그' : section === 'tools' ? '도구' : '설정';
+      } else heading.textContent = section === 'home' ? '내 블로그' : section === 'tools' ? '계획' : '설정';
       if (subviewTitles[state.mode] && state.mode !== 'external-discovery' && !(state.mode === 'page' && blogPageTask && blogMode === 'edit')) {
-        const labels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '서버 글 목록으로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 확인으로 돌아가기', blog: '글 관리로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '자료실로 돌아가기', topics: '검색 결과로 돌아가기', tools: '도구로 돌아가기', manage: '설정으로 돌아가기' };
-        const back = iconButton(state.mode === 'naver-blog' && currentNaverMediaOrigin() ? '읽던 원문으로 돌아가기' : labels[subviewOrigin().mode] || labels.sources, 'back', guarded(returnFromSubview));
+        const labels = { 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'naver-capture': '본문·사진 검토로 돌아가기', 'account-blog': '서버 글 목록으로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', find: '검색 결과로 돌아가기', reflection: '회고로 돌아가기', home: '홈으로 돌아가기', sources: '자료실로 돌아가기', topics: '검색 결과로 돌아가기', tools: '계획으로 돌아가기', manage: '설정으로 돌아가기', collection: '컬렉션으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', books: '책으로 돌아가기', time: '연표로 돌아가기', import: '가져오기로 돌아가기', write: '자료 작성으로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기' };
+        const origin = subviewOrigin();
+        const back = iconButton(state.mode === 'naver-blog' && currentNaverMediaOrigin() ? '읽던 원문으로 돌아가기' : origin.postTarget ? '읽던 글로 돌아가기' : labels[origin.mode] || labels.sources, 'back', guarded(returnFromSubview));
         back.id = state.mode === 'write' ? 'lifeWritingClose' : 'lifeSubviewReturn';
         back.dataset.subviewReturn = 'true';
         headingGroup.append(back);
       }
       if (section === 'tools' && state.mode !== 'tools' && !subviewTitles[state.mode]) {
-        headingGroup.append(iconButton('도구로 돌아가기', 'back', guarded(() => navigate('tools'))));
+        headingGroup.append(iconButton('계획으로 돌아가기', 'back', guarded(() => navigate('tools'))));
       }
       if (state.mode === 'related') {
         const back = iconButton(relatedOrigin?.workspaceId === state.bundle?.workspaceId ? '읽던 글로 돌아가기' : '자료실로 돌아가기', 'back', guarded(returnFromRelated));
@@ -1655,35 +1704,25 @@
           }));
           select.id = 'lifeSelectionToggle';
           select.setAttribute('aria-pressed', String(state.selecting));
-          recordSections.append(select);
+          toolbar.append(select);
         }
-        [['collection', '컬렉션'], ['activities', '묶음'], ['page', '선택 자료 페이지']].forEach(([mode, label]) => {
-          const tab = button(label, guarded(() => navigate(mode)));
-          if (state.mode === mode || (mode === 'sources' && state.mode === 'source')) tab.setAttribute('aria-current', 'page');
-          recordSections.append(tab);
-        });
       }
       if (!focused && (section === 'records' || section === 'home')) {
         const nav = node('nav', null, 'life-nav life-context-nav');
         nav.setAttribute('aria-label', '기록 보기');
-        (section === 'records' ? [['time', '시간 보기', 'timeline']] : []).forEach(([mode, label, icon]) => {
-          const tab = iconButton(label, icon, guarded(() => navigate(mode)));
-          if (state.mode === mode || mode === 'sources' && state.mode === 'source') tab.setAttribute('aria-current', 'page');
-          nav.append(tab);
-        });
         const add = iconButton('가져오기', 'plus', guarded(async () => {
           if (!state.stage || state.stage.state !== 'draft') newDraft();
           await navigate('import');
         }));
         if (state.mode === 'import' || state.mode === 'batch') add.setAttribute('aria-current', 'page');
         // Home exposes these actions with labels in its shortcut row.
-        if (section === 'records') nav.append(add, iconButton('글쓰기', 'edit', guarded(() => navigate('write'))));
+        if (section === 'records') nav.append(add);
         toolbar.append(nav);
       }
       if (!['source', 'find'].includes(state.mode)) {
         const find = iconButton('통합 검색', 'search', guarded(() => navigate('find'))); find.id = 'lifeFindOpen'; toolbar.append(find);
       }
-      if (state.mode === 'sources' || state.mode === 'home') {
+      if (section === 'records' && (!focused || state.mode === 'collection') || state.mode === 'home') {
         const menu = featureMenu(state.mode === 'home');
         menu.open = menu.id === openMenuId;
         toolbar.append(menu);
@@ -1771,7 +1810,11 @@
         const section = node('section'); section.setAttribute('aria-label', name);
         section.append(node('h2', name));
         for (const [name, glyph, mode, id] of items) {
-          const control = actionRow(name, '', glyph, () => navigate(mode));
+          const control = actionRow(name, '', glyph, () => {
+            if (state.mode === mode) { menu.open = false; summary.focus({ preventScroll: true }); return; }
+            return navigate(mode, { featureNavigation: true });
+          });
+          if (state.mode === mode) control.setAttribute('aria-current', 'page');
           control.dataset.focusKey = (blog ? 'home:menu:' : 'records:menu:') + mode;
           if (id) control.id = id;
           if (mode === 'blog') { control.dataset.homeDestination = 'blog'; control.dataset.focusKey = 'home:action:blog'; }
@@ -1781,15 +1824,17 @@
         return section;
       };
       if (blog) group('글·공개', [
-        ['글 관리', 'edit', 'blog'], ['공개 표지', 'link', 'public-cover'], ['공개 페이지 관리', 'link', 'public-pages']
+        ['글 공개·보관', 'edit', 'blog'], ['공개한 페이지', 'link', 'public-pages'], ['공개 표지', 'link', 'public-cover']
       ]);
       else {
-        group('활용', [['다시 찾기', 'search', 'discover'], ['회고', 'book', 'reflection'], ['책 만들기', 'book', 'books']]);
+        group('모아 보기', [['컬렉션', 'bookmark', 'collection'], ['묶음', 'link', 'activities'], ['선택 자료 페이지', 'user', 'page']]);
+        group('활용', [['다시 찾기', 'search', 'discover'], ['회고', 'book', 'reflection'], ['책 만들기', 'book', 'books'], ['연표', 'timeline', 'time']]);
         const management = group('가져오기·관리', [
+          ['자료 작성', 'edit', 'write'],
           ['네이버 블로그 연결', 'link', 'naver-blog'], ['Obsidian 갱신', 'refresh', 'obsidian-update', 'lifeObsidianUpdateOpen']
         ]);
         const originals = actionRow('원본 첨부 보관', '', 'download', async () => {
-          const origin = { mode: 'sources', workspaceId: state.bundle.workspaceId, scrollY: global.scrollY, focusKey: 'records:menu:originals' };
+          const origin = { mode: state.mode, workspaceId: state.bundle.workspaceId, scrollY: global.scrollY, focusKey: 'records:menu:originals' };
           originalAttachmentsUI?.dispose();
           originalAttachmentsUI = await global.LifeOriginalAttachmentsUI.open({ auth, storage,
             onOpenSource: match => openOriginalSource(match, origin).catch(failure) });
@@ -1976,10 +2021,44 @@
       await instance.mount(host);
     }
 
+    async function openPostAction(mode, postId, options = {}) {
+      if (state.mode !== 'page' || !['blog', 'preservation'].includes(mode)) return false;
+      const workspaceId = state.bundle?.workspaceId, workspace = workspaceGeneration, navigation = navigationGeneration, account = state.syncAccountKey;
+      const current = () => !disposed && state.mode === 'page' && state.bundle?.workspaceId === workspaceId &&
+        workspace === workspaceGeneration && navigation === navigationGeneration && account === state.syncAccountKey;
+      if (typeof postId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(postId) || !Number.isSafeInteger(options.expectedRevision) || options.expectedRevision < 1) {
+        throw new Error('읽던 글의 정확한 판을 확인해 주세요.');
+      }
+      const post = await storage.readPhotoPost(workspaceId, postId);
+      if (!current()) return false;
+      if (post.id !== postId || post.status !== 'saved' || post.revision !== options.expectedRevision) {
+        throw postContextChanged(postId);
+      }
+      const postTarget = { id: post.id, revision: post.revision };
+      const origin = { mode: 'page', workspaceId, scrollY: global.scrollY, focusKey: options.originFocusKey,
+        postTarget, blogPageTask, materialWritingTask, parentOrigin: viewOrigins.get('page') || null };
+      return navigate(mode, { viewOrigin: origin, exactPost: postTarget, blogPostId: mode === 'blog' ? post.id : undefined });
+    }
+
+    function restorePostReturn(context) {
+      const pending = pendingPostReturn;
+      if (!pending || context.mode !== 'read' || context.id !== pending.origin.postTarget.id) return;
+      pendingPostReturn = null;
+      requestAnimationFrame(() => {
+        if (disposed || state.mode !== 'page' || navigationGeneration !== pending.navigation || workspaceGeneration !== pending.workspace ||
+          state.bundle?.workspaceId !== pending.workspaceId || state.syncAccountKey !== pending.account || inputGeneration !== pending.input) return;
+        const target = [...main.querySelectorAll('[data-focus-key]')].find(control => control.dataset.focusKey === pending.origin.focusKey);
+        for (let parent = target?.parentElement; parent && parent !== main; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
+        target?.focus({ preventScroll: true });
+        global.scrollTo({ top: pending.origin.scrollY, behavior: 'instant' });
+      });
+    }
+
     async function renderBlogManager() {
       const workspaceId = state.bundle.workspaceId;
       const host = node('section'); host.id = 'lifeBlogManager'; main.append(host);
       const instance = global.HaedoLife.BlogManager.create({ storage, workspaceId, auth, blogSync,
+        onOpenAccountBlog: options => navigate('account-blog', { originFocusKey: options?.originFocusKey }),
         onOpenEvidence: (reference, context = {}) => openManagedSource(workspaceId, { sourceId: reference.sourceId, sourceVersionId: reference.sourceVersionId, locator: { ...reference.locator } }, context, reference),
         isCurrent: () => !disposed && state.mode === 'blog' && state.bundle?.workspaceId === workspaceId,
         openPost: (postId, options = {}) => navigate('page', { blogContext: true, searchTarget: { photoPostId: postId, photoPostRevision: options.expectedRevision }, pagePreview: false, originFocusKey: options.focusKey }),
@@ -1993,9 +2072,17 @@
     }
 
     async function renderPreservation() {
-      const workspaceId = state.bundle.workspaceId, workspaceToken = workspaceGeneration;
-      const isCurrent = () => !disposed && workspaceToken === workspaceGeneration &&
+      const workspaceId = state.bundle.workspaceId, workspaceToken = workspaceGeneration, navigationToken = navigationGeneration;
+      const openOptions = preservationOpenOptions || {}; preservationOpenOptions = null;
+      const isCurrent = () => !disposed && workspaceToken === workspaceGeneration && navigationToken === navigationGeneration &&
         state.mode === 'preservation' && state.bundle?.workspaceId === workspaceId;
+      if (openOptions.exactPost) {
+        const post = await storage.readPhotoPost(workspaceId, openOptions.exactPost.id);
+        if (!isCurrent()) return;
+        if (post.id !== openOptions.exactPost.id || post.status !== 'saved' || post.revision !== openOptions.exactPost.revision) {
+          throw postContextChanged(openOptions.exactPost.id);
+        }
+      }
       const host = node('section'); host.id = 'lifePreservationHost'; main.append(host);
       const service = global.HaedoLife.Preservation.create({ storage, workspaceId, isCurrent });
       const instance = global.HaedoLife.PreservationUI.create({ service, isCurrent,
@@ -2025,7 +2112,8 @@
           announce('복원한 글과 원문 근거를 열었습니다. 원래 작업공간은 유지됩니다.');
         }
       });
-      preservationUI = instance; await instance.mount(host);
+      preservationUI = instance; await instance.mount(host, { postIds: openOptions.postIds || [],
+        expectedPostRevisions: openOptions.exactPost ? { [openOptions.exactPost.id]: openOptions.exactPost.revision } : {} });
     }
 
     async function openOriginalSource(match, origin) {
@@ -2052,7 +2140,7 @@
       if (disposed || installedWorkspace !== workspaceGeneration || navigation !== navigationGeneration || state.bundle?.workspaceId !== bundle.workspaceId) return;
       connectSubscription();
       return navigate('source', { sourceId: version.sourceId, sourceVersionId: version.id,
-        returnContext: { mode: 'sources', workspaceId: bundle.workspaceId, focusKey: 'records:menu:originals',
+        returnContext: { mode: sameWorkspace && origin?.mode ? origin.mode : 'sources', workspaceId: bundle.workspaceId, focusKey: 'records:menu:originals',
           folderFilter: sameWorkspace ? state.folderFilter : 'all', scrollY: origin?.workspaceId === bundle.workspaceId ? origin.scrollY : 0 } });
     }
 
@@ -2082,18 +2170,18 @@
     }
 
     function renderManagement() {
-      const manage = actionRow('자료 관리', (managedLibrary ? '자료 ' : '이 브라우저 · 자료 ') + state.bundle.sources.length + '개 · 발췌 ' + state.bundle.records.length + '개', 'book', () => {}, state.bundle.title || '내 자료');
+      const manage = actionRow('현재 자료공간', (managedLibrary ? '자료 ' : '이 브라우저 · 자료 ') + state.bundle.sources.length + '개 · 발췌 ' + state.bundle.records.length + '개', 'book', () => {}, state.bundle.title || '내 자료');
       manage.id = 'lifeCurrentWorkspace';
-      manage.setAttribute('aria-label', '자료 관리');
+      manage.setAttribute('aria-label', '현재 자료공간');
       manage.setAttribute('aria-description', '현재 작업공간. 눌러 다른 작업공간을 선택합니다.');
       const management = node('section', null, 'life-management');
       management.id = 'lifeManagement';
       management.hidden = !state.managementOpen;
-      management.setAttribute('aria-label', '자료 관리');
-      const close = iconButton('자료 관리 닫기', 'close', () => setManagement(false));
+      management.setAttribute('aria-label', '현재 자료공간');
+      const close = iconButton('자료공간 닫기', 'close', () => setManagement(false));
       const setManagement = disclosure(manage, management, { onChange: open => { state.managementOpen = open; } });
       const managementHeading = node('div', null, 'life-panel-heading');
-      managementHeading.append(node('h2', '자료 관리'), close);
+      managementHeading.append(node('h2', '현재 자료공간'), close);
       management.append(managementHeading);
       const workspace = selectField('작업공간', 'lifeWorkspace', state.workspaces.map(w => [w.workspaceId, w.title]), state.bundle.workspaceId);
       workspace.input.addEventListener('change', guarded(async () => {
@@ -2140,19 +2228,26 @@
       backups.setAttribute('aria-labelledby', 'lifeBackupChoices');
       const heading = node('h2', '파일로 보관'); heading.id = 'lifeBackupChoices';
       backups.append(heading);
+      const materialFiles = node('section', null, 'life-backup-group'); materialFiles.id = 'lifeBackupMaterials'; materialFiles.setAttribute('aria-label', '자료·글');
+      materialFiles.append(node('h3', '자료·글'));
+      const planningFiles = node('section', null, 'life-backup-group'); planningFiles.id = 'lifeBackupPlanning'; planningFiles.setAttribute('aria-label', '계획·연표');
+      planningFiles.append(node('h3', '계획·연표'));
       const destinations = node('div', null, 'life-destinations');
       destinations.append(actionRow('자료·구성 백업', '원문·발췌와 폴더·묶음·내 페이지·회고·책을 함께', 'download', () => navigate('workbench-backup')));
       destinations.append(actionRow('내보내기·사본 복원', '자료만 JSON·Markdown으로 · 구성 제외', 'book', () => navigate('transfer')));
-      destinations.append(destinationRow('연표·목표·습관 백업·복원', '위 두 파일에 포함되지 않는 별도 자료', 'workspace.html?section=manage#backupAll', 'timeline'));
       destinations.append(actionRow('컬렉션 백업·복구', '컬렉션 정보·비공개 메모를 별도 파일로 보관', 'bookmark', async () => { await navigate('collection'); collection?.showBackup(); }));
       const preservation = actionRow('보관 범위·근거 파일', '선택한 글·9칸과 정확한 원문 근거', 'download', () => navigate('preservation'));
       preservation.id = 'lifePreservationOpen'; destinations.append(preservation);
-      destinations.append(actionRow('연간 계획 파일', '연간·월별 계획의 전용 백업·복원', 'timeline', async () => {
+      materialFiles.append(destinations);
+      const planningDestinations = node('div', null, 'life-destinations');
+      planningDestinations.append(actionRow('연간 계획 파일', '연간·월별 계획의 전용 백업·복원', 'timeline', async () => {
         if (await navigate('annual-plan') === false) return;
         const panel = main.querySelector('#apSettings');
         if (panel) { panel.open = true; panel.querySelector('summary')?.focus(); panel.scrollIntoView({ block: 'nearest' }); }
       }));
-      backups.append(destinations);
+      planningDestinations.append(destinationRow('연표·목표·습관 백업·복원', '연간 계획 파일과 별도 형식', 'workspace.html?section=manage#backupAll', 'timeline'));
+      planningFiles.append(planningDestinations);
+      backups.append(materialFiles, planningFiles);
       main.append(backups);
     }
 
@@ -2460,7 +2555,7 @@
     }
 
     function searchReturnButton() {
-      const labels = { 'naver-capture': '본문·사진 검토로 돌아가기', 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 확인으로 돌아가기', blog: '글 관리로 돌아가기', home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
+      const labels = { 'naver-capture': '본문·사진 검토로 돌아가기', 'naver-blog': '네이버 블로그 목록으로 돌아가기', 'external-discovery': '새 글 찾기로 돌아가기', interests: '관심 주제 편집으로 돌아가기', blog: '글 공개·보관으로 돌아가기', home: '홈으로 돌아가기', activities: '묶음으로 돌아가기', page: '선택 자료 페이지로 돌아가기', discover: '다시 찾기로 돌아가기', related: '관련 기록으로 돌아가기', reflection: '회고로 돌아가기', books: '책으로 돌아가기' };
       const back = iconButton(labels[state.returnContext?.mode] || '검색 결과로 돌아가기', 'back', guarded(returnToResults));
       back.id = 'lifeSearchReturn';
       return back;
@@ -2791,7 +2886,7 @@
       controls.append(iconButton('선택 모두 해제', 'close', () => { selectedVersions.clear(); update(); selectionSummary.focus(); }));
       const cancelSelection = button('선택 취소', () => {
         selectedVersions.clear(); state.selecting = false; render();
-        recordSections.querySelector('#lifeSelectionToggle')?.focus({ preventScroll: true });
+        toolbar.querySelector('#lifeSelectionToggle')?.focus({ preventScroll: true });
       });
       selectionBar.append(selectionDetails, selectionStatus, controls, cancelSelection);
       function updateSelection(matches) {
@@ -4979,6 +5074,7 @@
       if (disposed) return;
       delete document.body.dataset.writingFocus;
       disposed = true;
+      pendingPostReturn = preservationOpenOptions = null;
       libraryRefresh++; unsubscribeLibrary?.(); metadataCleanup?.(); metadataCleanup = null;
       sourceFoldersMount?.dispose(); sourceFoldersMount = null; sourceFoldersUpdate = null;
       sourceFoldersUI?.dispose(); sourceFoldersUI = null; sourceFoldersWorkspace = null;

@@ -7,6 +7,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const {FakeCloud,platformContext,cloud,openManagement,openSection}=require('./life-sync-browser.cjs');
+const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 
 function loadPlaywright() {
   const candidates = [process.env.PW_MODULE_PATH, 'playwright', 'playwright-core',
@@ -147,11 +148,12 @@ async function applicationChecks(browser, observe) {
   const settle = () => page.waitForFunction(() => !document.querySelector('.life-app[aria-busy="true"]'));
   async function click(name) {
     if (name === '내보내기·사본 복원') await openManagement(page);
-    if (['자료실','기록 검색','가져오기','시간 보기'].includes(name)) {
+    if (['자료실','기록 검색','가져오기','연표'].includes(name)) {
       await openSection(page, 'records');
       if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'sources') { await page.locator('[data-haedo-navigation] [data-haedo-section="records"]').click(); await settle(); }
     }
     if (['기록 검색', '자료실'].includes(name)) return;
+    if (name === '연표') await openRecordsMenu(page);
     await page.getByRole('button',{name,exact:true}).click(); await settle();
   }
   async function mounted() {
@@ -366,7 +368,7 @@ async function applicationChecks(browser, observe) {
     await check('UI: explicit legacy lookup excludes unscoped documents and preserves them', async () => {
       assert.equal(await page.evaluate(() => __legacyAccess.some(x => x.kind !== 'read')),false);
       assert.equal(await page.evaluate(() => __legacyAccess.length),0);
-      await click('시간 보기'); await click('기존 연표 목록 확인');
+      await click('연표'); await click('기존 연표 목록 확인');
       assert.doesNotMatch(await page.locator('#lifeMain').textContent(),/익명 기존 연표/);
       assert.equal(await page.evaluate(() => __legacyAccess.length),0);
       const actual = await page.evaluate(keys => Object.fromEntries(keys.map(key => [key,localStorage.getItem(key)])),Object.keys(legacySeed));

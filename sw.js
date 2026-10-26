@@ -1,5 +1,5 @@
 /* Versioned static shell. Private account data uses verified services and cache/outbox storage. */
-const CACHE='haedo-v163';
+const CACHE='haedo-v164';
 const SHELL=[
   './assets/life/library-meta.js','./assets/life/library-remote.js','./assets/life/library-meta-sync.js','./assets/life/library-originals-remote.js','./assets/life/account-library.js',
   './assets/life/source-folders.js','./assets/life/source-folders-ui.js','./assets/life/source-folders.css',

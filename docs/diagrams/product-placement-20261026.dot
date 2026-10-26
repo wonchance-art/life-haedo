@@ -1,0 +1,49 @@
+// Regenerate with system Graphviz + Noto Sans CJK KR:
+// dot -Tsvg docs/diagrams/product-placement-20261026.dot -o docs/diagrams/rendered/product-placement-20261026.svg
+// dot -Tpng -Gdpi=144 docs/diagrams/product-placement-20261026.dot -o docs/diagrams/rendered/product-placement-20261026.png
+// dot -Tpdf docs/diagrams/product-placement-20261026.dot -o docs/diagrams/rendered/product-placement-20261026.pdf
+digraph HaedoPlacement {
+  graph [rankdir=TB, bgcolor="white", pad="0.34", nodesep="0.30", ranksep="0.52", splines=line,
+    fontname="Noto Sans CJK KR", fontsize=15, fontcolor="#30313a", labelloc=t,
+    label="해도 · 목적별 기능 배치\n목적별 구현 구조 · 출시 상태는 검수 기록 · 2026.10.26\n "];
+  node [shape=box, style=filled, fillcolor="#f4f4f6", color="#91939d", penwidth=1,
+    width=2.72, height=1.05, margin="0.12,0.15", fontname="Noto Sans CJK KR", fontsize=14, fontcolor="#2d2b35"];
+  edge [color="#8a8692", penwidth=1, dir=none];
+
+  H [label="홈\n내 글 쓰고 다시 읽기", fillcolor="#ede9fe", color="#8874b2", fontsize=18];
+  N [label="뉴스\n새로운 글 발견", fillcolor="#ede9fe", color="#8874b2", fontsize=18];
+  L [label="자료실\n보관한 자료 읽고 활용", fillcolor="#ede9fe", color="#8874b2", fontsize=18];
+  P [label="계획\n앞으로 할 일 정하기", fillcolor="#ede9fe", color="#8874b2", fontsize=18];
+  S [label="설정\n계정 보관·복구", fillcolor="#ede9fe", color="#8874b2", fontsize=18];
+
+  H1 [label="작성·재열기\n새 글 / 글·초안·보관함\n검색·사진·대상 첨부"];
+  H2 [label="글·공개 메뉴\n글 공개·보관 / 공개한 페이지\n공개 표지 · 고른 내용만 명시 공개"];
+  N1 [label="읽기·반응\n피드·좋아요·담기\n원문·번역·선택 자료 보관"];
+  N2 [label="뉴스 설정\n관심 주제·언어·추천\n출처·갱신 / 기록 관리"];
+  L1 [label="찾기·읽기·선택 활용\n검색·폴더·가져오기\n원문·발췌·자료 작성"];
+  L2 [label="자료 메뉴 · 모아 보기\n컬렉션·묶음·선택 자료 페이지\n활용·가져오기·관리"];
+  P1 [label="계획과 실천\n연간 계획·목표·습관\n저장 후 서로 이동"];
+  P2 [label="각 도구의 설정·파일\n기존 저장·복구 범위 유지\n도구 간 자동 변환 없음"];
+  S1 [label="계정·자료공간\n계정 보관 상태·재시도\n현재 공간 선택"];
+  S2 [label="파일로 보관 · 자료·글 / 계획·연표\n자료·구성 / 내보내기·사본 복원\n컬렉션 / 보관 범위·근거 파일\n연표·목표·습관 / 연간 계획"];
+
+  F [shape=plaintext, style="", width=0, height=0, fontsize=13,
+    label="선은 같은 메뉴의 기능 묶음입니다. 모든 기능을 차례로 거칠 필요는 없습니다.\n선택한 흐름: 뉴스 → 자료 보관 → 정확 원문 → 내 글·회고·책 중 필요한 결과 → 출발 맥락 복귀\n자료 구성은 접힌 ‘모아 보기’에서 선택합니다. ‘자료 작성’과 ‘내 글 쓰기’, 기능별 보관 범위는 구분합니다."];
+
+  {rank=same; H; N; L; P; S;}
+  {rank=same; H1; N1; L1; P1; S1;}
+  {rank=same; H2; N2; L2; P2; S2;}
+  H -> N -> L -> P -> S [style=invis, weight=100];
+  H1 -> N1 -> L1 -> P1 -> S1 [style=invis, weight=100];
+  H2 -> N2 -> L2 -> P2 -> S2 [style=invis, weight=100];
+  H -> H1 -> H2;
+  N -> N1 -> N2;
+  L -> L1 -> L2;
+  P -> P1 -> P2;
+  S -> S1 -> S2;
+  H2 -> F [style=invis];
+  N2 -> F [style=invis];
+  L2 -> F [style=invis];
+  P2 -> F [style=invis];
+  S2 -> F [style=invis];
+}

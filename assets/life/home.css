@@ -12,11 +12,7 @@
 .home-profile-bar > .home-blog-action { flex: none; min-height: 44px; border-color: var(--line); border-radius: 12px; padding-inline: 14px; background: var(--paper); color: var(--ink-soft); font-size: 13px; font-weight: 550; }
 .home-profile-bar > .home-blog-action:hover:not(:disabled) { border-color: var(--field-line); background: var(--soft); color: var(--color-primary); }
 .home-blog-action > .life-glyph { width: 16px; height: 16px; flex: none; }
-.home-blog-actions { display: flex; align-items: center; gap: 8px; margin-top: 16px; border: 1px solid var(--line); border-radius: 14px; padding: 5px; background: var(--paper); }
-.home-blog-actions > .home-compose-prompt { display: flex; flex: 1; align-items: center; justify-content: flex-start; gap: 10px; min-width: 0; min-height: 44px; border: 0; border-radius: 9px; padding: 10px 12px; background: transparent; color: var(--ink-soft); font-size: 15px; font-weight: 500; text-align: left; }
-.home-compose-prompt > .life-glyph { flex: none; width: 20px; height: 20px; color: var(--color-primary); }
-.home-compose-label { overflow: hidden; min-width: 0; text-overflow: ellipsis; white-space: nowrap; }
-.home-blog-actions > .home-compose-prompt:hover:not(:disabled) { background: var(--soft); color: var(--color-primary); }
+.home-blog-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .home-blog-actions > .home-blog-write { flex: none; min-height: 44px; border-radius: 10px; padding-inline: 18px; font-size: 14px; font-weight: 700; }
 #homePosts { margin-top: 0; }
 #homePosts > .home-section-heading { min-height: 52px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -106,7 +102,6 @@
   .home-profile-edit-label { display: none; }
   .home-blog-lead { padding-top: 4px; padding-bottom: 12px; }
   .home-blog-actions { gap: 4px; margin-top: 16px; }
-  .home-blog-actions > .home-compose-prompt { gap: 8px; padding-inline: 8px; font-size: 15px; }
   .home-blog-actions > .home-blog-write { padding-inline: 14px; }
   .home-profile-bar { gap: 8px; }
   .home-profile-open { gap: 10px; }

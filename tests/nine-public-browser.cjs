@@ -324,7 +324,7 @@ async function main() {
       const deleted = await original(); for (const key of Object.keys(prior).filter(key => key !== 'nine')) assert.deepEqual(deleted[key], prior[key]);
       assert(!deleted.nine.boards.find(b => b.id === fixture.boardId).areas.some(a => a.id === fixture.emptyAreaId));
       await openBlogMenu(page);
-      await page.getByText('공개 페이지 관리', { exact: true }).click(); await page.locator('#wbPublicPages').waitFor();
+      await page.getByText('공개한 페이지', { exact: true }).click(); await page.locator('#wbPublicPages').waitFor();
       const row = page.locator('.wb-public-page[data-workspace-id="' + fixture.emptyAreaId + '"]'); await row.waitFor();
       assert.equal(await row.locator('h3').innerText(), '영역 삭제 뒤 관리할 공개 9칸');
       await row.locator('.wb-public-revoke').click(); await row.locator('.wb-public-revoke-confirm').waitFor();

@@ -130,7 +130,9 @@ async function main() {
       await page.locator('.wb-discovery-result[data-version-id="' + refs.photo.versionId + '"] .wb-discovery-arrange').click(); await page.locator('#wbIncomingSelection').waitFor();
       assert.deepEqual(await page.locator('#wbIncomingSelection input[data-version-id]:checked').evaluateAll(nodes => nodes.map(node => node.dataset.versionId)), [refs.walk.versionId, refs.photo.versionId]);
       await page.locator('#wbIncomingTitle').fill(samples[0].title); await page.locator('#wbIncomingApply').click(); let state = await saved(page); assert.equal(state.workbench.groups.length, 1); assert.deepEqual(state.bundle, original);
-      await page.locator('article[data-group-id]').getByRole('button', { name: '이 묶음을 내 페이지에 추가', exact: true }).click(); await saved(page); await page.getByRole('button', { name: '선택 자료 페이지', exact: true }).click(); await page.locator('.wb-page-entry').waitFor();
+      await page.locator('article[data-group-id]').getByRole('button', { name: '이 묶음을 내 페이지에 추가', exact: true }).click(); await saved(page);
+      await page.locator('#lifeRecordsMenu > summary').click();
+      await page.getByRole('button', { name: '선택 자료 페이지', exact: true }).click(); await page.locator('.wb-page-entry').waitFor();
       const entry = page.locator('.wb-page-entry').first(), entryId = await entry.getAttribute('data-entry-id');
       await verifyPageBody(entry.locator('.wb-page-content [data-version-id="' + refs.walk.versionId + '"]'), samples[0].text, { folded: true });
       await entry.locator('.wb-page-entry-edit > summary').click(); const note = entry.getByLabel('내 코멘트', { exact: true });

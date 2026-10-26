@@ -137,7 +137,7 @@ async function main() {
     originalA = await preserved(a.page); originalB = await preserved(b.page);
     // Preserve an existing whole-library view while focused server management
     // must show its exact destination independently of that old search/filter.
-    await openBlogMenu(a.page); await a.page.getByRole('button', { name: '글 관리', exact: true }).click(); await managerReady(a.page);
+    await openBlogMenu(a.page); await a.page.getByRole('button', { name: '글 공개·보관', exact: true }).click(); await managerReady(a.page);
     await a.page.locator('#blogManagerSearch').fill('일치하지 않는 기존 목록 검색');
     await a.page.locator('#blogManagerFilter').selectOption('archived');
     await nav(a.page, 'home');
@@ -249,7 +249,7 @@ async function main() {
       assert.deepEqual(content((await state(a.page)).docs.find(d => d.id === returnedA.id)), content(returnedA)); assert.deepEqual(writes(), before);
     });
     await check('Only the chosen photo is public; anonymous original bytes and withdrawal are verified after owner completion', async () => {
-      active = a.page; await openBlogMenu(a.page); await a.page.getByRole('button', { name: '글 관리', exact: true }).click(); await managerReady(a.page);
+      active = a.page; await openBlogMenu(a.page); await a.page.getByRole('button', { name: '글 공개·보관', exact: true }).click(); await managerReady(a.page);
       assert.equal(await a.page.locator('#blogManagerSearch').inputValue(), '일치하지 않는 기존 목록 검색');
       assert.equal(await a.page.locator('#blogManagerFilter').inputValue(), 'archived');
       await a.page.locator('#blogManagerSearch').fill(''); await a.page.locator('#blogManagerFilter').selectOption('all');

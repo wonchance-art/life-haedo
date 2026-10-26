@@ -33,7 +33,7 @@ async function news(page) {
 }
 async function topics(page) { await settings(page); const details = page.locator('#discoveryTopics'); if (!await details.evaluate(el => el.open)) await details.locator(':scope > summary').click(); }
 async function sort(page, mode) { await news(page); await page.locator('#discoverySort').selectOption(mode); await idle(page); }
-async function refresh(page) { await settings(page); await page.locator('#discoveryRefresh').click(); }
+async function refresh(page) { await options(page); await page.locator('#discoveryRefresh').click(); }
 async function open(page) { await page.goto(entry); await ready(page); await page.locator('#discoveryReview').waitFor(); await idle(page); }
 async function snapshot(page) { return page.evaluate(async () => { const s = HaedoLife.Shell.storage, w = await s.getActive(); return { bundle: await s.read(w), workbench: await s.readWorkbench(w), profile: await s.readInterestProfile(w), feedback: await s.readDiscoveryProfile(w), settings: await s.readDiscoverySettings(w) }; }); }
 async function preserve(page, before) { const after = await snapshot(page); for (const key of ['bundle', 'workbench', 'feedback']) assert.deepEqual(after[key], before[key], key + ' remains exact'); return after; }
@@ -62,7 +62,7 @@ async function feedRoute(context) {
   control.release = () => { control.hold = false; control.gates.splice(0).forEach(resolve => resolve()); };
   return control;
 }
-async function options(page) { await topics(page); const d = page.locator('#discoveryOptions'); if (!await d.getAttribute('open').then(x => x !== null)) await d.locator('summary').click(); }
+async function options(page) { await settings(page); const d = page.locator('#discoveryOptions'); if (!await d.getAttribute('open').then(x => x !== null)) await d.locator(':scope > summary').click(); }
 async function auto(page, checked) { await options(page); await page.locator('#discoveryAutoRefresh').setChecked(checked); await wait(page, async value => { const s = HaedoLife.Shell.storage; return (await s.readDiscoverySettings(await s.getActive())).autoRefresh === value; }, checked, 'stored automatic option'); await idle(page); }
 async function clock(page) { await page.clock.install({ time: new Date() }); }
 async function advance(page, ms) { await page.clock.fastForward(ms); await page.waitForTimeout(80); }
@@ -116,7 +116,7 @@ async function main() {
       await topics(page); await page.locator(selector).check(); await idle(page); assert.ok(!(await snapshot(page)).settings.disabledInterestIds.includes(item.id));
     });
     await check('turning off every source is preserved as zero sources in both list orders', async ({ page }) => {
-      const before = await seed(page); await sort(page, 'related'); assert.equal(await page.locator('#discoveryRecommended').getAttribute('aria-pressed'), 'true'); await options(page); const ids = await page.locator('[data-discovery-source]').evaluateAll(nodes => nodes.map(x => x.dataset.discoverySource)); assert.ok(ids.length >= 2);
+      const before = await seed(page); await sort(page, 'related'); assert.equal(await page.locator('#discoverySort').inputValue(), 'related'); await options(page); const ids = await page.locator('[data-discovery-source]').evaluateAll(nodes => nodes.map(x => x.dataset.discoverySource)); assert.ok(ids.length >= 2);
       for (const id of ids) { await options(page); await page.locator('[data-discovery-source="' + id + '"]').uncheck(); await idle(page); }
       assert.equal(await page.locator('[data-discovery-id]').count(), 0); await sort(page, 'latest'); assert.equal(await page.locator('[data-discovery-id]').count(), 0);
       await page.reload(); await ready(page); await idle(page); await options(page); assert.equal(await page.locator('[data-discovery-source]:checked').count(), 0); assert.equal(await page.locator('[data-discovery-id]').count(), 0); assert.deepEqual(new Set((await snapshot(page)).settings.disabledSourceIds), new Set(ids)); await preserve(page, before);
