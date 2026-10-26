@@ -91,6 +91,7 @@
     isCurrent,
     blogSync = null,
     onManageServer = null,
+    onPreservePost = null,
     onDirty = () => {},
     onSaved = () => {},
     onCommitted = () => {},
@@ -110,6 +111,7 @@
       checkpointing = null,
       epoch = 0,
       busy = false,
+      navigating = false,
       composing = false,
       error = null,
       selected = null,
@@ -277,7 +279,7 @@
       return node;
     }
     async function run(task) {
-      if (busy || !valid()) return;
+      if (busy || navigating || !valid()) return;
       try {
         await task();
       } catch (e) {
@@ -702,6 +704,18 @@
       return current(token) && mode === "read" && doc?.status === "saved" && doc.id === id &&
         doc.revision === revision && sequence === serverSequence;
     }
+    async function openPostTask(callback, originFocusKey) {
+      if (typeof callback !== "function" || mode !== "read" || doc?.status !== "saved") return;
+      guard();
+      const token = epoch, id = doc.id, revision = doc.revision;
+      navigating = true;
+      try {
+        await flush();
+        if (!current(token) || mode !== "read" || doc?.id !== id || doc.revision !== revision || doc.status !== "saved") return;
+        await callback(id, { expectedRevision: revision, originFocusKey });
+      }
+      finally { navigating = false; }
+    }
     function showServerStatus() {
       if (!serverStatus || !serverActions || mode !== "read" || doc?.status !== "saved") return;
       const state = serverValue?.id === doc.id && serverValue.revision === doc.revision ? serverValue.status : "checking";
@@ -724,11 +738,10 @@
         retry.id = "photoServerRetry";
         serverActions.append(retry);
       } else if (state === "conflict" && onManageServer) {
-        serverActions.append(button("글 관리에서 서버 내용 확인", async () => {
-          const token = epoch, id = doc.id;
-          await flush();
-          if (current(token) && doc?.id === id) await onManageServer(id);
-        }));
+        const focusKey = "photo:conflict:" + doc.id;
+        const manage = button("글 관리에서 서버 내용 확인", () => openPostTask(onManageServer, focusKey));
+        manage.dataset.focusKey = focusKey;
+        serverActions.append(manage);
       }
       serverActions.hidden = !serverActions.children.length;
     }
@@ -1651,7 +1664,7 @@
           el("summary", "사진 글 보관 안내"),
           el(
             "p",
-            "글과 사진은 먼저 이 브라우저에 보관합니다. 글 관리에서 한 편씩 서버 보관·선택 공개할 수 있습니다. 일반 자료·구성 JSON과 기존 전체 동기화에는 포함되지 않습니다. 다시 편집할 사본은 사진 포함 ZIP으로 옮기고, 읽기만 할 파일은 HTML로 받으세요. 둘 다 원본 사진의 해상도와 바이트를 줄이지 않습니다. 사진 ZIP에는 인용 본문·출처 URL이 남지만 원문 근거 연결 정보는 포함되지 않습니다. 정확한 근거까지 옮기려면 설정의 보관 범위·근거 파일을 이용하세요. 다운로드 후에는 기기의 파일 앱에 실제로 보관됐는지 확인하세요.",
+            "글 저장 시 본문과 사진 원본의 비공개 서버 보관을 요청합니다. 보관 결과는 글의 서버 상태에서 확인하세요. 초안은 이 브라우저에 보관하며 공개는 따로 선택합니다. 일반 자료·구성 JSON에는 포함되지 않습니다. 다시 편집할 사본은 사진 포함 ZIP으로, 읽기만 할 파일은 HTML로 받으세요. 둘 다 원본 사진의 해상도와 바이트를 줄이지 않습니다. 사진 ZIP에는 인용 본문·출처 URL이 남지만 원문 근거 연결 정보는 포함되지 않습니다. 정확한 근거는 글의 더보기나 설정에서 근거 포함 파일로 보관하세요. 다운로드 후에는 기기의 파일 앱에서 저장 여부를 확인하세요.",
             "life-help",
           ),
         );
@@ -1783,6 +1796,16 @@
         const more = el("details", null, "photo-more life-details"),
           menu = el("div", null, "photo-more-menu");
         more.append(iconControl(el("summary"), "more", "더 보기"), menu);
+        if (doc.status === "saved") {
+          for (const [label, callback, action] of [["이 글 공개·보관", onManageServer, "manage"], ["근거 포함 파일", onPreservePost, "preserve"]]) {
+            if (typeof callback !== "function") continue;
+            const focusKey = "photo:" + action + ":" + doc.id;
+            const control = button(label, () => openPostTask(callback, focusKey));
+            control.dataset.focusKey = focusKey;
+            control.dataset.postAction = action;
+            menu.append(control);
+          }
+        }
         menu.append(
           button("HTML 읽기 파일 받기", exportHTML),
           button("사본으로 이어 쓰기", duplicate),
@@ -1806,7 +1829,7 @@
         if (!doc.title.trim()) heading.classList.add("life-sr-only");
         heading.tabIndex = -1;
         const metadata = el("p", (doc.archived ? "보관함 · " : "") +
-          (doc.status === "draft" ? "초안 · " : "비공개 · ") + "이 브라우저", "life-meta photo-read-meta");
+          (doc.status === "draft" ? "초안 · 이 브라우저" : "비공개 원본"), "life-meta photo-read-meta");
         const modified = new Date(doc.updatedAt);
         if (Number.isFinite(modified.getTime())) {
           const time = el("time", new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium" }).format(modified));

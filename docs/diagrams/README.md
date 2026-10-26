@@ -2,7 +2,7 @@
 
 2026-10-26 **현재 기능의 입력 → 처리 → 결과**: [PNG](rendered/product-workflow-20261026.png) · [SVG](rendered/product-workflow-20261026.svg) · [PDF](rendered/product-workflow-20261026.pdf) · [Graphviz 원본](product-workflow-20261026.dot). 뉴스·자료·글·계획·보관의 다섯 흐름과 기능별 저장 범위를 구분한다.
 
-2026-10-26 **목적별 메뉴 배치 설계안**: [PNG](rendered/product-placement-20261026.png) · [SVG](rendered/product-placement-20261026.svg) · [PDF](rendered/product-placement-20261026.pdf) · [Graphviz 원본](product-placement-20261026.dot). 홈·뉴스·자료실·계획(현 도구)·설정으로 목적을 정리한 **운영 화면 미적용 설계**다. [기능별 목적·동선·보존 조건·후속 작업](../design-review/purpose-workflow.md)에서 실제 구현과 제안 변경을 구분한다. 아래 도식은 작성 당시의 이력으로 보존한다.
+2026-10-26 **목적별 구현 구조**: [PNG](rendered/product-placement-20261026.png) · [SVG](rendered/product-placement-20261026.svg) · [PDF](rendered/product-placement-20261026.pdf) · [Graphviz 원본](product-placement-20261026.dot). 홈·뉴스·자료실·계획·설정과 구현한 하위 메뉴를 정리했다. 뉴스 설정의 다섯 목적, 자료 메뉴의 모아 보기, 설정의 자료·글 / 계획·연표 파일 그룹을 표시한다. **출시 상태는 [구현·검수 기록](../design-review/purpose-workflow-implementation.md)을 따른다.** 입력 → 처리 → 결과 도식은 기능별 처리·보관 경계가 같아 유지했다. [설계의 기능 목적·동선·보존 조건](../design-review/purpose-workflow.md)과 설계 당시 도식은 Git 이력에 남아 있다. 아래 도식은 작성 당시의 이력으로 보존한다.
 
 2026-10-20 **Input → Automated Process → Output workflow**: [PNG](rendered/product-workflow-20261020.png) · [SVG](rendered/product-workflow-20261020.svg) · [PDF](rendered/product-workflow-20261020.pdf) · [분류표·이전 workflow 참조](product-workflow-20261020.md) · [Graphviz 원본](product-workflow-20261020.dot). 3열로 입력/처리/결과를 나누고 자동 처리와 명시 선택, 현재 기능과 후속 AI를 구분한다. 이전 상세 workflow와 두 순환 원본도 함께 연결했다.
 

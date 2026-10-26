@@ -6,7 +6,7 @@
     { id: 'home', label: '홈', glyph: 'home', href: 'index.html' },
     { id: 'news', label: '뉴스', glyph: 'news', href: 'index.html?section=news' },
     { id: 'records', label: '자료실', glyph: 'quote', href: 'index.html?section=records' },
-    { id: 'tools', label: '도구', glyph: 'workspace', href: 'index.html?section=tools' },
+    { id: 'tools', label: '계획', glyph: 'workspace', href: 'index.html?section=tools' },
     { id: 'manage', label: '설정', glyph: 'settings', href: 'index.html?section=manage' }
   ];
   const viewSections = Object.freeze({

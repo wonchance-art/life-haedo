@@ -92,30 +92,30 @@ async function main() {
       assert.deepEqual(await current(page), before, 'Opening features does not rewrite source versions, excerpts or saved composition');
 
       const blogMenu = await openBlogMenu(page);
-      for (const label of ['글 관리', '공개 표지', '공개 페이지 관리']) assert.equal(await blogMenu.getByRole('button', { name: label, exact: true }).isVisible(), true, label);
-      assert.equal(await page.getByRole('button', { name: '글 관리', exact: true }).count(), 1, 'Home exposes one manager entry');
+      for (const label of ['글 공개·보관', '공개 표지', '공개한 페이지']) assert.equal(await blogMenu.getByRole('button', { name: label, exact: true }).isVisible(), true, label);
+      assert.equal(await page.getByRole('button', { name: '글 공개·보관', exact: true }).count(), 1, 'Home exposes one manager entry');
       await capture(page, 'blog-menu', size);
-      await blogMenu.getByRole('button', { name: '글 관리', exact: true }).click(); await mode(page, 'blog'); await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
-      await back(page, 'home'); await expectFocus(page, '글 관리');
+      await blogMenu.getByRole('button', { name: '글 공개·보관', exact: true }).click(); await mode(page, 'blog'); await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
+      await back(page, 'home'); await expectFocus(page, '글 공개·보관');
       assert.equal(await page.locator('#lifeBlogMenu').evaluate(node => node.open), true);
       await page.getByRole('button', { name: '공개 표지', exact: true }).click(); await mode(page, 'public-cover'); await page.locator('#publicCoverEditor').waitFor();
       await back(page, 'home'); await expectFocus(page, '공개 표지');
-      await page.getByRole('button', { name: '공개 페이지 관리', exact: true }).click(); await mode(page, 'public-pages');
-      await back(page, 'home'); await expectFocus(page, '공개 페이지 관리');
+      await page.getByRole('button', { name: '공개한 페이지', exact: true }).click(); await mode(page, 'public-pages');
+      await back(page, 'home'); await expectFocus(page, '공개한 페이지');
 
       await nav(page, 'tools'); await mode(page, 'tools');
       assert.deepEqual(await page.locator('#lifeMain .life-destination').evaluateAll(nodes => nodes.map(node => node.querySelector('strong')?.textContent)), ['연간 계획', '목표', '습관']);
       await capture(page, 'tools', size);
       await nav(page, 'manage'); await mode(page, 'manage');
-      for (const label of ['글 관리', '공개 표지', '공개 페이지 관리', 'Obsidian 갱신', '원본 첨부 보관', '자료 휴지통']) assert.equal(await page.getByRole('button', { name: label, exact: true }).count(), 0, 'Settings does not duplicate ' + label);
-      for (const label of ['자료 관리', '자료·구성 백업', '내보내기·사본 복원', '컬렉션 백업·복구']) assert.equal(await page.getByRole('button', { name: label, exact: true }).isVisible(), true, label);
+      for (const label of ['글 공개·보관', '공개 표지', '공개한 페이지', 'Obsidian 갱신', '원본 첨부 보관', '자료 휴지통']) assert.equal(await page.getByRole('button', { name: label, exact: true }).count(), 0, 'Settings does not duplicate ' + label);
+      for (const label of ['현재 자료공간', '자료·구성 백업', '내보내기·사본 복원', '컬렉션 백업·복구']) assert.equal(await page.getByRole('button', { name: label, exact: true }).isVisible(), true, label);
       await capture(page, 'settings', size);
       await page.getByRole('button', { name: '자료·구성 백업', exact: true }).click(); await mode(page, 'workbench-backup'); await page.locator('#wbBackupDownload').waitFor();
       await back(page, 'manage'); await expectFocus(page, '자료·구성 백업');
-      await openNewsSettings(page); await page.getByRole('button', { name: '관심 확인', exact: true }).click(); await mode(page, 'interests'); await page.locator('#interestManual').waitFor();
+      await openNewsSettings(page); await page.getByRole('button', { name: '관심 주제 편집', exact: true }).click(); await mode(page, 'interests'); await page.locator('#interestManual').waitFor();
       assert.equal(await page.locator('[data-haedo-section="news"][aria-current="page"]').count(), 1);
       await back(page, 'external-discovery'); await page.locator('#discoveryNewsSettingsPanel').waitFor({ state: 'visible' });
-      await expectFocus(page, '관심 확인');
+      await expectFocus(page, '관심 주제 편집');
       assert.deepEqual(await current(page), before);
     }, size);
 

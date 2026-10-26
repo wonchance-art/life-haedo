@@ -144,12 +144,9 @@
     }
     function quickLinks(context) {
       const nav = el('nav', null, 'home-blog-actions'); nav.setAttribute('aria-label', '내 블로그');
-      const prompt = action(context, '', () => navigate('page', { blogContext: true, pageCompose: true }), 'home-compose-prompt');
-      prompt.append(life.Icons.create('edit'), el('span', '어떤 이야기를 남길까요?', 'home-compose-label'));
-      prompt.dataset.focusKey = 'home:action:prompt';
       const write = action(context, '새 글 쓰기', () => navigate('page', { blogContext: true, pageCompose: true }), 'life-primary home-blog-write');
       write.dataset.homeDestination = 'write'; write.dataset.focusKey = 'home:action:write';
-      nav.append(prompt, write); context.composeActions = nav;
+      nav.append(write); context.composeActions = nav;
       return nav;
     }
     function profileHeader(context) {
@@ -176,10 +173,10 @@
       area.open = libraryOpen;
       area.addEventListener('toggle', () => { if (showing(context)) libraryOpen = area.open; });
       const summary = el('summary');
-      summary.append(el('span', '자료실과 도구'), el('span', '가져온 기록 · 묶음 · 책', 'life-meta'));
+      summary.append(el('span', '자료실'), el('span', '읽기 · 정리 · 활용', 'life-meta'));
       area.append(summary);
       const nav = el('nav', null, 'home-library-actions'); nav.setAttribute('aria-label', '자료실');
-      [['자료 가져오기', 'import'], ['가져온 기록', 'sources'], ['컬렉션', 'collection'], ['연표', 'time']].forEach(([label, mode]) => {
+      [['자료 가져오기', 'import'], ['자료 목록', 'sources'], ['컬렉션', 'collection'], ['연표', 'time']].forEach(([label, mode]) => {
         const button = action(context, label, () => navigate(mode));
         button.dataset.homeDestination = mode;
         button.dataset.focusKey = 'home:library:' + mode;
@@ -189,7 +186,7 @@
       preview.dataset.homeDestination = 'preview';
       preview.dataset.focusKey = 'home:library:preview';
       nav.append(preview);
-      area.append(nav, el('p', '미리보기에는 기록에서 고른 내용과 기존 첨부 글이 표시됩니다.', 'life-meta home-library-preview-note'));
+      area.append(nav);
       renderReadingResume?.(area);
       if (bundle.sources.length) area.append(recent(context, bundle));
       return area;
@@ -267,7 +264,7 @@
       const meta = el('p', null, 'life-meta home-post-meta');
       const time = modifiedDate(row.updatedAt, row.kind === 'source' ? '저장 ' : '수정 ');
       if (time) meta.append(time, document.createTextNode(' · '));
-      meta.append(document.createTextNode(row.kind === 'photo' ? '비공개 · 이 브라우저에 보관' : row.kind === 'source' ? '기록 글 · 비공개' : '첨부 글 · 비공개'));
+      meta.append(document.createTextNode(row.kind === 'photo' ? '비공개 원본' : row.kind === 'source' ? '기록 글 · 비공개' : '첨부 글 · 비공개'));
       const content = el('div', null, 'home-post-content'), heading = el('h3');
       const label = String(row.title || '').trim() || (snippet(row.body) || row.attachments?.[0]?.title || '사진이 있는 글');
       const button = action(context, label, open, 'home-post-open' + (row.kind === 'plain' || !String(row.title || '').trim() ? ' home-post-prose' : ''));
@@ -324,7 +321,7 @@
         intro.textContent = state.page.showIntro ? snippet(state.page.intro) : '';
         intro.hidden = !intro.textContent;
       });
-      read('photo', '이 브라우저의 글·초안·보관함', posts => {
+      read('photo', '글·초안·보관함', posts => {
         if (!Array.isArray(posts)) throw new Error('invalid_posts');
         rows.push(...posts.map(post => ({ ...post, kind: post.status === 'draft' ? 'photo-draft' : 'photo',
           tab: post.archived ? 'archive' : post.status === 'draft' ? 'drafts' : 'posts', editing: context.photoDrafts.get(post.id) })));
@@ -450,11 +447,10 @@
       }
       context.composeActions.hidden = !errors.length && counts.posts === 0 && listState.tab === 'posts' && !query;
       context.composeActions.querySelector('.home-blog-write').dataset.focusKey = context.composeActions.hidden ? 'home:action:hidden-write' : 'home:action:write';
-      context.composeActions.querySelector('.home-compose-prompt').dataset.focusKey = context.composeActions.hidden ? 'home:action:hidden-prompt' : 'home:action:prompt';
       context.list.setAttribute('aria-labelledby', 'homeTab-' + listState.tab);
       const matched = rows.filter(row => row.tab === listState.tab && matchesQuery(row));
       const fragment = document.createDocumentFragment();
-      if (listState.tab === 'archive') fragment.append(el('p', '이 브라우저에서 보관한 글입니다. 글을 열어 목록으로 복원할 수 있어요.', 'life-meta home-archive-note'));
+      if (listState.tab === 'archive') fragment.append(el('p', '글을 열어 목록으로 복원할 수 있어요.', 'life-meta home-archive-note'));
       const applicable = errors.filter(error => error.key === 'photo' || (listState.tab === 'posts' ? error.key === 'workbench' : listState.tab === 'drafts' ? ['plainDrafts', 'sourceDrafts'].includes(error.key) : false));
       if (applicable.length) {
         const error = el('div', null, 'home-posts-error home-load-error'); error.setAttribute('role', 'status');

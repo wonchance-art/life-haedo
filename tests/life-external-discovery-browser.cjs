@@ -51,7 +51,7 @@ const card = (page, id) => page.locator('[data-discovery-id="' + escapeId(id) + 
 async function idle(page) { await page.waitForFunction(() => document.querySelector('#discoveryReview')?.getAttribute('aria-busy') !== 'true'); }
 // These existing recommendation checks select related order explicitly; the
 // news entry's default latest order is covered by its dedicated entry journey.
-async function related(page) { await selectNewsMode(page, 'related'); await idle(page); assert.equal(await page.locator('#discoveryRecommended').getAttribute('aria-pressed'), 'true'); }
+async function related(page) { await selectNewsMode(page, 'related'); await idle(page); assert.equal(await page.locator('#discoverySort').inputValue(), 'related'); }
 async function topics(page) { const details = page.locator('#discoveryTopics'); await newsView(details); if (!await details.evaluate(el => el.open)) await details.locator(':scope > summary').click(); }
 async function open(page, file = 'index.html') { await page.goto(base + '/' + file + '?section=tools&view=external-discovery'); await ready(page); await page.locator('#discoveryReview').waitFor(); await idle(page); await related(page); }
 async function state(page) { return page.evaluate(async () => { const s = HaedoLife.Shell.storage, id = await s.getActive(); return { bundle: await s.read(id), workbench: await s.readWorkbench(id), interest: await s.readInterestProfile(id), feedback: await s.readDiscoveryProfile(id) }; }); }
@@ -162,7 +162,7 @@ async function main() {
       await seed(page, '전시'); await page.reload(); await ready(page); const before = await state(page); await nav(page, 'news'); await page.locator('#discoveryReview').waitFor(); await idle(page); await related(page);
       const count = await page.locator('[data-discovery-id]').count(); assert(count > 0 && count <= 5); assert.equal(new URL(page.url()).searchParams.get('section'), 'news'); assert.equal(new URL(page.url()).searchParams.get('view'), null);
       if (count < 3) assert.match(await page.locator('#discoveryReview').textContent(), /관련|없|부족|적|관심/);
-      await selectNewsMode(page, 'latest'); await idle(page); assert.equal(await page.locator('#discoveryLatest').getAttribute('aria-pressed'), 'true');
+      await selectNewsMode(page, 'latest'); await idle(page); assert.equal(await page.locator('#discoverySort').inputValue(), 'latest');
       assert.deepEqual((await state(page)).bundle, before.bundle); assert.deepEqual((await state(page)).workbench, before.workbench); assert.deepEqual((await state(page)).feedback, before.feedback);
       await selectNewsMode(page, 'related'); await idle(page); const first = page.locator('[data-discovery-id]').first(), articleId = await first.getAttribute('data-discovery-id'), articleUrl = await first.locator('[data-discovery-open]').getAttribute('href');
       await (await revealControl(first.locator('[data-discovery-import]'))).click(); await page.locator('#lifeImportTitle').waitFor(); assert.equal(await page.locator('#lifeImportUrl').inputValue(), articleUrl); assert.deepEqual((await state(page)).bundle, before.bundle);

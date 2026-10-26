@@ -142,7 +142,7 @@ async function main() {
     return context;
   }
   async function toggle(page, name, panel, open) {
-    if (name === '자료 관리' && open) await openManagement(page);
+    if (name === '현재 자료공간' && open) await openManagement(page);
     const button = page.getByRole('button', { name, exact: true });
     if (await button.getAttribute('aria-expanded') !== String(open)) {
       if (page.viewportSize().width <= 820) await button.tap(); else await button.click();
@@ -167,8 +167,8 @@ async function main() {
         check(`${size.name} account menu opens by keyboard`, await page.locator('#lifeLogout').isVisible());
         await page.keyboard.press('Escape');
         check(`${size.name} account Escape closes and returns focus`, await page.locator('#lifeLogout').isHidden() && await page.locator('#lifeAccountToggle').evaluate(el => el === document.activeElement));
-        await toggle(page, '자료 관리', '#lifeManagement', true); await capture(page, 'management', size);
-        await toggle(page, '자료 관리', '#lifeManagement', false);
+        await toggle(page, '현재 자료공간', '#lifeManagement', true); await capture(page, 'management', size);
+        await toggle(page, '현재 자료공간', '#lifeManagement', false);
         await click(page, '원천 기록'); await capture(page, 'empty', size, size.name === 'phone');
         const ids = await seed(page); await click(page, '원천 기록');
         await page.locator('#lifeSearch').fill(query);
@@ -235,7 +235,7 @@ async function main() {
         if (size.name === 'phone') {
           await click(page, '가져오기'); await capture(page, 'import', size);
           for (const [name, scene] of [['내보내기·사본 복원', 'transfer'], ['기기 간 동기화', 'sync']]) {
-            await toggle(page, '자료 관리', '#lifeManagement', true); await click(page, name);
+            await toggle(page, '현재 자료공간', '#lifeManagement', true); await click(page, name);
             await page.evaluate(() => scrollTo({ top: 0, behavior: 'instant' })); await capture(page, scene, size);
           }
         }

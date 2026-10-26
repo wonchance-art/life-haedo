@@ -10,6 +10,7 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { FakeCloud, accounts, session, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, makeContext, ready, nav } = require('./unified-home-browser.cjs');
+const { awaitCondition } = require('./helpers/await-condition.cjs');
 const output = path.resolve(process.env.ANNUAL_PLAN_OUTPUT || '.local/annual-plan-browser');
 const entry = base + '/index.html?section=tools&view=annual-plan';
 const PRIVATE = '합성개인계획_외부전송금지';
@@ -17,7 +18,7 @@ const RAW = '\ufeff연간 계획과 분리된 합성 원문 😀\r\nCafe\u0301�
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const report = { createdAt: new Date().toISOString(), scope: 'Local actual UI/Core/bundled SDK/scoped IndexedDB with anonymous FakeCloud Auth. Birthdate, annual/monthly plans, composition events, account sessions and save/read delays are synthetic. No production user/DB, publisher/AI/calendar requests, actual Apple hardware or OS file-save proof.', checks: [], visual: [], consoleErrors: [], pageErrors: [], externalRequests: [], privacyViolations: [], libraryCapabilityReads: [], remoteWrites: [], closedContexts: 0 };
 async function wait(page, predicate, argument, label = 'annual plan state') {
-  await page.waitForFunction(predicate, argument, { timeout: 20000 });
+  await awaitCondition(page, predicate, argument, { timeout: 20000, label });
 }
 async function open(page) { await page.goto(entry); await ready(page); await page.locator('#apGrid').waitFor(); }
 async function settings(page) {

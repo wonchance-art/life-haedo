@@ -10,6 +10,7 @@ const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, ready, settle, makeContext, observe, nav } = require('./unified-home-browser.cjs');
 const { fixture, current, seedComposition, abortWorkbenchWrites, go, inspect, oldBody, newBody } = require('./life-workbench-browser.cjs');
 const { inspectHome } = require('./home-entry-browser.cjs');
+const { awaitCondition } = require('./helpers/await-condition.cjs');
 const out = path.resolve(__dirname, '../.local/record-arrange');
 const report = { createdAt: new Date().toISOString(), scope: 'Actual app/SDK/IndexedDB; anonymous intercepted Auth, viewport/touch/IME-event simulation only', checks: [], visual: [], consoleErrors: [], pageErrors: [], expectedErrors: 0, external: [], realRemoteWrites: 0 };
 
@@ -57,7 +58,7 @@ async function review(page, target, location = '#lifeSelectionBar') {
 }
 async function apply(page, title) { if (title != null) await page.locator('#wbIncomingTitle').fill(title); await page.locator('#wbIncomingApply').click(); }
 async function waitSaved(page, predicate) {
-  await page.waitForFunction(source => { const s=HaedoLife.Shell.storage; return s.getActive().then(id=>s.readWorkbench(id)).then(w=>new Function('w', 'return ('+source+')(w)')(w)); }, predicate.toString());
+  await awaitCondition(page, source => { const s=HaedoLife.Shell.storage; return s.getActive().then(id=>s.readWorkbench(id)).then(w=>new Function('w', 'return ('+source+')(w)')(w)); }, predicate.toString(), { timeout: 10000, label: 'saved workbench state' });
   return current(page);
 }
 async function capture(page, scene, size, workbench = false) {
@@ -178,7 +179,7 @@ async function main() {
       await go(page, 'workbench-backup'); after = await current(page); const waiting = page.waitForEvent('download'); await page.locator('#wbBackupDownload').click(); const content = JSON.parse(await fs.readFile(await (await waiting).path(), 'utf8'));
       assert.equal(content.format, 'life-workbench-backup-v1'); assert.deepEqual(content.workbench.page, after.workbench.page); assert.deepEqual(content.sourceBackup.workspace.records, before.bundle.records);
       await page.locator('#wbRestoreFile').setInputFiles({ name: '선택한-기록-사본.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(content)) }); await page.locator('#wbRestoreInstall').click();
-      await page.waitForFunction(id => HaedoLife.Shell.storage.getActive().then(active => active !== id), before.bundle.workspaceId); await page.locator('.life-workbench[data-mode="page"]').waitFor(); const restored = await current(page);
+      await awaitCondition(page, id => HaedoLife.Shell.storage.getActive().then(active => active !== id), before.bundle.workspaceId, { timeout: 10000, label: 'restored workspace becomes active' }); await page.locator('.life-workbench[data-mode="page"]').waitFor(); const restored = await current(page);
       assert.notEqual(restored.workbench.page.entries[0].id, entryId); assert.equal(restored.workbench.page.entries[0].parts[1].enabled, false);
       assert.equal(restored.bundle.sourceVersions.find(v => v.id === restored.workbench.page.entries[0].parts[0].versionId).contentText, oldBody);
       const record = restored.bundle.records[0], ref = record.sourceRefs[0]; assert.equal(restored.bundle.sourceVersions.find(v => v.id === ref.sourceVersionId).contentText.slice(ref.locator.start, ref.locator.end), record.text);
@@ -214,8 +215,8 @@ async function main() {
       await page.locator('[data-haedo-section="tools"]').click(); await settle(page); const finished = await page.evaluate(() => window.__arrangeReadsFinished || 0);
       await page.evaluate(() => __arrangeReleaseRead()); await page.waitForFunction(n => window.__arrangeReadsFinished > n, finished);
       assert.equal(await page.locator('#lifeMain').getAttribute('data-mode'), 'tools'); assert.equal(await page.locator('#wbIncomingSelection').count(), 0);
-      await nav(page, 'manage'); await page.getByRole('button', { name: '자료 관리', exact: true }).click(); await page.locator('#lifeWorkspace').selectOption(other); await settle(page); await nav(page, 'records');
-      await page.getByRole('button', { name: '자료실', exact: true }).click(); await settle(page); assert.equal(await page.locator('.life-source-select[aria-pressed="true"]').count(), 0);
+      await nav(page, 'manage'); await page.getByRole('button', { name: '현재 자료공간', exact: true }).click(); await page.locator('#lifeWorkspace').selectOption(other); await settle(page); await nav(page, 'records');
+      await nav(page, 'records'); assert.equal(await page.locator('.life-source-select[aria-pressed="true"]').count(), 0);
       assert.equal((await current(page)).bundle.workspaceId, other); assert.equal((await current(page)).workbench.page.entries.length, 0);
       assert.equal(await page.evaluate(async id => (await HaedoLife.Shell.storage.readWorkbench(id)).page.entries.length, f.workspaceId), 0);
     });

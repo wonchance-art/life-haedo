@@ -6,6 +6,8 @@ process.env.BASE_URL ||= 'http://127.0.0.1:4184';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
+const { awaitCondition } = require('./helpers/await-condition.cjs');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, ready, settle, makeContext, observe } = require('./unified-home-browser.cjs');
 const out = path.resolve(__dirname, '../.local/writing-sync');
@@ -17,10 +19,10 @@ const stages = (page, id) => page.evaluate(id => HaedoLife.Shell.storage.listSta
 
 async function save(page, count) {
   await page.locator('#lifeWritingSave').click();
-  await page.waitForFunction(count => {
+  await awaitCondition(page, count => {
     const storage = HaedoLife.Shell.storage;
     return storage.getActive().then(id => storage.read(id)).then(value => value.sourceVersions.length === count);
-  }, count);
+  }, count, { timeout: 12000, label: 'saved writing version count' });
   await settle(page);
   await page.locator('#lifeSourceText').waitFor();
 }
@@ -51,7 +53,7 @@ async function main() {
     await a.locator('#lifeWritingBody').fill(originalText); await save(a, 1);
     const first = await bundle(a, id), originalVersion = first.sourceVersions[0];
     assert.match(first.sources[0].sourceKey, /^haedo:writing:[0-9a-f-]{36}$/i);
-    await a.getByRole('button', { name: '글쓰기', exact: true }).click();
+    await openRecordsMenu(a); await a.getByRole('button', { name: '자료 작성', exact: true }).click();
     await a.locator('#lifeWritingTitle').fill('아직 다 쓰지 않은 글'); await a.locator('#lifeWritingBody').fill(draftText);
     await a.waitForFunction(() => document.querySelector('#lifeWritingStatus')?.dataset.state === 'draft');
     const localDraft = (await stages(a, id)).find(stage => stage.kind === 'writing' && stage.state === 'draft');
@@ -92,7 +94,7 @@ async function main() {
     await a.locator('.life-source-open[data-version-id="' + revised.sourceVersions.at(-1).id + '"]').click(); await settle(a);
     assert.equal(await a.locator('#lifeSourceText').textContent(), revisedText);
     assert(await a.getByRole('button', { name: '내 글 수정', exact: true }).isVisible());
-    await a.getByRole('button', { name: '글쓰기', exact: true }).click();
+    await openRecordsMenu(a); await a.getByRole('button', { name: '자료 작성', exact: true }).click();
     assert.equal(await a.locator('#lifeWritingBody').inputValue(), draftText);
     assert.equal(server.writes(accounts.a.id, bEmptyId).length, 0, 'Downloading does not upload the blank workspace');
     assert(server.writes().every(request => request.owner === accounts.a.id && request.id === id));

@@ -2,7 +2,7 @@
  * Auth and empty owner remote catalogues are synthetic. No remote publication,
  * production account/data, actual Google login or Apple device claim. */
 'use strict';
-const { openBlogMenu } = require('./helpers/feature-menus.cjs');
+const { openBlogMenu, openRecordsMenu } = require('./helpers/feature-menus.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4220';
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const { ShareCloud } = require('./life-share-browser.cjs');
@@ -90,7 +90,7 @@ async function openPage(page) {
   // after leaving settings. Use the real child return instead of assuming its
   // parent toolbar is immediately visible.
   if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'page') await nav(page, 'records');
-  if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'page') await page.getByRole('button', { name: '선택 자료 페이지', exact: true }).click();
+  if (await page.locator('#lifeMain').getAttribute('data-mode') !== 'page') { await openRecordsMenu(page); await page.getByRole('button', { name: '선택 자료 페이지', exact: true }).click(); }
   await page.locator('.life-workbench[data-mode="page"]').waitFor();
   await page.waitForFunction(() => ['#wbPageMaterialWriting','.mw-workspace','.bs-workspace','.nb-workspace'].some(selector => document.querySelector(selector)?.checkVisibility()));
   if (await page.locator('.mw-workspace').isVisible()) await page.locator('#mwClose').click();
@@ -123,7 +123,7 @@ async function main() {
       const f = await context(browser, 'entry-compat-' + size.width, size, accounts.a, null, report);
       try {
         const page = f.page; await page.goto(base + '/index.html', { waitUntil: 'domcontentloaded' }); await ready(page); const seed = await seedCompatibility(page), before = await compatibilitySnapshot(page, seed); console.log('Entry compatibility started ' + size.width);
-        await openBlogMenu(page); await page.getByRole('button', { name: '글 관리', exact: true }).click(); await page.locator('#lifeBlogManager').waitFor();
+        await openBlogMenu(page); await page.getByRole('button', { name: '글 공개·보관', exact: true }).click(); await page.locator('#lifeBlogManager').waitFor();
         await page.locator('.blog-post[data-post-id="' + seed.postId + '"]').getByRole('button', { name: '기존 v1 사진 글', exact: true }).click(); await page.locator('.photo-article').waitFor();
         assert.match(await page.locator('.photo-article').innerText(), /기존 설명/); await capture(page, report, 'old-v1-photo-read', size); await nav(page, 'manage');
         await openBlogMenu(page); await page.getByRole('button', { name: '공개 표지', exact: true }).click(); await page.locator('#pcSaveStatus[data-state="saved"]').waitFor(); await page.locator('#pcNew').click(); await page.locator('#pcTitle').waitFor();

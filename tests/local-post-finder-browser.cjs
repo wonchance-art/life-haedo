@@ -128,7 +128,7 @@ async function seed(page, { corrupt = false } = {}) {
 }
 
 async function manager(page) {
-  await openBlogMenu(page); await page.getByRole('button', { name: '글 관리', exact: true }).click();
+  await openBlogMenu(page); await page.getByRole('button', { name: '글 공개·보관', exact: true }).click();
   await page.locator('.blog-manager-list[data-state="ready"],.blog-manager-list[data-state="partial"]').waitFor();
 }
 async function finder(page) {

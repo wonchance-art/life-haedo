@@ -51,9 +51,9 @@ async function main() {
       const before=await current(page);
       assert.match(await page.locator('#lifeManagementSyncStatus').innerText(),/원문·발췌/);
       await capture(page,'manage',width);
-      await page.getByRole('button',{name:'자료 관리',exact:true}).focus();await page.keyboard.press('Enter');
+      await page.getByRole('button',{name:'현재 자료공간',exact:true}).focus();await page.keyboard.press('Enter');
       assert.equal(await page.locator('#lifeWorkspace').inputValue(),before.bundle.workspaceId);
-      await button(page,'자료 관리 닫기');
+      await button(page,'자료공간 닫기');
       const integrated=page.getByRole('button',{name:'자료·구성 백업',exact:true});
       if(width===1440){await integrated.focus();await page.keyboard.press('Enter');}else await integrated.tap();
       await page.locator('#wbBackupScope summary').click();
@@ -84,9 +84,9 @@ async function main() {
       await page.goto(base+'/index.html');await ready(page);await manage(page);await button(page,'기기 간 동기화');await enable(page);
       const ids=await page.evaluate(async()=>{const s=HaedoLife.Shell.storage,a=await s.getActive(),b=await s.createWorkspace('연결하지 않은 두 번째 공간'),c=await s.createWorkspace('나중에 고른 세 번째 공간');await s.setActive(a);window.__managementHoldId=b.workspaceId;return {a,b:b.workspaceId,c:c.workspaceId};});
       await page.reload();await ready(page);await page.evaluate(id=>{window.__managementHoldId=id;},ids.b);
-      await manage(page);await status(page,'synced');await button(page,'자료 관리');await page.locator('#lifeWorkspace').selectOption(ids.b);await settle(page);await manage(page);
+      await manage(page);await status(page,'synced');await button(page,'현재 자료공간');await page.locator('#lifeWorkspace').selectOption(ids.b);await settle(page);await manage(page);
       await page.waitForFunction(()=>window.__managementHeld);await status(page,'loading');await capture(page,'loading',820);
-      await button(page,'자료 관리');await page.locator('#lifeWorkspace').selectOption(ids.c);await settle(page);await manage(page);await status(page,'unbound');
+      await button(page,'현재 자료공간');await page.locator('#lifeWorkspace').selectOption(ids.c);await settle(page);await manage(page);await status(page,'unbound');
       await page.evaluate(()=>{window.__managementHoldId=null;window.__managementRelease.splice(0).forEach(release=>release());});
       await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await status(page,'unbound');
       assert.equal((await current(page)).bundle.workspaceId,ids.c);assert.equal(server.rows.size,1);

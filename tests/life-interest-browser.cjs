@@ -73,7 +73,7 @@ async function main() {
   }
   try {
     await check('actual policy news settings entry, manual save reload and reset preserve source/workbench', async ({ page }) => {
-      await fixture(page); const before = await stored(page); await openNewsSettings(page); await page.getByRole('button', { name: '관심 확인', exact: true }).click(); await page.locator('#interestManual').waitFor();
+      await fixture(page); const before = await stored(page); await openNewsSettings(page); await page.getByRole('button', { name: '관심 주제 편집', exact: true }).click(); await page.locator('#interestManual').waitFor();
       assert.equal(new URL(page.url()).searchParams.get('view'), 'interests');
       await selectAll(page); assert.equal(await page.locator('#interestAnalyze').isDisabled(), true);
       await page.locator('#interestManual').fill('책의 문장과 표현\n도시에서 걷는 길'); await page.locator('#interestSaveManual').click(); await idle(page);
@@ -113,7 +113,7 @@ async function main() {
       await page.locator('#interestManual').fill('원문을 보고 돌아와 이어 쓸 관심'); const first = page.locator('[data-interest-evidence]').first(); await first.evaluate(el => { el.closest('details').open = true; });
       const focusKey = await first.getAttribute('data-focus-key'); const expected = proposed.profile.analysis.interests[0].evidence[0];
       await first.click(); await page.locator('#lifeSourceText').waitFor(); assert.equal(await page.locator('#lifeSourceText').textContent(), before.bundle.sourceVersions.find(x => x.id === expected.sourceVersionId).contentText);
-      await page.getByRole('button', { name: '관심 확인으로 돌아가기', exact: true }).click(); await page.locator('#interestManual').waitFor(); assert.equal(await page.locator('#interestManual').inputValue(), '원문을 보고 돌아와 이어 쓸 관심');
+      await page.getByRole('button', { name: '관심 주제 편집으로 돌아가기', exact: true }).click(); await page.locator('#interestManual').waitFor(); assert.equal(await page.locator('#interestManual').inputValue(), '원문을 보고 돌아와 이어 쓸 관심');
       await page.waitForFunction(key => document.activeElement?.dataset.focusKey === key, focusKey);
       await page.locator('[data-interest-candidate]').first().check(); await page.locator('#interestConfirm').click(); await idle(page); assert.equal((await stored(page)).profile.confirmedIds.length, 1);
       assert.deepEqual((await stored(page)).bundle, before.bundle); assert.deepEqual((await stored(page)).workbench, before.workbench);
@@ -140,9 +140,9 @@ async function main() {
       await fixture(page); await analyze(page); const second = await context.newPage(); observe(second, report, 'regression latest confirmations second tab'); await open(second);
       const choice = second.locator('[data-interest-candidate]').first(); assert.equal(await choice.isChecked(), false); await nav(second, 'tools');
       await page.locator('[data-interest-candidate]').first().check(); await page.locator('#interestConfirm').click(); await idle(page);
-      await openNewsSettings(second); await second.getByRole('button', { name: '관심 확인', exact: true }).click(); await second.locator('#interestConfirm').waitFor(); assert.equal(await choice.isChecked(), true);
+      await openNewsSettings(second); await second.getByRole('button', { name: '관심 주제 편집', exact: true }).click(); await second.locator('#interestConfirm').waitFor(); assert.equal(await choice.isChecked(), true);
       await nav(second, 'tools'); await page.locator('[data-interest-candidate]').first().uncheck(); await page.locator('#interestConfirm').click(); await idle(page);
-      await openNewsSettings(second); await second.getByRole('button', { name: '관심 확인', exact: true }).click(); await second.locator('#interestConfirm').waitFor(); assert.equal(await choice.isChecked(), false); assert.deepEqual((await stored(second)).profile.confirmedIds, []); await second.close();
+      await openNewsSettings(second); await second.getByRole('button', { name: '관심 주제 편집', exact: true }).click(); await second.locator('#interestConfirm').waitFor(); assert.equal(await choice.isChecked(), false); assert.deepEqual((await stored(second)).profile.confirmedIds, []); await second.close();
     }, { mock: true });
     await check('regression real checkbox edits block logout workspace and external exits until confirm or revert', async ({ page }) => {
       const data = await fixture(page);
@@ -154,18 +154,18 @@ async function main() {
       assert.equal((await stored(page)).bundle.workspaceId, data.workspaceId); assert.deepEqual((await stored(page)).profile.confirmedIds, []);
       await openAccount(page); await page.locator('#lifeLogout').click(); await page.locator('#lifeStartup[role="alert"]').waitFor({ state: 'visible' });
       assert.match(await page.locator('#lifeStartup').textContent(), /로그아웃을 완료하지 않았습니다/); assert.equal(await page.locator('#lifeApp').isVisible(), true); assert.equal(await page.evaluate(() => HaedoAuth.user.id), accounts.a.id);
-      await page.locator('#lifeAccountToggle').click(); await openNewsSettings(page); await page.getByRole('button', { name: '관심 확인', exact: true }).click(); await page.locator('#interestConfirm').waitFor(); assert.equal(await page.locator('[data-interest-candidate]').first().isChecked(), true);
+      await page.locator('#lifeAccountToggle').click(); await openNewsSettings(page); await page.getByRole('button', { name: '관심 주제 편집', exact: true }).click(); await page.locator('#interestConfirm').waitFor(); assert.equal(await page.locator('[data-interest-candidate]').first().isChecked(), true);
       await page.locator('#interestConfirm').click(); await idle(page); assert.equal((await stored(page)).profile.confirmedIds.length, 1);
       await nav(page, 'tools'); await page.getByRole('link', { name: '목표', exact: false }).click(); await page.waitForURL(url => url.pathname.endsWith('/goals.html'));
       await open(page); await page.locator('[data-interest-candidate]').first().uncheck(); await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(otherId); await page.locator('#lifeError').waitFor({ state: 'visible' }); assert.equal((await stored(page)).bundle.workspaceId, data.workspaceId);
-      await openNewsSettings(page); await page.getByRole('button', { name: '관심 확인', exact: true }).click(); await page.locator('#interestConfirm').waitFor(); await page.locator('#interestRevertManual').click(); await idle(page); assert.equal(await page.locator('[data-interest-candidate]').first().isChecked(), true);
+      await openNewsSettings(page); await page.getByRole('button', { name: '관심 주제 편집', exact: true }).click(); await page.locator('#interestConfirm').waitFor(); await page.locator('#interestRevertManual').click(); await idle(page); assert.equal(await page.locator('[data-interest-candidate]').first().isChecked(), true);
       await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(otherId); await page.waitForFunction(id => HaedoLife.Shell.storage.getActive().then(active => active === id), otherId);
       assert.deepEqual(await page.evaluate(async id => HaedoLife.Shell.storage.read(id), data.workspaceId), before.bundle);
     }, { mock: true });
     await check('synthetic late inference cancelled by navigation never saves analysis', async ({ page }) => {
       await fixture(page); await page.evaluate(() => { window.__interestMockHold = true; }); await selectAll(page); await page.locator('#interestAnalyze').click(); await page.waitForFunction(() => window.__interestMockEntered);
       await nav(page, 'tools'); await page.evaluate(() => window.__interestMockRelease()); await page.waitForTimeout(100); assert.equal((await stored(page)).profile.analysis, null);
-      await openNewsSettings(page); await page.getByRole('button', { name: '관심 확인', exact: true }).click(); await page.locator('#interestManual').waitFor(); assert.equal(await page.locator('#interestConfirm').count(), 0);
+      await openNewsSettings(page); await page.getByRole('button', { name: '관심 주제 편집', exact: true }).click(); await page.locator('#interestManual').waitFor(); assert.equal(await page.locator('#interestConfirm').count(), 0);
       await analyze(page); assert((await stored(page)).profile.analysis);
     }, { mock: true });
     for (const width of [390, 820, 1440]) await check('visual actual policy manual selection ' + width, async ({ page }) => {

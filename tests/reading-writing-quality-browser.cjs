@@ -6,6 +6,7 @@
 'use strict';
 process.env.BASE_URL ||= 'http://127.0.0.1:4184';
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
+const { openRecordsMenu } = require('./helpers/feature-menus.cjs');
 const { FakeCloud, accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { playwright, ready, settle, makeContext, observe } = require('./unified-home-browser.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
@@ -91,7 +92,7 @@ async function main() {
       await page.locator('#lifeSearchReturn').focus(); await page.keyboard.press('Enter'); await settle(page); await frames(page);
       verify(`${size.width} back preserves query and exact result focus`, await page.locator('#lifeSearch').inputValue() === quote && await result.evaluate(el => el === document.activeElement));
       await page.locator('#lifeSearch').fill('익명 샘플에 없는 검색어'); await capture(page, 'search-empty', size);
-      await activate(page.getByRole('button', { name: '글쓰기', exact: true })); await page.locator('#lifeWritingTitle').waitFor();
+      await openRecordsMenu(page); await activate(page.getByRole('button', { name: '자료 작성', exact: true })); await page.locator('#lifeWritingTitle').waitFor();
       verify(`${size.width} writer entry clears previous excerpt success`, await page.locator('#lifeSaveStatus').textContent() === '' && await page.locator('#lifeWritingStatus').getAttribute('data-state') === 'empty');
       await capture(page, 'writer-empty', size);
       await page.locator('#lifeWritingTitle').fill(title); await page.locator('#lifeWritingBody').fill('책을 덮고 문장을 다시 읽었다.\n첫 글의 본문은 기록에 저장하기 전까지 브라우저 초안으로 남는다.'); await draftSaved(page);
@@ -118,7 +119,7 @@ async function main() {
       if (closeBeforeSection) { await activate(page.locator('#lifeWritingClose')); await settle(page); }
       await activate(tools); await settle(page);
       await activate(page.locator('[data-haedo-navigation] [data-haedo-section="records"]')); await settle(page);
-      if (closeBeforeSection) { await activate(page.getByRole('button', { name: '글쓰기', exact: true })); await settle(page); }
+      if (closeBeforeSection) { await openRecordsMenu(page); await activate(page.getByRole('button', { name: '자료 작성', exact: true })); await settle(page); }
       await page.locator('#lifeWritingBody').waitFor(); await frames(page);
       const resumed = await page.locator('#lifeWritingBody').evaluate(el => ({ start: el.selectionStart, end: el.selectionEnd, direction: el.selectionDirection, scrollTop: el.scrollTop }));
       verify(`${size.width} ${closeBeforeSection ? 'writer close and section return' : 'section return'} keeps body selection direction and inner scroll`, JSON.stringify(editorPosition) === JSON.stringify(resumed) && await page.locator('#lifeWritingBody').inputValue() === longBody, { before: editorPosition, after: resumed });
@@ -134,6 +135,7 @@ async function main() {
       await capture(page, 'writer-saved-reader', size);
       // Delay the real IDB read's success delivery to expose loading; release it unchanged.
       await page.locator('.life-reader-tools > button').first().click(); await settle(page);
+      await openRecordsMenu(page);
       await page.evaluate(() => {
         window.__qualityGetAll = IDBIndex.prototype.getAll; window.__qualityRelease = null;
         IDBIndex.prototype.getAll = function(...args) {
@@ -145,7 +147,7 @@ async function main() {
           return request;
         };
       });
-      const opening = page.getByRole('button', { name: '글쓰기', exact: true }).click(); await page.locator('.life-writing[aria-busy="true"]').waitFor(); await capture(page, 'writer-loading', size);
+      const opening = page.getByRole('button', { name: '자료 작성', exact: true }).click(); await page.locator('.life-writing[aria-busy="true"]').waitFor(); await capture(page, 'writer-loading', size);
       verify(`${size.width} writer loading clears previous record-save success`, await page.locator('#lifeSaveStatus').textContent() === '');
       await page.waitForFunction(() => !!__qualityRelease); await page.evaluate(() => { IDBIndex.prototype.getAll = __qualityGetAll; __qualityRelease(); }); await opening; await page.locator('#lifeWritingBody').waitFor();
       assert.equal(server.writes().length, 0); report.checks.push({ name: `${size.width} combined local journey`, pass: true }); console.log('PASS combined quality ' + size.width);
