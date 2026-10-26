@@ -170,4 +170,8 @@ async function main() {
   } catch (error) { report.failure = error.stack; report.surface = await page.evaluate(() => ({ title: document.querySelector('.life-reader-heading')?.textContent, text: document.querySelector('#lifeSourceText')?.textContent?.slice(0, 200), active: document.activeElement?.outerHTML, error: document.querySelector('.life-error:not([hidden])')?.textContent, buttons: [...document.querySelectorAll('button')].filter(v => v.getClientRects().length).map(v => v.textContent) })).catch(() => null); throw error; } finally { await context.close(); await browser.close(); await fs.mkdir(output, { recursive: true }); await fs.writeFile(`${output}/report.json`, JSON.stringify(report, null, 2)); }
   console.log('PASS ' + report.checks.length + ' Obsidian and Naver exact-return journeys');
 }
-main().catch(error => { console.error(error.stack); process.exitCode = 1; });
+main().catch(error => {
+  console.error(error.stack);
+  if (process.env.GITHUB_ACTIONS) console.error('::error title=Obsidian link integration::' + String(error.stack || error).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A'));
+  process.exitCode = 1;
+});
