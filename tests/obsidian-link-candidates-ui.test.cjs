@@ -20,6 +20,16 @@ function doc() { const d = { createElement: tag => new Node(tag, d) }; d.body = 
 const all = (n, predicate) => [n, ...n.children.flatMap(v => all(v, predicate))].filter(predicate);
 const buttons = n => all(n, v => v.tagName === 'button');
 const named = (n, name) => buttons(n).filter(v => v.textContent === name);
+function openOccurrences(host) {
+  for (const entry of all(host, n => n.tagName === 'details' && (n.className || '').split(' ').includes('life-obsidian-occurrence'))) {
+    if (!entry.open) { entry.open = true; entry.emit('toggle'); }
+  }
+}
+function openCandidates(host) {
+  for (const entry of all(host, n => n.tagName === 'details' && (n.className || '').split(' ').includes('life-obsidian-candidate-choice'))) {
+    if (!entry.open) { entry.open = true; entry.emit('toggle'); }
+  }
+}
 const note = (path, id, text = '# 절\n내용') => ({ path, sourceId: 'source-' + id, sourceVersionId: 'version-' + id, origin: 'obsidian', title: '제목 ' + id, url: 'obsidian://vault/' + id, importedAt: '2026-10-26T09:10:11.000Z', text });
 function fixture(options = {}) {
   const document = doc(), host = document.createElement('main'), calls = []; document.body.append(host);
@@ -29,7 +39,7 @@ function fixture(options = {}) {
     fromSourceId: 'origin', fromSourceVersionId: 'origin-version',
     onOpenNote: v => calls.push(['open', v]), onConnectNote: v => calls.push(['connect', v]),
     onOpenAttachment: v => calls.push(['attachment', v]), isCurrent: () => current, ...options });
-  ui.mount(host); host.children[0].open = true; host.children[0].emit('toggle');
+  ui.mount(host); host.children[0].open = true; host.children[0].emit('toggle'); openOccurrences(host); openCandidates(host);
   return { document, host, calls, ui, setCurrent: v => { current = v; } };
 }
 test('explicit selection preserves UTF-16 token and disambiguates paths, vault labels and repeated headings', async () => {
@@ -119,7 +129,8 @@ test('closed reader defers scanning and ignores unrelated focus keys', () => {
   const counted = { scan: text => { scans++; return model.scan(text); }, resolve: options => { resolves++; return model.resolve(options); } };
   const ui = UI.create({ document, model: counted, text: '[[같은]]', fromPath: 'folder/현재.md', notes: [note('folder/같은.md', 'a')] });
   ui.mount(host); assert.equal(scans, 0); assert.equal(resolves, 0); assert.equal(ui.revealFocus('ordinary-source-return'), null); assert.equal(scans, 0); assert.equal(host.children[0].open, undefined);
-  host.children[0].open = true; host.children[0].emit('toggle'); assert.equal(scans, 1); assert.equal(resolves, 1);
+  host.children[0].open = true; host.children[0].emit('toggle'); assert.equal(scans, 1); assert.equal(resolves, 0);
+  openOccurrences(host); assert.equal(resolves, 1);
 });
 test('exact return restores later occurrence, candidate and heading pages without callbacks', () => {
   const text = Array.from({ length: 21 }, () => '[[대상#절]]').join(' ');
@@ -129,6 +140,8 @@ test('exact return restores later occurrence, candidate and heading pages withou
   const ui = UI.create({ document, model, text, fromPath: 'folder/현재.md', notes, fromSourceId: 'origin', fromSourceVersionId: 'origin-version', onOpenNote: () => opened++, onConnectNote: () => connected++ });
   ui.mount(host); const key = 'obsidian-candidate:' + occurrence.start + ':version-24:' + target.start;
   const focused = ui.revealFocus(key); assert.ok(focused); assert.equal(focused.dataset.obsidianFocus, key + ':open'); assert.equal(document.activeElement, focused); assert.equal(host.children[0].open, true);
+  const openChoices = all(host, n => n.tagName === 'details' && (n.className || '').split(' ').includes('life-obsidian-candidate-choice') && n.open);
+  assert.equal(openChoices.length, 1); assert.equal(openChoices[0].parentNode.dataset.versionId, 'version-24');
   assert.equal(opened, 0); assert.equal(connected, 0); assert.equal(ui.revealFocus(key + ':open'), focused);
   assert.equal(ui.revealFocus('obsidian-candidate:' + occurrence.start + ':missing:' + target.start), null);
   assert.equal(opened, 0); assert.equal(connected, 0);
@@ -169,7 +182,7 @@ test('cache evicts oldest entries at 200 and does not retain excessively large l
   let calls = 0; const counted = { scan: model.scan, resolve: options => { calls++; return model.resolve(options); } };
   const text = [...Array.from({ length: 201 }, (_, i) => '[[항목' + i + ']]'), '[[항목0]]'].join(' ');
   const f = fixture({ text, notes: [], model: counted });
-  for (let i = 0; i < 10; i++) await named(f.host, '링크 20개 더 보기')[0].click();
+  for (let i = 0; i < 10; i++) { await named(f.host, '링크 20개 더 보기')[0].click(); openOccurrences(f.host); }
   assert.equal(calls, 202); assert.equal(f.calls.length, 0);
   let hugeCalls = 0; const huge = { scan: model.scan, resolve: () => { hugeCalls++; return { status: 'candidate', kind: 'note', candidates: [{ path: 'x.md', sourceId: 'x', sourceVersionId: 'v', anchorStatus: 'text_missing', locators: Array(20001).fill({ start: 0, end: 1 }) }] }; } };
   fixture({ text: '[[x#y]] [[x#y]]', notes: [], model: huge }); assert.equal(hugeCalls, 2);
@@ -208,4 +221,43 @@ test('a late rejected action cannot reveal an error in a stale account or screen
 test('scan failure shows its own error instead of presenting a false empty result', () => {
   const f = fixture({ text: 'x'.repeat(1024 * 1024 + 1) });
   const alert = all(f.host, n => n.attributes.role === 'alert')[0]; assert.equal(alert.hidden, false); assert.match(alert.textContent, /링크 후보를 확인하지 못했습니다/);
+});
+
+test('large vault initially renders only collapsed occurrences and indexes existing links once', () => {
+  const text = Array.from({ length: 20 }, () => '[[같은#절]]').join(' '), occurrences = model.scan(text);
+  const targetText = Array.from({ length: 20 }, (_, i) => '# 절\n문맥 ' + i).join('\n');
+  const notes = Array.from({ length: 20 }, (_, i) => note('folder' + i + '/같은.md', String(i), targetText));
+  const target = { sourceId: 'source-0', sourceVersionId: 'version-0', locator: { start: 0, end: 3 } };
+  const stored = Array.from({ length: 2568 }, (_, i) => ({ kind: 'obsidian_link', sourceRefs: [
+    { sourceId: 'origin', sourceVersionId: 'origin-version', locator: i === 0 ? { start: occurrences[0].start, end: occurrences[0].end } : { start: 10000 + i, end: 10001 + i } }, structuredClone(target)
+  ] }));
+  let accesses = 0, resolves = 0;
+  const links = stored.map(value => new Proxy(value, { get(object, key) { accesses++; return object[key]; } }));
+  const counted = { scan: model.scan, resolve: options => { resolves++; return model.resolve(options); } };
+  const document = doc(), host = document.createElement('main'); document.body.append(host); let actions = 0;
+  const ui = UI.create({ document, model: counted, text, fromPath: 'folder/현재.md', notes, existingLinks: links,
+    fromSourceId: 'origin', fromSourceVersionId: 'origin-version', onOpenNote: () => actions++, onConnectNote: () => actions++ });
+  const readsAtCreation = accesses; assert.ok(readsAtCreation > 0);
+  stored[0].sourceRefs[1].sourceVersionId = 'mutated-after-creation';
+  ui.mount(host); host.children[0].open = true; host.children[0].emit('toggle');
+  assert.equal(resolves, 0); assert.equal(accesses, readsAtCreation); assert.equal(all(host, n => n.tagName === 'article').length, 20);
+  assert.ok(all(host, () => true).length < 150); assert.equal(actions, 0);
+  const row = all(host, n => n.tagName === 'article')[0], detail = row.children[0]; detail.open = true; detail.emit('toggle');
+  assert.equal(resolves, 1); assert.equal(accesses, readsAtCreation); assert.equal(named(host, '이미 연결됨').length, 0);
+  const choices = all(row, n => n.tagName === 'details' && (n.className || '').split(' ').includes('life-obsidian-candidate-choice'));
+  assert.equal(choices.length, 20); assert.ok(choices.every(choice => !choice.open));
+  assert.equal(all(host, n => n.tagName === 'p' && n.textContent.startsWith('위치: ')).length, 0); assert.ok(all(host, () => true).length < 500);
+  choices[0].open = true; choices[0].emit('toggle');
+  assert.equal(named(host, '이미 연결됨').length, 1); assert.equal(all(host, n => n.tagName === 'p' && n.textContent.startsWith('위치: ')).length, 20);
+  assert.ok(choices.slice(1).every(choice => !choice.open)); assert.ok(all(host, () => true).length < 800); assert.equal(actions, 0);
+});
+
+test('a successful connection updates the index before later candidate pages are loaded', async () => {
+  const notes = Array.from({ length: 21 }, (_, i) => note('p' + i + '/같은.md', String(i)));
+  const f = fixture({ text: '[[같은]]', notes }); const initial = named(f.host, '이 위치를 연결');
+  assert.equal(initial.length, 20); await initial[0].click(); assert.equal(f.calls.length, 1);
+  await named(f.host, '대상 20개 더 보기')[0].click();
+  const last = all(f.host, n => n.tagName === 'section' && n.dataset.versionId === 'version-20')[0];
+  openCandidates(last);
+  const conflict = named(last, '다른 대상이 이미 연결됨')[0]; assert.ok(conflict); assert.equal(conflict.disabled, true); await conflict.click(); assert.equal(f.calls.length, 1);
 });

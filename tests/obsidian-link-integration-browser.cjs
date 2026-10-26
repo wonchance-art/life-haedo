@@ -21,6 +21,18 @@ async function main() {
   page.on('request', request => { if (/^https:\/\/(?:[^/]+\.)?(?:naver\.com|pstatic\.net)\//i.test(request.url())) report.externalRequests.push(new URL(request.url()).hostname); });
   const entry = async () => { await page.goto(base + '/index.html?section=records&view=sources', { waitUntil: 'domcontentloaded' }); await ready(page); await settle(page); await page.locator('#lifeSearch').waitFor(); };
   const open = async (term, version) => { await page.locator('#lifeSearch').fill(term); await page.locator(`.life-source-open[data-version-id="${version}"]`).click(); await page.locator('#lifeSourceText').waitFor(); };
+  const openOccurrence = async start => {
+    const row = page.locator('#lifeObsidianCandidates article[data-start="' + start + '"]');
+    const disclosure = row.locator(':scope > details.life-obsidian-occurrence');
+    await disclosure.waitFor(); assert.equal(await disclosure.evaluate(node => node.open), false);
+    await disclosure.locator(':scope > summary').click(); assert.equal(await disclosure.evaluate(node => node.open), true);
+    return row;
+  };
+  const openCandidate = async candidate => {
+    const disclosure = candidate.locator(':scope > details.life-obsidian-candidate-choice');
+    await disclosure.waitFor(); assert.equal(await disclosure.evaluate(node => node.open), false);
+    await disclosure.locator(':scope > summary').click(); assert.equal(await disclosure.evaluate(node => node.open), true);
+  };
   try {
     await entry();
     const seed = await page.evaluate(async () => {
@@ -36,13 +48,15 @@ async function main() {
     await entry(); await open('테스트 출발 원문', seed.sourceVersion.id);
     const before = await page.evaluate(ws => HaedoLife.Shell.storage.read(ws), seed.workspaceId);
     const panel = page.locator('#lifeObsidianCandidates'); await panel.locator('summary').click();
-    const occurrence = panel.locator('article[data-start="' + seed.sourceVersion.contentText.indexOf(seed.token) + '"]'); await occurrence.waitFor();
+    const occurrence = await openOccurrence(seed.sourceVersion.contentText.indexOf(seed.token));
     const panelError = panel.locator('.life-error[role=alert]'); assert.equal(await panelError.isHidden(), true); assert.equal(await panelError.textContent(), '');
     assert.match(await occurrence.innerText(), /대상 후보 여러 개/);
     const target = occurrence.locator('section.life-backup-source[data-version-id="' + seed.targetVersion.id + '"]');
+    await openCandidate(target);
     assert.equal(await target.getByRole('button', { name: '이 위치를 연결', exact: true }).count(), 2);
     assert.match(await target.innerText(), /두 번째 🌿 문맥/);
-    assert.match(await panel.innerText(), /첨부 목록을 아직 확인하지 않았습니다/);
+    const attachment = await openOccurrence(seed.sourceVersion.contentText.indexOf('![[사진.png]]'));
+    assert.match(await attachment.innerText(), /첨부 목록을 아직 확인하지 않았습니다/);
     await target.getByRole('button', { name: '이 위치를 연결', exact: true }).nth(1).click();
     await target.getByRole('button', { name: '이미 연결됨', exact: true }).waitFor(); assert.equal(await panelError.isHidden(), true); assert.equal(await panelError.textContent(), '');
     const after = await page.evaluate(ws => HaedoLife.Shell.storage.read(ws), seed.workspaceId), link = after.links.find(l => l.kind === 'obsidian_link' && l.sourceRefs?.[0]?.sourceVersionId === seed.sourceVersion.id);
@@ -72,12 +86,15 @@ async function main() {
     assert.equal(await page.locator('#lifeSourceText').textContent(), seed.sourceVersion.contentText); assert.equal(hash(await page.locator('#lifeSourceText').textContent()), hash(seed.sourceVersion.contentText));
     await page.locator('#lifeSearchReturn').click(); await page.locator('#lifeSearch').waitFor(); assert.equal(await page.locator('#lifeSearch').inputValue(), '테스트 출발 원문');
     report.checks.push('DOM selection, duplicated anchors, old quote and backup, exact target and original return');
-    await open('테스트 출발 원문', seed.sourceVersion.id); await page.locator('#lifeObsidianCandidates summary').click();
+    await open('테스트 출발 원문', seed.sourceVersion.id); await page.locator('#lifeObsidianCandidates > details > summary').click();
+    await openOccurrence(seed.sourceVersion.contentText.indexOf(seed.token));
     const linked = page.locator('#lifeObsidianCandidates article[data-start="' + seed.sourceVersion.contentText.indexOf(seed.token) + '"] section.life-backup-source[data-version-id="' + seed.targetVersion.id + '"]');
+    await openCandidate(linked);
     await linked.getByRole('button', { name: /일치 위치 2 열기/ }).click(); await page.locator('#lifeSearchReturn').click(); await page.locator('#lifeSearch').waitFor(); assert.equal(await page.locator('#lifeSearch').inputValue(), '테스트 출발 원문');
     report.checks.push('existing direct list return remains available');
-    await open('테스트 출발 원문', seed.sourceVersion.id); await page.locator('#lifeObsidianCandidates summary').click();
+    await open('테스트 출발 원문', seed.sourceVersion.id); await page.locator('#lifeObsidianCandidates > details > summary').click();
     const selfStart = seed.sourceVersion.contentText.indexOf('[[#자기제목]]');
+    await openOccurrence(selfStart);
     const self = page.locator('#lifeObsidianCandidates article[data-start="' + selfStart + '"] section.life-backup-source[data-version-id="' + seed.sourceVersion.id + '"]');
     await self.getByRole('button', { name: '이 위치를 연결', exact: true }).click(); await self.getByRole('button', { name: '이미 연결됨', exact: true }).waitFor();
     const selfBundle = await page.evaluate(ws => HaedoLife.Shell.storage.read(ws), seed.workspaceId), selfLink = selfBundle.links.find(l => l.kind === 'obsidian_link' && l.sourceRefs?.[0]?.locator?.start === selfStart);
@@ -99,9 +116,11 @@ async function main() {
         return original.create({ ...options, storage: delayed });
       } };
     });
-    await open('테스트 출발 원문', seed.sourceVersion.id); await page.locator('#lifeObsidianCandidates summary').click();
+    await open('테스트 출발 원문', seed.sourceVersion.id); await page.locator('#lifeObsidianCandidates > details > summary').click();
     const lateStart = seed.sourceVersion.contentText.indexOf('[[대상#목표|지연검사]]');
+    await openOccurrence(lateStart);
     const late = page.locator('#lifeObsidianCandidates article[data-start="' + lateStart + '"] section.life-backup-source[data-version-id="' + seed.targetVersion.id + '"]');
+    await openCandidate(late);
     const beforeLate = await page.evaluate(ws => HaedoLife.Shell.storage.read(ws), seed.workspaceId);
     await late.getByRole('button', { name: '이 위치를 연결', exact: true }).first().click(); await page.waitForFunction(() => __obsidianGate.entered);
     await page.locator('#lifeSearchReturn').click(); await page.locator('#lifeSearch').waitFor(); await page.evaluate(() => __obsidianGate.release());
@@ -118,8 +137,10 @@ async function main() {
           commitLocal: (...args) => { gate.commits++; return underlying.commitLocal(...args); } } });
       } };
     });
-    await open('테스트 출발 원문', seed.sourceVersion.id); await page.locator('#lifeObsidianCandidates summary').click();
+    await open('테스트 출발 원문', seed.sourceVersion.id); await page.locator('#lifeObsidianCandidates > details > summary').click();
+    await openOccurrence(lateStart);
     const lateAccount = page.locator('#lifeObsidianCandidates article[data-start="' + lateStart + '"] section.life-backup-source[data-version-id="' + seed.targetVersion.id + '"]');
+    await openCandidate(lateAccount);
     const beforeAccount = await page.evaluate(ws => HaedoLife.Shell.storage.read(ws), seed.workspaceId);
     await lateAccount.getByRole('button', { name: '이 위치를 연결', exact: true }).first().click(); await page.waitForFunction(() => __obsidianGate.entered);
     await page.evaluate(async value => { await HaedoAuth.client.auth.setSession(value); await HaedoAuth.verify(); }, session(accounts.b));
