@@ -1,6 +1,6 @@
 # 목적별 메뉴와 결과물까지의 이동
 
-2026-10-26 UTC(10-27 KST 최종 검수). 기준 배포 main은 `c9c21ef21cda138f1a81bacc808199dedf49b3a3`, 설계는 [기능 목적·워크플로](purpose-workflow.md)다. **구현과 로컬 통합 검수를 마쳤다.** 정확 PR/main CI와 실제 배포 결과는 아래 출시 기록으로 확정한다.
+2026-10-26 UTC(10-27 KST 최종 검수). 기준 배포 main은 `c9c21ef21cda138f1a81bacc808199dedf49b3a3`, 설계는 [기능 목적·워크플로](purpose-workflow.md)다. **구현과 로컬 통합 검수를 마쳤다.** 정확 PR/main CI와 실제 배포 결과는 [PR139 출시 기록](https://github.com/wonchance-art/life-haedo/pull/139)으로 확정한다.
 
 ## 이번 작업의 결과
 
@@ -76,3 +76,5 @@
 실행별 원본·source/fixture/runner 해시·실패·화면·다운로드·종료 영수증은 `.local/purpose-workflow-20261026/`에 둔다. 제품과 원문/사진·계정 경계의 미해결 주요 결함은 로컬 검토에서0이다. 전체 격리 PostgreSQL/CI와 실제 배포는 로컬 브라우저 검사로 대신하지 않으며 PR의 정확 HEAD와 main 배포 결과를 별도로 기록한다.
 
 실제 소유자 기기·Google 로그인·개인 원본·직접 읽기 효용은 자동 검수의 결과로 주장하지 않는다. 다음 작업은 [최신 로드맵](../life-tools-design/roadmap.md)의 두 기기 완주와 내부 문서·첨부의 정확 연결이다.
+
+첫 PR CI의 핵심 경험·컬렉션 실패는 닫힌 자료 메뉴 안 버튼을 직접 누르던 검사 경로였다. 원래 실패와 정확 HEAD를 보존하고 실제 메뉴 열기만 추가했다. 같은 경로의 플랫폼·자료 활용 검사도 함께 이관했으며 기존 단언/제한 시간으로 core5·collection12·platform8·product-flow3(27캡처)를 확인했다. 플랫폼 구버전 사이트 옵션 분기는 해당 로컬 실행에서 미실행이며 최종 CI의 실제 범위와 구분한다.
