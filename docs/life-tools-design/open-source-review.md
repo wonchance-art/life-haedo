@@ -1075,3 +1075,7 @@ Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와
 공식 MCP 문서로 [Auth getUser](https://supabase.com/docs/reference/javascript/auth-getuser)의 서버 확인에 따른 사용자 정당성 검증과 기존 Auth/RLS 경계의 재사용을 확인했다. [changelog.md](https://supabase.com/changelog.md)는 직접 조회가 URLError로 실패해 본문을 확인하지 못했으며 우회하지 않았다. 이번에 SDK·키·스키마를 바꾸지 않는다.
 
 요구는 선택한 서버 판을 검증해 같은 로컬 사본으로 재개하는 것이다. 기존 BlogSync의 CAS·영속 작업 영수증, idb의 원자 트랜잭션과 계정 가드를 확장했다. 글 관리의 서버 새 판 읽기 비교도 기존 원문 조회와 metadata CAS를 사용해 업로드 없이 수행한다. 새 CRDT·동기화 엔진·SDK를 추가하면 기존 사본·충돌 보존과 성공 기준을 중복 관리해야 하므로 도입하지 않는다. [제품 계약·최종 로컬 검수 범위](../design-review/account-blog-continuity.md)의 여정6개·단위1142개를 확인했으며 최종 통합 CI·출시·실제 Apple 체험은 별도 증거로 확정한다.
+
+## Obsidian 링크 후보와 기존 원문 계약 — 2026-10-26
+
+[remark-wiki-link](https://github.com/landakram/remark-wiki-link)는 MIT, npm 최신 2.0.1(2023-10-10 수정)로 위키 링크를 Markdown AST에 표현한다. 공식 GitHub 저장소는 보관 상태가 아니며 마지막 push는 2023-10-10이다. 앱은 이미 공식 배포본 markdown-it 15.0.3과 DOMPurify를 읽기 렌더에 사용한다(`vendor/markdown-it/manifest.json`). 이 후보를 새로 도입해도 원래 UTF-16 토큰 범위·보관함 경계·중복 제목/블록의 명시 선택·기존 Core 관계/CAS를 완성하지 못하므로 렌더러 변경이나 새 런타임 의존성은 추가하지 않는다. 기존 `scripts/lib/obsidian-vault.mjs`와 `obsidian-decisions.js`는 각각 Node 감사와 명시 결정 파일에 쓰되 실시간 후보 UI에서 private 감사 파일을 요구하지 않는다. 브라우저에서는 원문을 수정하지 않는 좁은 후보 해석기와 기존 Core 링크 저장을 사용하며, 지원하지 못한 문법·미확인 첨부는 미확인으로 남긴다. 실제 대형 보관함 사용성과 Apple 기기·외부 네이버 수집은 별도다.
