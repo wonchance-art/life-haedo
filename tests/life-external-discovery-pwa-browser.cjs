@@ -1,4 +1,4 @@
-/* Actual v161 -> v162 SW, cached public catalog and private local reactions.
+/* Actual v161 -> v163 SW, cached public catalog and private local reactions.
  * Prior SW script only is old; app modules are current. Real SDK/IDB/SW with
  * anonymous Auth HTTP. No real account, source-site fetch or model download. */
 'use strict';
@@ -47,7 +47,7 @@ async function main() {
   const historicalReading = JSON.parse(historicalBytes);
   const cacheName = data => data.toString().match(/const CACHE\s*=\s*['"]([^'"]+)/)[1];
   report.oldCache = cacheName(oldSw); report.newCache = cacheName(newSw);
-  assert.equal(report.oldCache, 'haedo-v161'); assert.equal(report.newCache, 'haedo-v162');
+  assert.equal(report.oldCache, 'haedo-v161'); assert.equal(report.newCache, 'haedo-v163');
   report.oldSwSHA256 = sha(oldSw); report.newSwSHA256 = sha(newSw);
   assert.equal(report.oldSwSHA256, 'e5c6d7c1508dfc5c232930f3c7d22b17a7d77d95c7c4fa18991a04d0b25dcafa', 'Prior worker must be the exact cef8e8b0 v161 source');
   let old = true, failCatalog = false, strictOffline = false, transportProbe = false, probing = false;
@@ -166,7 +166,7 @@ async function main() {
     assert.ok(before.actions.entries.some(entry => entry.liked && entry.bookmarked));
     assert.ok(before.actions.entries.some(entry => !entry.liked && !entry.bookmarked && entry.likedAt === null && entry.bookmarkedAt === null));
     report.privateActionsFixture = { revision: before.actions.revision, entries: before.actions.entries.length, activeBoth: 1, cancelled: 1, personalizationEnabled: true, sha256: sha(Buffer.from(JSON.stringify(before.actions))) };
-    await check('v161 -> v162 worker preserves exact originals, workbench, manual interests, feedback, old settings, five language preferences, private reactions, virtual folders, annual plans and historical v3 reading', async () => {
+    await check('v161 -> v163 worker preserves exact originals, workbench, manual interests, feedback, old settings, five language preferences, private reactions, virtual folders, annual plans and historical v3 reading', async () => {
       old = false; await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
       await wait(page, async ({ oldCache, newCache }) => { const keys = await caches.keys(), r = await navigator.serviceWorker.getRegistration(); return !keys.includes(oldCache) && keys.includes(newCache) && r?.active?.state === 'activated' && navigator.serviceWorker.controller === r.active; }, { oldCache: report.oldCache, newCache: report.newCache });
       await page.reload(); await ready(page); assert.deepEqual(await state(), before);

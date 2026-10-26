@@ -187,6 +187,11 @@ async function main() {
     await page.reload(); await ready(page);
     await check('Management inventory and explicit selection preserve every original and require a separate file download', async () => {
       await enter(); assert.equal(await page.locator('#lifePreservation input[type="checkbox"]:checked').count(), 0);
+      const scopeNotice = await page.locator('#preservationNaverPhotos').innerText();
+      assert.match(scopeNotice, /자료 JSON과 이 근거 ZIP에는 네이버 원문의 사진 사본이 포함되지 않습니다/);
+      assert.match(scopeNotice, /원문을 열어 ‘글·사진 ZIP 저장’/);
+      assert.match(scopeNotice, /자료실 → 자료 메뉴 → 가져오기·관리 → 네이버 블로그 연결/);
+      assert.match(scopeNotice, /원문·사진 사본 ZIP 불러오기/);
       assert.equal(await page.locator('#preservationPostSelection input[data-post-id]').count(), 3, 'Unsaved drafts must not be export candidates');
       assert.equal(await page.locator('#preservationBoardSelection input[data-board-id]').count(), 2);
       await capture('inventory');
@@ -209,6 +214,8 @@ async function main() {
       assert.equal(await page.locator('#lifePreservation input[type="checkbox"]:checked').count(), 0);
       assert.deepEqual(await state(page, fixture.workspaceId), original); await prepare(fixture);
       assert.match(await page.locator('#preservationExportReview').innerText(), /9칸이 참조한 저장 글/);
+      assert.match(await page.locator('#preservationExportReview').innerText(), /선택한 글의 사진 원본과 파일 안 메타데이터/);
+      assert.match(await page.locator('#preservationReviewNaverPhotos').innerText(), /네이버 원문의 사진 사본이 포함되지 않습니다/);
       assert.deepEqual(await state(page, fixture.workspaceId), original); await capture('selected-review');
       const event = page.waitForEvent('download'); await page.locator('#preservationDownload').click();
       archive = Buffer.from(await fs.readFile(await (await event).path()));
@@ -255,7 +262,9 @@ async function main() {
       }
     });
     await check('An actual install transaction abort preserves the original, active workspace and file candidate for retry', async () => {
-      await load(archive); const before = await state(page, fixture.workspaceId);
+      await load(archive);
+      assert.match(await page.locator('#preservationImportReview #preservationReviewNaverPhotos').innerText(), /원문·사진 사본 ZIP 불러오기/);
+      const before = await state(page, fixture.workspaceId);
       await page.evaluate(() => { window.__preservationAdd = IDBObjectStore.prototype.add; IDBObjectStore.prototype.add = function (...args) {
         const result = __preservationAdd.apply(this, args); if (this.name === 'bundles') this.transaction.abort(); return result;
       }; });

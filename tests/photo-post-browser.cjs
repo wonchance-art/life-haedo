@@ -15,13 +15,38 @@ async function main(){
  let images,backup,initial,first;
  try{
   await go(page);initial=await originals();images=await page.evaluate(()=>[ [4032,3024,'image/png'],[1200,1800,'image/jpeg'] ].map(([w,h,type],i)=>{const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d'),g=x.createLinearGradient(0,0,0,h);g.addColorStop(0,i?'#ddd4c4':'#b6d1ce');g.addColorStop(1,i?'#5e7773':'#40556f');x.fillStyle=g;x.fillRect(0,0,w,h);x.fillStyle='#24303b';x.font=Math.round(w/28)+'px sans-serif';x.fillText('익명 산책 사진 '+(i+1),w/12,h/3);for(let n=0;n<24;n++){x.fillStyle=n%2?'#faf7ed':'#31434c';x.fillRect(w*.15+n*w*.025,h*.6,w*.015,h*.18);}return {width:w,height:h,type,data:c.toDataURL(type,.95).split(',')[1]};}));
+  await check('Photos with no MIME label retain actual pixels and bytes through ZIP, and invalid or mismatched content is refused',async()=>{
+   const result=await page.evaluate(async()=>{
+    const M=HaedoLife.PhotoPost,C=HaedoLife.Core,docs=M.create(C.id),items=[];
+    for(const type of ['image/png','image/jpeg','image/webp']){
+     const canvas=document.createElement('canvas');canvas.width=96;canvas.height=64;const ctx=canvas.getContext('2d');ctx.fillStyle='#426758';ctx.fillRect(0,0,96,64);
+     const original=await new Promise(resolve=>canvas.toBlob(resolve,type));if(!original||original.type!==type)throw Error('Browser encoder unavailable: '+type);
+     const input=new File([original],'original.'+type.split('/')[1],{type:''}),photo=await M.readPhoto(input,C.id);
+     items.push({expected:type,actual:photo.type,blobType:photo.blob.type,width:photo.width,height:photo.height,
+       sameBytes:Array.from(new Uint8Array(await original.arrayBuffer())).join(',')===Array.from(new Uint8Array(await photo.blob.arrayBuffer())).join(','),
+       digest:photo.digest,expectedDigest:await M.digest(original)});
+     docs.photos.push(photo);docs.ops.push({insert:{photo:{id:photo.id,caption:'설명',alt:'대체 텍스트'}}},{insert:'\n'});
+    }
+    const restored=await M.readBackup(await M.backup(docs),C.id);
+    const backup=await Promise.all(restored.photos.map(async p=>({type:p.type,width:p.width,height:p.height,digest:p.digest,actual:await M.digest(p.blob)})));
+    const validPng=await new Promise(resolve=>{const c=document.createElement('canvas');c.width=2;c.height=2;c.toBlob(resolve,'image/png');});
+    const bad=[new File([validPng],'wrong.jpg',{type:'image/jpeg'}),new File([new Uint8Array([137,80,78,71,13,10,26,10])],'broken.png',{type:''}),new File(['unsupported data'],'unknown',{type:''}),new File([validPng],'wrong.bin',{type:'application/octet-stream'})];
+    const rejected=[];for(const file of bad){try{await M.readPhoto(file,C.id);rejected.push(false);}catch(_){rejected.push(true);}}
+    return {items,backup,rejected};
+   });
+   assert.deepEqual(result.items.map(x=>x.actual),['image/png','image/jpeg','image/webp']);
+   for(const x of result.items){assert.equal(x.actual,x.expected);assert.equal(x.blobType,x.expected);assert.equal(x.width,96);assert.equal(x.height,64);assert.equal(x.sameBytes,true);assert.equal(x.digest,x.expectedDigest);}
+   for(let i=0;i<result.backup.length;i++){const x=result.backup[i],original=result.items[i];assert.equal(x.type,original.expected);assert.equal(x.width,96);assert.equal(x.height,64);assert.equal(x.digest,original.digest);assert.equal(x.actual,original.digest);}
+   assert.deepEqual(result.rejected,[true,true,true,true]);
+  });
   await check('Entering the photo editor cannot hide an unsaved legacy draft after a failed transaction',async()=>{
    await require('./page-composer-entry.cjs').openLegacy(page);await page.evaluate(()=>{window.__legacyPhotoPut=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(...args){const r=__legacyPhotoPut.apply(this,args);if(args[0]?.key?.startsWith('page-drafts:'))this.transaction.abort();return r;};});await page.locator('#ppBody').fill('기존 글의 보존할 초안');await page.locator('.pp-status[role=alert]').waitFor();await click('글쓰기');await page.locator('.photo-status[role=alert]').waitFor();assert.equal(await page.locator('#photoTitle').count(),0);assert.equal(await page.locator('#ppBody').inputValue(),'기존 글의 보존할 초안');assert.equal(await page.locator('#ppBody').isVisible(),true);await page.evaluate(()=>IDBObjectStore.prototype.put=__legacyPhotoPut);await click('초안 닫기');await page.locator('#ppBody').waitFor({state:'detached'});initial=await originals();
   });
   await check('A blog-style editor inserts unchanged 4032px originals between paragraphs; formatting, captions and undo preserve bytes',async()=>{
    await click('글쓰기');await page.locator('#photoTitle').fill('산책에서 남긴 두 장의 사진');await page.locator('.ql-editor').fill('사진 앞에 남기는 문장\n사진 뒤에 이어 쓰는 생각');
    await page.evaluate(()=>{const q=Quill.find(document.querySelector('.ql-container'));q.formatText(0,4,'bold',true,'user');q.setSelection(13,0,'silent');});
-   await page.locator('#photoFiles').setInputFiles(images.map((v,i)=>({name:'anonymous-'+i+(i?'.jpg':'.png'),mimeType:v.type,buffer:Buffer.from(v.data,'base64')})));await page.locator('.photo-block').nth(1).waitFor();await saved();
+   const selectedTypes=await page.evaluate(values=>{const files=new DataTransfer();values.forEach((v,i)=>{const bytes=Uint8Array.from(atob(v.data),c=>c.charCodeAt(0));files.items.add(new File([bytes],'anonymous-'+i+(i?'.jpg':'.png'),{type:i?v.type:''}));});const input=document.querySelector('#photoFiles');input.files=files.files;const types=[...input.files].map(file=>file.type);input.dispatchEvent(new Event('change',{bubbles:true}));return types;},images);
+   assert.deepEqual(selectedTypes,['','image/jpeg']);await page.locator('.photo-block').nth(1).waitFor();await saved();
    await page.locator('.photo-block img').first().click();await page.getByRole('textbox',{name:'사진 설명',exact:true}).fill('천천히 걸으며 바라본 풍경 🌱');await page.locator('.photo-settings summary').click();await page.getByRole('textbox',{name:'사진 대체 텍스트',exact:true}).fill('밝은 길과 짙은 나무의 익명 풍경');await saved();
    const before=(await read()).docs[0];first=before.id;assert.equal(before.photos[0].width,4032);assert.equal(before.photos[0].height,3024);assert.equal(before.photos[0].digest,createHash('sha256').update(Buffer.from(images[0].data,'base64')).digest('hex'));assert(before.ops.some(op=>op.attributes?.bold));
    await click('사진 빼기');assert.equal(await page.locator('.photo-block').count(),1);await click('실행 취소');assert.equal(await page.locator('.photo-block').count(),2);await page.waitForFunction(()=>[...document.querySelectorAll('.photo-block img')].every(n=>n.naturalWidth>0));await saved();assert.equal((await read()).docs[0].photos[0].digest,before.photos[0].digest);await page.locator('.photo-block').first().focus();await page.keyboard.press('Enter');assert.equal(await page.getByRole('textbox',{name:'사진 설명',exact:true}).evaluate(n=>n===document.activeElement),true);await page.locator('#photoTitle').scrollIntoViewIfNeeded();await snap('editor');await click('사진 편집 닫기');

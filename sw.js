@@ -1,5 +1,5 @@
 /* Versioned static shell. Private account data uses verified services and cache/outbox storage. */
-const CACHE='haedo-v162';
+const CACHE='haedo-v163';
 const SHELL=[
   './assets/life/library-meta.js','./assets/life/library-remote.js','./assets/life/library-meta-sync.js','./assets/life/library-originals-remote.js','./assets/life/account-library.js',
   './assets/life/source-folders.js','./assets/life/source-folders-ui.js','./assets/life/source-folders.css',
@@ -16,7 +16,7 @@ const SHELL=[
   './assets/life/preservation-ui.js','./assets/life/preservation.css','./assets/life/source-reference.js','./assets/life/blog.js','./assets/life/blog-evidence.js',
   './assets/life/blog-remote.js','./assets/life/blog-sync.js','./assets/life/account-blog-ui.js','./assets/life/blog-public-ui.js','./assets/life/blog-manager.js','./assets/life/blog-public.js',
   './assets/life/blog-public.css','./assets/life/blog-manager.css','./','./index.html','./login.html',
-  './workspace.html','./timeline.html','./assets/life/obsidian-decisions.js','./assets/life/obsidian-package.js','./goals.html',
+  './workspace.html','./timeline.html','./assets/life/obsidian-decisions.js','./assets/life/obsidian-link-candidates.js','./assets/life/obsidian-link-commit.js','./assets/life/obsidian-link-candidates-ui.js','./assets/life/obsidian-package.js','./goals.html',
   './habits.html','./privacy.html','./manifest.webmanifest','./icon.svg','./icon-maskable.svg',
   './vendor/daisyui.css','./vendor/daisyui-themes.css','./assets/app.css','./assets/haedo-type.css','./vendor/pretendard/PretendardVariable.woff2',
   './assets/haedo-motion.js','./assets/haedo-motion.css','./assets/data.js','./assets/sync.js','./assets/app.js',
