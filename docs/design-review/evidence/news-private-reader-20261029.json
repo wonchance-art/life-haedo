@@ -60,7 +60,7 @@
     "integratedInstallation": {
       "pass": true,
       "checks": 12,
-      "scope": "Agent-verified disposable PostgreSQL 17 before environment disconnect: exact migration allowlist, atomic rollback, existing rows/functions/privileges and populated private cache reinstallation. Final restored commit must pass GitHub CI separately.",
+      "scope": "Current final test source on disposable PostgreSQL 17: exact migration allowlist, atomic rollback, existing rows/functions/privileges and populated private cache reinstallation. No production access.",
       "unknownMigrationRejected": true,
       "containerRemoved": true
     }
@@ -120,7 +120,8 @@
     "sw.js": "a41ce8da8daca379cf9e1a6e1a0b36fd691e1e73ae02ffa28c8180ee1fdd3425",
     "supabase/migrations/20261029084145_discovery_private_reader.sql": "30c741bba2ef5b3658c7b17d653828649b0d98d30e2db17d4e12c877b057bd0e",
     "supabase/functions/haedo-discovery-private/handler.mjs": "ae56fb5c44af0c2fba55dd27854bf6eb0e42183c5d84295cc71fb2875640eb03",
-    "supabase/functions/haedo-discovery-private/article-intake.mjs": "75a8db63539efd29485820e512469d0bf1318a527c4d8b4ef186f2bf0b30739a"
+    "supabase/functions/haedo-discovery-private/article-intake.mjs": "75a8db63539efd29485820e512469d0bf1318a527c4d8b4ef186f2bf0b30739a",
+    "tests/integrated-release-installation.cjs": "93b96436f6ba2cf35ebca3c1581211ba70e3345cb65025630cb293b7d9c4733d"
   },
   "limits": [
     "Other six sources remain metadata/link only.",
@@ -143,5 +144,15 @@
     "initialFailure": "The strict integrated installer registry omitted the new private reader migration.",
     "fix": "Register the exact filename/SHA256 and extend atomic rollback, legacy preservation and populated-cache reinstallation checks; unknown files remain rejected.",
     "productionChanges": false
+  },
+  "recoveryCorrection": {
+    "initialRun": 40849922586,
+    "initialFailure": "A reconstructed test SQL dollar-quote was collapsed by JavaScript replacement-string expansion.",
+    "locallyReproduced": true,
+    "fix": "Restore the original $$ delimiter on one synthetic Auth fixture line.",
+    "runtimeChanged": false,
+    "assertionsWeakened": false,
+    "timeoutChanged": false,
+    "localChecksAfterFix": 12
   }
 }

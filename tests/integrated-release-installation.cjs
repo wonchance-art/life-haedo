@@ -470,7 +470,7 @@ async function main() {
       const session = randomUUID();
       psql('alter table auth.users add column is_anonymous boolean not null default false;' +
         'create table auth.sessions(id uuid primary key,user_id uuid not null references auth.users(id),not_after timestamptz);' +
-        "create function auth.jwt() returns jsonb language sql stable as $select nullif(current_setting('request.jwt.claims',true),'')::jsonb$;" +
+        "create function auth.jwt() returns jsonb language sql stable as $$select nullif(current_setting('request.jwt.claims',true),'')::jsonb$$;" +
         'insert into auth.sessions(id,user_id) values(' + q(session) + '::uuid,' + q(owner) + '::uuid);');
       const allNamespaces = "array['public','auth','storage','haedo_blog_private','haedo_material_private','haedo_naver_private','haedo_discovery_private']";
       const allCatalog = catalogQuery.replaceAll(namespaces, allNamespaces).replace(" and p.proname not like 'life_material_%'", '');
@@ -486,6 +486,9 @@ async function main() {
       const installedCatalog = sql(allCatalog);
       const addedFunction = row => row[0] === 'haedo_discovery_private' || row[0] === 'public' && ['life_discovery_article_claim', 'life_discovery_article_finish'].includes(row[1]);
       assert.equal(installedCatalog.functions.filter(addedFunction).length, 7);
+      assert.equal(installedCatalog.functions.filter(row => row[0] === 'haedo_discovery_private').length, 5);
+      assert.equal(installedCatalog.functions.filter(row => row[0] === 'public' && addedFunction(row)).length, 2);
+      assert.deepEqual(installedCatalog.relations.filter(row => row[0] === 'haedo_discovery_private').map(row => row[1]).sort(), ['articles', 'articles_pkey', 'limits', 'limits_pkey']);
       const originalCatalog = {
         schemas: installedCatalog.schemas.filter(row => row[0] !== 'haedo_discovery_private'),
         functions: installedCatalog.functions.filter(row => !addedFunction(row)),
@@ -501,8 +504,8 @@ async function main() {
       const lease = claim(); assert.equal(lease.status, 'claimed');
       const content = {
         coverage: 'full_text', summary: 'Synthetic summary', bodyText: '\ufeff정확한 본문 🌿\r\n두 번째 줄',
-        rights: { mode: 'private_reading' },
-        acquisition: { scope: 'private_account', method: 'publisher_html', sourceUrl: articleUrl, fetchedAt: new Date().toISOString() }
+        rights: { mode: 'private_reading', label: 'Synthetic publisher', url: articleUrl },
+        acquisition: { scope: 'private_account', method: 'publisher_html', sourceUrl: articleUrl, fetchedAt: new Date().toISOString(), license: { label: 'Synthetic terms', url: null } }
       };
       const finished = rpc('life_discovery_article_finish', [
         q(owner) + '::uuid', q('mit-linguistics'), q(articleUrl), q(lease.leaseToken) + '::uuid', json(content), 'null'
