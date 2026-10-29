@@ -1,9 +1,8 @@
-/* Public article discovery. Private interests and feedback stay in this browser;
- * only the prepared same-origin public catalog is requested. No source writes. */
+/* Discover public article metadata and open account-scoped reading snapshots. */
 (function (root) {
   'use strict';
   const node = (tag, text, cls) => { const value = root.document.createElement(tag); if (text != null) value.textContent = text; if (cls) value.className = cls; return value; };
-  function create({ container, storage, getBundle, isCurrent, onImport, onOpenInterests, onOpenOriginal, onReaderOpen, onReaderClose }) {
+  function create({ container, storage, getBundle, isCurrent, onImport, onOpenInterests, onOpenOriginal, onReaderOpen, onReaderClose, loadPrivateArticle }) {
     let active = false, disposed = false, generation = 0, workspaceId = null, surface = null;
     let current = null, client = null, unsubscribe = null, aborter = null, pendingWrite = null;
     const downloadUrls = new Set();
@@ -137,7 +136,8 @@
     function entryFor(article) { return current.actions?.entries.find(entry => entry.canonicalUrl === article.canonicalUrl); }
     function captured(article) {
       const source = current.catalog?.feed?.sources.find(value => value.id === article.sourceId);
-      return actionsModel().capture(article, source || { id: article.sourceId, name: article.sourceName });
+      const metadata = articleReader?.article === article ? articleReader.metadata : article;
+      return actionsModel().capture(metadata, source || { id: metadata.sourceId, name: metadata.sourceName });
     }
     async function persistAction() {
       if (!scope() || !current.actionIntent || actionWrite || current.actionConflict) return;
@@ -559,7 +559,13 @@
         if (!suspended && root.document.getElementById('lifeApp')?.hidden === false) syncTransientControls();
       } else scheduleAuto();
     }
-    function pageSuspend() { suspended = true; stopTimer(); cancelFetch(); }
+    function pageSuspend() {
+      suspended = true; stopTimer(); cancelFetch();
+      if (articleReader?.aborter) {
+        articleReader.aborter.abort(); articleReader.aborter = null;
+        showReaderError(articleReader, '연결을 확인한 뒤 다시 불러와 주세요.');
+      }
+    }
     function pageReady() {
       // The shell emits this only after revalidating the account and revealing it.
       suspended = false;
@@ -737,6 +743,7 @@
       return current?.catalog?.feed?.articles.find(value => value.id === article.id && value.sourceId === article.sourceId && value.canonicalUrl === article.canonicalUrl) || null;
     }
     function clearReader() {
+      articleReader?.aborter?.abort();
       articleReader?.view.dispose();
       articleReader = null;
       if (current?.readerHost) { current.readerHost.replaceChildren(); current.readerHost.hidden = true; }
@@ -756,18 +763,53 @@
       });
     }
     function openReader(article, focusKey) {
-      if (!scope() || articleReader) return;
+      if (!scope() || suspended || articleReader) return;
       capture(article.id, focusKey);
-      // Saved reactions retain metadata only; use content solely from the current validated catalog.
+      // Public metadata never substitutes for an authenticated reading snapshot.
       const selected = clone(currentFeedArticle(article) || article), token = generation;
+      delete selected.bodyText; delete selected.images; delete selected.summary; selected.coverage = 'link_only';
+      selected.rights = { ...selected.rights, mode: 'metadata_only' };
       const source = current.catalog?.feed?.sources.find(value => value.id === selected.sourceId);
       const back = button(null, 'discoveryReaderBack', closeReader, 'discovery-reader-back');
       back.setAttribute('aria-label', '뉴스로 돌아가기'); back.title = '뉴스로 돌아가기'; back.append(root.HaedoLife.Icons.create('back'));
       const original = originalLink(selected, { text: '원문', focusKey: 'reader-original:' + selected.id }); original.className = 'discovery-reader-original'; original.dataset.discoveryOriginal = '';
-      const view = root.HaedoLife.DiscoveryReaderUI.create({ article: selected, sourceName: source?.name || selected.sourceName || '출처 미확인', published: date(selected.publishedAt), backButton: back, originalLink: original });
-      articleReader = { article: selected, view, memory: null }; current.readerHost.replaceChildren(view.element); draw();
+      const view = root.HaedoLife.DiscoveryReaderUI.create({ article: selected, sourceName: source?.name || selected.sourceName || '출처 미확인', published: date(selected.publishedAt), backButton: back, originalLink: original, loading: true });
+      articleReader = { article: selected, metadata: clone(selected), view, memory: null, aborter: null }; current.readerHost.replaceChildren(view.element); draw();
       onReaderOpen?.();
       root.requestAnimationFrame(() => { if (!valid(token) || articleReader?.view !== view) return; view.heading.focus({ preventScroll: true }); surface.scrollIntoView({ block: 'start', behavior: 'instant' }); });
+      loadReader(articleReader);
+    }
+    function showReaderError(selected, message) {
+      if (articleReader !== selected) return;
+      const retry = button('다시 불러오기', 'discoveryReaderRetry', () => loadReader(selected), 'discovery-quiet');
+      selected.view.setState({ error: message, retryButton: retry });
+    }
+    async function loadReader(selected) {
+      if (!scope() || suspended || articleReader !== selected || selected.aborter) return;
+      const token = generation, request = new AbortController(); selected.aborter = request;
+      const retry = selected.view.element.querySelector('#discoveryReaderRetry');
+      const retryFocused = retry === root.document.activeElement;
+      selected.view.setState({ loading: true, retryButton: retry });
+      try {
+        if (typeof loadPrivateArticle !== 'function') throw Error('개인 읽기 연결을 확인하지 못했습니다.');
+        const loaded = await loadPrivateArticle(clone(selected.article), { signal: request.signal, workspaceId });
+        if (!valid(token) || suspended || articleReader !== selected || selected.aborter !== request || request.signal.aborted) return;
+        if (loaded === null) { selected.view.setState(); draw(); return; }
+        if (!loaded || loaded.id !== selected.article.id || loaded.sourceId !== selected.article.sourceId || loaded.canonicalUrl !== selected.article.canonicalUrl) throw Error('선택한 글의 본문을 확인하지 못했습니다.');
+        // Only this successful selection updates the snapshot. Later catalog
+        // refreshes or reactions never replace the open article's contents.
+        selected.article = clone(loaded); selected.view.setContent(selected.article); selected.view.setState();
+        draw();
+      } catch (error) {
+        if (!valid(token) || suspended || articleReader !== selected || selected.aborter !== request || request.signal.aborted) return;
+        showReaderError(selected, '본문을 불러오지 못했습니다.');
+      } finally {
+        if (selected.aborter === request) selected.aborter = null;
+        if (retryFocused && valid(token) && !suspended && articleReader === selected && !request.signal.aborted &&
+            [root.document.body, retry].includes(root.document.activeElement)) {
+          (selected.view.element.querySelector('#discoveryReaderRetry') || selected.view.heading).focus({ preventScroll: true });
+        }
+      }
     }
     function readerButton(article) {
       const control = button(article.title, null, () => openReader(article, 'open:' + article.id), 'discovery-title-button');
@@ -781,7 +823,7 @@
       link.addEventListener('click', event => openOriginal(event, article, focusKey, currentFeedOnly)); return link;
     }
     function openOriginal(event, article, focusKey = 'open:' + article.id, currentFeedOnly = false) {
-      if (!scope() || currentFeedOnly && !currentFeedArticle(article)) { event.preventDefault(); return; }
+      if (!scope() || suspended || currentFeedOnly && !currentFeedArticle(article)) { event.preventDefault(); return; }
       capture(article.id, focusKey);
       if (onOpenOriginal) {
         event.preventDefault();

@@ -1092,6 +1092,10 @@ Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와
 
 새 크롤러나 브라우저 자동화 서비스를 추가하지 않고 기존 collector·harvest-network·extractor를 읽기 전용 CLI에서 재사용한다. 공식 npm의 [Cheerio](https://www.npmjs.com/package/cheerio)는 확인 당시1.2.0/MIT(공식메타데이터갱신2026-07-17)이며 기존worker와검수fixture의고정1.2.0을유지한다. 실제probe때만기존고정검수의존성을사용하고기본정책진단은추가패키지나외부요청없이실행된다. 전체본문·사진원본여부·예약가동을공개표본추출과혼동하지않는다. 새sync/추출엔진·쿠키수집·headless우회를도입하지않는다.
 
-## 뉴스 내부 읽기 — 공식 XML과 안전한 DOM 재사용 (2026-10-29)
+## 개인 뉴스 본문과 계정 전용 수신 — 2026-10-29
 
-Readability 공식 tags/package 최신 0.6.0·Apache-2.0과 GHSA-3p6v-hrg8-8qj7의 수정 버전을 확인했다. 광범위 HTML 추출에는 유용하지만 sanitizer·권리 판단을 대신하지 않는다. Frontiers는 본문·초록·권리·그림이 분리된 공식 JATS를 제공하므로 기존 ElementTree/HTMLParser와 평문 DOM을 재사용한다. 새 Node DOM/추출기·이미지 프록시·AI API는 필요하지 않다. [공식 근거·선택 이유·유지 조건](../design-review/news-internal-reader.md#대안반대-검토)을 따른다.
+공식 [Cheerio npm](https://www.npmjs.com/package/cheerio)·[릴리스](https://github.com/cheeriojs/cheerio/releases)·[보안 권고](https://github.com/cheeriojs/cheerio/security/advisories)를 확인했다. 최신1.2.0/MIT이며 직접 게시된 권고는 조회시0건이다(전체 의존성의 안전 보장은 아님). 기존 Naver worker와 fixture의 고정1.2.0/slim 및 네트워크/robots/이미지 검증을 재사용한다. 새 npm 의존성 없이 공식 JATS/RSS·MIT 고정본문 selector를 private Edge에 연결하고 공개 Python 본문 추출 중복을 제거했다. Deno2.9.6 `check --frozen`과 기존 Naver 회귀를 통과했다.
+
+[Readability0.6.0](https://github.com/mozilla/readability/tags)/Apache-2.0와 [수정된 보안 권고](https://github.com/mozilla/readability/security/advisories/GHSA-3p6v-hrg8-8qj7)는 앞서 확인했다. 범용 추출은 별도 DOM·본문 범위 검증이 필요해 현재 세 출처에는 직접 도입하지 않는다. 제목으로 사용자 이해도를 정하는 새 모델이나 언어별 속도를 확인하지 않은 읽기 시간 옵션도 넣지 않는다. 실제 본문 근거가 없는 분량 설정은 이번 목적에 도움이 없어 보류했다.
+
+Supabase 현행 [Auth headers](https://supabase.com/docs/guides/functions/auth-headers)·[Edge dependencies](https://supabase.com/docs/guides/functions/dependencies)·[RLS](https://supabase.com/docs/guides/database/postgres/row-level-security)와 changelog를 확인했다. 기존 Auth/SDK·SQL private helper/public invoker·살아 있는 세션 검사 패턴을 재사용하고 account별 캐시·lease만 추가했다. gateway JWT와 Auth 재검증은 실제 설정된 테스트 계정 요청으로 확인했다. 새 AI 서비스·벡터 DB·크롤링 서비스를 추가하지 않는다. [구현·지원 범위](../design-review/news-internal-reader.md).

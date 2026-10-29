@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 
-// Reviewed public metadata and licensed Frontiers content. Refresh an isolated copy, then install it in a prepared
+// Public metadata only. Article text and images use the authenticated reader.
+// Refresh an isolated copy, then install it in a prepared
 // Pages artifact. Never commit the catalog or read personal settings/documents.
 const fs = require('node:fs');
 const path = require('node:path');
@@ -38,6 +39,25 @@ const PREVIOUS_LLT_SOURCE_IDS = Object.freeze([...PREVIOUS_RESEARCH_SOURCE_IDS, 
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+const PUBLIC_FIELDS = Object.freeze({
+  feed: ['schemaVersion', 'generatedAt', 'sources', 'articles'],
+  source: ['id', 'name', 'url', 'feedUrl', 'language', 'rights', 'freshnessMaxAgeDays', 'lastAttemptAt', 'attemptAt', 'lastSuccessAt', 'fetchedAt', 'status', 'stale', 'error', 'robotsStatus', 'entryCount', 'latestArticleAt', 'robotsCheckedAt'],
+  article: ['id', 'sourceId', 'url', 'canonicalUrl', 'title', 'publishedAt', 'dateStatus', 'updatedAt', 'updatedDateStatus', 'dateBasis', 'author', 'language', 'tags', 'summary', 'coverage', 'rights', 'fetchedAt'],
+  rights: ['mode', 'label', 'url']
+});
+function publicFields(value, kind) {
+  assert(value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).every(key => PUBLIC_FIELDS[kind].includes(key)),
+    'Public catalog fields exceed the reviewed source scope.');
+  if (kind === 'feed') return;
+  for (const [key, field] of Object.entries(value)) {
+    if (key === 'rights') continue; // Checked independently with its own exact fields.
+    const valid = key === 'tags' ? Array.isArray(field) && field.length <= 20 && field.every(tag => typeof tag === 'string' && tag.length <= 80) :
+      key === 'stale' ? typeof field === 'boolean' :
+      ['entryCount', 'freshnessMaxAgeDays'].includes(key) ? Number.isSafeInteger(field) && field >= 0 && field <= 500 :
+      field === null || typeof field === 'string' && field.length <= 8192;
+    assert(valid, 'Public catalog metadata types exceed the reviewed source scope.');
+  }
+}
 
 function assertWorkflowContext(env = process.env) {
   assert(env.GITHUB_ACTIONS === 'true' && env.GITHUB_REPOSITORY === 'wonchance-art/life-haedo' &&
@@ -81,6 +101,7 @@ const writeJSON = (file, value) => atomic(file, Buffer.from(JSON.stringify(value
 function validateCatalog(bytes, now = Date.now(), previousSeed = false) {
   assert(Buffer.isBuffer(bytes) && bytes.length <= MAX_BYTES, 'Public catalog exceeds the size limit.');
   const raw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+  publicFields(raw, 'feed');
   const checked = Discovery.validateFeed(raw, { now }); // Never inject an external allowlist.
   const sourceIds = Object.keys(Discovery.ALLOWED_SOURCES).sort();
   const suppliedIds = raw.sources.map(source => source.id).sort();
@@ -90,8 +111,8 @@ function validateCatalog(bytes, now = Date.now(), previousSeed = false) {
   assert(checked.validation.invalid.length === 0 && checked.articles.length === raw.articles.length && raw.articles.length > 0,
     'Public catalog contains rejected or missing articles.');
   for (const source of raw.sources) {
-    assert(source.rights.mode === 'metadata_only' || source.id === 'frontiers-psychology' &&
-      source.rights.mode === 'full_text_allowed' && source.rights.url === 'https://www.frontiersin.org/journals/psychology/about#copyright-statement',
+    publicFields(source, 'source'); publicFields(source.rights, 'rights');
+    assert(source.rights.mode === 'metadata_only',
     'Only reviewed source permissions are allowed.');
     for (const field of ['lastSuccessAt', 'lastAttemptAt']) {
       assert(source[field] === null || Date.parse(source[field]) <= now, 'Public source receipt is in the future.');
@@ -99,19 +120,11 @@ function validateCatalog(bytes, now = Date.now(), previousSeed = false) {
     assert(source.fetchedAt === undefined || source.fetchedAt === source.lastSuccessAt, 'Source fetch/success receipt mismatch.');
   }
   for (const article of raw.articles) {
-    const licensed = article.sourceId === 'frontiers-psychology' &&
-      article.rights.url === 'https://creativecommons.org/licenses/by/4.0/' &&
-      ((article.coverage === 'summary' && ['summary_allowed', 'full_text_allowed'].includes(article.rights.mode)) ||
-       (article.coverage === 'full_text' && article.rights.mode === 'full_text_allowed'));
+    publicFields(article, 'article'); publicFields(article.rights, 'rights');
     assert(!Object.hasOwn(article, 'description') && !Object.hasOwn(article, 'content'), 'Unreviewed article markup.');
-    assert(licensed || article.coverage === 'link_only' && article.rights.mode === 'metadata_only' && article.summary === '' &&
-      !Object.hasOwn(article, 'bodyText') && !Object.hasOwn(article, 'images'),
+    assert(article.coverage === 'link_only' && article.rights.mode === 'metadata_only' && article.summary === '' &&
+      !['bodyText', 'images', 'contentEvidence', 'acquisition', 'privateReader', 'privateReceipt'].some(key => Object.hasOwn(article, key)),
     'Article content exceeds the reviewed source scope.');
-    if (Object.hasOwn(article, 'images')) {
-      const normalized = checked.articles.find(value => value.id === article.id);
-      assert(licensed && article.coverage === 'full_text' && Array.isArray(article.images) &&
-        isDeepStrictEqual(article.images, normalized.images || []), 'Article images exceed the reviewed scope or byte budget.');
-    }
     assert(Date.parse(article.fetchedAt) <= now, 'Article fetch receipt is in the future.');
   }
   // Publisher dates marked future remain metadata; they are not fetch receipts

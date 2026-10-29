@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Fetch reviewed public feeds and explicitly licensed Frontiers article text.
+"""Fetch reviewed public-feed metadata only.
 
-No third-party dependencies or user interests. Other sources remain metadata-only.
-Frontiers uses official RSS abstracts and bounded, individually licensed JATS XML.
+No third-party dependencies, article bodies, images or user interests. Private
+article reading is handled by the authenticated account reader, never this file.
 """
 from __future__ import annotations
 
@@ -29,18 +29,11 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'scripts'))
-from lib.discovery_article_content import (ArticleContentError, CC_BY_4, MAX_IMAGE_BYTES,
-    MAX_XML_BYTES, frontiers_xml_url, image_payload, parse_frontiers_xml, retained_image, rss_abstract)
-
 DEFAULT_OUTPUT = ROOT / 'assets/life/discovery-feed.json'
-USER_AGENT = 'HaedoDiscoveryFeed/1.1 (reviewed public feeds and CC BY article text)'
+USER_AGENT = 'HaedoDiscoveryFeed/1.2 (reviewed public feed metadata)'
 MAX_FEED_BYTES = 2 * 1024 * 1024
 MAX_ROBOTS_BYTES = 128 * 1024
 MAX_PREVIOUS_BYTES = 4 * 1024 * 1024
-MAX_FEED_IMAGE_BYTES = 768 * 1024
-MAX_FRONTIERS_TEXT_BYTES = 2 * 1024 * 1024
-FRONTIERS_ADAPTER = 'frontiers-jats-v1'
 STALE_AFTER_DAYS = 7
 TRACKING = {'fbclid', 'gclid', 'dclid', 'msclkid', 'igshid', '_hsenc', '_hsmi', 'mc_cid', 'mc_eid'}
 ATOM = 'http://www.w3.org/2005/Atom'
@@ -82,8 +75,8 @@ SOURCES = (
     {'id': 'frontiers-psychology', 'name': 'Frontiers in Psychology · 영문 심리학 연구',
      'url': 'https://www.frontiersin.org/journals/psychology',
      'feedUrl': 'https://www.frontiersin.org/journals/psychology/rss', 'allowedHosts': ['www.frontiersin.org'],
-     'language': 'en', 'contentAdapter': FRONTIERS_ADAPTER, 'rights': {'mode': 'full_text_allowed',
-     'label': '공식 RSS 초록 · 원문 CC-BY(출처표시·변경명시) · 개별 CC BY 4.0 확인 글은 본문·허용 그림 제공',
+     'language': 'en', 'rights': {'mode': 'metadata_only',
+     'label': '공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인',
      'url': 'https://www.frontiersin.org/journals/psychology/about#copyright-statement'}},
 )
 
@@ -255,25 +248,22 @@ class RestrictedRedirect(urllib.request.HTTPRedirectHandler):
     max_redirections = 3
     max_repeats = 2
 
-    def __init__(self, hosts, robots_allowed=None):
+    def __init__(self, hosts):
         super().__init__()
         self.hosts = hosts
-        self.robots_allowed = robots_allowed
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         try:
             approved_url(newurl, self.hosts)
         except FeedError as cause:
             raise FeedError('허용되지 않은 피드 이동 (HTTPS·등록 호스트만 허용)') from cause
-        if self.robots_allowed:
-            self.robots_allowed(newurl)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def fetch_public(url, source, limit, timeout=20, *, pacer=None):
     url = approved_url(url, source['allowedHosts'])
     pacer = pacer if pacer is not None else source_pacer(source)
-    handlers = [RestrictedRedirect(source['allowedHosts'], source.get('_robotsAllowed'))]
+    handlers = [RestrictedRedirect(source['allowedHosts'])]
     if pacer is not None:
         handlers.append(PacedHTTPSHandler(pacer))
     opener = urllib.request.build_opener(*handlers)
@@ -373,22 +363,9 @@ def article_date(article):
     return ''
 
 
-def content_digest(article):
-    return hashlib.sha256(json.dumps({key: article.get(key) for key in ('coverage', 'summary', 'bodyText', 'rights')},
-                                    ensure_ascii=False, sort_keys=True).encode()).hexdigest()
-
-
-def mark_content(article, adapter, url, now, response=None):
-    article['contentEvidence'] = {'adapter': adapter, 'url': url, 'checkedAt': iso(now),
-                                  'contentSHA256': content_digest(article)}
-    if response:
-        article['contentEvidence']['responseSHA256'] = response['sha256']
-
-
 def parse_feed(body, source, now, limit=20):
-    content_enabled = source['id'] == 'frontiers-psychology' and source.get('contentAdapter') == FRONTIERS_ADAPTER
-    if source['rights']['mode'] != 'metadata_only' and not content_enabled:
-        raise FeedError('검토되지 않은 재배포 권한')
+    if source['rights']['mode'] != 'metadata_only':
+        raise FeedError('공개 목록은 제목·링크 정보만 허용')
     if len(body) > MAX_FEED_BYTES:
         raise FeedError('피드 크기 제한 초과')
     # The reviewed feeds are UTF-8. Reject other encodings before inspecting XML
@@ -460,15 +437,6 @@ def parse_feed(body, source, now, limit=20):
                 'author': author, 'language': source['language'], 'tags': list(dict.fromkeys(tag for tag in tags if tag))[:20],
                 'summary': '', 'coverage': 'link_only', 'rights': copy.deepcopy(source['rights']), 'fetchedAt': iso(now),
             }
-            if content_enabled:
-                summary = rss_abstract(child_text(entry, 'description'))
-                if summary:
-                    article.update({'summary': summary, 'coverage': 'summary',
-                        'rights': {'mode': 'summary_allowed', 'url': CC_BY_4,
-                                   'label': 'CC BY 4.0 · ' + ((author + ' et al. · ') if author else '') + 'Frontiers · 공식 RSS 저자 초록(서식 단순화)'}})
-                    mark_content(article, 'frontiers-rss-v1', canonical, now)
-                else:
-                    article['rights'] = {'mode': 'metadata_only', 'label': '공식 RSS 제목·링크 · 원문 권리 유지', 'url': source['rights']['url']}
             prior = articles.get(canonical)
             if prior is None or article_date(article) > article_date(prior):
                 articles[canonical] = article
@@ -480,55 +448,8 @@ def parse_feed(body, source, now, limit=20):
     return ordered[:limit], {'feedEntries': len(entries), 'acceptedEntries': len(ordered), 'rejectedEntries': rejected}
 
 
-def retained_content(item, source):
-    """Reuse only a matching, bounded payload from this reviewed adapter."""
-    if source['id'] != 'frontiers-psychology' or source.get('contentAdapter') != FRONTIERS_ADAPTER:
-        return {}
-    evidence = item.get('contentEvidence')
-    if not isinstance(evidence, dict) or evidence.get('adapter') not in ('frontiers-rss-v1', FRONTIERS_ADAPTER):
-        return {}
-    canonical = approved_url(item['url'], source['allowedHosts'], canonical=True)
-    if evidence.get('url') != canonical or evidence.get('contentSHA256') != content_digest(item):
-        return {}
-    permission = item.get('rights', {})
-    summary, body = item.get('summary'), item.get('bodyText', '')
-    if (not isinstance(permission, dict) or permission.get('url') != CC_BY_4
-            or not isinstance(permission.get('label'), str) or len(permission['label']) > 500
-            or not isinstance(summary, str) or len(summary) > 50000
-            or not isinstance(body, str) or len(body) > 200000):
-        return {}
-    coverage = item.get('coverage')
-    if coverage == 'full_text':
-        if evidence['adapter'] != FRONTIERS_ADAPTER or permission.get('mode') != 'full_text_allowed' or not body.strip():
-            return {}
-    elif coverage == 'summary':
-        if body or not summary.strip() or permission.get('mode') not in ('full_text_allowed', 'summary_allowed'):
-            return {}
-    else:
-        return {}
-    kept = {key: copy.deepcopy(item[key]) for key in ('coverage', 'summary', 'rights', 'contentEvidence')}
-    if body:
-        kept['bodyText'] = body
-    images = []
-    try:
-        article_number = frontiers_xml_url(canonical).rsplit('/', 2)[-2].rsplit('.', 1)[-1] if coverage == 'full_text' else None
-    except ArticleContentError:
-        return {}
-    for image in item.get('images', [])[:2] if coverage == 'full_text' and isinstance(item.get('images', []), list) else []:
-        try:
-            if not re.fullmatch(r'https://www\.frontiersin\.org/files/Articles/' + re.escape(article_number)
-                                + r'/xml-images/fpsyg-\d+-' + re.escape(article_number) + r'-g\d+\.(?:png|jpg|webp)', image.get('sourceUrl', '')):
-                continue
-            images.append(retained_image(image))
-        except (ArticleContentError, TypeError, ValueError):
-            continue
-    if images:
-        kept['images'] = images
-    return kept
-
-
 def previous_articles(previous, source):
-    """Retain known metadata and verified content from the same opt-in adapter."""
+    """Retain known metadata; never carry old article content into public output."""
     kept = []
     for item in previous.get('articles', []):
         if not isinstance(item, dict) or item.get('sourceId') != source['id']:
@@ -548,97 +469,16 @@ def previous_articles(previous, source):
             safe['language'] = source['language']
             if source['id'] == 'frontiers-psychology':
                 safe['tags'] = []
-                safe['rights'] = {'mode': 'metadata_only', 'label': '공식 RSS 제목·링크 · 원문 권리 유지', 'url': source['rights']['url']}
-                safe.update(retained_content(item, source))
             kept.append(safe)
         except (FeedError, KeyError, TypeError):
             continue
     return kept
 
 
-def enrich_articles(articles, source, previous, now, fetcher, evidence):
-    if source.get('contentAdapter') != FRONTIERS_ADAPTER or source['id'] != 'frontiers-psychology':
-        return articles
-    old = {item['canonicalUrl']: item for item in previous_articles(previous, source)}
-    rss_payloads = {item['canonicalUrl']: copy.deepcopy(item) for item in articles}
-    evidence['articleContent'] = []
-    article_source = {**source, '_robotsAllowed': lambda url: check_robots(source, fetcher, url)}
-    image_bytes = 0
-    for index, article in enumerate(articles):
-        prior = old.get(article['canonicalUrl'])
-        same_version = prior and all(prior.get(k) == article.get(k) for k in ('title', 'publishedAt', 'updatedAt'))
-        if index >= 3:
-            if same_version and prior.get('coverage') == 'full_text':
-                article.update(retained_content(prior, source))
-                article['fetchedAt'] = prior['fetchedAt']
-            continue
-        row = {'articleId': article['id'], 'status': 'error'}
-        try:
-            xml_url = frontiers_xml_url(article['canonicalUrl'])
-            check_robots(source, fetcher, xml_url)
-            data, response = fetcher(xml_url, article_source, MAX_XML_BYTES)
-            check_robots(source, fetcher, approved_url(response.get('finalUrl', xml_url), source['allowedHosts']))
-            if response.get('contentType', '').split(';', 1)[0].strip().lower() not in ('application/xml', 'text/xml'):
-                raise FeedError('본문 XML 응답 형식 오류')
-            payload, candidates = parse_frontiers_xml(data, article['canonicalUrl'])
-            article.update(payload)
-            mark_content(article, FRONTIERS_ADAPTER, article['canonicalUrl'], now, response)
-            images = []
-            for candidate in candidates:
-                if image_bytes >= MAX_FEED_IMAGE_BYTES:
-                    break
-                try:
-                    image_url = approved_url(candidate['sourceUrl'], source['allowedHosts'])
-                    check_robots(source, fetcher, image_url)
-                    image_data, image_response = fetcher(image_url, article_source, min(MAX_IMAGE_BYTES, MAX_FEED_IMAGE_BYTES - image_bytes))
-                    check_robots(source, fetcher, approved_url(image_response.get('finalUrl', image_url), source['allowedHosts']))
-                    images.append(image_payload(image_data, image_response.get('contentType', ''), candidate))
-                    image_bytes += len(image_data)
-                except (ArticleContentError, FeedError, ValueError, OSError, urllib.error.URLError):
-                    continue
-            if images:
-                article['images'] = images
-            row.update({'status': 'ok', 'coverage': article['coverage'], 'responseSHA256': response['sha256'], 'imageCount': len(images)})
-        except (ArticleContentError, FeedError, ValueError, OSError, urllib.error.URLError) as cause:
-            if same_version and prior.get('coverage') == 'full_text':
-                article.update(retained_content(prior, source))
-                article['fetchedAt'] = prior['fetchedAt']
-                row['retainedContent'] = True
-            row['error'] = error_label(cause)
-        evidence['articleContent'].append(row)
-    # Retained articles can carry older images; apply the same global bound to
-    # fresh and retained payloads, in the stable article order.
-    remaining = MAX_FEED_IMAGE_BYTES
-    remaining_text = MAX_FRONTIERS_TEXT_BYTES
-    for article in articles:
-        text_bytes = len((article.get('summary', '') + article.get('bodyText', '')).encode())
-        if text_bytes > remaining_text and article.get('coverage') == 'full_text':
-            original = rss_payloads[article['canonicalUrl']]
-            article['fetchedAt'] = original['fetchedAt']
-            for field in ('bodyText', 'images', 'contentEvidence'):
-                article.pop(field, None)
-            for field in ('coverage', 'summary', 'rights', 'contentEvidence'):
-                if field in original:
-                    article[field] = original[field]
-            text_bytes = len(article.get('summary', '').encode())
-        remaining_text = max(0, remaining_text - text_bytes)
-        kept = []
-        for image in article.get('images', []):
-            size = len(image['dataBase64']) * 3 // 4 - image['dataBase64'].count('=')
-            if size <= remaining:
-                kept.append(image)
-                remaining -= size
-        if kept:
-            article['images'] = kept
-        else:
-            article.pop('images', None)
-    return articles
-
-
 def error_label(cause):
     if isinstance(cause, urllib.error.HTTPError):
         return f'피드 응답 오류 (HTTP {cause.code})'
-    if isinstance(cause, (FeedError, ArticleContentError)):
+    if isinstance(cause, FeedError):
         return str(cause)
     if isinstance(cause, (TimeoutError, urllib.error.URLError, OSError)):
         return '공급원에 연결하지 못함'
@@ -652,14 +492,6 @@ def refresh_one(source, previous, now, fetcher):
                    'fetchedAt':old.get('lastSuccessAt'),'status':'error','stale':True,'error':None})
     evidence = {'sourceId':source['id'],'attemptAt':iso(now),'requests':[]}
     stage = 'robots'
-    original_fetcher, robots_cache = fetcher, {}
-    def checked_fetcher(url, source, limit):
-        if urllib.parse.urlsplit(url).path != '/robots.txt':
-            return original_fetcher(url, source, limit)
-        if url not in robots_cache:
-            robots_cache[url] = original_fetcher(url, source, limit)
-        return robots_cache[url]
-    fetcher = checked_fetcher
     try:
         robots = check_robots(source, fetcher)
         public['robotsStatus'] = robots['status']
@@ -670,12 +502,8 @@ def refresh_one(source, previous, now, fetcher):
         evidence['requests'].append(response)
         stage = 'parse'
         articles, stats = parse_feed(body, source, now)
-        stage = 'article-content'
-        articles = enrich_articles(articles, source, previous, now, fetcher, evidence)
         public.update({'lastSuccessAt':iso(now),'fetchedAt':iso(now),'status':'ok','stale':False,'error':None,
                        'entryCount':len(articles),'latestArticleAt':max((article_date(a) for a in articles),default=None) or None})
-        if any(row.get('retainedContent') for row in evidence.get('articleContent', [])):
-            public['stale'] = True
         evidence.update(stats)
         evidence['status'] = 'ok'
         return public, articles, evidence
@@ -700,23 +528,11 @@ def refresh_catalog(previous, now, fetcher=fetch_public):
             results.append(future.result())
     catalog = {'schemaVersion':1,'generatedAt':iso(now),'sources':[row[0] for row in results],
                'articles':[article for row in results for article in row[1]]}
-    remaining_images = MAX_FEED_IMAGE_BYTES
-    for article in catalog['articles']:
-        images = []
-        for image in article.get('images', []):
-            size = len(image['dataBase64']) * 3 // 4 - image['dataBase64'].count('=')
-            if size <= remaining_images:
-                images.append(image)
-                remaining_images -= size
-        if images:
-            article['images'] = images
-        else:
-            article.pop('images', None)
     if len((json.dumps(catalog, ensure_ascii=False, indent=2) + '\n').encode()) > MAX_PREVIOUS_BYTES:
         raise FeedError('갱신 카탈로그 크기 제한 초과: 기존 파일 보존')
     report = {'generatedAt':iso(now),'sourceCount':len(results),'okSources':sum(row[0]['status']=='ok' for row in results),
               'articleCount':len(catalog['articles']),'coverageCounts':{coverage:sum(a['coverage']==coverage for a in catalog['articles']) for coverage in ('link_only','summary','full_text')},
-              'sources':[row[2] for row in results], 'scope':'Reviewed official public feeds; Frontiers RSS abstracts and individually verified CC BY 4.0 JATS text and figures. No user interests, private documents or remote summarization.'}
+              'sources':[row[2] for row in results], 'scope':'Reviewed official public-feed metadata only. No article bodies, images, user interests or private account content.'}
     return catalog, report
 
 

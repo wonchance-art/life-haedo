@@ -152,7 +152,7 @@
   }
   // Images travel with the bounded public feed. No publisher URL becomes an
   // image request, and optional image failures never discard a readable body.
-  function images(values, hosts, paragraphText, budget) {
+  function images(values, hosts, paragraphText, budget, privateReading = false) {
     if (!Array.isArray(values) || values.length > LIMITS.imagesPerArticle) return [];
     const result = [], required = ['mimeType', 'dataBase64', 'alt', 'caption', 'credit', 'license', 'sourceUrl'];
     for (const value of values) {
@@ -160,8 +160,8 @@
         check(plain(value) && required.every(key => Object.hasOwn(value, key)) && Object.keys(value).every(key => [...required, 'afterParagraph'].includes(key)));
         check(['image/png', 'image/jpeg', 'image/webp'].includes(value.mimeType));
         check(text(value.alt, 1000, true) && text(value.caption, 4000, true) && text(value.credit, 1000));
-        check(plain(value.license) && Object.keys(value.license).length === 2 && text(value.license.label, 200) &&
-          ['https://creativecommons.org/licenses/by/4.0/', 'https://creativecommons.org/licenses/by/4.0'].includes(value.license.url));
+        check(plain(value.license) && Object.keys(value.license).length === 2 && text(value.license.label, privateReading ? 250 : 200) &&
+          (privateReading ? value.license.url === null || publicUrl(value.license.url) : ['https://creativecommons.org/licenses/by/4.0/', 'https://creativecommons.org/licenses/by/4.0'].includes(value.license.url)));
         const sourceUrl = canonicalUrl(value.sourceUrl);
         check(sourceUrl === value.sourceUrl && publicUrl(sourceUrl, hosts));
         if (Object.hasOwn(value, 'afterParagraph')) check(Number.isInteger(value.afterParagraph) && value.afterParagraph >= 0 &&
@@ -176,11 +176,17 @@
           size[0] * size[1] <= LIMITS.imagePixels && budget.bytes + bytes.length <= LIMITS.feedImageBytes);
         budget.bytes += bytes.length;
         result.push({ mimeType: value.mimeType, dataBase64: encoded, alt: value.alt, caption: value.caption, credit: value.credit,
-          license: { label: value.license.label, url: 'https://creativecommons.org/licenses/by/4.0/' }, sourceUrl,
+          license: { label: value.license.label, url: privateReading ? value.license.url : 'https://creativecommons.org/licenses/by/4.0/' }, sourceUrl,
           ...(Object.hasOwn(value, 'afterParagraph') ? { afterParagraph: value.afterParagraph } : {}) });
       } catch (_) { /* Keep valid public text when an optional picture is unusable. */ }
     }
     return result;
+  }
+  // Separate private transport adapter; public feed rights never use this path.
+  // Provider-specific article/image identity remains the caller's responsibility.
+  function validatePrivateImages(values, sourceId, paragraphText) {
+    check(Object.hasOwn(ALLOWED_SOURCES, sourceId) && typeof paragraphText === 'string');
+    return images(values, ALLOWED_SOURCES[sourceId], paragraphText, { bytes: 0 }, true);
   }
   function validateFeed(input, options = {}) {
     check(plain(input) && input.schemaVersion === 1 && iso(input.generatedAt) && Array.isArray(input.sources) && input.sources.length <= LIMITS.sources && Array.isArray(input.articles) && input.articles.length <= LIMITS.articles);
@@ -389,5 +395,5 @@
     function dispose() { disposed = true; cancel(); prior = null; priorFetchedAt = null; }
     return { load, rank, cancel, dispose };
   }
-  return Object.freeze({ ALLOWED_SOURCES, ALIASES, RELATED_TERMS, LIMITS, CONTENT_LANGUAGE_CODES, languageKey, languageAllowed, canonicalUrl, validateFeed, candidatePool, rankPool, rank, toImportInput, create });
+  return Object.freeze({ ALLOWED_SOURCES, ALIASES, RELATED_TERMS, LIMITS, CONTENT_LANGUAGE_CODES, languageKey, languageAllowed, canonicalUrl, validateFeed, validatePrivateImages, candidatePool, rankPool, rank, toImportInput, create });
 });

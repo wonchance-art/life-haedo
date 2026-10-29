@@ -390,23 +390,34 @@ test('Pages schedule preserves all required checks and least-privilege publicati
   assert.match(workflow.slice(workflow.indexOf('\n  deploy:')), /pages: write\n      id-token: write/);
 });
 
-test('licensed Frontiers content passes artifact scope without widening other sources', () => {
-  const feed = seed(), source = feed.sources.find(row => row.id === 'frontiers-psychology');
-  source.rights = { mode: 'full_text_allowed', label: 'CC BY 4.0', url: 'https://www.frontiersin.org/journals/psychology/about#copyright-statement' };
-  const article = feed.articles.find(row => row.sourceId === source.id);
-  Object.assign(article, { coverage: 'full_text', summary: '공식 초록', bodyText: '확인한 원문 본문', rights: { ...source.rights, url: 'https://creativecommons.org/licenses/by/4.0/' } });
-  assert.equal(CI.validateCatalog(bytes(feed), stamp()).articles.find(row => row.id === article.id).bodyText, article.bodyText);
-  const summary = structuredClone(feed), summaryArticle = summary.articles.find(row => row.id === article.id);
-  summaryArticle.coverage = 'summary'; summaryArticle.rights.mode = 'summary_allowed'; delete summaryArticle.bodyText;
-  assert.doesNotThrow(() => CI.validateCatalog(bytes(summary), stamp()));
-  summaryArticle.rights.mode = 'full_text_allowed';
-  assert.doesNotThrow(() => CI.validateCatalog(bytes(summary), stamp()));
-  const foreign = structuredClone(feed), other = foreign.articles.find(row => row.sourceId !== source.id);
-  Object.assign(other, { coverage: 'full_text', summary: '', bodyText: article.bodyText, rights: { ...source.rights, url: 'https://creativecommons.org/licenses/by/4.0/' } });
-  assert.throws(() => CI.validateCatalog(bytes(foreign), stamp()), /reviewed source scope/);
-  const malformed = structuredClone(feed);
-  malformed.articles.find(row => row.id === article.id).images = [{ mimeType: 'image/svg+xml', dataBase64: 'PHN2Zz4=' }];
-  assert.throws(() => CI.validateCatalog(bytes(malformed), stamp()), /images exceed/);
-  article.rights.url = 'https://example.org/unverified-permission';
-  assert.throws(() => CI.validateCatalog(bytes(feed), stamp()), /reviewed source scope/);
+test('public artifacts reject article bodies, images and private receipts for every source', () => {
+  for (const sourceId of seed().sources.map(row => row.id)) {
+    for (const fields of [
+      { bodyText: 'PRIVATE_BODY' }, { unknownPrivateField: 'PRIVATE' }, { images: [] }, { contentEvidence: {} },
+      { acquisition: { scope: 'private_account' } }, { privateReader: true }, { privateReceipt: {} },
+      { summary: 'Publisher abstract', coverage: 'summary', rights: { mode: 'summary_allowed', label: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/' } }
+    ]) {
+      const feed = seed(), article = feed.articles.find(row => row.sourceId === sourceId);
+      Object.assign(article, fields);
+      assert.throws(() => CI.validateCatalog(bytes(feed), stamp()), /scope|rejected/, sourceId);
+      assert.throws(() => CI.validateCatalog(bytes(feed), stamp(), true), /scope|rejected/, sourceId + ' previous seed');
+    }
+  }
+  const feed = seed();
+  feed.sources.find(row => row.id === 'frontiers-psychology').rights.mode = 'full_text_allowed';
+  assert.throws(() => CI.validateCatalog(bytes(feed), stamp()), /permissions/);
+});
+
+test('public catalog refuses unknown fields at the top, source and rights boundaries', () => {
+  for (const locate of [f => f, f => f.sources[0], f => f.sources[0].rights, f => f.articles[0].rights]) {
+    const feed = seed(); locate(feed).privateData = 'PRIVATE';
+    assert.throws(() => CI.validateCatalog(bytes(feed), stamp()), /source scope/);
+  }
+});
+
+test('legacy metadata fields cannot conceal nested private values', () => {
+  for (const [kind, field] of [['articles', 'updatedDateStatus'], ['sources', 'robotsStatus'], ['sources', 'entryCount'], ['sources', 'latestArticleAt']]) {
+    const feed = seed(); feed[kind][0][field] = { privateText: 'PRIVATE' };
+    assert.throws(() => CI.validateCatalog(bytes(feed), stamp()), /source scope/);
+  }
 });

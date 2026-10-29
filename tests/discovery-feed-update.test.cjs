@@ -67,10 +67,12 @@ test('official metadata contract distinguishes publication, update, fetch and ri
   assert.equal(seoul.publishedAt, '2026-10-16T08:11:27Z');
   assert.equal(woo.publishedAt, '2026-10-06T05:00:35Z');
   for (const a of c.articles) {
-    assert.equal(a.coverage, a.sourceId === 'frontiers-psychology' ? 'summary' : 'link_only');
-    assert.equal(a.rights.mode, a.sourceId === 'frontiers-psychology' ? 'summary_allowed' : 'metadata_only');
-    assert.equal(a.summary, a.sourceId === 'frontiers-psychology' ? 'Official author abstract.' : '');
+    assert.equal(a.coverage, 'link_only');
+    assert.equal(a.rights.mode, 'metadata_only');
+    assert.equal(a.summary, '');
     assert.equal(Object.hasOwn(a, 'bodyText'), false);
+    assert.equal(Object.hasOwn(a, 'images'), false);
+    assert.equal(Object.hasOwn(a, 'contentEvidence'), false);
     assert.deepEqual(a.tags, ['llt-journal', 'frontiers-psychology'].includes(a.sourceId) ? [] : ['공식 분류']);
     assert.match(a.url, /utm_source=feed#detail$/);
     assert.equal(a.canonicalUrl, a.sourceId === 'llt-journal'
@@ -285,7 +287,7 @@ test('LLT feed failure retains exact undated metadata and leaves the first seven
   assert.deepEqual(legacy(after), legacy(before));
 });
 
-test('Frontiers adds reviewed official abstract with its date and first author but no article-type topic tags', t => {
+test('Frontiers keeps official title, date and first author without abstracts, bodies or article-type topic tags', t => {
   const w = workspace(t);
   assert.equal(update(w).status, 0);
   const catalog = JSON.parse(fs.readFileSync(w.output));
@@ -297,20 +299,19 @@ test('Frontiers adds reviewed official abstract with its date and first author b
   assert.equal(config.feedUrl, 'https://www.frontiersin.org/journals/psychology/rss');
   assert.deepEqual(config.allowedHosts, ['www.frontiersin.org']);
   assert.equal(source.rights.url, 'https://www.frontiersin.org/journals/psychology/about#copyright-statement');
-  assert.equal(source.rights.mode, 'full_text_allowed');
-  assert.match(source.rights.label, /CC-BY\(출처표시·변경명시\)/);
-  assert.match(source.rights.label, /개별 CC BY 4\.0 확인/);
+  assert.equal(source.rights.mode, 'metadata_only');
+  assert.equal(Object.hasOwn(config, 'contentAdapter'), false);
   assert.equal(article.language, 'en');
   assert.equal(article.publishedAt, '2026-10-17T00:00:00Z');
   assert.equal(article.dateStatus, 'valid');
   assert.equal(article.dateBasis, 'published');
   assert.equal(article.author, 'First Author');
   assert.deepEqual(article.tags, []);
-  assert.equal(article.coverage, 'summary');
-  assert.equal(article.summary, 'Official author abstract.');
-  assert.equal(article.rights.mode, 'summary_allowed');
-  assert.equal(article.rights.url, 'https://creativecommons.org/licenses/by/4.0/');
-  assert.doesNotMatch(JSON.stringify(catalog), /PRIVATE_BODY_SENTINEL|SECOND_AUTHOR_SENTINEL/);
+  assert.equal(article.coverage, 'link_only');
+  assert.equal(article.summary, '');
+  assert.equal(article.rights.mode, 'metadata_only');
+  assert.equal(article.rights.url, source.rights.url);
+  assert.doesNotMatch(JSON.stringify(catalog), /PRIVATE_BODY_SENTINEL|SECOND_AUTHOR_SENTINEL|Official author abstract/);
 });
 
 test('Frontiers lowercase dates are source-specific and retain missing, invalid, future and standard-date precedence', () => {

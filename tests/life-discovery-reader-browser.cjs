@@ -1,12 +1,13 @@
 /* Internal news reading against the real app, bundled SDK and isolated IndexedDB.
- * Synthetic Auth/feed/images only. Publisher navigation is intercepted after
+ * Synthetic Auth/public metadata/private content/images only. Publisher navigation is intercepted after
  * its explicit click; no production account, real publisher or Apple device. */
 'use strict';
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const { FakeCloud, accounts, session, cloud, base } = require('./life-sync-browser.cjs');
+const { accounts, session, cloud, base } = require('./life-sync-browser.cjs');
+const { DiscoveryPrivateCloud, publicMetadata } = require('./helpers/discovery-private-cloud.cjs');
 const { playwright, makeContext, ready, nav } = require('./unified-home-browser.cjs');
 const { openReader, closeReader, assertImportedText } = require('./helpers/discovery-reader.cjs');
 const out = path.resolve(process.env.DISCOVERY_READER_OUTPUT || '.local/discovery-reader-browser');
@@ -19,7 +20,7 @@ function fixture() {
   const source = { id: 'frontiers-psychology', name: '합성 연구 출처', url: 'https://www.frontiersin.org/journals/psychology', feedUrl: 'https://www.frontiersin.org/journals/psychology/rss', language: 'ko', rights, status: 'ok', stale: false, error: null, lastSuccessAt: now, lastAttemptAt: now };
   const article = (id, title, minutes, patch) => ({ id, sourceId: source.id, title, url: sourceUrl.replace('9999999', String(9999999 - minutes)), author: '익명 연구자', language: 'ko', tags: ['독서', '언어'], publishedAt: new Date(Date.now() - minutes * 60000).toISOString(), updatedAt: null, dateStatus: 'valid', coverage: 'link_only', summary: '', fetchedAt: now, rights: { ...license, mode: 'metadata_only' }, ...patch });
   return { schemaVersion: 1, generatedAt: now, sources: [source], articles: [
-    article('full', '한국어로 읽는 연구: 독서·집중력·외국어 학습을 함께 살펴보는 긴 제목', 0, { coverage: 'full_text', bodyText: body, rights, images: [{ mimeType: 'image/png', dataBase64: imageData, alt: '익명 합성 연구 그림', caption: '그림 1. 이미지 재현 검수용 합성 도식', credit: '익명 연구자', license, sourceUrl: 'https://www.frontiersin.org/files/Articles/9999999/xml-images/synthetic-g001.png', afterParagraph: 1 }] }),
+    article('full', '한국어로 읽는 연구: 독서·집중력·외국어 학습을 함께 살펴보는 긴 제목', 0, { coverage: 'full_text', bodyText: body, rights, images: [{ mimeType: 'image/png', dataBase64: imageData, alt: '익명 합성 연구 그림', caption: '그림 1. 이미지 재현 검수용 합성 도식', credit: '익명 연구자', license, sourceUrl: 'https://www.frontiersin.org/files/Articles/9999999/xml-images/fpsyg-99-9999999-g001.webp', afterParagraph: 1 }] }),
     article('summary', '짧은 요약만 확보한 언어 학습 자료', 1, { coverage: 'summary', summary: '출처가 제공한 초록입니다. 전문과 이미지가 확보되었다고 표시하지 않습니다.', rights: { ...license, mode: 'summary_allowed' } }),
     article('link', '링크만 확보한 집중력 자료', 2),
     article('last', '목록 위치를 보존하는 마지막 자료', 3)
@@ -43,9 +44,10 @@ async function main() {
   await imagePage.close();
   async function check(name, run) {
     if (process.env.DISCOVERY_READER_MATCH && !new RegExp(process.env.DISCOVERY_READER_MATCH).test(name)) return;
-    const server = new FakeCloud(), context = await makeContext(browser, server, 'reader-' + report.checks.length, accounts.a, { viewport: { width: 820, height: 1000 }, reducedMotion: 'reduce' });
+    const server = new DiscoveryPrivateCloud(), context = await makeContext(browser, server, 'reader-' + report.checks.length, accounts.a, { viewport: { width: 820, height: 1000 }, reducedMotion: 'reduce' });
     const feed = { value: fixture(), requests: 0 }; let expectedOriginal = null;
-    await context.route(base + '/assets/life/discovery-feed.json', route => { feed.requests++; return route.fulfill({ contentType: 'application/json', body: JSON.stringify(feed.value) }); });
+    server.setArticles(accounts.a.id, feed.value.articles);
+    await context.route(base + '/assets/life/discovery-feed.json', route => { feed.requests++; return route.fulfill({ contentType: 'application/json', body: JSON.stringify(publicMetadata(feed.value)) }); });
     await context.route('**/*', route => {
       const request = route.request(), url = new URL(request.url());
       if ([new URL(base).origin, cloud].includes(url.origin)) return route.fallback();
@@ -61,7 +63,7 @@ async function main() {
     const page = await context.newPage(); page.setDefaultTimeout(15000);
     page.on('pageerror', error => report.pageErrors.push({ name, message: error.message }));
     page.on('console', error => { if (error.type() === 'error') report.consoleErrors.push({ name, message: error.text() }); });
-    try { console.log('RUN ' + name); await run({ page, context, feed, arm: url => { expectedOriginal = url; } }); assert.equal(server.writes().length, 0); report.checks.push({ name, pass: true }); console.log('PASS ' + name); }
+    try { console.log('RUN ' + name); await run({ page, context, feed, server, arm: url => { expectedOriginal = url; } }); assert.equal(server.writes().length, 0); assert.deepEqual(server.privateRouteErrors, []); report.checks.push({ name, pass: true, privateRequests: server.privateRequests }); console.log('PASS ' + name); }
     catch (error) { report.checks.push({ name, pass: false, error: error.stack }); console.error('FAIL ' + name + '\n' + error.stack); await page.screenshot({ path: path.join(out, 'failure-' + report.checks.length + '.png'), fullPage: true }).catch(() => {}); }
     finally { await context.close(); }
   }
@@ -72,6 +74,7 @@ async function main() {
       for (const width of [1440, 820, 390]) {
         await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
         const control = row(page, 'full').locator('[data-discovery-read]'); await control.focus(); await control.press('Enter'); await page.locator('#discoveryReader').waitFor();
+        await page.locator('#discoveryReader[data-reader-state="ready"]').waitFor();
         assert.equal(context.pages().length, initialPages); assert.equal(await page.locator('#discoveryList').isVisible(), false);
         assert.equal(await readerText(page), body);
         assert.equal(await page.evaluate(() => !!window.__unsafeReader), false);
@@ -104,9 +107,9 @@ async function main() {
       const initial = await state(page); await openReader(page, row(page, 'full')); const originalNode = await page.locator('#discoveryReaderContent').elementHandle(); const originalCount = feed.requests;
       feed.value = fixture(); feed.value.articles[0].bodyText = '뒤늦게 도착한 다른 본문으로 읽던 판을 바꾸지 않습니다.'; feed.value.articles[0].title = '갱신된 제목';
       await page.clock.fastForward(15 * 60000 + 1000); await idle(page); assert.equal(feed.requests, originalCount + 1); assert.equal(await readerText(page), body); assert.equal(await originalNode.evaluate(e => e === document.querySelector('#discoveryReaderContent')), true);
-      await (await reveal(page.locator('#discoveryReader [data-discovery-import]'))).click(); await page.locator('#lifeImportText').waitFor(); assertImportedText(await page.locator('#lifeImportText').inputValue(), fixture().articles[0], { textarea: true }); assert.equal(await page.locator('#lifeImportUrl').inputValue(), sourceUrl); assert.deepEqual((await state(page)).bundle, initial.bundle);
+      await (await reveal(page.locator('#discoveryReader [data-discovery-import]'))).click(); await page.locator('#lifeImportText').waitFor(); assertImportedText(await page.locator('#lifeImportText').inputValue(), fixture().articles[0], { textarea: true, privateReading: true }); assert.equal(await page.locator('#lifeImportUrl').inputValue(), sourceUrl); assert.deepEqual((await state(page)).bundle, initial.bundle);
       await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await page.locator('.life-review').waitFor(); await page.getByRole('button', { name: '자료만 보관', exact: true }).click(); await page.locator('.life-reader').waitFor();
-      const after = await state(page), source = after.bundle.sources.find(s => s.url === sourceUrl); assert(source); const version = after.bundle.sourceVersions.find(v => v.sourceId === source.id); assertImportedText(version.contentText, fixture().articles[0]); assert.equal(version.coverage.status, 'full_text'); assert.equal(Object.hasOwn(version, 'images'), false); assert.deepEqual(after.actions, initial.actions); assert.deepEqual(after.feedback, initial.feedback);
+      const after = await state(page), source = after.bundle.sources.find(s => s.url === sourceUrl); assert(source); const version = after.bundle.sourceVersions.find(v => v.sourceId === source.id); assertImportedText(version.contentText, fixture().articles[0], { privateReading: true }); assert.equal(version.coverage.status, 'full_text'); assert.equal(Object.hasOwn(version, 'images'), false); assert.deepEqual(after.actions, initial.actions); assert.deepEqual(after.feedback, initial.feedback);
       await page.getByRole('button', { name: '새 글 찾기로 돌아가기', exact: true }).click(); await idle(page); assert.equal(await row(page, 'full').count(), 0, 'Imported source is excluded using exact URL');
     });
     await check('browser back, section leave, workspace and account transition clear reader and image resources', async ({ page }) => {

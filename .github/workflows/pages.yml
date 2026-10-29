@@ -43,6 +43,8 @@ jobs:
         run: node tests/run-account-library-postgres.cjs
       - name: Verify immutable exact Naver photo receipts and owner boundaries
         run: node tests/run-naver-media-postgres.cjs
+      - name: Verify private news cache ownership, live sessions and bounded collection
+        run: node tests/run-discovery-private-postgres.cjs
       - name: Retain anonymous Naver database checks
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -55,6 +57,7 @@ jobs:
             .local/account-library-sql/
             .local/naver-media-sql/
             .local/naver-media-postgres/
+            .local/discovery-private-sql/
           if-no-files-found: ignore
   browser_suites:
     runs-on: ubuntu-24.04
@@ -442,9 +445,12 @@ jobs:
       - name: Verify explicit external discovery, exact source return and private feedback
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-external-discovery-browser.cjs
-      - name: Verify internal news reading, licensed images and exact list return
+      - name: Verify private news reading, captured images and exact list return
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-discovery-reader-browser.cjs
+      - name: Verify private news account isolation, late replies and exact import
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-personal-discovery-browser.cjs
       - name: Verify discovery catalog freshness, worker update and offline preservation
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-external-discovery-pwa-browser.cjs
@@ -547,6 +553,7 @@ jobs:
             .local/interest-pwa/
             .local/external-discovery-browser/
             .local/discovery-reader-browser/
+            .local/personal-news-browser/
             .local/external-discovery-pwa/
             .local/external-discovery-pwa-v162/
             .local/discovery-automation-browser/

@@ -240,6 +240,11 @@
 .discovery-news .discovery-reader-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 14px 0 30px; color: var(--news-muted); font-size: 12px; line-height: 1.75; overflow-wrap: anywhere; }
 .discovery-news .discovery-reader-meta time { font-variant-numeric: tabular-nums; }
 .discovery-news .discovery-reader-content { min-width: 0; color: #182522; }
+.discovery-news .discovery-reader-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.discovery-news .discovery-reader-status:empty { display: none; }
+.discovery-news .discovery-reader-status p { margin: 0 0 20px; font-size: 14px; line-height: 1.8; }
+.discovery-news .discovery-reader-loading { color: var(--news-muted); }
+.discovery-news .discovery-reader-status button { margin-bottom: 20px; }
 .discovery-news .discovery-reader-text { margin: 0; font-size: 18px; line-height: 1.85; white-space: pre-wrap; overflow-wrap: anywhere; }
 .discovery-news .discovery-reader-figure { min-width: 0; margin: 28px 0; white-space: normal; }
 .discovery-news .discovery-reader-figure img { display: block; width: auto; max-width: 100%; height: auto; margin-inline: auto; }
@@ -247,6 +252,8 @@
 .discovery-news .discovery-reader-figure figcaption p { margin: 4px 0 0; }
 .discovery-news .discovery-reader-credit a { color: #145b50; text-underline-offset: 3px; }
 .discovery-news .discovery-reader-rights { margin: 28px 0 0; color: var(--news-muted); font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.discovery-news .discovery-reader-stale { margin: 24px 0 0; color: var(--news-muted); font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.discovery-news .discovery-reader-stale + .discovery-reader-rights { margin-top: 6px; }
 .discovery-news .discovery-reader-rights a { color: #145b50; text-underline-offset: 3px; }
 .discovery-news :is(.discovery-reader-empty,.discovery-reader-coverage) { margin: 0 0 20px; color: var(--news-muted); font-size: 14px; line-height: 1.8; }
 .discovery-news .discovery-reader-controls { margin-top: 30px; padding-top: 12px; border-top: 1px solid var(--news-line); }

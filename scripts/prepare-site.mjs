@@ -1,5 +1,8 @@
 import { cp, mkdir, writeFile, readFile, access, lstat, readdir, mkdtemp, rename, rm } from 'node:fs/promises';
 import { resolve, dirname, parse, join, sep } from 'node:path';
+import { createRequire } from 'node:module';
+
+const { validateCatalog } = createRequire(import.meta.url)('./refresh-discovery-artifact.cjs');
 
 const root = resolve('.');
 const destination = resolve(process.argv[2] || '.local/site');
@@ -49,7 +52,7 @@ try {
     'assets/haedo-navigation.js', 'assets/haedo-shell.css', 'assets/timeline-shell.css',
     'assets/life/unified-search.js','assets/life/unified-search-ui.js','assets/life/core.js', 'assets/life/obsidian-decisions.js','assets/life/obsidian-link-candidates.js','assets/life/obsidian-link-commit.js','assets/life/obsidian-link-candidates-ui.js', 'assets/life/obsidian-package.js', 'assets/life/writing.js', 'assets/life/writing-ui.js', 'assets/life/nine-board.js','assets/life/nine-board-ui.js','assets/life/nine-board.css','assets/life/page-posts.js','assets/life/page-posts-view.js','assets/life/page-media.js','assets/life/page-composer.js','assets/life/photo-post.js','assets/life/photo-post-attachments.js','assets/life/photo-post-ui.js','assets/life/photo-post.css','vendor/quill/quill.js','vendor/quill/quill.snow.css','vendor/quill/LICENSE','vendor/quill/quill.js.LICENSE.txt','vendor/quill/THIRD_PARTY_NOTICES.txt','vendor/fflate/fflate.js','vendor/fflate/LICENSE','assets/life/page-posts.css', 'assets/life/workbench.js', 'assets/life/reflection.js', 'assets/life/reflection-lenses.js','assets/life/reflection-lenses-ui.js', 'assets/life/books.js', 'assets/life/book-history.js', 'assets/life/book-print.js', 'assets/life/rediscovery.js', 'assets/life/share.js', 'assets/life/share-remote.js', 'assets/life/share-view.js', 'assets/life/share-view.css', 'assets/life/share-page.js', 'assets/life/storage.js', 'assets/life/account-materials.js', 'assets/life/remote.js', 'assets/life/sync.js',
     'assets/life/interest-model-loader.js', 'assets/life/interest-model-worker.js', 'assets/life/interest-analysis.js', 'assets/life/interest-profile.js', 'assets/life/interest-policy.js', 'assets/life/interest-ui.js', 'assets/life/interest.css',
-    'assets/life/discovery.js', 'assets/life/discovery-profile.js', 'assets/life/discovery-settings.js', 'assets/life/discovery-language-settings.js', 'assets/life/discovery-actions.js', 'assets/life/discovery-recommendations.js', 'assets/life/discovery-reading.js', 'assets/life/discovery-reading-ui.js', 'assets/life/discovery-reader-ui.js','assets/life/discovery-ui.js', 'assets/life/discovery.css', 'assets/life/discovery-feed.json',
+    'assets/life/discovery.js', 'assets/life/discovery-profile.js', 'assets/life/discovery-settings.js', 'assets/life/discovery-language-settings.js', 'assets/life/discovery-actions.js', 'assets/life/discovery-recommendations.js', 'assets/life/discovery-reading.js', 'assets/life/discovery-reading-ui.js', 'assets/life/discovery-private-remote.js','assets/life/discovery-reader-ui.js','assets/life/discovery-ui.js', 'assets/life/discovery.css', 'assets/life/discovery-feed.json',
     'assets/life/composition-remote.js', 'assets/life/composition-sync.js', 'assets/life/composition-ui.js', 'assets/life/writing-remote.js', 'assets/life/writing-sync.js', 'assets/life/writing-sync-ui.js', 'assets/life/reading-position.js',
     'assets/life/legacy.js', 'assets/life/icons.js', 'assets/life/workbench-ui.js', 'assets/life/collection.js','assets/life/collection-media.js','assets/life/collection-metadata.js','assets/life/collection-picker.js','assets/life/collection-ui.js','assets/life/collection.css', 'assets/life/home.js', 'assets/life/ui.js', 'assets/life/ui.css', 'assets/life/workbench.css', 'assets/life/home.css', 'assets/life/shell.js',
     'vendor/daisyui.css', 'vendor/daisyui-themes.css', 'vendor/idb/idb.js', 'vendor/idb/LICENSE',
@@ -60,6 +63,7 @@ try {
     'supabase/migrations/20261003085426_life_sync_workspaces.sql',
     'supabase/migrations/20261006010000_life_compositions.sql', 'supabase/migrations/20261006020000_life_writing_drafts.sql']) {
     await access(path);
+    if (path === 'assets/life/discovery-feed.json') validateCatalog(await readFile(path));
     await mkdir(dirname(resolve(staging, path)), { recursive: true });
     await cp(path, resolve(staging, path), { recursive: true, dereference: false });
   }

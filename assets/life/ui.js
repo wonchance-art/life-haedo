@@ -211,8 +211,12 @@
     const annualPlanUI = global.HaedoLife.AnnualPlanUI?.create({ container: main, storage,
       getBundle: () => state.bundle, isCurrent: () => !disposed && state.mode === 'annual-plan' });
     let newsReaderBackPending = false;
+    const privateDiscovery = storage.isAccountScoped && global.HaedoLife.DiscoveryPrivateRemote?.create
+      ? global.HaedoLife.DiscoveryPrivateRemote.create({ auth, storage,
+        isCurrent: workspaceId => !disposed && state.mode === 'external-discovery' && state.bundle?.workspaceId === workspaceId }) : null;
     const externalDiscoveryUI = global.HaedoLife.DiscoveryUI?.create({ container: main, storage,
       getBundle: () => state.bundle, isCurrent: () => !disposed && state.mode === 'external-discovery',
+      loadPrivateArticle: privateDiscovery?.loadPrivateArticle,
       onOpenInterests: () => navigate('interests'),
       onReaderOpen: () => {
         if (disposed || state.mode !== 'external-discovery') return;
@@ -1326,7 +1330,9 @@
       const { navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, ...viewOptions } = options || {};
       if (externalImport) {
         if (mode !== 'import' || externalImport.workspaceId !== state.bundle.workspaceId) return false;
-        const input = global.HaedoLife.Discovery.toImportInput(externalImport.article);
+        const input = externalImport.article.privateReader === true
+          ? global.HaedoLife.DiscoveryPrivateRemote.toImportInput(externalImport.article)
+          : global.HaedoLife.Discovery.toImportInput(externalImport.article);
         newDraft();
         Object.assign(state.stage.input, input);
         state.importMethod = input.text ? 'text' : 'link';
@@ -5229,6 +5235,7 @@
       interestUI?.dispose();
       annualPlanUI?.dispose();
       externalDiscoveryUI?.dispose();
+      privateDiscovery?.dispose();
       originalAttachmentsUI?.dispose(); originalAttachmentsUI = null;
       compositionPanel?.dispose(); compositionPanel = null;
       if (accountBlogUI && accountBlogWorkspace) accountBlogViews.set(accountBlogWorkspace, accountBlogUI.getView?.());

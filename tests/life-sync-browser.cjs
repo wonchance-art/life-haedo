@@ -79,6 +79,19 @@ class WorkspaceCloud {
     if (url.pathname === '/auth/v1/user') return account ? send(user(account)) : send({code:'bad_jwt',message:'No test account'},401);
     if (url.pathname === '/auth/v1/logout') {this.requests.push({kind:'logout',device,owner:account?.id});return send(null,204);}
     if (!account) return send({code:'PGRST301',message:'No test account'},401);
+    if (url.pathname === '/functions/v1/haedo-discovery-private') {
+      // Existing navigation suites have no captured publisher content. Keep
+      // this authenticated endpoint explicit; unknown API requests still fail.
+      assert.equal(method, 'POST');
+      assert.deepEqual(Object.keys(body).sort(), ['sourceId', 'url']);
+      const hosts = { 'frontiers-psychology': 'www.frontiersin.org', 'mit-linguistics': 'news.mit.edu', 'llt-journal': 'www.lltjournal.org' };
+      assert(Object.hasOwn(hosts, body.sourceId));
+      const original = new URL(body.url); assert.equal(original.protocol, 'https:'); assert.equal(original.hostname, hosts[body.sourceId]);
+      assert.equal(original.username + original.password + original.port + original.search + original.hash, '');
+      assert.equal(request.headers().cookie, undefined); assert.equal(request.headers().referer, undefined);
+      this.requests.push({kind:'discovery-private-read',owner:account.id,sourceId:body.sourceId,url:body.url,device});
+      headers['cache-control'] = 'no-store'; return send({status:'unavailable'});
+    }
     if (this.schemaMissing) { this.expectedFailures++; return send({code:'PGRST205',message:'Anonymous test schema is unavailable'},404); }
     if (url.pathname === '/rest/v1/rpc/life_naver_media_receipt_read' && method === 'POST') {
       // These legacy source fixtures have no registered version/media mapping.
