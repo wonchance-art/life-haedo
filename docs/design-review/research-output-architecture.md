@@ -1,8 +1,13 @@
 # 추천·탐구·콘텐츠와 채널 연결 구조
 
+2026-10-29 현행 구현 갱신: [PR145](https://github.com/wonchance-art/life-haedo/pull/145)의 공개 RSS 목록은9출처120글의 메타데이터만 유지하며, 본문·이미지는 Auth/활성 세션을 검증하는 `haedo-discovery-private`와 account별 서버 캐시로 이동했다. Frontiers 공식XML·MIT HTML본문·LLT RSS초록을 지원한다. 계정별100편/32MiB·TTL24시간, 공개 목록 캐시 v2와 `private,no-store` 분리, 정확 판 import/계정전환 보존을 검수했고 새schema/Edge v1 설치도 완료했다. 이 경로를 아래의 후속 AI 처리·뉴스 설정 계정 보관과 중복 구현하지 않는다. 현재 개인 브리프/언어/반응 전체 동기화와 AI 설명은 설계 범위로 남는다.
+
+
 2026-10-29. 현재 코드와 [제품 목적](../life-tools-design/product-purpose.md), [읽기 메모](reading-decision-journey.md), [계획·회고](planning-practice-review.md)를 잇는 **미래 확장 설계**다. 앱·SQL·외부 계정 설정·운영 자료를 변경하지 않았다. 아래 논리 객체·작업 이름은 현재 존재하는 테이블/RPC 선언이 아니다.
 
-## 1. 확정한 시작점과 후속 범위
+## 1. 조사 당시 SNS 우선 가설과 후속 범위
+
+다음 표는 개인 내부 읽기 결정 이전의 조사 이력이다. 현행 시작점은 문서 상단의 계정 전용 읽기이며, 이 절의 SNS 선행 순서는 적용하지 않는다.
 
 사용자는 **내가 읽을 탐구 자료를 추천받는 SNS 계정부터 시작**하기로 확정했다. **최초 운영 시범은 SNS 자체 추천에서 발견하고 읽으면 완결**된다. 자체 엄선·연구 재정렬·해도 저장은 실제 필요를 확인한 뒤 두 번째 묶음으로 검토한다. 플랫폼·계정은 운영 설계에서 고르며 새 SNS 홈을 해도 페이지로 대체하지 않는다.
 
@@ -17,9 +22,11 @@
 
 현행 [PRODUCT.md](../../PRODUCT.md)의 ‘SNS 연동은 수신 전용’과 [SNS 원칙](../life-tools-design/README.md)의 ‘원본 SNS 글을 게시·수정·삭제하지 않음’을 유지한다. 아래 외부 발행은 명시적인 미래 확장으로만 다룬다. 해도 블로그 공개가 외부 SNS 쓰기 권한을 뜻하지 않는다.
 
-## 2. 현재 구현과 재사용 가능한 경계
+## 2. 기존 코드 조사와 현재 구현의 연결
 
-| 현재 구현·정확 근거 | 실제 가능 범위 | 아직 없는 연결 |
+아래 행 번호와 링크 전용 가져오기는 조사 당시 main55a74ae 기준이다. 현재 PR145는 `DiscoveryPrivateRemote.loadPrivateArticle/toImportInput`·`haedo-discovery-private`로 확보한 정확 본문/초록을 계정에서 읽고 기존 자료실로 보관한다. 개인 원문·그림 캐시와 공개 메타데이터를 분리했으며, 반응/구판 읽기 비교에는 본문을 넣지 않는다. 이 구현을 다음 계정 뉴스 설정 작업에서 재사용한다.
+
+| 기존 코드 조사 근거(main 55a74ae) | 실제 가능 범위 | 아직 없는 연결 |
 | --- | --- | --- |
 | [Discovery.candidatePool/rankPool](../../assets/life/discovery.js) 236–268행 | 출처·언어·기보관·제외를 반영한 관심/최신 후보 | 질문별 조사 완결성·SNS 개인 피드 수집 |
 | [DiscoveryRecommendations.rank](../../assets/life/discovery-recommendations.js) 13–14, 65–100행 | opt-in 좋아요의 제목/태그 공통 표현 2개 이상 사용 | 학습형 추천·담기/도움/발행 실적의 자동 학습 |
@@ -38,7 +45,7 @@
 
 독립 읽기 메모의 기본 계정 보관·뉴스 계정 연속성·계획 연결은 최신 명세의 실행 대상이다. 이 문서가 구현 완료로 승격하지 않는다. 일반 글 근거 이동은 기존 준비 전송으로 대신 입증하지 않는다.
 
-## 3. 전체 흐름과 역할
+## 3. 조사 당시 흐름과 역할
 
 ```text
 최초 운영 시범: SNS 자체 추천 → 발견 → 원문 읽기 → 종료
@@ -203,7 +210,7 @@ Supabase의 exposed schema는 명시 grants와 RLS를 모두 검토한다. SELEC
 
 2026-10-29 공개 문서 확인: [Supabase changelog](https://supabase.com/changelog.md), [API 보안](https://supabase.com/docs/guides/api/securing-your-api), [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security). Supabase 스킬을 읽었으며 운영 프로젝트·DB·토큰에는 접속하지 않았다. 설치 버전/정책/새 API 지원 확인은 구현 관문이다.
 
-## 14. 한 여정의 완료 기준
+## 14. 조사 당시 시범·확장의 완료 기준
 
 **최초 운영 시범 완료:** 선택한 SNS 계정의 자체 추천에서 읽고 싶은 자료를 발견하고 원문을 읽거나 종료할 수 있다. 추천 도움·부담은 실제 체험으로 확인한다. 해도 저장·자체 재정렬·계정 ACK·발행 검수는 이 시범의 완료 조건이 아니다.
 
