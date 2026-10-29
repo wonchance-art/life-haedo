@@ -40,6 +40,29 @@
       "pass": true,
       "checks": 11,
       "scope": "Hosted Edge/Auth/database with configured synthetic A/B accounts and public publisher content. No personal account data queried."
+    },
+    "hostedResponseUI": {
+      "pass": true,
+      "checks": 5,
+      "scope": "Actual hosted Auth/Edge/database response from a configured test account; exact response displayed with synthetic Auth in current local Chromium UI at 1440px and 390px. Not real-account UI end-to-end or physical Apple hardware.",
+      "bodyChars": 88579,
+      "images": 2,
+      "exactImageBytes": true,
+      "publisherBrowserRequests": 0,
+      "consoleErrors": 0,
+      "accountLibraryWrites": 0,
+      "cleanup": {
+        "removedTestArticles": 1,
+        "removedTestLimits": 1,
+        "testSessionsSignedOut": 2
+      }
+    },
+    "integratedInstallation": {
+      "pass": true,
+      "checks": 12,
+      "scope": "Agent-verified disposable PostgreSQL 17 before environment disconnect: exact migration allowlist, atomic rollback, existing rows/functions/privileges and populated private cache reinstallation. Final restored commit must pass GitHub CI separately.",
+      "unknownMigrationRejected": true,
+      "containerRemoved": true
     }
   },
   "publicCatalog": {
@@ -113,6 +136,12 @@
     "reproduced": true,
     "fix": "Wait for TCP readiness with the unchanged 45-second deadline and 200ms polling interval.",
     "postgresChecksAfterFix": 12,
+    "productionChanges": false
+  },
+  "installationCiCorrection": {
+    "initialRun": 40847205019,
+    "initialFailure": "The strict integrated installer registry omitted the new private reader migration.",
+    "fix": "Register the exact filename/SHA256 and extend atomic rollback, legacy preservation and populated-cache reinstallation checks; unknown files remain rejected.",
     "productionChanges": false
   }
 }

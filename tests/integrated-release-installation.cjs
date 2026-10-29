@@ -22,6 +22,7 @@ const libraryMigrations = [
 const editedCopyMigration = 'supabase/migrations/20261022031304_life_material_edited_copy_markers.sql';
 const mediaReceiptMigration = ['supabase/migrations/20261029030503_naver_media_receipts.sql', '026730836fd04a9344ef831696857d7df806fc7fdb8d71605a509e3d398bae6d'];
 const inventoryRescanMigration = ['supabase/migrations/20261029040646_naver_inventory_automatic_rescan.sql', '186b8f4d06b5641859f419f864f640cff35b5b39adb524122d1047eb183d2cf4'];
+const privateReaderMigration = ['supabase/migrations/20261029084145_discovery_private_reader.sql', '30c741bba2ef5b3658c7b17d653828649b0d98d30e2db17d4e12c877b057bd0e'];
 const image = 'postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
 const container = 'haedo-blog-postgres-' + Date.now() + process.pid, database = 'haedo_blog_qa_integrated_install', runId = randomUUID();
 const env = { ...process.env }; for (const key of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH']) delete env[key];
@@ -57,8 +58,8 @@ async function main() {
       .trim().split('\n').filter(name => name.endsWith('.sql')).map(name => path.basename(name)).sort();
     assert.equal(baseline.length, 10);
     assert.deepEqual(files.map(name => 'supabase/migrations/' + name),
-      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file), mediaReceiptMigration[0], inventoryRescanMigration[0]].sort(),
-      'Exactly the ten legacy and eleven reviewed additive migrations are required; missing or unknown files are rejected.');
+      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file), mediaReceiptMigration[0], inventoryRescanMigration[0], privateReaderMigration[0]].sort(),
+      'Exactly the ten legacy and twelve reviewed additive migrations are required; missing or unknown files are rejected.');
     for (const file of baseline) {
       const relative = 'supabase/migrations/' + file, current = await fs.readFile(path.join(root, relative), 'utf8');
       assert.equal(hash(current), hash(command('git', ['-C', root, 'show', '88ccfe5:' + relative])), 'Previously installed migration changed: ' + file);
@@ -458,6 +459,64 @@ async function main() {
       for (let pass = 0; pass < 2; pass++) psql(ddl);
       assert.deepEqual(dataSnapshot(), intactData); assert.deepEqual(sql(allCatalog), installedCatalog); assert.deepEqual(targetMetadata(), installedMetadata);
       report.naverInventoryRescanMigration = { file, sha256: hash(ddl), originalBodySha256: hash(legacyBody), newBodySha256: hash(newBody), failedInstallAtomic: true, onlyReviewedConditionChanged: true, populatedRowsExact: true, allPrivilegesPreserved: true, repeatedInstallExact: true, runtimeGateUnchanged: true };
+    });
+    await check('Private news reader installs atomically and preserves every existing record and privilege plus populated private cache through reinstallation', async () => {
+      const [file, expectedHash] = privateReaderMigration;
+      const ddl = await fs.readFile(path.join(root, file), 'utf8');
+      assert.equal(hash(ddl), expectedHash, 'Only the exact independently reviewed private reader migration is accepted.');
+      assert.match(ddl, /begin;/); assert.match(ddl, /commit;\s*$/i);
+      // Auth fixtures supply only the hosted columns this additive feature uses.
+      // They precede the baseline snapshot and are not production migrations.
+      const session = randomUUID();
+      psql('alter table auth.users add column is_anonymous boolean not null default false;' +
+        'create table auth.sessions(id uuid primary key,user_id uuid not null references auth.users(id),not_after timestamptz);' +
+        "create function auth.jwt() returns jsonb language sql stable as $select nullif(current_setting('request.jwt.claims',true),'')::jsonb$;" +
+        'insert into auth.sessions(id,user_id) values(' + q(session) + '::uuid,' + q(owner) + '::uuid);');
+      const allNamespaces = "array['public','auth','storage','haedo_blog_private','haedo_material_private','haedo_naver_private','haedo_discovery_private']";
+      const allCatalog = catalogQuery.replaceAll(namespaces, allNamespaces).replace(" and p.proname not like 'life_material_%'", '');
+      const legacyData = () => sql('select installation_probe.all_data_snapshot();');
+      const privateData = () => sql("select jsonb_build_object('articles',(select coalesce(jsonb_agg(to_jsonb(a) order by owner_id,source_id,url),'[]'::jsonb) from haedo_discovery_private.articles a),'limits',(select coalesce(jsonb_agg(to_jsonb(l) order by owner_id),'[]'::jsonb) from haedo_discovery_private.limits l));");
+      const intactData = legacyData(), intactCatalog = sql(allCatalog);
+      const failed = ddl.replace(/commit;\s*$/i, 'select 1/0;\ncommit;');
+      assert.throws(() => psql(failed), /division by zero/);
+      assert.equal(sql("select to_jsonb(to_regnamespace('haedo_discovery_private') is null and to_regprocedure('public.life_discovery_article_claim(text,text)') is null and to_regprocedure('public.life_discovery_article_finish(uuid,text,text,uuid,jsonb,text)') is null);"), true);
+      assert.deepEqual(legacyData(), intactData); assert.deepEqual(sql(allCatalog), intactCatalog);
+      psql(ddl);
+      assert.deepEqual(legacyData(), intactData); assert.deepEqual(privateData(), { articles: [], limits: [] });
+      const installedCatalog = sql(allCatalog);
+      const addedFunction = row => row[0] === 'haedo_discovery_private' || row[0] === 'public' && ['life_discovery_article_claim', 'life_discovery_article_finish'].includes(row[1]);
+      assert.equal(installedCatalog.functions.filter(addedFunction).length, 7);
+      const originalCatalog = {
+        schemas: installedCatalog.schemas.filter(row => row[0] !== 'haedo_discovery_private'),
+        functions: installedCatalog.functions.filter(row => !addedFunction(row)),
+        relations: installedCatalog.relations.filter(row => row[0] !== 'haedo_discovery_private'),
+        policies: installedCatalog.policies.filter(row => row.schemaname !== 'haedo_discovery_private')
+      };
+      assert.deepEqual(originalCatalog, intactCatalog, 'Every prior row, definition and privilege must survive the additive private schema.');
+      psql(await fs.readFile(path.join(root, 'supabase/tests/discovery-private-installation.sql'), 'utf8'));
+      const articleUrl = 'https://news.mit.edu/2026/synthetic-language-fixture';
+      const claim = () => sql('begin;set local role authenticated;select set_config(\'request.jwt.claims\',' +
+        q(JSON.stringify({ role: 'authenticated', sub: owner, session_id: session })) +
+        ',true);select public.life_discovery_article_claim(\'mit-linguistics\',' + q(articleUrl) + ');commit;');
+      const lease = claim(); assert.equal(lease.status, 'claimed');
+      const content = {
+        coverage: 'full_text', summary: 'Synthetic summary', bodyText: '\ufeff정확한 본문 🌿\r\n두 번째 줄',
+        rights: { mode: 'private_reading' },
+        acquisition: { scope: 'private_account', method: 'publisher_html', sourceUrl: articleUrl, fetchedAt: new Date().toISOString() }
+      };
+      const finished = rpc('life_discovery_article_finish', [
+        q(owner) + '::uuid', q('mit-linguistics'), q(articleUrl), q(lease.leaseToken) + '::uuid', json(content), 'null'
+      ], 'service_role');
+      assert.equal(finished.status, 'ready'); assert.equal(finished.cached, false); assert.deepEqual(finished.content, content);
+      const expected = { ...finished, cached: true }, populated = privateData();
+      assert.deepEqual(claim(), expected); assert.deepEqual(privateData(), populated);
+      assert.throws(() => psql(failed), /division by zero/);
+      assert.deepEqual(privateData(), populated); assert.deepEqual(legacyData(), intactData); assert.deepEqual(sql(allCatalog), installedCatalog);
+      for (let pass = 0; pass < 2; pass++) psql(ddl);
+      assert.deepEqual(privateData(), populated); assert.deepEqual(legacyData(), intactData); assert.deepEqual(sql(allCatalog), installedCatalog);
+      assert.deepEqual(claim(), expected); assert.deepEqual(privateData(), populated);
+      psql(await fs.readFile(path.join(root, 'supabase/tests/discovery-private-installation.sql'), 'utf8'));
+      report.privateReaderMigration = { file, sha256: hash(ddl), failedInstallAtomic: true, existingRowsAndPrivilegesPreserved: true, populatedCacheReinstallPreserved: true, exactCachedResponse: true, syntheticLiveSession: true, hostedAccess: false };
     });
     report.pass = true; report.baselineMigrations = baseline; report.baselineDataSha256 = baselineDigest;
     report.rollback = 'Failed transaction rolls back all additive DDL. After successful use retain data/receipts and compatible output-receipt storage; disable new UI and public/private entrypoint execution, then reapply the migration to restore. Full 88cc frontend rollback is safe only before new preparation usage. No destructive down migration.';
