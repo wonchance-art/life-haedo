@@ -169,6 +169,13 @@ class CaptureCloud extends NaverCloud {
   holdCaptureNext(rpc, hold) { this.holds.set(rpc, hold); }
   async handle(route, device) {
     const request = route.request(), url = new URL(request.url());
+    if (['life_naver_media_receipt_read', 'life_naver_media_receipt_put', 'life_naver_media_receipt_find'].includes(url.pathname.split('/').at(-1))) {
+      const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST,OPTIONS', 'content-type': 'application/json' };
+      if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers, body: '' });
+      const name = url.pathname.split('/').at(-1);
+      if (name === 'life_naver_media_receipt_read' || name === 'life_naver_media_receipt_find') return route.fulfill({ status: 200, headers, body: JSON.stringify(name.endsWith('_find') ? [] : null) });
+      return route.fulfill({ status: 400, headers, body: JSON.stringify({ code: '22023', message: 'Legacy capture fixture must not publish without acknowledged account source sync' }) });
+    }
     const names = ['life_naver_account_list', 'life_naver_inventory_state', 'life_naver_inventory_start', 'life_naver_inventory_list',
       'life_naver_capture_request', 'life_naver_capture_list', 'life_naver_capture_read'];
     const rpc = url.pathname.split('/').at(-1), mediaRequest = url.pathname.includes('/haedo-naver-originals/');

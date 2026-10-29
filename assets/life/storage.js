@@ -2579,6 +2579,110 @@
       return value;
     };
     const naverCaptureKey = (workspaceId, versionId) => `naver-capture:${workspaceId}:${versionId}`;
+    const naverMediaReceiptKey = (workspaceId, versionId) => `naver-media-receipt:${workspaceId}:${versionId}`;
+    function naverMediaReceipt() {
+      const value = options.naverMediaReceipt || root.HaedoLife?.NaverMediaReceipt || (typeof require === 'function' && require('./naver-media-receipt.js'));
+      if (!value?.validate) throw fault('dependency_unavailable', '원문 사진 연결 검증기를 불러오지 못했습니다.');
+      return value;
+    }
+    function naverReceiptDescriptor(workspaceId, attachment) {
+      const receipt = { workspaceId, sourceId: attachment.sourceId, sourceVersionId: attachment.sourceVersionId,
+        captureId: attachment.capture.id, captureHash: attachment.capture.capture_hash };
+      naverMediaReceipt().validate(receipt); return receipt;
+    }
+    function checkNaverReceiptTarget(bundle, receipt) {
+      naverMediaReceipt().validate(receipt);
+      const source = bundle.sources.find(value => value.id === receipt.sourceId), version = bundle.sourceVersions.find(value => value.id === receipt.sourceVersionId);
+      if (receipt.workspaceId !== bundle.workspaceId || source?.origin !== 'naver_blog' || !version || version.sourceId !== source.id) {
+        throw fault('invalid_naver_media_receipt', '사진을 연결할 정확한 원문 판을 확인하지 못했습니다.');
+      }
+    }
+    async function naverReceiptValue(meta, workspaceId, versionId, bundle) {
+      const row = await meta.get(naverMediaReceiptKey(workspaceId, versionId));
+      if (!row) return null;
+      onlyFields(row.value, ['receipt', 'pending'], 'invalid_naver_media_receipt');
+      const value = row.value;
+      if (typeof value.pending !== 'boolean' || value.receipt?.sourceVersionId !== versionId) throw fault('invalid_naver_media_receipt', '원문 사진 연결의 상태를 확인해 주세요.');
+      checkNaverReceiptTarget(bundle, value.receipt); return value;
+    }
+    async function putNaverReceipt(meta, bundle, receipt, pending) {
+      checkNaverReceiptTarget(bundle, receipt);
+      const previous = await naverReceiptValue(meta, bundle.workspaceId, receipt.sourceVersionId, bundle);
+      if (previous && stablePayload(previous.receipt) !== stablePayload(receipt)) throw fault('immutable_naver_capture', '같은 원문 판의 사진 연결은 바꿀 수 없습니다.');
+      const value = { receipt: clone(receipt), pending: previous ? previous.pending && pending : pending };
+      const changed = !previous || previous.pending !== value.pending;
+      if (changed) await meta.put({ key: naverMediaReceiptKey(bundle.workspaceId, receipt.sourceVersionId), value });
+      return { value, changed };
+    }
+    function naverMediaChanged(workspaceId, sourceVersionId) {
+      const event = { type: 'naver_media_changed', workspaceId, sourceVersionId };
+      notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Committed state is authoritative. */ }
+    }
+    async function listNaverMediaReceipts(workspaceId, { pendingOnly = false } = {}) {
+      collectionScope(workspaceId);
+      if (typeof pendingOnly !== 'boolean') throw fault('invalid_request', '사진 연결 조회 조건을 확인해 주세요.');
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta), values = [];
+        const prefix = `naver-media-receipt:${workspaceId}:`;
+        for (const key of await meta.getAllKeys()) if (typeof key === 'string' && key.startsWith(prefix)) {
+          const value = await naverReceiptValue(meta, workspaceId, key.slice(prefix.length), bundle);
+          if (!pendingOnly || value.pending) values.push(clone(value));
+        }
+        return values;
+      });
+    }
+    async function acknowledgeNaverMediaReceipt(workspaceId, input, { isCurrent = () => true } = {}) {
+      collectionScope(workspaceId); const receipt = clone(input); naverMediaReceipt().validate(receipt);
+      let wrote = false;
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        if (!isCurrent()) throw fault('request_cancelled', '계정이나 화면이 바뀌어 사진 연결 확인을 중지했습니다.');
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        checkNaverReceiptTarget(bundle, receipt);
+        const prior = await naverReceiptValue(meta, workspaceId, receipt.sourceVersionId, bundle);
+        if (!prior || stablePayload(prior.receipt) !== stablePayload(receipt)) throw fault('invalid_naver_media_receipt', '요청한 사진 연결과 서버 확인 결과가 다릅니다.');
+        const saved = await putNaverReceipt(meta, bundle, receipt, false); wrote = saved.changed;
+        if (!isCurrent()) throw fault('request_cancelled', '계정이나 화면이 바뀌어 사진 연결 확인을 중지했습니다.');
+        return clone(saved.value);
+      });
+      if (wrote) naverMediaChanged(workspaceId, receipt.sourceVersionId); return result;
+    }
+    async function stageNaverMediaReceipt(workspaceId, sourceVersionId, { isCurrent = () => true } = {}) {
+      collectionScope(workspaceId); requireId(sourceVersionId, '원문 버전');
+      const attachment = await readNaverCapture(workspaceId, sourceVersionId); scopeGuard();
+      if (!isCurrent()) throw fault('request_cancelled', '계정이나 화면이 바뀌어 사진 연결 등록을 중지했습니다.');
+      if (!attachment || attachment.localOnly) return null;
+      const checked = await naverMedia().validate(attachment, { ownerId: account.userId }); scopeGuard();
+      const receipt = naverReceiptDescriptor(workspaceId, checked); let wrote = false;
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        if (!isCurrent()) throw fault('request_cancelled', '계정이나 화면이 바뀌어 사진 연결 등록을 중지했습니다.');
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const current = (await meta.get(naverCaptureKey(workspaceId, sourceVersionId)))?.value;
+        if (!current || current.localOnly || stablePayload({ ...current, photos: undefined }) !== stablePayload({ ...checked, photos: undefined })) throw fault('invalid_naver_media_receipt', '확인한 원문 사진 사본이 달라 등록하지 않았습니다.');
+        naverMedia().checkTarget(bundle, checked);
+        const saved = await putNaverReceipt(meta, bundle, receipt, true); wrote = saved.changed;
+        if (!isCurrent()) throw fault('request_cancelled', '계정이나 화면이 바뀌어 사진 연결 등록을 중지했습니다.');
+        return clone(saved.value);
+      });
+      if (wrote) naverMediaChanged(workspaceId, sourceVersionId); return result;
+    }
+    async function installNaverCaptureForVersion(workspaceId, input, inputReceipt, { isCurrent = () => true } = {}) {
+      collectionScope(workspaceId); const receipt = clone(inputReceipt); naverMediaReceipt().validate(receipt);
+      const attachment = await naverMedia().validate(input, { ownerId: account.userId }); scopeGuard();
+      if (attachment.localOnly || stablePayload(naverReceiptDescriptor(workspaceId, attachment)) !== stablePayload(receipt)) throw fault('invalid_naver_media_receipt', '선택한 정확한 원문 판과 사진 연결이 다릅니다.');
+      let wrote = false;
+      const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        if (!isCurrent()) throw fault('request_cancelled', '계정이나 화면이 바뀌어 원문 사진 받기를 중지했습니다.');
+        const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        naverMedia().checkTarget(bundle, attachment); checkNaverReceiptTarget(bundle, receipt);
+        const key = naverCaptureKey(workspaceId, receipt.sourceVersionId), previous = await meta.get(key);
+        if (previous && stablePayload({ ...previous.value, photos: undefined }) !== stablePayload({ ...attachment, photos: undefined })) throw fault('immutable_naver_capture', '보관한 원문 사진 선언을 다른 사본으로 바꾸지 않았습니다.');
+        if (!previous) { await meta.add({ key, value: attachment }); wrote = true; }
+        const saved = await putNaverReceipt(meta, bundle, receipt, false); wrote ||= saved.changed;
+        if (!isCurrent()) throw fault('request_cancelled', '계정이나 화면이 바뀌어 원문 사진 받기를 중지했습니다.');
+        return { status: wrote ? 'stored' : 'already_stored', sourceId: receipt.sourceId, sourceVersionId: receipt.sourceVersionId };
+      });
+      if (wrote) naverMediaChanged(workspaceId, receipt.sourceVersionId); return result;
+    }
     async function commitNaverCapture(request, options = {}) {
       const operationId = request?.operationId;
       try {
@@ -2739,6 +2843,7 @@
               throw fault('immutable_naver_capture', '보관한 원문 사진 선언은 덮어쓸 수 없습니다. 새 원문 버전으로 보관해 주세요.');
             }
             if (!previous) await meta.add({ key, value: naverAttachment });
+            await putNaverReceipt(meta, updated, naverReceiptDescriptor(workspaceId, naverAttachment), true);
           }
           if (registration && (await readSyncState(tx.objectStore('meta'), workspaceId, bundle))?.enabled &&
               new TextEncoder().encode(JSON.stringify(updated)).length > SYNC_MAX_BYTES) throw fault('snapshot_too_large', '등록한 자료가 동기화 크기 제한을 넘습니다. 기존 자료는 유지했습니다.');
@@ -2781,6 +2886,7 @@
           return stored;
         });
         if (wrote) changed(workspaceId, result.revision);
+        if (wrote && naverAttachment) naverMediaChanged(workspaceId, naverAttachment.sourceVersionId);
         if (updatedSync) syncChanged(updatedSync);
         if (appliedWriting) writingChanged(appliedWriting);
         if (updatedWriting) writingSyncChanged(updatedWriting);
@@ -4278,6 +4384,7 @@
       readPublicCover, savePublicCover,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       readPreservationCatalog, readPreservationSnapshot, installPreservationCopy, commitNaverCapture, readNaverCapture, installNaverCaptureCopy,
+      listNaverMediaReceipts, acknowledgeNaverMediaReceipt, stageNaverMediaReceipt, installNaverCaptureForVersion,
       commitLocal, readAccountMaterialRegistration, saveStage, getStage, listStages, deleteStage, subscribe, subscribeAll,
       getSyncState, bindSync, adoptSyncRemote, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,
       setSyncConflict, setSyncError, resolveSync,
