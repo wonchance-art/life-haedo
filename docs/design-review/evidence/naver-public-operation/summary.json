@@ -151,5 +151,19 @@
     "arrayOrderAndTextPreserved": true,
     "exactAcknowledgedVersionReused": true,
     "serverSourceWritesOnResume": 0
+  },
+  "ciRecovery": {
+    "initialRun": "https://github.com/wonchance-art/life-haedo/actions/runs/40851134937",
+    "initialFailure": "Static icon response body verification overlapped context close",
+    "resource": "/icon.svg",
+    "productFlowsPassedBeforeFailure": 8,
+    "requestAndHashDrainedBeforeClose": true,
+    "hashAndErrorAssertionsPreserved": true,
+    "timeoutIncreased": false,
+    "focusedChecksPassed": 8,
+    "focusedStaticResponsesVerified": 1925,
+    "focusedIconResponsesVerified": 57,
+    "focusedStaticErrors": 0,
+    "browser": "Chromium 151.0.7922.173"
   }
 }
