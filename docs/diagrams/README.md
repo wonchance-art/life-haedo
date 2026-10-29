@@ -1,5 +1,7 @@
 # 해도 워크플로와 구조도
 
+2026-10-29 **관심 글에서 내 판단까지 — 상세 설계**: [PNG](rendered/reading-decision-journey-20261029.png) · [SVG](rendered/reading-decision-journey-20261029.svg) · [원본](reading-decision-journey-20261029.dot) · [화면·데이터·실패 계약](../design-review/reading-decision-journey.md). 읽기만 종료·메모·글쓰기의 선택과 같은 기기/다른 기기의 복귀 범위를 나눈다. 구현·출시 상태 도식은 아니다.
+
 2026-10-29 **목적에서 출발하는 전체 workflow**: [PNG](rendered/purpose-workflow-20261029.png) · [SVG](rendered/purpose-workflow-20261029.svg) · [PDF](rendered/purpose-workflow-20261029.pdf) · [Graphviz 원본](purpose-workflow-20261029.dot) · [Mermaid 원본](purpose-workflow-20261029.mmd). 생활의 질문·기존 기록 → 필요한 맥락 준비 → 직접 읽기·판단·실천 → 선택 결과 → 생활 복귀를 3열로 정리했다. AI는 선택적 후속 설계이며, 도구 개선은 별도 순환이다. **목표 프레임**과 현재 기능을 구분하며, 근거·현재 구현·다음 작업은 [제품 목적 문서](../life-tools-design/product-purpose.md)를 따른다. 아래 구현 구조도와 함께 읽는다.
 
 2026-10-26 **현재 기능의 입력 → 처리 → 결과**: [PNG](rendered/product-workflow-20261026.png) · [SVG](rendered/product-workflow-20261026.svg) · [PDF](rendered/product-workflow-20261026.pdf) · [Graphviz 원본](product-workflow-20261026.dot). 뉴스·자료·글·계획·보관의 다섯 흐름과 기능별 저장 범위를 구분한다.
