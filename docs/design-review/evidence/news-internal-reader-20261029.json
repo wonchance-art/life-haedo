@@ -95,5 +95,12 @@
     "No actual user reading-utility assessment, production account mutation or Apple-device test."
   ],
   "integratedBaseCommit": "04dfcc1d9a083c0af93dbde91bf6d642b4863a2a",
-  "pullRequest": "https://github.com/wonchance-art/life-haedo/pull/145"
+  "pullRequest": "https://github.com/wonchance-art/life-haedo/pull/145",
+  "ciCorrection": {
+    "run": "https://github.com/wonchance-art/life-haedo/actions/runs/40841110781",
+    "failedExpectation": "Fixed interest 공연 must always expose seoul-environment in top five from a changing public catalog.",
+    "resolution": "Use the real source-only/latest UI for every public-provider availability journey; assert every visible article belongs to the selected source. Preserve separate related-order tests and all import/original/reaction/return assertions.",
+    "finalLocalJourneyCount": 19,
+    "runtimeChanged": false
+  }
 }

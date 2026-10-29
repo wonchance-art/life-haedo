@@ -196,20 +196,22 @@ async function main() {
         if (hosts) assert.deepEqual([...Discovery.ALLOWED_SOURCES[sourceId]].sort(), [...hosts].sort());
         await interests(page, interest); await open(page);
         journey.relatedVisibleIds = await page.locator('#discoveryList [data-discovery-id]').evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId));
-        if (hosts) {
-          // Explicit UI source choice/latest checks availability independently of
-          // Korean/English lexical match quality. No runtime/feed rank override.
-          await topics(page);
-          await (await revealControl(page.locator('#discoveryOptions > summary'))).click();
-          const sourceIds = await page.locator('[data-discovery-source]').evaluateAll(nodes => nodes.map(node => node.dataset.discoverySource));
-          assert(sourceIds.includes(sourceId));
-          for (const id of sourceIds) { await page.locator('[data-discovery-source="' + escapeId(id) + '"]').setChecked(id === sourceId); await idle(page); }
-          await (await revealControl(page.locator('#discoveryOptions > summary'))).click();
-          await selectNewsMode(page, 'latest'); await idle(page);
-          journey.selection = 'Explicit source-only UI setting and latest order; availability test, not recommendation usefulness';
-        } else journey.selection = 'Existing explicit interest and related order';
+        // Fresh publisher feeds need not keep any particular source in the top
+        // five for a fixed interest (e.g. 공연 is not an environment guarantee).
+        // Follow the same explicit source/latest UI path for every provider;
+        // related-order behavior is checked separately without overriding rank.
+        await topics(page);
+        await (await revealControl(page.locator('#discoveryOptions > summary'))).click();
+        const sourceIds = await page.locator('[data-discovery-source]').evaluateAll(nodes => nodes.map(node => node.dataset.discoverySource));
+        assert(sourceIds.includes(sourceId));
+        for (const id of sourceIds) { await page.locator('[data-discovery-source="' + escapeId(id) + '"]').setChecked(id === sourceId); await idle(page); }
+        await (await revealControl(page.locator('#discoveryOptions > summary'))).click();
+        await selectNewsMode(page, 'latest'); await idle(page);
+        journey.selection = 'Explicit source-only UI setting and latest order; availability test, not recommendation usefulness';
         const before = await state(page), actionsBefore = await actions();
         const ids = await page.locator('#discoveryList [data-discovery-id]').evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId));
+        assert(ids.length > 0, 'The explicitly selected source supplies visible actual articles');
+        for (const id of ids) assert.equal(publicFeed.articles.find(row => row.id === id)?.sourceId, sourceId, 'Every visible article follows the explicit source selection');
         const article = publicFeed.articles.find(row => row.sourceId === sourceId && ids.includes(row.id));
         assert(article, 'The actual approved source has a visible article: ' + sourceId);
         journey.articleId = article.id; journey.url = article.url; journey.canonicalUrl = Discovery.canonicalUrl(article.url);
