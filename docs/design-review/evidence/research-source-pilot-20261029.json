@@ -1,0 +1,935 @@
+{
+  "schema": "haedo-research-source-review-v1",
+  "checkedOn": "2026-10-29",
+  "timezone": "Asia/Seoul",
+  "runtimeIntegrated": false,
+  "containsUserEvaluations": false,
+  "questionHypothesis": "외국어 읽기를 기억에 남기고 꾸준히 이어가려면 학습 방법과 환경을 어떻게 비교할까?",
+  "selectionMethod": "목적 표집한 공개 웹 자료; SNS 홈 추천 표본이나 전 분야 체계적 문헌고찰 아님",
+  "languageSettingRead": false,
+  "firstReadIds": [
+    "learning-scientists-retrieval-2016",
+    "language-er-meta-2025",
+    "grit-meta-2017"
+  ],
+  "candidates": [
+    {
+      "id": "language-er-meta-2025",
+      "title": "Learning a Language Through Reading: A Meta-analysis of Studies on the Effects of Extensive Reading on Second and Foreign Language Learning",
+      "displayTitleKo": "외국어 다독은 어떤 능력에 도움이 되는가?",
+      "url": "https://link.springer.com/article/10.1007/s10648-025-10068-6",
+      "doi": "10.1007/s10648-025-10068-6",
+      "authors": [
+        "Nina L. Sangers",
+        "Lisa van der Sande",
+        "Camille Welie",
+        "Marjolein Dobber",
+        "Roel van Steensel"
+      ],
+      "year": 2025,
+      "publishedAt": "2025-09-26",
+      "dateMeaning": "출판사/색인에 표기된 공개일",
+      "contentLanguage": "en",
+      "studyTargetLanguage": "82개 개입 중 영어 80개, 스페인어 2개",
+      "topics": [
+        "외국어 학습",
+        "독서",
+        "다독"
+      ],
+      "evidenceType": "메타분석",
+      "access": {
+        "level": "full_text_selected_sections",
+        "checkedAt": "2026-10-29T16:33:05.870709+09:00",
+        "details": "출판사 공개 HTML의 방법·결과·논의·한계 부분 확인. 원문 공개 접근 가능."
+      },
+      "finding": "다독 개입은 검토된 언어 성과에서 작거나 중간 크기의 긍정적 단기 효과를 보였다. 주요 즉시효과 분석은 d=0.38이었다.",
+      "limits": [
+        "준실험이 77%이며 연구 질 지수 평균은 6점 중 2.93.",
+        "장기 추적 비교가 적어 장기 효과를 확정하지 못함.",
+        "영어·아시아·대학생 비중이 커 모든 연령/언어에 그대로 일반화할 수 없음.",
+        "텍스트 선택 범위/읽기 확인 활동의 조절효과를 의무 독후감이나 강제 추천 제한의 인과적 근거로 해석하면 안 됨."
+      ],
+      "editorialUse": "다독을 시작할 근거와 책 선택 난이도·장기 효과의 불확실성을 함께 확인하는 핵심 읽기 후보.",
+      "editorialSelection": "first_read",
+      "discoveredVia": "public_web_research",
+      "userAssessment": null,
+      "workIdentity": "doi:10.1007/s10648-025-10068-6",
+      "correctionRetractionCheck": "not_systematically_checked"
+    },
+    {
+      "id": "language-spacing-meta-2022",
+      "title": "The Effects of Spaced Practice on Second Language Learning: A Meta-Analysis",
+      "displayTitleKo": "외국어 복습은 간격을 어떻게 두는 것이 좋은가?",
+      "url": "https://onlinelibrary.wiley.com/doi/abs/10.1111/lang.12479",
+      "doi": "10.1111/lang.12479",
+      "authors": [
+        "Su Kyung Kim",
+        "Stuart Webb"
+      ],
+      "year": 2022,
+      "publishedAt": "2022-02-06",
+      "dateMeaning": "출판사/색인에 표기된 공개일",
+      "contentLanguage": "en",
+      "studyTargetLanguage": "제2언어 학습 연구; 언어별 분포는 이번 초록 확인 범위에서 미확인",
+      "topics": [
+        "외국어 학습",
+        "복습",
+        "기억"
+      ],
+      "evidenceType": "메타분석",
+      "access": {
+        "level": "abstract",
+        "checkedAt": "2026-10-29T16:33:05.870709+09:00",
+        "details": "출판사 초록·서지·참고문헌 확인. /full 주소는 /abs로 이동했으므로 본문 확보/독해로 표시하지 않음."
+      },
+      "finding": "간격 학습의 이점이 보고됐다. 긴 간격은 지연 검사에서 짧은 간격보다 유리했고, 등간격과 점증 간격 사이에는 통계적 차이가 확인되지 않았다.",
+      "limits": [
+        "학습 목표·활동·피드백·유지 기간에 따라 효과가 달랐다.",
+        "초록 확인만으로 개별 연구 질·이질성·최적 복습 일수를 독립 평가하지 못했다.",
+        "특정 앱이나 1-3-7일 같은 고정 시간표의 우수성을 이 결과에서 도출하지 않는다."
+      ],
+      "editorialUse": "한꺼번에 반복하기와 간격을 둔 복습을 구분하고, 장기 기억을 평가해야 하는 이유를 확인하는 초록 후보.",
+      "editorialSelection": "optional_comparison",
+      "discoveredVia": "public_web_research",
+      "userAssessment": null,
+      "workIdentity": "doi:10.1111/lang.12479",
+      "correctionRetractionCheck": "not_systematically_checked"
+    },
+    {
+      "id": "learning-scientists-retrieval-2016",
+      "title": "Learn how to Study Using... Retrieval Practice",
+      "displayTitleKo": "책을 덮고 떠올린 뒤 확인하는 복습법",
+      "url": "https://www.learningscientists.org/blog/2016/6/23-1",
+      "doi": null,
+      "authors": [
+        "Megan Smith",
+        "Yana Weinstein"
+      ],
+      "year": 2016,
+      "publishedAt": "2016-06-23",
+      "dateMeaning": "출판사/색인에 표기된 공개일",
+      "contentLanguage": "en",
+      "studyTargetLanguage": null,
+      "topics": [
+        "독서",
+        "복습",
+        "기억"
+      ],
+      "evidenceType": "인지심리 연구자의 실천 해설; 단일 연구/메타분석 아님",
+      "access": {
+        "level": "full_text",
+        "checkedAt": "2026-10-29T16:33:05.870709+09:00",
+        "details": "공식 블로그 본문 확인. 공식 전략 페이지의 YouTube 링크도 확인했지만 영상 재생/전체 청취는 하지 않음."
+      },
+      "finding": "노트를 보지 않고 기억에서 답하거나 써 본 뒤 원문을 대조해 오류를 확인하고 나중에 다시 시도하는 구체적인 실행 방법을 안내한다.",
+      "limits": [
+        "실천 해설을 독립적인 효과 검증으로 중복 계산하지 않는다.",
+        "2016년 안내이며 최근 연구의 포괄적 검토로 소개하지 않는다.",
+        "개념 이해·전이의 모든 조건을 이 짧은 글로 확정할 수 없다."
+      ],
+      "editorialUse": "논문보다 짧고 바로 시도할 수 있는 첫 읽기. 읽은 한 부분의 핵심을 떠올린 뒤 원문 확인하는 선택 실험으로 연결 가능.",
+      "editorialSelection": "first_read",
+      "discoveredVia": "public_web_research",
+      "userAssessment": null,
+      "workIdentity": "https://www.learningscientists.org/blog/2016/6/23-1",
+      "correctionRetractionCheck": "not_systematically_checked"
+    },
+    {
+      "id": "korean-er-meta-2017",
+      "title": "한국어 교육에서 다독 활동의 효과에 대한 메타분석",
+      "displayTitleKo": "한국어 학습에서도 다독이 도움이 되는가?",
+      "url": "https://www.kci.go.kr/kciportal/ci/sereArticleSearch/ciSereArtiView.kci?sereArticleSearchBean.artiId=ART002290159",
+      "doi": "10.17095/JRR.2017.45.3",
+      "authors": [
+        "백재파"
+      ],
+      "year": 2017,
+      "publishedAt": null,
+      "dateMeaning": "출판사/색인에 표기된 공개일",
+      "contentLanguage": "ko",
+      "studyTargetLanguage": "한국어",
+      "topics": [
+        "외국어 학습",
+        "독서",
+        "다독"
+      ],
+      "evidenceType": "메타분석",
+      "access": {
+        "level": "abstract",
+        "checkedAt": "2026-10-29T16:33:05.870709+09:00",
+        "details": "KCI 공식 서지와 국문/영문 초록 확인. 학술지 본문은 이번 조사에서 열지 않음."
+      },
+      "finding": "초록은 다독의 전체 효과크기 0.559를 보고하며 읽기 속도·어휘·독해 성과를 구분한다.",
+      "limits": [
+        "연구 11편의 작은 근거 묶음이며 연구 질·출판편향·장기 효과를 본문에서 확인하지 못했다.",
+        "한국어로 쓰였다는 이유로 한국인 영어 학습자의 연구로 분류하지 않는다.",
+        "2017년 결과를 최신 전체 연구를 대표하는 것으로 소개하지 않는다."
+      ],
+      "editorialUse": "한국어로 읽는 간단한 근거 후보이자 원문 언어와 학습 대상 언어를 구분하는 비교 사례.",
+      "editorialSelection": "optional_comparison",
+      "discoveredVia": "public_web_research",
+      "userAssessment": null,
+      "workIdentity": "doi:10.17095/JRR.2017.45.3",
+      "correctionRetractionCheck": "not_systematically_checked"
+    },
+    {
+      "id": "japanese-er-case-2021",
+      "title": "多読授業を体験した学生の読みの変化と学習観の変化",
+      "displayTitleKo": "일본어 다독을 경험한 한 학생의 읽기 방식은 어떻게 바뀌었나?",
+      "url": "https://www.jstage.jst.go.jp/article/jlem/27/1/27_128/_article/-char/ja/",
+      "doi": "10.19022/jlem.27.1_128",
+      "authors": [
+        "片山 智子 (Tomoko Katayama)"
+      ],
+      "year": 2021,
+      "publishedAt": "2021-08-12",
+      "dateMeaning": "J-STAGE 공개일",
+      "contentLanguage": "ja",
+      "studyTargetLanguage": "일본어",
+      "topics": [
+        "외국어 학습",
+        "독서",
+        "동기"
+      ],
+      "evidenceType": "단일 학습자 질적 사례 / 연구보고",
+      "access": {
+        "level": "full_text",
+        "checkedAt": "2026-10-29T16:33:05.870709+09:00",
+        "details": "J-STAGE 서지/초록과 2쪽 PDF 본문 확인."
+      },
+      "finding": "독서 기록·수업 코멘트·설문·면담에서 어휘/문법 지식 중심 읽기에서 내용 즐기기와 자신감으로 변화한 사례를 설명한다.",
+      "limits": [
+        "학생 1명을 선택 분석한 관찰 사례이며 비교군이 없다.",
+        "학습 효과의 크기나 일반적인 인과 효과를 추정할 수 없다.",
+        "느낀 자신감·읽기 스타일의 변화와 객관적 언어 능력 향상을 같은 결과로 처리하지 않는다."
+      ],
+      "editorialUse": "숫자 중심 메타분석과 다른 형태의 실제 독서 경험을 탐색하는 짧은 일본어 후보.",
+      "editorialSelection": "optional_comparison",
+      "discoveredVia": "public_web_research",
+      "userAssessment": null,
+      "workIdentity": "doi:10.19022/jlem.27.1_128",
+      "correctionRetractionCheck": "not_systematically_checked"
+    },
+    {
+      "id": "cdf-memory-lecture-2015",
+      "title": "La mémoire et son optimisation",
+      "displayTitleKo": "기억을 오래 남기는 조건: 회상과 간격",
+      "url": "https://www.college-de-france.fr/fr/agenda/cours/fondements-cognitifs-des-apprentissages-scolaires/la-memoire-et-son-optimisation",
+      "doi": null,
+      "authors": [
+        "Stanislas Dehaene"
+      ],
+      "year": 2015,
+      "publishedAt": "2015-02-17",
+      "dateMeaning": "공식 강의일",
+      "contentLanguage": "fr",
+      "studyTargetLanguage": null,
+      "topics": [
+        "독서",
+        "학습",
+        "기억"
+      ],
+      "evidenceType": "연구를 해설하는 대학 공개 강의 / 공식 요약",
+      "access": {
+        "level": "official_summary_media_unplayed",
+        "checkedAt": "2026-10-29T16:33:05.870709+09:00",
+        "details": "Collège de France 공식 텍스트 요약과 오디오/PDF 링크 확인. 오디오 전체 청취/영상 시청은 하지 않음."
+      },
+      "finding": "깊게 이해하기·기억에서 꺼내 보기·학습 간격을 두는 원리를 묶어 설명하며 복습 간격과 기억을 유지하려는 기간의 관계를 소개한다.",
+      "limits": [
+        "2015년 강의의 설명을 최신 메타분석과 같은 지위로 두지 않는다.",
+        "강의의 강한 일반화나 특정 배수/기간을 사용자의 보장된 효과로 재사용하지 않는다.",
+        "자료 요약 접근과 실제 강의 청취를 구분한다."
+      ],
+      "editorialUse": "프랑스어로 읽거나 들을 수 있는 개념 설명 후보. 짧은 텍스트 요약부터 선택 가능.",
+      "editorialSelection": "optional_comparison",
+      "discoveredVia": "public_web_research",
+      "userAssessment": null,
+      "workIdentity": "https://www.college-de-france.fr/fr/agenda/cours/fondements-cognitifs-des-apprentissages-scolaires/la-memoire-et-son-optimisation",
+      "correctionRetractionCheck": "not_systematically_checked"
+    },
+    {
+      "id": "attention-microbreaks-2022",
+      "title": "\"Give me a break!\" A systematic review and meta-analysis on the efficacy of micro-breaks for increasing well-being and performance",
+      "displayTitleKo": "짧은 휴식은 피로와 수행에 어떤 차이를 만드는가",
+      "url": "https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0272460",
+      "doi": "10.1371/journal.pone.0272460",
+      "authors": [
+        "Patricia Albulescu",
+        "Irina Macsinga",
+        "Andrei Rusu",
+        "Coralia Sulea",
+        "Alexandra Bodnaru",
+        "Bogdan Tudor Tulbure"
+      ],
+      "year": 2022,
+      "publishedAt": "2022-08-31",
+      "firstOnlineAt": null,
+      "dateMeaning": "출판사/색인/기관에 표기된 공개일 또는 출판 월",
+      "contentLanguage": "en",
+      "studyTargetLanguage": null,
+      "topics": [
+        "집중력",
+        "휴식",
+        "학습 지속"
+      ],
+      "evidenceType": "systematic_review_meta_analysis_experimental_and_quasi_experimental",
+      "access": {
+        "level": "full_text_selected_sections",
+        "checkedAt": "2026-10-29",
+        "details": "publisher_full_text",
+        "checkedSections": [
+          "서지·초록",
+          "결과와 한계"
+        ]
+      },
+      "finding": "22개 독립 표본, 총 2,335명을 종합했다. 10분 이내 휴식은 활력과 피로에 작은 개선 효과를 보였지만 전체 수행 향상은 통계적으로 유의하지 않았다.",
+      "limits": [
+        "결과별 연구 수가 적고 과제·측정의 이질성이 크다.",
+        "피로·활력은 자기보고이며 어떤 휴식 활동이 가장 좋은지는 확정하지 못했다.",
+        "외국어 독서나 특정 포모도로 간격의 우수성을 직접 검증한 결과가 아니다."
+      ],
+      "editorialUse": "집중을 오래 유지하는 방법을 볼 때 덜 피곤함과 더 잘 수행함을 별개의 결과로 평가하기 좋다.",
+      "editorialSelection": "optional_comparison",
+      "discoveredVia": "public_web_research",
+      "userAssessment": null,
+      "workIdentity": "doi:10.1371/journal.pone.0272460",
+      "correctionRetractionCheck": "not_systematically_checked"
+    },
+    {
+      "id": "grit-meta-2017",
+      "title": "Much ado about grit: A meta-analytic synthesis of the grit literature",
+      "displayTitleKo": "Grit은 성과를 얼마나 설명하는가",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/27845531/",
+      "doi": "10.1037/pspp0000102",
+      "authors": [
+        "Marcus Credé",
+        "Michael C. Tynan",
+        "Peter D. Harms"
+      ],
+      "year": 2017,
+      "publishedAt": "2017-09",
+      "firstOnlineAt": "2016-06-16",
+      "dateMeaning": "출판사/색인/기관에 표기된 공개일 또는 출판 월",
+      "contentLanguage": "en",
+      "studyTargetLanguage": null,
+      "topics": [
+        "Grit",
+        "지속성",
+        "성격과 성과"
+      ],
+      "evidenceType": "meta_analysis_correlational_construct_validity",
+      "access": {
+        "level": "abstract",
+        "checkedAt": "2026-10-29",
+        "details": "abstract_and_bibliography_only",
+        "checkedSections": [
+          "PubMed 서지·초록"
+        ]
+      },
+      "finding": "88개 독립 표본, 66,807명의 결과를 종합했다. Grit과 성실성의 중복이 크고, 노력의 지속성이 관심의 일관성보다 성과와 더 강하게 연결됐다.",
+      "limits": [
+        "상관관계와 구성 타당도를 종합한 근거이며 Grit 훈련의 인과효과를 입증하지 않는다.",
+        "Grit은 쓸모없다는 결론도 아니다. 노력 지속성의 추가 설명력을 별도로 보고했다.",
+        "현재 직접 확인한 범위는 초록이며, 출판사 전문 접근은 실패했다."
+      ],
+      "editorialUse": "의지·끈기를 강조하는 SNS 주장과 실제 연구의 측정·상관·개입을 구분하는 반대 근거로 읽는다.",
+      "editorialSelection": "first_read",
+      "discoveredVia": "public_web_research",
+      "userAssessment": null,
+      "workIdentity": "doi:10.1037/pspp0000102",
+      "correctionRetractionCheck": "not_systematically_checked"
+    },
+    {
+      "id": "habit-lally-interview-2026",
+      "title": "Does it really take 66 days to form a habit? We asked the expert, Dr Pippa Lally",
+      "displayTitleKo": "습관은 정말 66일이면 만들어지는가",
+      "url": "https://www.surrey.ac.uk/news/does-it-really-take-66-days-form-habit-we-asked-expert-dr-pippa-lally",
+      "doi": null,
+      "authors": [
+        "University of Surrey editorial feature; interviewee Phillippa Lally"
+      ],
+      "year": 2026,
+      "publishedAt": "2026-01-21",
+      "firstOnlineAt": null,
+      "dateMeaning": "출판사/색인/기관에 표기된 공개일 또는 출판 월",
+      "contentLanguage": "en",
+      "studyTargetLanguage": null,
+      "topics": [
+        "습관",
+        "지속성",
+        "학습 루틴"
+      ],
+      "evidenceType": "institutional_researcher_interview_not_primary_trial",
+      "access": {
+        "level": "full_text",
+        "checkedAt": "2026-10-29",
+        "details": "institutional_article_full_text",
+        "checkedSections": [
+          "게시일·인터뷰 전체"
+        ]
+      },
+      "finding": "원 연구자가 습관 형성 기간의 개인차를 설명하고 66일을 보편적 규칙으로 받아들이는 해석을 교정한다. 구체적 상황 계획과 막연한 의도를 구분한다.",
+      "limits": [
+        "연구자 인터뷰이며 2026년에 수행한 새 실험 결과가 아니다.",
+        "2010년 원 연구의 방법·통계는 이 인터뷰만으로 재검수하지 않았다.",
+        "습관 형성과 지속성·성과·언어 숙달을 같은 결과로 다루지 않는다."
+      ],
+      "editorialUse": "짧은 입문용 읽기. 하루 빠지면 실패라는 식의 루틴 설명을 비판적으로 검토하는 출발점으로 사용한다.",
+      "editorialSelection": "optional_comparison",
+      "discoveredVia": "public_web_research",
+      "userAssessment": null,
+      "workIdentity": "https://www.surrey.ac.uk/news/does-it-really-take-66-days-form-habit-we-asked-expert-dr-pippa-lally",
+      "correctionRetractionCheck": "not_systematically_checked"
+    },
+    {
+      "id": "zh-irrelevant-speech-2026",
+      "title": "复杂言语加工任务中无关言语效应的元分析",
+      "displayTitleKo": "배경 대화가 읽기·언어 과제에 주는 영향",
+      "url": "https://journal.psych.ac.cn/xlkxjz/CN/10.3724/SP.J.1042.2026.0060",
+      "doi": "10.3724/SP.J.1042.2026.0060",
+      "authors": [
+        "张楠",
+        "李旭奎"
+      ],
+      "year": 2026,
+      "publishedAt": "2026-01-15",
+      "firstOnlineAt": "2025-11-10",
+      "dateMeaning": "출판일과 온라인 선공개일 구분",
+      "contentLanguage": "zh",
+      "abstractLanguages": [
+        "zh",
+        "en"
+      ],
+      "studyTargetLanguage": null,
+      "topics": [
+        "독서",
+        "집중력",
+        "학습 환경"
+      ],
+      "evidenceType": "meta_analysis",
+      "access": {
+        "level": "abstract_and_tables",
+        "checkedAt": "2026-10-29",
+        "details": "출판사 중국어/영어 초록과 표 확인; 전체 방법 검토 미완료"
+      },
+      "finding": "30개 연구·113개 독립 효과를 종합해 이상치 제외 후 복잡한 언어 과제에서 과제와 무관한 말소리의 작은 수행 방해 효과를 보고한다. 이해 가능성·연령·과제 등 조건별 차이가 있다.",
+      "limits": [
+        "초록과 표 확인; 논문 전체 방법·선별/민감도 검토는 미완료",
+        "외국어 실력의 장기 향상이나 모든 음악의 해로움을 검증한 연구로 확대하지 않는다",
+        "발행연도와 온라인 공개 시점이 다르다."
+      ],
+      "editorialUse": "외국어 독서 환경에서 이해되는 말소리의 영향을 비교할 근거 후보",
+      "editorialSelection": "optional_comparison",
+      "discoveredVia": "public_web_research",
+      "userAssessment": null,
+      "workIdentity": "doi:10.3724/SP.J.1042.2026.0060",
+      "correctionRetractionCheck": "not_systematically_checked"
+    }
+  ],
+  "samplingLimits": [
+    "원문 언어별 할당량이나 사용자 활성 언어를 뜻하지 않음",
+    "10개 읽기 자료는 독립된 연구 10개가 아님; 해설·강의·사례·고찰이 함께 있음",
+    "개인화/최신순 비교, 실제 읽기 도움, 절약 시간 미측정",
+    "초록·일부 본문 확인을 전체 방법 검수로 승격하지 않음",
+    "현재 앱 feed/읽기 비교에 설치하지 않음"
+  ],
+  "channels": [
+    {
+      "id": "oasis",
+      "name": "OASIS — Open Accessible Summaries in Language Studies",
+      "languages": [
+        "en"
+      ],
+      "topics": [
+        "second-language-learning",
+        "motivation",
+        "boredom"
+      ],
+      "officialUrl": "https://www.oasis-database.org/help/",
+      "socialProfiles": {
+        "bluesky": "https://bsky.app/profile/oasisdatabase.bsky.social",
+        "x": "https://x.com/OASIS_Database"
+      },
+      "identityEvidence": "Official OASIS help HTML directly links both profiles; home identifies University of Oxford hosting.",
+      "activity": {
+        "method": "Unauthenticated public Bluesky getAuthorFeed, limit=10, one page only; no consumer account or personalised feed",
+        "returned": 10,
+        "ownPosts": 10,
+        "newestReturnedOwnPostAt": "2026-10-19T08:03:28.334Z",
+        "scopeLimit": "First returned page only; no claim of exhaustive latest activity or account inactivity. Public API cache and reposts may affect observations."
+      },
+      "limits": [
+        "네 링크의 정적 HTTP404 관측. 두 링크는 같은 ID의 공식 공개 요약 내용 확인 및 브라우저 진입 재검증; accessChecks 참조.",
+        "원논문 In press, DOI/직접 URL 미확인. 요약과 전문/개입효과를 구분.",
+        "공식 사이트가 자체 사용하는 공개 endpoint를 조사한 것이며 안정된 외부 수신 API 계약 검증/설치가 아님."
+      ]
+    },
+    {
+      "id": "retrieval-practice",
+      "name": "RetrievalPractice.org / Pooja K. Agarwal",
+      "languages": [
+        "en"
+      ],
+      "topics": [
+        "retrieval-practice",
+        "spacing",
+        "metacognition"
+      ],
+      "officialUrl": "https://www.retrievalpractice.org/",
+      "socialProfiles": {
+        "bluesky": "https://bsky.app/profile/retrievelearn.bsky.social",
+        "youtube": "https://youtube.com/@RetrieveLearn"
+      },
+      "identityEvidence": "Official site directly links both profiles, names author and research/resources.",
+      "activity": {
+        "method": "Unauthenticated public Bluesky getAuthorFeed, limit=10, one page only; no consumer account or personalised feed",
+        "returned": 10,
+        "ownPosts": 9,
+        "newestReturnedOwnPostAt": "2026-10-26T14:41:01.502Z",
+        "scopeLimit": "First returned page only; no claim of exhaustive latest activity or account inactivity. Public API cache and reposts may affect observations."
+      },
+      "limits": [
+        "Primarily teacher/classroom guidance; individual adult L2 transfer requires separate judgement.",
+        "Book/resource promotion appears among research advice.",
+        "A new social post may link an older article; preserve both dates.",
+        "YouTube channel direct web tool returned content-too-large; latest upload/playback not verified."
+      ]
+    },
+    {
+      "id": "learning-scientists",
+      "name": "The Learning Scientists",
+      "languages": [
+        "en"
+      ],
+      "topics": [
+        "learning",
+        "memory",
+        "metacognition"
+      ],
+      "officialUrl": "https://www.learningscientists.org/",
+      "socialProfiles": {
+        "bluesky": "https://bsky.app/profile/learningscientists.bsky.social",
+        "x": "https://x.com/AceThatTest"
+      },
+      "identityEvidence": "Official home HTML directly links both profiles; About describes cognitive/education researchers.",
+      "activity": {
+        "method": "Unauthenticated public Bluesky getAuthorFeed, limit=10, one page only; no consumer account or personalised feed",
+        "returned": 10,
+        "ownPosts": 7,
+        "newestReturnedOwnPostAt": "2026-01-15T15:14:49.544Z",
+        "scopeLimit": "First returned page only; no claim of exhaustive latest activity or account inactivity. Public API cache and reposts may affect observations."
+      },
+      "limits": [
+        "Newest own post in sampled page is 2026-01-15; no exhaustive account inactivity conclusion.",
+        "Sample source is explanatory blog, not itself a controlled experiment.",
+        "X profile open returned HTTP403 in the web tool; X contents/freshness unverified."
+      ]
+    },
+    {
+      "id": "tile",
+      "name": "TILE — Teaching Innovation & Learning Enhancement Network, University of Glasgow",
+      "languages": [
+        "en"
+      ],
+      "topics": [
+        "learning",
+        "memory",
+        "education"
+      ],
+      "officialUrl": "https://tile.psy.gla.ac.uk/tile-edusnaps/",
+      "socialProfiles": {
+        "bluesky": "https://bsky.app/profile/tilenetwork.bsky.social",
+        "youtube": "https://www.youtube.com/channel/UC34EEO0b5JeyZk2HFN-Fkiw"
+      },
+      "identityEvidence": "Official University of Glasgow subdomain identifies the network and directly links Bluesky and YouTube, explicitly saying social activity moved to Bluesky/LinkedIn.",
+      "activity": {
+        "method": "Unauthenticated public Bluesky getAuthorFeed, limit=10, one page only; no consumer account or personalised feed",
+        "returned": 10,
+        "ownPosts": 9,
+        "newestReturnedOwnPostAt": "2025-11-10T13:34:04.835Z",
+        "scopeLimit": "First returned page only; no claim of exhaustive latest activity or account inactivity. Public API cache and reposts may affect observations."
+      },
+      "limits": [
+        "Newest own post in sampled page is 2025-11-10; not sufficient evidence of fresh supply.",
+        "Higher-education/teacher audience."
+      ]
+    },
+    {
+      "id": "llt",
+      "name": "Language Learning & Technology",
+      "languages": [
+        "en"
+      ],
+      "topics": [
+        "second-language-learning",
+        "reading",
+        "attention"
+      ],
+      "officialUrl": "https://www.lltjournal.org/",
+      "socialProfiles": {
+        "x": "https://x.com/lltjournal"
+      },
+      "identityEvidence": "Official journal home HTML directly links X profile; publisher site gives editors and current articles.",
+      "activity": {
+        "method": "Official website read; X web-tool profile open",
+        "websiteObservation": "Home lists 2026-10-12 new meta-analysis and 2026-08-31 mobile-assisted L2 reading/mind-wandering article.",
+        "socialObservation": "HTTP403 from X profile; social posting activity not verified."
+      },
+      "limits": [
+        "Website activity does not establish active X delivery."
+      ]
+    },
+    {
+      "id": "college-de-france",
+      "name": "Collège de France",
+      "languages": [
+        "fr",
+        "en"
+      ],
+      "topics": [
+        "cognitive-science",
+        "reading",
+        "learning"
+      ],
+      "officialUrl": "https://www.college-de-france.fr/fr",
+      "socialProfiles": {
+        "bluesky": "https://bsky.app/profile/college-de-france.fr",
+        "youtube": "https://www.youtube.com/user/WebmestreCDF"
+      },
+      "identityEvidence": "Institutional home HTML directly links both profiles; Bluesky handle is institutional domain.",
+      "activity": {
+        "method": "Unauthenticated public Bluesky getAuthorFeed, limit=10, one page only; no consumer account or personalised feed",
+        "returned": 10,
+        "ownPosts": 8,
+        "newestReturnedOwnPostAt": "2026-10-28T16:49:17.513Z",
+        "scopeLimit": "First returned page only; no claim of exhaustive latest activity or account inactivity. Public API cache and reposts may affect observations."
+      },
+      "limits": [
+        "Most sampled recent social posts are outside the precise L2-learning question.",
+        "YouTube page exposed only shell/footer to web tool; video playback/captions not verified.",
+        "French/English labels describe available source content; not every video or feed post."
+      ]
+    },
+    {
+      "id": "ninjal",
+      "name": "国立国語研究所 / NINJAL",
+      "languages": [
+        "ja"
+      ],
+      "topics": [
+        "linguistics",
+        "japanese-language-education"
+      ],
+      "officialUrl": "https://www.ninjal.ac.jp/",
+      "socialProfiles": {
+        "x": "https://twitter.com/kokugoken",
+        "youtube": "https://www.youtube.com/c/NINJAL-kokugoken"
+      },
+      "identityEvidence": "Official institute home explicitly labels X and YouTube as official accounts.",
+      "activity": {
+        "method": "Official site read + direct YouTube web open",
+        "websiteObservation": "2026-10-26 news and upcoming language acquisition/education events observed.",
+        "socialObservation": "YouTube returned only page shell/footer; current uploads not verified."
+      },
+      "limits": [
+        "Linguistics and institutional events are not automatically practical adult language-learning advice.",
+        "Upcoming event is not readable or watched research evidence."
+      ]
+    },
+    {
+      "id": "csen",
+      "name": "Conseil scientifique de l’éducation nationale / CSEN",
+      "languages": [
+        "fr"
+      ],
+      "topics": [
+        "learning",
+        "metacognition",
+        "reading"
+      ],
+      "officialUrl": "https://www.csen.education.gouv.fr/",
+      "socialProfiles": {
+        "youtube": "https://www.youtube.com/@csencsen9750"
+      },
+      "identityEvidence": "French education ministry site directly links official YouTube; Forum Éducation page explicitly links channel replay.",
+      "activity": {
+        "method": "Official event page read + direct YouTube web open",
+        "websiteObservation": "Official 2026-09-30 Forum Éducation page states replay available; 2026-10-21 metacognition news observed on home.",
+        "socialObservation": "Direct YouTube channel web request throttled; actual playback/latest upload not verified."
+      },
+      "limits": [
+        "School/classroom intervention scope; not personalised adult L2 evidence."
+      ]
+    }
+  ],
+  "nativePostSamples": [
+    {
+      "author": "oasisdatabase.bsky.social",
+      "url": "https://bsky.app/profile/oasisdatabase.bsky.social/post/3my7ntjouac2x",
+      "postedAt": "2026-10-19T08:03:28.334Z",
+      "outboundUrls": [
+        "https://www.oasis-database.org/details/9ra4w5ge5"
+      ],
+      "title": "Destigmatizing boredom: five ways language learners may respond",
+      "isRepost": false,
+      "sourcePool": "sns_native_public_observation",
+      "contentType": "accessible-summary-link",
+      "destinationHttp": 404,
+      "originalPublishedAt": null,
+      "id": "native-1",
+      "httpMeaning": "initial_static_observation",
+      "personalizedFeedObserved": false,
+      "userAssessment": null,
+      "accessRecoveryId": "9ra4w5ge5",
+      "editorialDecision": "summary_only_with_access_scope"
+    },
+    {
+      "author": "oasisdatabase.bsky.social",
+      "url": "https://bsky.app/profile/oasisdatabase.bsky.social/post/3my7nrpa4xc2x",
+      "postedAt": "2026-10-19T08:02:27.031Z",
+      "outboundUrls": [
+        "https://www.oasis-database.org/details/hvre45v8g"
+      ],
+      "title": "Keeping motivation for an additional language going when English comes first",
+      "isRepost": false,
+      "sourcePool": "sns_native_public_observation",
+      "contentType": "accessible-summary-link",
+      "destinationHttp": 404,
+      "originalPublishedAt": null,
+      "id": "native-2",
+      "httpMeaning": "initial_static_observation",
+      "personalizedFeedObserved": false,
+      "userAssessment": null,
+      "accessRecoveryId": "hvre45v8g",
+      "editorialDecision": "summary_only_with_access_scope"
+    },
+    {
+      "author": "retrievelearn.bsky.social",
+      "url": "https://bsky.app/profile/retrievelearn.bsky.social/post/3myrxcumfdc2x",
+      "postedAt": "2026-10-26T14:41:01.502Z",
+      "outboundUrls": [
+        "https://www.retrievalpractice.org/strategies/bite-sized-adjustments"
+      ],
+      "title": "Make bite-sized adjustments to what you’re already doing",
+      "isRepost": false,
+      "sourcePool": "sns_native_public_observation",
+      "contentType": "practitioner-explanation",
+      "destinationHttp": 200,
+      "originalPublishedAt": "2025-04-30",
+      "id": "native-3",
+      "httpMeaning": "initial_static_observation",
+      "personalizedFeedObserved": false,
+      "userAssessment": null,
+      "editorialDecision": "readable_explanation_not_new_study"
+    },
+    {
+      "author": "retrievelearn.bsky.social",
+      "url": "https://bsky.app/profile/retrievelearn.bsky.social/post/3mwlkb37ncw2d",
+      "postedAt": "2026-09-28T14:41:00.816Z",
+      "outboundUrls": [
+        "https://www.retrievalpractice.org/strategies/2019/11/18/flashcards"
+      ],
+      "title": "Make flashcards more powerful with these 3 tips",
+      "isRepost": false,
+      "sourcePool": "sns_native_public_observation",
+      "contentType": "practitioner-explanation",
+      "destinationHttp": 200,
+      "originalPublishedAt": "2019-11-18",
+      "id": "native-4",
+      "httpMeaning": "initial_static_observation",
+      "personalizedFeedObserved": false,
+      "userAssessment": null,
+      "editorialDecision": "readable_explanation_not_new_study"
+    },
+    {
+      "author": "learningscientists.bsky.social",
+      "url": "https://bsky.app/profile/learningscientists.bsky.social/post/3m6hq43zyh22w",
+      "postedAt": "2025-11-25T16:10:19.077Z",
+      "outboundUrls": [
+        "https://www.learningscientists.org/blog/2025/11/21-1"
+      ],
+      "title": "The Box Metaphor for Working Memory",
+      "isRepost": false,
+      "sourcePool": "sns_native_public_observation",
+      "contentType": "research-explanation",
+      "destinationHttp": 200,
+      "originalPublishedAt": "2025-11-21",
+      "id": "native-5",
+      "httpMeaning": "initial_static_observation",
+      "personalizedFeedObserved": false,
+      "userAssessment": null,
+      "editorialDecision": "readable_explanation_not_new_study"
+    }
+  ],
+  "accessChecks": [
+    {
+      "id": "9ra4w5ge5",
+      "summaryTitle": "Destigmatizing boredom: five ways language learners may respond",
+      "summaryAuthor": [
+        "Kanazawa, Y."
+      ],
+      "summaryPublishedAt": "2026-10-17T17:02:47.521Z",
+      "summaryModifiedAt": "2026-10-19T07:48:59.394Z",
+      "paperTitle": "Boredom beyond disengagement: The DRIVE heuristic for boredom-related action in language learning",
+      "paperAuthors": [
+        "Kanazawa, Y."
+      ],
+      "paperPublicationStatus": "In press",
+      "paperJournal": "The Modern Language Journal",
+      "paperDoi": null,
+      "paperDirectUrl": null,
+      "evidenceType": "Conceptual article summarised by its author; no new participants or intervention, framework untested",
+      "summaryParaphrase": "언어학습 중 지루함에 대한 반응을 이탈·재참여·의미 재해석·다른 활동 탐색·의도적 지속으로 구분하는 개념 틀을 제안한다.",
+      "limits": "범주와 효과는 아직 경험적으로 검증되지 않았다. 관점을 넓히는 읽을거리이며 입증된 집중력/지속성 훈련법으로 추천하지 않는다.",
+      "checkedAt": "2026-10-29T16:39:50.820194+09:00",
+      "oldUrl": "https://www.oasis-database.org/details/9ra4w5ge5",
+      "staticHttp": 404,
+      "newCanonicalUrl": null,
+      "sameIdPublicApiHttp": 200,
+      "identityMatch": [
+        "exact existing post destination ID",
+        "exact summary title",
+        "official search result and materials endpoint agree on publication title"
+      ],
+      "browser": {
+        "engine": "system Chromium via Playwright, empty context, no auth, non-GET/HEAD/OPTIONS requests blocked",
+        "documentHttp": 404,
+        "summaryTitleAndPreviewControlsVisible": true,
+        "summaryFullTextVisibleInMainPage": false,
+        "pdfPreviewRoute": "https://www.oasis-database.org/details/9ra4w5ge5/pdf",
+        "pdfPreviewTitleVisible": true,
+        "pdfFullTextOrCanvasVisualVerified": true,
+        "pdfTextVerified": true,
+        "pdfTextProof": {
+          "checkedAt": "2026-10-29T16:43:08.684323+09:00",
+          "route": "https://www.oasis-database.org/details/9ra4w5ge5/pdf/",
+          "documentHttp": 404,
+          "method": "Official preview route in JavaScript Chromium produced an iframe blob; read that existing blob, saved temporarily, extracted text locally. No survey submitted; non-GET/HEAD/OPTIONS requests blocked.",
+          "pdfSource": "client-generated PDF blob in official page; not a server PDF HTTP endpoint",
+          "blobFetchHttp": 200,
+          "contentType": "application/pdf",
+          "bytes": 29541,
+          "exactSummaryTitleMatched": true,
+          "methodsSectionMatched": true,
+          "limitationsSectionMatched": true,
+          "conceptualArticleMentionMatched": true,
+          "pdfTextCharacters": 3188,
+          "browserPageErrors": 0,
+          "fullTextCommitted": false,
+          "originalPaperFullTextVerified": false,
+          "secondSummaryPdfVerified": false
+        },
+        "pdfVisualInspected": false
+      },
+      "readScope": "Exact OASIS public summary content, methods, findings, cautions and bibliographic metadata read through the public endpoint used by its own browser UI. Original article full text not obtained.",
+      "currentDecision": "정확 요약 내용은 사이트의 공개 응답에서 확인; 브라우저/PDF 확인 범위는 browser 필드를 따름. 원논문 전문 미확보."
+    },
+    {
+      "id": "hvre45v8g",
+      "summaryTitle": "Keeping motivation for an additional language going when English comes first",
+      "summaryAuthor": [
+        "Gu, X.",
+        "Xu, H."
+      ],
+      "summaryPublishedAt": "2026-10-17T08:03:58.260Z",
+      "summaryModifiedAt": "2026-10-17T08:03:58.020Z",
+      "paperTitle": "Sustaining a language other than English under English demands: a mixed-methods test of the metamotivation-embedded model of directed motivational currents",
+      "paperAuthors": [
+        "Gu, X.",
+        "Xu, H."
+      ],
+      "paperPublicationStatus": "In press",
+      "paperJournal": "The Modern Language Journal",
+      "paperDoi": null,
+      "paperDirectUrl": null,
+      "evidenceType": "Mixed-methods observational study as described in OASIS summary",
+      "summaryParaphrase": "중국 5개 대학 영어전공자 90명의 28일 일지와 8명 면담에서 영어 과업 부담과 추가 언어 참여의 관계를 살핀다.",
+      "limits": "동시기 상관이므로 인과가 아니다. 전략 가짓수는 적합성/실행 품질과 다르며 한 국가·시험 포함 4주라는 맥락을 보존한다.",
+      "checkedAt": "2026-10-29T16:39:50.820194+09:00",
+      "oldUrl": "https://www.oasis-database.org/details/hvre45v8g",
+      "staticHttp": 404,
+      "newCanonicalUrl": null,
+      "sameIdPublicApiHttp": 200,
+      "identityMatch": [
+        "exact existing post destination ID",
+        "exact summary title",
+        "official search result and materials endpoint agree on publication title"
+      ],
+      "browser": {
+        "engine": "system Chromium via Playwright, empty context, no auth, non-GET/HEAD/OPTIONS requests blocked",
+        "documentHttp": 404,
+        "summaryTitleAndPreviewControlsVisible": true,
+        "summaryFullTextVisibleInMainPage": false,
+        "pdfPreviewRoute": "https://www.oasis-database.org/details/hvre45v8g/pdf",
+        "pdfPreviewTitleVisible": true,
+        "pdfFullTextOrCanvasVisualVerified": false
+      },
+      "readScope": "Exact OASIS public summary content, methods, findings, cautions and bibliographic metadata read through the public endpoint used by its own browser UI. Original article full text not obtained.",
+      "currentDecision": "정확 요약 내용은 사이트의 공개 응답에서 확인; 브라우저/PDF 확인 범위는 browser 필드를 따름. 원논문 전문 미확보."
+    }
+  ],
+  "staticAccessFailures": {
+    "oasis404Urls": [
+      "https://www.oasis-database.org/details/9ra4w5ge5",
+      "https://www.oasis-database.org/details/jtctp35ss",
+      "https://www.oasis-database.org/details/7hj8custj",
+      "https://www.oasis-database.org/details/hvre45v8g"
+    ],
+    "x403Profiles": [
+      "https://x.com/lltjournal",
+      "https://x.com/AceThatTest"
+    ],
+    "meaning": "Failures are tool/environment/time observations, not global platform availability or account inactivity."
+  },
+  "platformDocumentation": [
+    {
+      "url": "https://bsky.social/about/blog/01-26-2026-whats-next-at-bluesky",
+      "claim": "2026 product statement treats following suggestions, Discover and custom feeds as separate areas; not a personalised-quality guarantee."
+    },
+    {
+      "url": "https://bsky.social/about/blog/7-27-2023-custom-feeds",
+      "claim": "Custom feed choice and Discover distinction; dated feature explanation, not current algorithm weights."
+    },
+    {
+      "url": "https://bsky.social/about/blog/06-26-2024-starter-packs",
+      "claim": "Starter packs can recommend accounts/feeds; not used or created."
+    },
+    {
+      "url": "https://github.com/bluesky-social/atproto/blob/main/lexicons/app/bsky/feed/getAuthorFeed.json",
+      "claim": "Official author-feed lexicon reference; observed public API read is a bounded account-post sample, not personal Home/Discover."
+    }
+  ],
+  "platformDecision": {
+    "proposedFirstTrial": "Bluesky",
+    "sourceIds": [
+      "oasis",
+      "retrieval-practice"
+    ],
+    "archiveSourceIds": [
+      "learning-scientists"
+    ],
+    "userSelected": false,
+    "accountConfigured": false,
+    "reason": "공식 출처·실제 공개 게시·연결 요약/해설의 확인 범위를 추적 가능",
+    "scopeLimit": "지속 공급/다국어 충분성·개인 추천 품질/실독 효용은 미검증; 접근 반례는 accessChecks 참조"
+  },
+  "liveHaedoFeedObservation": {
+    "url": "https://wonchance-art.github.io/life-haedo/assets/life/discovery-feed.json",
+    "httpStatus": 200,
+    "generatedAt": "2026-10-29T04:48:17Z",
+    "sources": 9,
+    "candidates": 120,
+    "contentLanguages": {
+      "ko": 50,
+      "en": 70
+    },
+    "errorStaleSourceIds": [
+      "naver-d2",
+      "woowahan-tech",
+      "arxiv-cs-cl"
+    ],
+    "healthySourceCount": 6,
+    "limitation": "조회 시점의 공개 표본; 개인 피드·전체 수집 성공·원문 확보·예약 트리거 검증 아님"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "scope": "현행 순수 모델의 설계 전제 재현. 새 기능·브라우저·운영 검수 아님.",
+  "baseline": "30e94f0116cf94faf6405572439bdf03f290b3c8",
+  "modules": {
+    "assets/platform-data.js": "bbf707e6684d0bba7f964ec946b7201cb703e7c31d9b0431989b38a65c494f63",
+    "assets/data.js": "04c38b381c9e9126508576999f3fcf95195b3a5ae417723486917f6768612af2",
+    "assets/life/annual-plan.js": "5584c306344d931a91c760012f4733890f5930faea8a89b969dda6326ae89a9a"
+  },
+  "cases": [
+    {
+      "case": "요일 변경 후 기존 체크",
+      "checkPreserved": true,
+      "scheduledNow": false,
+      "removalRejected": true
+    },
+    {
+      "case": "현행 validator의 중복 체크 허용",
+      "accepted": true
+    },
+    {
+      "case": "현행 validator의 미래 체크 허용",
+      "today": "2026-10-29",
+      "accepted": true
+    },
+    {
+      "case": "v1 복원은 항목 ID 유지·내용 교체",
+      "sameId": true,
+      "textChanged": true
+    }
+  ]
+}

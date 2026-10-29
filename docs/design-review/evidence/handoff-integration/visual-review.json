@@ -1,0 +1,49 @@
+{
+  "reviewedDate": "2026-10-29",
+  "reviewer": "Independent QA agent /root/purpose_review",
+  "prototypeSha256": "222296acc0da372bcfab495f44a9a6bba6cf8f29c40507aece1060a899d70f62",
+  "method": "Direct image inspection of all three final PNG files; hashes checked against the final browser report. Full-page captures use scrollTo(0,0) and two animation frames without hiding or changing styles.",
+  "pass": true,
+  "screens": [
+    {
+      "file": "reading-390.png",
+      "sha256": "e744b44b3c4afed4f80d7c2b8e9db18b5f23c165d0ec9dd85d94e72f8345eb3a",
+      "viewportWidth": 390,
+      "reviewedDirectly": true,
+      "pass": true,
+      "observation": "Single-column source text, marked preselected sentence, action buttons and synthetic-data boundary are readable. Keyboard focus on the reading heading is visible. No cropped text or overlapping elements observed."
+    },
+    {
+      "file": "period-820.png",
+      "sha256": "aa58bb792fd9037d6ba66c42a9b5795152bab2531884b531813b77ed9ff9d497",
+      "viewportWidth": 820,
+      "reviewedDirectly": true,
+      "pass": true,
+      "observation": "Habit-only preview displays the selected check dates and optional judgment without an unselected goal or monthly direction. Text, form and controls are readable. No clipping or overlap observed."
+    },
+    {
+      "file": "saved-comparison-1440.png",
+      "sha256": "96eac1b0e866a951516ed5303437d34abf568b76f8ad3fd1c50b0beb3227f085",
+      "viewportWidth": 1440,
+      "reviewedDirectly": true,
+      "pass": true,
+      "observation": "Full-page image starts at the document top. Plan/reading navigation is in its normal header position and does not cover the check dates or comparison content. Frozen and current values remain distinguishable and readable."
+    }
+  ],
+  "scrolledViewport": {
+    "scrollY": 600,
+    "viewportHeight": 1000,
+    "nav": {
+      "top": 0,
+      "bottom": 59
+    },
+    "focusedHeading": {
+      "top": 484.40625,
+      "bottom": 515.90625
+    },
+    "activeElement": "comparison-heading",
+    "pass": true,
+    "observation": "In the actual scrolled viewport, sticky navigation remains at top 0 through bottom 59; the focused comparison heading is fully visible at top 484.40625 through bottom 515.90625. The prior middle-of-document navigation in a full-page capture was corrected by resetting scroll before capture."
+  },
+  "scope": "Visual and automated checks cover the local synthetic prototype only. They do not establish account persistence, production behavior, human usefulness, or performance improvement."
+}

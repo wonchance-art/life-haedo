@@ -1,0 +1,36 @@
+---
+title: 해도 전체 workflow · 최신 통합 설계
+---
+%% 큰 기능 중심의 설계도. 모든 기능의 구현 완료를 뜻하지 않는다.
+%% Render: node scripts/render-diagrams.cjs workflow-overview-20261029.mmd
+%%{init: {"theme":"base","htmlLabels":false,"themeVariables":{"fontFamily":"Noto Sans CJK KR, sans-serif","fontSize":"20px","lineColor":"#8794A5","edgeLabelBackground":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#DFE5EC"},"flowchart":{"htmlLabels":false,"curve":"basis","nodeSpacing":28,"rankSpacing":42,"padding":24}}}%%
+flowchart LR
+  accTitle: 해도 전체 workflow — 큰 기능 중심
+  accDescr: 관심과 기존 자료, 생활의 목표와 생각을 입력으로 삼는다. 뉴스, 자료실, 계획, 홈은 필요에 따라 바로 이용하고 연결한다. 이해와 내 생각, 생활의 실천, 개인 글과 선택 공유가 사용자의 결과다. 계정 서버 자동 연동과 수집, 갱신, 출처 보존, 복구는 공통 기반이다. 최신 통합 설계이며 전체 구현 완료 도식이 아니다. 네 기능 사이는 필수 순서가 없다.
+
+  input["INPUT · 시작<br/><br/>관심·질문<br/>기존 자료·기록<br/>생활·목표·생각"]
+
+  subgraph FEATURES["핵심 기능 · 필요한 곳에서 바로 사용"]
+    direction TB
+    news["뉴스<br/>정보 발견 · 추천"]
+    library["자료실<br/>보관 · 검색 · 읽기 · 메모"]
+    plan["계획<br/>연간 일정 · 목표 · 습관 · 회고"]
+    home["홈<br/>글쓰기 · 내 글 · 블로그"]
+    news ~~~ library ~~~ plan ~~~ home
+  end
+
+  output["OUTPUT · 직접 얻고 선택하는 결과<br/><br/>이해·내 생각<br/>생활의 실천<br/>개인 글·선택 공유"]
+
+  input --> FEATURES --> output
+
+  foundation["공통 자동 처리 · 설정<br/><br/>저장한 내용의 계정 서버 연동<br/>수집·갱신 · 출처 보존 · 실패 복구"]
+  foundation -.- FEATURES
+
+  classDef input fill:#F7F8FA,stroke:#D1D9E2,color:#344256,stroke-width:1px;
+  classDef feature fill:#EFF4FF,stroke:#6282B5,color:#203E6A,stroke-width:1.5px;
+  classDef output fill:#EFF7F2,stroke:#88AC98,color:#28553D,stroke-width:1px;
+  classDef base fill:#F8F6F0,stroke:#C3B99C,color:#5B5038,stroke-width:1px;
+  class input input;
+  class news,library,plan,home feature;
+  class output output;
+  class foundation base;

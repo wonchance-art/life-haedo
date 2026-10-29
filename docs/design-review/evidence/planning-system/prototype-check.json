@@ -1,0 +1,288 @@
+{
+  "date": "2026-10-29",
+  "scope": "Standalone synthetic planning prototype; no production app, account, backend, or deployment validation.",
+  "environment": {
+    "browser": "Chromium /usr/bin/chromium",
+    "tool": "Playwright",
+    "url": "http://127.0.0.1:4193/planning-practice-review.html",
+    "fileUrl": "Blocked by browser environment policy: ERR_BLOCKED_BY_ADMINISTRATOR. Used local HTTP instead.",
+    "storage": "Memory only; refresh resets.",
+    "network": "Initial local HTML document request allowed. Additional network requests and storage API reads are audited.",
+    "browserVersion": "151.0.7922.173"
+  },
+  "checks": [
+    {
+      "name": "HTML inline JavaScript parses; no external resources or persistence/network APIs",
+      "status": "passed"
+    },
+    {
+      "name": "Initial six unique checked dates and duplicate date are visible only on request",
+      "status": "passed"
+    },
+    {
+      "name": "End-exclusive boundary counts Oct 2 and Oct 5 but excludes Oct 7",
+      "status": "passed"
+    },
+    {
+      "name": "Invalid, equal, reversed and empty periods do not open a review; empty target selection is rejected",
+      "status": "passed"
+    },
+    {
+      "name": "Monthly and direct intent link existing targets without changing original days, checks, progress or deadline; duplicate link is not added",
+      "status": "passed"
+    },
+    {
+      "name": "Empty weekday edit preserves unchecked input, original weekdays and checks; valid change does not rewrite old check dates",
+      "status": "passed"
+    },
+    {
+      "name": "Past Wednesday correction works after Tuesday/Thursday rule change; cancel preserves both duplicates and confirm removes all for exact date only",
+      "status": "passed"
+    },
+    {
+      "name": "Duplicate check is not added; future/empty/off-rule dates are rejected; valid past Tuesday can be checked",
+      "status": "passed"
+    },
+    {
+      "name": "Current goal progress is presented separately from period check dates",
+      "status": "passed"
+    },
+    {
+      "name": "Optional note and snapshot are explicitly saved; viewing alone creates no saved review",
+      "status": "passed"
+    },
+    {
+      "name": "Changing current plan, checks and goal leaves the saved snapshot and note unchanged",
+      "status": "passed"
+    },
+    {
+      "name": "Reading without saving ends normally and does not add a review; returning preserves current session only",
+      "status": "passed"
+    },
+    {
+      "name": "Keyboard can open/close correction dialog and focus returns to exact correction control",
+      "status": "passed"
+    },
+    {
+      "name": "Reload resets plans, relationships, checks, progress and saved reviews",
+      "status": "passed"
+    },
+    {
+      "name": "No secondary network request, storage API access, console error or uncaught error",
+      "status": "passed"
+    },
+    {
+      "name": "Empty judgment saves successfully; a second review preserves the first snapshot",
+      "status": "passed"
+    }
+  ],
+  "visual": [
+    {
+      "scene": "initial",
+      "width": 390,
+      "overflow": false,
+      "smallTargets": [],
+      "unnamedInputs": [],
+      "smallInputs": []
+    },
+    {
+      "scene": "initial",
+      "width": 820,
+      "overflow": false,
+      "smallTargets": [],
+      "unnamedInputs": [],
+      "smallInputs": []
+    },
+    {
+      "scene": "initial",
+      "width": 1440,
+      "overflow": false,
+      "smallTargets": [],
+      "unnamedInputs": [],
+      "smallInputs": []
+    },
+    {
+      "scene": "period-preview",
+      "width": 390,
+      "overflow": false,
+      "smallTargets": [],
+      "unnamedInputs": [],
+      "smallInputs": []
+    },
+    {
+      "scene": "period-preview",
+      "width": 820,
+      "overflow": false,
+      "smallTargets": [],
+      "unnamedInputs": [],
+      "smallInputs": []
+    },
+    {
+      "scene": "period-preview",
+      "width": 1440,
+      "overflow": false,
+      "smallTargets": [],
+      "unnamedInputs": [],
+      "smallInputs": []
+    },
+    {
+      "scene": "saved-current-comparison",
+      "width": 390,
+      "overflow": false,
+      "smallTargets": [],
+      "unnamedInputs": [],
+      "smallInputs": []
+    },
+    {
+      "scene": "saved-current-comparison",
+      "width": 820,
+      "overflow": false,
+      "smallTargets": [],
+      "unnamedInputs": [],
+      "smallInputs": []
+    },
+    {
+      "scene": "saved-current-comparison",
+      "width": 1440,
+      "overflow": false,
+      "smallTargets": [],
+      "unnamedInputs": [],
+      "smallInputs": []
+    }
+  ],
+  "errors": [],
+  "consoleErrors": [],
+  "requests": [
+    {
+      "url": "http://127.0.0.1:4193/planning-practice-review.html",
+      "method": "GET",
+      "resourceType": "document"
+    },
+    {
+      "url": "http://127.0.0.1:4193/planning-practice-review.html",
+      "method": "GET",
+      "resourceType": "document"
+    }
+  ],
+  "screenshots": [
+    {
+      "file": "prototype-390.png",
+      "width": 390
+    },
+    {
+      "file": "prototype-820.png",
+      "width": 820
+    },
+    {
+      "file": "prototype-1440.png",
+      "width": 1440
+    }
+  ],
+  "initialFindings": [
+    {
+      "kind": "review correction",
+      "detail": "Exclusive end date display corrected to show actual endExclusive; empty weekday edit rejected without mutation."
+    },
+    {
+      "kind": "implementation correction",
+      "detail": "Native dialog returnValue is reset on each open so Escape after an earlier confirm cannot remove a different check."
+    },
+    {
+      "kind": "test synchronization",
+      "detail": "First run read DOM immediately after dialog form close; assertion now waits for exact corrected row removal before checking remaining dates."
+    }
+  ],
+  "storageReadsBeforeReload": [],
+  "storageReadsAfterReload": [],
+  "status": "passed",
+  "limitations": [
+    "Synthetic UI interactions and Linux Chromium viewport checks only; not actual Apple device validation.",
+    "No account sync, backend write, concurrency, authenticated ownership or file restore implementation is simulated.",
+    "Application logic, production data and deployment are unchanged."
+  ],
+  "contrast": [
+    {
+      "role": "body",
+      "foreground": "#19332d",
+      "background": "#ffffff",
+      "ratio": 13.52,
+      "passed": true
+    },
+    {
+      "role": "muted",
+      "foreground": "#52665c",
+      "background": "#ffffff",
+      "ratio": 6.15,
+      "passed": true
+    },
+    {
+      "role": "muted on callout",
+      "foreground": "#52665c",
+      "background": "#edf4f0",
+      "ratio": 5.51,
+      "passed": true
+    },
+    {
+      "role": "primary button",
+      "foreground": "#ffffff",
+      "background": "#145b50",
+      "ratio": 7.95,
+      "passed": true
+    },
+    {
+      "role": "error",
+      "foreground": "#9a312c",
+      "background": "#ffffff",
+      "ratio": 7.37,
+      "passed": true
+    }
+  ],
+  "manualVisualReview": {
+    "performed": true,
+    "files": [
+      "prototype-390.png",
+      "prototype-820.png",
+      "prototype-1440.png"
+    ],
+    "findings": "All three screenshots read directly. Korean text and date-boundary labels are legible. No clipping/overlap or horizontal overflow. Initial controls stay in one column; reading and preserved/current comparison remain in the same white surface.",
+    "deviceClaim": "Viewport simulation only."
+  },
+  "reproduction": {
+    "server": "python3 -m http.server 4193 --bind 127.0.0.1 --directory docs/prototypes",
+    "url": "http://127.0.0.1:4193/planning-practice-review.html",
+    "temporaryCheckScript": "/tmp/haedo-planning-prototype-check.cjs",
+    "selectors": [
+      "#link-form",
+      "#current-target",
+      "#days-form",
+      "[data-correct-date]",
+      "#period-form",
+      "#save-review",
+      "#compare-current",
+      "#saved-list",
+      "#finish"
+    ]
+  },
+  "files": [
+    {
+      "path": "docs/prototypes/planning-practice-review.html",
+      "bytes": 30859,
+      "sha256": "25b026ab6c0d86c63be00114ae02181f3dd2536bfb963361e9a8b355e2a1b823"
+    },
+    {
+      "path": "docs/design-review/evidence/planning-system/prototype-390.png",
+      "bytes": 76333,
+      "sha256": "3ac8fcc994caaed276565e32ad7aedda3955802099b1306ec2ac591809efa67c"
+    },
+    {
+      "path": "docs/design-review/evidence/planning-system/prototype-820.png",
+      "bytes": 95106,
+      "sha256": "121bc3013215a371bd716f28a4a4207cfffbc73eb451beee162cba606414603d"
+    },
+    {
+      "path": "docs/design-review/evidence/planning-system/prototype-1440.png",
+      "bytes": 151221,
+      "sha256": "fe04094abd769d6ecbacc552279547a36fa4e341634cedddd8a87b9162434bca"
+    }
+  ]
+}

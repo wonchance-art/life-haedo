@@ -1,5 +1,9 @@
 # 오픈소스 검토와 재사용 결정
 
+## SNS 탐구 추천과 후속 콘텐츠 자동화 — 2026-10-29
+
+[공식 OSS 조사](../design-review/research-output-oss.md)에서 기존 경량 방식·Gorse·pgvector·Postiz·n8n·Temporal의 역할, 배포/라이선스·유지보수·공개 보안 자료와 전환 조건을 비교했다. 첫 목표는 SNS에서 내가 읽을 자료를 추천받는 것이므로 네이티브 SNS 기능과 기존 선택 링크·검색·규칙 추천을 우선한다. 별도 추천/게시/워크플로 서버를 설치하지 않았다. n8n의 source-available 범위와 외부 게시 스택의 운영 비용도 별도로 기록했다. [전체 설계](../design-review/research-output-system.md)와 함께 읽는다.
+
 ## 자료실 기본 계정 보관과 기존 CAS/outbox 재사용 — 2026-10-24
 
 사용자 요청으로 자료 영역의 기본 정책을 비공개 계정 자동 보관으로 바꾼다. 새 프레임워크보다 기존 단일 Supabase SDK/인증·Core Sync/CompositionSync의 두 엔진·owner/revision CAS·영속 operation 영수증과 IDB 캐시를 재사용하고 LibraryMeta를 도메인 adapter로 연결한다. 원본 첨부도 기존 ZIP 검증/Blob DB를 재사용한다. [대상·이관·순서·실패 복구](../design-review/account-library.md). 앱의 새 런타임 의존성은0이며 범용 복제 엔진·SDK 업그레이드는 추가하지 않았다.

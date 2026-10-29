@@ -1,0 +1,37 @@
+%% 목표 프레임 · 구현 현황은 제품 목적 문서 참조 · 2026.10.29
+%% 현재 메뉴 배치나 모든 기능의 구현 완료를 나타내는 그림이 아니다.
+flowchart TB
+  purpose["반복 관리 수고를 줄여<br/>직접 경험·깊이 생각·관계·표현에 쓸 여유"]
+
+  subgraph main["필요할 때 시작하고, 충분하면 멈추는 흐름"]
+    direction LR
+    input["INPUT · 생활에서 시작<br/><br/>경험·현재의 질문<br/>기존 기록·새 자료<br/>필요한 것만 가져오기"]
+    process["AUTOMATED PROCESS · 정해진 반복 처리<br/><br/>확보·보존·찾기·재개<br/>원문·출처·정확한 판 유지<br/>보관·검색·실패 복구"]
+    output["OUTPUT · 사람이 고르는 결과<br/><br/>직접 읽기·판단·실천<br/>↓<br/>이해·내 생각·다음 행동<br/>개인 글·모음 / 고른 내용만 공유"]
+    input --> process --> output
+  end
+
+  ai["선택적 AI · 후속 설계<br/>설명·비교·질문·초안 제안"]
+  process -.- ai
+  optional["읽기나 개인 보관만으로 끝내도 된다.<br/>기록·AI·글쓰기·공개는 필수 단계가 아니다."]
+  life["충분하면 생활로 돌아가기<br/>직접 경험·깊이 생각·관계·선택한 표현<br/>다시 필요할 때 시작"]
+  purpose ~~~ main
+  main ~~~ optional
+  optional --> life
+
+  subgraph improvement["도구를 개선하는 별도 순환"]
+    direction LR
+    observe["실제 막힘·도움"] --> compare["가설·작은 비교"] --> validate["검증 후 반영"] --> use["다시 사용"]
+    use --> observe
+  end
+  boundary["개인 결과를 자동 개발·공개 명령으로 바꾸지 않는다."]
+  life ~~~ improvement
+  improvement ~~~ boundary
+
+  classDef neutral fill:#f7f9f8,stroke:#ccd6d1,color:#19332d;
+  classDef human fill:#f0f6f3,stroke:#a5c1b7,color:#145b50;
+  classDef note fill:#ffffff,stroke:#ffffff,color:#5c6b65;
+  class input,process,observe,compare,validate,use neutral;
+  class output,life human;
+  class purpose,optional,boundary note;
+  class ai neutral;

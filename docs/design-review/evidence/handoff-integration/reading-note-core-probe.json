@@ -1,0 +1,148 @@
+{
+  "kind": "readonly-pure-model-probe",
+  "node": "v24.19.0",
+  "corePath": "assets/life/core.js",
+  "coreHashBefore": "5d38fbcc71cf3b13b03e8683106f8261ff453325092d34437d88014f2c4607a2",
+  "coreHashAfter": "5d38fbcc71cf3b13b03e8683106f8261ff453325092d34437d88014f2c4607a2",
+  "actualApi": "Core.validateWorkspace (no validateBundle export)",
+  "findings": [
+    {
+      "name": "full_and_link_only_plain_annotations",
+      "status": "pass",
+      "result": {
+        "links": 3,
+        "sourceBytesUnchanged": true,
+        "noExcerptCreated": true
+      }
+    },
+    {
+      "name": "invalid_link_only_locator_rejected",
+      "status": "pass",
+      "result": {
+        "accepted": false,
+        "code": "invalid_locator",
+        "message": "본문 없는 링크에서는 발췌를 만들 수 없습니다."
+      }
+    },
+    {
+      "name": "split_surrogate_locator_rejected",
+      "status": "pass",
+      "result": {
+        "accepted": false,
+        "code": "invalid_locator",
+        "message": "발췌 위치가 원문 범위와 맞지 않습니다. 원문에서 다시 선택해 주세요."
+      }
+    },
+    {
+      "name": "wrong_source_version_pair_rejected",
+      "status": "pass",
+      "result": {
+        "accepted": false,
+        "code": "missing_reference",
+        "message": "참조한 원문 버전을 찾을 수 없습니다."
+      }
+    },
+    {
+      "name": "edit_requires_incremented_revision_and_same_created_at",
+      "status": "pass",
+      "result": {
+        "withoutRevision": {
+          "accepted": false,
+          "code": "invalid_revision",
+          "message": "수정 항목의 버전을 확인해 주세요."
+        },
+        "createdAtChange": {
+          "accepted": false,
+          "code": "immutable_creation",
+          "message": "원래 저장 시각은 변경할 수 없습니다."
+        }
+      }
+    },
+    {
+      "name": "json_backup_restores_new_ids_exact_refs_and_plain_note",
+      "status": "pass",
+      "result": {
+        "workspaceRemapped": true,
+        "notes": 3,
+        "allReferencesRemapped": true,
+        "exactTextAndRangesPreserved": true
+      }
+    },
+    {
+      "name": "source_trash_preserves_existing_note_and_blocks_new_or_edited_note",
+      "status": "pass",
+      "result": {
+        "addResult": {
+          "accepted": false,
+          "code": "source_trashed",
+          "message": "휴지통의 자료를 새 활용에 연결하지 않았습니다."
+        },
+        "editResult": {
+          "accepted": false,
+          "code": "source_trashed",
+          "message": "휴지통의 자료를 새 활용에 연결하지 않았습니다."
+        },
+        "existingNotesPreserved": true
+      }
+    },
+    {
+      "name": "trashed_backup_restore_preserves_trash_and_note_then_source_restore_allows_edit",
+      "status": "pass",
+      "result": {
+        "trashRestored": true,
+        "sameMappedNoteResumed": true
+      }
+    },
+    {
+      "name": "no_existing_link_remove_api",
+      "status": "pass",
+      "result": {
+        "accepted": false,
+        "code": "unsupported_field",
+        "message": "삭제 항목에 지원하지 않는 항목이 있습니다."
+      }
+    },
+    {
+      "name": "no_existing_link_tombstone_schema",
+      "status": "pass",
+      "result": {
+        "accepted": false,
+        "code": "invalid_tombstone",
+        "message": "발췌 삭제 표식을 확인해 주세요."
+      }
+    },
+    {
+      "name": "generic_kind_change_can_represent_soft_hidden_state_but_has_no_product_semantics",
+      "status": "pass",
+      "result": {
+        "kindChangeAccepted": true,
+        "actualDelete": false,
+        "removedOnTrashedSource": {
+          "accepted": false,
+          "code": "source_trashed",
+          "message": "휴지통의 자료를 새 활용에 연결하지 않았습니다."
+        }
+      }
+    },
+    {
+      "name": "generic_validation_does_not_require_note_revision_or_single_source_or_immutable_target",
+      "status": "pass",
+      "result": {
+        "missingNoteAndRevisionAccepted": true,
+        "multipleSourcesAccepted": true,
+        "retargetAccepted": true,
+        "requiresDedicatedValidator": true
+      }
+    },
+    {
+      "name": "reading_markdown_currently_omits_link_notes",
+      "status": "pass",
+      "result": {
+        "jsonContainsNotes": true,
+        "markdownContainsNotes": false
+      }
+    }
+  ],
+  "scope": "No browser/IndexedDB/server/account/publication tests. Only synthetic pure Core model, JSON backup and trash boundaries.",
+  "unchanged": true
+}

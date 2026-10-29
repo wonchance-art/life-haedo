@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-29",
+  "scope": "Independent QA of one synthetic, memory-only HTML prototype. No product account, backend, deployment, real-device or human-usefulness claim.",
+  "checks": [
+    {
+      "name": "Current weekday change, keyboard cancel and explicit duplicate-date correction preserve other dates",
+      "status": "passed"
+    },
+    {
+      "name": "Memo connection success exposes an explicit return to the same memo, separate from source return",
+      "status": "failed",
+      "message": "locator.click: Timeout 7000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '메모로 돌아가기', exact: true })\u001b[22m\n"
+    },
+    {
+      "name": "A linked reading target carries its period scope without unrelated default selections",
+      "status": "failed",
+      "message": "Expected values to be strictly equal:\n\ntrue !== false\n"
+    }
+  ],
+  "comparison": {},
+  "screens": [],
+  "audits": [
+    {
+      "name": "Current weekday change, keyboard cancel and explicit duplicate-date correction preserve other dates",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "Memo connection success exposes an explicit return to the same memo, separate from source return",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "A linked reading target carries its period scope without unrelated default selections",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    }
+  ],
+  "failures": [
+    {
+      "name": "Memo connection success exposes an explicit return to the same memo, separate from source return",
+      "message": "locator.click: Timeout 7000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '메모로 돌아가기', exact: true })\u001b[22m\n",
+      "stack": "locator.click: Timeout 7000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '메모로 돌아가기', exact: true })\u001b[22m\n\n    at /workspace/haedo-purpose-design/docs/design-review/evidence/handoff-integration/verify-prototype.cjs:232:65\n    at async check (/workspace/haedo-purpose-design/docs/design-review/evidence/handoff-integration/verify-prototype.cjs:69:20)\n    at async /workspace/haedo-purpose-design/docs/design-review/evidence/handoff-integration/verify-prototype.cjs:229:3",
+      "visibleText": "설계 시연 · 예시 데이터\n여기서 마치기\n계획\n읽기\n기존 습관·목표에 연결\n\n저장한 메모에서 고른 문구 · 원문 고정판 1\n\n확인할 의도\n기존 대상\n대상을 선택하세요\n습관 · 저녁에 10분 읽기\n목표 · 읽은 책 한 편 정리하기\n\n선택한 문구만 연결하며, 대상의 원래 값은 유지합니다.\n\n연결\n취소\n원문으로 돌아가기\n\n연결했습니다. 원래 목표·습관은 그대로입니다.\n\n이 탭의 메모리만 사용하며, 새로고침하면 초기화됩니다. 계정 보관·동기화는 구현하지 않은 시연입니다.\n합성 예시 기준일: 2026.10.29 · Asia/Seoul · 실제 수행이나 완료율을 나타내지 않습니다."
+    },
+    {
+      "name": "A linked reading target carries its period scope without unrelated default selections",
+      "message": "Expected values to be strictly equal:\n\ntrue !== false\n",
+      "stack": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\ntrue !== false\n\n    at /workspace/haedo-purpose-design/docs/design-review/evidence/handoff-integration/verify-prototype.cjs:237:155\n    at async check (/workspace/haedo-purpose-design/docs/design-review/evidence/handoff-integration/verify-prototype.cjs:69:20)\n    at async /workspace/haedo-purpose-design/docs/design-review/evidence/handoff-integration/verify-prototype.cjs:234:3",
+      "visibleText": "설계 시연 · 예시 데이터\n여기서 마치기\n계획\n읽기\n\n2026년 10월\n\n내 속도로 읽는 한 달\n\n방향을 고르고, 필요한 기록만 확인합니다.\n\n월의 방향\n\n퇴근 후 짧게 읽고, 기억에 남는 문장을 남긴다.\n\n현재 문장 수정\n기존 습관·목표에 연결\n\n저녁에 10분 읽기에 연결\n\n퇴근 후 짧게 읽고, 기억에 남는 문장을 남긴다.\n\n읽은 문장에서 직접 연결\n\n원문으로 돌아가기\n기존 습관·목표\n확인할 대상\n습관 · 저녁에 10분 읽기\n목표 · 읽은 책 한 편 정리하기\n\n현재 반복: 월·수·금\n\n현재 요일 수정\n체크한 6일 확인·정정\n체크할 날짜\n체크\n기간 확인\n시작 날짜\n끝 날짜 · 포함\n확인할 내용\n월 방향\n읽기 습관\n책 정리 목표\n\n시작일부터 끝 날짜까지 확인합니다. 체크가 없는 날은 실패로 계산하지 않습니다.\n\n기간 확인\n이 탭의 메모리만 사용하며, 새로고침하면 초기화됩니다. 계정 보관·동기화는 구현하지 않은 시연입니다.\n합성 예시 기준일: 2026.10.29 · Asia/Seoul · 실제 수행이나 완료율을 나타내지 않습니다."
+    }
+  ],
+  "measurement": "One intentional button activation, one select choice or one complete text-entry operation counts as one action. Setup, assertions, screenshots and reloads are excluded. No timing or percentage improvement is reported.",
+  "environment": {
+    "browser": "151.0.7922.173",
+    "viewportWidths": [
+      390,
+      820,
+      1440
+    ],
+    "timezone": "Asia/Seoul",
+    "host": "127.0.0.1 ephemeral port; only frozen HTML document served",
+    "storage": "All storage API access blocked and audited",
+    "browserClaims": "Linux Chromium viewport simulation only"
+  },
+  "source": {
+    "path": "docs/prototypes/planning-practice-review.html",
+    "sha256": "a730202906f21262d2f08ed13b13ffe4b4f321141b092a80311d5db8b26e503f",
+    "endSha256": "a730202906f21262d2f08ed13b13ffe4b4f321141b092a80311d5db8b26e503f",
+    "unchanged": true
+  },
+  "auditPassed": true,
+  "pass": false
+}

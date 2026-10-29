@@ -1,0 +1,35 @@
+{
+  "renderer": {
+    "name": "mermaid",
+    "version": "12.1.0",
+    "license": "MIT"
+  },
+  "capturedAt": "2026-10-29T04:57:41.434Z",
+  "font": "Noto Sans CJK KR",
+  "environment": "Linux Chromium; documentation render, not an Apple device test",
+  "completed": true,
+  "diagrams": [
+    {
+      "source": "workflow-overview-20261029.mmd",
+      "sourceSha256": "f22347cc8722c7a168afa455078290ab66435ea7633a078f7e5300a6d7cf0d51",
+      "svgSha256": "49e8c76dd399e526308c7440e4c1ec62ec8f8567d32fa7a8996579d4b757cc19",
+      "title": "해도 전체 workflow — 큰 기능 중심",
+      "description": "관심과 기존 자료, 생활의 목표와 생각을 입력으로 삼는다. 뉴스, 자료실, 계획, 홈은 필요에 따라 바로 이용하고 연결한다. 이해와 내 생각, 생활의 실천, 개인 글과 선택 공유가 사용자의 결과다. 계정 서버 자동 연동과 수집, 갱신, 출처 보존, 복구는 공통 기반이다. 최신 통합 설계이며 전체 구현 완료 도식이 아니다. 네 기능 사이는 필수 순서가 없다.",
+      "width": 1269.328125,
+      "height": 622,
+      "nodes": 7,
+      "edges": 3,
+      "textElements": 9,
+      "koreanText": true,
+      "koreanFontReady": true,
+      "outOfBounds": [],
+      "clippedLabels": [],
+      "externalReferences": [],
+      "foreignObjects": 0
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "externalRequests": [],
+  "browser": "151.0.7922.173"
+}

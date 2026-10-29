@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+  <link rel="icon" href="data:,">
+  <title>계획·실행·회고 — 해도 설계 시연</title>
+  <style>
+    :root { color-scheme:light; --ink:#19332d; --muted:#52665c; --line:#d5dfd9; --teal:#145b50; --soft:#edf4f0; --canvas:#f5f7f5; --error:#9a312c; }
+    * { box-sizing:border-box; }
+    [hidden] { display:none !important; }
+    body { margin:0; background:var(--canvas); color:var(--ink); font:16px/1.7 "Pretendard", "Noto Sans CJK KR", "Apple SD Gothic Neo", sans-serif; word-break:keep-all; overflow-wrap:anywhere; }
+    ::selection { background:#c8e3d7; color:var(--ink); }
+    button, input, select, textarea { font:inherit; color:inherit; }
+    button, summary, input, select, textarea { -webkit-tap-highlight-color:transparent; }
+    button { min-height:44px; padding:9px 16px; border:1px solid var(--line); border-radius:8px; background:white; cursor:pointer; line-height:1.4; }
+    button:hover { background:var(--soft); }
+    button.primary { background:var(--teal); border-color:var(--teal); color:white; }
+    button.primary:hover { background:#10483f; }
+    button.quiet { background:transparent; border-color:transparent; color:var(--teal); }
+    button.danger { color:var(--error); }
+    button:disabled { cursor:default; opacity:.55; }
+    :focus-visible { outline:3px solid #287c69; outline-offset:3px; }
+    input, select, textarea { width:100%; min-width:0; min-height:46px; padding:9px 11px; border:1px solid #91a69a; border-radius:6px; background:white; caret-color:var(--teal); }
+    textarea { resize:vertical; line-height:1.65; min-height:96px; }
+    input::placeholder, textarea::placeholder { color:var(--muted); opacity:1; }
+    input[type="checkbox"], input[type="radio"] { width:20px; height:20px; min-height:20px; padding:0; accent-color:var(--teal); flex:none; }
+    h1, h2, h3, p { margin:0; }
+    h1 { font-size:29px; line-height:1.4; letter-spacing:-.025em; margin-bottom:12px; }
+    h2 { font-size:21px; line-height:1.5; margin-bottom:16px; }
+    h3 { font-size:17px; line-height:1.5; margin:20px 0 8px; }
+    p + p { margin-top:10px; }
+    .shell { max-width:760px; min-height:100vh; margin:auto; background:white; }
+    .top { min-height:68px; padding:10px 28px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .demo { color:var(--muted); font-size:13px; }
+    .entry-nav { display:flex; gap:8px; padding:7px 28px; border-bottom:1px solid var(--line); background:white; position:sticky; top:0; z-index:2; }
+    .entry-nav button[aria-current="page"] { background:var(--soft); color:var(--teal); font-weight:700; }
+    .reader { font-size:18px; line-height:1.95; }
+    .reader p + p { margin-top:24px; }
+    .reader mark { background:var(--soft); color:inherit; box-decoration-break:clone; }
+    .source-quote { margin:16px 0; padding:16px 18px; background:var(--soft); white-space:pre-wrap; }
+    .source-return { display:block; margin-top:8px; }
+    main { padding:32px 28px 12px; }
+    .intro { padding-bottom:26px; }
+    .muted, .hint { color:var(--muted); }
+    .hint { font-size:14px; line-height:1.65; }
+    .date { font-size:14px; color:var(--muted); margin-bottom:8px; font-variant-numeric:tabular-nums; }
+    section.block { padding:26px 0; border-top:1px solid var(--line); }
+    .block > p + details, .block > p + form { margin-top:16px; }
+    .plan { font-size:20px; line-height:1.7; white-space:pre-wrap; }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:16px; }
+    .field { display:block; margin-bottom:16px; }
+    .field > span { display:block; font-weight:600; margin-bottom:7px; }
+    .fields { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .fields .field { min-width:0; }
+    fieldset { border:0; margin:0 0 16px; padding:0; min-width:0; }
+    legend { padding:0; font-weight:600; margin-bottom:7px; }
+    .choices { display:flex; flex-wrap:wrap; gap:4px 16px; }
+    .choice { display:flex; gap:9px; align-items:center; min-height:44px; cursor:pointer; }
+    details { margin-top:14px; }
+    summary { min-height:44px; padding:10px 0; cursor:pointer; color:var(--teal); }
+    details > form, details > .inside { padding:14px 0 4px; }
+    .error { color:var(--error); font-size:14px; margin-top:10px; }
+    .status { min-height:24px; color:var(--teal); font-size:14px; margin-top:10px; }
+    .status:empty { display:none; }
+    .record-list { list-style:none; margin:16px 0 8px; padding:0; }
+    .record-list li { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:54px; border-bottom:1px solid #e5ebe7; }
+    .record-list li:first-child { border-top:1px solid #e5ebe7; }
+    .record-list time { font-variant-numeric:tabular-nums; }
+    .tag { color:var(--muted); font-size:13px; margin-left:8px; }
+    .inline-form { display:flex; gap:8px; align-items:end; margin-top:16px; }
+    .inline-form .field { flex:1; margin:0; }
+    .inline-form button { flex:none; }
+    .callout { background:var(--soft); padding:16px 18px; margin-top:16px; }
+    .callout p { white-space:pre-wrap; }
+    .check-dates { line-height:1.9; font-variant-numeric:tabular-nums; margin-top:8px; }
+    .preserved { color:var(--teal); font-weight:600; }
+    .comparison { margin-top:24px; border-top:1px solid var(--line); padding-top:24px; }
+    .comparison dl { margin:0; }
+    .comparison dt { font-weight:600; margin-top:18px; }
+    .comparison dd { margin:7px 0 0; }
+    .comparison dd span { color:var(--muted); font-size:14px; display:block; }
+    .comparison dd p { white-space:pre-wrap; }
+    .saved-list { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+    .saved-list button { text-align:left; }
+    .view-heading { scroll-margin-top:20px; }
+    .end { padding:65px 0 90px; }
+    footer { margin:14px 28px 0; padding:22px 0 28px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; line-height:1.8; }
+    dialog { width:calc(100% - 36px); max-width:440px; border:1px solid var(--line); border-radius:12px; padding:24px; color:var(--ink); }
+    dialog::backdrop { background:rgb(15 36 28 / .3); }
+    dialog h2 { margin-bottom:12px; }
+    @media(max-width:520px) {
+      .top { padding:10px 20px; }
+      .entry-nav { padding-left:20px; padding-right:20px; }
+      main { padding:26px 20px 8px; }
+      h1 { font-size:26px; }
+      .plan { font-size:19px; }
+      .fields { grid-template-columns:1fr; gap:0; }
+      footer { margin-left:20px; margin-right:20px; }
+      .inline-form { flex-wrap:wrap; }
+      .inline-form .field { flex-basis:180px; }
+      .record-list li { gap:6px; }
+    }
+    @media(prefers-reduced-motion:reduce) { * { scroll-behavior:auto !important; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="top"><span class="demo">설계 시연 · 예시 데이터</span><button type="button" id="finish" class="quiet">여기서 마치기</button></header>
+    <nav class="entry-nav" aria-label="시연 진입"><button type="button" id="nav-planning" class="quiet" aria-current="page">계획</button><button type="button" id="nav-reading" class="quiet">읽기</button></nav>
+    <main>
+      <div id="reading-view" hidden>
+        <div class="intro"><p class="date">합성 원문 · 고정판 1</p><h1 id="reading-heading" class="view-heading" tabindex="-1">짧게 읽고 오래 생각하기</h1></div>
+        <article id="reading-source" class="reader" data-source-id="example-source-reading" data-version-id="example-source-reading-v1" aria-labelledby="reading-heading">
+          <p>읽을 시간이 넉넉하지 않은 날에는 분량을 채우기보다 기억에 남는 문장 하나를 천천히 읽는다. 며칠 뒤 같은 문장으로 돌아왔을 때 생각이 달라져 있을 수도 있다.</p>
+          <p id="reading-selected-paragraph" tabindex="-1"><mark id="reading-selected-sentence">퇴근 후 짧게 읽고, 기억에 남는 문장을 남긴다.</mark> 이 문장은 정답이 아니라 오늘의 상황에서 골라 볼 수 있는 작은 제안이다.</p>
+          <p>읽고 끝내도 좋다. 해 보고 싶다면 이미 하고 있는 일에 연결하고, 내 생각을 남기고 싶다면 필요한 만큼만 적는다. 다음에 돌아왔을 때 무엇을 읽었는지 다시 찾을 수 있으면 충분하다.</p>
+        </article>
+        <div class="actions"><button type="button" id="reading-direct-link" class="primary">목표·습관에 연결</button><button type="button" id="reading-memo">메모 남기기</button><button type="button" id="reading-finish" class="quiet">읽고 마치기</button></div>
+        <p id="reading-result" class="status" role="status"></p>
+        <section class="block" id="reading-connections" hidden aria-labelledby="reading-connections-heading"><h2 id="reading-connections-heading">이 문장에서 이어진 일</h2><div id="reading-link-list" class="saved-list"></div></section>
+        <section class="block" id="reading-saved-memo" hidden><h2>남겨 둔 메모</h2><p id="reading-memo-text" style="white-space:pre-wrap"></p><div class="actions"><button type="button" id="reading-reopen-memo">메모 다시 열기</button></div></section>
+      </div>
+
+      <div id="memo-view" hidden>
+        <div class="intro"><h1 id="memo-heading" class="view-heading" tabindex="-1">내 생각 남기기</h1><p class="hint">짧게 읽고 오래 생각하기 · 고정판 1</p></div>
+        <blockquote id="memo-source-quote" class="source-quote"></blockquote>
+        <form id="memo-form" novalidate><label class="field"><span>메모</span><textarea id="memo-body" placeholder="원문 문장이나 내 생각을 남겨 보세요"></textarea></label><div class="actions"><button type="button" id="memo-insert-quote">선택 원문 문장 넣기</button><button type="submit" id="memo-save" class="primary">메모 저장</button><button type="button" id="memo-cancel" class="quiet">저장 없이 원문으로</button></div><p id="memo-message" class="status" role="status"></p></form>
+        <section class="block" id="memo-selection-section" hidden aria-labelledby="memo-selection-heading"><h2 id="memo-selection-heading">메모에서 연결할 문구</h2><label class="field"><span>저장한 메모 · 연결할 부분 선택</span><textarea id="memo-saved-text" readonly></textarea></label><button type="button" id="memo-use-selection">선택한 부분 가져오기</button><label class="field" style="margin-top:16px"><span>연결할 문구만 입력하거나 선택</span><textarea id="memo-selected-text" placeholder="저장한 메모 중 연결할 부분만"></textarea></label><div class="actions"><button type="button" id="memo-connect" class="primary">이 문구 연결</button><button type="button" id="memo-return" class="quiet">원문으로 돌아가기</button></div><p id="memo-selection-message" class="status" role="status"></p></section>
+      </div>
+
+      <div id="reading-link-view" hidden>
+        <div class="intro"><h1 id="reading-link-heading" class="view-heading" tabindex="-1">기존 습관·목표에 연결</h1><p id="reading-link-origin" class="hint"></p></div>
+        <form id="reading-link-form" novalidate><label class="field"><span>확인할 의도</span><textarea id="reading-link-intent"></textarea></label><label class="field"><span>기존 대상</span><select id="reading-link-target"><option value="">대상을 선택하세요</option><option value="habit">습관 · 저녁에 10분 읽기</option><option value="goal">목표 · 읽은 책 한 편 정리하기</option></select></label><p class="hint">선택한 문구만 연결하며, 대상의 원래 값은 유지합니다.</p><div class="actions"><button type="submit" id="reading-link-save" class="primary">연결</button><button type="button" id="reading-link-cancel">취소</button><button type="button" id="reading-link-memo-return" hidden>메모로 돌아가기</button><button type="button" id="reading-link-return" class="quiet" hidden>원문으로 돌아가기</button></div><p id="reading-link-message" class="status" role="status"></p></form>
+      </div>
+
+      <div id="workspace-view">
+        <div class="intro"><p class="date">2026년 10월</p><h1 id="workspace-heading" class="view-heading" tabindex="-1">내 속도로 읽는 한 달</h1><p class="muted">방향을 고르고, 필요한 기록만 확인합니다.</p></div>
+        <section class="block" aria-labelledby="plan-heading">
+          <h2 id="plan-heading">월의 방향</h2><p id="current-plan" class="plan"></p>
+          <details id="plan-editor"><summary>현재 문장 수정</summary><form id="plan-form"><label class="field"><span>10월 문장</span><textarea id="plan-text" required></textarea></label><button type="submit">문장 반영</button><p id="plan-message" class="status" role="status"></p></form></details>
+          <details id="link-editor"><summary>기존 습관·목표에 연결</summary><form id="link-form">
+            <fieldset><legend>연결할 의도</legend><div class="choices"><label class="choice"><input type="radio" name="intent-origin" value="month" checked>월 문장 사용</label><label class="choice"><input type="radio" name="intent-origin" value="direct">직접 입력</label></div></fieldset>
+            <label class="field"><span>확인한 문장</span><textarea id="intent-text" required></textarea></label>
+            <label class="field"><span>기존 대상</span><select id="link-target"><option value="">대상을 선택하세요</option><option value="habit">습관 · 저녁에 10분 읽기</option><option value="goal">목표 · 읽은 책 한 편 정리하기</option></select></label>
+            <p class="hint">연결은 대상의 제목·요일·체크·마감일을 바꾸지 않습니다.</p>
+            <div class="actions"><button type="submit" class="primary">연결</button></div><p id="link-message" class="status" role="status"></p>
+          </form></details>
+          <div id="link-summary" class="callout" hidden></div>
+        </section>
+
+        <section class="block" aria-labelledby="practice-heading">
+          <h2 id="practice-heading">기존 습관·목표</h2>
+          <label class="field"><span>확인할 대상</span><select id="current-target"><option value="habit">습관 · 저녁에 10분 읽기</option><option value="goal">목표 · 읽은 책 한 편 정리하기</option></select></label>
+          <div id="habit-panel">
+            <p id="habit-days" class="hint"></p>
+            <details id="days-editor"><summary>현재 요일 수정</summary><form id="days-form"><fieldset><legend>앞으로 반복할 요일</legend><div class="choices" id="day-options"></div></fieldset><button type="submit">요일 반영</button><p class="hint">이미 남긴 체크 날짜는 그대로 유지합니다.</p><p id="days-message" class="status" role="status"></p></form></details>
+            <details id="checks-detail"><summary id="check-summary">체크한 날짜 확인·정정</summary><div class="inside"><p class="hint">현재 요일과 달라도 과거 체크를 정정할 수 있습니다.</p><ul class="record-list" id="check-list"></ul></div></details>
+            <form id="add-check-form" class="inline-form" novalidate><label class="field"><span>체크할 날짜</span><input id="check-date" type="date" value="2026-10-26" min="2026-10-01" max="2026-10-29" required></label><button type="submit">체크</button></form>
+            <p id="check-message" class="status" role="status"></p>
+          </div>
+          <div id="goal-panel" hidden>
+            <p id="goal-deadline" class="hint">기존 마감일: 2026.10.31</p>
+            <form id="goal-form" class="inline-form"><label class="field"><span>현재 진척 (%)</span><input id="goal-progress" type="number" min="0" max="100" step="1" value="40" required></label><button type="submit">진척 반영</button></form>
+            <p class="hint">지금의 확인값입니다. 10월의 수행량이나 완료일로 바꾸지 않습니다.</p><p id="goal-message" class="status" role="status"></p>
+          </div>
+        </section>
+
+        <section class="block" aria-labelledby="period-heading">
+          <h2 id="period-heading" tabindex="-1">기간 확인</h2>
+          <form id="period-form" novalidate>
+            <div class="fields"><label class="field"><span>시작 날짜</span><input id="period-start" type="date" value="2026-10-01" min="2026-10-01" max="2026-10-29" required></label><label class="field"><span>끝 날짜 · 포함</span><input id="period-end" type="date" value="2026-10-31" min="2026-10-01" max="2026-10-31" required></label></div>
+            <fieldset><legend>확인할 내용</legend><div class="choices"><label class="choice"><input id="include-plan" type="checkbox" checked>월 방향</label><label class="choice"><input id="include-habit" type="checkbox" checked>읽기 습관</label><label class="choice"><input id="include-goal" type="checkbox" checked>책 정리 목표</label></div></fieldset>
+            <p class="hint">시작일부터 끝 날짜까지 확인합니다. 체크가 없는 날은 실패로 계산하지 않습니다.</p>
+            <p id="period-error" class="error" role="alert" hidden></p><div class="actions"><button type="submit" class="primary" id="inspect-period">기간 확인</button><button type="button" id="resume-preview" hidden>작성 중인 회고 이어보기</button></div>
+          </form>
+        </section>
+        <section class="block" id="saved-section" hidden aria-labelledby="saved-list-heading"><h2 id="saved-list-heading">이 시연에서 저장한 회고</h2><div id="saved-list" class="saved-list"></div></section>
+      </div>
+
+      <div id="review-view" hidden>
+        <div class="intro"><p id="preview-period" class="date"></p><h1 id="review-heading" class="view-heading" tabindex="-1">계획과 기록 살펴보기</h1><p class="muted">확인만 하고 마쳐도 됩니다.</p></div>
+        <div id="preview-content"></div>
+        <section class="block"><h2>내 판단</h2><label class="field"><span class="hint">선택 입력</span><textarea id="review-note" placeholder="남기고 싶은 생각이 있다면"></textarea></label><p id="review-error" class="error" role="alert" hidden></p><div class="actions"><button type="button" id="save-review" class="primary">회고 저장</button><button type="button" id="leave-review">저장 없이 마치기</button><button type="button" id="back-to-period" class="quiet">기간으로 돌아가기</button></div></section>
+      </div>
+
+      <div id="saved-view" hidden>
+        <div class="intro"><p id="saved-period" class="date"></p><h1 id="saved-heading" class="view-heading" tabindex="-1">남겨 둔 회고</h1><p id="saved-version" class="preserved"></p></div>
+        <div id="saved-content"></div>
+        <section class="block"><h2>당시의 내 판단</h2><p id="saved-note" style="white-space:pre-wrap"></p></section>
+        <div class="actions"><button type="button" id="compare-current">현재 내용 확인</button><button type="button" id="edit-current" class="primary">현재 월 방향 수정</button><button type="button" id="back-to-workspace" class="quiet">계획 화면으로</button></div>
+        <section id="comparison" class="comparison" hidden aria-labelledby="comparison-heading"><h2 id="comparison-heading" tabindex="-1">저장한 회고와 현재</h2><p class="hint">현재 내용을 수정해도 아래 회고의 당시 값은 유지됩니다.</p><dl id="comparison-content"></dl></section>
+      </div>
+
+      <div id="end-view" class="end" hidden><h1 id="end-heading" class="view-heading" tabindex="-1">여기까지면 충분해요</h1><p id="end-message">새 회고를 저장하지 않고 마쳤습니다.</p><div class="actions"><button type="button" id="resume-demo">시연으로 돌아가기</button></div></div>
+    </main>
+    <footer>이 탭의 메모리만 사용하며, 새로고침하면 초기화됩니다. 계정 보관·동기화는 구현하지 않은 시연입니다.<br>합성 예시 기준일: 2026.10.29 · Asia/Seoul · 실제 수행이나 완료율을 나타내지 않습니다.</footer>
+  </div>
+  <dialog id="correction-dialog" aria-labelledby="correction-heading"><h2 id="correction-heading">이 날짜의 체크 정정</h2><p id="correction-text"></p><p class="hint">다른 날짜와 현재 반복 요일은 유지합니다.</p><form method="dialog" class="actions"><button value="cancel" autofocus>취소</button><button id="confirm-correction" value="confirm" class="danger">체크 제거</button></form></dialog>
+  <script>
+    (() => {
+      'use strict';
+      const $ = id => document.getElementById(id);
+      const TODAY = '2026-10-29';
+      const CAPTURE_TIME = '2026-10-29T12:00:00+09:00';
+      const weekdayNames = ['일', '월', '화', '수', '목', '금', '토'];
+      const initialPlan = '퇴근 후 짧게 읽고, 기억에 남는 문장을 남긴다.';
+      const sourceText = $('reading-source').textContent;
+      const sourceRef = Object.freeze({id:'example-source-reading', version:'example-source-reading-v1', quote:initialPlan, start:sourceText.indexOf(initialPlan), end:sourceText.indexOf(initialPlan)+initialPlan.length});
+      const state = {
+        plan: { id:'example-month-oct', generation:1, revision:1, date:'2026-10-01', text:initialPlan },
+        habit: { id:'example-habit-reading', title:'저녁에 10분 읽기', revision:1, days:[1,3,5], checks:['2026-10-02','2026-10-05','2026-10-07','2026-10-07','2026-10-12','2026-10-19','2026-10-28'] },
+        goal: { id:'example-goal-book', title:'읽은 책 한 편 정리하기', revision:1, progress:40, target:'2026-10-31' },
+        links:[], reviews:[], memo:null, revision:0
+      };
+      let preview = null, openedReview = null, correctionDate = null, correctionFocus = null;
+      let workspaceScroll = 0, returnFocus = 'inspect-period';
+      let activeView='workspace', readingLinkContext=null, endReturn='workspace', memoSelectionRange=null;
+      const viewMemory={}, sectionLastView={planning:'workspace',reading:'reading'}, linkDrafts=new Map();
+      const readingViews=new Set(['reading','memo','reading-link']);
+      const clone = value => JSON.parse(JSON.stringify(value));
+      function freeze(value) { Object.values(value).forEach(item => { if (item && typeof item === 'object') freeze(item); }); return Object.freeze(value); }
+      function validDate(value) { return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0,10) === value; }
+      const displayDate = value => value.replaceAll('-', '.');
+      const shortDate = value => Number(value.slice(5,7)) + '월 ' + Number(value.slice(8,10)) + '일';
+      const weekday = value => new Date(value + 'T00:00:00Z').getUTCDay();
+      function datesIn(checks, start, end) { return [...new Set(checks.filter(date => validDate(date) && date >= start && date < end && date <= TODAY))].sort(); }
+      function shiftDate(date,days) { const parsed=new Date(date+'T00:00:00Z');parsed.setUTCDate(parsed.getUTCDate()+days);return parsed.toISOString().slice(0,10); }
+      function periodLabel(period) { return displayDate(period.start) + ' — ' + displayDate(shiftDate(period.endExclusive,-1)) + ' · 양 끝 날짜 포함'; }
+      function node(tag, text, className) { const el = document.createElement(tag); if (text !== undefined) el.textContent = text; if (className) el.className = className; return el; }
+      function message(id, text, error=false) { const el=$(id); el.textContent=text; el.classList.toggle('error',error); el.classList.toggle('status',!error); }
+      document.addEventListener('focusin',event=>{if($(activeView+'-view')?.contains(event.target)){viewMemory[activeView] ||= {};viewMemory[activeView].focus=event.target;}});
+      function rememberView() {
+        const memory=viewMemory[activeView] ||= {};
+        memory.scroll=window.scrollY;
+        if(memory.focus && typeof memory.focus.selectionStart==='number') memory.selection=[memory.focus.selectionStart,memory.focus.selectionEnd,memory.focus.selectionDirection];
+        if(activeView==='reading-link'&&readingLinkContext) linkDrafts.set(readingLinkContext.key,{intent:$('reading-link-intent').value,target:$('reading-link-target').value});
+      }
+      function showView(name, focusId, restore=false) {
+        rememberView();
+        const wasWorkspace = !$('workspace-view').hidden;
+        if (wasWorkspace && name !== 'workspace') workspaceScroll = window.scrollY;
+        ['workspace','review','saved','end','reading','memo','reading-link'].forEach(key => $(key+'-view').hidden = key !== name);
+        activeView=name;
+        const section=readingViews.has(name)?'reading':'planning';
+        if(name!=='end')sectionLastView[section]=name;
+        ['reading','planning'].forEach(key=>{if(key===section)$('nav-'+key).setAttribute('aria-current','page');else $('nav-'+key).removeAttribute('aria-current');});
+        const memory=viewMemory[name];
+        if(restore&&memory) {
+          if(memory.focus?.isConnected && $(name+'-view').contains(memory.focus)){memory.focus.focus({preventScroll:true});if(memory.selection && memory.focus.setSelectionRange)memory.focus.setSelectionRange(...memory.selection);}
+          window.scrollTo(0,memory.scroll||0);
+        } else if (name === 'workspace') { window.scrollTo(0,workspaceScroll); if(focusId) $(focusId).focus({preventScroll:true}); }
+        else { window.scrollTo(0,0); $(focusId || name+'-heading').focus({preventScroll:true}); }
+      }
+      function changed() { state.revision += 1; }
+      function renderPlan() { $('current-plan').textContent = state.plan.text; $('plan-text').value = state.plan.text; }
+      function renderLinks() {
+        const host=$('link-summary'); host.replaceChildren(); host.hidden = !state.links.length;
+        state.links.forEach(link => {
+          const row=node('div');row.dataset.linkId=link.id;row.dataset.targetId=link.targetId;
+          row.append(node('p', link.targetTitle + '에 연결', 'preserved'),node('p',link.intent),node('p',link.origin === 'month' ? '연결 당시의 월 문장 · 현재 문장과 별도 보관' : link.origin==='memo' ? '메모에서 선택한 문구' : link.origin==='reading' ? '읽은 문장에서 직접 연결' : '직접 확인한 의도 · 월 항목 연결 없음','hint'));
+          if(link.sourceRef){const button=node('button','원문으로 돌아가기','quiet source-return');button.type='button';button.dataset.returnSource=link.sourceRef.id;button.addEventListener('click',()=>returnToSource(link.sourceRef));row.append(button);}
+          host.append(row);
+        });
+        const links=state.links.filter(link=>link.sourceRef?.id===sourceRef.id),list=$('reading-link-list');list.replaceChildren();$('reading-connections').hidden=!links.length;
+        links.forEach(link=>{const button=node('button',link.targetTitle+' · '+(link.origin==='memo'?'메모에서 연결':'문장에서 직접 연결'));button.type='button';button.dataset.readingLinkId=link.id;button.dataset.targetId=link.targetId;button.addEventListener('click',()=>{showView('workspace');$('current-target').value=link.kind;$('include-plan').checked=false;$('include-habit').checked=link.kind==='habit';$('include-goal').checked=link.kind==='goal';renderPractice();$('current-target').focus();});list.append(button);});
+      }
+      function renderPractice() {
+        const kind=$('current-target').value;
+        $('habit-panel').hidden = kind !== 'habit'; $('goal-panel').hidden = kind !== 'goal';
+        $('habit-days').textContent = '현재 반복: ' + (state.habit.days.length ? state.habit.days.map(day=>weekdayNames[day]).join('·') : '지정 없음');
+        $('day-options').querySelectorAll('input').forEach(input=>input.checked=state.habit.days.includes(Number(input.value)));
+        const counts=new Map(); state.habit.checks.forEach(date=>counts.set(date,(counts.get(date)||0)+1));
+        const dates=datesIn(state.habit.checks,'2026-10-01','2026-11-01');
+        $('check-summary').textContent='체크한 '+dates.length+'일 확인·정정';
+        const list=$('check-list'); list.replaceChildren();
+        dates.forEach(date=>{
+          const row=node('li'), label=node('span'), time=node('time', shortDate(date)+' ('+weekdayNames[weekday(date)]+')'); time.dateTime=date; label.append(time);
+          if(counts.get(date)>1) label.append(node('span', counts.get(date)+'개 중복','tag'));
+          const button=node('button','정정','quiet'); button.type='button'; button.dataset.correctDate=date; button.setAttribute('aria-label',date+' 체크 정정'); button.addEventListener('click',()=>openCorrection(date,button));
+          row.append(label,button); list.append(row);
+        });
+        if(!dates.length) list.append(node('li','체크 날짜 없음 · 수행 여부 미확인','hint'));
+        $('goal-progress').value=state.goal.progress;
+      }
+      function openCorrection(date,button) {
+        correctionDate=date; correctionFocus=button;
+        const count=state.habit.checks.filter(item=>item===date).length;
+        $('correction-text').textContent=shortDate(date)+'에 저장된 체크 '+count+'개를 모두 제거합니다.';
+        $('correction-dialog').returnValue='';
+        $('correction-dialog').showModal();
+      }
+      function selectedLinks(scope) {
+        return state.links.filter(link=>scope[link.kind]).map(link=>{const copy=clone(link);if(!scope.plan)delete copy.monthRef;return copy;});
+      }
+      function selectedStamp(scope) { return JSON.stringify({plan:scope.plan?state.plan.revision:null,habit:scope.habit?state.habit.revision:null,goal:scope.goal?state.goal.revision:null,links:selectedLinks(scope)}); }
+      function capture(period, includeHabit, includeGoal, includePlan) {
+        const scope={habit:includeHabit,goal:includeGoal,plan:includePlan};
+        return {
+          period:clone(period), capturedAt:CAPTURE_TIME, scope, selectedStamp:selectedStamp(scope),
+          plan:includePlan?clone(state.plan):null, links:selectedLinks(scope),
+          habit:includeHabit ? {...clone(state.habit), dates:datesIn(state.habit.checks,period.start,period.endExclusive), checks:state.habit.checks.filter(date=>validDate(date)&&date>=period.start&&date<period.endExclusive&&date<=TODAY)} : null,
+          goal:includeGoal ? clone(state.goal) : null
+        };
+      }
+      function renderSnapshot(host,snapshot) {
+        host.replaceChildren();
+        if(snapshot.plan||snapshot.links.length){
+          const plan=node('section',undefined,'block');plan.append(node('h2',snapshot.plan?'계획':'확인한 의도'));
+          if(snapshot.plan)plan.append(node('p',snapshot.plan.text,'plan'));
+          snapshot.links.forEach(link=>{const box=node('div',undefined,'callout');box.dataset.snapshotTarget=link.targetId;box.append(node('p','연결 당시 · '+link.targetTitle,'hint'),node('p',link.intent));if(link.sourceRef){const button=node('button','원문으로 돌아가기','quiet source-return');button.type='button';button.dataset.returnSource=link.sourceRef.id;button.addEventListener('click',()=>returnToSource(link.sourceRef));box.append(button);}plan.append(box);});
+          if(snapshot.plan)plan.append(node('p','확인한 현재 문장입니다. 기간 시작 전 계획이었다고 가정하지 않습니다.','hint'));
+          host.append(plan);
+        }
+        const records=node('section',undefined,'block'); records.append(node('h2','확인한 기록'));
+        if(snapshot.habit) {
+          records.append(node('h3',snapshot.habit.title),node('p','체크한 날 '+snapshot.habit.dates.length+'일'));
+          records.append(node('p',snapshot.habit.dates.length ? snapshot.habit.dates.map(shortDate).join(' · ') : '체크 날짜 없음 · 수행 여부 미확인','check-dates'));
+          const duplicates=snapshot.habit.checks.length-snapshot.habit.dates.length;
+          records.append(node('p',(duplicates ? '중복 '+duplicates+'개는 같은 날로 셉니다. ' : '')+'현재 요일을 과거 달성률의 분모로 쓰지 않습니다.','hint'));
+        }
+        if(snapshot.goal) {
+          records.append(node('h3',snapshot.goal.title),node('p','현재 진척 '+snapshot.goal.progress+'%'),node('p','시연 확인 시점: 2026.10.29 12:00 · Asia/Seoul','hint'),node('p','선택 기간의 수행량·완료일이 아닙니다. 기존 마감일: '+displayDate(snapshot.goal.target),'hint'));
+        }
+        if(snapshot.habit||snapshot.goal)host.append(records);
+      }
+      function renderSavedList() {
+        $('saved-section').hidden=!state.reviews.length; const host=$('saved-list'); host.replaceChildren();
+        state.reviews.forEach(review=>{const button=node('button','회고 '+review.id+' · '+shortDate(review.period.start)+'부터'); button.type='button'; button.dataset.reviewId=review.id; button.addEventListener('click',()=>openSaved(review)); host.append(button);});
+      }
+      function openSaved(review) {
+        openedReview=review; $('saved-period').textContent=periodLabel(review.period);
+        $('saved-version').textContent='이 시연에서 저장한 회고 '+review.id+' · 당시 값 보존';
+        $('edit-current').textContent=review.plan?'현재 월 방향 수정':review.habit&&review.goal?'현재 습관·목표 확인':review.habit?'현재 습관 확인·정정':'현재 목표 진척 수정';
+        renderSnapshot($('saved-content'),review); $('saved-note').textContent=review.note||'판단을 남기지 않았습니다.';
+        $('comparison').hidden=true; showView('saved');
+      }
+      function compareCurrent() {
+        const review=openedReview, host=$('comparison-content'); host.replaceChildren();
+        function pair(title, before, current) {
+          host.append(node('dt',title));
+          const saved=node('dd'), live=node('dd'); saved.append(node('span','저장한 회고'),node('p',before)); live.append(node('span','현재'),node('p',current)); host.append(saved,live);
+        }
+        if(review.plan)pair('월의 방향',review.plan.text,state.plan.text);
+        if(review.habit) pair('기간 안의 체크 날짜',review.habit.dates.length+'일 · '+(review.habit.dates.map(shortDate).join(', ')||'없음'),datesIn(state.habit.checks,review.period.start,review.period.endExclusive).length+'일 · '+(datesIn(state.habit.checks,review.period.start,review.period.endExclusive).map(shortDate).join(', ')||'없음'));
+        if(review.goal) pair('각 확인 시점의 목표 진척',review.goal.progress+'%',state.goal.progress+'%');
+        $('comparison').hidden=false; $('comparison-heading').focus();
+      }
+      function finish() { endReturn=readingViews.has(activeView)?activeView:'workspace';$('resume-preview').hidden=!preview||!$('review-note').value.trim();$('end-message').textContent='시연을 마쳤습니다. 이 탭에 남긴 내용은 돌아가서 볼 수 있습니다.'; showView('end'); }
+      function returnToSource(reference) {
+        if(reference.id!==sourceRef.id||reference.version!==sourceRef.version||sourceText.slice(reference.start,reference.end)!==reference.quote){message('reading-link-message','정확한 원문을 확인할 수 없습니다.',true);return;}
+        const hasMemory=!!viewMemory.reading;showView('reading',undefined,hasMemory);
+        if(!hasMemory)$('reading-selected-paragraph').focus();
+      }
+      function openMemo() {
+        $('memo-source-quote').textContent=sourceRef.quote;
+        showView('memo',undefined,!!viewMemory.memo);
+      }
+      function startReadingLink(origin,selectedText,memoSelection=null) {
+        const key=JSON.stringify([origin,sourceRef.id,sourceRef.version,memoSelection?.revision||null,selectedText]);
+        const draft=linkDrafts.get(key);
+        readingLinkContext={key,origin,sourceRef:clone(sourceRef),memoSelection,returnView:origin==='memo'?'memo':'reading'};
+        $('reading-link-origin').textContent=origin==='memo'?'저장한 메모에서 고른 문구 · 원문 고정판 1':'원문에서 고른 문장 · 고정판 1';
+        $('reading-link-view').dataset.sourceId=sourceRef.id;$('reading-link-view').dataset.versionId=sourceRef.version;
+        $('reading-link-intent').value=draft?draft.intent:selectedText;$('reading-link-target').value=draft?draft.target:'';
+        $('reading-link-return').hidden=true;$('reading-link-memo-return').hidden=true;message('reading-link-message','');showView('reading-link',undefined,!!draft);
+      }
+      function renderMemo() {
+        $('reading-saved-memo').hidden=!state.memo;$('memo-selection-section').hidden=!state.memo;
+        if(state.memo){$('reading-memo-text').textContent=state.memo.text;$('memo-saved-text').value=state.memo.text;}
+      }
+
+      $('nav-planning').addEventListener('click',()=>showView(sectionLastView.planning,undefined,true));
+      $('nav-reading').addEventListener('click',()=>showView(sectionLastView.reading,undefined,true));
+      $('reading-direct-link').addEventListener('click',()=>startReadingLink('reading',sourceRef.quote));
+      $('reading-memo').addEventListener('click',openMemo);
+      $('reading-reopen-memo').addEventListener('click',openMemo);
+      $('reading-finish').addEventListener('click',finish);
+      $('memo-cancel').addEventListener('click',()=>returnToSource(sourceRef));
+      $('memo-return').addEventListener('click',()=>returnToSource(sourceRef));
+      $('memo-insert-quote').addEventListener('click',()=>{const field=$('memo-body');if(!field.value.includes(sourceRef.quote))field.value+=(field.value?'\n\n':'')+sourceRef.quote;field.focus();});
+      $('memo-form').addEventListener('submit',event=>{
+        event.preventDefault();const text=$('memo-body').value;if(!text.trim()){message('memo-message','남길 메모를 입력해 주세요.',true);return;}
+        if(state.memo?.text===text){message('memo-message','같은 메모가 이미 저장되어 있습니다.');return;}
+        state.memo={id:'example-reading-memo',revision:(state.memo?.revision||0)+1,text,sourceRef:clone(sourceRef)};memoSelectionRange=null;
+        if(!$('memo-selected-text').value||!text.includes($('memo-selected-text').value))$('memo-selected-text').value='';
+        renderMemo();message('memo-message','메모를 저장했습니다. 연결할 문구는 따로 고를 수 있습니다.');
+      });
+      $('memo-use-selection').addEventListener('click',()=>{const field=$('memo-saved-text'),text=field.value.slice(field.selectionStart,field.selectionEnd);if(!text.trim()){message('memo-selection-message','저장한 메모에서 연결할 부분을 선택해 주세요.',true);return;}memoSelectionRange={start:field.selectionStart,end:field.selectionEnd,revision:state.memo.revision,text};$('memo-selected-text').value=text;message('memo-selection-message','선택한 부분만 가져왔습니다.');$('memo-selected-text').focus();});
+      $('memo-selected-text').addEventListener('input',()=>{memoSelectionRange=null;});
+      $('memo-connect').addEventListener('click',()=>{
+        if(!state.memo||$('memo-body').value!==state.memo.text){message('memo-selection-message','수정 중인 메모를 먼저 저장해 주세요. 입력은 그대로 유지됩니다.',true);return;}
+        const selectedText=$('memo-selected-text').value;
+        const exact=memoSelectionRange?.revision===state.memo.revision&&memoSelectionRange.text===selectedText;
+        const start=exact?memoSelectionRange.start:state.memo.text.indexOf(selectedText);
+        if(!selectedText.trim()||start<0){message('memo-selection-message','저장한 메모 안의 문구를 선택하거나 그대로 입력해 주세요.',true);return;}
+        if(!exact&&state.memo.text.indexOf(selectedText,start+1)>=0){message('memo-selection-message','같은 문구가 여러 곳에 있습니다. 저장한 메모에서 연결할 부분을 직접 선택해 주세요.',true);return;}
+        startReadingLink('memo',selectedText,{id:state.memo.id,revision:state.memo.revision,text:selectedText,start,end:start+selectedText.length});
+      });
+      $('reading-link-cancel').addEventListener('click',()=>{if(readingLinkContext)showView(readingLinkContext.returnView,undefined,true);});
+      $('reading-link-return').addEventListener('click',()=>returnToSource(readingLinkContext.sourceRef));
+      $('reading-link-memo-return').addEventListener('click',()=>{if(readingLinkContext?.origin==='memo')showView('memo',undefined,true);});
+      $('reading-link-form').addEventListener('submit',event=>{
+        event.preventDefault();const context=readingLinkContext,intent=$('reading-link-intent').value.trim(),kind=$('reading-link-target').value;
+        if(!context)return;
+        if(!intent){message('reading-link-message','연결할 의도를 입력해 주세요.',true);return;}
+        if(!['habit','goal'].includes(kind)){message('reading-link-message','연결할 기존 대상을 선택해 주세요.',true);return;}
+        if(context.origin==='memo'&&(!state.memo||context.memoSelection.revision!==state.memo.revision||$('memo-body').value!==state.memo.text)){message('reading-link-message','메모가 바뀌었습니다. 메모로 돌아가 저장한 문구를 다시 확인해 주세요.',true);return;}
+        const target=state[kind];
+        const duplicate=state.links.some(link=>link.kind===kind&&link.intent===intent&&link.origin===context.origin&&JSON.stringify(link.sourceRef)===JSON.stringify(context.sourceRef)&&JSON.stringify(link.memoSelection||null)===JSON.stringify(context.memoSelection));
+        if(!duplicate){state.links.push({id:'example-link-'+(state.links.length+1),kind,targetId:target.id,targetTitle:target.title,intent,origin:context.origin,sourceRef:clone(context.sourceRef),memoSelection:clone(context.memoSelection),monthRef:null});changed();renderLinks();}
+        message('reading-link-message',duplicate?'이미 같은 의도로 연결되어 있습니다.':'연결했습니다. 원래 목표·습관은 그대로입니다.');
+        $('reading-link-return').hidden=false;$('reading-link-memo-return').hidden=context.origin!=='memo';message('reading-result',target.title+'에 '+(context.origin==='memo'?'선택한 메모 문구를':'원문 문장을')+' 연결했습니다.');
+      });
+
+      weekdayNames.forEach((name,index)=>{const label=node('label',undefined,'choice'),input=document.createElement('input');input.type='checkbox';input.value=index;input.name='habit-day'; label.append(input,document.createTextNode(name));$('day-options').append(label);});
+      $('intent-text').value=initialPlan;
+      $('plan-form').addEventListener('submit',event=>{event.preventDefault();const text=$('plan-text').value.trim();if(!text){message('plan-message','월 문장을 입력해 주세요.',true);return;}state.plan.text=text;state.plan.revision++;changed();renderPlan();message('plan-message','현재 문장을 반영했습니다. 저장한 회고는 유지됩니다.');});
+      document.querySelectorAll('[name="intent-origin"]').forEach(input=>input.addEventListener('change',()=>{if(input.checked){$('intent-text').value=input.value==='month'?state.plan.text:'';$('intent-text').focus();}}));
+      $('link-form').addEventListener('submit',event=>{
+        event.preventDefault();const intent=$('intent-text').value.trim();if(!intent){message('link-message','연결할 문장을 입력해 주세요.',true);return;}
+        const kind=$('link-target').value,origin=document.querySelector('[name="intent-origin"]:checked').value,target=state[kind];
+        if(!['habit','goal'].includes(kind)){message('link-message','연결할 기존 대상을 선택해 주세요.',true);return;}
+        if(state.links.some(link=>link.kind===kind&&link.intent===intent&&link.origin===origin)){message('link-message','이미 같은 의도로 연결되어 있습니다.');return;}
+        state.links.push({id:'example-link-'+(state.links.length+1),kind,targetId:target.id,targetTitle:target.title,intent,origin,monthRef:origin==='month'?clone(state.plan):null});changed();
+        $('current-target').value=kind;renderLinks();renderPractice();message('link-message','연결했습니다. 대상의 원래 값은 그대로입니다.');
+      });
+      $('current-target').addEventListener('change',renderPractice);
+      $('days-form').addEventListener('submit',event=>{event.preventDefault();const days=[...$('day-options').querySelectorAll('input:checked')].map(input=>Number(input.value));if(!days.length){message('days-message','반복할 요일을 하나 이상 선택해 주세요.',true);return;}state.habit.days=days;state.habit.revision++;changed();renderPractice();message('days-message','현재 요일만 반영했습니다. 과거 체크는 유지됩니다.');});
+      $('add-check-form').addEventListener('submit',event=>{
+        event.preventDefault();const date=$('check-date').value;
+        if(!validDate(date)||date<'2026-10-01'||date>TODAY){message('check-message','시연의 10월 날짜 중 29일까지 선택해 주세요.',true);return;}
+        if(state.habit.checks.includes(date)){message('check-message','이미 체크한 날짜입니다. 중복으로 추가하지 않았습니다.');return;}
+        if(!state.habit.days.includes(weekday(date))){message('check-message','현재 반복 요일에 해당하는 날짜를 선택해 주세요.',true);return;}
+        state.habit.checks.push(date);state.habit.revision++;changed();renderPractice();message('check-message',shortDate(date)+' 체크를 반영했습니다.');
+      });
+      $('correction-dialog').addEventListener('close',()=>{
+        if($('correction-dialog').returnValue==='confirm'&&correctionDate){const date=correctionDate;state.habit.checks=state.habit.checks.filter(item=>item!==date);state.habit.revision++;changed();renderPractice();message('check-message',shortDate(date)+'의 체크를 모두 제거했습니다.');$('check-summary').focus();}
+        else if(correctionFocus?.isConnected)correctionFocus.focus();correctionDate=null;correctionFocus=null;
+      });
+      $('goal-form').addEventListener('submit',event=>{event.preventDefault();const value=Number($('goal-progress').value);if(!Number.isInteger(value)||value<0||value>100)return;state.goal.progress=value;state.goal.revision++;changed();message('goal-message','현재 진척을 반영했습니다. 과거 실적은 만들지 않습니다.');});
+      $('period-form').addEventListener('submit',event=>{
+        event.preventDefault();const start=$('period-start').value,end=$('period-end').value,habit=$('include-habit').checked,goal=$('include-goal').checked,plan=$('include-plan').checked;let error='';
+        if(!validDate(start)||!validDate(end))error='시작과 끝 날짜를 모두 입력해 주세요.';
+        else if(start>end)error='끝 날짜가 시작 날짜보다 앞섭니다. 두 날짜를 다시 확인해 주세요.';
+        else if(start<'2026-10-01'||start>TODAY||end>'2026-10-31')error='시연에서는 10월 1일~29일에 시작하고, 끝 날짜는 10월 31일까지 선택할 수 있습니다.';
+        else if(!habit&&!goal&&!plan)error='확인할 내용을 하나 이상 선택해 주세요.';
+        $('period-error').textContent=error;$('period-error').hidden=!error;if(error)return;
+        preview=capture({start,endExclusive:shiftDate(end,1),basisLabel:'2026년 10월 예시',timeZone:'Asia/Seoul'},habit,goal,plan);
+        $('preview-period').textContent=periodLabel(preview.period);renderSnapshot($('preview-content'),preview);$('review-error').hidden=true;showView('review');
+      });
+      $('save-review').addEventListener('click',()=>{
+        if(!preview)return;
+        if(preview.selectedStamp!==selectedStamp(preview.scope)){$('review-error').textContent='선택한 내용이 바뀌었습니다. 입력한 판단은 유지됩니다. 기간으로 돌아가 다시 확인해 주세요.';$('review-error').hidden=false;return;}
+        const review=freeze({...clone(preview),id:state.reviews.length+1,revision:1,note:$('review-note').value});state.reviews.push(review);preview=null;$('resume-preview').hidden=true;renderSavedList();openSaved(review);$('review-note').value='';
+      });
+      $('back-to-period').addEventListener('click',()=>{$('resume-preview').hidden=!preview||!$('review-note').value.trim();showView('workspace',returnFocus);});
+      $('resume-preview').addEventListener('click',()=>{if(preview)showView('review',undefined,true);});
+      $('back-to-workspace').addEventListener('click',()=>showView('workspace','period-heading'));
+      $('edit-current').addEventListener('click',()=>{
+        if(!openedReview)return;showView('workspace');
+        if(openedReview.plan){$('plan-editor').open=true;$('plan-text').focus();return;}
+        $('current-target').value=openedReview.habit?'habit':'goal';renderPractice();
+        if(openedReview.habit&&openedReview.goal)$('current-target').focus();
+        else if(openedReview.habit){$('checks-detail').open=true;$('check-summary').focus();}
+        else $('goal-progress').focus();
+      });
+      $('compare-current').addEventListener('click',compareCurrent);
+      $('finish').addEventListener('click',finish);$('leave-review').addEventListener('click',finish);
+      $('resume-demo').addEventListener('click',()=>showView(endReturn,undefined,true));
+      renderPlan();renderPractice();renderLinks();
+    })();
+  </script>
+</body>
+</html>
