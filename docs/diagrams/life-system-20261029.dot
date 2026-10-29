@@ -1,0 +1,59 @@
+// Regenerate with system Graphviz + Noto Sans CJK KR:
+// dot -Tsvg docs/diagrams/life-system-20261029.dot -o docs/diagrams/rendered/life-system-20261029.svg
+// dot -Tpng -Gdpi=144 docs/diagrams/life-system-20261029.dot -o docs/diagrams/rendered/life-system-20261029.png
+// dot -Tpdf docs/diagrams/life-system-20261029.dot -o docs/diagrams/rendered/life-system-20261029.pdf
+// Target design, not implementation status. See life-system-contract.md
+// and planning-practice-review.md for current capabilities and follow-up scope.
+digraph HaedoLifeSystem {
+  graph [rankdir=TB, bgcolor="white", pad="0.38", nodesep="0.25", ranksep="0.28",
+    fontname="Noto Sans CJK KR", fontcolor="#19332d", fontsize=18, labelloc=t,
+    label="해도 · 생활의 여유를 만드는 시스템\n "];
+  node [shape=plain, fontname="Noto Sans CJK KR", fontcolor="#19332d", fontsize=16];
+
+  system [label=<
+    <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">
+      <TR>
+        <TD WIDTH="270" HEIGHT="58"><FONT POINT-SIZE="18"><B>INPUT</B></FONT><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">생활에서 들어오는 것</FONT></TD>
+        <TD WIDTH="38"></TD>
+        <TD WIDTH="330"><FONT POINT-SIZE="18"><B>AUTOMATED PROCESS</B></FONT><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">정해진 범위의 반복 처리</FONT></TD>
+        <TD WIDTH="38"></TD>
+        <TD WIDTH="300"><FONT POINT-SIZE="18"><B>OUTPUT</B></FONT><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">사람이 경험하고 고르는 결과</FONT></TD>
+      </TR>
+      <TR>
+        <TD BORDER="1" COLOR="#ccd6d1" BGCOLOR="#f7f9f8" HEIGHT="98" CELLPADDING="15"><B>질문 · 기존 기록</B><BR/><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">현재 관심 · 읽을 자료</FONT></TD>
+        <TD><FONT POINT-SIZE="25" COLOR="#84958f">→</FONT></TD>
+        <TD BORDER="1" COLOR="#ccd6d1" BGCOLOR="#f7f9f8" CELLPADDING="15"><B>정확한 자료 찾기 · 보존</B><BR/><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">원문 · 출처 · 정확한 판</FONT></TD>
+        <TD><FONT POINT-SIZE="25" COLOR="#84958f">→</FONT></TD>
+        <TD BORDER="1" COLOR="#a5c1b7" BGCOLOR="#f0f6f3" CELLPADDING="15"><FONT COLOR="#145b50"><B>읽기 · 내 판단</B></FONT><BR/><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">이해 · 질문 · 개인 메모</FONT></TD>
+      </TR>
+      <TR><TD COLSPAN="5" HEIGHT="12"></TD></TR>
+      <TR>
+        <TD BORDER="1" COLOR="#ccd6d1" BGCOLOR="#f7f9f8" HEIGHT="98" CELLPADDING="15"><B>월 방향 · 기존 목표·습관</B><BR/><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">이번에 선택한 일</FONT></TD>
+        <TD><FONT POINT-SIZE="25" COLOR="#84958f">→</FONT></TD>
+        <TD BORDER="1" COLOR="#ccd6d1" BGCOLOR="#f7f9f8" CELLPADDING="15"><B>명시 연결 · 계정 재개</B><BR/><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">고른 대상과 저장 상태 유지</FONT></TD>
+        <TD><FONT POINT-SIZE="25" COLOR="#84958f">→</FONT></TD>
+        <TD BORDER="1" COLOR="#a5c1b7" BGCOLOR="#f0f6f3" CELLPADDING="15"><FONT COLOR="#145b50"><B>작은 실천 · 수정한 계획</B></FONT><BR/><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">실행과 변경은 직접 결정</FONT></TD>
+      </TR>
+      <TR><TD COLSPAN="5" HEIGHT="12"></TD></TR>
+      <TR>
+        <TD BORDER="1" COLOR="#ccd6d1" BGCOLOR="#f7f9f8" HEIGHT="98" CELLPADDING="15"><B>실제 경험 · 직접 체크</B><BR/><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">내가 남긴 수행 기록</FONT></TD>
+        <TD><FONT POINT-SIZE="25" COLOR="#84958f">→</FONT></TD>
+        <TD BORDER="1" COLOR="#ccd6d1" BGCOLOR="#f7f9f8" CELLPADDING="15"><B>확인 가능한 기록 · 기간별 대조</B><BR/><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">기록된 시점과 범위 안에서</FONT></TD>
+        <TD><FONT POINT-SIZE="25" COLOR="#84958f">→</FONT></TD>
+        <TD BORDER="1" COLOR="#a5c1b7" BGCOLOR="#f0f6f3" CELLPADDING="15"><FONT COLOR="#145b50"><B>회고 · 선택한 표현</B></FONT><BR/><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">바뀐 생각 · 다음 선택 · 고른 공유</FONT></TD>
+      </TR>
+      <TR><TD COLSPAN="5" HEIGHT="42"><FONT POINT-SIZE="13" COLOR="#5c6b65">각 행은 독립된 사용 흐름이며, 모두 거치는 필수 단계가 아니다.</FONT></TD></TR>
+      <TR><TD COLSPAN="5" HEIGHT="16"></TD></TR>
+      <TR><TD COLSPAN="5" BGCOLOR="#e8f1ec" CELLPADDING="17">
+        <FONT POINT-SIZE="18" COLOR="#145b50"><B>선택 → 실행 → 확인·회고 → 다음 선택 ↺</B></FONT><BR/><BR/>
+        <FONT POINT-SIZE="13" COLOR="#52665c">필요한 만큼 반복하고, 기록하지 않고 생활로 돌아가도 된다.</FONT>
+      </TD></TR>
+      <TR><TD COLSPAN="5" HEIGHT="22"></TD></TR>
+      <TR><TD COLSPAN="5" HEIGHT="34"><FONT POINT-SIZE="14"><B>계획일 ≠ 마감일　 /　 현재 진척 ≠ 과거 실적　 /　 체크 없음 ≠ 실패</B></FONT></TD></TR>
+      <TR><TD COLSPAN="5" HEIGHT="40">
+        <FONT POINT-SIZE="13" COLOR="#5c6b65">일반 처리: 보존·찾기·연결　 |　 선택 AI: 설명·비교·초안 제안　 |　 사람: 경험·판단·실행·표현</FONT>
+      </TD></TR>
+      <TR><TD COLSPAN="5" HEIGHT="36"><FONT POINT-SIZE="12" COLOR="#5c6b65">목표 설계 · 현재 구현과 후속 범위는 문서 참조 · 2026.10.29</FONT></TD></TR>
+    </TABLE>
+  >];
+}

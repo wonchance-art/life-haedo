@@ -1,5 +1,7 @@
 # 생활 도구 전체 설계
 
+2026-10-29 전체 시스템 → 상세 계약: [생활 시스템](life-system-contract.md) · [계획·실행·기간 회고](../design-review/planning-practice-review.md) · [전체 구조도](../diagrams/rendered/life-system-20261029.png). 기존 읽기 여정과 실행 인계를 연결한 구현 전 설계이며 독립 기능의 종료·계정 책임·기간 사실·실패/복원까지 다룬다.
+
 2026-10-29 대표 여정 A 상세: [관심 글에서 내 판단·다음 선택까지](../design-review/reading-decision-journey.md). 화면·기존 코드/API·저장 수명·기기별 재개·실패/통합 검수와 실행 분담을 정리한 구현 전 명세다.
 
 2026-10-29 현재 전체 프레임: [제품 목적·전체 workflow](product-purpose.md). 초기 구상·후기 수정과 현재 배포를 대조해 **생활의 여유 → 필요한 맥락 회수 → 직접 읽기·판단·실천 → 선택 표현 → 생활 복귀**를 기준으로 복원했다. [단순 구조도](../diagrams/rendered/purpose-workflow-20261029.png)와 [최신 로드맵](roadmap.md)을 함께 읽는다. 현재 블로그 중심 홈·다섯 메뉴와 PR140 실행 인계를 유지하며, 아래 날짜별 설계와 미배포 문구는 당시 기록이다.
