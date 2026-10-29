@@ -168,6 +168,33 @@
           const old = await step(c, () => storage.readNaverCapture(ws, version.id));
           if (old?.capture.capture_hash === snapshot.capture.capture_hash) return { sourceId: found.sourceId, sourceVersionId: version.id, alreadyReceived: true, received: true };
         }
+        // A fresh device may already own the exact Core version while its
+        // photos are absent. Resolve immutable metadata before creating a new
+        // version; body equality alone never chooses a photo capture.
+        if (storage.installNaverCaptureForVersion) {
+          let known;
+          try {
+            known = await rpc(c, 'life_naver_media_receipt_find', { p_workspace_id: ws,
+              p_capture_id: snapshot.capture.id, p_capture_hash: snapshot.capture.capture_hash });
+          } catch (error) { if (error?.code !== 'naver_schema_missing') throw error; known = []; }
+          need(Array.isArray(known) && known.length <= 51);
+          need(known.length <= 50, 'naver_ambiguous');
+          known = known.map(value => receipts().validate(value));
+          need(known.every(value => value.workspaceId === ws && value.captureId === snapshot.capture.id && value.captureHash === snapshot.capture.capture_hash));
+          if (known.length) {
+            const matches = known.filter(value => value.sourceId === found.sourceId);
+            need(matches.length === 1, matches.length > 1 ? 'naver_ambiguous' : 'naver_conflict');
+            const receipt = matches[0], attachment = { sourceId: receipt.sourceId, sourceVersionId: receipt.sourceVersionId,
+              capture: snapshot.capture, photos: snapshot.photos, localOnly: false };
+            receipts().checkAttachment(receipt, attachment);
+            root.HaedoLife.NaverMedia.checkTarget(bundle, attachment);
+            await step(c, () => storage.installNaverCaptureForVersion(ws, attachment, receipt, { isCurrent: () => {
+              try { guard(c); return true; } catch (_) { return false; }
+            } }));
+            snapshots.delete(ws + ':' + id);
+            return { sourceId: receipt.sourceId, sourceVersionId: receipt.sourceVersionId, alreadyReceived: true, received: true };
+          }
+        }
         const expectedSource = Object.hasOwn(options, 'existingSourceId') ? options.existingSourceId : snapshot.projection.sourceId;
         const expectedVersion = Object.hasOwn(options, 'expectedSourceVersionId') ? options.expectedSourceVersionId : snapshot.projection.sourceVersionId;
         need(expectedSource === found.sourceId && expectedVersion === found.sourceVersionId, 'naver_conflict');
@@ -184,7 +211,67 @@
       }
       throw fault('naver_conflict');
     }
+    const receipts = () => root.HaedoLife?.NaverMediaReceipt || (typeof require === 'function' && require('./naver-media-receipt.js'));
+    async function sourceReady(c) {
+      if (!storage.getSyncState) return false;
+      const state = await step(c, () => storage.getSyncState(c.workspaceId));
+      const bundle = await step(c, () => storage.read(c.workspaceId));
+      return state?.enabled === true && state.status === 'synced' && !state.outbox && !state.conflict &&
+        state.binding?.userId === owner.userId && state.binding?.projectUrl === owner.projectUrl &&
+        state.binding?.remoteId === c.workspaceId && state.remoteRevision > 0 && state.syncedLocalRevision === bundle.revision;
+    }
+    async function publishPending(ws) {
+      const c = context(ws);
+      if (!await sourceReady(c)) return { status: 'pending', confirmed: 0 };
+      const rows = await step(c, () => storage.listNaverMediaReceipts(ws, { pendingOnly: true }));
+      let confirmed = 0;
+      for (const row of rows) {
+        const receipt = receipts().validate(row.receipt);
+        need(receipt.workspaceId === ws);
+        const result = receipts().validate(await rpc(c, 'life_naver_media_receipt_put', {
+          p_workspace_id: ws, p_source_id: receipt.sourceId, p_source_version_id: receipt.sourceVersionId,
+          p_capture_id: receipt.captureId, p_capture_hash: receipt.captureHash
+        }));
+        need(Object.keys(receipt).every(key => receipt[key] === result[key]));
+        await step(c, () => storage.acknowledgeNaverMediaReceipt(ws, result, { isCurrent: () => {
+          try { guard(c); return true; } catch (_) { return false; }
+        } }));
+        confirmed++;
+      }
+      return { status: 'confirmed', confirmed };
+    }
+    async function registerForVersion(ws, versionId) {
+      const c = context(ws);
+      const row = await step(c, () => storage.stageNaverMediaReceipt(ws, versionId, { isCurrent: () => {
+        try { guard(c); return true; } catch (_) { return false; }
+      } }));
+      if (!row) return { status: 'local_only' };
+      if (!row.pending) return { status: 'confirmed' };
+      await publishPending(ws);
+      const latest = await step(c, () => storage.listNaverMediaReceipts(ws));
+      return { status: latest.find(value => value.receipt.sourceVersionId === versionId)?.pending === false ? 'confirmed' : 'pending' };
+    }
+    async function restoreForVersion(ws, sourceId, versionId) {
+      const c = context(ws), local = await step(c, () => storage.readNaverCapture(ws, versionId));
+      if (local) { need(local.sourceId === sourceId); return local; }
+      const bundle = await step(c, () => storage.read(ws));
+      const source = bundle.sources.find(value => value.id === sourceId), version = bundle.sourceVersions.find(value => value.id === versionId);
+      need(source?.origin === 'naver_blog' && version?.sourceId === sourceId);
+      const raw = await rpc(c, 'life_naver_media_receipt_read', { p_workspace_id: ws, p_source_version_id: versionId });
+      if (raw === null) return null;
+      const receipt = receipts().validate(raw);
+      need(receipt.workspaceId === ws && receipt.sourceId === sourceId && receipt.sourceVersionId === versionId);
+      const snapshot = await readCapture(ws, receipt.captureId);
+      const attachment = { sourceId, sourceVersionId: versionId, capture: snapshot.capture, photos: snapshot.photos, localOnly: false };
+      receipts().checkAttachment(receipt, attachment);
+      root.HaedoLife.NaverMedia.checkTarget(bundle, attachment);
+      await step(c, () => storage.installNaverCaptureForVersion(ws, attachment, receipt, { isCurrent: () => {
+        try { guard(c); return true; } catch (_) { return false; }
+      } }));
+      return step(c, () => storage.readNaverCapture(ws, versionId));
+    }
     return Object.freeze({ connections, publicList, startInventory, queue, captures, checkCapture, retry, configureConnection, readCapture, receiveCapture,
+      publishPending, registerForVersion, restoreForVersion,
       dispose() { disposed = true; cancel(); unlisten?.(); } });
   }
   return Object.freeze({ create, fault });

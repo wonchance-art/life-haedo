@@ -1079,3 +1079,10 @@ Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와
 ## Obsidian 링크 후보와 기존 원문 계약 — 2026-10-26
 
 [remark-wiki-link](https://github.com/landakram/remark-wiki-link)는 MIT, npm 최신 2.0.1(2023-10-10 수정)로 위키 링크를 Markdown AST에 표현한다. 공식 GitHub 저장소는 보관 상태가 아니며 마지막 push는 2023-10-10이다. 앱은 이미 공식 배포본 markdown-it 15.0.3과 DOMPurify를 읽기 렌더에 사용한다(`vendor/markdown-it/manifest.json`). 이 후보를 새로 도입해도 원래 UTF-16 토큰 범위·보관함 경계·중복 제목/블록의 명시 선택·기존 Core 관계/CAS를 완성하지 못하므로 렌더러 변경이나 새 런타임 의존성은 추가하지 않는다. 기존 `scripts/lib/obsidian-vault.mjs`와 `obsidian-decisions.js`는 각각 Node 감사와 명시 결정 파일에 쓰되 실시간 후보 UI에서 private 감사 파일을 요구하지 않는다. 브라우저에서는 원문을 수정하지 않는 좁은 후보 해석기와 기존 Core 링크 저장을 사용하며, 지원하지 못한 문법·미확인 첨부는 미확인으로 남긴다. 실제 대형 보관함 사용성과 Apple 기기·외부 네이버 수집은 별도다.
+
+
+## 원문 판·사진 영수증 복구 — 2026-10-29 KST
+
+기존 원문 CAS/영속 전송 대기·NaverMedia의 SHA/픽셀 검증·Supabase private Storage를 재사용한다. 폴더·9칸 LibraryMeta v1은 정확 필드 계약이므로 사진 영수증을 섞지 않는다. CompositionSync의 전체 스냅샷 CAS 도메인도 비교했지만, 이 연결은 원문 판별 append-only 값이므로 별도 불변 registry RPC와 로컬 원자 대기/멱등 ACK가 더 작고 구기기의 metadata 덮어쓰기에도 독립적이다. ShareRemote는 공개/철회 의미라 사용하지 않는다.
+
+공식 npm의 [supabase-js](https://www.npmjs.com/package/@supabase/supabase-js)와 [릴리스](https://github.com/supabase/supabase-js/releases/tag/v2.118.0)를 확인했다. 확인 당시 최신 2.118.0/MIT이며 기존 vendor 2.117.2의 RPC·private download로 필요한 동작을 구현할 수 있어 SDK/새 동기화 라이브러리를 추가하지 않는다. 공식 [RLS 문서](https://supabase.com/docs/guides/database/postgres/row-level-security)의 소유자 정책·역할별 권한과 기존 private helper/public invoker wrapper를 따른다. 플랫폼 changelog 도메인은 실행 환경 허용 목록 밖이라 직접 확인하지 못했으며 전체 플랫폼의 변경·보안 권고가 없다고 주장하지 않는다.

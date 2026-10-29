@@ -134,7 +134,7 @@
     let accountBlogUI = null, accountBlogWorkspace = null;
     const accountBlogViews = new Map();
     let preservationUI = null, publicCoverUI = null, naverBlogUI = null, naverBlogService = null, naverBlogWorkspace = null;
-    let naverCaptureUI = null, naverCaptureService = null, naverPhotoView = null, naverCaptureTarget = null;
+    let naverCaptureUI = null, naverCaptureService = null, naverReaderService = null, naverPhotoView = null, naverCaptureTarget = null;
     let obsidianUpdateUI = null, originalAttachmentsUI = null;
     let sourceFoldersUI = null, sourceFoldersWorkspace = null, sourceFoldersMount = null, sourceFoldersUpdate = null;
     let accountMaterials = null, accountMaterialsFailure = null, accountMaterialsSequence = 0;
@@ -149,7 +149,7 @@
     const selectedVersions = new Set();
     let selectionReturn = null;
     let relatedOrigin = null;
-    let naverMediaOrigin = null;
+    let naverMediaOrigin = null, naverMediaReturn = null;
     const obsidianReaderOrigins = [];
     let compositionPanel = null, metadataCleanup = null;
     const downloadUrls = new Set();
@@ -207,7 +207,7 @@
           locator: { start: entry.start, end: entry.end } });
       }
     });
-    const editingInput = () => { inputGeneration += 1; global.HaedoMotion?.cancel(main); };
+    const editingInput = () => { naverMediaReturn = null; inputGeneration += 1; global.HaedoMotion?.cancel(main); };
     const annualPlanUI = global.HaedoLife.AnnualPlanUI?.create({ container: main, storage,
       getBundle: () => state.bundle, isCurrent: () => !disposed && state.mode === 'annual-plan' });
     const externalDiscoveryUI = global.HaedoLife.DiscoveryUI?.create({ container: main, storage,
@@ -710,7 +710,7 @@
 
     function batchKey(workspaceId, batchId) { return workspaceId + '|' + batchId; }
 
-    function invalidateBatchContext() { workspaceGeneration += 1; obsidianReaderOrigins.length = 0; naverMediaOrigin = null; sectionPositions.clear(); blogEntryScroll = null; pendingPostReturn = preservationOpenOptions = null; global.HaedoMotion?.cancel(main); stopBatchReading(); resetSearchContext(); }
+    function invalidateBatchContext() { workspaceGeneration += 1; obsidianReaderOrigins.length = 0; naverMediaOrigin = null; naverMediaReturn = null; sectionPositions.clear(); blogEntryScroll = null; pendingPostReturn = preservationOpenOptions = null; global.HaedoMotion?.cancel(main); stopBatchReading(); resetSearchContext(); }
 
     function validBatchStage(stage) {
       return typeof stage.batchId === 'string' && /^[a-f0-9-]{36}$/i.test(stage.batchId) &&
@@ -1853,6 +1853,7 @@
     }
 
     function closeFeatureMenusOutside(event) {
+      naverMediaReturn = null;
       root.querySelectorAll('.life-feature-menu[open]').forEach(menu => { if (!menu.contains(event.target)) menu.open = false; });
     }
     document.addEventListener('pointerdown', closeFeatureMenusOutside);
@@ -1883,8 +1884,35 @@
       try { if (await navigate('naver-blog') === false && naverMediaOrigin === origin) naverMediaOrigin = null; }
       catch (error) { if (naverMediaOrigin === origin) naverMediaOrigin = null; throw error; }
     }
+    function restoreNaverMediaReturn() {
+      const context = naverMediaReturn;
+      if (!context?.armed || context.frame) return;
+      const valid = () => naverMediaReturn === context && !disposed && context.navigation === navigationGeneration &&
+        context.render === renderGeneration && context.input === inputGeneration && context.origin.workspace === workspaceGeneration &&
+        context.origin.account === state.syncAccountKey && state.bundle?.workspaceId === context.origin.workspaceId &&
+        state.mode === 'source' && state.sourceId === context.origin.sourceId && state.sourceVersionId === context.origin.sourceVersionId;
+      context.frame = requestAnimationFrame(() => {
+        context.frame = null;
+        if (!valid() || Math.abs(global.scrollY - context.expectedScroll) > 2) {
+          if (naverMediaReturn === context) naverMediaReturn = null;
+          return;
+        }
+        if (!context.positioned) {
+          global.scrollTo({ top: context.origin.scrollY, behavior: 'instant' });
+          context.expectedScroll = global.scrollY; context.positioned = true;
+        }
+        // The original reader is usable before its remote photo receipt is
+        // known. Restore the originating action only after that action exists.
+        if (main.querySelector('#lifeNaverSourceMedia')?.dataset.state === 'loading') return;
+        const target = main.querySelector('#lifeNaverMediaReview') || main.querySelector('.life-reader-heading') || main.querySelector('h1,h2');
+        target?.focus({ preventScroll: true });
+        global.scrollTo({ top: context.origin.scrollY, behavior: 'instant' });
+        if (naverMediaReturn === context) naverMediaReturn = null;
+      });
+    }
     async function returnFromNaverMedia() {
       const origin = currentNaverMediaOrigin(); if (!origin) return navigate('sources');
+      const input = inputGeneration;
       naverMediaOrigin = null;
       try {
         if (await navigate('source', { sourceId: origin.sourceId, sourceVersionId: origin.sourceVersionId,
@@ -1892,14 +1920,13 @@
           origin.navigation = navigationGeneration; naverMediaOrigin = origin; return;
         }
       } catch (error) { origin.navigation = navigationGeneration; naverMediaOrigin = origin; throw error; }
-      const token = navigationGeneration, pending = mainRenderPromise;
-      await pending;
-      requestAnimationFrame(() => {
-        if (disposed || token !== navigationGeneration || origin.workspace !== workspaceGeneration || origin.account !== state.syncAccountKey ||
-            state.bundle?.workspaceId !== origin.workspaceId || state.mode !== 'source' || state.sourceId !== origin.sourceId || state.sourceVersionId !== origin.sourceVersionId) return;
-        (main.querySelector('#lifeNaverMediaReview') || main.querySelector('.life-reader-heading') || main.querySelector('h1,h2'))?.focus({ preventScroll: true });
-        global.scrollTo({ top: origin.scrollY, behavior: 'instant' });
-      });
+      if (input !== inputGeneration) return;
+      const context = { origin, navigation: navigationGeneration, render: renderGeneration, input, armed: false, frame: null };
+      naverMediaReturn = context;
+      await mainRenderPromise;
+      if (naverMediaReturn !== context || input !== inputGeneration) return;
+      context.expectedScroll = global.scrollY; context.armed = true;
+      restoreNaverMediaReturn();
     }
     async function renderNaverBlog() {
       const workspaceId = state.bundle.workspaceId, workspaceToken = workspaceGeneration;
@@ -3395,29 +3422,123 @@
         const workspaceId = state.bundle.workspaceId, generation = renderGeneration, account = state.syncAccountKey;
         const current = () => !disposed && generation === renderGeneration && account === state.syncAccountKey && state.mode === 'source' &&
           state.bundle?.workspaceId === workspaceId && state.sourceId === source.id && state.sourceVersionId === version.id;
-        const mediaTask = storage.readNaverCapture(workspaceId, version.id).then(attachment => {
-          if (!current()) return;
-          if (!attachment) {
-            mediaHost.dataset.state = 'unverified';
-            // The following reader action has a negative top margin; leave room
-            // for this explicit navigation control instead of overlapping it.
-            mediaHost.style.marginBottom = '24px';
-            mediaHost.append(node('p', '이 원문 버전의 사진 사본을 이 브라우저에서 확인하지 못했습니다. 원래 글의 사진 유무와 서버 보관 여부는 알 수 없습니다.', 'life-help'));
-            mediaHost.append(node('p', '네이버 수집 사본이나 전용 ZIP을 확인할 수 있습니다. 수집 사본을 자료에 반영하면 새 원문 버전이 만들어질 수 있습니다.', 'life-help'));
-            if (storage.isAccountScoped) {
-              const review = button('네이버 수집 사본 확인', guarded(() => openNaverMediaReview(source, version)));
-              review.id = 'lifeNaverMediaReview'; mediaHost.append(review);
-            }
-            return;
+        const mediaStatus = node('p', '', 'life-help'); mediaStatus.setAttribute('role', 'status');
+        const mediaBody = node('div'), mediaActions = node('div', null, 'life-actions');
+        const linkStatus = node('p', '', 'life-help'); linkStatus.id = 'lifeNaverMediaSyncStatus'; linkStatus.setAttribute('role', 'status'); linkStatus.hidden = true;
+        const linkActions = node('div', null, 'life-actions');
+        let working = false, linking = false, readerService = null, review = null, finishInitialRead;
+        const initialRead = new Promise(resolve => { finishInitialRead = resolve; });
+        const localReadComplete = () => { finishInitialRead?.(); finishInitialRead = null; };
+        mediaHost.append(mediaStatus, mediaBody, mediaActions, linkStatus, linkActions);
+        const service = () => {
+          if (!readerService) {
+            if (!storage.isAccountScoped || !global.HaedoLife.NaverCaptureSync?.create) return null;
+            readerService = global.HaedoLife.NaverCaptureSync.create({ storage, auth, core,
+              isCurrent: id => id === workspaceId && current() });
+            naverReaderService = readerService;
           }
-          mediaHost.append(node('p', attachment.localOnly ? '파일에서 복원한 원문·사진 사본 · 서버 보관 여부 미확인' : '검증한 수집 사진 사본 · 업로드 당시 원본 여부 미확인', 'life-help'));
-          naverPhotoView = global.HaedoLife.NaverCaptureUI.photos({ payload: attachment.capture.payload, photos: attachment.photos,
+          return readerService;
+        };
+        const restoreFocus = control => {
+          if (document.activeElement !== control) return;
+          mediaHost.tabIndex = -1; mediaHost.focus({ preventScroll: true });
+        };
+        const clearReview = () => { if (review) { restoreFocus(review); review.remove(); review = null; } };
+        const unverified = (setup = false) => {
+          mediaHost.dataset.state = 'unverified'; mediaHost.setAttribute('aria-busy', 'false');
+          mediaHost.style.marginBottom = '24px'; mediaStatus.className = 'life-help';
+          mediaStatus.textContent = '이 원문 버전의 사진 사본을 이 브라우저에서 확인하지 못했습니다. 원래 글의 사진 유무와 서버 보관 여부는 알 수 없습니다.';
+          mediaBody.replaceChildren(node('p', setup
+            ? '기기 간 사진 연결의 서버 준비를 확인하지 못했습니다. 원문은 그대로 읽을 수 있습니다.'
+            : '네이버 수집 사본이나 전용 ZIP을 확인할 수 있습니다. 수집 사본을 자료에 반영하면 새 원문 버전이 만들어질 수 있습니다.', 'life-help'));
+          retry.hidden = !storage.isAccountScoped;
+          if (storage.isAccountScoped && !review) {
+            review = button('네이버 수집 사본 확인', guarded(() => openNaverMediaReview(source, version)));
+            review.id = 'lifeNaverMediaReview'; mediaActions.append(review);
+          }
+          restoreNaverMediaReturn();
+        };
+        const linkRetry = button('다른 기기 사진 연결 다시 시도', () => { void register(); });
+        linkRetry.id = 'lifeNaverMediaSyncRetry'; linkRetry.hidden = true; linkActions.append(linkRetry);
+        async function register() {
+          if (!current() || linking) return;
+          linking = true; linkRetry.disabled = true;
+          try {
+            const manager = service();
+            if (!manager?.registerForVersion) throw Object.assign(new Error('사진 연결 준비 미확인'), { code: 'naver_schema_missing' });
+            const result = await manager.registerForVersion(workspaceId, version.id);
+            if (!current()) return;
+            if (result?.status === 'confirmed' || result?.status === 'local_only') {
+              linkStatus.dataset.state = result.status; linkStatus.hidden = true; linkStatus.textContent = '';
+              restoreFocus(linkRetry); linkRetry.hidden = true;
+            } else {
+              linkStatus.dataset.state = 'pending'; linkStatus.hidden = false;
+              linkStatus.textContent = '다른 기기 사진 연결 대기 중입니다. 이 기기의 사진은 그대로 사용할 수 있습니다.';
+              linkRetry.hidden = false;
+            }
+          } catch (_) {
+            if (!current()) return;
+            linkStatus.dataset.state = 'error'; linkStatus.hidden = false;
+            linkStatus.textContent = '다른 기기 사진 연결을 확인하지 못했습니다. 이 기기의 사진은 그대로 사용할 수 있습니다.';
+            linkRetry.hidden = false;
+          } finally {
+            linking = false;
+            if (current()) {
+              linkRetry.disabled = false;
+              mediaHost.style.marginBottom = mediaHost.dataset.state !== 'ready' || !linkRetry.hidden ? '24px' : '';
+            }
+          }
+        }
+        function showAttachment(attachment) {
+          if (!current()) return;
+          if (attachment.sourceId !== source.id || attachment.sourceVersionId !== version.id) throw new Error('사진을 연결할 원문 버전이 일치하지 않습니다.');
+          clearReview(); restoreFocus(retry); retry.hidden = true;
+          mediaHost.style.marginBottom = ''; mediaHost.dataset.state = 'ready'; mediaHost.setAttribute('aria-busy', 'false');
+          mediaStatus.className = 'life-help';
+          mediaStatus.textContent = attachment.localOnly ? '파일에서 복원한 원문·사진 사본 · 서버 보관 여부 미확인' : '검증한 수집 사진 사본 · 업로드 당시 원본 여부 미확인';
+          const view = global.HaedoLife.NaverCaptureUI.photos({ payload: attachment.capture.payload, photos: attachment.photos,
             onWritePhotos: value => writeNaverPhotos({ sourceId: source.id, sourceVersionId: version.id, indexes: Array.isArray(value) ? value : value.indexes }),
             onDownload: () => downloadNaverFile({ sourceId: source.id, sourceVersionId: version.id }) });
-          if (!current()) { naverPhotoView.dispose(); naverPhotoView = null; return; }
-          mediaHost.append(naverPhotoView.node); mediaHost.dataset.state = 'ready';
-        }).catch(() => { if (current()) { mediaHost.append(node('p', '사진 사본을 확인하지 못했습니다. 원문은 유지됩니다.', 'life-error')); mediaHost.dataset.state = 'error'; } });
-        mainRenderPromise = mediaTask;
+          if (!current()) { view.dispose(); return; }
+          naverPhotoView?.dispose(); naverPhotoView = view; mediaBody.replaceChildren(view.node);
+          // A file copy is not a server receipt. Verified local photos remain
+          // readable while the exact version's account connection is registered.
+          if (!attachment.localOnly && storage.isAccountScoped) void register();
+          restoreNaverMediaReturn();
+        }
+        const retry = button('사진 사본 다시 확인', () => { void load(); });
+        retry.id = 'lifeNaverSourceMediaRetry'; retry.hidden = true; mediaActions.append(retry);
+        async function load() {
+          if (!current() || working) return;
+          working = true; retry.disabled = true; mediaHost.dataset.state = 'loading'; mediaHost.setAttribute('aria-busy', 'true');
+          mediaStatus.className = 'life-help'; mediaStatus.textContent = '이 원문 버전의 사진 사본을 확인하고 있습니다.';
+          try {
+            let attachment = await storage.readNaverCapture(workspaceId, version.id);
+            if (!current()) return;
+            if (attachment) { showAttachment(attachment); return; }
+            // Remote photo retrieval must not delay original-text navigation,
+            // selection restoration or the reader's first usable frame.
+            localReadComplete();
+            if (storage.isAccountScoped) {
+              const manager = service();
+              if (manager?.restoreForVersion) attachment = await manager.restoreForVersion(workspaceId, source.id, version.id);
+            }
+            if (!current()) return;
+            if (attachment) showAttachment(attachment); else unverified();
+          } catch (error) {
+            if (!current()) return;
+            if (error?.code === 'naver_schema_missing') unverified(true);
+            else {
+              clearReview(); mediaHost.dataset.state = 'error'; mediaHost.setAttribute('aria-busy', 'false');
+              mediaHost.style.marginBottom = '24px';
+              mediaStatus.className = 'life-error'; mediaStatus.textContent = global.navigator?.onLine === false
+                ? '오프라인이라 사진 사본을 확인하지 못했습니다. 원문은 그대로 읽을 수 있습니다. 연결한 뒤 다시 시도해 주세요.'
+                : '사진 사본을 확인하지 못했습니다. 원문은 유지됩니다. 다시 시도해 주세요.';
+              retry.hidden = false; restoreNaverMediaReturn();
+            }
+          } finally { localReadComplete(); working = false; if (current()) retry.disabled = false; }
+        }
+        mainRenderPromise = initialRead; void load();
       }
       if (version.contentText === null || version.contentText === undefined) {
         article.append(empty('본문 미확보 · 링크만 보관했습니다. 원래 출처를 열거나 본문을 제공해 새 버전으로 보관할 수 있습니다.'));
@@ -4836,6 +4957,7 @@
     }
 
     function render() {
+      naverMediaReturn = null;
       metadataCleanup?.(); metadataCleanup = null;
       sourceFoldersMount?.dispose(); sourceFoldersMount = null; sourceFoldersUpdate = null;
       if (disposed) return;
@@ -4850,6 +4972,7 @@
       naverBlogService?.dispose(); naverBlogService = null;
       naverCaptureUI?.destroy(); naverCaptureUI = null;
       naverCaptureService?.dispose(); naverCaptureService = null;
+      naverReaderService?.dispose(); naverReaderService = null;
       naverPhotoView?.dispose(); naverPhotoView = null;
       if (blogManager && blogManagerWorkspace && !blogManagerPostId) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
       blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null; blogManagerPostId = null;
@@ -5073,7 +5196,7 @@
     function dispose() {
       if (disposed) return;
       delete document.body.dataset.writingFocus;
-      disposed = true;
+      disposed = true; naverMediaReturn = null;
       pendingPostReturn = preservationOpenOptions = null;
       libraryRefresh++; unsubscribeLibrary?.(); metadataCleanup?.(); metadataCleanup = null;
       sourceFoldersMount?.dispose(); sourceFoldersMount = null; sourceFoldersUpdate = null;
@@ -5092,6 +5215,7 @@
       naverBlogService?.dispose(); naverBlogService = null;
       naverCaptureUI?.destroy(); naverCaptureUI = null;
       naverCaptureService?.dispose(); naverCaptureService = null;
+      naverReaderService?.dispose(); naverReaderService = null;
       naverPhotoView?.dispose(); naverPhotoView = null;
       if (blogManager && blogManagerWorkspace && !blogManagerPostId) blogViews.set(blogManagerWorkspace, blogManager.getView?.());
       blogManager?.dispose(); blogManager = null; blogManagerWorkspace = null; blogManagerPostId = null;
@@ -5104,6 +5228,7 @@
       naverBlogService?.dispose(); naverBlogService = null;
       naverCaptureUI?.destroy(); naverCaptureUI = null;
       naverCaptureService?.dispose(); naverCaptureService = null;
+      naverReaderService?.dispose(); naverReaderService = null;
       naverPhotoView?.dispose(); naverPhotoView = null; naverBlogViews.clear(); naverCaptureTarget = null;
       home?.dispose();
       workbench?.dispose();

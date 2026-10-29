@@ -23,7 +23,7 @@
   }
   const copy = value => value == null ? value : structuredClone(value);
   function create({ storage, core, sync, compositionSync, libraryMetaSync, auth = root.HaedoAuth,
-    remote, originalsFactory, polling = true } = {}) {
+    remote, originalsFactory, naverMediaFactory, polling = true } = {}) {
     if (!storage?.isAccountScoped || !storage.account || !core || !sync || !compositionSync || !libraryMetaSync || !auth?.verify)
       throw fault('auth_required');
     const owner = copy(storage.account), authEpoch = auth.epoch;
@@ -34,6 +34,14 @@
     let booting = false, working = false, operation = null, timer = null, interval = null, globalError = null, followup = false;
     let defaultRow = null, catalog = new Map(), originals = null, originalsStop = null, originalsStarted = false;
     let deferredBackground = false, catalogPending = false, accountCachePresented = false;
+    let naverMedia = null;
+    function mediaReceipts() {
+      if (naverMedia) return naverMedia;
+      const factory = naverMediaFactory || root.HaedoLife?.NaverCaptureSync?.create;
+      if (!factory || !storage.listNaverMediaReceipts) return null;
+      naverMedia = factory({ storage, core, auth, isCurrent: () => !disposed });
+      return naverMedia;
+    }
     const same = value => value?.projectUrl === owner.projectUrl && value?.userId === owner.userId;
     function guard() {
       if (disposed || auth.epoch !== authEpoch || !same(auth.getAccount?.()) || auth.user?.id !== owner.userId) throw fault('request_cancelled');
@@ -108,6 +116,10 @@
         if (source.status === 'synced') {
           // Each domain still receives only after its exact source state is ready.
           const results = await Promise.allSettled([domain(compositionSync, id), domain(libraryMetaSync, id)]);
+          // Immutable media receipts follow the exact source acknowledgement.
+          // They are independent of folders and never delay the readable body.
+          try { await step(() => mediaReceipts()?.publishPending(id)); }
+          catch (_) { guard(); /* Durable pending receipt remains available for retry. */ }
           const rejected = results.find(value => value.status === 'rejected');
           if (rejected) throw rejected.reason;
         }
@@ -187,7 +199,7 @@
       if (started || disposed) return; started = true;
       stops.push(storage.subscribeAll(event => {
         if (disposed) return;
-        if (['changed', 'workbench_changed', 'source_folders_changed', 'collection_changed', 'nine_board_changed'].includes(event.type)) schedule();
+        if (['changed', 'workbench_changed', 'source_folders_changed', 'collection_changed', 'nine_board_changed', 'naver_media_changed'].includes(event.type)) schedule();
       }));
       for (const manager of [sync, compositionSync, libraryMetaSync]) stops.push(manager.subscribe(event => emit('state', event?.workspaceId)));
       root.addEventListener?.('online', lifecycle);
@@ -341,6 +353,7 @@
     }
     function dispose() {
       if (disposed) return; disposed = true;
+      naverMedia?.dispose?.(); naverMedia = null;
       root.clearTimeout(timer); root.clearInterval(interval);
       root.removeEventListener?.('online', lifecycle); root.removeEventListener?.('focus', lifecycle);
       root.document?.removeEventListener('visibilitychange', visible);
