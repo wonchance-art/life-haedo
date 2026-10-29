@@ -5,3 +5,6 @@ node_modules/
 !.env.example
 .local/
 test-results/
+
+# Python collector helper bytecode
+__pycache__/

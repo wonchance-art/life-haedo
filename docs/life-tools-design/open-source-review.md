@@ -1091,3 +1091,7 @@ Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와
 ## 네이버 운영 사전검사와 자동 재개 — 2026-10-29 KST
 
 새 크롤러나 브라우저 자동화 서비스를 추가하지 않고 기존 collector·harvest-network·extractor를 읽기 전용 CLI에서 재사용한다. 공식 npm의 [Cheerio](https://www.npmjs.com/package/cheerio)는 확인 당시1.2.0/MIT(공식메타데이터갱신2026-07-17)이며 기존worker와검수fixture의고정1.2.0을유지한다. 실제probe때만기존고정검수의존성을사용하고기본정책진단은추가패키지나외부요청없이실행된다. 전체본문·사진원본여부·예약가동을공개표본추출과혼동하지않는다. 새sync/추출엔진·쿠키수집·headless우회를도입하지않는다.
+
+## 뉴스 내부 읽기 — 공식 XML과 안전한 DOM 재사용 (2026-10-29)
+
+Readability 공식 tags/package 최신 0.6.0·Apache-2.0과 GHSA-3p6v-hrg8-8qj7의 수정 버전을 확인했다. 광범위 HTML 추출에는 유용하지만 sanitizer·권리 판단을 대신하지 않는다. Frontiers는 본문·초록·권리·그림이 분리된 공식 JATS를 제공하므로 기존 ElementTree/HTMLParser와 평문 DOM을 재사용한다. 새 Node DOM/추출기·이미지 프록시·AI API는 필요하지 않다. [공식 근거·선택 이유·유지 조건](../design-review/news-internal-reader.md#대안반대-검토)을 따른다.

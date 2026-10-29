@@ -26,7 +26,7 @@ const request = (path, mode = 'cors') => ({ url: 'https://test.invalid/life-haed
 test('complete offline shell includes every runtime module', async () => {
   const h = harness(); await h.run('install');
   assert.equal(h.state().skipped, true);
-  for (const name of ['assets/life/annual-plan.js', 'assets/life/annual-plan-ui.js', 'assets/life/annual-plan.css', 'assets/app.js', 'assets/data.js', 'assets/sync.js', 'assets/workspace.js', 'assets/app.css',
+  for (const name of ['assets/life/discovery-reader-ui.js', 'assets/life/annual-plan.js', 'assets/life/annual-plan-ui.js', 'assets/life/annual-plan.css', 'assets/app.js', 'assets/data.js', 'assets/sync.js', 'assets/workspace.js', 'assets/app.css',
     'index.html', 'login.html', 'workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'privacy.html',
     'assets/platform-config.js', 'assets/platform-auth.js', 'assets/platform-store.js', 'assets/platform-data.js',
     'assets/platform-ui.js', 'assets/platform.css', 'assets/platform-life-remote.js', 'assets/timeline-entry.js',
@@ -64,7 +64,7 @@ test('offline public home uses its exact installed document, without another-pag
   h.entries.set(request('').url,new Response('installed public home'));
   assert.equal(await (await h.run('fetch', request('', 'navigate'))).text(), 'installed public home');
 });
-for (const asset of ['assets/life/writing.js', 'assets/life/writing-ui.js', 'assets/life/storage.js', 'assets/life/icons.js', 'assets/life/workbench.js', 'assets/life/reflection-lenses.js', 'assets/life/reflection-lenses-ui.js', 'assets/life/rediscovery.js', 'assets/life/workbench-ui.js', 'assets/life/home.js', 'assets/life/workbench.css', 'assets/life/home.css']) {
+for (const asset of ['assets/life/discovery-reader-ui.js', 'assets/life/writing.js', 'assets/life/writing-ui.js', 'assets/life/storage.js', 'assets/life/icons.js', 'assets/life/workbench.js', 'assets/life/reflection-lenses.js', 'assets/life/reflection-lenses-ui.js', 'assets/life/rediscovery.js', 'assets/life/workbench-ui.js', 'assets/life/home.js', 'assets/life/workbench.css', 'assets/life/home.css']) {
   test(`a failed ${asset} installation keeps the old worker active`, async () => {
     const h = harness({ failInstallAsset: asset });
     await assert.rejects(h.run('install'));

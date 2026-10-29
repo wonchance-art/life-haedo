@@ -210,9 +210,21 @@
     const editingInput = () => { naverMediaReturn = null; inputGeneration += 1; global.HaedoMotion?.cancel(main); };
     const annualPlanUI = global.HaedoLife.AnnualPlanUI?.create({ container: main, storage,
       getBundle: () => state.bundle, isCurrent: () => !disposed && state.mode === 'annual-plan' });
+    let newsReaderBackPending = false;
     const externalDiscoveryUI = global.HaedoLife.DiscoveryUI?.create({ container: main, storage,
       getBundle: () => state.bundle, isCurrent: () => !disposed && state.mode === 'external-discovery',
       onOpenInterests: () => navigate('interests'),
+      onReaderOpen: () => {
+        if (disposed || state.mode !== 'external-discovery') return;
+        // A same-route entry makes browser Back return to the list. Article
+        // content and private account/workspace identifiers never enter history.
+        global.history.pushState({ haedoNewsReader: true }, '', global.location.href);
+      },
+      onReaderClose: ({ fromHistory }) => {
+        if (fromHistory || disposed || global.history.state?.haedoNewsReader !== true) return;
+        newsReaderBackPending = true;
+        global.history.back();
+      },
       onImport: (article, context = {}) => {
         if (disposed || state.mode !== 'external-discovery') return;
         return navigate('import', { externalImport: { article, workspaceId: state.bundle.workspaceId,
@@ -1317,7 +1329,7 @@
         const input = global.HaedoLife.Discovery.toImportInput(externalImport.article);
         newDraft();
         Object.assign(state.stage.input, input);
-        state.importMethod = 'link';
+        state.importMethod = input.text ? 'text' : 'link';
         state.editTick = 1;
         externalImportContext = { workspaceId: state.bundle.workspaceId, generation: workspaceGeneration,
           stageId: state.stage.stageId, committed: null,
@@ -1519,7 +1531,7 @@
       else url.searchParams.delete('view');
       const destination = url.pathname + url.search + url.hash;
       if (destination !== global.location.pathname + global.location.search + global.location.hash)
-        global.history[push ? 'pushState' : 'replaceState'](null, '', destination);
+        global.history[push && !(mode !== 'external-discovery' && global.history.state?.haedoNewsReader === true) ? 'pushState' : 'replaceState'](null, '', destination);
     }
 
     async function navigateSection(section, push = true) {
@@ -1530,7 +1542,10 @@
       }
       const previousSection = sectionFor(state.mode);
       const sectionRoot = section === 'news' ? 'external-discovery' : section === 'records' ? 'sources' : section;
-      if (section === previousSection && state.mode === sectionRoot) return;
+      if (section === previousSection && state.mode === sectionRoot) {
+        if (section === 'news') externalDiscoveryUI?.closeReader();
+        return;
+      }
       if (section === previousSection && state.mode === 'source' && ['sources', 'topics'].includes(state.returnContext?.mode)) return returnToResults();
       const token = ++navigationGeneration, workspace = workspaceGeneration, workspaceId = state.bundle.workspaceId;
       const account = state.syncAccountKey;
@@ -1567,6 +1582,14 @@
     const popstate = guarded(async () => {
       if (!state.bundle) return;
       let mode = routeMode();
+      if (newsReaderBackPending) {
+        newsReaderBackPending = false;
+        if (mode === 'external-discovery' && state.mode === mode) { externalDiscoveryUI?.restorePosition(); return; }
+      }
+      if (mode === 'external-discovery' && state.mode === mode && externalDiscoveryUI?.hasReader()) {
+        externalDiscoveryUI.closeReader({ fromHistory: true });
+        return;
+      }
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
       if (mode === 'sources' && lastRecordMode === 'source') mode = 'source';
       if (mode === 'import' && lastRecordMode === 'batch') mode = 'batch';

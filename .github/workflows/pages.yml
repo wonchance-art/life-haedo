@@ -442,6 +442,9 @@ jobs:
       - name: Verify explicit external discovery, exact source return and private feedback
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-external-discovery-browser.cjs
+      - name: Verify internal news reading, licensed images and exact list return
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/life-discovery-reader-browser.cjs
       - name: Verify discovery catalog freshness, worker update and offline preservation
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-external-discovery-pwa-browser.cjs
@@ -543,6 +546,7 @@ jobs:
             .local/interest-browser/
             .local/interest-pwa/
             .local/external-discovery-browser/
+            .local/discovery-reader-browser/
             .local/external-discovery-pwa/
             .local/external-discovery-pwa-v162/
             .local/discovery-automation-browser/

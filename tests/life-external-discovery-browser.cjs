@@ -4,6 +4,7 @@
  * Apple hardware or user usefulness claims.
  * BASE_URL=http://127.0.0.1:4173 node tests/life-external-discovery-browser.cjs */
 'use strict';
+const { openReader, closeReader, originalUrl, assertImportedText } = require('./helpers/discovery-reader.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -160,11 +161,11 @@ async function main() {
   try {
     await check('checked-in public catalogue smoke uses explicitly saved interests without automatic source writes', async ({ page }) => {
       await seed(page, '전시'); await page.reload(); await ready(page); const before = await state(page); await nav(page, 'news'); await page.locator('#discoveryReview').waitFor(); await idle(page); await related(page);
-      const count = await page.locator('[data-discovery-id]').count(); assert(count > 0 && count <= 5); assert.equal(new URL(page.url()).searchParams.get('section'), 'news'); assert.equal(new URL(page.url()).searchParams.get('view'), null);
+      const count = await page.locator('#discoveryList [data-discovery-id]').count(); assert(count > 0 && count <= 5); assert.equal(new URL(page.url()).searchParams.get('section'), 'news'); assert.equal(new URL(page.url()).searchParams.get('view'), null);
       if (count < 3) assert.match(await page.locator('#discoveryReview').textContent(), /관련|없|부족|적|관심/);
       await selectNewsMode(page, 'latest'); await idle(page); assert.equal(await page.locator('#discoverySort').inputValue(), 'latest');
       assert.deepEqual((await state(page)).bundle, before.bundle); assert.deepEqual((await state(page)).workbench, before.workbench); assert.deepEqual((await state(page)).feedback, before.feedback);
-      await selectNewsMode(page, 'related'); await idle(page); const first = page.locator('[data-discovery-id]').first(), articleId = await first.getAttribute('data-discovery-id'), articleUrl = await first.locator('[data-discovery-open]').getAttribute('href');
+      await selectNewsMode(page, 'related'); await idle(page); const first = page.locator('#discoveryList [data-discovery-id]').first(), articleId = await first.getAttribute('data-discovery-id'), articleUrl = await originalUrl(page, first);
       await (await revealControl(first.locator('[data-discovery-import]'))).click(); await page.locator('#lifeImportTitle').waitFor(); assert.equal(await page.locator('#lifeImportUrl').inputValue(), articleUrl); assert.deepEqual((await state(page)).bundle, before.bundle);
       await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await page.locator('.life-review').waitFor(); await page.getByRole('button', { name: '자료만 보관', exact: true }).click(); await page.locator('.life-reader').waitFor();
       const imported = await state(page); assert.equal(imported.bundle.sources.length, before.bundle.sources.length + 1); const source = imported.bundle.sources.find(x => x.url === articleUrl); assert(source); assert.equal(imported.bundle.sourceVersions.find(x => x.sourceId === source.id).contentText, null);
@@ -194,7 +195,7 @@ async function main() {
         assert(journey.suppliedArticles > 0, 'No actual public article supplied; do not replace with a synthetic success: ' + sourceId);
         if (hosts) assert.deepEqual([...Discovery.ALLOWED_SOURCES[sourceId]].sort(), [...hosts].sort());
         await interests(page, interest); await open(page);
-        journey.relatedVisibleIds = await page.locator('[data-discovery-id]').evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId));
+        journey.relatedVisibleIds = await page.locator('#discoveryList [data-discovery-id]').evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId));
         if (hosts) {
           // Explicit UI source choice/latest checks availability independently of
           // Korean/English lexical match quality. No runtime/feed rank override.
@@ -208,7 +209,7 @@ async function main() {
           journey.selection = 'Explicit source-only UI setting and latest order; availability test, not recommendation usefulness';
         } else journey.selection = 'Existing explicit interest and related order';
         const before = await state(page), actionsBefore = await actions();
-        const ids = await page.locator('[data-discovery-id]').evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId));
+        const ids = await page.locator('#discoveryList [data-discovery-id]').evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId));
         const article = publicFeed.articles.find(row => row.sourceId === sourceId && ids.includes(row.id));
         assert(article, 'The actual approved source has a visible article: ' + sourceId);
         journey.articleId = article.id; journey.url = article.url; journey.canonicalUrl = Discovery.canonicalUrl(article.url);
@@ -227,17 +228,17 @@ async function main() {
           const file = 'actual-arxiv-candidate-390.png'; await page.screenshot({ path: path.join(out, file), fullPage: false });
           report.visual.push({ width: 390, syntheticFeed: false, sourceId, file, audit });
         }
-        const original = card(page, article.id).locator('[data-discovery-open]'); assert.equal(await original.getAttribute('href'), article.url); assert.equal(await original.getAttribute('target'), '_blank'); assert.match(await original.getAttribute('rel'), /noreferrer/);
+        await openReader(page, card(page, article.id)); const original = page.locator('[data-discovery-original]'); assert.equal(await original.getAttribute('href'), article.url); assert.equal(await original.getAttribute('target'), '_blank'); assert.match(await original.getAttribute('rel'), /noreferrer/);
         await original.focus(); const navigationUrl = new URL(article.url).href, popupCount = report.popupRequests.length, popupPromise = context.waitForEvent('page'); armPublisher(navigationUrl); await original.click(); const popup = await popupPromise; await popup.waitForLoadState('domcontentloaded');
         assert.equal(popup.url(), navigationUrl); assert.equal(report.popupRequests.length, popupCount + 1); assert.equal(report.popupRequests.at(-1).url, navigationUrl); assert.equal(report.popupRequests.at(-1).method, 'GET');
         assert.deepEqual(await popup.evaluate(() => ({ referrer: document.referrer, opener: window.opener === null })), { referrer: '', opener: true }); await popup.close(); await page.bringToFront();
-        assert.deepEqual(await page.locator('[data-discovery-id]').evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId)), ids); assert.equal(await original.evaluate(node => node === document.activeElement), true); assert.deepEqual(await state(page), before); assert.deepEqual(await actions(), actionsBefore);
-        journey.explicitOriginalPopup = true; journey.popupDoesNotReactOrSave = true;
+        assert.deepEqual(await page.locator('#discoveryList [data-discovery-id]').evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId)), ids); assert.equal(await original.evaluate(node => node === document.activeElement), true); assert.deepEqual(await state(page), before); assert.deepEqual(await actions(), actionsBefore);
+        await closeReader(page); journey.explicitOriginalPopup = true; journey.popupDoesNotReactOrSave = true;
         for (const kind of ['liked', 'bookmarked']) {
           await card(page, article.id).locator('[data-discovery-reaction="' + kind + '"]').click(); await idle(page);
           await page.waitForFunction(async ({ canonicalUrl, kind }) => { const s = HaedoLife.Shell.storage, p = await s.readDiscoveryActions(await s.getActive()); return p.entries.some(entry => entry.canonicalUrl === canonicalUrl && entry[kind]); }, { canonicalUrl: journey.canonicalUrl, kind });
           assert.equal(await card(page, article.id).locator('[data-discovery-reaction="' + kind + '"]').getAttribute('aria-pressed'), 'true');
-          assert.deepEqual(await page.locator('[data-discovery-id]').evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId)), ids);
+          assert.deepEqual(await page.locator('#discoveryList [data-discovery-id]').evaluateAll(nodes => nodes.map(node => node.dataset.discoveryId)), ids);
         }
         const reacted = await actions(), saved = reacted.entries.find(entry => entry.canonicalUrl === journey.canonicalUrl);
         assert.equal(saved.liked, true); assert.equal(saved.bookmarked, true); assert.equal(reacted.personalizationEnabled, false);
@@ -256,7 +257,7 @@ async function main() {
         await page.reload(); await ready(page); await page.locator('#discoveryReview').waitFor(); await idle(page); assert.equal(await card(page, article.id).count(), 0); assert.deepEqual((await state(page)).feedback, feedbackBefore);
         for (const selector of ['#discoveryLiked', '#discoveryBookmarked']) {
           await page.locator(selector).click(); await idle(page); const retained = card(page, article.id); assert.equal(await retained.count(), 1);
-          assert.equal(await retained.locator('[data-discovery-open]').getAttribute('href'), article.url); assert.match(await retained.textContent(), /본문 미확보/);
+          assert.equal(await originalUrl(page, retained), article.url); assert.match(await retained.textContent(), /본문 미확보/);
           assert.equal(await retained.locator('[data-discovery-reaction="liked"]').getAttribute('aria-pressed'), 'true'); assert.equal(await retained.locator('[data-discovery-reaction="bookmarked"]').getAttribute('aria-pressed'), 'true');
         }
         if (sourceId === 'mit-linguistics') {
@@ -272,23 +273,23 @@ async function main() {
     }, { synthetic: false, strictPublisher: true });
     await check('synthetic related versus same-source latest, noreferrer popup return and exact list focus', async ({ page, context }) => {
       await feedRoute(context); await seed(page); await open(page); const before = await state(page);
-      assert.equal(await page.locator('[data-discovery-id]').count(), 3); assert.equal(await card(page, 'latest-other').count(), 0);
-      const order = await page.locator('[data-discovery-id]').evaluateAll(nodes => nodes.map(n => n.dataset.discoveryId)); const first = card(page, order[0]).locator('[data-discovery-open]');
+      assert.equal(await page.locator('#discoveryList [data-discovery-id]').count(), 3); assert.equal(await card(page, 'latest-other').count(), 0);
+      const order = await page.locator('#discoveryList [data-discovery-id]').evaluateAll(nodes => nodes.map(n => n.dataset.discoveryId)); await openReader(page, card(page, order[0])); const first = page.locator('[data-discovery-original]');
       assert.equal(await first.getAttribute('target'), '_blank'); assert.match(await first.getAttribute('rel'), /noreferrer/);
       await first.focus(); const popupPromise = context.waitForEvent('page'); await first.click(); const popup = await popupPromise; await popup.waitForLoadState('domcontentloaded');
       assert.deepEqual(await popup.evaluate(() => ({ referrer: document.referrer, opener: window.opener === null })), { referrer: '', opener: true }); await popup.close(); await page.bringToFront();
-      assert.deepEqual(await page.locator('[data-discovery-id]').evaluateAll(nodes => nodes.map(n => n.dataset.discoveryId)), order); assert.equal(await first.evaluate(el => document.activeElement === el), true);
-      assert.deepEqual(await state(page), before); await selectNewsMode(page, 'latest'); await idle(page); assert.equal(await page.locator('[data-discovery-id]').first().getAttribute('data-discovery-id'), 'latest-other');
+      assert.deepEqual(await page.locator('#discoveryList [data-discovery-id]').evaluateAll(nodes => nodes.map(n => n.dataset.discoveryId)), order); assert.equal(await first.evaluate(el => document.activeElement === el), true);
+      assert.deepEqual(await state(page), before); await closeReader(page); await selectNewsMode(page, 'latest'); await idle(page); assert.equal(await page.locator('#discoveryList [data-discovery-id]').first().getAttribute('data-discovery-id'), 'latest-other');
     });
-    for (const [id, coverage] of [['related-link', 'link_only'], ['related-summary', 'summary'], ['related-full', 'full_text']]) await check('synthetic catalogue ' + coverage + ' stays honest while explicit link import excludes saved URL', async ({ page, context }) => {
+    for (const [id, coverage] of [['related-link', 'link_only'], ['related-summary', 'summary'], ['related-full', 'full_text']]) await check('synthetic catalogue ' + coverage + ' preserves acquired content through explicit import and excludes saved URL', async ({ page, context }) => {
       const feed = fixture(); await feedRoute(context, feed); await seed(page); await open(page); const before = await state(page), article = feed.articles.find(x => x.id === id);
-      await (await revealControl(card(page, id).locator('[data-discovery-import]'))).click(); await page.locator('#lifeImportTitle').waitFor(); assert.equal(await page.locator('#lifeImportTitle').inputValue(), article.title); assert.equal(await page.locator('#lifeImportUrl').inputValue(), article.url); assert.equal(await page.locator('#lifeImportText').inputValue(), ''); assert.deepEqual((await state(page)).bundle, before.bundle); await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await page.locator('.life-review').waitFor();
-      const reviewText = await page.locator('.life-review').textContent(); assert.match(reviewText, /본문 미확보|링크/);
+      await (await revealControl(card(page, id).locator('[data-discovery-import]'))).click(); await page.locator('#lifeImportTitle').waitFor(); assert.equal(await page.locator('#lifeImportTitle').inputValue(), article.title); assert.equal(await page.locator('#lifeImportUrl').inputValue(), article.url); assertImportedText(await page.locator('#lifeImportText').inputValue(), article, { textarea: true }); assert.deepEqual((await state(page)).bundle, before.bundle); await page.getByRole('button', { name: '원문·출처 확인', exact: true }).click(); await page.locator('.life-review').waitFor();
+      const reviewText = await page.locator('.life-review').textContent(); assert.match(reviewText, coverage === 'link_only' ? /본문 미확보|링크/ : coverage === 'summary' ? /선택한 본문 일부|요약/ : /전체|전문|본문/);
       await page.getByRole('button', { name: '자료만 보관', exact: true }).click(); await page.locator('#lifeSourceText,.life-reader').first().waitFor();
       const after = await state(page); assert.equal(after.bundle.sources.length, before.bundle.sources.length + 1);
       const source = after.bundle.sources.find(x => x.url === article.url); assert(source); const version = after.bundle.sourceVersions.find(x => x.sourceId === source.id);
-      assert.equal(version.originalAuthor.relation, article.author ? 'other' : 'unknown'); assert.equal(version.coverage.status, 'link_only');
-      assert.equal(version.contentText, null);
+      assert.equal(version.originalAuthor.relation, article.author ? 'other' : 'unknown'); assert.equal(version.coverage.status, coverage === 'summary' ? 'partial' : coverage);
+      assertImportedText(version.contentText, article);
       assert.deepEqual(after.workbench, before.workbench); assert.deepEqual(after.interest, before.interest); assert.deepEqual(after.feedback, before.feedback);
       await returnToDiscovery(page); assert.equal(await card(page, id).count(), 0); assert.equal((await state(page)).bundle.sources.length, after.bundle.sources.length);
     });
@@ -330,13 +331,13 @@ async function main() {
       const saved = (await state(second)).feedback; assert.equal(saved.feedback.length, 2); assert.deepEqual(new Set(saved.feedback.map(x => x.kind)), new Set(['not_relevant', 'already_read'])); await second.close();
     });
     await check('synthetic empty catalogue, no relevant matches and failed refresh with stale recovery stay distinct', async ({ page, context, expectFeedFailure }) => {
-      const feed = await feedRoute(context, fixture({ empty: true })); await seed(page); await open(page); assert.equal(await page.locator('[data-discovery-id]').count(), 0); assert.match(await page.locator('#discoveryReview').textContent(), /공개|목록|없/);
-      feed.value = fixture(); await (await revealControl(page.locator('#discoveryRefresh'))).click(); await idle(page); assert.equal(await page.locator('[data-discovery-id]').count(), 3);
-      await interests(page, '합성목록에없는매우특이한관심'); await open(page); assert.equal(await page.locator('[data-discovery-id]').count(), 0); assert.match(await page.locator('#discoveryList').textContent(), /주제와 맞는 글이 없습니다\./); await selectNewsMode(page, 'latest'); await idle(page); assert.equal(await page.locator('[data-discovery-id]').count(), 5);
+      const feed = await feedRoute(context, fixture({ empty: true })); await seed(page); await open(page); assert.equal(await page.locator('#discoveryList [data-discovery-id]').count(), 0); assert.match(await page.locator('#discoveryReview').textContent(), /공개|목록|없/);
+      feed.value = fixture(); await (await revealControl(page.locator('#discoveryRefresh'))).click(); await idle(page); assert.equal(await page.locator('#discoveryList [data-discovery-id]').count(), 3);
+      await interests(page, '합성목록에없는매우특이한관심'); await open(page); assert.equal(await page.locator('#discoveryList [data-discovery-id]').count(), 0); assert.match(await page.locator('#discoveryList').textContent(), /주제와 맞는 글이 없습니다\./); await selectNewsMode(page, 'latest'); await idle(page); assert.equal(await page.locator('#discoveryList [data-discovery-id]').count(), 5);
       await interests(page); await open(page);
       feed.value = fixture({ stale: true }); await (await revealControl(page.locator('#discoveryRefresh'))).click(); await idle(page); assert.match(await page.locator('#discoveryReview').textContent(), /이전|갱신|실패/);
-      expectFeedFailure(true); feed.fail = true; await (await revealControl(page.locator('#discoveryRefresh'))).click(); await idle(page); assert.match(await page.locator('#discoveryReview').textContent(), /이전|실패|확인/); assert.equal(await page.locator('[data-discovery-id]').count(), 3);
-      await page.reload(); await ready(page); await page.locator('#discoveryReview').waitFor(); await idle(page); assert.equal(await page.locator('[data-discovery-id]').count(), 0); assert.match(await page.locator('#discoveryError').textContent(), /불러오지 못|확인|실패/);
+      expectFeedFailure(true); feed.fail = true; await (await revealControl(page.locator('#discoveryRefresh'))).click(); await idle(page); assert.match(await page.locator('#discoveryReview').textContent(), /이전|실패|확인/); assert.equal(await page.locator('#discoveryList [data-discovery-id]').count(), 3);
+      await page.reload(); await ready(page); await page.locator('#discoveryReview').waitFor(); await idle(page); assert.equal(await page.locator('#discoveryList [data-discovery-id]').count(), 0); assert.match(await page.locator('#discoveryError').textContent(), /불러오지 못|확인|실패/);
     });
     await check('synthetic delayed feed response cannot restore prior workspace interests or list', async ({ page, context }) => {
       const feed = await feedRoute(context), data = await seed(page);
@@ -345,7 +346,7 @@ async function main() {
       try {
         await nav(page, 'manage'); await page.locator('#lifeCurrentWorkspace').click(); await page.locator('#lifeWorkspace').selectOption(otherId); await page.waitForFunction(id => HaedoLife.Shell.storage.getActive().then(value => value === id), otherId);
       } finally { feed.release(); }
-      await returnToDiscovery(page); assert.equal((await state(page)).bundle.workspaceId, otherId); assert.deepEqual((await state(page)).interest.manual, []); assert.equal(await page.locator('[data-discovery-id]').count(), 0);
+      await returnToDiscovery(page); assert.equal((await state(page)).bundle.workspaceId, otherId); assert.deepEqual((await state(page)).interest.manual, []); assert.equal(await page.locator('#discoveryList [data-discovery-id]').count(), 0);
       assert.deepEqual(await page.evaluate(async id => HaedoLife.Shell.storage.read(id), data.workspaceId), before.bundle);
     });
     await check('synthetic late feed response after actual logout cannot reveal prior account feedback', async ({ page, context, server, device }) => {

@@ -1,19 +1,20 @@
 #!/usr/bin/env node
 'use strict';
 
-// Public metadata only. Refresh an isolated copy, then install it in a prepared
+// Reviewed public metadata and licensed Frontiers content. Refresh an isolated copy, then install it in a prepared
 // Pages artifact. Never commit the catalog or read personal settings/documents.
 const fs = require('node:fs');
 const path = require('node:path');
 const https = require('node:https');
 const crypto = require('node:crypto');
+const { isDeepStrictEqual } = require('node:util');
 const { spawnSync } = require('node:child_process');
 const Discovery = require('../assets/life/discovery.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const PUBLISHED_URL = 'https://wonchance-art.github.io/life-haedo/assets/life/discovery-feed.json';
 const PUBLISHED_SW_URL = 'https://wonchance-art.github.io/life-haedo/sw.js';
-const MAX_BYTES = 2 * 1024 * 1024;
+const MAX_BYTES = Discovery.LIMITS.feedBytes;
 const MAX_SW_BYTES = 256 * 1024;
 // Reviewed default-branch legacy workers: version numbers advanced on another
 // branch before this catalog existed. Only these exact bytes authorize bootstrap.
@@ -89,16 +90,28 @@ function validateCatalog(bytes, now = Date.now(), previousSeed = false) {
   assert(checked.validation.invalid.length === 0 && checked.articles.length === raw.articles.length && raw.articles.length > 0,
     'Public catalog contains rejected or missing articles.');
   for (const source of raw.sources) {
-    assert(source.rights.mode === 'metadata_only', 'Only reviewed public metadata is allowed.');
+    assert(source.rights.mode === 'metadata_only' || source.id === 'frontiers-psychology' &&
+      source.rights.mode === 'full_text_allowed' && source.rights.url === 'https://www.frontiersin.org/journals/psychology/about#copyright-statement',
+    'Only reviewed source permissions are allowed.');
     for (const field of ['lastSuccessAt', 'lastAttemptAt']) {
       assert(source[field] === null || Date.parse(source[field]) <= now, 'Public source receipt is in the future.');
     }
     assert(source.fetchedAt === undefined || source.fetchedAt === source.lastSuccessAt, 'Source fetch/success receipt mismatch.');
   }
   for (const article of raw.articles) {
-    assert(article.coverage === 'link_only' && article.rights.mode === 'metadata_only' && article.summary === '' &&
-      !Object.hasOwn(article, 'bodyText') && !Object.hasOwn(article, 'description') && !Object.hasOwn(article, 'content'),
-    'Article content exceeds the reviewed metadata scope.');
+    const licensed = article.sourceId === 'frontiers-psychology' &&
+      article.rights.url === 'https://creativecommons.org/licenses/by/4.0/' &&
+      ((article.coverage === 'summary' && ['summary_allowed', 'full_text_allowed'].includes(article.rights.mode)) ||
+       (article.coverage === 'full_text' && article.rights.mode === 'full_text_allowed'));
+    assert(!Object.hasOwn(article, 'description') && !Object.hasOwn(article, 'content'), 'Unreviewed article markup.');
+    assert(licensed || article.coverage === 'link_only' && article.rights.mode === 'metadata_only' && article.summary === '' &&
+      !Object.hasOwn(article, 'bodyText') && !Object.hasOwn(article, 'images'),
+    'Article content exceeds the reviewed source scope.');
+    if (Object.hasOwn(article, 'images')) {
+      const normalized = checked.articles.find(value => value.id === article.id);
+      assert(licensed && article.coverage === 'full_text' && Array.isArray(article.images) &&
+        isDeepStrictEqual(article.images, normalized.images || []), 'Article images exceed the reviewed scope or byte budget.');
+    }
     assert(Date.parse(article.fetchedAt) <= now, 'Article fetch receipt is in the future.');
   }
   // Publisher dates marked future remain metadata; they are not fetch receipts

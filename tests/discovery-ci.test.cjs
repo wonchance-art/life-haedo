@@ -389,3 +389,24 @@ test('Pages schedule preserves all required checks and least-privilege publicati
   assert.match(build, /contents: read\n      pages: read/); assert.doesNotMatch(build, /id-token: write|continue-on-error/);
   assert.match(workflow.slice(workflow.indexOf('\n  deploy:')), /pages: write\n      id-token: write/);
 });
+
+test('licensed Frontiers content passes artifact scope without widening other sources', () => {
+  const feed = seed(), source = feed.sources.find(row => row.id === 'frontiers-psychology');
+  source.rights = { mode: 'full_text_allowed', label: 'CC BY 4.0', url: 'https://www.frontiersin.org/journals/psychology/about#copyright-statement' };
+  const article = feed.articles.find(row => row.sourceId === source.id);
+  Object.assign(article, { coverage: 'full_text', summary: '공식 초록', bodyText: '확인한 원문 본문', rights: { ...source.rights, url: 'https://creativecommons.org/licenses/by/4.0/' } });
+  assert.equal(CI.validateCatalog(bytes(feed), stamp()).articles.find(row => row.id === article.id).bodyText, article.bodyText);
+  const summary = structuredClone(feed), summaryArticle = summary.articles.find(row => row.id === article.id);
+  summaryArticle.coverage = 'summary'; summaryArticle.rights.mode = 'summary_allowed'; delete summaryArticle.bodyText;
+  assert.doesNotThrow(() => CI.validateCatalog(bytes(summary), stamp()));
+  summaryArticle.rights.mode = 'full_text_allowed';
+  assert.doesNotThrow(() => CI.validateCatalog(bytes(summary), stamp()));
+  const foreign = structuredClone(feed), other = foreign.articles.find(row => row.sourceId !== source.id);
+  Object.assign(other, { coverage: 'full_text', summary: '', bodyText: article.bodyText, rights: { ...source.rights, url: 'https://creativecommons.org/licenses/by/4.0/' } });
+  assert.throws(() => CI.validateCatalog(bytes(foreign), stamp()), /reviewed source scope/);
+  const malformed = structuredClone(feed);
+  malformed.articles.find(row => row.id === article.id).images = [{ mimeType: 'image/svg+xml', dataBase64: 'PHN2Zz4=' }];
+  assert.throws(() => CI.validateCatalog(bytes(malformed), stamp()), /images exceed/);
+  article.rights.url = 'https://example.org/unverified-permission';
+  assert.throws(() => CI.validateCatalog(bytes(feed), stamp()), /reviewed source scope/);
+});

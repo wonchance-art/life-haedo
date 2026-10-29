@@ -133,6 +133,22 @@ test('normalized ranking digest and frozen date/source/evidence survive later ch
   const captured = await create(body); assert(!JSON.stringify(captured).includes(marker));
   assert(captured.session.articles.every(row => row.snapshot.coverage === 'link_only'));
 });
+test('licensed live pictures enter comparison input but never durable reaction or reading snapshots', async () => {
+  const input = fixture(), png = Buffer.alloc(33); Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(png);
+  png.writeUInt32BE(13, 8); png.write('IHDR', 12); png.writeUInt32BE(1, 16); png.writeUInt32BE(1, 20);
+  const image = { mimeType: 'image/png', dataBase64: png.toString('base64'),
+    alt: 'PUBLIC_IMAGE_METADATA_NOT_RETAINED', caption: '', credit: '합성 출처',
+    license: { label: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/' }, sourceUrl: 'https://d2.naver.com/synthetic-image.png' };
+  input.feed.articles[0].images = [image];
+  input.feed = D.validateFeed(input.feed, { now: NOW });
+  assert.equal(input.feed.articles[0].images.length, 1);
+  const captured = A.capture(input.feed.articles[0], input.feed.sources[0]); assert(!Object.hasOwn(captured, 'images'));
+  const result = await create(input); assert(R.validate(result));
+  assert(!JSON.stringify(result).includes(image.alt)); assert(!JSON.stringify(result).includes(image.dataBase64));
+  assert(result.session.articles.every(row => !Object.hasOwn(row.snapshot, 'images')));
+  const forged = clone(result); forged.session.articles[0].snapshot.images = [image];
+  assert.throws(() => R.validate(forged), { code: 'discovery_reading_invalid' });
+});
 test('explicit judgments and preference update only answers; unread/unavailable cannot become helpful evidence', async () => {
   const initial = await create(), url = initial.session.reviews[0].canonicalUrl, before = clone(initial);
   for (const reading of [null, 'not_read', 'unavailable']) {

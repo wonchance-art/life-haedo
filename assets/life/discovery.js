@@ -41,7 +41,8 @@
     ['책 읽기', ['reading comprehension']],
     ['집중력', ['sustained attention', 'mind wandering', 'minds wander']]
   ].map(([label, values]) => [label, Object.freeze(values)])));
-  const LIMITS = Object.freeze({ articles: 500, sources: 20, manual: 40, matches: 5, feedBytes: 4 * 1024 * 1024 });
+  const LIMITS = Object.freeze({ articles: 500, sources: 20, manual: 40, matches: 5, feedBytes: 4 * 1024 * 1024,
+    imagesPerArticle: 2, imageBytes: 256 * 1024, feedImageBytes: 768 * 1024, imageSide: 4096, imagePixels: 16 * 1024 * 1024 });
   const CONTENT_LANGUAGE_CODES = Object.freeze(['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'und', 'mul', 'other']);
   const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
   const validId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
@@ -115,6 +116,72 @@
     check(value.url === null || publicUrl(value.url));
     return { label: value.label, url: value.url, mode: value.mode };
   }
+  // Read raster headers before any browser decode. The existing photo decoder
+  // is asynchronous; feed validation must stay synchronous and perform no I/O.
+  function imageDimensions(bytes, mimeType) {
+    const byte = offset => bytes.charCodeAt(offset);
+    const be = (offset, size) => { let value = 0; for (let i = 0; i < size; i++) value = value * 256 + byte(offset + i); return value; };
+    const le = (offset, size) => { let value = 0; for (let i = size - 1; i >= 0; i--) value = value * 256 + byte(offset + i); return value; };
+    if (mimeType === 'image/png' && bytes.length >= 33 && bytes.startsWith('\x89PNG\r\n\x1a\n') &&
+        be(8, 4) === 13 && bytes.slice(12, 16) === 'IHDR') return [be(16, 4), be(20, 4)];
+    if (mimeType === 'image/webp' && bytes.length >= 20 && bytes.startsWith('RIFF') && bytes.slice(8, 12) === 'WEBP' && le(4, 4) + 8 === bytes.length) {
+      const chunk = bytes.slice(12, 16), size = le(16, 4);
+      if (size > bytes.length - 20) return null;
+      if (chunk === 'VP8X' && size >= 10 && bytes.length >= 30) return [le(24, 3) + 1, le(27, 3) + 1];
+      if (chunk === 'VP8 ' && size >= 10 && bytes.length >= 30 && bytes.slice(23, 26) === '\x9d\x01\x2a') return [le(26, 2) & 0x3fff, le(28, 2) & 0x3fff];
+      if (chunk === 'VP8L' && size >= 5 && bytes.length >= 25 && byte(20) === 0x2f) {
+        const bits = le(21, 4); return [(bits & 0x3fff) + 1, ((bits >>> 14) & 0x3fff) + 1];
+      }
+    }
+    if (mimeType === 'image/jpeg' && bytes.startsWith('\xff\xd8\xff') && bytes.endsWith('\xff\xd9')) {
+      let cursor = 2;
+      while (cursor + 4 <= bytes.length) {
+        if (byte(cursor) !== 0xff) break;
+        while (cursor < bytes.length && byte(cursor) === 0xff) cursor++;
+        if (cursor >= bytes.length) break;
+        const marker = byte(cursor++);
+        if (marker === 0x01 || marker === 0xd8 || marker >= 0xd0 && marker <= 0xd7) continue;
+        if (marker === 0xd9 || marker === 0xda || cursor + 2 > bytes.length) break;
+        const length = be(cursor, 2);
+        if (length < 2 || cursor + length > bytes.length) break;
+        if ([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf].includes(marker) && length >= 8) return [be(cursor + 5, 2), be(cursor + 3, 2)];
+        cursor += length;
+      }
+    }
+    return null;
+  }
+  // Images travel with the bounded public feed. No publisher URL becomes an
+  // image request, and optional image failures never discard a readable body.
+  function images(values, hosts, paragraphText, budget) {
+    if (!Array.isArray(values) || values.length > LIMITS.imagesPerArticle) return [];
+    const result = [], required = ['mimeType', 'dataBase64', 'alt', 'caption', 'credit', 'license', 'sourceUrl'];
+    for (const value of values) {
+      try {
+        check(plain(value) && required.every(key => Object.hasOwn(value, key)) && Object.keys(value).every(key => [...required, 'afterParagraph'].includes(key)));
+        check(['image/png', 'image/jpeg', 'image/webp'].includes(value.mimeType));
+        check(text(value.alt, 1000, true) && text(value.caption, 4000, true) && text(value.credit, 1000));
+        check(plain(value.license) && Object.keys(value.license).length === 2 && text(value.license.label, 200) &&
+          ['https://creativecommons.org/licenses/by/4.0/', 'https://creativecommons.org/licenses/by/4.0'].includes(value.license.url));
+        const sourceUrl = canonicalUrl(value.sourceUrl);
+        check(sourceUrl === value.sourceUrl && publicUrl(sourceUrl, hosts));
+        if (Object.hasOwn(value, 'afterParagraph')) check(Number.isInteger(value.afterParagraph) && value.afterParagraph >= 0 &&
+          paragraphText.trim() && value.afterParagraph < paragraphText.split(/\n[ \t]*\n/).length);
+        const encoded = value.dataBase64;
+        check(typeof encoded === 'string' && encoded.length > 0 && encoded.length <= Math.ceil(LIMITS.imageBytes / 3) * 4 &&
+          /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded));
+        const bytes = root.atob(encoded);
+        check(bytes.length <= LIMITS.imageBytes && root.btoa(bytes) === encoded);
+        const size = imageDimensions(bytes, value.mimeType);
+        check(size && size.every(value => Number.isInteger(value) && value > 0 && value <= LIMITS.imageSide) &&
+          size[0] * size[1] <= LIMITS.imagePixels && budget.bytes + bytes.length <= LIMITS.feedImageBytes);
+        budget.bytes += bytes.length;
+        result.push({ mimeType: value.mimeType, dataBase64: encoded, alt: value.alt, caption: value.caption, credit: value.credit,
+          license: { label: value.license.label, url: 'https://creativecommons.org/licenses/by/4.0/' }, sourceUrl,
+          ...(Object.hasOwn(value, 'afterParagraph') ? { afterParagraph: value.afterParagraph } : {}) });
+      } catch (_) { /* Keep valid public text when an optional picture is unusable. */ }
+    }
+    return result;
+  }
   function validateFeed(input, options = {}) {
     check(plain(input) && input.schemaVersion === 1 && iso(input.generatedAt) && Array.isArray(input.sources) && input.sources.length <= LIMITS.sources && Array.isArray(input.articles) && input.articles.length <= LIMITS.articles);
     check(new TextEncoder().encode(JSON.stringify(input)).length <= LIMITS.feedBytes);
@@ -138,7 +205,7 @@
         rights: rights(source.rights), status: source.status, lastSuccessAt, lastAttemptAt, error: source.error, freshnessMaxAgeDays,
         stale: source.stale || source.status !== 'ok' || !lastSuccessAt || now - Date.parse(lastSuccessAt) > freshnessMaxAgeDays * 86400000 });
     }
-    const bySource = new Map(sources.map(source => [source.id, source])), articleIds = new Set(), articles = [], invalid = [];
+    const bySource = new Map(sources.map(source => [source.id, source])), articleIds = new Set(), articles = [], invalid = [], imageBudget = { bytes: 0 };
     if (plain(input.validation) && Array.isArray(input.validation.invalid)) for (const row of input.validation.invalid.slice(0, LIMITS.articles)) if (plain(row) && row.reason === 'invalid_article' && (row.id === null || validId(row.id))) invalid.push({ id: row.id, reason: row.reason });
     for (const article of input.articles) {
       try {
@@ -160,9 +227,10 @@
         const updatedAt = article.updatedAt === undefined || article.updatedAt === null ? null : iso(article.updatedAt);
         const usablePublished = dateStatus === 'valid' ? publishedAt : null, usableUpdated = updatedAt && Date.parse(updatedAt) <= now + 300000 ? updatedAt : null;
         const sortDate = usablePublished || usableUpdated, dateBasis = usablePublished ? 'published' : usableUpdated ? 'updated' : 'unknown';
+        const pictures = images(article.images, allowed[article.sourceId], bodyText || article.summary, imageBudget);
         articleIds.add(article.id); articles.push({ id: article.id, sourceId: article.sourceId, url: article.url, canonicalUrl: canonicalUrl(article.url), title: article.title,
           publishedAt, dateStatus, updatedAt, dateBasis, sortDate, author: article.author, language: article.language, summary: article.summary,
-          ...(bodyText ? { bodyText } : {}), coverage: article.coverage, rights: permission, fetchedAt, tags: [...new Set(tags)] });
+          ...(bodyText ? { bodyText } : {}), ...(pictures.length ? { images: pictures } : {}), coverage: article.coverage, rights: permission, fetchedAt, tags: [...new Set(tags)] });
       } catch (cause) { if (cause.code !== 'discovery_feed_invalid') throw cause; invalid.push({ id: validId(article?.id) ? article.id : null, reason: 'invalid_article' }); }
     }
     return { schemaVersion: 1, generatedAt: iso(input.generatedAt), stale: sources.some(source => source.stale) || now - Date.parse(input.generatedAt) > 7 * 86400000, sources, articles, validation: { invalid, suppliedArticles: input.articles.length } };
@@ -268,9 +336,29 @@
   function rank(input, options = {}) { return rankPool(candidatePool(input, options)); }
   function toImportInput(article) {
     check(plain(article) && text(article.title, 500) && publicUrl(article.url) && (article.author === null || article.author === undefined || text(article.author, 200)));
-    return { origin: 'other', title: article.title, url: article.url, text: '', format: 'text/plain', author: article.author || '',
+    let content = '', status = 'link_only';
+    if (article.coverage === 'full_text') {
+      check(rights(article.rights).mode === 'full_text_allowed' && text(article.bodyText, 200000));
+      content = article.bodyText; status = 'full_text';
+    } else if (article.coverage === 'summary') {
+      check(rights(article.rights).mode !== 'metadata_only' && text(article.summary, 50000));
+      content = article.summary; status = 'partial';
+    }
+    // Keep the supplied text at offset zero. Attribution is an explicit Haedo
+    // appendix, so saved/exported copies retain the license without new schema.
+    if (content) {
+      const line = value => value.replace(/[\r\n]+/g, ' ');
+      content += '\n\n[해도 출처 정보]\n' +
+        '아래는 해도가 덧붙인 출처 정보이며 원문 본문에 포함되지 않습니다.\n' +
+        '제목: ' + line(article.title) + '\n원저자: ' + line(article.author || '미확인') +
+        '\n원문 URL: ' + article.url + '\n권리: ' + line(article.rights.label) +
+        '\n권리 URL: ' + (article.rights.url || '미제공') +
+        '\n보관 범위: ' + (status === 'full_text' ? '제공된 본문 전체' : '공개 요약 · 원문 전체 미확보') +
+        '\n변경 사항: 서식을 평문으로 단순화했습니다. 사진·영상은 보관하지 않았습니다.';
+    }
+    return { origin: 'other', title: article.title, url: article.url, text: content, format: 'text/plain', author: article.author || '',
       authorRelation: article.author ? 'other' : 'unknown', originalCreatedAt: iso(article.publishedAt) || '',
-      coverage: { status: 'link_only', omissions: ['원문 전체 미확보', '사진·영상 미보관'] } };
+      coverage: { status, omissions: [...(status === 'full_text' ? [] : ['원문 전체 미확보']), '사진·영상 미보관'] } };
   }
   function create(options = {}) {
     check(plain(options)); let epoch = 0, disposed = false, active = null, prior = null, priorFetchedAt = null;

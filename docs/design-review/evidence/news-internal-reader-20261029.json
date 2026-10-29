@@ -1,0 +1,97 @@
+{
+  "checkedAt": "2026-10-29",
+  "baseCommit": "55a74ae47e400261b6f3469f9bc3f4a8f76d7898",
+  "scope": "Local implementation and anonymous browser verification; actual public Frontiers collection. No production deployment, private user data or Apple device verification.",
+  "catalog": {
+    "generatedAt": "2026-10-29T08:10:44Z",
+    "sha256": "25539a6f8788526cc7d0ee55343260e0c7b4d29f55c39d4f6a6e427d71111f52",
+    "bytes": 1441512,
+    "sources": 9,
+    "articles": 120,
+    "coverage": {
+      "full_text": 3,
+      "summary": 16,
+      "link_only": 101
+    },
+    "images": 6
+  },
+  "verification": {
+    "static": "22 HTML pages, 175 JavaScript blocks/files, 729 local references and PWA shell",
+    "unitTests": 1609,
+    "internalReaderBrowserGroups": 4,
+    "newsBrowserGroups": 9,
+    "externalDiscoveryBrowserGroups": 19,
+    "focusedReadingComparison": true,
+    "focusedLanguages": 8,
+    "focusedRetainedReactions": true,
+    "pwa": {
+      "from": "v166",
+      "to": "v167",
+      "checks": 9
+    },
+    "viewports": [
+      1440,
+      820,
+      390
+    ],
+    "unexpectedConsoleErrors": 0,
+    "unexpectedPageErrors": 0,
+    "automaticPublisherBrowserRequests": 0
+  },
+  "actualArticle": {
+    "id": "article-frontiers-psychology-ad47f953217134966c21",
+    "title": "Supporting creative agency: metacognitive control and trust in generative AI art education",
+    "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1997631",
+    "author": "Renhao Zhu",
+    "coverage": "full_text",
+    "bodyCharacters": 88579,
+    "bodyUTF8Bytes": 89098,
+    "bodySHA256": "790048875590874945a746bafeba3c21a833dd43c465d56d8e225d459944b6cf",
+    "rights": {
+      "mode": "full_text_allowed",
+      "url": "https://creativecommons.org/licenses/by/4.0/",
+      "label": "CC BY 4.0 · Renhao Zhu · Frontiers · 원문 XML의 본문·초록·참고문헌을 텍스트로 표시(서식 단순화)"
+    }
+  },
+  "actualImages": [
+    {
+      "index": 0,
+      "sourceUrl": "https://www.frontiersin.org/files/Articles/1997631/xml-images/fpsyg-17-1997631-g001.webp",
+      "mimeType": "image/webp",
+      "bytes": 56958,
+      "sha256": "ea2842e313d266ccdbcf8ed4cdc44b927a68837a133a3f9b2412d5f362bba551",
+      "src": "blob:",
+      "width": 1535,
+      "height": 995,
+      "alphaPixels": 1527325,
+      "alt": "Figure 1. Hypothesized research model."
+    },
+    {
+      "index": 1,
+      "sourceUrl": "https://www.frontiersin.org/files/Articles/1997631/xml-images/fpsyg-17-1997631-g002.webp",
+      "mimeType": "image/webp",
+      "bytes": 149788,
+      "sha256": "532fe6dd611b782f89172e39d7dfc26019ea24cfecf6764f3bb576be031f195f",
+      "src": "blob:",
+      "width": 1535,
+      "height": 1257,
+      "alphaPixels": 1929495,
+      "alt": "Figure 2. Structural model of impact pathways. *p < 0.05, **p < 0.01, ***p < 0.001."
+    }
+  ],
+  "fixedRegressions": [
+    "Explicit close/browser Back scroll restoration race",
+    "News tab and outgoing route history return",
+    "Source/article permission mismatches in artifact installation",
+    "Prior licensed text/image preservation and stale receipts",
+    "Figure rights, dimensions and image scope validation",
+    "Attribution preserved in imported reading copies"
+  ],
+  "limitations": [
+    "Only reviewed Frontiers articles receive automatic text/figures; the other eight sources remain metadata-only.",
+    "Images in public feed are not privately archived as original files by the material importer.",
+    "Reading-copy hash includes its explicit Haedo attribution footer.",
+    "Small diagram labels may require browser zoom on narrow screens.",
+    "No actual user reading-utility assessment, production account mutation or Apple-device test."
+  ]
+}
