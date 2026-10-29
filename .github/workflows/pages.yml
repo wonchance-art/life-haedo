@@ -39,6 +39,8 @@ jobs:
         run: npm ci --prefix tests/sql-ci --ignore-scripts --no-audit --no-fund
       - name: Verify account library ownership, default races and immutable original manifests
         run: node tests/run-account-library-postgres.cjs
+      - name: Verify immutable exact Naver photo receipts and owner boundaries
+        run: node tests/run-naver-media-postgres.cjs
       - name: Retain anonymous Naver database checks
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -48,6 +50,8 @@ jobs:
             .local/naver-backend/
             .local/naver-capture-backend/
             .local/account-library-sql/
+            .local/naver-media-sql/
+            .local/naver-media-postgres/
           if-no-files-found: ignore
   browser_suites:
     runs-on: ubuntu-24.04
@@ -426,6 +430,9 @@ jobs:
       - name: Verify captured Naver photos, exact source revisions and independent device recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-naver-capture-browser.cjs
+      - name: Verify exact Naver original photos across independent account devices
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/naver-media-continuity-browser.cjs
       - name: Verify annual planning, dated month preservation and private local recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-annual-plan-browser.cjs
@@ -516,6 +523,7 @@ jobs:
             .local/naver-blog/
             .local/naver-capture/
             .local/naver-photo-status/
+            .local/naver-media-continuity/
             .local/app-native/qa/
             .local/home-refinement/qa/
             .local/blog-journeys/after/
@@ -770,7 +778,7 @@ jobs:
       - name: Verify generated configuration and complete installed shell hashes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         env:
-          PREVIOUS_RELEASE: 6126123c12af12daeca6b9679ce1201095c89367
+          PREVIOUS_RELEASE: ab6aef594a2d6d0cabbaf89864e7994ce22a6fec
         run: node scripts/verify-prepared-site.mjs
       - name: Verify the actual previous service worker updates without losing originals
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}

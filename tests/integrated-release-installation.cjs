@@ -7,6 +7,7 @@ const Core = require('../assets/life/core.js'), Workbench = require('../assets/l
 const Photo = require('../assets/life/photo-post.js'), Blog = require('../assets/life/blog.js'), Material = require('../assets/life/material-writing.js');
 const Continuity = require('../assets/life/material-continuity.js'), Ref = require('../assets/life/source-reference.js');
 const SourceEdit = require('../assets/life/source-edit.js');
+const NaverCapture = require('../assets/life/naver-capture.js');
 const Series = require('../assets/life/blog-series-public.js'), Nine = require('../assets/life/nine-board.js'), NinePublic = require('../assets/life/nine-public.js'), Cover = require('../assets/life/public-cover.js');
 const root = path.resolve(__dirname, '..'), output = path.join(root, '.local/integrated-release-installation');
 const migration = 'supabase/migrations/20261019005829_life_material_continuity.sql';
@@ -19,6 +20,7 @@ const libraryMigrations = [
   ['supabase/migrations/20261023163156_account_library_original_owner_variable.sql', '61b9de9c85f02668256c7f9d4f066d0031503666183a3a15beb6e13f5abc3ec5']
 ];
 const editedCopyMigration = 'supabase/migrations/20261022031304_life_material_edited_copy_markers.sql';
+const mediaReceiptMigration = ['supabase/migrations/20261029030503_naver_media_receipts.sql', '026730836fd04a9344ef831696857d7df806fc7fdb8d71605a509e3d398bae6d'];
 const image = 'postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
 const container = 'haedo-blog-postgres-' + Date.now() + process.pid, database = 'haedo_blog_qa_integrated_install', runId = randomUUID();
 const env = { ...process.env }; for (const key of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH']) delete env[key];
@@ -54,8 +56,8 @@ async function main() {
       .trim().split('\n').filter(name => name.endsWith('.sql')).map(name => path.basename(name)).sort();
     assert.equal(baseline.length, 10);
     assert.deepEqual(files.map(name => 'supabase/migrations/' + name),
-      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file)].sort(),
-      'Exactly the ten legacy and nine reviewed additive migrations are required; missing or unknown files are rejected.');
+      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file), mediaReceiptMigration[0]].sort(),
+      'Exactly the ten legacy and ten reviewed additive migrations are required; missing or unknown files are rejected.');
     for (const file of baseline) {
       const relative = 'supabase/migrations/' + file, current = await fs.readFile(path.join(root, relative), 'utf8');
       assert.equal(hash(current), hash(command('git', ['-C', root, 'show', '88ccfe5:' + relative])), 'Previously installed migration changed: ' + file);
@@ -379,6 +381,50 @@ async function main() {
       psql(await fs.readFile(path.join(root, 'supabase/tests/account-library-installation.sql'), 'utf8'));
       report.accountLibraryMigrations = libraryMigrations.map(([file, sha256]) => ({ file, sha256 }));
       report.accountLibraryPreservation = { eachFailureAtomic: true, eachInstallPreservesLegacy: true, populatedChainReinstallPreservesAllRowsAndReceipts: true, exactOldFunctionsAndPrivilegesPreserved: true, readonlyAudit: true, syntheticStorageOwnerColumnIncluded: true, actualStorageHTTP: false };
+    });
+    await check('Exact Naver photo receipt migration preserves populated originals, photos, sources and every old privilege through rollback and reinstallation', async () => {
+      const [file, expectedHash] = mediaReceiptMigration;
+      const ddl = await fs.readFile(path.join(root, file), 'utf8');
+      assert.equal(hash(ddl), expectedHash, 'Only the exact independently reviewed media receipt migration is accepted.');
+      const allNamespaces = "array['public','auth','storage','haedo_blog_private','haedo_material_private','haedo_naver_private']";
+      const allCatalog = catalogQuery.replaceAll(namespaces, allNamespaces).replace(" and p.proname not like 'life_material_%'", '');
+      const dataSnapshot = () => sql('select installation_probe.all_data_snapshot();');
+      const photoHash = 'e'.repeat(64), captureId = randomUUID();
+      const payload = { version: 1, blogId: 'Receipt_Fixture', logNo: '101', url: 'https://blog.naver.com/Receipt_Fixture/101', title: 'Synthetic exact capture', format: 'text/plain', body: '\ufeffexact 🌱 capture\r\nold quotation', bodyHash: hash('\ufeffexact 🌱 capture\r\nold quotation'), htmlHash: 'f'.repeat(64), coverage: 'partial', omissions: ['Original upload status unverified'], publishedAt: null, author: '', extractedAt: '2026-10-29T00:00:00.000Z', extractor: 'synthetic-installation-fixture', photos: [{ index: 0, url: 'https://blogfiles.pstatic.net/anonymous_fixture.jpg', storagePath: owner + '/naver/Receipt_Fixture/101/' + photoHash, sha256: photoHash, mimeType: 'image/jpeg', width: 4032, height: 3024, bytes: 100, alt: '', caption: '', status: 'stored', error: null, originalStatus: 'unverified' }] };
+      const captureHash = await NaverCapture.fingerprint(payload, { ownerId: owner });
+      let naverBundle = Core.createWorkspace({ title: 'Synthetic Naver exact original' });
+      const imported = await Core.prepareImport(NaverCapture.toImportInput(payload), naverBundle);
+      naverBundle = Core.applyChanges(naverBundle, Core.buildImportChanges(naverBundle, imported));
+      assert.equal(rpc('life_sync_put', [q(naverBundle.workspaceId) + '::uuid', '0', q(randomUUID()) + '::uuid', json(naverBundle)]).status, 'stored');
+      psql('insert into storage.objects(bucket_id,name,owner,owner_id,metadata) values(\'haedo-naver-originals\',' + q(payload.photos[0].storagePath) + ',' + q(owner) + '::uuid,' + q(owner) + ',\'{"size":100,"mimetype":"image/jpeg"}\');' +
+        'insert into public.life_naver_captures(id,owner_id,blog_id,log_no,capture_hash,payload) values(' + q(captureId) + '::uuid,' + q(owner) + '::uuid,\'Receipt_Fixture\',\'101\',' + q(captureHash) + ',' + json(payload) + ');');
+      const intactData = dataSnapshot(), intactCatalog = sql(allCatalog);
+      assert.throws(() => psql(ddl.replace(/commit;\s*$/i, 'select 1/0;\ncommit;')), /division by zero/);
+      assert.equal(sql("select to_jsonb(to_regclass('haedo_naver_private.media_receipts') is null);"), true);
+      assert.deepEqual(dataSnapshot(), intactData); assert.deepEqual(sql(allCatalog), intactCatalog);
+      psql(ddl);
+      const installedData = dataSnapshot(); assert.deepEqual(installedData['haedo_naver_private.media_receipts'], []);
+      delete installedData['haedo_naver_private.media_receipts']; assert.deepEqual(installedData, intactData);
+      const catalog = sql(allCatalog);
+      const privateFunctions = ['media_post_identity', 'media_receipt_check', 'media_receipt_put', 'media_receipt_read', 'media_receipt_find'];
+      const publicFunctions = ['life_naver_media_receipt_put', 'life_naver_media_receipt_read', 'life_naver_media_receipt_find'];
+      const addedFunctions = row => row[0] === 'haedo_naver_private' && privateFunctions.includes(row[1]) || row[0] === 'public' && publicFunctions.includes(row[1]);
+      assert.equal(catalog.functions.filter(addedFunctions).length, 8);
+      const oldCatalog = { ...catalog, functions: catalog.functions.filter(row => !addedFunctions(row)), relations: catalog.relations.filter(row => !(row[0] === 'haedo_naver_private' && ['media_receipts', 'media_receipts_pkey', 'naver_media_receipts_capture'].includes(row[1]))) };
+      assert.deepEqual(oldCatalog, intactCatalog, 'Only the exact reviewed private registry/index and eight functions may be added; every existing privilege and definition stays exact.');
+      const args = [q(naverBundle.workspaceId) + '::uuid', q(imported.source.id), q(imported.version.id), q(captureId) + '::uuid', q(captureHash)];
+      const expected = { workspaceId: naverBundle.workspaceId, sourceId: imported.source.id, sourceVersionId: imported.version.id, captureId, captureHash };
+      assert.deepEqual(rpc('life_naver_media_receipt_put', args), expected);
+      const populatedData = dataSnapshot(), populatedCatalog = sql(allCatalog);
+      assert.throws(() => psql(ddl.replace(/commit;\s*$/i, 'select 1/0;\ncommit;')), /division by zero/);
+      assert.deepEqual(dataSnapshot(), populatedData); assert.deepEqual(sql(allCatalog), populatedCatalog);
+      for (let pass = 0; pass < 2; pass++) psql(ddl);
+      assert.deepEqual(dataSnapshot(), populatedData); assert.deepEqual(sql(allCatalog), populatedCatalog);
+      assert.deepEqual(rpc('life_naver_media_receipt_put', args), expected);
+      assert.deepEqual(rpc('life_naver_media_receipt_read', [q(naverBundle.workspaceId) + '::uuid', q(imported.version.id)]), expected);
+      assert.deepEqual(rpc('life_naver_media_receipt_find', [q(naverBundle.workspaceId) + '::uuid', q(captureId) + '::uuid', q(captureHash)]), [expected]);
+      assert.deepEqual(dataSnapshot(), populatedData);
+      report.naverMediaReceiptMigration = { file, sha256: hash(ddl), failedInstallAtomic: true, existingRowsAndPrivilegesPreserved: true, populatedReceiptReinstallPreserved: true, exactPhotoMetadataOnly: true, actualPhotoBytes: false };
     });
     report.pass = true; report.baselineMigrations = baseline; report.baselineDataSha256 = baselineDigest;
     report.rollback = 'Failed transaction rolls back all additive DDL. After successful use retain data/receipts and compatible output-receipt storage; disable new UI and public/private entrypoint execution, then reapply the migration to restore. Full 88cc frontend rollback is safe only before new preparation usage. No destructive down migration.';

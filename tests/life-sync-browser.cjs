@@ -80,6 +80,15 @@ class WorkspaceCloud {
     if (url.pathname === '/auth/v1/logout') {this.requests.push({kind:'logout',device,owner:account?.id});return send(null,204);}
     if (!account) return send({code:'PGRST301',message:'No test account'},401);
     if (this.schemaMissing) { this.expectedFailures++; return send({code:'PGRST205',message:'Anonymous test schema is unavailable'},404); }
+    if (url.pathname === '/rest/v1/rpc/life_naver_media_receipt_read' && method === 'POST') {
+      // These legacy source fixtures have no registered version/media mapping.
+      // Keep this one authenticated read explicit; unknown RPCs still fail.
+      assert.deepEqual(Object.keys(body).sort(), ['p_source_version_id', 'p_workspace_id']);
+      assert.match(body.p_workspace_id, /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i);
+      assert.match(body.p_source_version_id, /^[A-Za-z0-9_-]{1,128}$/);
+      this.requests.push({kind:'naver-media-receipt-read',owner:account.id,id:body.p_workspace_id,version:body.p_source_version_id,device});
+      return send(null);
+    }
     if (url.pathname === '/rest/v1/life_account_materials' && method === 'GET') {
       const owner = url.searchParams.get('owner_id')?.replace(/^eq\./, '');
       this.requests.push({ kind: 'account-materials-list', owner: account.id, device });
