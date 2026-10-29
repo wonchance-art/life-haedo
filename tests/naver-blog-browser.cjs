@@ -67,7 +67,7 @@ function item(logNo, overrides = {}) {
 }
 
 class NaverCloud extends FakeCloud {
-  constructor() { super(); this.naverCalls = []; this.subscriptions = new Map(); this.items = []; this.collectionReady = false; this.holdList = null; this.failList = false; this.failCheck = false; this.expectedHttpErrors = 0; }
+  constructor() { super(); this.naverCalls = []; this.subscriptions = new Map(); this.items = []; this.accountInventories = new Map(); this.collectionReady = false; this.holdList = null; this.failList = false; this.failCheck = false; this.failSave = false; this.expectedHttpErrors = 0; }
   subscription(workspaceId, owner = accounts.a.id, enabled = false) {
     const row = { id: 'cccccccc-cccc-4ccc-8ccc-' + String(this.subscriptions.size + 1).padStart(12, '0'), workspace_id: workspaceId, blog_id: blogId,
       enabled, revision: 1, last_checked_at: null, last_success_at: null, last_error: null, next_check_at: null };
@@ -88,7 +88,7 @@ class NaverCloud extends FakeCloud {
       this.naverCalls.push({ rpc: advancedName, owner, device, body: copy(body) });
       const rows = [...this.subscriptions.entries()].filter(([key]) => key.startsWith(owner + ':')).map(([, row]) => copy(row));
       if (advancedName !== 'life_naver_account_list') assert.ok(rows.some(row => row.id === body.p_subscription_id), 'Advanced reads remain owner scoped');
-      const data = advancedName === 'life_naver_account_list' ? { subscriptions: rows.map(row => ({ ...row, inventory: null })), ready: this.collectionReady, hasMore: false, nextCursor: null } :
+      const data = advancedName === 'life_naver_account_list' ? { subscriptions: rows.map(row => ({ ...row, inventory: copy(this.accountInventories.get(row.id) || null) })), ready: this.collectionReady, hasMore: false, nextCursor: null } :
         advancedName === 'life_naver_inventory_list' ? { inventory: null, items: [], hasMore: false, nextCursor: null } : { captures: [], jobs: [], hasMore: false, nextCursor: null };
       return route.fulfill({ status: 200, headers, body: JSON.stringify(data) });
     }
@@ -117,6 +117,7 @@ class NaverCloud extends FakeCloud {
       assert.equal(body.p_blog_id, blogId, 'Only the anonymous fixture blog may be registered');
       assert.equal(body.p_expected_revision, old?.revision || 0);
       if (!this.collectionReady) assert.equal(body.p_enabled, false);
+      if (this.failSave) { this.expectedHttpErrors++; return send({ code: 'XX000', message: 'Synthetic connection save failure' }, 503); }
       const row = old ? { ...old, enabled: body.p_enabled, revision: old.revision + 1 } : this.subscription(body.p_workspace_id, owner, body.p_enabled);
       this.subscriptions.set(key, row); return send(copy(row));
     }
@@ -298,6 +299,43 @@ async function main() {
         assert.equal(await page.evaluate(async ws => { try { await HaedoLife.Shell.storage.read(ws); return null; } catch (e) { return e.code; } }, seeded.workspaceId), 'workspace_access_denied');
       } finally { late.release(); }
     });
+    await check('RSS pause remains usable while collection is not ready; failed save keeps exact input, focus and private originals', async ({ page, server, seeded }) => {
+      const before = await preserved(page, seeded), sub = server.subscription(seeded.workspaceId, accounts.a.id, true); server.inbox(sub, []);
+      await enter(page); await idle(page, 'setup-required'); await page.locator('#naverBlogId').fill(blogId);
+      const pause = page.locator('.nv-subscription[data-subscription-id="' + sub.id + '"] [data-action=pause]');
+      assert.equal(await pause.isEnabled(), true, 'An already enabled connection can always be paused');
+      server.failSave = true; await pause.click(); await idle(page, 'error');
+      await page.waitForFunction(() => document.activeElement?.matches('.nv-subscription [data-action=pause]'));
+      assert.equal(server.subscriptions.get(accounts.a.id + ':' + seeded.workspaceId).enabled, true); assert.equal(await page.locator('#naverBlogId').inputValue(), blogId); assert.deepEqual(await preserved(page, seeded), before);
+      await capture(page, report, 'rss-pause-failure-ready-false', '.nv-subscription [data-action=pause]');
+      server.failSave = false; await pause.click(); await idle(page, 'setup-required');
+      assert.equal(server.subscriptions.get(accounts.a.id + ':' + seeded.workspaceId).enabled, false);
+      assert.equal(await page.locator('.nv-subscription [data-action=resume]').isDisabled(), true, 'Not-ready collection cannot be re-enabled'); assert.equal(await page.locator('#naverBlogAuto').isDisabled(), true);
+      await page.waitForFunction(() => document.activeElement?.id === 'naverBlogRefresh');
+      assert.equal(await page.locator('#naverBlogId').inputValue(), blogId); assert.deepEqual(await preserved(page, seeded), before);
+    });
+    await check('An enabled account connection in another workspace can pause without a baseline, while re-enable retains both readiness gates', async ({ page, server, seeded }) => {
+      const other = await page.evaluate(async () => { const s = HaedoLife.Shell.storage, active = await s.getActive(), other = await s.createWorkspace('중지할 다른 합성 공간'); await s.setActive(active); return other.workspaceId; });
+      const before = await preserved(page, seeded), otherBefore = await page.evaluate(ws => HaedoLife.Shell.storage.read(ws), other), sub = server.subscription(other, accounts.a.id, true);
+      await enter(page); await idle(page, 'setup-required'); await page.locator('#naverBlogId').fill(blogId);
+      const row = page.locator('.nv-connection[data-connection-id="' + sub.id + '"]'), toggle = () => row.locator('[data-action=new-posts]');
+      assert.equal(await toggle().isEnabled(), true); assert.match(await toggle().innerText(), /중지/);
+      server.failSave = true; await toggle().click(); await page.locator('#naverCaptureIntakeStatus[data-state=error]').waitFor(); await idle(page);
+      await page.waitForFunction(id => document.activeElement?.closest('.nv-connection')?.dataset.connectionId === id && document.activeElement?.dataset.action === 'new-posts', sub.id);
+      assert.equal(server.subscriptions.get(accounts.a.id + ':' + other).enabled, true); assert.equal(await page.locator('#naverBlogId').inputValue(), blogId);
+      assert.equal(await page.evaluate(() => HaedoLife.Shell.storage.getActive()), seeded.workspaceId); assert.deepEqual(await page.evaluate(ws => HaedoLife.Shell.storage.read(ws), other), otherBefore); assert.deepEqual(await preserved(page, seeded), before);
+      await capture(page, report, 'account-pause-failure-incomplete-baseline', '.nv-connection[data-connection-id="' + sub.id + '"] [data-action=new-posts]');
+      server.failSave = false; await toggle().click(); await idle(page, 'setup-required');
+      assert.equal(server.subscriptions.get(accounts.a.id + ':' + other).enabled, false); assert.equal(await toggle().count(), 0, 'Incomplete baseline still cannot enable automatic new-post collection');
+      await page.waitForFunction(id => document.activeElement?.closest('.nv-connection')?.dataset.connectionId === id && document.activeElement?.dataset.action === 'public-list', sub.id);
+      server.collectionReady = true; await enter(page); await idle(page, 'ready'); assert.equal(await toggle().count(), 0, 'Ready server alone cannot enable an incomplete baseline');
+      server.accountInventories.set(sub.id, { status: 'complete', baseline_completed_at: '2026-10-29T04:00:00.000Z' }); server.collectionReady = false;
+      await enter(page); await idle(page, 'setup-required'); assert.equal(await toggle().isDisabled(), true, 'Complete baseline alone cannot bypass not-ready collection');
+      server.collectionReady = true; await enter(page); await idle(page, 'ready'); assert.equal(await toggle().isEnabled(), true); await toggle().click(); await idle(page, 'ready');
+      assert.equal(server.subscriptions.get(accounts.a.id + ':' + other).enabled, true);
+      const saves = server.naverCalls.filter(call => call.rpc === 'life_naver_save'); assert(saves.every(call => call.body.p_workspace_id === other), 'Account control targets the connection workspace without changing the active workspace'); assert.deepEqual(saves.map(call => call.body.p_enabled), [false, false, true]);
+      assert.equal(await page.evaluate(() => HaedoLife.Shell.storage.getActive()), seeded.workspaceId); assert.deepEqual(await page.evaluate(ws => HaedoLife.Shell.storage.read(ws), other), otherBefore); assert.deepEqual(await preserved(page, seeded), before);
+    });
     assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.externalRequests, []);
     assert.deepEqual(await hashes(), startHashes, 'Runtime files must remain frozen throughout the whole suite'); report.pass = true;
   } finally {
@@ -312,13 +350,18 @@ async function unchanged(page, old) {
     assert.deepEqual(now[name].filter(row => old[name].some(prior => prior.id === row.id)), old[name], 'Existing ' + name + ' must remain byte-for-byte equivalent');
   }
 }
-async function capture(page, report, scene) {
+async function capture(page, report, scene, pointerSelector) {
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.evaluate(() => scrollTo({ top: 0, left: 0, behavior: 'instant' }));
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const metrics = await page.evaluate(() => ({ width: innerWidth, overflow: document.documentElement.scrollWidth - innerWidth }));
     assert.ok(metrics.overflow <= 1, 'Naver interface must not overflow horizontally');
+    if (pointerSelector) {
+      const control = page.locator(pointerSelector); await control.scrollIntoViewIfNeeded();
+      const pointer = await control.evaluate(el => { const box = el.getBoundingClientRect(), hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2); return { enabled: !el.disabled, clear: hit === el || el.contains(hit), width: box.width, height: box.height }; });
+      assert.equal(pointer.enabled, true); assert.equal(pointer.clear, true, 'Pause remains reachable by an actual pointer in both viewports'); metrics.pointer = pointer;
+    }
     const filename = scene + '-' + width + '.png';
     await page.screenshot({ path: path.join(output, filename), fullPage: true }); report.visual.push({ filename, ...metrics });
   }

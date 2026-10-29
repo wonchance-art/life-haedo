@@ -139,18 +139,32 @@ export function createHarvestWorker({ rpc, fetcher = fetch, load, model, origin,
       return { status: result.status === 'stale' ? 'busy' : 'checked', stage: 'capture', failed: true };
     }
   }
-  return {
-    async execute({ action, owner = null, subscriptionId = null, jobId = null }) {
-      if (action !== 'inventory') {
-        const claims = await rpc('life_naver_capture_claim', { p_limit: 1, p_job_id: jobId, p_owner_id: owner, p_subscription_id: subscriptionId });
-        need(Array.isArray(claims) && claims.length <= 1);
-        if (claims.length) { identity(claims[0], { owner, subscriptionId, jobId }); return finishCapture(claims[0]); }
-        if (action === 'capture') return { status: 'busy' };
-      }
+  async function capture({ owner, subscriptionId, jobId }) {
+    const claims = await rpc('life_naver_capture_claim', { p_limit: 1, p_job_id: jobId, p_owner_id: owner, p_subscription_id: subscriptionId });
+    need(Array.isArray(claims) && claims.length <= 1);
+    if (!claims.length) return null;
+    identity(claims[0], { owner, subscriptionId, jobId }); return finishCapture(claims[0]);
+  }
+  async function inventory({ owner, subscriptionId }) {
       const claims = await rpc('life_naver_inventory_claim', { p_limit: 1, p_subscription_id: subscriptionId, p_owner_id: owner });
       need(Array.isArray(claims) && claims.length <= 1);
-      if (!claims.length) return { status: 'busy' };
+      if (!claims.length) return null;
       identity(claims[0], { owner, subscriptionId, inventory: true }); return finishInventory(claims[0]);
+  }
+  return {
+    async execute({ action, owner = null, subscriptionId = null, jobId = null }) {
+      const context = { owner, subscriptionId, jobId };
+      if (action === 'capture') return await capture(context) || { status: 'busy' };
+      if (action === 'inventory') return await inventory(context) || { status: 'busy' };
+      // A capture backlog must not indefinitely postpone a due inventory page.
+      // Each run gives inventory one bounded opportunity, then claims at most
+      // one capture only if the shared deadline still reserves claim (10s),
+      // robots (10s), body (10s) and finish/checkpoint (10s) plus overhead.
+      // Slow inventory can consume that reserve; it does not promise progress
+      // in both lanes on every invocation or start a fresh capture lease then.
+      const page = await inventory(context);
+      if (network.remaining() <= 45000) return page || { status: 'busy' };
+      return await capture(context) || page || { status: 'busy' };
     },
   };
 }

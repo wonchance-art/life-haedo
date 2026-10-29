@@ -1086,3 +1086,8 @@ Muuri는 임의 레이아웃·드래그/필터/정렬·worker·Web Animations와
 기존 원문 CAS/영속 전송 대기·NaverMedia의 SHA/픽셀 검증·Supabase private Storage를 재사용한다. 폴더·9칸 LibraryMeta v1은 정확 필드 계약이므로 사진 영수증을 섞지 않는다. CompositionSync의 전체 스냅샷 CAS 도메인도 비교했지만, 이 연결은 원문 판별 append-only 값이므로 별도 불변 registry RPC와 로컬 원자 대기/멱등 ACK가 더 작고 구기기의 metadata 덮어쓰기에도 독립적이다. ShareRemote는 공개/철회 의미라 사용하지 않는다.
 
 공식 npm의 [supabase-js](https://www.npmjs.com/package/@supabase/supabase-js)와 [릴리스](https://github.com/supabase/supabase-js/releases/tag/v2.118.0)를 확인했다. 확인 당시 최신 2.118.0/MIT이며 기존 vendor 2.117.2의 RPC·private download로 필요한 동작을 구현할 수 있어 SDK/새 동기화 라이브러리를 추가하지 않는다. 공식 [RLS 문서](https://supabase.com/docs/guides/database/postgres/row-level-security)의 소유자 정책·역할별 권한과 기존 private helper/public invoker wrapper를 따른다. 플랫폼 changelog 도메인은 실행 환경 허용 목록 밖이라 직접 확인하지 못했으며 전체 플랫폼의 변경·보안 권고가 없다고 주장하지 않는다.
+
+
+## 네이버 운영 사전검사와 자동 재개 — 2026-10-29 KST
+
+새 크롤러나 브라우저 자동화 서비스를 추가하지 않고 기존 collector·harvest-network·extractor를 읽기 전용 CLI에서 재사용한다. 공식 npm의 [Cheerio](https://www.npmjs.com/package/cheerio)는 확인 당시1.2.0/MIT(공식메타데이터갱신2026-07-17)이며 기존worker와검수fixture의고정1.2.0을유지한다. 실제probe때만기존고정검수의존성을사용하고기본정책진단은추가패키지나외부요청없이실행된다. 전체본문·사진원본여부·예약가동을공개표본추출과혼동하지않는다. 새sync/추출엔진·쿠키수집·headless우회를도입하지않는다.
