@@ -1,0 +1,66 @@
+// Regenerate with system Graphviz + Noto Sans CJK KR:
+// dot -Tsvg docs/diagrams/purpose-workflow-20261029.dot -o docs/diagrams/rendered/purpose-workflow-20261029.svg
+// dot -Tpng -Gdpi=144 docs/diagrams/purpose-workflow-20261029.dot -o docs/diagrams/rendered/purpose-workflow-20261029.png
+// dot -Tpdf docs/diagrams/purpose-workflow-20261029.dot -o docs/diagrams/rendered/purpose-workflow-20261029.pdf
+// This is a target-purpose diagram, not an implementation-status or navigation map.
+digraph HaedoPurposeWorkflow {
+  graph [rankdir=TB, bgcolor="white", pad="0.38", nodesep="0.25", ranksep="0.28",
+    fontname="Noto Sans CJK KR", fontcolor="#19332d", fontsize=14, labelloc=t,
+    label="해도 · 생활을 위한 도구\n\n반복 관리 수고를 줄여, 직접 경험·깊이 생각·관계·표현에 쓸 여유를 만든다.\n "];
+  node [shape=plain, fontname="Noto Sans CJK KR", fontcolor="#19332d", fontsize=16];
+  edge [color="#84958f", arrowsize=0.6, penwidth=1];
+
+  flow [label=<
+    <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">
+      <TR>
+        <TD WIDTH="250" HEIGHT="54"><FONT POINT-SIZE="18"><B>INPUT</B></FONT><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">생활에서 시작</FONT></TD>
+        <TD WIDTH="38"></TD>
+        <TD WIDTH="310"><FONT POINT-SIZE="18"><B>AUTOMATED PROCESS</B></FONT><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">정해진 범위의 반복 처리</FONT></TD>
+        <TD WIDTH="38"></TD>
+        <TD WIDTH="330"><FONT POINT-SIZE="18"><B>OUTPUT</B></FONT><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">사람이 고르는 결과</FONT></TD>
+      </TR>
+      <TR>
+        <TD BORDER="1" COLOR="#ccd6d1" BGCOLOR="#f7f9f8" HEIGHT="224" CELLPADDING="20">
+          <FONT POINT-SIZE="18"><B>경험 · 현재의 질문</B></FONT><BR/><BR/>
+          기존 기록 · 새 자료<BR/><BR/>
+          <FONT POINT-SIZE="13" COLOR="#5c6b65">필요한 것만 가져오기</FONT>
+        </TD>
+        <TD><FONT POINT-SIZE="25" COLOR="#84958f">→</FONT></TD>
+        <TD BORDER="1" COLOR="#ccd6d1" BGCOLOR="#f7f9f8" CELLPADDING="18">
+          <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">
+            <TR><TD HEIGHT="105"><B>확보 · 보존 · 찾기 · 재개</B><BR/><BR/>원문·출처·정확한 판 유지<BR/>보관 · 검색 · 실패 복구</TD></TR>
+            <TR><TD HEIGHT="12"></TD></TR>
+            <TR><TD BORDER="1" COLOR="#dce3df" CELLPADDING="10"><FONT POINT-SIZE="13" COLOR="#5c6b65"><B>선택적 AI · 후속 설계</B><BR/>설명 · 비교 · 질문 · 초안 제안</FONT></TD></TR>
+          </TABLE>
+        </TD>
+        <TD><FONT POINT-SIZE="25" COLOR="#84958f">→</FONT></TD>
+        <TD BORDER="1" COLOR="#a5c1b7" BGCOLOR="#f0f6f3" CELLPADDING="20">
+          <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">
+            <TR><TD><FONT POINT-SIZE="17" COLOR="#145b50"><B>직접 읽기 · 판단 · 실천</B></FONT></TD></TR>
+            <TR><TD HEIGHT="28"><FONT COLOR="#84958f">↓</FONT></TD></TR>
+            <TR><TD><B>이해 · 내 생각 · 다음 행동</B><BR/><BR/>개인 글 · 모음<BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">공유는 고른 내용만</FONT></TD></TR>
+          </TABLE>
+        </TD>
+      </TR>
+      <TR><TD COLSPAN="5" HEIGHT="44"><FONT POINT-SIZE="13" COLOR="#5c6b65">읽기나 개인 보관만으로 끝내도 된다. 기록·AI·글쓰기·공개는 필수 단계가 아니다.</FONT></TD></TR>
+    </TABLE>
+  >];
+
+  life [label=<
+    <TABLE BORDER="0" CELLBORDER="0" CELLPADDING="12" BGCOLOR="#e8f1ec">
+      <TR><TD WIDTH="966"><FONT POINT-SIZE="18" COLOR="#145b50"><B>충분하면 생활로 돌아가기</B></FONT><BR/><FONT POINT-SIZE="13" COLOR="#52665c">직접 경험 · 깊이 생각 · 관계 · 선택한 표현 / 다시 필요할 때 시작</FONT></TD></TR>
+    </TABLE>
+  >];
+
+  improvement [label=<
+    <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">
+      <TR><TD HEIGHT="42"><FONT POINT-SIZE="14"><B>도구를 개선하는 별도 순환</B></FONT></TD></TR>
+      <TR><TD><FONT POINT-SIZE="15">실제 막힘·도움  →  가설·작은 비교  →  검증 후 반영  →  다시 사용</FONT></TD></TR>
+      <TR><TD HEIGHT="34"><FONT POINT-SIZE="12" COLOR="#5c6b65">개인 결과를 자동 개발·공개 명령으로 바꾸지 않는다.</FONT></TD></TR>
+      <TR><TD HEIGHT="35"><FONT POINT-SIZE="12" COLOR="#5c6b65">목표 프레임 · 구현 현황은 제품 목적 문서 참조 · 2026.10.29</FONT></TD></TR>
+    </TABLE>
+  >];
+
+  flow -> life [minlen=1];
+  life -> improvement [style=invis, minlen=1];
+}

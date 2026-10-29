@@ -1,5 +1,7 @@
 # 해도 워크플로와 구조도
 
+2026-10-29 **목적에서 출발하는 전체 workflow**: [PNG](rendered/purpose-workflow-20261029.png) · [SVG](rendered/purpose-workflow-20261029.svg) · [PDF](rendered/purpose-workflow-20261029.pdf) · [Graphviz 원본](purpose-workflow-20261029.dot) · [Mermaid 원본](purpose-workflow-20261029.mmd). 생활의 질문·기존 기록 → 필요한 맥락 준비 → 직접 읽기·판단·실천 → 선택 결과 → 생활 복귀를 3열로 정리했다. AI는 선택적 후속 설계이며, 도구 개선은 별도 순환이다. **목표 프레임**과 현재 기능을 구분하며, 근거·현재 구현·다음 작업은 [제품 목적 문서](../life-tools-design/product-purpose.md)를 따른다. 아래 구현 구조도와 함께 읽는다.
+
 2026-10-26 **현재 기능의 입력 → 처리 → 결과**: [PNG](rendered/product-workflow-20261026.png) · [SVG](rendered/product-workflow-20261026.svg) · [PDF](rendered/product-workflow-20261026.pdf) · [Graphviz 원본](product-workflow-20261026.dot). 뉴스·자료·글·계획·보관의 다섯 흐름과 기능별 저장 범위를 구분한다.
 
 2026-10-26 **목적별 구현 구조**: [PNG](rendered/product-placement-20261026.png) · [SVG](rendered/product-placement-20261026.svg) · [PDF](rendered/product-placement-20261026.pdf) · [Graphviz 원본](product-placement-20261026.dot). 홈·뉴스·자료실·계획·설정과 구현한 하위 메뉴를 정리했다. 뉴스 설정의 다섯 목적, 자료 메뉴의 모아 보기, 설정의 자료·글 / 계획·연표 파일 그룹을 표시한다. **출시 상태는 [구현·검수 기록](../design-review/purpose-workflow-implementation.md)을 따른다.** 입력 → 처리 → 결과 도식은 기능별 처리·보관 경계가 같아 유지했다. [설계의 기능 목적·동선·보존 조건](../design-review/purpose-workflow.md)과 설계 당시 도식은 Git 이력에 남아 있다. 아래 도식은 작성 당시의 이력으로 보존한다.
