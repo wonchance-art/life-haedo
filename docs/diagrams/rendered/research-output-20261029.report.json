@@ -1,0 +1,35 @@
+{
+  "renderer": {
+    "name": "mermaid",
+    "version": "12.1.0",
+    "license": "MIT"
+  },
+  "capturedAt": "2026-10-29T05:17:13.534Z",
+  "font": "Noto Sans CJK KR",
+  "environment": "Linux Chromium; documentation render, not an Apple device test",
+  "completed": true,
+  "diagrams": [
+    {
+      "source": "research-output-20261029.mmd",
+      "sourceSha256": "b7407a79e4ad700f792049cd539602b6d1dd420b5cf0a74adf8ffd928c3b46b0",
+      "svgSha256": "8ba7ab5c64f0f7965608c0898baa1f2b31778895379c5fe95eb0d929f76ade48",
+      "title": "SNS에서 탐구 자료를 받고 내 아웃풋으로",
+      "description": "현재 설계는 관심과 질문을 기준으로 SNS 자체 추천과 선택 출처를 이용하여 내가 읽을 자료를 받는 것부터 시작한다. 선택한 자료만 엄선하고 읽고 비교하여 이해와 내 생각, 실천과 표현을 얻는다. 계정 보관은 공통 기반이다. AI 콘텐츠 제작과 SNS 배포는 가치 있는 탐구 뒤에 선택하는 후속 확장이다. 실제 기능 가동이나 게시를 뜻하지 않는다.",
+      "width": 605.2578125,
+      "height": 1173,
+      "nodes": 7,
+      "edges": 8,
+      "textElements": 11,
+      "koreanText": true,
+      "koreanFontReady": true,
+      "outOfBounds": [],
+      "clippedLabels": [],
+      "externalReferences": [],
+      "foreignObjects": 0
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "externalRequests": [],
+  "browser": "151.0.7922.173"
+}

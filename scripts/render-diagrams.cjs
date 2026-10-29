@@ -25,7 +25,7 @@ async function main() {
   const names = process.argv.length > 2 ? process.argv.slice(2).map(name => path.basename(name))
     : (await fs.readdir(sourceDir)).filter(name => /_v3\.mmd$/.test(name)).sort();
   assert(names.length, 'No diagram sources found');
-  assert(names.every(name => /^[a-z0-9_-]+_v[345678]\.mmd$/.test(name) || ['product-roadmap-20261012.mmd', 'workflow-overview-20261029.mmd'].includes(name)), 'Only explicitly supported documentation diagrams are rendered');
+  assert(names.every(name => /^[a-z0-9_-]+_v[345678]\.mmd$/.test(name) || ['product-roadmap-20261012.mmd', 'workflow-overview-20261029.mmd', 'research-output-20261029.mmd'].includes(name)), 'Only explicitly supported documentation diagrams are rendered');
   const reportName = process.argv.length <= 2 ? 'report.json' : names.length === 1
     ? names[0].replace(/\.mmd$/, '.report.json')
     : 'report-' + createHash('sha256').update([...names].sort().join('\n')).digest('hex').slice(0, 16) + '.json';

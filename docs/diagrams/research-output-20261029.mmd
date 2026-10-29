@@ -1,0 +1,39 @@
+---
+title: SNS에서 탐구 자료를 받고 내 아웃풋으로 · 통합 설계
+---
+%% 현재 출발점은 내가 읽을 탐구 자료를 추천받는 SNS 계정이다.
+%% 점선 상자는 이후 선택할 제작·게시 확장. 계정 접속/실가동을 뜻하지 않는다.
+%%{init: {"theme":"base","htmlLabels":false,"themeVariables":{"fontFamily":"Noto Sans CJK KR, sans-serif","fontSize":"19px","lineColor":"#8794A5","edgeLabelBackground":"#ffffff","clusterBkg":"#ffffff","clusterBorder":"#DFE5EC"},"flowchart":{"htmlLabels":false,"curve":"basis","nodeSpacing":34,"rankSpacing":36,"padding":22}}}%%
+flowchart TB
+  accTitle: SNS에서 탐구 자료를 받고 내 아웃풋으로
+  accDescr: 현재 설계는 관심과 질문을 기준으로 SNS 자체 추천과 선택 출처를 이용하여 내가 읽을 자료를 받는 것부터 시작한다. 선택한 자료만 엄선하고 읽고 비교하여 이해와 내 생각, 실천과 표현을 얻는다. 계정 보관은 공통 기반이다. AI 콘텐츠 제작과 SNS 배포는 가치 있는 탐구 뒤에 선택하는 후속 확장이다. 실제 기능 가동이나 게시를 뜻하지 않는다.
+
+  interest["관심·탐구 질문<br/>자료 언어 · 읽을 시간"]
+  sns["SNS에서 자료 받기<br/>구독·리스트 · 자체 추천"]
+  research["엄선·탐구<br/>원문 확인 · 읽기·비교<br/>필요한 자료와 내 판단 보관"]
+  result["기존 OUTPUT<br/>이해 · 내 생각<br/>실천 · 표현"]
+  interest --> sns --> research --> result
+  research -.->|질문·출처 조정| sns
+
+  subgraph OPTIONAL["탐구가 쌓인 뒤 선택 확장"]
+    direction LR
+    create["AI 콘텐츠 제작<br/>기준 원고 → 채널별 자료"]
+    publish["SNS 배포·운영<br/>선택한 계정·규칙으로 실행"]
+    create --> publish
+  end
+  research -.->|표현할 내용이 있을 때| create
+  publish -.-> result
+
+  base["해도에 보관할 때<br/>계정 서버 연동 · 정확 출처<br/>중복 방지 · 중지·실패 복구"]
+  base -.- research
+
+  classDef input fill:#F7F8FA,stroke:#D1D9E2,color:#344256;
+  classDef primary fill:#EFF4FF,stroke:#6282B5,color:#203E6A,stroke-width:1.5px;
+  classDef output fill:#EFF7F2,stroke:#88AC98,color:#28553D;
+  classDef future fill:#FBFBFC,stroke:#AAB4C2,color:#58667A,stroke-dasharray:6 4;
+  classDef foundation fill:#F8F6F0,stroke:#C3B99C,color:#5B5038;
+  class interest input;
+  class sns,research primary;
+  class result output;
+  class create,publish future;
+  class base foundation;
