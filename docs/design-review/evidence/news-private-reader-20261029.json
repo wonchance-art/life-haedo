@@ -121,7 +121,15 @@
     "supabase/migrations/20261029084145_discovery_private_reader.sql": "30c741bba2ef5b3658c7b17d653828649b0d98d30e2db17d4e12c877b057bd0e",
     "supabase/functions/haedo-discovery-private/handler.mjs": "ae56fb5c44af0c2fba55dd27854bf6eb0e42183c5d84295cc71fb2875640eb03",
     "supabase/functions/haedo-discovery-private/article-intake.mjs": "75a8db63539efd29485820e512469d0bf1318a527c4d8b4ef186f2bf0b30739a",
-    "tests/integrated-release-installation.cjs": "93b96436f6ba2cf35ebca3c1581211ba70e3345cb65025630cb293b7d9c4733d"
+    "tests/integrated-release-installation.cjs": "93b96436f6ba2cf35ebca3c1581211ba70e3345cb65025630cb293b7d9c4733d",
+    "tests/purpose-workflow-browser.cjs": "55ba0671830b5bd38c1222831ef7376ea5764bff56f02a70b935d34e8df9b7ef",
+    "tests/life-discovery-languages-browser.cjs": "7cde6b5273613a9ae8a5c9bbfdaf4cdb4b2faa77ec1ea4278372eef7dce0d8f5",
+    "tests/life-discovery-reactions-browser.cjs": "ab33513317ee72d8d42942ece1663a6b188108663269eb5952b0b7ae1ea098ef",
+    "tests/life-discovery-reading-browser.cjs": "3de3ffecf50a7a66deaed13b99a5dbc9f27aeec9672cfb5c9699d49e410c591f",
+    "tests/life-external-discovery-browser.cjs": "fd04054bd9f5c78c64bf929b122216992126fbb2ca31166407deab4c8493e198",
+    "tests/life-external-discovery-pwa-browser.cjs": "ec5297602f64722cb95921750d3042cc03aeb8600a3b3e07810a7e2b871e3917",
+    "tests/life-news-browser.cjs": "9406eccb2a1264ad12beccdc8bb62ccb1dbde6167e895b39202b2a496887f9ba",
+    "tests/news-social-browser.cjs": "65c189ce98e2dda2f5a6e1ac94033038f6347a63070a7cb2aa417457bc85bbeb"
   },
   "limits": [
     "Other six sources remain metadata/link only.",
@@ -154,5 +162,42 @@
     "assertionsWeakened": false,
     "timeoutChanged": false,
     "localChecksAfterFix": 12
+  },
+  "ciBrowserCorrections": {
+    "initialRun": 40851120661,
+    "runtimeChanged": false,
+    "assertionsWeakened": false,
+    "timeoutsChanged": false,
+    "purpose": {
+      "originalFlowsPassed": 8,
+      "failure": "Renderer-owned favicon response body disappeared after navigation.",
+      "controlledReproduction": true,
+      "fix": "Verify actual upstream bytes then forward identical status, headers and body, retaining one hash receipt for each observed static response.",
+      "passed": 8,
+      "captures": 21,
+      "verifiedResponses": 1947,
+      "verifiedFavicons": 57
+    },
+    "language": {
+      "originalPassed": 16,
+      "originalFailed": 1,
+      "failure": "A detached recovery button was misclassified by closest(); the test helper itself closed news settings.",
+      "controlledReproduction": true,
+      "fix": "Resolve the containing view with an ancestor selector; keep actual CAS redraw, zero settings-Back clicks and exact content/translation preservation checks.",
+      "passed": 17,
+      "oldHelperMutationFailed": true,
+      "runnersCorrected": 7
+    },
+    "browser": "153.0.8010.12",
+    "playwright": "1.63.0",
+    "finalCI": "Tracked at PR145",
+    "helperRegression": {
+      "reading": 5,
+      "social": 6,
+      "external": 19,
+      "pwa": 9,
+      "news": 9,
+      "reactions": 24
+    }
   }
 }

@@ -29,7 +29,7 @@ const copy = value => structuredClone(value);
 const id = '30000000-0000-4000-8000-000000000001';
 const sourceFiles = ['index.html', 'life.html', 'sw.js', 'assets/haedo-navigation.js', 'assets/haedo-shell.css', 'assets/platform-auth.js', 'assets/platform-ui.js', 'assets/life/shell.js', 'assets/life/ui.js', 'assets/life/ui.css', 'assets/life/home.js', 'assets/life/home.css', 'assets/life/blog-manager.js', 'assets/life/photo-post-ui.js', 'assets/life/account-library.js', 'assets/life/storage.js', 'assets/life/source-folders-ui.js', 'assets/life/discovery-ui.js', 'assets/life/discovery.css', 'assets/life/interest-ui.js', 'assets/life/preservation-ui.js', 'assets/life/obsidian-link-candidates.js', 'assets/life/obsidian-link-candidates-ui.js', 'assets/life/obsidian-link-commit.js', 'assets/life/collection-ui.js', 'assets/life/workbench-ui.js', 'assets/life/core.js', 'assets/life/workbench.js', 'assets/life/library-meta.js', 'assets/life/source-folders.js', 'assets/life/photo-post.js', 'goals.html', 'habits.html', 'workspace.html'];
 const fixtureFiles = ['tests/composition-sync-browser.cjs', 'tests/life-sync-browser.cjs', 'tests/unified-home-browser.cjs', 'tests/home-entry-browser.cjs', 'tests/helpers/feature-menus.cjs', 'tests/helpers/library-cloud.cjs', 'tests/helpers/blog-cloud.cjs'];
-const report = { createdAt: new Date().toISOString(), scope: 'Exact app bytes, bundled SDK and IndexedDB; anonymous capability-1 HTTP. Viewports and simulated input only; no real login, device or production account writes.', baseline, base, sourceRoot, checks: [], visual: [], observations: [], pageErrors: [], consoleErrors: [], expectedConsoleErrors: [], external: [], staticErrors: [], staticResponses: [], privateRequests: [], forbiddenPrivateRequests: [], contexts: [], browserClosed: false };
+const report = { createdAt: new Date().toISOString(), scope: 'Exact static server bytes are SHA-verified before forwarding the same status, headers and body; bundled SDK and IndexedDB with anonymous capability-1 HTTP. The platform-config fixture retains its existing mock route. Viewports and simulated input only; no real login, device or production account writes.', baseline, base, sourceRoot, checks: [], visual: [], observations: [], pageErrors: [], consoleErrors: [], expectedConsoleErrors: [], external: [], staticErrors: [], staticResponses: [], privateRequests: [], forbiddenPrivateRequests: [], contexts: [], browserClosed: false };
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 async function hashes(files) { return Object.fromEntries(await Promise.all(files.map(async file => [file, sha(await fs.readFile(path.join(sourceRoot, file)))]))); }
 async function wait(read, predicate, label) { const end = Date.now() + 20000; let value; do { value = await read(); if (predicate(value)) return value; await new Promise(resolve => setTimeout(resolve, 25)); } while (Date.now() < end); throw Error(label + ': ' + JSON.stringify(value)); }
@@ -102,7 +102,13 @@ async function main() {
   async function check(name, action, size = sizes[1]) {
     if (match && !match.test(name)) return;
     const server = cloudFixture(data), device = 'purpose-' + report.checks.length, context = await makeContext(browser, server, device, accounts.a, { viewport: size, hasTouch: true, reducedMotion: 'reduce' }), pending = new Set();
-    const receipt = { device, closed: false, capability: server.libraryCapabilities }; report.contexts.push(receipt);
+    const receipt = { device, closed: false, capability: server.libraryCapabilities, staticObserved: 0, staticForwarded: 0 }; report.contexts.push(receipt);
+    const forwarded = new Map(), observed = new Set();
+    const staticURL = url => url.origin === new URL(base).origin && (/\.(html|js|css|woff2?|json|svg)$/.test(url.pathname) || url.pathname.endsWith('/'));
+    function trackStatic(task, url) {
+      pending.add(task);
+      return task.catch(error => report.staticErrors.push({ device, path: url.pathname, message: error.message })).finally(() => pending.delete(task));
+    }
     context.on('request', request => {
       const url = new URL(request.url()), method = request.method(); if (url.origin !== cloud || method === 'OPTIONS') return;
       const row = { device, method, path: url.pathname }; report.privateRequests.push(row);
@@ -111,9 +117,34 @@ async function main() {
       const rpc = method === 'POST' && ['life_library_capabilities', 'life_library_open', 'life_library_catalog', 'life_library_meta_get', 'life_library_meta_put', 'life_library_originals_list', 'life_library_original_get', 'life_composition_get', 'life_composition_put', 'life_sync_put', 'life_blog_list', 'life_blog_read'].some(name => url.pathname === '/rest/v1/rpc/' + name);
       if (!(reads || auth || rpc)) report.forbiddenPrivateRequests.push(row);
     });
-    await context.route('**/*', route => { const u = new URL(route.request().url()); if ([new URL(base).origin, cloud].includes(u.origin)) return route.fallback(); report.external.push({ device, origin: u.origin, path: u.pathname }); return route.abort('blockedbyclient'); });
-    context.on('response', response => { const u = new URL(response.url()); if (u.origin !== new URL(base).origin || !/\.(html|js|css|woff2?|json|svg)$/.test(u.pathname) && !u.pathname.endsWith('/')) return;
-      const task = (async () => { const bytes = await response.body(), file = u.pathname.slice(1) || 'index.html', row = { device, file, status: response.status(), sha256: sha(bytes), bytes: bytes.length, configFixture: file === 'assets/platform-config.js' }; if (!row.configFixture) assert.equal(row.sha256, sha(await fs.readFile(path.join(sourceRoot, file))), 'Actual response differs: ' + file); report.staticResponses.push(row); })(); pending.add(task); task.catch(error => report.staticErrors.push({ device, path: u.pathname, message: error.message })).finally(() => pending.delete(task));
+    await context.route('**/*', route => {
+      const request = route.request(), u = new URL(request.url());
+      if (staticURL(u) && u.pathname !== '/assets/platform-config.js') {
+        // Renderer-owned response bodies disappear on hard navigation, including
+        // favicons whose request starts after load. Read the actual server body
+        // independently, then forward those exact bytes without a second fetch.
+        const task = (async () => {
+          const upstream = await route.fetch({ maxRedirects: 0 }), bytes = await upstream.body(), file = u.pathname.slice(1) || 'index.html';
+          const row = { device, file, status: upstream.status(), sha256: sha(bytes), bytes: bytes.length, configFixture: false, transport: 'verified-upstream-forward' };
+          assert.equal(row.sha256, sha(await fs.readFile(path.join(sourceRoot, file))), 'Actual response differs: ' + file);
+          assert(!forwarded.has(request), 'Static request was forwarded twice: ' + file); forwarded.set(request, row);
+          await route.fulfill({ response: upstream, body: bytes }); receipt.staticForwarded++;
+        })();
+        return trackStatic(task, u);
+      }
+      if ([new URL(base).origin, cloud].includes(u.origin)) return route.fallback();
+      report.external.push({ device, origin: u.origin, path: u.pathname }); return route.abort('blockedbyclient');
+    });
+    context.on('response', response => { const u = new URL(response.url()); if (!staticURL(u)) return;
+      receipt.staticObserved++;
+      const task = (async () => {
+        const request = response.request(); assert(!observed.has(request), 'Static response observed twice: ' + u.pathname); observed.add(request);
+        if (u.pathname === '/assets/platform-config.js') {
+          const bytes = await response.body(); report.staticResponses.push({ device, file: u.pathname.slice(1), status: response.status(), sha256: sha(bytes), bytes: bytes.length, configFixture: true, transport: 'existing-config-fixture' }); return;
+        }
+        const row = forwarded.get(request); assert(row, 'Static response has no verified forwarded bytes: ' + u.pathname);
+        assert.equal(response.status(), row.status, 'Forwarded response status differs: ' + row.file); report.staticResponses.push(row);
+      })(); trackStatic(task, u);
     });
     const page = await context.newPage(); page.setDefaultTimeout(20000);
     page.on('pageerror', error => report.pageErrors.push({ device, message: error.message })); page.on('console', event => { if (event.type() === 'error') report.consoleErrors.push({ device, message: event.text(), path: event.location().url }); });
@@ -122,14 +153,18 @@ async function main() {
       await page.goto(base + '/index.html?section=records'); await ready(page); await mode(page, 'sources'); await synced(page);
       assert.equal(await page.evaluate(() => HaedoLife.Shell.storage.getActive()), id); assert((await page.evaluate(() => __homeDbOpens)).every(v => v.verified));
       await page.evaluate(async post => { const s = HaedoLife.Shell.storage; const saved = await s.savePhotoPost(await s.getActive(), post, 0); if (saved.status !== 'saved') throw Error('Real anonymous post seed did not save'); }, data.post);
-      await action({ page, context, server, device, data, size, drainStatic: async () => { await page.waitForLoadState('load'); await Promise.all([...pending]); } });
+      await action({ page, context, server, device, data, size, drainStatic: async () => { await page.waitForLoadState('load'); while (pending.size) await Promise.all([...pending]); } });
       assert.deepEqual(server.libraryRouteErrors, []); assert.deepEqual(report.forbiddenPrivateRequests.filter(row => row.device === device), []);
       assert(server.blogCalls.every(call => ['life_blog_list', 'life_blog_read'].includes(call.rpc)), 'Navigation must not save or publish a blog post'); assert.equal(server.saves().length, 0); assert.equal(server.assetCalls.filter(call => call.method !== 'GET').length, 0, 'Navigation must not upload blog originals');
       assert(server.libraryRequests.some(row => row.rpc === 'life_library_capabilities')); receipt.privateRequests = server.requests.length; receipt.libraryRequests = server.libraryRequests.length; receipt.blogReadRPCs = server.blogCalls.map(call => call.rpc); receipt.blogSaves = server.saves().length; receipt.blogAssetWrites = server.assetCalls.filter(call => call.method !== 'GET').length;
       report.checks.push({ name, pass: true }); console.log('PASS ' + name);
     } catch (error) {
       report.checks.push({ name, pass: false, error: error.stack, state: await page.evaluate(() => ({ mode: document.querySelector('#lifeMain')?.dataset.mode, url: location.pathname + location.search, focus: document.activeElement?.getAttribute('aria-label'), error: document.querySelector('#lifeError')?.textContent })).catch(() => null) }); console.error('FAIL ' + name + '\n' + error.stack); await page.screenshot({ path: path.join(output, 'failure-' + report.checks.length + '.png') }).catch(() => {});
-    } finally { await Promise.allSettled([...pending]); await context.close(); receipt.closed = true; }
+    } finally {
+      while (pending.size) await Promise.allSettled([...pending]);
+      assert.equal(report.staticResponses.filter(row => row.device === device).length, receipt.staticObserved, 'Every observed static response must have one byte/hash receipt');
+      await context.close(); receipt.closed = true;
+    }
   }
   try {
     for (const size of sizes) await check('purpose surfaces and preserved exact graph ' + size.width, async ({ page }) => {

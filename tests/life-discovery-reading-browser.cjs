@@ -22,7 +22,10 @@ const productFiles = ['index.html', 'assets/life/discovery-reading.js', 'assets/
 async function newsView(control) {
   const page = control.page(), panel = page.locator('#discoveryNewsSettingsPanel');
   if (!await panel.count()) return;
-  const settingsTarget = await control.evaluate(element => !!element.closest('#discoveryNewsSettingsPanel'));
+  // Resolve the stable containing view before a redraw can detach its button.
+  const view = await control.locator('xpath=ancestor-or-self::*[@id="discoveryNewsSettingsPanel" or @id="discoveryReview"][1]').getAttribute('id');
+  assert(['discoveryNewsSettingsPanel', 'discoveryReview'].includes(view));
+  const settingsTarget = view === 'discoveryNewsSettingsPanel';
   if (settingsTarget && !await panel.isVisible()) await page.locator('#discoveryNewsSettings').click();
   else if (!settingsTarget && await panel.isVisible()) await page.locator('#discoveryNewsSettingsBack').click();
 }
