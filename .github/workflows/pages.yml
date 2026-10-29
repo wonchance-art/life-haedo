@@ -35,6 +35,8 @@ jobs:
         run: node supabase/tests/check-naver-backend.mjs
       - name: Verify private Naver capture versions, inventory baselines and asset ownership
         run: node supabase/tests/check-naver-captures.mjs
+      - name: Verify automatic Naver inventory recovery and preserved baselines
+        run: node supabase/tests/check-naver-inventory-rescan.mjs
       - name: Install pinned account library SQL test dependencies
         run: npm ci --prefix tests/sql-ci --ignore-scripts --no-audit --no-fund
       - name: Verify account library ownership, default races and immutable original manifests
@@ -49,6 +51,7 @@ jobs:
           path: |
             .local/naver-backend/
             .local/naver-capture-backend/
+            .local/naver-inventory-rescan/
             .local/account-library-sql/
             .local/naver-media-sql/
             .local/naver-media-postgres/
@@ -778,7 +781,7 @@ jobs:
       - name: Verify generated configuration and complete installed shell hashes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         env:
-          PREVIOUS_RELEASE: ab6aef594a2d6d0cabbaf89864e7994ce22a6fec
+          PREVIOUS_RELEASE: 30e94f0116cf94faf6405572439bdf03f290b3c8
         run: node scripts/verify-prepared-site.mjs
       - name: Verify the actual previous service worker updates without losing originals
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
