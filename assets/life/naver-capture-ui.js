@@ -47,6 +47,115 @@
     }
     return { node, getSelectedIndexes, dispose() { if (disposed) return; disposed = true; images.forEach(image => image.removeAttribute('src')); urls.forEach(url => root.URL.revokeObjectURL(url)); node.replaceChildren(); } };
   }
+  function sourceMedia({ container, storage, getBundle, createService, workspaceId, sourceId, sourceVersionId,
+    isCurrent = () => true, onReview, onWritePhotos, onDownload, onReferenceStored }) {
+    const doc = container.ownerDocument;
+    const el = (tag, text, cls) => { const node = doc.createElement(tag); if (text != null) node.textContent = text; if (cls) node.className = cls; return node; };
+    let disposed = false, epoch = 0, busy = false, service = null, imageView = null, imageHash = null;
+    let status, error, actions;
+    const valid = token => !disposed && isCurrent() && container.isConnected && (token == null || token === epoch);
+    const target = { sourceId, sourceVersionId };
+    container.style.marginBottom = '24px';
+    function button(label, id, action) {
+      const node = el('button', label, 'life-button'); node.type = 'button'; node.id = id;
+      node.addEventListener('click', () => { if (valid() && !busy) void action(node); }); return node;
+    }
+    function lock() {
+      container.setAttribute('aria-busy', String(busy));
+      actions?.querySelectorAll('button').forEach(node => { node.disabled = busy || node.dataset.unavailable === 'true'; });
+    }
+    function fail(message) {
+      if (!valid()) return;
+      error.textContent = message; error.hidden = false; status.textContent = ''; status.dataset.state = 'error';
+    }
+    async function read() {
+      // Presentation uses the reader snapshot. Every mutating service action
+      // independently re-reads the exact source/reference before committing.
+      const bundle = getBundle(), attachment = await storage.readNaverCapture(workspaceId, sourceVersionId);
+      const found = root.HaedoLife.NaverCaptureReference.get(bundle, sourceId, sourceVersionId);
+      if (attachment && (attachment.sourceId !== sourceId || attachment.sourceVersionId !== sourceVersionId ||
+          found && found.reference.captureHash !== attachment.capture.capture_hash)) throw Error('원문 사진의 연결이 일치하지 않습니다.');
+      return { bundle, attachment, reference: found?.reference || null };
+    }
+    function paint(value) {
+      const { bundle, attachment, reference } = value;
+      const active = root.HaedoLife.Core.isVersionActive(bundle, sourceVersionId);
+      const nodes = [];
+      if (!attachment && imageView) { imageView.dispose(); imageView = null; imageHash = null; }
+      status = el('p', '', 'life-status'); status.id = 'lifeNaverPhotosStatus'; status.setAttribute('role', 'status'); status.tabIndex = -1;
+      error = el('p', '', 'life-error'); error.id = 'lifeNaverPhotosError'; error.setAttribute('role', 'alert'); error.hidden = true;
+      actions = el('div', null, 'life-actions');
+      if (attachment) {
+        container.dataset.state = 'ready';
+        nodes.push(el('p', attachment.localOnly ? '파일에서 복원한 원문·사진 사본 · 서버 보관 여부 미확인' : '검증한 수집 사진 사본 · 업로드 당시 원본 여부 미확인', 'life-help'));
+        const hash = attachment.capture.capture_hash;
+        if (!imageView || imageHash !== hash) {
+          imageView?.dispose(); imageHash = hash;
+          imageView = photos({ payload: attachment.capture.payload, photos: attachment.photos, document: doc,
+            onWritePhotos: onWritePhotos && (indexes => onWritePhotos({ ...target, indexes, expectedCaptureHash: hash })),
+            onDownload: onDownload && (() => onDownload({ ...target, expectedCaptureHash: hash })) });
+        }
+        if (!reference && !attachment.localOnly && storage.isAccountScoped && attachment.capture.owner_id === storage.account?.userId) {
+          nodes.push(el('p', '다른 기기에서 같은 사진 판을 찾도록 연결 정보를 자료에 보관합니다. 사진 파일을 새로 올리지는 않습니다.', 'life-help'));
+          const remember = button('사진 연결 보관', 'lifeNaverPhotosRemember', trigger => perform('remember', hash, trigger));
+          remember.dataset.unavailable = String(!active); actions.append(remember);
+        }
+        nodes.push(actions, status, error, imageView.node);
+      } else if (reference) {
+        container.dataset.state = 'recoverable';
+        nodes.push(el('p', '이 원문 판의 사진 연결이 있습니다. 서버의 같은 사진 판을 확인해 가져옵니다.', 'life-help'));
+        const restore = button('사진 가져오기', 'lifeNaverPhotosRestore', trigger => perform('restore', reference.captureHash, trigger));
+        restore.dataset.unavailable = String(!active || !storage.isAccountScoped); actions.append(restore);
+        if (!active) nodes.push(el('p', '휴지통에서 자료를 복원한 뒤 사진을 가져올 수 있습니다.', 'life-help'));
+        nodes.push(actions, status, error);
+      } else {
+        container.dataset.state = 'unverified';
+        nodes.push(el('p', '이 원문 버전의 사진 사본을 이 브라우저에서 확인하지 못했습니다. 원래 글의 사진 유무와 서버 보관 여부는 알 수 없습니다.', 'life-help'));
+        nodes.push(el('p', '네이버 수집 사본이나 전용 ZIP을 확인할 수 있습니다. 수집 사본을 자료에 반영하면 새 원문 버전이 만들어질 수 있습니다.', 'life-help'));
+        if (onReview) actions.append(button('네이버 수집 사본 확인', 'lifeNaverMediaReview', async () => {
+          try { await onReview(); } catch (_) { fail('수집 사본을 열지 못했습니다. 원문은 유지됩니다. 다시 시도해 주세요.'); }
+        }));
+        nodes.push(actions, status, error);
+      }
+      container.replaceChildren(...nodes); lock();
+    }
+    async function perform(kind, expectedCaptureHash, trigger) {
+      if (!valid() || busy) return;
+      const token = ++epoch; let committed = false; busy = true; error.hidden = true; status.textContent = kind === 'restore' ? '사진 가져오는 중' : '사진 연결 보관 중'; status.dataset.state = 'pending'; lock();
+      try {
+        service?.dispose(); service = createService();
+        const result = await service[kind === 'restore' ? 'restoreSourcePhotos' : 'rememberSourcePhotos'](workspaceId, { ...target, expectedCaptureHash });
+        if (!valid(token)) return;
+        if (result?.status !== 'stored' || result.sourceId !== sourceId || result.sourceVersionId !== sourceVersionId) throw Error('사진 처리 결과를 확인하지 못했습니다.');
+        committed = true;
+        if (kind === 'remember') await onReferenceStored?.(result);
+        if (!valid(token)) return;
+        const value = await read(); if (!valid(token)) return;
+        if ((kind === 'restore' && value.attachment?.capture.capture_hash !== expectedCaptureHash) ||
+            (kind === 'remember' && value.reference?.captureHash !== expectedCaptureHash)) throw Error('저장한 사진 연결을 확인하지 못했습니다.');
+        const keepFocus = doc.activeElement === trigger;
+        paint(value); status.textContent = kind === 'restore' ? '이 판의 사진 사본을 가져왔습니다.' : '사진 연결을 자료에 보관했습니다.'; status.dataset.state = 'stored';
+        if (keepFocus) status.focus({ preventScroll: true });
+      } catch (_) {
+        if (valid(token)) fail(committed ? '처리는 끝났지만 현재 보관 상태를 확인하지 못했습니다. 원문은 그대로입니다. 다시 확인해 주세요.' :
+          kind === 'restore' ? '사진을 가져오지 못했습니다. 원문은 그대로입니다. 다시 시도해 주세요.' : '사진 연결을 보관하지 못했습니다. 원문과 사진은 그대로입니다. 다시 시도해 주세요.');
+      } finally { if (valid(token)) { busy = false; lock(); } }
+    }
+    async function render() {
+      if (disposed || !isCurrent()) return;
+      const token = ++epoch; container.dataset.state = 'loading'; container.setAttribute('aria-busy', 'true');
+      try { const value = await read(); if (valid(token)) paint(value); }
+      catch (_) {
+        if (!valid(token)) return;
+        container.dataset.state = 'error';
+        status = el('p', '', 'life-status'); status.id = 'lifeNaverPhotosStatus'; status.setAttribute('role', 'status');
+        error = el('p', '사진 사본을 확인하지 못했습니다. 원문은 유지됩니다.', 'life-error'); error.id = 'lifeNaverPhotosError'; error.setAttribute('role', 'alert');
+        actions = el('div', null, 'life-actions'); actions.append(button('사진 다시 확인', 'lifeNaverPhotosRetry', () => render()));
+        container.replaceChildren(status, error, actions);
+      } finally { if (valid(token)) lock(); }
+    }
+    return { render, dispose() { if (disposed) return; disposed = true; epoch++; service?.dispose(); imageView?.dispose(); container.replaceChildren(); } };
+  }
   function create({ container, service, workspaceId, capture: initial, captureId, onApply, onOpenSource, onWritePhotos, onDownload, onReturn, isCurrent = () => true, viewState = {} }) {
     const doc = container.ownerDocument;
     const el = (tag, text, cls) => { const n = doc.createElement(tag); if (text != null) n.textContent = text; if (cls) n.className = cls; return n; };
@@ -121,5 +230,5 @@
       getView: () => ({ captureId: data?.capture?.id || captureId, selectedIndexes: imageView?.getSelectedIndexes() || [] }),
       destroy() { if (disposed) return; disposed = true; epoch++; imageView?.dispose(); data = null; container.replaceChildren(); } };
   }
-  return Object.freeze({ create, photos });
+  return Object.freeze({ create, photos, sourceMedia });
 });

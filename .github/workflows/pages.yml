@@ -423,6 +423,9 @@ jobs:
       - name: Verify Naver source photo availability and exact return
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/naver-source-photo-status-browser.cjs
+      - name: Verify exact source photo recovery across account devices and portable files
+        if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
+        run: node tests/source-photo-recovery-browser.cjs
       - name: Verify captured Naver photos, exact source revisions and independent device recovery
         if: ${{ matrix.group == 5 && !cancelled() && steps.server.outcome == 'success' }}
         run: node tests/life-naver-capture-browser.cjs
@@ -532,6 +535,7 @@ jobs:
             .local/interest-browser/
             .local/interest-pwa/
             .local/external-discovery-browser/
+            .local/source-photo-recovery-browser/
             .local/external-discovery-pwa/
             .local/external-discovery-pwa-v162/
             .local/discovery-automation-browser/
@@ -770,7 +774,7 @@ jobs:
       - name: Verify generated configuration and complete installed shell hashes
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}
         env:
-          PREVIOUS_RELEASE: 6126123c12af12daeca6b9679ce1201095c89367
+          PREVIOUS_RELEASE: ab6aef594a2d6d0cabbaf89864e7994ce22a6fec
         run: node scripts/verify-prepared-site.mjs
       - name: Verify the actual previous service worker updates without losing originals
         if: ${{ !cancelled() && steps.server.outcome == 'success' }}

@@ -1,5 +1,29 @@
 # 오픈소스 검토와 재사용 결정
 
+## 정확한 원문 판·사진 복구와 기존 불변 참조 재사용 — 2026-10-27
+
+다른 기기에 원문만 도착했을 때 **그 원문 판에 연결된 사진 묶음**을 명시적으로 다시 받는 목표다. 본문이 같은 두 수집 판도 사진은 다를 수 있으므로 제목·본문 해시·최신 날짜로 사진을 추정하지 않는다. 기존 Core의 정확 `sourceVersion` 연결, 계정 원문 동기화, owner RLS가 있는 수집 판 조회, private Storage 다운로드, NaverMedia의 사진 검증·전용 ZIP을 재사용한다. 새 런타임 패키지·서버 테이블·별도 동기화 엔진은 추가하지 않는다.
+
+| 비교한 방법 | 선택과 유지 비용 |
+| --- | --- |
+| 기존 Core links의 불변 사진 판 참조 | **채택.** `naver_capture_reference`에 정확 원문 판과 `blogId/logNo/captureHash`만 연결한다. 원문·사진·참조의 원자 생성, 앱의 직접 저장·원격 설치에서 기존 참조 교체·삭제 거절, 백업의 정확 ID 재매핑을 검수해야 한다. owner·서버 row ID·사진 경로는 참조에 넣지 않는다. |
+| 별도 서버 영수증 테이블·새 동기화 도메인 | 이번에는 제외한다. 서버의 수신 완료 상태를 별도로 관리할 요구가 없고 기존 원문 동기화와 중복된 설치·CAS·충돌·기기 복구 경로가 생긴다. 실제 서버에 사진이 남아 있는지는 명시 복구 시 현재 계정의 정확 행과 바이트를 다시 확인한다. |
+| 본문 일치 또는 최신 수집 판으로 연결 | 제외한다. 같은 본문·다른 사진, 본문 없는 링크, 추출기/HTML 변경을 구별하지 못한다. 기존 참조가 없는 과거 자료에는 본문 일치만으로 새 참조를 만들지 않는다. |
+
+이 참조는 **서버 보관 완료 증명이나 다운로드 권한이 아닌 재검증할 대상의 포인터**다. 일반 JSON에서 참조가 이동해도 사진 바이트가 포함되거나 그 계정에서 다운로드할 수 있다는 뜻이 아니다. 기존 전용 Naver ZIP은 owner/row/storagePath를 제거한 `localOnly` 새 사본으로 유지한다. 선택한 캡처의 사진 SHA·실제 디코딩·픽셀과 원문 정체성을 확인한 뒤 정확한 판에 sidecar만 원자 설치한다. 브라우저 표시를 위해 새 이미지 프록시·재압축·외부 URL 직접 로드를 도입하지 않는다.
+
+2026-10-27 04:17 UTC 운영의 스키마·권한·정책 메타데이터만 읽어 `life_naver_captures`의 `(owner_id,blog_id,log_no,capture_hash)` unique, RLS 활성화, `authenticated` SELECT 허용·쓰기 불허, `anon` SELECT 불허와 `owner_id = auth.uid()` SELECT 정책을 확인했다. 사용자 자료 조회·쓰기나 SQL 설치는 없었다. 이는 정확 행을 조회할 기존 접근 경로의 확인이며 특정 사진의 서버 잔존·다운로드 성공 증명은 아니다.
+
+| 재사용 요소 | 공식 최신 근거와 이번 판단 |
+| --- | --- |
+| fflate 0.8.3 · MIT | [npm latest](https://registry.npmjs.org/fflate/latest)와 [공식 v0.8.3 릴리스](https://github.com/101arrowz/fflate/releases/tag/v0.8.3), 2026-05-16 게시가 일치한다. [태그 LICENSE](https://github.com/101arrowz/fflate/blob/v0.8.3/LICENSE)를 확인했고 저장소는 비보관·비활성화 아님, 마지막 push는 같은 날이다. 기존 동봉본과 level0 전용 ZIP, 경로/개수/크기/CRC/SHA 검증을 유지한다. 일반 ZIP 지원이나 새 압축 엔진으로 범위를 늘리지 않는다. |
+| idb 8.0.3 유지 · ISC | 최신 [npm 8.0.4](https://registry.npmjs.org/idb/latest)는 2026-10-06 게시다. [공식 8.0.3→8.0.4 비교](https://github.com/jakearchibald/idb/compare/v8.0.3...v8.0.4)는 NaN 읽기 수정과 byte 절약이며, 이번 엄격 JSON/정수 사진 명세는 NaN을 거절한다. 기능과 무관한 동봉본 교체를 하지 않는다. 저장소는 비보관·비활성화 아님, 마지막 push 2026-10-06, [ISC 전문](https://github.com/jakearchibald/idb/blob/main/LICENSE)을 확인했다. GitHub latest release endpoint의404와 npm 게시 버전을 구분한다. |
+| 기존 Supabase SDK·Auth·private Storage | [getUser](https://supabase.com/docs/reference/javascript/auth-getuser)의 Auth 서버 조회와 [private bucket](https://supabase.com/docs/guides/storage/buckets/fundamentals)의 JWT/RLS 다운로드를 재사용한다. 로컬 session의 user나 참조 안 문자열만으로 소유자를 승인하지 않는다. 현재 계정·공간·정확 원문 판을 비동기 경계와 마지막 쓰기에서 다시 확인한다. |
+
+fflate와 idb의 공개 저장소 security-advisories 목록을 2026-10-27 UTC에 각각 HTTP200·0건으로 확인했다. 이는 공개된 목록의 관측이며 전이 의존성·전체 보안 감사나 취약점 부재 보장이 아니다. 라이브러리를 새로 설치하지 않았고, 원문·사진 판 관계와 불변성만 작은 앱 모델로 유지한다. [idb transaction lifetime](https://github.com/jakearchibald/idb#transaction-lifetime)에 따라 네트워크·WebCrypto·사진 디코딩은 쓰기 트랜잭션 밖에서 완료하고, 트랜잭션 안에서는 현재 타깃/참조 검증과 IDB 쓰기만 수행한다.
+
+Supabase 스킬과 [최신 changelog](https://supabase.com/changelog.md)를 다시 읽었다. [10/12 TLS CBC 중단](https://supabase.com/changelog/cbc-tls-ciphers-deprecated)은 11/10 이후 구형 TLS1.2 일부 cipher 대상이고 TLS1.3은 변하지 않는다. [9/25 PostgreSQL15.19/17.11 변경](https://supabase.com/changelog/postgres-15-19-17-11-breaking-changes)의 특수 index·legacy pgcrypto·custom operator 범위와 이번 JSON/정확 조회를 구분했다. 이 조사로 실제 사용자 기기나 운영 DB의 영향 여부를 확정하지 않는다. `auth-getuser.md` 직접 조회는404였으므로 공식 Supabase 문서 검색에서 해당 reference 본문을 확인했다. 검증·출시 결과는 구현 설계와 해당 PR의 정확 커밋 기록을 따른다.
+
 ## 자료실 기본 계정 보관과 기존 CAS/outbox 재사용 — 2026-10-24
 
 사용자 요청으로 자료 영역의 기본 정책을 비공개 계정 자동 보관으로 바꾼다. 새 프레임워크보다 기존 단일 Supabase SDK/인증·Core Sync/CompositionSync의 두 엔진·owner/revision CAS·영속 operation 영수증과 IDB 캐시를 재사용하고 LibraryMeta를 도메인 adapter로 연결한다. 원본 첨부도 기존 ZIP 검증/Blob DB를 재사용한다. [대상·이관·순서·실패 복구](../design-review/account-library.md). 앱의 새 런타임 의존성은0이며 범용 복제 엔진·SDK 업그레이드는 추가하지 않았다.

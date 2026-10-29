@@ -4,7 +4,8 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
-  const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i, LOG = /^[1-9][0-9]{0,29}$/;
+  const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i, LOG = /^[1-9][0-9]{0,29}$/,
+    ID = /^[A-Za-z0-9_-]{1,128}$/, SHA = /^[a-f0-9]{64}$/;
   const messages = {
     naver_auth_required: '로그인을 확인한 뒤 다시 시도해 주세요.',
     naver_setup_required: '실제 수집은 준비 중입니다. 기존 연결과 자료는 유지됩니다.',
@@ -14,13 +15,20 @@
     naver_network_error: '요청을 마치지 못했습니다. 기존 자료를 유지하며 다시 확인할 수 있습니다.',
     naver_conflict: '자료나 연결이 바뀌었습니다. 현재 내용을 다시 확인해 주세요.',
     naver_ambiguous: '같은 글의 자료가 여러 개 있습니다. 보완할 자료를 먼저 확인해 주세요.',
-    naver_source_trashed: '휴지통에 있는 자료입니다. 복원한 뒤 본문·사진을 받아 주세요.'
+    naver_source_trashed: '휴지통에 있는 자료입니다. 복원한 뒤 본문·사진을 받아 주세요.',
+    naver_photo_reference_missing: '이 원문 판에는 사진 연결이 보관되지 않았습니다. 수집 사본을 확인해 주세요.',
+    naver_photo_unavailable: '이 계정에서 같은 사진 판을 찾지 못했습니다. 기존 자료는 유지됩니다.'
   };
   const fault = code => Object.assign(new Error(messages[code] || messages.naver_network_error), { code });
   function need(ok, code = 'naver_invalid_data') { if (!ok) throw fault(code); }
   const plain = value => value && typeof value === 'object' && !Array.isArray(value);
   function clean(error) {
     if (messages[error?.code]) return error;
+    if (['naver_capture_invalid', 'invalid_naver_media', 'invalid_naver_capture_reference', 'naver_capture_reference_invalid',
+      'naver_capture_reference_mismatch', 'duplicate_naver_capture_reference'].includes(error?.code)) return fault('naver_invalid_data');
+    if (['immutable_naver_capture_reference', 'immutable_source_version', 'immutable_naver_capture',
+      'naver_capture_changed', 'naver_target_changed'].includes(error?.code)) return fault('naver_conflict');
+    if (error?.code === 'source_trashed') return fault('naver_source_trashed');
     if (error?.code === 'PT409' || error?.status === 409 || /conflict/i.test(error?.message || '')) return fault('naver_conflict');
     if (['PGRST202', 'PGRST205', '42P01', '42883'].includes(error?.code)) return fault('naver_schema_missing');
     if (error?.code === '42501' || error?.status === 401) return fault('naver_auth_required');
@@ -28,12 +36,16 @@
     return fault('naver_network_error');
   }
   function create({ storage, auth = root.HaedoAuth, core = root.HaedoLife?.Core,
-    model = root.HaedoLife?.NaverCapture, identity = root.HaedoLife?.NaverBlog, isCurrent = () => true } = {}) {
+    model = root.HaedoLife?.NaverCapture, identity = root.HaedoLife?.NaverBlog,
+    reference = root.HaedoLife?.NaverCaptureReference, media = root.HaedoLife?.NaverMedia, isCurrent = () => true } = {}) {
     need(storage?.isAccountScoped && storage.account && auth?.client?.rpc && auth?.verify && core && model && identity, 'naver_auth_required');
-    const owner = { ...storage.account }, client = auth.client, controllers = new Set(), snapshots = new Map(), jobs = new Map();
+    const owner = { ...storage.account }, client = auth.client, controllers = new Set(), snapshots = new Map(), jobs = new Map(), photoTasks = new Map();
     let disposed = false, generation = 0;
-    function cancel() { generation++; snapshots.clear(); for (const c of controllers) c.abort(); controllers.clear(); }
-    const unlisten = auth.onAccountChange?.(() => { if (auth.getAccount?.()?.userId !== owner.userId) cancel(); });
+    function cancel() { generation++; snapshots.clear(); photoTasks.clear(); for (const c of controllers) c.abort(); controllers.clear(); }
+    const unlisten = auth.onAccountChange?.(() => {
+      const current = auth.getAccount?.();
+      if (current?.userId !== owner.userId || current?.projectUrl !== owner.projectUrl) cancel();
+    });
     function context(workspaceId) { need(UUID.test(workspaceId || '')); return { workspaceId, epoch: auth.epoch, generation }; }
     function guard(c) {
       need(!disposed && c.generation === generation && c.epoch === auth.epoch && isCurrent(c.workspaceId) &&
@@ -47,6 +59,18 @@
         let request = client.rpc(name, args); if (request?.abortSignal) request = request.abortSignal(controller.signal);
         const result = await step(c, () => request); if (result.error) throw result.error; return result.data;
       } catch (error) { guard(c); throw clean(error); } finally { controllers.delete(controller); }
+    }
+    async function downloadPhotos(c, row) {
+      const photos = [];
+      for (const photo of row.payload.photos) if (photo.status === 'stored') {
+        await verify(c); const controller = new AbortController(); controllers.add(controller);
+        try {
+          const result = await step(c, () => client.storage.from('haedo-naver-originals').download(photo.storagePath, {}, { signal: controller.signal }));
+          if (result.error) throw result.error;
+          need(result.data instanceof Blob); photos.push({ index: photo.index, blob: result.data });
+        } catch (error) { guard(c); throw clean(error); } finally { controllers.delete(controller); }
+      }
+      return photos;
     }
     function subscription(row) {
       need(plain(row) && UUID.test(row.id || '') && UUID.test(row.workspace_id || '') && typeof row.enabled === 'boolean' &&
@@ -139,6 +163,97 @@
       return subscription(await rpc(c, 'life_naver_save', { p_workspace_id: sub.workspaceId, p_blog_id: sub.blogId,
         p_expected_revision: expectedRevision, p_enabled: enabled }));
     }
+    function photoTarget(input) {
+      const keys = ['sourceId', 'sourceVersionId', 'expectedCaptureHash'];
+      need(plain(input) && Reflect.ownKeys(input).length === keys.length && keys.every(key =>
+        Object.hasOwn(input, key) && Object.hasOwn(Object.getOwnPropertyDescriptor(input, key), 'value')));
+      need(ID.test(input.sourceId || '') && ID.test(input.sourceVersionId || '') && SHA.test(input.expectedCaptureHash || ''));
+      return { sourceId: input.sourceId, sourceVersionId: input.sourceVersionId, expectedCaptureHash: input.expectedCaptureHash };
+    }
+    async function exactTarget(c, target, requiredReference) {
+      need(reference?.get && reference?.assertCapture && media?.validate && media?.checkTarget);
+      const bundle = await step(c, () => storage.read(c.workspaceId));
+      core.validateWorkspace(bundle);
+      const source = bundle.sources.find(value => value.id === target.sourceId), version = bundle.sourceVersions.find(value => value.id === target.sourceVersionId);
+      need(source?.origin === 'naver_blog' && version?.sourceId === source.id, 'naver_conflict');
+      need(core.isSourceActive(bundle, source.id), 'naver_source_trashed');
+      const linked = reference.get(bundle, source.id, version.id);
+      if (requiredReference) need(linked, 'naver_photo_reference_missing');
+      if (linked) need(linked.reference.captureHash === target.expectedCaptureHash, 'naver_conflict');
+      return { bundle, linked };
+    }
+    async function exactCapture(c, pointer) {
+      need(typeof client.from === 'function');
+      await verify(c); const controller = new AbortController(); controllers.add(controller);
+      try {
+        // A hash reference chooses an immutable photo set, not the latest post.
+        // It carries no server locator or assertion of account storage success.
+        let request = client.from('life_naver_captures').select('id,owner_id,blog_id,log_no,capture_hash,created_at,payload')
+          .eq('owner_id', owner.userId).eq('blog_id', pointer.blogId).eq('log_no', pointer.logNo).eq('capture_hash', pointer.captureHash).limit(2);
+        if (request?.abortSignal) request = request.abortSignal(controller.signal);
+        const result = await step(c, () => request); if (result.error) throw result.error;
+        need(Array.isArray(result.data)); need(result.data.length !== 0, 'naver_photo_unavailable'); need(result.data.length === 1);
+        const row = await step(c, () => model.validateCaptureRow(result.data[0], { ownerId: owner.userId }));
+        reference.assertCapture(pointer, row); return row;
+      } catch (error) { guard(c); throw clean(error); } finally { controllers.delete(controller); }
+    }
+    function commitGuard(c) { return () => { try { guard(c); return true; } catch (_) { return false; } }; }
+    function photoCommit(result, target) {
+      if (result?.status === 'conflict') throw fault('naver_conflict');
+      if (result?.status === 'rejected') throw clean(result.error);
+      need(result?.status === 'stored' && result.sourceId === target.sourceId && result.sourceVersionId === target.sourceVersionId &&
+        Number.isSafeInteger(result.revision) && result.revision >= 0);
+      return structuredClone(result);
+    }
+    async function photoTask(ws, input, kind, action) {
+      const target = photoTarget(input), c = context(ws);
+      guard(c);
+      const key = JSON.stringify([kind, ws, target.sourceId, target.sourceVersionId, target.expectedCaptureHash, c.epoch, c.generation]);
+      let task = photoTasks.get(key);
+      if (!task) {
+        task = (async () => { try { return await action(c, target); } catch (error) { guard(c); throw clean(error); } })();
+        photoTasks.set(key, task);
+      }
+      try { return structuredClone(await step(c, () => task)); }
+      finally { if (photoTasks.get(key) === task) photoTasks.delete(key); }
+    }
+    async function restoreSourcePhotos(ws, input) {
+      return photoTask(ws, input, 'restore', async (c, target) => {
+        need(typeof storage.restoreNaverCapturePhotos === 'function');
+        const initial = await exactTarget(c, target, true), pointer = initial.linked.reference;
+        const row = await exactCapture(c, pointer), attachment = { sourceId: target.sourceId, sourceVersionId: target.sourceVersionId,
+          capture: row, photos: [] };
+        media.checkTarget(initial.bundle, attachment);
+        attachment.photos = await downloadPhotos(c, row);
+        const verified = await step(c, () => media.validate(attachment, { ownerId: owner.userId }));
+        const current = await exactTarget(c, target, true); reference.assertCapture(current.linked.reference, row); media.checkTarget(current.bundle, verified);
+        await verify(c);
+        return photoCommit(await step(c, () => storage.restoreNaverCapturePhotos({ workspaceId: ws, sourceId: target.sourceId,
+          sourceVersionId: target.sourceVersionId, expectedReference: pointer, attachment: verified }, { isCurrent: commitGuard(c) })), target);
+      });
+    }
+    async function rememberSourcePhotos(ws, input) {
+      return photoTask(ws, input, 'remember', async (c, target) => {
+        need(typeof storage.rememberNaverCaptureReference === 'function' && typeof storage.readNaverCapture === 'function');
+        const initial = await exactTarget(c, target, false), local = await step(c, () => storage.readNaverCapture(ws, target.sourceVersionId));
+        need(local && !local.localOnly && local.sourceId === target.sourceId && local.sourceVersionId === target.sourceVersionId &&
+          local.capture?.owner_id === owner.userId && local.capture?.capture_hash === target.expectedCaptureHash, 'naver_conflict');
+        const previous = await step(c, () => model.validateCaptureRow(local.capture, { ownerId: owner.userId })); media.checkTarget(initial.bundle, local);
+        // Existing local bytes do not prove current server availability. This
+        // explicit action rechecks the same server row before adding a pointer.
+        const raw = await rpc(c, 'life_naver_capture_read', { p_capture_id: previous.id });
+        need(raw !== null, 'naver_photo_unavailable');
+        const row = await step(c, () => model.validateCaptureRow(raw, { ownerId: owner.userId }));
+        need(row.id === previous.id && row.capture_hash === target.expectedCaptureHash);
+        const pointer = { sourceVersionId: target.sourceVersionId, blogId: previous.blog_id, logNo: previous.log_no, captureHash: previous.capture_hash };
+        reference.assertCapture(pointer, row);
+        const current = await exactTarget(c, target, false); media.checkTarget(current.bundle, { ...local, capture: row });
+        await verify(c);
+        return photoCommit(await step(c, () => storage.rememberNaverCaptureReference({ workspaceId: ws, sourceId: target.sourceId,
+          sourceVersionId: target.sourceVersionId, expectedCaptureHash: target.expectedCaptureHash, expectedCaptureId: previous.id,
+          operationId: core.id() }, { isCurrent: commitGuard(c) })), target);
+      });
+    }
     async function readCapture(ws, id) {
       need(UUID.test(id || '')); const c = context(ws), key = ws + ':' + id;
       if (snapshots.has(key)) {
@@ -147,14 +262,9 @@
       }
       const raw = await rpc(c, 'life_naver_capture_read', { p_capture_id: id });
       const row = await step(c, () => model.validateCaptureRow(raw));
-      need(row.owner_id === owner.userId); const photos = [];
-      for (const photo of row.payload.photos) if (photo.status === 'stored') {
-        await verify(c);
-        const result = await step(c, () => client.storage.from('haedo-naver-originals').download(photo.storagePath));
-        if (result.error) throw clean(result.error); need(result.data instanceof Blob); photos.push({ index: photo.index, blob: result.data });
-      }
+      need(row.id === id && row.owner_id === owner.userId); const photos = await downloadPhotos(c, row);
       const bundle = await step(c, () => storage.read(ws)), projection = await receivedProjection(c, row, bundle);
-      await step(c, () => root.HaedoLife.NaverMedia.validate({ sourceId: projection.sourceId || core.id(), sourceVersionId: projection.sourceVersionId || core.id(), capture: row, photos }));
+      await step(c, () => media.validate({ sourceId: projection.sourceId || core.id(), sourceVersionId: projection.sourceVersionId || core.id(), capture: row, photos }));
       const snapshot = { capture: row, photos, projection }; snapshots.set(key, snapshot); return structuredClone(snapshot);
     }
     async function receiveCapture(ws, id, options = {}) {
@@ -185,6 +295,7 @@
       throw fault('naver_conflict');
     }
     return Object.freeze({ connections, publicList, startInventory, queue, captures, checkCapture, retry, configureConnection, readCapture, receiveCapture,
+      restoreSourcePhotos, rememberSourcePhotos,
       dispose() { disposed = true; cancel(); unlisten?.(); } });
   }
   return Object.freeze({ create, fault });
