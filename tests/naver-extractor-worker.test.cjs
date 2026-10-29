@@ -25,6 +25,7 @@ function fixture(options = {}) {
     revision: 1, lease_token: ids.lease, lease_until: new Date(Date.now()+120000).toISOString(), progress, ...options.claim });
   const rpc = async (name,args) => {
     rpcCalls.push({name,args:structuredClone(args)});
+    options.onRPC?.(name,args);
     if (name === 'life_naver_capture_claim') return options.inventory ? [] : [claim()];
     if (name === 'life_naver_inventory_claim') return [{...claim(),page:1,page_size:30}];
     if (name === 'life_naver_capture_checkpoint') { progress=structuredClone(args.p_progress); return {status:'pending'}; }
@@ -132,6 +133,59 @@ test('inventory errors preserve prior inventory and successful page carries chec
   const bad=fixture({inventory:true,list:{totalCount:31,postList:[]}});await(await bad.worker()).execute({action:'inventory',owner:ids.owner,subscriptionId:ids.sub});
   const error=bad.rpcCalls.find(v=>v.name==='life_naver_inventory_finish').args;assert.equal(error.p_error,'incomplete_inventory');assert.deepEqual(error.p_entries,[]);assert.equal(error.p_total,null);
 });
+test('run fairness gives due inventory a page before each bounded capture checkpoint despite a photo backlog',async()=>{
+  const f=fixture({images:5});
+  for(let run=0;run<2;run++){
+    const before=f.rpcCalls.length, w=await f.worker();
+    assert.deepEqual(await w.execute({action:'run'}),{status:'checked',stage:'capture',pending:true});
+    const calls=f.rpcCalls.slice(before);
+    assert.equal(calls.filter(v=>v.name==='life_naver_inventory_claim').length,1);
+    assert.equal(calls.filter(v=>v.name==='life_naver_capture_claim').length,1);
+    assert.ok(calls.findIndex(v=>v.name==='life_naver_inventory_finish')<calls.findIndex(v=>v.name==='life_naver_capture_claim'));
+    assert.equal(calls.find(v=>v.name==='life_naver_inventory_finish').args.p_entries[0].logNo,LOG);
+    assert.equal(calls.filter(v=>v.name==='life_naver_capture_checkpoint').length,1);
+    assert.equal(f.progress().nextImage,(run+1)*2);
+  }
+  assert.equal(f.calls.filter(v=>v.url.includes('/PostView.naver')).length,1,'Resumed capture keeps the original exact body');
+  assert.equal(f.uploads.length,4);
+});
+test('slow inventory returns its exact page result without claiming a fresh capture lease at or below the shared reserve',async()=>{
+  const realNow=Date.now, start=realNow();let elapsed=0;
+  Date.now=()=>start+elapsed;
+  try{
+    for(const cost of [35000,60000]){
+      elapsed=0;
+      const f=fixture({onRPC:name=>{if(name==='life_naver_inventory_finish')elapsed=cost;}});
+      assert.deepEqual(await(await f.worker()).execute({action:'run'}),{status:'checked',stage:'inventory',failed:false});
+      assert.deepEqual(f.rpcCalls.map(v=>v.name),['life_naver_inventory_claim','life_naver_inventory_finish']);
+      assert.equal(f.progress(),null);assert.equal(f.uploads.length,0);
+      assert.equal(f.calls.some(v=>v.url.includes('/PostView.naver')),false);
+    }
+  }finally{Date.now=realNow;}
+});
+test('a recorded inventory failure still permits one capture when budget remains, while explicit lanes stay single-purpose',async()=>{
+  const f=fixture({images:0,list:{totalCount:31,postList:[]}});
+  assert.deepEqual(await(await f.worker()).execute({action:'run'}),{status:'checked',stage:'capture',pending:false});
+  assert.equal(f.rpcCalls.find(v=>v.name==='life_naver_inventory_finish').args.p_error,'incomplete_inventory');
+  assert.equal(f.rpcCalls.filter(v=>v.name==='life_naver_capture_claim').length,1);
+  for(const action of ['capture','inventory']){
+    const single=fixture({images:0});await(await single.worker()).execute({action,owner:ids.owner,subscriptionId:ids.sub,...(action==='capture'?{jobId:ids.job}:{})});
+    const other=action==='capture'?'inventory':'capture';
+    assert.equal(single.rpcCalls.some(v=>v.name==='life_naver_'+other+'_claim'),false);
+  }
+});
+test('run stops after an unknown inventory acknowledgement or invalid lease without claiming the capture lane',async()=>{
+  const lost=fixture({onRPC:name=>{if(name==='life_naver_inventory_finish')throw new Error('lost inventory ACK');}});
+  await assert.rejects((await lost.worker()).execute({action:'run'}),/lost inventory ACK/);
+  assert.equal(lost.rpcCalls.filter(v=>v.name==='life_naver_inventory_finish').length,1);
+  assert.equal(lost.rpcCalls.some(v=>v.name==='life_naver_capture_claim'),false);
+  assert.equal(lost.rpcCalls.at(-1).args.p_error,null,'Unknown successful page ACK must not be replaced by an error finish');
+  for(const claim of [{owner_id:ids.other},{lease_until:new Date(Date.now()-1).toISOString()}]){
+    const invalid=fixture({claim});
+    await assert.rejects((await invalid.worker()).execute({action:'run',owner:ids.owner,subscriptionId:ids.sub}));
+    assert.equal(invalid.calls.length,0);assert.deepEqual(invalid.rpcCalls.map(v=>v.name),['life_naver_inventory_claim']);
+  }
+});
 test('new action handler verifies user before double gates and pins manual subscription; response contains no acquired body',async()=>{
   const [,,,{createHandler}]=await modules;const model=require('../assets/life/naver-capture.js');
   const f=fixture({images:0});const seen=[];
@@ -147,7 +201,10 @@ test('new action handler verifies user before double gates and pins manual subsc
   let handler=createHandler({fetcher,environment:k=>env[k],load,captureModel:model});
   let result=await handler(request());assert.deepEqual(await result.json(),{status:'checked',stage:'capture',pending:false});
   assert.equal(seen[0],'https://fixture.supabase.co/auth/v1/user');
-  assert.deepEqual(f.rpcCalls[0].args,{p_limit:1,p_job_id:null,p_owner_id:ids.owner,p_subscription_id:ids.sub});
+  assert.equal(f.rpcCalls[0].name,'life_naver_inventory_claim');
+  assert.deepEqual(f.rpcCalls[0].args,{p_limit:1,p_subscription_id:ids.sub,p_owner_id:ids.owner});
+  assert.equal(f.rpcCalls[2].name,'life_naver_capture_claim');
+  assert.deepEqual(f.rpcCalls[2].args,{p_limit:1,p_job_id:null,p_owner_id:ids.owner,p_subscription_id:ids.sub});
   delete env.HAEDO_NAVER_INGESTION_ENABLED;seen.length=0;
   result=await handler(request());assert.deepEqual(await result.json(),{error:'setup_required'});assert.equal(seen.length,1);
 });

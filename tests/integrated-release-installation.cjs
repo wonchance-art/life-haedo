@@ -21,6 +21,7 @@ const libraryMigrations = [
 ];
 const editedCopyMigration = 'supabase/migrations/20261022031304_life_material_edited_copy_markers.sql';
 const mediaReceiptMigration = ['supabase/migrations/20261029030503_naver_media_receipts.sql', '026730836fd04a9344ef831696857d7df806fc7fdb8d71605a509e3d398bae6d'];
+const inventoryRescanMigration = ['supabase/migrations/20261029040646_naver_inventory_automatic_rescan.sql', '186b8f4d06b5641859f419f864f640cff35b5b39adb524122d1047eb183d2cf4'];
 const image = 'postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
 const container = 'haedo-blog-postgres-' + Date.now() + process.pid, database = 'haedo_blog_qa_integrated_install', runId = randomUUID();
 const env = { ...process.env }; for (const key of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH']) delete env[key];
@@ -56,8 +57,8 @@ async function main() {
       .trim().split('\n').filter(name => name.endsWith('.sql')).map(name => path.basename(name)).sort();
     assert.equal(baseline.length, 10);
     assert.deepEqual(files.map(name => 'supabase/migrations/' + name),
-      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file), mediaReceiptMigration[0]].sort(),
-      'Exactly the ten legacy and ten reviewed additive migrations are required; missing or unknown files are rejected.');
+      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file), mediaReceiptMigration[0], inventoryRescanMigration[0]].sort(),
+      'Exactly the ten legacy and eleven reviewed additive migrations are required; missing or unknown files are rejected.');
     for (const file of baseline) {
       const relative = 'supabase/migrations/' + file, current = await fs.readFile(path.join(root, relative), 'utf8');
       assert.equal(hash(current), hash(command('git', ['-C', root, 'show', '88ccfe5:' + relative])), 'Previously installed migration changed: ' + file);
@@ -425,6 +426,38 @@ async function main() {
       assert.deepEqual(rpc('life_naver_media_receipt_find', [q(naverBundle.workspaceId) + '::uuid', q(captureId) + '::uuid', q(captureHash)]), [expected]);
       assert.deepEqual(dataSnapshot(), populatedData);
       report.naverMediaReceiptMigration = { file, sha256: hash(ddl), failedInstallAtomic: true, existingRowsAndPrivilegesPreserved: true, populatedReceiptReinstallPreserved: true, exactPhotoMetadataOnly: true, actualPhotoBytes: false };
+    });
+    await check('Reviewed inventory rescan changes only the exact original claim body and preserves all populated records, functions and privileges through rollback and reinstallation', async () => {
+      const [file, expectedHash] = inventoryRescanMigration;
+      const ddl = await fs.readFile(path.join(root, file), 'utf8');
+      assert.equal(hash(ddl), expectedHash, 'Only the exact independently reviewed inventory rescan migration is accepted.');
+      const definition = /create or replace function haedo_naver_private\.inventory_claim\([^$]+?as \$\$([\s\S]*?)\$\$;/;
+      const legacyBody = (await fs.readFile(path.join(root, captureMigration), 'utf8')).match(definition)?.[1];
+      const newBody = ddl.match(definition)?.[1];
+      assert.equal(hash(legacyBody || ''), '6e8def3fc70a1c103ea7570978c2400067915efb200dac32f722b6b60f9b87cd', 'The original inventory claim body must remain the independently reviewed immutable source.');
+      assert.equal(newBody, legacyBody.replace("if i.status='complete' then", "if i.status='complete' or i.last_error in ('inventory_changed','inventory_incomplete') then"), 'Only the reviewed automatic rescan condition may change.');
+      const allNamespaces = "array['public','auth','storage','haedo_blog_private','haedo_material_private','haedo_naver_private']";
+      const allCatalog = catalogQuery.replaceAll(namespaces, allNamespaces).replace(" and p.proname not like 'life_material_%'", '');
+      const dataSnapshot = () => sql('select installation_probe.all_data_snapshot();');
+      const target = row => row[0] === 'haedo_naver_private' && row[1] === 'inventory_claim';
+      const targetMetadata = () => sql("select jsonb_build_object('body',p.prosrc,'identity',pg_get_function_identity_arguments(p.oid),'result',pg_get_function_result(p.oid),'owner',pg_get_userbyid(p.proowner),'acl',p.proacl,'path',p.proconfig,'definer',p.prosecdef,'volatility',p.provolatile,'strict',p.proisstrict,'parallel',p.proparallel,'defaultArguments',pg_get_expr(p.proargdefaults,0)) from pg_proc p where p.oid='haedo_naver_private.inventory_claim(integer,uuid,uuid)'::regprocedure;");
+      const intactData = dataSnapshot(), intactCatalog = sql(allCatalog), originalMetadata = targetMetadata();
+      assert.equal(intactCatalog.functions.filter(target).length, 1);
+      assert.equal(originalMetadata.body, legacyBody, 'The installed original function must match the exact reviewed source before replacement.');
+      assert.throws(() => psql(ddl.replace(/commit;\s*$/i, 'select 1/0;\ncommit;')), /division by zero/);
+      assert.deepEqual(dataSnapshot(), intactData); assert.deepEqual(sql(allCatalog), intactCatalog); assert.deepEqual(targetMetadata(), originalMetadata);
+      psql(ddl);
+      const installedCatalog = sql(allCatalog), installedMetadata = targetMetadata();
+      assert.equal(installedMetadata.body, newBody);
+      assert.deepEqual({ ...installedMetadata, body: legacyBody }, originalMetadata, 'Argument defaults, result, owner, volatility, search path, definer status and ACL are preserved.');
+      const normalizedCatalog = { ...installedCatalog, functions: installedCatalog.functions.map(row => target(row) ? row.map((value, index) => index === 3 ? legacyBody : value) : row) };
+      assert.deepEqual(normalizedCatalog, intactCatalog, 'Only inventory_claim.prosrc may differ; every other schema, relation, policy, function and privilege stays exact.');
+      assert.deepEqual(dataSnapshot(), intactData);
+      assert.throws(() => psql(ddl.replace(/commit;\s*$/i, 'select 1/0;\ncommit;')), /division by zero/);
+      assert.deepEqual(dataSnapshot(), intactData); assert.deepEqual(sql(allCatalog), installedCatalog); assert.deepEqual(targetMetadata(), installedMetadata);
+      for (let pass = 0; pass < 2; pass++) psql(ddl);
+      assert.deepEqual(dataSnapshot(), intactData); assert.deepEqual(sql(allCatalog), installedCatalog); assert.deepEqual(targetMetadata(), installedMetadata);
+      report.naverInventoryRescanMigration = { file, sha256: hash(ddl), originalBodySha256: hash(legacyBody), newBodySha256: hash(newBody), failedInstallAtomic: true, onlyReviewedConditionChanged: true, populatedRowsExact: true, allPrivilegesPreserved: true, repeatedInstallExact: true, runtimeGateUnchanged: true };
     });
     report.pass = true; report.baselineMigrations = baseline; report.baselineDataSha256 = baselineDigest;
     report.rollback = 'Failed transaction rolls back all additive DDL. After successful use retain data/receipts and compatible output-receipt storage; disable new UI and public/private entrypoint execution, then reapply the migration to restore. Full 88cc frontend rollback is safe only before new preparation usage. No destructive down migration.';

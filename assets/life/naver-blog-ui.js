@@ -63,11 +63,15 @@
       });
       return n;
     }
-    async function work(action) {
+    async function work(action, focus = null) {
       if (!current() || busy) return;
-      const token = epoch; busy = true; clearError(); controls();
+      const token = epoch, restoreFocus = focus && doc.activeElement === focus.trigger; busy = true; clearError(); controls();
       try { await action(token); } catch (cause) { if (current(token)) fail(cause); }
-      finally { if (current(token)) { busy = false; controls(); } }
+      finally { if (current(token)) {
+        busy = false; controls();
+        const active = doc.activeElement;
+        if (restoreFocus && (!active || active === doc.body || active === focus.trigger)) focus.resolve()?.focus({ preventScroll: true });
+      } }
     }
     async function navigate(callback) {
       if (!current() || navigating) return;
@@ -93,8 +97,8 @@
         '목록이나 수집 처리를 완료하지 못했습니다. 선택과 기존 자료는 그대로 있습니다. 다시 확인해 주세요.';
       captureStatus.textContent = setup ? '서버 수집 기능 준비 중 · 선택 유지' : '완료하지 못함 · 선택 유지'; captureStatus.dataset.state = setup ? 'setup-required' : 'error';
     }
-    async function advanced(action) {
-      await work(async token => { captureError.hidden = true; try { await action(token); } catch (cause) { if (current(token)) advancedFailure(cause); } });
+    async function advanced(action, focus = null) {
+      await work(async token => { captureError.hidden = true; try { await action(token); } catch (cause) { if (current(token)) advancedFailure(cause); } }, focus);
     }
     function jobStatus(value) {
       return ({ queued: '수집 대기', pending: '수집 대기', running: '수집 중', working: '수집 중', failed: '수집 실패 · 재시도 가능', stored: '수집 사본 보관됨', complete: '수집 사본 보관됨', completed: '수집 사본 보관됨', succeeded: '수집 사본 보관됨', cancelled: '수집 중지', blocked: '수집 보류' })[value] || '처리 상태 확인 필요';
@@ -122,12 +126,17 @@
             captureStatus.textContent = result?.status === 'checked' ? '확인한 공개 목록입니다. 필요한 글을 직접 골라 수집할 수 있습니다.' : '서버에서 공개 목록을 확인하고 있습니다. 잠시 뒤 수집 상태를 다시 확인해 주세요.';
             captureStatus.dataset.state = result?.status === 'checked' ? 'ready' : 'pending';
           })); inventory.dataset.action = 'inventory'; article.append(inventory);
-          if (connection.baselineComplete && (connection.workspaceId === workspaceId || typeof service.configureConnection === 'function')) {
-            const toggle = button(connection.enabled ? '이후 새 글 자동 수집 중지' : '이후 새 글 자동 수집 켜기', () => advanced(async token => {
+          if ((connection.enabled || connection.baselineComplete) && (connection.workspaceId === workspaceId || typeof service.configureConnection === 'function')) {
+            const toggle = button(connection.enabled ? '이후 새 글 자동 수집 중지' : '이후 새 글 자동 수집 켜기', trigger => advanced(async token => {
               if (typeof service.configureConnection === 'function') await service.configureConnection(workspaceId, connection.id, { expectedRevision: connection.revision, enabled: !connection.enabled });
               else await service.save(workspaceId, { blogId: connection.blogId, expectedRevision: connection.revision, enabled: !connection.enabled });
               if (current(token)) { await load(); await loadConnections(); }
-            })); toggle.dataset.action = 'new-posts'; toggle.dataset.unavailable = String(!ready); article.append(toggle);
+            }, { trigger, resolve: () => {
+              const row = [...connectionsList.querySelectorAll('.nv-connection')].find(row => row.dataset.connectionId === connection.id);
+              const control = row?.querySelector('[data-action="new-posts"]');
+              return control && !control.disabled ? control : row?.querySelector('[data-action="public-list"]');
+            } }));
+            toggle.dataset.action = 'new-posts'; toggle.dataset.unavailable = String(!connection.enabled && (!ready || !connection.baselineComplete)); article.append(toggle);
           } else if (!connection.baselineComplete) article.append(el('p', '첫 공개 목록을 확인한 뒤 이후 새 글 자동 수집을 켤 수 있습니다. 과거 글은 직접 선택합니다.', 'life-help'));
         }
         connectionsList.append(article);
@@ -272,12 +281,16 @@
           const result = await service.check(workspaceId, row.id);
           if (current(token)) await load(result?.status === 'busy' ? '서버에서 확인 작업이 진행 중입니다. 현재 보관된 목록을 표시합니다. 잠시 뒤 다시 확인해 주세요.' : '새 글 목록을 확인했습니다.', result?.status === 'busy' ? 'checking' : null);
         })));
-        const toggle = button(row.enabled ? '자동 수집 중지' : '자동 수집 켜기', () => work(async token => {
+        const toggle = button(row.enabled ? '자동 수집 중지' : '자동 수집 켜기', trigger => work(async token => {
           const result = await service.save(workspaceId, { blogId: row.blogId || row.blog_id, expectedRevision: row.revision, enabled: !row.enabled });
           if (!current(token)) return;
           adoptSubscription(result); paintSubscriptions(); await load('연결 설정을 보관했습니다.');
-        }));
-        if (!ready) toggle.dataset.unavailable = 'true';
+        }, { trigger, resolve: () => {
+          const item = [...subscriptions.querySelectorAll('.nv-subscription')].find(item => item.dataset.subscriptionId === row.id);
+          const control = item?.querySelector('[data-action="pause"],[data-action="resume"]');
+          return control && !control.disabled ? control : surface.querySelector('#naverBlogRefresh');
+        } }));
+        if (!ready && !row.enabled) toggle.dataset.unavailable = 'true';
         toggle.dataset.action = row.enabled ? 'pause' : 'resume'; actions.append(toggle); article.append(actions); subscriptions.append(article);
       }
     }
@@ -321,6 +334,8 @@
       if (!row?.id) return;
       const i = data.subscriptions.findIndex(item => item.id === row.id);
       if (i < 0) data.subscriptions.push(row); else data.subscriptions[i] = row;
+      const connection = connections.find(item => item.id === row.id);
+      if (connection) { connection.enabled = row.enabled; connection.revision = row.revision; paintConnections(); }
     }
     function collectionNotice(result, success, displayState) {
       clearError();
