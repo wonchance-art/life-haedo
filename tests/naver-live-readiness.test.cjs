@@ -14,7 +14,7 @@ function fixture(options = {}) {
     assert.equal(init.redirect, 'error'); assert.equal(init.method || 'GET', 'GET');
     assert(!new Headers(init.headers).has('authorization')); assert(!new Headers(init.headers).has('apikey')); assert.equal(init.body, undefined);
     if (options.throwNetwork) throw Error('Do not emit a private upstream body, title, URL or token');
-    if (url.pathname === '/robots.txt') return new Response(options.blockRobots ? 'User-agent: *\nDisallow: /' : 'User-agent: *\nAllow: /');
+    if (url.pathname === '/robots.txt') return new Response(options.robotsByHost?.[url.hostname] ?? (options.blockRobots ? 'User-agent: *\nDisallow: /' : 'User-agent: *\nAllow: /'));
     if (url.hostname === 'rss.blog.naver.com') return new Response('<rss version="2.0"><channel><item><title>Private fixture title</title><link>https://blog.naver.com/' + BLOG + '/123</link><description><![CDATA[private fixture text]]></description></item></channel></rss>');
     if (url.pathname === '/PostTitleListAsync.naver') return Response.json(options.inventory || { totalCount: '1', countPerPage: '30', postList: [{ logNo: '123', title: 'Private+fixture+title' }] });
     if (url.pathname === '/PostView.naver') return new Response('<h1 class="se-title-text">Private fixture title</h1><div class="se-main-container"><p>private fixture text 🌱</p><img src="https://blogfiles.pstatic.net/first.png"><img src="https://postfiles.pstatic.net/second.png"></div>');
@@ -26,20 +26,77 @@ function fixture(options = {}) {
 test('default diagnostics never fetch, load a parser, or emit target IDs', async () => {
   const { probeNaver } = await moduleReady; let calls = 0;
   const report = await probeNaver({ blogId: BLOG, postNo: '123', snapshot: policies().snapshot, fetcher: () => { calls++; throw Error('No default networking'); } });
-  assert.equal(calls, 0); assert.equal(report.mode, 'diagnostic'); assert.equal(report.status, 'planned'); assert.deepEqual(report.requests, []); assert(!JSON.stringify(report).includes(BLOG));
+  assert.equal(calls, 0); assert.equal(report.mode, 'diagnostic'); assert.equal(report.source, 'all'); assert.equal(report.status, 'planned'); assert.deepEqual(report.sources, { rss: 'not_checked', public: 'not_checked' }); assert.deepEqual(report.requests, []); assert(!JSON.stringify(report).includes(BLOG));
 });
 test('missing, stale, unenforced, mismatched or incomplete policy blocks every request', async () => {
   const { probeNaver } = await moduleReady;
-  for (const mutate of [value => { delete value.observation; }, value => { value.observation.observations_current = false; }, value => { value.observation.network_policy.state = 'pending'; }, value => { value.observation.observed_at = new Date(NOW - 300001).toISOString(); }, value => { value.observation.observed_spec_revision = '0'; }, value => { value.snapshot.http_network_policy.egress_rules.pop(); }, value => { value.observation.network_policy.effective_allowed_hosts = []; }]) {
-    const policy = policies(); mutate(policy); const f = fixture();
-    const report = await probeNaver({ blogId: BLOG, probe: true, ...policy, now: NOW, fetcher: f.fetcher, load });
-    assert.equal(report.status, 'blocked'); assert.equal(f.calls.length, 0); assert.equal(report.requests.length, 0);
+  for (const source of ['all', 'public', 'rss']) {
+    for (const mutate of [value => { delete value.observation; }, value => { value.observation.observations_current = false; }, value => { value.observation.network_policy.state = 'pending'; }, value => { value.observation.observed_at = new Date(NOW - 300001).toISOString(); }, value => { value.observation.observed_spec_revision = '0'; }, value => { value.snapshot.http_network_policy.egress_rules.pop(); }, value => { value.observation.network_policy.effective_allowed_hosts = []; }]) {
+      const policy = policies(source === 'all' ? coreHosts : [source === 'public' ? 'blog.naver.com' : 'rss.blog.naver.com']); mutate(policy); const f = fixture();
+      const report = await probeNaver({ blogId: BLOG, probe: true, source, ...policy, now: NOW, fetcher: f.fetcher, load });
+      assert.equal(report.status, 'blocked'); assert.equal(f.calls.length, 0); assert.equal(report.requests.length, 0);
+    }
   }
 });
 test('robots disallow stops before fetching RSS, body, inventory or images', async () => {
   const { probeNaver } = await moduleReady, f = fixture({ blockRobots: true });
   const report = await probeNaver({ blogId: BLOG, probe: true, ...policies(), now: NOW, fetcher: f.fetcher, load });
   assert.equal(report.status, 'blocked'); assert.equal(report.code, 'blocked'); assert.equal(f.calls.length, 1); assert.equal(new URL(f.calls[0].url).pathname, '/robots.txt');
+  assert.deepEqual(report.sources, { rss: 'blocked', public: 'not_checked' });
+});
+test('public source needs only PC policy and checks its own robots without visiting the blocked RSS origin', async () => {
+  const { probeNaver } = await moduleReady;
+  const options = { robotsByHost: { 'rss.blog.naver.com': 'User-agent: *\nDisallow: /', 'blog.naver.com': 'User-agent: *\nDisallow: /PostList.naver' } };
+  const f = fixture(options);
+  const report = await probeNaver({ blogId: BLOG, source: 'public', probe: true, ...policies(['blog.naver.com']), now: NOW, fetcher: f.fetcher, load });
+  assert.equal(report.status, 'checked'); assert.equal(report.source, 'public'); assert.equal(report.operationalReadinessVerified, false);
+  assert.deepEqual(report.sources, { rss: 'not_selected', public: 'checked' });
+  assert.equal(report.feed, undefined); assert.equal(report.inventory.entries, 1); assert.equal(report.post.photos, 2);
+  assert.deepEqual(report.policy.coreHosts.map(value => value.host), ['blog.naver.com']);
+  assert(f.calls.every(value => new URL(value.url).hostname === 'blog.naver.com'));
+  assert.equal(new URL(f.calls[0].url).pathname, '/robots.txt');
+  for (const content of [BLOG, 'Private fixture title', 'private fixture text', 'first.png']) assert(!JSON.stringify(report).includes(content));
+  const all = fixture(options);
+  const blocked = await probeNaver({ blogId: BLOG, probe: true, ...policies(), now: NOW, fetcher: all.fetcher, load });
+  assert.equal(blocked.status, 'blocked'); assert.equal(blocked.source, 'all'); assert.equal(blocked.blockedStage, 'rss');
+  assert.deepEqual(blocked.sources, { rss: 'blocked', public: 'not_checked' });
+  assert.equal(all.calls.length, 1); assert.equal(new URL(all.calls[0].url).hostname, 'rss.blog.naver.com');
+});
+test('public source keeps its photo opt-in, CDN robots and exact policy checks', async () => {
+  const { probeNaver } = await moduleReady, f = fixture();
+  const report = await probeNaver({ blogId: BLOG, source: 'public', photos: 1, probe: true, ...policies(['blog.naver.com', 'blogfiles.pstatic.net']), now: NOW, fetcher: f.fetcher, load });
+  assert.equal(report.status, 'checked'); assert.equal(report.photo.decodeVerified, false); assert.equal(report.photo.originalStatus, 'unverified');
+  assert.equal(report.sources.rss, 'not_selected'); assert(f.calls.every(value => new URL(value.url).hostname !== 'rss.blog.naver.com'));
+  assert.deepEqual(f.calls.filter(value => new URL(value.url).hostname === 'blogfiles.pstatic.net').map(value => new URL(value.url).pathname), ['/robots.txt', '/first.png']);
+});
+test('public source stops at its own disallow before inventory even when RSS was not selected', async () => {
+  const { probeNaver } = await moduleReady, f = fixture({ blockRobots: true });
+  const report = await probeNaver({ blogId: BLOG, source: 'public', probe: true, ...policies(['blog.naver.com']), now: NOW, fetcher: f.fetcher, load });
+  assert.equal(report.status, 'blocked'); assert.equal(report.code, 'blocked'); assert.equal(report.blockedStage, 'inventory');
+  assert.deepEqual(report.sources, { rss: 'not_selected', public: 'blocked' });
+  assert.deepEqual(f.calls.map(value => value.url), ['https://blog.naver.com/robots.txt']);
+  assert.equal(report.inventory, undefined); assert.equal(report.post, undefined);
+});
+test('RSS source needs no PC grant or extractor dependency and never checks public pages', async () => {
+  const { probeNaver } = await moduleReady, f = fixture({ robotsByHost: { 'blog.naver.com': 'User-agent: *\nDisallow: /' } });
+  const Module = require('node:module'), previous = Module._load;
+  let report;
+  Module._load = function (name, ...args) { if (name.startsWith('cheerio')) throw Error('RSS must not load an HTML parser'); return previous.call(this, name, ...args); };
+  try { report = await probeNaver({ blogId: BLOG, source: 'rss', probe: true, ...policies(['rss.blog.naver.com']), now: NOW, fetcher: f.fetcher }); }
+  finally { Module._load = previous; }
+  assert.equal(report.status, 'checked'); assert.equal(report.source, 'rss'); assert.equal(report.postSelection, 'not_selected');
+  assert.deepEqual(report.sources, { rss: 'checked', public: 'not_selected' });
+  assert.equal(report.feed.entries, 1); assert.equal(report.inventory, undefined); assert.equal(report.post, undefined); assert.equal(report.photo, undefined);
+  assert.deepEqual(report.policy.coreHosts.map(value => value.host), ['rss.blog.naver.com']);
+  assert.deepEqual(f.calls.map(value => new URL(value.url).hostname), ['rss.blog.naver.com', 'rss.blog.naver.com']);
+});
+test('source selection rejects unsupported values and incompatible RSS options before any request', async () => {
+  const { probeNaver } = await moduleReady;
+  for (const options of [{ source: 'untrusted-private-value' }, { source: 'rss', photos: 1 }, { source: 'rss', postNo: '123' }]) {
+    const f = fixture(), report = await probeNaver({ blogId: BLOG, probe: true, ...options, ...policies(), now: NOW, fetcher: f.fetcher, load });
+    assert.equal(report.status, 'blocked'); assert.equal(report.code, 'invalid_arguments'); assert.equal(f.calls.length, 0);
+    assert(!JSON.stringify(report).includes('untrusted-private-value'));
+  }
 });
 test('bounded public metadata reuses collector and extractor, selects first listed post and enumerates CDNs without loading pictures', async () => {
   const { probeNaver } = await moduleReady, f = fixture();
@@ -76,7 +133,8 @@ test('redirected and oversized robots responses fail before fetching target cont
 });
 test('CLI parser accepts only deliberate probe, target, representative and single-photo options', async () => {
   const { parseArguments, probeNaver } = await moduleReady;
-  assert.deepEqual(parseArguments(['--blog', BLOG, '--probe', '--photos', '1', '--post', '123', '--policy-status', '.local/observation.json']), { probe: true, photos: 1, blogId: BLOG, postNo: '123', policyStatus: '.local/observation.json' });
-  for (const args of [['--probe', '--probe'], ['--photos', '20'], ['--blog'], ['--url', 'https://arbitrary.invalid'], ['--headers', 'secret']]) assert.throws(() => parseArguments(args), /invalid_arguments/);
+  assert.deepEqual(parseArguments(['--blog', BLOG, '--probe', '--photos', '1', '--post', '123', '--policy-status', '.local/observation.json']), { probe: true, photos: 1, blogId: BLOG, postNo: '123', policyStatus: '.local/observation.json', source: 'all' });
+  for (const source of ['public', 'rss', 'all']) assert.deepEqual(parseArguments(['--probe', '--source', source]), { probe: true, photos: 0, source });
+  for (const args of [['--probe', '--probe'], ['--photos', '20'], ['--blog'], ['--url', 'https://arbitrary.invalid'], ['--headers', 'secret'], ['--source'], ['--source', 'mobile'], ['--source', 'public', '--source', 'all'], ['--source', 'rss', '--photos', '1'], ['--source', 'rss', '--post', '123']]) assert.throws(() => parseArguments(args), /invalid_arguments/);
   const report = await probeNaver({ probe: true, ...policies(), now: NOW }); assert.equal(report.status, 'blocked'); assert.equal(report.code, 'blog_required'); assert.deepEqual(report.requests, []);
 });

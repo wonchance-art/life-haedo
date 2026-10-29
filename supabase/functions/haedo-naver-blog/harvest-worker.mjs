@@ -26,16 +26,21 @@ export function createHarvestWorker({ rpc, fetcher = fetch, load, model, origin,
   async function finishInventory(claim) {
     const args = { p_subscription_id: claim.subscription_id, p_lease_token: claim.lease_token, p_revision: claim.revision,
       p_page: claim.page, p_entries: [], p_total: null, p_next_page: null, p_error: null };
+    let countMismatch = false;
     try {
       const url = 'https://blog.naver.com/PostTitleListAsync.naver?' + new URLSearchParams({ blogId: claim.blog_id,
         currentPage: String(claim.page), categoryNo: '0', countPerPage: '30' });
-      const page = parseInventory(text(await network.resource(url, 'html', 2 * 1024 * 1024)), { blogId: claim.blog_id, page: claim.page });
+      const page = parseInventory(text(await network.resource(url, 'html', 2 * 1024 * 1024)), { blogId: claim.blog_id, page: claim.page, preserveCountMismatch: true });
       args.p_entries = page.entries.map(entry => ({ logNo: entry.log_no, title: entry.title, publishedAt: null }));
-      args.p_total = page.total; args.p_next_page = page.has_more ? page.page + 1 : null;
+      countMismatch = page.count_consistent === false;
+      // A null trusted total keeps the existing DB completion gate closed even
+      // if cross-page duplicates make the observed set equal the reported total.
+      args.p_total = countMismatch ? null : page.total;
+      args.p_next_page = countMismatch ? null : page.has_more ? page.page + 1 : null;
     } catch (error) { args.p_error = code(error); }
     const result = await rpc('life_naver_inventory_finish', args);
     need(result && ['stored','stale'].includes(result.status));
-    return { status: result.status === 'stale' ? 'busy' : 'checked', stage: 'inventory', failed: args.p_error !== null };
+    return { status: result.status === 'stale' ? 'busy' : 'checked', stage: 'inventory', failed: args.p_error !== null || countMismatch };
   }
   async function upload(claim, bytes, metadata) {
     const digest = await sha256(bytes), path = claim.owner_id + '/naver/' + claim.blog_id + '/' + claim.log_no + '/' + digest;

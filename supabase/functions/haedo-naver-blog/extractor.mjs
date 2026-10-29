@@ -54,10 +54,10 @@ export function imageURL(raw) {
   need(/^https:\/\/[^/?#]+\//.test(raw) && !/%(?:2f|5c|00)/i.test(url.pathname), 'blocked_image');
   return url.href;
 }
-export function parseInventory(raw, { blogId, page = 1, pageSize = 30 } = {}) {
+export function parseInventory(raw, { blogId, page = 1, pageSize = 30, preserveCountMismatch = false } = {}) {
   need(typeof raw === 'string' && utf8(raw) <= 2 * 1024 * 1024, 'invalid_inventory');
   raw = raw.replace(/^\uFEFF/, '');
-  need(Number.isSafeInteger(page) && page > 0 && Number.isSafeInteger(pageSize) && pageSize > 0 && pageSize <= EXTRACT_LIMITS.list, 'invalid_inventory');
+  need(Number.isSafeInteger(page) && page > 0 && Number.isSafeInteger(pageSize) && pageSize > 0 && pageSize <= EXTRACT_LIMITS.list && typeof preserveCountMismatch === 'boolean', 'invalid_inventory');
   let value;
   try { value = JSON.parse(raw); }
   catch (_) {
@@ -78,8 +78,13 @@ export function parseInventory(raw, { blogId, page = 1, pageSize = 30 } = {}) {
     return { log_no: identity.logNo, title, url: identity.url };
   });
   const expected = Math.max(0, Math.min(pageSize, total - (page - 1) * pageSize));
-  need(entries.length === expected, 'incomplete_inventory');
-  return { page, page_size: pageSize, total, entries, has_more: page * pageSize < total };
+  const countConsistent = entries.length === expected;
+  // A stale reported total must not discard valid extra terminal rows. This
+  // opt-in preserves every validated entry while explicitly distrusting the
+  // count; short pages, zero totals and clamped pages beyond the end still fail.
+  need(countConsistent || preserveCountMismatch && expected > 0 && page === Math.ceil(total / pageSize) && entries.length > expected, 'incomplete_inventory');
+  return { page, page_size: pageSize, total, entries, has_more: page * pageSize < total,
+    ...(countConsistent ? {} : { count_consistent: false }) };
 }
 export async function extractHTML(html, { load, blogId, logNo, summary = false, titleFallback = '' } = {}) {
   need(typeof load === 'function' && typeof html === 'string' && utf8(html) <= EXTRACT_LIMITS.html);

@@ -13,6 +13,19 @@ export function secretEqual(left, right) {
   let different = 0; for (let i = 0; i < right.length; i++) different |= left.charCodeAt(i) ^ right.charCodeAt(i);
   return different === 0;
 }
+function legacyServiceCandidate(token, hostname) {
+  // Unverified claims only bound which credentials may be sent to the current
+  // project's service-only RPC. They never establish authentication locally.
+  if (token.length > 4096 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)) return false;
+  try {
+    const decode = part => JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(
+      Uint8Array.from(atob(part.replace(/-/g, '+').replace(/_/g, '/')), value => value.charCodeAt(0))));
+    const [header, claims] = token.split('.').slice(0, 2).map(decode);
+    const ref = /^([a-z0-9-]+)\.supabase\.co$/.exec(hostname)?.[1];
+    return object(header) && header.alg === 'HS256' && object(claims) && !!ref &&
+      claims.role === 'service_role' && claims.ref === ref && Number.isSafeInteger(claims.exp) && claims.exp > Date.now() / 1000;
+  } catch (_) { return false; }
+}
 const safeCode = error => ['invalid_blog', 'invalid_feed', 'feed_too_large', 'blocked', 'network_error',
   'invalid_response', 'incomplete_response'].includes(error?.code) ? error.code : 'network_error';
 /** @param {{fetcher?: typeof fetch, environment?: (name: string) => string | undefined, load?: any, captureModel?: any}} [options] */
@@ -24,7 +37,7 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
     try {
       const project = new URL(environment('SUPABASE_URL') || '');
       check(project.protocol === 'https:' && !project.username && !project.password && project.pathname === '/' && !project.search && !project.hash, 'setup_required');
-      const origin = project.origin, key = environment('SUPABASE_SERVICE_ROLE_KEY');
+      const origin = project.origin; let key = environment('SUPABASE_SERVICE_ROLE_KEY');
       check(typeof key === 'string' && key.length > 0 && !key.startsWith('sb_publishable_') &&
         key !== environment('SUPABASE_ANON_KEY') && key !== environment('SUPABASE_PUBLISHABLE_KEY'), 'setup_required');
       const token = /^Bearer ([^\s]+)$/i.exec(request.headers.get('authorization') || '')?.[1];
@@ -32,10 +45,34 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
       let input;
       try { input = JSON.parse(await readBounded(request, 4096)); } catch (_) { throw failure('invalid_request'); }
       check(object(input));
+      const readiness = input.action === 'readiness';
       const harvest = ['inventory','capture','run'].includes(input.action);
-      const cron = input.action === 'cron' || input.action === 'run' && secretEqual(token, key); let owner = null;
-      if (cron) {
-        check(Object.keys(input).length === 1 && secretEqual(token, key), 'unauthorized');
+      const exactService = secretEqual(token, key);
+      const candidate = ['cron','run','readiness'].includes(input.action) && legacyServiceCandidate(token, project.hostname);
+      const cron = input.action === 'cron' || input.action === 'run' && (exactService || candidate || Object.keys(input).length === 1);
+      let owner = null, verifiedReady;
+      if (cron || readiness) {
+        check(Object.keys(input).length === 1, 'unauthorized');
+        if (!exactService) {
+          check(candidate, 'unauthorized');
+          // Key rotation can leave two valid service JWTs with different bytes.
+          // Authenticate this candidate remotely using ONLY its own credential,
+          // never the environment key; do not persist or cache it across requests.
+          const endpoint = origin + '/rest/v1/rpc/life_naver_ready';
+          const result = await fetcher(endpoint, { method: 'POST', redirect: 'error',
+            signal: AbortSignal.any([request.signal, AbortSignal.timeout(Math.min(10000, deadline - Date.now()))]),
+            headers: { apikey: token, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: '{}' });
+          if (result.redirected || result.url && result.url !== endpoint) {
+            await result.body?.cancel(); throw failure('unauthorized');
+          }
+          if (result.status !== 200) {
+            await result.body?.cancel();
+            throw failure([401, 403].includes(result.status) ? 'unauthorized' : 'server_error');
+          }
+          verifiedReady = JSON.parse(await readBounded(result, 1024));
+          check(typeof verifiedReady === 'boolean', 'server_error');
+          key = token; // Current request only, after remote signature/privilege validation.
+        }
       } else {
         check(harvest ? input.action === 'capture' ? Object.keys(input).every(k => ['action','subscriptionId','jobId'].includes(k)) &&
           UUID.test(input.jobId || '') && (input.subscriptionId === undefined || UUID.test(input.subscriptionId)) :
@@ -50,7 +87,7 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
         if (!authenticated.ok) { await authenticated.body?.cancel(); throw failure('unauthorized'); }
         const user = JSON.parse(await readBounded(authenticated, 16384)); check(object(user) && UUID.test(user.id || ''), 'unauthorized'); owner = user.id;
       }
-      if (environment('HAEDO_NAVER_INGESTION_ENABLED') !== 'true') return response({ error: 'setup_required' });
+      const ingestionEnabled = environment('HAEDO_NAVER_INGESTION_ENABLED') === 'true';
       const rpc = async (name, args) => {
         check(deadline > Date.now() + 100, 'server_error');
         const result = await fetcher(origin + '/rest/v1/rpc/' + name, { method: 'POST', redirect: 'error',
@@ -59,7 +96,12 @@ export function createHandler({ fetcher = fetch, environment = name => globalThi
         if (!result.ok) { await result.body?.cancel(); throw failure('server_error'); }
         return JSON.parse(await readBounded(result, 4 * 1024 * 1024));
       };
-      const ready = await rpc('life_naver_ready', {}); check(typeof ready === 'boolean', 'server_error');
+      if (!readiness && !ingestionEnabled) return response({ error: 'setup_required' });
+      const ready = verifiedReady === undefined ? await rpc('life_naver_ready', {}) : verifiedReady;
+      check(typeof ready === 'boolean', 'server_error');
+      // Service-only inspection reads one boolean RPC even while collection is
+      // disabled. Never claim work, fetch Naver, or read/write private material.
+      if (readiness) return response({ ingestionEnabled, ready });
       if (!ready) return response({ error: 'setup_required' });
       if (harvest) {
         if (typeof load !== 'function' || !captureModel) return response({ error: 'setup_required' });

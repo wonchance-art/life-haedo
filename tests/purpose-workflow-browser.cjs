@@ -101,8 +101,13 @@ async function main() {
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] }); report.browser = browser.version();
   async function check(name, action, size = sizes[1]) {
     if (match && !match.test(name)) return;
-    const server = cloudFixture(data), device = 'purpose-' + report.checks.length, context = await makeContext(browser, server, device, accounts.a, { viewport: size, hasTouch: true, reducedMotion: 'reduce' }), pending = new Set();
+    const server = cloudFixture(data), device = 'purpose-' + report.checks.length, context = await makeContext(browser, server, device, accounts.a, { viewport: size, hasTouch: true, reducedMotion: 'reduce' }), pending = new Set(), staticRequests = new Map();
     const receipt = { device, closed: false, capability: server.libraryCapabilities }; report.contexts.push(receipt);
+    const staticURL = raw => { const u = new URL(raw); return u.origin === new URL(base).origin && (/\.(html|js|css|woff2?|json|svg)$/.test(u.pathname) || u.pathname.endsWith('/')) ? u : null; };
+    const beginStatic = request => { const url = staticURL(request.url()); if (url) staticRequests.set(request, { ...deferred(), url }); };
+    const finishStatic = request => { const entry = staticRequests.get(request); if (entry) { staticRequests.delete(request); entry.resolve(); } };
+    const failStatic = request => { const entry = staticRequests.get(request); if (entry) report.staticErrors.push({ device, path: entry.url.pathname, message: request.failure()?.errorText || 'Static request failed' }); finishStatic(request); };
+    context.on('request', beginStatic); context.on('requestfinished', finishStatic); context.on('requestfailed', failStatic);
     context.on('request', request => {
       const url = new URL(request.url()), method = request.method(); if (url.origin !== cloud || method === 'OPTIONS') return;
       const row = { device, method, path: url.pathname }; report.privateRequests.push(row);
@@ -112,24 +117,39 @@ async function main() {
       if (!(reads || auth || rpc)) report.forbiddenPrivateRequests.push(row);
     });
     await context.route('**/*', route => { const u = new URL(route.request().url()); if ([new URL(base).origin, cloud].includes(u.origin)) return route.fallback(); report.external.push({ device, origin: u.origin, path: u.pathname }); return route.abort('blockedbyclient'); });
-    context.on('response', response => { const u = new URL(response.url()); if (u.origin !== new URL(base).origin || !/\.(html|js|css|woff2?|json|svg)$/.test(u.pathname) && !u.pathname.endsWith('/')) return;
+    const verifyStatic = response => { const u = staticURL(response.url()); if (!u) return;
       const task = (async () => { const bytes = await response.body(), file = u.pathname.slice(1) || 'index.html', row = { device, file, status: response.status(), sha256: sha(bytes), bytes: bytes.length, configFixture: file === 'assets/platform-config.js' }; if (!row.configFixture) assert.equal(row.sha256, sha(await fs.readFile(path.join(sourceRoot, file))), 'Actual response differs: ' + file); report.staticResponses.push(row); })(); pending.add(task); task.catch(error => report.staticErrors.push({ device, path: u.pathname, message: error.message })).finally(() => pending.delete(task));
-    });
+    };
+    context.on('response', verifyStatic);
     const page = await context.newPage(); page.setDefaultTimeout(20000);
+    const drainStatic = async () => {
+      await page.waitForLoadState('load'); await page.evaluate(() => undefined);
+      // A request may still lack response headers, so a body-promise snapshot
+      // alone cannot delimit verification. Keep observing until both are done.
+      await wait(() => ({ requests: staticRequests.size, verifications: pending.size }), value => value.requests === 0 && value.verifications === 0, 'Static requests and response hashes drained');
+    };
     page.on('pageerror', error => report.pageErrors.push({ device, message: error.message })); page.on('console', event => { if (event.type() === 'error') report.consoleErrors.push({ device, message: event.text(), path: event.location().url }); });
     console.log('RUN ' + name);
     try {
       await page.goto(base + '/index.html?section=records'); await ready(page); await mode(page, 'sources'); await synced(page);
       assert.equal(await page.evaluate(() => HaedoLife.Shell.storage.getActive()), id); assert((await page.evaluate(() => __homeDbOpens)).every(v => v.verified));
       await page.evaluate(async post => { const s = HaedoLife.Shell.storage; const saved = await s.savePhotoPost(await s.getActive(), post, 0); if (saved.status !== 'saved') throw Error('Real anonymous post seed did not save'); }, data.post);
-      await action({ page, context, server, device, data, size, drainStatic: async () => { await page.waitForLoadState('load'); await Promise.all([...pending]); } });
+      await action({ page, context, server, device, data, size, drainStatic });
       assert.deepEqual(server.libraryRouteErrors, []); assert.deepEqual(report.forbiddenPrivateRequests.filter(row => row.device === device), []);
       assert(server.blogCalls.every(call => ['life_blog_list', 'life_blog_read'].includes(call.rpc)), 'Navigation must not save or publish a blog post'); assert.equal(server.saves().length, 0); assert.equal(server.assetCalls.filter(call => call.method !== 'GET').length, 0, 'Navigation must not upload blog originals');
       assert(server.libraryRequests.some(row => row.rpc === 'life_library_capabilities')); receipt.privateRequests = server.requests.length; receipt.libraryRequests = server.libraryRequests.length; receipt.blogReadRPCs = server.blogCalls.map(call => call.rpc); receipt.blogSaves = server.saves().length; receipt.blogAssetWrites = server.assetCalls.filter(call => call.method !== 'GET').length;
       report.checks.push({ name, pass: true }); console.log('PASS ' + name);
     } catch (error) {
       report.checks.push({ name, pass: false, error: error.stack, state: await page.evaluate(() => ({ mode: document.querySelector('#lifeMain')?.dataset.mode, url: location.pathname + location.search, focus: document.activeElement?.getAttribute('aria-label'), error: document.querySelector('#lifeError')?.textContent })).catch(() => null) }); console.error('FAIL ' + name + '\n' + error.stack); await page.screenshot({ path: path.join(output, 'failure-' + report.checks.length + '.png') }).catch(() => {});
-    } finally { await Promise.allSettled([...pending]); await context.close(); receipt.closed = true; }
+    } finally {
+      try {
+        await drainStatic(); receipt.staticAtClose = { requests: staticRequests.size, verifications: pending.size };
+        assert.deepEqual(receipt.staticAtClose, { requests: 0, verifications: 0 });
+        // End observation synchronously at the drained boundary, before close
+        // can emit teardown events and start another response.body() operation.
+        context.off('response', verifyStatic); context.off('request', beginStatic); context.off('requestfinished', finishStatic); context.off('requestfailed', failStatic);
+      } finally { await context.close(); receipt.closed = true; }
+    }
   }
   try {
     for (const size of sizes) await check('purpose surfaces and preserved exact graph ' + size.width, async ({ page }) => {

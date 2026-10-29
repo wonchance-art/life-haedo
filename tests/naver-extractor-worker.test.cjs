@@ -27,7 +27,7 @@ function fixture(options = {}) {
     rpcCalls.push({name,args:structuredClone(args)});
     options.onRPC?.(name,args);
     if (name === 'life_naver_capture_claim') return options.inventory ? [] : [claim()];
-    if (name === 'life_naver_inventory_claim') return [{...claim(),page:1,page_size:30}];
+    if (name === 'life_naver_inventory_claim') return [{...claim(),page:options.inventoryPage ?? 1,page_size:30}];
     if (name === 'life_naver_capture_checkpoint') { progress=structuredClone(args.p_progress); return {status:'pending'}; }
     if (name === 'life_naver_capture_finish') { if (options.loseFinish) throw new Error('lost ACK'); return {status: options.stale ? 'stale' : 'stored'}; }
     if (name === 'life_naver_inventory_finish') return {status:'stored'};
@@ -81,6 +81,29 @@ test('inventory validates exact page counts/identities and never returns regex-e
   for(const invalid of [raw.replace('"totalCount":"1"','"totalCount":"2"'),raw.slice(0,-1),raw.replace('"123"','"00123"'),raw.replace('%ED%95%9C','%bad%')])assert.throws(()=>parseInventory(invalid,{blogId:BLOG}));
   assert.throws(()=>parseInventory(JSON.stringify({totalCount:30,postList:[]}),{blogId:BLOG}),{code:'incomplete_inventory'});
 });
+test('explicit inventory preservation keeps every validated excess terminal entry without trusting the reported count',async()=>{
+  const [{parseInventory}]=await modules;
+  const postList=Array.from({length:15},(_,i)=>({logNo:String(i+2000),title:encodeURIComponent('합성 끝 '+i)}));
+  const raw=JSON.stringify({totalCount:'1663',countPerPage:'30',postList});
+  assert.throws(()=>parseInventory(raw,{blogId:BLOG,page:56}),{code:'incomplete_inventory'});
+  const result=parseInventory(raw,{blogId:BLOG,page:56,preserveCountMismatch:true});
+  assert.equal(result.total,1663);assert.equal(result.page,56);assert.equal(result.count_consistent,false);assert.equal(result.has_more,false);
+  assert.deepEqual(result.entries.map(v=>v.log_no),postList.map(v=>v.logNo));
+  assert.deepEqual(result.entries.map(v=>v.title),postList.map(v=>decodeURIComponent(v.title)));
+  const exact=JSON.stringify({totalCount:1665,countPerPage:30,postList});
+  assert.deepEqual(parseInventory(exact,{blogId:BLOG,page:56,preserveCountMismatch:true}),parseInventory(exact,{blogId:BLOG,page:56}));
+});
+test('terminal preservation never accepts short middle/end pages, clamped pages, zero counts or invalid rows',async()=>{
+  const [{parseInventory}]=await modules;
+  const rows=n=>Array.from({length:n},(_,i)=>({logNo:String(i+2000),title:'fixture'}));
+  for(const [total,page,postList] of [[61,1,rows(29)],[1663,56,rows(12)],[1663,57,rows(15)],[0,1,rows(1)]]){
+    assert.throws(()=>parseInventory(JSON.stringify({totalCount:total,countPerPage:30,postList}),{blogId:BLOG,page,preserveCountMismatch:true}),{code:'incomplete_inventory'});
+  }
+  for(const postList of [rows(31),[{logNo:'01',title:'fixture'},{logNo:'2',title:'fixture'}],[{logNo:'1',title:'fixture'},{logNo:'1',title:'duplicate'}],[{logNo:'1',title:'fixture'},{logNo:'2',title:'%bad%'}]]){
+    assert.throws(()=>parseInventory(JSON.stringify({totalCount:1,countPerPage:30,postList}),{blogId:BLOG,preserveCountMismatch:true}),{code:'invalid_inventory'});
+  }
+  assert.throws(()=>parseInventory(JSON.stringify({totalCount:1,postList:rows(2)}),{blogId:BLOG,preserveCountMismatch:'true'}),{code:'invalid_inventory'});
+});
 test('network rejects host suffixes, credentials, HTTP, redirects and non-approved endpoint URLs',async()=>{
   const [{imageURL}, {safeResource,createNetwork}]=await modules;
   for(const url of ['http://blogfiles.pstatic.net/x','https://blogfiles.pstatic.net.evil.invalid/x','https://127.0.0.1/x','https://user@blogfiles.pstatic.net/x'])assert.throws(()=>imageURL(url));
@@ -132,6 +155,27 @@ test('inventory errors preserve prior inventory and successful page carries chec
   assert.deepEqual(finish.p_entries,[{logNo:LOG,title:'합성 제목',publishedAt:null}]);assert.equal(finish.p_total,1);assert.equal(finish.p_next_page,null);assert.equal(finish.p_error,null);
   const bad=fixture({inventory:true,list:{totalCount:31,postList:[]}});await(await bad.worker()).execute({action:'inventory',owner:ids.owner,subscriptionId:ids.sub});
   const error=bad.rpcCalls.find(v=>v.name==='life_naver_inventory_finish').args;assert.equal(error.p_error,'incomplete_inventory');assert.deepEqual(error.p_entries,[]);assert.equal(error.p_total,null);
+});
+test('worker stores all excess terminal rows with an unknown total and reports incomplete validation',async()=>{
+  const postList=Array.from({length:15},(_,i)=>({logNo:String(i+2000),title:encodeURIComponent('합성 끝 '+i)}));
+  const f=fixture({inventory:true,inventoryPage:56,list:{totalCount:1663,countPerPage:30,postList}});
+  assert.deepEqual(await(await f.worker()).execute({action:'inventory',owner:ids.owner,subscriptionId:ids.sub}),{status:'checked',stage:'inventory',failed:true});
+  const finishes=f.rpcCalls.filter(v=>v.name==='life_naver_inventory_finish');assert.equal(finishes.length,1);
+  const args=finishes[0].args;
+  assert.deepEqual(args.p_entries,postList.map(v=>({logNo:v.logNo,title:decodeURIComponent(v.title),publishedAt:null})));
+  assert.equal(args.p_total,null);assert.equal(args.p_next_page,null);assert.equal(args.p_error,null);assert.equal(args.p_page,56);
+  assert.equal(f.rpcCalls.some(v=>v.name==='life_naver_capture_claim'),false);
+  assert.equal(f.calls.filter(v=>v.url.includes('PostTitleListAsync.naver')).length,1);
+});
+test('worker never submits the reported total when cross-page overlap would accidentally satisfy the completion count',async()=>{
+  const prior=new Set(Array.from({length:30},(_,i)=>String(i+1)));
+  const postList=[{logNo:'30',title:'overlap'},{logNo:'31',title:'new'}];
+  assert.equal(new Set([...prior,...postList.map(v=>v.logNo)]).size,31,'Observed unique count accidentally equals reported total');
+  const f=fixture({inventory:true,inventoryPage:2,list:{totalCount:31,countPerPage:30,postList}});
+  assert.equal((await(await f.worker()).execute({action:'inventory',owner:ids.owner,subscriptionId:ids.sub})).failed,true);
+  const args=f.rpcCalls.find(v=>v.name==='life_naver_inventory_finish').args;
+  assert.equal(args.p_total,null,'DB must receive an unknown total, so its non-null completion prerequisite cannot pass');
+  assert.equal(args.p_entries.length,2);assert.equal(args.p_next_page,null);assert.equal(args.p_error,null);
 });
 test('run fairness gives due inventory a page before each bounded capture checkpoint despite a photo backlog',async()=>{
   const f=fixture({images:5});
