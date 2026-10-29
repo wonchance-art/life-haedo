@@ -97,5 +97,26 @@
   "securityResiduals": [
     "pg_net extension_in_public; net API not exposed but default PUBLIC grants/RLS limitation remain",
     "preexisting SECURITY DEFINER and leaked password protection notices"
-  ]
+  ],
+  "ciRecovery": {
+    "initialRun": "https://github.com/wonchance-art/life-haedo/actions/runs/40868195230",
+    "initialCheckJobPassed": true,
+    "initialGuardFailures": [
+      "New reviewed migration absent from exact installation list",
+      "PWA current release target still fixed at 166"
+    ],
+    "migrationRegistryHashPinned": true,
+    "unknownMigrationRejectionRetained": true,
+    "originalValuesAndACLAssertionsRetained": true,
+    "integratedInstallationGroupsPassed": 12,
+    "pwaFixedPreviousVersions": [
+      162,
+      163
+    ],
+    "pwaChecksPassedPerVersion": 9,
+    "currentPwaTarget": 167,
+    "historicalHashesAndAssertionsRetained": true,
+    "timeoutsChanged": false,
+    "productOrFixtureChangesInRecovery": false
+  }
 }
