@@ -1,5 +1,7 @@
 # 제품 기준
 
+2026-10-29 설계 역할 확장: **workflow 통합·효율화·자동화**를 전체 시스템 설계 범위로 둔다. [자동화 계약](docs/life-tools-design/workflow-automation.md)의 입력→자동 처리→결과, 실행 위치·트리거·중지·중복 방지·복구·실제 효율 기준을 적용한다. 구현 후보가 없어도 상세 자동화 설계는 계속 진행하고, 구현·실가동·배포는 별도 증거로 확인한다.
+
 2026-10-29 시스템 상세 기준: [생활의 선택을 이어 주는 전체 계약](docs/life-tools-design/life-system-contract.md)과 [계획·실행·기간 회고 명세](docs/design-review/planning-practice-review.md). 읽기·판단·계획·체크·회고가 각각 완결되고 명시 선택한 관계로 이어진다. 계획 원본의 세대, 현재 상태와 과거 사실, 계정/공간, 불변 회고와 복원 ID 매핑을 고정했다. 새 계정 계획·관계·기간 회고는 구현 전이다.
 
 2026-10-29 통합 교정: [읽기→메모/목표 연결→정확 복귀](docs/design-review/reading-planning-integration.md). 새 읽기 메모는 기존 Core 주석 관계·계정 보관·자료 JSON을 재사용하도록 설계했다. 작성 준비의 로컬/선택 전송을 새 메모 기본값으로 두던 가설을 교체한다. [현재 읽기 명세](docs/design-review/reading-decision-journey.md), 선택 범위만 담는 회고와 포함 종료일을 단일 시연에 반영했다. 제품 구현·계정 왕복은 후속 실행 범위다.

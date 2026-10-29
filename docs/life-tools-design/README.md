@@ -1,5 +1,7 @@
 # 생활 도구 전체 설계
 
+2026-10-29 설계 책임: [workflow 통합·효율화·자동화](workflow-automation.md). 전체 목적과 기능 연결부터 반복 처리의 트리거·실행 위치·보관·중지·복구·실제 효율까지 함께 설계한다.
+
 2026-10-29 통합 동선 교정: [읽기·메모·계획을 다시 입력하지 않고 잇기](../design-review/reading-planning-integration.md). 새 메모의 기본 계정 보관을 기존 Core 주석 관계로 연결하고, 직접 연결·메모 경유·계획 단독·조회/회고의 비교 기준과 정확 복귀를 구체화했다. 제품 구현 전 설계와 단일 클릭 시연이다.
 
 2026-10-29 전체 시스템 → 상세 계약: [생활 시스템](life-system-contract.md) · [계획·실행·기간 회고](../design-review/planning-practice-review.md) · [전체 구조도](../diagrams/rendered/life-system-20261029.png). 기존 읽기 여정과 실행 인계를 연결한 구현 전 설계이며 독립 기능의 종료·계정 책임·기간 사실·실패/복원까지 다룬다.
