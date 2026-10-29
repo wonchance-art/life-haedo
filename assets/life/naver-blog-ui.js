@@ -103,6 +103,19 @@
     function jobStatus(value) {
       return ({ queued: '수집 대기', pending: '수집 대기', running: '수집 중', working: '수집 중', failed: '수집 실패 · 재시도 가능', stored: '수집 사본 보관됨', complete: '수집 사본 보관됨', completed: '수집 사본 보관됨', succeeded: '수집 사본 보관됨', cancelled: '수집 중지', blocked: '수집 보류' })[value] || '처리 상태 확인 필요';
     }
+    function inventoryStatus(inventory, complete = inventory?.status === 'complete') {
+      const count = value => Number.isSafeInteger(value) && value >= 0 ? value.toLocaleString('ko-KR') : null;
+      const seen = count(inventory?.seen_count), reported = count(inventory?.total_start);
+      const counts = seen !== null && reported !== null ? '확인한 목록 ' + seen + '개 · 네이버 표시 ' + reported + '개. ' : '';
+      if (inventory?.baseline_method === 'observed_set') return {
+        text: counts + (complete ? '반복 확인한 목록을 기준으로 이후 새로 발견한 글을 구분합니다. 전체 공개 글 수는 미확정입니다.' : '반복 확인한 기준 목록은 유지합니다. 이번 목록 확인은 아직 끝나지 않았습니다.'),
+        state: complete ? 'observed' : 'partial'
+      };
+      if (seen !== null && reported !== null && inventory.seen_count > inventory.total_start && !complete) return {
+        text: counts + '개수가 달라 전체 목록 확인은 미완료입니다. 확인한 항목과 기존 자료는 보존합니다.', state: 'partial'
+      };
+      return { text: complete ? '확인한 공개 목록입니다. 공개 여부나 이후 변경은 원문에서 다시 확인할 수 있습니다.' : '일부 공개 목록만 확인했습니다. 목록 밖의 글이 없다는 뜻은 아닙니다.', state: complete ? 'ready' : 'partial' };
+    }
     function paintConnections() {
       if (!connectionsList) return;
       connectionsList.replaceChildren();
@@ -110,6 +123,7 @@
       for (const connection of connections) {
         const article = el('article', null, 'nv-connection'); article.dataset.connectionId = connection.id;
         article.append(el('h3', connection.blogId), el('p', '이 계정에 등록된 연결 · 선택한 자료는 현재 공간에 받습니다.', 'life-meta'));
+        if (connection.inventory?.baseline_method === 'observed_set' || connection.inventory?.status === 'partial') article.append(el('p', inventoryStatus(connection.inventory).text, 'life-help'));
         {
           const show = button('공개 글 목록 보기', () => advanced(async token => {
             if (selectedSubscription !== connection.id) { selectedPosts.clear(); publicPages = 1; publicShown = 20; }
@@ -123,11 +137,13 @@
             if (!current(token)) return;
             await loadConnections(); await loadPublic(token); await loadCaptures(token);
             if (!current(token)) return;
-            captureStatus.textContent = result?.status === 'checked' ? '확인한 공개 목록입니다. 필요한 글을 직접 골라 수집할 수 있습니다.' : '서버에서 공개 목록을 확인하고 있습니다. 잠시 뒤 수집 상태를 다시 확인해 주세요.';
-            captureStatus.dataset.state = result?.status === 'checked' ? 'ready' : 'pending';
+            if (result?.status !== 'checked') {
+              captureStatus.textContent = '서버에서 공개 목록을 확인하고 있습니다. 잠시 뒤 수집 상태를 다시 확인해 주세요.';
+              captureStatus.dataset.state = 'pending';
+            }
           })); inventory.dataset.action = 'inventory'; article.append(inventory);
           if ((connection.enabled || connection.baselineComplete) && (connection.workspaceId === workspaceId || typeof service.configureConnection === 'function')) {
-            const toggle = button(connection.enabled ? '이후 새 글 자동 수집 중지' : '이후 새 글 자동 수집 켜기', trigger => advanced(async token => {
+            const toggle = button(connection.enabled ? '이후 새로 발견한 글 자동 수집 중지' : '이후 새로 발견한 글 자동 수집 켜기', trigger => advanced(async token => {
               if (typeof service.configureConnection === 'function') await service.configureConnection(workspaceId, connection.id, { expectedRevision: connection.revision, enabled: !connection.enabled });
               else await service.save(workspaceId, { blogId: connection.blogId, expectedRevision: connection.revision, enabled: !connection.enabled });
               if (current(token)) { await load(); await loadConnections(); }
@@ -137,7 +153,7 @@
               return control && !control.disabled ? control : row?.querySelector('[data-action="public-list"]');
             } }));
             toggle.dataset.action = 'new-posts'; toggle.dataset.unavailable = String(!connection.enabled && (!ready || !connection.baselineComplete)); article.append(toggle);
-          } else if (!connection.baselineComplete) article.append(el('p', '첫 공개 목록을 확인한 뒤 이후 새 글 자동 수집을 켤 수 있습니다. 과거 글은 직접 선택합니다.', 'life-help'));
+          } else if (!connection.baselineComplete) article.append(el('p', '기준 목록을 확인한 뒤 이후 새로 발견한 글의 자동 수집을 켤 수 있습니다. 과거 글은 직접 선택합니다.', 'life-help'));
         }
         connectionsList.append(article);
       }
@@ -169,8 +185,9 @@
       rows.push(...page.items.filter(row => !known.has(row.logNo)));
       publicRows = rows; publicPage = page; if (Array.isArray(page.jobs)) jobs = page.jobs;
       paintPublic();
-      captureStatus.textContent = page.complete ? '확인한 공개 목록입니다. 공개 여부나 이후 변경은 원문에서 다시 확인할 수 있습니다.' : '일부 공개 목록만 확인했습니다. 목록 밖의 글이 없다는 뜻은 아닙니다.';
-      captureStatus.dataset.state = page.complete ? 'ready' : 'partial';
+      const status = inventoryStatus(page.inventory, page.complete);
+      captureStatus.textContent = status.text;
+      captureStatus.dataset.state = status.state;
     }
     function paintCaptures() {
       captureList.replaceChildren();
@@ -388,7 +405,7 @@
       input.addEventListener('input', update); input.addEventListener('compositionstart', () => { composing = true; controls(); }); input.addEventListener('compositionend', () => { composing = false; update(); });
       const choice = el('label', null, 'nv-auto'); auto = el('input'); auto.type = 'checkbox'; auto.id = 'naverBlogAuto'; choice.append(auto, el('span', '새로 확인되는 글을 비공개 자료로 수집'));
       auto.addEventListener('change', () => { autoDraft = ready && auto.checked; });
-      const autoHelp = el('p', captureEnabled ? '과거 공개 글은 아래에서 직접 고릅니다. 첫 목록 확인 뒤 이후 새 글 자동 수집을 켤 수 있습니다. 앱을 닫아도 서버에 보관하며, 이 화면에서 자료로 받습니다.' : '처음 확인한 목록도 포함합니다. 앱을 닫으면 서버에 보관하고, 이 화면을 열 때 현재 공간에 반영합니다.', 'life-help');
+      const autoHelp = el('p', captureEnabled ? '과거 공개 글은 아래에서 직접 고릅니다. 기준 목록 확인 뒤 새로 발견한 글의 자동 수집을 켤 수 있습니다. 예전 글이 새로 공개된 경우도 포함될 수 있습니다. 앱을 닫아도 서버에 보관하며, 이 화면에서 자료로 받습니다.' : '처음 확인한 목록도 포함합니다. 앱을 닫으면 서버에 보관하고, 이 화면을 열 때 현재 공간에 반영합니다.', 'life-help');
       autoHelp.id = 'naverBlogAutoHelp'; auto.setAttribute('aria-describedby', autoHelp.id);
       save = button('블로그 연결 보관', () => work(async token => {
         const value = model().parseBlog(input.value);

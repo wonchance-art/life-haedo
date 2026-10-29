@@ -18,6 +18,11 @@ function png(width = 4032, height = 3024) {
   return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',ihdr),chunk('IDAT',deflateSync(Buffer.alloc((width*4+1)*height))),chunk('IEND',Buffer.alloc(0))]);
 }
 function html(count = 0) { return '<html><meta property="article:published_time" content="2026-10-21T12:00:00Z"><h1 class="se-title-text">합성 제목</h1><div data-post-editor-version="4" class="se-main-container"><div class="se-component se-text"><p>첫 문단 😀</p><p>첫 문단 😀</p><script>secret()</script></div>' + Array.from({length:count},(_,i)=>'<div class="se-component se-image"><img src="https://blogfiles.pstatic.net/image'+i+'.png" alt="사진 '+i+'"></div>').join('') + '</div></html>'; }
+const inventoryPosts=(length,start=2000)=>Array.from({length},(_,i)=>({logNo:String(i+start),title:encodeURIComponent('합성 끝 '+i)}));
+function observedFixture(options={}) {
+  const head={totalCount:1663,countPerPage:30,postList:inventoryPosts(30,1000)},tail={totalCount:1663,countPerPage:30,postList:inventoryPosts(15)};
+  return fixture({inventory:true,inventoryPage:56,listByPage:{1:head,56:tail,57:tail},...options});
+}
 function fixture(options = {}) {
   const calls = [], rpcCalls = [], uploads = [], bytes = options.bytes || png(4032,3024);
   let progress = options.progress || null;
@@ -30,14 +35,18 @@ function fixture(options = {}) {
     if (name === 'life_naver_inventory_claim') return [{...claim(),page:options.inventoryPage ?? 1,page_size:30}];
     if (name === 'life_naver_capture_checkpoint') { progress=structuredClone(args.p_progress); return {status:'pending'}; }
     if (name === 'life_naver_capture_finish') { if (options.loseFinish) throw new Error('lost ACK'); return {status: options.stale ? 'stale' : 'stored'}; }
-    if (name === 'life_naver_inventory_finish') return {status:'stored'};
+    if (name === 'life_naver_inventory_finish_observed') { if(options.loseInventoryFinish)throw Error('lost inventory ACK');return options.inventoryResult || {status:'stored'}; }
     throw new Error('unexpected RPC');
   };
   const fetcher = async (raw,init={}) => {
     calls.push({url:raw,init}); const u = new URL(raw);
+    options.onFetch?.(u);
+    if (options.httpFailure?.path === u.pathname && (!options.httpFailure.page || options.httpFailure.page === u.searchParams.get('currentPage'))) return new Response('private upstream response must not be reported', {
+      status: options.httpFailure.status, headers: { 'Retry-After': options.httpFailure.retryAfter || '', 'X-Private-Diagnostic': 'private header must not be reported' }
+    });
     if (u.pathname === '/robots.txt') return new Response(options.robots || 'User-agent: *\nAllow: /');
     if (u.hostname === 'blog.naver.com') {
-      if (u.pathname === '/PostTitleListAsync.naver') return Response.json(options.list || {totalCount:'1',countPerPage:'30',postList:[{logNo:LOG,title:encodeURIComponent('합성 제목')}]});
+      if (u.pathname === '/PostTitleListAsync.naver') return Response.json(options.listByPage?.[u.searchParams.get('currentPage')] || options.list || {totalCount:'1',countPerPage:'30',postList:[{logNo:LOG,title:encodeURIComponent('합성 제목')}]});
       return new Response(options.html || html(options.images ?? 3));
     }
     if (u.hostname.endsWith('.pstatic.net')) return new Response(bytes, {headers:{'Content-Type':options.mime || 'image/png','Content-Length':String(bytes.length)}});
@@ -151,31 +160,97 @@ test('wrong owner/expired lease stops all external requests; unknown completion 
 });
 test('inventory errors preserve prior inventory and successful page carries checkpoint data without claiming whole completion',async()=>{
   const f=fixture({inventory:true});await(await f.worker()).execute({action:'inventory',owner:ids.owner,subscriptionId:ids.sub});
-  const finish=f.rpcCalls.find(v=>v.name==='life_naver_inventory_finish').args;
+  const finish=f.rpcCalls.find(v=>v.name==='life_naver_inventory_finish_observed').args;
   assert.deepEqual(finish.p_entries,[{logNo:LOG,title:'합성 제목',publishedAt:null}]);assert.equal(finish.p_total,1);assert.equal(finish.p_next_page,null);assert.equal(finish.p_error,null);
+  assert.equal(finish.p_probe,null);assert.equal(f.calls.filter(v=>v.url.includes('PostTitleListAsync.naver')).length,1,'Exact legacy terminal needs no observed proof');
   const bad=fixture({inventory:true,list:{totalCount:31,postList:[]}});await(await bad.worker()).execute({action:'inventory',owner:ids.owner,subscriptionId:ids.sub});
-  const error=bad.rpcCalls.find(v=>v.name==='life_naver_inventory_finish').args;assert.equal(error.p_error,'incomplete_inventory');assert.deepEqual(error.p_entries,[]);assert.equal(error.p_total,null);
+  const error=bad.rpcCalls.find(v=>v.name==='life_naver_inventory_finish_observed').args;assert.equal(error.p_error,'incomplete_inventory');assert.deepEqual(error.p_entries,[]);assert.equal(error.p_total,null);
 });
-test('worker stores all excess terminal rows with an unknown total and reports incomplete validation',async()=>{
-  const postList=Array.from({length:15},(_,i)=>({logNo:String(i+2000),title:encodeURIComponent('합성 끝 '+i)}));
-  const f=fixture({inventory:true,inventoryPage:56,list:{totalCount:1663,countPerPage:30,postList}});
-  assert.deepEqual(await(await f.worker()).execute({action:'inventory',owner:ids.owner,subscriptionId:ids.sub}),{status:'checked',stage:'inventory',failed:true});
-  const finishes=f.rpcCalls.filter(v=>v.name==='life_naver_inventory_finish');assert.equal(finishes.length,1);
+test('worker preserves every terminal entry and the reported count, but a first observed scan is not completed locally',async()=>{
+  const postList=inventoryPosts(15),f=observedFixture({inventoryResult:{status:'stored',inventory:{status:'partial',baseline_method:null},observed_verified:true}});
+  assert.deepEqual(await(await f.worker()).execute({action:'inventory',owner:ids.owner,subscriptionId:ids.sub}),{status:'checked',stage:'inventory',failed:true,countConsistent:false});
+  const finishes=f.rpcCalls.filter(v=>v.name==='life_naver_inventory_finish_observed');assert.equal(finishes.length,1);
   const args=finishes[0].args;
   assert.deepEqual(args.p_entries,postList.map(v=>({logNo:v.logNo,title:decodeURIComponent(v.title),publishedAt:null})));
-  assert.equal(args.p_total,null);assert.equal(args.p_next_page,null);assert.equal(args.p_error,null);assert.equal(args.p_page,56);
+  assert.equal(args.p_total,1663);assert.equal(args.p_next_page,null);assert.equal(args.p_error,null);assert.equal(args.p_page,56);
+  assert.deepEqual(args.p_probe,{head:{total:1663,logNos:inventoryPosts(30,1000).map(v=>v.logNo)},tail:{total:1663,logNos:postList.map(v=>v.logNo)}});
   assert.equal(f.rpcCalls.some(v=>v.name==='life_naver_capture_claim'),false);
-  assert.equal(f.calls.filter(v=>v.url.includes('PostTitleListAsync.naver')).length,1);
+  assert.deepEqual(f.calls.filter(v=>v.url.includes('PostTitleListAsync.naver')).map(v=>new URL(v.url).searchParams.get('currentPage')),['56','1','57']);
+  assert.equal(f.calls.filter(v=>v.url.endsWith('/robots.txt')).length,3,'Each observed page has its own current robots check');
+  assert(!JSON.stringify(args.p_probe).includes('title'));assert(!JSON.stringify(args.p_probe).includes('합성'));
 });
-test('worker never submits the reported total when cross-page overlap would accidentally satisfy the completion count',async()=>{
+test('worker sends count mismatch only to the observed wrapper even if overlap would accidentally match the reported count',async()=>{
   const prior=new Set(Array.from({length:30},(_,i)=>String(i+1)));
   const postList=[{logNo:'30',title:'overlap'},{logNo:'31',title:'new'}];
   assert.equal(new Set([...prior,...postList.map(v=>v.logNo)]).size,31,'Observed unique count accidentally equals reported total');
   const f=fixture({inventory:true,inventoryPage:2,list:{totalCount:31,countPerPage:30,postList}});
   assert.equal((await(await f.worker()).execute({action:'inventory',owner:ids.owner,subscriptionId:ids.sub})).failed,true);
-  const args=f.rpcCalls.find(v=>v.name==='life_naver_inventory_finish').args;
-  assert.equal(args.p_total,null,'DB must receive an unknown total, so its non-null completion prerequisite cannot pass');
+  const args=f.rpcCalls.find(v=>v.name==='life_naver_inventory_finish_observed').args;
+  assert.equal(args.p_total,31,'Only the observed wrapper may turn the reported count into a trusted or unknown total');
+  assert.equal(args.p_probe,null,'A short head page cannot furnish observed proof');
+  assert.equal(f.rpcCalls.some(v=>v.name==='life_naver_inventory_finish'),false,'Never bypass the wrapper completion fence');
   assert.equal(args.p_entries.length,2);assert.equal(args.p_next_page,null);assert.equal(args.p_error,null);
+});
+test('inventory HTTP denial reports only safe stage/status and retains the unfinished page',async()=>{
+  const f=fixture({inventory:true,httpFailure:{path:'/PostTitleListAsync.naver',status:403,retryAfter:'900'}});
+  const result=await(await f.worker()).execute({action:'inventory',owner:ids.owner,subscriptionId:ids.sub});
+  assert.deepEqual(result,{status:'checked',stage:'inventory',failed:true,sourceFailure:{stage:'inventory',reason:'http_status',httpStatus:403,retryAfterSeconds:900}});
+  const args=f.rpcCalls.find(v=>v.name==='life_naver_inventory_finish_observed').args;
+  assert.equal(args.p_error,'blocked');assert.deepEqual(args.p_entries,[]);assert.equal(args.p_probe,null);
+  assert.equal(f.calls.length,2);assert.doesNotMatch(JSON.stringify(result),/private|https:|blogId|Authorization/i);
+});
+test('robots policy denial and robots HTTP denial remain distinct and never request the inventory',async()=>{
+  for(const options of [{robots:'User-agent: *\nDisallow: /'},{httpFailure:{path:'/robots.txt',status:403,retryAfter:'private invalid header'}}]) {
+    const f=fixture({inventory:true,...options}),result=await(await f.worker()).execute({action:'inventory',owner:ids.owner,subscriptionId:ids.sub});
+    assert.equal(f.calls.length,1);assert.equal(result.failed,true);assert.equal(result.sourceFailure.stage,'robots');
+    assert.equal(result.sourceFailure.reason,options.robots?'robots_disallowed':'http_status');
+    assert.equal(result.sourceFailure.httpStatus,options.robots?200:403);assert.equal(result.sourceFailure.retryAfterSeconds,null);
+    assert.doesNotMatch(JSON.stringify(result),/private|https:|blogId|Authorization/i);
+  }
+});
+test('a denied terminal probe retains validated entries and cannot attach raw error fields to the response',async()=>{
+  const f=observedFixture({onFetch:url=>{if(url.searchParams.get('currentPage')==='57')throw Object.assign(Error('private raw error'),{code:'blocked',sourceFailure:{stage:'inventory',reason:'http_status',httpStatus:403,retryAfterSeconds:999999,url:'private URL',headers:'private bearer',body:'private body'}});}});
+  const result=await(await f.worker()).execute({action:'inventory',owner:ids.owner,subscriptionId:ids.sub});
+  assert.equal(result.failed,true);assert.deepEqual(result.sourceFailure,{stage:'inventory',reason:'http_status',httpStatus:403,retryAfterSeconds:null});
+  const args=f.rpcCalls.find(v=>v.name==='life_naver_inventory_finish_observed').args;
+  assert.equal(args.p_entries.length,15);assert.equal(args.p_total,1663);assert.equal(args.p_error,null);assert.equal(args.p_probe,null);
+  assert.doesNotMatch(JSON.stringify(result),/private|https:|blogId|Authorization/i);
+});
+test('only a DB-verified completed observed baseline reports observed success while retaining count inconsistency',async()=>{
+  for(const [inventory,verified,failed] of [[{status:'complete',baseline_method:'observed_set'},true,false],[{status:'complete',baseline_method:'observed_set'},false,true],[{status:'partial',baseline_method:'observed_set'},true,true],[undefined,undefined,true]]){
+    const f=observedFixture({inventoryResult:{status:'stored',inventory,observed_verified:verified}});
+    const result=await(await f.worker()).execute({action:'inventory',owner:ids.owner,subscriptionId:ids.sub});
+    assert.deepEqual(result,{status:'checked',stage:'inventory',failed,countConsistent:false});
+    assert.equal(f.rpcCalls.filter(v=>v.name==='life_naver_inventory_finish_observed').length,1);
+  }
+});
+test('an observed baseline still requires head and clamp evidence after the reported total becomes count-consistent',async()=>{
+  const head={totalCount:31,countPerPage:30,postList:inventoryPosts(30,1000)},tail={totalCount:31,countPerPage:30,postList:inventoryPosts(1)};
+  const f=fixture({inventory:true,inventoryPage:2,claim:{baseline_method:'observed_set'},listByPage:{1:head,2:tail,3:tail},inventoryResult:{status:'stored',inventory:{status:'complete',baseline_method:'observed_set'},observed_verified:true}});
+  assert.deepEqual(await(await f.worker()).execute({action:'inventory',owner:ids.owner,subscriptionId:ids.sub}),{status:'checked',stage:'inventory',failed:false});
+  assert.deepEqual(f.calls.filter(v=>v.url.includes('PostTitleListAsync.naver')).map(v=>new URL(v.url).searchParams.get('currentPage')),['2','1','3']);
+  assert.equal(f.rpcCalls.at(-1).args.p_probe.tail.logNos.length,1);
+});
+test('changed head totals or a nonmatching clamp preserve the terminal rows but provide no observed proof',async()=>{
+  const head={totalCount:1663,countPerPage:30,postList:inventoryPosts(30,1000)},tail={totalCount:1663,countPerPage:30,postList:inventoryPosts(15)};
+  for(const listByPage of [{1:{...head,totalCount:1664},56:tail,57:tail},{1:head,56:tail,57:{...tail,postList:[...tail.postList].reverse()}},{1:head,56:tail,57:{...tail,postList:[tail.postList[0],tail.postList[0]]}}]){
+    const f=observedFixture({listByPage}),result=await(await f.worker()).execute({action:'inventory',owner:ids.owner,subscriptionId:ids.sub});
+    assert.equal(result.failed,true);const args=f.rpcCalls.at(-1).args;
+    assert.equal(args.p_entries.length,15);assert.equal(args.p_total,1663);assert.equal(args.p_error,null);assert.equal(args.p_probe,null);
+  }
+});
+test('an insufficient existing deadline skips observed HTTP and preserves terminal entries as incomplete',async()=>{
+  const realNow=Date.now,start=realNow();let elapsed=0;Date.now=()=>start+elapsed;
+  try{
+    const f=observedFixture({onFetch:u=>{if(u.pathname==='/PostTitleListAsync.naver')elapsed=25000;}});
+    const result=await(await f.worker()).execute({action:'inventory',owner:ids.owner,subscriptionId:ids.sub});
+    assert.equal(result.failed,true);assert.equal(f.calls.filter(v=>v.url.includes('PostTitleListAsync.naver')).length,1);
+    assert.equal(f.rpcCalls.at(-1).args.p_entries.length,15);assert.equal(f.rpcCalls.at(-1).args.p_probe,null);assert.equal(f.rpcCalls.at(-1).args.p_error,null);
+  }finally{Date.now=realNow;}
+});
+test('an unknown observed finish acknowledgement cannot be replaced by an error finish',async()=>{
+  const f=observedFixture({loseInventoryFinish:true});await assert.rejects((await f.worker()).execute({action:'inventory',owner:ids.owner,subscriptionId:ids.sub}),/lost inventory ACK/);
+  const finishes=f.rpcCalls.filter(v=>v.name==='life_naver_inventory_finish_observed');assert.equal(finishes.length,1);assert.equal(finishes[0].args.p_error,null);assert(finishes[0].args.p_probe);
 });
 test('run fairness gives due inventory a page before each bounded capture checkpoint despite a photo backlog',async()=>{
   const f=fixture({images:5});
@@ -185,8 +260,8 @@ test('run fairness gives due inventory a page before each bounded capture checkp
     const calls=f.rpcCalls.slice(before);
     assert.equal(calls.filter(v=>v.name==='life_naver_inventory_claim').length,1);
     assert.equal(calls.filter(v=>v.name==='life_naver_capture_claim').length,1);
-    assert.ok(calls.findIndex(v=>v.name==='life_naver_inventory_finish')<calls.findIndex(v=>v.name==='life_naver_capture_claim'));
-    assert.equal(calls.find(v=>v.name==='life_naver_inventory_finish').args.p_entries[0].logNo,LOG);
+    assert.ok(calls.findIndex(v=>v.name==='life_naver_inventory_finish_observed')<calls.findIndex(v=>v.name==='life_naver_capture_claim'));
+    assert.equal(calls.find(v=>v.name==='life_naver_inventory_finish_observed').args.p_entries[0].logNo,LOG);
     assert.equal(calls.filter(v=>v.name==='life_naver_capture_checkpoint').length,1);
     assert.equal(f.progress().nextImage,(run+1)*2);
   }
@@ -199,9 +274,9 @@ test('slow inventory returns its exact page result without claiming a fresh capt
   try{
     for(const cost of [35000,60000]){
       elapsed=0;
-      const f=fixture({onRPC:name=>{if(name==='life_naver_inventory_finish')elapsed=cost;}});
+      const f=fixture({onRPC:name=>{if(name==='life_naver_inventory_finish_observed')elapsed=cost;}});
       assert.deepEqual(await(await f.worker()).execute({action:'run'}),{status:'checked',stage:'inventory',failed:false});
-      assert.deepEqual(f.rpcCalls.map(v=>v.name),['life_naver_inventory_claim','life_naver_inventory_finish']);
+      assert.deepEqual(f.rpcCalls.map(v=>v.name),['life_naver_inventory_claim','life_naver_inventory_finish_observed']);
       assert.equal(f.progress(),null);assert.equal(f.uploads.length,0);
       assert.equal(f.calls.some(v=>v.url.includes('/PostView.naver')),false);
     }
@@ -210,7 +285,7 @@ test('slow inventory returns its exact page result without claiming a fresh capt
 test('a recorded inventory failure still permits one capture when budget remains, while explicit lanes stay single-purpose',async()=>{
   const f=fixture({images:0,list:{totalCount:31,postList:[]}});
   assert.deepEqual(await(await f.worker()).execute({action:'run'}),{status:'checked',stage:'capture',pending:false});
-  assert.equal(f.rpcCalls.find(v=>v.name==='life_naver_inventory_finish').args.p_error,'incomplete_inventory');
+  assert.equal(f.rpcCalls.find(v=>v.name==='life_naver_inventory_finish_observed').args.p_error,'incomplete_inventory');
   assert.equal(f.rpcCalls.filter(v=>v.name==='life_naver_capture_claim').length,1);
   for(const action of ['capture','inventory']){
     const single=fixture({images:0});await(await single.worker()).execute({action,owner:ids.owner,subscriptionId:ids.sub,...(action==='capture'?{jobId:ids.job}:{})});
@@ -219,12 +294,12 @@ test('a recorded inventory failure still permits one capture when budget remains
   }
 });
 test('run stops after an unknown inventory acknowledgement or invalid lease without claiming the capture lane',async()=>{
-  const lost=fixture({onRPC:name=>{if(name==='life_naver_inventory_finish')throw new Error('lost inventory ACK');}});
+  const lost=fixture({onRPC:name=>{if(name==='life_naver_inventory_finish_observed')throw new Error('lost inventory ACK');}});
   await assert.rejects((await lost.worker()).execute({action:'run'}),/lost inventory ACK/);
-  assert.equal(lost.rpcCalls.filter(v=>v.name==='life_naver_inventory_finish').length,1);
+  assert.equal(lost.rpcCalls.filter(v=>v.name==='life_naver_inventory_finish_observed').length,1);
   assert.equal(lost.rpcCalls.some(v=>v.name==='life_naver_capture_claim'),false);
   assert.equal(lost.rpcCalls.at(-1).args.p_error,null,'Unknown successful page ACK must not be replaced by an error finish');
-  for(const claim of [{owner_id:ids.other},{lease_until:new Date(Date.now()-1).toISOString()}]){
+  for(const claim of [{owner_id:ids.other},{lease_until:new Date(Date.now()-1).toISOString()},{baseline_method:'unknown_method'}]){
     const invalid=fixture({claim});
     await assert.rejects((await invalid.worker()).execute({action:'run',owner:ids.owner,subscriptionId:ids.sub}));
     assert.equal(invalid.calls.length,0);assert.deepEqual(invalid.rpcCalls.map(v=>v.name),['life_naver_inventory_claim']);

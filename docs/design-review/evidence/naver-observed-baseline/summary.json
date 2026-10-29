@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "observedAt": "2026-10-29T11:42:10Z",
+  "baseMain": "2f9d93387405d0c9eb9443d43278331a3895522c",
+  "scope": {
+    "account": "configured_test_A",
+    "existingIsolatedWorkspaceOnly": true,
+    "accountEnumerationRequests": 0,
+    "workspaceEnumerationRequests": 0,
+    "userAutoSubscriptionsEnabled": 0,
+    "keysOrTokensPublished": false,
+    "privateArtifactsPublished": false
+  },
+  "sourceAudit": {
+    "savedPagesReused": 56,
+    "uniqueIds": 1665,
+    "reportedTotal": 1663,
+    "duplicates": 0,
+    "dateOrIdentityOrderViolations": 0,
+    "currentHeadAndTailMatchSavedBytes": true,
+    "postViewCountEvidenceFound": false,
+    "causeOfCountDifference": "unverified",
+    "rssFeedRequests": 0,
+    "forbiddenPostListRequests": 0
+  },
+  "database": {
+    "localMigration": "20261029112456_naver_observed_inventory_baseline.sql",
+    "appliedMigrationVersion": "20261029113551",
+    "sqlSHA256": "a4e8aaf116eb2977cb7452b241acc49259029c90ca016dcfce0a7c69bbca6e08",
+    "isolatedPostgresChecks": 22,
+    "unrelatedFunctionsAndACLsUnchanged": 106,
+    "unrelatedFunctionFingerprint": "52b8a7c26c2b19fa18cd0416853130c5",
+    "captureRows": 1,
+    "captureFingerprintBeforeAndAfter": "ce333550e9b0ff8c2473b886664f6c6d",
+    "securityWarningKindsAndCountsUnchanged": true,
+    "privateRLSWithoutPoliciesInfoDelta": 2
+  },
+  "edge": {
+    "version": 9,
+    "bundleSHA256": "c69f6828c809d9b1298e6d38d90eb64c55d01de5eb4eb4e1cd88407e424a77c8",
+    "diagnostics": "Fixed stage/reason/status/retry-seconds only; no URL, headers, body or credentials",
+    "runtimeSourcesMatched": 8
+  },
+  "firstLiveObservedScanAttempt": {
+    "completedPages": 16,
+    "preservedIds": 480,
+    "failurePage": 17,
+    "error": "blocked",
+    "failedAtUTC": "2026-10-29T11:37:06.394437Z",
+    "nextRetryNotBeforeUTC": "2026-10-29T11:52:06.394437Z",
+    "verified": false,
+    "baselinePromoted": false,
+    "existingCapturesPreserved": true,
+    "denialSourceAtThisObservation": "not_yet_diagnosed",
+    "laterResults": "See linked release PR; this snapshot is retained as original failure evidence"
+  },
+  "actualFeatureUI": {
+    "comparedInventoryItems": 1665,
+    "matchingSourcesInSelectedWorkspace": 1,
+    "matchingSourceCoverage": "partial",
+    "itemsAbsentFromSelectedWorkspace": 1664,
+    "knownCaptureRows": 1,
+    "verifiedPhotos": 2,
+    "bodyBytesAndImagePixelsMatched": true,
+    "noteTypedDuringPhotoDownloadPreserved": true,
+    "coreGraphUnchanged": true,
+    "serverWrites": 0,
+    "accountDiscoveryAdapterUsed": true,
+    "shellOrGoogleOAuthVerified": false
+  },
+  "pwa": {
+    "previousRelease": "2f9d93387405d0c9eb9443d43278331a3895522c",
+    "oldVersion": 166,
+    "newVersion": 167,
+    "oldSHA256": "0114abb8ec31ffba1f04335a11ae49b6927292a8ffa822a548e96e566f415f8c",
+    "newSHA256": "be6469ea886c575bb04f472c7ca70ec4fadbed7ec3e1d04a4964eeb0cc3599a4",
+    "checksPassed": 9,
+    "partialInstallRejected": true,
+    "oldControllerPreserved": true,
+    "unsavedInputAndCaretPreserved": true,
+    "syntheticExactTextAndLocalPhotoPreserved": true,
+    "modelOrOriginalSiteRequests": 0,
+    "remoteWrites": 0,
+    "auth": "synthetic",
+    "shellAssetsInstalled": 192,
+    "selectedModuleHashesVerified": 44
+  },
+  "unverified": [
+    "complete_public_post_count",
+    "actual_new_post_detection",
+    "full_shell_fresh_bootstrap",
+    "google_provider_login",
+    "physical_Apple_devices",
+    "full_account_discovery",
+    "actual_observed_baseline_pair"
+  ],
+  "securityResiduals": [
+    "pg_net extension_in_public; net API not exposed but default PUBLIC grants/RLS limitation remain",
+    "preexisting SECURITY DEFINER and leaked password protection notices"
+  ]
+}
