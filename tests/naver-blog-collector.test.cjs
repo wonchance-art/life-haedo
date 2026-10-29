@@ -95,6 +95,40 @@ test('robots longest-match, user agent, deny and malformed page boundaries', asy
   assert.throws(() => robotsAllowed('User-agent: *\nCrawl-delay: 1\nAllow: /', '/fixture_blog.xml'));
   assert.equal(robotsAllowed('User-agent: *\nDisallow: /*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*b$', '/aaaaaaaaaaaaaaaaaaaaaaaaaaaa.xml'), true);
 });
+test('robots compares equivalent unreserved escapes and UTF-8 paths before choosing a rule', async () => {
+  const [{ robotsAllowed }] = await modules;
+  const allowed = (rule, path) => robotsAllowed('User-agent: *\nDisallow: ' + rule, path);
+  assert.equal(allowed('/photos/first.png', '/photos/%66irst.png'), false);
+  assert.equal(allowed('/photos/%66irst.png', '/photos/first.png'), false);
+  assert.equal(allowed('/%41%7a%30%2D%2e%5F%7e', '/Az0-._~'), false);
+  assert.equal(allowed('/사진/🌱', '/%EC%82%AC%EC%A7%84/%F0%9F%8C%B1'), false);
+  assert.equal(allowed('/%ec%82%ac%ec%a7%84/%f0%9f%8c%b1', '/사진/🌱'), false);
+  assert.equal(robotsAllowed('User-agent: *\nDisallow: /%66irst\nAllow: /first', '/first'), true,
+    'equivalent normalized rules retain the allow tie-break');
+});
+test('robots retains reserved bytes, literal operators and wildcard/end-anchor boundaries', async () => {
+  const [{ robotsAllowed }] = await modules;
+  const allowed = (rule, path) => robotsAllowed('User-agent: *\nDisallow: ' + rule, path);
+  assert.equal(allowed('/photos/first.png', '/photos%2Ffirst.png'), true);
+  assert.equal(allowed('/photos%2ffirst.png$', '/photos%2Ffirst.png'), false);
+  assert.equal(allowed('/literal%2A%24$', '/literal%2a%24'), false);
+  assert.equal(allowed('/literal%2A%24$', '/literal-anything$'), true);
+  assert.equal(allowed('/photos/*/%66irst.png$', '/photos/album/first.png'), false);
+  assert.equal(allowed('/photos/*/%66irst.png$', '/photos/album/first.png?size=large'), true);
+  assert.equal(allowed('/photos/*/%66irst.png', '/photos/album/first.png?size=large'), false);
+});
+test('malformed robots path escapes or UTF-8 fail closed before fetching an RSS feed', async () => {
+  const [{ robotsAllowed, collect }] = await modules;
+  for (const path of ['/bad%', '/bad%2', '/bad%GG', '/bad%FF', '/bad%ED%A0%80', '/bad\uD800', '/bad%00']) {
+    assert.throws(() => robotsAllowed('User-agent: *\nAllow: /', path), { code: 'blocked' });
+    assert.throws(() => robotsAllowed('User-agent: *\nDisallow: ' + path, '/safe'), { code: 'blocked' });
+  }
+  for (const rule of ['/%66ixture_blog.xml$', '/bad%GG']) {
+    const f = fixture({ robots: 'User-agent: *\nDisallow: ' + rule });
+    await assert.rejects(collect(BLOG, { fetcher: f.fetcher }), { code: 'blocked' });
+    assert.deepEqual(f.calls.map(value => value.url), ['https://rss.blog.naver.com/robots.txt']);
+  }
+});
 test('fixed two URLs only; robots block or redirect means zero feed request', async () => {
   const [{ collect }] = await modules;
   const normal = fixture(); await collect(BLOG, { fetcher: normal.fetcher });

@@ -17,7 +17,7 @@
   },
   "verification": {
     "static": "22 HTML pages, 175 JavaScript blocks/files, 729 local references and PWA shell",
-    "unitTests": 1609,
+    "unitTests": 1612,
     "internalReaderBrowserGroups": 4,
     "newsBrowserGroups": 9,
     "externalDiscoveryBrowserGroups": 19,
@@ -93,5 +93,7 @@
     "Reading-copy hash includes its explicit Haedo attribution footer.",
     "Small diagram labels may require browser zoom on narrow screens.",
     "No actual user reading-utility assessment, production account mutation or Apple-device test."
-  ]
+  ],
+  "integratedBaseCommit": "04dfcc1d9a083c0af93dbde91bf6d642b4863a2a",
+  "pullRequest": "https://github.com/wonchance-art/life-haedo/pull/145"
 }
