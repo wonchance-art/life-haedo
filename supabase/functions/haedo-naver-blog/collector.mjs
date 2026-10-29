@@ -151,9 +151,25 @@ export async function parseFeed(text, blogId) {
   }
   need(encoder.encode(JSON.stringify(items)).length <= LIMITS.json, 'feed_too_large'); return items;
 }
+function robotsPath(value) {
+  // RFC 9309 §2.2.2: compare UTF-8 percent-encoded paths, decoding only
+  // unreserved ASCII. Encoded reserved bytes stay distinct from separators
+  // and from the literal '*'/'$' robots operators. Never rewrite a fetch URL.
+  need(typeof value === 'string' && !/[\u0000-\u001f\u007f\uD800-\uDFFF]/u.test(value), 'blocked');
+  try {
+    // Reject malformed escapes/UTF-8 rather than treating them as no match.
+    need(!/[\u0000-\u001f\u007f]/u.test(decodeURIComponent(value)), 'blocked');
+  } catch (_) { throw failure('blocked'); }
+  return value.replace(/%([0-9a-f]{2})|[^\x00-\x7f]/giu, (match, hex) => {
+    if (!hex) return encodeURIComponent(match);
+    const char = String.fromCharCode(parseInt(hex, 16));
+    return /^[A-Za-z0-9._~-]$/.test(char) ? char : '%' + hex.toUpperCase();
+  });
+}
 export function robotsAllowed(text, path) {
   need(typeof text === 'string' && encoder.encode(text).length <= LIMITS.robots, 'blocked');
   need(!/<\s*!?\/?(?:html|doctype)\b/i.test(text), 'blocked');
+  path = robotsPath(path);
   const groups = []; let group = null, rulesStarted = false;
   for (const line of text.split(/\r?\n/)) {
     const cleanLine = line.replace(/#.*/, '').trim(); if (!cleanLine) continue;
@@ -165,7 +181,7 @@ export function robotsAllowed(text, path) {
     } else if (group && ['allow', 'disallow'].includes(key)) {
       rulesStarted = true;
       need(value.length <= 2048 && (value.match(/\*/g) || []).length <= 16, 'blocked');
-      if (value) group.rules.push({ allow: key === 'allow', path: value });
+      if (value) group.rules.push({ allow: key === 'allow', path: robotsPath(value) });
     } else if (group && key === 'crawl-delay') {
       rulesStarted = true; group.delay = value;
     }
