@@ -1,5 +1,7 @@
 # 해도 워크플로와 구조도
 
+2026-10-29 **큰 기능으로 본 최신 전체 workflow**: [PNG](rendered/workflow-overview-20261029.png) · [SVG](rendered/workflow-overview-20261029.svg) · [Mermaid 원본](workflow-overview-20261029.mmd) · [렌더 검수](rendered/workflow-overview-20261029.report.json). 입력 → 뉴스·자료실·계획·홈 → 사용자가 얻고 선택하는 결과를 7개 큰 상자로 정리했다. 네 기능은 각각 바로 사용할 수 있고 상세 연결은 생략했다. 계정 서버 연동과 수집·갱신·복구는 공통 기반이다. **최신 통합 설계이며 모든 기능의 구현 완료 도식은 아니다.** 기존 로컬 초안·선택 전송 정책은 별도 계약을 따른다. `node scripts/render-diagrams.cjs workflow-overview-20261029.mmd`로 SVG와 `.local/diagram-render/evidence/`의 PNG·검수 JSON을 재생성한다.
+
 2026-10-29 **생활 전체 시스템 목표**: [PNG](rendered/life-system-20261029.png) · [SVG](rendered/life-system-20261029.svg) · [PDF](rendered/life-system-20261029.pdf) · [원본](life-system-20261029.dot) · [책임/확장 계약](../life-tools-design/life-system-contract.md). 입력·일반 자동 처리·사람의 선택을 3열로 정리하고 계획/실제 체크/회고의 의미와 독립 종료를 표시한다. 구현 완료 도식이 아니다.
 
 2026-10-29 **관심 글에서 내 판단까지 — 상세 설계**: [PNG](rendered/reading-decision-journey-20261029.png) · [SVG](rendered/reading-decision-journey-20261029.svg) · [원본](reading-decision-journey-20261029.dot) · [화면·데이터·실패 계약](../design-review/reading-decision-journey.md). 읽기만 종료·메모·글쓰기의 선택과 같은 기기/다른 기기의 복귀 범위를 나눈다. 구현·출시 상태 도식은 아니다.
