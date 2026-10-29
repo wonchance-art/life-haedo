@@ -1,6 +1,44 @@
 # 네이버 수집 운영 준비와 가동 검수
 
-2026-10-29 KST. 기준 main `30e94f0`의 기존 네이버 연결·불변 본문/사진 수집·정확 판 복구를 실제 공개 응답과 예약 실행으로 검증하기 위한 운영 기록이다. 준비 상태 조회, 공개 응답 검사, 서버 가동과 개인 구독 사용은 서로 다른 단계다. 코드·배포·합성 검사 성공만으로 실제 수집 가동을 완료했다고 표시하지 않는다.
+2026-10-29 KST. 최신 검수 기준 main은 `55a74ae`(PR143)다. 기존 네이버 연결·불변 본문/사진 수집·정확 판 복구를 재사용하며, 준비 상태 조회·공개 응답 검사·서버 가동·개인 구독 사용을 구분한다. 코드·배포·합성 검사 성공만으로 실제 수집 가동을 완료했다고 표시하지 않는다.
+
+## 최신 실제 관측: 네트워크 적용 완료, robots로 가동 보류
+
+새 독립 worktree에서 공식 환경 상태와 로컬 `/etc/codex/network-policy.json`을 대조했다. spec1/observed spec1, `observations_current=true`, `unrestricted/enforced`이고 로컬 HTTP 정책도 unrestricted다. 이전 spec481의 미적용 상태와 다르며, 사용자에게 네트워크 설정이나 이미 등록한 Vault를 다시 요구할 조건이 아니다.
+
+| 대상 | 현재 결과 | 가동 판단 |
+| --- | --- | --- |
+| RSS robots | [실제 응답](https://rss.blog.naver.com/robots.txt) HTTP200, 515bytes, `User-agent: *` / `Disallow: /` | 수집기에도 전면 금지. readiness probe는 이 요청 1건 뒤 `blocked`로 종료했고 RSS 본문·목록·글·사진 요청은 0건이다. |
+| 블로그 robots | [실제 응답](https://blog.naver.com/robots.txt) HTTP200, 1,623bytes | AI training/RAG 목적의 봇 접근 금지 문구가 있다. PC 경로로 RSS 금지를 대신 통과시키지 않는다. |
+| 수집 DB | `ready=false`, `pg_cron`·`pg_net` 미설치 | 예약 활성화·확장 설치·구독 생성·개인 자료 쓰기를 하지 않았다. |
+| 명시 대상의 서버 상태 | 구독0·RSS 항목0·capture0 | 해당 서버 경로의 집계만 확인했다. 로컬 브라우저·다른 가져오기 경로의 기존 글이 없다는 뜻이 아니다. 전체 공개 목록을 받지 못했으므로 미수집 총수와 기준선은 미확인이다. |
+| Vault | 두 이름 각각1개, 프로젝트 URL 일치·서버 키 기본 형식 검사 통과 | 비밀은 SQL 내부 boolean 검사만 했다. 실제 인증 권한 성공은 미검증이며 재등록을 요구하지 않는다. |
+| 배포 함수(수정 전) | ACTIVE v4, 기존 해시 `9414e7b59f4aac9d8d14803cd7e1c65ec5aba4cd6b78816c97921e20e8c27a88`; 소스8개가 main과 일치 | 소스 일치와 실제 실행 성공은 다르다. |
+| 환경값·서버 키 인증 | 실제 flag true·Vault 키 인증은 미검증 | 현재 연결 도구에는 secret digest 조회가 없다. `ready=false`에서 handler는 flag false와 동일한 `setup_required`를 반환하므로 그 응답만으로 true를 증명할 수 없다. 진단을 위해 ready를 켜거나 자격값을 꺼내지 않았다. |
+
+RSS robots SHA256은 `2dff46c43bf5ed9611b25434c4e2110a574470d722e70dff1e2d99ba4289a2f5`, 블로그 robots SHA256은 `b0a0a5a0aa415af00955e98be932403dc9d99fcb7626b45fcd169b97e1c113b4`다. 원문·제목·사진·소유자 식별자·자격값을 보고서나 저장소에 넣지 않았다. 공개 robots 보충 조회 2건과 probe의 robots 1건을 구분한다. 정책상 차단 뒤 다른 UA·프록시·모바일/목록 경로로 수집을 우회하지 않았다.
+
+현재 [활성화 SQL](../../supabase/operations/naver-collection-activation.sql)의 `external_validation=verified`를 정직하게 충족할 수 없다. 따라서 `ready=false`와 예약 미설치를 유지한다. 네트워크 unrestricted는 사이트 접근 허가를 대신하지 않는다. 전체 목록·기수집 대조, 본문/사진 확보 범위, 앱 종료 중 예약·재접속·정확 복원·중지/부분 실패/재시도/중복 방지의 **실제 운영**은 모두 미검증이다. 합성 회귀 결과로 승격하지 않으며 신규 게시 탐지도 미검증이다.
+
+다음 큰 작업은 **허용된 자료 확보부터 정확 원문·사진 활용까지**다. 자동 수집은 해당 목적·수집기·경로에 대한 허용 근거가 먼저 필요하며, 그때 robots/RSS/목록/대표 응답→비밀 없는 환경·인증 확인→기존 SQL 활성화→실제 예약·복원 검수를 이어간다. 정책이 유지되면 사용자가 직접 제공한 내보내기/본문·사진 파일을 기존 수동 가져오기·불변 판·보관/복원 경로로 처리하는 대안을 설계한다. 이 대안은 예약 수집 성공이 아니며 현재 세션에서 추가 개인 자료를 취득하거나 새로운 전송 경로를 만들지 않았다.
+
+## robots 경로 일치 결함과 회귀 검수
+
+독립 검토에서 `Disallow: /photos/first.png`가 `/photos/%66irst.png` 요청을 막지 못하는 결함을 확인했다. main의 원래 구현은 true(허용), 수정본은 false(차단)로 재현했다. [RFC9309 §2.2.2](https://www.rfc-editor.org/rfc/rfc9309.html#section-2.2.2)에 따라 기존 비교기에 unreserved ASCII 정규화·percent hex 대소문자 통일·UTF-8 경로 비교를 추가했다. `%2F` 등 예약 문자와 encoded `*`/`$`는 유지하고 잘못된 escape/UTF-8/제어문자는 차단한다. 실제 fetch URL이나 원문은 바꾸지 않는다. 새 라이브러리·수집 경로를 도입하지 않았다.
+
+collector16개와 worker/readiness25개 회귀를 통과했고 정적 검사는 HTML22·JS174·리소스726·PWA 셸을 통과했다. 기존 전체 단위·브라우저·PWA 업데이트 검사를 수동 반복하지 않았다. UI·저장 형식·공개 셸 변경은 없으며 이번 수정으로 실제 RSS 전면 금지가 풀리지 않는다. 독립 검수와 배포 결과는 아래 출시 기록에서 확정한다.
+
+### 방어 수정 출시 기록
+
+별도 검수자가 percent 정규화/UTF-8/예약 문자/wildcard/이중 인코딩10조건과 잘못된 인코딩8조건을 확인했다. CDN 네트워크 경계를 거친 합성 실험에서도 금지된 encoded 사진 경로는 robots1회 뒤 차단되고 사진 요청은0회였다. 운영 SQL·보존 흐름·문서도 독립 검토했다.
+
+2026-10-29 16:57 KST에 Edge v5를 배포했다. 번들 SHA256은 `6c5a2e0bbbba67465eb5b10378fa8e15494a86aa1d244b1d666cf97f5d8744ee`, ACTIVE/`verify_jwt=false`이며 handler의 기존 개별 인증을 유지한다. 배포 입력에는 기존 Deno 설정·lock을 포함했고, 플랫폼이 반환한 런타임 소스8개 모두 검수한 작업공간과 일치한다. 바뀐 런타임 소스는 collector1개다. 실제 익명 cron 요청은 HTTP401/`unauthorized`로 거절됐다. 이는 익명 거절 확인이며 Vault 키의 인증 성공을 뜻하지 않는다.
+
+배포 뒤 DB `ready=false`·확장/예약 미설치·대상 구독/항목/capture0을 재확인했다. 사이트 금지 규칙이 유지되므로 실제 RSS·본문·사진 검사를 반복하지 않았다. 저장소 통합과 필수 CI·Pages 결과는 연결 PR의 최종 기록을 따른다. 이 출시는 robots 준수 방어 수정이며 네이버 실제 자동 수집 가동 완료가 아니다. 기존 보안 advisor의 3종 WARN(익명/인증 사용자 SECURITY DEFINER 노출, 유출 비밀번호 보호 비활성)은 별도 이력이며 이번 변경으로 DB 권한을 수정하지 않았다. [DB 함수 안내](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable)·[인증 함수 안내](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)·[비밀번호 보호 안내](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+
+## 이전 세션 관측 이력
+
+아래 spec481·Vault 미등록·worker v2/v3 기록은 이전 단계의 관측이다. 최신 상태는 위 표를 따른다.
 
 ## 현재 관측과 미확인 범위
 
