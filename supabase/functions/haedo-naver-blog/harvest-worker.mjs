@@ -13,7 +13,8 @@ function identity(claim, { owner, subscriptionId, jobId, inventory }) {
     /^[A-Za-z0-9_-]{1,50}$/.test(claim.blog_id || '') && Number.isSafeInteger(claim.revision) && claim.revision > 0 &&
     Number.isFinite(Date.parse(claim.lease_until)) && Date.parse(claim.lease_until) > Date.now() &&
     (!owner || claim.owner_id === owner) && (!subscriptionId || claim.subscription_id === subscriptionId));
-  if (inventory) need(Number.isSafeInteger(claim.page) && claim.page > 0 && claim.page_size === 30);
+  if (inventory) need(Number.isSafeInteger(claim.page) && claim.page > 0 && claim.page_size === 30 &&
+    (claim.baseline_method === undefined || claim.baseline_method === null || ['count_exact', 'observed_set'].includes(claim.baseline_method)));
   else need(UUID.test(claim.job_id || '') && (!jobId || claim.job_id === jobId) && /^[1-9][0-9]{0,29}$/.test(claim.log_no || ''));
 }
 function blankPhoto(index, candidate, error) {
@@ -25,22 +26,53 @@ export function createHarvestWorker({ rpc, fetcher = fetch, load, model, origin,
   const network = createNetwork({ fetcher, signal, deadline });
   async function finishInventory(claim) {
     const args = { p_subscription_id: claim.subscription_id, p_lease_token: claim.lease_token, p_revision: claim.revision,
-      p_page: claim.page, p_entries: [], p_total: null, p_next_page: null, p_error: null };
-    let countMismatch = false;
+      p_page: claim.page, p_entries: [], p_total: null, p_next_page: null, p_error: null, p_probe: null };
+    let countMismatch = false, requiredProbe = false, probeFailed = false, sourceDiagnostic = null;
+    const diagnostic = error => {
+      const value = error?.sourceFailure;
+      if (value && ['robots','inventory','body','image'].includes(value.stage) &&
+        ['http_status','robots_disallowed','response_mismatch'].includes(value.reason) &&
+        (value.httpStatus === null || Number.isInteger(value.httpStatus) && value.httpStatus >= 100 && value.httpStatus <= 599)) return {
+        stage: value.stage, reason: value.reason, httpStatus: value.httpStatus,
+        retryAfterSeconds: Number.isSafeInteger(value.retryAfterSeconds) && value.retryAfterSeconds >= 0 && value.retryAfterSeconds <= 86400 ? value.retryAfterSeconds : null
+      };
+      return null;
+    };
+    const inventoryURL = page => 'https://blog.naver.com/PostTitleListAsync.naver?' + new URLSearchParams({ blogId: claim.blog_id,
+      currentPage: String(page), categoryNo: '0', countPerPage: '30' });
     try {
-      const url = 'https://blog.naver.com/PostTitleListAsync.naver?' + new URLSearchParams({ blogId: claim.blog_id,
-        currentPage: String(claim.page), categoryNo: '0', countPerPage: '30' });
-      const page = parseInventory(text(await network.resource(url, 'html', 2 * 1024 * 1024)), { blogId: claim.blog_id, page: claim.page, preserveCountMismatch: true });
+      const page = parseInventory(text(await network.resource(inventoryURL(claim.page), 'html', 2 * 1024 * 1024)), { blogId: claim.blog_id, page: claim.page, preserveCountMismatch: true });
       args.p_entries = page.entries.map(entry => ({ logNo: entry.log_no, title: entry.title, publishedAt: null }));
       countMismatch = page.count_consistent === false;
-      // A null trusted total keeps the existing DB completion gate closed even
-      // if cross-page duplicates make the observed set equal the reported total.
-      args.p_total = countMismatch ? null : page.total;
-      args.p_next_page = countMismatch ? null : page.has_more ? page.page + 1 : null;
-    } catch (error) { args.p_error = code(error); }
-    const result = await rpc('life_naver_inventory_finish', args);
+      // The observed wrapper retains the reported total as evidence and fences
+      // the old count-based completion gate when that count is inconsistent.
+      args.p_total = page.total; args.p_next_page = page.has_more ? page.page + 1 : null;
+      requiredProbe = !page.has_more && (countMismatch || claim.baseline_method === 'observed_set');
+      if (requiredProbe) {
+        probeFailed = true;
+        try {
+          // Four bounded HTTP requests (each page's robots + body), then the
+          // finish RPC and overhead, must fit the existing 80-second deadline.
+          need(network.remaining() > 55000, 'deadline');
+          const head = parseInventory(text(await network.resource(inventoryURL(1), 'html', 2 * 1024 * 1024)), { blogId: claim.blog_id, preserveCountMismatch: true });
+          need(head.total === page.total, 'incomplete_inventory');
+          const tailRaw = text(await network.resource(inventoryURL(page.page + 1), 'html', 2 * 1024 * 1024));
+          // Only this explicit clamp check parses a next-page response as the
+          // known terminal page. Ordinary beyond-end parsing stays strict.
+          const tail = parseInventory(tailRaw, { blogId: claim.blog_id, page: page.page, preserveCountMismatch: true });
+          const logNos = value => value.entries.map(entry => entry.log_no);
+          need(tail.total === page.total && JSON.stringify(logNos(tail)) === JSON.stringify(logNos(page)), 'incomplete_inventory');
+          args.p_probe = { head: { total: head.total, logNos: logNos(head) }, tail: { total: tail.total, logNos: logNos(tail) } };
+          probeFailed = false;
+        } catch (error) { sourceDiagnostic = diagnostic(error); /* Preserve validated entries; missing proof cannot promote a baseline. */ }
+      }
+    } catch (error) { args.p_error = code(error); sourceDiagnostic = diagnostic(error); }
+    const result = await rpc('life_naver_inventory_finish_observed', args);
     need(result && ['stored','stale'].includes(result.status));
-    return { status: result.status === 'stale' ? 'busy' : 'checked', stage: 'inventory', failed: args.p_error !== null || countMismatch };
+    const observedComplete = result.inventory?.status === 'complete' && result.inventory?.baseline_method === 'observed_set' && result.observed_verified === true;
+    return { status: result.status === 'stale' ? 'busy' : 'checked', stage: 'inventory',
+      failed: args.p_error !== null || probeFailed || requiredProbe && result.observed_verified !== true || result.inventory?.status === 'partial' || countMismatch && !observedComplete,
+      ...(countMismatch ? { countConsistent: false } : {}), ...(sourceDiagnostic ? { sourceFailure: sourceDiagnostic } : {}) };
   }
   async function upload(claim, bytes, metadata) {
     const digest = await sha256(bytes), path = claim.owner_id + '/naver/' + claim.blog_id + '/' + claim.log_no + '/' + digest;

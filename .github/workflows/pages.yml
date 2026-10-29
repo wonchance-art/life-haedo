@@ -39,6 +39,8 @@ jobs:
         run: node supabase/tests/check-naver-inventory-rescan.mjs
       - name: Verify Naver public-only schedules and atomic activation guards
         run: node tests/run-naver-activation-postgres.cjs
+      - name: Verify repeated Naver inventory observations and deferred discoveries
+        run: node tests/run-naver-observed-baseline-postgres.cjs
       - name: Install pinned account library SQL test dependencies
         run: npm ci --prefix tests/sql-ci --ignore-scripts --no-audit --no-fund
       - name: Verify account library ownership, default races and immutable original manifests
@@ -55,6 +57,7 @@ jobs:
             .local/naver-capture-backend/
             .local/naver-inventory-rescan/
             .local/naver-activation-postgres/
+            .local/naver-observed-baseline/
             .local/account-library-sql/
             .local/naver-media-sql/
             .local/naver-media-postgres/

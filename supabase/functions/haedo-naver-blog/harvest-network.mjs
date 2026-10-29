@@ -1,6 +1,14 @@
 import { failure, robotsAllowed } from './collector.mjs';
 import { imageURL } from './extractor.mjs';
 const need = (ok, code) => { if (!ok) throw failure(code); };
+function sourceFailure(code, url, kind, reason, response = null) {
+  const stage = kind === 'robots' ? 'robots' : kind === 'image' ? 'image' :
+    new URL(url).pathname === '/PostTitleListAsync.naver' ? 'inventory' : 'body';
+  const retry = response?.headers.get('retry-after');
+  return Object.assign(failure(code), { sourceFailure: { stage, reason,
+    httpStatus: response?.status ?? null,
+    retryAfterSeconds: /^\d{1,5}$/.test(retry || '') && Number(retry) <= 86400 ? Number(retry) : null } });
+}
 export const MEDIA_MAX_BYTES = 16 * 1024 * 1024;
 export function safeResource(raw, kind) {
   if (kind === 'image') return imageURL(raw);
@@ -67,9 +75,9 @@ export function createNetwork({ fetcher = fetch, signal, deadline = Date.now() +
     const url = safeResource(raw, kind);
     const response = await fetcher(url, { method: 'GET', redirect: 'error', signal: timeout(), headers: {
       'User-Agent': 'HaedoNaverCollector/1.0', Accept: kind === 'image' ? 'image/png,image/jpeg,image/webp' : kind === 'robots' ? 'text/plain' : 'text/html,application/json', 'Accept-Encoding': 'identity' } });
-    if (response.redirected || response.url && response.url !== url) { await response.body?.cancel(); throw failure('blocked'); }
+    if (response.redirected || response.url && response.url !== url) { await response.body?.cancel(); throw sourceFailure('blocked', url, kind, 'response_mismatch', response); }
     if (kind === 'robots' && [404,410].includes(response.status)) { await response.body?.cancel(); return null; }
-    if (!response.ok) { await response.body?.cancel(); throw failure(response.status === 404 || response.status === 410 ? 'unavailable' : response.status === 403 || response.status === 401 ? 'blocked' : 'network_error'); }
+    if (!response.ok) { await response.body?.cancel(); throw sourceFailure(response.status === 404 || response.status === 410 ? 'unavailable' : response.status === 403 || response.status === 401 ? 'blocked' : 'network_error', url, kind, 'http_status', response); }
     return { bytes: await readBytes(response, limit), type: response.headers.get('content-type') || '' };
   }
   async function resource(raw, kind, limit) {
@@ -78,7 +86,8 @@ export function createNetwork({ fetcher = fetch, signal, deadline = Date.now() +
       const robotURL = parsed.origin + '/robots.txt';
       const robot = await request(robotURL, 'robots', 128 * 1024);
       const content = robot === null ? null : new TextDecoder('utf-8', { fatal: true }).decode(robot.bytes);
-      need(content === null || robotsAllowed(content, parsed.pathname + parsed.search), 'blocked'); robots.set(robotURL, content);
+      if (content !== null && !robotsAllowed(content, parsed.pathname + parsed.search)) throw sourceFailure('blocked', robotURL, 'robots', 'robots_disallowed', { status: 200, headers: new Headers() });
+      robots.set(robotURL, content);
     }
     // CDN robots are not inferred from blog robots. No images are requested if
     // their origin policy was not checked during this same execution.

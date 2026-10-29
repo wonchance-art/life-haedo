@@ -22,6 +22,7 @@ const libraryMigrations = [
 const editedCopyMigration = 'supabase/migrations/20261022031304_life_material_edited_copy_markers.sql';
 const mediaReceiptMigration = ['supabase/migrations/20261029030503_naver_media_receipts.sql', '026730836fd04a9344ef831696857d7df806fc7fdb8d71605a509e3d398bae6d'];
 const inventoryRescanMigration = ['supabase/migrations/20261029040646_naver_inventory_automatic_rescan.sql', '186b8f4d06b5641859f419f864f640cff35b5b39adb524122d1047eb183d2cf4'];
+const observedBaselineMigration = ['supabase/migrations/20261029112456_naver_observed_inventory_baseline.sql', 'a4e8aaf116eb2977cb7452b241acc49259029c90ca016dcfce0a7c69bbca6e08'];
 const image = 'postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3';
 const container = 'haedo-blog-postgres-' + Date.now() + process.pid, database = 'haedo_blog_qa_integrated_install', runId = randomUUID();
 const env = { ...process.env }; for (const key of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH']) delete env[key];
@@ -57,8 +58,8 @@ async function main() {
       .trim().split('\n').filter(name => name.endsWith('.sql')).map(name => path.basename(name)).sort();
     assert.equal(baseline.length, 10);
     assert.deepEqual(files.map(name => 'supabase/migrations/' + name),
-      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file), mediaReceiptMigration[0], inventoryRescanMigration[0]].sort(),
-      'Exactly the ten legacy and eleven reviewed additive migrations are required; missing or unknown files are rejected.');
+      [...baseline.map(name => 'supabase/migrations/' + name), migration, accountMaterialMigration, ...naverMigrations, captureMigration, editedCopyMigration, ...libraryMigrations.map(([file]) => file), mediaReceiptMigration[0], inventoryRescanMigration[0], observedBaselineMigration[0]].sort(),
+      'Exactly the ten legacy and twelve reviewed additive migrations are required; missing or unknown files are rejected.');
     for (const file of baseline) {
       const relative = 'supabase/migrations/' + file, current = await fs.readFile(path.join(root, relative), 'utf8');
       assert.equal(hash(current), hash(command('git', ['-C', root, 'show', '88ccfe5:' + relative])), 'Previously installed migration changed: ' + file);
@@ -458,6 +459,118 @@ async function main() {
       for (let pass = 0; pass < 2; pass++) psql(ddl);
       assert.deepEqual(dataSnapshot(), intactData); assert.deepEqual(sql(allCatalog), installedCatalog); assert.deepEqual(targetMetadata(), installedMetadata);
       report.naverInventoryRescanMigration = { file, sha256: hash(ddl), originalBodySha256: hash(legacyBody), newBodySha256: hash(newBody), failedInstallAtomic: true, onlyReviewedConditionChanged: true, populatedRowsExact: true, allPrivilegesPreserved: true, repeatedInstallExact: true, runtimeGateUnchanged: true };
+    });
+    await check('Reviewed observed-baseline installation preserves all populated legacy values and privileges through atomic rollback, exact additive schema changes and populated receipt reinstallation', async () => {
+      const [file, expectedHash] = observedBaselineMigration;
+      const ddl = await fs.readFile(path.join(root, file), 'utf8');
+      assert.equal(hash(ddl), expectedHash, 'Only the exact independently reviewed observed-baseline migration is accepted.');
+      assert.match(ddl, /begin;/); assert.match(ddl, /commit;\s*$/i);
+      const allNamespaces = "array['public','auth','storage','haedo_blog_private','haedo_material_private','haedo_naver_private']";
+      const allCatalog = catalogQuery.replaceAll(namespaces, allNamespaces).replace(" and p.proname not like 'life_material_%'", '');
+      const dataSnapshot = () => sql('select installation_probe.all_data_snapshot();');
+      const functionMetadata = () => sql("select jsonb_agg(jsonb_build_array(n.nspname,p.proname,pg_get_function_identity_arguments(p.oid),pg_get_function_result(p.oid),pg_get_userbyid(p.proowner),p.prosecdef,p.proconfig,p.proacl,p.provolatile,p.proisstrict,p.proparallel,pg_get_expr(p.proargdefaults,0)) order by n.nspname,p.proname,p.oid) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname=any(" + allNamespaces + ");");
+      // Seed a real pre-migration count-exact inventory/receipt and a pending
+      // photo checkpoint. All source, photo, draft, publication and account
+      // records populated by the earlier release checks remain present.
+      const sub = rpc('life_naver_save', [q(bundle.workspaceId) + '::uuid', q('observed_installation_probe'), '0', 'false']);
+      rpc('life_naver_inventory_start', [q(sub.id) + '::uuid', String(sub.revision)]);
+      psql('update haedo_naver_private.runtime set ready=true where singleton;');
+      const oldLease = rpc('life_naver_inventory_claim', ['1', q(sub.id) + '::uuid', q(owner) + '::uuid'], 'service_role')[0];
+      const entries = [{ logNo: '986', title: 'Synthetic preserved inventory', publishedAt: null }];
+      const oldArgs = [q(sub.id) + '::uuid', q(oldLease.lease_token) + '::uuid', String(oldLease.revision), '1', json(entries), '1', 'null', 'null'];
+      const oldResult = rpc('life_naver_inventory_finish', oldArgs, 'service_role');
+      assert.equal(oldResult.inventory.status, 'complete'); assert.equal(oldResult.inventory.baseline_count, 1);
+      psql('update haedo_naver_private.runtime set ready=false where singleton;' +
+        'insert into haedo_naver_private.capture_jobs(owner_id,subscription_id,blog_id,log_no,progress) values(' + q(owner) + '::uuid,' + q(sub.id) + '::uuid,' + q(sub.blog_id) + ", '986', '{\"fixture\":\"pending exact photo checkpoint\"}');");
+      const intactData = dataSnapshot(), intactCatalog = sql(allCatalog), intactMetadata = functionMetadata();
+      const failed = ddl.replace(/commit;\s*$/i, 'select 1/0;\ncommit;');
+      assert.throws(() => psql(failed), /division by zero/);
+      assert.deepEqual(dataSnapshot(), intactData); assert.deepEqual(sql(allCatalog), intactCatalog); assert.deepEqual(functionMetadata(), intactMetadata);
+      assert.equal(sql("select to_jsonb(to_regclass('haedo_naver_private.inventory_scan_observations') is null and to_regclass('haedo_naver_private.inventory_observation_receipts') is null and not exists(select 1 from information_schema.columns where table_schema='haedo_naver_private' and column_name in ('baseline_method','observed_discovery_revision')));"), true);
+      psql(ddl);
+      const addedColumns = {
+        'haedo_naver_private.inventory': ['baseline_method', 'text', false],
+        'haedo_naver_private.inventory_entries': ['observed_discovery_revision', 'bigint', false]
+      };
+      const addedTables = ['haedo_naver_private.inventory_scan_observations', 'haedo_naver_private.inventory_observation_receipts'];
+      const addedRelations = ['inventory_scan_observations', 'inventory_scan_observations_pkey', 'inventory_observation_receipts', 'inventory_observation_receipts_pkey'];
+      const addedFunction = row => row[0] === 'haedo_naver_private' && ['observation_ids_ok', 'inventory_finish_observed'].includes(row[1]) || row[0] === 'public' && row[1] === 'life_naver_inventory_finish_observed';
+      const changedBody = row => row[0] === 'haedo_naver_private' && ['inventory_claim', 'inventory_finish'].includes(row[1]);
+      const identity = row => JSON.stringify(row.slice(0, 3));
+      const originalFunctions = new Map(intactCatalog.functions.map(row => [identity(row), row]));
+      const installedCatalog = sql(allCatalog), installedData = dataSnapshot();
+      assert.deepEqual(Object.keys(installedData).sort(), [...Object.keys(intactData), ...addedTables].sort());
+      for (const table of addedTables) assert.deepEqual(installedData[table], []);
+      function projectLegacyData(data) {
+        const projected = {};
+        for (const [table, oldRows] of Object.entries(intactData)) {
+          assert(Object.hasOwn(data, table), 'An existing table disappeared: ' + table);
+          const column = addedColumns[table]?.[0];
+          projected[table] = data[table].map(row => {
+            if (!column) return row;
+            assert(Object.hasOwn(row, column)); assert.equal(row[column], null, 'An existing row received an unexpected new metadata value: ' + table);
+            const copy = { ...row }; delete copy[column]; return copy;
+          });
+          assert.deepEqual(projected[table], oldRows, 'An original value, row, photo, draft, receipt or setting changed: ' + table);
+        }
+        return projected;
+      }
+      assert.deepEqual(projectLegacyData(installedData), intactData, 'Only the two new nullable column keys are projected; every original stored value remains exact.');
+      const newConstraints = sql("select jsonb_agg(jsonb_build_object('table',c.relname,'name',k.conname,'type',k.contype,'validated',k.convalidated,'definition',pg_get_constraintdef(k.oid),'columns',(select jsonb_agg(a.attname order by a.attnum) from pg_attribute a where a.attrelid=c.oid and a.attnum=any(k.conkey))) order by c.relname) from pg_constraint k join pg_class c on c.oid=k.conrelid where c.relnamespace='haedo_naver_private'::regnamespace and k.conname in ('inventory_baseline_method_check','inventory_entries_observed_discovery_revision_check');");
+      assert.deepEqual(newConstraints.map(row => [row.table, row.name, row.type, row.validated, row.columns]), [
+        ['inventory', 'inventory_baseline_method_check', 'c', true, ['baseline_method']],
+        ['inventory_entries', 'inventory_entries_observed_discovery_revision_check', 'c', true, ['observed_discovery_revision']]
+      ]);
+      assert.equal(installedCatalog.functions.filter(addedFunction).length, 3);
+      assert.equal(installedCatalog.functions.filter(changedBody).length, 2);
+      assert.deepEqual(functionMetadata().filter(row => !addedFunction(row)), intactMetadata, 'Every pre-existing signature, result, owner, security mode, path, ACL, volatility and argument default remains exact.');
+      const newRelations = installedCatalog.relations.filter(row => row[0] === 'haedo_naver_private' && addedRelations.includes(row[1]));
+      assert.deepEqual(newRelations.map(row => row[1]).sort(), addedRelations.slice().sort());
+      const normalizedCatalog = { ...installedCatalog,
+        functions: installedCatalog.functions.filter(row => !addedFunction(row)).map(row => {
+          if (!changedBody(row)) return row;
+          const original = originalFunctions.get(identity(row)); assert(original);
+          const definition = new RegExp('create or replace function haedo_naver_private\\.' + row[1] + '\\([^$]+?as \\$\\$([\\s\\S]*?)\\$\\$;');
+          assert.equal(row[3], ddl.match(definition)?.[1], 'The reviewed new function body must actually install.');
+          assert.notEqual(row[3], original[3]); return row.map((value, index) => index === 3 ? original[3] : value);
+        }),
+        relations: installedCatalog.relations.filter(row => !(row[0] === 'haedo_naver_private' && addedRelations.includes(row[1]))).map(row => {
+          const column = addedColumns[row[0] + '.' + row[1]]; if (!column) return row;
+          assert.deepEqual(row[6].filter(value => value[0] === column[0]), [column]);
+          const constraint = newConstraints.find(value => value.table === row[1]); assert(constraint);
+          assert.equal(row[7].filter(value => value === constraint.definition).length, 1);
+          return row.map((value, index) => index === 6 ? value.filter(item => item[0] !== column[0]) : index === 7 ? value.filter(item => item !== constraint.definition) : value);
+        })
+      };
+      assert.deepEqual(normalizedCatalog, intactCatalog, 'Only the two named nullable columns/checks, two private tables/indexes, three new functions and two reviewed function bodies may differ.');
+      const gates = sql("select jsonb_build_object('rls',(select count(*)=2 and bool_and(relrowsecurity and not relforcerowsecurity) from pg_class where oid in ('haedo_naver_private.inventory_scan_observations'::regclass,'haedo_naver_private.inventory_observation_receipts'::regclass)),'privateTables',(select bool_and(not has_table_privilege(r,t,'SELECT,INSERT,UPDATE,DELETE')) from unnest(array['anon','authenticated','service_role']) r cross join unnest(array['haedo_naver_private.inventory_scan_observations','haedo_naver_private.inventory_observation_receipts']) t),'workerOnly',(select count(*)=2 and bool_and(proconfig=array['search_path=pg_catalog'] and has_function_privilege('service_role',p.oid,'execute') and not has_function_privilege('anon',p.oid,'execute') and not has_function_privilege('authenticated',p.oid,'execute') and prosecdef=(n.nspname='haedo_naver_private')) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','haedo_naver_private') and p.proname in ('life_naver_inventory_finish_observed','inventory_finish_observed')),'helperPrivate',not has_function_privilege('anon','haedo_naver_private.observation_ids_ok(jsonb)','execute') and not has_function_privilege('authenticated','haedo_naver_private.observation_ids_ok(jsonb)','execute') and not has_function_privilege('service_role','haedo_naver_private.observation_ids_ok(jsonb)','execute')); ");
+      assert(Object.values(gates).every(Boolean));
+      assert.deepEqual(rpc('life_naver_inventory_finish', oldArgs, 'service_role'), oldResult, 'A pre-migration receipt remains an exact no-op retry while readiness is off.');
+      assert.deepEqual(dataSnapshot(), installedData);
+      // Populate both new registries through the real service-only wrapper.
+      // This deliberate scan changes only inventory bookkeeping; retain all
+      // pre-existing original/photo/quote/draft/account/publication rows exactly.
+      psql('update haedo_naver_private.runtime set ready=true where singleton;');
+      const lease = rpc('life_naver_inventory_claim', ['1', q(sub.id) + '::uuid', q(owner) + '::uuid'], 'service_role')[0];
+      const witness = { head: { total: 1, logNos: ['986'] }, tail: { total: 1, logNos: ['986'] } };
+      const observedArgs = [q(sub.id) + '::uuid', q(lease.lease_token) + '::uuid', String(lease.revision), '1', json(entries), '1', 'null', 'null', json(witness)];
+      const observedResult = rpc('life_naver_inventory_finish_observed', observedArgs, 'service_role');
+      assert.equal(observedResult.observed_verified, true); assert.equal(observedResult.baseline_promoted, false);
+      psql('update haedo_naver_private.runtime set ready=false where singleton;');
+      const populatedData = dataSnapshot(), populatedCatalog = sql(allCatalog), populatedMetadata = functionMetadata();
+      assert.equal(populatedData[addedTables[0]].length, 1); assert.equal(populatedData[addedTables[1]].length, 1);
+      const scanBookkeeping = new Set(['haedo_naver_private.inventory', 'haedo_naver_private.inventory_seen', 'haedo_naver_private.capture_receipts']);
+      for (const [table, rows] of Object.entries(installedData)) if (!addedTables.includes(table) && !scanBookkeeping.has(table)) assert.deepEqual(populatedData[table], rows, 'A deliberate scan altered unrelated existing records: ' + table);
+      assert.throws(() => psql(failed), /division by zero/);
+      assert.deepEqual(dataSnapshot(), populatedData); assert.deepEqual(sql(allCatalog), populatedCatalog); assert.deepEqual(functionMetadata(), populatedMetadata);
+      for (let pass = 0; pass < 2; pass++) psql(ddl);
+      assert.deepEqual(dataSnapshot(), populatedData); assert.deepEqual(sql(allCatalog), populatedCatalog); assert.deepEqual(functionMetadata(), populatedMetadata);
+      assert.deepEqual(rpc('life_naver_inventory_finish_observed', observedArgs, 'service_role'), observedResult);
+      assert.deepEqual(rpc('life_naver_inventory_finish', oldArgs, 'service_role'), oldResult);
+      const changedProof = { ...witness, tail: { total: 2, logNos: ['986'] } };
+      assert.throws(() => rpc('life_naver_inventory_finish_observed', [...observedArgs.slice(0, 8), json(changedProof)], 'service_role'), /life_naver_operation_mismatch/);
+      assert.deepEqual(dataSnapshot(), populatedData);
+      report.naverObservedBaselineMigration = { file, sha256: hash(ddl), failedInstallAtomic: true, originalValuesProjectedExact: true, onlyTwoNullableColumnsAndChecks: true, onlyThreeNewFunctionsAndTwoChangedBodies: true, preservedExistingFunctions: intactCatalog.functions.length - 2, allPrivilegesPreserved: true, privateRegistryGates: gates, populatedReinstallExact: true, oldAndNewReceiptReplayExact: true, changedProofRejected: true, runtimeGateUnchanged: true };
     });
     report.pass = true; report.baselineMigrations = baseline; report.baselineDataSha256 = baselineDigest;
     report.rollback = 'Failed transaction rolls back all additive DDL. After successful use retain data/receipts and compatible output-receipt storage; disable new UI and public/private entrypoint execution, then reapply the migration to restore. Full 88cc frontend rollback is safe only before new preparation usage. No destructive down migration.';

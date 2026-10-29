@@ -42,7 +42,7 @@ function deferred() { let resolve; const promise = new Promise(value => { resolv
 async function fixture(t, options = {}) {
   const document = documentFixture(), host = document.createElement('main'); document.body.append(host);
   const ws = 'current-workspace'; let current = true, beforeSave = null, saveError = null;
-  let connection = { id: 'connection-one', blogId: 'won_cy_', workspaceId: options.otherWorkspace ? 'other-workspace' : ws, enabled: options.enabled !== false, revision: 7, baselineComplete: options.baseline === true };
+  let connection = { id: 'connection-one', blogId: 'won_cy_', workspaceId: options.otherWorkspace ? 'other-workspace' : ws, enabled: options.enabled !== false, revision: 7, baselineComplete: options.baseline === true, inventory: options.inventory };
   const ready = options.ready === true, calls = [];
   const clone = value => structuredClone(value);
   const subscription = () => ({ id: connection.id, blog_id: connection.blogId, workspace_id: connection.workspaceId, enabled: connection.enabled, revision: connection.revision });
@@ -56,8 +56,10 @@ async function fixture(t, options = {}) {
   };
   if (!options.legacy) Object.assign(service, {
     async connections() { calls.push({ kind: 'connections' }); return { ready, connections: [clone(connection)] }; },
-    async publicList() { return { items: [], hasMore: false, complete: false, jobs: [] }; },
+    async publicList() { return { items: [], hasMore: false, complete: options.inventory?.status === 'complete', inventory: options.inventory, jobs: [] }; },
     async captures() { return { captures: [], jobs: [], hasMore: false }; },
+    async startInventory() { return {}; },
+    async checkCapture() { return options.checkResult || { status: 'checked' }; },
     configureConnection: (workspace, id, value) => { assert.equal(workspace, ws); assert.equal(id, connection.id); return save('configure', id, value); }
   });
   const sandbox = { URL, Intl, HaedoLife: { NaverBlog: Model } };
@@ -70,6 +72,45 @@ async function fixture(t, options = {}) {
   const rssToggle = () => get('#naverBlogSubscriptions').querySelector('[data-action="pause"],[data-action="resume"]');
   return { ui, host, document, get, calls, accountRow, accountToggle, rssToggle, state: () => clone(connection), setBeforeSave: value => { beforeSave = value; }, setSaveError: value => { saveError = value; }, setCurrent: value => { current = value; }, async click(node) { assert.ok(node); assert.equal(node.disabled, false); node.focus(); node.emit('click'); await settle(); } };
 }
+
+test('count mismatch remains partial after a checked worker response and preserves input', async t => {
+  const f = await fixture(t, { ready: true, enabled: false, inventory: { status: 'partial', seen_count: 1665, total_start: 1663 }, checkResult: { status: 'checked', failed: true } });
+  const input = f.get('#naverBlogId'), originalInput = input.value;
+  await f.click(f.accountRow().querySelector('[data-action="inventory"]'));
+  const status = f.get('#naverCaptureIntakeStatus');
+  assert.equal(status.dataset.state, 'partial');
+  assert.match(status.textContent, /1,665개.*1,663개/);
+  assert.match(status.textContent, /전체 목록 확인은 미완료/);
+  assert.equal(input.value, originalInput);
+  assert.equal(f.accountToggle(), null);
+});
+
+test('observed baseline enables an explicit opt-in while disclosing unconfirmed total', async t => {
+  const f = await fixture(t, { ready: true, enabled: false, baseline: true, inventory: { status: 'complete', baseline_method: 'observed_set', baseline_count: 1665, seen_count: 1665, total_start: 1663 } });
+  await f.click(f.accountRow().querySelector('[data-action="public-list"]'));
+  const status = f.get('#naverCaptureIntakeStatus');
+  assert.equal(status.dataset.state, 'observed');
+  assert.match(status.textContent, /반복 확인한 목록/);
+  assert.match(status.textContent, /전체 공개 글 수는 미확정/);
+  assert.equal(f.accountToggle().disabled, false);
+  assert.match(f.accountToggle().textContent, /새로 발견한 글/);
+  assert.equal(f.state().enabled, false);
+  assert.equal(f.calls.filter(value => value.kind === 'configure').length, 0);
+});
+
+test('an incomplete subsequent scan preserves the observed baseline without a completed scan message', async t => {
+  const f = await fixture(t, { ready: true, baseline: true, inventory: { status: 'partial', baseline_method: 'observed_set', baseline_count: 1665, seen_count: 30, total_start: 1664 } });
+  await f.click(f.accountRow().querySelector('[data-action="public-list"]'));
+  assert.equal(f.get('#naverCaptureIntakeStatus').dataset.state, 'partial');
+  assert.match(f.get('#naverCaptureIntakeStatus').textContent, /기준 목록은 유지.*이번 목록 확인은 아직 끝나지/);
+});
+
+test('an interrupted first scan does not label a normally shorter prefix as a source count mismatch', async t => {
+  const f = await fixture(t, { ready: true, enabled: false, inventory: { status: 'partial', seen_count: 30, total_start: 1663, page: 2, last_error: 'network_error' } });
+  await f.click(f.accountRow().querySelector('[data-action="public-list"]'));
+  assert.equal(f.get('#naverCaptureIntakeStatus').dataset.state, 'partial');
+  assert.doesNotMatch(f.get('#naverCaptureIntakeStatus').textContent, /개수가 달라/);
+});
 
 test('setup-off enabled connection can pause before baseline, including a different workspace', async t => {
   const f = await fixture(t, { otherWorkspace: true, baseline: false, ready: false });
