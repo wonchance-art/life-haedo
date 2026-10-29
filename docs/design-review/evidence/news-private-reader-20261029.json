@@ -1,0 +1,203 @@
+{
+  "date": "2026-10-29",
+  "scope": "Personal authenticated research reading. Public evidence only; no account IDs, credentials, private bodies or user judgments.",
+  "unitTests": {
+    "passed": 1647,
+    "failed": 0
+  },
+  "static": {
+    "html": 22,
+    "javascript": 176,
+    "references": 732
+  },
+  "checks": {
+    "reader": {
+      "pass": true,
+      "checks": 4,
+      "scope": "Local Chromium, real UI/SDK/scoped IndexedDB; synthetic Auth/feed/PNG and intercepted explicit original popup. No production data, publisher fetch, Apple device or usefulness claim."
+    },
+    "privateReader": {
+      "pass": true,
+      "checks": 7,
+      "scope": "Synthetic owner API/metadata/text, real application/SDK and isolated Chromium contexts. Not operating SQL/RLS, physical devices, Apple or recommendation usefulness."
+    },
+    "existingDiscovery": {
+      "pass": true,
+      "checks": 19,
+      "scope": "Real local app/Core/SDK/IndexedDB and checked-in public catalogue; synthetic edge HTTP and publisher popup interception identified per check. No live OAuth/account/publisher, model inference, Apple hardware or user usefulness validation."
+    },
+    "pwa": {
+      "pass": true,
+      "checks": 9,
+      "scope": "Real Chromium SDK/IndexedDB/Service Worker. Only the selected exact v167 sw.js is prior code; all app modules and approved-source policy are current. Virtual folders, annual plans, reactions and five-language settings are seeded through the current real scoped storage API before the worker update; an actual a0eac63 v3 historical reading row is seeded unchanged into synthetic local metadata under its original workspace ID. This isolates worker/cache migration rather than reconstructing the entire previous app. Real prepared public catalog served by an anonymous local fixture; synthetic title/build-time update for freshness tests. Mocked Auth response during cached-shell reload is separate from strict offline Auth refusal. No production, Apple device, upstream collection or model validation."
+    },
+    "postgres": {
+      "pass": true,
+      "checks": 12,
+      "scope": "Synthetic PostgreSQL 17 with Auth schema shims, three real sessions. No hosted project, user data or credentials."
+    },
+    "hosted": {
+      "pass": true,
+      "checks": 11,
+      "scope": "Hosted Edge/Auth/database with configured synthetic A/B accounts and public publisher content. No personal account data queried."
+    },
+    "hostedResponseUI": {
+      "pass": true,
+      "checks": 5,
+      "scope": "Actual hosted Auth/Edge/database response from a configured test account; exact response displayed with synthetic Auth in current local Chromium UI at 1440px and 390px. Not real-account UI end-to-end or physical Apple hardware.",
+      "bodyChars": 88579,
+      "images": 2,
+      "exactImageBytes": true,
+      "publisherBrowserRequests": 0,
+      "consoleErrors": 0,
+      "accountLibraryWrites": 0,
+      "cleanup": {
+        "removedTestArticles": 1,
+        "removedTestLimits": 1,
+        "testSessionsSignedOut": 2
+      }
+    },
+    "integratedInstallation": {
+      "pass": true,
+      "checks": 12,
+      "scope": "Current final test source on disposable PostgreSQL 17: exact migration allowlist, atomic rollback, existing rows/functions/privileges and populated private cache reinstallation. No production access.",
+      "unknownMigrationRejected": true,
+      "containerRemoved": true
+    }
+  },
+  "publicCatalog": {
+    "bytes": 136525,
+    "sources": 9,
+    "articles": 120,
+    "bodies": 0,
+    "images": 0,
+    "summaries": 0,
+    "sha256": "0e504c7ab643b9d19af1c8f5786408e108e533819942396a4c56e25cd68efe41"
+  },
+  "hostedSources": [
+    {
+      "sourceId": "frontiers-psychology",
+      "coverage": "full_text",
+      "chars": 88579,
+      "images": 2
+    },
+    {
+      "sourceId": "mit-linguistics",
+      "coverage": "full_text",
+      "chars": 9085,
+      "images": 0
+    },
+    {
+      "sourceId": "llt-journal",
+      "coverage": "summary",
+      "chars": 1867,
+      "images": 0
+    }
+  ],
+  "installation": {
+    "migration": "20261029084145_discovery_private_reader.sql",
+    "appliedMigration": "20261029084926",
+    "edge": "haedo-discovery-private",
+    "edgeVersion": 1,
+    "gatewayJWT": true,
+    "structureInspection": "passed",
+    "cleanup": {
+      "removedTestArticles": 4,
+      "removedTestLimits": 2,
+      "testSessionsSignedOut": 3
+    }
+  },
+  "sourceSHA256": {
+    "assets/life/discovery.js": "e8c4660451086a17fec9df1957225e56fc79ae7e18db67e6c1afdf7492e3da1d",
+    "assets/life/discovery-private-remote.js": "3f2238d23c624c2276344fa569cd7b43a04102a8278e14b5077d89cb20b68163",
+    "assets/life/discovery-reader-ui.js": "aee6d759ab6f6e0f13d02123818b44cc784302e153519af7152eff9e0a66efd3",
+    "assets/life/discovery-ui.js": "7982214d760f1ab7c3649b1901328c2582f72c14fc9361a3cf7499df62e3fa2b",
+    "assets/life/discovery.css": "87675eacd3a7cd0a9d51d5ffdedb7d07a13099d8a677c2496d461277282fbb6a",
+    "assets/life/ui.js": "1c1252fb703f98b5db84c81e7a20ea78f76dbecb4b721bb7f6e8d8b86aed35d4",
+    "scripts/update-discovery-feed.py": "176200b80865cf460b2fc72b3b7d0358ec6cbfbb7195ce66bc2f8c85d1380021",
+    "scripts/refresh-discovery-artifact.cjs": "a3fb3ec3f92d3ce6a829d6ffdcbd41cf737c438ef81fc0a63bc00c1aa710dd84",
+    "scripts/prepare-site.mjs": "1799eab40685538a47929987009adaad5a7710496661a2f3a2749a15a8df4f5f",
+    "sw.js": "a41ce8da8daca379cf9e1a6e1a0b36fd691e1e73ae02ffa28c8180ee1fdd3425",
+    "supabase/migrations/20261029084145_discovery_private_reader.sql": "30c741bba2ef5b3658c7b17d653828649b0d98d30e2db17d4e12c877b057bd0e",
+    "supabase/functions/haedo-discovery-private/handler.mjs": "ae56fb5c44af0c2fba55dd27854bf6eb0e42183c5d84295cc71fb2875640eb03",
+    "supabase/functions/haedo-discovery-private/article-intake.mjs": "75a8db63539efd29485820e512469d0bf1318a527c4d8b4ef186f2bf0b30739a",
+    "tests/integrated-release-installation.cjs": "93b96436f6ba2cf35ebca3c1581211ba70e3345cb65025630cb293b7d9c4733d",
+    "tests/purpose-workflow-browser.cjs": "55ba0671830b5bd38c1222831ef7376ea5764bff56f02a70b935d34e8df9b7ef",
+    "tests/life-discovery-languages-browser.cjs": "7cde6b5273613a9ae8a5c9bbfdaf4cdb4b2faa77ec1ea4278372eef7dce0d8f5",
+    "tests/life-discovery-reactions-browser.cjs": "ab33513317ee72d8d42942ece1663a6b188108663269eb5952b0b7ae1ea098ef",
+    "tests/life-discovery-reading-browser.cjs": "3de3ffecf50a7a66deaed13b99a5dbc9f27aeec9672cfb5c9699d49e410c591f",
+    "tests/life-external-discovery-browser.cjs": "fd04054bd9f5c78c64bf929b122216992126fbb2ca31166407deab4c8493e198",
+    "tests/life-external-discovery-pwa-browser.cjs": "ec5297602f64722cb95921750d3042cc03aeb8600a3b3e07810a7e2b871e3917",
+    "tests/life-news-browser.cjs": "9406eccb2a1264ad12beccdc8bb62ccb1dbde6167e895b39202b2a496887f9ba",
+    "tests/news-social-browser.cjs": "65c189ce98e2dda2f5a6e1ac94033038f6347a63070a7cb2aa417457bc85bbeb"
+  },
+  "limits": [
+    "Other six sources remain metadata/link only.",
+    "LLT PDF and MIT/LLT images not collected.",
+    "Reading cache is not permanent material storage; imported material omits images.",
+    "Existing interest/language/reaction cross-device sync and level-aware AI explanations remain separate work.",
+    "Apple devices and actual recommendation usefulness not assessed.",
+    "Frontend release and CI are tracked in PR145."
+  ],
+  "ciCorrection": {
+    "initialRun": 40846095141,
+    "initialFailure": "The test connected during the temporary Unix-socket-only PostgreSQL initialization server.",
+    "reproduced": true,
+    "fix": "Wait for TCP readiness with the unchanged 45-second deadline and 200ms polling interval.",
+    "postgresChecksAfterFix": 12,
+    "productionChanges": false
+  },
+  "installationCiCorrection": {
+    "initialRun": 40847205019,
+    "initialFailure": "The strict integrated installer registry omitted the new private reader migration.",
+    "fix": "Register the exact filename/SHA256 and extend atomic rollback, legacy preservation and populated-cache reinstallation checks; unknown files remain rejected.",
+    "productionChanges": false
+  },
+  "recoveryCorrection": {
+    "initialRun": 40849922586,
+    "initialFailure": "A reconstructed test SQL dollar-quote was collapsed by JavaScript replacement-string expansion.",
+    "locallyReproduced": true,
+    "fix": "Restore the original $$ delimiter on one synthetic Auth fixture line.",
+    "runtimeChanged": false,
+    "assertionsWeakened": false,
+    "timeoutChanged": false,
+    "localChecksAfterFix": 12
+  },
+  "ciBrowserCorrections": {
+    "initialRun": 40851120661,
+    "runtimeChanged": false,
+    "assertionsWeakened": false,
+    "timeoutsChanged": false,
+    "purpose": {
+      "originalFlowsPassed": 8,
+      "failure": "Renderer-owned favicon response body disappeared after navigation.",
+      "controlledReproduction": true,
+      "fix": "Verify actual upstream bytes then forward identical status, headers and body, retaining one hash receipt for each observed static response.",
+      "passed": 8,
+      "captures": 21,
+      "verifiedResponses": 1947,
+      "verifiedFavicons": 57
+    },
+    "language": {
+      "originalPassed": 16,
+      "originalFailed": 1,
+      "failure": "A detached recovery button was misclassified by closest(); the test helper itself closed news settings.",
+      "controlledReproduction": true,
+      "fix": "Resolve the containing view with an ancestor selector; keep actual CAS redraw, zero settings-Back clicks and exact content/translation preservation checks.",
+      "passed": 17,
+      "oldHelperMutationFailed": true,
+      "runnersCorrected": 7
+    },
+    "browser": "153.0.8010.12",
+    "playwright": "1.63.0",
+    "finalCI": "Tracked at PR145",
+    "helperRegression": {
+      "reading": 5,
+      "social": 6,
+      "external": 19,
+      "pwa": 9,
+      "news": 9,
+      "reactions": 24
+    }
+  }
+}

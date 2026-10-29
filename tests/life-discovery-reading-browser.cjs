@@ -2,6 +2,7 @@
  * mocked Auth/FakeCloud + real SDK/IndexedDB. No live account, original page,
  * translation service, actual reading, device or user usefulness claim. */
 'use strict';
+const { openReader, closeReader, originalUrl } = require('./helpers/discovery-reader.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -21,7 +22,10 @@ const productFiles = ['index.html', 'assets/life/discovery-reading.js', 'assets/
 async function newsView(control) {
   const page = control.page(), panel = page.locator('#discoveryNewsSettingsPanel');
   if (!await panel.count()) return;
-  const settingsTarget = await control.evaluate(element => !!element.closest('#discoveryNewsSettingsPanel'));
+  // Resolve the stable containing view before a redraw can detach its button.
+  const view = await control.locator('xpath=ancestor-or-self::*[@id="discoveryNewsSettingsPanel" or @id="discoveryReview"][1]').getAttribute('id');
+  assert(['discoveryNewsSettingsPanel', 'discoveryReview'].includes(view));
+  const settingsTarget = view === 'discoveryNewsSettingsPanel';
   if (settingsTarget && !await panel.isVisible()) await page.locator('#discoveryNewsSettings').click();
   else if (!settingsTarget && await panel.isVisible()) await page.locator('#discoveryNewsSettingsBack').click();
 }
@@ -136,7 +140,7 @@ async function capture(page, scene, selector) {
   try { for (const width of [390, 820, 1440]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 }); await page.evaluate(() => document.fonts.ready);
     if (selector) await page.locator(selector).first().scrollIntoViewIfNeeded(); else await page.evaluate(() => scrollTo(0, 0));
-    const audit = await page.evaluate(() => ({ width: innerWidth, height: innerHeight, scrollY, documentWidth: document.documentElement.scrollWidth, comparisonOpen: document.querySelector('#discoveryReadingComparison')?.open, firstTitle: (() => { const rect = document.querySelector('#discoveryList .discovery-title a')?.getBoundingClientRect(); return rect && { top: rect.top, bottom: rect.bottom }; })(), navTop: document.querySelector('[data-haedo-navigation]')?.getBoundingClientRect().top, controls: [...document.querySelectorAll('#discoveryReadingComparison button,#discoveryReadingComparison select,#discoveryReadingComparison summary')].filter(element => element.checkVisibility()).map(element => { const r = element.getBoundingClientRect(); return { id: element.id || element.dataset.readingField || element.textContent, width: r.width, height: r.height }; }) }));
+    const audit = await page.evaluate(() => ({ width: innerWidth, height: innerHeight, scrollY, documentWidth: document.documentElement.scrollWidth, comparisonOpen: document.querySelector('#discoveryReadingComparison')?.open, firstTitle: (() => { const rect = document.querySelector('#discoveryList .discovery-title [data-discovery-read]')?.getBoundingClientRect(); return rect && { top: rect.top, bottom: rect.bottom }; })(), navTop: document.querySelector('[data-haedo-navigation]')?.getBoundingClientRect().top, controls: [...document.querySelectorAll('#discoveryReadingComparison button,#discoveryReadingComparison select,#discoveryReadingComparison summary')].filter(element => element.checkVisibility()).map(element => { const r = element.getBoundingClientRect(); return { id: element.id || element.dataset.readingField || element.textContent, width: r.width, height: r.height }; }) }));
     assert(audit.documentWidth <= width, 'No horizontal overflow');
     if (scene === 'first-fold') { assert.equal(audit.comparisonOpen, false); assert.equal(audit.scrollY, 0); assert(audit.firstTitle && audit.firstTitle.top >= 60 && audit.firstTitle.bottom < (width === 390 ? audit.navTop : 1000), 'First article remains in the fresh viewport'); }
     assert(audit.controls.every(row => row.width >= 44 && row.height >= 44), 'Reading controls minimum 44px');
@@ -243,8 +247,9 @@ async function main() {
         const sourceRow = actualFeed.articles.find(row => row.id === id); assert.equal(sourceRow.sourceId, 'llt-journal'); assert.equal(sourceRow.publishedAt, null); assert.equal(sourceRow.author, null); assert.deepEqual(sourceRow.tags, []); assert.equal(sourceRow.summary, ''); assert.equal(sourceRow.coverage, 'link_only');
         await (await revealControl(llt.locator('.discovery-article-info > summary'))).click();
         assert((await llt.innerText()).includes(sourceRow.title)); assert((await llt.innerText()).includes('발행일 미확인')); assert.equal(await llt.locator('time').count(), 0);
-        const original = await llt.locator('[data-discovery-open]').getAttribute('href');
-        await popup(page, context, original, '[data-discovery-open]', 'original', llt);
+        await openReader(page, llt); const original = await page.locator('[data-discovery-original]').getAttribute('href');
+        await popup(page, context, original, '[data-discovery-original]', 'original', page.locator('#discoveryReader'));
+        await closeReader(page);
         await popup(page, context, original, '[data-discovery-translate]', 'translation', llt);
         const priorReview = await state(page); await (await revealControl(llt.locator('[data-discovery-import]'))).click(); await page.locator('#lifeImportTitle').waitFor();
         assert.equal(await page.locator('#lifeImportTitle').inputValue(), sourceRow.title); assert.equal(await page.locator('#lifeImportText').inputValue(), ''); assert.equal(await page.locator('#lifeImportDate').inputValue(), ''); assert.equal(await page.locator('#lifeImportAuthor').inputValue(), '');

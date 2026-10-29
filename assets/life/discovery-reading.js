@@ -171,7 +171,7 @@
     fields(input.feed, ['schemaVersion', 'generatedAt', 'sources', 'articles'], ['stale', 'validation']);
     array(input.feed.sources, 20); array(input.feed.articles, 500);
     for (const source of input.feed.sources) { fields(source, ['id', 'name', 'url', 'feedUrl', 'language', 'rights', 'status', 'lastSuccessAt', 'lastAttemptAt', 'error', 'stale'], ['freshnessMaxAgeDays']); fields(source.rights, ['label', 'url', 'mode']); }
-    for (const article of input.feed.articles) { fields(article, ['id', 'sourceId', 'url', 'title', 'author', 'language', 'publishedAt', 'fetchedAt', 'coverage', 'summary', 'rights'], ['canonicalUrl', 'tags', 'updatedAt', 'dateStatus', 'dateBasis', 'sortDate', 'bodyText']); fields(article.rights, ['label', 'url', 'mode']); }
+    for (const article of input.feed.articles) { fields(article, ['id', 'sourceId', 'url', 'title', 'author', 'language', 'publishedAt', 'fetchedAt', 'coverage', 'summary', 'rights'], ['canonicalUrl', 'tags', 'updatedAt', 'dateStatus', 'dateBasis', 'sortDate', 'bodyText', 'images']); fields(article.rights, ['label', 'url', 'mode']); }
     if (Object.hasOwn(input.feed, 'validation')) {
       fields(input.feed.validation, ['invalid', 'suppliedArticles']); array(input.feed.validation.invalid, 500);
       check(integer(input.feed.validation.suppliedArticles) && input.feed.validation.suppliedArticles <= 500);

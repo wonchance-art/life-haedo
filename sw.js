@@ -1,5 +1,5 @@
 /* Versioned static shell. Private account data uses verified services and cache/outbox storage. */
-const CACHE='haedo-v166';
+const CACHE='haedo-v168';
 const SHELL=[
   './assets/life/library-meta.js','./assets/life/library-remote.js','./assets/life/library-meta-sync.js','./assets/life/library-originals-remote.js','./assets/life/account-library.js',
   './assets/life/source-folders.js','./assets/life/source-folders-ui.js','./assets/life/source-folders.css',
@@ -9,7 +9,7 @@ const SHELL=[
   './vendor/js-yaml/js-yaml.umd.min.js',
   './assets/life/naver-blog.js','./assets/life/naver-capture.js','./assets/life/naver-media.js','./assets/life/naver-media-receipt.js','./assets/life/naver-capture-sync.js','./assets/life/naver-capture-ui.js','./assets/life/naver-blog-sync.js','./assets/life/naver-blog-ui.js','./assets/life/naver-blog.css',
   './assets/life/discovery-reading.js','./assets/life/discovery-reading-ui.js',
-  './assets/life/discovery.js','./assets/life/discovery-profile.js','./assets/life/discovery-settings.js','./assets/life/discovery-language-settings.js','./assets/life/discovery-actions.js','./assets/life/discovery-recommendations.js','./assets/life/discovery-ui.js','./assets/life/discovery.css',
+  './assets/life/discovery.js','./assets/life/discovery-profile.js','./assets/life/discovery-settings.js','./assets/life/discovery-language-settings.js','./assets/life/discovery-actions.js','./assets/life/discovery-recommendations.js','./assets/life/discovery-private-remote.js','./assets/life/discovery-reader-ui.js','./assets/life/discovery-ui.js','./assets/life/discovery.css',
   './assets/life/interest-model-loader.js','./assets/life/interest-model-worker.js','./assets/life/interest-analysis.js','./assets/life/interest-profile.js','./assets/life/interest-policy.js',
   './assets/life/interest-ui.js','./assets/life/interest.css','./assets/life/obsidian-update.js','./assets/life/obsidian-update-ui.js','./assets/life/original-attachments.js',
   './assets/life/original-attachments-ui.js','./assets/life/original-attachments.css','./assets/life/preservation-references.js','./assets/life/preservation-package.js','./assets/life/preservation.js',
@@ -44,7 +44,7 @@ const SHELL=[
 const shellURLs=new Set(SHELL.map(path=>new URL(path,self.registration.scope).href));
 // Public catalog changes independently of the installed application release.
 // Loads are manual or explicitly enabled visible-screen refreshes, never shell install.
-const DISCOVERY_CACHE='haedo-discovery-feed-v1';
+const DISCOVERY_CACHE='haedo-discovery-feed-v2';
 const discoveryURL=new URL('./assets/life/discovery-feed.json',self.registration.scope).href;
 const authParams=new Set(['code','access_token','refresh_token','token','token_hash','id_token','error','error_code','error_description']);
 const shellParams=new Set(['v','section','view','doc','next','view-only','view_only','viewOnly','readonly','read_only','share','public']);
@@ -55,13 +55,27 @@ self.addEventListener('install',event=>{
 });
 self.addEventListener('activate',event=>{
   event.waitUntil(caches.keys().then(keys=>Promise.all(keys
-    .filter(key=>/^haedo-v\d+$/.test(key)&&key!==CACHE).map(key=>caches.delete(key))))
+    .filter(key=>(/^haedo-v\d+$/.test(key)&&key!==CACHE)||(/^haedo-discovery-feed-v\d+$/.test(key)&&key!==DISCOVERY_CACHE)).map(key=>caches.delete(key))))
     .then(()=>self.clients.claim()));
 });
 function discoveryResponse(body,source,fetchedAt){
   const safeHeaders=new Headers({'content-type':'application/json; charset=utf-8','cache-control':'no-store',
     'X-Haedo-Discovery-Cache':source,'X-Haedo-Discovery-Fetched-At':fetchedAt});
   return new Response(body,{status:200,headers:safeHeaders});
+}
+function publicCatalog(body){
+  const feed=JSON.parse(body);
+  const fields=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).every(key=>keys.includes(key));
+  const rights=value=>fields(value,['mode','label','url'])&&value.mode==='metadata_only';
+  const metadata=value=>Object.entries(value).every(([key,field])=>key==='rights'?
+    rights(field)&&Object.values(field).every(item=>item===null||typeof item==='string'&&item.length<=8192):
+    key==='tags'?Array.isArray(field)&&field.length<=20&&field.every(tag=>typeof tag==='string'&&tag.length<=80):
+    key==='stale'?typeof field==='boolean':['entryCount','freshnessMaxAgeDays'].includes(key)?Number.isSafeInteger(field)&&field>=0&&field<=500:
+    field===null||typeof field==='string'&&field.length<=8192);
+  if(!fields(feed,['schemaVersion','generatedAt','sources','articles'])||feed.schemaVersion!==1||!Array.isArray(feed.articles)||!Array.isArray(feed.sources)||
+    feed.sources.some(source=>!fields(source,['id','name','url','feedUrl','language','rights','freshnessMaxAgeDays','lastAttemptAt','attemptAt','lastSuccessAt','fetchedAt','status','stale','error','robotsStatus','entryCount','latestArticleAt','robotsCheckedAt'])||!rights(source.rights)||!metadata(source))||
+    feed.articles.some(article=>!fields(article,['id','sourceId','url','canonicalUrl','title','publishedAt','dateStatus','updatedAt','updatedDateStatus','dateBasis','author','language','tags','summary','coverage','rights','fetchedAt'])||article.coverage!=='link_only'||!rights(article.rights)||article.summary!==''||!metadata(article)))throw new Error('catalog_invalid');
+  return body;
 }
 async function discoveryFeed(){
   const cache=await caches.open(DISCOVERY_CACHE);
@@ -71,15 +85,15 @@ async function discoveryFeed(){
     if(!response.ok||!/^application\/json(?:;|$)/i.test(response.headers.get('content-type')||''))throw new Error('catalog_unavailable');
     const body=await response.text();
     if(new TextEncoder().encode(body).byteLength>4*1024*1024)throw new Error('catalog_too_large');
-    const feed=JSON.parse(body);
-    if(feed?.schemaVersion!==1||!Array.isArray(feed.articles)||!Array.isArray(feed.sources))throw new Error('catalog_invalid');
+    publicCatalog(body);
     const fetchedAt=new Date().toISOString(),fresh=discoveryResponse(body,'network',fetchedAt);
     try{await cache.put(discoveryURL,fresh.clone());}catch(_){/* A cache write failure does not turn fresh public data into an empty result. */}
     return fresh;
   }catch(_){
     const saved=await cache.match(discoveryURL);
     if(!saved)return Response.error();
-    return discoveryResponse(await saved.text(),'stale',saved.headers.get('X-Haedo-Discovery-Fetched-At')||'');
+    try{return discoveryResponse(publicCatalog(await saved.text()),'stale',saved.headers.get('X-Haedo-Discovery-Fetched-At')||'');}
+    catch(_){await cache.delete(discoveryURL);return Response.error();}
   }
 }
 self.addEventListener('fetch',event=>{

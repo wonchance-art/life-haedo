@@ -10,9 +10,9 @@
 
 [이 브라우저에서 글 찾기](docs/design-review/local-post-finder.md): **홈 → 블로그 메뉴 → 글 공개·보관**에서 목록과 별도로 저장된 글 본문을 읽기 전용으로 확인합니다. 현재 계정의 모든 공간과 명시 선택한 로그인 전 자료를 조사하고, 고른 글만 미리보기·파일 보관합니다. 실제 누락 글의 발견·복구는 사용자 브라우저의 조사 결과로 확인해야 합니다.
 
-[뉴스](https://wonchance-art.github.io/life-haedo/index.html?section=news)에서 최신 외부 글을 바로 찾습니다. 뉴스 설정의 `관심 주제`·`출처·갱신`에서 표현·출처를, `언어 옵션`에서 콘텐츠 언어를 고르고, 원문 또는 선택한 언어의 번역 링크를 엽니다. 공개 RSS의 제목·링크 메타데이터만 자동 수집하며 본문은 복사하지 않습니다. 좋아요·담기는 독립 목록이고 개인 추천은 기본 꺼짐입니다. 링크를 명시 보관한 뒤 **이 자료로 글쓰기**로 정확한 자료가 연결된 작성 준비를 열고, 내 문단·출처를 골라 글 저장·재열기와 뉴스 복귀까지 이어갑니다. [뉴스에서 글 완성까지](docs/design-review/news-to-writing.md). [첫 예약 수집·현재 검수](docs/design-review/discovery-scheduled-operation.md), [동일 조건 읽기 비교](docs/design-review/discovery-field-languages.md), [현재 로드맵](docs/life-tools-design/roadmap.md)을 따릅니다.
+[뉴스](https://wonchance-art.github.io/life-haedo/index.html?section=news)에서 최신 외부 글을 바로 찾습니다. 뉴스 설정의 `관심 주제`·`출처·갱신`에서 표현·출처를, `언어 옵션`에서 콘텐츠 언어를 고르고, 원문 또는 선택한 언어의 번역 링크를 엽니다. 공개 목록은 RSS 제목·링크 메타데이터만 자동 갱신합니다. 제목을 누르면 로그인 계정의 본문 읽기를 열며 Frontiers 본문·그림, MIT 본문, LLT 초록을 지원합니다. [개인 읽기·설치와 검수 범위](docs/design-review/news-internal-reader.md). 좋아요·담기는 독립 목록이고 개인 추천은 기본 꺼짐입니다. 링크를 명시 보관한 뒤 **이 자료로 글쓰기**로 정확한 자료가 연결된 작성 준비를 열고, 내 문단·출처를 골라 글 저장·재열기와 뉴스 복귀까지 이어갑니다. [뉴스에서 글 완성까지](docs/design-review/news-to-writing.md). [첫 예약 수집·현재 검수](docs/design-review/discovery-scheduled-operation.md), [동일 조건 읽기 비교](docs/design-review/discovery-field-languages.md), [현재 로드맵](docs/life-tools-design/roadmap.md)을 따릅니다.
 
-뉴스는 **피드 / 좋아요 / 담기**로 둘러봅니다. 기사 제목은 원문, **글 옵션**은 자료 보관·읽음·관련 없음, **기사 정보**는 확보 범위와 추천 근거를 엽니다. **뉴스 설정 → 기록 관리 → 반응 해제 기록**은 좋아요와 담기를 모두 해제한 글이며 dislike가 아닙니다. **뉴스 설정 → 추천 → 읽기 비교**에서 직접 판단을 저장·재열기할 수 있습니다. [새 뉴스 UI·반응 의미](docs/design-review/news-social-redesign.md).
+뉴스는 **피드 / 좋아요 / 담기**로 둘러봅니다. 기사 제목은 해도 안의 읽기 화면, 원문은 별도 출처 링크, **글 옵션**은 자료 보관·읽음·관련 없음, **기사 정보**는 확보 범위와 추천 근거를 엽니다. **뉴스 설정 → 기록 관리 → 반응 해제 기록**은 좋아요와 담기를 모두 해제한 글이며 dislike가 아닙니다. **뉴스 설정 → 추천 → 읽기 비교**에서 직접 판단을 저장·재열기할 수 있습니다. [새 뉴스 UI·반응 의미](docs/design-review/news-social-redesign.md).
 
 내 생각과 일상을 글로 쓰고, 기록과 취향을 모으는 개인 블로그.
 메인은 실제 프로필·짧은 글쓰기·사진과 본문이 이어지는 SNS형 피드를 보여주고, 기존 메모·연표·목표·습관은 자료실과 계획에서 이어 쓴다. 빌드 없이 정적 호스팅에서 실행한다.

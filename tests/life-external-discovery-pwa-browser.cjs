@@ -1,26 +1,31 @@
-/* Exact v162/v163 -> v166 SW, cached public catalog and private local reactions.
+/* Exact v162/v163/v166/v167 -> v168 SW, cached public catalog and private local reactions.
  * Prior SW script only is old; app modules are current. Real SDK/IDB/SW with
  * anonymous Auth HTTP. No real account, source-site fetch or model download. */
 'use strict';
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path'), http = require('node:http');
 const { createHash } = require('node:crypto');
 const project = path.resolve(__dirname, '..'), output = path.resolve(process.env.EXTERNAL_DISCOVERY_PWA_OUTPUT || path.join(project, '.local/external-discovery-pwa'));
-const feedPath = '/assets/life/discovery-feed.json', feedCache = 'haedo-discovery-feed-v1';
+const feedPath = '/assets/life/discovery-feed.json', feedCache = 'haedo-discovery-feed-v2';
 // Fixed historical Git objects only; callers cannot substitute worker paths or hashes.
 const previousWorkers = Object.freeze({
+  '167': Object.freeze({ file: 'fixtures/external-discovery/sw-discovery-v167.js', commit: 'e270c0db0f47604e833dec3c0e1c819f23cb1053', sha256: '7433b221e0182fa725e9c7c5f79b360a2a723006746a5d156512fe9424c9bf4c' }),
+  '166': Object.freeze({ file: 'fixtures/external-discovery/sw-discovery-v166.js', commit: '55a74ae47e400261b6f3469f9bc3f4a8f76d7898', sha256: '0114abb8ec31ffba1f04335a11ae49b6927292a8ffa822a548e96e566f415f8c' }),
   '162': Object.freeze({ file: 'fixtures/external-discovery/sw-discovery-v162.js', commit: 'c9c21ef21cda138f1a81bacc808199dedf49b3a3', sha256: 'a6de8d7cfabdb8ae37e234c1d79e38f05aba68587df3225acfd9de01bf5825ee' }),
   '163': Object.freeze({ file: 'fixtures/external-discovery/sw-discovery-v163.js', commit: '6126123c12af12daeca6b9679ce1201095c89367', sha256: '186a65617f0fc05a3dfb38cd7c011c33d20410dc25e773d8ecdd844ee85567de' })
 });
-const previousVersion = process.env.EXTERNAL_DISCOVERY_PWA_PREVIOUS_VERSION === undefined ? '163' : process.env.EXTERNAL_DISCOVERY_PWA_PREVIOUS_VERSION;
-assert.ok(Object.hasOwn(previousWorkers, previousVersion), 'Previous worker must be the fixed version 162 or 163');
+const previousVersion = process.env.EXTERNAL_DISCOVERY_PWA_PREVIOUS_VERSION === undefined ? '167' : process.env.EXTERNAL_DISCOVERY_PWA_PREVIOUS_VERSION;
+assert.ok(Object.hasOwn(previousWorkers, previousVersion), 'Previous worker must be the fixed version 162, 163, 166 or 167');
 const previousWorker = previousWorkers[previousVersion];
-const assets = ['library-meta.js','library-remote.js','library-meta-sync.js','library-originals-remote.js','account-library.js','source-folders.js', 'source-folders-ui.js', 'source-folders.css', 'annual-plan.js', 'annual-plan-ui.js', 'annual-plan.css', 'source-markdown.js', 'source-markdown.css', 'discovery.js', 'discovery-profile.js', 'discovery-settings.js', 'discovery-language-settings.js', 'discovery-actions.js', 'discovery-recommendations.js', 'discovery-reading.js', 'discovery-reading-ui.js', 'discovery-ui.js', 'discovery.css'].map(file => 'assets/life/' + file).concat('vendor/js-yaml/js-yaml.umd.min.js', 'assets/platform-auth.js', 'assets/life/ui.js', 'assets/life/shell.js', 'assets/haedo-navigation.js', 'assets/life/blog-manager.js', 'assets/life/home.css', 'assets/life/home.js', 'assets/life/photo-post-ui.js', 'assets/life/preservation-ui.js', 'assets/life/ui.css', 'assets/life/workbench-ui.js', 'assets/platform-ui.js', 'goals.html', 'habits.html', 'workspace.html', 'assets/life/obsidian-link-candidates.js', 'assets/life/obsidian-link-commit.js', 'assets/life/obsidian-link-candidates-ui.js', 'assets/life/photo-post.js');
+const assets = ['library-meta.js','library-remote.js','library-meta-sync.js','library-originals-remote.js','account-library.js','source-folders.js', 'source-folders-ui.js', 'source-folders.css', 'annual-plan.js', 'annual-plan-ui.js', 'annual-plan.css', 'source-markdown.js', 'source-markdown.css', 'discovery.js', 'discovery-profile.js', 'discovery-settings.js', 'discovery-language-settings.js', 'discovery-actions.js', 'discovery-recommendations.js', 'discovery-reading.js', 'discovery-reading-ui.js', 'discovery-private-remote.js', 'discovery-reader-ui.js', 'discovery-ui.js', 'discovery.css'].map(file => 'assets/life/' + file).concat('vendor/js-yaml/js-yaml.umd.min.js', 'assets/platform-auth.js', 'assets/life/ui.js', 'assets/life/shell.js', 'assets/haedo-navigation.js', 'assets/life/blog-manager.js', 'assets/life/home.css', 'assets/life/home.js', 'assets/life/photo-post-ui.js', 'assets/life/preservation-ui.js', 'assets/life/ui.css', 'assets/life/workbench-ui.js', 'assets/platform-ui.js', 'goals.html', 'habits.html', 'workspace.html', 'assets/life/obsidian-link-candidates.js', 'assets/life/obsidian-link-commit.js', 'assets/life/obsidian-link-candidates-ui.js', 'assets/life/photo-post.js');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 // Follow the actual settings/back buttons before opening native disclosures.
 async function newsView(control) {
   const page = control.page(), panel = page.locator('#discoveryNewsSettingsPanel');
   if (!await panel.count()) return;
-  const settingsTarget = await control.evaluate(element => !!element.closest('#discoveryNewsSettingsPanel'));
+  // Resolve the stable containing view before a redraw can detach its button.
+  const view = await control.locator('xpath=ancestor-or-self::*[@id="discoveryNewsSettingsPanel" or @id="discoveryReview"][1]').getAttribute('id');
+  assert(['discoveryNewsSettingsPanel', 'discoveryReview'].includes(view));
+  const settingsTarget = view === 'discoveryNewsSettingsPanel';
   if (settingsTarget && !await panel.isVisible()) await page.locator('#discoveryNewsSettings').click();
   else if (!settingsTarget && await panel.isVisible()) await page.locator('#discoveryNewsSettingsBack').click();
 }
@@ -56,7 +61,7 @@ async function main() {
   const historicalReading = JSON.parse(historicalBytes);
   const cacheName = data => data.toString().match(/const CACHE\s*=\s*['"]([^'"]+)/)[1];
   report.oldCache = cacheName(oldSw); report.newCache = cacheName(newSw);
-  assert.equal(report.oldCache, 'haedo-v' + previousVersion); assert.equal(report.newCache, 'haedo-v166');
+  assert.equal(report.oldCache, 'haedo-v' + previousVersion); assert.equal(report.newCache, 'haedo-v168');
   report.oldSwSHA256 = sha(oldSw); report.newSwSHA256 = sha(newSw);
   assert.equal(report.oldSwSHA256, previousWorker.sha256, 'Prior worker must be the exact ' + previousWorker.commit + ' v' + previousVersion + ' source');
   let old = true, failCatalog = false, strictOffline = false, transportProbe = false, probing = false;
@@ -175,9 +180,11 @@ async function main() {
     assert.ok(before.actions.entries.some(entry => entry.liked && entry.bookmarked));
     assert.ok(before.actions.entries.some(entry => !entry.liked && !entry.bookmarked && entry.likedAt === null && entry.bookmarkedAt === null));
     report.privateActionsFixture = { revision: before.actions.revision, entries: before.actions.entries.length, activeBoth: 1, cancelled: 1, personalizationEnabled: true, sha256: sha(Buffer.from(JSON.stringify(before.actions))) };
-    await check('v' + previousVersion + ' -> v164 worker preserves exact originals, workbench, manual interests, feedback, old settings, five language preferences, private reactions, virtual folders, annual plans and historical v3 reading', async () => {
+    await page.evaluate(async () => { const old = await caches.open('haedo-discovery-feed-v1'); await old.put(new URL('assets/life/discovery-feed.json', location.href), new Response(JSON.stringify({ privateBody: 'synthetic previous body', images: ['synthetic image'] }))); });
+    await check('v' + previousVersion + ' -> v168 worker preserves exact originals, workbench, manual interests, feedback, old settings, five language preferences, private reactions, virtual folders, annual plans and historical v3 reading', async () => {
       old = false; await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
       await wait(page, async ({ oldCache, newCache }) => { const keys = await caches.keys(), r = await navigator.serviceWorker.getRegistration(); return !keys.includes(oldCache) && keys.includes(newCache) && r?.active?.state === 'activated' && navigator.serviceWorker.controller === r.active; }, { oldCache: report.oldCache, newCache: report.newCache });
+      assert.equal(await page.evaluate(async () => (await caches.keys()).includes('haedo-discovery-feed-v1')), false, 'Old article cache must be removed before takeover');
       await page.reload(); await ready(page); assert.deepEqual(await state(), before);
       assert.equal(report.catalogRequests.length, 0);
     });

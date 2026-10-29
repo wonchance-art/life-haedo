@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-19T05:50:54Z",
+  "generatedAt": "2026-10-29T08:10:44Z",
   "sources": [
     {
       "id": "naver-d2",
@@ -14,8 +14,8 @@
         "url": "https://d2.naver.com/home"
       },
       "freshnessMaxAgeDays": 7,
-      "lastAttemptAt": "2026-10-19T05:50:54Z",
-      "attemptAt": "2026-10-19T05:50:54Z",
+      "lastAttemptAt": "2026-10-29T08:10:44Z",
+      "attemptAt": "2026-10-29T08:10:44Z",
       "lastSuccessAt": null,
       "fetchedAt": null,
       "status": "error",
@@ -37,17 +37,17 @@
         "url": "https://news.seoul.go.kr/culture"
       },
       "freshnessMaxAgeDays": 7,
-      "lastAttemptAt": "2026-10-19T05:50:54Z",
-      "attemptAt": "2026-10-19T05:50:54Z",
-      "lastSuccessAt": "2026-10-19T05:50:54Z",
-      "fetchedAt": "2026-10-19T05:50:54Z",
+      "lastAttemptAt": "2026-10-29T08:10:44Z",
+      "attemptAt": "2026-10-29T08:10:44Z",
+      "lastSuccessAt": "2026-10-29T08:10:44Z",
+      "fetchedAt": "2026-10-29T08:10:44Z",
       "status": "ok",
       "stale": false,
       "error": null,
       "robotsStatus": "allowed",
-      "robotsCheckedAt": "2026-10-19T05:50:54Z",
+      "robotsCheckedAt": "2026-10-29T08:10:44Z",
       "entryCount": 10,
-      "latestArticleAt": "2026-10-19T04:46:01Z"
+      "latestArticleAt": "2026-10-28T05:37:09Z"
     },
     {
       "id": "woowahan-tech",
@@ -61,17 +61,17 @@
         "url": "https://techblog.woowahan.com/"
       },
       "freshnessMaxAgeDays": 7,
-      "lastAttemptAt": "2026-10-19T05:50:54Z",
-      "attemptAt": "2026-10-19T05:50:54Z",
-      "lastSuccessAt": "2026-10-19T05:50:54Z",
-      "fetchedAt": "2026-10-19T05:50:54Z",
+      "lastAttemptAt": "2026-10-29T08:10:44Z",
+      "attemptAt": "2026-10-29T08:10:44Z",
+      "lastSuccessAt": "2026-10-29T08:10:44Z",
+      "fetchedAt": "2026-10-29T08:10:44Z",
       "status": "ok",
       "stale": false,
       "error": null,
       "robotsStatus": "allowed",
-      "robotsCheckedAt": "2026-10-19T05:50:54Z",
+      "robotsCheckedAt": "2026-10-29T08:10:44Z",
       "entryCount": 10,
-      "latestArticleAt": "2026-10-06T05:00:35Z"
+      "latestArticleAt": "2026-10-21T07:56:08Z"
     },
     {
       "id": "readersnews-books",
@@ -85,17 +85,17 @@
         "url": "https://www.readersnews.com/rssIndex.html"
       },
       "freshnessMaxAgeDays": 7,
-      "lastAttemptAt": "2026-10-19T05:50:54Z",
-      "attemptAt": "2026-10-19T05:50:54Z",
-      "lastSuccessAt": "2026-10-19T05:50:54Z",
-      "fetchedAt": "2026-10-19T05:50:54Z",
+      "lastAttemptAt": "2026-10-29T08:10:44Z",
+      "attemptAt": "2026-10-29T08:10:44Z",
+      "lastSuccessAt": "2026-10-29T08:10:44Z",
+      "fetchedAt": "2026-10-29T08:10:44Z",
       "status": "ok",
       "stale": false,
       "error": null,
       "robotsStatus": "allowed",
-      "robotsCheckedAt": "2026-10-19T05:50:54Z",
+      "robotsCheckedAt": "2026-10-29T08:10:44Z",
       "entryCount": 20,
-      "latestArticleAt": "2026-10-19T03:12:15Z"
+      "latestArticleAt": "2026-10-29T02:57:14Z"
     },
     {
       "id": "seoul-environment",
@@ -109,17 +109,17 @@
         "url": "https://news.seoul.go.kr/env"
       },
       "freshnessMaxAgeDays": 7,
-      "lastAttemptAt": "2026-10-19T05:50:54Z",
-      "attemptAt": "2026-10-19T05:50:54Z",
-      "lastSuccessAt": "2026-10-19T05:50:54Z",
-      "fetchedAt": "2026-10-19T05:50:54Z",
+      "lastAttemptAt": "2026-10-29T08:10:44Z",
+      "attemptAt": "2026-10-29T08:10:44Z",
+      "lastSuccessAt": "2026-10-29T08:10:44Z",
+      "fetchedAt": "2026-10-29T08:10:44Z",
       "status": "ok",
       "stale": false,
       "error": null,
       "robotsStatus": "allowed",
-      "robotsCheckedAt": "2026-10-19T05:50:54Z",
+      "robotsCheckedAt": "2026-10-29T08:10:44Z",
       "entryCount": 10,
-      "latestArticleAt": "2026-10-19T00:21:15Z"
+      "latestArticleAt": "2026-10-29T01:36:26Z"
     },
     {
       "id": "arxiv-cs-cl",
@@ -133,15 +133,15 @@
         "url": "https://info.arxiv.org/help/api/tou.html"
       },
       "freshnessMaxAgeDays": 7,
-      "lastAttemptAt": "2026-10-19T05:50:54Z",
-      "attemptAt": "2026-10-19T05:50:54Z",
+      "lastAttemptAt": "2026-10-29T08:10:44Z",
+      "attemptAt": "2026-10-29T08:10:44Z",
       "lastSuccessAt": "2026-10-19T05:50:54Z",
       "fetchedAt": "2026-10-19T05:50:54Z",
-      "status": "ok",
-      "stale": false,
-      "error": null,
+      "status": "error",
+      "stale": true,
+      "error": "비어 있거나 항목 제한을 넘은 피드",
       "robotsStatus": "not_provided",
-      "robotsCheckedAt": "2026-10-19T05:50:54Z",
+      "robotsCheckedAt": "2026-10-29T08:10:44Z",
       "entryCount": 20,
       "latestArticleAt": "2026-10-19T04:00:00Z"
     },
@@ -157,20 +157,223 @@
         "url": "https://news.mit.edu/terms-of-use"
       },
       "freshnessMaxAgeDays": 7,
-      "lastAttemptAt": "2026-10-19T05:50:54Z",
-      "attemptAt": "2026-10-19T05:50:54Z",
-      "lastSuccessAt": "2026-10-19T05:50:54Z",
-      "fetchedAt": "2026-10-19T05:50:54Z",
+      "lastAttemptAt": "2026-10-29T08:10:44Z",
+      "attemptAt": "2026-10-29T08:10:44Z",
+      "lastSuccessAt": "2026-10-29T08:10:44Z",
+      "fetchedAt": "2026-10-29T08:10:44Z",
       "status": "ok",
       "stale": false,
       "error": null,
       "robotsStatus": "allowed",
-      "robotsCheckedAt": "2026-10-19T05:50:54Z",
+      "robotsCheckedAt": "2026-10-29T08:10:44Z",
       "entryCount": 20,
-      "latestArticleAt": "2026-09-29T04:00:00Z"
+      "latestArticleAt": "2026-10-23T19:35:00Z"
+    },
+    {
+      "id": "llt-journal",
+      "name": "Language Learning & Technology",
+      "url": "https://www.lltjournal.org/",
+      "feedUrl": "https://www.lltjournal.org/feedlet/",
+      "language": "en",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS · 언어교육 동료심사 연구 · 제목·링크만 보관 · 2020년 이후 원문 CC BY-NC-ND 4.0(출처표시·비상업·원형유지)",
+        "url": "https://www.lltjournal.org/about/"
+      },
+      "freshnessMaxAgeDays": 7,
+      "lastAttemptAt": "2026-10-29T08:10:44Z",
+      "attemptAt": "2026-10-29T08:10:44Z",
+      "lastSuccessAt": "2026-10-29T08:10:44Z",
+      "fetchedAt": "2026-10-29T08:10:44Z",
+      "status": "ok",
+      "stale": false,
+      "error": null,
+      "robotsStatus": "not_provided",
+      "robotsCheckedAt": "2026-10-29T08:10:44Z",
+      "entryCount": 10,
+      "latestArticleAt": null
+    },
+    {
+      "id": "frontiers-psychology",
+      "name": "Frontiers in Psychology · 영문 심리학 연구",
+      "url": "https://www.frontiersin.org/journals/psychology",
+      "feedUrl": "https://www.frontiersin.org/journals/psychology/rss",
+      "language": "en",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "freshnessMaxAgeDays": 7,
+      "lastAttemptAt": "2026-10-29T08:10:44Z",
+      "attemptAt": "2026-10-29T08:10:44Z",
+      "lastSuccessAt": "2026-10-29T08:10:44Z",
+      "fetchedAt": "2026-10-29T08:10:44Z",
+      "status": "ok",
+      "stale": false,
+      "error": null,
+      "robotsStatus": "allowed",
+      "robotsCheckedAt": "2026-10-29T08:10:44Z",
+      "entryCount": 20,
+      "latestArticleAt": "2026-10-29T00:00:00Z"
     }
   ],
   "articles": [
+    {
+      "id": "article-seoul-culture-0471c3a0aaa9b0a79ab2",
+      "sourceId": "seoul-culture",
+      "url": "https://news.seoul.go.kr/culture/archives/535099",
+      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/535099",
+      "title": "2026 JTBC 서울마라톤대회(11. 1. 일요일) 관련 교통통제 안내",
+      "publishedAt": "2026-10-28T05:37:09Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-28T07:45:21Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "관광체육국 - 체육진흥과",
+      "language": "ko",
+      "tags": [
+        "체육사업 새소식",
+        "새소식",
+        "JTBC마라톤",
+        "서울마라톤",
+        "마라톤대회",
+        "교통통제"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/culture"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-seoul-culture-3df89a422acdea639050",
+      "sourceId": "seoul-culture",
+      "url": "https://news.seoul.go.kr/culture/archives/535069",
+      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/535069",
+      "title": "서울생활사박물관, '문화가 흐르는 박물관' 가을음악회 개최(2026.10.31.토)",
+      "publishedAt": "2026-10-21T07:06:27Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-23T04:51:46Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "서울역사박물관-학예연구부",
+      "language": "ko",
+      "tags": [
+        "전통문화시설 새소식",
+        "새소식",
+        "'문화가 흐르는 박물관'",
+        "가을음악회",
+        "서울생활사박물관",
+        "문화행사"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/culture"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-seoul-culture-5c8f93237fe0913d06de",
+      "sourceId": "seoul-culture",
+      "url": "https://news.seoul.go.kr/culture/archives/535059",
+      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/535059",
+      "title": "제6회 서울역사박물관 배리어프리영화관 10.29.(목)",
+      "publishedAt": "2026-10-20T05:38:45Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-20T05:38:45Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "서울역사박물관-경영지원부",
+      "language": "ko",
+      "tags": [
+        "새소식",
+        "전통문화시설 새소식",
+        "영화 상영",
+        "10월 문화행사",
+        "배리어프리영화",
+        "배리어프리",
+        "무료영화",
+        "서울역사박물관"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/culture"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-seoul-culture-12baa512993e5aacc9c3",
+      "sourceId": "seoul-culture",
+      "url": "https://news.seoul.go.kr/culture/archives/535037",
+      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/535037",
+      "title": "갑자기 쌀쌀하다고요? 일단 공연장 갑니다! 겨울까지 공연봄날 ON",
+      "publishedAt": "2026-10-20T02:28:12Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-21T11:38:03Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "문화본부-문화예술과",
+      "language": "ko",
+      "tags": [
+        "전시·공연 새소식",
+        "새소식",
+        "공연봄날",
+        "발레",
+        "서커스",
+        "청소년",
+        "뮤지컬",
+        "공연"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/culture"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-seoul-culture-111cca8803fd458ec849",
+      "sourceId": "seoul-culture",
+      "url": "https://news.seoul.go.kr/culture/archives/535023",
+      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/535023",
+      "title": "린 허쉬만 리슨: 나의 [나]들 전시 안내",
+      "publishedAt": "2026-10-19T07:03:15Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-23T04:35:04Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "시립미술관-경영지원부",
+      "language": "ko",
+      "tags": [
+        "전시·공연 새소식",
+        "새소식",
+        "정체성",
+        "린허쉬만리슨",
+        "AI",
+        "여성",
+        "미디어"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/culture"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
     {
       "id": "article-seoul-culture-ddc9e99388178ef665ea",
       "sourceId": "seoul-culture",
@@ -179,7 +382,7 @@
       "title": "2026년 12월 누구나클래식 with 원주시립교향악단 행복동행석 신청안내",
       "publishedAt": "2026-10-19T04:46:01Z",
       "dateStatus": "valid",
-      "updatedAt": "2026-10-19T05:05:28Z",
+      "updatedAt": "2026-10-23T04:32:38Z",
       "updatedDateStatus": "valid",
       "dateBasis": "published",
       "author": "세종문화회관 시민예술팀",
@@ -200,17 +403,17 @@
         "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
         "url": "https://news.seoul.go.kr/culture"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-seoul-culture-37b90f10cd355ed237d3",
       "sourceId": "seoul-culture",
       "url": "https://news.seoul.go.kr/culture/archives/534964",
       "canonicalUrl": "https://news.seoul.go.kr/culture/archives/534964",
-      "title": "장르가 뭐냐고요? 일단 힙합니다 「전국실용무용챔피언십」",
+      "title": "장르가 뭐냐고요? 일단 힙합니다 「전국실용무용챔피언십」('26.10.17.)",
       "publishedAt": "2026-10-16T08:11:27Z",
       "dateStatus": "valid",
-      "updatedAt": "2026-10-16T08:27:50Z",
+      "updatedAt": "2026-10-20T01:08:46Z",
       "updatedDateStatus": "valid",
       "dateBasis": "published",
       "author": "문화본부-문화예술과",
@@ -218,11 +421,11 @@
       "tags": [
         "축제·행사 새소식",
         "새소식",
-        "브레이킹",
+        "스트리트댄스",
         "전국실용무용챔피언십",
+        "브레이킹",
         "실용무용",
-        "전국무용제",
-        "스트리트댄스"
+        "전국무용제"
       ],
       "summary": "",
       "coverage": "link_only",
@@ -231,7 +434,7 @@
         "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
         "url": "https://news.seoul.go.kr/culture"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-seoul-culture-4dc4f4e3ddfee21d758b",
@@ -247,17 +450,17 @@
       "author": "디자인정책관-도시경관담당관",
       "language": "ko",
       "tags": [
-        "미디어아트 기반조성",
         "새소식",
-        "미디어아트 서울 전시플랫폼",
-        "해치마당 미디어월",
+        "미디어아트 기반조성",
         "미디어아트 서울",
         "아뜰리에 광화",
         "서울로미디어캔버스",
-        "아뜰리에 노들",
         "2026 서울라이트 한강 빛섬축제",
         "오간수교 미디어파사드",
-        "키아프특별전"
+        "키아프특별전",
+        "아뜰리에 노들",
+        "미디어아트 서울 전시플랫폼",
+        "해치마당 미디어월"
       ],
       "summary": "",
       "coverage": "link_only",
@@ -266,7 +469,7 @@
         "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
         "url": "https://news.seoul.go.kr/culture"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-seoul-culture-01eaa4910fa45c4cc407",
@@ -284,11 +487,11 @@
       "tags": [
         "공공미술 소식",
         "새소식",
-        "공공주택",
+        "공모",
         "LH",
+        "공공주택",
         "건축물미술작품",
-        "미술작품",
-        "공모"
+        "미술작품"
       ],
       "summary": "",
       "coverage": "link_only",
@@ -297,7 +500,7 @@
         "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
         "url": "https://news.seoul.go.kr/culture"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-seoul-culture-79ad59a5577ebeeb4b3c",
@@ -329,161 +532,35 @@
         "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
         "url": "https://news.seoul.go.kr/culture"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
-      "id": "article-seoul-culture-f7494c76d08adabc6310",
-      "sourceId": "seoul-culture",
-      "url": "https://news.seoul.go.kr/culture/archives/534805",
-      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/534805",
-      "title": "2026 '디자인산업 스펙트럼'·'그린칩스 페스티벌' 개최",
-      "publishedAt": "2026-10-12T01:49:18Z",
+      "id": "article-woowahan-tech-9f546203b6c706e996bc",
+      "sourceId": "woowahan-tech",
+      "url": "https://techblog.woowahan.com/27864/",
+      "canonicalUrl": "https://techblog.woowahan.com/27864/",
+      "title": "critical-script, 배달의민족 웹뷰 로딩 성능을 30% 개선한 인라인 스크립트 로딩 전략 이야기",
+      "publishedAt": "2026-10-21T07:56:08Z",
       "dateStatus": "valid",
-      "updatedAt": "2026-10-12T08:01:48Z",
-      "updatedDateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
       "dateBasis": "published",
-      "author": "디자인정책관-디자인산업담당관",
+      "author": "추용혁",
       "language": "ko",
       "tags": [
-        "산업디자인 소식",
-        "새소식",
-        "DDP",
-        "지속가능",
-        "그린칩스",
-        "디자인산업",
-        "전시"
+        "Frontend",
+        "웹",
+        "웹뷰",
+        "최적화"
       ],
       "summary": "",
       "coverage": "link_only",
       "rights": {
         "mode": "metadata_only",
-        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
-        "url": "https://news.seoul.go.kr/culture"
+        "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
+        "url": "https://techblog.woowahan.com/"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-seoul-culture-495f55eb5a54e1796fb1",
-      "sourceId": "seoul-culture",
-      "url": "https://news.seoul.go.kr/culture/archives/534795",
-      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/534795",
-      "title": "2026년 서울시 공공도서관 비이용자 조사 참여 안내",
-      "publishedAt": "2026-10-12T00:29:23Z",
-      "dateStatus": "valid",
-      "updatedAt": "2026-10-16T04:26:46Z",
-      "updatedDateStatus": "valid",
-      "dateBasis": "published",
-      "author": "서울도서관 - 도서관정책과",
-      "language": "ko",
-      "tags": [
-        "문화예술사업 소개",
-        "새소식",
-        "개선방안",
-        "비이용자",
-        "공공도서관",
-        "조사",
-        "참여"
-      ],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
-        "url": "https://news.seoul.go.kr/culture"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-seoul-culture-868edc397cd28e0c7ee8",
-      "sourceId": "seoul-culture",
-      "url": "https://news.seoul.go.kr/culture/archives/534780",
-      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/534780",
-      "title": "2026 서울달리기 대회(10.11. 일요일) 관련 교통통제 안내",
-      "publishedAt": "2026-10-08T08:37:44Z",
-      "dateStatus": "valid",
-      "updatedAt": "2026-10-08T09:10:27Z",
-      "updatedDateStatus": "valid",
-      "dateBasis": "published",
-      "author": "체육진흥과 - 생활체육운영팀",
-      "language": "ko",
-      "tags": [
-        "체육사업 새소식",
-        "새소식",
-        "2026",
-        "하프",
-        "서울달리기",
-        "교통통제",
-        "청계천로"
-      ],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
-        "url": "https://news.seoul.go.kr/culture"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-seoul-culture-019707f57d61ba7ac5ee",
-      "sourceId": "seoul-culture",
-      "url": "https://news.seoul.go.kr/culture/archives/534765",
-      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/534765",
-      "title": "제35회 ‘전국무용제’ 일정 및 관람 안내",
-      "publishedAt": "2026-10-08T02:29:25Z",
-      "dateStatus": "valid",
-      "updatedAt": "2026-10-16T00:25:28Z",
-      "updatedDateStatus": "valid",
-      "dateBasis": "published",
-      "author": "문화본부-문화예술과",
-      "language": "ko",
-      "tags": [
-        "축제·행사 새소식",
-        "새소식",
-        "전국무용제",
-        "예매",
-        "본선경연",
-        "무용축제",
-        "무료",
-        "문화"
-      ],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
-        "url": "https://news.seoul.go.kr/culture"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-seoul-culture-6e65e536fdce0c829a78",
-      "sourceId": "seoul-culture",
-      "url": "https://news.seoul.go.kr/culture/archives/534601",
-      "canonicalUrl": "https://news.seoul.go.kr/culture/archives/534601",
-      "title": "2026. 10월 문화달력",
-      "publishedAt": "2026-09-30T23:31:13Z",
-      "dateStatus": "valid",
-      "updatedAt": "2026-10-01T00:13:24Z",
-      "updatedDateStatus": "valid",
-      "dateBasis": "published",
-      "author": "문화본부-문화정책과",
-      "language": "ko",
-      "tags": [
-        "문화달력(월별)",
-        "새소식",
-        "뉴스레터",
-        "문화달력",
-        "문화행사"
-      ],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
-        "url": "https://news.seoul.go.kr/culture"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-woowahan-tech-4c867040c423434788dc",
@@ -511,7 +588,7 @@
         "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
         "url": "https://techblog.woowahan.com/"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-woowahan-tech-fe68b13e121324bcba8d",
@@ -536,7 +613,7 @@
         "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
         "url": "https://techblog.woowahan.com/"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-woowahan-tech-3cfd97a9c3020c3ae396",
@@ -561,7 +638,7 @@
         "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
         "url": "https://techblog.woowahan.com/"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-woowahan-tech-c6652cd093e157e0b20f",
@@ -587,7 +664,7 @@
         "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
         "url": "https://techblog.woowahan.com/"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-woowahan-tech-ae63f46374316e06c46f",
@@ -612,7 +689,7 @@
         "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
         "url": "https://techblog.woowahan.com/"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-woowahan-tech-35f305b7696b03a5194e",
@@ -639,7 +716,7 @@
         "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
         "url": "https://techblog.woowahan.com/"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-woowahan-tech-292f4dd9371290944fc0",
@@ -664,7 +741,7 @@
         "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
         "url": "https://techblog.woowahan.com/"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-woowahan-tech-33c060269b1af5024709",
@@ -692,7 +769,7 @@
         "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
         "url": "https://techblog.woowahan.com/"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-woowahan-tech-e2f31b92a471dc061a4a",
@@ -719,45 +796,38 @@
         "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
         "url": "https://techblog.woowahan.com/"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
-      "id": "article-woowahan-tech-e02cb48b618b689f774e",
-      "sourceId": "woowahan-tech",
-      "url": "https://techblog.woowahan.com/27268/",
-      "canonicalUrl": "https://techblog.woowahan.com/27268/",
-      "title": "AI에게 만드는 법 대신 실패하는 법을 묻다: 포토그래퍼의 수천 명 동시 접속 게임 만들기",
-      "publishedAt": "2026-08-28T06:46:55Z",
+      "id": "article-readersnews-books-e1bc02e6b11cf3f64316",
+      "sourceId": "readersnews-books",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200809",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200809",
+      "title": "지금 읽고 있는 책이 나의 미래가 된다면?",
+      "publishedAt": "2026-10-29T02:57:14Z",
       "dateStatus": "valid",
       "updatedAt": null,
       "updatedDateStatus": "unknown",
       "dateBasis": "published",
-      "author": "장진솔",
+      "author": "이루리 작가",
       "language": "ko",
-      "tags": [
-        "AI",
-        "Culture",
-        "Game",
-        "Redis",
-        "SSE",
-        "회고"
-      ],
+      "tags": [],
       "summary": "",
       "coverage": "link_only",
       "rights": {
         "mode": "metadata_only",
-        "label": "원문 권리 유지 · 제목과 링크 정보만 제공",
-        "url": "https://techblog.woowahan.com/"
+        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
+        "url": "https://www.readersnews.com/rssIndex.html"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
-      "id": "article-readersnews-books-1d3a45b3c182d6650671",
+      "id": "article-readersnews-books-5b49838732aa328fa011",
       "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200771",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200771",
-      "title": "데이먼 갤것과 함께 하는 ‘세계 작가와의 대화’",
-      "publishedAt": "2026-10-19T03:12:15Z",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200808",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200808",
+      "title": "용인 느티나무재단, AI 시대 도서관 역할 모색하는 ‘글로벌 도넛 데이 2026’ 개최",
+      "publishedAt": "2026-10-29T02:33:10Z",
       "dateStatus": "valid",
       "updatedAt": null,
       "updatedDateStatus": "unknown",
@@ -772,268 +842,15 @@
         "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
         "url": "https://www.readersnews.com/rssIndex.html"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
-      "id": "article-readersnews-books-3ed1978f81d474f66cb0",
+      "id": "article-readersnews-books-5e5148d4576fb0e266eb",
       "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200770",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200770",
-      "title": "[신간] 『우리는 어떤 AI를 만들고 있는가』",
-      "publishedAt": "2026-10-19T01:17:43Z",
-      "dateStatus": "valid",
-      "updatedAt": null,
-      "updatedDateStatus": "unknown",
-      "dateBasis": "published",
-      "author": "최유진 기자",
-      "language": "ko",
-      "tags": [],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
-        "url": "https://www.readersnews.com/rssIndex.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-readersnews-books-fa673efbb6efe0c2e0ff",
-      "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200769",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200769",
-      "title": "[신간] 『한글』",
-      "publishedAt": "2026-10-19T01:00:52Z",
-      "dateStatus": "valid",
-      "updatedAt": null,
-      "updatedDateStatus": "unknown",
-      "dateBasis": "published",
-      "author": "최유진 기자",
-      "language": "ko",
-      "tags": [],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
-        "url": "https://www.readersnews.com/rssIndex.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-readersnews-books-c3fe5a58e80bec4a9fb8",
-      "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200762",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200762",
-      "title": "최면, 무의식의 문을 열다",
-      "publishedAt": "2026-10-18T21:00:00Z",
-      "dateStatus": "valid",
-      "updatedAt": null,
-      "updatedDateStatus": "unknown",
-      "dateBasis": "published",
-      "author": "고재권 기자",
-      "language": "ko",
-      "tags": [],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
-        "url": "https://www.readersnews.com/rssIndex.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-readersnews-books-eaeafbab51a6f0c6ada3",
-      "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200761",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200761",
-      "title": "나는 옳고 너는 틀렸다는 믿음은 어디서 왔을까",
-      "publishedAt": "2026-10-17T21:00:00Z",
-      "dateStatus": "valid",
-      "updatedAt": null,
-      "updatedDateStatus": "unknown",
-      "dateBasis": "published",
-      "author": "최유진 기자",
-      "language": "ko",
-      "tags": [],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
-        "url": "https://www.readersnews.com/rssIndex.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-readersnews-books-2cf0d14c308070bbdbec",
-      "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200757",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200757",
-      "title": "먹방으로 보는 슬픈 자화상",
-      "publishedAt": "2026-10-16T21:00:00Z",
-      "dateStatus": "valid",
-      "updatedAt": null,
-      "updatedDateStatus": "unknown",
-      "dateBasis": "published",
-      "author": "고재권 기자",
-      "language": "ko",
-      "tags": [],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
-        "url": "https://www.readersnews.com/rssIndex.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-readersnews-books-7edebbd3da15c9b9d74f",
-      "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200737",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200737",
-      "title": "우리는 지금 무엇을 끄지 못하고 있는가, 이승형 작가",
-      "publishedAt": "2026-10-16T05:00:00Z",
-      "dateStatus": "valid",
-      "updatedAt": null,
-      "updatedDateStatus": "unknown",
-      "dateBasis": "published",
-      "author": "최유진 기자",
-      "language": "ko",
-      "tags": [],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
-        "url": "https://www.readersnews.com/rssIndex.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-readersnews-books-365ba64f64a6e4fdd145",
-      "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200765",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200765",
-      "title": "한국출판인회의, AI와 출판의 상생 위한 ‘대한민국 호소문’ 연명 진행",
-      "publishedAt": "2026-10-16T02:18:11Z",
-      "dateStatus": "valid",
-      "updatedAt": null,
-      "updatedDateStatus": "unknown",
-      "dateBasis": "published",
-      "author": "최유진 기자",
-      "language": "ko",
-      "tags": [],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
-        "url": "https://www.readersnews.com/rssIndex.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-readersnews-books-68aa549cf1f005eac788",
-      "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200764",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200764",
-      "title": "[신간] 『초록마법』",
-      "publishedAt": "2026-10-16T01:10:25Z",
-      "dateStatus": "valid",
-      "updatedAt": null,
-      "updatedDateStatus": "unknown",
-      "dateBasis": "published",
-      "author": "최유진 기자",
-      "language": "ko",
-      "tags": [],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
-        "url": "https://www.readersnews.com/rssIndex.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-readersnews-books-92bc322561ada53bbc2a",
-      "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200763",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200763",
-      "title": "[신간] 『잘 익은 언어들을 만나러 갑니다』",
-      "publishedAt": "2026-10-16T00:43:24Z",
-      "dateStatus": "valid",
-      "updatedAt": null,
-      "updatedDateStatus": "unknown",
-      "dateBasis": "published",
-      "author": "최유진 기자",
-      "language": "ko",
-      "tags": [],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
-        "url": "https://www.readersnews.com/rssIndex.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-readersnews-books-03c96e851d4236e88b58",
-      "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200751",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200751",
-      "title": "한글, 세계의 언어를 꿈꾸다",
-      "publishedAt": "2026-10-15T21:00:00Z",
-      "dateStatus": "valid",
-      "updatedAt": null,
-      "updatedDateStatus": "unknown",
-      "dateBasis": "published",
-      "author": "고재권 기자",
-      "language": "ko",
-      "tags": [],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
-        "url": "https://www.readersnews.com/rssIndex.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-readersnews-books-deab6c92eac96d7be97a",
-      "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200760",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200760",
-      "title": "‘파주페어 북앤컬처’ 오는 16일부터 ‘북마켓 난-장’ 개최",
-      "publishedAt": "2026-10-15T03:01:23Z",
-      "dateStatus": "valid",
-      "updatedAt": null,
-      "updatedDateStatus": "unknown",
-      "dateBasis": "published",
-      "author": "최유진 기자",
-      "language": "ko",
-      "tags": [],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
-        "url": "https://www.readersnews.com/rssIndex.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-readersnews-books-4b88c25898dbe982f508",
-      "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200759",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200759",
-      "title": "[신간] 『나의 첫 번째 재테크 교과서』",
-      "publishedAt": "2026-10-15T01:25:47Z",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200807",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200807",
+      "title": "[신간] 『경성 모던, 모던 경성』",
+      "publishedAt": "2026-10-29T01:26:07Z",
       "dateStatus": "valid",
       "updatedAt": null,
       "updatedDateStatus": "unknown",
@@ -1048,15 +865,15 @@
         "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
         "url": "https://www.readersnews.com/rssIndex.html"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
-      "id": "article-readersnews-books-1b8c27275d94c0697aa4",
+      "id": "article-readersnews-books-6bbba00ae8b7e77ee895",
       "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200758",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200758",
-      "title": "[신간] 『우리 착한 나진』",
-      "publishedAt": "2026-10-15T00:53:01Z",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200806",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200806",
+      "title": "[신간] 『도시가 말하지 않는 것들』",
+      "publishedAt": "2026-10-29T01:07:54Z",
       "dateStatus": "valid",
       "updatedAt": null,
       "updatedDateStatus": "unknown",
@@ -1071,15 +888,15 @@
         "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
         "url": "https://www.readersnews.com/rssIndex.html"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
-      "id": "article-readersnews-books-968ef5ddb49280ec2223",
+      "id": "article-readersnews-books-62904b03683b383fb89c",
       "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200695",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200695",
-      "title": "잊지 마세요, 매일 출근하는 당신은 멋진 사람이라는 걸",
-      "publishedAt": "2026-10-14T21:00:00Z",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200797",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200797",
+      "title": "자연을 좋아하지 않아도 뇌는 이미 혜택받고 있다",
+      "publishedAt": "2026-10-28T21:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
       "updatedDateStatus": "unknown",
@@ -1094,38 +911,15 @@
         "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
         "url": "https://www.readersnews.com/rssIndex.html"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
-      "id": "article-readersnews-books-0c1629184d6347b2ad68",
+      "id": "article-readersnews-books-b0784f84119221478e14",
       "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200756",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200756",
-      "title": "재생된 골목은 왜 사람을 천천히 걷게 하는가",
-      "publishedAt": "2026-10-14T06:45:36Z",
-      "dateStatus": "valid",
-      "updatedAt": null,
-      "updatedDateStatus": "unknown",
-      "dateBasis": "published",
-      "author": "장기민 박사",
-      "language": "ko",
-      "tags": [],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
-        "url": "https://www.readersnews.com/rssIndex.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-readersnews-books-c9341d2c60a8079a257b",
-      "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200746",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200746",
-      "title": "“저 군대 안 갑니다”",
-      "publishedAt": "2026-10-14T05:00:00Z",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200792",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200792",
+      "title": "숲과 인류 문명에 관하여…",
+      "publishedAt": "2026-10-28T05:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
       "updatedDateStatus": "unknown",
@@ -1140,15 +934,15 @@
         "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
         "url": "https://www.readersnews.com/rssIndex.html"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
-      "id": "article-readersnews-books-3171f19e01fcfe416f02",
+      "id": "article-readersnews-books-b11b7be144fa5181c3ea",
       "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200754",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200754",
-      "title": "‘제17회 서울인쇄대상 및 인쇄문화축제’ 개최",
-      "publishedAt": "2026-10-14T02:58:20Z",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200802",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200802",
+      "title": "한국출판인회의, AI 시대 출판 논의하는 ‘2026 아시아 출판 주간’ 개최",
+      "publishedAt": "2026-10-28T03:19:48Z",
       "dateStatus": "valid",
       "updatedAt": null,
       "updatedDateStatus": "unknown",
@@ -1163,15 +957,15 @@
         "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
         "url": "https://www.readersnews.com/rssIndex.html"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
-      "id": "article-readersnews-books-33cb5ef482b7af976682",
+      "id": "article-readersnews-books-e732d3e420818d92ab4a",
       "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200753",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200753",
-      "title": "[신간] 『나를 알아가는 뇌과학』",
-      "publishedAt": "2026-10-14T02:01:06Z",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200801",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200801",
+      "title": "[신간] 『플루언트 포에버』",
+      "publishedAt": "2026-10-28T02:03:18Z",
       "dateStatus": "valid",
       "updatedAt": null,
       "updatedDateStatus": "unknown",
@@ -1186,15 +980,15 @@
         "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
         "url": "https://www.readersnews.com/rssIndex.html"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
-      "id": "article-readersnews-books-e7a4a8196b56ddd5da95",
+      "id": "article-readersnews-books-26fd11dd10a6419802ce",
       "sourceId": "readersnews-books",
-      "url": "https://www.readersnews.com/news/articleView.html?idxno=200752",
-      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200752",
-      "title": "[신간] 『오래 곁에 두어 좋은 말』",
-      "publishedAt": "2026-10-14T01:42:59Z",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200800",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200800",
+      "title": "[책 속 명문장] 삶을 이해하기 위해 세포를 들여다본다",
+      "publishedAt": "2026-10-28T01:28:11Z",
       "dateStatus": "valid",
       "updatedAt": null,
       "updatedDateStatus": "unknown",
@@ -1209,7 +1003,512 @@
         "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
         "url": "https://www.readersnews.com/rssIndex.html"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-readersnews-books-97dbbaeb1dccecd40f14",
+      "sourceId": "readersnews-books",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200780",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200780",
+      "title": "결혼은 늘었는데 청년들은 왜 여전히 불안할까",
+      "publishedAt": "2026-10-27T21:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "최유진 기자",
+      "language": "ko",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
+        "url": "https://www.readersnews.com/rssIndex.html"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-readersnews-books-7dbab17d494910b82a54",
+      "sourceId": "readersnews-books",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200788",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200788",
+      "title": "피자, 세계가 빚어낸 가장 맛있는 역사",
+      "publishedAt": "2026-10-26T21:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "고재권 기자",
+      "language": "ko",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
+        "url": "https://www.readersnews.com/rssIndex.html"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-readersnews-books-f4553ae24d306eef216b",
+      "sourceId": "readersnews-books",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200795",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200795",
+      "title": "하나의 문화 코스로 즐기는 종로, ‘아름다운 종로 박물관 나들이’ 개최",
+      "publishedAt": "2026-10-26T02:37:48Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "최유진 기자",
+      "language": "ko",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
+        "url": "https://www.readersnews.com/rssIndex.html"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-readersnews-books-a3c5878ddf8a5d143b74",
+      "sourceId": "readersnews-books",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200794",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200794",
+      "title": "[신간] 『하기 싫다, 그래도 한다』",
+      "publishedAt": "2026-10-26T02:00:50Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "최유진 기자",
+      "language": "ko",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
+        "url": "https://www.readersnews.com/rssIndex.html"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-readersnews-books-c2a26eb1198f78106380",
+      "sourceId": "readersnews-books",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200793",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200793",
+      "title": "[신간] 『건강경제학』",
+      "publishedAt": "2026-10-26T01:35:57Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "최유진 기자",
+      "language": "ko",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
+        "url": "https://www.readersnews.com/rssIndex.html"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-readersnews-books-9b2c2a604a7896fc067a",
+      "sourceId": "readersnews-books",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200776",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200776",
+      "title": "“명작 뒤에는 언제나 또 다른 명작이 숨어 있다”",
+      "publishedAt": "2026-10-25T21:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "고재권 기자",
+      "language": "ko",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
+        "url": "https://www.readersnews.com/rssIndex.html"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-readersnews-books-b1ce40c8d4cf90022386",
+      "sourceId": "readersnews-books",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200782",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200782",
+      "title": "독도는 어떻게 지켜지는가",
+      "publishedAt": "2026-10-24T21:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "최유진 기자",
+      "language": "ko",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
+        "url": "https://www.readersnews.com/rssIndex.html"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-readersnews-books-27a4ef9a671b0dc09837",
+      "sourceId": "readersnews-books",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200781",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200781",
+      "title": "카톡 ‘1’에 집착하는 당신에게",
+      "publishedAt": "2026-10-23T21:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "최유진 기자",
+      "language": "ko",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
+        "url": "https://www.readersnews.com/rssIndex.html"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-readersnews-books-ef141f1b90162421b77d",
+      "sourceId": "readersnews-books",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200783",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200783",
+      "title": "BTS의 RM과 소통의 예술",
+      "publishedAt": "2026-10-23T05:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "고재권 기자",
+      "language": "ko",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
+        "url": "https://www.readersnews.com/rssIndex.html"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-readersnews-books-76929bd2cd70abc24bfe",
+      "sourceId": "readersnews-books",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200791",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200791",
+      "title": "마음을 멈추고 관찰하는 시간, 수원 지관서가 ‘가을 북페스티벌’ 개최",
+      "publishedAt": "2026-10-23T02:32:27Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "최유진 기자",
+      "language": "ko",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
+        "url": "https://www.readersnews.com/rssIndex.html"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-readersnews-books-247149c8106da87ed016",
+      "sourceId": "readersnews-books",
+      "url": "https://www.readersnews.com/news/articleView.html?idxno=200790",
+      "canonicalUrl": "https://www.readersnews.com/news/articleView.html?idxno=200790",
+      "title": "[신간] 『나는 이 세상에 소풍 온 심리학자입니다』",
+      "publishedAt": "2026-10-23T01:49:01Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "최유진 기자",
+      "language": "ko",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크 이용 범위 · 본문 미확보",
+        "url": "https://www.readersnews.com/rssIndex.html"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-seoul-environment-42169a85ef01069e658f",
+      "sourceId": "seoul-environment",
+      "url": "https://news.seoul.go.kr/env/archives/571356",
+      "canonicalUrl": "https://news.seoul.go.kr/env/archives/571356",
+      "title": "전기차 충전구역 불법주차 및 충전방해 안 돼요!",
+      "publishedAt": "2026-10-29T01:36:26Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-29T05:52:51Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "기후환경본부-친환경차량과",
+      "language": "ko",
+      "tags": [
+        "새소식",
+        "친환경 자료실",
+        "과태료",
+        "불법주차",
+        "전기차",
+        "충전구역",
+        "충전방해"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/env"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-seoul-environment-409bd5652aec6ec46a43",
+      "sourceId": "seoul-environment",
+      "url": "https://news.seoul.go.kr/env/archives/571347",
+      "canonicalUrl": "https://news.seoul.go.kr/env/archives/571347",
+      "title": "2026년 반려인능력시험 필기 시험 문제 및 해설",
+      "publishedAt": "2026-10-29T00:24:07Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-29T00:26:10Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "정원도시국 - 동물보호과",
+      "language": "ko",
+      "tags": [
+        "동물보호 자료실",
+        "새소식",
+        "반려견",
+        "반려묘",
+        "반려인능력시험"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/env"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-seoul-environment-543b69f8c85c7e31afe6",
+      "sourceId": "seoul-environment",
+      "url": "https://news.seoul.go.kr/env/archives/571321",
+      "canonicalUrl": "https://news.seoul.go.kr/env/archives/571321",
+      "title": "[제로서울뉴스 vol.35] 100만 원 행운부터 난방비 절약까지! 서울 환경 소식 모음zip",
+      "publishedAt": "2026-10-29T00:00:49Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-28T01:00:48Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "기후환경본부-기후환경정책과",
+      "language": "ko",
+      "tags": [
+        "새소식",
+        "제로서울뉴스 신규 뉴스레터",
+        "에너지절약",
+        "에코마일리지",
+        "조기폐차",
+        "친환경",
+        "태양광"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/env"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-seoul-environment-9960143c6e8603a81bd2",
+      "sourceId": "seoul-environment",
+      "url": "https://news.seoul.go.kr/env/archives/571296",
+      "canonicalUrl": "https://news.seoul.go.kr/env/archives/571296",
+      "title": "서울시와 헤이딜러가 함께하는 조기폐차 응원 이벤트",
+      "publishedAt": "2026-10-26T08:26:20Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-26T10:03:36Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "기후환경본부-대기정책과",
+      "language": "ko",
+      "tags": [
+        "경유차 저공해사업",
+        "새소식",
+        "4등급",
+        "5등급",
+        "경유차",
+        "보조금",
+        "자동차",
+        "조기폐차"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/env"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-seoul-environment-347ef89cf8b3d552560a",
+      "sourceId": "seoul-environment",
+      "url": "https://news.seoul.go.kr/env/archives/571285",
+      "canonicalUrl": "https://news.seoul.go.kr/env/archives/571285",
+      "title": "2026년 서울대공원 가을 축제 '예술로 물드는 피노키오의 숲'",
+      "publishedAt": "2026-10-26T05:37:00Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-26T10:06:16Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "경영관리부-기획홍보과",
+      "language": "ko",
+      "tags": [
+        "공원 소식",
+        "새소식",
+        "공원",
+        "공원소식",
+        "서울대공원",
+        "서울시",
+        "서울의공원",
+        "축제",
+        "행사"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/env"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-seoul-environment-0ff7c0bb49e58c6b5af2",
+      "sourceId": "seoul-environment",
+      "url": "https://news.seoul.go.kr/env/archives/571253",
+      "canonicalUrl": "https://news.seoul.go.kr/env/archives/571253",
+      "title": "보일러 켜기 전에 이것부터 확인하세요!",
+      "publishedAt": "2026-10-23T01:47:35Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-23T01:49:20Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "기후환경본부-기후환경정책과",
+      "language": "ko",
+      "tags": [
+        "기후환경 소식",
+        "새소식",
+        "난방비절약",
+        "보일러점검",
+        "실내온도",
+        "에너지절약",
+        "에코마일리지"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/env"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-seoul-environment-a1ff917b3e4381deafe3",
+      "sourceId": "seoul-environment",
+      "url": "https://news.seoul.go.kr/env/archives/571240",
+      "canonicalUrl": "https://news.seoul.go.kr/env/archives/571240",
+      "title": "'서울 정원문화힐링센터 가든데이'에 초대합니다",
+      "publishedAt": "2026-10-21T06:26:53Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-21T07:29:20Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "정원도시국-공원여가사업과",
+      "language": "ko",
+      "tags": [
+        "공원 소식",
+        "새소식",
+        "가드닝",
+        "가든데이",
+        "가든백",
+        "가을",
+        "서울 정원문화힐링센터",
+        "정원문화힐링센터",
+        "허브 솔트",
+        "호박 바스켓"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/env"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-seoul-environment-cbe5f86577829100cb2c",
+      "sourceId": "seoul-environment",
+      "url": "https://news.seoul.go.kr/env/archives/571214",
+      "canonicalUrl": "https://news.seoul.go.kr/env/archives/571214",
+      "title": "가을 한강 봉사데이 : 한강탐험대 (10.24.(토))",
+      "publishedAt": "2026-10-20T00:51:31Z",
+      "dateStatus": "valid",
+      "updatedAt": "2026-10-20T07:58:50Z",
+      "updatedDateStatus": "valid",
+      "dateBasis": "published",
+      "author": "미래한강본부-운영부",
+      "language": "ko",
+      "tags": [
+        "새소식",
+        "한강 소식",
+        "봉사활동",
+        "여의도한강공원",
+        "줍깅",
+        "한강봉사데이",
+        "환경"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
+        "url": "https://news.seoul.go.kr/env"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-seoul-environment-dace88006b0f92216176",
@@ -1219,7 +1518,7 @@
       "title": "미세먼지, 오존 예·경보 알림 신청하고, 기프티콘 받으세요!",
       "publishedAt": "2026-10-19T00:21:15Z",
       "dateStatus": "valid",
-      "updatedAt": "2026-10-19T00:22:36Z",
+      "updatedAt": "2026-10-19T10:37:10Z",
       "updatedDateStatus": "valid",
       "dateBasis": "published",
       "author": "기후환경본부-대기정책과",
@@ -1240,7 +1539,7 @@
         "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
         "url": "https://news.seoul.go.kr/env"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-seoul-environment-65a1a62d640c98b4b9bf",
@@ -1270,262 +1569,9 @@
         "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
         "url": "https://news.seoul.go.kr/env"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
-      "id": "article-seoul-environment-0c879c782be90087dd3c",
-      "sourceId": "seoul-environment",
-      "url": "https://news.seoul.go.kr/env/archives/571163",
-      "canonicalUrl": "https://news.seoul.go.kr/env/archives/571163",
-      "title": "2025년 서울시 소음진동관리 연차보고서",
-      "publishedAt": "2026-10-14T00:53:02Z",
-      "dateStatus": "valid",
-      "updatedAt": "2026-10-14T00:53:02Z",
-      "updatedDateStatus": "valid",
-      "dateBasis": "published",
-      "author": "자원회수시설추진단-생활환경과",
-      "language": "ko",
-      "tags": [
-        "새소식",
-        "소음·진동관리연차보고서",
-        "소음"
-      ],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
-        "url": "https://news.seoul.go.kr/env"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-seoul-environment-aa1ea1174355880129e0",
-      "sourceId": "seoul-environment",
-      "url": "https://news.seoul.go.kr/env/archives/571160",
-      "canonicalUrl": "https://news.seoul.go.kr/env/archives/571160",
-      "title": "2024년 서울시 소음진동관리 연차보고서",
-      "publishedAt": "2026-10-14T00:46:59Z",
-      "dateStatus": "valid",
-      "updatedAt": "2026-10-14T00:46:59Z",
-      "updatedDateStatus": "valid",
-      "dateBasis": "published",
-      "author": "자원회수시설추진단-생활환경과",
-      "language": "ko",
-      "tags": [
-        "새소식",
-        "소음·진동관리연차보고서",
-        "소음"
-      ],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
-        "url": "https://news.seoul.go.kr/env"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-seoul-environment-0005d88348ccb84a0ca6",
-      "sourceId": "seoul-environment",
-      "url": "https://news.seoul.go.kr/env/archives/571139",
-      "canonicalUrl": "https://news.seoul.go.kr/env/archives/571139",
-      "title": "물재생센터 채수확대지점 수질검사 결과(2026년9월)",
-      "publishedAt": "2026-10-13T04:43:20Z",
-      "dateStatus": "valid",
-      "updatedAt": "2026-10-13T04:43:20Z",
-      "updatedDateStatus": "valid",
-      "dateBasis": "published",
-      "author": "물순환안전국-물재생시설과",
-      "language": "ko",
-      "tags": [
-        "물재생시설 자료실",
-        "새소식",
-        "물재생센터",
-        "수질",
-        "하수"
-      ],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
-        "url": "https://news.seoul.go.kr/env"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-seoul-environment-20368879191b89e4c21e",
-      "sourceId": "seoul-environment",
-      "url": "https://news.seoul.go.kr/env/archives/571090",
-      "canonicalUrl": "https://news.seoul.go.kr/env/archives/571090",
-      "title": "짚라인부터 K-푸드 경연대회, 뮤지컬까지 운동·맛·공연 한자리에 '한강페스티벌_가을'",
-      "publishedAt": "2026-10-11T08:35:11Z",
-      "dateStatus": "valid",
-      "updatedAt": "2026-10-11T08:36:12Z",
-      "updatedDateStatus": "valid",
-      "dateBasis": "published",
-      "author": "한강사업추진단-한강사업총괄부",
-      "language": "ko",
-      "tags": [
-        "새소식",
-        "한강 소식",
-        "hangang",
-        "hangangfestival",
-        "hangangpark",
-        "hangangriver",
-        "가을",
-        "가을축제",
-        "뮤지컬",
-        "운동",
-        "한강공원",
-        "한강축제",
-        "한강페스티벌"
-      ],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
-        "url": "https://news.seoul.go.kr/env"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-seoul-environment-eac340b20fe461d6db98",
-      "sourceId": "seoul-environment",
-      "url": "https://news.seoul.go.kr/env/archives/571072",
-      "canonicalUrl": "https://news.seoul.go.kr/env/archives/571072",
-      "title": "한글날 어디 갈까? 한강플플 '한글놀이터'에서 즐겨보세요",
-      "publishedAt": "2026-10-08T06:21:31Z",
-      "dateStatus": "valid",
-      "updatedAt": "2026-10-12T06:41:56Z",
-      "updatedDateStatus": "valid",
-      "dateBasis": "published",
-      "author": "한강사업추진단-한강사업총괄부",
-      "language": "ko",
-      "tags": [
-        "새소식",
-        "한강 소식",
-        "가족나들이",
-        "구석구석라이브",
-        "드론라이트쇼",
-        "뚝섬한강공원",
-        "무료체험",
-        "문화행사",
-        "서울가볼만한곳",
-        "서울행사",
-        "어린이체험",
-        "영화상영",
-        "자양역",
-        "플플오픈마이크",
-        "한강플플",
-        "한글날",
-        "한글날행사",
-        "한글놀이터",
-        "한글책쉼터",
-        "한글체험"
-      ],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
-        "url": "https://news.seoul.go.kr/env"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-seoul-environment-8593df42d6da74c51c9b",
-      "sourceId": "seoul-environment",
-      "url": "https://news.seoul.go.kr/env/archives/570957",
-      "canonicalUrl": "https://news.seoul.go.kr/env/archives/570957",
-      "title": "제안서 평가위원 모집 안내(난지물재생센터 공공하수도 기술진단 용역)",
-      "publishedAt": "2026-10-07T06:26:19Z",
-      "dateStatus": "valid",
-      "updatedAt": "2026-10-07T06:35:43Z",
-      "updatedDateStatus": "valid",
-      "dateBasis": "published",
-      "author": "난지물재생센터-시설보수과",
-      "language": "ko",
-      "tags": [
-        "새소식",
-        "하수도 정책",
-        "공공하수도 기술진단",
-        "난지물재생센터",
-        "제안성평가",
-        "평가위원"
-      ],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
-        "url": "https://news.seoul.go.kr/env"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-seoul-environment-de22b900cd50bc4bd8ed",
-      "sourceId": "seoul-environment",
-      "url": "https://news.seoul.go.kr/env/archives/571019",
-      "canonicalUrl": "https://news.seoul.go.kr/env/archives/571019",
-      "title": "서울시 물재생센터 악취측정 결과(2026년 3분기)",
-      "publishedAt": "2026-10-07T04:44:16Z",
-      "dateStatus": "valid",
-      "updatedAt": "2026-10-07T04:44:16Z",
-      "updatedDateStatus": "valid",
-      "dateBasis": "published",
-      "author": "물순환안전국-물재생시설과",
-      "language": "ko",
-      "tags": [
-        "물재생시설 자료실",
-        "새소식",
-        "물재생센터 분기별 악취측정결과"
-      ],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
-        "url": "https://news.seoul.go.kr/env"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-seoul-environment-8374b5f084ea47d152a7",
-      "sourceId": "seoul-environment",
-      "url": "https://news.seoul.go.kr/env/archives/571003",
-      "canonicalUrl": "https://news.seoul.go.kr/env/archives/571003",
-      "title": "물놀이형 수경시설 수질검사 결과(2026년 9월)",
-      "publishedAt": "2026-10-06T11:24:13Z",
-      "dateStatus": "valid",
-      "updatedAt": "2026-10-09T05:42:51Z",
-      "updatedDateStatus": "valid",
-      "dateBasis": "published",
-      "author": "물순환안전국-수변감성도시과",
-      "language": "ko",
-      "tags": [
-        "물순환시설",
-        "새소식",
-        "물놀이형수경시설"
-      ],
-      "summary": "",
-      "coverage": "link_only",
-      "rights": {
-        "mode": "metadata_only",
-        "label": "원문별 이용 조건 확인 · 제목과 링크 정보만 제공",
-        "url": "https://news.seoul.go.kr/env"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
-    },
-    {
-      "id": "article-arxiv-cs-cl-343bf0e0623deed443d9",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23847",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23847",
-      "title": "Behavioral Couplings: From Formation to Behavioral Emergence in Language Models",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1533,6 +1579,12 @@
       "dateBasis": "published",
       "author": "Dongyoon Hahm, Woogyeol Jin, Dennis Wei, Yi Zhou, Nathalie Baracaldo, Kimin Lee",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-343bf0e0623deed443d9",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23847",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23847",
+      "title": "Behavioral Couplings: From Formation to Behavioral Emergence in Language Models",
       "tags": [
         "cs.CL",
         "cs.AI",
@@ -1544,15 +1596,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-b34e9d0c4929185b45d7",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23845",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23845",
-      "title": "AI-Driven Reproducibility and Analytical Robustness in Scientific Discovery",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1560,6 +1606,12 @@
       "dateBasis": "published",
       "author": "Shicheng Liu, Krista Opsahl-Ong, Andrew Drozdov, Julian Killingback, Arnav Singhvi, Ronak Pradeep, Michael Bendersky, Ja",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-b34e9d0c4929185b45d7",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23845",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23845",
+      "title": "AI-Driven Reproducibility and Analytical Robustness in Scientific Discovery",
       "tags": [
         "cs.AI",
         "cs.CL"
@@ -1570,22 +1622,22 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-3a10a454d6678b392d1a",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23839",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23839",
-      "title": "DiscoveryRSI: Recursively Learning to Discover Valuable Hypotheses",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
       "updatedDateStatus": "unknown",
       "dateBasis": "published",
-      "author": "Jianyuan Zhong, Chenwei Wu, Zhaochen Yu, Xixian Jiang, Xuewei Li, Hao Xiao, Xilin Dai, Junyang Wang, Jiaru Zou, Zhiqing ",
+      "author": "Jianyuan Zhong, Chenwei Wu, Zhaochen Yu, Xixian Jiang, Xuewei Li, Hao Xiao, Xilin Dai, Junyang Wang, Jiaru Zou, Zhiqing",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-3a10a454d6678b392d1a",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23839",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23839",
+      "title": "DiscoveryRSI: Recursively Learning to Discover Valuable Hypotheses",
       "tags": [
         "cs.CL"
       ],
@@ -1595,15 +1647,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-dd69b748d043a4b4a63a",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23831",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23831",
-      "title": "Beyond the Answer: Student-Conditioned Trace Construction for Reasoning Distillation",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1611,6 +1657,12 @@
       "dateBasis": "published",
       "author": "Shaoang Li, Yanhang Shi, Yufei Li, Mingfu Liang, Frank Shyu, Sandeep Pandey, Luke Simon, Xi Liu, Jian Li",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-dd69b748d043a4b4a63a",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23831",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23831",
+      "title": "Beyond the Answer: Student-Conditioned Trace Construction for Reasoning Distillation",
       "tags": [
         "cs.CL",
         "cs.LG"
@@ -1621,15 +1673,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-af0589479ca9616d43fe",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23818",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23818",
-      "title": "Acceptance Is Not Speed: Length Inflation in Training-Free Lossy Speculative Decoding",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1637,6 +1683,12 @@
       "dateBasis": "published",
       "author": "Chiatzen Wang, Bill Xu, Haochen Gu, Hongyang Zhang",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-af0589479ca9616d43fe",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23818",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23818",
+      "title": "Acceptance Is Not Speed: Length Inflation in Training-Free Lossy Speculative Decoding",
       "tags": [
         "cs.CL"
       ],
@@ -1646,15 +1698,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-b8a433458f1ffcdb7a75",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23807",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23807",
-      "title": "Steering beyond Language: Improving Multilingual Training-Free Text Embeddings via Paired-Residual Subspace Removal",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1662,6 +1708,12 @@
       "dateBasis": "published",
       "author": "Ailiang Lin, Zhuoyun Li, Yusong Wang, Keyu Mao, Kotaro Funakoshi, Manabu Okumura",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-b8a433458f1ffcdb7a75",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23807",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23807",
+      "title": "Steering beyond Language: Improving Multilingual Training-Free Text Embeddings via Paired-Residual Subspace Removal",
       "tags": [
         "cs.CL"
       ],
@@ -1671,15 +1723,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-365ad2bd230dd99f4cfc",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23787",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23787",
-      "title": "DLite: History-free Speculative Decoding for Agentic AI",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1687,6 +1733,12 @@
       "dateBasis": "published",
       "author": "Jiaming Xu, Hanzhen Wang, Tianlang Zhao, Jiewen Xiao, Chengze Yuan, Jiayi Pan, Yongkang Zhou, Jiancai Ye, Yu Wang, Guoha",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-365ad2bd230dd99f4cfc",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23787",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23787",
+      "title": "DLite: History-free Speculative Decoding for Agentic AI",
       "tags": [
         "cs.CL"
       ],
@@ -1696,15 +1748,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-188836d1cd9a07f9dc62",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23745",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23745",
-      "title": "VocalGrad: Evaluating Acoustic Perception in Audio Language Models",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1712,6 +1758,12 @@
       "dateBasis": "published",
       "author": "Koki Ryu, Hitomi Yanaka",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-188836d1cd9a07f9dc62",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23745",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23745",
+      "title": "VocalGrad: Evaluating Acoustic Perception in Audio Language Models",
       "tags": [
         "cs.SD",
         "cs.CL"
@@ -1722,15 +1774,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-ca0cdcdad8fe48e379bc",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23741",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23741",
-      "title": "The Italian lawmaking process: a unified and structured dataset",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1738,6 +1784,12 @@
       "dateBasis": "published",
       "author": "Matilde Contestabile, Chiara Ferrara, Giovanni Parrillo, Lorenzo Emer, Andrea Vandin",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-ca0cdcdad8fe48e379bc",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23741",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23741",
+      "title": "The Italian lawmaking process: a unified and structured dataset",
       "tags": [
         "cs.CL"
       ],
@@ -1747,15 +1799,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-7c82b2cddf1a2fde0690",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23734",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23734",
-      "title": "Bridging the Language Gap in Scholarly Data II: Enhancing Gender Inference for Chinese Names",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1763,6 +1809,12 @@
       "dateBasis": "published",
       "author": "Lisette Esp\\'in-Noboa, Mingrong She, Ana Maria Jaramillo, Liuhuaying Yang",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-7c82b2cddf1a2fde0690",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23734",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23734",
+      "title": "Bridging the Language Gap in Scholarly Data II: Enhancing Gender Inference for Chinese Names",
       "tags": [
         "cs.CL",
         "cs.CY",
@@ -1776,15 +1828,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-55c86fa3af4d4176e19b",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23726",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23726",
-      "title": "RedDarwin: Evolving Jailbreak Skills against Frontier LLMs",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1792,6 +1838,12 @@
       "dateBasis": "published",
       "author": "Zhouyuan Ma, Yutao Wu, Hanxun Huang, Xiang Zheng, Yi Liu, Xingjun Ma",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-55c86fa3af4d4176e19b",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23726",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23726",
+      "title": "RedDarwin: Evolving Jailbreak Skills against Frontier LLMs",
       "tags": [
         "cs.CR",
         "cs.CL"
@@ -1802,15 +1854,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-12fb4d1e7b23a3d5179f",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23721",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23721",
-      "title": "Recognizing Study Lineage Is Not Enough: Over-Crediting Same-Trial Evidence in LLM-Based Medical Verification",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1818,6 +1864,12 @@
       "dateBasis": "published",
       "author": "Mukand Krishna, Anoushka Harit, Chenghao Xiao, Zhongtian Sun",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-12fb4d1e7b23a3d5179f",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23721",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23721",
+      "title": "Recognizing Study Lineage Is Not Enough: Over-Crediting Same-Trial Evidence in LLM-Based Medical Verification",
       "tags": [
         "cs.CL"
       ],
@@ -1827,15 +1879,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-1e6f35c8f7fe3dcfecf9",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23715",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23715",
-      "title": "The Cognitive Cost of LLM Writing: A Reading-Time Comparison with Human Text",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1843,6 +1889,12 @@
       "dateBasis": "published",
       "author": "Kamer Cekini, Elisabetta Biondi, Chiara Boldrini, Andrea Passarella, Marco Conti",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-1e6f35c8f7fe3dcfecf9",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23715",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23715",
+      "title": "The Cognitive Cost of LLM Writing: A Reading-Time Comparison with Human Text",
       "tags": [
         "cs.CL"
       ],
@@ -1852,15 +1904,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-fd81b752c0ecea76548b",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23709",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23709",
-      "title": "GLOBE: Evolving Structured Agentic Memory for E-commerce Product Optimization in Generative Search",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1868,6 +1914,12 @@
       "dateBasis": "published",
       "author": "Hyunseo Kim, Suil Choe, Sukkyoung So, Daeyeon Yi",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-fd81b752c0ecea76548b",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23709",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23709",
+      "title": "GLOBE: Evolving Structured Agentic Memory for E-commerce Product Optimization in Generative Search",
       "tags": [
         "cs.CL",
         "cs.AI"
@@ -1878,15 +1930,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-e4ad6c662c02d050637c",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23702",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23702",
-      "title": "VISTA: Steering LLMs with Latent User Values Inferred from a Few Survey Answers",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1894,6 +1940,12 @@
       "dateBasis": "published",
       "author": "Yinuo Xu, Jadie Adams, Brian Hu, Shivani Kumar, David Jurgens, Arslan Basharat",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-e4ad6c662c02d050637c",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23702",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23702",
+      "title": "VISTA: Steering LLMs with Latent User Values Inferred from a Few Survey Answers",
       "tags": [
         "cs.CL"
       ],
@@ -1903,15 +1955,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-6fa2817e71d17a9f0e99",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23678",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23678",
-      "title": "Beyond the Benchmark: Conditioning, Domains and Failure Modes of Qwen3-TTS",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1919,6 +1965,12 @@
       "dateBasis": "published",
       "author": "S\\'everin Baroudi, Yanis Labrak, Petr Motlicek, Herv\\'e Bredin, Ricard Marxer",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-6fa2817e71d17a9f0e99",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23678",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23678",
+      "title": "Beyond the Benchmark: Conditioning, Domains and Failure Modes of Qwen3-TTS",
       "tags": [
         "cs.SD",
         "cs.CL"
@@ -1929,15 +1981,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-4b0a672a008ffbf0964b",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23651",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23651",
-      "title": "In Human Memories. Technology, Creativity and Self-Determination: An Ethical Proposal",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1945,6 +1991,12 @@
       "dateBasis": "published",
       "author": "Francesco Vitucci, Giuseppe Silvi, Francesco Abbrescia, Anthony Di Furia, Francesco Scagliola",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-4b0a672a008ffbf0964b",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23651",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23651",
+      "title": "In Human Memories. Technology, Creativity and Self-Determination: An Ethical Proposal",
       "tags": [
         "cs.CL"
       ],
@@ -1954,15 +2006,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-6157edc72fb25f0bfdec",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23625",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23625",
-      "title": "PresenceBench: An Exploratory Evaluation of Large Language Model Adaptation to User State",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1970,6 +2016,12 @@
       "dateBasis": "published",
       "author": "Pe\\~na Arroyo Gallego, Mauro Ruiz Moreno, Alejandro Acien, Sergio Romero-Tapiador, Teresa Arroyo-Gallego",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-6157edc72fb25f0bfdec",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23625",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23625",
+      "title": "PresenceBench: An Exploratory Evaluation of Large Language Model Adaptation to User State",
       "tags": [
         "cs.HC",
         "cs.AI",
@@ -1981,15 +2033,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-3d4c7781a3f13335e96d",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23613",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23613",
-      "title": "Trajectory-Triggered Sparse Collaborative Decoding",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -1997,6 +2043,12 @@
       "dateBasis": "published",
       "author": "Amit Ranjan Trivedi, Sruthikesh Surineni, Kyong Ho Lee, Mohit Mittal, Steven Li, Rex Hill",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-3d4c7781a3f13335e96d",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23613",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23613",
+      "title": "Trajectory-Triggered Sparse Collaborative Decoding",
       "tags": [
         "cs.CL",
         "cs.LG"
@@ -2007,15 +2059,9 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
-      },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      }
     },
     {
-      "id": "article-arxiv-cs-cl-87c1e84ac6e28586227b",
-      "sourceId": "arxiv-cs-cl",
-      "url": "https://arxiv.org/abs/2610.23612",
-      "canonicalUrl": "https://arxiv.org/abs/2610.23612",
-      "title": "SIT-Eval: Situation-Based Interactive Turn-by-Turn Evaluation of Conversational Agents",
       "publishedAt": "2026-10-19T04:00:00Z",
       "dateStatus": "valid",
       "updatedAt": null,
@@ -2023,6 +2069,12 @@
       "dateBasis": "published",
       "author": "Ravil Mussabayev, Saveliy Zavertyaev, Dmitriy Parpulov, Andrey Savchenko",
       "language": "en",
+      "fetchedAt": "2026-10-19T05:50:54Z",
+      "id": "article-arxiv-cs-cl-87c1e84ac6e28586227b",
+      "sourceId": "arxiv-cs-cl",
+      "url": "https://arxiv.org/abs/2610.23612",
+      "canonicalUrl": "https://arxiv.org/abs/2610.23612",
+      "title": "SIT-Eval: Situation-Based Interactive Turn-by-Turn Evaluation of Conversational Agents",
       "tags": [
         "cs.CL",
         "cs.AI"
@@ -2033,8 +2085,51 @@
         "mode": "metadata_only",
         "label": "메타데이터 CC0 · 영문 사전공개 논문 · 날짜는 RSS 공지일 · 원문별 권리 유지 · 초록·본문 미제공",
         "url": "https://info.arxiv.org/help/api/tou.html"
+      }
+    },
+    {
+      "id": "article-mit-linguistics-6b7380afc5963ae9364a",
+      "sourceId": "mit-linguistics",
+      "url": "https://news.mit.edu/2026/reinforcing-value-of-human-understanding-at-mit-1023",
+      "canonicalUrl": "https://news.mit.edu/2026/reinforcing-value-of-human-understanding-at-mit-1023",
+      "title": "Reinforcing the value of human understanding at MIT",
+      "publishedAt": "2026-10-23T19:35:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Benjamin Daniel | School of Humanities, Arts, and Social Sciences",
+      "language": "en",
+      "tags": [
+        "Special events and guest speakers",
+        "History of MIT",
+        "Classes and programs",
+        "Humanities",
+        "Arts",
+        "Social sciences",
+        "Education, teaching, academics",
+        "Anthropology",
+        "Comparative Media Studies/Writing",
+        "Economics",
+        "History",
+        "Linguistics",
+        "Literature",
+        "Music and theater arts",
+        "Philosophy",
+        "Political science",
+        "Technology and society",
+        "Human-computer interaction",
+        "Artificial intelligence",
+        "MISTI"
+      ],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
+        "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-d08507c6dd8f3ff175b5",
@@ -2074,7 +2169,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-67ad55cae621f9992409",
@@ -2108,7 +2203,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-e21bfd7986421ed6d2a4",
@@ -2145,7 +2240,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-741b6e7f60f9ae093b49",
@@ -2183,7 +2278,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-351860ffca03ba1a28ad",
@@ -2227,7 +2322,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-534fb73c09c3f266c3c1",
@@ -2261,7 +2356,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-142d223faac074e84a96",
@@ -2298,7 +2393,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-ef36f3d1af8cde47f58d",
@@ -2342,7 +2437,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-0e7d1da84cc76c7cd724",
@@ -2377,7 +2472,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-ece92a76f02bcf70dc9c",
@@ -2417,7 +2512,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-c3cdc85d77fce26513d9",
@@ -2461,7 +2556,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-1eebd1fadcca3ad1b5e5",
@@ -2495,7 +2590,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-c16e9db12dd06cab48ea",
@@ -2530,7 +2625,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-c9b3166761399d2fe600",
@@ -2569,7 +2664,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-ccd5c2ed1d71414e9ea2",
@@ -2601,7 +2696,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-6fba539c2a682cfaa0a1",
@@ -2645,7 +2740,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-ed163421c269512e57b9",
@@ -2674,7 +2769,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-574630450de1e6ea5063",
@@ -2718,7 +2813,7 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
       "id": "article-mit-linguistics-9a0520ace5a3b444a4f8",
@@ -2750,39 +2845,697 @@
         "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
         "url": "https://news.mit.edu/terms-of-use"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
     },
     {
-      "id": "article-mit-linguistics-3e53c02e59af39450b6c",
-      "sourceId": "mit-linguistics",
-      "url": "https://news.mit.edu/2024/professor-emeritus-james-harris-dies-1125",
-      "canonicalUrl": "https://news.mit.edu/2024/professor-emeritus-james-harris-dies-1125",
-      "title": "Professor Emeritus James Harris, a scholar of Spanish language, dies at 92",
-      "publishedAt": "2024-11-25T20:00:00Z",
-      "dateStatus": "valid",
+      "id": "article-llt-journal-ef1907e78f1a76be4df8",
+      "sourceId": "llt-journal",
+      "url": "https://www.lltjournal.org/item/10125-73714/",
+      "canonicalUrl": "https://www.lltjournal.org/item/10125-73714/",
+      "title": "The cognitive-affective impact of generative AI on EFL/ESL learning: A meta-analysis",
+      "publishedAt": null,
+      "dateStatus": "unknown",
       "updatedAt": null,
       "updatedDateStatus": "unknown",
-      "dateBasis": "published",
-      "author": "Benjamin Daniel | School of Humanities, Arts, and Social Sciences",
+      "dateBasis": "unknown",
+      "author": null,
       "language": "en",
-      "tags": [
-        "Faculty",
-        "Obituaries",
-        "Linguistics",
-        "Language",
-        "Global",
-        "Learning",
-        "Alumni/ae",
-        "School of Humanities Arts and Social Sciences"
-      ],
+      "tags": [],
       "summary": "",
       "coverage": "link_only",
       "rights": {
         "mode": "metadata_only",
-        "label": "MIT News 공식 RSS · 영문 제목·링크·작성자·분류만 · 본문 미제공",
-        "url": "https://news.mit.edu/terms-of-use"
+        "label": "공식 RSS · 언어교육 동료심사 연구 · 제목·링크만 보관 · 2020년 이후 원문 CC BY-NC-ND 4.0(출처표시·비상업·원형유지)",
+        "url": "https://www.lltjournal.org/about/"
       },
-      "fetchedAt": "2026-10-19T05:50:54Z"
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-llt-journal-a0a882bb94b488fc5bf7",
+      "sourceId": "llt-journal",
+      "url": "https://www.lltjournal.org/item/10125-73713/",
+      "canonicalUrl": "https://www.lltjournal.org/item/10125-73713/",
+      "title": "Examining small group dynamics in cross-cultural telecollaboration",
+      "publishedAt": null,
+      "dateStatus": "unknown",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "unknown",
+      "author": null,
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS · 언어교육 동료심사 연구 · 제목·링크만 보관 · 2020년 이후 원문 CC BY-NC-ND 4.0(출처표시·비상업·원형유지)",
+        "url": "https://www.lltjournal.org/about/"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-llt-journal-63ff555109e634661c42",
+      "sourceId": "llt-journal",
+      "url": "https://www.lltjournal.org/item/10125-73712/",
+      "canonicalUrl": "https://www.lltjournal.org/item/10125-73712/",
+      "title": "Unpacking EFL students’ engagement with GAI in digital multimodal composing",
+      "publishedAt": null,
+      "dateStatus": "unknown",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "unknown",
+      "author": null,
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS · 언어교육 동료심사 연구 · 제목·링크만 보관 · 2020년 이후 원문 CC BY-NC-ND 4.0(출처표시·비상업·원형유지)",
+        "url": "https://www.lltjournal.org/about/"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-llt-journal-075f312aebd480384952",
+      "sourceId": "llt-journal",
+      "url": "https://www.lltjournal.org/item/10125-73711/",
+      "canonicalUrl": "https://www.lltjournal.org/item/10125-73711/",
+      "title": "When readers’ minds wander: How cognitive and affective variables shape mobile-assisted L2 reading comprehension",
+      "publishedAt": null,
+      "dateStatus": "unknown",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "unknown",
+      "author": null,
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS · 언어교육 동료심사 연구 · 제목·링크만 보관 · 2020년 이후 원문 CC BY-NC-ND 4.0(출처표시·비상업·원형유지)",
+        "url": "https://www.lltjournal.org/about/"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-llt-journal-5666c932039cf1edaa3e",
+      "sourceId": "llt-journal",
+      "url": "https://www.lltjournal.org/item/10125-73710/",
+      "canonicalUrl": "https://www.lltjournal.org/item/10125-73710/",
+      "title": "Language teaching with high-immersion virtual reality: Developing TPACK through lesson planning",
+      "publishedAt": null,
+      "dateStatus": "unknown",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "unknown",
+      "author": null,
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS · 언어교육 동료심사 연구 · 제목·링크만 보관 · 2020년 이후 원문 CC BY-NC-ND 4.0(출처표시·비상업·원형유지)",
+        "url": "https://www.lltjournal.org/about/"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-llt-journal-9d4e3fa61d0011e561a5",
+      "sourceId": "llt-journal",
+      "url": "https://www.lltjournal.org/item/10125-73709/",
+      "canonicalUrl": "https://www.lltjournal.org/item/10125-73709/",
+      "title": "Who wrote this? An EAP think-aloud study on AI detection",
+      "publishedAt": null,
+      "dateStatus": "unknown",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "unknown",
+      "author": null,
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS · 언어교육 동료심사 연구 · 제목·링크만 보관 · 2020년 이후 원문 CC BY-NC-ND 4.0(출처표시·비상업·원형유지)",
+        "url": "https://www.lltjournal.org/about/"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-llt-journal-9e4a88b048ada85fd3e5",
+      "sourceId": "llt-journal",
+      "url": "https://www.lltjournal.org/item/10125-73708/",
+      "canonicalUrl": "https://www.lltjournal.org/item/10125-73708/",
+      "title": "Using GenAI tools in advanced Korean language classes for cultural competence development",
+      "publishedAt": null,
+      "dateStatus": "unknown",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "unknown",
+      "author": null,
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS · 언어교육 동료심사 연구 · 제목·링크만 보관 · 2020년 이후 원문 CC BY-NC-ND 4.0(출처표시·비상업·원형유지)",
+        "url": "https://www.lltjournal.org/about/"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-llt-journal-d12efe905882a2c1a36b",
+      "sourceId": "llt-journal",
+      "url": "https://www.lltjournal.org/item/10125-73707/",
+      "canonicalUrl": "https://www.lltjournal.org/item/10125-73707/",
+      "title": "Technology-specific L2 motivational quality and persistence in mobile-assisted language learning: A self-determination theory perspective",
+      "publishedAt": null,
+      "dateStatus": "unknown",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "unknown",
+      "author": null,
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS · 언어교육 동료심사 연구 · 제목·링크만 보관 · 2020년 이후 원문 CC BY-NC-ND 4.0(출처표시·비상업·원형유지)",
+        "url": "https://www.lltjournal.org/about/"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-llt-journal-ef0521340ed694951ddc",
+      "sourceId": "llt-journal",
+      "url": "https://www.lltjournal.org/item/10125-73691/",
+      "canonicalUrl": "https://www.lltjournal.org/item/10125-73691/",
+      "title": "Enhancing college students’ listening performance and self-efficacy using mobile annotated vlogs",
+      "publishedAt": null,
+      "dateStatus": "unknown",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "unknown",
+      "author": null,
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS · 언어교육 동료심사 연구 · 제목·링크만 보관 · 2020년 이후 원문 CC BY-NC-ND 4.0(출처표시·비상업·원형유지)",
+        "url": "https://www.lltjournal.org/about/"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-llt-journal-f58298e310e29db3f4f7",
+      "sourceId": "llt-journal",
+      "url": "https://www.lltjournal.org/item/10125-73670/",
+      "canonicalUrl": "https://www.lltjournal.org/item/10125-73670/",
+      "title": "Critical semiotic awareness in virtual exchange using digital cultural artefacts",
+      "publishedAt": null,
+      "dateStatus": "unknown",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "unknown",
+      "author": null,
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS · 언어교육 동료심사 연구 · 제목·링크만 보관 · 2020년 이후 원문 CC BY-NC-ND 4.0(출처표시·비상업·원형유지)",
+        "url": "https://www.lltjournal.org/about/"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-ad47f953217134966c21",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1997631",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1997631",
+      "title": "Supporting creative agency: metacognitive control and trust in generative AI art education",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Renhao Zhu",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-a5a74ee2630dd718c531",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1992560",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1992560",
+      "title": "A meta-analysis of the effects of aerobic exercise on inhibitory control in university students and an analysis of moderating effects",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Shaofeng Peng",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-9de29ae89dc9fcf3db38",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1989620",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1989620",
+      "title": "The relationship between family capital and academic burnout among undergraduate sports majors: the mediating role of academic self-efficacy",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Yang Lan",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-8f37e167de26809ba849",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1984417",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1984417",
+      "title": "Associations between bullying, depressive symptoms, parental supervision, and suicidal behaviors in Chinese adolescents: a cross-sectional study",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "La Mang",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-7ed53e334955db8c8306",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1983915",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1983915",
+      "title": "Academic motivation and basic psychological needs among university students in physical education and mountain sports: a self-determination theory study",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Stefan Alecu",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-15cb8119e1d736778783",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1980836",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1980836",
+      "title": "Psychological pathways linking body mass index and depression in women and men in a Colombian sociodemographic context",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Duban Romero",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-a450f8a802782b19988b",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1979598",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1979598",
+      "title": "Beyond “Environment → Outcome”: What taking the “Person × Environment” perspective seriously changes in research practice",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Giuseppina Spano",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-9a33ffeb07dda0534007",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1967032",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1967032",
+      "title": "Effects of self-regulated learning prompts on statistical problem-solving by goal orientation",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Aeng Muhidin",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-4d8ea85af772c62086e0",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1961297",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1961297",
+      "title": "Age-specific associations between perceptions of community environmental quality, restorative environmental perception and community identity: an interpretative perspective based on the Homo Urbanicus",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Chenda Guo",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-deb545889ee91d70bab2",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1950010",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1950010",
+      "title": "Adolescent ICT use profiles and creative thinking: evidence from 42 countries in PISA 2022",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Can Meşe",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-1bfb771df32e1c03c65d",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1943574",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1943574",
+      "title": "The association between wearable device use and exercise adherence: a chain mediation model of exercise self-efficacy and positive experiences",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Zitong Qin",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-f26026aaeda84e7f7cdb",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1930200",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1930200",
+      "title": "Independent predictors of non-suicidal self-injury among adolescents: a logistic regression model development study based on coping styles",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Qiuyu Yuan",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-caca32ce044e5d91c6e0",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1929837",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1929837",
+      "title": "Perceived social support, perceived stress, and athlete burnout among competitive athletes: a mediation model",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Weihan Yuan",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-5a5dbddf690f0778af58",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1922313",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1922313",
+      "title": "The mediating role of smartphone addiction in the relationship between desire for being liked and psychological resilience",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Ahmet Yavuz Mallı",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-9b177df732794f05464a",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1920857",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1920857",
+      "title": "Interpersonal communication competence, organizational climate, and academic burnout: examining indirect associations within the job demands–resources framework",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Batıkan Güngör Çağıran",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-3988870b8b5065482a83",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1914591",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1914591",
+      "title": "A study on age group differences in gender awareness among female employees in the hotel industry",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Hui Wang",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-fd17684ce8132e486d96",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1900905",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1900905",
+      "title": "Confidence–performance relationships in prospective and retrospective metacognition across local and global judgments",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Yuki Otomo",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-785b12480d70b68dc4d2",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1854454",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1854454",
+      "title": "The impact of telework intensity on employee proactive behavior: based on the uncertainty management theory",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Yixin Zhang",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-1391bc9e5097df43555c",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1788534",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1788534",
+      "title": "A multi-study exploratory investigation into choking under pressure frequency, self-compassion, and depressive symptoms in athletes",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Christopher Mesagno",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
+    },
+    {
+      "id": "article-frontiers-psychology-6ee43b0a7c407afed5c8",
+      "sourceId": "frontiers-psychology",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1753268",
+      "canonicalUrl": "https://www.frontiersin.org/articles/10.3389/fpsyg.2026.1753268",
+      "title": "Beyond social skills: emotion regulation as a potential mechanism linking physical exercise to social anxiety in left-behind adolescents",
+      "publishedAt": "2026-10-29T00:00:00Z",
+      "dateStatus": "valid",
+      "updatedAt": null,
+      "updatedDateStatus": "unknown",
+      "dateBasis": "published",
+      "author": "Li Wu",
+      "language": "en",
+      "tags": [],
+      "summary": "",
+      "coverage": "link_only",
+      "rights": {
+        "mode": "metadata_only",
+        "label": "공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인",
+        "url": "https://www.frontiersin.org/journals/psychology/about#copyright-statement"
+      },
+      "fetchedAt": "2026-10-29T08:10:44Z"
     }
   ]
 }

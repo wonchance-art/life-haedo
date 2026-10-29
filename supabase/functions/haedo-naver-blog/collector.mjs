@@ -166,7 +166,7 @@ function robotsPath(value) {
     return /^[A-Za-z0-9._~-]$/.test(char) ? char : '%' + hex.toUpperCase();
   });
 }
-export function robotsAllowed(text, path) {
+export function robotsAllowed(text, path, userAgent = UA) {
   need(typeof text === 'string' && encoder.encode(text).length <= LIMITS.robots, 'blocked');
   need(!/<\s*!?\/?(?:html|doctype)\b/i.test(text), 'blocked');
   path = robotsPath(path);
@@ -186,7 +186,7 @@ export function robotsAllowed(text, path) {
       rulesStarted = true; group.delay = value;
     }
   }
-  const explicit = groups.filter(g => g.agents.some(a => a !== '*' && UA.toLowerCase().includes(a)));
+  const explicit = groups.filter(g => g.agents.some(a => a !== '*' && userAgent.toLowerCase().includes(a)));
   const selected = explicit.length ? explicit : groups.filter(g => g.agents.includes('*'));
   // This first collector has no per-origin pacing scheduler. Do not silently
   // ignore a server's nonzero/unknown delay directive; keep ingestion blocked.

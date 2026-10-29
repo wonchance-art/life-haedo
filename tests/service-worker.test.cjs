@@ -5,13 +5,13 @@ const vm = require('node:vm');
 function harness({ failInstall = false, failInstallAsset, fetchResult } = {}) {
   const handlers = {}, removed = [], writes = [], entries = new Map(), requests = []; let skipped = false, claimed = false, resources, fetches = 0;
   const cache = { addAll: async urls => { resources = urls; if (failInstall || (failInstallAsset && urls.some(r => r.url.endsWith(failInstallAsset)))) throw new Error('offline'); },
-    match: async key => entries.get(key)?.clone(), put: async (key, response) => writes.push([key, response]) };
+    match: async key => entries.get(key)?.clone(), put: async (key, response) => writes.push([key, response]), delete: async key => entries.delete(key) };
   class WorkerRequest { constructor(input, options) { this.url = typeof input === 'string' ? new URL(input, 'https://test.invalid/life-haedo/').href : input.url; Object.assign(this, options); } }
-  const context = { URL, Request: WorkerRequest, Response,
+  const context = { URL, Request: WorkerRequest, Response, Headers, TextEncoder,
     self: { registration: { scope: 'https://test.invalid/life-haedo/' }, location: { origin: 'https://test.invalid' },
       addEventListener: (type, fn) => handlers[type] = fn,
       skipWaiting: async () => skipped = true, clients: { claim: async () => claimed = true } },
-    caches: { open: async () => cache, keys: async () => ['haedo-v1', context.currentCache, 'unrelated-app'], delete: async name => removed.push(name) },
+    caches: { open: async () => cache, keys: async () => ['haedo-v1', context.currentCache, 'haedo-discovery-feed-v1', 'haedo-discovery-feed-v2', 'unrelated-app'], delete: async name => removed.push(name) },
     fetch: async request => { fetches++; requests.push(request); if (fetchResult instanceof Error) throw fetchResult; return fetchResult || new Response('OK'); }
   };
   vm.runInNewContext(readFileSync(require.resolve('../sw.js'), 'utf8') + '\nthis.currentCache = CACHE;', context);
@@ -26,7 +26,7 @@ const request = (path, mode = 'cors') => ({ url: 'https://test.invalid/life-haed
 test('complete offline shell includes every runtime module', async () => {
   const h = harness(); await h.run('install');
   assert.equal(h.state().skipped, true);
-  for (const name of ['assets/life/annual-plan.js', 'assets/life/annual-plan-ui.js', 'assets/life/annual-plan.css', 'assets/app.js', 'assets/data.js', 'assets/sync.js', 'assets/workspace.js', 'assets/app.css',
+  for (const name of ['assets/life/discovery-private-remote.js','assets/life/discovery-reader-ui.js', 'assets/life/annual-plan.js', 'assets/life/annual-plan-ui.js', 'assets/life/annual-plan.css', 'assets/app.js', 'assets/data.js', 'assets/sync.js', 'assets/workspace.js', 'assets/app.css',
     'index.html', 'login.html', 'workspace.html', 'timeline.html', 'goals.html', 'habits.html', 'privacy.html',
     'assets/platform-config.js', 'assets/platform-auth.js', 'assets/platform-store.js', 'assets/platform-data.js',
     'assets/platform-ui.js', 'assets/platform.css', 'assets/platform-life-remote.js', 'assets/timeline-entry.js',
@@ -42,7 +42,7 @@ test('failed installation does not activate a partial shell', async () => {
 });
 test('activation removes old app caches but preserves unrelated caches', async () => {
   const h = harness(); await h.run('activate');
-  assert.deepEqual(h.removed, ['haedo-v1']); assert.equal(h.state().claimed, true);
+  assert.deepEqual(h.removed, ['haedo-v1', 'haedo-discovery-feed-v1']); assert.equal(h.state().claimed, true);
 });
 test('HTTP errors never replace a usable offline asset', async () => {
   const h = harness({ fetchResult: new Response('Not found', { status: 404 }) });
@@ -64,7 +64,7 @@ test('offline public home uses its exact installed document, without another-pag
   h.entries.set(request('').url,new Response('installed public home'));
   assert.equal(await (await h.run('fetch', request('', 'navigate'))).text(), 'installed public home');
 });
-for (const asset of ['assets/life/writing.js', 'assets/life/writing-ui.js', 'assets/life/storage.js', 'assets/life/icons.js', 'assets/life/workbench.js', 'assets/life/reflection-lenses.js', 'assets/life/reflection-lenses-ui.js', 'assets/life/rediscovery.js', 'assets/life/workbench-ui.js', 'assets/life/home.js', 'assets/life/workbench.css', 'assets/life/home.css']) {
+for (const asset of ['assets/life/discovery-private-remote.js','assets/life/discovery-reader-ui.js', 'assets/life/writing.js', 'assets/life/writing-ui.js', 'assets/life/storage.js', 'assets/life/icons.js', 'assets/life/workbench.js', 'assets/life/reflection-lenses.js', 'assets/life/reflection-lenses-ui.js', 'assets/life/rediscovery.js', 'assets/life/workbench-ui.js', 'assets/life/home.js', 'assets/life/workbench.css', 'assets/life/home.css']) {
   test(`a failed ${asset} installation keeps the old worker active`, async () => {
     const h = harness({ failInstallAsset: asset });
     await assert.rejects(h.run('install'));
@@ -156,4 +156,21 @@ test('interest review shell includes local worker without pre-caching remote mod
   const urls = h.state().resources.map(request => request.url);
   for (const path of ['assets/life/interest-model-loader.js', 'assets/life/interest-model-worker.js', 'assets/life/interest-analysis.js', 'assets/life/interest-profile.js', 'assets/life/interest-policy.js', 'assets/life/interest-ui.js', 'assets/life/interest.css']) assert.ok(urls.some(url => url.endsWith('/' + path)), path);
   assert.ok(urls.every(url => url.startsWith('https://test.invalid/life-haedo/')));
+});
+
+test('public discovery cache rejects bodies and private receipts in fresh and stale responses', async () => {
+  for (const extra of [{ bodyText: 'PRIVATE_BODY' }, { images: [] }, { acquisition: {} }, { privateReader: true }, { unknownPrivateField: 'PRIVATE' }, { updatedDateStatus: { privateText: 'PRIVATE' } }]) {
+    const article = { coverage: 'link_only', rights: { mode: 'metadata_only' }, summary: '', ...extra };
+    const body = JSON.stringify({ schemaVersion: 1, sources: [], articles: [article] });
+    const h = harness({ fetchResult: new Response(body, { headers: { 'content-type': 'application/json' } }) });
+    const url = request('assets/life/discovery-feed.json');
+    h.entries.set(url.url, new Response(body));
+    const result = await h.run('fetch', url);
+    assert.equal(result.type, 'error'); assert.equal(h.writes.length, 0); assert.equal(h.entries.has(url.url), false);
+  }
+});
+test('private article POST never enters the public service worker cache', async () => {
+  const h = harness();
+  assert.equal(await h.run('fetch', { url: 'https://test.supabase.co/functions/v1/haedo-discovery-private', method: 'POST', headers: new Headers({ Authorization: 'Bearer synthetic' }) }), undefined);
+  assert.equal(h.writes.length, 0); assert.equal(h.state().fetches, 0);
 });

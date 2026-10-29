@@ -18,7 +18,7 @@ test('repeat public build removes stale private canary and old SDK while preserv
     await assert.rejects(fs.access(path.join(target,'vendor/supabase.js')));
     await fs.access(path.join(target,'vendor/supabase/supabase.js'));await fs.access(path.join(target,'life.html'));
     await fs.access(path.join(target,'assets/life/icons.js'));await fs.access(path.join(target,'vendor/lucide/LICENSE'));
-    for(const asset of ['discovery.js','discovery-profile.js','discovery-settings.js','discovery-language-settings.js','discovery-actions.js','discovery-recommendations.js','discovery-reading.js','discovery-reading-ui.js','discovery-ui.js','discovery.css','discovery-feed.json']){
+    for(const asset of ['discovery.js','discovery-profile.js','discovery-settings.js','discovery-language-settings.js','discovery-actions.js','discovery-recommendations.js','discovery-reading.js','discovery-reading-ui.js','discovery-private-remote.js','discovery-reader-ui.js','discovery-ui.js','discovery.css','discovery-feed.json']){
       const relative=path.join('assets/life',asset);
       assert.deepEqual(await fs.readFile(path.join(target,relative)),await fs.readFile(path.join(root,relative)),`${relative}: published bytes match source`);
     }
@@ -34,7 +34,7 @@ test('repeat public build removes stale private canary and old SDK while preserv
       }
       if(['index.html','life.html'].includes(name)){
         const scripts=[...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(match=>match[1]);
-        const ordered=['assets/life/core.js','assets/life/workbench.js', 'assets/life/rediscovery.js','assets/life/discovery.js','assets/life/discovery-profile.js','assets/life/discovery-settings.js','assets/life/discovery-language-settings.js','assets/life/discovery-actions.js','assets/life/discovery-recommendations.js','assets/life/discovery-ui.js','assets/life/storage.js','assets/life/workbench-ui.js','assets/life/home.js','assets/life/ui.js','assets/life/shell.js'];
+        const ordered=['assets/life/core.js','assets/life/workbench.js', 'assets/life/rediscovery.js','assets/life/discovery.js','assets/life/discovery-profile.js','assets/life/discovery-settings.js','assets/life/discovery-language-settings.js','assets/life/discovery-actions.js','assets/life/discovery-recommendations.js','assets/life/discovery-private-remote.js','assets/life/discovery-reader-ui.js','assets/life/discovery-ui.js','assets/life/storage.js','assets/life/workbench-ui.js','assets/life/home.js','assets/life/ui.js','assets/life/shell.js'];
         for(let index=0;index<ordered.length;index++){
           assert.equal(scripts.filter(src=>src===ordered[index]).length,1,`${name}: ${ordered[index]} must load once`);
           if(index)assert.ok(scripts.indexOf(ordered[index-1])<scripts.indexOf(ordered[index]),`${name}: dependency order`);

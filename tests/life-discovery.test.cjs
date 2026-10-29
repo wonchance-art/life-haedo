@@ -17,6 +17,27 @@ const profile = label => ({ manual: [{ id: 'manual-1', label }] });
 const rank = (catalog, label = '인공지능', extra = {}) => Discovery.rank(catalog, { profile: profile(label), now: NOW, ...extra });
 const response = (catalog, headers) => new Response(JSON.stringify(catalog), { headers: { 'content-type': 'application/json', ...headers } });
 const deferred = () => { let resolve; const promise = new Promise(yes => { resolve = yes; }); return { resolve, promise }; };
+function rasterHeader(mimeType, width = 1, height = 1, variant = 'VP8X') {
+  if (mimeType === 'image/png') {
+    const bytes = Buffer.alloc(33); Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes);
+    bytes.writeUInt32BE(13, 8); bytes.write('IHDR', 12); bytes.writeUInt32BE(width, 16); bytes.writeUInt32BE(height, 20); return bytes;
+  }
+  if (mimeType === 'image/jpeg') {
+    const bytes = Buffer.from([255, 216, 255, 224, 0, 4, 0, 0, 255, 192, 0, 11, 8, 0, 0, 0, 0, 1, 1, 17, 0, 255, 217]);
+    bytes.writeUInt16BE(height, 13); bytes.writeUInt16BE(width, 15); return bytes;
+  }
+  const bytes = Buffer.alloc(variant === 'VP8L' ? 26 : 30); bytes.write('RIFF'); bytes.writeUInt32LE(bytes.length - 8, 4); bytes.write('WEBP', 8); bytes.write(variant, 12);
+  bytes.writeUInt32LE(variant === 'VP8L' ? 5 : 10, 16);
+  if (variant === 'VP8X') { bytes.writeUIntLE(width - 1, 24, 3); bytes.writeUIntLE(height - 1, 27, 3); }
+  else if (variant === 'VP8L') { bytes[20] = 0x2f; bytes.writeUInt32LE((width - 1) + (height - 1) * 16384, 21); }
+  else { Buffer.from([157, 1, 42]).copy(bytes, 23); bytes.writeUInt16LE(width, 26); bytes.writeUInt16LE(height, 28); }
+  return bytes;
+}
+function picture(extra = {}) {
+  return { mimeType: 'image/png', dataBase64: rasterHeader('image/png').toString('base64'),
+    alt: '합성 그림', caption: '합성 설명', credit: '합성 작성자', license: { label: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/' },
+    sourceUrl: 'https://d2.naver.com/images/synthetic.png', ...extra };
+}
 test('canonical identity removes only tracking and fragments while preserving raw meaningful query spelling and order', () => {
   assert.equal(Discovery.canonicalUrl('https://D2.NAVER.COM:443/a?newsId=17&q=one%20two&x=~&x=2&utm_source=r&ref=book#section'), 'https://d2.naver.com/a?newsId=17&q=one%20two&x=~&x=2&ref=book');
   assert.notEqual(Discovery.canonicalUrl('https://d2.naver.com/a?id=1'), Discovery.canonicalUrl('https://d2.naver.com/a?id=2'));
@@ -225,10 +246,75 @@ test('source refresh failure retains last-good public material with explicit sta
   const catalog = feed([article('old', '인공지능')]); Object.assign(catalog.sources[0], { status: 'error', stale: true, error: '공개 공급 갱신 실패', lastSuccessAt: '2026-10-10T00:00:00Z' });
   const result = rank(catalog); assert.equal(result.items.length, 1); assert(result.metadata.stale); assert.equal(result.metadata.sources[0].status, 'error');
 });
-test('import input is a link-only review even when public body is available', async () => {
-  const input = Discovery.toImportInput(article('body', '인공지능 연구', { bodyText: '공개 본문', coverage: 'full_text', rights: rights('full_text_allowed') }));
-  assert.equal(input.text, ''); assert.equal(input.authorRelation, 'other'); assert.equal(input.coverage.status, 'link_only');
-  const bundle = Core.createWorkspace(); const prepared = await Core.prepareImport(input, bundle); assert.equal(prepared.version.contentText, null); assert.equal(prepared.version.coverage.status, 'link_only');
+test('import review preserves permitted exact body or summary and states the media omission', async () => {
+  const original = '\r\n공개 😀 본문\r\n\r\n마지막 줄\n', item = article('body', '인공지능 연구', { bodyText: original, coverage: 'full_text', rights: rights('full_text_allowed') });
+  const input = Discovery.toImportInput(item);
+  assert.equal(input.text.slice(0, original.length), original); assert.equal(input.authorRelation, 'other'); assert.equal(input.coverage.status, 'full_text');
+  const footer = input.text.slice(original.length); assert(footer.startsWith('\n\n[해도 출처 정보]\n'));
+  for (const line of ['원문 본문에 포함되지 않습니다.', '제목: 인공지능 연구', '원저자: 공개 작성자', '원문 URL: ' + item.url,
+    '권리: ' + item.rights.label, '권리 URL: ' + item.rights.url, '서식을 평문으로 단순화했습니다.', '사진·영상은 보관하지 않았습니다.']) assert(footer.includes(line), line);
+  assert.deepEqual(input.coverage.omissions, ['사진·영상 미보관']);
+  const bundle = Core.createWorkspace(); const prepared = await Core.prepareImport(input, bundle); assert.equal(prepared.version.contentText, input.text); assert.equal(prepared.version.coverage.status, 'full_text');
+  const summary = Discovery.toImportInput(article('summary', '요약', { summary: '공개 요약\n\n두 번째 문단', coverage: 'summary', rights: rights('summary_allowed') }));
+  const partial = await Core.prepareImport(summary, bundle); assert(partial.version.contentText.startsWith('공개 요약\n\n두 번째 문단\n\n[해도 출처 정보]\n')); assert.equal(partial.version.coverage.status, 'partial');
+  assert(partial.version.contentText.includes('보관 범위: 공개 요약 · 원문 전체 미확보'));
+  assert.deepEqual(partial.version.coverage.omissions, ['원문 전체 미확보', '사진·영상 미보관']);
+  const link = await Core.prepareImport(Discovery.toImportInput(article('link', '제목')), bundle);
+  assert.equal(link.version.contentText, null); assert.equal(link.version.coverage.status, 'link_only');
+  for (const invalid of [{ coverage: 'full_text', bodyText: '권한 없는 본문' }, { coverage: 'summary', summary: '권한 없는 요약' }]) {
+    assert.throws(() => Discovery.toImportInput(article('invalid', '제목', invalid)), { code: 'discovery_feed_invalid' });
+  }
+});
+test('optional embedded pictures preserve old feeds and normalize safe licensed bytes without body mutation', () => {
+  const bodyText = '첫째 문단\n\n둘째 문단', original = article('body', '본문', { bodyText, coverage: 'full_text', rights: rights('full_text_allowed') });
+  const prior = Discovery.validateFeed(feed([original]), { now: NOW }); assert(!Object.hasOwn(prior.articles[0], 'images'));
+  const input = feed([{ ...original, images: [picture({ afterParagraph: 1, alt: '<img onerror=alert(1)>' })] }]);
+  const before = structuredClone(input), normalized = Discovery.validateFeed(input, { now: NOW });
+  assert.deepEqual(input, before); assert.equal(normalized.articles[0].bodyText, bodyText);
+  assert.equal(normalized.articles[0].images[0].afterParagraph, 1); assert.equal(normalized.articles[0].images[0].alt, '<img onerror=alert(1)>');
+  assert.deepEqual(Discovery.validateFeed(normalized, { now: NOW }), normalized);
+});
+test('unsafe, oversized or malformed optional images are removed while readable text survives', () => {
+  const oversized = Buffer.alloc(Discovery.LIMITS.imageBytes + 1); rasterHeader('image/png').copy(oversized);
+  const bad = [picture({ mimeType: 'image/svg+xml' }), picture({ mimeType: 'image/jpeg' }), picture({ dataBase64: '<svg/>' }),
+    picture({ dataBase64: Buffer.concat([rasterHeader('image/png'), Buffer.from([0])]).toString('base64').replace('A==', 'B==') }), picture({ dataBase64: picture().dataBase64 + '\n' }),
+    picture({ dataBase64: oversized.toString('base64') }), picture({ license: { label: 'CC BY 4.0', url: 'https://evil.example/by/4.0/' } }),
+    picture({ sourceUrl: 'https://d2.naver.com.evil.example/p.png' }), picture({ sourceUrl: 'https://u:p@d2.naver.com/p.png' }),
+    picture({ sourceUrl: 'data:image/png;base64,AAAA' }), picture({ sourceUrl: 'https://d2.naver.com/p.png#x' }),
+    picture({ afterParagraph: -1 }), picture({ afterParagraph: 1.5 }), picture({ afterParagraph: 1 }), picture({ credit: '' }),
+    picture({ path: 'https://evil.example/p.png' })];
+  for (const image of bad) {
+    const normalized = Discovery.validateFeed(feed([article('body', '본문', { bodyText: '안전한 본문', coverage: 'full_text', rights: rights('full_text_allowed'), images: [image] })]), { now: NOW });
+    assert.equal(normalized.articles.length, 1); assert.equal(normalized.articles[0].bodyText, '안전한 본문');
+    assert(!Object.hasOwn(normalized.articles[0], 'images'), JSON.stringify(image).slice(0, 150)); assert.equal(normalized.validation.invalid.length, 0);
+  }
+  for (const images of [null, {}, [picture(), picture(), picture()]]) {
+    const normalized = Discovery.validateFeed(feed([article('a', '제목', { images })]), { now: NOW });
+    assert.equal(normalized.articles.length, 1); assert(!Object.hasOwn(normalized.articles[0], 'images'));
+  }
+});
+test('decoded image budgets span the feed and accept only declared raster signatures', () => {
+  const large = Buffer.alloc(Discovery.LIMITS.imageBytes); rasterHeader('image/png').copy(large);
+  const image = picture({ dataBase64: large.toString('base64') });
+  const normalized = Discovery.validateFeed(feed([article('a', '제목', { images: [image, image] }), article('b', '제목', { images: [image, image] })]), { now: NOW });
+  assert.equal(normalized.articles[0].images.length, 2); assert.equal(normalized.articles[1].images.length, 1);
+  const rasters = [picture({ mimeType: 'image/jpeg', dataBase64: rasterHeader('image/jpeg').toString('base64') }),
+    picture({ mimeType: 'image/webp', dataBase64: rasterHeader('image/webp').toString('base64') })];
+  assert.equal(Discovery.validateFeed(feed([article('a', '제목', { images: rasters })]), { now: NOW }).articles[0].images.length, 2);
+});
+test('raster header dimensions reject decompression-sized images and truncated headers before rendering', () => {
+  for (const [mimeType, variant] of [['image/png'], ['image/jpeg'], ['image/webp', 'VP8X'], ['image/webp', 'VP8L'], ['image/webp', 'VP8 ']]) {
+    for (const [width, height, accepted] of [[1, 1, true], [4096, 4096, true], [4097, 2, false], [2, 4097, false]]) {
+      const dataBase64 = rasterHeader(mimeType, width, height, variant).toString('base64');
+      const normalized = Discovery.validateFeed(feed([article('a', '제목', { images: [picture({ mimeType, dataBase64 })] })]), { now: NOW });
+      assert.equal(!!normalized.articles[0].images, accepted, mimeType + ':' + variant + ':' + width + 'x' + height);
+    }
+    const truncated = rasterHeader(mimeType, 1, 1, variant).subarray(0, 22).toString('base64');
+    const normalized = Discovery.validateFeed(feed([article('a', '본문 유지', { images: [picture({ mimeType, dataBase64: truncated })] })]), { now: NOW });
+    assert.equal(normalized.articles.length, 1); assert(!normalized.articles[0].images);
+  }
+  const malformed = [rasterHeader('image/png', 0, 1), rasterHeader('image/png', 1, 0), rasterHeader('image/png', 0xffffffff, 1)];
+  for (const bytes of malformed) assert(!Discovery.validateFeed(feed([article('a', '제목', { images: [picture({ dataBase64: bytes.toString('base64') })] })]), { now: NOW }).articles[0].images);
 });
 test('client requests nothing until explicit load and fetches only fixed public same-origin GET with no credentials, body or query', async () => {
   const requests = []; const client = Discovery.create({ now: () => NOW, fetch: async (url, options) => { requests.push({ url, options }); return response(feed([article('a', '인공지능')])); } });

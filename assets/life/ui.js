@@ -210,9 +210,25 @@
     const editingInput = () => { naverMediaReturn = null; inputGeneration += 1; global.HaedoMotion?.cancel(main); };
     const annualPlanUI = global.HaedoLife.AnnualPlanUI?.create({ container: main, storage,
       getBundle: () => state.bundle, isCurrent: () => !disposed && state.mode === 'annual-plan' });
+    let newsReaderBackPending = false;
+    const privateDiscovery = storage.isAccountScoped && global.HaedoLife.DiscoveryPrivateRemote?.create
+      ? global.HaedoLife.DiscoveryPrivateRemote.create({ auth, storage,
+        isCurrent: workspaceId => !disposed && state.mode === 'external-discovery' && state.bundle?.workspaceId === workspaceId }) : null;
     const externalDiscoveryUI = global.HaedoLife.DiscoveryUI?.create({ container: main, storage,
       getBundle: () => state.bundle, isCurrent: () => !disposed && state.mode === 'external-discovery',
+      loadPrivateArticle: privateDiscovery?.loadPrivateArticle,
       onOpenInterests: () => navigate('interests'),
+      onReaderOpen: () => {
+        if (disposed || state.mode !== 'external-discovery') return;
+        // A same-route entry makes browser Back return to the list. Article
+        // content and private account/workspace identifiers never enter history.
+        global.history.pushState({ haedoNewsReader: true }, '', global.location.href);
+      },
+      onReaderClose: ({ fromHistory }) => {
+        if (fromHistory || disposed || global.history.state?.haedoNewsReader !== true) return;
+        newsReaderBackPending = true;
+        global.history.back();
+      },
       onImport: (article, context = {}) => {
         if (disposed || state.mode !== 'external-discovery') return;
         return navigate('import', { externalImport: { article, workspaceId: state.bundle.workspaceId,
@@ -1314,10 +1330,12 @@
       const { navigationMotion, sectionPosition, sourceEdit, selection, groupId, pagePreview, discovery, writing, reimport, externalImport, book, bookList, chapterImport: chapterImportOptions, pageDraftId, searchTarget, nineTarget, collectionItemId, originFocusKey, featureNavigation, restoreViewOrigin, viewOrigin, exactPost, restorePostOrigin, ...viewOptions } = options || {};
       if (externalImport) {
         if (mode !== 'import' || externalImport.workspaceId !== state.bundle.workspaceId) return false;
-        const input = global.HaedoLife.Discovery.toImportInput(externalImport.article);
+        const input = externalImport.article.privateReader === true
+          ? global.HaedoLife.DiscoveryPrivateRemote.toImportInput(externalImport.article)
+          : global.HaedoLife.Discovery.toImportInput(externalImport.article);
         newDraft();
         Object.assign(state.stage.input, input);
-        state.importMethod = 'link';
+        state.importMethod = input.text ? 'text' : 'link';
         state.editTick = 1;
         externalImportContext = { workspaceId: state.bundle.workspaceId, generation: workspaceGeneration,
           stageId: state.stage.stageId, committed: null,
@@ -1519,7 +1537,7 @@
       else url.searchParams.delete('view');
       const destination = url.pathname + url.search + url.hash;
       if (destination !== global.location.pathname + global.location.search + global.location.hash)
-        global.history[push ? 'pushState' : 'replaceState'](null, '', destination);
+        global.history[push && !(mode !== 'external-discovery' && global.history.state?.haedoNewsReader === true) ? 'pushState' : 'replaceState'](null, '', destination);
     }
 
     async function navigateSection(section, push = true) {
@@ -1530,7 +1548,10 @@
       }
       const previousSection = sectionFor(state.mode);
       const sectionRoot = section === 'news' ? 'external-discovery' : section === 'records' ? 'sources' : section;
-      if (section === previousSection && state.mode === sectionRoot) return;
+      if (section === previousSection && state.mode === sectionRoot) {
+        if (section === 'news') externalDiscoveryUI?.closeReader();
+        return;
+      }
       if (section === previousSection && state.mode === 'source' && ['sources', 'topics'].includes(state.returnContext?.mode)) return returnToResults();
       const token = ++navigationGeneration, workspace = workspaceGeneration, workspaceId = state.bundle.workspaceId;
       const account = state.syncAccountKey;
@@ -1567,6 +1588,14 @@
     const popstate = guarded(async () => {
       if (!state.bundle) return;
       let mode = routeMode();
+      if (newsReaderBackPending) {
+        newsReaderBackPending = false;
+        if (mode === 'external-discovery' && state.mode === mode) { externalDiscoveryUI?.restorePosition(); return; }
+      }
+      if (mode === 'external-discovery' && state.mode === mode && externalDiscoveryUI?.hasReader()) {
+        externalDiscoveryUI.closeReader({ fromHistory: true });
+        return;
+      }
       if (sectionFor(state.mode) === 'records') lastRecordMode = state.mode;
       if (mode === 'sources' && lastRecordMode === 'source') mode = 'source';
       if (mode === 'import' && lastRecordMode === 'batch') mode = 'batch';
@@ -5206,6 +5235,7 @@
       interestUI?.dispose();
       annualPlanUI?.dispose();
       externalDiscoveryUI?.dispose();
+      privateDiscovery?.dispose();
       originalAttachmentsUI?.dispose(); originalAttachmentsUI = null;
       compositionPanel?.dispose(); compositionPanel = null;
       if (accountBlogUI && accountBlogWorkspace) accountBlogViews.set(accountBlogWorkspace, accountBlogUI.getView?.());

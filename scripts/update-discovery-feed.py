@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Fetch reviewed public RSS/Atom metadata; never receives user interests or article bodies.
+"""Fetch reviewed public-feed metadata only.
 
-No third-party dependencies. The fixed sources intentionally have metadata-only
-rights: descriptions, content, images, comments and embedded HTML are not copied.
+No third-party dependencies, article bodies, images or user interests. Private
+article reading is handled by the authenticated account reader, never this file.
 """
 from __future__ import annotations
 
@@ -30,10 +30,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = ROOT / 'assets/life/discovery-feed.json'
-USER_AGENT = 'HaedoDiscoveryFeed/1.0 (public RSS metadata only)'
+USER_AGENT = 'HaedoDiscoveryFeed/1.2 (reviewed public feed metadata)'
 MAX_FEED_BYTES = 2 * 1024 * 1024
 MAX_ROBOTS_BYTES = 128 * 1024
-MAX_PREVIOUS_BYTES = 2 * 1024 * 1024
+MAX_PREVIOUS_BYTES = 4 * 1024 * 1024
 STALE_AFTER_DAYS = 7
 TRACKING = {'fbclid', 'gclid', 'dclid', 'msclkid', 'igshid', '_hsenc', '_hsmi', 'mc_cid', 'mc_eid'}
 ATOM = 'http://www.w3.org/2005/Atom'
@@ -76,7 +76,7 @@ SOURCES = (
      'url': 'https://www.frontiersin.org/journals/psychology',
      'feedUrl': 'https://www.frontiersin.org/journals/psychology/rss', 'allowedHosts': ['www.frontiersin.org'],
      'language': 'en', 'rights': {'mode': 'metadata_only',
-     'label': '공식 RSS · 원문 CC-BY(출처표시·변경명시) · 제목·링크·첫 작성자·발행일만 · 초록·본문·이미지 미제공',
+     'label': '공식 RSS 제목·링크·작성자 · 원문 권리 유지 · 본문·이미지는 개인 읽기에서 확인',
      'url': 'https://www.frontiersin.org/journals/psychology/about#copyright-statement'}},
 )
 
@@ -311,8 +311,9 @@ def fixture_fetch(directory):
     return fetch
 
 
-def check_robots(source, fetcher):
-    robots_url = urllib.parse.urlunsplit(('https', urllib.parse.urlsplit(source['feedUrl']).hostname, '/robots.txt', '', ''))
+def check_robots(source, fetcher, target_url=None):
+    target_url = approved_url(target_url or source['feedUrl'], source['allowedHosts'])
+    robots_url = urllib.parse.urlunsplit(('https', urllib.parse.urlsplit(target_url).hostname, '/robots.txt', '', ''))
     try:
         body, metadata = fetcher(robots_url, source, MAX_ROBOTS_BYTES)
     except urllib.error.HTTPError as cause:
@@ -326,8 +327,8 @@ def check_robots(source, fetcher):
     parser = urllib.robotparser.RobotFileParser()
     parser.set_url(robots_url)
     parser.parse(text.splitlines())
-    if not parser.can_fetch(USER_AGENT, source['feedUrl']):
-        raise FeedError('공식 robots 정책에서 피드 수집을 허용하지 않음')
+    if not parser.can_fetch(USER_AGENT, target_url):
+        raise FeedError('공식 robots 정책에서 수집을 허용하지 않음')
     return {'status': 'allowed', 'url': robots_url, 'responseSHA256': metadata['sha256']}
 
 
@@ -364,7 +365,7 @@ def article_date(article):
 
 def parse_feed(body, source, now, limit=20):
     if source['rights']['mode'] != 'metadata_only':
-        raise FeedError('검토되지 않은 재배포 권한')
+        raise FeedError('공개 목록은 제목·링크 정보만 허용')
     if len(body) > MAX_FEED_BYTES:
         raise FeedError('피드 크기 제한 초과')
     # The reviewed feeds are UTF-8. Reject other encodings before inspecting XML
@@ -448,7 +449,7 @@ def parse_feed(body, source, now, limit=20):
 
 
 def previous_articles(previous, source):
-    """Retain only known public metadata from the last catalog, never unknown body fields."""
+    """Retain known metadata; never carry old article content into public output."""
     kept = []
     for item in previous.get('articles', []):
         if not isinstance(item, dict) or item.get('sourceId') != source['id']:
@@ -527,9 +528,11 @@ def refresh_catalog(previous, now, fetcher=fetch_public):
             results.append(future.result())
     catalog = {'schemaVersion':1,'generatedAt':iso(now),'sources':[row[0] for row in results],
                'articles':[article for row in results for article in row[1]]}
+    if len((json.dumps(catalog, ensure_ascii=False, indent=2) + '\n').encode()) > MAX_PREVIOUS_BYTES:
+        raise FeedError('갱신 카탈로그 크기 제한 초과: 기존 파일 보존')
     report = {'generatedAt':iso(now),'sourceCount':len(results),'okSources':sum(row[0]['status']=='ok' for row in results),
-              'articleCount':len(catalog['articles']),'coverageCounts':{'link_only':len(catalog['articles']),'summary':0,'full_text':0},
-              'sources':[row[2] for row in results], 'scope':'Official public feeds only. No user interests, private documents, article-page scraping or remote summarization.'}
+              'articleCount':len(catalog['articles']),'coverageCounts':{coverage:sum(a['coverage']==coverage for a in catalog['articles']) for coverage in ('link_only','summary','full_text')},
+              'sources':[row[2] for row in results], 'scope':'Reviewed official public-feed metadata only. No article bodies, images, user interests or private account content.'}
     return catalog, report
 
 
