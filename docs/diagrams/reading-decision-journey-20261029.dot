@@ -18,13 +18,14 @@ digraph ReadingDecisionJourney {
         <TD WIDTH="330"><FONT POINT-SIZE="18"><B>③ 필요한 만큼 선택</B></FONT></TD>
       </TR>
       <TR>
-        <TD BORDER="1" COLOR="#ccd6d1" BGCOLOR="#f7f9f8" HEIGHT="228" CELLPADDING="18">
+        <TD BORDER="1" COLOR="#ccd6d1" BGCOLOR="#f7f9f8" HEIGHT="250" CELLPADDING="18">
           <B>관심 · 현재의 질문</B><BR/><BR/>
           뉴스 후보에서 고르기<BR/>기존 자료 다시 찾기
         </TD>
         <TD><FONT POINT-SIZE="25" COLOR="#84958f">→</FONT></TD>
         <TD BORDER="1" COLOR="#ccd6d1" BGCOLOR="#f7f9f8" CELLPADDING="18">
-          <B>확보한 본문 → 내부 읽기</B><BR/><BR/>
+          <B>확보한 본문 → 내부 읽기</B><BR/>
+          <FONT POINT-SIZE="14">필요한 문장·근거 선택</FONT><BR/><BR/>
           링크만 있음 → 외부 원문 열기<BR/><BR/>
           <FONT POINT-SIZE="13" COLOR="#5c6b65">번역 화면과 원문은 구분</FONT>
         </TD>
@@ -32,8 +33,8 @@ digraph ReadingDecisionJourney {
         <TD BORDER="1" COLOR="#a5c1b7" BGCOLOR="#f0f6f3" CELLPADDING="18">
           <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">
             <TR><TD HEIGHT="44"><FONT POINT-SIZE="17" COLOR="#145b50"><B>읽고 끝</B></FONT></TD></TR>
-            <TR><TD HEIGHT="69"><B>메모 · 판단</B><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">기존 작성 준비 활용</FONT></TD></TR>
-            <TR><TD HEIGHT="69"><B>내 글 · 작은 행동</B><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">다음 행동은 메모 · 자동 일정 아님</FONT></TD></TR>
+            <TR><TD HEIGHT="80"><B>개인 메모 계정 보관</B><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">명시 저장 → 기본 계정 전송<BR/>서버 반영을 확인해 보관 완료</FONT></TD></TR>
+            <TR><TD HEIGHT="90"><B>목표·습관 연결 · 선택 글쓰기</B><BR/><FONT POINT-SIZE="13" COLOR="#5c6b65">선택 문장 → 기존 목표 또는 습관<BR/>메모·월 계획 경유는 선택</FONT></TD></TR>
           </TABLE>
         </TD>
       </TR>
@@ -43,19 +44,19 @@ digraph ReadingDecisionJourney {
         <TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">
           <TR>
             <TD WIDTH="448" BORDER="1" COLOR="#ccd6d1" BGCOLOR="#f7f9f8" CELLPADDING="16">
-              <FONT POINT-SIZE="16"><B>같은 기기 · 목록으로 복귀</B></FONT><BR/><BR/>
-              <FONT POINT-SIZE="14">실제로 보존한 출발 목록·위치로</FONT>
+              <FONT POINT-SIZE="16"><B>같은 기기 · 읽던 맥락으로 복귀</B></FONT><BR/><BR/>
+              <FONT POINT-SIZE="14">정확한 원문 판·선택 위치로<BR/>출발 목록·초점 유지</FONT>
             </TD>
             <TD WIDTH="20"></TD>
             <TD WIDTH="498" BORDER="1" COLOR="#ccd6d1" BGCOLOR="#f7f9f8" CELLPADDING="16">
               <FONT POINT-SIZE="16"><B>다른 기기 · 경로별 이어가기</B></FONT><BR/><BR/>
-              <FONT POINT-SIZE="14">선택 준비 이어쓰기: 기존<BR/>일반 글 근거 연결: 실행 인계</FONT>
+              <FONT POINT-SIZE="14">계정 메모: 같은 자료에서 재개<BR/>기존 작성 준비: 선택 전송<BR/>일반 글 근거 연결: 별도 인계</FONT>
             </TD>
           </TR>
         </TABLE>
       </TD></TR>
       <TR><TD COLSPAN="5" HEIGHT="44"><FONT POINT-SIZE="13" COLOR="#5c6b65">확인하지 못한 원문·판·위치는 추정하지 않는다.</FONT></TD></TR>
-      <TR><TD COLSPAN="5" HEIGHT="34"><FONT POINT-SIZE="12" COLOR="#5c6b65">기존 화면을 연결하는 설계 · 새 메뉴·대시보드 추가 없음</FONT></TD></TR>
+      <TR><TD COLSPAN="5" HEIGHT="34"><FONT POINT-SIZE="12" COLOR="#5c6b65">작성 준비는 독립 기능 · 전체 자동 이관 없음</FONT></TD></TR>
       <TR><TD COLSPAN="5" HEIGHT="34"><FONT POINT-SIZE="12" COLOR="#5c6b65">설계안 · 구현·출시는 명세 참조 · 2026.10.29</FONT></TD></TR>
     </TABLE>
   >];

@@ -1,0 +1,341 @@
+{
+  "date": "2026-10-29",
+  "scope": "Independent QA of one synthetic, memory-only HTML prototype. No product account, backend, deployment, real-device or human-usefulness claim.",
+  "checks": [
+    {
+      "name": "Initial plan and original values preserved; inclusive date boundary and one-day period",
+      "status": "passed"
+    },
+    {
+      "name": "Existing monthly/direct link requires target, cancels duplicate creation and preserves target data",
+      "status": "passed"
+    },
+    {
+      "name": "Current weekday change, keyboard cancel and explicit duplicate-date correction preserve other dates",
+      "status": "passed"
+    },
+    {
+      "name": "Frozen saved review and optional note remain unchanged after current plan/check/progress edits",
+      "status": "passed"
+    },
+    {
+      "name": "Reading alone ends without memo/link/review; reload resets the synthetic session",
+      "status": "passed"
+    },
+    {
+      "name": "Direct reading path: exact source, unselected target rejection, cancel and session draft/selection preservation",
+      "status": "passed"
+    },
+    {
+      "name": "Controlled action comparison: direct",
+      "status": "passed"
+    },
+    {
+      "name": "Controlled action comparison: memo",
+      "status": "passed"
+    },
+    {
+      "name": "Memo selection excludes private remainder, blocks unsaved edit and resolves repeated phrase explicitly",
+      "status": "passed"
+    },
+    {
+      "name": "Period scope: plan-only accepted, empty scope rejected, habit-only excludes unselected goal/month payload",
+      "status": "passed"
+    },
+    {
+      "name": "Memo connection success exposes an explicit return to the same memo, separate from source return",
+      "status": "passed"
+    },
+    {
+      "name": "A linked reading target carries its period scope without unrelated default selections",
+      "status": "passed",
+      "detail": {
+        "targetKinds": [
+          "habit",
+          "goal"
+        ]
+      }
+    },
+    {
+      "name": "Unselected target modification does not invalidate a draft; selected target change preserves note and requires review",
+      "status": "passed"
+    },
+    {
+      "name": "Preview and saved review source links return to the exact reading fixture without altering saved content",
+      "status": "passed"
+    },
+    {
+      "name": "390px reading screen and keyboard entry",
+      "status": "passed"
+    },
+    {
+      "name": "820px selected scope screen",
+      "status": "passed"
+    },
+    {
+      "name": "1440px saved/current comparison screen",
+      "status": "passed"
+    }
+  ],
+  "comparison": {
+    "direct": {
+      "start": "Same source/version and preselected sentence visible in reader; no memo or relation",
+      "end": "Same source visible; one relation with same intent and target; original plan/habit/goal unchanged",
+      "sourceId": "example-source-reading",
+      "sourceVersionId": "example-source-reading-v1",
+      "intent": "퇴근 후 짧게 읽고, 기억에 남는 문장을 남긴다.",
+      "targetId": "example-goal-book",
+      "actionCount": 4,
+      "actions": [
+        "Open direct connection",
+        "Choose the existing book goal",
+        "Confirm connection",
+        "Return to the same source"
+      ],
+      "reenteredText": 0,
+      "extraMemo": false
+    },
+    "memo": {
+      "start": "Same source/version and preselected sentence visible in reader; no memo or relation",
+      "end": "Same source visible; one relation with same intent and target; original plan/habit/goal unchanged",
+      "sourceId": "example-source-reading",
+      "sourceVersionId": "example-source-reading-v1",
+      "intent": "퇴근 후 짧게 읽고, 기억에 남는 문장을 남긴다.",
+      "targetId": "example-goal-book",
+      "actionCount": 9,
+      "actions": [
+        "Open memo",
+        "Insert the same source sentence with the existing explicit button",
+        "Explicitly save memo",
+        "Explicitly select the saved memo phrase",
+        "Bring only the selected phrase into the connection input",
+        "Open connection from that phrase",
+        "Choose the existing book goal",
+        "Confirm connection",
+        "Return to the same source"
+      ],
+      "reenteredText": 0,
+      "extraMemo": true
+    }
+  },
+  "screens": [
+    {
+      "file": "reading-390.png",
+      "sha256": "e744b44b3c4afed4f80d7c2b8e9db18b5f23c165d0ec9dd85d94e72f8345eb3a",
+      "scene": "Reading entry; no link or memo created",
+      "viewport": 390,
+      "documentWidth": 390,
+      "shortControls": [],
+      "smallInputs": [],
+      "visualReview": "Independent image review is separate; match this hash against visual-review.json."
+    },
+    {
+      "file": "period-820.png",
+      "sha256": "aa58bb792fd9037d6ba66c42a9b5795152bab2531884b531813b77ed9ff9d497",
+      "scene": "Habit-only period preview; no unselected plan or goal",
+      "viewport": 820,
+      "documentWidth": 820,
+      "shortControls": [],
+      "smallInputs": [],
+      "visualReview": "Independent image review is separate; match this hash against visual-review.json."
+    },
+    {
+      "file": "saved-comparison-1440.png",
+      "sha256": "96eac1b0e866a951516ed5303437d34abf568b76f8ad3fd1c50b0beb3227f085",
+      "scene": "Frozen saved values compared with current plan; scroll normalized before full-page capture",
+      "viewport": 1440,
+      "documentWidth": 1440,
+      "shortControls": [],
+      "smallInputs": [],
+      "visualReview": "Independent image review is separate; match this hash against visual-review.json."
+    }
+  ],
+  "audits": [
+    {
+      "name": "Initial plan and original values preserved; inclusive date boundary and one-day period",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "Existing monthly/direct link requires target, cancels duplicate creation and preserves target data",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "Current weekday change, keyboard cancel and explicit duplicate-date correction preserve other dates",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "Frozen saved review and optional note remain unchanged after current plan/check/progress edits",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "Reading alone ends without memo/link/review; reload resets the synthetic session",
+      "documentRequests": 2,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "Direct reading path: exact source, unselected target rejection, cancel and session draft/selection preservation",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "Controlled action comparison: direct",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "Controlled action comparison: memo",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "Memo selection excludes private remainder, blocks unsaved edit and resolves repeated phrase explicitly",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "Period scope: plan-only accepted, empty scope rejected, habit-only excludes unselected goal/month payload",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "Memo connection success exposes an explicit return to the same memo, separate from source return",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "A linked reading target carries its period scope without unrelated default selections",
+      "documentRequests": 2,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "Unselected target modification does not invalidate a draft; selected target change preserves note and requires review",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "Preview and saved review source links return to the exact reading fixture without altering saved content",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "390px reading screen and keyboard entry",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "820px selected scope screen",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "1440px saved/current comparison screen",
+      "documentRequests": 1,
+      "additionalRequests": [],
+      "storageAccess": [],
+      "pageErrors": [],
+      "consoleErrors": []
+    }
+  ],
+  "failures": [],
+  "measurement": "One intentional button activation, one select choice, one complete text-entry operation or one explicit text-range selection counts as one action. Setup, assertions, screenshots and reloads are excluded. No timing or percentage improvement is reported. Comparison tests an unnecessary memo detour for the same connection-only goal; it does not rank a genuine memo-writing task below direct connection.",
+  "limitations": [
+    "The source sentence is preselected in a fixed synthetic fixture; arbitrary original-text selection is not implemented.",
+    "This prototype connects saved memo text only. The design allowance for directly connecting unsaved memo text is outside this demonstration.",
+    "Storage, account continuity, remote failures, backup restoration and real Apple devices are outside this demonstration."
+  ],
+  "priorEvidence": [
+    {
+      "file": "report-initial.json",
+      "classification": "Initial 15 scenarios; one harness timing assertion read the DOM before the native dialog close handler completed. Original 7-second limit retained; corrected test waits for exact-date row removal."
+    },
+    {
+      "file": "report-contract-failures.json",
+      "classification": "Focused run reproduced two prototype defects: missing explicit memo return after connection and unrelated default period selection on contextual target entry. Check correction passed after the harness correction."
+    }
+  ],
+  "environment": {
+    "browser": "151.0.7922.173",
+    "viewportWidths": [
+      390,
+      820,
+      1440
+    ],
+    "timezone": "Asia/Seoul",
+    "host": "127.0.0.1 ephemeral port; only frozen HTML document served",
+    "storage": "All storage API access blocked and audited",
+    "browserClaims": "Linux Chromium viewport simulation only"
+  },
+  "source": {
+    "path": "docs/prototypes/planning-practice-review.html",
+    "sha256": "222296acc0da372bcfab495f44a9a6bba6cf8f29c40507aece1060a899d70f62",
+    "endSha256": "222296acc0da372bcfab495f44a9a6bba6cf8f29c40507aece1060a899d70f62",
+    "unchanged": true
+  },
+  "scrolledViewport": {
+    "scrollY": 600,
+    "viewportHeight": 1000,
+    "nav": {
+      "top": 0,
+      "bottom": 59
+    },
+    "focusedHeading": {
+      "top": 484.40625,
+      "bottom": 515.90625
+    },
+    "activeElement": "comparison-heading"
+  },
+  "auditPassed": true,
+  "pass": true
+}
