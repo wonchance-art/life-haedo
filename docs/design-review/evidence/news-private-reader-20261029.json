@@ -106,5 +106,13 @@
     "Existing interest/language/reaction cross-device sync and level-aware AI explanations remain separate work.",
     "Apple devices and actual recommendation usefulness not assessed.",
     "Frontend release and CI are tracked in PR145."
-  ]
+  ],
+  "ciCorrection": {
+    "initialRun": 40846095141,
+    "initialFailure": "The test connected during the temporary Unix-socket-only PostgreSQL initialization server.",
+    "reproduced": true,
+    "fix": "Wait for TCP readiness with the unchanged 45-second deadline and 200ms polling interval.",
+    "postgresChecksAfterFix": 12,
+    "productionChanges": false
+  }
 }

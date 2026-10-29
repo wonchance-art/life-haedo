@@ -28,7 +28,9 @@ async function main(){
   const state=JSON.parse(docker(['inspect',container,'--format','{{json .}}']));assert.equal(state.Config.Labels[label],tag);
   const bindings=state.NetworkSettings.Ports['5432/tcp'];assert.equal(bindings.length,1);assert.equal(bindings[0].HostIp,'127.0.0.1');
   const config={host:'127.0.0.1',port:Number(bindings[0].HostPort),user:'postgres',database:'postgres'};
-  const deadline=Date.now()+45000;for(;;){try{docker(['exec',container,'pg_isready','-U','postgres']);break;}catch(error){if(Date.now()>deadline)throw Error('Synthetic PostgreSQL startup failed');await new Promise(r=>setTimeout(r,200));}}
+  // The image's temporary init server accepts Unix sockets before restarting.
+  // Wait for TCP, the transport used by all three real test connections.
+  const deadline=Date.now()+45000;for(;;){try{docker(['exec',container,'pg_isready','--host=127.0.0.1','-U','postgres']);break;}catch(error){if(Date.now()>deadline)throw Error('Synthetic PostgreSQL startup failed');await new Promise(r=>setTimeout(r,200));}}
   db=new Client(config);other=new Client(config);second=new Client(config);await Promise.all([db.connect(),other.connect(),second.connect()]);
   const q=(sql,args=[])=>db.query(sql,args),one=async(client,sql,args=[])=>{const r=await client.query(sql,args);return r.rows[0]?.result;};
   const actor=async(client,role,owner='',session='')=>{await client.query('reset role');await client.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:owner,session_id:session})]);if(role!=='postgres')await client.query('set role '+role);};
