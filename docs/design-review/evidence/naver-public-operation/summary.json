@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "observedAt": "2026-10-29T09:33:58.379456+00:00",
+  "baseMain": "04dfcc1d9a083c0af93dbde91bf6d642b4863a2a",
+  "purpose": "Owner-authorized private archival verification; no model, embedding or RAG ingestion",
+  "environment": {
+    "officialRevision": "1",
+    "observationsCurrent": true,
+    "networkPolicy": "unrestricted",
+    "enforcement": "enforced",
+    "localPolicy": "unrestricted"
+  },
+  "scope": {
+    "account": "configured_test_A",
+    "newIsolatedWorkspace": true,
+    "existingUserMaterialWrites": 0,
+    "accountEnumerationRequests": 0,
+    "workspaceEnumerationRequests": 0,
+    "privateArtifactsPublished": false
+  },
+  "sources": {
+    "rss": {
+      "status": "robots_blocked",
+      "feedRequests": 0,
+      "scheduledJobs": 0
+    },
+    "public": {
+      "status": "sample_checked",
+      "postsSampled": 1,
+      "photosSampled": 1,
+      "fullInventoryVerified": false
+    }
+  },
+  "inventory": {
+    "pages": 56,
+    "rawRows": 1665,
+    "uniqueIds": 1665,
+    "reportedTotal": 1663,
+    "duplicateIds": 0,
+    "tailOverlap": 0,
+    "stableHead": true,
+    "totalConsistent": false,
+    "identitySha256": "8c9d41ac7fff6f5a197ea7ac6f05c0fb847217f58168878b9a95188bea5bef1a"
+  },
+  "serverInventory": {
+    "preservedEntries": 1665,
+    "status": "partial",
+    "baselineComplete": false,
+    "reportedTotal": 1663
+  },
+  "credentialVerification": {
+    "vaultRecreated": false,
+    "legacyServiceRoleValidatedByCurrentProject": true,
+    "ingestionEnabledObserved": true,
+    "keysOrTokensReturned": false
+  },
+  "scheduler": {
+    "firstObservedRunUTC": "2026-10-29T09:15:00.363749Z",
+    "enqueueStatus": "succeeded",
+    "workerHTTPStatus": 200,
+    "workerStage": "capture",
+    "browserClosed": true,
+    "storedPosts": 1,
+    "storedPhotos": 2,
+    "failedPhotos": 0,
+    "captureCreatedAt": "2026-10-29T09:15:06.081971+00:00"
+  },
+  "restoration": {
+    "authVerified": true,
+    "firstReceiveCoreAcknowledged": true,
+    "independentBrowserContexts": 3,
+    "bodyHash": "72818a851ba0d48513eefdebefb9b09cdd19aa2f9a2a12bdfc5fa7e98bfc4e16",
+    "captureHash": "5e994032ca33cc7b4c04bf97b2ec49bd7c551cc5d91779f8a8ad8a1d8cabb6a3",
+    "photos": [
+      {
+        "index": 0,
+        "bytes": 215380,
+        "sha256": "21e29e3719be7d4d1c37b8d2b2db344df9f8529c093056f2eada5a4da05e74ba",
+        "width": 900,
+        "height": 1200,
+        "pixelHash": "6dc7ac415c1393663eb74e6466dcf145bae2030a70973720c0c73fa94c17183a"
+      },
+      {
+        "index": 1,
+        "bytes": 148234,
+        "sha256": "152e907ad3273eea1aa6c1c7108afc29ca04fbcf0ed959df3cf7fcf68abfc5ae",
+        "width": 900,
+        "height": 600,
+        "pixelHash": "ba51eb27eac446d7ba9ae4fb3afd2cabcfbfbea37fd90a2b3d5911095314745d"
+      }
+    ],
+    "exactGraphEqual": true,
+    "duplicateAdded": 0,
+    "originalUploadIdentityVerified": false,
+    "productUIVerified": false,
+    "physicalDevicesVerified": false,
+    "googleProviderLoginVerified": false,
+    "privateImmutableReceiptRegistered": true
+  },
+  "portableCopy": {
+    "bytes": 369143,
+    "sha256": "e4665c98684c090dd4463c0ea9502aca55565c795b83cbf6a15fc31c6c023922",
+    "localOnly": true,
+    "newWorkspace": true,
+    "serverReceipts": 0
+  },
+  "injectedFailure": {
+    "synthetic503": true,
+    "noPartialInstall": true,
+    "graphUnchanged": true,
+    "realServerRetrySucceeded": true
+  },
+  "access": {
+    "otherTestAccountCaptureRead": "null",
+    "otherAccountWrites": 0
+  },
+  "stop": {
+    "subscriptionStopped": true,
+    "serverRunAfterStop": "busy",
+    "globalPauseReady": false,
+    "globalPauseNaverJobs": 0,
+    "capturePreserved": true,
+    "inventoryPreserved": true,
+    "pausedWorkerResult": "setup_required"
+  },
+  "finalRuntime": {
+    "ready": true,
+    "activePublicJobs": 1,
+    "publicSchedule": "*/15 * * * *",
+    "cronTimezone": "GMT",
+    "rssJobs": 0,
+    "activeSubscriptions": 0,
+    "captureRows": 1,
+    "captureJobs": 1
+  },
+  "edge": {
+    "version": 7,
+    "runtimeSourcesMatched": 8,
+    "bundleSHA256": "1db5135a134309ad15f354d04572431a8b61218987eda61eb5abd607842c8fab"
+  },
+  "unverified": [
+    "complete_inventory_baseline",
+    "actual_new_post_detection",
+    "full_product_ui",
+    "google_provider_login",
+    "physical_Apple_devices"
+  ],
+  "verificationRecovery": {
+    "originalBComparisonFailureRetained": true,
+    "canonicalObjectKeysOnly": true,
+    "arrayOrderAndTextPreserved": true,
+    "exactAcknowledgedVersionReused": true,
+    "serverSourceWritesOnResume": 0
+  }
+}

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createHash } = require('node:crypto');
+const { createHash, createHmac } = require('node:crypto');
 const modules = Promise.all([
   import('../supabase/functions/haedo-naver-blog/collector.mjs'),
   import('../supabase/functions/haedo-naver-blog/handler.mjs'),
@@ -36,6 +36,32 @@ function fixture(overrides = {}) {
   const request = (body = { subscriptionId: ids.subscription }, bearer = 'user-token-fixture') => new Request('https://fixture.supabase.co/functions/v1/haedo-naver-blog',
     { method: 'POST', headers: { Authorization: 'Bearer ' + bearer, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   return { env, fetcher, calls, finishes, prior, request };
+}
+const syntheticSigningKey = 'synthetic-rotation-signing-key';
+function serviceToken({ claims = {}, header = {}, signer = syntheticSigningKey } = {}) {
+  const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const parts = [encode({ alg: 'HS256', typ: 'JWT', ...header }),
+    encode({ role: 'service_role', ref: 'fixture', exp: Math.floor(Date.now() / 1000) + 3600, ...claims })];
+  return parts.join('.') + '.' + createHmac('sha256', signer).update(parts.join('.')).digest('base64url');
+}
+function rotatedFixture(overrides = {}) {
+  const f = fixture({ claims: [], ...overrides }); let revoked = false;
+  const fetcher = async (url, options = {}) => {
+    if (url.endsWith('/life_naver_ready')) {
+      f.calls.push({ url, options });
+      const token = options.headers.Authorization?.replace(/^Bearer /, '');
+      assert.equal(options.headers.apikey, token, 'remote verification must use only the presented credential');
+      if (overrides.readyResponse) return overrides.readyResponse();
+      const parts = token.split('.'), signature = createHmac('sha256', syntheticSigningKey).update(parts.slice(0, 2).join('.')).digest('base64url');
+      if (revoked || parts[2] !== signature) return new Response('private authentication detail', { status: 401 });
+      return Response.json(overrides.ready !== false);
+    }
+    if (/\/life_naver_(?:inventory|capture)_claim$/.test(url)) {
+      f.calls.push({ url, options }); return Response.json([]);
+    }
+    return f.fetcher(url, options);
+  };
+  return { ...f, fetcher, revoke() { revoked = true; } };
 }
 test('RSS description becomes only partial safe text; exact UTF-8 SHA, dates and empty links remain honest', async () => {
   const [{ parseFeed }] = await modules;
@@ -159,7 +185,7 @@ test('manual getUser auth then env+DB dual gate: no Naver request or claim while
   const bad = fixture({ authStatus: 401 }); const denied = await createHandler({ fetcher: bad.fetcher, environment: key => bad.env[key] })(bad.request());
   assert.equal(denied.status, 401); assert.equal(bad.calls.length, 1);
 });
-test('cron requires exact secret, publishable/forged role cannot claim or fetch', async () => {
+test('cron retains exact-secret fast path, while publishable/malformed service tokens cannot claim or fetch', async () => {
   const [, { createHandler, secretEqual }] = await modules;
   assert.equal(secretEqual('', ''), false); assert.equal(secretEqual('abc', 'abd'), false); assert.equal(secretEqual('abc', 'abc'), true);
   for (const token of ['public-fixture', 'ey.fake.service_role', 'server-secret-fixtureX']) {
@@ -173,6 +199,153 @@ test('cron requires exact secret, publishable/forged role cannot claim or fetch'
   assert.equal((await result.json()).checked, 0); assert.equal(f.calls.some(v => v.url.endsWith('/auth/v1/user')), false);
   assert.deepEqual(JSON.parse(f.calls.find(v => v.url.endsWith('/life_naver_claim')).options.body),
     { p_limit: 2, p_subscription_id: null, p_owner_id: null });
+});
+test('service-only readiness reads exact booleans while ingestion or DB collection is disabled', async () => {
+  const [, { createHandler }] = await modules;
+  for (const flag of ['true', 'false', undefined, 'TRUE']) for (const ready of [false, true]) {
+    const f = fixture({ ready, env: { HAEDO_NAVER_INGESTION_ENABLED: flag } });
+    const result = await createHandler({ fetcher: f.fetcher, environment: key => f.env[key] })(f.request({ action: 'readiness' }, f.env.SUPABASE_SERVICE_ROLE_KEY));
+    assert.equal(result.status, 200);
+    assert.deepEqual(await result.json(), { ingestionEnabled: flag === 'true', ready });
+    assert.equal(result.headers.get('Cache-Control'), 'no-store');
+    assert.deepEqual(f.calls.map(value => value.url), ['https://fixture.supabase.co/rest/v1/rpc/life_naver_ready']);
+    assert.deepEqual(JSON.parse(f.calls[0].options.body), {});
+    assert.deepEqual(f.finishes, []); assert.deepEqual(f.prior, ['existing-body']);
+  }
+});
+test('readiness rejects ordinary users, missing/forged credentials and expanded scope before any request', async () => {
+  const [, { createHandler }] = await modules;
+  for (const token of ['user-token-fixture', 'public-fixture', 'ey.fake.service_role', 'server-secret-fixtureX']) {
+    const f = fixture();
+    const result = await createHandler({ fetcher: f.fetcher, environment: key => f.env[key] })(f.request({ action: 'readiness' }, token));
+    assert.equal(result.status, 401); assert.deepEqual(await result.json(), { error: 'unauthorized' }); assert.equal(f.calls.length, 0);
+  }
+  for (const extra of [{ subscriptionId: ids.subscription }, { owner: ids.user }, { ready: true }, { ingestionEnabled: true }]) {
+    const f = fixture();
+    const result = await createHandler({ fetcher: f.fetcher, environment: key => f.env[key] })(f.request({ action: 'readiness', ...extra }, f.env.SUPABASE_SERVICE_ROLE_KEY));
+    assert.equal(result.status, 401); assert.equal(f.calls.length, 0);
+  }
+  const f = fixture(), request = f.request({ action: 'readiness' }); request.headers.delete('authorization');
+  assert.equal((await createHandler({ fetcher: f.fetcher, environment: key => f.env[key] })(request)).status, 401);
+  assert.equal(f.calls.length, 0);
+});
+test('readiness never substitutes malformed or failed database responses for verified readiness', async () => {
+  const [, { createHandler }] = await modules;
+  for (const response of [() => Response.json({ ready: true }), () => Response.json(null),
+    () => new Response('private-database-detail', { status: 403 }), () => { throw Error('private-database-detail'); }]) {
+    const f = fixture({ ready: false }), calls = [];
+    const handler = createHandler({ environment: key => f.env[key], fetcher: async url => { calls.push(url); return response(); } });
+    const result = await handler(f.request({ action: 'readiness' }, f.env.SUPABASE_SERVICE_ROLE_KEY));
+    assert.equal(result.status, 502); assert.deepEqual(await result.json(), { error: 'server_error' });
+    assert.deepEqual(calls, ['https://fixture.supabase.co/rest/v1/rpc/life_naver_ready']);
+  }
+});
+test('a rotated service JWT is remotely authenticated for readiness even when flag or DB ready is false', async () => {
+  const [, { createHandler }] = await modules;
+  for (const enabled of ['true', 'false']) for (const ready of [false, true]) {
+    const f = rotatedFixture({ ready, env: { HAEDO_NAVER_INGESTION_ENABLED: enabled } }), token = serviceToken();
+    const result = await createHandler({ fetcher: f.fetcher, environment: key => f.env[key] })(f.request({ action: 'readiness' }, token));
+    assert.equal(result.status, 200); assert.deepEqual(await result.json(), { ingestionEnabled: enabled === 'true', ready });
+    assert.deepEqual(f.calls.map(call => call.url), ['https://fixture.supabase.co/rest/v1/rpc/life_naver_ready']);
+    assert.equal(f.calls[0].options.redirect, 'error'); assert.ok(f.calls[0].options.signal instanceof AbortSignal);
+    assert.deepEqual(JSON.parse(f.calls[0].options.body), {}); assert.deepEqual(f.finishes, []);
+  }
+});
+test('rotated cron/run credentials are request-local and reuse the authenticated ready boolean before claiming', async () => {
+  const [, { createHandler }] = await modules;
+  for (const action of ['cron', 'run']) {
+    const f = rotatedFixture(), token = serviceToken();
+    const handler = createHandler({ fetcher: f.fetcher, environment: key => f.env[key], load: () => {},
+      captureModel: { verifyPayload() {}, fingerprint() {} } });
+    const result = await handler(f.request({ action }, token)); assert.equal(result.status, 200);
+    assert.equal((await result.json()).status, action === 'cron' ? 'checked' : 'busy');
+    assert.equal(f.calls.filter(call => call.url.endsWith('life_naver_ready')).length, 1);
+    assert.equal(f.calls.some(call => call.url.includes('/auth/') || call.url.includes('naver.com') || call.url.includes('/storage/')), false);
+    for (const call of f.calls) { assert.equal(call.options.headers.apikey, token); assert.equal(call.options.headers.Authorization, 'Bearer ' + token); }
+    f.revoke(); f.calls.length = 0;
+    const rejected = await handler(f.request({ action }, token));
+    assert.equal(rejected.status, 401); assert.deepEqual(await rejected.json(), { error: 'unauthorized' });
+    assert.deepEqual(f.calls.map(call => call.url), ['https://fixture.supabase.co/rest/v1/rpc/life_naver_ready'], 'the same handler must revalidate every request after revocation');
+  }
+});
+test('rotated service requests stop before claiming when ingestion is disabled or DB ready is false', async () => {
+  const [, { createHandler }] = await modules;
+  for (const options of [{ ready: false }, { env: { HAEDO_NAVER_INGESTION_ENABLED: 'false' } }]) for (const action of ['cron', 'run']) {
+    const f = rotatedFixture(options), token = serviceToken();
+    const result = await createHandler({ fetcher: f.fetcher, environment: key => f.env[key] })(f.request({ action }, token));
+    assert.deepEqual(await result.json(), { error: 'setup_required' });
+    assert.deepEqual(f.calls.map(call => call.url), ['https://fixture.supabase.co/rest/v1/rpc/life_naver_ready']);
+  }
+});
+test('wrong role/project/expiry/algorithm and malformed service JWT candidates never reach remote validation', async () => {
+  const [, { createHandler }] = await modules;
+  const invalid = [serviceToken({ claims: { role: 'authenticated' } }), serviceToken({ claims: { role: 'anon' } }),
+    serviceToken({ claims: { ref: 'another-project' } }), serviceToken({ claims: { exp: Math.floor(Date.now() / 1000) - 1 } }),
+    serviceToken({ claims: { exp: '9999999999' } }), serviceToken({ header: { alg: 'none' } }), serviceToken({ header: { alg: 'RS256' } }),
+    'not-a-jwt', 'a.b.c', 'a'.repeat(4097) + '.b.c'];
+  for (const token of invalid) for (const action of ['cron', 'run', 'readiness']) {
+    const f = rotatedFixture();
+    const result = await createHandler({ fetcher: f.fetcher, environment: key => f.env[key] })(f.request({ action }, token));
+    assert.equal(result.status, 401); assert.deepEqual(await result.json(), { error: 'unauthorized' }); assert.equal(f.calls.length, 0);
+  }
+});
+test('decoded service claims cannot authorize a forged signature or broaden a privileged request scope', async () => {
+  const [, { createHandler }] = await modules;
+  for (const action of ['cron', 'run', 'readiness']) {
+    const f = rotatedFixture(), token = serviceToken({ signer: 'forged-synthetic-signer' });
+    const result = await createHandler({ fetcher: f.fetcher, environment: key => f.env[key] })(f.request({ action }, token));
+    assert.equal(result.status, 401); assert.deepEqual(await result.json(), { error: 'unauthorized' });
+    assert.deepEqual(f.calls.map(call => call.url), ['https://fixture.supabase.co/rest/v1/rpc/life_naver_ready']);
+    for (const extra of [{ subscriptionId: ids.subscription }, { owner: ids.user }, { blogId: BLOG }, { url: 'https://fixture.invalid' }, { ready: true }]) {
+      const expanded = rotatedFixture();
+      const rejected = await createHandler({ fetcher: expanded.fetcher, environment: key => expanded.env[key] })(expanded.request({ action, ...extra }, serviceToken()));
+      assert.equal(rejected.status, 401); assert.equal(expanded.calls.length, 0);
+    }
+  }
+});
+test('remote verification requires HTTP200 and a bounded boolean; failed details or secrets are never returned', async () => {
+  const [, { createHandler }] = await modules;
+  const token = serviceToken(), privateDetail = token + ' server-secret-fixture private authentication detail';
+  const failures = [() => Response.json({ ready: false, detail: privateDetail }), () => Response.json(null), () => Response.json('false'),
+    () => new Response(privateDetail), () => new Response('false', { status: 201 }), () => new Response(privateDetail, { status: 401 }),
+    () => new Response(privateDetail, { status: 403 }), () => new Response(privateDetail, { status: 500 }),
+    () => new Response('false', { status: 302, headers: { Location: 'https://fixture.invalid' } }),
+    () => new Response('false', { headers: { 'Content-Length': '100' } }), () => new Response('x'.repeat(1025)),
+    () => { throw Error(privateDetail); },
+    () => { const response = Response.json(false); Object.defineProperty(response, 'redirected', { value: true }); return response; },
+    () => { const response = Response.json(false); Object.defineProperty(response, 'url', { value: 'https://fixture.invalid/rpc' }); return response; }];
+  for (const readyResponse of failures) {
+    const f = rotatedFixture({ readyResponse });
+    const result = await createHandler({ fetcher: f.fetcher, environment: key => f.env[key] })(f.request({ action: 'readiness' }, token));
+    assert.ok([401, 502].includes(result.status)); const output = await result.json();
+    assert.ok(['unauthorized', 'server_error'].includes(output.error)); assert.deepEqual(Object.keys(output), ['error']);
+    assert.equal(JSON.stringify(output).includes(token), false); assert.equal(JSON.stringify(output).includes('server-secret-fixture'), false);
+    assert.deepEqual(f.calls.map(call => call.url), ['https://fixture.supabase.co/rest/v1/rpc/life_naver_ready']);
+  }
+});
+test('remote readiness distinguishes rejected credentials from rate limits or provider failures without claiming', async () => {
+  const [, { createHandler }] = await modules;
+  for (const status of [401, 403, 429, 500, 503, 201]) for (const action of ['cron', 'run', 'readiness']) {
+    const f = rotatedFixture({ readyResponse: () => new Response('private provider detail', { status }) });
+    const result = await createHandler({ fetcher: f.fetcher, environment: key => f.env[key] })(f.request({ action }, serviceToken()));
+    const unauthorized = status === 401 || status === 403;
+    assert.equal(result.status, unauthorized ? 401 : 502);
+    assert.deepEqual(await result.json(), { error: unauthorized ? 'unauthorized' : 'server_error' });
+    assert.deepEqual(f.calls.map(call => call.url), ['https://fixture.supabase.co/rest/v1/rpc/life_naver_ready']);
+    assert.deepEqual(f.finishes, []);
+  }
+});
+test('ordinary user JWTs retain getUser and exact owner fencing instead of service fallback', async () => {
+  const [, { createHandler }] = await modules;
+  const token = serviceToken({ claims: { role: 'authenticated', sub: ids.user } });
+  const f = fixture({ claim: { owner_id: ids.other } });
+  const result = await createHandler({ fetcher: f.fetcher, environment: key => f.env[key] })(f.request({ subscriptionId: ids.subscription }, token));
+  assert.equal(result.status, 502); assert.equal(f.calls[0].url, 'https://fixture.supabase.co/auth/v1/user');
+  assert.equal(f.calls[0].options.headers.Authorization, 'Bearer ' + token);
+  const claim = f.calls.find(call => call.url.endsWith('life_naver_claim'));
+  assert.equal(JSON.parse(claim.options.body).p_owner_id, ids.user);
+  assert.equal(claim.options.headers.apikey, f.env.SUPABASE_SERVICE_ROLE_KEY);
+  assert.equal(f.calls.some(call => call.url.includes('naver.com') || call.url.includes('/storage/')), false);
 });
 test('verified owner pins manual lease; foreign or malformed batch never fetches or finishes', async () => {
   const [, { createHandler }] = await modules;
