@@ -222,6 +222,11 @@
           if (data?.sender !== sender && data?.type === 'material_writing_changed' && typeof data.workspaceId === 'string' && Number.isSafeInteger(data.revision) && data.revision >= 1) {
             notify({ type: 'material_writing_changed', workspaceId: data.workspaceId, revision: data.revision });
           }
+          if (data?.sender !== sender && data?.type === 'naver_capture_changed' && typeof data.workspaceId === 'string' &&
+              typeof data.sourceId === 'string' && typeof data.sourceVersionId === 'string' && /^[a-f0-9]{64}$/.test(data.captureHash) &&
+              Number.isSafeInteger(data.revision) && data.revision >= 0) {
+            notify({ type: data.type, workspaceId: data.workspaceId, sourceId: data.sourceId, sourceVersionId: data.sourceVersionId, captureHash: data.captureHash, revision: data.revision });
+          }
           if (data?.sender !== sender && data?.type === 'photo_posts_changed' && typeof data.workspaceId === 'string') notify({ type: 'photo_posts_changed', workspaceId: data.workspaceId });
           if (data?.sender !== sender && data?.type === 'workbench_changed' && typeof data.workspaceId === 'string' &&
               Number.isSafeInteger(data.revision) && data.revision >= 0) {
@@ -444,6 +449,15 @@
         const original = previous.get(version.id);
         if (original && stablePayload(original) !== stablePayload(version)) {
           throw fault('immutable_source_version', '서버의 원문 버전이 같은 식별자로 변경되었습니다. 로컬 원문은 보존했습니다.');
+        }
+      }
+      if (partial && [...(local.links || []), ...(incoming.links || [])].some(link => link.kind === 'naver_capture_reference')) {
+        const references = naverReference();
+        for (const version of incoming.sourceVersions || []) if (previous.has(version.id)) {
+          const before = references.find(local, version.id), after = references.find(incoming, version.id);
+          if (before && after && stablePayload(before.link) !== stablePayload(after.link)) {
+            throw fault('immutable_naver_capture_reference', '같은 원문 판의 사진 연결을 다른 값으로 바꾸지 않았습니다.');
+          }
         }
       }
       if (partial && typeof core().editedCopyMarkers === 'function') {
@@ -1941,11 +1955,12 @@
             const wrapper = clone(await materialWritingValue(meta, target.workspaceId)); wrapper.plans.find(plan => plan.id === target.planId).output = null; wrapper.revision++; planRevision = wrapper.revision; output = null;
             await meta.delete(materialOutputKey(target.workspaceId, target.planId)); await meta.put({ key: `material-writing:${target.workspaceId}`, value: wrapper });
           }
-          const mapped = materialRemapped(row.data, target.workspaceId, state.mapping, state.mapping === null); let appended = false;
+          const mapped = materialRemapped(row.data, target.workspaceId, state.mapping, state.mapping === null), previousBundle = clone(bundle); let appended = false;
           immutableVersions(bundle, mapped.data.bundle, { partial: true });
           // The chosen local plan and source metadata stay authoritative, while
           // the winning output's exact evidence dependencies become available.
           for (const name of ['sources', 'sourceVersions', 'links']) for (const item of mapped.data.bundle[name]) if (!bundle[name].some(value => value.id === item.id)) { bundle[name].push(item); appended = true; }
+          core().assertSourceLinkPreservation?.(previousBundle, bundle);
           if (appended) { bundle.revision++; bundle.updatedAt = new Date().toISOString(); core().validateWorkspace(bundle); await tx.objectStore('bundles').put(bundle); }
           state.revision++; state.remoteRevision = row.revision; state.head = clone(row); state.output = clone(row.data.output); state.pending = null; state.conflict = null; state.error = null;
           state.mapping = mapped.mapping;
@@ -1959,9 +1974,11 @@
         const mapped = materialRemapped(row.data, target.workspaceId, state.mapping, state.mapping === null), bundle = clone(await checkedBundle(tx.objectStore('bundles'), target.workspaceId, meta));
         if (mapped.data.plan.id !== target.planId) throw fault('invalid_material_continuity', '서버 준비의 고정 식별자가 바뀌었습니다.');
         immutableVersions(bundle, mapped.data.bundle, { partial: true });
+        const previousBundle = clone(bundle);
         for (const name of ['sources', 'sourceVersions', 'links']) for (const item of mapped.data.bundle[name]) {
           const at = bundle[name].findIndex(existing => existing.id === item.id); if (at < 0) bundle[name].push(item); else bundle[name][at] = item;
         }
+        core().assertSourceLinkPreservation?.(previousBundle, bundle);
         bundle.revision++; bundle.updatedAt = new Date().toISOString(); core().validateWorkspace(bundle); await tx.objectStore('bundles').put(bundle);
         const wrapper = clone(await materialWritingValue(meta, target.workspaceId)), at = wrapper.plans.findIndex(plan => plan.id === target.planId), plan = mapped.data.plan;
         plan.output = await installMaterialPost(tx, target.workspaceId, mapped, original, row.data.bundle.workspaceId, current.plan, !!settings.preserveLocal, settings.blogRow);
@@ -2579,6 +2596,36 @@
       return value;
     };
     const naverCaptureKey = (workspaceId, versionId) => `naver-capture:${workspaceId}:${versionId}`;
+    const naverReference = () => {
+      const value = options.naverCaptureReference || root.HaedoLife?.NaverCaptureReference || (typeof require === 'function' && require('./naver-capture-reference.js'));
+      if (!value?.create || !value?.get || !value?.assertCapture) throw fault('dependency_unavailable', '원문 사진 연결 검증기를 불러오지 못했습니다.');
+      return value;
+    };
+    function naverCaptureChanged(workspaceId, attachment, revision) {
+      const event = { type: 'naver_capture_changed', workspaceId, sourceId: attachment.sourceId,
+        sourceVersionId: attachment.sourceVersionId, captureHash: attachment.capture.capture_hash, revision };
+      notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Committed media is authoritative. */ }
+    }
+    function naverAttachmentIdentity(attachment) {
+      return stablePayload({ sourceId: attachment.sourceId, sourceVersionId: attachment.sourceVersionId,
+        capture: attachment.capture, localOnly: attachment.localOnly === true,
+        photos: attachment.photos.map(photo => ({ index: photo.index, bytes: photo.blob.size, type: photo.blob.type })) });
+    }
+    function assertNaverRequestTarget(bundle, sourceId, sourceVersionId) {
+      requireId(sourceId, '원문'); requireId(sourceVersionId, '원문 버전');
+      if (!bundle.sources.some(source => source.id === sourceId) || !bundle.sourceVersions.some(version => version.id === sourceVersionId && version.sourceId === sourceId)) {
+        throw fault('naver_target_changed', '사진을 받을 정확한 원문 판을 다시 확인해 주세요.');
+      }
+      if (!core().isSourceActive(bundle, sourceId)) throw fault('source_trashed', '휴지통의 자료에는 사진을 받지 않았습니다. 자료를 먼저 복원해 주세요.');
+    }
+    function addNaverReference(bundle, attachment) {
+      const value = naverReference().get(bundle, attachment.sourceId, attachment.sourceVersionId);
+      if (value) { naverReference().assertCapture(value.reference, attachment.capture); return false; }
+      bundle.links.push(naverReference().create({ sourceVersionId: attachment.sourceVersionId,
+        blogId: attachment.capture.blog_id, logNo: attachment.capture.log_no, captureHash: attachment.capture.capture_hash },
+      { id: core().id(), createdAt: new Date().toISOString() }));
+      core().validateWorkspace(bundle); return true;
+    }
     async function commitNaverCapture(request, options = {}) {
       const operationId = request?.operationId;
       try {
@@ -2601,7 +2648,98 @@
       const attachment = await naverMedia().validate(snapshot.attachment); scopeGuard();
       if (attachment.sourceVersionId !== sourceVersionId) throw fault('invalid_naver_media', '원문 사진의 버전이 일치하지 않습니다.');
       naverMedia().checkTarget(snapshot.bundle, attachment);
+      const reference = snapshot.bundle.links.some(link => link.kind === 'naver_capture_reference') ?
+        naverReference().get(snapshot.bundle, attachment.sourceId, attachment.sourceVersionId) : null;
+      if (reference && !attachment.localOnly) naverReference().assertCapture(reference.reference, attachment.capture);
       return attachment;
+    }
+    async function restoreNaverCapturePhotos(request, { isCurrent = () => true } = {}) {
+      try {
+        const input = clone(request);
+        onlyFields(input, ['workspaceId', 'sourceId', 'sourceVersionId', 'expectedReference', 'attachment'], 'invalid_naver_media');
+        collectionScope(input.workspaceId); requireId(input.sourceId, '원문'); requireId(input.sourceVersionId, '원문 버전');
+        if (!account) throw fault('auth_scope_required', '확인된 계정으로 원문 사진을 받아 주세요.');
+        const attachment = await naverMedia().validate(input.attachment, { ownerId: account.userId }); scopeGuard();
+        if (attachment.localOnly || attachment.sourceId !== input.sourceId || attachment.sourceVersionId !== input.sourceVersionId ||
+            input.expectedReference?.sourceVersionId !== input.sourceVersionId) throw fault('invalid_naver_media', '사진을 받을 원문 판과 수집 연결이 다릅니다.');
+        naverReference().assertCapture(input.expectedReference, attachment.capture);
+        // Existing bytes are decoded before IDB work. Their immutable declaration
+        // is checked again in the final transaction, never replaced by a new row.
+        const previous = await readNaverCapture(input.workspaceId, input.sourceVersionId); scopeGuard();
+        if (previous?.localOnly) throw fault('invalid_naver_media', '파일 사본을 서버 보관 결과로 바꾸지 않았습니다.');
+        if (previous && previous.capture.owner_id !== account.userId) throw fault('invalid_naver_media', '현재 계정의 사진 사본만 확인할 수 있습니다.');
+        scopeGuard(); let added = false;
+        const result = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+          const meta = tx.objectStore('meta'), bundle = await checkedBundle(tx.objectStore('bundles'), input.workspaceId, meta);
+          if (!isCurrent() || (await meta.get(activeKey))?.value !== input.workspaceId) throw fault('request_cancelled', '화면이나 자료공간이 바뀌어 사진 받기를 중지했습니다.');
+          assertNaverRequestTarget(bundle, input.sourceId, input.sourceVersionId);
+          const reference = naverReference().get(bundle, input.sourceId, input.sourceVersionId);
+          if (!reference || stablePayload(reference.reference) !== stablePayload(input.expectedReference)) throw fault('naver_capture_reference_mismatch', '사진을 받을 정확한 연결이 달라졌습니다.');
+          naverReference().assertCapture(reference.reference, attachment.capture); naverMedia().checkTarget(bundle, attachment);
+          const key = naverCaptureKey(input.workspaceId, input.sourceVersionId), current = (await meta.get(key))?.value;
+          if ((current === undefined) !== (previous === null) || current && naverAttachmentIdentity(current) !== naverAttachmentIdentity(previous)) {
+            throw fault('naver_capture_changed', '사진 보관 상태가 바뀌었습니다. 현재 자료를 다시 확인해 주세요.');
+          }
+          if (current && (current.localOnly === true || current.capture.capture_hash !== attachment.capture.capture_hash)) {
+            throw fault('immutable_naver_capture', '같은 원문 판의 다른 사진 사본을 교체하지 않았습니다.');
+          }
+          if (!current) { await meta.add({ key, value: attachment }); added = true; }
+          if (!isCurrent()) throw fault('request_cancelled', '화면이나 자료공간이 바뀌어 사진 받기를 중지했습니다.');
+          return { status: 'stored', sourceId: input.sourceId, sourceVersionId: input.sourceVersionId, revision: bundle.revision, alreadyReceived: !!current };
+        });
+        if (added) naverCaptureChanged(input.workspaceId, attachment, result.revision);
+        return result;
+      } catch (error) { return { status: 'rejected', error: errorInfo(error) }; }
+    }
+    async function rememberNaverCaptureReference(request, { isCurrent = () => true } = {}) {
+      const operationId = request?.operationId;
+      try {
+        const input = clone(request);
+        onlyFields(input, ['workspaceId', 'sourceId', 'sourceVersionId', 'expectedCaptureHash', 'expectedCaptureId', 'operationId'], 'invalid_naver_media');
+        collectionScope(input.workspaceId); requireId(input.sourceId, '원문'); requireId(input.sourceVersionId, '원문 버전'); requireId(input.operationId, '작업');
+        if (!account) throw fault('auth_scope_required', '확인된 계정으로 사진 연결을 보관해 주세요.');
+        const previous = await readNaverCapture(input.workspaceId, input.sourceVersionId); scopeGuard();
+        if (!previous || previous.localOnly || previous.sourceId !== input.sourceId || previous.capture.capture_hash !== input.expectedCaptureHash || previous.capture.id !== input.expectedCaptureId) {
+          throw fault('invalid_naver_media', '현재 계정에서 확인한 사진 사본만 연결할 수 있습니다.');
+        }
+        // readNaverCapture already checked the row hash and decoded every byte.
+        // Owner comparison adds account isolation without decoding those bytes twice.
+        if (previous.capture.owner_id !== account.userId) throw fault('invalid_naver_media', '현재 계정의 사진 사본만 연결할 수 있습니다.');
+        const attachment = previous;
+        const payload = stablePayload({ kind: 'naver_capture_reference', ...input }); let wrote = false, updatedSync = null;
+        const result = await transaction(['bundles', 'meta', 'operations'], 'readwrite', async tx => {
+          const meta = tx.objectStore('meta'), bundles = tx.objectStore('bundles'), operations = tx.objectStore('operations');
+          const bundle = await checkedBundle(bundles, input.workspaceId, meta);
+          if (!isCurrent() || (await meta.get(activeKey))?.value !== input.workspaceId) throw fault('request_cancelled', '화면이나 자료공간이 바뀌어 사진 연결을 보관하지 않았습니다.');
+          assertNaverRequestTarget(bundle, input.sourceId, input.sourceVersionId); naverMedia().checkTarget(bundle, attachment);
+          const current = (await meta.get(naverCaptureKey(input.workspaceId, input.sourceVersionId)))?.value;
+          if (!current || current.localOnly || naverAttachmentIdentity(current) !== naverAttachmentIdentity(attachment)) throw fault('naver_capture_changed', '사진 보관 상태가 바뀌었습니다. 다시 확인해 주세요.');
+          const receipt = await operations.get([input.workspaceId, input.operationId]);
+          if (receipt) {
+            if (receipt.payload !== payload) throw fault('operation_mismatch', '같은 작업의 다른 사진 연결을 적용하지 않았습니다.');
+            if (!isCurrent()) throw fault('request_cancelled', '화면이 바뀌어 사진 연결 확인을 중단했습니다.');
+            return clone(receipt.result);
+          }
+          const existing = naverReference().get(bundle, input.sourceId, input.sourceVersionId);
+          if (existing) {
+            naverReference().assertCapture(existing.reference, attachment.capture);
+            if (!isCurrent()) throw fault('request_cancelled', '화면이 바뀌어 사진 연결 확인을 중단했습니다.');
+            return { status: 'stored', sourceId: input.sourceId, sourceVersionId: input.sourceVersionId, revision: bundle.revision, alreadyRemembered: true, operationId };
+          }
+          const link = naverReference().create({ sourceVersionId: input.sourceVersionId, blogId: attachment.capture.blog_id,
+            logNo: attachment.capture.log_no, captureHash: attachment.capture.capture_hash }, { id: core().id(), createdAt: new Date().toISOString() });
+          const updated = core().applyChanges(bundle, { put: { links: [link] } }); core().validateWorkspace(updated);
+          const sync = await readSyncState(meta, input.workspaceId, bundle);
+          const stored = { status: 'stored', sourceId: input.sourceId, sourceVersionId: input.sourceVersionId, revision: updated.revision, alreadyRemembered: false, operationId };
+          await bundles.put(updated);
+          if (sync) { sync.status = syncStatus(sync, updated); sync.error = null; updatedSync = await writeSyncState(meta, sync); }
+          await operations.add({ workspaceId: input.workspaceId, operationId: input.operationId, payload, result: stored });
+          if (!isCurrent()) throw fault('request_cancelled', '화면이나 자료공간이 바뀌어 사진 연결을 보관하지 않았습니다.');
+          wrote = true; return stored;
+        });
+        if (wrote) changed(input.workspaceId, result.revision); if (updatedSync) syncChanged(updatedSync);
+        return result;
+      } catch (error) { return { status: 'rejected', error: errorInfo(error), operationId }; }
     }
     async function installNaverCaptureCopy(input, { isCurrent = () => true } = {}) {
       scopeGuard();
@@ -2739,6 +2877,9 @@
               throw fault('immutable_naver_capture', '보관한 원문 사진 선언은 덮어쓸 수 없습니다. 새 원문 버전으로 보관해 주세요.');
             }
             if (!previous) await meta.add({ key, value: naverAttachment });
+            // The source, decoded photos and hash-only pointer share this exact
+            // transaction. Operation replay above reuses the original link ID.
+            addNaverReference(updated, naverAttachment);
           }
           if (registration && (await readSyncState(tx.objectStore('meta'), workspaceId, bundle))?.enabled &&
               new TextEncoder().encode(JSON.stringify(updated)).length > SYNC_MAX_BYTES) throw fault('snapshot_too_large', '등록한 자료가 동기화 크기 제한을 넘습니다. 기존 자료는 유지했습니다.');
@@ -4277,7 +4418,7 @@
       readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, finishMaterialContinuityClaim,
       readPublicCover, savePublicCover,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
-      readPreservationCatalog, readPreservationSnapshot, installPreservationCopy, commitNaverCapture, readNaverCapture, installNaverCaptureCopy,
+      readPreservationCatalog, readPreservationSnapshot, installPreservationCopy, commitNaverCapture, readNaverCapture, restoreNaverCapturePhotos, rememberNaverCaptureReference, installNaverCaptureCopy,
       commitLocal, readAccountMaterialRegistration, saveStage, getStage, listStages, deleteStage, subscribe, subscribeAll,
       getSyncState, bindSync, adoptSyncRemote, pauseSync, prepareSyncUpload, ackSync, applySyncRemote, installSyncRemote,
       setSyncConflict, setSyncError, resolveSync,

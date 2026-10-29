@@ -454,6 +454,129 @@ test('a changed Naver photo declaration cannot replace one source version; expli
   assert.deepEqual(await f.scoped.readNaverCapture(before.workspaceId, prior.sourceVersionId), prior);
   assert.equal((await f.scoped.readNaverCapture(before.workspaceId, fresh.version.id)).capture.capture_hash, changed.capture.capture_hash);
 });
+async function naverReceiverFixture(t, { legacy = false } = {}) {
+  const source = await naverStorageFixture(); t.after(() => source.storage.close());
+  assert.equal((await source.scoped.commitNaverCapture(source.request)).status, 'stored');
+  const bundle = await source.scoped.read(source.before.workspaceId);
+  if (legacy) bundle.links = bundle.links.filter(link => link.kind !== 'naver_capture_reference');
+  const receiver = syncFixture(); t.after(() => receiver.storage.close());
+  const scoped = receiver.storage.forAccount(source.account), binding = { ...source.account, remoteId: bundle.workspaceId };
+  const installed = await scoped.installSyncRemote(serverRow(bundle, 1), binding);
+  const attachment = await source.scoped.readNaverCapture(bundle.workspaceId, source.request.attachment.sourceVersionId);
+  if (legacy) receiver.rows.get('meta').set(JSON.stringify(`naver-capture:${bundle.workspaceId}:${attachment.sourceVersionId}`),
+    { key: `naver-capture:${bundle.workspaceId}:${attachment.sourceVersionId}`, value: structuredClone(attachment) });
+  const reference = require('../assets/life/naver-capture-reference.js').get(installed, attachment.sourceId, attachment.sourceVersionId)?.reference;
+  const request = { workspaceId: installed.workspaceId, sourceId: attachment.sourceId, sourceVersionId: attachment.sourceVersionId, expectedReference: reference, attachment };
+  return { ...receiver, scoped, account: source.account, installed, binding, request, source };
+}
+test('account-delivered exact Naver reference restores photos without changing Core, quotations or source sync and replays with no write', async t => {
+  const F = require('./fixtures/naver-media.cjs'), restore = F.installDecoder(); t.after(restore);
+  const f = await naverReceiverFixture(t), ws = f.installed.workspaceId, before = await f.scoped.read(ws), sync = await f.scoped.getSyncState(ws), events = [];
+  f.scoped.subscribe(ws, event => events.push(event));
+  const pointer = before.links.find(link => link.kind === 'naver_capture_reference');
+  assert.deepEqual(Object.keys(JSON.parse(pointer.note)).sort(), ['blogId', 'captureHash', 'format', 'logNo']);
+  assert.equal(await f.scoped.readNaverCapture(ws, f.request.sourceVersionId), null);
+  assert.deepEqual(await f.scoped.restoreNaverCapturePhotos(f.request), { status: 'stored', sourceId: f.request.sourceId,
+    sourceVersionId: f.request.sourceVersionId, revision: before.revision, alreadyReceived: false });
+  const media = await f.scoped.readNaverCapture(ws, f.request.sourceVersionId);
+  assert.deepEqual(new Uint8Array(await media.photos[0].blob.arrayBuffer()), F.bytes);
+  assert.deepEqual(await f.scoped.read(ws), before); assert.deepEqual(await f.scoped.getSyncState(ws), sync);
+  assert.deepEqual(events.map(event => event.type), ['naver_capture_changed']);
+  const persisted = structuredClone(f.rows); let writes = 0; f.control.beforeWrite = () => writes++;
+  assert.equal((await f.scoped.restoreNaverCapturePhotos(f.request)).alreadyReceived, true);
+  assert.equal(writes, 0); assert.deepEqual(f.rows, persisted); assert.equal(events.length, 1);
+  // The full account stream may not erase a pointer already observed on this device.
+  const removed = structuredClone(before); removed.links = removed.links.filter(link => link.id !== pointer.id);
+  await assert.rejects(f.scoped.applySyncRemote(ws, f.binding, serverRow(removed, 2)), { code: 'immutable_naver_capture_reference' });
+  assert.deepEqual(f.rows, persisted);
+});
+test('same-body photo ambiguity, wrong version, missing reference, foreign owner and local-only copies never install recovered photos', async t => {
+  const F = require('./fixtures/naver-media.cjs'), restore = F.installDecoder(); t.after(restore);
+  const Capture = require('../assets/life/naver-capture.js');
+  const f = await naverReceiverFixture(t), before = structuredClone(f.rows);
+  const wrongPhoto = structuredClone(f.request); wrongPhoto.attachment.capture.payload.photos[0].caption = '본문은 같지만 다른 사진 판';
+  wrongPhoto.attachment.capture.capture_hash = await Capture.fingerprint(wrongPhoto.attachment.capture.payload);
+  const wrongOwner = structuredClone(f.request); wrongOwner.attachment.capture.owner_id = '99999999-9999-4999-8999-999999999999';
+  const wrongVersion = { ...f.request, sourceVersionId: f.installed.sourceVersions[0].id };
+  const missing = { ...f.request, expectedReference: null };
+  const local = structuredClone(f.request); local.attachment.localOnly = true;
+  for (const request of [wrongPhoto, wrongOwner, wrongVersion, missing, local]) {
+    assert.equal((await f.scoped.restoreNaverCapturePhotos(request)).status, 'rejected'); assert.deepEqual(f.rows, before);
+  }
+  const legacy = await naverReceiverFixture(t, { legacy: true });
+  const versionId = legacy.request.sourceVersionId, key = JSON.stringify(`naver-capture:${legacy.installed.workspaceId}:${versionId}`);
+  legacy.rows.get('meta').delete(key);
+  const prior = structuredClone(legacy.rows);
+  assert.equal((await legacy.scoped.restoreNaverCapturePhotos({ ...legacy.request, expectedReference: f.request.expectedReference })).status, 'rejected');
+  assert.deepEqual(legacy.rows, prior);
+});
+test('source photo recovery rolls back quota, completion abort, late reader changes and late account replacement without a Core write', async t => {
+  const F = require('./fixtures/naver-media.cjs'), restore = F.installDecoder(); t.after(restore);
+  for (const point of ['quota', 'completion', 'reader', 'account']) {
+    const f = await naverReceiverFixture(t), before = structuredClone(f.rows), events = []; let current = true;
+    f.scoped.subscribe(f.installed.workspaceId, event => events.push(event));
+    if (point === 'quota') f.control.failWrite = { name: 'meta', method: 'add' };
+    f.control.afterWrite = ({ name, method, value }) => {
+      if (name !== 'meta' || method !== 'add' || !value.key.startsWith('naver-capture:')) return;
+      if (point === 'completion') f.control.failCompletion = true;
+      if (point === 'reader') current = false;
+      if (point === 'account') f.storage.forAccount({ ...f.account, userId: '99999999-9999-4999-8999-999999999999' });
+    };
+    const result = await f.scoped.restoreNaverCapturePhotos(f.request, { isCurrent: () => current });
+    assert.equal(result.status, 'rejected', point); assert.deepEqual(f.rows, before, point); assert.deepEqual(events, [], point);
+    assert.equal(result.error.code, { quota: 'storage_quota', completion: 'storage_aborted', reader: 'request_cancelled', account: 'storage_scope_closed' }[point]);
+    f.control.afterWrite = null;
+  }
+});
+test('source photo recovery checks current active workspace and trash while preserving old exact citations', async t => {
+  const F = require('./fixtures/naver-media.cjs'), restore = F.installDecoder(); t.after(restore);
+  const f = await naverReceiverFixture(t), ws = f.installed.workspaceId;
+  await f.scoped.createWorkspace('다른 화면'); let before = structuredClone(f.rows);
+  assert.equal((await f.scoped.restoreNaverCapturePhotos(f.request)).error.code, 'request_cancelled'); assert.deepEqual(f.rows, before);
+  await f.scoped.setActive(ws);
+  const bundle = await f.scoped.read(ws);
+  assert.equal((await f.scoped.commitLocal({ workspaceId: ws, baseRevision: bundle.revision, operationId: Core.id(),
+    changes: Core.buildSourceStateChanges(bundle, f.request.sourceId, 'trash') })).status, 'stored');
+  before = structuredClone(f.rows);
+  assert.equal((await f.scoped.restoreNaverCapturePhotos(f.request)).error.code, 'source_trashed'); assert.deepEqual(f.rows, before);
+  assert.deepEqual((await f.scoped.read(ws)).records, bundle.records);
+});
+test('explicit legacy photo-reference preservation changes only the pointer and sync revision, with durable idempotent operation replay', async t => {
+  const F = require('./fixtures/naver-media.cjs'), restore = F.installDecoder(); t.after(restore);
+  const f = await naverReceiverFixture(t, { legacy: true }), ws = f.installed.workspaceId, before = await f.scoped.read(ws);
+  const request = { workspaceId: ws, sourceId: f.request.sourceId, sourceVersionId: f.request.sourceVersionId,
+    expectedCaptureHash: f.request.attachment.capture.capture_hash, expectedCaptureId: f.request.attachment.capture.id, operationId: Core.id() };
+  const rows = structuredClone(f.rows);
+  assert.deepEqual(await f.scoped.readNaverCapture(ws, request.sourceVersionId), f.request.attachment); assert.deepEqual(f.rows, rows);
+  const saved = await f.scoped.rememberNaverCaptureReference(request); assert.equal(saved.status, 'stored'); assert.equal(saved.alreadyRemembered, false);
+  const after = await f.scoped.read(ws); assert.equal(after.revision, before.revision + 1); assert.equal(after.links.length, before.links.length + 1);
+  assert.deepEqual(after.sources, before.sources); assert.deepEqual(after.sourceVersions, before.sourceVersions); assert.deepEqual(after.records, before.records);
+  assert.deepEqual(await f.scoped.readNaverCapture(ws, request.sourceVersionId), f.request.attachment);
+  assert.equal((await f.scoped.getSyncState(ws)).status, 'pending');
+  const persisted = structuredClone(f.rows); assert.deepEqual(await f.scoped.rememberNaverCaptureReference(request), saved); assert.deepEqual(f.rows, persisted);
+  assert.equal((await f.scoped.rememberNaverCaptureReference({ ...request, operationId: Core.id() })).alreadyRemembered, true);
+  assert.deepEqual(f.rows, persisted);
+});
+test('legacy pointer preservation rejects replaced or local-only media and rolls back every write boundary', async t => {
+  const F = require('./fixtures/naver-media.cjs'), restore = F.installDecoder(); t.after(restore);
+  for (const point of ['wrong_capture', 'local', 'bundle', 'operation', 'completion', 'late']) {
+    const f = await naverReceiverFixture(t, { legacy: true }), ws = f.installed.workspaceId;
+    const request = { workspaceId: ws, sourceId: f.request.sourceId, sourceVersionId: f.request.sourceVersionId,
+      expectedCaptureHash: f.request.attachment.capture.capture_hash, expectedCaptureId: f.request.attachment.capture.id, operationId: Core.id() };
+    if (point === 'wrong_capture') request.expectedCaptureId = Core.id();
+    if (point === 'local') {
+      const Media = require('../assets/life/naver-media.js'), copied = await Media.copy(await Media.read(await Media.pack({ bundle: f.installed, attachment: f.request.attachment })));
+      const local = copied.attachment; local.sourceId = request.sourceId; local.sourceVersionId = request.sourceVersionId;
+      const key = `naver-capture:${ws}:${request.sourceVersionId}`; f.rows.get('meta').set(JSON.stringify(key), { key, value: local });
+    }
+    const before = structuredClone(f.rows); let current = true;
+    if (point === 'bundle') f.control.failWrite = { name: 'bundles', method: 'put' };
+    if (point === 'operation') f.control.failWrite = { name: 'operations', method: 'add' };
+    f.control.afterWrite = ({ name }) => { if (name === 'operations') { if (point === 'completion') f.control.failCompletion = true; if (point === 'late') current = false; } };
+    assert.equal((await f.scoped.rememberNaverCaptureReference(request, { isCurrent: () => current })).status, 'rejected', point);
+    f.control.afterWrite = null; assert.deepEqual(f.rows, before, point);
+  }
+});
 test('workspace pair installation is atomic across second-write failure, duplicate IDs and account replacement', async t => {
   const { storage: base, control } = syncFixture(); t.after(() => base.close());
   let a = base.forAccount(accountA); const previous = await a.createWorkspace('기존 자료');

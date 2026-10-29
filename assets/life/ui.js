@@ -3392,32 +3392,29 @@
       let naverMediaHost = null;
       if (source.origin === 'naver_blog' && storage.readNaverCapture) {
         const mediaHost = node('section', null, 'nv-source-media'); mediaHost.id = 'lifeNaverSourceMedia'; naverMediaHost = mediaHost;
-        const workspaceId = state.bundle.workspaceId, generation = renderGeneration, account = state.syncAccountKey;
-        const current = () => !disposed && generation === renderGeneration && account === state.syncAccountKey && state.mode === 'source' &&
+        const workspaceId = state.bundle.workspaceId, generation = renderGeneration, workspace = workspaceGeneration, account = state.syncAccountKey;
+        const current = () => !disposed && generation === renderGeneration && workspace === workspaceGeneration && account === state.syncAccountKey && state.mode === 'source' &&
           state.bundle?.workspaceId === workspaceId && state.sourceId === source.id && state.sourceVersionId === version.id;
-        const mediaTask = storage.readNaverCapture(workspaceId, version.id).then(attachment => {
-          if (!current()) return;
-          if (!attachment) {
-            mediaHost.dataset.state = 'unverified';
-            // The following reader action has a negative top margin; leave room
-            // for this explicit navigation control instead of overlapping it.
-            mediaHost.style.marginBottom = '24px';
-            mediaHost.append(node('p', '이 원문 버전의 사진 사본을 이 브라우저에서 확인하지 못했습니다. 원래 글의 사진 유무와 서버 보관 여부는 알 수 없습니다.', 'life-help'));
-            mediaHost.append(node('p', '네이버 수집 사본이나 전용 ZIP을 확인할 수 있습니다. 수집 사본을 자료에 반영하면 새 원문 버전이 만들어질 수 있습니다.', 'life-help'));
-            if (storage.isAccountScoped) {
-              const review = button('네이버 수집 사본 확인', guarded(() => openNaverMediaReview(source, version)));
-              review.id = 'lifeNaverMediaReview'; mediaHost.append(review);
-            }
-            return;
+        naverPhotoView = global.HaedoLife.NaverCaptureUI.sourceMedia({ container: mediaHost, storage, workspaceId,
+          sourceId: source.id, sourceVersionId: version.id, getBundle: () => state.bundle, isCurrent: current,
+          createService: () => {
+            const navigation = navigationGeneration;
+            return global.HaedoLife.NaverCaptureSync.create({ storage, auth, core,
+              isCurrent: id => id === workspaceId && navigation === navigationGeneration && current() });
+          },
+          onReview: storage.isAccountScoped ? guarded(() => openNaverMediaReview(source, version)) : null,
+          onWritePhotos: writeNaverPhotos, onDownload: downloadNaverFile,
+          onReferenceStored: async result => {
+            if (!current()) return;
+            const onlyOwnChange = result.revision === state.bundle.revision + 1;
+            const bundle = await storage.read(workspaceId);
+            if (!current() || bundle.revision < state.bundle.revision) return;
+            state.bundle = bundle;
+            // A concurrent change still needs the existing visible refresh cue.
+            if (onlyOwnChange && state.bundle.revision === result.revision) { state.remoteChanged = false; renderHeader(); }
           }
-          mediaHost.append(node('p', attachment.localOnly ? '파일에서 복원한 원문·사진 사본 · 서버 보관 여부 미확인' : '검증한 수집 사진 사본 · 업로드 당시 원본 여부 미확인', 'life-help'));
-          naverPhotoView = global.HaedoLife.NaverCaptureUI.photos({ payload: attachment.capture.payload, photos: attachment.photos,
-            onWritePhotos: value => writeNaverPhotos({ sourceId: source.id, sourceVersionId: version.id, indexes: Array.isArray(value) ? value : value.indexes }),
-            onDownload: () => downloadNaverFile({ sourceId: source.id, sourceVersionId: version.id }) });
-          if (!current()) { naverPhotoView.dispose(); naverPhotoView = null; return; }
-          mediaHost.append(naverPhotoView.node); mediaHost.dataset.state = 'ready';
-        }).catch(() => { if (current()) { mediaHost.append(node('p', '사진 사본을 확인하지 못했습니다. 원문은 유지됩니다.', 'life-error')); mediaHost.dataset.state = 'error'; } });
-        mainRenderPromise = mediaTask;
+        });
+        mainRenderPromise = naverPhotoView.render();
       }
       if (version.contentText === null || version.contentText === undefined) {
         article.append(empty('본문 미확보 · 링크만 보관했습니다. 원래 출처를 열거나 본문을 제공해 새 버전으로 보관할 수 있습니다.'));

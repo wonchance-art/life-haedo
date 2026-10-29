@@ -55,12 +55,12 @@ function adapter() {
   } };
   return { rows, control, idb };
 }
-async function fixture() {
+async function fixture(sourceInput = {}) {
   const f = adapter(), options = { idb: f.idb, core: Core, channelFactory: null, account: accountA };
   const a = createStorage(options), b = createStorage(options), foreign = createStorage({ ...options, account: accountB });
   let bundle = await a.createWorkspace('익명 자료 글쓰기'), ws = bundle.workspaceId;
   const prepared = await Core.prepareImport({ origin: 'obsidian', title: '정확한 옛 자료',
-    text: '🌿\r\n선택한 구절\r\n채택하지 않은 원문 끝', author: '원저자', authorRelation: 'other', coverage: 'partial' }, bundle);
+    text: '🌿\r\n선택한 구절\r\n채택하지 않은 원문 끝', author: '원저자', authorRelation: 'other', coverage: 'partial', ...sourceInput }, bundle);
   await a.commitLocal({ workspaceId: ws, operationId: Core.id(), baseRevision: bundle.revision, changes: Core.buildImportChanges(bundle, prepared) });
   bundle = await a.read(ws);
   const material = M.material(bundle, prepared.source.id, prepared.version.id, Core.id); material.note = '자료별 비공개 메모';
@@ -335,4 +335,43 @@ test('a separate editing draft created during received-photo verification invali
     await f.b.savePhotoPost(target.workspaceId, draft, 0); const before = copy(f.rows); gate.resolve();
     await assert.rejects(applying, { code: 'material_continuity_changed' }); assert.deepEqual(f.rows, before);
   } finally { globalThis.HaedoLife.MaterialContinuity = module; gate.resolve(); }
+});
+
+async function photoReferenceFixture() {
+  const f = await fixture({ origin: 'naver_blog', url: 'https://blog.naver.com/fixture_blog/123456789012' });
+  const Ref = require('../assets/life/naver-capture-reference.js'), version = f.bundle.sourceVersions[0];
+  const pointer = Ref.create({ sourceVersionId: version.id, blogId: 'fixture_blog', logNo: '123456789012', captureHash: 'a'.repeat(64) },
+    { id: Core.id(), createdAt: '2026-10-27T00:00:00.000Z' });
+  assert.equal((await f.a.commitLocal({ workspaceId: f.ws, baseRevision: f.bundle.revision, operationId: Core.id(), changes: { put: { links: [pointer] } } })).status, 'stored');
+  f.bundle = await f.a.read(f.ws); return { ...f, pointer };
+}
+test('partial material receive omits photo pointers by design and both merge choices preserve existing exact reference', async t => {
+  for (const preserveRemote of [false, true]) {
+    const f = await photoReferenceFixture(); t.after(f.close); const { row } = await connect(f);
+    assert.deepEqual(row.data.bundle.links, []);
+    const baseline = await f.a.readMaterialContinuitySnapshot(f.ws, f.plan.id), next = copy(row); next.revision++;
+    next.data.plan.question = '계정에서 새로 받은 질문';
+    const result = await f.a.installMaterialContinuity(next, { target: { workspaceId: f.ws, planId: f.plan.id }, expectedFingerprint: baseline.fingerprint, preserveRemote });
+    const after = await f.a.read(f.ws);
+    assert.deepEqual(after.links, f.bundle.links); assert.deepEqual(after.sourceVersions, f.bundle.sourceVersions);
+    assert.equal(result.existing, true);
+    if (preserveRemote) assert.equal(result.bundle.revision, f.bundle.revision);
+  }
+});
+test('partial merge cannot replace an existing photo-pointer ID with a different link kind or mutate its exact source/version', async t => {
+  for (const attack of ['link_kind', 'source_identity', 'version_author']) {
+    const f = await photoReferenceFixture(); t.after(f.close); const { row } = await connect(f);
+    const baseline = await f.a.readMaterialContinuitySnapshot(f.ws, f.plan.id), next = copy(row); next.revision++;
+    if (attack === 'link_kind') {
+      next.data.bundle.links.push({ id: f.pointer.id, kind: 'source_edited_copy', entityRefs: copy(f.pointer.entityRefs),
+        revision: 1, createdAt: f.pointer.createdAt, updatedAt: f.pointer.updatedAt });
+    }
+    if (attack === 'source_identity') next.data.bundle.sources[0].url = 'https://blog.naver.com/other_blog/123456789012';
+    if (attack === 'version_author') next.data.bundle.sourceVersions[0].originalAuthor.label = '서버가 바꾼 저자';
+    await C.verify(next.data);
+    const before = copy(f.rows);
+    await assert.rejects(f.a.installMaterialContinuity(next, { target: { workspaceId: f.ws, planId: f.plan.id }, expectedFingerprint: baseline.fingerprint }),
+      { code: { link_kind: 'immutable_naver_capture_reference', source_identity: 'invalid_naver_capture_reference', version_author: 'immutable_source_version' }[attack] });
+    assert.deepEqual(f.rows, before, attack);
+  }
 });

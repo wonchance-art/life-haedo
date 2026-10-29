@@ -17,6 +17,7 @@
   const SOURCE_STATE_KINDS = ['source_trash', 'source_active'];
   const SOURCE_IMMUTABLE_KINDS = ['source_edited_copy', 'source_edit_base'];
   const SOURCE_LINK_KINDS = SOURCE_STATE_KINDS.concat(SOURCE_IMMUTABLE_KINDS);
+  const NAVER_CAPTURE_REFERENCE = 'naver_capture_reference';
   const now = () => new Date().toISOString();
 
   function fail(code, message) {
@@ -25,6 +26,12 @@
     throw error;
   }
   function assert(condition, code, message) { if (!condition) fail(code, message); }
+  function captureReferences() {
+    const api = root.HaedoLife?.NaverCaptureReference || (typeof require === 'function' && require('./naver-capture-reference.js'));
+    assert(api?.validateWorkspace && api?.assertPreserved, 'dependency_unavailable', '원문 사진 연결 검증기를 불러오지 못했습니다. 기존 자료는 유지했습니다.');
+    return api;
+  }
+  const hasCaptureReferences = bundle => bundle.links.some(link => link.kind === NAVER_CAPTURE_REFERENCE);
   function object(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value) &&
       (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
@@ -226,6 +233,7 @@
       else assert(SOURCE_STATE_KINDS.includes(next.kind) && canonical(next.entityRefs) === canonical(link.entityRefs) && next.createdAt === link.createdAt &&
         (canonical(next) === canonical(link) || next.revision > link.revision && Date.parse(next.updatedAt) >= Date.parse(link.updatedAt)), 'source_state_conflict', '자료의 휴지통 상태가 이전 값으로 바뀌었습니다.');
     }
+    if (hasCaptureReferences(previous) || hasCaptureReferences(incoming)) captureReferences().assertPreserved(previous, incoming);
     return true;
   }
   function assertSourceLinkPreservation(previous, incoming) {
@@ -314,6 +322,7 @@
       if (link.updatedAt !== undefined) timestamp(link.updatedAt);
     }
     validateSourceLinks(bundle, maps);
+    if (hasCaptureReferences(bundle)) captureReferences().validateWorkspace(bundle);
     for (const hint of bundle.resumeHints) {
       fields(hint, ['id', 'sourceId', 'sourceVersionId', 'recordId', 'locator', 'note', 'revision', 'createdAt', 'updatedAt'], '재개 정보');
       assert(hint.sourceId !== undefined || hint.sourceVersionId !== undefined || hint.recordId !== undefined, 'missing_reference', '재개할 자료 참조가 필요합니다.');
@@ -466,6 +475,10 @@
           assert(!(value.sourceRefs || []).some(ref => trashed.has(ref.sourceId)), 'source_trashed', '휴지통의 자료로 새 발췌를 만들지 않았습니다.');
         }
         if (name === 'links') {
+          if (previous && (previous.kind === NAVER_CAPTURE_REFERENCE || value.kind === NAVER_CAPTURE_REFERENCE)) {
+            assert(previous.kind === NAVER_CAPTURE_REFERENCE && canonical(previous) === canonical(value),
+              'immutable_naver_capture_reference', '보관한 원문 사진 연결은 변경할 수 없습니다. 기존 원문과 사진을 유지했습니다.');
+          }
           if (previous && (SOURCE_LINK_KINDS.includes(previous.kind) || SOURCE_LINK_KINDS.includes(value.kind))) {
             if (SOURCE_IMMUTABLE_KINDS.includes(previous.kind)) assert(canonical(previous) === canonical(value), 'immutable_source_link', '보관한 수정 이력은 변경할 수 없습니다.');
             else assert(SOURCE_STATE_KINDS.includes(previous.kind) && SOURCE_STATE_KINDS.includes(value.kind) &&
