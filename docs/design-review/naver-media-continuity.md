@@ -27,3 +27,7 @@
 정확 migration SHA256 `026730836fd04a9344ef831696857d7df806fc7fdb8d71605a509e3d398bae6d`를 운영에 추가 설치했다. 기존 Core/Library/Naver 함수 98개의 정의·ACL fingerprint는 설치 전후 `5e4f52a9292afb56bc48463a67724125`로 동일하다. 새 private registry의 RLS ON, authenticated 직접 쓰기 불가, anon RPC 실행 불가, authenticated wrapper 실행과 public invoker를 카탈로그로 재확인했다. 사용자 자료는 조회·변경하지 않았다. 실제 익명 HTTP RPC도 401/42501로 거절되는지 확인했다.
 
 보안 advisor의 기존 WARN 세 종류/개수는 동일하고 신규 WARN은 없다. 새 private registry는 정책 없는 RLS 표라는 INFO가 추가된다. 직접 표 접근을 전부 revoke하고 인증된 owner 검증 RPC로만 쓰는 의도된 구조이며 [공식 점검 설명](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)을 함께 검토했다. 이 설치 확인은 실제 네이버 upstream 수집이나 물리 기기 성공의 증거가 아니다.
+
+### 통합 CI의 기존 검사 도구 보완
+
+최초 CI에서 기존 설치 검사의 고정 migration 목록이 새 파일을 거절했다. 정확한 새 SHA 하나만 허용하고 기존 모든 데이터·catalog·ACL, 실제 synthetic 원문/사진 metadata와 영수증 사용 뒤 rollback/reinstall/replay 보존까지 확장해 원형 설치10개를 실제 PostgreSQL에서 재검증했다. 기존 Core·Naver 검사는 공통 모의 서버가 새 `life_naver_media_receipt_read`를 지원하지 않아 원래 예외를 로컬에서 재현했다. 공통 fixture에서 이 정확한 인증된 조회와 엄격한 키/식별자만 empty registry로 처리하고 unknown RPC 거절은 유지했다. 원형 Core5개(3폭·visual6)와 Naver3개가 콘솔·페이지/개인 쓰기 보존 단언 그대로 통과했다. 제품 코드는 이 보완에서 변경하지 않았다.
