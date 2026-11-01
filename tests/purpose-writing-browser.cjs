@@ -68,10 +68,33 @@ async function openReader(page, f, search = false) {
   await page.locator('#photoServerStatus:not([data-state="checking"])').waitFor();
 }
 async function more(page, action) {
+  // A reader reached by a return navigation reopens this menu and focuses the
+  // origin item in its next animation frame, before that view is first painted.
+  // Read the menu only after that frame: a click based on the unpainted closed
+  // state would toggle the menu the app has just opened.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => resolve())));
   const menu = page.locator('details.photo-more'); if (!await menu.evaluate(node => node.open)) await menu.locator(':scope > summary').click();
   await menu.locator('[data-post-action="' + action + '"]').click(); await settle(page);
   if (action === 'manage') await page.locator('.blog-manager-list[data-state="ready"]').waitFor();
   else await page.locator('#preservationPostSelection').waitFor();
+}
+// Holds the page's animation frames, as a loaded CI browser delivers a frame
+// late, until the first frame request after arm(). Records each read of the
+// reader menu's open state with the frames still pending at that moment.
+async function holdFrames(page) {
+  await page.evaluate(() => {
+    const frame = window.requestAnimationFrame, cancel = window.cancelAnimationFrame, held = new Map(), gate = window.__frameGate = { armed: false, held, reads: [] };
+    let next = -1;
+    const release = () => { window.requestAnimationFrame = frame; window.cancelAnimationFrame = cancel; const callbacks = [...held.values()]; held.clear(); callbacks.forEach(callback => frame.call(window, callback)); };
+    window.requestAnimationFrame = callback => { const id = next--; held.set(id, callback); if (gate.armed) release(); return id; };
+    window.cancelAnimationFrame = id => held.has(id) ? held.delete(id) : cancel.call(window, id);
+    const open = Object.getOwnPropertyDescriptor(HTMLDetailsElement.prototype, 'open');
+    Object.defineProperty(HTMLDetailsElement.prototype, 'open', { ...open, get() {
+      const value = open.get.call(this);
+      if (gate.armed && this.matches('.photo-more')) gate.reads.push({ pending: held.size, open: value, focus: document.activeElement?.dataset.focusKey || null });
+      return value;
+    } });
+  });
 }
 async function changePost(page, f, suffix) {
   return page.evaluate(async ({ f, suffix }) => {
@@ -192,6 +215,23 @@ async function main() {
       await page.getByRole('button', { name: '현재 글 확인', exact: true }).click(); await page.locator('.photo-article').waitFor(); assert.equal(await page.locator('.photo-article h2').innerText(), f.title);
       await page.getByRole('button', { name: '내 글로 돌아가기', exact: true }).click(); await page.locator('#homePosts').waitFor();
       assert.equal((await postState(page, f)).doc.revision, f.revision); assert.equal(downloads, 0);
+    });
+
+    await check('current post return restores the exact menu item in its next frame; menu actions wait for it', async ({ device }) => {
+      const { page } = await device('return-frame'); let f = await seed(page);
+      await openReader(page, f); await more(page, 'preserve'); await page.locator('#preservationPostSelection').waitFor();
+      f = await changePost(page, f, ' 수정');
+      await page.locator('#preservationPrepareExport').click(); await page.locator('#preservationError:not([hidden])').waitFor();
+      await page.locator('#lifeSubviewReturn').click(); await settle(page); await holdFrames(page);
+      await page.getByRole('button', { name: '현재 글 확인', exact: true }).click(); await page.locator('.photo-article').waitFor();
+      // The reader exists, but its pending return frame has not run yet.
+      const before = await page.evaluate(() => { __frameGate.armed = true; const menu = document.querySelector('details.photo-more');
+        return { pending: __frameGate.held.size, open: menu.hasAttribute('open'), focus: document.activeElement?.dataset.focusKey || null }; });
+      assert(before.pending > 0); assert.equal(before.open, false); assert.notEqual(before.focus, 'photo:preserve:' + f.postId);
+      await more(page, 'preserve'); await page.locator('#preservationPostSelection').waitFor();
+      const reads = await page.evaluate(() => __frameGate.reads);
+      assert.deepEqual(reads[0], { pending: 0, open: true, focus: 'photo:preserve:' + f.postId });
+      assert.deepEqual(await page.locator('#preservationPostSelection input:checked').evaluateAll(inputs => inputs.map(input => input.dataset.postId)), [f.postId]);
     });
 
     await check('reader action read failure stays readable; duplicate pending action and late navigation are suppressed', async ({ device, server }) => {
