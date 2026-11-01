@@ -154,7 +154,7 @@ begin
  perform pg_temp.blog_assert(jsonb_array_length(page2->'posts')=1 and page1->'posts'->0->>'token'<>page2->'posts'->0->>'token','timestamp ties paginate by token without omission');
  execute 'reset role';
 end $tests$;
--- 20261101090000_life_blog_account_sync: drafts, HEIC views and explicit deletion.
+-- 20261101091500_life_blog_account_sync: drafts, HEIC views and explicit deletion.
 do $sync$
 declare a uuid:=gen_random_uuid(); b uuid:=gen_random_uuid(); w uuid:=gen_random_uuid(); dr uuid:=gen_random_uuid(); hp uuid:=gen_random_uuid();
  r jsonb; d jsonb; h jsonb; heic jsonb; jpeg jsonb; path_o text; path_v text; tok uuid; media_id text; n integer;

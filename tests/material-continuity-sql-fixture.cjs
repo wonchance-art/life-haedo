@@ -10,7 +10,7 @@ class LocalSQLMaterialCloud extends LocalSQLBlogCloud {
   async prepare(migration) {
     assert.match(migration, /^supabase\/migrations\/\d{14}_life_material_[a-z_]+\.sql$/);
     this.docker(['exec', '-i', this.container, 'createdb', '-U', 'postgres', this.database]);
-    const files = await Promise.all(['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql', migration, 'supabase/migrations/20261101090000_life_blog_account_sync.sql',
+    const files = await Promise.all(['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql', migration, 'supabase/migrations/20261101091500_life_blog_account_sync.sql',
       'supabase/migrations/20261022031304_life_material_edited_copy_markers.sql'].map(name => fs.readFile(path.resolve(__dirname, '..', name), 'utf8')));
     this.docker(['exec', '-i', this.container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', this.database], files.join('\n'));
     this.installedMigrationSha256=digest(Buffer.from(files[2]));

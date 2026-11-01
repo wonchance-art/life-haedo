@@ -98,7 +98,7 @@ async function main() {
   const server = new LocalSQLBlogCloud({ container: process.env.BLOG_POSTGRES_CONTAINER, database: process.env.BLOG_POSTGRES_DATABASE });
   if (process.argv.includes('--prepare-database')) {
     server.docker(['exec', '-i', server.container, 'createdb', '-U', 'postgres', server.database]);
-    const files = await Promise.all(['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql', 'supabase/migrations/20261101090000_life_blog_account_sync.sql'].map(file => fs.readFile(path.resolve(__dirname, '..', file), 'utf8')));
+    const files = await Promise.all(['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql', 'supabase/migrations/20261101091500_life_blog_account_sync.sql'].map(file => fs.readFile(path.resolve(__dirname, '..', file), 'utf8')));
     server.docker(['exec', '-i', server.container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', server.database], files.join('\n'));
   }
   await server.initialize();

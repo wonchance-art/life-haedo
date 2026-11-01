@@ -2,7 +2,7 @@
 /* Two or more synthetic devices of one account: each has its own real Storage
  * (serialized in-memory IndexedDB adapter) and BlogSync; they share only a
  * synthetic private blog server that follows the SQL CAS/receipt/deletion
- * rules of supabase/migrations/20261101090000_life_blog_account_sync.sql. */
+ * rules of supabase/migrations/20261101091500_life_blog_account_sync.sql. */
 const assert = require('node:assert/strict');
 const { createStorage } = require('../../assets/life/storage.js');
 const Core = require('../../assets/life/core.js'), Photo = require('../../assets/life/photo-post.js'), Blog = require('../../assets/life/blog.js');

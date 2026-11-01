@@ -723,14 +723,14 @@
       if (!serverStatus || !serverActions || mode !== "read" || doc?.status !== "saved") return;
       const state = serverValue?.id === doc.id && serverValue.revision === doc.revision ? serverValue.status : "checking";
       const labels = {
-        checking: "이 브라우저에 저장됨 · 서버 보관 상태 확인 중…",
-        saving: "이 브라우저에 저장됨 · 비공개 서버에 보관 중…",
-        synced: "이 브라우저와 내 계정 서버에 비공개로 보관했습니다.",
-        not_enabled: "이 브라우저에 저장됨 · 서버에는 아직 보관하지 않았습니다.",
-        pending: "이 브라우저에 저장됨 · 서버 보관이 아직 끝나지 않았습니다.",
-        paused: "이 브라우저에 저장됨 · 이 글의 서버 연결은 중지되어 있습니다.",
-        conflict: "이 브라우저에 저장됨 · 서버에도 변경이 있습니다. 글 관리에서 양쪽 내용을 확인해 주세요.",
-        error: "이 브라우저에 저장됨 · 서버 보관을 확인하지 못했습니다. 다시 시도할 수 있습니다.",
+        checking: "저장됨 · 계정 동기화 확인 중…",
+        saving: "저장됨 · 모든 기기에 올리는 중…",
+        synced: "모든 기기에 저장됨 (비공개)",
+        not_enabled: "저장됨 · 곧 모든 기기에 올립니다.",
+        pending: "저장됨 · 계정에 올리기 대기 중",
+        paused: "저장됨 · 곧 모든 기기에 올립니다.",
+        conflict: "저장됨 · 다른 기기 변경을 맞추는 중입니다. 진 쪽 내용은 별도 초안으로 남습니다.",
+        error: "저장됨 · 계정에 올리지 못했습니다. 자동으로 다시 시도합니다.",
       };
       serverStatus.textContent = labels[state] || labels.error;
       serverStatus.dataset.state = state;
@@ -1262,7 +1262,7 @@
       if (doc.replaces)
         commandState.prepend(el("span", "기존 글 수정 중", "photo-editing-label"));
       save.classList.add("photo-save");
-      save.title = "이 브라우저에 저장한 뒤 내 계정 서버에 비공개로 보관";
+      save.title = "저장하면 모든 기기에 비공개로 동기화됩니다";
       // Narrow screens hide the scope line; the button still describes it.
       save.setAttribute("aria-describedby", scope.id);
       commands.append(iconControl(button("닫기", list), "close", "닫기"), commandState, save, more);
@@ -1582,7 +1582,18 @@
       );
       menu.append(recovery);
     }
+    // While a post is open for editing, background sync holds it so a change
+    // from another device cannot replace unsaved input; it applies after release.
+    let heldId = null, releaseHeld = null;
+    function syncHold() {
+      const want = host && valid() && mode === "edit" && doc?.id ? doc.id : null;
+      if (want === heldId) return;
+      try { releaseHeld?.(); } catch (_) {}
+      heldId = want; releaseHeld = null;
+      if (want) try { releaseHeld = blogSync?.holdPost?.(workspaceId, want) || null; } catch (_) {}
+    }
     function render() {
+      syncHold();
       if (!host || !valid()) return;
       cancelAutosave();
       cleanup();
@@ -1689,7 +1700,7 @@
           el("summary", "사진 글 보관 안내"),
           el(
             "p",
-            "글 저장 시 본문과 사진 원본의 비공개 서버 보관을 요청합니다. 보관 결과는 글의 서버 상태에서 확인하세요. 초안은 이 브라우저에 보관하며 공개는 따로 선택합니다. 일반 자료·구성 JSON에는 포함되지 않습니다. 다시 편집할 사본은 사진 포함 ZIP으로, 읽기만 할 파일은 HTML로 받으세요. 둘 다 원본 사진의 해상도와 바이트를 줄이지 않습니다. 사진 ZIP에는 인용 본문·출처 URL이 남지만 원문 근거 연결 정보는 포함되지 않습니다. 정확한 근거는 글의 더보기나 설정에서 근거 포함 파일로 보관하세요. 다운로드 후에는 기기의 파일 앱에서 저장 여부를 확인하세요.",
+            "글 저장 시 본문과 사진 원본의 비공개 서버 보관을 요청합니다. 보관 결과는 글의 서버 상태에서 확인하세요. 초안도 계정에 자동 저장되어 모든 기기에서 이어 쓸 수 있으며 공개는 따로 선택합니다. 일반 자료·구성 JSON에는 포함되지 않습니다. 다시 편집할 사본은 사진 포함 ZIP으로, 읽기만 할 파일은 HTML로 받으세요. 둘 다 원본 사진의 해상도와 바이트를 줄이지 않습니다. 사진 ZIP에는 인용 본문·출처 URL이 남지만 원문 근거 연결 정보는 포함되지 않습니다. 정확한 근거는 글의 더보기나 설정에서 근거 포함 파일로 보관하세요. 다운로드 후에는 기기의 파일 앱에서 저장 여부를 확인하세요.",
             "life-help",
           ),
         );
@@ -1854,7 +1865,7 @@
         if (!doc.title.trim()) heading.classList.add("life-sr-only");
         heading.tabIndex = -1;
         const metadata = el("p", (doc.archived ? "보관함 · " : "") +
-          (doc.status === "draft" ? "초안 · 이 브라우저" : "비공개 원본"), "life-meta photo-read-meta");
+          (doc.status === "draft" ? "초안" : "비공개 원본"), "life-meta photo-read-meta");
         const modified = new Date(doc.updatedAt);
         if (Number.isFinite(modified.getTime())) {
           const time = el("time", new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium" }).format(modified));
@@ -1933,6 +1944,8 @@
     }
     function detach() {
       epoch++;
+      try { releaseHeld?.(); } catch (_) {}
+      heldId = null; releaseHeld = null;
       serverSequence++; serverBusy = false; serverValue = null; serverStatus = serverActions = null;
       unsubscribeServer?.(); unsubscribeServer = null;
       cancelAutosave();
