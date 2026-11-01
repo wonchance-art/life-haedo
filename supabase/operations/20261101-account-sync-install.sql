@@ -9,30 +9,31 @@
 --   20261101160000_life_blog_delete_guard.sql  b10dc40f9b7136b81dc7450c6e4e40c60a8e09d9e4317cb3d0d255d463da833c
 --
 -- 안전 장치:
---   * 전체가 하나의 트랜잭션이다. 어느 단계든 실패하면 아무것도 바뀌지 않는다.
+--   * 설치 전체가 DO 블록 "한 문장"이다. SQL Editor가 문장을 어떤 연결·트랜잭션으로
+--     나눠 실행하든, 어느 단계에서 실패하면 그 문장 전체가 되돌려져 아무것도 바뀌지 않는다.
 --   * 설치 전후로 public·haedo_* 스키마의 모든 테이블과 storage.objects의 행 수를 비교하고,
---     하나라도 달라지면 예외를 내서 전체를 되돌린다(새로 만든 테이블은 비교에서 제외).
+--     하나라도 달라지면 예외를 내서 전체를 되돌린다(설치 중 새로 만든 테이블은 비교에서 제외).
 --   * 함수 밖에서 바뀌는 설정은 haedo-blog-originals 버킷의 허용 형식에 HEIC/HEIF를 더하는 것뿐이다.
 --   * 다시 실행해도 된다(if not exists / create or replace / drop ... if exists).
--- 실행 후 맨 아래 결과 표에서 모든 check 값이 true인지 확인한다.
+-- 실행 후 맨 아래 결과 표에서 모든 ok 값이 true인지 확인한다.
 
-begin;
-
-create temporary table haedo_install_before on commit drop as
-  select format('%I.%I', n.nspname, c.relname) as relation, 0::bigint as rows
-  from pg_class c join pg_namespace n on n.oid = c.relnamespace
-  where c.relkind = 'r' and (n.nspname = 'public' or n.nspname like 'haedo\_%' or (n.nspname = 'storage' and c.relname = 'objects'));
-do $snapshot$
-declare r record; n bigint;
+do $haedo_install$
+declare
+  r record;
+  n bigint;
+  before jsonb := '{}'::jsonb;
 begin
-  for r in select relation from haedo_install_before loop
+  for r in
+    select format('%I.%I', ns.nspname, c.relname) as relation
+    from pg_class c join pg_namespace ns on ns.oid = c.relnamespace
+    where c.relkind = 'r' and (ns.nspname = 'public' or ns.nspname like 'haedo\_%' or (ns.nspname = 'storage' and c.relname = 'objects'))
+  loop
     execute format('select count(*) from %s', r.relation) into n;
-    update haedo_install_before set rows = n where relation = r.relation;
+    before := before || jsonb_build_object(r.relation, n);
   end loop;
-end
-$snapshot$;
 
--- ===== 20261101090000_life_account_documents.sql =====
+  -- ===== 20261101090000_life_account_documents.sql =====
+  execute $haedo_m1$
 -- Small per-account documents that every signed-in device of the same owner
 -- replicates automatically (settings, reading position, plans, drafts, ...).
 -- Sync is not publication: nothing here is readable by anyone but the owner.
@@ -187,8 +188,10 @@ revoke all on function public.life_account_document_changes(bigint,integer) from
 grant execute on function public.life_account_document_put(text,bigint,uuid,jsonb,boolean,timestamptz) to authenticated;
 grant execute on function public.life_account_document_changes(bigint,integer) to authenticated;
 notify pgrst,'reload schema';
+$haedo_m1$;
 
--- ===== 20261101091500_life_blog_account_sync.sql =====
+  -- ===== 20261101091500_life_blog_account_sync.sql =====
+  execute $haedo_m2$
 -- Account-wide blog sync (2026-11-01 owner directive): every saved post and
 -- draft of the signed-in owner is kept on all of their devices. Extends
 -- 20261017144744_life_blog_originals without rewriting stored documents.
@@ -515,8 +518,10 @@ do $$ declare name text; signature text; private_name text; role_name text; begi
  end loop;
 end $$;
 notify pgrst,'reload schema';
+$haedo_m2$;
 
--- ===== 20261101130000_life_material_tombstones.sql =====
+  -- ===== 20261101130000_life_material_tombstones.sql =====
+  execute $haedo_m3$
 -- Preparation deletions reach every signed-in device. A deleted head stays as a tombstone (revision kept, data retained server-side for the immutable-version checks) and is no longer listed; get returns {id,revision,deleted,updated_at}. A later put with the tombstone revision revives it, so a device with unsent edits recreates instead of dropping.
 alter table haedo_material_private.heads add column if not exists deleted_at timestamptz;
 
@@ -585,8 +590,10 @@ revoke all on function public.life_material_delete(uuid,uuid,bigint) from public
 grant execute on function public.life_material_delete(uuid,uuid,bigint) to authenticated;
 grant execute on function haedo_material_private.remove(uuid,uuid,bigint),haedo_material_private.get(uuid),haedo_material_private.list(timestamptz,uuid) to authenticated;
 notify pgrst, 'reload schema';
+$haedo_m3$;
 
--- ===== 20261101140000_life_sync_edit_times.sql =====
+  -- ===== 20261101140000_life_sync_edit_times.sql =====
+  execute $haedo_m4$
 -- Compositions and library metadata may carry the writing device's local edit time (top-level "editedAt", an exact ISO-8601 UTC millisecond string) so automatic latest-wins conflict handling compares edit times, not upload times. The content validators are unchanged: the edit time is validated and removed before them. Clients fall back to sending without it while this migration is not installed.
 
 -- Keep the existing composition validator body as the content check.
@@ -624,8 +631,10 @@ returns boolean language sql immutable set search_path=pg_catalog as $$
 $$;
 
 notify pgrst, 'reload schema';
+$haedo_m4$;
 
--- ===== 20261101150000_life_account_documents_owner_lock.sql =====
+  -- ===== 20261101150000_life_account_documents_owner_lock.sql =====
+  execute $haedo_m5$
 -- Owner-level ordering for life_account_document_put (follows 20261101090000).
 -- Before this, puts of different keys of one owner held different advisory
 -- locks: a put could take a seq, commit after a later seq became visible, and a
@@ -702,8 +711,10 @@ $function$;
 revoke all on function public.life_account_document_put(text,bigint,uuid,jsonb,boolean,timestamptz) from public, anon, authenticated;
 grant execute on function public.life_account_document_put(text,bigint,uuid,jsonb,boolean,timestamptz) to authenticated;
 notify pgrst,'reload schema';
+$haedo_m5$;
 
--- ===== 20261101160000_life_blog_delete_guard.sql =====
+  -- ===== 20261101160000_life_blog_delete_guard.sql =====
+  execute $haedo_m6$
 -- Explicit post deletion never removes a public post (2026-11-01 review B1).
 -- A device can believe a post is unpublished while another device has just
 -- published it; the server is the authority. Such a request deletes nothing
@@ -737,42 +748,33 @@ end $$;
 revoke all on function haedo_blog_private.delete_post(uuid,bigint) from public,anon,authenticated,service_role;
 grant execute on function haedo_blog_private.delete_post(uuid,bigint) to authenticated;
 notify pgrst,'reload schema';
+$haedo_m6$;
 
-do $guard$
-declare r record; n bigint;
-begin
-  for r in select relation, rows from haedo_install_before loop
+  for r in select key as relation, value::bigint as rows from jsonb_each_text(before) loop
     execute format('select count(*) from %s', r.relation) into n;
     if n <> r.rows then
       raise exception 'Row count changed in % (% -> %); installation rolled back', r.relation, r.rows, n;
     end if;
   end loop;
-end
-$guard$;
 
-do $verify$
-begin
   if to_regclass('public.life_account_documents') is null then raise exception 'life_account_documents missing'; end if;
   if not (select relrowsecurity from pg_class where oid = 'public.life_account_documents'::regclass) then raise exception 'RLS disabled on life_account_documents'; end if;
-  if to_regprocedure('public.life_account_document_changes(bigint,integer)') is null then raise exception 'life_account_document_changes missing'; end if;
-  if not exists (select 1 from pg_proc where proname = 'life_account_document_put' and pronamespace = 'public'::regnamespace) then raise exception 'life_account_document_put missing'; end if;
-  if not exists (select 1 from pg_proc where proname = 'life_blog_sync_list' and pronamespace = 'public'::regnamespace) then raise exception 'life_blog_sync_list missing'; end if;
-  if not exists (select 1 from pg_proc where proname = 'life_blog_delete' and pronamespace = 'public'::regnamespace) then raise exception 'life_blog_delete missing'; end if;
-  if not exists (select 1 from pg_proc where proname = 'life_material_delete' and pronamespace = 'public'::regnamespace) then raise exception 'life_material_delete missing'; end if;
+  if (select count(distinct proname) from pg_proc where pronamespace = 'public'::regnamespace
+      and proname in ('life_account_document_put','life_account_document_changes','life_blog_sync_list','life_blog_delete','life_material_delete')) <> 5 then
+    raise exception 'a new RPC is missing';
+  end if;
   if exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace
              and p.proname in ('life_account_document_put','life_account_document_changes','life_blog_sync_list','life_blog_delete','life_material_delete')
              and has_function_privilege('anon', p.oid, 'execute')) then
     raise exception 'anon can execute a new private function';
   end if;
+  raise notice 'haedo account sync installed; % existing tables unchanged', (select count(*) from jsonb_object_keys(before));
 end
-$verify$;
-
-commit;
+$haedo_install$;
 
 -- 결과 확인용(읽기 전용)
 select 'account documents table + RLS' as check_name,
-       (to_regclass('public.life_account_documents') is not null
-        and (select relrowsecurity from pg_class where oid = 'public.life_account_documents'::regclass)) as ok
+       coalesce((select relrowsecurity from pg_class where oid = to_regclass('public.life_account_documents')), false) as ok
 union all
 select 'new RPCs present', (select count(distinct proname) = 5 from pg_proc where pronamespace = 'public'::regnamespace
   and proname in ('life_account_document_put','life_account_document_changes','life_blog_sync_list','life_blog_delete','life_material_delete'))

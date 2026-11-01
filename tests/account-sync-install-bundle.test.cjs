@@ -15,6 +15,7 @@ test('combined account sync install file matches its migrations', async () => {
   const actual = await fs.readFile(path.join(root, generator.OUTPUT), 'utf8');
   assert.equal(actual, expected, 'Run node scripts/build-account-sync-install.mjs');
   for (const name of generator.MIGRATIONS) assert.ok(actual.includes(`-- ===== ${name} =====`), name);
-  assert.equal((actual.match(/^begin;$/gm) || []).length, 1, 'one outer transaction');
-  assert.equal((actual.match(/^commit;$/gm) || []).length, 1, 'one outer commit');
+  // One DO statement: atomic however the SQL Editor splits or pools statements.
+  assert.equal((actual.match(/^do \$haedo_install\$$/gm) || []).length, 1, 'one installing statement');
+  assert.equal((actual.match(/^(begin|commit);$/gim) || []).length, 0, 'no transaction control that the editor could split');
 });
