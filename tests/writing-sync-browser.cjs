@@ -24,11 +24,6 @@ class WritingCloud extends FakeCloud {
     const request = route.request(), url = new URL(request.url()), kind = url.pathname.split('/').at(-1).replace('life_writing_draft_', '');
     const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS', 'content-type': 'application/json' };
     const send = (value, status = 200) => route.fulfill({ status, headers, body: status === 204 ? '' : JSON.stringify(value) });
-    if (url.pathname.startsWith('/rest/v1/rpc/life_material_')) {
-      // The preparation loop shares this background start; its schema is outside this simulator.
-      if (request.method() === 'OPTIONS') return send(null, 204);
-      this.expectedFailures++; return send({ code: 'PGRST202', message: 'Anonymous material schema missing' }, 404);
-    }
     if (!['/rest/v1/rpc/life_writing_draft_get', '/rest/v1/rpc/life_writing_draft_put', '/rest/v1/rpc/life_writing_draft_list'].includes(url.pathname)) return super.handle(route, device);
     if (request.method() === 'OPTIONS') return send(null, 204);
     if (this.offline.has(device) || this.writingOffline.has(device)) { this.expectedFailures++; return route.abort('internetdisconnected'); }

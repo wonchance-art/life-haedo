@@ -1739,6 +1739,52 @@
       });
       materialWritingChanged(workspaceId, planRevision); return saved;
     }
+    // Links whose preparation was deleted on this device: the deletion still has to reach the server.
+    async function listMaterialContinuityOrphans(workspaceId) {
+      collectionScope(workspaceId);
+      return transaction(['bundles', 'meta'], 'readonly', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const prefix = `material-continuity:${workspaceId}:`, plans = new Set((await materialWritingValue(meta, workspaceId)).plans.map(plan => plan.id)), result = [];
+        for (const key of await meta.getAllKeys()) {
+          if (typeof key !== 'string' || !key.startsWith(prefix)) continue;
+          const planId = key.slice(prefix.length);
+          if (!plans.has(planId)) { const state = await materialContinuityState(meta, workspaceId, planId); result.push({ planId, remoteId: state.remoteId, revision: state.revision, remoteRevision: state.remoteRevision }); }
+        }
+        return result;
+      });
+    }
+    // Drops one preparation's server link (never its sources or posts). With removePlan the
+    // preparation itself is removed too: used only when the server copy was deleted on another
+    // device and this device holds no unsent change (checked by the caller's exact fingerprint).
+    async function forgetMaterialContinuity(workspaceId, planId, options = {}) {
+      collectionScope(workspaceId); requireId(planId, '글 준비');
+      onlyFields(options, ['expectedRevision', 'removePlan', 'expectedFingerprint'], 'invalid_material_continuity');
+      requireRevision(options.expectedRevision);
+      let before = null;
+      if (options.removePlan) {
+        before = await readMaterialContinuitySnapshot(workspaceId, planId); scopeGuard();
+        if (before.fingerprint !== options.expectedFingerprint) throw fault('material_continuity_changed', '준비가 바뀌었습니다. 지우지 않고 다시 보냅니다.');
+      }
+      let planRevision = null;
+      await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'); await checkedBundle(tx.objectStore('bundles'), workspaceId, meta);
+        const state = await materialContinuityState(meta, workspaceId, planId);
+        if (!state || state.revision !== options.expectedRevision) throw fault('material_continuity_conflict', '준비 연결이 바뀌었습니다. 다시 확인합니다.');
+        const wrapper = clone(await materialWritingValue(meta, workspaceId));
+        if (options.removePlan) {
+          const current = await materialSnapshot(tx, workspaceId, planId);
+          if (materialSnapshotGuard(current) !== materialSnapshotGuard(before)) throw fault('material_continuity_changed', '준비가 바뀌었습니다. 지우지 않고 다시 보냅니다.');
+          wrapper.plans = wrapper.plans.filter(plan => plan.id !== planId); wrapper.revision++; materialWriting().validate(wrapper);
+          await meta.put({ key: `material-writing:${workspaceId}`, value: wrapper }); await meta.delete(materialOutputKey(workspaceId, planId));
+          planRevision = wrapper.revision;
+        }
+        await meta.delete(materialContinuityKey(workspaceId, planId));
+        const receipt = (await meta.get(materialInstallKey(state.remoteId)))?.value;
+        if (receipt?.workspaceId === workspaceId && receipt.planId === planId) await meta.delete(materialInstallKey(state.remoteId));
+        if (planRevision === null) planRevision = wrapper.revision;
+      });
+      materialWritingChanged(workspaceId, planRevision); return { workspaceId, planId, removed: !!options.removePlan };
+    }
     async function findMaterialContinuity(remoteId) {
       scopeGuard(); requireId(remoteId, '서버 준비'); if (!account) throw fault('auth_scope_required', '확인된 계정으로 준비를 받아 주세요.');
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
@@ -4652,7 +4698,7 @@
       readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, listBlogSyncStates, commitBlogSync, deletePhotoPost, clearBlogTombstone, readPageDrafts, savePageDrafts, savePagePost,
 
       scanLocalPosts, readLocalPostCandidate,
-      readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, finishMaterialContinuityClaim,
+      readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, listMaterialContinuityOrphans, forgetMaterialContinuity, finishMaterialContinuityClaim,
       readPublicCover, savePublicCover,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, readWorkbenchEditedAt, installWorkbenchCopy,
       readPreservationCatalog, readPreservationSnapshot, installPreservationCopy, commitNaverCapture, readNaverCapture, installNaverCaptureCopy,

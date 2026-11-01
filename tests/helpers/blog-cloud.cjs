@@ -43,6 +43,9 @@ return class BlogCloud extends BaseCloud {
     assert.equal(method, 'POST'); const rpc = url.pathname.split('/').at(-1), body = request.postDataJSON();
     this.blogCalls.push({ owner, device, rpc, body: copy(body) });
     if (rpc === 'life_blog_list') return send([...this.posts.values()].filter(row => row.owner === owner && (!body.p_workspace_id || row.workspace_id === body.p_workspace_id)).map(row => ({ id: row.id, workspace_id: row.workspace_id, revision: row.revision, title: row.data.title, updated_at: row.updated_at })));
+    // Body-free heads for the account-wide blog auto-sync (shape of life_blog_sync_list).
+    if (rpc === 'life_blog_sync_list') return send([...this.posts.values()].filter(row => row.owner === owner).map(row => ({ id: row.id, workspace_id: row.workspace_id, revision: row.revision,
+      status: row.data.status, title: row.data.title || '', updated_at: row.updated_at, document_updated_at: row.data.updatedAt || row.updated_at, archived: row.data.archived === true, publication: row.publication || null })));
     const key = owner + ':' + body.p_post_id, row = this.posts.get(key);
     if (rpc === 'life_blog_read') { const value = row ? copy(row) : null; if (value) delete value.owner; return send(value); }
     if (rpc === 'life_blog_prepare_asset') {
@@ -50,7 +53,8 @@ return class BlogCloud extends BaseCloud {
       return send({ bucket: 'haedo-blog-originals', path: assetPath, exists: this.originals.has(assetPath) });
     }
     if (rpc !== 'life_blog_save') return send({ code: 'unsupported_blog_rpc', message: 'Synthetic private transport does not implement this RPC' }, 400);
-    Blog.validateManifest(body.p_data); assert.equal(body.p_data.status, 'saved');
+    // Account blog sync stores drafts as well (migration 20261101091500); public paths still require saved posts.
+    Blog.validateManifest(body.p_data); assert(['saved', 'draft'].includes(body.p_data.status));
     const receiptKey = owner + ':' + body.p_operation_id, payload = JSON.stringify(body), prior = this.blogReceipts.get(receiptKey);
     let result;
     if (prior) { assert.equal(payload, prior.payload, 'A retry must reuse exactly the approved request'); result = prior.result; }

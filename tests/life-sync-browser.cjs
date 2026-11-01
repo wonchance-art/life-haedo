@@ -137,7 +137,8 @@ class WorkspaceCloud {
   }
 }
 
-const FakeCloud = require('./helpers/library-cloud.cjs').withLibraryCloud(require('./helpers/blog-cloud.cjs').withBlogCloud(WorkspaceCloud, accounts), accounts);
+// Account preparations sync in the background of every signed-in page; their RPCs are modelled here.
+const FakeCloud = require('./helpers/material-cloud.cjs').withMaterialCloud(require('./helpers/library-cloud.cjs').withLibraryCloud(require('./helpers/blog-cloud.cjs').withBlogCloud(WorkspaceCloud, accounts), accounts), accounts);
 
 async function platformContext(context,server,device,seed=accounts.a) {
   await server.attach(context,device);
