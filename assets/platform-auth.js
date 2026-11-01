@@ -63,7 +63,7 @@
     const sdkFactory = options.clientFactory || env.supabase?.createClient;
     const ready = validConfig(input, location.hostname) && typeof sdkFactory === 'function';
     const config = ready ? Object.freeze({ url: new URL(input.url).origin, key: input.key }) : null;
-    let user = null, session = null, epoch = 0, observedId, closed = false, locallyBlocked = false, signingOut = false, logoutPromise = null, pendingUser = null;
+    let user = null, session = null, epoch = 0, observedId, closed = false, locallyBlocked = false, signingOut = false, logoutPromise = null, pendingUser = null, parked = false;
     const listeners = new Set(), controllers = new Set();
     let backingStorage;
     try { backingStorage = options.storage || env.localStorage; } catch (_) {}
@@ -129,6 +129,10 @@
     }
     async function verify() {
       if (!client || blocked()) return null;
+      // A page in the back/forward cache starts no account check. The document
+      // becomes visible before pageshow; a check begun then would be shared by
+      // the resumed page's own verification and reveal it early.
+      if (parked) throw fault('request_cancelled');
       const expected = epoch;
       try {
         const current = await client.auth.getSession(); alive(expected);
@@ -224,7 +228,8 @@
         if (url.href !== location.href) env.history?.replaceState(null, '', url.pathname + url.search + url.hash);
       } catch (_) {}
     }
-    const pagehide = () => {
+    const pagehide = value => {
+      if (value?.persisted) parked = true;
       if (!hasPrivateSurface()) return;
       // Let a live workspace capture its caret/scroll before hiding changes
       // layout and focus. The notification never cancels navigation or conceal.
@@ -235,6 +240,7 @@
       if (value.key === LOGOUT_KEY && value.newValue === '1') invalidate();
     };
     const pageshow = async value => {
+      parked = false;
       if (!value.persisted || !hasPrivateSurface()) return;
       // A workspace owns its unsaved editor and verifies the resumed account
       // before revealing it. Let that owner handle one verification, rather than

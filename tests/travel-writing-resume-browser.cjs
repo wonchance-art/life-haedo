@@ -4,7 +4,7 @@
  * native IME, browser eviction, crash recovery or live Google verification. */
 'use strict';
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
-const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: only owner-scoped background sync calls are excluded.
+const { isBackgroundSync, isBackgroundSyncWrite } = require('./helpers/account-sync-rpcs.cjs'); // Owner directive 2026-11-01: owner-scoped private sync reads only; every write stays audited.
 process.env.BASE_URL ||= 'http://127.0.0.1:4231';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -54,7 +54,8 @@ async function main() {
   });
   context.on('request', request => {
     const url = new URL(request.url());
-    if (isBackgroundSync(request.url())) (report.backgroundSync ||= []).push(url.pathname); else if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ owner: server.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
+    if (url.origin === cloud && isBackgroundSync(url.href) && !isBackgroundSyncWrite(url.href)) (report.backgroundSyncReads ||= []).push(url.pathname);
+    else if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ owner: server.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
     else if (url.origin === cloud && request.method() !== 'GET' && request.method() !== 'OPTIONS' && url.pathname.startsWith('/rest/')) report.writes.push(url.pathname);
   });
   const page = await context.newPage(); page.setDefaultTimeout(15000); page.setDefaultNavigationTimeout(15000);

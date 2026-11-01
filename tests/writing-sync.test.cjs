@@ -93,3 +93,14 @@ test('a server without the draft schema is marked unavailable and not probed aga
   assert.equal(f.calls.filter(call => call[0] === 'list').length, 1); assert.equal(f.calls.filter(call => call[0] === 'enable').length, 0);
   assert.equal(f.manager.availability().status, 'unavailable'); assert.ok(f.manager.availability().until > Date.now());
 });
+
+test('nothing starts while the page is parked in the back/forward cache or suspended', async t => {
+  const handlers = new Map(), previous = { add: globalThis.addEventListener, remove: globalThis.removeEventListener };
+  globalThis.addEventListener = (name, fn) => handlers.set(name, fn); globalThis.removeEventListener = name => handlers.delete(name);
+  const f = fixture({ stages: [draft(1)] });
+  t.after(() => { f.manager.dispose(); globalThis.addEventListener = previous.add; globalThis.removeEventListener = previous.remove; });
+  f.manager.start(); await f.manager.refresh(); const before = f.calls.length;
+  handlers.get('pagehide')({ persisted: true });
+  await f.manager.refresh(); assert.equal(f.calls.length, before, 'no list, enable or sync while parked');
+  handlers.get('pageshow')({ persisted: true }); await f.manager.refresh(); assert.ok(f.calls.length > before, 'resumes after pageshow');
+});

@@ -7,6 +7,7 @@ const { LocalSQLNineCloud } = require('./nine-public-sql-fixture.cjs');
 const { playwright, makeContext, ready } = require('./unified-home-browser.cjs');
 const { accounts, cloud, base } = require('./life-sync-browser.cjs');
 const { seedPublicTargets, enterCover, ownerIdle, saved, snapshot } = require('./public-cover-browser.cjs');
+const { blogSyncSettled } = require('./helpers/blog-sync-settle.cjs');
 const { inspect } = require('../scripts/check-site-design.cjs');
 const visitorOnly = process.argv.includes('--visitor-only');
 const output = path.resolve(__dirname, '../.local/public-cover-visual' + (visitorOnly ? '-visitor' : ''));
@@ -77,7 +78,9 @@ async function main() {
       window.setTimeout = function (fn, ms, ...args) { if (ms === 30000) __coverVisualPolls.push(fn); return native.call(this, fn, ms, ...args); };
     });
     page = await owner.newPage(); visitor = await anon.newPage(); await page.goto(base + '/index.html'); await ready(page);
-    const fixture = await seedPublicTargets(page), before = await snapshot(page, fixture.workspaceId);
+    const fixture = await seedPublicTargets(page);
+    // Saved posts sync privately in the background (2026-11-01); snapshot once settled.
+    await blogSyncSettled(page, fixture.workspaceId); const before = await snapshot(page, fixture.workspaceId);
     const coverId = await page.evaluate(async f => {
       const L = HaedoLife, s = L.Shell.storage, state = await s.readPublicCover(f.workspaceId), cover = L.PublicCover.create(L.Core.id);
       cover.title = '여행을 읽고 들으며 다시 고르는 대표 글과 연재·취향 🌱';

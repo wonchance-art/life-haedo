@@ -171,7 +171,7 @@ test("library metadata snapshot is a side-effect-free exact whitelist with monot
   assert.deepEqual(f.rows, initial); assert.deepEqual(f.control.transactions.slice(from), [{ names: ["bundles", "meta"], mode: "readonly" }]);
   for (const suffix of ["annual", "page-drafts", "discovery-actions", "naver-capture", "private-capture"]) f.rows.get("meta").set(key(`${suffix}:${f.w}`), { key: `${suffix}:${f.w}`, value: { secret: suffix } });
   const before = copy(f.rows), state = await populated(f), snap = await f.a.readLibraryMetaSnapshot(f.w);
-  assert.equal(state.revision, 3); assert.deepEqual(Object.keys(state).sort(), ["collection", "format", "nineBoard", "revision", "sourceFolders", "workspaceId"]);
+  assert.equal(state.revision, 3); assert.deepEqual(Object.keys(state).sort(), ["collection", "editedAt", "format", "nineBoard", "revision", "sourceFolders", "workspaceId"]); assert.ok(Number.isFinite(Date.parse(state.editedAt)), "local edit time for latest-wins sync only");
   assert.deepEqual(snap.bundle, f.bundle); assert.deepEqual(f.rows.get("bundles"), before.get("bundles"));
   for (const [k, value] of before.get("meta")) assert.deepEqual(f.rows.get("meta").get(k), value);
   assert.equal(state.nineBoard.boards[0].areas[0].items[0].reference.value.sourceVersionId, f.prepared.version.id);
@@ -420,4 +420,17 @@ test("initial-empty CAS convergence rolls back every metadata/receipt write and 
     }
     assert.equal((await f.a[race.adopt](f.w, f.binding, race.remote, options)).status, "stored");
   });
+});
+
+test("an empty local side resolved against a server copy keeps no recovery copy and no notice", async t => {
+  const f = await fixture(t); await sourceReady(f);
+  // The server copy holds a folder; this device never edited its metadata (a first receiving device).
+  const remoteData = M.empty(f.w); remoteData.sourceFolders = F.createFolder(remoteData.sourceFolders, { name: "다른 기기 폴더", parentId: null });
+  const remote = row(f.w, remoteData, 1);
+  await f.a.bindLibraryMetaSync(f.w, f.binding); await f.a.setLibraryMetaConflict(f.w, f.binding, remote);
+  const empty = (await f.a.readLibraryMetaSnapshot(f.w)).metadata;
+  const result = await f.a.resolveLibraryMetaSync(f.w, f.binding, { choice: "remote", expectedLocalRevision: empty.revision, remoteRow: remote });
+  assert.equal(result.recoveryId, null); assert.deepEqual(await f.a.listLibraryMetaRecoveries(f.w), []);
+  const state = await f.a.getLibraryMetaState(f.w); assert.equal(state.noticeAt ?? null, null); assert.equal(state.lastRecoveryId, null);
+  assert.equal((await f.a.readLibraryMetaSnapshot(f.w)).metadata.sourceFolders.folders[0].name, "다른 기기 폴더");
 });

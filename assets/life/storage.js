@@ -2629,11 +2629,10 @@
         if (drafts.revision !== draftRevision) throw fault('page_draft_conflict', '다른 탭에서 초안이 바뀌었습니다. 입력을 보존했습니다.');
         const draft = drafts.posts.find(post => post.id === draftId);
         const finished = pagePosts().finish((previous.page.posts || []).concat(draft || []), draftId, new Date().toISOString(), options);
-        const state = clone(previous); state.page.posts = finished.posts; state.revision++; workbench().validate(state);
+        const state = clone(previous); state.page.posts = finished.posts; state.revision++; state.editedAt = new Date().toISOString(); workbench().validate(state);
         const composition = await readCompositionState(meta, workspaceId, previous);
         drafts.posts = drafts.posts.filter(post => post.id !== draftId); drafts.revision++; validatePageDrafts(drafts);
         await meta.put({ key: `workbench:${workspaceId}`, value: state });
-        await meta.put({ key: workbenchEditedKey(workspaceId), value: new Date().toISOString() });
         await meta.put({ key: `page-drafts:${workspaceId}`, value: drafts });
         if (composition) { composition.error = null; composition.status = compositionStatus(composition, state); await writeCompositionState(meta, composition); }
         return { workbench: clone(state), drafts: clone(drafts), id: finished.id };
@@ -2656,13 +2655,17 @@
       });
     }
     async function readWorkbench(workspaceId) { return (await readWorkbenchSnapshot(workspaceId)).workbench; }
+    // Content without the local edit time: equality, receipts and pristine checks ignore when it was edited.
+    function withoutEditTime(value) { if (!plain(value) || !Object.hasOwn(value, 'editedAt')) return value; const copy = { ...value }; delete copy.editedAt; return copy; }
     // Local edit time for latest-wins composition conflicts. Not part of the composition payload.
     const workbenchEditedKey = workspaceId => `workbenchEditedAt:${workspaceId}`;
     async function readWorkbenchEditedAt(workspaceId) {
       requireId(workspaceId, '작업공간');
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
         await checkedBundle(tx.objectStore('bundles'), workspaceId, tx.objectStore('meta'));
-        const value = (await tx.objectStore('meta').get(workbenchEditedKey(workspaceId)))?.value;
+        const state = await workbenchValue(tx.objectStore('meta'), workspaceId);
+        if (typeof state.editedAt === 'string') return state.editedAt;
+        const value = (await tx.objectStore('meta').get(workbenchEditedKey(workspaceId)))?.value; // before edit times travelled
         return typeof value === 'string' ? value : null;
       });
     }
@@ -2679,10 +2682,9 @@
         if (previous.revision !== baseRevision) throw fault('workbench_conflict', '다른 탭에서 구성을 바꿨습니다. 입력을 보존하고 최신 구성을 확인해 주세요.');
         assertNewWorkbenchVersionsActive(bundle, state, previous);
         const composition = await readCompositionState(meta, workspaceId, previous);
-        state.revision = baseRevision + 1;
+        state.revision = baseRevision + 1; state.editedAt = new Date().toISOString();
         workbench().validate(state);
         await meta.put({ key: `workbench:${workspaceId}`, value: state });
-        await meta.put({ key: workbenchEditedKey(workspaceId), value: new Date().toISOString() });
         if (composition) {
           composition.error = null; composition.status = compositionStatus(composition, state);
           await writeCompositionState(meta, composition);
@@ -3475,7 +3477,7 @@
         if (!head) throw fault('invalid_composition_metadata', '구성의 서버 비교 기준을 찾을 수 없습니다. 기존 내용은 보존했습니다.');
         const value = compositionRow(head.value, workspaceId);
         if (value.revision !== sync.remoteRevision || value.source_revision !== sync.sourceRevision ||
-            (state && state.revision === sync.syncedLocalRevision && stablePayload({ ...value.data, revision: state.revision }) !== stablePayload(state)) ||
+            (state && state.revision === sync.syncedLocalRevision && stablePayload(withoutEditTime({ ...value.data, revision: state.revision })) !== stablePayload(withoutEditTime(state))) ||
             (state && sync.status === 'synced' && state.revision !== sync.syncedLocalRevision)) {
           throw fault('invalid_composition_metadata', '구성의 서버 비교 기준이 일치하지 않습니다. 기존 내용은 보존했습니다.');
         }
@@ -3516,7 +3518,7 @@
       }
       const known = row.revision === sync.remoteRevision ? (await meta.get(`compositionHead:${sync.workspaceId}`))?.value :
         row.revision === sync.conflict?.remoteRevision ? sync.conflict.row : null;
-      if (known && (row.source_revision !== known.source_revision || stablePayload(row.data) !== stablePayload(known.data))) {
+      if (known && (row.source_revision !== known.source_revision || stablePayload(withoutEditTime(row.data)) !== stablePayload(withoutEditTime(known.data)))) {
         throw fault('remote_revision_mismatch', '같은 서버 버전의 구성 내용이 달라졌습니다. 기존 내용은 보존했습니다.');
       }
     }
@@ -3663,7 +3665,7 @@
         const state = await workbenchValue(meta, workspaceId);
         const sync = authorizedComposition(await readCompositionState(meta, workspaceId, state), binding);
         await checkCompositionRow(meta, sync, source, row);
-        const payload = value => stablePayload({ ...value, revision: 0 });
+        const payload = value => stablePayload(withoutEditTime({ ...value, revision: 0 }));
         if (!canAdoptInitial(sync, state, row, source, settings, workbench().empty(workspaceId), payload)) return { status: 'conflict', revision: state.revision };
         updated = { ...clone(row.data), revision: 1 }; workbench().validate(updated);
         await meta.put({ key: `workbench:${workspaceId}`, value: updated }); await saveCompositionHead(meta, row);
@@ -3721,10 +3723,13 @@
           throw fault('composition_conflict_changed', '비교한 구성이 바뀌었습니다. 최신 양쪽 내용을 다시 확인하세요.');
         }
         await checkCompositionRow(meta, sync, source, row);
-        const recoveryId = core().id(), discarded = request.choice === 'remote' ? state : row.data;
+        const discarded = request.choice === 'remote' ? state : row.data;
+        // An empty/default side (a first receiving device) has nothing to recover.
+        const emptySide = stablePayload(withoutEditTime({ ...discarded, revision: 0 })) === stablePayload({ ...workbench().empty(workspaceId), revision: 0 });
+        const recoveryId = emptySide ? null : core().id();
         // Keep exact references and material together before either side is replaced. The
         // existing integrated-backup restore remaps this durable snapshot into a new copy.
-        await meta.add({ key: `compositionRecovery:${workspaceId}:${recoveryId}`, value: {
+        if (recoveryId) await meta.add({ key: `compositionRecovery:${workspaceId}:${recoveryId}`, value: {
           id: recoveryId, workspaceId, createdAt: new Date().toISOString(), bundle: clone(bundle), workbench: clone(discarded)
         } });
         const updated = request.choice === 'remote' ? { ...clone(row.data), revision: state.revision + 1 } : state;
@@ -3733,7 +3738,8 @@
         await saveCompositionHead(meta, row);
         sync.remoteRevision = row.revision; sync.sourceRevision = row.source_revision; sync.outbox = null; sync.conflict = null; sync.error = null;
         sync.syncedLocalRevision = request.choice === 'remote' ? updated.revision : -1;
-        sync.status = request.choice === 'remote' ? 'synced' : 'pending'; sync.lastRecoveryId = recoveryId; sync.noticeAt = new Date().toISOString();
+        sync.status = request.choice === 'remote' ? 'synced' : 'pending';
+        if (recoveryId) { sync.lastRecoveryId = recoveryId; sync.noticeAt = new Date().toISOString(); }
         return { workbench: clone(updated), metadata: await writeCompositionState(meta, sync), recoveryId };
       });
       if (request.choice === 'remote') workbenchChanged(result.workbench);
@@ -3793,10 +3799,12 @@
     async function libraryMetaValue(meta, workspaceId) {
       const sourceFolders = await sourceFoldersValue(meta, workspaceId), collection = await collectionValue(meta, workspaceId), nineBoard = await nineBoardValue(meta, workspaceId);
       const state = { format: 'life-library-meta-v1', workspaceId, revision: libraryMetaRevision([sourceFolders, collection, nineBoard]), sourceFolders, collection, nineBoard };
+      const edited = (await meta.get(libraryMetaEditedKey(workspaceId)))?.value;
+      if (typeof edited === 'string' && Number.isFinite(Date.parse(edited))) state.editedAt = edited;
       libraryMeta().validate(state); return state;
     }
     function libraryMetaContent(state) {
-      return stablePayload({ ...state, revision: 0, sourceFolders: { ...state.sourceFolders, revision: 0 },
+      return stablePayload({ ...withoutEditTime(state), revision: 0, sourceFolders: { ...state.sourceFolders, revision: 0 },
         collection: { ...state.collection, revision: 0 }, nineBoard: { ...state.nineBoard, revision: 0 } });
     }
     async function readLibraryMetaSnapshot(workspaceId) {
@@ -3817,6 +3825,8 @@
       await meta.put({ key: sourceFoldersKey(workspaceId), value: state.sourceFolders });
       await meta.put({ key: `collection:${workspaceId}`, value: state.collection });
       await meta.put({ key: `nine-board:${workspaceId}`, value: state.nineBoard });
+      // The installed content carries the edit time of the device that wrote it.
+      if (typeof incoming.editedAt === 'string') await meta.put({ key: libraryMetaEditedKey(workspaceId), value: incoming.editedAt });
       return state;
     }
     function libraryMetaChildrenChanged(state) {
@@ -3930,7 +3940,7 @@
       }
       const known = row.revision === sync.remoteRevision ? (await meta.get(`libraryMetaHead:${sync.workspaceId}`))?.value :
         row.revision === sync.conflict?.remoteRevision ? sync.conflict.row : null;
-      if (known && (row.source_revision !== known.source_revision || stablePayload(row.data) !== stablePayload(known.data))) {
+      if (known && (row.source_revision !== known.source_revision || stablePayload(withoutEditTime(row.data)) !== stablePayload(withoutEditTime(known.data)))) {
         throw fault('remote_revision_mismatch', '같은 서버 버전의 구성 내용이 달라졌습니다. 기존 내용은 보존했습니다.');
       }
     }
@@ -4117,10 +4127,11 @@
           throw fault('composition_conflict_changed', '비교한 구성이 바뀌었습니다. 최신 양쪽 내용을 다시 확인하세요.');
         }
         await checkLibraryMetaRow(meta, sync, source, row);
-        const recoveryId = core().id(), discarded = request.choice === 'remote' ? state : row.data;
+        const discarded = request.choice === 'remote' ? state : row.data;
+        const recoveryId = libraryMetaContent(discarded) === libraryMetaContent(libraryMeta().empty(workspaceId)) ? null : core().id();
         // Keep the nonchosen metadata and exact Core snapshot together without
         // publishing the recovery or changing any source/version identities.
-        await meta.add({ key: `libraryMetaRecovery:${workspaceId}:${recoveryId}`, value: {
+        if (recoveryId) await meta.add({ key: `libraryMetaRecovery:${workspaceId}:${recoveryId}`, value: {
           id: recoveryId, workspaceId, createdAt: new Date().toISOString(), bundle: clone(bundle), metadata: clone(discarded)
         } });
         libraryMeta().validateReferences(bundle, row.data);
@@ -4128,7 +4139,8 @@
         await saveLibraryMetaHead(meta, row);
         sync.remoteRevision = row.revision; sync.sourceRevision = row.source_revision; sync.outbox = null; sync.conflict = null; sync.error = null;
         sync.syncedLocalRevision = request.choice === 'remote' ? updated.revision : -1;
-        sync.status = request.choice === 'remote' ? 'synced' : 'pending'; sync.lastRecoveryId = recoveryId; sync.noticeAt = new Date().toISOString();
+        sync.status = request.choice === 'remote' ? 'synced' : 'pending';
+        if (recoveryId) { sync.lastRecoveryId = recoveryId; sync.noticeAt = new Date().toISOString(); }
         return { metadata: clone(updated), sync: await writeLibraryMetaState(meta, sync), recoveryId };
       });
       if (request.choice === 'remote') libraryMetaChildrenChanged(result.metadata);
@@ -4450,15 +4462,16 @@
           loser.state = 'draft'; delete loser.appliedResult; delete loser.baseChanged;
           Object.assign(loser, { sourceId: null, baseSourceRevision: null, baseSourceVersionId: null });
         }
-        recovered = { ...writing().recoverDraft(loser), revision: 1 };
-        await stages.add(recovered);
+        // An empty draft side has nothing to recover.
+        recovered = !String(loser.title || '').trim() && !String(loser.text || '').trim() ? null : { ...writing().recoverDraft(loser), revision: 1 };
+        if (recovered) await stages.add(recovered);
         const updated = useRemote ? { ...clone(row.data), revision: stage.revision + 1 } : stage;
         writing().validateDraft(updated); if (useRemote) await stages.put(updated);
         await saveWritingHead(meta, row);
         Object.assign(sync, { remoteRevision: row.revision, sourceRevision: row.source_revision, syncedLocalRevision: useRemote ? updated.revision : -1,
-          outbox: null, conflict: null, error: null, status: useRemote ? 'synced' : 'pending', notice: { recoveryStageId: recovered.stageId, at: new Date().toISOString() } });
-        return { stage: clone(updated), metadata: await writeWritingState(meta, sync), recoveryStageId: recovered.stageId };
-      }); writingChanged(recovered); writingChanged(result.stage); writingSyncChanged(result.metadata); return result;
+          outbox: null, conflict: null, error: null, status: useRemote ? 'synced' : 'pending', notice: recovered ? { recoveryStageId: recovered.stageId, at: new Date().toISOString() } : (sync.notice || null) });
+        return { stage: clone(updated), metadata: await writeWritingState(meta, sync), recoveryStageId: recovered?.stageId || null };
+      }); if (recovered) writingChanged(recovered); writingChanged(result.stage); writingSyncChanged(result.metadata); return result;
     }
     function validateStageResult(value, bundle) {
       try {

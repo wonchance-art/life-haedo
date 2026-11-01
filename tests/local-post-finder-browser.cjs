@@ -174,7 +174,7 @@ async function main() {
       const url = new URL(request.url());
       if (isBackgroundSync(request.url())) (report.backgroundSync ||= []).push(url.pathname); else if (isLegacyLibraryCapabilityRead(request, { cloud, server: fake })) report.libraryCapabilityReads.push({ owner: fake.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
       else if (url.origin === cloud && url.pathname.startsWith('/rest/v1/') && !['GET', 'HEAD', 'OPTIONS'].includes(request.method()) &&
-          !/^\/rest\/v1\/rpc\/life_(?:blog|blog_sync|material)_list$/.test(url.pathname)) { // read-only list RPCs are POSTs
+          url.pathname !== '/rest/v1/rpc/life_blog_list') {
           report.remoteWrites++; (report.remoteWritePaths ||= []).push(url.pathname); }
     });
     // Instrument only the asynchronous test boundary. Original storage APIs and

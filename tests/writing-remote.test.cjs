@@ -16,7 +16,7 @@ const request = () => ({ workspaceId: ID, draftId: DRAFT, expectedRevision: 0, o
 const summary = () => ({ draft_id: DRAFT, title: '산책 후 다시 쓰는 생각', state: 'draft', revision: 1, updated_at: '2026-10-06T00:02:00Z' });
 function fixture() {
   const state = { authCalls: 0, calls: [], disposed: 0, authResult: { data: { user: { id: ID } }, error: null }, result: { data: row(), error: null } };
-  const auth = { ready: true, config };
+  const auth = { ready: true, config, user: { id: ID }, epoch: 0 };
   const clientFactory = (provided, options) => {
     assert.equal(provided, auth); assert.deepEqual(options, { scope: 'writing' });
     return (url, key) => {
@@ -24,11 +24,11 @@ function fixture() {
       return { auth: { async getUser() { state.authCalls++; return state.authPending || state.authResult; }, dispose() { state.disposed++; } }, async rpc(name, params) { state.calls.push({ name, params }); return state.pending || state.result; } };
     };
   };
-  return { state, adapter: Remote.create({ auth, writing: Writing, clientFactory }) };
+  return { state, auth, adapter: Remote.create({ auth, writing: Writing, clientFactory }) };
 }
-test('selected draft read verifies shared account and returns a detached exact identity', async () => {
+test('selected draft read uses the shell-verified account without a per-call auth round trip and returns a detached exact identity', async () => {
   const { state, adapter } = fixture(); const result = await adapter.read(ID, DRAFT);
-  assert.equal(state.authCalls, 1); assert.deepEqual(state.calls, [{ name: 'life_writing_draft_get', params: { p_workspace_id: ID, p_draft_id: DRAFT } }]);
+  assert.equal(state.authCalls, 0); assert.deepEqual(state.calls, [{ name: 'life_writing_draft_get', params: { p_workspace_id: ID, p_draft_id: DRAFT } }]);
   assert.deepEqual(result, state.result.data); result.data.text = 'caller change'; assert.notEqual(state.result.data.data.text, result.data.text);
   state.result.data = null; assert.equal(await adapter.read(ID, DRAFT), null); adapter.dispose();
 });
@@ -56,10 +56,10 @@ test('invalid request and oversized body are blocked before account or network a
   await assert.rejects(adapter.write({ ...request(), data: { ...data(), text: '한'.repeat(350000) } }));
   assert.equal(state.calls.length, 0); assert.equal(state.authCalls, 0); adapter.dispose();
 });
-test('write snapshots payload and scalar identity before asynchronous account verification', async () => {
-  const { state, adapter } = fixture(), waiting = deferred(), input = request(); state.authPending = waiting.promise; state.result = { data: { status: 'stored', revision: 1 }, error: null };
+test('write snapshots payload and scalar identity before the asynchronous request', async () => {
+  const { state, adapter } = fixture(), waiting = deferred(), input = request(); state.pending = waiting.promise;
   const pending = adapter.write(input); input.workspaceId = OTHER; input.draftId = OTHER; input.operationId = OTHER; input.expectedRevision = 90; input.sourceRevision = 80; input.data.text = 'mutated';
-  waiting.resolve(state.authResult); assert.deepEqual(await pending, { status: 'stored', revision: 1 });
+  waiting.resolve({ data: { status: 'stored', revision: 1 }, error: null }); assert.deepEqual(await pending, { status: 'stored', revision: 1 });
   assert.deepEqual(state.calls[0], { name: 'life_writing_draft_put', params: { p_workspace_id: ID, p_draft_id: DRAFT, p_expected_revision: 0, p_operation_id: OP, p_source_revision: 2, p_data: data() } }); adapter.dispose();
 });
 test('stored conflict missing replies stay distinct and malformed results reject', async () => {
@@ -69,11 +69,11 @@ test('stored conflict missing replies stay distinct and malformed results reject
   adapter.dispose();
 });
 test('remote schema permissions and network errors redact raw private diagnostics', async () => {
-  const { state, adapter } = fixture();
+  const { state, adapter, auth } = fixture();
   for (const [error, code] of [[{ code: 'PGRST202', message: 'private SQL token' }, 'schema_missing'], [{ code: '42501', message: 'private owner identity' }, 'permission_denied'], [{ message: 'life_writing_draft_source_not_ready' }, 'writing_source_pending'], [{ message: 'life_writing_draft_operation_mismatch' }, 'operation_mismatch'], [{ status: 401, message: 'private bearer' }, 'auth_required'], [{ name: 'AbortError', message: 'private URL' }, 'request_cancelled'], [{ message: 'private transport trace' }, 'network_error']]) {
     state.result = { error, data: null }; await assert.rejects(adapter.read(ID, DRAFT), failure => failure.code === code && !failure.message.includes('private'));
   }
-  state.authResult = { data: { user: null }, error: null }; const calls = state.calls.length; await assert.rejects(adapter.write(request()), { code: 'auth_required' }); assert.equal(state.calls.length, calls); adapter.dispose();
+  auth.user = null; const calls = state.calls.length; await assert.rejects(adapter.write(request()), { code: 'auth_required' }); assert.equal(state.calls.length, calls); adapter.dispose();
 });
 test('dispose rejects delayed replies and releases only borrowed transport once', async () => {
   const { state, adapter } = fixture(), waiting = deferred(); state.pending = waiting.promise;

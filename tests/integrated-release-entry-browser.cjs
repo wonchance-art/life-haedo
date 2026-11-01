@@ -2,6 +2,7 @@
  * Auth and empty owner remote catalogues are synthetic. No remote publication,
  * production account/data, actual Google login or Apple device claim. */
 'use strict';
+const { isBackgroundSync } = require('./helpers/account-sync-rpcs.cjs');
 const { openBlogMenu, openRecordsMenu } = require('./helpers/feature-menus.cjs');
 process.env.BASE_URL ||= 'http://127.0.0.1:4220';
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
@@ -27,6 +28,8 @@ async function context(browser, name, size, account = accounts.a, oldAuthSource 
   });
   value.on('request', request => {
     const url = new URL(request.url());
+    // Owner-scoped private background sync (owner directive 2026-11-01) is listed separately; publication stays a write.
+    if (url.origin === cloud && isBackgroundSync(url.href)) { if (report) (report.backgroundSync ||= []).push(url.pathname); return; }
     if (url.origin === cloud && /\/rest\/v1\/rpc\/(?:life_(?:blog_(?:save|publish|unpublish|prepare_asset)|public_page_put|material_put)|life_sync_put)$/.test(url.pathname)) report?.writes.push(url.pathname);
   });
   value.on('page', page => {

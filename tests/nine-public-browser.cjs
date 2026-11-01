@@ -1,4 +1,12 @@
 'use strict';
+const syncRpcs = require('./helpers/account-sync-rpcs.cjs');
+// 2026-11-01: the owner's saved posts sync privately in the background. Nine-slot
+// publication must still cause no blog publication and no other account's access.
+function privateSyncOnly(server) {
+  const other = server.blogRequests.filter(row => !((syncRpcs.reads.has(row.rpc) || syncRpcs.writes.has(row.rpc)) && Object.values(accounts).some(account => account.id === row.owner)));
+  assert.deepEqual(other.map(row => [row.rpc, row.owner]), [], 'only owner-scoped private blog sync');
+  assert(server.assetRequests.every(row => Object.values(accounts).some(account => account.id === row.owner) && ['GET', 'POST', 'DELETE'].includes(row.method)), 'only the owner\'s private originals');
+}
 const { openBlogMenu } = require('./helpers/feature-menus.cjs');
 // Actual owner UI/SDK/IndexedDB -> isolated PostgreSQL RPC -> anonymous reader.
 process.env.BASE_URL ||= 'http://127.0.0.1:4213';
@@ -191,7 +199,7 @@ async function main() {
       const wire = readPublic().snapshot; privateExcluded(wire); assert.deepEqual(wire.entries[0].attachments, fixture.attachments);
       assert.equal(wire.entries.length, 1); assert.equal(wire.entries[0].note, null); assert.deepEqual(wire.entries[0].parts, []);
       assert.deepEqual(await original(), before); assert.equal(server.rpc(accounts.a.id, 'life_public_page_get', { p_workspace_id: fixture.ws }).publicId, oldPage.publicId);
-      assert.equal(server.blogRequests.length, 0); assert.equal(server.assetRequests.length, 0);
+      privateSyncOnly(server);
     });
     await check('An anonymous visitor reads all nine ordered items, full details and explicit source without opening personal storage or external media automatically', async () => {
       await visitor.goto(publicURL); await publicState('published'); privateExcluded(await visitor.locator('#ninePublicContent').innerText());
@@ -358,7 +366,7 @@ async function main() {
       assert.equal(server.rpc(accounts.a.id, 'life_public_page_get', { p_workspace_id: fixture.ws }).publicId, oldPage.publicId);
     });
     assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.external, []);
-    assert.equal(server.blogRequests.length, 0); assert.equal(server.assetRequests.length, 0); report.pass = true;
+    privateSyncOnly(server); report.pass = true;
   } catch (error) { report.pass = false; report.failure = error.stack; throw error; }
   finally { for (const value of contexts) await value.close().catch(() => {}); await browser.close(); await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(report, null, 2)); }
 }

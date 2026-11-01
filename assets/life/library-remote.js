@@ -49,7 +49,7 @@
     const owner = auth.getAccount?.()?.userId || auth.user?.id, project = auth.config.url;
     check(id(owner), 'auth_required');
     const client = clientFactory(auth, { scope: 'library' })(auth.config.url, auth.config.key);
-    let disposed = false;
+    let disposed = false, editTimes = true;
     function alive(context) {
       check(!disposed, 'request_cancelled');
       if (context) check(context.authEpoch === auth.epoch && auth.config.url === project &&
@@ -130,10 +130,18 @@
     async function write(request) {
       const { workspaceId, expectedRevision, operationId, sourceRevision } = request || {};
       check(id(workspaceId) && id(operationId) && revision(expectedRevision) && revision(sourceRevision, 1), 'invalid_request');
-      const snapshot = data(request.data, workspaceId);
+      let snapshot = data(request.data, workspaceId);
+      if (!editTimes) delete snapshot.editedAt;
       return perform(async ctx => {
-        const value = await rpc(ctx, 'life_library_meta_put', { p_workspace_id: workspaceId, p_expected_revision: expectedRevision,
+        const put = () => rpc(ctx, 'life_library_meta_put', { p_workspace_id: workspaceId, p_expected_revision: expectedRevision,
           p_operation_id: operationId, p_source_revision: sourceRevision, p_data: snapshot });
+        let value;
+        // A server before migration 20261101140000 rejects the edit time; content is unchanged without it.
+        try { value = await put(); }
+        catch (error) {
+          if (!Object.hasOwn(snapshot, 'editedAt') || !/life_library_invalid_metadata/.test(error?.message || '')) throw error;
+          editTimes = false; snapshot = { ...snapshot }; delete snapshot.editedAt; value = await put();
+        }
         if (value?.status === 'missing') { fields(value, ['status']); return { status: 'missing' }; }
         fields(value, ['status', 'revision']);
         check(['stored', 'conflict'].includes(value.status) && revision(value.revision, 1) &&

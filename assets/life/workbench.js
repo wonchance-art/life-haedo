@@ -94,7 +94,9 @@
       reflection: { versionIds: [], note: '' } };
   }
   function validate(state) {
-    fields(state, ['format', 'workspaceId', 'revision', 'groups', 'page', 'reflection'], ['discovery', 'books']);
+    fields(state, ['format', 'workspaceId', 'revision', 'groups', 'page', 'reflection'], ['discovery', 'books', 'editedAt']);
+    // Local edit time used for latest-wins sync conflicts; not part of the composition content.
+    if (Object.hasOwn(state, 'editedAt')) assert(typeof state.editedAt === 'string' && state.editedAt.length <= 40 && Number.isFinite(Date.parse(state.editedAt)), 'invalid_workbench', '구성의 수정 시각을 확인해 주세요.');
     assert(state.format === 'life-workbench-v1', 'unsupported_workbench', '지원하는 구성 파일 형식이 아닙니다.');
     identifier(state.workspaceId);
     assert(Number.isSafeInteger(state.revision) && state.revision >= 0, 'invalid_revision', '구성 저장 버전을 확인해 주세요.');

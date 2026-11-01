@@ -39,7 +39,7 @@
     clientFactory = root.HaedoLife?.PlatformRemote?.clientFactory } = {}) {
     if (!auth?.ready || !workbench?.validate || !clientFactory) throw fault('auth_required');
     const client = clientFactory(auth, { scope: 'composition' })(auth.config.url, auth.config.key);
-    let disposed = false;
+    let disposed = false, editTimes = true;
     const alive = () => { if (disposed) throw fault('request_cancelled'); };
     function data(value, workspaceId) {
       try {
@@ -72,11 +72,17 @@
       const { workspaceId, operationId, expectedRevision, sourceRevision } = request || {};
       if (!identifier(workspaceId) || !identifier(operationId) || !validRevision(expectedRevision) || !validRevision(sourceRevision, 1)) throw fault('invalid_request');
       try {
-        const snapshot = data(request.data, workspaceId);
+        let snapshot = data(request.data, workspaceId);
+        if (!editTimes) delete snapshot.editedAt;
         await authorize();
-        const result = await client.rpc('life_composition_put', { p_workspace_id: workspaceId,
+        const put = () => client.rpc('life_composition_put', { p_workspace_id: workspaceId,
           p_expected_revision: expectedRevision, p_operation_id: operationId,
-          p_source_revision: sourceRevision, p_data: snapshot }); alive();
+          p_source_revision: sourceRevision, p_data: snapshot });
+        let result = await put(); alive();
+        // A server before migration 20261101140000 rejects the edit time; content is unchanged without it.
+        if (result.error && Object.hasOwn(snapshot, 'editedAt') && /life_composition_invalid_snapshot/.test(result.error.message || '')) {
+          editTimes = false; snapshot = { ...snapshot }; delete snapshot.editedAt; result = await put(); alive();
+        }
         if (result.error) throw result.error;
         if (result.data?.status === 'missing') return { status: 'missing' };
         if (!['stored', 'conflict'].includes(result.data?.status) || !validRevision(result.data.revision, 1)) throw fault('invalid_remote_data');

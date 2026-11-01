@@ -46,10 +46,12 @@
     let disposed = false, markerSupport = null;
     const context = () => { if (disposed) throw fault('request_cancelled'); if (!auth.user?.id) throw fault('auth_required'); return { userId: auth.user.id, epoch: auth.epoch }; };
     function alive(value) { if (disposed || value && (!value.userId || auth.user?.id !== value.userId || auth.epoch !== value.epoch)) throw fault('request_cancelled'); }
+    // No /auth/v1/user round trip per call: the borrowed client sends with the shell-verified
+    // account's current token, uid/epoch are captured and any account change cancels the result;
+    // the server checks the token and auth.uid() on every RPC. No verification result is cached.
     async function rpc(name, args, captured) {
       try {
-        alive(captured); const user = await client.auth.getUser(); alive(captured);
-        if (user.error || !user.data?.user || user.data.user.id !== captured.userId) throw fault('auth_required');
+        alive(captured);
         const result = await client.rpc(name, args); alive(captured); if (result.error) throw result.error; return result.data;
       } catch (cause) { alive(captured); throw clean(cause); }
     }

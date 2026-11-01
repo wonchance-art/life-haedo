@@ -344,4 +344,8 @@ test('latest resolver prefers the server when the local edit time is unknown or 
   assert.equal(latest({ remote: { updated_at: '2026-10-07T00:00:00Z' }, editedAt: '2026-10-06T00:00:00Z' }), 'remote');
   assert.equal(latest({ remote: { updated_at: '2026-10-07T00:00:00Z' }, editedAt: '2026-10-08T00:00:00Z' }), 'local');
   assert.equal(latest({ remote: {}, editedAt: '2026-10-08T00:00:00Z' }), 'local');
+  // The remote side's own edit time wins over its upload time: an offline edit made earlier but
+  // uploaded later does not beat a newer local edit.
+  assert.equal(latest({ remote: { data: { editedAt: '2026-10-05T00:00:00Z' }, updated_at: '2026-10-09T00:00:00Z' }, editedAt: '2026-10-07T00:00:00Z' }), 'local');
+  assert.equal(latest({ remote: { data: { editedAt: '2026-10-08T00:00:00Z' }, updated_at: '2026-10-09T00:00:00Z' }, editedAt: '2026-10-07T00:00:00Z' }), 'remote');
 });
