@@ -7,14 +7,14 @@
 })(globalThis, function (root) {
   'use strict';
   const messages = {
-    composition_source_pending: '원문 동기화를 먼저 완료해 주세요. 구성은 이 브라우저에 보존됩니다.',
+    composition_source_pending: '원문 동기화를 먼저 완료해 주세요. 구성은 이 기기에 보존됩니다.',
     composition_conflict: '두 기기의 구성이 다릅니다. 양쪽 내용을 비교해 주세요.',
     composition_conflict_changed: '비교한 뒤 구성이 바뀌었습니다. 양쪽 내용을 다시 확인해 주세요.',
     remote_revision_mismatch: '같은 서버 버전의 내용이 달라 적용하지 않았습니다.',
     stale_sync_result: '서버 버전이 이전보다 낮거나 현재 요청과 달라 적용하지 않았습니다.',
     remote_missing: '연결된 서버 구성이 없습니다. 자동으로 다시 만들지 않았습니다.',
-    sync_paused: '구성 이어쓰기가 중지되어 있습니다.',
-    not_enabled: '구성 이어쓰기를 먼저 시작해 주세요.',
+    sync_paused: '구성 동기화를 다시 시작하는 중입니다.',
+    not_enabled: '구성 동기화를 준비하는 중입니다.',
     account_mismatch: '현재 계정의 구성 연결을 확인해 주세요.',
     request_cancelled: '계정 또는 연결이 바뀌어 이전 요청을 적용하지 않았습니다.',
     storage_quota: '저장 공간이 부족합니다. 현재 구성과 복구 사본을 보존한 뒤 다시 시도해 주세요.',
