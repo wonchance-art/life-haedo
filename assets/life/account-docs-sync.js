@@ -35,6 +35,10 @@
     const client = remote || root.HaedoLife?.AccountDocsRemote?.create({ auth });
     if (!client) throw fault('dependency_unavailable', '자동 저장 연결을 준비하지 못했습니다.');
     let disposed = false, started = false, timer = null, interval = null, unlisten = null, running = null, again = false;
+    // Between a persisted pagehide and its pageshow the page sits in the
+    // back/forward cache: starting work there evicts it, and an account check
+    // begun before pageshow must not stand in for the resumed page's own.
+    let parked = false;
     // A server without the account-document RPCs is 'unavailable': local saves
     // stay pending and the server is asked again only after a growing pause.
     let unavailableUntil = 0, unavailableDelay = 0;
@@ -224,7 +228,7 @@
       if (retry) schedule(debounceMs);
     }
     function run() {
-      if (disposed) return Promise.resolve();
+      if (disposed || parked) return Promise.resolve();
       if (running) { again = true; return running; }
       const exclusive = task => locks?.request ? locks.request(lockName, { mode: 'exclusive' }, task) : task();
       running = (async () => {
@@ -241,13 +245,16 @@
       return running;
     }
     function schedule(delay = debounceMs) {
-      if (disposed || !started) return;
+      if (disposed || !started || parked) return;
       root.clearTimeout(timer);
       timer = root.setTimeout(() => { timer = null; run(); }, delay);
       timer?.unref?.();
     }
     const wake = () => schedule(0);
     const visibility = () => schedule(0); // Hidden: flush pending saves now; visible: pull other devices' changes.
+    // A cached page resumes on the regular poll, after its own account check.
+    const pagehide = event => { if (event?.persisted) { parked = true; root.clearTimeout(timer); timer = null; } };
+    const pageshow = event => { if (event?.persisted) parked = false; };
     function start() {
       guard(); if (started) return; started = true;
       unlisten = storage.subscribeAll(event => {
@@ -257,6 +264,7 @@
       });
       root.addEventListener?.('online', wake); root.addEventListener?.('focus', wake);
       root.document?.addEventListener?.('visibilitychange', visibility);
+      root.addEventListener?.('pagehide', pagehide); root.addEventListener?.('pageshow', pageshow);
       // Poll only while visible; hiding the page flushes once through visibilitychange.
       if (polling) { interval = root.setInterval(() => { if (root.document?.visibilityState !== 'hidden') run(); }, intervalMs); interval?.unref?.(); }
       run();
@@ -266,6 +274,7 @@
       root.clearTimeout(timer); root.clearInterval(interval); unlisten?.(); listeners.clear();
       root.removeEventListener?.('online', wake); root.removeEventListener?.('focus', wake);
       root.document?.removeEventListener?.('visibilitychange', visibility);
+      root.removeEventListener?.('pagehide', pagehide); root.removeEventListener?.('pageshow', pageshow);
       client.dispose?.();
     }
     function subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); }

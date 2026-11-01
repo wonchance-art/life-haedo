@@ -29,6 +29,8 @@
     const owner = storage.account, queues = new Map(), listeners = new Set(), generations = new Map();
     const holds = new Map(), retries = new Map(), draftDue = new Map();
     let disposed = false, started = false, timer = null, draftTimer = null, running = null, rerun = null;
+    // Set between a persisted pagehide and the next pageshow (back/forward cache).
+    let parked = false;
     const removers = [];
     const summary = { state: 'idle', pending: 0, errors: 0, receiving: 0, lastSyncAt: null, lastError: null, running: false };
     const canonical = value => Array.isArray(value) ? '[' + value.map(canonical).join(',') + ']' : value && typeof value === 'object' ? '{' + Object.keys(value).sort().map(name => JSON.stringify(name) + ':' + canonical(value[name])).join(',') + '}' : JSON.stringify(value);
@@ -444,7 +446,10 @@
     }
     function kick(delay = 0) { if (started) schedule(delay); }
     async function syncNow(options = {}) {
-      if (disposed) return getStatus();
+      // A cached page starts nothing: script running there evicts it from the
+      // back/forward cache, and an account check begun while the private view is
+      // concealed must not serve the resumed page's own verification.
+      if (disposed || parked) return getStatus();
       // An explicit retry or a restored connection does not wait for backoff.
       if (options.force) for (const value of retries.values()) value.until = 0;
       if (running) { rerun = { uploadOnly: !!rerun?.uploadOnly && !!options.uploadOnly, flushDrafts: !!rerun?.flushDrafts || !!options.flushDrafts }; return running; }
@@ -471,7 +476,9 @@
       const doc = events?.document;
       on(events, 'online', () => { void syncNow({ force: true }); });
       on(events, 'focus', () => kick(0));
-      on(events, 'pagehide', () => { void syncNow({ uploadOnly: true, flushDrafts: true }); });
+      on(events, 'pagehide', event => { if (event?.persisted) parked = true; else void syncNow({ uploadOnly: true, flushDrafts: true }); });
+      // The resumed page verifies its account first; each later cycle verifies again.
+      on(events, 'pageshow', event => { if (event?.persisted && parked) { parked = false; schedule(interval); } });
       on(doc, 'visibilitychange', () => {
         if (doc.visibilityState === 'hidden') void syncNow({ uploadOnly: true, flushDrafts: true }); else kick(0);
       });
