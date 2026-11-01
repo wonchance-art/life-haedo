@@ -1978,6 +1978,61 @@
       changed(installed.workspaceId, installed.bundle.revision); materialWritingChanged(installed.workspaceId, installed.planRevision);
       return installed;
     }
+    // Automatic receive of a preparation that another device of the same account created
+    // in a workspace this device already holds: the plan keeps its own ID in the same
+    // workspace (no remapping, no new workspace). Exact source versions are appended
+    // only when absent and must be byte-identical when present; existing local source
+    // metadata and every other plan stay untouched.
+    async function adoptMaterialContinuity(inputRow, options = {}) {
+      scopeGuard(); if (!account) throw fault('auth_scope_required', '확인된 계정에 준비를 받아 주세요.');
+      onlyFields(options, ['post', 'blogRow'], 'invalid_material_continuity');
+      const row = materialRemoteRow(inputRow), settings = clone(options), model = materialContinuity();
+      await model.verify(row.data); scopeGuard();
+      const workspaceId = row.data.bundle.workspaceId, planId = row.data.plan.id;
+      let original = settings.post || null;
+      if (original) {
+        photoPost().validate(original);
+        if (row.data.output?.state !== 'saved' || original.id !== row.data.output.postId || original.status !== 'saved' || original.replaces !== null) throw fault('invalid_material_continuity', '서버 준비와 완성 글의 연결이 다릅니다.');
+        const blog = root.HaedoLife?.Blog || require('./blog.js'); original = await blog.hydrate(blog.pack(original), new Map(original.photos.map(photo => [photo.id, photo.blob]))); scopeGuard();
+        if (settings.blogRow && (settings.blogRow.id !== row.data.output.postId || settings.blogRow.revision !== row.data.output.revision || typeof settings.blogRow.workspace_id !== 'string' || stablePayload(settings.blogRow.data) !== stablePayload(blog.pack(original)))) throw fault('invalid_material_continuity', '서버 완성 글의 버전·본문·연결이 다릅니다.');
+      }
+      if (row.data.output?.state === 'saved' && !original) throw fault('material_output_pending', '완성 글의 정확한 원본을 먼저 받아 주세요.');
+      const installed = await transaction(['bundles', 'meta'], 'readwrite', async tx => {
+        const meta = tx.objectStore('meta'), bundles = tx.objectStore('bundles');
+        if ((await meta.get(materialInstallKey(row.id)))?.value) throw fault('material_continuity_exists', '이미 받은 준비입니다.');
+        const bundle = clone(await checkedBundle(bundles, workspaceId, meta));
+        const wrapper = clone(await materialWritingValue(meta, workspaceId));
+        if (wrapper.plans.some(plan => plan.id === planId)) throw fault('material_continuity_exists', '같은 준비가 이미 있습니다. 양쪽 내용을 비교합니다.');
+        if (await meta.get(materialContinuityKey(workspaceId, planId))) throw fault('material_continuity_exists', '같은 준비 연결이 이미 있습니다.');
+        const mapped = materialRemapped(row.data, workspaceId, null, true);
+        immutableVersions(bundle, mapped.data.bundle, { partial: true });
+        let appended = false;
+        for (const name of ['sources', 'sourceVersions', 'links']) for (const item of mapped.data.bundle[name]) if (!bundle[name].some(value => value.id === item.id)) { bundle[name].push(item); appended = true; }
+        if (appended) { bundle.revision++; bundle.updatedAt = new Date().toISOString(); core().validateWorkspace(bundle); await bundles.put(bundle); }
+        const plan = mapped.data.plan, output = mapped.data.output;
+        // The ordinary blog sync may already hold the same server post. Reuse that exact
+        // revision instead of installing a second local copy bound to the same post.
+        const held = output?.state === 'saved' ? (await blogCopies(meta, workspaceId, output.postId)) : [];
+        if (held.length) {
+          const copy = held.find(value => value.remoteRevision === output.revision && value.status === 'received');
+          if (!copy) throw fault('material_output_pending', '완성 글의 같은 판을 먼저 받아 주세요. 준비는 다음 동기화에서 받습니다.');
+          const refs = checkedEvidence(output.refs, workspaceId), key = `post-evidence:${workspaceId}:${copy.localPostId}`, evidence = (await meta.get(key))?.value;
+          if (evidence && stablePayload(evidence.refs) !== stablePayload(refs)) throw fault('material_output_changed', '완성 글의 인용 근거가 다릅니다. 기존 글을 바꾸지 않았습니다.');
+          if (!evidence) await meta.put({ key, value: { revision: 1, refs: clone(refs) } });
+          plan.output = { postId: copy.localPostId };
+        } else plan.output = await installMaterialPost(tx, workspaceId, mapped, original, workspaceId, null, false, settings.blogRow || null);
+        wrapper.plans.push(plan); wrapper.revision++; materialWriting().validate(wrapper);
+        await meta.put({ key: `material-writing:${workspaceId}`, value: wrapper });
+        if (plan.output) await meta.put({ key: materialOutputKey(workspaceId, plan.id), value: clone(plan.output) });
+        const state = freshMaterialState(row.id, row, null); validateMaterialContinuityState(state, workspaceId);
+        await meta.put({ key: materialContinuityKey(workspaceId, plan.id), value: state });
+        await meta.put({ key: materialInstallKey(row.id), value: { workspaceId, planId: plan.id } });
+        return { workspaceId, planId: plan.id, postId: plan.output?.postId || null, existing: false, adopted: true, bundle: clone(bundle), planRevision: wrapper.revision, appended };
+      });
+      if (installed.appended) changed(workspaceId, installed.bundle.revision);
+      materialWritingChanged(workspaceId, installed.planRevision);
+      delete installed.appended; return installed;
+    }
     const blogSeries = () => root.HaedoLife?.BlogSeries || (typeof require === 'function' && require('./blog-series.js'));
     const seriesPostKey = (workspaceId, seriesId, itemId) => `blog-series-post:${workspaceId}:${seriesId}:${itemId}`;
     async function blogSeriesValue(meta, workspaceId) {
@@ -2389,6 +2444,7 @@
         const composition = await readCompositionState(meta, workspaceId, previous);
         drafts.posts = drafts.posts.filter(post => post.id !== draftId); drafts.revision++; validatePageDrafts(drafts);
         await meta.put({ key: `workbench:${workspaceId}`, value: state });
+        await meta.put({ key: workbenchEditedKey(workspaceId), value: new Date().toISOString() });
         await meta.put({ key: `page-drafts:${workspaceId}`, value: drafts });
         if (composition) { composition.error = null; composition.status = compositionStatus(composition, state); await writeCompositionState(meta, composition); }
         return { workbench: clone(state), drafts: clone(drafts), id: finished.id };
@@ -2407,10 +2463,13 @@
       return transaction(['bundles', 'meta'], 'readonly', async tx => {
         const bundle = await checkedBundle(tx.objectStore('bundles'), workspaceId, tx.objectStore('meta'));
         const state = await workbenchValue(tx.objectStore('meta'), workspaceId);
-        return { bundle: clone(bundle), workbench: clone(state) };
+        const edited = (await tx.objectStore('meta').get(workbenchEditedKey(workspaceId)))?.value;
+        return { bundle: clone(bundle), workbench: clone(state), editedAt: typeof edited === 'string' ? edited : null };
       });
     }
     async function readWorkbench(workspaceId) { return (await readWorkbenchSnapshot(workspaceId)).workbench; }
+    // Local edit time for latest-wins composition conflicts. Not part of the composition payload.
+    const workbenchEditedKey = workspaceId => `workbenchEditedAt:${workspaceId}`;
     async function saveWorkbench(workspaceId, input, baseRevision) {
       requireId(workspaceId, '작업공간'); requireRevision(baseRevision, 'baseRevision');
       workbench().validate(input);
@@ -2427,6 +2486,7 @@
         state.revision = baseRevision + 1;
         workbench().validate(state);
         await meta.put({ key: `workbench:${workspaceId}`, value: state });
+        await meta.put({ key: workbenchEditedKey(workspaceId), value: new Date().toISOString() });
         if (composition) {
           composition.error = null; composition.status = compositionStatus(composition, state);
           await writeCompositionState(meta, composition);
@@ -4380,7 +4440,7 @@
       readCollection, saveCollection, readNineBoard, saveNineBoard, saveNineBoardCopy, readMaterialWriting, saveMaterialWriting, createMaterialWritingPost, readBlogSeries, saveBlogSeries, readBlogSeriesSnapshot, installBlogSeriesCopy, listPhotoPosts, readPhotoPost, savePhotoPost, readPostEvidence, savePostEvidence, savePhotoPostWithEvidence, savePhotoPostFromNineBoard, savePhotoPostFromNaverCapture, listBlogCopies, installReceivedBlogPost, readBlogSyncState, writeBlogSyncState, readPageDrafts, savePageDrafts, savePagePost,
 
       scanLocalPosts, readLocalPostCandidate,
-      readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, finishMaterialContinuityClaim,
+      readMaterialContinuitySnapshot, readMaterialContinuityState, writeMaterialContinuityState, findMaterialContinuity, installMaterialContinuity, adoptMaterialContinuity, finishMaterialContinuityClaim,
       readPublicCover, savePublicCover,
       readWorkbench, saveWorkbench, readWorkbenchSnapshot, installWorkbenchCopy,
       readPreservationCatalog, readPreservationSnapshot, installPreservationCopy, commitNaverCapture, readNaverCapture, installNaverCaptureCopy,

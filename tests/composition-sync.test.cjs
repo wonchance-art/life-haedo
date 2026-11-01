@@ -40,9 +40,14 @@ function fixture(t, options = {}) {
     subscribe() { return () => {}; },
     async bindCompositionSync() { state.mutations.push('bind'); state.meta.enabled = true; },
     async pauseCompositionSync() { state.mutations.push('pause'); state.meta.enabled = false; },
-    async prepareCompositionUpload() { state.calls.push('prepare'); return copy(state.meta.outbox); },
+    async prepareCompositionUpload() {
+      state.calls.push('prepare');
+      if (state.prepareOverride && !state.meta.outbox && state.meta.syncedLocalRevision !== state.local.revision) state.meta.outbox = state.prepareOverride();
+      return copy(state.meta.outbox);
+    },
     async applyCompositionRemote(_id, _binding, row) {
       state.mutations.push('apply');
+      if (state.applyOverride && row.revision !== state.meta.remoteRevision) return state.applyOverride(row);
       if (row.revision > state.meta.remoteRevision) {
         state.local = { ...copy(row.data), revision: state.local.revision + 1 };
         state.meta.remoteRevision = row.revision; state.meta.syncedLocalRevision = state.local.revision;
@@ -64,6 +69,19 @@ function fixture(t, options = {}) {
       state.meta.conflict = { missing: !row, row: copy(row), remoteRevision: row?.revision ?? state.meta.remoteRevision,
         localRevision: state.local.revision };
       state.meta.status = 'conflict';
+    },
+    async readWorkbenchSnapshot() { return { workbench: copy(state.local), bundle: {}, editedAt: state.editedAt ?? null }; },
+    async resolveCompositionSync(_id, _binding, request) {
+      state.mutations.push('resolve:' + request.choice); state.resolutions = (state.resolutions || []).concat(copy(request));
+      assert.ok(state.meta.conflict && !state.meta.conflict.missing, 'resolve needs a recorded conflict');
+      assert.equal(request.expectedLocalRevision, state.local.revision);
+      const recoveryId = 'recovery_' + state.resolutions.length;
+      state.recoveries = (state.recoveries || []).concat({ id: recoveryId, workbench: copy(request.choice === 'remote' ? state.local : request.remoteRow.data) });
+      if (request.choice === 'remote') state.local = { ...copy(request.remoteRow.data), revision: state.local.revision + 1 };
+      state.meta.remoteRevision = request.remoteRow.revision; state.meta.outbox = null; state.meta.conflict = null; state.meta.error = null;
+      state.meta.syncedLocalRevision = request.choice === 'remote' ? state.local.revision : -1;
+      state.meta.status = request.choice === 'remote' ? 'synced' : 'pending'; state.meta.lastRecoveryId = recoveryId;
+      return { workbench: copy(state.local), metadata: copy(state.meta), recoveryId };
     }
   };
   const sourceSync = {
@@ -91,8 +109,11 @@ function fixture(t, options = {}) {
     clearTimeout(id) { timers.delete(id); }, setInterval() { return 1; }, clearInterval() {}
   };
   vm.runInNewContext(source, context);
+  // Engine conflict-recording tests pass autoResolve: null; the default latest-wins
+  // resolver is exercised by omitting the option (defaultResolver: true).
   const manager = context.module.exports.create({ storage, sourceSync, remote, auth,
-    initialReceive: options.initialReceive ? (...args) => options.initialReceive(state, ...args) : null });
+    initialReceive: options.initialReceive ? (...args) => options.initialReceive(state, ...args) : null,
+    ...(options.defaultResolver ? {} : { autoResolve: Object.hasOwn(options, 'autoResolve') ? options.autoResolve : null }) });
   t.after(() => manager.dispose());
   return { manager, state, timers, timerScheduled, changeAccount(value) { state.account = copy(value); state.epoch++; } };
 }
@@ -270,4 +291,56 @@ test('noninitial CAS conflicts and missing first-write replies never invoke init
     const pending = copy(f.state.meta.outbox); assert.equal((await f.manager.syncNow(WORKSPACE)).status, 'conflict');
     assert.equal(calls, 0); assert.deepEqual(f.state.meta.outbox, pending); assert.equal(f.state.meta.conflict.missing, missing);
   }
+});
+
+test('default latest-wins keeps the newer server composition and stores the local side as a recovery copy', async t => {
+  const f = fixture(t, { defaultResolver: true }), events = [];
+  f.manager.subscribe(event => events.push(event));
+  f.state.local.revision = 2; f.state.local.reflection.note = '오래된 이 기기 메모'; f.state.editedAt = '2026-10-06T00:00:00Z';
+  f.state.meta.outbox = { operationId: OPERATION, expectedRevision: 1, sourceRevision: 1, localRevision: 2, data: copy(f.state.local) };
+  f.state.meta.status = 'pending';
+  const remoteData = { ...copy(f.state.local), reflection: { versionIds: [], note: '더 최근 다른 기기 메모' } };
+  f.state.row = { ...f.state.row, revision: 2, data: remoteData, updated_at: '2026-10-07T00:00:00Z' };
+  f.state.writeOverride = () => ({ status: 'conflict', revision: 2 });
+  const result = await f.manager.syncNow(WORKSPACE);
+  assert.equal(result.status, 'synced');
+  assert.equal(f.state.local.reflection.note, '더 최근 다른 기기 메모');
+  assert.equal(f.state.recoveries.length, 1); assert.equal(f.state.recoveries[0].workbench.reflection.note, '오래된 이 기기 메모');
+  assert.deepEqual(f.state.mutations.filter(value => value.startsWith('resolve')), ['resolve:remote']);
+  assert.ok(events.some(event => event.autoResolved && event.choice === 'remote' && event.recoveryId === 'recovery_1'));
+});
+
+test('default latest-wins keeps a newer local edit, uploads it and stores the server side as a recovery copy', async t => {
+  const f = fixture(t, { defaultResolver: true });
+  f.state.local.revision = 2; f.state.local.reflection.note = '방금 쓴 이 기기 메모'; f.state.editedAt = '2026-10-08T00:00:00Z';
+  f.state.meta.syncedLocalRevision = 1; f.state.meta.status = 'pending';
+  const remoteData = { ...copy(f.state.local), reflection: { versionIds: [], note: '이전 다른 기기 메모' } };
+  f.state.row = { ...f.state.row, revision: 2, data: remoteData, updated_at: '2026-10-07T00:00:00Z' };
+  // A local edit without an outbox: remote apply reports a conflict like the real storage.
+  f.state.applyOverride = async () => ({ status: 'conflict', revision: f.state.local.revision });
+  let wrote = null;
+  f.state.writeOverride = request => { wrote = request; return { status: 'stored', revision: 3 }; };
+  // After resolution the engine prepares and sends the kept local composition.
+  f.state.prepareOverride = () => ({ operationId: OPERATION, expectedRevision: 2, sourceRevision: 1, localRevision: 2, data: copy(f.state.local) });
+  const result = await f.manager.syncNow(WORKSPACE);
+  assert.equal(f.state.local.reflection.note, '방금 쓴 이 기기 메모');
+  assert.equal(f.state.recoveries[0].workbench.reflection.note, '이전 다른 기기 메모');
+  assert.equal(wrote.data.reflection.note, '방금 쓴 이 기기 메모'); assert.equal(wrote.expectedRevision, 2);
+  assert.equal(result.status, 'synced');
+});
+
+test('a deleted server composition stays a visible conflict and is never recreated automatically', async t => {
+  const f = fixture(t, { defaultResolver: true });
+  f.state.readOverride = () => null; f.state.meta.remoteRevision = 1;
+  const result = await f.manager.syncNow(WORKSPACE);
+  assert.equal(result.status, 'conflict'); assert.equal(f.state.meta.conflict.missing, true);
+  assert.equal(f.state.resolutions, undefined);
+});
+
+test('latest resolver prefers the server when the local edit time is unknown or older', () => {
+  const { latest } = require('../assets/life/composition-sync.js');
+  assert.equal(latest({ remote: { updated_at: '2026-10-07T00:00:00Z' }, editedAt: null }), 'remote');
+  assert.equal(latest({ remote: { updated_at: '2026-10-07T00:00:00Z' }, editedAt: '2026-10-06T00:00:00Z' }), 'remote');
+  assert.equal(latest({ remote: { updated_at: '2026-10-07T00:00:00Z' }, editedAt: '2026-10-08T00:00:00Z' }), 'local');
+  assert.equal(latest({ remote: {}, editedAt: '2026-10-08T00:00:00Z' }), 'local');
 });

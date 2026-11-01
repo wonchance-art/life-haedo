@@ -1,20 +1,33 @@
-/* Adapt selected drafts to the already tested CAS/lifetime engine. Reuse its queue, retry and account boundaries. */
+/* Every writing draft of the signed-in account syncs automatically through the tested CAS/lifetime
+ * engine (one engine per draft, polling off). Conflicts keep the newest edit and store the other
+ * side as a new unlinked draft through the existing fork/recovery transaction. */
 (function (root, factory) {
   'use strict'; const api = factory(root); (root.HaedoLife ||= {}).WritingSync = api;
   if (typeof module === 'object' && module.exports) module.exports = api;
 })(globalThis, function (root) {
   'use strict';
+  const time = value => { const parsed = typeof value === 'string' ? Date.parse(value) : NaN; return Number.isFinite(parsed) ? parsed : null; };
+  // A saved record is terminal: keep it and recover the other input as a new draft.
+  // Otherwise the newer edit time wins; ties converge on the server copy.
+  function latest({ local, remote }) {
+    const other = remote?.data;
+    if (local?.state === 'applied' || other?.state === 'applied') return 'fork';
+    const mine = time(local?.updatedAt), theirs = time(other?.updatedAt);
+    if (mine === null) return 'remote';
+    return theirs !== null && theirs >= mine ? 'remote' : 'local';
+  }
   function create({ storage, sourceSync, auth = root.HaedoAuth,
-    remote = root.HaedoLife?.WritingRemote?.create({ auth }), engine = root.HaedoLife?.CompositionSync } = {}) {
+    remote = root.HaedoLife?.WritingRemote?.create({ auth }), engine = root.HaedoLife?.CompositionSync,
+    materials = undefined, interval: every = 30000 } = {}) {
     const clean = root.HaedoLife?.WritingRemote?.clean || (error => error);
     const fault = code => clean({ code });
     if (!storage?.account || !sourceSync || !auth || !remote || !engine) throw fault('account_mismatch');
-    const owner = storage.account, entries = new Map(), listeners = new Set();
-    let disposed = false, started = false, interval = null, refreshing = false;
+    const owner = storage.account, entries = new Map(), listeners = new Set(), notices = new Map();
+    let disposed = false, started = false, interval = null, refreshing = false, again = false, soon = null, offAll = null, material = null;
     const same = value => value?.userId === owner.userId && value?.projectUrl === owner.projectUrl;
     const guard = epoch => { if (disposed || !same(auth.getAccount()) || epoch !== undefined && epoch !== auth.epoch) throw fault('request_cancelled'); };
     const binding = ws => ({ ...owner, remoteId: ws });
-    const emit = (workspaceId, draftId) => { if (!disposed) for (const listener of listeners) { try { listener({ workspaceId, draftId }); } catch (_) {} } };
+    const emit = (workspaceId, draftId, extra = null) => { if (!disposed) for (const listener of listeners) { try { listener({ workspaceId, draftId, ...(extra || {}) }); } catch (_) {} } };
     function entry(ws, id) {
       guard(); const key = ws + '/' + id;
       if (entries.has(key)) return entries.get(key);
@@ -44,8 +57,12 @@
         subscribe: listener => sourceSync.subscribe(event => { if (event.workspaceId === ws) listener({ workspaceId: id }); }) };
       const transport = { read: () => remote.read(ws, id), write: request => remote.write({ ...request, workspaceId: ws, draftId: id }) };
       const instance = engine.create({ storage: adapter, sourceSync: sourceAdapter, auth, remote: transport,
-        errorCleaner: clean, resolutionChoices: ['local','remote','fork'], sendResolution: (_, result) => result.metadata.status === 'pending', polling: false });
-      instance.subscribe(() => emit(ws, id));
+        errorCleaner: clean, resolutionChoices: ['local','remote','fork'], sendResolution: (_, result) => result.metadata.status === 'pending', polling: false,
+        autoResolve: latest });
+      instance.subscribe(event => {
+        if (event?.autoResolved) notices.set(key, { choice: event.choice, recoveryStageId: event.recoveryId || null, at: new Date().toISOString() });
+        emit(ws, id, event?.autoResolved ? { autoResolved: true, recoveryStageId: event.recoveryId || null } : null);
+      });
       const value = { instance, start() { if (!value.started) { value.started = true; instance.start(); } }, started: false };
       entries.set(key, value); return value;
     }
@@ -54,7 +71,7 @@
       const stage = await storage.getStage(id); guard(epoch);
       if (stage && (stage.workspaceId !== ws || stage.kind !== 'writing')) throw fault('account_mismatch');
       const metadata = stage ? await storage.getWritingSyncState(ws, id) : null; guard(epoch);
-      return { ...(metadata || {}), workspaceId: ws, draftId: id, stage, enabled: !!metadata?.enabled,
+      return { ...(metadata || {}), workspaceId: ws, draftId: id, stage, enabled: !!metadata?.enabled, notice: notices.get(ws + '/' + id) || null,
         status: !metadata ? 'not_enabled' : !metadata.enabled ? 'paused' : stage.state === 'applied' && metadata.status === 'synced' ? 'closed' : metadata.status };
     }
     async function call(method, ws, id, ...args) {
@@ -83,41 +100,89 @@
         await call('enable', ws, id); guard(epoch); return { stage: await storage.getStage(id), existing: true };
       }
       const result = await storage.installWritingRemote(ws, binding(ws), row); guard(epoch);
-      entry(ws, id).start(); emit(ws, id); return result;
+      entry(ws, id).start(); emit(ws, id, { received: true }); return result;
+    }
+    // One pass over every workspace whose originals already sync for this account:
+    // upload every local draft, keep enabled drafts moving and install drafts that
+    // exist only on the server. Each draft fails independently; text stays local.
+    async function workspacePass(ws, epoch) {
+      const source = await sourceSync.getState(ws); guard(epoch);
+      if (!source?.enabled || !same(source.binding)) return;
+      const stages = (await storage.listStages(ws)).filter(stage => stage.kind === 'writing'); guard(epoch);
+      const states = new Map((await storage.listWritingSyncStates(ws)).map(state => [state.draftId, state])); guard(epoch);
+      for (const stage of stages) {
+        const state = states.get(stage.stageId);
+        try {
+          if (!state) { if (stage.state !== 'applied') await call('enable', ws, stage.stageId); }
+          else if (!state.enabled) await call('enable', ws, stage.stageId);
+          else {
+            if (stage.state === 'applied' && state.status === 'synced') continue;
+            const value = entry(ws, stage.stageId);
+            if (!value.started) value.start(); else await value.instance.syncNow(stage.stageId).catch(() => {});
+          }
+        } catch (_) { guard(epoch); /* Durable state keeps the error; the next pass retries. */ }
+        guard(epoch);
+      }
+      if (source.status !== 'synced') return;
+      const known = new Set(stages.map(stage => stage.stageId));
+      let after = null;
+      for (let page = 0; page < 50; page++) {
+        const rows = await remote.list(ws, after); guard(epoch);
+        for (const row of rows) {
+          if (row.state !== 'draft' || known.has(row.draft_id)) continue;
+          try { await download(ws, row.draft_id); known.add(row.draft_id); } catch (_) { guard(epoch); }
+        }
+        if (rows.length < 100) break;
+        after = rows.at(-1).draft_id;
+      }
     }
     async function automatic() {
-      if (disposed || refreshing || root.document?.visibilityState === 'hidden') return;
+      if (disposed || root.document?.visibilityState === 'hidden') return;
+      if (refreshing) { again = true; return; }
       refreshing = true;
       try {
-        guard(); const epoch = auth.epoch, workspaces = await storage.listWorkspaces(); guard(epoch);
-        for (const workspace of workspaces) {
-          const states = await storage.listWritingSyncStates(workspace.workspaceId); guard(epoch);
-          for (const state of states) {
-            if (!state.enabled) continue;
-            const actual = await getState(state.workspaceId, state.draftId); guard(epoch);
-            if (actual.status === 'closed') continue;
-            const value = entry(state.workspaceId, state.draftId);
-            if (!value.started) value.start(); else value.instance.syncNow(state.draftId).catch(() => {});
+        do {
+          again = false;
+          guard(); const epoch = auth.epoch, workspaces = await storage.listWorkspaces(); guard(epoch);
+          for (const workspace of workspaces) {
+            try { await workspacePass(workspace.workspaceId, epoch); }
+            catch (error) { guard(epoch); /* Other workspaces still sync. */ }
           }
-        }
-      } catch (_) { /* Retain local text and metadata; explicit actions report errors. */ }
+        } while (again && !disposed);
+      } catch (_) { /* Retain local text and metadata; the next pass retries. */ }
       finally { refreshing = false; }
     }
-    function start() { guard(); if (started) return; started = true;
-      interval = root.setInterval(automatic, 30000); interval?.unref?.();
-      root.addEventListener?.('online', automatic); root.addEventListener?.('focus', automatic);
-      root.document?.addEventListener('visibilitychange', automatic); automatic();
+    function nudge() {
+      if (disposed || soon) return;
+      soon = root.setTimeout(() => { soon = null; automatic(); }, 1500); soon?.unref?.();
     }
-    function dispose() { if (disposed) return; disposed = true; root.clearInterval(interval);
-      for (const value of entries.values()) value.instance.dispose(); entries.clear(); listeners.clear(); remote.dispose?.();
+    function onStorage(event) {
+      if (event?.type !== 'writing_draft_changed' || !event.stageId || entries.has(event.workspaceId + '/' + event.stageId)) return;
+      nudge();
+    }
+    function start() { guard(); if (started) return; started = true;
+      interval = root.setInterval(automatic, every); interval?.unref?.();
+      root.addEventListener?.('online', automatic); root.addEventListener?.('focus', automatic);
+      root.document?.addEventListener('visibilitychange', automatic);
+      try { offAll = storage.subscribeAll?.(onStorage) || null; } catch (_) { offAll = null; }
+      if (materials !== null) {
+        try { material = (materials || root.HaedoLife?.MaterialContinuitySync?.automatic)?.({ storage, auth }) || null; material?.start(); }
+        catch (_) { material = null; }
+      }
+      automatic();
+    }
+    function dispose() { if (disposed) return; disposed = true; root.clearInterval(interval); root.clearTimeout(soon); soon = null;
+      offAll?.(); material?.dispose(); material = null;
+      for (const value of entries.values()) value.instance.dispose(); entries.clear(); listeners.clear(); notices.clear(); remote.dispose?.();
       root.removeEventListener?.('online', automatic); root.removeEventListener?.('focus', automatic);
       root.document?.removeEventListener('visibilitychange', automatic);
     }
-    return Object.freeze({ start, getState, listRemote, download, dispose,
+    return Object.freeze({ start, getState, listRemote, download, dispose, refresh: automatic,
       enable: (ws, id) => call('enable', ws, id), pause: (ws, id) => call('pause', ws, id), syncNow: (ws, id) => call('syncNow', ws, id),
       compare: (ws, id) => call('compare', ws, id), resolve: (ws, id, choice, expected) => call('resolve', ws, id, choice, expected),
+      dismissNotice: (ws, id) => { notices.delete(ws + '/' + id); },
       subscribe(listener) { guard(); listeners.add(listener); return () => listeners.delete(listener); }
     });
   }
-  return Object.freeze({ create });
+  return Object.freeze({ create, latest });
 });
