@@ -68,12 +68,24 @@
 
 ## 운영 설치 순서
 
-1. 마이그레이션을 다음 순서로 설치한다.
-   - `20261101090000_life_account_documents.sql`
-   - `20261101091500_life_blog_account_sync.sql`
-   - `20261101130000_life_material_tombstones.sql`
-   - `20261101140000_life_sync_edit_times.sql`
-   - 기존 마이그레이션은 수정하지 않았다.
+1. Supabase SQL Editor에서 합친 설치 파일 `supabase/operations/20261101-account-sync-install.sql`을 한 번에 실행한다.
+   - 포함된 마이그레이션은 다음 6개다. 기존 마이그레이션은 수정하지 않았다.
+     - `20261101090000_life_account_documents.sql`
+     - `20261101091500_life_blog_account_sync.sql`
+     - `20261101130000_life_material_tombstones.sql`
+     - `20261101140000_life_sync_edit_times.sql`
+     - `20261101150000_life_account_documents_owner_lock.sql`
+     - `20261101160000_life_blog_delete_guard.sql`
+   - 설치 전체가 `DO` 블록 한 문장이다. SQL Editor가 문장을 어떤 연결로 나눠 실행해도, 어느 단계에서 실패하면 전체가 되돌려진다.
+     - 처음 만든 판은 임시 표와 `begin/commit`을 썼다. 이 판은 SQL Editor에서 `relation "haedo_install_before" does not exist`로 실패했다. 문장들이 같은 연결에서 실행되지 않았기 때문이다.
+   - 설치 전후로 기존 테이블과 `storage.objects`의 행 수가 하나라도 달라지면 전체를 되돌린다.
+   - 실행이 끝나면 결과 표의 확인 항목 4개가 모두 `true`여야 한다.
+   - 이 파일은 `node scripts/build-account-sync-install.mjs`로 생성한다. 원본과 어긋나면 `tests/account-sync-install-bundle.test.cjs`가 실패한다.
+   - 일회용 PostgreSQL 16에 기존 마이그레이션 전체를 설치한 상태에서 검증했다.
+     - 첫 설치가 성공했고, 같은 파일을 다시 실행해도 성공했다.
+     - 설치 중 기존 행을 일부러 바꾸자 전체가 되돌려졌다.
+     - 마지막 마이그레이션 직전에 오류를 넣자 아무것도 설치되지 않았다.
+   - **운영 설치 완료 (2026-11-01):** 소유자가 SQL Editor에서 `364b88a` 판을 실행했다. 결과 표 4개 항목이 모두 `true`였다.
 2. 앱을 배포한다. SW 캐시는 `haedo-v168`이다.
    - 마이그레이션 없이 배포해도 앱은 'unavailable' 상태로 버틴다. 다만 연동은 되지 않는다.
 3. 각 기기에서 처음 로그인하면 그 기기의 기존 로컬 데이터를 서버로 올린다. 로컬 데이터는 지우지 않는다.
