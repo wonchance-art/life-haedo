@@ -52,7 +52,9 @@
     const alive = () => { if (disposed) throw fault('request_cancelled'); };
     // No /auth/v1/user round trip per call: the borrowed client sends with the shell-verified
     // account's current token; uid/epoch are captured and an account change cancels the result.
-    const capture = () => { alive(); if (!auth.user?.id) throw fault('auth_required'); return { uid: auth.user.id, epoch: auth.epoch }; };
+    // The owner is fixed when this transport is created; a different signed-in user is refused.
+    const ownerId = auth.user?.id || auth.getAccount?.()?.userId || null;
+    const capture = () => { alive(); if (!auth.user?.id) throw fault('auth_required'); if (ownerId && auth.user.id !== ownerId) throw fault('account_mismatch'); return { uid: auth.user.id, epoch: auth.epoch }; };
     const same = captured => { alive(); if (auth.user?.id !== captured.uid || auth.epoch !== captured.epoch) throw fault('request_cancelled'); };
     const ids = (ws, id) => { if (!validId(ws) || !validId(id)) throw fault('invalid_request'); };
     function data(value, ws, id) {

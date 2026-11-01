@@ -44,7 +44,9 @@
     if (!auth?.ready || !model?.verify || !clientFactory) throw fault('auth_required');
     const client = clientFactory(auth, { scope: 'material' })(auth.config.url, auth.config.key);
     let disposed = false, markerSupport = null;
-    const context = () => { if (disposed) throw fault('request_cancelled'); if (!auth.user?.id) throw fault('auth_required'); return { userId: auth.user.id, epoch: auth.epoch }; };
+    // The owner is fixed when this transport is created; a different signed-in user is refused.
+    const ownerId = auth.user?.id || auth.getAccount?.()?.userId || null;
+    const context = () => { if (disposed) throw fault('request_cancelled'); if (!auth.user?.id) throw fault('auth_required'); if (ownerId && auth.user.id !== ownerId) throw fault('request_cancelled'); return { userId: auth.user.id, epoch: auth.epoch }; };
     function alive(value) { if (disposed || value && (!value.userId || auth.user?.id !== value.userId || auth.epoch !== value.epoch)) throw fault('request_cancelled'); }
     // No /auth/v1/user round trip per call: the borrowed client sends with the shell-verified
     // account's current token, uid/epoch are captured and any account change cancels the result;

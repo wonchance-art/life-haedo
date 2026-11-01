@@ -65,3 +65,9 @@ test('edited-marker writes require an explicit supported server before dispatch;
   const pending = changing.remote.write(request()); await started; changing.auth.epoch++; release();
   await assert.rejects(pending, { code: 'request_cancelled' }); assert.deepEqual(changing.calls.map(v => v.name), ['life_material_capabilities']); changing.remote.dispose();
 });
+
+test('a different signed-in user than the transport owner is refused before any request', async () => {
+  const f = fixture(); f.auth.user = { id: randomUUID() }; f.auth.epoch++;
+  await assert.rejects(f.remote.list(), { code: 'request_cancelled' }); await assert.rejects(f.remote.read(randomUUID()), { code: 'request_cancelled' });
+  assert.equal(f.calls.length, 0); f.remote.dispose();
+});

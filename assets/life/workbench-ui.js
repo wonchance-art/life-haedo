@@ -1134,9 +1134,10 @@
         onDirty: () => updateStatus(session), isCurrent: active,
         isBusy: () => !!session.materialUI?.dirty(),
         onChanged: async () => {
-          // A change arrived from another device while the editor had no unsaved input.
-          if (!active() || session.materialUI.dirty()) return;
-          const bundle = await storage.read(session.workspaceId); if (!active() || session.materialUI.dirty()) return;
+          // A change arrived from another device. The parent reader snapshot always follows the stored
+          // workspace (new exact versions); the editor reloads only while it holds no unsaved input.
+          if (!active()) return;
+          const bundle = await storage.read(session.workspaceId); if (!active()) return;
           await onBundleUpdated(bundle); if (!active() || session.materialUI.dirty()) return;
           await session.materialUI.reload({ planId: session.materialUI.getView().planId });
         },

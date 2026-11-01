@@ -45,6 +45,7 @@ async function fixture({ savedOutput = false, photos = false } = {}) {
     async findMaterialContinuity() { return stats.unlinked ? null : { workspaceId: bundle.workspaceId, planId: plan.id }; },
     async forgetMaterialContinuity(ws, id, options) { stats.forgot = copy(options); assert.equal(options.expectedRevision, state.revision); state = null; stats.onForget?.(); return { removed: !!options.removePlan }; },
     async listMaterialContinuityOrphans() { return stats.orphan ? [copy(stats.orphan)] : []; },
+    async listWorkspaces() { return [{ workspaceId: bundle.workspaceId }]; },
     async readMaterialWriting() { return { ...M.empty(bundle.workspaceId), revision: 1, plans: stats.planAbsent ? [] : [copy(plan)] }; },
     async adoptMaterialContinuity(value, options) { stats.adopted = { row: copy(value), options: copy(options) }; return { workspaceId: value.data.bundle.workspaceId, planId: value.data.plan.id, adopted: true }; },
     async readBlogSyncState() { return copy(stats.existingBlogState || null); },
@@ -61,6 +62,7 @@ async function fixture({ savedOutput = false, photos = false } = {}) {
     }
   };
   const remote = {
+    async list() { stats.lists = (stats.lists || 0) + 1; return { items: row ? [{ id: row.id, revision: row.revision, title: '', updated_at: row.updated_at }] : [], next: null }; },
     async remove(request) { stats.removed = copy(request); return { status: stats.removeStatus || 'deleted', revision: request.expectedRevision + 1 }; },
     async read() { stats.reads++; if (stats.deletedRemote) return { id: row.id, revision: row.revision + 1, deleted: true, data: null, updated_at: row.updated_at }; if (stats.holdRead) { const hold = stats.holdRead; stats.holdRead = null; hold.started.resolve(); await hold.release.promise; } return copy(row); },
     async write(request) {
@@ -181,7 +183,7 @@ test('a server preparation missing on this device is adopted into the same works
 });
 test('the background loop syncs every preparation, adopts server-only ones and skips a workspace with unsaved editor input', async () => {
   const ws = C.id(), plans = [{ id: 'p1' }, { id: 'p2' }], calls = [];
-  const manager = { autoSync: async (w, id) => { calls.push(['auto', w, id]); return {}; }, list: async () => ({ items: [{ id: 'r1' }], next: null }),
+  const manager = { autoSync: async (w, id) => { calls.push(['auto', w, id]); return {}; }, list: async () => ({ items: [{ id: 'r1', revision: 1 }], next: null }),
     adopt: async item => { calls.push(['adopt', item.id]); return null; }, dispose() {} };
   const storage = { account: { userId: 'u', projectUrl: 'p' }, readMaterialWriting: async () => ({ plans }), adoptMaterialContinuity() {},
     listAccountLibraries: async () => [{ workspaceId: ws, eligible: true }, { workspaceId: 'recovery', eligible: false }] };
@@ -189,7 +191,8 @@ test('the background loop syncs every preparation, adopts server-only ones and s
   await loop.refresh();
   assert.deepEqual(calls, [['auto', ws, 'p1'], ['auto', ws, 'p2'], ['adopt', 'r1']]);
   calls.length = 0; let dirty = true; const unwatch = Service.watch(ws, { busy: () => dirty });
-  await loop.refresh(); assert.deepEqual(calls, [['adopt', 'r1']]);
+  // The server-only item that could not be installed is not fetched again at the same revision.
+  await loop.refresh(); assert.deepEqual(calls, []);
   dirty = false; unwatch(); calls.length = 0; await loop.refresh(); assert.equal(calls.filter(call => call[0] === 'auto').length, 2);
   loop.dispose();
 });
@@ -227,4 +230,19 @@ test('a missing server schema is recorded as unavailable and not retried every c
   await loop.refresh(); await loop.refresh(); await loop.refresh();
   assert.equal(lists, 1); assert.equal(loop.availability().status, 'unavailable'); assert.ok(loop.availability().until > Date.now());
   loop.dispose();
+});
+
+test('unchanged linked preparations cost one list call per cycle and no body reads', async () => {
+  // A preparation whose completed post is already stored at its exact revision: nothing is due.
+  const f = await fixture({ savedOutput: true }); f.stats.existingBlogState = { remoteId: f.post.id, remoteRevision: 1, localRevision: f.post.revision, enabled: true };
+  const storage = { account: f.manager && { userId: 'u' }, readMaterialWriting: async () => ({ plans: [{ id: f.plan.id }] }), adoptMaterialContinuity() {},
+    listWorkspaces: async () => [{ workspaceId: f.bundle.workspaceId }], listMaterialContinuityOrphans: async () => [] };
+  const loop = Service.automatic({ storage, auth: {}, manager: f.manager, every: 3600000 });
+  for (let cycle = 1; cycle <= 3; cycle++) {
+    await loop.refresh();
+    assert.equal(f.stats.lists, cycle, 'one list per cycle'); assert.equal(f.stats.reads, 0, 'no preparation body read'); assert.deepEqual(f.stats.writes, []);
+  }
+  const advanced = copy(f.row()); advanced.revision = 2; advanced.data.plan.question = '다른 기기에서 바뀐 질문'; f.setRow(advanced);
+  await loop.refresh(); assert.equal(f.stats.reads, 1, 'only the preparation whose listed revision moved is read');
+  loop.dispose(); f.manager.dispose();
 });

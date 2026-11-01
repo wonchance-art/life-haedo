@@ -52,7 +52,8 @@ test('every local draft is enabled automatically, paused drafts resume and saved
   await f.manager.refresh();
   const enabled = f.calls.filter(call => call[0] === 'enable').map(call => call[1]).sort();
   assert.deepEqual(enabled, [id(1), id(2)].sort());
-  assert.ok(f.calls.some(call => call[0] === 'start'), 'an already enabled draft is started');
+  assert.deepEqual(f.calls.filter(call => call[0] === 'syncNow').map(call => call[1]), [id(4)], 'an enabled draft with a pending local change is sent');
+  assert.equal(f.calls.some(call => call[0] === 'start'), false, 'engines are driven by the loop only, without their own polling');
   assert.ok(!f.calls.some(call => call[1] === id(3) || call[1] === id(9)));
   // Each engine carries the latest-wins resolver and recovery-capable fork choice, with polling off.
   for (const instance of f.created.values()) {
@@ -103,4 +104,17 @@ test('nothing starts while the page is parked in the back/forward cache or suspe
   handlers.get('pagehide')({ persisted: true });
   await f.manager.refresh(); assert.equal(f.calls.length, before, 'no list, enable or sync while parked');
   handlers.get('pageshow')({ persisted: true }); await f.manager.refresh(); assert.ok(f.calls.length > before, 'resumes after pageshow');
+});
+
+test('unchanged drafts cost one list call per cycle and no body reads', async t => {
+  const rows = [1, 2, 3, 4, 5].map(n => ({ draft_id: id(n), state: 'draft', title: '', revision: 3 }));
+  const states = [1, 2, 3, 4, 5].map(n => ({ draftId: id(n), enabled: true, status: 'synced', remoteRevision: 3, syncedLocalRevision: 1, outbox: null, conflict: null, error: null }));
+  const f = fixture({ stages: [1, 2, 3, 4, 5].map(n => draft(n)), states, rows }); t.after(() => f.manager.dispose());
+  for (let cycle = 1; cycle <= 3; cycle++) {
+    await f.manager.refresh();
+    assert.equal(f.calls.filter(call => call[0] === 'list').length, cycle, 'one list per cycle');
+    assert.deepEqual(f.calls.filter(call => ['syncNow', 'enable', 'install'].includes(call[0])), [], 'no body read for unchanged drafts');
+  }
+  rows[2].revision = 4; await f.manager.refresh();
+  assert.deepEqual(f.calls.filter(call => call[0] === 'syncNow').map(call => call[1]), [id(3)], 'only the draft whose server revision moved is read');
 });

@@ -282,12 +282,14 @@ async function main() {
         const open = indexedDB.open('life-tools-v1'); open.onerror = () => reject(open.error); open.onsuccess = () => {
           const db = open.result, tx = db.transaction('meta', 'readonly'), get = tx.objectStore('meta').getAll();
           get.onsuccess = () => { const rows = get.result, plan = rows.find(r => r.key === 'material-writing:' + ws)?.value;
-            resolve({ plan, postIds: rows.filter(r => r.key.startsWith('photo-post:' + ws + ':')).map(r => r.key.slice(('photo-post:' + ws + ':').length)), refsCount: rows.filter(r => r.key.startsWith('post-evidence:' + ws + ':')).length, receipts: rows.filter(r => r.key.startsWith('material-writing-output:' + ws + ':')).length }); };
+            resolve({ plan, postIds: rows.filter(r => r.key.startsWith('photo-post:' + ws + ':')).map(r => r.key.slice(('photo-post:' + ws + ':').length)), refIds: rows.filter(r => r.key.startsWith('post-evidence:' + ws + ':')).map(r => r.key.slice(('post-evidence:' + ws + ':').length)), receipts: rows.filter(r => r.key.startsWith('material-writing-output:' + ws + ':')).length }); };
           tx.oncomplete = () => db.close(); tx.onerror = () => reject(tx.error);
         };
       }), d.fixture.workspaceId);
       // Posts received for account A through account blog sync carry their own evidence rows; none was created by the cancelled handoff.
-      assert.deepEqual(oldRows.postIds.filter(postId => !earlierPosts.has(postId)), []); assert.equal(oldRows.refsCount <= oldRows.postIds.length, true); assert.equal(oldRows.receipts, 0); assert.equal(oldRows.plan.plans.find(p => p.id === id).output, null);
+      assert.deepEqual(oldRows.postIds.filter(postId => !earlierPosts.has(postId)), []);
+      // Every evidence row belongs to a post the account blog sync legitimately received; none to the cancelled handoff.
+      assert.deepEqual(oldRows.refIds.filter(postId => !earlierPosts.has(postId) || !oldRows.postIds.includes(postId)), []); assert.equal(oldRows.receipts, 0); assert.equal(oldRows.plan.plans.find(p => p.id === id).output, null);
       const current = await snapshot(page); assert.notEqual(current.workspaceId, d.fixture.workspaceId); assert.equal(current.posts.length, 0); assert.equal(current.preparation.plans.length, 0); assert.equal(server.blogRequests.filter(r => r.device === 'material-late-account' && !(isBackgroundSync('/rest/v1/rpc/' + r.rpc) && !isBackgroundSyncWrite('/rest/v1/rpc/' + r.rpc))).length, 0); await d.context.close();
     });
     assert.deepEqual(report.consoleErrors, []); assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.external, []); report.pass = true;
