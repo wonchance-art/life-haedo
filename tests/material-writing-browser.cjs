@@ -98,7 +98,7 @@ async function main() {
   const server = new LocalSQLBlogCloud({ container: process.env.BLOG_POSTGRES_CONTAINER, database: process.env.BLOG_POSTGRES_DATABASE });
   if (process.argv.includes('--prepare-database')) {
     server.docker(['exec', '-i', server.container, 'createdb', '-U', 'postgres', server.database]);
-    const files = await Promise.all(['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql'].map(file => fs.readFile(path.resolve(__dirname, '..', file), 'utf8')));
+    const files = await Promise.all(['supabase/tests/blog-bootstrap.sql', 'supabase/migrations/20261017144744_life_blog_originals.sql', 'supabase/migrations/20261101091500_life_blog_account_sync.sql'].map(file => fs.readFile(path.resolve(__dirname, '..', file), 'utf8')));
     server.docker(['exec', '-i', server.container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', server.database], files.join('\n'));
   }
   await server.initialize();
@@ -174,7 +174,7 @@ async function main() {
       const original = (await snapshot(page)).posts.find(p => p.doc.status === 'saved'); assert(original); assert.equal(original.doc.photos.length, 2);
       await page.getByRole('button', { name: '글 수정', exact: true }).click(); await page.locator('#photoTitle').fill('자료로 완성하고 다시 다듬은 여행글');
       await page.evaluate(() => Quill.find(document.querySelector('.ql-container')).insertText(0, '준비와 왕복해도 유지할 미완성 수정 문단🌱\n', 'user'));
-      await page.waitForFunction(() => document.querySelector('.photo-status-text')?.textContent === '브라우저에 자동 임시저장됨');
+      await page.waitForFunction(() => document.querySelector('.photo-status-text')?.textContent === '자동 저장됨');
       const pending = await snapshot(page), editing = pending.posts.find(p => p.doc.status === 'draft' && p.doc.replaces?.id === original.doc.id); assert(editing); assert.notEqual(editing.doc.id, original.doc.id);
       await page.locator('.photo-editor').getByRole('button', { name: '닫기', exact: true }).click(); await page.locator('#mwContinue').waitFor(); await page.locator('#mwContinue').click(); await page.locator('#photoTitle').waitFor();
       assert.equal(await page.locator('#photoTitle').inputValue(), editing.doc.title); assert.match(await page.locator('.ql-editor').innerText(), /준비와 왕복해도 유지할 미완성 수정 문단/);

@@ -42,14 +42,21 @@ async function fixture({ savedOutput = false, photos = false } = {}) {
       }
       return result;
     },
-    async findMaterialContinuity() { return { workspaceId: bundle.workspaceId, planId: plan.id }; },
+    async findMaterialContinuity() { return stats.unlinked ? null : { workspaceId: bundle.workspaceId, planId: plan.id }; },
+    async readMaterialWriting() { return { ...M.empty(bundle.workspaceId), revision: 1, plans: stats.planAbsent ? [] : [copy(plan)] }; },
+    async adoptMaterialContinuity(value, options) { stats.adopted = { row: copy(value), options: copy(options) }; return { workspaceId: value.data.bundle.workspaceId, planId: value.data.plan.id, adopted: true }; },
     async readBlogSyncState() { return copy(stats.existingBlogState || null); },
     async finishMaterialContinuityClaim(ws, id, revision) {
       assert.equal(ws, bundle.workspaceId); assert.equal(id, plan.id); assert.equal(revision, 1);
       stats.seedCalls = (stats.seedCalls || 0) + 1;
       return { postId: post.id, revision: post.revision, planRevision: 1, created: false };
     },
-    async installMaterialContinuity(value, options) { stats.installs.push({ row: copy(value), options: copy(options) }); return { workspaceId: bundle.workspaceId, planId: plan.id }; }
+    async installMaterialContinuity(value, options) {
+      stats.installs.push({ row: copy(value), options: copy(options) });
+      // Like the real transaction, a resolved conflict advances the link to the server head.
+      if (options?.target && (options.preserveLocal || options.preserveRemote)) state = { ...state, revision: state.revision + 1, remoteRevision: value.revision, head: copy(value), output: copy(value.data.output), pending: null, conflict: null, error: null };
+      return { workspaceId: bundle.workspaceId, planId: plan.id };
+    }
   };
   const remote = {
     async read() { stats.reads++; if (stats.holdRead) { const hold = stats.holdRead; stats.holdRead = null; hold.started.resolve(); await hold.release.promise; } return copy(row); },
@@ -65,7 +72,7 @@ async function fixture({ savedOutput = false, photos = false } = {}) {
       revision: stats.advancedBlogHead ? 2 : 1, data, assets: Object.fromEntries(post.photos.map(photo => [photo.id, { path: photo.id }])), publication: null }; },
     async downloadAsset(asset) { if (stats.holdPhoto) { stats.holdPhoto.started.resolve(); await stats.holdPhoto.release.promise; } return post.photos.find(photo => photo.id === asset.path).blob; }
   };
-  const blogSync = { async save() { stats.saved = true; return { status: 'synced', remoteId: post.id, remoteRevision: 1 }; } };
+  const blogSync = { async save() { stats.saved = true; stats.existingBlogState ||= { remoteId: post.id, remoteRevision: 1, localRevision: post.revision, enabled: true }; return { status: 'synced', remoteId: post.id, remoteRevision: 1 }; } };
   const manager = Service.create({ storage, auth, model: Model, remote, blogSync, blogRemote, blog: Blog, photoPost: Photo, makeId: C.id });
   return { manager, stats, plan, post, bundle, ref, auth, remote, state: () => state, row: () => row,
     setRow(value) { row = value; }, setPending(value) { state.pending = value; }, disconnect() { state = null; row = null; } };
@@ -130,4 +137,61 @@ test('a compare waiting for the server keeps the displayed article and approval 
   await assert.rejects(f.manager.resolve(f.bundle.workspaceId, f.plan.id, 'remote', comparison.expected), { code: 'material_review_required' });
   assert.equal(f.stats.installs.length, 0); assert.equal(f.post.revision, 5);
   assert(f.post.ops.some(op => typeof op.insert === 'string' && op.insert.includes('보이지 않은 새 문단'))); f.manager.dispose();
+});
+
+async function conflicted(f, { localTime, remoteTime }) {
+  f.plan.question = '이 기기에서 고친 질문'; f.plan.updatedAt = localTime;
+  const advanced = copy(f.row()); advanced.revision = 2; advanced.data.plan.question = '다른 기기에서 고친 질문'; advanced.data.plan.updatedAt = remoteTime; f.setRow(advanced);
+}
+test('automatic sync keeps the newer server preparation and installs it with the local side kept as a recovery copy', async () => {
+  const f = await fixture(); await conflicted(f, { localTime: '2099-01-01T00:00:00.000Z', remoteTime: '2099-01-02T00:00:00.000Z' });
+  const result = await f.manager.autoSync(f.bundle.workspaceId, f.plan.id);
+  assert.equal(result.resolved, 'remote'); assert.equal(f.stats.installs.length, 1);
+  assert.equal(f.stats.installs[0].options.preserveLocal, true); assert.equal(f.stats.installs[0].row.data.plan.question, '다른 기기에서 고친 질문');
+  assert.deepEqual(f.stats.writes, []);
+  const state = await f.manager.getState(f.bundle.workspaceId, f.plan.id); assert.equal(state.notice.choice, 'remote');
+  f.manager.dismissNotice(f.bundle.workspaceId, f.plan.id); assert.equal((await f.manager.getState(f.bundle.workspaceId, f.plan.id)).notice, null);
+  f.manager.dispose();
+});
+test('automatic sync keeps a newer local preparation, stores the server side as a recovery copy and uploads the local plan', async () => {
+  const f = await fixture(); await conflicted(f, { localTime: '2099-01-03T00:00:00.000Z', remoteTime: '2099-01-02T00:00:00.000Z' });
+  const result = await f.manager.autoSync(f.bundle.workspaceId, f.plan.id);
+  assert.equal(result.resolved, 'local'); assert.equal(f.stats.installs[0].options.preserveRemote, true);
+  assert.equal(f.stats.writes.at(-1).data.plan.question, '이 기기에서 고친 질문'); assert.equal(f.stats.writes.at(-1).expectedRevision, 2);
+  f.manager.dispose();
+});
+test('automatic sync uploads a changed preparation without a consent step and leaves an unchanged one to a read-only check', async () => {
+  const f = await fixture(); f.plan.question = '자동으로 보낼 질문';
+  await f.manager.autoSync(f.bundle.workspaceId, f.plan.id);
+  // The changed plan goes first; the already saved post claimed on this device follows with its exact revision.
+  assert.equal(f.stats.writes.length, 2); assert.equal(f.stats.writes[0].data.plan.question, '자동으로 보낼 질문');
+  assert.equal(f.stats.writes[1].data.output.state, 'saved'); assert.equal(f.stats.writes[1].data.output.revision, 1); assert.equal(f.stats.saved, true);
+  const writes = f.stats.writes.length; await f.manager.autoSync(f.bundle.workspaceId, f.plan.id);
+  assert.equal(f.stats.writes.length, writes); assert.equal(f.stats.installs.length, 0); f.manager.dispose();
+});
+test('a server preparation missing on this device is adopted into the same workspace and preparation ID', async () => {
+  const f = await fixture(); f.stats.unlinked = true; f.stats.planAbsent = true;
+  const result = await f.manager.adopt({ id: f.row().id, revision: 1 });
+  assert.equal(result.adopted, true); assert.equal(f.stats.adopted.row.data.plan.id, f.plan.id);
+  assert.equal(f.stats.adopted.row.data.bundle.workspaceId, f.bundle.workspaceId); assert.deepEqual(f.stats.installs, []);
+  f.stats.unlinked = false; assert.equal(await f.manager.adopt({ id: f.row().id, revision: 1 }), null); f.manager.dispose();
+});
+test('the background loop syncs every preparation, adopts server-only ones and skips a workspace with unsaved editor input', async () => {
+  const ws = C.id(), plans = [{ id: 'p1' }, { id: 'p2' }], calls = [];
+  const manager = { autoSync: async (w, id) => { calls.push(['auto', w, id]); return {}; }, list: async () => ({ items: [{ id: 'r1' }], next: null }),
+    adopt: async item => { calls.push(['adopt', item.id]); return null; }, dispose() {} };
+  const storage = { account: { userId: 'u', projectUrl: 'p' }, readMaterialWriting: async () => ({ plans }), adoptMaterialContinuity() {},
+    listAccountLibraries: async () => [{ workspaceId: ws, eligible: true }, { workspaceId: 'recovery', eligible: false }] };
+  const loop = Service.automatic({ storage, auth: {}, manager, every: 3600000 });
+  await loop.refresh();
+  assert.deepEqual(calls, [['auto', ws, 'p1'], ['auto', ws, 'p2'], ['adopt', 'r1']]);
+  calls.length = 0; let dirty = true; const unwatch = Service.watch(ws, { busy: () => dirty });
+  await loop.refresh(); assert.deepEqual(calls, [['adopt', 'r1']]);
+  dirty = false; unwatch(); calls.length = 0; await loop.refresh(); assert.equal(calls.filter(call => call[0] === 'auto').length, 2);
+  loop.dispose();
+});
+test('latest plan edit wins and an unknown local time yields to the server copy', () => {
+  assert.equal(Service.latest({ plan: { updatedAt: '2099-01-02T00:00:00.000Z' } }, { plan: { updatedAt: '2099-01-01T00:00:00.000Z' } }), 'local');
+  assert.equal(Service.latest({ plan: { updatedAt: '2099-01-01T00:00:00.000Z' } }, { plan: { updatedAt: '2099-01-01T00:00:00.000Z' } }), 'remote');
+  assert.equal(Service.latest({ plan: {} }, { plan: { updatedAt: '2099-01-01T00:00:00.000Z' } }), 'remote');
 });

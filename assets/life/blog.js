@@ -20,6 +20,9 @@
   }
   function bytes(value, code) { check(new TextEncoder().encode(JSON.stringify(value)).length <= LIMITS.bytes, code); }
   const photoKeys = ["id", "name", "type", "width", "height", "size", "digest"];
+  const viewKeys = ["type", "size", "digest", "width", "height"];
+  // HEIC/HEIF originals carry `view` (derived JPEG metadata); other types never do.
+  const needsView = (photo) => model().viewRequired(photo?.type);
   function placeholder(photo) {
     const blob = new Blob([], { type: typeof photo.type === "string" ? photo.type : "" });
     // Structural validation needs the declared size, without allocating photo-sized buffers.
@@ -30,14 +33,18 @@
     const v2 = value?.format === "life-photo-post-v2";
     fields(value, ["format", "id", "revision", "title", "status", "replaces", "createdAt", "updatedAt", "ops", "photos", ...(v2 ? ["attachments", "archived"] : [])]);
     check(Array.isArray(value.photos));
-    for (const photo of value.photos) fields(photo, photoKeys);
+    for (const photo of value.photos) {
+      fields(photo, needsView(photo) ? [...photoKeys, "view"] : photoKeys);
+      if (needsView(photo)) fields(photo.view, viewKeys);
+    }
     bytes(value);
-    model().validate({ ...value, photos: value.photos.map((photo) => ({ ...photo, blob: placeholder(photo) })) });
+    model().validate({ ...value, photos: value.photos.map((photo) => ({ ...photo,
+      ...(photo.view ? { view: { ...photo.view, blob: placeholder(photo.view) } } : {}), blob: placeholder(photo) })) });
     return value;
   }
   function pack(doc) {
     model().validate(doc);
-    const manifest = { ...copy(doc), photos: doc.photos.map(({ blob, ...metadata }) => copy(metadata)) };
+    const manifest = { ...copy(doc), photos: doc.photos.map((photo) => copy(model().metadata(photo))) };
     validateManifest(manifest);
     return manifest;
   }
@@ -57,24 +64,40 @@
       });
     } finally { root.URL.revokeObjectURL(url); }
   }
+  const signature = async (blob) => model().detectType(new Uint8Array(await blob.slice(0, 4096).arrayBuffer()));
+  // `photos` is a Map id -> Blob | { blob, view }, or an array of photo objects
+  // ({ id, blob, view?: { blob } | Blob }). A HEIC view may also come from the
+  // same-session pairing that PhotoPost.validate records for its original Blob.
   async function hydrate(input, photos) {
     validateManifest(input);
     const manifest = copy(input), originals = new Map();
-    const entries = photos instanceof Map ? [...photos] : Array.isArray(photos) ? photos.map((p) => [p?.id, p?.blob]) : [];
-    for (const [id, blob] of entries) {
-      check(!originals.has(id) && blob instanceof Blob, "invalid_blog_photo"); originals.set(id, blob);
+    const entries = photos instanceof Map ? [...photos] : Array.isArray(photos) ? photos.map((p) => [p?.id, p]) : [];
+    for (const [id, value] of entries) {
+      const blob = value instanceof Blob ? value : value?.blob, carried = value instanceof Blob ? undefined : value?.view ?? undefined;
+      const view = carried === undefined || carried instanceof Blob ? carried : carried?.blob;
+      check(!originals.has(id) && blob instanceof Blob && (view === undefined || view instanceof Blob), "invalid_blog_photo");
+      originals.set(id, { blob, view });
     }
     check(originals.size === manifest.photos.length, "invalid_blog_photo");
     for (const photo of manifest.photos) {
-      const blob = originals.get(photo.id);
+      const { blob, view: carried } = originals.get(photo.id) || {};
       check(blob && blob.size === photo.size && blob.type === photo.type, "invalid_blog_photo");
-      const signature = new Uint8Array(await blob.slice(0, 12).arrayBuffer()), s = String.fromCharCode(...signature);
-      check((photo.type === "image/jpeg" && signature[0] === 255 && signature[1] === 216 && signature[2] === 255) ||
-        (photo.type === "image/png" && s.startsWith("\x89PNG\r\n\x1a\n")) ||
-        (photo.type === "image/webp" && s.startsWith("RIFF") && s.slice(8) === "WEBP"), "invalid_blog_photo");
+      check(await signature(blob) === photo.type, "invalid_blog_photo");
       check(await model().digest(blob) === photo.digest, "invalid_blog_photo");
-      const size = await dimensions(blob);
-      check(!size || (size[0] === photo.width && size[1] === photo.height), "invalid_blog_photo");
+      if (needsView(photo)) {
+        // The HEIC original is checked by signature and digest only; browsers
+        // without a HEVC decoder must still verify and move the exact bytes.
+        const view = carried || model().pairedView(blob);
+        check(view instanceof Blob && view.size === photo.view.size && view.type === photo.view.type, "invalid_blog_photo");
+        check(await signature(view) === "image/jpeg" && await model().digest(view) === photo.view.digest, "invalid_blog_photo");
+        const size = await dimensions(view);
+        check(!size || (size[0] === photo.view.width && size[1] === photo.view.height), "invalid_blog_photo");
+        photo.view.blob = view;
+      } else {
+        check(!carried, "invalid_blog_photo");
+        const size = await dimensions(blob);
+        check(!size || (size[0] === photo.width && size[1] === photo.height), "invalid_blog_photo");
+      }
       photo.blob = blob;
     }
     model().validate(manifest);
@@ -114,8 +137,12 @@
     const snapshot = { format: "life-blog-public-v1", title: doc.title,
       ops: doc.ops.filter((op) => typeof op.insert === "string" || selected.has(op.insert.photo.id)).map((op) => typeof op.insert === "string" ? copy(op) :
         { ...copy(op), insert: { photo: { ...copy(op.insert.photo), id: mapping.get(op.insert.photo.id) } } }),
-      attachments: copy(doc.attachments || []), photos: doc.photos.filter((p) => selected.has(p.id)).map(({ id, type, width, height, size, digest }) =>
-        ({ id: mapping.get(id), type, width, height, size, digest })), author: copy(author) };
+      // A HEIC original is never projected publicly; its derived JPEG (no
+      // embedded metadata) is the public photo for that position.
+      attachments: copy(doc.attachments || []), photos: doc.photos.filter((p) => selected.has(p.id)).map((p) => {
+        const { type, width, height, size, digest } = needsView(p) ? p.view : p;
+        return { id: mapping.get(p.id), type, width, height, size, digest };
+      }), author: copy(author) };
     validateSnapshot(snapshot);
     return snapshot;
   }

@@ -8,7 +8,7 @@
   const UUID = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
   const messages = {
     auth_required: '로그인 계정을 다시 확인해 주세요.', request_cancelled: '계정이나 연결이 바뀌어 이전 요청을 중단했습니다.',
-    schema_missing: '서버에 자료 준비 이어쓰기 설치가 필요합니다. 이 브라우저의 준비는 유지합니다.',
+    schema_missing: '서버에 작성 준비 동기화 설치가 필요합니다. 이 기기의 준비는 유지합니다.',
     invalid_request: '자료 준비 전송의 식별자와 버전을 확인해 주세요.', invalid_remote_data: '서버 준비의 원문과 구절을 확인하지 못했습니다. 현재 입력은 유지합니다.',
     operation_mismatch: '이미 보낸 작업과 요청 내용이 달라 적용하지 않았습니다.', remote_missing: '연결한 서버 준비가 없습니다. 자동으로 다시 만들지 않았습니다.',
     output_conflict: '이미 정해진 글과 작성 기기를 바꿀 수 없습니다. 기존 글을 이어 쓰거나 별도 준비 사본을 만드세요.',

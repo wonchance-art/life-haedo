@@ -76,7 +76,7 @@
       const key = session.stage.state === 'applied' ? 'stored' : session.error ? 'error' : session.recordSaving || session.saving ? 'saving' :
         edited(session) ? 'dirty' : session.stage.revision ? 'draft' : 'empty';
       const labels = { stored: '기록으로 저장됨', error: '저장하지 못함 · 입력 유지', saving: session.recordSaving ? '기록으로 저장 중…' : '초안 보관 중…',
-        dirty: session.composing.size ? '작성 중' : '초안 보관 대기', draft: '이 브라우저에 초안 보관됨', empty: '새 글' };
+        dirty: session.composing.size ? '작성 중' : '초안 보관 대기', draft: '초안 보관됨', empty: '새 글' };
       status.dataset.state = key; status.textContent = labels[key];
       if (saveButton) saveButton.disabled = session.stage.state === 'applied' || !!session.recordSaving || !!session.composing.size || !session.stage.text.trim();
       for (const input of [titleInput, bodyInput]) if (input) input.disabled = !!session.recordSaving || session.stage.state === 'applied';
@@ -220,7 +220,7 @@
       finally { session.recordSaving = null; updateStatus(session); }
       // The receipt is settled before onSaved navigates and calls flush again.
       if (!showing(session, token)) return saved;
-      announce('글을 이 브라우저의 기록으로 저장했습니다.');
+      announce('글을 기록으로 저장했습니다.');
       session.openingSaved = true; updateStatus(session);
       try { await onSaved(saved); }
       catch (_) { report(session, fault('writing_open_failed', '글은 저장됐지만 화면을 열지 못했습니다. 저장한 글을 다시 열어 주세요.'), 'record'); }
@@ -344,7 +344,7 @@
           onOpen: id => open({ stageId: id, syncOpen: true }) });
       }
       const scope = el('details', null, 'life-writing-scope'); scope.append(el('summary', '초안 보관'),
-        el('p', '초안은 먼저 이 브라우저에 보관합니다. 초안 이어쓰기에서 고른 글만 별도로 연결할 수 있고 기록 백업에는 포함되지 않습니다. TXT로 따로 받을 수 있습니다. 저장한 글은 기록 백업과 기존 원문 동기화 설정을 따르며 공개 게시와는 별개입니다.', 'life-meta'));
+        el('p', '초안은 먼저 이 기기에 보관하고 같은 계정으로 로그인한 기기와 자동으로 동기화합니다. 기록 백업에는 포함되지 않으며 TXT로 따로 받을 수 있습니다. 저장한 글은 기록 백업과 원문 동기화를 따르며 공개 게시와는 별개입니다.', 'life-meta'));
       surface.append(scope); updateStatus(session); renderIncoming(session); if (session.error) report(session, session.error, session.errorPhase);
       restoreEditor(session);
     }

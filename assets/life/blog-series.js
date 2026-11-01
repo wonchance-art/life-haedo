@@ -67,9 +67,9 @@
       const used = photoPost().validate(row.doc);
       if (row.itemId !== entry.id || row.doc.id !== entry.postId || row.doc.revision !== entry.postRevision || row.doc.title !== entry.title || row.doc.status !== 'saved' || row.doc.archived) fail('목차가 가리키는 정확한 저장 글을 확인하지 못했습니다.');
       if (row.doc.photos.some(photo => !used.has(photo.id))) fail('본문에서 사용한 원본 사진만 모음에 보관해 주세요.');
-      for (const photo of row.doc.photos) { bytes += photo.size; count++; }
+      for (const photo of row.doc.photos) { bytes += photo.size + (photo.view ? photo.view.size : 0); count++; }
     }
-    const metadata = { series: value.series, posts: value.posts.map(row => ({ itemId: row.itemId, doc: { ...row.doc, photos: row.doc.photos.map(({ blob, ...photo }) => photo) } })) };
+    const metadata = { series: value.series, posts: value.posts.map(row => ({ itemId: row.itemId, doc: { ...row.doc, photos: row.doc.photos.map(photo => photoPost().metadata(photo)) } })) };
     const metadataBytes = new TextEncoder().encode(JSON.stringify(metadata)).length;
     if (metadataBytes > LIMITS.snapshotJson || count > LIMITS.photos || bytes + metadataBytes > LIMITS.bytes) fail('모음은 설명·본문 16 MiB, 원본 사진 200장·전체 256 MiB까지 보관할 수 있습니다.');
     return value;

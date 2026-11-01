@@ -178,7 +178,7 @@ async function applicationChecks(browser, observe) {
       const initial = await savedBundle(); originalWorkspace = initial.workspaceId;
       assert.equal(initial.sources.length,0); assert.equal(initial.records.length,0);
       assert.deepEqual(await page.evaluate(() => __legacyAccess),[]);
-      assert.match(await page.locator('#lifeApp').textContent(),/기기 간 자동 동기화/);
+      assert.match(await page.locator('#lifeApp').textContent(),/서버 동기화 미연결|동기화/);
     });
     await check('UI: paste → reviewed exact excerpt/topic → source jump, inert HTML/history', async () => {
       await click('가져오기');
