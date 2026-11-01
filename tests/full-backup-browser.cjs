@@ -109,6 +109,7 @@ async function main() {
   assert(['127.0.0.1', 'localhost', '[::1]'].includes(new URL(base).hostname), 'Only an explicit loopback test server is permitted');
   await fs.mkdir(out, { recursive: true });
   const browser = await playwright().chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', args: ['--no-sandbox'] });
+  openBrowser = browser;
   const report = { checks: [], visual: [], consoleErrors: [], pageErrors: [], external: [], browser: browser.version(),
     scope: 'Actual local app/SDK/IndexedDB, downloaded ZIP bytes and restore in a second, empty account context. Synthetic Auth/FakeCloud; Chromium viewport simulation; no Apple claim.' };
   const server = new FakeCloud();
@@ -315,4 +316,6 @@ async function main() {
   await fs.writeFile(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
   console.log('PASS full backup browser: ' + report.checks.length + ' checks');
 }
-main().catch(error => { console.error(error.stack); process.exitCode = 1; });
+let openBrowser = null;
+// A failed check must not leave the browser (and this process) running.
+main().catch(async error => { console.error(error.stack); process.exitCode = 1; await openBrowser?.close().catch(() => {}); });
