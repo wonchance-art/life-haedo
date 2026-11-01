@@ -350,17 +350,20 @@
   // account (non-recovery) workspace, plus server preparations not yet on this device.
   function automatic({ storage, auth = root.HaedoAuth, every = 60000, manager = null } = {}) {
     if (!storage?.account || typeof storage.readMaterialWriting !== 'function' || typeof storage.adoptMaterialContinuity !== 'function') return null;
-    let instance = manager, disposed = false, running = false, again = false, timer = null, offAll = null, soon = null;
+    let instance = manager, disposed = false, running = null, again = false, timer = null, offAll = null, soon = null;
     try { instance ||= create({ storage, auth }); } catch (_) { return null; }
     shared.set(storage, instance);
     async function workspaces() {
       if (typeof storage.listAccountLibraries === 'function') return (await storage.listAccountLibraries()).filter(row => row.eligible).map(row => row.workspaceId);
       return (await storage.listWorkspaces()).map(row => row.workspaceId);
     }
-    async function pass() {
-      if (disposed || root.document?.visibilityState === 'hidden') return;
-      if (running) { again = true; return; }
-      running = true;
+    function pass() {
+      if (disposed || root.document?.visibilityState === 'hidden') return Promise.resolve();
+      if (running) { again = true; return running; }
+      running = passes().finally(() => { running = null; });
+      return running;
+    }
+    async function passes() {
       try {
         do {
           again = false;
@@ -385,7 +388,6 @@
           }
         } while (again && !disposed);
       } catch (_) { /* Network or account changes: local preparations stay as they are. */ }
-      finally { running = false; }
     }
     const nudge = event => {
       if (disposed || event?.type !== 'material_writing_changed' || soon) return;

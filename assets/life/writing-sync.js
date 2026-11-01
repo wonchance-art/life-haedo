@@ -23,7 +23,7 @@
     const fault = code => clean({ code });
     if (!storage?.account || !sourceSync || !auth || !remote || !engine) throw fault('account_mismatch');
     const owner = storage.account, entries = new Map(), listeners = new Set(), notices = new Map();
-    let disposed = false, started = false, interval = null, refreshing = false, again = false, soon = null, offAll = null, material = null;
+    let disposed = false, started = false, interval = null, refreshing = null, again = false, soon = null, offAll = null, material = null;
     const same = value => value?.userId === owner.userId && value?.projectUrl === owner.projectUrl;
     const guard = epoch => { if (disposed || !same(auth.getAccount()) || epoch !== undefined && epoch !== auth.epoch) throw fault('request_cancelled'); };
     const binding = ws => ({ ...owner, remoteId: ws });
@@ -89,11 +89,13 @@
     async function listRemote(ws, after = null) {
       const epoch = auth.epoch; await sourceReady(ws); const rows = await remote.list(ws, after); guard(epoch); return rows;
     }
-    async function download(ws, id) {
-      guard(); const epoch = auth.epoch; await sourceReady(ws);
+    // `source` is a state the caller already read as enabled and synced for this account;
+    // the originals are then refreshed only when the draft needs a newer source head.
+    async function download(ws, id, source = null) {
+      guard(); const epoch = auth.epoch; if (!source) await sourceReady(ws);
       const row = await remote.read(ws, id); guard(epoch);
       if (!row) throw fault('remote_missing');
-      await sourceReady(ws, row.source_revision); guard(epoch);
+      if (!source || row.source_revision > source.remoteRevision) { await sourceReady(ws, row.source_revision); guard(epoch); }
       const existing = await storage.getStage(id); guard(epoch);
       if (existing) {
         if (existing.workspaceId !== ws || existing.kind !== 'writing') throw fault('account_mismatch');
@@ -118,7 +120,8 @@
           else {
             if (stage.state === 'applied' && state.status === 'synced') continue;
             const value = entry(ws, stage.stageId);
-            if (!value.started) value.start(); else await value.instance.syncNow(stage.stageId).catch(() => {});
+            if (!value.started) value.start();
+            await value.instance.syncNow(stage.stageId).catch(() => {});
           }
         } catch (_) { guard(epoch); /* Durable state keeps the error; the next pass retries. */ }
         guard(epoch);
@@ -130,16 +133,20 @@
         const rows = await remote.list(ws, after); guard(epoch);
         for (const row of rows) {
           if (row.state !== 'draft' || known.has(row.draft_id)) continue;
-          try { await download(ws, row.draft_id); known.add(row.draft_id); } catch (_) { guard(epoch); }
+          try { await download(ws, row.draft_id, source); known.add(row.draft_id); } catch (_) { guard(epoch); }
         }
         if (rows.length < 100) break;
         after = rows.at(-1).draft_id;
       }
     }
-    async function automatic() {
-      if (disposed || root.document?.visibilityState === 'hidden') return;
-      if (refreshing) { again = true; return; }
-      refreshing = true;
+    // Callers that arrive during a pass wait for the same pass, which then runs once more.
+    function automatic() {
+      if (disposed || root.document?.visibilityState === 'hidden') return Promise.resolve();
+      if (refreshing) { again = true; return refreshing; }
+      refreshing = passes().finally(() => { refreshing = null; });
+      return refreshing;
+    }
+    async function passes() {
       try {
         do {
           again = false;
@@ -150,7 +157,6 @@
           }
         } while (again && !disposed);
       } catch (_) { /* Retain local text and metadata; the next pass retries. */ }
-      finally { refreshing = false; }
     }
     function nudge() {
       if (disposed || soon) return;

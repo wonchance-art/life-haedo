@@ -53,7 +53,8 @@
       body.replaceChildren();
       if (!state) { body.append(button('다시 확인', 'compositionRetry', refresh)); return; }
       if (failed) body.append(button('다시 시도', 'compositionSyncNow', async () => {
-        if (managed && onRetry) await onRetry(); else if (state.enabled) await manager.syncNow(workspaceId); else await manager.enable(workspaceId);
+        if (state.enabled && state.conflict && !state.conflict.missing) await manager.syncNow(workspaceId);
+        else if (managed && onRetry) await onRetry(); else if (state.enabled) await manager.syncNow(workspaceId); else await manager.enable(workspaceId);
       }));
       if (state.conflict?.missing) body.append(node('p', '서버 구성을 찾을 수 없어 자동으로 다시 만들지 않았습니다. 현재 구성은 자료·구성 백업이나 복구 파일로 보관할 수 있습니다.', 'life-help'));
       if (message) body.append(node('p', message, 'life-help'));
@@ -76,6 +77,8 @@
         state = next; recoveries = copies; draw();
         // Without the account library nothing else starts this workspace's sync; do it once, quietly.
         if (!managed && !state.enabled && !autoEnabled) { autoEnabled = true; manager.enable(workspaceId).catch(cause => { if (alive()) { error = cause.message || ''; refresh(); } }); }
+        // A conflict recorded before automatic resolution existed is settled on the next run.
+        else if (state.enabled && state.conflict && !state.conflict.missing && !autoEnabled) { autoEnabled = true; manager.syncNow(workspaceId).catch(cause => { if (alive()) { error = cause.message || ''; refresh(); } }); }
       } catch (cause) { if (alive() && token === sequence) { state = null; error = cause.message || '구성을 불러오지 못했습니다.'; draw(); } }
     }
     const unsubscribe = manager.subscribe(event => {
