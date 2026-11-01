@@ -11,7 +11,8 @@
   'use strict';
   const CONFLICT_PREFIX = '충돌로 보관한 이전 내용 · ';
   const DRAFT_DELAY = 5000, MAX_BACKOFF = 15 * 60 * 1000;
-  const QUIET = new Set(['request_cancelled']);
+  // A concurrent local change (another tab) is simply decided again next cycle.
+  const QUIET = new Set(['request_cancelled', 'blog_state_conflict', 'photo_post_conflict']);
   // Live instances with automatic sync. The editor reports a committed local
   // draft through the module (HaedoLife.BlogSync.noteLocalDraftSaved).
   const live = new Set();
@@ -217,7 +218,8 @@
     }
     // Called by the editor right after an explicit save: uploads now instead of
     // waiting for the next cycle. Failures stay queued for the automatic retry.
-    const saveDefault = (ws, id, options = {}) => push(ws, id, { expectedLocalRevision: options.expectedLocalRevision, expectedManifest: options.expectedManifest || null });
+    // A following cycle retires a replaced editing draft on the server promptly.
+    const saveDefault = (ws, id, options = {}) => push(ws, id, { expectedLocalRevision: options.expectedLocalRevision, expectedManifest: options.expectedManifest || null }).finally(() => kick(0));
     const save = (ws, id, options = {}) => push(ws, id, { expectedManifest: options.expectedManifest || null });
     // ---- download --------------------------------------------------------------
     async function install(ws, head, byRemote) {
@@ -230,9 +232,11 @@
           try { await storage.commitBlogSync(ws, { postId: row.id, post: doc, baseRevision: 0, binding, bindingRevision: 0 }, { isCurrent: () => current(c) }); }
           catch (error) {
             if (error?.code === 'blog_post_deleted') return null;
-            // An unbound local document already uses this identity: decide it as a conflict.
-            if (error?.code === 'photo_post_conflict' && !(await readState(c))) {
-              await writeState(c, null, { ...binding, remoteRevision: 0, remoteManifest: null, status: 'pending' }); return null;
+            if (error?.code === 'photo_post_conflict' || error?.code === 'blog_state_conflict') {
+              const existing = await readState(c);
+              if (existing?.remoteId === row.id) return null; // another tab installed it
+              // An unbound local document already uses this identity: decide it as a conflict.
+              if (!existing && error.code === 'photo_post_conflict') { await writeState(c, null, { ...binding, remoteRevision: 0, remoteManifest: null, status: 'pending' }); return null; }
             }
             throw error;
           }
@@ -441,6 +445,8 @@
     function kick(delay = 0) { if (started) schedule(delay); }
     async function syncNow(options = {}) {
       if (disposed) return getStatus();
+      // An explicit retry or a restored connection does not wait for backoff.
+      if (options.force) for (const value of retries.values()) value.until = 0;
       if (running) { rerun = { uploadOnly: !!rerun?.uploadOnly && !!options.uploadOnly, flushDrafts: !!rerun?.flushDrafts || !!options.flushDrafts }; return running; }
       if (timer) { timers.clearTimeout(timer); timer = null; }
       running = (async () => {
@@ -463,7 +469,7 @@
       if (disposed || started) return; started = true;
       const on = (target, name, handler) => { if (typeof target?.addEventListener === 'function') { target.addEventListener(name, handler); removers.push(() => target.removeEventListener(name, handler)); } };
       const doc = events?.document;
-      on(events, 'online', () => kick(0));
+      on(events, 'online', () => { void syncNow({ force: true }); });
       on(events, 'focus', () => kick(0));
       on(events, 'pagehide', () => { void syncNow({ uploadOnly: true, flushDrafts: true }); });
       on(doc, 'visibilitychange', () => {
