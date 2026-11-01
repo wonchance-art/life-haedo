@@ -265,6 +265,20 @@ async function main() {
       const before = own(await snapshot(page)); assert.equal(before.posts.length, 1); const postId = before.posts[0].doc.id; assert.equal(before.preparation.plans.find(p => p.id === id).output.postId, postId);
       await page.locator('#mwContinue').click(); await page.locator('#photoTitle').waitFor(); const after = own(await snapshot(page)); assert.equal(after.posts.length, 1); assert.equal(after.posts[0].doc.id, postId); assert.deepEqual(after, before); await d.context.close();
     });
+    await check('Re-selecting the open preparation while its sources load is a no-op, and choosing another one waits for the load instead of leaving a stuck error', async () => {
+      const d = await fixture('material-select-loading'); page = d.page; const first = await seedPlan(page, d.fixture, '불러오는 중 선택 첫 준비'), second = await seedPlan(page, d.fixture, '불러오는 중 선택 둘째 준비');
+      await enter(page, first); await saved(page);
+      // Hold only the real source list's mount; storage, preparation and selector stay real.
+      await page.evaluate(() => { const original = HaedoLife.MaterialWritingSources; window.__mwSourceGate = new Promise(resolve => { window.__mwReleaseSources = resolve; });
+        HaedoLife.MaterialWritingSources = { ...original, create(options) { const value = original.create(options); return { ...value, mount: async (...args) => { window.__mwSourcesHeld = true; await window.__mwSourceGate; return value.mount(...args); }, pending: (...args) => value.pending(...args), getView: (...args) => value.getView?.(...args), refresh: (...args) => value.refresh?.(...args), dispose: (...args) => value.dispose(...args) }; } }; });
+      await page.locator('#mwPlanSelect').selectOption(second); await page.waitForFunction(() => window.__mwSourcesHeld === true && document.querySelector('.mw-status')?.textContent === '자료를 불러오는 중…');
+      await page.locator('#mwPlanSelect').selectOption(second);
+      assert.equal(await page.locator('.mw-status').getAttribute('data-state'), 'dirty'); assert.equal(await page.locator('.mw-error').isHidden(), true, 'the same selection is not refused');
+      await page.locator('#mwPlanSelect').selectOption(first); assert.equal(await page.locator('.mw-error').isHidden(), true, 'a new selection waits for the read-only load');
+      await page.evaluate(() => window.__mwReleaseSources()); await page.waitForFunction(() => document.querySelector('#mwTitle')?.value === '불러오는 중 선택 첫 준비'); await saved(page);
+      assert.equal(await page.locator('#mwPlanSelect').inputValue(), first); assert.equal(await page.locator('#mwTitle').inputValue(), '불러오는 중 선택 첫 준비'); assert.equal(await page.locator('.mw-error').isHidden(), true);
+      assert.equal((await readPreparation(page)).plans.length, 2, 'no copy or new preparation was made');
+    });
     await check('A real SDK account change during exact-source hashing cancels the old account handoff and leaves both accounts free of partial posts', async () => {
       const earlierPosts = new Set(server.rpc(accounts.a.id, 'life_blog_sync_list', {}).map(row => row.id));
       const d = await fixture('material-late-account'); page = d.page; const id = await seedPlan(page, d.fixture); await enter(page, id);

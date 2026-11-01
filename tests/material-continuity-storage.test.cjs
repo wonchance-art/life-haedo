@@ -213,8 +213,9 @@ test('an edit after reviewed snapshot hashing but before the final transaction c
   const module = globalThis.HaedoLife.MaterialContinuity; let gated = false;
   globalThis.HaedoLife.MaterialContinuity = { ...C, async fingerprint(value) { const hash = await C.fingerprint(value); if (!gated) { gated = true; entered.resolve(); await gate.promise; } return hash; } };
   try {
-    const applying = f.a.installMaterialContinuity({ ...row, revision: 2 }, { target: { workspaceId: f.ws, planId: f.plan.id }, expectedFingerprint: before.fingerprint });
-    await entered.promise; const edited = await f.b.readMaterialWriting(f.ws); edited.plans[0].question = '해시 대기 중 다른 탭 입력'; await f.b.saveMaterialWriting(f.ws, edited, edited.revision);
+    // Tab B has not hashed this preparation yet (fingerprints are cached per storage), so its install hashes now.
+    const applying = f.b.installMaterialContinuity({ ...row, revision: 2 }, { target: { workspaceId: f.ws, planId: f.plan.id }, expectedFingerprint: before.fingerprint });
+    await entered.promise; const edited = await f.a.readMaterialWriting(f.ws); edited.plans[0].question = '해시 대기 중 다른 탭 입력'; await f.a.saveMaterialWriting(f.ws, edited, edited.revision);
     const preserved = copy(f.rows); gate.resolve(); await assert.rejects(applying, { code: 'material_continuity_changed' }); assert.deepEqual(f.rows, preserved);
   } finally { globalThis.HaedoLife.MaterialContinuity = module; gate.resolve(); }
 });
@@ -386,4 +387,18 @@ test('a server-side deletion removes an unchanged preparation but never one edit
   assert.deepEqual((await f.a.readMaterialWriting(f.ws)).plans, []); assert.equal(await f.a.readMaterialContinuityState(f.ws, f.plan.id), null);
   assert.deepEqual((await f.a.read(f.ws)).sourceVersions, before.sourceVersions);
   f.close();
+});
+
+test('an unchanged preparation is hashed once across background cycles; any change hashes again', async () => {
+  const counts = { verify: 0, fingerprint: 0 }, counted = { ...C, verify: async value => { counts.verify++; return C.verify(value); }, fingerprint: async value => { counts.fingerprint++; return C.fingerprint(value); } };
+  const f = await fixture(), options = { idb: f.idb, core: Core, channelFactory: null, account: accountA, materialContinuity: counted }, s = createStorage(options);
+  const first = await s.readMaterialContinuitySnapshot(f.ws, f.plan.id), hashed = { ...counts };
+  assert.ok(hashed.fingerprint >= 1);
+  for (let cycle = 0; cycle < 3; cycle++) assert.equal((await s.readMaterialContinuitySnapshot(f.ws, f.plan.id)).fingerprint, first.fingerprint);
+  assert.deepEqual(counts, hashed, 'no re-hash for an unchanged preparation');
+  const wrapper = await s.readMaterialWriting(f.ws), edited = copy(wrapper); edited.plans[0].question = '다시 해시해야 하는 질문';
+  await s.saveMaterialWriting(f.ws, edited, wrapper.revision);
+  const changed = await s.readMaterialContinuitySnapshot(f.ws, f.plan.id);
+  assert.notEqual(changed.fingerprint, first.fingerprint); assert.equal(counts.fingerprint, hashed.fingerprint + 1);
+  s.close(); f.close();
 });
