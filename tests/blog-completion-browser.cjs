@@ -242,6 +242,12 @@ async function main() {
   }, id);
   // An 'online' event starts an immediate account sync cycle without backoff.
   const kick = p => p.evaluate(() => dispatchEvent(new Event('online')));
+  // Emulates a backgrounded tab (e.g. another window in front, or CI): the
+  // page reports hidden and receives the same visibilitychange event.
+  const setHidden = (p, hidden) => p.evaluate(hidden => {
+    for (const name of ['visibilityState', 'hidden']) Object.defineProperty(document, name, { configurable: true, get: () => name === 'hidden' ? hidden : hidden ? 'hidden' : 'visible' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
   const until = async (read, ok, label, timeout = 30000) => {
     const end = Date.now() + timeout; let value;
     do { value = await read(); if (ok(value)) return value; await new Promise(done => setTimeout(done, 100)); } while (Date.now() < end);
@@ -411,13 +417,19 @@ async function main() {
       (server.offlineDevices ||= new Set()).add(owner.name);
       const editedA = await editPhotoPost(page, atA, 'A가 오프라인에서 먼저 쓴 글 ' + suffix, 'A의 오프라인 문장\n', { expectedServerState: ['error', 'pending'] });
       assert.equal(readRemote().data.title, editedB.title, 'nothing left the offline device');
+      // A's tab goes to the background (its one hidden flush runs now, while
+      // still offline); it stays hidden when it comes back online below.
+      await setHidden(page, true);
       await new Promise(done => setTimeout(done, 1100));
       const laterB = await editPhotoPost(second.page, await currentOf(second.page), 'B가 나중에 다듬은 글 ' + suffix, 'B의 나중 문장\n');
+      // A comes back online while its tab is still in the background: its kept
+      // conflict copy must reach the account without the tab in front.
       server.offlineDevices.delete(owner.name); await kick(page);
       const keptA = await until(async () => (await data(page)).docs.find(doc => doc.status === 'draft' && doc.title === '충돌로 보관한 이전 내용 · ' + editedA.title), Boolean, 'A keeps its earlier edit as a draft');
       assert((await data(page)).docs.some(doc => doc.status === 'saved' && doc.title === laterB.title), 'the later B edit is in place on A');
       assert.equal(readRemote().data.title, laterB.title); assert(keptA.ops[0].insert.startsWith('A의 오프라인 문장\n'));
       await until(async () => server.sql("select count(*) from haedo_blog_private.posts where data->>'status'='draft' and data->>'title'=" + literal(keptA.title) + ';'), count => count === 1, 'the kept draft reaches the account');
+      await setHidden(page, false);
       await kick(second.page);
       await until(async () => (await data(second.page)).docs.some(doc => doc.status === 'draft' && doc.title === keptA.title), Boolean, 'the kept draft reaches B');
       phase('A two-device conflict keeps both versions on both devices');
