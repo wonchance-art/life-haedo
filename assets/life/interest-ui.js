@@ -55,7 +55,7 @@
     async function saveManual(token) {
       if (current.conflict) throw Object.assign(new Error('conflict'), { code: 'interest_profile_conflict' });
       const next = profile().setManual(current.saved, manualItems(), { expectedRevision: current.saved.revision });
-      if (await persist(next, token)) { current.manualText = current.baseManualText; const input = surface?.querySelector('#interestManual'); if(input) input.value = current.manualText; message('관심을 이 브라우저에 보관했습니다.'); }
+      if (await persist(next, token)) { current.manualText = current.baseManualText; const input = surface?.querySelector('#interestManual'); if(input) input.value = current.manualText; message('관심을 계정에 자동 저장했습니다.'); }
     }
     async function saveProposed(token) {
       if (!current.pendingResult) return;
@@ -113,7 +113,7 @@
       input.addEventListener('input', () => { current.manualText = input.value; }); label.append(input);
       manual.append(label, control('관심 보관', 'interestSaveManual', saveManual, true));
       manual.append(control('입력 되돌리기', 'interestRevertManual', async () => { current.manualText = current.baseManualText; current.pendingResult = null; current.confirmedDraft = new Set(current.saved.confirmedIds); current.confirmationStale = false; draw(); }));
-      manual.append(node('p', '관심과 분석 후보는 이 계정·작업공간의 이 브라우저에만 보관합니다. 원문 백업·서버 동기화·공개 사본에는 포함하지 않습니다.', 'life-help'));
+      manual.append(node('p', '관심과 분석 후보는 계정에 비공개로 자동 저장되어 로그인한 내 기기에서 함께 보입니다. 원문 백업과 공개 사본에는 포함하지 않습니다.', 'life-help'));
       surface.append(manual);
       const selection = node('details'); selection.id = 'interestSelection'; selection.open = current.selectionOpen;
       selection.addEventListener('toggle', () => { current.selectionOpen = selection.open; }); selection.append(node('summary', '분석할 자료 선택'));
@@ -207,7 +207,14 @@
         if (untouchedConfirmations) current.confirmedDraft = new Set(saved.confirmedIds);
         else if (priorFingerprint !== saved.analysis?.inputFingerprint) current.confirmationStale = true;
       }
-      unsubscribe = storage.subscribe(workspaceId, event => { if (event.type === 'interest_profile_changed' && event.revision > current.saved.revision && inScope()) { current.conflict = true; const reload = surface?.querySelector('#interestReload'); if(reload) reload.hidden = false; message('다른 탭에서 관심을 변경했습니다. 입력을 복사한 뒤 최신 관심을 확인해 주세요.', true); } });
+      unsubscribe = storage.subscribe(workspaceId, event => {
+        if (event.type !== 'interest_profile_changed' || !(event.revision > current.saved.revision) || !inScope()) return;
+        // Account sync: with no unsaved input, focused field or running task here, show the latest directly.
+        const focused = surface?.contains(root.document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(root.document.activeElement.tagName);
+        if (!dirty() && !busy && !focused && !current.conflict) { render().then(() => message('다른 탭이나 기기에서 바뀐 관심을 불러왔습니다.')).catch(() => {}); return; }
+        current.conflict = true; const reload = surface?.querySelector('#interestReload'); if (reload) reload.hidden = false;
+        message('다른 탭이나 기기에서 관심이 바뀌었습니다. 입력을 유지했습니다. 최신 관심 확인을 눌러 주세요.', true);
+      });
       draw();
     }
     function leave() { cancel(false); active = false; unsubscribe?.(); unsubscribe = null; }

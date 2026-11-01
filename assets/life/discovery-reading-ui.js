@@ -50,7 +50,7 @@
       errorNode = node('p', '', 'life-error'); errorNode.id = 'discoveryReadingError'; errorNode.setAttribute('role', 'alert');
       recovery = node('div', null, 'life-actions discovery-reading-recovery');
       emptyHost = node('div');
-      const intro = node('p', '지금의 주제·언어·출처와 공개 목록을 고정해 소수의 글을 비교합니다. 답은 이 브라우저에 비공개로 보관합니다.', 'life-meta');
+      const intro = node('p', '지금의 주제·언어·출처와 공개 목록을 고정해 소수의 글을 비교합니다. 답은 계정에 비공개로 자동 저장됩니다.', 'life-meta');
       emptyHost.append(intro, button('현재 조건으로 비교 시작', 'discoveryReadingStart', start));
       sessionHost = node('section', null, 'discovery-reading-session'); sessionHost.setAttribute('aria-label', '현재 읽기 비교');
       conditionHost = node('div'); listsHost = node('div'); listsHost.id = 'discoveryReadingLists'; articlesHost = node('div');
@@ -301,7 +301,7 @@
       if (event.local && inflight) return;
       if (event.revision <= (saved?.revision ?? -1)) return;
       remoteMax = Math.max(remoteMax, event.revision); remoteEpoch++; readEpoch++; blocked = true; loading = false;
-      if (inflight || dirty()) { conflict = true; error = '다른 탭에서 읽기 비교가 바뀌었습니다. 현재 선택을 유지했습니다. 최신 비교를 확인해 주세요.'; sync(); }
+      if (inflight || dirty()) { conflict = true; error = '다른 탭이나 기기에서 읽기 비교가 바뀌었습니다. 현재 선택을 유지했습니다. 최신 비교를 확인해 주세요.'; sync(); }
       else { sync(); readLatest().catch(() => {}); }
     }
     async function render(nextWorkspaceId) {

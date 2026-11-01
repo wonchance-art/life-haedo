@@ -48,7 +48,7 @@
     function fail(error, conflict = false) {
       if (!inScope() || !current) return;
       current.error = conflict || /conflict/.test(error?.code || '')
-        ? '다른 탭에서 계획이 바뀌었습니다. 최신 계획을 확인한 뒤 내 입력을 다시 적용하세요.'
+        ? '다른 탭이나 기기에서 계획이 바뀌었습니다. 최신 계획을 확인한 뒤 내 입력을 다시 적용하세요.'
         : error?.code === 'annual_plan_unsaved' ? error.message
           : '저장하지 못했습니다. 입력은 유지됩니다. 설정을 확인하거나 다시 저장하세요.';
       if (conflict || /conflict/.test(error?.code || '')) current.conflict = true;
@@ -372,6 +372,17 @@
       slot.reading = false; build();
       unsubscribe = storage.subscribe(workspaceId, event => {
         if (event.type !== 'annual_plan_changed' || !inScope() || !current.saved || event.revision <= current.saved.revision || event.local && writing) return;
+        // Account sync: adopt another tab's or device's plan only when nothing here is unsaved or focused.
+        const focused = surface?.contains(root.document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(root.document.activeElement.tagName);
+        if (!event.local && !writing && !changed() && !current.conflict && !current.reading && !focused) {
+          const token = generation, slot = current;
+          storage.readAnnualPlan(workspaceId).then(latest => {
+            if (!valid(token) || slot !== current) return;
+            if (writing || changed() || slot.conflict) { if (latest.revision !== slot.saved.revision) fail(null, true); return; }
+            slot.saved = latest; slot.draft = payload(latest); slot.error = ''; slot.latest = null; syncSettings(); drawGrid(); status();
+          }).catch(error => { if (valid(token)) fail(error); });
+          return;
+        }
         fail(null, true);
       });
       try {
