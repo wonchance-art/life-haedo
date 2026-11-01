@@ -24,8 +24,10 @@
   const time = value => { const parsed = typeof value === 'string' ? Date.parse(value) : NaN; return Number.isFinite(parsed) ? parsed : null; };
   // Latest edit wins. The local edit time is recorded with each composition save;
   // the server row carries its own write time. Unknown local time yields to the server.
+  // The remote side's own edit time travels in its payload (data.editedAt); older servers and
+  // rows written before that fall back to the server write time.
   function latest({ remote, editedAt }) {
-    const local = time(editedAt), server = time(remote?.updated_at);
+    const local = time(editedAt), server = time(remote?.data?.editedAt) ?? time(remote?.updated_at);
     if (local === null) return 'remote';
     return server !== null && server >= local ? 'remote' : 'local';
   }
@@ -103,7 +105,9 @@
       try {
         const result = await storage.resolveCompositionSync(ctx.workspaceId, binding(ctx.workspaceId), {
           choice, expectedLocalRevision: snapshot.workbench.revision, remoteRow: row }); guard(ctx);
-        emit(ctx.workspaceId, { autoResolved: true, choice, recoveryId: result?.recoveryId || result?.recoveryStageId || null });
+        const recoveryId = result?.recoveryId || result?.recoveryStageId || null;
+        // An empty/default losing side keeps no recovery copy, so there is nothing to announce.
+        emit(ctx.workspaceId, recoveryId ? { autoResolved: true, choice, recoveryId } : { resolved: choice });
         return true;
       } catch (error) {
         // A newer local edit or remote head arrived; the next pass reads both again.

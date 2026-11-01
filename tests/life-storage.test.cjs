@@ -1208,7 +1208,8 @@ test('workbench starts without a write and persists independently of bundle revi
   const promise = storage.saveWorkbench(bundle.workspaceId, input, 0);
   input.page.entries[0].note = '저장 요청 뒤 바꾼 값';
   const saved = await promise;
-  assert.deepEqual(saved, { ...expected, revision: 1 });
+  // The save stamps the local edit time used for latest-wins sync; the content is exactly the input.
+  assert.ok(Number.isFinite(Date.parse(saved.editedAt))); assert.deepEqual(saved, { ...expected, revision: 1, editedAt: saved.editedAt });
   assert.deepEqual(events, [{ type: 'workbench_changed', workspaceId: bundle.workspaceId, revision: 1 }]);
   assert.deepEqual(await storage.read(bundle.workspaceId), bundle);
   assert.deepEqual(await storage.getSyncState(bundle.workspaceId), beforeSync);

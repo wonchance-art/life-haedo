@@ -41,7 +41,10 @@
   function validate(value) {
     json(value);
     const keys = ['format', 'workspaceId', 'revision', 'sourceFolders', 'collection', 'nineBoard'];
-    fail(value && !Array.isArray(value) && Reflect.ownKeys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key)));
+    // editedAt: optional local edit time for latest-wins sync conflicts, not library content.
+    const edited = value && Object.hasOwn(value, 'editedAt');
+    fail(value && !Array.isArray(value) && Reflect.ownKeys(value).length === keys.length + (edited ? 1 : 0) && keys.every(key => Object.hasOwn(value, key)));
+    if (edited) fail(typeof value.editedAt === 'string' && value.editedAt.length <= 40 && Number.isFinite(Date.parse(value.editedAt)));
     fail(value.format === FORMAT && identifier(value.workspaceId) && Number.isSafeInteger(value.revision) && value.revision >= 0);
     for (const [child, childModel] of [[value.sourceFolders, folders()], [value.collection, collection()], [value.nineBoard, nine()]]) {
       childModel.validate(child); fail(child.workspaceId === value.workspaceId, 'workspace_mismatch');
