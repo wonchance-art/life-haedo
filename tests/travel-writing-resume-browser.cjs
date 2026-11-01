@@ -4,6 +4,7 @@
  * native IME, browser eviction, crash recovery or live Google verification. */
 'use strict';
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
+const { isAccountDocumentSync } = require('./helpers/account-docs-cloud.cjs'); // Owner directive 2026-11-01: account documents sync automatically.
 process.env.BASE_URL ||= 'http://127.0.0.1:4231';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -53,7 +54,7 @@ async function main() {
   });
   context.on('request', request => {
     const url = new URL(request.url());
-    if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ owner: server.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
+    if (isAccountDocumentSync(request, { cloud, server: server })) (report.accountDocumentSync ||= []).push(url.pathname); else if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ owner: server.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
     else if (url.origin === cloud && request.method() !== 'GET' && request.method() !== 'OPTIONS' && url.pathname.startsWith('/rest/')) report.writes.push(url.pathname);
   });
   const page = await context.newPage(); page.setDefaultTimeout(15000); page.setDefaultNavigationTimeout(15000);

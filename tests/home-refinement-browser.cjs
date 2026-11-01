@@ -4,6 +4,7 @@
  */
 'use strict';
 const { isLegacyLibraryCapabilityRead } = require('./helpers/library-cloud.cjs');
+const { isAccountDocumentSync } = require('./helpers/account-docs-cloud.cjs'); // Owner directive 2026-11-01: account documents sync automatically.
 process.env.BASE_URL ||= 'http://127.0.0.1:4173';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -67,7 +68,7 @@ async function main() {
     const server = new ShareCloud(), device = 'refinement-' + report.checks.length;
     const context = await makeContext(browser, server, device, accounts.a, { viewport: { width: 320, height: 568 }, hasTouch: true, ...contextOptions }); await instrument(context);
     await context.route('**/*', route => { const request = route.request(), url = new URL(request.url()); if (url.origin === cloud && !['GET', 'HEAD', 'OPTIONS'].includes(request.method()) && !url.pathname.startsWith('/auth/')) {
-      if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ name, owner: server.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
+      if (isAccountDocumentSync(request, { cloud, server: server })) (report.accountDocumentSync ||= []).push(url.pathname); else if (isLegacyLibraryCapabilityRead(request, { cloud, server })) report.libraryCapabilityReads.push({ name, owner: server.libraryOwner(request), method: request.method(), path: url.pathname, parameterCount: 0 });
       else if (url.pathname === '/rest/v1/rpc/life_blog_save' && request.method() === 'POST') report.privateSaves.push({ name, postId: request.postDataJSON().p_post_id });
       else report.remoteWrites.push({ method: request.method(), path: url.pathname });
     } if ([new URL(base).origin, cloud].includes(url.origin)) return route.fallback(); report.external.push(url.origin); return route.abort('blockedbyclient'); });
