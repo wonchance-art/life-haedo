@@ -317,29 +317,23 @@ test('the remote client sends exact RPC arguments and refuses non-JSON data', as
   assert.equal(Remote.clean({ code: 'PGRST202' }).code, 'schema_missing');
 });
 
-test('material-writing travels with its output receipts; a known receipt is never dropped by an older remote plan', async t => {
-  const MaterialWriting = require('../assets/life/material-writing.js');
-  const server = fakeServer(), mac = device(), ipad = device();
-  t.after(() => { mac.base.close(); ipad.base.close(); });
+test('a server without the account-document RPCs is unavailable and is not asked again every pass', async t => {
+  const mac = device(); t.after(() => mac.base.close());
   const a = mac.base.forAccount(accountA), bundle = await workspaceOn(a), w = bundle.workspaceId;
-  const b = ipad.base.forAccount(accountA); await workspaceOn(b, bundle);
-  const state = MaterialWriting.empty(w), plan = MaterialWriting.create(Core.id, '2026-11-01T00:00:00.000Z'); plan.title = '준비 한 개'; state.plans.push(plan);
-  await a.saveMaterialWriting(w, state, 0);
-  const key = `material-writing:${w}`, outputKey = `material-writing-output:${w}:${plan.id}`;
-  const record = await a.readAccountDocRecord(key);
-  assert.deepEqual(Object.keys(record.value).sort(), ['outputs', 'state']); assert.deepEqual(record.value.outputs, {});
-  await engine(a, server).sync.syncNow();
-  assert.deepEqual(server.docs(accountA.userId).get(key).data.outputs, {});
-
-  // This device already holds a receipt for the plan (its post was created here).
-  ipad.rows.get('meta').set(JSON.stringify(outputKey), { key: outputKey, value: { postId: 'post-made-on-ipad' } });
-  const before = await b.readAccountDocRecord(key);
-  const applied = await b.applyAccountDoc(key, { value: server.docs(accountA.userId).get(key).data, expectedHash: before.hash, sync: { docKey: key, revision: 1, seq: 1 } });
-  assert.equal(applied.status, 'applied', JSON.stringify(applied)); assert.equal(applied.merged, true);
-  assert.deepEqual((await b.readMaterialWriting(w)).plans[0].output, { postId: 'post-made-on-ipad' });
-  assert.equal((await b.readAccountDocRecord(key)).sync.hash, null, 'the merged receipt stays pending so it reaches the server');
-  await engine(b, server).sync.syncNow();
-  assert.deepEqual(server.docs(accountA.userId).get(key).data.outputs, { [plan.id]: { postId: 'post-made-on-ipad' } });
-  await engine(a, server).sync.syncNow();
-  assert.deepEqual((await a.readMaterialWriting(w)).plans[0].output, { postId: 'post-made-on-ipad' });
+  await draft(a, w, '서버 준비 전 초안');
+  let calls = 0, at = 1000;
+  const missing = () => { calls++; throw Object.assign(new Error('missing'), { code: 'schema_missing' }); };
+  const sync = Sync.create({ storage: a, auth: { getAccount: () => accountA }, remote: { PAGE_LIMIT: 2, changes: missing, put: missing, dispose() {} },
+    polling: false, locks: null, debounceMs: 1e7, clock: () => at });
+  await sync.syncNow();
+  assert.equal(sync.getStatus().state, 'unavailable'); assert.equal(calls, 1);
+  await sync.syncNow(); await sync.syncNow();
+  assert.equal(calls, 1, 'no repeated calls while backing off');
+  at += 5 * 60 * 1000 + 1; await sync.syncNow();
+  assert.equal(calls, 2); assert.equal(sync.getStatus().state, 'unavailable');
+  at += 5 * 60 * 1000 + 1; await sync.syncNow();
+  assert.equal(calls, 2, 'the pause grows after another miss');
+  const [doc] = (await a.listAccountDocs()).filter(item => item.key === `page-drafts:${w}`);
+  assert.notEqual(doc.hash, doc.sync?.hash, 'the local draft stays pending');
+  assert.equal((await a.readPageDrafts(w)).posts[0].body, '서버 준비 전 초안');
 });

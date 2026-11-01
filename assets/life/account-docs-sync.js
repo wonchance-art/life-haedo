@@ -17,7 +17,7 @@
   // Local saves of these types may change a synced document.
   const TRIGGERS = new Set(['account_doc_changed', 'reading_position_changed', 'interest_profile_changed', 'annual_plan_changed',
     'discovery_profile_changed', 'discovery_settings_changed', 'discovery_language_settings_changed', 'discovery_actions_changed',
-    'discovery_reading_changed', 'public_cover_changed', 'material_writing_changed', 'photo_posts_changed', 'workbench_changed']);
+    'discovery_reading_changed', 'public_cover_changed', 'photo_posts_changed', 'workbench_changed']);
   const STOP = new Set(['auth_required', 'request_cancelled', 'schema_missing', 'permission_denied', 'storage_scope_closed', 'storage_closed']);
   const fault = (code, message) => Object.assign(new Error(message || '자동 저장을 진행하지 못했습니다.'), { code });
   const time = value => { const parsed = Date.parse(value || EPOCH); return Number.isFinite(parsed) ? parsed : 0; };
@@ -28,12 +28,16 @@
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   }
   function create({ storage, auth = root.HaedoAuth, remote = null, polling = true, debounceMs = 800, intervalMs = 30000,
-    now = () => new Date().toISOString(), locks = root.navigator?.locks, online = () => root.navigator?.onLine !== false } = {}) {
+    now = () => new Date().toISOString(), locks = root.navigator?.locks, online = () => root.navigator?.onLine !== false,
+    unavailableMs = 5 * 60 * 1000, clock = () => Date.now() } = {}) {
     if (!storage?.account || typeof storage.listAccountDocs !== 'function' || !auth) throw fault('account_mismatch', '현재 계정의 자동 저장을 준비하지 못했습니다.');
     const owner = storage.account, listeners = new Set();
     const client = remote || root.HaedoLife?.AccountDocsRemote?.create({ auth });
     if (!client) throw fault('dependency_unavailable', '자동 저장 연결을 준비하지 못했습니다.');
     let disposed = false, started = false, timer = null, interval = null, unlisten = null, running = null, again = false;
+    // A server without the account-document RPCs is 'unavailable': local saves
+    // stay pending and the server is asked again only after a growing pause.
+    let unavailableUntil = 0, unavailableDelay = 0;
     let status = { state: 'idle', pending: 0, error: null, lastSyncedAt: null };
     const changeTimes = new Map(); // key -> time of the first local save seen since the last mark
     const sameAccount = value => value?.userId === owner.userId && value?.projectUrl === owner.projectUrl;
@@ -108,9 +112,10 @@
       return result.status === 'changed' ? 'retry' : 'deferred';
     }
     async function pull() {
-      let cursor = await storage.readAccountDocCursor() ?? 0, retry = false;
+      let cursor = await storage.readAccountDocCursor(), retry = false;
       // A stored cursor also records that this account has synced on this device.
-      cursor = await storage.writeAccountDocCursor(cursor);
+      // Written once; later only new rows move it, so idle passes write nothing.
+      if (cursor === null) cursor = await storage.writeAccountDocCursor(0);
       for (;;) {
         guard();
         const rows = await client.changes(cursor, client.PAGE_LIMIT || 200); guard();
@@ -201,6 +206,7 @@
       guard();
       await mark();
       if (!online()) { emit({ state: 'offline' }); return; }
+      if (clock() < unavailableUntil) { emit({ state: 'unavailable' }); return; }
       emit({ state: 'syncing' });
       let retry = await pull();
       let docs = await storage.listAccountDocs(); guard();
@@ -213,6 +219,7 @@
       }
       docs = await storage.listAccountDocs(); guard();
       const pending = docs.filter(doc => !doc.sync || doc.hash !== doc.sync.hash).length;
+      unavailableDelay = 0;
       emit({ state: pending ? 'pending' : 'synced', pending, error: null, lastSyncedAt: pending ? status.lastSyncedAt : now() });
       if (retry) schedule(debounceMs);
     }
@@ -224,7 +231,11 @@
         try {
           do { again = false; await exclusive(cycle); } while (again && !disposed);
         } catch (error) {
-          if (!disposed) emit({ state: error?.code === 'network_error' ? 'offline' : 'error', error: errorOf(error) });
+          if (!disposed && error?.code === 'schema_missing') {
+            unavailableDelay = Math.min(Math.max(unavailableDelay * 2, unavailableMs), 60 * 60 * 1000);
+            unavailableUntil = clock() + unavailableDelay;
+            emit({ state: 'unavailable', error: errorOf(error) });
+          } else if (!disposed) emit({ state: error?.code === 'network_error' ? 'offline' : 'error', error: errorOf(error) });
         } finally { running = null; }
       })();
       return running;

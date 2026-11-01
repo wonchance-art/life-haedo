@@ -81,7 +81,10 @@ async function main() {
   await context.route('**/*', route => { const url = new URL(route.request().url()); if ([new URL(base).origin, cloud].includes(url.origin)) return route.fallback(); report.externalRequests.push(url.origin + url.pathname); return route.abort('blockedbyclient'); });
   context.on('request', request => {
     const url = new URL(request.url()), body = request.postData() || '';
-    if ([privateTopic, encodeURIComponent(privateTopic), JSON.stringify(privateTopic).slice(1, -1)].some(value => request.url().includes(value) || body.includes(value))) report.privateLeaks.push(url.origin + url.pathname);
+    // Owner directive 2026-11-01: private settings follow the signed-in account through
+    // the owner-only account document RPC. Any other destination is still a leak.
+    const accountSync = url.origin === cloud && url.pathname === '/rest/v1/rpc/life_account_document_put' && request.method() === 'POST' && /^Bearer \S+$/.test(request.headers().authorization || '');
+    if (!accountSync && [privateTopic, encodeURIComponent(privateTopic), JSON.stringify(privateTopic).slice(1, -1)].some(value => request.url().includes(value) || body.includes(value))) report.privateLeaks.push(url.origin + url.pathname);
     if (url.origin === new URL(base).origin && url.pathname === '/assets/life/discovery-feed.json') report.feedRequests.push({ method: request.method(), query: url.search, body: request.postData(), auth: request.headers().authorization || null });
   });
   context.on('response', response => {

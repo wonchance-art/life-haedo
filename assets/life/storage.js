@@ -1502,7 +1502,6 @@
       return state;
     }
     function materialWritingChanged(workspaceId, revision) {
-      accountDocChanged(`material-writing:${workspaceId}`);
       const event = { type: 'material_writing_changed', workspaceId, revision }; notify(event);
       try { channel?.postMessage({ ...event, sender }); } catch (_) { /* The committed plan remains authoritative. */ }
     }
@@ -4365,8 +4364,10 @@
     // through AccountDocsSync. Keys stay exactly as stored locally: account
     // keys embed this account, workspace keys belong to workspaces this
     // account owns. Another account's rows are never listed, read or applied.
-    // blog-series is excluded: its items depend on blog-series-post rows that
-    // hold photo Blobs. Publication state and remote bindings are not synced.
+    // Excluded: blog-series (its items depend on blog-series-post rows holding
+    // photo Blobs), material-writing/-output and workbench/composition/writing
+    // rows (their own sync paths), photo posts and blog state (BlogSync).
+    // Publication state and remote bindings are never synced here.
     const ACCOUNT_DOC_ACCOUNT_PREFIXES = Object.freeze({
       readingPosition: { read: (meta, ws) => readingPositionValue(meta, ws), event: 'reading_position_changed', recovery: false },
       interestProfile: { read: (meta, ws) => interestProfileValue(meta, ws), event: 'interest_profile_changed', recovery: true },
@@ -4380,7 +4381,6 @@
     const ACCOUNT_DOC_WORKSPACE_PREFIXES = Object.freeze({
       'public-cover': { read: (meta, ws) => publicCoverValue(meta, ws), event: 'public_cover_changed', recovery: true },
       'page-drafts': { read: (meta, ws) => pageDraftsValue(meta, ws), event: null, recovery: true },
-      'material-writing': { read: (meta, ws) => materialWritingValue(meta, ws), event: 'material_writing_changed', recovery: true, composite: true },
       'post-evidence': { read: (meta, ws, key) => postEvidenceRow(meta, ws, key), event: null, recovery: true, post: true }
     });
     const ACCOUNT_DOC_ID = /^[A-Za-z0-9_-]{1,128}$/;
@@ -4421,21 +4421,7 @@
       onlyFields(row.value, ['revision', 'refs'], 'invalid_post_evidence'); requireRevision(row.value.revision);
       checkedEvidence(row.value.refs, workspaceId); return row.value;
     }
-    async function materialOutputs(meta, workspaceId) {
-      const prefix = `material-writing-output:${workspaceId}:`, range = root.IDBKeyRange?.bound(prefix, prefix + '￿');
-      const keys = (await meta.getAllKeys(range)).filter(key => typeof key === 'string' && key.startsWith(prefix)).sort();
-      const outputs = {};
-      for (const key of keys) outputs[key.slice(prefix.length)] = (await meta.get(key)).value;
-      return outputs;
-    }
-    // Raw local value as synced. material-writing travels with its output
-    // receipts so the plan/receipt invariant is applied in one transaction.
-    async function accountDocLocal(meta, parsed) {
-      const row = await meta.get(parsed.key);
-      if (row === undefined) return undefined;
-      if (parsed.spec.composite) return { state: row.value, outputs: await materialOutputs(meta, parsed.workspaceId) };
-      return row.value;
-    }
+    async function accountDocLocal(meta, parsed) { return (await meta.get(parsed.key))?.value; }
     async function accountDocAllowed(meta, parsed) {
       if (parsed.scoped === 'account') return true;
       const owner = await workspaceOwner(meta, parsed.workspaceId);
@@ -4460,7 +4446,7 @@
       for (const key of keys) notify({ type: 'account_doc_changed', key });
     }
     function accountDocApplied(parsed, value) {
-      const revision = parsed.spec.composite ? value?.state?.revision : value?.revision;
+      const revision = value?.revision;
       const event = { type: 'account_doc_applied', key: parsed.key, workspaceId: parsed.workspaceId };
       notify(event); try { channel?.postMessage({ ...event, sender }); } catch (_) { /* Durable row remains authoritative. */ }
       if (parsed.spec.event && Number.isSafeInteger(revision) && revision >= 1) {
@@ -4559,27 +4545,10 @@
         const local = await accountDocLocal(meta, parsed), localHash = accountDocHash(local);
         if (localHash !== expectedHash) return { status: 'changed', hash: localHash };
         const value = clone(incoming);
-        const target = parsed.spec.composite ? value?.state : value, before = parsed.spec.composite ? local?.state : local;
-        if (plain(target) && plain(before) && Number.isSafeInteger(target.revision) && Number.isSafeInteger(before.revision) &&
-            before.revision >= target.revision && before.revision < Number.MAX_SAFE_INTEGER) target.revision = before.revision + 1;
-        let merged = false;
+        if (plain(value) && plain(local) && Number.isSafeInteger(value.revision) && Number.isSafeInteger(local.revision) &&
+            local.revision >= value.revision && local.revision < Number.MAX_SAFE_INTEGER) value.revision = local.revision + 1;
         try {
-          if (parsed.spec.composite) {
-            onlyFields(value, ['state', 'outputs'], 'invalid_material_writing');
-            if (!plain(value.outputs) || !Array.isArray(value.state?.plans)) throw fault('invalid_material_writing', '준비 연결 형식을 확인하지 못했습니다.');
-            // A created post receipt is a monotonic fact: a plan that already has
-            // one here keeps it even when the other device had not seen it yet.
-            const known = { ...(await materialOutputs(meta, parsed.workspaceId)), ...value.outputs };
-            for (const plan of value.state.plans) {
-              if (plain(plan) && (plan.output === null || plan.output === undefined) && known[plan.id]) { plan.output = clone(known[plan.id]); merged = true; }
-            }
-            await meta.put({ key: parsed.key, value: value.state });
-            for (const [planId, receipt] of Object.entries(value.outputs)) {
-              if (!ACCOUNT_DOC_ID.test(planId)) throw fault('invalid_material_writing', '준비 연결 형식을 확인하지 못했습니다.');
-              onlyFields(receipt, ['postId'], 'invalid_material_writing'); requireId(receipt.postId, '완성 글');
-              await meta.put({ key: materialOutputKey(parsed.workspaceId, planId), value: receipt });
-            }
-          } else await meta.put({ key: parsed.key, value });
+          await meta.put({ key: parsed.key, value });
           await parsed.spec.read(meta, parsed.workspaceId, parsed.key);
         } catch (error) {
           // Browser storage failures propagate; only validation refusals become 'rejected'.
@@ -4593,11 +4562,10 @@
           const row = accountDocRecoveryRow(parsed.key, local, recoveryReason); await meta.add(row);
         }
         if (input.sync) {
-          // A merged receipt must still reach the server: leave the doc pending.
-          const sync = accountDocSyncValue({ ...clone(input.sync), docKey: parsed.key, hash: merged ? null : hash }, parsed.key);
+          const sync = accountDocSyncValue({ ...clone(input.sync), docKey: parsed.key, hash }, parsed.key);
           await meta.put({ key: accountDocSyncKey(parsed.key), value: sync });
         }
-        return { status: 'applied', hash, merged, value: clone(applied) };
+        return { status: 'applied', hash, value: clone(applied) };
       }).catch(error => {
         if (rejected && error?.code === 'account_doc_rejected') return { status: 'rejected', error: rejected };
         throw error;
