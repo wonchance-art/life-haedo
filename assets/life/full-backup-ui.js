@@ -288,7 +288,9 @@
           const label = node('label', null, 'fb-check'), input = node('input'); input.type = 'checkbox'; input.checked = true; input.value = row.kind;
           input.id = 'fbRestoreKind-' + row.kind; checks.push(input);
           const copy = node('span', null, 'fb-kind-copy'); copy.append(node('strong', row.label), node('span', counts, 'life-meta'));
-          if (row.kind === 'naverCaptures') copy.append(node('span', '원문마다 새 자료공간 하나로 복원합니다(기존 원문 사진 복원과 같음).', 'life-meta'));
+          if (row.kind === 'naverCaptures') copy.append(node('span', opened.type === 'bundle'
+            ? '자료·구성과 함께 복원하면 새 사본의 같은 원문 버전에 사진을 붙입니다. 자료·구성 없이는 복원하지 않습니다.'
+            : '원문과 사진을 새 자료공간 하나로 복원합니다(원문 사진 화면의 복원과 같음).', 'life-meta'));
           if (row.kind === 'originals') copy.append(node('span', '계정의 원본 첨부 보관함에 파트를 하나 더 추가합니다.', 'life-meta'));
           label.append(input, copy); item.append(label);
         } else {

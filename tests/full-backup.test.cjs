@@ -198,7 +198,8 @@ test('모두 받기: every account workspace and kind in one ZIP, existing forma
   assert.equal(timeline.format, 'haedo-platform-backup-v1'); assert.deepEqual(byKind('timeline')[0].counts, { timelines: 1, goals: 1, habits: 1 });
   // Kinds without a format are listed, with the draft count; nothing claims "all".
   const excluded = Object.fromEntries(built.manifest.notIncluded.map(row => [row.kind, row]));
-  assert.deepEqual(Object.keys(excluded).sort(), ['importDrafts', 'publication', 'sourceEditDrafts', 'writingDrafts']);
+  assert.deepEqual(Object.keys(excluded).sort(), ['importDrafts', 'originalsServer', 'publication', 'sourceEditDrafts', 'writingDrafts']);
+  assert.match(excluded.originalsServer.reason, /서버에만 있는 파트는 확인하지 않았습니다/);
   assert.equal(excluded.writingDrafts.count, 1); assert.ok(excluded.writingDrafts.whereToSave);
   const readme = Buffer.from(files['README.txt']).toString();
   assert.match(readme, /하나의 형식이 아닙니다/); assert.match(readme, /담지 않은 것/); assert.match(readme, /글쓰기 초안 1개/);
@@ -228,8 +229,8 @@ test('restore into another account: new copies only, exact versions, byte-identi
   assert.equal(await target.getActive(), existing, 'the workspace in use stays active');
   const after = JSON.parse(await snapshotAll(target)), old = JSON.parse(before)[0];
   assert.deepEqual(after.find(row => row.ws.workspaceId === existing), old, 'existing workspace unchanged');
-  // Three workspace copies plus the capture's own new workspace (existing capture restore).
-  assert.equal(after.length, 5); assert.equal(report.extraCopies.length, 1);
+  // One copy per original workspace; the capture joins its library copy instead of making another workspace.
+  assert.equal(after.length, 4); assert.equal(report.extraCopies.length, 0);
   const copy = after.find(row => row.ws.title === '첫 자료공간');
   assert.ok(copy && copy.ws.workspaceId !== seeded.first);
   const source = await seeded.storage.read(seeded.first);
@@ -251,9 +252,10 @@ test('restore into another account: new copies only, exact versions, byte-identi
   assert.equal(copy.series.series.length, 1); assert.equal(copy.series.series[0].title, '익명 연재');
   assert.equal(copy.material.plans.length, 1); assert.equal(copy.material.plans[0].output, null);
   assert.equal(copy.material.plans[0].materials[0].sourceVersionId, oldCopy.id);
-  const captureCopy = after.find(row => row.ws.workspaceId === report.extraCopies[0].workspaceId);
-  assert.equal(captureCopy.bundle.sources[0].origin, 'naver_blog');
-  assert.ok(await target.readNaverCapture(captureCopy.ws.workspaceId, captureCopy.bundle.sourceVersions[0].id));
+  const captureCopy = after.find(row => row.bundle.sources.some(source => source.origin === 'naver_blog'));
+  assert.equal(captureCopy.bundle.sources.length, 1);
+  const restoredCapture = await target.readNaverCapture(captureCopy.ws.workspaceId, captureCopy.bundle.sourceVersions[0].id);
+  assert.equal(sha(Buffer.from(await restoredCapture.photos[0].blob.arrayBuffer())), sha(NaverFixture.bytes));
   assert.equal(originals.rows.size, 1); assert.equal(sha(Buffer.from(await [...originals.rows.values()][0].blob.arrayBuffer())), sha(seeded.partZip));
   const second = after.find(row => row.ws.title === '두 번째 자료공간');
   assert.equal(second.posts[0].status, 'draft'); assert.equal(second.bundle.sources.length, 1);
@@ -434,4 +436,135 @@ test('single existing files open with their format and restore as new copies; pa
   const retry = await Full.restore(docFile, { storage: target, kinds: new Set(['accountDocuments']), targets, verifyPhoto: null });
   assert.equal(retry.items[0].counts.documents, 0); assert.equal(retry.items[0].rejected, 1, 'only the rejected document runs again');
   assert.equal((await target.readDiscoverySettings(row.targetId)).autoRefresh, true);
+});
+
+// Three Naver captures kept in one workspace, built from the shared fixture with distinct posts.
+async function naverWorkspace(storage, count) {
+  const Capture = require('../assets/life/naver-capture.js'), { bytes, hash, OWNER } = NaverFixture;
+  let bundle = Core.createWorkspace(); bundle.title = '네이버 원문 공간';
+  const attachments = [];
+  for (let n = 0; n < count; n++) {
+    const logNo = '12345678901' + n, body = '추출한 원문 ' + n + '\r\n🌱 그대로 보관한 구절', sha256 = hash(bytes), stamp = '2026-10-21T01:00:00.000Z';
+    const payload = { version: 1, blogId: 'fixture_blog', logNo, url: 'https://blog.naver.com/fixture_blog/' + logNo,
+      title: '사진이 있는 원문 ' + n, format: 'text/plain', body, bodyHash: hash(body), htmlHash: hash('<p>' + n + '</p>'),
+      coverage: 'full_text', omissions: [], publishedAt: null, author: '', extractedAt: stamp, extractor: 'fixture@v1',
+      photos: [{ index: 0, url: 'https://postfiles.pstatic.net/fixture/' + n + '.png?type=w966', storagePath: OWNER + '/naver/fixture_blog/' + logNo + '/' + sha256,
+        sha256, mimeType: 'image/png', width: 1, height: 1, bytes: bytes.length, alt: '대체 설명', caption: '사진 설명', status: 'stored', error: null, originalStatus: 'unverified' }] };
+    const capture = { id: require('node:crypto').randomUUID(), owner_id: OWNER, blog_id: payload.blogId, log_no: logNo, capture_hash: await Capture.fingerprint(payload), created_at: stamp, payload };
+    const prepared = await Core.prepareImport(Capture.toImportInput(payload), bundle);
+    bundle = Core.applyChanges(bundle, Core.buildImportChanges(bundle, prepared));
+    attachments.push({ sourceId: prepared.source.id, sourceVersionId: prepared.version.id, capture, photos: [{ index: 0, blob: new Blob([bytes], { type: 'image/png' }) }] });
+  }
+  await storage.installWorkspace(bundle);
+  for (const attachment of attachments) {
+    const file = await Media.read(await Media.pack({ bundle, attachment }));
+    await storage.attachNaverCaptureCopy(bundle.workspaceId, file.attachment);
+  }
+  return bundle.workspaceId;
+}
+
+test('N1: three captures plus their library restore into exactly one new workspace, each version with its own photo bytes', async t => {
+  const decoder = NaverFixture.installDecoder(); t.after(decoder);
+  const storage = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: owner });
+  const ws = await naverWorkspace(storage, 3);
+  assert.equal((await storage.listNaverCaptures(ws)).length, 3);
+  // The inventory counts captures from the stored rows, without validating each capture.
+  let reads = 0;
+  const counting = Object.create(storage, { readNaverCapture: { value: async (...args) => { reads++; return storage.readNaverCapture(...args); } } });
+  const planned = await Full.plan({ storage: counting });
+  assert.equal(reads, 0); assert.equal(planned.tasks.filter(task => task.kind === 'naverCaptures').length, 3);
+  const { built } = await fullBundle(storage);
+  assert.equal(built.manifest.files.filter(file => file.kind === 'naverCaptures').length, 3);
+  const target = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: other });
+  const opened = await Full.open(built.blob);
+  const report = await Full.restore(opened, { storage: target, kinds: RESTORABLE, verifyPhoto: null });
+  assert.deepEqual(report.items.filter(item => item.status !== 'restored'), []);
+  const workspaces = await target.listWorkspaces();
+  assert.equal(workspaces.length, 1, 'one new workspace, not one per capture');
+  const copy = await target.read(workspaces[0].workspaceId), original = await storage.read(ws);
+  assert.equal(copy.sourceVersions.length, 3);
+  for (const version of copy.sourceVersions) {
+    const capture = await target.readNaverCapture(copy.workspaceId, version.id);
+    assert.ok(capture, 'every restored version has its capture');
+    assert.equal(capture.sourceVersionId, version.id);
+    const before = original.sourceVersions.find(row => row.contentHash === version.contentHash);
+    const source = await storage.readNaverCapture(ws, before.id);
+    assert.equal(sha(Buffer.from(await capture.photos[0].blob.arrayBuffer())), sha(Buffer.from(await source.photos[0].blob.arrayBuffer())));
+    assert.equal(capture.capture.capture_hash, source.capture.capture_hash);
+  }
+  // Without the library the photos are not restored and no workspace is made for them.
+  const bare = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: other });
+  const skipped = await Full.restore(opened, { storage: bare, kinds: new Set(['naverCaptures']), verifyPhoto: null });
+  assert.deepEqual(skipped.items.map(item => item.status), ['skipped', 'skipped', 'skipped']);
+  assert.match(skipped.items[0].message, /자료·구성과 함께 복원하세요/);
+  assert.deepEqual(await bare.listWorkspaces(), []);
+  // The attach function never replaces an existing capture.
+  const again = await Media.read(new Blob([Z.unzipSync(new Uint8Array(await built.blob.arrayBuffer()))[built.manifest.files.find(file => file.kind === 'naverCaptures').path]]));
+  const version = copy.sourceVersions.find(row => row.contentHash === original.sourceVersions.find(item => item.id === again.attachment.sourceVersionId).contentHash);
+  const source = copy.sources.find(row => row.id === version.sourceId);
+  await assert.rejects(target.attachNaverCaptureCopy(copy.workspaceId, { ...again.attachment, sourceId: source.id, sourceVersionId: version.id }), { code: 'naver_capture_exists' });
+});
+
+test('a list that failed is read again on retry, and its items are appended', async () => {
+  const { storage, first } = await seed();
+  let fail = true;
+  const flaky = Object.create(storage, { listPhotoPosts: { value: async workspaceId => { if (fail && workspaceId === first) throw new Error('합성 목록 실패'); return storage.listPhotoPosts(workspaceId); } } });
+  const context = { storage: flaky }, planned = await Full.plan(context), writer = Full.writer(planned, context);
+  const failed = await writer.collect();
+  assert.deepEqual(failed.map(task => task.id), ['photoPosts:1:list']);
+  fail = false;
+  assert.deepEqual(await writer.collect({ only: new Set(['photoPosts:1:list']) }), []);
+  const built = writer.finish();
+  assert.equal(built.manifest.complete, true);
+  assert.equal(built.manifest.files.filter(file => file.kind === 'photoPosts' && file.workspace === 1).length, 2);
+});
+
+test('a failure after reading never leaves a written entry outside the manifest', async () => {
+  const { storage, first } = await seed();
+  // The value serializes, then its count throws: the entry must not be written.
+  const odd = Object.create(storage, { readMaterialWriting: { value: async workspaceId => {
+    const value = await storage.readMaterialWriting(workspaceId);
+    if (workspaceId !== first) return value;
+    let reads = 0; const plans = value.plans;
+    return Object.defineProperty({ ...value }, 'plans', { enumerable: true, get() { if (++reads > 1) throw new Error('합성 개수 실패'); return plans; } });
+  } } });
+  const context = { storage: odd }, planned = await Full.plan(context), writer = Full.writer(planned, context);
+  const failed = await writer.collect();
+  assert.deepEqual(failed.map(task => task.id), ['materialWriting:1']);
+  const partial = writer.finish({ partial: true });
+  assert.equal((await zipNames(partial.blob)).includes('workspaces/01/material-writing.json'), false);
+  assert.equal((await Full.open(partial.blob)).type, 'bundle', 'the partial ZIP matches its manifest');
+});
+
+test('a restored post makes nine-slot references follow its new revision only when the body is the referenced one', async () => {
+  const storage = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: owner });
+  const ws = (await storage.createWorkspace('글 참조 공간')).workspaceId;
+  let same = await storage.savePhotoPost(ws, postDoc({ title: '그대로인 글', status: 'saved' }), 0);
+  same = await storage.savePhotoPost(ws, same, same.revision); // revision 2
+  let edited = await storage.savePhotoPost(ws, postDoc({ title: '나중에 고친 글', status: 'saved' }), 0);
+  edited = await storage.savePhotoPost(ws, edited, edited.revision); // revision 2
+  const sameRef = await Reference.buildPost({ workspaceId: ws, post: same }), editedRef = await Reference.buildPost({ workspaceId: ws, post: edited });
+  edited = await storage.savePhotoPost(ws, { ...edited, ops: [{ insert: '본문을 바꾼 뒤 저장\n' }] }, edited.revision); // revision 3, other body
+  const board = Nine.create(Core.id); board.title = '글 아홉 칸';
+  board.areas[0].items = [Nine.evidenceSnapshot({ kind: 'post', value: sameRef }), Nine.evidenceSnapshot({ kind: 'post', value: editedRef })];
+  await storage.saveNineBoard(ws, { format: 'life-nine-board-v2', workspaceId: ws, revision: 0, boards: [board] }, 0);
+  const { built } = await fullBundle(storage);
+  const target = createStorage({ idb: memoryIdb().idb, core: Core, channelFactory: null, account: other });
+  const report = await Full.restore(await Full.open(built.blob), { storage: target, kinds: RESTORABLE, verifyPhoto: null });
+  const copyId = report.workspaces[0].targetId, items = (await target.readNineBoard(copyId)).boards[0].areas[0].items;
+  const posts = await target.listPhotoPosts(copyId), restoredSame = posts.find(row => row.title === '그대로인 글'), restoredEdited = posts.find(row => row.title === '나중에 고친 글');
+  assert.equal(items[0].reference.value.postId, restoredSame.id);
+  assert.equal(items[0].reference.value.postRevision, restoredSame.revision, 'same body: follows the restored revision');
+  assert.equal((await Reference.resolvePost({ workspaceId: copyId, post: await target.readPhotoPost(copyId, restoredSame.id) }, items[0].reference.value)).postId, restoredSame.id);
+  assert.equal(items[1].reference.value.postId, restoredEdited.id);
+  assert.equal(items[1].reference.value.postRevision, 2, 'changed body: left as it was, no other version substituted');
+});
+
+test('conflict recovery copies of account documents are counted as not included', async () => {
+  const { storage, first } = await seed();
+  const key = Full.docKey(storage, 'discoverySettings', first);
+  await storage.saveAccountDocRecovery(key, { schemaVersion: 1, note: '이전 값' }, 'conflict');
+  const planned = await Full.plan({ storage });
+  const row = planned.notIncluded.find(item => item.kind === 'accountDocRecoveries');
+  assert.equal(row.count, 1); assert.ok(row.reason && row.whereToSave);
 });

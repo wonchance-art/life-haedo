@@ -21,7 +21,7 @@
   const LIMITS = Object.freeze({ bundle: 3.5 * GiB, warn: 1 * GiB, files: 20000, manifest: 16 * MiB, json: 512 * MiB, chunk: 8 * MiB, receipts: 50 });
   const paths = { Core: './core.js', Workbench: './workbench.js', SourceFolders: './source-folders.js', Collection: './collection.js',
     NineBoard: './nine-board.js', PhotoPost: './photo-post.js', BlogSeriesPackage: './blog-series-package.js', MaterialWriting: './material-writing.js',
-    NaverMedia: './naver-media.js' };
+    NaverMedia: './naver-media.js', SourceReference: './source-reference.js' };
   const dep = name => root.HaedoLife?.[name] || (typeof require === 'function' && require(paths[name]));
   const zip = () => root.fflate || (typeof require === 'function' && require('../../vendor/fflate/fflate.js'));
   const fault = (code, message, extra = {}) => Object.assign(new Error(message), { code, ...extra });
@@ -55,7 +55,9 @@
     importDrafts: { label: '가져오기 검토 초안', reason: '검토 중인 가져오기는 백업 형식이 없습니다.', whereToSave: '검토를 마쳐 자료로 저장하면 자료·구성 파일에 들어갑니다.' },
     sourceEditDrafts: { label: '자료 수정 초안', reason: '저장하지 않은 수정은 백업 형식이 없습니다.', whereToSave: '수정을 저장하면 새 원문 버전으로 자료·구성 파일에 들어갑니다.' },
     publication: { label: '공개 상태·서버 연결', reason: '새 사본은 공개하지 않고 원래 서버 연결을 옮기지 않습니다.', whereToSave: '공개본은 원래 공개 페이지에 그대로 있습니다. 필요하면 복원한 글을 다시 공개하세요.' },
-    originals: { label: '원본 첨부', reason: '원본 첨부 보관함을 열 수 없습니다.', whereToSave: '자료 메뉴의 원본 첨부에서 파트 ZIP을 받으세요.' }
+    originals: { label: '원본 첨부', reason: '원본 첨부 보관함을 열 수 없습니다.', whereToSave: '자료 메뉴의 원본 첨부에서 파트 ZIP을 받으세요.' },
+    originalsServer: { label: '서버에만 있는 원본 첨부 파트', reason: '이 기기에 내려받은 원본 파트만 담고, 서버에만 있는 파트는 확인하지 않았습니다.', whereToSave: '자료 메뉴의 원본 첨부를 열어 목록을 받은 뒤 다시 모두 받기를 하거나, 그 화면에서 파트 ZIP을 받으세요.' },
+    accountDocRecoveries: { label: '설정 충돌 복구 사본', reason: '동기화 충돌 때 남긴 이전 설정 사본은 백업 형식이 없습니다.', whereToSave: '이 기기의 로컬 기록에 문서마다 최근 5개까지 남습니다.' }
   });
   // Account documents mirror storage.js ACCOUNT_DOC_*_PREFIXES. Keys of the
   // first group embed the account; the rest belong to an owned workspace.
@@ -140,46 +142,86 @@
       items: clone(platformData.read(localStorage, keys.items, [])) };
   }
   function notIncluded(kind, count = null) { return { kind, ...NOT_INCLUDED[kind], ...(count === null ? {} : { count }) }; }
-  async function plan({ storage, timeline = null, originals = null, isCurrent = () => true }) {
+  // Each lister reads one list and returns its tasks and skipped rows. A list
+  // that fails becomes one failed task; retrying it reads the list again.
+  const LISTERS = {
+    async photoPosts(storage, ws) {
+      const base = 'workspaces/' + pad(ws.index) + '/', tasks = [], skipped = [];
+      for (const row of await storage.listPhotoPosts(ws.workspaceId)) {
+        if (ID.test(row.id)) tasks.push({ id: 'photoPosts:' + ws.index + ':' + row.id, kind: 'photoPosts', workspace: ws.index, postId: row.id,
+          title: row.title || '', status: row.status, archived: row.archived === true, path: base + 'photo-posts/' + row.id + '.zip' });
+        else skipped.push({ kind: 'photoPosts', workspace: ws.index, title: row.title || '', error: '글 식별자가 파일 경로 규칙과 맞지 않아 담지 않았습니다.' });
+      }
+      return { tasks, skipped };
+    },
+    async blogSeries(storage, ws) {
+      const base = 'workspaces/' + pad(ws.index) + '/', tasks = [], skipped = [];
+      if (!storage.readBlogSeries) return { tasks, skipped };
+      for (const series of (await storage.readBlogSeries(ws.workspaceId)).series) {
+        if (!ID.test(series.id)) skipped.push({ kind: 'blogSeries', workspace: ws.index, title: series.title || '', error: '모음 식별자가 파일 경로 규칙과 맞지 않아 담지 않았습니다.' });
+        else if (!series.items.length) skipped.push({ kind: 'blogSeries', workspace: ws.index, title: series.title || '', error: '글이 없는 모음은 모음 ZIP 형식으로 담을 수 없습니다.' });
+        else tasks.push({ id: 'blogSeries:' + ws.index + ':' + series.id, kind: 'blogSeries', workspace: ws.index, seriesId: series.id, title: series.title || '',
+          path: base + 'blog-series/' + series.id + '.zip' });
+      }
+      return { tasks, skipped };
+    },
+    async naverCaptures(storage, ws) {
+      const base = 'workspaces/' + pad(ws.index) + '/', tasks = [], skipped = [];
+      // Counts from the stored rows only; each capture is validated when its file is written.
+      let rows;
+      if (storage.listNaverCaptures) rows = await storage.listNaverCaptures(ws.workspaceId);
+      else if (storage.readNaverCapture) {
+        const bundle = await storage.read(ws.workspaceId), naver = new Set(bundle.sources.filter(source => source.origin === 'naver_blog').map(source => source.id));
+        rows = [];
+        for (const version of bundle.sourceVersions.filter(row => naver.has(row.sourceId))) {
+          const attachment = await storage.readNaverCapture(ws.workspaceId, version.id);
+          if (attachment) rows.push({ sourceVersionId: version.id, photos: attachment.photos.length, bytes: attachment.photos.reduce((sum, photo) => sum + photo.blob.size, 0) });
+        }
+      } else rows = [];
+      for (const row of rows) {
+        if (ID.test(row.sourceVersionId)) tasks.push({ id: 'naverCaptures:' + ws.index + ':' + row.sourceVersionId, kind: 'naverCaptures', workspace: ws.index,
+          versionId: row.sourceVersionId, title: '', path: base + 'naver-captures/' + row.sourceVersionId + '.zip',
+          counts: { captures: 1, photos: row.photos }, estimate: row.bytes + 65536 });
+        else skipped.push({ kind: 'naverCaptures', workspace: ws.index, error: '원문 버전 식별자가 파일 경로 규칙과 맞지 않아 담지 않았습니다.' });
+      }
+      return { tasks, skipped };
+    },
+    async originals(storage, ws, originals) {
+      const tasks = [], skipped = [];
+      for (const part of await originals.list({ cached: true })) { // Rows kept on this device; no catalog request.
+        if (ID.test(part.id)) tasks.push({ id: 'originals:' + part.id, kind: 'originals', workspace: null, partId: part.id, count: part.count || 0,
+          title: '파트 ' + part.part + '/' + part.partCount, path: 'original-attachments/' + part.id + '.zip' });
+        else skipped.push({ kind: 'originals', workspace: null, error: '원본 파트 식별자가 파일 경로 규칙과 맞지 않아 담지 않았습니다.' });
+      }
+      return { tasks, skipped };
+    }
+  };
+  async function list(kind, ws, context) {
+    const { storage, originals = null } = context;
+    return LISTERS[kind](storage, ws, originals);
+  }
+  const listTask = (kind, ws) => ({ id: kind + ':' + (ws ? ws.index : 'account') + ':list', kind, workspace: ws ? ws.index : null, path: null, relist: true,
+    title: '목록', error: null });
+  async function plan(context) {
+    const { storage, timeline = null, originals = null, isCurrent = () => true } = context;
     if (!storage?.isAccountScoped || !storage.account) throw fault('auth_scope_required', '로그인한 계정에서 백업을 만들어 주세요.');
     const stop = () => { if (!isCurrent()) throw fault('backup_cancelled', '화면이 바뀌어 백업 준비를 멈췄습니다. 자료는 바뀌지 않았습니다.'); };
     const libraries = await storage.listAccountLibraries(); stop();
     const workspaces = libraries.map((row, i) => ({ index: i + 1, workspaceId: row.workspaceId, title: row.title || '제목 없는 자료공간', recovery: row.eligible === false }));
     const tasks = [], skipped = [], drafts = { writingDrafts: 0, importDrafts: 0, sourceEditDrafts: 0 };
-    const listFailure = (kind, ws, error) => tasks.push({ id: kind + ':' + ws.index + ':list', kind, workspace: ws.index, path: null, listError: error });
+    const listed = async (kind, ws) => {
+      try { const value = await list(kind, ws, context); tasks.push(...value.tasks); skipped.push(...value.skipped); }
+      catch (error) { tasks.push({ ...listTask(kind, ws), listError: message(error) }); }
+    };
     for (const ws of workspaces) {
       const base = 'workspaces/' + pad(ws.index) + '/';
       tasks.push({ id: 'library:' + ws.index, kind: 'library', workspace: ws.index, path: base + 'library.json' },
         { id: 'collection:' + ws.index, kind: 'collection', workspace: ws.index, path: base + 'collection.json' },
         { id: 'nineBoards:' + ws.index, kind: 'nineBoards', workspace: ws.index, path: base + 'nine-boards.json' });
-      try {
-        for (const row of await storage.listPhotoPosts(ws.workspaceId)) {
-          if (ID.test(row.id)) tasks.push({ id: 'photoPosts:' + ws.index + ':' + row.id, kind: 'photoPosts', workspace: ws.index, postId: row.id,
-            title: row.title || '', status: row.status, archived: row.archived === true, path: base + 'photo-posts/' + row.id + '.zip' });
-          else skipped.push({ kind: 'photoPosts', workspace: ws.index, title: row.title || '', error: '글 식별자가 파일 경로 규칙과 맞지 않아 담지 않았습니다.' });
-        }
-      } catch (error) { listFailure('photoPosts', ws, error); }
-      if (storage.readBlogSeries) try {
-        for (const series of (await storage.readBlogSeries(ws.workspaceId)).series) {
-          if (!ID.test(series.id)) skipped.push({ kind: 'blogSeries', workspace: ws.index, title: series.title || '', error: '모음 식별자가 파일 경로 규칙과 맞지 않아 담지 않았습니다.' });
-          else if (!series.items.length) skipped.push({ kind: 'blogSeries', workspace: ws.index, title: series.title || '', error: '글이 없는 모음은 모음 ZIP 형식으로 담을 수 없습니다.' });
-          else tasks.push({ id: 'blogSeries:' + ws.index + ':' + series.id, kind: 'blogSeries', workspace: ws.index, seriesId: series.id, title: series.title || '',
-            path: base + 'blog-series/' + series.id + '.zip' });
-        }
-      } catch (error) { listFailure('blogSeries', ws, error); }
+      await listed('photoPosts', ws);
+      await listed('blogSeries', ws);
       if (storage.readMaterialWriting) tasks.push({ id: 'materialWriting:' + ws.index, kind: 'materialWriting', workspace: ws.index, path: base + 'material-writing.json' });
-      if (storage.readNaverCapture) try {
-        const bundle = await storage.read(ws.workspaceId), naver = new Set(bundle.sources.filter(source => source.origin === 'naver_blog').map(source => source.id));
-        for (const version of bundle.sourceVersions.filter(row => naver.has(row.sourceId))) {
-          const attachment = await storage.readNaverCapture(ws.workspaceId, version.id);
-          if (!attachment) continue;
-          // Counted here once; the photos are read again only when the ZIP is written.
-          if (ID.test(version.id)) tasks.push({ id: 'naverCaptures:' + ws.index + ':' + version.id, kind: 'naverCaptures', workspace: ws.index, versionId: version.id,
-            title: bundle.sources.find(source => source.id === version.sourceId)?.title || '', path: base + 'naver-captures/' + version.id + '.zip',
-            counts: COUNT.naverCaptures(attachment), estimate: attachment.photos.reduce((sum, photo) => sum + photo.blob.size, 65536) });
-          else skipped.push({ kind: 'naverCaptures', workspace: ws.index, error: '원문 버전 식별자가 파일 경로 규칙과 맞지 않아 담지 않았습니다.' });
-        }
-      } catch (error) { listFailure('naverCaptures', ws, error); }
+      if (storage.listNaverCaptures || storage.readNaverCapture) await listed('naverCaptures', ws);
       if (storage.listStages) try {
         for (const stage of await storage.listStages(ws.workspaceId)) {
           if (stage.state && stage.state !== 'draft') continue;
@@ -190,14 +232,17 @@
     }
     tasks.push({ id: 'accountDocuments', kind: 'accountDocuments', workspace: null, path: 'account-documents.json' });
     const excluded = Object.entries(drafts).map(([kind, count]) => notIncluded(kind, count));
+    // Conflict recovery copies of account documents have no file format; they are counted, not written.
+    if (storage.listAccountDocs && storage.listAccountDocRecoveries) try {
+      const known = new Set(workspaces.map(row => row.workspaceId));
+      let count = 0;
+      for (const row of await storage.listAccountDocs()) if (known.has(row.workspaceId)) count += (await storage.listAccountDocRecoveries(row.key)).length;
+      if (count) excluded.push(notIncluded('accountDocRecoveries', count));
+    } catch (_) { excluded.push(notIncluded('accountDocRecoveries')); }
     if (originals) {
-      try {
-        for (const part of await originals.list({ cached: true })) { // Rows kept for this account; no catalog request.
-          if (ID.test(part.id)) tasks.push({ id: 'originals:' + part.id, kind: 'originals', workspace: null, partId: part.id, count: part.count || 0,
-            title: '파트 ' + part.part + '/' + part.partCount, path: 'original-attachments/' + part.id + '.zip' });
-          else skipped.push({ kind: 'originals', workspace: null, error: '원본 파트 식별자가 파일 경로 규칙과 맞지 않아 담지 않았습니다.' });
-        }
-      } catch (error) { tasks.push({ id: 'originals:list', kind: 'originals', workspace: null, path: null, listError: error }); }
+      await listed('originals', null);
+      // Only parts already on this device are listed; parts kept only on the server are not checked here.
+      excluded.push(notIncluded('originalsServer'));
     } else excluded.push(notIncluded('originals'));
     if (timeline) tasks.push({ id: 'timeline', kind: 'timeline', workspace: null, path: 'timeline-goals-habits.json' });
     excluded.push(notIncluded('publication'));
@@ -206,7 +251,6 @@
   }
   async function readPart(task, { storage, workspaces, timeline, originals }) {
     const ws = workspaces.find(row => row.index === task.workspace);
-    if (task.listError) throw task.listError;
     if (task.kind === 'library') {
       const snapshot = await (storage.readLibraryBackupSnapshot ? storage.readLibraryBackupSnapshot(ws.workspaceId) : storage.readWorkbenchSnapshot(ws.workspaceId));
       const folders = snapshot.sourceFolders, nonempty = folders && (folders.folders.length || folders.assignments.length);
@@ -261,7 +305,7 @@
       if (!isCurrent()) throw fault('backup_cancelled', '화면이 바뀌어 목록 확인을 멈췄습니다.');
       try {
         const ws = planned.workspaces.find(row => row.index === task.workspace);
-        if (task.listError) throw task.listError;
+        if (task.relist) throw fault('list_failed', task.listError || '목록을 읽지 못했습니다.');
         if (task.kind === 'photoPosts') {
           const doc = await storage.readPhotoPost(ws.workspaceId, task.postId);
           rows.push({ id: task.id, kind: task.kind, workspace: task.workspace, status: 'ready', counts: { posts: 1, photos: doc.photos.length },
@@ -345,18 +389,32 @@
       if (finished) throw fault('backup_finished', '이미 마친 백업입니다. 다시 받아 주세요.');
       const tasks = planned.tasks.filter(task => only ? only.has(task.id) : !results.has(task.id));
       let done = 0;
-      for (const task of tasks) {
+      for (let index = 0; index < tasks.length; index++) {
+        const task = tasks[index];
         if (!isCurrent()) throw fault('backup_cancelled', '계정이나 화면이 바뀌어 백업을 멈췄습니다. 자료는 바뀌지 않았습니다.');
         onProgress({ phase: 'read', done, total: tasks.length, task });
+        if (task.relist) {
+          // A list that failed in plan stays failed until a retry reads it again.
+          if (!only) results.set(task.id, { status: 'failed', error: task.listError || '목록을 읽지 못했습니다.' });
+          else try {
+            const ws = planned.workspaces.find(row => row.index === task.workspace) || null;
+            const value = await list(task.kind, ws, context);
+            planned.tasks.splice(planned.tasks.indexOf(task), 1, ...value.tasks);
+            results.delete(task.id); skipped.push(...value.skipped); tasks.push(...value.tasks);
+          } catch (cause) { results.set(task.id, { status: 'failed', error: message(cause) }); }
+          done++; await pause(); continue;
+        }
         let item = null;
         try {
           item = await readPart(task, { ...context, workspaces: planned.workspaces });
           const bytes = item.blob ? await blobBytes(item.blob) : json(item.value);
           if (!item.blob && bytes.byteLength > LIMITS.json) throw fault('part_too_large', KINDS[task.kind].label + ' 파일이 512 MiB를 넘습니다.');
+          // Everything the manifest needs is computed first; nothing that can fail follows the write.
           const format = item.format || item.value.format || 'haedo-backup-v1', hash = await sha256(bytes);
+          const result = { status: 'ok', size: bytes.byteLength, sha256: hash, format, formatVersion: versionOf(format, item.value),
+            counts: item.counts || COUNT[task.kind](item.value), meta: item.meta || null };
           add(task.path, bytes);
-          results.set(task.id, { status: 'ok', size: bytes.byteLength, sha256: hash, format, formatVersion: versionOf(format, item.value),
-            counts: item.counts || COUNT[task.kind](item.value), meta: item.meta || null });
+          results.set(task.id, result);
           for (const row of item.skipped || []) skipped.push(row);
         } catch (cause) {
           if (cause?.code === 'backup_too_large' || cause === error) throw cause;
@@ -380,7 +438,7 @@
         return { path: task.path, kind: task.kind, workspace: task.workspace, ...(result.meta || {}), format: result.format, formatVersion: result.formatVersion,
           counts: result.counts, bytes: result.size, sha256: result.sha256 };
       });
-      const missing = missingTasks.map(task => ({ kind: task.kind, workspace: task.workspace, reason: 'read_failed',
+      const missing = missingTasks.map(task => ({ kind: task.kind, workspace: task.workspace, reason: 'read_failed', ...(task.relist ? { list: true } : {}),
         ...(task.postId ? { postId: task.postId } : {}), ...(task.title ? { title: task.title } : {}), error: results.get(task.id)?.error || '읽지 못했습니다.' }))
         .concat(skipped.map(row => ({ reason: 'skipped', ...row })));
       const manifest = { format: FORMAT, version: VERSION, createdAt: now(), appVersion, complete: !missingTasks.length,
@@ -692,7 +750,7 @@
     try {
       for (const { ws, own, docs } of work) {
         guard();
-        const target = targets.get(ws.index) || { workspaceId: null, title: ws.title, map: new Map(), posts: new Map(), library: false, appliedDocs: new Set() };
+        const target = targets.get(ws.index) || { workspaceId: null, title: ws.title, map: new Map(), posts: new Map(), postDocs: new Map(), library: false, appliedDocs: new Set() };
         targets.set(ws.index, target);
         const summary = { index: ws.index, title: ws.title, targetId: target.workspaceId, targetTitle: target.title };
         report.workspaces.push(summary);
@@ -718,6 +776,7 @@
             continue;
           }
         }
+        // A lone capture file restores into its own new workspace; captures from a ZIP need the library copy.
         const nonCopy = own.every(entry => entry.kind === 'naverCaptures') && !docs.length;
         if (!target.workspaceId && !nonCopy) {
           const created = await storage.createWorkspace(ws.title);
@@ -751,7 +810,7 @@
               catch (error) { evidenceNote = '인용 근거 ' + refs.length + '개는 원문과 맞지 않아 연결하지 않았습니다.'; }
             } else if (evidence?.value?.refs?.length) evidenceNote = '자료·구성을 함께 복원하지 않아 인용 근거 ' + evidence.value.refs.length + '개를 연결하지 않았습니다.';
             if (!saved) saved = await storage.savePhotoPost(id, candidate, 0);
-            if (entry.postId) { target.posts.set(entry.postId, saved.id); target.map.set(entry.postId, saved.id); }
+            if (entry.postId) { target.posts.set(entry.postId, saved.id); target.map.set(entry.postId, saved.id); target.postDocs.set(saved.id, saved); }
             record('photoPosts', ws, 'restored', { targetId: id, postId: entry.postId, newPostId: saved.id, title: saved.title, postStatus: saved.status,
               counts: entry.counts, ...(evidenceNote ? { message: evidenceNote } : {}) });
           } catch (error) { if (error?.code === 'restore_cancelled') throw error; record('photoPosts', ws, 'failed', { postId: entry.postId, title: entry.title, message: message(error) }); }
@@ -764,6 +823,14 @@
             let dropped = 0;
             for (const board of incoming) for (const area of board.areas) for (const item of area.items) {
               if (Object.hasOwn(item, 'reference') && !keepReference(item.reference, target)) { delete item.reference; dropped++; }
+              else if (item.reference?.kind === 'post') {
+                // The restored post starts at a new revision. Follow it only when its body is the referenced one.
+                const post = target.postDocs.get(item.reference.value.postId);
+                if (post && post.revision !== item.reference.value.postRevision) {
+                  const current = await dep('SourceReference').buildPost({ workspaceId: target.workspaceId, post });
+                  if (current.contentHash === item.reference.value.contentHash) item.reference.value = { ...item.reference.value, postRevision: post.revision };
+                }
+              }
             }
             const added = N.copies(incoming, makeId), state = await storage.readNineBoard(id);
             const next = { ...state, format: N.hasReferences(state.boards.concat(added)) ? 'life-nine-board-v2' : state.format, boards: state.boards.concat(added) };
@@ -800,12 +867,23 @@
         for (const entry of own.filter(item => item.kind === 'naverCaptures')) {
           step(KINDS.naverCaptures.label); guard();
           try {
-            // The existing capture restore: each capture becomes its own new workspace with its source version and photos.
-            const Media = dep('NaverMedia'), copy = await Media.copy(await Media.read(entry.blob));
-            const installed = await storage.installNaverCaptureCopy(copy, { isCurrent });
-            report.extraCopies.push({ workspaceId: installed.bundle.workspaceId, title: installed.bundle.title });
-            record('naverCaptures', ws, 'restored', { targetId: installed.bundle.workspaceId, title: installed.bundle.title, counts: entry.counts,
-              message: '원문과 사진을 새 자료공간 "' + installed.bundle.title + '"으로 복원했습니다.' });
+            const Media = dep('NaverMedia'), snapshot = await Media.read(entry.blob);
+            if (opened.type === 'single') {
+              // A single capture file: the existing restore makes one new workspace with its version and photos.
+              const installed = await storage.installNaverCaptureCopy(await Media.copy(snapshot), { isCurrent });
+              report.extraCopies.push({ workspaceId: installed.bundle.workspaceId, title: installed.bundle.title });
+              record('naverCaptures', ws, 'restored', { targetId: installed.bundle.workspaceId, title: installed.bundle.title, counts: entry.counts });
+              continue;
+            }
+            // From a backup ZIP the photos join the same exact version in this workspace's restored library copy.
+            const sourceId = target.library && target.map.get(snapshot.attachment.sourceId), versionId = target.library && target.map.get(snapshot.attachment.sourceVersionId);
+            if (!sourceId || !versionId) {
+              record('naverCaptures', ws, 'skipped', { title: snapshot.bundle.sources[0]?.title || entry.title, counts: entry.counts,
+                message: '원문 사진은 자료·구성과 함께 복원하세요. 사진을 붙일 같은 원문 버전이 이 복원에 없습니다.' });
+              continue;
+            }
+            await storage.attachNaverCaptureCopy(id, { ...snapshot.attachment, sourceId, sourceVersionId: versionId }, { isCurrent });
+            record('naverCaptures', ws, 'restored', { targetId: id, title: snapshot.bundle.sources[0]?.title || entry.title, counts: entry.counts });
           } catch (error) { if (error?.code === 'restore_cancelled') throw error; record('naverCaptures', ws, 'failed', { title: entry.title, message: message(error) }); }
         }
         if (docs.length) {

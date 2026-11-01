@@ -149,7 +149,7 @@ async function main() {
       assert.deepEqual(kinds, ['library', 'collection', 'photoPosts', 'nineBoards', 'materialWriting', 'accountDocuments', 'timeline']);
       // Kinds without a file format are named before download, with where they are kept.
       const excluded = await page.locator('#fbNotIncluded [data-not-included]').evaluateAll(rows => rows.map(row => row.dataset.notIncluded));
-      assert.deepEqual(excluded.sort(), ['importDrafts', 'publication', 'sourceEditDrafts', 'writingDrafts']);
+      assert.deepEqual(excluded.sort(), ['importDrafts', 'originalsServer', 'publication', 'sourceEditDrafts', 'writingDrafts']);
       assert.match(await page.locator('#fbNotIncluded').innerText(), /글쓰기 초안 0개/);
       assert.doesNotMatch(await page.locator('#fbDownload').innerText(), /모든 항목|전부 담/);
       assert.match(await page.locator('#fbInventory [data-kind="library"]').innerText(), /자료 2 · 원문 버전 3/);
@@ -168,7 +168,7 @@ async function main() {
       const file = await download; archive = Buffer.from(await fs.readFile(await file.path()));
       assert.match(file.suggestedFilename(), /^haedo-backup-\d{4}-\d{2}-\d{2}\.zip$/);
       await page.locator('#fbDownloadDone').waitFor();
-      assert.equal(await page.locator('#fbNotIncludedAfter [data-not-included]').count(), 4, 'the result repeats what the ZIP does not contain');
+      assert.equal(await page.locator('#fbNotIncludedAfter [data-not-included]').count(), 5, 'the result repeats what the ZIP does not contain');
       const files = Z.unzipSync(archive); manifest = JSON.parse(Z.strFromU8(files['manifest.json']));
       assert.equal(manifest.format, 'haedo-full-backup-v1'); assert.equal(manifest.complete, true); assert.equal(manifest.workspaces.length, 2);
       assert.deepEqual(Object.keys(files).sort(), ['README.txt', 'manifest.json', ...manifest.files.map(item => item.path)].sort());
@@ -261,7 +261,7 @@ async function main() {
       assert.match(preview, /해도 백업 ZIP \(목록 v2\)/); assert.match(preview, /SHA-256 확인 완료/); assert.match(preview, /haedo-full-backup-v1|파일 \d+개/);
       const choices = await target.locator('#fbRestorePreview input[type=checkbox]').evaluateAll(inputs => inputs.map(input => [input.value, input.checked]));
       assert.deepEqual(choices, [['library', true], ['collection', true], ['photoPosts', true], ['nineBoards', true], ['materialWriting', true], ['accountDocuments', true]]);
-      assert.equal(await target.locator('#fbRestoreNotIncluded [data-not-included]').count(), 4);
+      assert.equal(await target.locator('#fbRestoreNotIncluded [data-not-included]').count(), 5);
       assert.match(await target.locator('#fbRestorePreview [data-kind="timeline"]').innerText(), /이 화면에서는 복원하지 않습니다/);
       assert.equal(await target.locator('#fbRestorePreview a[href="workspace.html?section=manage#backupAll"]').count(), 1);
       await capture(target, 'restore-preview', [390]);
