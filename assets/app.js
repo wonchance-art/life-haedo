@@ -638,6 +638,22 @@ function pinColor(e){       /* 여러 태그면 레이어 순서상 첫 번째 (
   return l?l.color:PIN_GRAY;
 }
 const pinDash=fut=>fut?{'stroke-dasharray':'3 2.4'}:{}; /* 예정 = 점선 — 기간 막대와 같은 문법 */
+const RECEDE_GRAY='#7A8A80'; /* 포커스 밖 분야 선·칩 색점 — 역할 nt(중립)로 해석된다 */
+/* 포커스한 분야에 속한 요소는 물러나지 않는다 — wrapReceded가 건너뛴다 */
+const keepInFocus=g=>{g.dataset.keep='1';};
+/* 포커스 밖 = 회색으로 물러남(dataviz 규범 1, 흐린 제 색은 분야 5색과 헷갈린다).
+   필터는 칠하는 면적만큼 비싸다 — 요소마다 걸면 사건 150·생각 144에서 프레임이 20~50ms 늘었고,
+   연속 묶음마다 걸어도 묶음이 연표 폭 전체라 비슷했다(실측). → 물러날 것을 전부 <g> 하나에 모아
+   필터를 한 번만 건다. 그 사이에 끼는 건 포커스 분야 사건뿐이라 그것들이 위로 올라온다(초점이 위).
+   속성으로 걸어 내보내기에도 그대로 따라간다 */
+function wrapReceded(){
+  const recede=n=>n.nodeType===1&&!n.dataset.keep&&(n.classList.contains('c-main')||n.hasAttribute('data-hap'));
+  const list=[...svg.childNodes].filter(recede);
+  if(!list.length)return;
+  const run=el('g',{class:'recede-run',filter:'url(#recede)',opacity:.3,'pointer-events':'none'});
+  svg.insertBefore(run,list[0]);
+  list.forEach(n=>run.appendChild(n));
+}
 function render(){
   if(!SHOW.lay)focusLayer='main'; /* 분야를 끈 채 포커스가 남으면 화면 전체가 흐려진다 */
   if(window.syncStartGuide)syncStartGuide(); /* 안내 카드는 데이터가 생기면 거둔다 */
@@ -649,6 +665,10 @@ function render(){
   svg.setAttribute('viewBox',`0 0 ${W} ${L.H}`);
   svg.setAttribute('height',L.H);
   svg.innerHTML='';
+  /* 포커스 밖은 색을 흐리지 않고 회색으로 물러난다(dataviz 규범 1) — CSS가 filter:url(#recede)로 건다.
+     svg 안에 두어야 내보내기 사본에도 따라간다 */
+  {const d=el('defs',{}),f=el('filter',{id:'recede','color-interpolation-filters':'sRGB'});
+    f.appendChild(el('feColorMatrix',{type:'saturate',values:'0'}));d.appendChild(f);svg.appendChild(d);}
   const span=dom[1]-dom[0];
   const HY=v=>L.HAP_BOT-((v+1)/2)*(L.HAP_BOT-L.HAP_TOP); /* −1~+1, 중앙 0 */
 
@@ -835,17 +855,20 @@ function render(){
   if(SHOW.lay)(DATA.layers||[]).forEach(lay=>{
     const pts=lay.pts.filter(p=>isFinite(p.t)).map(p=>({x:X(p.t),y:HY(p.v),p}));
     const foc=focusLayer===lay.id;
+    const receded=focusLayer!=='main'&&!foc; /* 다른 분야에 포커스 = 회색으로 물러남 (흐린 제 색 아님) */
+    const lcol=receded?RECEDE_GRAY:lay.color;
     const gl=el('g',{class:'c-lay','data-lay':lay.id,
-      opacity:focusLayer==='main'?.26:(foc?1:.06)});
+      opacity:focusLayer==='main'?.26:(foc?1:.3)});
+    if(receded)gl.setAttribute('data-receded','1');
     if(!foc)gl.setAttribute('pointer-events','none');
     const lma=MA_SIGMA>0?maSeries(pts,MA_SIGMA,-60,W+60):null;
-    if(pts.length>1)gl.appendChild(el('path',{d:lma?polyD(lma):smoothPath(pts),fill:'none',stroke:lay.color,
+    if(pts.length>1)gl.appendChild(el('path',{d:lma?polyD(lma):smoothPath(pts),fill:'none',stroke:lcol,
       'stroke-width':foc?2.4:1.5,'stroke-linecap':'round','stroke-linejoin':'round',opacity:foc?.95:.8}));
     pts.forEach(q=>{
       if(q.x<-20||q.x>W+20)return;
       const gd=el('g',{cursor:foc?'ns-resize':'default'});
       gd.appendChild(el('circle',{cx:q.x,cy:q.y,r:9,fill:'transparent'}));
-      const dot=el('circle',{cx:q.x,cy:q.y,r:foc?4.2:2.6,fill:lay.color,stroke:'#F2F4EE','stroke-width':foc?1.6:0});
+      const dot=el('circle',{cx:q.x,cy:q.y,r:foc?4.2:2.6,fill:lcol,stroke:'#F2F4EE','stroke-width':foc?1.6:0});
       gd.appendChild(dot);
       if(foc&&!RO){
         const p=q.p;
@@ -933,7 +956,8 @@ function render(){
       (run.future?futureClip:pastClip).appendChild(el('rect',{x:run.start,y:0,width:Math.max(0,run.end-run.start),height:L.H}));
     }
     defs.append(pastClip,futureClip);svg.appendChild(defs);
-    const actual=el('g',{'clip-path':'url(#curvePast)','data-curve':'actual'});
+    /* c-main = 분야 포커스 때 회색으로 물러나는 종합 곡선·면 묶음 (wrapReceded가 svg 바로 아래만 본다) */
+    const actual=el('g',{'clip-path':'url(#curvePast)','data-curve':'actual',class:'c-main'});
     [...svg.querySelectorAll('path.c-main')].forEach(path=>actual.appendChild(path));
     svg.appendChild(actual);
     svg.appendChild(el('path',{d:MA_CURVE?polyD(MA_CURVE):smoothPath(hp),fill:'none',
@@ -1030,7 +1054,7 @@ function render(){
     const g=el('g',{cursor:'pointer',tabindex:0,role:'button',class:'c-main','data-event-cluster':n,
       'aria-label':`${list[0].date} 부근 겹친 사건 ${n}건 — 열어서 고르기`});
     if(focusLayer!=='main'&&list.some(e=>(e.layers||[]).includes(focusLayer))){
-      g.style.opacity='1';g.style.pointerEvents='auto';
+      keepInFocus(g);
     }
     g.appendChild(el('circle',{cx:x,cy:y,r:matchMedia('(pointer:coarse)').matches?22:16,fill:'transparent'}));
     /* 두 링 아래를 종이색으로 비워 곡선 위에서도 각각 또렷하게 보인다. */
@@ -1065,7 +1089,7 @@ function render(){
     const ly=v>=0.45?y+17:y-9; /* 천장 근처 점은 라벨을 아래로 */
     const g=el('g',{cursor:'pointer',tabindex:0,role:'button',class:'c-main','aria-label':`${e.date} ${e.title}`});
     if(focusLayer!=='main'&&(e.layers||[]).includes(focusLayer)){
-      g.style.opacity='1';g.style.pointerEvents='auto'; /* 포커스 레이어 소속 사건은 흐려지지 않는다 */
+      keepInFocus(g); /* 포커스 레이어 소속 사건은 물러나지 않는다 */
     }
     g.appendChild(el('circle',{cx:x,cy:y,r:12,fill:'transparent'}));
     const R=sel?6:4.5;
@@ -1294,7 +1318,7 @@ function render(){
     const pt=p.pt, isEv=pt.kind==='event';
     const g=el('g',{cursor:'ns-resize','data-hap':'1'});
     if(focusLayer!=='main'&&pt.kind==='event'&&(pt.src.layers||[]).includes(focusLayer)){
-      g.style.opacity='1';g.style.pointerEvents='auto'; /* 태그된 사건의 값도 함께 선명 */
+      keepInFocus(g); /* 태그된 사건의 값도 함께 선명 */
     }
     g.appendChild(el('circle',{cx:p.x,cy:p.y,r:10,fill:'transparent'}));
     /* 사건에서 온 값 = 링, 독립 값 = 채움 */
@@ -1367,6 +1391,7 @@ function render(){
     });
     svg.appendChild(g);
   });
+  if(focusLayer!=='main')wrapReceded();
   /* 크로스헤어 — 마우스 위치의 시점·행복도 읽기 (주식 차트식) */
   CH.g=el('g',{'pointer-events':'none',opacity:0});
   CH.line=el('line',{y1:L.AXIS_Y+2,y2:L.HAP_BOT,stroke:'#C4CDC1','stroke-width':.8,'stroke-dasharray':'3 4'});
@@ -1509,7 +1534,8 @@ function renderLayerBar(){
     const b=document.createElement('button');
     b.className='lay-chip'+(focusLayer===id?' on':'');
     b.setAttribute('aria-pressed',String(focusLayer===id));
-    b.innerHTML=`<span class="swz" style="background:${dispCol(color)}"></span>${esc(name)}`;
+    const sw=(focusLayer==='main'||focusLayer===id)?color:RECEDE_GRAY; /* 포커스 밖 칩은 회색 점 */
+    b.innerHTML=`<span class="swz" style="background:${dispCol(sw)}"></span>${esc(name)}`;
     b.onclick=()=>{focusLayer=(focusLayer===id?'main':id);render();};
     bar.appendChild(b);
   };
@@ -2486,8 +2512,7 @@ function exportSvgText(){
   const liveText=svg.querySelector('text');
   const halo=toRgb((liveText&&getComputedStyle(liveText).stroke)||paper)||paper;
   st.textContent=`svg{font-family:'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',system-ui,sans-serif}
-text{paint-order:stroke;stroke:${halo};stroke-width:2.5px;stroke-linejoin:round}
-svg:not([data-focus="main"]) .c-main,svg:not([data-focus="main"]) [data-hap]{opacity:.13}`;
+text{paint-order:stroke;stroke:${halo};stroke-width:2.5px;stroke-linejoin:round}`; /* 포커스 밖 회색은 .recede-run 속성으로 이미 들어 있다 */
   c.insertBefore(st,c.firstChild);
   return {text:'<?xml version="1.0" encoding="UTF-8"?>\n'+new XMLSerializer().serializeToString(c),w:W2,h:H2};
 }

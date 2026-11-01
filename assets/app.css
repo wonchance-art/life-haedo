@@ -120,7 +120,9 @@ html[data-theme=spring]{
   .lay-chip.on{opacity:1;border-color:var(--ink);font-weight:700}
   .lay-chip .swz{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
   #tl .c-main,#tl [data-hap],#tl .c-lay{transition:opacity .25s ease}
-  #tl:not([data-focus="main"]) .c-main,#tl:not([data-focus="main"]) [data-hap]{opacity:.13;pointer-events:none}
+  /* 포커스 밖 = 회색으로 물러남(dataviz 규범 1). 흐린 제 색(.13)은 분야 5색과 헷갈렸다.
+     render()의 wrapReceded가 연속 묶음을 .recede-run(회색 필터·.3)으로 감싼다 — 안쪽은 누를 수 없다 */
+  #tl .recede-run,#tl .recede-run *{pointer-events:none}
   .pe-tags{flex-wrap:wrap;gap:9px}
   .lay-tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--ink);cursor:pointer;font-family:inherit}
   .lay-tag input{accent-color:var(--ink);width:12px;height:12px;margin:0}
