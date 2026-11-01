@@ -102,3 +102,9 @@ test('account switch aborts delayed writing read write and list responses withou
     await assert.rejects(pending, { code: 'request_cancelled' }); adapter.dispose(); assert.equal(shared.state.disposedAuth, 0); assert.equal(shared.auth.user.id, OTHER);
   }
 });
+
+test('a different signed-in user than the transport owner is refused before any request', async () => {
+  const { state, adapter, auth } = fixture(); auth.user = { id: OTHER }; auth.epoch++;
+  await assert.rejects(adapter.read(ID, DRAFT), { code: 'account_mismatch' }); await assert.rejects(adapter.list(ID), { code: 'account_mismatch' });
+  assert.equal(state.calls.length, 0); adapter.dispose();
+});

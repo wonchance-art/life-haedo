@@ -301,8 +301,11 @@
     // One automatic step for a preparation: upload local changes (the full review is
     // generated here, so no consent toggle exists), receive server changes, settle conflicts,
     // and store a completed post's exact revision once it is saved.
-    async function autoSync(ws, id) {
-      try { return await autoStep(ws, id); }
+    // options.listed: remoteId -> server revision from this pass's metadata list. A linked
+    // preparation unchanged here whose listed revision equals the acknowledged one needs no
+    // body read (a full preparation with its sources can be up to 16 MiB).
+    async function autoSync(ws, id, options = {}) {
+      try { return await autoStep(ws, id, options); }
       catch (error) { if (error?.code !== 'material_remote_deleted') throw error; return deletedElsewhere(ws, id); }
     }
     // The server copy was deleted on another device. An unchanged preparation is removed here
@@ -332,9 +335,12 @@
         emit(c); return { workspaceId: ws, planId: id, status };
       });
     }
-    async function autoStep(ws, id) {
+    async function autoStep(ws, id, { listed = null } = {}) {
       let state = await stateFor(context(ws, id));
       if (state.status === 'conflict' && state.conflict?.row) return settle(ws, id);
+      const outputDue = state.enabled && state.output && (state.outputNeedsReview || state.output.state === 'writing' && state.ownClaim);
+      if (listed && state.enabled && state.head && !state.pending && !state.changed && !state.error && !state.conflict && !outputDue &&
+          listed.get(state.remoteId) === state.remoteRevision) return { ...state, received: null, unchanged: true };
       let received = null;
       if (!state.enabled || !state.head || state.pending || state.changed) {
         const preview = await review(context(ws, id));
@@ -402,10 +408,18 @@
     // 'unavailable' and retried with growing back-off instead of on every cycle.
     let availability = { status: 'unknown', until: 0, backoff: 0 };
     const UNAVAILABLE = new Set(['schema_missing', 'permission_denied']);
+    // One metadata list per pass decides every body read: unchanged linked preparations and
+    // server preparations that could not be installed here are not fetched again.
+    const adoptSkips = new Map(); let knownSpaces = null; const ADOPT_RETRY = 30 * 60000;
+    async function listAll() {
+      const items = []; let cursor = null;
+      for (let page = 0; page < 50 && !disposed; page++) { const result = await instance.list(cursor); items.push(...(result.items || [])); if (!result.next) break; cursor = result.next; }
+      return items;
+    }
     async function passes() {
       if (Date.now() < availability.until) return;
-      let first;
-      try { first = await instance.list(null); }
+      let items;
+      try { items = await listAll(); }
       catch (error) {
         if (UNAVAILABLE.has(error?.code)) {
           const backoff = Math.min(Math.max(availability.backoff * 2, 5 * 60000), 60 * 60000);
@@ -417,7 +431,8 @@
       try {
         do {
           again = false;
-          for (const ws of await workspaces()) {
+          const listed = new Map(items.map(item => [item.id, item.revision])), spaces = await workspaces();
+          for (const ws of spaces) {
             if (disposed) return;
             if (held(ws)) continue;
             let changed = false;
@@ -426,19 +441,23 @@
             let wrapper; try { wrapper = await storage.readMaterialWriting(ws); } catch (_) { continue; }
             for (const plan of wrapper.plans) {
               if (disposed || held(ws)) break;
-              try { const result = await instance.autoSync(ws, plan.id); if (result?.received || result?.resolved) changed = true; } catch (_) { /* Durable error stays; next pass retries. */ }
+              try { const result = await instance.autoSync(ws, plan.id, { listed }); if (result?.received || result?.resolved) changed = true; } catch (_) { /* Durable error stays; next pass retries. */ }
             }
             if (changed && !held(ws)) await reloadHeld(ws);
           }
-          let page = first; first = null;
-          for (let index = 0; index < 50 && !disposed; index++) {
-            page ||= await instance.list(null);
-            for (const item of page.items || []) {
-              try { const adopted = await instance.adopt(item); if (adopted && !held(adopted.workspaceId)) await reloadHeld(adopted.workspaceId, adopted); } catch (_) { /* Retry next pass. */ }
-            }
-            if (!page.next) break;
-            page = await instance.list(page.next);
+          // A workspace arriving here may make a skipped server preparation installable.
+          const spaceKey = [...spaces].sort().join('|'); if (spaceKey !== knownSpaces) { adoptSkips.clear(); knownSpaces = spaceKey; }
+          for (const item of items) {
+            if (disposed) return;
+            const skip = adoptSkips.get(item.id);
+            if (skip && skip.revision === item.revision && Date.now() - skip.at < ADOPT_RETRY) continue;
+            try {
+              const adopted = await instance.adopt(item);
+              if (adopted) { adoptSkips.delete(item.id); if (!held(adopted.workspaceId)) await reloadHeld(adopted.workspaceId, adopted); }
+              else adoptSkips.set(item.id, { revision: item.revision, at: Date.now() });
+            } catch (_) { adoptSkips.set(item.id, { revision: item.revision, at: Date.now() }); }
           }
+          if (again && !disposed) items = await listAll();
         } while (again && !disposed);
       } catch (_) { /* Network or account changes: local preparations stay as they are. */ }
     }

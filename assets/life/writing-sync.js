@@ -73,7 +73,9 @@
         status: !metadata ? 'not_enabled' : !metadata.enabled ? 'paused' : stage.state === 'applied' && metadata.status === 'synced' ? 'closed' : metadata.status };
     }
     async function call(method, ws, id, ...args) {
-      try { const value = entry(ws, id); const result = await value.instance[method](id, ...args); if (['enable','syncNow'].includes(method)) value.start(); return result; }
+      // Engines are driven by this loop only (no per-draft polling or focus runs): every remote
+      // read is decided against the list revision first.
+      try { const value = entry(ws, id); return await value.instance[method](id, ...args); }
       catch (error) { throw clean(error); }
     }
     async function sourceReady(ws, floor = 1) {
@@ -100,7 +102,7 @@
         await call('enable', ws, id); guard(epoch); return { stage: await storage.getStage(id), existing: true };
       }
       const result = await storage.installWritingRemote(ws, binding(ws), row); guard(epoch);
-      entry(ws, id).start(); emit(ws, id, { received: true }); return result;
+      emit(ws, id, { received: true }); return result;
     }
     // One pass over every workspace whose originals already sync for this account:
     // upload every local draft, keep enabled drafts moving and install drafts that
@@ -114,14 +116,24 @@
       const backoff = Math.min(Math.max(availability.backoff * 2, 5 * 60000), 60 * 60000);
       availability = { status: 'unavailable', until: Date.now() + backoff, backoff }; return true;
     }
+    // One pass per workspace: one metadata list (100 per page) decides which draft bodies to fetch.
+    // A draft whose local text is unchanged since its last exchange and whose listed server revision
+    // equals the acknowledged one is skipped: no body read on cellular for unchanged drafts.
     async function workspacePass(ws, epoch) {
       const source = await sourceSync.getState(ws); guard(epoch);
       if (!source?.enabled || !same(source.binding)) return;
-      // Probe once per workspace before touching any draft.
-      let firstPage = null;
+      let listed = null;
       if (source.status === 'synced') {
-        try { firstPage = await remote.list(ws, null); guard(epoch); }
-        catch (error) { guard(epoch); if (markUnavailable(clean(error))) throw clean(error); return; }
+        listed = new Map();
+        try {
+          let after = null;
+          for (let page = 0; page < 50; page++) {
+            const rows = await remote.list(ws, after); guard(epoch);
+            for (const row of rows) listed.set(row.draft_id, row);
+            if (rows.length < 100) break;
+            after = rows.at(-1).draft_id;
+          }
+        } catch (error) { guard(epoch); if (markUnavailable(clean(error))) throw clean(error); return; }
         availability = { status: 'available', until: 0, backoff: 0 };
       }
       const stages = (await storage.listStages(ws)).filter(stage => stage.kind === 'writing'); guard(epoch);
@@ -133,24 +145,20 @@
           else if (!state.enabled) await call('enable', ws, stage.stageId);
           else {
             if (stage.state === 'applied' && state.status === 'synced') continue;
-            const value = entry(ws, stage.stageId);
-            if (!value.started) value.start();
-            await value.instance.syncNow(stage.stageId).catch(() => {});
+            const row = listed?.get(stage.stageId);
+            const localChange = !!state.outbox || !!state.conflict || !!state.error || state.status !== 'synced' || stage.revision !== state.syncedLocalRevision;
+            const remoteChange = listed !== null && (!row || row.revision !== state.remoteRevision);
+            if (!localChange && !remoteChange) continue;
+            await entry(ws, stage.stageId).instance.syncNow(stage.stageId).catch(() => {});
           }
         } catch (error) { guard(epoch); if (markUnavailable(error)) throw error; /* Durable state keeps the error; the next pass retries. */ }
         guard(epoch);
       }
-      if (source.status !== 'synced') return;
+      if (!listed) return;
       const known = new Set(stages.map(stage => stage.stageId));
-      let after = null;
-      for (let page = 0; page < 50; page++) {
-        const rows = page === 0 && firstPage ? firstPage : await remote.list(ws, after); guard(epoch);
-        for (const row of rows) {
-          if (row.state !== 'draft' || known.has(row.draft_id)) continue;
-          try { await download(ws, row.draft_id, source); known.add(row.draft_id); } catch (_) { guard(epoch); }
-        }
-        if (rows.length < 100) break;
-        after = rows.at(-1).draft_id;
+      for (const row of listed.values()) {
+        if (row.state !== 'draft' || known.has(row.draft_id)) continue;
+        try { await download(ws, row.draft_id, source); known.add(row.draft_id); } catch (_) { guard(epoch); }
       }
     }
     // Callers that arrive during a pass wait for the same pass, which then runs once more.
@@ -184,10 +192,12 @@
     }
     function nudge() {
       if (disposed || suspended || parked || soon) return;
-      soon = root.setTimeout(() => { soon = null; automatic(); }, 1500); soon?.unref?.();
+      soon = root.setTimeout(() => { soon = null; automatic(); }, 3000); soon?.unref?.();
     }
+    // Any saved draft change (new draft or new text) is sent by a pass shortly after; the pass
+    // reads no body for drafts that did not change on either side.
     function onStorage(event) {
-      if (event?.type !== 'writing_draft_changed' || !event.stageId || entries.has(event.workspaceId + '/' + event.stageId)) return;
+      if (event?.type !== 'writing_draft_changed' || !event.stageId) return;
       nudge();
     }
     function start() { guard(); if (started) return; started = true;
