@@ -144,7 +144,7 @@ async function main() {
     // createdb fails on an existing database; never replace another fixture.
     server.docker(['exec', '-i', container, 'createdb', '-U', 'postgres', database]);
     const bootstrap = await fs.readFile(path.resolve(__dirname, '../supabase/tests/blog-bootstrap.sql'), 'utf8');
-    const migration = await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261017144744_life_blog_originals.sql'), 'utf8');
+    const migration = await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261017144744_life_blog_originals.sql'), 'utf8') + '\n' + await fs.readFile(path.resolve(__dirname, '../supabase/migrations/20261101090000_life_blog_account_sync.sql'), 'utf8');
     server.docker(['exec', '-i', container, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '--dbname', database], bootstrap + '\n' + migration);
     migrationSha256 = digest(Buffer.from(migration));
   }

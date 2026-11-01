@@ -142,3 +142,73 @@ test('inspection metadata checks the current local post inside its transaction a
   assert.equal(confirmed.conflict.remoteRevision, 5); assert.equal(confirmed.revision, state.revision + 1);
   assert.deepEqual(await f.a.readPhotoPost(f.ws, id), installed.post);
 });
+
+// ---- Account-wide sync helpers (2026-11-01) ----
+const remoteBinding = (f, id, revision = 2) => ({ enabled: true, remoteId: id, remoteWorkspaceId: f.ws, remoteRevision: revision, localRevision: 0,
+  remoteManifest: null, publication: null, pending: null, conflict: null, status: 'synced', error: null });
+
+test('sync install writes the post in place with its binding atomically, and a failed binding write leaves nothing', async t => {
+  const f = await fixture(t), id = Core.id(), doc = { ...copy(f.doc), id }, events = [];
+  f.a.subscribe(f.ws, event => events.push(event.type));
+  const before = copy(f.rows);
+  f.control.fail = write => write.id === `blog-sync:${f.ws}:${id}`;
+  await assert.rejects(f.a.commitBlogSync(f.ws, { postId: id, post: doc, baseRevision: 0, binding: remoteBinding(f, id), bindingRevision: 0 }), { code: 'storage_quota' });
+  assert.deepEqual(f.rows, before); assert.deepEqual(events, []);
+  const result = await f.a.commitBlogSync(f.ws, { postId: id, post: doc, baseRevision: 0, binding: remoteBinding(f, id), bindingRevision: 0 });
+  assert.equal(result.revision, 1);
+  const state = await f.a.readBlogSyncState(f.ws, id);
+  assert.equal(state.localRevision, 1); assert.equal(state.revision, 1); assert.equal(state.remoteRevision, 2);
+  assert.equal((await f.a.readPhotoPost(f.ws, id)).id, id); assert.deepEqual(events, ['photo_posts_changed']);
+  const listed = await f.a.listBlogSyncStates(f.ws);
+  assert.deepEqual(listed.posts.map(row => row.id), [id]); assert.equal(listed.states[0].localPostId, id); assert.deepEqual(listed.tombstones, []);
+  await assert.rejects(f.b.commitBlogSync(f.ws, { postId: id, post: doc, baseRevision: 0, binding: remoteBinding(f, id), bindingRevision: 0 }), { code: 'blog_state_conflict' });
+  await assert.rejects(f.foreign.listBlogSyncStates(f.ws), { code: 'workspace_access_denied' });
+});
+
+test('a conflict keeps the losing side as a new draft in the same transaction as the in-place update', async t => {
+  const f = await fixture(t), id = Core.id(), doc = { ...copy(f.doc), id };
+  await f.a.commitBlogSync(f.ws, { postId: id, post: doc, baseRevision: 0, binding: remoteBinding(f, id), bindingRevision: 0 });
+  const local = await f.a.readPhotoPost(f.ws, id);
+  const kept = { ...copy(local), id: Core.id(), revision: 0, status: 'draft', title: '충돌로 보관한 이전 내용 · ' + local.title };
+  const remote = { ...copy(local), title: '다른 기기의 최신 글' };
+  f.control.fail = write => write.id === `photo-post:${f.ws}:${kept.id}`;
+  const before = copy(f.rows);
+  await assert.rejects(f.a.commitBlogSync(f.ws, { postId: id, post: remote, baseRevision: 1, binding: remoteBinding(f, id, 3), bindingRevision: 1, copy: kept }), { code: 'storage_quota' });
+  assert.deepEqual(f.rows, before);
+  await f.a.commitBlogSync(f.ws, { postId: id, post: remote, baseRevision: 1, binding: remoteBinding(f, id, 3), bindingRevision: 1, copy: kept });
+  assert.equal((await f.a.readPhotoPost(f.ws, id)).title, '다른 기기의 최신 글');
+  assert.equal((await f.a.readPhotoPost(f.ws, kept.id)).status, 'draft');
+  assert.equal(await f.a.readBlogSyncState(f.ws, kept.id), null, 'the kept draft starts unbound and syncs as its own post');
+  await assert.rejects(f.a.commitBlogSync(f.ws, { postId: id, post: remote, baseRevision: 1, binding: remoteBinding(f, id, 4), bindingRevision: 2 }), { code: 'photo_post_conflict' });
+});
+
+test('explicit deletion records a deletion for a stored post, refuses a published one and is never re-received', async t => {
+  const f = await fixture(t), id = Core.id(), doc = { ...copy(f.doc), id };
+  await f.a.commitBlogSync(f.ws, { postId: id, post: doc, baseRevision: 0, binding: { ...remoteBinding(f, id), publication: { token: Core.id(), blogToken: Core.id(), revision: 1, active: true } }, bindingRevision: 0 });
+  await assert.rejects(f.a.deletePhotoPost(f.ws, id, 1), { code: 'blog_post_published' });
+  const state = await f.a.readBlogSyncState(f.ws, id);
+  await f.a.writeBlogSyncState(f.ws, id, { ...state, publication: { ...state.publication, active: false, revision: 2 } }, state.revision);
+  await assert.rejects(f.a.deletePhotoPost(f.ws, id, 5), { code: 'photo_post_conflict' });
+  assert.deepEqual(await f.a.deletePhotoPost(f.ws, id, 1), { postId: id, remoteId: id });
+  const listed = await f.a.listBlogSyncStates(f.ws);
+  assert.deepEqual(listed.posts, []); assert.deepEqual(listed.states, []); assert.deepEqual(listed.tombstones.map(item => item.remoteId), [id]);
+  await assert.rejects(f.a.commitBlogSync(f.ws, { postId: id, post: doc, baseRevision: 0, binding: remoteBinding(f, id), bindingRevision: 0 }), { code: 'blog_post_deleted' });
+  await f.a.clearBlogTombstone(f.ws, id);
+  assert.deepEqual((await f.a.listBlogSyncStates(f.ws)).tombstones, []);
+  const local = await f.a.savePhotoPost(f.ws, { ...copy(f.doc), id: Core.id() }, 0);
+  await f.a.deletePhotoPost(f.ws, local.id, local.revision);
+  assert.deepEqual((await f.a.listBlogSyncStates(f.ws)).tombstones, [], 'a never-sent post needs no server deletion');
+});
+
+test('saving an editing draft that synced on its own keeps the target server identity and retires the draft on the server', async t => {
+  const f = await fixture(t), id = Core.id();
+  await f.a.commitBlogSync(f.ws, { postId: id, post: { ...copy(f.doc), id }, baseRevision: 0, binding: remoteBinding(f, id), bindingRevision: 0 });
+  const target = await f.a.readPhotoPost(f.ws, id);
+  const draft = await f.a.savePhotoPost(f.ws, { ...copy(target), id: Core.id(), revision: 0, status: 'draft', replaces: { id, revision: target.revision }, title: '고치는 중' }, 0);
+  await f.a.writeBlogSyncState(f.ws, draft.id, { ...remoteBinding(f, draft.id, 1), localRevision: draft.revision }, 0);
+  const saved = await f.a.savePhotoPost(f.ws, { ...copy(draft), status: 'saved' }, draft.revision);
+  const binding = await f.a.readBlogSyncState(f.ws, saved.id);
+  assert.equal(binding.remoteId, id); assert.equal(binding.localRevision, 0); assert.equal(binding.revision, 2);
+  assert.equal(await f.a.readBlogSyncState(f.ws, id), null);
+  assert.deepEqual((await f.a.listBlogSyncStates(f.ws)).tombstones, [{ remoteId: draft.id, remoteWorkspaceId: f.ws, reason: 'replaced' }]);
+});
